@@ -82,9 +82,11 @@ export function MainMenu() {
         ))}
       </nav>
       <section className={styles.preview}>
-        {health.data && health.data.config !== "ok" && (
+        {health.data && (health.data.config !== "ok" || health.data.models?.ready === false) && (
           <Panel line="var(--cp-yellow)" className={styles.warn}>
-            模型还没配好，剧情暂时不能开始。
+            {health.data.models?.gm.error ??
+              health.data.models?.aux.error ??
+              "模型还没配好，剧情暂时不能开始。"}
             <Button onClick={() => navigate("/settings")}>去设置</Button>
           </Panel>
         )}

@@ -41,11 +41,12 @@ function fromLocalPage(url: string, origin: string | undefined, fetchSite: strin
 export function createApp(deps: AppDeps): Hono {
   const hub = deps.hub ?? new TurnHub();
   const clock = deps.clock ?? { now: () => new Date() };
+  const llm = new LlmRouter(deps.config);
   const game = new GameService({
     saves: deps.saves,
     characters: deps.characters,
     config: deps.config,
-    llm: new LlmRouter(deps.config),
+    llm,
     hub,
     clock,
     rng: deps.rng ?? cryptoRng,
@@ -66,7 +67,18 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get("/api/health", async (c) => {
     const state = await deps.config.load();
-    return c.json({ ok: true, config: state.status, dev: deps.dev });
+    const [gm, aux] = await Promise.all([llm.resolve("gm"), llm.resolve("aux")]);
+    const redact = await deps.config.redactor();
+    return c.json({
+      ok: true,
+      config: state.status,
+      dev: deps.dev,
+      models: {
+        ready: gm.ok && aux.ok,
+        gm: { ready: gm.ok, error: gm.ok ? null : redact(gm.error) },
+        aux: { ready: aux.ok, error: aux.ok ? null : redact(aux.error) },
+      },
+    });
   });
   app.route("/api/profiles", profileRoutes(deps.config));
   app.route("/api/characters", characterRoutes(deps.characters, clock));

@@ -20,3 +20,4 @@ tools/evals/results/
 # Playwright
 test-results/
 playwright-report/
+.run/

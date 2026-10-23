@@ -41,7 +41,7 @@
   cursor: pointer;
 }
 
-.tabs button[aria-selected="true"] {
+.tabs button[aria-pressed="true"] {
   color: var(--cp-yellow);
   border-bottom-color: var(--cp-yellow);
 }

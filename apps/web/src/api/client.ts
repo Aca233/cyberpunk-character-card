@@ -45,6 +45,12 @@ export interface Health {
   readonly ok: boolean;
   readonly config: "ok" | "missing" | "invalid";
   readonly dev: boolean;
+  /** 仅检查本机配置，不代表已经连通过服务商。兼容旧后端。 */
+  readonly models?: {
+    readonly ready: boolean;
+    readonly gm: { readonly ready: boolean; readonly error: string | null };
+    readonly aux: { readonly ready: boolean; readonly error: string | null };
+  };
 }
 
 export type Difficulty = PlayerView["difficulty"];
