@@ -10,6 +10,9 @@ import {
   formatInput,
   isSuccess,
   OUTCOME_LABELS,
+  type Speaker,
+  speakersOf,
+  splitSpeakers,
   type Turn,
   type View,
 } from "./view";
@@ -23,7 +26,39 @@ function paragraphs(text: string): string[] {
     .filter((p) => p !== "");
 }
 
-function TurnBlock({ turn, saveId }: { readonly turn: Turn; readonly saveId: string }) {
+/** 一段正文；名字上色：自己用黄色，别人用青色 */
+function Paragraph({
+  text,
+  speakers,
+}: {
+  readonly text: string;
+  readonly speakers: readonly Speaker[];
+}) {
+  return (
+    <p>
+      {splitSpeakers(text, speakers).map((part, i) =>
+        part.speaker ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
+          <b key={i} className={styles.speaker} data-self={part.speaker.self || undefined}>
+            {part.text}
+          </b>
+        ) : (
+          part.text
+        ),
+      )}
+    </p>
+  );
+}
+
+function TurnBlock({
+  turn,
+  saveId,
+  speakers,
+}: {
+  readonly turn: Turn;
+  readonly saveId: string;
+  readonly speakers: readonly Speaker[];
+}) {
   return (
     <article className={styles.turn}>
       {turn.seq > 0 && (
@@ -40,7 +75,7 @@ function TurnBlock({ turn, saveId }: { readonly turn: Turn; readonly saveId: str
       ))}
       {paragraphs(turn.text).map((p, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-        <p key={`${turn.seq}-${i}`}>{p}</p>
+        <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
       ))}
       <footer className={styles.turnMeta}>
         {turn.dropped > 0 && (
@@ -86,6 +121,7 @@ export function StoryLog({
 
   const generating = live.phase !== "idle";
   const earlier = view.totalTurns - view.turns.length;
+  const speakers = speakersOf(view);
 
   return (
     <div className={styles.log} ref={box} aria-live="polite" aria-busy={generating}>
@@ -101,7 +137,7 @@ export function StoryLog({
           </p>
         )}
         {view.turns.map((t) => (
-          <TurnBlock key={t.seq} turn={t} saveId={saveId} />
+          <TurnBlock key={t.seq} turn={t} saveId={saveId} speakers={speakers} />
         ))}
 
         {!generating && view.offers.read && <p className={styles.read}>{view.offers.read}</p>}
@@ -127,7 +163,7 @@ export function StoryLog({
             )}
             {paragraphs(live.text).map((p, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 正在生成的正文只会往后追加
-              <p key={i}>{p}</p>
+              <Paragraph key={i} text={p} speakers={speakers} />
             ))}
             <span className={styles.caret} aria-hidden />
           </article>

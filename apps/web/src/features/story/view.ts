@@ -43,6 +43,40 @@ export function locationLabel(location: string | null): string {
   return location.replace(/[._/]+/g, " · ").replace(/-/g, " ");
 }
 
+export interface Speaker {
+  readonly name: string;
+  readonly self: boolean;
+}
+
+export interface Segment {
+  readonly text: string;
+  readonly speaker?: Speaker | undefined;
+}
+
+/** 正文里要上色的名字：玩家自己，和见过的人（连同外号）；长的先匹配，免得「丽贝」吃掉「丽贝卡」 */
+export function speakersOf(view: View): Speaker[] {
+  const out: Speaker[] = [];
+  if (view.character.name) out.push({ name: view.character.name, self: true });
+  for (const npc of view.npcs) {
+    out.push({ name: npc.name, self: false });
+    if (npc.alias) out.push({ name: npc.alias, self: false });
+  }
+  return out.filter((s) => s.name.trim().length > 0).sort((a, b) => b.name.length - a.name.length);
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** 把一段正文切成普通文字和名字 */
+export function splitSpeakers(text: string, speakers: readonly Speaker[]): Segment[] {
+  if (speakers.length === 0) return [{ text }];
+  const byName = new Map(speakers.map((s) => [s.name, s]));
+  const pattern = new RegExp(`(${speakers.map((s) => escapeRegExp(s.name)).join("|")})`, "g");
+  return text
+    .split(pattern)
+    .filter((part) => part !== "")
+    .map((part) => ({ text: part, speaker: byName.get(part) }));
+}
+
 /** 正文里玩家那一行的写法；旧存档按当时选的输入方式加标记，新输入原样显示 */
 export function formatInput(input: TurnInput): string {
   switch (input.mode) {

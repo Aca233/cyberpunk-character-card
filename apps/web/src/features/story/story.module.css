@@ -906,3 +906,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 正文里的名字：别人青色，自己黄色 */
+.speaker {
+  color: var(--cp-cyan);
+  font-weight: 500;
+}
+
+.speaker[data-self] {
+  color: var(--cp-yellow);
+}
