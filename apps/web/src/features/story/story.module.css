@@ -292,6 +292,89 @@
   color: var(--cp-danger);
 }
 
+/* 人物档案只显示玩家已知的信息 */
+.npcList {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.npcCard {
+  border-left: 2px solid var(--cp-cyan-dim);
+  background: rgb(94 246 255 / 3%);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+
+.npcCard summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem 0.6rem;
+  padding: 0.65rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.npcCard summary::-webkit-details-marker {
+  display: none;
+}
+
+.npcCard summary strong {
+  color: var(--cp-cyan);
+}
+
+.npcCard summary strong::before {
+  content: "＋ ";
+}
+
+.npcCard[open] summary strong::before {
+  content: "− ";
+}
+
+.npcCard summary:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 2px;
+}
+
+.npcCard[data-dead] {
+  border-left-color: var(--cp-red-dim);
+}
+
+.npcCard[data-dead] summary strong {
+  color: var(--cp-text-dim);
+}
+
+.npcStatus,
+.npcRole {
+  color: var(--cp-text-dim);
+}
+
+.npcAffinity {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.npcDetail {
+  padding: 0 0.65rem 0.65rem;
+  border-top: 1px solid var(--cp-cyan-dim);
+  line-height: 1.7;
+}
+
+.npcMemoryTitle {
+  color: var(--cp-cyan);
+}
+
+.npcDetail ul {
+  padding-left: 1rem;
+  margin-bottom: 0;
+}
+
+.npcDetail li + li {
+  margin-top: 0.45rem;
+}
+
 /* ———— 正文 ———— */
 
 .column {

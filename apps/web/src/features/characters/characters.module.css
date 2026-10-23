@@ -1,0 +1,449 @@
+/* 角色档案：左侧身份库，中间编辑，右侧说明；沿用主界面的红、青、黄 */
+.screen {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--cp-text);
+  background: linear-gradient(110deg, rgb(255 97 88 / 6%), transparent 45%), var(--cp-bg);
+  font-family: var(--font-ui);
+}
+
+.head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.4rem 2.4rem;
+  border-bottom: 1px solid var(--cp-red-line);
+}
+
+.head h1 {
+  margin: 0.35rem 0 0;
+  color: var(--cp-red);
+  font-size: var(--fs-title);
+  letter-spacing: 0.16em;
+}
+
+.eyebrow {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  letter-spacing: 0.12em;
+}
+
+.workspace {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(200px, 250px) minmax(0, 760px) minmax(180px, 250px);
+  justify-content: center;
+  overflow: hidden;
+}
+
+.library,
+.editor,
+.guide {
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.library {
+  padding: 1.6rem 1.2rem 3rem;
+  border-right: 1px solid var(--cp-red-dim);
+}
+
+.note {
+  margin: 0.65rem 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.65;
+}
+
+.cards {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--cp-red-dim);
+  border-left: 3px solid var(--cp-red-dim);
+  color: var(--cp-text-dim);
+  background: var(--cp-panel);
+  text-align: left;
+  font: inherit;
+  font-size: var(--fs-label);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.card strong {
+  color: var(--cp-text);
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.cardKind {
+  color: var(--cp-text-dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.card:hover:not(:disabled) {
+  border-color: var(--cp-red);
+}
+
+.card[aria-pressed="true"] {
+  border-color: var(--cp-cyan-dim);
+  border-left-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 6%);
+}
+
+.card[aria-pressed="true"] strong {
+  color: var(--cp-cyan);
+}
+
+.card:focus-visible,
+.stepper button:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 3px;
+}
+
+.card:disabled {
+  cursor: wait;
+}
+
+.editor {
+  padding: 1.6rem 2rem 3rem;
+}
+
+.editorHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.editorHead h2 {
+  margin: 0.4rem 0 0;
+  font-size: 1.7rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.editorHead > .note {
+  flex-shrink: 0;
+}
+
+.notice {
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1rem;
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 5%);
+  font-size: var(--fs-label);
+  line-height: 1.65;
+}
+
+.notice p {
+  margin: 0 0 0.7rem;
+}
+
+.fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sectionTitle {
+  margin: 1.8rem 0 1rem;
+  padding: 0;
+  color: var(--cp-red);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+legend.sectionTitle {
+  margin-top: 0;
+}
+
+.identity,
+.background {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.background > :nth-child(2),
+.background > :last-child {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.5rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.field small {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.field input,
+.field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--cp-red-dim);
+  border-radius: 0;
+  color: var(--cp-text);
+  background: rgb(0 0 0 / 35%);
+  font: inherit;
+  font-size: var(--fs-ui);
+  line-height: 1.65;
+}
+
+.field textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--cp-text-dim);
+  opacity: 0.8;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--cp-cyan);
+  outline: 1px solid var(--cp-cyan-dim);
+  outline-offset: 1px;
+}
+
+.fields:disabled input,
+.fields:disabled textarea {
+  opacity: 1;
+  color: var(--cp-text-dim);
+  -webkit-text-fill-color: var(--cp-text-dim);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sectionHead .sectionTitle {
+  margin-bottom: 0;
+}
+
+.points {
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.attributes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.attribute {
+  min-width: 0;
+  padding: 0.7rem 0.35rem;
+  border-top: 1px solid var(--cp-cyan-dim);
+  background: rgb(94 246 255 / 3%);
+  text-align: center;
+}
+
+.attribute > label {
+  display: block;
+  margin-bottom: 0.65rem;
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.stepper button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.7rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--cp-cyan-dim);
+  color: var(--cp-cyan);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.stepper button:hover:not(:disabled) {
+  background: rgb(94 246 255 / 12%);
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stepper output {
+  min-width: 1.2rem;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  margin-top: 1.8rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--cp-red-dim);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.error,
+.success {
+  font-size: var(--fs-label);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--cp-danger);
+}
+
+.success {
+  color: var(--cp-success);
+}
+
+.guide {
+  padding: 1.6rem 1.2rem 3rem;
+  border-left: 1px solid var(--cp-red-dim);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.8;
+}
+
+.guide p:first-child {
+  margin-top: 0;
+}
+
+.guide p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 1150px) {
+  .workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .guide {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .screen {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .head {
+    align-items: flex-start;
+    padding: 1.2rem;
+  }
+
+  .workspace {
+    display: block;
+    overflow: visible;
+  }
+
+  .library,
+  .editor {
+    overflow: visible;
+    padding: 1.2rem;
+  }
+
+  .library {
+    border-right: 0;
+    border-bottom: 1px solid var(--cp-red-dim);
+  }
+
+  .cards {
+    display: flex;
+    overflow-x: auto;
+    padding: 0.25rem 0.25rem 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .cards li {
+    flex: 0 0 180px;
+  }
+
+  .editorHead {
+    flex-wrap: wrap;
+  }
+
+  .attributes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .identity,
+  .background {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .background > :nth-child(2),
+  .background > :last-child {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

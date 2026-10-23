@@ -1,4 +1,5 @@
 import { createBrowserRouter, Outlet } from "react-router";
+import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { MainMenu } from "./features/menu/MainMenu";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import { Splash } from "./features/splash/Splash";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <Splash /> },
       { path: "/menu", element: <MainMenu /> },
+      { path: "/characters", element: <CharactersScreen /> },
       { path: "/play/:saveId", element: <StoryScreen /> },
       { path: "/settings", element: <SettingsScreen /> },
     ],

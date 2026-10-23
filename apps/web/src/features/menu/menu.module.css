@@ -111,16 +111,29 @@
   font-size: var(--fs-ui);
 }
 
-.field input {
+.field input,
+.field select {
   padding: 8px 10px;
   border: 1px solid var(--cp-red-dim);
   background: rgb(0 0 0 / 40%);
   color: var(--cp-text);
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--cp-cyan);
   outline: none;
+}
+
+.field select {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.field select option {
+  color: var(--cp-text);
+  background: var(--cp-bg);
 }
 
 .difficulty {

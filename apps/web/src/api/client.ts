@@ -1,4 +1,4 @@
-import type { PlayerView, TurnInput, TurnUsage } from "@cp/core";
+import type { CharacterCard, PlayerView, TurnInput, TurnUsage } from "@cp/core";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
 
@@ -57,6 +57,14 @@ export interface SaveSummary {
   readonly createdAt: string;
   readonly startTime: number;
   readonly running: boolean;
+}
+
+/** 角色卡：sample 是内容包里的示例，只读 */
+export interface CharacterEntry {
+  readonly id: string;
+  readonly updatedAt: string;
+  readonly card: CharacterCard;
+  readonly sample: boolean;
 }
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
@@ -169,6 +177,15 @@ export const api = {
     }),
   clearKey: (name: string) =>
     request<{ profile: PublicProfile }>("DELETE", `/profiles/${encodeURIComponent(name)}/key`),
+  characters: () =>
+    request<{ characters: CharacterEntry[] }>("GET", "/characters").then((r) => r.characters),
+  createCharacter: (card: CharacterCard) =>
+    request<{ character: CharacterEntry }>("POST", "/characters", card).then((r) => r.character),
+  updateCharacter: (id: string, card: CharacterCard) =>
+    request<{ character: CharacterEntry }>("PUT", `/characters/${id}`, card).then(
+      (r) => r.character,
+    ),
+  deleteCharacter: (id: string) => request<{ ok: true }>("DELETE", `/characters/${id}`),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),

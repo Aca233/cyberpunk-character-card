@@ -11,10 +11,7 @@ import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
 import styles from "./menu.module.css";
 
-type Item = "continue" | "new" | "load" | "settings";
-
-/** 角色在下一片（内容和试玩）加入；在那之前新存档不绑定角色 */
-const NO_CHARACTER = "unassigned";
+type Item = "continue" | "new" | "load" | "characters" | "settings";
 
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
@@ -31,18 +28,25 @@ export function MainMenu() {
     { id: "continue", label: "继续", disabled: !latest, reason: "还没有存档" },
     { id: "new", label: "新建存档" },
     { id: "load", label: "读取存档", disabled: sorted.length === 0, reason: "还没有存档" },
+    { id: "characters", label: "角色" },
     { id: "settings", label: "设置" },
   ];
 
   const select = (id: Item) => {
     if (id === "continue" && latest) navigate(`/play/${latest.id}`);
+    else if (id === "characters") navigate("/characters");
     else if (id === "settings") navigate("/settings");
     else setFocus(id);
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      )
+        return;
       const enabled = items.filter((i) => !i.disabled).map((i) => i.id);
       const at = enabled.indexOf(focus);
       if (e.key === "ArrowDown") setFocus(enabled[(at + 1) % enabled.length] ?? focus);
@@ -151,21 +155,29 @@ function SaveCard({
 }
 
 function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
+  const navigate = useNavigate();
   const client = useQueryClient();
+  const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
+  const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("nightCity");
+  const entries = characters.data ?? [];
+  const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
+  const characterId = selected?.id ?? "";
   const create = useMutation({
-    mutationFn: () =>
-      api.createSave({ title: title.trim(), characterId: NO_CHARACTER, difficulty }),
+    mutationFn: () => api.createSave({ title: title.trim(), characterId, difficulty }),
     onSuccess: async (save) => {
       await client.invalidateQueries({ queryKey: ["saves"] });
       onCreated(save.id);
     },
   });
+  const canCreate =
+    title.trim() !== "" && characterId !== "" && characters.isSuccess && !create.isPending;
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (title.trim()) create.mutate();
+    if (canCreate) create.mutate();
   };
+  const reason = create.isPending ? "正在创建" : !title.trim() ? "先写存档名" : "先选一个可用角色";
   return (
     <Panel title="新建存档">
       <form className={styles.form} onSubmit={submit}>
@@ -174,11 +186,50 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <input
             value={title}
             maxLength={80}
+            disabled={create.isPending}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例如：沃森的第一单"
           />
         </label>
-        <fieldset className={styles.difficulty}>
+        <label className={styles.field}>
+          <span>扮演的角色</span>
+          <select
+            value={characterId}
+            disabled={create.isPending || !characters.isSuccess || entries.length === 0}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {entries.length === 0 && (
+              <option value="">{characters.isPending ? "正在读取角色…" : "暂无可选角色"}</option>
+            )}
+            {entries.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.card.name} · {entry.card.origin}
+                {entry.sample ? "（示例）" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        {characters.isError && (
+          <div role="alert">
+            <p className={styles.error}>{characters.error.message}</p>
+            <Button disabled={characters.isFetching} onClick={() => void characters.refetch()}>
+              重新读取角色
+            </Button>
+          </div>
+        )}
+        {characters.isSuccess && entries.length === 0 && (
+          <p className={styles.note}>先创建一个角色，再开始这段故事。</p>
+        )}
+        {selected && (
+          <p className={styles.note}>
+            {selected.card.alias ? `外号「${selected.card.alias}」。` : ""}
+            {selected.card.personality || selected.card.origin}
+          </p>
+        )}
+        <Button disabled={create.isPending} onClick={() => navigate("/characters")}>
+          管理角色
+        </Button>
+        <fieldset className={styles.difficulty} disabled={create.isPending}>
           <legend>难度</legend>
           {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((d) => (
             <label key={d} data-checked={difficulty === d || undefined}>
@@ -193,16 +244,13 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
             </label>
           ))}
         </fieldset>
-        <p className={styles.note}>
-          角色在下一阶段加入：现在新建的存档还没有绑定角色，剧情里显示“未建档”。
-        </p>
-        {create.isError && <p className={styles.error}>{create.error.message}</p>}
-        <Button
-          type="submit"
-          primary
-          disabled={!title.trim() || create.isPending}
-          reason="先写存档名"
-        >
+        <p className={styles.note}>开档时保存角色快照，以后修改角色卡不会改变这个存档。</p>
+        {create.isError && (
+          <p className={styles.error} role="alert">
+            {create.error.message}
+          </p>
+        )}
+        <Button type="submit" primary disabled={!canCreate} reason={reason}>
           {create.isPending ? "创建中…" : "开始"}
         </Button>
       </form>
