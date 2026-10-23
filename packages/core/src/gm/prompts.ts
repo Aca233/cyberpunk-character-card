@@ -18,7 +18,7 @@ import type { ItemKind } from "../systems/inventory/schema";
 import { castSection } from "../systems/npc/prompt";
 import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
-import { WorldClockStateSchema } from "../systems/world/schema";
+import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { BlockDocSchema, STATE_CLOSE, STATE_OPEN } from "./block";
 import { commandDoc, schemaDoc } from "./doc";
 import type { RolledCheck } from "./pending";
@@ -192,6 +192,18 @@ item 指令的 id 只能用下面这些；【当前状态】里的武器栏、�
 ${lines.join("\n")}`;
 }
 
+/** 地点表：和物品表一样放在系统提示词末尾 */
+export function locationSection(data: Readonly<Record<string, unknown>>): string | undefined {
+  const places = [...locationCatalog(data).values()];
+  if (places.length === 0) return undefined;
+  const lines = places.map(
+    (p) => `- ${p.id}：${p.name}（${p.district}${p.note ? `，${p.note}` : ""}）`,
+  );
+  return `【常用地点】
+world 指令换地点时，去下面这些地方就用这些 id；表里没有的地方，location 直接写中文地名，例如「沃森 · 无名小巷」。
+${lines.join("\n")}`;
+}
+
 /** 提示词里随存档而定、但不在世界状态里的东西 */
 export interface PromptExtras {
   /** 静态数据表；带物品表时写进系统提示词 */
@@ -212,7 +224,7 @@ export function stateSummary(view: PlayerView): string {
     `角色：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
     `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred}`,
     `时间：${view.time.text}（${view.time.periodLabel}）`,
-    `地点：${view.location ?? "尚未确定，由你在开场时安排"}`,
+    `地点：${view.location ?? "尚未确定，由你在开场时安排"}${view.names.location && view.names.location !== view.location ? `（${view.names.location}）` : ""}`,
     `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
   ];
@@ -271,12 +283,14 @@ export function buildGmPrompt(
   plan: GmPlan,
   extras: PromptExtras = {},
 ): GmPrompt {
-  const view = projectState(world, records);
+  const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
-  const catalog = extras.data ? catalogSection(extras.data) : undefined;
-  const messages: LlmMessage[] = [
-    { role: "system", content: systemPrompt(modules, catalog ? [catalog] : []) },
-  ];
+  const tables = extras.data
+    ? [catalogSection(extras.data), locationSection(extras.data)].filter(
+        (s): s is string => s !== undefined,
+      )
+    : [];
+  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(modules, tables) }];
   for (const turn of view.turns.slice(-HISTORY_TURNS)) {
     messages.push({ role: "user", content: formatInput(turn.input) });
     messages.push({ role: "assistant", content: turn.text });

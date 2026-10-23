@@ -23,8 +23,9 @@ export function Hud({ view }: { readonly view: View }) {
   const { health, character, combat } = view;
   const low = health.wound === "severe" || health.wound === "zero";
   const wound = WOUND_LABELS[health.wound];
-  const weapon =
+  const weaponId =
     view.inventory.active === null ? null : (view.inventory.weapons[view.inventory.active] ?? null);
+  const weapon = weaponId === null ? null : (view.names.items[weaponId] ?? weaponId);
 
   return (
     <header className={styles.hud}>
@@ -87,12 +88,18 @@ export function Hud({ view }: { readonly view: View }) {
 
       <div className={styles.zone}>
         <div className={styles.zoneText}>
-          <span className={styles.zoneName}>{locationLabel(view.location)}</span>
+          <span className={styles.zoneName}>
+            {view.names.location ?? locationLabel(view.location)}
+          </span>
           <span className={styles.zoneTime}>
             {view.time.text} · {view.time.periodLabel}
           </span>
         </div>
-        <Asset id={districtIcon(view.location)} tint="var(--cp-yellow)" height={40} />
+        <Asset
+          id={districtIcon(view.names.district ?? view.location)}
+          tint="var(--cp-yellow)"
+          height={40}
+        />
       </div>
     </header>
   );
@@ -130,7 +137,8 @@ export function SidePanel({ view }: { readonly view: View }) {
             <>
               <dt>治疗</dt>
               <dd>
-                {inventory.healing.id} {inventory.healing.charges}/{inventory.healing.max}
+                {view.names.items[inventory.healing.id] ?? inventory.healing.id}{" "}
+                {inventory.healing.charges}/{inventory.healing.max}
               </dd>
             </>
           )}
@@ -138,7 +146,8 @@ export function SidePanel({ view }: { readonly view: View }) {
             <>
               <dt>手雷</dt>
               <dd>
-                {inventory.grenade.id} {inventory.grenade.charges}/{inventory.grenade.max}
+                {view.names.items[inventory.grenade.id] ?? inventory.grenade.id}{" "}
+                {inventory.grenade.charges}/{inventory.grenade.max}
               </dd>
             </>
           )}

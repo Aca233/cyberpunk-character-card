@@ -114,6 +114,38 @@ export const DeadlineCommandSchema = z
   );
 export type DeadlineCommand = z.infer<typeof DeadlineCommandSchema>;
 
+/** 地点表的一条；数据在 content 包的 locations.ts，只用来显示中文名和告诉模型有哪些常用地点 */
+export const LocationDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  /** 所在地区的中文名，例如沃森、威斯布鲁克 */
+  district: z.string().min(1),
+  /** 给模型看的一句话 */
+  note: z.string().min(1).optional(),
+});
+export type LocationDef = z.infer<typeof LocationDefSchema>;
+
+export const LocationCatalogSchema = z.array(LocationDefSchema);
+
+const locationCatalogs = new WeakMap<object, ReadonlyMap<string, LocationDef>>();
+
+/** 读取并校验地点表；没有地点表时是空表，地点 id 本来就可以是表外的 */
+export function locationCatalog(
+  data: Readonly<Record<string, unknown>>,
+): ReadonlyMap<string, LocationDef> {
+  const raw = data.locations;
+  if (typeof raw !== "object" || raw === null) return new Map();
+  const cached = locationCatalogs.get(raw);
+  if (cached) return cached;
+  const catalog = new Map<string, LocationDef>();
+  for (const place of LocationCatalogSchema.parse(raw)) {
+    if (catalog.has(place.id)) throw new Error(`地点表里的 id 重复：${place.id}`);
+    catalog.set(place.id, place);
+  }
+  locationCatalogs.set(raw, catalog);
+  return catalog;
+}
+
 /** 只能由代码发出：主持人标了 sceneEnd 之后由主持流程发出 */
 export const EndSceneSchema = z.object({ type: z.literal("world.endScene") });
 export type EndScene = z.infer<typeof EndSceneSchema>;

@@ -132,7 +132,7 @@ export class GameService {
   async state(id: string): Promise<PlayerView> {
     return this.locks.run(id, async () => {
       const { world, records } = await this.load(id);
-      return projectState(world, records);
+      return projectState(world, records, gameData);
     });
   }
 

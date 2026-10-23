@@ -11,12 +11,17 @@ import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
-import { InventoryStateSchema, type ItemDef } from "./systems/inventory/schema";
+import { itemCatalog } from "./systems/inventory/apply";
+import {
+  type InventoryState,
+  InventoryStateSchema,
+  type ItemDef,
+} from "./systems/inventory/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { registry } from "./systems/registry";
 import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
-import { WorldClockStateSchema } from "./systems/world/schema";
+import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -26,6 +31,8 @@ export interface GameContent {
   readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
   /** 物品表；开局装备要用它结算 */
   readonly items?: readonly ItemDef[];
+  /** 常用地点的中文名 */
+  readonly locations?: readonly LocationDef[];
   /** 可选的开场；存档的 meta.opening 记着用的是哪一个 */
   readonly openings?: readonly GameOpening[];
 }
@@ -187,11 +194,39 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
   };
 }
 
+const CJK = /[\u3400-\u9fff]/;
+
+/** 物品和地点的中文名；表外的物品用 id，表外的地点只有本身是中文时才当名字 */
+function displayNames(
+  data: Readonly<Record<string, unknown>>,
+  inventory: InventoryState,
+  location: string | null,
+) {
+  const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
+  const ids = new Set([
+    ...inventory.weapons.filter((w): w is string => w !== null),
+    ...(inventory.healing ? [inventory.healing.id] : []),
+    ...(inventory.grenade ? [inventory.grenade.id] : []),
+    ...Object.keys(inventory.backpack),
+  ]);
+  const place = location === null ? undefined : locationCatalog(data).get(location);
+  return {
+    items: Object.fromEntries([...ids].map((id) => [id, items.get(id)?.name ?? id])),
+    location: place?.name ?? (location !== null && CJK.test(location) ? location : null),
+    district: place?.district ?? null,
+  };
+}
+
 /**
  * 玩家能看到的状态。只放界面要显示的东西：
  * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现
  */
-export function projectState(world: WorldState, records: readonly LogRecord[]) {
+export function projectState(
+  world: WorldState,
+  records: readonly LogRecord[],
+  /** 静态数据表；带物品表和地点表时给出中文名 */
+  data: Readonly<Record<string, unknown>> = {},
+) {
   const dice = DiceStateSchema.parse(world.slices.dice);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
@@ -222,6 +257,8 @@ export function projectState(world: WorldState, records: readonly LogRecord[]) {
       periodLabel: PERIOD_LABELS[period],
     },
     location: clock.location,
+    /** 界面显示用的中文名，查不到时为 id 或 null */
+    names: displayNames(data, inventory, clock.location),
     scene: clock.scene,
     health: {
       hp: health.hp,
