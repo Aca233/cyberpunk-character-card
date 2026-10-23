@@ -30,12 +30,15 @@ export interface ApplyContext {
   readonly rng: Rng;
   /** 本轮的事实，例如检定结果；各系统用自己的 schema 读取，不信任未校验的内容 */
   readonly facts?: Readonly<Record<string, unknown>>;
+  /** 静态数据表（content 包），例如 items；各系统用自己的 schema 读取 */
+  readonly data?: Readonly<Record<string, unknown>>;
 }
 
 /** 系统结算时看到的环境 */
 export interface SystemContext {
   readonly rng: Rng;
   readonly facts: Readonly<Record<string, unknown>>;
+  readonly data: Readonly<Record<string, unknown>>;
   /** 当前游戏时间（分钟） */
   readonly now: number;
   /** 读取 dependsOn 里声明过的系统的状态，返回只读快照 */
@@ -162,6 +165,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
   ): SystemContext => ({
     rng: ctx.rng,
     facts: ctx.facts ?? {},
+    data: ctx.data ?? {},
     now: draft.time,
     read<T>(id: string): T {
       if (!(system.dependsOn ?? []).includes(id)) {
