@@ -13,7 +13,10 @@ import {
   PENALTY_CAP,
 } from "../systems/dice";
 import { DAMAGE_LABELS } from "../systems/health";
+import { castSection } from "../systems/npc/prompt";
+import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
+import { WorldClockStateSchema } from "../systems/world/schema";
 import { BlockDocSchema, STATE_CLOSE, STATE_OPEN } from "./block";
 import { commandDoc, schemaDoc } from "./doc";
 import type { RolledCheck } from "./pending";
@@ -40,6 +43,13 @@ const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
   say: "说",
   think: "想",
   ooc: "出戏",
+};
+
+/** 伤势标签给模型看的写法；没受伤不写 */
+const WOUND_TEXT: Readonly<Record<string, string>> = {
+  light: "轻伤",
+  severe: "重伤",
+  zero: "生命归零",
 };
 
 const OUTCOME_LABELS = {
@@ -165,7 +175,7 @@ export function stateSummary(view: PlayerView): string {
     `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred}`,
     `时间：${view.time.text}（${view.time.periodLabel}）`,
     `地点：${view.location ?? "尚未确定，由你在开场时安排"}`,
-    `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${view.health.wound ? `，${view.health.wound}` : ""}`,
+    `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
   ];
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
@@ -229,7 +239,12 @@ export function buildGmPrompt(
     messages.push({ role: "user", content: formatInput(turn.input) });
     messages.push({ role: "assistant", content: turn.text });
   }
-  const parts = [`【当前状态】\n${stateSummary(view)}`];
+  const clock = WorldClockStateSchema.parse(world.slices.world);
+  const cast = castSection(NpcStateSchema.parse(world.slices.npc), {
+    location: clock.location,
+    sceneStartedAt: clock.sceneStartedAt,
+  });
+  const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));
   parts.push(`（先写正文，最后附 ${STATE_OPEN} 指令块。）`);

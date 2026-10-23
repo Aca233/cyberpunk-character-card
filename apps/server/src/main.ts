@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
+import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
 import { SaveStore } from "./storage";
 
@@ -15,6 +16,7 @@ const config = new ConfigService(join(root, "config.json"));
 const app = createApp({
   config,
   saves: new SaveStore(join(root, "data")),
+  characters: new CharacterStore(join(root, "data")),
   dev,
   log: (message) => console.error(message),
 });

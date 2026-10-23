@@ -226,6 +226,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@cp/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@cp/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -279,6 +282,12 @@ importers:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)
 
+  packages/content:
+    dependencies:
+      '@cp/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/core:
     dependencies:
       immer:
@@ -290,6 +299,9 @@ importers:
 
   tools:
     dependencies:
+      '@cp/content':
+        specifier: workspace:*
+        version: link:../packages/content
       '@cp/core':
         specifier: workspace:*
         version: link:../packages/core

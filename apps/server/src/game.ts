@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { gameContent, gameData } from "@cp/content";
 import {
   buildGmPrompt,
   type CheckRecord,
@@ -22,6 +23,7 @@ import {
   rolledFrom,
   runGmTurn,
   type SaveMeta,
+  saveCharacter,
   serializeRecord,
   TurnInputSchema,
   type TurnRecord,
@@ -31,6 +33,7 @@ import {
   worldRules,
 } from "@cp/core";
 import { z } from "zod";
+import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { KeyedMutex } from "./fsutil";
 import { AbortedError, UpstreamError } from "./providers/http";
@@ -52,12 +55,13 @@ export const CreateSaveSchema = z.strictObject({
 
 /** 路由直接把 body 按 status 返回 */
 export interface Reply {
-  readonly status: 200 | 201 | 202 | 404 | 409 | 503;
+  readonly status: 200 | 201 | 202 | 400 | 404 | 409 | 503;
   readonly body: Record<string, unknown>;
 }
 
 export interface GameDeps {
   readonly saves: SaveStore;
+  readonly characters: CharacterStore;
   readonly config: ConfigService;
   readonly llm: LlmRouter;
   readonly hub: TurnHub;
@@ -113,7 +117,13 @@ export class GameService {
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
     const id = `s-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
-    const meta: SaveMeta = { ...input, createdAt: this.deps.clock.now().toISOString() };
+    const entry = await this.deps.characters.get(input.characterId);
+    if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
+    const meta: SaveMeta = {
+      ...input,
+      createdAt: this.deps.clock.now().toISOString(),
+      character: saveCharacter(entry.card),
+    };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };
   }
@@ -258,7 +268,7 @@ export class GameService {
         return { status: 404, body: { error: `没有第 ${seq} 轮` } };
       }
       const before = records.slice(0, seq);
-      const world = replay({ nextSeq: 0, world: newGameWorld(meta) }, before);
+      const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
       const input = TurnInputSchema.safeParse(record.input);
       let prompt: { messages: unknown[]; modules: readonly string[] } | null = null;
       let rebuildError: string | null = null;
@@ -332,6 +342,7 @@ export class GameService {
         {
           llm: this.deps.llm,
           rng: this.deps.rng,
+          data: gameData,
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },
@@ -431,7 +442,7 @@ export class GameService {
     if (log.droppedPartialTail) this.deps.log(`存档 ${id} 的回合日志末尾有半行，已经截掉`);
     const snapshot = pickSnapshot(await saves.readSnapshots(id), log.records) ?? {
       nextSeq: 0,
-      world: newGameWorld(meta),
+      world: newGameWorld(meta, gameContent),
     };
     return { meta, records: log.records, world: replay(snapshot, log.records) };
   }

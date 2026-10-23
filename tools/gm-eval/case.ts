@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { gameContent } from "@cp/content";
 import {
   type CheckRecord,
   type Command,
@@ -142,7 +143,10 @@ function applyAll(
 /** 按用例搭出存档状态和这一轮的计划；用例本身有问题时报错 */
 export function buildScenario(c: EvalCase): Scenario {
   const { setup } = c;
-  let world = newGameWorld({ startTime: setup.startTime, difficulty: setup.difficulty });
+  let world = newGameWorld(
+    { startTime: setup.startTime, difficulty: setup.difficulty },
+    gameContent,
+  );
   const character = setup.character ?? EVAL_CHARACTER;
   world = applyAll(
     world,

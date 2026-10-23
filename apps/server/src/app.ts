@@ -1,9 +1,11 @@
 import type { Clock, Rng } from "@cp/core";
 import { Hono } from "hono";
+import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
 import { LlmRouter } from "./providers/index";
 import { cryptoRng } from "./rng";
+import { characterRoutes } from "./routes/characters";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
 import type { SaveStore } from "./storage";
@@ -12,6 +14,7 @@ import { TurnHub } from "./turns";
 export interface AppDeps {
   readonly config: ConfigService;
   readonly saves: SaveStore;
+  readonly characters: CharacterStore;
   readonly dev: boolean;
   /** 写后端日志；传进来的文本已经去掉密钥 */
   readonly log: (message: string) => void;
@@ -37,12 +40,14 @@ function fromLocalPage(url: string, origin: string | undefined, fetchSite: strin
 
 export function createApp(deps: AppDeps): Hono {
   const hub = deps.hub ?? new TurnHub();
+  const clock = deps.clock ?? { now: () => new Date() };
   const game = new GameService({
     saves: deps.saves,
+    characters: deps.characters,
     config: deps.config,
     llm: new LlmRouter(deps.config),
     hub,
-    clock: deps.clock ?? { now: () => new Date() },
+    clock,
     rng: deps.rng ?? cryptoRng,
     log: deps.log,
   });
@@ -64,6 +69,7 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true, config: state.status, dev: deps.dev });
   });
   app.route("/api/profiles", profileRoutes(deps.config));
+  app.route("/api/characters", characterRoutes(deps.characters, clock));
   app.route("/api/saves", saveRoutes(game, hub));
   return app;
 }

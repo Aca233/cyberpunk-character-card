@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { gameData } from "@cp/content";
 import {
   buildGmPrompt,
   fixedRng,
@@ -199,7 +200,7 @@ async function main(): Promise<number> {
     let run: RunResult;
     try {
       const result = await runGmTurn(
-        { llm: gmLlm, rng },
+        { llm: gmLlm, rng, data: gameData },
         scenario.world,
         scenario.records,
         scenario.plan,
