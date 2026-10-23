@@ -75,6 +75,8 @@ export interface PublicProfile {
   readonly embeddingModel?: string;
   readonly apiKeyEnv?: string;
   readonly keyStatus: KeyStatus;
+  /** 密钥从哪来：config.json、环境变量，或者还没有 */
+  readonly keySource: "config" | "env" | null;
 }
 
 export interface ProfilesOverview {
@@ -91,6 +93,15 @@ export interface ProfilePatch {
   temperature?: number;
   maxOutputTokens?: number;
   contextWindow?: number;
+}
+
+/** 新建方案；密钥另外用 setKey 存 */
+export interface NewProfile {
+  name: string;
+  type: PublicProfile["type"];
+  model: string;
+  baseUrl?: string;
+  contextWindow: number;
 }
 
 export type ConnectionTest =
@@ -143,6 +154,21 @@ export const api = {
   /** 会用这个方案发一条很短的请求，产生极少量费用 */
   testProfile: (name: string) =>
     request<ConnectionTest>("POST", `/profiles/${encodeURIComponent(name)}/test`),
+  /** 照 config.example.json 建一份 config.json（已有就不动） */
+  initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
+  setRoles: (roles: { gm?: string; aux?: string }) =>
+    request<{ gm: string; aux: string }>("PUT", "/profiles/-/roles", roles),
+  createProfile: (profile: NewProfile) =>
+    request<{ profile: PublicProfile }>("POST", "/profiles", profile),
+  deleteProfile: (name: string) =>
+    request<{ ok: true }>("DELETE", `/profiles/${encodeURIComponent(name)}`),
+  /** 密钥只发给本机后端，后端不会再把它返回 */
+  setKey: (name: string, apiKey: string) =>
+    request<{ profile: PublicProfile }>("PUT", `/profiles/${encodeURIComponent(name)}/key`, {
+      apiKey,
+    }),
+  clearKey: (name: string) =>
+    request<{ profile: PublicProfile }>("DELETE", `/profiles/${encodeURIComponent(name)}/key`),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),

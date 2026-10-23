@@ -1,22 +1,63 @@
 import type { LlmUsage } from "@cp/core";
-import { Hono } from "hono";
-import type { ConfigService } from "../config";
+import { type Context, Hono } from "hono";
+import type { ConfigService, Result } from "../config";
 import { LlmRouter } from "../providers/index";
 
 /** 测试连接最多等这么久 */
 const TEST_TIMEOUT_MS = 30_000;
 
+async function readBody(c: Context): Promise<unknown> {
+  return c.req.json().catch(() => undefined);
+}
+
+function badJson(c: Context) {
+  return c.json({ error: "请求体不是合法的 JSON" }, 400);
+}
+
+function send<T>(c: Context, result: Result<T>, body: (value: T) => object) {
+  return result.ok ? c.json(body(result.value)) : c.json({ error: result.error }, result.status);
+}
+
 export function profileRoutes(config: ConfigService): Hono {
   const routes = new Hono();
   routes.get("/", async (c) => c.json(await config.overview()));
-  routes.put("/:name", async (c) => {
-    const body: unknown = await c.req.json().catch(() => undefined);
-    if (body === undefined) return c.json({ error: "请求体不是合法的 JSON" }, 400);
-    const result = await config.updateProfile(c.req.param("name"), body);
-    return result.ok
-      ? c.json({ profile: result.profile })
-      : c.json({ error: result.error }, result.status);
+
+  // 以 - 开头的路径不会和方案名冲突：设置页新建的方案名只能以字母或数字开头
+  routes.post("/-/init", async (c) => send(c, await config.init(), () => ({ ok: true })));
+  routes.put("/-/roles", async (c) => {
+    const body = await readBody(c);
+    if (body === undefined) return badJson(c);
+    return send(c, await config.setRoles(body), (roles) => roles);
   });
+
+  routes.post("/", async (c) => {
+    const body = await readBody(c);
+    if (body === undefined) return badJson(c);
+    return send(c, await config.addProfile(body), (profile) => ({ profile }));
+  });
+  routes.put("/:name", async (c) => {
+    const body = await readBody(c);
+    if (body === undefined) return badJson(c);
+    return send(c, await config.updateProfile(c.req.param("name"), body), (profile) => ({
+      profile,
+    }));
+  });
+  routes.delete("/:name", async (c) =>
+    send(c, await config.removeProfile(c.req.param("name")), () => ({ ok: true })),
+  );
+
+  /** 密钥只进不出：存进 config.json，接口只回方案的公开信息，日志里也不写 */
+  routes.put("/:name/key", async (c) => {
+    const body = await readBody(c);
+    if (body === undefined) return badJson(c);
+    const apiKey =
+      typeof body === "object" && body !== null ? (body as { apiKey?: unknown }).apiKey : undefined;
+    return send(c, await config.setKey(c.req.param("name"), apiKey), (profile) => ({ profile }));
+  });
+  routes.delete("/:name/key", async (c) =>
+    send(c, await config.clearKey(c.req.param("name")), (profile) => ({ profile })),
+  );
+
   /** 测试连接：用这个方案发一条很短的请求，会产生极少量费用；报错先去掉密钥 */
   routes.post("/:name/test", async (c) => {
     const name = c.req.param("name");

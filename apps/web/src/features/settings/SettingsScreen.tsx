@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import {
   api,
   type ConnectionTest,
+  type NewProfile,
   type ProfilePatch,
   type PublicProfile,
   type TurnContext,
@@ -84,34 +85,45 @@ export function SettingsScreen() {
 
 /* ———— 模型方案 ———— */
 
+const TYPE_LABELS: Readonly<Record<PublicProfile["type"], string>> = {
+  openai: "OpenAI 兼容（中转站、DeepSeek、OpenRouter 等）",
+  ollama: "Ollama 本地模型",
+  gemini: "Gemini 原生接口（还没接好）",
+  anthropic: "Anthropic 原生接口（还没接好）",
+};
+
+function useRefreshConfig() {
+  const client = useQueryClient();
+  return async () => {
+    await client.invalidateQueries({ queryKey: ["profiles"] });
+    await client.invalidateQueries({ queryKey: ["health"] });
+  };
+}
+
 function Profiles() {
   const overview = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   if (overview.isPending) return <p className={styles.dim}>正在读取配置…</p>;
   if (overview.isError) return <EmptyState text={`读取配置失败：${overview.error.message}`} />;
   const data = overview.data;
+  if (data.status === "missing") return <CreateConfig />;
 
   return (
     <div className={styles.profiles}>
-      {data.status !== "ok" && (
-        <Panel
-          as="div"
-          title={data.status === "missing" ? "还没有配置文件" : "配置文件有错"}
-          line="var(--cp-danger)"
-        >
-          {data.status === "missing" && (
-            <p>
-              在项目根目录把 <code>config.example.json</code> 复制成 <code>config.json</code>
-              ，再把密钥放进 <code>.env</code>（只放在后端，网页看不到）。
-            </p>
-          )}
+      {data.status === "invalid" && (
+        <Panel as="div" title="config.json 有错" line="var(--cp-danger)">
+          <p>文件格式不对，设置页没法安全地改它。按下面的提示在编辑器里修好，再刷新这一页。</p>
           <ul className={styles.errors}>
             {data.errors.map((e) => (
               <li key={e}>{e}</li>
             ))}
           </ul>
         </Panel>
+      )}
+      {data.status === "ok" && data.gm !== undefined && data.aux !== undefined && (
+        <Roles profiles={data.profiles} gm={data.gm} aux={data.aux} />
       )}
       <ul className={styles.profileList}>
         {data.profiles.map((p) => (
@@ -129,12 +141,78 @@ function Profiles() {
           </li>
         ))}
       </ul>
-      {data.profiles.length === 0 && data.status === "ok" && <EmptyState text="配置里还没有方案" />}
+      {data.status === "ok" &&
+        (adding ? (
+          <AddProfile onDone={() => setAdding(false)} />
+        ) : (
+          <div>
+            <Button onClick={() => setAdding(true)}>添加方案</Button>
+          </div>
+        ))}
       <p className={styles.dim}>
-        密钥只能在后端的 <code>.env</code> 里改；这里只显示配没配。切换主持用哪个方案请改{" "}
-        <code>config.json</code> 的 gm 字段。
+        密钥只发给本机后端，存在项目根目录的 <code>config.json</code>
+        里（这个文件不会提交到 git），保存后网页上不会再显示出来。
       </p>
     </div>
+  );
+}
+
+function CreateConfig() {
+  const refresh = useRefreshConfig();
+  const create = useMutation({ mutationFn: () => api.initConfig(), onSuccess: refresh });
+  return (
+    <div className={styles.profiles}>
+      <Panel as="div" title="还没有配置" line="var(--cp-yellow)">
+        <p>先照示例建一份配置，再给要用的方案填上密钥，就能开始玩了。</p>
+        {create.isError && <p className={styles.error}>{create.error.message}</p>}
+        <div className={styles.actions}>
+          <Button primary onClick={() => create.mutate()} disabled={create.isPending}>
+            {create.isPending ? "创建中…" : "用示例创建"}
+          </Button>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function Roles({
+  profiles,
+  gm,
+  aux,
+}: {
+  readonly profiles: readonly PublicProfile[];
+  readonly gm: string;
+  readonly aux: string;
+}) {
+  const refresh = useRefreshConfig();
+  const save = useMutation({ mutationFn: api.setRoles, onSuccess: refresh });
+  const picker = (role: "gm" | "aux", label: string, value: string) => (
+    <label>
+      <span>{label}</span>
+      <select
+        value={value}
+        disabled={save.isPending}
+        onChange={(e) =>
+          save.mutate(role === "gm" ? { gm: e.target.value } : { aux: e.target.value })
+        }
+      >
+        {profiles.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}
+            {p.keyStatus === "missing" ? "（缺密钥）" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <Panel as="div" title="用哪个方案" line="var(--cp-yellow)">
+      <div className={styles.pickers}>
+        {picker("gm", "主持（写剧情）", gm)}
+        {picker("aux", "辅助（修格式、写摘要）", aux)}
+      </div>
+      {save.isError && <p className={styles.error}>{save.error.message}</p>}
+    </Panel>
   );
 }
 
@@ -151,21 +229,24 @@ function ProfileCard({
   readonly onEdit: () => void;
   readonly onSaved: () => void;
 }) {
+  const refresh = useRefreshConfig();
   const [asking, setAsking] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [result, setResult] = useState<ConnectionTest | null>(null);
   const test = useMutation({
     mutationFn: () => api.testProfile(profile.name),
     onSuccess: setResult,
     onError: (e) => setResult({ ok: false, error: e.message }),
   });
+  const remove = useMutation({
+    mutationFn: () => api.deleteProfile(profile.name),
+    onSuccess: refresh,
+  });
   const noKey = profile.keyStatus === "missing";
+  const inUse = roles.length > 0;
 
   return (
-    <Panel
-      as="div"
-      title={profile.name}
-      line={roles.length > 0 ? "var(--cp-yellow)" : "var(--cp-red)"}
-    >
+    <Panel as="div" title={profile.name} line={inUse ? "var(--cp-yellow)" : "var(--cp-red)"}>
       <div className={styles.badges}>
         {roles.map((r) => (
           <span key={r} className={styles.role}>
@@ -175,7 +256,6 @@ function ProfileCard({
         <span className={styles.badge}>{profile.type}</span>
         <span className={styles.badge} data-key={profile.keyStatus}>
           {KEY_LABELS[profile.keyStatus]}
-          {profile.apiKeyEnv && profile.keyStatus === "missing" && `（${profile.apiKeyEnv}）`}
         </span>
       </div>
       <dl className={styles.facts}>
@@ -203,6 +283,8 @@ function ProfileCard({
         )}
       </dl>
 
+      <KeyEditor profile={profile} />
+
       {editing && <ProfileForm profile={profile} onSaved={onSaved} />}
 
       <div className={styles.actions}>
@@ -210,12 +292,20 @@ function ProfileCard({
         <Button
           onClick={() => setAsking(true)}
           disabled={test.isPending || noKey}
-          reason={noKey ? "先在 .env 里配好密钥" : undefined}
+          reason={noKey ? "先填好密钥" : undefined}
         >
           {test.isPending ? "测试中…" : "测试连接"}
         </Button>
+        <Button
+          onClick={() => setRemoving(true)}
+          disabled={inUse || remove.isPending}
+          reason={inUse ? "正在使用，先在上面换成别的方案" : undefined}
+        >
+          删除方案
+        </Button>
       </div>
 
+      {remove.isError && <p className={styles.error}>{remove.error.message}</p>}
       {result && (
         <p className={styles.testResult} data-ok={result.ok || undefined} role="status">
           {result.ok
@@ -255,6 +345,234 @@ function ProfileCard({
           </p>
         </Dialog>
       )}
+      {removing && (
+        <Dialog
+          title="删除方案"
+          tone="danger"
+          onClose={() => setRemoving(false)}
+          actions={
+            <>
+              <Button
+                primary
+                onClick={() => {
+                  setRemoving(false);
+                  remove.mutate();
+                }}
+              >
+                删除
+              </Button>
+              <Button onClick={() => setRemoving(false)}>取消</Button>
+            </>
+          }
+        >
+          <p>会从 config.json 删掉「{profile.name}」和它的密钥，删了要重新添加。</p>
+        </Dialog>
+      )}
+    </Panel>
+  );
+}
+
+/** 密钥只进不出：保存后输入框立刻清空，后端也不会把它发回来 */
+function KeyEditor({ profile }: { readonly profile: PublicProfile }) {
+  const refresh = useRefreshConfig();
+  const [value, setValue] = useState("");
+  const [note, setNote] = useState<{ readonly ok: boolean; readonly text: string } | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const save = useMutation({
+    // 密钥直接从输入框读，不当 mutation 参数，免得留在 react-query 的缓存里
+    mutationFn: () => api.setKey(profile.name, value),
+    onSuccess: async () => {
+      setValue("");
+      setNote({ ok: true, text: "已保存，下一轮就用新密钥" });
+      await refresh();
+    },
+    onError: (e) => setNote({ ok: false, text: e.message }),
+  });
+  const clear = useMutation({
+    mutationFn: () => api.clearKey(profile.name),
+    onSuccess: async () => {
+      setNote({ ok: true, text: "已清除" });
+      await refresh();
+    },
+    onError: (e) => setNote({ ok: false, text: e.message }),
+  });
+
+  const status =
+    profile.keySource === "config"
+      ? "已保存在 config.json"
+      : profile.keySource === "env"
+        ? `来自环境变量 ${profile.apiKeyEnv ?? ""}`
+        : profile.keyStatus === "notNeeded"
+          ? "本地模型，一般不需要"
+          : "还没有";
+
+  return (
+    <form
+      className={styles.keyForm}
+      onSubmit={(e) => {
+        e.preventDefault();
+        setNote(null);
+        if (value.trim() !== "") save.mutate();
+      }}
+    >
+      <label>
+        <span>密钥：{status}</span>
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={profile.keyStatus === "configured" ? "填新的会替换现在的" : "粘贴密钥"}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+      <div className={styles.actions}>
+        <Button type="submit" primary disabled={save.isPending || value.trim() === ""}>
+          {save.isPending ? "保存中…" : "保存密钥"}
+        </Button>
+        {profile.keySource === "config" && (
+          <Button onClick={() => setClearing(true)} disabled={clear.isPending}>
+            清除密钥
+          </Button>
+        )}
+      </div>
+      {note && (
+        <p className={note.ok ? styles.ok : styles.error} role="status">
+          {note.text}
+        </p>
+      )}
+      {clearing && (
+        <Dialog
+          title="清除密钥"
+          tone="danger"
+          onClose={() => setClearing(false)}
+          actions={
+            <>
+              <Button
+                primary
+                onClick={() => {
+                  setClearing(false);
+                  clear.mutate();
+                }}
+              >
+                清除
+              </Button>
+              <Button onClick={() => setClearing(false)}>取消</Button>
+            </>
+          }
+        >
+          <p>会从 config.json 删掉「{profile.name}」的密钥，之后要重新填才能用这个方案。</p>
+        </Dialog>
+      )}
+    </form>
+  );
+}
+
+function AddProfile({ onDone }: { readonly onDone: () => void }) {
+  const refresh = useRefreshConfig();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<PublicProfile["type"]>("openai");
+  const [model, setModel] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [contextWindow, setContextWindow] = useState("128000");
+  const [key, setKey] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    // 密钥从输入框读，不进 mutation 参数
+    mutationFn: async (profile: NewProfile) => {
+      await api.createProfile(profile);
+      if (key.trim() !== "") await api.setKey(profile.name, key);
+    },
+    onSuccess: async () => {
+      setKey("");
+      await refresh();
+      onDone();
+    },
+    onError: async (e) => {
+      setError(e.message);
+      await refresh();
+    },
+  });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const size = Number(contextWindow);
+    if (!Number.isInteger(size)) {
+      setError("上下文窗口要填整数");
+      return;
+    }
+    create.mutate({
+      name: name.trim(),
+      type,
+      model: model.trim(),
+      contextWindow: size,
+      ...(baseUrl.trim() !== "" ? { baseUrl: baseUrl.trim() } : {}),
+    });
+  };
+
+  return (
+    <Panel as="div" title="添加方案" line="var(--cp-cyan)">
+      <form className={styles.form} onSubmit={submit}>
+        <label>
+          <span>名字（字母、数字、点、下划线、短横线）</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label>
+          <span>类型</span>
+          <select value={type} onChange={(e) => setType(e.target.value as PublicProfile["type"])}>
+            {Object.entries(TYPE_LABELS).map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>模型</span>
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="例如 deepseek-chat"
+            required
+          />
+        </label>
+        <label>
+          <span>地址（baseUrl）</span>
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="中转站填它给的地址，通常以 /v1 结尾"
+          />
+        </label>
+        <label>
+          <span>上下文窗口 tokens</span>
+          <input
+            value={contextWindow}
+            onChange={(e) => setContextWindow(e.target.value)}
+            inputMode="numeric"
+            required
+          />
+        </label>
+        <label>
+          <span>密钥（可以之后再填）</span>
+          <input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.actions}>
+          <Button type="submit" primary disabled={create.isPending}>
+            {create.isPending ? "添加中…" : "添加"}
+          </Button>
+          <Button onClick={onDone}>取消</Button>
+        </div>
+      </form>
     </Panel>
   );
 }

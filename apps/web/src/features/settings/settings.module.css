@@ -279,3 +279,45 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ———— 密钥 ———— */
+
+.keyForm {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--cp-red-line);
+}
+
+.keyForm label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+.keyForm input,
+.form select {
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--cp-text);
+  background: rgb(0 0 0 / 45%);
+  border: 1px solid var(--cp-red-line);
+}
+
+.keyForm input:focus,
+.form select:focus {
+  outline: none;
+  border-color: var(--cp-cyan);
+}
+
+.keyForm .actions {
+  margin-top: 0.2rem;
+}
+
+.ok {
+  color: var(--cp-success);
+  font-size: var(--fs-label);
+}

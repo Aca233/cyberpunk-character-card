@@ -21,6 +21,20 @@ export interface AppDeps {
   readonly rng?: Rng;
 }
 
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/** 只认本机地址：挡住 DNS 重绑定，以及别的网站借浏览器往本机接口发请求（会改配置、写密钥） */
+function fromLocalPage(url: string, origin: string | undefined, fetchSite: string | undefined) {
+  if (!LOOPBACK.has(new URL(url).hostname)) return false;
+  if (fetchSite === "cross-site") return false;
+  if (origin === undefined) return true;
+  try {
+    return LOOPBACK.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function createApp(deps: AppDeps): Hono {
   const hub = deps.hub ?? new TurnHub();
   const game = new GameService({
@@ -39,6 +53,12 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ error: "服务器内部错误，详情见后端日志" }, 500);
   });
   app.notFound((c) => c.json({ error: `没有这个接口：${c.req.method} ${c.req.path}` }, 404));
+  app.use("/api/*", async (c, next) => {
+    if (!fromLocalPage(c.req.url, c.req.header("origin"), c.req.header("sec-fetch-site"))) {
+      return c.json({ error: "只接受本机页面的请求" }, 403);
+    }
+    await next();
+  });
   app.get("/api/health", async (c) => {
     const state = await deps.config.load();
     return c.json({ ok: true, config: state.status, dev: deps.dev });

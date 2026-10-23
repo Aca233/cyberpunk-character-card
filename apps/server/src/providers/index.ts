@@ -30,10 +30,10 @@ export class LlmRouter implements LlmClient {
     switch (profile.type) {
       case "openai":
         if (!key) {
-          const where = profile.apiKeyEnv
-            ? `环境变量 ${profile.apiKeyEnv}`
-            : "config.json 的 apiKey 或 apiKeyEnv";
-          return { ok: false, error: `${role}方案「${profile.name}」没有密钥：请设置${where}` };
+          return {
+            ok: false,
+            error: `${role}方案「${profile.name}」没有密钥：到设置页的「模型方案」里粘贴密钥并保存`,
+          };
         }
         return { ok: true, profile, client: openAiClient(profile, key) };
       case "ollama":

@@ -1,9 +1,9 @@
 import { open, rename, rm } from "node:fs/promises";
 
-/** 先写临时文件并刷盘，再改名替换，写到一半崩溃也不会留下半个文件 */
-export async function atomicWrite(path: string, data: string): Promise<void> {
+/** 先写临时文件并刷盘，再改名替换，写到一半崩溃也不会留下半个文件；mode 是新文件的权限 */
+export async function atomicWrite(path: string, data: string, mode = 0o644): Promise<void> {
   const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
-  const handle = await open(tmp, "w");
+  const handle = await open(tmp, "w", mode);
   try {
     await handle.writeFile(data, "utf8");
     await handle.sync();
