@@ -9,12 +9,14 @@ import {
   diceRules,
   type GmPlan,
   type LogRecord,
+  LogRecordSchema,
   newGameWorld,
   registry,
   rolledFrom,
   TurnInputSchema,
   type TurnRecord,
   type WorldState,
+  withAllSlices,
   worldRules,
 } from "@cp/core";
 import { z } from "zod";
@@ -62,6 +64,18 @@ export const EvalCaseSchema = z
         /** 开局前由代码执行的指令，内部指令也可以，例如人性、开战 */
         commands: z.array(z.unknown()).default([]),
         history: z.array(HistoryTurnSchema).default([]),
+        /** 从试玩存档截出来的：这一轮之前的世界和回合日志；有它时不用上面几项搭开局 */
+        snapshot: z
+          .strictObject({
+            /** 存档的开场设定，故事还没开始时进提示词 */
+            opening: z.string().optional(),
+            world: z.custom<WorldState>(
+              (v) => typeof v === "object" && v !== null && "slices" in v && "time" in v,
+              "world 要是存档里的世界状态",
+            ),
+            records: z.array(LogRecordSchema),
+          })
+          .optional(),
       })
       .prefault({}),
     /** 这一轮的玩家输入；和 confirm 二选一 */
@@ -90,6 +104,8 @@ export const EvalCaseSchema = z
       .prefault({}),
     /** 评分模型按条打 1–5 分 */
     rubric: z.array(z.string().min(1)).default([]),
+    /** 存为用例时模型当时的回复，只供补期望时参考 */
+    actual: z.unknown().optional(),
   })
   .refine(
     (c) => (c.input === undefined) !== (c.confirm === undefined),
@@ -117,6 +133,8 @@ export interface Scenario {
   readonly world: WorldState;
   readonly records: readonly LogRecord[];
   readonly plan: GmPlan;
+  /** 开场设定；只有从存档截出的用例有 */
+  readonly opening?: string | undefined;
 }
 
 const SETUP_AT = "2026-01-01T00:00:00.000Z";
@@ -143,6 +161,7 @@ function applyAll(
 /** 按用例搭出存档状态和这一轮的计划；用例本身有问题时报错 */
 export function buildScenario(c: EvalCase): Scenario {
   const { setup } = c;
+  if (setup.snapshot) return fromSnapshot(c, setup.snapshot);
   let world = newGameWorld(
     { startTime: setup.startTime, difficulty: setup.difficulty },
     gameContent,
@@ -202,5 +221,29 @@ export function buildScenario(c: EvalCase): Scenario {
     world,
     records,
     plan: { kind: "resolve", input: { text: offer.label }, check: rolled },
+  };
+}
+
+/** 从存档截出的用例：世界和日志原样用，最后一轮的检定已经掷过时直接按给的骰面结算 */
+function fromSnapshot(c: EvalCase, snapshot: NonNullable<EvalCase["setup"]["snapshot"]>): Scenario {
+  const world = withAllSlices(snapshot.world);
+  const records = snapshot.records;
+  const { opening } = snapshot;
+  if (c.input) return { world, records, opening, plan: { kind: "action", input: c.input } };
+  const confirm = c.confirm as NonNullable<EvalCase["confirm"]>;
+  const offers = currentOffers(records);
+  const offer = confirm.checkId
+    ? offers.checks.find((o) => o.id === confirm.checkId)
+    : offers.checks[0];
+  if (!offer) throw new Error(`存档里没有待确认的检定 ${confirm.checkId ?? ""}`);
+  return {
+    world,
+    records,
+    opening,
+    plan: {
+      kind: "resolve",
+      input: { text: offer.label },
+      check: rolledFrom(world, offer, confirm.faces),
+    },
   };
 }

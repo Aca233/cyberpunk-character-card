@@ -91,6 +91,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
     return reply(c, await game.context(c.req.param("id"), seq));
   });
 
+  app.post("/:id/turns/:seq/eval-case", async (c) => {
+    const seq = Number(c.req.param("seq"));
+    if (!Number.isInteger(seq) || seq < 0) return c.json({ error: "轮次序号不合法" }, 400);
+    return reply(c, await game.evalDraft(c.req.param("id"), seq));
+  });
+
   app.post("/:id/turns/:turnId/stop", (c) =>
     reply(c, game.stop(c.req.param("id"), c.req.param("turnId"))),
   );

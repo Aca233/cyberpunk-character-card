@@ -128,6 +128,7 @@ function offline(cases: readonly EvalCase[], scenarios: ReadonlyMap<string, Scen
     const scenario = scenarios.get(c.id) as Scenario;
     const prompt = buildGmPrompt(scenario.world, scenario.records, scenario.plan, {
       data: gameData,
+      opening: scenario.opening,
     });
     const findings = moduleFindings(c, prompt.modules);
     const bad = findings.filter((f) => !f.ok);
@@ -202,7 +203,7 @@ async function main(): Promise<number> {
     let run: RunResult;
     try {
       const result = await runGmTurn(
-        { llm: gmLlm, rng, data: gameData },
+        { llm: gmLlm, rng, data: gameData, opening: scenario.opening },
         scenario.world,
         scenario.records,
         scenario.plan,

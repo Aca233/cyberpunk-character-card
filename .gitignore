@@ -16,6 +16,7 @@ reference/
 
 # 测评结果（含真实模型输出）
 tools/evals/results/
+tools/evals/drafts/
 
 # Playwright
 test-results/

@@ -18,6 +18,7 @@ const app = createApp({
   saves: new SaveStore(join(root, "data")),
   characters: new CharacterStore(join(root, "data")),
   dev,
+  evalDrafts: join(root, "tools", "evals", "drafts"),
   log: (message) => console.error(message),
 });
 

@@ -23,6 +23,8 @@ export interface AppDeps {
   readonly hub?: TurnHub;
   /** 测试时可以换成固定骰子 */
   readonly rng?: Rng;
+  /** 「存为评测用例」写草稿的目录 */
+  readonly evalDrafts?: string | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -52,6 +54,7 @@ export function createApp(deps: AppDeps): Hono {
     clock,
     rng: deps.rng ?? cryptoRng,
     log: deps.log,
+    evalDrafts: deps.evalDrafts,
   });
   const app = new Hono();
   app.onError(async (error, c) => {

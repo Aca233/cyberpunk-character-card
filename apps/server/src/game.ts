@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { DEFAULT_OPENING, gameContent, gameData, openingPremise } from "@cp/content";
 import {
   type ActionRecord,
@@ -39,7 +41,7 @@ import {
 import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
-import { KeyedMutex } from "./fsutil";
+import { atomicWrite, KeyedMutex } from "./fsutil";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
 import type { SaveStore } from "./storage";
@@ -73,6 +75,8 @@ export interface GameDeps {
   /** 玩家检定用的骰子 */
   readonly rng: Rng;
   readonly log: (message: string) => void;
+  /** 「存为评测用例」写草稿的目录；不给时不能存 */
+  readonly evalDrafts?: string | undefined;
 }
 
 interface Loaded {
@@ -368,6 +372,61 @@ export class GameService {
           rebuildError,
         },
       };
+    });
+  }
+
+  /**
+   * 上下文查看器的「存为评测用例」：截出第 seq 轮之前的世界和回合日志、这一轮的输入，
+   * 连同当时的回复写成用例草稿；补上期望后移到 tools/evals/ 才进测评
+   */
+  evalDraft(id: string, seq: number): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const dir = this.deps.evalDrafts;
+      if (!dir) return { status: 404, body: { error: "后端没有配置评测用例草稿目录" } };
+      const meta = await this.deps.saves.readMeta(id);
+      const { records } = await this.deps.saves.loadLog(id);
+      const record = records[seq];
+      if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
+        return { status: 404, body: { error: `没有第 ${seq} 轮` } };
+      }
+      const input = TurnInputSchema.safeParse(record.input);
+      if (!input.success) return { status: 400, body: { error: "这一轮的玩家输入格式不对" } };
+      const before = records.slice(0, seq);
+      let ask: Record<string, unknown> = { input: input.data };
+      if (record.resolves !== undefined) {
+        const rolled = before.findLast(
+          (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
+        );
+        if (!rolled) {
+          return { status: 409, body: { error: `找不到检定 ${record.resolves} 的骰子记录` } };
+        }
+        ask = { confirm: { checkId: record.resolves, faces: rolled.roll.faces } };
+      }
+      const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
+      const opening = openingPremise(meta.opening);
+      const caseId = `playtest-${id}-${seq}`;
+      const draft = {
+        id: caseId,
+        title: `试玩「${meta.title}」第 ${seq} 轮：写清这一轮哪里不对`,
+        tags: ["playtest"],
+        setup: {
+          difficulty: meta.difficulty,
+          snapshot: { ...(opening ? { opening } : {}), world, records: before },
+        },
+        ...ask,
+        expect: {},
+        rubric: [],
+        actual: {
+          text: record.text,
+          commands: record.commands,
+          dropped: record.dropped,
+          check: record.check ?? null,
+          choices: record.choices ?? [],
+        },
+      };
+      await mkdir(dir, { recursive: true });
+      await atomicWrite(join(dir, `${caseId}.json`), `${JSON.stringify(draft, null, 2)}\n`);
+      return { status: 201, body: { id: caseId, file: `tools/evals/drafts/${caseId}.json` } };
     });
   }
 

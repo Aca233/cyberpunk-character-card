@@ -321,3 +321,10 @@
   color: var(--cp-success);
   font-size: var(--fs-label);
 }
+
+.caseRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

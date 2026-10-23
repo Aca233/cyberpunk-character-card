@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { api, type TurnContext } from "../../api/client";
@@ -176,14 +176,33 @@ function ContextViewer() {
       {turns.length === 0 && state.isSuccess && <EmptyState text="这个存档还没有写进任何一轮" />}
       {context.isPending && seq !== null && <p className={styles.dim}>正在重建这一轮的上下文…</p>}
       {context.isError && <EmptyState text={`读取失败：${context.error.message}`} />}
-      {context.data && <ContextDetail ctx={context.data} />}
+      {context.data && <ContextDetail ctx={context.data} saveId={saveId} />}
     </div>
   );
 }
 
-function ContextDetail({ ctx }: { readonly ctx: TurnContext }) {
+/** 把出问题的这一轮截成评测用例草稿；补上期望后移进 tools/evals/ */
+function SaveAsCase({ saveId, seq }: { readonly saveId: string; readonly seq: number }) {
+  const save = useMutation({ mutationFn: () => api.evalCase(saveId, seq) });
+  return (
+    <div className={styles.caseRow}>
+      <Button onClick={() => save.mutate()} disabled={save.isPending}>
+        存为评测用例
+      </Button>
+      {save.isSuccess && (
+        <p className={styles.dim}>
+          已写入 {save.data.file}：补上 expect 和 rubric，移到 tools/evals/ 就会进测评
+        </p>
+      )}
+      {save.isError && <p className={styles.error}>没存上：{save.error.message}</p>}
+    </div>
+  );
+}
+
+function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly saveId: string }) {
   return (
     <div className={styles.detail}>
+      <SaveAsCase key={`${saveId}-${ctx.seq}`} saveId={saveId} seq={ctx.seq} />
       <dl className={styles.facts}>
         <dt>时间</dt>
         <dd>{formatDate(ctx.at)}</dd>

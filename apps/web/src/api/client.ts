@@ -210,6 +210,9 @@ export const api = {
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>
     request<TurnContext>("GET", `/saves/${saveId}/turns/${seq}/context`),
+  /** 把这一轮存成评测用例草稿，返回草稿在仓库里的路径 */
+  evalCase: (saveId: string, seq: number) =>
+    request<{ id: string; file: string }>("POST", `/saves/${saveId}/turns/${seq}/eval-case`),
 };
 
 /** 每次提交生成一个新的请求 id；同一次提交重发时沿用，后端只执行一次 */
