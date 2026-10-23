@@ -8,3 +8,4 @@ export * as healthRules from "./systems/health";
 export * as humanityRules from "./systems/humanity";
 export * as inventoryRules from "./systems/inventory";
 export { registry, systems } from "./systems/registry";
+export * as worldRules from "./systems/world";
