@@ -19,18 +19,17 @@ pnpm check   # 类型检查 + Biome + Vitest
 
 来源：ai.google.dev 的模型页面、定价页面和安全设置指南。
 
-| 项目 | 结果 |
-|---|---|
-| 模型 ID | `gemini-3.8-flash`，稳定版（2026-09 更新） |
-| 上下文 | 输入最多 1,048,576 token，单次输出最多 65,536 token |
-| 输入 / 输出 | 输入可以是文本、图片、视频、音频、PDF；只输出文本 |
-| 思考强度 | `thinking_level`：`low` / `medium`（默认）/ `high`；不支持 `minimal`，旧的 `thinking_budget` 已被取代 |
-| 价格 | 优惠价到 2026-12-31：输入 $0.75 / 1M token，输出 $3.75 / 1M token；2027-01-01 起按标准价 |
-| 安全设置 | 类别：仇恨、色情、危险内容、骚扰、公民诚信、越狱。2.5 及以后的模型，没设置的类别默认 `OFF`。`BLOCK_NONE` 不拦截但会返回评分；`OFF` 不返回任何安全信息 |
-| 被拦截时 | Interactions API 返回 HTTP 400，错误码 `safety`，不返回被拦截的内容 |
+| 项目        | 结果                                                                                                                                                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 模型 ID     | `gemini-3.8-flash`，稳定版（2026-09 更新）                                                                                                            |
+| 上下文      | 输入最多 1,048,576 token，单次输出最多 65,536 token                                                                                                   |
+| 输入 / 输出 | 输入可以是文本、图片、视频、音频、PDF；只输出文本                                                                                                     |
+| 思考强度    | `thinking_level`：`low` / `medium`（默认）/ `high`；不支持 `minimal`，旧的 `thinking_budget` 已被取代                                                 |
+| 价格        | 优惠价到 2026-12-31：输入 $0.75 / 1M token，输出 $3.75 / 1M token；2027-01-01 起按标准价                                                              |
+| 安全设置    | 类别：仇恨、色情、危险内容、骚扰、公民诚信、越狱。2.5 及以后的模型，没设置的类别默认 `OFF`。`BLOCK_NONE` 不拦截但会返回评分；`OFF` 不返回任何安全信息 |
+| 被拦截时    | Interactions API 返回 HTTP 400，错误码 `safety`，不返回被拦截的内容                                                                                   |
 
 对实现的影响：
-
 - 主持人上下文按 1M 输入、64k 输出设上限；预算和摘要策略不变，不把整份日志塞进去。
 - 安全设置默认不传（即 `OFF`）；需要拿评分做自己的规则时再改成 `BLOCK_NONE`。
 - 提供方必须把"HTTP 400 + `safety`"转成 `LlmEvent` 的 `blocked` 事件，不能当成网络错误重试。
@@ -41,29 +40,28 @@ pnpm check   # 类型检查 + Biome + Vitest
 
 M1 用到的依赖，2026-10-23 查到的最新版：
 
-| 包 | 版本 |
-|---|---|
-| react / react-dom | 19.3.1 |
-| vite | 8.3.5 |
-| @vitejs/plugin-react | 6.1.2 |
-| react-router | 8.5.0 |
-| zustand | 5.0.16 |
-| @tanstack/react-query | 5.104.5 |
-| immer | 11.2.9 |
-| hono | 4.13.13 |
-| @hono/node-server | 2.1.5 |
-| zod | 4.6.7 |
-| @playwright/test | 1.64.1 |
-| sharp | 0.35.5（需要 `pnpm approve-builds sharp`） |
-| concurrently | 10.0.6 |
-| typescript | 7.0.2 |
-| @biomejs/biome | 2.6.2（`rules.recommended` 已弃用，改用 `rules.preset`） |
-| vitest | 5.0.5 |
+| 包                    | 版本                                                     |
+| --------------------- | -------------------------------------------------------- |
+| react / react-dom     | 19.3.1                                                   |
+| vite                  | 8.3.5                                                    |
+| @vitejs/plugin-react  | 6.1.2                                                    |
+| react-router          | 8.5.0                                                    |
+| zustand               | 5.0.16                                                   |
+| @tanstack/react-query | 5.104.5                                                  |
+| immer                 | 11.2.9                                                   |
+| hono                  | 4.13.13                                                  |
+| @hono/node-server     | 2.1.5                                                    |
+| zod                   | 4.6.7                                                    |
+| @playwright/test      | 1.64.1                                                   |
+| sharp                 | 0.35.5（需要 `pnpm approve-builds sharp`）               |
+| concurrently          | 10.0.6                                                   |
+| typescript            | 7.0.2                                                    |
+| @biomejs/biome        | 2.6.2（`rules.recommended` 已弃用，改用 `rules.preset`） |
+| vitest                | 5.0.5                                                    |
 
 ### 素材转换：WolvenKit CLI
 
 来源：WolvenKit wiki 的 CLI 页面。本机核对的是 `_unpack` 里的文件。
-
 - **`.inkwidget` 和 `onscreens.json` 都还是 CR2W 二进制**：本机核对过，文件开头 4 个字节是 `CR2W`。这包括 `_unpack/assets/ui_layout/` 下的 1,698 个 `.inkwidget`，以及 `text_zh_en/{base,ep1}/localization/zh-cn/onscreens/onscreens.json`。`onscreens.json` 虽然扩展名是 `.json`，实际也是 CR2W；目前还没有转成文本 JSON 的版本。
 - **转换命令是 `convert serialize`**，可以只转一个文件：`WolvenKit.CLI convert serialize "<文件或目录>" -o "<输出目录>"`。目录可以加 `-w *.inkwidget` 过滤，加 `--print` 输出到标准输出；旧的 `cr2w -s` 写法已弃用。
 - **贴图（`.xbm`）用 `export`**：`WolvenKit.CLI export "<文件.xbm>" --uext png -o "<输出目录>"`。还在 `.archive` 里的文件用 `uncook -p "<archive>" -w *.xbm --uext png -o "<输出目录>"`。

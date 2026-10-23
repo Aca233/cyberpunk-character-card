@@ -15,7 +15,7 @@ import {
 import type { Snapshot, WorldState } from "./world";
 
 const at = "2077-08-20T21:00:00.000Z";
-const initial: WorldState = { slices: { counter: { value: 0 } } };
+const initial: WorldState = { time: 0, slices: { counter: { value: 0 } } };
 const origin: Snapshot = { nextSeq: 0, world: initial };
 
 function turn(seq: number, value: number): TurnRecord {
