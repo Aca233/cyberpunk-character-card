@@ -68,10 +68,13 @@ export function isOpen(job: Pick<Job, "status">): boolean {
   return job.status === "offered" || job.status === "active";
 }
 
-function changeTrust(fixer: Draft<Fixer>, delta: number): string {
-  const before = fixer.trust;
-  fixer.trust = Math.max(0, Math.min(TRUST_MAX, before + delta));
-  return `${fixer.name}的信任度 ${before} → ${fixer.trust}`;
+function changeTrust(
+  fixer: Draft<Fixer>,
+  delta: number,
+): { from: number; to: number; note: string } {
+  const from = fixer.trust;
+  fixer.trust = Math.max(0, Math.min(TRUST_MAX, from + delta));
+  return { from, to: fixer.trust, note: `${fixer.name}的信任度 ${from} → ${fixer.trust}` };
 }
 
 export function seedFixer(draft: Draft<JobsState>, command: SeedFixer): ApplyOutcome {
@@ -119,6 +122,8 @@ export function offerJob(
     overdue: false,
     paid: null,
     summary: null,
+    humanityAtAccept: null,
+    settlement: null,
   });
   return {
     ok: true,
@@ -130,7 +135,12 @@ function find(draft: Draft<JobsState>, id: string): Draft<Job> | undefined {
   return draft.jobs.find((j) => j.id === id);
 }
 
-export function acceptJob(draft: Draft<JobsState>, command: JobAccept, now: number): ApplyOutcome {
+export function acceptJob(
+  draft: Draft<JobsState>,
+  command: JobAccept,
+  now: number,
+  humanity: number,
+): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
   if (job.status !== "offered") {
@@ -138,6 +148,7 @@ export function acceptJob(draft: Draft<JobsState>, command: JobAccept, now: numb
   }
   job.status = "active";
   job.acceptedAt = now;
+  job.humanityAtAccept = humanity;
   return { ok: true, notes: [`接下委托：${job.title}`] };
 }
 
@@ -149,8 +160,13 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
   return { ok: true };
 }
 
-/** 委托结束：写结局和总评，改信任度，到手的报酬交给欧元系统 */
-export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
+/** 委托结束：写结局和总评，改信任度，到手的报酬交给欧元系统，声望交给角色系统；结算记在委托上 */
+export function endJob(
+  draft: Draft<JobsState>,
+  command: JobEnd,
+  now: number,
+  humanity: number,
+): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
   if (job.status !== "active") {
@@ -166,20 +182,27 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
   job.summary = command.summary;
   const notes = [`委托${JOB_OUTCOME_LABELS[command.outcome]}：${job.title}`];
   const fixer = job.fixer === null ? undefined : draft.fixers[job.fixer];
-  if (fixer) notes.push(changeTrust(fixer, TRUST_CHANGE[command.outcome]));
+  const trust = fixer ? changeTrust(fixer, TRUST_CHANGE[command.outcome]) : null;
+  if (trust) notes.push(trust.note);
   const emit: Command[] =
     paid > 0
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
-  if (done) {
-    const full = CRED_HALVES[job.risk] ?? 1;
+  const full = CRED_HALVES[job.risk] ?? 1;
+  const credHalves = done ? (command.outcome === "clean" ? full : Math.ceil(full / 2)) : 0;
+  if (credHalves > 0) {
     emit.push({
       type: "character.cred",
-      halves: command.outcome === "clean" ? full : Math.ceil(full / 2),
+      halves: credHalves,
       reason: `委托${JOB_OUTCOME_LABELS[command.outcome]}`,
       event: `job:${job.id}`,
     });
   }
+  job.settlement = {
+    credHalves,
+    trust: trust ? { from: trust.from, to: trust.to } : null,
+    humanity: job.humanityAtAccept === null ? null : humanity - job.humanityAtAccept,
+  };
   return { ok: true, notes, emit };
 }
 

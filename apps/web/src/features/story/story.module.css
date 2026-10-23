@@ -1037,3 +1037,46 @@
 .jobs > li[data-overdue] {
   border-left-color: var(--cp-danger);
 }
+
+/* 委托结算卡 */
+.settleMeta {
+  margin: 0 0 0.6rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.settle {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  min-width: 22rem;
+}
+
+.settle > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--cp-cyan) 25%, transparent);
+  padding-bottom: 0.25rem;
+}
+
+.settle dt {
+  color: var(--cp-text-dim);
+}
+
+.settle dd {
+  margin: 0;
+}
+
+.settle dd[data-tone="good"] {
+  color: var(--cp-cyan);
+}
+
+.settle dd[data-tone="bad"] {
+  color: var(--cp-danger);
+}
+
+.settleSummary {
+  margin: 0.8rem 0 0;
+  font-style: italic;
+}

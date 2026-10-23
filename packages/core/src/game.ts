@@ -400,6 +400,15 @@ export function projectState(
         notes: j.notes,
         paid: j.paid,
         summary: j.summary,
+        /** 结算卡：声望按级、信任度变化、接单以来的人性变化 */
+        settlement:
+          j.settlement === null
+            ? null
+            : {
+                streetCred: j.settlement.credHalves / 2,
+                trust: j.settlement.trust,
+                humanity: j.settlement.humanity,
+              },
       })),
     },
     deadlines: clock.deadlines

@@ -11,6 +11,7 @@ import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
+import { type SettledJob, SettlementCard } from "./Settlement";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
@@ -50,6 +51,9 @@ export function StoryScreen() {
   // 新的一轮写进存档后，和上一次看到的状态比，弹出变化提示
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const previous = useRef<View | null>(null);
+  // 委托结束后排队弹出的结算卡
+  const [settled, setSettled] = useState<readonly SettledJob[]>([]);
+  const closeSettlement = useCallback(() => setSettled((q) => q.slice(1)), []);
   useEffect(() => {
     if (!view) return;
     const prev = previous.current;
@@ -57,6 +61,11 @@ export function StoryScreen() {
     if (!prev) return;
     const fresh = diffViews(prev, view);
     if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-6));
+    const wasOpen = new Set(prev.jobs.list.filter((j) => j.open).map((j) => j.id));
+    const closed = view.jobs.list.filter(
+      (j) => !j.open && j.settlement !== null && wasOpen.has(j.id),
+    );
+    if (closed.length > 0) setSettled((q) => [...q, ...closed]);
   }, [view]);
   const dropToast = useCallback(
     (key: string) => setToasts((t) => t.filter((x) => x.key !== key)),
@@ -273,6 +282,7 @@ export function StoryScreen() {
           <p>你的输入还留在输入框里，配好以后可以直接重发。</p>
         </Dialog>
       )}
+      {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
       {failure?.kind === "blocked" && (
         <Dialog
           title="这一轮被安全过滤拦下了"

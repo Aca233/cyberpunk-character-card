@@ -29,6 +29,17 @@ export const JobStatusSchema = z.enum([
 ]);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
 
+/** 结束时记下的结算，给结算卡看；报酬见 paid */
+export const JobSettlementSchema = z.object({
+  /** 这单带来的街头声望，按半级计 */
+  credHalves: z.number().int().min(0),
+  /** 中间人信任度的变化；没有中间人时为 null */
+  trust: z.object({ from: z.number().int(), to: z.number().int() }).nullable(),
+  /** 从接单到结束的人性变化；接单时还没记人性的旧委托为 null */
+  humanity: z.number().int().nullable(),
+});
+export type JobSettlement = z.infer<typeof JobSettlementSchema>;
+
 export const JobSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -57,6 +68,9 @@ export const JobSchema = z.object({
   /** 实际到手的报酬；结束时写 */
   paid: z.number().int().min(0).nullable(),
   summary: z.string().nullable(),
+  /** 接单时的人性，结算时算这一单的人性变化 */
+  humanityAtAccept: z.number().int().nullable().default(null),
+  settlement: JobSettlementSchema.nullable().default(null),
 });
 export type Job = z.infer<typeof JobSchema>;
 

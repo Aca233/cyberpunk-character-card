@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { CharacterState } from "../character";
+import type { HumanityState } from "../humanity";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsRules } from "./prompt";
 import {
@@ -14,10 +15,10 @@ import {
   SeedFixerSchema,
 } from "./schema";
 
-/** 委托和中间人：委托卡、进展笔记、结局、信任度；报酬交给欧元系统 */
+/** 委托和中间人：委托卡、进展笔记、结局、信任度和结算；报酬交给欧元系统，声望交给角色系统 */
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
-  dependsOn: ["economy", "character"],
+  dependsOn: ["economy", "character", "humanity"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -34,11 +35,11 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
       case "jobOffer":
         return offerJob(draft, command, ctx.now, ctx.read<CharacterState>("character").streetCred);
       case "jobAccept":
-        return acceptJob(draft, command, ctx.now);
+        return acceptJob(draft, command, ctx.now, ctx.read<HumanityState>("humanity").current);
       case "jobNote":
         return noteJob(draft, command);
       case "jobEnd":
-        return endJob(draft, command, ctx.now);
+        return endJob(draft, command, ctx.now, ctx.read<HumanityState>("humanity").current);
     }
   },
   tick: (draft, span) => tickJobs(draft, span),
