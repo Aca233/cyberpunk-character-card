@@ -62,9 +62,10 @@ M1 用到的依赖，2026-10-23 查到的最新版：
 
 ### 素材转换：WolvenKit CLI
 
-来源：WolvenKit wiki 的 CLI 页面。
+来源：WolvenKit wiki 的 CLI 页面。本机核对的是 `_unpack` 里的文件。
 
-- 支持转换单个文件：`WolvenKit.CLI.exe export "<文件.xbm>" --uext png -o "<输出目录>"`。也可以传多个文件或一个目录；旧的 `-p` 写法已弃用。
-- 还在 `.archive` 里的文件要用 `uncook -p "<archive>" -w *.xbm --uext png -o "<输出目录>"`。
-- 安装方法：`dotnet tool install -g wolvenkit.cli`。
-- `tools/assets/pick.ts` 优先使用 `_unpack` 里已经解出的 PNG。缺图时报错，并给出可以照抄的 `export` 命令，不自动调用，也不用 CSS / SVG 代替。
+- **`.inkwidget` 和 `onscreens.json` 都还是 CR2W 二进制**：本机核对过，文件开头 4 个字节是 `CR2W`。这包括 `_unpack/assets/ui_layout/` 下的 1,698 个 `.inkwidget`，以及 `text_zh_en/{base,ep1}/localization/zh-cn/onscreens/onscreens.json`。`onscreens.json` 虽然扩展名是 `.json`，实际也是 CR2W；目前还没有转成文本 JSON 的版本。
+- **转换命令是 `convert serialize`**，可以只转一个文件：`WolvenKit.CLI convert serialize "<文件或目录>" -o "<输出目录>"`。目录可以加 `-w *.inkwidget` 过滤，加 `--print` 输出到标准输出；旧的 `cr2w -s` 写法已弃用。
+- **贴图（`.xbm`）用 `export`**：`WolvenKit.CLI export "<文件.xbm>" --uext png -o "<输出目录>"`。还在 `.archive` 里的文件用 `uncook -p "<archive>" -w *.xbm --uext png -o "<输出目录>"`。
+- **本机还没装 WolvenKit CLI**；dotnet 已有（`C:\Program Files\dotnet`）。安装命令是 `dotnet tool install -g wolvenkit.cli`，等切片 5 做素材时再装，装之前先确认。
+- 转出的 JSON 放到 `reference/ui/layouts/` 和 `tools/assets/` 的输入目录，不进版本库。`pick.ts` 缺图或缺布局时报错，并给出可以照抄的命令，不自动调用，也不用 CSS / SVG 代替。
