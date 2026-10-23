@@ -200,7 +200,7 @@ export async function runGmTurn(
   b.checkAborted();
   const { rest, narrative, block } = splitter.finish();
   if (rest !== "") deps.onText?.(rest);
-  if (narrative === "") throw new GmEmptyReplyError("主持人没有返回正文，可以重试");
+  if (narrative === "") throw new GmEmptyReplyError("模型没有返回正文，可以重试");
 
   const shape = await b.readBlock(block);
   // 场外提问由主持人判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算

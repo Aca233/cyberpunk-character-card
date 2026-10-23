@@ -44,7 +44,7 @@ function TurnBlock({ turn, saveId }: { readonly turn: Turn; readonly saveId: str
       ))}
       <footer className={styles.turnMeta}>
         {turn.dropped > 0 && (
-          <span className={styles.dropped} title="主持人这轮写的部分指令没能通过校验，被丢弃了">
+          <span className={styles.dropped} title="模型这轮写的部分指令没能通过校验，被丢弃了">
             本轮数值未结算（{turn.dropped} 条）
           </span>
         )}
@@ -92,7 +92,7 @@ export function StoryLog({
       <div className={styles.logInner}>
         {earlier > 0 && <p className={styles.dim}>更早的 {earlier} 轮暂不显示</p>}
         {view.turns.length === 0 && !generating && (
-          <p className={styles.dim}>故事还没开始。写下你的第一个行动，或者直接问主持人怎么开场。</p>
+          <p className={styles.dim}>故事还没开始。写下你的第一句话或第一个行动。</p>
         )}
         {view.turns.map((t) => (
           <TurnBlock key={t.seq} turn={t} saveId={saveId} />

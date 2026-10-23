@@ -131,7 +131,7 @@ function Profiles() {
             <ProfileCard
               profile={p}
               roles={[
-                data.gm === p.name ? "主持" : null,
+                data.gm === p.name ? "角色" : null,
                 data.aux === p.name ? "辅助" : null,
               ].filter((r): r is string => r !== null)}
               editing={editing === p.name}
@@ -208,7 +208,7 @@ function Roles({
   return (
     <Panel as="div" title="用哪个方案" line="var(--cp-yellow)">
       <div className={styles.pickers}>
-        {picker("gm", "主持（写剧情）", gm)}
+        {picker("gm", "角色（扮演 NPC、写剧情）", gm)}
         {picker("aux", "辅助（修格式、写摘要）", aux)}
       </div>
       {save.isError && <p className={styles.error}>{save.error.message}</p>}

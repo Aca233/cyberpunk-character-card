@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
 
-/** 主持人回复的格式：正文在前，末尾一个 <state> 指令块，块内是一个 JSON 对象 */
+/** 模型回复的格式：正文在前，末尾一个 <state> 指令块，块内是一个 JSON 对象 */
 export const STATE_OPEN = "<state>";
 export const STATE_CLOSE = "</state>";
 
@@ -26,7 +26,9 @@ export const MAX_CHOICES = 5;
 /** 指令块的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
 export const BlockDocSchema = z.object({
   read: z.string().optional().describe("一句话说出你对玩家意图的理解"),
-  choices: z.array(ChoiceSchema).describe(`2–4 个建议选项，最多 ${MAX_CHOICES} 个`),
+  choices: z
+    .array(ChoiceSchema)
+    .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
   check: CheckSpecSchema.nullable().describe(
     "需要掷骰时给出，这一轮只写到行动将要发生；不需要时写 null",
   ),

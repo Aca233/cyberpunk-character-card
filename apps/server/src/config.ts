@@ -60,7 +60,7 @@ const RolesSchema = z.strictObject({
 export const ConfigSchema = z
   .strictObject({
     profiles: z.array(ProfileSchema).min(1, "至少要有一个方案"),
-    /** 主持人模型用哪个方案 */
+    /** 角色模型（扮演 NPC、写剧情）用哪个方案 */
     gm: z.string().min(1),
     /** 辅助模型（摘要、格式修复、模块解读）用哪个方案 */
     aux: z.string().min(1),
@@ -326,7 +326,7 @@ export class ConfigService {
         if (!config.profiles.some((p) => p.name === name)) {
           return fail(404, `没有叫 ${name} 的方案`);
         }
-        const roles = [config.gm === name ? "主持" : null, config.aux === name ? "辅助" : null]
+        const roles = [config.gm === name ? "角色模型" : null, config.aux === name ? "辅助" : null]
           .filter((r) => r !== null)
           .join("和");
         if (roles !== "") return fail(409, `「${name}」正在当${roles}，先换成别的方案再删`);
@@ -336,7 +336,7 @@ export class ConfigService {
     );
   }
 
-  /** 换主持 / 辅助用的方案 */
+  /** 换角色 / 辅助用的方案 */
   setRoles(body: unknown): Promise<Result<{ gm: string; aux: string }>> {
     const parsed = RolesSchema.safeParse(body);
     if (!parsed.success) {

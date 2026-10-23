@@ -355,7 +355,7 @@ export class GameService {
       if (error instanceof GmAbortedError || error instanceof AbortedError || signal.aborted) {
         hub.push(run, { type: "stopped" });
       } else if (error instanceof GmEmptyReplyError) {
-        hub.push(run, { type: "error", message: "主持人没有返回正文，可以重试", retryable: true });
+        hub.push(run, { type: "error", message: "模型没有返回正文，可以重试", retryable: true });
       } else if (error instanceof UpstreamError) {
         hub.push(run, {
           type: "error",

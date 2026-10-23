@@ -4,7 +4,7 @@ import { Button } from "../../ui/Button";
 import styles from "./story.module.css";
 
 const MAX = 2000;
-const HINT = "动作、台词、心里话都直接写，主持人自己分辨；想问规则或现状也直接问";
+const HINT = "动作、台词、心里话都直接写；想跳出角色问规则或现状，也直接问";
 
 /** 只有一个输入框；Enter 发送，Shift+Enter 换行；生成时变成“停止生成” */
 export function InputBar({

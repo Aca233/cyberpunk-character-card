@@ -15,7 +15,7 @@ import { codeFindings, type Finding, moduleFindings } from "./gm-eval/checks";
 import { grade, type Score } from "./gm-eval/grader";
 
 /**
- * 主持人测评：pnpm eval [--gm 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
+ * 角色模型测评：pnpm eval [--gm 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
  *   [--repeat 3] [--jobs 2] [--offline]
  * 调用真实模型，会花钱；--offline 只检查用例和规则模块选择，不调模型。
  * 结果写进 tools/evals/results/，并和上一次对比
@@ -184,7 +184,7 @@ async function main(): Promise<number> {
     graderLlm = router;
   }
   console.log(
-    `主持人 ${gmName}，辅助 ${auxName}，评分 ${graderName ?? "不评（没给 --grader，只跑代码检查）"}`,
+    `角色模型 ${gmName}，辅助 ${auxName}，评分 ${graderName ?? "不评（没给 --grader，只跑代码检查）"}`,
   );
   console.log(`${cases.length} 条用例 × ${repeat} 次，并发 ${jobs}；调用真实模型，会产生费用\n`);
 
@@ -341,7 +341,7 @@ async function main(): Promise<number> {
   }
   const u = (x: Usage) => `输入 ${x.inputTokens}，输出 ${x.outputTokens}`;
   console.log(
-    `\ntoken 用量：主持人 ${u(usage.gm)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
+    `\ntoken 用量：角色模型 ${u(usage.gm)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
   );
   console.log(`结果：tools/evals/results/${name}`);
   return 0;

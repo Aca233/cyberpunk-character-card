@@ -24,7 +24,7 @@ export class LlmRouter implements LlmClient {
       return { ok: false, error: `config.json 还不能用：${state.errors.join("；")}` };
     const name = this.pick[purpose] ?? state.config[purpose];
     const profile = state.config.profiles.find((p) => p.name === name);
-    const role = purpose === "gm" ? "主持人" : "辅助模型";
+    const role = purpose === "gm" ? "角色模型" : "辅助模型";
     if (!profile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };
     const key = this.config.keyFor(profile);
     switch (profile.type) {
