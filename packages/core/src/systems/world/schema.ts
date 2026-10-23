@@ -43,15 +43,24 @@ export function parseGameTime(text: string): number | undefined {
   return ms / 60000;
 }
 
-/** 游戏时间字符串，例如 2076-03-14 22:40；换算成从 1970-01-01 00:00 起的分钟数 */
-export const GameTimeSchema = z.string().transform((text, ctx) => {
-  const minutes = parseGameTime(text);
-  if (minutes === undefined) {
-    ctx.addIssue({ code: "custom", message: `时间格式应为 YYYY-MM-DD HH:mm：${text}` });
-    return z.NEVER;
-  }
-  return minutes;
-});
+/**
+ * 游戏时间字符串，例如 2076-03-14 22:40；换算成从 1970-01-01 00:00 起的分钟数。
+ * 已经换算过的分钟数原样通过：结算时会把校验过的指令再校验一遍，换算必须能重复做。
+ * 给模型看的格式只写文本
+ */
+export const GameTimeSchema = z
+  .union([
+    z.string().transform((text, ctx) => {
+      const minutes = parseGameTime(text);
+      if (minutes === undefined) {
+        ctx.addIssue({ code: "custom", message: `时间格式应为 YYYY-MM-DD HH:mm：${text}` });
+        return z.NEVER;
+      }
+      return minutes;
+    }),
+    z.number().int(),
+  ])
+  .meta({ modelDoc: "文本" });
 
 export const DeadlineSchema = z.object({
   id: z.string().min(1),

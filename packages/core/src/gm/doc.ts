@@ -14,6 +14,8 @@ interface JsonSchema {
   readonly description?: string;
   readonly minimum?: number;
   readonly maximum?: number;
+  /** schema 的 meta 里指定的写法，代替自动生成的（例如能接受两种输入、只想让模型用一种） */
+  readonly modelDoc?: string;
 }
 
 /** 超过这个范围的上下限是 Zod 默认的安全整数边界，不写出来 */
@@ -29,6 +31,7 @@ function range(schema: JsonSchema, name: string): string {
 }
 
 function render(schema: JsonSchema): string {
+  if (schema.modelDoc !== undefined) return schema.modelDoc;
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   if (schema.enum) return schema.enum.map((v) => JSON.stringify(v)).join("|");
   const union = schema.anyOf ?? schema.oneOf;
