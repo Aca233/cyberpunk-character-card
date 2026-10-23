@@ -218,6 +218,25 @@ export function SidePanel({
         )}
       </Panel>
 
+      <Panel as="div" title="义体" line="var(--cp-cyan)">
+        {view.cyberware.length === 0 ? (
+          <p className={styles.dim}>没装义体。</p>
+        ) : (
+          <ul className={styles.cyberList}>
+            {view.cyberware.map((c) => (
+              <li key={c.id} className={styles.cyberItem}>
+                <span>{c.name}</span>
+                <small className={styles.cyberSlot}>
+                  {c.slotLabel}
+                  {c.rarityLabel ? ` · ${c.rarityLabel}` : ""}
+                </small>
+                {c.ability && <p className={styles.cyberAbility}>{c.ability}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
         {view.npcs.length === 0 ? (
           <p className={styles.dim}>还没有认识的人，人物档案会随着交谈和相处留下来。</p>

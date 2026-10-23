@@ -1,6 +1,7 @@
 import { type AnySystem, createRegistry } from "../kernel/system";
 import { character } from "./character";
 import { combat } from "./combat";
+import { cyberware } from "./cyberware";
 import { dice } from "./dice";
 import { economy } from "./economy";
 import { health } from "./health";
@@ -22,6 +23,7 @@ export const systems: readonly AnySystem[] = [
   npc,
   economy,
   jobs,
+  cyberware,
 ];
 
 export const registry = createRegistry(systems);

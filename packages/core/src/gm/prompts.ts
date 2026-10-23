@@ -4,6 +4,7 @@ import type { RuleModule } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { TurnInput } from "../schemas/turn";
+import { cyberwareSection } from "../systems/cyberware/prompt";
 import {
   ATTRIBUTE_LABELS,
   type Attribute,
@@ -232,6 +233,10 @@ export function stateSummary(view: PlayerView): string {
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
     `欧元：${view.money.eddies}`,
   ];
+  if (view.cyberware.length > 0)
+    lines.push(
+      `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}）`).join("、")}`,
+    );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
   if (view.inventory.healing)
@@ -290,9 +295,12 @@ export function buildGmPrompt(
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const tables = extras.data
-    ? [catalogSection(extras.data), locationSection(extras.data), twistSection(extras.data)].filter(
-        (s): s is string => s !== undefined,
-      )
+    ? [
+        catalogSection(extras.data),
+        cyberwareSection(extras.data),
+        locationSection(extras.data),
+        twistSection(extras.data),
+      ].filter((s): s is string => s !== undefined)
     : [];
   const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(modules, tables) }];
   for (const turn of view.turns.slice(-HISTORY_TURNS)) {

@@ -264,6 +264,17 @@ export function diffViews(prev: View, next: View): Toast[] {
       out.push({ icon: "notify.inventory", text: `失去 ${name} ×${-delta}`, tone: "bad" });
   }
 
+  const hadParts = new Set(prev.cyberware.map((c) => c.id));
+  const hasParts = new Set(next.cyberware.map((c) => c.id));
+  for (const c of next.cyberware) {
+    if (!hadParts.has(c.id))
+      out.push({ icon: "notify.attention", text: `新义体已上线：${c.name}`, tone: "good" });
+  }
+  for (const c of prev.cyberware) {
+    if (!hasParts.has(c.id))
+      out.push({ icon: "notify.attention", text: `义体已卸下：${c.name}`, tone: "info" });
+  }
+
   const money = next.money.eddies - prev.money.eddies;
   if (money !== 0) {
     out.push({

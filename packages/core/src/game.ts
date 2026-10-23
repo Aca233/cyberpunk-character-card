@@ -6,6 +6,13 @@ import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
+import { cyberwareCatalog } from "./systems/cyberware/apply";
+import {
+  type CyberwareDef,
+  CyberwareStateSchema,
+  RARITY_LABELS,
+  SLOT_LABELS,
+} from "./systems/cyberware/schema";
 import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
 import { EconomyStateSchema } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
@@ -34,6 +41,8 @@ export interface GameContent {
   readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
   /** 物品表；开局装备要用它结算 */
   readonly items?: readonly ItemDef[];
+  /** 义体表；开局自带的义体要用它结算 */
+  readonly cyberware?: readonly CyberwareDef[];
   /** 中间人；trust 不写时从 10 起步 */
   readonly fixers?: readonly {
     readonly id: string;
@@ -70,6 +79,8 @@ export interface GameOpening {
   readonly hidden?: boolean;
   /** 开局身上的欧元 */
   readonly eddies?: number;
+  /** 开局自带的义体 id，不扣钱 */
+  readonly cyberware?: readonly string[];
   /** 开局就接下的委托，期限从开场时间往后算 */
   readonly jobs?: readonly OpeningJob[];
 }
@@ -100,6 +111,7 @@ function openingCommands(opening: GameOpening, start: number): unknown[] {
         reason,
         ...(g.slot === undefined ? {} : { slot: g.slot }),
       })),
+    ...(opening.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
     ...(opening.eddies ? [{ type: "money", delta: opening.eddies, reason }] : []),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
@@ -156,7 +168,10 @@ export function newGameWorld(
   });
   const applied = registry.applyCommands(world, parsed, {
     rng: setupRng,
-    ...(content.items ? { data: { items: content.items } } : {}),
+    data: {
+      ...(content.items ? { items: content.items } : {}),
+      ...(content.cyberware ? { cyberware: content.cyberware } : {}),
+    },
   });
   for (const { command, result } of applied.results) {
     if (!result.ok) throw new Error(`开局的 ${command.type} 没有生效：${result.reason}`);
@@ -293,6 +308,8 @@ export function projectState(
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
+  const installed = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+  const parts = cyberwareCatalog(data);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const period = periodOf(world.time);
   const humanityLevel = humanityStage(humanity.current);
@@ -342,6 +359,18 @@ export function projectState(
       grenade: inventory.grenade,
       backpack: inventory.backpack,
     },
+    /** 装着的义体，按装上的先后 */
+    cyberware: installed.map((c) => {
+      const def = parts.get(c.id);
+      return {
+        id: c.id,
+        name: def?.name ?? c.id,
+        slot: c.slot,
+        slotLabel: SLOT_LABELS[c.slot],
+        rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
+        ability: def?.ability ?? null,
+      };
+    }),
     combat: {
       active: active && {
         /** 第几次交锋，从 1 起 */

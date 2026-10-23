@@ -1,0 +1,55 @@
+import { cyberwareRules } from "@cp/core";
+
+/** M1 的义体表：几件常见义体；价格和人性消耗按策划书的经济表暂定，试玩后再调 */
+export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
+  {
+    id: "kiroshi-mk1",
+    name: "基洛希光学义眼 Mk.1",
+    slot: "eyes",
+    rarity: "common",
+    price: 1500,
+    humanityCost: 2,
+    ability: "扫描人和物：看出对方的身份、帮派、悬赏和身上的武器义体，标记目标，放大远处的细节",
+    checks: ["intelligence"],
+  },
+  {
+    id: "reinforced-tendons",
+    name: "强化肌腱",
+    slot: "legs",
+    rarity: "uncommon",
+    price: 6000,
+    humanityCost: 4,
+    ability: "二段跳：半空中再蹬一次，跳上二楼的阳台、越过围墙和车顶",
+    checks: ["reflexes"],
+  },
+  {
+    id: "subdermal-armor",
+    name: "皮下护甲",
+    slot: "skeleton",
+    rarity: "uncommon",
+    price: 8000,
+    humanityCost: 5,
+    ability: "皮下嵌着装甲板：刀划不开，小口径子弹打不穿，挨揍不容易倒",
+    checks: ["body"],
+  },
+  {
+    id: "gorilla-arms",
+    name: "大猩猩手臂",
+    slot: "arms",
+    rarity: "rare",
+    price: 20000,
+    humanityCost: 8,
+    ability: "徒手掰开锁死的门、掀翻车、一拳把人打飞；近战拳头就是武器",
+    checks: ["body"],
+  },
+  {
+    id: "mantis-blades",
+    name: "螳螂刀",
+    slot: "arms",
+    rarity: "rare",
+    price: 25000,
+    humanityCost: 9,
+    ability: "前臂弹出两把单分子刀：近战处决，扎进墙面攀爬，扑向远处的敌人",
+    checks: ["reflexes"],
+  },
+]);

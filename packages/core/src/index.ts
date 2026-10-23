@@ -12,6 +12,7 @@ export * from "./schemas/save";
 export * from "./schemas/turn";
 export * as characterRules from "./systems/character";
 export * as combatRules from "./systems/combat";
+export * as cyberwareRules from "./systems/cyberware";
 export * as diceRules from "./systems/dice";
 export * as economyRules from "./systems/economy";
 export * as healthRules from "./systems/health";

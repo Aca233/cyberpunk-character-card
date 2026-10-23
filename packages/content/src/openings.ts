@@ -18,6 +18,7 @@ export const openings: readonly GameOpening[] = [
       { id: "bounce-back", equip: true },
     ],
     eddies: 300,
+    cyberware: ["kiroshi-mk1"],
     deadlines: [],
     jobs: [
       {
