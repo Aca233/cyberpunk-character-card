@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { DEFAULT_OPENING, gameContent, gameData, openingPremise } from "@cp/content";
 import {
+  type ActionRecord,
+  type ActionRequest,
+  applyPlayerAction,
   buildGmPrompt,
   type CheckRecord,
   type Clock,
@@ -250,6 +253,43 @@ export class GameService {
         meta.opening,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
+    });
+  }
+
+  /** 界面操作（分配属性点……）：不调用模型，结算后写一条 action 记录 */
+  action(id: string, request: ActionRequest): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { world, records } = await this.load(id);
+      const version = logVersion(records);
+      const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
+      if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
+      if (this.deps.hub.running(id)) {
+        return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
+      }
+      if (currentOffers(records).rolled) {
+        return { status: 409, body: { error: "先确认已经掷过的检定", version } };
+      }
+      if (request.baseVersion !== version) {
+        return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
+      }
+      const result = applyPlayerAction(world, request.action, {
+        rng: this.deps.rng,
+        data: gameData,
+      });
+      if (!result.ok) return { status: 409, body: { error: result.reason, version } };
+      const record: ActionRecord = {
+        kind: "action",
+        seq: version,
+        at: this.deps.clock.now().toISOString(),
+        requestId: request.requestId,
+        action: request.action,
+        commands: [...result.commands],
+        notes: [...result.notes],
+        patches: [...result.patches],
+      };
+      await this.deps.saves.appendLog(id, serializeRecord(record));
+      await this.maybeSnapshot(id, version + 1);
+      return { status: 200, body: { seq: version, version: version + 1, notes: result.notes } };
     });
   }
 

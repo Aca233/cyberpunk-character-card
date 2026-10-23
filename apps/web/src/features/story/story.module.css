@@ -235,7 +235,7 @@
 
 .attrs > li {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  grid-template-columns: 24px 1fr auto auto;
   align-items: center;
   gap: 0.5rem;
 }
@@ -243,6 +243,34 @@
 .attrs b {
   font-size: 1.1rem;
   color: var(--cp-cyan);
+}
+
+.spend {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--cp-yellow);
+  background: transparent;
+  color: var(--cp-yellow);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.spend:hover:not(:disabled) {
+  background: var(--cp-yellow);
+  color: var(--cp-bg, #000);
+}
+
+.spend:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.points {
+  margin: 0.2rem 0 0;
+  font-size: var(--fs-label);
+  color: var(--cp-yellow);
 }
 
 .facts {

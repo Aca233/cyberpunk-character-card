@@ -1,4 +1,4 @@
-import type { CharacterCard, PlayerView, TurnInput, TurnUsage } from "@cp/core";
+import type { ActionRequest, CharacterCard, PlayerView, TurnInput, TurnUsage } from "@cp/core";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
 
@@ -201,6 +201,9 @@ export const api = {
     if (typeof r.turnId === "string") return { kind: "started", turnId: r.turnId };
     return { kind: "duplicate", seq: Number(r.seq), version: Number(r.version) };
   },
+  /** 界面操作（分配属性点……），不调用模型 */
+  action: (saveId: string, body: ActionRequest) =>
+    request<{ version: number; notes?: string[] }>("POST", `/saves/${saveId}/actions`, body),
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>

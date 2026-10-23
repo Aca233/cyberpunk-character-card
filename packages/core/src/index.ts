@@ -1,3 +1,4 @@
+export * from "./actions";
 export * from "./game";
 export * from "./gm";
 export * from "./kernel/ports";

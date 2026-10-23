@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { AttributeSchema } from "../dice";
 
-export const AttributeValueSchema = z.number().int().min(1).max(20);
+export const ATTRIBUTE_MAX = 20;
+export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
+
+export const STREET_CRED_MAX = 50;
+/** 街头声望每升这么多级得 1 个属性点 */
+export const LEVELS_PER_POINT = 5;
 
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
@@ -10,7 +15,13 @@ export const CharacterStateSchema = z.object({
   brief: z.string(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
   /** 街头声望等级 */
-  streetCred: z.number().int().min(0).max(50),
+  streetCred: z.number().int().min(0).max(STREET_CRED_MAX),
+  /** 声望按半级增长：攒着半级时为 true，再得半级就升一级 */
+  credHalf: z.boolean().default(false),
+  /** 还没分配的属性点 */
+  attributePoints: z.number().int().min(0).default(0),
+  /** 已经结算过声望的事件 id；同一事件只结算一次 */
+  credSettled: z.array(z.string()).default([]),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -20,6 +31,38 @@ export const SetCharacterSchema = z.object({
   name: z.string().min(1),
   brief: z.string(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
-  streetCred: z.number().int().min(0).max(50).default(1),
+  streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
 });
 export type SetCharacter = z.infer<typeof SetCharacterSchema>;
+
+/** 模型使用：传闻和公开事件带来的声望 */
+export const StreetCredCommandSchema = z
+  .object({
+    type: z.literal("streetCred"),
+    levels: z.number().multipleOf(0.5).min(0.5).max(2),
+    reason: z.string().min(1),
+    /** 事件 id，例如 rumor:arasaka-tower；同一事件只结算一次 */
+    event: z.string().min(1),
+  })
+  .describe(
+    "街头声望上涨：传闻传开 0.5，街上有人认出、谈论 1，轰动的公开事件最多 2，按 0.5 级递增；同一事件只结算一次。委托完成的声望由代码自动加，不要另写",
+  );
+export type StreetCredCommand = z.infer<typeof StreetCredCommandSchema>;
+
+/** 只能由代码发出：委托完成等带来的声望，按半级计 */
+export const GainCredSchema = z.object({
+  type: z.literal("character.cred"),
+  halves: z.number().int().min(1).max(12),
+  reason: z.string().min(1),
+  event: z.string().min(1),
+});
+export type GainCred = z.infer<typeof GainCredSchema>;
+
+/** 只能由代码发出：玩家在界面上分配一个属性点 */
+export const SpendPointSchema = z.object({
+  type: z.literal("character.spendPoint"),
+  attribute: AttributeSchema,
+});
+export type SpendPoint = z.infer<typeof SpendPointSchema>;
+
+export type CharacterInternal = SetCharacter | GainCred | SpendPoint;

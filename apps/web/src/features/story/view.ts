@@ -127,6 +127,14 @@ export function signed(n: number): string {
   return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "±0";
 }
 
+const ATTRIBUTE_NAMES: Readonly<Record<string, string>> = {
+  body: "肉体",
+  reflexes: "反应",
+  tech: "技术",
+  intelligence: "智力",
+  cool: "镇定",
+};
+
 export interface Toast {
   readonly key: string;
   readonly icon: AssetId;
@@ -162,6 +170,25 @@ export function diffViews(prev: View, next: View): Toast[] {
       text: `街头声望 ${signed(cred)}（${next.character.streetCred} 级）`,
       tone: cred > 0 ? "good" : "bad",
     });
+  }
+
+  const points = next.character.attributePoints - prev.character.attributePoints;
+  if (points > 0) {
+    out.push({
+      icon: "notify.streetCred",
+      text: `得到 ${points} 个属性点，可以在角色栏分配`,
+      tone: "good",
+    });
+  }
+  for (const [key, value] of Object.entries(next.character.attributes)) {
+    const before = prev.character.attributes[key as keyof typeof prev.character.attributes];
+    if (before !== undefined && value !== undefined && value > before) {
+      out.push({
+        icon: "notify.attention",
+        text: `${ATTRIBUTE_NAMES[key] ?? key} ${signed(value - before)}（${value}）`,
+        tone: "good",
+      });
+    }
   }
 
   const hum = next.humanity.current - prev.humanity.current;

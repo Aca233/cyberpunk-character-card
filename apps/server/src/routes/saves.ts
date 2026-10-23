@@ -1,4 +1,4 @@
-import { TurnRequestSchema } from "@cp/core";
+import { ActionRequestSchema, TurnRequestSchema } from "@cp/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -31,7 +31,7 @@ async function body<T extends z.ZodType>(
 
 const reply = (c: Context, r: Reply) => c.json(r.body, r.status);
 
-/** /api/saves：存档列表和创建、状态投影、提交回合、回合事件流（SSE，可按 Last-Event-ID 续收）、停止、上下文查看器 */
+/** /api/saves：存档列表和创建、状态投影、提交回合、界面操作、回合事件流（SSE，可按 Last-Event-ID 续收）、停止、上下文查看器 */
 export function saveRoutes(game: GameService, hub: TurnHub): Hono {
   const app = new Hono();
 
@@ -60,6 +60,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
     const parsed = await body(c, TurnRequestSchema);
     if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
     return reply(c, await game.submit(c.req.param("id"), parsed.value));
+  });
+
+  app.post("/:id/actions", async (c) => {
+    const parsed = await body(c, ActionRequestSchema);
+    if (!parsed.ok) return c.json({ error: "提交的操作不对", details: parsed.errors }, 400);
+    return reply(c, await game.action(c.req.param("id"), parsed.value));
   });
 
   app.get("/:id/turns/:turnId/events", (c) => {

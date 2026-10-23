@@ -224,7 +224,7 @@ export function stateSummary(view: PlayerView): string {
   const c = view.character;
   const lines = [
     `角色：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
-    `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred}`,
+    `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred} 级${c.credHalf ? "（再得半级就升级）" : ""}`,
     `时间：${view.time.text}（${view.time.periodLabel}）`,
     `地点：${view.location ?? "尚未确定，由你在开场时安排"}${view.names.location && view.names.location !== view.location ? `（${view.names.location}）` : ""}`,
     `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,

@@ -2,7 +2,7 @@ import type { TurnInput } from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ApiError, api } from "../../api/client";
+import { ApiError, api, newRequestId } from "../../api/client";
 import { cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
@@ -79,6 +79,30 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
+
+  // 分配属性点：不调用模型，失败时用提示条说明原因
+  const spend = useCallback(
+    async (attribute: keyof View["character"]["attributes"]) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "spendPoint", attribute },
+        });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        const toast: Toast = {
+          key: `spend-${Date.now()}`,
+          icon: "notify.warning",
+          text,
+          tone: "bad",
+        };
+        setToasts((t) => [...t, toast].slice(-6));
+      }
+      await refresh();
+    },
+    [saveId, version, refresh],
+  );
 
   const send = useCallback(
     (input: TurnInput) => {
@@ -171,7 +195,7 @@ export function StoryScreen() {
     >
       <div className={styles.fx} aria-hidden />
       <Hud view={view} />
-      <SidePanel view={view} />
+      <SidePanel view={view} onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)} />
 
       <main className={styles.column}>
         <StoryLog view={view} saveId={saveId} live={story} />

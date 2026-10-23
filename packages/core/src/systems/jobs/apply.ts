@@ -42,6 +42,9 @@ export const TRUST_CHANGE: Readonly<Record<JobOutcome, number>> = {
   betrayed: -20,
 };
 
+/** 完成一单得到的街头声望，按半级计：1 星半级到 5 星三级；带瑕疵完成减半 */
+export const CRED_HALVES: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 6 };
+
 /** 能接的星级取街头声望和信任度两者中较低的一项 */
 export function starsByCred(cred: number): number {
   if (cred >= 35) return 5;
@@ -168,6 +171,15 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
     paid > 0
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
+  if (done) {
+    const full = CRED_HALVES[job.risk] ?? 1;
+    emit.push({
+      type: "character.cred",
+      halves: command.outcome === "clean" ? full : Math.ceil(full / 2),
+      reason: `委托${JOB_OUTCOME_LABELS[command.outcome]}`,
+      event: `job:${job.id}`,
+    });
+  }
   return { ok: true, notes, emit };
 }
 

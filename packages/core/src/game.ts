@@ -164,13 +164,23 @@ export function newGameWorld(
   return applied.world;
 }
 
-/** 旧快照里没有后来加的系统；缺的状态用初始值补上 */
+/** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
 export function withAllSlices(world: WorldState): WorldState {
   const base = registry.initialWorld(world.time);
-  const missing = Object.keys(base.slices).filter((id) => !(id in world.slices));
-  if (missing.length === 0) return world;
-  const filled = Object.fromEntries(missing.map((id) => [id, base.slices[id]]));
-  return { ...world, slices: { ...filled, ...world.slices } };
+  const slices: Record<string, unknown> = { ...world.slices };
+  for (const system of registry.order) {
+    const raw = slices[system.id];
+    if (raw === undefined) {
+      slices[system.id] = base.slices[system.id];
+      continue;
+    }
+    // 后来加的字段按 schema 的默认值补上；旧字段原样保留
+    const parsed = system.state.safeParse(raw);
+    if (parsed.success && typeof raw === "object" && raw !== null) {
+      slices[system.id] = { ...raw, ...(parsed.data as object) };
+    }
+  }
+  return { ...world, slices };
 }
 
 /** 状态接口带上的已结束委托，最近的优先 */
@@ -297,6 +307,9 @@ export function projectState(
       brief: character.brief,
       attributes: character.attributes,
       streetCred: character.streetCred,
+      /** 攒着半级声望，再得半级就升级 */
+      credHalf: character.credHalf,
+      attributePoints: character.attributePoints,
     },
     time: {
       minutes: world.time,

@@ -1,14 +1,19 @@
 import { defineSystem } from "../../kernel/system";
-import { maxHp } from "../dice";
+import { gainCred, setCharacter, spendPoint } from "./apply";
+import { streetCredRules } from "./prompt";
 import {
+  type CharacterInternal,
   type CharacterState,
   CharacterStateSchema,
-  type SetCharacter,
+  GainCredSchema,
   SetCharacterSchema,
+  SpendPointSchema,
+  type StreetCredCommand,
+  StreetCredCommandSchema,
 } from "./schema";
 
-/** 角色的名字、简介、属性和街头声望；M1 只在建档时写入，成长在之后的阶段 */
-export const character = defineSystem<CharacterState, never, SetCharacter>({
+/** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
+export const character = defineSystem<CharacterState, StreetCredCommand, CharacterInternal>({
   id: "character",
   dependsOn: ["health"],
   state: CharacterStateSchema,
@@ -17,19 +22,31 @@ export const character = defineSystem<CharacterState, never, SetCharacter>({
     brief: "",
     attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
     streetCred: 1,
+    credHalf: false,
+    attributePoints: 0,
+    credSettled: [],
   }),
-  commands: {},
-  internal: { "character.set": SetCharacterSchema },
-  apply(draft, command) {
-    draft.name = command.name;
-    draft.brief = command.brief;
-    draft.attributes = { ...command.attributes };
-    draft.streetCred = command.streetCred;
-    return {
-      ok: true,
-      emit: [{ type: "health.setMax", max: maxHp(command.attributes.body, command.streetCred) }],
-    };
+  commands: { streetCred: StreetCredCommandSchema },
+  internal: {
+    "character.set": SetCharacterSchema,
+    "character.cred": GainCredSchema,
+    "character.spendPoint": SpendPointSchema,
   },
+  apply(draft, command) {
+    switch (command.type) {
+      case "character.set":
+        return setCharacter(draft, command);
+      case "character.cred":
+        return gainCred(draft, command.halves, command.reason, command.event);
+      case "character.spendPoint":
+        return spendPoint(draft, command);
+      case "streetCred":
+        return gainCred(draft, command.levels * 2, command.reason, command.event);
+    }
+  },
+  rules: [streetCredRules],
 });
 
+export * from "./apply";
+export * from "./prompt";
 export * from "./schema";

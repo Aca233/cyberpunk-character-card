@@ -17,6 +17,9 @@ const ATTRS: readonly (readonly [Attribute, string, AssetId])[] = [
   ["cool", "镇定", "attr.cool"],
 ];
 
+/** 单项属性的上限 */
+const ATTRIBUTE_MAX = 20;
+
 /** 武器格的编号，和数字键 1–3 对应 */
 const WEAPON_SLOTS = [1, 2, 3] as const;
 
@@ -110,7 +113,14 @@ export function Hud({ view }: { readonly view: View }) {
 }
 
 /** 左侧角色栏：建档前显示“未建档” */
-export function SidePanel({ view }: { readonly view: View }) {
+export function SidePanel({
+  view,
+  onSpend,
+}: {
+  readonly view: View;
+  /** 分配一个属性点；正在生成时不传，按钮不显示 */
+  readonly onSpend?: ((attribute: Attribute) => void) | undefined;
+}) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
   const itemName = (id: string) => view.names.items[id] ?? id;
@@ -127,12 +137,28 @@ export function SidePanel({ view }: { readonly view: View }) {
               <Asset id={icon} tint="var(--cp-cyan)" height={22} />
               <span>{label}</span>
               <b>{character.attributes[key] ?? "—"}</b>
+              {character.attributePoints > 0 && onSpend && (
+                <button
+                  type="button"
+                  className={styles.spend}
+                  disabled={(character.attributes[key] ?? 0) >= ATTRIBUTE_MAX}
+                  title={`用 1 个属性点提升${label}`}
+                  onClick={() => onSpend(key)}
+                >
+                  +
+                </button>
+              )}
             </li>
           ))}
         </ul>
+        {character.attributePoints > 0 && (
+          <p className={styles.points}>可分配属性点 {character.attributePoints}</p>
+        )}
         <dl className={styles.facts}>
           <dt>街头声望</dt>
-          <dd>{character.streetCred} 级</dd>
+          <dd title={character.credHalf ? "再得半级声望就升级" : undefined}>
+            {character.streetCred} 级{character.credHalf && <small> · 半级</small>}
+          </dd>
           <dt>人性</dt>
           <dd data-stage={humanity.stage}>
             {humanity.current}/{humanity.cap}

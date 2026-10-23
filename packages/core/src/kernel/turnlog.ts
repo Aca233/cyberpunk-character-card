@@ -85,11 +85,25 @@ const BackgroundRecordSchema = z.object({
   patches: z.array(PatchSchema),
 });
 
+/** 玩家在界面上直接做的操作（分配属性点……），不调用模型，只改状态 */
+const ActionRecordSchema = z.object({
+  kind: z.literal("action"),
+  seq,
+  at: z.string(),
+  requestId: z.string().min(1),
+  /** 网页提交的操作，原样存下 */
+  action: z.unknown(),
+  commands: z.array(z.unknown()),
+  notes: z.array(z.string()),
+  patches: z.array(PatchSchema),
+});
+
 export const LogRecordSchema = z.discriminatedUnion("kind", [
   TurnRecordSchema,
   CheckRecordSchema,
   VoidRecordSchema,
   BackgroundRecordSchema,
+  ActionRecordSchema,
 ]);
 
 export type LogRecord = z.infer<typeof LogRecordSchema>;
@@ -97,6 +111,7 @@ export type TurnRecord = z.infer<typeof TurnRecordSchema>;
 export type CheckRecord = z.infer<typeof CheckRecordSchema>;
 export type VoidRecord = z.infer<typeof VoidRecordSchema>;
 export type BackgroundRecord = z.infer<typeof BackgroundRecordSchema>;
+export type ActionRecord = z.infer<typeof ActionRecordSchema>;
 export type DiceRoll = z.infer<typeof DiceRollSchema>;
 
 export class LogCorruptError extends Error {
