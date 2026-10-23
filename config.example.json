@@ -10,6 +10,16 @@
       "temperature": 1,
       "thinkingLevel": "medium",
       "safety": "off"
+    },
+    {
+      "name": "relay",
+      "type": "openai",
+      "baseUrl": "https://api.aca233.icu/v1",
+      "model": "填中转站后台里的模型名",
+      "apiKeyEnv": "CP_RELAY_KEY",
+      "contextWindow": 131072,
+      "maxOutputTokens": 8192,
+      "temperature": 1
     }
   ],
   "gm": "gemini-flash",
