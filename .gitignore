@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+
+# 用户本地配置，含密钥
+config.json
+
+# 角色、存档和内容工坊草稿
+data/
+
+# 原作素材和参考截图：只在本机使用，不随项目分享
+apps/web/public/assets/local/
+reference/
+
+# 测评结果（含真实模型输出）
+tools/evals/results/
+
+# Playwright
+test-results/
+playwright-report/

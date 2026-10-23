@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": false },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!apps/web/public/assets/local",
+      "!reference",
+      "!data",
+      "!tools/evals/results",
+      "!test-results",
+      "!playwright-report"
+    ]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["packages/core/**", "packages/content/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "core 和 content 不能依赖 React，界面代码放在 apps/web",
+                  "react-dom": "core 和 content 不能依赖 React，界面代码放在 apps/web",
+                  "hono": "core 和 content 不能依赖后端框架，接口代码放在 apps/server"
+                },
+                "patterns": [
+                  {
+                    "group": ["node:*"],
+                    "message": "core 和 content 不能直接用 Node 模块，通过 kernel/ports.ts 的接口注入"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
