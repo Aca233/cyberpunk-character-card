@@ -7,6 +7,7 @@ export * from "./kernel/system";
 export * from "./kernel/turnlog";
 export * from "./kernel/world";
 export * from "./schemas/character";
+export * from "./schemas/lore";
 export * from "./schemas/save";
 export * from "./schemas/turn";
 export * as characterRules from "./systems/character";

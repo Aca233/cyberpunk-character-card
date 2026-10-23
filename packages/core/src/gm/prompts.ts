@@ -23,6 +23,7 @@ import { registry } from "../systems/registry";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { BlockDocSchema, STATE_CLOSE, STATE_OPEN } from "./block";
 import { commandDoc, schemaDoc } from "./doc";
+import { examplesSection, twistSection } from "./examples";
 import type { RolledCheck } from "./pending";
 
 /**
@@ -157,7 +158,7 @@ export function coreRules(): string {
     ]);
     const missing = registry.commandTypes().filter((t) => !documented.has(t));
     if (missing.length > 0) throw new Error(`这些指令没有写进任何规则模块：${missing.join("、")}`);
-    core = `${CORE}\n\n${formatSection()}`;
+    core = `${CORE}\n\n${formatSection()}\n\n${examplesSection()}`;
   }
   return core;
 }
@@ -289,7 +290,7 @@ export function buildGmPrompt(
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const tables = extras.data
-    ? [catalogSection(extras.data), locationSection(extras.data)].filter(
+    ? [catalogSection(extras.data), locationSection(extras.data), twistSection(extras.data)].filter(
         (s): s is string => s !== undefined,
       )
     : [];
