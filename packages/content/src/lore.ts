@@ -19,7 +19,7 @@ export const glossary: readonly Slang[] = [
   {
     term: "netrunner",
     aliases: ["netrunners"],
-    meaning: "网络行者，用神经接口潜入网络、破解系统的骇客",
+    meaning: "网络黑客（官方译名），用神经接口潜入网络、破解系统的人",
   },
   { term: "fixer", aliases: ["fixers"], meaning: "中间人，替客户找佣兵、谈价钱、派活的人" },
   {
@@ -28,8 +28,16 @@ export const glossary: readonly Slang[] = [
     meaning: "边缘行者，游走在法律和生死边缘的街头佣兵",
   },
   { term: "merc", aliases: ["mercs"], meaning: "佣兵，拿钱办事的人" },
-  { term: "corpo", aliases: ["corpos"], meaning: "公司狗，大公司的员工，也指公司那套做派" },
-  { term: "nomad", aliases: ["nomads"], meaning: "游牧民，在城外荒地上以家族为单位生活的车队" },
+  {
+    term: "corpo",
+    aliases: ["corpos"],
+    meaning: "公司员工（官方译名），街头也骂“公司狗”，也指公司那套做派",
+  },
+  {
+    term: "nomad",
+    aliases: ["nomads"],
+    meaning: "流浪者（官方译名），在城外恶土上以家族为单位生活的车队",
+  },
   {
     term: "cyberpsycho",
     aliases: ["cyberpsychos", "cyberpsychosis"],

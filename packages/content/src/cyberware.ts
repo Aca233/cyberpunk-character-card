@@ -4,7 +4,7 @@ import { cyberwareRules } from "@cp/core";
 export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "kiroshi-mk1",
-    name: "基洛希光学义眼 Mk.1",
+    name: "基础岐路司义眼",
     slot: "eyes",
     rarity: "common",
     price: 1500,
