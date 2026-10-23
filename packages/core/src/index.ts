@@ -3,6 +3,7 @@ export * from "./kernel/rng";
 export * from "./kernel/system";
 export * from "./kernel/turnlog";
 export * from "./kernel/world";
+export * as combatRules from "./systems/combat";
 export * as diceRules from "./systems/dice";
 export * as healthRules from "./systems/health";
 export * as humanityRules from "./systems/humanity";
