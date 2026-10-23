@@ -30,6 +30,7 @@ import {
   type TurnRequest,
   type TurnUsage,
   type WorldState,
+  withAllSlices,
   worldRules,
 } from "@cp/core";
 import { z } from "zod";
@@ -456,6 +457,10 @@ export class GameService {
       nextSeq: 0,
       world: newGameWorld(meta, gameContent),
     };
-    return { meta, records: log.records, world: replay(snapshot, log.records) };
+    return {
+      meta,
+      records: log.records,
+      world: replay({ ...snapshot, world: withAllSlices(snapshot.world) }, log.records),
+    };
   }
 }

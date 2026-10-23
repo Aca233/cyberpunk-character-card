@@ -7,6 +7,7 @@ import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
 import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
+import { EconomyStateSchema } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
@@ -17,6 +18,8 @@ import {
   InventoryStateSchema,
   type ItemDef,
 } from "./systems/inventory/schema";
+import { isOpen, JOB_STATUS_LABELS, maxRisk } from "./systems/jobs/apply";
+import { JobsStateSchema } from "./systems/jobs/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { registry } from "./systems/registry";
@@ -31,6 +34,12 @@ export interface GameContent {
   readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
   /** 物品表；开局装备要用它结算 */
   readonly items?: readonly ItemDef[];
+  /** 中间人；trust 不写时从 10 起步 */
+  readonly fixers?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly trust?: number;
+  }[];
   /** 常用地点的中文名 */
   readonly locations?: readonly LocationDef[];
   /** 可选的开场；存档的 meta.opening 记着用的是哪一个 */
@@ -57,6 +66,25 @@ export interface GameOpening {
     readonly label: string;
     readonly afterMinutes: number;
   }[];
+  /** 旧存档还在用、新存档不再提供的开场 */
+  readonly hidden?: boolean;
+  /** 开局身上的欧元 */
+  readonly eddies?: number;
+  /** 开局就接下的委托，期限从开场时间往后算 */
+  readonly jobs?: readonly OpeningJob[];
+}
+
+export interface OpeningJob {
+  readonly id: string;
+  readonly title: string;
+  readonly fixer?: string;
+  readonly client: string;
+  readonly location?: string;
+  readonly risk: number;
+  readonly reward: number;
+  readonly conflict: string;
+  readonly twist?: string;
+  readonly afterMinutes: number;
 }
 
 function openingCommands(opening: GameOpening, start: number): unknown[] {
@@ -72,6 +100,11 @@ function openingCommands(opening: GameOpening, start: number): unknown[] {
         reason,
         ...(g.slot === undefined ? {} : { slot: g.slot }),
       })),
+    ...(opening.eddies ? [{ type: "money", delta: opening.eddies, reason }] : []),
+    ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
+      { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
+      { type: "jobAccept", id: job.id },
+    ]),
     ...opening.deadlines.map((d) => ({
       type: "deadline",
       action: "add",
@@ -112,6 +145,7 @@ export function newGameWorld(
   const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
+    ...(content.fixers ?? []).map((f) => ({ type: "jobs.seedFixer", ...f })),
     ...(opening ? openingCommands(opening, meta.startTime) : []),
   ];
   if (commands.length === 0) return world;
@@ -129,6 +163,18 @@ export function newGameWorld(
   }
   return applied.world;
 }
+
+/** 旧快照里没有后来加的系统；缺的状态用初始值补上 */
+export function withAllSlices(world: WorldState): WorldState {
+  const base = registry.initialWorld(world.time);
+  const missing = Object.keys(base.slices).filter((id) => !(id in world.slices));
+  if (missing.length === 0) return world;
+  const filled = Object.fromEntries(missing.map((id) => [id, base.slices[id]]));
+  return { ...world, slices: { ...filled, ...world.slices } };
+}
+
+/** 状态接口带上的已结束委托，最近的优先 */
+export const JOBS_CLOSED_SHOWN = 5;
 
 function turnInput(raw: unknown): TurnInput {
   const parsed = TurnInputSchema.safeParse(raw);
@@ -235,6 +281,8 @@ export function projectState(
   const combat = CombatStateSchema.parse(world.slices.combat);
   const character = CharacterStateSchema.parse(world.slices.character);
   const npcs = NpcStateSchema.parse(world.slices.npc);
+  const economy = EconomyStateSchema.parse(world.slices.economy);
+  const jobs = JobsStateSchema.parse(world.slices.jobs);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const period = periodOf(world.time);
   const humanityLevel = humanityStage(humanity.current);
@@ -311,6 +359,36 @@ export function projectState(
         here: onStage(n, stage),
         memories: n.memories,
       })),
+    money: { eddies: economy.eddies },
+    /** 委托和中间人；隐藏的转折只给模型看，不在这里 */
+    jobs: {
+      fixers: Object.values(jobs.fixers).map((f) => ({
+        id: f.id,
+        name: f.name,
+        trust: f.trust,
+        maxRisk: maxRisk(f, character.streetCred),
+      })),
+      list: [
+        ...jobs.jobs.filter(isOpen),
+        ...jobs.jobs.filter((j) => !isOpen(j)).slice(-JOBS_CLOSED_SHOWN),
+      ].map((j) => ({
+        id: j.id,
+        title: j.title,
+        fixer: j.fixer === null ? null : (jobs.fixers[j.fixer]?.name ?? j.fixer),
+        client: j.client,
+        location: j.location,
+        risk: j.risk,
+        reward: j.reward,
+        due: j.due === null ? null : formatGameTime(j.due),
+        overdue: isOpen(j) && j.due !== null && j.due <= world.time,
+        status: j.status,
+        statusLabel: JOB_STATUS_LABELS[j.status],
+        open: isOpen(j),
+        notes: j.notes,
+        paid: j.paid,
+        summary: j.summary,
+      })),
+    },
     deadlines: clock.deadlines
       .filter((d) => d.handledAt === null)
       .map((d) => ({

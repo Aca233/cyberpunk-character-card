@@ -2,9 +2,11 @@ import { type AnySystem, createRegistry } from "../kernel/system";
 import { character } from "./character";
 import { combat } from "./combat";
 import { dice } from "./dice";
+import { economy } from "./economy";
 import { health } from "./health";
 import { humanity } from "./humanity";
 import { inventory } from "./inventory";
+import { jobs } from "./jobs";
 import { npc } from "./npc";
 import { world } from "./world";
 
@@ -18,6 +20,8 @@ export const systems: readonly AnySystem[] = [
   world,
   combat,
   npc,
+  economy,
+  jobs,
 ];
 
 export const registry = createRegistry(systems);

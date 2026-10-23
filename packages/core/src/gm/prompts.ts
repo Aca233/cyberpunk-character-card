@@ -15,6 +15,8 @@ import {
 import { DAMAGE_LABELS } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import type { ItemKind } from "../systems/inventory/schema";
+import { jobsSection } from "../systems/jobs/prompt";
+import { JobsStateSchema } from "../systems/jobs/schema";
 import { castSection } from "../systems/npc/prompt";
 import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
@@ -227,6 +229,7 @@ export function stateSummary(view: PlayerView): string {
     `地点：${view.location ?? "尚未确定，由你在开场时安排"}${view.names.location && view.names.location !== view.location ? `（${view.names.location}）` : ""}`,
     `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
+    `欧元：${view.money.eddies}`,
   ];
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
@@ -301,6 +304,8 @@ export function buildGmPrompt(
     sceneStartedAt: clock.sceneStartedAt,
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
+  const jobs = jobsSection(JobsStateSchema.parse(world.slices.jobs), view.character.streetCred);
+  if (jobs) parts.push(`【委托】\n${jobs}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));

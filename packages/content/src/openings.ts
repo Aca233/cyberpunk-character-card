@@ -1,11 +1,42 @@
 import type { GameOpening } from "@cp/core";
 
 /** 新存档默认用的开场 */
-export const DEFAULT_OPENING = "lizzies-shard";
+export const DEFAULT_OPENING = "lizzies-job";
 
 export const openings: readonly GameOpening[] = [
   {
+    id: "lizzies-job",
+    title: "莉齐酒吧的一块芯片",
+    location: "lizzies-bar",
+    premise: `这一档从沃森区的莉齐酒吧开始，深夜。玩家角色已经接下中间人法拉第的一单（委托 faraday-shard）：今晚有人会在莉齐酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到法拉第手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在戏里安排，随着剧情慢慢揭开。
+第一轮直接从酒吧里的一个具体瞬间切进去：声音、气味、一个人物主动开口或者递来东西。不要用旁白交代背景，不要列选项，也不要问玩家想做什么。玩家的第一句话已经写了自己在做什么，就顺着它接。
+芯片交到玩家角色手上时发 item gain shard；见到法拉第交了货、或者这单黄了，按实际结局发 jobEnd faraday-shard。`,
+    gear: [
+      // 最后装上的武器拿在手里，所以手枪放在刀后面
+      { id: "knife", equip: true, slot: 2 },
+      { id: "lexington", equip: true, slot: 1 },
+      { id: "bounce-back", equip: true },
+    ],
+    eddies: 300,
+    deadlines: [],
+    jobs: [
+      {
+        id: "faraday-shard",
+        title: "把芯片交给法拉第",
+        fixer: "faraday",
+        client: "法拉第的客户（身份不明）",
+        location: "lizzies-bar",
+        risk: 1,
+        reward: 2000,
+        conflict: "法拉第的客户想要芯片里的东西；芯片原来的主人想把它追回来，交货人夹在中间",
+        afterMinutes: 22 * 60,
+      },
+    ],
+  },
+  {
+    // 旧存档用的版本：期限挂在世界时钟上，没有委托卡
     id: "lizzies-shard",
+    hidden: true,
     title: "莉齐酒吧的一块芯片",
     location: "lizzies-bar",
     premise: `这一档从沃森区的莉齐酒吧开始，深夜。中间人法拉第发来消息派了一单：今晚有人会在莉齐酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到法拉第手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在戏里安排，随着剧情慢慢揭开。

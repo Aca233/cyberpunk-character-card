@@ -186,10 +186,33 @@ export function diffViews(prev: View, next: View): Toast[] {
   ]);
   for (const id of ids) {
     const delta = (next.inventory.backpack[id] ?? 0) - (prev.inventory.backpack[id] ?? 0);
+    const name = next.names.items[id] ?? prev.names.items[id] ?? id;
     if (delta > 0)
-      out.push({ icon: "notify.inventory", text: `获得 ${id} ×${delta}`, tone: "good" });
+      out.push({ icon: "notify.inventory", text: `获得 ${name} ×${delta}`, tone: "good" });
     if (delta < 0)
-      out.push({ icon: "notify.inventory", text: `失去 ${id} ×${-delta}`, tone: "bad" });
+      out.push({ icon: "notify.inventory", text: `失去 ${name} ×${-delta}`, tone: "bad" });
+  }
+
+  const money = next.money.eddies - prev.money.eddies;
+  if (money !== 0) {
+    out.push({
+      icon: "notify.inventory",
+      text: `欧元 ${signed(money)}（现有 ${next.money.eddies}）`,
+      tone: money > 0 ? "good" : "bad",
+    });
+  }
+  const jobsBefore = new Map(prev.jobs.list.map((j) => [j.id, j]));
+  for (const job of next.jobs.list) {
+    const old = jobsBefore.get(job.id);
+    if (!old) out.push({ icon: "notify.journal", text: `新委托：${job.title}`, tone: "info" });
+    else if (old.status !== job.status) {
+      const good = job.status === "active" || job.status === "clean" || job.status === "flawed";
+      out.push({
+        icon: "notify.questUpdate",
+        text: `委托${job.statusLabel}：${job.title}`,
+        tone: good ? "good" : "bad",
+      });
+    }
   }
 
   const before = new Map(prev.deadlines.map((d) => [d.id, d]));

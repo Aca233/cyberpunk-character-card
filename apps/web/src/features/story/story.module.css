@@ -979,3 +979,33 @@
   color: var(--cp-cyan);
   font-variant-numeric: tabular-nums;
 }
+
+/* 委托：标题、星级和报酬、中间人和期限、最新进展 */
+.jobs {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+  font-size: var(--fs-label);
+}
+
+.jobs > li {
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--cp-red-dim);
+}
+
+.jobs strong {
+  color: var(--cp-text);
+  font-weight: 500;
+}
+
+.jobs > li > span:not(.dim) {
+  color: var(--cp-text-dim);
+}
+
+.jobs > li[data-overdue] {
+  border-left-color: var(--cp-danger);
+}
