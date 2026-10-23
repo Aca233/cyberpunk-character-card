@@ -11,7 +11,7 @@ import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
-import { InventoryStateSchema } from "./systems/inventory/schema";
+import { InventoryStateSchema, type ItemDef } from "./systems/inventory/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { registry } from "./systems/registry";
@@ -24,15 +24,70 @@ export const VIEW_TURNS = 50;
 /** 新存档要放进世界的静态内容（content 包），例如原作人物卡 */
 export interface GameContent {
   readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
+  /** 物品表；开局装备要用它结算 */
+  readonly items?: readonly ItemDef[];
+  /** 可选的开场；存档的 meta.opening 记着用的是哪一个 */
+  readonly openings?: readonly GameOpening[];
+}
+
+/** 开场：从哪里开始、身上带什么、眼下有什么活 */
+export interface GameOpening {
+  readonly id: string;
+  readonly title: string;
+  /** 开场地点 id */
+  readonly location: string;
+  /** 只给模型看的开场处境和钩子；故事还没开始时放进提示词 */
+  readonly premise: string;
+  /** 开局装备：先放进背包，标了 equip 的再装上 */
+  readonly gear: readonly {
+    readonly id: string;
+    readonly equip?: boolean;
+    readonly slot?: number;
+  }[];
+  /** 开局就有的期限，从开场时间往后算 */
+  readonly deadlines: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly afterMinutes: number;
+  }[];
+}
+
+function openingCommands(opening: GameOpening, start: number): unknown[] {
+  const reason = `开局：${opening.title}`;
+  return [
+    ...opening.gear.map((g) => ({ type: "item", action: "gain", id: g.id, reason })),
+    ...opening.gear
+      .filter((g) => g.equip)
+      .map((g) => ({
+        type: "item",
+        action: "equip",
+        id: g.id,
+        reason,
+        ...(g.slot === undefined ? {} : { slot: g.slot }),
+      })),
+    ...opening.deadlines.map((d) => ({
+      type: "deadline",
+      action: "add",
+      id: d.id,
+      label: d.label,
+      due: formatGameTime(start + d.afterMinutes),
+    })),
+  ];
 }
 
 const setupRng = { roll: () => 1 };
 
 /** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
-  meta: Pick<SaveMeta, "startTime" | "difficulty"> & Partial<Pick<SaveMeta, "character">>,
+  meta: Pick<SaveMeta, "startTime" | "difficulty"> &
+    Partial<Pick<SaveMeta, "character" | "opening">>,
   content: GameContent = {},
 ): WorldState {
+  const opening =
+    meta.opening === undefined ? undefined : content.openings?.find((o) => o.id === meta.opening);
+  if (meta.opening !== undefined && !opening) {
+    throw new Error(`内容包里没有开场 ${meta.opening}`);
+  }
   const base = registry.initialWorld(meta.startTime);
   const clock = WorldClockStateSchema.parse(base.slices.world);
   const world: WorldState = {
@@ -40,12 +95,17 @@ export function newGameWorld(
     slices: {
       ...base.slices,
       dice: DiceStateSchema.parse({ mode: meta.difficulty }),
-      world: { ...clock, sceneStartedAt: meta.startTime },
+      world: {
+        ...clock,
+        location: opening?.location ?? clock.location,
+        sceneStartedAt: meta.startTime,
+      },
     },
   };
-  const commands = [
+  const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
+    ...(opening ? openingCommands(opening, meta.startTime) : []),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
@@ -53,7 +113,10 @@ export function newGameWorld(
     if (!result.ok) throw new Error(`开局内容不合格：${result.error}`);
     return result.command;
   });
-  const applied = registry.applyCommands(world, parsed, { rng: setupRng });
+  const applied = registry.applyCommands(world, parsed, {
+    rng: setupRng,
+    ...(content.items ? { data: { items: content.items } } : {}),
+  });
   for (const { command, result } of applied.results) {
     if (!result.ok) throw new Error(`开局的 ${command.type} 没有生效：${result.reason}`);
   }

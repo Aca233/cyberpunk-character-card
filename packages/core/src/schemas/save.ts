@@ -16,5 +16,7 @@ export const SaveMetaSchema = z.object({
   startTime: z.number().int(),
   /** 旧存档没有：开档时没有选角色 */
   character: SaveCharacterSchema.optional(),
+  /** 旧存档没有：用的是内容包里哪个开场 */
+  opening: z.string().min(1).optional(),
 });
 export type SaveMeta = z.infer<typeof SaveMetaSchema>;

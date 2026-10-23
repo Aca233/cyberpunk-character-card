@@ -13,6 +13,8 @@ import {
   PENALTY_CAP,
 } from "../systems/dice";
 import { DAMAGE_LABELS } from "../systems/health";
+import { itemCatalog } from "../systems/inventory/apply";
+import type { ItemKind } from "../systems/inventory/schema";
 import { castSection } from "../systems/npc/prompt";
 import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
@@ -158,8 +160,44 @@ export function coreRules(): string {
   return core;
 }
 
-export function systemPrompt(modules: readonly RuleModule[]): string {
-  return [coreRules(), ...modules.map(moduleSection)].join("\n\n");
+export function systemPrompt(
+  modules: readonly RuleModule[],
+  extra: readonly string[] = [],
+): string {
+  return [coreRules(), ...modules.map(moduleSection), ...extra].join("\n\n");
+}
+
+const KIND_LABELS: Readonly<Record<ItemKind, string>> = {
+  weapon: "武器",
+  healing: "治疗品",
+  grenade: "手雷",
+  consumable: "消耗品",
+  clothing: "服装",
+  misc: "杂物",
+};
+
+/** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id */
+export function catalogSection(data: Readonly<Record<string, unknown>>): string | undefined {
+  if (data.items === undefined) return undefined;
+  const lines = [...itemCatalog(data).values()].map((item) => {
+    const notes = [
+      KIND_LABELS[item.kind],
+      ...(item.iconic ? ["标志性，只从剧情获得"] : []),
+      ...(item.price === undefined ? [] : [`约 ${item.price} 欧元`]),
+    ];
+    return `- ${item.id}：${item.name}（${notes.join("，")}）`;
+  });
+  return `【物品表】
+item 指令的 id 只能用下面这些；【当前状态】里的武器栏、治疗品和背包写的也是这些 id，正文里用名称。表里没有的东西只在正文里写，不发 item 指令。
+${lines.join("\n")}`;
+}
+
+/** 提示词里随存档而定、但不在世界状态里的东西 */
+export interface PromptExtras {
+  /** 静态数据表；带物品表时写进系统提示词 */
+  readonly data?: Readonly<Record<string, unknown>> | undefined;
+  /** 这个存档的开场设定；故事还没开始时放进最后一条消息 */
+  readonly opening?: string | undefined;
 }
 
 function attributeLine(values: Readonly<Record<Attribute, number>>): string {
@@ -231,10 +269,14 @@ export function buildGmPrompt(
   world: WorldState,
   records: readonly LogRecord[],
   plan: GmPlan,
+  extras: PromptExtras = {},
 ): GmPrompt {
   const view = projectState(world, records);
   const modules = registry.activeRules(world, plan.input);
-  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(modules) }];
+  const catalog = extras.data ? catalogSection(extras.data) : undefined;
+  const messages: LlmMessage[] = [
+    { role: "system", content: systemPrompt(modules, catalog ? [catalog] : []) },
+  ];
   for (const turn of view.turns.slice(-HISTORY_TURNS)) {
     messages.push({ role: "user", content: formatInput(turn.input) });
     messages.push({ role: "assistant", content: turn.text });
@@ -245,6 +287,7 @@ export function buildGmPrompt(
     sceneStartedAt: clock.sceneStartedAt,
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
+  if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));
   parts.push(`（先写正文，最后附 ${STATE_OPEN} 指令块。）`);

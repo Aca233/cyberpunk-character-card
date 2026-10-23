@@ -117,9 +117,9 @@ export function applyDeadline(
   }
   if (!existing) return fail(`没有期限 ${command.id}`);
   if (existing.handledAt !== null) return fail(`期限 ${command.id} 已经回应过`);
-  if (existing.due > now) return fail(`期限 ${command.id} 还没到期`);
   existing.handledAt = now;
-  return { ok: true, notes: [`已回应：${existing.label}`] };
+  const early = existing.due > now;
+  return { ok: true, notes: [`${early ? "提前办完" : "已回应"}：${existing.label}`] };
 }
 
 /** 场景结束：至少前进到下一个时段，并广播 scene.end */

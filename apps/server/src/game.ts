@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { gameContent, gameData } from "@cp/content";
+import { DEFAULT_OPENING, gameContent, gameData, openingPremise } from "@cp/content";
 import {
   buildGmPrompt,
   type CheckRecord,
@@ -123,6 +123,7 @@ export class GameService {
       ...input,
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),
+      opening: DEFAULT_OPENING,
     };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };
@@ -138,7 +139,7 @@ export class GameService {
   submit(id: string, request: TurnRequest): Promise<Reply> {
     const { hub } = this.deps;
     return this.locks.run(id, async (): Promise<Reply> => {
-      const { world, records } = await this.load(id);
+      const { meta, world, records } = await this.load(id);
       const version = logVersion(records);
       const done = records.find((r) => r.kind === "turn" && r.requestId === request.requestId);
       if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
@@ -219,7 +220,7 @@ export class GameService {
           dv: check.result.dv,
           outcome: check.result.outcome,
         });
-        void this.execute(run, world, log, plan);
+        void this.execute(run, world, log, plan, meta.opening);
         return { status: 202, body: { turnId: run.turnId, replayed: false } };
       }
 
@@ -240,7 +241,13 @@ export class GameService {
       const unavailable = await this.llmUnavailable();
       if (unavailable) return unavailable;
       const run = hub.start(id, request.requestId, version);
-      void this.execute(run, world, records, { kind: "action", input: request.input });
+      void this.execute(
+        run,
+        world,
+        records,
+        { kind: "action", input: request.input },
+        meta.opening,
+      );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
   }
@@ -283,7 +290,10 @@ export class GameService {
           if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
           plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
         }
-        const built = buildGmPrompt(world, before, plan);
+        const built = buildGmPrompt(world, before, plan, {
+          data: gameData,
+          opening: openingPremise(meta.opening),
+        });
         prompt = { messages: [...built.messages], modules: built.modules };
       } catch (error) {
         rebuildError = error instanceof Error ? error.message : String(error);
@@ -333,6 +343,7 @@ export class GameService {
     world: WorldState,
     records: readonly LogRecord[],
     plan: GmPlan,
+    opening: string | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
@@ -343,6 +354,7 @@ export class GameService {
           llm: this.deps.llm,
           rng: this.deps.rng,
           data: gameData,
+          opening: openingPremise(opening),
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },

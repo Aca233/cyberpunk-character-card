@@ -95,7 +95,7 @@ export const WorldCommandSchema = z
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 
-/** 模型使用：添加期限（add），或标记到期事件已经回应（handle） */
+/** 模型使用：添加期限（add），或标记这件事已经办完或到期事件已经回应（handle） */
 export const DeadlineCommandSchema = z
   .object({
     type: z.literal("deadline"),
@@ -109,7 +109,9 @@ export const DeadlineCommandSchema = z
       ctx.addIssue({ code: "custom", message: "添加期限要写 label 和 due" });
     }
   })
-  .describe("期限：add 添加（要写 label 和 due），handle 标记到期事件已经回应");
+  .describe(
+    "期限：add 添加（要写 label 和 due）；handle 标记这件事已经了结——提前办完、办砸了、或者到期后已经回应",
+  );
 export type DeadlineCommand = z.infer<typeof DeadlineCommandSchema>;
 
 /** 只能由代码发出：主持人标了 sceneEnd 之后由主持流程发出 */

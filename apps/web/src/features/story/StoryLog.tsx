@@ -92,7 +92,13 @@ export function StoryLog({
       <div className={styles.logInner}>
         {earlier > 0 && <p className={styles.dim}>更早的 {earlier} 轮暂不显示</p>}
         {view.turns.length === 0 && !generating && (
-          <p className={styles.dim}>故事还没开始。写下你的第一句话或第一个行动。</p>
+          <p className={styles.dim}>
+            故事还没开始。
+            {view.deadlines[0]
+              ? `眼下的活：${view.deadlines[0].label}，${view.deadlines[0].due} 前。`
+              : ""}
+            写下你的第一句话或第一个行动。
+          </p>
         )}
         {view.turns.map((t) => (
           <TurnBlock key={t.seq} turn={t} saveId={saveId} />

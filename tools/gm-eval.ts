@@ -126,7 +126,9 @@ function offline(cases: readonly EvalCase[], scenarios: ReadonlyMap<string, Scen
   let failed = 0;
   for (const c of cases) {
     const scenario = scenarios.get(c.id) as Scenario;
-    const prompt = buildGmPrompt(scenario.world, scenario.records, scenario.plan);
+    const prompt = buildGmPrompt(scenario.world, scenario.records, scenario.plan, {
+      data: gameData,
+    });
     const findings = moduleFindings(c, prompt.modules);
     const bad = findings.filter((f) => !f.ok);
     if (bad.length > 0) failed += 1;

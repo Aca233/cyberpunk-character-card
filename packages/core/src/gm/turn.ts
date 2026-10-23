@@ -69,6 +69,8 @@ export interface GmDeps {
   readonly rng: Rng;
   /** 静态数据表（content 包） */
   readonly data?: Readonly<Record<string, unknown>>;
+  /** 这个存档的开场设定（内容包），故事还没开始时给模型 */
+  readonly opening?: string | undefined;
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
@@ -181,7 +183,7 @@ export async function runGmTurn(
   plan: GmPlan,
 ): Promise<GmResult> {
   const b = new TurnBuilder(deps);
-  const prompt = buildGmPrompt(world, records, plan);
+  const prompt = buildGmPrompt(world, records, plan, { data: deps.data, opening: deps.opening });
   const splitter = new StateSplitter();
   let usage: LlmUsage | undefined;
   for await (const event of deps.llm.stream(
