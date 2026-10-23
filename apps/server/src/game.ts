@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import {
+  buildGmPrompt,
   type CheckRecord,
   type Clock,
   currentOffers,
   diceRules,
+  effectiveTurns,
   GmAbortedError,
   GmEmptyReplyError,
   type GmPlan,
@@ -21,6 +23,7 @@ import {
   runGmTurn,
   type SaveMeta,
   serializeRecord,
+  TurnInputSchema,
   type TurnRecord,
   type TurnRequest,
   type TurnUsage,
@@ -240,6 +243,71 @@ export class GameService {
     }
     run.controller.abort();
     return { status: 202, body: { stopping: true } };
+  }
+
+  /**
+   * 上下文查看器：第 seq 轮的规则模块、被丢弃的指令、token 用量，
+   * 以及按回合日志重建的这一轮发给主持人的内容（不含格式修复的那次调用）
+   */
+  context(id: string, seq: number): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const meta = await this.deps.saves.readMeta(id);
+      const { records } = await this.deps.saves.loadLog(id);
+      const record = records[seq];
+      if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
+        return { status: 404, body: { error: `没有第 ${seq} 轮` } };
+      }
+      const before = records.slice(0, seq);
+      const world = replay({ nextSeq: 0, world: newGameWorld(meta) }, before);
+      const input = TurnInputSchema.safeParse(record.input);
+      let prompt: { messages: unknown[]; modules: readonly string[] } | null = null;
+      let rebuildError: string | null = null;
+      try {
+        if (!input.success) throw new Error("这一轮的玩家输入格式不对");
+        let plan: GmPlan = { kind: "action", input: input.data };
+        if (record.resolves !== undefined) {
+          const offer = currentOffers(before).checks.find((o) => o.id === record.resolves);
+          const rolled = before.findLast(
+            (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
+          );
+          if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
+          plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
+        }
+        const built = buildGmPrompt(world, before, plan);
+        prompt = { messages: [...built.messages], modules: built.modules };
+      } catch (error) {
+        rebuildError = error instanceof Error ? error.message : String(error);
+      }
+      const total = { inputTokens: 0, outputTokens: 0, turns: 0 };
+      for (const turn of effectiveTurns(records)) {
+        if (!turn.usage) continue;
+        total.inputTokens += turn.usage.inputTokens;
+        total.outputTokens += turn.usage.outputTokens;
+        total.turns += 1;
+      }
+      return {
+        status: 200,
+        body: {
+          seq,
+          at: record.at,
+          input: input.success ? input.data : null,
+          text: record.text,
+          read: record.read ?? null,
+          modules: record.modules ?? [],
+          commands: record.commands,
+          dropped: record.dropped,
+          notes: record.notes ?? [],
+          check: record.check ?? null,
+          choices: record.choices ?? [],
+          dice: record.dice,
+          resolves: record.resolves ?? null,
+          usage: record.usage ?? null,
+          totalUsage: total,
+          prompt,
+          rebuildError,
+        },
+      };
+    });
   }
 
   /** 主持人模型没配好时直接告诉玩家，不换别的服务商 */

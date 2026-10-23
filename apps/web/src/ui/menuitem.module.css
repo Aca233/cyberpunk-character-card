@@ -1,0 +1,44 @@
+.item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 4px 0;
+  color: var(--cp-red);
+  text-align: left;
+  transition: color var(--dur-flash);
+}
+
+.bar {
+  opacity: 0;
+  transition: opacity var(--dur-flash);
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-size: var(--fs-menu);
+  font-weight: 600;
+}
+
+.hint {
+  margin-left: auto;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-ui);
+}
+
+.item:hover:not(:disabled),
+.item[data-selected] {
+  color: var(--cp-cyan);
+}
+
+.item[data-selected] .bar {
+  opacity: 1;
+}
+
+.item:hover:not(:disabled) .bar {
+  opacity: 1;
+}
+
+.item:disabled {
+  color: var(--cp-red-dim);
+}

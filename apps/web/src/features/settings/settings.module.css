@@ -1,0 +1,281 @@
+/* 设置页：偏工具界面，信息密度高，但沿用 HUD 的红黄青 */
+
+.screen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  background: linear-gradient(90deg, rgb(255 0 60 / 6%), transparent 40%), var(--cp-bg);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5rem;
+  padding: 1.6rem 2.4rem 0;
+  border-bottom: 1px solid var(--cp-red-line);
+}
+
+.head h1 {
+  margin: 0 0 0.6rem;
+  font-size: var(--fs-title);
+  letter-spacing: 0.2em;
+  color: var(--cp-red);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.tabs button {
+  padding: 0.5rem 1.2rem;
+  font: inherit;
+  font-size: var(--fs-ui);
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--cp-yellow);
+  border-bottom-color: var(--cp-yellow);
+}
+
+.tabs button:focus-visible {
+  outline: 1px solid var(--cp-cyan);
+}
+
+.body {
+  overflow-y: auto;
+  padding: 1.6rem 2.4rem;
+}
+
+.foot {
+  padding: 0.6rem 2.4rem 1rem;
+}
+
+.dim {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.dim code,
+.profiles code {
+  color: var(--cp-cyan);
+}
+
+.error {
+  color: var(--cp-danger);
+  font-size: var(--fs-label);
+}
+
+.errors {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--cp-danger);
+  font-size: var(--fs-label);
+}
+
+/* ———— 方案 ———— */
+
+.profiles {
+  display: grid;
+  gap: 1.2rem;
+  max-width: 72rem;
+}
+
+.profileList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: 1rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.badge,
+.role {
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--cp-text-faint);
+  color: var(--cp-text-dim);
+}
+
+.role {
+  border-color: var(--cp-yellow);
+  color: var(--cp-bg);
+  background: var(--cp-yellow);
+  font-weight: 700;
+}
+
+.badge[data-key="configured"] {
+  border-color: var(--cp-success);
+  color: var(--cp-success);
+}
+
+.badge[data-key="missing"] {
+  border-color: var(--cp-danger);
+  color: var(--cp-danger);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: var(--fs-label);
+}
+
+.facts dt {
+  color: var(--cp-text-dim);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.testResult {
+  margin: 0.7rem 0 0;
+  padding: 0.4rem 0.7rem;
+  font-size: var(--fs-label);
+  border-left: 2px solid var(--cp-danger);
+  color: var(--cp-danger);
+  overflow-wrap: anywhere;
+}
+
+.testResult[data-ok] {
+  border-color: var(--cp-success);
+  color: var(--cp-success);
+}
+
+.form {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--cp-red-line);
+}
+
+.form label,
+.pickers label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+.form input,
+.pickers select {
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--cp-text);
+  background: rgb(0 0 0 / 45%);
+  border: 1px solid var(--cp-red-line);
+}
+
+.form input:focus,
+.pickers select:focus {
+  outline: none;
+  border-color: var(--cp-cyan);
+}
+
+/* ———— 上下文 ———— */
+
+.context {
+  display: grid;
+  gap: 1.2rem;
+  max-width: 72rem;
+}
+
+.pickers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.section {
+  border-left: 2px solid var(--cp-red-dim);
+  padding-left: 1rem;
+}
+
+.section[data-tone="warn"] {
+  border-color: var(--cp-yellow);
+}
+
+.section h2 {
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-ui);
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+}
+
+.section ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: var(--fs-label);
+}
+
+.section pre {
+  margin: 0;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 0.7rem 0.9rem;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgb(0 0 0 / 50%);
+  border: 1px solid var(--cp-red-line);
+}
+
+.message {
+  margin-bottom: 0.4rem;
+}
+
+.message summary {
+  cursor: pointer;
+  padding: 0.25rem 0;
+  font-size: var(--fs-label);
+  color: var(--cp-yellow);
+}
+
+@media (width < 760px) {
+  .head,
+  .body,
+  .foot {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .pickers {
+    grid-template-columns: 1fr;
+  }
+}

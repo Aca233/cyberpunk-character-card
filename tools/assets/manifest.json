@@ -1,0 +1,331 @@
+{
+  "$comment": "M1 素材清单，按界面分组。atlas 是解包目录 export/ui_sprites 下的图集路径，slot 是图集里的单图名；frames 展开成 id.0 … id.N 的逐帧图，slot 里的 {n} 换成帧号。改完运行 pnpm pick-assets，再用 pnpm check-assets 检查",
+  "groups": {
+    "common": [
+      { "id": "panel.frame", "atlas": "fullscreen/thin_red_frame01", "slot": "frame" },
+      { "id": "panel.techFrame", "atlas": "fullscreen/techframe02", "slot": "frame" },
+      { "id": "panel.glowBottom", "atlas": "widgets/shapes_bg_glow", "slot": "Bottom_glow" },
+      { "id": "panel.glowLeft", "atlas": "widgets/shapes_bg_glow", "slot": "Left_glow" },
+      { "id": "panel.cellBg", "atlas": "widgets/atlas_common", "slot": "frame_bg" },
+      { "id": "panel.cellFg", "atlas": "widgets/atlas_common", "slot": "frame_fg" },
+      { "id": "fluff.code", "atlas": "fullscreen/fullscreen_elements", "slot": "FLUFF1" },
+      { "id": "fluff.cc35", "atlas": "fullscreen/fullscreen_elements", "slot": "cc35" },
+      {
+        "id": "fluff.attention",
+        "atlas": "fullscreen/fullscreen_elements",
+        "slot": "fluff_attention"
+      },
+      {
+        "id": "fluff.attentionFill",
+        "atlas": "fullscreen/fullscreen_elements",
+        "slot": "fluff_attention_fill"
+      },
+      { "id": "fluff.protocol", "atlas": "widgets/atlas_common", "slot": "fluff_protocol1" },
+      { "id": "image.none", "atlas": "fullscreen/fullscreen_elements", "slot": "no_img" },
+      { "id": "fx.scanlines", "atlas": "widgets/scanlines", "slot": "scanlines" },
+      { "id": "fx.vignette", "atlas": "widgets/vignette", "slot": "vignette_1" },
+      { "id": "fx.grid", "atlas": "widgets/vignette", "slot": "grid" },
+      { "id": "tab.bg", "atlas": "common/atlas_tabs", "slot": "button_big2_bg_tab" },
+      { "id": "tab.line", "atlas": "common/atlas_tabs", "slot": "button_big2_bg_tab_line" },
+      { "id": "tab.code", "atlas": "common/atlas_tabs", "slot": "fluff_code" },
+      { "id": "key.1", "atlas": "common/icons_keyboard", "slot": "kb_1" },
+      { "id": "key.2", "atlas": "common/icons_keyboard", "slot": "kb_2" },
+      { "id": "key.3", "atlas": "common/icons_keyboard", "slot": "kb_3" },
+      { "id": "key.4", "atlas": "common/icons_keyboard", "slot": "kb_4" },
+      { "id": "key.enter", "atlas": "common/icons_keyboard", "slot": "kb_enter" },
+      { "id": "key.esc", "atlas": "common/icons_keyboard", "slot": "kb_esc" },
+      { "id": "key.f", "atlas": "common/icons_keyboard", "slot": "kb_f" },
+      { "id": "key.fHold", "atlas": "common/icons_keyboard", "slot": "kb_f_hold" },
+      { "id": "key.tab", "atlas": "common/icons_keyboard", "slot": "kb_tab" },
+      { "id": "attr.body", "atlas": "common/attributes_icons", "slot": "ico_body" },
+      { "id": "attr.reflexes", "atlas": "common/attributes_icons", "slot": "ico_ref" },
+      { "id": "attr.tech", "atlas": "common/attributes_icons", "slot": "ico_tech" },
+      { "id": "attr.intelligence", "atlas": "common/attributes_icons", "slot": "ico_int" },
+      { "id": "attr.cool", "atlas": "common/attributes_icons", "slot": "ico_cool" }
+    ],
+    "splash": [
+      { "id": "splash.logo", "atlas": "fullscreen/menu_background", "slot": "cp_logo_zhs" },
+      { "id": "splash.logoEn", "atlas": "fullscreen/menu_background", "slot": "cp_logo" },
+      { "id": "splash.ncLogo", "atlas": "fullscreen/atlas_loading_screen", "slot": "nc_logo" },
+      { "id": "splash.line", "atlas": "fullscreen/atlas_loading_screen", "slot": "line" },
+      { "id": "loading.circle", "atlas": "fullscreen/default_loading", "slot": "Circle" },
+      { "id": "loading.frame", "atlas": "fullscreen/default_loading", "slot": "Frame" }
+    ],
+    "menu": [
+      { "id": "menu.background", "atlas": "fullscreen/menu_background", "slot": "menu_full_bg" },
+      { "id": "menu.header", "atlas": "fullscreen/menu_background", "slot": "tex_header" },
+      { "id": "menu.tiled", "atlas": "fullscreen/menu_background", "slot": "tex_tiled" },
+      { "id": "menu.scanline", "atlas": "fullscreen/menu_background", "slot": "scanlineLight" },
+      { "id": "menu.cellBorder", "atlas": "fullscreen/hub_menu_atlas", "slot": "cell_border" },
+      { "id": "menu.cellFill", "atlas": "fullscreen/hub_menu_atlas", "slot": "cell_fill" },
+      { "id": "menu.arrowBorder", "atlas": "fullscreen/hub_menu_atlas", "slot": "arrow_border" },
+      { "id": "menu.arrowFill", "atlas": "fullscreen/hub_menu_atlas", "slot": "arrow_fill" },
+      {
+        "id": "menu.saveSlot",
+        "atlas": "fullscreen/fullscreen_elements",
+        "slot": "save_load_screen"
+      }
+    ],
+    "hud": [
+      { "id": "hud.healthbar", "atlas": "widgets/hpbar_anim", "slot": "hpbar_0100" },
+      { "id": "hud.ramBar", "atlas": "widgets/hpbar_anim", "slot": "memorybar" },
+      { "id": "hud.levelFrame", "atlas": "widgets/hpbar_anim", "slot": "level_frame" },
+      { "id": "hud.zoneFrame", "atlas": "widgets/zone_update", "slot": "frame" },
+      { "id": "hud.zoneIcon", "atlas": "widgets/zone_update", "slot": "zone_updated_icon" },
+      { "id": "hud.damageGlow", "atlas": "widgets/damage_indicator", "slot": "glow" },
+      {
+        "id": "district.badlands",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_badlands_large"
+      },
+      {
+        "id": "district.center",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_center_large"
+      },
+      {
+        "id": "district.dogtown",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_dogtown_large"
+      },
+      {
+        "id": "district.domingo",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_domingo_large"
+      },
+      {
+        "id": "district.heywood",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_heywood_large"
+      },
+      {
+        "id": "district.nightcity",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_nightcity_large"
+      },
+      {
+        "id": "district.pacifica",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_pacifica_large"
+      },
+      {
+        "id": "district.watson",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_watson_large"
+      },
+      {
+        "id": "district.westbrook",
+        "atlas": "common/district_icons",
+        "slot": "ico_district_westbrook_large"
+      },
+      { "id": "weapon.club", "atlas": "common/weapon_types", "slot": "club" },
+      { "id": "weapon.fists", "atlas": "common/weapon_types", "slot": "fists" },
+      { "id": "weapon.hammer", "atlas": "common/weapon_types", "slot": "hammer" },
+      { "id": "weapon.heavyMachine", "atlas": "common/weapon_types", "slot": "heavy_machine" },
+      { "id": "weapon.katana", "atlas": "common/weapon_types", "slot": "katana" },
+      { "id": "weapon.knife", "atlas": "common/weapon_types", "slot": "knife" },
+      { "id": "weapon.lightMachine", "atlas": "common/weapon_types", "slot": "light_machine" },
+      { "id": "weapon.longBlade", "atlas": "common/weapon_types", "slot": "long_blade" },
+      { "id": "weapon.pistol", "atlas": "common/weapon_types", "slot": "pistol" },
+      { "id": "weapon.pistolPower", "atlas": "common/weapon_types", "slot": "pistol_power" },
+      { "id": "weapon.revolverPower", "atlas": "common/weapon_types", "slot": "revolver_power" },
+      { "id": "weapon.revolverTech", "atlas": "common/weapon_types", "slot": "revolver_tech" },
+      { "id": "weapon.riflePrecision", "atlas": "common/weapon_types", "slot": "rifle_preci" },
+      {
+        "id": "weapon.riflePrecisionTech",
+        "atlas": "common/weapon_types",
+        "slot": "rifle_preci_tech"
+      },
+      {
+        "id": "weapon.shotgunDoublePower",
+        "atlas": "common/weapon_types",
+        "slot": "shotgun_double_power"
+      },
+      {
+        "id": "weapon.shotgunDoubleSmart",
+        "atlas": "common/weapon_types",
+        "slot": "shotgun_double_smart"
+      },
+      {
+        "id": "weapon.shotgunDoubleTech",
+        "atlas": "common/weapon_types",
+        "slot": "shotgun_double_tech"
+      },
+      { "id": "weapon.shotgunPower", "atlas": "common/weapon_types", "slot": "shotgun_power" },
+      { "id": "weapon.shotgunSmart", "atlas": "common/weapon_types", "slot": "shotgun_smart" },
+      { "id": "weapon.sniper", "atlas": "common/weapon_types", "slot": "sniper" },
+      { "id": "weapon.sniperSmart", "atlas": "common/weapon_types", "slot": "sniper_smart" },
+      { "id": "weapon.smgPower", "atlas": "common/weapon_types", "slot": "subma_power" },
+      { "id": "weapon.smgSmart", "atlas": "common/weapon_types", "slot": "subma_smart" },
+      {
+        "id": "notify.bracketBg",
+        "atlas": "widgets/notification_assets",
+        "slot": "notification_bracket_bg"
+      },
+      {
+        "id": "notify.bracketFg",
+        "atlas": "widgets/notification_assets",
+        "slot": "notification_bracket_fg"
+      },
+      { "id": "notify.itemCellBg", "atlas": "widgets/notification_assets", "slot": "item_cell_bg" },
+      { "id": "notify.itemCellFg", "atlas": "widgets/notification_assets", "slot": "item_cell_fg" },
+      { "id": "notify.cash", "atlas": "widgets/notification_assets", "slot": "cash_symbol_small" },
+      {
+        "id": "notify.streetCred",
+        "atlas": "widgets/notification_assets",
+        "slot": "SC_logo_single"
+      },
+      {
+        "id": "notify.questUpdate",
+        "atlas": "widgets/notification_assets",
+        "slot": "ico_quest_update"
+      },
+      {
+        "id": "notify.attention",
+        "atlas": "widgets/notification_assets",
+        "slot": "Icon_Attention"
+      },
+      {
+        "id": "notify.warning",
+        "atlas": "widgets/notification_assets",
+        "slot": "Acc_Req_triangle"
+      },
+      { "id": "notify.inventory", "atlas": "widgets/notification_assets", "slot": "ico_inventory" },
+      { "id": "notify.journal", "atlas": "widgets/notification_assets", "slot": "ico_journal" }
+    ],
+    "dialog": [
+      {
+        "id": "dialog.lineSelect",
+        "atlas": "widgets/atlas_dialog_nineslice",
+        "slot": "line_select"
+      },
+      {
+        "id": "dialog.skillSelect",
+        "atlas": "widgets/atlas_dialog_nineslice",
+        "slot": "skill_select"
+      },
+      { "id": "dialog.iconSlot", "atlas": "widgets/atlas_dialog_nineslice", "slot": "icon_slot" },
+      {
+        "id": "dialog.numberSlot",
+        "atlas": "widgets/atlas_dialog_nineslice",
+        "slot": "number_slot"
+      },
+      { "id": "dialog.timer", "atlas": "widgets/atlas_dialog_nineslice", "slot": "timer" },
+      { "id": "skillcheck.default", "atlas": "widgets/skillchecks_atlas", "slot": "default" },
+      { "id": "skillcheck.solo", "atlas": "widgets/skillchecks_atlas", "slot": "solo" },
+      { "id": "skillcheck.techie", "atlas": "widgets/skillchecks_atlas", "slot": "techie" },
+      { "id": "skillcheck.netrunner", "atlas": "widgets/skillchecks_atlas", "slot": "netrunner" },
+      { "id": "interaction.talk", "atlas": "widgets/atlas_dialog_interactions", "slot": "call" },
+      { "id": "interaction.use", "atlas": "widgets/atlas_dialog_interactions", "slot": "Use" },
+      { "id": "interaction.aim", "atlas": "widgets/atlas_dialog_interactions", "slot": "Aim" },
+      {
+        "id": "interaction.drawWeapon",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "draw_weapon"
+      },
+      {
+        "id": "interaction.hideWeapon",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "hide_weapon"
+      },
+      { "id": "interaction.hack", "atlas": "widgets/atlas_dialog_interactions", "slot": "Hacking" },
+      {
+        "id": "interaction.jackIn",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "JackIn"
+      },
+      { "id": "interaction.scan", "atlas": "widgets/atlas_dialog_interactions", "slot": "scan" },
+      {
+        "id": "interaction.techie",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "Techie"
+      },
+      { "id": "interaction.solo", "atlas": "widgets/atlas_dialog_interactions", "slot": "Solo" },
+      {
+        "id": "interaction.netrunner",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "Netrunner"
+      },
+      {
+        "id": "interaction.athletics",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "Athletics"
+      },
+      {
+        "id": "interaction.engineering",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "Engineering"
+      },
+      {
+        "id": "interaction.takeDown",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "TakeDown"
+      },
+      {
+        "id": "interaction.distract",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "Distract"
+      },
+      { "id": "interaction.hit", "atlas": "widgets/atlas_dialog_interactions", "slot": "Hit" },
+      {
+        "id": "interaction.illegal",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "illegal"
+      },
+      {
+        "id": "interaction.vendor",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "OpenVendor"
+      },
+      { "id": "interaction.sit", "atlas": "widgets/atlas_dialog_interactions", "slot": "Sit" },
+      {
+        "id": "interaction.backOut",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "BackOut"
+      },
+      { "id": "interaction.allow", "atlas": "widgets/atlas_dialog_interactions", "slot": "Allow" },
+      {
+        "id": "interaction.friendly",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "ChangeToFriendly"
+      },
+      {
+        "id": "interaction.grenade",
+        "atlas": "widgets/atlas_dialog_interactions",
+        "slot": "grenade"
+      }
+    ],
+    "check": [
+      {
+        "id": "check.hold",
+        "atlas": "common/hold_fill",
+        "slot": "icon_circle_anim__{n}",
+        "frames": { "from": 0, "to": 99, "missing": [3] }
+      },
+      { "id": "check.holdKey", "atlas": "common/hold_fill_keyboard", "slot": "hold_keyboard" },
+      {
+        "id": "check.damageGraze",
+        "atlas": "widgets/notification_assets",
+        "slot": "Acc_Req_triangle"
+      },
+      {
+        "id": "check.damageHeavy",
+        "atlas": "widgets/notification_assets",
+        "slot": "Icon_Attention"
+      },
+      {
+        "id": "check.damageLethal",
+        "atlas": "fullscreen/fullscreen_elements",
+        "slot": "death_skull"
+      }
+    ],
+    "status": [
+      { "id": "status.skull", "atlas": "fullscreen/fullscreen_elements", "slot": "death_skull" },
+      {
+        "id": "status.timeCircle",
+        "atlas": "fullscreen/fullscreen_elements",
+        "slot": "time-circle-small"
+      }
+    ]
+  }
+}

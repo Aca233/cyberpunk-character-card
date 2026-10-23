@@ -1,0 +1,864 @@
+/* 剧情主界面：原作 HUD 的红黄青三色，正文用宽松的中文排版 */
+
+.screen {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(0, 280px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "hud hud hud"
+    "side main .";
+  height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 120%, rgb(255 0 60 / 8%), transparent 60%),
+    linear-gradient(180deg, rgb(0 0 0 / 30%), transparent 30%), var(--cp-bg);
+  color: var(--cp-text);
+}
+
+/* 扫描线和重伤时的屏幕边缘红光 */
+.fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 1.5%) 0 1px, transparent 1px 3px);
+}
+
+.screen[data-severe] .fx {
+  background:
+    var(--glow-img, none) center / 100% 100% no-repeat,
+    radial-gradient(ellipse at center, transparent 55%, rgb(255 30 50 / 22%) 100%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 1.5%) 0 1px, transparent 1px 3px);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.center {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 2rem;
+}
+
+.loading {
+  font-family: var(--font-ui);
+  letter-spacing: 0.2em;
+  color: var(--cp-cyan);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.dim {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+/* ———— 顶部 HUD ———— */
+
+.hud {
+  grid-area: hud;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 1rem;
+  padding: 0.9rem 1.4rem 0.6rem;
+  font-family: var(--font-ui);
+  z-index: 2;
+}
+
+.vitals {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.level {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.level > span {
+  position: absolute;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--cp-yellow);
+}
+
+.hp {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.hpText {
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  color: var(--cp-hp);
+}
+
+.hpText[data-low] {
+  color: var(--cp-hp-low);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.weapon {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 36px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--cp-cyan-dim);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+.weaponName {
+  font-size: var(--fs-label);
+  color: var(--cp-cyan);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.15rem 0.8rem;
+  align-items: center;
+  padding: 0.4rem 1rem;
+  border-top: 2px solid var(--cp-red);
+  background: linear-gradient(180deg, rgb(255 0 60 / 14%), transparent);
+  max-width: 30rem;
+}
+
+.combatTitle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cp-red);
+}
+
+.combatResults {
+  display: flex;
+  gap: 4px;
+}
+
+.combatResults > i {
+  width: 18px;
+  height: 6px;
+  background: var(--cp-text-faint);
+  transform: skewX(-25deg);
+}
+
+.combatResults > i[data-result="win"] {
+  background: var(--cp-success);
+}
+
+.combatResults > i[data-result="lose"] {
+  background: var(--cp-danger);
+}
+
+.combatResults > i[data-result="draw"] {
+  background: var(--cp-yellow-dim);
+}
+
+.combatResults > i[data-result="now"] {
+  background: var(--cp-red);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.combatDefeat,
+.combatEnemies,
+.dying {
+  grid-column: 1 / -1;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+.dying {
+  color: var(--cp-danger);
+  font-weight: 700;
+}
+
+.zone {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: right;
+}
+
+.zoneText {
+  display: flex;
+  flex-direction: column;
+}
+
+.zoneName {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-yellow);
+  text-transform: uppercase;
+}
+
+.zoneTime {
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+  letter-spacing: 0.06em;
+}
+
+/* ———— 左侧角色栏 ———— */
+
+.side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.6rem 0 1rem 1.4rem;
+  overflow-y: auto;
+  font-family: var(--font-ui);
+}
+
+.attrs {
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.attrs > li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attrs b {
+  font-size: 1.1rem;
+  color: var(--cp-cyan);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.8rem;
+  margin: 0.6rem 0 0;
+  font-size: var(--fs-label);
+}
+
+.facts dt {
+  color: var(--cp-text-dim);
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+}
+
+.facts dd[data-stage="edge"],
+.facts dd[data-stage="crisis"] {
+  color: var(--voice-humanity);
+}
+
+.deadlines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: var(--fs-label);
+}
+
+.deadlines > li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 0 0.4rem;
+  align-items: center;
+}
+
+.deadlines time {
+  grid-column: 2;
+  color: var(--cp-text-dim);
+}
+
+.deadlines > li[data-overdue] time {
+  color: var(--cp-danger);
+}
+
+/* ———— 正文 ———— */
+
+.column {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 1.2rem;
+}
+
+.log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  mask-image: linear-gradient(180deg, transparent 0, #000 2.5rem);
+}
+
+.logInner {
+  max-width: var(--story-width);
+  margin: 0 auto;
+  padding: 2.5rem 0 1.5rem;
+  font-family: var(--font-body);
+  font-size: var(--story-size);
+  line-height: var(--story-leading);
+}
+
+.turn {
+  margin-bottom: 1.8rem;
+  animation: rise var(--dur-slide) ease-out both;
+}
+
+.turn p {
+  margin: 0 0 0.8em;
+  text-indent: 2em;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.turn p.input {
+  text-indent: 0;
+  padding-left: 0.8rem;
+  border-left: 2px solid var(--cp-yellow);
+  color: var(--cp-yellow);
+  font-size: 0.95em;
+}
+
+.input[data-mode="think"] {
+  color: var(--voice-past);
+  border-color: var(--voice-past);
+  font-style: italic;
+}
+
+.input[data-mode="ooc"] {
+  color: var(--cp-text-dim);
+  border-color: var(--cp-text-faint);
+  font-family: var(--font-ui);
+}
+
+.turn p.diceLine {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-indent: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-cyan);
+  letter-spacing: 0.05em;
+}
+
+.turn p.rolled {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  text-indent: 0;
+  padding: 0.4rem 0.8rem;
+  font-family: var(--font-ui);
+  border: 1px solid var(--cp-danger);
+  color: var(--cp-danger);
+  animation: flash var(--dur-flash) ease-out;
+}
+
+.rolled[data-success] {
+  border-color: var(--cp-success);
+  color: var(--cp-success);
+}
+
+.rolled b {
+  font-size: 1.2em;
+  letter-spacing: 0.15em;
+}
+
+.rolled span {
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+@keyframes flash {
+  from {
+    background: currentColor;
+  }
+}
+
+.turnMeta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+}
+
+.turnMeta a {
+  color: var(--cp-text-faint);
+  text-decoration: none;
+}
+
+.turnMeta a:hover,
+.turnMeta a:focus-visible {
+  color: var(--cp-cyan);
+}
+
+.dropped {
+  color: var(--cp-yellow);
+}
+
+.read {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-cyan);
+  background: linear-gradient(90deg, rgb(0 240 255 / 8%), transparent);
+  border-left: 2px solid var(--cp-cyan);
+}
+
+.caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--cp-red);
+  animation: blink 0.9s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  max-width: var(--story-width);
+  width: 100%;
+  margin: 0 auto 0.6rem;
+  padding: 0.5rem 0.8rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  border: 1px solid var(--cp-yellow-dim);
+  color: var(--cp-yellow);
+}
+
+.notice > span {
+  flex: 1;
+}
+
+.notice[data-kind="lost"],
+.notice[data-kind="rejected"] {
+  border-color: var(--cp-red-dim);
+  color: var(--cp-red);
+}
+
+/* ———— 底部：选项 / 检定 / 输入 ———— */
+
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-width: calc(var(--story-width) + 4rem);
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 0.9rem;
+}
+
+.choices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-family: var(--font-body);
+  text-align: left;
+  color: var(--cp-text);
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    background var(--dur-flash),
+    border-color var(--dur-flash),
+    color var(--dur-flash);
+}
+
+.choice:hover:not(:disabled),
+.choice:focus-visible {
+  outline: none;
+  color: var(--cp-yellow);
+  border-left-color: var(--cp-yellow);
+  background: linear-gradient(90deg, rgb(252 238 10 / 10%), transparent 70%);
+}
+
+.choice:disabled {
+  cursor: not-allowed;
+  color: var(--cp-text-faint);
+}
+
+.choice[data-check] .choiceText::after {
+  content: " ◆";
+  color: var(--cp-red);
+  font-size: 0.7em;
+}
+
+.num {
+  width: 22px;
+  text-align: center;
+  font-family: var(--font-ui);
+  color: var(--cp-text-dim);
+}
+
+.choiceText {
+  flex: 1;
+}
+
+.tag {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid currentColor;
+  color: var(--cp-red);
+  white-space: nowrap;
+}
+
+.tag[data-met] {
+  color: var(--cp-success);
+}
+
+/* 检定确认栏 */
+.check {
+  position: relative;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1.1rem;
+  font-family: var(--font-ui);
+  background: linear-gradient(180deg, rgb(252 238 10 / 7%), rgb(0 0 0 / 55%));
+  border: 1px solid var(--cp-yellow-dim);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+  animation: rise var(--dur-slide) ease-out both;
+}
+
+.checkHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.checkHead h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+}
+
+.chance {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--cp-cyan);
+}
+
+.checkNumbers {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+}
+
+.checkNumbers > div:not(.vs) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0 0.6rem;
+}
+
+.checkNumbers small {
+  grid-column: 1 / -1;
+  color: var(--cp-text-dim);
+  letter-spacing: 0.15em;
+}
+
+.checkNumbers b {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.checkNumbers span {
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+.vs {
+  color: var(--cp-red);
+  letter-spacing: 0.2em;
+}
+
+.sources {
+  font-size: var(--fs-label);
+}
+
+.sourcesTitle {
+  color: var(--cp-text-dim);
+}
+
+.capped {
+  margin-left: 0.5rem;
+  font-style: normal;
+  color: var(--cp-yellow);
+}
+
+.sources ul {
+  margin: 0.15rem 0 0;
+  padding-left: 1rem;
+}
+
+.sources b {
+  color: var(--cp-cyan);
+}
+
+.stakes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.stakes p {
+  margin: 0;
+  padding-left: 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  border-left: 2px solid var(--cp-success);
+}
+
+.stakes p[data-tone="bad"] {
+  border-color: var(--cp-danger);
+}
+
+.stakes small {
+  display: block;
+  font-family: var(--font-ui);
+  color: var(--cp-text-dim);
+  letter-spacing: 0.15em;
+}
+
+.damage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-danger);
+}
+
+.checkActions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+/* 输入框 */
+.inputBar {
+  display: grid;
+  gap: 0.35rem;
+  --mode-color: var(--cp-yellow);
+}
+
+.inputBar[data-mode="say"] {
+  --mode-color: var(--cp-cyan);
+}
+
+.inputBar[data-mode="think"] {
+  --mode-color: var(--voice-past);
+}
+
+.inputBar[data-mode="ooc"] {
+  --mode-color: var(--cp-text-dim);
+}
+
+.modes {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-ui);
+}
+
+.mode {
+  padding: 0.15rem 0.8rem;
+  font: inherit;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.mode[aria-selected="true"] {
+  color: var(--mode-color);
+  border-bottom-color: var(--mode-color);
+}
+
+.mode:focus-visible {
+  outline: 1px solid var(--mode-color);
+}
+
+.modeHint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--cp-text-faint);
+}
+
+.inputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+
+.textarea {
+  flex: 1;
+  resize: none;
+  min-height: 3.2rem;
+  max-height: 10rem;
+  padding: 0.55rem 0.8rem;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--cp-text);
+  background: rgb(0 0 0 / 45%);
+  border: 1px solid var(--cp-red-line);
+  border-left: 2px solid var(--mode-color);
+  field-sizing: content;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--mode-color);
+  box-shadow: 0 0 0 1px var(--mode-color) inset;
+}
+
+.textarea:disabled {
+  opacity: 0.5;
+}
+
+.warn {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-danger);
+}
+
+/* ———— 右侧提示 ———— */
+
+.toasts {
+  position: fixed;
+  top: 5.5rem;
+  right: 1.4rem;
+  z-index: 20;
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-ui);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 14rem;
+  padding: 0.4rem 0.8rem;
+  font-size: var(--fs-label);
+  background: rgb(0 0 0 / 75%);
+  border-right: 3px solid var(--cp-yellow);
+  animation: slide-in var(--dur-slide) ease-out both;
+}
+
+.toast[data-tone="good"] {
+  border-right-color: var(--cp-success);
+}
+
+.toast[data-tone="bad"] {
+  border-right-color: var(--cp-danger);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+/* ———— 窄屏：角色栏收到顶部下方 ———— */
+
+@media (width < 960px) {
+  .screen {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: none;
+  }
+
+  .hud,
+  .side,
+  .column {
+    grid-area: auto;
+  }
+
+  .hud {
+    grid-template-columns: 1fr;
+  }
+
+  .zone {
+    justify-self: start;
+  }
+
+  .side {
+    flex-direction: row;
+    padding: 0 1rem;
+    overflow-x: auto;
+  }
+
+  .stakes,
+  .checkNumbers {
+    grid-template-columns: 1fr;
+  }
+}

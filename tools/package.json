@@ -4,11 +4,14 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "eval": "tsx gm-eval.ts"
+    "eval": "tsx gm-eval.ts",
+    "pick-assets": "tsx assets/pick.ts",
+    "check-assets": "tsx assets/check.ts"
   },
   "dependencies": {
     "@cp/core": "workspace:*",
     "@cp/server": "workspace:*",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   }
 }

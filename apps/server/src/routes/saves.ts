@@ -31,7 +31,7 @@ async function body<T extends z.ZodType>(
 
 const reply = (c: Context, r: Reply) => c.json(r.body, r.status);
 
-/** /api/saves：存档列表和创建、状态投影、提交回合、回合事件流（SSE，可按 Last-Event-ID 续收）、停止 */
+/** /api/saves：存档列表和创建、状态投影、提交回合、回合事件流（SSE，可按 Last-Event-ID 续收）、停止、上下文查看器 */
 export function saveRoutes(game: GameService, hub: TurnHub): Hono {
   const app = new Hono();
 
@@ -77,6 +77,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
         await stream.writeSSE({ id: String(id), event: event.type, data: JSON.stringify(event) });
       }
     });
+  });
+
+  app.get("/:id/turns/:seq/context", async (c) => {
+    const seq = Number(c.req.param("seq"));
+    if (!Number.isInteger(seq) || seq < 0) return c.json({ error: "轮次序号不合法" }, 400);
+    return reply(c, await game.context(c.req.param("id"), seq));
   });
 
   app.post("/:id/turns/:turnId/stop", (c) =>

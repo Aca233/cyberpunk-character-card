@@ -1,0 +1,25 @@
+.masked {
+  display: inline-block;
+  flex: none;
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  vertical-align: middle;
+}
+
+.nineSlice {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.missing {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px dashed var(--cp-danger);
+  background: rgb(255 0 60 / 15%);
+  color: var(--cp-danger);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  white-space: nowrap;
+}

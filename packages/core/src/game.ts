@@ -6,7 +6,7 @@ import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
-import { ATTRIBUTE_LABELS, DiceStateSchema } from "./systems/dice/schema";
+import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
@@ -46,14 +46,30 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
     const prepared = prepareFor(world, offer.spec);
     if (!prepared.ok) return [];
     const { spec } = offer;
+    const { check } = prepared;
     return [
       {
         id: offer.id,
         label: offer.label,
         attribute: spec.attribute,
         attributeLabel: ATTRIBUTE_LABELS[spec.attribute],
-        dv: prepared.check.dv,
-        chance: prepared.check.chance,
+        attributeValue: check.attributeValue,
+        tierLabel: OPPONENT_TIERS[spec.tier].label,
+        /** 档位给的基础难度值；最终难度值 dv = 基础值 + 修正（封顶后）+ 难度模式 */
+        baseDv: spec.dv,
+        dv: check.dv,
+        modeDv: check.modeDv,
+        /** 检定值：属性 + 加成 − 减值（封顶后） */
+        modifier: check.modifier,
+        /** 逐条来源；raw 是封顶前的合计，和 total 不同时界面标“已封顶” */
+        bonuses: check.bonus,
+        penalties: check.penalty,
+        dvMods: check.dvMods,
+        capped:
+          check.bonus.raw !== check.bonus.total ||
+          check.penalty.raw !== check.penalty.total ||
+          check.dvMods.raw !== check.dvMods.total,
+        chance: check.chance,
         success: spec.success,
         failure: spec.failure,
         damage: spec.damage ?? null,
@@ -166,6 +182,8 @@ export function projectState(world: WorldState, records: readonly LogRecord[]) {
       input: turnInput(t.input),
       text: t.text,
       dice: t.dice,
+      /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
+      dropped: t.dropped.length,
     })),
   };
 }

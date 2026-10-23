@@ -1,0 +1,19 @@
+.panel {
+  position: relative;
+  padding: 14px 18px 18px;
+  isolation: isolate;
+}
+
+.title {
+  position: relative;
+  margin: 0 0 10px;
+  color: var(--cp-red);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.body {
+  position: relative;
+}

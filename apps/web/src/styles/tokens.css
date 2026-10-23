@@ -1,0 +1,72 @@
+/*
+ * 设计令牌。原作 UI 图集几乎都是白色蒙版，颜色在引擎里着色，所以颜色只在这里定义，
+ * 组件用 mask 把素材染成这些颜色。数值先按贴图取样（Logo 黄、红框、菜单底色），之后用实机截图校正
+ */
+:root {
+  /* 主界面色：菜单文字、边框、未选中项；大段文字不用红色 */
+  --cp-red: #ff6158;
+  --cp-red-dim: #8f3530;
+  --cp-red-line: #d8103a;
+  /* 高亮、选中、可交互 */
+  --cp-cyan: #5ef6ff;
+  --cp-cyan-dim: #1f6a73;
+  /* 主线、Logo、重要提示、街头声望 */
+  --cp-yellow: #fcee0a;
+  --cp-yellow-dim: #7a7300;
+  /* 近黑背景、半透明面板底 */
+  --cp-bg: #0c080e;
+  --cp-panel: rgb(18 10 16 / 88%);
+  --cp-panel-strong: rgb(12 6 10 / 96%);
+  /* 正文近白（对背景约 16:1）、次要文字灰（约 7:1） */
+  --cp-text: #ece8e4;
+  --cp-text-dim: #a8a3a0;
+  --cp-text-faint: #6e6a68;
+  /* 血条、低血量 */
+  --cp-hp: #ff6158;
+  --cp-hp-low: #ff2a3c;
+  --cp-ram: #5ef6ff;
+  /* 警报、通缉、致命风险 */
+  --cp-danger: #ff003c;
+  /* 网监热度，和警方通缉的红色分开 */
+  --cp-netwatch: #3d7bff;
+  --cp-success: #3ff2a0;
+
+  /* 稀有度 */
+  --rar-common: #a8a8a8;
+  --rar-uncommon: #4fd17a;
+  --rar-rare: #3fa9ff;
+  --rar-epic: #b45cff;
+  --rar-legendary: #ffa125;
+  --rar-iconic: #f2d14c;
+
+  /* 内心声音：过往、义体、人性 */
+  --voice-past: #f2c27a;
+  --voice-chrome: #5ef6ff;
+  --voice-humanity: #ff8fa0;
+
+  /* 字体：英文和数字 Rajdhani，中文 Noto Sans SC */
+  --font-ui: "Rajdhani", "Noto Sans SC Variable", sans-serif;
+  --font-body: "Noto Sans SC Variable", "Rajdhani", sans-serif;
+
+  /* 字号分级 */
+  --fs-title: 44px;
+  --fs-menu: 26px;
+  --fs-body: 17px;
+  --fs-ui: 15px;
+  --fs-label: 12px;
+  /* 剧情正文单独一档，设置里可调 */
+  --story-size: 18px;
+  --story-leading: 1.85;
+  /* 正文栏宽度：约 40 个汉字 */
+  --story-width: 40em;
+
+  --dur-flash: 150ms;
+  --dur-slide: 250ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-flash: 0ms;
+    --dur-slide: 0ms;
+  }
+}

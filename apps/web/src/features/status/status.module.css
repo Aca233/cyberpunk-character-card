@@ -1,0 +1,59 @@
+.fatal {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+}
+
+.fatal h1 {
+  margin: 0 0 12px;
+  color: var(--cp-danger);
+  font-family: var(--font-ui);
+}
+
+.missing {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+  padding: 10px 14px;
+  border: 1px dashed var(--cp-danger);
+  background: rgb(30 0 8 / 92%);
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+}
+
+.missing strong {
+  color: var(--cp-danger);
+  font-size: var(--fs-ui);
+}
+
+.notice {
+  position: fixed;
+  bottom: 4px;
+  left: 50%;
+  z-index: 1;
+  margin: 0;
+  transform: translateX(-50%);
+  color: var(--cp-text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--cp-text-dim);
+}
+
+.empty p {
+  margin: 0;
+}

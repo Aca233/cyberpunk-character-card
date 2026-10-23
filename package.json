@@ -12,7 +12,9 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "eval": "pnpm --filter @cp/tools run eval"
+    "eval": "pnpm --filter @cp/tools run eval",
+    "pick-assets": "pnpm --filter @cp/tools run pick-assets",
+    "check-assets": "pnpm --filter @cp/tools run check-assets"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",
