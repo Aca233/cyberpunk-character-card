@@ -9,6 +9,8 @@ import { registry } from "./systems/registry";
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 分配一个街头声望攒下的属性点 */
   z.strictObject({ type: z.literal("spendPoint"), attribute: AttributeSchema }),
+  /** 在委托板上接下一单挂着的委托 */
+  z.strictObject({ type: z.literal("acceptJob"), id: z.string().min(1).max(64) }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 
@@ -22,11 +24,20 @@ export const ActionRequestSchema = z.strictObject({
 });
 export type ActionRequest = z.infer<typeof ActionRequestSchema>;
 
+/** 在委托板上接单时写进进展笔记的一句 */
+export const BOARD_ACCEPT_NOTE = "在委托板上接下，戏里还没和对方细谈";
+
 /** 每种操作对应的内部指令；只放行这里列出的 */
 function commandsFor(action: PlayerAction): Command[] {
   switch (action.type) {
     case "spendPoint":
       return [{ type: "character.spendPoint", attribute: action.attribute }];
+    case "acceptJob":
+      // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
+      return [
+        { type: "jobAccept", id: action.id },
+        { type: "jobNote", id: action.id, note: BOARD_ACCEPT_NOTE },
+      ];
   }
 }
 

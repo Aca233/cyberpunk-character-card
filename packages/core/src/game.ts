@@ -422,6 +422,8 @@ export function projectState(
         risk: j.risk,
         reward: j.reward,
         due: j.due === null ? null : formatGameTime(j.due),
+        /** 离期限还有多少分钟；已过期为负 */
+        dueIn: j.due === null ? null : j.due - world.time,
         overdue: isOpen(j) && j.due !== null && j.due <= world.time,
         status: j.status,
         statusLabel: JOB_STATUS_LABELS[j.status],

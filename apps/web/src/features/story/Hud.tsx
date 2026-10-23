@@ -116,15 +116,19 @@ export function Hud({ view }: { readonly view: View }) {
 export function SidePanel({
   view,
   onSpend,
+  onJournal,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
   readonly onSpend?: ((attribute: Attribute) => void) | undefined;
+  /** 打开日志，board 为 true 时直接到委托板 */
+  readonly onJournal: (board: boolean) => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
   const itemName = (id: string) => view.names.items[id] ?? id;
-  const openJobs = view.jobs.list.filter((job) => job.open);
+  const activeJobs = view.jobs.list.filter((job) => job.status === "active");
+  const offered = view.jobs.list.filter((job) => job.status === "offered").length;
   return (
     <aside className={styles.side}>
       <Panel as="div" title={character.name ?? "未建档"}>
@@ -278,11 +282,11 @@ export function SidePanel({
       </Panel>
 
       <Panel as="div" title="委托" line="var(--cp-red)">
-        {openJobs.length === 0 ? (
+        {activeJobs.length === 0 ? (
           <p className={styles.dim}>眼下没有接下的委托。</p>
         ) : (
           <ul className={styles.jobs}>
-            {openJobs.map((job) => (
+            {activeJobs.map((job) => (
               <li key={job.id} data-overdue={job.overdue || undefined}>
                 <strong>{job.title}</strong>
                 <span>
@@ -298,6 +302,16 @@ export function SidePanel({
             ))}
           </ul>
         )}
+        <div className={styles.jobLinks}>
+          <button type="button" onClick={() => onJournal(false)}>
+            日志 [J]
+          </button>
+          {offered > 0 && (
+            <button type="button" onClick={() => onJournal(true)}>
+              委托板上有 {offered} 单可接
+            </button>
+          )}
+        </div>
         {view.jobs.fixers.length > 0 && (
           <dl className={styles.facts}>
             {view.jobs.fixers.map((f) => (

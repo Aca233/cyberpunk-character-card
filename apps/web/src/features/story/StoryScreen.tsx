@@ -11,6 +11,7 @@ import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
+import { Journal } from "./Journal";
 import { type SettledJob, SettlementCard } from "./Settlement";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
@@ -88,6 +89,15 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
+  // 日志开着时停用正文的快捷键；值是打开时的标签页
+  const [journal, setJournal] = useState<"active" | "board" | null>(null);
+  const closeJournal = useCallback(() => setJournal(null), []);
+
+  const warn = useCallback((key: string, error: unknown) => {
+    const text = error instanceof Error ? error.message : String(error);
+    const toast: Toast = { key: `${key}-${Date.now()}`, icon: "notify.warning", text, tone: "bad" };
+    setToasts((t) => [...t, toast].slice(-6));
+  }, []);
 
   // 分配属性点：不调用模型，失败时用提示条说明原因
   const spend = useCallback(
@@ -99,18 +109,30 @@ export function StoryScreen() {
           action: { type: "spendPoint", attribute },
         });
       } catch (error) {
-        const text = error instanceof Error ? error.message : String(error);
-        const toast: Toast = {
-          key: `spend-${Date.now()}`,
-          icon: "notify.warning",
-          text,
-          tone: "bad",
-        };
-        setToasts((t) => [...t, toast].slice(-6));
+        warn("spend", error);
       }
       await refresh();
     },
-    [saveId, version, refresh],
+    [saveId, version, refresh, warn],
+  );
+
+  // 在委托板上接单：不调用模型；失败时提示原因，确认框留着
+  const acceptJob = useCallback(
+    async (id: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "acceptJob", id },
+        });
+      } catch (error) {
+        warn("accept", error);
+        await refresh();
+        throw error;
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
   );
 
   const send = useCallback(
@@ -150,7 +172,11 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (/^[1-5]$/.test(e.key)) {
+      if (journal) return;
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        setJournal("active");
+      } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
       } else if (e.key === "Escape" && !story.failure) {
@@ -161,7 +187,7 @@ export function StoryScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate]);
+  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal]);
 
   if (query.isPending) {
     return (
@@ -204,7 +230,11 @@ export function StoryScreen() {
     >
       <div className={styles.fx} aria-hidden />
       <Hud view={view} />
-      <SidePanel view={view} onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)} />
+      <SidePanel
+        view={view}
+        onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)}
+        onJournal={(board) => setJournal(board ? "board" : "active")}
+      />
 
       <main className={styles.column}>
         <StoryLog view={view} saveId={saveId} live={story} />
@@ -281,6 +311,14 @@ export function StoryScreen() {
           <p>{failure.message}</p>
           <p>你的输入还留在输入框里，配好以后可以直接重发。</p>
         </Dialog>
+      )}
+      {journal && (
+        <Journal
+          view={view}
+          initialTab={journal}
+          onAccept={busy || offers?.rolled ? undefined : acceptJob}
+          onClose={closeJournal}
+        />
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
       {failure?.kind === "blocked" && (
