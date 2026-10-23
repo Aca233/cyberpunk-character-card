@@ -10,16 +10,26 @@ export const TurnInputSchema = z.strictObject({
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 
-/** POST /api/saves/:id/turns 的请求体 */
-export const TurnRequestSchema = z.strictObject({
-  /** 网页生成的请求 id；同一个 id 重复提交只执行一次 */
-  requestId: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{8,64}$/, "requestId 只能是 8–64 位字母、数字、- 或 _"),
-  /** 提交时网页看到的存档版本；和后端不一致说明别处已经改过，需要先刷新 */
-  baseVersion: z.number().int().min(0),
-  input: TurnInputSchema,
-});
+/** POST /api/saves/:id/turns 的请求体：一次行动（input），或确认一个待定的检定（confirm），二选一 */
+export const TurnRequestSchema = z
+  .strictObject({
+    /** 网页生成的请求 id；同一个 id 重复提交只执行一次 */
+    requestId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{8,64}$/, "requestId 只能是 8–64 位字母、数字、- 或 _"),
+    /** 提交时网页看到的存档版本；和后端不一致说明别处已经改过，需要先刷新 */
+    baseVersion: z.number().int().min(0),
+    input: TurnInputSchema.optional(),
+    /** 状态投影 offers.checks 里的检定 id，例如 12 或 12.2 */
+    confirm: z
+      .string()
+      .regex(/^\d+(\.\d+)?$/, "confirm 应为检定 id，例如 12 或 12.2")
+      .optional(),
+  })
+  .refine(
+    (r) => (r.input === undefined) !== (r.confirm === undefined),
+    "input 和 confirm 要有且只有一个",
+  );
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 export interface TurnUsage {
@@ -34,6 +44,15 @@ export type TurnEvent =
       readonly turnId: string;
       readonly requestId: string;
       readonly baseVersion: number;
+    }
+  /** 确认检定后先掷骰并写进日志，再请主持人写结果；不是终止事件 */
+  | {
+      readonly type: "rolled";
+      readonly checkId: string;
+      readonly faces: readonly number[];
+      readonly total: number;
+      readonly dv: number;
+      readonly outcome: "critical" | "success" | "failure" | "fumble";
     }
   | { readonly type: "text"; readonly text: string }
   /** 以下四种是终止事件，每一轮恰好一个 */
@@ -53,5 +72,5 @@ export type TerminalTurnEvent = Extract<
 >;
 
 export function isTerminalEvent(event: TurnEvent): event is TerminalTurnEvent {
-  return event.type !== "started" && event.type !== "text";
+  return event.type !== "started" && event.type !== "rolled" && event.type !== "text";
 }

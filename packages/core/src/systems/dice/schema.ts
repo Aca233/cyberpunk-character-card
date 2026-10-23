@@ -4,6 +4,14 @@ import { z } from "zod";
 export const AttributeSchema = z.enum(["body", "reflexes", "tech", "intelligence", "cool"]);
 export type Attribute = z.infer<typeof AttributeSchema>;
 
+export const ATTRIBUTE_LABELS: Readonly<Record<Attribute, string>> = {
+  body: "肉体",
+  reflexes: "反应",
+  tech: "技术",
+  intelligence: "智力",
+  cool: "镇定",
+};
+
 /** 对手档位：混混、精锐、精英、传奇 */
 export const TierSchema = z.enum(["street", "veteran", "elite", "legend"]);
 export type Tier = z.infer<typeof TierSchema>;
@@ -38,21 +46,21 @@ const PositiveModifier = ModifierSchema.extend({ value: z.number().int().min(1) 
 
 /** 主持人返回的 check：掷骰前先说清成功和失败会怎样 */
 export const CheckSpecSchema = z.object({
-  intent: z.string().min(1),
+  intent: z.string().min(1).describe("玩家想做成什么"),
   attribute: AttributeSchema,
   tier: TierSchema,
   /** 难度值的基础值，必须落在对手档位的范围内 */
-  dv: z.number().int(),
+  dv: z.number().int().describe("基础难度值，落在档位范围内"),
   /** 加成，合计最多 +4 */
   bonuses: z.array(PositiveModifier).default([]),
   /** 减值（戒断、伤势、恶劣环境），写正数，合计最多 −4 */
   penalties: z.array(PositiveModifier).default([]),
   /** 基础值之上的难度值修正，合计最多 +4；降低难度写负数 */
   dvMods: z.array(ModifierSchema.refine((m) => m.value !== 0, "修正不能为 0")).default([]),
-  success: z.string().min(1),
-  failure: z.string().min(1),
+  success: z.string().min(1).describe("成功会怎样"),
+  failure: z.string().min(1).describe("失败会怎样，后果不会比这更重"),
   /** 失败时最多扣到哪一档；不写表示失败不扣血 */
-  damage: DamageTierSchema.optional(),
+  damage: DamageTierSchema.optional().describe("失败最多扣到哪一档；不写表示失败不扣血"),
 });
 export type CheckSpec = z.infer<typeof CheckSpecSchema>;
 

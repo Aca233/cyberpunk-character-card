@@ -19,16 +19,20 @@ export const HumanityStateSchema = z.object({
 export type HumanityState = z.infer<typeof HumanityStateSchema>;
 
 /** 模型使用：{"type": "humanity", "delta": -2, "reason": "..."} */
-export const HumanityCommandSchema = z.object({
-  type: z.literal("humanity"),
-  delta: z
-    .number()
-    .int()
-    .refine((v) => v !== 0, "人性变化不能为 0"),
-  reason: z.string().min(1),
-  /** 事件 id，例如锚点死亡；带上后同一事件只结算一次 */
-  event: z.string().min(1).optional(),
-});
+export const HumanityCommandSchema = z
+  .object({
+    type: z.literal("humanity"),
+    delta: z
+      .number()
+      .int()
+      .refine((v) => v !== 0, "人性变化不能为 0"),
+    reason: z.string().min(1),
+    /** 事件 id，例如锚点死亡；带上后同一事件只结算一次 */
+    event: z.string().min(1).optional(),
+  })
+  .describe(
+    "人性变化：残忍行为 −2 至 −5，失去重要的人 −10 至 −15，休整 +3，有意义的休整 +5，和锚点相处 +8；单次和每天的恢复有上限，代码截断",
+  );
 export type HumanityCommand = z.infer<typeof HumanityCommandSchema>;
 
 /** 只能由代码发出：义体装卸后更新消耗合计 */

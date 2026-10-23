@@ -50,6 +50,23 @@ export interface TimeSpan {
   readonly to: number;
 }
 
+/** 判断规则模块带不带时看的玩家输入 */
+export interface RuleInput {
+  readonly mode: string;
+  readonly text: string;
+}
+
+/** 规则模块：主持人提示词里的一段规则，代码每轮按状态决定带不带 */
+export interface RuleModule<S = unknown> {
+  readonly id: string;
+  readonly title: string;
+  readonly text: string;
+  /** 这一段负责说明的指令类型；格式说明由这些指令的 schema 生成 */
+  readonly commands?: readonly string[];
+  /** 这一轮要不要带上；判断不准时宁可多带 */
+  when(state: S, input: RuleInput): boolean;
+}
+
 type CommandSchemas<C extends Command> = {
   readonly [K in C["type"]]: z.ZodType<Extract<C, { type: K }>>;
 };
@@ -70,6 +87,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly on?: Readonly<Record<string, (draft: Draft<S>, ctx: SystemContext) => void>>;
   /** 时间推进时的结算，例如重伤失血、期限到期；不能失败 */
   tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
+  /** 这个系统给主持人的规则模块 */
+  readonly rules?: readonly RuleModule<S>[];
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: 注册表要存放状态和指令类型各不相同的系统
@@ -113,6 +132,12 @@ export interface Registry {
   initialWorld(time: number): WorldState;
   /** 模型可以使用的指令类型 */
   commandTypes(): readonly string[];
+  /** 模型可以使用的指令的 schema，用来生成格式说明和单条修复 */
+  commandSchema(type: string): z.ZodType<Command> | undefined;
+  /** 所有规则模块，按系统顺序排好；顺序固定，状态不变时提示词前缀不变 */
+  readonly rules: readonly RuleModule[];
+  /** 这一轮要带的规则模块 */
+  activeRules(world: WorldState, input: RuleInput): readonly RuleModule[];
   /** 校验模型给出的指令，只接受模型可以使用的类型 */
   parseCommand(raw: unknown): ParseResult;
   /** 校验代码发出的指令，内部指令也接受 */
@@ -155,6 +180,22 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
         }
         owners.set(type, { system, schema, internal });
       }
+    }
+  }
+
+  const rules: { readonly system: AnySystem; readonly module: RuleModule }[] = [];
+  for (const system of order) {
+    for (const module of (system.rules ?? []) as readonly RuleModule[]) {
+      if (rules.some((r) => r.module.id === module.id)) {
+        throw new RegistryError(`规则模块 id 重复：${module.id}`);
+      }
+      for (const type of module.commands ?? []) {
+        const owner = owners.get(type);
+        if (!owner || owner.internal) {
+          throw new RegistryError(`规则模块 ${module.id} 说明的 ${type} 不是模型可用的指令`);
+        }
+      }
+      rules.push({ system, module });
     }
   }
 
@@ -259,6 +300,13 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       return { time, slices };
     },
     commandTypes: () => [...owners].filter(([, o]) => !o.internal).map(([type]) => type),
+    commandSchema(type) {
+      const owner = owners.get(type);
+      return owner && !owner.internal ? owner.schema : undefined;
+    },
+    rules: rules.map((r) => r.module),
+    activeRules: (world, input) =>
+      rules.filter((r) => r.module.when(world.slices[r.system.id], input)).map((r) => r.module),
     parseCommand: (raw) => parse(raw, false),
     parseInternal: (raw) => parse(raw, true),
     applyCommands(world, commands, ctx) {

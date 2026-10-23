@@ -1,8 +1,9 @@
-import type { Clock } from "@cp/core";
+import type { Clock, Rng } from "@cp/core";
 import { Hono } from "hono";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
 import { LlmRouter } from "./providers/index";
+import { cryptoRng } from "./rng";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
 import type { SaveStore } from "./storage";
@@ -16,6 +17,8 @@ export interface AppDeps {
   readonly log: (message: string) => void;
   readonly clock?: Clock;
   readonly hub?: TurnHub;
+  /** 测试时可以换成固定骰子 */
+  readonly rng?: Rng;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -26,6 +29,7 @@ export function createApp(deps: AppDeps): Hono {
     llm: new LlmRouter(deps.config),
     hub,
     clock: deps.clock ?? { now: () => new Date() },
+    rng: deps.rng ?? cryptoRng,
     log: deps.log,
   });
   const app = new Hono();

@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyHumanity, setCyberwareCost } from "./apply";
+import { psychosisRules } from "./prompt";
 import {
   HUMANITY_MAX,
   type HumanityCommand,
@@ -26,7 +27,9 @@ export const humanity = defineSystem<HumanityState, HumanityCommand, SetCyberwar
       ? applyHumanity(draft, command, ctx.now)
       : setCyberwareCost(draft, command.total);
   },
+  rules: [psychosisRules],
 });
 
 export * from "./apply";
+export * from "./prompt";
 export * from "./schema";

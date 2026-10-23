@@ -1,4 +1,5 @@
 export * from "./game";
+export * from "./gm";
 export * from "./kernel/ports";
 export * from "./kernel/rng";
 export * from "./kernel/system";
@@ -6,6 +7,7 @@ export * from "./kernel/turnlog";
 export * from "./kernel/world";
 export * from "./schemas/save";
 export * from "./schemas/turn";
+export * as characterRules from "./systems/character";
 export * as combatRules from "./systems/combat";
 export * as diceRules from "./systems/dice";
 export * as healthRules from "./systems/health";

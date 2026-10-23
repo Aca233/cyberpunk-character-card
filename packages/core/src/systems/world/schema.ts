@@ -73,13 +73,17 @@ export const WorldClockStateSchema = z.object({
 export type WorldClockState = z.infer<typeof WorldClockStateSchema>;
 
 /** 模型使用：{"type": "world", "activity": "talk", "time": "2076-03-14 22:40", "location": "..."} */
-export const WorldCommandSchema = z.object({
-  type: z.literal("world"),
-  activity: ActivitySchema,
-  /** 主持人想推进到的时间；早于保底时按保底 */
-  time: GameTimeSchema.optional(),
-  location: z.string().min(1).optional(),
-});
+export const WorldCommandSchema = z
+  .object({
+    type: z.literal("world"),
+    activity: ActivitySchema,
+    /** 主持人想推进到的时间；早于保底时按保底 */
+    time: GameTimeSchema.optional(),
+    location: z.string().min(1).optional(),
+  })
+  .describe(
+    "每轮一条：这一轮主要做了什么，代码按类别保底推进时间；time 是想推进到的时间（YYYY-MM-DD HH:mm），location 是换到的地点 id",
+  );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 
 /** 模型使用：添加期限（add），或标记到期事件已经回应（handle） */
@@ -95,7 +99,8 @@ export const DeadlineCommandSchema = z
     if (c.action === "add" && (c.label === undefined || c.due === undefined)) {
       ctx.addIssue({ code: "custom", message: "添加期限要写 label 和 due" });
     }
-  });
+  })
+  .describe("期限：add 添加（要写 label 和 due），handle 标记到期事件已经回应");
 export type DeadlineCommand = z.infer<typeof DeadlineCommandSchema>;
 
 /** 只能由代码发出：主持人标了 sceneEnd 之后由主持流程发出 */

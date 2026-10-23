@@ -63,14 +63,18 @@ export const InventoryStateSchema = z.object({
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
 /** 模型使用：{"type": "item", "action": "gain", "id": "...", "reason": "..."} */
-export const ItemCommandSchema = z.object({
-  type: z.literal("item"),
-  action: z.enum(["gain", "lose", "use", "equip", "unequip"]),
-  id: z.string().min(1),
-  reason: z.string().min(1),
-  /** equip 武器时指定第几格（1–3） */
-  slot: z.number().int().min(1).max(3).optional(),
-});
+export const ItemCommandSchema = z
+  .object({
+    type: z.literal("item"),
+    action: z.enum(["gain", "lose", "use", "equip", "unequip"]),
+    id: z.string().min(1),
+    reason: z.string().min(1),
+    /** equip 武器时指定第几格（1–3） */
+    slot: z.number().int().min(1).max(3).optional(),
+  })
+  .describe(
+    "物品：gain 获得、lose 失去、use 使用、equip 装备（武器写 slot 1–3）、unequip 卸下；id 必须是物品表或物品栏里有的",
+  );
 export type ItemCommand = z.infer<typeof ItemCommandSchema>;
 
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);

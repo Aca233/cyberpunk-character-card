@@ -65,7 +65,10 @@ export const CombatCommandSchema = z
     ) {
       ctx.addIssue({ code: "custom", message: "开战要写 moments、defeat 和 enemies" });
     }
-  });
+  })
+  .describe(
+    "战斗：start 开打（要写 moments、defeat、enemies），next 结算当前交锋，retreat 撤退，end 上一次交锋赢了以后提前收场",
+  );
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 
 /** 主持流程放进 ctx.facts.direct：这次主行动没掷骰，直接成功或门槛达标 */

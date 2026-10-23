@@ -1,10 +1,12 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
+import { currentOffers, prepareFor } from "./gm/pending";
 import { effectiveTurns, type LogRecord, logVersion } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
+import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
-import { DiceStateSchema } from "./systems/dice/schema";
+import { ATTRIBUTE_LABELS, DiceStateSchema } from "./systems/dice/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
@@ -36,6 +38,49 @@ function turnInput(raw: unknown): TurnInput {
   return parsed.success ? parsed.data : { mode: "do", text: String(raw) };
 }
 
+/** 最近一轮留给玩家的选项和待确认的检定；成功率按当前属性现算 */
+function projectOffers(world: WorldState, records: readonly LogRecord[]) {
+  const offers = currentOffers(records);
+  const character = CharacterStateSchema.parse(world.slices.character);
+  const checks = offers.checks.flatMap((offer) => {
+    const prepared = prepareFor(world, offer.spec);
+    if (!prepared.ok) return [];
+    const { spec } = offer;
+    return [
+      {
+        id: offer.id,
+        label: offer.label,
+        attribute: spec.attribute,
+        attributeLabel: ATTRIBUTE_LABELS[spec.attribute],
+        dv: prepared.check.dv,
+        chance: prepared.check.chance,
+        success: spec.success,
+        failure: spec.failure,
+        damage: spec.damage ?? null,
+        rolled: offers.rolled?.offer.id === offer.id,
+      },
+    ];
+  });
+  const seq = offers.turn?.seq;
+  return {
+    read: offers.turn?.read ?? null,
+    choices: offers.choices.map((choice, i) => ({
+      text: choice.text,
+      gate: choice.gate
+        ? {
+            ...choice.gate,
+            attributeLabel: ATTRIBUTE_LABELS[choice.gate.attribute],
+            met: character.attributes[choice.gate.attribute] >= choice.gate.value,
+          }
+        : null,
+      checkId: choice.check && seq !== undefined ? `${seq}.${i + 1}` : null,
+    })),
+    checks,
+    /** 已经掷过骰的检定 id；这时只能确认它 */
+    rolled: offers.rolled?.offer.id ?? null,
+  };
+}
+
 /**
  * 玩家能看到的状态。只放界面要显示的东西：
  * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现
@@ -47,6 +92,7 @@ export function projectState(world: WorldState, records: readonly LogRecord[]) {
   const humanity = HumanityStateSchema.parse(world.slices.humanity);
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const combat = CombatStateSchema.parse(world.slices.combat);
+  const character = CharacterStateSchema.parse(world.slices.character);
   const period = periodOf(world.time);
   const stage = humanityStage(humanity.current);
   const turns = effectiveTurns(records);
@@ -55,6 +101,12 @@ export function projectState(world: WorldState, records: readonly LogRecord[]) {
   return {
     version: logVersion(records),
     difficulty: dice.mode,
+    character: {
+      name: character.name,
+      brief: character.brief,
+      attributes: character.attributes,
+      streetCred: character.streetCred,
+    },
     time: {
       minutes: world.time,
       text: formatGameTime(world.time),
@@ -106,6 +158,7 @@ export function projectState(world: WorldState, records: readonly LogRecord[]) {
         due: formatGameTime(d.due),
         overdue: d.due <= world.time,
       })),
+    offers: projectOffers(world, records),
     totalTurns: turns.length,
     turns: turns.slice(-VIEW_TURNS).map((t) => ({
       seq: t.seq,

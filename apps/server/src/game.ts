@@ -1,16 +1,26 @@
 import { randomBytes } from "node:crypto";
 import {
+  type CheckRecord,
   type Clock,
+  currentOffers,
+  diceRules,
+  GmAbortedError,
+  GmEmptyReplyError,
+  type GmPlan,
+  type GmTurn,
   type LogRecord,
   logVersion,
   newGameWorld,
   type PlayerView,
   pickSnapshot,
+  prepareFor,
   projectState,
+  type Rng,
   replay,
+  rolledFrom,
+  runGmTurn,
   type SaveMeta,
   serializeRecord,
-  type TurnInput,
   type TurnRecord,
   type TurnRequest,
   type TurnUsage,
@@ -20,7 +30,6 @@ import {
 import { z } from "zod";
 import type { ConfigService } from "./config";
 import { KeyedMutex } from "./fsutil";
-import { buildMessages } from "./prompt";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
 import type { SaveStore } from "./storage";
@@ -50,6 +59,8 @@ export interface GameDeps {
   readonly llm: LlmRouter;
   readonly hub: TurnHub;
   readonly clock: Clock;
+  /** 玩家检定用的骰子 */
+  readonly rng: Rng;
   readonly log: (message: string) => void;
 }
 
@@ -63,10 +74,19 @@ class VersionMovedError extends Error {
   override name = "VersionMovedError";
 }
 
+function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined {
+  if (!a && b.inputTokens === 0 && b.outputTokens === 0) return undefined;
+  return {
+    inputTokens: (a?.inputTokens ?? 0) + b.inputTokens,
+    outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
+  };
+}
+
 /**
  * 存档和回合：同一存档的读写都排在一把锁里。
- * 一轮的顺序是 校验 → 登记进行中 → 调模型（锁外） → 加锁追加回合日志；
- * 被拦截、停止或出错的轮次不写日志，存档保持原样
+ * 行动的顺序是 校验 → 登记进行中 → 调主持人（锁外） → 加锁追加回合日志；
+ * 确认检定时先在锁里掷骰并写进日志，再走同样的流程，这样重试和刷新都不会重掷。
+ * 被拦截、停止或出错的轮次不写回合记录，已经写下的骰子保留，下次确认同一个检定时沿用
  */
 export class GameService {
   private readonly locks = new KeyedMutex();
@@ -117,16 +137,97 @@ export class GameService {
           status: 409,
           body: { error: "上一轮还在生成，先等它结束或停止", turnId: busy.turnId, version },
         };
+      const offers = currentOffers(records);
+
+      if (request.confirm !== undefined) {
+        const offer = offers.checks.find((c) => c.id === request.confirm);
+        if (!offer) {
+          return { status: 409, body: { error: "检定已失效，请刷新后再选", version } };
+        }
+        const rolled = offers.rolled;
+        if (rolled && rolled.offer.id !== offer.id) {
+          return {
+            status: 409,
+            body: {
+              error: `已经掷过「${rolled.offer.label}」，先确认它的结果`,
+              checkId: rolled.offer.id,
+              version,
+            },
+          };
+        }
+        if (request.baseVersion !== version && request.baseVersion !== rolled?.record.seq) {
+          return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
+        }
+        const unavailable = await this.llmUnavailable();
+        if (unavailable) return unavailable;
+
+        let log = records;
+        let faces: readonly number[];
+        let baseVersion = version;
+        if (rolled) {
+          faces = rolled.record.roll.faces;
+        } else {
+          const prepared = prepareFor(world, offer.spec);
+          if (!prepared.ok) {
+            return {
+              status: 409,
+              body: { error: `这个检定已经不能掷：${prepared.reason}`, version },
+            };
+          }
+          faces = diceRules.rollFaces(this.deps.rng);
+          const record: CheckRecord = {
+            kind: "check",
+            seq: version,
+            at: this.deps.clock.now().toISOString(),
+            requestId: request.requestId,
+            checkId: offer.id,
+            roll: diceRules.diceRecord(
+              prepared.check,
+              diceRules.resolveCheck(prepared.check, faces),
+            ),
+          };
+          await this.deps.saves.appendLog(id, serializeRecord(record));
+          baseVersion = version + 1;
+          await this.maybeSnapshot(id, baseVersion);
+          log = [...records, record];
+        }
+        const check = rolledFrom(world, offer, faces);
+        const plan: GmPlan = {
+          kind: "resolve",
+          input: { mode: "do", text: offer.label },
+          check,
+        };
+        const run = hub.start(id, request.requestId, baseVersion);
+        hub.push(run, {
+          type: "rolled",
+          checkId: offer.id,
+          faces: check.result.faces,
+          total: check.result.total,
+          dv: check.result.dv,
+          outcome: check.result.outcome,
+        });
+        void this.execute(run, world, log, plan);
+        return { status: 202, body: { turnId: run.turnId, replayed: false } };
+      }
+
+      if (request.input === undefined) throw new Error("回合请求既没有行动也没有确认");
+      if (offers.rolled) {
+        return {
+          status: 409,
+          body: {
+            error: `已经掷过「${offers.rolled.offer.label}」，先确认它的结果`,
+            checkId: offers.rolled.offer.id,
+            version,
+          },
+        };
+      }
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
       }
-      const resolved = await this.deps.llm.resolve("gm");
-      if (!resolved.ok) {
-        const redact = await this.deps.config.redactor();
-        return { status: 503, body: { error: redact(resolved.error) } };
-      }
-      const run = hub.start(id, request.requestId, request.baseVersion);
-      void this.execute(run, projectState(world, records), request.input);
+      const unavailable = await this.llmUnavailable();
+      if (unavailable) return unavailable;
+      const run = hub.start(id, request.requestId, version);
+      void this.execute(run, world, records, { kind: "action", input: request.input });
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
   }
@@ -141,35 +242,52 @@ export class GameService {
     return { status: 202, body: { stopping: true } };
   }
 
-  private async execute(run: TurnRun, view: PlayerView, input: TurnInput): Promise<void> {
+  /** 主持人模型没配好时直接告诉玩家，不换别的服务商 */
+  private async llmUnavailable(): Promise<Reply | undefined> {
+    const resolved = await this.deps.llm.resolve("gm");
+    if (resolved.ok) return undefined;
+    const redact = await this.deps.config.redactor();
+    return { status: 503, body: { error: redact(resolved.error) } };
+  }
+
+  private async execute(
+    run: TurnRun,
+    world: WorldState,
+    records: readonly LogRecord[],
+    plan: GmPlan,
+  ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
     const signal = run.controller.signal;
-    let text = "";
-    let usage: TurnUsage | undefined;
     try {
-      for await (const event of this.deps.llm.stream(
-        { purpose: "gm", messages: buildMessages(view, input) },
-        signal,
-      )) {
-        if (event.type === "text") {
-          text += event.text;
-          hub.push(run, { type: "text", text: event.text });
-        } else if (event.type === "blocked") {
-          hub.push(run, { type: "blocked", reason: redact(event.reason) });
-          return;
-        } else if (event.usage) {
-          usage = event.usage;
-        }
+      const result = await runGmTurn(
+        {
+          llm: this.deps.llm,
+          rng: this.deps.rng,
+          signal,
+          onText: (text) => hub.push(run, { type: "text", text }),
+        },
+        world,
+        records,
+        plan,
+      );
+      if (result.kind === "blocked") {
+        hub.push(run, { type: "blocked", reason: redact(result.reason) });
+        return;
       }
-      if (signal.aborted) throw new AbortedError();
-      if (text.trim() === "")
-        throw new UpstreamError("主持人没有返回正文，可以重试", undefined, true);
-      const saved = await this.commit(run, input, text);
+      if (signal.aborted) throw new GmAbortedError("已停止");
+      const { turn } = result;
+      const usage = addUsage(turn.usage, turn.repairUsage);
+      const saved = await this.commit(run, plan, turn, usage);
+      if (turn.repairs > 0) {
+        this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
+      }
       hub.push(run, { type: "done", ...saved, ...(usage ? { usage } : {}) });
     } catch (error) {
-      if (error instanceof AbortedError || signal.aborted) {
+      if (error instanceof GmAbortedError || error instanceof AbortedError || signal.aborted) {
         hub.push(run, { type: "stopped" });
+      } else if (error instanceof GmEmptyReplyError) {
+        hub.push(run, { type: "error", message: "主持人没有返回正文，可以重试", retryable: true });
       } else if (error instanceof UpstreamError) {
         hub.push(run, {
           type: "error",
@@ -189,8 +307,9 @@ export class GameService {
 
   private commit(
     run: TurnRun,
-    input: TurnInput,
-    text: string,
+    plan: GmPlan,
+    turn: GmTurn,
+    usage: TurnUsage | undefined,
   ): Promise<{ seq: number; version: number }> {
     const { saves } = this.deps;
     return this.locks.run(run.saveId, async () => {
@@ -204,21 +323,35 @@ export class GameService {
         at: this.deps.clock.now().toISOString(),
         requestId: run.requestId,
         baseVersion: run.baseVersion,
-        input,
-        dice: [],
-        commands: [],
-        dropped: [],
-        text,
-        patches: [],
+        input: plan.input,
+        dice:
+          plan.kind === "resolve"
+            ? [diceRules.diceRecord(plan.check.prepared, plan.check.result)]
+            : [],
+        commands: [...turn.commands],
+        dropped: [...turn.dropped],
+        text: turn.text,
+        patches: [...turn.patches],
+        ...(turn.read !== undefined ? { read: turn.read } : {}),
+        ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),
+        ...(turn.check !== undefined ? { check: turn.check } : {}),
+        ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
+        ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
+        ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
+        ...(usage ? { usage } : {}),
       };
       await saves.appendLog(run.saveId, serializeRecord(record));
       const version = seq + 1;
-      if (version % SNAPSHOT_EVERY === 0) {
-        const { world } = await this.load(run.saveId);
-        await saves.writeSnapshot(run.saveId, { nextSeq: version, world });
-      }
+      await this.maybeSnapshot(run.saveId, version);
       return { seq, version };
     });
+  }
+
+  /** 调用方持有这个存档的锁 */
+  private async maybeSnapshot(id: string, version: number): Promise<void> {
+    if (version % SNAPSHOT_EVERY !== 0) return;
+    const { world } = await this.load(id);
+    await this.deps.saves.writeSnapshot(id, { nextSeq: version, world });
   }
 
   /** 调用方持有这个存档的锁 */

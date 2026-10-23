@@ -22,7 +22,7 @@ export const DAMAGE_PERCENT: Readonly<Record<DamageTier, number>> = {
   lethal: 60,
 };
 const DAMAGE_RANK: Readonly<Record<DamageTier, number>> = { graze: 0, heavy: 1, lethal: 2 };
-const DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
+export const DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
   graze: "擦伤",
   heavy: "重击",
   lethal: "致命",

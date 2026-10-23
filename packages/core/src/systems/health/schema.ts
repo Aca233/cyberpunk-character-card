@@ -19,19 +19,23 @@ export const HealthStateSchema = z.object({
 export type HealthState = z.infer<typeof HealthStateSchema>;
 
 /** 模型使用：{"type": "damage", "tier": "graze", "reason": "..."}，只能在掷骰失败后出现 */
-export const DamageCommandSchema = z.object({
-  type: z.literal("damage"),
-  tier: DamageTierSchema,
-  reason: z.string().min(1),
-});
+export const DamageCommandSchema = z
+  .object({
+    type: z.literal("damage"),
+    tier: DamageTierSchema,
+    reason: z.string().min(1),
+  })
+  .describe("扣血：只能出现在检定失败的那一轮，档位不超过 check 事先写的 damage");
 export type DamageCommand = z.infer<typeof DamageCommandSchema>;
 
 /** 模型使用：{"type": "heal", "source": "maxdoc"} */
-export const HealCommandSchema = z.object({
-  type: z.literal("heal"),
-  source: z.enum(["maxdoc", "ripperdoc", "rest"]),
-  reason: z.string().min(1).optional(),
-});
+export const HealCommandSchema = z
+  .object({
+    type: z.literal("heal"),
+    source: z.enum(["maxdoc", "ripperdoc", "rest"]),
+    reason: z.string().min(1).optional(),
+  })
+  .describe("回血：maxdoc 用快捷栏里的治疗品，ripperdoc 找义体医生，rest 休整");
 export type HealCommand = z.infer<typeof HealCommandSchema>;
 
 /** 只能由代码发出：建档和成长改上限、救治倒下或濒死的角色、判定死亡 */

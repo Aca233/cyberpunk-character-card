@@ -1,0 +1,20 @@
+import type { RuleModule } from "../../kernel/system";
+import type { CombatState } from "./schema";
+
+/** 输入里像要开打的说法；宁可多带，漏带时模型不知道怎么开战 */
+const FIGHT =
+  /开枪|开火|射击|扫射|动手|打(他|她|它|过去|起来|一架)|揍|砍|捅|刺(向|过去)|扑(上去|过去)|拔(枪|刀)|冲上去|干掉|宰了|杀了|攻击|拼了|突突/;
+
+export const combatRules: RuleModule<CombatState> = {
+  id: "combat",
+  title: "战斗",
+  commands: ["combat"],
+  when: (state, input) => state.active !== null || (input.mode === "do" && FIGHT.test(input.text)),
+  text: `- 战斗按“交锋”结算，不是回合制。开打时发 combat start：交锋数 1–3（小冲突 1 次，正经火并 2 次，硬仗 3 次）、败局（输了会怎样，写具体）、敌群（档位决定难度值，杂兵按组合并，不逐个建卡）。
+- 每次交锋玩家只有一个主行动。结果不确定时先给 check（tier 用对面最强那一组的档位），检定结果出来的那一轮发 combat next 结算这次交锋；只用一次检定结算一次交锋。
+- 埋伏得手、碾压级优势、聪明的办法可以不掷骰直接赢下这次交锋：在指令块写 "direct": true 并发 combat next，正文写清凭什么；没掷骰也不是直接成功就算平手。
+- 撤退也是主行动：combat retreat，同样要检定或直接成功。上一次交锋赢了、敌人已经溃散时可以 combat end 提前收场。
+- 失败扣血只能用 check 里事先写的 damage 档位，不能更重；只有事先写了 lethal 才可能濒死，否则血量归零只是倒下。
+- 濒死要在下一次交锋结束前被救回：只有在场的原作人物或现场医生能救；没人救就是死亡，正文不要替代码宣布结果。
+- 正文里写出现在是第几次交锋、局面朝哪边倒，不写血量数字。`,
+};

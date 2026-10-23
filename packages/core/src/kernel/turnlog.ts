@@ -34,6 +34,33 @@ const TurnRecordSchema = z.object({
   dropped: z.array(z.unknown()),
   text: z.string(),
   patches: z.array(PatchSchema),
+  /** 以下字段在切片 4 加入，旧存档没有 */
+  /** 主持人对玩家意图的一句理解 */
+  read: z.string().optional(),
+  /** 建议选项，原样存下，展示时再按 schema 读 */
+  choices: z.array(z.unknown()).optional(),
+  /** 主持人提出、等玩家确认的检定 */
+  check: z.unknown().optional(),
+  /** 这一轮写的是哪次检定的结果 */
+  resolves: z.string().optional(),
+  /** 结算说明，例如“人性 −20 已截断为 −15” */
+  notes: z.array(z.string()).optional(),
+  /** 本轮带了哪些规则模块 */
+  modules: z.array(z.string()).optional(),
+  usage: z
+    .object({ inputTokens: z.number().int().min(0), outputTokens: z.number().int().min(0) })
+    .optional(),
+});
+
+/** 玩家确认检定后、调模型之前写下的掷骰；之后重试和重新生成都用这次的骰面 */
+const CheckRecordSchema = z.object({
+  kind: z.literal("check"),
+  seq,
+  at: z.string(),
+  requestId: z.string().min(1),
+  /** 被确认的检定，例如 12（第 12 轮的 check）或 12.2（第 12 轮第 2 个选项的 check） */
+  checkId: z.string().min(1),
+  roll: DiceRollSchema,
 });
 
 const VoidRecordSchema = z.object({
@@ -58,12 +85,14 @@ const BackgroundRecordSchema = z.object({
 
 export const LogRecordSchema = z.discriminatedUnion("kind", [
   TurnRecordSchema,
+  CheckRecordSchema,
   VoidRecordSchema,
   BackgroundRecordSchema,
 ]);
 
 export type LogRecord = z.infer<typeof LogRecordSchema>;
 export type TurnRecord = z.infer<typeof TurnRecordSchema>;
+export type CheckRecord = z.infer<typeof CheckRecordSchema>;
 export type VoidRecord = z.infer<typeof VoidRecordSchema>;
 export type BackgroundRecord = z.infer<typeof BackgroundRecordSchema>;
 export type DiceRoll = z.infer<typeof DiceRollSchema>;
@@ -159,7 +188,7 @@ export function replay(base: Snapshot, records: readonly LogRecord[]): WorldStat
   const voided = voidedSeqs(records);
   let world = base.world;
   for (const record of records.slice(base.nextSeq)) {
-    if (record.kind === "void" || voided.has(record.seq)) continue;
+    if (record.kind === "void" || record.kind === "check" || voided.has(record.seq)) continue;
     world = applyPatches(world, record.patches);
   }
   return world;

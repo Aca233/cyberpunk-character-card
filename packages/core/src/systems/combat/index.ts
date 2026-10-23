@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyCombat } from "./apply";
+import { combatRules } from "./prompt";
 import {
   type CombatCommand,
   CombatCommandSchema,
@@ -14,7 +15,9 @@ export const combat = defineSystem<CombatState, CombatCommand>({
   initial: () => ({ active: null, usedChecks: [], last: null }),
   commands: { combat: CombatCommandSchema },
   apply: (draft, command, ctx) => applyCombat(draft, command, ctx),
+  rules: [combatRules],
 });
 
 export * from "./apply";
+export * from "./prompt";
 export * from "./schema";
