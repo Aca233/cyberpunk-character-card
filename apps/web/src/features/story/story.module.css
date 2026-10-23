@@ -916,3 +916,66 @@
 .speaker[data-self] {
   color: var(--cp-yellow);
 }
+
+/* 随身物品：三个武器格加背包；装上的武器不在背包里 */
+.gear,
+.backpack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  font-size: var(--fs-label);
+}
+
+.gear > li {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.gear > li[data-empty] {
+  color: var(--cp-text-dim);
+}
+
+.gear > li[data-active] {
+  color: var(--cp-yellow);
+}
+
+.gear small {
+  color: var(--cp-yellow);
+  font-size: 0.7rem;
+}
+
+.slotNum {
+  display: grid;
+  place-items: center;
+  height: 1.3rem;
+  border: 1px solid var(--cp-red-dim);
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gear > li[data-active] .slotNum {
+  border-color: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+.gearTitle {
+  margin: 0.8rem 0 0.35rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+}
+
+.backpack > li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.backpack b {
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}

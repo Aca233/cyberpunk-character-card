@@ -16,6 +16,9 @@ const ATTRS: readonly (readonly [Attribute, string, AssetId])[] = [
   ["cool", "镇定", "attr.cool"],
 ];
 
+/** 武器格的编号，和数字键 1–3 对应 */
+const WEAPON_SLOTS = [1, 2, 3] as const;
+
 const WOUND_LABELS = { none: "", light: "轻伤", severe: "重伤", zero: "失去意识" } as const;
 
 /** 顶部 HUD：左上生命和声望，右上地区、时间，正中是战斗进度 */
@@ -108,6 +111,8 @@ export function Hud({ view }: { readonly view: View }) {
 /** 左侧角色栏：建档前显示“未建档” */
 export function SidePanel({ view }: { readonly view: View }) {
   const { character, humanity, inventory } = view;
+  const backpack = Object.entries(inventory.backpack);
+  const itemName = (id: string) => view.names.items[id] ?? id;
   return (
     <aside className={styles.side}>
       <Panel as="div" title={character.name ?? "未建档"}>
@@ -152,6 +157,35 @@ export function SidePanel({ view }: { readonly view: View }) {
             </>
           )}
         </dl>
+      </Panel>
+
+      <Panel as="div" title="随身物品" line="var(--cp-yellow)">
+        <ol className={styles.gear} aria-label="武器格">
+          {WEAPON_SLOTS.map((n) => {
+            const id = inventory.weapons[n - 1] ?? null;
+            const active = inventory.active === n - 1;
+            return (
+              <li key={n} data-active={active || undefined} data-empty={id === null || undefined}>
+                <span className={styles.slotNum}>{n}</span>
+                <span>{id === null ? "空" : itemName(id)}</span>
+                {active && <small>手持</small>}
+              </li>
+            );
+          })}
+        </ol>
+        <p className={styles.gearTitle}>背包</p>
+        {backpack.length === 0 ? (
+          <p className={styles.dim}>空的。</p>
+        ) : (
+          <ul className={styles.backpack}>
+            {backpack.map(([id, count]) => (
+              <li key={id}>
+                <span>{itemName(id)}</span>
+                {count > 1 && <b>×{count}</b>}
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
 
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
