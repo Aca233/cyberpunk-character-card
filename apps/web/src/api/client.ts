@@ -1,4 +1,5 @@
 import type { ActionRequest, CharacterCard, PlayerView, TurnInput, TurnUsage } from "@cp/core";
+import type { Gloss } from "../features/story/view";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
 
@@ -195,6 +196,7 @@ export const api = {
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),
+  glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
   state: (saveId: string) => request<PlayerView>("GET", `/saves/${saveId}/state`),
   async submit(saveId: string, body: TurnBody): Promise<SubmitResult> {
     const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, body);

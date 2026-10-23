@@ -77,6 +77,50 @@ export function splitSpeakers(text: string, speakers: readonly Speaker[]): Segme
     .map((part) => ({ text: part, speaker: byName.get(part) }));
 }
 
+/** 黑话术语表里的一条；来自 GET /api/glossary */
+export interface Gloss {
+  readonly term: string;
+  readonly aliases?: readonly string[] | undefined;
+  readonly meaning: string;
+}
+
+export interface GlossMatcher {
+  readonly pattern: RegExp;
+  /** 小写的写法 → 释义 */
+  readonly meanings: ReadonlyMap<string, string>;
+}
+
+/** 把术语表编成一个正则；只匹配拉丁字母写的词，前后不能紧挨别的字母，不分大小写 */
+export function glossMatcher(glossary: readonly Gloss[]): GlossMatcher | null {
+  const meanings = new Map<string, string>();
+  for (const g of glossary) {
+    for (const word of [g.term, ...(g.aliases ?? [])]) {
+      const key = word.trim().toLowerCase();
+      if (key !== "" && !meanings.has(key)) meanings.set(key, g.meaning);
+    }
+  }
+  if (meanings.size === 0) return null;
+  const words = [...meanings.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
+  return { pattern: new RegExp(`(?<![A-Za-z])(${words.join("|")})(?![A-Za-z])`, "gi"), meanings };
+}
+
+/** 把一段普通文字切成普通文字和带释义的黑话 */
+export function splitSlang(
+  text: string,
+  matcher: GlossMatcher | null | undefined,
+): { readonly text: string; readonly meaning?: string | undefined }[] {
+  if (!matcher) return [{ text }];
+  return text
+    .split(matcher.pattern)
+    .filter((part) => part !== "")
+    .map((part, i) =>
+      // split 带捕获组时，奇数位是匹配到的词
+      i % 2 === 1 || matcher.meanings.has(part.toLowerCase())
+        ? { text: part, meaning: matcher.meanings.get(part.toLowerCase()) }
+        : { text: part },
+    );
+}
+
 /** 正文里玩家那一行的写法；旧存档按当时选的输入方式加标记，新输入原样显示 */
 export function formatInput(input: TurnInput): string {
   switch (input.mode) {

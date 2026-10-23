@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Fragment, useEffect, useLayoutEffect, useRef } from "react";
 import { Link } from "react-router";
+import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
 import type { useStory } from "./store";
@@ -8,10 +10,12 @@ import {
   type Choice,
   formatDice,
   formatInput,
+  glossMatcher,
   isSuccess,
   OUTCOME_LABELS,
   type Speaker,
   speakersOf,
+  splitSlang,
   splitSpeakers,
   type Turn,
   type View,
@@ -26,7 +30,17 @@ function paragraphs(text: string): string[] {
     .filter((p) => p !== "");
 }
 
-/** 一段正文；名字上色：自己用黄色，别人用青色 */
+/** 黑话术语表只取一次；select 是模块级函数，react-query 会缓存编好的正则 */
+function useGlossary() {
+  return useQuery({
+    queryKey: ["glossary"],
+    queryFn: api.glossary,
+    staleTime: Number.POSITIVE_INFINITY,
+    select: glossMatcher,
+  }).data;
+}
+
+/** 一段正文；名字上色：自己用黄色，别人用青色；黑话加虚线，悬停看释义 */
 function Paragraph({
   text,
   speakers,
@@ -34,6 +48,7 @@ function Paragraph({
   readonly text: string;
   readonly speakers: readonly Speaker[];
 }) {
+  const glossary = useGlossary();
   return (
     <p>
       {splitSpeakers(text, speakers).map((part, i) =>
@@ -43,7 +58,19 @@ function Paragraph({
             {part.text}
           </b>
         ) : (
-          part.text
+          // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
+          <Fragment key={i}>
+            {splitSlang(part.text, glossary).map((bit, j) =>
+              bit.meaning ? (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 同上
+                <abbr key={j} className={styles.slang} title={bit.meaning}>
+                  {bit.text}
+                </abbr>
+              ) : (
+                bit.text
+              ),
+            )}
+          </Fragment>
         ),
       )}
     </p>

@@ -1080,3 +1080,9 @@
   margin: 0.8rem 0 0;
   font-style: italic;
 }
+
+.slang {
+  text-decoration: underline dotted var(--cp-cyan);
+  text-underline-offset: 3px;
+  cursor: help;
+}
