@@ -34,13 +34,94 @@
                 },
                 "patterns": [
                   {
-                    "group": ["node:*"],
+                    "group": ["node:*", "node:*/**"],
                     "message": "core 和 content 不能直接用 Node 模块，通过 kernel/ports.ts 的接口注入"
                   }
                 ]
               }
             }
           }
+        }
+      }
+    },
+    {
+      "includes": ["apps/server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@cp/web", "@cp/web/**", "**/web", "**/web/**"],
+                    "message": "server 不能引用 web；共享类型和规则放在 packages/core"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@cp/server", "@cp/server/**", "**/server", "**/server/**"],
+                    "message": "web 不能引用 server；通过 HTTP 接口访问后端，共享类型放在 packages/core"
+                  },
+                  {
+                    "group": ["node:*", "node:*/**"],
+                    "message": "web 不能直接使用 Node 模块；文件和密钥操作放在 apps/server"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/src/systems/*/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "core 和 content 不能依赖 React，界面代码放在 apps/web",
+                  "react-dom": "core 和 content 不能依赖 React，界面代码放在 apps/web",
+                  "hono": "core 和 content 不能依赖后端框架，接口代码放在 apps/server"
+                },
+                "patterns": [
+                  {
+                    "group": ["node:*", "node:*/**"],
+                    "message": "core 和 content 不能直接用 Node 模块，通过 kernel/ports.ts 的接口注入"
+                  },
+                  {
+                    "group": ["../*/*", "../*/**", "!../../**", "!../*/index"],
+                    "message": "系统之间只能引用对方目录的入口（../dice），不能读内部文件；依赖要写进 dependsOn"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/**", "packages/content/**", "apps/web/**"],
+      "linter": {
+        "rules": {
+          "correctness": { "noNodejsModules": "error" }
         }
       }
     }
