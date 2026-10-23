@@ -1,0 +1,17 @@
+{
+  "profiles": [
+    {
+      "name": "gemini-flash",
+      "type": "gemini",
+      "model": "gemini-3.8-flash",
+      "apiKeyEnv": "GEMINI_API_KEY",
+      "contextWindow": 1048576,
+      "maxOutputTokens": 8192,
+      "temperature": 1,
+      "thinkingLevel": "medium",
+      "safety": "off"
+    }
+  ],
+  "gm": "gemini-flash",
+  "aux": "gemini-flash"
+}
