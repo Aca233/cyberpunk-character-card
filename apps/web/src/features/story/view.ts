@@ -1,4 +1,4 @@
-import type { InputMode, PlayerView, TurnInput } from "@cp/core";
+import type { PlayerView, TurnInput } from "@cp/core";
 import type { AssetId } from "../../assets";
 
 /** 剧情界面用到的纯函数：不碰 React，也不发请求 */
@@ -43,25 +43,10 @@ export function locationLabel(location: string | null): string {
   return location.replace(/[._/]+/g, " · ").replace(/-/g, " ");
 }
 
-export const MODE_LABELS: Readonly<Record<InputMode, string>> = {
-  do: "做",
-  say: "说",
-  think: "想",
-  ooc: "出戏",
-};
-
-export const MODE_HINTS: Readonly<Record<InputMode, string>> = {
-  do: "写下你要做的事",
-  say: "直接写台词，不用加引号",
-  think: "心里的念头，别人听不到",
-  ooc: "和主持人说话：提问、纠错、要求重写语气；不算行动，不推进时间",
-};
-
-export const MODES: readonly InputMode[] = ["do", "say", "think", "ooc"];
-
-/** 正文里玩家那一行的写法 */
+/** 正文里玩家那一行的写法；旧存档按当时选的输入方式加标记，新输入原样显示 */
 export function formatInput(input: TurnInput): string {
   switch (input.mode) {
+    case undefined:
     case "do":
       return input.text;
     case "say":

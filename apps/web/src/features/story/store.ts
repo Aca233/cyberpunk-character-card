@@ -59,7 +59,7 @@ interface StoryState {
 
 let unsubscribe: (() => void) | null = null;
 
-const EMPTY_DRAFT: TurnInput = { mode: "do", text: "" };
+const EMPTY_DRAFT: TurnInput = { text: "" };
 
 export const useStory = create<StoryState>()((set, get) => {
   const follow = (saveId: string, turnId: string, refresh: () => Promise<unknown>) => {
@@ -85,7 +85,7 @@ export const useStory = create<StoryState>()((set, get) => {
                 text: "",
                 rolled: null,
                 pending: null,
-                draft: wasInput ? { ...EMPTY_DRAFT, mode: s.draft.mode } : s.draft,
+                draft: wasInput ? EMPTY_DRAFT : s.draft,
               })),
             );
             return;

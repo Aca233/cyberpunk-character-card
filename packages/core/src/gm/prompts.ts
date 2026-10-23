@@ -34,7 +34,8 @@ export type GmPlan =
   /** 玩家确认了检定，骰子已经写进日志，这一轮写结果 */
   | { readonly kind: "resolve"; readonly input: TurnInput; readonly check: RolledCheck };
 
-const MODE_LABELS: Readonly<Record<TurnInput["mode"], string>> = {
+/** 旧存档的输入方式 */
+const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
   do: "做",
   say: "说",
   think: "想",
@@ -70,9 +71,9 @@ const CORE = `你是《赛博朋克 2077》世界观下文字冒险的主持人�
 - 玩家写的台词照原话放进正文，不改写不润色；动作可以展开描写，但不加玩家没写的意图。
 - 需要角色表态时停下来，用建议选项或留白交给玩家，不替玩家回答。
 
-【四种输入】
-- 【做】行动；【说】角色说出口的话；【想】只有角色自己知道的念头，NPC 听不到，不能被当成对话回应。
-- 【出戏】玩家在场外提问：用一两句话直接回答，不推进剧情；指令块里 changes 写 []、check 写 null。问“能不能行”时只说大致可行性和会不会要检定，不给难度值。
+【玩家输入】
+- 玩家只有一个输入框，一次可能同时写了动作、台词和念头，你自己分辨：引号里的、或明显是说出口的话是台词；括号里的、或“我心想”之类是只有角色自己知道的念头，NPC 听不到，不能被当成对话回应；其余按行动理解。拿不准是说出口还是心里想时，按没说出口处理，并在 read 里写明你的理解。
+- 玩家跳出角色问你（问规则、问能不能这么做、问现在什么情况、问前情），而不是让角色行动，就是场外提问：用一两句话直接回答，不推进剧情；指令块写 "ooc": true，changes 写 []、check 写 null。问“能不能行”时只说大致可行性和会不会要检定，不给难度值。场外提问和行动混在一起时，按行动处理。
 
 【判定】按固定顺序：
 1. 说服、谈判：先看有没有说中对方的诉求或触到底线，不看数值。
@@ -189,7 +190,7 @@ export function stateSummary(view: PlayerView): string {
 }
 
 export function formatInput(input: TurnInput): string {
-  return `【${MODE_LABELS[input.mode]}】${input.text}`;
+  return input.mode ? `【${MODE_LABELS[input.mode]}】${input.text}` : `【玩家】${input.text}`;
 }
 
 export function checkResultText(rolled: RolledCheck): string {

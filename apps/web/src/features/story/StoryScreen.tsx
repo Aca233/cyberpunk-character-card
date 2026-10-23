@@ -108,7 +108,7 @@ export function StoryScreen() {
         setPicked({ id: choice.checkId, version });
         return;
       }
-      send({ mode: "do", text: choice.text });
+      send({ text: choice.text });
     },
     [offers, busy, send, version],
   );
@@ -156,7 +156,7 @@ export function StoryScreen() {
   const failure = story.failure;
   const severe = view.health.wound === "severe" || view.health.condition !== "up";
   const draftFromCheck = (label: string) => {
-    story.setDraft({ mode: "do", text: label });
+    story.setDraft({ text: label });
     setPicked(null);
   };
 

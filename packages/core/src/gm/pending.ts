@@ -45,6 +45,7 @@ export interface RolledCheck {
 }
 
 function isOoc(turn: TurnRecord): boolean {
+  if (turn.ooc === true) return true;
   const input = TurnInputSchema.safeParse(turn.input);
   return input.success && input.data.mode === "ooc";
 }

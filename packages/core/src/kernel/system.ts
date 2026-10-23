@@ -52,7 +52,8 @@ export interface TimeSpan {
 
 /** 判断规则模块带不带时看的玩家输入 */
 export interface RuleInput {
-  readonly mode: string;
+  /** 只有旧存档带输入方式；新输入不写 */
+  readonly mode?: string | undefined;
   readonly text: string;
 }
 

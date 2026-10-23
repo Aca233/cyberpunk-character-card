@@ -197,6 +197,6 @@ export function buildScenario(c: EvalCase): Scenario {
   return {
     world,
     records,
-    plan: { kind: "resolve", input: { mode: "do", text: offer.label }, check: rolled },
+    plan: { kind: "resolve", input: { text: offer.label }, check: rolled },
   };
 }

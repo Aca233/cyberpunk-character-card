@@ -43,6 +43,8 @@ const TurnRecordSchema = z.object({
   check: z.unknown().optional(),
   /** 这一轮写的是哪次检定的结果 */
   resolves: z.string().optional(),
+  /** 主持人判断这一轮是场外提问，不改状态；旧存档没有，按当时的输入方式判断 */
+  ooc: z.boolean().optional(),
   /** 结算说明，例如“人性 −20 已截断为 −15” */
   notes: z.array(z.string()).optional(),
   /** 本轮带了哪些规则模块 */

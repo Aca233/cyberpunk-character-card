@@ -50,6 +50,8 @@ export interface GmTurn {
   readonly patches: readonly Patch[];
   readonly modules: readonly string[];
   readonly pin: boolean;
+  /** 主持人判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
+  readonly ooc: boolean;
   readonly usage: LlmUsage | undefined;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
@@ -201,8 +203,9 @@ export async function runGmTurn(
   if (narrative === "") throw new GmEmptyReplyError("主持人没有返回正文，可以重试");
 
   const shape = await b.readBlock(block);
-  const ooc = plan.input.mode === "ooc";
-  const oocReason = "出戏频道不改状态";
+  // 场外提问由主持人判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算
+  const ooc = plan.kind === "action" && (plan.input.mode === "ooc" || shape.ooc === true);
+  const oocReason = "场外提问不改状态";
 
   // 待确认的检定：格式对了还要能算出难度值（档位范围、属性）
   let check: CheckSpec | undefined;
@@ -296,6 +299,7 @@ export async function runGmTurn(
       patches: applied.patches,
       modules: prompt.modules,
       pin: !ooc && shape.pin === true,
+      ooc,
       usage,
       repairs: b.repairs,
       repairUsage: b.repairUsage,

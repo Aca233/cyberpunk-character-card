@@ -92,9 +92,7 @@ export function StoryLog({
       <div className={styles.logInner}>
         {earlier > 0 && <p className={styles.dim}>更早的 {earlier} 轮暂不显示</p>}
         {view.turns.length === 0 && !generating && (
-          <p className={styles.dim}>
-            故事还没开始。写下你的第一个行动，或者用「出戏」问主持人怎么开场。
-          </p>
+          <p className={styles.dim}>故事还没开始。写下你的第一个行动，或者直接问主持人怎么开场。</p>
         )}
         {view.turns.map((t) => (
           <TurnBlock key={t.seq} turn={t} saveId={saveId} />

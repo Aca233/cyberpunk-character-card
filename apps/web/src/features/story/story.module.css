@@ -701,47 +701,8 @@
   --mode-color: var(--cp-yellow);
 }
 
-.inputBar[data-mode="say"] {
-  --mode-color: var(--cp-cyan);
-}
-
-.inputBar[data-mode="think"] {
-  --mode-color: var(--voice-past);
-}
-
-.inputBar[data-mode="ooc"] {
-  --mode-color: var(--cp-text-dim);
-}
-
-.modes {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
+.hint {
   font-family: var(--font-ui);
-}
-
-.mode {
-  padding: 0.15rem 0.8rem;
-  font: inherit;
-  font-size: var(--fs-label);
-  color: var(--cp-text-dim);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.mode[aria-selected="true"] {
-  color: var(--mode-color);
-  border-bottom-color: var(--mode-color);
-}
-
-.mode:focus-visible {
-  outline: 1px solid var(--mode-color);
-}
-
-.modeHint {
-  margin-left: auto;
   font-size: 0.75rem;
   color: var(--cp-text-faint);
 }

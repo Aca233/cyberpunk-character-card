@@ -36,6 +36,10 @@ export const BlockDocSchema = z.object({
   direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
+  ooc: z
+    .boolean()
+    .optional()
+    .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
 });
 
 /** 顶层字段只看类型；choices、check、changes 的每一条再单独校验 */
@@ -47,6 +51,7 @@ const BlockShapeSchema = z.object({
   direct: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   pin: z.boolean().optional().catch(undefined),
+  ooc: z.boolean().optional().catch(undefined),
 });
 export type BlockShape = z.infer<typeof BlockShapeSchema>;
 

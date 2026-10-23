@@ -2,11 +2,11 @@ import type { TurnInput } from "@cp/core";
 import { useEffect, useRef } from "react";
 import { Button } from "../../ui/Button";
 import styles from "./story.module.css";
-import { MODE_HINTS, MODE_LABELS, MODES } from "./view";
 
 const MAX = 2000;
+const HINT = "动作、台词、心里话都直接写，主持人自己分辨；想问规则或现状也直接问";
 
-/** 输入框：做 / 说 / 想 / 出戏；Enter 发送，Shift+Enter 换行；生成时变成“停止生成” */
+/** 只有一个输入框；Enter 发送，Shift+Enter 换行；生成时变成“停止生成” */
 export function InputBar({
   busy,
   streaming,
@@ -45,39 +45,17 @@ export function InputBar({
   }, [draft.text]);
 
   const send = () => {
-    if (canSend) onSend({ mode: draft.mode, text });
+    if (canSend) onSend({ text });
   };
 
   return (
     <form
       className={styles.inputBar}
-      data-mode={draft.mode}
       onSubmit={(e) => {
         e.preventDefault();
         send();
       }}
     >
-      <div className={styles.modes} role="tablist" aria-label="输入方式">
-        {MODES.map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={draft.mode === m}
-            className={styles.mode}
-            data-mode={m}
-            onClick={() => {
-              onDraft({ mode: m });
-              area.current?.focus();
-            }}
-          >
-            {MODE_LABELS[m]}
-          </button>
-        ))}
-        <span className={styles.modeHint}>
-          {disabled && reason ? reason : MODE_HINTS[draft.mode]}
-        </span>
-      </div>
       <div className={styles.inputRow}>
         <textarea
           ref={area}
@@ -85,8 +63,9 @@ export function InputBar({
           rows={2}
           value={draft.text}
           disabled={disabled}
-          placeholder={MODE_HINTS[draft.mode]}
+          placeholder="你要做什么、说什么？"
           aria-label="你的行动"
+          aria-describedby="story-input-hint"
           onChange={(e) => onDraft({ text: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -109,10 +88,14 @@ export function InputBar({
           </Button>
         )}
       </div>
-      {tooLong && (
+      {tooLong ? (
         <p className={styles.warn}>
           {text.length}/{MAX} 字，太长了
         </p>
+      ) : (
+        <span id="story-input-hint" className={styles.hint}>
+          {disabled && reason ? reason : HINT}
+        </span>
       )}
     </form>
   );

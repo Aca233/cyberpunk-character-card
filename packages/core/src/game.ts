@@ -35,7 +35,7 @@ export function newGameWorld(meta: Pick<SaveMeta, "startTime" | "difficulty">): 
 
 function turnInput(raw: unknown): TurnInput {
   const parsed = TurnInputSchema.safeParse(raw);
-  return parsed.success ? parsed.data : { mode: "do", text: String(raw) };
+  return parsed.success ? parsed.data : { text: String(raw) };
 }
 
 /** 最近一轮留给玩家的选项和待确认的检定；成功率按当前属性现算 */

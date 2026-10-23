@@ -197,7 +197,7 @@ export class GameService {
         const check = rolledFrom(world, offer, faces);
         const plan: GmPlan = {
           kind: "resolve",
-          input: { mode: "do", text: offer.label },
+          input: { text: offer.label },
           check,
         };
         const run = hub.start(id, request.requestId, baseVersion);
@@ -404,6 +404,7 @@ export class GameService {
         ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),
         ...(turn.check !== undefined ? { check: turn.check } : {}),
         ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
+        ...(turn.ooc ? { ooc: true } : {}),
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),

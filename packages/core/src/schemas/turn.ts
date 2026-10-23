@@ -1,11 +1,12 @@
 import { z } from "zod";
 
-/** 玩家输入的四种方式：做、说、想，以及不算行动的出戏频道 */
+/** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由主持人自己判断 */
 export const InputModeSchema = z.enum(["do", "say", "think", "ooc"]);
 export type InputMode = z.infer<typeof InputModeSchema>;
 
 export const TurnInputSchema = z.strictObject({
-  mode: InputModeSchema,
+  /** 只有旧存档带；新输入不写 */
+  mode: InputModeSchema.optional(),
   text: z.string().trim().min(1, "行动不能为空").max(2000, "一次最多 2000 字"),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
