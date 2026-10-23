@@ -6,7 +6,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "eval": "tsx gm-eval.ts",
     "pick-assets": "tsx assets/pick.ts",
-    "check-assets": "tsx assets/check.ts"
+    "check-assets": "tsx assets/check.ts",
+    "terms": "tsx lore/terms.ts"
   },
   "dependencies": {
     "@cp/content": "workspace:*",

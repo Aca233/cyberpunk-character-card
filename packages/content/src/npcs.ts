@@ -13,7 +13,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       id: "rebecca",
       name: "丽贝卡",
       pronoun: "她",
-      role: "缅因团伙的枪手",
+      role: "曼因团伙的枪手",
       look: "个子很小，绿色双马尾，身上纹满荧光纹身，义体手臂，背着一把比她人还长的霰弹枪。",
       voice: "嗓门大、语速快，脏话张口就来，爱起哄，兴奋时会笑出声；对喜欢的人说话反而别扭。",
       samples: [
@@ -29,7 +29,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
     },
     {
       id: "maine",
-      name: "缅因",
+      name: "曼因",
       pronoun: "他",
       role: "雇佣兵团伙的老大",
       look: "高大魁梧，身上大半是军用级义体，红色光学义眼，夹克敞着露出金属胸膛。",

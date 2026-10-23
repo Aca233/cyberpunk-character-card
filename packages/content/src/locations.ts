@@ -4,7 +4,7 @@ import { worldRules } from "@cp/core";
 export const locations = worldRules.LocationCatalogSchema.parse([
   {
     id: "lizzies-bar",
-    name: "莉齐酒吧",
+    name: "丽姿酒吧",
     district: "沃森",
     note: "歌舞伎区的超梦酒吧，莫克斯帮罩着",
   },
@@ -17,16 +17,16 @@ export const locations = worldRules.LocationCatalogSchema.parse([
   },
   {
     id: "megabuilding-h10",
-    name: "H10 巨构大楼",
+    name: "超级摩天楼 H10",
     district: "沃森",
     note: "上万人住的公寓楼，楼下有商店和诊所",
   },
-  { id: "vik-clinic", name: "维克托的诊所", district: "沃森", note: "义体医生维克托开的小诊所" },
-  { id: "tom-diner", name: "汤姆餐馆", district: "沃森", note: "沃森的老式餐馆，适合约人谈事" },
-  { id: "japantown", name: "日本街", district: "威斯布鲁克", note: "霓虹、夜市和虎爪帮的地盘" },
+  { id: "vik-clinic", name: "维克多的诊所", district: "沃森", note: "义体医生维克多开的小诊所" },
+  { id: "tom-diner", name: "汤姆饭店", district: "沃森", note: "沃森的老式餐馆，适合约人谈事" },
+  { id: "japantown", name: "日本街", district: "威斯特布鲁克", note: "霓虹、夜市和虎爪帮的地盘" },
   {
     id: "coyote-cojo",
-    name: "跛脚郊狼酒吧",
+    name: "野狼酒吧",
     district: "海伍德",
     note: "瓦伦蒂诺帮附近的老街坊酒吧",
   },

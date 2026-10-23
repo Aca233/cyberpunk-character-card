@@ -14,7 +14,8 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "eval": "pnpm --filter @cp/tools run eval",
     "pick-assets": "pnpm --filter @cp/tools run pick-assets",
-    "check-assets": "pnpm --filter @cp/tools run check-assets"
+    "check-assets": "pnpm --filter @cp/tools run check-assets",
+    "terms": "pnpm --filter @cp/tools run terms"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",

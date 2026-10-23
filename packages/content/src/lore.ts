@@ -8,7 +8,11 @@ export const glossary: readonly Slang[] = [
   { term: "nova", meaning: "酷、好极了" },
   { term: "delta", meaning: "离开、溜走；“快 delta”就是赶紧撤" },
   { term: "eddies", aliases: ["eddie", "eddy"], meaning: "欧元，夜之城的通用货币" },
-  { term: "flatline", aliases: ["flatlined", "flatlining"], meaning: "杀死；也指脑波归零、死掉" },
+  {
+    term: "flatline",
+    aliases: ["flatlined", "flatlining"],
+    meaning: "停搏（官方译名）：杀死；也指脑波归零、死掉",
+  },
   { term: "zero", aliases: ["zeroed"], meaning: "干掉、杀掉" },
   { term: "chrome", meaning: "义体，泛指装在身上的机械和电子改造" },
   {
@@ -25,7 +29,7 @@ export const glossary: readonly Slang[] = [
   {
     term: "edgerunner",
     aliases: ["edgerunners"],
-    meaning: "边缘行者，游走在法律和生死边缘的街头佣兵",
+    meaning: "边缘行者（游戏里译作“边缘人”），游走在法律和生死边缘的街头佣兵",
   },
   { term: "merc", aliases: ["mercs"], meaning: "佣兵，拿钱办事的人" },
   {

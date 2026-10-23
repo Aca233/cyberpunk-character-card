@@ -118,7 +118,7 @@ export type DeadlineCommand = z.infer<typeof DeadlineCommandSchema>;
 export const LocationDefSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  /** 所在地区的中文名，例如沃森、威斯布鲁克 */
+  /** 所在地区的中文名，例如沃森、威斯特布鲁克 */
   district: z.string().min(1),
   /** 给模型看的一句话 */
   note: z.string().min(1).optional(),

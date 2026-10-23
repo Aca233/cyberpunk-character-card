@@ -19,7 +19,16 @@ const DISTRICTS: readonly (readonly [AssetId, readonly string[]])[] = [
   ],
   [
     "district.westbrook",
-    ["westbrook", "japantown", "charter", "north-oak", "northoak", "威斯布鲁克", "日本街"],
+    [
+      "westbrook",
+      "japantown",
+      "charter",
+      "north-oak",
+      "northoak",
+      "威斯特布鲁克",
+      "威斯布鲁克",
+      "日本街",
+    ],
   ],
   ["district.center", ["center", "centre", "corpo", "downtown", "市中心"]],
   ["district.heywood", ["heywood", "wellsprings", "glen", "vista", "海伍德"]],
