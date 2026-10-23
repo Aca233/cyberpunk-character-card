@@ -12,6 +12,7 @@
       "!reference",
       "!data",
       "!tools/evals/results",
+      "!tools/evals/drafts",
       "!test-results",
       "!playwright-report"
     ]
