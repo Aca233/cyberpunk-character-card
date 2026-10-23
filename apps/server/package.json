@@ -2,6 +2,9 @@
   "name": "@cp/server",
   "private": true,
   "type": "module",
+  "exports": {
+    "./llm": "./src/llm.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts --dev",

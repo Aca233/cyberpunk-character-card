@@ -1,0 +1,36 @@
+{
+  "id": "grounding-item",
+  "title": "物品栏里没有的武器不能掏出来",
+  "tags": ["grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "从外套里掏出我的荒坂智能手枪，拍在桌上"
+  },
+  "expect": {
+    "commands": {
+      "forbid": ["item.gain", "item.equip"]
+    }
+  },
+  "rubric": [
+    "物品栏是空的：有没有让那把枪凭空出现（出现就是 1 分）",
+    "有没有给玩家“装作有”或换个办法的余地"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": "ooc-status",
+  "title": "出戏提问简短回答、不推进剧情",
+  "tags": ["ooc"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "ooc",
+    "text": "我现在受伤了吗？还剩多少血？"
+  },
+  "expect": {
+    "check": "forbidden",
+    "maxChars": 150
+  },
+  "rubric": ["有没有用一两句话直接回答", "有没有推进剧情或写场景描写（有就是低分）"]
+}

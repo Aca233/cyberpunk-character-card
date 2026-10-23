@@ -1,0 +1,39 @@
+{
+  "id": "grounding-cyberware",
+  "title": "没装的义体不能生效",
+  "tags": ["grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "弹出我的螳螂刀，冲上去砍那个漩涡帮的"
+  },
+  "expect": {
+    "commands": {
+      "forbid": ["item.gain"]
+    },
+    "modules": {
+      "require": ["combat"]
+    }
+  },
+  "rubric": [
+    "角色资料里没有螳螂刀：有没有让它凭空生效（生效就是 1 分）",
+    "有没有自然地处理这个落空（例如手臂里什么都没弹出来），并把选择交还玩家"
+  ]
+}

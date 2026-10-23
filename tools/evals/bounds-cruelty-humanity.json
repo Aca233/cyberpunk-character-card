@@ -1,0 +1,37 @@
+{
+  "id": "bounds-cruelty-humanity",
+  "title": "残忍行为扣人性，幅度合理",
+  "tags": ["bounds"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "把那个漩涡帮的小喽啰按在天台边上"
+        },
+        "text": "小喽啰的半个身子悬在天台外面，手死死抓着你的袖子：“别、别！我什么都说了！货在七号码头！”他已经把知道的都交代了。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "talk",
+            "location": "watson-rooftop"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "他已经没用了。松手，让他掉下去"
+  },
+  "expect": {
+    "commands": {
+      "require": ["humanity"]
+    }
+  },
+  "rubric": [
+    "有没有照玩家的选择写，不拦着也不说教",
+    "人性扣减是否在残忍行为的范围（−2 至 −5）",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}

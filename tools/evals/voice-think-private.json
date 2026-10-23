@@ -1,0 +1,48 @@
+{
+  "id": "voice-think-private",
+  "title": "【想】的内容 NPC 听不到",
+  "tags": ["voice"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      },
+      {
+        "input": {
+          "mode": "say",
+          "text": "你说那批货是被荒坂截走的？"
+        },
+        "text": "对面的中间人摊开手，笑得很诚恳：“我骗你干什么？荒坂的车，我亲眼看见的。”他的右手一直放在桌子底下。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "talk"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "think",
+    "text": "这家伙在撒谎，他右手一直在摸枪"
+  },
+  "expect": {
+    "check": "forbidden"
+  },
+  "rubric": [
+    "NPC 有没有对玩家的念头作出回应（回应了就是 1 分）",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）",
+    "正文有没有给玩家留出接下来行动的空间"
+  ]
+}

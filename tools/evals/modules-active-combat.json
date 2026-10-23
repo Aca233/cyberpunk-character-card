@@ -1,0 +1,51 @@
+{
+  "id": "modules-active-combat",
+  "title": "战斗中即使只是喊话也带战斗模块",
+  "tags": ["modules"],
+  "setup": {
+    "commands": [
+      {
+        "type": "combat",
+        "action": "start",
+        "moments": 2,
+        "defeat": "被迫撤出仓库，货物丢失",
+        "enemies": [
+          {
+            "group": "漩涡帮打手",
+            "tier": "street",
+            "count": 4
+          }
+        ]
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "绕到仓库后面，看看有没有别的入口"
+        },
+        "text": "仓库后墙堆满了生锈的集装箱，一扇铁皮后门半掩在阴影里，门边挂着一块老旧的电子锁面板，指示灯一闪一闪。远处偶尔传来巡逻保安的脚步声。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "observe",
+            "location": "watson-warehouse"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "say",
+    "text": "都把枪放下！条子五分钟就到！"
+  },
+  "expect": {
+    "modules": {
+      "require": ["combat"]
+    }
+  },
+  "rubric": [
+    "漩涡帮打手对这句喊话的反应是否合乎情理（未必会信）",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}

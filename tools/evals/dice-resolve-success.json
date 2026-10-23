@@ -1,0 +1,58 @@
+{
+  "id": "dice-resolve-success",
+  "title": "检定成功：照成功写",
+  "tags": ["dice"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "绕到仓库后面，看看有没有别的入口"
+        },
+        "text": "仓库后墙堆满了生锈的集装箱，一扇铁皮后门半掩在阴影里，门边挂着一块老旧的电子锁面板，指示灯一闪一闪。远处偶尔传来巡逻保安的脚步声。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "observe",
+            "location": "watson-warehouse"
+          }
+        ]
+      },
+      {
+        "input": {
+          "mode": "do",
+          "text": "撬开电子锁"
+        },
+        "text": "你蹲下身，撬开面板外壳，露出里面一团缠在一起的线路。",
+        "check": {
+          "intent": "撬开后门的电子锁",
+          "attribute": "tech",
+          "tier": "street",
+          "dv": 11,
+          "success": "锁无声打开，没人察觉",
+          "failure": "面板报警，巡逻的保安会往这边来",
+          "damage": "graze"
+        },
+        "commands": [
+          {
+            "type": "world",
+            "activity": "breach"
+          }
+        ]
+      }
+    ]
+  },
+  "confirm": {
+    "faces": [9]
+  },
+  "expect": {
+    "commands": {
+      "forbid": ["damage"]
+    }
+  },
+  "rubric": [
+    "有没有照“锁无声打开，没人察觉”写出成功",
+    "有没有凭空追加没说明的坏事",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}

@@ -9,16 +9,20 @@ export type Resolved =
 
 /**
  * 按用途（gm / aux）在每次调用时从 config.json 选方案，改了配置不用重启。
- * 选中的方案用不了就直接报错，不悄悄换成别的提供方
+ * 选中的方案用不了就直接报错，不悄悄换成别的提供方。
+ * pick 可以按用途指定方案名，覆盖 config.json 里的选择（测评工具用）
  */
 export class LlmRouter implements LlmClient {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly pick: Partial<Record<LlmRequest["purpose"], string>> = {},
+  ) {}
 
   async resolve(purpose: LlmRequest["purpose"]): Promise<Resolved> {
     const state = await this.config.load();
     if (state.status !== "ok")
       return { ok: false, error: `config.json 还不能用：${state.errors.join("；")}` };
-    const name = state.config[purpose];
+    const name = this.pick[purpose] ?? state.config[purpose];
     const profile = state.config.profiles.find((p) => p.name === name);
     const role = purpose === "gm" ? "主持人" : "辅助模型";
     if (!profile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };

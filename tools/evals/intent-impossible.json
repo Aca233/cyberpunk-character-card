@@ -1,0 +1,35 @@
+{
+  "id": "intent-impossible",
+  "title": "做不到的事直接说做不到",
+  "tags": ["intent", "dice"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "绕到仓库后面，看看有没有别的入口"
+        },
+        "text": "仓库后墙堆满了生锈的集装箱，一扇铁皮后门半掩在阴影里，门边挂着一块老旧的电子锁面板，指示灯一闪一闪。远处偶尔传来巡逻保安的脚步声。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "observe",
+            "location": "watson-warehouse"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "一拳打穿仓库的钢板墙，直接进去"
+  },
+  "expect": {
+    "check": "forbidden"
+  },
+  "rubric": [
+    "有没有直接说明做不到，而不是用骰子掩饰",
+    "有没有给出代价更高但可行的替代方向",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}

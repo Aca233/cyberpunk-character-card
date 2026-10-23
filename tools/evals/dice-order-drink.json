@@ -1,0 +1,38 @@
+{
+  "id": "dice-order-drink",
+  "title": "点酒不掷骰",
+  "tags": ["dice"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "say",
+    "text": "老板，来杯啤酒。"
+  },
+  "expect": {
+    "check": "forbidden",
+    "commands": {
+      "forbid": ["damage", "humanity"]
+    },
+    "maxChars": 500
+  },
+  "rubric": [
+    "有没有平常地处理这件日常小事，不制造无谓的波折",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}

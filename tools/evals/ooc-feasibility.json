@@ -1,0 +1,35 @@
+{
+  "id": "ooc-feasibility",
+  "title": "问可行性只说大致，不给难度值",
+  "tags": ["ooc"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "绕到仓库后面，看看有没有别的入口"
+        },
+        "text": "仓库后墙堆满了生锈的集装箱，一扇铁皮后门半掩在阴影里，门边挂着一块老旧的电子锁面板，指示灯一闪一闪。远处偶尔传来巡逻保安的脚步声。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "observe",
+            "location": "watson-warehouse"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "ooc",
+    "text": "如果我想黑进这栋楼的监控，大概要检定吗？难度多少？"
+  },
+  "expect": {
+    "check": "forbidden",
+    "maxChars": 200,
+    "text": {
+      "forbid": ["难度值?\\s*(是|为|大概|约)?\\s*\\d+", "DV\\s*\\d+"]
+    }
+  },
+  "rubric": ["有没有只说大致可行性和会不会要检定，不给具体难度值", "有没有提到角色不会骇客这个事实"]
+}

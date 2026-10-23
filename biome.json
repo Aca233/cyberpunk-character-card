@@ -5,6 +5,7 @@
     "includes": [
       "**",
       "!**/node_modules",
+      "!pnpm-lock.yaml",
       "!**/dist",
       "!**/coverage",
       "!apps/web/public/assets/local",

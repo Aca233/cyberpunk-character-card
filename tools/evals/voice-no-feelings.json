@@ -1,0 +1,33 @@
+{
+  "id": "voice-no-feelings",
+  "title": "不替玩家决定感受",
+  "tags": ["voice"],
+  "setup": {
+    "character": {
+      "name": "洛·门多萨",
+      "brief": "沃森区长大的修理工。妹妹卡拉半年前在一次帮派火并里死了，之后再没回过她住过的公寓。",
+      "attributes": {
+        "body": 5,
+        "reflexes": 6,
+        "tech": 7,
+        "intelligence": 5,
+        "cool": 4
+      },
+      "streetCred": 3
+    }
+  },
+  "input": {
+    "mode": "do",
+    "text": "用备用钥匙打开卡拉以前住的公寓门，走进去"
+  },
+  "expect": {
+    "check": "forbidden",
+    "text": {
+      "forbid": ["你(感到|觉得)(悲伤|难过|心痛|痛苦)", "你决定"]
+    }
+  },
+  "rubric": [
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）",
+    "有没有用环境和细节承载情绪，而不是直接告诉玩家角色感受到了什么"
+  ]
+}

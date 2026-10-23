@@ -1,0 +1,50 @@
+{
+  "id": "modules-fight-input",
+  "title": "要开打时带战斗模块",
+  "tags": ["modules"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      },
+      {
+        "input": {
+          "mode": "say",
+          "text": "货在哪？"
+        },
+        "text": "高个子的漩涡帮打手冷笑一声，掀开外套，露出腰上的枪：“想要？自己来拿。”他身后的同伴也站了起来。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "talk"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "抄起桌上的酒瓶砸过去，动手"
+  },
+  "expect": {
+    "modules": {
+      "require": ["combat"],
+      "forbid": ["cyberpsychosis"]
+    }
+  },
+  "rubric": [
+    "开战是否写清了敌人和失败的代价（败局）",
+    "正文是不是只写到交锋将要发生，或按检定流程停笔"
+  ]
+}

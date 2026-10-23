@@ -1,0 +1,34 @@
+{
+  "id": "dice-look-around",
+  "title": "观察环境不掷骰",
+  "tags": ["dice"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "mode": "do",
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。角落里两个漩涡帮的人在低声说话，时不时朝门口瞟一眼。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "mode": "do",
+    "text": "环顾一圈，看看酒吧里有没有熟面孔"
+  },
+  "expect": {
+    "check": "forbidden"
+  },
+  "rubric": [
+    "有没有直接给出观察到的信息",
+    "有没有替玩家角色说台词、做决定或替玩家写出感受（不由自主的身体反应不算）"
+  ]
+}
