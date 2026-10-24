@@ -1,0 +1,26 @@
+{
+  "id": "modules-city",
+  "title": "城里有没结束的动静时，带上「城里的动静」规则",
+  "tags": ["modules", "city"],
+  "setup": {
+    "commands": [
+      {
+        "type": "city.event",
+        "id": "tyger-claws-kabuki",
+        "title": "虎爪帮在歌舞伎区收紧地盘",
+        "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。",
+        "district": "沃森",
+        "status": "heating",
+        "weight": "normal"
+      }
+    ]
+  },
+  "input": {
+    "text": "我去酒吧找老板打听最近街上有什么消息"
+  },
+  "expect": {
+    "modules": {
+      "require": ["city"]
+    }
+  }
+}

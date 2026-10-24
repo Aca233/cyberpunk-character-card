@@ -15,6 +15,8 @@ import styles from "./settings.module.css";
 
 type Tab = "profiles" | "narrative" | "context";
 
+const CITY_WEIGHT = { minor: "街角小事", normal: "几个街区在传", major: "头条" } as const;
+
 export function SettingsScreen() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -280,6 +282,18 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
             {ctx.considered.map((n, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 按抽取给的顺序排，可能重复
               <li key={`${i}-${n}`}>{n}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {ctx.city && ctx.city.length > 0 && (
+        <Section title={`城里的动静（这一轮之后，${ctx.city.length}）`}>
+          <ul>
+            {ctx.city.map((e) => (
+              <li key={e.id} className={e.over ? styles.dim : undefined}>
+                {e.title}［{e.status}，{CITY_WEIGHT[e.weight]}
+                {e.district ? `，${e.district}` : ""}］{e.body}
+              </li>
             ))}
           </ul>
         </Section>

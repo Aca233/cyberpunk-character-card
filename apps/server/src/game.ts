@@ -18,6 +18,7 @@ import {
   buildNarratorPrompt,
   type CheckRecord,
   type Clock,
+  cityRules,
   currentOffers,
   diceRules,
   effectiveTurns,
@@ -31,6 +32,9 @@ import {
   type NarratorPlan,
   type NarratorTurn,
   newGameWorld,
+  OFFSCREEN_PACE_SCENES,
+  OFFSCREEN_SYSTEM,
+  type OffscreenPace,
   type PlayerView,
   phoneRules,
   pickLoadouts,
@@ -253,7 +257,7 @@ export class GameService {
           dv: check.result.dv,
           outcome: check.result.outcome,
         });
-        void this.execute(run, world, log, plan, meta.opening);
+        void this.execute(run, world, log, plan, meta.opening, request.offscreen);
         return { status: 202, body: { turnId: run.turnId, replayed: false } };
       }
 
@@ -288,6 +292,7 @@ export class GameService {
         records,
         { kind: "action", input: request.input },
         meta.opening,
+        request.offscreen,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
@@ -580,6 +585,19 @@ export class GameService {
             ),
           );
         }
+        // ⑥ 场外推演：发出的内容和回复是记下来的，不用重建
+        if (record.offscreen) {
+          prompts.push(
+            stage("offscreen", "⑥ 场外推演", {
+              messages: [
+                { role: "system", content: OFFSCREEN_SYSTEM },
+                { role: "user", content: record.offscreen.prompt },
+                { role: "assistant", content: record.offscreen.reply },
+              ],
+              modules: [],
+            }),
+          );
+        }
       } catch (error) {
         prompts = [];
         rebuildError = error instanceof Error ? error.message : String(error);
@@ -606,6 +624,22 @@ export class GameService {
           dropped: record.dropped,
           notes: record.notes ?? [],
           considered: record.considered ?? [],
+          // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
+          city: cityRules.CityStateSchema.parse(
+            replay(
+              { nextSeq: 0, world: newGameWorld(meta, gameContent) },
+              records.slice(0, seq + 1),
+            ).slices.city ?? {},
+          ).events.map((e) => ({
+            id: e.id,
+            title: e.title,
+            body: e.body,
+            district: e.district ?? null,
+            status: cityRules.CITY_STATUS_LABELS[e.status],
+            weight: e.weight,
+            over: e.status === "over",
+            updatedAt: e.updatedAt,
+          })),
           unsettled: record.unsettled ?? null,
           check: record.check ?? null,
           choices: record.choices ?? [],
@@ -690,6 +724,7 @@ export class GameService {
     records: readonly LogRecord[],
     plan: NarratorPlan,
     opening: string | undefined,
+    offscreen: OffscreenPace | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
@@ -701,6 +736,7 @@ export class GameService {
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening),
+          offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },
@@ -791,6 +827,7 @@ export class GameService {
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
+        ...(turn.offscreen !== undefined ? { offscreen: turn.offscreen } : {}),
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
         ...(turn.recalled.length > 0
           ? { recalled: turn.recalled.map((m) => ({ title: m.title, text: m.text })) }
@@ -832,7 +869,7 @@ export class GameService {
 
 /** 上下文查看器里一步的提示词 */
 interface StagePrompt {
-  readonly stage: "judge" | "narrate" | "extract";
+  readonly stage: "judge" | "narrate" | "extract" | "offscreen";
   readonly label: string;
   readonly messages: LlmMessage[];
   readonly modules: string[];

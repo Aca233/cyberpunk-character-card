@@ -17,6 +17,17 @@ export const TurnInputSchema = z.strictObject({
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 
+/** 城里的动静（场外推演）多久跑一次：关、慢、常规、快；设置存在浏览器里，每轮随请求带上 */
+export const OffscreenPaceSchema = z.enum(["off", "slow", "normal", "fast"]);
+export type OffscreenPace = z.infer<typeof OffscreenPaceSchema>;
+/** 隔几场推演一次；null 是关掉 */
+export const OFFSCREEN_PACE_SCENES: Readonly<Record<OffscreenPace, number | null>> = {
+  off: null,
+  slow: 5,
+  normal: 3,
+  fast: 2,
+};
+
 /** POST /api/saves/:id/turns 的请求体：一次行动（input），或确认一个待定的检定（confirm），二选一 */
 export const TurnRequestSchema = z
   .strictObject({
@@ -32,6 +43,8 @@ export const TurnRequestSchema = z
       .string()
       .regex(/^\d+(\.\d+)?$/, "confirm 应为检定 id，例如 12 或 12.2")
       .optional(),
+    /** 没带时按常规 */
+    offscreen: OffscreenPaceSchema.optional(),
   })
   .refine(
     (r) => (r.input === undefined) !== (r.confirm === undefined),

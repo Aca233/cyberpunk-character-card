@@ -2,6 +2,7 @@ import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
+import { CityStateSchema, citySection } from "../../systems/city";
 import { cyberwareSection } from "../../systems/cyberware/prompt";
 import { ATTRIBUTE_LABELS, type Attribute, MOD_STEP, PENALTY_CAP } from "../../systems/dice";
 import { RARITY_LABELS } from "../../systems/economy/schema";
@@ -374,6 +375,8 @@ export function situation(
   if (recent) parts.push(`【近期后果】\n${recent}`);
   const due = dueSection(world);
   if (due) parts.push(`【到期事件】\n${due}`);
+  const city = citySection(CityStateSchema.parse(world.slices.city ?? {}));
+  if (city) parts.push(`【城里的动静】\n${city}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   return parts;

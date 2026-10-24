@@ -2,6 +2,7 @@ export * from "./block";
 export * from "./doc";
 export * from "./examples";
 export * from "./modules";
+export * from "./offscreen";
 export * from "./pending";
 export * from "./prompts";
 export * from "./prose";

@@ -17,6 +17,7 @@ import {
   type Trait,
   type TraitSlot,
 } from "../systems/character";
+import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema, MAX_QUICK } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import {
@@ -49,6 +50,13 @@ import {
   VoiceSchema,
 } from "./block";
 import { schemaDoc } from "./doc";
+import {
+  buildOffscreenPrompt,
+  OFFSCREEN_TEMPERATURE,
+  offscreenDue,
+  presentNpcs,
+  readOffscreen,
+} from "./offscreen";
 import { prepareFor } from "./pending";
 import {
   buildExtractPrompt,
@@ -212,6 +220,8 @@ export interface NarratorTurn {
   readonly unsettled: string | undefined;
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
+  /** ⑥ 场外推演跑了时：发出的用户消息和原始回复，只供剧透视图 */
+  readonly offscreen: { readonly prompt: string; readonly reply: string } | undefined;
   readonly notes: readonly string[];
   readonly world: WorldState;
   readonly patches: readonly Patch[];
@@ -258,6 +268,8 @@ export interface NarratorDeps {
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
+  /** 场外推演隔几场跑一次；null 是关掉，没写按默认 3 场 */
+  readonly offscreen?: number | null | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -637,7 +649,7 @@ export async function runNarratorTurn(
       shape = await b.readExtract(reply.text);
     }
   }
-  const considered = settle ? readConsidered(shape.dropped) : [];
+  const considered: string[] = settle ? readConsidered(shape.dropped) : [];
 
   // 装着的义体的名字：义体来源的专属选项和义体的内心声音要对得上
   const parts = cyberwareCatalog(deps.data ?? {});
@@ -900,6 +912,52 @@ export async function runNarratorTurn(
   const after = WorldClockStateSchema.parse(settled.world.slices.world);
   const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
   const unsettled = settle ? unsettledReason(b.dropped) : undefined;
+
+  // ⑥ 场外推演：收场时隔了几场或半天，推演玩家没看着的地方；结果只进补丁，和本轮一起落盘撤回
+  let final = settled;
+  let offscreenTrace: { prompt: string; reply: string } | undefined;
+  const every = deps.offscreen === undefined ? OFFSCREEN_SCENES : deps.offscreen;
+  if (
+    settle &&
+    !inFlashback &&
+    unsettled === undefined &&
+    every !== null &&
+    offscreenDue(world, settled.world, every)
+  ) {
+    const present = presentNpcs(world, settled.world);
+    const messages = buildOffscreenPrompt(settled.world, records, extras, narrative, present);
+    const reply = await b.call({ purpose: "aux", temperature: OFFSCREEN_TEMPERATURE, messages });
+    offscreenTrace = {
+      prompt: messages[messages.length - 1]?.content ?? "",
+      reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
+    };
+    let offscreen: Command[] = [];
+    if ("blocked" in reply) {
+      considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
+    } else {
+      b.auxUsage = addUsage(b.auxUsage, reply.usage);
+      const sent = accepted.filter((c) => c.type === "phone.receive").length;
+      const got = readOffscreen(reply.text, settled.world, {
+        present,
+        messages: MESSAGES_PER_TURN - sent,
+      });
+      considered.push(...got.notes);
+      offscreen = got.commands;
+    }
+    // 读不了也记下场次和时间，下一轮不马上重试
+    final = registry.applyCommands(settled.world, [...offscreen, { type: "city.ran" }], applyCtx);
+    for (const { command, result } of final.results) {
+      if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
+      // 消息玩家看得到；其余只进剧透视图
+      else if (command.type === "phone.receive") b.notes.push(...result.notes);
+      else {
+        const c = command as { type: string; id?: string; title?: string; text?: string };
+        if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
+        else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+        considered.push(...result.notes.map((n) => `场外推演：${n}`));
+      }
+    }
+  }
   const closeup =
     ooc || unsettled !== undefined
       ? undefined
@@ -918,9 +976,12 @@ export async function runNarratorTurn(
       dropped: b.dropped,
       unsettled,
       considered,
+      offscreen: offscreenTrace,
       notes: b.notes,
-      world: settled.world,
-      patches: ooc ? applied.patches : [...applied.patches, ...settled.patches],
+      world: final.world,
+      patches: ooc
+        ? applied.patches
+        : [...applied.patches, ...settled.patches, ...(final === settled ? [] : final.patches)],
       modules: prompt.modules,
       pin: settle && unsettled === undefined && shape.pin === true,
       clutch: settle && shape.clutch === true,

@@ -13,7 +13,7 @@ import type {
   TurnUsage,
 } from "@cp/core";
 
-import { spoilersOn } from "../features/settings/prefs";
+import { offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
@@ -247,6 +247,8 @@ export interface TurnContext {
   readonly notes: readonly string[];
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
+  /** 这一轮之后城里的动静；旧后端没有 */
+  readonly city?: readonly CityEventView[];
   /** 未定稿的原因；定稿的轮次为 null */
   readonly unsettled: string | null;
   readonly check: unknown;
@@ -265,11 +267,23 @@ export interface TurnContext {
 }
 
 export interface StagePrompt {
-  readonly stage: "judge" | "narrate" | "extract";
+  readonly stage: "judge" | "narrate" | "extract" | "offscreen";
   readonly label: string;
   readonly messages: readonly { readonly role: string; readonly content: string }[];
   readonly modules: readonly string[];
   readonly chars: number;
+}
+
+/** 上下文查看器里的一条城里的动静 */
+export interface CityEventView {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string;
+  readonly district: string | null;
+  readonly status: string;
+  readonly weight: "minor" | "normal" | "major";
+  readonly over: boolean;
+  readonly updatedAt: number;
 }
 
 export type TurnBody = { requestId: string; baseVersion: number } & (
@@ -328,7 +342,10 @@ export const api = {
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
   state: (saveId: string) => request<PlayerView>("GET", `/saves/${saveId}/state`),
   async submit(saveId: string, body: TurnBody): Promise<SubmitResult> {
-    const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, body);
+    const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, {
+      ...body,
+      offscreen: offscreenPace(),
+    });
     if (typeof r.turnId === "string") return { kind: "started", turnId: r.turnId };
     return { kind: "duplicate", seq: Number(r.seq), version: Number(r.version) };
   },

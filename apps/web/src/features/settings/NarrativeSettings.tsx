@@ -1,7 +1,20 @@
-import { type NarrativePrefs, setNarrativePref, useNarrativePrefs } from "./prefs";
+import type { OffscreenPace } from "@cp/core";
+import {
+  type NarrativeToggle,
+  setNarrativePref,
+  setOffscreenPace,
+  useNarrativePrefs,
+} from "./prefs";
 import styles from "./settings.module.css";
 
-const OPTIONS: readonly [keyof NarrativePrefs, string, string][] = [
+const PACES: readonly [OffscreenPace, string][] = [
+  ["off", "关"],
+  ["slow", "慢（隔 5 场）"],
+  ["normal", "常规（隔 3 场）"],
+  ["fast", "快（隔 2 场）"],
+];
+
+const OPTIONS: readonly [NarrativeToggle, string, string][] = [
   ["sceneTitles", "场景标题卡", "每个场景开头打出一行：城区 · 地点 · 时间"],
   ["closeups", "特写卡", "接到大单、首领现身、拿到不朽物品时弹一张特写；每个场景最多一张"],
   [
@@ -16,7 +29,7 @@ export function NarrativeSettings() {
   const prefs = useNarrativePrefs();
   return (
     <div className={styles.prefs}>
-      <p className={styles.dim}>这些偏好只存在这台浏览器里，默认都关着。</p>
+      <p className={styles.dim}>这些偏好只存在这台浏览器里；开关默认关着。</p>
       {OPTIONS.map(([key, label, hint]) => (
         <label key={key} className={styles.pref}>
           <input
@@ -28,6 +41,23 @@ export function NarrativeSettings() {
           <small className={styles.dim}>{hint}</small>
         </label>
       ))}
+      <label className={styles.pref}>
+        <select
+          value={prefs.offscreen}
+          onChange={(e) => setOffscreenPace(e.target.value as OffscreenPace)}
+        >
+          {PACES.map(([pace, label]) => (
+            <option key={pace} value={pace}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span>城里的动静</span>
+        <small className={styles.dim}>
+          收场时，AI
+          推演你没看着的地方：帮派、公司、警察和熟人的动向，之后借新闻、传闻和消息带进故事；隔的场数越少，城里变得越快。游戏时间过了半天也会推演一次
+        </small>
+      </label>
     </div>
   );
 }
