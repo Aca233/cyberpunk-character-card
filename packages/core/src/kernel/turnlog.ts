@@ -41,6 +41,8 @@ const TurnRecordSchema = z.object({
   choices: z.array(z.unknown()).optional(),
   /** 内心声音，原样存下，展示时再按 schema 读 */
   voices: z.array(z.unknown()).optional(),
+  /** 主持人标记的生死瞬间：下一轮可以开斯安威斯坦 */
+  clutch: z.boolean().optional(),
   /** 主持人提出、等玩家确认的检定 */
   check: z.unknown().optional(),
   /** 这一轮写的是哪次检定的结果 */

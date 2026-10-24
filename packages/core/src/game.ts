@@ -28,6 +28,8 @@ import {
   tradeInValue,
 } from "./systems/cyberware/apply";
 import {
+  BOOST_SLOTS,
+  BOOST_WINDOW,
   type CyberwareDef,
   type CyberwareSlot,
   CyberwareStateSchema,
@@ -282,11 +284,47 @@ export function newGameWorld(
   return applied.world;
 }
 
+/** 装着、没坏的第一件加速义体；cost 是再开一次扣多少人性 */
+export function sandevistanOf(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+): {
+  readonly id: string;
+  readonly name: string;
+  readonly slots: number;
+  readonly cost: number;
+} | null {
+  const parts = cyberwareCatalog(data);
+  const broken = HealthStateSchema.parse(world.slices.health).brokenChrome;
+  const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  for (const c of state.installed) {
+    const def = parts.get(c.id);
+    if (!def?.accelerator || broken.includes(c.id)) continue;
+    const last = state.boost;
+    const cost = last && world.time - last.lastAt <= BOOST_WINDOW ? last.count + 1 : 1;
+    return { id: def.id, name: def.name, slots: BOOST_SLOTS[def.rarity], cost };
+  }
+  return null;
+}
+
+/** 这一轮能不能开斯安威斯坦；能开时返回 null，否则返回原因 */
+export function sandevistanBlock(
+  world: WorldState,
+  records: readonly LogRecord[],
+  data: Readonly<Record<string, unknown>>,
+): string | null {
+  if (currentOffers(records).turn?.clutch !== true) {
+    return "现在不是生死瞬间：主持人标记了 clutch 才能开斯安威斯坦";
+  }
+  return sandevistanOf(world, data) ? null : "没装能用的加速义体";
+}
+
 /** 义体的属性加成，例如“反应 +2”；没有时是空字符串 */
 function bonusText(def: CyberwareDef): string {
   return [
     ...Object.entries(def.attributes).map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`),
     ...(def.armor ? ["受伤降一档"] : []),
+    ...(def.accelerator ? [`斯安威斯坦时刻 ${BOOST_SLOTS[def.rarity]} 个动作格`] : []),
   ].join("、");
 }
 
@@ -492,6 +530,8 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
       source: choice.source ?? null,
     })),
     checks,
+    /** 主持人标记了生死瞬间：这一轮可以开斯安威斯坦 */
+    clutch: offers.turn?.clutch === true,
     /** 已经掷过骰的检定 id；这时只能确认它 */
     rolled: offers.rolled?.offer.id ?? null,
   };
@@ -821,6 +861,8 @@ export function projectState(
         overdue: d.due <= world.time,
       })),
     offers: projectOffers(world, records),
+    /** 能用的加速义体；没装或打坏了是 null */
+    sandevistan: sandevistanOf(world, data),
     totalTurns: turns.length,
     turns: turns.slice(-VIEW_TURNS).map((t) => ({
       seq: t.seq,

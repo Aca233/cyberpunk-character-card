@@ -67,6 +67,8 @@ export interface GmTurn {
   readonly patches: readonly Patch[];
   readonly modules: readonly string[];
   readonly pin: boolean;
+  /** 生死瞬间：下一轮可以开斯安威斯坦 */
+  readonly clutch: boolean;
   /** 主持人判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
   readonly ooc: boolean;
   readonly usage: LlmUsage | undefined;
@@ -394,6 +396,11 @@ export async function runGmTurn(
       .map((c) => [c.slot, { id: c.id, name: parts.get(c.id)?.name ?? c.id }]),
   );
   if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
+  // 开了斯安威斯坦：先扣人性再结算；能不能开（clutch、义体能用）由后端在调模型前拦下
+  if (plan.kind === "action" && plan.input.sandevistan === true && !ooc) {
+    const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
+    if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
+  }
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
   const applied = registry.applyCommands(world, commands, applyCtx);
   const accepted: Command[] = [];
@@ -429,6 +436,7 @@ export async function runGmTurn(
       patches: ooc ? applied.patches : [...applied.patches, ...settled.patches],
       modules: prompt.modules,
       pin: !ooc && shape.pin === true,
+      clutch: !ooc && shape.clutch === true,
       ooc,
       usage,
       repairs: b.repairs,

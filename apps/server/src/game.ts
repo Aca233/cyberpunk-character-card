@@ -37,6 +37,7 @@ import {
   rolledFrom,
   runGmTurn,
   type SaveMeta,
+  sandevistanBlock,
   saveCharacter,
   sceneStartSeq,
   serializeRecord,
@@ -262,6 +263,10 @@ export class GameService {
       }
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
+      }
+      if (request.input.sandevistan) {
+        const blocked = sandevistanBlock(world, records, gameData);
+        if (blocked) return { status: 409, body: { error: blocked, version } };
       }
       const unavailable = await this.llmUnavailable();
       if (unavailable) return unavailable;
@@ -596,6 +601,7 @@ export class GameService {
         ...(turn.read !== undefined ? { read: turn.read } : {}),
         ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),
         ...(turn.voices.length > 0 ? { voices: [...turn.voices] } : {}),
+        ...(turn.clutch ? { clutch: true } : {}),
         ...(turn.check !== undefined ? { check: turn.check } : {}),
         ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
         ...(turn.ooc ? { ooc: true } : {}),

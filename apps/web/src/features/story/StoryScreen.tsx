@@ -413,6 +413,7 @@ export function StoryScreen() {
             }
             draft={story.draft}
             onDraft={story.setDraft}
+            boost={offers?.clutch && view.sandevistan ? view.sandevistan : undefined}
             onSend={send}
             onStop={() => void story.stop()}
           />

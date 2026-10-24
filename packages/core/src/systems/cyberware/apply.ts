@@ -3,6 +3,7 @@ import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
 import { HUMANITY_MAX } from "../humanity";
 import {
+  BOOST_WINDOW,
   CyberwareCatalogSchema,
   type CyberwareCommand,
   type CyberwareDef,
@@ -201,6 +202,29 @@ export function remove(
       bonusCommand(draft, catalog),
       { type: "health.limb", action: "clear", id },
     ],
+  };
+}
+
+/** 生死瞬间开加速义体：上一次开过后一小时内再开算连续使用，人性代价按连续次数递增 */
+export function applyBoost(
+  draft: Draft<CyberwareState>,
+  id: string,
+  catalog: ReadonlyMap<string, CyberwareDef>,
+  now: number,
+  broken: readonly string[],
+): ApplyOutcome {
+  const def = catalog.get(id);
+  if (!def?.accelerator) return { ok: false, reason: `${def?.name ?? id}不是加速义体` };
+  if (!draft.installed.some((c) => c.id === id))
+    return { ok: false, reason: `没有装着${def.name}` };
+  if (broken.includes(id)) return { ok: false, reason: `${def.name}打坏了，修好前开不了` };
+  const last = draft.boost;
+  const count = last && now - last.lastAt <= BOOST_WINDOW ? last.count + 1 : 1;
+  draft.boost = { count, lastAt: now };
+  return {
+    ok: true,
+    notes: [`开了${def.name}${count > 1 ? `（连续第 ${count} 次）` : ""}`],
+    emit: [{ type: "humanity", delta: -count, reason: `开${def.name}` }],
   };
 }
 

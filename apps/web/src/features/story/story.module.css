@@ -1485,3 +1485,15 @@
   color: var(--cp-red);
   font-size: 0.85rem;
 }
+
+/* 斯安威斯坦时刻：输入栏变青 */
+.inputBar[data-boost] {
+  box-shadow:
+    0 0 0 1px var(--cp-cyan),
+    0 0 24px color-mix(in srgb, var(--cp-cyan) 35%, transparent);
+}
+
+.inputBar[data-boost] .textarea {
+  border-color: var(--cp-cyan);
+  color: var(--cp-cyan);
+}

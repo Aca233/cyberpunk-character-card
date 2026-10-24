@@ -175,6 +175,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     ability: "斯安威斯坦：几秒钟里周围的一切慢下来，只有你照常行动，开放“斯安威斯坦时刻”",
     checks: ["reflexes"],
+    accelerator: true,
   },
   {
     id: "dynalar-sandevistan",
@@ -185,6 +186,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 10,
     ability: "更强的斯安威斯坦：慢下来的时间更长，“斯安威斯坦时刻”能多做一件事",
     checks: ["reflexes"],
+    accelerator: true,
   },
   {
     id: "moore-berserk",

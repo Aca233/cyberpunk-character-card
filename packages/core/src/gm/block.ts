@@ -66,6 +66,10 @@ export const BlockDocSchema = z.object({
     .optional()
     .describe(`内心声音，只在关键时刻写，最多 ${MAX_VOICES} 条；平常不写`),
   direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
+  clutch: z
+    .boolean()
+    .optional()
+    .describe("生死瞬间写 true：下一轮玩家可以开斯安威斯坦；一场战斗最多一两次"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
   ooc: z
@@ -82,6 +86,7 @@ const BlockShapeSchema = z.object({
   changes: z.array(z.unknown()).optional(),
   voices: z.array(z.unknown()).optional().catch(undefined),
   direct: z.boolean().optional().catch(undefined),
+  clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   pin: z.boolean().optional().catch(undefined),
   ooc: z.boolean().optional().catch(undefined),

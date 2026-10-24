@@ -1,8 +1,11 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
-import { applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
+import type { HealthState } from "../health";
+import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
 import { cyberwareRules } from "./prompt";
 import {
+  type BoostCommand,
+  BoostCommandSchema,
   type CyberwareCommand,
   CyberwareCommandSchema,
   type CyberwareState,
@@ -17,20 +20,25 @@ import {
 export const cyberware = defineSystem<
   CyberwareState,
   CyberwareCommand,
-  InstallCyberware | RipperdocDebtCommand
+  InstallCyberware | RipperdocDebtCommand | BoostCommand
 >({
   id: "cyberware",
   dependsOn: ["economy", "humanity", "character", "world", "health"],
   state: CyberwareStateSchema,
-  initial: () => ({ installed: [], settled: [], debts: [] }),
+  initial: () => ({ installed: [], settled: [], debts: [], boost: null }),
   commands: { cyberware: CyberwareCommandSchema },
   internal: {
     "cyberware.install": InstallCyberwareSchema,
     "cyberware.debt": RipperdocDebtCommandSchema,
+    "cyberware.boost": BoostCommandSchema,
   },
   apply(draft, command, ctx) {
     const catalog = cyberwareCatalog(ctx.data);
     if (command.type === "cyberware.debt") return applyDebt(draft, command, ctx.now);
+    if (command.type === "cyberware.boost") {
+      const broken = ctx.read<HealthState>("health").brokenChrome;
+      return applyBoost(draft, command.id, catalog, ctx.now, broken);
+    }
     return command.type === "cyberware.install"
       ? install(draft, command.id, catalog, ctx.now)
       : applyCyberware(draft, command, catalog, ctx.now, ctx.read<EconomyState>("economy").eddies);

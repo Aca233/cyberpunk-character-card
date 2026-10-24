@@ -49,6 +49,8 @@ export const CyberwareDefSchema = z.object({
   attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
   /** 护甲义体：受到的伤害降一档；装着几件护甲也只降一档 */
   armor: z.boolean().default(false),
+  /** 加速义体（斯安威斯坦）：生死瞬间可以开，一段输入塞进几个动作 */
+  accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
   iconic: z.boolean().default(false),
 });
@@ -84,6 +86,17 @@ export const REPAIR_RATE = 0.3;
 /** 赊账几天内还清 */
 export const DEBT_DAYS = 7;
 
+/** 斯安威斯坦时刻一次能塞进几个动作，按义体稀有度 */
+export const BOOST_SLOTS: Readonly<Record<z.infer<typeof RaritySchema>, number>> = {
+  common: 2,
+  uncommon: 3,
+  rare: 3,
+  epic: 4,
+  legendary: 5,
+};
+/** 上一次开加速义体之后多少分钟内再开算连续使用，人性代价递增 */
+export const BOOST_WINDOW = 60;
+
 /** 欠义体医生的钱：一位医生同时只赊一笔，期限记在“期限与伏笔”里 */
 export const RipperdocDebtSchema = z.object({
   doc: z.string().min(1),
@@ -109,6 +122,11 @@ export const CyberwareStateSchema = z.object({
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()).default([]),
   debts: z.array(RipperdocDebtSchema).default([]),
+  /** 最近一次开加速义体：连续第几次、什么时候；旧存档没有 */
+  boost: z
+    .object({ count: z.number().int().min(1), lastAt: z.number().int() })
+    .nullable()
+    .default(null),
 });
 export type CyberwareState = z.infer<typeof CyberwareStateSchema>;
 
@@ -148,3 +166,10 @@ export const RipperdocDebtCommandSchema = z.object({
   item: z.string().min(1).optional(),
 });
 export type RipperdocDebtCommand = z.infer<typeof RipperdocDebtCommandSchema>;
+
+/** 只能由代码发出：生死瞬间玩家开了加速义体，扣人性（连续使用递增） */
+export const BoostCommandSchema = z.object({
+  type: z.literal("cyberware.boost"),
+  id: z.string().min(1),
+});
+export type BoostCommand = z.infer<typeof BoostCommandSchema>;

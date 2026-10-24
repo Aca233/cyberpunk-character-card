@@ -16,6 +16,7 @@ export function InputBar({
   onDraft,
   onSend,
   onStop,
+  boost,
 }: {
   readonly busy: boolean;
   readonly streaming: boolean;
@@ -25,11 +26,16 @@ export function InputBar({
   readonly onDraft: (draft: Partial<TurnInput>) => void;
   readonly onSend: (input: TurnInput) => void;
   readonly onStop: () => void;
+  /** 生死瞬间、装着能用的加速义体时才有：可以开斯安威斯坦 */
+  readonly boost?:
+    | { readonly name: string; readonly slots: number; readonly cost: number }
+    | undefined;
 }) {
   const area = useRef<HTMLTextAreaElement>(null);
   const text = draft.text.trim();
   const tooLong = text.length > MAX;
   const canSend = !busy && !disabled && text !== "" && !tooLong;
+  const boosting = boost !== undefined && draft.sandevistan === true;
 
   // 改写检定时文字被放进输入框：把焦点也放过去
   const last = useRef(draft.text);
@@ -45,12 +51,13 @@ export function InputBar({
   }, [draft.text]);
 
   const send = () => {
-    if (canSend) onSend({ text });
+    if (canSend) onSend(boosting ? { text, sandevistan: true } : { text });
   };
 
   return (
     <form
       className={styles.inputBar}
+      data-boost={boosting || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         send();
@@ -63,7 +70,11 @@ export function InputBar({
           rows={2}
           value={draft.text}
           disabled={disabled}
-          placeholder="你要做什么、说什么？"
+          placeholder={
+            boosting
+              ? `时间慢下来了：这一瞬间要做的事（最多 ${boost?.slots} 件）`
+              : "你要做什么、说什么？"
+          }
           aria-label="你的行动"
           aria-describedby="story-input-hint"
           onChange={(e) => onDraft({ text: e.target.value })}
@@ -74,6 +85,11 @@ export function InputBar({
             }
           }}
         />
+        {boost && !streaming && (
+          <Button disabled={busy || disabled} onClick={() => onDraft({ sandevistan: !boosting })}>
+            {boosting ? "关掉义体" : `开${boost.name}`}
+          </Button>
+        )}
         {streaming ? (
           <Button onClick={onStop}>停止生成</Button>
         ) : (
@@ -94,7 +110,11 @@ export function InputBar({
         </p>
       ) : (
         <span id="story-input-hint" className={styles.hint}>
-          {disabled && reason ? reason : HINT}
+          {disabled && reason
+            ? reason
+            : boosting
+              ? `斯安威斯坦开着：最多 ${boost?.slots} 个动作，不确定的部分合并成一次掷骰，人性 −${boost?.cost}`
+              : HINT}
         </span>
       )}
     </form>

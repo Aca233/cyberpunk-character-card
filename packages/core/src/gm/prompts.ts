@@ -119,6 +119,7 @@ const CORE = `你在《赛博朋克 2077》世界观下和玩家一起做角色�
 【专属选项和内心声音】
 - 角色的出身、过往、义体或本事让某条路只有他走得通时，在选项里写 source 标出来源，例如“过往：荒坂前员工”“义体：螳螂刀”“出身：流浪者”；义体来源必须是【当前状态】里装着的；角色有主板时，出身、过往、本事来源写主板上的模块名。不用每轮都有。
 - 关键时刻（艰难的决定、触动过往的东西、义体在逼你、人性在动摇）可以写 0–2 条 voices：一句脑子里冒出来的念头，不超过 30 字，不替角色做决定。past 是过往和出身的回响，chrome 是义体冷冰冰的建议（没装义体时不写），humanity 是残存的良心和情感，iconic 是武器栏里不朽武器的回响（照【当前状态】里写的口吻，武器栏里没有时不写）。人性越低，chrome 越多、越冷，humanity 越少。平常的轮次不写。
+- 生死瞬间（子弹出膛、刀到眼前、车要撞上）可以在指令块写 "clutch": true：下一轮玩家装着能用的加速义体时可以开斯安威斯坦，把几个动作塞进这一瞬间。一场战斗最多一两次，平常不写。
 
 【写作】
 - 每轮 100–350 字，等检定的那一轮更短；以对话为主，停在 NPC 说完话、或需要玩家接话的地方。
@@ -267,6 +268,11 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}${c.broken ? "，打坏了，修好前用不了" : c.bonusText ? `，${c.bonusText}` : ""}）`).join("、")}`,
     );
+  if (view.sandevistan) {
+    lines.push(
+      `加速义体：${view.sandevistan.name}，斯安威斯坦时刻最多 ${view.sandevistan.slots} 个动作，再开一次人性 −${view.sandevistan.cost}`,
+    );
+  }
   if (view.health.lostLimbs.length > 0) {
     const ids = view.health.lostLimbs.map((l) => l.id);
     lines.push(
@@ -371,7 +377,10 @@ export function dueSection(world: WorldState): string | undefined {
 }
 
 export function formatInput(input: TurnInput): string {
-  return input.mode ? `【${MODE_LABELS[input.mode]}】${input.text}` : `【玩家】${input.text}`;
+  const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
+  return input.mode
+    ? `【${MODE_LABELS[input.mode]}】${boost}${input.text}`
+    : `【玩家】${boost}${input.text}`;
 }
 
 export function checkResultText(rolled: RolledCheck): string {
@@ -432,6 +441,12 @@ export function buildGmPrompt(
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));
+  if (plan.kind === "action" && plan.input.sandevistan === true && view.sandevistan) {
+    const { name, slots } = view.sandevistan;
+    parts.push(
+      `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序不执行，正文里写明哪几件没来得及。把这些动作写成一段连贯的慢动作；所有真正不确定的部分合并成一次 check（占这次交锋唯一的掷骰），事先写明失败时哪几个动作会落空。人性已经由代码扣过，不另写 humanity。`,
+    );
+  }
   parts.push(`（先写正文，最后附 ${STATE_OPEN} 指令块。）`);
   messages.push({ role: "user", content: parts.join("\n\n") });
   return { messages, modules: modules.map((m) => m.id) };

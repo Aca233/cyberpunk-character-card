@@ -8,6 +8,8 @@ export const TurnInputSchema = z.strictObject({
   /** 只有旧存档带；新输入不写 */
   mode: InputModeSchema.optional(),
   text: z.string().trim().min(1, "行动不能为空").max(2000, "一次最多 2000 字"),
+  /** 生死瞬间开了斯安威斯坦：这段输入写的是慢动作里的几个动作 */
+  sandevistan: z.boolean().optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 
