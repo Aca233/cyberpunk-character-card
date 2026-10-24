@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { AuthoringStore } from "./authoring";
+import { AuthoringTextSearch } from "./authoring-search";
 import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
 import { SaveStore } from "./storage";
@@ -21,6 +22,11 @@ const app = createApp({
   dev,
   evalDrafts: join(root, "tools", "evals", "drafts"),
   authoring: dev ? new AuthoringStore(join(root, "data", "drafts")) : undefined,
+  authoringText: dev
+    ? new AuthoringTextSearch(
+        process.env.CP_TEXT_DB ?? "/mnt/c/Cyberpunk 2077/_unpack/export/text/cyberpunk2077_text.db",
+      )
+    : undefined,
   log: (message) => console.error(message),
 });
 

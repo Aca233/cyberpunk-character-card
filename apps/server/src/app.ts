@@ -2,6 +2,7 @@ import { glossary } from "@cp/content";
 import type { Clock, Rng } from "@cp/core";
 import { Hono } from "hono";
 import type { AuthoringStore } from "./authoring";
+import type { AuthoringTextSearch } from "./authoring-search";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
@@ -29,6 +30,7 @@ export interface AppDeps {
   readonly evalDrafts?: string | undefined;
   /** 本机内容工坊；非开发模式即使传入也不挂载接口。 */
   readonly authoring?: AuthoringStore | undefined;
+  readonly authoringText?: AuthoringTextSearch | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -93,7 +95,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
   app.route("/api/saves", saveRoutes(game, hub));
   if (deps.dev && deps.authoring) {
-    app.route("/api/dev/authoring", authoringRoutes(deps.authoring, clock));
+    app.route("/api/dev/authoring", authoringRoutes(deps.authoring, clock, deps.authoringText));
   }
   return app;
 }

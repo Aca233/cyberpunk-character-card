@@ -4,11 +4,15 @@ import {
   AuthoringInputSchema,
   type Clock,
   NPC_REVIEW_ITEMS,
+  type OfficialTextResult,
+  TextSearchRequestSchema,
+  TextSourceRequestSchema,
   validateAuthoringContent,
 } from "@cp/core";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { AuthoringError, type AuthoringStore } from "../authoring";
+import { type AuthoringTextSearch, OfficialTextError } from "../authoring-search";
 
 const UpdateSchema = z.strictObject({
   revision: z.number().int().min(1),
@@ -59,8 +63,50 @@ async function draftResponse(
 }
 
 /** 只由 createApp 在开发模式下挂载；尚不包含生成、发布或源码写入接口。 */
-export function authoringRoutes(store: AuthoringStore, clock: Clock): Hono {
+function textResponse(c: Context, operation: () => OfficialTextResult) {
+  try {
+    return c.json(operation());
+  } catch (error) {
+    if (error instanceof OfficialTextError) return c.json({ error: error.message }, 503);
+    throw error;
+  }
+}
+
+export function authoringRoutes(
+  store: AuthoringStore,
+  clock: Clock,
+  text?: AuthoringTextSearch,
+): Hono {
   const app = new Hono();
+
+  app.get("/text/search", (c) => {
+    const input = TextSearchRequestSchema.safeParse(c.req.query());
+    if (!input.success)
+      return c.json({ error: "检索参数不合法：关键词 2–80 字，最多返回 20 条" }, 400);
+    if (!text)
+      return c.json({
+        available: false,
+        mode: input.data.mode,
+        hits: [],
+        hasMore: false,
+        note: "本机尚未配置官方文本检索，可以继续手工填写来源",
+      });
+    return textResponse(c, () => text.search(input.data));
+  });
+
+  app.get("/text/source", (c) => {
+    const input = TextSourceRequestSchema.safeParse(c.req.query());
+    if (!input.success) return c.json({ error: "来源键不合法" }, 400);
+    if (!text)
+      return c.json({
+        available: false,
+        mode: "source",
+        hits: [],
+        hasMore: false,
+        note: "本机尚未配置官方文本检索",
+      });
+    return textResponse(c, () => text.source(input.data.key));
+  });
 
   app.get("/types", (c) => c.json({ kinds: AUTHORING_LABELS, npcChecklist: NPC_REVIEW_ITEMS }));
 
