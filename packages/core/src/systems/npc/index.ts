@@ -2,7 +2,9 @@ import { defineSystem } from "../../kernel/system";
 import { applyNpc, seedNpc } from "./apply";
 import { npcRules } from "./prompt";
 import {
+  AffinityProposalSchema,
   AffinitySchema,
+  legacyAffinity,
   MeetSchema,
   MemorySchema,
   NewNpcSchema,
@@ -26,6 +28,7 @@ export const npc = defineSystem<NpcState, NpcCommand, SeedNpc>({
     memory: MemorySchema,
     npcDeath: NpcDeathSchema,
   },
+  proposals: { affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity } },
   internal: { "npc.seed": SeedNpcSchema },
   apply(draft, command, ctx) {
     return command.type === "npc.seed"

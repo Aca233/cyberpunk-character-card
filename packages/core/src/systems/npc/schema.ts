@@ -90,9 +90,58 @@ export const AffinitySchema = z
     reason: z.string().trim().min(1).max(80),
   })
   .describe(
-    `好感变化：小事 ±1 至 ±3，帮了大忙或伤了感情 ±5 至 ±${AFFINITY_STEP_CAP}；单条最多 ±${AFFINITY_STEP_CAP}，范围 ${AFFINITY_MIN} 到 ${AFFINITY_MAX}，代码截断`,
+    `好感变化（结算用；模型写的是方向和大小，见 AffinityProposalSchema）；单条最多 ±${AFFINITY_STEP_CAP}，范围 ${AFFINITY_MIN} 到 ${AFFINITY_MAX}，代码截断`,
   );
 export type Affinity = z.infer<typeof AffinitySchema>;
+
+/** 好感的大小档：小事、帮了忙或伤了感情、救命之恩或背叛；换算表只在这里写一份（暂定，试玩时调） */
+export const AFFINITY_SIZES = { small: 2, medium: 5, large: 10 } as const;
+export type AffinitySize = keyof typeof AFFINITY_SIZES;
+const AFFINITY_SIZE_LABELS: Readonly<Record<AffinitySize, string>> = {
+  small: "小",
+  medium: "中",
+  large: "大",
+};
+
+/** 模型写的好感：只选方向和大小，代码按 AFFINITY_SIZES 换成数字 */
+export const AffinityProposalSchema = z
+  .object({
+    type: z.literal("affinity"),
+    id: NpcIdSchema,
+    dir: z.enum(["up", "down"]).describe("up 态度变好，down 变差"),
+    size: z
+      .enum(["small", "medium", "large"])
+      .describe("small 小事（一句好话、一点冒犯），medium 帮了忙或伤了感情，large 救命之恩或背叛"),
+    reason: z.string().trim().min(1).max(80),
+  })
+  .describe("好感变化：只选方向和大小，不写数字，代码换算并截断")
+  .transform(
+    ({ dir, size, ...rest }): Affinity => ({
+      ...rest,
+      delta: (dir === "up" ? 1 : -1) * AFFINITY_SIZES[size],
+    }),
+  );
+
+/** 模型仍写了数字好感时：换成最近的大小档（一样近取小的），方向看正负 */
+export function legacyAffinity(
+  raw: Readonly<Record<string, unknown>>,
+): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
+  if (!("delta" in raw)) return undefined;
+  const { delta, ...rest } = raw;
+  if (rest.dir !== undefined && rest.size !== undefined) {
+    return { value: rest, note: "好感写了数字，按写的方向和大小处理，数字不用" };
+  }
+  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) return undefined;
+  const abs = Math.abs(delta);
+  const sizes = Object.entries(AFFINITY_SIZES) as [AffinitySize, number][];
+  const [size] = sizes.reduce((best, cur) =>
+    Math.abs(cur[1] - abs) < Math.abs(best[1] - abs) ? cur : best,
+  );
+  return {
+    value: { ...rest, dir: delta > 0 ? "up" : "down", size },
+    note: `好感写了数字，已按最近的档位（${AFFINITY_SIZE_LABELS[size]}）处理`,
+  };
+}
 
 export const MemorySchema = z
   .object({

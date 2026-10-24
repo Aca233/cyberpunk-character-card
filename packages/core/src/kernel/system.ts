@@ -76,6 +76,22 @@ type CommandSchemas<C extends Command> = {
   readonly [K in C["type"]]: z.ZodType<Extract<C, { type: K }>>;
 };
 
+/**
+ * 模型提议的格式和结算用的指令不一样时（模型选档位、代码换成数字）：
+ * schema 只用来给模型写格式说明和校验，校验后输出结算用的指令；
+ * legacy 把模型仍按旧格式写的数字换成档位，返回换过的对象和一句提示，不认得时返回 undefined
+ */
+export interface CommandProposal<C extends Command = Command> {
+  readonly schema: z.ZodType<C>;
+  legacy?(
+    raw: Readonly<Record<string, unknown>>,
+  ): { readonly value: Record<string, unknown>; readonly note: string } | undefined;
+}
+
+type CommandProposals<C extends Command> = {
+  readonly [K in C["type"]]?: CommandProposal<Extract<C, { type: K }>>;
+};
+
 export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly id: string;
   /** 可以读取状态、发出指令的其他系统；同时决定结算顺序 */
@@ -86,6 +102,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly commands: CommandSchemas<C>;
   /** 只能由代码发出的指令：建档、回合流程，或依赖这个系统的其他系统 */
   readonly internal?: CommandSchemas<I>;
+  /** 模型提议的格式，只给 commands 里的指令写；没写的指令模型直接写结算格式 */
+  readonly proposals?: CommandProposals<C>;
   /** 在草稿上结算一条指令；返回 ok: false 时这条指令整体不生效 */
   apply(draft: Draft<S>, command: C | I, ctx: SystemContext): ApplyOutcome;
   /** 信号处理：只改自己的状态，不能失败 */
@@ -139,6 +157,8 @@ export interface Registry {
   commandTypes(): readonly string[];
   /** 模型可以使用的指令的 schema，用来生成格式说明和单条修复 */
   commandSchema(type: string): z.ZodType<Command> | undefined;
+  /** 模型仍按旧的数字格式写时换成档位；不用换时原样返回，note 为 undefined */
+  normalizeProposal(raw: unknown): { readonly value: unknown; readonly note: string | undefined };
   /** 所有规则模块，按系统顺序排好；顺序固定，状态不变时提示词前缀不变 */
   readonly rules: readonly RuleModule[];
   /** 这一轮要带的规则模块 */
@@ -163,6 +183,7 @@ interface Owner {
   readonly system: AnySystem;
   readonly schema: z.ZodType<Command>;
   readonly internal: boolean;
+  readonly proposal: CommandProposal | undefined;
 }
 
 const MAX_CHAIN = 8;
@@ -183,7 +204,15 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
             `指令类型 ${type} 同时由 ${existing.system.id} 和 ${system.id} 注册`,
           );
         }
-        owners.set(type, { system, schema, internal });
+        const proposal = internal
+          ? undefined
+          : (system.proposals as Record<string, CommandProposal> | undefined)?.[type];
+        owners.set(type, { system, schema, internal, proposal });
+      }
+    }
+    for (const type of Object.keys(system.proposals ?? {})) {
+      if (!(type in system.commands)) {
+        throw new RegistryError(`${system.id} 的提议格式 ${type} 不是它的模型可用指令`);
       }
     }
   }
@@ -307,7 +336,16 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     commandTypes: () => [...owners].filter(([, o]) => !o.internal).map(([type]) => type),
     commandSchema(type) {
       const owner = owners.get(type);
-      return owner && !owner.internal ? owner.schema : undefined;
+      return owner && !owner.internal ? (owner.proposal?.schema ?? owner.schema) : undefined;
+    },
+    normalizeProposal(raw) {
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        return { value: raw, note: undefined };
+      }
+      const type = (raw as { type?: unknown }).type;
+      const owner = typeof type === "string" ? owners.get(type) : undefined;
+      const legacy = owner?.proposal?.legacy?.(raw as Record<string, unknown>);
+      return legacy ? legacy : { value: raw, note: undefined };
     },
     rules: rules.map((r) => r.module),
     activeRules: (world, input) =>

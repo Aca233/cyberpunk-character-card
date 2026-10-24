@@ -673,15 +673,18 @@ export async function runNarratorTurn(
       );
       continue;
     }
-    const command = await b.validate(where, item, schema);
+    // 模型仍写数字时先换成档位；校验后得到结算用的指令，之后核对和结算都按结算格式读
+    const legacy = registry.normalizeProposal(item);
+    if (legacy.note !== undefined) noteOnce(b.notes, legacy.note);
+    const command = await b.validate(where, legacy.value, schema);
     if (!command) continue;
     proposals.push({
       where,
       kind: "change",
       value: command as Record<string, unknown>,
       parse: (v) => {
-        const parsed = schema.safeParse(v);
-        return parsed.success ? parsed.data : undefined;
+        const parsed = registry.parseCommand(v);
+        return parsed.ok ? parsed.command : undefined;
       },
     });
   }
