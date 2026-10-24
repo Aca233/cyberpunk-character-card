@@ -526,8 +526,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "legendary",
     iconic: true,
-    ability: "丽贝卡的改装霰弹枪，一枪能把人轰飞好几米",
-    voice: "像丽贝卡在耳边嚷嚷：嘴快、暴躁、护短，劝你先开枪再说",
+    ability: "丽贝卡留下的改装霰弹枪（她死在《边缘行者》的结局里），一枪能把人轰飞好几米",
+    voice: "像丽贝卡还在耳边嚷嚷：嘴快、暴躁、护短，劝你先开枪再说",
     source: `${W}Ranged-Preset_Carnage_Edgerunners`,
   },
   {

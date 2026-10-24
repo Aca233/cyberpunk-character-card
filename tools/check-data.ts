@@ -9,6 +9,7 @@ import {
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
   fixers,
+  gameContent,
   glossary,
   items,
   jobTemplates,
@@ -194,6 +195,18 @@ for (const o of openings) {
       errors.push(`开场 ${o.id} 的委托 ${j.id}：风险星级 ${j.risk} 不在 1–5`);
   }
 }
+const castIds = new Set<string>([
+  ...(npcs as readonly { id: string }[]).map((n) => n.id),
+  ...fixers.map((f) => f.id),
+]);
+for (const o of openings) {
+  if (o.cast) refs(`开场 ${o.id} 的 cast`, o.cast, castIds, "人物卡或中间人");
+  for (const j of o.jobs ?? []) {
+    if (o.cast && j.fixer && !o.cast.includes(j.fixer))
+      errors.push(`开场 ${o.id} 的委托 ${j.id}：中间人 ${j.fixer} 不在这个开场的 cast 里`);
+  }
+}
+refs("defaultCast", gameContent.defaultCast ?? [], castIds, "人物卡或中间人");
 for (const t of jobTemplates) refs(`委托模板 ${t.kind}`, t.twists, twistIds, "转折");
 refs(
   "生命路径",

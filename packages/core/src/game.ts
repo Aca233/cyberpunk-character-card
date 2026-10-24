@@ -99,6 +99,8 @@ export interface GameContent {
   readonly openings?: readonly GameOpening[];
   /** 按出身和经历发的开局行装；存档的 meta.loadouts 记着发了哪几套 */
   readonly loadouts?: readonly Loadout[];
+  /** 开场没写 cast 时种哪些人物卡和中间人（旧存档）；都没写就全种 */
+  readonly defaultCast?: readonly string[];
 }
 
 /** 开场：从哪里开始、身上带什么、眼下有什么活 */
@@ -129,6 +131,8 @@ export interface GameOpening {
   readonly cyberware?: readonly string[];
   /** 开局就接下的委托，期限从开场时间往后算 */
   readonly jobs?: readonly OpeningJob[];
+  /** 这个开场种哪些人物卡和中间人（id）；没写就用内容包的 defaultCast */
+  readonly cast?: readonly string[];
 }
 
 /** 开局行装：按出身发一整套，再按经历补几样；有行装的存档不再用开场自带的装备、欧元和义体 */
@@ -242,6 +246,9 @@ export function newGameWorld(
     if (!found) throw new Error(`内容包里没有开局行装 ${id}`);
     return found;
   });
+  const castIds = opening?.cast ?? content.defaultCast;
+  const inCast = (id: string) => castIds === undefined || castIds.includes(id);
+  const cast = (content.npcs ?? []).filter((c) => inCast(c.id));
   const base = registry.initialWorld(meta.startTime);
   const clock = WorldClockStateSchema.parse(base.slices.world);
   const world: WorldState = {
@@ -265,11 +272,13 @@ export function newGameWorld(
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     // 耐受要在装任何义体之前写进去，人性消耗才按它折算
     ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
-    ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
+    ...cast.map((card) => ({ type: "npc.seed", ...card })),
     ...(meta.board?.people ?? [])
-      .filter((p) => !(content.npcs ?? []).some((c) => c.id === p.id || c.name === p.name))
+      .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
       .map((p) => ({ type: "npc.seed", ...p })),
-    ...(content.fixers ?? []).map((f) => ({ type: "jobs.seedFixer", ...f })),
+    ...(content.fixers ?? [])
+      .filter((f) => inCast(f.id))
+      .map((f) => ({ type: "jobs.seedFixer", ...f })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
   ];

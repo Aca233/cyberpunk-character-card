@@ -35,6 +35,8 @@ export const gameContent: GameContent = {
   locations,
   openings,
   loadouts,
+  // 没有开场的旧存档种的人
+  defaultCast: ["rebecca", "maine", "faraday"],
 };
 
 /** 结算时传给各系统的静态数据表 */

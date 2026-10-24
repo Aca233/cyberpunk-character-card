@@ -2,4 +2,8 @@
 export const fixers: readonly {
   readonly id: string;
   readonly name: string;
-}[] = [{ id: "faraday", name: "法拉第" }];
+}[] = [
+  // 法拉第在原剧第 10 集死了：只给旧存档和以后的 2075 剧本用
+  { id: "faraday", name: "法拉第" },
+  { id: "regina", name: "瑞吉娜·琼斯" },
+];
