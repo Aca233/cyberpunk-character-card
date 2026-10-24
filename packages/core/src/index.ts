@@ -24,4 +24,5 @@ export * as inventoryRules from "./systems/inventory";
 export * as jobsRules from "./systems/jobs";
 export * as npcRules from "./systems/npc";
 export { registry, systems } from "./systems/registry";
+export * as stealthRules from "./systems/stealth";
 export * as worldRules from "./systems/world";

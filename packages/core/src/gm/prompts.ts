@@ -325,6 +325,11 @@ export function stateSummary(view: PlayerView): string {
     if (a.dyingMomentsLeft !== null)
       lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 次交锋内要被救回`);
   }
+  if (view.stealth.level > 0) {
+    lines.push(
+      `潜入警戒：${view.stealth.level}/3 ${view.stealth.label}${view.stealth.lowered ? "，这个场景已经降过一档" : ""}`,
+    );
+  }
   for (const d of view.deadlines) {
     lines.push(
       `期限 ${d.id}：${d.label}，${d.due}${d.overdue ? "（已到期，见【到期事件】）" : ""}`,

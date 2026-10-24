@@ -11,6 +11,7 @@ export const FALLOUT_KINDS = [
   "humanity",
   "fight",
   "job",
+  "alert",
 ] as const;
 export const FalloutKindSchema = z.enum(FALLOUT_KINDS);
 export type FalloutKind = z.infer<typeof FalloutKindSchema>;
@@ -25,6 +26,7 @@ export const FALLOUT_LABELS: Readonly<Record<FalloutKind, string>> = {
   humanity: "人性受损",
   fight: "打起来",
   job: "委托黄了",
+  alert: "被察觉",
 };
 
 /** 记最近这么多次后果 */

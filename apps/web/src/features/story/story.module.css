@@ -1497,3 +1497,21 @@
   border-color: var(--cp-cyan);
   color: var(--cp-cyan);
 }
+
+/* 潜入警戒：起疑黄、搜索橙、交战红 */
+.alert {
+  align-self: center;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  color: #f2d53c;
+}
+
+.alert[data-level="2"] {
+  color: #ff8a3d;
+}
+
+.alert[data-level="3"] {
+  color: var(--cp-red);
+}

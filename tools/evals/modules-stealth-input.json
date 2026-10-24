@@ -1,0 +1,25 @@
+{
+  "id": "modules-stealth-input",
+  "title": "要潜入时带潜入警戒模块",
+  "tags": ["modules"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "去漩涡帮的仓库外面看看" },
+        "text": "仓库外的铁丝网锈得发红。门口两个漩涡帮的人在抽烟，侧面的卸货口半开着，一盏探照灯来回扫。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "等探照灯扫过去，从卸货口悄悄溜进去" },
+  "expect": {
+    "modules": {
+      "require": ["stealth"],
+      "forbid": ["combat"]
+    }
+  },
+  "rubric": [
+    "潜入失败的后果是否默认写成警戒升档，而不是扣血",
+    "正文是否没有替玩家决定溜进去之后做什么"
+  ]
+}

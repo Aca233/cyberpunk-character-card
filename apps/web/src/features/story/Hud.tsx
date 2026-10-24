@@ -69,6 +69,16 @@ export function Hud({ view }: { readonly view: View }) {
             <span className={styles.starsEmpty}>{"★".repeat(5 - view.heat.stars)}</span>
           </div>
         )}
+        {view.stealth.level > 0 && (
+          <div
+            className={styles.alert}
+            data-level={view.stealth.level}
+            role="status"
+            title={`潜入警戒 ${view.stealth.level}/3${view.stealth.lowered ? "，这个场景已经降过一档" : ""}`}
+          >
+            ◆ {view.stealth.label}
+          </div>
+        )}
         <div className={styles.weapon} title={weapon ?? "空手"}>
           {weapon === null ? (
             <Asset id="weapon.fists" tint="var(--cp-cyan)" height={28} alt="空手" />

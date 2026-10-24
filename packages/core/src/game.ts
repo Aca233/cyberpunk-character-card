@@ -66,6 +66,8 @@ import { JobsStateSchema } from "./systems/jobs/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { registry } from "./systems/registry";
+import { currentAlert } from "./systems/stealth/apply";
+import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
 import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
 
@@ -774,6 +776,11 @@ export function projectState(
       },
       last: combat.last,
     },
+    /** 当前场景的潜入警戒度 */
+    stealth: (() => {
+      const s = currentAlert(StealthStateSchema.parse(world.slices.stealth ?? {}), clock.scene);
+      return { level: s.level, label: ALERT_LABELS[s.level], peak: s.peak, lowered: s.lowered };
+    })(),
     /** 见过的人；诉求、底线和秘密只给模型看，不在这里 */
     npcs: Object.values(npcs.npcs)
       .filter((n) => n.met)

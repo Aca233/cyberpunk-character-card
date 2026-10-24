@@ -45,6 +45,9 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
       case "combat":
         if (c.action === "start") kinds.add("fight");
         break;
+      case "alert":
+        if (num(c.delta) > 0) kinds.add("alert");
+        break;
       case "jobEnd":
         if (c.outcome === "failed") kinds.add("job");
         break;

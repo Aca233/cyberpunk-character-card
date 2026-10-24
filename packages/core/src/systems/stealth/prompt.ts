@@ -1,0 +1,19 @@
+import type { RuleModule } from "../../kernel/system";
+import type { StealthState } from "./schema";
+
+/** 输入里像要潜入的说法 */
+const SNEAK =
+  /潜入|潜行|摸进|溜进|溜过|偷偷|悄悄|躲开(守卫|摄像头|巡逻)|绕过(守卫|摄像头|巡逻)|不被发现|别被发现|翻墙|从后门/;
+
+export const stealthRules: RuleModule<StealthState> = {
+  id: "stealth",
+  title: "潜入和警戒",
+  commands: ["alert"],
+  when: (state, input) => state.level > 0 || (input.mode !== "ooc" && SNEAK.test(input.text)),
+  text: `- 潜入时代码按场景记警戒度 0–3：没察觉、起疑、搜索、交战。被察觉时写 alert（delta 为正），降警戒写 delta −1。
+- 潜入掷骰失败的默认后果是 alert +1，不扣血；要扣血的风险照常在 check 的 damage 里事先写明。
+- 起疑（1）：守卫加强巡逻，相关检定在 penalties 写 −2（计入 −4 上限）。搜索（2）：出口和要道有人把守，部分路线关闭，增援在路上。交战（3）：发 combat start，第一次交锋敌人占优。
+- 降警戒：躲起来等一阵（推进时间）、处理掉起疑的人、骇掉警报；每个场景最多降一档，交战档不能再降，只能打或撤。
+- 好办法（扫描路线、穿对衣服、骇掉摄像头、天气掩护）照意图优先免检定或给加成。
+- 没被发现就完成目标，委托按 clean 结算；这个场景警戒到过搜索档，收尾时代码给热度加一星，不另写 event。`,
+};
