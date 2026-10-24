@@ -933,12 +933,14 @@ export async function runNarratorTurn(
   const unsettled = settle ? unsettledReason(b.dropped) : undefined;
 
   // ⑥ 场外推演：收场时隔了几场或半天，推演玩家没看着的地方；结果只进补丁，和本轮一起落盘撤回
+  const dead = HealthStateSchema.parse(settled.world.slices.health).condition === "dead";
   let final = settled;
   let offscreenTrace: { prompt: string; reply: string } | undefined;
   const every = deps.offscreen === undefined ? OFFSCREEN_SCENES : deps.offscreen;
   if (
     settle &&
     !inFlashback &&
+    !dead &&
     unsettled === undefined &&
     every !== null &&
     offscreenDue(world, settled.world, every)
@@ -983,6 +985,7 @@ export async function runNarratorTurn(
           closed: after.scene !== before.scene,
           flashback: inFlashback,
           unsettled: unsettled !== undefined,
+          dead,
           every,
         })
       : undefined;

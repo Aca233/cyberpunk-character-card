@@ -67,9 +67,11 @@ export function offscreenSkipReason(o: {
   readonly closed: boolean;
   readonly flashback: boolean;
   readonly unsettled: boolean;
+  readonly dead: boolean;
   readonly every: number | null;
 }): string | undefined {
   if (!o.closed) return undefined;
+  if (o.dead) return "玩家角色死了，不推演";
   if (o.flashback) return "闪回里不推演";
   if (o.unsettled) return "这一轮没结算干净，不推演";
   if (o.every === null) return "设置里关了城里的动静";
