@@ -107,6 +107,14 @@
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+/* 通缉星：原作左上角的红星，空星用 .starsEmpty */
+.wanted {
+  color: var(--cp-red);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 6px var(--cp-red);
+}
+
 .weapon {
   display: grid;
   place-items: center;
@@ -293,6 +301,10 @@
 .facts dd[data-stage="edge"],
 .facts dd[data-stage="crisis"] {
   color: var(--voice-humanity);
+}
+
+.facts dd[data-tone="bad"] {
+  color: var(--cp-red);
 }
 
 .deadlines {

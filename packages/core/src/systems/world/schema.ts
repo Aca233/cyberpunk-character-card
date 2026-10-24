@@ -122,6 +122,8 @@ export const LocationDefSchema = z.object({
   district: z.string().min(1),
   /** 给模型看的一句话 */
   note: z.string().min(1).optional(),
+  /** 大街（street）、帮派地盘（gang）还是公司产区（corp）；警方热度按这个分账 */
+  zone: z.enum(["street", "gang", "corp"]).default("street"),
 });
 export type LocationDef = z.infer<typeof LocationDefSchema>;
 

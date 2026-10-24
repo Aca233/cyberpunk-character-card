@@ -4,6 +4,7 @@ import { DIFFICULTY_LABELS } from "../../labels";
 import { Asset } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Panel } from "../../ui/Panel";
+import { countdown } from "./Journal";
 import styles from "./story.module.css";
 import { districtIcon, locationLabel, type View } from "./view";
 
@@ -56,6 +57,16 @@ export function Hud({ view }: { readonly view: View }) {
             {health.condition !== "up" && ` · ${health.conditionLabel}`}
           </span>
         </div>
+        {view.heat.stars > 0 && (
+          <div
+            className={styles.wanted}
+            role="status"
+            title={`警方热度 ${view.heat.stars} 星${view.heat.lastSeen ? `，最后一次被看见：${view.heat.lastSeen}` : ""}`}
+          >
+            {"★".repeat(view.heat.stars)}
+            <span className={styles.starsEmpty}>{"★".repeat(5 - view.heat.stars)}</span>
+          </div>
+        )}
         <div className={styles.weapon} title={weapon ?? "空手"}>
           {weapon === null ? (
             <Asset id="weapon.fists" tint="var(--cp-cyan)" height={28} alt="空手" />
@@ -170,6 +181,17 @@ export function SidePanel({
           </dd>
           <dt>欧元</dt>
           <dd>{view.money.eddies.toLocaleString("en-US")}</dd>
+          <dt>警方热度</dt>
+          <dd
+            data-tone={view.heat.stars >= 3 ? "bad" : undefined}
+            title={
+              view.heat.decayIn === null
+                ? undefined
+                : `再过 ${countdown(view.heat.decayIn).replace("还剩 ", "")}不犯事就降一星`
+            }
+          >
+            {view.heat.stars} 星{view.heat.half && <small> · 多半星</small>}
+          </dd>
           <dt>难度</dt>
           <dd>{DIFFICULTY_LABELS[view.difficulty]}</dd>
           {inventory.healing && (

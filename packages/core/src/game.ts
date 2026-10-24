@@ -12,6 +12,8 @@ import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dic
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
+import { shownStars } from "./systems/heat/apply";
+import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
 import { itemCatalog } from "./systems/inventory/apply";
@@ -368,6 +370,8 @@ export function projectState(
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const installed = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+  // 旧快照里没有热度系统
+  const heat = world.slices.heat === undefined ? null : HeatStateSchema.parse(world.slices.heat);
   const parts = cyberwareCatalog(data);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const period = periodOf(world.time);
@@ -461,6 +465,25 @@ export function projectState(
         memories: n.memories,
       })),
     money: { eddies: economy.eddies },
+    /** 警方热度：整星，另标有没有攒着半星；自然下降还要多久（分钟） */
+    heat: {
+      stars: shownStars(heat?.stars ?? 0),
+      half: (heat?.stars ?? 0) % 1 !== 0,
+      lastSeen: heat?.lastSeenAt == null ? null : formatGameTime(heat.lastSeenAt),
+      decayIn:
+        heat && heat.stars > 0 && heat.decayedAt !== null
+          ? Math.max(0, heat.decayedAt + HEAT_DECAY_MINUTES - world.time)
+          : null,
+      recent: (heat?.recent ?? [])
+        .slice(-3)
+        .reverse()
+        .map((e) => ({
+          at: formatGameTime(e.at),
+          label: EVENT_LABELS[e.kind],
+          delta: e.delta,
+          reason: e.reason,
+        })),
+    },
     /** 委托和中间人；隐藏的转折只给模型看，不在这里 */
     jobs: {
       fixers: Object.values(jobs.fixers).map((f) => ({

@@ -251,6 +251,10 @@ export function stateSummary(view: PlayerView): string {
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
     `欧元：${view.money.eddies}`,
   ];
+  if (view.heat.stars > 0 || view.heat.half)
+    lines.push(
+      `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,
+    );
   if (view.cyberware.length > 0)
     lines.push(
       `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}）`).join("、")}`,
