@@ -14,7 +14,7 @@ export const combat = defineSystem<CombatState, CombatCommand, StandoffTick>({
   id: "combat",
   dependsOn: ["dice", "health", "inventory", "npc"],
   state: CombatStateSchema,
-  initial: () => ({ active: null, usedChecks: [], last: null, standoff: null }),
+  initial: () => ({ active: null, last: null, standoff: null }),
   commands: { combat: CombatCommandSchema },
   internal: { "combat.standoffTick": StandoffTickSchema },
   apply: (draft, command, ctx) =>

@@ -355,7 +355,7 @@ export async function runGmTurn(
   }
 
   const commands: Command[] = [];
-  // 快捷动作（用治疗品、扔手雷）每次交锋最多两个：超出的在结算前拦下
+  // 快捷动作（用治疗品、扔手雷）每段最多两个：超出的在结算前拦下
   const fight = CombatStateSchema.parse(world.slices.combat).active;
   let quick = fight ? (fight.quick ?? 0) : 0;
   const isQuick = (c: Command) => {
@@ -399,7 +399,7 @@ export async function runGmTurn(
     }
     if (fight && isQuick(command)) {
       if (quick >= MAX_QUICK) {
-        b.drop(where, command, `这次交锋的快捷动作已经用了 ${MAX_QUICK} 个`, "rules");
+        b.drop(where, command, `这一段的快捷动作已经用了 ${MAX_QUICK} 个`, "rules");
         continue;
       }
       quick += 1;
@@ -439,7 +439,7 @@ export async function runGmTurn(
     else commands.push({ type: "world.endScene" });
   }
 
-  const facts: Record<string, unknown> = { direct: shape.direct === true };
+  const facts: Record<string, unknown> = {};
   if (plan.kind === "resolve") {
     facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
   }

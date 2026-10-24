@@ -134,7 +134,7 @@ export function applyDamage(
     draft.condition = fact.damage === "lethal" ? "dying" : "down";
     notes.push(
       draft.condition === "dying"
-        ? "血量归零：濒死，撑到下一次交锋结束"
+        ? "血量归零：濒死，撑到下一段结束"
         : "血量归零：倒下（没有事先警告致命危险，不会死）",
     );
   }

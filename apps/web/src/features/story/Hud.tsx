@@ -107,15 +107,19 @@ export function Hud({ view }: { readonly view: View }) {
       {combat.active && (
         <div className={styles.combat} role="status">
           <span className={styles.combatTitle}>
-            交锋 {combat.active.moment}/{combat.active.moments}
+            第 {combat.active.moment}/{combat.active.moments} 段
           </span>
           <span className={styles.combatResults}>
             {Array.from({ length: combat.active.moments }, (_, i) => (
               <i
-                // biome-ignore lint/suspicious/noArrayIndexKey: 第几次交锋就是格子的身份
+                // biome-ignore lint/suspicious/noArrayIndexKey: 第几段就是格子的身份
                 key={i}
                 data-result={
-                  combat.active?.results[i] ?? (i + 1 === combat.active?.moment ? "now" : "todo")
+                  i + 1 < (combat.active?.moment ?? 0)
+                    ? "done"
+                    : i + 1 === combat.active?.moment
+                      ? "now"
+                      : "todo"
                 }
               />
             ))}
@@ -128,11 +132,9 @@ export function Hud({ view }: { readonly view: View }) {
             {[
               ...combat.active.enemies.map((e) => `${e.group}×${e.count}`),
               ...combat.active.foes.map((f) =>
-                f.down
-                  ? `${f.name}（濒死）`
-                  : f.scanned
-                    ? `${f.name} ${"■".repeat(f.need - f.hits)}${"□".repeat(f.hits)}`
-                    : `${f.name}（未扫描）`,
+                f.scanned || f.state !== "up"
+                  ? `${f.name}（${f.stateLabel}）`
+                  : `${f.name}（未扫描）`,
               ),
             ].join("、")}
           </span>
@@ -141,7 +143,7 @@ export function Hud({ view }: { readonly view: View }) {
           )}
           {combat.active.dyingMomentsLeft !== null && (
             <span className={styles.dying}>
-              濒死：{combat.active.dyingMomentsLeft} 次交锋内要被救回
+              濒死：{combat.active.dyingMomentsLeft} 段内要被救回
             </span>
           )}
         </div>
@@ -593,7 +595,8 @@ export function SidePanel({
               <Fragment key={f.id}>
                 <dt>{f.name}</dt>
                 <dd>
-                  信任 {f.trust} · 最多 {f.maxRisk} 星{f.capHint && <small> · {f.capHint}</small>}
+                  好感 {f.affinity} · 最多 {f.maxRisk} 星
+                  {f.capHint && <small> · {f.capHint}</small>}
                 </dd>
               </Fragment>
             ))}

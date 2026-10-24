@@ -1,7 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
-import { applyEvent, applyHeat, type Place, tickHeat } from "./apply";
+import { applyEvent, applyHeat, tickHeat } from "./apply";
 import { eventRules, heatRules } from "./prompt";
 import {
   type EventCommand,
@@ -13,12 +13,15 @@ import {
   HeatStateSchema,
 } from "./schema";
 
-function placeOf(location: string | null, data: Readonly<Record<string, unknown>>): Place {
-  const def = location === null ? undefined : locationCatalog(data).get(location);
-  return { district: def?.district ?? null, zone: def?.zone ?? "street" };
+function districtOf(
+  location: string | null,
+  data: Readonly<Record<string, unknown>>,
+): string | null {
+  if (location === null) return null;
+  return locationCatalog(data).get(location)?.district ?? null;
 }
 
-/** 警方热度：事件按地点和城区警力推导，随时间、换城区和贿赂下降；贿赂的钱交给欧元系统扣 */
+/** 警方热度：事件按目击和动静推导，随时间、换城区和贿赂下降；贿赂的钱交给欧元系统扣 */
 export const heat = defineSystem<HeatState, EventCommand | HeatCommand>({
   id: "heat",
   dependsOn: ["world", "economy", "stealth"],
@@ -34,12 +37,11 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand>({
   commands: { event: EventCommandSchema, heat: HeatCommandSchema },
   apply(draft, command, ctx) {
     if (command.type === "heat") return applyHeat(draft, command, ctx.now);
-    const place = placeOf(ctx.read<WorldClockState>("world").location, ctx.data);
-    return applyEvent(draft, command, place, ctx.now);
+    const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
+    return applyEvent(draft, command, district, ctx.now);
   },
   tick(draft, span, ctx) {
-    const place = placeOf(ctx.read<WorldClockState>("world").location, ctx.data);
-    tickHeat(draft, span, place.district);
+    tickHeat(draft, span, districtOf(ctx.read<WorldClockState>("world").location, ctx.data));
   },
   on: {
     // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星

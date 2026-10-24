@@ -11,7 +11,7 @@ export const jobsRules: RuleModule<JobsState> = {
   title: "委托",
   commands: ["jobOffer", "jobAccept", "jobNote", "jobEnd"],
   when: () => true,
-  text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们对玩家角色的信任度；隐藏的转折只有你知道，到合适的时候在戏里揭开，不直接说给玩家。
+  text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们对玩家角色的好感；隐藏的转折只有你知道，到合适的时候在戏里揭开，不直接说给玩家。
 - 新单子由人物在戏里给出：中间人打电话、熟人求助、仇家找上门。挂出时写 jobOffer，玩家角色在戏里答应了再写 jobAccept；中间人只派他现在肯派的星级，派不出的活就让他说“你还不够格”。
 - 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的降低风险或免去检定。
 - 玩家也能在委托板上直接接单：进展笔记里写着“在委托板上接下”的单子已经算接下，不要再写 jobAccept；找个自然的时机让中间人或雇主联系玩家角色，交代细节。
@@ -32,7 +32,7 @@ function jobLine(job: Job, state: JobsState): string {
     ...(job.location ? [`地点 ${job.location}`] : []),
     ...(job.due === null
       ? []
-      : [`期限 ${formatGameTime(job.due)}${job.overdue ? "（已超期，信任度已扣）" : ""}`]),
+      : [`期限 ${formatGameTime(job.due)}${job.overdue ? "（已超期）" : ""}`]),
   ];
   const lines = [`- ${job.title}［${job.id}］${parts.join("，")}`, `  利益冲突：${job.conflict}`];
   if (job.twist) lines.push(`  隐藏的转折：${job.twist}`);
@@ -41,12 +41,16 @@ function jobLine(job: Job, state: JobsState): string {
 }
 
 /** 给模型看的【委托】：中间人、挂着和接下的单子，加最近结束的几单 */
-export function jobsSection(state: JobsState, streetCred: number): string | undefined {
+export function jobsSection(
+  state: JobsState,
+  streetCred: number,
+  affinityOf: (id: string) => number,
+): string | undefined {
   const fixers = Object.values(state.fixers);
   if (fixers.length === 0 && state.jobs.length === 0) return undefined;
   const lines = fixers.map(
     (f) =>
-      `- 中间人 ${f.name}［${f.id}］：信任度 ${f.trust}，现在最多派 ${maxRisk(f, streetCred)} 星`,
+      `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，现在最多派 ${maxRisk(affinityOf(f.id), streetCred)} 星`,
   );
   const open = state.jobs.filter(isOpen);
   if (open.length === 0) lines.push("- 眼下没有挂着或接下的委托");
@@ -59,14 +63,14 @@ export function jobsSection(state: JobsState, streetCred: number): string | unde
   return lines.join("\n");
 }
 
-/** 系统提示词里的【委托类型模板】：8 类委托各自的交锋结构、潜入和对峙的位置、典型败局和适合的转折 */
+/** 系统提示词里的【委托类型模板】：8 类委托各自的分段结构、潜入和对峙的位置、典型败局和适合的转折 */
 export function jobTemplateSection(data: Readonly<Record<string, unknown>>): string | undefined {
   if (data.jobTemplates === undefined) return undefined;
   const list = JobTemplateCatalogSchema.parse(data.jobTemplates);
   if (list.length === 0) return undefined;
   const lines = list.map(
     (t) =>
-      `- ${t.kind} ${JOB_KIND_LABELS[t.kind]}：交锋 ${t.moments}；潜入 ${t.stealth}；对峙 ${t.standoff}；典型败局 ${t.defeat}${t.twists.length > 0 ? `；适合的转折 ${t.twists.join("、")}` : ""}`,
+      `- ${t.kind} ${JOB_KIND_LABELS[t.kind]}：分段 ${t.moments}；潜入 ${t.stealth}；对峙 ${t.standoff}；典型败局 ${t.defeat}${t.twists.length > 0 ? `；适合的转折 ${t.twists.join("、")}` : ""}`,
   );
-  return `【委托类型模板】\n挂委托时 jobOffer 写 kind；按类型取交锋结构、潜入和对峙的位置、典型败局和转折，可以改写或组合，不强制套用。\n${lines.join("\n")}`;
+  return `【委托类型模板】\n挂委托时 jobOffer 写 kind；按类型取分段结构、潜入和对峙的位置、典型败局和转折，可以改写或组合，不强制套用。\n${lines.join("\n")}`;
 }

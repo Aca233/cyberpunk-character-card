@@ -6,7 +6,7 @@ export const eventRules: RuleModule<HeatState> = {
   title: "事件",
   commands: ["event"],
   when: () => true,
-  text: `- 角色杀人、公开动手、偷东西、砸东西时写一条 event，只报告发生了什么：kind、看见的人数 witnesses、是不是在公开场合 public；公司或帮派报了警加 reportedTo: "ncpd"。警方热度由代码按地点和城区警力推导，不要自己算。
+  text: `- 角色杀人、公开动手、偷东西、砸东西时写一条 event，只报告发生了什么：kind、看见的人数 witnesses、是不是在公开场合 public；有人报了警加 reportedTo: "ncpd"。警方热度由代码推导，不要自己算。
 - 没人看见、也没被摄像头拍到时 witnesses 写 0、public 写 false；事后有人报警再补一条带 reportedTo 的 event。`,
 };
 

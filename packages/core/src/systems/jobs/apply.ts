@@ -1,19 +1,17 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, TimeSpan } from "../../kernel/system";
+import { AFFINITY_MAX, AFFINITY_MIN, type NpcState } from "../npc";
 import { formatGameTime } from "../world";
-import {
-  type Fixer,
-  type Job,
-  type JobAccept,
-  type JobEnd,
-  type JobNote,
-  type JobOffer,
-  type JobOutcome,
-  type JobStatus,
-  type JobsState,
-  OVERDUE_TRUST,
-  type SeedFixer,
-  TRUST_MAX,
+import type {
+  Job,
+  JobAccept,
+  JobEnd,
+  JobNote,
+  JobOffer,
+  JobOutcome,
+  JobStatus,
+  JobsState,
+  SeedFixer,
 } from "./schema";
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
@@ -33,19 +31,19 @@ export const JOB_STATUS_LABELS: Readonly<Record<JobStatus, string>> = {
   ...JOB_OUTCOME_LABELS,
 };
 
-/** 委托结局对中间人信任度的影响 */
-export const TRUST_CHANGE: Readonly<Record<JobOutcome, number>> = {
-  clean: 10,
-  flawed: 4,
+/** 委托结局对中间人好感的影响；中间人要有见过面、还活着的人物卡才算 */
+export const AFFINITY_CHANGE: Readonly<Record<JobOutcome, number>> = {
+  clean: 5,
+  flawed: 2,
   abandoned: -2,
   failed: -5,
-  betrayed: -20,
+  betrayed: -10,
 };
 
 /** 完成一单得到的街头声望，按半级计：1 星半级到 5 星三级；带瑕疵完成减半 */
 export const CRED_HALVES: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 6 };
 
-/** 能接的星级取街头声望和信任度两者中较低的一项 */
+/** 能接的星级取街头声望和中间人好感两者中较低的一项 */
 export function starsByCred(cred: number): number {
   if (cred >= 35) return 5;
   if (cred >= 20) return 4;
@@ -53,15 +51,15 @@ export function starsByCred(cred: number): number {
   return 2;
 }
 
-export function starsByTrust(trust: number): number {
-  if (trust >= 85) return 5;
-  if (trust >= 60) return 4;
-  if (trust >= 30) return 3;
+export function starsByAffinity(affinity: number): number {
+  if (affinity >= 70) return 5;
+  if (affinity >= 40) return 4;
+  if (affinity >= 20) return 3;
   return 2;
 }
 
-export function maxRisk(fixer: Pick<Fixer, "trust">, streetCred: number): number {
-  return Math.min(starsByCred(streetCred), starsByTrust(fixer.trust));
+export function maxRisk(affinity: number, streetCred: number): number {
+  return Math.min(starsByCred(streetCred), starsByAffinity(affinity));
 }
 
 const CRED_STEPS = [
@@ -69,32 +67,32 @@ const CRED_STEPS = [
   { at: 20, stars: 4 },
   { at: 35, stars: 5 },
 ] as const;
-const TRUST_STEPS = [
-  { at: 30, stars: 3 },
-  { at: 60, stars: 4 },
-  { at: 85, stars: 5 },
+const AFFINITY_STEPS = [
+  { at: 20, stars: 3 },
+  { at: 40, stars: 4 },
+  { at: 70, stars: 5 },
 ] as const;
 
 export interface RiskCap {
   readonly max: number;
   /** 卡在哪一项；两项一样或已经到 5 星时为 null */
-  readonly by: "cred" | "trust" | null;
+  readonly by: "cred" | "affinity" | null;
   /** 要多接一星差什么，界面直接显示 */
   readonly hint: string | null;
 }
 
 /** 能接的星级卡在哪一项、再往上要什么，委托板标明 */
-export function riskCap(fixer: Pick<Fixer, "trust">, streetCred: number): RiskCap {
+export function riskCap(affinity: number, streetCred: number): RiskCap {
   const byCred = starsByCred(streetCred);
-  const byTrust = starsByTrust(fixer.trust);
-  const max = Math.min(byCred, byTrust);
+  const byAffinity = starsByAffinity(affinity);
+  const max = Math.min(byCred, byAffinity);
   if (max >= 5) return { max, by: null, hint: null };
   const cred = CRED_STEPS.find((s) => s.stars === max + 1);
-  const trust = TRUST_STEPS.find((s) => s.stars === max + 1);
+  const liking = AFFINITY_STEPS.find((s) => s.stars === max + 1);
   const needs: string[] = [];
   if (byCred <= max && cred) needs.push(`街头声望 ${cred.at} 级`);
-  if (byTrust <= max && trust) needs.push(`信任度 ${trust.at}`);
-  const by = byCred === byTrust ? null : byCred < byTrust ? "cred" : "trust";
+  if (byAffinity <= max && liking) needs.push(`中间人好感 ${liking.at}`);
+  const by = byCred === byAffinity ? null : byCred < byAffinity ? "cred" : "affinity";
   return { max, by, hint: `需要${needs.join("和")}，才能接 ${max + 1} 星` };
 }
 
@@ -102,26 +100,19 @@ export function isOpen(job: Pick<Job, "status">): boolean {
   return job.status === "offered" || job.status === "active";
 }
 
-function changeTrust(
-  fixer: Draft<Fixer>,
-  delta: number,
-): { from: number; to: number; note: string } {
-  const from = fixer.trust;
-  fixer.trust = Math.max(0, Math.min(TRUST_MAX, from + delta));
-  return { from, to: fixer.trust, note: `${fixer.name}的信任度 ${from} → ${fixer.trust}` };
-}
-
 export function seedFixer(draft: Draft<JobsState>, command: SeedFixer): ApplyOutcome {
   if (draft.fixers[command.id]) return fail(`中间人 ${command.id} 已经存在`);
-  draft.fixers[command.id] = { id: command.id, name: command.name, trust: command.trust };
+  draft.fixers[command.id] = { id: command.id, name: command.name };
   return { ok: true };
 }
 
+/** affinityOf：按中间人 id 查好感，没有人物卡的算 0 */
 export function offerJob(
   draft: Draft<JobsState>,
   command: JobOffer,
   now: number,
   streetCred: number,
+  affinityOf: (id: string) => number,
 ): ApplyOutcome {
   if (draft.jobs.some((j) => j.id === command.id)) return fail(`委托 ${command.id} 已经存在`);
   if (command.due !== undefined && command.due <= now) {
@@ -130,10 +121,11 @@ export function offerJob(
   const fixer = command.fixer === undefined ? undefined : draft.fixers[command.fixer];
   if (command.fixer !== undefined && !fixer) return fail(`没有中间人 ${command.fixer}`);
   if (fixer) {
-    const max = maxRisk(fixer, streetCred);
+    const affinity = affinityOf(fixer.id);
+    const max = maxRisk(affinity, streetCred);
     if (command.risk > max) {
       return fail(
-        `${fixer.name}现在最多派 ${max} 星的活（街头声望 ${streetCred} 级、信任度 ${fixer.trust}），这单是 ${command.risk} 星`,
+        `${fixer.name}现在最多派 ${max} 星的活（街头声望 ${streetCred} 级、好感 ${affinity}），这单是 ${command.risk} 星`,
       );
     }
   }
@@ -197,12 +189,13 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
   return { ok: true };
 }
 
-/** 委托结束：写结局和总评，改信任度，到手的报酬交给欧元系统，声望交给角色系统；结算记在委托上 */
+/** 委托结束：写结局和总评；报酬交给欧元系统，声望交给角色系统，中间人好感交给人物系统；结算记在委托上 */
 export function endJob(
   draft: Draft<JobsState>,
   command: JobEnd,
   now: number,
   humanity: number,
+  npcs: NpcState["npcs"],
 ): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
@@ -211,16 +204,14 @@ export function endJob(
       `委托 ${job.title} 现在是「${JOB_STATUS_LABELS[job.status]}」，只有进行中的委托能结束`,
     );
   }
+  const label = JOB_OUTCOME_LABELS[command.outcome];
   const done = command.outcome === "clean" || command.outcome === "flawed";
   const paid = command.paid ?? (done ? job.reward : 0);
   job.status = command.outcome;
   job.closedAt = now;
   job.paid = paid;
   job.summary = command.summary;
-  const notes = [`委托${JOB_OUTCOME_LABELS[command.outcome]}：${job.title}`];
-  const fixer = job.fixer === null ? undefined : draft.fixers[job.fixer];
-  const trust = fixer ? changeTrust(fixer, TRUST_CHANGE[command.outcome]) : null;
-  if (trust) notes.push(trust.note);
+  const notes = [`委托${label}：${job.title}`];
   const emit: Command[] =
     paid > 0
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
@@ -231,29 +222,39 @@ export function endJob(
     emit.push({
       type: "character.cred",
       halves: credHalves,
-      reason: `委托${JOB_OUTCOME_LABELS[command.outcome]}`,
+      reason: `委托${label}`,
       event: `job:${job.id}`,
     });
   }
+  let affinity: { from: number; to: number } | null = null;
+  if (job.fixer !== null) {
+    const card = npcs[job.fixer];
+    if (card?.met && card.alive) {
+      const delta = AFFINITY_CHANGE[command.outcome];
+      affinity = {
+        from: card.affinity,
+        to: Math.min(AFFINITY_MAX, Math.max(AFFINITY_MIN, card.affinity + delta)),
+      };
+      emit.push({ type: "affinity", id: job.fixer, delta, reason: `委托${label}` });
+    }
+  }
   job.settlement = {
     credHalves,
-    trust: trust ? { from: trust.from, to: trust.to } : null,
+    affinity,
     humanity: job.humanityAtAccept === null ? null : humanity - job.humanityAtAccept,
   };
   return { ok: true, notes, emit };
 }
 
-/** 时间推进：没接的单子到期被别人接走；接下的超期扣一次信任 */
+/** 时间推进：没接的单子到期被别人接走；接下的超期只做标记，由主持人在戏里回应 */
 export function tickJobs(draft: Draft<JobsState>, span: TimeSpan): void {
   for (const job of draft.jobs) {
     if (job.due === null || job.due > span.to) continue;
     if (job.status === "offered") {
       job.status = "expired";
       job.closedAt = job.due;
-    } else if (job.status === "active" && !job.overdue) {
+    } else if (job.status === "active") {
       job.overdue = true;
-      const fixer = job.fixer === null ? undefined : draft.fixers[job.fixer];
-      if (fixer) changeTrust(fixer, OVERDUE_TRUST);
     }
   }
 }

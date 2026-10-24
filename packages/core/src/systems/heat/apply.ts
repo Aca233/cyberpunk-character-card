@@ -2,7 +2,6 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, TimeSpan } from "../../kernel/system";
 import {
   BRIBE_PER_STAR,
-  DISTRICT_POLICE,
   EVENT_LABELS,
   type EventCommand,
   type EventKind,
@@ -10,18 +9,16 @@ import {
   HEAT_MAX,
   type HeatCommand,
   type HeatState,
-  type PoliceStrength,
   RECENT_EVENTS,
-  type Zone,
 } from "./schema";
 
-/** 被人看见时各类事件的基础热度；羞辱、背叛、救人、帮忙不惊动警察，骇入公共网络记在网络监察那边（M2b） */
+/** 被人看见时各类事件的基础热度；羞辱、背叛、救人、帮忙不惊动警察 */
 const BASE_HEAT: Readonly<Record<EventKind, number>> = {
   kill: 2,
   publicViolence: 1,
   theft: 1,
   vandalism: 1,
-  publicHack: 0,
+  publicHack: 1,
   humiliate: 0,
   betray: 0,
   rescue: 0,
@@ -30,57 +27,20 @@ const BASE_HEAT: Readonly<Record<EventKind, number>> = {
 
 const VIOLENT: ReadonlySet<EventKind> = new Set(["kill", "publicViolence"]);
 
-const POLICE_FACTOR: Readonly<Record<PoliceStrength, number>> = {
-  strong: 1.5,
-  normal: 1,
-  weak: 0.5,
-  none: 0,
-};
-
-const POLICE_LABELS: Readonly<Record<PoliceStrength, string>> = {
-  strong: "警力强",
-  normal: "",
-  weak: "警力弱，减半",
-  none: "NCPD 不管",
-};
-
-export function policeOf(district: string | null): PoliceStrength {
-  return (district && DISTRICT_POLICE[district]) || "normal";
-}
-
 /** 整星显示 */
 export function shownStars(stars: number): number {
   return Math.floor(stars);
 }
 
-export interface Place {
-  readonly district: string | null;
-  readonly zone: Zone;
-}
-
-/** 按事件、地点和城区警力推导热度增量（星，按半星取整），附一句理由 */
-export function heatDelta(
-  event: EventCommand,
-  place: Place,
-): { readonly delta: number; readonly why: string } {
+/** 按事件推导热度增量（星），附一句理由：公开或五人以上看见的暴力多涨一星；没人看见也没人报警不涨 */
+export function heatDelta(event: EventCommand): { readonly delta: number; readonly why: string } {
   const base = BASE_HEAT[event.kind];
   if (base === 0) return { delta: 0, why: "这类事不惊动警察" };
   if (event.witnesses === 0 && !event.public && !event.reportedTo) {
     return { delta: 0, why: "没人看见" };
   }
-  const police = policeOf(place.district);
-  if (police === "none") return { delta: 0, why: POLICE_LABELS.none };
-  const zone = event.reportedTo ? "street" : place.zone;
-  if (zone === "corp") return { delta: 0, why: "公司产区里的事只算公司的账" };
-  if (zone === "gang" && !VIOLENT.has(event.kind)) {
-    return { delta: 0, why: "帮派地盘里的小事 NCPD 不管" };
-  }
   const loud = VIOLENT.has(event.kind) && (event.public || event.witnesses >= 5) ? 1 : 0;
-  const delta = Math.round((base + loud) * POLICE_FACTOR[police] * 2) / 2;
-  const why = [event.reportedTo ? "有人报了警" : "", POLICE_LABELS[police]]
-    .filter(Boolean)
-    .join("，");
-  return { delta, why };
+  return { delta: base + loud, why: event.reportedTo ? "有人报了警" : "" };
 }
 
 function remember(draft: Draft<HeatState>, entry: HeatState["recent"][number]): void {
@@ -97,14 +57,14 @@ function seen(draft: Draft<HeatState>, now: number): void {
 export function applyEvent(
   draft: Draft<HeatState>,
   event: EventCommand,
-  place: Place,
+  district: string | null,
   now: number,
 ): ApplyOutcome {
-  const { delta, why } = heatDelta(event, place);
+  const { delta, why } = heatDelta(event);
   const before = shownStars(draft.stars);
   draft.stars = Math.min(HEAT_MAX, draft.stars + delta);
   if (delta > 0) seen(draft, now);
-  if (place.district !== null) draft.district = place.district;
+  if (district !== null) draft.district = district;
   remember(draft, { at: now, kind: event.kind, delta, reason: event.reason });
   const after = shownStars(draft.stars);
   const label = EVENT_LABELS[event.kind];

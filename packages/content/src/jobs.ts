@@ -60,7 +60,7 @@ export const consequences = falloutRules.ConsequenceTableSchema.parse([
       "重伤",
       "被缴械，或者丢一件罕见装备",
       "对方有了防备，后面同样的办法难度值 +2",
-      "中间人信任度下降、雇主起疑",
+      "中间人好感下降、雇主起疑",
       "冒出一个盯上你的人，加一个期限",
     ],
   },
@@ -87,7 +87,7 @@ export const consequences = falloutRules.ConsequenceTableSchema.parse([
   },
 ]);
 
-/** 8 类委托的模板：交锋结构、潜入和对峙放在哪、典型败局、适合的转折；主持人取素材，不强制套用 */
+/** 8 类委托的模板：分段结构、潜入和对峙放在哪、典型败局、适合的转折；主持人取素材，不强制套用 */
 export const jobTemplates = jobsRules.JobTemplateCatalogSchema.parse([
   {
     kind: "escort",

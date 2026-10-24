@@ -32,7 +32,7 @@ export function applyAlert(draft: Stealth, command: AlertCommand, scene: number)
     `警戒 ${from} → ${draft.level}（${ALERT_LABELS[draft.level]}）：${command.reason}`,
   ];
   if (draft.level === ALERT_MAX && from < ALERT_MAX) {
-    notes.push("交战：发 combat start，第一次交锋敌人占优");
+    notes.push("交战：发 combat start，第一段敌人占优");
   }
   return { ok: true, notes };
 }

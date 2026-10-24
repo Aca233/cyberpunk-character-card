@@ -1,6 +1,5 @@
-/** 中间人：开档时写进委托系统；和出身、过往有关的中间人信任度从 25 起步，其余从 10 起步 */
+/** 中间人：开档时写进委托系统；好感记在同 id 的人物卡上（npcs.ts） */
 export const fixers: readonly {
   readonly id: string;
   readonly name: string;
-  readonly trust?: number;
-}[] = [{ id: "faraday", name: "法拉第", trust: 10 }];
+}[] = [{ id: "faraday", name: "法拉第" }];

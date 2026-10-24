@@ -82,7 +82,7 @@ schema("义体医生 ripperdocs", cyberwareRules.RipperdocListSchema, ripperdocs
 schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
-schema("中间人 fixers", jobsRules.FixerSchema.partial({ trust: true }).array(), fixers);
+schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
 schema("转折素材 twists", TwistCatalogSchema, twists);
 schema("后果参考表 consequences", falloutRules.ConsequenceTableSchema, consequences);
 schema("委托模板 jobTemplates", jobsRules.JobTemplateCatalogSchema, jobTemplates);

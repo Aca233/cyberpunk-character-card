@@ -1,16 +1,9 @@
 import { z } from "zod";
 import { GameTimeSchema } from "../world";
 
-export const TRUST_MAX = 100;
-/** 和出身、过往无关的中间人从这个信任度起步 */
-export const TRUST_START = 10;
-/** 接下的委托超过期限没完成扣多少信任 */
-export const OVERDUE_TRUST = -3;
-
 export const FixerSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  trust: z.number().int().min(0).max(TRUST_MAX),
 });
 export type Fixer = z.infer<typeof FixerSchema>;
 
@@ -40,7 +33,7 @@ export const JOB_KIND_LABELS: Readonly<Record<JobKind, string>> = {
 /** 委托类型模板：主持人取素材用，不强制套用。数据在 content 包的 jobs.ts */
 export const JobTemplateSchema = z.object({
   kind: JobKindSchema,
-  /** 常见的交锋结构 */
+  /** 常见的分段结构 */
   moments: z.string().min(1),
   /** 潜入放在哪里、怎么用 */
   stealth: z.string().min(1),
@@ -78,8 +71,8 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 export const JobSettlementSchema = z.object({
   /** 这单带来的街头声望，按半级计 */
   credHalves: z.number().int().min(0),
-  /** 中间人信任度的变化；没有中间人时为 null */
-  trust: z.object({ from: z.number().int(), to: z.number().int() }).nullable(),
+  /** 中间人好感的变化；没有中间人、或中间人没有见过面的人物卡时为 null */
+  affinity: z.object({ from: z.number().int(), to: z.number().int() }).nullable().default(null),
   /** 从接单到结束的人性变化；接单时还没记人性的旧委托为 null */
   humanity: z.number().int().nullable(),
 });
@@ -110,7 +103,7 @@ export const JobSchema = z.object({
   offeredAt: z.number().int(),
   acceptedAt: z.number().int().nullable(),
   closedAt: z.number().int().nullable(),
-  /** 接下后超期扣过信任 */
+  /** 接下后超期了：只做标记，由主持人在戏里回应 */
   overdue: z.boolean(),
   /** 超期这件事主持人已经在戏里回应过（写了 jobNote） */
   dueHandled: z.boolean().default(false),
@@ -147,7 +140,7 @@ export const JobOfferSchema = z
     twist: z.string().min(1).optional(),
   })
   .describe(
-    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人 id，熟人求助不写；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和信任度检查中间人肯不肯派这个星级",
+    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人 id，熟人求助不写；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和中间人好感检查中间人肯不肯派这个星级",
   );
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 
@@ -171,7 +164,7 @@ export const JobEndSchema = z
     summary: z.string().min(1),
   })
   .describe(
-    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；代码按结局给报酬、改中间人信任度；summary 一句话总评",
+    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；代码按结局给报酬、改中间人好感；summary 一句话总评",
   );
 export type JobEnd = z.infer<typeof JobEndSchema>;
 
@@ -182,6 +175,5 @@ export const SeedFixerSchema = z.object({
   type: z.literal("jobs.seedFixer"),
   id: z.string().min(1),
   name: z.string().min(1),
-  trust: z.number().int().min(0).max(TRUST_MAX).default(TRUST_START),
 });
 export type SeedFixer = z.infer<typeof SeedFixerSchema>;

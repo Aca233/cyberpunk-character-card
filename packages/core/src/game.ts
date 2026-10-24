@@ -20,7 +20,12 @@ import {
   effectiveAttributes,
   FLASHBACK_TURNS,
 } from "./systems/character/schema";
-import { CombatStateSchema, EDGE_LABELS, MAX_QUICK } from "./systems/combat/schema";
+import {
+  CombatStateSchema,
+  EDGE_LABELS,
+  FOE_STATE_LABELS,
+  MAX_QUICK,
+} from "./systems/combat/schema";
 import {
   cyberwareCatalog,
   repairCost,
@@ -83,11 +88,10 @@ export interface GameContent {
   readonly items?: readonly ItemDef[];
   /** 义体表；开局自带的义体要用它结算 */
   readonly cyberware?: readonly CyberwareDef[];
-  /** 中间人；trust 不写时从 10 起步 */
+  /** 中间人；好感记在同 id 的人物卡上 */
   readonly fixers?: readonly {
     readonly id: string;
     readonly name: string;
-    readonly trust?: number;
   }[];
   /** 常用地点的中文名 */
   readonly locations?: readonly LocationDef[];
@@ -851,30 +855,28 @@ export function projectState(
     })),
     combat: {
       active: active && {
-        /** 第几次交锋，从 1 起 */
+        /** 第几段，从 1 起 */
         moment: active.current + 1,
         moments: active.moments,
         defeat: active.defeat,
         enemies: active.enemies,
-        /** 有卡敌人：没扫描过的，界面不显示血条 */
+        /** 有卡敌人：没扫描过、也还没受伤的，界面不显示情况 */
         foes: (active.foes ?? []).map((f) => ({
           npc: f.npc,
           name: f.name,
           tier: f.tier,
           tierLabel: OPPONENT_TIERS[f.tier].label,
-          need: f.need,
-          hits: f.hits,
+          state: f.state,
+          stateLabel: FOE_STATE_LABELS[f.state],
           scanned: f.scanned,
-          down: f.hits >= f.need,
         })),
-        results: active.results,
-        /** 这次交锋用了几个快捷动作，最多 quickMax 个 */
+        /** 这一段用了几个快捷动作，最多 quickMax 个 */
         quick: active.quick ?? 0,
         quickMax: MAX_QUICK,
-        /** 濒死时还剩几次交锋结束前要被救回；不在濒死时为 null */
+        /** 濒死时还剩几段结束前要被救回；不在濒死时为 null */
         dyingMomentsLeft:
           active.dyingUntil === null ? null : active.dyingUntil - active.current + 1,
-        /** 第一次交锋谁占先机；过了第一次交锋是 null */
+        /** 第一段谁占先机；过了第一段是 null */
         edge: active.current === 0 ? (active.edge ?? null) : null,
         edgeLabel: active.current === 0 && active.edge ? EDGE_LABELS[active.edge] : null,
       },
@@ -928,10 +930,10 @@ export function projectState(
       fixers: Object.values(jobs.fixers).map((f) => ({
         id: f.id,
         name: f.name,
-        trust: f.trust,
-        maxRisk: maxRisk(f, character.streetCred),
-        cappedBy: riskCap(f, character.streetCred).by,
-        capHint: riskCap(f, character.streetCred).hint,
+        affinity: npcs.npcs[f.id]?.affinity ?? 0,
+        maxRisk: maxRisk(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred),
+        cappedBy: riskCap(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred).by,
+        capHint: riskCap(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred).hint,
       })),
       list: [
         ...jobs.jobs.filter(isOpen),
@@ -956,13 +958,13 @@ export function projectState(
         notes: j.notes,
         paid: j.paid,
         summary: j.summary,
-        /** 结算卡：声望按级、信任度变化、接单以来的人性变化 */
+        /** 结算卡：声望按级、中间人好感变化、接单以来的人性变化 */
         settlement:
           j.settlement === null
             ? null
             : {
                 streetCred: j.settlement.credHalves / 2,
-                trust: j.settlement.trust,
+                affinity: j.settlement.affinity,
                 humanity: j.settlement.humanity,
               },
       })),

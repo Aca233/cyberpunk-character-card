@@ -164,16 +164,8 @@
   transform: skewX(-25deg);
 }
 
-.combatResults > i[data-result="win"] {
+.combatResults > i[data-result="done"] {
   background: var(--cp-success);
-}
-
-.combatResults > i[data-result="lose"] {
-  background: var(--cp-danger);
-}
-
-.combatResults > i[data-result="draw"] {
-  background: var(--cp-yellow-dim);
 }
 
 .combatResults > i[data-result="now"] {

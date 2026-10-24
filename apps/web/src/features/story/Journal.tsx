@@ -169,7 +169,7 @@ export function Journal({
                       <dt>中间人</dt>
                       <dd>
                         {selected.fixer}
-                        {fixer(selected.fixer) && `（信任 ${fixer(selected.fixer)?.trust}）`}
+                        {fixer(selected.fixer) && `（好感 ${fixer(selected.fixer)?.affinity}）`}
                       </dd>
                     </div>
                   )}
@@ -250,7 +250,7 @@ export function Journal({
           <p>
             {confirming.due === null
               ? "这单没有期限。"
-              : `期限 ${confirming.due}。接下后超期没完成，${confirming.fixer ?? "雇主"}会对你失去信任；没接的单子过期不扣。`}
+              : `期限 ${confirming.due}。接下后超期没完成，${confirming.fixer ?? "雇主"}会找上门来问；没接的单子过期会被别人接走。`}
           </p>
         </Dialog>
       )}

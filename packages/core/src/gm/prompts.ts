@@ -350,15 +350,14 @@ export function stateSummary(view: PlayerView): string {
       ...a.enemies.map((e) => `${e.group}（${e.tier}，${e.count} 人）`),
       ...a.foes.map(
         (f) =>
-          `${f.name}（有卡敌人 ${f.npc}，${f.tier}，${f.down ? "已打到濒死，等玩家决定杀、放还是抓" : `已中 ${f.hits}/${f.need} 次`}${f.scanned ? "" : "，玩家还没扫描"}）`,
+          `${f.name}（有卡敌人 ${f.npc}，${f.tier}，${f.stateLabel}${f.state === "down" ? "，等玩家决定杀、放还是抓" : ""}${f.scanned ? "" : "，玩家还没扫描"}）`,
       ),
     ].join("、");
     lines.push(
-      `战斗中：第 ${a.moment}/${a.moments} 次交锋，敌人 ${enemies}，败局是「${a.defeat}」；这次交锋快捷动作已用 ${a.quick}/${a.quickMax}`,
+      `战斗中：第 ${a.moment}/${a.moments} 段，敌人 ${enemies}，败局是「${a.defeat}」；这一段快捷动作已用 ${a.quick}/${a.quickMax}`,
     );
-    if (a.dyingMomentsLeft !== null)
-      lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 次交锋内要被救回`);
-    if (a.edgeLabel) lines.push(`第一次交锋：${a.edgeLabel}`);
+    if (a.dyingMomentsLeft !== null) lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 段内要被救回`);
+    if (a.edgeLabel) lines.push(`第一段：${a.edgeLabel}`);
   }
   if (view.combat.standoff) {
     const s = view.combat.standoff;
@@ -482,7 +481,12 @@ export function buildGmPrompt(
     sceneStartedAt: clock.sceneStartedAt,
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
-  const jobs = jobsSection(JobsStateSchema.parse(world.slices.jobs), view.character.streetCred);
+  const fixerCards = NpcStateSchema.parse(world.slices.npc).npcs;
+  const jobs = jobsSection(
+    JobsStateSchema.parse(world.slices.jobs),
+    view.character.streetCred,
+    (id) => fixerCards[id]?.affinity ?? 0,
+  );
   if (jobs) parts.push(`【委托】\n${jobs}`);
   const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
   if (recent) parts.push(`【近期后果】\n${recent}`);

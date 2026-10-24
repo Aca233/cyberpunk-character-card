@@ -11,7 +11,7 @@ function signed(n: number): string {
   return n > 0 ? `+${n}` : String(n);
 }
 
-/** 委托结束后弹出的结算卡：结局、报酬、声望、信任度、人性和一句总评 */
+/** 委托结束后弹出的结算卡：结局、报酬、声望、中间人好感、人性和一句总评 */
 export function SettlementCard({
   job,
   onClose,
@@ -30,11 +30,11 @@ export function SettlementCard({
     ],
   ];
   if (s && s.streetCred > 0) rows.push(["街头声望", `+${s.streetCred} 级`, "good"]);
-  if (s?.trust && job.fixer) {
-    const delta = s.trust.to - s.trust.from;
+  if (s?.affinity && job.fixer) {
+    const delta = s.affinity.to - s.affinity.from;
     rows.push([
-      `${job.fixer}的信任`,
-      `${s.trust.from} → ${s.trust.to}（${signed(delta)}）`,
+      `${job.fixer}的好感`,
+      `${s.affinity.from} → ${s.affinity.to}（${signed(delta)}）`,
       delta > 0 ? "good" : delta < 0 ? "bad" : undefined,
     ]);
   }

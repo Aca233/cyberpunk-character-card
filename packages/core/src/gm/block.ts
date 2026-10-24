@@ -72,7 +72,6 @@ export const BlockDocSchema = z.object({
     .describe(
       `消息：不在场的人通过植入式通讯发来的消息，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`,
     ),
-  direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
   clutch: z
     .boolean()
     .optional()
@@ -93,7 +92,6 @@ const BlockShapeSchema = z.object({
   changes: z.array(z.unknown()).optional(),
   voices: z.array(z.unknown()).optional().catch(undefined),
   messages: z.array(z.unknown()).optional().catch(undefined),
-  direct: z.boolean().optional().catch(undefined),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   pin: z.boolean().optional().catch(undefined),
