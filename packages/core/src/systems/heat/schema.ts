@@ -42,13 +42,15 @@ export type Zone = z.infer<typeof ZoneSchema>;
 /** 城区警力：强的热度涨得快，弱的减半，none 是 NCPD 不管的地方（热度不涨） */
 export type PoliceStrength = "strong" | "normal" | "weak" | "none";
 
-/** 按城区中文名查警力，照策划书：市中心和西区强，太平洲弱，恶土和狗镇不管；表里没有的按一般算 */
+/** 按城区中文名查警力，照策划书：市政中心和西区强，太平洲弱，恶土和狗镇不管；表里没有的按一般算 */
 export const DISTRICT_POLICE: Readonly<Record<string, PoliceStrength>> = {
+  市政中心: "strong",
+  // 市中心（Downtown）是市政中心下面的小区，模型新建地点时可能写成这样
   市中心: "strong",
   威斯特布鲁克: "strong",
   沃森: "normal",
   海伍德: "normal",
-  圣多明各: "normal",
+  圣多明戈: "normal",
   太平洲: "weak",
   恶土: "none",
   狗镇: "none",

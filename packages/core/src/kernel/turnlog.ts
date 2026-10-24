@@ -53,7 +53,7 @@ const TurnRecordSchema = z.object({
   clutch: z.boolean().optional(),
   /** 这一轮发生在第几个场景；旧存档没有 */
   scene: z.number().int().min(0).optional(),
-  /** 场景标题卡的一行，例如“沃森 · 歌舞伎町 · 22:40”；还没有地点时不写 */
+  /** 场景标题卡的一行，例如“沃森 · 歌舞伎区 · 22:40”；还没有地点时不写 */
   title: z.string().optional(),
   /** 这一轮弹出的特写卡 */
   closeup: CloseupSchema.optional(),

@@ -30,7 +30,7 @@ const DISTRICTS: readonly (readonly [AssetId, readonly string[]])[] = [
       "日本街",
     ],
   ],
-  ["district.center", ["center", "centre", "corpo", "downtown", "市中心"]],
+  ["district.center", ["center", "centre", "corpo", "downtown", "市政中心", "市中心"]],
   ["district.heywood", ["heywood", "wellsprings", "glen", "vista", "海伍德"]],
   ["district.domingo", ["domingo", "arroyo", "rancho", "圣多明戈"]],
   ["district.pacifica", ["pacifica", "coastview", "westwind", "west-wind", "太平洲"]],

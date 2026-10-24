@@ -41,7 +41,7 @@ export const locations = worldRules.LocationCatalogSchema.parse([
   {
     id: "corpo-plaza",
     name: "公司广场",
-    district: "市中心",
+    district: "市政中心",
     note: "荒坂塔下的公司区",
     zone: "corp",
   },
