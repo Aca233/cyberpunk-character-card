@@ -29,9 +29,11 @@ export function startCombat(
   ctx: SystemContext,
 ): ApplyOutcome {
   if (draft.active) return fail("已经在战斗中");
-  const { moments, defeat } = command;
+  const { moments, objective, defeat } = command;
   const enemies = command.enemies ?? [];
-  if (moments === undefined || defeat === undefined) return fail("开战要写 moments 和 defeat");
+  if (moments === undefined || objective === undefined || defeat === undefined) {
+    return fail("开战要写 moments、objective 和 defeat");
+  }
   if (enemies.length === 0 && (command.foes ?? []).length === 0) {
     return fail("开战要写 enemies 或 foes");
   }
@@ -52,6 +54,7 @@ export function startCombat(
     startedAt: ctx.now,
     moments,
     current: 0,
+    objective,
     defeat,
     enemies,
     foes,
@@ -64,7 +67,7 @@ export function startCombat(
     ok: true,
     notes: [
       ...(standoff ? [`和${standoff.opponent}的对峙谈崩了`] : []),
-      `战斗开始：分 ${moments} 段；败局：${defeat}`,
+      `战斗开始：分 ${moments} 段；目标：${objective}；败局：${defeat}`,
       ...(edge ? [`第一段${EDGE_LABELS[edge]}`] : []),
       ...(named.length > 0 ? [`有卡敌人：${named.join("、")}`] : []),
     ],

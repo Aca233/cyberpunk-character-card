@@ -858,6 +858,7 @@ export function projectState(
         /** 第几段，从 1 起 */
         moment: active.current + 1,
         moments: active.moments,
+        objective: active.objective ?? null,
         defeat: active.defeat,
         enemies: active.enemies,
         /** 有卡敌人：没扫描过、也还没受伤的，界面不显示情况 */

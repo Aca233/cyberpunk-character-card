@@ -124,6 +124,9 @@ export function Hud({ view }: { readonly view: View }) {
               />
             ))}
           </span>
+          {combat.active.objective && (
+            <span className={styles.combatEnemies}>目标：{combat.active.objective}</span>
+          )}
           <span className={styles.combatDefeat}>败局：{combat.active.defeat}</span>
           <span className={styles.combatEnemies}>
             快捷动作 {combat.active.quick}/{combat.active.quickMax}

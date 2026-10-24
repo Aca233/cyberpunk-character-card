@@ -234,7 +234,7 @@ export function stateSummary(view: PlayerView): string {
       ),
     ].join("、");
     lines.push(
-      `战斗中：第 ${a.moment}/${a.moments} 段，敌人 ${enemies}，败局是「${a.defeat}」；这一段快捷动作已用 ${a.quick}/${a.quickMax}`,
+      `战斗中：第 ${a.moment}/${a.moments} 段，敌人 ${enemies}，${a.objective ? `目标是「${a.objective}」，` : ""}败局是「${a.defeat}」；这一段快捷动作已用 ${a.quick}/${a.quickMax}`,
     );
     if (a.dyingMomentsLeft !== null) lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 段内要被救回`);
     if (a.edgeLabel) lines.push(`第一段：${a.edgeLabel}`);

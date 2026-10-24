@@ -68,6 +68,8 @@ export const ActiveCombatSchema = z.object({
   moments: z.number().int().min(1).max(3),
   /** 当前是第几段（从 0 起） */
   current: z.number().int().min(0),
+  /** 开战时写明的目标：这一仗要达成什么；旧存档没有 */
+  objective: z.string().min(1).nullable().default(null),
   /** 开战时写明的败局 */
   defeat: z.string().min(1),
   enemies: z.array(EnemyGroupSchema),
@@ -98,7 +100,8 @@ export type CombatState = z.infer<typeof CombatStateSchema>;
 
 /**
  * 模型使用：
- * {"type": "combat", "action": "start", "moments": 2, "defeat": "被迫撤退，货物丢失",
+ * {"type": "combat", "action": "start", "moments": 2, "objective": "抢在他们之前把货运出仓库",
+ *  "defeat": "被迫撤退，货物丢失",
  *  "enemies": [{"group": "漩涡帮打手", "tier": "street", "count": 5}]}
  * action 可为 start、next（这一段打完，进下一段）、end（写结局）、retreat（撤退成功）、foe（有卡敌人的情况变了）
  */
@@ -107,6 +110,8 @@ export const CombatCommandSchema = z
     type: z.literal("combat"),
     action: z.enum(["start", "next", "retreat", "end", "foe", "scan", "standoff", "defuse"]),
     moments: z.number().int().min(1).max(3).optional(),
+    /** start：这一仗要达成什么 */
+    objective: z.string().min(1).max(80).optional(),
     defeat: z.string().min(1).optional(),
     enemies: z.array(EnemyGroupSchema).min(1).max(6).optional(),
     /** 有卡敌人，不放进敌群 */
@@ -129,8 +134,8 @@ export const CombatCommandSchema = z
       ctx.addIssue({ code: "custom", message: "对峙要写 opponent 和 rounds" });
     }
     if (c.action === "start") {
-      if (c.moments === undefined || c.defeat === undefined) {
-        ctx.addIssue({ code: "custom", message: "开战要写 moments 和 defeat" });
+      if (c.moments === undefined || c.objective === undefined || c.defeat === undefined) {
+        ctx.addIssue({ code: "custom", message: "开战要写 moments、objective 和 defeat" });
       }
       if (c.enemies === undefined && c.foes === undefined) {
         ctx.addIssue({ code: "custom", message: "开战要写 enemies 或 foes" });
@@ -147,7 +152,7 @@ export const CombatCommandSchema = z
     }
   })
   .describe(
-    "战斗：start 开打（要写 moments 分几段、defeat，敌群写 enemies，有人物卡的敌人写 foes），next 这一段打完、进下一段，end 写结局（outcome 写 victory 或 defeat），retreat 撤退成功，foe 有卡敌人的情况变了（target 写他的 id，state 写 hurt、down 或 fled），scan 玩家扫描了某个有卡敌人；standoff 开一场对峙（写 opponent、rounds 2–3），defuse 对峙化解、不打了；start 可以写 edge（player 或 enemy）说明第一段谁占先机",
+    "战斗：start 开打（要写 moments 分几段、objective 这一仗要达成什么、defeat 输了会怎样，敌群写 enemies，有人物卡的敌人写 foes），next 这一段打完、进下一段，end 写结局（outcome 写 victory 或 defeat），retreat 撤退成功，foe 有卡敌人的情况变了（target 写他的 id，state 写 hurt、down 或 fled），scan 玩家扫描了某个有卡敌人；standoff 开一场对峙（写 opponent、rounds 2–3），defuse 对峙化解、不打了；start 可以写 edge（player 或 enemy）说明第一段谁占先机",
   );
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 
