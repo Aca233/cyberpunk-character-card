@@ -19,6 +19,7 @@ import { DAMAGE_LABELS } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import {
   ITEM_KIND_LABELS,
+  MOD_SLOT_LABELS,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   weaponAttribute,
@@ -200,6 +201,11 @@ export function catalogSection(data: Readonly<Record<string, unknown>>): string 
       ...(item.category === undefined && item.attribute
         ? [`${ATTRIBUTE_LABELS[item.attribute]}检定`]
         : []),
+      ...(item.modSlot && item.modFits
+        ? [
+            `${MOD_SLOT_LABELS[item.modSlot]}，配${item.modFits.map((c) => WEAPON_CATEGORY_LABELS[c]).join("、")}`,
+          ]
+        : []),
       ...(item.rarity ? [RARITY_LABELS[item.rarity]] : []),
       ...(item.iconic ? ["不朽"] : item.price === undefined ? [] : [String(item.price)]),
     ];
@@ -210,6 +216,7 @@ export function catalogSection(data: Readonly<Record<string, unknown>>): string 
   return `【物品表】
 item 指令的 id 只能用下面这些；【当前状态】里的武器栏、治疗品和背包写的也是这些 id，正文里用名称。表里没有的东西只在正文里写，不发 item 指令。
 每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）：能力。技术武器一律用技术检定、智能武器一律用智能检定，不看组名；不朽的东西只从剧情获得，没人卖。
+改装件只在装到武器上时才算数（【当前状态】武器栏括号里写着的），例如装了消音器才能安静开枪；装卸在界面上做，你不发指令。
 ${body}`;
 }
 
@@ -271,7 +278,11 @@ export function stateSummary(view: PlayerView): string {
       `欠义体医生的钱：${view.ripperdocDebts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 money。到期没还，医生会派人来催或上门`,
     );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
-  lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
+  const withMods = (w: string) => {
+    const fitted = view.inventory.mods[w] ?? [];
+    return fitted.length > 0 ? `${w}（装着 ${fitted.map((m) => m.id).join("、")}）` : w;
+  };
+  lines.push(`武器栏：${weapons.length > 0 ? weapons.map(withMods).join("、") : "空手"}`);
   if (view.inventory.clothing.length > 0)
     lines.push(
       `穿着（只影响身份和伪装，没有护甲）：${view.inventory.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,

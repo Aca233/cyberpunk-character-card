@@ -8,10 +8,12 @@ import {
   type ItemCommand,
   type ItemDef,
   type ItemKind,
+  MOD_SLOT_LABELS,
   type QuickSlotName,
   SELL_RATE,
   type Shop,
   ShopListSchema,
+  WEAPON_CATEGORY_LABELS,
 } from "./schema";
 
 export const WEAPON_SLOTS = 3;
@@ -92,7 +94,20 @@ export function applyItem(
   }
 }
 
+/** 丢了最后一把武器时，装在上面的改装件跟着没了 */
 function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
+  const outcome = loseOne(draft, def);
+  const gone =
+    outcome.ok &&
+    def.kind === "weapon" &&
+    !draft.weapons.includes(def.id) &&
+    (draft.backpack[def.id] ?? 0) < 1;
+  if (!gone || draft.mods[def.id] === undefined) return outcome;
+  Reflect.deleteProperty(draft.mods, def.id);
+  return ok(`失去 ${def.name}，装在上面的改装件一起没了`);
+}
+
+function loseOne(draft: Inventory, def: ItemDef): ApplyOutcome {
   if (take(draft, def.id)) return ok(`失去 ${def.name}`);
   const slot = draft.weapons.indexOf(def.id);
   if (slot >= 0) {
@@ -203,6 +218,8 @@ function use(draft: Inventory, def: ItemDef): ApplyOutcome {
     case "weapon":
     case "clothing":
       return fail(`${def.name} 不是一次性物品`);
+    case "mod":
+      return fail(`${def.name} 是改装件，在装备栏里装到武器上`);
   }
 }
 
@@ -312,4 +329,44 @@ export function applyOutfit(
     draft.clothing[slot] = id;
   }
   return ok(`换上整套外观：${wanted.map((p) => name(p.id)).join("、")}`);
+}
+
+/** 改装件：attach 从背包装到一把武器上，同位置的旧件放回背包；detach 拆下放回背包。
+ * 武器要在武器格或背包里 */
+export function applyMod(
+  draft: Inventory,
+  action: "attach" | "detach",
+  weaponId: string,
+  modId: string,
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  const weapon = catalog.get(weaponId);
+  const mod = catalog.get(modId);
+  if (weapon?.kind !== "weapon" || weapon.category === undefined) {
+    return fail(`物品表里没有武器 ${weaponId}`);
+  }
+  if (mod?.kind !== "mod" || mod.modSlot === undefined) return fail(`物品表里没有改装件 ${modId}`);
+  if (!draft.weapons.includes(weaponId) && (draft.backpack[weaponId] ?? 0) < 1) {
+    return fail(`身上没有 ${weapon.name}`);
+  }
+  const slot = mod.modSlot;
+  const fitted = draft.mods[weaponId];
+  if (action === "detach") {
+    if (fitted?.[slot] !== modId) return fail(`${weapon.name} 上没装 ${mod.name}`);
+    Reflect.deleteProperty(fitted, slot);
+    if (Object.keys(fitted).length === 0) Reflect.deleteProperty(draft.mods, weaponId);
+    put(draft, modId);
+    return ok(`从 ${weapon.name} 上拆下 ${mod.name}，放回背包`);
+  }
+  if (!mod.modFits?.includes(weapon.category)) {
+    return fail(`${mod.name} 装不到${WEAPON_CATEGORY_LABELS[weapon.category]}上`);
+  }
+  if (fitted?.[slot] === modId) return fail(`${weapon.name} 上已经装着 ${mod.name}`);
+  if (!take(draft, modId)) return fail(`背包里没有 ${mod.name}`);
+  const old = fitted?.[slot];
+  if (old !== undefined) put(draft, old);
+  draft.mods[weaponId] = { ...fitted, [slot]: modId };
+  return ok(
+    `${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}${old === undefined ? "" : "，换下的放回背包"}`,
+  );
 }

@@ -47,6 +47,13 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("unequipItem"), id: z.string().min(1).max(64) }),
   /** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
   z.strictObject({ type: z.literal("outfit"), action: z.enum(["save", "wear"]) }),
+  /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
+  z.strictObject({
+    type: z.literal("modWeapon"),
+    action: z.enum(["attach", "detach"]),
+    weapon: z.string().min(1).max(64),
+    mod: z.string().min(1).max(64),
+  }),
   /** 在商店买一件，放进背包 */
   z.strictObject({
     type: z.literal("buyItem"),
@@ -160,6 +167,10 @@ function shopCommands(
     if (!def) return `物品表里没有 ${action.id}`;
     const inventory = InventoryStateSchema.parse(world.slices.inventory);
     if ((inventory.backpack[def.id] ?? 0) < 1) return `背包里没有${def.name}；装备着的先卸下`;
+    const lastOne = !inventory.weapons.includes(def.id) && inventory.backpack[def.id] === 1;
+    if (lastOne && inventory.mods[def.id] !== undefined) {
+      return `${def.name}上还装着改装件，先拆下来再卖`;
+    }
     const value = sellValue(def);
     if (value <= 0)
       return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
@@ -217,6 +228,13 @@ function commandsFor(
       const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
       if (combat) return "战斗中换装备要花一个动作，在行动里写";
       return [{ type: "inventory.outfit", action: action.action }];
+    }
+    case "modWeapon": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "战斗中来不及改装武器";
+      return [
+        { type: "inventory.mod", action: action.action, weapon: action.weapon, mod: action.mod },
+      ];
     }
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过

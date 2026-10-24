@@ -54,6 +54,8 @@ import {
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
+  MOD_SLOT_LABELS,
+  ModSlotSchema,
   WEAPON_CATEGORY_LABELS,
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
@@ -335,6 +337,7 @@ function ripperdocView(
 }
 
 const CLOTHING_SLOTS = ClothingSlotSchema.options;
+const MOD_SLOTS = ModSlotSchema.options;
 
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
 function shopsView(
@@ -620,6 +623,36 @@ export function projectState(
           return to ? [[id, to]] : [];
         }),
       ) as Readonly<Record<string, "weapon" | "quick" | "clothing">>,
+      /** 武器上装着的改装件：武器 id → 按位置顺序；没装的武器不列 */
+      mods: Object.fromEntries(
+        Object.entries(inventory.mods).map(([weapon, fitted]) => [
+          weapon,
+          MOD_SLOTS.flatMap((slot) => {
+            const id = fitted[slot];
+            return id === undefined ? [] : [{ slot, label: MOD_SLOT_LABELS[slot], id }];
+          }),
+        ]),
+      ) as Readonly<Record<string, readonly { slot: string; label: string; id: string }[]>>,
+      /** 背包里的改装件能装到哪几把身上的武器（武器格和背包里的），按武器格在前 */
+      modTargets: Object.fromEntries(
+        Object.keys(inventory.backpack).flatMap((id) => {
+          const fits = items.get(id)?.modFits;
+          if (fits === undefined) return [];
+          const owned = [
+            ...new Set([
+              ...inventory.weapons.filter((w): w is string => w !== null),
+              ...Object.keys(inventory.backpack),
+            ]),
+          ];
+          const targets = owned.filter((w) => {
+            const category = items.get(w)?.category;
+            return (
+              items.get(w)?.kind === "weapon" && category !== undefined && fits.includes(category)
+            );
+          });
+          return targets.length > 0 ? [[id, targets]] : [];
+        }),
+      ) as Readonly<Record<string, readonly string[]>>,
     },
     /** 装着的义体，按装上的先后 */
     cyberware: installed.map((c) => {

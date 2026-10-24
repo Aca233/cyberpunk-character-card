@@ -8,6 +8,7 @@ export const ItemKindSchema = z.enum([
   "grenade",
   "consumable",
   "clothing",
+  "mod",
   "misc",
 ]);
 export type ItemKind = z.infer<typeof ItemKindSchema>;
@@ -18,6 +19,7 @@ export const ITEM_KIND_LABELS: Readonly<Record<ItemKind, string>> = {
   grenade: "手雷",
   consumable: "消耗品",
   clothing: "服装",
+  mod: "改装件",
   misc: "杂物",
 };
 
@@ -60,6 +62,16 @@ export const WEAPON_CATEGORY_LABELS: Readonly<Record<WeaponCategory, string>> = 
   lmg: "轻机枪",
   blade: "刀剑",
   blunt: "钝器",
+};
+
+/** 改装件装在武器的哪个位置：枪口（消音器）、瞄准镜、插件；每个位置装一件 */
+export const ModSlotSchema = z.enum(["muzzle", "scope", "plugin"]);
+export type ModSlot = z.infer<typeof ModSlotSchema>;
+
+export const MOD_SLOT_LABELS: Readonly<Record<ModSlot, string>> = {
+  muzzle: "枪口",
+  scope: "瞄准镜",
+  plugin: "插件",
 };
 
 /** 远程武器的类型：威能（跳弹）、技术（蓄力穿墙）、智能（子弹追踪，要手部装智能连接） */
@@ -117,6 +129,10 @@ export const ItemDefSchema = z
     weaponType: WeaponTypeSchema.optional(),
     /** 服装穿在哪一格；服装必须写 */
     clothingSlot: ClothingSlotSchema.optional(),
+    /** 改装件装在武器的哪个位置；改装件必须写 */
+    modSlot: ModSlotSchema.optional(),
+    /** 改装件能装到哪些类别的武器上；改装件必须写 */
+    modFits: z.array(WeaponCategorySchema).min(1).optional(),
     /** 拿着它角色真的能做到什么；写给模型 */
     ability: z.string().min(1).optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
@@ -141,6 +157,15 @@ export const ItemDefSchema = z
     if (item.kind === "clothing" && item.clothingSlot === undefined)
       report("服装必须写明穿在哪一格");
     if (item.kind !== "clothing" && item.clothingSlot !== undefined) report("只有服装才写格子");
+    if (item.kind === "mod") {
+      if (item.modSlot === undefined || item.modFits === undefined) {
+        report("改装件必须写明装在哪个位置、配哪些武器");
+      } else if (item.modSlot !== "plugin" && item.modFits.some((c) => MELEE.has(c))) {
+        report("近战武器只能装插件，没有枪口和瞄准镜");
+      }
+    } else if (item.modSlot !== undefined || item.modFits !== undefined) {
+      report("只有改装件才写位置和适用武器");
+    }
     if ((item.kind === "healing" || item.kind === "grenade") && item.charges === undefined) {
       report("治疗品和手雷必须写明使用次数");
     }
@@ -173,6 +198,8 @@ export const InventoryStateSchema = z.object({
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 存下的整套外观：格子 → 物品 id；没存过时为空 */
   outfit: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
+  /** 武器上装着的改装件：武器 id → 位置 → 改装件 id；同一种武器的几把共用一份 */
+  mods: z.record(z.string(), z.partialRecord(ModSlotSchema, z.string().min(1))).default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
@@ -202,6 +229,13 @@ export const InventoryInternalSchemas = {
   "inventory.outfit": z.object({
     type: z.literal("inventory.outfit"),
     action: z.enum(["save", "wear"]),
+  }),
+  /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */
+  "inventory.mod": z.object({
+    type: z.literal("inventory.mod"),
+    action: z.enum(["attach", "detach"]),
+    weapon: z.string().min(1),
+    mod: z.string().min(1),
   }),
 };
 export type InventoryInternal = z.infer<

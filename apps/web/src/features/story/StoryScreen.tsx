@@ -225,6 +225,21 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  const modAction = useCallback(
+    async (action: "attach" | "detach", weapon: string, mod: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "modWeapon", action, weapon, mod },
+        });
+      } catch (error) {
+        warn("gear", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
 
   const send = useCallback(
     (input: TurnInput) => {
@@ -330,6 +345,7 @@ export function StoryScreen() {
         onEquip={busy ? undefined : (id) => void gearAction("equipItem", id)}
         onUnequip={busy ? undefined : (id) => void gearAction("unequipItem", id)}
         onOutfit={busy ? undefined : (action) => void outfitAction(action)}
+        onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
       />
 
       <main className={styles.column}>

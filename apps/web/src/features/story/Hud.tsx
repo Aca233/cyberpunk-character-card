@@ -135,6 +135,7 @@ export function SidePanel({
   onEquip,
   onUnequip,
   onOutfit,
+  onMod,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -150,6 +151,8 @@ export function SidePanel({
   readonly onUnequip?: ((id: string) => void) | undefined;
   /** 整套外观：save 存下身上穿着的，wear 照存下的换好 */
   readonly onOutfit?: ((action: "save" | "wear") => void) | undefined;
+  /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
+  readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -260,7 +263,27 @@ export function SidePanel({
             return (
               <li key={n} data-active={active || undefined} data-empty={id === null || undefined}>
                 <span className={styles.slotNum}>{n}</span>
-                <span>{id === null ? "空" : itemName(id)}</span>
+                <span>
+                  {id === null ? "空" : itemName(id)}
+                  {id !== null &&
+                    (inventory.mods[id] ?? []).map((m) => (
+                      <small key={m.slot} className={styles.dim}>
+                        {" · "}
+                        {itemName(m.id)}
+                        {onMod && (
+                          <button
+                            type="button"
+                            className={styles.gearAction}
+                            aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
+                            title="拆下放回背包"
+                            onClick={() => onMod("detach", id, m.id)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </small>
+                    ))}
+                </span>
                 <span className={styles.gearTools}>
                   {active && <small>手持</small>}
                   {id !== null && !active && onEquip && (
@@ -378,6 +401,17 @@ export function SidePanel({
                       {to === "clothing" ? "穿上" : to === "quick" ? "放进快捷栏" : "装上"}
                     </button>
                   )}
+                  {onMod &&
+                    (inventory.modTargets[id] ?? []).map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        className={styles.gearAction}
+                        onClick={() => onMod("attach", w, id)}
+                      >
+                        装到{itemName(w)}
+                      </button>
+                    ))}
                 </li>
               );
             })}
