@@ -241,6 +241,24 @@ export function parsePatch(text: string): PatchLine[] | undefined {
   return out;
 }
 
+/** ⑤ 审守则：一轮最多记几条提醒 */
+const MAX_FLAGS = 5;
+const FLAG_LINE = /^flag\s+(代说|泄密|死人)\s*(?:[;；]\s*(.*))?$/;
+
+/** 解析 <patch> 块里的 flag 行，返回「类别：说明」；认不出的类别跳过 */
+export function parseFlags(text: string): string[] {
+  const block = PATCH_BLOCK.exec(text);
+  if (!block) return [];
+  const out: string[] = [];
+  for (const raw of (block[1] ?? "").split("\n")) {
+    const m = FLAG_LINE.exec(raw.trim());
+    if (!m) continue;
+    const note = (m[2] ?? "").trim();
+    out.push(note ? `${m[1]}：${note}` : (m[1] as string));
+  }
+  return out.slice(0, MAX_FLAGS);
+}
+
 /** 档位从轻到重；fix 只能往轻里改 */
 const LADDERS: readonly (readonly string[])[] = [
   ["graze", "heavy", "lethal"],

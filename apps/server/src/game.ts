@@ -727,6 +727,7 @@ export class GameService {
           notes: record.notes ?? [],
           considered: record.considered ?? [],
           ruling: record.ruling ?? null,
+          flags: record.flags ?? [],
           // ⑥ 没跑的原因：收场时记下的，其余按这一轮的情况推
           offscreenSkip: record.offscreen
             ? null
@@ -947,6 +948,7 @@ export class GameService {
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
         ...(turn.ruling !== undefined ? { ruling: turn.ruling } : {}),
+        ...(turn.flags.length > 0 ? { flags: [...turn.flags] } : {}),
         ...(turn.offscreen !== undefined ? { offscreen: turn.offscreen } : {}),
         ...(turn.offscreenSkip !== undefined ? { offscreenSkip: turn.offscreenSkip } : {}),
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),

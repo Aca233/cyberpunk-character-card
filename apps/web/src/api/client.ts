@@ -249,6 +249,8 @@ export interface TurnContext {
   readonly considered: readonly string[];
   /** 判断定检定或门槛的理由；没有为 null，旧后端没有 */
   readonly ruling?: string | null;
+  /** ⑤ 审守则的提醒；旧后端没有 */
+  readonly flags?: readonly string[];
   /** ⑥ 场外推演没跑的原因；跑了为 null，旧后端没有 */
   readonly offscreenSkip?: string | null;
   /** 这一轮之后城里的动静；旧后端没有 */

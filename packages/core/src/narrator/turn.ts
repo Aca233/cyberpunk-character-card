@@ -84,6 +84,7 @@ import {
   judgeGate,
   MAX_RECALL,
   type Memory,
+  parseFlags,
   parsePatch,
   readJudgeShape,
   recallCandidates,
@@ -228,6 +229,8 @@ export interface NarratorTurn {
   /** ⑥ 收了场却没推演时的原因，只供剧透视图 */
   readonly offscreenSkip: string | undefined;
   readonly notes: readonly string[];
+  /** ⑤ 审守则的提醒（替玩家角色说话、泄露秘密、死人出场）；只供剧透视图，不拦这一轮 */
+  readonly flags: readonly string[];
   readonly world: WorldState;
   readonly patches: readonly Patch[];
   readonly modules: readonly string[];
@@ -315,6 +318,8 @@ interface Proposal {
 class TurnBuilder {
   readonly dropped: Dropped[] = [];
   readonly notes: string[] = [];
+  /** ⑤ 审守则的提醒，只供剧透视图 */
+  readonly flags: string[] = [];
   repairs = 0;
   repairUsage: LlmUsage = ZERO;
   auxUsage: LlmUsage = ZERO;
@@ -484,6 +489,7 @@ async function verify(
   }
   b.auxUsage = addUsage(b.auxUsage, reply.usage);
   const lines = parsePatch(reply.text);
+  b.flags.push(...parseFlags(reply.text));
   if (lines === undefined) {
     b.notes.push("核对没给出 <patch>，提议原样保留");
     return proposals;
@@ -1017,6 +1023,7 @@ export async function runNarratorTurn(
       offscreen: offscreenTrace,
       offscreenSkip,
       notes: b.notes,
+      flags: b.flags,
       world: final.world,
       patches: ooc
         ? applied.patches

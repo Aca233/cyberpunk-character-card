@@ -266,6 +266,16 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           <pre>{JSON.stringify(ctx.dropped, null, 2)}</pre>
         </Section>
       )}
+      {ctx.flags && ctx.flags.length > 0 && (
+        <Section title={`守则提醒（${ctx.flags.length}）`} tone="warn">
+          <ul>
+            {ctx.flags.map((f, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 按核对给出的顺序排，可能重复
+              <li key={`${i}-${f}`}>{f}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {ctx.notes.length > 0 && (
         <Section title="结算记录">
           <ul>

@@ -73,6 +73,8 @@ const TurnRecordSchema = z.object({
   considered: z.array(z.string()).optional(),
   /** 判断给检定或门槛时写的理由；只供剧透视图 */
   ruling: z.string().optional(),
+  /** ⑤ 审守则的提醒（替玩家角色说话、泄露秘密、死人出场）；只供剧透视图 */
+  flags: z.array(z.string()).optional(),
   /** 场外推演发出的用户消息和原始回复；只供剧透视图 */
   offscreen: z.object({ prompt: z.string(), reply: z.string() }).optional(),
   /** 收了场却没推演时的原因；只供剧透视图 */
