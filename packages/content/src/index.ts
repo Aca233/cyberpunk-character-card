@@ -2,7 +2,7 @@ import type { GameContent } from "@cp/core";
 import { cyberware } from "./cyberware";
 import { fixers } from "./fixers";
 import { items } from "./items";
-import { twists } from "./jobs";
+import { consequences, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
 import { npcs } from "./npcs";
@@ -12,7 +12,7 @@ export { sampleCharacters } from "./characters";
 export { cyberware } from "./cyberware";
 export { fixers } from "./fixers";
 export { items } from "./items";
-export { twists } from "./jobs";
+export { consequences, twists } from "./jobs";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
 export { glossary } from "./lore";
@@ -31,4 +31,10 @@ export const gameContent: GameContent = {
 };
 
 /** 结算时传给各系统的静态数据表 */
-export const gameData: Readonly<Record<string, unknown>> = { items, cyberware, locations, twists };
+export const gameData: Readonly<Record<string, unknown>> = {
+  items,
+  cyberware,
+  locations,
+  twists,
+  consequences,
+};

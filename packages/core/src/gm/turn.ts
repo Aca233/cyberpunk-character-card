@@ -5,6 +5,7 @@ import type { Command } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
+import { falloutKinds } from "../systems/fallout";
 import { registry } from "../systems/registry";
 import {
   BlockDocSchema,
@@ -272,11 +273,8 @@ export async function runGmTurn(
   if (plan.kind === "resolve") {
     facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
   }
-  const applied = registry.applyCommands(world, commands, {
-    rng: deps.rng,
-    facts,
-    ...(deps.data ? { data: deps.data } : {}),
-  });
+  const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
+  const applied = registry.applyCommands(world, commands, applyCtx);
   const accepted: Command[] = [];
   for (const { command, result } of applied.results) {
     if (result.ok) {
@@ -286,6 +284,14 @@ export async function runGmTurn(
       b.drop(command.type, command, result.reason, "rules");
     }
   }
+  // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
+  const settled = ooc
+    ? applied
+    : registry.applyCommands(
+        applied.world,
+        [{ type: "fallout.record", kinds: falloutKinds(accepted, plan.kind === "resolve") }],
+        applyCtx,
+      );
 
   return {
     kind: "done",
@@ -297,8 +303,8 @@ export async function runGmTurn(
       commands: accepted,
       dropped: b.dropped,
       notes: b.notes,
-      world: applied.world,
-      patches: applied.patches,
+      world: settled.world,
+      patches: ooc ? applied.patches : [...applied.patches, ...settled.patches],
       modules: prompt.modules,
       pin: !ooc && shape.pin === true,
       ooc,

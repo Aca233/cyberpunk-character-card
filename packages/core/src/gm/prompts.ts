@@ -14,6 +14,7 @@ import {
   PENALTY_CAP,
 } from "../systems/dice";
 import { RARITY_LABELS } from "../systems/economy/schema";
+import { consequenceSection, FalloutStateSchema, falloutSection } from "../systems/fallout";
 import { DAMAGE_LABELS } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import {
@@ -322,6 +323,7 @@ export function buildGmPrompt(
         cyberwareSection(extras.data),
         locationSection(extras.data),
         twistSection(extras.data),
+        consequenceSection(extras.data, view.difficulty),
       ].filter((s): s is string => s !== undefined)
     : [];
   const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(modules, tables) }];
@@ -337,6 +339,8 @@ export function buildGmPrompt(
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
   const jobs = jobsSection(JobsStateSchema.parse(world.slices.jobs), view.character.streetCred);
   if (jobs) parts.push(`【委托】\n${jobs}`);
+  const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
+  if (recent) parts.push(`【近期后果】\n${recent}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));
