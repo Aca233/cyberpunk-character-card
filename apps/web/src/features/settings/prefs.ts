@@ -6,11 +6,13 @@ export interface NarrativePrefs {
   readonly sceneTitles: boolean;
   /** 接到大单、首领现身、拿到不朽物品时弹特写卡 */
   readonly closeups: boolean;
+  /** 剧透调试视图：上下文查看器、存为测评用例；打开时屏幕顶部常驻「剧透」 */
+  readonly spoilers: boolean;
 }
 
 const KEY = "cp.narrativePrefs";
 const EVENT = "cp-narrative-prefs";
-const DEFAULTS: NarrativePrefs = { sceneTitles: false, closeups: false };
+const DEFAULTS: NarrativePrefs = { sceneTitles: false, closeups: false, spoilers: false };
 
 let cache: { readonly raw: string | null; readonly value: NarrativePrefs } | null = null;
 
@@ -21,13 +23,22 @@ function read(): NarrativePrefs {
   if (raw !== null) {
     try {
       const parsed = JSON.parse(raw) as Partial<Record<keyof NarrativePrefs, unknown>>;
-      value = { sceneTitles: parsed.sceneTitles === true, closeups: parsed.closeups === true };
+      value = {
+        sceneTitles: parsed.sceneTitles === true,
+        closeups: parsed.closeups === true,
+        spoilers: parsed.spoilers === true,
+      };
     } catch {
       value = DEFAULTS;
     }
   }
   cache = { raw, value };
   return value;
+}
+
+/** 给接口层用：现在开没开剧透 */
+export function spoilersOn(): boolean {
+  return read().spoilers;
 }
 
 export function setNarrativePref(key: keyof NarrativePrefs, on: boolean): void {

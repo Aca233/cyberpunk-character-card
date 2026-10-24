@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
 import { useNarrativePrefs } from "../settings/prefs";
+import { useSpoilerView } from "../settings/SpoilerBadge";
 import type { useStory } from "./store";
 import styles from "./story.module.css";
 import {
@@ -173,9 +174,7 @@ function TurnBlock({
             本轮数值未结算（{turn.dropped} 条）
           </span>
         )}
-        <Link to={`/settings?tab=context&save=${encodeURIComponent(saveId)}&seq=${turn.seq}`}>
-          #{turn.seq} 上下文
-        </Link>
+        <ContextLink saveId={saveId} seq={turn.seq} />
       </footer>
     </article>
   );
@@ -331,5 +330,16 @@ export function ChoiceList({
         );
       })}
     </ol>
+  );
+}
+
+/** 上下文是剧透调试视图：打开「显示剧透」或后端开发模式时才给入口 */
+function ContextLink({ saveId, seq }: { readonly saveId: string; readonly seq: number }) {
+  const { open } = useSpoilerView();
+  if (!open) return null;
+  return (
+    <Link to={`/settings?tab=context&save=${encodeURIComponent(saveId)}&seq=${seq}`}>
+      #{seq} 上下文
+    </Link>
   );
 }

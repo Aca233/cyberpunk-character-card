@@ -38,7 +38,12 @@ async function body<T extends z.ZodType>(
 const reply = (c: Context, r: Reply) => c.json(r.body, r.status);
 
 /** /api/saves：存档列表和创建、状态投影、提交回合、界面操作、回合事件流（SSE，可按 Last-Event-ID 续收）、停止、上下文查看器 */
-export function saveRoutes(game: GameService, hub: TurnHub): Hono {
+/** 剧透调试视图的接口：要带 x-cp-spoilers: 1（网页上打开「显示剧透」），开发模式不看 */
+const SPOILER_HEADER = "x-cp-spoilers";
+const SPOILER_LOCKED = "这是剧透调试视图：先到设置的叙事偏好里打开「显示剧透」";
+
+export function saveRoutes(game: GameService, hub: TurnHub, dev = false): Hono {
+  const locked = (c: Context) => !dev && c.req.header(SPOILER_HEADER) !== "1";
   const app = new Hono();
 
   app.onError((error, c) => {
@@ -110,12 +115,14 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
   });
 
   app.get("/:id/turns/:seq/context", async (c) => {
+    if (locked(c)) return c.json({ error: SPOILER_LOCKED }, 403);
     const seq = Number(c.req.param("seq"));
     if (!Number.isInteger(seq) || seq < 0) return c.json({ error: "轮次序号不合法" }, 400);
     return reply(c, await game.context(c.req.param("id"), seq));
   });
 
   app.post("/:id/turns/:seq/eval-case", async (c) => {
+    if (locked(c)) return c.json({ error: SPOILER_LOCKED }, 403);
     const seq = Number(c.req.param("seq"));
     if (!Number.isInteger(seq) || seq < 0) return c.json({ error: "轮次序号不合法" }, 400);
     return reply(c, await game.evalDraft(c.req.param("id"), seq));

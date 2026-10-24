@@ -12,6 +12,8 @@ import type {
   TurnInput,
   TurnUsage,
 } from "@cp/core";
+
+import { spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
@@ -28,12 +30,23 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** 剧透调试视图的接口要带这个头；后端开发模式下不看 */
+const spoilerHeader = () => ({ "x-cp-spoilers": spoilersOn() ? "1" : "0" });
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Readonly<Record<string, string>> = {},
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
       method,
-      headers: body === undefined ? {} : { "content-type": "application/json" },
+      headers: {
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {
@@ -342,10 +355,20 @@ export const api = {
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>
-    request<TurnContext>("GET", `/saves/${saveId}/turns/${seq}/context`),
+    request<TurnContext>(
+      "GET",
+      `/saves/${saveId}/turns/${seq}/context`,
+      undefined,
+      spoilerHeader(),
+    ),
   /** 把这一轮存成评测用例草稿，返回草稿在仓库里的路径 */
   evalCase: (saveId: string, seq: number) =>
-    request<{ id: string; file: string }>("POST", `/saves/${saveId}/turns/${seq}/eval-case`),
+    request<{ id: string; file: string }>(
+      "POST",
+      `/saves/${saveId}/turns/${seq}/eval-case`,
+      undefined,
+      spoilerHeader(),
+    ),
 };
 
 /** 每次提交生成一个新的请求 id；同一次提交重发时沿用，后端只执行一次 */

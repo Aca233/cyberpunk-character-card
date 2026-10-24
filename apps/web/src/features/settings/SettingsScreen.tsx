@@ -9,6 +9,8 @@ import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
+import { setNarrativePref } from "./prefs";
+import { useSpoilerView } from "./SpoilerBadge";
 import styles from "./settings.module.css";
 
 type Tab = "profiles" | "narrative" | "context";
@@ -127,6 +129,7 @@ export function SettingsScreen() {
 /* ———— 上下文 ———— */
 
 function ContextViewer() {
+  const { open } = useSpoilerView();
   const [params, setParams] = useSearchParams();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const saveId = params.get("save") ?? saves.data?.[0]?.id ?? "";
@@ -143,7 +146,7 @@ function ContextViewer() {
   const context = useQuery({
     queryKey: ["context", saveId, seq],
     queryFn: () => api.context(saveId, seq ?? 0),
-    enabled: saveId !== "" && seq !== null,
+    enabled: open && saveId !== "" && seq !== null,
   });
 
   const update = (key: "save" | "seq", value: string) =>
@@ -154,6 +157,21 @@ function ContextViewer() {
       return p;
     });
 
+  if (!open) {
+    return (
+      <div className={styles.prefs}>
+        <p>
+          这里是剧透调试视图：会显示发给模型的全部内容，包括人物的诉求、底线、秘密和委托的隐藏信息。
+        </p>
+        <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
+        <div>
+          <Button primary onClick={() => setNarrativePref("spoilers", true)}>
+            显示剧透
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (saves.isPending) return <p className={styles.dim}>正在读取存档…</p>;
   if (saves.isError) return <EmptyState text={`读取存档失败：${saves.error.message}`} />;
   if (saves.data.length === 0)

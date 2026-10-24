@@ -353,3 +353,19 @@
 .pref > small {
   grid-column: 2;
 }
+
+/* 剧透调试视图的常驻标记：深红底白字，对比度 7:1 以上 */
+.spoilerBadge {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 2px 14px;
+  border-radius: 0 0 4px 4px;
+  background: #7f1d1d;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  pointer-events: none;
+}

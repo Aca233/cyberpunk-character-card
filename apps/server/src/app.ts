@@ -93,7 +93,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get("/api/glossary", (c) => c.json({ glossary }));
   app.route("/api/profiles", profileRoutes(deps.config));
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
-  app.route("/api/saves", saveRoutes(game, hub));
+  app.route("/api/saves", saveRoutes(game, hub, deps.dev === true));
   if (deps.dev && deps.authoring) {
     app.route(
       "/api/dev/authoring",
