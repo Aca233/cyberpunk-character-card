@@ -22,6 +22,7 @@ export const DAMAGE_PERCENT: Readonly<Record<DamageTier, number>> = {
   lethal: 60,
 };
 const DAMAGE_RANK: Readonly<Record<DamageTier, number>> = { graze: 0, heavy: 1, lethal: 2 };
+const DAMAGE_TIERS: readonly DamageTier[] = ["graze", "heavy", "lethal"];
 export const DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
   graze: "擦伤",
   heavy: "重击",
@@ -72,7 +73,7 @@ function trackSevere(draft: Health, now: number): void {
   }
 }
 
-/** 没掷骰不扣血；档位不超过 check 事先说明的；同一次检定只扣一次 */
+/** 没掷骰不扣血；档位不超过 check 事先说明的（大失败最多高一档）；同一次检定只扣一次；护甲义体再降一档 */
 export function applyDamage(
   draft: Health,
   command: DamageCommand,
@@ -83,17 +84,30 @@ export function applyDamage(
   if (!fact) return fail("没掷骰不扣血：本轮没有检定结果");
   if (isSuccess(fact.outcome)) return fail("检定成功，不能扣血");
   if (fact.damage === undefined) return fail("check 没有事先写明伤害档位，失败不扣血");
-  if (DAMAGE_RANK[command.tier] > DAMAGE_RANK[fact.damage]) {
+  const cap = Math.min(
+    DAMAGE_RANK.lethal,
+    DAMAGE_RANK[fact.damage] + (fact.outcome === "fumble" ? 1 : 0),
+  );
+  if (DAMAGE_RANK[command.tier] > cap) {
     return fail(
-      `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[fact.damage]}`,
+      `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[fact.damage]}（大失败最多高一档）`,
     );
   }
   if (draft.damagedBy === fact.id) return fail("这次检定已经扣过血");
-
-  const amount = percentOf(draft.max, DAMAGE_PERCENT[command.tier]);
-  draft.hp = Math.max(0, draft.hp - amount);
   draft.damagedBy = fact.id;
-  const notes = [`${DAMAGE_LABELS[command.tier]} −${amount}，${hpNote(draft)}`];
+
+  // 护甲降一档；几件护甲同时装着也只降一档（turn 只放一件的名字进来）
+  const armor = typeof ctx.facts.armor === "string" ? ctx.facts.armor : undefined;
+  const rank = DAMAGE_RANK[command.tier] - (armor ? 1 : 0);
+  if (rank < 0) return ok(`${armor}挡下了这一下（${DAMAGE_LABELS[command.tier]}），没扣血`);
+  const tier = DAMAGE_TIERS[rank] ?? "graze";
+  const amount = percentOf(draft.max, DAMAGE_PERCENT[tier]);
+  draft.hp = Math.max(0, draft.hp - amount);
+  const notes = [
+    armor
+      ? `${armor}把${DAMAGE_LABELS[command.tier]}降成${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`
+      : `${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`,
+  ];
   if (draft.hp === 0) {
     draft.condition = fact.damage === "lethal" ? "dying" : "down";
     notes.push(

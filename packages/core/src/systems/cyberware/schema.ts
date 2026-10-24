@@ -47,6 +47,8 @@ export const CyberwareDefSchema = z.object({
   checks: z.array(AttributeSchema).default([]),
   /** 装着时属性加多少（+1 至 +3）；把属性推到 11–20 主要靠它 */
   attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
+  /** 护甲义体：受到的伤害降一档；装着几件护甲也只降一档 */
+  armor: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
   iconic: z.boolean().default(false),
 });

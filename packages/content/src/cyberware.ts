@@ -248,6 +248,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     ability: "皮下嵌着装甲板：刀划不开，小口径子弹打不穿，挨揍不容易倒",
     checks: ["body"],
+    armor: true,
   },
   {
     id: "fireproof-coating",

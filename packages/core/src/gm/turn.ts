@@ -364,6 +364,11 @@ export async function runGmTurn(
   if (plan.kind === "resolve") {
     facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
   }
+  // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
+  const armor = CyberwareStateSchema.parse(world.slices.cyberware ?? {})
+    .installed.map((c) => parts.get(c.id))
+    .find((d) => d?.armor === true);
+  if (armor) facts.armor = armor.name;
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
   const applied = registry.applyCommands(world, commands, applyCtx);
   const accepted: Command[] = [];

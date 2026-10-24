@@ -283,9 +283,10 @@ export function newGameWorld(
 
 /** 义体的属性加成，例如“反应 +2”；没有时是空字符串 */
 function bonusText(def: CyberwareDef): string {
-  return Object.entries(def.attributes)
-    .map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`)
-    .join("、");
+  return [
+    ...Object.entries(def.attributes).map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`),
+    ...(def.armor ? ["受伤降一档"] : []),
+  ].join("、");
 }
 
 function ripperdocView(
