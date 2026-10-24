@@ -337,7 +337,7 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop) return;
+      if (journal || atDoc || atShop || story.spend) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -352,7 +352,18 @@ export function StoryScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal, atDoc, atShop]);
+  }, [
+    choose,
+    pickedId,
+    offers?.rolled,
+    story.failure,
+    story.spend,
+    busy,
+    navigate,
+    journal,
+    atDoc,
+    atShop,
+  ]);
 
   if (query.isPending) {
     return (
@@ -571,6 +582,34 @@ export function StoryScreen() {
                 }
           }
         />
+      )}
+      {story.spend && (
+        <Dialog
+          title={`花一大笔钱：${story.spend.label}`}
+          tone="info"
+          onClose={story.cancelSpend}
+          actions={
+            <>
+              <Button
+                primary
+                onClick={() => {
+                  const spend = story.spend;
+                  if (spend) send({ ...spend.input, spendOk: true });
+                }}
+              >
+                花这笔钱
+              </Button>
+              <Button onClick={story.cancelSpend}>再想想</Button>
+            </>
+          }
+        >
+          <p>
+            要花 {story.spend.price.toLocaleString("en-US")} 欧元，身上有{" "}
+            {story.spend.eddies.toLocaleString("en-US")} 欧元，花完剩{" "}
+            {(story.spend.eddies - story.spend.price).toLocaleString("en-US")}。
+          </p>
+          <p>取消不算一轮，输入还留在输入框里。</p>
+        </Dialog>
       )}
       {failure?.kind === "blocked" && (
         <Dialog

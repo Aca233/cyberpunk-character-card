@@ -1,8 +1,23 @@
 import type { TurnEvent } from "@cp/core";
 
-const NAMES = ["started", "rolled", "text", "done", "blocked", "stopped", "error"] as const;
+const NAMES = [
+  "started",
+  "rolled",
+  "text",
+  "done",
+  "blocked",
+  "confirmSpend",
+  "stopped",
+  "error",
+] as const;
 
-const TERMINAL: ReadonlySet<string> = new Set(["done", "blocked", "stopped", "error"]);
+const TERMINAL: ReadonlySet<string> = new Set([
+  "done",
+  "blocked",
+  "confirmSpend",
+  "stopped",
+  "error",
+]);
 const isTerminal = (event: TurnEvent) => TERMINAL.has(event.type);
 
 export interface FollowHandlers {

@@ -4,6 +4,15 @@ import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CharacterStateSchema, effectiveAttribute } from "../systems/character/schema";
 import { ATTRIBUTE_LABELS, CheckProposalSchema } from "../systems/dice";
+import {
+  DiscountSchema,
+  discounted,
+  EconomyStateSchema,
+  isBigSpend,
+  SERVICES,
+  ServiceSchema,
+} from "../systems/economy/schema";
+import { itemCatalog } from "../systems/inventory/apply";
 import { type Gate, GateProposalSchema } from "./block";
 
 /**
@@ -11,7 +20,23 @@ import { type Gate, GateProposalSchema } from "./block";
  * 这里放 ① 和 ⑤ 的格式、门槛判定、旧记忆候选；调模型和结算在 turn.ts
  */
 
-/** ① 判断的格式，只用来生成说明；check 和 gate 另外逐条校验 */
+/** ① 判断里玩家这一轮要花的钱：只写买什么，价钱由代码查表 */
+export const BuyProposalSchema = z
+  .object({
+    item: z.string().min(1).optional().describe("买物品写物品表里的 id"),
+    service: ServiceSchema.optional().describe(
+      "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
+    ),
+    discount: DiscountSchema.default("none").describe(
+      "讲价讲下来多少：none 没有，small 小，large 大",
+    ),
+  })
+  .refine((b) => (b.item === undefined) !== (b.service === undefined), {
+    message: "item 和 service 写一个",
+  });
+export type BuyProposal = z.infer<typeof BuyProposalSchema>;
+
+/** ① 判断的格式，只用来生成说明；check、gate 和 buy 另外逐条校验 */
 export const JudgeDocSchema = z.object({
   read: z
     .string()
@@ -22,6 +47,9 @@ export const JudgeDocSchema = z.object({
     .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
   check: CheckProposalSchema.nullable().describe("结果真不确定、需要掷骰时给出；不需要时写 null"),
   gate: GateProposalSchema.nullable().describe("属性达标就直接成功的门槛；没有写 null"),
+  buy: BuyProposalSchema.nullable().describe(
+    "玩家这一轮要掏钱买东西或买服务时写买什么，不写价钱；不花钱写 null",
+  ),
   recall: z
     .array(z.string())
     .describe("从【可调的旧记忆】里原样抄这一轮用得上的标题，最多 3 条，按从旧到新排；没有写 []"),
@@ -32,6 +60,7 @@ const JudgeShapeSchema = z.object({
   ooc: z.boolean().optional().catch(undefined),
   check: z.unknown().optional(),
   gate: z.unknown().optional(),
+  buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
 });
 export type JudgeShape = z.infer<typeof JudgeShapeSchema>;
@@ -69,6 +98,39 @@ export function gateText(result: GateResult): string {
   return result.met
     ? `【门槛】${label}要 ${result.gate.value}，角色是 ${result.value}：达标，这件事直接办成，不掷骰`
     : `【门槛】${label}要 ${result.gate.value}，角色是 ${result.value}：没达标，这条路现在走不通；让世界或人物拒绝，或者让玩家付出别的代价换一条路`;
+}
+
+/** 要玩家先确认的大额花费 */
+export interface BigSpend {
+  readonly label: string;
+  readonly price: number;
+  /** 身上现有的欧元 */
+  readonly eddies: number;
+}
+
+/** 一次花掉超过存款一半且超过 1,000 欧元时返回；查不到价钱、不卖的东西不拦，交给结算 */
+export function bigSpend(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  buy: BuyProposal,
+): BigSpend | undefined {
+  const { eddies } = EconomyStateSchema.parse(world.slices.economy);
+  let label: string;
+  let base: number;
+  if (buy.service !== undefined) {
+    label = SERVICES[buy.service].label;
+    base = SERVICES[buy.service].price;
+  } else {
+    const def =
+      data.items === undefined || buy.item === undefined
+        ? undefined
+        : itemCatalog(data).get(buy.item);
+    if (!def || def.iconic || def.price === undefined) return undefined;
+    label = def.name;
+    base = def.price;
+  }
+  const price = discounted(base, buy.discount);
+  return isBigSpend(price, eddies) ? { label, price, eddies } : undefined;
 }
 
 /** 可调的旧记忆：热层以外的旧轮次；M3 换成状态库和扩展层检索 */

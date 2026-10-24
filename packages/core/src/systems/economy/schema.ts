@@ -75,6 +75,14 @@ export const SERVICES: Readonly<
 };
 
 /** 按折扣档算价钱，舍到十位，最少 10 */
+/** 大额花费：一次花掉超过存款一半、且超过这个数，要玩家在提交前确认 */
+export const BIG_SPEND_MIN = 1_000;
+
+/** 钱不够的不算：结算会拒绝，用不着确认 */
+export function isBigSpend(price: number, eddies: number): boolean {
+  return price > BIG_SPEND_MIN && price * 2 > eddies && price <= eddies;
+}
+
 export function discounted(base: number, discount: Discount): number {
   return Math.max(10, Math.round((base * DISCOUNT_FACTORS[discount]) / 10) * 10);
 }

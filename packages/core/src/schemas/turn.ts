@@ -12,6 +12,8 @@ export const TurnInputSchema = z.strictObject({
   sandevistan: z.boolean().optional(),
   /** 回复第几条消息 */
   replyTo: z.number().int().min(1).optional(),
+  /** 玩家已经在提交前确认过这一轮的大额花费 */
+  spendOk: z.boolean().optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 
@@ -60,7 +62,7 @@ export type TurnEvent =
       readonly outcome: "critical" | "success" | "failure" | "fumble";
     }
   | { readonly type: "text"; readonly text: string }
-  /** 以下四种是终止事件，每一轮恰好一个 */
+  /** 以下五种是终止事件，每一轮恰好一个 */
   | {
       readonly type: "done";
       readonly seq: number;
@@ -68,12 +70,19 @@ export type TurnEvent =
       readonly usage?: TurnUsage;
     }
   | { readonly type: "blocked"; readonly reason: string }
+  /** 这一轮要一次花掉一大笔钱：先问玩家，什么都没写进存档 */
+  | {
+      readonly type: "confirmSpend";
+      readonly label: string;
+      readonly price: number;
+      readonly eddies: number;
+    }
   | { readonly type: "stopped" }
   | { readonly type: "error"; readonly message: string; readonly retryable: boolean };
 
 export type TerminalTurnEvent = Extract<
   TurnEvent,
-  { type: "done" | "blocked" | "stopped" | "error" }
+  { type: "done" | "blocked" | "confirmSpend" | "stopped" | "error" }
 >;
 
 export function isTerminalEvent(event: TurnEvent): event is TerminalTurnEvent {

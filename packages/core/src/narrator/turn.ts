@@ -65,6 +65,9 @@ import {
 import { closeupFor, sceneTitle } from "./scene";
 import {
   applyFix,
+  type BigSpend,
+  BuyProposalSchema,
+  bigSpend,
   type GateResult,
   gateText,
   JudgeDocSchema,
@@ -240,7 +243,9 @@ export interface NarratorTurn {
 
 export type NarratorResult =
   | { readonly kind: "done"; readonly turn: NarratorTurn }
-  | { readonly kind: "blocked"; readonly reason: string };
+  | { readonly kind: "blocked"; readonly reason: string }
+  /** 提交前确认：这一轮要一次花掉一大笔钱，先问玩家；什么都没写，取消不算一轮 */
+  | ({ readonly kind: "confirmSpend" } & BigSpend);
 
 export interface NarratorDeps {
   readonly llm: LlmClient;
@@ -551,6 +556,20 @@ export async function runNarratorTurn(
       if (spec && check) b.drop("gate", spec, "这一轮已经给了检定，门槛不再判", "rules");
       else if (spec) gate = judgeGate(world, spec);
     }
+  }
+
+  // 提交前确认：一次花掉超过存款一半且超过 1,000 欧元时先停下来问；玩家确认过就不再问
+  if (
+    judge.buy !== undefined &&
+    judge.buy !== null &&
+    plan.kind === "action" &&
+    plan.input.spendOk !== true &&
+    !ooc &&
+    !inFlashback
+  ) {
+    const buy = await b.validate("buy", judge.buy, BuyProposalSchema);
+    const spend = buy && bigSpend(world, deps.data ?? {}, buy);
+    if (spend) return { kind: "confirmSpend", ...spend };
   }
 
   // 旧记忆：只认候选里原样抄来的标题

@@ -34,6 +34,14 @@ export interface Failure {
 
 export type Rolled = Extract<TurnEvent, { type: "rolled" }>;
 
+/** 提交前确认：这一轮要一次花掉一大笔钱；确认后带 spendOk 原样重发 */
+export interface Spend {
+  readonly label: string;
+  readonly price: number;
+  readonly eddies: number;
+  readonly input: TurnInput;
+}
+
 interface StoryState {
   readonly phase: "idle" | "submitting" | "streaming";
   readonly saveId: string | null;
@@ -43,10 +51,13 @@ interface StoryState {
   readonly rolled: Rolled | null;
   readonly pending: Pending | null;
   readonly failure: Failure | null;
+  readonly spend: Spend | null;
   /** 输入框：方式和文字；发送成功、这一轮写进存档后才清空 */
   readonly draft: TurnInput;
   setDraft(draft: Partial<TurnInput>): void;
   dismiss(): void;
+  /** 不花这笔钱：关掉确认框，输入留在输入框里 */
+  cancelSpend(): void;
   enter(saveId: string): void;
   submit(
     saveId: string,
@@ -88,6 +99,25 @@ export const useStory = create<StoryState>()((set, get) => {
                 draft: wasInput ? EMPTY_DRAFT : s.draft,
               })),
             );
+            return;
+          }
+          case "confirmSpend": {
+            const pending = get().pending;
+            set({
+              phase: "idle",
+              turnId: null,
+              text: "",
+              pending: null,
+              spend:
+                pending?.kind === "input"
+                  ? {
+                      label: event.label,
+                      price: event.price,
+                      eddies: event.eddies,
+                      input: pending.input,
+                    }
+                  : null,
+            });
             return;
           }
           case "blocked":
@@ -137,9 +167,11 @@ export const useStory = create<StoryState>()((set, get) => {
     rolled: null,
     pending: null,
     failure: null,
+    spend: null,
     draft: EMPTY_DRAFT,
     setDraft: (draft) => set((s) => ({ draft: { ...s.draft, ...draft } })),
     dismiss: () => set({ failure: null }),
+    cancelSpend: () => set({ spend: null }),
     enter: (saveId) => {
       if (get().saveId === saveId) return;
       unsubscribe?.();
@@ -152,12 +184,13 @@ export const useStory = create<StoryState>()((set, get) => {
         rolled: null,
         pending: null,
         failure: null,
+        spend: null,
         draft: EMPTY_DRAFT,
       });
     },
     async submit(saveId, baseVersion, pending, refresh) {
       if (get().phase !== "idle") return;
-      set({ phase: "submitting", pending, failure: null, text: "", rolled: null });
+      set({ phase: "submitting", pending, failure: null, spend: null, text: "", rolled: null });
       const body =
         pending.kind === "input"
           ? { requestId: newRequestId(), baseVersion, input: pending.input }

@@ -712,6 +712,11 @@ export class GameService {
         hub.push(run, { type: "blocked", reason: redact(result.reason) });
         return;
       }
+      if (result.kind === "confirmSpend") {
+        const { label, price, eddies } = result;
+        hub.push(run, { type: "confirmSpend", label, price, eddies });
+        return;
+      }
       if (signal.aborted) throw new NarratorAbortedError("已停止");
       const { turn } = result;
       const usage = addUsage(addUsage(turn.usage, turn.auxUsage), turn.repairUsage);

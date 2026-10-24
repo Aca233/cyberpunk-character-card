@@ -282,6 +282,20 @@ async function main(): Promise<number> {
           scores: [],
           ms: Date.now() - started,
         };
+      } else if (result.kind === "confirmSpend") {
+        run = {
+          rep,
+          ok: false,
+          findings: [
+            {
+              name: "提交前确认",
+              ok: false,
+              detail: `停在大额花费确认：${result.label} ${result.price} 欧元；用例的输入要带 spendOk`,
+            },
+          ],
+          scores: [],
+          ms: Date.now() - started,
+        };
       } else {
         const { turn } = result;
         add(usage.narrator, turn.usage);
