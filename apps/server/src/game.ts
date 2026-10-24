@@ -15,6 +15,7 @@ import {
   boardStart,
   buildExtractPrompt,
   buildJudgePrompt,
+  buildLedger,
   buildNarratorPrompt,
   type CheckRecord,
   type Clock,
@@ -641,6 +642,11 @@ export class GameService {
             over: e.status === "over",
             updatedAt: e.updatedAt,
           })),
+          // 账目对账：最近 10 轮各改了哪些硬数值，和当时生效的指令
+          ledger: buildLedger(
+            { nextSeq: 0, world: newGameWorld(meta, gameContent) },
+            records.slice(0, seq + 1),
+          ),
           unsettled: record.unsettled ?? null,
           check: record.check ?? null,
           choices: record.choices ?? [],

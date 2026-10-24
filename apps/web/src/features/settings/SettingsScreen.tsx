@@ -276,6 +276,27 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           </ul>
         </Section>
       )}
+      {ctx.ledger && ctx.ledger.length > 0 && (
+        <Section
+          title={`账目对账（最近 ${ctx.ledger.filter((e) => e.kind === "turn").length} 轮）`}
+        >
+          <ul>
+            {ctx.ledger.map((e) => (
+              <li key={e.seq}>
+                <strong>
+                  {e.kind === "turn" ? `第 ${e.seq} 轮` : `第 ${e.seq} 条（界面操作）`}
+                </strong>
+                {e.changes.length === 0
+                  ? "：硬数值没变"
+                  : `：${e.changes.map((c) => `${c.label} ${c.before ?? "—"} → ${c.after ?? "—"}`).join("，")}`}
+                {e.commands.length > 0 && (
+                  <pre>{e.commands.map((c) => JSON.stringify(c)).join("\n")}</pre>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {ctx.considered.length > 0 && (
         <Section title={`考虑过没记账的（${ctx.considered.length}）`}>
           <ul>

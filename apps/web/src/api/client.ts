@@ -251,6 +251,8 @@ export interface TurnContext {
   readonly ruling?: string | null;
   /** 这一轮之后城里的动静；旧后端没有 */
   readonly city?: readonly CityEventView[];
+  /** 账目对账：最近 10 轮各改了哪些硬数值；旧版后端没有 */
+  readonly ledger?: readonly LedgerEntryView[];
   /** 未定稿的原因；定稿的轮次为 null */
   readonly unsettled: string | null;
   readonly check: unknown;
@@ -277,6 +279,18 @@ export interface StagePrompt {
 }
 
 /** 上下文查看器里的一条城里的动静 */
+/** 账目对账的一条：一个回合或一次界面操作 */
+export interface LedgerEntryView {
+  readonly seq: number;
+  readonly kind: "turn" | "action";
+  readonly changes: readonly {
+    readonly label: string;
+    readonly before: number | null;
+    readonly after: number | null;
+  }[];
+  readonly commands: readonly unknown[];
+}
+
 export interface CityEventView {
   readonly id: string;
   readonly title: string;
