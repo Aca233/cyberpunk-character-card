@@ -7,6 +7,8 @@ import type {
   Combo,
   LifepathEntry,
   PlayerView,
+  ProseBlock,
+  ProseMode,
   TurnInput,
   TurnUsage,
 } from "@cp/core";
@@ -51,6 +53,61 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError(`${message}${details}`, response.status, data);
   }
   return data as T;
+}
+
+export interface ProseInput {
+  readonly card: CharacterCard;
+  readonly block: ProseBlock;
+  readonly mode: ProseMode;
+  readonly instruction?: string;
+}
+
+/**
+ * 角色正文：后端按行吐 JSON 事件，边收边交给 onText；停止时 fetch 抛 AbortError，由调用方处理。
+ * 返回 truncated：模型写超了字数，后面的被截掉
+ */
+async function streamProse(
+  input: ProseInput,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<{ truncated: boolean }> {
+  let response: Response;
+  try {
+    response = await fetch("/api/characters/prose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw new ApiError("连不上后端：确认已经在项目根目录运行 pnpm --filter @cp/server dev", 0);
+  }
+  if (!response.ok || !response.body) {
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const message = typeof data.error === "string" ? data.error : `请求失败（${response.status}）`;
+    throw new ApiError(message, response.status, data);
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim() === "") continue;
+      const event = JSON.parse(line) as
+        | { type: "text"; text: string }
+        | { type: "error"; message: string }
+        | { type: "done"; truncated: boolean };
+      if (event.type === "text") onText(event.text);
+      else if (event.type === "error") throw new ApiError(event.message, 502);
+      else return { truncated: event.truncated };
+    }
+  }
+  throw new ApiError("连接中途断开了，可以重试", 0);
 }
 
 export interface Health {
@@ -224,6 +281,8 @@ export const api = {
   /** 自写模块交给辅助模型解读；会花一次模型调用 */
   interpretModule: (input: { slot: BoardSlot; text: string; board: Board }) =>
     request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),
+  /** 角色正文的一个区块交给辅助模型写，流式；会花一次模型调用 */
+  streamProse,
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),

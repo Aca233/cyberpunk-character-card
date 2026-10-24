@@ -9,9 +9,12 @@ import {
   interpretModule,
   type LlmClient,
   normalizeBoard,
+  ProseRequestSchema,
   START_CYBERWARE_POINTS,
+  streamProse,
 } from "@cp/core";
 import { type Context, Hono } from "hono";
+import { stream } from "hono/streaming";
 import { z } from "zod";
 import type { CharacterStore } from "../characters";
 import { AbortedError, UpstreamError } from "../providers/http";
@@ -109,6 +112,31 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
       if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
       throw error;
     }
+  });
+  // 角色正文：一个区块交给辅助模型写，按行吐 JSON 事件（text / error / done）；不进回合日志
+  app.post("/prose", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const input = ProseRequestSchema.safeParse(raw);
+    if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
+    const signal = c.req.raw.signal;
+    c.header("content-type", "application/x-ndjson; charset=utf-8");
+    c.header("cache-control", "no-store");
+    return stream(c, async (out) => {
+      const send = (event: unknown) => out.write(`${JSON.stringify(event)}\n`);
+      try {
+        for await (const event of streamProse(llm, input.data, signal)) await send(event);
+      } catch (error) {
+        if (error instanceof AbortedError) return;
+        const message = error instanceof UpstreamError ? error.message : "写正文时出错了，可以重试";
+        if (!(error instanceof UpstreamError)) console.error(error);
+        await send({ type: "error", message });
+      }
+    });
   });
   app.get("/:id", async (c) => {
     const entry = await store.get(c.req.param("id"));

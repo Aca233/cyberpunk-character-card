@@ -19,6 +19,31 @@ export const ATTRIBUTE_CREATE_MAX = 6;
 
 const text = (max: number) => z.string().trim().max(max);
 
+/** 角色正文的区块：都可以交给模型生成、重写、续写、润色，也可以手写和锁定 */
+export const PROSE_BLOCKS = [
+  "look",
+  "past",
+  "personality",
+  "voice",
+  "scene",
+  "greeting",
+  "examples",
+] as const;
+export const ProseBlockSchema = z.enum(PROSE_BLOCKS);
+export type ProseBlock = z.infer<typeof ProseBlockSchema>;
+
+export const PROSE_BLOCK_INFO: Readonly<
+  Record<ProseBlock, { readonly label: string; readonly max: number; readonly hint: string }>
+> = {
+  look: { label: "外貌", max: 300, hint: "衣着、神态、义体的样子、留下的伤疤" },
+  past: { label: "背景故事", max: 800, hint: "从哪来，失去过什么，还有什么没了结" },
+  personality: { label: "性格", max: 300, hint: "在乎什么，忍不了什么，习惯把什么藏起来" },
+  voice: { label: "说话方式", max: 300, hint: "口头禅、语气、爱用的词" },
+  scene: { label: "场景", max: 400, hint: "故事开始时角色身在何处、处境如何" },
+  greeting: { label: "开场白", max: 600, hint: "角色登场的一段描写，可以带一句台词" },
+  examples: { label: "对话示例", max: 800, hint: "几句这个角色会说的话，一句一行，用来定口吻" },
+};
+
 /** 玩家自己写的角色卡；开档时整理成一段简介交给模型 */
 export const CharacterCardSchema = z
   .object({
@@ -29,11 +54,17 @@ export const CharacterCardSchema = z
     /** 出身，例如街头小子、流浪者、公司员工 */
     origin: z.string().trim().min(1, "出身不能为空").max(40),
     look: text(300).default(""),
-    /** 过往：几段经历 */
+    /** 过往：几段经历，也是正文里的背景故事 */
     past: text(800).default(""),
     personality: text(300).default(""),
     /** 说话方式：口头禅、语气 */
     voice: text(300).default(""),
+    /** 场景、开场白、对话示例：只留在卡上，不交给主持人，免得它替玩家说话 */
+    scene: text(400).default(""),
+    greeting: text(600).default(""),
+    examples: text(800).default(""),
+    /** 锁定的正文区块：模型不会改写，生成别的区块时当作定稿 */
+    locked: z.array(ProseBlockSchema).max(PROSE_BLOCKS.length).default([]),
     /** 本事：会什么、不会什么 */
     skills: text(400).default(""),
     attributes: z.record(

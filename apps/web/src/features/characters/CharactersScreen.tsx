@@ -16,6 +16,7 @@ import { Dialog } from "../../ui/Dialog";
 import { Panel } from "../../ui/Panel";
 import { BoardEditor, emptyBoard } from "./BoardEditor";
 import styles from "./characters.module.css";
+import { ProseField } from "./ProseField";
 
 type Attribute = keyof CharacterCard["attributes"];
 
@@ -39,6 +40,10 @@ function blankCard(): CharacterCard {
     personality: "",
     voice: "",
     skills: "",
+    scene: "",
+    greeting: "",
+    examples: "",
+    locked: [],
     attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
   };
 }
@@ -48,23 +53,9 @@ function editorFor(card: CharacterCard, id: string | null = null, sample = false
   return { id, sample, card: copy, original: JSON.stringify(copy) };
 }
 
-const TEXT_FIELDS = [
-  { key: "look", label: "外貌", max: 300, hint: "衣着、神态、留下的伤疤……" },
-  { key: "past", label: "过往", max: 800, hint: "从哪来，失去过什么，还有什么没了结。" },
-  { key: "personality", label: "性格", max: 300, hint: "在乎什么，忍不了什么，习惯把什么藏起来。" },
-  {
-    key: "voice",
-    label: "说话方式",
-    max: 300,
-    hint: "口头禅、语气、爱用的词。不代表模型可以替你说话。",
-  },
-  {
-    key: "skills",
-    label: "本事",
-    max: 400,
-    hint: "会什么、不会什么；已有的能力，不是希望将来获得的能力。",
-  },
-] as const;
+/** 交给主持人的正文在前；场景、开场白、对话示例只留在卡上 */
+const BRIEF_BLOCKS = ["look", "past", "personality", "voice"] as const;
+const CARD_BLOCKS = ["scene", "greeting", "examples"] as const;
 
 /** 角色库和手写角色卡；改卡只影响以后新建的存档 */
 export function CharactersScreen() {
@@ -357,23 +348,37 @@ export function CharactersScreen() {
             {editor.card.board && boardData.isPending && <p role="status">正在读取模块库…</p>}
 
             <h3 className={styles.sectionTitle}>04 / 这个人</h3>
-            <div className={styles.background}>
-              {TEXT_FIELDS.map(({ key, label, max, hint }) => (
-                <label className={styles.field} key={key}>
-                  <span>
-                    {label}
-                    <small>
-                      {editor.card[key].length} / {max}
-                    </small>
-                  </span>
-                  <textarea
-                    rows={key === "past" ? 5 : 3}
-                    maxLength={max}
-                    value={editor.card[key]}
-                    placeholder={hint}
-                    onChange={(event) => change({ [key]: event.target.value })}
-                  />
-                </label>
+            <p className={styles.note}>
+              每块都可以手写，也可以交给辅助模型生成、重写、续写或润色（每次花一次模型调用）；
+              模型按名片、属性、主板和别的区块来写，锁定的区块不会被改。说话方式不代表模型可以替你说话。
+            </p>
+            <div className={styles.proseBlocks}>
+              {BRIEF_BLOCKS.map((block) => (
+                <ProseField key={block} block={block} card={editor.card} onChange={change} />
+              ))}
+              <label className={styles.field}>
+                <span>
+                  本事
+                  <small>{editor.card.skills.length} / 400</small>
+                </span>
+                <textarea
+                  rows={3}
+                  maxLength={400}
+                  value={editor.card.skills}
+                  placeholder="会什么、不会什么；已有的能力，不是希望将来获得的能力。"
+                  onChange={(event) => change({ skills: event.target.value })}
+                />
+              </label>
+            </div>
+            <h4 className={styles.subTitle}>
+              卡面{" "}
+              <small className={styles.subNote}>
+                场景、开场白和对话示例只留在卡上，不交给主持人
+              </small>
+            </h4>
+            <div className={styles.proseBlocks}>
+              {CARD_BLOCKS.map((block) => (
+                <ProseField key={block} block={block} card={editor.card} onChange={change} />
               ))}
             </div>
           </fieldset>

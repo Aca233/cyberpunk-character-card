@@ -646,3 +646,26 @@ legend.sectionTitle {
   font-size: var(--fs-label);
   line-height: 1.6;
 }
+
+.proseBlocks {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.subTitle {
+  margin: 1.5rem 0 0.75rem;
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+}
+
+.subNote {
+  margin-left: 0.5rem;
+  color: var(--cp-text-dim);
+  font-weight: normal;
+}
