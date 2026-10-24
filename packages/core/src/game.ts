@@ -987,8 +987,17 @@ export function projectState(
       items,
     ),
     totalTurns: turns.length,
-    turns: turns.slice(-VIEW_TURNS).map((t) => ({
+    turns: turns.slice(-VIEW_TURNS).map((t, i, shown) => ({
       seq: t.seq,
+      /** 场景的第一轮：给出场景标题卡的一行；界面按叙事偏好决定显示不显示 */
+      sceneTitle:
+        t.title !== undefined &&
+        t.scene !== undefined &&
+        turns[turns.length - shown.length + i - 1]?.scene !== t.scene
+          ? t.title
+          : null,
+      /** 这一轮弹出的特写卡 */
+      closeup: t.closeup ?? null,
       at: t.at,
       input: turnInput(t.input),
       text: t.text,

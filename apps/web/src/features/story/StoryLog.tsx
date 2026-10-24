@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
+import { useNarrativePrefs } from "../settings/prefs";
 import type { useStory } from "./store";
 import styles from "./story.module.css";
 import {
@@ -93,8 +94,12 @@ function TurnBlock({
   readonly saveId: string;
   readonly speakers: readonly Speaker[];
 }) {
+  const prefs = useNarrativePrefs();
   return (
     <article className={styles.turn}>
+      {prefs.sceneTitles && turn.sceneTitle && (
+        <p className={styles.sceneTitle}>{turn.sceneTitle}</p>
+      )}
       {turn.seq > 0 && (
         <p className={styles.input} data-mode={turn.input.mode}>
           {formatInput(turn.input)}

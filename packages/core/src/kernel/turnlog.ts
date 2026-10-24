@@ -20,6 +20,14 @@ export const DiceRollSchema = z.object({
 
 const seq = z.number().int().min(0);
 
+/** 特写卡：接到大单、首领现身、拿到不朽物品时弹一张；每个场景最多一张 */
+export const CloseupSchema = z.object({
+  kind: z.enum(["bigJob", "boss", "iconic"]),
+  title: z.string().min(1),
+  detail: z.string(),
+});
+export type Closeup = z.infer<typeof CloseupSchema>;
+
 const TurnRecordSchema = z.object({
   kind: z.literal("turn"),
   seq,
@@ -43,6 +51,12 @@ const TurnRecordSchema = z.object({
   voices: z.array(z.unknown()).optional(),
   /** 主持人标记的生死瞬间：下一轮可以开斯安威斯坦 */
   clutch: z.boolean().optional(),
+  /** 这一轮发生在第几个场景；旧存档没有 */
+  scene: z.number().int().min(0).optional(),
+  /** 场景标题卡的一行，例如“沃森 · 歌舞伎町 · 22:40”；还没有地点时不写 */
+  title: z.string().optional(),
+  /** 这一轮弹出的特写卡 */
+  closeup: CloseupSchema.optional(),
   /** 主持人提出、等玩家确认的检定 */
   check: z.unknown().optional(),
   /** 这一轮写的是哪次检定的结果 */

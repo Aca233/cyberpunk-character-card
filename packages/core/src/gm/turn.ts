@@ -2,7 +2,7 @@ import type { Patch } from "immer";
 import type { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage, LlmUsage, Rng } from "../kernel/ports";
 import type { Command } from "../kernel/system";
-import type { LogRecord } from "../kernel/turnlog";
+import type { Closeup, LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import {
   CharacterStateSchema,
@@ -18,6 +18,7 @@ import { HealthStateSchema } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { registry } from "../systems/registry";
+import { WorldClockStateSchema } from "../systems/world";
 import {
   BlockDocSchema,
   type BlockShape,
@@ -35,6 +36,7 @@ import {
 import { schemaDoc } from "./doc";
 import { prepareFor } from "./pending";
 import { buildGmPrompt, type GmPlan } from "./prompts";
+import { closeupFor, sceneTitle } from "./scene";
 
 /**
  * 主持人的一轮：拼提示词 → 调模型（正文边收边放）→ 拆出指令块 → 逐条校验，不合格的单条修一次
@@ -69,6 +71,12 @@ export interface GmTurn {
   readonly pin: boolean;
   /** 生死瞬间：下一轮可以开斯安威斯坦 */
   readonly clutch: boolean;
+  /** 这一轮发生在第几个场景 */
+  readonly scene: number;
+  /** 场景标题卡的一行；还没有地点时为 undefined */
+  readonly title: string | undefined;
+  /** 这一轮弹出的特写卡 */
+  readonly closeup: Closeup | undefined;
   /** 主持人判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
   readonly ooc: boolean;
   readonly usage: LlmUsage | undefined;
@@ -460,6 +468,12 @@ export async function runGmTurn(
           applyCtx,
         );
 
+  // 场景标题：这一轮收了场就按收场前的地点和时间
+  const before = WorldClockStateSchema.parse(world.slices.world);
+  const after = WorldClockStateSchema.parse(settled.world.slices.world);
+  const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
+  const closeup = ooc ? undefined : closeupFor(accepted, world, records, deps.data ?? {});
+
   return {
     kind: "done",
     turn: {
@@ -476,6 +490,9 @@ export async function runGmTurn(
       modules: prompt.modules,
       pin: !ooc && shape.pin === true,
       clutch: !ooc && shape.clutch === true,
+      scene: before.scene,
+      title,
+      closeup,
       ooc,
       usage,
       repairs: b.repairs,

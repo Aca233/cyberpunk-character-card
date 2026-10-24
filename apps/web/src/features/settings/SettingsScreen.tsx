@@ -8,16 +8,18 @@ import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
 import { ModelSettings } from "./ModelSettings";
+import { NarrativeSettings } from "./NarrativeSettings";
 import styles from "./settings.module.css";
 
-type Tab = "profiles" | "context";
+type Tab = "profiles" | "narrative" | "context";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Tab | "menu" | null>(null);
-  const tab: Tab = params.get("tab") === "context" ? "context" : "profiles";
+  const tabParam = params.get("tab");
+  const tab: Tab = tabParam === "context" || tabParam === "narrative" ? tabParam : "profiles";
 
   const go = (target: Tab | "menu") => {
     setDirty(false);
@@ -74,6 +76,13 @@ export function SettingsScreen() {
           </button>
           <button
             type="button"
+            aria-pressed={tab === "narrative"}
+            onClick={() => requestGo("narrative")}
+          >
+            叙事偏好
+          </button>
+          <button
+            type="button"
             aria-pressed={tab === "context"}
             onClick={() => requestGo("context")}
           >
@@ -82,7 +91,13 @@ export function SettingsScreen() {
         </div>
       </header>
       <main className={styles.body}>
-        {tab === "profiles" ? <ModelSettings onDirtyChange={setDirty} /> : <ContextViewer />}
+        {tab === "profiles" ? (
+          <ModelSettings onDirtyChange={setDirty} />
+        ) : tab === "narrative" ? (
+          <NarrativeSettings />
+        ) : (
+          <ContextViewer />
+        )}
       </main>
       <footer className={styles.foot}>
         <KeyBar>

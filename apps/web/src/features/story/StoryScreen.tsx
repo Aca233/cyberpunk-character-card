@@ -9,6 +9,7 @@ import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
+import { CloseupQueue } from "./Closeup";
 import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
@@ -503,6 +504,7 @@ export function StoryScreen() {
         />
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
+      {!settled[0] && <CloseupQueue turns={view.turns} />}
       {failure?.kind === "blocked" && (
         <Dialog
           title="这一轮被安全过滤拦下了"
