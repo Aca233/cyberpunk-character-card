@@ -1,7 +1,8 @@
 import { worldRules } from "@cp/core";
+import { MAP_SPOTS } from "./map";
 
 /** 常用地点：界面显示中文名，模型换地点时优先用这些 id；表外的地点模型直接写中文名 */
-export const locations = worldRules.LocationCatalogSchema.parse([
+const table = [
   {
     id: "lizzies-bar",
     name: "丽姿酒吧",
@@ -49,4 +50,9 @@ export const locations = worldRules.LocationCatalogSchema.parse([
   },
   { id: "dogtown", name: "狗镇", district: "狗镇", note: "军阀统治的封闭区" },
   { id: "badlands", name: "恶土", district: "恶土", note: "城外的荒漠，游牧帮派的地方" },
-]);
+];
+
+/** 地图坐标在 map.ts，这里合进地点表 */
+export const locations = worldRules.LocationCatalogSchema.parse(
+  table.map((l) => ({ ...l, ...MAP_SPOTS[l.id] })),
+);

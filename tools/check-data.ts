@@ -8,6 +8,8 @@ import {
   cyberware,
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
+  DISTRICT_CENTERS,
+  encounters,
   fixers,
   gameContent,
   glossary,
@@ -49,6 +51,7 @@ import {
   registry,
   schemaDoc,
   TwistCatalogSchema,
+  travelRules,
   worldRules,
 } from "@cp/core";
 import type { z } from "zod";
@@ -97,6 +100,7 @@ schema("快速破解 quickhacks", hackingRules.QuickhackCatalogSchema, quickhack
 schema("义体医生 ripperdocs", cyberwareRules.RipperdocListSchema, ripperdocs);
 schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
+schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
 schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
 schema("转折素材 twists", TwistCatalogSchema, twists);
@@ -313,7 +317,24 @@ if (existsSync(TERMS)) {
   );
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}`;
+// 地图和偶遇：地点都要有坐标，偶遇只能写地点表里有的城区
+unique(
+  "路上偶遇",
+  encounters.map((e) => e.id),
+);
+const districts = new Set(Object.keys(DISTRICT_CENTERS));
+for (const l of locations) {
+  if (l.x === undefined || l.y === undefined) errors.push(`地点 ${l.id}：没有地图坐标（map.ts）`);
+  if (!districts.has(l.district))
+    errors.push(`地点 ${l.id}：城区「${l.district}」不在 map.ts 的城区表里`);
+}
+for (const e of encounters) {
+  for (const d of e.districts ?? []) {
+    if (!districts.has(d)) errors.push(`偶遇 ${e.id}：城区「${d}」不在 map.ts 的城区表里`);
+  }
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

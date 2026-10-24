@@ -18,8 +18,16 @@ const ID = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/;
 const EntrySchema = z
   .strictObject({
     id: z.string().regex(ID, "id 用点分隔的小驼峰，例如 hud.healthbar"),
-    atlas: z.string().regex(/^[a-z0-9_]+\/[A-Za-z0-9_-]+$/, "atlas 写成 分组/图集名"),
-    slot: z.string().min(1),
+    atlas: z
+      .string()
+      .regex(/^[a-z0-9_]+\/[A-Za-z0-9_-]+$/, "atlas 写成 分组/图集名")
+      .optional(),
+    slot: z.string().min(1).optional(),
+    /** 整张图（不在图集里），路径相对解包目录的 export/，例如 map/world_map_blue.png */
+    file: z
+      .string()
+      .regex(/^[a-z0-9_]+\/[A-Za-z0-9_.-]+\.png$/, "file 写成 目录/文件名.png")
+      .optional(),
     frames: z
       .strictObject({
         from: z.number().int().min(0),
@@ -30,7 +38,13 @@ const EntrySchema = z
       .refine((f) => f.from <= f.to, "from 不能大于 to")
       .optional(),
   })
-  .refine((e) => (e.frames === undefined) === !e.slot.includes("{n}"), {
+  .refine((e) => (e.file === undefined) === (e.atlas !== undefined && e.slot !== undefined), {
+    message: "每条要么写 atlas 和 slot（图集里的一块），要么只写 file（整张图）",
+  })
+  .refine((e) => e.file === undefined || e.frames === undefined, {
+    message: "整张图不能写 frames",
+  })
+  .refine((e) => e.slot === undefined || (e.frames === undefined) === !e.slot.includes("{n}"), {
     message: "逐帧素材的 slot 要带 {n}，其他素材不能带",
   });
 
@@ -43,8 +57,11 @@ export const ManifestSchema = z.strictObject({
 export interface AssetSpec {
   readonly id: string;
   readonly group: string;
+  /** 整张图时为空串 */
   readonly atlas: string;
   readonly slot: string;
+  /** 整张图：相对 export/ 的路径 */
+  readonly file?: string;
 }
 
 /** index.json 里的一条：path 相对网页根目录；显示尺寸是 width / scale */
@@ -74,7 +91,11 @@ export async function loadManifest(): Promise<AssetSpec[]> {
     out.push(spec);
   };
   for (const [group, entries] of Object.entries(parsed.data.groups)) {
-    for (const { id, atlas, slot, frames } of entries) {
+    for (const { id, atlas = "", slot = "", file, frames } of entries) {
+      if (file !== undefined) {
+        add({ id, group, atlas, slot, file });
+        continue;
+      }
       if (!frames) {
         add({ id, group, atlas, slot });
         continue;

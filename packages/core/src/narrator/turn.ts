@@ -32,6 +32,7 @@ import { itemCatalog } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
+import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
 import { formatGameTime, WorldClockStateSchema } from "../systems/world";
 import {
   type Choice,
@@ -280,6 +281,8 @@ export interface NarratorDeps {
   readonly onText?: (text: string) => void;
   /** 场外推演隔几场跑一次；null 是关掉，没写按默认 3 场 */
   readonly offscreen?: number | null | undefined;
+  /** 路上偶遇的频率倍数；0 是关掉，没写按 1 */
+  readonly encounters?: number | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -628,6 +631,18 @@ export async function runNarratorTurn(
     );
   }
   if (gate) decided.push(gateText(gate));
+  // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
+  let trip: PlannedTrip | undefined;
+  if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
+    const planned = planTrip(tripWorldOf(world), deps.data ?? {}, plan.input.travel, {
+      rng: deps.rng,
+      factor: deps.encounters ?? 1,
+    });
+    if (planned.ok) {
+      trip = planned.trip;
+      decided.push(tripText(planned.trip));
+    } else b.notes.push(`出行没成：${planned.reason}`);
+  }
   // 对手的打算：只给写正文的一步，正文照它写对手的行动
   const foes =
     !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
@@ -902,6 +917,10 @@ export async function runNarratorTurn(
   // 回复消息：先记下回的是哪一条
   if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
     commands.unshift({ type: "phone.reply", id: plan.input.replyTo });
+  }
+  if (trip) {
+    facts.travel = tripFact(trip);
+    commands.unshift({ type: "travel", to: trip.to.id, mode: trip.route.mode });
   }
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
   // 成组生效：之前被丢的、结算时被拒的，跟着它的条目一起不生效，剩下的重新结算

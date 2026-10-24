@@ -171,6 +171,8 @@ export const ASSET_IDS = [
   "key.tab",
   "loading.circle",
   "loading.frame",
+  "map.albedo",
+  "map.blue",
   "menu.arrowBorder",
   "menu.arrowFill",
   "menu.background",

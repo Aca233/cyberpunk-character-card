@@ -30,4 +30,5 @@ export * as npcRules from "./systems/npc";
 export * as phoneRules from "./systems/phone";
 export { registry, systems } from "./systems/registry";
 export * as stealthRules from "./systems/stealth";
+export * as travelRules from "./systems/travel";
 export * as worldRules from "./systems/world";

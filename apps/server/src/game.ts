@@ -60,6 +60,8 @@ import {
   type TurnRecord,
   type TurnRequest,
   type TurnUsage,
+  travelBlock,
+  travelRules,
   type VoidRecord,
   voidedSeqs,
   type WorldState,
@@ -376,6 +378,10 @@ export class GameService {
         const blocked = sandevistanBlock(world, records, gameData);
         if (blocked) return { status: 409, body: { error: blocked, version } };
       }
+      if (request.input.travel !== undefined) {
+        const blocked = travelBlock(world, gameData, request.input.travel);
+        if (blocked) return { status: 409, body: { error: blocked, version } };
+      }
       if (request.input.replyTo !== undefined) {
         const blocked = phoneRules.replyBlock(world, request.input.replyTo);
         if (blocked) return { status: 409, body: { error: blocked, version } };
@@ -391,6 +397,7 @@ export class GameService {
         meta.opening,
         meta.startTime,
         request.offscreen,
+        request.encounters,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
@@ -844,6 +851,7 @@ export class GameService {
     opening: string | undefined,
     startTime: number,
     offscreen: OffscreenPace | undefined,
+    encounters?: travelRules.EncounterPace,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
@@ -857,6 +865,7 @@ export class GameService {
           opening: openingPremise(opening),
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
+          encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },

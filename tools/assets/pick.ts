@@ -80,6 +80,10 @@ async function locate(
   root: string,
   spec: AssetSpec,
 ): Promise<{ file: string; scale: number } | undefined> {
+  if (spec.file !== undefined) {
+    const whole = join(root, "export", spec.file);
+    return (await exists(whole)) ? { file: whole, scale: 1 } : undefined;
+  }
   const name = spec.atlas.split("/").at(-1) as string;
   const base = join(root, "export", "ui_sprites", spec.atlas, `${name}.inkatlas`);
   for (const [res, scale] of RESOLUTIONS) {
@@ -115,7 +119,7 @@ async function main(): Promise<number> {
       next += 1;
       const found = await locate(root, spec);
       if (!found) {
-        missing.push(`${spec.id}（${spec.atlas} 的 ${spec.slot}）`);
+        missing.push(`${spec.id}（${spec.file ?? `${spec.atlas} 的 ${spec.slot}`}）`);
         continue;
       }
       const size = (await stat(found.file)).size;

@@ -85,6 +85,7 @@ import { PhoneStateSchema } from "./systems/phone/schema";
 import { registry } from "./systems/registry";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
+import { planTrip, routeOptions, type TravelRequest, tripWorldOf } from "./systems/travel";
 import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
 
@@ -864,6 +865,8 @@ export function projectState(
     }),
     /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */
     hacking: hackingView(world, installed, data, clock.location),
+    /** 地图上的地点和到每个地点的路线；路线面板照这里显示，结算用同一套算法 */
+    travel: travelView(world, data),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1115,4 +1118,42 @@ function hackingView(
         gains: n.gains.map((g) => HACK_GAIN_LABELS[g]),
       })),
   };
+}
+
+/** 地图上能去的地点、每种出行方式的耗时、花费和风险，以及这一场的路上偶遇 */
+function travelView(world: WorldState, data: Readonly<Record<string, unknown>>) {
+  const w = tripWorldOf(world);
+  const destinations = [...locationCatalog(data).values()].flatMap((p) =>
+    p.x === undefined || p.y === undefined
+      ? []
+      : [
+          {
+            id: p.id,
+            name: p.name,
+            district: p.district,
+            x: p.x,
+            y: p.y,
+            metro: p.metro === true,
+            here: p.id === w.location,
+            routes: p.id === w.location ? [] : routeOptions(w, data, p.id),
+          },
+        ],
+  );
+  const { encounter } = w.travel;
+  return {
+    destinations,
+    encounter: encounter
+      ? { label: encounter.label, note: encounter.note, district: encounter.district }
+      : null,
+  };
+}
+
+/** 路线面板提交前的检查：走不了时返回原因 */
+export function travelBlock(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  travel: TravelRequest,
+): string | null {
+  const plan = planTrip(tripWorldOf(world), data, travel);
+  return plan.ok ? null : plan.reason;
 }

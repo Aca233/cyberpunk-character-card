@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EncounterPaceSchema, TravelRequestSchema } from "../systems/travel/schema";
 
 /** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由叙事模型自己判断 */
 export const InputModeSchema = z.enum(["do", "say", "think", "ooc"]);
@@ -14,6 +15,8 @@ export const TurnInputSchema = z.strictObject({
   replyTo: z.number().int().min(1).optional(),
   /** 玩家已经在提交前确认过这一轮的大额花费 */
   spendOk: z.boolean().optional(),
+  /** 路线面板确认的出行：去哪、怎么去；耗时和路费由代码按路线表算 */
+  travel: TravelRequestSchema.optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 
@@ -45,6 +48,8 @@ export const TurnRequestSchema = z
       .optional(),
     /** 没带时按常规 */
     offscreen: OffscreenPaceSchema.optional(),
+    /** 路上偶遇的频率；没带时按常规 */
+    encounters: EncounterPaceSchema.optional(),
   })
   .refine(
     (r) => (r.input === undefined) !== (r.confirm === undefined),

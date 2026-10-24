@@ -109,6 +109,11 @@ export const LocationDefSchema = z.object({
   district: z.string().min(1),
   /** 给模型看的一句话 */
   note: z.string().min(1).optional(),
+  /** 地图上的位置：底图宽、高的百分比（0–100），在 /dev/calibrate 校准；没写的不上地图 */
+  x: z.number().min(0).max(100).optional(),
+  y: z.number().min(0).max(100).optional(),
+  /** 附近有 NCART 轻轨站 */
+  metro: z.boolean().optional(),
 });
 export type LocationDef = z.infer<typeof LocationDefSchema>;
 

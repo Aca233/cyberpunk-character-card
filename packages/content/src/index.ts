@@ -1,5 +1,6 @@
 import type { GameContent } from "@cp/core";
 import { cyberware } from "./cyberware";
+import { encounters } from "./encounters";
 import { fixers } from "./fixers";
 import { quickhacks } from "./hacking";
 import { items } from "./items";
@@ -14,6 +15,7 @@ import { shops } from "./shops";
 export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
 export { cyberware } from "./cyberware";
+export { encounters } from "./encounters";
 export { fixers } from "./fixers";
 export { quickhacks } from "./hacking";
 export { items } from "./items";
@@ -22,6 +24,7 @@ export { lifepath } from "./lifepath";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
 export { canonTimeline, glossary } from "./lore";
+export { DISTRICT_CENTERS, MAP_SPOTS } from "./map";
 export { boardModules } from "./modules";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
@@ -50,6 +53,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   ripperdocs,
   shops,
   quickhacks,
+  encounters,
   twists,
   consequences,
   jobTemplates,
