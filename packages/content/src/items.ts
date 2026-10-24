@@ -681,4 +681,10 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
   },
   // 杂物
   { id: "shard", name: "数据芯片", kind: "misc" },
+  {
+    id: "corpo-badge",
+    name: "公司工牌",
+    kind: "misc",
+    ability: "自家公司的门禁工牌：刷得开员工通道和自己楼层的门；公司随时能把它停用",
+  },
 ]);

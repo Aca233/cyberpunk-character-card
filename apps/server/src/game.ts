@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { DEFAULT_OPENING, gameContent, gameData, openingPremise } from "@cp/content";
+import {
+  DEFAULT_LOADOUT,
+  DEFAULT_OPENING,
+  gameContent,
+  gameData,
+  openingPremise,
+} from "@cp/content";
 import {
   type ActionRecord,
   type ActionRequest,
@@ -20,6 +26,7 @@ import {
   logVersion,
   newGameWorld,
   type PlayerView,
+  pickLoadouts,
   pickSnapshot,
   prepareFor,
   projectState,
@@ -132,6 +139,7 @@ export class GameService {
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),
       opening: DEFAULT_OPENING,
+      loadouts: pickLoadouts(entry.card, gameContent.loadouts ?? [], DEFAULT_LOADOUT),
     };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };

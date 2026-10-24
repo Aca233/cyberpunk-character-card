@@ -18,5 +18,7 @@ export const SaveMetaSchema = z.object({
   character: SaveCharacterSchema.optional(),
   /** 旧存档没有：用的是内容包里哪个开场 */
   opening: z.string().min(1).optional(),
+  /** 旧存档没有：建档时按出身和经历挑的开局行装，读档重放时照这个发 */
+  loadouts: z.array(z.string().min(1)).optional(),
 });
 export type SaveMeta = z.infer<typeof SaveMetaSchema>;

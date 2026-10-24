@@ -48,6 +48,8 @@ export interface GameContent {
   readonly locations?: readonly LocationDef[];
   /** 可选的开场；存档的 meta.opening 记着用的是哪一个 */
   readonly openings?: readonly GameOpening[];
+  /** 按出身和经历发的开局行装；存档的 meta.loadouts 记着发了哪几套 */
+  readonly loadouts?: readonly Loadout[];
 }
 
 /** 开场：从哪里开始、身上带什么、眼下有什么活 */
@@ -80,6 +82,42 @@ export interface GameOpening {
   readonly jobs?: readonly OpeningJob[];
 }
 
+/** 开局行装：按出身发一整套，再按经历补几样；有行装的存档不再用开场自带的装备、欧元和义体 */
+export interface Loadout {
+  readonly id: string;
+  readonly label: string;
+  /** origin：出身的整套行装，只取一套；background：经历附带的东西，可以叠加 */
+  readonly kind: "origin" | "background";
+  /** origin 看角色卡的出身，background 还看过往和本事；出现这些词就用这一套 */
+  readonly keywords: readonly string[];
+  readonly gear: GameOpening["gear"];
+  readonly eddies?: number;
+  readonly cyberware?: readonly string[];
+}
+
+/** 建档时按角色卡挑行装：出身里最后出现关键词的那一套（中文的中心词在后，“在公司打过零工的街头小子”是街头小子），
+ * 没有就用 fallback；经历附带的可以有好几套 */
+export function pickLoadouts(
+  card: { readonly origin: string; readonly past?: string; readonly skills?: string },
+  loadouts: readonly Loadout[],
+  fallback: string,
+): string[] {
+  const at = (text: string, l: Loadout) => {
+    const hits = l.keywords
+      .map((k) => text.toLowerCase().lastIndexOf(k.toLowerCase()))
+      .filter((i) => i >= 0);
+    return hits.length === 0 ? -1 : Math.max(...hits);
+  };
+  const origins = loadouts
+    .filter((l) => l.kind === "origin")
+    .map((l) => [l, at(card.origin, l)] as const)
+    .filter(([, i]) => i >= 0)
+    .sort((a, b) => b[1] - a[1]);
+  const story = [card.origin, card.past ?? "", card.skills ?? ""].join("\n");
+  const extras = loadouts.filter((l) => l.kind === "background" && at(story, l) >= 0);
+  return [origins[0]?.[0].id ?? fallback, ...extras.map((l) => l.id)];
+}
+
 export interface OpeningJob {
   readonly id: string;
   readonly title: string;
@@ -93,11 +131,26 @@ export interface OpeningJob {
   readonly afterMinutes: number;
 }
 
-function openingCommands(opening: GameOpening, start: number): unknown[] {
+/** 开局发的东西：有行装时用行装，旧存档和没选行装时用开场自带的 */
+interface Kit {
+  readonly gear: GameOpening["gear"];
+  readonly eddies?: number | undefined;
+  readonly cyberware?: readonly string[] | undefined;
+}
+
+function mergeKits(loadouts: readonly Loadout[]): Kit {
+  return {
+    gear: loadouts.flatMap((l) => l.gear),
+    eddies: loadouts.reduce((sum, l) => sum + (l.eddies ?? 0), 0),
+    cyberware: [...new Set(loadouts.flatMap((l) => l.cyberware ?? []))],
+  };
+}
+
+function openingCommands(opening: GameOpening, start: number, kit: Kit = opening): unknown[] {
   const reason = `开局：${opening.title}`;
   return [
-    ...opening.gear.map((g) => ({ type: "item", action: "gain", id: g.id, reason })),
-    ...opening.gear
+    ...kit.gear.map((g) => ({ type: "item", action: "gain", id: g.id, reason })),
+    ...kit.gear
       .filter((g) => g.equip)
       .map((g) => ({
         type: "item",
@@ -106,8 +159,8 @@ function openingCommands(opening: GameOpening, start: number): unknown[] {
         reason,
         ...(g.slot === undefined ? {} : { slot: g.slot }),
       })),
-    ...(opening.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
-    ...(opening.eddies ? [{ type: "money", delta: opening.eddies, reason }] : []),
+    ...(kit.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
+    ...(kit.eddies ? [{ type: "money", delta: kit.eddies, reason }] : []),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
       { type: "jobAccept", id: job.id },
@@ -127,7 +180,7 @@ const setupRng = { roll: () => 1 };
 /** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
   meta: Pick<SaveMeta, "startTime" | "difficulty"> &
-    Partial<Pick<SaveMeta, "character" | "opening">>,
+    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts">>,
   content: GameContent = {},
 ): WorldState {
   const opening =
@@ -135,6 +188,11 @@ export function newGameWorld(
   if (meta.opening !== undefined && !opening) {
     throw new Error(`内容包里没有开场 ${meta.opening}`);
   }
+  const loadouts = (meta.loadouts ?? []).map((id) => {
+    const found = content.loadouts?.find((l) => l.id === id);
+    if (!found) throw new Error(`内容包里没有开局行装 ${id}`);
+    return found;
+  });
   const base = registry.initialWorld(meta.startTime);
   const clock = WorldClockStateSchema.parse(base.slices.world);
   const world: WorldState = {
@@ -153,7 +211,13 @@ export function newGameWorld(
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
     ...(content.fixers ?? []).map((f) => ({ type: "jobs.seedFixer", ...f })),
-    ...(opening ? openingCommands(opening, meta.startTime) : []),
+    ...(opening
+      ? openingCommands(
+          opening,
+          meta.startTime,
+          loadouts.length > 0 ? mergeKits(loadouts) : opening,
+        )
+      : []),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
