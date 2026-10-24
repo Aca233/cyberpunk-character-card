@@ -1,46 +1,33 @@
-import { type PlayerView, projectState } from "../game";
-import type { LlmMessage } from "../kernel/ports";
-import type { RuleModule } from "../kernel/system";
-import type { LogRecord } from "../kernel/turnlog";
-import type { WorldState } from "../kernel/world";
-import type { TurnInput } from "../schemas/turn";
-import { cyberwareSection } from "../systems/cyberware/prompt";
-import { ATTRIBUTE_LABELS, type Attribute } from "../systems/dice";
-import { RARITY_LABELS } from "../systems/economy/schema";
-import { consequenceSection, FalloutStateSchema, falloutSection } from "../systems/fallout";
-import { DAMAGE_LABELS } from "../systems/health";
-import { itemCatalog } from "../systems/inventory/apply";
+import type { PlayerView } from "../../game";
+import type { LlmMessage } from "../../kernel/ports";
+import type { WorldState } from "../../kernel/world";
+import type { TurnInput } from "../../schemas/turn";
+import { cyberwareSection } from "../../systems/cyberware/prompt";
+import { ATTRIBUTE_LABELS, type Attribute } from "../../systems/dice";
+import { RARITY_LABELS } from "../../systems/economy/schema";
+import { consequenceSection, FalloutStateSchema, falloutSection } from "../../systems/fallout";
+import { DAMAGE_LABELS } from "../../systems/health";
+import { itemCatalog } from "../../systems/inventory/apply";
 import {
   ITEM_KIND_LABELS,
   MOD_SLOT_LABELS,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   weaponAttribute,
-} from "../systems/inventory/schema";
-import { jobsSection, jobTemplateSection } from "../systems/jobs/prompt";
-import { JobsStateSchema } from "../systems/jobs/schema";
-import { castSection } from "../systems/npc/prompt";
-import { NpcStateSchema } from "../systems/npc/schema";
-import { registry } from "../systems/registry";
-import { formatGameTime } from "../systems/world/apply";
-import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
-import { ExtractDocSchema } from "./block";
-import { commandDoc, schemaDoc } from "./doc";
-import { examplesSection, twistSection } from "./examples";
-import type { RolledCheck } from "./pending";
-import {
-  EXTRACT_EXAMPLE,
-  EXTRACT_RULES,
-  JUDGE_EXAMPLE,
-  JUDGE_RULES,
-  NARRATE_RULES,
-  VERIFY_RULES,
-} from "./rules";
-import { JudgeDocSchema, type Memory } from "./stages";
+} from "../../systems/inventory/schema";
+import { jobsSection, jobTemplateSection } from "../../systems/jobs/prompt";
+import { JobsStateSchema } from "../../systems/jobs/schema";
+import { castSection } from "../../systems/npc/prompt";
+import { NpcStateSchema } from "../../systems/npc/schema";
+import { formatGameTime } from "../../systems/world/apply";
+import { locationCatalog, WorldClockStateSchema } from "../../systems/world/schema";
+import { twistSection } from "../examples";
+import type { RolledCheck } from "../pending";
+import type { Memory } from "../stages";
 
 /**
- * 每一步的提示词：常驻守则和按状态挑出的规则模块放在系统消息里，只随规则变化；
- * 每轮都变的局面、本轮已定的事和玩家输入放在最后一条消息里，前缀能命中提示缓存
+ * 各步共用的材料：当前状态、人物、委托、到期事件、物品和地点表、玩家输入的写法。
+ * 这些填进 L2 任务模板的槽位；模板和各层的拼法在 layers.ts
  */
 
 /** 带最近这么多轮原文；更早的先丢，场景压缩在 M3 */
@@ -78,72 +65,6 @@ const OUTCOME_LABELS = {
   failure: "失败",
   fumble: "大失败",
 } as const;
-
-function moduleSection(module: RuleModule, withCommands: boolean): string {
-  const commands = withCommands
-    ? (module.commands ?? []).map((type) =>
-        commandDoc(
-          type,
-          registry.commandSchema(type) as NonNullable<ReturnType<typeof registry.commandSchema>>,
-        ),
-      )
-    : [];
-  return [
-    `【规则：${module.title}】`,
-    module.text,
-    ...(commands.length > 0 ? ["相关指令：", ...commands] : []),
-  ].join("\n");
-}
-
-/** 写正文和判断时，规则模块里提到的指令由后面的抽取负责 */
-const MODULE_NOTE =
-  "下面的规则说明这些场面怎么处理；里面提到的指令由代码在正文之后另行抽取，这一步不写指令。";
-
-let narrateCore: string | undefined;
-let extractCore: string | undefined;
-
-/** ③ 写正文的常驻部分：守则和好坏示例 */
-export function coreRules(): string {
-  narrateCore ??= `${NARRATE_RULES}\n\n${examplesSection()}`;
-  return narrateCore;
-}
-
-/** ④ 抽取的常驻部分；第一次用时检查每种模型可用的指令都有说明 */
-export function extractRules(): string {
-  if (extractCore === undefined) {
-    const documented = new Set<string>([
-      ...CORE_COMMANDS,
-      ...registry.rules.flatMap((m) => m.commands ?? []),
-    ]);
-    const missing = registry.commandTypes().filter((t) => !documented.has(t));
-    if (missing.length > 0) throw new Error(`这些指令没有写进任何规则模块：${missing.join("、")}`);
-    const commands = CORE_COMMANDS.map((type) => {
-      const schema = registry.commandSchema(type);
-      if (!schema) throw new Error(`常驻核心说明的 ${type} 不是模型可用的指令`);
-      return commandDoc(type, schema);
-    });
-    extractCore = [
-      EXTRACT_RULES,
-      `【输出格式】\n${schemaDoc(ExtractDocSchema)}\n- 字段后的问号表示可以不写，括号里是说明。`,
-      `changes 可用的指令：\n${commands.join("\n")}`,
-      `例：\n${EXTRACT_EXAMPLE}`,
-    ].join("\n\n");
-  }
-  return extractCore;
-}
-
-/** ③ 写正文的系统消息 */
-export function systemPrompt(
-  modules: readonly RuleModule[],
-  extra: readonly string[] = [],
-): string {
-  return [
-    coreRules(),
-    ...(modules.length > 0 ? [MODULE_NOTE] : []),
-    ...modules.map((m) => moduleSection(m, false)),
-    ...extra,
-  ].join("\n\n");
-}
 
 const KIND_LABELS = ITEM_KIND_LABELS;
 
@@ -199,8 +120,10 @@ export interface PromptExtras {
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   /** 这个存档的开场设定；故事还没开始时放进最后一条消息 */
   readonly opening?: string | undefined;
-  /** 写正文之前代码已经定下的事：场外提问、先给检定、门槛结果、调出的旧记忆 */
+  /** 写正文之前代码已经定下的事：场外提问、先给检定、门槛结果 */
   readonly decided?: readonly string[] | undefined;
+  /** ① 判断调出的旧记忆；写正文时单独放一栏 */
+  readonly recalled?: readonly Memory[] | undefined;
 }
 
 function attributeLine(values: Readonly<Record<Attribute, number>>): string {
@@ -410,10 +333,10 @@ export interface NarratorPrompt {
 }
 
 /** 判断只看最近几轮的原文 */
-const JUDGE_TURNS = 4;
+export const JUDGE_TURNS = 4;
 
 /** 物品、义体、地点等表：写正文和抽取都要用 id */
-function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
+export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
   return [
     catalogSection(extras.data),
@@ -426,7 +349,7 @@ function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
 }
 
 /** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
-function situation(
+export function situation(
   world: WorldState,
   view: PlayerView,
   plan: NarratorPlan,
@@ -455,7 +378,7 @@ function situation(
 }
 
 /** 开了斯安威斯坦时的说明；没开或开不了时为 undefined */
-function boostNote(
+export function boostNote(
   view: PlayerView,
   plan: NarratorPlan,
   stage: "judge" | "narrate",
@@ -466,120 +389,4 @@ function boostNote(
   return stage === "judge"
     ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。所有真正不确定的部分合并成一次 check，事先在 failure 里写明失败时哪几个动作会落空。`
     : `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序不执行，正文里写明哪几件没来得及。把这些动作写成一段连贯的慢动作。人性已经由代码扣过。`;
-}
-
-/** ① 判断：一条系统消息加一条用户消息，只输出 JSON */
-export function buildJudgePrompt(
-  world: WorldState,
-  records: readonly LogRecord[],
-  plan: NarratorPlan,
-  extras: PromptExtras,
-  memories: readonly Memory[],
-): NarratorPrompt {
-  const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
-  const system = [
-    JUDGE_RULES,
-    `【输出格式】\n${schemaDoc(JudgeDocSchema)}\n例：\n${JUDGE_EXAMPLE}`,
-    ...(modules.length > 0 ? [MODULE_NOTE] : []),
-    ...modules.map((m) => moduleSection(m, false)),
-  ].join("\n\n");
-  const recent = view.turns
-    .slice(-JUDGE_TURNS)
-    .map((t) => `${formatInput(t.input)}\n${t.text}`)
-    .join("\n\n");
-  const parts = situation(world, view, plan, extras);
-  if (recent !== "") parts.unshift(`【最近几轮】\n${recent}`);
-  parts.push(
-    `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
-  );
-  const boost = boostNote(view, plan, "judge");
-  if (boost) parts.push(boost);
-  parts.push(formatInput(plan.input));
-  parts.push("（只输出判断的 JSON 对象。）");
-  return {
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: parts.join("\n\n") },
-    ],
-    modules: modules.map((m) => m.id),
-  };
-}
-
-/** ③ 写正文：最近几轮原文作对话历史，最后一条消息放局面、本轮已定的事和玩家输入 */
-export function buildNarratorPrompt(
-  world: WorldState,
-  records: readonly LogRecord[],
-  plan: NarratorPlan,
-  extras: PromptExtras = {},
-): NarratorPrompt {
-  const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
-  const messages: LlmMessage[] = [
-    { role: "system", content: systemPrompt(modules, tablesOf(view, extras)) },
-  ];
-  for (const turn of view.turns.slice(-HISTORY_TURNS)) {
-    messages.push({ role: "user", content: formatInput(turn.input) });
-    messages.push({ role: "assistant", content: turn.text });
-  }
-  const parts = situation(world, view, plan, extras);
-  if (extras.decided && extras.decided.length > 0) {
-    parts.push(`【本轮已定的事】\n${extras.decided.join("\n")}`);
-  }
-  parts.push(formatInput(plan.input));
-  const boost = boostNote(view, plan, "narrate");
-  if (boost) parts.push(boost);
-  parts.push("（只写正文，纯文本。）");
-  messages.push({ role: "user", content: parts.join("\n\n") });
-  return { messages, modules: modules.map((m) => m.id) };
-}
-
-/** ④ 抽取：辅助模型读局面、玩家输入和定稿的正文，只输出 JSON */
-export function buildExtractPrompt(
-  world: WorldState,
-  records: readonly LogRecord[],
-  plan: NarratorPlan,
-  extras: PromptExtras,
-  narrative: string,
-): NarratorPrompt {
-  const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
-  const system = [
-    extractRules(),
-    ...modules.map((m) => moduleSection(m, true)),
-    ...tablesOf(view, extras),
-  ].join("\n\n");
-  const parts = situation(world, view, plan, extras);
-  parts.push(`【玩家输入】\n${formatInput(plan.input)}`);
-  parts.push(`【本轮正文】\n${narrative}`);
-  parts.push("（只输出抽取的 JSON 对象。）");
-  return {
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: parts.join("\n\n") },
-    ],
-    modules: modules.map((m) => m.id),
-  };
-}
-
-/** ⑤ 核对：辅助模型逐条看提议有没有正文依据，只输出 <patch> */
-export function buildVerifyPrompt(
-  world: WorldState,
-  records: readonly LogRecord[],
-  plan: NarratorPlan,
-  extras: PromptExtras,
-  narrative: string,
-  proposals: readonly unknown[],
-): LlmMessage[] {
-  const view = projectState(world, records, extras.data);
-  const parts = [`【当前状态】\n${stateSummary(view)}`];
-  if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
-  parts.push(`【玩家输入】\n${formatInput(plan.input)}`);
-  parts.push(`【本轮正文】\n${narrative}`);
-  parts.push(`【提议】\n${proposals.map((p, i) => `${i + 1}. ${JSON.stringify(p)}`).join("\n")}`);
-  parts.push("（只输出 <patch> 块。）");
-  return [
-    { role: "system", content: VERIFY_RULES },
-    { role: "user", content: parts.join("\n\n") },
-  ];
 }

@@ -62,6 +62,10 @@ export interface RuleModule<S = unknown> {
   readonly id: string;
   readonly title: string;
   readonly text: string;
+  /** 判断用的一半：什么时候检定、档位怎么选；没写时判断拿 text */
+  readonly judge?: string;
+  /** 写正文用的一半：常见的转折、对手会怎么做、什么后果合适；没写时写正文拿 text */
+  readonly narrate?: string;
   /** 这一段负责说明的指令类型；格式说明由这些指令的 schema 生成 */
   readonly commands?: readonly string[];
   /** 这一轮要不要带上；判断不准时宁可多带 */

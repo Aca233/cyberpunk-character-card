@@ -49,9 +49,12 @@ import {
   buildJudgePrompt,
   buildNarratorPrompt,
   buildVerifyPrompt,
+  EXTRACT_TEMPERATURE,
   HISTORY_TURNS,
+  JUDGE_TEMPERATURE,
   type NarratorPlan,
   type PromptExtras,
+  VERIFY_TEMPERATURE,
 } from "./prompts";
 import { closeupFor, sceneTitle } from "./scene";
 import {
@@ -406,7 +409,7 @@ async function verify(
   proposals: Proposal[],
 ): Promise<Proposal[]> {
   if (proposals.length === 0) return proposals;
-  const reply = await b.call({ purpose: "aux", temperature: 0.1, messages });
+  const reply = await b.call({ purpose: "aux", temperature: VERIFY_TEMPERATURE, messages });
   if ("blocked" in reply) {
     b.notes.push("核对被辅助模型拒答，提议原样保留");
     return proposals;
@@ -469,7 +472,7 @@ export async function runNarratorTurn(
     const prompt = buildJudgePrompt(world, records, plan, extras, memories);
     const reply = await b.call({
       purpose: "narrator",
-      temperature: 0.2,
+      temperature: JUDGE_TEMPERATURE,
       messages: prompt.messages,
     });
     if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
@@ -529,14 +532,9 @@ export async function runNarratorTurn(
     );
   }
   if (gate) decided.push(gateText(gate));
-  if (recalled.length > 0) {
-    decided.push(
-      `【调出的旧记忆】\n${recalled.map((m) => `- ${m.title}\n  ${m.text}`).join("\n")}`,
-    );
-  }
 
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
-  const prompt = buildNarratorPrompt(world, records, plan, { ...extras, decided });
+  const prompt = buildNarratorPrompt(world, records, plan, { ...extras, decided, recalled });
   const splitter = new StateSplitter();
   b.checkAborted();
   for await (const event of deps.llm.stream(
@@ -563,7 +561,11 @@ export async function runNarratorTurn(
   const settle = !ooc && check === undefined;
   if (settle) {
     const extract = buildExtractPrompt(world, records, plan, extras, narrative);
-    const reply = await b.call({ purpose: "aux", temperature: 0.2, messages: extract.messages });
+    const reply = await b.call({
+      purpose: "aux",
+      temperature: EXTRACT_TEMPERATURE,
+      messages: extract.messages,
+    });
     if ("blocked" in reply) {
       b.drop("抽取", null, `辅助模型拒答：${reply.blocked}；这一轮只保留正文`, "format");
     } else {
