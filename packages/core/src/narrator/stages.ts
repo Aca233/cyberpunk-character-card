@@ -55,6 +55,16 @@ export const JudgeDocSchema = z.object({
   recall: z
     .array(z.string())
     .describe("从【可调的旧记忆】里原样抄这一轮用得上的标题，最多 3 条，按从旧到新排；没有写 []"),
+  foes: z
+    .string()
+    .nullable()
+    .describe(
+      "在场的对手（敌人、要对付或要骗过的人）这一轮想干什么、会怎么应对玩家，一句话，只给写正文的一步看；没有对手写 null",
+    ),
+  why: z
+    .string()
+    .nullable()
+    .describe("给了 check 或 gate 时，一句话说为什么是这个档位和难度、风险从哪来；没给写 null"),
 });
 
 const JudgeShapeSchema = z.object({
@@ -64,6 +74,8 @@ const JudgeShapeSchema = z.object({
   gate: z.unknown().optional(),
   buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
+  foes: z.string().nullable().optional().catch(undefined),
+  why: z.string().nullable().optional().catch(undefined),
 });
 export type JudgeShape = z.infer<typeof JudgeShapeSchema>;
 

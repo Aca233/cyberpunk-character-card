@@ -624,6 +624,7 @@ export class GameService {
           dropped: record.dropped,
           notes: record.notes ?? [],
           considered: record.considered ?? [],
+          ruling: record.ruling ?? null,
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
             replay(
@@ -827,6 +828,7 @@ export class GameService {
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
+        ...(turn.ruling !== undefined ? { ruling: turn.ruling } : {}),
         ...(turn.offscreen !== undefined ? { offscreen: turn.offscreen } : {}),
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
         ...(turn.recalled.length > 0

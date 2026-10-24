@@ -247,6 +247,8 @@ export interface TurnContext {
   readonly notes: readonly string[];
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
+  /** 判断定检定或门槛的理由；没有为 null，旧后端没有 */
+  readonly ruling?: string | null;
   /** 这一轮之后城里的动静；旧后端没有 */
   readonly city?: readonly CityEventView[];
   /** 未定稿的原因；定稿的轮次为 null */

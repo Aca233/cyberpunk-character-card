@@ -220,6 +220,8 @@ export interface NarratorTurn {
   readonly unsettled: string | undefined;
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
+  /** 判断给检定或门槛时写的理由，只供剧透视图 */
+  readonly ruling: string | undefined;
   /** ⑥ 场外推演跑了时：发出的用户消息和原始回复，只供剧透视图 */
   readonly offscreen: { readonly prompt: string; readonly reply: string } | undefined;
   readonly notes: readonly string[];
@@ -284,6 +286,9 @@ const REPAIR_SYSTEM =
   "你负责修复 JSON 格式。只输出修好的 JSON，不要解释，不要代码块。不改原意，不补充原文没有的内容；实在修不了就输出 null。";
 
 const ZERO: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+/** 判断写的对手打算和裁决理由最多留几个字 */
+const FOES_CHARS = 160;
+const RULING_CHARS = 200;
 
 const addUsage = (a: LlmUsage, b: LlmUsage | undefined): LlmUsage =>
   b
@@ -608,6 +613,17 @@ export async function runNarratorTurn(
     );
   }
   if (gate) decided.push(gateText(gate));
+  // 对手的打算：只给写正文的一步，正文照它写对手的行动
+  const foes =
+    !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
+      ? judge.foes.trim().slice(0, FOES_CHARS)
+      : undefined;
+  if (foes) decided.push(`对手这一轮的打算（照这个写对手的行动，对手不会只等着挨打）：${foes}`);
+  // 裁决理由：给了检定或门槛时留档，只在剧透视图里看
+  const ruling =
+    (check || gate) && typeof judge.why === "string" && judge.why.trim() !== ""
+      ? judge.why.trim().slice(0, RULING_CHARS)
+      : undefined;
 
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
   const prompt = buildNarratorPrompt(world, records, plan, { ...extras, decided, recalled });
@@ -976,6 +992,7 @@ export async function runNarratorTurn(
       dropped: b.dropped,
       unsettled,
       considered,
+      ruling,
       offscreen: offscreenTrace,
       notes: b.notes,
       world: final.world,

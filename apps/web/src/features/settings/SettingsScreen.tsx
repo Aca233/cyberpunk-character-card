@@ -286,6 +286,11 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           </ul>
         </Section>
       )}
+      {ctx.ruling && (
+        <Section title="裁决理由">
+          <p>{ctx.ruling}</p>
+        </Section>
+      )}
       {ctx.city && ctx.city.length > 0 && (
         <Section title={`城里的动静（这一轮之后，${ctx.city.length}）`}>
           <ul>

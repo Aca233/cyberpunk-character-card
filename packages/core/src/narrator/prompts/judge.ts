@@ -56,6 +56,10 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 失败可能受伤时在 check 写 damage（graze 擦伤、heavy 重击、lethal 致命）；只有写了 lethal 才可能死，不写 damage 失败就不扣血。
 - 断肢很少见：只在刀刃、霰弹枪、爆炸、重型机械这类真能打断手脚的场面，致命档失败可能失去手臂或腿时，在 check 写 limb: true 并在 failure 里写明。
 
+【对手】
+- 场上有对手（敌人、要对付、要骗过或要说服的人）时，在 foes 用一句话写他这一轮想干什么、会怎么应对玩家：他有自己的目标和打算，不是站着等玩家出手。后面写正文的一步照这一句写对手的行动；没有对手写 null。
+- 给了 check 或 gate 时，在 why 用一句话写为什么定这个档位和难度、风险从哪来（对手是谁、环境怎样、玩家做了什么准备）；只留档给开发时查，不给玩家看。
+
 【花钱】
 - 玩家这一轮要掏钱买东西或买服务（买枪、包一辆车、请人办事、看伤）时在 buy 写买什么：物品写物品表的 id，服务写服务名，讲价写 discount。你不写价钱；一笔太大时代码会先请玩家确认。不花钱写 null。
 
@@ -63,7 +67,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - recall 只能从【可调的旧记忆】里原样抄标题，抄错的会被丢掉；没有列出、或这一轮用不上时写 []。`;
 
 /** ① 判断的例子 */
-export const JUDGE_EXAMPLE = `{"read": "你想不被发现地翻上棚顶，继续盯着那个中间人", "ooc": false, "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}, "gate": null, "buy": null, "recall": []}`;
+export const JUDGE_EXAMPLE = `{"read": "你想不被发现地翻上棚顶，继续盯着那个中间人", "ooc": false, "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}, "gate": null, "buy": null, "recall": [], "foes": "那个中间人一直留意着门口，听到动静会先从后门溜", "why": "棚顶铁皮松动，对方只是街头的普通人，没带保镖"}`;
 
 let output: string | undefined;
 
