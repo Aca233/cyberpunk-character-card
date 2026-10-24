@@ -91,12 +91,11 @@ export function buildJudgePrompt(
     after: [boostNote(view, plan, "judge")],
     reminder: "（只输出判断的 JSON 对象。）",
   });
+  const system = systemMessage("judge", [BASE_RULES, JUDGE_STAGE, judgeOutput()], modules);
   return {
+    rules: system.length,
     messages: [
-      {
-        role: "system",
-        content: systemMessage("judge", [BASE_RULES, JUDGE_STAGE, judgeOutput()], modules),
-      },
+      { role: "system", content: system },
       { role: "user", content },
     ],
     modules: modules.map((m) => m.id),

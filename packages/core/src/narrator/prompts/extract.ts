@@ -88,12 +88,11 @@ export function buildExtractPrompt(
     after: [`【本轮正文】\n${narrative}`],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
+  const rules = systemMessage("extract", [extractRules()], modules);
   return {
+    rules: rules.length,
     messages: [
-      {
-        role: "system",
-        content: systemMessage("extract", [extractRules()], modules, tablesOf(view, extras)),
-      },
+      { role: "system", content: [rules, ...tablesOf(view, extras)].join("\n\n") },
       { role: "user", content },
     ],
     modules: modules.map((m) => m.id),

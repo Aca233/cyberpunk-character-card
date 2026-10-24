@@ -3,10 +3,14 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { gameData } from "@cp/content";
 import {
+  buildExtractPrompt,
+  buildJudgePrompt,
   buildNarratorPrompt,
+  estimateTokens,
   fixedRng,
   type LlmClient,
   type LlmUsage,
+  RULE_BUDGET_TOKENS,
   runNarratorTurn,
   seededRng,
 } from "@cp/core";
@@ -124,21 +128,44 @@ const rate = (s: Pick<CaseSummary, "passed" | "runs">) => (s.runs === 0 ? 0 : s.
 
 function offline(cases: readonly EvalCase[], scenarios: ReadonlyMap<string, Scenario>): number {
   let failed = 0;
+  const peak = { judge: 0, narrate: 0, extract: 0 };
+  const peakCase = { judge: "", narrate: "", extract: "" };
   for (const c of cases) {
     const scenario = scenarios.get(c.id) as Scenario;
-    const prompt = buildNarratorPrompt(scenario.world, scenario.records, scenario.plan, {
-      data: gameData,
-      opening: scenario.opening,
-    });
+    const extras = { data: gameData, opening: scenario.opening };
+    const { world, records, plan } = scenario;
+    const prompt = buildNarratorPrompt(world, records, plan, extras);
     const findings = moduleFindings(c, prompt.modules);
     const bad = findings.filter((f) => !f.ok);
     if (bad.length > 0) failed += 1;
     const chars = prompt.messages.reduce((n, m) => n + m.content.length, 0);
+    // 规则层：只算系统消息里守则、阶段说明、输出约定和规则模块那一段
+    const layer = (
+      stage: keyof typeof peak,
+      built: { messages: readonly { content: string }[]; rules: number },
+    ) => {
+      const tokens = estimateTokens(built.messages[0]?.content.slice(0, built.rules) ?? "");
+      if (tokens > peak[stage]) {
+        peak[stage] = tokens;
+        peakCase[stage] = c.id;
+      }
+    };
+    if (plan.kind === "action") layer("judge", buildJudgePrompt(world, records, plan, extras, []));
+    layer("narrate", prompt);
+    layer("extract", buildExtractPrompt(world, records, plan, extras, "（正文）"));
     console.log(
       `${bad.length > 0 ? "✗" : "✓"} ${c.id.padEnd(28)} 模块 [${prompt.modules.join(",")}] 共 ${chars} 字${bad.length > 0 ? `  ${bad.map((f) => f.detail).join("；")}` : ""}`,
     );
   }
   console.log(`\n${cases.length} 条用例搭建成功，${failed} 条的规则模块不符合期望`);
+  const labels = { judge: "① 判断", narrate: "③ 写正文", extract: "④ 抽取" } as const;
+  console.log(`\n规则层（粗估 token，汉字按 1 个算；32K 模型的预算约 ${RULE_BUDGET_TOKENS}）：`);
+  for (const stage of ["judge", "narrate", "extract"] as const) {
+    const over = peak[stage] > RULE_BUDGET_TOKENS;
+    console.log(
+      `${over ? "!" : "✓"} ${labels[stage]} 最多约 ${peak[stage]}（${peakCase[stage]}）${over ? "  超出预算，只是提醒" : ""}`,
+    );
+  }
   return failed > 0 ? 1 : 0;
 }
 

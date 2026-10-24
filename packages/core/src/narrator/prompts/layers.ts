@@ -74,6 +74,20 @@ export function systemMessage(
   );
 }
 
+/** 规则层预算：32K 上下文的模型约 4K token（规格“上下文预算”） */
+export const RULE_BUDGET_TOKENS = 4000;
+
+/** 粗估 token：汉字按 1 个算，其余每 4 个字符算 1 个；偏保守，只用来提醒 */
+export function estimateTokens(text: string): number {
+  let han = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch)) han += 1;
+    else other += 1;
+  }
+  return han + Math.ceil(other / 4);
+}
+
 /** L2 的槽位，按固定顺序拼；没有内容的槽不出现 */
 export interface PromptSlots {
   /** 最近几轮原文（判断用；写正文的原文放在对话历史里） */

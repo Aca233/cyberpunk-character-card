@@ -166,11 +166,9 @@ export function buildNarratorPrompt(
 ): NarratorPrompt {
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
+  const rules = systemMessage("narrate", [coreRules()], modules);
   const messages: LlmMessage[] = [
-    {
-      role: "system",
-      content: systemMessage("narrate", [coreRules()], modules, tablesOf(view, extras)),
-    },
+    { role: "system", content: [rules, ...tablesOf(view, extras)].join("\n\n") },
   ];
   for (const turn of view.turns.slice(-HISTORY_TURNS)) {
     messages.push({ role: "user", content: formatInput(turn.input) });
@@ -196,5 +194,5 @@ export function buildNarratorPrompt(
       reminder: "（只写正文，纯文本。）",
     }),
   });
-  return { messages, modules: modules.map((m) => m.id) };
+  return { messages, modules: modules.map((m) => m.id), rules: rules.length };
 }

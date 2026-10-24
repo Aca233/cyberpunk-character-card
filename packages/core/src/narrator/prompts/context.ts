@@ -330,6 +330,8 @@ export interface NarratorPrompt {
   readonly messages: readonly LlmMessage[];
   /** 本轮带上的规则模块 id，记进回合日志，上下文查看器用 */
   readonly modules: readonly string[];
+  /** 规则层的字数：守则、阶段说明、输出约定和规则模块，不含物品表这类数据表 */
+  readonly rules: number;
 }
 
 /** 判断只看最近几轮的原文 */
