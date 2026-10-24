@@ -5,8 +5,10 @@ import {
   HUMANITY_MAX,
   type HumanityCommand,
   HumanityCommandSchema,
+  HumanityProposalSchema,
   type HumanityState,
   HumanityStateSchema,
+  legacyHumanity,
   type SetCyberwareCost,
   SetCyberwareCostSchema,
   type SetTolerance,
@@ -28,6 +30,7 @@ export const humanity = defineSystem<
     settled: [],
   }),
   commands: { humanity: HumanityCommandSchema },
+  proposals: { humanity: { schema: HumanityProposalSchema, legacy: legacyHumanity } },
   internal: {
     "humanity.setCyberwareCost": SetCyberwareCostSchema,
     "humanity.setTolerance": SetToleranceSchema,

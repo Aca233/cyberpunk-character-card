@@ -42,9 +42,81 @@ export const HumanityCommandSchema = z
     event: z.string().min(1).optional(),
   })
   .describe(
-    "人性变化：残忍行为 −2 至 −5，失去重要的人 −10 至 −15，休整 +3，有意义的休整 +5，和锚点相处 +8；单次和每天的恢复有上限，代码截断",
+    "人性变化（结算用；模型写的是类别和大小，见 HumanityProposalSchema）；单次和每天的恢复有上限，代码截断",
   );
 export type HumanityCommand = z.infer<typeof HumanityCommandSchema>;
+
+/** 人性的类别和大小档；换算表只在这里写一份（暂定，试玩时调） */
+export const HUMANITY_KINDS = {
+  cruelty: { label: "残忍行为", sizes: { small: -2, medium: -3, large: -5 } },
+  loss: { label: "失去重要的人", sizes: { small: -10, medium: -10, large: -10 } },
+  anchor: { label: "失去锚点", sizes: { small: -15, medium: -15, large: -15 } },
+  rest: { label: "休整", sizes: { small: 3, medium: 5, large: 8 } },
+} as const;
+export type HumanityKind = keyof typeof HUMANITY_KINDS;
+type HumanitySize = keyof (typeof HUMANITY_KINDS)["cruelty"]["sizes"];
+const SIZE_LABELS: Readonly<Record<HumanitySize, string>> = {
+  small: "小",
+  medium: "中",
+  large: "大",
+};
+
+/** 模型写的人性：只选类别和大小，代码按 HUMANITY_KINDS 换成数字 */
+export const HumanityProposalSchema = z
+  .object({
+    type: z.literal("humanity"),
+    kind: z
+      .enum(["cruelty", "loss", "anchor", "rest"])
+      .describe("cruelty 残忍行为，loss 失去重要的人，anchor 失去锚点，rest 休整"),
+    size: z
+      .enum(["small", "medium", "large"])
+      .optional()
+      .describe(
+        "cruelty 和 rest 要写：cruelty 按残忍程度；rest 的 small 普通休整，medium 有意义的休整，large 和锚点相处",
+      ),
+    reason: z.string().min(1),
+    event: z.string().min(1).optional().describe("事件 id，例如锚点死亡；带上后同一事件只结算一次"),
+  })
+  .refine((h) => h.size !== undefined || h.kind === "loss" || h.kind === "anchor", {
+    message: "cruelty 和 rest 要写 size",
+    path: ["size"],
+  })
+  .describe("人性变化：只选类别和大小，不写数字，代码换算并截断")
+  .transform(
+    ({ kind, size, ...rest }): HumanityCommand => ({
+      ...rest,
+      delta: HUMANITY_KINDS[kind].sizes[size ?? "medium"],
+    }),
+  );
+
+/** 模型仍写了数字人性时：换成最近的类别和大小（一样近取轻的），正数算休整 */
+export function legacyHumanity(
+  raw: Readonly<Record<string, unknown>>,
+): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
+  if (!("delta" in raw)) return undefined;
+  const { delta, ...rest } = raw;
+  if (rest.kind !== undefined) {
+    return { value: rest, note: "人性写了数字，按写的类别和大小处理，数字不用" };
+  }
+  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) return undefined;
+  const options: [HumanityKind, HumanitySize, number][] = [];
+  for (const [kind, def] of Object.entries(HUMANITY_KINDS) as [
+    HumanityKind,
+    (typeof HUMANITY_KINDS)[HumanityKind],
+  ][]) {
+    for (const [size, value] of Object.entries(def.sizes) as [HumanitySize, number][]) {
+      if (Math.sign(value) === Math.sign(delta)) options.push([kind, size, value]);
+    }
+  }
+  const [kind, size] = options.reduce((best, cur) =>
+    Math.abs(cur[2] - delta) < Math.abs(best[2] - delta) ? cur : best,
+  );
+  const fixed = kind === "loss" || kind === "anchor";
+  return {
+    value: { ...rest, kind, ...(fixed ? {} : { size }) },
+    note: `人性写了数字，已按最近的档位（${HUMANITY_KINDS[kind].label}${fixed ? "" : `·${SIZE_LABELS[size]}`}）处理`,
+  };
+}
 
 /** 只能由代码发出：义体装卸后更新消耗合计 */
 export const SetCyberwareCostSchema = z.object({
