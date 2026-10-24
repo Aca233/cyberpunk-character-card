@@ -67,6 +67,8 @@ const TurnRecordSchema = z.object({
   notes: z.array(z.string()).optional(),
   /** 未定稿：关键条目被拒、被丢或被核对删掉时的原因；不进旧记忆 */
   unsettled: z.string().optional(),
+  /** 按账目改写：这一条替换掉第几轮（那一轮按作废算）；一行写完，不会只作废不替换 */
+  replaces: seq.optional(),
   /** 抽取考虑过但没抽的，和原因；只供调试 */
   considered: z.array(z.string()).optional(),
   /** 写正文之前代码定下的事；旧存档没有，上下文查看器重建时用 */
@@ -195,9 +197,19 @@ export function logVersion(records: readonly LogRecord[]): number {
   return records.length;
 }
 
+/** 这条记录作废了哪一轮：作废记录的 target，或按账目改写的回合替换掉的那一轮 */
+function voidTarget(record: LogRecord): number | undefined {
+  if (record.kind === "void") return record.target;
+  if (record.kind === "turn") return record.replaces;
+  return undefined;
+}
+
 export function voidedSeqs(records: readonly LogRecord[]): ReadonlySet<number> {
   const voided = new Set<number>();
-  for (const record of records) if (record.kind === "void") voided.add(record.target);
+  for (const record of records) {
+    const target = voidTarget(record);
+    if (target !== undefined) voided.add(target);
+  }
   return voided;
 }
 
@@ -220,7 +232,8 @@ export function effectiveTurns(records: readonly LogRecord[]): readonly TurnReco
 export function isSnapshotValid(snapshot: Snapshot, records: readonly LogRecord[]): boolean {
   if (snapshot.nextSeq > records.length) return false;
   for (const record of records.slice(snapshot.nextSeq)) {
-    if (record.kind === "void" && record.target < snapshot.nextSeq) return false;
+    const target = voidTarget(record);
+    if (target !== undefined && target < snapshot.nextSeq) return false;
   }
   return true;
 }

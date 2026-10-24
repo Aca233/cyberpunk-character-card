@@ -40,6 +40,7 @@ import {
   type Rng,
   recallCandidates,
   replay,
+  rewriteNarrative,
   rolledFrom,
   runNarratorTurn,
   type SaveMeta,
@@ -80,7 +81,7 @@ export const CreateSaveSchema = z.strictObject({
 
 /** 路由直接把 body 按 status 返回 */
 export interface Reply {
-  readonly status: 200 | 201 | 202 | 400 | 404 | 409 | 503;
+  readonly status: 200 | 201 | 202 | 400 | 404 | 409 | 502 | 503;
   readonly body: Record<string, unknown>;
 }
 
@@ -427,6 +428,78 @@ export class GameService {
     });
   }
 
+  /**
+   * 按账目改写最后一轮：只按已经结算的账目重写正文，不重掷、不改状态。
+   * 和回合一样：锁里校验 → 锁外调叙事模型 → 锁里确认存档没动过再追加；
+   * 追加的回合照抄指令、骰子和状态变化，只换正文，用 replaces 一行替换掉原来那一轮
+   */
+  async rewrite(id: string, request: z.output<typeof RegenerateRequestSchema>): Promise<Reply> {
+    const checked = await this.locks.run(
+      id,
+      async (): Promise<{ reply: Reply } | { last: TurnRecord; version: number }> => {
+        const { world, records } = await this.load(id);
+        const version = logVersion(records);
+        const refuse = (error: string): { reply: Reply } => ({
+          reply: { status: 409, body: { error, version } },
+        });
+        if (this.deps.hub.running(id)) return refuse("这一轮还在生成，等它结束再操作");
+        if (request.baseVersion !== version) return refuse("存档已经更新过，请刷新后再操作");
+        if (projectState(world, records, gameData).death) return refuse("角色已经死了，不能改写");
+        const voided = voidedSeqs(records);
+        const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
+        if (last?.kind !== "turn" || last.seq === 0) {
+          return refuse("最后一步不是可以改写的回合（之后可能有别的操作）");
+        }
+        if (last.unsettled === undefined) return refuse("这一轮的正文和账目对得上，不用改写");
+        return { last, version };
+      },
+    );
+    if ("reply" in checked) return checked.reply;
+    const { last, version } = checked;
+    const unavailable = await this.llmUnavailable();
+    if (unavailable) return unavailable;
+    const redact = await this.deps.config.redactor();
+    let result: Awaited<ReturnType<typeof rewriteNarrative>>;
+    try {
+      result = await rewriteNarrative(this.deps.llm, last, AbortSignal.timeout(REWRITE_TIMEOUT_MS));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        status: 502,
+        body: { error: `改写失败：${redact(message)}；原来的正文保留`, version },
+      };
+    }
+    if (!result.ok) return { status: 502, body: { error: redact(result.error), version } };
+    const text = result.text;
+    const usage = result.usage;
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { records } = await this.load(id);
+      const now = logVersion(records);
+      if (now !== version || this.deps.hub.running(id)) {
+        return {
+          status: 409,
+          body: {
+            error: "改写期间存档有了新的变化，这次改写没有写进去，原来的正文保留",
+            version: now,
+          },
+        };
+      }
+      const { unsettled: _unsettled, ...kept } = last;
+      const record: TurnRecord = {
+        ...kept,
+        seq: version,
+        at: this.deps.clock.now().toISOString(),
+        requestId: `${last.requestId}.rewrite`,
+        baseVersion: version,
+        text,
+        replaces: last.seq,
+        ...(usage ? { usage } : {}),
+      };
+      await this.deps.saves.appendLog(id, serializeRecord(record));
+      return { status: 200, body: { version: version + 1, replaced: last.seq } };
+    });
+  }
+
   stop(id: string, turnId: string): Reply {
     const run = this.deps.hub.get(id, turnId);
     if (!run) return { status: 404, body: { error: "没有这一轮，可能已经过期" } };
@@ -765,6 +838,9 @@ interface StagePrompt {
 export const RestartRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
 
 /** 重新生成最后一轮：基于哪个日志版本 */
+/** 按账目改写最多等这么久 */
+const REWRITE_TIMEOUT_MS = 120_000;
+
 export const RegenerateRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
 
 /** 角色死了就不能再提交回合和操作 */

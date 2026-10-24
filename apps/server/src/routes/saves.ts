@@ -86,6 +86,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
     return reply(c, await game.regenerate(c.req.param("id"), parsed.value));
   });
 
+  app.post("/:id/rewrite", async (c) => {
+    const parsed = await body(c, RegenerateRequestSchema);
+    if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
+    return reply(c, await game.rewrite(c.req.param("id"), parsed.value));
+  });
+
   app.get("/:id/turns/:turnId/events", (c) => {
     const run = hub.get(c.req.param("id"), c.req.param("turnId"));
     if (!run) return c.json({ error: "没有这一轮，可能已经过期；刷新存档状态即可" }, 404);

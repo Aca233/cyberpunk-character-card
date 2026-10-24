@@ -146,6 +146,16 @@ export function StoryScreen() {
     }
   }, [saveId, version, refresh, warn, story]);
 
+  // 按账目改写最后一轮：只换正文，不重掷、不改状态
+  const rewrite = useCallback(async () => {
+    try {
+      await api.rewrite(saveId, version);
+    } catch (error) {
+      warn("rewrite", error);
+    }
+    await refresh();
+  }, [saveId, version, refresh, warn]);
+
   // 在委托板上接单：不调用模型；失败时提示原因，确认框留着
   const acceptJob = useCallback(
     async (id: string) => {
@@ -405,6 +415,7 @@ export function StoryScreen() {
           saveId={saveId}
           live={story}
           onRegenerate={view.death ? undefined : () => void regenerate()}
+          onRewrite={view.death ? undefined : rewrite}
         />
 
         {failure &&

@@ -334,6 +334,11 @@ export const api = {
       `/saves/${saveId}/regenerate`,
       { baseVersion },
     ),
+  /** 按账目改写最后一轮（未定稿的）：只换正文，账目和骰子不动；要等模型写完才返回 */
+  rewrite: (saveId: string, baseVersion: number) =>
+    request<{ version: number; replaced: number }>("POST", `/saves/${saveId}/rewrite`, {
+      baseVersion,
+    }),
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>

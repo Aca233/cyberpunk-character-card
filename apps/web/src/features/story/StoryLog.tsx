@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useEffect, useLayoutEffect, useRef } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
@@ -90,14 +90,18 @@ function TurnBlock({
   saveId,
   speakers,
   onRegenerate,
+  onRewrite,
 }: {
   readonly turn: Turn;
   readonly saveId: string;
   readonly speakers: readonly Speaker[];
   /** 只有最后一轮、没在生成时才有 */
   readonly onRegenerate?: (() => void) | undefined;
+  /** 按账目改写；和重新生成同样只给最后一轮 */
+  readonly onRewrite?: (() => Promise<void>) | undefined;
 }) {
   const prefs = useNarrativePrefs();
+  const [rewriting, setRewriting] = useState(false);
   return (
     <article className={styles.turn}>
       {prefs.sceneTitles && turn.sceneTitle && (
@@ -136,6 +140,24 @@ function TurnBlock({
             本轮叙事和账目对不上
           </span>
         )}
+        {turn.unsettled && onRegenerate && onRewrite && (
+          <button
+            type="button"
+            className={styles.regenerate}
+            disabled={rewriting}
+            onClick={async () => {
+              setRewriting(true);
+              try {
+                await onRewrite();
+              } finally {
+                setRewriting(false);
+              }
+            }}
+            title="账目不动、骰子不重掷，只按已经记上的变化重写这一轮正文"
+          >
+            {rewriting ? "改写中…" : "按账目改写"}
+          </button>
+        )}
         {onRegenerate && (
           <button
             type="button"
@@ -165,12 +187,15 @@ export function StoryLog({
   saveId,
   live,
   onRegenerate,
+  onRewrite,
 }: {
   readonly view: View;
   readonly saveId: string;
   readonly live: Live;
   /** 重新生成最后一轮；角色死了时不给 */
   readonly onRegenerate?: (() => void) | undefined;
+  /** 按账目改写最后一轮；角色死了时不给 */
+  readonly onRewrite?: (() => Promise<void>) | undefined;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -218,6 +243,7 @@ export function StoryLog({
                 ? onRegenerate
                 : undefined
             }
+            onRewrite={onRewrite}
           />
         ))}
 
