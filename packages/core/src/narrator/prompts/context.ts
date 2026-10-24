@@ -190,7 +190,7 @@ export function stateSummary(view: PlayerView): string {
   if (view.health.lostLimbs.length > 0) {
     const ids = view.health.lostLimbs.map((l) => l.id);
     lines.push(
-      `断肢：${view.health.lostLimbs.map((l) => l.label).join("、")}；${ids.some((l) => l.endsWith("arm")) ? "断臂不能用双手武器，" : ""}${ids.some((l) => l.endsWith("leg")) ? "断腿不能追车或步行逃跑，" : ""}相关检定在 penalties 写 −${MOD_STEP}（计入 −${PENALTY_CAP} 上限）；找义体医生装手臂或腿部义体就补上了`,
+      `断肢：${view.health.lostLimbs.map((l) => l.label).join("、")}；${ids.some((l) => l.endsWith("arm")) ? "断臂不能用双手武器，" : ""}${ids.some((l) => l.endsWith("leg")) ? "断腿不能追车或步行逃跑，" : ""}相关检定在 penalties 加一项（−${MOD_STEP}，计入 −${PENALTY_CAP} 上限）；找义体医生装手臂或腿部义体就补上了`,
     );
   }
   if (view.ripperdoc)
