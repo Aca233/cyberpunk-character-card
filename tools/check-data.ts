@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   boardModules,
+  canonTimeline,
   combos,
   consequences,
   cyberware,
@@ -24,6 +25,7 @@ import {
 import {
   BASE_RULES,
   BoardModuleSchema,
+  CanonTimelineSchema,
   CharacterCardSchema,
   ComboSchema,
   characterRules,
@@ -101,6 +103,7 @@ schema("联动 combos", ComboSchema.array(), combos);
 schema("生命路径 lifepath", LifepathEntrySchema.array(), lifepath);
 schema("示例角色 characters", CharacterCardSchema.array(), sampleCharacters);
 schema("黑话 glossary", GlossarySchema, glossary);
+schema("原剧时间线 canonTimeline", CanonTimelineSchema, canonTimeline);
 
 // 2. 重复 id
 const itemIds = unique(

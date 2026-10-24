@@ -22,6 +22,7 @@ import { castSection } from "../../systems/npc/prompt";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { formatGameTime } from "../../systems/world/apply";
 import { locationCatalog, WorldClockStateSchema } from "../../systems/world/schema";
+import { canonSection } from "../canon";
 import { twistSection } from "../examples";
 import type { RolledCheck } from "../pending";
 import type { Memory } from "../stages";
@@ -125,6 +126,8 @@ export interface PromptExtras {
   readonly decided?: readonly string[] | undefined;
   /** ① 判断调出的旧记忆；写正文时单独放一栏 */
   readonly recalled?: readonly Memory[] | undefined;
+  /** 开场的游戏时间；按它算原剧时间线走到第几天，没给就不带 */
+  readonly startTime?: number | undefined;
 }
 
 function attributeLine(values: Readonly<Record<Attribute, number>>): string {
@@ -377,6 +380,8 @@ export function situation(
   if (due) parts.push(`【到期事件】\n${due}`);
   const city = citySection(CityStateSchema.parse(world.slices.city ?? {}));
   if (city) parts.push(`【城里的动静】\n${city}`);
+  const canon = canonSection(extras.data, extras.startTime, world.time);
+  if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   return parts;

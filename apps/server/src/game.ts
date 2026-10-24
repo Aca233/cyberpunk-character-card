@@ -354,7 +354,7 @@ export class GameService {
           dv: check.result.dv,
           outcome: check.result.outcome,
         });
-        void this.execute(run, world, log, plan, meta.opening, request.offscreen);
+        void this.execute(run, world, log, plan, meta.opening, meta.startTime, request.offscreen);
         return { status: 202, body: { turnId: run.turnId, replayed: false } };
       }
 
@@ -389,6 +389,7 @@ export class GameService {
         records,
         { kind: "action", input: request.input },
         meta.opening,
+        meta.startTime,
         request.offscreen,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
@@ -640,7 +641,11 @@ export class GameService {
           if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
           plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
         }
-        const extras = { data: gameData, opening: openingPremise(meta.opening) };
+        const extras = {
+          data: gameData,
+          opening: openingPremise(meta.opening),
+          startTime: meta.startTime,
+        };
         const stage = (
           id: StagePrompt["stage"],
           label: string,
@@ -836,6 +841,7 @@ export class GameService {
     records: readonly LogRecord[],
     plan: NarratorPlan,
     opening: string | undefined,
+    startTime: number,
     offscreen: OffscreenPace | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
@@ -848,6 +854,7 @@ export class GameService {
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening),
+          startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),

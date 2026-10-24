@@ -270,6 +270,8 @@ export interface NarratorDeps {
   readonly data?: Readonly<Record<string, unknown>>;
   /** 这个存档的开场设定（内容包），故事还没开始时给模型 */
   readonly opening?: string | undefined;
+  /** 开场的游戏时间；按它算原剧时间线走到第几天 */
+  readonly startTime?: number | undefined;
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
@@ -519,7 +521,11 @@ export async function runNarratorTurn(
   plan: NarratorPlan,
 ): Promise<NarratorResult> {
   const b = new TurnBuilder(deps);
-  const extras: PromptExtras = { data: deps.data, opening: deps.opening };
+  const extras: PromptExtras = {
+    data: deps.data,
+    opening: deps.opening,
+    startTime: deps.startTime,
+  };
   let usage: LlmUsage | undefined;
   const addNarrator = (u: LlmUsage | undefined) => {
     if (u) usage = addUsage(usage ?? ZERO, u);
