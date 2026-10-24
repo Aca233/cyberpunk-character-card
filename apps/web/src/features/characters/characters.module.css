@@ -669,3 +669,31 @@ legend.sectionTitle {
   color: var(--cp-text-dim);
   font-weight: normal;
 }
+
+.importBox {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.importOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.importCheck {
+  margin-top: 0.25rem;
+  accent-color: var(--cp-cyan);
+}
+
+.headTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

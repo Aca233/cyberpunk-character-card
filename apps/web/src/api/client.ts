@@ -283,6 +283,13 @@ export const api = {
     request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),
   /** 角色正文的一个区块交给辅助模型写，流式；会花一次模型调用 */
   streamProse,
+  /** 导入 Character Card；useModel 时花一次模型调用插主板、分属性。结果不保存，由玩家确认 */
+  importCharacter: (input: { raw: unknown; useModel: boolean }) =>
+    request<{ card: CharacterCard; warnings: string[]; own: boolean }>(
+      "POST",
+      "/characters/import",
+      input,
+    ),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),

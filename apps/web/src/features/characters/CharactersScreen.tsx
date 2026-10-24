@@ -8,7 +8,7 @@ import {
   pointsSpent,
 } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
 import { Button } from "../../ui/Button";
@@ -17,6 +17,7 @@ import { Panel } from "../../ui/Panel";
 import { BoardEditor, emptyBoard } from "./BoardEditor";
 import styles from "./characters.module.css";
 import { ProseField } from "./ProseField";
+import { downloadCard, readCardFile } from "./tavernFile";
 
 type Attribute = keyof CharacterCard["attributes"];
 
@@ -25,6 +26,8 @@ interface Editor {
   readonly sample: boolean;
   readonly card: CharacterCard;
   readonly original: string;
+  /** 刚导入、还没保存的卡：导入时的提示 */
+  readonly imported?: { readonly warnings: readonly string[]; readonly own: boolean };
 }
 
 type Destination = { readonly editor: Editor } | { readonly back: true };
@@ -91,7 +94,21 @@ export function CharactersScreen() {
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
   });
-  const busy = save.isPending || remove.isPending;
+  const [useModel, setUseModel] = useState(true);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const importCard = useMutation({
+    mutationFn: async ({ file, model }: { file: File; model: boolean }) =>
+      api.importCharacter({ raw: await readCardFile(file), useModel: model }),
+    onSuccess: ({ card, warnings, own }) => {
+      // 导入的卡不保存，original 留空让它算作未保存
+      const next = {
+        editor: { id: null, sample: false, card, original: "", imported: { warnings, own } },
+      };
+      if (dirty) setDestination(next);
+      else go(next);
+    },
+  });
+  const busy = save.isPending || remove.isPending || importCard.isPending;
 
   useEffect(() => {
     if (!dirty) return;
@@ -149,6 +166,37 @@ export function CharactersScreen() {
           >
             ＋ 新建角色
           </Button>
+          <div className={styles.importBox}>
+            <Button disabled={busy} onClick={() => fileInput.current?.click()}>
+              {importCard.isPending ? "正在导入…" : "导入角色卡"}
+            </Button>
+            <label className={styles.importOption}>
+              <input
+                type="checkbox"
+                className={styles.importCheck}
+                checked={useModel}
+                disabled={busy}
+                onChange={(event) => setUseModel(event.target.checked)}
+              />
+              <span>用模型插主板、分属性（花一次模型调用；本作导出的卡不调用）</span>
+            </label>
+            <input
+              ref={fileInput}
+              type="file"
+              hidden
+              accept=".json,.png,application/json,image/png"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) importCard.mutate({ file, model: useModel });
+              }}
+            />
+            {importCard.isError && (
+              <p className={styles.error} role="alert">
+                {importCard.error.message}
+              </p>
+            )}
+          </div>
           <p className={styles.note}>你决定自己是谁，夜之城决定如何回应。</p>
           {characters.isPending && <p role="status">正在读取角色库…</p>}
           {characters.isError && (
@@ -202,8 +250,37 @@ export function CharactersScreen() {
               </span>
               <h2>{editor.card.name.trim() || "尚未命名"}</h2>
             </div>
-            <span className={styles.note}>{dirty ? "有未保存的修改" : "本地角色库"}</span>
+            <div className={styles.headTools}>
+              <span className={styles.note}>{dirty ? "有未保存的修改" : "本地角色库"}</span>
+              <Button
+                disabled={busy || !parsed.success}
+                reason="角色卡还没填完整"
+                onClick={() => {
+                  if (parsed.success) downloadCard(parsed.data);
+                }}
+              >
+                导出角色卡
+              </Button>
+            </div>
           </div>
+
+          {editor.imported && (
+            <div className={styles.notice} role="status">
+              <p>
+                {editor.imported.own
+                  ? "这是本作导出的角色卡，已经原样还原。"
+                  : "从角色卡导入：文字已经对上正文，主板和属性是模型挑的，代码按规矩截过。"}
+                检查一遍再保存，保存后才进角色库。
+              </p>
+              {editor.imported.warnings.length > 0 && (
+                <ul className={styles.warnings}>
+                  {editor.imported.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {editor.sample && (
             <div className={styles.notice}>

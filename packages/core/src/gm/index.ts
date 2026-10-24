@@ -5,4 +5,5 @@ export * from "./modules";
 export * from "./pending";
 export * from "./prompts";
 export * from "./prose";
+export * from "./tavern";
 export * from "./turn";
