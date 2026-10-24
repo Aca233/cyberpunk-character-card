@@ -23,6 +23,7 @@ export function Ripperdoc({
   onBuy,
   onRemove,
   onRepay,
+  onRepair,
   onClose,
 }: {
   readonly view: View;
@@ -31,6 +32,8 @@ export function Ripperdoc({
   readonly onBuy?: ((id: string, credit: boolean) => Promise<void>) | undefined;
   readonly onRemove?: ((id: string) => Promise<void>) | undefined;
   readonly onRepay?: (() => Promise<void>) | undefined;
+  /** 修好一件打坏的义体 */
+  readonly onRepair?: ((id: string) => Promise<void>) | undefined;
   readonly onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState<Item | null>(null);
@@ -107,7 +110,18 @@ export function Ripperdoc({
                     <li key={c.id} className={styles.docItem}>
                       <div className={styles.docItemHead}>
                         <strong>{c.name}</strong>
-                        <small className={styles.cyberSlot}>{c.slotLabel}</small>
+                        <small className={styles.cyberSlot}>
+                          {c.slotLabel}
+                          {c.broken && " · 打坏了"}
+                        </small>
+                        {doc.repair[c.id] !== undefined && (
+                          <Button
+                            disabled={!onRepair || working || (doc.repair[c.id] ?? 0) > eddies}
+                            onClick={() => onRepair && void run(() => onRepair(c.id))}
+                          >
+                            修好（{money(doc.repair[c.id] ?? 0)}）
+                          </Button>
+                        )}
                         <Button
                           disabled={!onRemove || working}
                           onClick={() => onRemove && void run(() => onRemove(c.id))}

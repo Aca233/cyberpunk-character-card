@@ -13,6 +13,7 @@ import {
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
+import { HealthStateSchema } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { registry } from "../systems/registry";
@@ -279,11 +280,11 @@ export async function runGmTurn(
 
   // 装着的义体的名字：义体来源的专属选项和义体的内心声音要对得上
   const parts = cyberwareCatalog(deps.data ?? {});
-  const chrome = new Set(
-    CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed.map(
-      (c) => parts.get(c.id)?.name ?? c.id,
-    ),
-  );
+  // 打坏的义体修好前失去能力：不算专属选项的来源、不会说话、不挡伤害
+  const installedChrome = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+  const broken = new Set(HealthStateSchema.parse(world.slices.health).brokenChrome);
+  const working = installedChrome.filter((c) => !broken.has(c.id));
+  const chrome = new Set(working.map((c) => parts.get(c.id)?.name ?? c.id));
   const traits = CharacterStateSchema.parse(world.slices.character).traits;
   // 武器栏里有带专属声音的不朽武器时，它才会说话
   const items = deps.data?.items ? itemCatalog(deps.data) : new Map<string, ItemDef>();
@@ -365,10 +366,15 @@ export async function runGmTurn(
     facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
   }
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
-  const armor = CyberwareStateSchema.parse(world.slices.cyberware ?? {})
-    .installed.map((c) => parts.get(c.id))
-    .find((d) => d?.armor === true);
+  const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
   if (armor) facts.armor = armor.name;
+  // 断肢打在义肢上改记为义体损坏：坏着的也要放进来，不然会当成血肉再断一次
+  const limbChrome = Object.fromEntries(
+    installedChrome
+      .filter((c) => c.slot === "arms" || c.slot === "legs")
+      .map((c) => [c.slot, { id: c.id, name: parts.get(c.id)?.name ?? c.id }]),
+  );
+  if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
   const applied = registry.applyCommands(world, commands, applyCtx);
   const accepted: Command[] = [];

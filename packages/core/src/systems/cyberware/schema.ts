@@ -79,6 +79,8 @@ export const RipperdocListSchema = z.array(RipperdocSchema);
 
 /** 旧件折价回收：最多按参考价的两成，防低买高卖 */
 export const TRADE_IN_RATE = 0.2;
+/** 修理打坏的义体按参考价的几成收钱 */
+export const REPAIR_RATE = 0.3;
 /** 赊账几天内还清 */
 export const DEBT_DAYS = 7;
 

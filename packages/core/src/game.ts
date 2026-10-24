@@ -22,6 +22,7 @@ import {
 import { CombatStateSchema } from "./systems/combat/schema";
 import {
   cyberwareCatalog,
+  repairCost,
   ripperdocList,
   ripperdocShelf,
   tradeInValue,
@@ -41,7 +42,7 @@ import {
 } from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
-import { HealthStateSchema } from "./systems/health/schema";
+import { HealthStateSchema, LIMB_LABELS } from "./systems/health/schema";
 import { shownStars } from "./systems/heat/apply";
 import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
@@ -296,6 +297,7 @@ function ripperdocView(
   installed: readonly { readonly id: string; readonly slot: CyberwareSlot }[],
   parts: ReadonlyMap<string, CyberwareDef>,
   debts: readonly RipperdocDebt[],
+  broken: readonly string[],
 ) {
   const doc =
     location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
@@ -315,6 +317,13 @@ function ripperdocView(
       installed.map((c) => {
         const def = parts.get(c.id);
         return [c.id, def ? tradeInValue(def) : 0];
+      }),
+    ) as Readonly<Record<string, number>>,
+    /** 打坏的义体修好要多少，按义体 id；没坏的不列 */
+    repair: Object.fromEntries(
+      installed.flatMap((c) => {
+        const def = parts.get(c.id);
+        return def && broken.includes(c.id) ? [[c.id, repairCost(def)]] : [];
       }),
     ) as Readonly<Record<string, number>>,
     shelf: ripperdocShelf(doc, parts, streetCred, installed).map((item) => ({
@@ -585,6 +594,8 @@ export function projectState(
       condition: health.condition,
       conditionLabel: CONDITION_LABELS[health.condition],
       wound: woundTag(health),
+      /** 断了还没装义肢的部位 */
+      lostLimbs: health.lostLimbs.map((l) => ({ id: l, label: LIMB_LABELS[l] })),
     },
     humanity: {
       current: humanity.current,
@@ -673,10 +684,20 @@ export function projectState(
         rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
         ability: def?.ability ?? null,
         bonusText: def ? bonusText(def) : "",
+        /** 被打坏了：修好前失去能力 */
+        broken: health.brokenChrome.includes(c.id),
       };
     }),
     /** 当前地点开着的义体医生；不在诊所时是 null */
-    ripperdoc: ripperdocView(data, clock.location, character.streetCred, installed, parts, debts),
+    ripperdoc: ripperdocView(
+      data,
+      clock.location,
+      character.streetCred,
+      installed,
+      parts,
+      debts,
+      health.brokenChrome,
+    ),
     /** 欠义体医生的钱 */
     /** 当前地点开着的商店 */
     shops: shopsView(data, clock.location, character.streetCred, inventory),

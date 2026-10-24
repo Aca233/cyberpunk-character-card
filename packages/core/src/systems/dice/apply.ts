@@ -69,6 +69,9 @@ export function prepareCheck(
   if (spec.dv < min || spec.dv > max) {
     return { ok: false, reason: `${tier.label}的难度值应在 ${min}–${max} 之间，给的是 ${spec.dv}` };
   }
+  if (spec.limb === true && spec.damage !== "lethal") {
+    return { ok: false, reason: "断肢风险只能和致命档（damage: lethal）一起写" };
+  }
   const dvItems: Modifier[] = [...spec.dvMods];
   if (mode === "deathCity") {
     dvItems.push({ source: "difficulty", value: DEATH_CITY_DV, reason: "死亡之城难度" });

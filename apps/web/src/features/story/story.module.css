@@ -1474,3 +1474,14 @@
   color: var(--cp-yellow);
   font-size: 0.75em;
 }
+
+.cyberItem[data-broken] > span {
+  color: var(--cp-red);
+  text-decoration: line-through;
+}
+
+.lostLimbs {
+  margin: 0.5rem 0 0;
+  color: var(--cp-red);
+  font-size: 0.85rem;
+}

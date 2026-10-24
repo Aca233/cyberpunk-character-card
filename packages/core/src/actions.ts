@@ -6,6 +6,7 @@ import type { WorldState } from "./kernel/world";
 import { CharacterStateSchema } from "./systems/character/schema";
 import {
   cyberwareCatalog,
+  repairCost,
   ripperdocList,
   ripperdocShelf,
   tradeInValue,
@@ -13,6 +14,7 @@ import {
 import { CyberwareStateSchema } from "./systems/cyberware/schema";
 import { AttributeSchema } from "./systems/dice/schema";
 import { EconomyStateSchema } from "./systems/economy/schema";
+import { HealthStateSchema } from "./systems/health/schema";
 import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
 import { InventoryStateSchema } from "./systems/inventory/schema";
 import { registry } from "./systems/registry";
@@ -37,6 +39,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 还清欠义体医生的钱 */
   z.strictObject({ type: z.literal("repayRipperdoc"), doc: z.string().min(1).max(40) }),
+  /** 请义体医生修好一件打坏的义体 */
+  z.strictObject({
+    type: z.literal("repairCyberware"),
+    doc: z.string().min(1).max(40),
+    id: z.string().min(1).max(64),
+  }),
   /** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
   z.strictObject({
     type: z.literal("equipItem"),
@@ -85,7 +93,10 @@ export const BOARD_ACCEPT_NOTE = "在委托板上接下，戏里还没和对方�
 /** 义体医生的操作：人要在诊所里，货要在货架上、肯卖 */
 function ripperdocCommands(
   world: WorldState,
-  action: Extract<PlayerAction, { type: "buyCyberware" | "removeCyberware" | "repayRipperdoc" }>,
+  action: Extract<
+    PlayerAction,
+    { type: "buyCyberware" | "removeCyberware" | "repayRipperdoc" | "repairCyberware" }
+  >,
   data: Readonly<Record<string, unknown>>,
 ): Command[] | string {
   const doc = ripperdocList(data).find((d) => d.id === action.doc);
@@ -103,6 +114,20 @@ function ripperdocCommands(
     return [
       { type: "money", delta: -debt.amount, reason: `还清欠${doc.name}的义体钱` },
       { type: "cyberware.debt", action: "repay", doc: doc.id, docName: doc.name },
+    ];
+  }
+  if (action.type === "repairCyberware") {
+    const def = catalog.get(action.id);
+    const name = def?.name ?? action.id;
+    if (!installed.some((c) => c.id === action.id)) return `没有装着${name}`;
+    if (!HealthStateSchema.parse(world.slices.health).brokenChrome.includes(action.id)) {
+      return `${name}没坏`;
+    }
+    const cost = def ? repairCost(def) : 0;
+    if (cost > eddies) return `欧元不够：修${name}要 ${cost}，身上只有 ${eddies}`;
+    return [
+      ...(cost > 0 ? [{ type: "money", delta: -cost, reason: `在${doc.name}那里修${name}` }] : []),
+      { type: "health.limb", action: "repair", id: action.id, name },
     ];
   }
   if (action.type === "removeCyberware") {
@@ -203,6 +228,7 @@ function commandsFor(
     case "buyCyberware":
     case "removeCyberware":
     case "repayRipperdoc":
+    case "repairCyberware":
       return ripperdocCommands(world, action, data);
     case "buyItem":
     case "sellItem":

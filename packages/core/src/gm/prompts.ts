@@ -113,6 +113,7 @@ const CORE = `你在《赛博朋克 2077》世界观下和玩家一起做角色�
 - 加成 bonuses（本事、义体、物品、人物、准备，每项 +2）合计最多 +${BONUS_CAP}；减值 penalties（伤势、恶劣环境）合计最多 −${PENALTY_CAP}；基础值之上的难度修正 dvMods 合计最多 +${DV_MOD_CAP}。代码统一截断。聪明的计划、充分的准备、利用人物关系和环境，可以免检定、降低难度值或获得加成。
 - 失败可能受伤时在 check 写 damage（graze 擦伤、heavy 重击、lethal 致命）；只有写了 lethal 才可能死，不写 damage 失败就不扣血。
 - 大失败时 damage 指令最多比事先写的高一档（仍然只有事先写了 lethal 才可能死）；装着护甲义体时代码自动降一档，damage 照角色实际挨的那一下写，不要自己先降。
+- 断肢很少见：只在刀刃、霰弹枪、爆炸、重型机械这类真能打断手脚的场面，致命档失败可能失去手臂或腿时，在 check 写 limb: true 并在 failure 里写明；真断了才在 damage 指令写 limb（left-arm、right-arm、left-leg、right-leg）。没事先写明、降档后不到致命或难度不允许时代码会拦下；原本是义肢的部位改记为义体损坏，修好前用不了。
 - 检定结果出来后照事先说明的写：失败后果不比 failure 更重，剧情照样往前走。
 
 【专属选项和内心声音】
@@ -264,8 +265,14 @@ export function stateSummary(view: PlayerView): string {
     );
   if (view.cyberware.length > 0)
     lines.push(
-      `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}${c.bonusText ? `，${c.bonusText}` : ""}）`).join("、")}`,
+      `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}${c.broken ? "，打坏了，修好前用不了" : c.bonusText ? `，${c.bonusText}` : ""}）`).join("、")}`,
     );
+  if (view.health.lostLimbs.length > 0) {
+    const ids = view.health.lostLimbs.map((l) => l.id);
+    lines.push(
+      `断肢：${view.health.lostLimbs.map((l) => l.label).join("、")}；${ids.some((l) => l.endsWith("arm")) ? "断臂不能用双手武器，" : ""}${ids.some((l) => l.endsWith("leg")) ? "断腿不能追车或步行逃跑，" : ""}相关检定在 penalties 写 −2（计入 −4 上限）；找义体医生装手臂或腿部义体就补上了`,
+    );
+  }
   if (view.ripperdoc)
     lines.push(
       `义体医生：${view.ripperdoc.name}在这里（${view.ripperdoc.note}）；玩家可以在界面上直接买、卸义体，代码按货架价结算，你只写场面${view.ripperdoc.blackMarket ? "。这是黑市货，装上的东西可能有故障或追踪器，可以在剧情里兑现" : ""}`,

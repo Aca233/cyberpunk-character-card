@@ -16,13 +16,18 @@ export const CheckFactSchema = z.object({
   outcome: CheckOutcomeSchema,
   /** check 里事先说明的伤害档位 */
   damage: DamageTierSchema.optional(),
+  /** check 里事先写明了断肢风险 */
+  limb: z.boolean().optional(),
 });
 export type CheckFact = z.infer<typeof CheckFactSchema>;
 
 export function checkFactFrom(id: string, check: PreparedCheck, result: CheckResult): CheckFact {
-  return check.spec.damage === undefined
-    ? { id, outcome: result.outcome }
-    : { id, outcome: result.outcome, damage: check.spec.damage };
+  return {
+    id,
+    outcome: result.outcome,
+    ...(check.spec.damage === undefined ? {} : { damage: check.spec.damage }),
+    ...(check.spec.limb === true ? { limb: true } : {}),
+  };
 }
 
 /** 读取本轮检定结果；没有检定时返回 undefined，格式不对时报错 */

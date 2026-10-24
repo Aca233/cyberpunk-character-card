@@ -357,6 +357,15 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   // 手臂
   {
+    id: "prosthetic-arms",
+    name: "通用义肢手臂",
+    slot: "arms",
+    rarity: "common",
+    price: 4000,
+    humanityCost: 2,
+    ability: "量产的替换手臂：断了的胳膊补回原有的力气和灵巧，没有别的花样",
+  },
+  {
     id: "gorilla-arms",
     name: "大猩猩手臂",
     slot: "arms",
@@ -397,6 +406,15 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     checks: ["tech"],
   },
   // 腿部
+  {
+    id: "prosthetic-legs",
+    name: "通用义肢腿",
+    slot: "legs",
+    rarity: "common",
+    price: 3000,
+    humanityCost: 2,
+    ability: "量产的替换腿：断了的腿能照常走路、跑步，没有别的花样",
+  },
   {
     id: "fortified-ankles",
     name: "踝部加固",

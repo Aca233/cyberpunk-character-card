@@ -1,8 +1,25 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
-import { checkFact, type DamageTier, isSuccess, type Modifier } from "../dice";
+import {
+  type CheckFact,
+  checkFact,
+  type DamageTier,
+  type DiceState,
+  isSuccess,
+  type Modifier,
+} from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
-import type { Condition, DamageCommand, HealCommand, HealthState } from "./schema";
+import {
+  ChromeLimbsFactSchema,
+  type Condition,
+  type DamageCommand,
+  type HealCommand,
+  type HealthInternal,
+  type HealthState,
+  LIMB_LABELS,
+  type Limb,
+  limbSlot,
+} from "./schema";
 
 type Health = Draft<HealthState>;
 
@@ -99,7 +116,11 @@ export function applyDamage(
   // 护甲降一档；几件护甲同时装着也只降一档（turn 只放一件的名字进来）
   const armor = typeof ctx.facts.armor === "string" ? ctx.facts.armor : undefined;
   const rank = DAMAGE_RANK[command.tier] - (armor ? 1 : 0);
-  if (rank < 0) return ok(`${armor}挡下了这一下（${DAMAGE_LABELS[command.tier]}），没扣血`);
+  if (rank < 0) {
+    return ok(
+      `${armor}挡下了这一下（${DAMAGE_LABELS[command.tier]}），没扣血${command.limb ? "，也没断肢" : ""}`,
+    );
+  }
   const tier = DAMAGE_TIERS[rank] ?? "graze";
   const amount = percentOf(draft.max, DAMAGE_PERCENT[tier]);
   draft.hp = Math.max(0, draft.hp - amount);
@@ -108,6 +129,7 @@ export function applyDamage(
       ? `${armor}把${DAMAGE_LABELS[command.tier]}降成${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`
       : `${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`,
   ];
+  if (command.limb) notes.push(loseLimb(draft, command.limb, tier, fact, ctx));
   if (draft.hp === 0) {
     draft.condition = fact.damage === "lethal" ? "dying" : "down";
     notes.push(
@@ -118,6 +140,57 @@ export function applyDamage(
   }
   trackSevere(draft, ctx.now);
   return ok(...notes);
+}
+
+/** 断肢：致命档、事先写明、难度允许才断；原本是义肢的部位改记为义体损坏 */
+function loseLimb(
+  draft: Health,
+  limb: Limb,
+  tier: DamageTier,
+  fact: CheckFact,
+  ctx: SystemContext,
+): string {
+  const label = LIMB_LABELS[limb];
+  if (fact.limb !== true) return `没断${label}：check 没有事先写明断肢风险`;
+  if (tier !== "lethal") return `没断${label}：降档后不到致命`;
+  const mode = ctx.read<DiceState>("dice").mode;
+  if (mode === "streetLegend") return `没断${label}：街头传说难度不会断肢`;
+  if (fact.damage !== "lethal" && mode !== "deathCity") {
+    return `没断${label}：事先写的不是致命档（只有死亡之城大失败升到致命也会断）`;
+  }
+  const chrome = ChromeLimbsFactSchema.safeParse(ctx.facts.chrome ?? {});
+  const part = chrome.success ? chrome.data[limbSlot(limb)] : undefined;
+  if (part) {
+    if (draft.brokenChrome.includes(part.id)) return `${label}的${part.name}本来就坏着`;
+    draft.brokenChrome.push(part.id);
+    return `${label}是义肢：${part.name}被打坏了，找义体医生修好前用不了`;
+  }
+  if (draft.lostLimbs.includes(limb)) return `${label}已经没了`;
+  draft.lostLimbs.push(limb);
+  return `失去${label}：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，相关检定 −2；找义体医生装义肢能补上`;
+}
+
+/** 义肢和义体损坏：只能由代码发出 */
+export function applyLimb(
+  draft: Health,
+  command: Extract<HealthInternal, { type: "health.limb" }>,
+): ApplyOutcome {
+  if (command.action === "fit") {
+    const fixed = draft.lostLimbs.filter((l) => limbSlot(l) === command.slot);
+    if (fixed.length === 0) return ok();
+    draft.lostLimbs = draft.lostLimbs.filter((l) => limbSlot(l) !== command.slot);
+    return ok(
+      `装上${command.name ?? "义肢"}，断了的${fixed.map((l) => LIMB_LABELS[l]).join("、")}补上了`,
+    );
+  }
+  const i = command.id === undefined ? -1 : draft.brokenChrome.indexOf(command.id);
+  if (command.action === "clear") {
+    if (i >= 0) draft.brokenChrome.splice(i, 1);
+    return ok();
+  }
+  if (i < 0) return fail(`${command.name ?? command.id}没坏`);
+  draft.brokenChrome.splice(i, 1);
+  return ok(`${command.name ?? command.id}修好了`);
 }
 
 export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContext): ApplyOutcome {

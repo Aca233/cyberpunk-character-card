@@ -430,11 +430,12 @@ export function SidePanel({
         ) : (
           <ul className={styles.cyberList}>
             {view.cyberware.map((c) => (
-              <li key={c.id} className={styles.cyberItem}>
+              <li key={c.id} className={styles.cyberItem} data-broken={c.broken || undefined}>
                 <span>{c.name}</span>
                 <small className={styles.cyberSlot}>
                   {c.slotLabel}
                   {c.rarityLabel ? ` · ${c.rarityLabel}` : ""}
+                  {c.broken && " · 打坏了，修好前用不了"}
                 </small>
                 {c.ability && (
                   <p className={styles.cyberAbility}>
@@ -445,6 +446,12 @@ export function SidePanel({
               </li>
             ))}
           </ul>
+        )}
+        {view.health.lostLimbs.length > 0 && (
+          <p className={styles.lostLimbs}>
+            断肢：{view.health.lostLimbs.map((l) => l.label).join("、")}
+            （找义体医生装义肢能补上）
+          </p>
         )}
         {view.ripperdoc && (
           <div className={styles.docLink}>

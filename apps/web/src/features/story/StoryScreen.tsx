@@ -155,6 +155,7 @@ export function StoryScreen() {
       action:
         | { type: "buyCyberware"; id: string; credit: boolean }
         | { type: "removeCyberware"; id: string }
+        | { type: "repairCyberware"; id: string }
         | { type: "repayRipperdoc" },
     ) => {
       const doc = view?.ripperdoc;
@@ -478,6 +479,7 @@ export function StoryScreen() {
           }
           onRemove={busy ? undefined : (id) => cyberAction({ type: "removeCyberware", id })}
           onRepay={busy ? undefined : () => cyberAction({ type: "repayRipperdoc" })}
+          onRepair={busy ? undefined : (id) => cyberAction({ type: "repairCyberware", id })}
           onClose={() => setAtDoc(false)}
         />
       )}

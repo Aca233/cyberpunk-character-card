@@ -8,6 +8,7 @@ import {
   type CyberwareDef,
   type CyberwareState,
   DEBT_DAYS,
+  REPAIR_RATE,
   type Ripperdoc,
   type RipperdocDebtCommand,
   RipperdocListSchema,
@@ -48,6 +49,11 @@ export function ripperdocList(data: Readonly<Record<string, unknown>>): readonly
 }
 
 /** 医生回收一件旧义体给多少：参考价的两成，舍到百位；不朽义体不回收 */
+/** 修好一件打坏的义体：参考价的三成，舍到百位，最少 100 */
+export function repairCost(def: CyberwareDef): number {
+  return Math.max(100, Math.round((def.price * REPAIR_RATE) / 100) * 100);
+}
+
 export function tradeInValue(def: CyberwareDef): number {
   return def.iconic ? 0 : Math.floor((def.price * TRADE_IN_RATE) / 100) * 100;
 }
@@ -153,13 +159,19 @@ export function install(
   }
   const notes: string[] = [];
   const old = draft.installed.findIndex((c) => c.slot === def.slot);
+  const emit: Command[] = [];
   if (old >= 0) {
     const [prev] = draft.installed.splice(old, 1);
-    if (prev) notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
+    if (prev) {
+      notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
+      emit.push({ type: "health.limb", action: "clear", id: prev.id });
+    }
   }
   draft.installed.push({ id, slot: def.slot, installedAt: now });
   notes.push(`${SLOT_LABELS[def.slot]}装上${def.name}`);
-  const emit: Command[] = [];
+  if (def.slot === "arms" || def.slot === "legs") {
+    emit.push({ type: "health.limb", action: "fit", slot: def.slot, name: def.name });
+  }
   if (purchase && purchase.price > 0) {
     emit.push({
       type: "money",
@@ -184,7 +196,11 @@ export function remove(
   return {
     ok: true,
     notes: [`卸下${name}`],
-    emit: [costCommand(draft, catalog), bonusCommand(draft, catalog)],
+    emit: [
+      costCommand(draft, catalog),
+      bonusCommand(draft, catalog),
+      { type: "health.limb", action: "clear", id },
+    ],
   };
 }
 

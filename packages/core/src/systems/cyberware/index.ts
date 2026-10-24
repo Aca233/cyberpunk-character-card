@@ -20,7 +20,7 @@ export const cyberware = defineSystem<
   InstallCyberware | RipperdocDebtCommand
 >({
   id: "cyberware",
-  dependsOn: ["economy", "humanity", "character", "world"],
+  dependsOn: ["economy", "humanity", "character", "world", "health"],
   state: CyberwareStateSchema,
   initial: () => ({ installed: [], settled: [], debts: [] }),
   commands: { cyberware: CyberwareCommandSchema },

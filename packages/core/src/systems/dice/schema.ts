@@ -61,6 +61,11 @@ export const CheckSpecSchema = z.object({
   failure: z.string().min(1).describe("失败会怎样，后果不会比这更重"),
   /** 失败时最多扣到哪一档；不写表示失败不扣血 */
   damage: DamageTierSchema.optional().describe("失败最多扣到哪一档；不写表示失败不扣血"),
+  /** 失败可能失去手臂或腿；只能和 damage lethal 一起写 */
+  limb: z
+    .boolean()
+    .optional()
+    .describe("失败可能失去手臂或腿（failure 里要写明）；只能和 damage: lethal 一起写"),
 });
 export type CheckSpec = z.infer<typeof CheckSpecSchema>;
 

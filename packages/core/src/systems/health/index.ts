@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { maxHp } from "../dice";
-import { applyDamage, applyHeal, bleed, die, revive, setMax } from "./apply";
+import { applyDamage, applyHeal, applyLimb, bleed, die, revive, setMax } from "./apply";
 import {
   type DamageCommand,
   DamageCommandSchema,
@@ -18,7 +18,16 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
   state: HealthStateSchema,
   initial: () => {
     const max = maxHp(3, 1);
-    return { hp: max, max, condition: "up", severeSince: null, bleeds: 0, damagedBy: null };
+    return {
+      hp: max,
+      max,
+      condition: "up",
+      severeSince: null,
+      bleeds: 0,
+      damagedBy: null,
+      lostLimbs: [],
+      brokenChrome: [],
+    };
   },
   commands: { damage: DamageCommandSchema, heal: HealCommandSchema },
   internal: HealthInternalSchemas,
@@ -34,6 +43,8 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
         return revive(draft, ctx.now);
       case "health.die":
         return die(draft, command.reason);
+      case "health.limb":
+        return applyLimb(draft, command);
     }
   },
   tick: (draft, span) => bleed(draft, span),
