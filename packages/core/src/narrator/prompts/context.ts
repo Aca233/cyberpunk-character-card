@@ -203,7 +203,7 @@ export function stateSummary(view: PlayerView): string {
     );
   if (view.ripperdocDebts.length > 0)
     lines.push(
-      `欠义体医生的钱：${view.ripperdocDebts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 money。到期没还，医生会派人来催或上门`,
+      `欠义体医生的钱：${view.ripperdocDebts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 trade。到期没还，医生会派人来催或上门`,
     );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   const withMods = (w: string) => {

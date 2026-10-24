@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type Attribute, AttributeSchema } from "../dice";
-import { RaritySchema } from "../economy";
+import { DiscountSchema, RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -222,6 +222,29 @@ export const ItemCommandSchema = z
     "物品：gain 获得、lose 失去、use 使用、equip 装备（武器写 slot 1–3）、unequip 卸下；id 必须是物品表或物品栏里有的",
   );
 export type ItemCommand = z.infer<typeof ItemCommandSchema>;
+
+/** 模型使用：买卖，价钱由代码查表；物品按物品表的参考价，服务按服务价目表 */
+export const TradeCommandSchema = z
+  .object({
+    type: z.literal("trade"),
+    action: z
+      .enum(["buy", "sell", "service"])
+      .describe("buy 买物品，sell 卖物品，service 买服务（吃住、打车、情报、看伤、罚款、打点）"),
+    item: z.string().min(1).optional().describe("buy 和 sell 写物品表里的 id"),
+    service: ServiceSchema.optional().describe(
+      "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点、请人帮个小忙",
+    ),
+    discount: DiscountSchema.default("none").describe(
+      "讲价讲下来多少：none 没有，small 小，large 大",
+    ),
+    with: z.string().min(1).max(40).describe("和谁交易"),
+    reason: z.string().min(1),
+  })
+  .refine((t) => (t.action === "service" ? t.service !== undefined : t.item !== undefined), {
+    message: "buy 和 sell 写 item，service 写 service",
+  })
+  .describe("买卖：只写买什么、讲价档，不写价钱；钱不够时整条不生效");
+export type TradeCommand = z.infer<typeof TradeCommandSchema>;
 
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);
 export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;

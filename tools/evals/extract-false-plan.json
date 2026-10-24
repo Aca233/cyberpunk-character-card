@@ -32,10 +32,10 @@
   "narrative": "酒保点点头，在一张油腻的纸片上记了一笔：“明天这个点来。钱到时候一起结，一分不能少。”他把纸片塞进围裙口袋。",
   "expect": {
     "extract": {
-      "forbid": ["money", "item.gain"]
+      "forbid": ["trade", "item.gain"]
     },
     "verify": {
-      "forbid": ["money", "item.gain"]
+      "forbid": ["trade", "item.gain"]
     }
   }
 }

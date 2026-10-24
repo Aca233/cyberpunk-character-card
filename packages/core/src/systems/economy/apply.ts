@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import type { EconomyState, MoneyCommand } from "./schema";
+import { type EconomyState, LOOT_EDDIES, type LootCommand, type MoneyCommand } from "./schema";
 
 export function formatEddies(n: number): string {
   return `${n.toLocaleString("en-US")} 欧元`;
@@ -24,4 +24,15 @@ export function applyMoney(draft: Draft<EconomyState>, command: MoneyCommand): A
     ok: true,
     notes: [`欧元 ${sign}${Math.abs(command.delta)}（${command.reason}），现有 ${draft.eddies}`],
   };
+}
+
+/** 零钱：按掉落表换成欧元；同一批只结算一次 */
+export function applyLoot(draft: Draft<EconomyState>, command: LootCommand): ApplyOutcome {
+  if (command.event !== undefined && draft.settled.includes(command.event)) {
+    return { ok: false, reason: `事件 ${command.event} 的战利品已经结算过` };
+  }
+  const amount = LOOT_EDDIES[command.tier][command.amount];
+  draft.eddies += amount;
+  if (command.event !== undefined) draft.settled.push(command.event);
+  return { ok: true, notes: [`欧元 +${amount}（${command.reason}），现有 ${draft.eddies}`] };
 }

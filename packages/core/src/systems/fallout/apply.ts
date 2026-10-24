@@ -23,6 +23,9 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
       case "money":
         if (resolving && num(c.delta) < 0) kinds.add("money");
         break;
+      case "trade":
+        if (resolving && c.action !== "sell") kinds.add("money");
+        break;
       case "event":
         if (
           NOTICED_EVENTS.has(String(c.kind)) &&

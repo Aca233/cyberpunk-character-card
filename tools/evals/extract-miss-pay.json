@@ -32,10 +32,10 @@
   "narrative": "“二十。”酒保把一杯浑浊的合成威士忌推到你面前。你把二十欧元的芯片按在吧台上，他扫了一眼，收进抽屉里，转身去招呼别人。",
   "expect": {
     "extract": {
-      "require": ["money"]
+      "require": ["trade"]
     },
     "verify": {
-      "require": ["money"]
+      "require": ["trade"]
     }
   }
 }

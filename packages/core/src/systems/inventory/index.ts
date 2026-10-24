@@ -1,5 +1,14 @@
 import { defineSystem } from "../../kernel/system";
-import { applyItem, applyMod, applyOutfit, itemCatalog, recharge, spend } from "./apply";
+import type { EconomyState } from "../economy";
+import {
+  applyItem,
+  applyMod,
+  applyOutfit,
+  applyTrade,
+  itemCatalog,
+  recharge,
+  spend,
+} from "./apply";
 import {
   type InventoryInternal,
   InventoryInternalSchemas,
@@ -7,9 +16,15 @@ import {
   InventoryStateSchema,
   type ItemCommand,
   ItemCommandSchema,
+  type TradeCommand,
+  TradeCommandSchema,
 } from "./schema";
 
-export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInternal>({
+export const inventory = defineSystem<
+  InventoryState,
+  ItemCommand | TradeCommand,
+  InventoryInternal
+>({
   id: "inventory",
   dependsOn: ["dice", "economy"],
   state: InventoryStateSchema,
@@ -24,12 +39,14 @@ export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInte
     outfit: {},
     mods: {},
   }),
-  commands: { item: ItemCommandSchema },
+  commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
   internal: InventoryInternalSchemas,
   apply(draft, command, ctx) {
     switch (command.type) {
       case "item":
         return applyItem(draft, command, itemCatalog(ctx.data));
+      case "trade":
+        return applyTrade(draft, command, itemCatalog(ctx.data), ctx.read<EconomyState>("economy"));
       case "inventory.spend":
         return spend(draft, command.slot);
       case "inventory.recharge":

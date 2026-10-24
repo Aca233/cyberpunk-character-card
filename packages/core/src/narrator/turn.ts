@@ -125,6 +125,8 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   "health.die": "死亡",
   npcDeath: "人物死亡",
   money: "欧元",
+  trade: "买卖",
+  loot: "零钱",
   item: "物品",
   jobEnd: "委托结局",
 };
@@ -150,6 +152,8 @@ function roleOf(raw: unknown): Role | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const c = raw as { type?: unknown; delta?: unknown; action?: unknown };
   if (c.type === "money" && typeof c.delta === "number" && c.delta < 0) return "pay";
+  // 买东西一条里同时付钱和拿货，不用跟别的条目配对；买服务、交罚款算付钱
+  if (c.type === "trade" && c.action === "service") return "pay";
   if (c.type === "item" && c.action === "gain") return "goods";
   if (c.type === "combat" && c.action === "start") return "fightStart";
   if (c.type === "damage") return "hit";

@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { DISCOUNT_FACTORS, discounted, type EconomyState, SERVICES } from "../economy";
 import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
@@ -13,6 +14,7 @@ import {
   SELL_RATE,
   type Shop,
   ShopListSchema,
+  type TradeCommand,
   WEAPON_CATEGORY_LABELS,
 } from "./schema";
 
@@ -370,4 +372,65 @@ export function applyMod(
   return ok(
     `${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}${old === undefined ? "" : "，换下的放回背包"}`,
   );
+}
+
+/**
+ * 买卖：价钱查表，讲价按折扣档；物品在这里进出背包，钱发一条 money 由欧元系统结算。
+ * 卖出按商店收购价（参考价两成）再乘讲价档的反向：讲价讲得好卖得更贵，最多参考价三成
+ */
+export function applyTrade(
+  draft: Inventory,
+  command: TradeCommand,
+  catalog: ReadonlyMap<string, ItemDef>,
+  economy: EconomyState,
+): ApplyOutcome {
+  if (command.action === "service") {
+    const service = command.service;
+    if (service === undefined) return fail("买服务要写 service");
+    const def = SERVICES[service];
+    const price = discounted(def.price, command.discount);
+    if (price > economy.eddies) {
+      return fail(`欧元不够：${def.label}要 ${price}，身上只有 ${economy.eddies}`);
+    }
+    return {
+      ok: true,
+      notes: [],
+      emit: [{ type: "money", delta: -price, reason: `${def.label}（${command.with}）` }],
+    };
+  }
+  const id = command.item;
+  if (id === undefined) return fail("买卖物品要写 item");
+  const def = catalog.get(id);
+  if (!def) return fail(`物品表里没有 ${id}`);
+  if (command.action === "buy") {
+    if (def.iconic) return fail(`${def.name}是不朽物品，只能从剧情获得，没人卖`);
+    if (def.price === undefined) return fail(`${def.name}没有标价，不能买`);
+    const price = discounted(def.price, command.discount);
+    if (price > economy.eddies) {
+      return fail(`欧元不够：${def.name}要 ${price}，身上只有 ${economy.eddies}`);
+    }
+    draft.backpack[def.id] = (draft.backpack[def.id] ?? 0) + 1;
+    return {
+      ok: true,
+      notes: [`得到${def.name}（从${command.with}那里买的）`],
+      emit: [{ type: "money", delta: -price, reason: `向${command.with}买${def.name}` }],
+    };
+  }
+  if (def.iconic) return fail(`${def.name}是不朽物品，不卖`);
+  if ((draft.backpack[def.id] ?? 0) < 1) return fail(`背包里没有${def.name}；装备着的先卸下`);
+  const base = sellValue(def);
+  if (base <= 0) return fail(`${def.name}没有标价，卖不出去`);
+  const bonus = 2 - DISCOUNT_FACTORS[command.discount];
+  const price = Math.min(
+    Math.floor(((def.price ?? 0) * 0.3) / 10) * 10,
+    Math.round((base * bonus) / 10) * 10,
+  );
+  const left = (draft.backpack[def.id] ?? 0) - 1;
+  if (left > 0) draft.backpack[def.id] = left;
+  else delete draft.backpack[def.id];
+  return {
+    ok: true,
+    notes: [`卖掉${def.name}（卖给${command.with}）`],
+    emit: [{ type: "money", delta: price, reason: `卖给${command.with}：${def.name}` }],
+  };
 }
