@@ -5,7 +5,6 @@ import { items } from "./items";
 import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
-import { canonTimeline } from "./lore";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
@@ -48,5 +47,5 @@ export const gameData: Readonly<Record<string, unknown>> = {
   twists,
   consequences,
   jobTemplates,
-  canon: canonTimeline,
+  // 原剧第 1–3 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };

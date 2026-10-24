@@ -55,9 +55,9 @@ export const glossary: readonly Slang[] = [
 const FAN = "https://cyberpunk.fandom.com/wiki/";
 
 /**
- * 原剧时间线：《赛博朋克：边缘行者》第 1–3 集。
+ * 原剧时间线：《赛博朋克：边缘行者》第 1–3 集，给以后的 2075 剧本用；现在只做 2077 开局，gameData 里不带。
  * 剧情照原剧（出处见 source，2026-10-25 查）；第几天是本作改编：第 3 集时格洛丽亚已经死了两天。
- * 年份待核对：维基百科引 R. Talsorian《Edgerunner's Handbook》写第 1–6 集在 2075 年，策划案统一按 2076 年，默认开场时间是 2077-01-01。
+ * 年份：维基百科引 R. Talsorian《Edgerunner's Handbook》写第 1–6 集在 2075 年、第 7 集起 2076 年（原作依据）；2075 剧本照这个开局。
  * 人物译名待核对。
  */
 export const canonTimeline: readonly CanonNode[] = [
