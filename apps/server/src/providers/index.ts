@@ -1,5 +1,6 @@
 import type { AbortSignalLike, LlmClient, LlmEvent, LlmRequest } from "@cp/core";
 import type { ConfigService, Profile } from "../config";
+import { geminiClient } from "./gemini";
 import { UpstreamError } from "./http";
 import { openAiClient } from "./openai";
 
@@ -39,10 +40,17 @@ export class LlmRouter implements LlmClient {
       case "ollama":
         return { ok: true, profile, client: openAiClient(profile, key) };
       case "gemini":
+        if (!key) {
+          return {
+            ok: false,
+            error: `${role}方案「${profile.name}」没有密钥：到设置页的「模型方案」里粘贴密钥并保存`,
+          };
+        }
+        return { ok: true, profile, client: geminiClient(profile, key) };
       case "anthropic":
         return {
           ok: false,
-          error: `${role}方案「${profile.name}」是 ${profile.type} 类型，原生接入还没做好；先把 config.json 里的 ${purpose} 指向 OpenAI 兼容的方案（例如 relay）`,
+          error: `${role}方案「${profile.name}」是 anthropic 类型，原生接入还没做好；先把 config.json 里的 ${purpose} 指向 OpenAI 兼容的方案（例如 relay）`,
         };
     }
   }

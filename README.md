@@ -15,7 +15,7 @@ pnpm check   # 类型检查 + Biome + Vitest
 
 ## 开工前核实（2026-10-23）
 
-### 主持人模型：Gemini 3.8 Flash
+### 叙事模型：Gemini 3.8 Flash
 
 来源：ai.google.dev 的模型页面、定价页面和安全设置指南。
 
@@ -27,14 +27,25 @@ pnpm check   # 类型检查 + Biome + Vitest
 | 思考强度    | `thinking_level`：`low` / `medium`（默认）/ `high`；不支持 `minimal`，旧的 `thinking_budget` 已被取代                                                 |
 | 价格        | 优惠价到 2026-12-31：输入 $0.75 / 1M token，输出 $3.75 / 1M token；2027-01-01 起按标准价                                                              |
 | 安全设置    | 类别：仇恨、色情、危险内容、骚扰、公民诚信、越狱。2.5 及以后的模型，没设置的类别默认 `OFF`。`BLOCK_NONE` 不拦截但会返回评分；`OFF` 不返回任何安全信息 |
-| 被拦截时    | Interactions API 返回 HTTP 400，错误码 `safety`，不返回被拦截的内容                                                                                   |
+| 被拦截时    | 本项目使用 generateContent 协议：检查 `promptFeedback.blockReason`、候选的 `finishReason` 和 `safetyRatings[].blocked`；转成 `blocked`，不记作成功    |
 
 对实现的影响：
-- 主持人上下文按 1M 输入、64k 输出设上限；预算和摘要策略不变，不把整份日志塞进去。
+- 叙事模型上下文按 1M 输入、64k 输出设上限；预算和摘要策略不变，不把整份日志塞进去。
 - 安全设置默认不传（即 `OFF`）；需要拿评分做自己的规则时再改成 `BLOCK_NONE`。
-- 提供方必须把"HTTP 400 + `safety`"转成 `LlmEvent` 的 `blocked` 事件，不能当成网络错误重试。
-- 用 `generateContent` 还是 Interactions API（`POST /v1beta/interactions`，请求头 `Api-Revision: 2026-05-20`），在切片 3 写提供方时决定。
+- 提供方识别输入拦截、候选拦截及明确的安全错误码，转成 `LlmEvent` 的 `blocked`；其他 HTTP 错误按状态码处理，不能把所有 400/403 都当成内容拦截。
+- 提供方用 `streamGenerateContent?alt=sse`（2026-10-24 接入）：系统消息放 `systemInstruction`，assistant 转成 `model`，密钥放 `x-goog-api-key` 请求头；思考内容不放进正文，思考 token 算进输出用量；`MAX_TOKENS`、`CONTINUATION` 和别的异常结束都报错，不自动续写或重试。
 - 模型页面显示 Gemini 4 Argon 已经可用。M1 仍用 3.8 Flash，模型 ID 放在 `config.json` 里，以后可以换。
+
+### Gemini 原生接入补充（2026-10-24）
+
+- 接口：`POST /v1beta/models/{model}:streamGenerateContent?alt=sse`。`baseUrl` 填 API 根路径，不填完整生成接口；模型 ID 从方案配置读取。
+- 密钥使用 `x-goog-api-key` 请求头，不拼进 URL；本地 `config.json` 不纳入版本库。
+- `systemInstruction` 接收系统消息，历史 assistant 消息转换为 `model`。只显示普通文本片段，跳过思考摘要。
+- 用量采用流中的累计值，不逐块相加；输出用量包含 `candidatesTokenCount` 和 `thoughtsTokenCount`。
+- 停止生成、断流、格式错误、空正文、达到输出上限和要求续写，都不当成完成；不自动发起续写或重试。
+- 设置页新增 Gemini 官方接入方式。测试连接会产生模型费用；Gemini 测试请求最多允许 2048 个输出 token，且不超过方案的输出上限。较低上限仍可能被思考耗尽，此时明确报错，不自动放宽。
+- 本机假服务已验证协议 20 项、停止和路由 6 项；真实 Google 接口和浏览器操作尚未验证。
+- 协议参考：[生成接口](https://ai.google.dev/api/generate-content)、[generateContent 思考配置](https://ai.google.dev/gemini-api/docs/generate-content/thinking)、[generateContent 安全反馈](https://ai.google.dev/gemini-api/docs/generate-content/safety-settings)。
 
 ### 依赖版本
 

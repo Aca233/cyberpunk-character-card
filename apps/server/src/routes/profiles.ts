@@ -58,7 +58,7 @@ export function profileRoutes(config: ConfigService): Hono {
     send(c, await config.clearKey(c.req.param("name")), (profile) => ({ profile })),
   );
 
-  /** 测试连接：用这个方案发一条很短的请求，会产生极少量费用；报错先去掉密钥 */
+  /** 测试连接：会产生模型费用（可能包含思考 token）；报错先去掉密钥，不自动重试 */
   routes.post("/:name/test", async (c) => {
     const name = c.req.param("name");
     const redact = await config.redactor();
@@ -72,7 +72,12 @@ export function profileRoutes(config: ConfigService): Hono {
         {
           purpose: "narrator",
           temperature: 0,
-          maxOutputTokens: 64,
+          // Gemini 的输出额度包含思考 token，不能固定压到 64。
+          // 测试最多用 2048；用户配置更低时尊重配置，不偷偷提高。
+          maxOutputTokens:
+            resolved.profile.type === "gemini"
+              ? Math.min(resolved.profile.maxOutputTokens ?? 2048, 2048)
+              : 64,
           messages: [{ role: "user", content: "连接测试：只回复 OK。" }],
         },
         AbortSignal.timeout(TEST_TIMEOUT_MS),

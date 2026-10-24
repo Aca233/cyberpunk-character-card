@@ -6,7 +6,7 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import styles from "./model-settings.module.css";
 
-type Preset = "relay" | "openai" | "ollama";
+type Preset = "gemini" | "relay" | "openai" | "ollama";
 const PRESETS: Record<
   Preset,
   {
@@ -16,6 +16,12 @@ const PRESETS: Record<
     baseUrl: string;
   }
 > = {
+  gemini: {
+    title: "Gemini 官方",
+    hint: "填写 Google AI Studio 的 API 密钥；模型名例如 gemini-3.8-flash。",
+    type: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  },
   relay: {
     title: "中转站 / OpenAI 兼容",
     hint: "模型名和接口地址照服务商提供的填写。",
@@ -39,8 +45,7 @@ const PRESETS: Record<
 function problems(profile: PublicProfile | undefined): string[] {
   if (!profile) return ["还没有选择模型连接"];
   const out: string[] = [];
-  if (profile.type === "gemini" || profile.type === "anthropic")
-    out.push(`${profile.type} 原生接口暂未实现，请另建 OpenAI 兼容连接`);
+  if (profile.type === "anthropic") out.push("anthropic 原生接口暂未实现，请另建 OpenAI 兼容连接");
   if (profile.keyStatus === "missing") out.push("还没有填写 API 密钥");
   return out;
 }
