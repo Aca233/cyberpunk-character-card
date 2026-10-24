@@ -62,6 +62,20 @@ export function offscreenDue(
   return city.lastAt !== null && after.time - city.lastAt >= OFFSCREEN_HOURS * 60;
 }
 
+/** ⑥ 收了场却没推演时给剧透视图的原因；没收场返回 undefined，不记 */
+export function offscreenSkipReason(o: {
+  readonly closed: boolean;
+  readonly flashback: boolean;
+  readonly unsettled: boolean;
+  readonly every: number | null;
+}): string | undefined {
+  if (!o.closed) return undefined;
+  if (o.flashback) return "闪回里不推演";
+  if (o.unsettled) return "这一轮没结算干净，不推演";
+  if (o.every === null) return "设置里关了城里的动静";
+  return `离上次推演还不到 ${o.every} 场，游戏时间也没过半天`;
+}
+
 const OFFSCREEN_STAGE = `【这一步：场外推演】
 玩家刚收了一场。你负责推演玩家没看着的地方：这段时间里，夜之城有什么在变？
 - 只推演已经具备条件的事：正文里提到、但没在玩家眼前发生的（有人说哪里打起来了、新闻里提到的、委托里的对手、玩家做完事留下的余波），帮派抢地盘、公司的动作、夜之城警察局和暴恐机动队的反应、中间人的生意。不凭空制造戏剧性；没有值得记的，三个数组都输出空的。

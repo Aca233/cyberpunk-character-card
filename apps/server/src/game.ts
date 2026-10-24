@@ -626,6 +626,15 @@ export class GameService {
           notes: record.notes ?? [],
           considered: record.considered ?? [],
           ruling: record.ruling ?? null,
+          // ⑥ 没跑的原因：收场时记下的，其余按这一轮的情况推
+          offscreenSkip: record.offscreen
+            ? null
+            : (record.offscreenSkip ??
+              (record.ooc
+                ? "场外提问，不推演"
+                : record.check !== undefined
+                  ? "这一轮在等检定，还没结算"
+                  : "这一轮没收场")),
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
             replay(
@@ -836,6 +845,7 @@ export class GameService {
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
         ...(turn.ruling !== undefined ? { ruling: turn.ruling } : {}),
         ...(turn.offscreen !== undefined ? { offscreen: turn.offscreen } : {}),
+        ...(turn.offscreenSkip !== undefined ? { offscreenSkip: turn.offscreenSkip } : {}),
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
         ...(turn.recalled.length > 0
           ? { recalled: turn.recalled.map((m) => ({ title: m.title, text: m.text })) }

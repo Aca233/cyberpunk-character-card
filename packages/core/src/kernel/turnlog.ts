@@ -75,6 +75,8 @@ const TurnRecordSchema = z.object({
   ruling: z.string().optional(),
   /** 场外推演发出的用户消息和原始回复；只供剧透视图 */
   offscreen: z.object({ prompt: z.string(), reply: z.string() }).optional(),
+  /** 收了场却没推演时的原因；只供剧透视图 */
+  offscreenSkip: z.string().optional(),
   /** 写正文之前代码定下的事；旧存档没有，上下文查看器重建时用 */
   decided: z.array(z.string()).optional(),
   /** 判断调出的旧记忆：标题和当时的正文 */

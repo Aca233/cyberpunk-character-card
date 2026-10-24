@@ -54,6 +54,7 @@ import {
   buildOffscreenPrompt,
   OFFSCREEN_TEMPERATURE,
   offscreenDue,
+  offscreenSkipReason,
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
@@ -224,6 +225,8 @@ export interface NarratorTurn {
   readonly ruling: string | undefined;
   /** ⑥ 场外推演跑了时：发出的用户消息和原始回复，只供剧透视图 */
   readonly offscreen: { readonly prompt: string; readonly reply: string } | undefined;
+  /** ⑥ 收了场却没推演时的原因，只供剧透视图 */
+  readonly offscreenSkip: string | undefined;
   readonly notes: readonly string[];
   readonly world: WorldState;
   readonly patches: readonly Patch[];
@@ -974,6 +977,15 @@ export async function runNarratorTurn(
       }
     }
   }
+  const offscreenSkip =
+    offscreenTrace === undefined
+      ? offscreenSkipReason({
+          closed: after.scene !== before.scene,
+          flashback: inFlashback,
+          unsettled: unsettled !== undefined,
+          every,
+        })
+      : undefined;
   const closeup =
     ooc || unsettled !== undefined
       ? undefined
@@ -994,6 +1006,7 @@ export async function runNarratorTurn(
       considered,
       ruling,
       offscreen: offscreenTrace,
+      offscreenSkip,
       notes: b.notes,
       world: final.world,
       patches: ooc

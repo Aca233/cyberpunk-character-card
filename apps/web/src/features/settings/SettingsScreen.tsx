@@ -312,6 +312,11 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           <p>{ctx.ruling}</p>
         </Section>
       )}
+      {ctx.offscreenSkip && (
+        <Section title="⑥ 场外推演">
+          <p className={styles.dim}>这一轮没跑：{ctx.offscreenSkip}</p>
+        </Section>
+      )}
       {ctx.city && ctx.city.length > 0 && (
         <Section title={`城里的动静（这一轮之后，${ctx.city.length}）`}>
           <ul>
