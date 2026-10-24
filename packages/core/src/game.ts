@@ -19,7 +19,7 @@ import {
   effectiveAttribute,
   effectiveAttributes,
 } from "./systems/character/schema";
-import { CombatStateSchema } from "./systems/combat/schema";
+import { CombatStateSchema, MAX_QUICK } from "./systems/combat/schema";
 import {
   cyberwareCatalog,
   repairCost,
@@ -725,6 +725,9 @@ export function projectState(
           down: f.hits >= f.need,
         })),
         results: active.results,
+        /** 这次交锋用了几个快捷动作，最多 quickMax 个 */
+        quick: active.quick ?? 0,
+        quickMax: MAX_QUICK,
         /** 濒死时还剩几次交锋结束前要被救回；不在濒死时为 null */
         dyingMomentsLeft:
           active.dyingUntil === null ? null : active.dyingUntil - active.current + 1,

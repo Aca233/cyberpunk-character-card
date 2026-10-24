@@ -35,6 +35,9 @@ export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
 /** 有卡敌人打到濒死要几次成功：混混 1 次、精锐 2 次、精英和传奇 3 次；护甲义体多 1 次 */
 export const FOE_HITS = { street: 1, veteran: 2, elite: 3, legend: 3 } as const;
 
+/** 每次交锋最多几个快捷动作（用治疗品、扔手雷），不算主行动 */
+export const MAX_QUICK = 2;
+
 export const MomentResultSchema = z.enum(["win", "lose", "draw"]);
 export type MomentResult = z.infer<typeof MomentResultSchema>;
 
@@ -52,6 +55,8 @@ export const ActiveCombatSchema = z.object({
   enemies: z.array(EnemyGroupSchema),
   /** 有卡敌人；旧存档里没有 */
   foes: z.array(ActiveFoeSchema).default([]),
+  /** 这次交锋已经做了几个快捷动作 */
+  quick: z.number().int().min(0).default(0),
   results: z.array(MomentResultSchema),
   /** 濒死要在这次交锋（从 0 起）结束前被救回；不在濒死时为 null */
   dyingUntil: z.number().int().min(0).nullable(),

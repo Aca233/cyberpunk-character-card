@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyCombat } from "./apply";
+import { applyCombat, countQuick } from "./apply";
 import { combatRules } from "./prompt";
 import {
   type CombatCommand,
@@ -15,6 +15,7 @@ export const combat = defineSystem<CombatState, CombatCommand>({
   initial: () => ({ active: null, usedChecks: [], last: null }),
   commands: { combat: CombatCommandSchema },
   apply: (draft, command, ctx) => applyCombat(draft, command, ctx),
+  on: { "combat.quick": (draft) => countQuick(draft) },
   rules: [combatRules],
 });
 

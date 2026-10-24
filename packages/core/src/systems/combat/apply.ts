@@ -70,6 +70,7 @@ export function startCombat(
     defeat,
     enemies,
     foes,
+    quick: 0,
     results: [],
     dyingUntil: null,
   };
@@ -205,10 +206,16 @@ export function resolveMoment(
   if (retreat && r.result === "win") return finish(draft, "retreat", notes, emit, ctx.now);
   if (isLast) return finish(draft, r.result === "win" ? "victory" : "defeat", notes, emit, ctx.now);
   active.current = index + 1;
+  active.quick = 0;
   return { ok: true, notes, emit };
 }
 
 /** 上一次交锋获胜、敌人已经打垮时可以提前结束 */
+/** 快捷栏扣了一次（治疗品、手雷）：战斗中记一个快捷动作；上限由主持流程在结算前拦 */
+export function countQuick(draft: Combat): void {
+  if (draft.active) draft.active.quick = (draft.active.quick ?? 0) + 1;
+}
+
 export function endCombat(draft: Combat, now: number): ApplyOutcome {
   const active = draft.active;
   if (!active) return fail("不在战斗中");

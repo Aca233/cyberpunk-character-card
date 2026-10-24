@@ -96,6 +96,9 @@ export function Hud({ view }: { readonly view: View }) {
           </span>
           <span className={styles.combatDefeat}>败局：{combat.active.defeat}</span>
           <span className={styles.combatEnemies}>
+            快捷动作 {combat.active.quick}/{combat.active.quickMax}
+          </span>
+          <span className={styles.combatEnemies}>
             {[
               ...combat.active.enemies.map((e) => `${e.group}×${e.count}`),
               ...combat.active.foes.map((f) =>

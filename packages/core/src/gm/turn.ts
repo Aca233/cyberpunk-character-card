@@ -10,6 +10,7 @@ import {
   type Trait,
   type TraitSlot,
 } from "../systems/character";
+import { CombatStateSchema, MAX_QUICK } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
@@ -332,6 +333,16 @@ export async function runGmTurn(
   }
 
   const commands: Command[] = [];
+  // 快捷动作（用治疗品、扔手雷）每次交锋最多两个：超出的在结算前拦下
+  const fight = CombatStateSchema.parse(world.slices.combat).active;
+  let quick = fight ? (fight.quick ?? 0) : 0;
+  const isQuick = (c: Command) => {
+    const x = c as { type: string; source?: unknown; action?: unknown; id?: unknown };
+    if (x.type === "heal") return x.source === "maxdoc";
+    return x.type === "item" && x.action === "use" && typeof x.id === "string"
+      ? items.get(x.id)?.kind === "grenade"
+      : false;
+  };
   for (const [i, item] of (shape.changes ?? []).entries()) {
     const where = `changes[${i}]`;
     if (ooc) {
@@ -351,7 +362,15 @@ export async function runGmTurn(
       continue;
     }
     const command = await b.validate(where, item, schema);
-    if (command) commands.push(command);
+    if (!command) continue;
+    if (fight && isQuick(command)) {
+      if (quick >= MAX_QUICK) {
+        b.drop(where, command, `这次交锋的快捷动作已经用了 ${MAX_QUICK} 个`, "rules");
+        continue;
+      }
+      quick += 1;
+    }
+    commands.push(command);
   }
   b.checkAborted();
 

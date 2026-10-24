@@ -314,7 +314,7 @@ export function stateSummary(view: PlayerView): string {
       ),
     ].join("、");
     lines.push(
-      `战斗中：第 ${a.moment}/${a.moments} 次交锋，敌人 ${enemies}，败局是「${a.defeat}」`,
+      `战斗中：第 ${a.moment}/${a.moments} 次交锋，敌人 ${enemies}，败局是「${a.defeat}」；这次交锋快捷动作已用 ${a.quick}/${a.quickMax}`,
     );
     if (a.dyingMomentsLeft !== null)
       lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 次交锋内要被救回`);
