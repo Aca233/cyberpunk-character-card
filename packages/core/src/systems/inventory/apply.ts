@@ -7,6 +7,9 @@ import {
   type ItemDef,
   type ItemKind,
   type QuickSlotName,
+  SELL_RATE,
+  type Shop,
+  ShopListSchema,
 } from "./schema";
 
 export const WEAPON_SLOTS = 3;
@@ -196,4 +199,49 @@ export function recharge(draft: Inventory): ApplyOutcome {
   }
   draft.depleted = {};
   return ok();
+}
+
+const shopLists = new WeakMap<object, readonly Shop[]>();
+
+/** 读取并校验商店表；没有时是空表 */
+export function shopList(data: Readonly<Record<string, unknown>>): readonly Shop[] {
+  const raw = data.shops;
+  if (typeof raw !== "object" || raw === null) return [];
+  const cached = shopLists.get(raw);
+  if (cached) return cached;
+  const list = ShopListSchema.parse(raw);
+  shopLists.set(raw, list);
+  return list;
+}
+
+/** 货架上的一件：价格按店的系数折算到十位；locked 是不卖的原因 */
+export interface ShopItem {
+  readonly def: ItemDef;
+  readonly price: number;
+  readonly locked: string | null;
+}
+
+export function shopShelf(
+  shop: Shop,
+  catalog: ReadonlyMap<string, ItemDef>,
+  streetCred: number,
+): ShopItem[] {
+  return shop.shelf.flatMap((id) => {
+    const def = catalog.get(id);
+    if (!def || def.price === undefined) return [];
+    const gate = def.rarity === undefined ? undefined : shop.credGates[def.rarity];
+    const locked = def.iconic
+      ? "不朽物品只从剧情获得"
+      : gate !== undefined && streetCred < gate
+        ? `街头声望 ${gate} 级才肯卖`
+        : null;
+    const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
+    return [{ def, price, locked }];
+  });
+}
+
+/** 卖给商店给多少：参考价的两成，舍到十位；不朽物品和没有标价的不收，返回 0 */
+export function sellValue(def: ItemDef): number {
+  if (def.iconic || def.price === undefined) return 0;
+  return Math.floor((def.price * SELL_RATE) / 10) * 10;
 }

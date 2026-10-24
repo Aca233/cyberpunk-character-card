@@ -1363,6 +1363,18 @@
   margin: 0;
 }
 
+.shopBody {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr);
+  gap: 1.2rem;
+}
+
+.shopBag {
+  align-self: start;
+  padding-left: 1rem;
+  border-left: 1px solid var(--cp-yellow-dim);
+}
+
 .docDebt {
   display: flex;
   flex-wrap: wrap;

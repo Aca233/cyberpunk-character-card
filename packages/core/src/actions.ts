@@ -13,6 +13,8 @@ import {
 import { CyberwareStateSchema } from "./systems/cyberware/schema";
 import { AttributeSchema } from "./systems/dice/schema";
 import { EconomyStateSchema } from "./systems/economy/schema";
+import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
+import { InventoryStateSchema } from "./systems/inventory/schema";
 import { registry } from "./systems/registry";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
@@ -35,6 +37,18 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 还清欠义体医生的钱 */
   z.strictObject({ type: z.literal("repayRipperdoc"), doc: z.string().min(1).max(40) }),
+  /** 在商店买一件，放进背包 */
+  z.strictObject({
+    type: z.literal("buyItem"),
+    shop: z.string().min(1).max(40),
+    id: z.string().min(1).max(64),
+  }),
+  /** 把背包里的一件卖给商店 */
+  z.strictObject({
+    type: z.literal("sellItem"),
+    shop: z.string().min(1).max(40),
+    id: z.string().min(1).max(64),
+  }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 
@@ -120,6 +134,42 @@ function ripperdocCommands(
   ];
 }
 
+/** 商店的买卖：人要在店里；买的要在货架上、肯卖，卖的只收背包里的 */
+function shopCommands(
+  world: WorldState,
+  action: Extract<PlayerAction, { type: "buyItem" | "sellItem" }>,
+  data: Readonly<Record<string, unknown>>,
+): Command[] | string {
+  const shop = shopList(data).find((s) => s.id === action.shop);
+  if (!shop) return `没有叫 ${action.shop} 的商店`;
+  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+  if (here !== shop.location) return `不在${shop.name}，先去那里`;
+  const catalog = itemCatalog(data);
+  if (action.type === "sellItem") {
+    const def = catalog.get(action.id);
+    if (!def) return `物品表里没有 ${action.id}`;
+    const inventory = InventoryStateSchema.parse(world.slices.inventory);
+    if ((inventory.backpack[def.id] ?? 0) < 1) return `背包里没有${def.name}；装备着的先卸下`;
+    const value = sellValue(def);
+    if (value <= 0)
+      return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
+    return [
+      { type: "item", action: "lose", id: def.id, reason: `卖给${shop.name}` },
+      { type: "money", delta: value, reason: `${shop.name}收购${def.name}` },
+    ];
+  }
+  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
+  const item = shopShelf(shop, catalog, streetCred).find((i) => i.def.id === action.id);
+  if (!item) return `${shop.name}的货架上没有这件`;
+  if (item.locked) return `${shop.name}不卖${item.def.name}：${item.locked}`;
+  const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
+  if (item.price > eddies) return `欧元不够：${item.def.name}要 ${item.price}，身上只有 ${eddies}`;
+  return [
+    { type: "money", delta: -item.price, reason: `在${shop.name}买${item.def.name}` },
+    { type: "item", action: "gain", id: item.def.id, reason: `在${shop.name}买下` },
+  ];
+}
+
 /** 每种操作对应的指令；只放行这里列出的。返回字符串表示操作不成立 */
 function commandsFor(
   world: WorldState,
@@ -133,6 +183,9 @@ function commandsFor(
     case "removeCyberware":
     case "repayRipperdoc":
       return ripperdocCommands(world, action, data);
+    case "buyItem":
+    case "sellItem":
+      return shopCommands(world, action, data);
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
       return [

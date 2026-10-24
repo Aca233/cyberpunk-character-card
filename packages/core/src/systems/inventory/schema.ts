@@ -12,6 +12,15 @@ export const ItemKindSchema = z.enum([
 ]);
 export type ItemKind = z.infer<typeof ItemKindSchema>;
 
+export const ITEM_KIND_LABELS: Readonly<Record<ItemKind, string>> = {
+  weapon: "武器",
+  healing: "治疗品",
+  grenade: "手雷",
+  consumable: "消耗品",
+  clothing: "服装",
+  misc: "杂物",
+};
+
 /** 武器类别，按原作 */
 export const WeaponCategorySchema = z.enum([
   "pistol",
@@ -171,3 +180,28 @@ export const InventoryInternalSchemas = {
 export type InventoryInternal = z.infer<
   (typeof InventoryInternalSchemas)[keyof typeof InventoryInternalSchemas]
 >;
+
+/** 商店：开在某个地点，有自己的货架和价格；高稀有度的货随街头声望解锁。数据在 content 包的 shops.ts */
+export const ShopSchema = z.object({
+  id: z.string().min(1).max(40),
+  /** 店名，例如“威尔逊的枪店” */
+  name: z.string().min(1).max(24),
+  /** 店主；给主持人写场面用 */
+  keeper: z.string().min(1).max(20),
+  /** 地点表里的 id：玩家在这里时才能进店 */
+  location: z.string().min(1),
+  note: z.string().max(120).default(""),
+  /** 乘在物品表参考价上的系数 */
+  priceFactor: z.number().min(0.5).max(2).default(1),
+  /** 黑市货：便宜，但可能来路不明，由主持人在剧情里兑现 */
+  blackMarket: z.boolean().default(false),
+  /** 货架上的物品 id；不朽物品和没有标价的放上来也不卖 */
+  shelf: z.array(z.string().min(1)).min(1),
+  /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
+  credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
+});
+export type Shop = z.infer<typeof ShopSchema>;
+export const ShopListSchema = z.array(ShopSchema);
+
+/** 卖给商店的回收价：最多按参考价的两成（从店里买来的转卖上限），防低买高卖 */
+export const SELL_RATE = 0.2;

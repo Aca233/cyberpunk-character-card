@@ -46,11 +46,13 @@ import { shownStars } from "./systems/heat/apply";
 import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
-import { itemCatalog } from "./systems/inventory/apply";
+import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
 import {
   type InventoryState,
   InventoryStateSchema,
+  ITEM_KIND_LABELS,
   type ItemDef,
+  WEAPON_CATEGORY_LABELS,
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
 import { JobsStateSchema } from "./systems/jobs/schema";
@@ -330,6 +332,44 @@ function ripperdocView(
   };
 }
 
+/** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
+function shopsView(
+  data: Readonly<Record<string, unknown>>,
+  location: string | null,
+  streetCred: number,
+  inventory: InventoryState,
+) {
+  if (location === null || data.items === undefined) return [];
+  const catalog = itemCatalog(data);
+  const here = shopList(data).filter((s) => s.location === location);
+  if (here.length === 0) return [];
+  const sell = Object.entries(inventory.backpack).flatMap(([id, count]) => {
+    const def = catalog.get(id);
+    return def ? [{ id, name: def.name, count, value: sellValue(def) }] : [];
+  });
+  return here.map((shop) => ({
+    id: shop.id,
+    name: shop.name,
+    keeper: shop.keeper,
+    note: shop.note,
+    blackMarket: shop.blackMarket,
+    shelf: shopShelf(shop, catalog, streetCred).map(({ def, price, locked }) => ({
+      id: def.id,
+      name: def.name,
+      group:
+        def.kind === "weapon" && def.category
+          ? WEAPON_CATEGORY_LABELS[def.category]
+          : ITEM_KIND_LABELS[def.kind],
+      rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
+      price,
+      ability: def.ability ?? null,
+      locked,
+    })),
+    /** 背包里的东西卖给这家店给多少；0 是不收 */
+    sell,
+  }));
+}
+
 /** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
 export function withAllSlices(world: WorldState): WorldState {
   const base = registry.initialWorld(world.time);
@@ -566,6 +606,8 @@ export function projectState(
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(data, clock.location, character.streetCred, installed, parts, debts),
     /** 欠义体医生的钱 */
+    /** 当前地点开着的商店 */
+    shops: shopsView(data, clock.location, character.streetCred, inventory),
     ripperdocDebts: debts.map((d) => ({
       docName: d.docName,
       amount: d.amount,

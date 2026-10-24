@@ -18,7 +18,7 @@ import { consequenceSection, FalloutStateSchema, falloutSection } from "../syste
 import { DAMAGE_LABELS } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import {
-  type ItemKind,
+  ITEM_KIND_LABELS,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   weaponAttribute,
@@ -183,14 +183,7 @@ export function systemPrompt(
   return [coreRules(), ...modules.map(moduleSection), ...extra].join("\n\n");
 }
 
-const KIND_LABELS: Readonly<Record<ItemKind, string>> = {
-  weapon: "武器",
-  healing: "治疗品",
-  grenade: "手雷",
-  consumable: "消耗品",
-  clothing: "服装",
-  misc: "杂物",
-};
+const KIND_LABELS = ITEM_KIND_LABELS;
 
 /** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id。
  * 按类别分组，组名写一次检定属性，每行只写这件东西自己的部分，几十件也不太占篇幅 */
@@ -268,6 +261,10 @@ export function stateSummary(view: PlayerView): string {
   if (view.ripperdoc)
     lines.push(
       `义体医生：${view.ripperdoc.name}在这里（${view.ripperdoc.note}）；玩家可以在界面上直接买、卸义体，代码按货架价结算，你只写场面${view.ripperdoc.blackMarket ? "。这是黑市货，装上的东西可能有故障或追踪器，可以在剧情里兑现" : ""}`,
+    );
+  for (const shop of view.shops)
+    lines.push(
+      `商店：${shop.name}在这里（店主${shop.keeper}，${shop.note}）；玩家可以在界面上直接买卖，代码按货架价结算，你只写场面${shop.blackMarket ? "。这是黑市货，买到的东西可能来路不明，可以在剧情里兑现" : ""}`,
     );
   if (view.ripperdocDebts.length > 0)
     lines.push(

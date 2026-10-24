@@ -14,6 +14,7 @@ import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
+import { Shop } from "./Shop";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
@@ -93,6 +94,7 @@ export function StoryScreen() {
   // 日志开着时停用正文的快捷键；值是打开时的标签页
   const [journal, setJournal] = useState<"active" | "board" | null>(null);
   const [atDoc, setAtDoc] = useState(false);
+  const [atShop, setAtShop] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
 
   const warn = useCallback((key: string, error: unknown) => {
@@ -173,6 +175,25 @@ export function StoryScreen() {
     [view?.ripperdoc, saveId, version, refresh, warn],
   );
 
+  // 商店里买卖：不调用模型；失败时提示原因，确认框留着
+  const shopAction = useCallback(
+    async (type: "buyItem" | "sellItem", shop: string, id: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type, shop, id },
+        });
+      } catch (error) {
+        warn("shop", error);
+        await refresh();
+        throw error;
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
+
   const send = useCallback(
     (input: TurnInput) => {
       if (!view) return;
@@ -210,7 +231,7 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc) return;
+      if (journal || atDoc || atShop) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -225,7 +246,7 @@ export function StoryScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal, atDoc]);
+  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal, atDoc, atShop]);
 
   if (query.isPending) {
     return (
@@ -273,6 +294,7 @@ export function StoryScreen() {
         onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)}
         onJournal={(board) => setJournal(board ? "board" : "active")}
         onRipperdoc={() => setAtDoc(true)}
+        onShop={setAtShop}
       />
 
       <main className={styles.column}>
@@ -381,6 +403,21 @@ export function StoryScreen() {
           onClose={closeJournal}
         />
       )}
+      {atShop &&
+        (() => {
+          const shop = view.shops.find((s) => s.id === atShop);
+          return (
+            shop && (
+              <Shop
+                view={view}
+                shop={shop}
+                onBuy={busy ? undefined : (id) => shopAction("buyItem", shop.id, id)}
+                onSell={busy ? undefined : (id) => shopAction("sellItem", shop.id, id)}
+                onClose={() => setAtShop(null)}
+              />
+            )
+          );
+        })()}
       {atDoc && view.ripperdoc && (
         <Ripperdoc
           view={view}

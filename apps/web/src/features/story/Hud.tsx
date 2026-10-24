@@ -131,6 +131,7 @@ export function SidePanel({
   onSpend,
   onJournal,
   onRipperdoc,
+  onShop,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -139,6 +140,8 @@ export function SidePanel({
   readonly onJournal: (board: boolean) => void;
   /** 打开当前地点的义体医生 */
   readonly onRipperdoc: () => void;
+  /** 打开当前地点的一家商店 */
+  readonly onShop: (id: string) => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -268,6 +271,11 @@ export function SidePanel({
             ))}
           </ul>
         )}
+        {view.shops.map((shop) => (
+          <div className={styles.docLink} key={shop.id}>
+            <Button onClick={() => onShop(shop.id)}>进{shop.name}</Button>
+          </div>
+        ))}
       </Panel>
 
       <Panel as="div" title="义体" line="var(--cp-cyan)">
