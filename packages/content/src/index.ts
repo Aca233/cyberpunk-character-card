@@ -9,10 +9,12 @@ import { npcs } from "./npcs";
 import { openings } from "./openings";
 
 export { sampleCharacters } from "./characters";
+export { combos } from "./combos";
 export { cyberware } from "./cyberware";
 export { fixers } from "./fixers";
 export { items } from "./items";
 export { consequences, twists } from "./jobs";
+export { lifepath } from "./lifepath";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
 export { glossary } from "./lore";

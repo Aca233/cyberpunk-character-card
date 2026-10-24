@@ -1,5 +1,11 @@
-import { cyberware } from "@cp/content";
-import { CharacterCardSchema, type Clock, normalizeStartCyberware } from "@cp/core";
+import { boardModules, combos, cyberware, lifepath } from "@cp/content";
+import {
+  CharacterCardSchema,
+  type Clock,
+  cyberwareRules,
+  normalizeBoard,
+  START_CYBERWARE_POINTS,
+} from "@cp/core";
 import { type Context, Hono } from "hono";
 import type { z } from "zod";
 import type { CharacterStore } from "../characters";
@@ -14,8 +20,8 @@ async function readCard(c: Context) {
   const parsed = CharacterCardSchema.safeParse(raw);
   if (parsed.success) {
     if (!parsed.data.board) return { ok: true as const, card: parsed.data };
-    // 开局义体的点数和人性消耗按义体表重算，再校验一次预算
-    const fixed = normalizeStartCyberware(parsed.data.board, cyberware);
+    // 开局义体的点数、人性消耗和联动按内容表重算，再校验一次预算
+    const fixed = normalizeBoard(parsed.data.board, { cyberware, combos });
     if (!fixed.ok) return { ok: false as const, error: fixed.error };
     return readCardAgain({ ...parsed.data, board: fixed.board });
   }
@@ -40,6 +46,30 @@ function issuesOf(error: z.ZodError) {
 export function characterRoutes(store: CharacterStore, clock: Clock): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ characters: await store.list() }));
+  // 主板要用的表：模块库、联动、生命路径和创建时能装的义体；要放在 /:id 前面
+  app.get("/board", (c) =>
+    c.json({
+      modules: boardModules,
+      combos,
+      lifepath,
+      cyberware: cyberware.flatMap((def) => {
+        const points = START_CYBERWARE_POINTS[def.rarity];
+        return def.iconic || points === undefined
+          ? []
+          : [
+              {
+                id: def.id,
+                name: def.name,
+                slot: def.slot,
+                slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
+                points,
+                humanityCost: def.humanityCost,
+                ability: def.ability,
+              },
+            ];
+      }),
+    }),
+  );
   app.get("/:id", async (c) => {
     const entry = await store.get(c.req.param("id"));
     return entry ? c.json({ character: entry }) : c.json({ error: "没有这个角色" }, 404);

@@ -81,6 +81,28 @@ export const StartCyberwareSchema = z.object({
 });
 export type StartCyberware = z.infer<typeof StartCyberwareSchema>;
 
+/** 联动：几块模块的标签或 id 凑齐时触发，带来新能力和钩子；预设的写在 content 的 combos.ts */
+export const ComboSchema = z.object({
+  id: z.string().trim().min(1).max(40),
+  label: z.string().trim().min(1).max(24),
+  /** 每一项要有一块模块的 id 或标签对上；至少要两块不同的模块参与 */
+  requires: z.array(z.string().trim().min(1)).min(2).max(4),
+  ability: line(200),
+  hook: line(200).default(""),
+});
+export type Combo = z.infer<typeof ComboSchema>;
+
+/** 角色卡上记着的联动：存卡时服务端按联动表重算 */
+export const BoardComboSchema = ComboSchema.omit({ requires: true });
+export type BoardCombo = z.infer<typeof BoardComboSchema>;
+
+/** 生命路径表的一条：过往模块 id 和按出身的权重，没写的出身按 1 */
+export const LifepathEntrySchema = z.object({
+  id: z.string().min(1),
+  weights: z.record(z.string(), z.number().min(0)).default({}),
+});
+export type LifepathEntry = z.infer<typeof LifepathEntrySchema>;
+
 export const BoardSchema = z.object({
   origin: BoardModuleSchema.nullable().default(null),
   pasts: z.array(BoardModuleSchema).max(PAST_MAX).default([]),
@@ -88,6 +110,7 @@ export const BoardSchema = z.object({
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
   cyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   tolerance: ToleranceSchema.default("normal"),
+  combos: z.array(BoardComboSchema).max(6).default([]),
 });
 export type Board = z.infer<typeof BoardSchema>;
 
@@ -197,14 +220,73 @@ export function boardIssues(board: Board): string[] {
   return issues;
 }
 
-/**
- * 按义体表重算开局义体的快照：没有的、不朽的、稀有以上的、同一部位两件的都不收。
- * 存角色卡前在服务端调一次，之后预算按快照算
- */
-export function normalizeStartCyberware(
+/** 主板触发了哪些联动 */
+export function boardCombos(board: Board, combos: readonly Combo[]): Combo[] {
+  const modules = boardModules(board);
+  return combos.filter((combo) => {
+    const used = new Set<string>();
+    for (const need of combo.requires) {
+      const hits = modules.filter((m) => m.id === need || m.tags.includes(need));
+      if (hits.length === 0) return false;
+      for (const m of hits) used.add(m.id);
+    }
+    return used.size >= 2;
+  });
+}
+
+/** 生命路径掷一段过往：按出身加权，已经插着的不再出 */
+export function rollLifepath(
   board: Board,
-  catalog: readonly CyberwareDef[],
+  table: readonly LifepathEntry[],
+  modules: readonly BoardModule[],
+  random: () => number,
+): BoardModule | null {
+  const taken = new Set(board.pasts.map((m) => m.id));
+  const origin = board.origin?.id ?? "";
+  const pool = table.flatMap((entry) => {
+    const module = modules.find((m) => m.id === entry.id && m.slot === "past");
+    const weight = entry.weights[origin] ?? 1;
+    return module && weight > 0 && !taken.has(module.id) ? [{ module, weight }] : [];
+  });
+  const total = pool.reduce((sum, p) => sum + p.weight, 0);
+  let roll = random() * total;
+  for (const p of pool) {
+    roll -= p.weight;
+    if (roll < 0) return p.module;
+  }
+  return pool.at(-1)?.module ?? null;
+}
+
+/** 随机插满：过往补到必填的块数 */
+export function fillPasts(
+  board: Board,
+  table: readonly LifepathEntry[],
+  modules: readonly BoardModule[],
+  random: () => number,
+): Board {
+  let next = board;
+  while (next.pasts.length < PAST_MIN) {
+    const rolled = rollLifepath(next, table, modules, random);
+    if (!rolled) break;
+    next = { ...next, pasts: [...next.pasts, rolled] };
+  }
+  return next;
+}
+
+export interface BoardTables {
+  readonly cyberware: readonly CyberwareDef[];
+  readonly combos: readonly Combo[];
+}
+
+/**
+ * 存角色卡前在服务端调一次：按义体表重算开局义体的快照（没有的、不朽的、稀有以上的、
+ * 同一部位两件的都不收），按联动表重算联动；之后预算和简介按快照算
+ */
+export function normalizeBoard(
+  board: Board,
+  tables: BoardTables,
 ): { readonly ok: true; readonly board: Board } | { readonly ok: false; readonly error: string } {
+  const catalog = tables.cyberware;
   const slots = new Map<string, string>();
   const cyberware: StartCyberware[] = [];
   for (const { id } of board.cyberware) {
@@ -224,7 +306,8 @@ export function normalizeStartCyberware(
     slots.set(def.slot, def.name);
     cyberware.push({ id: def.id, name: def.name, points, humanityCost: def.humanityCost });
   }
-  return { ok: true, board: { ...board, cyberware } };
+  const combos = boardCombos(board, tables.combos).map(({ requires: _, ...combo }) => combo);
+  return { ok: true, board: { ...board, cyberware, combos } };
 }
 
 function moduleLine(m: BoardModule): string {
@@ -240,7 +323,12 @@ function moduleLine(m: BoardModule): string {
 
 /** 给模型看的主板：每块模块一行 */
 export function boardBrief(board: Board): string {
-  const lines = boardModules(board).map(moduleLine);
+  const lines = [
+    ...boardModules(board).map(moduleLine),
+    ...board.combos.map(
+      (c) => `- 联动「${c.label}」；能力：${c.ability}${c.hook ? `；钩子：${c.hook}` : ""}`,
+    ),
+  ];
   const tolerance = TOLERANCE_LEVELS[board.tolerance];
   if (board.tolerance !== "normal") {
     lines.push(
