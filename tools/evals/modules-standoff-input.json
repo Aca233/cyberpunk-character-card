@@ -1,0 +1,24 @@
+{
+  "id": "modules-standoff-input",
+  "title": "僵持场面带战斗模块，好开对峙",
+  "tags": ["modules"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "推开后门，走进巷子" },
+        "text": "巷子尽头站着三个瓦伦蒂诺帮的人，领头的那个已经把枪抬了起来，枪口正对着你的胸口。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "慢慢举起双手：“把枪放下，货的事可以谈。”" },
+  "expect": {
+    "modules": {
+      "require": ["combat"]
+    }
+  },
+  "rubric": [
+    "是否开了对峙（combat standoff）而不是直接开打",
+    "正文是否停在僵持的那一刻，没有替玩家开枪或让步"
+  ]
+}

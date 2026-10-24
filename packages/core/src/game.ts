@@ -19,7 +19,7 @@ import {
   effectiveAttribute,
   effectiveAttributes,
 } from "./systems/character/schema";
-import { CombatStateSchema, MAX_QUICK } from "./systems/combat/schema";
+import { CombatStateSchema, EDGE_LABELS, MAX_QUICK } from "./systems/combat/schema";
 import {
   cyberwareCatalog,
   repairCost,
@@ -773,7 +773,12 @@ export function projectState(
         /** 濒死时还剩几次交锋结束前要被救回；不在濒死时为 null */
         dyingMomentsLeft:
           active.dyingUntil === null ? null : active.dyingUntil - active.current + 1,
+        /** 第一次交锋谁占先机；过了第一次交锋是 null */
+        edge: active.current === 0 ? (active.edge ?? null) : null,
+        edgeLabel: active.current === 0 && active.edge ? EDGE_LABELS[active.edge] : null,
       },
+      /** 进行中的对峙 */
+      standoff: combat.standoff ?? null,
       last: combat.last,
     },
     /** 当前场景的潜入警戒度 */

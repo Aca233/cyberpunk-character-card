@@ -1515,3 +1515,13 @@
 .alert[data-level="3"] {
   color: var(--cp-red);
 }
+
+/* 对峙倒计时 */
+.standoffClock {
+  color: #f2d53c;
+  font-variant-numeric: tabular-nums;
+}
+
+.standoffClock[data-out] {
+  color: var(--cp-red);
+}

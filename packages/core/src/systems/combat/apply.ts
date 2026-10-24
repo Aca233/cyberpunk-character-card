@@ -9,6 +9,7 @@ import {
   type CombatOutcome,
   type CombatState,
   DirectFactSchema,
+  EDGE_LABELS,
   FOE_HITS,
   type MomentResult,
 } from "./schema";
@@ -63,6 +64,10 @@ export function startCombat(
       scanned: false,
     });
   }
+  // 对峙谈崩：时间到了还没人让步，对方先动手
+  const standoff = draft.standoff;
+  const edge = command.edge ?? (standoff && standoff.left === 0 ? "enemy" : null);
+  draft.standoff = null;
   draft.active = {
     startedAt: ctx.now,
     moments,
@@ -73,6 +78,7 @@ export function startCombat(
     quick: 0,
     results: [],
     dyingUntil: null,
+    edge,
   };
   draft.usedChecks = [];
   const named = foes.map(
@@ -81,7 +87,9 @@ export function startCombat(
   return {
     ok: true,
     notes: [
+      ...(standoff ? [`和${standoff.opponent}的对峙谈崩了`] : []),
       `战斗开始：${moments} 次交锋；败局：${defeat}`,
+      ...(edge ? [`第一次交锋${EDGE_LABELS[edge]}`] : []),
       ...(named.length > 0 ? [`有卡敌人：${named.join("、")}`] : []),
     ],
   };
@@ -223,6 +231,42 @@ export function endCombat(draft: Combat, now: number): ApplyOutcome {
   return finish(draft, "victory", [], [], now);
 }
 
+/** 开一场对峙：战斗中不能开 */
+export function startStandoff(draft: Combat, command: CombatCommand, now: number): ApplyOutcome {
+  if (draft.active) return fail("已经在战斗中，不能再开对峙");
+  if (draft.standoff) return fail(`已经在和${draft.standoff.opponent}对峙`);
+  const { opponent, rounds } = command;
+  if (opponent === undefined || rounds === undefined) return fail("对峙要写 opponent 和 rounds");
+  draft.standoff = { startedAt: now, opponent, rounds, left: rounds };
+  return {
+    ok: true,
+    notes: [`对峙开始：和${opponent}，最多 ${rounds} 轮，时间到了对方先动手`],
+  };
+}
+
+/** 对峙化解：说中诉求、亮出筹码或镇定门槛达标，这场仗不打了 */
+export function defuseStandoff(draft: Combat): ApplyOutcome {
+  const standoff = draft.standoff;
+  if (!standoff) return fail("没有在对峙");
+  draft.standoff = null;
+  return { ok: true, notes: [`对峙化解：和${standoff.opponent}没打起来`] };
+}
+
+/** 每轮结束倒数一次；这一轮已经化解或开打时什么也不做 */
+export function tickStandoff(draft: Combat): ApplyOutcome {
+  const standoff = draft.standoff;
+  if (!standoff || draft.active || standoff.left === 0) return { ok: true, notes: [] };
+  standoff.left -= 1;
+  return {
+    ok: true,
+    notes: [
+      standoff.left === 0
+        ? `和${standoff.opponent}的对峙到时间了：下一轮对方先动手`
+        : `对峙还剩 ${standoff.left} 轮`,
+    ],
+  };
+}
+
 export function applyCombat(
   draft: Combat,
   command: CombatCommand,
@@ -239,5 +283,9 @@ export function applyCombat(
       return endCombat(draft, ctx.now);
     case "scan":
       return scanFoe(draft, command.target);
+    case "standoff":
+      return startStandoff(draft, command, ctx.now);
+    case "defuse":
+      return defuseStandoff(draft);
   }
 }

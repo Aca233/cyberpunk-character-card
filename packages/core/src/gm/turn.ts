@@ -376,6 +376,10 @@ export async function runGmTurn(
   }
   b.checkAborted();
 
+  // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
+  if (!ooc && CombatStateSchema.parse(world.slices.combat).standoff) {
+    commands.push({ type: "combat.standoffTick" });
+  }
   if (!ooc && !commands.some((c) => c.type === "world")) {
     commands.push({ type: "world", activity: "talk" });
     b.notes.push("这一轮没写 world，按 talk 保底推进时间");

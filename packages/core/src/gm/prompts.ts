@@ -324,6 +324,15 @@ export function stateSummary(view: PlayerView): string {
     );
     if (a.dyingMomentsLeft !== null)
       lines.push(`濒死：还剩 ${a.dyingMomentsLeft} 次交锋内要被救回`);
+    if (a.edgeLabel) lines.push(`第一次交锋：${a.edgeLabel}`);
+  }
+  if (view.combat.standoff) {
+    const s = view.combat.standoff;
+    lines.push(
+      s.left > 0
+        ? `对峙中：和${s.opponent}，还剩 ${s.left}/${s.rounds} 轮`
+        : `对峙到时间了：和${s.opponent}，这一轮对方先动手，发 combat start`,
+    );
   }
   if (view.stealth.level > 0) {
     lines.push(

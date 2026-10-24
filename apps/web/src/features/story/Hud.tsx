@@ -88,6 +88,15 @@ export function Hud({ view }: { readonly view: View }) {
         </div>
       </div>
 
+      {combat.standoff && (
+        <div className={styles.combat} role="status">
+          <span className={styles.combatTitle}>对峙</span>
+          <span className={styles.combatEnemies}>和{combat.standoff.opponent}</span>
+          <span className={styles.standoffClock} data-out={combat.standoff.left === 0 || undefined}>
+            {combat.standoff.left > 0 ? `还剩 ${combat.standoff.left} 轮` : "时间到了，对方要动手"}
+          </span>
+        </div>
+      )}
       {combat.active && (
         <div className={styles.combat} role="status">
           <span className={styles.combatTitle}>
@@ -120,6 +129,9 @@ export function Hud({ view }: { readonly view: View }) {
               ),
             ].join("、")}
           </span>
+          {combat.active.edgeLabel && (
+            <span className={styles.combatEnemies}>{combat.active.edgeLabel}</span>
+          )}
           {combat.active.dyingMomentsLeft !== null && (
             <span className={styles.dying}>
               濒死：{combat.active.dyingMomentsLeft} 次交锋内要被救回
