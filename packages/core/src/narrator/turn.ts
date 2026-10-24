@@ -37,8 +37,9 @@ import {
   ChoiceProposalSchema,
   ExtractDocSchema,
   type ExtractShape,
-  GateSchema,
+  GateProposalSchema,
   issueText,
+  legacyGate,
   MAX_CHOICES,
   MAX_VOICES,
   parseModelJson,
@@ -96,15 +97,25 @@ function noteOnce(notes: string[], note: string): void {
   if (!notes.includes(note)) notes.push(note);
 }
 
-/** 建议选项里的检定仍写了数字难度值时，先换成上下沿再校验 */
+/** 建议选项里的检定或门槛仍写了数字时，先换成档位再校验 */
 function legacyChoice(item: unknown, notes: string[]): unknown {
-  if (typeof item !== "object" || item === null || Array.isArray(item) || !("check" in item)) {
-    return item;
+  if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
+  let out = item as Record<string, unknown>;
+  if ("check" in out) {
+    const legacy = legacyDvToEdge(out.check);
+    if (legacy.note !== undefined) {
+      noteOnce(notes, legacy.note);
+      out = { ...out, check: legacy.value };
+    }
   }
-  const legacy = legacyDvToEdge((item as { check: unknown }).check);
-  if (legacy.note === undefined) return item;
-  noteOnce(notes, legacy.note);
-  return { ...item, check: legacy.value };
+  if ("gate" in out) {
+    const legacy = legacyGate(out.gate);
+    if (legacy.note !== undefined) {
+      noteOnce(notes, legacy.note);
+      out = { ...out, gate: legacy.value };
+    }
+  }
+  return out;
 }
 
 /** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
@@ -530,7 +541,9 @@ export async function runNarratorTurn(
   if (judge.gate !== undefined && judge.gate !== null) {
     if (ooc) b.drop("gate", judge.gate, oocReason, "rules");
     else {
-      const spec = await b.validate("gate", judge.gate, GateSchema);
+      const legacyG = legacyGate(judge.gate);
+      if (legacyG.note !== undefined) noteOnce(b.notes, legacyG.note);
+      const spec = await b.validate("gate", legacyG.value, GateProposalSchema);
       if (spec && check) b.drop("gate", spec, "这一轮已经给了检定，门槛不再判", "rules");
       else if (spec) gate = judgeGate(world, spec);
     }
