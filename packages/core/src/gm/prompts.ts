@@ -265,6 +265,10 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}）`).join("、")}`,
     );
+  if (view.ripperdoc)
+    lines.push(
+      `义体医生：${view.ripperdoc.name}在这里（${view.ripperdoc.note}）；玩家可以在界面上直接买、卸义体，代码按货架价结算，你只写场面${view.ripperdoc.blackMarket ? "。这是黑市货，装上的东西可能有故障或追踪器，可以在剧情里兑现" : ""}`,
+    );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
   if (view.inventory.healing)

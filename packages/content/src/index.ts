@@ -7,6 +7,7 @@ import { loadouts } from "./loadouts";
 import { locations } from "./locations";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
+import { ripperdocs } from "./ripperdocs";
 
 export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
@@ -21,6 +22,7 @@ export { glossary } from "./lore";
 export { boardModules } from "./modules";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
+export { ripperdocs } from "./ripperdocs";
 
 /** 新存档放进世界的内容 */
 export const gameContent: GameContent = {
@@ -38,6 +40,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   items,
   cyberware,
   locations,
+  ripperdocs,
   twists,
   consequences,
 };

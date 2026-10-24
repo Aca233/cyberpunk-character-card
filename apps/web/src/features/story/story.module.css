@@ -1348,3 +1348,75 @@
   align-items: center;
   margin-top: 1rem;
 }
+
+/* 义体医生：货架按部位分组 */
+.docHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.docNote {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
+.docBody {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 0.4rem 1.2rem;
+}
+
+.docGroup {
+  margin: 0.6rem 0 0.3rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  font-weight: normal;
+}
+
+.docList {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docItem {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--cp-cyan-dim);
+}
+
+.docItem[data-locked] {
+  opacity: 0.6;
+}
+
+.docItemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.docPrice {
+  margin-left: auto;
+  color: var(--cp-yellow);
+}
+
+.docPrice[data-short] {
+  color: var(--cp-red);
+}
+
+.docLocked {
+  margin: 0;
+  color: var(--cp-red);
+  font-size: var(--fs-label);
+}
+
+.docLink {
+  margin-top: 0.5rem;
+}

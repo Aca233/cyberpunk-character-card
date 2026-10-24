@@ -4,6 +4,7 @@ import type { AssetId } from "../../assets";
 import { DIFFICULTY_LABELS } from "../../labels";
 import { Asset } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
+import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
 import { countdown } from "./Journal";
 import styles from "./story.module.css";
@@ -129,12 +130,15 @@ export function SidePanel({
   view,
   onSpend,
   onJournal,
+  onRipperdoc,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
   readonly onSpend?: ((attribute: Attribute) => void) | undefined;
   /** 打开日志，board 为 true 时直接到委托板 */
   readonly onJournal: (board: boolean) => void;
+  /** 打开当前地点的义体医生 */
+  readonly onRipperdoc: () => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -277,6 +281,11 @@ export function SidePanel({
               </li>
             ))}
           </ul>
+        )}
+        {view.ripperdoc && (
+          <div className={styles.docLink}>
+            <Button onClick={onRipperdoc}>找{view.ripperdoc.name}装义体</Button>
+          </div>
         )}
       </Panel>
 

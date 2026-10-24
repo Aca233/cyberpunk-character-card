@@ -6,6 +6,8 @@ import {
   type CyberwareCommand,
   type CyberwareDef,
   type CyberwareState,
+  type Ripperdoc,
+  RipperdocListSchema,
   SLOT_LABELS,
 } from "./schema";
 
@@ -26,6 +28,57 @@ export function cyberwareCatalog(
   }
   catalogs.set(raw, catalog);
   return catalog;
+}
+
+const doctorLists = new WeakMap<object, readonly Ripperdoc[]>();
+
+/** 读取并校验义体医生表；没有时是空表 */
+export function ripperdocList(data: Readonly<Record<string, unknown>>): readonly Ripperdoc[] {
+  const raw = data.ripperdocs;
+  if (typeof raw !== "object" || raw === null) return [];
+  const cached = doctorLists.get(raw);
+  if (cached) return cached;
+  const list = RipperdocListSchema.parse(raw);
+  doctorLists.set(raw, list);
+  return list;
+}
+
+/** 货架上的一件：价格按医生的系数折算到百位；locked 是不卖的原因 */
+export interface ShelfItem {
+  readonly def: CyberwareDef;
+  readonly price: number;
+  readonly locked: string | null;
+  readonly installed: boolean;
+  /** 同一部位已经装着、装上会换下来的那件 */
+  readonly replaces: CyberwareDef | null;
+}
+
+export function ripperdocShelf(
+  doc: Ripperdoc,
+  catalog: ReadonlyMap<string, CyberwareDef>,
+  streetCred: number,
+  installed: readonly { readonly id: string; readonly slot: string }[],
+): ShelfItem[] {
+  return doc.shelf.flatMap((id) => {
+    const def = catalog.get(id);
+    if (!def) return [];
+    const gate = doc.credGates[def.rarity];
+    const locked = def.iconic
+      ? "不朽义体只从剧情获得"
+      : gate !== undefined && streetCred < gate
+        ? `街头声望 ${gate} 级才肯卖`
+        : null;
+    const old = installed.find((c) => c.slot === def.slot && c.id !== id);
+    return [
+      {
+        def,
+        price: Math.round((def.price * doc.priceFactor) / 100) * 100,
+        locked,
+        installed: installed.some((c) => c.id === id),
+        replaces: old ? (catalog.get(old.id) ?? null) : null,
+      },
+    ];
+  });
 }
 
 /** 装着的义体一共占掉多少人性上限 */

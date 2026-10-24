@@ -52,6 +52,25 @@ export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
 
 export const CyberwareCatalogSchema = z.array(CyberwareDefSchema);
 
+/** 义体医生：开在某个地点，有自己的货架和价格；高稀有度的货随街头声望解锁。数据在 content 包的 ripperdocs.ts */
+export const RipperdocSchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  name: z.string().min(1).max(20),
+  /** 地点表里的 id：玩家在这里时才能找他 */
+  location: z.string().min(1),
+  note: z.string().max(120).default(""),
+  /** 乘在义体表参考价上的系数 */
+  priceFactor: z.number().min(0.5).max(2).default(1),
+  /** 黑市货：便宜，但可能有故障或追踪器，由主持人在剧情里兑现 */
+  blackMarket: z.boolean().default(false),
+  /** 货架上的义体 id；不朽义体放上来也不卖 */
+  shelf: z.array(z.string().min(1)).min(1),
+  /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
+  credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
+});
+export type Ripperdoc = z.infer<typeof RipperdocSchema>;
+export const RipperdocListSchema = z.array(RipperdocSchema);
+
 export const CyberwareStateSchema = z.object({
   installed: z
     .array(

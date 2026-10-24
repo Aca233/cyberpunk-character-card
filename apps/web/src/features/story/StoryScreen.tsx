@@ -12,6 +12,7 @@ import { CheckBar } from "./CheckBar";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
+import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
@@ -91,6 +92,7 @@ export function StoryScreen() {
   const busy = story.phase !== "idle";
   // 日志开着时停用正文的快捷键；值是打开时的标签页
   const [journal, setJournal] = useState<"active" | "board" | null>(null);
+  const [atDoc, setAtDoc] = useState(false);
   const closeJournal = useCallback(() => setJournal(null), []);
 
   const warn = useCallback((key: string, error: unknown) => {
@@ -145,6 +147,27 @@ export function StoryScreen() {
     [saveId, version, refresh, warn],
   );
 
+  // 义体医生那里买、卸义体：不调用模型；失败时提示原因，确认框留着
+  const cyberAction = useCallback(
+    async (type: "buyCyberware" | "removeCyberware", id: string) => {
+      const doc = view?.ripperdoc;
+      if (!doc) return;
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type, doc: doc.id, id },
+        });
+      } catch (error) {
+        warn("ripperdoc", error);
+        await refresh();
+        throw error;
+      }
+      await refresh();
+    },
+    [view?.ripperdoc, saveId, version, refresh, warn],
+  );
+
   const send = useCallback(
     (input: TurnInput) => {
       if (!view) return;
@@ -182,7 +205,7 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal) return;
+      if (journal || atDoc) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -197,7 +220,7 @@ export function StoryScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal]);
+  }, [choose, pickedId, offers?.rolled, story.failure, busy, navigate, journal, atDoc]);
 
   if (query.isPending) {
     return (
@@ -244,6 +267,7 @@ export function StoryScreen() {
         view={view}
         onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)}
         onJournal={(board) => setJournal(board ? "board" : "active")}
+        onRipperdoc={() => setAtDoc(true)}
       />
 
       <main className={styles.column}>
@@ -350,6 +374,15 @@ export function StoryScreen() {
           initialTab={journal}
           onAccept={busy || offers?.rolled ? undefined : acceptJob}
           onClose={closeJournal}
+        />
+      )}
+      {atDoc && view.ripperdoc && (
+        <Ripperdoc
+          view={view}
+          doc={view.ripperdoc}
+          onBuy={busy ? undefined : (id) => cyberAction("buyCyberware", id)}
+          onRemove={busy ? undefined : (id) => cyberAction("removeCyberware", id)}
+          onClose={() => setAtDoc(false)}
         />
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}

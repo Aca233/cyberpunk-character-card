@@ -16,8 +16,13 @@ import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { credTier } from "./systems/character/apply";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
-import { cyberwareCatalog } from "./systems/cyberware/apply";
-import { type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./systems/cyberware/schema";
+import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./systems/cyberware/apply";
+import {
+  type CyberwareDef,
+  type CyberwareSlot,
+  CyberwareStateSchema,
+  SLOT_LABELS,
+} from "./systems/cyberware/schema";
 import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
@@ -255,6 +260,38 @@ export function newGameWorld(
   return applied.world;
 }
 
+function ripperdocView(
+  data: Readonly<Record<string, unknown>>,
+  location: string | null,
+  streetCred: number,
+  installed: readonly { readonly id: string; readonly slot: CyberwareSlot }[],
+  parts: ReadonlyMap<string, CyberwareDef>,
+) {
+  const doc =
+    location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
+  if (!doc) return null;
+  return {
+    id: doc.id,
+    name: doc.name,
+    note: doc.note,
+    blackMarket: doc.blackMarket,
+    shelf: ripperdocShelf(doc, parts, streetCred, installed).map((item) => ({
+      id: item.def.id,
+      name: item.def.name,
+      slot: item.def.slot,
+      slotLabel: SLOT_LABELS[item.def.slot],
+      rarity: item.def.rarity,
+      rarityLabel: RARITY_LABELS[item.def.rarity],
+      price: item.price,
+      humanityCost: item.def.humanityCost,
+      ability: item.def.ability,
+      locked: item.locked,
+      installed: item.installed,
+      replaces: item.replaces?.name ?? null,
+    })),
+  };
+}
+
 /** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
 export function withAllSlices(world: WorldState): WorldState {
   const base = registry.initialWorld(world.time);
@@ -484,6 +521,8 @@ export function projectState(
         ability: def?.ability ?? null,
       };
     }),
+    /** 当前地点开着的义体医生；不在诊所时是 null */
+    ripperdoc: ripperdocView(data, clock.location, character.streetCred, installed, parts),
     combat: {
       active: active && {
         /** 第几次交锋，从 1 起 */

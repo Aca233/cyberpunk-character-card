@@ -3,6 +3,9 @@ import type { Patch } from "immer";
 import { z } from "zod";
 import type { ApplyContext, Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
+import { CharacterStateSchema } from "./systems/character/schema";
+import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./systems/cyberware/apply";
+import { CyberwareStateSchema } from "./systems/cyberware/schema";
 import { AttributeSchema } from "./systems/dice/schema";
 import { registry } from "./systems/registry";
 
@@ -11,6 +14,18 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("spendPoint"), attribute: AttributeSchema }),
   /** 在委托板上接下一单挂着的委托 */
   z.strictObject({ type: z.literal("acceptJob"), id: z.string().min(1).max(64) }),
+  /** 在义体医生那里买一件装上；同一部位的旧件换下来 */
+  z.strictObject({
+    type: z.literal("buyCyberware"),
+    doc: z.string().min(1).max(40),
+    id: z.string().min(1).max(64),
+  }),
+  /** 请义体医生卸下一件 */
+  z.strictObject({
+    type: z.literal("removeCyberware"),
+    doc: z.string().min(1).max(40),
+    id: z.string().min(1).max(64),
+  }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 
@@ -27,11 +42,60 @@ export type ActionRequest = z.infer<typeof ActionRequestSchema>;
 /** 在委托板上接单时写进进展笔记的一句 */
 export const BOARD_ACCEPT_NOTE = "在委托板上接下，戏里还没和对方细谈";
 
-/** 每种操作对应的内部指令；只放行这里列出的 */
-function commandsFor(action: PlayerAction): Command[] {
+/** 义体医生的操作：人要在诊所里，货要在货架上、肯卖 */
+function ripperdocCommands(
+  world: WorldState,
+  action: Extract<PlayerAction, { type: "buyCyberware" | "removeCyberware" }>,
+  data: Readonly<Record<string, unknown>>,
+): Command[] | string {
+  const doc = ripperdocList(data).find((d) => d.id === action.doc);
+  if (!doc) return `没有叫 ${action.doc} 的义体医生`;
+  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+  if (here !== doc.location) return `不在${doc.name}的诊所，先去那里`;
+  const catalog = cyberwareCatalog(data);
+  const installed = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+  if (action.type === "removeCyberware") {
+    const def = catalog.get(action.id);
+    if (!installed.some((c) => c.id === action.id)) return `没有装着${def?.name ?? action.id}`;
+    return [
+      {
+        type: "cyberware",
+        action: "remove",
+        id: action.id,
+        reason: `在${doc.name}那里卸下`,
+      },
+    ];
+  }
+  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
+  const item = ripperdocShelf(doc, catalog, streetCred, installed).find(
+    (i) => i.def.id === action.id,
+  );
+  if (!item) return `${doc.name}的货架上没有这件`;
+  if (item.locked) return `${doc.name}不卖${item.def.name}：${item.locked}`;
+  if (item.installed) return `${item.def.name}已经装着了`;
+  return [
+    {
+      type: "cyberware",
+      action: "install",
+      id: action.id,
+      price: item.price,
+      reason: `在${doc.name}那里装上${item.def.name}`,
+    },
+  ];
+}
+
+/** 每种操作对应的指令；只放行这里列出的。返回字符串表示操作不成立 */
+function commandsFor(
+  world: WorldState,
+  action: PlayerAction,
+  data: Readonly<Record<string, unknown>>,
+): Command[] | string {
   switch (action.type) {
     case "spendPoint":
       return [{ type: "character.spendPoint", attribute: action.attribute }];
+    case "buyCyberware":
+    case "removeCyberware":
+      return ripperdocCommands(world, action, data);
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
       return [
@@ -57,8 +121,10 @@ export function applyPlayerAction(
   action: PlayerAction,
   ctx: ApplyContext,
 ): ActionResult {
+  const commands = commandsFor(world, action, ctx.data ?? {});
+  if (typeof commands === "string") return { ok: false, reason: commands };
   const parsed: Command[] = [];
-  for (const raw of commandsFor(action)) {
+  for (const raw of commands) {
     const result = registry.parseInternal(raw);
     if (!result.ok) return { ok: false, reason: result.error };
     parsed.push(result.command);
