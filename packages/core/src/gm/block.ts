@@ -17,11 +17,37 @@ export const ChoiceSchema = z
     text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
     gate: GateSchema.optional().describe("门槛判定，属性达标直接成功"),
     check: CheckSpecSchema.optional().describe("风险掷骰，选中就直接掷"),
+    source: z
+      .string()
+      .trim()
+      .min(1)
+      .max(24)
+      .optional()
+      .describe("专属选项的来源，例如 过往：荒坂前员工、义体：螳螂刀；只有这条路是角色独有的才写"),
   })
   .refine((c) => !(c.gate && c.check), "一个选项只能有 gate 或 check 之一");
 export type Choice = z.infer<typeof ChoiceSchema>;
 
 export const MAX_CHOICES = 5;
+
+/** 内心声音：过往和出身、义体、人性三种来源 */
+export const VoiceSchema = z.object({
+  from: z
+    .enum(["past", "chrome", "humanity"])
+    .describe("past 过往和出身，chrome 义体，humanity 人性"),
+  text: z.string().trim().min(1).max(60).describe("一句脑子里冒出来的念头"),
+});
+export type Voice = z.infer<typeof VoiceSchema>;
+
+export const MAX_VOICES = 2;
+
+/** 存档里的内心声音按 schema 读，格式不对的跳过 */
+export function readVoices(raw: readonly unknown[] | undefined): Voice[] {
+  return (raw ?? []).flatMap((v) => {
+    const parsed = VoiceSchema.safeParse(v);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 
 /** 指令块的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
 export const BlockDocSchema = z.object({
@@ -35,6 +61,10 @@ export const BlockDocSchema = z.object({
   changes: z
     .array(z.object({ type: z.string() }))
     .describe("本轮的状态变化，按发生顺序，见下方指令"),
+  voices: z
+    .array(VoiceSchema)
+    .optional()
+    .describe(`内心声音，只在关键时刻写，最多 ${MAX_VOICES} 条；平常不写`),
   direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
@@ -50,6 +80,7 @@ const BlockShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
   check: z.unknown().optional(),
   changes: z.array(z.unknown()).optional(),
+  voices: z.array(z.unknown()).optional().catch(undefined),
   direct: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   pin: z.boolean().optional().catch(undefined),

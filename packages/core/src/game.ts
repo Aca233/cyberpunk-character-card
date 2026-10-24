@@ -1,6 +1,7 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
 
 import { applyPatches } from "immer";
+import { readVoices } from "./gm/block";
 import { currentOffers, prepareFor } from "./gm/pending";
 import {
   effectiveTurns,
@@ -349,6 +350,8 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
           }
         : null,
       checkId: choice.check && seq !== undefined ? `${seq}.${i + 1}` : null,
+      /** 专属选项的来源，例如“过往：荒坂前员工” */
+      source: choice.source ?? null,
     })),
     checks,
     /** 已经掷过骰的检定 id；这时只能确认它 */
@@ -576,6 +579,7 @@ export function projectState(
       at: t.at,
       input: turnInput(t.input),
       text: t.text,
+      voices: readVoices(t.voices),
       dice: t.dice,
       /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
       dropped: t.dropped.length,

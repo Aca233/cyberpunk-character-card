@@ -591,6 +591,7 @@ export class GameService {
         patches: [...turn.patches],
         ...(turn.read !== undefined ? { read: turn.read } : {}),
         ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),
+        ...(turn.voices.length > 0 ? { voices: [...turn.voices] } : {}),
         ...(turn.check !== undefined ? { check: turn.check } : {}),
         ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
         ...(turn.ooc ? { ooc: true } : {}),

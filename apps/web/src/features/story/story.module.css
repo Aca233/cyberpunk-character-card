@@ -662,6 +662,38 @@
   color: var(--cp-text-dim);
 }
 
+.source {
+  flex: none;
+  font-size: var(--fs-label);
+  color: var(--cp-yellow);
+  white-space: nowrap;
+}
+
+.voice {
+  margin: 0.5rem 0 0.5rem 1.4rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-left-width: 3px;
+  font-style: italic;
+  font-size: 0.95em;
+}
+
+.voice[data-from="past"] {
+  color: var(--voice-past);
+}
+
+.voice[data-from="chrome"] {
+  color: var(--voice-chrome);
+  letter-spacing: 0.03em;
+  text-shadow:
+    1px 0 rgb(255 0 80 / 0.45),
+    -1px 0 rgb(0 240 255 / 0.35);
+}
+
+.voice[data-from="humanity"] {
+  color: var(--voice-humanity);
+}
+
 .choiceText {
   flex: 1;
 }

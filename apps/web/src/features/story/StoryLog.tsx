@@ -77,6 +77,8 @@ function Paragraph({
   );
 }
 
+const VOICE_LABELS = { past: "过往", chrome: "义体", humanity: "人性" } as const;
+
 function TurnBlock({
   turn,
   saveId,
@@ -103,6 +105,17 @@ function TurnBlock({
       {paragraphs(turn.text).map((p, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
         <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
+      ))}
+      {turn.voices.map((v, i) => (
+        <p
+          // biome-ignore lint/suspicious/noArrayIndexKey: 同一轮的内心声音按写下的顺序排，不会重排
+          key={`${turn.seq}-v${i}`}
+          className={styles.voice}
+          data-from={v.from}
+          title={`内心声音 · ${VOICE_LABELS[v.from]}`}
+        >
+          {v.text}
+        </p>
       ))}
       <footer className={styles.turnMeta}>
         {turn.dropped > 0 && (
@@ -237,6 +250,7 @@ export function ChoiceList({
               ) : (
                 <span className={styles.num}>{i + 1}</span>
               )}
+              {c.source && <span className={styles.source}>[{c.source}]</span>}
               <span className={styles.choiceText}>{c.text}</span>
               {c.gate && (
                 <span className={styles.tag} data-met={c.gate.met || undefined}>

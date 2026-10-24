@@ -4,6 +4,7 @@ import type { AbortSignalLike, LlmClient, LlmMessage, LlmUsage, Rng } from "../k
 import type { Command } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
+import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { registry } from "../systems/registry";
@@ -14,9 +15,12 @@ import {
   ChoiceSchema,
   issueText,
   MAX_CHOICES,
+  MAX_VOICES,
   parseModelJson,
   readBlockShape,
   StateSplitter,
+  type Voice,
+  VoiceSchema,
 } from "./block";
 import { schemaDoc } from "./doc";
 import { prepareFor } from "./pending";
@@ -41,6 +45,8 @@ export interface GmTurn {
   readonly text: string;
   readonly read: string | undefined;
   readonly choices: readonly Choice[];
+  /** 内心声音，0–2 条 */
+  readonly voices: readonly Voice[];
   /** 主持人提出、等玩家确认的检定 */
   readonly check: CheckSpec | undefined;
   /** 生效的指令，按结算顺序 */
@@ -177,6 +183,15 @@ class TurnBuilder {
   }
 }
 
+/** 义体来源的专属选项必须是身上装着的义体；对不上时去掉来源，选项留着 */
+function verifySource(choice: Choice, chrome: ReadonlySet<string>, notes: string[]): Choice {
+  const named = choice.source?.match(/^义体[：:]\s*(.+)$/)?.[1]?.trim();
+  if (named === undefined || chrome.has(named)) return choice;
+  const { source: _source, ...rest } = choice;
+  notes.push(`选项「${choice.text}」的来源「${choice.source}」不是身上装着的义体，去掉了来源`);
+  return rest;
+}
+
 export async function runGmTurn(
   deps: GmDeps,
   world: WorldState,
@@ -222,6 +237,13 @@ export async function runGmTurn(
     }
   }
 
+  // 装着的义体的名字：义体来源的专属选项和义体的内心声音要对得上
+  const parts = cyberwareCatalog(deps.data ?? {});
+  const chrome = new Set(
+    CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed.map(
+      (c) => parts.get(c.id)?.name ?? c.id,
+    ),
+  );
   const choices: Choice[] = [];
   if (!ooc) {
     const raw = shape.choices ?? [];
@@ -235,7 +257,25 @@ export async function runGmTurn(
       if (!choice) continue;
       const prepared = choice.check && prepareFor(world, choice.check);
       if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
-      else choices.push(choice);
+      else choices.push(verifySource(choice, chrome, b.notes));
+    }
+  }
+
+  const voices: Voice[] = [];
+  if (!ooc) {
+    for (const [i, item] of (shape.voices ?? []).entries()) {
+      const where = `voices[${i}]`;
+      if (i >= MAX_VOICES) {
+        b.drop(where, item, `内心声音每轮最多 ${MAX_VOICES} 条`, "rules");
+        continue;
+      }
+      const voice = await b.validate(where, item, VoiceSchema);
+      if (!voice) continue;
+      if (voice.from === "chrome" && chrome.size === 0) {
+        b.drop(where, voice, "身上没装义体，义体不会说话", "rules");
+        continue;
+      }
+      voices.push(voice);
     }
   }
 
@@ -299,6 +339,7 @@ export async function runGmTurn(
       text: narrative,
       read: ooc ? undefined : shape.read,
       choices,
+      voices,
       check,
       commands: accepted,
       dropped: b.dropped,
