@@ -13,6 +13,8 @@ import {
   ServiceSchema,
 } from "../systems/economy/schema";
 import { itemCatalog } from "../systems/inventory/apply";
+import { JobsStateSchema } from "../systems/jobs/schema";
+import { WorldClockStateSchema } from "../systems/world/schema";
 import { type Gate, GateProposalSchema } from "./block";
 
 /**
@@ -131,6 +133,30 @@ export function bigSpend(
   }
   const price = discounted(base, buy.discount);
   return isBigSpend(price, eddies) ? { label, price, eddies } : undefined;
+}
+
+/** 一次跳过这么多分钟以上算长时间跳过（睡觉、等到天黑、长途移动） */
+export const LONG_SKIP = 120;
+
+/** 长时间跳过中间最早到期的事：没回应的期限、还没超期的委托；没有时为 undefined */
+export function skipStop(
+  world: WorldState,
+  to: number,
+): { readonly at: number; readonly label: string } | undefined {
+  if (to - world.time < LONG_SKIP) return undefined;
+  const clock = WorldClockStateSchema.parse(world.slices.world);
+  const jobs = JobsStateSchema.parse(world.slices.jobs);
+  const points = [
+    ...clock.deadlines
+      .filter((d) => d.handledAt === null)
+      .map((d) => ({ at: d.due, label: d.label })),
+    ...jobs.jobs.flatMap((j) =>
+      j.status === "active" && !j.overdue && j.due !== null
+        ? [{ at: j.due, label: `委托「${j.title}」` }]
+        : [],
+    ),
+  ];
+  return points.filter((p) => p.at > world.time && p.at < to).sort((a, b) => a.at - b.at)[0];
 }
 
 /** 可调的旧记忆：热层以外的旧轮次；M3 换成状态库和扩展层检索 */

@@ -31,7 +31,7 @@ import { itemCatalog } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
-import { WorldClockStateSchema } from "../systems/world";
+import { formatGameTime, WorldClockStateSchema } from "../systems/world";
 import {
   type Choice,
   ChoiceProposalSchema,
@@ -78,6 +78,7 @@ import {
   parsePatch,
   readJudgeShape,
   recallCandidates,
+  skipStop,
 } from "./stages";
 
 /**
@@ -806,6 +807,16 @@ export async function runNarratorTurn(
     commands.push(command);
   }
   b.checkAborted();
+
+  // 长时间跳过在决策点停下：中间有期限或委托到期时，时间截在最早到期的那一刻，交给玩家
+  for (const [i, c] of commands.entries()) {
+    const time = c.type === "world" ? (c as { time?: unknown }).time : undefined;
+    if (typeof time !== "number") continue;
+    const stop = skipStop(world, time);
+    if (!stop) continue;
+    commands[i] = { ...c, time: stop.at } as Command;
+    b.notes.push(`时间停在 ${formatGameTime(stop.at)}：${stop.label}到期，接下来交给玩家`);
+  }
 
   // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
   if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
