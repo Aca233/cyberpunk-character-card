@@ -112,6 +112,8 @@ interface RunResult {
   readonly gradeError?: string;
   readonly text?: string;
   readonly block?: unknown;
+  /** ⑤ 审守则的提醒；只统计，不算失败 */
+  readonly flags?: readonly string[];
   readonly ms: number;
 }
 
@@ -331,6 +333,7 @@ async function main(): Promise<number> {
             modules: turn.modules,
             repairs: turn.repairs,
           },
+          ...(turn.flags.length > 0 ? { flags: turn.flags } : {}),
           ms: Date.now() - started,
         };
       }
@@ -427,6 +430,13 @@ async function main(): Promise<number> {
   const u = (x: Usage) => `输入 ${x.inputTokens}，输出 ${x.outputTokens}`;
   console.log(
     `\ntoken 用量：叙事模型 ${u(usage.narrator)}；抽取和核对 ${u(usage.aux)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}；连不上后重连 ${reconnects} 次`,
+  );
+  // ⑤ 审守则的提醒：只统计，不算失败
+  const flagged = [...results.entries()].flatMap(([id, runs]) =>
+    runs.flatMap((r) => (r.flags ?? []).map((f) => `${id} #${r.rep + 1}  ${f}`)),
+  );
+  console.log(
+    `守则提醒 ${flagged.length} 条${flagged.length > 0 ? `：\n${flagged.map((f) => `  ${f}`).join("\n")}` : ""}`,
   );
   console.log(`结果：tools/evals/results/${name}`);
   return 0;
