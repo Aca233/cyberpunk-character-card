@@ -194,6 +194,23 @@ export function StoryScreen() {
     [saveId, version, refresh, warn],
   );
 
+  // 装备栏里换装备：不调用模型；战斗中由代码拒绝
+  const gearAction = useCallback(
+    async (type: "equipItem" | "unequipItem", id: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type, id },
+        });
+      } catch (error) {
+        warn("gear", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
+
   const send = useCallback(
     (input: TurnInput) => {
       if (!view) return;
@@ -295,6 +312,8 @@ export function StoryScreen() {
         onJournal={(board) => setJournal(board ? "board" : "active")}
         onRipperdoc={() => setAtDoc(true)}
         onShop={setAtShop}
+        onEquip={busy ? undefined : (id) => void gearAction("equipItem", id)}
+        onUnequip={busy ? undefined : (id) => void gearAction("unequipItem", id)}
       />
 
       <main className={styles.column}>

@@ -272,6 +272,10 @@ export function stateSummary(view: PlayerView): string {
     );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
+  if (view.inventory.clothing.length > 0)
+    lines.push(
+      `穿着（只影响身份和伪装，没有护甲）：${view.inventory.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,
+    );
   if (view.inventory.healing)
     lines.push(`治疗品：${view.inventory.healing.id}，剩 ${view.inventory.healing.charges} 次`);
   const backpack = Object.entries(view.inventory.backpack);

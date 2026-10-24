@@ -48,6 +48,8 @@ import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/app
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
 import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
 import {
+  CLOTHING_SLOT_LABELS,
+  ClothingSlotSchema,
   type InventoryState,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
@@ -332,6 +334,8 @@ function ripperdocView(
   };
 }
 
+const CLOTHING_SLOTS = ClothingSlotSchema.options;
+
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
 function shopsView(
   data: Readonly<Record<string, unknown>>,
@@ -494,6 +498,7 @@ function displayNames(
     ...(inventory.healing ? [inventory.healing.id] : []),
     ...(inventory.grenade ? [inventory.grenade.id] : []),
     ...Object.keys(inventory.backpack),
+    ...Object.values(inventory.clothing),
   ]);
   const place = location === null ? undefined : locationCatalog(data).get(location);
   return {
@@ -527,6 +532,7 @@ export function projectState(
   // 旧快照里没有热度系统
   const heat = world.slices.heat === undefined ? null : HeatStateSchema.parse(world.slices.heat);
   const parts = cyberwareCatalog(data);
+  const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const period = periodOf(world.time);
   const humanityLevel = humanityStage(humanity.current);
@@ -589,6 +595,26 @@ export function projectState(
       healing: inventory.healing,
       grenade: inventory.grenade,
       backpack: inventory.backpack,
+      /** 穿着的服装，按格子顺序；没穿的格子不列 */
+      clothing: CLOTHING_SLOTS.flatMap((slot) => {
+        const id = inventory.clothing[slot];
+        return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
+      }),
+      /** 背包里每件东西能装到哪：weapon 武器格、quick 快捷栏、clothing 服装格；不能装的不列 */
+      equipTo: Object.fromEntries(
+        Object.keys(inventory.backpack).flatMap((id) => {
+          const kind = items.get(id)?.kind;
+          const to =
+            kind === "weapon"
+              ? "weapon"
+              : kind === "healing" || kind === "grenade"
+                ? "quick"
+                : kind === "clothing"
+                  ? "clothing"
+                  : null;
+          return to ? [[id, to]] : [];
+        }),
+      ) as Readonly<Record<string, "weapon" | "quick" | "clothing">>,
     },
     /** 装着的义体，按装上的先后 */
     cyberware: installed.map((c) => {

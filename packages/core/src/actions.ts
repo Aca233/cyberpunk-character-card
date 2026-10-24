@@ -37,6 +37,14 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 还清欠义体医生的钱 */
   z.strictObject({ type: z.literal("repayRipperdoc"), doc: z.string().min(1).max(40) }),
+  /** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
+  z.strictObject({
+    type: z.literal("equipItem"),
+    id: z.string().min(1).max(64),
+    slot: z.number().int().min(1).max(3).optional(),
+  }),
+  /** 把装备栏里的一件放回背包 */
+  z.strictObject({ type: z.literal("unequipItem"), id: z.string().min(1).max(64) }),
   /** 在商店买一件，放进背包 */
   z.strictObject({
     type: z.literal("buyItem"),
@@ -186,6 +194,23 @@ function commandsFor(
     case "buyItem":
     case "sellItem":
       return shopCommands(world, action, data);
+    case "equipItem":
+    case "unequipItem": {
+      // 战斗里换装备要花一个动作，只能在行动里说
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "战斗中换装备要花一个动作，在行动里写";
+      return [
+        {
+          type: "item",
+          action: action.type === "equipItem" ? "equip" : "unequip",
+          id: action.id,
+          reason: "在装备栏里换",
+          ...(action.type === "equipItem" && action.slot !== undefined
+            ? { slot: action.slot }
+            : {}),
+        },
+      ];
+    }
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
       return [

@@ -132,6 +132,8 @@ export function SidePanel({
   onJournal,
   onRipperdoc,
   onShop,
+  onEquip,
+  onUnequip,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -142,6 +144,9 @@ export function SidePanel({
   readonly onRipperdoc: () => void;
   /** 打开当前地点的一家商店 */
   readonly onShop: (id: string) => void;
+  /** 换装备；正在生成时不传，按钮不显示 */
+  readonly onEquip?: ((id: string) => void) | undefined;
+  readonly onUnequip?: ((id: string) => void) | undefined;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -253,22 +258,97 @@ export function SidePanel({
               <li key={n} data-active={active || undefined} data-empty={id === null || undefined}>
                 <span className={styles.slotNum}>{n}</span>
                 <span>{id === null ? "空" : itemName(id)}</span>
-                {active && <small>手持</small>}
+                <span className={styles.gearTools}>
+                  {active && <small>手持</small>}
+                  {id !== null && !active && onEquip && (
+                    <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
+                      拿上
+                    </button>
+                  )}
+                  {id !== null && onUnequip && (
+                    <button
+                      type="button"
+                      className={styles.gearAction}
+                      onClick={() => onUnequip(id)}
+                    >
+                      收起
+                    </button>
+                  )}
+                </span>
               </li>
             );
           })}
         </ol>
+        {(inventory.healing || inventory.grenade) && (
+          <>
+            <p className={styles.gearTitle}>快捷栏</p>
+            <ul className={styles.backpack}>
+              {[inventory.healing, inventory.grenade].map(
+                (q) =>
+                  q && (
+                    <li key={q.id}>
+                      <span>
+                        {itemName(q.id)} {q.charges}/{q.max}
+                      </span>
+                      {onUnequip && (
+                        <button
+                          type="button"
+                          className={styles.gearAction}
+                          onClick={() => onUnequip(q.id)}
+                        >
+                          放回背包
+                        </button>
+                      )}
+                    </li>
+                  ),
+              )}
+            </ul>
+          </>
+        )}
+        {inventory.clothing.length > 0 && (
+          <>
+            <p className={styles.gearTitle}>穿着</p>
+            <ul className={styles.backpack}>
+              {inventory.clothing.map((c) => (
+                <li key={c.slot}>
+                  <span>
+                    <small className={styles.dim}>{c.label}</small> {itemName(c.id)}
+                  </span>
+                  {onUnequip && (
+                    <button
+                      type="button"
+                      className={styles.gearAction}
+                      onClick={() => onUnequip(c.id)}
+                    >
+                      脱下
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <p className={styles.gearTitle}>背包</p>
         {backpack.length === 0 ? (
           <p className={styles.dim}>空的。</p>
         ) : (
           <ul className={styles.backpack}>
-            {backpack.map(([id, count]) => (
-              <li key={id}>
-                <span>{itemName(id)}</span>
-                {count > 1 && <b>×{count}</b>}
-              </li>
-            ))}
+            {backpack.map(([id, count]) => {
+              const to = inventory.equipTo[id];
+              return (
+                <li key={id}>
+                  <span>
+                    {itemName(id)}
+                    {count > 1 && <b> ×{count}</b>}
+                  </span>
+                  {to && onEquip && (
+                    <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
+                      {to === "clothing" ? "穿上" : to === "quick" ? "放进快捷栏" : "装上"}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
         {view.shops.map((shop) => (

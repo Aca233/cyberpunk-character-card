@@ -20,6 +20,7 @@ export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInte
     grenade: null,
     backpack: {},
     depleted: {},
+    clothing: {},
   }),
   commands: { item: ItemCommandSchema },
   internal: InventoryInternalSchemas,

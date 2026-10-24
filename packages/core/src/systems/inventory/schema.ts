@@ -21,6 +21,19 @@ export const ITEM_KIND_LABELS: Readonly<Record<ItemKind, string>> = {
   misc: "杂物",
 };
 
+/** 服装的 6 格，照原作；服装只影响身份和伪装，不提供护甲 */
+export const ClothingSlotSchema = z.enum(["head", "face", "outer", "inner", "legs", "feet"]);
+export type ClothingSlot = z.infer<typeof ClothingSlotSchema>;
+
+export const CLOTHING_SLOT_LABELS: Readonly<Record<ClothingSlot, string>> = {
+  head: "头部",
+  face: "面部",
+  outer: "外套",
+  inner: "内衣",
+  legs: "腿部",
+  feet: "鞋子",
+};
+
 /** 武器类别，按原作 */
 export const WeaponCategorySchema = z.enum([
   "pistol",
@@ -102,6 +115,8 @@ export const ItemDefSchema = z
     category: WeaponCategorySchema.optional(),
     /** 远程武器的类型；近战武器不写 */
     weaponType: WeaponTypeSchema.optional(),
+    /** 服装穿在哪一格；服装必须写 */
+    clothingSlot: ClothingSlotSchema.optional(),
     /** 拿着它角色真的能做到什么；写给模型 */
     ability: z.string().min(1).optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
@@ -123,6 +138,9 @@ export const ItemDefSchema = z
     } else if (item.category !== undefined || item.weaponType !== undefined) {
       report("只有武器才写类别和类型");
     }
+    if (item.kind === "clothing" && item.clothingSlot === undefined)
+      report("服装必须写明穿在哪一格");
+    if (item.kind !== "clothing" && item.clothingSlot !== undefined) report("只有服装才写格子");
     if ((item.kind === "healing" || item.kind === "grenade") && item.charges === undefined) {
       report("治疗品和手雷必须写明使用次数");
     }
@@ -151,6 +169,8 @@ export const InventoryStateSchema = z.object({
   backpack: z.record(z.string(), z.number().int().min(1)),
   /** 从快捷栏卸下时还没恢复的次数，防止换装刷次数 */
   depleted: z.record(z.string(), z.number().int().min(0)),
+  /** 身上穿着的服装：格子 → 物品 id */
+  clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 

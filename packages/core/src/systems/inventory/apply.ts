@@ -1,6 +1,8 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import {
+  CLOTHING_SLOT_LABELS,
+  type ClothingSlot,
   type InventoryState,
   ItemCatalogSchema,
   type ItemCommand,
@@ -103,13 +105,18 @@ function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
     draft[quick] = null;
     return ok(`失去 ${def.name}`);
   }
+  if (def.clothingSlot && draft.clothing[def.clothingSlot] === def.id) {
+    Reflect.deleteProperty(draft.clothing, def.clothingSlot);
+    return ok(`失去 ${def.name}`);
+  }
   return fail(`身上没有 ${def.name}`);
 }
 
 function equip(draft: Inventory, def: ItemDef, slot: number | undefined): ApplyOutcome {
   const quick = quickSlotFor(def.kind);
   if (quick) return equipQuick(draft, def, quick);
-  if (def.kind !== "weapon") return fail(`${def.name} 不能装到装备栏（服装栏在 M2a 加入）`);
+  if (def.clothingSlot) return wear(draft, def, def.clothingSlot);
+  if (def.kind !== "weapon") return fail(`${def.name} 不能装到装备栏`);
 
   const target = slot === undefined ? undefined : slot - 1;
   const current = draft.weapons.indexOf(def.id);
@@ -140,6 +147,18 @@ function equip(draft: Inventory, def: ItemDef, slot: number | undefined): ApplyO
   );
 }
 
+/** 穿上一件服装：同一格的旧衣服放回背包 */
+function wear(draft: Inventory, def: ItemDef, slot: ClothingSlot): ApplyOutcome {
+  if (draft.clothing[slot] === def.id) return fail(`${def.name} 已经穿着了`);
+  if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
+  const old = draft.clothing[slot];
+  if (old !== undefined) put(draft, old);
+  draft.clothing[slot] = def.id;
+  return ok(
+    `穿上 ${def.name}（${CLOTHING_SLOT_LABELS[slot]}）${old === undefined ? "" : "，换下的放回背包"}`,
+  );
+}
+
 function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyOutcome {
   if (draft[slot]?.id === def.id) return fail(`${def.name} 已经在快捷栏`);
   if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
@@ -163,6 +182,11 @@ function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
   if (quick && draft[quick]?.id === def.id) {
     stow(draft, quick);
     return ok(`${def.name} 放回背包`);
+  }
+  if (def.clothingSlot && draft.clothing[def.clothingSlot] === def.id) {
+    Reflect.deleteProperty(draft.clothing, def.clothingSlot);
+    put(draft, def.id);
+    return ok(`脱下 ${def.name}，放回背包`);
   }
   return fail(`没有装备 ${def.name}`);
 }
