@@ -69,5 +69,46 @@ export const CheckSpecSchema = z.object({
 });
 export type CheckSpec = z.infer<typeof CheckSpecSchema>;
 
+/** 上下沿：low 取对手档位的下限（偏容易），high 取上限（偏难） */
+export const EdgeSchema = z.enum(["low", "high"]);
+export type Edge = z.infer<typeof EdgeSchema>;
+
+/** 难度值的基础值：对手档位加上下沿查表 */
+export function baseDv(tier: Tier, edge: Edge): number {
+  return OPPONENT_TIERS[tier].dv[edge === "low" ? 0 : 1];
+}
+
+/** 叙事模型提出的 check：只写对手档位和上下沿，不写难度值；代码查表换成存档里的 CheckSpec */
+export const CheckProposalSchema = CheckSpecSchema.omit({ dv: true })
+  .extend({
+    edge: EdgeSchema.describe("low 档位下沿（偏容易），high 上沿（偏难）；难度值由代码查表"),
+  })
+  .transform(({ edge, ...rest }): CheckSpec => ({ ...rest, dv: baseDv(rest.tier, edge) }));
+
+/**
+ * 模型仍写了数字难度值时：换成最近的上下沿（一样近取下沿），数字不用；
+ * 已经写了 edge 就只去掉数字。返回换过的对象和一句提示，没写数字时提示为 undefined
+ */
+export function legacyDvToEdge(raw: unknown): {
+  readonly value: unknown;
+  readonly note: string | undefined;
+} {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw) || !("dv" in raw)) {
+    return { value: raw, note: undefined };
+  }
+  const { dv, ...rest } = raw as Record<string, unknown>;
+  if (rest.edge !== undefined) {
+    return { value: rest, note: "检定写了难度值数字，按写的上下沿处理，数字不用" };
+  }
+  const tier = TierSchema.safeParse(rest.tier);
+  if (typeof dv !== "number" || !tier.success) return { value: raw, note: undefined };
+  const [low, high] = OPPONENT_TIERS[tier.data].dv;
+  const edge: Edge = Math.abs(dv - low) <= Math.abs(dv - high) ? "low" : "high";
+  return {
+    value: { ...rest, edge },
+    note: `检定写了难度值数字，已按最近的${edge === "low" ? "下沿" : "上沿"}处理`,
+  };
+}
+
 export const DiceStateSchema = z.object({ mode: DifficultySchema });
 export type DiceState = z.infer<typeof DiceStateSchema>;

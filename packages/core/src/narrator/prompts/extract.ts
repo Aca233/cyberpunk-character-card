@@ -43,7 +43,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 一场戏收尾、换地点或跳过一段时间时写 "sceneEnd": true；这一轮很重要、以后要记住时写 "pin": true。`;
 
 /** ④ 抽取的例子 */
-export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14", "location": "kabuki-market"}], "choices": [{"text": "坐到他旁边，点一碗面"}, {"text": "装作路过，翻上棚顶继续盯着", "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "dv": 11, "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
+export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14", "location": "kabuki-market"}], "choices": [{"text": "坐到他旁边，点一碗面"}, {"text": "装作路过，翻上棚顶继续盯着", "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
 let extractCore: string | undefined;
 

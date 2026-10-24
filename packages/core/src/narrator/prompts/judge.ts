@@ -26,7 +26,7 @@ import { BASE_RULES, systemMessage, userMessage } from "./layers";
 export const JUDGE_TEMPERATURE = 0.3;
 
 const tiers = Object.entries(OPPONENT_TIERS)
-  .map(([id, t]) => `${id}（${t.label}）${t.dv[0]}–${t.dv[1]}`)
+  .map(([id, t]) => `${id}（${t.label}）`)
   .join("，");
 
 const attributes = Object.entries(ATTRIBUTE_LABELS)
@@ -49,7 +49,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 2. 门槛：属性达标直接成功，不掷骰，写在 gate。门槛前期 4–8，中期 9–14，后期 15–20。
 3. 只有结果真不确定、失败有意义的后果、成败都能让故事继续时才给 check，写清 success 和 failure。合理的办法直接成功，不给 check；不可能的事也不给 check，后面一步会让世界拒绝。
 - 属性：${attributes}。
-- 难度值的基础值按对手档位给：${tiers}；没有对手的环境风险（攀爬、追车路况、恶劣天气）按同一张表选相当的档位。
+- 难度按对手档位 tier 给：${tiers}；没有对手的环境风险（攀爬、追车路况、恶劣天气）按同一张表选相当的档位。再选 edge：low 是这一档里偏容易的，high 是偏难的。难度值由代码查表，你不写数字。
 - 加成 bonuses（本事、义体、物品、人物、准备，每项 +2）合计最多 +${BONUS_CAP}；减值 penalties（伤势、恶劣环境）合计最多 −${PENALTY_CAP}；基础值之上的难度修正 dvMods 合计最多 +${DV_MOD_CAP}。代码统一截断。聪明的计划、充分的准备、利用人物关系和环境，可以免检定、降低难度值或获得加成。
 - 加成的来源必须在【当前状态】里找得到：没装的义体、没有的物品、不认识的人不算。
 - 失败可能受伤时在 check 写 damage（graze 擦伤、heavy 重击、lethal 致命）；只有写了 lethal 才可能死，不写 damage 失败就不扣血。
@@ -59,7 +59,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - recall 只能从【可调的旧记忆】里原样抄标题，抄错的会被丢掉；没有列出、或这一轮用不上时写 []。`;
 
 /** ① 判断的例子 */
-export const JUDGE_EXAMPLE = `{"read": "你想不被发现地翻上棚顶，继续盯着那个中间人", "ooc": false, "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "dv": 11, "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}, "gate": null, "recall": []}`;
+export const JUDGE_EXAMPLE = `{"read": "你想不被发现地翻上棚顶，继续盯着那个中间人", "ooc": false, "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}, "gate": null, "recall": []}`;
 
 let output: string | undefined;
 

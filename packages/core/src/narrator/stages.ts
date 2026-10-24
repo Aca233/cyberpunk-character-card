@@ -3,7 +3,7 @@ import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CharacterStateSchema, effectiveAttribute } from "../systems/character/schema";
-import { ATTRIBUTE_LABELS, CheckSpecSchema } from "../systems/dice";
+import { ATTRIBUTE_LABELS, CheckProposalSchema } from "../systems/dice";
 import { type Gate, GateSchema } from "./block";
 
 /**
@@ -20,7 +20,7 @@ export const JudgeDocSchema = z.object({
   ooc: z
     .boolean()
     .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
-  check: CheckSpecSchema.nullable().describe("结果真不确定、需要掷骰时给出；不需要时写 null"),
+  check: CheckProposalSchema.nullable().describe("结果真不确定、需要掷骰时给出；不需要时写 null"),
   gate: GateSchema.nullable().describe("属性达标就直接成功的门槛；没有写 null"),
   recall: z
     .array(z.string())

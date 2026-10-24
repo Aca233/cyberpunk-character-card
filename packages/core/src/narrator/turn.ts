@@ -19,7 +19,12 @@ import {
 } from "../systems/character";
 import { CombatStateSchema, MAX_QUICK } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
-import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
+import {
+  CheckProposalSchema,
+  type CheckSpec,
+  checkFactFrom,
+  legacyDvToEdge,
+} from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { HealthStateSchema } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
@@ -29,7 +34,7 @@ import { registry } from "../systems/registry";
 import { WorldClockStateSchema } from "../systems/world";
 import {
   type Choice,
-  ChoiceSchema,
+  ChoiceProposalSchema,
   ExtractDocSchema,
   type ExtractShape,
   GateSchema,
@@ -84,6 +89,22 @@ export interface Dropped {
   readonly reason: string;
   /** format：格式不合格，修过一次仍不行；verify：核对认为正文里没有依据；rules：业务校验没通过 */
   readonly stage: "format" | "verify" | "rules";
+}
+
+/** 同一句提示一轮只记一次 */
+function noteOnce(notes: string[], note: string): void {
+  if (!notes.includes(note)) notes.push(note);
+}
+
+/** 建议选项里的检定仍写了数字难度值时，先换成上下沿再校验 */
+function legacyChoice(item: unknown, notes: string[]): unknown {
+  if (typeof item !== "object" || item === null || Array.isArray(item) || !("check" in item)) {
+    return item;
+  }
+  const legacy = legacyDvToEdge((item as { check: unknown }).check);
+  if (legacy.note === undefined) return item;
+  noteOnce(notes, legacy.note);
+  return { ...item, check: legacy.value };
 }
 
 /** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
@@ -495,7 +516,9 @@ export async function runNarratorTurn(
     if (ooc || inFlashback) {
       b.drop("check", judge.check, ooc ? oocReason : flashbackReason, "rules");
     } else {
-      const spec = await b.validate("check", judge.check, CheckSpecSchema);
+      const legacy = legacyDvToEdge(judge.check);
+      if (legacy.note !== undefined) noteOnce(b.notes, legacy.note);
+      const spec = await b.validate("check", legacy.value, CheckProposalSchema);
       const prepared = spec && prepareFor(world, spec);
       if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
       else check = spec;
@@ -600,7 +623,7 @@ export async function runNarratorTurn(
       b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
       continue;
     }
-    const choice = await b.validate(where, item, ChoiceSchema);
+    const choice = await b.validate(where, legacyChoice(item, b.notes), ChoiceProposalSchema);
     if (!choice) continue;
     // 闪回里不掷骰：选项去掉检定，只留行动
     if (inFlashback && choice.check) {

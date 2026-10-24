@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
+import { AttributeSchema, CheckProposalSchema, CheckSpecSchema } from "../systems/dice/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
@@ -13,21 +13,29 @@ export const GateSchema = z.object({
 });
 export type Gate = z.infer<typeof GateSchema>;
 
-export const ChoiceSchema = z
-  .object({
-    text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
-    gate: GateSchema.optional().describe("门槛判定，属性达标直接成功"),
-    check: CheckSpecSchema.optional().describe("风险掷骰，选中就直接掷"),
-    source: z
-      .string()
-      .trim()
-      .min(1)
-      .max(24)
-      .optional()
-      .describe("专属选项的来源，例如 过往：荒坂前员工、义体：螳螂刀；只有这条路是角色独有的才写"),
-  })
-  .refine((c) => !(c.gate && c.check), "一个选项只能有 gate 或 check 之一");
+const ChoiceBaseSchema = z.object({
+  text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
+  gate: GateSchema.optional().describe("门槛判定，属性达标直接成功"),
+  source: z
+    .string()
+    .trim()
+    .min(1)
+    .max(24)
+    .optional()
+    .describe("专属选项的来源，例如 过往：荒坂前员工、义体：螳螂刀；只有这条路是角色独有的才写"),
+});
+const oneOf = "一个选项只能有 gate 或 check 之一";
+
+/** 存档里的建议选项：check 带查表后的难度值 */
+export const ChoiceSchema = ChoiceBaseSchema.extend({
+  check: CheckSpecSchema.optional().describe("风险掷骰，选中就直接掷"),
+}).refine((c) => !(c.gate && c.check), oneOf);
 export type Choice = z.infer<typeof ChoiceSchema>;
+
+/** 模型提出的建议选项：check 只写档位和上下沿，校验后换成 Choice */
+export const ChoiceProposalSchema = ChoiceBaseSchema.extend({
+  check: CheckProposalSchema.optional().describe("风险掷骰，选中就直接掷"),
+}).refine((c) => !(c.gate && c.check), oneOf);
 
 export const MAX_CHOICES = 5;
 
@@ -56,7 +64,7 @@ export const ExtractDocSchema = z.object({
     .array(z.object({ type: z.string() }))
     .describe("这一轮已经发生的状态变化，按发生顺序，见下方指令；每轮都有一条 world"),
   choices: z
-    .array(ChoiceSchema)
+    .array(ChoiceProposalSchema)
     .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
   voices: z
     .array(VoiceSchema)
