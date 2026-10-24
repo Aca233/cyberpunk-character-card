@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
-import { type Board, BoardSchema, boardBrief, boardIssues } from "./board";
+import {
+  BOARD_SLOT_LABELS,
+  type Board,
+  BoardSchema,
+  boardBrief,
+  boardIssues,
+  boardModules,
+} from "./board";
 import type { BoardStart, SaveCharacter } from "./save";
 
 /** 创建时各项属性从这个值起步 */
@@ -95,10 +102,52 @@ export function loadoutText(card: CharacterCard): { origin: string; past: string
   };
 }
 
-/** 建档时从主板带进存档的东西：开局义体和义体耐受 */
+const UNDECIDED = "还没定：第一次出场时按身份和那段经历定下来，之后一直保持一致";
+
+/** 主板模块带出的人物：过去就认识，外貌和口吻留给第一次出场时定；负面经历带出的人开局有敌意 */
+export function boardPeople(board: Board): BoardStart["people"] {
+  const people: BoardStart["people"] = [];
+  const names = new Set<string>();
+  for (const m of boardModules(board)) {
+    m.people.forEach((p, i) => {
+      if (names.has(p.name)) return;
+      names.add(p.name);
+      const base =
+        m.id
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "m";
+      const flaw = m.slot === "flaw";
+      people.push({
+        id: `board-${base}-${i + 1}`,
+        name: p.name,
+        pronoun: "TA",
+        role: (p.role || `${BOARD_SLOT_LABELS[m.slot]}「${m.label}」里的人`).slice(0, 40),
+        look: UNDECIDED,
+        voice: UNDECIDED,
+        samples: [],
+        want: (
+          `和玩家角色的旧账：${BOARD_SLOT_LABELS[m.slot]}「${m.label}」` +
+          (m.hook ? `——${m.hook}` : m.ability ? `——${m.ability}` : "")
+        ).slice(0, 160),
+        limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
+        canon: false,
+        affinity: flaw ? -10 : 0,
+        met: true,
+      });
+    });
+  }
+  return people;
+}
+
+/** 建档时从主板带进存档的东西：开局义体、义体耐受和模块带出的人物 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
-  return { cyberware: card.board.cyberware.map((c) => c.id), tolerance: card.board.tolerance };
+  return {
+    cyberware: card.board.cyberware.map((c) => c.id),
+    tolerance: card.board.tolerance,
+    people: boardPeople(card.board),
+  };
 }
 
 /** 开档时写进存档的角色快照 */

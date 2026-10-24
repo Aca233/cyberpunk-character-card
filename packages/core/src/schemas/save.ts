@@ -2,15 +2,20 @@ import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
 import { DifficultySchema } from "../systems/dice/schema";
 import { ToleranceSchema } from "../systems/humanity/schema";
+import { SeedNpcSchema } from "../systems/npc/schema";
 
 /** 开档时角色卡的快照：之后改角色卡不影响已有存档 */
 export const SaveCharacterSchema = SetCharacterSchema.omit({ type: true });
 export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 
-/** 建档时从角色主板带进来的：开局义体 id 和义体耐受 */
+/** 建档时从角色主板带进来的：开局义体 id、义体耐受和模块带出的人物卡 */
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
   tolerance: ToleranceSchema.default("normal"),
+  people: z
+    .array(SeedNpcSchema.omit({ type: true }))
+    .max(20)
+    .default([]),
 });
 export type BoardStart = z.infer<typeof BoardStartSchema>;
 

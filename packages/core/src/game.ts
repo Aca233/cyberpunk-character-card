@@ -229,6 +229,9 @@ export function newGameWorld(
     // 耐受要在装任何义体之前写进去，人性消耗才按它折算
     ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
     ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
+    ...(meta.board?.people ?? [])
+      .filter((p) => !(content.npcs ?? []).some((c) => c.id === p.id || c.name === p.name))
+      .map((p) => ({ type: "npc.seed", ...p })),
     ...(content.fixers ?? []).map((f) => ({ type: "jobs.seedFixer", ...f })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),

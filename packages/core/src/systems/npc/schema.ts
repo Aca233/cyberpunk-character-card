@@ -114,9 +114,11 @@ export type NpcDeath = z.infer<typeof NpcDeathSchema>;
 
 export type NpcCommand = NewNpc | Meet | Affinity | Memory | NpcDeath;
 
-/** 只能由代码发出：新存档放进原作人物卡，开局好感按卡上写的 */
+/** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
 export const SeedNpcSchema = NpcCardSchema.extend({
   type: z.literal("npc.seed"),
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX).default(0),
+  /** 主板带出的人物是角色过去就认识的 */
+  met: z.boolean().default(false),
 });
 export type SeedNpc = z.infer<typeof SeedNpcSchema>;

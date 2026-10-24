@@ -25,13 +25,13 @@ function nameTaken(state: Draft<NpcState>, name: string, alias?: string): Npc | 
 }
 
 export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome {
-  const { type: _type, affinity, ...card } = command;
+  const { type: _type, affinity, met, ...card } = command;
   if (draft.npcs[card.id]) return { ok: false, reason: `人物 ${card.id} 已经有卡了` };
   draft.npcs[card.id] = {
     ...card,
     affinity,
     alive: true,
-    met: false,
+    met,
     location: card.home ?? null,
     lastSeenAt: null,
     memories: [],
