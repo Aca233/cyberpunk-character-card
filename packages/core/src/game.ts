@@ -20,11 +20,17 @@ import {
   effectiveAttributes,
 } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
-import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./systems/cyberware/apply";
+import {
+  cyberwareCatalog,
+  ripperdocList,
+  ripperdocShelf,
+  tradeInValue,
+} from "./systems/cyberware/apply";
 import {
   type CyberwareDef,
   type CyberwareSlot,
   CyberwareStateSchema,
+  type RipperdocDebt,
   SLOT_LABELS,
 } from "./systems/cyberware/schema";
 import {
@@ -282,15 +288,28 @@ function ripperdocView(
   streetCred: number,
   installed: readonly { readonly id: string; readonly slot: CyberwareSlot }[],
   parts: ReadonlyMap<string, CyberwareDef>,
+  debts: readonly RipperdocDebt[],
 ) {
   const doc =
     location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
   if (!doc) return null;
+  const debt = debts.find((d) => d.doc === doc.id);
   return {
     id: doc.id,
     name: doc.name,
     note: doc.note,
     blackMarket: doc.blackMarket,
+    /** 最多肯赊多少；0 是不赊账 */
+    credit: doc.credit,
+    /** 欠这位医生的钱 */
+    debt: debt ? { amount: debt.amount, due: formatGameTime(debt.due) } : null,
+    /** 卸下装着的义体时回收多少，按义体 id */
+    buyback: Object.fromEntries(
+      installed.map((c) => {
+        const def = parts.get(c.id);
+        return [c.id, def ? tradeInValue(def) : 0];
+      }),
+    ) as Readonly<Record<string, number>>,
     shelf: ripperdocShelf(doc, parts, streetCred, installed).map((item) => ({
       id: item.def.id,
       name: item.def.name,
@@ -299,6 +318,8 @@ function ripperdocView(
       rarity: item.def.rarity,
       rarityLabel: RARITY_LABELS[item.def.rarity],
       price: item.price,
+      tradeIn: item.tradeIn,
+      net: item.net,
       humanityCost: item.def.humanityCost,
       ability: item.def.ability,
       bonusText: bonusText(item.def),
@@ -462,7 +483,7 @@ export function projectState(
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
-  const installed = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+  const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   // 旧快照里没有热度系统
   const heat = world.slices.heat === undefined ? null : HeatStateSchema.parse(world.slices.heat);
   const parts = cyberwareCatalog(data);
@@ -543,7 +564,13 @@ export function projectState(
       };
     }),
     /** 当前地点开着的义体医生；不在诊所时是 null */
-    ripperdoc: ripperdocView(data, clock.location, character.streetCred, installed, parts),
+    ripperdoc: ripperdocView(data, clock.location, character.streetCred, installed, parts, debts),
+    /** 欠义体医生的钱 */
+    ripperdocDebts: debts.map((d) => ({
+      docName: d.docName,
+      amount: d.amount,
+      due: formatGameTime(d.due),
+    })),
     combat: {
       active: active && {
         /** 第几次交锋，从 1 起 */

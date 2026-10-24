@@ -269,6 +269,10 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `义体医生：${view.ripperdoc.name}在这里（${view.ripperdoc.note}）；玩家可以在界面上直接买、卸义体，代码按货架价结算，你只写场面${view.ripperdoc.blackMarket ? "。这是黑市货，装上的东西可能有故障或追踪器，可以在剧情里兑现" : ""}`,
     );
+  if (view.ripperdocDebts.length > 0)
+    lines.push(
+      `欠义体医生的钱：${view.ripperdocDebts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 money。到期没还，医生会派人来催或上门`,
+    );
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   lines.push(`武器栏：${weapons.length > 0 ? weapons.join("、") : "空手"}`);
   if (view.inventory.healing)

@@ -1363,6 +1363,17 @@
   margin: 0;
 }
 
+.docDebt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--cp-red);
+  color: var(--cp-red);
+}
+
 .docBody {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));

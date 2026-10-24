@@ -149,14 +149,19 @@ export function StoryScreen() {
 
   // 义体医生那里买、卸义体：不调用模型；失败时提示原因，确认框留着
   const cyberAction = useCallback(
-    async (type: "buyCyberware" | "removeCyberware", id: string) => {
+    async (
+      action:
+        | { type: "buyCyberware"; id: string; credit: boolean }
+        | { type: "removeCyberware"; id: string }
+        | { type: "repayRipperdoc" },
+    ) => {
       const doc = view?.ripperdoc;
       if (!doc) return;
       try {
         await api.action(saveId, {
           requestId: newRequestId(),
           baseVersion: version,
-          action: { type, doc: doc.id, id },
+          action: { ...action, doc: doc.id },
         });
       } catch (error) {
         warn("ripperdoc", error);
@@ -380,8 +385,11 @@ export function StoryScreen() {
         <Ripperdoc
           view={view}
           doc={view.ripperdoc}
-          onBuy={busy ? undefined : (id) => cyberAction("buyCyberware", id)}
-          onRemove={busy ? undefined : (id) => cyberAction("removeCyberware", id)}
+          onBuy={
+            busy ? undefined : (id, credit) => cyberAction({ type: "buyCyberware", id, credit })
+          }
+          onRemove={busy ? undefined : (id) => cyberAction({ type: "removeCyberware", id })}
+          onRepay={busy ? undefined : () => cyberAction({ type: "repayRipperdoc" })}
           onClose={() => setAtDoc(false)}
         />
       )}

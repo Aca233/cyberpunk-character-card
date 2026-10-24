@@ -69,9 +69,27 @@ export const RipperdocSchema = z.object({
   shelf: z.array(z.string().min(1)).min(1),
   /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
   credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
+  /** 最多肯赊多少欧元；0 是不赊账 */
+  credit: z.number().int().min(0).max(100_000).default(0),
 });
 export type Ripperdoc = z.infer<typeof RipperdocSchema>;
 export const RipperdocListSchema = z.array(RipperdocSchema);
+
+/** 旧件折价回收：最多按参考价的两成，防低买高卖 */
+export const TRADE_IN_RATE = 0.2;
+/** 赊账几天内还清 */
+export const DEBT_DAYS = 7;
+
+/** 欠义体医生的钱：一位医生同时只赊一笔，期限记在“期限与伏笔”里 */
+export const RipperdocDebtSchema = z.object({
+  doc: z.string().min(1),
+  docName: z.string().min(1),
+  amount: z.number().int().min(1),
+  due: z.number().int(),
+  /** 对应的期限 id */
+  deadline: z.string().min(1),
+});
+export type RipperdocDebt = z.infer<typeof RipperdocDebtSchema>;
 
 export const CyberwareStateSchema = z.object({
   installed: z
@@ -86,6 +104,7 @@ export const CyberwareStateSchema = z.object({
     .default([]),
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()).default([]),
+  debts: z.array(RipperdocDebtSchema).default([]),
 });
 export type CyberwareState = z.infer<typeof CyberwareStateSchema>;
 
@@ -112,3 +131,16 @@ export const InstallCyberwareSchema = z.object({
   id: z.string().min(1),
 });
 export type InstallCyberware = z.infer<typeof InstallCyberwareSchema>;
+
+/** 只能由代码发出：在义体医生那里赊账（add）或还清（repay） */
+export const RipperdocDebtCommandSchema = z.object({
+  type: z.literal("cyberware.debt"),
+  action: z.enum(["add", "repay"]),
+  doc: z.string().min(1),
+  docName: z.string().min(1),
+  /** add 时赊多少 */
+  amount: z.number().int().min(1).optional(),
+  /** add 时赊的是哪件义体的尾款 */
+  item: z.string().min(1).optional(),
+});
+export type RipperdocDebtCommand = z.infer<typeof RipperdocDebtCommandSchema>;

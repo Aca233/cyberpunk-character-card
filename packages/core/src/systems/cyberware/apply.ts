@@ -7,9 +7,12 @@ import {
   type CyberwareCommand,
   type CyberwareDef,
   type CyberwareState,
+  DEBT_DAYS,
   type Ripperdoc,
+  type RipperdocDebtCommand,
   RipperdocListSchema,
   SLOT_LABELS,
+  TRADE_IN_RATE,
 } from "./schema";
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, CyberwareDef>>();
@@ -44,10 +47,19 @@ export function ripperdocList(data: Readonly<Record<string, unknown>>): readonly
   return list;
 }
 
+/** 医生回收一件旧义体给多少：参考价的两成，舍到百位；不朽义体不回收 */
+export function tradeInValue(def: CyberwareDef): number {
+  return def.iconic ? 0 : Math.floor((def.price * TRADE_IN_RATE) / 100) * 100;
+}
+
 /** 货架上的一件：价格按医生的系数折算到百位；locked 是不卖的原因 */
 export interface ShelfItem {
   readonly def: CyberwareDef;
   readonly price: number;
+  /** 换下的旧件抵掉多少 */
+  readonly tradeIn: number;
+  /** 抵完旧件实际要付的 */
+  readonly net: number;
   readonly locked: string | null;
   readonly installed: boolean;
   /** 同一部位已经装着、装上会换下来的那件 */
@@ -70,13 +82,18 @@ export function ripperdocShelf(
         ? `街头声望 ${gate} 级才肯卖`
         : null;
     const old = installed.find((c) => c.slot === def.slot && c.id !== id);
+    const replaces = old ? (catalog.get(old.id) ?? null) : null;
+    const price = Math.round((def.price * doc.priceFactor) / 100) * 100;
+    const tradeIn = replaces ? Math.min(price, tradeInValue(replaces)) : 0;
     return [
       {
         def,
-        price: Math.round((def.price * doc.priceFactor) / 100) * 100,
+        price,
+        tradeIn,
+        net: price - tradeIn,
         locked,
         installed: installed.some((c) => c.id === id),
-        replaces: old ? (catalog.get(old.id) ?? null) : null,
+        replaces,
       },
     ];
   });
@@ -192,4 +209,47 @@ export function applyCyberware(
       : remove(draft, command.id, catalog);
   if (outcome.ok && command.event !== undefined) draft.settled.push(command.event);
   return outcome;
+}
+
+/** 赊账和还钱：赊账记一条期限，还清时把期限标成办完 */
+export function applyDebt(
+  draft: Draft<CyberwareState>,
+  command: RipperdocDebtCommand,
+  now: number,
+): ApplyOutcome {
+  const i = draft.debts.findIndex((d) => d.doc === command.doc);
+  if (command.action === "repay") {
+    const debt = draft.debts[i];
+    if (!debt) return { ok: false, reason: `不欠${command.docName}的钱` };
+    draft.debts.splice(i, 1);
+    return {
+      ok: true,
+      notes: [`还清欠${debt.docName}的 ${debt.amount} 欧元`],
+      emit: [{ type: "deadline", action: "handle", id: debt.deadline }],
+    };
+  }
+  if (i >= 0) return { ok: false, reason: `还欠着${command.docName}的钱，先还清` };
+  if (command.amount === undefined) return { ok: false, reason: "赊账要写金额" };
+  const due = now + DEBT_DAYS * 24 * 60;
+  const deadline = `ripperdoc-debt-${command.doc}-${now}`;
+  draft.debts.push({
+    doc: command.doc,
+    docName: command.docName,
+    amount: command.amount,
+    due,
+    deadline,
+  });
+  return {
+    ok: true,
+    notes: [`向${command.docName}赊了 ${command.amount} 欧元，${DEBT_DAYS} 天内还清`],
+    emit: [
+      {
+        type: "deadline",
+        action: "add",
+        id: deadline,
+        label: `还${command.docName} ${command.amount} 欧元${command.item ? `（${command.item}的尾款）` : ""}，到期不还他会找上门`,
+        due,
+      },
+    ],
+  };
 }

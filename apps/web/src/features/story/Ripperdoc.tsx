@@ -22,18 +22,25 @@ export function Ripperdoc({
   doc,
   onBuy,
   onRemove,
+  onRepay,
   onClose,
 }: {
   readonly view: View;
   readonly doc: Doc;
-  /** 正在生成时不传，按钮不能点 */
-  readonly onBuy?: ((id: string) => Promise<void>) | undefined;
+  /** 正在生成时不传，按钮不能点；credit 是钱不够时赊账 */
+  readonly onBuy?: ((id: string, credit: boolean) => Promise<void>) | undefined;
   readonly onRemove?: ((id: string) => Promise<void>) | undefined;
+  readonly onRepay?: (() => Promise<void>) | undefined;
   readonly onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState<Item | null>(null);
   const [working, setWorking] = useState(false);
   const eddies = view.money.eddies;
+  const money = (n: number) => n.toLocaleString("en-US");
+  /** 钱不够时这位医生肯不肯赊：肯赊、没有旧账、差额在额度内 */
+  const creditable = (item: Item) =>
+    doc.credit > 0 && doc.debt === null && item.net - eddies <= doc.credit;
+  const owed = confirming ? Math.max(0, confirming.net - eddies) : 0;
 
   // 确认框开着时 Esc 只关确认框
   useEffect(() => {
@@ -66,10 +73,30 @@ export function Ripperdoc({
               {doc.blackMarket && "。黑市货便宜，但来路不明，可能有故障或追踪器。"}
             </p>
             <span>
-              身上 <b>{eddies.toLocaleString("en-US")}</b> 欧元
+              身上 <b>{money(eddies)}</b> 欧元
             </span>
             <Button onClick={onClose}>离开</Button>
           </div>
+          {doc.debt ? (
+            <div className={styles.docDebt} role="status">
+              <span>
+                欠{doc.name} <b>{money(doc.debt.amount)}</b> 欧元，{doc.debt.due} 前还清
+              </span>
+              <Button
+                disabled={!onRepay || working || doc.debt.amount > eddies}
+                reason={doc.debt.amount > eddies ? "欧元不够" : undefined}
+                onClick={() => onRepay && void run(onRepay)}
+              >
+                还清
+              </Button>
+            </div>
+          ) : (
+            doc.credit > 0 && (
+              <p className={`${styles.dim} ${styles.docNote}`}>
+                钱不够时肯赊账，最多 {money(doc.credit)} 欧元，7 天内还清。
+              </p>
+            )
+          )}
 
           <div className={styles.docBody}>
             {view.cyberware.length > 0 && (
@@ -85,7 +112,9 @@ export function Ripperdoc({
                           disabled={!onRemove || working}
                           onClick={() => onRemove && void run(() => onRemove(c.id))}
                         >
-                          卸下
+                          {doc.buyback[c.id]
+                            ? `卸下（回收 ${money(doc.buyback[c.id] ?? 0)}）`
+                            : "卸下"}
                         </Button>
                       </div>
                     </li>
@@ -98,7 +127,8 @@ export function Ripperdoc({
                 <h3 className={styles.docGroup}>{slot}</h3>
                 <ul className={styles.docList}>
                   {items.map((item) => {
-                    const short = item.price > eddies;
+                    const short = item.net > eddies;
+                    const credit = short && creditable(item);
                     return (
                       <li
                         key={item.id}
@@ -111,17 +141,29 @@ export function Ripperdoc({
                             {item.rarityLabel} · 人性上限 −{item.humanityCost}
                           </small>
                           <span className={styles.docPrice} data-short={short || undefined}>
-                            {item.price.toLocaleString("en-US")} 欧元
+                            {money(item.net)} 欧元
+                            {item.tradeIn > 0 && (
+                              <small className={styles.dim}>（旧件抵 {money(item.tradeIn)}）</small>
+                            )}
                           </span>
                           {item.installed ? (
                             <small className={styles.dim}>装着</small>
                           ) : (
                             <Button
-                              disabled={!onBuy || working || item.locked !== null || short}
-                              reason={item.locked ?? (short ? "欧元不够" : undefined)}
+                              disabled={
+                                !onBuy || working || item.locked !== null || (short && !credit)
+                              }
+                              reason={
+                                item.locked ??
+                                (short && !credit
+                                  ? doc.debt
+                                    ? "欧元不够，旧账没还清不再赊"
+                                    : "欧元不够"
+                                  : undefined)
+                              }
                               onClick={() => setConfirming(item)}
                             >
-                              装上
+                              {credit ? "赊账装上" : "装上"}
                             </Button>
                           )}
                         </div>
@@ -150,9 +192,13 @@ export function Ripperdoc({
               <Button
                 primary
                 disabled={working || !onBuy}
-                onClick={() => onBuy && void run(() => onBuy(confirming.id))}
+                onClick={() => onBuy && void run(() => onBuy(confirming.id, owed > 0))}
               >
-                {working ? "装着呢…" : `付 ${confirming.price.toLocaleString("en-US")} 欧元`}
+                {working
+                  ? "装着呢…"
+                  : owed > 0
+                    ? `付 ${money(eddies)}，赊 ${money(owed)}`
+                    : `付 ${money(confirming.net)} 欧元`}
               </Button>
               <Button onClick={() => setConfirming(null)}>再想想</Button>
             </>
@@ -161,9 +207,17 @@ export function Ripperdoc({
           <p>
             {confirming.slotLabel} · {confirming.rarityLabel}，人性上限 −{confirming.humanityCost}
             {confirming.bonusText && `，${confirming.bonusText}`}
-            {confirming.replaces && `；会换下${confirming.replaces}（不折价回收）`}。
+            {confirming.replaces &&
+              `；会换下${confirming.replaces}${confirming.tradeIn > 0 ? `，${doc.name}折价抵 ${money(confirming.tradeIn)} 欧元` : ""}`}
+            。
           </p>
           <p>{confirming.ability}</p>
+          {owed > 0 && (
+            <p className={styles.docLocked}>
+              身上的 {money(eddies)} 欧元全付掉，剩下 {money(owed)} 欧元赊着，7 天内还清；到期不还
+              {doc.name}会找上门。
+            </p>
+          )}
         </Dialog>
       )}
     </div>
