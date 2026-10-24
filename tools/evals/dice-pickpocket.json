@@ -35,8 +35,10 @@
     "text": "趁他看手机，悄悄摸过去把他腰上的门禁卡顺走"
   },
   "expect": {
-    "check": "required",
-    "commands": {
+    "judge": {
+      "check": "required"
+    },
+    "verify": {
       "forbid": ["damage", "item.gain"]
     }
   },

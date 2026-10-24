@@ -23,7 +23,10 @@
     "text": "如果我想黑进这栋楼的监控，大概要检定吗？难度多少？"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden",
+      "ooc": true
+    },
     "maxChars": 200,
     "text": {
       "forbid": ["难度值?\\s*(是|为|大概|约)?\\s*\\d+", "DV\\s*\\d+"]

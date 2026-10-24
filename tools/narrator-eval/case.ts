@@ -90,18 +90,45 @@ export const EvalCaseSchema = z
       .optional(),
     /** 这一轮结算里用到的骰子（例如战斗），按顺序给出；不写时用固定种子 */
     dice: z.array(z.number().int().min(1)).optional(),
+    /** 只测记账：这一轮的正文由用例写死，判断和写正文不调模型，只有抽取和核对调辅助模型 */
+    narrative: z.string().min(1).optional(),
+    /** 和 narrative 一起用：判断那一步的固定结果，不写时按“不检定、不调记忆”处理 */
+    judged: z.record(z.string(), z.unknown()).optional(),
     expect: z
       .strictObject({
-        /** required：这一轮必须给出待确认的检定；forbidden：不能给 */
-        check: z.enum(["required", "forbidden", "optional"]).default("optional"),
-        /** 指令按 type 或 type.action 匹配，例如 damage、combat.start、item.gain */
-        commands: MatchSchema.prefault({}),
+        /** ① 判断 */
+        judge: z
+          .strictObject({
+            /** required：这一轮必须给出待确认的检定；forbidden：不能给 */
+            check: z.enum(["required", "forbidden", "optional"]).default("optional"),
+            /** 判断认为是场外提问 */
+            ooc: z.boolean().optional(),
+            /** 意图（read）里必须出现 / 不能出现的内容（正则） */
+            read: MatchSchema.prefault({}),
+          })
+          .prefault({}),
+        /** ④ 抽取提了什么（核对和校验之前），按 type 或 type.action 匹配；require 没提是漏抽，forbid 提了是误抽 */
+        extract: MatchSchema.prefault({}),
+        /** ⑤ 核对和代码校验之后真正生效的指令 */
+        verify: MatchSchema.prefault({}),
+        /** 旧写法：等于 judge.check */
+        check: z.enum(["required", "forbidden", "optional"]).optional(),
+        /** 旧写法：等于 verify */
+        commands: MatchSchema.optional(),
         modules: MatchSchema.prefault({}),
         /** 正文里必须出现 / 不能出现的内容（正则） */
         text: MatchSchema.prefault({}),
         maxChars: z.number().int().min(1).optional(),
       })
-      .prefault({}),
+      .prefault({})
+      .transform(({ check, commands, ...rest }) => ({
+        ...rest,
+        judge: { ...rest.judge, check: check ?? rest.judge.check },
+        verify: {
+          require: [...rest.verify.require, ...(commands?.require ?? [])],
+          forbid: [...rest.verify.forbid, ...(commands?.forbid ?? [])],
+        },
+      })),
     /** 评分模型按条打 1–5 分 */
     rubric: z.array(z.string().min(1)).default([]),
     /** 存为用例时模型当时的回复，只供补期望时参考 */
@@ -110,6 +137,14 @@ export const EvalCaseSchema = z
   .refine(
     (c) => (c.input === undefined) !== (c.confirm === undefined),
     "input 和 confirm 要有且只有一个",
+  )
+  .refine(
+    (c) => c.judged === undefined || c.narrative !== undefined,
+    "judged 要和 narrative 一起写",
+  )
+  .refine(
+    (c) => c.narrative === undefined || c.input !== undefined,
+    "只测记账的用例要写 input（确认检定的轮次另做）",
   );
 export type EvalCase = z.infer<typeof EvalCaseSchema>;
 

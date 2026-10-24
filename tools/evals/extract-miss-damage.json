@@ -1,0 +1,45 @@
+{
+  "id": "extract-miss-damage",
+  "title": "没检定却写了挨打：抽取要提 damage，代码按没掷骰拦下",
+  "tags": ["extract"],
+  "setup": {
+    "commands": [
+      {
+        "type": "money",
+        "delta": 500,
+        "reason": "开局的积蓄"
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "趁他不注意抢过他腰上的枪"
+  },
+  "narrative": "你的手刚碰到枪柄，对方的手肘就砸了回来，正中你的脸。鼻梁一声闷响，血顺着嘴唇流下来，你踉跄着退了两步，扶住吧台才没倒下。他把枪拔出来，枪口指着你的胸口：“再动一下试试。”",
+  "expect": {
+    "extract": {
+      "require": ["damage"]
+    },
+    "verify": {
+      "forbid": ["damage"]
+    }
+  },
+  "judged": {
+    "read": "你想趁他不注意抢枪",
+    "check": null
+  }
+}

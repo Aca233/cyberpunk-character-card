@@ -23,8 +23,10 @@
     "text": "“老板，来杯啤酒。”"
   },
   "expect": {
-    "check": "forbidden",
-    "commands": {
+    "judge": {
+      "check": "forbidden"
+    },
+    "verify": {
       "forbid": ["damage", "humanity"]
     },
     "maxChars": 500

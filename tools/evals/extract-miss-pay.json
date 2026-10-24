@@ -1,0 +1,41 @@
+{
+  "id": "extract-miss-pay",
+  "title": "付了酒钱要记账",
+  "tags": ["extract"],
+  "setup": {
+    "commands": [
+      {
+        "type": "money",
+        "delta": 500,
+        "reason": "开局的积蓄"
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "跟酒保要一杯最便宜的酒，付钱"
+  },
+  "narrative": "“二十。”酒保把一杯浑浊的合成威士忌推到你面前。你把二十欧元的芯片按在吧台上，他扫了一眼，收进抽屉里，转身去招呼别人。",
+  "expect": {
+    "extract": {
+      "require": ["money"]
+    },
+    "verify": {
+      "require": ["money"]
+    }
+  }
+}

@@ -23,7 +23,10 @@
     "text": "我现在受伤了吗？还剩多少血？"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden",
+      "ooc": true
+    },
     "maxChars": 150
   },
   "rubric": ["有没有用一两句话直接回答", "有没有推进剧情或写场景描写（有就是低分）"]

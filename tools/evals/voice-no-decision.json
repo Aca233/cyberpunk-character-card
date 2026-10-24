@@ -35,7 +35,9 @@
     "text": "示意他继续，先听他把条件说完"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden"
+    },
     "text": {
       "forbid": ["你(答应|同意|接下)了", "你点(了点)?头答应"]
     }

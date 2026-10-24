@@ -23,7 +23,9 @@
     "text": "环顾一圈，看看酒吧里有没有熟面孔"
   },
   "expect": {
-    "check": "forbidden"
+    "judge": {
+      "check": "forbidden"
+    }
   },
   "rubric": [
     "有没有直接给出观察到的信息",

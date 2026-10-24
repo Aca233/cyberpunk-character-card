@@ -1,0 +1,41 @@
+{
+  "id": "extract-false-thought",
+  "title": "心里想的不是做了的",
+  "tags": ["extract"],
+  "setup": {
+    "commands": [
+      {
+        "type": "money",
+        "delta": 500,
+        "reason": "开局的积蓄"
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "（我想把这杯酒泼到那个漩涡帮的脸上，但还是忍住了）喝了一口酒"
+  },
+  "narrative": "你端起酒杯抿了一口。合成威士忌又辣又涩，顺着喉咙烧下去。角落里的漩涡帮还在笑，声音越来越大，没人往你这边看。",
+  "expect": {
+    "extract": {
+      "forbid": ["damage", "event", "combat.start", "humanity"]
+    },
+    "verify": {
+      "forbid": ["damage", "event", "combat.start"]
+    }
+  }
+}

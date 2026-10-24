@@ -1,0 +1,41 @@
+{
+  "id": "extract-false-threat",
+  "title": "威胁不是已经发生的事",
+  "tags": ["extract"],
+  "setup": {
+    "commands": [
+      {
+        "type": "money",
+        "delta": 500,
+        "reason": "开局的积蓄"
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "跟角落那桌的漩涡帮说他们挡着路了"
+  },
+  "narrative": "两个漩涡帮的人慢慢转过头。高个的那个把烟按灭在桌上，笑了一声：“挡着你了？出了这扇门，我们会让你知道什么叫挡路。”他没有站起来，只是看着你，等你先眨眼。",
+  "expect": {
+    "extract": {
+      "forbid": ["damage", "combat.start"]
+    },
+    "verify": {
+      "forbid": ["damage", "combat.start"]
+    }
+  }
+}

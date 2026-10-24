@@ -23,7 +23,7 @@
     "text": "弹出我的螳螂刀，冲上去砍那个漩涡帮的"
   },
   "expect": {
-    "commands": {
+    "verify": {
       "forbid": ["item.gain"]
     },
     "modules": {

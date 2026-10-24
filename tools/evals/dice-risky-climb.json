@@ -23,8 +23,10 @@
     "text": "翻出窗户，沿着外沿挪到隔壁的阳台去"
   },
   "expect": {
-    "check": "required",
-    "commands": {
+    "judge": {
+      "check": "required"
+    },
+    "verify": {
       "forbid": ["damage"]
     },
     "maxChars": 300

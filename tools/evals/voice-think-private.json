@@ -35,7 +35,9 @@
     "text": "（这家伙在撒谎，他右手一直在摸枪）"
   },
   "expect": {
-    "check": "forbidden"
+    "judge": {
+      "check": "forbidden"
+    }
   },
   "rubric": [
     "NPC 有没有对玩家的念头作出回应（回应了就是 1 分）",

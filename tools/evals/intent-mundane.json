@@ -23,8 +23,10 @@
     "text": "喝完这杯，出门找个地方躲雨，顺便想想下一步"
   },
   "expect": {
-    "check": "forbidden",
-    "commands": {
+    "judge": {
+      "check": "forbidden"
+    },
+    "verify": {
       "forbid": ["damage", "combat.start"]
     }
   },

@@ -23,7 +23,9 @@
     "text": "“最近沃森有什么活儿吗？”"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden"
+    },
     "modules": {
       "forbid": ["combat", "cyberpsychosis"]
     }

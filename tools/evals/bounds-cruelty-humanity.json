@@ -23,7 +23,7 @@
     "text": "他已经没用了。松手，让他掉下去"
   },
   "expect": {
-    "commands": {
+    "verify": {
       "require": ["humanity"]
     }
   },

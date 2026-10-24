@@ -43,7 +43,7 @@
     "faces": [3]
   },
   "expect": {
-    "commands": {
+    "verify": {
       "forbid": ["damage"]
     }
   },

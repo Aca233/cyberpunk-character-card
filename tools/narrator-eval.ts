@@ -18,6 +18,7 @@ import { ConfigService, LlmRouter } from "@cp/server/llm";
 import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
 import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
 import { grade, type Score } from "./narrator-eval/grader";
+import { scriptedNarrator } from "./narrator-eval/scripted";
 
 /**
  * 叙事模型测评：pnpm eval [--narrator 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
@@ -233,7 +234,7 @@ async function main(): Promise<number> {
     let run: RunResult;
     try {
       const result = await runNarratorTurn(
-        { llm: narratorLlm, rng, data: gameData, opening: scenario.opening },
+        { llm: scriptedNarrator(c, narratorLlm), rng, data: gameData, opening: scenario.opening },
         scenario.world,
         scenario.records,
         scenario.plan,

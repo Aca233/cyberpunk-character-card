@@ -20,7 +20,9 @@
     "text": "用备用钥匙打开卡拉以前住的公寓门，走进去"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden"
+    },
     "text": {
       "forbid": ["你(感到|觉得)(悲伤|难过|心痛|痛苦)", "你决定"]
     }

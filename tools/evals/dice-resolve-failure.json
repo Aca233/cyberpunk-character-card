@@ -44,7 +44,7 @@
     "faces": [2]
   },
   "expect": {
-    "commands": {
+    "verify": {
       "forbid": ["humanity"]
     }
   },

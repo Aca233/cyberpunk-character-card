@@ -23,7 +23,9 @@
     "text": "一拳打穿仓库的钢板墙，直接进去"
   },
   "expect": {
-    "check": "forbidden"
+    "judge": {
+      "check": "forbidden"
+    }
   },
   "rubric": [
     "有没有直接说明做不到，而不是用骰子掩饰",

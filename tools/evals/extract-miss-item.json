@@ -1,0 +1,41 @@
+{
+  "id": "extract-miss-item",
+  "title": "酒保塞来的东西要记进物品栏",
+  "tags": ["extract"],
+  "setup": {
+    "commands": [
+      {
+        "type": "money",
+        "delta": 500,
+        "reason": "开局的积蓄"
+      }
+    ],
+    "history": [
+      {
+        "input": {
+          "text": "推门走进来生酒吧，找个靠墙的位置坐下"
+        },
+        "text": "雨水顺着你的外套往下淌。来生酒吧里烟雾缭绕，吧台后的酒保抬眼看了你一下，又低头去擦杯子。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "travel",
+            "location": "afterlife"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "接过酒保递来的东西"
+  },
+  "narrative": "酒保从吧台下面摸出一支 MaxDoc 急救注射器，压在你手边：“罗格让我给你的，说你今晚用得上。”你把它揣进外套内袋。",
+  "expect": {
+    "extract": {
+      "require": ["item.gain"]
+    },
+    "verify": {
+      "require": ["item.gain"]
+    }
+  }
+}

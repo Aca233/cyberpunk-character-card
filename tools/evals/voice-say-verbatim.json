@@ -35,7 +35,9 @@
     "text": "“我不欠你什么，滚。”"
   },
   "expect": {
-    "check": "forbidden",
+    "judge": {
+      "check": "forbidden"
+    },
     "text": {
       "require": ["我不欠你什么，滚"]
     }
