@@ -1,5 +1,7 @@
-import { CharacterCardSchema, type Clock } from "@cp/core";
+import { cyberware } from "@cp/content";
+import { CharacterCardSchema, type Clock, normalizeStartCyberware } from "@cp/core";
 import { type Context, Hono } from "hono";
+import type { z } from "zod";
 import type { CharacterStore } from "../characters";
 
 async function readCard(c: Context) {
@@ -10,10 +12,25 @@ async function readCard(c: Context) {
     return { ok: false as const, error: "请求体不是合法的 JSON" };
   }
   const parsed = CharacterCardSchema.safeParse(raw);
-  if (parsed.success) return { ok: true as const, card: parsed.data };
+  if (parsed.success) {
+    if (!parsed.data.board) return { ok: true as const, card: parsed.data };
+    // 开局义体的点数和人性消耗按义体表重算，再校验一次预算
+    const fixed = normalizeStartCyberware(parsed.data.board, cyberware);
+    if (!fixed.ok) return { ok: false as const, error: fixed.error };
+    return readCardAgain({ ...parsed.data, board: fixed.board });
+  }
+  return issuesOf(parsed.error);
+}
+
+function readCardAgain(raw: unknown) {
+  const parsed = CharacterCardSchema.safeParse(raw);
+  return parsed.success ? { ok: true as const, card: parsed.data } : issuesOf(parsed.error);
+}
+
+function issuesOf(error: z.ZodError) {
   return {
     ok: false as const,
-    error: parsed.error.issues
+    error: error.issues
       .map((i) => (i.path.length > 0 ? `${i.path.join(".")}：${i.message}` : i.message))
       .join("；"),
   };

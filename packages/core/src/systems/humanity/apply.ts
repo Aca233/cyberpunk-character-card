@@ -7,6 +7,8 @@ import {
   type HumanityState,
   LOSS_CAP,
   MINUTES_PER_DAY,
+  TOLERANCE_FACTOR,
+  type Tolerance,
 } from "./schema";
 
 export type HumanityStage = "stable" | "detached" | "unstable" | "edge" | "crisis";
@@ -80,9 +82,12 @@ export function applyHumanity(
   return { ok: true, notes };
 }
 
-/** 义体装卸后更新消耗合计；当前人性超过新上限时降到上限 */
+/** 义体装卸后更新消耗合计（按义体耐受折算）；当前人性超过新上限时降到上限 */
 export function setCyberwareCost(draft: Draft<HumanityState>, total: number): ApplyOutcome {
-  draft.cyberwareCost = total;
+  draft.cyberwareCost = Math.min(
+    HUMANITY_MAX,
+    Math.round(total * TOLERANCE_FACTOR[draft.tolerance]),
+  );
   const cap = humanityCap(draft);
   const notes = [`人性上限变为 ${cap}`];
   if (draft.current > cap) {
@@ -90,4 +95,20 @@ export function setCyberwareCost(draft: Draft<HumanityState>, total: number): Ap
     draft.current = cap;
   }
   return { ok: true, notes };
+}
+
+const TOLERANCE_LABELS: Readonly<Record<Tolerance, string>> = {
+  low: "低耐受",
+  normal: "普通",
+  high: "高耐受",
+};
+
+export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance): ApplyOutcome {
+  draft.tolerance = tolerance;
+  return {
+    ok: true,
+    notes: [
+      `义体耐受：${TOLERANCE_LABELS[tolerance]}，义体的人性消耗 ×${TOLERANCE_FACTOR[tolerance]}`,
+    ],
+  };
 }

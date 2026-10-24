@@ -192,7 +192,7 @@ const setupRng = { roll: () => 1 };
 /** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
   meta: Pick<SaveMeta, "startTime" | "difficulty"> &
-    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts">>,
+    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts" | "board">>,
   content: GameContent = {},
 ): WorldState {
   const opening =
@@ -219,17 +219,19 @@ export function newGameWorld(
       },
     },
   };
+  const kit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
+  // 主板的义体在开局行装之后装：同一部位的会换下行装里的那件
+  const boardCyberware = (meta.board?.cyberware ?? []).filter(
+    (id) => !(kit?.cyberware ?? []).includes(id),
+  );
   const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
+    // 耐受要在装任何义体之前写进去，人性消耗才按它折算
+    ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
     ...(content.npcs ?? []).map((card) => ({ type: "npc.seed", ...card })),
     ...(content.fixers ?? []).map((f) => ({ type: "jobs.seedFixer", ...f })),
-    ...(opening
-      ? openingCommands(
-          opening,
-          meta.startTime,
-          loadouts.length > 0 ? mergeKits(loadouts) : opening,
-        )
-      : []),
+    ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
+    ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {

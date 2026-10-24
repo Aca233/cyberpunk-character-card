@@ -12,6 +12,7 @@ import {
   type ActionRecord,
   type ActionRequest,
   applyPlayerAction,
+  boardStart,
   buildGmPrompt,
   type CheckRecord,
   type Clock,
@@ -23,6 +24,7 @@ import {
   type GmPlan,
   type GmTurn,
   type LogRecord,
+  loadoutText,
   logVersion,
   newGameWorld,
   type PlayerView,
@@ -137,12 +139,14 @@ export class GameService {
     const id = `s-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
+    const start = boardStart(entry.card);
     const meta: SaveMeta = {
       ...input,
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),
       opening: DEFAULT_OPENING,
-      loadouts: pickLoadouts(entry.card, gameContent.loadouts ?? [], DEFAULT_LOADOUT),
+      loadouts: pickLoadouts(loadoutText(entry.card), gameContent.loadouts ?? [], DEFAULT_LOADOUT),
+      ...(start ? { board: start } : {}),
     };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };

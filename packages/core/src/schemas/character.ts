@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
-import type { SaveCharacter } from "./save";
+import { type Board, BoardSchema, boardBrief, boardIssues } from "./board";
+import type { BoardStart, SaveCharacter } from "./save";
 
 /** 创建时各项属性从这个值起步 */
 export const ATTRIBUTE_BASE = 3;
@@ -32,6 +33,8 @@ export const CharacterCardSchema = z
       AttributeSchema,
       z.number().int().min(ATTRIBUTE_BASE).max(ATTRIBUTE_CREATE_MAX),
     ),
+    /** 角色主板；只写了文字的旧卡没有 */
+    board: BoardSchema.optional(),
   })
   .superRefine((card, ctx) => {
     const spent = pointsSpent(card.attributes);
@@ -41,6 +44,9 @@ export const CharacterCardSchema = z
         path: ["attributes"],
         message: `属性点只有 ${ATTRIBUTE_POINTS} 点，现在分了 ${spent} 点`,
       });
+    }
+    for (const message of card.board ? boardIssues(card.board) : []) {
+      ctx.addIssue({ code: "custom", path: ["board"], message });
     }
   });
 export type CharacterCard = z.infer<typeof CharacterCardSchema>;
@@ -69,8 +75,30 @@ export function characterBrief(card: CharacterCard): string {
     card.personality && `性格：${card.personality}`,
     card.voice && `说话方式：${card.voice}`,
     card.skills && `本事：${card.skills}`,
+    card.board ? boardBrief(card.board) : "",
   ];
   return parts.filter((p) => p !== "").join("\n");
+}
+
+function boardWords(board: Board | undefined, key: "origin" | "pasts" | "skills"): string {
+  if (!board) return "";
+  const list = key === "origin" ? (board.origin ? [board.origin] : []) : board[key];
+  return list.flatMap((m) => [m.label, ...m.tags]).join(" ");
+}
+
+/** 挑开局行装看的文字：手写的出身、过往、本事，加上主板模块的名字和标签 */
+export function loadoutText(card: CharacterCard): { origin: string; past: string; skills: string } {
+  return {
+    origin: [card.origin, boardWords(card.board, "origin")].join(" "),
+    past: [card.past, boardWords(card.board, "pasts")].join("\n"),
+    skills: [card.skills, boardWords(card.board, "skills")].join("\n"),
+  };
+}
+
+/** 建档时从主板带进存档的东西：开局义体和义体耐受 */
+export function boardStart(card: CharacterCard): BoardStart | undefined {
+  if (!card.board) return undefined;
+  return { cyberware: card.board.cyberware.map((c) => c.id), tolerance: card.board.tolerance };
 }
 
 /** 开档时写进存档的角色快照 */

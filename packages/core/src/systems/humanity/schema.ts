@@ -7,10 +7,21 @@ export const LOSS_CAP = 15;
 export const DAILY_RECOVERY_CAP = 8;
 export const MINUTES_PER_DAY = 1440;
 
+/** 义体耐受：建角色时选，乘在义体的人性消耗上 */
+export const ToleranceSchema = z.enum(["low", "normal", "high"]);
+export type Tolerance = z.infer<typeof ToleranceSchema>;
+export const TOLERANCE_FACTOR: Readonly<Record<Tolerance, number>> = {
+  low: 1.3,
+  normal: 1,
+  high: 0.7,
+};
+
 export const HumanityStateSchema = z.object({
   current: z.number().int().min(0).max(HUMANITY_MAX),
   /** 已装义体的人性消耗之和；义体系统通过内部指令更新 */
   cyberwareCost: z.number().int().min(0).max(HUMANITY_MAX),
+  /** 旧存档没有：都按普通 */
+  tolerance: ToleranceSchema.default("normal"),
   /** 某个游戏日（序号）已经恢复了多少 */
   recovery: z.object({ day: z.number().int(), amount: z.number().int().min(0) }),
   /** 已经结算过的事件 id；同一事件只结算一次 */
@@ -41,3 +52,10 @@ export const SetCyberwareCostSchema = z.object({
   total: z.number().int().min(0).max(HUMANITY_MAX),
 });
 export type SetCyberwareCost = z.infer<typeof SetCyberwareCostSchema>;
+
+/** 只能由代码发出：建档时写入义体耐受；要在装开局义体之前发 */
+export const SetToleranceSchema = z.object({
+  type: z.literal("humanity.setTolerance"),
+  tolerance: ToleranceSchema,
+});
+export type SetTolerance = z.infer<typeof SetToleranceSchema>;

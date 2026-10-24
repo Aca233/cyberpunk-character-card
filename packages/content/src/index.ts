@@ -16,6 +16,7 @@ export { consequences, twists } from "./jobs";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
 export { glossary } from "./lore";
+export { boardModules } from "./modules";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 
