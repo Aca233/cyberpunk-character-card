@@ -1,12 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import {
-  ACTIVITY_FLOOR,
-  type Deadline,
-  type DeadlineCommand,
-  type WorldClockState,
-  type WorldCommand,
-} from "./schema";
+import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
 const MORNING_HOUR = 7;
@@ -76,29 +70,34 @@ function dueNotes(draft: Draft<WorldClockState>, from: number, to: number): stri
     .map((d) => `到期：${d.label}（${formatGameTime(d.due)}）`);
 }
 
-/** 推进时间：不少于这类行动的保底，不倒退；地点随指令更新 */
+/** 时间由主持人写：只往前走，倒退的不改；rest 没写时间时按睡到下一个清晨；地点随指令更新 */
 export function applyWorld(
   draft: Draft<WorldClockState>,
   command: WorldCommand,
   now: number,
 ): ApplyOutcome {
-  const floor =
-    command.activity === "rest" ? nextMorning(now) : now + ACTIVITY_FLOOR[command.activity];
   const notes: string[] = [];
-  let target = floor;
+  let target = now;
   if (command.time !== undefined) {
-    if (command.time >= floor) target = command.time;
+    if (command.time >= now) target = command.time;
     else
-      notes.push(`时间至少推进到 ${formatGameTime(floor)}，${formatGameTime(command.time)} 太早`);
+      notes.push(
+        `时间不能倒退：${formatGameTime(command.time)} 早于现在 ${formatGameTime(now)}，时间没动`,
+      );
+  } else if (command.activity === "rest") {
+    target = nextMorning(now);
+    notes.push("没写睡到几点，按睡到清晨算");
   }
   if (command.location !== undefined && command.location !== draft.location) {
     draft.location = command.location;
     notes.push(`来到 ${command.location}`);
   }
-  notes.push(`${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`);
+  if (target > now) notes.push(`${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`);
   notes.push(...dueNotes(draft, now, target));
   const signals = command.activity === "rest" ? ["rest"] : [];
-  return { ok: true, notes, advanceTo: target, signals };
+  return target > now
+    ? { ok: true, notes, advanceTo: target, signals }
+    : { ok: true, notes, signals };
 }
 
 export function applyDeadline(
@@ -122,15 +121,9 @@ export function applyDeadline(
   return { ok: true, notes: [`${early ? "提前办完" : "已回应"}：${existing.label}`] };
 }
 
-/** 场景结束：至少前进到下一个时段，并广播 scene.end */
+/** 场景结束：不推进时间（过了多久由主持人在 world 里写），广播 scene.end */
 export function endScene(draft: Draft<WorldClockState>, now: number): ApplyOutcome {
-  const target = nextPeriodStart(now);
   draft.scene += 1;
-  draft.sceneStartedAt = target;
-  return {
-    ok: true,
-    notes: [`场景结束，${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`],
-    advanceTo: target,
-    signals: ["scene.end"],
-  };
+  draft.sceneStartedAt = now;
+  return { ok: true, notes: ["场景结束"], signals: ["scene.end"] };
 }

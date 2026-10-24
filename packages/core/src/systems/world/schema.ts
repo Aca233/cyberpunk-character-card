@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 行动类型，决定这一轮时间至少推进多少 */
+/** 这一轮主要做了什么；只作记录，过了多久由主持人在 time 里写 */
 export const ActivitySchema = z.enum([
   "talk",
   "observe",
@@ -14,19 +14,6 @@ export const ActivitySchema = z.enum([
   "rest",
 ]);
 export type Activity = z.infer<typeof ActivitySchema>;
-
-/** 时间保底（分钟）；rest 另算，推进到下一个清晨 */
-export const ACTIVITY_FLOOR: Readonly<Record<Exclude<Activity, "rest">, number>> = {
-  talk: 5,
-  observe: 5,
-  travel: 5,
-  quickhack: 2,
-  breach: 30,
-  prepare: 30,
-  heal: 30,
-  combat: 5,
-  wait: 5,
-};
 
 const GAME_TIME = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 
@@ -86,12 +73,12 @@ export const WorldCommandSchema = z
   .object({
     type: z.literal("world"),
     activity: ActivitySchema,
-    /** 主持人想推进到的时间；早于保底时按保底 */
+    /** 这一轮结束时是几点，由主持人按情境写；不能早于现在。rest 没写时按睡到下一个清晨 */
     time: GameTimeSchema.optional(),
     location: z.string().min(1).optional(),
   })
   .describe(
-    "每轮一条：这一轮主要做了什么，代码按类别保底推进时间；time 是想推进到的时间（YYYY-MM-DD HH:mm），location 是换到的地点 id",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在；location 是换到的地点 id",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 

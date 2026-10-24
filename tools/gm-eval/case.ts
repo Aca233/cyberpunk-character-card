@@ -176,10 +176,7 @@ export function buildScenario(c: EvalCase): Scenario {
 
   const records: LogRecord[] = [];
   for (const [i, turn] of setup.history.entries()) {
-    const raw = turn.commands.some((x) => (x as { type?: unknown }).type === "world")
-      ? turn.commands
-      : [...turn.commands, { type: "world", activity: "talk" }];
-    const applied = applyAll(world, raw, false, `第 ${i + 1} 轮历史`);
+    const applied = applyAll(world, turn.commands, false, `第 ${i + 1} 轮历史`);
     world = applied.world;
     const seq = records.length;
     records.push({

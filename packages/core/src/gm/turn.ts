@@ -433,12 +433,7 @@ export async function runGmTurn(
   if (!ooc && inFlashback && !commands.some((c) => flashbackAction(c) === "end")) {
     commands.push({ type: "character.flashbackTick" });
   }
-  // 闪回里和开闪回的这一轮不按 talk 保底推进时间
-  const startsFlashback = commands.some((c) => flashbackAction(c) === "start");
-  if (!ooc && !inFlashback && !startsFlashback && !commands.some((c) => c.type === "world")) {
-    commands.push({ type: "world", activity: "talk" });
-    b.notes.push("这一轮没写 world，按 talk 保底推进时间");
-  }
+  // 时间由主持人写在 world 里；没写就是时间没动，代码不补保底
   if (!ooc && shape.sceneEnd === true) {
     if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
     else commands.push({ type: "world.endScene" });
