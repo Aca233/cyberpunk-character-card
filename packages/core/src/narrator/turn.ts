@@ -94,6 +94,49 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   jobEnd: "委托结局",
 };
 
+/** 互相关联的条目：一种没生效，跟着它的也不生效（付钱和拿货互相跟，受伤跟着开战） */
+type Role = "pay" | "goods" | "fightStart" | "hit";
+
+const ROLE_LABELS: Readonly<Record<Role, string>> = {
+  pay: "付钱",
+  goods: "拿货",
+  fightStart: "开战",
+  hit: "受伤",
+};
+
+const FOLLOWERS: Readonly<Record<Role, readonly Role[]>> = {
+  pay: ["goods"],
+  goods: ["pay"],
+  fightStart: ["hit"],
+  hit: [],
+};
+
+function roleOf(raw: unknown): Role | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const c = raw as { type?: unknown; delta?: unknown; action?: unknown };
+  if (c.type === "money" && typeof c.delta === "number" && c.delta < 0) return "pay";
+  if (c.type === "item" && c.action === "gain") return "goods";
+  if (c.type === "combat" && c.action === "start") return "fightStart";
+  if (c.type === "damage") return "hit";
+  return undefined;
+}
+
+/** 去掉跟着没生效条目的那些，记进 dropped */
+function dropFollowers(
+  b: TurnBuilder,
+  commands: readonly Command[],
+  failed: ReadonlySet<Role>,
+): Command[] {
+  return commands.filter((command) => {
+    const role = roleOf(command);
+    if (!role) return true;
+    const cause = [...failed].find((r) => FOLLOWERS[r].includes(role));
+    if (!cause) return true;
+    b.drop(command.type, command, `同一轮的${ROLE_LABELS[cause]}没生效，这一条跟着不算`, "rules");
+    return false;
+  });
+}
+
 /** 正文和账目对不上的原因；没有关键条目出问题时为 undefined */
 export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
   for (const d of dropped) {
@@ -736,7 +779,24 @@ export async function runNarratorTurn(
     commands.unshift({ type: "phone.reply", id: plan.input.replyTo });
   }
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
-  const applied = registry.applyCommands(world, commands, applyCtx);
+  // 成组生效：之前被丢的、结算时被拒的，跟着它的条目一起不生效，剩下的重新结算
+  const failed = new Set<Role>();
+  for (const d of b.dropped) {
+    const role = roleOf(d.raw);
+    if (role) failed.add(role);
+  }
+  let pending = dropFollowers(b, commands, failed);
+  let applied = registry.applyCommands(world, pending, applyCtx);
+  for (;;) {
+    const fresh = applied.results
+      .filter(({ result }) => !result.ok)
+      .map(({ command }) => roleOf(command))
+      .filter((r): r is Role => r !== undefined && !failed.has(r) && FOLLOWERS[r].length > 0);
+    if (fresh.length === 0) break;
+    for (const r of fresh) failed.add(r);
+    pending = dropFollowers(b, pending, failed);
+    applied = registry.applyCommands(world, pending, applyCtx);
+  }
   const accepted: Command[] = [];
   for (const { command, result } of applied.results) {
     if (result.ok) {
