@@ -1,3 +1,4 @@
+import { characterRules } from "@cp/core";
 import { Fragment } from "react";
 import type { AssetId } from "../../assets";
 import { DIFFICULTY_LABELS } from "../../labels";
@@ -168,6 +169,21 @@ export function SidePanel({
         </ul>
         {character.attributePoints > 0 && (
           <p className={styles.points}>可分配属性点 {character.attributePoints}</p>
+        )}
+        {character.traits.length > 0 && (
+          <ul className={styles.traits} aria-label="角色主板">
+            {character.traits.map((t) => (
+              <li
+                key={`${t.slot}-${t.label}`}
+                className={styles.trait}
+                data-slot={t.slot}
+                title={t.ability || undefined}
+              >
+                <small className={styles.traitKind}>{characterRules.TRAIT_LABELS[t.slot]}</small>
+                {t.label}
+              </li>
+            ))}
+          </ul>
         )}
         <dl className={styles.facts}>
           <dt>街头声望</dt>

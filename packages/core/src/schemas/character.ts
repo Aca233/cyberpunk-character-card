@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Trait } from "../systems/character/schema";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
 import {
   BOARD_SLOT_LABELS,
@@ -181,6 +182,14 @@ export function boardStart(card: CharacterCard): BoardStart | undefined {
   };
 }
 
+/** 主板上的模块和联动，记进角色状态：专属选项的来源按它核对 */
+export function boardTraits(board: Board): Trait[] {
+  return [
+    ...boardModules(board).map((m) => ({ slot: m.slot, label: m.label, ability: m.ability })),
+    ...board.combos.map((c) => ({ slot: "combo" as const, label: c.label, ability: c.ability })),
+  ];
+}
+
 /** 开档时写进存档的角色快照 */
 export function saveCharacter(card: CharacterCard): SaveCharacter {
   return {
@@ -188,5 +197,6 @@ export function saveCharacter(card: CharacterCard): SaveCharacter {
     brief: characterBrief(card),
     attributes: { ...card.attributes },
     streetCred: 1,
+    ...(card.board ? { traits: boardTraits(card.board) } : {}),
   };
 }

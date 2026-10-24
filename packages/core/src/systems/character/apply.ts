@@ -44,6 +44,7 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.streetCred = command.streetCred;
   draft.credHalf = false;
   draft.attributePoints = 0;
+  draft.traits = (command.traits ?? []).map((t) => ({ ...t }));
   return { ok: true, emit: [setMax(command)] };
 }
 

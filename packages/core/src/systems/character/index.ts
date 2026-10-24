@@ -25,6 +25,7 @@ export const character = defineSystem<CharacterState, StreetCredCommand, Charact
     credHalf: false,
     attributePoints: 0,
     credSettled: [],
+    traits: [],
   }),
   commands: { streetCred: StreetCredCommandSchema },
   internal: {

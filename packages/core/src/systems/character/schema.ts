@@ -8,6 +8,25 @@ export const STREET_CRED_MAX = 50;
 /** 街头声望每升这么多级得 1 个属性点 */
 export const LEVELS_PER_POINT = 5;
 
+/** 角色主板上的一块：出身、过往、本事、负面经历或联动；专属选项的来源按它核对，侧栏也显示 */
+export const TRAIT_SLOTS = ["origin", "past", "skill", "flaw", "combo"] as const;
+export const TraitSlotSchema = z.enum(TRAIT_SLOTS);
+export type TraitSlot = z.infer<typeof TraitSlotSchema>;
+export const TRAIT_LABELS: Readonly<Record<TraitSlot, string>> = {
+  origin: "出身",
+  past: "过往",
+  skill: "本事",
+  flaw: "负面经历",
+  combo: "联动",
+};
+export const TraitSchema = z.object({
+  slot: TraitSlotSchema,
+  label: z.string().trim().min(1).max(24),
+  ability: z.string().max(200).default(""),
+});
+export type Trait = z.infer<typeof TraitSchema>;
+export const TRAITS_MAX = 24;
+
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
   name: z.string().min(1).nullable(),
@@ -22,6 +41,8 @@ export const CharacterStateSchema = z.object({
   attributePoints: z.number().int().min(0).default(0),
   /** 已经结算过声望的事件 id；同一事件只结算一次 */
   credSettled: z.array(z.string()).default([]),
+  /** 旧存档和没用主板的角色是空的 */
+  traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -32,6 +53,8 @@ export const SetCharacterSchema = z.object({
   brief: z.string(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
+  /** 旧存档的角色快照没有 */
+  traits: z.array(TraitSchema).max(TRAITS_MAX).optional(),
 });
 export type SetCharacter = z.infer<typeof SetCharacterSchema>;
 

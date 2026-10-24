@@ -438,6 +438,8 @@ export function projectState(
       /** 攒着半级声望，再得半级就升级 */
       credHalf: character.credHalf,
       attributePoints: character.attributePoints,
+      /** 主板上的模块和联动；没用主板的角色是空的 */
+      traits: character.traits,
     },
     time: {
       minutes: world.time,

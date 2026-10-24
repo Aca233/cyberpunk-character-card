@@ -281,6 +281,37 @@
   color: var(--cp-yellow);
 }
 
+.traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trait {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--cp-cyan-dim);
+  font-size: var(--fs-label);
+  cursor: help;
+}
+
+.trait[data-slot="flaw"] {
+  border-color: var(--cp-red-dim);
+}
+
+.trait[data-slot="combo"] {
+  border-color: var(--cp-yellow-dim);
+}
+
+.traitKind {
+  color: var(--cp-text-dim);
+}
+
 .facts {
   display: grid;
   grid-template-columns: auto 1fr;

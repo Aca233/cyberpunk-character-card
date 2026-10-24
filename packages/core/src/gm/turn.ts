@@ -4,6 +4,12 @@ import type { AbortSignalLike, LlmClient, LlmMessage, LlmUsage, Rng } from "../k
 import type { Command } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
+import {
+  CharacterStateSchema,
+  TRAIT_LABELS,
+  type Trait,
+  type TraitSlot,
+} from "../systems/character";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
@@ -183,12 +189,44 @@ class TurnBuilder {
   }
 }
 
-/** 义体来源的专属选项必须是身上装着的义体；对不上时去掉来源，选项留着 */
-function verifySource(choice: Choice, chrome: ReadonlySet<string>, notes: string[]): Choice {
-  const named = choice.source?.match(/^义体[：:]\s*(.+)$/)?.[1]?.trim();
-  if (named === undefined || chrome.has(named)) return choice;
+/** 来源前缀能对上主板上的哪几类；过往也算上负面经历 */
+const SOURCE_SLOTS: Readonly<Record<string, readonly TraitSlot[]>> = {
+  出身: ["origin"],
+  过往: ["past", "flaw"],
+  本事: ["skill"],
+  负面经历: ["flaw"],
+  联动: ["combo"],
+};
+
+/**
+ * 专属选项的来源要对得上：义体来源必须是身上装着的义体；角色有主板时，出身、过往、本事、
+ * 联动来源必须是主板上的模块（名字互相包含就算）。对不上时去掉来源，选项留着
+ */
+function verifySource(
+  choice: Choice,
+  chrome: ReadonlySet<string>,
+  traits: readonly Trait[],
+  notes: string[],
+): Choice {
+  const match = choice.source?.match(/^([^：:]+)[：:]\s*(.+)$/);
+  if (!match) return choice;
+  const kind = (match[1] ?? "").trim();
+  const named = (match[2] ?? "").trim();
+  let reason: string;
+  if (kind === "义体") {
+    if (chrome.has(named)) return choice;
+    reason = "不是身上装着的义体";
+  } else {
+    const slots = SOURCE_SLOTS[kind];
+    if (slots === undefined || traits.length === 0) return choice;
+    const fits = traits.some(
+      (t) => slots.includes(t.slot) && (t.label.includes(named) || named.includes(t.label)),
+    );
+    if (fits) return choice;
+    reason = `不是主板上的${slots.map((s) => TRAIT_LABELS[s]).join("或")}`;
+  }
   const { source: _source, ...rest } = choice;
-  notes.push(`选项「${choice.text}」的来源「${choice.source}」不是身上装着的义体，去掉了来源`);
+  notes.push(`选项「${choice.text}」的来源「${choice.source}」${reason}，去掉了来源`);
   return rest;
 }
 
@@ -244,6 +282,7 @@ export async function runGmTurn(
       (c) => parts.get(c.id)?.name ?? c.id,
     ),
   );
+  const traits = CharacterStateSchema.parse(world.slices.character).traits;
   const choices: Choice[] = [];
   if (!ooc) {
     const raw = shape.choices ?? [];
@@ -257,7 +296,7 @@ export async function runGmTurn(
       if (!choice) continue;
       const prepared = choice.check && prepareFor(world, choice.check);
       if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
-      else choices.push(verifySource(choice, chrome, b.notes));
+      else choices.push(verifySource(choice, chrome, traits, b.notes));
     }
   }
 
