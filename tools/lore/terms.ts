@@ -116,12 +116,15 @@ function contentNames(): [string, string][] {
   return out.filter(([, name], i) => out.findIndex(([, n]) => n === name) === i);
 }
 
+/** 官方只有一个词的武器名（统一、杀戮）在内容包里加了类别，核对时去掉 */
+const WEAPON_SUFFIX = /(手枪|左轮|冲锋枪|突击步枪|霰弹枪|精准步枪|狙击步枪|轻机枪)$/;
+
 function check(rows: readonly Row[], seeds: Record<string, Term[]>): string[] {
   const official = new Set(rows.map((r) => r.zh));
   const terms = Object.values(seeds).flat();
   const lines: string[] = [];
   for (const [kind, name] of contentNames()) {
-    if (official.has(name)) continue;
+    if (official.has(name) || official.has(name.replace(WEAPON_SUFFIX, ""))) continue;
     const mine = bigrams(name);
     const near = terms
       .filter((t) => t.zh !== name && [...bigrams(t.zh)].some((b) => mine.has(b)))

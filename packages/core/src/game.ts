@@ -7,14 +7,9 @@ import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
 import { cyberwareCatalog } from "./systems/cyberware/apply";
-import {
-  type CyberwareDef,
-  CyberwareStateSchema,
-  RARITY_LABELS,
-  SLOT_LABELS,
-} from "./systems/cyberware/schema";
+import { type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./systems/cyberware/schema";
 import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
-import { EconomyStateSchema } from "./systems/economy/schema";
+import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { AttributeSchema } from "../dice";
+import { type Attribute, AttributeSchema } from "../dice";
+import { RaritySchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -10,6 +11,67 @@ export const ItemKindSchema = z.enum([
   "misc",
 ]);
 export type ItemKind = z.infer<typeof ItemKindSchema>;
+
+/** 武器类别，按原作 */
+export const WeaponCategorySchema = z.enum([
+  "pistol",
+  "revolver",
+  "smg",
+  "assaultRifle",
+  "shotgun",
+  "precisionRifle",
+  "sniperRifle",
+  "lmg",
+  "blade",
+  "blunt",
+]);
+export type WeaponCategory = z.infer<typeof WeaponCategorySchema>;
+
+export const WEAPON_CATEGORY_LABELS: Readonly<Record<WeaponCategory, string>> = {
+  pistol: "手枪",
+  revolver: "左轮手枪",
+  smg: "冲锋枪",
+  assaultRifle: "突击步枪",
+  shotgun: "霰弹枪",
+  precisionRifle: "精准步枪",
+  sniperRifle: "狙击步枪",
+  lmg: "轻机枪",
+  blade: "刀剑",
+  blunt: "钝器",
+};
+
+/** 远程武器的类型：威能（跳弹）、技术（蓄力穿墙）、智能（子弹追踪，要手部装智能连接） */
+export const WeaponTypeSchema = z.enum(["power", "tech", "smart"]);
+export type WeaponType = z.infer<typeof WeaponTypeSchema>;
+
+export const WEAPON_TYPE_LABELS: Readonly<Record<WeaponType, string>> = {
+  power: "威能",
+  tech: "技术",
+  smart: "智能",
+};
+
+const MELEE: ReadonlySet<WeaponCategory> = new Set(["blade", "blunt"]);
+
+/** 武器用哪项属性检定（照原作 2.0）：技术武器用技术，智能武器用智能，其余按类别 */
+export function weaponAttribute(category: WeaponCategory, type?: WeaponType): Attribute {
+  if (type === "tech") return "tech";
+  if (type === "smart") return "intelligence";
+  switch (category) {
+    case "shotgun":
+    case "lmg":
+    case "blunt":
+      return "body";
+    case "blade":
+    case "assaultRifle":
+    case "smg":
+      return "reflexes";
+    case "pistol":
+    case "revolver":
+    case "precisionRifle":
+    case "sniperRifle":
+      return "cool";
+  }
+}
 
 /** 物品表的一条；数据在 content 包的 items.ts，结算时通过 ctx.data.items 传入 */
 export const ItemDefSchema = z
@@ -23,14 +85,35 @@ export const ItemDefSchema = z
     charges: z.number().int().min(1).optional(),
     /** 治疗品：每次回复生命上限的百分之几 */
     healPercent: z.number().int().min(1).max(100).optional(),
-    /** 标志性物品：只能从剧情获得 */
+    /** 不朽物品（原作的 Iconic）：只能从剧情获得 */
     iconic: z.boolean().default(false),
     price: z.number().int().min(0).optional(),
+    rarity: RaritySchema.optional(),
+    /** 武器类别；武器必须写 */
+    category: WeaponCategorySchema.optional(),
+    /** 远程武器的类型；近战武器不写 */
+    weaponType: WeaponTypeSchema.optional(),
+    /** 拿着它角色真的能做到什么；写给模型 */
+    ability: z.string().min(1).optional(),
+    /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
+    source: z
+      .string()
+      .regex(/^text:\S+$/)
+      .optional(),
   })
   .superRefine((item, ctx) => {
     const report = (message: string) =>
       ctx.addIssue({ code: "custom", message: `${item.id}：${message}` });
-    if (item.kind === "weapon" && item.attribute === undefined) report("武器必须写明用哪项属性");
+    if (item.kind === "weapon") {
+      if (item.category === undefined) report("武器必须写明类别");
+      else if (MELEE.has(item.category) && item.weaponType !== undefined) {
+        report("近战武器没有威能、技术、智能之分");
+      } else if (item.attribute !== weaponAttribute(item.category, item.weaponType)) {
+        report(`按类别和类型应该用${weaponAttribute(item.category, item.weaponType)}检定`);
+      }
+    } else if (item.category !== undefined || item.weaponType !== undefined) {
+      report("只有武器才写类别和类型");
+    }
     if ((item.kind === "healing" || item.kind === "grenade") && item.charges === undefined) {
       report("治疗品和手雷必须写明使用次数");
     }

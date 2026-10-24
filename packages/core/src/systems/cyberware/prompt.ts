@@ -1,7 +1,8 @@
 import type { RuleModule } from "../../kernel/system";
 import { ATTRIBUTE_LABELS } from "../dice";
+import { RARITY_LABELS } from "../economy";
 import { cyberwareCatalog } from "./apply";
-import { type CyberwareState, RARITY_LABELS, SLOT_LABELS } from "./schema";
+import { type CyberwareState, SLOT_LABELS } from "./schema";
 
 export const cyberwareRules: RuleModule<CyberwareState> = {
   id: "cyberware",
@@ -15,18 +16,29 @@ export const cyberwareRules: RuleModule<CyberwareState> = {
 - 只有义体医生能装卸义体；街上捡到、从敌人身上拆下的义体只写在正文里，要装得先找医生。`,
 };
 
-/** 义体表：和物品表一样放在系统提示词末尾 */
+/** 义体表：和物品表一样放在系统提示词末尾，按部位分组 */
 export function cyberwareSection(data: Readonly<Record<string, unknown>>): string | undefined {
   const parts = [...cyberwareCatalog(data).values()];
   if (parts.length === 0) return undefined;
-  const lines = parts.map((p) => {
-    const checks =
-      p.checks.length > 0
-        ? `；${p.checks.map((a) => ATTRIBUTE_LABELS[a]).join("、")}检定用得上时算有利条件`
-        : "";
-    return `- ${p.id}：${p.name}（${SLOT_LABELS[p.slot]}，${RARITY_LABELS[p.rarity]}，约 ${p.price} 欧元，人性上限 -${p.humanityCost}）：${p.ability}${checks}`;
-  });
+  const groups = new Map<string, string[]>();
+  for (const p of parts) {
+    const notes = [
+      RARITY_LABELS[p.rarity],
+      p.iconic ? "不朽" : String(p.price),
+      `人性-${p.humanityCost}`,
+      ...(p.checks.length > 0
+        ? [`利于${p.checks.map((a) => ATTRIBUTE_LABELS[a]).join("、")}`]
+        : []),
+    ];
+    const group = SLOT_LABELS[p.slot];
+    groups.set(group, [
+      ...(groups.get(group) ?? []),
+      `- ${p.id} ${p.name}｜${notes.join("｜")}：${p.ability}`,
+    ]);
+  }
+  const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
   return `【义体表】
 cyberware 指令的 id 只能用下面这些，正文里用名称。
-${lines.join("\n")}`;
+每行是：id 名称｜稀有度｜参考价（欧元）｜装上后人性上限降多少｜利于哪些属性：能力。“利于”的属性检定里用得上这件义体时算有利条件；不朽义体只从剧情获得，义体医生不卖。
+${body}`;
 }

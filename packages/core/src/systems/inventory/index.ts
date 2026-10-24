@@ -11,7 +11,7 @@ import {
 
 export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInternal>({
   id: "inventory",
-  dependsOn: ["dice"],
+  dependsOn: ["dice", "economy"],
   state: InventoryStateSchema,
   initial: () => ({
     weapons: [null, null, null],

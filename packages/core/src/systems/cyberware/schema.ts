@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AttributeSchema } from "../dice";
+import { RaritySchema } from "../economy";
 
 /** 义体部位，按原作分类；同一部位只装一件 */
 export const CYBERWARE_SLOTS = [
@@ -30,17 +31,6 @@ export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
   legs: "腿部",
 };
 
-export const RaritySchema = z.enum(["common", "uncommon", "rare", "epic", "legendary"]);
-export type Rarity = z.infer<typeof RaritySchema>;
-
-export const RARITY_LABELS: Readonly<Record<Rarity, string>> = {
-  common: "普通",
-  uncommon: "罕见",
-  rare: "稀有",
-  epic: "史诗",
-  legendary: "传说",
-};
-
 /** 义体表的一条；数据在 content 包的 cyberware.ts */
 export const CyberwareDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
@@ -55,6 +45,8 @@ export const CyberwareDefSchema = z.object({
   ability: z.string().min(1),
   /** 做哪些属性的检定时算有利条件 */
   checks: z.array(AttributeSchema).default([]),
+  /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
+  iconic: z.boolean().default(false),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
 

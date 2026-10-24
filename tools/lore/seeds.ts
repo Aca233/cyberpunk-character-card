@@ -152,6 +152,6 @@ export const CATALOG_KEYS: Readonly<Record<string, RegExp>> = {
   cyberware: /^Gameplay-Cyberware-.*DisplayName/,
   weapons: /^Gameplay-Weapons-.*DisplayName/,
   consumables: /^Gameplay-Consumables-.*DisplayName/,
-  quickhacks: /^Gameplay-QuickHacks-.*DisplayName/,
+  quickhacks: /^Gameplay-QuickHacks-QuickHacksNames-/,
   attributes: /^Gameplay-RPG-Stats-Attributes-/,
 };

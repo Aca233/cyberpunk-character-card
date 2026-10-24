@@ -75,7 +75,7 @@ export function applyItem(
   switch (command.action) {
     case "gain":
       put(draft, def.id);
-      return ok(def.iconic ? `获得标志性物品：${def.name}` : `获得 ${def.name}`);
+      return ok(def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`);
     case "lose":
       return lose(draft, def);
     case "equip":

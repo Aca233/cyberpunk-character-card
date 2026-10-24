@@ -13,9 +13,15 @@ import {
   OPPONENT_TIERS,
   PENALTY_CAP,
 } from "../systems/dice";
+import { RARITY_LABELS } from "../systems/economy/schema";
 import { DAMAGE_LABELS } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
-import type { ItemKind } from "../systems/inventory/schema";
+import {
+  type ItemKind,
+  WEAPON_CATEGORY_LABELS,
+  WEAPON_TYPE_LABELS,
+  weaponAttribute,
+} from "../systems/inventory/schema";
 import { jobsSection } from "../systems/jobs/prompt";
 import { JobsStateSchema } from "../systems/jobs/schema";
 import { castSection } from "../systems/npc/prompt";
@@ -180,20 +186,32 @@ const KIND_LABELS: Readonly<Record<ItemKind, string>> = {
   misc: "杂物",
 };
 
-/** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id */
+/** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id。
+ * 按类别分组，组名写一次检定属性，每行只写这件东西自己的部分，几十件也不太占篇幅 */
 export function catalogSection(data: Readonly<Record<string, unknown>>): string | undefined {
   if (data.items === undefined) return undefined;
-  const lines = [...itemCatalog(data).values()].map((item) => {
+  const groups = new Map<string, string[]>();
+  for (const item of itemCatalog(data).values()) {
+    const group =
+      item.category === undefined
+        ? KIND_LABELS[item.kind]
+        : `${WEAPON_CATEGORY_LABELS[item.category]}（${ATTRIBUTE_LABELS[weaponAttribute(item.category)]}检定）`;
     const notes = [
-      KIND_LABELS[item.kind],
-      ...(item.iconic ? ["标志性，只从剧情获得"] : []),
-      ...(item.price === undefined ? [] : [`约 ${item.price} 欧元`]),
+      ...(item.weaponType ? [WEAPON_TYPE_LABELS[item.weaponType]] : []),
+      ...(item.category === undefined && item.attribute
+        ? [`${ATTRIBUTE_LABELS[item.attribute]}检定`]
+        : []),
+      ...(item.rarity ? [RARITY_LABELS[item.rarity]] : []),
+      ...(item.iconic ? ["不朽"] : item.price === undefined ? [] : [String(item.price)]),
     ];
-    return `- ${item.id}：${item.name}（${notes.join("，")}）`;
-  });
+    const line = `- ${item.id} ${item.name}${notes.length > 0 ? `｜${notes.join("｜")}` : ""}${item.ability ? `：${item.ability}` : ""}`;
+    groups.set(group, [...(groups.get(group) ?? []), line]);
+  }
+  const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
   return `【物品表】
 item 指令的 id 只能用下面这些；【当前状态】里的武器栏、治疗品和背包写的也是这些 id，正文里用名称。表里没有的东西只在正文里写，不发 item 指令。
-${lines.join("\n")}`;
+每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）：能力。技术武器一律用技术检定、智能武器一律用智能检定，不看组名；不朽的东西只从剧情获得，没人卖。
+${body}`;
 }
 
 /** 地点表：和物品表一样放在系统提示词末尾 */
