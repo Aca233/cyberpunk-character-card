@@ -1,0 +1,270 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  boardModules,
+  combos,
+  consequences,
+  cyberware,
+  DEFAULT_LOADOUT,
+  DEFAULT_OPENING,
+  fixers,
+  glossary,
+  items,
+  jobTemplates,
+  lifepath,
+  loadouts,
+  locations,
+  npcs,
+  openings,
+  ripperdocs,
+  sampleCharacters,
+  shops,
+  twists,
+} from "@cp/content";
+import {
+  BoardModuleSchema,
+  CharacterCardSchema,
+  ComboSchema,
+  cyberwareRules,
+  falloutRules,
+  GlossarySchema,
+  inventoryRules,
+  jobsRules,
+  LifepathEntrySchema,
+  npcRules,
+  TwistCatalogSchema,
+  worldRules,
+} from "@cp/core";
+import type { z } from "zod";
+import { ROOT } from "./assets/manifest";
+
+/**
+ * pnpm check-data：用 schema 检查 packages/content 的所有数据，再查跨表引用和重复 id。
+ * 有本机的官方译名表（pnpm terms 生成的 data/lore/terms.json）时顺带核对名字，只提醒不算失败
+ */
+
+const errors: string[] = [];
+const notes: string[] = [];
+
+function schema(label: string, s: z.ZodType, data: unknown): void {
+  const r = s.safeParse(data);
+  if (!r.success) {
+    for (const issue of r.error.issues.slice(0, 5)) {
+      errors.push(`${label}：${issue.path.join(".") || "（整体）"} ${issue.message}`);
+    }
+  }
+}
+
+function unique(label: string, ids: readonly string[]): Set<string> {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) errors.push(`${label}：id 重复「${id}」`);
+    seen.add(id);
+  }
+  return seen;
+}
+
+function refs(
+  label: string,
+  wanted: readonly string[],
+  have: ReadonlySet<string>,
+  what: string,
+): void {
+  for (const id of wanted)
+    if (!have.has(id)) errors.push(`${label}：引用了不存在的${what}「${id}」`);
+}
+
+// 1. 按 schema 校验
+schema("物品表 items", inventoryRules.ItemCatalogSchema, items);
+schema("义体表 cyberware", cyberwareRules.CyberwareCatalogSchema, cyberware);
+schema("义体医生 ripperdocs", cyberwareRules.RipperdocListSchema, ripperdocs);
+schema("商店 shops", inventoryRules.ShopListSchema, shops);
+schema("地点 locations", worldRules.LocationCatalogSchema, locations);
+schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
+schema("中间人 fixers", jobsRules.FixerSchema.partial({ trust: true }).array(), fixers);
+schema("转折素材 twists", TwistCatalogSchema, twists);
+schema("后果参考表 consequences", falloutRules.ConsequenceTableSchema, consequences);
+schema("委托模板 jobTemplates", jobsRules.JobTemplateCatalogSchema, jobTemplates);
+schema("主板模块 boardModules", BoardModuleSchema.array(), boardModules);
+schema("联动 combos", ComboSchema.array(), combos);
+schema("生命路径 lifepath", LifepathEntrySchema.array(), lifepath);
+schema("示例角色 characters", CharacterCardSchema.array(), sampleCharacters);
+schema("黑话 glossary", GlossarySchema, glossary);
+
+// 2. 重复 id
+const itemIds = unique(
+  "物品表",
+  items.map((i) => i.id),
+);
+const chromeIds = unique(
+  "义体表",
+  cyberware.map((c) => c.id),
+);
+const locationIds = unique(
+  "地点",
+  locations.map((l) => l.id),
+);
+const fixerIds = unique(
+  "中间人",
+  fixers.map((f) => f.id),
+);
+const twistIds = unique(
+  "转折素材",
+  twists.map((t) => t.id),
+);
+const moduleIds = unique(
+  "主板模块",
+  boardModules.map((m) => m.id),
+);
+const loadoutIds = unique(
+  "行装",
+  loadouts.map((l) => l.id),
+);
+const openingIds = unique(
+  "开场",
+  openings.map((o) => o.id),
+);
+unique(
+  "义体医生",
+  ripperdocs.map((d) => d.id),
+);
+unique(
+  "商店",
+  shops.map((s) => s.id),
+);
+unique(
+  "人物卡",
+  (npcs as readonly { id: string }[]).map((n) => n.id),
+);
+unique(
+  "委托模板",
+  jobTemplates.map((t) => t.kind),
+);
+unique(
+  "联动",
+  combos.map((c) => c.id),
+);
+
+// 3. 跨表引用
+for (const s of shops) {
+  refs(`商店 ${s.id}`, [s.location], locationIds, "地点");
+  refs(`商店 ${s.id}`, s.shelf, itemIds, "物品");
+}
+for (const d of ripperdocs) {
+  refs(`义体医生 ${d.id}`, [d.location], locationIds, "地点");
+  refs(`义体医生 ${d.id}`, d.shelf, chromeIds, "义体");
+}
+for (const l of loadouts) {
+  refs(
+    `行装 ${l.id}`,
+    l.gear.map((g) => g.id),
+    itemIds,
+    "物品",
+  );
+  refs(`行装 ${l.id}`, l.cyberware ?? [], chromeIds, "义体");
+  if (l.keywords.length === 0) errors.push(`行装 ${l.id}：没有关键词，永远选不中`);
+}
+for (const o of openings) {
+  refs(`开场 ${o.id}`, [o.location], locationIds, "地点");
+  refs(
+    `开场 ${o.id}`,
+    o.gear.map((g) => g.id),
+    itemIds,
+    "物品",
+  );
+  refs(`开场 ${o.id}`, o.cyberware ?? [], chromeIds, "义体");
+  for (const j of o.jobs ?? []) {
+    if (j.fixer) refs(`开场 ${o.id} 的委托 ${j.id}`, [j.fixer], fixerIds, "中间人");
+    if (j.location) refs(`开场 ${o.id} 的委托 ${j.id}`, [j.location], locationIds, "地点");
+    if (j.risk < 1 || j.risk > 5)
+      errors.push(`开场 ${o.id} 的委托 ${j.id}：风险星级 ${j.risk} 不在 1–5`);
+  }
+}
+for (const t of jobTemplates) refs(`委托模板 ${t.kind}`, t.twists, twistIds, "转折");
+refs(
+  "生命路径",
+  lifepath.map((e) => e.id),
+  moduleIds,
+  "主板模块",
+);
+// 联动的每一项对上一块模块的 id、名字或标签就算数
+const moduleKeys = new Set(boardModules.flatMap((m) => [m.id, m.label, ...(m.tags ?? [])]));
+for (const c of combos) refs(`联动 ${c.id}`, c.requires, moduleKeys, "模块 id、名字或标签");
+refs("默认行装 DEFAULT_LOADOUT", [DEFAULT_LOADOUT], loadoutIds, "行装");
+refs("默认开场 DEFAULT_OPENING", [DEFAULT_OPENING], openingIds, "开场");
+
+// 4. 数值范围：照策划书的价格参考表（暂定，调平衡时两边一起改）
+type Band = readonly [number, number];
+// 普通档不设下限：小刀、钢管、起步手枪这类街头货本来就便宜
+const WEAPON_PRICES: Readonly<Record<string, Band>> = {
+  common: [0, 1_500],
+  uncommon: [1_500, 5_000],
+  rare: [5_000, 15_000],
+  epic: [15_000, 40_000],
+  legendary: [40_000, Number.POSITIVE_INFINITY],
+};
+const CHROME_PRICES: Readonly<Record<string, Band>> = {
+  common: [1_000, 5_000],
+  uncommon: [5_000, 15_000],
+  rare: [15_000, 35_000],
+  epic: [35_000, 70_000],
+  legendary: [70_000, Number.POSITIVE_INFINITY],
+};
+function priced(
+  label: string,
+  name: string,
+  rarity: string | undefined,
+  price: number | undefined,
+  table: Readonly<Record<string, Band>>,
+): void {
+  if (rarity === undefined || price === undefined) return;
+  const band = table[rarity];
+  if (!band) return;
+  if (price < band[0] || price > band[1]) {
+    errors.push(
+      `${label}「${name}」：${rarity} 的价格 ${price} 不在 ${band[0]}–${band[1] === Number.POSITIVE_INFINITY ? "∞" : band[1]}`,
+    );
+  }
+}
+for (const i of items) {
+  if (i.iconic || (i.kind !== "weapon" && i.kind !== "mod")) continue;
+  priced(i.kind === "weapon" ? "武器" : "改装件", i.name, i.rarity, i.price, WEAPON_PRICES);
+}
+for (const c of cyberware) {
+  if ((c as { iconic?: boolean }).iconic) continue;
+  priced("义体", c.name, c.rarity, c.price, CHROME_PRICES);
+}
+
+// 5. 官方译名（本机有译名表时）
+const TERMS = join(ROOT, "data", "lore", "terms.json");
+if (existsSync(TERMS)) {
+  const t = JSON.parse(readFileSync(TERMS, "utf8")) as {
+    seeds?: Record<string, { zh: string }[]>;
+    catalogs?: Record<string, { zh: string }[]>;
+  };
+  const official = new Set(
+    [...Object.values(t.seeds ?? {}), ...Object.values(t.catalogs ?? {})].flat().map((x) => x.zh),
+  );
+  const names: [string, string][] = [
+    ...cyberware.map((c): [string, string] => ["义体", c.name]),
+    ...items.map((i): [string, string] => ["物品", i.name]),
+  ];
+  const off = names.filter(([, n]) => !official.has(n));
+  notes.push(
+    off.length === 0
+      ? "义体和物品的名字都在官方译名表里"
+      : `有 ${off.length} 个义体或物品的名字不在官方译名表里（自创的可以不改，详细对照跑 pnpm terms）`,
+  );
+} else {
+  notes.push("本机没有官方译名表 data/lore/terms.json，跳过译名核对（需要时先跑 pnpm terms）");
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}`;
+for (const n of notes) console.log(n);
+if (errors.length > 0) {
+  console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);
+  for (const e of errors) console.log(`  ${e}`);
+  process.exitCode = 1;
+} else {
+  console.log(`数据检查通过：${counts}`);
+}

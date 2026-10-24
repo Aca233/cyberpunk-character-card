@@ -11,11 +11,12 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check-data",
     "eval": "pnpm --filter @cp/tools run eval",
     "pick-assets": "pnpm --filter @cp/tools run pick-assets",
     "check-assets": "pnpm --filter @cp/tools run check-assets",
-    "terms": "pnpm --filter @cp/tools run terms"
+    "terms": "pnpm --filter @cp/tools run terms",
+    "check-data": "pnpm --filter @cp/tools run check-data"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",

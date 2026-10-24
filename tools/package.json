@@ -7,7 +7,8 @@
     "eval": "tsx gm-eval.ts",
     "pick-assets": "tsx assets/pick.ts",
     "check-assets": "tsx assets/check.ts",
-    "terms": "tsx lore/terms.ts"
+    "terms": "tsx lore/terms.ts",
+    "check-data": "tsx check-data.ts"
   },
   "dependencies": {
     "@cp/content": "workspace:*",
