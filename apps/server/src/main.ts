@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
+import { AuthoringStore } from "./authoring";
 import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
 import { SaveStore } from "./storage";
@@ -19,6 +20,7 @@ const app = createApp({
   characters: new CharacterStore(join(root, "data")),
   dev,
   evalDrafts: join(root, "tools", "evals", "drafts"),
+  authoring: dev ? new AuthoringStore(join(root, "data", "drafts")) : undefined,
   log: (message) => console.error(message),
 });
 

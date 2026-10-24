@@ -25,6 +25,7 @@ import {
   BoardModuleSchema,
   CharacterCardSchema,
   ComboSchema,
+  contentPriceIssues,
   cyberwareRules,
   falloutRules,
   GlossarySchema,
@@ -194,46 +195,8 @@ refs("默认行装 DEFAULT_LOADOUT", [DEFAULT_LOADOUT], loadoutIds, "行装");
 refs("默认开场 DEFAULT_OPENING", [DEFAULT_OPENING], openingIds, "开场");
 
 // 4. 数值范围：照策划书的价格参考表（暂定，调平衡时两边一起改）
-type Band = readonly [number, number];
-// 普通档不设下限：小刀、钢管、起步手枪这类街头货本来就便宜
-const WEAPON_PRICES: Readonly<Record<string, Band>> = {
-  common: [0, 1_500],
-  uncommon: [1_500, 5_000],
-  rare: [5_000, 15_000],
-  epic: [15_000, 40_000],
-  legendary: [40_000, Number.POSITIVE_INFINITY],
-};
-const CHROME_PRICES: Readonly<Record<string, Band>> = {
-  common: [1_000, 5_000],
-  uncommon: [5_000, 15_000],
-  rare: [15_000, 35_000],
-  epic: [35_000, 70_000],
-  legendary: [70_000, Number.POSITIVE_INFINITY],
-};
-function priced(
-  label: string,
-  name: string,
-  rarity: string | undefined,
-  price: number | undefined,
-  table: Readonly<Record<string, Band>>,
-): void {
-  if (rarity === undefined || price === undefined) return;
-  const band = table[rarity];
-  if (!band) return;
-  if (price < band[0] || price > band[1]) {
-    errors.push(
-      `${label}「${name}」：${rarity} 的价格 ${price} 不在 ${band[0]}–${band[1] === Number.POSITIVE_INFINITY ? "∞" : band[1]}`,
-    );
-  }
-}
-for (const i of items) {
-  if (i.iconic || (i.kind !== "weapon" && i.kind !== "mod")) continue;
-  priced(i.kind === "weapon" ? "武器" : "改装件", i.name, i.rarity, i.price, WEAPON_PRICES);
-}
-for (const c of cyberware) {
-  if ((c as { iconic?: boolean }).iconic) continue;
-  priced("义体", c.name, c.rarity, c.price, CHROME_PRICES);
-}
+for (const item of items) errors.push(...contentPriceIssues("item", item));
+for (const chrome of cyberware) errors.push(...contentPriceIssues("cyberware", chrome));
 
 // 5. 官方译名（本机有译名表时）
 const TERMS = join(ROOT, "data", "lore", "terms.json");

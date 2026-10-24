@@ -1,11 +1,13 @@
 import { glossary } from "@cp/content";
 import type { Clock, Rng } from "@cp/core";
 import { Hono } from "hono";
+import type { AuthoringStore } from "./authoring";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
 import { LlmRouter } from "./providers/index";
 import { cryptoRng } from "./rng";
+import { authoringRoutes } from "./routes/authoring";
 import { characterRoutes } from "./routes/characters";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
@@ -25,6 +27,8 @@ export interface AppDeps {
   readonly rng?: Rng;
   /** 「存为评测用例」写草稿的目录 */
   readonly evalDrafts?: string | undefined;
+  /** 本机内容工坊；非开发模式即使传入也不挂载接口。 */
+  readonly authoring?: AuthoringStore | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -88,5 +92,8 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/profiles", profileRoutes(deps.config));
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
   app.route("/api/saves", saveRoutes(game, hub));
+  if (deps.dev && deps.authoring) {
+    app.route("/api/dev/authoring", authoringRoutes(deps.authoring, clock));
+  }
   return app;
 }

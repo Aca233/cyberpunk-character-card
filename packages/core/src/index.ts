@@ -1,4 +1,5 @@
 export * from "./actions";
+export * from "./authoring";
 export * from "./game";
 export * from "./gm";
 export * from "./kernel/ports";
