@@ -73,12 +73,12 @@ export const WorldCommandSchema = z
   .object({
     type: z.literal("world"),
     activity: ActivitySchema,
-    /** 这一轮结束时是几点，由主持人按情境写；不能早于现在。rest 没写时按睡到下一个清晨 */
+    /** 这一轮结束时是几点，按情境写；不能早于现在，没写就是时间没动 */
     time: GameTimeSchema.optional(),
     location: z.string().min(1).optional(),
   })
   .describe(
-    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在；location 是换到的地点 id",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在，没写就是时间没动；location 是换到的地点 id；收场（sceneEnd）时代码会至少推进到下一个时段",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 

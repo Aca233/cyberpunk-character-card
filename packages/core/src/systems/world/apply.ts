@@ -3,7 +3,6 @@ import type { ApplyOutcome } from "../../kernel/system";
 import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
-const MORNING_HOUR = 7;
 
 export type Period = "dawn" | "day" | "dusk" | "night";
 
@@ -49,12 +48,6 @@ export function nextPeriodStart(now: number): number {
   throw new Error("找不到下一个时段");
 }
 
-/** 下一个清晨（07:00），严格晚于 now */
-export function nextMorning(now: number): number {
-  const today = now - minuteOfDay(now) + MORNING_HOUR * 60;
-  return today > now ? today : today + MINUTES_PER_DAY;
-}
-
 /** 已经到期、还没回应的事件；一次跳过好几天时全部列出 */
 export function dueDeadlines(state: WorldClockState, now: number): readonly Deadline[] {
   return state.deadlines
@@ -70,7 +63,7 @@ function dueNotes(draft: Draft<WorldClockState>, from: number, to: number): stri
     .map((d) => `到期：${d.label}（${formatGameTime(d.due)}）`);
 }
 
-/** 时间由主持人写：只往前走，倒退的不改；rest 没写时间时按睡到下一个清晨；地点随指令更新 */
+/** 时间只往前走，倒退的不改；没写 time 时间不动；地点随指令更新 */
 export function applyWorld(
   draft: Draft<WorldClockState>,
   command: WorldCommand,
@@ -84,9 +77,6 @@ export function applyWorld(
       notes.push(
         `时间不能倒退：${formatGameTime(command.time)} 早于现在 ${formatGameTime(now)}，时间没动`,
       );
-  } else if (command.activity === "rest") {
-    target = nextMorning(now);
-    notes.push("没写睡到几点，按睡到清晨算");
   }
   if (command.location !== undefined && command.location !== draft.location) {
     draft.location = command.location;
@@ -121,9 +111,15 @@ export function applyDeadline(
   return { ok: true, notes: [`${early ? "提前办完" : "已回应"}：${existing.label}`] };
 }
 
-/** 场景结束：不推进时间（过了多久由主持人在 world 里写），广播 scene.end */
+/** 场景结束：至少前进到下一个时段，并广播 scene.end */
 export function endScene(draft: Draft<WorldClockState>, now: number): ApplyOutcome {
+  const target = nextPeriodStart(now);
   draft.scene += 1;
-  draft.sceneStartedAt = now;
-  return { ok: true, notes: ["场景结束"], signals: ["scene.end"] };
+  draft.sceneStartedAt = target;
+  return {
+    ok: true,
+    notes: [`场景结束，${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`],
+    advanceTo: target,
+    signals: ["scene.end"],
+  };
 }
