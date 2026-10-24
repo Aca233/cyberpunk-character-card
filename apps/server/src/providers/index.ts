@@ -8,7 +8,7 @@ export type Resolved =
   | { readonly ok: false; readonly error: string };
 
 /**
- * 按用途（gm / aux）在每次调用时从 config.json 选方案，改了配置不用重启。
+ * 按用途（narrator / aux）在每次调用时从 config.json 选方案，改了配置不用重启。
  * 选中的方案用不了就直接报错，不悄悄换成别的提供方。
  * pick 可以按用途指定方案名，覆盖 config.json 里的选择（测评工具用）
  */
@@ -24,7 +24,7 @@ export class LlmRouter implements LlmClient {
       return { ok: false, error: `config.json 还不能用：${state.errors.join("；")}` };
     const name = this.pick[purpose] ?? state.config[purpose];
     const profile = state.config.profiles.find((p) => p.name === name);
-    const role = purpose === "gm" ? "角色模型" : "辅助模型";
+    const role = purpose === "narrator" ? "叙事模型" : "辅助模型";
     if (!profile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };
     const key = this.config.keyFor(profile);
     switch (profile.type) {

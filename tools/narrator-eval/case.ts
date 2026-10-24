@@ -7,9 +7,9 @@ import {
   characterRules,
   currentOffers,
   diceRules,
-  type GmPlan,
   type LogRecord,
   LogRecordSchema,
+  type NarratorPlan,
   newGameWorld,
   registry,
   rolledFrom,
@@ -132,7 +132,7 @@ export async function loadCases(dir: string): Promise<EvalCase[]> {
 export interface Scenario {
   readonly world: WorldState;
   readonly records: readonly LogRecord[];
-  readonly plan: GmPlan;
+  readonly plan: NarratorPlan;
   /** 开场设定；只有从存档截出的用例有 */
   readonly opening?: string | undefined;
 }

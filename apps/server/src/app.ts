@@ -77,15 +77,15 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get("/api/health", async (c) => {
     const state = await deps.config.load();
-    const [gm, aux] = await Promise.all([llm.resolve("gm"), llm.resolve("aux")]);
+    const [narrator, aux] = await Promise.all([llm.resolve("narrator"), llm.resolve("aux")]);
     const redact = await deps.config.redactor();
     return c.json({
       ok: true,
       config: state.status,
       dev: deps.dev,
       models: {
-        ready: gm.ok && aux.ok,
-        gm: { ready: gm.ok, error: gm.ok ? null : redact(gm.error) },
+        ready: narrator.ok && aux.ok,
+        narrator: { ready: narrator.ok, error: narrator.ok ? null : redact(narrator.error) },
         aux: { ready: aux.ok, error: aux.ok ? null : redact(aux.error) },
       },
     });

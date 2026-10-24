@@ -22,6 +22,6 @@
       "temperature": 1
     }
   ],
-  "gm": "relay",
+  "narrator": "relay",
   "aux": "relay"
 }

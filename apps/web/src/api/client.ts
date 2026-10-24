@@ -117,7 +117,7 @@ export interface Health {
   /** 仅检查本机配置，不代表已经连通过服务商。兼容旧后端。 */
   readonly models?: {
     readonly ready: boolean;
-    readonly gm: { readonly ready: boolean; readonly error: string | null };
+    readonly narrator: { readonly ready: boolean; readonly error: string | null };
     readonly aux: { readonly ready: boolean; readonly error: string | null };
   };
 }
@@ -181,7 +181,7 @@ export interface PublicProfile {
 export interface ProfilesOverview {
   readonly status: "ok" | "missing" | "invalid";
   readonly errors: readonly string[];
-  readonly gm?: string;
+  readonly narrator?: string;
   readonly aux?: string;
   readonly profiles: readonly PublicProfile[];
 }
@@ -255,8 +255,8 @@ export const api = {
     request<ConnectionTest>("POST", `/profiles/${encodeURIComponent(name)}/test`),
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
-  setRoles: (roles: { gm?: string; aux?: string }) =>
-    request<{ gm: string; aux: string }>("PUT", "/profiles/-/roles", roles),
+  setRoles: (roles: { narrator?: string; aux?: string }) =>
+    request<{ narrator: string; aux: string }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),
   deleteProfile: (name: string) =>

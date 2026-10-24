@@ -62,7 +62,7 @@ export function profileRoutes(config: ConfigService): Hono {
   routes.post("/:name/test", async (c) => {
     const name = c.req.param("name");
     const redact = await config.redactor();
-    const resolved = await new LlmRouter(config, { gm: name }).resolve("gm");
+    const resolved = await new LlmRouter(config, { narrator: name }).resolve("narrator");
     if (!resolved.ok) return c.json({ ok: false, error: redact(resolved.error) });
     const started = Date.now();
     let reply = "";
@@ -70,7 +70,7 @@ export function profileRoutes(config: ConfigService): Hono {
     try {
       for await (const event of resolved.client.stream(
         {
-          purpose: "gm",
+          purpose: "narrator",
           temperature: 0,
           maxOutputTokens: 64,
           messages: [{ role: "user", content: "连接测试：只回复 OK。" }],

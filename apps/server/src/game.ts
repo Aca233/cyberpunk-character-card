@@ -13,19 +13,19 @@ import {
   type ActionRequest,
   applyPlayerAction,
   boardStart,
-  buildGmPrompt,
+  buildNarratorPrompt,
   type CheckRecord,
   type Clock,
   currentOffers,
   diceRules,
   effectiveTurns,
-  GmAbortedError,
-  GmEmptyReplyError,
-  type GmPlan,
-  type GmTurn,
   type LogRecord,
   loadoutText,
   logVersion,
+  NarratorAbortedError,
+  NarratorEmptyReplyError,
+  type NarratorPlan,
+  type NarratorTurn,
   newGameWorld,
   type PlayerView,
   phoneRules,
@@ -36,7 +36,7 @@ import {
   type Rng,
   replay,
   rolledFrom,
-  runGmTurn,
+  runNarratorTurn,
   type SaveMeta,
   sandevistanBlock,
   saveCharacter,
@@ -233,7 +233,7 @@ export class GameService {
           log = [...records, record];
         }
         const check = rolledFrom(world, offer, faces);
-        const plan: GmPlan = {
+        const plan: NarratorPlan = {
           kind: "resolve",
           input: { text: offer.label },
           check,
@@ -406,7 +406,7 @@ export class GameService {
       let rebuildError: string | null = null;
       try {
         if (!input.success) throw new Error("这一轮的玩家输入格式不对");
-        let plan: GmPlan = { kind: "action", input: input.data };
+        let plan: NarratorPlan = { kind: "action", input: input.data };
         if (record.resolves !== undefined) {
           const offer = currentOffers(before).checks.find((o) => o.id === record.resolves);
           const rolled = before.findLast(
@@ -415,7 +415,7 @@ export class GameService {
           if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
           plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
         }
-        const built = buildGmPrompt(world, before, plan, {
+        const built = buildNarratorPrompt(world, before, plan, {
           data: gameData,
           opening: openingPremise(meta.opening),
         });
@@ -512,7 +512,7 @@ export class GameService {
 
   /** 叙事模型没配好时直接告诉玩家，不换别的服务商 */
   private async llmUnavailable(): Promise<Reply | undefined> {
-    const resolved = await this.deps.llm.resolve("gm");
+    const resolved = await this.deps.llm.resolve("narrator");
     if (resolved.ok) return undefined;
     const redact = await this.deps.config.redactor();
     return { status: 503, body: { error: redact(resolved.error) } };
@@ -522,14 +522,14 @@ export class GameService {
     run: TurnRun,
     world: WorldState,
     records: readonly LogRecord[],
-    plan: GmPlan,
+    plan: NarratorPlan,
     opening: string | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
     const signal = run.controller.signal;
     try {
-      const result = await runGmTurn(
+      const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
           rng: this.deps.rng,
@@ -546,7 +546,7 @@ export class GameService {
         hub.push(run, { type: "blocked", reason: redact(result.reason) });
         return;
       }
-      if (signal.aborted) throw new GmAbortedError("已停止");
+      if (signal.aborted) throw new NarratorAbortedError("已停止");
       const { turn } = result;
       const usage = addUsage(turn.usage, turn.repairUsage);
       const saved = await this.commit(run, plan, turn, usage);
@@ -555,9 +555,13 @@ export class GameService {
       }
       hub.push(run, { type: "done", ...saved, ...(usage ? { usage } : {}) });
     } catch (error) {
-      if (error instanceof GmAbortedError || error instanceof AbortedError || signal.aborted) {
+      if (
+        error instanceof NarratorAbortedError ||
+        error instanceof AbortedError ||
+        signal.aborted
+      ) {
         hub.push(run, { type: "stopped" });
-      } else if (error instanceof GmEmptyReplyError) {
+      } else if (error instanceof NarratorEmptyReplyError) {
         hub.push(run, { type: "error", message: "模型没有返回正文，可以重试", retryable: true });
       } else if (error instanceof UpstreamError) {
         hub.push(run, {
@@ -578,8 +582,8 @@ export class GameService {
 
   private commit(
     run: TurnRun,
-    plan: GmPlan,
-    turn: GmTurn,
+    plan: NarratorPlan,
+    turn: NarratorTurn,
     usage: TurnUsage | undefined,
   ): Promise<{ seq: number; version: number }> {
     const { saves } = this.deps;

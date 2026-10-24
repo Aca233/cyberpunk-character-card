@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { schemaDoc } from "../gm/doc";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
+import { schemaDoc } from "../narrator/doc";
 import { CHROME_PRICES, type PriceBand, WEAPON_PRICES } from "./prices";
 import {
   AUTHORING_LABELS,

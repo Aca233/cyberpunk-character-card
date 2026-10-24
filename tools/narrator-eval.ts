@@ -3,20 +3,20 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { gameData } from "@cp/content";
 import {
-  buildGmPrompt,
+  buildNarratorPrompt,
   fixedRng,
   type LlmClient,
   type LlmUsage,
-  runGmTurn,
+  runNarratorTurn,
   seededRng,
 } from "@cp/core";
 import { ConfigService, LlmRouter } from "@cp/server/llm";
-import { buildScenario, type EvalCase, loadCases, type Scenario } from "./gm-eval/case";
-import { codeFindings, type Finding, moduleFindings } from "./gm-eval/checks";
-import { grade, type Score } from "./gm-eval/grader";
+import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
+import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
+import { grade, type Score } from "./narrator-eval/grader";
 
 /**
- * 角色模型测评：pnpm eval [--gm 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
+ * 叙事模型测评：pnpm eval [--narrator 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
  *   [--repeat 3] [--jobs 2] [--offline]
  * 调用真实模型，会花钱；--offline 只检查用例和规则模块选择，不调模型。
  * 结果写进 tools/evals/results/，并和上一次对比
@@ -28,7 +28,7 @@ const RESULTS = join(CASES, "results");
 
 const { values: args } = parseArgs({
   options: {
-    gm: { type: "string" },
+    narrator: { type: "string" },
     aux: { type: "string" },
     grader: { type: "string" },
     tag: { type: "string" },
@@ -89,11 +89,11 @@ interface CaseSummary {
 
 interface ResultFile {
   readonly at: string;
-  readonly gm: string;
+  readonly narrator: string;
   readonly aux: string;
   readonly grader: string | null;
   readonly repeat: number;
-  readonly usage: Readonly<Record<"gm" | "repair" | "grader", Usage>>;
+  readonly usage: Readonly<Record<"narrator" | "repair" | "grader", Usage>>;
   readonly cases: Readonly<Record<string, CaseSummary>>;
 }
 
@@ -126,7 +126,7 @@ function offline(cases: readonly EvalCase[], scenarios: ReadonlyMap<string, Scen
   let failed = 0;
   for (const c of cases) {
     const scenario = scenarios.get(c.id) as Scenario;
-    const prompt = buildGmPrompt(scenario.world, scenario.records, scenario.plan, {
+    const prompt = buildNarratorPrompt(scenario.world, scenario.records, scenario.plan, {
       data: gameData,
       opening: scenario.opening,
     });
@@ -171,28 +171,31 @@ async function main(): Promise<number> {
 
   const config = new ConfigService(args.config);
   const redact = await config.redactor();
-  const pick = { ...(args.gm ? { gm: args.gm } : {}), ...(args.aux ? { aux: args.aux } : {}) };
-  const gmLlm = new LlmRouter(config, pick);
-  const describe = async (router: LlmRouter, purpose: "gm" | "aux") => {
+  const pick = {
+    ...(args.narrator ? { narrator: args.narrator } : {}),
+    ...(args.aux ? { aux: args.aux } : {}),
+  };
+  const narratorLlm = new LlmRouter(config, pick);
+  const describe = async (router: LlmRouter, purpose: "narrator" | "aux") => {
     const resolved = await router.resolve(purpose);
     if (!resolved.ok) throw new Error(redact(resolved.error));
     return `${resolved.profile.name}（${resolved.profile.model}）`;
   };
-  const gmName = await describe(gmLlm, "gm");
-  const auxName = await describe(gmLlm, "aux");
+  const narratorName = await describe(narratorLlm, "narrator");
+  const auxName = await describe(narratorLlm, "aux");
   let graderLlm: LlmClient | undefined;
   let graderName: string | null = null;
   if (args.grader) {
-    const router = new LlmRouter(config, { gm: args.grader });
-    graderName = await describe(router, "gm");
+    const router = new LlmRouter(config, { narrator: args.grader });
+    graderName = await describe(router, "narrator");
     graderLlm = router;
   }
   console.log(
-    `角色模型 ${gmName}，辅助 ${auxName}，评分 ${graderName ?? "不评（没给 --grader，只跑代码检查）"}`,
+    `叙事模型 ${narratorName}，辅助 ${auxName}，评分 ${graderName ?? "不评（没给 --grader，只跑代码检查）"}`,
   );
   console.log(`${cases.length} 条用例 × ${repeat} 次，并发 ${jobs}；调用真实模型，会产生费用\n`);
 
-  const usage = { gm: zero(), repair: zero(), grader: zero() };
+  const usage = { narrator: zero(), repair: zero(), grader: zero() };
   const results = new Map<string, RunResult[]>(cases.map((c) => [c.id, []]));
   const tasks = cases.flatMap((c) => Array.from({ length: repeat }, (_, rep) => ({ c, rep })));
 
@@ -202,8 +205,8 @@ async function main(): Promise<number> {
     const rng = c.dice ? fixedRng(c.dice) : seededRng(rep + 1);
     let run: RunResult;
     try {
-      const result = await runGmTurn(
-        { llm: gmLlm, rng, data: gameData, opening: scenario.opening },
+      const result = await runNarratorTurn(
+        { llm: narratorLlm, rng, data: gameData, opening: scenario.opening },
         scenario.world,
         scenario.records,
         scenario.plan,
@@ -218,7 +221,7 @@ async function main(): Promise<number> {
         };
       } else {
         const { turn } = result;
-        add(usage.gm, turn.usage);
+        add(usage.narrator, turn.usage);
         add(usage.repair, turn.repairUsage);
         const findings = codeFindings(c, scenario.plan, turn);
         let scores: readonly Score[] = [];
@@ -300,7 +303,7 @@ async function main(): Promise<number> {
   const previous = await previousResult();
   const file: ResultFile = {
     at: new Date().toISOString(),
-    gm: gmName,
+    narrator: narratorName,
     aux: auxName,
     grader: graderName,
     repeat,
@@ -339,13 +342,13 @@ async function main(): Promise<number> {
       if (reasons.length > 0) worse.push(`  ${id}：${reasons.join("，")}`);
     }
     console.log(
-      `和上一次（${previous.at}，${previous.gm}）相比：${worse.length > 0 ? `${worse.length} 条变差` : "没有变差的用例"}`,
+      `和上一次（${previous.at}，${previous.narrator}）相比：${worse.length > 0 ? `${worse.length} 条变差` : "没有变差的用例"}`,
     );
     for (const line of worse) console.log(line);
   }
   const u = (x: Usage) => `输入 ${x.inputTokens}，输出 ${x.outputTokens}`;
   console.log(
-    `\ntoken 用量：角色模型 ${u(usage.gm)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
+    `\ntoken 用量：叙事模型 ${u(usage.narrator)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
   );
   console.log(`结果：tools/evals/results/${name}`);
   return 0;

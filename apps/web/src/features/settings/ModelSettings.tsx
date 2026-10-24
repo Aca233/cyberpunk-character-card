@@ -133,15 +133,15 @@ export function ModelSettings({
       </section>
     );
 
-  const gm = data.profiles.find((p) => p.name === data.gm);
+  const narrator = data.profiles.find((p) => p.name === data.narrator);
   const aux = data.profiles.find((p) => p.name === data.aux);
-  const gmProblems = problems(gm);
+  const narratorProblems = problems(narrator);
   const auxProblems = problems(aux);
-  const ready = gmProblems.length === 0 && auxProblems.length === 0;
+  const ready = narratorProblems.length === 0 && auxProblems.length === 0;
   const candidate = data.profiles.find((p) => problems(p).length === 0);
   const requested = params.get("profile");
   const adding = requested === "@new" || data.profiles.length === 0;
-  const selected = data.profiles.find((p) => p.name === requested) ?? gm ?? data.profiles[0];
+  const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
 
   return (
     <div className={styles.root}>
@@ -160,13 +160,13 @@ export function ModelSettings({
           <span className={styles.kicker}>{ready ? "配置已就绪" : "还差一步"}</span>
           <h3>{ready ? "模型已选好，连接尚需实际验证。" : "当前选择还不能开始剧情。"}</h3>
           <p>
-            角色模型：<strong>{data.gm ?? "未选择"}</strong> · 辅助模型：
+            叙事模型：<strong>{data.narrator ?? "未选择"}</strong> · 辅助模型：
             <strong>{data.aux ?? "未选择"}</strong>
           </p>
           {!ready && (
             <ul>
-              {gmProblems.map((p) => (
-                <li key={`gm-${p}`}>角色模型：{p}</li>
+              {narratorProblems.map((p) => (
+                <li key={`narrator-${p}`}>叙事模型：{p}</li>
               ))}
               {auxProblems.map((p) => (
                 <li key={`aux-${p}`}>辅助模型：{p}</li>
@@ -182,7 +182,7 @@ export function ModelSettings({
               primary
               disabled={assign.isPending || dirty}
               reason={dirty ? "先保存或撤销正在编辑的内容" : "正在更新"}
-              onClick={() => assign.mutate({ gm: candidate.name, aux: candidate.name })}
+              onClick={() => assign.mutate({ narrator: candidate.name, aux: candidate.name })}
             >
               {assign.isPending ? "切换中…" : `角色和辅助都改用「${candidate.name}」`}
             </Button>
@@ -226,7 +226,7 @@ export function ModelSettings({
                       {issues.length ? "需要处理" : "配置齐全 · 未验证"}
                     </span>
                     <span className={styles.roles}>
-                      {data.gm === profile.name ? "角色模型 " : ""}
+                      {data.narrator === profile.name ? "叙事模型 " : ""}
                       {data.aux === profile.name ? "辅助模型" : ""}
                     </span>
                   </button>
@@ -262,7 +262,7 @@ export function ModelSettings({
               <section className={styles.usage}>
                 <span className={styles.kicker}>02 / 用于游戏</span>
                 <h3>保存之后，明确选它来玩。</h3>
-                <p>角色模型扮演 NPC、推进剧情；辅助模型处理格式修复等后台工作。</p>
+                <p>叙事模型扮演 NPC、推进剧情；辅助模型处理格式修复等后台工作。</p>
                 <div className={styles.actions}>
                   <Button
                     primary
@@ -270,14 +270,14 @@ export function ModelSettings({
                       dirty ||
                       assign.isPending ||
                       problems(selected).length > 0 ||
-                      (data.gm === selected.name && data.aux === selected.name)
+                      (data.narrator === selected.name && data.aux === selected.name)
                     }
                     reason={
                       dirty ? "请先保存连接" : problems(selected).join("；") || "角色和辅助已经在用"
                     }
-                    onClick={() => assign.mutate({ gm: selected.name, aux: selected.name })}
+                    onClick={() => assign.mutate({ narrator: selected.name, aux: selected.name })}
                   >
-                    {data.gm === selected.name && data.aux === selected.name
+                    {data.narrator === selected.name && data.aux === selected.name
                       ? "角色和辅助正在使用"
                       : "角色和辅助都用这个"}
                   </Button>
@@ -290,11 +290,11 @@ export function ModelSettings({
                         dirty ||
                         assign.isPending ||
                         problems(selected).length > 0 ||
-                        data.gm === selected.name
+                        data.narrator === selected.name
                       }
-                      onClick={() => assign.mutate({ gm: selected.name })}
+                      onClick={() => assign.mutate({ narrator: selected.name })}
                     >
-                      只设为角色模型
+                      只设为叙事模型
                     </Button>
                     <Button
                       disabled={
@@ -314,7 +314,7 @@ export function ModelSettings({
                 configVersion={overview.dataUpdatedAt}
                 profile={selected}
                 dirty={dirty}
-                inUse={data.gm === selected.name || data.aux === selected.name}
+                inUse={data.narrator === selected.name || data.aux === selected.name}
                 onDeleted={() => select("@new")}
               />
             </div>

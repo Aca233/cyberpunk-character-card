@@ -53,36 +53,46 @@ export const NewProfileSchema = ProfileBase.omit({ apiKey: true, apiKeyEnv: true
 });
 
 const RolesSchema = z.strictObject({
-  gm: z.string().min(1).optional(),
+  narrator: z.string().min(1).optional(),
   aux: z.string().min(1).optional(),
 });
 
-export const ConfigSchema = z
-  .strictObject({
-    profiles: z.array(ProfileSchema).min(1, "至少要有一个方案"),
-    /** 角色模型（扮演 NPC、写剧情）用哪个方案 */
-    gm: z.string().min(1),
-    /** 辅助模型（摘要、格式修复、模块解读）用哪个方案 */
-    aux: z.string().min(1),
-  })
-  .superRefine((config, ctx) => {
-    const names = new Set<string>();
-    for (const [index, profile] of config.profiles.entries()) {
-      if (names.has(profile.name)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["profiles", index, "name"],
-          message: `方案名重复：${profile.name}`,
-        });
+/** 旧版 config.json 用 gm 记叙事模型的方案：读的时候当成 narrator，下次保存就写成新键 */
+function legacyRoles(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw) || !("gm" in raw)) return raw;
+  const { gm, ...rest } = raw as Record<string, unknown>;
+  return "narrator" in rest ? rest : { ...rest, narrator: gm };
+}
+
+export const ConfigSchema = z.preprocess(
+  legacyRoles,
+  z
+    .strictObject({
+      profiles: z.array(ProfileSchema).min(1, "至少要有一个方案"),
+      /** 叙事模型（扮演 NPC、写剧情）用哪个方案 */
+      narrator: z.string().min(1),
+      /** 辅助模型（摘要、格式修复、模块解读）用哪个方案 */
+      aux: z.string().min(1),
+    })
+    .superRefine((config, ctx) => {
+      const names = new Set<string>();
+      for (const [index, profile] of config.profiles.entries()) {
+        if (names.has(profile.name)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["profiles", index, "name"],
+            message: `方案名重复：${profile.name}`,
+          });
+        }
+        names.add(profile.name);
       }
-      names.add(profile.name);
-    }
-    for (const role of ["gm", "aux"] as const) {
-      if (!names.has(config[role])) {
-        ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${config[role]} 的方案` });
+      for (const role of ["narrator", "aux"] as const) {
+        if (!names.has(config[role])) {
+          ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${config[role]} 的方案` });
+        }
       }
-    }
-  });
+    }),
+);
 export type Config = z.infer<typeof ConfigSchema>;
 
 export type ConfigState =
@@ -243,7 +253,7 @@ export class ConfigService {
     return {
       status: state.status,
       errors: state.errors,
-      gm: config.gm,
+      narrator: config.narrator,
       aux: config.aux,
       profiles: config.profiles.map((p) => this.publicProfile(p)),
     };
@@ -326,7 +336,10 @@ export class ConfigService {
         if (!config.profiles.some((p) => p.name === name)) {
           return fail(404, `没有叫 ${name} 的方案`);
         }
-        const roles = [config.gm === name ? "角色模型" : null, config.aux === name ? "辅助" : null]
+        const roles = [
+          config.narrator === name ? "叙事模型" : null,
+          config.aux === name ? "辅助" : null,
+        ]
           .filter((r) => r !== null)
           .join("和");
         if (roles !== "") return fail(409, `「${name}」正在当${roles}，先换成别的方案再删`);
@@ -337,14 +350,14 @@ export class ConfigService {
   }
 
   /** 换角色 / 辅助用的方案 */
-  setRoles(body: unknown): Promise<Result<{ gm: string; aux: string }>> {
+  setRoles(body: unknown): Promise<Result<{ narrator: string; aux: string }>> {
     const parsed = RolesSchema.safeParse(body);
     if (!parsed.success) {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
     return this.edit(
       (config) => ({ draft: { ...config, ...parsed.data } }),
-      (config) => ({ gm: config.gm, aux: config.aux }),
+      (config) => ({ narrator: config.narrator, aux: config.aux }),
     );
   }
 

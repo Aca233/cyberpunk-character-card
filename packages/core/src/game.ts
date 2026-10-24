@@ -1,8 +1,6 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
 
 import { applyPatches } from "immer";
-import { readVoices } from "./gm/block";
-import { currentOffers, prepareFor } from "./gm/pending";
 import {
   effectiveTurns,
   type LogRecord,
@@ -11,6 +9,8 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
+import { readVoices } from "./narrator/block";
+import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { credTier } from "./systems/character/apply";

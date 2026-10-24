@@ -36,7 +36,7 @@ import {
 } from "./block";
 import { schemaDoc } from "./doc";
 import { prepareFor } from "./pending";
-import { buildGmPrompt, type GmPlan } from "./prompts";
+import { buildNarratorPrompt, type NarratorPlan } from "./prompts";
 import { closeupFor, sceneTitle } from "./scene";
 
 /**
@@ -53,7 +53,7 @@ export interface Dropped {
   readonly stage: "format" | "rules";
 }
 
-export interface GmTurn {
+export interface NarratorTurn {
   /** 正文，不含指令块 */
   readonly text: string;
   readonly read: string | undefined;
@@ -88,11 +88,11 @@ export interface GmTurn {
   readonly messages: readonly LlmMessage[];
 }
 
-export type GmResult =
-  | { readonly kind: "done"; readonly turn: GmTurn }
+export type NarratorResult =
+  | { readonly kind: "done"; readonly turn: NarratorTurn }
   | { readonly kind: "blocked"; readonly reason: string };
 
-export interface GmDeps {
+export interface NarratorDeps {
   readonly llm: LlmClient;
   readonly rng: Rng;
   /** 静态数据表（content 包） */
@@ -104,12 +104,12 @@ export interface GmDeps {
   readonly onText?: (text: string) => void;
 }
 
-export class GmEmptyReplyError extends Error {
-  override name = "GmEmptyReplyError";
+export class NarratorEmptyReplyError extends Error {
+  override name = "NarratorEmptyReplyError";
 }
 
-export class GmAbortedError extends Error {
-  override name = "GmAbortedError";
+export class NarratorAbortedError extends Error {
+  override name = "NarratorAbortedError";
 }
 
 const REPAIR_SYSTEM =
@@ -126,10 +126,10 @@ class TurnBuilder {
   repairs = 0;
   repairUsage: LlmUsage = { inputTokens: 0, outputTokens: 0 };
 
-  constructor(private readonly deps: GmDeps) {}
+  constructor(private readonly deps: NarratorDeps) {}
 
   checkAborted(): void {
-    if (this.deps.signal?.aborted) throw new GmAbortedError("已停止生成");
+    if (this.deps.signal?.aborted) throw new NarratorAbortedError("已停止生成");
   }
 
   drop(where: string, raw: unknown, reason: string, stage: Dropped["stage"]): void {
@@ -245,18 +245,21 @@ function verifySource(
   return rest;
 }
 
-export async function runGmTurn(
-  deps: GmDeps,
+export async function runNarratorTurn(
+  deps: NarratorDeps,
   world: WorldState,
   records: readonly LogRecord[],
-  plan: GmPlan,
-): Promise<GmResult> {
+  plan: NarratorPlan,
+): Promise<NarratorResult> {
   const b = new TurnBuilder(deps);
-  const prompt = buildGmPrompt(world, records, plan, { data: deps.data, opening: deps.opening });
+  const prompt = buildNarratorPrompt(world, records, plan, {
+    data: deps.data,
+    opening: deps.opening,
+  });
   const splitter = new StateSplitter();
   let usage: LlmUsage | undefined;
   for await (const event of deps.llm.stream(
-    { purpose: "gm", messages: prompt.messages },
+    { purpose: "narrator", messages: prompt.messages },
     deps.signal,
   )) {
     if (event.type === "text") {
@@ -271,7 +274,7 @@ export async function runGmTurn(
   b.checkAborted();
   const { rest, narrative, block } = splitter.finish();
   if (rest !== "") deps.onText?.(rest);
-  if (narrative === "") throw new GmEmptyReplyError("模型没有返回正文，可以重试");
+  if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
 
   const shape = await b.readBlock(block);
   // 场外提问由叙事模型判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算

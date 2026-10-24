@@ -1,4 +1,4 @@
-import { type Command, diceRules, type GmPlan, type GmTurn } from "@cp/core";
+import { type Command, diceRules, type NarratorPlan, type NarratorTurn } from "@cp/core";
 import type { EvalCase } from "./case";
 
 /** 代码检查：不用模型，能直接判对错的项 */
@@ -41,7 +41,7 @@ export function moduleFindings(c: EvalCase, modules: readonly string[]): Finding
   ];
 }
 
-export function codeFindings(c: EvalCase, plan: GmPlan, turn: GmTurn): Finding[] {
+export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn): Finding[] {
   const out: Finding[] = [];
   const blockDrops = turn.dropped.filter((d) => d.where === "指令块");
   out.push(

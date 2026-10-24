@@ -47,7 +47,7 @@ export const HISTORY_TURNS = 12;
 /** 常驻核心负责说明的指令；其余指令由各系统的规则模块说明 */
 export const CORE_COMMANDS = ["world", "humanity", "item", "damage", "heal", "deadline"] as const;
 
-export type GmPlan =
+export type NarratorPlan =
   | { readonly kind: "action"; readonly input: TurnInput }
   /** 玩家确认了检定，骰子已经写进日志，这一轮写结果 */
   | { readonly kind: "resolve"; readonly input: TurnInput; readonly check: RolledCheck };
@@ -446,18 +446,18 @@ export function checkResultText(rolled: RolledCheck): string {
   return lines.join("\n");
 }
 
-export interface GmPrompt {
+export interface NarratorPrompt {
   readonly messages: readonly LlmMessage[];
   /** 本轮带上的规则模块 id，记进回合日志，上下文查看器用 */
   readonly modules: readonly string[];
 }
 
-export function buildGmPrompt(
+export function buildNarratorPrompt(
   world: WorldState,
   records: readonly LogRecord[],
-  plan: GmPlan,
+  plan: NarratorPlan,
   extras: PromptExtras = {},
-): GmPrompt {
+): NarratorPrompt {
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const tables = extras.data

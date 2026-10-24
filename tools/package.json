@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "eval": "tsx gm-eval.ts",
+    "eval": "tsx narrator-eval.ts",
     "pick-assets": "tsx assets/pick.ts",
     "check-assets": "tsx assets/check.ts",
     "terms": "tsx lore/terms.ts",
