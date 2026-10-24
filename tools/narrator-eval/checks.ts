@@ -58,10 +58,20 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
         .map((d) => `${d.where}：${d.reason}`),
     ),
   );
+  // 用例期望"该抽、但不该生效"的指令（例如没掷骰的伤害），被代码拦下正是想要的结果，不算失败
+  const meantToBlock = new Set(
+    c.expect.extract.require.filter((k) => c.expect.verify.forbid.includes(k)),
+  );
+  const rawKeys = (raw: unknown): string[] =>
+    typeof raw === "object" && raw !== null && typeof (raw as { type?: unknown }).type === "string"
+      ? commandKeys(raw as Command)
+      : [];
   out.push(
     finding(
       "业务校验",
-      turn.dropped.filter((d) => d.stage === "rules").map((d) => `${d.where}：${d.reason}`),
+      turn.dropped
+        .filter((d) => d.stage === "rules" && !rawKeys(d.raw).some((k) => meantToBlock.has(k)))
+        .map((d) => `${d.where}：${d.reason}`),
     ),
   );
 
@@ -117,13 +127,7 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
     ...turn.commands.flatMap(commandKeys),
     ...turn.dropped
       .filter((d) => d.stage !== "format" && !notCommand.test(d.where))
-      .flatMap((d) =>
-        typeof d.raw === "object" &&
-        d.raw !== null &&
-        typeof (d.raw as { type?: unknown }).type === "string"
-          ? commandKeys(d.raw as Command)
-          : [],
-      ),
+      .flatMap((d) => rawKeys(d.raw)),
   ]);
   const { extract, verify } = c.expect;
   if (extract.require.length > 0 || extract.forbid.length > 0) {

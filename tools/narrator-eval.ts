@@ -14,7 +14,7 @@ import {
   runNarratorTurn,
   seededRng,
 } from "@cp/core";
-import { ConfigService, LlmRouter } from "@cp/server/llm";
+import { ConfigService, LlmRouter, UpstreamError } from "@cp/server/llm";
 import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
 import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
 import { grade, type Score } from "./narrator-eval/grader";
@@ -28,6 +28,40 @@ import { scriptedNarrator } from "./narrator-eval/scripted";
  */
 
 const ROOT = join(import.meta.dirname, "..");
+
+/** 连不上时最多再连几次、每次多等多久 */
+const CONNECT_RETRIES = 3;
+const CONNECT_WAIT_MS = 20_000;
+let reconnects = 0;
+
+/**
+ * 只在测评里用：连不上（请求还没发出去，不花钱）时等一会儿再连，免得网络抖动把整批结果冲掉。
+ * 已经开始返回内容、或上游回了状态码的错误照常报；游戏里仍然不自动重试
+ */
+function retryConnect(inner: LlmClient): LlmClient {
+  return {
+    async *stream(request, signal) {
+      for (let attempt = 0; ; attempt++) {
+        let started = false;
+        try {
+          for await (const event of inner.stream(request, signal)) {
+            started = true;
+            yield event;
+          }
+          return;
+        } catch (error) {
+          const connect =
+            error instanceof UpstreamError &&
+            error.status === undefined &&
+            error.message.startsWith("连不上");
+          if (started || !connect || attempt >= CONNECT_RETRIES) throw error;
+          reconnects++;
+          await new Promise((resolve) => setTimeout(resolve, CONNECT_WAIT_MS * (attempt + 1)));
+        }
+      }
+    },
+  };
+}
 const CASES = join(import.meta.dirname, "evals");
 const RESULTS = join(CASES, "results");
 
@@ -203,20 +237,21 @@ async function main(): Promise<number> {
     ...(args.narrator ? { narrator: args.narrator } : {}),
     ...(args.aux ? { aux: args.aux } : {}),
   };
-  const narratorLlm = new LlmRouter(config, pick);
+  const narratorRouter = new LlmRouter(config, pick);
+  const narratorLlm = retryConnect(narratorRouter);
   const describe = async (router: LlmRouter, purpose: "narrator" | "aux") => {
     const resolved = await router.resolve(purpose);
     if (!resolved.ok) throw new Error(redact(resolved.error));
     return `${resolved.profile.name}（${resolved.profile.model}）`;
   };
-  const narratorName = await describe(narratorLlm, "narrator");
-  const auxName = await describe(narratorLlm, "aux");
+  const narratorName = await describe(narratorRouter, "narrator");
+  const auxName = await describe(narratorRouter, "aux");
   let graderLlm: LlmClient | undefined;
   let graderName: string | null = null;
   if (args.grader) {
     const router = new LlmRouter(config, { narrator: args.grader });
     graderName = await describe(router, "narrator");
-    graderLlm = router;
+    graderLlm = retryConnect(router);
   }
   console.log(
     `叙事模型 ${narratorName}，辅助 ${auxName}，评分 ${graderName ?? "不评（没给 --grader，只跑代码检查）"}`,
@@ -377,7 +412,7 @@ async function main(): Promise<number> {
   }
   const u = (x: Usage) => `输入 ${x.inputTokens}，输出 ${x.outputTokens}`;
   console.log(
-    `\ntoken 用量：叙事模型 ${u(usage.narrator)}；抽取和核对 ${u(usage.aux)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
+    `\ntoken 用量：叙事模型 ${u(usage.narrator)}；抽取和核对 ${u(usage.aux)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}；连不上后重连 ${reconnects} 次`,
   );
   console.log(`结果：tools/evals/results/${name}`);
   return 0;
