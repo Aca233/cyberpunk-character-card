@@ -17,6 +17,7 @@ import { falloutKinds } from "../systems/fallout";
 import { HealthStateSchema } from "../systems/health";
 import { itemCatalog } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
+import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { WorldClockStateSchema } from "../systems/world";
 import {
@@ -407,6 +408,21 @@ export async function runGmTurn(
   }
   b.checkAborted();
 
+  // 手机消息：每轮最多两条；场外提问和闪回里不收
+  for (const [i, item] of (shape.messages ?? []).entries()) {
+    const where = `messages[${i}]`;
+    if (ooc || inFlashback) {
+      b.drop(where, item, ooc ? oocReason : flashbackReason, "rules");
+      continue;
+    }
+    if (i >= MESSAGES_PER_TURN) {
+      b.drop(where, item, `手机消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
+      continue;
+    }
+    const message = await b.validate(where, item, IncomingMessageSchema);
+    if (message) commands.push({ type: "phone.receive", from: message.from, text: message.text });
+  }
+
   // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
   if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
     commands.push({ type: "combat.standoffTick" });
@@ -446,6 +462,10 @@ export async function runGmTurn(
   if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
+  }
+  // 在手机上回复：先记下回的是哪一条
+  if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
+    commands.unshift({ type: "phone.reply", id: plan.input.replyTo });
   }
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
   const applied = registry.applyCommands(world, commands, applyCtx);

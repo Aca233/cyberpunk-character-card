@@ -66,6 +66,7 @@ import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/appl
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
+import { PhoneStateSchema } from "./systems/phone/schema";
 import { registry } from "./systems/registry";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
@@ -647,6 +648,9 @@ export function perceivedLine(
   return bits.join("；");
 }
 
+/** 界面上最多列几条手机消息 */
+const PHONE_SHOWN = 20;
+
 export function projectState(
   world: WorldState,
   records: readonly LogRecord[],
@@ -663,6 +667,8 @@ export function projectState(
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
+  // 旧存档没有手机
+  const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
   const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   // 旧快照里没有热度系统
   const heat = world.slices.heat === undefined ? null : HeatStateSchema.parse(world.slices.heat);
@@ -972,6 +978,22 @@ export function projectState(
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
+    /** 手机消息，最近的在前 */
+    phone: {
+      unread: phoneState.messages.filter((m) => !m.read).length,
+      messages: [...phoneState.messages]
+        .reverse()
+        .slice(0, PHONE_SHOWN)
+        .map((m) => ({
+          id: m.id,
+          from: m.from,
+          name: m.name,
+          text: m.text,
+          at: formatGameTime(m.at),
+          read: m.read,
+          replied: m.replied,
+        })),
+    },
     /** 别人眼里的你：交给主持人，NPC 的第一反应照这一行写 */
     perceived: perceivedLine(
       {

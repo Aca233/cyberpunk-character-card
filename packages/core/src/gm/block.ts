@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
+import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 /** 模型回复的格式：正文在前，末尾一个 <state> 指令块，块内是一个 JSON 对象 */
 export const STATE_OPEN = "<state>";
@@ -65,6 +66,10 @@ export const BlockDocSchema = z.object({
     .array(VoiceSchema)
     .optional()
     .describe(`内心声音，只在关键时刻写，最多 ${MAX_VOICES} 条；平常不写`),
+  messages: z
+    .array(IncomingMessageSchema)
+    .optional()
+    .describe(`手机消息：不在场的人发来的短信，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`),
   direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
   clutch: z
     .boolean()
@@ -85,6 +90,7 @@ const BlockShapeSchema = z.object({
   check: z.unknown().optional(),
   changes: z.array(z.unknown()).optional(),
   voices: z.array(z.unknown()).optional().catch(undefined),
+  messages: z.array(z.unknown()).optional().catch(undefined),
   direct: z.boolean().optional().catch(undefined),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),

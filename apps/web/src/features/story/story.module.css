@@ -1626,3 +1626,52 @@
   font-size: var(--fs-label);
   letter-spacing: 0.15em;
 }
+
+.phoneList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.phoneItem {
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--cp-cyan-dim);
+}
+
+.phoneItem[data-unread] {
+  border-left-color: var(--cp-yellow);
+}
+
+.phoneHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0;
+  font-size: var(--fs-label);
+}
+
+.phoneText {
+  margin: 0.2rem 0 0.3rem;
+}
+
+.replyChip {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.3rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--cp-yellow-dim);
+  font-size: var(--fs-label);
+}
+
+.replyText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -74,6 +74,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     shop: z.string().min(1).max(40),
     id: z.string().min(1).max(64),
   }),
+  /** 打开手机：把消息都标成已读 */
+  z.strictObject({ type: z.literal("readMessages") }),
   /** 角色卡上的习惯：add 自己写一条，confirm 认下主持人的提议，dismiss 不要这条提议，remove 删掉 */
   z.strictObject({
     type: z.literal("habit"),
@@ -268,6 +270,8 @@ function commandsFor(
         { type: "inventory.mod", action: action.action, weapon: action.weapon, mod: action.mod },
       ];
     }
+    case "readMessages":
+      return [{ type: "phone.read" }];
     case "habit":
       return [{ type: "character.habit", action: action.action, text: action.text }];
     case "acceptJob":

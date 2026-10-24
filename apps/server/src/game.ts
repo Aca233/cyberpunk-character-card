@@ -28,6 +28,7 @@ import {
   logVersion,
   newGameWorld,
   type PlayerView,
+  phoneRules,
   pickLoadouts,
   pickSnapshot,
   prepareFor,
@@ -266,6 +267,10 @@ export class GameService {
       }
       if (request.input.sandevistan) {
         const blocked = sandevistanBlock(world, records, gameData);
+        if (blocked) return { status: 409, body: { error: blocked, version } };
+      }
+      if (request.input.replyTo !== undefined) {
+        const blocked = phoneRules.replyBlock(world, request.input.replyTo);
         if (blocked) return { status: 409, body: { error: blocked, version } };
       }
       const unavailable = await this.llmUnavailable();

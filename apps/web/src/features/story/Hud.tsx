@@ -178,6 +178,7 @@ export function SidePanel({
   onOutfit,
   onMod,
   onHabit,
+  onPhone,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -197,6 +198,8 @@ export function SidePanel({
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
+  /** 打开手机 */
+  readonly onPhone: () => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -574,6 +577,9 @@ export function SidePanel({
         <div className={styles.jobLinks}>
           <button type="button" onClick={() => onJournal(false)}>
             日志 [J]
+          </button>
+          <button type="button" onClick={onPhone}>
+            手机{view.phone.unread > 0 ? `（${view.phone.unread} 条未读）` : ""}
           </button>
           {offered > 0 && (
             <button type="button" onClick={() => onJournal(true)}>

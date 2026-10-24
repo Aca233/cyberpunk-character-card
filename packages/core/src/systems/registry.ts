@@ -11,6 +11,7 @@ import { humanity } from "./humanity";
 import { inventory } from "./inventory";
 import { jobs } from "./jobs";
 import { npc } from "./npc";
+import { phone } from "./phone";
 import { stealth } from "./stealth";
 import { world } from "./world";
 
@@ -30,6 +31,7 @@ export const systems: readonly AnySystem[] = [
   heat,
   fallout,
   stealth,
+  phone,
 ];
 
 export const registry = createRegistry(systems);

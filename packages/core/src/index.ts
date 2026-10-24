@@ -23,6 +23,7 @@ export * as humanityRules from "./systems/humanity";
 export * as inventoryRules from "./systems/inventory";
 export * as jobsRules from "./systems/jobs";
 export * as npcRules from "./systems/npc";
+export * as phoneRules from "./systems/phone";
 export { registry, systems } from "./systems/registry";
 export * as stealthRules from "./systems/stealth";
 export * as worldRules from "./systems/world";

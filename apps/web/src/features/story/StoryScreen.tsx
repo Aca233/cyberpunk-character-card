@@ -14,6 +14,7 @@ import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
+import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
 import { Shop } from "./Shop";
@@ -98,6 +99,7 @@ export function StoryScreen() {
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
+  const [atPhone, setAtPhone] = useState(false);
 
   const warn = useCallback((key: string, error: unknown) => {
     const text = error instanceof Error ? error.message : String(error);
@@ -228,6 +230,22 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 打开手机：未读的标成已读，不调用模型
+  const unread = view?.phone.unread ?? 0;
+  const openPhone = useCallback(async () => {
+    setAtPhone(true);
+    if (unread === 0) return;
+    try {
+      await api.action(saveId, {
+        requestId: newRequestId(),
+        baseVersion: version,
+        action: { type: "readMessages" },
+      });
+    } catch (error) {
+      warn("phone", error);
+    }
+    await refresh();
+  }, [saveId, version, refresh, warn, unread]);
   // 改习惯：不调用模型，失败时用提示条说明原因
   const habitAction = useCallback(
     async (action: HabitAction, text: string) => {
@@ -366,6 +384,7 @@ export function StoryScreen() {
         onOutfit={busy ? undefined : (action) => void outfitAction(action)}
         onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
+        onPhone={() => void openPhone()}
       />
 
       <main className={styles.column}>
@@ -432,6 +451,12 @@ export function StoryScreen() {
             }
             draft={story.draft}
             onDraft={story.setDraft}
+            reply={
+              story.draft.replyTo === undefined
+                ? undefined
+                : view.phone.messages.find((m) => m.id === story.draft.replyTo)
+            }
+            onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
             boost={offers?.clutch && view.sandevistan ? view.sandevistan : undefined}
             onSend={send}
             onStop={() => void story.stop()}
@@ -505,6 +530,20 @@ export function StoryScreen() {
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
       {!settled[0] && <CloseupQueue turns={view.turns} />}
+      {atPhone && (
+        <PhoneDialog
+          view={view}
+          onClose={() => setAtPhone(false)}
+          onReply={
+            busy
+              ? undefined
+              : (id) => {
+                  story.setDraft({ replyTo: id });
+                  setAtPhone(false);
+                }
+          }
+        />
+      )}
       {failure?.kind === "blocked" && (
         <Dialog
           title="这一轮被安全过滤拦下了"

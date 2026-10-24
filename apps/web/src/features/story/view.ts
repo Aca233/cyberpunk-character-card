@@ -133,7 +133,8 @@ export function splitSlang(
 /** 正文里玩家那一行的写法；旧存档按当时选的输入方式加标记，新输入原样显示 */
 export function formatInput(input: TurnInput): string {
   const text = plainInput(input);
-  return input.sandevistan ? `【斯安威斯坦】${text}` : text;
+  const reply = input.replyTo !== undefined ? `【回复 #${input.replyTo}】` : "";
+  return `${input.sandevistan ? "【斯安威斯坦】" : ""}${reply}${text}`;
 }
 
 function plainInput(input: TurnInput): string {

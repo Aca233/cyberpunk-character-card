@@ -17,6 +17,8 @@ export function InputBar({
   onSend,
   onStop,
   boost,
+  reply,
+  onCancelReply,
 }: {
   readonly busy: boolean;
   readonly streaming: boolean;
@@ -30,6 +32,9 @@ export function InputBar({
   readonly boost?:
     | { readonly name: string; readonly slots: number; readonly cost: number }
     | undefined;
+  /** 正在回复的手机消息 */
+  readonly reply?: { readonly name: string; readonly text: string } | undefined;
+  readonly onCancelReply?: (() => void) | undefined;
 }) {
   const area = useRef<HTMLTextAreaElement>(null);
   const text = draft.text.trim();
@@ -51,7 +56,12 @@ export function InputBar({
   }, [draft.text]);
 
   const send = () => {
-    if (canSend) onSend(boosting ? { text, sandevistan: true } : { text });
+    if (!canSend) return;
+    onSend({
+      text,
+      ...(boosting ? { sandevistan: true } : {}),
+      ...(reply && draft.replyTo !== undefined ? { replyTo: draft.replyTo } : {}),
+    });
   };
 
   return (
@@ -63,6 +73,18 @@ export function InputBar({
         send();
       }}
     >
+      {reply && (
+        <p className={styles.replyChip}>
+          <span className={styles.replyText}>
+            回复 {reply.name}：{reply.text}
+          </span>
+          {onCancelReply && (
+            <button type="button" className={styles.habitButton} onClick={onCancelReply}>
+              取消
+            </button>
+          )}
+        </p>
+      )}
       <div className={styles.inputRow}>
         <textarea
           ref={area}
