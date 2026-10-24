@@ -1,7 +1,7 @@
 import type { RuleModule } from "../../kernel/system";
 import { formatGameTime } from "../world";
 import { isOpen, JOB_STATUS_LABELS, maxRisk } from "./apply";
-import type { Job, JobsState } from "./schema";
+import { JOB_KIND_LABELS, type Job, type JobsState, JobTemplateCatalogSchema } from "./schema";
 
 /** 已结束的委托最多列这么多单，最近的优先 */
 export const CLOSED_LISTED = 5;
@@ -24,6 +24,7 @@ function jobLine(job: Job, state: JobsState): string {
   const fixer = job.fixer === null ? undefined : state.fixers[job.fixer];
   const parts = [
     JOB_STATUS_LABELS[job.status],
+    ...(job.kind ? [JOB_KIND_LABELS[job.kind]] : []),
     `${job.risk} 星`,
     `报酬 ${job.reward} 欧元`,
     fixer ? `中间人 ${fixer.name}［${fixer.id}］` : "没有中间人",
@@ -56,4 +57,16 @@ export function jobsSection(state: JobsState, streetCred: number): string | unde
     );
   }
   return lines.join("\n");
+}
+
+/** 系统提示词里的【委托类型模板】：8 类委托各自的交锋结构、潜入和对峙的位置、典型败局和适合的转折 */
+export function jobTemplateSection(data: Readonly<Record<string, unknown>>): string | undefined {
+  if (data.jobTemplates === undefined) return undefined;
+  const list = JobTemplateCatalogSchema.parse(data.jobTemplates);
+  if (list.length === 0) return undefined;
+  const lines = list.map(
+    (t) =>
+      `- ${t.kind} ${JOB_KIND_LABELS[t.kind]}：交锋 ${t.moments}；潜入 ${t.stealth}；对峙 ${t.standoff}；典型败局 ${t.defeat}${t.twists.length > 0 ? `；适合的转折 ${t.twists.join("、")}` : ""}`,
+  );
+  return `【委托类型模板】\n挂委托时 jobOffer 写 kind；按类型取交锋结构、潜入和对峙的位置、典型败局和转折，可以改写或组合，不强制套用。\n${lines.join("\n")}`;
 }

@@ -2,7 +2,7 @@ import type { GameContent } from "@cp/core";
 import { cyberware } from "./cyberware";
 import { fixers } from "./fixers";
 import { items } from "./items";
-import { consequences, twists } from "./jobs";
+import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
 import { npcs } from "./npcs";
@@ -15,7 +15,7 @@ export { combos } from "./combos";
 export { cyberware } from "./cyberware";
 export { fixers } from "./fixers";
 export { items } from "./items";
-export { consequences, twists } from "./jobs";
+export { consequences, jobTemplates, twists } from "./jobs";
 export { lifepath } from "./lifepath";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
@@ -46,4 +46,5 @@ export const gameData: Readonly<Record<string, unknown>> = {
   shops,
   twists,
   consequences,
+  jobTemplates,
 };

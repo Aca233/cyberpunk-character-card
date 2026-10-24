@@ -135,6 +135,7 @@ export function Journal({
                           >
                             <strong>{job.title}</strong>
                             <span>
+                              {job.kindLabel && `${job.kindLabel} · `}
                               {"★".repeat(job.risk)} · {job.reward.toLocaleString("en-US")} 欧元
                               {job.dueIn !== null && job.open && ` · ${countdown(job.dueIn)}`}
                             </span>

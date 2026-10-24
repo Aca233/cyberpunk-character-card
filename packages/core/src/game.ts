@@ -62,7 +62,7 @@ import {
   WEAPON_CATEGORY_LABELS,
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
-import { JobsStateSchema } from "./systems/jobs/schema";
+import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { registry } from "./systems/registry";
@@ -838,6 +838,8 @@ export function projectState(
       ].map((j) => ({
         id: j.id,
         title: j.title,
+        /** 委托类型，例如“护送”；没写类型是 null */
+        kindLabel: j.kind ? JOB_KIND_LABELS[j.kind] : null,
         fixer: j.fixer === null ? null : (jobs.fixers[j.fixer]?.name ?? j.fixer),
         client: j.client,
         location: j.location,

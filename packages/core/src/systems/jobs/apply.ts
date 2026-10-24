@@ -140,6 +140,7 @@ export function offerJob(
   draft.jobs.push({
     id: command.id,
     title: command.title,
+    kind: command.kind ?? null,
     fixer: command.fixer ?? null,
     client: command.client,
     location: command.location ?? null,

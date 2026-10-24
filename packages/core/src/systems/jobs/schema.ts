@@ -14,6 +14,51 @@ export const FixerSchema = z.object({
 });
 export type Fixer = z.infer<typeof FixerSchema>;
 
+/** 委托类型：护送、刺杀、绑人或救人、偷东西、破坏、调查、谈判、运货 */
+export const JobKindSchema = z.enum([
+  "escort",
+  "assassinate",
+  "abduct",
+  "steal",
+  "sabotage",
+  "investigate",
+  "negotiate",
+  "deliver",
+]);
+export type JobKind = z.infer<typeof JobKindSchema>;
+export const JOB_KIND_LABELS: Readonly<Record<JobKind, string>> = {
+  escort: "护送",
+  assassinate: "刺杀",
+  abduct: "绑人或救人",
+  steal: "偷东西",
+  sabotage: "破坏",
+  investigate: "调查",
+  negotiate: "谈判",
+  deliver: "运货",
+};
+
+/** 委托类型模板：主持人取素材用，不强制套用。数据在 content 包的 jobs.ts */
+export const JobTemplateSchema = z.object({
+  kind: JobKindSchema,
+  /** 常见的交锋结构 */
+  moments: z.string().min(1),
+  /** 潜入放在哪里、怎么用 */
+  stealth: z.string().min(1),
+  /** 对峙放在哪里 */
+  standoff: z.string().min(1),
+  /** 典型的败局 */
+  defeat: z.string().min(1),
+  /** 适合的转折和两难素材 id */
+  twists: z.array(z.string().min(1)).default([]),
+});
+export type JobTemplate = z.infer<typeof JobTemplateSchema>;
+export const JobTemplateCatalogSchema = z
+  .array(JobTemplateSchema)
+  .refine(
+    (list) => new Set(list.map((t) => t.kind)).size === list.length,
+    "同一类委托只写一个模板",
+  );
+
 export const JobOutcomeSchema = z.enum(["clean", "flawed", "abandoned", "failed", "betrayed"]);
 export type JobOutcome = z.infer<typeof JobOutcomeSchema>;
 
@@ -43,6 +88,8 @@ export type JobSettlement = z.infer<typeof JobSettlementSchema>;
 export const JobSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
+  /** 委托类型；旧存档和没写的是 null */
+  kind: JobKindSchema.nullable().default(null),
   /** 派单的中间人 id；熟人求助、过往钩子这类没有中间人 */
   fixer: z.string().min(1).nullable(),
   /** 真正的雇主 */
@@ -89,6 +136,7 @@ export const JobOfferSchema = z
     type: z.literal("jobOffer"),
     id: z.string().min(1),
     title: z.string().min(1),
+    kind: JobKindSchema.optional(),
     fixer: z.string().min(1).optional(),
     client: z.string().min(1),
     location: z.string().min(1).optional(),
@@ -99,7 +147,7 @@ export const JobOfferSchema = z
     twist: z.string().min(1).optional(),
   })
   .describe(
-    "挂出委托：fixer 是派单的中间人 id，熟人求助不写；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和信任度检查中间人肯不肯派这个星级",
+    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人 id，熟人求助不写；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和信任度检查中间人肯不肯派这个星级",
   );
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 

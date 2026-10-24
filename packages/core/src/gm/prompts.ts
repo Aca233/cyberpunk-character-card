@@ -24,7 +24,7 @@ import {
   WEAPON_TYPE_LABELS,
   weaponAttribute,
 } from "../systems/inventory/schema";
-import { jobsSection } from "../systems/jobs/prompt";
+import { jobsSection, jobTemplateSection } from "../systems/jobs/prompt";
 import { JobsStateSchema } from "../systems/jobs/schema";
 import { castSection } from "../systems/npc/prompt";
 import { NpcStateSchema } from "../systems/npc/schema";
@@ -432,6 +432,7 @@ export function buildGmPrompt(
         cyberwareSection(extras.data),
         locationSection(extras.data),
         twistSection(extras.data),
+        jobTemplateSection(extras.data),
         consequenceSection(extras.data, view.difficulty),
       ].filter((s): s is string => s !== undefined)
     : [];
