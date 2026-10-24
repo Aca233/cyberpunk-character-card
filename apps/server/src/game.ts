@@ -24,6 +24,7 @@ import {
   diceRules,
   effectiveTurns,
   HISTORY_TURNS,
+  isSnapshotValid,
   type LlmMessage,
   type LogRecord,
   loadoutText,
@@ -37,6 +38,7 @@ import {
   OFFSCREEN_SYSTEM,
   type OffscreenPace,
   type PlayerView,
+  parseLog,
   phoneRules,
   pickLoadouts,
   pickSnapshot,
@@ -49,6 +51,7 @@ import {
   rolledFrom,
   runNarratorTurn,
   type SaveMeta,
+  SaveMetaSchema,
   sandevistanBlock,
   saveCharacter,
   sceneStartSeq,
@@ -83,6 +86,33 @@ export const CreateSaveSchema = z.strictObject({
   /** 开场时间，格式 YYYY-MM-DD HH:mm；没给时用 DEFAULT_START（prefault 先填默认文本再解析） */
   startTime: worldRules.GameTimeSchema.prefault(DEFAULT_START),
 });
+
+/** 完整导出的文件格式：meta、整份回合日志和最新快照；含剧透，只用来备份和换电脑 */
+export const SAVE_EXPORT_FORMAT = "cp2077-save";
+export const SaveExportSchema = z.object({
+  format: z.literal(SAVE_EXPORT_FORMAT),
+  version: z.literal(1),
+  exportedAt: z.string().optional(),
+  meta: z.unknown(),
+  records: z.array(z.unknown()),
+  snapshot: z.unknown().optional(),
+});
+
+const ImportedSnapshotSchema = z.object({
+  nextSeq: z.number().int().min(0),
+  world: z.object({ time: z.number().int(), slices: z.record(z.string(), z.unknown()) }),
+});
+
+/** 键按字母排的 JSON，用来比两个世界状态是否一样 */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  );
+}
+
+const newSaveId = () => `s-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
 
 /** 路由直接把 body 按 status 返回 */
 export interface Reply {
@@ -149,7 +179,7 @@ export class GameService {
   }
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
-    const id = `s-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+    const id = newSaveId();
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
     const start = boardStart(entry.card);
@@ -163,6 +193,72 @@ export class GameService {
     };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };
+  }
+
+  /** 完整导出：meta、整份回合日志和最新的有效快照；含剧透 */
+  exportSave(id: string): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const meta = await this.deps.saves.readMeta(id);
+      const log = await this.deps.saves.loadLog(id);
+      const snapshot = pickSnapshot(await this.deps.saves.readSnapshots(id), log.records) ?? null;
+      return {
+        status: 200,
+        body: {
+          format: SAVE_EXPORT_FORMAT,
+          version: 1,
+          exportedAt: this.deps.clock.now().toISOString(),
+          meta,
+          records: log.records,
+          snapshot,
+        },
+      };
+    });
+  }
+
+  /** 导入完整导出：逐行校验日志、从头重放；快照对不上时以日志为准，建成一个新存档 */
+  async importSave(input: z.output<typeof SaveExportSchema>): Promise<Reply> {
+    const meta = SaveMetaSchema.safeParse(input.meta);
+    if (!meta.success) return { status: 400, body: { error: "存档信息（meta）格式不对" } };
+    let records: readonly LogRecord[];
+    try {
+      records = parseLog(input.records.map((r) => `${JSON.stringify(r)}\n`).join("")).records;
+    } catch (error) {
+      return {
+        status: 400,
+        body: { error: error instanceof Error ? error.message : String(error) },
+      };
+    }
+    let world: WorldState;
+    try {
+      world = replay(
+        { nextSeq: 0, world: withAllSlices(newGameWorld(meta.data, gameContent)) },
+        records,
+      );
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      return { status: 400, body: { error: `回合日志重放不了：${why}` } };
+    }
+    const notes: string[] = [];
+    if (input.snapshot !== undefined && input.snapshot !== null) {
+      const snap = ImportedSnapshotSchema.safeParse(input.snapshot);
+      let same = false;
+      if (snap.success && isSnapshotValid(snap.data, records)) {
+        try {
+          const fromSnap = replay({ ...snap.data, world: withAllSlices(snap.data.world) }, records);
+          same = stableJson(fromSnap) === stableJson(world);
+        } catch {
+          same = false;
+        }
+      }
+      if (!same) notes.push("导出文件里的快照和回合日志对不上，已按回合日志重建");
+    }
+    const id = newSaveId();
+    await this.deps.saves.create(id, meta.data);
+    if (records.length > 0) {
+      await this.deps.saves.importLog(id, records.map(serializeRecord).join(""));
+      await this.deps.saves.writeSnapshot(id, { nextSeq: records.length, world });
+    }
+    return { status: 201, body: { id, ...meta.data, notes } };
   }
 
   async state(id: string): Promise<PlayerView> {

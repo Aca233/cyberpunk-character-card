@@ -9,6 +9,7 @@ import {
   RegenerateRequestSchema,
   type Reply,
   RestartRequestSchema,
+  SaveExportSchema,
 } from "../game";
 import { isSaveId, SaveExistsError, SaveNotFoundError } from "../storage";
 import type { TurnHub } from "../turns";
@@ -64,6 +65,17 @@ export function saveRoutes(game: GameService, hub: TurnHub, dev = false): Hono {
     if (!parsed.ok) return c.json({ error: "存档信息不对", details: parsed.errors }, 400);
     return reply(c, await game.create(parsed.value));
   });
+
+  // 完整导出和导入：整份存档（含剧透），只用来备份和换电脑
+  app.post("/import", async (c) => {
+    const parsed = await body(c, SaveExportSchema);
+    if (!parsed.ok) {
+      return c.json({ error: "不是本作完整导出的存档文件", details: parsed.errors }, 400);
+    }
+    return reply(c, await game.importSave(parsed.value));
+  });
+
+  app.get("/:id/export", async (c) => reply(c, await game.exportSave(c.req.param("id"))));
 
   app.get("/:id/state", async (c) => c.json(await game.state(c.req.param("id"))));
 

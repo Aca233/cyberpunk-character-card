@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type Difficulty, type SaveSummary } from "../../api/client";
 import { DIFFICULTY_LABELS, DIFFICULTY_NOTES, formatDate } from "../../labels";
@@ -27,7 +27,7 @@ export function MainMenu() {
   const items: { id: Item; label: string; disabled?: boolean; reason?: string }[] = [
     { id: "continue", label: "继续", disabled: !latest, reason: "还没有存档" },
     { id: "new", label: "新建存档" },
-    { id: "load", label: "读取存档", disabled: sorted.length === 0, reason: "还没有存档" },
+    { id: "load", label: "读取存档" },
     { id: "characters", label: "角色" },
     { id: "settings", label: "设置" },
   ];
@@ -102,6 +102,7 @@ export function MainMenu() {
         {focus === "load" && (
           <Panel title="读取存档">
             {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
+            <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
             {sorted.length === 0 ? (
               <EmptyState
                 text="还没有存档"
@@ -112,6 +113,7 @@ export function MainMenu() {
                 {sorted.map((save) => (
                   <li key={save.id}>
                     <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
+                    <ExportSave save={save} />
                   </li>
                 ))}
               </ul>
@@ -126,6 +128,87 @@ export function MainMenu() {
         </KeyBar>
       </div>
     </main>
+  );
+}
+
+const SPOILER_WARNING =
+  "完整导出包含整个存档：人物的诉求、底线、秘密和委托的隐藏信息都在文件里，打开就会看到剧透。只用来备份和换电脑。确定导出吗？";
+
+function downloadJson(data: unknown, name: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name.replace(/[\\/:*?"<>|]/g, "_");
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** 完整导出：先提示有剧透，确认后下载 */
+function ExportSave({ save }: { save: SaveSummary }) {
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    if (!window.confirm(SPOILER_WARNING)) return;
+    setError(null);
+    try {
+      downloadJson(await api.exportSave(save.id), `存档-${save.title}.json`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className={styles.saveTools}>
+      <Button onClick={() => void run()}>完整导出（含剧透）</Button>
+      {error && <span className={styles.error}>{error}</span>}
+    </div>
+  );
+}
+
+/** 导入完整导出的文件：建成一个新存档，原来的不动 */
+function ImportSave({ onImported }: { onImported: (id: string) => void }) {
+  const queryClient = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const onFile = async (file: File) => {
+    setError(null);
+    setBusy(true);
+    try {
+      let data: unknown;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        throw new Error("文件不是合法的 JSON");
+      }
+      const made = await api.importSave(data);
+      await queryClient.invalidateQueries({ queryKey: ["saves"] });
+      if (made.notes.length > 0) window.alert(made.notes.join("\n"));
+      onImported(made.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.saveTools}>
+      <Button onClick={() => input.current?.click()} disabled={busy}>
+        {busy ? "导入中……" : "导入存档"}
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void onFile(file);
+        }}
+      />
+      <span className={styles.note}>导入完整导出的文件，建成一个新存档</span>
+      {error && <span className={styles.error}>{error}</span>}
+    </div>
   );
 }
 

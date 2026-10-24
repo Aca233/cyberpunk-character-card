@@ -112,6 +112,11 @@ export class SaveStore implements Storage {
     }
   }
 
+  /** 导入存档：一次写下整份日志（调用方已经逐行校验过，存档是刚建的空档） */
+  async importLog(id: string, text: string): Promise<void> {
+    await atomicWrite(this.logPath(id), text);
+  }
+
   /** 读取并解析日志；末尾有写到一半的行时，把文件截到最后一条完整记录 */
   async loadLog(id: string): Promise<ParsedLog> {
     const text = await this.readLog(id);

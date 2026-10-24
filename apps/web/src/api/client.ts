@@ -355,6 +355,12 @@ export const api = {
       input,
     ),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
+  /** 完整导出：整份存档（含剧透），网页原样下载成文件 */
+  exportSave: (saveId: string) =>
+    request<Record<string, unknown>>("GET", `/saves/${saveId}/export`),
+  /** 导入完整导出的文件，建成一个新存档；notes 是快照对不上之类的提示 */
+  importSave: (data: unknown) =>
+    request<SaveSummary & { notes: readonly string[] }>("POST", "/saves/import", data),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
