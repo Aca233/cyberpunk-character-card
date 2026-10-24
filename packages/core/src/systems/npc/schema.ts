@@ -81,7 +81,9 @@ export const MeetSchema = z
     id: NpcIdSchema,
     location: LocationSchema.optional(),
   })
-  .describe("已有人物卡的人出场（第一次见面也用这条），或换了地点");
+  .describe(
+    "已有人物卡的人出场（第一次见面也用这条），或换了地点；id 必须是【人物】里有卡的。没卡的路人（酒保、店员、路过的帮派成员）不写 meet；要和他有实质来往、以后还会出场，先写 npc 建卡",
+  );
 export type Meet = z.infer<typeof MeetSchema>;
 
 export const AffinitySchema = z

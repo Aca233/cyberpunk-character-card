@@ -131,7 +131,10 @@ export const JobOfferSchema = z
     title: z.string().min(1),
     kind: JobKindSchema.optional(),
     fixer: z.string().min(1).optional(),
-    client: z.string().min(1),
+    client: z
+      .string()
+      .min(1)
+      .describe("必填：真正的雇主；派单的人不肯说时写「身份不明」或「法拉第的客户（身份不明）」"),
     location: z.string().min(1).optional(),
     risk: z.number().int().min(1).max(5),
     reward: z.number().int().min(0).max(100_000),
