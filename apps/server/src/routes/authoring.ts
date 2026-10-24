@@ -1,8 +1,13 @@
+import { cyberware, glossary, items, jobTemplates, npcs, twists } from "@cp/content";
 import {
   AUTHORING_LABELS,
   type AuthoringDraft,
+  AuthoringGenerateRequestSchema,
   AuthoringInputSchema,
+  type AuthoringKind,
   type Clock,
+  generateAuthoringDraft,
+  type LlmClient,
   NPC_REVIEW_ITEMS,
   type OfficialTextResult,
   TextSearchRequestSchema,
@@ -13,6 +18,17 @@ import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { AuthoringError, type AuthoringStore } from "../authoring";
 import { type AuthoringTextSearch, OfficialTextError } from "../authoring-search";
+import { AbortedError, UpstreamError } from "../providers/http";
+
+/** 起草时给模型看的格式示例：各类取内容包里的第一条 */
+const EXAMPLES: Readonly<Record<AuthoringKind, unknown>> = {
+  npc: npcs[0],
+  item: items[0],
+  cyberware: cyberware[0],
+  jobTemplate: jobTemplates[0],
+  twist: twists[0],
+  slang: glossary[0],
+};
 
 const UpdateSchema = z.strictObject({
   revision: z.number().int().min(1),
@@ -62,7 +78,7 @@ async function draftResponse(
   }
 }
 
-/** 只由 createApp 在开发模式下挂载；尚不包含生成、发布或源码写入接口。 */
+/** 只由 createApp 在开发模式下挂载；尚不包含发布或源码写入接口。 */
 function textResponse(c: Context, operation: () => OfficialTextResult) {
   try {
     return c.json(operation());
@@ -76,6 +92,7 @@ export function authoringRoutes(
   store: AuthoringStore,
   clock: Clock,
   text?: AuthoringTextSearch,
+  llm?: LlmClient,
 ): Hono {
   const app = new Hono();
 
@@ -149,6 +166,26 @@ export function authoringRoutes(
     return draftResponse(c, () =>
       store.review(c.req.param("id"), body.value.revision, clock.now()),
     );
+  });
+
+  // 辅助模型起草：只返回初稿给页面，不保存；保存仍走 /drafts，来源和审核由人工填
+  app.post("/generate", async (c) => {
+    const body = await bodyOf(c, AuthoringGenerateRequestSchema);
+    if (!body.ok) return c.json({ error: body.error }, 400);
+    if (!llm) return c.json({ error: "没有接上辅助模型" }, 503);
+    try {
+      const result = await generateAuthoringDraft(
+        llm,
+        body.value,
+        EXAMPLES[body.value.kind],
+        c.req.raw.signal,
+      );
+      return result.ok ? c.json(result.result) : c.json({ error: result.error }, 502);
+    } catch (error) {
+      if (error instanceof AbortedError) return c.json({ error: "已停止起草" }, 400);
+      if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
+      throw error;
+    }
   });
 
   return app;

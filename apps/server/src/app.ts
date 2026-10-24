@@ -95,7 +95,10 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
   app.route("/api/saves", saveRoutes(game, hub));
   if (deps.dev && deps.authoring) {
-    app.route("/api/dev/authoring", authoringRoutes(deps.authoring, clock, deps.authoringText));
+    app.route(
+      "/api/dev/authoring",
+      authoringRoutes(deps.authoring, clock, deps.authoringText, llm),
+    );
   }
   return app;
 }
