@@ -1,4 +1,13 @@
-import type { ActionRequest, CharacterCard, PlayerView, TurnInput, TurnUsage } from "@cp/core";
+import type {
+  ActionRequest,
+  BoardModule,
+  CharacterCard,
+  Combo,
+  LifepathEntry,
+  PlayerView,
+  TurnInput,
+  TurnUsage,
+} from "@cp/core";
 import type { Gloss } from "../features/story/view";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
@@ -72,6 +81,22 @@ export interface CharacterEntry {
   readonly updatedAt: string;
   readonly card: CharacterCard;
   readonly sample: boolean;
+}
+
+/** 主板要用的表：模块库、联动、生命路径和创建时能装的义体 */
+export interface BoardData {
+  readonly modules: readonly BoardModule[];
+  readonly combos: readonly Combo[];
+  readonly lifepath: readonly LifepathEntry[];
+  readonly cyberware: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly slot: string;
+    readonly slotLabel: string;
+    readonly points: number;
+    readonly humanityCost: number;
+    readonly ability: string;
+  }[];
 }
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
@@ -193,6 +218,7 @@ export const api = {
       (r) => r.character,
     ),
   deleteCharacter: (id: string) => request<{ ok: true }>("DELETE", `/characters/${id}`),
+  characterBoard: () => request<BoardData>("GET", "/characters/board"),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),

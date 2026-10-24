@@ -447,3 +447,176 @@ legend.sectionTitle {
     transition: none;
   }
 }
+
+/* 角色主板：插槽一组一组往下排，模块是带左边线的小卡片 */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.budget {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgb(252 238 10 / 30%);
+  background: var(--cp-bg);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget b {
+  color: var(--cp-yellow);
+  font-size: 1.1rem;
+}
+
+.budget [data-tone="bad"],
+.budget [data-tone="bad"] b {
+  color: var(--cp-danger);
+}
+
+.slotGroup h4 {
+  margin: 0 0 0.6rem;
+  color: var(--cp-cyan);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+}
+
+.slotGroup h4 small {
+  margin-left: 0.4rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  font-weight: 400;
+}
+
+.modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.module {
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 4%);
+  font-size: var(--fs-label);
+  line-height: 1.55;
+}
+
+.module[data-flaw] {
+  border-left-color: var(--cp-red);
+  background: rgb(255 97 88 / 5%);
+}
+
+.module[data-combo] {
+  border-left-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 5%);
+}
+
+.module p {
+  margin: 0.3rem 0 0;
+}
+
+.moduleHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.moduleHead strong {
+  flex: 1;
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+}
+
+.moduleHead button {
+  padding: 0 0.3rem;
+  border: 0;
+  color: var(--cp-text-dim);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.moduleHead button:hover {
+  color: var(--cp-danger);
+}
+
+.modulePoints {
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.moduleTags {
+  color: var(--cp-cyan);
+}
+
+.moduleHook {
+  color: var(--cp-text-dim);
+}
+
+.slotTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.picker,
+.toolButton {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--cp-cyan-dim);
+  color: var(--cp-cyan);
+  background: var(--cp-bg);
+  font: inherit;
+  font-size: var(--fs-label);
+  cursor: pointer;
+}
+
+.toolButton:hover:not(:disabled),
+.picker:hover:not(:disabled) {
+  background: rgb(94 246 255 / 10%);
+}
+
+.toolButton:disabled,
+.picker:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tolerance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.tolerance button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.6rem;
+  border: 1px solid var(--cp-cyan-dim);
+  color: var(--cp-text-dim);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-label);
+  cursor: pointer;
+}
+
+.tolerance button strong {
+  color: var(--cp-text);
+  font-weight: 500;
+}
+
+.tolerance button[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+}

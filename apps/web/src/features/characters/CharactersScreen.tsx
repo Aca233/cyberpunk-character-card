@@ -14,6 +14,7 @@ import { api, type CharacterEntry } from "../../api/client";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Panel } from "../../ui/Panel";
+import { BoardEditor, emptyBoard } from "./BoardEditor";
 import styles from "./characters.module.css";
 
 type Attribute = keyof CharacterCard["attributes"];
@@ -70,6 +71,11 @@ export function CharactersScreen() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
+  const boardData = useQuery({
+    queryKey: ["characterBoard"],
+    queryFn: api.characterBoard,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const [editor, setEditor] = useState<Editor>(() => editorFor(blankCard()));
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
@@ -121,6 +127,13 @@ export function CharactersScreen() {
   };
   const change = (patch: Partial<CharacterCard>) => {
     setEditor((old) => ({ ...old, card: { ...old.card, ...patch } }));
+    save.reset();
+  };
+  const dropBoard = () => {
+    setEditor((old) => {
+      const { board: _, ...card } = old.card;
+      return { ...old, card };
+    });
     save.reset();
   };
 
@@ -308,7 +321,42 @@ export function CharactersScreen() {
               )}
             </div>
 
-            <h3 className={styles.sectionTitle}>03 / 这个人</h3>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>03 / 角色主板</h3>
+              {editor.card.board && !editor.sample && (
+                <button type="button" className={styles.toolButton} onClick={dropBoard}>
+                  拆掉主板
+                </button>
+              )}
+            </div>
+            {!editor.card.board && (
+              <div className={styles.notice}>
+                <p>
+                  主板把出身、过往、本事做成一块块模块：每块写明你能做到什么、带着什么麻烦，主持人据此判断行动和给出专属选项。
+                  只写下面的文字也能玩。
+                </p>
+                {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
+                {!editor.sample && (
+                  <Button
+                    disabled={!boardData.isSuccess}
+                    reason="正在读取模块库"
+                    onClick={() => change({ board: emptyBoard() })}
+                  >
+                    启用角色主板
+                  </Button>
+                )}
+              </div>
+            )}
+            {editor.card.board && boardData.isSuccess && (
+              <BoardEditor
+                board={editor.card.board}
+                data={boardData.data}
+                onChange={(board, origin) => change({ board, ...(origin ? { origin } : {}) })}
+              />
+            )}
+            {editor.card.board && boardData.isPending && <p role="status">正在读取模块库…</p>}
+
+            <h3 className={styles.sectionTitle}>04 / 这个人</h3>
             <div className={styles.background}>
               {TEXT_FIELDS.map(({ key, label, max, hint }) => (
                 <label className={styles.field} key={key}>
@@ -370,7 +418,9 @@ export function CharactersScreen() {
         <aside className={styles.guide}>
           <Panel title="你来扮演">
             <p>台词、行动和心里话都由你写。背景只是让世界更了解你，不替你决定下一步。</p>
-            <p>这里先做手写角色卡。义体插槽、背景预算和角色卡导入尚未开放。</p>
+            <p>
+              主板上的模块是你已经会的、已经欠下的；联动和钩子是夜之城找上门的理由。自写模块、角色卡正文生成和导入还没开放。
+            </p>
           </Panel>
         </aside>
       </div>
