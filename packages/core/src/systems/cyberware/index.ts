@@ -14,7 +14,7 @@ import {
 /** 义体：按部位装卸，钱交给欧元系统扣，人性上限交给人性系统算 */
 export const cyberware = defineSystem<CyberwareState, CyberwareCommand, InstallCyberware>({
   id: "cyberware",
-  dependsOn: ["economy", "humanity"],
+  dependsOn: ["economy", "humanity", "character"],
   state: CyberwareStateSchema,
   initial: () => ({ installed: [], settled: [] }),
   commands: { cyberware: CyberwareCommandSchema },

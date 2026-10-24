@@ -263,7 +263,7 @@ export function stateSummary(view: PlayerView): string {
     );
   if (view.cyberware.length > 0)
     lines.push(
-      `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}）`).join("、")}`,
+      `义体：${view.cyberware.map((c) => `${c.name}（${c.id}，${c.slotLabel}${c.bonusText ? `，${c.bonusText}` : ""}）`).join("、")}`,
     );
   if (view.ripperdoc)
     lines.push(

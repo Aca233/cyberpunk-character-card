@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
+import type { Attribute } from "../dice";
 import { HUMANITY_MAX } from "../humanity";
 import {
   CyberwareCatalogSchema,
@@ -90,6 +91,23 @@ function costCommand(
   return { type: "humanity.setCyberwareCost", total: Math.min(HUMANITY_MAX, total) };
 }
 
+/** 装着的义体一共给哪些属性加多少 */
+function bonusCommand(
+  draft: Draft<CyberwareState>,
+  catalog: ReadonlyMap<string, CyberwareDef>,
+): Command {
+  const bonuses: Partial<Record<Attribute, number>> = {};
+  for (const c of draft.installed) {
+    for (const [a, n] of Object.entries(catalog.get(c.id)?.attributes ?? {}) as [
+      Attribute,
+      number,
+    ][]) {
+      bonuses[a] = (bonuses[a] ?? 0) + n;
+    }
+  }
+  return { type: "character.setBonuses", bonuses };
+}
+
 export interface Purchase {
   readonly price: number;
   /** 身上现有的欧元 */
@@ -133,7 +151,7 @@ export function install(
       ...(purchase.event ? { event: purchase.event } : {}),
     });
   }
-  emit.push(costCommand(draft, catalog));
+  emit.push(costCommand(draft, catalog), bonusCommand(draft, catalog));
   return { ok: true, notes, emit };
 }
 
@@ -146,7 +164,11 @@ export function remove(
   const i = draft.installed.findIndex((c) => c.id === id);
   if (i < 0) return { ok: false, reason: `没有装着${name}` };
   draft.installed.splice(i, 1);
-  return { ok: true, notes: [`卸下${name}`], emit: [costCommand(draft, catalog)] };
+  return {
+    ok: true,
+    notes: [`卸下${name}`],
+    emit: [costCommand(draft, catalog), bonusCommand(draft, catalog)],
+  };
 }
 
 /** 模型的 cyberware 指令 */

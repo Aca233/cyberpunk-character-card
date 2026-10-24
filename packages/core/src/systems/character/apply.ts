@@ -4,7 +4,9 @@ import { ATTRIBUTE_LABELS, maxHp } from "../dice";
 import {
   ATTRIBUTE_MAX,
   type CharacterState,
+  effectiveAttribute,
   LEVELS_PER_POINT,
+  type SetBonuses,
   type SetCharacter,
   type SpendPoint,
   STREET_CRED_MAX,
@@ -32,8 +34,12 @@ export function credTier(level: number): CredTier {
   return CRED_TIERS.findLast((t) => level >= t.from) ?? CRED_TIERS[0];
 }
 
-function setMax(state: Pick<CharacterState, "attributes" | "streetCred">): Command {
-  return { type: "health.setMax", max: maxHp(state.attributes.body ?? 3, state.streetCred) };
+function setMax(
+  state: Pick<CharacterState, "attributes" | "streetCred"> & {
+    readonly bonuses?: CharacterState["bonuses"];
+  },
+): Command {
+  return { type: "health.setMax", max: maxHp(effectiveAttribute(state, "body"), state.streetCred) };
 }
 
 /** 建档：写入角色，声望进度和属性点从零开始 */
@@ -45,7 +51,26 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.credHalf = false;
   draft.attributePoints = 0;
   draft.traits = (command.traits ?? []).map((t) => ({ ...t }));
-  return { ok: true, emit: [setMax(command)] };
+  return { ok: true, emit: [setMax(draft)] };
+}
+
+/** 义体装卸后换上新的属性加成；肉体变了生命上限跟着变 */
+export function setBonuses(draft: Draft<CharacterState>, command: SetBonuses): ApplyOutcome {
+  const notes: string[] = [];
+  for (const a of Object.keys(ATTRIBUTE_LABELS) as (keyof typeof ATTRIBUTE_LABELS)[]) {
+    const before = draft.bonuses[a] ?? 0;
+    const after = command.bonuses[a] ?? 0;
+    if (before !== after) {
+      notes.push(
+        `义体让${ATTRIBUTE_LABELS[a]}${after > before ? "+" : "−"}${Math.abs(after - before)}`,
+      );
+    }
+  }
+  const bodyChanged = (draft.bonuses.body ?? 0) !== (command.bonuses.body ?? 0);
+  draft.bonuses = Object.fromEntries(
+    Object.entries(command.bonuses).filter(([, n]) => n !== undefined && n > 0),
+  );
+  return { ok: true, notes, ...(bodyChanged ? { emit: [setMax(draft)] } : {}) };
 }
 
 /** 声望按半级累加，满两个半级升一级；每跨过 5 级得 1 个属性点，升级后生命上限跟着涨 */

@@ -7,7 +7,7 @@ import {
 } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
-import { CharacterStateSchema } from "../systems/character/schema";
+import { CharacterStateSchema, effectiveAttribute } from "../systems/character/schema";
 import {
   type CheckResult,
   type CheckSpec,
@@ -95,7 +95,7 @@ export function currentOffers(records: readonly LogRecord[]): Offers {
 export function prepareFor(world: WorldState, spec: CheckSpec): PrepareResult {
   const character = CharacterStateSchema.parse(world.slices.character);
   const dice = DiceStateSchema.parse(world.slices.dice);
-  return prepareCheck(spec, character.attributes[spec.attribute], dice.mode);
+  return prepareCheck(spec, effectiveAttribute(character, spec.attribute), dice.mode);
 }
 
 /** 用已经写进日志的骰面结算；重试和重新生成都走这里，不重掷 */

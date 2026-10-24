@@ -1,11 +1,12 @@
 import { defineSystem } from "../../kernel/system";
-import { gainCred, setCharacter, spendPoint } from "./apply";
+import { gainCred, setBonuses, setCharacter, spendPoint } from "./apply";
 import { streetCredRules } from "./prompt";
 import {
   type CharacterInternal,
   type CharacterState,
   CharacterStateSchema,
   GainCredSchema,
+  SetBonusesSchema,
   SetCharacterSchema,
   SpendPointSchema,
   type StreetCredCommand,
@@ -26,12 +27,14 @@ export const character = defineSystem<CharacterState, StreetCredCommand, Charact
     attributePoints: 0,
     credSettled: [],
     traits: [],
+    bonuses: {},
   }),
   commands: { streetCred: StreetCredCommandSchema },
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,
     "character.spendPoint": SpendPointSchema,
+    "character.setBonuses": SetBonusesSchema,
   },
   apply(draft, command) {
     switch (command.type) {
@@ -41,6 +44,8 @@ export const character = defineSystem<CharacterState, StreetCredCommand, Charact
         return gainCred(draft, command.halves, command.reason, command.event);
       case "character.spendPoint":
         return spendPoint(draft, command);
+      case "character.setBonuses":
+        return setBonuses(draft, command);
       case "streetCred":
         return gainCred(draft, command.levels * 2, command.reason, command.event);
     }

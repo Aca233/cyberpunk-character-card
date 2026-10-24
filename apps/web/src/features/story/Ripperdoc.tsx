@@ -125,7 +125,10 @@ export function Ripperdoc({
                             </Button>
                           )}
                         </div>
-                        <p className={styles.cyberAbility}>{item.ability}</p>
+                        <p className={styles.cyberAbility}>
+                          {item.ability}
+                          {item.bonusText && `（${item.bonusText}）`}
+                        </p>
                         {item.locked && <p className={styles.docLocked}>{item.locked}</p>}
                       </li>
                     );
@@ -157,6 +160,7 @@ export function Ripperdoc({
         >
           <p>
             {confirming.slotLabel} · {confirming.rarityLabel}，人性上限 −{confirming.humanityCost}
+            {confirming.bonusText && `，${confirming.bonusText}`}
             {confirming.replaces && `；会换下${confirming.replaces}（不折价回收）`}。
           </p>
           <p>{confirming.ability}</p>

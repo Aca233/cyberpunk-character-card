@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AttributeSchema } from "../dice";
+import { type Attribute, AttributeSchema } from "../dice";
 
 export const ATTRIBUTE_MAX = 20;
 export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
@@ -43,6 +43,8 @@ export const CharacterStateSchema = z.object({
   credSettled: z.array(z.string()).default([]),
   /** 旧存档和没用主板的角色是空的 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
+  /** 装着的义体带来的属性加成，由义体系统算好写进来；旧存档没有 */
+  bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)).default({}),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -88,4 +90,30 @@ export const SpendPointSchema = z.object({
 });
 export type SpendPoint = z.infer<typeof SpendPointSchema>;
 
-export type CharacterInternal = SetCharacter | GainCred | SpendPoint;
+/** 只能由代码发出：义体装卸后重算的属性加成 */
+export const SetBonusesSchema = z.object({
+  type: z.literal("character.setBonuses"),
+  bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)),
+});
+export type SetBonuses = z.infer<typeof SetBonusesSchema>;
+
+export type CharacterInternal = SetCharacter | GainCred | SpendPoint | SetBonuses;
+
+/** 检定用的属性：自己的加上义体加成，最高 20 */
+export function effectiveAttribute(
+  state: Pick<CharacterState, "attributes"> & { readonly bonuses?: CharacterState["bonuses"] },
+  attribute: Attribute,
+): number {
+  return Math.min(
+    ATTRIBUTE_MAX,
+    (state.attributes[attribute] ?? 0) + (state.bonuses?.[attribute] ?? 0),
+  );
+}
+
+export function effectiveAttributes(
+  state: Pick<CharacterState, "attributes"> & { readonly bonuses?: CharacterState["bonuses"] },
+): Record<Attribute, number> {
+  return Object.fromEntries(
+    (Object.keys(state.attributes) as Attribute[]).map((a) => [a, effectiveAttribute(state, a)]),
+  ) as Record<Attribute, number>;
+}

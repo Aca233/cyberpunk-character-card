@@ -157,6 +157,11 @@ export function SidePanel({
               <Asset id={icon} tint="var(--cp-cyan)" height={22} />
               <span>{label}</span>
               <b>{character.attributes[key] ?? "—"}</b>
+              {(character.bonuses[key] ?? 0) > 0 && (
+                <small className={styles.attrBonus} title="义体加成，已经算进去了">
+                  +{character.bonuses[key]}
+                </small>
+              )}
               {character.attributePoints > 0 && onSpend && (
                 <button
                   type="button"
@@ -277,7 +282,12 @@ export function SidePanel({
                   {c.slotLabel}
                   {c.rarityLabel ? ` · ${c.rarityLabel}` : ""}
                 </small>
-                {c.ability && <p className={styles.cyberAbility}>{c.ability}</p>}
+                {c.ability && (
+                  <p className={styles.cyberAbility}>
+                    {c.ability}
+                    {c.bonusText && `（${c.bonusText}）`}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

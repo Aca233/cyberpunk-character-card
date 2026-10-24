@@ -16,6 +16,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 2,
     ability: "脑子里多一块高速内存：潜网和快速破解时能同时跑更多程序，不容易卡住",
     checks: ["intelligence"],
+    attributes: { intelligence: 1 },
   },
   {
     id: "limbic-enhancement",
@@ -26,6 +27,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 4,
     ability: "读人更准：看得出对方在撒谎、在害怕、在拖时间，谈判和威胁时心里有数",
     checks: ["cool"],
+    attributes: { cool: 1 },
   },
   {
     id: "visual-cortex-support",
@@ -46,6 +48,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     ability: "看得懂机器：对机器人、无人机和炮塔，知道拆哪里、打哪里最致命",
     checks: ["tech"],
+    attributes: { tech: 2 },
   },
   // 眼部
   {
@@ -108,6 +111,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 3,
     ability: "被人发现的那一刻时间变慢，来得及躲回掩体、编个理由或者先动手",
     checks: ["reflexes", "cool"],
+    attributes: { reflexes: 1 },
   },
   {
     id: "reflex-tuner",
@@ -118,6 +122,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 4,
     ability: "命悬一线时自动进入子弹时间，来得及找掩体、打一针或者还手",
     checks: ["reflexes"],
+    attributes: { reflexes: 1 },
   },
   {
     id: "kerenzikov",
@@ -128,6 +133,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 6,
     ability: "闪避、滑铲、跳在半空时时间变慢一瞬，边躲边开枪也打得准",
     checks: ["reflexes"],
+    attributes: { reflexes: 2 },
   },
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
   {
@@ -230,6 +236,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     ability: "心脏停了还有一颗：受了致命伤也能被自己拉回来一次，之后要好好休整才能再用",
     checks: ["body"],
+    attributes: { body: 3 },
   },
   // 皮肤
   {
@@ -282,6 +289,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 3,
     ability: "骨头像钢：扛得动更重的东西，从二楼摔下来也不会断",
     checks: ["body"],
+    attributes: { body: 1 },
   },
   {
     id: "dense-marrow",
@@ -292,6 +300,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 3,
     ability: "骨架更沉更硬，近战一拳一棍都更重",
     checks: ["body"],
+    attributes: { body: 1 },
   },
   {
     id: "bionic-joints",
@@ -312,6 +321,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     ability: "全身骨架换成再造骨骼，整个人更扛揍，伤得重也站得住",
     checks: ["body"],
+    attributes: { body: 2 },
   },
   // 手部
   {

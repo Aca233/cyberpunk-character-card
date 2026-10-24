@@ -45,6 +45,8 @@ export const CyberwareDefSchema = z.object({
   ability: z.string().min(1),
   /** 做哪些属性的检定时算有利条件 */
   checks: z.array(AttributeSchema).default([]),
+  /** 装着时属性加多少（+1 至 +3）；把属性推到 11–20 主要靠它 */
+  attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
   /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
   iconic: z.boolean().default(false),
 });

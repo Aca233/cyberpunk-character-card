@@ -14,7 +14,11 @@ import type { WorldState } from "./kernel/world";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { credTier } from "./systems/character/apply";
-import { CharacterStateSchema } from "./systems/character/schema";
+import {
+  CharacterStateSchema,
+  effectiveAttribute,
+  effectiveAttributes,
+} from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
 import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./systems/cyberware/apply";
 import {
@@ -23,7 +27,12 @@ import {
   CyberwareStateSchema,
   SLOT_LABELS,
 } from "./systems/cyberware/schema";
-import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
+import {
+  ATTRIBUTE_LABELS,
+  type Attribute,
+  DiceStateSchema,
+  OPPONENT_TIERS,
+} from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
@@ -260,6 +269,13 @@ export function newGameWorld(
   return applied.world;
 }
 
+/** 义体的属性加成，例如“反应 +2”；没有时是空字符串 */
+function bonusText(def: CyberwareDef): string {
+  return Object.entries(def.attributes)
+    .map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`)
+    .join("、");
+}
+
 function ripperdocView(
   data: Readonly<Record<string, unknown>>,
   location: string | null,
@@ -285,6 +301,7 @@ function ripperdocView(
       price: item.price,
       humanityCost: item.def.humanityCost,
       ability: item.def.ability,
+      bonusText: bonusText(item.def),
       locked: item.locked,
       installed: item.installed,
       replaces: item.replaces?.name ?? null,
@@ -389,7 +406,7 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
         ? {
             ...choice.gate,
             attributeLabel: ATTRIBUTE_LABELS[choice.gate.attribute],
-            met: character.attributes[choice.gate.attribute] >= choice.gate.value,
+            met: effectiveAttribute(character, choice.gate.attribute) >= choice.gate.value,
           }
         : null,
       checkId: choice.check && seq !== undefined ? `${seq}.${i + 1}` : null,
@@ -468,7 +485,10 @@ export function projectState(
     character: {
       name: character.name,
       brief: character.brief,
-      attributes: character.attributes,
+      /** 检定用的属性，已经算上义体加成 */
+      attributes: effectiveAttributes(character),
+      /** 义体加成：侧栏标出来 */
+      bonuses: character.bonuses,
       streetCred: character.streetCred,
       credTier: credTier(character.streetCred).label,
       credWorld: credTier(character.streetCred).world,
@@ -519,6 +539,7 @@ export function projectState(
         slotLabel: SLOT_LABELS[c.slot],
         rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
         ability: def?.ability ?? null,
+        bonusText: def ? bonusText(def) : "",
       };
     }),
     /** 当前地点开着的义体医生；不在诊所时是 null */
