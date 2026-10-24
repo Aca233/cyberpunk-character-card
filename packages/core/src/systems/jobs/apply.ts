@@ -120,6 +120,7 @@ export function offerJob(
     acceptedAt: null,
     closedAt: null,
     overdue: false,
+    dueHandled: false,
     paid: null,
     summary: null,
     humanityAtAccept: null,
@@ -157,6 +158,7 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
   if (!job) return fail(`没有委托 ${command.id}`);
   if (!isOpen(job)) return fail(`委托 ${job.title} 已经结束`);
   job.notes.push(command.note);
+  if (job.overdue) job.dueHandled = true;
   return { ok: true };
 }
 

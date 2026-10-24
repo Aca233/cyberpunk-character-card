@@ -28,6 +28,7 @@ import { JobsStateSchema } from "../systems/jobs/schema";
 import { castSection } from "../systems/npc/prompt";
 import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
+import { formatGameTime } from "../systems/world/apply";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { BlockDocSchema, STATE_CLOSE, STATE_OPEN } from "./block";
 import { commandDoc, schemaDoc } from "./doc";
@@ -278,10 +279,53 @@ export function stateSummary(view: PlayerView): string {
   }
   for (const d of view.deadlines) {
     lines.push(
-      `期限 ${d.id}：${d.label}，${d.due}${d.overdue ? "（已到期，这一轮必须回应）" : ""}`,
+      `期限 ${d.id}：${d.label}，${d.due}${d.overdue ? "（已到期，见【到期事件】）" : ""}`,
     );
   }
   return lines.join("\n");
+}
+
+export interface DueEvent {
+  readonly kind: "deadline" | "job";
+  readonly id: string;
+  readonly label: string;
+  readonly due: number;
+}
+
+/** 已经到期、主持人还没回应的事：期限和超期的委托；一次跳过好几天时期间到期的一起列出 */
+export function dueEvents(world: WorldState): DueEvent[] {
+  const clock = WorldClockStateSchema.parse(world.slices.world);
+  const jobs = JobsStateSchema.parse(world.slices.jobs);
+  const events: DueEvent[] = [
+    ...clock.deadlines
+      .filter((d) => d.handledAt === null && d.due <= world.time)
+      .map((d) => ({ kind: "deadline" as const, id: d.id, label: d.label, due: d.due })),
+    ...jobs.jobs.flatMap((j) =>
+      j.status === "active" && j.overdue && !j.dueHandled && j.due !== null
+        ? [{ kind: "job" as const, id: j.id, label: j.title, due: j.due }]
+        : [],
+    ),
+  ];
+  return events.sort((a, b) => a.due - b.due);
+}
+
+function elapsed(minutes: number): string {
+  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} 小时`;
+  return `${Math.floor(minutes / 1440)} 天`;
+}
+
+/** 给模型看的【到期事件】：这一轮必须回应 */
+export function dueSection(world: WorldState): string | undefined {
+  const due = dueEvents(world);
+  if (due.length === 0) return undefined;
+  return [
+    "这些事已经到期，这一轮必须在戏里回应：人物打来电话、找上门，或者事情就这么黄了，怎么写由你决定。回应后期限写 deadline handle；委托还要接着办就写 jobNote，黄了就写 jobEnd。",
+    ...due.map(
+      (e) =>
+        `- ${e.kind === "job" ? "委托" : "期限"} ${e.label}［${e.id}］：${formatGameTime(e.due)} 到期，已经过了 ${elapsed(world.time - e.due)}`,
+    ),
+  ].join("\n");
 }
 
 export function formatInput(input: TurnInput): string {
@@ -341,6 +385,8 @@ export function buildGmPrompt(
   if (jobs) parts.push(`【委托】\n${jobs}`);
   const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
   if (recent) parts.push(`【近期后果】\n${recent}`);
+  const due = dueSection(world);
+  if (due) parts.push(`【到期事件】\n${due}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   parts.push(formatInput(plan.input));

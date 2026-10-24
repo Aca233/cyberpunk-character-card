@@ -65,6 +65,8 @@ export const JobSchema = z.object({
   closedAt: z.number().int().nullable(),
   /** 接下后超期扣过信任 */
   overdue: z.boolean(),
+  /** 超期这件事主持人已经在戏里回应过（写了 jobNote） */
+  dueHandled: z.boolean().default(false),
   /** 实际到手的报酬；结束时写 */
   paid: z.number().int().min(0).nullable(),
   summary: z.string().nullable(),
