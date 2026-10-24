@@ -377,6 +377,51 @@ export class GameService {
     });
   }
 
+  /**
+   * 重新生成最后一轮：把它作废（reason regenerate），返回当时的输入或确认的检定，
+   * 网页再按原来的提交流程重发；掷过的骰子还在日志里，不重掷
+   */
+  regenerate(id: string, request: z.output<typeof RegenerateRequestSchema>): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { world, records } = await this.load(id);
+      const version = logVersion(records);
+      if (this.deps.hub.running(id)) {
+        return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
+      }
+      if (request.baseVersion !== version) {
+        return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
+      }
+      if (projectState(world, records, gameData).death) {
+        return { status: 409, body: { error: "角色已经死了，不能重新生成", version } };
+      }
+      const voided = voidedSeqs(records);
+      const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
+      if (last?.kind !== "turn" || last.seq === 0) {
+        return {
+          status: 409,
+          body: { error: "最后一步不是可以重写的回合（之后可能有别的操作）", version },
+        };
+      }
+      const input = TurnInputSchema.safeParse(last.input);
+      if (!input.success) {
+        return { status: 409, body: { error: "这一轮的输入读不出来，不能重新生成", version } };
+      }
+      const record: VoidRecord = {
+        kind: "void",
+        seq: version,
+        at: this.deps.clock.now().toISOString(),
+        target: last.seq,
+        reason: "regenerate",
+      };
+      await this.deps.saves.appendLog(id, serializeRecord(record));
+      const pending =
+        last.resolves !== undefined
+          ? { kind: "confirm", checkId: last.resolves, label: input.data.text }
+          : { kind: "input", input: input.data };
+      return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
+    });
+  }
+
   stop(id: string, turnId: string): Reply {
     const run = this.deps.hub.get(id, turnId);
     if (!run) return { status: 404, body: { error: "没有这一轮，可能已经过期" } };
@@ -443,6 +488,7 @@ export class GameService {
           dropped: record.dropped,
           notes: record.notes ?? [],
           considered: record.considered ?? [],
+          unsettled: record.unsettled ?? null,
           check: record.check ?? null,
           choices: record.choices ?? [],
           dice: record.dice,
@@ -619,6 +665,7 @@ export class GameService {
         ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
         ...(turn.ooc ? { ooc: true } : {}),
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
+        ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
@@ -657,6 +704,9 @@ export class GameService {
 
 /** 夜之城难度死亡后重来：基于哪个日志版本 */
 export const RestartRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
+
+/** 重新生成最后一轮：基于哪个日志版本 */
+export const RegenerateRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
 
 /** 角色死了就不能再提交回合和操作 */
 function deathBlock(

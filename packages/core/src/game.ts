@@ -1029,6 +1029,8 @@ export function projectState(
       dice: t.dice,
       /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
       dropped: t.dropped.length,
+      /** 未定稿的原因：正文和账目对不上，界面提示并给“重新生成” */
+      unsettled: t.unsettled ?? null,
     })),
   };
 }

@@ -83,6 +83,31 @@ export interface Dropped {
   readonly stage: "format" | "verify" | "rules";
 }
 
+/** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
+const KEY_ITEMS: Readonly<Record<string, string>> = {
+  damage: "伤害",
+  "health.limb": "断肢",
+  "health.die": "死亡",
+  npcDeath: "人物死亡",
+  money: "欧元",
+  item: "物品",
+  jobEnd: "委托结局",
+};
+
+/** 正文和账目对不上的原因；没有关键条目出问题时为 undefined */
+export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
+  for (const d of dropped) {
+    if (d.where === "抽取") return "这一轮的记账没抽出来，状态没有变";
+    const raw = d.raw;
+    if (typeof raw !== "object" || raw === null) continue;
+    const type = (raw as { type?: unknown }).type;
+    if (typeof type !== "string") continue;
+    const label = type === "world" && "location" in raw ? "移动" : KEY_ITEMS[type];
+    if (label) return `${label}没有记上：${d.reason}`;
+  }
+  return undefined;
+}
+
 export interface NarratorTurn {
   /** 正文 */
   readonly text: string;
@@ -97,6 +122,8 @@ export interface NarratorTurn {
   /** 生效的指令，按结算顺序 */
   readonly commands: readonly Command[];
   readonly dropped: readonly Dropped[];
+  /** 未定稿：关键条目没记上时的原因；正文照常显示，但不进旧记忆、不弹特写卡 */
+  readonly unsettled: string | undefined;
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
   readonly notes: readonly string[];
@@ -733,7 +760,11 @@ export async function runNarratorTurn(
   const before = WorldClockStateSchema.parse(world.slices.world);
   const after = WorldClockStateSchema.parse(settled.world.slices.world);
   const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
-  const closeup = ooc ? undefined : closeupFor(accepted, world, records, deps.data ?? {});
+  const unsettled = settle ? unsettledReason(b.dropped) : undefined;
+  const closeup =
+    ooc || unsettled !== undefined
+      ? undefined
+      : closeupFor(accepted, world, records, deps.data ?? {});
 
   return {
     kind: "done",
@@ -746,12 +777,13 @@ export async function runNarratorTurn(
       gate,
       commands: accepted,
       dropped: b.dropped,
+      unsettled,
       considered,
       notes: b.notes,
       world: settled.world,
       patches: ooc ? applied.patches : [...applied.patches, ...settled.patches],
       modules: prompt.modules,
-      pin: settle && shape.pin === true,
+      pin: settle && unsettled === undefined && shape.pin === true,
       clutch: settle && shape.clutch === true,
       scene: before.scene,
       title,

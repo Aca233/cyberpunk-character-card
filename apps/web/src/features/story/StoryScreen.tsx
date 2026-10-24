@@ -134,6 +134,18 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
+  // 重新生成最后一轮：后端作废它，再用当时的输入或检定按原流程提交；骰子不重掷
+  const regenerate = useCallback(async () => {
+    try {
+      const r = await api.regenerate(saveId, version);
+      await refresh();
+      await story.submit(saveId, r.version, r.pending, refresh);
+    } catch (error) {
+      warn("regenerate", error);
+      await refresh();
+    }
+  }, [saveId, version, refresh, warn, story]);
+
   // 在委托板上接单：不调用模型；失败时提示原因，确认框留着
   const acceptJob = useCallback(
     async (id: string) => {
@@ -388,7 +400,12 @@ export function StoryScreen() {
       />
 
       <main className={styles.column}>
-        <StoryLog view={view} saveId={saveId} live={story} />
+        <StoryLog
+          view={view}
+          saveId={saveId}
+          live={story}
+          onRegenerate={view.death ? undefined : () => void regenerate()}
+        />
 
         {failure &&
           (failure.kind === "stopped" ||

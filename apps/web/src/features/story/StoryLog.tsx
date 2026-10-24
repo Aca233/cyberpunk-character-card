@@ -89,10 +89,13 @@ function TurnBlock({
   turn,
   saveId,
   speakers,
+  onRegenerate,
 }: {
   readonly turn: Turn;
   readonly saveId: string;
   readonly speakers: readonly Speaker[];
+  /** 只有最后一轮、没在生成时才有 */
+  readonly onRegenerate?: (() => void) | undefined;
 }) {
   const prefs = useNarrativePrefs();
   return (
@@ -128,7 +131,22 @@ function TurnBlock({
         </p>
       ))}
       <footer className={styles.turnMeta}>
-        {turn.dropped > 0 && (
+        {turn.unsettled && (
+          <span className={styles.unsettled} title={turn.unsettled}>
+            本轮叙事和账目对不上
+          </span>
+        )}
+        {onRegenerate && (
+          <button
+            type="button"
+            className={styles.regenerate}
+            onClick={onRegenerate}
+            title="作废这一轮，用同样的输入重写；掷过的骰子不重掷"
+          >
+            重新生成
+          </button>
+        )}
+        {turn.dropped > 0 && !turn.unsettled && (
           <span className={styles.dropped} title="模型这轮写的部分指令没能通过校验，被丢弃了">
             本轮数值未结算（{turn.dropped} 条）
           </span>
@@ -146,10 +164,13 @@ export function StoryLog({
   view,
   saveId,
   live,
+  onRegenerate,
 }: {
   readonly view: View;
   readonly saveId: string;
   readonly live: Live;
+  /** 重新生成最后一轮；角色死了时不给 */
+  readonly onRegenerate?: (() => void) | undefined;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -186,8 +207,18 @@ export function StoryLog({
             写下你的第一句话或第一个行动。
           </p>
         )}
-        {view.turns.map((t) => (
-          <TurnBlock key={t.seq} turn={t} saveId={saveId} speakers={speakers} />
+        {view.turns.map((t, i) => (
+          <TurnBlock
+            key={t.seq}
+            turn={t}
+            saveId={saveId}
+            speakers={speakers}
+            onRegenerate={
+              i === view.turns.length - 1 && t.seq > 0 && !generating && !view.offers.rolled
+                ? onRegenerate
+                : undefined
+            }
+          />
         ))}
 
         {!generating && view.offers.read && <p className={styles.read}>{view.offers.read}</p>}

@@ -85,10 +85,10 @@ function oneLine(text: string, max: number): string {
   return [...flat].length > max ? `${[...flat].slice(0, max).join("")}…` : flat;
 }
 
-/** 已经掉出最近 hot 轮的回合，每轮一个标题；场外提问不算 */
+/** 已经掉出最近 hot 轮的回合，每轮一个标题；场外提问和未定稿的不算 */
 export function recallCandidates(records: readonly LogRecord[], hot: number): Memory[] {
   const turns = effectiveTurns(records).filter((t) => {
-    if (t.ooc === true) return false;
+    if (t.ooc === true || t.unsettled !== undefined) return false;
     const input = TurnInputSchema.safeParse(t.input);
     return !(input.success && input.data.mode === "ooc");
   });

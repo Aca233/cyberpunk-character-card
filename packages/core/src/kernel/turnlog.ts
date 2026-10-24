@@ -65,6 +65,8 @@ const TurnRecordSchema = z.object({
   ooc: z.boolean().optional(),
   /** 结算说明，例如“人性 −20 已截断为 −15” */
   notes: z.array(z.string()).optional(),
+  /** 未定稿：关键条目被拒、被丢或被核对删掉时的原因；不进旧记忆 */
+  unsettled: z.string().optional(),
   /** 抽取考虑过但没抽的，和原因；只供调试 */
   considered: z.array(z.string()).optional(),
   /** 本轮带了哪些规则模块 */

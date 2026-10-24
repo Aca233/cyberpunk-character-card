@@ -3,7 +3,13 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { z } from "zod";
-import { CreateSaveSchema, type GameService, type Reply, RestartRequestSchema } from "../game";
+import {
+  CreateSaveSchema,
+  type GameService,
+  RegenerateRequestSchema,
+  type Reply,
+  RestartRequestSchema,
+} from "../game";
 import { isSaveId, SaveExistsError, SaveNotFoundError } from "../storage";
 import type { TurnHub } from "../turns";
 
@@ -72,6 +78,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
     const parsed = await body(c, RestartRequestSchema);
     if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
     return reply(c, await game.restart(c.req.param("id"), parsed.value));
+  });
+
+  app.post("/:id/regenerate", async (c) => {
+    const parsed = await body(c, RegenerateRequestSchema);
+    if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
+    return reply(c, await game.regenerate(c.req.param("id"), parsed.value));
   });
 
   app.get("/:id/turns/:turnId/events", (c) => {

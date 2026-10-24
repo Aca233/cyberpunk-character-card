@@ -217,6 +217,11 @@ export type SubmitResult =
   | { readonly kind: "started"; readonly turnId: string }
   | { readonly kind: "duplicate"; readonly seq: number; readonly version: number };
 
+/** 重新生成时要重发的内容：当时的输入，或当时确认的检定 */
+export type Regenerated =
+  | { readonly kind: "input"; readonly input: TurnInput }
+  | { readonly kind: "confirm"; readonly checkId: string; readonly label: string };
+
 export interface TurnContext {
   readonly seq: number;
   readonly at: string;
@@ -229,6 +234,8 @@ export interface TurnContext {
   readonly notes: readonly string[];
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
+  /** 未定稿的原因；定稿的轮次为 null */
+  readonly unsettled: string | null;
   readonly check: unknown;
   readonly choices: readonly unknown[];
   readonly dice: readonly unknown[];
@@ -310,6 +317,13 @@ export const api = {
     request<{ version: number; voided: number }>("POST", `/saves/${saveId}/restart`, {
       baseVersion,
     }),
+  /** 重新生成最后一轮：后端作废它，返回当时的输入或检定，网页再按原流程提交；骰子不重掷 */
+  regenerate: (saveId: string, baseVersion: number) =>
+    request<{ version: number; voided: number; pending: Regenerated }>(
+      "POST",
+      `/saves/${saveId}/regenerate`,
+      { baseVersion },
+    ),
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>
