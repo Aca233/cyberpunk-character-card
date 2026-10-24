@@ -40,7 +40,7 @@ import { buildGmPrompt, type GmPlan } from "./prompts";
 import { closeupFor, sceneTitle } from "./scene";
 
 /**
- * 主持人的一轮：拼提示词 → 调模型（正文边收边放）→ 拆出指令块 → 逐条校验，不合格的单条修一次
+ * 叙事模型的一轮：拼提示词 → 调模型（正文边收边放）→ 拆出指令块 → 逐条校验，不合格的单条修一次
  * → 业务校验和记账。只算出结果，不写日志：写日志、加锁和版本核对由调用方负责
  */
 
@@ -60,7 +60,7 @@ export interface GmTurn {
   readonly choices: readonly Choice[];
   /** 内心声音，0–2 条 */
   readonly voices: readonly Voice[];
-  /** 主持人提出、等玩家确认的检定 */
+  /** 叙事模型提出、等玩家确认的检定 */
   readonly check: CheckSpec | undefined;
   /** 生效的指令，按结算顺序 */
   readonly commands: readonly Command[];
@@ -78,13 +78,13 @@ export interface GmTurn {
   readonly title: string | undefined;
   /** 这一轮弹出的特写卡 */
   readonly closeup: Closeup | undefined;
-  /** 主持人判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
+  /** 叙事模型判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
   readonly ooc: boolean;
   readonly usage: LlmUsage | undefined;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
-  /** 实际发给主持人的消息，上下文查看器和测评用 */
+  /** 实际发给叙事模型的消息，上下文查看器和测评用 */
   readonly messages: readonly LlmMessage[];
 }
 
@@ -274,7 +274,7 @@ export async function runGmTurn(
   if (narrative === "") throw new GmEmptyReplyError("模型没有返回正文，可以重试");
 
   const shape = await b.readBlock(block);
-  // 场外提问由主持人判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算
+  // 场外提问由叙事模型判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算
   const ooc = plan.kind === "action" && (plan.input.mode === "ooc" || shape.ooc === true);
   const oocReason = "场外提问不改状态";
   // 闪回里不掷骰、不推进时间、不记账：只认 flashback 指令
@@ -433,7 +433,7 @@ export async function runGmTurn(
   if (!ooc && inFlashback && !commands.some((c) => flashbackAction(c) === "end")) {
     commands.push({ type: "character.flashbackTick" });
   }
-  // 时间由主持人写在 world 里；没写就是时间没动，代码不补保底
+  // 时间由叙事模型写在 world 里；没写就是时间没动，代码不补保底
   if (!ooc && shape.sceneEnd === true) {
     if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
     else commands.push({ type: "world.endScene" });

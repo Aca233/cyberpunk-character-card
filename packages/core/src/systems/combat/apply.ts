@@ -84,7 +84,7 @@ export function scanFoe(draft: Combat, target: string | undefined): ApplyOutcome
   };
 }
 
-/** 有卡敌人的情况变了：由主持人按正文写，代码只记下来给界面看 */
+/** 有卡敌人的情况变了：由叙事模型按正文写，代码只记下来给界面看 */
 export function setFoe(
   draft: Combat,
   target: string | undefined,
@@ -144,7 +144,7 @@ function checkHealth(
     if (active.dyingUntil > index) return false;
     if (ctx.read<DiceState>("dice").mode === "streetLegend") {
       emit.push({ type: "health.revive" });
-      notes.push("街头传说：总有一条退路，有人把你拖了出来；代价在戏里写（欧元、人性或关系）");
+      notes.push("街头传说：总有一条退路，有人把你拖了出来；代价在正文里写（欧元、人性或关系）");
     } else {
       emit.push({ type: "health.die", reason: "濒死期间没人救治" });
     }
@@ -191,7 +191,7 @@ export function endCombat(
   return finish(draft, lost ? "defeat" : outcome, notes, emit, ctx.now);
 }
 
-/** 快捷栏扣了一次（治疗品、手雷）：战斗中记一个快捷动作；上限由主持流程在结算前拦 */
+/** 快捷栏扣了一次（治疗品、手雷）：战斗中记一个快捷动作；上限由回合流程在结算前拦 */
 export function countQuick(draft: Combat): void {
   if (draft.active) draft.active.quick = (draft.active.quick ?? 0) + 1;
 }

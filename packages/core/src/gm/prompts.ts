@@ -387,7 +387,7 @@ export interface DueEvent {
   readonly due: number;
 }
 
-/** 已经到期、主持人还没回应的事：期限和超期的委托；一次跳过好几天时期间到期的一起列出 */
+/** 已经到期、叙事模型还没回应的事：期限和超期的委托；一次跳过好几天时期间到期的一起列出 */
 export function dueEvents(world: WorldState): DueEvent[] {
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
@@ -415,7 +415,7 @@ export function dueSection(world: WorldState): string | undefined {
   const due = dueEvents(world);
   if (due.length === 0) return undefined;
   return [
-    "这些事已经到期，这一轮必须在戏里回应：人物打来电话、找上门，或者事情就这么黄了，怎么写由你决定。回应后期限写 deadline handle；委托还要接着办就写 jobNote，黄了就写 jobEnd。",
+    "这些事已经到期，这一轮必须在正文里回应：人物打来电话、找上门，或者事情就这么黄了，怎么写由你决定。回应后期限写 deadline handle；委托还要接着办就写 jobNote，黄了就写 jobEnd。",
     ...due.map(
       (e) =>
         `- ${e.kind === "job" ? "委托" : "期限"} ${e.label}［${e.id}］：${formatGameTime(e.due)} 到期，已经过了 ${elapsed(world.time - e.due)}`,

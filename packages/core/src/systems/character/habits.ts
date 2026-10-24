@@ -2,7 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import { type CharacterState, HABITS_MAX, type HabitChange } from "./schema";
 
-/** 主持人提议一条习惯：先挂着等玩家确认；已经有的、提过的不再挂 */
+/** 叙事模型提议一条习惯：先挂着等玩家确认；已经有的、提过的不再挂 */
 export function offerHabit(draft: Draft<CharacterState>, text: string): ApplyOutcome {
   if (draft.habits.includes(text) || draft.habitOffers.includes(text))
     return { ok: true, notes: [] };
@@ -18,7 +18,7 @@ function drop(list: string[], text: string): boolean {
   return true;
 }
 
-/** 玩家在角色卡上改习惯：add 自己写一条，confirm 认下主持人的提议，dismiss 不要这条提议，remove 删掉一条 */
+/** 玩家在角色卡上改习惯：add 自己写一条，confirm 认下叙事模型的提议，dismiss 不要这条提议，remove 删掉一条 */
 export function changeHabit(draft: Draft<CharacterState>, command: HabitChange): ApplyOutcome {
   const { text } = command;
   switch (command.action) {

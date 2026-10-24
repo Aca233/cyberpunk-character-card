@@ -30,7 +30,7 @@ export const JOB_KIND_LABELS: Readonly<Record<JobKind, string>> = {
   deliver: "运货",
 };
 
-/** 委托类型模板：主持人取素材用，不强制套用。数据在 content 包的 jobs.ts */
+/** 委托类型模板：叙事模型取素材用，不强制套用。数据在 content 包的 jobs.ts */
 export const JobTemplateSchema = z.object({
   kind: JobKindSchema,
   /** 常见的分段结构 */
@@ -103,9 +103,9 @@ export const JobSchema = z.object({
   offeredAt: z.number().int(),
   acceptedAt: z.number().int().nullable(),
   closedAt: z.number().int().nullable(),
-  /** 接下后超期了：只做标记，由主持人在戏里回应 */
+  /** 接下后超期了：只做标记，由叙事模型在正文里回应 */
   overdue: z.boolean(),
-  /** 超期这件事主持人已经在戏里回应过（写了 jobNote） */
+  /** 超期这件事叙事模型已经在正文里回应过（写了 jobNote） */
   dueHandled: z.boolean().default(false),
   /** 实际到手的报酬；结束时写 */
   paid: z.number().int().min(0).nullable(),
@@ -146,7 +146,7 @@ export type JobOffer = z.infer<typeof JobOfferSchema>;
 
 export const JobAcceptSchema = z
   .object({ type: z.literal("jobAccept"), id: z.string().min(1) })
-  .describe("玩家角色在戏里答应接下这单");
+  .describe("玩家角色在正文里答应接下这单");
 export type JobAccept = z.infer<typeof JobAcceptSchema>;
 
 export const JobNoteSchema = z

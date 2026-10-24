@@ -25,7 +25,7 @@ function Sources({
       </span>
       <ul>
         {total.items.map((m, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 修正来源可能同名，按主持人给的顺序排
+          // biome-ignore lint/suspicious/noArrayIndexKey: 修正来源可能同名，按叙事模型给的顺序排
           <li key={`${m.source}-${i}`}>
             <b>{signed(sign * m.value)}</b> {m.source}：{m.reason}
           </li>

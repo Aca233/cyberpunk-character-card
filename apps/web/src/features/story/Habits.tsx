@@ -13,7 +13,7 @@ export function Habits({
 }: {
   readonly perceived: string;
   readonly habits: readonly string[];
-  /** 主持人提议、等玩家确认的习惯 */
+  /** 叙事模型提议、等玩家确认的习惯 */
   readonly offers: readonly string[];
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
@@ -54,7 +54,7 @@ export function Habits({
         {offers.map((h) => (
           <li key={`offer-${h}`} className={styles.habitItem} data-offer="">
             <span className={styles.habitText}>{h}</span>
-            <small>主持人提议</small>
+            <small>AI 提议</small>
             {onHabit && (
               <>
                 <button

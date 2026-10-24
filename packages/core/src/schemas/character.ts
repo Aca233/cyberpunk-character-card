@@ -60,7 +60,7 @@ export const CharacterCardSchema = z
     personality: text(300).default(""),
     /** 说话方式：口头禅、语气 */
     voice: text(300).default(""),
-    /** 场景、开场白、对话示例：只留在卡上，不交给主持人，免得它替玩家说话 */
+    /** 场景、开场白、对话示例：只留在卡上，不交给叙事模型，免得它替玩家说话 */
     scene: text(400).default(""),
     greeting: text(600).default(""),
     examples: text(800).default(""),

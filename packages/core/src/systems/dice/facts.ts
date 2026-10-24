@@ -9,7 +9,7 @@ export const CheckOutcomeSchema: z.ZodType<CheckOutcome> = z.enum([
   "fumble",
 ]);
 
-/** 本轮检定结果，由主持流程放进 ctx.facts.check，伤害等系统据此校验 */
+/** 本轮检定结果，由回合流程放进 ctx.facts.check，伤害等系统据此校验 */
 export const CheckFactSchema = z.object({
   /** 检定 id，同一次检定只能扣一次血 */
   id: z.string().min(1),

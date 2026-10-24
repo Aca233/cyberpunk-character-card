@@ -113,7 +113,7 @@ function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined
 
 /**
  * 存档和回合：同一存档的读写都排在一把锁里。
- * 行动的顺序是 校验 → 登记进行中 → 调主持人（锁外） → 加锁追加回合日志；
+ * 行动的顺序是 校验 → 登记进行中 → 调叙事模型（锁外） → 加锁追加回合日志；
  * 确认检定时先在锁里掷骰并写进日志，再走同样的流程，这样重试和刷新都不会重掷。
  * 被拦截、停止或出错的轮次不写回合记录，已经写下的骰子保留，下次确认同一个检定时沿用
  */
@@ -389,7 +389,7 @@ export class GameService {
 
   /**
    * 上下文查看器：第 seq 轮的规则模块、被丢弃的指令、token 用量，
-   * 以及按回合日志重建的这一轮发给主持人的内容（不含格式修复的那次调用）
+   * 以及按回合日志重建的这一轮发给叙事模型的内容（不含格式修复的那次调用）
    */
   context(id: string, seq: number): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
@@ -510,7 +510,7 @@ export class GameService {
     });
   }
 
-  /** 主持人模型没配好时直接告诉玩家，不换别的服务商 */
+  /** 叙事模型没配好时直接告诉玩家，不换别的服务商 */
   private async llmUnavailable(): Promise<Reply | undefined> {
     const resolved = await this.deps.llm.resolve("gm");
     if (resolved.ok) return undefined;

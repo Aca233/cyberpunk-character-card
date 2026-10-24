@@ -1,6 +1,6 @@
 import { falloutRules, jobsRules, type Twist } from "@cp/core";
 
-/** 转折和两难素材：主持人挂委托或推剧情时取用，不强制套用 */
+/** 转折和两难素材：叙事模型挂委托或推剧情时取用，不强制套用 */
 export const twists: readonly Twist[] = [
   {
     id: "target-already-dead",
@@ -29,7 +29,7 @@ export const twists: readonly Twist[] = [
   },
 ];
 
-/** 后果参考表：按委托星级给分量和例子，帮主持人保持分量和多样性，不随机强制 */
+/** 后果参考表：按委托星级给分量和例子，帮叙事模型保持分量和多样性，不随机强制 */
 export const consequences = falloutRules.ConsequenceTableSchema.parse([
   {
     risk: 1,
@@ -87,7 +87,7 @@ export const consequences = falloutRules.ConsequenceTableSchema.parse([
   },
 ]);
 
-/** 8 类委托的模板：分段结构、潜入和对峙放在哪、典型败局、适合的转折；主持人取素材，不强制套用 */
+/** 8 类委托的模板：分段结构、潜入和对峙放在哪、典型败局、适合的转折；叙事模型取素材，不强制套用 */
 export const jobTemplates = jobsRules.JobTemplateCatalogSchema.parse([
   {
     kind: "escort",

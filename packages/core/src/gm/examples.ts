@@ -1,4 +1,4 @@
-/** 常驻核心里的好坏示例，以及给主持人取用的转折和两难素材 */
+/** 常驻核心里的好坏示例，以及给叙事模型取用的转折和两难素材 */
 import { TwistCatalogSchema } from "../schemas/lore";
 
 export interface PromptExample {

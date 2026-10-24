@@ -45,7 +45,7 @@ export function falloutSection(state: FalloutState): string | undefined {
   }
   if (state.owed)
     lines.push(
-      `- 检定 ${state.owed.id} 失败了，但还没落下实际的后果：这一轮让它在戏里落地，不超过当时说好的范围`,
+      `- 检定 ${state.owed.id} 失败了，但还没落下实际的后果：这一轮让它在正文里落地，不超过当时说好的范围`,
     );
   return lines.length > 0 ? lines.join("\n") : undefined;
 }

@@ -67,7 +67,7 @@ export const RipperdocSchema = z.object({
   note: z.string().max(120).default(""),
   /** 乘在义体表参考价上的系数 */
   priceFactor: z.number().min(0.5).max(2).default(1),
-  /** 黑市货：便宜，但可能有故障或追踪器，由主持人在剧情里兑现 */
+  /** 黑市货：便宜，但可能有故障或追踪器，由叙事模型在剧情里兑现 */
   blackMarket: z.boolean().default(false),
   /** 货架上的义体 id；不朽义体放上来也不卖 */
   shelf: z.array(z.string().min(1)).min(1),

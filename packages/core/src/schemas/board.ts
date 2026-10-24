@@ -60,9 +60,9 @@ export const BoardModuleSchema = z.object({
   points: z.number().int().min(0).max(4),
   /** 标签：联动和检定加成按标签判断 */
   tags: z.array(z.string().trim().min(1).max(12)).max(6).default([]),
-  /** 这块模块让角色能做到什么；主持人据此判断行动是否可行 */
+  /** 这块模块让角色能做到什么；叙事模型据此判断行动是否可行 */
   ability: line(200).default(""),
-  /** 剧情钩子：主持人可以拿来做文章的线头 */
+  /** 剧情钩子：叙事模型可以拿来做文章的线头 */
   hook: line(200).default(""),
   people: z.array(ModulePersonSchema).max(2).default([]),
   /** 做哪些属性的检定时算有利条件 */

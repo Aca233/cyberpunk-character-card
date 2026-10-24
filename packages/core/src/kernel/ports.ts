@@ -30,7 +30,7 @@ export interface LlmMessage {
 }
 
 export interface LlmRequest {
-  /** gm 用主持人模型，aux 用辅助模型 */
+  /** gm 用叙事模型，aux 用辅助模型 */
   readonly purpose: "gm" | "aux";
   readonly messages: readonly LlmMessage[];
   readonly maxOutputTokens?: number;

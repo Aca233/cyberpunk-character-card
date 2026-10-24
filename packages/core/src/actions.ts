@@ -76,7 +76,7 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 打开消息：把消息都标成已读 */
   z.strictObject({ type: z.literal("readMessages") }),
-  /** 角色卡上的习惯：add 自己写一条，confirm 认下主持人的提议，dismiss 不要这条提议，remove 删掉 */
+  /** 角色卡上的习惯：add 自己写一条，confirm 认下叙事模型的提议，dismiss 不要这条提议，remove 删掉 */
   z.strictObject({
     type: z.literal("habit"),
     action: z.enum(["add", "confirm", "dismiss", "remove"]),
@@ -96,7 +96,7 @@ export const ActionRequestSchema = z.strictObject({
 export type ActionRequest = z.infer<typeof ActionRequestSchema>;
 
 /** 在委托板上接单时写进进展笔记的一句 */
-export const BOARD_ACCEPT_NOTE = "在委托板上接下，戏里还没和对方细谈";
+export const BOARD_ACCEPT_NOTE = "在委托板上接下，正文里还没和对方细谈";
 
 /** 义体医生的操作：人要在诊所里，货要在货架上、肯卖 */
 function ripperdocCommands(
@@ -275,7 +275,7 @@ function commandsFor(
     case "habit":
       return [{ type: "character.habit", action: action.action, text: action.text }];
     case "acceptJob":
-      // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
+      // 记一条进展笔记，让叙事模型知道这单是在板上接的，正文里还没谈过
       return [
         { type: "jobAccept", id: action.id },
         { type: "jobNote", id: action.id, note: BOARD_ACCEPT_NOTE },

@@ -9,7 +9,7 @@ export const EnemyGroupSchema = z.object({
 });
 export type EnemyGroup = z.infer<typeof EnemyGroupSchema>;
 
-/** 有名有姓的敌人：有人物卡，情况由主持人按正文写，代码不算命中次数 */
+/** 有名有姓的敌人：有人物卡，情况由叙事模型按正文写，代码不算命中次数 */
 export const FoeSchema = z.object({
   npc: z.string().min(1).describe("人物卡 id"),
   tier: TierSchema,

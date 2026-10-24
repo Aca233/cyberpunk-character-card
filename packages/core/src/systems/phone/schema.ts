@@ -2,12 +2,12 @@ import { z } from "zod";
 
 /** 消息记录最多留这么多条，旧的先删 */
 export const PHONE_KEPT = 40;
-/** 主持人每轮最多发几条 */
+/** 叙事模型每轮最多发几条 */
 export const MESSAGES_PER_TURN = 2;
 
 export const MessageSchema = z.object({
   id: z.number().int().min(1),
-  /** 人物 id、中间人 id，或者主持人写的名字 */
+  /** 人物 id、中间人 id，或者叙事模型写的名字 */
   from: z.string().min(1),
   /** 显示用的名字：查得到人物卡或中间人时用中文名 */
   name: z.string().min(1),
@@ -31,7 +31,7 @@ export const IncomingMessageSchema = z.object({
 });
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
-/** 只能由代码发出：主持流程把指令块里的 messages 记进消息记录 */
+/** 只能由代码发出：回合流程把指令块里的 messages 记进消息记录 */
 export const ReceiveSchema = z.object({
   type: z.literal("phone.receive"),
   from: z.string().min(1),

@@ -37,7 +37,7 @@ export const EVAL_CHARACTER = {
 
 const HistoryTurnSchema = z.strictObject({
   input: TurnInputSchema,
-  /** 主持人当时的正文 */
+  /** 叙事模型当时的正文 */
   text: z.string().min(1),
   /** 当时生效的指令，按模型可用的格式写；没有 world 时补一条 talk */
   commands: z.array(z.unknown()).default([]),

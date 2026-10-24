@@ -252,14 +252,14 @@ export const ShopSchema = z.object({
   id: z.string().min(1).max(40),
   /** 店名，例如“威尔逊的枪店” */
   name: z.string().min(1).max(24),
-  /** 店主；给主持人写场面用 */
+  /** 店主；给叙事模型写场面用 */
   keeper: z.string().min(1).max(20),
   /** 地点表里的 id：玩家在这里时才能进店 */
   location: z.string().min(1),
   note: z.string().max(120).default(""),
   /** 乘在物品表参考价上的系数 */
   priceFactor: z.number().min(0.5).max(2).default(1),
-  /** 黑市货：便宜，但可能来路不明，由主持人在剧情里兑现 */
+  /** 黑市货：便宜，但可能来路不明，由叙事模型在剧情里兑现 */
   blackMarket: z.boolean().default(false),
   /** 货架上的物品 id；不朽物品和没有标价的放上来也不卖 */
   shelf: z.array(z.string().min(1)).min(1),

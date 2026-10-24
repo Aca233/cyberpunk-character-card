@@ -322,7 +322,7 @@ export function sandevistanBlock(
   data: Readonly<Record<string, unknown>>,
 ): string | null {
   if (currentOffers(records).turn?.clutch !== true) {
-    return "现在不是生死瞬间：主持人标记了 clutch 才能开斯安威斯坦";
+    return "现在不是生死瞬间：叙事模型标记了 clutch 才能开斯安威斯坦";
   }
   return sandevistanOf(world, data) ? null : "没装能用的加速义体";
 }
@@ -538,7 +538,7 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
       source: choice.source ?? null,
     })),
     checks,
-    /** 主持人标记了生死瞬间：这一轮可以开斯安威斯坦 */
+    /** 叙事模型标记了生死瞬间：这一轮可以开斯安威斯坦 */
     clutch: offers.turn?.clutch === true,
     /** 已经掷过骰的检定 id；这时只能确认它 */
     rolled: offers.rolled?.offer.id ?? null,
@@ -709,7 +709,7 @@ export function projectState(
       attributePoints: character.attributePoints,
       /** 主板上的模块和联动；没用主板的角色是空的 */
       traits: character.traits,
-      /** 习惯栏，和主持人提议、等玩家确认的习惯 */
+      /** 习惯栏，和叙事模型提议、等玩家确认的习惯 */
       habits: character.habits,
       habitOffers: character.habitOffers,
       /** 角色的过往，闪回用过没有 */
@@ -996,7 +996,7 @@ export function projectState(
           replied: m.replied,
         })),
     },
-    /** 别人眼里的你：交给主持人，NPC 的第一反应照这一行写 */
+    /** 别人眼里的你：交给叙事模型，NPC 的第一反应照这一行写 */
     perceived: perceivedLine(
       {
         traits: character.traits,

@@ -25,7 +25,7 @@ export type ApplyOutcome =
     }
   | { readonly ok: false; readonly reason: string };
 
-/** 调用方（主持流程、建档、测试）提供的结算环境 */
+/** 调用方（回合流程、建档、测试）提供的结算环境 */
 export interface ApplyContext {
   readonly rng: Rng;
   /** 本轮的事实，例如检定结果；各系统用自己的 schema 读取，不信任未校验的内容 */
@@ -57,7 +57,7 @@ export interface RuleInput {
   readonly text: string;
 }
 
-/** 规则模块：主持人提示词里的一段规则，代码每轮按状态决定带不带 */
+/** 规则模块：叙事模型提示词里的一段规则，代码每轮按状态决定带不带 */
 export interface RuleModule<S = unknown> {
   readonly id: string;
   readonly title: string;
@@ -80,7 +80,7 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   initial(): S;
   /** 模型可以使用的指令，键必须等于指令的 type */
   readonly commands: CommandSchemas<C>;
-  /** 只能由代码发出的指令：建档、主持流程，或依赖这个系统的其他系统 */
+  /** 只能由代码发出的指令：建档、回合流程，或依赖这个系统的其他系统 */
   readonly internal?: CommandSchemas<I>;
   /** 在草稿上结算一条指令；返回 ok: false 时这条指令整体不生效 */
   apply(draft: Draft<S>, command: C | I, ctx: SystemContext): ApplyOutcome;
@@ -88,7 +88,7 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly on?: Readonly<Record<string, (draft: Draft<S>, ctx: SystemContext) => void>>;
   /** 时间推进时的结算，例如重伤失血、期限到期；不能失败 */
   tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
-  /** 这个系统给主持人的规则模块 */
+  /** 这个系统给叙事模型的规则模块 */
   readonly rules?: readonly RuleModule<S>[];
 }
 
@@ -149,7 +149,7 @@ export interface Registry {
     commands: readonly Command[],
     ctx: ApplyContext,
   ): ApplyBatchResult;
-  /** 由主持流程发出的信号，例如 turn.end */
+  /** 由回合流程发出的信号，例如 turn.end */
   signal(world: WorldState, signal: string, ctx: ApplyContext): WorldChange;
   /** 把游戏时间推进到 to；倒退时报错 */
   advanceTo(world: WorldState, to: number, ctx: ApplyContext): WorldChange;

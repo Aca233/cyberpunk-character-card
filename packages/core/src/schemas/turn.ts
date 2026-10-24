@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由主持人自己判断 */
+/** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由叙事模型自己判断 */
 export const InputModeSchema = z.enum(["do", "say", "think", "ooc"]);
 export type InputMode = z.infer<typeof InputModeSchema>;
 
@@ -50,7 +50,7 @@ export type TurnEvent =
       readonly requestId: string;
       readonly baseVersion: number;
     }
-  /** 确认检定后先掷骰并写进日志，再请主持人写结果；不是终止事件 */
+  /** 确认检定后先掷骰并写进日志，再请叙事模型写结果；不是终止事件 */
   | {
       readonly type: "rolled";
       readonly checkId: string;

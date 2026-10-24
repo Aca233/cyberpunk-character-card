@@ -10,7 +10,7 @@ export const SlangSchema = z.object({
 export type Slang = z.input<typeof SlangSchema>;
 export const GlossarySchema = z.array(SlangSchema);
 
-/** 转折和两难素材：主持人可以取用、改写，不强制套用 */
+/** 转折和两难素材：叙事模型可以取用、改写，不强制套用 */
 export const TwistSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   kind: z.enum(["twist", "dilemma"]),

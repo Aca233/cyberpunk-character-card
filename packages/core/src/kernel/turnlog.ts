@@ -43,13 +43,13 @@ const TurnRecordSchema = z.object({
   text: z.string(),
   patches: z.array(PatchSchema),
   /** 以下字段在切片 4 加入，旧存档没有 */
-  /** 主持人对玩家意图的一句理解 */
+  /** 叙事模型对玩家意图的一句理解 */
   read: z.string().optional(),
   /** 建议选项，原样存下，展示时再按 schema 读 */
   choices: z.array(z.unknown()).optional(),
   /** 内心声音，原样存下，展示时再按 schema 读 */
   voices: z.array(z.unknown()).optional(),
-  /** 主持人标记的生死瞬间：下一轮可以开斯安威斯坦 */
+  /** 叙事模型标记的生死瞬间：下一轮可以开斯安威斯坦 */
   clutch: z.boolean().optional(),
   /** 这一轮发生在第几个场景；旧存档没有 */
   scene: z.number().int().min(0).optional(),
@@ -57,11 +57,11 @@ const TurnRecordSchema = z.object({
   title: z.string().optional(),
   /** 这一轮弹出的特写卡 */
   closeup: CloseupSchema.optional(),
-  /** 主持人提出、等玩家确认的检定 */
+  /** 叙事模型提出、等玩家确认的检定 */
   check: z.unknown().optional(),
   /** 这一轮写的是哪次检定的结果 */
   resolves: z.string().optional(),
-  /** 主持人判断这一轮是场外提问，不改状态；旧存档没有，按当时的输入方式判断 */
+  /** 叙事模型判断这一轮是场外提问，不改状态；旧存档没有，按当时的输入方式判断 */
   ooc: z.boolean().optional(),
   /** 结算说明，例如“人性 −20 已截断为 −15” */
   notes: z.array(z.string()).optional(),

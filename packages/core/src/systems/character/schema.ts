@@ -27,7 +27,7 @@ export const TraitSchema = z.object({
 export type Trait = z.infer<typeof TraitSchema>;
 export const TRAITS_MAX = 24;
 
-/** 习惯栏最多几条；主持人提议、还没确认的也最多这么多 */
+/** 习惯栏最多几条；叙事模型提议、还没确认的也最多这么多 */
 export const HABITS_MAX = 8;
 /** 一条习惯：常去的店、爱吃的东西、睡前做什么、车里放什么歌 */
 export const HabitTextSchema = z.string().trim().min(1).max(40);
@@ -56,7 +56,7 @@ export type PastFact = z.infer<typeof PastFactSchema>;
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
   name: z.string().min(1).nullable(),
-  /** 给主持人看的一段简介：出身、外貌、性格、会什么 */
+  /** 给叙事模型看的一段简介：出身、外貌、性格、会什么 */
   brief: z.string(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
   /** 街头声望等级 */
@@ -71,9 +71,9 @@ export const CharacterStateSchema = z.object({
   traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
   /** 装着的义体带来的属性加成，由义体系统算好写进来；旧存档没有 */
   bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)).default({}),
-  /** 习惯：玩家自己写的，或者确认过的主持人提议；不加数值 */
+  /** 习惯：玩家自己写的，或者确认过的叙事模型提议；不加数值 */
   habits: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
-  /** 主持人提议、玩家还没确认的习惯 */
+  /** 叙事模型提议、玩家还没确认的习惯 */
   habitOffers: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
   /** 闪回过的过往；每段过往一生只闪回一次 */
   flashbackUsed: z.array(z.string().min(1)).default([]),
@@ -167,7 +167,7 @@ export const FlashbackCommandSchema = z
   );
 export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
 
-/** 只能由代码发出：闪回里每过一轮由主持流程发出，玩满自动回到现在 */
+/** 只能由代码发出：闪回里每过一轮由回合流程发出，玩满自动回到现在 */
 export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
 export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
 

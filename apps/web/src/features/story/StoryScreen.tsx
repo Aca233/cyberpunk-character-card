@@ -78,7 +78,7 @@ export function StoryScreen() {
     [],
   );
 
-  // 当前打开的检定：已掷过骰的那个优先；其次是主持人这轮直接要求的检定（不挂在选项上）
+  // 当前打开的检定：已掷过骰的那个优先；其次是叙事模型这轮直接要求的检定（不挂在选项上）
   const version = view?.version ?? 0;
   const [picked, setPicked] = useState<{ readonly id: string; readonly version: number } | null>(
     null,

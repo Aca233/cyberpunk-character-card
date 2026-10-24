@@ -44,7 +44,7 @@ export type Modifier = z.infer<typeof ModifierSchema>;
 
 const PositiveModifier = ModifierSchema.extend({ value: z.number().int().min(1) });
 
-/** 主持人返回的 check：掷骰前先说清成功和失败会怎样 */
+/** 叙事模型返回的 check：掷骰前先说清成功和失败会怎样 */
 export const CheckSpecSchema = z.object({
   intent: z.string().min(1).describe("玩家想做成什么"),
   attribute: AttributeSchema,

@@ -56,7 +56,7 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
   return [...kinds];
 }
 
-/** 记下这一轮的后果；检定失败却什么都没发生时，下一轮提醒主持人补上 */
+/** 记下这一轮的后果；检定失败却什么都没发生时，下一轮提醒叙事模型补上 */
 export function recordFallout(
   draft: Draft<FalloutState>,
   command: FalloutRecord,

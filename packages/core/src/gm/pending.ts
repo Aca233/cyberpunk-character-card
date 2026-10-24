@@ -38,7 +38,7 @@ export interface Offers {
   readonly rolled: { readonly offer: CheckOffer; readonly record: CheckRecord } | undefined;
 }
 
-/** 掷过骰的检定，交给主持人写结果 */
+/** 掷过骰的检定，交给叙事模型写结果 */
 export interface RolledCheck {
   readonly offer: CheckOffer;
   readonly prepared: PreparedCheck;

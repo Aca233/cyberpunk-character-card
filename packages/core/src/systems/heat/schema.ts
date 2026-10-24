@@ -8,7 +8,7 @@ export const BRIBE_PER_STAR = 1000;
 /** 最近事件留几条 */
 export const RECENT_EVENTS = 10;
 
-/** 事件类别：主持人只报告发生了什么，声望和热度由代码推导 */
+/** 事件类别：叙事模型只报告发生了什么，声望和热度由代码推导 */
 export const EVENT_KINDS = [
   "kill",
   "publicViolence",

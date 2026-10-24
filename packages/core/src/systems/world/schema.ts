@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 这一轮主要做了什么；只作记录，过了多久由主持人在 time 里写 */
+/** 这一轮主要做了什么；只作记录，过了多久由叙事模型在 time 里写 */
 export const ActivitySchema = z.enum([
   "talk",
   "observe",
@@ -53,7 +53,7 @@ export const DeadlineSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   due: z.number().int(),
-  /** 主持人回应过的游戏时间；没回应时为 null */
+  /** 叙事模型回应过的游戏时间；没回应时为 null */
   handledAt: z.number().int().nullable(),
 });
 export type Deadline = z.infer<typeof DeadlineSchema>;
@@ -133,6 +133,6 @@ export function locationCatalog(
   return catalog;
 }
 
-/** 只能由代码发出：主持人标了 sceneEnd 之后由主持流程发出 */
+/** 只能由代码发出：叙事模型标了 sceneEnd 之后由回合流程发出 */
 export const EndSceneSchema = z.object({ type: z.literal("world.endScene") });
 export type EndScene = z.infer<typeof EndSceneSchema>;

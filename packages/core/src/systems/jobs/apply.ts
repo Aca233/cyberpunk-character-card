@@ -246,7 +246,7 @@ export function endJob(
   return { ok: true, notes, emit };
 }
 
-/** 时间推进：没接的单子到期被别人接走；接下的超期只做标记，由主持人在戏里回应 */
+/** 时间推进：没接的单子到期被别人接走；接下的超期只做标记，由叙事模型在正文里回应 */
 export function tickJobs(draft: Draft<JobsState>, span: TimeSpan): void {
   for (const job of draft.jobs) {
     if (job.due === null || job.due > span.to) continue;

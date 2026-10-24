@@ -56,7 +56,7 @@ function editorFor(card: CharacterCard, id: string | null = null, sample = false
   return { id, sample, card: copy, original: JSON.stringify(copy) };
 }
 
-/** 交给主持人的正文在前；场景、开场白、对话示例只留在卡上 */
+/** 交给叙事模型的正文在前；场景、开场白、对话示例只留在卡上 */
 const BRIEF_BLOCKS = ["look", "past", "personality", "voice"] as const;
 const CARD_BLOCKS = ["scene", "greeting", "examples"] as const;
 
@@ -400,8 +400,8 @@ export function CharactersScreen() {
             {!editor.card.board && (
               <div className={styles.notice}>
                 <p>
-                  主板把出身、过往、本事做成一块块模块：每块写明你能做到什么、带着什么麻烦，主持人据此判断行动和给出专属选项。
-                  只写下面的文字也能玩。
+                  主板把出身、过往、本事做成一块块模块：每块写明你能做到什么、带着什么麻烦，AI
+                  据此判断行动和给出专属选项。 只写下面的文字也能玩。
                 </p>
                 {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
                 {!editor.sample && (
@@ -449,9 +449,7 @@ export function CharactersScreen() {
             </div>
             <h4 className={styles.subTitle}>
               卡面{" "}
-              <small className={styles.subNote}>
-                场景、开场白和对话示例只留在卡上，不交给主持人
-              </small>
+              <small className={styles.subNote}>场景、开场白和对话示例只留在卡上，不交给 AI</small>
             </h4>
             <div className={styles.proseBlocks}>
               {CARD_BLOCKS.map((block) => (

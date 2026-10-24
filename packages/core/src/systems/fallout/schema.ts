@@ -50,7 +50,7 @@ export const FalloutStateSchema = z.object({
 });
 export type FalloutState = z.infer<typeof FalloutStateSchema>;
 
-/** 只能由主持流程发出：这一轮真正生效的指令里认出来的后果 */
+/** 只能由回合流程发出：这一轮真正生效的指令里认出来的后果 */
 export const FalloutRecordSchema = z.object({
   type: z.literal("fallout.record"),
   kinds: z.array(FalloutKindSchema),
