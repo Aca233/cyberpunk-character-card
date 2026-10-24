@@ -13,7 +13,7 @@ export const PERIOD_LABELS: Readonly<Record<Period, string>> = {
   night: "深夜",
 };
 
-/** 时段的起点（小时），只作显示和场景推进用 */
+/** 时段的起点（小时），只作显示用 */
 const PERIOD_STARTS: readonly (readonly [number, Period])[] = [
   [5, "dawn"],
   [9, "day"],
@@ -34,18 +34,6 @@ export function periodOf(minutes: number): Period {
   let period: Period = "night";
   for (const [start, p] of PERIOD_STARTS) if (hour >= start) period = p;
   return period;
-}
-
-/** 下一个时段的开始时间，严格晚于 now */
-export function nextPeriodStart(now: number): number {
-  const dayStart = now - minuteOfDay(now);
-  for (const day of [0, 1]) {
-    for (const [hour] of PERIOD_STARTS) {
-      const t = dayStart + day * MINUTES_PER_DAY + hour * 60;
-      if (t > now) return t;
-    }
-  }
-  throw new Error("找不到下一个时段");
 }
 
 /** 已经到期、还没回应的事件；一次跳过好几天时全部列出 */
@@ -111,15 +99,9 @@ export function applyDeadline(
   return { ok: true, notes: [`${early ? "提前办完" : "已回应"}：${existing.label}`] };
 }
 
-/** 场景结束：至少前进到下一个时段，并广播 scene.end */
+/** 场景结束：不推进时间（过了多久由叙事模型在 world 里写），广播 scene.end */
 export function endScene(draft: Draft<WorldClockState>, now: number): ApplyOutcome {
-  const target = nextPeriodStart(now);
   draft.scene += 1;
-  draft.sceneStartedAt = target;
-  return {
-    ok: true,
-    notes: [`场景结束，${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`],
-    advanceTo: target,
-    signals: ["scene.end"],
-  };
+  draft.sceneStartedAt = now;
+  return { ok: true, notes: ["场景结束"], signals: ["scene.end"] };
 }
