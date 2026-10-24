@@ -52,6 +52,7 @@ import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import {
   deckOf,
   CATEGORY_LABELS as HACK_CATEGORY_LABELS,
+  BREACH_GAIN_LABELS as HACK_GAIN_LABELS,
   HackingStateSchema,
   type QuickhackDef,
   quickhackCatalog,
@@ -860,7 +861,7 @@ export function projectState(
       };
     }),
     /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */
-    hacking: hackingView(world, installed, data),
+    hacking: hackingView(world, installed, data, clock.location),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1069,6 +1070,7 @@ function hackingView(
   world: WorldState,
   installed: Parameters<typeof deckOf>[0],
   data: Readonly<Record<string, unknown>>,
+  location: string | null,
 ) {
   const found = deckOf(installed, data);
   if (!found?.deck) return null;
@@ -1093,5 +1095,14 @@ function hackingView(
         effect: def?.effect ?? "",
       };
     }),
+    /** 这个地点入侵过的网络，最近的在前 */
+    breaches: state.breachedNetworks
+      .filter((n) => n.location === location)
+      .reverse()
+      .map((n) => ({
+        name: n.name,
+        at: formatGameTime(n.at),
+        gains: n.gains.map((g) => HACK_GAIN_LABELS[g]),
+      })),
   };
 }

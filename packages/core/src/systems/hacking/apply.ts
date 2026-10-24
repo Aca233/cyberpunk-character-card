@@ -4,7 +4,11 @@ import type { CombatState } from "../combat";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { checkFact } from "../dice";
 import { HUMANITY_KINDS } from "../humanity";
+import type { WorldClockState } from "../world";
 import {
+  BREACH_GAIN_LABELS,
+  BREACH_KEEP,
+  type BreachCommand,
   CATEGORY_LABELS,
   type HackCommand,
   type HackingState,
@@ -129,4 +133,52 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
       : [];
   const inCombat = ctx.read<CombatState>("combat").active !== null;
   return { ok: true, notes, emit, ...(inCombat ? { signals: ["combat.quick"] } : {}) };
+}
+
+/** 本轮的智力门槛结果；回合流程放进 ctx.facts.gate */
+function gateMet(facts: Readonly<Record<string, unknown>>): boolean | undefined {
+  const gate = facts.gate as { attribute?: unknown; met?: unknown } | undefined;
+  if (gate === undefined || gate.attribute !== "intelligence") return undefined;
+  return gate.met === true;
+}
+
+/** 入侵协议：要接入仓，并且本轮智力门槛达标或检定成功；同一个网络在同一地点不重复入侵 */
+export function applyBreach(
+  draft: Hacking,
+  command: BreachCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  syncDeck(draft, ctx);
+  if (!draft.deck) return fail("没装网络接入仓，做不了入侵协议");
+  const check = checkFact(ctx.facts);
+  const gate = gateMet(ctx.facts);
+  if (check === undefined && gate === undefined) {
+    return fail("入侵协议要先过智力门槛或掷智力：本轮没有门槛结果，也没有检定结果");
+  }
+  if (check !== undefined && (check.outcome === "failure" || check.outcome === "fumble")) {
+    return fail("检定没过，入侵没成功：写被 ICE 挡下、被对方察觉或被追踪的后果");
+  }
+  if (check === undefined && gate === false) {
+    return fail("智力门槛没达标，入侵没成功：让玩家换一条路");
+  }
+  const location = ctx.read<WorldClockState>("world").location ?? null;
+  if (draft.breachedNetworks.some((n) => n.name === command.network && n.location === location)) {
+    return fail(`「${command.network}」已经入侵过了，不用再做一次`);
+  }
+  draft.breachedNetworks.push({
+    name: command.network,
+    location,
+    at: ctx.now,
+    gains: [...command.gains],
+  });
+  if (draft.breachedNetworks.length > BREACH_KEEP) {
+    draft.breachedNetworks.splice(0, draft.breachedNetworks.length - BREACH_KEEP);
+  }
+  const gains = command.gains.map((g) => BREACH_GAIN_LABELS[g]).join("、");
+  return {
+    ok: true,
+    notes: [
+      `入侵协议：${command.network}${command.via ? `（从${command.via}接入）` : ""}，拿下${gains}`,
+    ],
+  };
 }

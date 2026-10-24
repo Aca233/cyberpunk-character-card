@@ -217,6 +217,10 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `网络接入仓：${h.deckName}，RAM ${h.ram}/${h.ramMax} 格；已装程序 ${h.programs.length}/${h.slots}：${programs.length > 0 ? programs.join("；") : "一个都没装"}`,
     );
+    if (h.breaches.length > 0)
+      lines.push(
+        `这里入侵过的网络：${h.breaches.map((n) => `${n.name}（${n.at}，拿下${n.gains.join("、")}）`).join("；")}`,
+      );
   }
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   const withMods = (w: string) => {

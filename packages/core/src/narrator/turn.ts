@@ -882,6 +882,8 @@ export async function runNarratorTurn(
   if (plan.kind === "resolve") {
     facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
   }
+  // 门槛结果：入侵协议等要门槛达标的指令据此核对
+  if (gate) facts.gate = { attribute: gate.gate.attribute, met: gate.met };
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
   const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
   if (armor) facts.armor = armor.name;
