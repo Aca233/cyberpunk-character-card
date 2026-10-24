@@ -22,17 +22,27 @@ import {
   twists,
 } from "@cp/content";
 import {
+  BASE_RULES,
   BoardModuleSchema,
   CharacterCardSchema,
   ComboSchema,
+  characterRules,
   contentPriceIssues,
   cyberwareRules,
+  diceRules,
+  EXTRACT_STAGE,
   falloutRules,
   GlossarySchema,
+  healthRules,
+  humanityRules,
   inventoryRules,
+  JUDGE_STAGE,
   jobsRules,
   LifepathEntrySchema,
+  NARRATE_STAGE,
   npcRules,
+  registry,
+  schemaDoc,
   TwistCatalogSchema,
   worldRules,
 } from "@cp/core";
@@ -220,6 +230,50 @@ if (existsSync(TERMS)) {
   );
 } else {
   notes.push("本机没有官方译名表 data/lore/terms.json，跳过译名核对（需要时先跑 pnpm terms）");
+}
+
+// 档位换算：发给模型的说明里只出现档位，不出现换算表的数；修正值只能是一档或上限
+{
+  const { BONUS_CAP, DV_MOD_CAP, MOD_STEP, PENALTY_CAP } = diceRules;
+  const { AFFINITY_SIZES } = npcRules;
+  const { HUMANITY_KINDS } = humanityRules;
+  const { DAMAGE_PERCENT } = healthRules;
+  const { CRED_SIZES } = characterRules;
+  const texts: [string, string][] = [
+    ["常驻守则", BASE_RULES],
+    ["判断", JUDGE_STAGE],
+    ["抽取", EXTRACT_STAGE],
+    ["写正文", NARRATE_STAGE],
+    ...registry.rules.flatMap((m): [string, string][] =>
+      [m.text, m.judge, m.narrate]
+        .filter((t): t is string => t !== undefined)
+        .map((t) => [`规则模块 ${m.id}`, t]),
+    ),
+    ...registry.commandTypes().flatMap((type): [string, string][] => {
+      const s = registry.commandSchema(type);
+      return s ? [[`指令 ${type} 的格式说明`, schemaDoc(s)]] : [];
+    }),
+  ];
+  const allowed = new Set([1, MOD_STEP, BONUS_CAP, PENALTY_CAP, DV_MOD_CAP]);
+  for (const [where, text] of texts) {
+    for (const m of text.matchAll(/(?<![\w\d])[+−](\d+)/g)) {
+      if (!allowed.has(Number(m[1]))) {
+        errors.push(
+          `${where}：出现了「${m[0]}」，修正只能是一档 ${MOD_STEP} 或上限，换算的数由代码查表`,
+        );
+      }
+    }
+    for (const m of text.matchAll(/\d+\s?%/g)) {
+      errors.push(`${where}：出现了「${m[0]}」，伤害按档位写，百分比由代码换算`);
+    }
+  }
+  const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`.replace("-", "−"));
+  const humanity = Object.values(HUMANITY_KINDS)
+    .map((k) => `${k.label} ${[...new Set(Object.values(k.sizes))].map(signed).join("/")}`)
+    .join("，");
+  notes.push(
+    `换算表（和计划里的"档位换算"对照）：伤害 ${Object.values(DAMAGE_PERCENT).join("/")}%；好感 ±${Object.values(AFFINITY_SIZES).join("/")}；人性 ${humanity}；声望 ${Object.values(CRED_SIZES).join("/")} 级；修正一档 ${MOD_STEP}，上限 +${BONUS_CAP}/−${PENALTY_CAP}/+${DV_MOD_CAP}`,
+  );
 }
 
 const counts = `物品 ${items.length}、义体 ${cyberware.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}`;

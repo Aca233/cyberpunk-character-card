@@ -6,7 +6,9 @@ import {
   type DamageTier,
   type DiceState,
   isSuccess,
+  MOD_STEP,
   type Modifier,
+  PENALTY_CAP,
 } from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
 import {
@@ -62,11 +64,11 @@ export function woundTag(state: Pick<HealthState, "hp" | "max">): WoundTag {
   return "severe";
 }
 
-/** 伤势减值，交给检定的 penalties；计入 −4 的减值上限 */
+/** 伤势减值，交给检定的 penalties；计入 PENALTY_CAP 的减值上限 */
 export function woundPenalty(state: Pick<HealthState, "hp" | "max">): Modifier | undefined {
   const tag = woundTag(state);
-  if (tag === "light") return { source: "wound", value: 2, reason: "轻伤" };
-  if (tag === "severe") return { source: "wound", value: 4, reason: "重伤" };
+  if (tag === "light") return { source: "wound", value: MOD_STEP, reason: "轻伤" };
+  if (tag === "severe") return { source: "wound", value: 2 * MOD_STEP, reason: "重伤" };
   return undefined;
 }
 
@@ -167,7 +169,7 @@ function loseLimb(
   }
   if (draft.lostLimbs.includes(limb)) return `${label}已经没了`;
   draft.lostLimbs.push(limb);
-  return `失去${label}：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，相关检定 −2；找义体医生装义肢能补上`;
+  return `失去${label}：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，相关检定 −${MOD_STEP}；找义体医生装义肢能补上`;
 }
 
 /** 义肢和义体损坏：只能由代码发出 */

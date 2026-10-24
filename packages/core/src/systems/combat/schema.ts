@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TierSchema } from "../dice";
+import { MOD_STEP, TierSchema } from "../dice";
 
 /** 敌群：杂兵不建卡，按档位和大致人数合成一组 */
 export const EnemyGroupSchema = z.object({
@@ -47,8 +47,8 @@ export type CombatOutcome = z.infer<typeof CombatOutcomeSchema>;
 export const EdgeSchema = z.enum(["player", "enemy"]);
 export type Edge = z.infer<typeof EdgeSchema>;
 export const EDGE_LABELS: Readonly<Record<Edge, string>> = {
-  player: "你占先机，检定 +2",
-  enemy: "对方占先机，检定 −2",
+  player: `你占先机，检定 +${MOD_STEP}`,
+  enemy: `对方占先机，检定 −${MOD_STEP}`,
 };
 
 /** 对峙：枪口对着枪口，最多几轮发言，时间到了对方先动手 */

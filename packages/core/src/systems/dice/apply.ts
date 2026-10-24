@@ -5,6 +5,8 @@ import { type CheckSpec, type Difficulty, type Modifier, OPPONENT_TIERS } from "
 export const BONUS_CAP = 4;
 export const PENALTY_CAP = 4;
 export const DV_MOD_CAP = 4;
+/** 加成和减值的一档：本事、义体、先机、断肢、起疑都是一档；提示词里的数都从这里来 */
+export const MOD_STEP = 2;
 /** 街头传说的 −2 单独计算，不占修正上限；死亡之城的 +2 算进修正上限 */
 const STREET_LEGEND_DV = -2;
 const DEATH_CITY_DV = 2;

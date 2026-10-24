@@ -1,4 +1,5 @@
 import type { RuleModule } from "../../kernel/system";
+import { MOD_STEP, PENALTY_CAP } from "../dice";
 import type { CombatState } from "./schema";
 
 /** 输入里像要开打的说法；宁可多带，漏带时模型不知道怎么开战 */
@@ -20,7 +21,7 @@ export const combatRules: RuleModule<CombatState> = {
 - 失败可能受伤时在 check 写 damage；只有写了 lethal 才可能濒死，否则血量归零只是倒下。
 - 快捷动作（用快捷栏的治疗品、扔手雷）每段最多 2 个，不掷骰，也不决定胜负；撤退也是主行动，撤不撤得掉照常给 check。
 - 对峙按顺序判：说中对方的诉求、亮出把柄或筹码不掷骰；镇定达标走 gate；触到底线立刻开打。
-- 第一段的先机：玩家在对峙里先开枪、埋伏得手时检定 +2；谈崩被抢先、被埋伏、潜入到交战档时在 penalties 写 −2（计入 −4 上限）。`,
+- 第一段的先机：玩家在对峙里先开枪、埋伏得手时检定 +${MOD_STEP}；谈崩被抢先、被埋伏、潜入到交战档时在 penalties 写 −${MOD_STEP}（计入 −${PENALTY_CAP} 上限）。`,
   narrate: `- 正文里写出现在是第几段、局面朝哪边倒，不写血量数字；一段只写玩家的一个主行动和对面的反应。
 - 敌人也会动脑子：找掩体、包抄、叫增援、拿人质、见势不妙就跑。杂兵成群地写，有名有姓的敌人有自己的打法和台词。
 - 有名有姓的敌人倒下以后，杀、放还是抓由玩家决定，正文不替玩家下手。
@@ -37,5 +38,5 @@ export const combatRules: RuleModule<CombatState> = {
 - 正文里写出现在是第几段、局面朝哪边倒，不写血量数字。
 - 双方摊牌、有人拔枪或要谈判时，可以先开对峙：combat standoff（opponent 写对面是谁，rounds 2–3 轮）。代码每轮倒数，时间到了下一轮对方先动手。对峙时正文停在僵持的那一刻，不替玩家开枪或让步。
 - 对峙按顺序判：说中对方的诉求、亮出把柄或筹码、镇定门槛达标，可以 combat defuse 免掉这场仗，或者开战时少写一段；触到底线立刻 combat start。
-- 开战时用 edge 写第一段谁占先机：玩家在对峙里先开枪、埋伏得手写 player（检定 +2），同时按先动手发 event，对没拔枪的人开枪可以扣人性；谈崩被抢先、被埋伏、潜入到交战档写 enemy（检定 −2，写进 penalties，计入 −4 上限）。对峙时间到了不写 edge 也按 enemy 算。`,
+- 开战时用 edge 写第一段谁占先机：玩家在对峙里先开枪、埋伏得手写 player（检定 +${MOD_STEP}），同时按先动手发 event，对没拔枪的人开枪可以扣人性；谈崩被抢先、被埋伏、潜入到交战档写 enemy（检定 −${MOD_STEP}，写进 penalties，计入 −${PENALTY_CAP} 上限）。对峙时间到了不写 edge 也按 enemy 算。`,
 };
