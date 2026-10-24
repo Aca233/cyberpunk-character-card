@@ -13,6 +13,7 @@ import {
 import type { WorldState } from "./kernel/world";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
+import { credTier } from "./systems/character/apply";
 import { CharacterStateSchema } from "./systems/character/schema";
 import { CombatStateSchema } from "./systems/combat/schema";
 import { cyberwareCatalog } from "./systems/cyberware/apply";
@@ -31,7 +32,7 @@ import {
   InventoryStateSchema,
   type ItemDef,
 } from "./systems/inventory/schema";
-import { isOpen, JOB_STATUS_LABELS, maxRisk } from "./systems/jobs/apply";
+import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
 import { JobsStateSchema } from "./systems/jobs/schema";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
@@ -427,6 +428,8 @@ export function projectState(
       brief: character.brief,
       attributes: character.attributes,
       streetCred: character.streetCred,
+      credTier: credTier(character.streetCred).label,
+      credWorld: credTier(character.streetCred).world,
       /** 攒着半级声望，再得半级就升级 */
       credHalf: character.credHalf,
       attributePoints: character.attributePoints,
@@ -531,6 +534,8 @@ export function projectState(
         name: f.name,
         trust: f.trust,
         maxRisk: maxRisk(f, character.streetCred),
+        cappedBy: riskCap(f, character.streetCred).by,
+        capHint: riskCap(f, character.streetCred).hint,
       })),
       list: [
         ...jobs.jobs.filter(isOpen),

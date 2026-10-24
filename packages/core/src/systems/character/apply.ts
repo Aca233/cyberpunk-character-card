@@ -10,6 +10,28 @@ import {
   STREET_CRED_MAX,
 } from "./schema";
 
+/** 传奇之路：声望到达里程碑时世界的反应；主持人据此写路人、帮派和中间人的态度 */
+export const CRED_TIERS = [
+  { from: 0, label: "无名小卒", world: "没人认识你，中间人只给小活，混混不把你放在眼里" },
+  { from: 10, label: "小有名气", world: "常去的酒吧有人叫得出你的名字，街头混混动手前会掂量一下" },
+  {
+    from: 20,
+    label: "道上有名",
+    world: "中间人主动找上门，帮派里有人听过你的事，也有人想拿你立威",
+  },
+  { from: 35, label: "响当当", world: "陌生人认得出你，混混见了你就躲，公司的人开始留意你" },
+  {
+    from: 50,
+    label: "传奇",
+    world: "你是夜之城的传说：来生酒吧有以你命名的调酒，人人都想和你扯上关系",
+  },
+] as const;
+export type CredTier = (typeof CRED_TIERS)[number];
+
+export function credTier(level: number): CredTier {
+  return CRED_TIERS.findLast((t) => level >= t.from) ?? CRED_TIERS[0];
+}
+
 function setMax(state: Pick<CharacterState, "attributes" | "streetCred">): Command {
   return { type: "health.setMax", max: maxHp(state.attributes.body ?? 3, state.streetCred) };
 }
@@ -49,6 +71,8 @@ export function gainCred(
     return { ok: true, notes };
   }
   notes.push(`街头声望升到 ${draft.streetCred} 级`);
+  const tier = credTier(draft.streetCred);
+  if (tier !== credTier(before)) notes.push(`声望里程碑「${tier.label}」：${tier.world}`);
   const points =
     Math.floor(draft.streetCred / LEVELS_PER_POINT) - Math.floor(before / LEVELS_PER_POINT);
   if (points > 0) {

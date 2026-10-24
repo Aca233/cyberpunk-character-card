@@ -64,6 +64,40 @@ export function maxRisk(fixer: Pick<Fixer, "trust">, streetCred: number): number
   return Math.min(starsByCred(streetCred), starsByTrust(fixer.trust));
 }
 
+const CRED_STEPS = [
+  { at: 10, stars: 3 },
+  { at: 20, stars: 4 },
+  { at: 35, stars: 5 },
+] as const;
+const TRUST_STEPS = [
+  { at: 30, stars: 3 },
+  { at: 60, stars: 4 },
+  { at: 85, stars: 5 },
+] as const;
+
+export interface RiskCap {
+  readonly max: number;
+  /** 卡在哪一项；两项一样或已经到 5 星时为 null */
+  readonly by: "cred" | "trust" | null;
+  /** 要多接一星差什么，界面直接显示 */
+  readonly hint: string | null;
+}
+
+/** 能接的星级卡在哪一项、再往上要什么，委托板标明 */
+export function riskCap(fixer: Pick<Fixer, "trust">, streetCred: number): RiskCap {
+  const byCred = starsByCred(streetCred);
+  const byTrust = starsByTrust(fixer.trust);
+  const max = Math.min(byCred, byTrust);
+  if (max >= 5) return { max, by: null, hint: null };
+  const cred = CRED_STEPS.find((s) => s.stars === max + 1);
+  const trust = TRUST_STEPS.find((s) => s.stars === max + 1);
+  const needs: string[] = [];
+  if (byCred <= max && cred) needs.push(`街头声望 ${cred.at} 级`);
+  if (byTrust <= max && trust) needs.push(`信任度 ${trust.at}`);
+  const by = byCred === byTrust ? null : byCred < byTrust ? "cred" : "trust";
+  return { max, by, hint: `需要${needs.join("和")}，才能接 ${max + 1} 星` };
+}
+
 export function isOpen(job: Pick<Job, "status">): boolean {
   return job.status === "offered" || job.status === "active";
 }

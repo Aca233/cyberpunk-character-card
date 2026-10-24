@@ -171,8 +171,9 @@ export function SidePanel({
         )}
         <dl className={styles.facts}>
           <dt>街头声望</dt>
-          <dd title={character.credHalf ? "再得半级声望就升级" : undefined}>
-            {character.streetCred} 级{character.credHalf && <small> · 半级</small>}
+          <dd title={`${character.credWorld}${character.credHalf ? "；再得半级声望就升级" : ""}`}>
+            {character.streetCred} 级 · {character.credTier}
+            {character.credHalf && <small> · 半级</small>}
           </dd>
           <dt>人性</dt>
           <dd data-stage={humanity.stage}>
@@ -340,7 +341,7 @@ export function SidePanel({
               <Fragment key={f.id}>
                 <dt>{f.name}</dt>
                 <dd>
-                  信任 {f.trust} · 最多 {f.maxRisk} 星
+                  信任 {f.trust} · 最多 {f.maxRisk} 星{f.capHint && <small> · {f.capHint}</small>}
                 </dd>
               </Fragment>
             ))}
