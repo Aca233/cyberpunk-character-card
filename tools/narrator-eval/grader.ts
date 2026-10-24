@@ -24,7 +24,7 @@ export type GradeResult =
   | { readonly ok: true; readonly scores: readonly Score[]; readonly usage: LlmUsage | undefined }
   | { readonly ok: false; readonly error: string; readonly usage: LlmUsage | undefined };
 
-const GRADER_SYSTEM = `你是文字冒险游戏的测评员，评的是叙事模型这一轮的回复。游戏是《赛博朋克 2077》世界观下的角色扮演：玩家扮演自己的角色，只有一个输入框；模型扮演 NPC 和城市本身，写正文并在末尾给出指令块。
+const GRADER_SYSTEM = `你是文字冒险游戏的测评员，评的是叙事模型这一轮的回复。游戏是《赛博朋克 2077》世界观下的角色扮演：玩家扮演自己的角色，只有一个输入框；模型扮演 NPC 和城市本身：先判断意图和要不要检定，再写正文，最后由代码从正文里抽出记账的变化。
 按评分表逐条打 1–5 分：5 完全做到，4 基本做到、有小瑕疵，3 一半一半，2 明显没做到，1 完全相反。每条附一句理由，指出正文里的具体位置。
 只看评分表上的项目，不评文笔好坏以外的东西，也不因为篇幅长短加减分，除非评分表这样要求。
 只输出一个 JSON 对象，不要代码块：{"scores": [{"item": "评分表原文", "score": 1到5的整数, "reason": "一句话"}]}`;
@@ -39,11 +39,12 @@ const ReplySchema = z.object({
   ),
 });
 
-function blockSummary(turn: NarratorTurn): string {
+function settledSummary(turn: NarratorTurn): string {
   return JSON.stringify({
     read: turn.read,
-    choices: turn.choices,
     check: turn.check ?? null,
+    gate: turn.gate ?? null,
+    choices: turn.choices,
     changes: turn.commands,
   });
 }
@@ -66,7 +67,7 @@ export function graderPrompt(
     ...(plan.kind === "resolve" ? [checkResultText(plan.check)] : []),
     `【这一轮玩家】${formatInput(plan.input)}`,
     `【模型正文】\n${turn.text}`,
-    `【模型指令块（已校验）】\n${blockSummary(turn)}`,
+    `【判断和记账（已校验）】\n${settledSummary(turn)}`,
     `【评分表】\n${c.rubric.map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
   ].join("\n\n");
 }

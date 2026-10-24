@@ -1,6 +1,13 @@
 import type { Patch } from "immer";
 import type { z } from "zod";
-import type { AbortSignalLike, LlmClient, LlmMessage, LlmUsage, Rng } from "../kernel/ports";
+import type {
+  AbortSignalLike,
+  LlmClient,
+  LlmMessage,
+  LlmRequest,
+  LlmUsage,
+  Rng,
+} from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import type { Closeup, LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
@@ -21,50 +28,77 @@ import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { WorldClockStateSchema } from "../systems/world";
 import {
-  BlockDocSchema,
-  type BlockShape,
   type Choice,
   ChoiceSchema,
+  ExtractDocSchema,
+  type ExtractShape,
+  GateSchema,
   issueText,
   MAX_CHOICES,
   MAX_VOICES,
   parseModelJson,
-  readBlockShape,
+  readExtractShape,
   StateSplitter,
   type Voice,
   VoiceSchema,
 } from "./block";
 import { schemaDoc } from "./doc";
 import { prepareFor } from "./pending";
-import { buildNarratorPrompt, type NarratorPlan } from "./prompts";
+import {
+  buildExtractPrompt,
+  buildJudgePrompt,
+  buildNarratorPrompt,
+  buildVerifyPrompt,
+  HISTORY_TURNS,
+  type NarratorPlan,
+  type PromptExtras,
+} from "./prompts";
 import { closeupFor, sceneTitle } from "./scene";
+import {
+  applyFix,
+  type GateResult,
+  gateText,
+  JudgeDocSchema,
+  type JudgeShape,
+  judgeGate,
+  MAX_RECALL,
+  type Memory,
+  parsePatch,
+  readJudgeShape,
+  recallCandidates,
+} from "./stages";
 
 /**
- * 叙事模型的一轮：拼提示词 → 调模型（正文边收边放）→ 拆出指令块 → 逐条校验，不合格的单条修一次
- * → 业务校验和记账。只算出结果，不写日志：写日志、加锁和版本核对由调用方负责
+ * 一轮五步：① 判断（叙事模型，JSON）→ ② 拼上下文 → ③ 写正文（叙事模型，纯文本，边收边放）
+ * → ④ 抽取（辅助模型，JSON）→ ⑤ 核对（辅助模型，<patch>）→ 代码校验和记账。
+ * 只算出结果，不写日志：写日志、加锁和版本核对由调用方负责
  */
 
 export interface Dropped {
-  /** 出问题的位置，例如 changes[2]、check、choices[1]、指令块 */
+  /** 出问题的位置，例如 changes[2]、check、choices[1]、抽取 */
   readonly where: string;
   readonly raw: unknown;
   readonly reason: string;
-  /** format：格式不合格，修过一次仍不行；rules：格式对但业务校验没通过 */
-  readonly stage: "format" | "rules";
+  /** format：格式不合格，修过一次仍不行；verify：核对认为正文里没有依据；rules：业务校验没通过 */
+  readonly stage: "format" | "verify" | "rules";
 }
 
 export interface NarratorTurn {
-  /** 正文，不含指令块 */
+  /** 正文 */
   readonly text: string;
   readonly read: string | undefined;
   readonly choices: readonly Choice[];
   /** 内心声音，0–2 条 */
   readonly voices: readonly Voice[];
-  /** 叙事模型提出、等玩家确认的检定 */
+  /** 判断给出、等玩家确认的检定 */
   readonly check: CheckSpec | undefined;
+  /** 判断给出的门槛和代码判定的结果 */
+  readonly gate: GateResult | undefined;
   /** 生效的指令，按结算顺序 */
   readonly commands: readonly Command[];
   readonly dropped: readonly Dropped[];
+  /** 抽取考虑过但没抽的，和原因 */
+  readonly considered: readonly string[];
   readonly notes: readonly string[];
   readonly world: WorldState;
   readonly patches: readonly Patch[];
@@ -78,13 +112,16 @@ export interface NarratorTurn {
   readonly title: string | undefined;
   /** 这一轮弹出的特写卡 */
   readonly closeup: Closeup | undefined;
-  /** 叙事模型判断这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
+  /** 判断认为这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
   readonly ooc: boolean;
+  /** 叙事模型的用量（判断和写正文） */
   readonly usage: LlmUsage | undefined;
+  /** 辅助模型抽取和核对的用量 */
+  readonly auxUsage: LlmUsage;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
-  /** 实际发给叙事模型的消息，上下文查看器和测评用 */
+  /** 写正文时发给叙事模型的消息，上下文查看器和测评用 */
   readonly messages: readonly LlmMessage[];
 }
 
@@ -115,16 +152,31 @@ export class NarratorAbortedError extends Error {
 const REPAIR_SYSTEM =
   "你负责修复 JSON 格式。只输出修好的 JSON，不要解释，不要代码块。不改原意，不补充原文没有的内容；实在修不了就输出 null。";
 
+const ZERO: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+
 const addUsage = (a: LlmUsage, b: LlmUsage | undefined): LlmUsage =>
   b
     ? { inputTokens: a.inputTokens + b.inputTokens, outputTokens: a.outputTokens + b.outputTokens }
     : a;
 
+type Reply =
+  | { readonly text: string; readonly usage: LlmUsage | undefined }
+  | { readonly blocked: string };
+
+/** 一条等核对的提议：抽取的 changes 或 messages，格式已经校验过 */
+interface Proposal {
+  readonly where: string;
+  readonly kind: "change" | "message";
+  value: Record<string, unknown>;
+  readonly parse: (value: unknown) => Command | undefined;
+}
+
 class TurnBuilder {
   readonly dropped: Dropped[] = [];
   readonly notes: string[] = [];
   repairs = 0;
-  repairUsage: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+  repairUsage: LlmUsage = ZERO;
+  auxUsage: LlmUsage = ZERO;
 
   constructor(private readonly deps: NarratorDeps) {}
 
@@ -136,27 +188,34 @@ class TurnBuilder {
     this.dropped.push({ where, raw, reason, stage });
   }
 
+  /** 调一次模型，收完全部文字 */
+  async call(request: LlmRequest): Promise<Reply> {
+    this.checkAborted();
+    let text = "";
+    let usage: LlmUsage | undefined;
+    for await (const event of this.deps.llm.stream(request, this.deps.signal)) {
+      if (event.type === "text") text += event.text;
+      else if (event.type === "blocked") return { blocked: event.reason };
+      else usage = event.usage;
+    }
+    this.checkAborted();
+    return { text, usage };
+  }
+
   /** 让辅助模型修一次；修不好返回 undefined */
   async repair(task: string, raw: string): Promise<unknown> {
-    this.checkAborted();
     this.repairs += 1;
-    let text = "";
-    for await (const event of this.deps.llm.stream(
-      {
-        purpose: "aux",
-        temperature: 0,
-        messages: [
-          { role: "system", content: REPAIR_SYSTEM },
-          { role: "user", content: `${task}\n\n原文：\n${raw}` },
-        ],
-      },
-      this.deps.signal,
-    )) {
-      if (event.type === "text") text += event.text;
-      else if (event.type === "blocked") return undefined;
-      else this.repairUsage = addUsage(this.repairUsage, event.usage);
-    }
-    const parsed = parseModelJson(text);
+    const reply = await this.call({
+      purpose: "aux",
+      temperature: 0,
+      messages: [
+        { role: "system", content: REPAIR_SYSTEM },
+        { role: "user", content: `${task}\n\n原文：\n${raw}` },
+      ],
+    });
+    if ("blocked" in reply) return undefined;
+    this.repairUsage = addUsage(this.repairUsage, reply.usage);
+    const parsed = parseModelJson(reply.text);
     return parsed.ok && parsed.value !== null ? parsed.value : undefined;
   }
 
@@ -180,26 +239,42 @@ class TurnBuilder {
     return undefined;
   }
 
-  /** 拆出指令块的顶层结构；整块解析不了时修一次，仍不行就只保留正文 */
-  async readBlock(block: string | null): Promise<BlockShape> {
-    if (block === null) {
-      this.drop("指令块", null, "回复里没有 <state> 指令块，这一轮状态不变", "format");
-      return {};
-    }
-    const json = parseModelJson(block);
-    const shape = json.ok ? readBlockShape(json.value) : undefined;
-    if (shape?.ok) return shape.block;
+  /** ① 判断的顶层结构；解析不了修一次，仍不行按“不检定、不调记忆”继续 */
+  async readJudge(text: string): Promise<JudgeShape> {
+    const json = parseModelJson(text);
+    const shape = json.ok ? readJudgeShape(json.value) : undefined;
+    if (shape?.ok) return shape.judge;
     const reason = shape ? shape.error : json.ok ? "" : `不是合法的 JSON：${json.error}`;
     const fixed = await this.repair(
-      `下面的指令块解析不了（${reason}）。修成一个 JSON 对象，格式：${schemaDoc(BlockDocSchema)}`,
-      block,
+      `下面的判断解析不了（${reason}）。修成一个 JSON 对象，格式：${schemaDoc(JudgeDocSchema)}`,
+      text,
     );
-    const second = fixed === undefined ? undefined : readBlockShape(fixed);
+    const second = fixed === undefined ? undefined : readJudgeShape(fixed);
     if (second?.ok) {
-      this.notes.push("指令块的格式已自动修正");
-      return second.block;
+      this.notes.push("判断的格式已自动修正");
+      return second.judge;
     }
-    this.drop("指令块", block, `${reason}；修过一次仍然不行，这一轮只保留正文`, "format");
+    this.drop("判断", text, `${reason}；修过一次仍然不行，这一轮按不检定、不调记忆继续`, "format");
+    this.notes.push("这一轮的判断没解析出来，按不检定继续");
+    return {};
+  }
+
+  /** ④ 抽取的顶层结构；解析不了修一次，仍不行就只保留正文、状态不变 */
+  async readExtract(text: string): Promise<ExtractShape> {
+    const json = parseModelJson(text);
+    const shape = json.ok ? readExtractShape(json.value) : undefined;
+    if (shape?.ok) return shape.extract;
+    const reason = shape ? shape.error : json.ok ? "" : `不是合法的 JSON：${json.error}`;
+    const fixed = await this.repair(
+      `下面的抽取结果解析不了（${reason}）。修成一个 JSON 对象，格式：${schemaDoc(ExtractDocSchema)}`,
+      text,
+    );
+    const second = fixed === undefined ? undefined : readExtractShape(fixed);
+    if (second?.ok) {
+      this.notes.push("抽取的格式已自动修正");
+      return second.extract;
+    }
+    this.drop("抽取", text, `${reason}；修过一次仍然不行，这一轮只保留正文`, "format");
     return {};
   }
 }
@@ -245,6 +320,59 @@ function verifySource(
   return rest;
 }
 
+/** 抽取的 dropped：考虑过但没抽的，只留文字 */
+function readConsidered(raw: readonly unknown[] | undefined): string[] {
+  return (raw ?? []).flatMap((item) => {
+    if (typeof item === "string" && item.trim() !== "") return [item.trim().slice(0, 200)];
+    if (typeof item === "object" && item !== null) return [JSON.stringify(item).slice(0, 200)];
+    return [];
+  });
+}
+
+/** ⑤ 核对：没有正文依据的删掉，写重了的按正文改小；核对出问题时提议原样保留 */
+async function verify(
+  b: TurnBuilder,
+  messages: readonly LlmMessage[],
+  proposals: Proposal[],
+): Promise<Proposal[]> {
+  if (proposals.length === 0) return proposals;
+  const reply = await b.call({ purpose: "aux", temperature: 0.1, messages });
+  if ("blocked" in reply) {
+    b.notes.push("核对被辅助模型拒答，提议原样保留");
+    return proposals;
+  }
+  b.auxUsage = addUsage(b.auxUsage, reply.usage);
+  const lines = parsePatch(reply.text);
+  if (lines === undefined) {
+    b.notes.push("核对没给出 <patch>，提议原样保留");
+    return proposals;
+  }
+  const seen = new Set<number>();
+  const removed = new Set<number>();
+  for (const line of lines) {
+    const index = line.n - 1;
+    const proposal = proposals[index];
+    if (!proposal || seen.has(index)) continue;
+    seen.add(index);
+    if (line.op === "drop") {
+      b.drop(proposal.where, proposal.value, `核对：${line.reason}`, "verify");
+      removed.add(index);
+    } else if (line.op === "fix") {
+      const fixed = applyFix(proposal.value, line.fields);
+      const parsed = fixed.ok ? proposal.parse(fixed.value) : undefined;
+      if (fixed.ok && parsed) {
+        proposal.value = fixed.value;
+        b.notes.push(`核对按正文改小了 ${proposal.where}${line.reason ? `：${line.reason}` : ""}`);
+      } else {
+        b.notes.push(
+          `核对对 ${proposal.where} 的改动不合规（${fixed.ok ? "改完格式不对" : fixed.reason}），按原样保留`,
+        );
+      }
+    }
+  }
+  return proposals.filter((_, i) => !removed.has(i));
+}
+
 export async function runNarratorTurn(
   deps: NarratorDeps,
   world: WorldState,
@@ -252,12 +380,95 @@ export async function runNarratorTurn(
   plan: NarratorPlan,
 ): Promise<NarratorResult> {
   const b = new TurnBuilder(deps);
-  const prompt = buildNarratorPrompt(world, records, plan, {
-    data: deps.data,
-    opening: deps.opening,
-  });
-  const splitter = new StateSplitter();
+  const extras: PromptExtras = { data: deps.data, opening: deps.opening };
   let usage: LlmUsage | undefined;
+  const addNarrator = (u: LlmUsage | undefined) => {
+    if (u) usage = addUsage(usage ?? ZERO, u);
+  };
+  // 闪回里不掷骰、不推进时间、不记账：只认 flashback 指令
+  const inFlashback = CharacterStateSchema.parse(world.slices.character).flashback !== null;
+  const flashbackReason = "闪回里不掷骰、不推进时间、不记账";
+  const oocReason = "场外提问不改状态";
+  const legacyOoc = plan.kind === "action" && plan.input.mode === "ooc";
+
+  // ① 判断：确认过的检定（包括预先带检定的选项）跳过；旧存档选了出戏也跳过
+  let judge: JudgeShape = {};
+  const memories: Memory[] =
+    plan.kind === "action" && !legacyOoc ? recallCandidates(records, HISTORY_TURNS) : [];
+  if (plan.kind === "action" && !legacyOoc) {
+    const prompt = buildJudgePrompt(world, records, plan, extras, memories);
+    const reply = await b.call({
+      purpose: "narrator",
+      temperature: 0.2,
+      messages: prompt.messages,
+    });
+    if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
+    addNarrator(reply.usage);
+    judge = await b.readJudge(reply.text);
+  }
+  const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
+  const read =
+    !ooc && typeof judge.read === "string" && judge.read.trim() !== ""
+      ? judge.read.trim()
+      : undefined;
+
+  // 待确认的检定：格式对了还要能算出难度值（档位范围、属性）
+  let check: CheckSpec | undefined;
+  if (judge.check !== undefined && judge.check !== null) {
+    if (ooc || inFlashback) {
+      b.drop("check", judge.check, ooc ? oocReason : flashbackReason, "rules");
+    } else {
+      const spec = await b.validate("check", judge.check, CheckSpecSchema);
+      const prepared = spec && prepareFor(world, spec);
+      if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
+      else check = spec;
+    }
+  }
+
+  // 门槛：代码直接判定，不掷骰；这一轮已经给了检定就不再判
+  let gate: GateResult | undefined;
+  if (judge.gate !== undefined && judge.gate !== null) {
+    if (ooc) b.drop("gate", judge.gate, oocReason, "rules");
+    else {
+      const spec = await b.validate("gate", judge.gate, GateSchema);
+      if (spec && check) b.drop("gate", spec, "这一轮已经给了检定，门槛不再判", "rules");
+      else if (spec) gate = judgeGate(world, spec);
+    }
+  }
+
+  // 旧记忆：只认候选里原样抄来的标题
+  const recalled: Memory[] = [];
+  if (!ooc) {
+    for (const [i, raw] of (judge.recall ?? []).entries()) {
+      const where = `recall[${i}]`;
+      const hit =
+        typeof raw === "string" ? memories.find((m) => m.title === raw.trim()) : undefined;
+      if (!hit) b.drop(where, raw, "不在可调的旧记忆里", "rules");
+      else if (recalled.length >= MAX_RECALL)
+        b.drop(where, raw, `一轮最多调 ${MAX_RECALL} 条旧记忆`, "rules");
+      else if (!recalled.includes(hit)) recalled.push(hit);
+    }
+  }
+
+  // ② 拼上下文：写正文之前代码已经定下的事
+  const decided: string[] = [];
+  if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
+  if (check) {
+    decided.push(
+      `先给检定：${check.intent}。这一轮只写到行动将要发生的那一刻（一两句），不写结果，停笔等玩家确认`,
+    );
+  }
+  if (gate) decided.push(gateText(gate));
+  if (recalled.length > 0) {
+    decided.push(
+      `【调出的旧记忆】\n${recalled.map((m) => `- ${m.title}\n  ${m.text}`).join("\n")}`,
+    );
+  }
+
+  // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
+  const prompt = buildNarratorPrompt(world, records, plan, { ...extras, decided });
+  const splitter = new StateSplitter();
+  b.checkAborted();
   for await (const event of deps.llm.stream(
     { purpose: "narrator", messages: prompt.messages },
     deps.signal,
@@ -268,34 +479,29 @@ export async function runNarratorTurn(
     } else if (event.type === "blocked") {
       return { kind: "blocked", reason: event.reason };
     } else {
-      usage = event.usage;
+      addNarrator(event.usage);
     }
   }
   b.checkAborted();
   const { rest, narrative, block } = splitter.finish();
   if (rest !== "") deps.onText?.(rest);
   if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
+  if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
 
-  const shape = await b.readBlock(block);
-  // 场外提问由叙事模型判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算
-  const ooc = plan.kind === "action" && (plan.input.mode === "ooc" || shape.ooc === true);
-  const oocReason = "场外提问不改状态";
-  // 闪回里不掷骰、不推进时间、不记账：只认 flashback 指令
-  const inFlashback = CharacterStateSchema.parse(world.slices.character).flashback !== null;
-  const flashbackReason = "闪回里不掷骰、不推进时间、不记账";
-
-  // 待确认的检定：格式对了还要能算出难度值（档位范围、属性）
-  let check: CheckSpec | undefined;
-  if (shape.check !== undefined && shape.check !== null) {
-    if (ooc || inFlashback) {
-      b.drop("check", shape.check, ooc ? oocReason : flashbackReason, "rules");
+  // ④ 抽取：场外提问和等检定的轮次不抽，状态不变
+  let shape: ExtractShape = {};
+  const settle = !ooc && check === undefined;
+  if (settle) {
+    const extract = buildExtractPrompt(world, records, plan, extras, narrative);
+    const reply = await b.call({ purpose: "aux", temperature: 0.2, messages: extract.messages });
+    if ("blocked" in reply) {
+      b.drop("抽取", null, `辅助模型拒答：${reply.blocked}；这一轮只保留正文`, "format");
     } else {
-      const spec = await b.validate("check", shape.check, CheckSpecSchema);
-      const prepared = spec && prepareFor(world, spec);
-      if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
-      else check = spec;
+      b.auxUsage = addUsage(b.auxUsage, reply.usage);
+      shape = await b.readExtract(reply.text);
     }
   }
+  const considered = settle ? readConsidered(shape.dropped) : [];
 
   // 装着的义体的名字：义体来源的专属选项和义体的内心声音要对得上
   const parts = cyberwareCatalog(deps.data ?? {});
@@ -312,68 +518,50 @@ export async function runNarratorTurn(
     inventory.success &&
     inventory.data.weapons.some((w) => w !== null && items.get(w)?.voice !== undefined);
   const choices: Choice[] = [];
-  if (!ooc) {
-    const raw = shape.choices ?? [];
-    for (const [i, item] of raw.entries()) {
-      const where = `choices[${i}]`;
-      if (i >= MAX_CHOICES) {
-        b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
-        continue;
-      }
-      const choice = await b.validate(where, item, ChoiceSchema);
-      if (!choice) continue;
-      // 闪回里不掷骰：选项去掉检定，只留行动
-      if (inFlashback && choice.check) {
-        const { check: _dropped, ...plain } = choice;
-        b.notes.push(`选项「${choice.text}」在闪回里，去掉了检定`);
-        choices.push(verifySource(plain as Choice, chrome, traits, b.notes));
-        continue;
-      }
-      const prepared = choice.check && prepareFor(world, choice.check);
-      if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
-      else choices.push(verifySource(choice, chrome, traits, b.notes));
+  for (const [i, item] of (shape.choices ?? []).entries()) {
+    const where = `choices[${i}]`;
+    if (i >= MAX_CHOICES) {
+      b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
+      continue;
     }
+    const choice = await b.validate(where, item, ChoiceSchema);
+    if (!choice) continue;
+    // 闪回里不掷骰：选项去掉检定，只留行动
+    if (inFlashback && choice.check) {
+      const { check: _dropped, ...plain } = choice;
+      b.notes.push(`选项「${choice.text}」在闪回里，去掉了检定`);
+      choices.push(verifySource(plain as Choice, chrome, traits, b.notes));
+      continue;
+    }
+    const prepared = choice.check && prepareFor(world, choice.check);
+    if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
+    else choices.push(verifySource(choice, chrome, traits, b.notes));
   }
 
   const voices: Voice[] = [];
-  if (!ooc) {
-    for (const [i, item] of (shape.voices ?? []).entries()) {
-      const where = `voices[${i}]`;
-      if (i >= MAX_VOICES) {
-        b.drop(where, item, `内心声音每轮最多 ${MAX_VOICES} 条`, "rules");
-        continue;
-      }
-      const voice = await b.validate(where, item, VoiceSchema);
-      if (!voice) continue;
-      if (voice.from === "chrome" && chrome.size === 0) {
-        b.drop(where, voice, "身上没装义体，义体不会说话", "rules");
-        continue;
-      }
-      if (voice.from === "iconic" && !iconicHeld) {
-        b.drop(where, voice, "武器栏里没有会说话的不朽武器", "rules");
-        continue;
-      }
-      voices.push(voice);
-    }
-  }
-
-  const commands: Command[] = [];
-  // 快捷动作（用治疗品、扔手雷）每段最多两个：超出的在结算前拦下
-  const fight = CombatStateSchema.parse(world.slices.combat).active;
-  let quick = fight ? (fight.quick ?? 0) : 0;
-  const isQuick = (c: Command) => {
-    const x = c as { type: string; source?: unknown; action?: unknown; id?: unknown };
-    if (x.type === "heal") return x.source === "maxdoc";
-    return x.type === "item" && x.action === "use" && typeof x.id === "string"
-      ? items.get(x.id)?.kind === "grenade"
-      : false;
-  };
-  for (const [i, item] of (shape.changes ?? []).entries()) {
-    const where = `changes[${i}]`;
-    if (ooc) {
-      b.drop(where, item, oocReason, "rules");
+  for (const [i, item] of (shape.voices ?? []).entries()) {
+    const where = `voices[${i}]`;
+    if (i >= MAX_VOICES) {
+      b.drop(where, item, `内心声音每轮最多 ${MAX_VOICES} 条`, "rules");
       continue;
     }
+    const voice = await b.validate(where, item, VoiceSchema);
+    if (!voice) continue;
+    if (voice.from === "chrome" && chrome.size === 0) {
+      b.drop(where, voice, "身上没装义体，义体不会说话", "rules");
+      continue;
+    }
+    if (voice.from === "iconic" && !iconicHeld) {
+      b.drop(where, voice, "武器栏里没有会说话的不朽武器", "rules");
+      continue;
+    }
+    voices.push(voice);
+  }
+
+  // 代码校验第一步：白名单和逐条格式
+  const proposals: Proposal[] = [];
+  for (const [i, item] of (shape.changes ?? []).entries()) {
+    const where = `changes[${i}]`;
     const type =
       typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
     const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
@@ -388,6 +576,76 @@ export async function runNarratorTurn(
     }
     const command = await b.validate(where, item, schema);
     if (!command) continue;
+    proposals.push({
+      where,
+      kind: "change",
+      value: command as Record<string, unknown>,
+      parse: (v) => {
+        const parsed = schema.safeParse(v);
+        return parsed.success ? parsed.data : undefined;
+      },
+    });
+  }
+  // 消息：每轮最多两条；闪回里不收
+  for (const [i, item] of (shape.messages ?? []).entries()) {
+    const where = `messages[${i}]`;
+    if (inFlashback) {
+      b.drop(where, item, flashbackReason, "rules");
+      continue;
+    }
+    if (i >= MESSAGES_PER_TURN) {
+      b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
+      continue;
+    }
+    const message = await b.validate(where, item, IncomingMessageSchema);
+    if (!message) continue;
+    proposals.push({
+      where,
+      kind: "message",
+      value: { ...message },
+      parse: (v) => {
+        const parsed = IncomingMessageSchema.safeParse(v);
+        return parsed.success
+          ? { type: "phone.receive", from: parsed.data.from, text: parsed.data.text }
+          : undefined;
+      },
+    });
+  }
+
+  // ⑤ 核对：没有正文依据的删掉，写重了的改小
+  const verified = await verify(
+    b,
+    buildVerifyPrompt(
+      world,
+      records,
+      plan,
+      extras,
+      narrative,
+      proposals.map((p) => p.value),
+    ),
+    proposals,
+  );
+
+  // 代码校验第二步：业务规则（闪回、战斗中的限制、快捷动作上限）
+  const commands: Command[] = [];
+  // 快捷动作（用治疗品、扔手雷）每段最多两个：超出的在结算前拦下
+  const fight = CombatStateSchema.parse(world.slices.combat).active;
+  let quick = fight ? (fight.quick ?? 0) : 0;
+  const isQuick = (c: Command) => {
+    const x = c as { type: string; source?: unknown; action?: unknown; id?: unknown };
+    if (x.type === "heal") return x.source === "maxdoc";
+    return x.type === "item" && x.action === "use" && typeof x.id === "string"
+      ? items.get(x.id)?.kind === "grenade"
+      : false;
+  };
+  for (const proposal of verified) {
+    const command = proposal.parse(proposal.value);
+    if (!command) continue;
+    if (proposal.kind === "message") {
+      commands.push(command);
+      continue;
+    }
+    const { where } = proposal;
     if (inFlashback && command.type !== "flashback") {
       b.drop(where, command, flashbackReason, "rules");
       continue;
@@ -411,21 +669,6 @@ export async function runNarratorTurn(
   }
   b.checkAborted();
 
-  // 消息：每轮最多两条；场外提问和闪回里不收
-  for (const [i, item] of (shape.messages ?? []).entries()) {
-    const where = `messages[${i}]`;
-    if (ooc || inFlashback) {
-      b.drop(where, item, ooc ? oocReason : flashbackReason, "rules");
-      continue;
-    }
-    if (i >= MESSAGES_PER_TURN) {
-      b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
-      continue;
-    }
-    const message = await b.validate(where, item, IncomingMessageSchema);
-    if (message) commands.push({ type: "phone.receive", from: message.from, text: message.text });
-  }
-
   // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
   if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
     commands.push({ type: "combat.standoffTick" });
@@ -436,8 +679,8 @@ export async function runNarratorTurn(
   if (!ooc && inFlashback && !commands.some((c) => flashbackAction(c) === "end")) {
     commands.push({ type: "character.flashbackTick" });
   }
-  // 时间由叙事模型写在 world 里；没写就是时间没动，代码不补保底
-  if (!ooc && shape.sceneEnd === true) {
+  // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
+  if (settle && shape.sceneEnd === true) {
     if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
     else commands.push({ type: "world.endScene" });
   }
@@ -496,23 +739,26 @@ export async function runNarratorTurn(
     kind: "done",
     turn: {
       text: narrative,
-      read: ooc ? undefined : shape.read,
+      read,
       choices,
       voices,
       check,
+      gate,
       commands: accepted,
       dropped: b.dropped,
+      considered,
       notes: b.notes,
       world: settled.world,
       patches: ooc ? applied.patches : [...applied.patches, ...settled.patches],
       modules: prompt.modules,
-      pin: !ooc && shape.pin === true,
-      clutch: !ooc && shape.clutch === true,
+      pin: settle && shape.pin === true,
+      clutch: settle && shape.clutch === true,
       scene: before.scene,
       title,
       closeup,
       ooc,
       usage,
+      auxUsage: b.auxUsage,
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       messages: prompt.messages,

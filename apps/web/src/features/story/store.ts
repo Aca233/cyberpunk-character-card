@@ -38,7 +38,7 @@ interface StoryState {
   readonly phase: "idle" | "submitting" | "streaming";
   readonly saveId: string | null;
   readonly turnId: string | null;
-  /** 正在生成的正文；指令块已经被后端拆掉 */
+  /** 正在生成的正文；记账在正文之后由后端另外抽 */
   readonly text: string;
   readonly rolled: Rolled | null;
   readonly pending: Pending | null;

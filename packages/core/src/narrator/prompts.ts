@@ -5,14 +5,7 @@ import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { TurnInput } from "../schemas/turn";
 import { cyberwareSection } from "../systems/cyberware/prompt";
-import {
-  ATTRIBUTE_LABELS,
-  type Attribute,
-  BONUS_CAP,
-  DV_MOD_CAP,
-  OPPONENT_TIERS,
-  PENALTY_CAP,
-} from "../systems/dice";
+import { ATTRIBUTE_LABELS, type Attribute } from "../systems/dice";
 import { RARITY_LABELS } from "../systems/economy/schema";
 import { consequenceSection, FalloutStateSchema, falloutSection } from "../systems/fallout";
 import { DAMAGE_LABELS } from "../systems/health";
@@ -31,14 +24,23 @@ import { NpcStateSchema } from "../systems/npc/schema";
 import { registry } from "../systems/registry";
 import { formatGameTime } from "../systems/world/apply";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
-import { BlockDocSchema, STATE_CLOSE, STATE_OPEN } from "./block";
+import { ExtractDocSchema } from "./block";
 import { commandDoc, schemaDoc } from "./doc";
 import { examplesSection, twistSection } from "./examples";
 import type { RolledCheck } from "./pending";
+import {
+  EXTRACT_EXAMPLE,
+  EXTRACT_RULES,
+  JUDGE_EXAMPLE,
+  JUDGE_RULES,
+  NARRATE_RULES,
+  VERIFY_RULES,
+} from "./rules";
+import { JudgeDocSchema, type Memory } from "./stages";
 
 /**
- * 角色扮演提示词：常驻核心在前，按状态挑出的规则模块在后，两者都只随规则变化；
- * 每轮都变的状态、检定结果和玩家输入放在最后一条消息里，前缀能命中提示缓存
+ * 每一步的提示词：常驻守则和按状态挑出的规则模块放在系统消息里，只随规则变化；
+ * 每轮都变的局面、本轮已定的事和玩家输入放在最后一条消息里，前缀能命中提示缓存
  */
 
 /** 带最近这么多轮原文；更早的先丢，场景压缩在 M3 */
@@ -77,89 +79,15 @@ const OUTCOME_LABELS = {
   fumble: "大失败",
 } as const;
 
-const tiers = Object.entries(OPPONENT_TIERS)
-  .map(([id, t]) => `${id}（${t.label}）${t.dv[0]}–${t.dv[1]}`)
-  .join("，");
-
-const attributes = Object.entries(ATTRIBUTE_LABELS)
-  .map(([id, label]) => `${id} ${label}`)
-  .join("、");
-
-const CORE = `你在《赛博朋克 2077》世界观下和玩家一起做角色扮演。玩家扮演自己建档的角色；你扮演除此之外的一切——每一个 NPC，以及夜之城本身。用简体中文写作，玩家角色用第二人称“你”。
-
-【入戏】
-- 你不是主持人，也不是讲解员。NPC 用自己的声音说话：口癖、街头黑话、情绪和立场都要鲜明。台词是正文的主体，环境和动作描写为对话服务，点到为止。
-- 每个 NPC 有自己的目的、秘密、记性和底线。他们会主动开口、提要求、撒谎、讨价还价、翻脸或者帮忙，不只是等玩家提问再回答；好感高不等于言听计从。
-- 世界自己在动：没人理会的威胁会逼近，欠下的人情会被追讨，街上的事会传开。
-- 不跳出戏：正文里不问“你要怎么做？”，不列选项，不总结局势，不提检定、难度、属性和数值，不解释规则。需要玩家回应时，让 NPC 把话递过来，或者停在一个悬着的瞬间。
-
-【不替玩家角色说话】
-- 不替玩家角色说台词、决定感受或做决定；只写别人怎么回应，以及身体上不由自主的反应（手抖、心跳加快、伤口发疼）。
-- 玩家写的台词照原话放进正文，不改写不润色；动作可以展开描写，但不加玩家没写的意图。
-
-【玩家输入】
-- 玩家只有一个输入框，一次可能同时写了动作、台词和念头，你自己分辨：引号里的、或明显是说出口的话是台词；括号里的、或“我心想”之类是只有角色自己知道的念头，NPC 听不到，不能被当成对话回应；其余按行动理解。拿不准是说出口还是心里想时，按没说出口处理，并在 read 里写明你的理解。
-- 玩家跳出角色问你（问规则、问能不能这么做、问现在什么情况、问前情），而不是让角色行动，就是场外提问：跳出角色，用一两句话直接回答，不推进剧情；指令块写 "ooc": true，changes 写 []、check 写 null。问“能不能行”时只说大致可行性和有没有风险，不给难度值。场外提问和行动混在一起时，按行动处理。
-
-【可信】
-- 自由输入是一等公民。先理解玩家想达成什么，合理的办法直接让它发生，并写出代价：时间、人情、痕迹或热度至少付一项。
-- 不可能的事让世界或 NPC 拒绝（门锁死了、对方冷笑着摇头），不用旁白宣布“做不到”，也不用骰子掩饰。
-- 玩家声称拥有的能力、物品、义体、人脉，必须在角色资料或物品栏里找得到；找不到时可以让玩家试着“装作有”，但不能凭空生效。已确定的事实和死亡不能推翻。
-- 公平但冷酷：不偏袒也不刁难，坏选择有坏结果，好办法有好结果。
-
-【暗中判定】骰子和数值都在幕后，玩家只从故事里感受到结果。按固定顺序：
-1. 对话、说服、谈判、调情、威胁：看有没有说中对方的诉求或触到底线，由 NPC 的性格决定怎么回应，不掷骰。
-2. 门槛：属性达标直接成功，不掷骰。门槛前期 4–8，中期 9–14，后期 15–20；选项可以带 gate，代码判断达不达标。
-3. 只有结果真不确定、失败有意义的后果、成败都能让故事继续时才掷骰：这一轮正文只写到行动将要发生的那一刻（一两句），在指令块给出 check，写清 success 和 failure，不写结果，停笔等玩家确认。代码掷骰后会再请你写结果。正文里不提检定。
-- 属性：${attributes}。
-- 难度值的基础值按对手档位给：${tiers}；没有对手的环境风险（攀爬、追车路况、恶劣天气）按同一张表选相当的档位。
-- 加成 bonuses（本事、义体、物品、人物、准备，每项 +2）合计最多 +${BONUS_CAP}；减值 penalties（伤势、恶劣环境）合计最多 −${PENALTY_CAP}；基础值之上的难度修正 dvMods 合计最多 +${DV_MOD_CAP}。代码统一截断。聪明的计划、充分的准备、利用人物关系和环境，可以免检定、降低难度值或获得加成。
-- 失败可能受伤时在 check 写 damage（graze 擦伤、heavy 重击、lethal 致命）；只有写了 lethal 才可能死，不写 damage 失败就不扣血。
-- 大失败时 damage 指令最多比事先写的高一档（仍然只有事先写了 lethal 才可能死）；装着护甲义体时代码自动降一档，damage 照角色实际挨的那一下写，不要自己先降。
-- 断肢很少见：只在刀刃、霰弹枪、爆炸、重型机械这类真能打断手脚的场面，致命档失败可能失去手臂或腿时，在 check 写 limb: true 并在 failure 里写明；真断了才在 damage 指令写 limb（left-arm、right-arm、left-leg、right-leg）。没事先写明、降档后不到致命或难度不允许时代码会拦下；原本是义肢的部位改记为义体损坏，修好前用不了。
-- 检定结果出来后照事先说明的写：失败后果不比 failure 更重，剧情照样往前走。
-
-【专属选项和内心声音】
-- 角色的出身、过往、义体或本事让某条路只有他走得通时，在选项里写 source 标出来源，例如“过往：荒坂前员工”“义体：螳螂刀”“出身：流浪者”；义体来源必须是【当前状态】里装着的；角色有主板时，出身、过往、本事来源写主板上的模块名。不用每轮都有。
-- 关键时刻（艰难的决定、触动过往的东西、义体在逼你、人性在动摇）可以写 0–2 条 voices：一句脑子里冒出来的念头，不超过 30 字，不替角色做决定。past 是过往和出身的回响，chrome 是义体冷冰冰的建议（没装义体时不写），humanity 是残存的良心和情感，iconic 是武器栏里不朽武器的回响（照【当前状态】里写的口吻，武器栏里没有时不写）。人性越低，chrome 越多、越冷，humanity 越少。平常的轮次不写。
-- 生死瞬间（子弹出膛、刀到眼前、车要撞上）可以在指令块写 "clutch": true：下一轮玩家装着能用的加速义体时可以开斯安威斯坦，把几个动作塞进这一瞬间。一场战斗最多一两次，平常不写。
-
-【写作】
-- 每轮 100–350 字，等检定的那一轮更短；以对话为主，停在 NPC 说完话、或需要玩家接话的地方。
-- 状态由代码记账，正文只写故事。暴力和成人题材按原作基调写，不刻意回避也不猎奇渲染。`;
-
-function formatSection(): string {
-  const commands = CORE_COMMANDS.map((type) => {
-    const schema = registry.commandSchema(type);
-    if (!schema) throw new Error(`常驻核心说明的 ${type} 不是模型可用的指令`);
-    return commandDoc(type, schema);
-  });
-  return `【回复格式】
-正文在前，末尾附一个指令块，块里是一个 JSON 对象，不要用代码块包起来：
-${STATE_OPEN}
-${schemaDoc(BlockDocSchema)}
-${STATE_CLOSE}
-- 字段后的问号表示可以不写，括号里是说明。
-- changes 每轮都要有一条 world；没有别的变化就只写这一条。
-- id 用小写英文和连字符，例如地点 kabuki-market。
-
-changes 可用的指令：
-${commands.join("\n")}
-
-例：
-你压低帽檐，跟着那个中间人拐进市场后巷。他在面摊前停下，头也不回：“跟了我三条街了，小鬼。有话坐下说，没话就滚。”
-${STATE_OPEN}
-{"read": "你想跟踪中间人，看他去见谁", "choices": [{"text": "坐到他旁边，点一碗面"}, {"text": "装作路过，翻上棚顶继续盯着", "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "dv": 11, "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}}], "check": null, "changes": [{"type": "world", "activity": "observe", "location": "kabuki-market"}]}
-${STATE_CLOSE}`;
-}
-
-function moduleSection(module: RuleModule): string {
-  const commands = (module.commands ?? []).map((type) =>
-    commandDoc(
-      type,
-      registry.commandSchema(type) as NonNullable<ReturnType<typeof registry.commandSchema>>,
-    ),
-  );
+function moduleSection(module: RuleModule, withCommands: boolean): string {
+  const commands = withCommands
+    ? (module.commands ?? []).map((type) =>
+        commandDoc(
+          type,
+          registry.commandSchema(type) as NonNullable<ReturnType<typeof registry.commandSchema>>,
+        ),
+      )
+    : [];
   return [
     `【规则：${module.title}】`,
     module.text,
@@ -167,27 +95,54 @@ function moduleSection(module: RuleModule): string {
   ].join("\n");
 }
 
-let core: string | undefined;
+/** 写正文和判断时，规则模块里提到的指令由后面的抽取负责 */
+const MODULE_NOTE =
+  "下面的规则说明这些场面怎么处理；里面提到的指令由代码在正文之后另行抽取，这一步不写指令。";
 
-/** 常驻核心；第一次用时检查每种模型可用的指令都有说明 */
+let narrateCore: string | undefined;
+let extractCore: string | undefined;
+
+/** ③ 写正文的常驻部分：守则和好坏示例 */
 export function coreRules(): string {
-  if (core === undefined) {
+  narrateCore ??= `${NARRATE_RULES}\n\n${examplesSection()}`;
+  return narrateCore;
+}
+
+/** ④ 抽取的常驻部分；第一次用时检查每种模型可用的指令都有说明 */
+export function extractRules(): string {
+  if (extractCore === undefined) {
     const documented = new Set<string>([
       ...CORE_COMMANDS,
       ...registry.rules.flatMap((m) => m.commands ?? []),
     ]);
     const missing = registry.commandTypes().filter((t) => !documented.has(t));
     if (missing.length > 0) throw new Error(`这些指令没有写进任何规则模块：${missing.join("、")}`);
-    core = `${CORE}\n\n${formatSection()}\n\n${examplesSection()}`;
+    const commands = CORE_COMMANDS.map((type) => {
+      const schema = registry.commandSchema(type);
+      if (!schema) throw new Error(`常驻核心说明的 ${type} 不是模型可用的指令`);
+      return commandDoc(type, schema);
+    });
+    extractCore = [
+      EXTRACT_RULES,
+      `【输出格式】\n${schemaDoc(ExtractDocSchema)}\n- 字段后的问号表示可以不写，括号里是说明。`,
+      `changes 可用的指令：\n${commands.join("\n")}`,
+      `例：\n${EXTRACT_EXAMPLE}`,
+    ].join("\n\n");
   }
-  return core;
+  return extractCore;
 }
 
+/** ③ 写正文的系统消息 */
 export function systemPrompt(
   modules: readonly RuleModule[],
   extra: readonly string[] = [],
 ): string {
-  return [coreRules(), ...modules.map(moduleSection), ...extra].join("\n\n");
+  return [
+    coreRules(),
+    ...(modules.length > 0 ? [MODULE_NOTE] : []),
+    ...modules.map((m) => moduleSection(m, false)),
+    ...extra,
+  ].join("\n\n");
 }
 
 const KIND_LABELS = ITEM_KIND_LABELS;
@@ -244,6 +199,8 @@ export interface PromptExtras {
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   /** 这个存档的开场设定；故事还没开始时放进最后一条消息 */
   readonly opening?: string | undefined;
+  /** 写正文之前代码已经定下的事：场外提问、先给检定、门槛结果、调出的旧记忆 */
+  readonly decided?: readonly string[] | undefined;
 }
 
 function attributeLine(values: Readonly<Record<Attribute, number>>): string {
@@ -441,7 +398,7 @@ export function checkResultText(rolled: RolledCheck): string {
   const lines = [
     `【检定结果】${ATTRIBUTE_LABELS[spec.attribute]}检定，难度值 ${prepared.dv}：掷出 ${faces}，加检定值 ${prepared.modifier}，合计 ${result.total} → ${OUTCOME_LABELS[result.outcome]}`,
     `事先说明——成功：${spec.success}；失败：${spec.failure}${spec.damage ? `；失败最多${DAMAGE_LABELS[spec.damage]}` : "；失败不扣血"}`,
-    "按这个结果写这一轮的正文，正文里不提骰子和数值。同一个行动不要再给 check；失败时后果不比事先说明的更重。",
+    "按这个结果写这一轮的正文，正文里不提骰子和数值；失败时后果不比事先说明的更重。",
   ];
   return lines.join("\n");
 }
@@ -452,40 +409,40 @@ export interface NarratorPrompt {
   readonly modules: readonly string[];
 }
 
-export function buildNarratorPrompt(
+/** 判断只看最近几轮的原文 */
+const JUDGE_TURNS = 4;
+
+/** 物品、义体、地点等表：写正文和抽取都要用 id */
+function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
+  if (!extras.data) return [];
+  return [
+    catalogSection(extras.data),
+    cyberwareSection(extras.data),
+    locationSection(extras.data),
+    twistSection(extras.data),
+    jobTemplateSection(extras.data),
+    consequenceSection(extras.data, view.difficulty),
+  ].filter((s): s is string => s !== undefined);
+}
+
+/** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
+function situation(
   world: WorldState,
-  records: readonly LogRecord[],
+  view: PlayerView,
   plan: NarratorPlan,
-  extras: PromptExtras = {},
-): NarratorPrompt {
-  const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
-  const tables = extras.data
-    ? [
-        catalogSection(extras.data),
-        cyberwareSection(extras.data),
-        locationSection(extras.data),
-        twistSection(extras.data),
-        jobTemplateSection(extras.data),
-        consequenceSection(extras.data, view.difficulty),
-      ].filter((s): s is string => s !== undefined)
-    : [];
-  const messages: LlmMessage[] = [{ role: "system", content: systemPrompt(modules, tables) }];
-  for (const turn of view.turns.slice(-HISTORY_TURNS)) {
-    messages.push({ role: "user", content: formatInput(turn.input) });
-    messages.push({ role: "assistant", content: turn.text });
-  }
+  extras: PromptExtras,
+): string[] {
   const clock = WorldClockStateSchema.parse(world.slices.world);
-  const cast = castSection(NpcStateSchema.parse(world.slices.npc), {
+  const npcs = NpcStateSchema.parse(world.slices.npc);
+  const cast = castSection(npcs, {
     location: clock.location,
     sceneStartedAt: clock.sceneStartedAt,
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
-  const fixerCards = NpcStateSchema.parse(world.slices.npc).npcs;
   const jobs = jobsSection(
     JobsStateSchema.parse(world.slices.jobs),
     view.character.streetCred,
-    (id) => fixerCards[id]?.affinity ?? 0,
+    (id) => npcs.npcs[id]?.affinity ?? 0,
   );
   if (jobs) parts.push(`【委托】\n${jobs}`);
   const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
@@ -494,14 +451,135 @@ export function buildNarratorPrompt(
   if (due) parts.push(`【到期事件】\n${due}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
   if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
+  return parts;
+}
+
+/** 开了斯安威斯坦时的说明；没开或开不了时为 undefined */
+function boostNote(
+  view: PlayerView,
+  plan: NarratorPlan,
+  stage: "judge" | "narrate",
+): string | undefined {
+  if (plan.kind !== "action" || plan.input.sandevistan !== true || !view.sandevistan)
+    return undefined;
+  const { name, slots } = view.sandevistan;
+  return stage === "judge"
+    ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。所有真正不确定的部分合并成一次 check，事先在 failure 里写明失败时哪几个动作会落空。`
+    : `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序不执行，正文里写明哪几件没来得及。把这些动作写成一段连贯的慢动作。人性已经由代码扣过。`;
+}
+
+/** ① 判断：一条系统消息加一条用户消息，只输出 JSON */
+export function buildJudgePrompt(
+  world: WorldState,
+  records: readonly LogRecord[],
+  plan: NarratorPlan,
+  extras: PromptExtras,
+  memories: readonly Memory[],
+): NarratorPrompt {
+  const view = projectState(world, records, extras.data);
+  const modules = registry.activeRules(world, plan.input);
+  const system = [
+    JUDGE_RULES,
+    `【输出格式】\n${schemaDoc(JudgeDocSchema)}\n例：\n${JUDGE_EXAMPLE}`,
+    ...(modules.length > 0 ? [MODULE_NOTE] : []),
+    ...modules.map((m) => moduleSection(m, false)),
+  ].join("\n\n");
+  const recent = view.turns
+    .slice(-JUDGE_TURNS)
+    .map((t) => `${formatInput(t.input)}\n${t.text}`)
+    .join("\n\n");
+  const parts = situation(world, view, plan, extras);
+  if (recent !== "") parts.unshift(`【最近几轮】\n${recent}`);
+  parts.push(
+    `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
+  );
+  const boost = boostNote(view, plan, "judge");
+  if (boost) parts.push(boost);
   parts.push(formatInput(plan.input));
-  if (plan.kind === "action" && plan.input.sandevistan === true && view.sandevistan) {
-    const { name, slots } = view.sandevistan;
-    parts.push(
-      `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序不执行，正文里写明哪几件没来得及。把这些动作写成一段连贯的慢动作；所有真正不确定的部分合并成一次 check（占这次交锋唯一的掷骰），事先写明失败时哪几个动作会落空。人性已经由代码扣过，不另写 humanity。`,
-    );
+  parts.push("（只输出判断的 JSON 对象。）");
+  return {
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: parts.join("\n\n") },
+    ],
+    modules: modules.map((m) => m.id),
+  };
+}
+
+/** ③ 写正文：最近几轮原文作对话历史，最后一条消息放局面、本轮已定的事和玩家输入 */
+export function buildNarratorPrompt(
+  world: WorldState,
+  records: readonly LogRecord[],
+  plan: NarratorPlan,
+  extras: PromptExtras = {},
+): NarratorPrompt {
+  const view = projectState(world, records, extras.data);
+  const modules = registry.activeRules(world, plan.input);
+  const messages: LlmMessage[] = [
+    { role: "system", content: systemPrompt(modules, tablesOf(view, extras)) },
+  ];
+  for (const turn of view.turns.slice(-HISTORY_TURNS)) {
+    messages.push({ role: "user", content: formatInput(turn.input) });
+    messages.push({ role: "assistant", content: turn.text });
   }
-  parts.push(`（先写正文，最后附 ${STATE_OPEN} 指令块。）`);
+  const parts = situation(world, view, plan, extras);
+  if (extras.decided && extras.decided.length > 0) {
+    parts.push(`【本轮已定的事】\n${extras.decided.join("\n")}`);
+  }
+  parts.push(formatInput(plan.input));
+  const boost = boostNote(view, plan, "narrate");
+  if (boost) parts.push(boost);
+  parts.push("（只写正文，纯文本。）");
   messages.push({ role: "user", content: parts.join("\n\n") });
   return { messages, modules: modules.map((m) => m.id) };
+}
+
+/** ④ 抽取：辅助模型读局面、玩家输入和定稿的正文，只输出 JSON */
+export function buildExtractPrompt(
+  world: WorldState,
+  records: readonly LogRecord[],
+  plan: NarratorPlan,
+  extras: PromptExtras,
+  narrative: string,
+): NarratorPrompt {
+  const view = projectState(world, records, extras.data);
+  const modules = registry.activeRules(world, plan.input);
+  const system = [
+    extractRules(),
+    ...modules.map((m) => moduleSection(m, true)),
+    ...tablesOf(view, extras),
+  ].join("\n\n");
+  const parts = situation(world, view, plan, extras);
+  parts.push(`【玩家输入】\n${formatInput(plan.input)}`);
+  parts.push(`【本轮正文】\n${narrative}`);
+  parts.push("（只输出抽取的 JSON 对象。）");
+  return {
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: parts.join("\n\n") },
+    ],
+    modules: modules.map((m) => m.id),
+  };
+}
+
+/** ⑤ 核对：辅助模型逐条看提议有没有正文依据，只输出 <patch> */
+export function buildVerifyPrompt(
+  world: WorldState,
+  records: readonly LogRecord[],
+  plan: NarratorPlan,
+  extras: PromptExtras,
+  narrative: string,
+  proposals: readonly unknown[],
+): LlmMessage[] {
+  const view = projectState(world, records, extras.data);
+  const parts = [`【当前状态】\n${stateSummary(view)}`];
+  if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
+  parts.push(`【玩家输入】\n${formatInput(plan.input)}`);
+  parts.push(`【本轮正文】\n${narrative}`);
+  parts.push(`【提议】\n${proposals.map((p, i) => `${i + 1}. ${JSON.stringify(p)}`).join("\n")}`);
+  parts.push("（只输出 <patch> 块。）");
+  return [
+    { role: "system", content: VERIFY_RULES },
+    { role: "user", content: parts.join("\n\n") },
+  ];
 }

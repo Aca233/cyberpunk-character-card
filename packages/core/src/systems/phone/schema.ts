@@ -24,14 +24,14 @@ export const PhoneStateSchema = z.object({
 });
 export type PhoneState = z.infer<typeof PhoneStateSchema>;
 
-/** 模型在指令块顶层写的一条 messages */
+/** 抽取结果顶层的一条 messages */
 export const IncomingMessageSchema = z.object({
   from: z.string().trim().min(1).max(40).describe("发消息的人：人物 id、中间人 id，或者一个名字"),
   text: z.string().trim().min(1).max(300).describe("消息原文：短、口语，像真的短信"),
 });
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
-/** 只能由代码发出：回合流程把指令块里的 messages 记进消息记录 */
+/** 只能由代码发出：回合流程把抽取结果里的 messages 记进消息记录 */
 export const ReceiveSchema = z.object({
   type: z.literal("phone.receive"),
   from: z.string().min(1),

@@ -227,6 +227,8 @@ export interface TurnContext {
   readonly commands: readonly unknown[];
   readonly dropped: readonly unknown[];
   readonly notes: readonly string[];
+  /** 抽取考虑过但没抽的，和原因 */
+  readonly considered: readonly string[];
   readonly check: unknown;
   readonly choices: readonly unknown[];
   readonly dice: readonly unknown[];

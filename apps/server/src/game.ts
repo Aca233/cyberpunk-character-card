@@ -442,6 +442,7 @@ export class GameService {
           commands: record.commands,
           dropped: record.dropped,
           notes: record.notes ?? [],
+          considered: record.considered ?? [],
           check: record.check ?? null,
           choices: record.choices ?? [],
           dice: record.dice,
@@ -548,7 +549,7 @@ export class GameService {
       }
       if (signal.aborted) throw new NarratorAbortedError("已停止");
       const { turn } = result;
-      const usage = addUsage(turn.usage, turn.repairUsage);
+      const usage = addUsage(addUsage(turn.usage, turn.auxUsage), turn.repairUsage);
       const saved = await this.commit(run, plan, turn, usage);
       if (turn.repairs > 0) {
         this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
@@ -618,6 +619,7 @@ export class GameService {
         ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
         ...(turn.ooc ? { ooc: true } : {}),
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
+        ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
       };

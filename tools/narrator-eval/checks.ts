@@ -43,18 +43,18 @@ export function moduleFindings(c: EvalCase, modules: readonly string[]): Finding
 
 export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn): Finding[] {
   const out: Finding[] = [];
-  const blockDrops = turn.dropped.filter((d) => d.where === "指令块");
+  const whole = new Set(["判断", "抽取"]);
   out.push(
     finding(
-      "指令块",
-      blockDrops.map((d) => d.reason),
+      "判断和抽取",
+      turn.dropped.filter((d) => whole.has(d.where)).map((d) => `${d.where}：${d.reason}`),
     ),
   );
   out.push(
     finding(
       "逐条格式",
       turn.dropped
-        .filter((d) => d.stage === "format" && d.where !== "指令块")
+        .filter((d) => d.stage === "format" && !whole.has(d.where))
         .map((d) => `${d.where}：${d.reason}`),
     ),
   );

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
-/** 模型回复的格式：正文在前，末尾一个 <state> 指令块，块内是一个 JSON 对象 */
+/** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
 export const STATE_OPEN = "<state>";
 export const STATE_CLOSE = "</state>";
 
@@ -50,18 +50,14 @@ export function readVoices(raw: readonly unknown[] | undefined): Voice[] {
   });
 }
 
-/** 指令块的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
-export const BlockDocSchema = z.object({
-  read: z.string().optional().describe("一句话说出你对玩家意图的理解"),
+/** ④ 抽取的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
+export const ExtractDocSchema = z.object({
+  changes: z
+    .array(z.object({ type: z.string() }))
+    .describe("这一轮已经发生的状态变化，按发生顺序，见下方指令；每轮都有一条 world"),
   choices: z
     .array(ChoiceSchema)
     .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
-  check: CheckSpecSchema.nullable().describe(
-    "需要掷骰时给出，这一轮只写到行动将要发生；不需要时写 null",
-  ),
-  changes: z
-    .array(z.object({ type: z.string() }))
-    .describe("本轮的状态变化，按发生顺序，见下方指令"),
   voices: z
     .array(VoiceSchema)
     .optional()
@@ -70,34 +66,31 @@ export const BlockDocSchema = z.object({
     .array(IncomingMessageSchema)
     .optional()
     .describe(
-      `消息：不在场的人通过植入式通讯发来的消息，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`,
+      `消息：正文里不在场的人通过植入式通讯发来的消息，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`,
     ),
   clutch: z
     .boolean()
     .optional()
-    .describe("生死瞬间写 true：下一轮玩家可以开斯安威斯坦；一场战斗最多一两次"),
+    .describe("正文停在生死瞬间时写 true：下一轮玩家可以开斯安威斯坦；一场战斗最多一两次"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
-  ooc: z
-    .boolean()
-    .optional()
-    .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
+  dropped: z
+    .array(z.string())
+    .describe("考虑过但没抽的，每条写上原因，例如“只是打算，没发生”；没有写 []"),
 });
 
-/** 顶层字段只看类型；choices、check、changes 的每一条再单独校验 */
-const BlockShapeSchema = z.object({
-  read: z.string().optional().catch(undefined),
+/** 顶层字段只看类型；choices、changes 的每一条再单独校验 */
+const ExtractShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
-  check: z.unknown().optional(),
   changes: z.array(z.unknown()).optional(),
   voices: z.array(z.unknown()).optional().catch(undefined),
   messages: z.array(z.unknown()).optional().catch(undefined),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   pin: z.boolean().optional().catch(undefined),
-  ooc: z.boolean().optional().catch(undefined),
+  dropped: z.array(z.unknown()).optional().catch(undefined),
 });
-export type BlockShape = z.infer<typeof BlockShapeSchema>;
+export type ExtractShape = z.infer<typeof ExtractShapeSchema>;
 
 /**
  * 流式拆分：<state> 之前的正文边收边放，之后的内容攒起来。
@@ -171,14 +164,17 @@ export function parseModelJson(raw: string): JsonResult {
 }
 
 export type ShapeResult =
-  | { readonly ok: true; readonly block: BlockShape }
+  | { readonly ok: true; readonly extract: ExtractShape }
   | { readonly ok: false; readonly error: string };
 
-export function readBlockShape(value: unknown): ShapeResult {
-  const parsed = BlockShapeSchema.safeParse(value);
+export function readExtractShape(value: unknown): ShapeResult {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { ok: false, error: "抽取结果要是一个 JSON 对象" };
+  }
+  const parsed = ExtractShapeSchema.safeParse(value);
   return parsed.success
-    ? { ok: true, block: parsed.data }
-    : { ok: false, error: `指令块不是对象，或 changes 不是数组：${parsed.error.message}` };
+    ? { ok: true, extract: parsed.data }
+    : { ok: false, error: `changes 不是数组：${parsed.error.message}` };
 }
 
 /** Zod 报错压成一行，给修复提示词和被丢弃的指令记录用 */

@@ -242,7 +242,7 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
         </p>
       )}
       {ctx.dropped.length > 0 && (
-        <Section title={`被丢弃的指令（${ctx.dropped.length}）`} tone="warn">
+        <Section title={`被丢弃的提议（${ctx.dropped.length}）`} tone="warn">
           <pre>{JSON.stringify(ctx.dropped, null, 2)}</pre>
         </Section>
       )}
@@ -251,6 +251,16 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           <ul>
             {ctx.notes.map((n, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 结算记录按发生顺序排，可能重复
+              <li key={`${i}-${n}`}>{n}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {ctx.considered.length > 0 && (
+        <Section title={`考虑过没记账的（${ctx.considered.length}）`}>
+          <ul>
+            {ctx.considered.map((n, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 按抽取给的顺序排，可能重复
               <li key={`${i}-${n}`}>{n}</li>
             ))}
           </ul>

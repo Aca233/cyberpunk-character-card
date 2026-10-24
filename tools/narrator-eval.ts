@@ -93,7 +93,7 @@ interface ResultFile {
   readonly aux: string;
   readonly grader: string | null;
   readonly repeat: number;
-  readonly usage: Readonly<Record<"narrator" | "repair" | "grader", Usage>>;
+  readonly usage: Readonly<Record<"narrator" | "aux" | "repair" | "grader", Usage>>;
   readonly cases: Readonly<Record<string, CaseSummary>>;
 }
 
@@ -195,7 +195,7 @@ async function main(): Promise<number> {
   );
   console.log(`${cases.length} 条用例 × ${repeat} 次，并发 ${jobs}；调用真实模型，会产生费用\n`);
 
-  const usage = { narrator: zero(), repair: zero(), grader: zero() };
+  const usage = { narrator: zero(), aux: zero(), repair: zero(), grader: zero() };
   const results = new Map<string, RunResult[]>(cases.map((c) => [c.id, []]));
   const tasks = cases.flatMap((c) => Array.from({ length: repeat }, (_, rep) => ({ c, rep })));
 
@@ -222,6 +222,7 @@ async function main(): Promise<number> {
       } else {
         const { turn } = result;
         add(usage.narrator, turn.usage);
+        add(usage.aux, turn.auxUsage);
         add(usage.repair, turn.repairUsage);
         const findings = codeFindings(c, scenario.plan, turn);
         let scores: readonly Score[] = [];
@@ -348,7 +349,7 @@ async function main(): Promise<number> {
   }
   const u = (x: Usage) => `输入 ${x.inputTokens}，输出 ${x.outputTokens}`;
   console.log(
-    `\ntoken 用量：叙事模型 ${u(usage.narrator)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
+    `\ntoken 用量：叙事模型 ${u(usage.narrator)}；抽取和核对 ${u(usage.aux)}；格式修复 ${u(usage.repair)}；评分 ${u(usage.grader)}`,
   );
   console.log(`结果：tools/evals/results/${name}`);
   return 0;
