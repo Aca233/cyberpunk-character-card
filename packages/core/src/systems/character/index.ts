@@ -14,11 +14,13 @@ import {
   HabitChangeSchema,
   type HabitCommand,
   HabitCommandSchema,
+  legacyStreetCred,
   SetBonusesSchema,
   SetCharacterSchema,
   SpendPointSchema,
   type StreetCredCommand,
   StreetCredCommandSchema,
+  StreetCredProposalSchema,
 } from "./schema";
 
 /** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
@@ -51,6 +53,7 @@ export const character = defineSystem<
     habit: HabitCommandSchema,
     flashback: FlashbackCommandSchema,
   },
+  proposals: { streetCred: { schema: StreetCredProposalSchema, legacy: legacyStreetCred } },
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,

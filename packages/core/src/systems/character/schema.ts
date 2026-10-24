@@ -106,9 +106,54 @@ export const StreetCredCommandSchema = z
     event: z.string().min(1),
   })
   .describe(
-    "街头声望上涨：传闻传开 0.5，街上有人认出、谈论 1，轰动的公开事件最多 2，按 0.5 级递增；同一事件只结算一次。委托完成的声望由代码自动加，不要另写",
+    "街头声望上涨（结算用；模型写的是大小，见 StreetCredProposalSchema）；同一事件只结算一次",
   );
 export type StreetCredCommand = z.infer<typeof StreetCredCommandSchema>;
+
+/** 声望的大小档：传闻传开、街上有人谈论、轰动的公开事件；换算表只在这里写一份（暂定，试玩时调） */
+export const CRED_SIZES = { small: 0.5, medium: 1, large: 2 } as const;
+export type CredSize = keyof typeof CRED_SIZES;
+const CRED_SIZE_LABELS: Readonly<Record<CredSize, string>> = {
+  small: "小",
+  medium: "中",
+  large: "大",
+};
+
+/** 模型写的声望：只选大小，代码按 CRED_SIZES 换成级数 */
+export const StreetCredProposalSchema = z
+  .object({
+    type: z.literal("streetCred"),
+    size: z
+      .enum(["small", "medium", "large"])
+      .describe("small 传闻传开，medium 街上有人认出、谈论，large 轰动的公开事件"),
+    reason: z.string().min(1),
+    /** 事件 id，例如 rumor:arasaka-tower；同一事件只结算一次 */
+    event: z.string().min(1),
+  })
+  .describe(
+    "街头声望上涨：只选大小，不写数字；同一事件只结算一次。委托完成的声望由代码自动加，不要另写",
+  )
+  .transform(({ size, ...rest }): StreetCredCommand => ({ ...rest, levels: CRED_SIZES[size] }));
+
+/** 模型仍写了级数时：换成最近的大小档（一样近取小的） */
+export function legacyStreetCred(
+  raw: Readonly<Record<string, unknown>>,
+): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
+  if (!("levels" in raw)) return undefined;
+  const { levels, ...rest } = raw;
+  if (rest.size !== undefined) {
+    return { value: rest, note: "街头声望写了数字，按写的大小处理，数字不用" };
+  }
+  if (typeof levels !== "number" || !Number.isFinite(levels) || levels <= 0) return undefined;
+  const sizes = Object.entries(CRED_SIZES) as [CredSize, number][];
+  const [size] = sizes.reduce((best, cur) =>
+    Math.abs(cur[1] - levels) < Math.abs(best[1] - levels) ? cur : best,
+  );
+  return {
+    value: { ...rest, size },
+    note: `街头声望写了数字，已按最近的档位（${CRED_SIZE_LABELS[size]}）处理`,
+  };
+}
 
 /** 只能由代码发出：委托完成等带来的声望，按半级计 */
 export const GainCredSchema = z.object({
