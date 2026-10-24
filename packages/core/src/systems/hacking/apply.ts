@@ -10,6 +10,10 @@ import {
   BREACH_KEEP,
   type BreachCommand,
   CATEGORY_LABELS,
+  DIVE_DAMAGE,
+  DIVE_LAYERS,
+  DIVE_MAX,
+  type DiveCommand,
   type HackCommand,
   type HackingState,
   QuickhackCatalogSchema,
@@ -181,4 +185,64 @@ export function applyBreach(
       `入侵协议：${command.network}${command.via ? `（从${command.via}接入）` : ""}，拿下${gains}`,
     ],
   };
+}
+
+const TIER_ORDER = ["graze", "heavy", "lethal"] as const;
+
+/** 潜网：开始、往下潜一层、退出 */
+export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemContext): ApplyOutcome {
+  syncDeck(draft, ctx);
+  if (command.action === "surface") {
+    if (!draft.dive) return fail("没在潜网");
+    const layer = draft.dive.layer;
+    draft.dive = null;
+    return { ok: true, notes: [`退出潜网，从第 ${layer} 层（${DIVE_LAYERS[layer - 1]}）回到肉身`] };
+  }
+  if (command.action === "start") {
+    if (!draft.deck) return fail("没装网络接入仓，潜不了网");
+    if (draft.dive) return fail(`已经在潜网（第 ${draft.dive.layer} 层）`);
+    if (ctx.read<CombatState>("combat").active) return fail("战斗中不能潜网：肉身顾不上");
+    draft.dive = {
+      layer: 1,
+      startedAt: ctx.now,
+      chair: command.chair ?? "",
+      guard: command.guard ?? "",
+    };
+    return {
+      ok: true,
+      notes: [
+        `躺上${command.chair}接进网络，${command.guard}守着肉身：第 1 层（${DIVE_LAYERS[0]}）`,
+      ],
+    };
+  }
+  const dive = draft.dive;
+  if (!dive) return fail("没在潜网，先 start");
+  if (dive.layer >= DIVE_MAX) {
+    return fail("已经到黑墙边缘，再往里是黑墙，过不去；后面是流窜 AI");
+  }
+  const check = checkFact(ctx.facts);
+  if (check === undefined) return fail("往下潜一层要先掷智力：本轮没有检定结果");
+  if (check.outcome === "failure" || check.outcome === "fumble") {
+    return fail("检定没过，没潜下去：写 ICE 反噬、被追踪或被迫上浮");
+  }
+  const target = dive.layer + 1;
+  const need = DIVE_DAMAGE[target];
+  if (
+    need !== undefined &&
+    (check.damage === undefined || TIER_ORDER.indexOf(check.damage) < TIER_ORDER.indexOf(need))
+  ) {
+    return fail(`潜到第 ${target} 层的检定要事先写明 damage 至少 ${need}（神经反噬）`);
+  }
+  dive.layer = target;
+  return {
+    ok: true,
+    notes: [
+      `往下潜到第 ${target}/${DIVE_MAX} 层（${DIVE_LAYERS[target - 1]}）${target === DIVE_MAX ? "：再往里就是黑墙" : ""}`,
+    ],
+  };
+}
+
+/** 场景结束：还在潜的自动退出 */
+export function surfaceOnSceneEnd(draft: Hacking): void {
+  draft.dive = null;
 }

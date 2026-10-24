@@ -1715,3 +1715,13 @@
     transition: none;
   }
 }
+
+/* 潜网中：青色描边的标签 */
+.dive {
+  padding: 2px 8px;
+  border: 1px solid var(--cp-cyan);
+  color: var(--cp-cyan);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cp-cyan) 40%, transparent);
+}

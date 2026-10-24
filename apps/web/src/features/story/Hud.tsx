@@ -101,6 +101,16 @@ export function Hud({ view }: { readonly view: View }) {
             ◆ {view.stealth.label}
           </div>
         )}
+        {view.hacking?.dive && (
+          <div
+            className={styles.dive}
+            role="status"
+            title={`肉身躺在${view.hacking.dive.chair}，${view.hacking.dive.guard}守着`}
+          >
+            潜网 · 第 {view.hacking.dive.layer}/{view.hacking.dive.layers} 层 ·{" "}
+            {view.hacking.dive.label}
+          </div>
+        )}
         <div className={styles.weapon} title={weapon ?? "空手"}>
           {weapon === null ? (
             <Asset id="weapon.fists" tint="var(--cp-cyan)" height={28} alt="空手" />

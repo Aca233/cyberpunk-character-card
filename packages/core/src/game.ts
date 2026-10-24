@@ -50,6 +50,8 @@ import {
 } from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import {
+  DIVE_LAYERS,
+  DIVE_MAX,
   deckOf,
   CATEGORY_LABELS as HACK_CATEGORY_LABELS,
   BREACH_GAIN_LABELS as HACK_GAIN_LABELS,
@@ -1095,6 +1097,14 @@ function hackingView(
         effect: def?.effect ?? "",
       };
     }),
+    /** 正在潜网：第几层、这一层叫什么、谁守着肉身；没在潜是 null */
+    dive: state.dive && {
+      layer: state.dive.layer,
+      layers: DIVE_MAX,
+      label: DIVE_LAYERS[state.dive.layer - 1] ?? "",
+      chair: state.dive.chair,
+      guard: state.dive.guard,
+    },
     /** 这个地点入侵过的网络，最近的在前 */
     breaches: state.breachedNetworks
       .filter((n) => n.location === location)

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DamageTier } from "../dice";
 
 /** 快速破解的类别，照原作 2.x：控制、隐蔽、伤害、终极 */
 export const QUICKHACK_CATEGORIES = ["control", "covert", "damage", "ultimate"] as const;
@@ -52,6 +53,33 @@ export const BreachedNetworkSchema = z.object({
 });
 export type BreachedNetwork = z.infer<typeof BreachedNetworkSchema>;
 
+/** 潜网的层（本作改编，取自《边缘行者》的潜网和原作的黑墙）：越往下越危险，最底下是黑墙边缘 */
+export const DIVE_LAYERS = [
+  "本地子网",
+  "城区网络",
+  "公司数据堡垒",
+  "网络监察巡查带",
+  "黑墙边缘",
+] as const;
+export const DIVE_MAX = DIVE_LAYERS.length;
+/** 潜到这一层的检定至少要事先写明多重的伤害（神经反噬）；没列的层不强制 */
+export const DIVE_DAMAGE: Readonly<Partial<Record<number, DamageTier>>> = {
+  3: "heavy",
+  4: "heavy",
+  5: "lethal",
+};
+
+export const DiveSchema = z.object({
+  /** 第几层，从 1 起 */
+  layer: z.number().int().min(1).max(DIVE_MAX),
+  startedAt: z.number().int(),
+  /** 潜网椅在哪 */
+  chair: z.string().min(1),
+  /** 谁守着肉身 */
+  guard: z.string().min(1),
+});
+export type Dive = z.infer<typeof DiveSchema>;
+
 export const HackingStateSchema = z.object({
   /** 装着的网络接入仓（义体 id）；由装着的义体推出来，没装是 null */
   deck: z.string().nullable().default(null),
@@ -63,6 +91,8 @@ export const HackingStateSchema = z.object({
   programs: z.array(z.string()).default([]),
   /** 入侵协议拿下的网络，最近的在后，最多留 BREACH_KEEP 条 */
   breachedNetworks: z.array(BreachedNetworkSchema).default([]),
+  /** 正在潜网；没在潜是 null */
+  dive: DiveSchema.nullable().default(null),
 });
 export type HackingState = z.infer<typeof HackingStateSchema>;
 
@@ -122,3 +152,22 @@ export const BreachCommandSchema = z
     "入侵协议：接进一个网络，开门、关摄像头、拿数据；要装网络接入仓，并且本轮智力门槛达标或检定成功，代码核对，不扣 RAM",
   );
 export type BreachCommand = z.infer<typeof BreachCommandSchema>;
+
+/** 模型使用：{"type": "dive", "action": "start", "chair": "朱迪公寓里的潜网椅", "guard": "朱迪"} */
+export const DiveCommandSchema = z
+  .object({
+    type: z.literal("dive"),
+    action: z.enum(["start", "deeper", "surface"]),
+    chair: z.string().trim().min(1).max(30).optional().describe("start 要写：潜网椅在哪"),
+    guard: z.string().trim().min(1).max(20).optional().describe("start 要写：谁守着肉身"),
+    reason: z.string().trim().min(1).max(80).optional(),
+  })
+  .superRefine((c, ctx) => {
+    if (c.action === "start" && (c.chair === undefined || c.guard === undefined)) {
+      ctx.addIssue({ code: "custom", message: "开始潜网要写 chair 和 guard", path: ["chair"] });
+    }
+  })
+  .describe(
+    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（本轮智力检定成功才行，深层的检定要事先写明伤害），surface 退出回到肉身；场景结束自动退出",
+  );
+export type DiveCommand = z.infer<typeof DiveCommandSchema>;
