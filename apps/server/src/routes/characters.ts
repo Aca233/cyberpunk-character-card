@@ -1,14 +1,20 @@
+import { randomBytes } from "node:crypto";
 import { boardModules, combos, cyberware, lifepath } from "@cp/content";
 import {
+  BoardSchema,
+  BoardSlotSchema,
   CharacterCardSchema,
   type Clock,
   cyberwareRules,
+  interpretModule,
+  type LlmClient,
   normalizeBoard,
   START_CYBERWARE_POINTS,
 } from "@cp/core";
 import { type Context, Hono } from "hono";
-import type { z } from "zod";
+import { z } from "zod";
 import type { CharacterStore } from "../characters";
+import { AbortedError, UpstreamError } from "../providers/http";
 
 async function readCard(c: Context) {
   let raw: unknown;
@@ -42,8 +48,17 @@ function issuesOf(error: z.ZodError) {
   };
 }
 
+const InterpretSchema = z.object({
+  slot: BoardSlotSchema,
+  text: z.string().trim().min(4, "多写几句再交给模型解读").max(600, "设定最多 600 字"),
+  board: BoardSchema.optional(),
+});
+
+/** 模块库里用过的标签：解读时让模型尽量沿用，联动才对得上 */
+const KNOWN_TAGS = [...new Set(boardModules.flatMap((m) => m.tags))];
+
 /** /api/characters：角色卡的列表、新建、修改、删除；示例角色只读 */
-export function characterRoutes(store: CharacterStore, clock: Clock): Hono {
+export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmClient): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ characters: await store.list() }));
   // 主板要用的表：模块库、联动、生命路径和创建时能装的义体；要放在 /:id 前面
@@ -70,6 +85,31 @@ export function characterRoutes(store: CharacterStore, clock: Clock): Hono {
       }),
     }),
   );
+  // 自写模块交给辅助模型解读；不进回合日志，结果由玩家确认后才插上
+  app.post("/interpret", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const input = InterpretSchema.safeParse(raw);
+    if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
+    const id = `custom-${randomBytes(4).toString("hex")}`;
+    try {
+      const result = await interpretModule(
+        llm,
+        { ...input.data, knownTags: KNOWN_TAGS },
+        id,
+        c.req.raw.signal,
+      );
+      return result.ok ? c.json(result.reading) : c.json({ error: result.error }, 502);
+    } catch (error) {
+      if (error instanceof AbortedError) return c.json({ error: "已停止解读" }, 400);
+      if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
+      throw error;
+    }
+  });
   app.get("/:id", async (c) => {
     const entry = await store.get(c.req.param("id"));
     return entry ? c.json({ character: entry }) : c.json({ error: "没有这个角色" }, 404);

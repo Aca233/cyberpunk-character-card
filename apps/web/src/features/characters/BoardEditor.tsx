@@ -18,7 +18,9 @@ import {
   SKILL_MIN,
   TOLERANCE_LEVELS,
 } from "@cp/core";
+import { useState } from "react";
 import type { BoardData } from "../../api/client";
+import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
 
 type ListKey = "pasts" | "skills" | "flaws";
@@ -103,6 +105,30 @@ export function BoardEditor({
   const takenSlots = new Set(
     board.cyberware.map((c) => data.cyberware.find((o) => o.id === c.id)?.slot),
   );
+  const [writing, setWriting] = useState<BoardSlot | null>(null);
+  const writeButton = (slot: BoardSlot, full: boolean) =>
+    writing !== slot && (
+      <button
+        type="button"
+        className={styles.toolButton}
+        disabled={full}
+        onClick={() => setWriting(slot)}
+      >
+        自己写一块
+      </button>
+    );
+  const customForm = (slot: BoardSlot, accept: (module: BoardModule) => void) =>
+    writing === slot && (
+      <CustomModuleForm
+        slot={slot}
+        board={board}
+        onCancel={() => setWriting(null)}
+        onAccept={(module) => {
+          accept(module);
+          setWriting(null);
+        }}
+      />
+    );
   const roll = () => {
     const rolled = rollLifepath(board, data.lifepath, data.modules, Math.random);
     if (rolled) commit({ ...board, pasts: [...board.pasts, rolled] });
@@ -134,17 +160,22 @@ export function BoardEditor({
           }}
         >
           <option value="">— 选择出身 —</option>
+          {board.origin?.custom && (
+            <option value={board.origin.id}>{board.origin.label}（自写）</option>
+          )}
           {of("origin").map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
             </option>
           ))}
         </select>
+        {writeButton("origin", false)}
         {board.origin && (
           <ul className={styles.modules}>
             <ModuleCard module={board.origin} onRemove={() => commit({ ...board, origin: null })} />
           </ul>
         )}
+        {customForm("origin", (origin) => commit({ ...board, origin }, origin.label))}
       </section>
 
       {LISTS.map(({ key, slot, min, max, hint }) => {
@@ -212,7 +243,9 @@ export function BoardEditor({
                   </button>
                 </>
               )}
+              {writeButton(slot, list.length >= max)}
             </div>
+            {customForm(slot, (module) => commit({ ...board, [key]: [...list, module] }))}
           </section>
         );
       })}

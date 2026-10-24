@@ -1,6 +1,8 @@
 import type {
   ActionRequest,
+  Board,
   BoardModule,
+  BoardSlot,
   CharacterCard,
   Combo,
   LifepathEntry,
@@ -219,6 +221,9 @@ export const api = {
     ),
   deleteCharacter: (id: string) => request<{ ok: true }>("DELETE", `/characters/${id}`),
   characterBoard: () => request<BoardData>("GET", "/characters/board"),
+  /** 自写模块交给辅助模型解读；会花一次模型调用 */
+  interpretModule: (input: { slot: BoardSlot; text: string; board: Board }) =>
+    request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
     request<SaveSummary>("POST", "/saves", input),
