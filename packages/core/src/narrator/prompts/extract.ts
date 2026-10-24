@@ -40,7 +40,8 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 【内心声音和标记】
 - 关键时刻（艰难的决定、触动过往的东西、义体在逼你、人性在动摇）可以写 0–2 条 voices：一句脑子里冒出来的念头，不超过 30 字，不替角色做决定。past 是过往和出身的回响，chrome 是义体冷冰冰的建议（没装义体时不写），humanity 是残存的良心和情感，iconic 是武器栏里不朽武器的回响（照【当前状态】里写的口吻，武器栏里没有时不写）。人性越低，chrome 越多、越冷，humanity 越少。平常的轮次不写。
 - 正文停在生死瞬间（子弹出膛、刀到眼前、车要撞上）时写 "clutch": true：下一轮玩家可以开斯安威斯坦。一场战斗最多一两次。
-- 一场戏收尾、换地点或跳过一段时间时写 "sceneEnd": true；这一轮很重要、以后要记住时写 "pin": true。`;
+- 一场戏收尾、换地点或跳过一段时间时写 "sceneEnd": true；这一轮很重要、以后要记住时写 "pin": true。
+- 收场（sceneEnd 为 true）时，这一场里和玩家角色有过实质来往的有卡人物，每人写一条 memory：一句话记这一场你们之间发生了什么（帮了谁、欠了什么、闹翻了没有），只写正文里写了的；已经记过的同一件事不重复写。`;
 
 /** ④ 抽取的例子 */
 export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14", "location": "kabuki-market"}], "choices": [{"text": "坐到他旁边，点一碗面"}, {"text": "装作路过，翻上棚顶继续盯着", "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
