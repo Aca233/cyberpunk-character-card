@@ -37,8 +37,8 @@ export function Habits({
       )}
       <ul className={styles.habitList}>
         {habits.map((h) => (
-          <li key={h}>
-            <span>{h}</span>
+          <li key={h} className={styles.habitItem}>
+            <span className={styles.habitText}>{h}</span>
             {onHabit && (
               <button
                 type="button"
@@ -52,8 +52,8 @@ export function Habits({
           </li>
         ))}
         {offers.map((h) => (
-          <li key={`offer-${h}`} data-offer="">
-            <span>{h}</span>
+          <li key={`offer-${h}`} className={styles.habitItem} data-offer="">
+            <span className={styles.habitText}>{h}</span>
             <small>主持人提议</small>
             {onHabit && (
               <>
@@ -79,6 +79,7 @@ export function Habits({
       {onHabit && habits.length < characterRules.HABITS_MAX && (
         <form className={styles.habitForm} onSubmit={submit}>
           <input
+            className={styles.habitInput}
             value={draft}
             maxLength={40}
             placeholder="常去的店、睡前做什么……"

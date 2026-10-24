@@ -18,6 +18,7 @@ import {
   CharacterStateSchema,
   effectiveAttribute,
   effectiveAttributes,
+  FLASHBACK_TURNS,
 } from "./systems/character/schema";
 import { CombatStateSchema, EDGE_LABELS, MAX_QUICK } from "./systems/combat/schema";
 import {
@@ -701,6 +702,18 @@ export function projectState(
       /** 习惯栏，和主持人提议、等玩家确认的习惯 */
       habits: character.habits,
       habitOffers: character.habitOffers,
+      /** 角色的过往，闪回用过没有 */
+      pasts: character.traits
+        .filter((t) => t.slot === "past")
+        .map((t) => ({ label: t.label, used: character.flashbackUsed.includes(t.label) })),
+      /** 正在进行的闪回：第几轮（从 1 起），共几轮 */
+      flashback: character.flashback && {
+        past: character.flashback.past,
+        turn: character.flashback.turns + 1,
+        turns: FLASHBACK_TURNS,
+      },
+      /** 闪回里确认的事 */
+      pastFacts: character.pastFacts,
     },
     time: {
       minutes: world.time,

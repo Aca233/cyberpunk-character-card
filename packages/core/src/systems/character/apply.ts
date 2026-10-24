@@ -51,6 +51,9 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.credHalf = false;
   draft.attributePoints = 0;
   draft.traits = (command.traits ?? []).map((t) => ({ ...t }));
+  draft.flashbackUsed = [];
+  draft.flashback = null;
+  draft.pastFacts = [];
   return { ok: true, emit: [setMax(draft)] };
 }
 

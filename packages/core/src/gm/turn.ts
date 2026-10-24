@@ -268,12 +268,16 @@ export async function runGmTurn(
   // 场外提问由主持人判断（旧存档按当时选的输入方式）；写检定结果的那一轮不算
   const ooc = plan.kind === "action" && (plan.input.mode === "ooc" || shape.ooc === true);
   const oocReason = "场外提问不改状态";
+  // 闪回里不掷骰、不推进时间、不记账：只认 flashback 指令
+  const inFlashback = CharacterStateSchema.parse(world.slices.character).flashback !== null;
+  const flashbackReason = "闪回里不掷骰、不推进时间、不记账";
 
   // 待确认的检定：格式对了还要能算出难度值（档位范围、属性）
   let check: CheckSpec | undefined;
   if (shape.check !== undefined && shape.check !== null) {
-    if (ooc) b.drop("check", shape.check, oocReason, "rules");
-    else {
+    if (ooc || inFlashback) {
+      b.drop("check", shape.check, ooc ? oocReason : flashbackReason, "rules");
+    } else {
       const spec = await b.validate("check", shape.check, CheckSpecSchema);
       const prepared = spec && prepareFor(world, spec);
       if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
@@ -306,6 +310,13 @@ export async function runGmTurn(
       }
       const choice = await b.validate(where, item, ChoiceSchema);
       if (!choice) continue;
+      // 闪回里不掷骰：选项去掉检定，只留行动
+      if (inFlashback && choice.check) {
+        const { check: _dropped, ...plain } = choice;
+        b.notes.push(`选项「${choice.text}」在闪回里，去掉了检定`);
+        choices.push(verifySource(plain as Choice, chrome, traits, b.notes));
+        continue;
+      }
       const prepared = choice.check && prepareFor(world, choice.check);
       if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
       else choices.push(verifySource(choice, chrome, traits, b.notes));
@@ -365,6 +376,18 @@ export async function runGmTurn(
     }
     const command = await b.validate(where, item, schema);
     if (!command) continue;
+    if (inFlashback && command.type !== "flashback") {
+      b.drop(where, command, flashbackReason, "rules");
+      continue;
+    }
+    if (
+      fight &&
+      command.type === "flashback" &&
+      (command as { action?: unknown }).action !== "end"
+    ) {
+      b.drop(where, command, "战斗中不能闪回", "rules");
+      continue;
+    }
     if (fight && isQuick(command)) {
       if (quick >= MAX_QUICK) {
         b.drop(where, command, `这次交锋的快捷动作已经用了 ${MAX_QUICK} 个`, "rules");
@@ -377,14 +400,25 @@ export async function runGmTurn(
   b.checkAborted();
 
   // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
-  if (!ooc && CombatStateSchema.parse(world.slices.combat).standoff) {
+  if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
     commands.push({ type: "combat.standoffTick" });
   }
-  if (!ooc && !commands.some((c) => c.type === "world")) {
+  const flashbackAction = (c: Command) =>
+    c.type === "flashback" ? (c as { action?: unknown }).action : undefined;
+  // 闪回里过一轮；这一轮写了 end 就不再扣
+  if (!ooc && inFlashback && !commands.some((c) => flashbackAction(c) === "end")) {
+    commands.push({ type: "character.flashbackTick" });
+  }
+  // 闪回里和开闪回的这一轮不按 talk 保底推进时间
+  const startsFlashback = commands.some((c) => flashbackAction(c) === "start");
+  if (!ooc && !inFlashback && !startsFlashback && !commands.some((c) => c.type === "world")) {
     commands.push({ type: "world", activity: "talk" });
     b.notes.push("这一轮没写 world，按 talk 保底推进时间");
   }
-  if (!ooc && shape.sceneEnd === true) commands.push({ type: "world.endScene" });
+  if (!ooc && shape.sceneEnd === true) {
+    if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
+    else commands.push({ type: "world.endScene" });
+  }
 
   const facts: Record<string, unknown> = { direct: shape.direct === true };
   if (plan.kind === "resolve") {
@@ -401,7 +435,7 @@ export async function runGmTurn(
   );
   if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
   // 开了斯安威斯坦：先扣人性再结算；能不能开（clutch、义体能用）由后端在调模型前拦下
-  if (plan.kind === "action" && plan.input.sandevistan === true && !ooc) {
+  if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
   }
@@ -417,13 +451,14 @@ export async function runGmTurn(
     }
   }
   // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
-  const settled = ooc
-    ? applied
-    : registry.applyCommands(
-        applied.world,
-        [{ type: "fallout.record", kinds: falloutKinds(accepted, plan.kind === "resolve") }],
-        applyCtx,
-      );
+  const settled =
+    ooc || inFlashback
+      ? applied
+      : registry.applyCommands(
+          applied.world,
+          [{ type: "fallout.record", kinds: falloutKinds(accepted, plan.kind === "resolve") }],
+          applyCtx,
+        );
 
   return {
     kind: "done",

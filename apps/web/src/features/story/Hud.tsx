@@ -98,6 +98,12 @@ export function Hud({ view }: { readonly view: View }) {
           </span>
         </div>
       )}
+      {character.flashback && (
+        <div className={styles.flashback} role="status">
+          闪回 · {character.flashback.past} · 第 {character.flashback.turn}/
+          {character.flashback.turns} 轮 · 不掷骰、不推进时间
+        </div>
+      )}
       {combat.active && (
         <div className={styles.combat} role="status">
           <span className={styles.combatTitle}>

@@ -32,6 +32,27 @@ export const HABITS_MAX = 8;
 /** 一条习惯：常去的店、爱吃的东西、睡前做什么、车里放什么歌 */
 export const HabitTextSchema = z.string().trim().min(1).max(40);
 
+/** 闪回最多玩几轮，到了自动回到现在 */
+export const FLASHBACK_TURNS = 3;
+/** 闪回里确认的事最多记这么多条 */
+export const PAST_FACTS_MAX = 24;
+
+export const ActiveFlashbackSchema = z.object({
+  /** 过往模块的名字 */
+  past: z.string().min(1),
+  startedAt: z.number().int(),
+  /** 闪回里已经玩了几轮（开闪回的那一轮不算） */
+  turns: z.number().int().min(0),
+});
+export type ActiveFlashback = z.infer<typeof ActiveFlashbackSchema>;
+
+/** 闪回里确认、写进已确定事实的一句 */
+export const PastFactSchema = z.object({
+  past: z.string().min(1),
+  text: z.string().min(1).max(200),
+});
+export type PastFact = z.infer<typeof PastFactSchema>;
+
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
   name: z.string().min(1).nullable(),
@@ -54,6 +75,12 @@ export const CharacterStateSchema = z.object({
   habits: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
   /** 主持人提议、玩家还没确认的习惯 */
   habitOffers: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
+  /** 闪回过的过往；每段过往一生只闪回一次 */
+  flashbackUsed: z.array(z.string().min(1)).default([]),
+  /** 正在进行的闪回；不在闪回时为 null */
+  flashback: ActiveFlashbackSchema.nullable().default(null),
+  /** 闪回里确认的事：已确定的事实 */
+  pastFacts: z.array(PastFactSchema).max(PAST_FACTS_MAX).default([]),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -122,7 +149,35 @@ export const HabitChangeSchema = z.object({
 });
 export type HabitChange = z.infer<typeof HabitChangeSchema>;
 
-export type CharacterInternal = SetCharacter | GainCred | SpendPoint | SetBonuses | HabitChange;
+/** 模型使用：{"type": "flashback", "past": "过往的名字"}；结束时 {"type": "flashback", "action": "end", "fact": "..."} */
+export const FlashbackCommandSchema = z
+  .object({
+    type: z.literal("flashback"),
+    action: z.enum(["start", "end"]).default("start"),
+    past: z.string().min(1).optional(),
+    fact: z.string().trim().min(1).max(200).optional(),
+  })
+  .superRefine((c, ctx) => {
+    if (c.action === "start" && c.past === undefined) {
+      ctx.addIssue({ code: "custom", message: "开始闪回要写 past（过往的名字）" });
+    }
+  })
+  .describe(
+    "过往闪回：start 开一段闪回，past 写状态里还能闪回的过往名字，每段一生一次；end 回到现在，fact 写这段闪回里确认的事（一句话，成为已确定的事实）",
+  );
+export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
+
+/** 只能由代码发出：闪回里每过一轮由主持流程发出，玩满自动回到现在 */
+export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
+export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
+
+export type CharacterInternal =
+  | SetCharacter
+  | GainCred
+  | SpendPoint
+  | SetBonuses
+  | HabitChange
+  | FlashbackTick;
 
 /** 检定用的属性：自己的加上义体加成，最高 20 */
 export function effectiveAttribute(

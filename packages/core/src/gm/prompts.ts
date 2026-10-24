@@ -264,6 +264,22 @@ export function stateSummary(view: PlayerView): string {
   if (c.habits.length > 0) lines.push(`习惯：${c.habits.join("；")}`);
   if (c.habitOffers.length > 0)
     lines.push(`提议过、等玩家确认的习惯：${c.habitOffers.join("；")}（不要再提）`);
+  if (c.flashback) {
+    lines.push(
+      `闪回中：${c.flashback.past}，第 ${c.flashback.turn}/${c.flashback.turns} 轮；不掷骰、不推进时间、不记账，最后一轮写 flashback end 和确认的事`,
+    );
+  } else if (c.pasts.some((p) => !p.used)) {
+    lines.push(
+      `还能闪回的过往：${c.pasts
+        .filter((p) => !p.used)
+        .map((p) => p.label)
+        .join("、")}`,
+    );
+  }
+  if (c.pastFacts.length > 0)
+    lines.push(
+      `过往里确认的事（已确定的事实）：${c.pastFacts.map((f) => `${f.past}：${f.text}`).join("；")}`,
+    );
   if (view.heat.stars > 0 || view.heat.half)
     lines.push(
       `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,

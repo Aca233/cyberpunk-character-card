@@ -1,11 +1,15 @@
 import { defineSystem } from "../../kernel/system";
 import { gainCred, setBonuses, setCharacter, spendPoint } from "./apply";
+import { applyFlashback, tickFlashback } from "./flashback";
 import { changeHabit, offerHabit } from "./habits";
-import { habitRules, streetCredRules } from "./prompt";
+import { flashbackRules, habitRules, streetCredRules } from "./prompt";
 import {
   type CharacterInternal,
   type CharacterState,
   CharacterStateSchema,
+  type FlashbackCommand,
+  FlashbackCommandSchema,
+  FlashbackTickSchema,
   GainCredSchema,
   HabitChangeSchema,
   type HabitCommand,
@@ -20,7 +24,7 @@ import {
 /** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
 export const character = defineSystem<
   CharacterState,
-  StreetCredCommand | HabitCommand,
+  StreetCredCommand | HabitCommand | FlashbackCommand,
   CharacterInternal
 >({
   id: "character",
@@ -38,16 +42,24 @@ export const character = defineSystem<
     bonuses: {},
     habits: [],
     habitOffers: [],
+    flashbackUsed: [],
+    flashback: null,
+    pastFacts: [],
   }),
-  commands: { streetCred: StreetCredCommandSchema, habit: HabitCommandSchema },
+  commands: {
+    streetCred: StreetCredCommandSchema,
+    habit: HabitCommandSchema,
+    flashback: FlashbackCommandSchema,
+  },
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,
     "character.spendPoint": SpendPointSchema,
     "character.setBonuses": SetBonusesSchema,
     "character.habit": HabitChangeSchema,
+    "character.flashbackTick": FlashbackTickSchema,
   },
-  apply(draft, command) {
+  apply(draft, command, ctx) {
     switch (command.type) {
       case "character.set":
         return setCharacter(draft, command);
@@ -63,12 +75,17 @@ export const character = defineSystem<
         return offerHabit(draft, command.text);
       case "character.habit":
         return changeHabit(draft, command);
+      case "flashback":
+        return applyFlashback(draft, command, ctx.now);
+      case "character.flashbackTick":
+        return tickFlashback(draft);
     }
   },
-  rules: [streetCredRules, habitRules],
+  rules: [streetCredRules, habitRules, flashbackRules],
 });
 
 export * from "./apply";
+export * from "./flashback";
 export * from "./habits";
 export * from "./prompt";
 export * from "./schema";

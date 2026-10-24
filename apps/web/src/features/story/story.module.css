@@ -1555,17 +1555,17 @@
   font-size: var(--fs-label);
 }
 
-.habitList li {
+.habitItem {
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
 }
 
-.habitList li > span {
+.habitText {
   flex: 1;
 }
 
-.habitList li[data-offer] {
+.habitItem[data-offer] {
   border-left: 2px dashed var(--cp-yellow-dim);
   padding-left: 0.4rem;
 }
@@ -1590,7 +1590,7 @@
   margin-top: 0.3rem;
 }
 
-.habitForm input {
+.habitInput {
   flex: 1;
   min-width: 0;
   padding: 0.1rem 0.3rem;
@@ -1598,4 +1598,12 @@
   background: transparent;
   color: inherit;
   font-size: var(--fs-label);
+}
+
+.flashback {
+  padding: 0.2rem 0.6rem;
+  border: 1px dashed var(--cp-yellow-dim);
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
+  letter-spacing: 0.05em;
 }
