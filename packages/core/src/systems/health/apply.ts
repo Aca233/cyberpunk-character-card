@@ -8,7 +8,6 @@ import {
   isSuccess,
   MOD_STEP,
   type Modifier,
-  PENALTY_CAP,
 } from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
 import {

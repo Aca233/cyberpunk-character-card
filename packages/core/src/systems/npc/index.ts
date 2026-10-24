@@ -4,6 +4,7 @@ import { npcRules } from "./prompt";
 import {
   AffinityProposalSchema,
   AffinitySchema,
+  DoingSchema,
   legacyAffinity,
   MeetSchema,
   MemorySchema,
@@ -27,6 +28,7 @@ export const npc = defineSystem<NpcState, NpcCommand, SeedNpc>({
     affinity: AffinitySchema,
     memory: MemorySchema,
     npcDeath: NpcDeathSchema,
+    doing: DoingSchema,
   },
   proposals: { affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity } },
   internal: { "npc.seed": SeedNpcSchema },

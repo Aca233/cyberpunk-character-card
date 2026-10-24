@@ -35,6 +35,7 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
     location: card.home ?? null,
     lastSeenAt: null,
     memories: [],
+    doing: null,
   };
   return { ok: true };
 }
@@ -62,6 +63,7 @@ export function applyNpc(draft: Draft<NpcState>, command: NpcCommand, now: numbe
       location: location ?? null,
       lastSeenAt: now,
       memories: [],
+      doing: null,
     };
     return { ok: true, notes: [`新人物：${card.name}`] };
   }
@@ -102,6 +104,11 @@ export function applyNpc(draft: Draft<NpcState>, command: NpcCommand, now: numbe
       if (npc.memories.length > MEMORY_KEPT) {
         npc.memories.splice(0, npc.memories.length - MEMORY_KEPT);
       }
+      return { ok: true };
+    }
+    case "doing": {
+      if (npc.doing?.text === command.text) return { ok: true };
+      npc.doing = { text: command.text, at: now };
       return { ok: true };
     }
     case "npcDeath": {

@@ -48,6 +48,11 @@ export const NpcSchema = NpcCardSchema.extend({
   lastSeenAt: z.number().int().nullable(),
   /** 和玩家角色的共同记忆，旧的在前 */
   memories: z.array(z.string()),
+  /** 最近在做什么（只给模型看）：一句话和记下的游戏时间；旧存档没有 */
+  doing: z
+    .object({ text: z.string().min(1), at: z.number().int() })
+    .nullable()
+    .default(null),
 });
 export type Npc = z.infer<typeof NpcSchema>;
 
@@ -161,7 +166,18 @@ export const NpcDeathSchema = z
   .describe("人物死亡；死了的人不会再出场");
 export type NpcDeath = z.infer<typeof NpcDeathSchema>;
 
-export type NpcCommand = NewNpc | Meet | Affinity | Memory | NpcDeath;
+export const DoingSchema = z
+  .object({
+    type: z.literal("doing"),
+    id: NpcIdSchema,
+    text: z.string().trim().min(1).max(80),
+  })
+  .describe(
+    "这个人最近在做什么（换了活、搬去哪、在忙什么、和谁走得近）；一句话，只写正文里透出来的（本人说的、新闻、传闻、消息），会替换掉旧的",
+  );
+export type Doing = z.infer<typeof DoingSchema>;
+
+export type NpcCommand = NewNpc | Meet | Affinity | Memory | NpcDeath | Doing;
 
 /** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
 export const SeedNpcSchema = NpcCardSchema.extend({
