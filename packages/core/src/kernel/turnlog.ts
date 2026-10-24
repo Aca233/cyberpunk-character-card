@@ -71,7 +71,10 @@ const VoidRecordSchema = z.object({
   at: z.string(),
   /** 被作废的那条记录的 seq */
   target: seq,
-  reason: z.enum(["undo", "regenerate", "correction"]),
+  /** restart：夜之城难度死亡后从场景开头重来 */
+  reason: z.enum(["undo", "regenerate", "correction", "restart"]),
+  /** 重来的是第几个场景；只有 restart 写 */
+  scene: z.number().int().min(0).optional(),
 });
 
 const BackgroundRecordSchema = z.object({
@@ -170,6 +173,15 @@ export function voidedSeqs(records: readonly LogRecord[]): ReadonlySet<number> {
   const voided = new Set<number>();
   for (const record of records) if (record.kind === "void") voided.add(record.target);
   return voided;
+}
+
+/** 重来过的场景（夜之城难度每个场景只能重来一次） */
+export function restartedScenes(records: readonly LogRecord[]): ReadonlySet<number> {
+  const scenes = new Set<number>();
+  for (const r of records) {
+    if (r.kind === "void" && r.reason === "restart" && r.scene !== undefined) scenes.add(r.scene);
+  }
+  return scenes;
 }
 
 /** 没被作废的回合 */

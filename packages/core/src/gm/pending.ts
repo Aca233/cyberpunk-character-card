@@ -3,6 +3,7 @@ import {
   effectiveTurns,
   type LogRecord,
   type TurnRecord,
+  voidedSeqs,
 } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
@@ -77,9 +78,10 @@ export function currentOffers(records: readonly LogRecord[]): Offers {
   const turn = effectiveTurns(records).findLast((t) => !isOoc(t));
   if (!turn) return { turn: undefined, choices: [], checks: [], rolled: undefined };
   const checks = checkOffers(turn);
+  const voided = voidedSeqs(records);
   let rolled: Offers["rolled"];
   for (const record of records.slice(turn.seq + 1)) {
-    if (record.kind !== "check") continue;
+    if (record.kind !== "check" || voided.has(record.seq)) continue;
     const offer = checks.find((c) => c.id === record.checkId);
     if (offer) {
       rolled = { offer, record };

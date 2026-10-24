@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
-import { checkFact, isSuccess } from "../dice";
+import { checkFact, type DiceState, isSuccess } from "../dice";
 import type { HealthState } from "../health";
 import {
   type CombatCommand,
@@ -105,6 +105,11 @@ export function resolveMoment(draft: Combat, ctx: SystemContext, retreat: boolea
         isLast ? "濒死：撑到这一轮结束，需要有人救治" : "濒死：撑到下一次交锋结束，需要有人救治",
       );
     } else if (active.dyingUntil <= index) {
+      if (ctx.read<DiceState>("dice").mode === "streetLegend") {
+        emit.push({ type: "health.revive" });
+        notes.push("街头传说：总有一条退路，有人把你拖了出来；代价在戏里写（欧元、人性或关系）");
+        return finish(draft, "defeat", notes, emit, ctx.now);
+      }
       emit.push({ type: "health.die", reason: "濒死期间没人救治" });
       return finish(draft, "defeat", notes, emit, ctx.now);
     }

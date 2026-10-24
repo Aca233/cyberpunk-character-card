@@ -206,6 +206,11 @@ export const api = {
   /** 界面操作（分配属性点……），不调用模型 */
   action: (saveId: string, body: ActionRequest) =>
     request<{ version: number; notes?: string[] }>("POST", `/saves/${saveId}/actions`, body),
+  /** 夜之城难度死亡后从这个场景开头重来；每个场景一次 */
+  restart: (saveId: string, baseVersion: number) =>
+    request<{ version: number; voided: number }>("POST", `/saves/${saveId}/restart`, {
+      baseVersion,
+    }),
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>

@@ -590,7 +590,8 @@
 }
 
 .notice[data-kind="lost"],
-.notice[data-kind="rejected"] {
+.notice[data-kind="rejected"],
+.notice[data-kind="dead"] {
   border-color: var(--cp-red-dim);
   color: var(--cp-red);
 }

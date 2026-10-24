@@ -1,6 +1,14 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
+
+import { applyPatches } from "immer";
 import { currentOffers, prepareFor } from "./gm/pending";
-import { effectiveTurns, type LogRecord, logVersion } from "./kernel/turnlog";
+import {
+  effectiveTurns,
+  type LogRecord,
+  logVersion,
+  restartedScenes,
+  voidedSeqs,
+} from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
@@ -259,6 +267,28 @@ export function withAllSlices(world: WorldState): WorldState {
   return { ...world, slices };
 }
 
+/**
+ * 当前场景从哪条记录开始：最后一次换场景之后的第一条记录。
+ * initial 是新存档的初始世界；整局都在第一个场景里时是 0
+ */
+export function sceneStartSeq(initial: WorldState, records: readonly LogRecord[]): number {
+  const voided = voidedSeqs(records);
+  const sceneOf = (w: WorldState) => (w.slices.world as { scene?: number } | undefined)?.scene ?? 0;
+  let world = initial;
+  let scene = sceneOf(world);
+  let start = 0;
+  for (const record of records) {
+    if (record.kind === "void" || record.kind === "check" || voided.has(record.seq)) continue;
+    world = applyPatches(world, record.patches);
+    const now = sceneOf(world);
+    if (now !== scene) {
+      scene = now;
+      start = record.seq + 1;
+    }
+  }
+  return start;
+}
+
 /** 状态接口带上的已结束委托，最近的优先 */
 export const JOBS_CLOSED_SHOWN = 5;
 
@@ -382,6 +412,13 @@ export function projectState(
   return {
     version: logVersion(records),
     difficulty: dice.mode,
+    /** 角色死了时不为 null：夜之城每个场景能从开头重来一次，其他难度死了就结束 */
+    death:
+      health.condition === "dead"
+        ? { canRestart: dice.mode === "nightCity" && !restartedScenes(records).has(clock.scene) }
+        : null,
+    /** 整局重来过几个场景，履历里记着 */
+    restarts: restartedScenes(records).size,
     character: {
       name: character.name,
       brief: character.brief,

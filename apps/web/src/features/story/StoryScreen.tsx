@@ -116,6 +116,16 @@ export function StoryScreen() {
     [saveId, version, refresh, warn],
   );
 
+  // 夜之城难度死亡后重来：作废这个场景的回合，回到场景开头
+  const restart = useCallback(async () => {
+    try {
+      await api.restart(saveId, version);
+    } catch (error) {
+      warn("restart", error);
+    }
+    await refresh();
+  }, [saveId, version, refresh, warn]);
+
   // 在委托板上接单：不调用模型；失败时提示原因，确认框留着
   const acceptJob = useCallback(
     async (id: string) => {
@@ -271,11 +281,33 @@ export function StoryScreen() {
               />
             )
           )}
+          {view.death && (
+            <div className={styles.notice} data-kind="dead" role="alert">
+              <span>
+                {view.death.canRestart
+                  ? "你死了。夜之城难度下可以从这个场景开头重来一次：这个场景发生的事全部作废，骰子重新掷，履历里记一笔“重来过”。"
+                  : view.difficulty === "nightCity"
+                    ? "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"
+                    : "你死了。这份存档到此为止，只能回看。"}
+              </span>
+              {view.death.canRestart && (
+                <Button onClick={() => void restart()} disabled={busy}>
+                  从场景开头重来
+                </Button>
+              )}
+            </div>
+          )}
           <InputBar
             busy={busy}
             streaming={story.phase === "streaming"}
-            disabled={offers?.rolled != null}
-            reason={offers?.rolled != null ? "上一次检定已经掷过骰，先继续结算" : undefined}
+            disabled={offers?.rolled != null || view.death !== null}
+            reason={
+              view.death !== null
+                ? "角色已经死亡"
+                : offers?.rolled != null
+                  ? "上一次检定已经掷过骰，先继续结算"
+                  : undefined
+            }
             draft={story.draft}
             onDraft={story.setDraft}
             onSend={send}

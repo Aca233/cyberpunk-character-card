@@ -36,11 +36,14 @@ import {
   runGmTurn,
   type SaveMeta,
   saveCharacter,
+  sceneStartSeq,
   serializeRecord,
   TurnInputSchema,
   type TurnRecord,
   type TurnRequest,
   type TurnUsage,
+  type VoidRecord,
+  voidedSeqs,
   type WorldState,
   withAllSlices,
   worldRules,
@@ -159,6 +162,8 @@ export class GameService {
       const version = logVersion(records);
       const done = records.find((r) => r.kind === "turn" && r.requestId === request.requestId);
       if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
+      const dead = deathBlock(world, records, version);
+      if (dead) return dead;
       const same = hub.byRequest(id, request.requestId);
       if (same) return { status: 202, body: { turnId: same.turnId, replayed: true } };
       const busy = hub.running(id);
@@ -275,6 +280,8 @@ export class GameService {
       const version = logVersion(records);
       const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
       if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
+      const dead = deathBlock(world, records, version);
+      if (dead) return dead;
       if (this.deps.hub.running(id)) {
         return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
       }
@@ -302,6 +309,57 @@ export class GameService {
       await this.deps.saves.appendLog(id, serializeRecord(record));
       await this.maybeSnapshot(id, version + 1);
       return { status: 200, body: { seq: version, version: version + 1, notes: result.notes } };
+    });
+  }
+
+  /**
+   * 夜之城难度死亡后从这个场景开头重来：把场景开始以后的回合、掷骰和操作都作废，
+   * 骰子之后重新掷；每个场景只能重来一次，作废记录就是履历里的“重来过”
+   */
+  restart(id: string, request: z.output<typeof RestartRequestSchema>): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { meta, world, records } = await this.load(id);
+      const version = logVersion(records);
+      if (this.deps.hub.running(id)) {
+        return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
+      }
+      if (request.baseVersion !== version) {
+        return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
+      }
+      const view = projectState(world, records, gameData);
+      if (!view.death) return { status: 409, body: { error: "角色还活着，不用重来", version } };
+      if (!view.death.canRestart) {
+        return {
+          status: 409,
+          body: {
+            error:
+              view.difficulty === "nightCity"
+                ? "这个场景已经重来过一次，这一次是真的死了"
+                : "这个难度死了就结束，不能重来",
+            version,
+          },
+        };
+      }
+      const start = sceneStartSeq(newGameWorld(meta, gameContent), records);
+      const voided = voidedSeqs(records);
+      const targets = records.filter(
+        (r) => r.seq >= start && r.kind !== "void" && !voided.has(r.seq),
+      );
+      const at = this.deps.clock.now().toISOString();
+      let seq = version;
+      for (const target of targets) {
+        const record: VoidRecord = {
+          kind: "void",
+          seq,
+          at,
+          target: target.seq,
+          reason: "restart",
+          scene: view.scene,
+        };
+        await this.deps.saves.appendLog(id, serializeRecord(record));
+        seq += 1;
+      }
+      return { status: 200, body: { version: seq, voided: targets.length } };
     });
   }
 
@@ -570,4 +628,27 @@ export class GameService {
       world: replay({ ...snapshot, world: withAllSlices(snapshot.world) }, log.records),
     };
   }
+}
+
+/** 夜之城难度死亡后重来：基于哪个日志版本 */
+export const RestartRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
+
+/** 角色死了就不能再提交回合和操作 */
+function deathBlock(
+  world: WorldState,
+  records: readonly LogRecord[],
+  version: number,
+): Reply | undefined {
+  const { death } = projectState(world, records, gameData);
+  if (!death) return undefined;
+  return {
+    status: 409,
+    body: {
+      error: death.canRestart
+        ? "角色已经死亡：可以从这个场景开头重来一次"
+        : "角色已经死亡，这份存档到此为止，只能回看",
+      death,
+      version,
+    },
+  };
 }
