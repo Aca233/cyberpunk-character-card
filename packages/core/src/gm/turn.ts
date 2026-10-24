@@ -408,7 +408,7 @@ export async function runGmTurn(
   }
   b.checkAborted();
 
-  // 手机消息：每轮最多两条；场外提问和闪回里不收
+  // 消息：每轮最多两条；场外提问和闪回里不收
   for (const [i, item] of (shape.messages ?? []).entries()) {
     const where = `messages[${i}]`;
     if (ooc || inFlashback) {
@@ -416,7 +416,7 @@ export async function runGmTurn(
       continue;
     }
     if (i >= MESSAGES_PER_TURN) {
-      b.drop(where, item, `手机消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
+      b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
       continue;
     }
     const message = await b.validate(where, item, IncomingMessageSchema);
@@ -463,7 +463,7 @@ export async function runGmTurn(
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
   }
-  // 在手机上回复：先记下回的是哪一条
+  // 回复消息：先记下回的是哪一条
   if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
     commands.unshift({ type: "phone.reply", id: plan.input.replyTo });
   }

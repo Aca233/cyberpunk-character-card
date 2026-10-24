@@ -12,7 +12,7 @@ import {
   ReplySchema,
 } from "./schema";
 
-/** 手机消息：主持人在指令块里写 messages，玩家看、回复；联系人和完整手机界面在 M3 */
+/** 消息：主持人在指令块里写 messages，玩家看、回复；联系人、全息电话和完整通讯界面在 M3 */
 export const phone = defineSystem<PhoneState, never, PhoneInternal>({
   id: "phone",
   dependsOn: ["npc", "jobs"],

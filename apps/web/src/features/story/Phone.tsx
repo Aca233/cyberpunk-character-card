@@ -3,7 +3,7 @@ import { Dialog } from "../../ui/Dialog";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
-/** 手机（简版）：按游戏时间列消息，最近的在前；联系人和完整手机界面在 M3 */
+/** 消息（简版）：按游戏时间列消息，最近的在前；联系人、全息电话和完整通讯界面在 M3 */
 export function PhoneDialog({
   view,
   onReply,
@@ -17,7 +17,7 @@ export function PhoneDialog({
   const { messages } = view.phone;
   return (
     <Dialog
-      title="手机"
+      title="消息"
       onClose={onClose}
       actions={
         <Button primary onClick={onClose}>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 手机里最多留这么多条，旧的先删 */
+/** 消息记录最多留这么多条，旧的先删 */
 export const PHONE_KEPT = 40;
 /** 主持人每轮最多发几条 */
 export const MESSAGES_PER_TURN = 2;
@@ -31,7 +31,7 @@ export const IncomingMessageSchema = z.object({
 });
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
-/** 只能由代码发出：主持流程把指令块里的 messages 记进手机 */
+/** 只能由代码发出：主持流程把指令块里的 messages 记进消息记录 */
 export const ReceiveSchema = z.object({
   type: z.literal("phone.receive"),
   from: z.string().min(1),

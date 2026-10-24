@@ -648,7 +648,7 @@ export function perceivedLine(
   return bits.join("；");
 }
 
-/** 界面上最多列几条手机消息 */
+/** 界面上最多列几条消息 */
 const PHONE_SHOWN = 20;
 
 export function projectState(
@@ -667,7 +667,7 @@ export function projectState(
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
-  // 旧存档没有手机
+  // 旧存档没有消息记录
   const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
   const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   // 旧快照里没有热度系统
@@ -978,7 +978,7 @@ export function projectState(
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
-    /** 手机消息，最近的在前 */
+    /** 消息，最近的在前 */
     phone: {
       unread: phoneState.messages.filter((m) => !m.read).length,
       messages: [...phoneState.messages]

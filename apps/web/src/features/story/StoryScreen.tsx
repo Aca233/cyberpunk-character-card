@@ -230,7 +230,7 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
-  // 打开手机：未读的标成已读，不调用模型
+  // 打开消息：未读的标成已读，不调用模型
   const unread = view?.phone.unread ?? 0;
   const openPhone = useCallback(async () => {
     setAtPhone(true);

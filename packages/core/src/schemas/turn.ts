@@ -10,7 +10,7 @@ export const TurnInputSchema = z.strictObject({
   text: z.string().trim().min(1, "行动不能为空").max(2000, "一次最多 2000 字"),
   /** 生死瞬间开了斯安威斯坦：这段输入写的是慢动作里的几个动作 */
   sandevistan: z.boolean().optional(),
-  /** 在手机上回复第几条消息 */
+  /** 回复第几条消息 */
   replyTo: z.number().int().min(1).optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;

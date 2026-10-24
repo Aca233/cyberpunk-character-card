@@ -32,7 +32,7 @@ export function InputBar({
   readonly boost?:
     | { readonly name: string; readonly slots: number; readonly cost: number }
     | undefined;
-  /** 正在回复的手机消息 */
+  /** 正在回复的消息 */
   readonly reply?: { readonly name: string; readonly text: string } | undefined;
   readonly onCancelReply?: (() => void) | undefined;
 }) {

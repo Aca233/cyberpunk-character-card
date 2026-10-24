@@ -61,7 +61,7 @@ const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
 };
 
 /** 伤势标签给模型看的写法；没受伤不写 */
-/** 状态里列最近几条手机消息 */
+/** 状态里列最近几条消息 */
 const PROMPT_MESSAGES = 5;
 
 const WOUND_TEXT: Readonly<Record<string, string>> = {
@@ -281,7 +281,7 @@ export function stateSummary(view: PlayerView): string {
   }
   if (view.phone.messages.length > 0) {
     lines.push(
-      `手机消息（最近的在前，未读 ${view.phone.unread} 条）：${view.phone.messages
+      `消息（最近的在前，未读 ${view.phone.unread} 条）：${view.phone.messages
         .slice(0, PROMPT_MESSAGES)
         .map(
           (m) =>
@@ -426,7 +426,7 @@ export function dueSection(world: WorldState): string | undefined {
 
 export function formatInput(input: TurnInput): string {
   const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
-  const reply = input.replyTo !== undefined ? `【回复手机消息 #${input.replyTo}】` : "";
+  const reply = input.replyTo !== undefined ? `【回复消息 #${input.replyTo}】` : "";
   return input.mode
     ? `【${MODE_LABELS[input.mode]}】${boost}${reply}${input.text}`
     : `【玩家】${boost}${reply}${input.text}`;

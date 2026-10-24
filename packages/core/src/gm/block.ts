@@ -69,7 +69,9 @@ export const BlockDocSchema = z.object({
   messages: z
     .array(IncomingMessageSchema)
     .optional()
-    .describe(`手机消息：不在场的人发来的短信，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`),
+    .describe(
+      `消息：不在场的人通过植入式通讯发来的消息，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`,
+    ),
   direct: z.boolean().optional().describe("这一轮的主行动没掷骰、直接成功时写 true"),
   clutch: z
     .boolean()

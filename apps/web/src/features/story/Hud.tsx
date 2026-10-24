@@ -198,7 +198,7 @@ export function SidePanel({
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
-  /** 打开手机 */
+  /** 打开消息 */
   readonly onPhone: () => void;
 }) {
   const { character, humanity, inventory } = view;
@@ -579,7 +579,7 @@ export function SidePanel({
             日志 [J]
           </button>
           <button type="button" onClick={onPhone}>
-            手机{view.phone.unread > 0 ? `（${view.phone.unread} 条未读）` : ""}
+            消息{view.phone.unread > 0 ? `（${view.phone.unread} 条未读）` : ""}
           </button>
           {offered > 0 && (
             <button type="button" onClick={() => onJournal(true)}>
