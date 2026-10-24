@@ -77,7 +77,12 @@ function Paragraph({
   );
 }
 
-const VOICE_LABELS = { past: "过往", chrome: "义体", humanity: "人性" } as const;
+const VOICE_LABELS = {
+  past: "过往",
+  chrome: "义体",
+  humanity: "人性",
+  iconic: "不朽武器",
+} as const;
 
 function TurnBlock({
   turn,

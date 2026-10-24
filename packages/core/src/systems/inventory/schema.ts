@@ -121,6 +121,8 @@ export const ItemDefSchema = z
     healPercent: z.number().int().min(1).max(100).optional(),
     /** 不朽物品（原作的 Iconic）：只能从剧情获得 */
     iconic: z.boolean().default(false),
+    /** 不朽武器的专属内心声音：拿在武器栏里时，它用什么口吻在脑子里说话；写给模型 */
+    voice: z.string().min(1).max(80).optional(),
     price: z.number().int().min(0).optional(),
     rarity: RaritySchema.optional(),
     /** 武器类别；武器必须写 */
@@ -157,6 +159,9 @@ export const ItemDefSchema = z
     if (item.kind === "clothing" && item.clothingSlot === undefined)
       report("服装必须写明穿在哪一格");
     if (item.kind !== "clothing" && item.clothingSlot !== undefined) report("只有服装才写格子");
+    if (item.voice !== undefined && !(item.iconic && item.kind === "weapon")) {
+      report("只有不朽武器才有专属内心声音");
+    }
     if (item.kind === "mod") {
       if (item.modSlot === undefined || item.modFits === undefined) {
         report("改装件必须写明装在哪个位置、配哪些武器");

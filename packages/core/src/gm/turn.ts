@@ -13,6 +13,8 @@ import {
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import { type CheckSpec, CheckSpecSchema, checkFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
+import { itemCatalog } from "../systems/inventory/apply";
+import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { registry } from "../systems/registry";
 import {
   BlockDocSchema,
@@ -283,6 +285,12 @@ export async function runGmTurn(
     ),
   );
   const traits = CharacterStateSchema.parse(world.slices.character).traits;
+  // 武器栏里有带专属声音的不朽武器时，它才会说话
+  const items = deps.data?.items ? itemCatalog(deps.data) : new Map<string, ItemDef>();
+  const inventory = InventoryStateSchema.safeParse(world.slices.inventory);
+  const iconicHeld =
+    inventory.success &&
+    inventory.data.weapons.some((w) => w !== null && items.get(w)?.voice !== undefined);
   const choices: Choice[] = [];
   if (!ooc) {
     const raw = shape.choices ?? [];
@@ -312,6 +320,10 @@ export async function runGmTurn(
       if (!voice) continue;
       if (voice.from === "chrome" && chrome.size === 0) {
         b.drop(where, voice, "身上没装义体，义体不会说话", "rules");
+        continue;
+      }
+      if (voice.from === "iconic" && !iconicHeld) {
+        b.drop(where, voice, "武器栏里没有会说话的不朽武器", "rules");
         continue;
       }
       voices.push(voice);

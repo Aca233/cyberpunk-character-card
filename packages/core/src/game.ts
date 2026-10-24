@@ -623,6 +623,13 @@ export function projectState(
           return to ? [[id, to]] : [];
         }),
       ) as Readonly<Record<string, "weapon" | "quick" | "clothing">>,
+      /** 武器栏里带专属内心声音的不朽武器 */
+      iconicVoices: inventory.weapons.flatMap((w) => {
+        const def = w === null ? undefined : items.get(w);
+        return def?.iconic && def.voice !== undefined
+          ? [{ id: def.id, name: def.name, voice: def.voice }]
+          : [];
+      }),
       /** 武器上装着的改装件：武器 id → 按位置顺序；没装的武器不列 */
       mods: Object.fromEntries(
         Object.entries(inventory.mods).map(([weapon, fitted]) => [

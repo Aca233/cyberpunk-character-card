@@ -30,11 +30,11 @@ export type Choice = z.infer<typeof ChoiceSchema>;
 
 export const MAX_CHOICES = 5;
 
-/** 内心声音：过往和出身、义体、人性三种来源 */
+/** 内心声音：过往和出身、义体、人性、武器栏里的不朽武器四种来源 */
 export const VoiceSchema = z.object({
   from: z
-    .enum(["past", "chrome", "humanity"])
-    .describe("past 过往和出身，chrome 义体，humanity 人性"),
+    .enum(["past", "chrome", "humanity", "iconic"])
+    .describe("past 过往和出身，chrome 义体，humanity 人性，iconic 武器栏里的不朽武器"),
   text: z.string().trim().min(1).max(60).describe("一句脑子里冒出来的念头"),
 });
 export type Voice = z.infer<typeof VoiceSchema>;

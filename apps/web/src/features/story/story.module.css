@@ -721,6 +721,11 @@
     -1px 0 rgb(0 240 255 / 0.35);
 }
 
+.voice[data-from="iconic"] {
+  color: var(--rar-iconic);
+  border-color: var(--rar-iconic);
+}
+
 .voice[data-from="humanity"] {
   color: var(--voice-humanity);
 }

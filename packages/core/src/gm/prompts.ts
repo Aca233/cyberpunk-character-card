@@ -116,7 +116,7 @@ const CORE = `你在《赛博朋克 2077》世界观下和玩家一起做角色�
 
 【专属选项和内心声音】
 - 角色的出身、过往、义体或本事让某条路只有他走得通时，在选项里写 source 标出来源，例如“过往：荒坂前员工”“义体：螳螂刀”“出身：流浪者”；义体来源必须是【当前状态】里装着的；角色有主板时，出身、过往、本事来源写主板上的模块名。不用每轮都有。
-- 关键时刻（艰难的决定、触动过往的东西、义体在逼你、人性在动摇）可以写 0–2 条 voices：一句脑子里冒出来的念头，不超过 30 字，不替角色做决定。past 是过往和出身的回响，chrome 是义体冷冰冰的建议（没装义体时不写），humanity 是残存的良心和情感。人性越低，chrome 越多、越冷，humanity 越少。平常的轮次不写。
+- 关键时刻（艰难的决定、触动过往的东西、义体在逼你、人性在动摇）可以写 0–2 条 voices：一句脑子里冒出来的念头，不超过 30 字，不替角色做决定。past 是过往和出身的回响，chrome 是义体冷冰冰的建议（没装义体时不写），humanity 是残存的良心和情感，iconic 是武器栏里不朽武器的回响（照【当前状态】里写的口吻，武器栏里没有时不写）。人性越低，chrome 越多、越冷，humanity 越少。平常的轮次不写。
 
 【写作】
 - 每轮 100–350 字，等检定的那一轮更短；以对话为主，停在 NPC 说完话、或需要玩家接话的地方。
@@ -283,6 +283,10 @@ export function stateSummary(view: PlayerView): string {
     return fitted.length > 0 ? `${w}（装着 ${fitted.map((m) => m.id).join("、")}）` : w;
   };
   lines.push(`武器栏：${weapons.length > 0 ? weapons.map(withMods).join("、") : "空手"}`);
+  if (view.inventory.iconicVoices.length > 0)
+    lines.push(
+      `不朽武器的声音（voices 可以写 from "iconic"）：${view.inventory.iconicVoices.map((v) => `${v.name}——${v.voice}`).join("；")}`,
+    );
   if (view.inventory.clothing.length > 0)
     lines.push(
       `穿着（只影响身份和伪装，没有护甲）：${view.inventory.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,
