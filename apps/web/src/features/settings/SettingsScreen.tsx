@@ -269,14 +269,32 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
       <Section title={`生效的指令（${ctx.commands.length}）`}>
         <pre>{JSON.stringify(ctx.commands, null, 2)}</pre>
       </Section>
-      {ctx.prompt && (
-        <Section title={`发给模型的消息（${ctx.prompt.messages.length}）`}>
-          {ctx.prompt.messages.map((m, i) => (
+      {(
+        ctx.prompts ??
+        (ctx.prompt
+          ? [
+              {
+                stage: "narrate" as const,
+                label: "③ 写正文",
+                ...ctx.prompt,
+                chars: ctx.prompt.messages.reduce((n, m) => n + m.content.length, 0),
+              },
+            ]
+          : [])
+      ).map((p) => (
+        <Section
+          key={p.stage}
+          title={`${p.label}：${p.messages.length} 条消息 · ${p.chars.toLocaleString()} 字`}
+        >
+          <p className={styles.stageModules}>
+            规则模块：{p.modules.length > 0 ? p.modules.join("、") : "无"}
+          </p>
+          {p.messages.map((m, i) => (
             <details
               // biome-ignore lint/suspicious/noArrayIndexKey: 消息按发送顺序排，角色会重复
               key={`${i}-${m.role}`}
               className={styles.message}
-              open={i === (ctx.prompt?.messages.length ?? 0) - 1}
+              open={p.stage === "narrate" && i === p.messages.length - 1}
             >
               <summary>
                 {m.role} · {m.content.length} 字
@@ -285,7 +303,7 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
             </details>
           ))}
         </Section>
-      )}
+      ))}
       <Section title="模型的回复正文">
         <pre>{ctx.text}</pre>
       </Section>

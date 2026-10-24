@@ -69,6 +69,10 @@ const TurnRecordSchema = z.object({
   unsettled: z.string().optional(),
   /** 抽取考虑过但没抽的，和原因；只供调试 */
   considered: z.array(z.string()).optional(),
+  /** 写正文之前代码定下的事；旧存档没有，上下文查看器重建时用 */
+  decided: z.array(z.string()).optional(),
+  /** 判断调出的旧记忆：标题和当时的正文 */
+  recalled: z.array(z.object({ title: z.string(), text: z.string() })).optional(),
   /** 本轮带了哪些规则模块 */
   modules: z.array(z.string()).optional(),
   usage: z

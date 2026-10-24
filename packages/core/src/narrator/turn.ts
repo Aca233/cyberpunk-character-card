@@ -196,6 +196,10 @@ export interface NarratorTurn {
   readonly repairUsage: LlmUsage;
   /** 写正文时发给叙事模型的消息，上下文查看器和测评用 */
   readonly messages: readonly LlmMessage[];
+  /** 写正文之前代码定下的事，记进回合日志，上下文查看器重建写正文那一步用 */
+  readonly decided: readonly string[];
+  /** 判断调出的旧记忆 */
+  readonly recalled: readonly Memory[];
 }
 
 export type NarratorResult =
@@ -856,6 +860,8 @@ export async function runNarratorTurn(
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       messages: prompt.messages,
+      decided,
+      recalled,
     },
   };
 }

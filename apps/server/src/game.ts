@@ -13,12 +13,16 @@ import {
   type ActionRequest,
   applyPlayerAction,
   boardStart,
+  buildExtractPrompt,
+  buildJudgePrompt,
   buildNarratorPrompt,
   type CheckRecord,
   type Clock,
   currentOffers,
   diceRules,
   effectiveTurns,
+  HISTORY_TURNS,
+  type LlmMessage,
   type LogRecord,
   loadoutText,
   logVersion,
@@ -34,6 +38,7 @@ import {
   prepareFor,
   projectState,
   type Rng,
+  recallCandidates,
   replay,
   rolledFrom,
   runNarratorTurn,
@@ -447,7 +452,7 @@ export class GameService {
       const before = records.slice(0, seq);
       const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
       const input = TurnInputSchema.safeParse(record.input);
-      let prompt: { messages: unknown[]; modules: readonly string[] } | null = null;
+      let prompts: StagePrompt[] = [];
       let rebuildError: string | null = null;
       try {
         if (!input.success) throw new Error("这一轮的玩家输入格式不对");
@@ -460,14 +465,54 @@ export class GameService {
           if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
           plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
         }
-        const built = buildNarratorPrompt(world, before, plan, {
-          data: gameData,
-          opening: openingPremise(meta.opening),
+        const extras = { data: gameData, opening: openingPremise(meta.opening) };
+        const stage = (
+          id: StagePrompt["stage"],
+          label: string,
+          built: { messages: readonly LlmMessage[]; modules: readonly string[] },
+        ): StagePrompt => ({
+          stage: id,
+          label,
+          messages: [...built.messages],
+          modules: [...built.modules],
+          chars: built.messages.reduce((n, m) => n + m.content.length, 0),
         });
-        prompt = { messages: [...built.messages], modules: built.modules };
+        // ① 判断：确认检定的那一轮、场外提问的旧存档没有这一步
+        if (plan.kind === "action" && input.data.mode !== "ooc") {
+          const memories = recallCandidates(before, HISTORY_TURNS);
+          prompts.push(
+            stage("judge", "① 判断", buildJudgePrompt(world, before, plan, extras, memories)),
+          );
+        }
+        prompts.push(
+          stage(
+            "narrate",
+            record.decided === undefined
+              ? "③ 写正文（旧存档没记已定的事，只是大致还原）"
+              : "③ 写正文",
+            buildNarratorPrompt(world, before, plan, {
+              ...extras,
+              decided: record.decided,
+              recalled: record.recalled,
+            }),
+          ),
+        );
+        // ④ 抽取：场外提问和等检定的轮次不抽
+        if (record.ooc !== true && record.check === undefined) {
+          prompts.push(
+            stage(
+              "extract",
+              "④ 抽取",
+              buildExtractPrompt(world, before, plan, extras, record.text),
+            ),
+          );
+        }
       } catch (error) {
+        prompts = [];
         rebuildError = error instanceof Error ? error.message : String(error);
       }
+      const narrate = prompts.find((p) => p.stage === "narrate");
+      const prompt = narrate ? { messages: narrate.messages, modules: narrate.modules } : null;
       const total = { inputTokens: 0, outputTokens: 0, turns: 0 };
       for (const turn of effectiveTurns(records)) {
         if (!turn.usage) continue;
@@ -496,6 +541,7 @@ export class GameService {
           usage: record.usage ?? null,
           totalUsage: total,
           prompt,
+          prompts,
           rebuildError,
         },
       };
@@ -667,6 +713,10 @@ export class GameService {
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
+        ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
+        ...(turn.recalled.length > 0
+          ? { recalled: turn.recalled.map((m) => ({ title: m.title, text: m.text })) }
+          : {}),
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
       };
@@ -700,6 +750,15 @@ export class GameService {
       world: replay({ ...snapshot, world: withAllSlices(snapshot.world) }, log.records),
     };
   }
+}
+
+/** 上下文查看器里一步的提示词 */
+interface StagePrompt {
+  readonly stage: "judge" | "narrate" | "extract";
+  readonly label: string;
+  readonly messages: LlmMessage[];
+  readonly modules: string[];
+  readonly chars: number;
 }
 
 /** 夜之城难度死亡后重来：基于哪个日志版本 */

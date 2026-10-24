@@ -246,7 +246,17 @@ export interface TurnContext {
     readonly messages: readonly { readonly role: string; readonly content: string }[];
     readonly modules: readonly string[];
   } | null;
+  /** 按阶段重建的提示词：① 判断、③ 写正文、④ 抽取（没有这一步的轮次不列） */
+  readonly prompts?: readonly StagePrompt[];
   readonly rebuildError: string | null;
+}
+
+export interface StagePrompt {
+  readonly stage: "judge" | "narrate" | "extract";
+  readonly label: string;
+  readonly messages: readonly { readonly role: string; readonly content: string }[];
+  readonly modules: readonly string[];
+  readonly chars: number;
 }
 
 export type TurnBody = { requestId: string; baseVersion: number } & (

@@ -256,6 +256,12 @@
   border: 1px solid var(--cp-red-line);
 }
 
+.stageModules {
+  margin: 0 0 0.5rem;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
 .message {
   margin-bottom: 0.4rem;
 }
