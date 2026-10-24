@@ -1,4 +1,46 @@
-import { CharacterCardSchema } from "@cp/core";
+import { BoardSchema, boardCombos, CharacterCardSchema } from "@cp/core";
+import { combos } from "./combos";
+import { boardModules } from "./modules";
+
+const library = (id: string) => {
+  const found = boardModules.find((m) => m.id === id);
+  if (!found) throw new Error(`模块库里没有 ${id}`);
+  return found;
+};
+
+/** 洛的主板：库里的模块加两块自写的（车行学徒、欠漩涡帮的债），和他的文字设定对得上 */
+const loBoard = BoardSchema.parse({
+  origin: library("street-kid"),
+  pasts: [
+    {
+      id: "custom-lo-garage",
+      slot: "past",
+      label: "车行学徒",
+      points: 1,
+      tags: ["车", "技术"],
+      ability: "在沃森区的车行打了好几年工：拆装发动机、改线路，认得车贩子和收赃车的人",
+      hook: "车行老板替帮派改过车牌，账本上有你的签名",
+      people: [{ name: "老韩", role: "车行老板，教你手艺，也拿你顶过一次锅" }],
+      custom: true,
+    },
+    library("clinic-apprentice"),
+    library("smuggler"),
+  ],
+  skills: [library("mechanic"), library("lockpick"), library("driving")],
+  flaws: [
+    {
+      id: "custom-lo-debt",
+      slot: "flaw",
+      label: "欠漩涡帮的债",
+      points: 2,
+      tags: ["债务", "帮派"],
+      ability: "欠了漩涡帮一个小头目三千欧元，下个月到期",
+      hook: "到期那天还不上，漩涡帮会来车行找人",
+      people: [{ name: "铁钳", role: "漩涡帮的小头目，借钱给你的人" }],
+      custom: true,
+    },
+  ],
+});
 
 /** 手写的示例角色：没有自建角色时可以直接用它开档 */
 export const sampleCharacters = CharacterCardSchema.array().parse([
@@ -13,5 +55,9 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
     voice: "说话短，爱用车行里的黑话，紧张时会摸后脑勺；很少说谢谢，但会记着还人情。",
     skills: "会修车、懂一点电子锁和监控；开车很稳。不会骇客，没装战斗义体，枪法一般。",
     attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 4, cool: 3 },
+    board: {
+      ...loBoard,
+      combos: boardCombos(loBoard, combos).map(({ requires: _, ...combo }) => combo),
+    },
   },
 ]);
