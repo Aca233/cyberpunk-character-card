@@ -306,7 +306,13 @@ export function stateSummary(view: PlayerView): string {
     lines.push(`背包：${backpack.map(([id, n]) => `${id}×${n}`).join("、")}`);
   if (view.combat.active) {
     const a = view.combat.active;
-    const enemies = a.enemies.map((e) => `${e.group}（${e.tier}，${e.count} 人）`).join("、");
+    const enemies = [
+      ...a.enemies.map((e) => `${e.group}（${e.tier}，${e.count} 人）`),
+      ...a.foes.map(
+        (f) =>
+          `${f.name}（有卡敌人 ${f.npc}，${f.tier}，${f.down ? "已打到濒死，等玩家决定杀、放还是抓" : `已中 ${f.hits}/${f.need} 次`}${f.scanned ? "" : "，玩家还没扫描"}）`,
+      ),
+    ].join("、");
     lines.push(
       `战斗中：第 ${a.moment}/${a.moments} 次交锋，敌人 ${enemies}，败局是「${a.defeat}」`,
     );

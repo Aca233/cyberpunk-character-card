@@ -96,7 +96,16 @@ export function Hud({ view }: { readonly view: View }) {
           </span>
           <span className={styles.combatDefeat}>败局：{combat.active.defeat}</span>
           <span className={styles.combatEnemies}>
-            {combat.active.enemies.map((e) => `${e.group}×${e.count}`).join("、")}
+            {[
+              ...combat.active.enemies.map((e) => `${e.group}×${e.count}`),
+              ...combat.active.foes.map((f) =>
+                f.down
+                  ? `${f.name}（濒死）`
+                  : f.scanned
+                    ? `${f.name} ${"■".repeat(f.need - f.hits)}${"□".repeat(f.hits)}`
+                    : `${f.name}（未扫描）`,
+              ),
+            ].join("、")}
           </span>
           {combat.active.dyingMomentsLeft !== null && (
             <span className={styles.dying}>

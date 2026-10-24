@@ -10,7 +10,7 @@ import {
 
 export const combat = defineSystem<CombatState, CombatCommand>({
   id: "combat",
-  dependsOn: ["dice", "health", "inventory"],
+  dependsOn: ["dice", "health", "inventory", "npc"],
   state: CombatStateSchema,
   initial: () => ({ active: null, usedChecks: [], last: null }),
   commands: { combat: CombatCommandSchema },

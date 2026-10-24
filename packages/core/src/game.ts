@@ -713,6 +713,17 @@ export function projectState(
         moments: active.moments,
         defeat: active.defeat,
         enemies: active.enemies,
+        /** 有卡敌人：没扫描过的，界面不显示血条 */
+        foes: (active.foes ?? []).map((f) => ({
+          npc: f.npc,
+          name: f.name,
+          tier: f.tier,
+          tierLabel: OPPONENT_TIERS[f.tier].label,
+          need: f.need,
+          hits: f.hits,
+          scanned: f.scanned,
+          down: f.hits >= f.need,
+        })),
         results: active.results,
         /** 濒死时还剩几次交锋结束前要被救回；不在濒死时为 null */
         dyingMomentsLeft:

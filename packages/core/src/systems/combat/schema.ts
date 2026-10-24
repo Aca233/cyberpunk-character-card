@@ -9,6 +9,32 @@ export const EnemyGroupSchema = z.object({
 });
 export type EnemyGroup = z.infer<typeof EnemyGroupSchema>;
 
+/** 有名有姓的敌人：有人物卡，按成功次数打到濒死，不按伤害百分比 */
+export const FoeSchema = z.object({
+  npc: z.string().min(1).describe("人物卡 id"),
+  tier: TierSchema,
+  /** 装着护甲义体：多要 1 次成功 */
+  armor: z.boolean().optional(),
+});
+export type Foe = z.infer<typeof FoeSchema>;
+
+export const ActiveFoeSchema = z.object({
+  npc: z.string().min(1),
+  name: z.string().min(1),
+  tier: TierSchema,
+  /** 打到濒死要几次成功 */
+  need: z.number().int().min(1).max(4),
+  hits: z.number().int().min(0),
+  /** 有没有靠掷骰打中过：传奇档对手至少要掷一次骰 */
+  rolled: z.boolean(),
+  /** 玩家扫描过才显示血条 */
+  scanned: z.boolean(),
+});
+export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
+
+/** 有卡敌人打到濒死要几次成功：混混 1 次、精锐 2 次、精英和传奇 3 次；护甲义体多 1 次 */
+export const FOE_HITS = { street: 1, veteran: 2, elite: 3, legend: 3 } as const;
+
 export const MomentResultSchema = z.enum(["win", "lose", "draw"]);
 export type MomentResult = z.infer<typeof MomentResultSchema>;
 
@@ -23,7 +49,9 @@ export const ActiveCombatSchema = z.object({
   current: z.number().int().min(0),
   /** 开战时写明的败局 */
   defeat: z.string().min(1),
-  enemies: z.array(EnemyGroupSchema).min(1),
+  enemies: z.array(EnemyGroupSchema),
+  /** 有卡敌人；旧存档里没有 */
+  foes: z.array(ActiveFoeSchema).default([]),
   results: z.array(MomentResultSchema),
   /** 濒死要在这次交锋（从 0 起）结束前被救回；不在濒死时为 null */
   dyingUntil: z.number().int().min(0).nullable(),
@@ -53,21 +81,30 @@ export type CombatState = z.infer<typeof CombatStateSchema>;
 export const CombatCommandSchema = z
   .object({
     type: z.literal("combat"),
-    action: z.enum(["start", "next", "retreat", "end"]),
+    action: z.enum(["start", "next", "retreat", "end", "scan"]),
     moments: z.number().int().min(1).max(3).optional(),
     defeat: z.string().min(1).optional(),
     enemies: z.array(EnemyGroupSchema).min(1).max(6).optional(),
+    /** 有卡敌人，不放进敌群 */
+    foes: z.array(FoeSchema).min(1).max(4).optional(),
+    /** next：这次主行动打的是哪个有卡敌人；scan：扫描了谁 */
+    target: z.string().min(1).optional(),
   })
   .superRefine((c, ctx) => {
-    if (
-      c.action === "start" &&
-      (c.moments === undefined || c.defeat === undefined || c.enemies === undefined)
-    ) {
-      ctx.addIssue({ code: "custom", message: "开战要写 moments、defeat 和 enemies" });
+    if (c.action === "start") {
+      if (c.moments === undefined || c.defeat === undefined) {
+        ctx.addIssue({ code: "custom", message: "开战要写 moments 和 defeat" });
+      }
+      if (c.enemies === undefined && c.foes === undefined) {
+        ctx.addIssue({ code: "custom", message: "开战要写 enemies 或 foes" });
+      }
+    }
+    if (c.action === "scan" && c.target === undefined) {
+      ctx.addIssue({ code: "custom", message: "scan 要写 target" });
     }
   })
   .describe(
-    "战斗：start 开打（要写 moments、defeat、enemies），next 结算当前交锋，retreat 撤退，end 上一次交锋赢了以后提前收场",
+    "战斗：start 开打（要写 moments、defeat，敌群写 enemies，有人物卡的敌人写 foes），next 结算当前交锋（主行动打的是有卡敌人时写 target），retreat 撤退，end 上一次交锋赢了以后提前收场，scan 玩家扫描了某个有卡敌人",
   );
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 

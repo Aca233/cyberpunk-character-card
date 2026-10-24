@@ -1,12 +1,15 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
-import { checkFact, type DiceState, isSuccess } from "../dice";
+import { checkFact, type DiceState, isSuccess, OPPONENT_TIERS } from "../dice";
 import type { HealthState } from "../health";
+import type { NpcState } from "../npc";
 import {
+  type ActiveFoe,
   type CombatCommand,
   type CombatOutcome,
   type CombatState,
   DirectFactSchema,
+  FOE_HITS,
   type MomentResult,
 } from "./schema";
 
@@ -31,23 +34,88 @@ export function canRollThisMoment(state: CombatState, checkId: string): boolean 
   return state.active !== null && !state.usedChecks.includes(checkId);
 }
 
-export function startCombat(draft: Combat, command: CombatCommand, now: number): ApplyOutcome {
+export function startCombat(
+  draft: Combat,
+  command: CombatCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
   if (draft.active) return fail("已经在战斗中");
-  const { moments, defeat, enemies } = command;
-  if (moments === undefined || defeat === undefined || enemies === undefined) {
-    return fail("开战要写 moments、defeat 和 enemies");
+  const { moments, defeat } = command;
+  const enemies = command.enemies ?? [];
+  if (moments === undefined || defeat === undefined) return fail("开战要写 moments 和 defeat");
+  if (enemies.length === 0 && (command.foes ?? []).length === 0) {
+    return fail("开战要写 enemies 或 foes");
+  }
+  const cards = ctx.read<NpcState>("npc").npcs;
+  const foes: ActiveFoe[] = [];
+  for (const f of command.foes ?? []) {
+    const card = cards[f.npc];
+    if (!card) return fail(`没有 ${f.npc} 的人物卡；有卡敌人要先建卡，杂兵写进 enemies`);
+    if (!card.alive) return fail(`${card.name}已经死了`);
+    if (foes.some((x) => x.npc === f.npc)) return fail(`${card.name}写了两次`);
+    foes.push({
+      npc: f.npc,
+      name: card.name,
+      tier: f.tier,
+      need: FOE_HITS[f.tier] + (f.armor ? 1 : 0),
+      hits: 0,
+      rolled: false,
+      scanned: false,
+    });
   }
   draft.active = {
-    startedAt: now,
+    startedAt: ctx.now,
     moments,
     current: 0,
     defeat,
     enemies,
+    foes,
     results: [],
     dyingUntil: null,
   };
   draft.usedChecks = [];
-  return { ok: true, notes: [`战斗开始：${moments} 次交锋；败局：${defeat}`] };
+  const named = foes.map(
+    (f) => `${f.name}（${OPPONENT_TIERS[f.tier].label}，${f.need} 次成功打到濒死）`,
+  );
+  return {
+    ok: true,
+    notes: [
+      `战斗开始：${moments} 次交锋；败局：${defeat}`,
+      ...(named.length > 0 ? [`有卡敌人：${named.join("、")}`] : []),
+    ],
+  };
+}
+
+/** 主行动打中有卡敌人：掷骰成功 1 次、大成功 2 次、直接成功 1 次；传奇档至少要掷一次骰才拿得下 */
+function hitFoe(foe: Draft<ActiveFoe>, facts: SystemContext["facts"]): string {
+  const fact = checkFact(facts);
+  const rolled = fact !== undefined;
+  const gain = fact?.outcome === "critical" ? 2 : 1;
+  let hits = Math.min(foe.need, foe.hits + gain);
+  const notes: string[] = [];
+  if (hits >= foe.need && foe.tier === "legend" && !foe.rolled && !rolled) {
+    hits = foe.need - 1;
+    notes.push("传奇档对手至少要掷一次骰才拿得下");
+  }
+  if (rolled) foe.rolled = true;
+  foe.hits = hits;
+  if (hits >= foe.need) return `${foe.name}被打到濒死：杀、放还是抓，由玩家决定`;
+  return [`${foe.name}挨了${gain === 2 ? "重重的" : ""}一下（${hits}/${foe.need}）`, ...notes].join(
+    "；",
+  );
+}
+
+/** 玩家扫描了有卡敌人：之后界面显示他的血条 */
+export function scanFoe(draft: Combat, target: string | undefined): ApplyOutcome {
+  const foe = (draft.active?.foes ?? []).find((f) => f.npc === target);
+  if (!draft.active) return fail("不在战斗中");
+  if (!foe) return fail(`战斗里没有有卡敌人 ${target}`);
+  if (foe.scanned) return { ok: true, notes: [] };
+  foe.scanned = true;
+  return {
+    ok: true,
+    notes: [`扫描了${foe.name}：要 ${foe.need} 次成功打到濒死，已中 ${foe.hits} 次`],
+  };
 }
 
 /** 交锋胜负由代码判定：掷骰看成败，没掷骰但直接成功算胜，都没有算平 */
@@ -83,9 +151,20 @@ function finish(
 }
 
 /** 结算当前交锋；retreat 时这次交锋的主行动是撤退 */
-export function resolveMoment(draft: Combat, ctx: SystemContext, retreat: boolean): ApplyOutcome {
+export function resolveMoment(
+  draft: Combat,
+  ctx: SystemContext,
+  retreat: boolean,
+  target?: string,
+): ApplyOutcome {
   const active = draft.active;
   if (!active) return fail("不在战斗中");
+  const foe = target === undefined ? undefined : (active.foes ?? []).find((f) => f.npc === target);
+  if (target !== undefined) {
+    if (retreat) return fail("撤退不打人，不写 target");
+    if (!foe) return fail(`战斗里没有有卡敌人 ${target}`);
+    if (foe.hits >= foe.need) return fail(`${foe.name}已经被打到濒死`);
+  }
   const r = momentResult(draft, ctx.facts);
   if (typeof r === "string") return fail(r);
   if (retreat && r.result === "draw") return fail("撤退是主行动，要有检定结果或直接成功");
@@ -94,6 +173,7 @@ export function resolveMoment(draft: Combat, ctx: SystemContext, retreat: boolea
   const index = active.current;
   active.results.push(r.result);
   const notes = [`交锋 ${index + 1} / ${active.moments}：${RESULT_LABELS[r.result]}`];
+  if (foe && r.result === "win") notes.push(hitFoe(foe, ctx.facts));
   const emit: Command[] = [];
   const isLast = index + 1 >= active.moments;
 
@@ -143,12 +223,14 @@ export function applyCombat(
 ): ApplyOutcome {
   switch (command.action) {
     case "start":
-      return startCombat(draft, command, ctx.now);
+      return startCombat(draft, command, ctx);
     case "next":
-      return resolveMoment(draft, ctx, false);
+      return resolveMoment(draft, ctx, false, command.target);
     case "retreat":
-      return resolveMoment(draft, ctx, true);
+      return resolveMoment(draft, ctx, true, command.target);
     case "end":
       return endCombat(draft, ctx.now);
+    case "scan":
+      return scanFoe(draft, command.target);
   }
 }
