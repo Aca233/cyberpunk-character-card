@@ -209,6 +209,15 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `欠义体医生的钱：${view.ripperdocDebts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 trade。到期没还，医生会派人来催或上门`,
     );
+  if (view.hacking) {
+    const h = view.hacking;
+    const programs = h.programs.map(
+      (p) => `${p.id}「${p.name}」（${p.categoryLabel}，${p.ram} 格：${p.effect}）`,
+    );
+    lines.push(
+      `网络接入仓：${h.deckName}，RAM ${h.ram}/${h.ramMax} 格；已装程序 ${h.programs.length}/${h.slots}：${programs.length > 0 ? programs.join("；") : "一个都没装"}`,
+    );
+  }
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   const withMods = (w: string) => {
     const fitted = view.inventory.mods[w] ?? [];

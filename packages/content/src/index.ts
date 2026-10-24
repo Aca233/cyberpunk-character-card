@@ -1,6 +1,7 @@
 import type { GameContent } from "@cp/core";
 import { cyberware } from "./cyberware";
 import { fixers } from "./fixers";
+import { quickhacks } from "./hacking";
 import { items } from "./items";
 import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
@@ -14,6 +15,7 @@ export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
 export { cyberware } from "./cyberware";
 export { fixers } from "./fixers";
+export { quickhacks } from "./hacking";
 export { items } from "./items";
 export { consequences, jobTemplates, twists } from "./jobs";
 export { lifepath } from "./lifepath";
@@ -35,6 +37,7 @@ export const gameContent: GameContent = {
   locations,
   openings,
   loadouts,
+  quickhacks,
   // 没有开场的旧存档种的人
   defaultCast: ["rebecca", "maine", "faraday"],
 };
@@ -46,6 +49,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   locations,
   ripperdocs,
   shops,
+  quickhacks,
   twists,
   consequences,
   jobTemplates,

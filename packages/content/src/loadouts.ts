@@ -57,5 +57,6 @@ export const loadouts: readonly Loadout[] = [
     keywords: ["黑客", "潜网", "网络行者", "netrunner", "入侵协议", "快速破解"],
     gear: [{ id: "netrunner-suit" }],
     cyberware: ["militech-paraline"],
+    programs: ["ping", "reboot-optics", "short-circuit"],
   },
 ];

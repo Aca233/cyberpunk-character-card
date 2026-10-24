@@ -49,6 +49,10 @@ export const CyberwareDefSchema = z.object({
   attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
   /** 护甲义体：受到的伤害降一档；装着几件护甲也只降一档 */
   armor: z.boolean().default(false),
+  /** 网络接入仓：能装几个快速破解程序；有这一项的操作系统义体才算接入仓 */
+  programSlots: z.number().int().min(1).max(12).optional(),
+  /** RAM 格：接入仓给底数，额叶皮质等义体再加（本作改编） */
+  ram: z.number().int().min(1).max(12).optional(),
   /** 加速义体（斯安威斯坦）：生死瞬间可以开，一段输入塞进几个动作 */
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */

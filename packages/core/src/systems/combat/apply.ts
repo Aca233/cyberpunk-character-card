@@ -176,7 +176,7 @@ export function nextSegment(draft: Combat, ctx: SystemContext): ApplyOutcome {
   }
   active.current = index + 1;
   active.quick = 0;
-  return { ok: true, notes, emit };
+  return { ok: true, notes, emit, signals: ["combat.next"] };
 }
 
 /** 收场：end 写赢了还是输了，retreat 是撤退成功；玩家倒下或死了一律按败局 */

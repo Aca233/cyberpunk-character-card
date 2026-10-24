@@ -9,6 +9,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   // 额叶皮质
   {
     id: "ram-upgrade",
+    ram: 1,
     name: "RAM 升级",
     slot: "frontalCortex",
     rarity: "common",
@@ -138,6 +139,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
   {
     id: "militech-paraline",
+    ram: 4,
+    programSlots: 4,
     name: "军用科技平行线 1 型",
     slot: "os",
     rarity: "common",
@@ -148,6 +151,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "biotech-sigma",
+    ram: 5,
+    programSlots: 5,
     name: "生物技术 Σ 1 型",
     slot: "os",
     rarity: "uncommon",
@@ -158,6 +163,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "raven-microcyber",
+    ram: 6,
+    programSlots: 6,
     name: "乌鸦微控 3 型",
     slot: "os",
     rarity: "rare",
@@ -461,6 +468,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "netwatch-netdriver",
+    ram: 8,
+    programSlots: 8,
     name: "网络监察网驱 5 型",
     slot: "os",
     rarity: "legendary",

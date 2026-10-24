@@ -18,6 +18,7 @@ import {
   locations,
   npcs,
   openings,
+  quickhacks,
   ripperdocs,
   sampleCharacters,
   shops,
@@ -36,6 +37,7 @@ import {
   EXTRACT_STAGE,
   falloutRules,
   GlossarySchema,
+  hackingRules,
   healthRules,
   humanityRules,
   inventoryRules,
@@ -91,6 +93,7 @@ function refs(
 // 1. 按 schema 校验
 schema("物品表 items", inventoryRules.ItemCatalogSchema, items);
 schema("义体表 cyberware", cyberwareRules.CyberwareCatalogSchema, cyberware);
+schema("快速破解 quickhacks", hackingRules.QuickhackCatalogSchema, quickhacks);
 schema("义体医生 ripperdocs", cyberwareRules.RipperdocListSchema, ripperdocs);
 schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
@@ -115,6 +118,16 @@ const chromeIds = unique(
   "义体表",
   cyberware.map((c) => c.id),
 );
+const quickhackIds = unique(
+  "快速破解",
+  quickhacks.map((q) => q.id),
+);
+for (const c of cyberware) {
+  if (c.programSlots !== undefined && c.slot !== "os")
+    errors.push(`义体 ${c.id}：只有操作系统义体能当网络接入仓（programSlots）`);
+  if (c.programSlots !== undefined && c.ram === undefined)
+    errors.push(`义体 ${c.id}：网络接入仓要写 RAM 格数`);
+}
 const locationIds = unique(
   "地点",
   locations.map((l) => l.id),
@@ -177,6 +190,13 @@ for (const l of loadouts) {
     "物品",
   );
   refs(`行装 ${l.id}`, l.cyberware ?? [], chromeIds, "义体");
+  refs(`行装 ${l.id}`, l.programs ?? [], quickhackIds, "快速破解");
+  if ((l.programs ?? []).length > 0) {
+    const deck = cyberware.find((c) => (l.cyberware ?? []).includes(c.id) && c.programSlots);
+    if (!deck) errors.push(`行装 ${l.id}：带了快速破解却没带网络接入仓`);
+    else if ((l.programs ?? []).length > (deck.programSlots ?? 0))
+      errors.push(`行装 ${l.id}：快速破解比 ${deck.name} 的程序格多`);
+  }
   if (l.keywords.length === 0) errors.push(`行装 ${l.id}：没有关键词，永远选不中`);
 }
 for (const o of openings) {
@@ -237,6 +257,7 @@ if (existsSync(TERMS)) {
   const names: [string, string][] = [
     ...cyberware.map((c): [string, string] => ["义体", c.name]),
     ...items.map((i): [string, string] => ["物品", i.name]),
+    ...quickhacks.map((q): [string, string] => ["快速破解", q.name]),
   ];
   const off = names.filter(([, n]) => !official.has(n));
   notes.push(
@@ -292,7 +313,7 @@ if (existsSync(TERMS)) {
   );
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

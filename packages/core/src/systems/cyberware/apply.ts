@@ -182,7 +182,7 @@ export function install(
     });
   }
   emit.push(costCommand(draft, catalog), bonusCommand(draft, catalog));
-  return { ok: true, notes, emit };
+  return { ok: true, notes, emit, signals: ["cyberware.changed"] };
 }
 
 export function remove(
@@ -202,6 +202,7 @@ export function remove(
       bonusCommand(draft, catalog),
       { type: "health.limb", action: "clear", id },
     ],
+    signals: ["cyberware.changed"],
   };
 }
 

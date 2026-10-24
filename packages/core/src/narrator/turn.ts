@@ -810,12 +810,13 @@ export async function runNarratorTurn(
 
   // 代码校验第二步：业务规则（闪回、战斗中的限制、快捷动作上限）
   const commands: Command[] = [];
-  // 快捷动作（用治疗品、扔手雷）每段最多两个：超出的在结算前拦下
+  // 快捷动作（用治疗品、扔手雷、放快速破解）每段最多两个：超出的在结算前拦下
   const fight = CombatStateSchema.parse(world.slices.combat).active;
   let quick = fight ? (fight.quick ?? 0) : 0;
   const isQuick = (c: Command) => {
     const x = c as { type: string; source?: unknown; action?: unknown; id?: unknown };
     if (x.type === "heal") return x.source === "maxdoc";
+    if (x.type === "hack") return (x.action ?? "use") === "use";
     return x.type === "item" && x.action === "use" && typeof x.id === "string"
       ? items.get(x.id)?.kind === "grenade"
       : false;

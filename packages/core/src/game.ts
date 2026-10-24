@@ -49,6 +49,13 @@ import {
   OPPONENT_TIERS,
 } from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
+import {
+  deckOf,
+  CATEGORY_LABELS as HACK_CATEGORY_LABELS,
+  HackingStateSchema,
+  type QuickhackDef,
+  quickhackCatalog,
+} from "./systems/hacking";
 import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
 import { HealthStateSchema, LIMB_LABELS } from "./systems/health/schema";
 import { shownStars } from "./systems/heat/apply";
@@ -88,6 +95,8 @@ export interface GameContent {
   readonly items?: readonly ItemDef[];
   /** 义体表；开局自带的义体要用它结算 */
   readonly cyberware?: readonly CyberwareDef[];
+  /** 快速破解表；开局自带的程序要用它结算 */
+  readonly quickhacks?: readonly QuickhackDef[];
   /** 中间人；好感记在同 id 的人物卡上 */
   readonly fixers?: readonly {
     readonly id: string;
@@ -146,6 +155,8 @@ export interface Loadout {
   readonly gear: GameOpening["gear"];
   readonly eddies?: number;
   readonly cyberware?: readonly string[];
+  /** 装进接入仓的快速破解程序 id；要同时带接入仓 */
+  readonly programs?: readonly string[];
 }
 
 /** 建档时按角色卡挑行装：出身里最后出现关键词的那一套（中文的中心词在后，“在公司打过零工的街头小子”是街头小子），
@@ -189,6 +200,7 @@ interface Kit {
   readonly gear: GameOpening["gear"];
   readonly eddies?: number | undefined;
   readonly cyberware?: readonly string[] | undefined;
+  readonly programs?: readonly string[] | undefined;
 }
 
 function mergeKits(loadouts: readonly Loadout[]): Kit {
@@ -196,6 +208,7 @@ function mergeKits(loadouts: readonly Loadout[]): Kit {
     gear: loadouts.flatMap((l) => l.gear),
     eddies: loadouts.reduce((sum, l) => sum + (l.eddies ?? 0), 0),
     cyberware: [...new Set(loadouts.flatMap((l) => l.cyberware ?? []))],
+    programs: [...new Set(loadouts.flatMap((l) => l.programs ?? []))],
   };
 }
 
@@ -213,6 +226,7 @@ function openingCommands(opening: GameOpening, start: number, kit: Kit = opening
         ...(g.slot === undefined ? {} : { slot: g.slot }),
       })),
     ...(kit.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
+    ...(kit.programs ?? []).map((id) => ({ type: "hack", action: "learn", program: id, reason })),
     ...(kit.eddies ? [{ type: "money", delta: kit.eddies, reason }] : []),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
@@ -293,6 +307,7 @@ export function newGameWorld(
     data: {
       ...(content.items ? { items: content.items } : {}),
       ...(content.cyberware ? { cyberware: content.cyberware } : {}),
+      ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),
     },
   });
   for (const { command, result } of applied.results) {
@@ -844,6 +859,8 @@ export function projectState(
         broken: health.brokenChrome.includes(c.id),
       };
     }),
+    /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */
+    hacking: hackingView(world, installed, data),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1046,3 +1063,35 @@ export function projectState(
 }
 
 export type PlayerView = ReturnType<typeof projectState>;
+
+/** 接入仓按装着的义体现算（旧存档的骇入状态可能还没同步）；RAM 用状态里记的，换过接入仓按满格 */
+function hackingView(
+  world: WorldState,
+  installed: Parameters<typeof deckOf>[0],
+  data: Readonly<Record<string, unknown>>,
+) {
+  const found = deckOf(installed, data);
+  if (!found?.deck) return null;
+  const state = HackingStateSchema.parse(world.slices.hacking ?? {});
+  const parts = cyberwareCatalog(data);
+  const programs = quickhackCatalog(data);
+  const ram = state.deck === found.deck ? Math.min(state.ram, found.ramMax) : found.ramMax;
+  return {
+    deck: found.deck,
+    deckName: parts.get(found.deck)?.name ?? found.deck,
+    ram,
+    ramMax: found.ramMax,
+    slots: found.slots,
+    programs: state.programs.map((id) => {
+      const def = programs.get(id);
+      return {
+        id,
+        name: def?.name ?? id,
+        category: def?.category ?? null,
+        categoryLabel: def ? HACK_CATEGORY_LABELS[def.category] : "",
+        ram: def?.ram ?? 0,
+        effect: def?.effect ?? "",
+      };
+    }),
+  };
+}

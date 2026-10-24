@@ -1685,3 +1685,33 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* RAM 格：血条下方一排青色格子，放程序逐格熄灭，回复逐格点亮 */
+.ram {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.ramCell {
+  width: 14px;
+  height: 6px;
+  border: 1px solid var(--cp-cyan);
+  opacity: 0.35;
+  transition:
+    opacity 0.25s,
+    background-color 0.25s,
+    box-shadow 0.25s;
+}
+
+.ramCell[data-on] {
+  background-color: var(--cp-cyan);
+  opacity: 1;
+  box-shadow: 0 0 6px var(--cp-cyan);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ramCell {
+    transition: none;
+  }
+}

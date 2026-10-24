@@ -59,6 +59,27 @@ export function Hud({ view }: { readonly view: View }) {
             {wound && ` · ${wound}`}
             {health.condition !== "up" && ` · ${health.conditionLabel}`}
           </span>
+          {view.hacking && view.hacking.ramMax > 0 && (
+            <div
+              className={styles.ram}
+              role="img"
+              aria-label={`RAM ${view.hacking.ram}/${view.hacking.ramMax}`}
+              title={`${view.hacking.deckName}：RAM ${view.hacking.ram}/${view.hacking.ramMax} 格；已装 ${
+                view.hacking.programs.length > 0
+                  ? view.hacking.programs.map((p) => `${p.name}（${p.ram} 格）`).join("、")
+                  : "没有快速破解"
+              }`}
+            >
+              {Array.from({ length: view.hacking.ramMax }, (_, i) => (
+                <span
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 格子按位置排，没有别的 id
+                  key={i}
+                  className={styles.ramCell}
+                  data-on={(view.hacking && i < view.hacking.ram) || undefined}
+                />
+              ))}
+            </div>
+          )}
         </div>
         {view.heat.stars > 0 && (
           <div

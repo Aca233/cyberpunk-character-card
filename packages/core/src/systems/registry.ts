@@ -6,6 +6,7 @@ import { cyberware } from "./cyberware";
 import { dice } from "./dice";
 import { economy } from "./economy";
 import { fallout } from "./fallout";
+import { hacking } from "./hacking";
 import { health } from "./health";
 import { heat } from "./heat";
 import { humanity } from "./humanity";
@@ -34,6 +35,7 @@ export const systems: readonly AnySystem[] = [
   stealth,
   phone,
   city,
+  hacking,
 ];
 
 export const registry = createRegistry(systems);

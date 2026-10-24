@@ -20,6 +20,7 @@ export * as cyberwareRules from "./systems/cyberware";
 export * as diceRules from "./systems/dice";
 export * as economyRules from "./systems/economy";
 export * as falloutRules from "./systems/fallout";
+export * as hackingRules from "./systems/hacking";
 export * as healthRules from "./systems/health";
 export * as heatRules from "./systems/heat";
 export * as humanityRules from "./systems/humanity";
