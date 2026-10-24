@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyItem, itemCatalog, recharge, spend } from "./apply";
+import { applyItem, applyOutfit, itemCatalog, recharge, spend } from "./apply";
 import {
   type InventoryInternal,
   InventoryInternalSchemas,
@@ -21,6 +21,7 @@ export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInte
     backpack: {},
     depleted: {},
     clothing: {},
+    outfit: {},
   }),
   commands: { item: ItemCommandSchema },
   internal: InventoryInternalSchemas,
@@ -32,6 +33,8 @@ export const inventory = defineSystem<InventoryState, ItemCommand, InventoryInte
         return spend(draft, command.slot);
       case "inventory.recharge":
         return recharge(draft);
+      case "inventory.outfit":
+        return applyOutfit(draft, command.action, itemCatalog(ctx.data));
     }
   },
   on: {

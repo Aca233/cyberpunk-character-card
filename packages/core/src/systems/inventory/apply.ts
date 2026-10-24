@@ -269,3 +269,47 @@ export function sellValue(def: ItemDef): number {
   if (def.iconic || def.price === undefined) return 0;
   return Math.floor((def.price * SELL_RATE) / 10) * 10;
 }
+
+/** 整套外观：save 记下身上穿着的；wear 照记下的换好，外观里没有的格子脱下放回背包。
+ * 缺的件既没穿着也不在背包里时整套不换，免得换到一半 */
+export function applyOutfit(
+  draft: Inventory,
+  action: "save" | "wear",
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  const name = (id: string) => catalog.get(id)?.name ?? id;
+  const slots = Object.keys(CLOTHING_SLOT_LABELS) as ClothingSlot[];
+  const pieces = (from: Partial<Record<ClothingSlot, string>>) =>
+    slots.flatMap((slot) => {
+      const id = from[slot];
+      return id === undefined ? [] : [{ slot, id }];
+    });
+  if (action === "save") {
+    const worn = pieces(draft.clothing);
+    if (worn.length === 0) return fail("身上没穿衣服，没有能存的外观");
+    draft.outfit = {};
+    for (const { slot, id } of worn) draft.outfit[slot] = id;
+    return ok(`存下整套外观：${worn.map((p) => name(p.id)).join("、")}`);
+  }
+  const wanted = pieces(draft.outfit);
+  if (wanted.length === 0) return fail("还没存过整套外观");
+  const missing = wanted.filter(
+    (p) => draft.clothing[p.slot] !== p.id && (draft.backpack[p.id] ?? 0) < 1,
+  );
+  if (missing.length > 0) {
+    return fail(`整套外观缺 ${missing.map((p) => name(p.id)).join("、")}：没穿着，背包里也没有`);
+  }
+  for (const slot of slots) {
+    const current = draft.clothing[slot];
+    if (current !== undefined && current !== draft.outfit[slot]) {
+      Reflect.deleteProperty(draft.clothing, slot);
+      put(draft, current);
+    }
+  }
+  for (const { slot, id } of wanted) {
+    if (draft.clothing[slot] === id) continue;
+    take(draft, id);
+    draft.clothing[slot] = id;
+  }
+  return ok(`换上整套外观：${wanted.map((p) => name(p.id)).join("、")}`);
+}

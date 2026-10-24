@@ -171,6 +171,8 @@ export const InventoryStateSchema = z.object({
   depleted: z.record(z.string(), z.number().int().min(0)),
   /** 身上穿着的服装：格子 → 物品 id */
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
+  /** 存下的整套外观：格子 → 物品 id；没存过时为空 */
+  outfit: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
@@ -196,6 +198,11 @@ export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
   "inventory.recharge": z.object({ type: z.literal("inventory.recharge") }),
+  /** 界面动作：save 把身上穿着的存成整套外观，wear 照存下的一次换好 */
+  "inventory.outfit": z.object({
+    type: z.literal("inventory.outfit"),
+    action: z.enum(["save", "wear"]),
+  }),
 };
 export type InventoryInternal = z.infer<
   (typeof InventoryInternalSchemas)[keyof typeof InventoryInternalSchemas]

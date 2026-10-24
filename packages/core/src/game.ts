@@ -600,6 +600,11 @@ export function projectState(
         const id = inventory.clothing[slot];
         return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
       }),
+      /** 存下的整套外观，按格子顺序；没存过时为空 */
+      outfit: CLOTHING_SLOTS.flatMap((slot) => {
+        const id = inventory.outfit[slot];
+        return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
+      }),
       /** 背包里每件东西能装到哪：weapon 武器格、quick 快捷栏、clothing 服装格；不能装的不列 */
       equipTo: Object.fromEntries(
         Object.keys(inventory.backpack).flatMap((id) => {

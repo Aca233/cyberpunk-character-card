@@ -210,6 +210,21 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  const outfitAction = useCallback(
+    async (action: "save" | "wear") => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "outfit", action },
+        });
+      } catch (error) {
+        warn("gear", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
 
   const send = useCallback(
     (input: TurnInput) => {
@@ -314,6 +329,7 @@ export function StoryScreen() {
         onShop={setAtShop}
         onEquip={busy ? undefined : (id) => void gearAction("equipItem", id)}
         onUnequip={busy ? undefined : (id) => void gearAction("unequipItem", id)}
+        onOutfit={busy ? undefined : (action) => void outfitAction(action)}
       />
 
       <main className={styles.column}>

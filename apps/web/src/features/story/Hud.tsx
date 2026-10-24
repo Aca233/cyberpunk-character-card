@@ -134,6 +134,7 @@ export function SidePanel({
   onShop,
   onEquip,
   onUnequip,
+  onOutfit,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -147,6 +148,8 @@ export function SidePanel({
   /** 换装备；正在生成时不传，按钮不显示 */
   readonly onEquip?: ((id: string) => void) | undefined;
   readonly onUnequip?: ((id: string) => void) | undefined;
+  /** 整套外观：save 存下身上穿着的，wear 照存下的换好 */
+  readonly onOutfit?: ((action: "save" | "wear") => void) | undefined;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -305,7 +308,7 @@ export function SidePanel({
             </ul>
           </>
         )}
-        {inventory.clothing.length > 0 && (
+        {(inventory.clothing.length > 0 || inventory.outfit.length > 0) && (
           <>
             <p className={styles.gearTitle}>穿着</p>
             <ul className={styles.backpack}>
@@ -326,6 +329,35 @@ export function SidePanel({
                 </li>
               ))}
             </ul>
+            {inventory.outfit.length > 0 && (
+              <p className={styles.dim}>
+                整套外观：
+                {inventory.outfit.map((o) => `${o.label} ${itemName(o.id)}`).join("、")}
+              </p>
+            )}
+            {onOutfit && (
+              <div className={styles.gearTools}>
+                <button
+                  type="button"
+                  className={styles.gearAction}
+                  disabled={inventory.clothing.length === 0}
+                  title="把身上穿着的记成一整套，之后一下换回来"
+                  onClick={() => onOutfit("save")}
+                >
+                  存为整套外观
+                </button>
+                {inventory.outfit.length > 0 && (
+                  <button
+                    type="button"
+                    className={styles.gearAction}
+                    title="照存下的整套换好；外观里没有的格子脱下放回背包"
+                    onClick={() => onOutfit("wear")}
+                  >
+                    换上整套外观
+                  </button>
+                )}
+              </div>
+            )}
           </>
         )}
         <p className={styles.gearTitle}>背包</p>

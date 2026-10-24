@@ -45,6 +45,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 把装备栏里的一件放回背包 */
   z.strictObject({ type: z.literal("unequipItem"), id: z.string().min(1).max(64) }),
+  /** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
+  z.strictObject({ type: z.literal("outfit"), action: z.enum(["save", "wear"]) }),
   /** 在商店买一件，放进背包 */
   z.strictObject({
     type: z.literal("buyItem"),
@@ -210,6 +212,11 @@ function commandsFor(
             : {}),
         },
       ];
+    }
+    case "outfit": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "战斗中换装备要花一个动作，在行动里写";
+      return [{ type: "inventory.outfit", action: action.action }];
     }
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
