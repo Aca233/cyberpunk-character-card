@@ -6,6 +6,7 @@ import { Asset } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { type HabitAction, Habits } from "./Habits";
 import { countdown } from "./Journal";
 import styles from "./story.module.css";
 import { districtIcon, locationLabel, type View } from "./view";
@@ -170,6 +171,7 @@ export function SidePanel({
   onUnequip,
   onOutfit,
   onMod,
+  onHabit,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -187,6 +189,8 @@ export function SidePanel({
   readonly onOutfit?: ((action: "save" | "wear") => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
+  /** 改习惯；正在生成时不传，按钮不显示 */
+  readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -242,6 +246,12 @@ export function SidePanel({
             ))}
           </ul>
         )}
+        <Habits
+          perceived={view.perceived}
+          habits={character.habits}
+          offers={character.habitOffers}
+          onHabit={onHabit}
+        />
         <dl className={styles.facts}>
           <dt>街头声望</dt>
           <dd title={`${character.credWorld}${character.credHalf ? "；再得半级声望就升级" : ""}`}>

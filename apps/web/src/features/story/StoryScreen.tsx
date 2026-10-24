@@ -9,6 +9,7 @@ import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
+import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
@@ -226,6 +227,22 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 改习惯：不调用模型，失败时用提示条说明原因
+  const habitAction = useCallback(
+    async (action: HabitAction, text: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "habit", action, text },
+        });
+      } catch (error) {
+        warn("habit", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const modAction = useCallback(
     async (action: "attach" | "detach", weapon: string, mod: string) => {
       try {
@@ -347,6 +364,7 @@ export function StoryScreen() {
         onUnequip={busy ? undefined : (id) => void gearAction("unequipItem", id)}
         onOutfit={busy ? undefined : (action) => void outfitAction(action)}
         onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
+        onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
       />
 
       <main className={styles.column}>

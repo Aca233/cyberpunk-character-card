@@ -567,6 +567,85 @@ function displayNames(
  * 玩家能看到的状态。只放界面要显示的东西：
  * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现
  */
+/** 出身带出来的口音和做派；查不到的出身只写出身 */
+const ORIGIN_ACCENTS: Readonly<Record<string, string>> = {
+  街头小子: "一口夜之城街头腔，黑话张嘴就来",
+  流浪者: "带着荒地口音，说话直来直去",
+  公司员工: "一口公司腔，用词客气、句句留余地",
+};
+
+/** 别人一眼看得见的义体部位 */
+const VISIBLE_CHROME: ReadonlySet<string> = new Set([
+  "eyes",
+  "integumentary",
+  "hands",
+  "arms",
+  "legs",
+]);
+/** 装到这么多件，路人会觉得浑身是铬 */
+const CHROME_HEAVY = 6;
+/** 热度到这么多星，街上算是有悬赏、被通缉 */
+const WANTED_STARS = 3;
+
+const WOUND_LOOKS: Readonly<Record<string, string>> = {
+  light: "身上带着伤",
+  severe: "伤得很重，走路都不稳",
+  zero: "浑身是血，随时会倒下",
+};
+
+export interface Looks {
+  readonly traits: readonly { readonly slot: string; readonly label: string }[];
+  readonly streetCred: number;
+  readonly clothing: Readonly<Partial<Record<string, string>>>;
+  readonly installed: readonly { readonly id: string; readonly slot: string }[];
+  readonly lostLimbs: readonly string[];
+  readonly wound: string;
+  readonly heatStars: number;
+}
+
+/** 别人眼里的你：每轮从出身、口音、穿着、看得见的义体、伤势、声望和热度拼一行 */
+export function perceivedLine(
+  looks: Looks,
+  parts: ReadonlyMap<string, { readonly name: string }>,
+  items: ReadonlyMap<string, { readonly name: string }>,
+): string {
+  const bits: string[] = [];
+  const origin = looks.traits.find((t) => t.slot === "origin")?.label;
+  if (origin) {
+    const accent = ORIGIN_ACCENTS[origin];
+    bits.push(accent ? `${origin}出身，${accent}` : `${origin}出身`);
+  }
+  const worn = CLOTHING_SLOTS.flatMap((slot) => {
+    const id = looks.clothing[slot];
+    return id === undefined ? [] : [items.get(id)?.name ?? id];
+  });
+  bits.push(worn.length > 0 ? `穿着${worn.join("、")}` : "衣着不起眼");
+  const slotLabels = SLOT_LABELS as Readonly<Record<string, string>>;
+  const shown = looks.installed
+    .filter((c) => VISIBLE_CHROME.has(c.slot))
+    .map((c) => `${parts.get(c.id)?.name ?? c.id}（${slotLabels[c.slot] ?? c.slot}）`);
+  if (looks.installed.length >= CHROME_HEAVY) {
+    bits.push(`浑身是铬${shown.length > 0 ? `，看得见${shown.join("、")}` : ""}`);
+  } else if (shown.length > 0) {
+    bits.push(`看得见${shown.join("、")}`);
+  } else {
+    bits.push(looks.installed.length > 0 ? "装的义体都藏在身体里，一眼看不出来" : "看不出装了义体");
+  }
+  if (looks.lostLimbs.length > 0) {
+    const limbLabels = LIMB_LABELS as Readonly<Record<string, string>>;
+    bits.push(`少了${looks.lostLimbs.map((l) => limbLabels[l] ?? l).join("、")}`);
+  }
+  const wound = WOUND_LOOKS[looks.wound];
+  if (wound) bits.push(wound);
+  bits.push(`街头声望 ${looks.streetCred} 级（${credTier(looks.streetCred).label}）`);
+  if (looks.heatStars >= WANTED_STARS) {
+    bits.push(`NCPD 通缉中（${looks.heatStars} 星），赏金猎人和眼尖的人认得出`);
+  } else if (looks.heatStars > 0) {
+    bits.push(`NCPD 在留意（${looks.heatStars} 星）`);
+  }
+  return bits.join("；");
+}
+
 export function projectState(
   world: WorldState,
   records: readonly LogRecord[],
@@ -619,6 +698,9 @@ export function projectState(
       attributePoints: character.attributePoints,
       /** 主板上的模块和联动；没用主板的角色是空的 */
       traits: character.traits,
+      /** 习惯栏，和主持人提议、等玩家确认的习惯 */
+      habits: character.habits,
+      habitOffers: character.habitOffers,
     },
     time: {
       minutes: world.time,
@@ -877,6 +959,20 @@ export function projectState(
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
+    /** 别人眼里的你：交给主持人，NPC 的第一反应照这一行写 */
+    perceived: perceivedLine(
+      {
+        traits: character.traits,
+        streetCred: character.streetCred,
+        clothing: inventory.clothing,
+        installed,
+        lostLimbs: health.lostLimbs,
+        wound: woundTag(health),
+        heatStars: shownStars(heat?.stars ?? 0),
+      },
+      parts,
+      items,
+    ),
     totalTurns: turns.length,
     turns: turns.slice(-VIEW_TURNS).map((t) => ({
       seq: t.seq,

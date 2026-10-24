@@ -74,6 +74,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     shop: z.string().min(1).max(40),
     id: z.string().min(1).max(64),
   }),
+  /** 角色卡上的习惯：add 自己写一条，confirm 认下主持人的提议，dismiss 不要这条提议，remove 删掉 */
+  z.strictObject({
+    type: z.literal("habit"),
+    action: z.enum(["add", "confirm", "dismiss", "remove"]),
+    text: z.string().trim().min(1).max(40),
+  }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 
@@ -262,6 +268,8 @@ function commandsFor(
         { type: "inventory.mod", action: action.action, weapon: action.weapon, mod: action.mod },
       ];
     }
+    case "habit":
+      return [{ type: "character.habit", action: action.action, text: action.text }];
     case "acceptJob":
       // 记一条进展笔记，让主持人知道这单是在板上接的，戏里还没谈过
       return [

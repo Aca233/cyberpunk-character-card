@@ -27,6 +27,11 @@ export const TraitSchema = z.object({
 export type Trait = z.infer<typeof TraitSchema>;
 export const TRAITS_MAX = 24;
 
+/** 习惯栏最多几条；主持人提议、还没确认的也最多这么多 */
+export const HABITS_MAX = 8;
+/** 一条习惯：常去的店、爱吃的东西、睡前做什么、车里放什么歌 */
+export const HabitTextSchema = z.string().trim().min(1).max(40);
+
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
   name: z.string().min(1).nullable(),
@@ -45,6 +50,10 @@ export const CharacterStateSchema = z.object({
   traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
   /** 装着的义体带来的属性加成，由义体系统算好写进来；旧存档没有 */
   bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)).default({}),
+  /** 习惯：玩家自己写的，或者确认过的主持人提议；不加数值 */
+  habits: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
+  /** 主持人提议、玩家还没确认的习惯 */
+  habitOffers: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -97,7 +106,23 @@ export const SetBonusesSchema = z.object({
 });
 export type SetBonuses = z.infer<typeof SetBonusesSchema>;
 
-export type CharacterInternal = SetCharacter | GainCred | SpendPoint | SetBonuses;
+/** 模型使用：{"type": "habit", "text": "..."}，玩家确认后才写进角色卡 */
+export const HabitCommandSchema = z
+  .object({ type: z.literal("habit"), text: HabitTextSchema })
+  .describe(
+    "提议一个习惯：剧情里角色反复做的一件小事（常去的店、爱吃的东西、睡前做什么、车里放什么歌），一句话；玩家确认后才写进角色卡，不加数值",
+  );
+export type HabitCommand = z.infer<typeof HabitCommandSchema>;
+
+/** 只能由代码发出：玩家在角色卡上加、确认、拒绝或删掉一条习惯 */
+export const HabitChangeSchema = z.object({
+  type: z.literal("character.habit"),
+  action: z.enum(["add", "confirm", "dismiss", "remove"]),
+  text: HabitTextSchema,
+});
+export type HabitChange = z.infer<typeof HabitChangeSchema>;
+
+export type CharacterInternal = SetCharacter | GainCred | SpendPoint | SetBonuses | HabitChange;
 
 /** 检定用的属性：自己的加上义体加成，最高 20 */
 export function effectiveAttribute(

@@ -259,7 +259,11 @@ export function stateSummary(view: PlayerView): string {
     `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,
     `欧元：${view.money.eddies}`,
+    `别人眼里的你：${view.perceived}`,
   ];
+  if (c.habits.length > 0) lines.push(`习惯：${c.habits.join("；")}`);
+  if (c.habitOffers.length > 0)
+    lines.push(`提议过、等玩家确认的习惯：${c.habitOffers.join("；")}（不要再提）`);
   if (view.heat.stars > 0 || view.heat.half)
     lines.push(
       `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,

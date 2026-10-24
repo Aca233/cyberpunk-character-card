@@ -1,11 +1,15 @@
 import { defineSystem } from "../../kernel/system";
 import { gainCred, setBonuses, setCharacter, spendPoint } from "./apply";
-import { streetCredRules } from "./prompt";
+import { changeHabit, offerHabit } from "./habits";
+import { habitRules, streetCredRules } from "./prompt";
 import {
   type CharacterInternal,
   type CharacterState,
   CharacterStateSchema,
   GainCredSchema,
+  HabitChangeSchema,
+  type HabitCommand,
+  HabitCommandSchema,
   SetBonusesSchema,
   SetCharacterSchema,
   SpendPointSchema,
@@ -14,7 +18,11 @@ import {
 } from "./schema";
 
 /** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
-export const character = defineSystem<CharacterState, StreetCredCommand, CharacterInternal>({
+export const character = defineSystem<
+  CharacterState,
+  StreetCredCommand | HabitCommand,
+  CharacterInternal
+>({
   id: "character",
   dependsOn: ["health"],
   state: CharacterStateSchema,
@@ -28,13 +36,16 @@ export const character = defineSystem<CharacterState, StreetCredCommand, Charact
     credSettled: [],
     traits: [],
     bonuses: {},
+    habits: [],
+    habitOffers: [],
   }),
-  commands: { streetCred: StreetCredCommandSchema },
+  commands: { streetCred: StreetCredCommandSchema, habit: HabitCommandSchema },
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,
     "character.spendPoint": SpendPointSchema,
     "character.setBonuses": SetBonusesSchema,
+    "character.habit": HabitChangeSchema,
   },
   apply(draft, command) {
     switch (command.type) {
@@ -48,11 +59,16 @@ export const character = defineSystem<CharacterState, StreetCredCommand, Charact
         return setBonuses(draft, command);
       case "streetCred":
         return gainCred(draft, command.levels * 2, command.reason, command.event);
+      case "habit":
+        return offerHabit(draft, command.text);
+      case "character.habit":
+        return changeHabit(draft, command);
     }
   },
-  rules: [streetCredRules],
+  rules: [streetCredRules, habitRules],
 });
 
 export * from "./apply";
+export * from "./habits";
 export * from "./prompt";
 export * from "./schema";
