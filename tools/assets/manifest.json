@@ -259,6 +259,16 @@
         "slot": "level_frame"
       },
       {
+        "id": "hud.slotBg",
+        "atlas": "common/atlas_common",
+        "slot": "cell_hud_item_bg"
+      },
+      {
+        "id": "hud.slotFg",
+        "atlas": "common/atlas_common",
+        "slot": "cell_hud_item_fg"
+      },
+      {
         "id": "hud.zoneFrame",
         "atlas": "widgets/zone_update",
         "slot": "frame"

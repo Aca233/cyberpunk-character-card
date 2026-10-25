@@ -2,7 +2,7 @@ import { characterRules } from "@cp/core";
 import { Fragment } from "react";
 import type { AssetId } from "../../assets";
 import { DIFFICULTY_LABELS } from "../../labels";
-import { Asset } from "../../ui/Asset";
+import { Asset, NineSlice } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
@@ -140,6 +140,8 @@ export function Hud({
           </div>
         )}
         <div className={styles.weapon} title={weapon ?? "空手"}>
+          <NineSlice id="hud.slotBg" tint="rgb(14 14 23 / 85%)" slice={[20, 38, 50, 38]} />
+          <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={[20, 38, 50, 38]} />
           {weapon === null ? (
             <Asset id="weapon.fists" tint="var(--cp-cyan)" height={28} alt="空手" />
           ) : (

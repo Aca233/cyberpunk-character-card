@@ -151,6 +151,8 @@ export const ASSET_IDS = [
   "hud.healthbar",
   "hud.levelFrame",
   "hud.ramBar",
+  "hud.slotBg",
+  "hud.slotFg",
   "hud.zoneFrame",
   "hud.zoneIcon",
   "image.none",
