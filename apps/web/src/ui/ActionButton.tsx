@@ -12,6 +12,8 @@ interface ActionButtonProps {
   readonly label?: string | undefined;
   /** 展开类按钮：传了就带 aria-expanded */
   readonly expanded?: boolean | undefined;
+  /** 表单里的提交按钮 */
+  readonly submit?: boolean;
 }
 
 /** 列表行里的小按钮：底是原作标签页底（和 Button 同一张 tab.bg），青色、字号小 */
@@ -22,10 +24,11 @@ export function ActionButton({
   title,
   label,
   expanded,
+  submit,
 }: ActionButtonProps) {
   return (
     <button
-      type="button"
+      type={submit ? "submit" : "button"}
       className={styles.action}
       aria-label={label}
       aria-expanded={expanded}

@@ -1,5 +1,6 @@
 import { characterRules } from "@cp/core";
 import { type FormEvent, useState } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import styles from "./story.module.css";
 
 export type HabitAction = "add" | "confirm" | "dismiss" | "remove";
@@ -40,14 +41,13 @@ export function Habits({
           <li key={h} className={styles.habitItem}>
             <span className={styles.habitText}>{h}</span>
             {onHabit && (
-              <button
-                type="button"
-                className={styles.habitButton}
+              <ActionButton
                 title="删掉这条习惯"
+                label={`删掉习惯：${h}`}
                 onClick={() => onHabit("remove", h)}
               >
                 ×
-              </button>
+              </ActionButton>
             )}
           </li>
         ))}
@@ -57,20 +57,8 @@ export function Habits({
             <small>AI 提议</small>
             {onHabit && (
               <>
-                <button
-                  type="button"
-                  className={styles.habitButton}
-                  onClick={() => onHabit("confirm", h)}
-                >
-                  记下
-                </button>
-                <button
-                  type="button"
-                  className={styles.habitButton}
-                  onClick={() => onHabit("dismiss", h)}
-                >
-                  不要
-                </button>
+                <ActionButton onClick={() => onHabit("confirm", h)}>记下</ActionButton>
+                <ActionButton onClick={() => onHabit("dismiss", h)}>不要</ActionButton>
               </>
             )}
           </li>
@@ -86,9 +74,9 @@ export function Habits({
             aria-label="新习惯"
             onChange={(e) => setDraft(e.target.value)}
           />
-          <button type="submit" className={styles.habitButton} disabled={draft.trim() === ""}>
+          <ActionButton submit disabled={draft.trim() === ""}>
             记下
-          </button>
+          </ActionButton>
         </form>
       )}
     </section>

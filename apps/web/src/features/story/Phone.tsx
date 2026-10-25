@@ -1,3 +1,4 @@
+import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import styles from "./story.module.css";
@@ -39,11 +40,7 @@ export function PhoneDialog({
                 </small>
               </p>
               <p className={styles.phoneText}>{m.text}</p>
-              {onReply && (
-                <button type="button" className={styles.habitButton} onClick={() => onReply(m.id)}>
-                  回复
-                </button>
-              )}
+              {onReply && <ActionButton onClick={() => onReply(m.id)}>回复</ActionButton>}
             </li>
           ))}
         </ul>

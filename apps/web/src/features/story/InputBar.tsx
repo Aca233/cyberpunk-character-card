@@ -1,5 +1,6 @@
 import type { TurnInput } from "@cp/core";
 import { useEffect, useRef } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
 import styles from "./story.module.css";
 
@@ -78,11 +79,7 @@ export function InputBar({
           <span className={styles.replyText}>
             回复 {reply.name}：{reply.text}
           </span>
-          {onCancelReply && (
-            <button type="button" className={styles.habitButton} onClick={onCancelReply}>
-              取消
-            </button>
-          )}
+          {onCancelReply && <ActionButton onClick={onCancelReply}>取消</ActionButton>}
         </p>
       )}
       <div className={styles.inputRow}>

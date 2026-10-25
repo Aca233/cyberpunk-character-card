@@ -1596,20 +1596,6 @@
   padding-left: 0.4rem;
 }
 
-.habitButton {
-  padding: 0 0.35rem;
-  border: 1px solid var(--cp-cyan-dim);
-  background: none;
-  color: inherit;
-  font-size: var(--fs-label);
-  cursor: var(--cp-cursor-hand);
-}
-
-.habitButton:disabled {
-  opacity: 0.4;
-  cursor: var(--cp-cursor);
-}
-
 .habitForm {
   display: flex;
   gap: 0.3rem;
