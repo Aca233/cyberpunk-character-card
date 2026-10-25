@@ -192,6 +192,11 @@ export function stateSummary(view: PlayerView): string {
       lines.push(
         `${t.name}（${t.id}）：${t.items.map((i) => `${i.name}${i.count > 1 ? `×${i.count}` : ""}`).join("、")}（不在身上）`,
       );
+  const forSale = view.safehouse.forSale.filter((a) => a.locked === null);
+  if (forSale.length > 0)
+    lines.push(
+      `这里有公寓出售（玩家在界面上买下，代码扣钱；正文里可以有中介或广告，不要替玩家买下或白送）：${forSale.map((a) => `${a.name} ${a.price} 欧元：${a.note}`).join("；")}`,
+    );
   const gigs = view.sidegigs;
   if (gigs.active)
     lines.push(
