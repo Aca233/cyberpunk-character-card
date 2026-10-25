@@ -320,7 +320,12 @@ export function stateSummary(view: PlayerView): string {
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   const withMods = (w: string) => {
     const fitted = view.inventory.mods[w] ?? [];
-    return fitted.length > 0 ? `${w}（装着 ${fitted.map((m) => m.id).join("、")}）` : w;
+    const tuned = view.inventory.tuned[w];
+    const extra = [
+      ...(tuned ? [`升到${tuned}`] : []),
+      ...(fitted.length > 0 ? [`装着 ${fitted.map((m) => m.id).join("、")}`] : []),
+    ];
+    return extra.length > 0 ? `${w}（${extra.join("；")}）` : w;
   };
   lines.push(`武器栏：${weapons.length > 0 ? weapons.map(withMods).join("、") : "空手"}`);
   if (view.inventory.iconicVoices.length > 0)
@@ -336,6 +341,10 @@ export function stateSummary(view: PlayerView): string {
   const backpack = Object.entries(view.inventory.backpack);
   if (backpack.length > 0)
     lines.push(`背包：${backpack.map(([id, n]) => `${id}×${n}`).join("、")}`);
+  if (view.inventory.parts > 0)
+    lines.push(
+      `零件：${view.inventory.parts} 个（拆解和升级玩家在界面上做；剧情里得到或花掉写 parts）`,
+    );
   if (view.combat.active) {
     const a = view.combat.active;
     const enemies = [

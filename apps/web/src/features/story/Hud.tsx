@@ -232,6 +232,7 @@ export function SidePanel({
   onStash,
   onAnchor,
   onSquad,
+  onCraft,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -255,6 +256,8 @@ export function SidePanel({
   readonly onAnchor?: ((action: "add" | "remove", npc: string) => void) | undefined;
   /** 小队面板的动作；正在生成时不传，按钮不显示 */
   readonly onSquad?: ((action: SquadAction, npc: string) => void) | undefined;
+  /** 工作台：dismantle 拆成零件，tune 给武器升一档稀有度；正在生成时不传，按钮不显示 */
+  readonly onCraft?: ((action: "dismantle" | "tune", id: string) => void) | undefined;
   /** 打开消息 */
   readonly onPhone: () => void;
   /** 打开地图和路线面板 */
@@ -434,6 +437,9 @@ export function SidePanel({
                 <span className={styles.slotNum}>{n}</span>
                 <span>
                   {id === null ? "空" : itemName(id)}
+                  {id !== null && inventory.tuned[id] && (
+                    <small className={styles.dim}> · {inventory.tuned[id]}</small>
+                  )}
                   {id !== null &&
                     (inventory.mods[id] ?? []).map((m) => (
                       <small key={m.slot} className={styles.dim}>
@@ -455,6 +461,17 @@ export function SidePanel({
                 </span>
                 <span className={styles.gearTools}>
                   {active && <small>手持</small>}
+                  {id !== null && onCraft && inventory.tune[id] && (
+                    <button
+                      type="button"
+                      className={styles.gearAction}
+                      disabled={inventory.parts < inventory.tune[id].parts}
+                      title={`用 ${inventory.tune[id].parts} 个零件升到${inventory.tune[id].to}；要技术 ${inventory.tune[id].tech}`}
+                      onClick={() => onCraft("tune", id)}
+                    >
+                      升级
+                    </button>
+                  )}
                   {id !== null && !active && onEquip && (
                     <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
                       拿上
@@ -552,7 +569,9 @@ export function SidePanel({
             )}
           </>
         )}
-        <p className={styles.gearTitle}>背包</p>
+        <p className={styles.gearTitle}>
+          背包{inventory.parts > 0 && <small> · 零件 {inventory.parts}</small>}
+        </p>
         {backpack.length === 0 ? (
           <p className={styles.dim}>空的。</p>
         ) : (
@@ -568,6 +587,27 @@ export function SidePanel({
                   {to && onEquip && (
                     <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
                       {to === "clothing" ? "穿上" : to === "quick" ? "放进快捷栏" : "装上"}
+                    </button>
+                  )}
+                  {onCraft && inventory.dismantle[id] !== undefined && (
+                    <button
+                      type="button"
+                      className={styles.gearAction}
+                      title={`拆掉一件，得 ${inventory.dismantle[id]} 个零件`}
+                      onClick={() => onCraft("dismantle", id)}
+                    >
+                      拆解
+                    </button>
+                  )}
+                  {onCraft && inventory.tune[id] && (
+                    <button
+                      type="button"
+                      className={styles.gearAction}
+                      disabled={inventory.parts < inventory.tune[id].parts}
+                      title={`用 ${inventory.tune[id].parts} 个零件升到${inventory.tune[id].to}；要技术 ${inventory.tune[id].tech}`}
+                      onClick={() => onCraft("tune", id)}
+                    >
+                      升级
                     </button>
                   )}
                   {onMod &&

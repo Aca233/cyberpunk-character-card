@@ -1,6 +1,14 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { DISCOUNT_FACTORS, discounted, type EconomyState, SERVICES } from "../economy";
+import {
+  DISCOUNT_FACTORS,
+  discounted,
+  type EconomyState,
+  RARITY_LABELS,
+  type Rarity,
+  RaritySchema,
+  SERVICES,
+} from "../economy";
 import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
@@ -10,6 +18,7 @@ import {
   type ItemDef,
   type ItemKind,
   MOD_SLOT_LABELS,
+  type PartsCommand,
   type QuickSlotName,
   SELL_RATE,
   type Shop,
@@ -113,6 +122,7 @@ function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
     def.kind === "weapon" &&
     !draft.weapons.includes(def.id) &&
     (draft.backpack[def.id] ?? 0) < 1;
+  if (gone) Reflect.deleteProperty(draft.tuned, def.id);
   if (!gone || draft.mods[def.id] === undefined) return outcome;
   Reflect.deleteProperty(draft.mods, def.id);
   return ok(`失去 ${def.name}，装在上面的改装件一起没了`);
@@ -487,4 +497,106 @@ export function applyTrade(
     notes: [`卖掉${def.name}（卖给${command.with}）`],
     emit: [{ type: "money", delta: price, reason: `卖给${command.with}：${def.name}` }],
   };
+}
+
+/**
+ * 零件和升级。本作改编：原作 2.0 拆解得到按品质分的零件、用零件升级武器品质；这里合成一种零件，
+ * 拆出和升级要的数量、升级要的技术是自定的，试玩后再调
+ */
+/** 拆一件能得几个零件，按（升过的）稀有度 */
+export const DISMANTLE_PARTS: Readonly<Record<Rarity, number>> = {
+  common: 2,
+  uncommon: 4,
+  rare: 8,
+  epic: 14,
+  legendary: 24,
+};
+/** 升到这一档要几个零件 */
+export const TUNE_PARTS: Readonly<Record<Rarity, number>> = {
+  common: 0,
+  uncommon: 5,
+  rare: 10,
+  epic: 20,
+  legendary: 35,
+};
+/** 升到这一档要多少技术 */
+export const TUNE_TECH: Readonly<Record<Rarity, number>> = {
+  common: 0,
+  uncommon: 3,
+  rare: 5,
+  epic: 8,
+  legendary: 11,
+};
+
+/** 物品现在的稀有度：升过的按升过的，没写稀有度的按普通 */
+export function rarityOf(def: ItemDef, tuned: Readonly<Record<string, Rarity>>): Rarity {
+  return tuned[def.id] ?? def.rarity ?? "common";
+}
+
+export function nextRarity(r: Rarity): Rarity | null {
+  const order = RaritySchema.options;
+  return order[order.indexOf(r) + 1] ?? null;
+}
+
+/** 能拆的：武器、服装、改装件，不朽武器不拆 */
+export function canDismantle(def: ItemDef): boolean {
+  return !def.iconic && (def.kind === "weapon" || def.kind === "clothing" || def.kind === "mod");
+}
+
+export function applyParts(draft: Inventory, command: PartsCommand): ApplyOutcome {
+  if (command.delta === 0) return ok();
+  if (draft.parts + command.delta < 0) {
+    return fail(`零件不够：有 ${draft.parts} 个，要 ${-command.delta} 个`);
+  }
+  draft.parts += command.delta;
+  return ok(
+    `零件 ${command.delta > 0 ? "+" : "−"}${Math.abs(command.delta)}（${command.reason}），现有 ${draft.parts}`,
+  );
+}
+
+export function dismantle(
+  draft: Inventory,
+  id: string,
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  const def = catalog.get(id);
+  if (!def) return fail(`物品表里没有 ${id}`);
+  if (def.iconic) return fail(`${def.name}是不朽武器，不能拆`);
+  if (!canDismantle(def)) return fail(`${def.name}拆不出零件；能拆的是武器、服装和改装件`);
+  const have = draft.backpack[id] ?? 0;
+  if (have < 1) return fail(`背包里没有${def.name}；装备着的要先收起或脱下`);
+  const last = def.kind === "weapon" && !draft.weapons.includes(id) && have === 1;
+  if (last && draft.mods[id] !== undefined) return fail(`${def.name}上还装着改装件，先拆下来`);
+  const gain = DISMANTLE_PARTS[rarityOf(def, draft.tuned)];
+  take(draft, id);
+  draft.parts += gain;
+  if (last) Reflect.deleteProperty(draft.tuned, id);
+  return ok(`拆了${def.name}，得到 ${gain} 个零件，现有 ${draft.parts}`);
+}
+
+export function tune(
+  draft: Inventory,
+  id: string,
+  tech: number,
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  const def = catalog.get(id);
+  if (!def) return fail(`物品表里没有 ${id}`);
+  if (def.kind !== "weapon") return fail("只有武器能升稀有度");
+  if (!draft.weapons.includes(id) && (draft.backpack[id] ?? 0) < 1) {
+    return fail(`身上没有${def.name}`);
+  }
+  const from = rarityOf(def, draft.tuned);
+  const to = nextRarity(from);
+  if (to === null) return fail(`${def.name}已经是${RARITY_LABELS[from]}，不能再升`);
+  if (tech < TUNE_TECH[to]) {
+    return fail(`升到${RARITY_LABELS[to]}要技术 ${TUNE_TECH[to]}，你的技术是 ${tech}`);
+  }
+  const cost = TUNE_PARTS[to];
+  if (draft.parts < cost) {
+    return fail(`零件不够：升到${RARITY_LABELS[to]}要 ${cost} 个，现有 ${draft.parts}`);
+  }
+  draft.parts -= cost;
+  draft.tuned[id] = to;
+  return ok(`${def.name}从${RARITY_LABELS[from]}升到${RARITY_LABELS[to]}，用掉 ${cost} 个零件`);
 }

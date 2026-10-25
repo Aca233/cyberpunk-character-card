@@ -73,12 +73,18 @@ import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/hea
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
 import {
+  canDismantle,
   currentStock,
+  DISMANTLE_PARTS,
   itemCatalog,
+  nextRarity,
+  rarityOf,
   restockDue,
   sellValue,
   shopList,
   shopShelf,
+  TUNE_PARTS,
+  TUNE_TECH,
 } from "./systems/inventory/apply";
 import {
   CLOTHING_SLOT_LABELS,
@@ -860,6 +866,37 @@ export function projectState(
       healing: inventory.healing,
       grenade: inventory.grenade,
       backpack: inventory.backpack,
+      /** 零件：拆解得来，给武器升稀有度 */
+      parts: inventory.parts,
+      /** 升过稀有度的武器：id → 稀有度名 */
+      tuned: Object.fromEntries(
+        Object.entries(inventory.tuned).map(([id, r]) => [id, RARITY_LABELS[r]]),
+      ) as Readonly<Record<string, string>>,
+      /** 背包里能拆的东西各拆出几个零件 */
+      dismantle: Object.fromEntries(
+        Object.keys(inventory.backpack).flatMap((id) => {
+          const def = items.get(id);
+          return def && canDismantle(def)
+            ? [[id, DISMANTLE_PARTS[rarityOf(def, inventory.tuned)]]]
+            : [];
+        }),
+      ) as Readonly<Record<string, number>>,
+      /** 身上的武器（武器格和背包里的）升一档：到哪一档、要几个零件、要多少技术；到顶的不列 */
+      tune: Object.fromEntries(
+        [
+          ...new Set([
+            ...inventory.weapons.filter((w): w is string => w !== null),
+            ...Object.keys(inventory.backpack),
+          ]),
+        ].flatMap((id) => {
+          const def = items.get(id);
+          if (def?.kind !== "weapon") return [];
+          const to = nextRarity(rarityOf(def, inventory.tuned));
+          return to === null
+            ? []
+            : [[id, { to: RARITY_LABELS[to], parts: TUNE_PARTS[to], tech: TUNE_TECH[to] }]];
+        }),
+      ) as Readonly<Record<string, { to: string; parts: number; tech: number }>>,
       /** 穿着的服装，按格子顺序；没穿的格子不列 */
       clothing: CLOTHING_SLOTS.flatMap((slot) => {
         const id = inventory.clothing[slot];

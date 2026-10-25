@@ -321,6 +321,21 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  const craftAction = useCallback(
+    async (action: "dismantle" | "tune", id: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "craft", action, id },
+        });
+      } catch (error) {
+        warn("craft", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const squadAction = useCallback(
     async (action: "accept" | "decline" | "dismiss" | "pay", npc: string) => {
       try {
@@ -484,6 +499,7 @@ export function StoryScreen() {
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
         onAnchor={busy ? undefined : (action, npc) => void anchorAction(action, npc)}
         onSquad={busy ? undefined : (action, npc) => void squadAction(action, npc)}
+        onCraft={busy ? undefined : (action, id) => void craftAction(action, id)}
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}

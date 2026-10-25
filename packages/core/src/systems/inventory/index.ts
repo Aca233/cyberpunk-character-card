@@ -4,13 +4,17 @@ import {
   applyItem,
   applyMod,
   applyOutfit,
+  applyParts,
   applyTrade,
+  dismantle,
   itemCatalog,
   markSold,
   recharge,
   spend,
   stashMove,
+  tune,
 } from "./apply";
+import { partsRules } from "./prompt";
 import {
   type InventoryInternal,
   InventoryInternalSchemas,
@@ -18,13 +22,15 @@ import {
   InventoryStateSchema,
   type ItemCommand,
   ItemCommandSchema,
+  type PartsCommand,
+  PartsCommandSchema,
   type TradeCommand,
   TradeCommandSchema,
 } from "./schema";
 
 export const inventory = defineSystem<
   InventoryState,
-  ItemCommand | TradeCommand,
+  ItemCommand | TradeCommand | PartsCommand,
   InventoryInternal
 >({
   id: "inventory",
@@ -40,9 +46,11 @@ export const inventory = defineSystem<
     clothing: {},
     outfit: {},
     mods: {},
+    parts: 0,
+    tuned: {},
     shopStock: {},
   }),
-  commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
+  commands: { item: ItemCommandSchema, trade: TradeCommandSchema, parts: PartsCommandSchema },
   internal: InventoryInternalSchemas,
   apply(draft, command, ctx) {
     switch (command.type) {
@@ -62,6 +70,12 @@ export const inventory = defineSystem<
         return stashMove(draft, command.action, command.id);
       case "inventory.mod":
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
+      case "parts":
+        return applyParts(draft, command);
+      case "inventory.dismantle":
+        return dismantle(draft, command.id, itemCatalog(ctx.data));
+      case "inventory.tune":
+        return tune(draft, command.id, command.tech, itemCatalog(ctx.data));
     }
   },
   on: {
@@ -72,6 +86,7 @@ export const inventory = defineSystem<
       recharge(draft);
     },
   },
+  rules: [partsRules],
 });
 
 export * from "./apply";

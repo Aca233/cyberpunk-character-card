@@ -205,6 +205,10 @@ export const InventoryStateSchema = z.object({
   outfit: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 武器上装着的改装件：武器 id → 位置 → 改装件 id；同一种武器的几把共用一份 */
   mods: z.record(z.string(), z.partialRecord(ModSlotSchema, z.string().min(1))).default({}),
+  /** 拆解得来的零件，用来给武器升稀有度；旧存档默认 0 */
+  parts: z.number().int().min(0).default(0),
+  /** 升过稀有度的武器：武器 id → 现在的稀有度；同一种武器的几把共用一份 */
+  tuned: z.record(z.string(), RaritySchema).default({}),
   /** 各家店这一批卖掉了多少：店 id -> 这一批从什么时候算起、每件卖了几个；满 3 个游戏日补满 */
   shopStock: z
     .record(
@@ -281,6 +285,17 @@ export const InventoryInternalSchemas = {
     action: z.enum(["out", "in"]),
     id: z.string().min(1),
   }),
+  /** 界面动作：把背包里的一件拆成零件 */
+  "inventory.dismantle": z.object({
+    type: z.literal("inventory.dismantle"),
+    id: z.string().min(1),
+  }),
+  /** 界面动作：用零件给武器升一档稀有度；tech 是玩家角色的技术，由代码带上 */
+  "inventory.tune": z.object({
+    type: z.literal("inventory.tune"),
+    id: z.string().min(1),
+    tech: z.number().int().min(0),
+  }),
   /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */
   "inventory.mod": z.object({
     type: z.literal("inventory.mod"),
@@ -317,3 +332,15 @@ export const ShopListSchema = z.array(ShopSchema);
 
 /** 卖给商店的回收价：最多按参考价的两成（从店里买来的转卖上限），防低买高卖 */
 export const SELL_RATE = 0.2;
+
+/** 模型使用：剧情里得到或花掉零件 */
+export const PartsCommandSchema = z
+  .object({
+    type: z.literal("parts"),
+    delta: z.number().int().min(-60).max(60),
+    reason: z.string().min(1),
+  })
+  .describe(
+    "零件：搜刮、拆了场景里的设备、别人送的写正数，剧情里花掉写负数；玩家自己拆解和给武器升级在界面上做，不写这个",
+  );
+export type PartsCommand = z.infer<typeof PartsCommandSchema>;
