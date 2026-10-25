@@ -28,7 +28,7 @@ import {
 } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { HealthStateSchema } from "../systems/health";
-import { itemCatalog } from "../systems/inventory/apply";
+import { itemCatalog, shopList } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
@@ -915,6 +915,12 @@ export async function runNarratorTurn(
   if (!trip && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
     facts.hideout = true;
   }
+  // 人在店里：叙事模型写的 trade buy 买这家货架上的东西时，和界面买一样占库存；这一轮出了门不算
+  const shopHereNow =
+    trip || here === undefined
+      ? undefined
+      : shopList(deps.data ?? {}).find((s) => s.location === here);
+  if (shopHereNow) facts.shop = { id: shopHereNow.id, at: world.time };
   // 开了斯安威斯坦：先扣人性再结算；能不能开（clutch、义体能用）由后端在调模型前拦下
   if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);

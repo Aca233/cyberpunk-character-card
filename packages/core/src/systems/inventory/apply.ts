@@ -277,6 +277,25 @@ export function shopList(data: Readonly<Record<string, unknown>>): readonly Shop
   return list;
 }
 
+/** 这一轮人在哪家店里：回合流程把店 id 和游戏时间放进事实 shop，叙事模型写的买卖据此占库存 */
+export interface ShopHere {
+  readonly id: string;
+  readonly name: string;
+  readonly shelf: readonly string[];
+  readonly at: number;
+}
+
+export function shopHere(
+  fact: unknown,
+  data: Readonly<Record<string, unknown>>,
+): ShopHere | undefined {
+  if (typeof fact !== "object" || fact === null) return undefined;
+  const { id, at } = fact as { id?: unknown; at?: unknown };
+  if (typeof id !== "string" || typeof at !== "number") return undefined;
+  const shop = shopList(data).find((s) => s.id === id);
+  return shop ? { id, name: shop.name, shelf: shop.shelf, at } : undefined;
+}
+
 /** 货架上的一件：价格按店的系数折算到十位；locked 是不卖的原因 */
 export interface ShopItem {
   readonly def: ItemDef;
@@ -447,6 +466,7 @@ export function applyTrade(
   command: TradeCommand,
   catalog: ReadonlyMap<string, ItemDef>,
   economy: EconomyState,
+  shop?: ShopHere,
 ): ApplyOutcome {
   if (command.action === "service") {
     const service = command.service;
@@ -472,6 +492,14 @@ export function applyTrade(
     const price = discounted(def.price, command.discount);
     if (price > economy.eddies) {
       return fail(`欧元不够：${def.name}要 ${price}，身上只有 ${economy.eddies}`);
+    }
+    // 人在店里、买的是这家货架上的东西：和界面买一样占这一批的库存
+    if (shop?.shelf.includes(def.id)) {
+      const stock = currentStock(draft.shopStock[shop.id], shop.at);
+      if (stockOf(def) - (stock?.sold[def.id] ?? 0) < 1) {
+        return fail(`${shop.name}的${def.name}这一批卖完了，等补货`);
+      }
+      markSold(draft, shop.id, def.id, shop.at);
     }
     draft.backpack[def.id] = (draft.backpack[def.id] ?? 0) + 1;
     return {

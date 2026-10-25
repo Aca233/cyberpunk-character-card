@@ -10,6 +10,7 @@ import {
   itemCatalog,
   markSold,
   recharge,
+  shopHere,
   spend,
   stashMove,
   tune,
@@ -57,7 +58,13 @@ export const inventory = defineSystem<
       case "item":
         return applyItem(draft, command, itemCatalog(ctx.data));
       case "trade":
-        return applyTrade(draft, command, itemCatalog(ctx.data), ctx.read<EconomyState>("economy"));
+        return applyTrade(
+          draft,
+          command,
+          itemCatalog(ctx.data),
+          ctx.read<EconomyState>("economy"),
+          shopHere(ctx.facts.shop, ctx.data),
+        );
       case "inventory.spend":
         return spend(draft, command.slot);
       case "inventory.recharge":
