@@ -1107,21 +1107,6 @@
   gap: 0.4rem;
 }
 
-.gearAction {
-  padding: 0 0.3rem;
-  border: 1px solid var(--cp-cyan-dim);
-  background: none;
-  color: var(--cp-cyan);
-  font: inherit;
-  font-size: 0.7rem;
-  cursor: var(--cp-cursor-hand);
-}
-
-.gearAction:hover,
-.gearAction:focus-visible {
-  border-color: var(--cp-cyan);
-}
-
 .slotNum {
   display: grid;
   place-items: center;

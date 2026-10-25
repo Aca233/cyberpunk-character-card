@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
@@ -87,14 +88,12 @@ export function StashPanel({
                             {count > 1 && ` ×${count}`}
                           </span>
                           {move && (
-                            <button
-                              type="button"
-                              className={styles.gearAction}
+                            <ActionButton
                               disabled={full && !box.items.some((i) => i.id === id)}
                               onClick={() => move("store", id, box.id)}
                             >
                               放进去
-                            </button>
+                            </ActionButton>
                           )}
                         </li>
                       ))}
@@ -120,13 +119,9 @@ export function StashPanel({
                             {i.count > 1 && ` ×${i.count}`}
                           </span>
                           {move && (
-                            <button
-                              type="button"
-                              className={styles.gearAction}
-                              onClick={() => move("take", i.id, box.id)}
-                            >
+                            <ActionButton onClick={() => move("take", i.id, box.id)}>
                               拿出来
-                            </button>
+                            </ActionButton>
                           )}
                         </li>
                       ))}

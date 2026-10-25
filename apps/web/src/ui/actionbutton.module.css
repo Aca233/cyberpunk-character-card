@@ -1,0 +1,38 @@
+/* 行内小按钮：和 Button 同一张原作标签页底（tab.bg 九宫格），字号小、青色 */
+.action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 0.45rem;
+  color: var(--cp-cyan);
+  font: inherit;
+  font-size: 0.7rem;
+  isolation: isolate;
+  cursor: var(--cp-cursor-hand);
+  transition: color var(--dur-flash);
+}
+
+.bg {
+  z-index: -1;
+  opacity: 0.16;
+  transition: opacity var(--dur-flash);
+}
+
+.action:disabled {
+  color: var(--cp-text-faint);
+  cursor: default;
+}
+
+.action:focus-visible .bg,
+.action[aria-expanded="true"] .bg,
+.action:hover:not(:disabled) .bg {
+  opacity: 0.32;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action,
+  .bg {
+    transition: none;
+  }
+}

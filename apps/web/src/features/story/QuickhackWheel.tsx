@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useState } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import styles from "./story.module.css";
 
 interface Program {
@@ -33,15 +34,13 @@ export function QuickhackWheel({
 
   return (
     <div className={styles.quickhack}>
-      <button
-        type="button"
-        className={styles.gearAction}
-        aria-expanded={open}
+      <ActionButton
+        expanded={open}
         title="快速破解轮盘：选一个程序写进输入框"
         onClick={() => setOpen((o) => !o)}
       >
         快速破解
-      </button>
+      </ActionButton>
       {open && (
         <div className={styles.wheel} role="menu" aria-label="快速破解">
           <div className={styles.wheelCenter}>

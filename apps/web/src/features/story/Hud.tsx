@@ -2,6 +2,7 @@ import { characterRules } from "@cp/core";
 import { Fragment } from "react";
 import type { AssetId } from "../../assets";
 import { DIFFICULTY_LABELS } from "../../labels";
+import { ActionButton } from "../../ui/ActionButton";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Button } from "../../ui/Button";
@@ -480,15 +481,13 @@ export function SidePanel({
                         {" · "}
                         {itemName(m.id)}
                         {onMod && (
-                          <button
-                            type="button"
-                            className={styles.gearAction}
-                            aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
+                          <ActionButton
+                            label={`从${itemName(id)}上拆下${itemName(m.id)}`}
                             title="拆下放回背包"
                             onClick={() => onMod("detach", id, m.id)}
                           >
                             ×
-                          </button>
+                          </ActionButton>
                         )}
                       </small>
                     ))}
@@ -496,29 +495,19 @@ export function SidePanel({
                 <span className={styles.gearTools}>
                   {active && <small>手持</small>}
                   {id !== null && onCraft && inventory.tune[id] && (
-                    <button
-                      type="button"
-                      className={styles.gearAction}
+                    <ActionButton
                       disabled={inventory.parts < inventory.tune[id].parts}
                       title={`用 ${inventory.tune[id].parts} 个零件升到${inventory.tune[id].to}；要技术 ${inventory.tune[id].tech}`}
                       onClick={() => onCraft("tune", id)}
                     >
                       升级
-                    </button>
+                    </ActionButton>
                   )}
                   {id !== null && !active && onEquip && (
-                    <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
-                      拿上
-                    </button>
+                    <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
                   )}
                   {id !== null && onUnequip && (
-                    <button
-                      type="button"
-                      className={styles.gearAction}
-                      onClick={() => onUnequip(id)}
-                    >
-                      收起
-                    </button>
+                    <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>
                   )}
                 </span>
               </li>
@@ -537,13 +526,7 @@ export function SidePanel({
                         {itemName(q.id)} {q.charges}/{q.max}
                       </span>
                       {onUnequip && (
-                        <button
-                          type="button"
-                          className={styles.gearAction}
-                          onClick={() => onUnequip(q.id)}
-                        >
-                          放回背包
-                        </button>
+                        <ActionButton onClick={() => onUnequip(q.id)}>放回背包</ActionButton>
                       )}
                     </li>
                   ),
@@ -560,15 +543,7 @@ export function SidePanel({
                   <span>
                     <small className={styles.dim}>{c.label}</small> {itemName(c.id)}
                   </span>
-                  {onUnequip && (
-                    <button
-                      type="button"
-                      className={styles.gearAction}
-                      onClick={() => onUnequip(c.id)}
-                    >
-                      脱下
-                    </button>
-                  )}
+                  {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
                 </li>
               ))}
             </ul>
@@ -580,24 +555,20 @@ export function SidePanel({
             )}
             {onOutfit && (
               <div className={styles.gearTools}>
-                <button
-                  type="button"
-                  className={styles.gearAction}
+                <ActionButton
                   disabled={inventory.clothing.length === 0}
                   title="把身上穿着的记成一整套，之后一下换回来"
                   onClick={() => onOutfit("save")}
                 >
                   存为整套外观
-                </button>
+                </ActionButton>
                 {inventory.outfit.length > 0 && (
-                  <button
-                    type="button"
-                    className={styles.gearAction}
+                  <ActionButton
                     title="照存下的整套换好；外观里没有的格子脱下放回背包"
                     onClick={() => onOutfit("wear")}
                   >
                     换上整套外观
-                  </button>
+                  </ActionButton>
                 )}
               </div>
             )}
@@ -619,41 +590,32 @@ export function SidePanel({
                     {count > 1 && <b> ×{count}</b>}
                   </span>
                   {to && onEquip && (
-                    <button type="button" className={styles.gearAction} onClick={() => onEquip(id)}>
+                    <ActionButton onClick={() => onEquip(id)}>
                       {to === "clothing" ? "穿上" : to === "quick" ? "放进快捷栏" : "装上"}
-                    </button>
+                    </ActionButton>
                   )}
                   {onCraft && inventory.dismantle[id] !== undefined && (
-                    <button
-                      type="button"
-                      className={styles.gearAction}
+                    <ActionButton
                       title={`拆掉一件，得 ${inventory.dismantle[id]} 个零件`}
                       onClick={() => onCraft("dismantle", id)}
                     >
                       拆解
-                    </button>
+                    </ActionButton>
                   )}
                   {onCraft && inventory.tune[id] && (
-                    <button
-                      type="button"
-                      className={styles.gearAction}
+                    <ActionButton
                       disabled={inventory.parts < inventory.tune[id].parts}
                       title={`用 ${inventory.tune[id].parts} 个零件升到${inventory.tune[id].to}；要技术 ${inventory.tune[id].tech}`}
                       onClick={() => onCraft("tune", id)}
                     >
                       升级
-                    </button>
+                    </ActionButton>
                   )}
                   {onMod &&
                     (inventory.modTargets[id] ?? []).map((w) => (
-                      <button
-                        key={w}
-                        type="button"
-                        className={styles.gearAction}
-                        onClick={() => onMod("attach", w, id)}
-                      >
+                      <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
                         装到{itemName(w)}
-                      </button>
+                      </ActionButton>
                     ))}
                 </li>
               );
@@ -744,23 +706,17 @@ export function SidePanel({
                     {onAnchor &&
                       npc.alive &&
                       (view.psychosis.anchors.some((a) => a.npc === npc.id) ? (
-                        <button
-                          type="button"
-                          className={styles.gearAction}
-                          onClick={() => onAnchor("remove", npc.id)}
-                        >
+                        <ActionButton onClick={() => onAnchor("remove", npc.id)}>
                           不再当锚点
-                        </button>
+                        </ActionButton>
                       ) : (
                         view.psychosis.anchors.length < view.psychosis.max && (
-                          <button
-                            type="button"
-                            className={styles.gearAction}
+                          <ActionButton
                             title="过命交情的人：快撑不住的时候能把你拉回来；最多 3 个"
                             onClick={() => onAnchor("add", npc.id)}
                           >
                             设为锚点
-                          </button>
+                          </ActionButton>
                         )
                       ))}
                     <p className={styles.npcMemoryTitle}>共同记忆</p>

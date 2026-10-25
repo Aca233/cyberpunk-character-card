@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import styles from "./story.module.css";
 
 /** 原作入侵协议矩阵的代码 */
@@ -116,11 +117,7 @@ export function BreachMatrix({ onDone }: { readonly onDone: (solved: number) => 
         {done
           ? `断开连接：解开 ${count} 段，掷骰时一起算`
           : "第一下选第一行，之后按列、按行交替；序列要在缓冲区里连着出现"}
-        {!done && (
-          <button type="button" className={styles.gearAction} onClick={() => finish(count)}>
-            断开
-          </button>
-        )}
+        {!done && <ActionButton onClick={() => finish(count)}>断开</ActionButton>}
       </p>
     </section>
   );
