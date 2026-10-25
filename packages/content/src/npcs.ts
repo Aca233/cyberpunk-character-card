@@ -123,7 +123,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       name: "杰克·威尔斯",
       alias: "杰克",
       pronoun: "他",
-      role: "佣兵，海伍德长大的独行侠，以前混过瓦伦蒂诺帮",
+      role: "佣兵，海伍德长大的独狼，以前混过瓦伦蒂诺帮",
       look: "体格魁梧，拉丁裔，留着短胡子，脖子上挂着金链子，夹克底下别着两把手枪；说起摩托眼睛就发亮。",
       voice: "嗓门洪亮，爱笑，爱拍人肩膀，口头禅随口就来；讲义气，答应的事一定办到。",
       samples: [
@@ -151,7 +151,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       want: "让来生和她的生意稳稳当当；只接赚得到钱、又查不到她头上的活",
       limit: "把麻烦带进来生、让人顺着线索查到她；欠账不还",
       secret:
-        "年轻时是出了名的独行侠，一场车祸伤了内脏才退下来；和一个早就死了的摇滚明星有过一段，从不提",
+        "年轻时是出了名的独狼，一场车祸伤了内脏才退下来；和一个早就死了的摇滚明星有过一段，从不提",
       home: "afterlife",
       canon: true,
     },
