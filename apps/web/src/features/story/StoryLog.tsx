@@ -327,6 +327,7 @@ export function ChoiceList({
               className={styles.choice}
               disabled={disabled}
               data-check={c.checkId !== null || undefined}
+              data-short={short > 0 || undefined}
               title={short > 0 ? `${c.gate?.attributeLabel}差 ${short} 点` : undefined}
               onClick={() => onChoose(i)}
             >

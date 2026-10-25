@@ -657,7 +657,13 @@
   gap: 0.3rem;
 }
 
+/* 剧情选项：照原作 dialog.inkwidget 的 DialogChoiceLogicController。
+   字色 dialogchoicesstyle Choice/Default = MainColors.Blue，门槛不够 Choice/Inactive = MainColors.MildRed；
+   选中底 selectedBg 是 fullscreen_shapes 的矢量形状 dialogItem（88×88，右下斜切 24，九宫格右 25、下 25，4K），
+   染 Choice.fontColor、实心，LinearWipe 从左往右擦入；底上的字按 Choice/Black 用黑色 */
 .choice {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -666,28 +672,41 @@
   font: inherit;
   font-family: var(--font-body);
   text-align: left;
-  color: var(--cp-text);
+  color: var(--cp-cyan);
   background: transparent;
   border: 0;
-  border-left: 2px solid transparent;
   cursor: var(--cp-cursor-hand);
-  transition:
-    background var(--dur-flash),
-    border-color var(--dur-flash),
-    color var(--dur-flash);
+  transition: color var(--dur-flash);
 }
 
-.choice:hover:not(:disabled),
-.choice:focus-visible {
-  outline: none;
-  color: var(--cp-yellow);
-  border-left-color: var(--cp-yellow);
-  background: linear-gradient(90deg, rgb(252 238 10 / 10%), transparent 70%);
+.choice::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--cp-cyan);
+  clip-path: polygon(0 0, 0 0, 0 calc(100% - 12px), 0 100%, 0 100%);
+  transition: clip-path var(--dur-flash);
 }
 
 .choice:disabled {
   cursor: var(--cp-cursor-invalid);
   color: var(--cp-text-faint);
+}
+
+.choice[data-short] {
+  color: #ae3b36;
+}
+
+.choice:hover:not(:disabled),
+.choice:focus-visible {
+  outline: none;
+  color: #000;
+}
+
+.choice:hover:not(:disabled)::before,
+.choice:focus-visible::before {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
 }
 
 .choice[data-check] .choiceText::after {
@@ -708,6 +727,11 @@
   font-size: var(--fs-label);
   color: var(--cp-yellow);
   white-space: nowrap;
+}
+
+.choice:focus-visible :is(.num, .source),
+.choice:hover:not(:disabled) :is(.num, .source) {
+  color: inherit;
 }
 
 .voice {
