@@ -62,8 +62,11 @@ export function Asset({ id, tint, height, width, alt, className, style }: AssetP
 interface NineSliceProps {
   readonly id: AssetId;
   readonly tint: string;
-  /** 切线离边缘多少原图像素；四边相同 */
-  readonly slice: number;
+  /**
+   * 切线离边缘多少原图像素：一个数四边相同；四个数按 CSS 顺序 上、右、下、左
+   * （原作 inkatlas 的 nineSliceScaleRect 是 Left、Top、Right、Bottom，抄过来时注意换顺序）
+   */
+  readonly slice: number | readonly [number, number, number, number];
   readonly className?: string | undefined;
   readonly style?: CSSProperties;
 }
@@ -75,6 +78,9 @@ interface NineSliceProps {
 export function NineSlice({ id, tint, slice, className, style }: NineSliceProps) {
   const info = asset(id);
   if (!info) return <MissingAsset id={id} style={{ position: "absolute", inset: 0 }} />;
+  const sides = typeof slice === "number" ? [slice] : slice;
+  const cut = sides.join(" ");
+  const widths = sides.map((s) => `${s / info.scale}px`).join(" ");
   return (
     <span
       aria-hidden
@@ -82,7 +88,7 @@ export function NineSlice({ id, tint, slice, className, style }: NineSliceProps)
       style={{
         ...style,
         backgroundColor: tint,
-        WebkitMaskBoxImage: `url("${info.url}") ${slice} fill / ${slice / info.scale}px stretch`,
+        WebkitMaskBoxImage: `url("${info.url}") ${cut} fill / ${widths} stretch`,
       }}
     />
   );

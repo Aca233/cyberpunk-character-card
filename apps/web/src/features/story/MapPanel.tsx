@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
-import { Asset, MissingAsset } from "../../ui/Asset";
+import { Asset, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import {
   DISTRICT_SHAPES,
@@ -181,6 +181,13 @@ function loadHidden(): ReadonlySet<LegendKey> {
 
 const POI_COUNT = new Map<MapPoiKind, number>();
 for (const poi of MAP_POIS) POI_COUNT.set(poi.kind, (POI_COUNT.get(poi.kind) ?? 0) + 1);
+
+/**
+ * 筛选格子和方框的九宫格切线：原作 atlas_shapes_sync.inkatlas 的 nineSliceScaleRect（2160p 图的像素），
+ * 原文是 左、上、右、下，这里换成 CSS 的 上、右、下、左。cell 20/20/30/30，color 9/9/18/21
+ */
+const CELL_SLICE = [20, 30, 30, 20] as const;
+const BOX_SLICE = [9, 18, 21, 9] as const;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -818,7 +825,39 @@ export function MapPanel({
                     title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
                     onClick={() => toggleLegend(l.key)}
                   >
-                    <i className={styles.mapFilterBox} aria-hidden="true" />
+                    {/* 原作 FiltersListItem：cell_bg 底、cell_fg 框；方框是 color_bg 底、color_fg 框、color_bg 填色 */}
+                    <NineSlice
+                      id="map.filterCellBg"
+                      tint="var(--f-bg)"
+                      slice={CELL_SLICE}
+                      className={styles.mapFilterLayer}
+                    />
+                    <NineSlice
+                      id="map.filterCellFg"
+                      tint="var(--f-frame)"
+                      slice={CELL_SLICE}
+                      className={styles.mapFilterLayer}
+                    />
+                    <span className={styles.mapFilterBox} aria-hidden="true">
+                      <NineSlice
+                        id="map.filterBoxBg"
+                        tint="var(--f-box-bg)"
+                        slice={BOX_SLICE}
+                        className={styles.mapFilterBoxBg}
+                      />
+                      <NineSlice
+                        id="map.filterBoxFg"
+                        tint="var(--f-box-frame)"
+                        slice={BOX_SLICE}
+                        className={styles.mapFilterLayer}
+                      />
+                      <NineSlice
+                        id="map.filterBoxBg"
+                        tint="var(--f-box)"
+                        slice={BOX_SLICE}
+                        className={styles.mapFilterBoxFill}
+                      />
+                    </span>
                     <span className={styles.mapFilterIcon} aria-hidden="true">
                       {l.icon}
                     </span>

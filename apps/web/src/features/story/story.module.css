@@ -2261,59 +2261,87 @@ ul.mapLegend > li {
   margin-bottom: 0.5rem;
 }
 
-/* 筛选开关：关是红字暗红框、空方框、图标变暗；开是青字 MildBlue 框、方框填青；悬停 FaintBlue 底青框 */
+/*
+ * 筛选开关：原作 FiltersListItem 的贴图层（atlas_shapes_sync 的 cell_bg、cell_fg、color_bg、color_fg，九宫格拉伸），
+ * 各层颜色走下面的变量，三态照 CustomFilter：Default 关、Selected 开、Hover 悬停（悬停时盖过开关状态，和原作一样）
+ *   --f-bg bgColor · --f-frame frameColor · --f-box-frame checkboxFrameColor
+ *   --f-box-bg checkBoxBackgroundColor（透明度 checkBoxOpacity 0 / 1 / 1）· --f-box checkBoxColor
+ */
 .mapFilter {
+  --f-bg: var(--filter-bg);
+  --f-frame: var(--filter-off-frame);
+  --f-box-frame: var(--filter-off-frame);
+  --f-box-bg: var(--filter-bg);
+  --f-box-bg-opacity: 0;
+  --f-box: var(--filter-bg);
+  position: relative;
+  isolation: isolate;
   flex: 1;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.25rem 0.45rem;
-  border: 1px solid var(--filter-off-frame);
-  background: var(--filter-bg);
+  min-height: 1.75rem;
+  /* 右下是斜切角，右边多留一点 */
+  padding: 0.25rem 0.9rem 0.25rem 0.5rem;
+  border: 0;
+  background: none;
   color: var(--filter-off);
   font: inherit;
   font-size: var(--fs-label);
   text-align: left;
   cursor: var(--cp-cursor-hand);
-  transition:
-    background var(--dur-flash),
-    border-color var(--dur-flash),
-    color var(--dur-flash);
+  transition: color var(--dur-flash);
 }
 
 .mapFilter[aria-pressed="true"] {
-  border-color: var(--filter-on-frame);
+  --f-frame: var(--filter-on-frame);
+  --f-box-frame: var(--filter-on-frame);
+  --f-box-bg: var(--filter-hover-bg);
+  --f-box-bg-opacity: 1;
+  --f-box: var(--filter-on);
   color: var(--filter-on);
 }
 
 .mapFilter:hover,
 .mapFilter:focus-visible {
+  --f-bg: var(--filter-hover-bg);
+  --f-frame: var(--filter-on);
+  --f-box-frame: var(--filter-on-frame);
+  --f-box-bg: var(--filter-bg);
+  --f-box-bg-opacity: 1;
+  --f-box: var(--filter-on);
   outline: none;
-  border-color: var(--filter-on);
-  background: var(--filter-hover-bg);
   color: var(--filter-on);
 }
 
+/* 贴图层垫在文字下面 */
+.mapFilterLayer {
+  z-index: -1;
+  transition: background-color var(--dur-flash);
+}
+
+/* 方框按 1080p 原图大小，15×16 */
 .mapFilterBox {
+  position: relative;
+  isolation: isolate;
   flex: none;
-  width: 0.75rem;
-  height: 0.75rem;
-  border: 1px solid var(--filter-off-frame);
-  background: var(--filter-bg);
+  width: 15px;
+  height: 16px;
+}
+
+.mapFilterBoxBg {
+  z-index: -1;
+  opacity: var(--f-box-bg-opacity);
   transition:
-    background var(--dur-flash),
-    border-color var(--dur-flash);
+    background-color var(--dur-flash),
+    opacity var(--dur-flash);
 }
 
-.mapFilter[aria-pressed="true"] .mapFilterBox {
-  border-color: var(--filter-on-frame);
-  background: var(--filter-on);
-  box-shadow: inset 0 0 0 2px var(--filter-hover-bg);
-}
-
-.mapFilter:hover .mapFilterBox {
-  border-color: var(--filter-on-frame);
+/* 填色比方框小一圈 */
+.mapFilterBox .mapFilterBoxFill {
+  inset: 3px;
+  transition: background-color var(--dur-flash);
 }
 
 .mapFilterIcon {
