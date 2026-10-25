@@ -74,5 +74,5 @@ export const gameData: Readonly<Record<string, unknown>> = {
   jobTemplates,
   sidegigs,
   apartments,
-  // 原剧第 1–3 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
+  // 原剧第 1–6 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };
