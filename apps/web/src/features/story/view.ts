@@ -250,6 +250,16 @@ export function diffViews(prev: View, next: View): Toast[] {
     }
   }
 
+  // 扫描器上新挂的警情
+  for (const a of next.ncpd.alerts) {
+    if (!prev.ncpd.alerts.some((p) => p.id === a.id))
+      out.push({
+        icon: "notify.attention",
+        text: `NCPD 警情：${a.label}（${a.locationName}）`,
+        tone: "info",
+      });
+  }
+
   // 悬赏：新挂、涨价、了结都弹一条
   for (const b of next.heat.bounties) {
     const before = prev.heat.bounties.find((p) => p.id === b.id);

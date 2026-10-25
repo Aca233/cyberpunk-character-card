@@ -1,7 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
-import { applyBounty, applyEvent, applyHeat, tickHeat } from "./apply";
+import { applyBounty, applyEvent, applyHeat, applyRelief, tickHeat } from "./apply";
 import { eventRules, heatRules } from "./prompt";
 import {
   type BountyCommand,
@@ -11,6 +11,8 @@ import {
   HEAT_MAX,
   type HeatCommand,
   HeatCommandSchema,
+  type HeatRelief,
+  HeatReliefSchema,
   type HeatState,
   HeatStateSchema,
 } from "./schema";
@@ -24,42 +26,46 @@ function districtOf(
 }
 
 /** 警方热度：事件按目击和动静推导，随时间、换城区和贿赂下降；贿赂的钱交给欧元系统扣 */
-export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyCommand>({
-  id: "heat",
-  dependsOn: ["world", "economy", "stealth"],
-  state: HeatStateSchema,
-  initial: () => ({
-    stars: 0,
-    lastSeenAt: null,
-    decayedAt: null,
-    district: null,
-    districtDay: null,
-    recent: [],
-    bounties: [],
-  }),
-  commands: { event: EventCommandSchema, heat: HeatCommandSchema, bounty: BountyCommandSchema },
-  apply(draft, command, ctx) {
-    if (command.type === "heat") return applyHeat(draft, command, ctx.now);
-    if (command.type === "bounty") return applyBounty(draft, command, ctx.now);
-    const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
-    return applyEvent(draft, command, district, ctx.now);
-  },
-  tick(draft, span, ctx) {
-    tickHeat(draft, span, districtOf(ctx.read<WorldClockState>("world").location, ctx.data));
-  },
-  on: {
-    // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星
-    "scene.end": (draft, ctx) => {
-      const alert = ctx.read<StealthState>("stealth");
-      const ended = ctx.read<WorldClockState>("world").scene - 1;
-      if (alert.scene === ended && alert.peak >= ALERT_HEAT_LEVEL) {
-        draft.stars = Math.min(HEAT_MAX, draft.stars + 1);
-        draft.lastSeenAt = ctx.now;
-      }
+export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyCommand, HeatRelief>(
+  {
+    id: "heat",
+    dependsOn: ["world", "economy", "stealth"],
+    state: HeatStateSchema,
+    initial: () => ({
+      stars: 0,
+      lastSeenAt: null,
+      decayedAt: null,
+      district: null,
+      districtDay: null,
+      recent: [],
+      bounties: [],
+    }),
+    commands: { event: EventCommandSchema, heat: HeatCommandSchema, bounty: BountyCommandSchema },
+    internal: { "heat.relief": HeatReliefSchema },
+    apply(draft, command, ctx) {
+      if (command.type === "heat") return applyHeat(draft, command, ctx.now);
+      if (command.type === "bounty") return applyBounty(draft, command, ctx.now);
+      if (command.type === "heat.relief") return applyRelief(draft, command);
+      const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
+      return applyEvent(draft, command, district, ctx.now);
     },
+    tick(draft, span, ctx) {
+      tickHeat(draft, span, districtOf(ctx.read<WorldClockState>("world").location, ctx.data));
+    },
+    on: {
+      // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星
+      "scene.end": (draft, ctx) => {
+        const alert = ctx.read<StealthState>("stealth");
+        const ended = ctx.read<WorldClockState>("world").scene - 1;
+        if (alert.scene === ended && alert.peak >= ALERT_HEAT_LEVEL) {
+          draft.stars = Math.min(HEAT_MAX, draft.stars + 1);
+          draft.lastSeenAt = ctx.now;
+        }
+      },
+    },
+    rules: [eventRules, heatRules],
   },
-  rules: [eventRules, heatRules],
-});
+);
 
 export * from "./apply";
 export * from "./prompt";

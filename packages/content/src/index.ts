@@ -8,6 +8,7 @@ import { items } from "./items";
 import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
+import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
@@ -29,6 +30,7 @@ export { locations } from "./locations";
 export { canonTimeline, glossary } from "./lore";
 export { DISTRICT_CENTERS, MAP_SPOTS } from "./map";
 export { boardModules } from "./modules";
+export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 export { ripperdocs } from "./ripperdocs";
@@ -61,6 +63,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   encounters,
   vehicles,
   factions,
+  ncpdAlerts,
   twists,
   consequences,
   jobTemplates,

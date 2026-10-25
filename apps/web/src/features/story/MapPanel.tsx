@@ -120,6 +120,18 @@ export function MapPanel({
                     </div>
                   );
                 })}
+              {view.ncpd.alerts.map((a) =>
+                a.x === null || a.y === null ? null : (
+                  <span
+                    key={a.id}
+                    className={styles.alertPin}
+                    style={{ left: `${a.x}%`, top: `${a.y}%` }}
+                    title={`NCPD 警情：${a.label}（${a.locationName}，赏金 ${a.reward} 欧元，${a.until} 前）`}
+                  >
+                    !
+                  </span>
+                ),
+              )}
               {destinations.map((d) => (
                 <button
                   key={d.id}

@@ -86,6 +86,7 @@ import {
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
+import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
@@ -893,6 +894,8 @@ export function projectState(
     travel: travelView(world, data),
     /** 各势力对玩家的态度，和当前地点是谁的地盘 */
     factions: factionsView(world, data, clock.location),
+    /** 扫描器上挂着的 NCPD 警情 */
+    ncpd: ncpdView(world, data, clock.location),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1158,6 +1161,37 @@ function hackingView(
 }
 
 /** 地图上能去的地点、每种出行方式的耗时、花费和风险，以及这一场的路上偶遇 */
+function ncpdView(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  location: string | null,
+) {
+  const state = NcpdStateSchema.parse(world.slices.ncpd ?? {});
+  const places = locationCatalog(data);
+  const here = location === null ? undefined : places.get(location);
+  return {
+    cleared: state.cleared,
+    alerts: state.alerts.map((a) => {
+      const place = places.get(a.location);
+      return {
+        id: a.id,
+        label: a.label,
+        note: a.note,
+        district: a.district,
+        location: a.location,
+        locationName: place?.name ?? a.location,
+        x: place?.x ?? null,
+        y: place?.y ?? null,
+        reward: a.reward,
+        risk: a.risk,
+        until: formatGameTime(a.expiresAt),
+        /** 玩家现在就在这条警情的城区 */
+        here: here?.district === a.district,
+      };
+    }),
+  };
+}
+
 function factionsView(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,

@@ -13,6 +13,7 @@ import {
   HEAT_DECAY_MINUTES,
   HEAT_MAX,
   type HeatCommand,
+  type HeatRelief,
   type HeatState,
   RECENT_EVENTS,
 } from "./schema";
@@ -148,6 +149,17 @@ export function applyBounty(
   return {
     ok: true,
     notes: [`悬赏了结：${BOUNTY_RESOLUTION_LABELS[how]}（${command.reason}）`],
+  };
+}
+
+/** 帮 NCPD 办了事：降一星，不碰悬赏 */
+export function applyRelief(draft: Draft<HeatState>, command: HeatRelief): ApplyOutcome {
+  if (draft.stars === 0) return { ok: true, notes: [`${command.reason}：没有警方热度可降`] };
+  const before = shownStars(draft.stars);
+  draft.stars = Math.max(0, draft.stars - 1);
+  return {
+    ok: true,
+    notes: [`${command.reason}：警方热度 ${before} → ${shownStars(draft.stars)} 星`],
   };
 }
 

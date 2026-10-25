@@ -73,6 +73,16 @@ export function FactionsPanel({
                         )}
                         <p className={styles.factionLine}>{f.style}</p>
                         {f.id === "ncpd" &&
+                          view.ncpd.alerts.map((a) => (
+                            <p key={a.id} className={styles.factionLine}>
+                              警情「{a.label}」在{a.locationName}（{a.district}，
+                              {"★".repeat(a.risk)}，赏金 {a.reward} 欧元，{a.until} 前）：{a.note}
+                            </p>
+                          ))}
+                        {f.id === "ncpd" && view.ncpd.cleared > 0 && (
+                          <p className={styles.factionLine}>处理过 {view.ncpd.cleared} 条警情</p>
+                        )}
+                        {f.id === "ncpd" &&
                           view.heat.bounties.map((b) => (
                             <p key={b.id} className={styles.factionReason}>
                               悬赏 {b.reward.toLocaleString("en-US")} 欧元（{b.since} 起）：

@@ -182,6 +182,10 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,
     );
+  if (view.ncpd.alerts.length > 0)
+    lines.push(
+      `NCPD 警情（扫描器上挂着的，玩家可以去处理，也可以不管）：${view.ncpd.alerts.map((a) => `${a.id}「${a.label}」在${a.locationName}（${a.district}${a.here ? "，就在这个城区" : ""}，${"★".repeat(a.risk)}，赏金 ${a.reward} 欧元，${a.until} 前）：${a.note}`).join("；")}`,
+    );
   for (const b of view.heat.bounties)
     lines.push(
       `悬赏 ${b.id}：${b.reward} 欧元（${b.since} 起；案由：${b.reasons.join("；")}）${b.hunter ? `，赏金猎人 ${b.hunter} 在追你` : "，还没有赏金猎人：合适的时候让一个登场，先写 npc 建卡，再写 bounty hunter"}；不随时间消失，只能靠剧情了结（bounty resolve）`,

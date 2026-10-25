@@ -146,3 +146,10 @@ export const BountyCommandSchema = z
     "悬赏：悬赏由代码在大案后生成。hunter 是赏金猎人登场了，npc 写他的人物 id（先用 npc 建卡）；resolve 是靠剧情了结了，how 写 settled 摆平、scapegoat 有人顶罪、fakeDeath 伪造死亡、leftTown 离开城区避风头",
   );
 export type BountyCommand = z.infer<typeof BountyCommandSchema>;
+
+/** 只能由代码发出：帮 NCPD 办了事，热度降一星（悬赏不受影响） */
+export const HeatReliefSchema = z.object({
+  type: z.literal("heat.relief"),
+  reason: z.string().min(1),
+});
+export type HeatRelief = z.infer<typeof HeatReliefSchema>;

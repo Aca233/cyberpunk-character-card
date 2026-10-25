@@ -19,6 +19,7 @@ import {
   lifepath,
   loadouts,
   locations,
+  ncpdAlerts,
   npcs,
   openings,
   quickhacks,
@@ -50,6 +51,7 @@ import {
   jobsRules,
   LifepathEntrySchema,
   NARRATE_STAGE,
+  ncpdRules,
   npcRules,
   registry,
   schemaDoc,
@@ -105,6 +107,7 @@ schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
 schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters);
 schema("势力 factions", factionsRules.FactionCatalogSchema, factions);
+schema("NCPD 警情 ncpdAlerts", ncpdRules.AlertCatalogSchema, ncpdAlerts);
 schema("车型 vehicles", travelRules.VehicleCatalogSchema, vehicles);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
 schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
@@ -358,7 +361,20 @@ for (const f of factions) {
     errors.push(`势力 ${f.id}：关系里写了自己`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}`;
+// NCPD 警情：只能写 NCPD 管得到的城区
+unique(
+  "NCPD 警情",
+  ncpdAlerts.map((a) => a.id),
+);
+for (const a of ncpdAlerts) {
+  for (const d of a.districts ?? []) {
+    if (!districts.has(d)) errors.push(`NCPD 警情 ${a.id}：城区「${d}」不在 map.ts 的城区表里`);
+    if (ncpdRules.ALERT_EXCLUDED_DISTRICTS.includes(d))
+      errors.push(`NCPD 警情 ${a.id}：${d}NCPD 管不到`);
+  }
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

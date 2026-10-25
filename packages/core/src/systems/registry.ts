@@ -13,6 +13,7 @@ import { heat } from "./heat";
 import { humanity } from "./humanity";
 import { inventory } from "./inventory";
 import { jobs } from "./jobs";
+import { ncpd } from "./ncpd";
 import { npc } from "./npc";
 import { phone } from "./phone";
 import { stealth } from "./stealth";
@@ -40,6 +41,7 @@ export const systems: readonly AnySystem[] = [
   hacking,
   travel,
   factions,
+  ncpd,
 ];
 
 export const registry = createRegistry(systems);
