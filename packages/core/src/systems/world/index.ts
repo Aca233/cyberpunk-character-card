@@ -31,3 +31,4 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
 
 export * from "./apply";
 export * from "./schema";
+export * from "./weather";

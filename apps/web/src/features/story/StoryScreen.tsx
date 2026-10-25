@@ -469,6 +469,7 @@ export function StoryScreen() {
       }
     >
       <div className={styles.fx} aria-hidden />
+      <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <Hud view={view} />
       <SidePanel
         view={view}

@@ -122,6 +122,7 @@ import {
 } from "./systems/travel";
 import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
+import { weatherAt } from "./systems/world/weather";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -826,6 +827,13 @@ export function projectState(
       period,
       periodLabel: PERIOD_LABELS[period],
     },
+    /** 天气：按时间、季节和城区算；还没有地点时按市区 */
+    weather: weatherAt(
+      world.time,
+      clock.location === null
+        ? null
+        : (locationCatalog(data).get(clock.location)?.district ?? null),
+    ),
     location: clock.location,
     /** 界面显示用的中文名，查不到时为 id 或 null */
     names: displayNames(data, inventory, clock.location),

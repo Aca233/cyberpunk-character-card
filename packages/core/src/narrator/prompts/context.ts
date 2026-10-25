@@ -142,6 +142,7 @@ export function stateSummary(view: PlayerView): string {
     `角色：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
     `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred} 级${c.credHalf ? "（再得半级就升级）" : ""}，${c.credTier}：${c.credWorld}`,
     `时间：${view.time.text}（${view.time.periodLabel}）`,
+    `天气：${view.weather.label}，${view.weather.note}；写进氛围，有时也是掩护或麻烦`,
     `地点：${view.location ?? "尚未确定，由你在开场时安排"}${view.names.location && view.names.location !== view.location ? `（${view.names.location}）` : ""}`,
     `生命：${view.health.hp}/${view.health.max}，${view.health.conditionLabel}${WOUND_TEXT[view.health.wound] ? `，${WOUND_TEXT[view.health.wound]}` : ""}`,
     `人性：${view.humanity.current}/${view.humanity.cap}，${view.humanity.stageLabel}`,

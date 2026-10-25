@@ -3,7 +3,7 @@ import { type Closeup, effectiveTurns, type LogRecord } from "../kernel/turnlog"
 import type { WorldState } from "../kernel/world";
 import { itemCatalog } from "../systems/inventory/apply";
 import { NpcStateSchema } from "../systems/npc";
-import { locationCatalog, WorldClockStateSchema } from "../systems/world";
+import { locationCatalog, WorldClockStateSchema, weatherAt } from "../systems/world";
 
 /** 这个星级以上的委托挂出来时弹特写 */
 export const BIG_JOB_RISK = 4;
@@ -24,7 +24,7 @@ export function sceneTitle(
   if (clock.location === null) return undefined;
   const def = locationCatalog(data).get(clock.location);
   const place = def ? `${def.district} · ${def.name}` : clock.location;
-  return `${place} · ${clockText(world.time)}`;
+  return `${place} · ${clockText(world.time)} · ${weatherAt(world.time, def?.district ?? null).label}`;
 }
 
 /** 这一轮该不该弹特写卡：按生效的指令认；同一个场景已经弹过就不再弹 */

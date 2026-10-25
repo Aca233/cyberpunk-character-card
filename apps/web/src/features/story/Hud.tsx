@@ -200,7 +200,8 @@ export function Hud({ view }: { readonly view: View }) {
             {view.names.location ?? locationLabel(view.location)}
           </span>
           <span className={styles.zoneTime}>
-            {view.time.text} · {view.time.periodLabel}
+            {view.time.text} · {view.time.periodLabel} ·{" "}
+            <span title={view.weather.note}>{view.weather.label}</span>
           </span>
         </div>
         <Asset
