@@ -1,0 +1,25 @@
+{
+  "id": "modules-squad-input",
+  "title": "招人入队时带小队模块，队员会讨价还价",
+  "tags": ["modules", "voice"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "在吧台边坐下，跟旁边那个扛霰弹枪的人搭话" },
+        "text": "那人叫老枪，左手是一条掉了漆的军用义肢。他听你说完，把酒杯转了半圈：“干活可以。先说清楚，我不白给人挡子弹。”",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "“跟我干吧，下一单分成三七，你三。”" },
+  "expect": {
+    "modules": {
+      "require": ["squad"],
+      "forbid": ["hacking", "combat"]
+    }
+  },
+  "rubric": [
+    "老枪是否按自己的算盘回应（还价、提条件或者拒绝），而不是一口答应",
+    "是否没有替玩家角色接着谈条件或做决定"
+  ]
+}

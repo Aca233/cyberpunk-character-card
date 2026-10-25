@@ -1,0 +1,25 @@
+{
+  "id": "modules-hack-input",
+  "title": "要骇入时带骇入模块，不带战斗和出行",
+  "tags": ["modules", "grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "绕到仓库侧面看看" },
+        "text": "侧门上方挂着一个摄像头，红灯一闪一闪。门边的墙上嵌着一块落满灰的检修面板，螺丝少了一颗。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "找到那块面板上的接入点，黑进去把摄像头关掉" },
+  "expect": {
+    "modules": {
+      "require": ["hacking"],
+      "forbid": ["combat", "travel"]
+    }
+  },
+  "rubric": [
+    "角色没装网络接入仓时，正文是否让世界拒绝（没有能接的口子、手头没工具），而不是照样黑进去",
+    "正文里是否没有写 RAM 格数、程序名之类的系统词"
+  ]
+}

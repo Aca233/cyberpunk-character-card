@@ -1,0 +1,25 @@
+{
+  "id": "modules-anchors-input",
+  "title": "吃压制剂时带锚点和压制剂模块，背包里没有就拿不出来",
+  "tags": ["modules", "grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "靠着墙喘口气" },
+        "text": "耳鸣又来了，像有人在颅骨里拧一根钢丝。巷子尽头的霓虹招牌闪了两下，你一时分不清是它在闪还是自己的眼睛。",
+        "commands": [{ "type": "world", "activity": "rest" }]
+      }
+    ]
+  },
+  "input": { "text": "从背包里摸出一片压制剂吞下去" },
+  "expect": {
+    "modules": {
+      "require": ["anchors"],
+      "forbid": ["combat", "hacking"]
+    }
+  },
+  "rubric": [
+    "背包里没有压制剂时，正文是否写成摸不到，而不是照样吞下去",
+    "是否没有写成压制剂能恢复人性"
+  ]
+}

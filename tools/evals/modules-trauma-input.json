@@ -1,0 +1,25 @@
+{
+  "id": "modules-trauma-input",
+  "title": "问创伤小组会籍时带创伤小组模块",
+  "tags": ["modules", "grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "看街对面那架落地的浮空车" },
+        "text": "浮空车的舱门滑开，四个穿装甲的医护把一个西装男人抬上担架，枪口对着围观的人。机身上印着一个白色十字，下面一行小字：创伤小组国际。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "联系创伤小组，问问白金卡会籍要多少钱" },
+  "expect": {
+    "modules": {
+      "require": ["trauma"],
+      "forbid": ["combat", "hacking"]
+    }
+  },
+  "rubric": [
+    "是否没有让角色凭空拿到会籍，办会籍要按规矩付钱或走手续",
+    "价钱和条款如果正文给了，是否写成接线员说的话，而不是系统提示"
+  ]
+}

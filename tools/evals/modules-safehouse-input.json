@@ -1,0 +1,25 @@
+{
+  "id": "modules-safehouse-input",
+  "title": "往存放箱里放东西时带安全屋模块",
+  "tags": ["modules", "grounding"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "锁好门，把外套扔在椅子上" },
+        "text": "安全屋里还是那股机油和速食面的味道。床边的金属存放箱上落了一层薄灰，墙上空着几颗钉子。",
+        "commands": [{ "type": "world", "activity": "rest" }]
+      }
+    ]
+  },
+  "input": { "text": "把今天的战利品放进存放箱，锁好" },
+  "expect": {
+    "modules": {
+      "require": ["safehouse"],
+      "forbid": ["combat", "hacking"]
+    }
+  },
+  "rubric": [
+    "放进存放箱的东西是否都是角色身上真有的",
+    "正文是否没有接着替玩家安排下一步（睡觉、出门之类）"
+  ]
+}

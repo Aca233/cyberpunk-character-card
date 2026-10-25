@@ -1,0 +1,25 @@
+{
+  "id": "modules-sidegig-input",
+  "title": "报名拳赛时带拳赛和赛车模块",
+  "tags": ["modules", "voice"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "跟着人群挤进地下室" },
+        "text": "地下室里挤满了人，铁笼子吊在正中间，地上的血还没擦干。一个戴耳麦的胖子在笼边收钱，一边收一边喊下一场的赔率。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "挤到胖子跟前，报名今晚的地下拳赛" },
+  "expect": {
+    "modules": {
+      "require": ["sidegigs"],
+      "forbid": ["hacking", "travel"]
+    }
+  },
+  "rubric": [
+    "收钱的胖子是否按自己的生意经回应（押金、对手、规矩），而不是直接开打",
+    "正文里是否没有自己定奖金和押金的数字"
+  ]
+}

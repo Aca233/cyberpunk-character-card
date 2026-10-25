@@ -1,0 +1,25 @@
+{
+  "id": "modules-faction-input",
+  "title": "提到帮派和地盘时带势力模块",
+  "tags": ["modules", "voice"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "问摊主最近生意怎么样" },
+        "text": "摊主往门口瞟了一眼，压低声音：“生意？这条街每个月要交两回钱，一回给漩涡帮，一回给收钱的那个人自己。”",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "找管这片地盘的帮派头目，谈谈这条街的保护费" },
+  "expect": {
+    "modules": {
+      "require": ["factions"],
+      "forbid": ["hacking"]
+    }
+  },
+  "rubric": [
+    "帮派的人是否有自己的立场和算盘，不是一谈就让步",
+    "正文里是否没有报“态度变了”之类的系统说法"
+  ]
+}

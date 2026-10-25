@@ -1,0 +1,34 @@
+{
+  "id": "modules-chat-no-m2b",
+  "title": "闲聊时不带骇入、出行、小队、创伤小组、拳赛这些模块",
+  "tags": ["modules"],
+  "setup": {
+    "history": [
+      {
+        "input": { "text": "在吧台边坐下，要一杯啤酒" },
+        "text": "酒保把一杯泡沫快溢出来的啤酒推到你面前，顺手把找零拍在台面上。屏幕上在放 N54 的晚间新闻，没人在看。",
+        "commands": [{ "type": "world", "activity": "talk" }]
+      }
+    ]
+  },
+  "input": { "text": "跟酒保聊聊最近城里有什么新鲜事" },
+  "expect": {
+    "judge": { "check": "forbidden" },
+    "modules": {
+      "forbid": [
+        "hacking",
+        "travel",
+        "squad",
+        "trauma",
+        "sidegigs",
+        "parts",
+        "safehouse",
+        "anchors"
+      ]
+    }
+  },
+  "rubric": [
+    "酒保是否像个有自己生活的人在闲聊，而不是念任务列表",
+    "是否没有列选项、没有问“你要怎么做”"
+  ]
+}
