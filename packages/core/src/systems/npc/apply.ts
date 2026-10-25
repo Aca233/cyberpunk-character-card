@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { memberDeathBlocked } from "../dice";
 import {
   AFFINITY_MAX,
   AFFINITY_MIN,
@@ -40,7 +41,12 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
   return { ok: true };
 }
 
-export function applyNpc(draft: Draft<NpcState>, command: NpcCommand, now: number): ApplyOutcome {
+export function applyNpc(
+  draft: Draft<NpcState>,
+  command: NpcCommand,
+  now: number,
+  facts: Readonly<Record<string, unknown>> = {},
+): ApplyOutcome {
   if (command.type === "npc") {
     const { type: _type, location, ...card } = command;
     if (draft.npcs[card.id]) {
@@ -112,6 +118,13 @@ export function applyNpc(draft: Draft<NpcState>, command: NpcCommand, now: numbe
       return { ok: true };
     }
     case "npcDeath": {
+      // 队员之死的保底：squad 不能被 npc 读（squad 读 npc），回合流程把队员名单放进事实 squad
+      const squad = Array.isArray(facts.squad) ? (facts.squad as unknown[]) : [];
+      if (squad.includes(command.id)) {
+        const names = [npc.name, ...(npc.alias === undefined ? [] : [npc.alias])];
+        const blocked = memberDeathBlocked(facts, names);
+        if (blocked) return { ok: false, reason: blocked };
+      }
       npc.alive = false;
       npc.lastSeenAt = now;
       return { ok: true, notes: [`${npc.name} 死了`] };

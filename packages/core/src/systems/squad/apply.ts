@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import { memberDeathBlocked } from "../dice";
 import type { NpcState } from "../npc";
 import { formatGameTime } from "../world";
 import {
@@ -120,6 +121,14 @@ export function applySquad(
     }
     case "dead": {
       if (!member) return fail(`${name}不在小队里；不是队员的人死了写 npcDeath`);
+      // 保底：检定事先点名警告过致命危险、又失败了才会死
+      const names = [
+        member.name,
+        ...(card ? [card.name] : []),
+        ...(card?.alias ? [card.alias] : []),
+      ];
+      const blocked = memberDeathBlocked(ctx.facts, names);
+      if (blocked) return fail(blocked);
       removeMember(draft, command.npc, "dead", ctx.now, command.reason);
       return {
         ok: true,

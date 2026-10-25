@@ -35,7 +35,7 @@ export const npc = defineSystem<NpcState, NpcCommand, SeedNpc>({
   apply(draft, command, ctx) {
     return command.type === "npc.seed"
       ? seedNpc(draft, command)
-      : applyNpc(draft, command, ctx.now);
+      : applyNpc(draft, command, ctx.now, ctx.facts);
   },
   rules: [npcRules],
 });

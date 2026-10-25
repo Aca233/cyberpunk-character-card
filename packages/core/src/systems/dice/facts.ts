@@ -18,6 +18,8 @@ export const CheckFactSchema = z.object({
   damage: DamageTierSchema.optional(),
   /** check 里事先写明了断肢风险 */
   limb: z.boolean().optional(),
+  /** check 里事先写的“失败会怎样”；队员会不会死按这句里有没有点名来判 */
+  failure: z.string().optional(),
 });
 export type CheckFact = z.infer<typeof CheckFactSchema>;
 
@@ -27,6 +29,7 @@ export function checkFactFrom(id: string, check: PreparedCheck, result: CheckRes
     outcome: result.outcome,
     ...(check.spec.damage === undefined ? {} : { damage: check.spec.damage }),
     ...(check.spec.limb === true ? { limb: true } : {}),
+    failure: check.spec.failure,
   };
 }
 
@@ -36,6 +39,22 @@ export function checkFact(facts: Readonly<Record<string, unknown>>): CheckFact |
   const parsed = CheckFactSchema.safeParse(facts.check);
   if (!parsed.success) throw new Error(`本轮的检定结果格式不对：${parsed.error.message}`);
   return parsed.data;
+}
+
+/**
+ * 队员之死的保底：这一轮有检定、检定失败（或大失败），且检定事先写的失败后果里点了这名队员的名字，
+ * 才允许写死；否则返回拒绝的原因（最坏是重伤或被抓）
+ */
+export function memberDeathBlocked(
+  facts: Readonly<Record<string, unknown>>,
+  names: readonly string[],
+): string | undefined {
+  const check = checkFact(facts);
+  const who = names[0] ?? "队员";
+  const why = `${who}是队员：只有检定事先在失败后果里点名写明${who}有致命危险、检定又失败时才会死；没有这样警告过的，最坏写 squad status hurt 或 captured`;
+  if (!check || (check.outcome !== "failure" && check.outcome !== "fumble")) return why;
+  const text = check.failure ?? "";
+  return names.some((n) => n.trim() !== "" && text.includes(n.trim())) ? undefined : why;
 }
 
 /** 生命上限（暂定，试玩时调平衡）：随肉体和街头声望等级增长 */

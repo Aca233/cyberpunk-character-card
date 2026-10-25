@@ -915,6 +915,10 @@ export async function runNarratorTurn(
   if (!trip && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
     facts.hideout = true;
   }
+  // 队员名单：npc 不能读小队（squad 读 npc），写 npcDeath 杀队员时按它走同一道保底
+  const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
+  const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
+  if (squadIds.length > 0) facts.squad = squadIds;
   // 人在店里：叙事模型写的 trade buy 买这家货架上的东西时，和界面买一样占库存；这一轮出了门不算
   const shopHereNow =
     trip || here === undefined
