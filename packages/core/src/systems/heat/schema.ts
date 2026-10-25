@@ -44,6 +44,36 @@ export const HeatEventSchema = z.object({
 });
 export type HeatEvent = z.infer<typeof HeatEventSchema>;
 
+/** 4 星以上的暴力大案留下悬赏（原作依据 2.0 的通缉系统；金额本作改编） */
+export const BOUNTY_MIN_STARS = 4;
+/** 悬赏金额 = 这个数 × 当时的星级；再犯大案每次加一份 */
+export const BOUNTY_PER_STAR = 2500;
+/** 一份悬赏最多记几条案由 */
+export const BOUNTY_REASONS = 5;
+
+/** 了结悬赏的办法：摆平、顶罪、伪造死亡、离开城区避一阵（本作改编） */
+export const BOUNTY_RESOLUTIONS = ["settled", "scapegoat", "fakeDeath", "leftTown"] as const;
+export const BountyResolutionSchema = z.enum(BOUNTY_RESOLUTIONS);
+export type BountyResolution = z.infer<typeof BountyResolutionSchema>;
+export const BOUNTY_RESOLUTION_LABELS: Readonly<Record<BountyResolution, string>> = {
+  settled: "摆平了",
+  scapegoat: "有人顶了罪",
+  fakeDeath: "伪造了死亡",
+  leftTown: "离开城区避了一阵",
+};
+
+export const BountySchema = z.object({
+  id: z.string().min(1),
+  at: z.number().int(),
+  reward: z.number().int().min(0),
+  reasons: z.array(z.string()).max(BOUNTY_REASONS),
+  /** 追你的赏金猎人（人物 id）；还没建卡时为 null */
+  hunter: z.string().nullable(),
+  resolvedAt: z.number().int().nullable(),
+  resolution: BountyResolutionSchema.nullable(),
+});
+export type Bounty = z.infer<typeof BountySchema>;
+
 export const HeatStateSchema = z.object({
   /** 警方热度 0–5 星；旧存档里可能有半星，界面和提示词显示整星 */
   stars: z.number().min(0).max(HEAT_MAX).multipleOf(0.5),
@@ -56,6 +86,8 @@ export const HeatStateSchema = z.object({
   /** 上次因为换城区多降一星是第几个游戏日 */
   districtDay: z.number().int().nullable(),
   recent: z.array(HeatEventSchema).max(RECENT_EVENTS),
+  /** 悬赏：不随时间消失，只能靠剧情了结 */
+  bounties: z.array(BountySchema).default([]),
 });
 export type HeatState = z.infer<typeof HeatStateSchema>;
 
@@ -88,3 +120,29 @@ export const HeatCommandSchema = z
     "警方热度：bribe 是贿赂警察成功，降一星，代码按星级扣欧元（5 星不能贿赂）；seen 是被摄像头或盘查看见但没犯新事，自然下降重新计时",
   );
 export type HeatCommand = z.infer<typeof HeatCommandSchema>;
+
+/** 模型使用：{"type": "bounty", "action": "hunter", "npc": "...", "reason": "..."} */
+export const BountyCommandSchema = z
+  .object({
+    type: z.literal("bounty"),
+    action: z.enum(["hunter", "resolve"]),
+    /** 悬赏 id；只有一份没了结的时可以不写 */
+    id: z.string().min(1).optional(),
+    /** hunter：赏金猎人的人物 id（先写 npc 建卡） */
+    npc: z.string().min(1).optional(),
+    /** resolve：怎么了结的 */
+    how: BountyResolutionSchema.optional(),
+    reason: z.string().trim().min(1).max(80),
+  })
+  .refine((c) => c.action !== "hunter" || c.npc !== undefined, {
+    message: "hunter 要写 npc（赏金猎人的人物 id）",
+    path: ["npc"],
+  })
+  .refine((c) => c.action !== "resolve" || c.how !== undefined, {
+    message: "resolve 要写 how（settled、scapegoat、fakeDeath、leftTown）",
+    path: ["how"],
+  })
+  .describe(
+    "悬赏：悬赏由代码在大案后生成。hunter 是赏金猎人登场了，npc 写他的人物 id（先用 npc 建卡）；resolve 是靠剧情了结了，how 写 settled 摆平、scapegoat 有人顶罪、fakeDeath 伪造死亡、leftTown 离开城区避风头",
+  );
+export type BountyCommand = z.infer<typeof BountyCommandSchema>;

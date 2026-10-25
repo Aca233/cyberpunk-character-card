@@ -72,6 +72,14 @@ export function FactionsPanel({
                           </p>
                         )}
                         <p className={styles.factionLine}>{f.style}</p>
+                        {f.id === "ncpd" &&
+                          view.heat.bounties.map((b) => (
+                            <p key={b.id} className={styles.factionReason}>
+                              悬赏 {b.reward.toLocaleString("en-US")} 欧元（{b.since} 起）：
+                              {b.reasons.join("；")}
+                              {b.hunterName ? ` · 赏金猎人${b.hunterName}在追你` : ""}
+                            </p>
+                          ))}
                         <p className={styles.factionLine}>
                           {f.turf.length > 0
                             ? `地盘：${f.turf.join("、")}${f.turfNote ? `（${f.turfNote}）` : ""}`

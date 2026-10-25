@@ -1920,3 +1920,12 @@
   margin: 0.2rem 0 0;
   color: var(--cp-text-faint);
 }
+
+/* 有悬赏时 HUD 上的红字 */
+.bounty {
+  padding: 0.1rem 0.5rem;
+  color: var(--cp-danger);
+  border: 1px solid var(--cp-danger);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}

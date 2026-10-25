@@ -1,9 +1,11 @@
 import { defineSystem } from "../../kernel/system";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
-import { applyEvent, applyHeat, tickHeat } from "./apply";
+import { applyBounty, applyEvent, applyHeat, tickHeat } from "./apply";
 import { eventRules, heatRules } from "./prompt";
 import {
+  type BountyCommand,
+  BountyCommandSchema,
   type EventCommand,
   EventCommandSchema,
   HEAT_MAX,
@@ -22,7 +24,7 @@ function districtOf(
 }
 
 /** 警方热度：事件按目击和动静推导，随时间、换城区和贿赂下降；贿赂的钱交给欧元系统扣 */
-export const heat = defineSystem<HeatState, EventCommand | HeatCommand>({
+export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyCommand>({
   id: "heat",
   dependsOn: ["world", "economy", "stealth"],
   state: HeatStateSchema,
@@ -33,10 +35,12 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand>({
     district: null,
     districtDay: null,
     recent: [],
+    bounties: [],
   }),
-  commands: { event: EventCommandSchema, heat: HeatCommandSchema },
+  commands: { event: EventCommandSchema, heat: HeatCommandSchema, bounty: BountyCommandSchema },
   apply(draft, command, ctx) {
     if (command.type === "heat") return applyHeat(draft, command, ctx.now);
+    if (command.type === "bounty") return applyBounty(draft, command, ctx.now);
     const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
     return applyEvent(draft, command, district, ctx.now);
   },

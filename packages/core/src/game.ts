@@ -970,6 +970,17 @@ export function projectState(
       stars: shownStars(heat?.stars ?? 0),
       half: (heat?.stars ?? 0) % 1 !== 0,
       lastSeen: heat?.lastSeenAt == null ? null : formatGameTime(heat.lastSeenAt),
+      /** 没了结的悬赏：不随时间消失 */
+      bounties: (heat?.bounties ?? [])
+        .filter((b) => b.resolvedAt === null)
+        .map((b) => ({
+          id: b.id,
+          reward: b.reward,
+          reasons: b.reasons,
+          hunter: b.hunter,
+          hunterName: b.hunter === null ? null : (npcs.npcs[b.hunter]?.name ?? b.hunter),
+          since: formatGameTime(b.at),
+        })),
       decayIn:
         heat && heat.stars > 0 && heat.decayedAt !== null
           ? Math.max(0, heat.decayedAt + HEAT_DECAY_MINUTES - world.time)

@@ -250,6 +250,24 @@ export function diffViews(prev: View, next: View): Toast[] {
     }
   }
 
+  // 悬赏：新挂、涨价、了结都弹一条
+  for (const b of next.heat.bounties) {
+    const before = prev.heat.bounties.find((p) => p.id === b.id);
+    if (!before || before.reward !== b.reward) {
+      out.push({
+        icon: "notify.warning",
+        text: before
+          ? `悬赏涨到 ${b.reward.toLocaleString("en-US")} 欧元`
+          : `你被挂了悬赏：${b.reward.toLocaleString("en-US")} 欧元`,
+        tone: "bad",
+      });
+    }
+  }
+  for (const b of prev.heat.bounties) {
+    if (!next.heat.bounties.some((n) => n.id === b.id))
+      out.push({ icon: "notify.attention", text: "悬赏了结了", tone: "good" });
+  }
+
   // 势力态度变了：弹出新标签，变好是绿色、变坏是红色
   const order = ["kos", "hostile", "neutral", "friendly", "family"];
   for (const f of next.factions.list) {

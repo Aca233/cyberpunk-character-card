@@ -1,6 +1,11 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, TimeSpan } from "../../kernel/system";
 import {
+  BOUNTY_MIN_STARS,
+  BOUNTY_PER_STAR,
+  BOUNTY_REASONS,
+  BOUNTY_RESOLUTION_LABELS,
+  type BountyCommand,
   BRIBE_PER_STAR,
   EVENT_LABELS,
   type EventCommand,
@@ -68,6 +73,12 @@ export function applyEvent(
   remember(draft, { at: now, kind: event.kind, delta, reason: event.reason });
   const after = shownStars(draft.stars);
   const label = EVENT_LABELS[event.kind];
+  const bounty = VIOLENT.has(event.kind) && delta > 0 ? postBounty(draft, event.reason, now) : null;
+  if (bounty) {
+    const base =
+      delta === 0 || before === after ? `警方热度 ${after} 星` : `警方热度 ${before} → ${after} 星`;
+    return { ok: true, notes: [`${label}（${event.reason}）：${base}；${bounty}`] };
+  }
   if (delta === 0)
     return { ok: true, notes: [`${label}（${event.reason}）：警方热度不变，${why}`] };
   if (before === after)
@@ -80,6 +91,63 @@ export function applyEvent(
     notes: [
       `${label}（${event.reason}）：警方热度 ${before} → ${after} 星${why ? `（${why}）` : ""}`,
     ],
+  };
+}
+
+/** 4 星以上的暴力大案：没有悬赏时挂一份，已有没了结的就加一份钱；返回提示，没挂时为 null */
+function postBounty(draft: Draft<HeatState>, reason: string, now: number): string | null {
+  if (shownStars(draft.stars) < BOUNTY_MIN_STARS) return null;
+  if (!draft.bounties) draft.bounties = [];
+  const open = draft.bounties.find((b) => b.resolvedAt === null);
+  if (open) {
+    open.reward += BOUNTY_PER_STAR;
+    open.reasons.push(reason);
+    if (open.reasons.length > BOUNTY_REASONS)
+      open.reasons.splice(0, open.reasons.length - BOUNTY_REASONS);
+    return `悬赏涨到 ${open.reward.toLocaleString("en-US")} 欧元`;
+  }
+  const reward = BOUNTY_PER_STAR * shownStars(draft.stars);
+  draft.bounties.push({
+    id: `bounty-${draft.bounties.length + 1}`,
+    at: now,
+    reward,
+    reasons: [reason],
+    hunter: null,
+    resolvedAt: null,
+    resolution: null,
+  });
+  return `大案留下了悬赏：${reward.toLocaleString("en-US")} 欧元，不会随时间消失，会有赏金猎人找上门`;
+}
+
+/** 赏金猎人登场或靠剧情了结悬赏 */
+export function applyBounty(
+  draft: Draft<HeatState>,
+  command: BountyCommand,
+  now: number,
+): ApplyOutcome {
+  const open = (draft.bounties ?? []).filter((b) => b.resolvedAt === null);
+  if (open.length === 0) return { ok: false, reason: "现在没有悬赏" };
+  const target =
+    command.id === undefined
+      ? open.length === 1
+        ? open[0]
+        : undefined
+      : open.find((b) => b.id === command.id);
+  if (!target)
+    return {
+      ok: false,
+      reason: `要写悬赏 id；没了结的有：${open.map((b) => b.id).join("、")}`,
+    };
+  if (command.action === "hunter") {
+    target.hunter = command.npc ?? null;
+    return { ok: true, notes: [`赏金猎人 ${command.npc} 盯上了你（${command.reason}）`] };
+  }
+  const how = command.how ?? "settled";
+  target.resolvedAt = now;
+  target.resolution = how;
+  return {
+    ok: true,
+    notes: [`悬赏了结：${BOUNTY_RESOLUTION_LABELS[how]}（${command.reason}）`],
   };
 }
 

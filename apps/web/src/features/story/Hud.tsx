@@ -91,6 +91,16 @@ export function Hud({ view }: { readonly view: View }) {
             <span className={styles.starsEmpty}>{"★".repeat(5 - view.heat.stars)}</span>
           </div>
         )}
+        {view.heat.bounties.length > 0 && (
+          <div
+            className={styles.bounty}
+            role="status"
+            title={view.heat.bounties.map((b) => b.reasons.join("；")).join("；")}
+          >
+            悬赏 {view.heat.bounties.reduce((sum, b) => sum + b.reward, 0).toLocaleString("en-US")}{" "}
+            欧元
+          </div>
+        )}
         {view.stealth.level > 0 && (
           <div
             className={styles.alert}
@@ -327,6 +337,15 @@ export function SidePanel({
           >
             {view.heat.stars} 星{view.heat.half && <small> · 多半星</small>}
           </dd>
+          {view.heat.bounties.map((b) => (
+            <Fragment key={b.id}>
+              <dt>悬赏</dt>
+              <dd data-tone="bad" title={`${b.since} 起：${b.reasons.join("；")}`}>
+                {b.reward.toLocaleString("en-US")} 欧元
+                {b.hunterName && <small> · {b.hunterName}在追你</small>}
+              </dd>
+            </Fragment>
+          ))}
           <dt>难度</dt>
           <dd>{DIFFICULTY_LABELS[view.difficulty]}</dd>
           {inventory.healing && (
