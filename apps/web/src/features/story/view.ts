@@ -250,6 +250,19 @@ export function diffViews(prev: View, next: View): Toast[] {
     }
   }
 
+  // 势力态度变了：弹出新标签，变好是绿色、变坏是红色
+  const order = ["kos", "hostile", "neutral", "friendly", "family"];
+  for (const f of next.factions.list) {
+    const before = prev.factions.list.find((p) => p.id === f.id);
+    if (before && before.attitude !== f.attitude) {
+      out.push({
+        icon: "notify.attention",
+        text: `${f.name}：${f.attitudeLabel}`,
+        tone: order.indexOf(f.attitude) > order.indexOf(before.attitude) ? "good" : "bad",
+      });
+    }
+  }
+
   const hum = next.humanity.current - prev.humanity.current;
   if (hum !== 0) {
     out.push({

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type AssetId, asset } from "../../assets";
 import { MissingAsset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -31,6 +31,17 @@ export function MapPanel({
   const here = destinations.find((d) => d.here);
   const dest = destinations.find((d) => d.id === picked);
   const info = asset(layer);
+  const [turf, setTurf] = useState(false);
+  // 城区的位置：取城区里已上图地点的平均坐标
+  const centers = useMemo(() => {
+    const sums = new Map<string, { x: number; y: number; n: number }>();
+    for (const d of destinations) {
+      const s = sums.get(d.district) ?? { x: 0, y: 0, n: 0 };
+      sums.set(d.district, { x: s.x + d.x, y: s.y + d.y, n: s.n + 1 });
+    }
+    return [...sums].map(([district, s]) => ({ district, x: s.x / s.n, y: s.y / s.n }));
+  }, [destinations]);
+  const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
 
   // 选中地点时 Esc 先取消选中，再按一次关掉地图
   useEffect(() => {
@@ -65,6 +76,14 @@ export function MapPanel({
                 </button>
               ))}
             </span>
+            <button
+              type="button"
+              className={styles.mapLayer}
+              aria-pressed={turf}
+              onClick={() => setTurf((t) => !t)}
+            >
+              帮派地盘
+            </button>
             <Button onClick={onClose}>关闭</Button>
           </div>
 
@@ -82,6 +101,25 @@ export function MapPanel({
               ) : (
                 <MissingAsset id={layer} />
               )}
+              {turf &&
+                centers.map((c) => {
+                  const owners = gangs.filter((g) => g.turf.includes(c.district));
+                  if (owners.length === 0) return null;
+                  return (
+                    <div
+                      key={c.district}
+                      className={styles.turfTag}
+                      style={{ left: `${c.x}%`, top: `${c.y}%` }}
+                    >
+                      {owners.map((g) => (
+                        <span key={g.id} className={styles.turfName} style={{ color: g.color }}>
+                          {g.name}
+                          {g.attitude === "neutral" ? "" : `·${g.attitudeLabel}`}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })}
               {destinations.map((d) => (
                 <button
                   key={d.id}

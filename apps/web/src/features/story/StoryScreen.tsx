@@ -10,6 +10,7 @@ import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
 import { CloseupQueue } from "./Closeup";
+import { FactionsPanel } from "./FactionsPanel";
 import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
@@ -100,6 +101,7 @@ export function StoryScreen() {
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
   const [atMap, setAtMap] = useState(false);
+  const [atFactions, setAtFactions] = useState(false);
   const closeJournal = useCallback(() => setJournal(null), []);
   const [atPhone, setAtPhone] = useState(false);
 
@@ -339,13 +341,16 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop || atMap || story.spend) return;
+      if (journal || atDoc || atShop || atMap || atFactions || story.spend) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
       } else if (e.key === "m" || e.key === "M") {
         e.preventDefault();
         setAtMap(true);
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        setAtFactions(true);
       } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
@@ -369,6 +374,7 @@ export function StoryScreen() {
     atDoc,
     atShop,
     atMap,
+    atFactions,
   ]);
 
   if (query.isPending) {
@@ -425,6 +431,7 @@ export function StoryScreen() {
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
+        onFactions={() => setAtFactions(true)}
       />
 
       <main className={styles.column}>
@@ -574,6 +581,7 @@ export function StoryScreen() {
           onClose={() => setAtDoc(false)}
         />
       )}
+      {atFactions && <FactionsPanel view={view} onClose={() => setAtFactions(false)} />}
       {atMap && (
         <MapPanel
           view={view}

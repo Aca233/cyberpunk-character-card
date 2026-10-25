@@ -1847,3 +1847,76 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 地图上的帮派地盘：按城区里地点的平均位置摆一组名字 */
+.turfTag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  pointer-events: none;
+}
+
+.turfName {
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  background: rgb(0 0 0 / 0.7);
+  border: 1px solid currentColor;
+}
+
+/* 势力页 */
+.factionList {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.6rem;
+}
+
+.factionCard {
+  padding: 0.5rem 0.7rem;
+  border-left: 4px solid var(--cp-yellow-dim);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.factionCard[data-here] {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.factionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.factionAttitude {
+  margin-left: auto;
+  padding: 0 0.4rem;
+  border: 1px solid currentColor;
+  color: var(--cp-text-faint);
+  white-space: nowrap;
+}
+
+.factionAttitude[data-attitude="kos"],
+.factionAttitude[data-attitude="hostile"] {
+  color: var(--cp-danger);
+}
+
+.factionAttitude[data-attitude="friendly"],
+.factionAttitude[data-attitude="family"] {
+  color: var(--cp-cyan);
+}
+
+.factionReason {
+  margin: 0.25rem 0;
+  color: var(--cp-yellow);
+}
+
+.factionLine {
+  margin: 0.2rem 0 0;
+  color: var(--cp-text-faint);
+}

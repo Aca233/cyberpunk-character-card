@@ -216,6 +216,7 @@ export function SidePanel({
   onHabit,
   onPhone,
   onMap,
+  onFactions,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -239,6 +240,8 @@ export function SidePanel({
   readonly onPhone: () => void;
   /** 打开地图和路线面板 */
   readonly onMap: () => void;
+  /** 打开势力页 */
+  readonly onFactions: () => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -622,6 +625,9 @@ export function SidePanel({
           </button>
           <button type="button" onClick={onMap}>
             地图 [M]
+          </button>
+          <button type="button" onClick={onFactions}>
+            势力 [F]
           </button>
           {offered > 0 && (
             <button type="button" onClick={() => onJournal(true)}>
