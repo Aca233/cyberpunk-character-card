@@ -27,6 +27,7 @@ import {
   ripperdocs,
   sampleCharacters,
   shops,
+  sidegigs,
   twists,
   vehicles,
 } from "@cp/content";
@@ -57,6 +58,7 @@ import {
   registry,
   safehouseRules,
   schemaDoc,
+  sidegigRules,
   TwistCatalogSchema,
   travelRules,
   worldRules,
@@ -111,6 +113,7 @@ schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters
 schema("势力 factions", factionsRules.FactionCatalogSchema, factions);
 schema("NCPD 警情 ncpdAlerts", ncpdRules.AlertCatalogSchema, ncpdAlerts);
 schema("开局住所 homes", safehouseRules.HomeCatalogSchema, homes);
+schema("拳赛和赛车 sidegigs", sidegigRules.GigCatalogSchema, sidegigs);
 schema("车型 vehicles", travelRules.VehicleCatalogSchema, vehicles);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
 schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
@@ -393,7 +396,27 @@ for (const h of homes) {
     errors.push(`开局住所 ${h.id}：地点 ${h.location} 不在地点表里`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}`;
+// 拳赛和赛车：地点要在地点表里，对手不重复，赢了拿的要比押金多，来源要标原作依据、本作改编或待核对
+unique(
+  "拳赛和赛车",
+  sidegigs.map((g) => g.id),
+);
+unique(
+  "拳赛和赛车的对手",
+  sidegigs.map((g) => g.opponent),
+);
+for (const g of sidegigs) {
+  refs(`拳赛和赛车 ${g.id}`, [g.location], locationIds, "地点");
+  if (g.purse <= g.stake) errors.push(`拳赛和赛车 ${g.id}：奖金 ${g.purse} 不比押金 ${g.stake} 多`);
+  if (!/原作依据|本作改编|待核对/.test(g.source))
+    errors.push(`拳赛和赛车 ${g.id}：来源要标原作依据、本作改编或待核对`);
+}
+for (const kind of ["fight", "race"] as const) {
+  const n = sidegigs.filter((g) => g.kind === kind).length;
+  if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);
