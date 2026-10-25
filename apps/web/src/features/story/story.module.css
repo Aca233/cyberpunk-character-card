@@ -2209,23 +2209,58 @@
   margin-bottom: 0.4rem;
 }
 
-/* 左下角路线卡：选中地点后才出现 */
+/*
+ * 左下角路线卡：选中地点后才出现。外形照原作世界地图的默认 tooltip（world_map.inkwidget 的 WorldMapTooltipController）：
+ * 阴影 shadowBlobSquare_small、底 tooltip_map_bg、框 tooltip_map_fg，右下大斜切角、左边一道缺口。
+ * 颜色照 world_map_style.inkstyle 的 Tooltip/Default，色值取 inkwidget 里的兜底值
+ */
 .mapRouteCard {
+  --tip-shadow: #0e0e17; /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
+  --tip-bg: #121221; /* Tooltip.backgroundColor → MainColors.Fullscreen_PrimaryBackgroundDark */
+  --tip-frame: var(--cp-red); /* Tooltip.frameColor → MainColors.Red */
   position: absolute;
   left: 0.8rem;
   bottom: 2rem;
   z-index: 3;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, calc(100% - 1.6rem));
+  max-height: calc(100% - 3rem);
+  cursor: var(--cp-cursor);
+}
+
+/* 贴图层垫在内容下面；底和阴影不透明度 0.99、框 0.3，都照原作 */
+.mapTipBg {
+  z-index: -1;
+  opacity: 0.99;
+}
+
+.mapTipFrame {
+  z-index: -1;
+  opacity: 0.3;
+}
+
+/* 阴影照原作 margin 外扩：左 -20、上 -30、右 40、下 -40（4K 单位，折半成 CSS 像素） */
+.mapRouteCard .mapTipShadow {
+  inset: -15px 20px -20px -10px;
+  z-index: -1;
+  opacity: 0.99;
+}
+
+/* 内容在里层滚动；底边留出右下斜切角 */
+.mapRouteBody {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  width: min(22rem, calc(100% - 1.6rem));
-  max-height: calc(100% - 3rem);
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid var(--cp-yellow-dim);
-  border-left: 3px solid var(--cp-yellow);
-  background: rgb(4 7 13 / 88%);
-  cursor: var(--cp-cursor);
+  padding: 0.8rem 1rem 1.3rem 0.9rem;
+}
+
+/* Tooltip.titleColor → MainColors.White */
+.mapTipTitle {
+  color: #fff;
 }
 
 .mapRouteHead {
@@ -2406,12 +2441,15 @@ ul.mapLegend > li {
   gap: 0.5rem;
   width: min(20rem, calc(100% - 1.6rem));
   max-height: calc(100% - 1.6rem);
-  overflow-y: auto;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid var(--cp-red-dim);
-  border-right: 3px solid var(--cp-red);
-  background: rgb(4 7 13 / 88%);
+  overflow: hidden;
+  /* 原作 districtInfo 没有框和底，只在文字下垫一块 shadowBlobText 黑色软阴影；阴影边缘是渐隐的，四周多留一点 */
+  isolation: isolate;
+  padding: 1rem 1.2rem;
   pointer-events: none;
+}
+
+.mapDistrictShadow {
+  z-index: -1;
 }
 
 .mapDistrictHead {

@@ -188,6 +188,15 @@ for (const poi of MAP_POIS) POI_COUNT.set(poi.kind, (POI_COUNT.get(poi.kind) ?? 
  */
 const CELL_SLICE = [20, 30, 30, 20] as const;
 const BOX_SLICE = [9, 18, 21, 9] as const;
+/**
+ * 路线卡照原作世界地图的默认 tooltip（world_map.inkwidget 的 WorldMapTooltipController）：
+ * shadow_blobs 的 shadowBlobSquare_small 阴影、atlas_shapes_sync 的 tooltip_map_bg 底和 tooltip_map_fg 框。
+ * 切线 2160p 左上右下：tooltip_map 10/10/30/70，阴影 20/20/20/20
+ */
+const TOOLTIP_SLICE = [10, 30, 70, 10] as const;
+const SHADOW_SLICE = 20;
+/** 城区卡照原作 districtInfo 不加框，文字下垫 shadowBlobText 黑色阴影；切线 2160p 左上右下 28/18/28/16 */
+const TEXT_SHADOW_SLICE = [18, 28, 16, 28] as const;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -697,6 +706,12 @@ export function MapPanel({
         {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
         {hover && (
           <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
+            <NineSlice
+              id="map.shadowText"
+              tint="#000"
+              slice={TEXT_SHADOW_SLICE}
+              className={styles.mapDistrictShadow}
+            />
             <div className={styles.mapDistrictHead}>
               <Asset id={districtIcon(hover.district)} tint="var(--cp-yellow)" height={44} />
               <div>
@@ -732,60 +747,81 @@ export function MapPanel({
 
         {dest && (
           <section className={styles.mapRouteCard} data-overlay="" aria-label={`去${dest.name}`}>
-            <div className={styles.mapRouteHead}>
-              <div>
-                <h3 className={styles.mapTitle}>{dest.name}</h3>
-                <span className={styles.dim}>
-                  {dest.district}
-                  {dest.metro && " · 有 NCART 站台"}
-                </span>
+            {/* 原作默认 tooltip 的三层：阴影、底、框（框不透明度 0.3）；贴图垫在外壳上，内容在里层滚动 */}
+            <NineSlice
+              id="map.shadowSmall"
+              tint="var(--tip-shadow)"
+              slice={SHADOW_SLICE}
+              className={styles.mapTipShadow}
+            />
+            <NineSlice
+              id="map.tooltipBg"
+              tint="var(--tip-bg)"
+              slice={TOOLTIP_SLICE}
+              className={styles.mapTipBg}
+            />
+            <NineSlice
+              id="map.tooltipFg"
+              tint="var(--tip-frame)"
+              slice={TOOLTIP_SLICE}
+              className={styles.mapTipFrame}
+            />
+            <div className={styles.mapRouteBody}>
+              <div className={styles.mapRouteHead}>
+                <div>
+                  <h3 className={`${styles.mapTitle} ${styles.mapTipTitle}`}>{dest.name}</h3>
+                  <span className={styles.dim}>
+                    {dest.district}
+                    {dest.metro && " · 有 NCART 站台"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.mapLayer}
+                  aria-label="取消选中"
+                  onClick={() => setPicked(null)}
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                className={styles.mapLayer}
-                aria-label="取消选中"
-                onClick={() => setPicked(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <ul className={styles.routeList}>
-              {dest.routes.map((r) => (
-                <li key={r.mode}>
-                  <button
-                    type="button"
-                    className={styles.routeOption}
-                    disabled={!onTravel || r.blocked !== undefined}
-                    onClick={() => onTravel?.(dest, r)}
-                  >
-                    <b>{r.label}</b>
-                    <span>
-                      {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
-                      {r.riskLabel}
-                    </span>
-                    {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {!onTravel && <p className={styles.dim}>这一轮还没写完，写完再出发。</p>}
-            {view.travel.vehicles.length > 0 && (
-              <>
-                <h4 className={styles.mapSubtitle}>名下的车</h4>
-                <ul className={styles.routeList}>
-                  {view.travel.vehicles.map((v) => (
-                    <li key={v.id}>
-                      {v.name}
-                      <span className={styles.dim}>
-                        {" "}
-                        · {v.classLabel} · {v.conditionLabel}
-                        {v.stolen && " · 偷来的"}
+              <ul className={styles.routeList}>
+                {dest.routes.map((r) => (
+                  <li key={r.mode}>
+                    <button
+                      type="button"
+                      className={styles.routeOption}
+                      disabled={!onTravel || r.blocked !== undefined}
+                      onClick={() => onTravel?.(dest, r)}
+                    >
+                      <b>{r.label}</b>
+                      <span>
+                        {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
+                        {r.riskLabel}
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+                      {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!onTravel && <p className={styles.dim}>这一轮还没写完，写完再出发。</p>}
+              {view.travel.vehicles.length > 0 && (
+                <>
+                  <h4 className={styles.mapSubtitle}>名下的车</h4>
+                  <ul className={styles.routeList}>
+                    {view.travel.vehicles.map((v) => (
+                      <li key={v.id}>
+                        {v.name}
+                        <span className={styles.dim}>
+                          {" "}
+                          · {v.classLabel} · {v.conditionLabel}
+                          {v.stolen && " · 偷来的"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
           </section>
         )}
 
