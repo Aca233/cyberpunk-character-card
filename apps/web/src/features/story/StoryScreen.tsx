@@ -474,17 +474,28 @@ export function StoryScreen() {
     setPicked(null);
   };
 
+  /** 人性干扰的强度：0 没有，3 最强；人性归零、发作和记忆空白时拉满 */
+  const glitch =
+    view.humanity.current === 0 || view.psychosis.episodeHere || view.psychosis.blackoutOpen
+      ? 3
+      : view.humanity.current < 25
+        ? 2
+        : view.humanity.current < 40
+          ? 1
+          : 0;
   return (
     <div
       className={styles.screen}
       data-severe={severe || undefined}
       data-stage={view.humanity.stage}
+      data-glitch={glitch || undefined}
       style={
         severe ? ({ "--glow-img": cssUrl("hud.damageGlow") ?? "none" } as CSSProperties) : undefined
       }
     >
       <div className={styles.fx} aria-hidden />
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
+      <div className={styles.glitch} data-level={glitch} aria-hidden />
       <Hud view={view} />
       <SidePanel
         view={view}
