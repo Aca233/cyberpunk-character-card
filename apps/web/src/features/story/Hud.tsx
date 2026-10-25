@@ -30,6 +30,13 @@ const ATTRIBUTE_MAX = 20;
 /** 武器格的编号，和数字键 1–3 对应 */
 const WEAPON_SLOTS = [1, 2, 3] as const;
 
+/** 武器格编号用原作 icons_keyboard 的数字键图标，和剧情选项的数字键一样 */
+const SLOT_KEYS: Record<(typeof WEAPON_SLOTS)[number], AssetId> = {
+  1: "key.1",
+  2: "key.2",
+  3: "key.3",
+};
+
 const WOUND_LABELS = { none: "", light: "轻伤", severe: "重伤", zero: "失去意识" } as const;
 
 /** 顶部 HUD：左上生命和声望，右上地区、时间，正中是战斗进度 */
@@ -456,7 +463,9 @@ export function SidePanel({
             const active = inventory.active === n - 1;
             return (
               <li key={n} data-active={active || undefined} data-empty={id === null || undefined}>
-                <span className={styles.slotNum}>{n}</span>
+                <span className={styles.slotNum}>
+                  <Asset id={SLOT_KEYS[n]} tint="currentColor" height={20} alt={String(n)} />
+                </span>
                 <span>
                   {id === null ? "空" : itemName(id)}
                   {id !== null && inventory.tuned[id] && (

@@ -1126,13 +1126,10 @@
   display: grid;
   place-items: center;
   height: 1.3rem;
-  border: 1px solid var(--cp-red-dim);
   color: var(--cp-text-dim);
-  font-variant-numeric: tabular-nums;
 }
 
 .gear > li[data-active] .slotNum {
-  border-color: var(--cp-yellow);
   color: var(--cp-yellow);
 }
 
