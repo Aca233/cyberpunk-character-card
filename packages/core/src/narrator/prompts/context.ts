@@ -234,6 +234,16 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `路上偶遇（代码定的，这一场要写出来，玩家可以不理）：${view.travel.encounter.label}——${view.travel.encounter.note}`,
     );
+  if (view.factions.list.length > 0) {
+    const turf = view.factions.list.filter((f) => f.here);
+    if (turf.length > 0)
+      lines.push(
+        `这里（${view.factions.district}）是${turf.map((f) => `${f.name}（${f.turfNote ?? "整片"}，对你${f.attitudeLabel}）`).join("、")}的地盘`,
+      );
+    lines.push(
+      `势力（faction 写 id）：${view.factions.list.map((f) => `${f.id} ${f.name}${f.attitude === "neutral" ? "" : `【${f.attitudeLabel}${f.reason ? `：${f.reason}` : ""}】`}`).join("、")}；没标的对你中立`,
+    );
+  }
   const weapons = view.inventory.weapons.filter((w): w is string => w !== null);
   const withMods = (w: string) => {
     const fitted = view.inventory.mods[w] ?? [];

@@ -19,6 +19,7 @@ export * as combatRules from "./systems/combat";
 export * as cyberwareRules from "./systems/cyberware";
 export * as diceRules from "./systems/dice";
 export * as economyRules from "./systems/economy";
+export * as factionsRules from "./systems/factions";
 export * as falloutRules from "./systems/fallout";
 export * as hackingRules from "./systems/hacking";
 export * as healthRules from "./systems/health";

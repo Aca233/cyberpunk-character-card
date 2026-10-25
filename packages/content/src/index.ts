@@ -1,6 +1,7 @@
 import type { GameContent } from "@cp/core";
 import { cyberware } from "./cyberware";
 import { encounters } from "./encounters";
+import { factions } from "./factions";
 import { fixers } from "./fixers";
 import { quickhacks } from "./hacking";
 import { items } from "./items";
@@ -17,6 +18,7 @@ export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
 export { cyberware } from "./cyberware";
 export { encounters } from "./encounters";
+export { factions } from "./factions";
 export { fixers } from "./fixers";
 export { quickhacks } from "./hacking";
 export { items } from "./items";
@@ -58,6 +60,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   quickhacks,
   encounters,
   vehicles,
+  factions,
   twists,
   consequences,
   jobTemplates,

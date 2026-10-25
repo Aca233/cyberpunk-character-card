@@ -50,6 +50,13 @@ import {
 } from "./systems/dice/schema";
 import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
 import {
+  attitudeLabel,
+  currentAttitude,
+  FACTION_KIND_LABELS,
+  FactionsStateSchema,
+  factionCatalog,
+} from "./systems/factions";
+import {
   DIVE_LAYERS,
   DIVE_MAX,
   deckOf,
@@ -884,6 +891,8 @@ export function projectState(
     hacking: hackingView(world, installed, data, clock.location),
     /** 地图上的地点和到每个地点的路线；路线面板照这里显示，结算用同一套算法 */
     travel: travelView(world, data),
+    /** 各势力对玩家的态度，和当前地点是谁的地盘 */
+    factions: factionsView(world, data, clock.location),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1138,6 +1147,41 @@ function hackingView(
 }
 
 /** 地图上能去的地点、每种出行方式的耗时、花费和风险，以及这一场的路上偶遇 */
+function factionsView(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  location: string | null,
+) {
+  const catalog = factionCatalog(data);
+  const state = FactionsStateSchema.parse(world.slices.factions ?? {});
+  const place = location === null ? undefined : locationCatalog(data).get(location);
+  const name = (id: string) => catalog.get(id)?.name ?? id;
+  const list = [...catalog.values()].map((f) => {
+    const attitude = currentAttitude(state, f);
+    const stance = state.stances[f.id];
+    return {
+      id: f.id,
+      name: f.name,
+      en: f.en,
+      kind: f.kind,
+      kindLabel: FACTION_KIND_LABELS[f.kind],
+      color: f.color,
+      style: f.style,
+      turf: f.turf,
+      turfNote: f.turfNote ?? null,
+      allies: f.allies.map(name),
+      enemies: f.enemies.map(name),
+      attitude,
+      attitudeLabel: attitudeLabel(f.kind, attitude),
+      reason: stance?.reason ?? null,
+      changedAt: stance ? formatGameTime(stance.at) : null,
+      /** 当前地点所在的城区是它的地盘 */
+      here: place !== undefined && f.turf.includes(place.district),
+    };
+  });
+  return { list, district: place?.district ?? null };
+}
+
 function travelView(world: WorldState, data: Readonly<Record<string, unknown>>) {
   const w = tripWorldOf(world);
   const destinations = [...locationCatalog(data).values()].flatMap((p) =>

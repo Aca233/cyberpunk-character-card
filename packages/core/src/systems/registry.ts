@@ -5,6 +5,7 @@ import { combat } from "./combat";
 import { cyberware } from "./cyberware";
 import { dice } from "./dice";
 import { economy } from "./economy";
+import { factions } from "./factions";
 import { fallout } from "./fallout";
 import { hacking } from "./hacking";
 import { health } from "./health";
@@ -38,6 +39,7 @@ export const systems: readonly AnySystem[] = [
   city,
   hacking,
   travel,
+  factions,
 ];
 
 export const registry = createRegistry(systems);
