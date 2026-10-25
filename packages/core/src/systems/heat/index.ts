@@ -37,6 +37,7 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       decayedAt: null,
       district: null,
       districtDay: null,
+      hideoutDay: null,
       recent: [],
       bounties: [],
     }),
@@ -50,7 +51,13 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       return applyEvent(draft, command, district, ctx.now);
     },
     tick(draft, span, ctx) {
-      tickHeat(draft, span, districtOf(ctx.read<WorldClockState>("world").location, ctx.data));
+      // heat 不能读安全屋（safehouse→travel→heat 会成环），回合流程把“这一轮躲在自己的安全屋里”放进事实
+      tickHeat(
+        draft,
+        span,
+        districtOf(ctx.read<WorldClockState>("world").location, ctx.data),
+        ctx.facts.hideout === true,
+      );
     },
     on: {
       // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星

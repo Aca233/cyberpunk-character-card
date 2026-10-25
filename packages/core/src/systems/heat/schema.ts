@@ -85,6 +85,8 @@ export const HeatStateSchema = z.object({
   district: z.string().nullable(),
   /** 上次因为换城区多降一星是第几个游戏日 */
   districtDay: z.number().int().nullable(),
+  /** 上次因为躲在自己的安全屋多降一星是第几个游戏日；旧存档没有 */
+  hideoutDay: z.number().int().nullable().default(null),
   recent: z.array(HeatEventSchema).max(RECENT_EVENTS),
   /** 悬赏：不随时间消失，只能靠剧情了结 */
   bounties: z.array(BountySchema).default([]),

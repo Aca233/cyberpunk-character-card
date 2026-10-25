@@ -909,6 +909,12 @@ export async function runNarratorTurn(
       .map((c) => [c.slot, { id: c.id, name: parts.get(c.id)?.name ?? c.id }]),
   );
   if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
+  // 躲在自己的安全屋：heat 不能读安全屋（safehouse→travel→heat 会成环），这一轮没出门才算
+  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+  const homes = (world.slices.safehouse as { homes?: { location?: unknown }[] } | undefined)?.homes;
+  if (!trip && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
+    facts.hideout = true;
+  }
   // 开了斯安威斯坦：先扣人性再结算；能不能开（clutch、义体能用）由后端在调模型前拦下
   if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);

@@ -190,16 +190,31 @@ export function applyHeat(
   };
 }
 
+/** 在自己的安全屋里一口气躲够这么久（分钟），多降一星（本作改编） */
+export const HIDEOUT_MINUTES = 6 * 60;
+
 /**
  * 时间推进：从最后一次被看见算起每满一个游戏日降一星（所以 3 星以上睡一觉也清不掉）；
- * 换了城区当天多降一星，每个游戏日最多一次
+ * 换了城区当天多降一星，每个游戏日最多一次；在自己的安全屋里躲满 6 小时也多降一星，每个游戏日最多一次
  */
-export function tickHeat(draft: Draft<HeatState>, span: TimeSpan, district: string | null): void {
+export function tickHeat(
+  draft: Draft<HeatState>,
+  span: TimeSpan,
+  district: string | null,
+  hideout = false,
+): void {
   if (draft.stars > 0 && draft.decayedAt !== null) {
     const days = Math.floor((span.to - draft.decayedAt) / HEAT_DECAY_MINUTES);
     if (days > 0) {
       draft.stars = Math.max(0, draft.stars - days);
       draft.decayedAt += days * HEAT_DECAY_MINUTES;
+    }
+  }
+  if (hideout && draft.stars > 0 && span.to - span.from >= HIDEOUT_MINUTES) {
+    const day = Math.floor(span.to / HEAT_DECAY_MINUTES);
+    if (draft.hideoutDay !== day) {
+      draft.stars = Math.max(0, draft.stars - 1);
+      draft.hideoutDay = day;
     }
   }
   if (district === null) return;
