@@ -64,15 +64,14 @@ export function StashPanel({
             <div className={styles.docBody}>
               <div className={styles.mapLayers}>
                 {boxes.map((b) => (
-                  <button
+                  <Button
                     key={b.id}
-                    type="button"
-                    className={styles.mapLayer}
-                    aria-pressed={b.id === picked}
+                    small
+                    pressed={b.id === picked}
                     onClick={() => setPicked(b.id)}
                   >
                     {b.name}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {box && (
