@@ -775,6 +775,19 @@ export function MapPanel({
                       disabled={!onTravel || r.blocked !== undefined}
                       onClick={() => onTravel?.(dest, r)}
                     >
+                      {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
+                      <NineSlice
+                        id="map.filterCellBg"
+                        tint="var(--f-bg)"
+                        slice={CELL_SLICE}
+                        className={styles.mapFilterLayer}
+                      />
+                      <NineSlice
+                        id="map.filterCellFg"
+                        tint="var(--f-frame)"
+                        slice={CELL_SLICE}
+                        className={styles.mapFilterLayer}
+                      />
                       <b>{r.label}</b>
                       <span>
                         {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险

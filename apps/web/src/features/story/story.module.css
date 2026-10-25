@@ -1873,21 +1873,37 @@
   gap: 0.5rem;
 }
 
+/* 路线选项：贴图层同筛选开关（cell_bg 底、cell_fg 框，右下斜角），平时 CustomFilter Default、悬停 Hover */
 .routeOption {
+  --f-bg: var(--filter-bg);
+  --f-frame: var(--filter-off-frame);
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: 0.15rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  /* 右下是斜切角，右边和底边多留一点 */
+  padding: 0.5rem 1.1rem 0.6rem 0.7rem;
   text-align: left;
-  background: transparent;
-  color: inherit;
-  border: 1px solid var(--cp-yellow-dim);
+  background: none;
+  color: var(--cp-text);
+  border: 0;
   font: inherit;
   cursor: var(--cp-cursor-hand);
+  transition: color var(--dur-flash);
 }
 
-.routeOption:hover:not(:disabled) {
-  border-color: var(--cp-yellow);
+.routeOption > b {
+  color: var(--f-label, var(--filter-off));
+  transition: color var(--dur-flash);
+}
+
+.routeOption:hover:not(:disabled),
+.routeOption:focus-visible {
+  --f-bg: var(--filter-hover-bg);
+  --f-frame: var(--filter-on);
+  --f-label: var(--filter-on);
+  outline: none;
 }
 
 .routeOption:disabled {
@@ -1903,6 +1919,13 @@
 
 /* 全屏地图：上面一排工具，下面整块是可缩放拖动的地图；图例在右下角，选中地点后左下角出路线卡 */
 .mapScreen {
+  /* 筛选开关和路线选项共用：配色照 world_map_style.inkstyle 的 CustomFilter 三态，色值取 world_map.inkwidget 里 MainColors 的兜底值 */
+  --filter-on: #5ef6ff; /* MainColors.Blue */
+  --filter-on-frame: #349197; /* MainColors.MildBlue */
+  --filter-hover-bg: #172c2e; /* MainColors.FaintBlue */
+  --filter-bg: #0e0e17; /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
+  --filter-off: var(--cp-red); /* MainColors.Red，没有兜底值，用本作红色 */
+  --filter-off-frame: var(--cp-red-dim); /* MainColors.FaintRed，没有兜底值，用本作暗红近似 */
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -2178,13 +2201,6 @@
 
 /* 右下角图例：浮在地图上，可以收起；每一项就是原作 world_map 的 FiltersListItem 筛选开关 */
 .mapLegendBox {
-  /* 配色照 world_map_style.inkstyle 的 CustomFilter 三态，色值取 world_map.inkwidget 里 MainColors 的兜底值 */
-  --filter-on: #5ef6ff; /* MainColors.Blue */
-  --filter-on-frame: #349197; /* MainColors.MildBlue */
-  --filter-hover-bg: #172c2e; /* MainColors.FaintBlue */
-  --filter-bg: #0e0e17; /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
-  --filter-off: var(--cp-red); /* MainColors.Red，没有兜底值，用本作红色 */
-  --filter-off-frame: var(--cp-red-dim); /* MainColors.FaintRed，没有兜底值，用本作暗红近似 */
   /*
    * 原作筛选列表本身没有底和框；框借同一屏的说明面板（FastTravelInstructions）：
    * Background_BG = cell_flip_bg，Fullscreen_PrimaryBackgroundDarkest，不透明度 0.61；
