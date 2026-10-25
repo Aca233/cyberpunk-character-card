@@ -120,10 +120,27 @@ function TurnBlock({
           {d.purpose} · d{d.sides} → {d.faces.join(" / ")}
         </p>
       ))}
-      {paragraphs(turn.text).map((p, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-        <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
-      ))}
+      {turn.lostControl && (
+        <p className={styles.lostControl}>
+          <strong>[失控]</strong> 你想：{turn.lostControl.intent}；实际：{turn.lostControl.actual}
+        </p>
+      )}
+      {turn.blackout ? (
+        <details className={styles.blackout}>
+          <summary className={styles.blackoutTitle}>
+            [记忆缺失] 这一段角色记不起来；展开看回合日志里的原文
+          </summary>
+          {paragraphs(turn.text).map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
+            <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
+          ))}
+        </details>
+      ) : (
+        paragraphs(turn.text).map((p, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
+          <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
+        ))
+      )}
       {turn.voices.map((v, i) => (
         <p
           // biome-ignore lint/suspicious/noArrayIndexKey: 同一轮的内心声音按写下的顺序排，不会重排

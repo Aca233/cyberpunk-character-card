@@ -97,7 +97,7 @@ import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
-import { psychosisView } from "./systems/psychosis/apply";
+import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
 import { currentAlert } from "./systems/stealth/apply";
@@ -941,7 +941,7 @@ export function projectState(
     trauma: traumaView(world, data, clock.location, world.time),
     /** 安全屋、存放箱、后备箱和战利品墙 */
     safehouse: safehouseView(world, data, clock.location),
-    psychosis: psychosisView(world.slices.psychosis, world.time),
+    psychosis: psychosisView(world.slices.psychosis, world.time, clock.scene),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1150,6 +1150,10 @@ export function projectState(
       dropped: t.dropped.length,
       /** 未定稿的原因：正文和账目对不上，界面提示并给“重新生成” */
       unsettled: t.unsettled ?? null,
+      /** 这一轮短暂失控：玩家的意图和实际发生的事 */
+      lostControl: lostControlOf(t.commands),
+      /** 落在严重发作后的记忆空白里：角色视角折起来，原文以回合日志为准 */
+      blackout: blackoutTurns(turns, world.slices.psychosis).has(t.seq),
     })),
   };
 }

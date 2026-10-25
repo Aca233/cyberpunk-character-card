@@ -205,6 +205,13 @@ export function stateSummary(view: PlayerView): string {
       lines.push("压制剂戒断中：烦躁、手抖、睡不好；相关检定写一项减值（来源：戒断）");
     else if (s.dependent) lines.push("已经依赖压制剂：停药一天就会戒断");
   }
+  if (view.psychosis.episodeHere) lines.push("这个场景已经发作过一次，不再安排发作");
+  if (view.psychosis.blackoutOpen)
+    lines.push("严重发作还没过去：这一段事后会成为记忆空白，场景结束后角色记不清");
+  if (view.psychosis.blackouts.length > 0)
+    lines.push(
+      `记忆空白：${view.psychosis.blackouts.map((b) => `${b.from} 到 ${b.to}`).join("、")}；角色自己想不起这些时候的事，只能从别人的反应、新闻和物证拼回，真相以回合日志为准`,
+    );
   if (view.trauma.active)
     lines.push(
       `创伤小组：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.dispatch.ok ? "现在叫得来（倒下或濒死时写 trauma rescue）" : `现在不会来：${view.trauma.dispatch.why}`}`,

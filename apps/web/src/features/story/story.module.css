@@ -1974,3 +1974,24 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 赛博精神病：失控标记和记忆空白 */
+.lostControl {
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.5rem;
+  border-left: 2px solid var(--cp-red-line);
+  color: var(--cp-red);
+  font-size: 0.85rem;
+}
+
+.blackout {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--cp-red-dim);
+}
+
+.blackoutTitle {
+  cursor: pointer;
+  color: var(--cp-red);
+  letter-spacing: 0.05em;
+}

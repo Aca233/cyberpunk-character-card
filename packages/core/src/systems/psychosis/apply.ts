@@ -1,15 +1,19 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
-import { HUMANITY_KINDS } from "../humanity";
+import { HUMANITY_KINDS, type HumanityState, PSYCHOSIS_BELOW } from "../humanity";
 import type { InventoryState } from "../inventory";
 import type { NpcState } from "../npc";
-import { formatGameTime } from "../world";
+import { formatGameTime, type WorldClockState } from "../world";
 import {
   ANCHOR_LOSS_LABELS,
   ANCHORS_MAX,
   type AnchorCommand,
+  BLACKOUTS_KEPT,
   DEPENDENCE_DOSES,
   DEPENDENCE_WINDOW,
+  type EpisodeCommand,
+  type LostControlCommand,
+  LostControlCommandSchema,
   type PsychosisInternal,
   type PsychosisState,
   PsychosisStateSchema,
@@ -137,11 +141,106 @@ export function takeSuppressant(
   };
 }
 
-/** 给界面和提示词的锚点、压制剂情况 */
-export function psychosisView(slice: unknown, now: number) {
+/** 发作：人性低于 40 才成立；一个场景最多一次，同一件事只一次；严重的开一段记忆空白 */
+export function applyEpisode(
+  draft: Draft<PsychosisState>,
+  command: EpisodeCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const humanity = ctx.read<HumanityState>("humanity").current;
+  if (humanity >= PSYCHOSIS_BELOW) {
+    return fail(`人性 ${humanity}，不低于 ${PSYCHOSIS_BELOW}，不会发作`);
+  }
+  const scene = ctx.read<WorldClockState>("world").scene;
+  if (draft.episodeScene === scene) return fail("这个场景已经发作过一次");
+  if (command.event !== undefined && draft.events.includes(command.event)) {
+    return fail(`「${command.event}」这件事已经发作过`);
+  }
+  draft.episodeScene = scene;
+  if (command.event !== undefined) draft.events.push(command.event);
+  const notes = [`赛博精神病发作：${command.trigger}`];
+  if (command.severity === "severe") {
+    draft.blackouts.push({ scene, from: ctx.now, to: null });
+    if (draft.blackouts.length > BLACKOUTS_KEPT) draft.blackouts.shift();
+    notes.push("严重发作：这一段事后会记不清");
+  }
+  return { ok: true, notes };
+}
+
+/** 短暂失控：这个场景发作过才成立；说明里同时写意图和实际 */
+export function applyLostControl(
+  draft: Draft<PsychosisState>,
+  command: LostControlCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const scene = ctx.read<WorldClockState>("world").scene;
+  if (draft.episodeScene !== scene) return fail("这个场景没有发作，不会失控；先写 episode");
+  draft.lostControl += 1;
+  return { ok: true, notes: [`[失控] 你想：${command.intent}；实际：${command.actual}`] };
+}
+
+/** 场景结束：还开着的记忆空白到这里为止 */
+export function closeBlackouts(draft: Draft<PsychosisState>, now: number): void {
+  for (const b of draft.blackouts) if (b.to === null) b.to = now;
+}
+
+function isSevereEpisode(command: unknown): boolean {
+  if (typeof command !== "object" || command === null) return false;
+  const c = command as { type?: unknown; severity?: unknown };
+  return c.type === "episode" && c.severity === "severe";
+}
+
+/** 哪几轮落在已经结束的记忆空白里：那个场景从严重发作那一轮起，到场景结束 */
+export function blackoutTurns(
+  turns: readonly {
+    readonly seq: number;
+    readonly scene?: number | undefined;
+    readonly commands: readonly unknown[];
+  }[],
+  slice: unknown,
+): ReadonlySet<number> {
+  const state = PsychosisStateSchema.parse(slice ?? {});
+  const closed = new Set(state.blackouts.filter((b) => b.to !== null).map((b) => b.scene));
+  const started = new Set<number>();
+  const out = new Set<number>();
+  for (const t of turns) {
+    if (t.scene === undefined || !closed.has(t.scene)) continue;
+    if (!started.has(t.scene) && t.commands.some(isSevereEpisode)) started.add(t.scene);
+    if (started.has(t.scene)) out.add(t.seq);
+  }
+  return out;
+}
+
+/** 这一轮的失控：玩家的意图和实际发生的事；没有时为 null */
+export function lostControlOf(
+  commands: readonly unknown[],
+): { readonly intent: string; readonly actual: string } | null {
+  for (const c of commands) {
+    const parsed = LostControlCommandSchema.safeParse(c);
+    if (parsed.success) return { intent: parsed.data.intent, actual: parsed.data.actual };
+  }
+  return null;
+}
+
+/** 给界面和提示词的锚点、压制剂、发作情况 */
+export function psychosisView(slice: unknown, now: number, scene: number | null = null) {
   const state = PsychosisStateSchema.parse(slice ?? {});
   const s = suppressantStatus(state.doses, now);
   return {
+    /** 这个场景已经发作过 */
+    episodeHere: scene !== null && state.episodeScene === scene,
+    /** 严重发作还没过去 */
+    blackoutOpen: state.blackouts.some((b) => b.to === null),
+    /** 已经结束的记忆空白，最近 3 段 */
+    blackouts: state.blackouts
+      .filter((b) => b.to !== null)
+      .slice(-3)
+      .map((b) => ({
+        scene: b.scene,
+        from: formatGameTime(b.from),
+        to: formatGameTime(b.to ?? b.from),
+      })),
+    lostControl: state.lostControl,
     anchors: state.anchors.map((a) => ({
       npc: a.npc,
       name: a.name,

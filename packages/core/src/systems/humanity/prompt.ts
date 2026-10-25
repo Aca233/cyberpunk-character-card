@@ -7,6 +7,7 @@ export const PSYCHOSIS_BELOW = 40;
 export const psychosisRules: RuleModule<HumanityState> = {
   id: "cyberpsychosis",
   title: "赛博精神病",
+  commands: ["episode", "lostControl"],
   when: (state) => state.current < PSYCHOSIS_BELOW,
   judge: `- 角色人性已低于 ${PSYCHOSIS_BELOW}。只在合乎情理的高压时刻可能发作：重大失败、连续过载义体、重要的人死去、和旧创伤有关的刺激；每个场景最多一次。
 - 玩家照常自由行动。交出武器、喊出锚点的名字、把自己锁进车里这类合理办法直接起作用；只有真正不确定的部分才给 check，常用 cool，人性 20–39 用 street 档 high，1–19 用 veteran 档 high。
@@ -19,5 +20,7 @@ export const psychosisRules: RuleModule<HumanityState> = {
 - 发作时写失真的感知、熟人突然变得陌生、难以控制的冲动、义体冰冷的声音；幻觉不能写成已确认的事实。
 - 玩家照常自由行动。交出武器、喊出锚点的名字、把自己锁进车里这类合理办法可以直接起作用；只有真正不确定的部分才给 check，常用 cool，人性 20–39 用 street 档 high，1–19 用 veteran 档 high。
 - 失败后果事先在 check 里写明范围（迟疑、误判、暴露位置、伤到关系，严重时短暂失控）；不暗中改写玩家的行动，不无故让玩家去杀人。
-- 建议选项里可以有义体的声音提出的冲动选项，但它只是选择之一。`,
+- 建议选项里可以有义体的声音提出的冲动选项，但它只是选择之一。
+- 安排了发作写 episode：trigger 写诱因，severity 写 mild，严重到事后记不清的写 severe（这一段之后成为记忆空白）；event 写这件事的 id，同一件事只发作一次；同一个场景第二次会被代码拒绝。
+- 发作中检定失败、角色短暂失控时写 lostControl：intent 写玩家原本想做的，actual 写实际发生的；界面标 [失控] 并同时显示两者。`,
 };
