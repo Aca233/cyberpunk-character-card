@@ -35,6 +35,8 @@ export const loadouts: readonly Loadout[] = [
     ],
     eddies: 500,
     cyberware: ["kiroshi-mk1"],
+    // 策划书：流浪者出身开局有一辆车；车型是本作改编
+    vehicles: ["thorton-colby-pickup"],
   },
   {
     id: "corpo",

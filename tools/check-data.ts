@@ -25,6 +25,7 @@ import {
   sampleCharacters,
   shops,
   twists,
+  vehicles,
 } from "@cp/content";
 import {
   BASE_RULES,
@@ -101,6 +102,7 @@ schema("义体医生 ripperdocs", cyberwareRules.RipperdocListSchema, ripperdocs
 schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
 schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters);
+schema("车型 vehicles", travelRules.VehicleCatalogSchema, vehicles);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
 schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
 schema("转折素材 twists", TwistCatalogSchema, twists);
@@ -135,6 +137,10 @@ for (const c of cyberware) {
 const locationIds = unique(
   "地点",
   locations.map((l) => l.id),
+);
+const vehicleIds = unique(
+  "车型",
+  vehicles.map((v) => v.id),
 );
 const fixerIds = unique(
   "中间人",
@@ -194,6 +200,7 @@ for (const l of loadouts) {
     "物品",
   );
   refs(`行装 ${l.id}`, l.cyberware ?? [], chromeIds, "义体");
+  refs(`行装 ${l.id}`, l.vehicles ?? [], vehicleIds, "车型");
   refs(`行装 ${l.id}`, l.programs ?? [], quickhackIds, "快速破解");
   if ((l.programs ?? []).length > 0) {
     const deck = cyberware.find((c) => (l.cyberware ?? []).includes(c.id) && c.programSlots);
@@ -334,7 +341,7 @@ for (const e of encounters) {
   }
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

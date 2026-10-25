@@ -11,6 +11,7 @@ import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
 import { shops } from "./shops";
+import { vehicles } from "./vehicles";
 
 export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
@@ -30,6 +31,7 @@ export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 export { ripperdocs } from "./ripperdocs";
 export { shops } from "./shops";
+export { vehicles } from "./vehicles";
 
 /** 新存档放进世界的内容 */
 export const gameContent: GameContent = {
@@ -41,6 +43,7 @@ export const gameContent: GameContent = {
   openings,
   loadouts,
   quickhacks,
+  vehicles,
   // 没有开场的旧存档种的人
   defaultCast: ["rebecca", "maine", "faraday"],
 };
@@ -54,6 +57,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   shops,
   quickhacks,
   encounters,
+  vehicles,
   twists,
   consequences,
   jobTemplates,

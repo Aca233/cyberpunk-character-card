@@ -65,14 +65,6 @@ export type Trip = z.infer<typeof TripSchema>;
 /** 留几条出行记录 */
 export const TRIPS_KEPT = 10;
 
-export const TravelStateSchema = z.object({
-  trips: z.array(TripSchema),
-  /** 上一次偶遇在第几个场景；一个场景最多一次 */
-  encounterScene: z.number().int().nullable(),
-  encounter: EncounterSchema.nullable(),
-});
-export type TravelState = z.infer<typeof TravelStateSchema>;
-
 /** 只能由代码发出：玩家在路线面板确认的出行 */
 export const TravelCommandSchema = z
   .object({
@@ -107,3 +99,113 @@ export const ENCOUNTER_PACE_FACTORS: Readonly<Record<EncounterPace, number>> = {
   normal: 1,
   often: 1.5,
 };
+
+/** 载具分类照原作：经济型、行政型、运动型、超跑、越野、摩托 */
+export const VehicleClassSchema = z.enum([
+  "economy",
+  "executive",
+  "sport",
+  "hyper",
+  "offroad",
+  "moto",
+]);
+export type VehicleClass = z.infer<typeof VehicleClassSchema>;
+export const VEHICLE_CLASS_LABELS: Readonly<Record<VehicleClass, string>> = {
+  economy: "经济型",
+  executive: "行政型",
+  sport: "运动型",
+  hyper: "超跑",
+  offroad: "越野",
+  moto: "摩托",
+};
+
+/** 车型表的一条；数据在 content 包的 vehicles.ts */
+export const VehicleDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  /** 厂牌 */
+  maker: z.string().min(1).optional(),
+  class: VehicleClassSchema,
+  /** 速度档 1–5：开车出行的耗时按它折算 */
+  speed: z.number().int().min(1).max(5),
+  seats: z.number().int().min(1).max(8),
+  /** 后备箱能放几格东西 */
+  trunk: z.number().int().min(0).max(30),
+  price: z.number().int().min(1000).max(100_000),
+  note: z.string().min(1).optional(),
+});
+export type VehicleDef = z.infer<typeof VehicleDefSchema>;
+export const VehicleCatalogSchema = z.array(VehicleDefSchema);
+
+export const VehicleConditionSchema = z.enum(["intact", "damaged", "wrecked"]);
+export type VehicleCondition = z.infer<typeof VehicleConditionSchema>;
+export const VEHICLE_CONDITION_LABELS: Readonly<Record<VehicleCondition, string>> = {
+  intact: "完好",
+  damaged: "受损",
+  wrecked: "报废",
+};
+
+/** 名下的一辆车 */
+export const OwnedVehicleSchema = z.object({
+  /** 这辆车的 id，例如 thorton-galena-1 */
+  id: z.string().min(1),
+  model: z.string().min(1),
+  condition: VehicleConditionSchema,
+  /** 偷来的：开着它风险高，迟早要扔 */
+  stolen: z.boolean(),
+  since: z.number().int(),
+});
+export type OwnedVehicle = z.infer<typeof OwnedVehicleSchema>;
+
+/** 最多同时有几辆车（含偷来的） */
+export const VEHICLES_MAX = 6;
+/** 修车按车价的这个比例收钱（本作改编） */
+export const REPAIR_SHARE = 0.1;
+
+/** 模型使用：{"type": "vehicle", "action": "steal", "model": "thorton-galena", "witnesses": 0, "reason": "..."} */
+export const VehicleCommandSchema = z
+  .object({
+    type: z.literal("vehicle"),
+    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase"]),
+    /** buy、steal 写车型 id */
+    model: z.string().min(1).optional(),
+    /** 对哪辆车；不写是正在开的那辆（最近一辆没报废的） */
+    vehicle: z.string().min(1).optional(),
+    /** steal：看见的人数 */
+    witnesses: z.number().int().min(0).max(1000).optional(),
+    /** chase：事先说好的失败代价——damage 车受损，stopped 被拦下，heat 通缉星涨 */
+    stake: z.enum(["damage", "stopped", "heat"]).optional(),
+    reason: z.string().min(1),
+  })
+  .superRefine((c, ctx) => {
+    if ((c.action === "buy" || c.action === "steal") && c.model === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["model"],
+        message: "buy 和 steal 要写 model（车型 id）",
+      });
+    if (c.action === "chase" && c.stake === undefined)
+      ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
+  })
+  .describe(
+    "载具：buy 买车（代码按车价扣钱）；steal 偷车（本轮要技术门槛达标或检定成功，写 witnesses）；damage 车受损一档；wreck 报废；repair 修好受损的车（代码按车价一成收钱）；abandon 扔掉；chase 追车或被追（本轮要掷反应，stake 写失败的代价）",
+  );
+export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
+
+/** 开局送的车（只能由代码发出） */
+export const VehicleGrantSchema = z.object({
+  type: z.literal("vehicle.grant"),
+  model: z.string().min(1),
+  reason: z.string().min(1),
+});
+export type VehicleGrant = z.infer<typeof VehicleGrantSchema>;
+
+export const TravelStateSchema = z.object({
+  trips: z.array(TripSchema),
+  /** 上一次偶遇在第几个场景；一个场景最多一次 */
+  encounterScene: z.number().int().nullable(),
+  encounter: EncounterSchema.nullable(),
+  /** 名下的车；旧存档没有 */
+  vehicles: z.array(OwnedVehicleSchema).default([]),
+});
+export type TravelState = z.infer<typeof TravelStateSchema>;

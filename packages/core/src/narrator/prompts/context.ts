@@ -226,6 +226,10 @@ export function stateSummary(view: PlayerView): string {
         `这里入侵过的网络：${h.breaches.map((n) => `${n.name}（${n.at}，拿下${n.gains.join("、")}）`).join("；")}`,
       );
   }
+  if (view.travel.vehicles.length > 0)
+    lines.push(
+      `名下的车：${view.travel.vehicles.map((v) => `${v.id}「${v.name}」（${v.classLabel}，速度 ${v.speed} 档，${v.seats} 座，${v.conditionLabel}${v.stolen ? "，偷来的" : ""}）`).join("；")}`,
+    );
   if (view.travel.encounter)
     lines.push(
       `路上偶遇（代码定的，这一场要写出来，玩家可以不理）：${view.travel.encounter.label}——${view.travel.encounter.note}`,

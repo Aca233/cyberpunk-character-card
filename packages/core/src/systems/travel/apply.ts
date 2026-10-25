@@ -28,6 +28,7 @@ import {
   type TravelState,
   TravelStateSchema,
 } from "./schema";
+import { activeVehicle, vehicleCatalog, vehicleFactor } from "./vehicles";
 
 /**
  * 耗时 = 固定 + 每单位距离的分钟数；距离是底图百分比坐标的直线距离，1 单位约 100 米（本作改编，待校准）。
@@ -90,7 +91,7 @@ export function tripWorldOf(world: {
     eddies: EconomyStateSchema.parse(world.slices.economy).eddies,
     inCombat: CombatStateSchema.parse(world.slices.combat).active !== null,
     travel: TravelStateSchema.parse(
-      world.slices.travel ?? { trips: [], encounterScene: null, encounter: null },
+      world.slices.travel ?? { trips: [], encounterScene: null, encounter: null, vehicles: [] },
     ),
   };
 }
@@ -127,21 +128,30 @@ export function routeOptions(
   const there = places.get(to);
   const d = distanceBetween(here, there);
   const period = periodOf(w.now);
+  const cars = vehicleCatalog(data);
   return MODES.map((mode) => {
     const speed = TRAVEL_SPEEDS[mode];
-    const minutes = d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit));
+    // 开车：按正在开的那辆的速度档和车况折算
+    const car =
+      mode === "car" || mode === "stolen"
+        ? activeVehicle(w.travel.vehicles, mode === "stolen")
+        : undefined;
+    const carDef = car ? cars.get(car.model) : undefined;
+    const factor = car ? vehicleFactor(car, carDef) : 1;
+    const minutes =
+      d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit * factor));
     const cost =
       mode === "taxi" && d !== undefined ? Math.ceil((TAXI_BASE + d * TAXI_PER_UNIT) / 5) * 5 : 0;
     const risk = riskOf(mode, period, w.heat);
     const base = {
       mode,
-      label: TRAVEL_MODE_LABELS[mode],
+      label: carDef ? `${TRAVEL_MODE_LABELS[mode]}（${carDef.name}）` : TRAVEL_MODE_LABELS[mode],
       minutes,
       cost,
       risk,
       riskLabel: RISK_LABELS[risk],
     };
-    const blocked = blockOf(w, mode, here, there, d, cost);
+    const blocked = blockOf(w, mode, here, there, d, cost, car !== undefined);
     return blocked ? { ...base, blocked } : base;
   });
 }
@@ -153,6 +163,7 @@ function blockOf(
   there: LocationDef | undefined,
   d: number | undefined,
   cost: number,
+  hasCar: boolean,
 ): string | undefined {
   if (!there) return "这个地点不在地点表里";
   if (w.inCombat) return "战斗中走不开";
@@ -160,8 +171,9 @@ function blockOf(
   if (d === undefined)
     return spot(there) ? "现在的位置不在地图上，用自由输入写怎么去" : `${there.name}还没上地图`;
   if (mode === "metro" && !(here?.metro && there.metro)) return "两头不都有轻轨站";
-  if (mode === "car") return "还没有自己的车";
-  if (mode === "stolen") return "附近没有能偷的车";
+  if (mode === "car" && !hasCar)
+    return w.travel.vehicles.some((v) => !v.stolen) ? "自己的车都报废了" : "还没有自己的车";
+  if (mode === "stolen" && !hasCar) return "手上没有偷来的车：先在正文里偷一辆";
   if (cost > w.eddies) return `钱不够：要 ${cost}，只有 ${w.eddies}`;
   return undefined;
 }

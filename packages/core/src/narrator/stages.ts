@@ -14,6 +14,7 @@ import {
 } from "../systems/economy/schema";
 import { itemCatalog } from "../systems/inventory/apply";
 import { JobsStateSchema } from "../systems/jobs/schema";
+import { vehicleCatalog } from "../systems/travel/vehicles";
 import { WorldClockStateSchema } from "../systems/world/schema";
 import { type Gate, GateProposalSchema } from "./block";
 
@@ -25,7 +26,7 @@ import { type Gate, GateProposalSchema } from "./block";
 /** ① 判断里玩家这一轮要花的钱：只写买什么，价钱由代码查表 */
 export const BuyProposalSchema = z
   .object({
-    item: z.string().min(1).optional().describe("买物品写物品表里的 id"),
+    item: z.string().min(1).optional().describe("买物品写物品表里的 id，买车写车型 id"),
     service: ServiceSchema.optional().describe(
       "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
     ),
@@ -134,6 +135,10 @@ export function bigSpend(
   if (buy.service !== undefined) {
     label = SERVICES[buy.service].label;
     base = SERVICES[buy.service].price;
+  } else if (buy.item !== undefined && vehicleCatalog(data).has(buy.item)) {
+    const car = vehicleCatalog(data).get(buy.item) as { name: string; price: number };
+    label = car.name;
+    base = car.price;
   } else {
     const def =
       data.items === undefined || buy.item === undefined

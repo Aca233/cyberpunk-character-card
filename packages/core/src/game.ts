@@ -85,7 +85,16 @@ import { PhoneStateSchema } from "./systems/phone/schema";
 import { registry } from "./systems/registry";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
-import { planTrip, routeOptions, type TravelRequest, tripWorldOf } from "./systems/travel";
+import {
+  planTrip,
+  routeOptions,
+  type TravelRequest,
+  tripWorldOf,
+  VEHICLE_CLASS_LABELS,
+  VEHICLE_CONDITION_LABELS,
+  type VehicleDef,
+  vehicleCatalog,
+} from "./systems/travel";
 import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
 
@@ -101,6 +110,8 @@ export interface GameContent {
   readonly cyberware?: readonly CyberwareDef[];
   /** 快速破解表；开局自带的程序要用它结算 */
   readonly quickhacks?: readonly QuickhackDef[];
+  /** 车型表；开局送车时要用 */
+  readonly vehicles?: readonly VehicleDef[];
   /** 中间人；好感记在同 id 的人物卡上 */
   readonly fixers?: readonly {
     readonly id: string;
@@ -161,6 +172,8 @@ export interface Loadout {
   readonly cyberware?: readonly string[];
   /** 装进接入仓的快速破解程序 id；要同时带接入仓 */
   readonly programs?: readonly string[];
+  /** 开局名下的车（车型 id） */
+  readonly vehicles?: readonly string[];
 }
 
 /** 建档时按角色卡挑行装：出身里最后出现关键词的那一套（中文的中心词在后，“在公司打过零工的街头小子”是街头小子），
@@ -205,6 +218,7 @@ interface Kit {
   readonly eddies?: number | undefined;
   readonly cyberware?: readonly string[] | undefined;
   readonly programs?: readonly string[] | undefined;
+  readonly vehicles?: readonly string[] | undefined;
 }
 
 function mergeKits(loadouts: readonly Loadout[]): Kit {
@@ -213,6 +227,7 @@ function mergeKits(loadouts: readonly Loadout[]): Kit {
     eddies: loadouts.reduce((sum, l) => sum + (l.eddies ?? 0), 0),
     cyberware: [...new Set(loadouts.flatMap((l) => l.cyberware ?? []))],
     programs: [...new Set(loadouts.flatMap((l) => l.programs ?? []))],
+    vehicles: loadouts.flatMap((l) => l.vehicles ?? []),
   };
 }
 
@@ -232,6 +247,7 @@ function openingCommands(opening: GameOpening, start: number, kit: Kit = opening
     ...(kit.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
     ...(kit.programs ?? []).map((id) => ({ type: "hack", action: "learn", program: id, reason })),
     ...(kit.eddies ? [{ type: "money", delta: kit.eddies, reason }] : []),
+    ...(kit.vehicles ?? []).map((model) => ({ type: "vehicle.grant", model, reason })),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
       { type: "jobAccept", id: job.id },
@@ -312,6 +328,7 @@ export function newGameWorld(
       ...(content.items ? { items: content.items } : {}),
       ...(content.cyberware ? { cyberware: content.cyberware } : {}),
       ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),
+      ...(content.vehicles ? { vehicles: content.vehicles } : {}),
     },
   });
   for (const { command, result } of applied.results) {
@@ -1140,8 +1157,26 @@ function travelView(world: WorldState, data: Readonly<Record<string, unknown>>) 
         ],
   );
   const { encounter } = w.travel;
+  const cars = vehicleCatalog(data);
+  const vehicles = w.travel.vehicles.map((v) => {
+    const def = cars.get(v.model);
+    return {
+      id: v.id,
+      model: v.model,
+      name: def?.name ?? v.model,
+      maker: def?.maker ?? null,
+      classLabel: def ? VEHICLE_CLASS_LABELS[def.class] : "",
+      speed: def?.speed ?? 0,
+      seats: def?.seats ?? 0,
+      trunk: def?.trunk ?? 0,
+      condition: v.condition,
+      conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
+      stolen: v.stolen,
+    };
+  });
   return {
     destinations,
+    vehicles,
     encounter: encounter
       ? { label: encounter.label, note: encounter.note, district: encounter.district }
       : null,
