@@ -14,6 +14,7 @@ import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
 import { homes } from "./safehouses";
 import { shops } from "./shops";
+import { sidegigs } from "./sidegigs";
 import { vehicles } from "./vehicles";
 
 export { sampleCharacters } from "./characters";
@@ -37,6 +38,7 @@ export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 export { ripperdocs } from "./ripperdocs";
 export { homes } from "./safehouses";
 export { shops } from "./shops";
+export { sidegigs } from "./sidegigs";
 export { vehicles } from "./vehicles";
 
 /** 新存档放进世界的内容 */
@@ -70,5 +72,6 @@ export const gameData: Readonly<Record<string, unknown>> = {
   twists,
   consequences,
   jobTemplates,
+  sidegigs,
   // 原剧第 1–3 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };

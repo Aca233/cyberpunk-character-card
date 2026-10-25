@@ -6,6 +6,7 @@ import { Asset } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { GigsPanel } from "./GigsPanel";
 import { type HabitAction, Habits } from "./Habits";
 import { countdown } from "./Journal";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
@@ -670,6 +671,7 @@ export function SidePanel({
       </Panel>
 
       <SquadPanel squad={view.squad} onSquad={onSquad} />
+      <GigsPanel gigs={view.sidegigs} />
 
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
         {view.npcs.length === 0 ? (

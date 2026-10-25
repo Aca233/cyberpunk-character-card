@@ -192,6 +192,16 @@ export function stateSummary(view: PlayerView): string {
       lines.push(
         `${t.name}（${t.id}）：${t.items.map((i) => `${i.name}${i.count > 1 ? `×${i.count}` : ""}`).join("、")}（不在身上）`,
       );
+  const gigs = view.sidegigs;
+  if (gigs.active)
+    lines.push(
+      `正在比：${gigs.active.kindLabel}「${gigs.active.name}」，对手${gigs.active.opponent}（${gigs.active.tierLabel}，id ${gigs.active.id}）；按检定结果写 sidegig win 或 lose`,
+    );
+  const gigsHere = gigs.list.filter((g) => g.here && gigs.active?.id !== g.id);
+  if (gigsHere.length > 0)
+    lines.push(
+      `这里的拳赛和赛车：${gigsHere.map((g) => `${g.id} ${g.kindLabel}「${g.name}」对手${g.opponent}（${g.tierLabel}，押金 ${g.stake}、奖金 ${g.purse}${g.beaten ? "；已经赢过，不再比" : g.rematch ? `；刚输过，${g.rematch} 以后才肯再比` : ""}）：${g.note}`).join("；")}`,
+    );
   const squad = view.squad;
   if (squad.members.length > 0)
     lines.push(

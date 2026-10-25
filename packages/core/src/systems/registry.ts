@@ -18,6 +18,7 @@ import { npc } from "./npc";
 import { phone } from "./phone";
 import { psychosis } from "./psychosis";
 import { safehouse } from "./safehouse";
+import { sidegigs } from "./sidegigs";
 import { squad } from "./squad";
 import { stealth } from "./stealth";
 import { trauma } from "./trauma";
@@ -50,6 +51,7 @@ export const systems: readonly AnySystem[] = [
   safehouse,
   psychosis,
   squad,
+  sidegigs,
 ];
 
 export const registry = createRegistry(systems);

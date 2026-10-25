@@ -106,6 +106,7 @@ import { PhoneStateSchema } from "./systems/phone/schema";
 import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
+import { sidegigsView } from "./systems/sidegigs/apply";
 import { squadView } from "./systems/squad/apply";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
@@ -989,6 +990,7 @@ export function projectState(
     safehouse: safehouseView(world, data, clock.location),
     psychosis: psychosisView(world.slices.psychosis, world.time, clock.scene),
     squad: squadView(world.slices.squad, npcs.npcs, world.time),
+    sidegigs: sidegigsView(world.slices.sidegigs, data, clock.location, world.time),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
