@@ -739,6 +739,8 @@
       { "id": "gang.barghest", "atlas": "common/gang_logos", "slot": "logo_barghest" },
       { "id": "map.filterCellBg", "atlas": "common/atlas_shapes_sync", "slot": "cell_bg" },
       { "id": "map.filterCellFg", "atlas": "common/atlas_shapes_sync", "slot": "cell_fg" },
+      { "id": "qh.cellBg", "atlas": "common/atlas_shapes_sync", "slot": "qh_cell_bg" },
+      { "id": "qh.cellFg", "atlas": "common/atlas_shapes_sync", "slot": "qh_cell_fg" },
       { "id": "map.filterBoxBg", "atlas": "common/atlas_shapes_sync", "slot": "color_bg" },
       { "id": "map.filterBoxFg", "atlas": "common/atlas_shapes_sync", "slot": "color_fg" },
       { "id": "map.tooltipBg", "atlas": "common/atlas_shapes_sync", "slot": "tooltip_map_bg" },

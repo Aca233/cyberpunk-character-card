@@ -2847,20 +2847,31 @@ ul.mapLegend > li {
   color: var(--cp-cyan);
 }
 
+/* 程序格：原作 quickhacks.inkwidget 的 bg_button（Darkest 0.61）、bg_button_highlight（Blue，平时 0）、fg_button 框 */
 .wheelItem {
   position: absolute;
   top: 50%;
   left: 50%;
+  isolation: isolate;
   width: 72px;
-  margin: -16px 0 0 -36px;
-  padding: 3px 4px;
-  border: 1px solid var(--cp-cyan);
-  background: rgb(0 0 0 / 70%);
+  min-height: 38px;
+  margin: -19px 0 0 -36px;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
   color: var(--cp-cyan);
   font-size: 12px;
   line-height: 1.2;
   cursor: var(--cp-cursor-hand);
   transform: rotate(var(--a)) translate(78px) rotate(calc(-1 * var(--a)));
+}
+
+.wheelHi {
+  opacity: 0;
+}
+
+.wheelItem > [aria-hidden] {
+  z-index: -1;
 }
 
 .wheelItem small {
@@ -2869,8 +2880,12 @@ ul.mapLegend > li {
 }
 
 .wheelItem:hover:not(:disabled) {
-  background: var(--cp-cyan);
   color: #000;
+}
+
+.wheelItem:focus-visible .wheelHi,
+.wheelItem:hover:not(:disabled) .wheelHi {
+  opacity: 1;
 }
 
 .wheelItem:disabled {

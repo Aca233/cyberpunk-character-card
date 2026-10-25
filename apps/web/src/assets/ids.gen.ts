@@ -247,6 +247,8 @@ export const ASSET_IDS = [
   "panel.glowBottom",
   "panel.glowLeft",
   "panel.techFrame",
+  "qh.cellBg",
+  "qh.cellFg",
   "skillcheck.default",
   "skillcheck.netrunner",
   "skillcheck.solo",

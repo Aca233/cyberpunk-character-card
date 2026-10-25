@@ -1,6 +1,10 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
+import { NineSlice } from "../../ui/Asset";
 import styles from "./story.module.css";
+
+/** 原作 quickhacks.inkwidget 程序格 qh_cell_bg/fg 的切线（atlas_shapes_sync 2160p：左上右下 25/60/25/15） */
+const QH_CUT = [60, 25, 15, 25] as const;
 
 interface Program {
   readonly id: string;
@@ -63,6 +67,14 @@ export function QuickhackWheel({
                 onPick(p.name);
               }}
             >
+              <NineSlice id="qh.cellBg" tint="rgb(14 14 23 / 61%)" slice={QH_CUT} />
+              <NineSlice
+                id="qh.cellBg"
+                tint="rgb(94 246 255)"
+                slice={QH_CUT}
+                className={styles.wheelHi}
+              />
+              <NineSlice id="qh.cellFg" tint="rgb(40 255 255)" slice={QH_CUT} />
               {p.name}
               <small>{p.ram} 格</small>
             </button>
