@@ -8,6 +8,7 @@ import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
 import { type HabitAction, Habits } from "./Habits";
 import { countdown } from "./Journal";
+import { type SquadAction, SquadPanel } from "./SquadPanel";
 import styles from "./story.module.css";
 import { districtIcon, locationLabel, type View } from "./view";
 
@@ -229,6 +230,7 @@ export function SidePanel({
   onFactions,
   onStash,
   onAnchor,
+  onSquad,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -250,6 +252,8 @@ export function SidePanel({
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
   /** 设锚点或取消；正在生成时不传，按钮不显示 */
   readonly onAnchor?: ((action: "add" | "remove", npc: string) => void) | undefined;
+  /** 小队面板的动作；正在生成时不传，按钮不显示 */
+  readonly onSquad?: ((action: SquadAction, npc: string) => void) | undefined;
   /** 打开消息 */
   readonly onPhone: () => void;
   /** 打开地图和路线面板 */
@@ -623,6 +627,8 @@ export function SidePanel({
           </div>
         )}
       </Panel>
+
+      <SquadPanel squad={view.squad} onSquad={onSquad} />
 
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
         {view.npcs.length === 0 ? (

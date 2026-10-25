@@ -33,6 +33,7 @@ export * as phoneRules from "./systems/phone";
 export * as psychosisRules from "./systems/psychosis";
 export { registry, systems } from "./systems/registry";
 export * as safehouseRules from "./systems/safehouse";
+export * as squadRules from "./systems/squad";
 export * as stealthRules from "./systems/stealth";
 export * as traumaRules from "./systems/trauma";
 export * as travelRules from "./systems/travel";

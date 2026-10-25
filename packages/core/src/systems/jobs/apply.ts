@@ -196,6 +196,7 @@ export function endJob(
   now: number,
   humanity: number,
   npcs: NpcState["npcs"],
+  squad: readonly { npc: string; name: string; kind: string; share: number }[] = [],
 ): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
@@ -238,7 +239,27 @@ export function endJob(
       emit.push({ type: "affinity", id: job.fixer, delta, reason: `委托${label}` });
     }
   }
+  const cuts: { name: string; cut: number }[] = [];
+  for (const m of squad) {
+    if (m.kind !== "friend" || m.share <= 0 || paid <= 0 || !npcs[m.npc]?.alive) continue;
+    const cut = Math.floor((paid * m.share) / 100);
+    if (cut <= 0) continue;
+    cuts.push({ name: m.name, cut });
+    emit.push({
+      type: "money",
+      delta: -cut,
+      reason: `小队分账：${m.name}（${m.share}%）`,
+      event: `job:${job.id}:squad:${m.npc}`,
+    });
+  }
+  if (cuts.length > 0) {
+    const total = cuts.reduce((sum, c) => sum + c.cut, 0);
+    notes.push(
+      `小队分账：${cuts.map((c) => `${c.name} ${c.cut.toLocaleString("en-US")}`).join("、")}；到手 ${(paid - total).toLocaleString("en-US")}`,
+    );
+  }
   job.settlement = {
+    squad: cuts,
     credHalves,
     affinity,
     humanity: job.humanityAtAccept === null ? null : humanity - job.humanityAtAccept,

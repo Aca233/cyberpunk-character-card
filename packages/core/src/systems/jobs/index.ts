@@ -3,6 +3,7 @@ import type { CharacterState } from "../character";
 import type { HumanityState } from "../humanity";
 import type { NpcState } from "../npc";
 import { inCrisis, type PsychosisState } from "../psychosis";
+import type { SquadState } from "../squad";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsRules } from "./prompt";
 import {
@@ -20,7 +21,7 @@ import {
 /** 委托和中间人：委托卡、进展笔记、结局、中间人好感和结算；报酬交给欧元系统，声望交给角色系统 */
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
-  dependsOn: ["economy", "character", "humanity", "npc", "psychosis"],
+  dependsOn: ["economy", "character", "humanity", "npc", "psychosis", "squad"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -58,6 +59,7 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
           ctx.now,
           ctx.read<HumanityState>("humanity").current,
           ctx.read<NpcState>("npc").npcs,
+          ctx.read<SquadState>("squad").members,
         );
     }
   },

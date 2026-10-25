@@ -1995,3 +1995,21 @@
   color: var(--cp-red);
   letter-spacing: 0.05em;
 }
+
+.squadOffer {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--cp-red-dim);
+}
+
+.squadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.squadOwed {
+  color: var(--cp-red);
+}

@@ -321,6 +321,21 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  const squadAction = useCallback(
+    async (action: "accept" | "decline" | "dismiss" | "pay", npc: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "squad", action, npc },
+        });
+      } catch (error) {
+        warn("squad", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const modAction = useCallback(
     async (action: "attach" | "detach", weapon: string, mod: string) => {
       try {
@@ -467,6 +482,7 @@ export function StoryScreen() {
         onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
         onAnchor={busy ? undefined : (action, npc) => void anchorAction(action, npc)}
+        onSquad={busy ? undefined : (action, npc) => void squadAction(action, npc)}
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}

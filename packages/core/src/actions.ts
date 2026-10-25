@@ -81,6 +81,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     action: z.enum(["add", "remove"]),
     npc: z.string().min(1).max(64),
   }),
+  /** 小队面板：accept、decline 回应入队请求，dismiss 请队员离开，pay 发雇佣型队员的薪水 */
+  z.strictObject({
+    type: z.literal("squad"),
+    action: z.enum(["accept", "decline", "dismiss", "pay"]),
+    npc: z.string().min(1).max(64),
+  }),
   /** 在商店买一件，放进背包 */
   z.strictObject({
     type: z.literal("buyItem"),
@@ -268,6 +274,11 @@ function commandsFor(
     case "buyItem":
     case "sellItem":
       return shopCommands(world, action, data);
+    case "squad": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat && action.action !== "pay") return "打斗中顾不上，打完再说";
+      return [{ type: "squad.member", action: action.action, npc: action.npc }];
+    }
     case "anchor": {
       const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
       if (combat && action.action === "add") return "打斗中顾不上，打完再说";

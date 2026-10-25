@@ -100,6 +100,7 @@ import { PhoneStateSchema } from "./systems/phone/schema";
 import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
+import { squadView } from "./systems/squad/apply";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
 import {
@@ -942,6 +943,7 @@ export function projectState(
     /** 安全屋、存放箱、后备箱和战利品墙 */
     safehouse: safehouseView(world, data, clock.location),
     psychosis: psychosisView(world.slices.psychosis, world.time, clock.scene),
+    squad: squadView(world.slices.squad, npcs.npcs, world.time),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1082,6 +1084,7 @@ export function projectState(
           j.settlement === null
             ? null
             : {
+                squad: j.settlement.squad,
                 streetCred: j.settlement.credHalves / 2,
                 affinity: j.settlement.affinity,
                 humanity: j.settlement.humanity,

@@ -29,6 +29,9 @@ export function SettlementCard({
       job.paid !== null && job.paid > 0 ? "good" : undefined,
     ],
   ];
+  for (const c of s?.squad ?? []) {
+    rows.push([`分给${c.name}`, `−${c.cut.toLocaleString("en-US")} 欧元`, undefined]);
+  }
   if (s && s.streetCred > 0) rows.push(["街头声望", `+${s.streetCred} 级`, "good"]);
   if (s?.affinity && job.fixer) {
     const delta = s.affinity.to - s.affinity.from;

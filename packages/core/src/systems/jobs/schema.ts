@@ -69,6 +69,8 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 
 /** 结束时记下的结算，给结算卡看；报酬见 paid */
 export const JobSettlementSchema = z.object({
+  /** 小队分账：朋友型队员按分成拿走的钱；旧存档没有 */
+  squad: z.array(z.object({ name: z.string(), cut: z.number().int().min(0) })).default([]),
   /** 这单带来的街头声望，按半级计 */
   credHalves: z.number().int().min(0),
   /** 中间人好感的变化；没有中间人、或中间人没有见过面的人物卡时为 null */
