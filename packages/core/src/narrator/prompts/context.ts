@@ -191,6 +191,20 @@ export function stateSummary(view: PlayerView): string {
       lines.push(
         `${t.name}（${t.id}）：${t.items.map((i) => `${i.name}${i.count > 1 ? `×${i.count}` : ""}`).join("、")}（不在身上）`,
       );
+  if (view.psychosis.anchors.length > 0)
+    lines.push(
+      `锚点（玩家确认的过命交情）：${view.psychosis.anchors.map((a) => `${a.name}（${a.npc}）`).join("、")}；在场或联系得上时发作相关检定可以写两项加成（来源：锚点），死去或决裂写 anchor`,
+    );
+  {
+    const s = view.psychosis.suppressant;
+    if (s.until)
+      lines.push(
+        `压制剂起效到 ${s.until}：发作相关检定可以写两项加成（来源：压制剂）${s.tolerant ? "；已经耐受，药效变短" : ""}`,
+      );
+    if (s.withdrawal)
+      lines.push("压制剂戒断中：烦躁、手抖、睡不好；相关检定写一项减值（来源：戒断）");
+    else if (s.dependent) lines.push("已经依赖压制剂：停药一天就会戒断");
+  }
   if (view.trauma.active)
     lines.push(
       `创伤小组：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.dispatch.ok ? "现在叫得来（倒下或濒死时写 trauma rescue）" : `现在不会来：${view.trauma.dispatch.why}`}`,

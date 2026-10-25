@@ -30,6 +30,7 @@ export * as jobsRules from "./systems/jobs";
 export * as ncpdRules from "./systems/ncpd";
 export * as npcRules from "./systems/npc";
 export * as phoneRules from "./systems/phone";
+export * as psychosisRules from "./systems/psychosis";
 export { registry, systems } from "./systems/registry";
 export * as safehouseRules from "./systems/safehouse";
 export * as stealthRules from "./systems/stealth";

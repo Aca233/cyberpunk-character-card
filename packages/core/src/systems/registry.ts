@@ -16,6 +16,7 @@ import { jobs } from "./jobs";
 import { ncpd } from "./ncpd";
 import { npc } from "./npc";
 import { phone } from "./phone";
+import { psychosis } from "./psychosis";
 import { safehouse } from "./safehouse";
 import { stealth } from "./stealth";
 import { trauma } from "./trauma";
@@ -46,6 +47,7 @@ export const systems: readonly AnySystem[] = [
   ncpd,
   trauma,
   safehouse,
+  psychosis,
 ];
 
 export const registry = createRegistry(systems);

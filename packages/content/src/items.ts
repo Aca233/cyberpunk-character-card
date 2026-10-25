@@ -842,4 +842,14 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     price: 600,
     ability: "插件：手枪瞄头部更准，适合一枪解决问题",
   },
+  // 本作改编：原作没有这种药，是本作的虚构药物；效果写在这里，由代码结算
+  {
+    id: "psycho-suppressant",
+    name: "神经压制剂",
+    kind: "consumable",
+    rarity: "uncommon",
+    price: 500,
+    ability:
+      "义体医生开的药：约 6 小时内发作相关检定 +4；只缓解症状，不恢复人性上限；常吃会耐受、依赖，停药有戒断",
+  },
 ]);

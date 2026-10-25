@@ -5,6 +5,8 @@ export const HUMANITY_MAX = 100;
 export const LOSS_CAP = 15;
 /** 每个游戏日最多恢复多少；有锚点时是 12，锚点在 M2b 加入 */
 export const DAILY_RECOVERY_CAP = 8;
+/** 有锚点时每个游戏日最多恢复多少 */
+export const ANCHORED_RECOVERY_CAP = 12;
 export const MINUTES_PER_DAY = 1440;
 
 /** 义体耐受：建角色时选，乘在义体的人性消耗上 */
@@ -26,6 +28,8 @@ export const HumanityStateSchema = z.object({
   recovery: z.object({ day: z.number().int(), amount: z.number().int().min(0) }),
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()),
+  /** 有没有锚点：有时每天最多恢复 ANCHORED_RECOVERY_CAP；锚点系统用内部指令更新 */
+  anchored: z.boolean().default(false),
 });
 export type HumanityState = z.infer<typeof HumanityStateSchema>;
 
@@ -131,3 +135,10 @@ export const SetToleranceSchema = z.object({
   tolerance: ToleranceSchema,
 });
 export type SetTolerance = z.infer<typeof SetToleranceSchema>;
+
+/** 只能由代码发出：锚点有了或没了 */
+export const SetAnchoredSchema = z.object({
+  type: z.literal("humanity.setAnchored"),
+  anchored: z.boolean(),
+});
+export type SetAnchored = z.infer<typeof SetAnchoredSchema>;

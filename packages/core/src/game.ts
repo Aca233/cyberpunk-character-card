@@ -97,6 +97,7 @@ import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
+import { psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
 import { currentAlert } from "./systems/stealth/apply";
@@ -940,6 +941,7 @@ export function projectState(
     trauma: traumaView(world, data, clock.location, world.time),
     /** 安全屋、存放箱、后备箱和战利品墙 */
     safehouse: safehouseView(world, data, clock.location),
+    psychosis: psychosisView(world.slices.psychosis, world.time),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,

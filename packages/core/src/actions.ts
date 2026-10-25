@@ -75,6 +75,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     weapon: z.string().min(1).max(64),
     mod: z.string().min(1).max(64),
   }),
+  /** 人物卡上设锚点或取消：add 设为锚点，remove 不再当锚点 */
+  z.strictObject({
+    type: z.literal("anchor"),
+    action: z.enum(["add", "remove"]),
+    npc: z.string().min(1).max(64),
+  }),
   /** 在商店买一件，放进背包 */
   z.strictObject({
     type: z.literal("buyItem"),
@@ -257,6 +263,11 @@ function commandsFor(
     case "buyItem":
     case "sellItem":
       return shopCommands(world, action, data);
+    case "anchor": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat && action.action === "add") return "打斗中顾不上，打完再说";
+      return [{ type: "psychosis.anchor", action: action.action, npc: action.npc }];
+    }
     case "equipItem":
     case "unequipItem": {
       // 战斗里换装备要花一个动作，只能在行动里说
