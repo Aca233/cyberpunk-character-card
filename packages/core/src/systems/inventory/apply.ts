@@ -492,6 +492,10 @@ export function applyTrade(
   const left = (draft.backpack[def.id] ?? 0) - 1;
   if (left > 0) draft.backpack[def.id] = left;
   else delete draft.backpack[def.id];
+  // 卖掉最后一把时升级记录跟着清掉，免得下次买到同款带着升过的稀有度
+  if (def.kind === "weapon" && left < 1 && !draft.weapons.includes(def.id)) {
+    Reflect.deleteProperty(draft.tuned, def.id);
+  }
   return {
     ok: true,
     notes: [`卖掉${def.name}（卖给${command.with}）`],
