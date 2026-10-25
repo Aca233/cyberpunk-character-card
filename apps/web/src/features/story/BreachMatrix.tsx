@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
+import { NineSlice } from "../../ui/Asset";
 import styles from "./story.module.css";
+
+/** atlas_shapes_sync frame_large_bg/fg 的切线（2160p，左上右下 60/295/20/295），按 CSS 顺序上右下左 */
+const FRAME_CUT = [295, 20, 295, 60] as const;
 
 /** 原作入侵协议矩阵的代码 */
 const CODES = ["1C", "55", "BD", "E9", "7A"] as const;
@@ -78,10 +82,26 @@ export function BreachMatrix({ onDone }: { readonly onDone: (solved: number) => 
 
   return (
     <section className={styles.matrix} aria-label="入侵协议矩阵">
+      {/* 原作 hacking_minigame 代码矩阵外框 BigShapeFluff：frame_large_bg / fg */}
+      <NineSlice id="breach.frameBg" tint="rgb(27 23 36)" slice={FRAME_CUT} />
+      <NineSlice id="breach.frameFg" tint="rgb(223 255 94)" slice={FRAME_CUT} />
       <div className={styles.matrixHead}>
         <b>入侵协议</b>
         <span className={styles.matrixBuffer} title="缓冲区">
-          {Array.from({ length: BUFFER }, (_, i) => buffer[i] ?? "··").join(" ")}
+          {Array.from({ length: BUFFER }, (_, i) => {
+            const code = buffer[i];
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 缓冲区格子位置固定
+              <span key={i} className={styles.matrixSlot}>
+                {code === undefined ? (
+                  <NineSlice id="breach.bufferEmpty" tint="rgb(223 255 94 / 20%)" slice={30} />
+                ) : (
+                  <NineSlice id="breach.bufferOn" tint="rgb(223 255 94)" slice={20} />
+                )}
+                {code ?? ""}
+              </span>
+            );
+          })}
         </span>
       </div>
       <div className={styles.matrixBody}>
@@ -98,6 +118,13 @@ export function BreachMatrix({ onDone }: { readonly onDone: (solved: number) => 
                 disabled={done || taken(r, c) || !onLine(r, c)}
                 onClick={() => pick(r, c)}
               >
+                {/* 原作 GridCell 的 GridSelected：frame_glow 染 Blue，悬停时显示 */}
+                <NineSlice
+                  id="breach.glow"
+                  tint="rgb(94 246 255)"
+                  slice={0}
+                  className={styles.matrixGlow}
+                />
                 {code}
               </button>
             )),
