@@ -66,6 +66,8 @@ export const CyberwareCatalogSchema = z.array(CyberwareDefSchema);
 export const RipperdocSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(20),
+  /** 医生本人的人物卡 id；有卡时见过面、好感够了，没到街头声望门槛的货也肯卖 */
+  keeperNpc: z.string().min(1).optional(),
   /** 地点表里的 id：玩家在这里时才能找他 */
   location: z.string().min(1),
   note: z.string().max(120).default(""),

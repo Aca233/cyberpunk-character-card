@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
+import { type Keeper, rarityLock } from "../economy";
 import { HUMANITY_MAX } from "../humanity";
 import {
   BOOST_WINDOW,
@@ -78,16 +79,15 @@ export function ripperdocShelf(
   catalog: ReadonlyMap<string, CyberwareDef>,
   streetCred: number,
   installed: readonly { readonly id: string; readonly slot: string }[],
+  /** 医生有人物卡、见过面时传：好感够了，没到声望门槛的货也肯卖 */
+  keeper?: Keeper,
 ): ShelfItem[] {
   return doc.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def) return [];
-    const gate = doc.credGates[def.rarity];
     const locked = def.iconic
       ? "不朽义体只从剧情获得"
-      : gate !== undefined && streetCred < gate
-        ? `街头声望 ${gate} 级才肯卖`
-        : null;
+      : rarityLock(def.rarity, doc.credGates, streetCred, keeper);
     const old = installed.find((c) => c.slot === def.slot && c.id !== id);
     const replaces = old ? (catalog.get(old.id) ?? null) : null;
     const price = Math.round((def.price * doc.priceFactor) / 100) * 100;

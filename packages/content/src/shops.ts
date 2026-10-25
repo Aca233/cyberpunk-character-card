@@ -116,6 +116,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     id: "vik-pharmacy",
     name: "维克多的药柜",
     keeper: "维克多",
+    keeperNpc: "viktor",
     location: "vik-clinic",
     note: "诊所里上锁的药柜，压制剂只卖给他看过的病人，每次都要叮嘱一句别吃多",
     shelf: ["psycho-suppressant", "maxdoc", "bounce-back"],

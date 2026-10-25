@@ -13,6 +13,49 @@ export const RARITY_LABELS: Readonly<Record<Rarity, string>> = {
   legendary: "传说",
 };
 
+/**
+ * 店主好感解锁（本作改编，暂定，试玩后再调）：店主有人物卡、见过面、还活着，好感到这一档时，
+ * 街头声望没到门槛的这档货也肯卖
+ */
+export const KEEPER_AFFINITY_GATES: Readonly<Partial<Record<Rarity, number>>> = {
+  rare: 20,
+  epic: 40,
+  legendary: 60,
+};
+
+/** 店主：人物卡上的名字和好感 */
+export interface Keeper {
+  readonly name: string;
+  readonly affinity: number;
+}
+
+/** 按人物卡找店主；没写店主人物、没有这张卡、还没见过或已经死了都返回 undefined */
+export function keeperOf(
+  npc: string | undefined,
+  npcs: Readonly<
+    Record<string, { name: string; affinity: number; met: boolean; alive: boolean } | undefined>
+  >,
+): Keeper | undefined {
+  const card = npc === undefined ? undefined : npcs[npc];
+  return card?.met && card.alive ? { name: card.name, affinity: card.affinity } : undefined;
+}
+
+/** 稀有度门槛：街头声望够，或者店主好感到了就卖；都不够时返回原因，卖就返回 null */
+export function rarityLock(
+  rarity: Rarity | undefined,
+  credGates: Readonly<Partial<Record<Rarity, number>>>,
+  streetCred: number,
+  keeper?: Keeper,
+): string | null {
+  if (rarity === undefined) return null;
+  const gate = credGates[rarity];
+  if (gate === undefined || streetCred >= gate) return null;
+  const warm = KEEPER_AFFINITY_GATES[rarity];
+  if (keeper === undefined || warm === undefined) return `街头声望 ${gate} 级才肯卖`;
+  if (keeper.affinity >= warm) return null;
+  return `街头声望 ${gate} 级，或者${keeper.name}的好感到 ${warm}，才肯卖`;
+}
+
 export const MONEY_CAP = 100_000;
 
 export const EconomyStateSchema = z.object({

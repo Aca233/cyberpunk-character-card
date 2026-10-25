@@ -48,7 +48,7 @@ import {
   DiceStateSchema,
   OPPONENT_TIERS,
 } from "./systems/dice/schema";
-import { EconomyStateSchema, RARITY_LABELS } from "./systems/economy/schema";
+import { EconomyStateSchema, keeperOf, RARITY_LABELS } from "./systems/economy/schema";
 import {
   attitudeLabel,
   currentAttitude,
@@ -440,14 +440,18 @@ function ripperdocView(
   parts: ReadonlyMap<string, CyberwareDef>,
   debts: readonly RipperdocDebt[],
   broken: readonly string[],
+  npcs: Parameters<typeof keeperOf>[1],
 ) {
   const doc =
     location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
   if (!doc) return null;
   const debt = debts.find((d) => d.doc === doc.id);
+  const keeper = keeperOf(doc.keeperNpc, npcs);
   return {
     id: doc.id,
     name: doc.name,
+    /** 医生对你的好感；没有人物卡或还没见过是 null */
+    affinity: keeper?.affinity ?? null,
     note: doc.note,
     blackMarket: doc.blackMarket,
     /** 最多肯赊多少；0 是不赊账 */
@@ -468,7 +472,7 @@ function ripperdocView(
         return def && broken.includes(c.id) ? [[c.id, repairCost(def)]] : [];
       }),
     ) as Readonly<Record<string, number>>,
-    shelf: ripperdocShelf(doc, parts, streetCred, installed).map((item) => ({
+    shelf: ripperdocShelf(doc, parts, streetCred, installed, keeper).map((item) => ({
       id: item.def.id,
       name: item.def.name,
       slot: item.def.slot,
@@ -503,6 +507,7 @@ function shopsView(
   streetCred: number,
   inventory: InventoryState,
   now: number,
+  npcs: Parameters<typeof keeperOf>[1],
 ) {
   if (location === null || data.items === undefined) return [];
   const catalog = itemCatalog(data);
@@ -512,34 +517,40 @@ function shopsView(
     const def = catalog.get(id);
     return def ? [{ id, name: def.name, count, value: sellValue(def) }] : [];
   });
-  return here.map((shop) => ({
-    id: shop.id,
-    name: shop.name,
-    keeper: shop.keeper,
-    note: shop.note,
-    blackMarket: shop.blackMarket,
-    restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
-    shelf: shopShelf(
-      shop,
-      catalog,
-      streetCred,
-      currentStock(inventory.shopStock[shop.id], now),
-    ).map(({ def, price, locked, left }) => ({
-      id: def.id,
-      name: def.name,
-      group:
-        def.kind === "weapon" && def.category
-          ? WEAPON_CATEGORY_LABELS[def.category]
-          : ITEM_KIND_LABELS[def.kind],
-      rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
-      price,
-      ability: def.ability ?? null,
-      locked,
-      left,
-    })),
-    /** 背包里的东西卖给这家店给多少；0 是不收 */
-    sell,
-  }));
+  return here.map((shop) => {
+    const keeper = keeperOf(shop.keeperNpc, npcs);
+    return {
+      id: shop.id,
+      name: shop.name,
+      keeper: shop.keeper,
+      /** 店主对你的好感；店主没有人物卡或还没见过是 null */
+      keeperAffinity: keeper?.affinity ?? null,
+      note: shop.note,
+      blackMarket: shop.blackMarket,
+      restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
+      shelf: shopShelf(
+        shop,
+        catalog,
+        streetCred,
+        currentStock(inventory.shopStock[shop.id], now),
+        keeper,
+      ).map(({ def, price, locked, left }) => ({
+        id: def.id,
+        name: def.name,
+        group:
+          def.kind === "weapon" && def.category
+            ? WEAPON_CATEGORY_LABELS[def.category]
+            : ITEM_KIND_LABELS[def.kind],
+        rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
+        price,
+        ability: def.ability ?? null,
+        locked,
+        left,
+      })),
+      /** 背包里的东西卖给这家店给多少；0 是不收 */
+      sell,
+    };
+  });
 }
 
 /** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
@@ -1006,10 +1017,11 @@ export function projectState(
       parts,
       debts,
       health.brokenChrome,
+      npcs.npcs,
     ),
     /** 欠义体医生的钱 */
     /** 当前地点开着的商店 */
-    shops: shopsView(data, clock.location, character.streetCred, inventory, world.time),
+    shops: shopsView(data, clock.location, character.streetCred, inventory, world.time, npcs.npcs),
     ripperdocDebts: debts.map((d) => ({
       docName: d.docName,
       amount: d.amount,

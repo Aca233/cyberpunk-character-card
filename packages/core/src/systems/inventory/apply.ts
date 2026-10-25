@@ -4,9 +4,11 @@ import {
   DISCOUNT_FACTORS,
   discounted,
   type EconomyState,
+  type Keeper,
   RARITY_LABELS,
   type Rarity,
   RaritySchema,
+  rarityLock,
   SERVICES,
 } from "../economy";
 import {
@@ -349,19 +351,17 @@ export function shopShelf(
   catalog: ReadonlyMap<string, ItemDef>,
   streetCred: number,
   stock?: ShopStock,
+  /** 店主有人物卡、见过面时传：好感够了，没到声望门槛的货也肯卖 */
+  keeper?: Keeper,
 ): ShopItem[] {
   return shop.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def || def.price === undefined) return [];
-    const gate = def.rarity === undefined ? undefined : shop.credGates[def.rarity];
+    const gate = rarityLock(def.rarity, shop.credGates, streetCred, keeper);
     const left = Math.max(0, stockOf(def) - (stock?.sold[id] ?? 0));
     const locked = def.iconic
       ? "不朽物品只从剧情获得"
-      : gate !== undefined && streetCred < gate
-        ? `街头声望 ${gate} 级才肯卖`
-        : left === 0
-          ? "这一批卖完了，等补货"
-          : null;
+      : (gate ?? (left === 0 ? "这一批卖完了，等补货" : null));
     const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
     return [{ def, price, locked, left }];
   });

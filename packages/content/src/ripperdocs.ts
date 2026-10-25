@@ -10,6 +10,7 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
   {
     id: "viktor",
     name: "维克多",
+    keeperNpc: "viktor",
     location: "vik-clinic",
     note: "老派义体医生，手艺好、收价公道，不卖来路不明的货",
     shelf: cyberware.filter((c) => !c.iconic).map((c) => c.id),

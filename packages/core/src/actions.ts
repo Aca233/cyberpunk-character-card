@@ -13,7 +13,7 @@ import {
 } from "./systems/cyberware/apply";
 import { CyberwareStateSchema } from "./systems/cyberware/schema";
 import { AttributeSchema } from "./systems/dice/schema";
-import { EconomyStateSchema } from "./systems/economy/schema";
+import { EconomyStateSchema, type Keeper, keeperOf } from "./systems/economy/schema";
 import { HealthStateSchema } from "./systems/health/schema";
 import {
   currentStock,
@@ -133,6 +133,12 @@ export type ActionRequest = z.infer<typeof ActionRequestSchema>;
 /** 在委托板上接单时写进进展笔记的一句 */
 export const BOARD_ACCEPT_NOTE = "在委托板上接下，正文里还没和对方细谈";
 
+/** 店主或义体医生的人物卡：见过面、还活着才算，好感够了没到声望门槛的货也肯卖 */
+function keeperIn(world: WorldState, npc: string | undefined): Keeper | undefined {
+  const npcs = (world.slices.npc as { npcs?: Parameters<typeof keeperOf>[1] } | undefined)?.npcs;
+  return keeperOf(npc, npcs ?? {});
+}
+
 /** 义体医生的操作：人要在诊所里，货要在货架上、肯卖 */
 function ripperdocCommands(
   world: WorldState,
@@ -195,9 +201,13 @@ function ripperdocCommands(
     ];
   }
   const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
-  const item = ripperdocShelf(doc, catalog, streetCred, installed).find(
-    (i) => i.def.id === action.id,
-  );
+  const item = ripperdocShelf(
+    doc,
+    catalog,
+    streetCred,
+    installed,
+    keeperIn(world, doc.keeperNpc),
+  ).find((i) => i.def.id === action.id);
   if (!item) return `${doc.name}的货架上没有这件`;
   if (item.locked) return `${doc.name}不卖${item.def.name}：${item.locked}`;
   if (item.installed) return `${item.def.name}已经装着了`;
