@@ -197,6 +197,8 @@ const TOOLTIP_SLICE = [10, 30, 70, 10] as const;
 const SHADOW_SLICE = 20;
 /** 城区卡照原作 districtInfo 不加框，文字下垫 shadowBlobText 黑色阴影；切线 2160p 左上右下 28/18/28/16 */
 const TEXT_SHADOW_SLICE = [18, 28, 16, 28] as const;
+/** 原作 atlas_shapes_sync 的 cell_flip_bg / cell_flip_fg（左下斜角）切线：2160p 左/上/右/下 30/20/20/30，这里是 CSS 顺序 */
+const PANEL_SLICE = [20, 20, 30, 30] as const;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -507,35 +509,20 @@ export function MapPanel({
           {here ? `当前位置：${here.name} · ${here.district}` : "现在的位置不在地图上"}
         </span>
         <div className={styles.mapTools}>
-          <button
-            type="button"
-            className={styles.mapLayer}
-            aria-pressed={shapes}
-            onClick={() => setShapes((s) => !s)}
-          >
+          <Button small pressed={shapes} onClick={() => setShapes((s) => !s)}>
             城区边界
-          </button>
+          </Button>
           <span className={styles.mapZoom}>
-            <button
-              type="button"
-              className={styles.mapLayer}
-              aria-label="缩小"
-              onClick={() => zoomBy(1 / 1.4)}
-            >
+            <Button small label="缩小" onClick={() => zoomBy(1 / 1.4)}>
               −
-            </button>
+            </Button>
             <span className={styles.dim}>{zoom.toFixed(1)}×</span>
-            <button
-              type="button"
-              className={styles.mapLayer}
-              aria-label="放大"
-              onClick={() => zoomBy(1.4)}
-            >
+            <Button small label="放大" onClick={() => zoomBy(1.4)}>
               ＋
-            </button>
-            <button type="button" className={styles.mapLayer} onClick={() => setCamera(null)}>
+            </Button>
+            <Button small onClick={() => setCamera(null)}>
               复位
-            </button>
+            </Button>
           </span>
           <Button onClick={onClose}>关闭</Button>
         </div>
@@ -775,14 +762,9 @@ export function MapPanel({
                     {dest.metro && " · 有 NCART 站台"}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className={styles.mapLayer}
-                  aria-label="取消选中"
-                  onClick={() => setPicked(null)}
-                >
+                <Button small label="取消选中" onClick={() => setPicked(null)}>
                   ✕
-                </button>
+                </Button>
               </div>
               <ul className={styles.routeList}>
                 {dest.routes.map((r) => (
@@ -825,86 +807,97 @@ export function MapPanel({
           </section>
         )}
 
-        <details className={styles.mapLegendBox} data-overlay="" open>
-          <summary>
-            图例
-            {hiddenCount > 0 && <span className={styles.dim}>{` · 隐藏了 ${hiddenCount} 项`}</span>}
-          </summary>
-          {/* 原作世界地图的自定义筛选：「全部显示」是 UI-Menus-WorldMap-Filter-All，「全部隐藏」本作加的 */}
-          <div className={styles.mapFilterBar}>
-            <button
-              type="button"
-              className={styles.mapLayer}
-              disabled={hiddenCount === 0}
-              onClick={() => setHidden(new Set())}
-            >
-              全部显示
-            </button>
-            <button
-              type="button"
-              className={styles.mapLayer}
-              disabled={hiddenCount === legend.length}
-              onClick={() => setHidden(new Set(legend.map((l) => l.key)))}
-            >
-              全部隐藏
-            </button>
-          </div>
-          <ul className={styles.mapLegend}>
-            {legend.map((l) => {
-              const on = !hidden.has(l.key);
-              return (
-                <li key={l.key}>
-                  <button
-                    type="button"
-                    className={styles.mapFilter}
-                    aria-pressed={on}
-                    title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
-                    onClick={() => toggleLegend(l.key)}
-                  >
-                    {/* 原作 FiltersListItem：cell_bg 底、cell_fg 框；方框是 color_bg 底、color_fg 框、color_bg 填色 */}
-                    <NineSlice
-                      id="map.filterCellBg"
-                      tint="var(--f-bg)"
-                      slice={CELL_SLICE}
-                      className={styles.mapFilterLayer}
-                    />
-                    <NineSlice
-                      id="map.filterCellFg"
-                      tint="var(--f-frame)"
-                      slice={CELL_SLICE}
-                      className={styles.mapFilterLayer}
-                    />
-                    <span className={styles.mapFilterBox} aria-hidden="true">
+        {/* 原作筛选列表没有底框；为了压住底图，借同一界面说明面板（FastTravelInstructions）的 cell_flip 底和框 */}
+        <div className={styles.mapLegendBox} data-overlay="">
+          <NineSlice
+            id="map.panelBg"
+            tint="var(--panel-bg)"
+            slice={PANEL_SLICE}
+            className={styles.mapPanelBg}
+          />
+          <NineSlice
+            id="map.panelFg"
+            tint="var(--panel-frame)"
+            slice={PANEL_SLICE}
+            className={styles.mapPanelFrame}
+          />
+          <details className={styles.mapLegendBody} open>
+            <summary>
+              图例
+              {hiddenCount > 0 && (
+                <span className={styles.dim}>{` · 隐藏了 ${hiddenCount} 项`}</span>
+              )}
+            </summary>
+            {/* 原作世界地图的自定义筛选：「全部显示」是 UI-Menus-WorldMap-Filter-All，「全部隐藏」本作加的 */}
+            <div className={styles.mapFilterBar}>
+              <Button small disabled={hiddenCount === 0} onClick={() => setHidden(new Set())}>
+                全部显示
+              </Button>
+              <Button
+                small
+                disabled={hiddenCount === legend.length}
+                onClick={() => setHidden(new Set(legend.map((l) => l.key)))}
+              >
+                全部隐藏
+              </Button>
+            </div>
+            <ul className={styles.mapLegend}>
+              {legend.map((l) => {
+                const on = !hidden.has(l.key);
+                return (
+                  <li key={l.key}>
+                    <button
+                      type="button"
+                      className={styles.mapFilter}
+                      aria-pressed={on}
+                      title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
+                      onClick={() => toggleLegend(l.key)}
+                    >
+                      {/* 原作 FiltersListItem：cell_bg 底、cell_fg 框；方框是 color_bg 底、color_fg 框、color_bg 填色 */}
                       <NineSlice
-                        id="map.filterBoxBg"
-                        tint="var(--f-box-bg)"
-                        slice={BOX_SLICE}
-                        className={styles.mapFilterBoxBg}
-                      />
-                      <NineSlice
-                        id="map.filterBoxFg"
-                        tint="var(--f-box-frame)"
-                        slice={BOX_SLICE}
+                        id="map.filterCellBg"
+                        tint="var(--f-bg)"
+                        slice={CELL_SLICE}
                         className={styles.mapFilterLayer}
                       />
                       <NineSlice
-                        id="map.filterBoxBg"
-                        tint="var(--f-box)"
-                        slice={BOX_SLICE}
-                        className={styles.mapFilterBoxFill}
+                        id="map.filterCellFg"
+                        tint="var(--f-frame)"
+                        slice={CELL_SLICE}
+                        className={styles.mapFilterLayer}
                       />
-                    </span>
-                    <span className={styles.mapFilterIcon} aria-hidden="true">
-                      {l.icon}
-                    </span>
-                    <span className={styles.mapFilterName}>{l.name}</span>
-                    {l.count !== null && <span className={styles.mapFilterCount}>{l.count}</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </details>
+                      <span className={styles.mapFilterBox} aria-hidden="true">
+                        <NineSlice
+                          id="map.filterBoxBg"
+                          tint="var(--f-box-bg)"
+                          slice={BOX_SLICE}
+                          className={styles.mapFilterBoxBg}
+                        />
+                        <NineSlice
+                          id="map.filterBoxFg"
+                          tint="var(--f-box-frame)"
+                          slice={BOX_SLICE}
+                          className={styles.mapFilterLayer}
+                        />
+                        <NineSlice
+                          id="map.filterBoxBg"
+                          tint="var(--f-box)"
+                          slice={BOX_SLICE}
+                          className={styles.mapFilterBoxFill}
+                        />
+                      </span>
+                      <span className={styles.mapFilterIcon} aria-hidden="true">
+                        {l.icon}
+                      </span>
+                      <span className={styles.mapFilterName}>{l.name}</span>
+                      {l.count !== null && <span className={styles.mapFilterCount}>{l.count}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        </div>
 
         <p className={styles.mapHint}>
           {dest ? "" : "点黄色菱形看怎么去，没标出来的地方用输入框写 · "}

@@ -192,6 +192,8 @@ export const ASSET_IDS = [
   "map.filterBoxFg",
   "map.filterCellBg",
   "map.filterCellFg",
+  "map.panelBg",
+  "map.panelFg",
   "map.poi.apartment",
   "map.poi.autofixer",
   "map.poi.bar",

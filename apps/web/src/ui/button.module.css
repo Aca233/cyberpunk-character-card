@@ -23,8 +23,27 @@
   white-space: nowrap;
 }
 
+.button[data-small] {
+  gap: 6px;
+  min-height: 26px;
+  padding: 2px 12px;
+}
+
+.button[data-small] .label {
+  font-size: var(--fs-label);
+}
+
 .button[data-primary] {
   color: var(--cp-yellow);
+}
+
+/* 开关按钮开着时青色、底亮一些 */
+.button[aria-pressed="true"] {
+  color: var(--cp-cyan);
+}
+
+.button[aria-pressed="true"] .bg {
+  opacity: 0.28;
 }
 
 .button:hover:not(:disabled) {

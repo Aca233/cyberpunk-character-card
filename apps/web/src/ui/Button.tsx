@@ -12,6 +12,12 @@ interface ButtonProps {
   readonly keyId?: AssetId | undefined;
   readonly primary?: boolean;
   readonly type?: "button" | "submit";
+  /** 开关按钮：传了就带 aria-pressed，开着时青色 */
+  readonly pressed?: boolean | undefined;
+  /** 按钮上只有符号时的无障碍名字 */
+  readonly label?: string | undefined;
+  /** 工具栏里的小号按钮 */
+  readonly small?: boolean;
 }
 
 /** 原作标签页底的按钮：斜切角，主按钮黄色，其余红色 */
@@ -23,12 +29,18 @@ export function Button({
   keyId,
   primary,
   type = "button",
+  pressed,
+  label,
+  small,
 }: ButtonProps) {
   return (
     <button
       type={type}
       className={styles.button}
       data-primary={primary || undefined}
+      data-small={small || undefined}
+      aria-pressed={pressed}
+      aria-label={label}
       onClick={onClick}
       disabled={disabled}
       title={disabled ? reason : undefined}
