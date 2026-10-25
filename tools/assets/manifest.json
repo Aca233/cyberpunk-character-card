@@ -699,7 +699,23 @@
       {
         "id": "map.roads",
         "file": "map/night_city_roads.png"
-      }
+      },
+      { "id": "map.poi.fixer", "atlas": "common/mappin_icons", "slot": "fixer" },
+      { "id": "map.poi.ripperdoc", "atlas": "common/mappin_icons", "slot": "ripperdoc" },
+      { "id": "map.poi.gun", "atlas": "common/mappin_icons", "slot": "gun" },
+      { "id": "map.poi.melee", "atlas": "common/mappin_icons", "slot": "melee" },
+      { "id": "map.poi.netrunner", "atlas": "common/mappin_icons", "slot": "netservice" },
+      { "id": "map.poi.clothes", "atlas": "common/mappin_icons", "slot": "clothes" },
+      { "id": "map.poi.meds", "atlas": "common/mappin_icons", "slot": "medicine" },
+      { "id": "map.poi.junk", "atlas": "common/mappin_icons", "slot": "junk_shop" },
+      { "id": "map.poi.food", "atlas": "common/mappin_icons", "slot": "food_vendor" },
+      { "id": "map.poi.bar", "atlas": "common/mappin_icons", "slot": "bar" },
+      { "id": "map.poi.apartment", "atlas": "common/mappin_icons", "slot": "apartment" },
+      { "id": "map.poi.rent", "atlas": "common/mappin_icons", "slot": "apartment_to_buy" },
+      { "id": "map.poi.autofixer", "atlas": "common/mappin_icons", "slot": "car_to_buy" },
+      { "id": "map.poi.quest", "atlas": "common/mappin_icons", "slot": "quest" },
+      { "id": "map.poi.player", "atlas": "common/mappin_icons", "slot": "V_owned" },
+      { "id": "map.poi.police", "atlas": "common/mappin_icons", "slot": "map_bounty" }
     ]
   }
 }

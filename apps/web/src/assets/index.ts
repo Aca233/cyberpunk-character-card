@@ -91,6 +91,36 @@ export function assetUrl(id: AssetId): string | undefined {
   return asset(id)?.url;
 }
 
+/**
+ * 地图瓦片：解包目录下的 build_map_tiles.py 从原作 3D 地图的网格烘焙，
+ * 第 z 级把整张底图切成 2^z × 2^z 块，每块 tile 像素。没有瓦片时返回 null，地图退回 map.roads 整图
+ */
+const TILES_URL = "/assets/local/maptiles";
+
+export interface MapTiles {
+  /** 每块的像素边长 */
+  readonly tile: number;
+  readonly maxZoom: number;
+  readonly url: (z: number, x: number, y: number) => string;
+}
+
+let tilesPromise: Promise<MapTiles | null> | null = null;
+
+export function loadMapTiles(): Promise<MapTiles | null> {
+  tilesPromise ??= fetch(`${TILES_URL}/index.json`, { cache: "no-cache" })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const data = (await response.json()) as { tile: number; maxZoom: number; format: string };
+      return {
+        tile: data.tile,
+        maxZoom: data.maxZoom,
+        url: (z: number, x: number, y: number) => `${TILES_URL}/${z}/${x}_${y}.${data.format}`,
+      };
+    })
+    .catch(() => null);
+  return tilesPromise;
+}
+
 export function useMissingAssets(): readonly string[] {
   return useSyncExternalStore(
     (listener) => {
