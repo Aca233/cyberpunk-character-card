@@ -9,6 +9,7 @@ import { Panel } from "../../ui/Panel";
 import { GigsPanel } from "./GigsPanel";
 import { type HabitAction, Habits } from "./Habits";
 import { countdown } from "./Journal";
+import { QuickhackWheel } from "./QuickhackWheel";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
 import styles from "./story.module.css";
 import { districtIcon, locationLabel, type View } from "./view";
@@ -32,7 +33,14 @@ const WEAPON_SLOTS = [1, 2, 3] as const;
 const WOUND_LABELS = { none: "", light: "轻伤", severe: "重伤", zero: "失去意识" } as const;
 
 /** 顶部 HUD：左上生命和声望，右上地区、时间，正中是战斗进度 */
-export function Hud({ view }: { readonly view: View }) {
+export function Hud({
+  view,
+  onQuickhack,
+}: {
+  readonly view: View;
+  /** 快速破解轮盘选了一个程序：把它写进输入框；生成中为 undefined */
+  readonly onQuickhack?: ((name: string) => void) | undefined;
+}) {
   const { health, character, combat } = view;
   const low = health.wound === "severe" || health.wound === "zero";
   const wound = WOUND_LABELS[health.wound];
@@ -83,6 +91,14 @@ export function Hud({ view }: { readonly view: View }) {
             </div>
           )}
         </div>
+        {view.hacking && view.hacking.programs.length > 0 && onQuickhack && (
+          <QuickhackWheel
+            ram={view.hacking.ram}
+            ramMax={view.hacking.ramMax}
+            programs={view.hacking.programs}
+            onPick={onQuickhack}
+          />
+        )}
         {view.heat.stars > 0 && (
           <div
             className={styles.wanted}

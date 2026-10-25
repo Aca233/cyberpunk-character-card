@@ -7,9 +7,11 @@ import { cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
+import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
 import { CloseupQueue } from "./Closeup";
+import { DivePanel } from "./DivePanel";
 import { FactionsPanel } from "./FactionsPanel";
 import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
@@ -374,9 +376,15 @@ export function StoryScreen() {
     },
     [story, saveId, version, view, refresh],
   );
+  const narrative = useNarrativePrefs();
   const confirm = useCallback(
-    (checkId: string, label: string) => {
-      void story.submit(saveId, version, { kind: "confirm", checkId, label }, refresh);
+    (checkId: string, label: string, matrix?: number) => {
+      void story.submit(
+        saveId,
+        version,
+        { kind: "confirm", checkId, label, ...(matrix === undefined ? {} : { matrix }) },
+        refresh,
+      );
     },
     [story, saveId, version, refresh],
   );
@@ -496,7 +504,18 @@ export function StoryScreen() {
       <div className={styles.fx} aria-hidden />
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <div className={styles.glitch} data-level={glitch} aria-hidden />
-      <Hud view={view} />
+      <Hud
+        view={view}
+        onQuickhack={
+          busy
+            ? undefined
+            : (name) =>
+                story.setDraft({
+                  text: `${story.draft.text}${story.draft.text ? " " : ""}用快速破解「${name}」`,
+                })
+        }
+      />
+      {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
       <SidePanel
         view={view}
         onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)}
@@ -540,10 +559,17 @@ export function StoryScreen() {
         <div className={styles.dock}>
           {openCheck ? (
             <CheckBar
+              key={openCheck.id}
               check={openCheck}
+              matrix={
+                narrative.breachMatrix &&
+                view.hacking !== null &&
+                openCheck.attribute === "intelligence" &&
+                !offers?.rolled
+              }
               busy={busy}
               closable={!offers?.rolled && openCheck.id === pickedId}
-              onConfirm={() => confirm(openCheck.id, openCheck.label)}
+              onConfirm={(matrix) => confirm(openCheck.id, openCheck.label, matrix)}
               onRewrite={() => draftFromCheck(openCheck.label)}
               onClose={() => setPicked(null)}
             />

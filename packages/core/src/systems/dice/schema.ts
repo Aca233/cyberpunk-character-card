@@ -81,6 +81,28 @@ export function baseDv(tier: Tier, edge: Edge): number {
 /** 加成和减值的一档：本事、义体、先机、断肢、起疑都是一档；提示词里的数都从这里来 */
 export const MOD_STEP = 2;
 
+/** 入侵协议矩阵小游戏最多解开几段序列 */
+export const MATRIX_MAX = 3;
+const MATRIX_SOURCE = "入侵协议矩阵";
+
+/**
+ * 设置里开了矩阵小游戏时，完成情况换算成检定修正（本作改编）：前两段各加一档，三段全解开再降一档难度。
+ * 只对智力检定算；没玩或一段没解开时原样返回
+ */
+export function withMatrix(spec: CheckSpec, solved: number | undefined): CheckSpec {
+  if (solved === undefined || solved < 1 || spec.attribute !== "intelligence") return spec;
+  const n = Math.min(Math.floor(solved), MATRIX_MAX);
+  const bonuses = [...spec.bonuses];
+  for (let i = 1; i <= Math.min(n, 2); i++) {
+    bonuses.push({ source: MATRIX_SOURCE, value: MOD_STEP, reason: `解开第 ${i} 段序列` });
+  }
+  const dvMods =
+    n >= MATRIX_MAX
+      ? [...spec.dvMods, { source: MATRIX_SOURCE, value: -MOD_STEP, reason: "三段序列全部解开" }]
+      : spec.dvMods;
+  return { ...spec, bonuses, dvMods };
+}
+
 /** 模型写的加成和减值：只写来源和理由，每项一档，数由代码给 */
 const ProposalModifierSchema = z.object({
   source: z.string().min(1).describe("来源：本事、义体、物品、人物、准备、伤势、环境……"),

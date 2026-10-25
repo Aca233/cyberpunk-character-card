@@ -2202,3 +2202,210 @@
     animation: none;
   }
 }
+
+/* 快速破解轮盘 */
+.quickhack {
+  position: relative;
+}
+
+.wheel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 30;
+  width: 220px;
+  height: 220px;
+  margin-left: -110px;
+  border: 1px solid var(--cp-cyan);
+  border-radius: 50%;
+  background: rgb(6 10 16 / 94%);
+  box-shadow: 0 0 24px rgb(0 240 255 / 18%);
+}
+
+.wheelCenter {
+  position: absolute;
+  inset: 36%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  font-size: 11px;
+  color: var(--cp-cyan);
+}
+
+.wheelItem {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72px;
+  margin: -16px 0 0 -36px;
+  padding: 3px 4px;
+  border: 1px solid var(--cp-cyan);
+  background: rgb(0 0 0 / 70%);
+  color: var(--cp-cyan);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transform: rotate(var(--a)) translate(78px) rotate(calc(-1 * var(--a)));
+}
+
+.wheelItem small {
+  display: block;
+  opacity: 0.7;
+}
+
+.wheelItem:hover:not(:disabled) {
+  background: var(--cp-cyan);
+  color: #000;
+}
+
+.wheelItem:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 入侵协议矩阵 */
+.matrix {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--cp-yellow);
+  background: rgb(0 0 0 / 40%);
+}
+
+.matrixHead {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--cp-yellow);
+}
+
+.matrixBuffer {
+  font-family: monospace;
+  letter-spacing: 0.08em;
+}
+
+.matrixBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.matrixGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 36px);
+  gap: 4px;
+}
+
+.matrixCell {
+  height: 28px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--cp-yellow);
+  font-family: monospace;
+  cursor: pointer;
+}
+
+.matrixCell[data-line] {
+  border-color: rgb(252 238 10 / 35%);
+  background: rgb(252 238 10 / 8%);
+}
+
+.matrixCell[data-picked] {
+  color: var(--cp-cyan);
+  opacity: 0.5;
+}
+
+.matrixCell:disabled {
+  cursor: default;
+}
+
+.matrixSeqs {
+  margin: 0;
+  padding-left: 18px;
+  font-family: monospace;
+}
+
+.matrixSeqs li[data-solved] {
+  color: var(--cp-cyan);
+}
+
+.matrixSeqs small {
+  margin-left: 8px;
+  opacity: 0.7;
+}
+
+.matrixNote {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* 潜网结构图，肉身状态常驻右下角 */
+.divePanel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  width: 230px;
+  padding: 10px;
+  border: 1px solid var(--cp-cyan);
+  background: rgb(4 8 14 / 92%);
+  color: var(--cp-cyan);
+}
+
+.diveTitle {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.diveLayers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diveLayer {
+  display: flex;
+  gap: 8px;
+  padding: 3px 6px;
+  border-left: 2px solid rgb(0 240 255 / 30%);
+  opacity: 0.55;
+}
+
+.diveLayer[data-past] {
+  opacity: 0.8;
+}
+
+.diveLayer[data-deep] {
+  border-left-color: var(--cp-yellow);
+}
+
+.diveLayer[data-here] {
+  border-left-color: var(--cp-cyan);
+  background: rgb(0 240 255 / 12%);
+  opacity: 1;
+}
+
+.diveLayer[data-wall] {
+  border-left-color: var(--cp-red);
+  color: var(--cp-red);
+}
+
+.diveBody {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgb(0 240 255 / 25%);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .divePanel {
+    position: static;
+    width: auto;
+  }
+}

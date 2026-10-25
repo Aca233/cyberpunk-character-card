@@ -98,6 +98,8 @@ const CheckRecordSchema = z.object({
   requestId: z.string().min(1),
   /** 被确认的检定，例如 12（第 12 轮的 check）或 12.2（第 12 轮第 2 个选项的 check） */
   checkId: z.string().min(1),
+  /** 设置里开了矩阵小游戏时解开了几段序列（0–3）；没玩时不写 */
+  matrix: z.number().int().min(0).max(3).optional(),
   roll: DiceRollSchema,
 });
 

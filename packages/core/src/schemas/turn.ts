@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MATRIX_MAX } from "../systems/dice/schema";
 import { EncounterPaceSchema, TravelRequestSchema } from "../systems/travel/schema";
 
 /** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由叙事模型自己判断 */
@@ -50,11 +51,14 @@ export const TurnRequestSchema = z
     offscreen: OffscreenPaceSchema.optional(),
     /** 路上偶遇的频率；没带时按常规 */
     encounters: EncounterPaceSchema.optional(),
+    /** 确认检定前玩了入侵协议矩阵小游戏：解开了几段序列；只对智力检定换算成修正 */
+    matrix: z.number().int().min(0).max(MATRIX_MAX).optional(),
   })
   .refine(
     (r) => (r.input === undefined) !== (r.confirm === undefined),
     "input 和 confirm 要有且只有一个",
-  );
+  )
+  .refine((r) => r.matrix === undefined || r.confirm !== undefined, "matrix 只能和 confirm 一起带");
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 export interface TurnUsage {

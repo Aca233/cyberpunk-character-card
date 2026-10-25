@@ -17,6 +17,7 @@ import {
   type PrepareResult,
   prepareCheck,
   resolveCheck,
+  withMatrix,
 } from "../systems/dice";
 import { type Choice, ChoiceSchema } from "./block";
 
@@ -84,7 +85,8 @@ export function currentOffers(records: readonly LogRecord[]): Offers {
     if (record.kind !== "check" || voided.has(record.seq)) continue;
     const offer = checks.find((c) => c.id === record.checkId);
     if (offer) {
-      rolled = { offer, record };
+      // 掷骰时玩过矩阵小游戏的，修正照骰子记录里的算
+      rolled = { offer: { ...offer, spec: withMatrix(offer.spec, record.matrix) }, record };
       break;
     }
   }

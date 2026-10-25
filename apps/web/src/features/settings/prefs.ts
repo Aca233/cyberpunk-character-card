@@ -9,6 +9,8 @@ export interface NarrativePrefs {
   readonly closeups: boolean;
   /** 剧透调试视图：上下文查看器、存为测评用例；打开时屏幕顶部常驻「剧透」 */
   readonly spoilers: boolean;
+  /** 智力检定确认前先玩原作的入侵协议矩阵，解开的序列换算成加成；默认关 */
+  readonly breachMatrix: boolean;
   /** 城里的动静（场外推演）多久跑一次；每轮随请求带给后端 */
   readonly offscreen: OffscreenPace;
   /** 路上偶遇的频率；每轮随请求带给后端 */
@@ -27,6 +29,7 @@ const DEFAULTS: NarrativePrefs = {
   sceneTitles: false,
   closeups: false,
   spoilers: false,
+  breachMatrix: false,
   offscreen: "normal",
   encounters: "normal",
 };
@@ -44,6 +47,7 @@ function read(): NarrativePrefs {
         sceneTitles: parsed.sceneTitles === true,
         closeups: parsed.closeups === true,
         spoilers: parsed.spoilers === true,
+        breachMatrix: parsed.breachMatrix === true,
         offscreen: PACES.find((p) => p === parsed.offscreen) ?? "normal",
         encounters: ENCOUNTER_PACES.find((p) => p === parsed.encounters) ?? "normal",
       };

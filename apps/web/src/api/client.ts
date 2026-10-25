@@ -308,7 +308,7 @@ export interface CityEventView {
 
 export type TurnBody = { requestId: string; baseVersion: number } & (
   | { input: TurnInput }
-  | { confirm: string }
+  | { confirm: string; matrix?: number }
 );
 
 export const api = {

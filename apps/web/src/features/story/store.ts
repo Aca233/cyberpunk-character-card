@@ -10,7 +10,13 @@ import { followTurn } from "../../api/events";
 
 export type Pending =
   | { readonly kind: "input"; readonly input: TurnInput }
-  | { readonly kind: "confirm"; readonly checkId: string; readonly label: string };
+  | {
+      readonly kind: "confirm";
+      readonly checkId: string;
+      readonly label: string;
+      /** 掷骰前玩了矩阵小游戏：解开了几段 */
+      readonly matrix?: number;
+    };
 
 export type FailureKind =
   /** 被安全过滤拦截 */
@@ -194,7 +200,12 @@ export const useStory = create<StoryState>()((set, get) => {
       const body =
         pending.kind === "input"
           ? { requestId: newRequestId(), baseVersion, input: pending.input }
-          : { requestId: newRequestId(), baseVersion, confirm: pending.checkId };
+          : {
+              requestId: newRequestId(),
+              baseVersion,
+              confirm: pending.checkId,
+              ...(pending.matrix === undefined ? {} : { matrix: pending.matrix }),
+            };
       try {
         const result = await api.submit(saveId, body);
         if (result.kind === "started") {

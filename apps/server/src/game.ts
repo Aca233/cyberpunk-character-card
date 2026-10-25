@@ -311,13 +311,17 @@ export class GameService {
         const unavailable = await this.llmUnavailable();
         if (unavailable) return unavailable;
 
+        // 矩阵小游戏的完成情况在掷骰时记进骰子记录；已经掷过的照记录里的算
+        const target = rolled
+          ? rolled.offer
+          : { ...offer, spec: diceRules.withMatrix(offer.spec, request.matrix) };
         let log = records;
         let faces: readonly number[];
         let baseVersion = version;
         if (rolled) {
           faces = rolled.record.roll.faces;
         } else {
-          const prepared = prepareFor(world, offer.spec);
+          const prepared = prepareFor(world, target.spec);
           if (!prepared.ok) {
             return {
               status: 409,
@@ -331,6 +335,7 @@ export class GameService {
             at: this.deps.clock.now().toISOString(),
             requestId: request.requestId,
             checkId: offer.id,
+            ...(request.matrix === undefined ? {} : { matrix: request.matrix }),
             roll: diceRules.diceRecord(
               prepared.check,
               diceRules.resolveCheck(prepared.check, faces),
@@ -341,7 +346,7 @@ export class GameService {
           await this.maybeSnapshot(id, baseVersion);
           log = [...records, record];
         }
-        const check = rolledFrom(world, offer, faces);
+        const check = rolledFrom(world, target, faces);
         const plan: NarratorPlan = {
           kind: "resolve",
           input: { text: offer.label },
@@ -646,7 +651,15 @@ export class GameService {
             (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
           );
           if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
-          plan = { ...plan, kind: "resolve", check: rolledFrom(world, offer, rolled.roll.faces) };
+          plan = {
+            ...plan,
+            kind: "resolve",
+            check: rolledFrom(
+              world,
+              { ...offer, spec: diceRules.withMatrix(offer.spec, rolled.matrix) },
+              rolled.roll.faces,
+            ),
+          };
         }
         const extras = {
           data: gameData,

@@ -1244,6 +1244,8 @@ function hackingView(
     dive: state.dive && {
       layer: state.dive.layer,
       layers: DIVE_MAX,
+      /** 每一层的名字，从浅到深 */
+      layerLabels: DIVE_LAYERS,
       label: DIVE_LAYERS[state.dive.layer - 1] ?? "",
       chair: state.dive.chair,
       guard: state.dive.guard,
