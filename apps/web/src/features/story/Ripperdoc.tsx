@@ -73,6 +73,7 @@ export function Ripperdoc({
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
               {doc.note}
+              {doc.affinity !== null && `。${doc.name}对你的好感 ${doc.affinity}`}
               {doc.blackMarket && "。黑市货便宜，但来路不明，可能有故障或追踪器。"}
             </p>
             <span>

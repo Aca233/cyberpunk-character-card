@@ -65,7 +65,8 @@ export function Shop({
         <Panel as="div" title={`商店 · ${shop.name}`} line="var(--cp-yellow)">
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
-              店主{shop.keeper}。{shop.note}
+              店主{shop.keeper}
+              {shop.keeperAffinity !== null && `（好感 ${shop.keeperAffinity}）`}。{shop.note}
               {shop.blackMarket && "。黑市货便宜，但来路不明。"}
               {shop.restockAt && `。这一批卖过货，${shop.restockAt} 补满。`}
             </p>
