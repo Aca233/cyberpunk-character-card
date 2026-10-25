@@ -1724,21 +1724,15 @@
   margin-top: 4px;
 }
 
+/* 原作 quickhackBar 的 full 层不透明度 0.55；用掉的格子本作压暗到 0.18 */
 .ramCell {
-  width: 14px;
-  height: 6px;
-  border: 1px solid var(--cp-cyan);
-  opacity: 0.35;
-  transition:
-    opacity 0.25s,
-    background-color 0.25s,
-    box-shadow 0.25s;
+  display: flex;
+  opacity: 0.18;
+  transition: opacity 0.25s;
 }
 
 .ramCell[data-on] {
-  background-color: var(--cp-cyan);
-  opacity: 1;
-  box-shadow: 0 0 6px var(--cp-cyan);
+  opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: reduce) {

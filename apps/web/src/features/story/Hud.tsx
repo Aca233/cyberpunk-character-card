@@ -93,7 +93,10 @@ export function Hud({
                   key={i}
                   className={styles.ramCell}
                   data-on={(view.hacking && i < view.hacking.ram) || undefined}
-                />
+                >
+                  {/* 原作 playerhealthbar 的 quickhackBar：memorybar 竖格染 Blue */}
+                  <Asset id="hud.ramBar" tint="var(--cp-cyan)" height={12} />
+                </span>
               ))}
             </div>
           )}
