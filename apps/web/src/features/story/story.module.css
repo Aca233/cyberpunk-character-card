@@ -792,23 +792,19 @@
 }
 
 /* 检定确认栏 */
+/* 原作没有掷骰前的确认栏；底和框借本作 Panel 的原作物品格 notify.itemCellBg / itemCellFg（切线 30，右下斜切） */
 .check {
   position: relative;
+  isolation: isolate;
   display: grid;
   gap: 0.6rem;
   padding: 0.9rem 1.1rem;
   font-family: var(--font-ui);
-  background: linear-gradient(180deg, rgb(252 238 10 / 7%), rgb(0 0 0 / 55%));
-  border: 1px solid var(--cp-yellow-dim);
-  clip-path: polygon(
-    0 0,
-    calc(100% - 14px) 0,
-    100% 14px,
-    100% 100%,
-    14px 100%,
-    0 calc(100% - 14px)
-  );
   animation: rise var(--dur-slide) ease-out both;
+}
+
+.check > [aria-hidden] {
+  z-index: -1;
 }
 
 .checkHead {

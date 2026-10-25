@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Asset } from "../../ui/Asset";
+import { Asset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { HoldButton } from "../../ui/HoldButton";
 import { BreachMatrix } from "./BreachMatrix";
@@ -67,6 +67,8 @@ export function CheckBar({
 
   return (
     <section className={styles.check} aria-label={`检定：${check.label}`}>
+      <NineSlice id="notify.itemCellBg" tint="var(--cp-panel)" slice={30} />
+      <NineSlice id="notify.itemCellFg" tint="var(--cp-yellow)" slice={30} />
       <header className={styles.checkHead}>
         <Asset id="skillcheck.default" tint="var(--cp-yellow)" height={28} />
         <h2>{check.label}</h2>
