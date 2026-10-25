@@ -2409,3 +2409,73 @@
     width: auto;
   }
 }
+
+/* 文字乱码：只在最新一轮上叠一条乱码遮住几个字，正文不变，读屏不会念出来 */
+.screen[data-glitch="2"] .turn:last-of-type,
+.screen[data-glitch="3"] .turn:last-of-type {
+  position: relative;
+}
+
+.screen[data-glitch="2"] .turn:last-of-type::after,
+.screen[data-glitch="3"] .turn:last-of-type::after {
+  content: "▓░ア▒#ｦ░7ﾊ▒" / "";
+  position: absolute;
+  top: 20%;
+  left: 10%;
+  padding: 0 0.15em;
+  background: var(--cp-bg);
+  color: var(--cp-red);
+  font-family: var(--font-ui);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  opacity: 0;
+  animation: garble 7s steps(1) infinite;
+}
+
+.screen[data-glitch="3"] .turn:last-of-type::after {
+  color: var(--cp-cyan);
+  animation-duration: 2.6s;
+}
+
+@keyframes garble {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    top: 18%;
+    left: 8%;
+  }
+  14% {
+    opacity: 0;
+  }
+  46% {
+    opacity: 1;
+    top: 52%;
+    left: 38%;
+  }
+  52% {
+    opacity: 0;
+  }
+  78% {
+    opacity: 1;
+    top: 76%;
+    left: 20%;
+  }
+  84% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen[data-glitch="2"] .turn:last-of-type::after,
+  .screen[data-glitch="3"] .turn:last-of-type::after {
+    top: 0;
+    right: 0;
+    left: auto;
+    background: none;
+    opacity: 0.6;
+    animation: none;
+  }
+}
