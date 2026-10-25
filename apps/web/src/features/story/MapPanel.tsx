@@ -29,18 +29,30 @@ const MAP: AssetId = "map.roads";
 /** NCPD 警情用原作地图上的悬赏标记 */
 const POLICE_ICON: AssetId = "map.poi.police";
 
-/** 城区和街区的边界：底图上叠一层 SVG，坐标是底图宽、高的百分比 */
-export function MapShapes({ labels = true }: { readonly labels?: boolean }) {
+/**
+ * 城区和街区的边界：底图上叠一层 SVG，坐标是底图宽、高的百分比。
+ * viewBox 默认是整张底图；全屏地图传视野那一块，SVG 只有屏幕大，放大后不会变成上万像素的大图
+ */
+export function MapShapes({
+  labels = true,
+  viewBox = "0 0 100 100",
+}: {
+  readonly labels?: boolean;
+  readonly viewBox?: string;
+}) {
   return (
     <>
       <svg
         className={styles.mapShapes}
-        viewBox="0 0 100 100"
+        viewBox={viewBox}
         preserveAspectRatio="none"
         aria-hidden="true"
       >
         {SUBDISTRICT_SHAPES.map((s) => (
           <polygon key={s.id} points={s.points} className={styles.mapSubdistrict} />
+        ))}
+        {DISTRICT_SHAPES.map((d) => (
+          <polygon key={`${d.id}-glow`} points={d.points} className={styles.mapDistrictGlow} />
         ))}
         {DISTRICT_SHAPES.map((d) => (
           <polygon key={d.id} points={d.points} className={styles.mapDistrict} />
@@ -261,31 +273,37 @@ export function MapPanel({
   const onScreen = (p: { left: number; top: number }) =>
     p.left > -120 && p.left < size.w + 120 && p.top > -40 && p.top < size.h + 40;
 
-  // 瓦片：挑一级让瓦片像素不少于屏幕物理像素，只摆视野里的几块
+  // 瓦片：挑一级让瓦片像素不少于屏幕物理像素，只摆视野里的几块；
+  // 下面垫低两级的几块，换级时新瓦片没载完也不露底（不再垫整张底图：放大后它会被拉成上万像素）
   const tileImgs: { key: string; src: string; left: number; top: number; size: number }[] = [];
   if (tiles && size.w > 0) {
     const worldPx = cam.k * 100;
     const dpr = window.devicePixelRatio || 1;
-    const z = clamp(Math.ceil(Math.log2((worldPx * dpr) / tiles.tile)), 0, tiles.maxZoom);
-    const n = 2 ** z;
-    const ts = worldPx / n;
+    const top = clamp(Math.ceil(Math.log2((worldPx * dpr) / tiles.tile)), 0, tiles.maxZoom);
     const origin = toScreen(0, 0);
-    const x0 = clamp(Math.floor(-origin.left / ts), 0, n - 1);
-    const x1 = clamp(Math.floor((size.w - origin.left) / ts), 0, n - 1);
-    const y0 = clamp(Math.floor(-origin.top / ts), 0, n - 1);
-    const y1 = clamp(Math.floor((size.h - origin.top) / ts), 0, n - 1);
-    for (let x = x0; x <= x1; x++) {
-      for (let y = y0; y <= y1; y++) {
-        tileImgs.push({
-          key: `${z}/${x}/${y}`,
-          src: tiles.url(z, x, y),
-          left: x * ts,
-          top: y * ts,
-          size: ts + 0.5,
-        });
+    const levels = top >= 2 ? [top - 2, top] : [top];
+    for (const z of levels) {
+      const n = 2 ** z;
+      const ts = worldPx / n;
+      const x0 = clamp(Math.floor(-origin.left / ts), 0, n - 1);
+      const x1 = clamp(Math.floor((size.w - origin.left) / ts), 0, n - 1);
+      const y0 = clamp(Math.floor(-origin.top / ts), 0, n - 1);
+      const y1 = clamp(Math.floor((size.h - origin.top) / ts), 0, n - 1);
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          tileImgs.push({
+            key: `${z}/${x}/${y}`,
+            src: tiles.url(z, x, y),
+            left: x * ts,
+            top: y * ts,
+            size: ts + 0.5,
+          });
+        }
       }
     }
   }
+  // 边界 SVG 只画视野这一块
+  const shapesBox = `${cam.cx - size.w / (2 * cam.k)} ${cam.cy - size.h / (2 * cam.k)} ${size.w / cam.k} ${size.h / cam.k}`;
 
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
   const sides = new Map<string, "right" | "left" | "hidden">();
@@ -442,7 +460,7 @@ export function MapPanel({
                 height: cam.k * 100,
               }}
             >
-              {info ? (
+              {tiles ? null : info ? (
                 <img src={info.url} alt="" className={styles.mapImage} draggable={false} />
               ) : (
                 <MissingAsset id={MAP} />
@@ -454,11 +472,12 @@ export function MapPanel({
                   alt=""
                   className={styles.mapTile}
                   draggable={false}
+                  decoding="async"
                   style={{ left: t.left, top: t.top, width: t.size, height: t.size }}
                 />
               ))}
-              {shapes && <MapShapes labels={false} />}
             </div>
+            {shapes && <MapShapes labels={false} viewBox={shapesBox} />}
 
             {shapes &&
               !turf &&

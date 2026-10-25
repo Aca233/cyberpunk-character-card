@@ -1757,6 +1757,7 @@
 }
 
 .mapDistrict,
+.mapDistrictGlow,
 .mapSubdistrict {
   fill: none;
   vector-effect: non-scaling-stroke;
@@ -1766,7 +1767,12 @@
 .mapDistrict {
   stroke: var(--cp-red);
   stroke-width: 1.5px;
-  filter: drop-shadow(0 0 2px rgb(255 0 60 / 60%));
+}
+
+/* 光晕用一层宽的半透明描边，不用 filter：滤镜每帧都要重新栅格化整层，放大后很卡 */
+.mapDistrictGlow {
+  stroke: rgb(255 0 60 / 22%);
+  stroke-width: 5px;
 }
 
 .mapSubdistrict {
@@ -2011,7 +2017,7 @@
   color: var(--cp-cyan);
   background: currentColor;
   mask: var(--icon) center / contain no-repeat;
-  filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);
+  /* 不加 filter：滤镜先于遮罩生效，阴影会被遮罩裁掉，还让每个图标每帧多一次离屏栅格化 */
   cursor: help;
 }
 
