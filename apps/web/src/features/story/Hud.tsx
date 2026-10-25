@@ -346,6 +346,19 @@ export function SidePanel({
               </dd>
             </Fragment>
           ))}
+          {(view.trauma.active || view.trauma.lapsed) && (
+            <>
+              <dt>创伤小组</dt>
+              <dd
+                data-tone={view.trauma.active ? undefined : "bad"}
+                title={view.trauma.dispatch.ok ? "倒下时会来" : view.trauma.dispatch.why}
+              >
+                {view.trauma.active
+                  ? `${view.trauma.tierLabel}，到 ${view.trauma.until}`
+                  : `${view.trauma.lapsed} 过期了`}
+              </dd>
+            </>
+          )}
           <dt>难度</dt>
           <dd>{DIFFICULTY_LABELS[view.difficulty]}</dd>
           {inventory.healing && (

@@ -250,6 +250,20 @@ export function diffViews(prev: View, next: View): Toast[] {
     }
   }
 
+  // 创伤小组会籍：办了、升了、过期了
+  if (next.trauma.tier !== prev.trauma.tier) {
+    out.push({
+      icon: "notify.attention",
+      text:
+        next.trauma.tier === "none"
+          ? next.trauma.lapsed
+            ? "创伤小组会籍过期了"
+            : "退掉了创伤小组会籍"
+          : `创伤小组${next.trauma.tierLabel}：到 ${next.trauma.until}`,
+      tone: next.trauma.tier === "none" ? "bad" : "good",
+    });
+  }
+
   // 扫描器上新挂的警情
   for (const a of next.ncpd.alerts) {
     if (!prev.ncpd.alerts.some((p) => p.id === a.id))

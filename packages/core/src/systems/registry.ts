@@ -17,6 +17,7 @@ import { ncpd } from "./ncpd";
 import { npc } from "./npc";
 import { phone } from "./phone";
 import { stealth } from "./stealth";
+import { trauma } from "./trauma";
 import { travel } from "./travel";
 import { world } from "./world";
 
@@ -42,6 +43,7 @@ export const systems: readonly AnySystem[] = [
   travel,
   factions,
   ncpd,
+  trauma,
 ];
 
 export const registry = createRegistry(systems);

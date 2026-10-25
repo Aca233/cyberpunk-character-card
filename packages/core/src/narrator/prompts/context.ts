@@ -182,6 +182,12 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,
     );
+  if (view.trauma.active)
+    lines.push(
+      `创伤小组：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.dispatch.ok ? "现在叫得来（倒下或濒死时写 trauma rescue）" : `现在不会来：${view.trauma.dispatch.why}`}`,
+    );
+  else if (view.trauma.lapsed)
+    lines.push(`创伤小组：会籍 ${view.trauma.lapsed} 过期了，没续，不会来`);
   if (view.ncpd.alerts.length > 0)
     lines.push(
       `NCPD 警情（扫描器上挂着的，玩家可以去处理，也可以不管）：${view.ncpd.alerts.map((a) => `${a.id}「${a.label}」在${a.locationName}（${a.district}${a.here ? "，就在这个城区" : ""}，${"★".repeat(a.risk)}，赏金 ${a.reward} 欧元，${a.until} 前）：${a.note}`).join("；")}`,
