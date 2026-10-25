@@ -6,6 +6,7 @@ import {
   applyOutfit,
   applyTrade,
   itemCatalog,
+  markSold,
   recharge,
   spend,
   stashMove,
@@ -39,6 +40,7 @@ export const inventory = defineSystem<
     clothing: {},
     outfit: {},
     mods: {},
+    shopStock: {},
   }),
   commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
   internal: InventoryInternalSchemas,
@@ -52,6 +54,8 @@ export const inventory = defineSystem<
         return spend(draft, command.slot);
       case "inventory.recharge":
         return recharge(draft);
+      case "inventory.sold":
+        return markSold(draft, command.shop, command.item, command.at);
       case "inventory.outfit":
         return applyOutfit(draft, command.action, itemCatalog(ctx.data));
       case "inventory.stash":

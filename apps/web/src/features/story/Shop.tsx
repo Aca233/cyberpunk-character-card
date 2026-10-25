@@ -67,6 +67,7 @@ export function Shop({
             <p className={`${styles.dim} ${styles.docNote}`}>
               店主{shop.keeper}。{shop.note}
               {shop.blackMarket && "。黑市货便宜，但来路不明。"}
+              {shop.restockAt && `。这一批卖过货，${shop.restockAt} 补满。`}
             </p>
             <span>
               身上 <b>{money(eddies)}</b> 欧元
@@ -94,7 +95,7 @@ export function Shop({
                               <small className={styles.cyberSlot}>{item.rarityLabel}</small>
                             )}
                             <span className={styles.docPrice} data-short={short || undefined}>
-                              {money(item.price)} 欧元
+                              {money(item.price)} 欧元{item.left > 0 && ` · 剩 ${item.left}`}
                             </span>
                             <Button
                               disabled={!onBuy || working || item.locked !== null || short}

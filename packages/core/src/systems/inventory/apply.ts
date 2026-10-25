@@ -272,24 +272,69 @@ export interface ShopItem {
   readonly def: ItemDef;
   readonly price: number;
   readonly locked: string | null;
+  /** 这一批还剩几件 */
+  readonly left: number;
+}
+
+/** 商店每 3 个游戏日补一次货 */
+export const RESTOCK_MINUTES = 3 * 1440;
+
+/** 一家店这一批的已卖记录 */
+export interface ShopStock {
+  readonly restockedAt: number;
+  readonly sold: Readonly<Record<string, number>>;
+}
+
+/** 每批进几件（本作改编）：治疗品和手雷 5，普通和没标稀有度的 3，uncommon 2，rare 及以上 1 */
+export function stockOf(def: ItemDef): number {
+  if (quickSlotFor(def.kind)) return 5;
+  if (def.rarity === undefined || def.rarity === "common") return 3;
+  if (def.rarity === "uncommon") return 2;
+  return 1;
+}
+
+/** 这一批还没满 3 天就返回已卖记录；满了算补满，返回 undefined */
+export function currentStock(stock: ShopStock | undefined, now: number): ShopStock | undefined {
+  return stock !== undefined && now - stock.restockedAt < RESTOCK_MINUTES ? stock : undefined;
+}
+
+/** 这一批卖过货时，下次补满的游戏时间；没卖过返回 null */
+export function restockDue(stock: ShopStock | undefined, now: number): number | null {
+  const current = currentStock(stock, now);
+  return current === undefined ? null : current.restockedAt + RESTOCK_MINUTES;
+}
+
+/** 买走一件记进这一批；上一批已经补满时，从这次起算新的一批 */
+export function markSold(draft: Inventory, shop: string, item: string, at: number): ApplyOutcome {
+  const entry = draft.shopStock[shop];
+  if (entry === undefined || at - entry.restockedAt >= RESTOCK_MINUTES) {
+    draft.shopStock[shop] = { restockedAt: at, sold: { [item]: 1 } };
+  } else {
+    entry.sold[item] = (entry.sold[item] ?? 0) + 1;
+  }
+  return { ok: true, notes: [], emit: [] };
 }
 
 export function shopShelf(
   shop: Shop,
   catalog: ReadonlyMap<string, ItemDef>,
   streetCred: number,
+  stock?: ShopStock,
 ): ShopItem[] {
   return shop.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def || def.price === undefined) return [];
     const gate = def.rarity === undefined ? undefined : shop.credGates[def.rarity];
+    const left = Math.max(0, stockOf(def) - (stock?.sold[id] ?? 0));
     const locked = def.iconic
       ? "不朽物品只从剧情获得"
       : gate !== undefined && streetCred < gate
         ? `街头声望 ${gate} 级才肯卖`
-        : null;
+        : left === 0
+          ? "这一批卖完了，等补货"
+          : null;
     const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
-    return [{ def, price, locked }];
+    return [{ def, price, locked, left }];
   });
 }
 

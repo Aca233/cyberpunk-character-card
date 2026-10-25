@@ -15,7 +15,13 @@ import { CyberwareStateSchema } from "./systems/cyberware/schema";
 import { AttributeSchema } from "./systems/dice/schema";
 import { EconomyStateSchema } from "./systems/economy/schema";
 import { HealthStateSchema } from "./systems/health/schema";
-import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
+import {
+  currentStock,
+  itemCatalog,
+  sellValue,
+  shopList,
+  shopShelf,
+} from "./systems/inventory/apply";
 import { InventoryStateSchema } from "./systems/inventory/schema";
 import { registry } from "./systems/registry";
 
@@ -220,7 +226,9 @@ function shopCommands(
     ];
   }
   const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
-  const item = shopShelf(shop, catalog, streetCred).find((i) => i.def.id === action.id);
+  const held = InventoryStateSchema.parse(world.slices.inventory);
+  const stock = currentStock(held.shopStock[shop.id], world.time);
+  const item = shopShelf(shop, catalog, streetCred, stock).find((i) => i.def.id === action.id);
   if (!item) return `${shop.name}的货架上没有这件`;
   if (item.locked) return `${shop.name}不卖${item.def.name}：${item.locked}`;
   const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
@@ -228,6 +236,7 @@ function shopCommands(
   return [
     { type: "money", delta: -item.price, reason: `在${shop.name}买${item.def.name}` },
     { type: "item", action: "gain", id: item.def.id, reason: `在${shop.name}买下` },
+    { type: "inventory.sold", shop: shop.id, item: item.def.id, at: world.time },
   ];
 }
 

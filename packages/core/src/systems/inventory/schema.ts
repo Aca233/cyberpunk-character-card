@@ -205,6 +205,16 @@ export const InventoryStateSchema = z.object({
   outfit: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 武器上装着的改装件：武器 id → 位置 → 改装件 id；同一种武器的几把共用一份 */
   mods: z.record(z.string(), z.partialRecord(ModSlotSchema, z.string().min(1))).default({}),
+  /** 各家店这一批卖掉了多少：店 id -> 这一批从什么时候算起、每件卖了几个；满 3 个游戏日补满 */
+  shopStock: z
+    .record(
+      z.string(),
+      z.object({
+        restockedAt: z.number().int(),
+        sold: z.record(z.string(), z.number().int().min(1)),
+      }),
+    )
+    .default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
@@ -253,6 +263,13 @@ export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
   "inventory.recharge": z.object({ type: z.literal("inventory.recharge") }),
+  /** 界面里在商店货架上买走一件：记进这一批的已卖数量 */
+  "inventory.sold": z.object({
+    type: z.literal("inventory.sold"),
+    shop: z.string().min(1),
+    item: z.string().min(1),
+    at: z.number().int(),
+  }),
   /** 界面动作：save 把身上穿着的存成整套外观，wear 照存下的一次换好 */
   "inventory.outfit": z.object({
     type: z.literal("inventory.outfit"),

@@ -72,7 +72,14 @@ import { shownStars } from "./systems/heat/apply";
 import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
 import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
 import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
-import { itemCatalog, sellValue, shopList, shopShelf } from "./systems/inventory/apply";
+import {
+  currentStock,
+  itemCatalog,
+  restockDue,
+  sellValue,
+  shopList,
+  shopShelf,
+} from "./systems/inventory/apply";
 import {
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
@@ -469,11 +476,17 @@ const CLOTHING_SLOTS = ClothingSlotSchema.options;
 const MOD_SLOTS = ModSlotSchema.options;
 
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
+/** 这一批卖过货时，下次补满的时间写成文字 */
+function restockLabel(due: number | null): string | null {
+  return due === null ? null : formatGameTime(due);
+}
+
 function shopsView(
   data: Readonly<Record<string, unknown>>,
   location: string | null,
   streetCred: number,
   inventory: InventoryState,
+  now: number,
 ) {
   if (location === null || data.items === undefined) return [];
   const catalog = itemCatalog(data);
@@ -489,7 +502,13 @@ function shopsView(
     keeper: shop.keeper,
     note: shop.note,
     blackMarket: shop.blackMarket,
-    shelf: shopShelf(shop, catalog, streetCred).map(({ def, price, locked }) => ({
+    restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
+    shelf: shopShelf(
+      shop,
+      catalog,
+      streetCred,
+      currentStock(inventory.shopStock[shop.id], now),
+    ).map(({ def, price, locked, left }) => ({
       id: def.id,
       name: def.name,
       group:
@@ -500,6 +519,7 @@ function shopsView(
       price,
       ability: def.ability ?? null,
       locked,
+      left,
     })),
     /** 背包里的东西卖给这家店给多少；0 是不收 */
     sell,
@@ -932,7 +952,7 @@ export function projectState(
     ),
     /** 欠义体医生的钱 */
     /** 当前地点开着的商店 */
-    shops: shopsView(data, clock.location, character.streetCred, inventory),
+    shops: shopsView(data, clock.location, character.streetCred, inventory, world.time),
     ripperdocDebts: debts.map((d) => ({
       docName: d.docName,
       amount: d.amount,
