@@ -106,6 +106,8 @@ export function StoryScreen() {
   const [atMap, setAtMap] = useState(false);
   const [atFactions, setAtFactions] = useState(false);
   const [atStash, setAtStash] = useState(false);
+  // 准备买下的公寓 id：先弹确认框
+  const [buyingHome, setBuyingHome] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
   const [atPhone, setAtPhone] = useState(false);
 
@@ -368,6 +370,23 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 买公寓：不调用模型；钱不够、这里已经有住处时由代码拒绝
+  const homeAction = useCallback(
+    async (id: string) => {
+      setBuyingHome(null);
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "buyHome", id },
+        });
+      } catch (error) {
+        warn("home", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
 
   const send = useCallback(
     (input: TurnInput) => {
@@ -534,6 +553,7 @@ export function StoryScreen() {
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}
         onStash={() => setAtStash(true)}
+        onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
 
       <main className={styles.column}>
@@ -697,6 +717,35 @@ export function StoryScreen() {
           onClose={() => setAtStash(false)}
         />
       )}
+      {buyingHome &&
+        (() => {
+          const home = view.safehouse.forSale.find((h) => h.id === buyingHome);
+          return (
+            home && (
+              <Dialog
+                title={`买下${home.name}`}
+                tone="info"
+                onClose={() => setBuyingHome(null)}
+                actions={
+                  <>
+                    <Button primary disabled={busy} onClick={() => void homeAction(home.id)}>
+                      一次付清
+                    </Button>
+                    <Button onClick={() => setBuyingHome(null)}>再想想</Button>
+                  </>
+                }
+              >
+                <p>{home.note}</p>
+                <p>
+                  要 {home.price.toLocaleString("en-US")} 欧元，身上有{" "}
+                  {view.money.eddies.toLocaleString("en-US")} 欧元，付完剩{" "}
+                  {(view.money.eddies - home.price).toLocaleString("en-US")}
+                  。不收房租，买下后有床、存放箱和衣柜，躲在里面热度降得快。
+                </p>
+              </Dialog>
+            )
+          );
+        })()}
       {atFactions && <FactionsPanel view={view} onClose={() => setAtFactions(false)} />}
       {atMap && (
         <MapPanel

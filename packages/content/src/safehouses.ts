@@ -38,3 +38,26 @@ export const homes = safehouseRules.HomeCatalogSchema.parse([
     source: "本作改编",
   },
 ]);
+
+/**
+ * 能买下的公寓：原作 2.0 起在 EZ 地产一次付清买下，这里在那个地点的界面上买。
+ * 北区（沃森）和格伦（海伍德）的公寓地点表里还没有，北区的价钱各处说法不一（5,000 或 10,000），先不放
+ */
+export const apartments = safehouseRules.ApartmentCatalogSchema.parse([
+  {
+    id: "apartment-japantown",
+    name: "日本街公寓",
+    location: "japantown",
+    price: 30_000,
+    note: "日本街霓虹招牌后面的一间小公寓：床、存放箱、衣柜，楼下一整夜都是夜市的声音",
+    source: "原作依据 2.0（日本街公寓，EZ 地产售价 30,000）",
+  },
+  {
+    id: "apartment-corpo-plaza",
+    name: "公司广场公寓",
+    location: "corpo-plaza",
+    price: 110_000,
+    note: "市政中心高层的大公寓，落地窗、门禁和保安齐全，住在这里说明你已经混出了头",
+    source: "原作依据 2.0（公司广场公寓，EZ 地产售价 110,000）",
+  },
+]);

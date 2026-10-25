@@ -4,6 +4,8 @@ import { type InventoryState, itemCatalog } from "../inventory";
 import { type TravelState, vehicleCatalog } from "../travel";
 import type { WorldClockState } from "../world";
 import {
+  ApartmentCatalogSchema,
+  type ApartmentDef,
   type SafehouseInternal,
   type SafehouseState,
   type StashCommand,
@@ -119,4 +121,21 @@ export function seedHome(
   if (draft.homes.some((h) => h.id === command.id)) return { ok: true, notes: [] };
   draft.homes.push({ id: command.id, name: command.name, location: command.location, since: now });
   return { ok: true, notes: [`住处：${command.name}`] };
+}
+
+/** 能买下的公寓表；数据表里没有时为空 */
+export function apartmentList(data: Readonly<Record<string, unknown>>): readonly ApartmentDef[] {
+  const parsed = ApartmentCatalogSchema.safeParse(data.apartments);
+  return parsed.success ? parsed.data : [];
+}
+
+/** 这处公寓为什么买不了；能买时为 undefined。同一个地点只算一处住所 */
+export function apartmentLocked(
+  homes: readonly { readonly id: string; readonly name: string; readonly location: string }[],
+  def: ApartmentDef,
+): string | undefined {
+  if (homes.some((h) => h.id === def.id)) return `${def.name}已经是你的了`;
+  const there = homes.find((h) => h.location === def.location);
+  if (there) return `这里已经有${there.name}，不用再买一处`;
+  return undefined;
 }

@@ -24,6 +24,8 @@ import {
 } from "./systems/inventory/apply";
 import { InventoryStateSchema } from "./systems/inventory/schema";
 import { registry } from "./systems/registry";
+import { apartmentList, apartmentLocked } from "./systems/safehouse/apply";
+import { SafehouseStateSchema } from "./systems/safehouse/schema";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 分配一个街头声望攒下的属性点 */
@@ -105,6 +107,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     shop: z.string().min(1).max(40),
     id: z.string().min(1).max(64),
   }),
+  /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
+  z.strictObject({ type: z.literal("buyHome"), id: z.string().min(1).max(64) }),
   /** 打开消息：把消息都标成已读 */
   z.strictObject({ type: z.literal("readMessages") }),
   /** 角色卡上的习惯：add 自己写一条，confirm 认下叙事模型的提议，dismiss 不要这条提议，remove 删掉 */
@@ -263,6 +267,33 @@ function shopCommands(
   ];
 }
 
+/** 一条 money 指令最多动多少欧元；更贵的分几笔付 */
+const MONEY_STEP = 100_000;
+
+/** 买公寓：人要在那个地点，这里还没有住处，钱够一次付清 */
+function homeCommands(
+  world: WorldState,
+  action: Extract<PlayerAction, { type: "buyHome" }>,
+  data: Readonly<Record<string, unknown>>,
+): Command[] | string {
+  const def = apartmentList(data).find((a) => a.id === action.id);
+  if (!def) return `没有叫 ${action.id} 的公寓`;
+  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+  if (here !== def.location) return `不在${def.name}那里，先过去看房`;
+  const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+  if (combat) return "打斗中顾不上买房";
+  const homes = SafehouseStateSchema.parse(world.slices.safehouse ?? {}).homes;
+  const locked = apartmentLocked(homes, def);
+  if (locked) return locked;
+  const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
+  if (def.price > eddies) return `欧元不够：${def.name}要 ${def.price}，身上只有 ${eddies}`;
+  const pay: Command[] = [];
+  for (let left = def.price; left > 0; left -= MONEY_STEP) {
+    pay.push({ type: "money", delta: -Math.min(left, MONEY_STEP), reason: `买下${def.name}` });
+  }
+  return [...pay, { type: "safehouse.seed", id: def.id, name: def.name, location: def.location }];
+}
+
 /** 每种操作对应的指令；只放行这里列出的。返回字符串表示操作不成立 */
 function commandsFor(
   world: WorldState,
@@ -280,6 +311,8 @@ function commandsFor(
     case "buyItem":
     case "sellItem":
       return shopCommands(world, action, data);
+    case "buyHome":
+      return homeCommands(world, action, data);
     case "craft": {
       const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
       if (combat) return "战斗中顾不上拆装";

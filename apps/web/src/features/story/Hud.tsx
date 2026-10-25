@@ -250,6 +250,7 @@ export function SidePanel({
   onAnchor,
   onSquad,
   onCraft,
+  onBuyHome,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -283,6 +284,8 @@ export function SidePanel({
   readonly onFactions: () => void;
   /** 打开存放箱和后备箱 */
   readonly onStash: () => void;
+  /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
+  readonly onBuyHome?: ((id: string) => void) | undefined;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -646,6 +649,16 @@ export function SidePanel({
         {view.shops.map((shop) => (
           <div className={styles.docLink} key={shop.id}>
             <Button onClick={() => onShop(shop.id)}>进{shop.name}</Button>
+          </div>
+        ))}
+        {view.safehouse.forSale.map((home) => (
+          <div className={styles.docLink} key={home.id}>
+            <p className={styles.dim}>{home.locked ?? home.note}</p>
+            {onBuyHome && !home.locked && (
+              <Button disabled={home.price > view.money.eddies} onClick={() => onBuyHome(home.id)}>
+                买下{home.name}（{home.price.toLocaleString("en-US")} 欧元）
+              </Button>
+            )}
           </div>
         ))}
       </Panel>

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  apartments,
   boardModules,
   canonTimeline,
   combos,
@@ -113,6 +114,7 @@ schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters
 schema("势力 factions", factionsRules.FactionCatalogSchema, factions);
 schema("NCPD 警情 ncpdAlerts", ncpdRules.AlertCatalogSchema, ncpdAlerts);
 schema("开局住所 homes", safehouseRules.HomeCatalogSchema, homes);
+schema("公寓 apartments", safehouseRules.ApartmentCatalogSchema, apartments);
 schema("拳赛和赛车 sidegigs", sidegigRules.GigCatalogSchema, sidegigs);
 schema("车型 vehicles", travelRules.VehicleCatalogSchema, vehicles);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
@@ -396,6 +398,14 @@ for (const h of homes) {
     errors.push(`开局住所 ${h.id}：地点 ${h.location} 不在地点表里`);
 }
 
+// 能买的公寓：id 不和开局住所撞，地点要在地点表里，来源要标原作依据、本作改编或待核对
+unique("开局住所和公寓", [...homes.map((h) => h.id), ...apartments.map((a) => a.id)]);
+for (const a of apartments) {
+  refs(`公寓 ${a.id}`, [a.location], locationIds, "地点");
+  if (!/原作依据|本作改编|待核对/.test(a.source))
+    errors.push(`公寓 ${a.id}：来源要标原作依据、本作改编或待核对`);
+}
+
 // 拳赛和赛车：地点要在地点表里，对手不重复，赢了拿的要比押金多，来源要标原作依据、本作改编或待核对
 unique(
   "拳赛和赛车",
@@ -416,7 +426,7 @@ for (const kind of ["fight", "race"] as const) {
   if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、拳赛和赛车 ${sidegigs.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

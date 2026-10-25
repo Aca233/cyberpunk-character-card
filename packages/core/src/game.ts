@@ -105,7 +105,13 @@ import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
 import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
-import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
+import {
+  apartmentList,
+  apartmentLocked,
+  type HomeDef,
+  SafehouseStateSchema,
+  trunks,
+} from "./systems/safehouse";
 import { sidegigsView } from "./systems/sidegigs/apply";
 import { squadView } from "./systems/squad/apply";
 import { currentAlert } from "./systems/stealth/apply";
@@ -1296,6 +1302,16 @@ function safehouseView(
       items: list(t.id),
     })),
     trophies: state.trophies.map((t) => ({ ...t, at: formatGameTime(t.at) })),
+    /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */
+    forSale: apartmentList(data)
+      .filter((a) => a.location === location)
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        price: a.price,
+        note: a.note,
+        locked: apartmentLocked(state.homes, a) ?? null,
+      })),
   };
 }
 

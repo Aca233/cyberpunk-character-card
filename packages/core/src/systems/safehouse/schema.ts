@@ -17,6 +17,19 @@ export const HomeDefSchema = z.object({
 export type HomeDef = z.infer<typeof HomeDefSchema>;
 export const HomeCatalogSchema = z.array(HomeDefSchema);
 
+/** 能买下的公寓：一次付清，不收房租；人在那个地点时在界面上买。数据在 content 包的 safehouses.ts */
+export const ApartmentDefSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  name: z.string().min(1).max(24),
+  /** 地点表里的 id */
+  location: z.string().min(1),
+  price: z.number().int().min(1000).max(500_000),
+  note: z.string().min(1).max(120),
+  source: z.string().min(1),
+});
+export type ApartmentDef = z.infer<typeof ApartmentDefSchema>;
+export const ApartmentCatalogSchema = z.array(ApartmentDefSchema);
+
 export const HomeSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),

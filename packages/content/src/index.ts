@@ -12,7 +12,7 @@ import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
-import { homes } from "./safehouses";
+import { apartments, homes } from "./safehouses";
 import { shops } from "./shops";
 import { sidegigs } from "./sidegigs";
 import { vehicles } from "./vehicles";
@@ -36,7 +36,7 @@ export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 export { ripperdocs } from "./ripperdocs";
-export { homes } from "./safehouses";
+export { apartments, homes } from "./safehouses";
 export { shops } from "./shops";
 export { sidegigs } from "./sidegigs";
 export { vehicles } from "./vehicles";
@@ -73,5 +73,6 @@ export const gameData: Readonly<Record<string, unknown>> = {
   consequences,
   jobTemplates,
   sidegigs,
+  apartments,
   // 原剧第 1–3 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };
