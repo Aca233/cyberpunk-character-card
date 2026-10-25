@@ -715,7 +715,18 @@
       { "id": "map.poi.autofixer", "atlas": "common/mappin_icons", "slot": "car_to_buy" },
       { "id": "map.poi.quest", "atlas": "common/mappin_icons", "slot": "quest" },
       { "id": "map.poi.player", "atlas": "common/mappin_icons", "slot": "V_owned" },
-      { "id": "map.poi.police", "atlas": "common/mappin_icons", "slot": "map_bounty" }
+      { "id": "map.poi.police", "atlas": "common/mappin_icons", "slot": "map_bounty" },
+      { "id": "gang.maelstrom", "atlas": "common/gang_logos", "slot": "logo_maelstrom" },
+      { "id": "gang.tygerClaws", "atlas": "common/gang_logos", "slot": "logo_tygerclaws" },
+      { "id": "gang.valentinos", "atlas": "common/gang_logos", "slot": "logo_valentinos" },
+      { "id": "gang.sixthStreet", "atlas": "common/gang_logos", "slot": "logo_6thstreet" },
+      { "id": "gang.animals", "atlas": "common/gang_logos", "slot": "logo_animals" },
+      { "id": "gang.voodooBoys", "atlas": "common/gang_logos", "slot": "logo_voodooboys" },
+      { "id": "gang.mox", "atlas": "common/gang_logos", "slot": "logo_themox" },
+      { "id": "gang.scavengers", "atlas": "common/gang_logos", "slot": "logo_scavengers" },
+      { "id": "gang.wraiths", "atlas": "common/gang_logos", "slot": "logo_wraiths" },
+      { "id": "gang.aldecaldos", "atlas": "common/gang_logos", "slot": "logo_aldecados" },
+      { "id": "gang.barghest", "atlas": "common/gang_logos", "slot": "logo_barghest" }
     ],
     "cursor": [
       { "id": "cursor.arrowShadow", "atlas": "widgets/cursor_inventory", "slot": "mouse_shadow" },

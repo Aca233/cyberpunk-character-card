@@ -3,12 +3,11 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
-import { MissingAsset } from "../../ui/Asset";
+import { Asset, MissingAsset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import {
   DISTRICT_SHAPES,
@@ -19,7 +18,7 @@ import {
   SUBDISTRICT_SHAPES,
 } from "./mapShapes.gen";
 import styles from "./story.module.css";
-import type { View } from "./view";
+import { districtIcon, type View } from "./view";
 
 export type MapDestination = View["travel"]["destinations"][number];
 export type MapRoute = MapDestination["routes"][number];
@@ -36,9 +35,12 @@ const POLICE_ICON: AssetId = "map.poi.police";
 export function MapShapes({
   labels = true,
   viewBox = "0 0 100 100",
+  active,
 }: {
   readonly labels?: boolean;
   readonly viewBox?: string;
+  /** 鼠标停着的城区（名字），整块提亮 */
+  readonly active?: string | undefined;
 }) {
   return (
     <>
@@ -48,6 +50,9 @@ export function MapShapes({
         preserveAspectRatio="none"
         aria-hidden="true"
       >
+        {DISTRICT_SHAPES.filter((d) => d.name === active).map((d) => (
+          <polygon key={`${d.id}-hover`} points={d.points} className={styles.mapDistrictHover} />
+        ))}
         {SUBDISTRICT_SHAPES.map((s) => (
           <polygon key={s.id} points={s.points} className={styles.mapSubdistrict} />
         ))}
@@ -93,6 +98,66 @@ function poiIcon(kind: MapPoiKind): AssetId {
 
 const KIND_NAME = new Map(MAP_POI_KINDS.map((k) => [k.id, k.name]));
 const SUB_NAME = new Map(SUBDISTRICT_SHAPES.map((s) => [s.id, s.name]));
+
+type Polygon = readonly (readonly [number, number])[];
+
+function parsePoints(points: string): Polygon {
+  return points
+    .trim()
+    .split(/\s+/)
+    .map((pair) => {
+      const [x, y] = pair.split(",").map(Number);
+      return [x ?? 0, y ?? 0] as const;
+    });
+}
+
+/** 射线法：点在不在多边形里 */
+function inside(poly: Polygon, x: number, y: number): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (!a || !b) continue;
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) {
+      hit = !hit;
+    }
+  }
+  return hit;
+}
+
+const DISTRICT_AREAS = DISTRICT_SHAPES.map((d) => ({ name: d.name, poly: parsePoints(d.points) }));
+const SUB_AREAS = SUBDISTRICT_SHAPES.map((s) => ({ name: s.name, poly: parsePoints(s.points) }));
+
+/**
+ * 鼠标下面是哪个城区：用原作世界地图的城区悬停区域（3dmap_view.ent）判断。
+ * 原作没有恶土的悬停区域，城区以外的地方都算恶土（海面也算，本作简化）
+ */
+interface Hover {
+  readonly district: string;
+  readonly sub: string | null;
+}
+
+function districtAt(x: number, y: number): Hover | null {
+  if (x < 0 || x > 100 || y < 0 || y > 100) return null;
+  const district = DISTRICT_AREAS.find((d) => inside(d.poly, x, y))?.name;
+  if (!district) return { district: "恶土", sub: null };
+  return { district, sub: SUB_AREAS.find((s) => inside(s.poly, x, y))?.name ?? null };
+}
+
+/** 帮派标志：原作 gang_logos 图集，按势力 id 对上 */
+const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
+  maelstrom: "gang.maelstrom",
+  "tyger-claws": "gang.tygerClaws",
+  valentinos: "gang.valentinos",
+  "sixth-street": "gang.sixthStreet",
+  animals: "gang.animals",
+  "voodoo-boys": "gang.voodooBoys",
+  mox: "gang.mox",
+  scavengers: "gang.scavengers",
+  wraiths: "gang.wraiths",
+  aldecaldos: "gang.aldecaldos",
+  barghest: "gang.barghest",
+};
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -154,7 +219,7 @@ export function MapPanel({
   readonly onClose: () => void;
 }) {
   const [shapes, setShapes] = useState(true);
-  const [turf, setTurf] = useState(false);
+  const [hover, setHover] = useState<Hover | null>(null);
   const [services, setServices] = useState(true);
   const [picked, setPicked] = useState<string | null>(null);
   const [tiles, setTiles] = useState<MapTiles | null>(null);
@@ -173,21 +238,6 @@ export function MapPanel({
       live = false;
     };
   }, []);
-
-  // 帮派地盘摆在城区名的位置（这时城区名不显示）；没有原作轮廓的城区（恶土等）取已上图地点的平均坐标
-  const centers = useMemo(() => {
-    const sums = new Map<string, { x: number; y: number; n: number }>();
-    for (const d of destinations) {
-      const s = sums.get(d.district) ?? { x: 0, y: 0, n: 0 };
-      sums.set(d.district, { x: s.x + d.x, y: s.y + d.y, n: s.n + 1 });
-    }
-    return [...sums].map(([district, s]) => {
-      const shape = DISTRICT_SHAPES.find((d) => d.name === district);
-      return shape
-        ? { district, x: shape.label[0], y: shape.label[1] }
-        : { district, x: s.x / s.n, y: s.y / s.n };
-    });
-  }, [destinations]);
 
   // ———— 视角：滚轮缩放、拖动平移、键盘 ————
   const viewport = useRef<HTMLDivElement>(null);
@@ -349,6 +399,7 @@ export function MapPanel({
   const center = () => ({ x: size.w / 2, y: size.h / 2 });
   const zoomBy = (factor: number) => zoomAt(factor, center().x, center().y);
   const policeLegend = iconStyle(POLICE_ICON);
+  const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
 
   return (
     <div role="dialog" aria-label="地图" className={styles.mapScreen}>
@@ -373,14 +424,6 @@ export function MapPanel({
             onClick={() => setServices((s) => !s)}
           >
             服务点
-          </button>
-          <button
-            type="button"
-            className={styles.mapLayer}
-            aria-pressed={turf}
-            onClick={() => setTurf((t) => !t)}
-          >
-            帮派地盘
           </button>
           <span className={styles.mapZoom}>
             <button
@@ -424,10 +467,23 @@ export function MapPanel({
         }}
         onPointerMove={(e) => {
           const d = drag.current;
-          if (!d || d.id !== e.pointerId) return;
+          if (!d || d.id !== e.pointerId) {
+            // 不在拖动：看鼠标停在哪个城区，右上角显示这里的帮派
+            if (e.pointerType === "touch" || onOverlay(e.target)) return;
+            const r = e.currentTarget.getBoundingClientRect();
+            const next = districtAt(
+              cam.cx + (e.clientX - r.left - size.w / 2) / cam.k,
+              cam.cy + (e.clientY - r.top - size.h / 2) / cam.k,
+            );
+            setHover((prev) =>
+              prev?.district === next?.district && prev?.sub === next?.sub ? prev : next,
+            );
+            return;
+          }
           drag.current = { ...d, x: e.clientX, y: e.clientY };
           pan(e.clientX - d.x, e.clientY - d.y);
         }}
+        onPointerLeave={() => setHover(null)}
         onPointerUp={() => {
           drag.current = null;
           setDragging(false);
@@ -477,10 +533,9 @@ export function MapPanel({
                 />
               ))}
             </div>
-            {shapes && <MapShapes labels={false} viewBox={shapesBox} />}
+            {shapes && <MapShapes labels={false} viewBox={shapesBox} active={hover?.district} />}
 
             {shapes &&
-              !turf &&
               zoom >= SUB_ZOOM &&
               SUBDISTRICT_SHAPES.map((s) => {
                 const at = toScreen(s.label[0], s.label[1]);
@@ -490,21 +545,20 @@ export function MapPanel({
                   </span>
                 ) : null;
               })}
-            {!turf &&
-              DISTRICT_SHAPES.map((d) => {
-                const at = toScreen(d.label[0], d.label[1]);
-                return onScreen(at) ? (
-                  <span
-                    key={d.id}
-                    className={styles.mapName}
-                    data-level="district"
-                    data-faint={zoom >= SUB_ZOOM || undefined}
-                    style={at}
-                  >
-                    {d.name}
-                  </span>
-                ) : null;
-              })}
+            {DISTRICT_SHAPES.map((d) => {
+              const at = toScreen(d.label[0], d.label[1]);
+              return onScreen(at) ? (
+                <span
+                  key={d.id}
+                  className={styles.mapName}
+                  data-level="district"
+                  data-faint={zoom >= SUB_ZOOM || undefined}
+                  style={at}
+                >
+                  {d.name}
+                </span>
+              ) : null;
+            })}
 
             {pois.map(({ poi, style }) => {
               const sub = poi.sub ? SUB_NAME.get(poi.sub) : undefined;
@@ -518,22 +572,6 @@ export function MapPanel({
                 />
               );
             })}
-
-            {turf &&
-              centers.map((c) => {
-                const owners = gangs.filter((g) => g.turf.includes(c.district));
-                if (owners.length === 0) return null;
-                return (
-                  <div key={c.district} className={styles.turfTag} style={toScreen(c.x, c.y)}>
-                    {owners.map((g) => (
-                      <span key={g.id} className={styles.turfName} style={{ color: g.color }}>
-                        {g.name}
-                        {g.attitude === "neutral" ? "" : `·${g.attitudeLabel}`}
-                      </span>
-                    ))}
-                  </div>
-                );
-              })}
 
             {view.ncpd.alerts.map((a) => {
               if (a.x === null || a.y === null) return null;
@@ -572,6 +610,42 @@ export function MapPanel({
               </div>
             ))}
           </>
+        )}
+
+        {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
+        {hover && (
+          <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
+            <div className={styles.mapDistrictHead}>
+              <Asset id={districtIcon(hover.district)} tint="var(--cp-yellow)" height={44} />
+              <div>
+                <h3 className={styles.mapTitle}>{hover.district}</h3>
+                {hover.sub && <span className={styles.dim}>{hover.sub}</span>}
+              </div>
+            </div>
+            {/* 原作 LocKey#77912 UI-Tooltips-LeadingGangs */}
+            <h4 className={styles.mapGangsLabel}>主要帮派：</h4>
+            {hoverGangs.length > 0 ? (
+              <ul className={styles.mapGangList}>
+                {hoverGangs.map((g) => {
+                  const logo = GANG_LOGOS[g.id];
+                  return (
+                    <li key={g.id} className={styles.mapGang}>
+                      {logo ? <Asset id={logo} height={36} width={36} /> : <i />}
+                      <span className={styles.mapGangText}>
+                        <b style={{ color: g.color }}>{g.name}</b>
+                        <small className={styles.dim}>
+                          {g.attitudeLabel}
+                          {g.turfNote ? ` · ${g.turfNote}` : ""}
+                        </small>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className={styles.dim}>没有帮派占着这里</p>
+            )}
+          </section>
         )}
 
         {dest && (
