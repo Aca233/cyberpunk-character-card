@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -159,6 +160,28 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
   barghest: "gang.barghest",
 };
 
+/** 图例每一项都能开关：当前位置、可以去的地点、NCPD 警情和每类服务点 */
+type LegendKey = "here" | "dest" | "police" | MapPoiKind;
+const LEGEND_KEYS = new Set<string>(["here", "dest", "police", ...MAP_POI_KINDS.map((k) => k.id)]);
+/** 关掉的图例项记在浏览器里，下次打开地图照旧 */
+const HIDDEN_STORE = "cp.mapHidden";
+
+function isLegendKey(v: unknown): v is LegendKey {
+  return typeof v === "string" && LEGEND_KEYS.has(v);
+}
+
+function loadHidden(): ReadonlySet<LegendKey> {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(HIDDEN_STORE) ?? "[]");
+    return new Set(Array.isArray(list) ? list.filter(isLegendKey) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+const POI_COUNT = new Map<MapPoiKind, number>();
+for (const poi of MAP_POIS) POI_COUNT.set(poi.kind, (POI_COUNT.get(poi.kind) ?? 0) + 1);
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
@@ -220,7 +243,7 @@ export function MapPanel({
 }) {
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
-  const [services, setServices] = useState(true);
+  const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
   const [picked, setPicked] = useState<string | null>(null);
   const [tiles, setTiles] = useState<MapTiles | null>(null);
   const destinations = view.travel.destinations;
@@ -238,6 +261,22 @@ export function MapPanel({
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HIDDEN_STORE, JSON.stringify([...hidden]));
+    } catch {
+      // 存不下（隐私模式之类）就只在这次打开里有效
+    }
+  }, [hidden]);
+
+  const toggleLegend = (key: LegendKey) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   // ———— 视角：滚轮缩放、拖动平移、键盘 ————
   const viewport = useRef<HTMLDivElement>(null);
@@ -355,11 +394,16 @@ export function MapPanel({
   // 边界 SVG 只画视野这一块
   const shapesBox = `${cam.cx - size.w / (2 * cam.k)} ${cam.cy - size.h / (2 * cam.k)} ${size.w / cam.k} ${size.h / cam.k}`;
 
+  // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点
+  const visibleDests = destinations.filter(
+    (d) => d.id === picked || !hidden.has(d.here ? "here" : "dest"),
+  );
+
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
   const sides = new Map<string, "right" | "left" | "hidden">();
   {
     const boxes: Box[] = [];
-    const order = [...destinations].sort(
+    const order = [...visibleDests].sort(
       (a, b) =>
         Number(b.here) - Number(a.here) || Number(b.id === picked) - Number(a.id === picked),
     );
@@ -380,11 +424,12 @@ export function MapPanel({
     }
   }
 
-  // 服务点：放大后才显示；挤在一起的只留第一个，避免糊成一片
+  // 服务点：放大后才显示；挤在一起的只留第一个，避免糊成一片；图例里关掉的类别不占位置
   const pois: { readonly poi: MapPoi; readonly style: CSSProperties }[] = [];
-  if (services && zoom >= POI_ZOOM) {
+  if (zoom >= POI_ZOOM) {
     const taken = new Set<string>();
     for (const poi of MAP_POIS) {
+      if (hidden.has(poi.kind)) continue;
       const at = toScreen(poi.x, poi.y);
       if (!onScreen(at)) continue;
       const cell = `${Math.round(at.left / 24)}:${Math.round(at.top / 24)}`;
@@ -399,6 +444,43 @@ export function MapPanel({
   const center = () => ({ x: size.w / 2, y: size.h / 2 });
   const zoomBy = (factor: number) => zoomAt(factor, center().x, center().y);
   const policeLegend = iconStyle(POLICE_ICON);
+
+  // 图例即筛选：每项一个开关，后面标地图上有几个
+  const legend: {
+    readonly key: LegendKey;
+    readonly name: string;
+    readonly icon: ReactNode;
+    readonly count: number | null;
+  }[] = [
+    { key: "here", name: "当前位置", icon: <i className={styles.legendHere} />, count: null },
+    {
+      key: "dest",
+      name: "可以去的地点",
+      icon: <i className={styles.legendDest} />,
+      count: destinations.filter((d) => !d.here).length,
+    },
+  ];
+  if (policeLegend) {
+    legend.push({
+      key: "police",
+      name: "NCPD 警情",
+      icon: (
+        <span className={styles.mapPoi} data-kind="police" data-legend="" style={policeLegend} />
+      ),
+      count: view.ncpd.alerts.filter((a) => a.x !== null && a.y !== null).length,
+    });
+  }
+  for (const k of MAP_POI_KINDS) {
+    const style = iconStyle(poiIcon(k.id));
+    if (!style) continue;
+    legend.push({
+      key: k.id,
+      name: k.name,
+      icon: <span className={styles.mapPoi} data-kind={k.id} data-legend="" style={style} />,
+      count: POI_COUNT.get(k.id) ?? 0,
+    });
+  }
+  const hiddenCount = legend.filter((l) => hidden.has(l.key)).length;
   const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
 
   return (
@@ -416,14 +498,6 @@ export function MapPanel({
             onClick={() => setShapes((s) => !s)}
           >
             城区边界
-          </button>
-          <button
-            type="button"
-            className={styles.mapLayer}
-            aria-pressed={services}
-            onClick={() => setServices((s) => !s)}
-          >
-            服务点
           </button>
           <span className={styles.mapZoom}>
             <button
@@ -573,21 +647,22 @@ export function MapPanel({
               );
             })}
 
-            {view.ncpd.alerts.map((a) => {
-              if (a.x === null || a.y === null) return null;
-              const style = iconStyle(POLICE_ICON, toScreen(a.x, a.y));
-              return style ? (
-                <span
-                  key={a.id}
-                  className={styles.mapPoi}
-                  data-kind="police"
-                  style={style}
-                  title={`NCPD 警情：${a.label}（${a.locationName}，赏金 ${a.reward} 欧元，${a.until} 前）`}
-                />
-              ) : null;
-            })}
+            {!hidden.has("police") &&
+              view.ncpd.alerts.map((a) => {
+                if (a.x === null || a.y === null) return null;
+                const style = iconStyle(POLICE_ICON, toScreen(a.x, a.y));
+                return style ? (
+                  <span
+                    key={a.id}
+                    className={styles.mapPoi}
+                    data-kind="police"
+                    style={style}
+                    title={`NCPD 警情：${a.label}（${a.locationName}，赏金 ${a.reward} 欧元，${a.until} 前）`}
+                  />
+                ) : null;
+              })}
 
-            {destinations.map((d) => (
+            {visibleDests.map((d) => (
               <div
                 key={d.id}
                 className={styles.mapDest}
@@ -708,37 +783,51 @@ export function MapPanel({
         )}
 
         <details className={styles.mapLegendBox} data-overlay="" open>
-          <summary>图例</summary>
+          <summary>
+            图例
+            {hiddenCount > 0 && <span className={styles.dim}>{` · 隐藏了 ${hiddenCount} 项`}</span>}
+          </summary>
+          {/* 原作世界地图的自定义筛选：「全部显示」是 UI-Menus-WorldMap-Filter-All，「全部隐藏」本作加的 */}
+          <div className={styles.mapFilterBar}>
+            <button
+              type="button"
+              className={styles.mapLayer}
+              disabled={hiddenCount === 0}
+              onClick={() => setHidden(new Set())}
+            >
+              全部显示
+            </button>
+            <button
+              type="button"
+              className={styles.mapLayer}
+              disabled={hiddenCount === legend.length}
+              onClick={() => setHidden(new Set(legend.map((l) => l.key)))}
+            >
+              全部隐藏
+            </button>
+          </div>
           <ul className={styles.mapLegend}>
-            <li>
-              <i className={styles.legendHere} />
-              当前位置
-            </li>
-            <li>
-              <i className={styles.legendDest} />
-              可以去的地点
-            </li>
-            {policeLegend && (
-              <li>
-                <span
-                  className={styles.mapPoi}
-                  data-kind="police"
-                  data-legend=""
-                  style={policeLegend}
-                />
-                NCPD 警情
-              </li>
-            )}
-            {services &&
-              MAP_POI_KINDS.map((k) => {
-                const style = iconStyle(poiIcon(k.id));
-                return style ? (
-                  <li key={k.id}>
-                    <span className={styles.mapPoi} data-kind={k.id} data-legend="" style={style} />
-                    {k.name}
-                  </li>
-                ) : null;
-              })}
+            {legend.map((l) => {
+              const on = !hidden.has(l.key);
+              return (
+                <li key={l.key}>
+                  <button
+                    type="button"
+                    className={styles.mapFilter}
+                    aria-pressed={on}
+                    title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
+                    onClick={() => toggleLegend(l.key)}
+                  >
+                    <i className={styles.mapFilterBox} aria-hidden="true" />
+                    <span className={styles.mapFilterIcon} aria-hidden="true">
+                      {l.icon}
+                    </span>
+                    <span className={styles.mapFilterName}>{l.name}</span>
+                    {l.count !== null && <span className={styles.mapFilterCount}>{l.count}</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </details>
 
