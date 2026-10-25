@@ -14,6 +14,7 @@ import {
   fixers,
   gameContent,
   glossary,
+  homes,
   items,
   jobTemplates,
   lifepath,
@@ -54,6 +55,7 @@ import {
   ncpdRules,
   npcRules,
   registry,
+  safehouseRules,
   schemaDoc,
   TwistCatalogSchema,
   travelRules,
@@ -108,6 +110,7 @@ schema("地点 locations", worldRules.LocationCatalogSchema, locations);
 schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters);
 schema("势力 factions", factionsRules.FactionCatalogSchema, factions);
 schema("NCPD 警情 ncpdAlerts", ncpdRules.AlertCatalogSchema, ncpdAlerts);
+schema("开局住所 homes", safehouseRules.HomeCatalogSchema, homes);
 schema("车型 vehicles", travelRules.VehicleCatalogSchema, vehicles);
 schema("人物卡 npcs", npcRules.NpcCardSchema.passthrough().array(), npcs);
 schema("中间人 fixers", jobsRules.FixerSchema.array(), fixers);
@@ -374,7 +377,23 @@ for (const a of ncpdAlerts) {
   }
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}`;
+// 开局住所：地点要在地点表里，每个出身最多一处，要有 default
+unique(
+  "开局住所",
+  homes.map((h) => h.id),
+);
+unique(
+  "开局住所的出身",
+  homes.map((h) => h.origin),
+);
+if (!homes.some((h) => h.origin === "default"))
+  errors.push("开局住所：没有 origin 为 default 的一处");
+for (const h of homes) {
+  if (!locations.some((l) => l.id === h.location))
+    errors.push(`开局住所 ${h.id}：地点 ${h.location} 不在地点表里`);
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

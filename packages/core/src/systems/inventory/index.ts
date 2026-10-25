@@ -8,6 +8,7 @@ import {
   itemCatalog,
   recharge,
   spend,
+  stashMove,
 } from "./apply";
 import {
   type InventoryInternal,
@@ -53,6 +54,8 @@ export const inventory = defineSystem<
         return recharge(draft);
       case "inventory.outfit":
         return applyOutfit(draft, command.action, itemCatalog(ctx.data));
+      case "inventory.stash":
+        return stashMove(draft, command.action, command.id);
       case "inventory.mod":
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
     }

@@ -12,6 +12,7 @@ import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { ripperdocs } from "./ripperdocs";
+import { homes } from "./safehouses";
 import { shops } from "./shops";
 import { vehicles } from "./vehicles";
 
@@ -34,6 +35,7 @@ export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
 export { ripperdocs } from "./ripperdocs";
+export { homes } from "./safehouses";
 export { shops } from "./shops";
 export { vehicles } from "./vehicles";
 
@@ -48,6 +50,7 @@ export const gameContent: GameContent = {
   loadouts,
   quickhacks,
   vehicles,
+  homes,
   // 没有开场的旧存档种的人
   defaultCast: ["rebecca", "maine", "faraday"],
 };

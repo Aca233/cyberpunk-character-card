@@ -53,6 +53,13 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   }),
   /** 把装备栏里的一件放回背包 */
   z.strictObject({ type: z.literal("unequipItem"), id: z.string().min(1).max(64) }),
+  /** 存放箱和后备箱：store 从背包放进去，take 拿回背包；where 写安全屋 id 或车的 id */
+  z.strictObject({
+    type: z.literal("stash"),
+    action: z.enum(["store", "take"]),
+    item: z.string().min(1).max(64),
+    where: z.string().min(1).max(64),
+  }),
   /** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
   z.strictObject({ type: z.literal("outfit"), action: z.enum(["save", "wear"]) }),
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
@@ -255,6 +262,19 @@ function commandsFor(
           ...(action.type === "equipItem" && action.slot !== undefined
             ? { slot: action.slot }
             : {}),
+        },
+      ];
+    }
+    case "stash": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "战斗中顾不上翻箱子";
+      return [
+        {
+          type: "stash",
+          action: action.action,
+          item: action.item,
+          where: action.where,
+          reason: action.action === "store" ? "收起来" : "拿出来带上",
         },
       ];
     }

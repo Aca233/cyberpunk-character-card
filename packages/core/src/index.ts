@@ -31,6 +31,7 @@ export * as ncpdRules from "./systems/ncpd";
 export * as npcRules from "./systems/npc";
 export * as phoneRules from "./systems/phone";
 export { registry, systems } from "./systems/registry";
+export * as safehouseRules from "./systems/safehouse";
 export * as stealthRules from "./systems/stealth";
 export * as traumaRules from "./systems/trauma";
 export * as travelRules from "./systems/travel";

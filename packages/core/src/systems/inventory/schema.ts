@@ -258,6 +258,12 @@ export const InventoryInternalSchemas = {
     type: z.literal("inventory.outfit"),
     action: z.enum(["save", "wear"]),
   }),
+  /** 安全屋系统发出：out 从背包拿走一件放进存放箱或后备箱，in 拿回背包；武器的改装件留着 */
+  "inventory.stash": z.object({
+    type: z.literal("inventory.stash"),
+    action: z.enum(["out", "in"]),
+    id: z.string().min(1),
+  }),
   /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */
   "inventory.mod": z.object({
     type: z.literal("inventory.mod"),

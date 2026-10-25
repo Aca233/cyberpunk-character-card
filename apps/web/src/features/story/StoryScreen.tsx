@@ -20,6 +20,7 @@ import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
 import { Shop } from "./Shop";
+import { StashPanel } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
@@ -102,6 +103,7 @@ export function StoryScreen() {
   const [atShop, setAtShop] = useState<string | null>(null);
   const [atMap, setAtMap] = useState(false);
   const [atFactions, setAtFactions] = useState(false);
+  const [atStash, setAtStash] = useState(false);
   const closeJournal = useCallback(() => setJournal(null), []);
   const [atPhone, setAtPhone] = useState(false);
 
@@ -241,6 +243,22 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 存放箱和后备箱：不调用模型；战斗中由代码拒绝
+  const stashAction = useCallback(
+    async (action: "store" | "take", item: string, where: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "stash", action, item, where },
+        });
+      } catch (error) {
+        warn("gear", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const outfitAction = useCallback(
     async (action: "save" | "wear") => {
       try {
@@ -341,7 +359,7 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop || atMap || atFactions || story.spend) return;
+      if (journal || atDoc || atShop || atMap || atFactions || atStash || story.spend) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -351,6 +369,9 @@ export function StoryScreen() {
       } else if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         setAtFactions(true);
+      } else if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        setAtStash(true);
       } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
@@ -375,6 +396,7 @@ export function StoryScreen() {
     atShop,
     atMap,
     atFactions,
+    atStash,
   ]);
 
   if (query.isPending) {
@@ -432,6 +454,7 @@ export function StoryScreen() {
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}
+        onStash={() => setAtStash(true)}
       />
 
       <main className={styles.column}>
@@ -579,6 +602,13 @@ export function StoryScreen() {
           onRepay={busy ? undefined : () => cyberAction({ type: "repayRipperdoc" })}
           onRepair={busy ? undefined : (id) => cyberAction({ type: "repairCyberware", id })}
           onClose={() => setAtDoc(false)}
+        />
+      )}
+      {atStash && (
+        <StashPanel
+          view={view}
+          onMove={busy ? undefined : (action, item, where) => void stashAction(action, item, where)}
+          onClose={() => setAtStash(false)}
         />
       )}
       {atFactions && <FactionsPanel view={view} onClose={() => setAtFactions(false)} />}

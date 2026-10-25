@@ -52,6 +52,15 @@ function put(draft: Inventory, id: string): void {
   draft.backpack[id] = (draft.backpack[id] ?? 0) + 1;
 }
 
+/** 存放箱和后备箱进出：只动背包，改装件跟着武器 id 留着 */
+export function stashMove(draft: Inventory, action: "out" | "in", id: string): ApplyOutcome {
+  if (action === "in") {
+    put(draft, id);
+    return { ok: true, notes: [] };
+  }
+  return take(draft, id) ? { ok: true, notes: [] } : { ok: false, reason: `背包里没有 ${id}` };
+}
+
 function take(draft: Inventory, id: string): boolean {
   const count = draft.backpack[id] ?? 0;
   if (count < 1) return false;

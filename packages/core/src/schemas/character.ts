@@ -178,6 +178,7 @@ export function boardStart(card: CharacterCard): BoardStart | undefined {
   return {
     cyberware: card.board.cyberware.map((c) => c.id),
     tolerance: card.board.tolerance,
+    ...(card.board.origin ? { origin: card.board.origin.id } : {}),
     people: boardPeople(card.board),
   };
 }

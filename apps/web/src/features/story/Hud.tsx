@@ -227,6 +227,7 @@ export function SidePanel({
   onPhone,
   onMap,
   onFactions,
+  onStash,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -252,6 +253,8 @@ export function SidePanel({
   readonly onMap: () => void;
   /** 打开势力页 */
   readonly onFactions: () => void;
+  /** 打开存放箱和后备箱 */
+  readonly onStash: () => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -661,6 +664,11 @@ export function SidePanel({
           <button type="button" onClick={onFactions}>
             势力 [F]
           </button>
+          {(view.safehouse.homes.length > 0 || view.safehouse.trunks.length > 0) && (
+            <button type="button" onClick={onStash}>
+              存放 [B]
+            </button>
+          )}
           {offered > 0 && (
             <button type="button" onClick={() => onJournal(true)}>
               委托板上有 {offered} 单可接

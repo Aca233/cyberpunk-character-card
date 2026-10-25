@@ -182,6 +182,15 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `警方热度：${view.heat.stars} 星${view.heat.half ? "多" : ""}${view.heat.lastSeen ? `，最后一次被看见是 ${view.heat.lastSeen}` : ""}${view.heat.decayIn !== null ? `，再过 ${Math.ceil(view.heat.decayIn / 60)} 小时不犯事就降一星` : ""}`,
     );
+  for (const h of view.safehouse.homes)
+    lines.push(
+      `安全屋 ${h.id}：${h.name}（${h.locationName}${h.here ? "，你现在就在这里" : ""}）；存放箱：${h.items.map((i) => `${i.name}${i.count > 1 ? `×${i.count}` : ""}`).join("、") || "空的"}（不在身上，拿出来才能用）`,
+    );
+  for (const t of view.safehouse.trunks)
+    if (t.items.length > 0)
+      lines.push(
+        `${t.name}（${t.id}）：${t.items.map((i) => `${i.name}${i.count > 1 ? `×${i.count}` : ""}`).join("、")}（不在身上）`,
+      );
   if (view.trauma.active)
     lines.push(
       `创伤小组：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.dispatch.ok ? "现在叫得来（倒下或濒死时写 trauma rescue）" : `现在不会来：${view.trauma.dispatch.why}`}`,

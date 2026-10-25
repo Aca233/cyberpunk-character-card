@@ -12,6 +12,8 @@ export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
   tolerance: ToleranceSchema.default("normal"),
+  /** 出身模块 id：按它给开局住所；旧存档没有 */
+  origin: z.string().min(1).optional(),
   people: z
     .array(SeedNpcSchema.omit({ type: true }))
     .max(20)

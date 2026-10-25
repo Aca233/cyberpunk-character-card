@@ -91,6 +91,7 @@ import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
 import { registry } from "./systems/registry";
+import { type HomeDef, SafehouseStateSchema, trunks } from "./systems/safehouse";
 import { currentAlert } from "./systems/stealth/apply";
 import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
 import {
@@ -138,6 +139,8 @@ export interface GameContent {
   readonly openings?: readonly GameOpening[];
   /** 按出身和经历发的开局行装；存档的 meta.loadouts 记着发了哪几套 */
   readonly loadouts?: readonly Loadout[];
+  /** 开局住所，按出身给 */
+  readonly homes?: readonly HomeDef[];
   /** 开场没写 cast 时种哪些人物卡和中间人（旧存档）；都没写就全种 */
   readonly defaultCast?: readonly string[];
 }
@@ -330,6 +333,7 @@ export function newGameWorld(
       .map((f) => ({ type: "jobs.seedFixer", ...f })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
+    ...homeSeed(content, meta.board?.origin),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
@@ -350,6 +354,15 @@ export function newGameWorld(
     if (!result.ok) throw new Error(`开局的 ${command.type} 没有生效：${result.reason}`);
   }
   return applied.world;
+}
+
+/** 按出身给开局住所；对不上时用 default 那一处 */
+function homeSeed(content: GameContent, origin: string | undefined): unknown[] {
+  const homes = content.homes ?? [];
+  const home = homes.find((h) => h.origin === origin) ?? homes.find((h) => h.origin === "default");
+  return home
+    ? [{ type: "safehouse.seed", id: home.id, name: home.name, location: home.location }]
+    : [];
 }
 
 /** 装着、没坏的第一件加速义体；cost 是再开一次扣多少人性 */
@@ -905,6 +918,8 @@ export function projectState(
     ncpd: ncpdView(world, data, clock.location),
     /** 创伤小组会籍，和现在叫不叫得来 */
     trauma: traumaView(world, data, clock.location, world.time),
+    /** 安全屋、存放箱、后备箱和战利品墙 */
+    safehouse: safehouseView(world, data, clock.location),
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1170,6 +1185,42 @@ function hackingView(
 }
 
 /** 地图上能去的地点、每种出行方式的耗时、花费和风险，以及这一场的路上偶遇 */
+function safehouseView(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  location: string | null,
+) {
+  const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
+  const names = itemCatalog(data);
+  const places = locationCatalog(data);
+  const list = (id: string) =>
+    Object.entries(state.stash[id] ?? {}).map(([item, count]) => ({
+      id: item,
+      name: names.get(item)?.name ?? item,
+      count,
+    }));
+  const travel = world.slices.travel as
+    | { vehicles?: Parameters<typeof trunks>[0]["vehicles"] }
+    | undefined;
+  return {
+    homes: state.homes.map((h) => ({
+      id: h.id,
+      name: h.name,
+      location: h.location,
+      locationName: places.get(h.location)?.name ?? h.location,
+      here: h.location === location,
+      items: list(h.id),
+    })),
+    trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data).map((t) => ({
+      id: t.id,
+      name: t.name,
+      cap: t.kind === "trunk" ? t.cap : 0,
+      items: list(t.id),
+    })),
+    trophies: state.trophies.map((t) => ({ ...t, at: formatGameTime(t.at) })),
+  };
+}
+
 function traumaView(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
