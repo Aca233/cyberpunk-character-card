@@ -716,6 +716,17 @@
       { "id": "map.poi.quest", "atlas": "common/mappin_icons", "slot": "quest" },
       { "id": "map.poi.player", "atlas": "common/mappin_icons", "slot": "V_owned" },
       { "id": "map.poi.police", "atlas": "common/mappin_icons", "slot": "map_bounty" }
+    ],
+    "cursor": [
+      { "id": "cursor.arrowShadow", "atlas": "widgets/cursor_inventory", "slot": "mouse_shadow" },
+      { "id": "cursor.arrowFrame", "atlas": "widgets/cursor_inventory", "slot": "mouse_frame" },
+      { "id": "cursor.handShadow", "atlas": "widgets/cursor_inventory", "slot": "hand_shadow" },
+      { "id": "cursor.hand", "atlas": "widgets/cursor_inventory", "slot": "hand" },
+      {
+        "id": "cursor.invalidFluff",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "mouse_invalid_fluff"
+      }
     ]
   }
 }

@@ -29,15 +29,40 @@ select {
   color: inherit;
 }
 
+/* 指针用原作图案（assets/cursor.ts），各处只写 var(--cp-cursor*)，不直接写 pointer 之类 */
+html {
+  cursor: var(--cp-cursor);
+}
+
 button {
   background: none;
   border: 0;
   padding: 0;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
-button:disabled {
-  cursor: not-allowed;
+a[href],
+select,
+summary,
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  cursor: var(--cp-cursor-hand);
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: var(--cp-cursor-invalid);
+}
+
+/* 打字的地方保留文字光标 */
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]),
+textarea,
+[contenteditable="true"] {
+  cursor: text;
 }
 
 :focus-visible {

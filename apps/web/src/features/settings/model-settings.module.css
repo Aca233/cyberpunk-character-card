@@ -91,7 +91,7 @@
   border: 1px solid transparent;
   border-left: 3px solid var(--cp-red-dim);
   background: rgb(255 255 255 / 2%);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
   overflow-wrap: anywhere;
 }
 .connection:hover {
@@ -180,7 +180,7 @@
 }
 .advanced summary {
   color: var(--cp-text-dim);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
   line-height: 1.6;
 }
 .advanced[open] summary {

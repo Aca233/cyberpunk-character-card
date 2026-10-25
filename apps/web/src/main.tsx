@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { router } from "./app";
 import { loadAssetIndex } from "./assets";
+import { installGameCursor } from "./assets/cursor";
 import { FatalScreen } from "./features/status/FatalScreen";
 
 const queryClient = new QueryClient({
@@ -19,6 +20,8 @@ const queryClient = new QueryClient({
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
 const loaded = await loadAssetIndex();
+// 不等指针拼完：拼好之前先用系统指针
+if (loaded.ok) void installGameCursor();
 root.render(
   <StrictMode>
     {loaded.ok ? (

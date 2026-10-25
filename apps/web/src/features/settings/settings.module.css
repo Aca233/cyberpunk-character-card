@@ -38,7 +38,7 @@
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .tabs button[aria-pressed="true"] {
@@ -267,7 +267,7 @@
 }
 
 .message summary {
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
   padding: 0.25rem 0;
   font-size: var(--fs-label);
   color: var(--cp-yellow);
@@ -347,7 +347,7 @@
   grid-template-columns: auto 1fr;
   column-gap: 0.6rem;
   align-items: baseline;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .pref > small {

@@ -35,7 +35,7 @@
   color: inherit;
   border: 1px solid var(--cp-yellow-dim);
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .toggle[aria-pressed="true"] {
@@ -79,7 +79,7 @@
   transform: translate(-50%, -50%) rotate(45deg);
   background: rgb(0 0 0 / 0.6);
   border: 2px solid var(--cp-cyan);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .pin[data-moved] {

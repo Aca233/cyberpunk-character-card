@@ -31,6 +31,15 @@
   --cp-netwatch: #3d7bff;
   --cp-success: #3ff2a0;
 
+  /*
+   * 鼠标指针：assets/cursor.ts 拼好原作指针后改写这三个变量，拼好前和缺图时是系统指针。
+   * 底色对应原作 MainColors.Fullscreen_PrimaryBackgroundDarkest
+   */
+  --cp-cursor-shadow: #0c080e;
+  --cp-cursor: auto;
+  --cp-cursor-hand: pointer;
+  --cp-cursor-invalid: not-allowed;
+
   /* 稀有度 */
   --rar-common: #a8a8a8;
   --rar-uncommon: #4fd17a;

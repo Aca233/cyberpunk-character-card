@@ -84,7 +84,7 @@
   text-align: left;
   font: inherit;
   font-size: var(--fs-label);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
   transition:
     border-color 120ms ease,
     background-color 120ms ease;
@@ -312,7 +312,7 @@ legend.sectionTitle {
   color: var(--cp-cyan);
   background: transparent;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .stepper button:hover:not(:disabled) {
@@ -321,7 +321,7 @@ legend.sectionTitle {
 
 .stepper button:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: var(--cp-cursor);
 }
 
 .stepper output {
@@ -544,7 +544,7 @@ legend.sectionTitle {
   color: var(--cp-text-dim);
   background: transparent;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .moduleHead button:hover {
@@ -578,7 +578,7 @@ legend.sectionTitle {
   background: var(--cp-bg);
   font: inherit;
   font-size: var(--fs-label);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .toolButton:hover:not(:disabled),
@@ -589,7 +589,7 @@ legend.sectionTitle {
 .toolButton:disabled,
 .picker:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: var(--cp-cursor);
 }
 
 .tolerance {
@@ -608,7 +608,7 @@ legend.sectionTitle {
   background: transparent;
   font: inherit;
   font-size: var(--fs-label);
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .tolerance button strong {
@@ -682,7 +682,7 @@ legend.sectionTitle {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
   line-height: 1.5;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .importCheck {
