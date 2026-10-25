@@ -697,12 +697,8 @@
     ],
     "map": [
       {
-        "id": "map.blue",
-        "file": "map/world_map_blue.png"
-      },
-      {
-        "id": "map.albedo",
-        "file": "map/world_map_albedo.png"
+        "id": "map.roads",
+        "file": "map/night_city_roads.png"
       }
     ]
   }

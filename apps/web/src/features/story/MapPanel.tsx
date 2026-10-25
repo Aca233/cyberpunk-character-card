@@ -3,16 +3,46 @@ import { type AssetId, asset } from "../../assets";
 import { MissingAsset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { DISTRICT_SHAPES, SUBDISTRICT_SHAPES } from "./mapShapes.gen";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
 export type MapDestination = View["travel"]["destinations"][number];
 export type MapRoute = MapDestination["routes"][number];
 
-const LAYERS: readonly [AssetId, string][] = [
-  ["map.blue", "线框"],
-  ["map.albedo", "实景"],
-];
+/** 底图：从原作世界地图的道路网格烘焙的俯视图，正方形 */
+const MAP: AssetId = "map.roads";
+
+/** 城区和街区的边界：底图上叠一层 SVG，坐标是底图宽、高的百分比 */
+export function MapShapes({ labels = true }: { readonly labels?: boolean }) {
+  return (
+    <>
+      <svg
+        className={styles.mapShapes}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {SUBDISTRICT_SHAPES.map((s) => (
+          <polygon key={s.id} points={s.points} className={styles.mapSubdistrict} />
+        ))}
+        {DISTRICT_SHAPES.map((d) => (
+          <polygon key={d.id} points={d.points} className={styles.mapDistrict} />
+        ))}
+      </svg>
+      {labels &&
+        DISTRICT_SHAPES.map((d) => (
+          <span
+            key={d.id}
+            className={styles.mapDistrictLabel}
+            style={{ left: `${d.label[0]}%`, top: `${d.label[1]}%` }}
+          >
+            {d.name}
+          </span>
+        ))}
+    </>
+  );
+}
 
 /** 地图和路线面板：原作底图上标出地点，点一个看各种走法；耗时、路费和风险由代码按路线表算，不调用模型 */
 export function MapPanel({
@@ -25,21 +55,26 @@ export function MapPanel({
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
   readonly onClose: () => void;
 }) {
-  const [layer, setLayer] = useState<AssetId>("map.blue");
+  const [shapes, setShapes] = useState(true);
   const [picked, setPicked] = useState<string | null>(null);
   const destinations = view.travel.destinations;
   const here = destinations.find((d) => d.here);
   const dest = destinations.find((d) => d.id === picked);
-  const info = asset(layer);
+  const info = asset(MAP);
   const [turf, setTurf] = useState(false);
-  // 城区的位置：取城区里已上图地点的平均坐标
+  // 城区的位置：有原作轮廓的用轮廓中心，没有的（恶土等）取城区里已上图地点的平均坐标
   const centers = useMemo(() => {
     const sums = new Map<string, { x: number; y: number; n: number }>();
     for (const d of destinations) {
       const s = sums.get(d.district) ?? { x: 0, y: 0, n: 0 };
       sums.set(d.district, { x: s.x + d.x, y: s.y + d.y, n: s.n + 1 });
     }
-    return [...sums].map(([district, s]) => ({ district, x: s.x / s.n, y: s.y / s.n }));
+    return [...sums].map(([district, s]) => {
+      const shape = DISTRICT_SHAPES.find((d) => d.name === district);
+      return shape
+        ? { district, x: shape.label[0], y: shape.label[1] + 3 }
+        : { district, x: s.x / s.n, y: s.y / s.n };
+    });
   }, [destinations]);
   const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
 
@@ -63,19 +98,14 @@ export function MapPanel({
               {here ? `现在在${here.name}（${here.district}）` : "现在的位置不在地图上"}
               。点一个地点看怎么去；耗时、路费和风险由代码算，确认后 AI 接着写路上和到达。
             </p>
-            <span className={styles.mapLayers}>
-              {LAYERS.map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={styles.mapLayer}
-                  aria-pressed={layer === id}
-                  onClick={() => setLayer(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </span>
+            <button
+              type="button"
+              className={styles.mapLayer}
+              aria-pressed={shapes}
+              onClick={() => setShapes((s) => !s)}
+            >
+              城区边界
+            </button>
             <button
               type="button"
               className={styles.mapLayer}
@@ -99,8 +129,9 @@ export function MapPanel({
               {info ? (
                 <img src={info.url} alt="" className={styles.mapImage} draggable={false} />
               ) : (
-                <MissingAsset id={layer} />
+                <MissingAsset id={MAP} />
               )}
+              {shapes && <MapShapes labels={!turf} />}
               {turf &&
                 centers.map((c) => {
                   const owners = gangs.filter((g) => g.turf.includes(c.district));

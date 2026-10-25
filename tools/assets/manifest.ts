@@ -23,7 +23,7 @@ const EntrySchema = z
       .regex(/^[a-z0-9_]+\/[A-Za-z0-9_-]+$/, "atlas 写成 分组/图集名")
       .optional(),
     slot: z.string().min(1).optional(),
-    /** 整张图（不在图集里），路径相对解包目录的 export/，例如 map/world_map_blue.png */
+    /** 整张图（不在图集里），路径相对解包目录的 export/，例如 map/night_city_roads.png */
     file: z
       .string()
       .regex(/^[a-z0-9_]+\/[A-Za-z0-9_.-]+\.png$/, "file 写成 目录/文件名.png")

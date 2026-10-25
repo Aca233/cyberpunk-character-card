@@ -1747,6 +1747,48 @@
   user-select: none;
 }
 
+/* 原作城区边界：城区红线，街区暗红细线；线宽按屏幕像素算，不跟着缩放 */
+.mapShapes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mapDistrict,
+.mapSubdistrict {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.mapDistrict {
+  stroke: var(--cp-red);
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 2px rgb(255 0 60 / 60%));
+}
+
+.mapSubdistrict {
+  stroke: var(--cp-red-dim);
+  stroke-width: 0.75px;
+  stroke-dasharray: 3 3;
+}
+
+.mapDistrictLabel {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  color: var(--cp-red);
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px #000,
+    0 0 3px #000;
+  pointer-events: none;
+}
+
 .mapLayers {
   display: flex;
   gap: 0.4rem;

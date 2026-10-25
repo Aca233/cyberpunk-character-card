@@ -2,6 +2,7 @@ import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { api, type SaveSummary } from "../../api/client";
 import { type AssetId, asset } from "../../assets";
+import { MapShapes } from "../story/MapPanel";
 import styles from "./calibrate.module.css";
 
 interface Spot {
@@ -13,10 +14,8 @@ interface Spot {
   readonly moved: boolean;
 }
 
-const LAYERS: readonly [AssetId, string][] = [
-  ["map.blue", "线框"],
-  ["map.albedo", "实景"],
-];
+/** 和剧情里的地图同一张底图：原作道路网格烘焙的俯视图 */
+const MAP: AssetId = "map.roads";
 
 /** 坐标取到 0.5% */
 const round = (n: number) => Math.round(n * 2) / 2;
@@ -27,14 +26,14 @@ const key = (id: string) => (/^[A-Za-z_$][\w$]*$/.test(id) ? id : JSON.stringify
  * 选中一个再点底图改坐标，最后把生成的 MAP_SPOTS 片段抄回 packages/content/src/map.ts
  */
 export function Calibrate() {
-  const [layer, setLayer] = useState<AssetId>("map.blue");
+  const [shapes, setShapes] = useState(true);
   const [saves, setSaves] = useState<readonly SaveSummary[]>([]);
   const [spots, setSpots] = useState<readonly Spot[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [newId, setNewId] = useState("");
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const info = asset(layer);
+  const info = asset(MAP);
 
   useEffect(() => {
     api
@@ -96,17 +95,14 @@ export function Calibrate() {
             </option>
           ))}
         </select>
-        {LAYERS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={styles.toggle}
-            aria-pressed={layer === id}
-            onClick={() => setLayer(id)}
-          >
-            {label}
-          </button>
-        ))}
+        <button
+          type="button"
+          className={styles.toggle}
+          aria-pressed={shapes}
+          onClick={() => setShapes((s) => !s)}
+        >
+          城区边界
+        </button>
         <span className={styles.dim}>
           {cursor ? `光标 ${cursor.x}, ${cursor.y}` : "把光标移到底图上看坐标"}
         </span>
@@ -119,8 +115,9 @@ export function Calibrate() {
           {info ? (
             <img src={info.url} alt="" className={styles.image} draggable={false} />
           ) : (
-            <p className={styles.error}>缺少素材 {layer}</p>
+            <p className={styles.error}>缺少素材 {MAP}</p>
           )}
+          {shapes && <MapShapes />}
           <button
             type="button"
             className={styles.surface}
