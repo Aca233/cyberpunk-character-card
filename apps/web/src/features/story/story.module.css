@@ -1725,3 +1725,125 @@
   letter-spacing: 0.08em;
   box-shadow: 0 0 8px color-mix(in srgb, var(--cp-cyan) 40%, transparent);
 }
+
+/* 地图和路线面板：地点按底图的百分比坐标摆 */
+.mapBody {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.mapFrame {
+  position: relative;
+  margin: 0 auto;
+  border: 1px solid var(--cp-yellow-dim);
+}
+
+.mapImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.mapLayers {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.mapLayer {
+  padding: 0.2rem 0.6rem;
+  background: transparent;
+  color: var(--cp-text-faint);
+  border: 1px solid var(--cp-yellow-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mapLayer[aria-pressed="true"] {
+  color: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+}
+
+.mapPin {
+  position: absolute;
+  width: 0.8rem;
+  height: 0.8rem;
+  padding: 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: rgb(0 0 0 / 0.6);
+  border: 2px solid var(--cp-yellow);
+  cursor: pointer;
+}
+
+.mapPin:hover,
+.mapPin[data-picked] {
+  background: var(--cp-yellow);
+}
+
+.mapPin[data-here] {
+  border-color: var(--cp-cyan);
+  background: var(--cp-cyan);
+  cursor: default;
+}
+
+.mapPinLabel {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: rotate(-45deg) translate(0.2rem, -50%);
+  transform-origin: left center;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--cp-text);
+  text-shadow:
+    0 0 3px #000,
+    0 0 3px #000;
+  pointer-events: none;
+}
+
+.mapTitle {
+  margin: 0 0 0.2rem;
+  color: var(--cp-yellow);
+}
+
+.mapSubtitle {
+  margin: 1rem 0 0.4rem;
+}
+
+.routeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.routeOption {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--cp-yellow-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.routeOption:hover:not(:disabled) {
+  border-color: var(--cp-yellow);
+}
+
+.routeOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .mapBody {
+    grid-template-columns: 1fr;
+  }
+}

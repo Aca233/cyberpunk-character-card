@@ -215,6 +215,7 @@ export function SidePanel({
   onMod,
   onHabit,
   onPhone,
+  onMap,
 }: {
   readonly view: View;
   /** 分配一个属性点；正在生成时不传，按钮不显示 */
@@ -236,6 +237,8 @@ export function SidePanel({
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
   /** 打开消息 */
   readonly onPhone: () => void;
+  /** 打开地图和路线面板 */
+  readonly onMap: () => void;
 }) {
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
@@ -616,6 +619,9 @@ export function SidePanel({
           </button>
           <button type="button" onClick={onPhone}>
             消息{view.phone.unread > 0 ? `（${view.phone.unread} 条未读）` : ""}
+          </button>
+          <button type="button" onClick={onMap}>
+            地图 [M]
           </button>
           {offered > 0 && (
             <button type="button" onClick={() => onJournal(true)}>

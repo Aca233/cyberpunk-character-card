@@ -14,6 +14,7 @@ import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
+import { MapPanel } from "./MapPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
@@ -98,6 +99,7 @@ export function StoryScreen() {
   const [journal, setJournal] = useState<"active" | "board" | null>(null);
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
+  const [atMap, setAtMap] = useState(false);
   const closeJournal = useCallback(() => setJournal(null), []);
   const [atPhone, setAtPhone] = useState(false);
 
@@ -337,10 +339,13 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop || story.spend) return;
+      if (journal || atDoc || atShop || atMap || story.spend) return;
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        setAtMap(true);
       } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
@@ -363,6 +368,7 @@ export function StoryScreen() {
     journal,
     atDoc,
     atShop,
+    atMap,
   ]);
 
   if (query.isPending) {
@@ -418,6 +424,7 @@ export function StoryScreen() {
         onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
         onPhone={() => void openPhone()}
+        onMap={() => setAtMap(true)}
       />
 
       <main className={styles.column}>
@@ -565,6 +572,23 @@ export function StoryScreen() {
           onRepay={busy ? undefined : () => cyberAction({ type: "repayRipperdoc" })}
           onRepair={busy ? undefined : (id) => cyberAction({ type: "repairCyberware", id })}
           onClose={() => setAtDoc(false)}
+        />
+      )}
+      {atMap && (
+        <MapPanel
+          view={view}
+          onTravel={
+            busy || offers?.rolled
+              ? undefined
+              : (dest, route) => {
+                  setAtMap(false);
+                  send({
+                    text: `${route.label}去${dest.name}`,
+                    travel: { to: dest.id, mode: route.mode },
+                  });
+                }
+          }
+          onClose={() => setAtMap(false)}
         />
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}

@@ -13,7 +13,7 @@ import type {
   TurnUsage,
 } from "@cp/core";
 
-import { offscreenPace, spoilersOn } from "../features/settings/prefs";
+import { encounterPace, offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
 
 /** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
@@ -371,6 +371,7 @@ export const api = {
     const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, {
       ...body,
       offscreen: offscreenPace(),
+      encounters: encounterPace(),
     });
     if (typeof r.turnId === "string") return { kind: "started", turnId: r.turnId };
     return { kind: "duplicate", seq: Number(r.seq), version: Number(r.version) };

@@ -1,6 +1,8 @@
 import type { OffscreenPace } from "@cp/core";
 import {
+  type EncounterPace,
   type NarrativeToggle,
+  setEncounterPace,
   setNarrativePref,
   setOffscreenPace,
   useNarrativePrefs,
@@ -12,6 +14,13 @@ const PACES: readonly [OffscreenPace, string][] = [
   ["slow", "慢（隔 5 场）"],
   ["normal", "常规（隔 3 场）"],
   ["fast", "快（隔 2 场）"],
+];
+
+const ENCOUNTERS: readonly [EncounterPace, string][] = [
+  ["off", "关"],
+  ["rare", "少"],
+  ["normal", "常规"],
+  ["often", "多"],
 ];
 
 const OPTIONS: readonly [NarrativeToggle, string, string][] = [
@@ -56,6 +65,22 @@ export function NarrativeSettings() {
         <small className={styles.dim}>
           收场时，AI
           推演你没看着的地方：帮派、公司、警察和熟人的动向，之后借新闻、传闻和消息带进故事；隔的场数越少，城里变得越快。游戏时间过了半天也会推演一次
+        </small>
+      </label>
+      <label className={styles.pref}>
+        <select
+          value={prefs.encounters}
+          onChange={(e) => setEncounterPace(e.target.value as EncounterPace)}
+        >
+          {ENCOUNTERS.map(([pace, label]) => (
+            <option key={pace} value={pace}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span>路上偶遇</span>
+        <small className={styles.dim}>
+          在地图上选路线出行、换了城区时，路上碰到事的几率：抢劫、求助、帮派盘查之类，夜里和被警方盯上时更常见；一个场景最多一次。关掉后照样能在正文里自己写
         </small>
       </label>
     </div>

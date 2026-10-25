@@ -1,0 +1,150 @@
+.page {
+  min-height: 100vh;
+  padding: 1rem 1.5rem;
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--cp-yellow);
+}
+
+.dim {
+  color: var(--cp-text-faint);
+  margin: 0;
+}
+
+.error {
+  color: var(--cp-danger);
+  margin: 0;
+}
+
+.toggle {
+  padding: 0.2rem 0.6rem;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--cp-yellow-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toggle[aria-pressed="true"] {
+  color: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(18rem, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.frame {
+  position: relative;
+  width: min(100%, calc(85vh * 0.992));
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.surface {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--cp-yellow-dim);
+  cursor: crosshair;
+}
+
+.pin {
+  position: absolute;
+  width: 0.8rem;
+  height: 0.8rem;
+  padding: 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: rgb(0 0 0 / 0.6);
+  border: 2px solid var(--cp-cyan);
+  cursor: pointer;
+}
+
+.pin[data-moved] {
+  border-color: var(--cp-yellow);
+}
+
+.pin[data-picked] {
+  background: var(--cp-yellow);
+}
+
+.label {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: rotate(-45deg) translate(0.2rem, -50%);
+  transform-origin: left center;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--cp-text);
+  text-shadow:
+    0 0 3px #000,
+    0 0 3px #000;
+  pointer-events: none;
+}
+
+.side {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.list li[data-picked] {
+  color: var(--cp-yellow);
+}
+
+.add {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.add input {
+  flex: 1;
+}
+
+.snippet {
+  width: 100%;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .body {
+    grid-template-columns: 1fr;
+  }
+}

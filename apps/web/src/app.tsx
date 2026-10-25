@@ -1,5 +1,6 @@
 import { createBrowserRouter, Outlet } from "react-router";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
+import { Calibrate } from "./features/dev/Calibrate";
 import { MainMenu } from "./features/menu/MainMenu";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import { SpoilerBadge } from "./features/settings/SpoilerBadge";
@@ -28,6 +29,8 @@ export const router = createBrowserRouter([
       { path: "/characters", element: <CharactersScreen /> },
       { path: "/play/:saveId", element: <StoryScreen /> },
       { path: "/settings", element: <SettingsScreen /> },
+      // 开发用的地图校准页：只在 pnpm dev 下有
+      ...(import.meta.env.DEV ? [{ path: "/dev/calibrate", element: <Calibrate /> }] : []),
     ],
   },
 ]);
