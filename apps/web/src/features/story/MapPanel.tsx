@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
-import { Asset, MissingAsset, NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import {
   DISTRICT_SHAPES,
@@ -209,6 +209,21 @@ function iconStyle(id: AssetId, at?: { left: number; top: number }): CSSProperti
   const info = asset(id);
   if (!info) return undefined;
   return { ...at, "--icon": `url("${info.url}")` } as CSSProperties;
+}
+
+/**
+ * 地点标记照原作世界地图的 mappin（fullscreen/world_map/mappins）：
+ * 目的地是 default_mappin 的 mappin_icons 图标垫 shadowBlobSquare_big 黑影；
+ * 当前位置是 player_mappin 的 atlas_minimap player 箭头和 braindance_icons recording1 圆圈。
+ * 都当遮罩用、CSS 上色，挂在地图根节点上，图例也能用；缺图时变量为空（缺图列表会报出来）
+ */
+function pinVars(): CSSProperties {
+  return {
+    "--pin-dest": cssUrl("map.pinDest"),
+    "--pin-shadow": cssUrl("map.pinShadow"),
+    "--pin-player": cssUrl("map.pinPlayer"),
+    "--pin-ping": cssUrl("map.pinPing"),
+  } as CSSProperties;
 }
 
 /** 底图不能缩到比视野小，也不能拖出边：四边都不露黑 */
@@ -502,7 +517,7 @@ export function MapPanel({
   const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
 
   return (
-    <div role="dialog" aria-label="地图" className={styles.mapScreen}>
+    <div role="dialog" aria-label="地图" className={styles.mapScreen} style={pinVars()}>
       <header className={styles.mapTop}>
         <h2 className={styles.mapTopTitle}>夜之城</h2>
         <span className={styles.dim}>
@@ -674,6 +689,8 @@ export function MapPanel({
                 style={toScreen(d.x, d.y)}
               >
                 {d.here && <span className={styles.mapHereTag}>当前位置</span>}
+                {/* 原作 mappin 的 shadow2 / iconBlack：图标下垫一块黑影，压住底图 */}
+                <i className={styles.mapPinShadow} aria-hidden="true" />
                 <button
                   type="button"
                   className={styles.mapDestPin}
@@ -913,7 +930,7 @@ export function MapPanel({
         </div>
 
         <p className={styles.mapHint}>
-          {dest ? "" : "点黄色菱形看怎么去，没标出来的地方用输入框写 · "}
+          {dest ? "" : "点黄色标记看怎么去，没标出来的地方用输入框写 · "}
           滚轮缩放 · 拖动平移 · 放大到 {POI_ZOOM}× 显示服务点 · 底图和图标取自原作
         </p>
       </div>

@@ -736,7 +736,11 @@
       { "id": "map.shadowSmall", "atlas": "common/shadow_blobs", "slot": "shadowBlobSquare_small" },
       { "id": "map.shadowText", "atlas": "common/shadow_blobs", "slot": "shadowBlobText" },
       { "id": "map.panelBg", "atlas": "common/atlas_shapes_sync", "slot": "cell_flip_bg" },
-      { "id": "map.panelFg", "atlas": "common/atlas_shapes_sync", "slot": "cell_flip_fg" }
+      { "id": "map.panelFg", "atlas": "common/atlas_shapes_sync", "slot": "cell_flip_fg" },
+      { "id": "map.pinDest", "atlas": "common/mappin_icons", "slot": "fast_travel" },
+      { "id": "map.pinShadow", "atlas": "common/shadow_blobs", "slot": "shadowBlobSquare_big" },
+      { "id": "map.pinPlayer", "atlas": "widgets/atlas_minimap", "slot": "player" },
+      { "id": "map.pinPing", "atlas": "common/braindance_icons", "slot": "recording1" }
     ],
     "cursor": [
       { "id": "cursor.arrowShadow", "atlas": "widgets/cursor_inventory", "slot": "mouse_shadow" },

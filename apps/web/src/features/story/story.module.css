@@ -1926,6 +1926,12 @@
   --filter-bg: #0e0e17; /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
   --filter-off: var(--cp-red); /* MainColors.Red，没有兜底值，用本作红色 */
   --filter-off-frame: var(--cp-red-dim); /* MainColors.FaintRed，没有兜底值，用本作暗红近似 */
+  /* 地点标记配色照原作 world_map/mappins 两个 inkwidget；原作是 HDR 色（分量大于 1），这里截到 sRGB */
+  /* default_mappin 根节点 MainColors.ActiveYellow 1.331/1.004/0.305，截断后用本作黄色近似 */
+  --pin-yellow: var(--cp-yellow);
+  --pin-green: #29ffb9; /* player_mappin 箭头 MainColors.ActiveGreen 0.161/1.314/0.727 */
+  --pin-ring: #1ded83; /* player_mappin 圆圈 MainColors.Green 0.114/0.929/0.514 */
+  --pin-gold: #ffd741; /* player_mappin 名字 MainColors.Gold 1.119/0.844/0.257 */
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -2073,39 +2079,71 @@
   cursor: var(--cp-cursor);
 }
 
-/* 可以去的地点：黄色菱形；当前位置青色并带一圈扩散 */
+/*
+ * 地点标记：原作世界地图的 mappin，贴图都当遮罩、按上面的 --pin-* 上色。
+ * 可以去的地点照 default_mappin：mappin_icons 图标（原作按任务种类换图，本作统一用实心的 fast_travel 定位针；
+ * custom_position 大半是 20%～40% 透明度，原作靠 HDR 黄提亮，截到 sRGB 后压在底图上发灰），下面垫 shadowBlobSquare_big 黑影；
+ * 当前位置照 player_mappin：atlas_minimap 的 player 箭头，外面一圈 braindance_icons 的 recording1
+ */
 .mapDest {
   position: absolute;
   width: 0;
   height: 0;
 }
 
+/* 黑影：原作 shadow2 / iconBlack，软边方块，比图标大一圈 */
+.mapPinShadow {
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  background: #000;
+  mask: var(--pin-shadow) center / contain no-repeat;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 目的地图标：1080p 原图 32×32，缩到 24 */
 .mapDestPin {
   position: absolute;
-  left: -0.5rem;
-  top: -0.5rem;
-  width: 1rem;
-  height: 1rem;
+  left: -12px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  transform: rotate(45deg);
-  background: rgb(0 0 0 / 70%);
-  border: 2px solid var(--cp-yellow);
-  box-shadow: 0 0 6px rgb(252 238 10 / 45%);
+  border: 0;
+  color: var(--pin-yellow);
+  background: currentColor;
+  mask: var(--pin-dest) center / contain no-repeat;
   cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    transform var(--dur-flash);
 }
 
+/* 悬停、键盘焦点和选中：原作的悬停动画没解出来，本作放大一点、提亮；描边会被遮罩裁掉，所以不用 outline */
 .mapDestPin:hover,
+.mapDestPin:focus-visible,
 .mapDest[data-picked] .mapDestPin {
-  background: var(--cp-yellow);
+  outline: none;
+  color: #fff8a8;
+  transform: scale(1.25);
 }
 
+/* 当前位置：player 箭头 1080p 原图 26×23；没有朝向数据，箭头一直朝上，原作的视野扇形 playerCone 不画 */
 .mapDest[data-here] .mapDestPin {
-  border-color: var(--cp-cyan);
-  background: var(--cp-cyan);
-  box-shadow: 0 0 10px var(--cp-cyan);
+  left: -11px;
+  top: -10px;
+  width: 22px;
+  height: 20px;
+  color: var(--pin-green);
+  mask-image: var(--pin-player);
+  transform: none;
   cursor: var(--cp-cursor);
 }
 
+/* 定位圈：原作 circle / circle2 两层 recording1 圆环；原作的动画没解出来，沿用本作的一圈扩散 */
 .mapDest[data-here]::before {
   content: "";
   position: absolute;
@@ -2113,8 +2151,8 @@
   top: -1.1rem;
   width: 2.2rem;
   height: 2.2rem;
-  border: 1px solid var(--cp-cyan);
-  border-radius: 50%;
+  background: var(--pin-ring);
+  mask: var(--pin-ping) center / contain no-repeat;
   pointer-events: none;
   animation: here-ping 1.8s ease-out infinite;
 }
@@ -2168,8 +2206,9 @@
   z-index: 2;
 }
 
+/* 原作 player_mappin 的名字 MainColors.Gold、黑底 */
 .mapDest[data-here] .mapDestLabel {
-  color: var(--cp-cyan);
+  color: var(--pin-gold);
 }
 
 .mapDest[data-picked] .mapDestLabel {
@@ -2185,8 +2224,8 @@
   font-size: 0.68rem;
   letter-spacing: 0.15em;
   white-space: nowrap;
-  color: #000;
-  background: var(--cp-cyan);
+  color: var(--pin-gold);
+  background: rgb(0 0 0 / 75%);
   pointer-events: none;
 }
 
@@ -2444,19 +2483,20 @@ ul.mapLegend > li {
   opacity: 0.7;
 }
 
+/* 图例里的地点标记：和地图上同一张图、同一种颜色 */
 .legendDest,
 .legendHere {
   flex: none;
-  width: 0.7rem;
-  height: 0.7rem;
-  margin: 0 0.2rem;
-  transform: rotate(45deg);
-  border: 2px solid var(--cp-yellow);
+  width: 16px;
+  height: 16px;
+  color: var(--pin-yellow);
+  background: currentColor;
+  mask: var(--pin-dest) center / contain no-repeat;
 }
 
 .legendHere {
-  border-color: var(--cp-cyan);
-  background: var(--cp-cyan);
+  color: var(--pin-green);
+  mask-image: var(--pin-player);
 }
 
 @media (max-width: 900px) {
