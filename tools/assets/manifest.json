@@ -726,7 +726,8 @@
         "id": "cursor.invalidFluff",
         "atlas": "widgets/cursor_inventory",
         "slot": "mouse_invalid_fluff"
-      }
+      },
+      { "id": "cursor.clickDot", "atlas": "widgets/cursor_inventory", "slot": "hov_dot" }
     ]
   }
 }

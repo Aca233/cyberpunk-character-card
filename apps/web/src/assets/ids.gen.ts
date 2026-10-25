@@ -110,6 +110,7 @@ export const ASSET_IDS = [
   "check.holdKey",
   "cursor.arrowFrame",
   "cursor.arrowShadow",
+  "cursor.clickDot",
   "cursor.hand",
   "cursor.handShadow",
   "cursor.invalidFluff",

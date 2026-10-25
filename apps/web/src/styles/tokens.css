@@ -32,10 +32,16 @@
   --cp-success: #3ff2a0;
 
   /*
-   * 鼠标指针：assets/cursor.ts 拼好原作指针后改写这三个变量，拼好前和缺图时是系统指针。
-   * 底色对应原作 MainColors.Fullscreen_PrimaryBackgroundDarkest
+   * 鼠标指针：assets/cursor.ts 拼好原作指针后改写 --cp-cursor 这三个变量，拼好前和缺图时是系统指针。
+   * 颜色取自原作 default_cursor.inkwidget 里写着的 tintColor：底色 Fullscreen_PrimaryBackgroundDarkest，
+   * 箭头 MainColors.Blue，手形和点击点 ActiveBlue（HDR 0.158/1.303/1.414，超过 1 的截到 1），不能点 ActiveRed（HDR 1.370/0.444/0.405）
    */
-  --cp-cursor-shadow: #0c080e;
+  --cp-cursor-shadow: #0e0e17;
+  --cp-cursor-tint: #5ef6ff;
+  --cp-cursor-tint-hover: #28ffff;
+  --cp-cursor-tint-invalid: #ff7167;
+  --cp-cursor-click: #28ffff;
+  --cp-cursor-click-shadow: rgb(0 0 0 / 80%);
   --cp-cursor: auto;
   --cp-cursor-hand: pointer;
   --cp-cursor-invalid: not-allowed;
