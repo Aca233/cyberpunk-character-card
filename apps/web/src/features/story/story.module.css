@@ -744,17 +744,27 @@
   flex: 1;
 }
 
+/* 选项的门槛和检定标签：原作 CaptionImageIcons 的 skill_select 实心底。
+   不满足染 MainColors.CombatRed（HDR 1.57/0.24/0.20，截到 sRGB），满足染 MainColors.Green；
+   实心底上的字按 Choice/Black 状态用黑色 */
 .tag {
+  --tag-tint: #ff3e34;
+  position: relative;
+  isolation: isolate;
   font-family: var(--font-ui);
   font-size: 0.75rem;
-  padding: 0.05rem 0.45rem;
-  border: 1px solid currentColor;
-  color: var(--cp-red);
+  font-weight: 600;
+  padding: 0.1rem 0.5rem 0.1rem 0.6rem;
+  color: #000;
   white-space: nowrap;
 }
 
 .tag[data-met] {
-  color: var(--cp-success);
+  --tag-tint: #1ded83;
+}
+
+.tag > [aria-hidden] {
+  z-index: -1;
 }
 
 /* 检定确认栏 */

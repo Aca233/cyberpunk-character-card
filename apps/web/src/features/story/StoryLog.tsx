@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
-import { Asset } from "../../ui/Asset";
+import { Asset, NineSlice } from "../../ui/Asset";
 import { useNarrativePrefs } from "../settings/prefs";
 import { useSpoilerView } from "../settings/SpoilerBadge";
 import type { useStory } from "./store";
@@ -297,6 +297,8 @@ export function StoryLog({
 }
 
 const KEYS: readonly AssetId[] = ["key.1", "key.2", "key.3", "key.4"];
+/** dialog.skillSelect 的切线（4K 原图像素，CSS 顺序上、右、下、左）：原作只切左 20、下 20，左下是切角 */
+const TAG_SLICE = [0, 0, 20, 20] as const;
 
 /** 选项：门槛不够的锁住并写明差几点；带检定的选中后打开确认栏 */
 export function ChoiceList({
@@ -335,13 +337,20 @@ export function ChoiceList({
               )}
               {c.source && <span className={styles.source}>[{c.source}]</span>}
               <span className={styles.choiceText}>{c.text}</span>
+              {/* 原作 CaptionImageIcons：底是 skill_select 九宫格（4K 切线左 20、下 20），满足染 Green、不满足染 CombatRed */}
               {c.gate && (
                 <span className={styles.tag} data-met={c.gate.met || undefined}>
+                  <NineSlice id="dialog.skillSelect" tint="var(--tag-tint)" slice={TAG_SLICE} />
                   {c.gate.attributeLabel} {c.gate.value}
                   {short > 0 && ` · 差 ${short} 点`}
                 </span>
               )}
-              {c.checkId && <span className={styles.tag}>检定</span>}
+              {c.checkId && (
+                <span className={styles.tag}>
+                  <NineSlice id="dialog.skillSelect" tint="var(--tag-tint)" slice={TAG_SLICE} />
+                  检定
+                </span>
+              )}
             </button>
           </li>
         );
