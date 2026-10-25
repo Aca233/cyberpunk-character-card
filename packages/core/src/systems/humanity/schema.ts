@@ -142,3 +142,10 @@ export const SetAnchoredSchema = z.object({
   anchored: z.boolean(),
 });
 export type SetAnchored = z.infer<typeof SetAnchoredSchema>;
+
+/** 只能由代码发出：危机章节里被拉回来，人性直接回到某个值（不受每天恢复上限限制，仍不超过上限） */
+export const RestoreHumanitySchema = z.object({
+  type: z.literal("humanity.restore"),
+  value: z.number().int().min(0).max(HUMANITY_MAX),
+});
+export type RestoreHumanity = z.infer<typeof RestoreHumanitySchema>;

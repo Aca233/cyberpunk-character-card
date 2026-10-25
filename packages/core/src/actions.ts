@@ -130,6 +130,11 @@ function ripperdocCommands(
   if (!doc) return `没有叫 ${action.doc} 的义体医生`;
   const here = (world.slices.world as { location?: unknown } | undefined)?.location;
   if (here !== doc.location) return `不在${doc.name}的诊所，先去那里`;
+  const crisis = (world.slices.psychosis as { crisis?: { status?: string } | null } | undefined)
+    ?.crisis;
+  if (action.type === "buyCyberware" && crisis?.status === "recovering") {
+    return `刚从危机里被拉回来，恢复期里${doc.name}不肯给你装新义体`;
+  }
   const catalog = cyberwareCatalog(data);
   const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   const installed = state.installed;

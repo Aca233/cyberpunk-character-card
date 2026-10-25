@@ -205,6 +205,22 @@ export function stateSummary(view: PlayerView): string {
       lines.push("压制剂戒断中：烦躁、手抖、睡不好；相关检定写一项减值（来源：戒断）");
     else if (s.dependent) lines.push("已经依赖压制剂：停药一天就会戒断");
   }
+  {
+    const c = view.psychosis.crisis;
+    if (c?.status === "open")
+      lines.push(
+        `危机章节（${c.since} 人性归零）：普通委托暂停；方向：被拉回来（锚点或诊所出面，镇定检定成功后写 crisis pulledBack）、带着全部义体走向最后一战（crisis lastStand）、向暴恐机动队投降（crisis surrender），玩家别的合理办法也能接住`,
+      );
+    else if (c?.status === "lastStand")
+      lines.push(
+        "最后一战：角色带着全部义体冲向结局，普通委托暂停；结局照剧情写，被拉回来仍可以写 crisis pulledBack",
+      );
+    else if (c?.status === "recovering")
+      lines.push(
+        `恢复期到 ${c.until}：刚从危机里被拉回来，身上的义体大多拆了；这段时间义体医生不给装新义体`,
+      );
+    else if (c?.status === "surrendered") lines.push("已向暴恐机动队投降：写被带走之后的事");
+  }
   if (view.psychosis.episodeHere) lines.push("这个场景已经发作过一次，不再安排发作");
   if (view.psychosis.blackoutOpen)
     lines.push("严重发作还没过去：这一段事后会成为记忆空白，场景结束后角色记不清");

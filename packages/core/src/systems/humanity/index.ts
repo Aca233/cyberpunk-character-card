@@ -1,5 +1,11 @@
 import { defineSystem } from "../../kernel/system";
-import { applyHumanity, setAnchored, setCyberwareCost, setTolerance } from "./apply";
+import {
+  applyHumanity,
+  restoreHumanity,
+  setAnchored,
+  setCyberwareCost,
+  setTolerance,
+} from "./apply";
 import { psychosisRules } from "./prompt";
 import {
   HUMANITY_MAX,
@@ -9,6 +15,8 @@ import {
   type HumanityState,
   HumanityStateSchema,
   legacyHumanity,
+  type RestoreHumanity,
+  RestoreHumanitySchema,
   type SetAnchored,
   SetAnchoredSchema,
   type SetCyberwareCost,
@@ -20,7 +28,7 @@ import {
 export const humanity = defineSystem<
   HumanityState,
   HumanityCommand,
-  SetCyberwareCost | SetTolerance | SetAnchored
+  SetCyberwareCost | SetTolerance | SetAnchored | RestoreHumanity
 >({
   id: "humanity",
   state: HumanityStateSchema,
@@ -38,10 +46,12 @@ export const humanity = defineSystem<
     "humanity.setCyberwareCost": SetCyberwareCostSchema,
     "humanity.setTolerance": SetToleranceSchema,
     "humanity.setAnchored": SetAnchoredSchema,
+    "humanity.restore": RestoreHumanitySchema,
   },
   apply(draft, command, ctx) {
     if (command.type === "humanity") return applyHumanity(draft, command, ctx.now);
     if (command.type === "humanity.setAnchored") return setAnchored(draft, command.anchored);
+    if (command.type === "humanity.restore") return restoreHumanity(draft, command.value);
     return command.type === "humanity.setTolerance"
       ? setTolerance(draft, command.tolerance)
       : setCyberwareCost(draft, command.total);

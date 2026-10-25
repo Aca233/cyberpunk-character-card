@@ -330,6 +330,16 @@ export function SidePanel({
             {humanity.current}/{humanity.cap}
             <small> · {humanity.stageLabel}</small>
           </dd>
+          {view.psychosis.crisis && (
+            <>
+              <dt>危机</dt>
+              <dd data-tone={view.psychosis.crisis.status === "recovering" ? undefined : "bad"}>
+                {view.psychosis.crisis.label}
+                {view.psychosis.crisis.until && <small> · 到 {view.psychosis.crisis.until}</small>}
+                {view.psychosis.crisis.status === "open" && <small> · 普通委托暂停</small>}
+              </dd>
+            </>
+          )}
           {view.psychosis.anchors.length > 0 && (
             <>
               <dt>锚点</dt>

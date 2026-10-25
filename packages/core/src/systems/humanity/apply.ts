@@ -82,8 +82,10 @@ export function applyHumanity(
   const from = humanityStage(before);
   const to = humanityStage(draft.current);
   if (from !== to) notes.push(`人性阶段：${STAGE_LABELS[from]} → ${STAGE_LABELS[to]}`);
-  if (draft.current === 0 && before > 0) notes.push("人性归零，进入危机章节");
-  return { ok: true, notes };
+  const zero = draft.current === 0 && before > 0;
+  if (zero) notes.push("人性归零，进入危机章节");
+  // 赛博精神病系统听这个信号打开危机章节
+  return zero ? { ok: true, notes, signals: ["humanity.zero"] } : { ok: true, notes };
 }
 
 /** 义体装卸后更新消耗合计（按义体耐受折算）；当前人性超过新上限时降到上限 */
@@ -94,9 +96,14 @@ export function setCyberwareCost(draft: Draft<HumanityState>, total: number): Ap
   );
   const cap = humanityCap(draft);
   const notes = [`人性上限变为 ${cap}`];
+  const before = draft.current;
   if (draft.current > cap) {
     notes.push(`当前人性 ${draft.current} 降到上限 ${cap}`);
     draft.current = cap;
+  }
+  if (draft.current === 0 && before > 0) {
+    notes.push("人性归零，进入危机章节");
+    return { ok: true, notes, signals: ["humanity.zero"] };
   }
   return { ok: true, notes };
 }
@@ -121,4 +128,16 @@ export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance):
 export function setAnchored(draft: Draft<HumanityState>, anchored: boolean): ApplyOutcome {
   draft.anchored = anchored;
   return { ok: true, notes: [] };
+}
+
+/** 被拉回来：人性直接回到给定的值，不超过上限 */
+export function restoreHumanity(draft: Draft<HumanityState>, value: number): ApplyOutcome {
+  const cap = humanityCap(draft);
+  const before = draft.current;
+  draft.current = Math.max(draft.current, Math.min(value, cap));
+  const notes = [`人性回到 ${draft.current}`];
+  const from = humanityStage(before);
+  const to = humanityStage(draft.current);
+  if (from !== to) notes.push(`人性阶段：${STAGE_LABELS[from]} → ${STAGE_LABELS[to]}`);
+  return { ok: true, notes };
 }

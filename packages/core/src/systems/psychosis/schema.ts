@@ -4,6 +4,22 @@ import { z } from "zod";
 export const ANCHORS_MAX = 3;
 /** 记忆空白只留最近几段 */
 export const BLACKOUTS_KEPT = 10;
+/** 被拉回来以后人性回到多少 */
+export const CRISIS_RESTORE = 20;
+/** 被拉回来以后的恢复期（分钟） */
+export const CRISIS_RECOVERY = 7 * 1440;
+/** 被拉回来时最多留下几件义体、这几件的人性消耗合计不超过多少；其余都拆掉（本作改编） */
+export const CRISIS_KEEP_PIECES = 2;
+export const CRISIS_KEEP_COST = 30;
+
+export const CrisisStatusSchema = z.enum(["open", "recovering", "lastStand", "surrendered"]);
+export type CrisisStatus = z.infer<typeof CrisisStatusSchema>;
+export const CRISIS_LABELS: Readonly<Record<CrisisStatus, string>> = {
+  open: "危机章节",
+  recovering: "恢复期",
+  lastStand: "最后一战",
+  surrendered: "已向暴恐机动队投降",
+};
 /** 压制剂的物品 id（本作改编的虚构药物） */
 export const SUPPRESSANT_ID = "psycho-suppressant";
 /** 一片压制剂管多久（分钟）；耐受以后减半 */
@@ -60,6 +76,17 @@ export const PsychosisStateSchema = z.object({
     .default([]),
   /** 短暂失控过几次 */
   lostControl: z.number().int().min(0).default(0),
+  /** 危机章节：人性归零时打开；until 是恢复期结束的时间 */
+  crisis: z
+    .object({
+      since: z.number().int(),
+      status: CrisisStatusSchema,
+      until: z.number().int().nullable(),
+    })
+    .nullable()
+    .default(null),
+  /** 经历过几次危机 */
+  crises: z.number().int().min(0).default(0),
 });
 export type PsychosisState = z.infer<typeof PsychosisStateSchema>;
 
@@ -114,6 +141,23 @@ export const LostControlCommandSchema = z
     "短暂失控：这个场景发作过、检定失败时才写；界面标 [失控] 并同时显示意图和实际。不改写玩家的输入，不替玩家去杀人",
   );
 export type LostControlCommand = z.infer<typeof LostControlCommandSchema>;
+
+/** 模型使用：{"type": "crisis", "path": "pulledBack", "who": "维克多", "reason": "..."} */
+export const CrisisCommandSchema = z
+  .object({
+    type: z.literal("crisis"),
+    path: z
+      .enum(["pulledBack", "lastStand", "surrender"])
+      .describe(
+        "pulledBack 被锚点或诊所拉回来（镇定检定成功之后才写），lastStand 带着全部义体走向最后一战，surrender 向暴恐机动队投降",
+      ),
+    who: z.string().min(1).max(40).optional().describe("pulledBack：谁把角色拉回来"),
+    reason: z.string().min(1),
+  })
+  .describe(
+    "危机章节的走向：只在人性归零、危机章节里写。pulledBack 由代码拆掉大部分义体、人性回到 20、进入 7 天恢复期",
+  );
+export type CrisisCommand = z.infer<typeof CrisisCommandSchema>;
 
 export const PsychosisInternalSchemas = {
   /** 界面动作：在人物卡上设锚点或取消 */

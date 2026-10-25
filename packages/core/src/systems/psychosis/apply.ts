@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { HUMANITY_KINDS, type HumanityState, PSYCHOSIS_BELOW } from "../humanity";
 import type { InventoryState } from "../inventory";
 import type { NpcState } from "../npc";
@@ -9,6 +10,12 @@ import {
   ANCHORS_MAX,
   type AnchorCommand,
   BLACKOUTS_KEPT,
+  CRISIS_KEEP_COST,
+  CRISIS_KEEP_PIECES,
+  CRISIS_LABELS,
+  CRISIS_RECOVERY,
+  CRISIS_RESTORE,
+  type CrisisCommand,
   DEPENDENCE_DOSES,
   DEPENDENCE_WINDOW,
   type EpisodeCommand,
@@ -222,6 +229,89 @@ export function lostControlOf(
   return null;
 }
 
+/** 危机章节里（还没被拉回来）：普通委托暂停 */
+export function inCrisis(state: Partial<Pick<PsychosisState, "crisis">> | undefined): boolean {
+  const status = state?.crisis?.status;
+  return status === "open" || status === "lastStand";
+}
+
+/** 人性归零：打开危机章节；已经在危机里、最后一战或投降了就不再开 */
+export function openCrisis(draft: Draft<PsychosisState>, now: number): void {
+  const status = draft.crisis?.status;
+  if (status === "open" || status === "lastStand" || status === "surrendered") return;
+  draft.crisis = { since: now, status: "open", until: null };
+  draft.crises += 1;
+}
+
+/** 恢复期满了：危机章节结束 */
+export function tickCrisis(draft: Draft<PsychosisState>, to: number): void {
+  const crisis = draft.crisis;
+  if (crisis?.status === "recovering" && crisis.until !== null && to >= crisis.until) {
+    draft.crisis = null;
+  }
+}
+
+/** 被拉回来时拆哪几件：按人性消耗从低到高留最多 2 件、合计不超过 30，其余都拆 */
+export function crisisRemovals(
+  installed: readonly { readonly id: string }[],
+  costOf: (id: string) => number,
+): string[] {
+  const sorted = [...installed].sort((a, b) => costOf(a.id) - costOf(b.id));
+  const kept: string[] = [];
+  let cost = 0;
+  for (const c of sorted) {
+    if (kept.length >= CRISIS_KEEP_PIECES || cost + costOf(c.id) > CRISIS_KEEP_COST) break;
+    kept.push(c.id);
+    cost += costOf(c.id);
+  }
+  return installed.map((c) => c.id).filter((id) => !kept.includes(id));
+}
+
+/** 危机章节的走向：拉回来、最后一战、投降 */
+export function applyCrisis(
+  draft: Draft<PsychosisState>,
+  command: CrisisCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const crisis = draft.crisis;
+  if (!crisis || (crisis.status !== "open" && crisis.status !== "lastStand")) {
+    return fail("现在不在危机章节里");
+  }
+  if (command.path === "lastStand") {
+    if (crisis.status === "lastStand") return fail("已经走上最后一战了");
+    crisis.status = "lastStand";
+    return { ok: true, notes: ["走向最后一战：带着全部义体，不再回头"] };
+  }
+  if (command.path === "surrender") {
+    crisis.status = "surrendered";
+    return { ok: true, notes: ["向暴恐机动队投降"] };
+  }
+  const catalog = cyberwareCatalog(ctx.data);
+  const installed = ctx.read<CyberwareState>("cyberware").installed;
+  const removed = crisisRemovals(installed, (id) => catalog.get(id)?.humanityCost ?? 0);
+  crisis.status = "recovering";
+  crisis.until = ctx.now + CRISIS_RECOVERY;
+  const who = command.who ? `${command.who}把你拉了回来` : "被拉了回来";
+  return {
+    ok: true,
+    notes: [
+      `${who}：人性回到 ${CRISIS_RESTORE}，恢复期到 ${formatGameTime(crisis.until)}`,
+      removed.length > 0
+        ? `拆掉了 ${removed.map((id) => catalog.get(id)?.name ?? id).join("、")}`
+        : "身上没有要拆的义体",
+    ],
+    emit: [
+      ...removed.map((id) => ({
+        type: "cyberware",
+        action: "remove",
+        id,
+        reason: `危机章节：${command.reason}`,
+      })),
+      { type: "humanity.restore", value: CRISIS_RESTORE },
+    ],
+  };
+}
+
 /** 给界面和提示词的锚点、压制剂、发作情况 */
 export function psychosisView(slice: unknown, now: number, scene: number | null = null) {
   const state = PsychosisStateSchema.parse(slice ?? {});
@@ -241,6 +331,15 @@ export function psychosisView(slice: unknown, now: number, scene: number | null 
         to: formatGameTime(b.to ?? b.from),
       })),
     lostControl: state.lostControl,
+    crisis:
+      state.crisis === null
+        ? null
+        : {
+            status: state.crisis.status,
+            label: CRISIS_LABELS[state.crisis.status],
+            since: formatGameTime(state.crisis.since),
+            until: state.crisis.until === null ? null : formatGameTime(state.crisis.until),
+          },
     anchors: state.anchors.map((a) => ({
       npc: a.npc,
       name: a.name,

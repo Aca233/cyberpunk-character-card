@@ -2,6 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import type { CharacterState } from "../character";
 import type { HumanityState } from "../humanity";
 import type { NpcState } from "../npc";
+import { inCrisis, type PsychosisState } from "../psychosis";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsRules } from "./prompt";
 import {
@@ -19,7 +20,7 @@ import {
 /** 委托和中间人：委托卡、进展笔记、结局、中间人好感和结算；报酬交给欧元系统，声望交给角色系统 */
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
-  dependsOn: ["economy", "character", "humanity", "npc"],
+  dependsOn: ["economy", "character", "humanity", "npc", "psychosis"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -44,6 +45,9 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
         );
       }
       case "jobAccept":
+        if (inCrisis(ctx.read<PsychosisState>("psychosis"))) {
+          return { ok: false, reason: "危机章节里普通委托暂停：先解决眼前的事" };
+        }
         return acceptJob(draft, command, ctx.now, ctx.read<HumanityState>("humanity").current);
       case "jobNote":
         return noteJob(draft, command);
