@@ -1052,9 +1052,14 @@ export async function runNarratorTurn(
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
   }
-  // 回复消息：先记下回的是哪一条
+  // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
   if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
-    commands.unshift({ type: "phone.reply", id: plan.input.replyTo });
+    const said = plan.input.text.trim().slice(0, 300);
+    commands.unshift({
+      type: "phone.reply",
+      id: plan.input.replyTo,
+      ...(said === "" ? {} : { text: said }),
+    });
   }
   if (trip) {
     facts.travel = tripFact(trip);

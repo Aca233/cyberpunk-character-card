@@ -37,6 +37,32 @@ export const NpcCardSchema = z.object({
 });
 export type NpcCard = z.infer<typeof NpcCardSchema>;
 
+/** 每个人物最多留这么多条人情和仇，满了先删最早了结的，再删最早的 */
+export const LEDGER_KEPT = 12;
+/** 关系笔记一句的长度上限 */
+export const RELATION_CHARS = 60;
+
+/** owesYou 对方欠你人情，youOwe 你欠对方人情，grudge 对方记你的仇 */
+export const LedgerKindSchema = z.enum(["owesYou", "youOwe", "grudge"]);
+export type LedgerKind = z.infer<typeof LedgerKindSchema>;
+export const LEDGER_KIND_LABELS: Readonly<Record<LedgerKind, string>> = {
+  owesYou: "欠你人情",
+  youOwe: "你欠人情",
+  grudge: "记你的仇",
+};
+
+export const LedgerEntrySchema = z.object({
+  kind: LedgerKindSchema,
+  text: z.string().min(1).max(80),
+  /** 记下的游戏时间 */
+  at: z.number().int(),
+  /** 了结（还了、报了、放下了）的游戏时间；没了结是 null */
+  settledAt: z.number().int().nullable(),
+  /** 怎么了结的 */
+  how: z.string().min(1).max(60).optional(),
+});
+export type LedgerEntry = z.infer<typeof LedgerEntrySchema>;
+
 export const NpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   alive: z.boolean(),
@@ -53,6 +79,13 @@ export const NpcSchema = NpcCardSchema.extend({
     .object({ text: z.string().min(1), at: z.number().int() })
     .nullable()
     .default(null),
+  /** 关系笔记：叙事模型写的一句关系状态，显示在人物档案里；旧存档没有 */
+  relation: z
+    .object({ text: z.string().min(1), at: z.number().int() })
+    .nullable()
+    .default(null),
+  /** 人情和仇，旧的在前；了结的留着，标了结时间 */
+  ledger: z.array(LedgerEntrySchema).default([]),
 });
 export type Npc = z.infer<typeof NpcSchema>;
 
@@ -179,7 +212,49 @@ export const DoingSchema = z
   );
 export type Doing = z.infer<typeof DoingSchema>;
 
-export type NpcCommand = NewNpc | Meet | Affinity | Memory | NpcDeath | Doing;
+export const RelationSchema = z
+  .object({
+    type: z.literal("relation"),
+    id: NpcIdSchema,
+    text: z.string().trim().min(1).max(RELATION_CHARS),
+  })
+  .describe(
+    "关系笔记：一句话写这个人和玩家角色现在的关系（例如「信得过，但还没说过真心话」）；一起扛过事、说过真心话、背叛、被拆穿大谎这类关系真的变了才写，会替换掉旧的",
+  );
+export type Relation = z.infer<typeof RelationSchema>;
+
+export const LedgerSchema = z
+  .object({
+    type: z.literal("ledger"),
+    id: NpcIdSchema,
+    kind: LedgerKindSchema.describe(
+      "owesYou 对方欠玩家角色人情，youOwe 玩家角色欠对方人情，grudge 对方记玩家角色的仇",
+    ),
+    text: z.string().trim().min(1).max(80),
+  })
+  .describe("记一笔人情或仇：帮了大忙、救过命、替人扛了事、结下梁子；一句话写清是什么事");
+export type Ledger = z.infer<typeof LedgerSchema>;
+
+export const LedgerSettleSchema = z
+  .object({
+    type: z.literal("ledgerSettle"),
+    id: NpcIdSchema,
+    entry: z.number().int().min(1).describe("【人物】里这个人的人情和仇的第几条"),
+    how: z.string().trim().min(1).max(60),
+  })
+  .describe("了结一笔人情或仇：还了、报了、放下了；how 一句话写怎么了结的");
+export type LedgerSettle = z.infer<typeof LedgerSettleSchema>;
+
+export type NpcCommand =
+  | NewNpc
+  | Meet
+  | Affinity
+  | Memory
+  | NpcDeath
+  | Doing
+  | Relation
+  | Ledger
+  | LedgerSettle;
 
 /** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
 export const SeedNpcSchema = NpcCardSchema.extend({

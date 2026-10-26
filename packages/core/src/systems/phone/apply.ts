@@ -27,11 +27,20 @@ export function readAll(draft: Draft<PhoneState>): ApplyOutcome {
   return { ok: true, notes: n > 0 ? [`看了 ${n} 条消息`] : [] };
 }
 
-export function replyMessage(draft: Draft<PhoneState>, id: number): ApplyOutcome {
+export function replyMessage(
+  draft: Draft<PhoneState>,
+  id: number,
+  text: string | undefined,
+  now: number,
+): ApplyOutcome {
   const m = draft.messages.find((x) => x.id === id);
   if (!m) return { ok: false, reason: `消息记录里没有第 ${id} 条消息` };
   m.read = true;
   m.replied = true;
+  if (text !== undefined) {
+    m.reply = text;
+    m.repliedAt = now;
+  }
   return { ok: true, notes: [`回复${m.name}的消息`] };
 }
 

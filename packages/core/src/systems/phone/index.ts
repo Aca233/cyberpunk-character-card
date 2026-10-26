@@ -36,7 +36,7 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
       case "phone.read":
         return readAll(draft);
       case "phone.reply":
-        return replyMessage(draft, command.id);
+        return replyMessage(draft, command.id, command.text, ctx.now);
     }
   },
   rules: [phoneRules],

@@ -5,6 +5,8 @@ import {
   AffinityProposalSchema,
   AffinitySchema,
   DoingSchema,
+  LedgerSchema,
+  LedgerSettleSchema,
   legacyAffinity,
   MeetSchema,
   MemorySchema,
@@ -15,10 +17,11 @@ import {
   NpcMemoryEditSchema,
   type NpcState,
   NpcStateSchema,
+  RelationSchema,
   SeedNpcSchema,
 } from "./schema";
 
-/** 有卡的人：名片、诉求底线秘密、好感、共同记忆、生死和位置；路人不建卡 */
+/** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、生死和位置；路人不建卡 */
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   id: "npc",
   state: NpcStateSchema,
@@ -30,6 +33,9 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     memory: MemorySchema,
     npcDeath: NpcDeathSchema,
     doing: DoingSchema,
+    relation: RelationSchema,
+    ledger: LedgerSchema,
+    ledgerSettle: LedgerSettleSchema,
   },
   proposals: { affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity } },
   internal: { "npc.seed": SeedNpcSchema, "npc.memoryEdit": NpcMemoryEditSchema },

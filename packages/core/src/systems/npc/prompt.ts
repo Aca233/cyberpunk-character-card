@@ -1,13 +1,30 @@
 import type { RuleModule } from "../../kernel/system";
-import type { Npc, NpcState } from "./schema";
+import type { LedgerKind, Npc, NpcState } from "./schema";
 
 /** 不在场的人最多列这么多个，最近出场的优先 */
 export const OFFSTAGE_LISTED = 20;
 
+/** 人物卡上人情和仇的写法；给模型看，所以写「玩家角色」，不写「你」 */
+const LEDGER_CARD_LABELS: Readonly<Record<LedgerKind, string>> = {
+  owesYou: "欠玩家角色人情",
+  youOwe: "玩家角色欠的人情",
+  grudge: "记玩家角色的仇",
+};
+
 export const npcRules: RuleModule<NpcState> = {
   id: "npcs",
   title: "人物",
-  commands: ["npc", "meet", "affinity", "memory", "npcDeath", "doing"],
+  commands: [
+    "npc",
+    "meet",
+    "affinity",
+    "memory",
+    "npcDeath",
+    "doing",
+    "relation",
+    "ledger",
+    "ledgerSettle",
+  ],
   when: () => true,
   judge: `- 对话、说服、谈判看有没有说中对方的诉求、有没有触到底线：好感决定态度冷热，诉求和底线决定会不会答应，不掷骰。
 - 人物的秘密只有你知道，判断时可以用，但不写进 read。
@@ -23,6 +40,8 @@ export const npcRules: RuleModule<NpcState> = {
 - 人物出场、或者第一次见面，写一条 meet；有名字、并且和玩家角色有了实质互动的新人物，当场用 npc 建卡，id 用小写拼音或英文。路人不建卡。
 - 好感只在对方真的有理由改变态度时才写，一轮里同一个人最多一条；承诺、人情、冲突这类以后会被提起的事写一条 memory。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
+- 关系真的变了（一起扛过事、说过真心话、生死与共，或者背叛、被拆穿大谎、伤了对方在乎的人）才写一条 relation，一句话写现在的关系，会替换旧的；好感高只说明对方愿意见你，不等于关系深。
+- 欠下或结下以后会被讨回来的人情和仇，写一条 ledger（owesYou 对方欠玩家角色、youOwe 玩家角色欠对方、grudge 对方记玩家角色的仇）；还了、报了、放下了，写 ledgerSettle，entry 填卡上「人情和仇」那一条的编号。
 - 死了的人不再出场，也不会发消息。`,
 };
 
@@ -54,6 +73,13 @@ function fullCard(npc: Npc): string {
   }
   lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
   if (npc.secret) lines.push(`  秘密：${npc.secret}`);
+  if (npc.relation) lines.push(`  关系：${npc.relation.text}`);
+  const open = npc.ledger.map((e, i) => ({ e, n: i + 1 })).filter(({ e }) => e.settledAt === null);
+  if (open.length > 0) {
+    lines.push(
+      `  人情和仇：${open.map(({ e, n }) => `${n}. ${LEDGER_CARD_LABELS[e.kind]}：${e.text}`).join("；")}`,
+    );
+  }
   if (npc.memories.length > 0) lines.push(`  共同记忆：${npc.memories.join("；")}`);
   if (npc.doing) lines.push(`  最近：${npc.doing.text}`);
   return lines.join("\n");

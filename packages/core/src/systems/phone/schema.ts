@@ -15,6 +15,10 @@ export const MessageSchema = z.object({
   at: z.number().int(),
   read: z.boolean(),
   replied: z.boolean(),
+  /** 玩家回的那句（这一轮的输入原文，截到 300 字）；旧存档和没记下的是 undefined */
+  reply: z.string().min(1).max(300).optional(),
+  /** 回复时的游戏时间 */
+  repliedAt: z.number().int().optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;
 
@@ -43,6 +47,8 @@ export const ReadSchema = z.object({ type: z.literal("phone.read") });
 export const ReplySchema = z.object({
   type: z.literal("phone.reply"),
   id: z.number().int().min(1),
+  /** 玩家回的那句；旧记录没有 */
+  text: z.string().min(1).max(300).optional(),
 });
 
 export type PhoneInternal =

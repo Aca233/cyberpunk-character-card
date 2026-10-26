@@ -102,7 +102,7 @@ import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
-import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
+import { LEDGER_KIND_LABELS, type NpcCard, NpcStateSchema } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
 import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
@@ -1081,6 +1081,21 @@ export function projectState(
         affinity: n.affinity,
         alive: n.alive,
         here: onStage(n, stage),
+        /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
+        lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
+        relation: n.relation?.text ?? null,
+        /** 人情和仇：没了结的在前，各自旧的在前 */
+        ledger: [
+          ...n.ledger.filter((e) => e.settledAt === null),
+          ...n.ledger.filter((e) => e.settledAt !== null),
+        ].map((e) => ({
+          kind: e.kind,
+          label: LEDGER_KIND_LABELS[e.kind],
+          text: e.text,
+          at: formatGameTime(e.at),
+          settled: e.settledAt === null ? null : formatGameTime(e.settledAt),
+          how: e.how ?? null,
+        })),
         memories: n.memories,
       })),
     /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
@@ -1211,7 +1226,29 @@ export function projectState(
           at: formatGameTime(m.at),
           read: m.read,
           replied: m.replied,
+          reply: m.reply ?? null,
+          repliedAt: m.repliedAt === undefined ? null : formatGameTime(m.repliedAt),
         })),
+      /** 联系人：按最后一条消息排，新的在前；有人物卡的带好感和死活 */
+      contacts: (() => {
+        const latest = new Map<string, (typeof phoneState.messages)[number]>();
+        for (const m of phoneState.messages) latest.set(m.from, m);
+        return [...latest.values()]
+          .sort((a, b) => b.at - a.at || b.id - a.id)
+          .map((m) => {
+            const npc = npcs.npcs[m.from];
+            return {
+              from: m.from,
+              name: m.name,
+              npc: npc?.met ? npc.id : null,
+              affinity: npc?.met ? npc.affinity : null,
+              alive: npc ? npc.alive : true,
+              last: formatGameTime(Math.max(m.at, m.repliedAt ?? m.at)),
+              unread: phoneState.messages.filter((x) => x.from === m.from && !x.read).length,
+              count: phoneState.messages.filter((x) => x.from === m.from).length,
+            };
+          });
+      })(),
     },
     /** 别人眼里的你：交给叙事模型，NPC 的第一反应照这一行写 */
     perceived: perceivedLine(

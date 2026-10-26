@@ -5,6 +5,8 @@ import {
   AFFINITY_MAX,
   AFFINITY_MIN,
   AFFINITY_STEP_CAP,
+  LEDGER_KEPT,
+  LEDGER_KIND_LABELS,
   MEMORY_KEPT,
   type Npc,
   type NpcCommand,
@@ -38,6 +40,8 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
     lastSeenAt: null,
     memories: [],
     doing: null,
+    relation: null,
+    ledger: [],
   };
   return { ok: true };
 }
@@ -92,6 +96,8 @@ export function applyNpc(
       lastSeenAt: now,
       memories: [],
       doing: null,
+      relation: null,
+      ledger: [],
     };
     return { ok: true, notes: [`新人物：${card.name}`] };
   }
@@ -138,6 +144,44 @@ export function applyNpc(
       if (npc.doing?.text === command.text) return { ok: true };
       npc.doing = { text: command.text, at: now };
       return { ok: true };
+    }
+    case "relation": {
+      if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      if (npc.relation?.text === command.text) return { ok: true };
+      npc.relation = { text: command.text, at: now };
+      return { ok: true, notes: [`和${npc.name}的关系：${command.text}`] };
+    }
+    case "ledger": {
+      if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      const same = npc.ledger.some(
+        (e) => e.settledAt === null && e.kind === command.kind && e.text === command.text,
+      );
+      if (same) return { ok: true };
+      npc.ledger.push({ kind: command.kind, text: command.text, at: now, settledAt: null });
+      while (npc.ledger.length > LEDGER_KEPT) {
+        const settled = npc.ledger.findIndex((e) => e.settledAt !== null);
+        npc.ledger.splice(settled === -1 ? 0 : settled, 1);
+      }
+      const line =
+        command.kind === "owesYou"
+          ? `${npc.name}欠你一个人情`
+          : command.kind === "youOwe"
+            ? `你欠${npc.name}一个人情`
+            : `${npc.name}记下了你的仇`;
+      return { ok: true, notes: [`${line}：${command.text}`] };
+    }
+    case "ledgerSettle": {
+      const entry = npc.ledger[command.entry - 1];
+      if (!entry) return { ok: false, reason: `${npc.name}的人情和仇里没有第 ${command.entry} 条` };
+      if (entry.settledAt !== null) {
+        return { ok: false, reason: `${npc.name}的第 ${command.entry} 条已经了结了` };
+      }
+      entry.settledAt = now;
+      entry.how = command.how;
+      return {
+        ok: true,
+        notes: [`了结了和${npc.name}的一笔账（${LEDGER_KIND_LABELS[entry.kind]}）：${command.how}`],
+      };
     }
     case "npcDeath": {
       // 队员之死的保底：squad 不能被 npc 读（squad 读 npc），回合流程把队员名单放进事实 squad
