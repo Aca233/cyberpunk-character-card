@@ -510,6 +510,23 @@ export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   ].filter((s): s is string => s !== undefined);
 }
 
+/**
+ * 地点 id 所在的城区：先查地点表；表外的地点按「沃森 · 无名小巷」这种写法认开头的城区名，
+ * 开头不是地点表里的城区就查不到
+ */
+export function districtResolver(
+  data: Readonly<Record<string, unknown>> | undefined,
+): (location: string) => string | undefined {
+  const catalog = data ? locationCatalog(data) : new Map<string, { readonly district: string }>();
+  const districts = new Set([...catalog.values()].map((p) => p.district));
+  return (location) => {
+    const def = catalog.get(location);
+    if (def) return def.district;
+    const head = location.split(/[·・|/]/)[0]?.trim();
+    return head !== undefined && districts.has(head) ? head : undefined;
+  };
+}
+
 /** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
 export function situation(
   world: WorldState,
@@ -522,6 +539,7 @@ export function situation(
   const cast = castSection(npcs, {
     location: clock.location,
     sceneStartedAt: clock.sceneStartedAt,
+    districtOf: districtResolver(extras.data),
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
   const jobs = jobsSection(

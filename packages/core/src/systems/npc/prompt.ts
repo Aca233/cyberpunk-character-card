@@ -32,13 +32,13 @@ export const npcRules: RuleModule<NpcState> = {
 - 死了的人不再出场。`,
   narrate: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
-- 要写新人物之前，先看【人物】里有没有合适的老面孔能用；同一个酒保、上次放走的混混可以反复出现。
+- 要写新人物之前，先看【人物】里「这一带的老面孔」和不在场的人有没有合适的能用；同一个酒保、总被撞见的混混、上次放走的人可以反复出现，让他们出场写 meet，不要另建一张差不多的卡。
 - 承诺、人情、冲突这类以后会被提起的事，让人物记着、以后提起。死了的人不再出场，也不会发消息。
 - 卡上的「最近」是这个人在屏幕外的近况，演的时候接着它写。时间大段跳过（半天以上）时，可以让一两个和玩家有关的人有点离屏进展，借新闻、传闻、一条消息或者本人的一句话透出来；只写一两句，不替玩家做事。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。`,
   text: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
-- 要写新人物之前，先看【人物】里有没有合适的老面孔能用；同一个酒保、上次放走的混混可以反复出现。
+- 要写新人物之前，先看【人物】里「这一带的老面孔」和不在场的人有没有合适的能用；同一个酒保、总被撞见的混混、上次放走的人可以反复出现，让他们出场写 meet，不要另建一张差不多的卡。
 - 人物出场、或者第一次见面，写一条 meet；有名字、并且和玩家角色有了实质互动的新人物，当场用 npc 建卡，id 用小写拼音或英文。路人不建卡。
 - 好感只在对方真的有理由改变态度时才写，一轮里同一个人最多一条；承诺、人情、冲突这类以后会被提起的事写一条 memory。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
@@ -53,7 +53,12 @@ export interface Stage {
   readonly location: string | null;
   /** 当前场景开始的游戏时间；这一场里出过场的人算在场 */
   readonly sceneStartedAt: number;
+  /** 地点 id 所在的城区；查不到是 undefined。不传就不分「这一带的老面孔」 */
+  readonly districtOf?: ((location: string) => string | undefined) | undefined;
 }
+
+/** 「这一带的老面孔」最多列这么多个，见过的、最近出场的优先 */
+export const LOCALS_LISTED = 8;
 
 export function onStage(npc: Npc, stage: Stage): boolean {
   if (!npc.alive) return false;
@@ -102,17 +107,45 @@ function oneLine(npc: Npc): string {
   return `- ${label(npc)} ${npc.role}；好感 ${npc.affinity}${npc.location ? `，最后在 ${npc.location}` : ""}${doing}`;
 }
 
-/** 给模型看的【人物】：在场的人带完整的卡，其余每人一行 */
+/** 玩家角色所在的城区；不在地点表里、或者没传 districtOf 时是 undefined */
+function stageDistrict(stage: Stage): string | undefined {
+  if (stage.location === null || !stage.districtOf) return undefined;
+  return stage.districtOf(stage.location);
+}
+
+/** 不在场、活着、常在或最后出现在这个城区的人：写新人物前先看能不能用他们 */
+export function localFaces(state: NpcState, stage: Stage): Npc[] {
+  const district = stageDistrict(stage);
+  if (district === undefined || !stage.districtOf) return [];
+  const districtOf = stage.districtOf;
+  return Object.values(state.npcs)
+    .filter((n) => n.alive && !onStage(n, stage))
+    .filter((n) => {
+      const where = n.location ?? n.home;
+      return where !== null && where !== undefined && districtOf(where) === district;
+    })
+    .sort((a, b) => Number(b.met) - Number(a.met) || (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
+    .slice(0, LOCALS_LISTED);
+}
+
+/** 给模型看的【人物】：在场的人带完整的卡，这一带的老面孔和其余的人每人一行 */
 export function castSection(state: NpcState, stage: Stage): string {
   const all = Object.values(state.npcs);
   if (all.length === 0) return "还没有人物卡。";
   const here = all.filter((n) => onStage(n, stage));
+  const locals = localFaces(state, stage);
+  const localIds = new Set(locals.map((n) => n.id));
   const away = all
-    .filter((n) => !onStage(n, stage))
+    .filter((n) => !onStage(n, stage) && !localIds.has(n.id))
     .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
     .slice(0, OFFSTAGE_LISTED);
   const parts: string[] = [];
   parts.push(here.length > 0 ? `在场：\n${here.map(fullCard).join("\n")}` : "在场：没有有卡的人。");
+  if (locals.length > 0) {
+    parts.push(
+      `这一带（${stageDistrict(stage)}）的老面孔，要写新人物前先看能不能让他们出场：\n${locals.map(oneLine).join("\n")}`,
+    );
+  }
   if (away.length > 0) parts.push(`不在场：\n${away.map(oneLine).join("\n")}`);
   return parts.join("\n");
 }
