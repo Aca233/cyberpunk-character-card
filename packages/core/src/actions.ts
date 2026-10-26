@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { ApplyContext, Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
 import { CharacterStateSchema } from "./systems/character/schema";
+import { EPITAPH_CHARS, StoryEndSchema } from "./systems/chronicle/schema";
 import {
   cyberwareCatalog,
   repairCost,
@@ -135,6 +136,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     title: z.string().trim().min(1).max(SUMMARY_TITLE_CHARS).optional(),
     text: z.string().trim().min(1).max(SUMMARY_CHARS).optional(),
     importance: ImportanceSchema.optional(),
+  }),
+  /** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读，角色进传说名册 */
+  z.strictObject({
+    type: z.literal("endStory"),
+    how: StoryEndSchema,
+    epitaph: z.string().trim().min(1).max(EPITAPH_CHARS).optional(),
   }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
@@ -470,6 +477,11 @@ function commandsFor(
       return [{ type: "character.habit", action: action.action, text: action.text }];
     case "editMemory":
       return memoryEditCommands(world, action);
+    case "endStory": {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "还在打，先活过这一场再说收尾";
+      return [{ type: "chronicle.end", how: action.how, epitaph: action.epitaph ?? null }];
+    }
     case "acceptJob":
       // 记一条进展笔记，让叙事模型知道这单是在板上接的，正文里还没谈过
       return [

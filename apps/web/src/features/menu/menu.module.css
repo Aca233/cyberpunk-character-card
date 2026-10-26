@@ -215,3 +215,93 @@
   align-items: center;
   margin: 4px 0 10px;
 }
+
+/* 传说名册：卡面是原作的塔罗牌，这里只排版 */
+.legendNote {
+  margin: 0 0 12px;
+  color: var(--cp-dim, rgb(255 255 255 / 60%));
+  font-size: var(--fs-ui);
+}
+
+.tarotGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.tarotCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tarotCard:hover,
+.tarotCard:focus-visible,
+.tarotCard[aria-pressed="true"] {
+  border-color: var(--cp-yellow);
+}
+
+.tarotCard small {
+  color: var(--cp-cyan);
+}
+
+.tarotEmpty {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.legendDetail {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cp-yellow);
+}
+
+.legendDetail header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.legendDetail p {
+  margin: 0;
+}
+
+.legendEpitaph {
+  color: var(--cp-yellow);
+}
+
+.legendFacts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.legendFacts dd {
+  margin: 0;
+}
+
+.legendChronicle {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendChronicle small {
+  color: var(--cp-cyan);
+}

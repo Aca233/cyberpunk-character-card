@@ -9,9 +9,10 @@ import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
+import { LegendsPanel } from "./LegendsPanel";
 import styles from "./menu.module.css";
 
-type Item = "continue" | "new" | "load" | "characters" | "settings";
+type Item = "continue" | "new" | "load" | "legends" | "characters" | "settings";
 
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
@@ -28,6 +29,7 @@ export function MainMenu() {
     { id: "continue", label: "继续", disabled: !latest, reason: "还没有存档" },
     { id: "new", label: "新建存档" },
     { id: "load", label: "读取存档" },
+    { id: "legends", label: "传说名册" },
     { id: "characters", label: "角色" },
     { id: "settings", label: "设置" },
   ];
@@ -99,6 +101,7 @@ export function MainMenu() {
           <SaveCard save={latest} onOpen={() => navigate(`/play/${latest.id}`)} />
         )}
         {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
+        {focus === "legends" && <LegendsPanel onOpen={(id) => navigate(`/play/${id}`)} />}
         {focus === "load" && (
           <Panel title="读取存档">
             {saves.isError && <p className={styles.error}>{saves.error.message}</p>}

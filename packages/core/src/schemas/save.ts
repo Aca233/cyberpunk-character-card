@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
+import { LEGENDS_SEEDED, LegendNoteSchema } from "../systems/chronicle/schema";
 import { DifficultySchema } from "../systems/dice/schema";
 import { ToleranceSchema } from "../systems/humanity/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
@@ -37,5 +38,7 @@ export const SaveMetaSchema = z.object({
   loadouts: z.array(z.string().min(1)).optional(),
   /** 旧存档和没用主板的角色没有 */
   board: BoardStartSchema.optional(),
+  /** 建档时传说名册里的前人，开局写进履历系统给叙事模型看；旧存档和名册空着时没有 */
+  legends: z.array(LegendNoteSchema).max(LEGENDS_SEEDED).optional(),
 });
 export type SaveMeta = z.infer<typeof SaveMetaSchema>;

@@ -26,9 +26,12 @@ import {
   HISTORY_TURNS,
   isSnapshotValid,
   judgeCandidates,
+  type Legend,
   type LlmMessage,
   type LogRecord,
   type LoreSource,
+  legendNotes,
+  legendOf,
   loadoutText,
   logVersion,
   memoryPool,
@@ -147,6 +150,9 @@ interface Loaded {
   readonly world: WorldState;
 }
 
+/** 名册里的一位：带上存档 id 和标题，好从名册点回去回看 */
+export type SavedLegend = Legend & { readonly saveId: string; readonly title: string };
+
 class VersionMovedError extends Error {
   override name = "VersionMovedError";
 }
@@ -185,11 +191,37 @@ export class GameService {
     return out;
   }
 
+  /**
+   * 传说名册：死了不能重来、或者玩家给故事收了尾的角色，最近的在前。
+   * 每次请求按各存档现算，所以旧存档里死掉的角色也在；读不了的存档跳过
+   */
+  async legends(): Promise<SavedLegend[]> {
+    const out: SavedLegend[] = [];
+    for (const id of await this.deps.saves.list()) {
+      try {
+        const legend = await this.locks.run(id, async (): Promise<SavedLegend | null> => {
+          const { meta, world, records } = await this.load(id);
+          const view = projectState(world, records, gameData);
+          const found = legendOf(view, world.time, meta.startTime);
+          return found && { ...found, saveId: id, title: meta.title };
+        });
+        if (legend) out.push(legend);
+      } catch (error) {
+        this.deps.log(
+          `名册跳过读不了的存档 ${id}：${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    return out.sort((a, b) => b.at - a.at);
+  }
+
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
     const id = newSaveId();
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
     const start = boardStart(entry.card);
+    // 名册摘要在建档时冻结进 meta：之后名册再变，这份存档重放出来的提示词也不变
+    const legends = legendNotes(await this.legends());
     const meta: SaveMeta = {
       ...input,
       createdAt: this.deps.clock.now().toISOString(),
@@ -197,6 +229,7 @@ export class GameService {
       opening: DEFAULT_OPENING,
       loadouts: pickLoadouts(loadoutText(entry.card), gameContent.loadouts ?? [], DEFAULT_LOADOUT),
       ...(start ? { board: start } : {}),
+      ...(legends.length > 0 ? { legends } : {}),
     };
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };
@@ -1116,13 +1149,19 @@ const REWRITE_TIMEOUT_MS = 120_000;
 
 export const RegenerateRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
 
-/** 角色死了就不能再提交回合和操作 */
+/** 角色死了、或玩家给故事收了尾，就不能再提交回合和操作 */
 function deathBlock(
   world: WorldState,
   records: readonly LogRecord[],
   version: number,
 ): Reply | undefined {
-  const { death } = projectState(world, records, gameData);
+  const { death, ended } = projectState(world, records, gameData);
+  if (ended && !death) {
+    return {
+      status: 409,
+      body: { error: "这个角色的故事已经结束，只能回看", ended, version },
+    };
+  }
   if (!death) return undefined;
   return {
     status: 409,

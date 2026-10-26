@@ -5,6 +5,7 @@ import type {
   BoardSlot,
   CharacterCard,
   Combo,
+  Legend,
   LifepathEntry,
   PlayerView,
   ProseBlock,
@@ -146,6 +147,9 @@ export interface SaveSummary {
   readonly startTime: number;
   readonly running: boolean;
 }
+
+/** 名册里的一位：带上存档 id 和标题，好点回去回看 */
+export type SavedLegend = Legend & { readonly saveId: string; readonly title: string };
 
 /** 角色卡：sample 是内容包里的示例，只读 */
 export interface CharacterEntry {
@@ -399,6 +403,9 @@ export const api = {
       input,
     ),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
+  /** 传说名册：死了不能重来、或者收了尾的角色，最近的在前 */
+  legends: () =>
+    request<{ legends: SavedLegend[] }>("GET", "/saves/legends").then((r) => r.legends),
   /** 完整导出：整份存档（含剧透），网页原样下载成文件 */
   exportSave: (saveId: string) =>
     request<Record<string, unknown>>("GET", `/saves/${saveId}/export`),

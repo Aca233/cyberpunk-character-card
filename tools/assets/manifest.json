@@ -207,6 +207,36 @@
         "slot": "tex_header"
       },
       {
+        "id": "tarot.strength",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_strength"
+      },
+      {
+        "id": "tarot.chariot",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_chariot"
+      },
+      {
+        "id": "tarot.magician",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_magician"
+      },
+      {
+        "id": "tarot.highpriestess",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_highpriestess"
+      },
+      {
+        "id": "tarot.moon",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_moon"
+      },
+      {
+        "id": "tarot.back",
+        "atlas": "fullscreen/atlas_tarot_back",
+        "slot": "back"
+      },
+      {
         "id": "menu.tiled",
         "atlas": "fullscreen/menu_background",
         "slot": "tex_tiled"

@@ -9,6 +9,7 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
+import { chronicleEntries } from "./legends";
 import { readVoices } from "./narrator/block";
 import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
@@ -20,6 +21,7 @@ import {
   effectiveAttributes,
   FLASHBACK_TURNS,
 } from "./systems/character/schema";
+import { ChronicleStateSchema, ENDING_LABELS } from "./systems/chronicle/schema";
 import {
   CombatStateSchema,
   EDGE_LABELS,
@@ -315,7 +317,7 @@ const setupRng = { roll: () => 1 };
 /** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
   meta: Pick<SaveMeta, "startTime" | "difficulty"> &
-    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts" | "board">>,
+    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts" | "board" | "legends">>,
   content: GameContent = {},
 ): WorldState {
   const opening =
@@ -364,6 +366,9 @@ export function newGameWorld(
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
     ...homeSeed(content, meta.board?.origin),
+    ...(meta.legends && meta.legends.length > 0
+      ? [{ type: "chronicle.seedLegends", legends: meta.legends }]
+      : []),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
@@ -793,6 +798,8 @@ export function projectState(
   const dice = DiceStateSchema.parse(world.slices.dice);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
+  // 旧存档没有履历系统
+  const chronicleState = ChronicleStateSchema.parse(world.slices.chronicle ?? {});
   const humanity = HumanityStateSchema.parse(world.slices.humanity);
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const combat = CombatStateSchema.parse(world.slices.combat);
@@ -823,6 +830,19 @@ export function projectState(
         : null,
     /** 整局重来过几个场景，履历里记着 */
     restarts: restartedScenes(records).size,
+    /** 玩家结束了故事（退休或停在这里）；没结束是 null。和死透了一样，之后存档只读 */
+    ended: chronicleState.ended && {
+      how: chronicleState.ended.how,
+      label: ENDING_LABELS[chronicleState.ended.how],
+      epitaph: chronicleState.ended.epitaph,
+      at: formatGameTime(chronicleState.ended.at),
+    },
+    /** 履历：叙事模型写的段落、结束的委托、死亡和结束故事，按游戏时间从早到晚 */
+    chronicle: chronicleEntries({
+      chronicle: chronicleState,
+      jobs: jobs.jobs,
+      death: health.condition === "dead" ? { at: world.time, location: clock.location } : null,
+    }),
     character: {
       name: character.name,
       brief: character.brief,

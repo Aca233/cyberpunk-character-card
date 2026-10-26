@@ -10,6 +10,7 @@ import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { CheckBar } from "./CheckBar";
+import { ChroniclePanel, type StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
 import { DivePanel } from "./DivePanel";
 import { FactionsPanel } from "./FactionsPanel";
@@ -108,6 +109,7 @@ export function StoryScreen() {
   const [atFactions, setAtFactions] = useState(false);
   const [atStash, setAtStash] = useState(false);
   const [atMemory, setAtMemory] = useState(false);
+  const [atChronicle, setAtChronicle] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
@@ -330,6 +332,24 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 给故事收尾：不调用模型；之后存档只读，失败时确认框留着
+  const endStory = useCallback(
+    async (how: StoryEnd, epitaph: string | undefined) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
+        });
+      } catch (error) {
+        warn("chronicle", error);
+        await refresh();
+        throw error;
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const craftAction = useCallback(
     async (action: "dismantle" | "tune", id: string) => {
       try {
@@ -436,11 +456,24 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop || atMap || atFactions || atStash || atMemory || story.spend)
+      if (
+        journal ||
+        atDoc ||
+        atShop ||
+        atMap ||
+        atFactions ||
+        atStash ||
+        atMemory ||
+        atChronicle ||
+        story.spend
+      )
         return;
       if (e.key === "r" || e.key === "R") {
         e.preventDefault();
         setAtMemory(true);
+      } else if (e.key === "h" || e.key === "H") {
+        e.preventDefault();
+        setAtChronicle(true);
       } else if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -479,6 +512,7 @@ export function StoryScreen() {
     atFactions,
     atStash,
     atMemory,
+    atChronicle,
   ]);
 
   if (query.isPending) {
@@ -562,6 +596,7 @@ export function StoryScreen() {
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}
         onMemory={() => setAtMemory(true)}
+        onChronicle={() => setAtChronicle(true)}
         onStash={() => setAtStash(true)}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
@@ -571,8 +606,8 @@ export function StoryScreen() {
           view={view}
           saveId={saveId}
           live={story}
-          onRegenerate={view.death ? undefined : () => void regenerate()}
-          onRewrite={view.death ? undefined : rewrite}
+          onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
+          onRewrite={view.death || view.ended ? undefined : rewrite}
         />
 
         {failure &&
@@ -630,16 +665,30 @@ export function StoryScreen() {
               )}
             </div>
           )}
+          {view.ended && !view.death && (
+            <div className={styles.notice} data-kind="dead" role="status">
+              <span>
+                {view.ended.how === "retired"
+                  ? "你离开了这一行，活着走出了夜之城。"
+                  : "故事停在这里。"}
+                {view.ended.epitaph && `「${view.ended.epitaph}」`}
+                这份存档只能回看，角色已经进了主菜单的传说名册。
+              </span>
+              <Button onClick={() => setAtChronicle(true)}>看履历</Button>
+            </div>
+          )}
           <InputBar
             busy={busy}
             streaming={story.phase === "streaming"}
-            disabled={offers?.rolled != null || view.death !== null}
+            disabled={offers?.rolled != null || view.death !== null || view.ended !== null}
             reason={
               view.death !== null
                 ? "角色已经死亡"
-                : offers?.rolled != null
-                  ? "上一次检定已经掷过骰，先继续结算"
-                  : undefined
+                : view.ended !== null
+                  ? "这个角色的故事已经结束"
+                  : offers?.rolled != null
+                    ? "上一次检定已经掷过骰，先继续结算"
+                    : undefined
             }
             draft={story.draft}
             onDraft={story.setDraft}
@@ -762,6 +811,13 @@ export function StoryScreen() {
           view={view}
           onEdit={busy ? undefined : memoryAction}
           onClose={() => setAtMemory(false)}
+        />
+      )}
+      {atChronicle && (
+        <ChroniclePanel
+          view={view}
+          onEnd={busy || view.death || view.ended ? undefined : endStory}
+          onClose={() => setAtChronicle(false)}
         />
       )}
       {atMap && (

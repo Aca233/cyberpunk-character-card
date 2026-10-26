@@ -1,5 +1,6 @@
 import { type AnySystem, createRegistry } from "../kernel/system";
 import { character } from "./character";
+import { chronicle } from "./chronicle";
 import { city } from "./city";
 import { combat } from "./combat";
 import { cyberware } from "./cyberware";
@@ -56,6 +57,7 @@ export const systems: readonly AnySystem[] = [
   squad,
   sidegigs,
   notes,
+  chronicle,
 ];
 
 export const registry = createRegistry(systems);
