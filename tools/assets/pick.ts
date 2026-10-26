@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import sharp from "sharp";
@@ -105,8 +105,10 @@ async function main(): Promise<number> {
   const specs = await loadManifest();
   console.log(`${tier} 档，源 ${root}，清单 ${specs.length} 张`);
 
-  await rm(UI_DIR, { recursive: true, force: true });
+  // 不整个删掉重建：开着的 Vite 会丢掉对 public 目录的监听，之后所有素材都回 index.html。
+  // 原地覆盖，最后只删这次没写到的旧文件
   await mkdir(UI_DIR, { recursive: true });
+  const written = new Set<string>([resolve(INDEX)]);
 
   const assets: Record<string, IndexEntry> = {};
   const missing: string[] = [];
@@ -126,6 +128,7 @@ async function main(): Promise<number> {
       const ext = size > WEBP_OVER ? "webp" : "png";
       const rel = outputName(spec, ext);
       const out = join(UI_DIR, rel);
+      written.add(resolve(out));
       await mkdir(dirname(out), { recursive: true });
       if (ext === "webp") {
         await sharp(found.file).webp({ quality: 90, alphaQuality: 100, effort: 5 }).toFile(out);
@@ -133,7 +136,9 @@ async function main(): Promise<number> {
       } else {
         await copyFile(found.file, out);
       }
-      bytes += (await stat(out)).size;
+      // 先等到大小再加：写成 bytes += await … 时，8 个并发会读到旧的 bytes，总数偏小
+      const outSize = (await stat(out)).size;
+      bytes += outSize;
       const meta = await sharp(found.file).metadata();
       assets[spec.id] = {
         path: `/assets/local/ui/${rel}`,
@@ -149,6 +154,15 @@ async function main(): Promise<number> {
   const sorted = Object.fromEntries(Object.entries(assets).sort(([a], [b]) => a.localeCompare(b)));
   const index: AssetIndex = { tier, generatedAt: new Date().toISOString(), assets: sorted };
   await writeFile(INDEX, `${JSON.stringify(index, null, 2)}\n`);
+  let stale = 0;
+  for (const entry of await readdir(UI_DIR, { recursive: true, withFileTypes: true })) {
+    const path = resolve(entry.parentPath, entry.name);
+    if (entry.isFile() && !written.has(path)) {
+      await rm(path);
+      stale += 1;
+    }
+  }
+  if (stale > 0) console.log(`删掉 ${stale} 个清单里已经没有的旧文件`);
   await mkdir(dirname(IDS_MODULE), { recursive: true });
   await writeFile(IDS_MODULE, renderIdsModule(specs));
 
