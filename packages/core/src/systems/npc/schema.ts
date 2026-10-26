@@ -7,6 +7,13 @@ export const AFFINITY_MAX = 100;
 export const AFFINITY_STEP_CAP = 10;
 /** 每个人物保留最近这么多条共同记忆 */
 export const MEMORY_KEPT = 12;
+/** 人物经历时间线最多留这么多条；到了 TIMELINE_SQUASH 条场外推演就该压成摘要，超过上限时代码直接删最早的 */
+export const TIMELINE_KEPT = 8;
+export const TIMELINE_SQUASH = 6;
+/** 压成摘要以后经历只留最近这么多条 */
+export const TIMELINE_TAIL = 3;
+/** 经历摘要最长这么多字 */
+export const PAST_MAX = 160;
 
 const NpcIdSchema = z
   .string()
@@ -203,6 +210,18 @@ export const NpcSchema = NpcCardSchema.extend({
   /** 最近在做什么（只给模型看）：一句话和记下的游戏时间；旧存档没有 */
   doing: z
     .object({ text: z.string().min(1), at: z.number().int() })
+    .nullable()
+    .default(null),
+  /** 经历时间线（只给模型看）：每次近况变了记一条，旧的在前，最多 TIMELINE_KEPT 条；旧存档没有 */
+  timeline: z.array(z.object({ text: z.string().min(1), at: z.number().int() })).default([]),
+  /** 更早的经历压成的摘要（只给模型看）；还没压过是 null */
+  past: z
+    .object({ text: z.string().min(1).max(PAST_MAX), at: z.number().int() })
+    .nullable()
+    .default(null),
+  /** 在玩家没看着的地方死的（场外推演写的）：死因和时间；玩家听说以前人物档案照旧显示活着 */
+  offscreenDeath: z
+    .object({ cause: z.string().min(1), at: z.number().int() })
     .nullable()
     .default(null),
   /** 关系笔记：叙事模型写的一句关系状态，显示在人物档案里；旧存档没有 */
@@ -516,4 +535,20 @@ export const NpcMemoryEditSchema = z.object({
 });
 export type NpcMemoryEdit = z.infer<typeof NpcMemoryEditSchema>;
 
-export type NpcInternal = SeedNpc | NpcMemoryEdit;
+/** 只能由场外推演产生：把这个人较早的经历压成一段摘要，替换掉旧的摘要，经历只留最近 TIMELINE_TAIL 条 */
+export const NpcPastSchema = z.object({
+  type: z.literal("npc.past"),
+  id: NpcIdSchema,
+  text: z.string().trim().min(1).max(PAST_MAX),
+});
+export type NpcPast = z.infer<typeof NpcPastSchema>;
+
+/** 只能由场外推演产生：原作人物在玩家没看着的地方死了；玩家听说之前人物档案照旧显示活着 */
+export const NpcOffscreenDeathSchema = z.object({
+  type: z.literal("npc.offscreenDeath"),
+  id: NpcIdSchema,
+  cause: z.string().trim().min(1).max(80),
+});
+export type NpcOffscreenDeath = z.infer<typeof NpcOffscreenDeathSchema>;
+
+export type NpcInternal = SeedNpc | NpcMemoryEdit | NpcPast | NpcOffscreenDeath;

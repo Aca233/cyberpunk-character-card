@@ -14,8 +14,12 @@ import {
   type Npc,
   type NpcCommand,
   type NpcMemoryEdit,
+  type NpcOffscreenDeath,
+  type NpcPast,
   type NpcState,
   type SeedNpc,
+  TIMELINE_KEPT,
+  TIMELINE_TAIL,
 } from "./schema";
 
 function sameName(a: string, b: string): boolean {
@@ -49,6 +53,9 @@ export function seedNpc(
     lastSeenAt: null,
     memories: [],
     doing: null,
+    timeline: [],
+    past: null,
+    offscreenDeath: null,
     relation: null,
     ledger: [],
     known: [],
@@ -76,6 +83,43 @@ export function editNpcMemory(draft: Draft<NpcState>, command: NpcMemoryEdit): A
   }
   npc.memories[command.index] = text;
   return { ok: true, notes: [`改写了和${npc.name}的一条共同记忆`] };
+}
+
+/** 场外推演压的经历摘要：替换旧摘要，经历只留最近 TIMELINE_TAIL 条；经历还不多时不压 */
+export function applyNpcPast(draft: Draft<NpcState>, command: NpcPast, now: number): ApplyOutcome {
+  const npc = draft.npcs[command.id];
+  if (!npc) return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡` };
+  if (npc.timeline.length <= TIMELINE_TAIL) {
+    return { ok: false, reason: `${npc.name}的经历还不多，不用压` };
+  }
+  npc.past = { text: command.text, at: now };
+  npc.timeline.splice(0, npc.timeline.length - TIMELINE_TAIL);
+  return { ok: true };
+}
+
+/** 场外推演写的死亡：只限原作人物、活着、不是队员；玩家听说以前人物档案照旧显示活着 */
+export function applyOffscreenDeath(
+  draft: Draft<NpcState>,
+  command: NpcOffscreenDeath,
+  now: number,
+  facts: Readonly<Record<string, unknown>> = {},
+): ApplyOutcome {
+  const npc = draft.npcs[command.id];
+  if (!npc) return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡` };
+  if (!npc.canon) return { ok: false, reason: `${npc.name}不是原作人物，屏幕外不能死` };
+  if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了` };
+  const squad = Array.isArray(facts.squad) ? (facts.squad as unknown[]) : [];
+  if (squad.includes(command.id)) return { ok: false, reason: `${npc.name}是队员，不能死在屏幕外` };
+  npc.alive = false;
+  npc.offscreenDeath = { cause: command.cause, at: now };
+  return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`] };
+}
+
+/** 人物档案里显示死了没有：屏幕外死的，要等玩家在那之后听说了这个人的事（learn）才算知道 */
+export function deathKnown(npc: Npc): boolean {
+  if (npc.alive) return false;
+  const off = npc.offscreenDeath;
+  return off === null || npc.known.some((k) => k.at >= off.at);
 }
 
 export function applyNpc(
@@ -115,6 +159,9 @@ export function applyNpc(
       lastSeenAt: now,
       memories: [],
       doing: null,
+      timeline: [],
+      past: null,
+      offscreenDeath: null,
       relation: null,
       ledger: [],
       known: [],
@@ -184,6 +231,11 @@ export function applyNpc(
     case "doing": {
       if (npc.doing?.text === command.text) return { ok: true };
       npc.doing = { text: command.text, at: now };
+      npc.timeline.push({ text: command.text, at: now });
+      // 兜底：场外推演一直没压摘要时直接删最早的
+      if (npc.timeline.length > TIMELINE_KEPT) {
+        npc.timeline.splice(0, npc.timeline.length - TIMELINE_KEPT);
+      }
       return { ok: true };
     }
     case "relation": {

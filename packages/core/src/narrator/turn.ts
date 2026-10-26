@@ -1130,6 +1130,7 @@ export async function runNarratorTurn(
       reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
     };
     let offscreen: Command[] = [];
+    let contact = false;
     if ("blocked" in reply) {
       considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
     } else {
@@ -1142,17 +1143,33 @@ export async function runNarratorTurn(
       });
       considered.push(...got.notes);
       offscreen = got.commands;
+      contact = got.contact;
     }
     // 读不了也记下场次和时间，下一轮不马上重试
-    final = registry.applyCommands(settled.world, [...offscreen, { type: "city.ran" }], applyCtx);
+    final = registry.applyCommands(
+      settled.world,
+      [...offscreen, { type: "city.ran", contact }],
+      applyCtx,
+    );
     for (const { command, result } of final.results) {
       if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
-      // 消息玩家看得到；其余只进剧透视图
-      else if (command.type === "phone.receive") b.notes.push(...result.notes);
-      else {
-        const c = command as { type: string; id?: string; title?: string; text?: string };
+      // 消息和头条带来的声望玩家看得到；其余只进剧透视图
+      else if (command.type === "phone.receive" || command.type === "streetCred") {
+        b.notes.push(...result.notes);
+      } else {
+        const c = command as {
+          type: string;
+          id?: string;
+          title?: string;
+          text?: string;
+          cause?: string;
+        };
         if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
         else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+        else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
+        else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
+        else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
+        else if (c.type === "agendaTold") considered.push(`场外推演：快讯播了势力动向 ${c.id}`);
         else if (c.type === "agenda.move")
           considered.push(`场外推演：势力动向 ${c.id}「${c.title}」${c.text ?? ""}`);
         considered.push(...result.notes.map((n) => `场外推演：${n}`));

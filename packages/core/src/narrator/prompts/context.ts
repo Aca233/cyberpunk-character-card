@@ -4,7 +4,7 @@ import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
 import { ChronicleStateSchema, chronicleSection, legendsSection } from "../../systems/chronicle";
-import { CityStateSchema, citySection } from "../../systems/city";
+import { CityStateSchema, citySection, playerRumorLine, rumorSection } from "../../systems/city";
 import { cyberwareSection } from "../../systems/cyberware/prompt";
 import { ATTRIBUTE_LABELS, type Attribute, MOD_STEP, PENALTY_CAP } from "../../systems/dice";
 import { RARITY_LABELS } from "../../systems/economy/schema";
@@ -563,8 +563,17 @@ export function situation(
   if (recent) parts.push(`【近期后果】\n${recent}`);
   const due = dueSection(world);
   if (due) parts.push(`【到期事件】\n${due}`);
-  const city = citySection(CityStateSchema.parse(world.slices.city ?? {}));
+  const cityState = CityStateSchema.parse(world.slices.city ?? {});
+  const city = citySection(cityState);
   if (city) parts.push(`【城里的动静】\n${city}`);
+  const rumors = rumorSection(cityState);
+  if (rumors) parts.push(`【街头传闻】\n${rumors}`);
+  const heard = playerRumorLine(cityState);
+  if (heard) {
+    parts.push(
+      `【传闻里的你】\n${heard}\n听过这些说法的人第一反应照这个版本来，和状态里的「别人眼里的你」合起来看。`,
+    );
+  }
   const agendas = agendaSection(
     FactionsStateSchema.parse(world.slices.factions ?? {}),
     extras.data ?? {},

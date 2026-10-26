@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyNpc, editNpcMemory, seedNpc } from "./apply";
+import { applyNpc, applyNpcPast, applyOffscreenDeath, editNpcMemory, seedNpc } from "./apply";
 import { npcRules } from "./prompt";
 import {
   AffinityProposalSchema,
@@ -21,6 +21,8 @@ import {
   NpcHurtSchema,
   type NpcInternal,
   NpcMemoryEditSchema,
+  NpcOffscreenDeathSchema,
+  NpcPastSchema,
   NpcScanSchema,
   type NpcState,
   NpcStateSchema,
@@ -52,10 +54,19 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcScan: NpcScanSchema,
   },
   proposals: { affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity } },
-  internal: { "npc.seed": SeedNpcSchema, "npc.memoryEdit": NpcMemoryEditSchema },
+  internal: {
+    "npc.seed": SeedNpcSchema,
+    "npc.memoryEdit": NpcMemoryEditSchema,
+    "npc.past": NpcPastSchema,
+    "npc.offscreenDeath": NpcOffscreenDeathSchema,
+  },
   apply(draft, command, ctx) {
     if (command.type === "npc.seed") return seedNpc(draft, command, ctx.data);
     if (command.type === "npc.memoryEdit") return editNpcMemory(draft, command);
+    if (command.type === "npc.past") return applyNpcPast(draft, command, ctx.now);
+    if (command.type === "npc.offscreenDeath") {
+      return applyOffscreenDeath(draft, command, ctx.now, ctx.facts);
+    }
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
   },
   rules: [npcRules],

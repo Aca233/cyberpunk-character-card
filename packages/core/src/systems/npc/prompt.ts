@@ -114,11 +114,23 @@ function fullCard(npc: Npc, stage: Stage): string {
   }
   if (npc.memories.length > 0) lines.push(`  共同记忆：${npc.memories.join("；")}`);
   if (npc.doing) lines.push(`  最近：${npc.doing.text}`);
+  const earlier = npc.timeline.slice(0, -1).map((t) => t.text);
+  if (npc.past || earlier.length > 0) {
+    lines.push(
+      `  这段时间的经历：${[...(npc.past ? [npc.past.text] : []), ...earlier].join("；")}`,
+    );
+  }
   return lines.join("\n");
 }
 
 function oneLine(npc: Npc, stage: Stage): string {
-  if (!npc.alive) return `- ${label(npc)} ${npc.role}；已死`;
+  if (!npc.alive) {
+    const off = npc.offscreenDeath;
+    if (off !== null && !npc.known.some((k) => k.at >= off.at)) {
+      return `- ${label(npc)} ${npc.role}；在玩家没看着的地方死了（${off.cause}），玩家角色还不知道；正文里让玩家听说或撞见时写一条 learn`;
+    }
+    return `- ${label(npc)} ${npc.role}；已死`;
+  }
   if (!npc.met) {
     return `- ${label(npc)} ${npc.role}；还没见过${npc.location ? `，常在 ${npc.location}` : ""}`;
   }

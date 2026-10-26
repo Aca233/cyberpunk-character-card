@@ -22,6 +22,7 @@ import {
   FLASHBACK_TURNS,
 } from "./systems/character/schema";
 import { ChronicleStateSchema, ENDING_LABELS } from "./systems/chronicle/schema";
+import { BULLETIN_KIND_LABELS, CityStateSchema } from "./systems/city/schema";
 import {
   CombatStateSchema,
   EDGE_LABELS,
@@ -107,6 +108,7 @@ import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/appl
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
+import { deathKnown } from "./systems/npc/apply";
 import { attributeSum, bodyView } from "./systems/npc/body";
 import { onStage } from "./systems/npc/prompt";
 import {
@@ -1117,7 +1119,8 @@ export function projectState(
           at: formatGameTime(k.at),
         })),
         affinity: n.affinity,
-        alive: n.alive,
+        /** 玩家知道的生死：屏幕外死的，听说以前照旧显示活着 */
+        alive: !deathKnown(n),
         here: onStage(n, stage),
         /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
         lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
@@ -1143,6 +1146,15 @@ export function projectState(
           ? bodyView(n, data, world.time, attributeSum(effectiveAttributes(character)))
           : null,
       })),
+    /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
+    bulletins: [...CityStateSchema.parse(world.slices.city ?? {}).bulletins].reverse().map((b) => ({
+      id: b.id,
+      kind: b.kind,
+      label: BULLETIN_KIND_LABELS[b.kind],
+      title: b.title,
+      text: b.text,
+      time: formatGameTime(b.at),
+    })),
     /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
     memory: (() => {
       const m = MemoryStateSchema.parse(world.slices.memory ?? {});
@@ -1287,7 +1299,7 @@ export function projectState(
               name: m.name,
               npc: npc?.met ? npc.id : null,
               affinity: npc?.met ? npc.affinity : null,
-              alive: npc ? npc.alive : true,
+              alive: npc ? !deathKnown(npc) : true,
               last: formatGameTime(Math.max(m.at, m.repliedAt ?? m.at)),
               unread: phoneState.messages.filter((x) => x.from === m.from && !x.read).length,
               count: phoneState.messages.filter((x) => x.from === m.from).length,

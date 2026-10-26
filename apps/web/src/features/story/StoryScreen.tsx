@@ -20,6 +20,7 @@ import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
 import { MapPanel } from "./MapPanel";
 import { type MemoryEdit, MemoryPanel } from "./MemoryPanel";
+import { NewsPanel } from "./NewsPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
@@ -110,6 +111,7 @@ export function StoryScreen() {
   const [atStash, setAtStash] = useState(false);
   const [atMemory, setAtMemory] = useState(false);
   const [atChronicle, setAtChronicle] = useState(false);
+  const [atNews, setAtNews] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
@@ -465,6 +467,7 @@ export function StoryScreen() {
         atStash ||
         atMemory ||
         atChronicle ||
+        atNews ||
         story.spend
       )
         return;
@@ -474,6 +477,9 @@ export function StoryScreen() {
       } else if (e.key === "h" || e.key === "H") {
         e.preventDefault();
         setAtChronicle(true);
+      } else if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setAtNews(true);
       } else if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -513,6 +519,7 @@ export function StoryScreen() {
     atStash,
     atMemory,
     atChronicle,
+    atNews,
   ]);
 
   if (query.isPending) {
@@ -597,6 +604,7 @@ export function StoryScreen() {
         onFactions={() => setAtFactions(true)}
         onMemory={() => setAtMemory(true)}
         onChronicle={() => setAtChronicle(true)}
+        onNews={() => setAtNews(true)}
         onStash={() => setAtStash(true)}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
@@ -820,6 +828,7 @@ export function StoryScreen() {
           onClose={() => setAtChronicle(false)}
         />
       )}
+      {atNews && <NewsPanel view={view} onClose={() => setAtNews(false)} />}
       {atMap && (
         <MapPanel
           view={view}
