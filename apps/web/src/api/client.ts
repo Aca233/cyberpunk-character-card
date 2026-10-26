@@ -275,7 +275,7 @@ export interface TurnContext {
 }
 
 export interface StagePrompt {
-  readonly stage: "judge" | "narrate" | "extract" | "offscreen";
+  readonly stage: "judge" | "narrate" | "extract" | "offscreen" | "summary";
   readonly label: string;
   readonly messages: readonly { readonly role: string; readonly content: string }[];
   readonly modules: readonly string[];

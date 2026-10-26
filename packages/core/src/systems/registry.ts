@@ -13,6 +13,7 @@ import { heat } from "./heat";
 import { humanity } from "./humanity";
 import { inventory } from "./inventory";
 import { jobs } from "./jobs";
+import { memory } from "./memory";
 import { ncpd } from "./ncpd";
 import { npc } from "./npc";
 import { phone } from "./phone";
@@ -43,6 +44,7 @@ export const systems: readonly AnySystem[] = [
   stealth,
   phone,
   city,
+  memory,
   hacking,
   travel,
   factions,

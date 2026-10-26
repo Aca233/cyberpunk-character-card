@@ -27,6 +27,7 @@ export * as heatRules from "./systems/heat";
 export * as humanityRules from "./systems/humanity";
 export * as inventoryRules from "./systems/inventory";
 export * as jobsRules from "./systems/jobs";
+export * as memoryRules from "./systems/memory";
 export * as ncpdRules from "./systems/ncpd";
 export * as npcRules from "./systems/npc";
 export * as phoneRules from "./systems/phone";

@@ -19,6 +19,7 @@ import {
   type NarratorPlan,
   type NarratorPrompt,
   type PromptExtras,
+  recapFor,
   situation,
 } from "./context";
 import { BASE_RULES, systemMessage, userMessage } from "./layers";
@@ -92,6 +93,7 @@ export function buildJudgePrompt(
     .map((t) => `${formatInput(t.input)}\n${t.text}`)
     .join("\n\n");
   const content = userMessage({
+    recap: recapFor(world, records, JUDGE_TURNS),
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
     scene: situation(world, view, plan, extras),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,

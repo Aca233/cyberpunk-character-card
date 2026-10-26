@@ -8,5 +8,6 @@ export * from "./prompts";
 export * from "./prose";
 export * from "./rewrite";
 export * from "./stages";
+export * from "./summary";
 export * from "./tavern";
 export * from "./turn";

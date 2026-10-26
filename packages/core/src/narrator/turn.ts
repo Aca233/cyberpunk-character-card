@@ -91,6 +91,7 @@ import {
   recallCandidates,
   skipStop,
 } from "./stages";
+import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE } from "./summary";
 
 /**
  * 一轮五步：① 判断（叙事模型，JSON）→ ② 拼上下文 → ③ 写正文（叙事模型，纯文本，边收边放）
@@ -229,6 +230,8 @@ export interface NarratorTurn {
   readonly offscreen: { readonly prompt: string; readonly reply: string } | undefined;
   /** ⑥ 收了场却没推演时的原因，只供剧透视图 */
   readonly offscreenSkip: string | undefined;
+  /** ⑦ 场景摘要跑了时：发出的用户消息和原始回复，只供剧透视图 */
+  readonly summary: { readonly prompt: string; readonly reply: string } | undefined;
   readonly notes: readonly string[];
   /** ⑤ 审守则的提醒（替玩家角色说话、泄露秘密、死人出场）；只供剧透视图，不拦这一轮 */
   readonly flags: readonly string[];
@@ -1039,6 +1042,38 @@ export async function runNarratorTurn(
           every,
         })
       : undefined;
+
+  // ⑦ 场景摘要：收了场就把这一场压成一条摘要，原文掉出窗口以后由【前情】接上；只进补丁，和本轮一起撤回
+  let ended = final.world;
+  const summaryPatches: Patch[] = [];
+  let summaryTrace: { prompt: string; reply: string } | undefined;
+  if (settle && after.scene !== before.scene) {
+    if (inFlashback) considered.push("场景摘要：闪回里不写");
+    else if (unsettled !== undefined) considered.push("场景摘要：这一轮没结算干净，不写");
+    else {
+      const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
+      const reply = await b.call({ purpose: "aux", temperature: SUMMARY_TEMPERATURE, messages });
+      summaryTrace = {
+        prompt: messages[messages.length - 1]?.content ?? "",
+        reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
+      };
+      if ("blocked" in reply) {
+        considered.push(`场景摘要被辅助模型拒答：${reply.blocked}`);
+      } else {
+        b.auxUsage = addUsage(b.auxUsage, reply.usage);
+        const got = readSummary(reply.text, ended, before.scene, before.location);
+        considered.push(...got.notes);
+        if (got.command) {
+          const done = registry.applyCommands(ended, [got.command], applyCtx);
+          for (const { result } of done.results) {
+            if (!result.ok) considered.push(`场景摘要没记上：${result.reason}`);
+          }
+          ended = done.world;
+          summaryPatches.push(...done.patches);
+        }
+      }
+    }
+  }
   const closeup =
     ooc || unsettled !== undefined
       ? undefined
@@ -1060,12 +1095,18 @@ export async function runNarratorTurn(
       ruling,
       offscreen: offscreenTrace,
       offscreenSkip,
+      summary: summaryTrace,
       notes: b.notes,
       flags: b.flags,
-      world: final.world,
+      world: ended,
       patches: ooc
         ? applied.patches
-        : [...applied.patches, ...settled.patches, ...(final === settled ? [] : final.patches)],
+        : [
+            ...applied.patches,
+            ...settled.patches,
+            ...(final === settled ? [] : final.patches),
+            ...summaryPatches,
+          ],
       modules: prompt.modules,
       pin: settle && unsettled === undefined && shape.pin === true,
       clutch: settle && shape.clutch === true,

@@ -52,6 +52,7 @@ import {
   runNarratorTurn,
   type SaveMeta,
   SaveMetaSchema,
+  SUMMARY_SYSTEM,
   sandevistanBlock,
   saveCharacter,
   sceneStartSeq,
@@ -720,6 +721,19 @@ export class GameService {
             }),
           );
         }
+        // ⑦ 场景摘要：同样是记下来的
+        if (record.summary) {
+          prompts.push(
+            stage("summary", "⑦ 场景摘要", {
+              messages: [
+                { role: "system", content: SUMMARY_SYSTEM },
+                { role: "user", content: record.summary.prompt },
+                { role: "assistant", content: record.summary.reply },
+              ],
+              modules: [],
+            }),
+          );
+        }
       } catch (error) {
         prompts = [];
         rebuildError = error instanceof Error ? error.message : String(error);
@@ -973,6 +987,7 @@ export class GameService {
         ...(turn.flags.length > 0 ? { flags: [...turn.flags] } : {}),
         ...(turn.offscreen !== undefined ? { offscreen: turn.offscreen } : {}),
         ...(turn.offscreenSkip !== undefined ? { offscreenSkip: turn.offscreenSkip } : {}),
+        ...(turn.summary !== undefined ? { summary: turn.summary } : {}),
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
         ...(turn.recalled.length > 0
           ? { recalled: turn.recalled.map((m) => ({ title: m.title, text: m.text })) }
@@ -1014,7 +1029,7 @@ export class GameService {
 
 /** 上下文查看器里一步的提示词 */
 interface StagePrompt {
-  readonly stage: "judge" | "narrate" | "extract" | "offscreen";
+  readonly stage: "judge" | "narrate" | "extract" | "offscreen" | "summary";
   readonly label: string;
   readonly messages: LlmMessage[];
   readonly modules: string[];

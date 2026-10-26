@@ -1,5 +1,6 @@
 import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
+import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
 import { CityStateSchema, citySection } from "../../systems/city";
@@ -18,6 +19,7 @@ import {
 } from "../../systems/inventory/schema";
 import { jobsSection, jobTemplateSection } from "../../systems/jobs/prompt";
 import { JobsStateSchema } from "../../systems/jobs/schema";
+import { MemoryStateSchema, recapSection } from "../../systems/memory";
 import { castSection } from "../../systems/npc/prompt";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { formatGameTime } from "../../systems/world/apply";
@@ -32,8 +34,24 @@ import type { Memory } from "../stages";
  * 这些填进 L2 任务模板的槽位；模板和各层的拼法在 layers.ts
  */
 
-/** 带最近这么多轮原文；更早的先丢，场景压缩在 M3 */
+/** 带最近这么多轮原文；更早的由【前情】的场景摘要接上（规格是 3 轮，预算切片再收） */
 export const HISTORY_TURNS = 12;
+
+/** 【前情】：已经收场、原文不在最近 hot 轮里的场景摘要；没有时为 undefined */
+export function recapFor(
+  world: WorldState,
+  records: readonly LogRecord[],
+  hot: number,
+): string | undefined {
+  const turns = effectiveTurns(records);
+  const shown = new Set(
+    (hot > 0 ? turns.slice(-hot) : [])
+      .map((t) => t.scene)
+      .filter((s): s is number => s !== undefined),
+  );
+  const text = recapSection(MemoryStateSchema.parse(world.slices.memory ?? {}), shown);
+  return text === undefined ? undefined : `【前情】\n${text}`;
+}
 
 /** 常驻核心负责说明的指令；其余指令由各系统的规则模块说明 */
 export const CORE_COMMANDS = ["world", "humanity", "item", "damage", "heal", "deadline"] as const;

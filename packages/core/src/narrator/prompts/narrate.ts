@@ -13,6 +13,7 @@ import {
   type NarratorPlan,
   type NarratorPrompt,
   type PromptExtras,
+  recapFor,
   situation,
   tablesOf,
 } from "./context";
@@ -184,6 +185,7 @@ export function buildNarratorPrompt(
   messages.push({
     role: "user",
     content: userMessage({
+      recap: recapFor(world, records, HISTORY_TURNS),
       scene: situation(world, view, plan, extras),
       decided: extras.decided,
       recall: recalledSection(extras.recalled),

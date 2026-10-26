@@ -90,6 +90,8 @@ export function estimateTokens(text: string): number {
 
 /** L2 的槽位，按固定顺序拼；没有内容的槽不出现 */
 export interface PromptSlots {
+  /** 【前情】：原文已经不在这一步里的场景摘要；只在收场时变，放最前面 */
+  readonly recap?: string | undefined;
   /** 最近几轮原文（判断用；写正文的原文放在对话历史里） */
   readonly recent?: string | undefined;
   /** 局面：当前状态、人物、委托、近期后果、到期事件、开场、检定结果 */
@@ -110,6 +112,7 @@ export interface PromptSlots {
 export function userMessage(slots: PromptSlots): string {
   const decided = slots.decided ?? [];
   return [
+    slots.recap,
     slots.recent,
     ...slots.scene,
     decided.length > 0 ? `【本轮已定的事】\n${decided.join("\n")}` : undefined,
