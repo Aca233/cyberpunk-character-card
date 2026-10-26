@@ -6,6 +6,7 @@ export * from "./offscreen";
 export * from "./pending";
 export * from "./prompts";
 export * from "./prose";
+export * from "./retrieve";
 export * from "./rewrite";
 export * from "./stages";
 export * from "./summary";

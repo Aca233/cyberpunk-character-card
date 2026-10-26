@@ -85,6 +85,18 @@ const TurnRecordSchema = z.object({
   decided: z.array(z.string()).optional(),
   /** 判断调出的旧记忆：标题和当时的正文 */
   recalled: z.array(z.object({ title: z.string(), text: z.string() })).optional(),
+  /** 扩展层按分数补进来的旧记忆：标题和当时的正文 */
+  expanded: z.array(z.object({ title: z.string(), text: z.string() })).optional(),
+  /** 扩展层为什么检索、前几名的分数和退回原因；只供剧透视图 */
+  retrieval: z
+    .object({
+      triggers: z.array(z.string()),
+      top: z.array(
+        z.object({ id: z.string(), title: z.string(), score: z.number(), parts: z.string() }),
+      ),
+      fallback: z.array(z.string()),
+    })
+    .optional(),
   /** 本轮带了哪些规则模块 */
   modules: z.array(z.string()).optional(),
   usage: z

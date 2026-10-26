@@ -25,10 +25,12 @@ import {
   effectiveTurns,
   HISTORY_TURNS,
   isSnapshotValid,
+  judgeCandidates,
   type LlmMessage,
   type LogRecord,
   loadoutText,
   logVersion,
+  memoryPool,
   NarratorAbortedError,
   NarratorEmptyReplyError,
   type NarratorPlan,
@@ -45,7 +47,6 @@ import {
   prepareFor,
   projectState,
   type Rng,
-  recallCandidates,
   replay,
   rewriteNarrative,
   rolledFrom,
@@ -680,7 +681,14 @@ export class GameService {
         });
         // ① 判断：确认检定的那一轮、场外提问的旧存档没有这一步
         if (plan.kind === "action" && input.data.mode !== "ooc") {
-          const memories = recallCandidates(before, HISTORY_TURNS);
+          const lately = effectiveTurns(before)
+            .slice(-2)
+            .map((t) => t.text)
+            .join("\n");
+          const memories = judgeCandidates(memoryPool(world, before, HISTORY_TURNS), world, {
+            input: input.data.text,
+            context: lately,
+          });
           prompts.push(
             stage("judge", "① 判断", buildJudgePrompt(world, before, plan, extras, memories)),
           );
@@ -694,7 +702,7 @@ export class GameService {
             buildNarratorPrompt(world, before, plan, {
               ...extras,
               decided: record.decided,
-              recalled: record.recalled,
+              recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
             }),
           ),
         );
@@ -762,6 +770,11 @@ export class GameService {
           considered: record.considered ?? [],
           ruling: record.ruling ?? null,
           flags: record.flags ?? [],
+          // 扩展层：为什么检索、前几名的分数、补进来的条目和退回原因；旧记录没有
+          retrieval: record.retrieval
+            ? { ...record.retrieval, picked: (record.expanded ?? []).map((m) => m.title) }
+            : null,
+          recalled: (record.recalled ?? []).map((m) => m.title),
           // ⑥ 没跑的原因：收场时记下的，其余按这一轮的情况推
           offscreenSkip: record.offscreen
             ? null
@@ -991,6 +1004,18 @@ export class GameService {
         ...(turn.decided.length > 0 ? { decided: [...turn.decided] } : {}),
         ...(turn.recalled.length > 0
           ? { recalled: turn.recalled.map((m) => ({ title: m.title, text: m.text })) }
+          : {}),
+        ...(turn.expanded.length > 0
+          ? { expanded: turn.expanded.map((m) => ({ title: m.title, text: m.text })) }
+          : {}),
+        ...(turn.retrieval !== undefined
+          ? {
+              retrieval: {
+                triggers: [...turn.retrieval.triggers],
+                top: turn.retrieval.top.map((t) => ({ ...t })),
+                fallback: [...turn.retrieval.fallback],
+              },
+            }
           : {}),
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),

@@ -253,6 +253,20 @@ export interface TurnContext {
   readonly flags?: readonly string[];
   /** ⑥ 场外推演没跑的原因；跑了为 null，旧后端没有 */
   readonly offscreenSkip?: string | null;
+  /** 判断调的旧记忆标题；旧后端没有 */
+  readonly recalled?: readonly string[];
+  /** 扩展层：检索原因、前几名分数、补进来的标题和退回原因；没检索为 null，旧后端没有 */
+  readonly retrieval?: {
+    readonly triggers: readonly string[];
+    readonly top: readonly {
+      readonly id: string;
+      readonly title: string;
+      readonly score: number;
+      readonly parts: string;
+    }[];
+    readonly fallback: readonly string[];
+    readonly picked: readonly string[];
+  } | null;
   /** 这一轮之后城里的动静；旧后端没有 */
   readonly city?: readonly CityEventView[];
   /** 账目对账：最近 10 轮各改了哪些硬数值；旧版后端没有 */

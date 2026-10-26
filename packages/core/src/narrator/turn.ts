@@ -10,6 +10,7 @@ import type {
 } from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import type { Closeup, LogRecord } from "../kernel/turnlog";
+import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import {
   CharacterStateSchema,
@@ -72,6 +73,7 @@ import {
   type PromptExtras,
   VERIFY_TEMPERATURE,
 } from "./prompts";
+import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
 import { closeupFor, sceneTitle } from "./scene";
 import {
   applyFix,
@@ -88,7 +90,6 @@ import {
   parseFlags,
   parsePatch,
   readJudgeShape,
-  recallCandidates,
   skipStop,
 } from "./stages";
 import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE } from "./summary";
@@ -262,6 +263,10 @@ export interface NarratorTurn {
   readonly decided: readonly string[];
   /** 判断调出的旧记忆 */
   readonly recalled: readonly Memory[];
+  /** 扩展层按分数补进来的旧记忆（不含判断调的） */
+  readonly expanded: readonly Memory[];
+  /** 扩展层为什么检索、前几名的分数和退回原因；没检索时为 undefined，只供剧透视图 */
+  readonly retrieval: Expansion | undefined;
 }
 
 export type NarratorResult =
@@ -550,8 +555,16 @@ export async function runNarratorTurn(
 
   // ① 判断：确认过的检定（包括预先带检定的选项）跳过；旧存档选了出戏也跳过
   let judge: JudgeShape = {};
+  const pool =
+    plan.kind === "action" && !legacyOoc ? memoryPool(world, records, HISTORY_TURNS) : [];
+  const lately = effectiveTurns(records)
+    .slice(-2)
+    .map((t) => t.text)
+    .join("\n");
   const memories: Memory[] =
-    plan.kind === "action" && !legacyOoc ? recallCandidates(records, HISTORY_TURNS) : [];
+    plan.kind === "action"
+      ? judgeCandidates(pool, world, { input: plan.input.text, context: lately })
+      : [];
   if (plan.kind === "action" && !legacyOoc) {
     const prompt = buildJudgePrompt(world, records, plan, extras, memories);
     const reply = await b.call({
@@ -624,6 +637,23 @@ export async function runNarratorTurn(
       else if (!recalled.includes(hit)) recalled.push(hit);
     }
   }
+  // 扩展层：覆盖不够时按分数补几条旧记忆，判断调过的不重复；检索用玩家输入加判断的理解
+  const retrieval =
+    plan.kind === "action" && !ooc
+      ? expandMemories(
+          pool,
+          world,
+          records,
+          HISTORY_TURNS,
+          { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
+          recalled,
+          deps.data ?? {},
+        )
+      : undefined;
+  const expanded: Memory[] = (retrieval?.picked ?? []).map((m) => ({
+    title: m.title,
+    text: m.text,
+  }));
 
   // ② 拼上下文：写正文之前代码已经定下的事
   const decided: string[] = [];
@@ -659,7 +689,11 @@ export async function runNarratorTurn(
       : undefined;
 
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
-  const prompt = buildNarratorPrompt(world, records, plan, { ...extras, decided, recalled });
+  const prompt = buildNarratorPrompt(world, records, plan, {
+    ...extras,
+    decided,
+    recalled: [...recalled, ...expanded],
+  });
   const splitter = new StateSplitter();
   b.checkAborted();
   for await (const event of deps.llm.stream(
@@ -1121,6 +1155,8 @@ export async function runNarratorTurn(
       messages: prompt.messages,
       decided,
       recalled,
+      expanded,
+      retrieval,
     },
   };
 }

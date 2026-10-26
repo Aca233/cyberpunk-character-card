@@ -322,6 +322,39 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           <p>{ctx.ruling}</p>
         </Section>
       )}
+      {(ctx.retrieval || (ctx.recalled && ctx.recalled.length > 0)) && (
+        <Section title="扩展层（旧记忆）">
+          {ctx.recalled && ctx.recalled.length > 0 && <p>判断调的：{ctx.recalled.join("；")}</p>}
+          {ctx.retrieval ? (
+            <>
+              <p>
+                {ctx.retrieval.triggers.length > 0
+                  ? `检索原因：${ctx.retrieval.triggers.join("；")}`
+                  : "覆盖够了，没检索"}
+              </p>
+              <p>
+                补进来的：
+                {ctx.retrieval.picked.length > 0 ? ctx.retrieval.picked.join("；") : "没有"}
+              </p>
+              {ctx.retrieval.fallback.length > 0 && (
+                <p className={styles.dim}>退回：{ctx.retrieval.fallback.join(" → ")}</p>
+              )}
+              {ctx.retrieval.top.length > 0 && (
+                <ul>
+                  {ctx.retrieval.top.map((t) => (
+                    <li key={t.id}>
+                      <strong>{t.score}</strong> {t.title}
+                      <span className={styles.dim}>（{t.parts}）</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className={styles.dim}>这一轮没有检索记录（旧记录或确认检定的一轮）</p>
+          )}
+        </Section>
+      )}
       {ctx.offscreenSkip && (
         <Section title="⑥ 场外推演">
           <p className={styles.dim}>这一轮没跑：{ctx.offscreenSkip}</p>

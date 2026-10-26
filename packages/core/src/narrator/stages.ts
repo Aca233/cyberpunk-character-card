@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
-import { TurnInputSchema } from "../schemas/turn";
 import { CharacterStateSchema, effectiveAttribute } from "../systems/character/schema";
 import { ATTRIBUTE_LABELS, CheckProposalSchema } from "../systems/dice";
 import {
@@ -176,34 +174,10 @@ export function skipStop(
   return points.filter((p) => p.at > world.time && p.at < to).sort((a, b) => a.at - b.at)[0];
 }
 
-/** 可调的旧记忆：热层以外的旧轮次；M3 换成状态库和扩展层检索 */
+/** 一条旧记忆：标题给判断原样抄，正文给写正文；候选池和扩展层检索在 retrieve.ts */
 export interface Memory {
   readonly title: string;
   readonly text: string;
-}
-
-const MAX_CANDIDATES = 40;
-const MEMORY_CHARS = 400;
-
-function oneLine(text: string, max: number): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return [...flat].length > max ? `${[...flat].slice(0, max).join("")}…` : flat;
-}
-
-/** 已经掉出最近 hot 轮的回合，每轮一个标题；场外提问和未定稿的不算 */
-export function recallCandidates(records: readonly LogRecord[], hot: number): Memory[] {
-  const turns = effectiveTurns(records).filter((t) => {
-    if (t.ooc === true || t.unsettled !== undefined) return false;
-    const input = TurnInputSchema.safeParse(t.input);
-    return !(input.success && input.data.mode === "ooc");
-  });
-  return turns
-    .slice(0, Math.max(0, turns.length - hot))
-    .slice(-MAX_CANDIDATES)
-    .map((t) => ({
-      title: `第 ${t.seq} 轮${t.title ? ` ${t.title}` : ""}：${oneLine(t.read ?? t.text, 24)}`,
-      text: oneLine(t.text, MEMORY_CHARS),
-    }));
 }
 
 /** ⑤ 核对的一行 */

@@ -16,15 +16,21 @@ export function recapLine(s: SceneSummary): string {
  * shown 是这一步带着原文的场次，那几场不再重复
  */
 export function recapSection(state: MemoryState, shown: ReadonlySet<number>): string | undefined {
+  const scenes = recapScenes(state, shown);
+  if (scenes.length === 0) return undefined;
+  return [
+    "更早几场的摘要：都是已经发生的事，原文不再给；正文和判断要和这些前后一致。",
+    ...scenes.map(recapLine),
+  ].join("\n");
+}
+
+/** 【前情】带哪几场：最近 RECAP_RECENT 场，加更早的 RECAP_KEY 个关键场；扩展层按它去重 */
+export function recapScenes(state: MemoryState, shown: ReadonlySet<number>): SceneSummary[] {
   const eligible = state.scenes.filter((s) => !shown.has(s.scene));
-  if (eligible.length === 0) return undefined;
   const recent = eligible.slice(-RECAP_RECENT);
   const older = eligible
     .slice(0, Math.max(0, eligible.length - RECAP_RECENT))
     .filter((s) => s.importance === "key")
     .slice(-RECAP_KEY);
-  return [
-    "更早几场的摘要：都是已经发生的事，原文不再给；正文和判断要和这些前后一致。",
-    ...[...older, ...recent].map(recapLine),
-  ].join("\n");
+  return [...older, ...recent];
 }
