@@ -1,12 +1,10 @@
 import { z } from "zod";
 
 export const HUMANITY_MAX = 100;
-/** 单次扣除上限：失去锚点的 −15 是最重的一档 */
+/** 单次扣除上限 */
 export const LOSS_CAP = 15;
-/** 每个游戏日最多恢复多少；有锚点时是 12，锚点在 M2b 加入 */
+/** 每个游戏日最多恢复多少 */
 export const DAILY_RECOVERY_CAP = 8;
-/** 有锚点时每个游戏日最多恢复多少 */
-export const ANCHORED_RECOVERY_CAP = 12;
 export const MINUTES_PER_DAY = 1440;
 
 /** 义体耐受：建角色时选，乘在义体的人性消耗上 */
@@ -28,8 +26,6 @@ export const HumanityStateSchema = z.object({
   recovery: z.object({ day: z.number().int(), amount: z.number().int().min(0) }),
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()),
-  /** 有没有锚点：有时每天最多恢复 ANCHORED_RECOVERY_CAP；锚点系统用内部指令更新 */
-  anchored: z.boolean().default(false),
 });
 export type HumanityState = z.infer<typeof HumanityStateSchema>;
 
@@ -42,7 +38,7 @@ export const HumanityCommandSchema = z
       .int()
       .refine((v) => v !== 0, "人性变化不能为 0"),
     reason: z.string().min(1),
-    /** 事件 id，例如锚点死亡；带上后同一事件只结算一次 */
+    /** 事件 id，例如某个重要的人死去；带上后同一事件只结算一次 */
     event: z.string().min(1).optional(),
   })
   .describe(
@@ -54,7 +50,6 @@ export type HumanityCommand = z.infer<typeof HumanityCommandSchema>;
 export const HUMANITY_KINDS = {
   cruelty: { label: "残忍行为", sizes: { small: -2, medium: -3, large: -5 } },
   loss: { label: "失去重要的人", sizes: { small: -10, medium: -10, large: -10 } },
-  anchor: { label: "失去锚点", sizes: { small: -15, medium: -15, large: -15 } },
   rest: { label: "休整", sizes: { small: 3, medium: 5, large: 8 } },
 } as const;
 export type HumanityKind = keyof typeof HUMANITY_KINDS;
@@ -70,18 +65,22 @@ export const HumanityProposalSchema = z
   .object({
     type: z.literal("humanity"),
     kind: z
-      .enum(["cruelty", "loss", "anchor", "rest"])
-      .describe("cruelty 残忍行为，loss 失去重要的人，anchor 失去锚点，rest 休整"),
+      .enum(["cruelty", "loss", "rest"])
+      .describe("cruelty 残忍行为，loss 失去重要的人，rest 休整"),
     size: z
       .enum(["small", "medium", "large"])
       .optional()
       .describe(
-        "cruelty 和 rest 要写：cruelty 按残忍程度；rest 的 small 普通休整，medium 有意义的休整，large 和锚点相处",
+        "cruelty 和 rest 要写：cruelty 按残忍程度；rest 的 small 普通休整，medium 有意义的休整，large 和重要的人相处",
       ),
     reason: z.string().min(1),
-    event: z.string().min(1).optional().describe("事件 id，例如锚点死亡；带上后同一事件只结算一次"),
+    event: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("事件 id，例如某个重要的人死去；带上后同一事件只结算一次"),
   })
-  .refine((h) => h.size !== undefined || h.kind === "loss" || h.kind === "anchor", {
+  .refine((h) => h.size !== undefined || h.kind === "loss", {
     message: "cruelty 和 rest 要写 size",
     path: ["size"],
   })
@@ -115,7 +114,7 @@ export function legacyHumanity(
   const [kind, size] = options.reduce((best, cur) =>
     Math.abs(cur[2] - delta) < Math.abs(best[2] - delta) ? cur : best,
   );
-  const fixed = kind === "loss" || kind === "anchor";
+  const fixed = kind === "loss";
   return {
     value: { ...rest, kind, ...(fixed ? {} : { size }) },
     note: `人性写了数字，已按最近的档位（${HUMANITY_KINDS[kind].label}${fixed ? "" : `·${SIZE_LABELS[size]}`}）处理`,
@@ -135,13 +134,6 @@ export const SetToleranceSchema = z.object({
   tolerance: ToleranceSchema,
 });
 export type SetTolerance = z.infer<typeof SetToleranceSchema>;
-
-/** 只能由代码发出：锚点有了或没了 */
-export const SetAnchoredSchema = z.object({
-  type: z.literal("humanity.setAnchored"),
-  anchored: z.boolean(),
-});
-export type SetAnchored = z.infer<typeof SetAnchoredSchema>;
 
 /** 只能由代码发出：危机章节里被拉回来，人性直接回到某个值（不受每天恢复上限限制，仍不超过上限） */
 export const RestoreHumanitySchema = z.object({

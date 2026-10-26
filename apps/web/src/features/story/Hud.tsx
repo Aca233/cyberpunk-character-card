@@ -260,7 +260,6 @@ export function SidePanel({
   onMap,
   onFactions,
   onStash,
-  onAnchor,
   onSquad,
   onCraft,
   onBuyHome,
@@ -283,8 +282,6 @@ export function SidePanel({
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
-  /** 设锚点或取消；正在生成时不传，按钮不显示 */
-  readonly onAnchor?: ((action: "add" | "remove", npc: string) => void) | undefined;
   /** 小队面板的动作；正在生成时不传，按钮不显示 */
   readonly onSquad?: ((action: SquadAction, npc: string) => void) | undefined;
   /** 工作台：dismantle 拆成零件，tune 给武器升一档稀有度；正在生成时不传，按钮不显示 */
@@ -379,12 +376,6 @@ export function SidePanel({
                 {view.psychosis.crisis.until && <small> · 到 {view.psychosis.crisis.until}</small>}
                 {view.psychosis.crisis.status === "open" && <small> · 普通委托暂停</small>}
               </dd>
-            </>
-          )}
-          {view.psychosis.anchors.length > 0 && (
-            <>
-              <dt>锚点</dt>
-              <dd>{view.psychosis.anchors.map((a) => a.name).join("、")}</dd>
             </>
           )}
           {(view.psychosis.suppressant.until || view.psychosis.suppressant.dependent) && (
@@ -692,9 +683,6 @@ export function SidePanel({
                       {!npc.alive ? "已故" : npc.here ? "在场" : "不在场"}
                     </span>
                     <span className={styles.npcRole}>{npc.role}</span>
-                    {view.psychosis.anchors.some((a) => a.npc === npc.id) && (
-                      <span className={styles.npcStatus}>锚点</span>
-                    )}
                     <span className={styles.npcAffinity}>
                       好感 {npc.affinity > 0 ? "+" : ""}
                       {npc.affinity}
@@ -703,22 +691,6 @@ export function SidePanel({
                   <div className={styles.npcDetail}>
                     {npc.alias && <p>外号：{npc.alias}</p>}
                     <p>{npc.look}</p>
-                    {onAnchor &&
-                      npc.alive &&
-                      (view.psychosis.anchors.some((a) => a.npc === npc.id) ? (
-                        <ActionButton onClick={() => onAnchor("remove", npc.id)}>
-                          不再当锚点
-                        </ActionButton>
-                      ) : (
-                        view.psychosis.anchors.length < view.psychosis.max && (
-                          <ActionButton
-                            title="过命交情的人：快撑不住的时候能把你拉回来；最多 3 个"
-                            onClick={() => onAnchor("add", npc.id)}
-                          >
-                            设为锚点
-                          </ActionButton>
-                        )
-                      ))}
                     <p className={styles.npcMemoryTitle}>共同记忆</p>
                     {npc.memories.length === 0 ? (
                       <p className={styles.dim}>还没有记录。</p>

@@ -219,10 +219,6 @@ export function stateSummary(view: PlayerView): string {
     lines.push(
       `等玩家确认的入队请求：${squad.offers.map((o) => `${o.name}（${o.kindLabel}，${o.terms}）`).join("、")}；已经提过了，不要再提，等玩家在小队面板答复`,
     );
-  if (view.psychosis.anchors.length > 0)
-    lines.push(
-      `锚点（玩家确认的过命交情）：${view.psychosis.anchors.map((a) => `${a.name}（${a.npc}）`).join("、")}；在场或联系得上时发作相关检定可以写两项加成（来源：锚点），死去或决裂写 anchor`,
-    );
   {
     const s = view.psychosis.suppressant;
     if (s.until)
@@ -237,7 +233,7 @@ export function stateSummary(view: PlayerView): string {
     const c = view.psychosis.crisis;
     if (c?.status === "open")
       lines.push(
-        `危机章节（${c.since} 人性归零）：普通委托暂停；方向：被拉回来（锚点或诊所出面，镇定检定成功后写 crisis pulledBack）、带着全部义体走向最后一战（crisis lastStand）、向暴恐机动队投降（crisis surrender），玩家别的合理办法也能接住`,
+        `危机章节（${c.since} 人性归零）：普通委托暂停；方向：被拉回来（身边的人或诊所出面，镇定检定成功后写 crisis pulledBack）、带着全部义体走向最后一战（crisis lastStand）、向暴恐机动队投降（crisis surrender），玩家别的合理办法也能接住`,
       );
     else if (c?.status === "lastStand")
       lines.push(

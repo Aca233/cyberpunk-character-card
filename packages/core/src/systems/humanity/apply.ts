@@ -1,7 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import {
-  ANCHORED_RECOVERY_CAP,
   DAILY_RECOVERY_CAP,
   HUMANITY_MAX,
   type HumanityCommand,
@@ -60,12 +59,9 @@ export function applyHumanity(
   if (delta > 0) {
     const day = gameDay(now);
     const used = draft.recovery.day === day ? draft.recovery.amount : 0;
-    const dayCap = draft.anchored ? ANCHORED_RECOVERY_CAP : DAILY_RECOVERY_CAP;
-    const room = Math.max(0, dayCap - used);
+    const room = Math.max(0, DAILY_RECOVERY_CAP - used);
     if (delta > room) {
-      notes.push(
-        `今天的人性恢复最多 ${dayCap}${draft.anchored ? "（有锚点）" : ""}，+${delta} 只生效 +${room}`,
-      );
+      notes.push(`今天的人性恢复最多 ${DAILY_RECOVERY_CAP}，+${delta} 只生效 +${room}`);
       delta = room;
     }
     const toCap = Math.max(0, cap - before);
@@ -122,12 +118,6 @@ export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance):
       `义体耐受：${TOLERANCE_LABELS[tolerance]}，义体的人性消耗 ×${TOLERANCE_FACTOR[tolerance]}`,
     ],
   };
-}
-
-/** 锚点有了或没了：决定每天的恢复上限 */
-export function setAnchored(draft: Draft<HumanityState>, anchored: boolean): ApplyOutcome {
-  draft.anchored = anchored;
-  return { ok: true, notes: [] };
 }
 
 /** 被拉回来：人性直接回到给定的值，不超过上限 */

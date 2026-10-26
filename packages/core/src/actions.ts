@@ -77,12 +77,6 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     weapon: z.string().min(1).max(64),
     mod: z.string().min(1).max(64),
   }),
-  /** 人物卡上设锚点或取消：add 设为锚点，remove 不再当锚点 */
-  z.strictObject({
-    type: z.literal("anchor"),
-    action: z.enum(["add", "remove"]),
-    npc: z.string().min(1).max(64),
-  }),
   /** 工作台：dismantle 把背包里的一件拆成零件，tune 用零件给武器升一档稀有度 */
   z.strictObject({
     type: z.literal("craft"),
@@ -336,11 +330,6 @@ function commandsFor(
       const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
       if (combat && action.action !== "pay") return "打斗中顾不上，打完再说";
       return [{ type: "squad.member", action: action.action, npc: action.npc }];
-    }
-    case "anchor": {
-      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
-      if (combat && action.action === "add") return "打斗中顾不上，打完再说";
-      return [{ type: "psychosis.anchor", action: action.action, npc: action.npc }];
     }
     case "equipItem":
     case "unequipItem": {

@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-/** 锚点最多几个 */
-export const ANCHORS_MAX = 3;
 /** 记忆空白只留最近几段 */
 export const BLACKOUTS_KEPT = 10;
 /** 被拉回来以后人性回到多少 */
@@ -34,30 +32,8 @@ export const DEPENDENCE_WINDOW = 14 * DAY;
 /** 依赖以后停药多久开始戒断 */
 export const WITHDRAWAL_AFTER = DAY;
 
-/** 一个锚点：玩家在人物卡上确认的过命交情 */
-export const AnchorEntrySchema = z.object({
-  /** 人物卡 id */
-  npc: z.string().min(1),
-  name: z.string().min(1),
-  since: z.number().int(),
-});
-export type AnchorEntry = z.infer<typeof AnchorEntrySchema>;
-
-export const AnchorLossSchema = z.enum(["dead", "broken"]);
-export const ANCHOR_LOSS_LABELS: Readonly<Record<z.infer<typeof AnchorLossSchema>, string>> = {
-  dead: "死去",
-  broken: "决裂",
-};
-
-export const LostAnchorSchema = AnchorEntrySchema.extend({
-  at: z.number().int(),
-  how: AnchorLossSchema,
-});
-
+/** 旧存档里的 anchors、lost 两个字段载入时直接丢掉（z.object 默认不保留未知键） */
 export const PsychosisStateSchema = z.object({
-  anchors: z.array(AnchorEntrySchema).max(ANCHORS_MAX).default([]),
-  /** 失去的锚点，旧的在前 */
-  lost: z.array(LostAnchorSchema).default([]),
   /** 最近 14 天吃压制剂的时间 */
   doses: z.array(z.number().int()).default([]),
   /** 最近一次发作在第几个场景；一个场景最多一次 */
@@ -89,17 +65,6 @@ export const PsychosisStateSchema = z.object({
   crises: z.number().int().min(0).default(0),
 });
 export type PsychosisState = z.infer<typeof PsychosisStateSchema>;
-
-/** 模型使用：{"type": "anchor", "npc": "rebecca", "how": "dead", "reason": "..."} */
-export const AnchorCommandSchema = z
-  .object({
-    type: z.literal("anchor"),
-    npc: z.string().min(1).describe("锚点的人物卡 id"),
-    how: AnchorLossSchema.describe("dead 死去，broken 和角色决裂"),
-    reason: z.string().min(1),
-  })
-  .describe("失去锚点：锚点死去或决裂，代码扣人性 15；锚点只能由玩家在人物卡上设，不要替玩家设");
-export type AnchorCommand = z.infer<typeof AnchorCommandSchema>;
 
 /** 模型使用：{"type": "suppressant", "reason": "..."} */
 export const SuppressantCommandSchema = z
@@ -149,7 +114,7 @@ export const CrisisCommandSchema = z
     path: z
       .enum(["pulledBack", "lastStand", "surrender"])
       .describe(
-        "pulledBack 被锚点或诊所拉回来（镇定检定成功之后才写），lastStand 带着全部义体走向最后一战，surrender 向暴恐机动队投降",
+        "pulledBack 被身边的人或诊所拉回来（镇定检定成功之后才写），lastStand 带着全部义体走向最后一战，surrender 向暴恐机动队投降",
       ),
     who: z.string().min(1).max(40).optional().describe("pulledBack：谁把角色拉回来"),
     reason: z.string().min(1),
@@ -158,15 +123,3 @@ export const CrisisCommandSchema = z
     "危机章节的走向：只在人性归零、危机章节里写。pulledBack 由代码拆掉大部分义体、人性回到 20、进入 7 天恢复期",
   );
 export type CrisisCommand = z.infer<typeof CrisisCommandSchema>;
-
-export const PsychosisInternalSchemas = {
-  /** 界面动作：在人物卡上设锚点或取消 */
-  "psychosis.anchor": z.object({
-    type: z.literal("psychosis.anchor"),
-    action: z.enum(["add", "remove"]),
-    npc: z.string().min(1),
-  }),
-};
-export type PsychosisInternal = z.infer<
-  (typeof PsychosisInternalSchemas)[keyof typeof PsychosisInternalSchemas]
->;

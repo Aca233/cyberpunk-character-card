@@ -310,21 +310,6 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
-  const anchorAction = useCallback(
-    async (action: "add" | "remove", npc: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "anchor", action, npc },
-        });
-      } catch (error) {
-        warn("habit", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
   const craftAction = useCallback(
     async (action: "dismantle" | "tune", id: string) => {
       try {
@@ -546,7 +531,6 @@ export function StoryScreen() {
         onOutfit={busy ? undefined : (action) => void outfitAction(action)}
         onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
         onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
-        onAnchor={busy ? undefined : (action, npc) => void anchorAction(action, npc)}
         onSquad={busy ? undefined : (action, npc) => void squadAction(action, npc)}
         onCraft={busy ? undefined : (action, id) => void craftAction(action, id)}
         onPhone={() => void openPhone()}

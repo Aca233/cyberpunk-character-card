@@ -258,6 +258,18 @@ export function pickSnapshot(
     .find((snapshot) => isSnapshotValid(snapshot, records));
 }
 
+/** 已经删掉的状态字段：旧日志里改它们的补丁重放时跳过，否则从新的初始世界重放会找不到路径 */
+const RETIRED_PATHS: readonly (readonly string[])[] = [
+  // 锚点机制已删除
+  ["slices", "psychosis", "anchors"],
+  ["slices", "psychosis", "lost"],
+  ["slices", "humanity", "anchored"],
+];
+
+function retired(path: readonly (string | number)[]): boolean {
+  return RETIRED_PATHS.some((r) => r.every((key, i) => path[i] === key));
+}
+
 /** 从快照往后按记录里的补丁重放：不重掷骰子，不调用模型 */
 export function replay(base: Snapshot, records: readonly LogRecord[]): WorldState {
   if (!isSnapshotValid(base, records)) {
@@ -267,7 +279,10 @@ export function replay(base: Snapshot, records: readonly LogRecord[]): WorldStat
   let world = base.world;
   for (const record of records.slice(base.nextSeq)) {
     if (record.kind === "void" || record.kind === "check" || voided.has(record.seq)) continue;
-    world = applyPatches(world, record.patches);
+    world = applyPatches(
+      world,
+      record.patches.filter((p) => !retired(p.path)),
+    );
   }
   return world;
 }

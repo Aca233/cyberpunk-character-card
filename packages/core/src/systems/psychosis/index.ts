@@ -4,42 +4,33 @@ import {
   applyEpisode,
   applyLostControl,
   closeBlackouts,
-  loseAnchor,
   openCrisis,
-  setAnchor,
   takeSuppressant,
   tickCrisis,
 } from "./apply";
-import { anchorRules } from "./prompt";
+import { suppressantRules } from "./prompt";
 import {
-  type AnchorCommand,
-  AnchorCommandSchema,
   type CrisisCommand,
   CrisisCommandSchema,
   type EpisodeCommand,
   EpisodeCommandSchema,
   type LostControlCommand,
   LostControlCommandSchema,
-  type PsychosisInternal,
-  PsychosisInternalSchemas,
   type PsychosisState,
   PsychosisStateSchema,
   type SuppressantCommand,
   SuppressantCommandSchema,
 } from "./schema";
 
-/** 赛博精神病：锚点、压制剂、发作、失控、记忆空白和危机章节；人性本身在 humanity 系统 */
+/** 赛博精神病：压制剂、发作、失控、记忆空白和危机章节；人性本身在 humanity 系统 */
 export const psychosis = defineSystem<
   PsychosisState,
-  AnchorCommand | SuppressantCommand | EpisodeCommand | LostControlCommand | CrisisCommand,
-  PsychosisInternal
+  SuppressantCommand | EpisodeCommand | LostControlCommand | CrisisCommand
 >({
   id: "psychosis",
-  dependsOn: ["humanity", "inventory", "npc", "world", "cyberware"],
+  dependsOn: ["humanity", "inventory", "world", "cyberware"],
   state: PsychosisStateSchema,
   initial: () => ({
-    anchors: [],
-    lost: [],
     doses: [],
     episodeScene: null,
     events: [],
@@ -49,17 +40,13 @@ export const psychosis = defineSystem<
     crises: 0,
   }),
   commands: {
-    anchor: AnchorCommandSchema,
     suppressant: SuppressantCommandSchema,
     episode: EpisodeCommandSchema,
     lostControl: LostControlCommandSchema,
     crisis: CrisisCommandSchema,
   },
-  internal: PsychosisInternalSchemas,
   apply(draft, command, ctx) {
     switch (command.type) {
-      case "anchor":
-        return loseAnchor(draft, command, ctx);
       case "suppressant":
         return takeSuppressant(draft, command, ctx);
       case "episode":
@@ -68,8 +55,6 @@ export const psychosis = defineSystem<
         return applyLostControl(draft, command, ctx);
       case "crisis":
         return applyCrisis(draft, command, ctx);
-      case "psychosis.anchor":
-        return setAnchor(draft, command, ctx);
     }
   },
   on: {
@@ -77,7 +62,7 @@ export const psychosis = defineSystem<
     "humanity.zero": (draft, ctx) => openCrisis(draft, ctx.now),
   },
   tick: (draft, span) => tickCrisis(draft, span.to),
-  rules: [anchorRules],
+  rules: [suppressantRules],
 });
 
 export * from "./apply";

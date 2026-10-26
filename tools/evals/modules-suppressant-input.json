@@ -1,6 +1,6 @@
 {
-  "id": "modules-anchors-input",
-  "title": "吃压制剂时带锚点和压制剂模块，背包里没有就拿不出来",
+  "id": "modules-suppressant-input",
+  "title": "吃压制剂时带压制剂模块，背包里没有就拿不出来",
   "tags": ["modules", "grounding"],
   "setup": {
     "history": [
@@ -14,7 +14,7 @@
   "input": { "text": "从背包里摸出一片压制剂吞下去" },
   "expect": {
     "modules": {
-      "require": ["anchors"],
+      "require": ["suppressant"],
       "forbid": ["combat", "hacking"]
     }
   },

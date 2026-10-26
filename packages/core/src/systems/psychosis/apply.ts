@@ -1,14 +1,10 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
-import { HUMANITY_KINDS, type HumanityState, PSYCHOSIS_BELOW } from "../humanity";
+import { type HumanityState, PSYCHOSIS_BELOW } from "../humanity";
 import type { InventoryState } from "../inventory";
-import type { NpcState } from "../npc";
 import { formatGameTime, type WorldClockState } from "../world";
 import {
-  ANCHOR_LOSS_LABELS,
-  ANCHORS_MAX,
-  type AnchorCommand,
   BLACKOUTS_KEPT,
   CRISIS_KEEP_COST,
   CRISIS_KEEP_PIECES,
@@ -21,7 +17,6 @@ import {
   type EpisodeCommand,
   type LostControlCommand,
   LostControlCommandSchema,
-  type PsychosisInternal,
   type PsychosisState,
   PsychosisStateSchema,
   SUPPRESSANT_ID,
@@ -33,11 +28,6 @@ import {
 } from "./schema";
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
-
-const anchored = (draft: Draft<PsychosisState>) => ({
-  type: "humanity.setAnchored",
-  anchored: draft.anchors.length > 0,
-});
 
 /** 压制剂现在的情况：药效到几点、耐受、依赖、戒断 */
 export interface SuppressantStatus {
@@ -60,66 +50,6 @@ export function suppressantStatus(doses: readonly number[], now: number): Suppre
     tolerant,
     dependent,
     withdrawal: dependent && last !== null && now - last >= WITHDRAWAL_AFTER,
-  };
-}
-
-/** 玩家在人物卡上设锚点或取消；取消不扣人性（决裂和死去由叙事模型写 anchor） */
-export function setAnchor(
-  draft: Draft<PsychosisState>,
-  command: Extract<PsychosisInternal, { type: "psychosis.anchor" }>,
-  ctx: SystemContext,
-): ApplyOutcome {
-  const npc = Object.values(ctx.read<NpcState>("npc").npcs).find((n) => n.id === command.npc);
-  const name = npc?.name ?? command.npc;
-  if (command.action === "remove") {
-    const index = draft.anchors.findIndex((a) => a.npc === command.npc);
-    if (index < 0) return fail(`${name}不是锚点`);
-    draft.anchors.splice(index, 1);
-    return { ok: true, notes: [`${name}不再是锚点`], emit: [anchored(draft)] };
-  }
-  if (!npc) return fail(`没有人物卡 ${command.npc}`);
-  if (!npc.alive) return fail(`${npc.name}已经不在了`);
-  if (!npc.met) return fail(`还没见过${npc.name}`);
-  if (draft.anchors.some((a) => a.npc === npc.id)) return fail(`${npc.name}已经是锚点`);
-  if (draft.anchors.length >= ANCHORS_MAX) {
-    return fail(`锚点最多 ${ANCHORS_MAX} 个，先取消一个`);
-  }
-  draft.anchors.push({ npc: npc.id, name: npc.name, since: ctx.now });
-  return {
-    ok: true,
-    notes: [`${npc.name}成了锚点：快撑不住的时候，这个人能把你拉回来`],
-    emit: [anchored(draft)],
-  };
-}
-
-/** 锚点死去或决裂：从锚点里去掉，人性 −15，同一个人只扣一次 */
-export function loseAnchor(
-  draft: Draft<PsychosisState>,
-  command: AnchorCommand,
-  ctx: SystemContext,
-): ApplyOutcome {
-  const index = draft.anchors.findIndex((a) => a.npc === command.npc);
-  const gone = draft.anchors[index];
-  if (index < 0 || !gone) {
-    const list = draft.anchors.map((a) => a.npc).join("、");
-    return fail(`${command.npc} 不是锚点；现在的锚点：${list || "没有"}`);
-  }
-  const entry = { npc: gone.npc, name: gone.name, since: gone.since };
-  draft.anchors.splice(index, 1);
-  draft.lost.push({ ...entry, at: ctx.now, how: command.how });
-  const how = ANCHOR_LOSS_LABELS[command.how];
-  return {
-    ok: true,
-    notes: [`失去锚点：${entry.name}（${how}）`],
-    emit: [
-      {
-        type: "humanity",
-        delta: HUMANITY_KINDS.anchor.sizes.medium,
-        reason: `失去锚点${entry.name}（${how}）：${command.reason}`,
-        event: `anchor:${entry.npc}`,
-      },
-      anchored(draft),
-    ],
   };
 }
 
@@ -312,7 +242,7 @@ export function applyCrisis(
   };
 }
 
-/** 给界面和提示词的锚点、压制剂、发作情况 */
+/** 给界面和提示词的压制剂、发作、危机情况 */
 export function psychosisView(slice: unknown, now: number, scene: number | null = null) {
   const state = PsychosisStateSchema.parse(slice ?? {});
   const s = suppressantStatus(state.doses, now);
@@ -340,18 +270,6 @@ export function psychosisView(slice: unknown, now: number, scene: number | null 
             since: formatGameTime(state.crisis.since),
             until: state.crisis.until === null ? null : formatGameTime(state.crisis.until),
           },
-    anchors: state.anchors.map((a) => ({
-      npc: a.npc,
-      name: a.name,
-      since: formatGameTime(a.since),
-    })),
-    lost: state.lost.map((l) => ({
-      npc: l.npc,
-      name: l.name,
-      how: ANCHOR_LOSS_LABELS[l.how],
-      at: formatGameTime(l.at),
-    })),
-    max: ANCHORS_MAX,
     suppressant: {
       until: s.until === null ? null : formatGameTime(s.until),
       tolerant: s.tolerant,
