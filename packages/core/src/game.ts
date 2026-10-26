@@ -99,6 +99,7 @@ import {
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
+import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
 import { type NpcCard, NpcStateSchema } from "./systems/npc/schema";
@@ -774,6 +775,8 @@ export function perceivedLine(
 
 /** 界面上最多列几条消息 */
 const PHONE_SHOWN = 20;
+/** 记忆面板显示最近几条修改记录 */
+const MEMORY_EDITS_SHOWN = 20;
 
 export function projectState(
   world: WorldState,
@@ -1080,6 +1083,33 @@ export function projectState(
         here: onStage(n, stage),
         memories: n.memories,
       })),
+    /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
+    memory: (() => {
+      const m = MemoryStateSchema.parse(world.slices.memory ?? {});
+      return {
+        scenes: [...m.scenes].reverse().map((s) => ({
+          scene: s.scene,
+          at: formatGameTime(s.at),
+          title: s.title,
+          text: s.text,
+          importance: s.importance,
+          importanceLabel: IMPORTANCE_LABELS[s.importance],
+          people: s.people.map((id) => npcs.npcs[id]?.name ?? id),
+          edited: s.edited === true,
+        })),
+        edits: [...m.edits]
+          .reverse()
+          .slice(0, MEMORY_EDITS_SHOWN)
+          .map((e) => ({
+            at: formatGameTime(e.at),
+            what: e.what === "scene" ? "场景摘要" : "共同记忆",
+            ref: e.ref,
+            action: e.action === "edit" ? "改写" : "删掉",
+            before: e.before,
+            after: e.after,
+          })),
+      };
+    })(),
     money: { eddies: economy.eddies },
     /** 警方热度：整星，另标有没有攒着半星；自然下降还要多久（分钟） */
     heat: {

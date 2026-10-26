@@ -18,6 +18,7 @@ import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
 import { MapPanel } from "./MapPanel";
+import { type MemoryEdit, MemoryPanel } from "./MemoryPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import { type SettledJob, SettlementCard } from "./Settlement";
@@ -106,6 +107,7 @@ export function StoryScreen() {
   const [atMap, setAtMap] = useState(false);
   const [atFactions, setAtFactions] = useState(false);
   const [atStash, setAtStash] = useState(false);
+  const [atMemory, setAtMemory] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
@@ -310,6 +312,24 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 改、删记忆：不调用模型；失败时提示原因，表单留着
+  const memoryAction = useCallback(
+    async (edit: MemoryEdit) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "editMemory", ...edit },
+        });
+      } catch (error) {
+        warn("memory", error);
+        await refresh();
+        throw error;
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
   const craftAction = useCallback(
     async (action: "dismantle" | "tune", id: string) => {
       try {
@@ -416,8 +436,12 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (journal || atDoc || atShop || atMap || atFactions || atStash || story.spend) return;
-      if (e.key === "j" || e.key === "J") {
+      if (journal || atDoc || atShop || atMap || atFactions || atStash || atMemory || story.spend)
+        return;
+      if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        setAtMemory(true);
+      } else if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
       } else if (e.key === "m" || e.key === "M") {
@@ -454,6 +478,7 @@ export function StoryScreen() {
     atMap,
     atFactions,
     atStash,
+    atMemory,
   ]);
 
   if (query.isPending) {
@@ -536,6 +561,7 @@ export function StoryScreen() {
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}
+        onMemory={() => setAtMemory(true)}
         onStash={() => setAtStash(true)}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
@@ -731,6 +757,13 @@ export function StoryScreen() {
           );
         })()}
       {atFactions && <FactionsPanel view={view} onClose={() => setAtFactions(false)} />}
+      {atMemory && (
+        <MemoryPanel
+          view={view}
+          onEdit={busy ? undefined : memoryAction}
+          onClose={() => setAtMemory(false)}
+        />
+      )}
       {atMap && (
         <MapPanel
           view={view}

@@ -189,3 +189,19 @@ export const SeedNpcSchema = NpcCardSchema.extend({
   met: z.boolean().default(false),
 });
 export type SeedNpc = z.infer<typeof SeedNpcSchema>;
+
+/**
+ * 只能由代码发出：玩家在记忆面板改写或删掉一条共同记忆。
+ * index 是 memories 里的下标，before 是玩家看到的原文，对不上（期间又写了新的）就不改
+ */
+export const NpcMemoryEditSchema = z.object({
+  type: z.literal("npc.memoryEdit"),
+  id: NpcIdSchema,
+  index: z.number().int().min(0),
+  before: z.string().min(1),
+  action: z.enum(["edit", "remove"]),
+  text: z.string().trim().min(1).max(120).optional(),
+});
+export type NpcMemoryEdit = z.infer<typeof NpcMemoryEditSchema>;
+
+export type NpcInternal = SeedNpc | NpcMemoryEdit;

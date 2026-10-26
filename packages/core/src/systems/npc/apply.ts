@@ -8,6 +8,7 @@ import {
   MEMORY_KEPT,
   type Npc,
   type NpcCommand,
+  type NpcMemoryEdit,
   type NpcState,
   type SeedNpc,
 } from "./schema";
@@ -39,6 +40,27 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
     doing: null,
   };
   return { ok: true };
+}
+
+/** 记忆面板：改写或删掉一条共同记忆；原文对不上就不改，死了的人的记忆也能改 */
+export function editNpcMemory(draft: Draft<NpcState>, command: NpcMemoryEdit): ApplyOutcome {
+  const npc = draft.npcs[command.id];
+  if (!npc) return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡` };
+  if (npc.memories[command.index] !== command.before) {
+    return { ok: false, reason: `和${npc.name}的这条共同记忆已经变了，刷新后再改` };
+  }
+  if (command.action === "remove") {
+    npc.memories.splice(command.index, 1);
+    return { ok: true, notes: [`删掉了和${npc.name}的一条共同记忆`] };
+  }
+  const text = command.text?.trim();
+  if (!text) return { ok: false, reason: "改写的内容不能为空" };
+  if (text === command.before) return { ok: false, reason: "内容没变" };
+  if (npc.memories.some((m, i) => i !== command.index && m === text)) {
+    return { ok: false, reason: `和${npc.name}已经有一条一样的共同记忆` };
+  }
+  npc.memories[command.index] = text;
+  return { ok: true, notes: [`改写了和${npc.name}的一条共同记忆`] };
 }
 
 export function applyNpc(

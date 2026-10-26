@@ -1612,6 +1612,68 @@
   font-size: var(--fs-label);
 }
 
+/* ———— 记忆面板 ———— */
+
+.memoryForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+}
+
+.memoryText {
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.3rem 0.5rem;
+  resize: vertical;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--cp-text);
+  background: rgb(0 0 0 / 45%);
+  border: 1px solid var(--cp-cyan-dim);
+}
+
+.memoryText:focus {
+  outline: none;
+  border-color: var(--cp-cyan);
+}
+
+.memoryActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.memoryTag {
+  padding: 0 0.3rem;
+  border: 1px solid var(--cp-cyan-dim);
+  font-size: var(--fs-label);
+}
+
+.memoryTag[data-importance="key"] {
+  border-color: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+.memoryTag[data-importance="minor"] {
+  opacity: 0.6;
+}
+
+.memoryBonds {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memoryBonds > li + li {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--cp-cyan-dim);
+}
+
 .flashback {
   padding: 0.2rem 0.6rem;
   border: 1px dashed var(--cp-yellow-dim);

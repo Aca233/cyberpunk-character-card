@@ -259,6 +259,7 @@ export function SidePanel({
   onPhone,
   onMap,
   onFactions,
+  onMemory,
   onStash,
   onSquad,
   onCraft,
@@ -292,6 +293,8 @@ export function SidePanel({
   readonly onMap: () => void;
   /** 打开势力页 */
   readonly onFactions: () => void;
+  /** 打开记忆面板：场景摘要、共同记忆和修改记录 */
+  readonly onMemory: () => void;
   /** 打开存放箱和后备箱 */
   readonly onStash: () => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
@@ -742,6 +745,9 @@ export function SidePanel({
           </button>
           <button type="button" onClick={onFactions}>
             势力 [F]
+          </button>
+          <button type="button" onClick={onMemory}>
+            记忆 [R]
           </button>
           {(view.safehouse.homes.length > 0 || view.safehouse.trunks.length > 0) && (
             <button type="button" onClick={onStash}>

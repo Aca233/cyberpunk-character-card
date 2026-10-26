@@ -36,12 +36,32 @@ export const SceneSummaryFieldsSchema = z.object({
 export const SceneSummarySchema = SceneSummaryFieldsSchema.extend({
   /** 收场时的游戏时间 */
   at: z.number().int(),
+  /** 玩家在记忆面板改过 */
+  edited: z.boolean().optional(),
 });
 export type SceneSummary = z.infer<typeof SceneSummarySchema>;
 
-/** 剧情记忆：现在只有场景摘要；章节摘要和全剧梗概在后续切片 */
+/** 修改记录最多留这么多条，先删最早的 */
+export const MEMORY_EDITS_KEPT = 100;
+
+/** 记忆面板的一条修改记录：改了什么、原来是什么、改成什么（删掉为 null） */
+export const MemoryEditLogSchema = z.object({
+  /** 改的时候的游戏时间 */
+  at: z.number().int(),
+  /** scene 场景摘要，bond 共同记忆 */
+  what: z.enum(["scene", "bond"]),
+  /** 给人看的出处，例如「第 3 场」「朱迪」 */
+  ref: z.string().min(1).max(40),
+  action: z.enum(["edit", "remove"]),
+  before: z.string(),
+  after: z.string().nullable(),
+});
+export type MemoryEditLog = z.infer<typeof MemoryEditLogSchema>;
+
+/** 剧情记忆：场景摘要和记忆面板的修改记录；章节摘要和全剧梗概在后续切片 */
 export const MemoryStateSchema = z.object({
   scenes: z.array(SceneSummarySchema).default([]),
+  edits: z.array(MemoryEditLogSchema).default([]),
 });
 export type MemoryState = z.infer<typeof MemoryStateSchema>;
 
@@ -51,4 +71,22 @@ export const MemorySceneCommandSchema = SceneSummaryFieldsSchema.extend({
 });
 export type MemorySceneCommand = z.infer<typeof MemorySceneCommandSchema>;
 
-export type MemoryInternal = MemorySceneCommand;
+/** 只能由代码发出：玩家在记忆面板改写或删掉一条场景摘要；before 是玩家看到的正文，对不上就不改 */
+export const MemoryEditCommandSchema = z.object({
+  type: z.literal("memory.edit"),
+  scene: z.number().int().min(0),
+  before: z.string().min(1),
+  action: z.enum(["edit", "remove"]),
+  title: z.string().trim().min(1).max(SUMMARY_TITLE_CHARS).optional(),
+  text: z.string().trim().min(1).max(SUMMARY_CHARS).optional(),
+  importance: ImportanceSchema.optional(),
+});
+export type MemoryEditCommand = z.infer<typeof MemoryEditCommandSchema>;
+
+/** 只能由代码发出：记一条修改记录（共同记忆的修改也记在这里） */
+export const MemoryLogCommandSchema = MemoryEditLogSchema.omit({ at: true }).extend({
+  type: z.literal("memory.log"),
+});
+export type MemoryLogCommand = z.infer<typeof MemoryLogCommandSchema>;
+
+export type MemoryInternal = MemorySceneCommand | MemoryEditCommand | MemoryLogCommand;
