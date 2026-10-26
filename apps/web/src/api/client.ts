@@ -267,6 +267,19 @@ export interface TurnContext {
     readonly fallback: readonly string[];
     readonly picked: readonly string[];
   } | null;
+  /** 设定库：检索词、挑中的原作资料和分数、没给的原因；没接文本库或旧记录为 null，旧后端没有 */
+  readonly lore?: {
+    readonly terms: readonly string[];
+    readonly picked: readonly {
+      readonly source: string;
+      readonly title: string;
+      readonly kind: string;
+      readonly score: number;
+      readonly hits: readonly string[];
+    }[];
+    readonly candidates: number;
+    readonly note: string | null;
+  } | null;
   /** 这一轮之后城里的动静；旧后端没有 */
   readonly city?: readonly CityEventView[];
   /** 账目对账：最近 10 轮各改了哪些硬数值；旧版后端没有 */

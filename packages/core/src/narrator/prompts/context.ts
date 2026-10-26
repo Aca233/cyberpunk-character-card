@@ -144,6 +144,8 @@ export interface PromptExtras {
   readonly decided?: readonly string[] | undefined;
   /** ① 判断调出的旧记忆；写正文时单独放一栏 */
   readonly recalled?: readonly Memory[] | undefined;
+  /** 设定库查到的原作资料，已经拼成单独的引用块；只给写正文那一步 */
+  readonly lore?: string | undefined;
   /** 开场的游戏时间；按它算原剧时间线走到第几天，没给就不带 */
   readonly startTime?: number | undefined;
 }

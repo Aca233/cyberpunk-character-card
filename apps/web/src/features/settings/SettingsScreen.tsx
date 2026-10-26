@@ -355,6 +355,27 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           )}
         </Section>
       )}
+      {ctx.lore && (
+        <Section title={`设定库（原作资料，${ctx.lore.picked.length} 段）`}>
+          <p>
+            检索词：{ctx.lore.terms.length > 0 ? ctx.lore.terms.join("、") : "没有"}；命中{" "}
+            {ctx.lore.candidates} 段
+          </p>
+          {ctx.lore.note && <p className={styles.dim}>没给的原因：{ctx.lore.note}</p>}
+          {ctx.lore.picked.length > 0 && (
+            <ul>
+              {ctx.lore.picked.map((p) => (
+                <li key={p.source}>
+                  <strong>{p.score}</strong> {p.kind}「{p.title}」
+                  <span className={styles.dim}>
+                    （命中 {p.hits.join("、")}；{p.source}）
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
       {ctx.offscreenSkip && (
         <Section title="⑥ 场外推演">
           <p className={styles.dim}>这一轮没跑：{ctx.offscreenSkip}</p>

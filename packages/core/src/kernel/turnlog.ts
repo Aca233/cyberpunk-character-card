@@ -97,6 +97,24 @@ const TurnRecordSchema = z.object({
       fallback: z.array(z.string()),
     })
     .optional(),
+  /** 设定库：检索词、挑中的原作资料（来源键、分数、命中词）和当时发出的引用块；只供剧透视图，存档只在本机 */
+  lore: z
+    .object({
+      terms: z.array(z.string()),
+      picked: z.array(
+        z.object({
+          source: z.string(),
+          title: z.string(),
+          kind: z.string(),
+          score: z.number(),
+          hits: z.array(z.string()),
+        }),
+      ),
+      candidates: z.number().int().min(0),
+      note: z.string().optional(),
+      section: z.string().optional(),
+    })
+    .optional(),
   /** 本轮带了哪些规则模块 */
   modules: z.array(z.string()).optional(),
   usage: z

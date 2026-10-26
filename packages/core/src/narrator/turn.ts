@@ -52,6 +52,7 @@ import {
   VoiceSchema,
 } from "./block";
 import { schemaDoc } from "./doc";
+import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import {
   buildOffscreenPrompt,
   OFFSCREEN_TEMPERATURE,
@@ -267,6 +268,8 @@ export interface NarratorTurn {
   readonly expanded: readonly Memory[];
   /** 扩展层为什么检索、前几名的分数和退回原因；没检索时为 undefined，只供剧透视图 */
   readonly retrieval: Expansion | undefined;
+  /** 设定库：检索词、挑中的原作资料和分数；没接文本库或没查时为 undefined，只供剧透视图 */
+  readonly lore: LoreTrace | undefined;
 }
 
 export type NarratorResult =
@@ -291,6 +294,8 @@ export interface NarratorDeps {
   readonly offscreen?: number | null | undefined;
   /** 路上偶遇的频率倍数；0 是关掉，没写按 1 */
   readonly encounters?: number | undefined;
+  /** 设定库：本机官方文本库的只读检索；没有文本库时不接，这一步自动关掉 */
+  readonly lore?: LoreSource | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -689,10 +694,15 @@ export async function runNarratorTurn(
       : undefined;
 
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
+  // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
+  const lore = ooc
+    ? undefined
+    : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {});
   const prompt = buildNarratorPrompt(world, records, plan, {
     ...extras,
     decided,
     recalled: [...recalled, ...expanded],
+    lore: lore?.section,
   });
   const splitter = new StateSplitter();
   b.checkAborted();
@@ -1157,6 +1167,7 @@ export async function runNarratorTurn(
       recalled,
       expanded,
       retrieval,
+      lore: lore?.trace,
     },
   };
 }

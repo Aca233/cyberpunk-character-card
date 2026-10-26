@@ -1,6 +1,7 @@
 export * from "./block";
 export * from "./doc";
 export * from "./examples";
+export * from "./lore";
 export * from "./modules";
 export * from "./offscreen";
 export * from "./pending";

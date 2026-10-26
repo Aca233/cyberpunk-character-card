@@ -189,6 +189,7 @@ export function buildNarratorPrompt(
       scene: situation(world, view, plan, extras),
       decided: extras.decided,
       recall: recalledSection(extras.recalled),
+      lore: extras.lore,
       habits: proseHabits(
         view.turns.map((t) => t.text),
         names,

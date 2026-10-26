@@ -1,5 +1,5 @@
 import { glossary } from "@cp/content";
-import type { Clock, Rng } from "@cp/core";
+import type { Clock, LoreSource, Rng } from "@cp/core";
 import { Hono } from "hono";
 import type { AuthoringStore } from "./authoring";
 import type { AuthoringTextSearch } from "./authoring-search";
@@ -31,6 +31,8 @@ export interface AppDeps {
   /** 本机内容工坊；非开发模式即使传入也不挂载接口。 */
   readonly authoring?: AuthoringStore | undefined;
   readonly authoringText?: AuthoringTextSearch | undefined;
+  /** 设定库：本机官方文本库的只读检索；没有文本库时不传 */
+  readonly lore?: LoreSource | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -61,6 +63,7 @@ export function createApp(deps: AppDeps): Hono {
     rng: deps.rng ?? cryptoRng,
     log: deps.log,
     evalDrafts: deps.evalDrafts,
+    lore: deps.lore,
   });
   const app = new Hono();
   app.onError(async (error, c) => {

@@ -28,6 +28,7 @@ import {
   judgeCandidates,
   type LlmMessage,
   type LogRecord,
+  type LoreSource,
   loadoutText,
   logVersion,
   memoryPool,
@@ -136,6 +137,8 @@ export interface GameDeps {
   readonly log: (message: string) => void;
   /** 「存为评测用例」写草稿的目录；不给时不能存 */
   readonly evalDrafts?: string | undefined;
+  /** 设定库：本机官方文本库的只读检索；没有文本库时不给，写正文就不带原作资料 */
+  readonly lore?: LoreSource | undefined;
 }
 
 interface Loaded {
@@ -703,6 +706,7 @@ export class GameService {
               ...extras,
               decided: record.decided,
               recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
+              lore: record.lore?.section,
             }),
           ),
         );
@@ -775,6 +779,15 @@ export class GameService {
             ? { ...record.retrieval, picked: (record.expanded ?? []).map((m) => m.title) }
             : null,
           recalled: (record.recalled ?? []).map((m) => m.title),
+          // 设定库：检索词、挑中的原作资料和分数、没给的原因；没接文本库或旧记录时为 null
+          lore: record.lore
+            ? {
+                terms: record.lore.terms,
+                picked: record.lore.picked,
+                candidates: record.lore.candidates,
+                note: record.lore.note ?? null,
+              }
+            : null,
           // ⑥ 没跑的原因：收场时记下的，其余按这一轮的情况推
           offscreenSkip: record.offscreen
             ? null
@@ -906,6 +919,7 @@ export class GameService {
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
+          lore: this.deps.lore,
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },
@@ -1014,6 +1028,17 @@ export class GameService {
                 triggers: [...turn.retrieval.triggers],
                 top: turn.retrieval.top.map((t) => ({ ...t })),
                 fallback: [...turn.retrieval.fallback],
+              },
+            }
+          : {}),
+        ...(turn.lore !== undefined
+          ? {
+              lore: {
+                terms: [...turn.lore.terms],
+                picked: turn.lore.picked.map((p) => ({ ...p, hits: [...p.hits] })),
+                candidates: turn.lore.candidates,
+                ...(turn.lore.note !== undefined ? { note: turn.lore.note } : {}),
+                ...(turn.lore.section !== undefined ? { section: turn.lore.section } : {}),
               },
             }
           : {}),
