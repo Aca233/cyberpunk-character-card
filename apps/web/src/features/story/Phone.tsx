@@ -74,6 +74,38 @@ function Profile({ npc }: { readonly npc: Npc }) {
         ) : (
           <p className={styles.dim}>还没见过面，下面是听来的。</p>
         )}
+        {npc.body && (
+          <>
+            <p className={styles.npcMemoryTitle}>身体</p>
+            <p className={styles.factionLine}>
+              {npc.body.wound}
+              {npc.body.gear.length > 0 && ` · 带着 ${npc.body.gear.join("、")}`}
+            </p>
+            {npc.body.scan ? (
+              <>
+                <p className={styles.factionLine}>
+                  <span className={styles.memoryTag}>扫描</span> {npc.body.scan.tier} · 威胁{" "}
+                  <b data-threat={npc.body.scan.threat}>
+                    {npc.body.scan.threat === "skull" ? "☠ 骷髅" : npc.body.scan.threatLabel}
+                  </b>
+                </p>
+                <p className={styles.factionLine}>
+                  {npc.body.scan.attributes.map((a) => `${a.label} ${a.value}`).join(" · ")}
+                </p>
+                <p className={styles.factionLine}>
+                  生命 {npc.body.scan.hp}/{npc.body.scan.max}{" "}
+                  <meter min={0} max={npc.body.scan.max} value={npc.body.scan.hp} />
+                </p>
+                <p className={styles.factionLine}>
+                  义体：{npc.body.scan.chrome.join("、") || "没扫出义体"} · 人性：
+                  {npc.body.scan.humanityStage}
+                </p>
+              </>
+            ) : (
+              <p className={styles.dim}>没扫描过，属性、生命和义体还看不出来。</p>
+            )}
+          </>
+        )}
         <p className={styles.npcMemoryTitle}>你知道的</p>
         {npc.known.length === 0 ? (
           <p className={styles.dim}>除了见面看到的，还没打听到什么。</p>

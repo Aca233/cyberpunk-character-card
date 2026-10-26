@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import { memberDeathBlocked } from "../dice";
+import { applyNpcBody, bodyProblems } from "./body";
 import {
   AFFINITY_MAX,
   AFFINITY_MIN,
@@ -30,9 +31,15 @@ function nameTaken(state: Draft<NpcState>, name: string, alias?: string): Npc | 
   });
 }
 
-export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome {
+export function seedNpc(
+  draft: Draft<NpcState>,
+  command: SeedNpc,
+  data: Readonly<Record<string, unknown>> = {},
+): ApplyOutcome {
   const { type: _type, affinity, met, ...card } = command;
   if (draft.npcs[card.id]) return { ok: false, reason: `人物 ${card.id} 已经有卡了` };
+  const problems = bodyProblems(card.body, data);
+  if (problems.length) return { ok: false, reason: `${card.name} 的身体：${problems.join("；")}` };
   draft.npcs[card.id] = {
     ...card,
     affinity,
@@ -45,6 +52,7 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
     relation: null,
     ledger: [],
     known: [],
+    vitals: null,
   };
   return { ok: true };
 }
@@ -75,6 +83,7 @@ export function applyNpc(
   command: NpcCommand,
   now: number,
   facts: Readonly<Record<string, unknown>> = {},
+  data: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
   if (command.type === "npc") {
     const { type: _type, location, ...card } = command;
@@ -86,6 +95,13 @@ export function applyNpc(
       return {
         ok: false,
         reason: `已经有叫「${taken.name}」的人物（${taken.id}）；是同一个人就用 meet，不是就换个名字`,
+      };
+    }
+    const problems = bodyProblems(card.body, data);
+    if (problems.length) {
+      return {
+        ok: false,
+        reason: `${card.name} 的 body：${problems.join("；")}；id 照物品表和义体表写`,
       };
     }
     draft.npcs[card.id] = {
@@ -102,6 +118,7 @@ export function applyNpc(
       relation: null,
       ledger: [],
       known: [],
+      vitals: null,
     };
     return { ok: true, notes: [`新人物：${card.name}`] };
   }
@@ -121,6 +138,16 @@ export function applyNpc(
     };
   }
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
+  if (
+    command.type === "npcHurt" ||
+    command.type === "npcHeal" ||
+    command.type === "npcGear" ||
+    command.type === "npcChrome" ||
+    command.type === "npcHumanity" ||
+    command.type === "npcScan"
+  ) {
+    return applyNpcBody(npc as Npc, command, now, data);
+  }
 
   switch (command.type) {
     case "meet": {

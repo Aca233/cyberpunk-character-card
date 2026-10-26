@@ -188,6 +188,15 @@ unique(
   "人物卡",
   (npcs as readonly { id: string }[]).map((n) => n.id),
 );
+// 人物卡的身体：原作人物都要写；装备和义体只能用物品表、义体表里有的
+for (const n of npcs) {
+  if (!n.body) {
+    if (n.canon) errors.push(`人物 ${n.id}：原作人物要写 body（档位、属性、装备、义体）`);
+    continue;
+  }
+  refs(`人物 ${n.id} 的装备`, n.body.gear, itemIds, "物品");
+  refs(`人物 ${n.id} 的义体`, n.body.cyberware, chromeIds, "义体");
+}
 unique(
   "委托模板",
   jobTemplates.map((t) => t.kind),

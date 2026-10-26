@@ -101,6 +101,7 @@ import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/appl
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
+import { attributeSum, bodyView } from "./systems/npc/body";
 import { onStage } from "./systems/npc/prompt";
 import {
   KNOWN_SOURCE_LABELS,
@@ -1110,6 +1111,13 @@ export function projectState(
           how: e.how ?? null,
         })),
         memories: n.memories,
+        /**
+         * 身体：见过的人看伤势和装备；扫描过的再看档位、威胁、属性、生命、义体和人性阶段。
+         * 人性数值只给叙事模型，这里没有；没见过的人是 null
+         */
+        body: n.met
+          ? bodyView(n, data, world.time, attributeSum(effectiveAttributes(character)))
+          : null,
       })),
     /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
     memory: (() => {

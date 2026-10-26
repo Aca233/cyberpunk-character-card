@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DamageTierSchema } from "../dice";
 
 export const AFFINITY_MIN = -100;
 export const AFFINITY_MAX = 100;
@@ -10,6 +11,108 @@ export const MEMORY_KEPT = 12;
 const NpcIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 rebecca");
+
+/**
+ * 人物的档位：mook 普通人、pro 老手、elite 精英、legend 传奇（本作改编）。
+ * 决定属性总和的范围、没写属性时的默认值、算生命上限时当作多少街头声望
+ */
+export const NpcTierSchema = z.enum(["mook", "pro", "elite", "legend"]);
+export type NpcTier = z.infer<typeof NpcTierSchema>;
+export const NPC_TIER_LABELS: Readonly<Record<NpcTier, string>> = {
+  mook: "普通人",
+  pro: "老手",
+  elite: "精英",
+  legend: "传奇",
+};
+/** 五项属性（不算义体加成）加起来的范围，建卡时代码校验（暂定，试玩时调） */
+export const NPC_TIER_ATTR_SUM: Readonly<Record<NpcTier, readonly [number, number]>> = {
+  mook: [15, 35],
+  pro: [25, 50],
+  elite: [40, 70],
+  legend: [55, 100],
+};
+/** 没写属性时每项的默认值 */
+export const NPC_TIER_DEFAULT_ATTR: Readonly<Record<NpcTier, number>> = {
+  mook: 5,
+  pro: 7,
+  elite: 10,
+  legend: 13,
+};
+/** 算生命上限时当作的街头声望 */
+export const NPC_TIER_CRED: Readonly<Record<NpcTier, number>> = {
+  mook: 0,
+  pro: 10,
+  elite: 25,
+  legend: 40,
+};
+export const NPC_ATTR_MIN = 3;
+export const NPC_ATTR_MAX = 20;
+/** 装备栏最多几件、义体最多几件 */
+export const NPC_GEAR_MAX = 6;
+export const NPC_CHROME_MAX = 8;
+
+const NpcAttrValueSchema = z.number().int().min(NPC_ATTR_MIN).max(NPC_ATTR_MAX);
+/** 和玩家同一套五项属性 */
+export const NpcAttributesSchema = z.object({
+  body: NpcAttrValueSchema,
+  reflexes: NpcAttrValueSchema,
+  tech: NpcAttrValueSchema,
+  intelligence: NpcAttrValueSchema,
+  cool: NpcAttrValueSchema,
+});
+export type NpcAttributes = z.infer<typeof NpcAttributesSchema>;
+
+function attrSum(a: NpcAttributes): number {
+  return a.body + a.reflexes + a.tech + a.intelligence + a.cool;
+}
+
+/**
+ * 人物卡上的身体：档位、属性、装备栏（物品表 id）、义体（义体表 id）、开局人性。
+ * id 在不在表里要拿内容数据才能查，由结算校验；这里只查范围和重复
+ */
+export const NpcBodyCardSchema = z
+  .object({
+    tier: NpcTierSchema.describe("mook 普通人，pro 老手，elite 精英，legend 传奇；按身份选"),
+    attributes: NpcAttributesSchema.optional().describe(
+      `五项属性 ${NPC_ATTR_MIN}–${NPC_ATTR_MAX}，不算义体加成；不写按档位给默认值`,
+    ),
+    gear: z
+      .array(z.string().min(1))
+      .max(NPC_GEAR_MAX)
+      .default([])
+      .describe("装备栏：物品表里的 id，手里的武器和身上的衣服"),
+    cyberware: z
+      .array(z.string().min(1))
+      .max(NPC_CHROME_MAX)
+      .default([])
+      .describe("装着的义体：义体表里的 id"),
+    humanity: z
+      .number()
+      .int()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("开局人性；不写按 100 减去义体消耗"),
+  })
+  .superRefine((b, ctx) => {
+    if (b.attributes) {
+      const sum = attrSum(b.attributes);
+      const [lo, hi] = NPC_TIER_ATTR_SUM[b.tier];
+      if (sum < lo || sum > hi) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${NPC_TIER_LABELS[b.tier]}的五项属性加起来要在 ${lo}–${hi}，现在是 ${sum}`,
+        });
+      }
+    }
+    if (new Set(b.gear).size !== b.gear.length) {
+      ctx.addIssue({ code: "custom", message: "装备栏里有重复的物品" });
+    }
+    if (new Set(b.cyberware).size !== b.cyberware.length) {
+      ctx.addIssue({ code: "custom", message: "义体里有重复的" });
+    }
+  });
+export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
 export const NpcCardSchema = z.object({
@@ -34,6 +137,8 @@ export const NpcCardSchema = z.object({
   /** 常在的地点 id */
   home: z.string().min(1).optional(),
   canon: z.boolean().default(false),
+  /** 身体：档位、属性、装备、义体、开局人性；不写按普通人的默认值补 */
+  body: NpcBodyCardSchema.optional(),
 });
 export type NpcCard = z.infer<typeof NpcCardSchema>;
 
@@ -109,8 +214,23 @@ export const NpcSchema = NpcCardSchema.extend({
   ledger: z.array(LedgerEntrySchema).default([]),
   /** 玩家角色知道的这个人的事，旧的在前；人物档案只显示这些；旧存档没有 */
   known: z.array(KnownFactSchema).default([]),
+  /**
+   * 会变的身体数值：生命值（hp 是 hpAt 那一刻的值，之后按时间惰性回复）、人性数值、最近一次受伤和被扫描的时间。
+   * 第一次受伤、治疗、换装备或装义体时按 body 补上；旧存档和没碰过的人是 null。人性数值只给叙事模型
+   */
+  vitals: z
+    .object({
+      hp: z.number().int().min(0),
+      hpAt: z.number().int(),
+      humanity: z.number().int().min(0).max(100),
+      hurtAt: z.number().int().nullable(),
+      scannedAt: z.number().int().nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 export type Npc = z.infer<typeof NpcSchema>;
+export type NpcVitals = NonNullable<Npc["vitals"]>;
 
 export const NpcStateSchema = z.object({
   npcs: z.record(z.string(), NpcSchema),
@@ -282,7 +402,86 @@ export const LearnSchema = z
   );
 export type Learn = z.infer<typeof LearnSchema>;
 
+export const NpcHurtSchema = z
+  .object({
+    type: z.literal("npcHurt"),
+    id: NpcIdSchema,
+    tier: DamageTierSchema.describe("graze 擦伤，heavy 重伤，lethal 致命；和玩家的伤害档一样"),
+    reason: z.string().trim().min(1).max(80),
+  })
+  .describe(
+    "有卡的人受了伤（打斗里中枪挨刀、出事故）：按档扣他的生命值，装着护甲义体降一档；打到 0 是倒下，不会自己好，死没死另写 npcDeath",
+  );
+export type NpcHurt = z.infer<typeof NpcHurtSchema>;
+
+export const NpcHealSchema = z
+  .object({
+    type: z.literal("npcHeal"),
+    id: NpcIdSchema,
+    how: z
+      .enum(["rest", "maxdoc", "ripperdoc"])
+      .describe("rest 休整了一阵，maxdoc 用了治疗品，ripperdoc 找义体医生治好了"),
+    reason: z.string().trim().min(1).max(80).optional(),
+  })
+  .describe("有卡的人得到治疗；倒下（生命 0）的人只有 ripperdoc 能救起来");
+export type NpcHeal = z.infer<typeof NpcHealSchema>;
+
+export const NpcGearSchema = z
+  .object({
+    type: z.literal("npcGear"),
+    id: NpcIdSchema,
+    action: z.enum(["add", "remove"]),
+    item: z.string().min(1).describe("物品表里的 id"),
+  })
+  .describe(
+    `有卡的人的装备栏换了东西：拿到新武器、换衣服、丢了枪；最多 ${NPC_GEAR_MAX} 件。玩家角色给他买的，同时写 money 扣钱`,
+  );
+export type NpcGear = z.infer<typeof NpcGearSchema>;
+
+export const NpcChromeSchema = z
+  .object({
+    type: z.literal("npcChrome"),
+    id: NpcIdSchema,
+    action: z.enum(["install", "remove"]),
+    cyberware: z.string().min(1).describe("义体表里的 id"),
+  })
+  .describe(
+    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，装上会压低他的人性上限。玩家角色出钱装的，同时写 money 扣钱`,
+  );
+export type NpcChrome = z.infer<typeof NpcChromeSchema>;
+
+export const NpcHumanitySchema = z
+  .object({
+    type: z.literal("npcHumanity"),
+    id: NpcIdSchema,
+    kind: z
+      .enum(["cruelty", "loss", "rest"])
+      .describe(
+        "cruelty 他做了残忍的事，loss 他失去了重要的人，rest 他好好休整、和在乎的人待了一阵",
+      ),
+    size: z.enum(["small", "medium", "large"]),
+    reason: z.string().trim().min(1).max(80),
+  })
+  .describe("有卡的人的人性变化：和玩家角色同一套档位，代码换算；数值只有叙事模型看得到");
+export type NpcHumanity = z.infer<typeof NpcHumanitySchema>;
+
+export const NpcScanSchema = z
+  .object({
+    type: z.literal("npcScan"),
+    id: NpcIdSchema,
+  })
+  .describe(
+    "玩家角色用义眼扫描了有卡的人（打斗里扫描有卡敌人也写这条）：之后人物档案能看到他的属性、威胁、生命、显眼的义体和人性阶段",
+  );
+export type NpcScan = z.infer<typeof NpcScanSchema>;
+
 export type NpcCommand =
+  | NpcHurt
+  | NpcHeal
+  | NpcGear
+  | NpcChrome
+  | NpcHumanity
+  | NpcScan
   | Learn
   | NewNpc
   | Meet

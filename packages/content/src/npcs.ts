@@ -6,6 +6,8 @@ import { npcRules } from "@cp/core";
  * - 朱迪、瑞吉娜、维克多：2077 开局的引导委托用（开场 lizzies-2077 的 cast）。原作依据《赛博朋克 2077》（2.x），2026-10-25 查
  *   cyberpunk.fandom.com 的 Judy_Álvarez、Regina_Jones、Viktor_Vektor；译名照本机文本库（朱迪·阿尔瓦雷兹、瑞吉娜·琼斯、维克多·维克托）。
  *   外貌和口吻的细节、维克多的诉求底线是本作改编
+ * - body（档位、属性、装备、义体、开局人性）全部是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值和具体型号。
+ *   丽贝卡的 Guts、杰克的 La Chingona Dorada 照原作的不朽武器配；曼因的人性压得很低是照他瞒着的发病征兆写的
  */
 export const npcs = npcRules.NpcCardSchema.extend({
   affinity: npcRules.AffinitySchema.shape.delta.optional(),
@@ -29,6 +31,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "嘴上最凶，其实最怕再失去身边的人",
       home: "lizzies-bar",
       canon: true,
+      body: {
+        tier: "elite",
+        attributes: { body: 6, reflexes: 15, tech: 6, intelligence: 5, cool: 10 },
+        gear: ["guts", "street-jacket"],
+        cyberware: ["prosthetic-arms", "kiroshi-mk1"],
+      },
     },
     {
       id: "maine",
@@ -46,6 +54,19 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "义体越装越多，最近开始出现幻觉和失控，他瞒着所有人，只有朵里欧知道",
       home: "lizzies-bar",
       canon: true,
+      body: {
+        tier: "legend",
+        attributes: { body: 18, reflexes: 12, tech: 6, intelligence: 6, cool: 14 },
+        gear: ["copperhead", "street-jacket"],
+        cyberware: [
+          "gorilla-arms",
+          "subdermal-armor",
+          "titanium-bones",
+          "reinforced-tendons",
+          "kiroshi-mk2",
+        ],
+        humanity: 15,
+      },
     },
     {
       id: "faraday",
@@ -62,6 +83,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       limit: "坏他的生意、泄露客户；当面威胁他",
       secret: "替军用科技物色能装重型义体的人，雇佣兵在他眼里都是一次性的",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 5, reflexes: 6, tech: 6, intelligence: 12, cool: 12 },
+        gear: ["corpo-suit"],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
     {
       id: "judy",
@@ -81,6 +108,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "和在一家玩偶俱乐部往上爬的女友越来越说不到一块，嘴上从来不提",
       home: "lizzies-bar",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 5, reflexes: 6, tech: 14, intelligence: 10, cool: 6 },
+        gear: ["techie-coverall"],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
     {
       id: "regina",
@@ -98,6 +131,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       limit: "滥杀发病的人；对她撒谎、拿假消息糊弄她",
       secret: "当记者那些年为了脱身欠下一笔人情债，到现在还没还清",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 12, cool: 10 },
+        gear: ["street-jacket"],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
     {
       id: "viktor",
@@ -117,6 +156,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "当年是沃森拳赛的亚军、夜之城恶魔拳击俱乐部出身，算得上街头传奇，可他一直想让人忘了这件事",
       home: "vik-clinic",
       canon: true,
+      body: {
+        tier: "elite",
+        attributes: { body: 14, reflexes: 10, tech: 16, intelligence: 10, cool: 10 },
+        gear: ["techie-coverall"],
+        cyberware: ["biomonitor"],
+      },
     },
     {
       id: "jackie",
@@ -136,6 +181,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "父亲当年酗酒打人，那条皮带他一直留着，从不跟人提起",
       home: "coyote-cojo",
       canon: true,
+      body: {
+        tier: "elite",
+        attributes: { body: 15, reflexes: 10, tech: 5, intelligence: 5, cool: 11 },
+        gear: ["la-chingona-dorada", "street-jacket"],
+        cyberware: ["kiroshi-mk1", "titanium-bones"],
+      },
     },
     {
       id: "rogue",
@@ -154,6 +205,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "年轻时是出了名的独狼，一场车祸伤了内脏才退下来；和一个早就死了的摇滚明星有过一段，从不提",
       home: "afterlife",
       canon: true,
+      body: {
+        tier: "legend",
+        attributes: { body: 8, reflexes: 12, tech: 6, intelligence: 14, cool: 17 },
+        gear: ["overture", "street-jacket"],
+        cyberware: ["kiroshi-mk2"],
+      },
     },
     {
       id: "wakako",
@@ -172,6 +229,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "关西出身，做过 Kiroshi 的医疗技师；一个孙辈死在荒坂手里，她恨这家公司，从不说出口",
       home: "japantown",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 3, reflexes: 4, tech: 8, intelligence: 15, cool: 14 },
+        gear: [],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
     {
       id: "misty",
@@ -189,6 +252,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "和杰克在海伍德一起长大，2076 年才在一起；杰克的妈妈一直不认她，她嘴上不说，心里在意",
       home: "vik-clinic",
       canon: true,
+      body: {
+        tier: "mook",
+        attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 9, cool: 8 },
+        gear: [],
+        cyberware: [],
+      },
     },
     {
       id: "dex",
@@ -206,6 +275,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret:
         "2075 年离开夜之城，传说是在太平洲搞砸了半个区、得罪了惹不起的人；这次回来，那些人还没忘",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 6, reflexes: 4, tech: 5, intelligence: 14, cool: 15 },
+        gear: ["corpo-suit"],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
     {
       id: "padre",
@@ -223,5 +298,11 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret:
         "年轻时跟着瓦伦蒂诺帮和华雷斯的贩毒集团做过脏事，见过一场血洗才回头；那些旧账没人敢当面提",
       canon: true,
+      body: {
+        tier: "pro",
+        attributes: { body: 7, reflexes: 6, tech: 5, intelligence: 12, cool: 13 },
+        gear: [],
+        cyberware: ["kiroshi-mk1"],
+      },
     },
   ]);

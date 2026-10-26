@@ -540,6 +540,8 @@ export function situation(
     location: clock.location,
     sceneStartedAt: clock.sceneStartedAt,
     districtOf: districtResolver(extras.data),
+    data: extras.data,
+    now: world.time,
   });
   const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
   const jobs = jobsSection(
