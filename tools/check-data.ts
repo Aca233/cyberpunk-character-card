@@ -354,6 +354,13 @@ for (const e of encounters) {
     if (!districts.has(d)) errors.push(`偶遇 ${e.id}：城区「${d}」不在 map.ts 的城区表里`);
   }
 }
+// 偶遇按城区扩充（M3）：每个城区至少这么多条专属的（districts 里写了它的），全城通用的不算
+const LOCAL_ENCOUNTERS_MIN = 10;
+for (const d of districts) {
+  const local = encounters.filter((e) => e.districts?.includes(d)).length;
+  if (local < LOCAL_ENCOUNTERS_MIN)
+    errors.push(`偶遇：城区「${d}」专属的只有 ${local} 条，至少要 ${LOCAL_ENCOUNTERS_MIN} 条`);
+}
 
 // 势力卡：地盘只写城区表里的城区，盟友和仇敌要在势力表里
 const factionIds = unique(
