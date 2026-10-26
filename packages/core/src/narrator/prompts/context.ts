@@ -20,6 +20,7 @@ import {
 import { jobsSection, jobTemplateSection } from "../../systems/jobs/prompt";
 import { JobsStateSchema } from "../../systems/jobs/schema";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
+import { NotesStateSchema, notesSection } from "../../systems/notes";
 import { castSection } from "../../systems/npc/prompt";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { formatGameTime } from "../../systems/world/apply";
@@ -529,6 +530,8 @@ export function situation(
     (id) => npcs.npcs[id]?.affinity ?? 0,
   );
   if (jobs) parts.push(`【委托】\n${jobs}`);
+  const notes = notesSection(NotesStateSchema.parse(world.slices.notes ?? {}));
+  if (notes) parts.push(`【备忘】\n${notes}`);
   const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
   if (recent) parts.push(`【近期后果】\n${recent}`);
   const due = dueSection(world);

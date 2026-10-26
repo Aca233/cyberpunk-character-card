@@ -15,6 +15,7 @@ import { inventory } from "./inventory";
 import { jobs } from "./jobs";
 import { memory } from "./memory";
 import { ncpd } from "./ncpd";
+import { notes } from "./notes";
 import { npc } from "./npc";
 import { phone } from "./phone";
 import { psychosis } from "./psychosis";
@@ -54,6 +55,7 @@ export const systems: readonly AnySystem[] = [
   psychosis,
   squad,
   sidegigs,
+  notes,
 ];
 
 export const registry = createRegistry(systems);
