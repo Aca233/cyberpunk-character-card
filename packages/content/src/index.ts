@@ -1,4 +1,5 @@
 import type { GameContent } from "@cp/core";
+import { agendas } from "./agendas";
 import { cyberware } from "./cyberware";
 import { encounters } from "./encounters";
 import { factions } from "./factions";
@@ -17,6 +18,7 @@ import { shops } from "./shops";
 import { sidegigs } from "./sidegigs";
 import { vehicles } from "./vehicles";
 
+export { agendas } from "./agendas";
 export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
 export { cyberware } from "./cyberware";
@@ -68,6 +70,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   encounters,
   vehicles,
   factions,
+  agendas,
   ncpdAlerts,
   twists,
   consequences,

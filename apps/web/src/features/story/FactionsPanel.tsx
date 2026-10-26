@@ -39,7 +39,7 @@ export function FactionsPanel({
               {here.length > 0
                 ? `这里（${view.factions.district}）是${here.map((f) => f.name).join("、")}的地盘。`
                 : "这里不是哪个帮派的地盘。"}
-              态度由 AI 按发生的事调整，每次都写了理由。
+              态度由 AI 按发生的事调整，每次都写了理由。各势力背地里的动向只列已经传开了的。
             </p>
             <Button onClick={onClose}>关闭</Button>
           </div>
@@ -108,7 +108,19 @@ export function FactionsPanel({
                             : "没有固定地盘"}
                           {f.allies.length > 0 && ` · 盟友：${f.allies.join("、")}`}
                           {f.enemies.length > 0 && ` · 仇敌：${f.enemies.join("、")}`}
+                          {f.turf.join("、") !== f.baseTurf.join("、") &&
+                            ` · 原来的地盘：${f.baseTurf.length > 0 ? f.baseTurf.join("、") : "没有"}`}
                         </p>
+                        {f.news.map((n) => (
+                          <p
+                            key={`${n.at}-${n.title}`}
+                            className={n.mine ? styles.factionReason : styles.factionLine}
+                          >
+                            动向「{n.agenda}」{n.label}：{n.news}
+                            {n.turf && ` · ${n.turf}`}
+                            <span className={styles.dim}>（{n.time}）</span>
+                          </p>
+                        ))}
                       </li>
                     ))}
                   </ul>

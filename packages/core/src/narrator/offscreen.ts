@@ -13,6 +13,15 @@ import {
   OFFSCREEN_MAJOR,
   OFFSCREEN_SCENES,
 } from "../systems/city";
+import {
+  AGENDA_OUTCOME_LABELS,
+  AgendaMoveCommandSchema,
+  agendaCatalog,
+  agendaDueSection,
+  agendaTurfProblem,
+  currentTurf,
+  FactionsStateSchema,
+} from "../systems/factions";
 import { JobsStateSchema } from "../systems/jobs";
 import { type Npc, NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
@@ -59,6 +68,9 @@ export function offscreenDue(
   if (now.scene === was.scene) return false;
   const city = CityStateSchema.parse(after.slices.city ?? {});
   if (now.scene - (city.lastScene ?? 0) >= every) return true;
+  // 上次推演以后有势力动向新到点了：只推一次，模型没写的留在队列里等下次
+  const due = FactionsStateSchema.parse(after.slices.factions ?? {}).due;
+  if (due.some((d) => city.lastAt === null || d.at > city.lastAt)) return true;
   return city.lastAt !== null && after.time - city.lastAt >= OFFSCREEN_HOURS * 60;
 }
 
@@ -80,22 +92,26 @@ export function offscreenSkipReason(o: {
 
 const OFFSCREEN_STAGE = `【这一步：场外推演】
 玩家刚收了一场。你负责推演玩家没看着的地方：这段时间里，夜之城有什么在变？
-- 只推演已经具备条件的事：正文里提到、但没在玩家眼前发生的（有人说哪里打起来了、新闻里提到的、委托里的对手、玩家做完事留下的余波），帮派抢地盘、公司的动作、夜之城警察局和暴恐机动队的反应、中间人的生意。不凭空制造戏剧性；没有值得记的，三个数组都输出空的。
+- 只推演已经具备条件的事：正文里提到、但没在玩家眼前发生的（有人说哪里打起来了、新闻里提到的、委托里的对手、玩家做完事留下的余波），帮派抢地盘、公司的动作、夜之城警察局和暴恐机动队的反应、中间人的生意。不凭空制造戏剧性；没有值得记的，events、npcs、messages 都输出空的（到点的势力动向照样要写）。
 - 和现有状态自洽：地点、势力、人物的生死和关系都不能矛盾；不写玩家角色做了什么、说了什么、想了什么。
 - 【城里的动静】里已有的照原 id 更新（升级、平息、结束），整条重写；新的事才起新 id。
 - 一次最多 ${OFFSCREEN_EVENTS} 条动静，其中 major 最多 ${OFFSCREEN_MAJOR} 条：城不能每次都在爆炸。
 - 人物近况只写这次推演牵涉到的、【人物】里活着的人，一人一句，最多 ${OFFSCREEN_NPCS} 个；标了「本场在场」的人就在玩家眼前，不写近况。
 - 不改任何数值（欧元、人性、生命、好感、通缉星、声望），不改期限和委托；动静里可以提到没卡的人，但不建新人物。
 - 原作人物按原剧的时间线走，不提前写出原剧里还没到的结局。
-- 主动联系：只在有人有事必须告诉玩家（有时限、发现了和玩家有关的事、要玩家做决定、关系变了）时才发，大多数时候是空的；不发寒暄和问候。发消息的只能是玩家见过的人或中间人，最多 ${MESSAGES_PER_TURN} 条；刚分开的人不发，除非分开后有了新情况。`;
+- 主动联系：只在有人有事必须告诉玩家（有时限、发现了和玩家有关的事、要玩家做决定、关系变了）时才发，大多数时候是空的；不发寒暄和问候。发消息的只能是玩家见过的人或中间人，最多 ${MESSAGES_PER_TURN} 条；刚分开的人不发，除非分开后有了新情况。
+- 势力动向：【到点的势力动向】里每一条，都要写这次实际发生了什么。种子只是素材：手段可以从「可能的法子」里挑，也可以按局面换个法子、半路改主意、被对头或别的势力（夜之城警察局、网络监察、公司）截胡；接着上次的事和钩子写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。
+- 代码掷的倾向是默认结果；局面明显不是这样的（玩家刚端了他们的据点、对头正好在那片收紧），可以改 outcome 并在 why 里写一句理由。地盘一次最多动一个城区，只在「能争的城区」里：成了，可以让这个势力拿下一个，或者让对头丢掉一个；受挫，可以让这个势力丢掉一个，或者让对头抢走一个；出了岔子不动地盘；不动地盘最常见，真打下来、真丢了才写。
+- next 写这个势力接下来可能怎么走，一句话，给以后的推演和叙事接着用；可以留空。`;
 
 const OFFSCREEN_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块：
-{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}]}
+{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}], "agendas": [{"id": "到点的动向 id", "outcome": "success|setback|twist，照倾向的可省", "why": "改了结果才写，一句理由", "title": "24 字以内", "text": "160 字以内：实际发生了什么、谁在背后、用的什么法子", "news": "80 字以内：传开以后街上、新闻里怎么说", "turf": {"faction": "势力 id", "district": "城区", "change": "gain|lose"}, "next": "可省：接下来可能怎么走，80 字以内"}]}
 status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束了。weight：minor 街角小事，normal 几个街区在传，major 上了 N54 头条、迟早找到玩家头上。
+agendas：没有【到点的势力动向】就输出空数组；有的话每条到点的都写一条。turf 不动地盘时写 null。
 
 例：{"events": [{"id": "tyger-claws-kabuki", "title": "虎爪帮在歌舞伎区收紧地盘", "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。", "district": "沃森", "status": "heating", "weight": "normal"}], "npcs": [], "messages": []}
-玩家只是在公寓睡了一觉、正文没提城里任何事时：{"events": [], "npcs": [], "messages": []}
+玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "messages": [], "agendas": []}
 不要写没有前因的大事：玩家在街边吃了碗面，就写「荒坂塔遇袭」，这是凭空制造戏剧性。`;
 
 export const OFFSCREEN_SYSTEM = [BOOKKEEPING_BASE, OFFSCREEN_STAGE, OFFSCREEN_OUTPUT].join("\n\n");
@@ -126,6 +142,10 @@ export function buildOffscreenPrompt(
     .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
     .slice(0, MAX_CARDS);
   const fixers = Object.values(JobsStateSchema.parse(world.slices.jobs).fixers);
+  const due = agendaDueSection(
+    FactionsStateSchema.parse(world.slices.factions ?? {}),
+    extras.data ?? {},
+  );
   const since = city.lastScene ?? 0;
   const window = effectiveTurns(records)
     .filter((r) => (r.scene ?? since) >= since)
@@ -139,6 +159,7 @@ export function buildOffscreenPrompt(
         ? [`【中间人】\n${fixers.map((f) => `- ${f.id}｜${f.name}`).join("\n")}`]
         : []),
       `【城里的动静】\n${citySection(city) ?? "（还没有记下的）"}`,
+      ...(due ? [`【到点的势力动向】\n${due}`] : []),
       ...(window.length > 0 ? [`【上次推演以来的正文】\n${window.join("\n\n")}`] : []),
     ],
     input: `【刚收场的这一轮正文】\n${narrative}`,
@@ -170,6 +191,8 @@ export function readOffscreen(
     readonly present?: ReadonlySet<string>;
     /** 这一轮还能收几条消息（本轮正文已经发的要扣掉） */
     readonly messages?: number;
+    /** 内容表：读势力动向的种子和势力卡 */
+    readonly data?: Readonly<Record<string, unknown>>;
   } = {},
 ): OffscreenResult {
   const commands: Command[] = [];
@@ -261,6 +284,39 @@ export function readOffscreen(
     }
     sent += 1;
     commands.push({ type: "phone.receive", from: parsed.data.from, text: parsed.data.text });
+  }
+
+  const data = opts.data ?? {};
+  const factions = FactionsStateSchema.parse(world.slices.factions ?? {});
+  const seeds = agendaCatalog(data);
+  const turf = currentTurf(factions, data);
+  const wrote = new Set<string>();
+  for (const [i, item] of list("agendas").entries()) {
+    const parsed = AgendaMoveCommandSchema.omit({ type: true }).safeParse(item);
+    if (!parsed.success) {
+      notes.push(`场外推演：agendas[${i}] 格式不对：${issue(parsed.error)}`);
+      continue;
+    }
+    const move = parsed.data;
+    const seed = seeds.get(move.id);
+    const due = factions.due.find((d) => d.id === move.id);
+    if (!seed || !due) {
+      notes.push(`场外推演：agendas[${i}] ${move.id} ${seed ? "没到点" : "不是势力动向"}`);
+      continue;
+    }
+    if (wrote.has(move.id)) {
+      notes.push(`场外推演：${move.id} 一次只写一步，多的不要`);
+      continue;
+    }
+    wrote.add(move.id);
+    const outcome = move.outcome ?? due.outcome;
+    if (outcome !== due.outcome)
+      notes.push(
+        `场外推演：${move.id} 倾向是${AGENDA_OUTCOME_LABELS[due.outcome]}，改成了${AGENDA_OUTCOME_LABELS[outcome]}${move.why ? `：${move.why}` : ""}`,
+      );
+    const problem = agendaTurfProblem(seed, outcome, move.turf, turf);
+    if (problem) notes.push(`场外推演：「${move.title}」的地盘变化不算：${problem}`);
+    commands.push({ type: "agenda.move", ...move, turf: problem ? null : move.turf });
   }
   return { commands, notes };
 }

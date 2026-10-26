@@ -8,6 +8,7 @@ import { CityStateSchema, citySection } from "../../systems/city";
 import { cyberwareSection } from "../../systems/cyberware/prompt";
 import { ATTRIBUTE_LABELS, type Attribute, MOD_STEP, PENALTY_CAP } from "../../systems/dice";
 import { RARITY_LABELS } from "../../systems/economy/schema";
+import { agendaSection, FactionsStateSchema } from "../../systems/factions";
 import { consequenceSection, FalloutStateSchema, falloutSection } from "../../systems/fallout";
 import { DAMAGE_LABELS } from "../../systems/health";
 import { itemCatalog } from "../../systems/inventory/apply";
@@ -564,6 +565,12 @@ export function situation(
   if (due) parts.push(`【到期事件】\n${due}`);
   const city = citySection(CityStateSchema.parse(world.slices.city ?? {}));
   if (city) parts.push(`【城里的动静】\n${city}`);
+  const agendas = agendaSection(
+    FactionsStateSchema.parse(world.slices.factions ?? {}),
+    extras.data ?? {},
+    world.time,
+  );
+  if (agendas) parts.push(`【势力动向】\n${agendas}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);

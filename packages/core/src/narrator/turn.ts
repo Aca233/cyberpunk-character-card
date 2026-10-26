@@ -1138,6 +1138,7 @@ export async function runNarratorTurn(
       const got = readOffscreen(reply.text, settled.world, {
         present,
         messages: MESSAGES_PER_TURN - sent,
+        data: extras.data ?? {},
       });
       considered.push(...got.notes);
       offscreen = got.commands;
@@ -1152,6 +1153,8 @@ export async function runNarratorTurn(
         const c = command as { type: string; id?: string; title?: string; text?: string };
         if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
         else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+        else if (c.type === "agenda.move")
+          considered.push(`场外推演：势力动向 ${c.id}「${c.title}」${c.text ?? ""}`);
         considered.push(...result.notes.map((n) => `场外推演：${n}`));
       }
     }

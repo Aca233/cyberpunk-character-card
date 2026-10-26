@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  agendas,
   apartments,
   boardModules,
   canonTimeline,
@@ -112,6 +113,7 @@ schema("商店 shops", inventoryRules.ShopListSchema, shops);
 schema("地点 locations", worldRules.LocationCatalogSchema, locations);
 schema("路上偶遇 encounters", travelRules.EncounterCatalogSchema, encounters);
 schema("势力 factions", factionsRules.FactionCatalogSchema, factions);
+schema("势力动向 agendas", factionsRules.AgendaCatalogSchema, agendas);
 schema("NCPD 警情 ncpdAlerts", ncpdRules.AlertCatalogSchema, ncpdAlerts);
 schema("开局住所 homes", safehouseRules.HomeCatalogSchema, homes);
 schema("公寓 apartments", safehouseRules.ApartmentCatalogSchema, apartments);
@@ -385,6 +387,20 @@ for (const f of factions) {
     errors.push(`势力 ${f.id}：关系里写了自己`);
 }
 
+// 势力动向的种子：势力和对头要在势力表里，能争的城区要在城区表里，每条要有原作参考
+unique(
+  "势力动向",
+  agendas.map((a) => a.id),
+);
+for (const a of agendas) {
+  refs(`势力动向 ${a.id} 的势力`, [a.faction], factionIds, "势力");
+  refs(`势力动向 ${a.id} 的对头`, a.rivals, factionIds, "势力");
+  if (a.rivals.includes(a.faction)) errors.push(`势力动向 ${a.id}：对头里写了自己`);
+  for (const d of a.districts)
+    if (!districts.has(d)) errors.push(`势力动向 ${a.id}：城区「${d}」不在 map.ts 的城区表里`);
+  if (a.canon.length === 0) errors.push(`势力动向 ${a.id}：没写参考的原作任务`);
+}
+
 // NCPD 警情：只能写 NCPD 管得到的城区
 unique(
   "NCPD 警情",
@@ -442,7 +458,7 @@ for (const kind of ["fight", "race"] as const) {
   if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);
