@@ -5,6 +5,8 @@ import {
   AFFINITY_MAX,
   AFFINITY_MIN,
   AFFINITY_STEP_CAP,
+  KNOWN_KEPT,
+  KNOWN_SOURCE_LABELS,
   LEDGER_KEPT,
   LEDGER_KIND_LABELS,
   MEMORY_KEPT,
@@ -42,6 +44,7 @@ export function seedNpc(draft: Draft<NpcState>, command: SeedNpc): ApplyOutcome 
     doing: null,
     relation: null,
     ledger: [],
+    known: [],
   };
   return { ok: true };
 }
@@ -98,6 +101,7 @@ export function applyNpc(
       doing: null,
       relation: null,
       ledger: [],
+      known: [],
     };
     return { ok: true, notes: [`新人物：${card.name}`] };
   }
@@ -105,6 +109,16 @@ export function applyNpc(
   const npc = draft.npcs[command.id];
   if (!npc) {
     return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡，新认识的人先用 npc 建卡` };
+  }
+  // 死了的人也能被打听到
+  if (command.type === "learn") {
+    if (npc.known.some((k) => k.text === command.text)) return { ok: true };
+    npc.known.push({ text: command.text, source: command.source, at: now });
+    if (npc.known.length > KNOWN_KEPT) npc.known.splice(0, npc.known.length - KNOWN_KEPT);
+    return {
+      ok: true,
+      notes: [`关于${npc.name}（${KNOWN_SOURCE_LABELS[command.source]}）：${command.text}`],
+    };
   }
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
 

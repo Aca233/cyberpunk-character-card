@@ -1,5 +1,5 @@
 import type { RuleModule } from "../../kernel/system";
-import type { LedgerKind, Npc, NpcState } from "./schema";
+import { KNOWN_SOURCE_LABELS, type LedgerKind, type Npc, type NpcState } from "./schema";
 
 /** 不在场的人最多列这么多个，最近出场的优先 */
 export const OFFSTAGE_LISTED = 20;
@@ -24,6 +24,7 @@ export const npcRules: RuleModule<NpcState> = {
     "relation",
     "ledger",
     "ledgerSettle",
+    "learn",
   ],
   when: () => true,
   judge: `- 对话、说服、谈判看有没有说中对方的诉求、有没有触到底线：好感决定态度冷热，诉求和底线决定会不会答应，不掷骰。
@@ -33,7 +34,8 @@ export const npcRules: RuleModule<NpcState> = {
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
 - 要写新人物之前，先看【人物】里有没有合适的老面孔能用；同一个酒保、上次放走的混混可以反复出现。
 - 承诺、人情、冲突这类以后会被提起的事，让人物记着、以后提起。死了的人不再出场，也不会发消息。
-- 卡上的「最近」是这个人在屏幕外的近况，演的时候接着它写。时间大段跳过（半天以上）时，可以让一两个和玩家有关的人有点离屏进展，借新闻、传闻、一条消息或者本人的一句话透出来；只写一两句，不替玩家做事。`,
+- 卡上的「最近」是这个人在屏幕外的近况，演的时候接着它写。时间大段跳过（半天以上）时，可以让一两个和玩家有关的人有点离屏进展，借新闻、传闻、一条消息或者本人的一句话透出来；只写一两句，不替玩家做事。
+- 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。`,
   text: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
 - 要写新人物之前，先看【人物】里有没有合适的老面孔能用；同一个酒保、上次放走的混混可以反复出现。
@@ -42,7 +44,8 @@ export const npcRules: RuleModule<NpcState> = {
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
 - 关系真的变了（一起扛过事、说过真心话、生死与共，或者背叛、被拆穿大谎、伤了对方在乎的人）才写一条 relation，一句话写现在的关系，会替换旧的；好感高只说明对方愿意见你，不等于关系深。
 - 欠下或结下以后会被讨回来的人情和仇，写一条 ledger（owesYou 对方欠玩家角色、youOwe 玩家角色欠对方、grudge 对方记玩家角色的仇）；还了、报了、放下了，写 ledgerSettle，entry 填卡上「人情和仇」那一条的编号。
-- 死了的人不再出场，也不会发消息。`,
+- 死了的人不再出场，也不会发消息。
+- 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。`,
 };
 
 export interface Stage {
@@ -74,6 +77,11 @@ function fullCard(npc: Npc): string {
   lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
   if (npc.secret) lines.push(`  秘密：${npc.secret}`);
   if (npc.relation) lines.push(`  关系：${npc.relation.text}`);
+  if (npc.known.length > 0) {
+    lines.push(
+      `  玩家角色知道：${npc.known.map((k) => `${k.text}（${KNOWN_SOURCE_LABELS[k.source]}）`).join("；")}`,
+    );
+  }
   const open = npc.ledger.map((e, i) => ({ e, n: i + 1 })).filter(({ e }) => e.settledAt === null);
   if (open.length > 0) {
     lines.push(

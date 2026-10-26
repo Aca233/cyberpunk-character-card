@@ -673,41 +673,43 @@ export function SidePanel({
       <GigsPanel gigs={view.sidegigs} />
 
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
-        {view.npcs.length === 0 ? (
+        {!view.npcs.some((n) => n.met) ? (
           <p className={styles.dim}>还没有认识的人，人物档案会随着交谈和相处留下来。</p>
         ) : (
           <ul className={styles.npcList}>
-            {view.npcs.map((npc) => (
-              <li key={npc.id}>
-                <details className={styles.npcCard} data-dead={!npc.alive || undefined}>
-                  <summary>
-                    <strong>{npc.name}</strong>
-                    <span className={styles.npcStatus}>
-                      {!npc.alive ? "已故" : npc.here ? "在场" : "不在场"}
-                    </span>
-                    <span className={styles.npcRole}>{npc.role}</span>
-                    <span className={styles.npcAffinity}>
-                      好感 {npc.affinity > 0 ? "+" : ""}
-                      {npc.affinity}
-                    </span>
-                  </summary>
-                  <div className={styles.npcDetail}>
-                    {npc.alias && <p>外号：{npc.alias}</p>}
-                    <p>{npc.look}</p>
-                    <p className={styles.npcMemoryTitle}>共同记忆</p>
-                    {npc.memories.length === 0 ? (
-                      <p className={styles.dim}>还没有记录。</p>
-                    ) : (
-                      <ul>
-                        {npc.memories.map((memory) => (
-                          <li key={memory}>{memory}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </details>
-              </li>
-            ))}
+            {view.npcs
+              .filter((n) => n.met)
+              .map((npc) => (
+                <li key={npc.id}>
+                  <details className={styles.npcCard} data-dead={!npc.alive || undefined}>
+                    <summary>
+                      <strong>{npc.name}</strong>
+                      <span className={styles.npcStatus}>
+                        {!npc.alive ? "已故" : npc.here ? "在场" : "不在场"}
+                      </span>
+                      <span className={styles.npcRole}>{npc.role}</span>
+                      <span className={styles.npcAffinity}>
+                        好感 {npc.affinity > 0 ? "+" : ""}
+                        {npc.affinity}
+                      </span>
+                    </summary>
+                    <div className={styles.npcDetail}>
+                      {npc.alias && <p>外号：{npc.alias}</p>}
+                      <p>{npc.look}</p>
+                      <p className={styles.npcMemoryTitle}>共同记忆</p>
+                      {npc.memories.length === 0 ? (
+                        <p className={styles.dim}>还没有记录。</p>
+                      ) : (
+                        <ul>
+                          {npc.memories.map((memory) => (
+                            <li key={memory}>{memory}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              ))}
           </ul>
         )}
       </Panel>

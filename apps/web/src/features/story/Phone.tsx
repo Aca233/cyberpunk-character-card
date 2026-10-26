@@ -54,18 +54,39 @@ function Profile({ npc }: { readonly npc: Npc }) {
           <span className={styles.dim}>
             {!npc.alive
               ? "已故"
-              : npc.here
-                ? "在场"
-                : npc.lastSeen
-                  ? `最后见面 ${npc.lastSeen}`
-                  : "不在场"}
+              : !npc.met
+                ? "只听说过"
+                : npc.here
+                  ? "在场"
+                  : npc.lastSeen
+                    ? `最后见面 ${npc.lastSeen}`
+                    : "不在场"}
           </span>
         </div>
-        <p className={styles.factionLine}>
-          {npc.role} · {npc.pronoun} · 好感 {npc.affinity > 0 ? "+" : ""}
-          {npc.affinity}
-        </p>
-        <p className={styles.factionLine}>{npc.look}</p>
+        {npc.met ? (
+          <>
+            <p className={styles.factionLine}>
+              {npc.role} · {npc.pronoun} · 好感 {npc.affinity > 0 ? "+" : ""}
+              {npc.affinity}
+            </p>
+            <p className={styles.factionLine}>{npc.look}</p>
+          </>
+        ) : (
+          <p className={styles.dim}>还没见过面，下面是听来的。</p>
+        )}
+        <p className={styles.npcMemoryTitle}>你知道的</p>
+        {npc.known.length === 0 ? (
+          <p className={styles.dim}>除了见面看到的，还没打听到什么。</p>
+        ) : (
+          <ul className={styles.memoryBonds}>
+            {npc.known.map((k) => (
+              <li key={k.text} className={styles.factionLine}>
+                <span className={styles.memoryTag}>{k.sourceLabel}</span> {k.text}
+                <small className={styles.dim}>（{k.at}）</small>
+              </li>
+            ))}
+          </ul>
+        )}
         <p className={styles.factionReason}>关系：{npc.relation ?? "还说不上什么关系。"}</p>
         {npc.ledger.length > 0 && (
           <>
@@ -158,9 +179,11 @@ export function PhoneDialog({
                       <span className={styles.contactName}>
                         <b>{c.name}</b>
                         <small className={styles.dim}>
-                          {c.npc
-                            ? `好感 ${c.npc.affinity > 0 ? "+" : ""}${c.npc.affinity}`
-                            : "没有档案"}
+                          {!c.npc
+                            ? "没有档案"
+                            : c.npc.met
+                              ? `好感 ${c.npc.affinity > 0 ? "+" : ""}${c.npc.affinity}`
+                              : "只听说过"}
                           {c.last ? ` · ${c.last}` : ""}
                         </small>
                       </span>

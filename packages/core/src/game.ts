@@ -102,7 +102,12 @@ import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
 import { onStage } from "./systems/npc/prompt";
-import { LEDGER_KIND_LABELS, type NpcCard, NpcStateSchema } from "./systems/npc/schema";
+import {
+  KNOWN_SOURCE_LABELS,
+  LEDGER_KIND_LABELS,
+  type NpcCard,
+  NpcStateSchema,
+} from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
 import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
@@ -1067,17 +1072,25 @@ export function projectState(
       const s = currentAlert(StealthStateSchema.parse(world.slices.stealth ?? {}), clock.scene);
       return { level: s.level, label: ALERT_LABELS[s.level], peak: s.peak, lowered: s.lowered };
     })(),
-    /** 见过的人；诉求、底线和秘密只给模型看，不在这里 */
+    /** 见过的人和只听说过的人；诉求、底线和秘密只给模型看，不在这里 */
     npcs: Object.values(npcs.npcs)
-      .filter((n) => n.met)
+      .filter((n) => n.met || n.known.length > 0)
       .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
       .map((n) => ({
         id: n.id,
         name: n.name,
         alias: n.alias ?? null,
         pronoun: n.pronoun,
-        role: n.role,
-        look: n.look,
+        /** 见过面没有；没见过的只是听说过，身份和样子不给 */
+        met: n.met,
+        role: n.met ? n.role : "只听说过",
+        look: n.met ? n.look : "没见过",
+        /** 玩家角色知道的这个人的事，旧的在前，带来源 */
+        known: n.known.map((k) => ({
+          text: k.text,
+          sourceLabel: KNOWN_SOURCE_LABELS[k.source],
+          at: formatGameTime(k.at),
+        })),
         affinity: n.affinity,
         alive: n.alive,
         here: onStage(n, stage),

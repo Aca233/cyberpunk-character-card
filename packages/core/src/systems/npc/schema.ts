@@ -63,6 +63,27 @@ export const LedgerEntrySchema = z.object({
 });
 export type LedgerEntry = z.infer<typeof LedgerEntrySchema>;
 
+/** 每个人物最多记这么多条玩家角色知道的事，满了先删最早的 */
+export const KNOWN_KEPT = 12;
+
+/** 玩家角色怎么知道的：seen 亲眼看到，self 本人说的，told 别人说的，rumor 传闻，scan 扫描 */
+export const KnownSourceSchema = z.enum(["seen", "self", "told", "rumor", "scan"]);
+export type KnownSource = z.infer<typeof KnownSourceSchema>;
+export const KNOWN_SOURCE_LABELS: Readonly<Record<KnownSource, string>> = {
+  seen: "亲眼见",
+  self: "本人说",
+  told: "别人说",
+  rumor: "传闻",
+  scan: "扫描",
+};
+
+export const KnownFactSchema = z.object({
+  text: z.string().min(1).max(80),
+  source: KnownSourceSchema,
+  at: z.number().int(),
+});
+export type KnownFact = z.infer<typeof KnownFactSchema>;
+
 export const NpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   alive: z.boolean(),
@@ -86,6 +107,8 @@ export const NpcSchema = NpcCardSchema.extend({
     .default(null),
   /** 人情和仇，旧的在前；了结的留着，标了结时间 */
   ledger: z.array(LedgerEntrySchema).default([]),
+  /** 玩家角色知道的这个人的事，旧的在前；人物档案只显示这些；旧存档没有 */
+  known: z.array(KnownFactSchema).default([]),
 });
 export type Npc = z.infer<typeof NpcSchema>;
 
@@ -245,7 +268,22 @@ export const LedgerSettleSchema = z
   .describe("了结一笔人情或仇：还了、报了、放下了；how 一句话写怎么了结的");
 export type LedgerSettle = z.infer<typeof LedgerSettleSchema>;
 
+export const LearnSchema = z
+  .object({
+    type: z.literal("learn"),
+    id: NpcIdSchema,
+    text: z.string().trim().min(1).max(80),
+    source: KnownSourceSchema.describe(
+      "seen 玩家角色亲眼看到，self 本人说的，told 别人说的，rumor 传闻、新闻，scan 扫描",
+    ),
+  })
+  .describe(
+    "玩家角色得知了有卡的人的一件事（身份、来历、去向、和谁有来往）：正文里真的透出来才写，一句话，写玩家角色以为的样子；对方骗人的话照骗的写，传闻照传的写",
+  );
+export type Learn = z.infer<typeof LearnSchema>;
+
 export type NpcCommand =
+  | Learn
   | NewNpc
   | Meet
   | Affinity
