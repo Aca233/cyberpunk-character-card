@@ -367,6 +367,8 @@ function memoryEditCommands(
   const npc = NpcStateSchema.parse(world.slices.npc ?? { npcs: {} }).npcs[action.npc];
   if (!npc) return `没有 id 为 ${action.npc} 的人物卡`;
   if (!removing && action.text === undefined) return "改写的内容不能为空";
+  // 和 npc 的 memory 指令一样，一条共同记忆最多 120 字
+  if (!removing && (action.text ?? "").length > 120) return "一条共同记忆最多 120 字";
   return [
     {
       type: "npc.memoryEdit",

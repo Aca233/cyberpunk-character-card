@@ -15,6 +15,8 @@ const IMPORTANCE: readonly [Importance, string][] = [
 /** 和核心里摘要标题、正文的长度上限一致 */
 const TITLE_CHARS = 24;
 const TEXT_CHARS = 200;
+/** 共同记忆一条的长度上限，和 npc 的 memory 指令一致 */
+const BOND_CHARS = 120;
 
 /** 发给后端的 editMemory 动作（不含 type） */
 export interface MemoryEdit {
@@ -81,7 +83,7 @@ function DraftForm({
         aria-label="内容"
         rows={3}
         value={draft.text}
-        maxLength={TEXT_CHARS}
+        maxLength={withTitle ? TEXT_CHARS : BOND_CHARS}
         onChange={(e) => onChange({ ...draft, text: e.target.value })}
       />
       <div className={styles.memoryActions}>
