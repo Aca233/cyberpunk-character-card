@@ -77,6 +77,7 @@ export function memoryPool(
   world: WorldState,
   records: readonly LogRecord[],
   hot: number,
+  recapTokens?: number,
 ): MemoryEntry[] {
   const npcs = Object.values(NpcStateSchema.parse(world.slices.npc).npcs);
   const shown = hotScenes(records, hot);
@@ -105,7 +106,7 @@ export function memoryPool(
 
   // 【前情】没带的场景摘要
   const memory = MemoryStateSchema.parse(world.slices.memory ?? {});
-  const recapped = new Set(recapScenes(memory, shown).map((s) => s.scene));
+  const recapped = new Set(recapScenes(memory, shown, recapTokens).map((s) => s.scene));
   for (const s of memory.scenes) {
     if (shown.has(s.scene) || recapped.has(s.scene)) continue;
     out.push({

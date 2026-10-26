@@ -280,6 +280,21 @@ export interface TurnContext {
     readonly candidates: number;
     readonly note: string | null;
   } | null;
+  /** 上下文预算：窗口、带了几轮原文、各部分用量对上限、砍掉了什么；旧记录为 null，旧后端没有 */
+  readonly budget?: {
+    readonly window: number;
+    readonly history: number;
+    readonly recapTokens: number;
+    readonly parts: readonly {
+      readonly part: string;
+      readonly label: string;
+      readonly tokens: number;
+      readonly limit: number | null;
+    }[];
+    readonly total: number;
+    readonly limit: number;
+    readonly cuts: readonly string[];
+  } | null;
   /** 这一轮之后城里的动静；旧后端没有 */
   readonly city?: readonly CityEventView[];
   /** 账目对账：最近 10 轮各改了哪些硬数值；旧版后端没有 */

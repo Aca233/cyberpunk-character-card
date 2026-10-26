@@ -688,7 +688,13 @@ export class GameService {
             .slice(-2)
             .map((t) => t.text)
             .join("\n");
-          const memories = judgeCandidates(memoryPool(world, before, HISTORY_TURNS), world, {
+          const pool = memoryPool(
+            world,
+            before,
+            record.budget?.history ?? HISTORY_TURNS,
+            record.budget?.recapTokens,
+          );
+          const memories = judgeCandidates(pool, world, {
             input: input.data.text,
             context: lately,
           });
@@ -707,6 +713,8 @@ export class GameService {
               decided: record.decided,
               recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
               lore: record.lore?.section,
+              history: record.budget?.history,
+              recapTokens: record.budget?.recapTokens,
             }),
           ),
         );
@@ -779,6 +787,8 @@ export class GameService {
             ? { ...record.retrieval, picked: (record.expanded ?? []).map((m) => m.title) }
             : null,
           recalled: (record.recalled ?? []).map((m) => m.title),
+          // 上下文预算：窗口、带了几轮原文、各部分用量对上限、为了塞进窗口砍掉了什么；旧记录没有
+          budget: record.budget ?? null,
           // 设定库：检索词、挑中的原作资料和分数、没给的原因；没接文本库或旧记录时为 null
           lore: record.lore
             ? {
@@ -910,9 +920,15 @@ export class GameService {
     const redact = await this.deps.config.redactor();
     const signal = run.controller.signal;
     try {
+      const resolved = await this.deps.llm.resolve("narrator");
+      if (!resolved.ok) {
+        hub.push(run, { type: "error", message: redact(resolved.error), retryable: false });
+        return;
+      }
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
+          contextWindow: resolved.profile.contextWindow,
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening),
@@ -1042,6 +1058,11 @@ export class GameService {
               },
             }
           : {}),
+        budget: {
+          ...turn.budget,
+          parts: turn.budget.parts.map((p) => ({ ...p })),
+          cuts: [...turn.budget.cuts],
+        },
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
       };

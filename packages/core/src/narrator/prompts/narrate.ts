@@ -17,7 +17,7 @@ import {
   situation,
   tablesOf,
 } from "./context";
-import { BASE_RULES, systemMessage, userMessage } from "./layers";
+import { BASE_RULES, estimateTokens, systemMessage, userMessage } from "./layers";
 
 /**
  * ③ 写正文：纯文本，边收边放。温度用设置里叙事模型的温度（规格暂定 0.8），这里不覆盖玩家的设置
@@ -170,34 +170,52 @@ export function buildNarratorPrompt(
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const rules = systemMessage("narrate", [coreRules()], modules);
-  const messages: LlmMessage[] = [
-    { role: "system", content: [rules, ...tablesOf(view, extras)].join("\n\n") },
-  ];
-  for (const turn of view.turns.slice(-HISTORY_TURNS)) {
-    messages.push({ role: "user", content: formatInput(turn.input) });
+  const system = [rules, ...tablesOf(view, extras)].join("\n\n");
+  const messages: LlmMessage[] = [{ role: "system", content: system }];
+  const hot = extras.history ?? HISTORY_TURNS;
+  let history = 0;
+  for (const turn of hot > 0 ? view.turns.slice(-hot) : []) {
+    const input = formatInput(turn.input);
+    messages.push({ role: "user", content: input });
     messages.push({ role: "assistant", content: turn.text });
+    history += estimateTokens(input) + estimateTokens(turn.text);
   }
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const names = [
     view.character.name ?? "",
     ...Object.values(npcs.npcs).flatMap((n) => [n.name, n.alias ?? ""]),
   ].filter((n) => n !== "");
-  messages.push({
-    role: "user",
-    content: userMessage({
-      recap: recapFor(world, records, HISTORY_TURNS),
-      scene: situation(world, view, plan, extras),
-      decided: extras.decided,
-      recall: recalledSection(extras.recalled),
-      lore: extras.lore,
-      habits: proseHabits(
-        view.turns.map((t) => t.text),
-        names,
-      ),
-      input: formatInput(plan.input),
-      after: [boostNote(view, plan, "narrate")],
-      reminder: "（只写正文，纯文本。）",
-    }),
+  const recap = recapFor(world, records, hot, extras.recapTokens);
+  const scene = situation(world, view, plan, extras);
+  const recall = recalledSection(extras.recalled);
+  const content = userMessage({
+    recap,
+    scene,
+    decided: extras.decided,
+    recall,
+    lore: extras.lore,
+    habits: proseHabits(
+      view.turns.map((t) => t.text),
+      names,
+    ),
+    input: formatInput(plan.input),
+    after: [boostNote(view, plan, "narrate")],
+    reminder: "（只写正文，纯文本。）",
   });
-  return { messages, modules: modules.map((m) => m.id), rules: rules.length };
+  messages.push({ role: "user", content });
+  const tokens = (s: string | undefined) => (s === undefined ? 0 : estimateTokens(s));
+  const hotTokens = tokens(scene.join("\n\n")) + tokens((extras.decided ?? []).join("\n"));
+  const parts = {
+    rules: tokens(system),
+    history,
+    recap: tokens(recap),
+    hot: hotTokens,
+    expanded: tokens(recall),
+    world: tokens(extras.lore),
+    other: Math.max(
+      0,
+      tokens(content) - tokens(recap) - hotTokens - tokens(recall) - tokens(extras.lore),
+    ),
+  };
+  return { messages, modules: modules.map((m) => m.id), rules: rules.length, parts };
 }

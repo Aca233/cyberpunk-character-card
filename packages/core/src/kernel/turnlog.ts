@@ -115,6 +115,25 @@ const TurnRecordSchema = z.object({
       section: z.string().optional(),
     })
     .optional(),
+  /** 上下文预算：窗口、写正文带了几轮原文、【前情】额度、各部分占用和额度、裁了什么；重建写正文时照它带原文和【前情】 */
+  budget: z
+    .object({
+      window: z.number().int().min(0),
+      history: z.number().int().min(0),
+      recapTokens: z.number().int().min(0),
+      parts: z.array(
+        z.object({
+          part: z.string(),
+          label: z.string(),
+          tokens: z.number().int().min(0),
+          limit: z.number().int().min(0).nullable(),
+        }),
+      ),
+      total: z.number().int().min(0),
+      limit: z.number().int(),
+      cuts: z.array(z.string()),
+    })
+    .optional(),
   /** 本轮带了哪些规则模块 */
   modules: z.array(z.string()).optional(),
   usage: z

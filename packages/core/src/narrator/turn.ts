@@ -51,6 +51,15 @@ import {
   type Voice,
   VoiceSchema,
 } from "./block";
+import {
+  BUDGET_LABELS,
+  type BudgetTrace,
+  contextBudget,
+  fitMemories,
+  historyTurns,
+  MIN_HISTORY,
+  memoryTokens,
+} from "./budget";
 import { schemaDoc } from "./doc";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import {
@@ -74,6 +83,7 @@ import {
   type PromptExtras,
   VERIFY_TEMPERATURE,
 } from "./prompts";
+import { estimateTokens } from "./prompts/layers";
 import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
 import { closeupFor, sceneTitle } from "./scene";
 import {
@@ -270,6 +280,8 @@ export interface NarratorTurn {
   readonly retrieval: Expansion | undefined;
   /** 设定库：检索词、挑中的原作资料和分数；没接文本库或没查时为 undefined，只供剧透视图 */
   readonly lore: LoreTrace | undefined;
+  /** 上下文预算：窗口、各部分占用和额度、原文带了几轮、裁了什么；只供剧透视图 */
+  readonly budget: BudgetTrace;
 }
 
 export type NarratorResult =
@@ -296,6 +308,8 @@ export interface NarratorDeps {
   readonly encounters?: number | undefined;
   /** 设定库：本机官方文本库的只读检索；没有文本库时不接，这一步自动关掉 */
   readonly lore?: LoreSource | undefined;
+  /** 叙事模型方案的上下文窗口（token）；按它分上下文预算，没给按 32K */
+  readonly contextWindow?: number | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -560,8 +574,12 @@ export async function runNarratorTurn(
 
   // ① 判断：确认过的检定（包括预先带检定的选项）跳过；旧存档选了出戏也跳过
   let judge: JudgeShape = {};
+  // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
+  const budget = contextBudget(deps.contextWindow);
+  let hot = historyTurns(records, budget.parts.history, HISTORY_TURNS);
+  let recapTokens = budget.parts.recap;
   const pool =
-    plan.kind === "action" && !legacyOoc ? memoryPool(world, records, HISTORY_TURNS) : [];
+    plan.kind === "action" && !legacyOoc ? memoryPool(world, records, hot, recapTokens) : [];
   const lately = effectiveTurns(records)
     .slice(-2)
     .map((t) => t.text)
@@ -649,16 +667,21 @@ export async function runNarratorTurn(
           pool,
           world,
           records,
-          HISTORY_TURNS,
+          hot,
           { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
           recalled,
           deps.data ?? {},
         )
       : undefined;
-  const expanded: Memory[] = (retrieval?.picked ?? []).map((m) => ({
-    title: m.title,
-    text: m.text,
-  }));
+  const cuts: string[] = [];
+  // 扩展层额度：判断调的先占，补进来的按分数从高到低留到额度用完
+  const recalledTokens = recalled.reduce((n, m) => n + memoryTokens(m), 0);
+  const fitted = fitMemories(
+    (retrieval?.picked ?? []).map((m) => ({ title: m.title, text: m.text })),
+    Math.max(0, budget.parts.expanded - recalledTokens),
+  );
+  let expanded: Memory[] = fitted.kept;
+  if (fitted.dropped > 0) cuts.push(`扩展层超额，少补 ${fitted.dropped} 条`);
 
   // ② 拼上下文：写正文之前代码已经定下的事
   const decided: string[] = [];
@@ -697,13 +720,65 @@ export async function runNarratorTurn(
   // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
   const lore = ooc
     ? undefined
-    : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {});
-  const prompt = buildNarratorPrompt(world, records, plan, {
-    ...extras,
-    decided,
-    recalled: [...recalled, ...expanded],
-    lore: lore?.section,
-  });
+    : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {}, budget.parts.world);
+  let loreSection = lore?.section;
+  const build = () =>
+    buildNarratorPrompt(world, records, plan, {
+      ...extras,
+      decided,
+      recalled: [...recalled, ...expanded],
+      lore: loreSection,
+      history: hot,
+      recapTokens,
+    });
+  // 整份超出窗口（减去留给回复的）时从低优先级裁起：扩展层 → 【前情】 → 设定资料 → 原文（留 MIN_HISTORY 轮）
+  const limit = budget.window - budget.parts.reply;
+  const totalOf = (p: ReturnType<typeof build>) =>
+    p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+  let prompt = build();
+  for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
+    if (expanded.length > 0) {
+      expanded = expanded.slice(0, -1);
+      cuts.push("整份超出，扩展层少补一条");
+    } else if (recapTokens > 0 && (prompt.parts?.recap ?? 0) > 0) {
+      recapTokens = recapTokens >= 400 ? Math.floor(recapTokens / 2) : 0;
+      cuts.push(`整份超出，【前情】额度降到 ${recapTokens}`);
+    } else if (loreSection !== undefined) {
+      loreSection = undefined;
+      cuts.push("整份超出，不带设定资料");
+    } else if (hot > MIN_HISTORY) {
+      hot -= 1;
+      cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
+    } else {
+      cuts.push(`必需的部分已经超出（约 ${total} / ${limit} token），没有能再裁的`);
+      break;
+    }
+    prompt = build();
+  }
+  const used = prompt.parts ?? {};
+  const budgetTrace: BudgetTrace = {
+    window: budget.window,
+    history: hot,
+    recapTokens,
+    parts: [
+      ...(["rules", "hot", "history", "recap", "expanded", "world"] as const).map((part) => ({
+        part,
+        label: BUDGET_LABELS[part],
+        tokens: used[part] ?? 0,
+        limit: part === "hot" ? budget.parts.hot + budget.parts.character : budget.parts[part],
+      })),
+      { part: "other", label: "输入和其余", tokens: used.other ?? 0, limit: null },
+      { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: budget.parts.reply },
+    ],
+    total: totalOf(prompt),
+    limit,
+    cuts,
+  };
+  // 设定资料被整份裁掉时，日志里也不记那块
+  const loreTrace =
+    lore && loreSection === undefined && lore.section !== undefined
+      ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
+      : lore?.trace;
   const splitter = new StateSplitter();
   b.checkAborted();
   for await (const event of deps.llm.stream(
@@ -1167,7 +1242,8 @@ export async function runNarratorTurn(
       recalled,
       expanded,
       retrieval,
-      lore: lore?.trace,
+      lore: loreTrace,
+      budget: budgetTrace,
     },
   };
 }

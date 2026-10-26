@@ -34,14 +34,15 @@ import type { Memory } from "../stages";
  * 这些填进 L2 任务模板的槽位；模板和各层的拼法在 layers.ts
  */
 
-/** 带最近这么多轮原文；更早的由【前情】的场景摘要接上（规格是 3 轮，预算切片再收） */
+/** 原文最多带这么多轮；实际带几轮由上下文预算定（至少 3 轮），没记预算的旧记录按这个数重建 */
 export const HISTORY_TURNS = 12;
 
-/** 【前情】：已经收场、原文不在最近 hot 轮里的场景摘要；没有时为 undefined */
+/** 【前情】：已经收场、原文不在最近 hot 轮里的场景摘要；没有时为 undefined。maxTokens 是预算给的额度 */
 export function recapFor(
   world: WorldState,
   records: readonly LogRecord[],
   hot: number,
+  maxTokens?: number,
 ): string | undefined {
   const turns = effectiveTurns(records);
   const shown = new Set(
@@ -49,7 +50,7 @@ export function recapFor(
       .map((t) => t.scene)
       .filter((s): s is number => s !== undefined),
   );
-  const text = recapSection(MemoryStateSchema.parse(world.slices.memory ?? {}), shown);
+  const text = recapSection(MemoryStateSchema.parse(world.slices.memory ?? {}), shown, maxTokens);
   return text === undefined ? undefined : `【前情】\n${text}`;
 }
 
@@ -146,6 +147,10 @@ export interface PromptExtras {
   readonly recalled?: readonly Memory[] | undefined;
   /** 设定库查到的原作资料，已经拼成单独的引用块；只给写正文那一步 */
   readonly lore?: string | undefined;
+  /** 写正文带几轮原文（上下文预算定的）；没给按 HISTORY_TURNS */
+  readonly history?: number | undefined;
+  /** 【前情】的 token 额度；没给不截 */
+  readonly recapTokens?: number | undefined;
   /** 开场的游戏时间；按它算原剧时间线走到第几天，没给就不带 */
   readonly startTime?: number | undefined;
 }
@@ -484,6 +489,8 @@ export interface NarratorPrompt {
   readonly modules: readonly string[];
   /** 规则层的字数：守则、阶段说明、输出约定和规则模块，不含物品表这类数据表 */
   readonly rules: number;
+  /** 写正文那一步各部分粗估多少 token（上下文预算用）；别的步骤没有 */
+  readonly parts?: Readonly<Record<string, number>> | undefined;
 }
 
 /** 判断只看最近几轮的原文 */

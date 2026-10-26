@@ -1,4 +1,5 @@
 export * from "./block";
+export * from "./budget";
 export * from "./doc";
 export * from "./examples";
 export * from "./lore";

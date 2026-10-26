@@ -322,6 +322,41 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           <p>{ctx.ruling}</p>
         </Section>
       )}
+      {ctx.budget && (
+        <Section
+          title={`上下文预算（约 ${ctx.budget.total.toLocaleString()} / ${ctx.budget.limit.toLocaleString()} token）`}
+          {...(ctx.budget.total > ctx.budget.limit ? { tone: "warn" as const } : {})}
+        >
+          <p>
+            窗口 {ctx.budget.window.toLocaleString()} token；带了最近 {ctx.budget.history}{" "}
+            轮原文；前情上限 {ctx.budget.recapTokens.toLocaleString()} token
+          </p>
+          <ul>
+            {ctx.budget.parts.map((p) => (
+              <li
+                key={p.part}
+                className={p.limit !== null && p.tokens > p.limit ? undefined : styles.dim}
+              >
+                {p.part === "reply" ? (
+                  `${p.label}：预留 ${(p.limit ?? 0).toLocaleString()}`
+                ) : (
+                  <>
+                    {p.label}：约 {p.tokens.toLocaleString()}
+                    {p.limit === null ? "（不设上限）" : ` / ${p.limit.toLocaleString()}`}
+                    {p.limit !== null && p.tokens > p.limit ? "（超了，必需的部分不裁）" : ""}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+          {ctx.budget.cuts.length > 0 ? (
+            <p>为了塞进窗口：{ctx.budget.cuts.join("；")}</p>
+          ) : (
+            <p className={styles.dim}>没有砍任何部分</p>
+          )}
+          <p className={styles.dim}>token 数按字数粗估，和服务商实际计数会有出入</p>
+        </Section>
+      )}
       {(ctx.retrieval || (ctx.recalled && ctx.recalled.length > 0)) && (
         <Section title="扩展层（旧记忆）">
           {ctx.recalled && ctx.recalled.length > 0 && <p>判断调的：{ctx.recalled.join("；")}</p>}

@@ -188,7 +188,9 @@ export function clipAround(text: string, terms: readonly string[], max = LORE_CH
 export function pickLore(
   hits: readonly LoreHit[],
   recent: ReadonlySet<string> = new Set(),
+  maxTokens: number = LORE_TOKENS,
 ): ScoredLore[] {
+  const cap = Math.min(LORE_TOKENS, maxTokens);
   const scored = hits
     .filter((h) => !recent.has(h.source))
     .map((h) => ({ ...h, score: scoreLore(h) }))
@@ -207,7 +209,7 @@ export function pickLore(
       h.hits.map((x) => x.term),
     );
     const cost = estimateTokens(`${h.title}${text}`) + 10;
-    if (tokens + cost > LORE_TOKENS) continue;
+    if (tokens + cost > cap) continue;
     tokens += cost;
     seen.add(h.source);
     seen.add(key);
@@ -256,6 +258,7 @@ export function lookupLore(
   records: readonly LogRecord[],
   input: string,
   data: Readonly<Record<string, unknown>>,
+  maxTokens: number = LORE_TOKENS,
 ): { readonly section: string | undefined; readonly trace: LoreTrace } | undefined {
   if (!source) return undefined;
   const query = loreQuery(world, input, data);
@@ -273,7 +276,7 @@ export function lookupLore(
       trace: { terms: [], picked: [], candidates: 0, note: "文本库读不了，这一轮不带设定资料" },
     };
   }
-  const picked = pickLore(hits, recent);
+  const picked = pickLore(hits, recent, maxTokens);
   const section = loreSection(picked);
   const terms = [
     ...new Set(
