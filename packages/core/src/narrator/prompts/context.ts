@@ -4,6 +4,7 @@ import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
 import { ArcsStateSchema, arcSection } from "../../systems/arcs";
+import { BraindanceStateSchema, braindanceSection } from "../../systems/braindance";
 import { ChronicleStateSchema, chronicleSection, legendsSection } from "../../systems/chronicle";
 import { CityStateSchema, citySection, playerRumorLine, rumorSection } from "../../systems/city";
 import { cyberwareSection } from "../../systems/cyberware/prompt";
@@ -468,9 +469,15 @@ export function dueSection(world: WorldState): string | undefined {
 export function formatInput(input: TurnInput): string {
   const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
   const reply = input.replyTo !== undefined ? `【回复消息 #${input.replyTo}】` : "";
+  const bd =
+    input.braindance === undefined
+      ? ""
+      : input.braindance === "abandon"
+        ? "【退出超梦，没下结论】"
+        : "【超梦下结论，对错见【超梦】】";
   return input.mode
-    ? `【${MODE_LABELS[input.mode]}】${boost}${reply}${input.text}`
-    : `【玩家】${boost}${reply}${input.text}`;
+    ? `【${MODE_LABELS[input.mode]}】${boost}${bd}${reply}${input.text}`
+    : `【玩家】${boost}${bd}${reply}${input.text}`;
 }
 
 export function checkResultText(rolled: RolledCheck): string {
@@ -597,6 +604,14 @@ export function situation(
     present,
   );
   if (concerns) parts.push(`【心事】\n${concerns}`);
+  const bd = braindanceSection(
+    BraindanceStateSchema.parse(world.slices.braindance ?? {}),
+    extras.data ?? {},
+    plan.kind === "action"
+      ? { text: plan.input.text, braindance: plan.input.braindance }
+      : { text: "" },
+  );
+  if (bd) parts.push(`【超梦】\n${bd}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);

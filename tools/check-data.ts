@@ -5,6 +5,7 @@ import {
   apartments,
   arcs,
   boardModules,
+  braindances,
   canonTimeline,
   combos,
   consequences,
@@ -38,6 +39,7 @@ import {
   arcRules,
   BASE_RULES,
   BoardModuleSchema,
+  braindanceRules,
   CanonTimelineSchema,
   CharacterCardSchema,
   ComboSchema,
@@ -415,6 +417,16 @@ for (const a of arcs) {
   }
 }
 
+// 超梦示例录像：规格要 3 段；格式（层、段、关键线索、结论）由 schema 查，来源要标原作或本作改编
+schema("超梦示例 braindances", braindanceRules.BdExampleListSchema, braindances);
+if (braindances.length < 3) errors.push(`超梦示例录像只有 ${braindances.length} 段，规格要 3 段`);
+for (const b of braindances) {
+  if (b.refs.length === 0) errors.push(`超梦示例 ${b.id}：没写参考的原作文本`);
+  if (!/原作|本作改编/.test(b.source))
+    errors.push(`超梦示例 ${b.id}：来源要写依据的原作或标本作改编`);
+  if (b.recording.job !== undefined) errors.push(`超梦示例 ${b.id}：示例不能挂具体的委托 id`);
+}
+
 // NCPD 警情：只能写 NCPD 管得到的城区
 unique(
   "NCPD 警情",
@@ -472,7 +484,7 @@ for (const kind of ["fight", "race"] as const) {
   if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、超梦录像 ${braindances.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

@@ -13,6 +13,7 @@ import {
   type ActionRequest,
   applyPlayerAction,
   boardStart,
+  braindanceRules,
   buildExtractPrompt,
   buildJudgePrompt,
   buildLedger,
@@ -427,6 +428,13 @@ export class GameService {
       }
       if (request.input.replyTo !== undefined) {
         const blocked = phoneRules.replyBlock(world, request.input.replyTo);
+        if (blocked) return { status: 409, body: { error: blocked, version } };
+      }
+      if (request.input.braindance !== undefined) {
+        const blocked = braindanceRules.concludeBlock(
+          world.slices.braindance,
+          request.input.braindance,
+        );
         if (blocked) return { status: 409, body: { error: blocked, version } };
       }
       const unavailable = await this.llmUnavailable();

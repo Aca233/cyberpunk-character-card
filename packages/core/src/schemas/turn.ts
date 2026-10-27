@@ -18,6 +18,14 @@ export const TurnInputSchema = z.strictObject({
   spendOk: z.boolean().optional(),
   /** 路线面板确认的出行：去哪、怎么去；耗时和路费由代码按路线表算 */
   travel: TravelRequestSchema.optional(),
+  /**
+   * 超梦编辑器里下的结论：写结论选项的 id，或者 abandon（不查了）；
+   * 对不对由代码按调查开始前写定的答案判断，叙事模型照结果接着写
+   */
+  braindance: z
+    .string()
+    .regex(/^[a-z0-9-]{1,40}$/, "超梦结论写选项 id 或 abandon")
+    .optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 

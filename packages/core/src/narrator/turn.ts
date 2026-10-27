@@ -1052,6 +1052,10 @@ export async function runNarratorTurn(
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
   }
+  // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
+  if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {
+    commands.unshift({ type: "braindance.conclude", option: plan.input.braindance });
+  }
   // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
   if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
     const said = plan.input.text.trim().slice(0, 300);

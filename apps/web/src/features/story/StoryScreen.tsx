@@ -9,6 +9,7 @@ import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
+import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import { ChroniclePanel, type StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
@@ -122,6 +123,7 @@ export function StoryScreen() {
   const [atStash, setAtStash] = useState(false);
   const [atMemory, setAtMemory] = useState(false);
   const [atChronicle, setAtChronicle] = useState(false);
+  const [atBraindance, setAtBraindance] = useState(false);
   const [atNews, setAtNews] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
@@ -363,6 +365,32 @@ export function StoryScreen() {
     },
     [saveId, version, refresh, warn],
   );
+  // 超梦编辑器标线索：不调用模型、不花时间
+  const markClue = useCallback(
+    async (point: string) => {
+      try {
+        await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: version,
+          action: { type: "braindance", action: "mark", point },
+        });
+      } catch (error) {
+        warn("braindance", error);
+      }
+      await refresh();
+    },
+    [saveId, version, refresh, warn],
+  );
+  // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
+  const bdKey = view?.braindance.active
+    ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
+    : null;
+  const bdSeen = useRef<string | null>(null);
+  useEffect(() => {
+    if (bdKey === null || bdKey === bdSeen.current) return;
+    bdSeen.current = bdKey;
+    setAtBraindance(true);
+  }, [bdKey]);
   const craftAction = useCallback(
     async (action: "dismantle" | "tune", id: string) => {
       try {
@@ -479,6 +507,7 @@ export function StoryScreen() {
         atMemory ||
         atChronicle ||
         atNews ||
+        atBraindance ||
         story.spend
       )
         return;
@@ -531,6 +560,7 @@ export function StoryScreen() {
     atMemory,
     atChronicle,
     atNews,
+    atBraindance,
   ]);
 
   if (query.isPending) {
@@ -616,6 +646,7 @@ export function StoryScreen() {
         onMemory={() => setAtMemory(true)}
         onChronicle={() => setAtChronicle(true)}
         onNews={() => setAtNews(true)}
+        onBraindance={() => setAtBraindance(true)}
         onStash={() => setAtStash(true)}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
@@ -840,6 +871,29 @@ export function StoryScreen() {
         />
       )}
       {atNews && <NewsPanel view={view} onClose={() => setAtNews(false)} />}
+      {atBraindance && view.braindance.active && (
+        <BraindanceEditor
+          view={view}
+          onMark={busy ? undefined : (point) => void markClue(point)}
+          onConclude={
+            busy || offers?.rolled
+              ? undefined
+              : (id, text) => {
+                  setAtBraindance(false);
+                  send({ text: `超梦里的结论：${text}`, braindance: id });
+                }
+          }
+          onAbandon={
+            busy || offers?.rolled
+              ? undefined
+              : () => {
+                  setAtBraindance(false);
+                  send({ text: "退出超梦，不查了", braindance: "abandon" });
+                }
+          }
+          onClose={() => setAtBraindance(false)}
+        />
+      )}
       {atMap && (
         <MapPanel
           view={view}

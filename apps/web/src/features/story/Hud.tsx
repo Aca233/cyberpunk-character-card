@@ -262,6 +262,7 @@ export function SidePanel({
   onMemory,
   onChronicle,
   onNews,
+  onBraindance,
   onStash,
   onSquad,
   onCraft,
@@ -301,6 +302,8 @@ export function SidePanel({
   readonly onChronicle: () => void;
   /** 打开新闻：N54 快讯和电台插段 */
   readonly onNews: () => void;
+  /** 打开超梦体验编辑器；有在查的超梦时才有按钮 */
+  readonly onBraindance: () => void;
   /** 打开存放箱和后备箱 */
   readonly onStash: () => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
@@ -763,6 +766,12 @@ export function SidePanel({
           <button type="button" onClick={onNews}>
             新闻 [N]
           </button>
+          {view.braindance.active && (
+            <button type="button" onClick={onBraindance}>
+              超梦体验编辑器（关键线索 {view.braindance.active.keys.found}/
+              {view.braindance.active.keys.total}）
+            </button>
+          )}
           {(view.safehouse.homes.length > 0 || view.safehouse.trunks.length > 0) && (
             <button type="button" onClick={onStash}>
               存放 [B]

@@ -15,6 +15,7 @@ import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { ArcsStateSchema, arcCatalog, CONCERN_STATUS_LABELS } from "./systems/arcs";
+import { BraindanceStateSchema, braindanceView } from "./systems/braindance";
 import { credTier } from "./systems/character/apply";
 import {
   CharacterStateSchema,
@@ -874,6 +875,8 @@ export function projectState(
       /** 了结宿敌给的街头声望（级） */
       cred: NEMESIS_CRED_HALVES / 2,
     })),
+    /** 超梦调查：正在查的录像（编辑器用）和查过的几次；旧存档没有超梦系统 */
+    braindance: braindanceView(BraindanceStateSchema.parse(world.slices.braindance ?? {})),
     character: {
       name: character.name,
       brief: character.brief,

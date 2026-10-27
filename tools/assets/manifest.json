@@ -272,6 +272,49 @@
         "slot": "save_load_screen"
       }
     ],
+    "braindance": [
+      {
+        "id": "braindance.visual",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_visual_icon"
+      },
+      {
+        "id": "braindance.visualOn",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_visual_icon_on"
+      },
+      {
+        "id": "braindance.sound",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_sound_icon"
+      },
+      {
+        "id": "braindance.soundOn",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_sound_icon_on"
+      },
+      {
+        "id": "braindance.thermal",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_thermal_icon"
+      },
+      {
+        "id": "braindance.thermalOn",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_thermal_icon_on"
+      },
+      {
+        "id": "braindance.playhead",
+        "atlas": "common/braindance_icons",
+        "slot": "braindance_timeline_indicator"
+      },
+      { "id": "braindance.pause", "atlas": "common/braindance_icons", "slot": "pause" },
+      { "id": "braindance.recording", "atlas": "common/braindance_icons", "slot": "recording1" },
+      { "id": "braindance.timeline", "atlas": "widgets/atlas_braindance", "slot": "timeline" },
+      { "id": "braindance.clue", "atlas": "widgets/atlas_braindance", "slot": "clue_marker" },
+      { "id": "braindance.timeFrame", "atlas": "widgets/atlas_braindance", "slot": "time_frame" },
+      { "id": "braindance.frame", "atlas": "widgets/atlas_braindance", "slot": "frame_fluff" }
+    ],
     "hud": [
       {
         "id": "hud.healthbar",

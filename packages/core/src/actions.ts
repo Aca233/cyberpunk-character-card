@@ -143,6 +143,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
     how: StoryEndSchema,
     epitaph: z.string().trim().min(1).max(EPITAPH_CHARS).optional(),
   }),
+  /** 超梦体验编辑器：标出一个线索点，看它的扫描结果；下结论走回合（input.braindance） */
+  z.strictObject({
+    type: z.literal("braindance"),
+    action: z.literal("mark"),
+    point: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  }),
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 
@@ -482,6 +488,8 @@ function commandsFor(
       if (combat) return "还在打，先活过这一场再说收尾";
       return [{ type: "chronicle.end", how: action.how, epitaph: action.epitaph ?? null }];
     }
+    case "braindance":
+      return [{ type: "braindance.mark", point: action.point }];
     case "acceptJob":
       // 记一条进展笔记，让叙事模型知道这单是在板上接的，正文里还没谈过
       return [

@@ -413,5 +413,17 @@ export function diffViews(prev: View, next: View): Toast[] {
     }
   }
 
+  // 超梦：接上新的一段、下了结论各弹一条；不说推得对不对
+  const bdNow = next.braindance.active;
+  const bdWas = prev.braindance.active;
+  if (bdNow && (!bdWas || bdWas.title !== bdNow.title || bdWas.startedAt !== bdNow.startedAt))
+    out.push({ icon: "braindance.recording", text: `接上超梦：${bdNow.title}`, tone: "info" });
+  if (next.braindance.history.length > prev.braindance.history.length || (bdWas && !bdNow))
+    out.push({
+      icon: "braindance.recording",
+      text: bdWas ? `超梦调查告一段落：${bdWas.title}` : "超梦调查告一段落",
+      tone: "info",
+    });
+
   return out.map((t, i) => ({ ...t, key: `${next.version}-${i}` }));
 }
