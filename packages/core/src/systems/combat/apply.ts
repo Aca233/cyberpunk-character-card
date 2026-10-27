@@ -117,7 +117,12 @@ function finish(
   now: number,
 ): ApplyOutcome {
   const defeat = draft.active?.defeat ?? null;
-  draft.last = { outcome, defeat: outcome === "defeat" ? defeat : null, endedAt: now };
+  const foes = (draft.active?.foes ?? []).map((f) => ({
+    npc: f.npc,
+    name: f.name,
+    state: f.state,
+  }));
+  draft.last = { outcome, defeat: outcome === "defeat" ? defeat : null, endedAt: now, foes };
   draft.active = null;
   notes.push(
     outcome === "defeat" ? `${OUTCOME_LABELS.defeat}：${defeat}` : OUTCOME_LABELS[outcome],

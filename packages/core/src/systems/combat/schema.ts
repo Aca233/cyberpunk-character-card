@@ -93,6 +93,10 @@ export const CombatStateSchema = z.object({
       outcome: CombatOutcomeSchema,
       defeat: z.string().nullable(),
       endedAt: z.number().int(),
+      /** 收场时有卡敌人的情况：宿敌从这里挑；旧存档没有 */
+      foes: z
+        .array(z.object({ npc: z.string().min(1), name: z.string().min(1), state: FoeStateSchema }))
+        .default([]),
     })
     .nullable(),
 });

@@ -31,6 +31,7 @@ export * as inventoryRules from "./systems/inventory";
 export * as jobsRules from "./systems/jobs";
 export * as memoryRules from "./systems/memory";
 export * as ncpdRules from "./systems/ncpd";
+export * as nemesisRules from "./systems/nemesis";
 export * as npcRules from "./systems/npc";
 export * as phoneRules from "./systems/phone";
 export * as psychosisRules from "./systems/psychosis";

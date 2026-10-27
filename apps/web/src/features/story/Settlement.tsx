@@ -71,3 +71,42 @@ export function SettlementCard({
     </Dialog>
   );
 }
+
+export type EndedNemesis = View["nemesesEnded"][number];
+
+/** 了结宿敌后弹出的结算卡：怎么结下的梁子、怎么了结的、街头声望 */
+export function NemesisSettlementCard({
+  nemesis,
+  onClose,
+}: {
+  readonly nemesis: EndedNemesis;
+  readonly onClose: () => void;
+}) {
+  const rows: [string, string, "good" | undefined][] = [
+    ["结下梁子", `${nemesis.since} · ${nemesis.how}`, undefined],
+    ["了结", `${nemesis.at} · ${nemesis.endLabel}`, undefined],
+    ["街头声望", `+${nemesis.cred} 级`, "good"],
+  ];
+  return (
+    <Dialog
+      title={`宿敌了结：${nemesis.name}`}
+      tone="info"
+      onClose={onClose}
+      actions={
+        <Button primary onClick={onClose}>
+          继续
+        </Button>
+      }
+    >
+      <dl className={styles.settle}>
+        {rows.map(([label, value, tone]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd data-tone={tone}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className={styles.settleSummary}>“{nemesis.text}”</p>
+    </Dialog>
+  );
+}

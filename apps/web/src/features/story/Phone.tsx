@@ -51,11 +51,16 @@ function Profile({ npc }: { readonly npc: Npc }) {
         <div className={styles.factionHead}>
           <b>{npc.name}</b>
           {npc.alias && <span className={styles.dim}>外号{npc.alias}</span>}
+          {npc.nemesis && (
+            <span className={styles.memoryTag}>{npc.nemesis.ended ? "旧宿敌" : "宿敌"}</span>
+          )}
           <span className={styles.dim}>
             {!npc.alive
               ? "已故"
               : !npc.met
-                ? "只听说过"
+                ? npc.nemesis
+                  ? "交过手"
+                  : "只听说过"
                 : npc.here
                   ? "在场"
                   : npc.lastSeen
@@ -72,7 +77,27 @@ function Profile({ npc }: { readonly npc: Npc }) {
             <p className={styles.factionLine}>{npc.look}</p>
           </>
         ) : (
-          <p className={styles.dim}>还没见过面，下面是听来的。</p>
+          <p className={styles.dim}>
+            {npc.nemesis ? "只在交手时照过面，底细还不清楚。" : "还没见过面，下面是听来的。"}
+          </p>
+        )}
+        {npc.nemesis && (
+          <>
+            <p className={styles.npcMemoryTitle}>宿敌</p>
+            <p className={styles.factionLine}>
+              怎么输给你的：{npc.nemesis.how}
+              <small className={styles.dim}>（{npc.nemesis.since} 结下梁子）</small>
+            </p>
+            {npc.nemesis.ended ? (
+              <p className={styles.factionReason}>{npc.nemesis.ended}</p>
+            ) : npc.nemesis.prep ? (
+              <p className={styles.factionLine}>
+                <span className={styles.memoryTag}>准备</span> {npc.nemesis.prep}
+              </p>
+            ) : (
+              <p className={styles.dim}>他会针对你做准备；扫描或打听才知道是什么。</p>
+            )}
+          </>
         )}
         {npc.body && (
           <>

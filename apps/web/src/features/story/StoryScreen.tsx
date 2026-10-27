@@ -23,7 +23,12 @@ import { type MemoryEdit, MemoryPanel } from "./MemoryPanel";
 import { NewsPanel } from "./NewsPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
-import { type SettledJob, SettlementCard } from "./Settlement";
+import {
+  type EndedNemesis,
+  NemesisSettlementCard,
+  type SettledJob,
+  SettlementCard,
+} from "./Settlement";
 import { Shop } from "./Shop";
 import { StashPanel } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
@@ -68,6 +73,9 @@ export function StoryScreen() {
   // 委托结束后排队弹出的结算卡
   const [settled, setSettled] = useState<readonly SettledJob[]>([]);
   const closeSettlement = useCallback(() => setSettled((q) => q.slice(1)), []);
+  // 了结宿敌后排队弹出的结算卡，在委托结算卡之后
+  const [rivalsDone, setRivalsDone] = useState<readonly EndedNemesis[]>([]);
+  const closeRival = useCallback(() => setRivalsDone((q) => q.slice(1)), []);
   useEffect(() => {
     if (!view) return;
     const prev = previous.current;
@@ -80,6 +88,9 @@ export function StoryScreen() {
       (j) => !j.open && j.settlement !== null && wasOpen.has(j.id),
     );
     if (closed.length > 0) setSettled((q) => [...q, ...closed]);
+    const wasEnded = new Set(prev.nemesesEnded.map((n) => n.npc));
+    const ended = view.nemesesEnded.filter((n) => !wasEnded.has(n.npc));
+    if (ended.length > 0) setRivalsDone((q) => [...q, ...ended]);
   }, [view]);
   const dropToast = useCallback(
     (key: string) => setToasts((t) => t.filter((x) => x.key !== key)),
@@ -847,7 +858,10 @@ export function StoryScreen() {
         />
       )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
-      {!settled[0] && <CloseupQueue turns={view.turns} />}
+      {!settled[0] && rivalsDone[0] && (
+        <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />
+      )}
+      {!settled[0] && !rivalsDone[0] && <CloseupQueue turns={view.turns} />}
       {atPhone && (
         <PhoneDialog
           view={view}

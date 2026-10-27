@@ -1163,6 +1163,7 @@ export async function runNarratorTurn(
           title?: string;
           text?: string;
           cause?: string;
+          npc?: string;
         };
         if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
         else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
@@ -1172,6 +1173,8 @@ export async function runNarratorTurn(
         else if (c.type === "agendaTold") considered.push(`场外推演：快讯播了势力动向 ${c.id}`);
         else if (c.type === "agenda.move")
           considered.push(`场外推演：势力动向 ${c.id}「${c.title}」${c.text ?? ""}`);
+        else if (c.type === "nemesis.move")
+          considered.push(`场外推演：宿敌 ${c.npc} ${c.text ?? ""}`);
         considered.push(...result.notes.map((n) => `场外推演：${n}`));
       }
     }

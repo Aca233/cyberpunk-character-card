@@ -108,6 +108,12 @@ import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/appl
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
 import { NcpdStateSchema } from "./systems/ncpd";
+import {
+  NEMESIS_CRED_HALVES,
+  NEMESIS_END_LABELS,
+  NEMESIS_STYLE_LABELS,
+  NemesisStateSchema,
+} from "./systems/nemesis";
 import { deathKnown } from "./systems/npc/apply";
 import { attributeSum, bodyView } from "./systems/npc/body";
 import { onStage } from "./systems/npc/prompt";
@@ -811,6 +817,8 @@ export function projectState(
   const combat = CombatStateSchema.parse(world.slices.combat);
   const character = CharacterStateSchema.parse(world.slices.character);
   const npcs = NpcStateSchema.parse(world.slices.npc);
+  // 旧存档没有宿敌系统
+  const nemesisState = NemesisStateSchema.parse(world.slices.nemesis ?? {});
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   // 旧存档没有消息记录
@@ -849,6 +857,19 @@ export function projectState(
       jobs: jobs.jobs,
       death: health.condition === "dead" ? { at: world.time, location: clock.location } : null,
     }),
+    /** 了结了的宿敌：界面按新出现的弹结算卡；旧的在前 */
+    nemesesEnded: nemesisState.ended.map((e) => ({
+      npc: e.npc,
+      name: e.name,
+      end: e.end,
+      endLabel: NEMESIS_END_LABELS[e.end],
+      text: e.text,
+      how: e.how,
+      since: formatGameTime(e.since),
+      at: formatGameTime(e.at),
+      /** 了结宿敌给的街头声望（级） */
+      cred: NEMESIS_CRED_HALVES / 2,
+    })),
     character: {
       name: character.name,
       brief: character.brief,
@@ -1099,9 +1120,15 @@ export function projectState(
       const s = currentAlert(StealthStateSchema.parse(world.slices.stealth ?? {}), clock.scene);
       return { level: s.level, label: ALERT_LABELS[s.level], peak: s.peak, lowered: s.lowered };
     })(),
-    /** 见过的人和只听说过的人；诉求、底线和秘密只给模型看，不在这里 */
+    /** 见过的人、只听说过的人和宿敌（交过手）；诉求、底线和秘密只给模型看，不在这里 */
     npcs: Object.values(npcs.npcs)
-      .filter((n) => n.met || n.known.length > 0)
+      .filter(
+        (n) =>
+          n.met ||
+          n.known.length > 0 ||
+          nemesisState.nemeses.some((x) => x.npc === n.id) ||
+          nemesisState.ended.some((x) => x.npc === n.id),
+      )
       .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
       .map((n) => ({
         id: n.id,
@@ -1145,6 +1172,33 @@ export function projectState(
         body: n.met
           ? bodyView(n, data, world.time, attributeSum(effectiveAttributes(character)))
           : null,
+        /**
+         * 宿敌：怎么输给你的；准备只在扫描或打听到以后给，屏幕外的动静不在这里。
+         * 了结了的写怎么了结的；不是宿敌是 null
+         */
+        nemesis: (() => {
+          const a = nemesisState.nemeses.find((x) => x.npc === n.id);
+          if (a) {
+            return {
+              how: a.how,
+              since: formatGameTime(a.since),
+              prep:
+                a.prep && a.known
+                  ? `专克${NEMESIS_STYLE_LABELS[a.prep.against]}：${a.prep.text}`
+                  : null,
+              ended: null,
+            };
+          }
+          const e = nemesisState.ended.find((x) => x.npc === n.id);
+          return e
+            ? {
+                how: e.how,
+                since: formatGameTime(e.since),
+                prep: null,
+                ended: `${NEMESIS_END_LABELS[e.end]}：${e.text}`,
+              }
+            : null;
+        })(),
       })),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
     bulletins: [...CityStateSchema.parse(world.slices.city ?? {}).bulletins].reverse().map((b) => ({

@@ -31,6 +31,14 @@ import {
   FactionsStateSchema,
 } from "../systems/factions";
 import { JobsStateSchema } from "../systems/jobs";
+import {
+  canMove,
+  MOVE_MAX,
+  moveOverdue,
+  NEMESIS_DUE_DAYS,
+  NemesisStateSchema,
+  nemesisOffscreenSection,
+} from "../systems/nemesis";
 import { type Npc, NpcStateSchema, PAST_MAX, TIMELINE_SQUASH } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN, PhoneStateSchema } from "../systems/phone";
 import { SquadStateSchema } from "../systems/squad";
@@ -81,6 +89,16 @@ export function offscreenDue(
   // 上次推演以后有势力动向新到点了：只推一次，模型没写的留在队列里等下次
   const due = FactionsStateSchema.parse(after.slices.factions ?? {}).due;
   if (due.some((d) => city.lastAt === null || d.at > city.lastAt)) return true;
+  // 宿敌拖到了期限、到期以后还没推演过：推一次，模型没写的等下次正常推演
+  const rivals = NemesisStateSchema.parse(after.slices.nemesis ?? {}).nemeses;
+  const overdueAt = (n: (typeof rivals)[number]) =>
+    (n.lastMoveAt ?? n.since) + NEMESIS_DUE_DAYS * DAY;
+  if (
+    rivals.some(
+      (n) => moveOverdue(n, after.time) && (city.lastAt === null || city.lastAt < overdueAt(n)),
+    )
+  )
+    return true;
   return city.lastAt !== null && after.time - city.lastAt >= OFFSCREEN_HOURS * 60;
 }
 
@@ -184,16 +202,18 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 原作人物：【人物】里标了「原作人物」的人可以死在屏幕外，写进 deaths（一次最多 ${OFFSCREEN_DEATHS} 个）：只在局面真的走到那一步时写（原作里这个人这段时间的命运、城里的动静或势力动向牵连到他、他自己的近况把他推到那里）；【原剧时间线】只是参考，玩家插过手的照玩家改过的走。大多数时候 deaths 是空的。写了死，最好再写一条能让玩家以后听说的动静或传闻；他死了就不要再给他写近况和消息。标了「本场在场」、在玩家队里的人不能写。
 - 势力动向：【到点的势力动向】里每一条，都要写这次实际发生了什么。种子只是素材：手段可以从「可能的法子」里挑，也可以按局面换个法子、半路改主意、被对头或别的势力（夜之城警察局、网络监察、公司）截胡；接着上次的事和钩子写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。
 - 代码掷的倾向是默认结果；局面明显不是这样的（玩家刚端了他们的据点、对头正好在那片收紧），可以改 outcome 并在 why 里写一句理由。地盘一次最多动一个城区，只在「能争的城区」里：成了，可以让这个势力拿下一个，或者让对头丢掉一个；受挫，可以让这个势力丢掉一个，或者让对头抢走一个；出了岔子不动地盘；不动地盘最常见，真打下来、真丢了才写。
-- next 写这个势力接下来可能怎么走，一句话，给以后的推演和叙事接着用；可以留空。`;
+- next 写这个势力接下来可能怎么走，一句话，给以后的推演和叙事接着用；可以留空。
+- 宿敌：【宿敌】里列的是这次可以在屏幕外动一步的人，每人最多写一条 nemeses：打听玩家的下落、找玩家在乎的人（【人物】里好感高、和玩家有共同记忆的）麻烦、抢玩家的单子或截玩家的中间人，接着他怎么输的和上一步写，${MOVE_MAX} 字以内。标了「这次要写」的必须写；其余的有说得过去的理由才写。只写他做了什么，不改任何数值，不写玩家的反应，不让他亲自和玩家见面；被他找过麻烦的人可以顺手在 npcs 里写近况或在 messages 里给玩家发消息。`;
 
 const OFFSCREEN_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块：
-{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "agendas": ["可省：播了的势力动向 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}], "agendas": [{"id": "到点的动向 id", "outcome": "success|setback|twist，照倾向的可省", "why": "改了结果才写，一句理由", "title": "24 字以内", "text": "160 字以内：实际发生了什么、谁在背后、用的什么法子", "news": "80 字以内：传开以后街上、新闻里怎么说", "turf": {"faction": "势力 id", "district": "城区", "change": "gain|lose"}, "next": "可省：接下来可能怎么走，80 字以内"}]}
+{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "agendas": ["可省：播了的势力动向 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}], "agendas": [{"id": "到点的动向 id", "outcome": "success|setback|twist，照倾向的可省", "why": "改了结果才写，一句理由", "title": "24 字以内", "text": "160 字以内：实际发生了什么、谁在背后、用的什么法子", "news": "80 字以内：传开以后街上、新闻里怎么说", "turf": {"faction": "势力 id", "district": "城区", "change": "gain|lose"}, "next": "可省：接下来可能怎么走，80 字以内"}], "nemeses": [{"npc": "【宿敌】里的人物 id", "text": "${MOVE_MAX} 字以内：他这次在屏幕外做了什么"}]}
 status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束了。weight：minor 街角小事，normal 几个街区在传，major 上了 N54 头条、迟早找到玩家头上。
 agendas：没有【到点的势力动向】就输出空数组；有的话每条到点的都写一条。turf 不动地盘时写 null。
+nemeses：没有【宿敌】就输出空数组。
 
 例：{"events": [{"id": "tyger-claws-kabuki", "title": "虎爪帮在歌舞伎区收紧地盘", "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。", "district": "沃森", "status": "heating", "weight": "normal"}], "npcs": [], "messages": []}
-玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "pasts": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "agendas": []}
+玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "pasts": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "agendas": [], "nemeses": []}
 不要写没有前因的大事：玩家在街边吃了碗面，就写「荒坂塔遇袭」，这是凭空制造戏剧性。`;
 
 export const OFFSCREEN_SYSTEM = [BOOKKEEPING_BASE, OFFSCREEN_STAGE, OFFSCREEN_OUTPUT].join("\n\n");
@@ -238,6 +258,10 @@ export function buildOffscreenPrompt(
     extras.data ?? {},
   );
   const rumors = rumorSection(city);
+  const nemeses = nemesisOffscreenSection(
+    NemesisStateSchema.parse(world.slices.nemesis ?? {}),
+    world.time,
+  );
   const picks = contactPicks(world, present);
   const squash = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
     .filter((n) => n.alive && n.timeline.length >= TIMELINE_SQUASH)
@@ -274,6 +298,7 @@ export function buildOffscreenPrompt(
         : []),
       ...(canon ? [`【原剧时间线】（只是参考）\n${canon}`] : []),
       ...(due ? [`【到点的势力动向】\n${due}`] : []),
+      ...(nemeses ? [`【宿敌】\n${nemeses}`] : []),
       ...(window.length > 0 ? [`【上次推演以来的正文】\n${window.join("\n\n")}`] : []),
     ],
     input: `【刚收场的这一轮正文】\n${narrative}`,
@@ -301,6 +326,10 @@ const OffscreenPastSchema = z.object({
 });
 const OffscreenBulletinSchema = BulletinFieldsSchema.extend({
   agendas: z.array(z.string().trim().min(1)).max(3).optional(),
+});
+const OffscreenNemesisSchema = z.object({
+  npc: z.string().trim().min(1),
+  text: z.string().trim().min(1).max(MOVE_MAX),
 });
 const OffscreenDeathSchema = z.object({
   id: z.string().trim().min(1),
@@ -547,6 +576,37 @@ export function readOffscreen(
     const problem = agendaTurfProblem(seed, outcome, move.turf, turf);
     if (problem) notes.push(`场外推演：「${move.title}」的地盘变化不算：${problem}`);
     commands.push({ type: "agenda.move", ...move, turf: problem ? null : move.turf });
+  }
+
+  const rivals = NemesisStateSchema.parse(world.slices.nemesis ?? {}).nemeses;
+  const moved = new Set<string>();
+  for (const [i, item] of list("nemeses").entries()) {
+    const parsed = OffscreenNemesisSchema.safeParse(item);
+    if (!parsed.success) {
+      notes.push(`场外推演：nemeses[${i}] 格式不对：${issue(parsed.error)}`);
+      continue;
+    }
+    const rival = rivals.find((n) => n.npc === parsed.data.npc);
+    const problem = !rival
+      ? "不是宿敌"
+      : !canMove(rival, world.time)
+        ? "离上次动静还不到间隔"
+        : died.has(rival.npc) || npcs[rival.npc]?.alive === false
+          ? "已经死了"
+          : moved.has(rival.npc)
+            ? "一次只写一步"
+            : undefined;
+    if (problem || !rival) {
+      notes.push(`场外推演：nemeses[${i}] ${parsed.data.npc} ${problem ?? ""}，不要`);
+      continue;
+    }
+    moved.add(rival.npc);
+    commands.push({ type: "nemesis.move", npc: rival.npc, text: parsed.data.text });
+  }
+  for (const n of rivals) {
+    if (!moved.has(n.npc) && moveOverdue(n, world.time)) {
+      notes.push(`场外推演：宿敌${n.name}标了「这次要写」却没写`);
+    }
   }
 
   const rawBulletin = raw.bulletin;

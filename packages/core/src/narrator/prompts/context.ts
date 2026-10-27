@@ -22,6 +22,7 @@ import {
 import { jobsSection, jobTemplateSection } from "../../systems/jobs/prompt";
 import { JobsStateSchema } from "../../systems/jobs/schema";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
+import { NemesisStateSchema, nemesisSection } from "../../systems/nemesis";
 import { NotesStateSchema, notesSection } from "../../systems/notes";
 import { castSection } from "../../systems/npc/prompt";
 import { NpcStateSchema } from "../../systems/npc/schema";
@@ -580,6 +581,8 @@ export function situation(
     world.time,
   );
   if (agendas) parts.push(`【势力动向】\n${agendas}`);
+  const nemeses = nemesisSection(NemesisStateSchema.parse(world.slices.nemesis ?? {}), world.time);
+  if (nemeses) parts.push(`【宿敌】\n${nemeses}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);

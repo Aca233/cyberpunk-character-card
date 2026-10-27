@@ -382,5 +382,19 @@ export function diffViews(prev: View, next: View): Toast[] {
       out.push({ icon: "notify.questUpdate", text: `已处理：${d.label}`, tone: "info" });
   }
 
+  // 宿敌：升级和看穿准备弹提示条，了结弹结算卡
+  const rivalsBefore = new Map(prev.npcs.map((n) => [n.id, n.nemesis]));
+  for (const n of next.npcs) {
+    const was = rivalsBefore.get(n.id) ?? null;
+    if (!n.nemesis || n.nemesis.ended) continue;
+    if (!was) out.push({ icon: "notify.attention", text: `${n.name}成了你的宿敌`, tone: "bad" });
+    else if (n.nemesis.prep && n.nemesis.prep !== was.prep)
+      out.push({
+        icon: "notify.attention",
+        text: `看穿了${n.name}的准备：${n.nemesis.prep}`,
+        tone: "info",
+      });
+  }
+
   return out.map((t, i) => ({ ...t, key: `${next.version}-${i}` }));
 }
