@@ -9,6 +9,7 @@ import {
   type MoneyCommand,
   MoneyCommandSchema,
 } from "./schema";
+import { economyStatus } from "./status";
 import { moneyView } from "./view";
 
 /** 欧元：身上的钱和已经结算过的事件 */
@@ -23,9 +24,11 @@ export const economy = defineSystem<EconomyState, LootCommand, MoneyCommand>({
     command.type === "money" ? applyMoney(draft, command) : applyLoot(draft, command),
   rules: [economyRules],
   view: { key: "money", project: moneyView },
+  status: economyStatus,
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

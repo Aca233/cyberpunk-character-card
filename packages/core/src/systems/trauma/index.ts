@@ -8,6 +8,7 @@ import {
   type TraumaState,
   TraumaStateSchema,
 } from "./schema";
+import { traumaStatus } from "./status";
 import { traumaView } from "./view";
 
 /** 创伤小组会籍：买一期管 30 天，倒下或濒死时按档位、地点、交火和热度判断来不来 */
@@ -21,6 +22,7 @@ export const trauma = defineSystem<TraumaState, TraumaCommand>({
   tick: (draft, span) => tickTrauma(draft, span),
   rules: [traumaRules],
   view: { key: "trauma", project: traumaView },
+  status: traumaStatus,
   events: traumaEvents,
 });
 
@@ -28,4 +30,5 @@ export * from "./apply";
 export * from "./events";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

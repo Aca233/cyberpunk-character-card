@@ -31,6 +31,7 @@ import {
   SeedNpcSchema,
 } from "./schema";
 import { npcSections } from "./sections";
+import { npcStatus } from "./status";
 import { npcsView } from "./view";
 
 /** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、生死和位置、血量装备义体人性；路人不建卡 */
@@ -76,6 +77,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   sections: npcSections,
   view: { key: "npcs", project: npcsView },
   views: [{ key: "perceived", project: perceivedView }],
+  status: npcStatus,
 });
 
 export * from "./apply";
@@ -84,4 +86,5 @@ export * from "./perceived";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";
+export * from "./status";
 export * from "./view";

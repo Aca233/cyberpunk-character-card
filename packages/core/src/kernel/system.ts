@@ -121,6 +121,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly actions?: Readonly<Record<string, PlayerActionDef>>;
   /** 给叙事模型的情境节，按 order 排进【当前状态】之后；只有这里可以写答案、真相这类隐藏信息 */
   readonly sections?: readonly SystemSection[];
+  /** 这个系统在【当前状态】里写的几行，按 order 和别的系统的穿插排好；只能读玩家投影，不能写隐藏信息 */
+  readonly status?: readonly SystemStatus[];
   /** 这个系统交给玩家的待办：只能用玩家已经知道的东西，委托转折、心事走向这类不能放进来 */
   objectives?(ctx: ViewContext): readonly Objective[];
   /** 这个系统交给玩家的威胁：只写玩家已经知道的，宿敌没扫描或打听到的准备不能放进来 */
@@ -237,6 +239,17 @@ export interface SystemSection {
   render(ctx: SectionContext): string | undefined;
 }
 
+/** 拼【当前状态】时系统看到的环境：registry.project 给出的各块玩家投影（键是投影字段名），只读 */
+export interface StatusContext {
+  readonly views: Readonly<Record<string, unknown>>;
+}
+
+/** 【当前状态】里的一组行：order 在所有系统里唯一，按它从小到大排；返回空数组时这一轮不写 */
+export interface SystemStatus {
+  readonly order: number;
+  lines(ctx: StatusContext): readonly string[];
+}
+
 /** 投影时系统看到的环境：只读，不能改状态 */
 export interface ViewContext {
   readonly world: WorldState;
@@ -346,6 +359,8 @@ export interface Registry {
   actionCommands(raw: unknown, ctx: ActionContext): Command[] | string;
   /** 各系统交的情境节按 order 排好、拼成「【标题】\n正文」；没内容的节跳过，只读 */
   sections(ctx: SectionContext): readonly string[];
+  /** 各系统交的【当前状态】行按 order 排好、逐行拼起来；只读 */
+  status(ctx: StatusContext): readonly string[];
   /** 各系统交的待办，按系统顺序拼起来；id 重复时报错，只读 */
   objectives(ctx: ViewContext): readonly Objective[];
   /** 各系统交的威胁，按系统顺序拼起来；id 重复或等级不在 0–5 时报错，只读 */
@@ -406,6 +421,19 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     }
   }
   sectionList.sort((a, b) => a.section.order - b.section.order);
+  const statusList: { readonly systemId: string; readonly status: SystemStatus }[] = [];
+  for (const system of order) {
+    for (const status of system.status ?? []) {
+      const existing = statusList.find((s) => s.status.order === status.order);
+      if (existing) {
+        throw new RegistryError(
+          `状态行排序 ${status.order} 同时由 ${existing.systemId} 和 ${system.id} 使用`,
+        );
+      }
+      statusList.push({ systemId: system.id, status });
+    }
+  }
+  statusList.sort((a, b) => a.status.order - b.status.order);
   const owners = new Map<string, Owner>();
   for (const system of order) {
     const groups = [
@@ -573,6 +601,9 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
         const body = section.render(ctx);
         return body === undefined ? [] : [`【${section.title}】\n${body}`];
       });
+    },
+    status(ctx) {
+      return statusList.flatMap(({ status }) => status.lines(ctx));
     },
     objectives(ctx) {
       const result: Objective[] = [];

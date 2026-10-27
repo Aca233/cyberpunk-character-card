@@ -186,7 +186,7 @@ export function buildNarratorPrompt(
     ...Object.values(npcs.npcs).flatMap((n) => [n.name, n.alias ?? ""]),
   ].filter((n) => n !== "");
   const recap = recapFor(world, records, hot, extras.recapTokens);
-  const scene = situation(world, view, plan, extras);
+  const scene = situation(world, records, view, plan, extras);
   const recall = recalledSection(extras.recalled);
   const content = userMessage({
     recap,

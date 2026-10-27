@@ -9,6 +9,7 @@ import {
   type SidegigsState,
   SidegigsStateSchema,
 } from "./schema";
+import { sidegigsStatus } from "./status";
 
 /** 拳赛和赛车：报名扣押金，赢了拿奖金和声望；比赛本身走检定 */
 export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
@@ -30,9 +31,11 @@ export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
         world.time,
       ),
   },
+  status: sidegigsStatus,
 });
 
 export * from "./apply";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";

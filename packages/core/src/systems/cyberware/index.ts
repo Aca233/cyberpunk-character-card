@@ -20,6 +20,7 @@ import {
   type RipperdocDebtCommand,
   RipperdocDebtCommandSchema,
 } from "./schema";
+import { cyberwareStatus } from "./status";
 import { cyberwareView } from "./view";
 
 /** 义体：按部位装卸，钱交给欧元系统扣，人性上限交给人性系统算 */
@@ -57,6 +58,7 @@ export const cyberware = defineSystem<
     { key: "ripperdocDebts", project: ripperdocDebtsView },
     { key: "sandevistan", project: sandevistanView },
   ],
+  status: cyberwareStatus,
   interactions: cyberwareInteractions,
   events: cyberwareEvents,
 });
@@ -69,4 +71,5 @@ export * from "./prompt";
 export * from "./ripperdoc";
 export * from "./sandevistan";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

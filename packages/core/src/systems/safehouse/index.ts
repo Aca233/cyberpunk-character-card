@@ -13,6 +13,7 @@ import {
   type TrophyCommand,
   TrophyCommandSchema,
 } from "./schema";
+import { safehouseStatus } from "./status";
 import { safehouseView } from "./view";
 
 /** 安全屋：开局按出身给一处住所；存放箱、后备箱和战利品墙 */
@@ -40,6 +41,7 @@ export const safehouse = defineSystem<
   rules: [safehouseRules],
   actions: safehouseActions,
   view: { key: "safehouse", project: safehouseView },
+  status: safehouseStatus,
   interactions: safehouseInteractions,
 });
 
@@ -48,4 +50,5 @@ export * from "./apply";
 export * from "./interactions";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

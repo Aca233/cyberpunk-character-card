@@ -134,6 +134,41 @@ describe("createRegistry", () => {
     );
   });
 
+  it("状态行按 order 跨系统穿插，保留组内顺序，跳过空组且不改投影", () => {
+    const a: AnySystem = {
+      ...stub("a"),
+      status: [
+        { order: 30, lines: ({ views }) => [String(views.label)] },
+        { order: 10, lines: () => ["首行", "第二行"] },
+      ],
+    };
+    const b: AnySystem = {
+      ...stub("b"),
+      status: [
+        { order: 20, lines: () => [] },
+        { order: 25, lines: () => ["中间行"] },
+      ],
+    };
+    const registry = createRegistry([b, a]);
+    const views = Object.freeze({ label: "末行" });
+    expect(registry.status({ views })).toEqual(["首行", "第二行", "中间行", "末行"]);
+    expect(views).toEqual({ label: "末行" });
+    expect(createRegistry([stub("empty")]).status({ views })).toEqual([]);
+  });
+
+  it("拒绝状态行排序重名，同一系统内和跨系统都检查", () => {
+    const reporter = (id: string, orders: readonly number[]): AnySystem => ({
+      ...stub(id),
+      status: orders.map((order) => ({ order, lines: () => [] })),
+    });
+    expect(() => createRegistry([reporter("a", [10, 10])])).toThrow(
+      "状态行排序 10 同时由 a 和 a 使用",
+    );
+    expect(() => createRegistry([reporter("a", [10]), reporter("b", [20, 10])])).toThrow(
+      "状态行排序 10 同时由 a 和 b 使用",
+    );
+  });
+
   it("初始世界包含时间和每个系统的初始状态", () => {
     const registry = createRegistry([counter, stub("a")]);
     expect(registry.initialWorld(T0)).toEqual({

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { projectState } from "../game";
 import type { LlmMessage } from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
@@ -310,7 +309,6 @@ export function buildOffscreenPrompt(
   narrative: string,
   present: ReadonlySet<string> = new Set(),
 ): LlmMessage[] {
-  const view = projectState(world, records, extras.data);
   const city = CityStateSchema.parse(world.slices.city ?? {});
   const npcs = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
     .filter((n) => n.alive)
@@ -339,7 +337,7 @@ export function buildOffscreenPrompt(
     .map((r) => r.text.slice(0, WINDOW_CHARS));
   const content = userMessage({
     scene: [
-      `【当前状态】\n${stateSummary(view)}`,
+      `【当前状态】\n${stateSummary(world, records, extras.data)}`,
       `【人物】\n${npcs.length > 0 ? npcs.map((n) => card(n, present.has(n.id))).join("\n") : "（还没有）"}`,
       ...(fixers.length > 0
         ? [`【中间人】\n${fixers.map((f) => `- ${f.id}｜${f.name}`).join("\n")}`]

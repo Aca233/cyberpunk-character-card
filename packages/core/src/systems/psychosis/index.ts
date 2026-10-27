@@ -23,6 +23,7 @@ import {
   type SuppressantCommand,
   SuppressantCommandSchema,
 } from "./schema";
+import { psychosisStatus } from "./status";
 
 /** 赛博精神病：压制剂、发作、失控、记忆空白和危机章节；人性本身在 humanity 系统 */
 export const psychosis = defineSystem<
@@ -74,8 +75,10 @@ export const psychosis = defineSystem<
         WorldClockStateSchema.parse(world.slices.world).scene,
       ),
   },
+  status: psychosisStatus,
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";

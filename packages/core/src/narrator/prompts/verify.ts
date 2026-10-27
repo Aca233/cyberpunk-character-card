@@ -1,4 +1,3 @@
-import { projectState } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
@@ -73,10 +72,9 @@ export function buildVerifyPrompt(
   narrative: string,
   proposals: readonly unknown[],
 ): LlmMessage[] {
-  const view = projectState(world, records, extras.data);
   const content = userMessage({
     scene: [
-      `【当前状态】\n${stateSummary(view)}`,
+      `【当前状态】\n${stateSummary(world, records, extras.data)}`,
       ...(plan.kind === "resolve" ? [checkResultText(plan.check)] : []),
       ...rulesReference(world),
     ],

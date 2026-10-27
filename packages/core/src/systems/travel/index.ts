@@ -11,6 +11,7 @@ import {
   type VehicleGrant,
   VehicleGrantSchema,
 } from "./schema";
+import { travelStatus } from "./status";
 import { applyVehicle, grantVehicle } from "./vehicles";
 import { travelView } from "./view";
 
@@ -37,10 +38,12 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
   },
   rules: [travelRules],
   view: { key: "travel", project: travelView },
+  status: travelStatus,
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./vehicles";
 export * from "./view";

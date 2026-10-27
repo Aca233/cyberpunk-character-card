@@ -12,6 +12,7 @@ import {
   type WorldCommand,
   WorldCommandSchema,
 } from "./schema";
+import { worldStatus } from "./status";
 import { worldView } from "./view";
 
 export const world = defineSystem<WorldClockState, WorldCommand | DeadlineCommand, EndScene>({
@@ -31,6 +32,7 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
     }
   },
   view: { key: "clock", project: worldView },
+  status: worldStatus,
   events: worldEvents,
   feed: worldFeed,
 });
@@ -39,6 +41,8 @@ export * from "./apply";
 export * from "./district";
 export * from "./events";
 export * from "./feed";
+export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";
 export * from "./weather";

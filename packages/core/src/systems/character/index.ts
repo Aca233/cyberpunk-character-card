@@ -24,6 +24,7 @@ import {
   StreetCredCommandSchema,
   StreetCredProposalSchema,
 } from "./schema";
+import { characterStatus } from "./status";
 import { characterView } from "./view";
 
 /** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
@@ -89,6 +90,7 @@ export const character = defineSystem<
   },
   rules: [streetCredRules, habitRules, flashbackRules],
   view: { key: "character", project: characterView },
+  status: characterStatus,
   actions: characterActions,
   events: characterEvents,
 });
@@ -100,4 +102,5 @@ export * from "./flashback";
 export * from "./habits";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

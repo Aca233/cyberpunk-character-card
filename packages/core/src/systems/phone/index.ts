@@ -17,6 +17,7 @@ import {
   ReplySchema,
 } from "./schema";
 import { phoneSections } from "./sections";
+import { phoneStatus } from "./status";
 import { phoneCallsView } from "./view";
 
 /** 消息：抽取按正文记 messages，玩家看、回复；联系人、全息电话和完整通讯界面在 M3 */
@@ -72,6 +73,7 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
   sections: phoneSections,
   view: { key: "calls", project: phoneCallsView },
   views: [{ key: "phoneMessages", project: phoneMessagesView }],
+  status: phoneStatus,
   actions: phoneActions,
   feed: phoneFeed,
 });
@@ -83,4 +85,5 @@ export * from "./messages";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";
+export * from "./status";
 export * from "./view";

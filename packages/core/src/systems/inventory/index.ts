@@ -33,6 +33,7 @@ import {
   TradeCommandSchema,
 } from "./schema";
 import { shopsView } from "./shops";
+import { inventoryStatus } from "./status";
 import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
@@ -106,6 +107,7 @@ export const inventory = defineSystem<
     { key: "shops", project: shopsView },
     { key: "names", project: namesView },
   ],
+  status: inventoryStatus,
   interactions: inventoryInteractions,
   events: inventoryEvents,
 });
@@ -115,6 +117,8 @@ export * from "./apply";
 export * from "./events";
 export * from "./interactions";
 export * from "./names";
+export * from "./prompt";
 export * from "./schema";
 export * from "./shops";
+export * from "./status";
 export * from "./view";

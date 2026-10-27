@@ -84,7 +84,7 @@ export function buildExtractPrompt(
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const content = userMessage({
-    scene: situation(world, view, plan, extras),
+    scene: situation(world, records, view, plan, extras),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [`【本轮正文】\n${narrative}`],
     reminder: "（只输出抽取的 JSON 对象。）",

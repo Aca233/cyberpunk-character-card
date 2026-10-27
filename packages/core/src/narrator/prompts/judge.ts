@@ -95,7 +95,7 @@ export function buildJudgePrompt(
   const content = userMessage({
     recap: recapFor(world, records, JUDGE_TURNS),
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
-    scene: situation(world, view, plan, extras),
+    scene: situation(world, records, view, plan, extras),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
     input: formatInput(plan.input),
     after: [boostNote(view, plan, "judge")],

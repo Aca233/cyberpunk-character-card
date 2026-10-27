@@ -62,7 +62,7 @@ export function graderPrompt(
     .join("\n\n");
   return [
     `【用例】${c.title}`,
-    `【当前状态】\n${stateSummary(view)}`,
+    `【当前状态】\n${stateSummary(scenario.world, scenario.records)}`,
     ...(history ? [`【前几轮】\n${history}`] : []),
     ...(plan.kind === "resolve" ? [checkResultText(plan.check)] : []),
     `【这一轮玩家】${formatInput(plan.input)}`,

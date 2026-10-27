@@ -11,6 +11,7 @@ import {
   type SquadState,
   SquadStateSchema,
 } from "./schema";
+import { squadStatus } from "./status";
 
 /** 小队：入队请求、队员、分成和薪水；委托分账在 jobs 结束委托时做 */
 export const squad = defineSystem<SquadState, SquadCommand, SquadInternal>({
@@ -36,9 +37,11 @@ export const squad = defineSystem<SquadState, SquadCommand, SquadInternal>({
     project: ({ world }) =>
       squadView(world.slices.squad, NpcStateSchema.parse(world.slices.npc).npcs, world.time),
   },
+  status: squadStatus,
 });
 
 export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";

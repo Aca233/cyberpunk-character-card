@@ -17,6 +17,7 @@ import {
   type SetTolerance,
   SetToleranceSchema,
 } from "./schema";
+import { humanityStatus } from "./status";
 import { humanityView } from "./view";
 
 export const humanity = defineSystem<
@@ -49,6 +50,7 @@ export const humanity = defineSystem<
   },
   rules: [psychosisRules],
   view: { key: "humanity", project: humanityView },
+  status: humanityStatus,
   events: humanityEvents,
 });
 
@@ -56,4 +58,5 @@ export * from "./apply";
 export * from "./events";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

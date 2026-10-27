@@ -26,6 +26,7 @@ import {
   type HeatState,
   HeatStateSchema,
 } from "./schema";
+import { heatStatus } from "./status";
 import { heatThreats } from "./threats";
 import { heatView } from "./view";
 
@@ -91,6 +92,7 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
     events: heatEvents,
     feed: heatFeed,
     view: { key: "heat", project: heatView },
+    status: heatStatus,
   },
 );
 
@@ -99,5 +101,6 @@ export * from "./events";
 export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./threats";
 export * from "./view";
