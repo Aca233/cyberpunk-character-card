@@ -1,19 +1,42 @@
+import type { TurnInput } from "@cp/core";
 import { type CSSProperties, useEffect, useState } from "react";
-import { Asset, cssUrl } from "../../ui/Asset";
+import type { AssetId } from "../../assets";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
+import { Bar } from "../../ui/Bar";
+import { KeyBar, KeyHint } from "../../ui/KeyHint";
+import { MenuItem } from "../../ui/MenuItem";
+import { Panel } from "../../ui/Panel";
+import { InputBar } from "../story/InputBar";
+import { ChoiceList } from "../story/StoryLog";
+import type { Choice, View } from "../story/view";
 import styles from "./neural.module.css";
 
-/** 神经界面九页，页名照原作文本库；没有原作键位的留空 */
-const MENU_PAGES = [
-  { name: "人物", key: "P" },
-  { name: "义体", key: "" },
-  { name: "物品栏", key: "O" },
-  { name: "制作", key: "K" },
-  { name: "日志", key: "J" },
-  { name: "地图", key: "M" },
-  { name: "消息", key: "T" },
-  { name: "联系人", key: "" },
-  { name: "数据库", key: "" },
-] as const;
+/**
+ * U0 视觉稿：不接数据的静态页，只用来定神经界面的风格（见 2077-interface-plan.md 第九节）。
+ * 边框、按钮、输入框一律用原作素材或正式页面已有的组件，不用 CSS 自己画。
+ * 演示键：I 神经界面、按住 Tab 扫描、B 交战横幅、N 弹系统通知、D 掉血、R 重放开机
+ */
+
+/** 九宫格切法照正式页面里同一张素材的用法抄，不另调 */
+const CELL_SLICE = [20, 30, 30, 20] as const; // MapPanel 筛选格 map.filterCell*
+const TOOLTIP_SLICE = [10, 30, 70, 10] as const; // MapPanel 地图提示 map.tooltip*
+const PANEL_SLICE = [20, 20, 30, 30] as const; // MapPanel 侧板 map.panel*
+const SLOT_SLICE = [20, 38, 50, 38] as const; // Hud 武器格 hud.slot*
+const QH_SLICE = [60, 25, 15, 25] as const; // QuickhackWheel qh.cell*
+const TAG_SLICE = [0, 0, 20, 20] as const; // StoryLog 选项标签 dialog.skillSelect
+
+/** 神经界面九页，页名照原作文本库；键位图标是原作 icons_keyboard，没有原作键位的留空 */
+const MENU_PAGES: readonly { readonly name: string; readonly key: AssetId | null }[] = [
+  { name: "人物", key: "key.p" },
+  { name: "义体", key: null },
+  { name: "物品栏", key: "key.o" },
+  { name: "制作", key: "key.k" },
+  { name: "日志", key: "key.j" },
+  { name: "地图", key: "key.m" },
+  { name: "消息", key: "key.t" },
+  { name: "联系人", key: null },
+  { name: "数据库", key: null },
+];
 
 /** 消息页样例：四个频道合在一个列表里 */
 const THREADS = [
@@ -24,11 +47,6 @@ const THREADS = [
   { channel: "街头", from: "来生吧台", preview: "听说码头那边有人在收芯片。" },
 ] as const;
 
-/**
- * U0 视觉稿：不接数据的静态页，只用来定神经界面的风格（见 2077-interface-plan.md 第九节）。
- * 演示键：I 神经界面、按住 Tab 扫描、B 交战横幅、N 弹系统通知、D 掉血、R 重放开机
- */
-
 const PEOPLE = [
   { name: "罗格", line: "来生的老板，欠她一个人情", threat: "中等", known: true },
   { name: "穿防弹夹克的人", line: "站在吧台边，一直看你", threat: "高", known: false },
@@ -36,16 +54,31 @@ const PEOPLE = [
 ] as const;
 
 const STORY = [
+  "你推开来生的门，雨声被关在身后。",
   "来生的灯光压得很低。罗格没抬头，指节在吧台上敲了两下，像在数你迟到了几分钟。",
   "「东西带来了？」她问。你把芯片推过去，她用指甲拨了一下，没急着拿。",
   "吧台另一头，穿防弹夹克的人放下了杯子。",
 ] as const;
 
-const OPTIONS = [
-  { key: "1", tag: "镇定", text: "我就是来送货的。" },
-  { key: "2", tag: "技术 6", text: "先看看那台终端。" },
-  { key: "3", tag: "", text: "（看向那个穿夹克的人）" },
-] as const;
+/** 演示属性和选项：形状照投影里的 offers.choices，交给正式剧情页的 ChoiceList 画 */
+const ATTRIBUTES: View["character"]["attributes"] = {
+  body: 4,
+  reflexes: 5,
+  tech: 6,
+  intelligence: 5,
+  cool: 3,
+};
+
+const CHOICES: readonly Choice[] = [
+  { text: "我就是来送货的。", gate: null, checkId: "demo.1", source: null },
+  {
+    text: "先看看那台终端。",
+    gate: { attribute: "tech", value: 6, attributeLabel: "技术", met: true },
+    checkId: null,
+    source: null,
+  },
+  { text: "（看向那个穿夹克的人）", gate: null, checkId: null, source: "过往：街头小子" },
+];
 
 /** 舞台按 1920×1080 画，再整体缩放到窗口 */
 const fit = () => Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
@@ -63,14 +96,18 @@ function useStageScale(): number {
 interface Note {
   readonly id: number;
   readonly text: string;
+  readonly icon: AssetId;
 }
 
-const SAMPLE_NOTES = [
-  "拿到 500 欧元",
-  "岐路司义眼已断开",
-  "罗格发来一条消息",
-  "街头声望 +1",
-] as const;
+/** 通知图标照 Toasts：原作 notification_assets */
+const SAMPLE_NOTES: readonly Omit<Note, "id">[] = [
+  { text: "拿到 500 欧元", icon: "notify.cash" },
+  { text: "岐路司义眼已断开", icon: "notify.warning" },
+  { text: "罗格发来一条消息", icon: "notify.attention" },
+  { text: "街头声望 +1", icon: "notify.streetCred" },
+];
+
+const HP_MAX = 340;
 
 export function NeuralMock() {
   const scale = useStageScale();
@@ -82,20 +119,26 @@ export function NeuralMock() {
   const [scan, setScan] = useState(q.has("scan"));
   const [combat, setCombat] = useState(q.has("combat"));
   const [hp, setHp] = useState(q.has("low") ? 18 : 82);
+  const [thread, setThread] = useState(0);
+  // 复用原来的单一输入框；演示输入只保存在本页，不调用模型或写入存档。
+  const [draft, setDraft] = useState<TurnInput>({ text: "" });
   const [notes, setNotes] = useState<readonly Note[]>(() =>
-    q.has("notes") ? SAMPLE_NOTES.slice(0, 3).map((text, id) => ({ id: -1 - id, text })) : [],
+    q.has("notes") ? SAMPLE_NOTES.slice(0, 3).map((n, i) => ({ ...n, id: -1 - i })) : [],
   );
 
   useEffect(() => {
     let next = 1;
     const push = () => {
       const id = next++;
-      const text = SAMPLE_NOTES[id % SAMPLE_NOTES.length] ?? "";
-      setNotes((n) => [...n, { id, text }].slice(-3));
+      const sample = SAMPLE_NOTES[id % SAMPLE_NOTES.length];
+      if (!sample) return;
+      setNotes((n) => [...n, { ...sample, id }].slice(-3));
       window.setTimeout(() => setNotes((n) => n.filter((x) => x.id !== id)), 4400);
     };
     const down = (e: KeyboardEvent) => {
       if (e.repeat) return;
+      // 在输入框里打字时不触发演示键
+      if (e.target instanceof HTMLTextAreaElement && e.key !== "Escape") return;
       const k = e.key.toLowerCase();
       if (k === "tab") {
         e.preventDefault();
@@ -118,216 +161,276 @@ export function NeuralMock() {
     };
   }, []);
 
+  const low = hp < 30;
+  const hpNow = Math.round((hp / 100) * HP_MAX);
+  const active = THREADS[thread] ?? THREADS[0];
+
   return (
     <div className={styles.viewport}>
       <div className={styles.stage} style={{ transform: `scale(${scale})` }}>
         <div key={boot} className={styles.world} data-menu={menu || undefined}>
-          {/* A 生物监测：神经界面层 */}
-          <section
+          {/* A 生物监测：神经界面层。面板 ui/Panel，等级框 hud.levelFrame，血条 hud.healthbar，RAM hud.ramBar，写法同 Hud */}
+          <div
             className={`${styles.block} ${styles.bio}`}
             data-layer="os"
-            data-low={hp < 30 || undefined}
+            data-low={low || undefined}
           >
-            <header className={styles.label}>生物监测</header>
-            <div className={styles.bioRow}>
-              <span className={styles.level}>12</span>
-              <div className={styles.hpBar} style={{ "--hp": hp / 100 } as CSSProperties}>
-                <span className={styles.hpGhost} />
-                <span className={styles.hpFill} />
+            <Panel as="section" title="生物监测" line="var(--cp-red)">
+              <div className={styles.bioRow}>
+                <span className={styles.level} title="街头声望">
+                  <Asset id="hud.levelFrame" tint="var(--cp-red)" height={44} />
+                  <b>12</b>
+                </span>
+                <div className={styles.hp}>
+                  <Bar
+                    id="hud.healthbar"
+                    value={hpNow}
+                    max={HP_MAX}
+                    color={low ? "var(--cp-hp-low)" : "var(--cp-hp)"}
+                    width={280}
+                    label={`生命 ${hpNow}/${HP_MAX}`}
+                  />
+                  <span className={styles.hpText} data-low={low || undefined}>
+                    HP {hpNow}/{HP_MAX}
+                  </span>
+                </div>
               </div>
-              <b className={styles.hpNum}>{Math.round(hp * 3.4)}</b>
-            </div>
-            <div className={styles.ram} role="img" aria-label="网络接入仓 RAM 5/8">
-              {Array.from({ length: 8 }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: 格子位置就是身份
-                <i key={i} data-on={i < 5 || undefined} style={{ "--i": i } as CSSProperties} />
-              ))}
-            </div>
-          </section>
+              <div className={styles.ram} role="img" aria-label="网络接入仓 RAM 5/8">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <span
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 格子位置就是身份
+                    key={i}
+                    className={styles.ramCell}
+                    data-on={i < 5 || undefined}
+                    style={{ "--i": i } as CSSProperties}
+                  >
+                    <Asset id="hud.ramBar" tint="var(--cp-cyan)" height={14} />
+                  </span>
+                ))}
+              </div>
+            </Panel>
+          </div>
 
-          {/* S 在场的人：义眼叠加层 */}
+          {/* S 在场的人：义眼叠加层。每人一格 map.filterCell，扫描卡 map.tooltip */}
           <section
             className={`${styles.block} ${styles.present}`}
             data-layer="optics"
             data-scan={scan || undefined}
           >
-            <header className={styles.label}>{scan ? "岐路司义眼 - 正在扫描…" : "在场"}</header>
+            <header className={styles.label}>
+              <Asset id="interaction.scan" tint="currentColor" height={18} />
+              {scan ? "岐路司义眼 - 正在扫描…" : "在场"}
+            </header>
             <ul>
               {PEOPLE.map((p, i) => (
                 <li key={p.name} className={styles.person} style={{ "--i": i } as CSSProperties}>
-                  <span className={styles.corners} aria-hidden />
-                  <b>{p.name}</b>
-                  <small>{p.line}</small>
+                  <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 72%)" slice={CELL_SLICE} />
+                  <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
+                  <div className={styles.inner}>
+                    <b>{p.name}</b>
+                    <small>{p.line}</small>
+                  </div>
                   <span className={styles.scanCard}>
-                    威胁 <em data-threat={p.threat}>{p.threat}</em>
-                    {p.known ? " · 认识" : " · 底细不明"}
+                    <NineSlice
+                      id="map.tooltipBg"
+                      tint="rgb(14 14 23 / 88%)"
+                      slice={TOOLTIP_SLICE}
+                    />
+                    <NineSlice id="map.tooltipFg" tint="var(--cp-cyan)" slice={TOOLTIP_SLICE} />
+                    <span className={styles.inner}>
+                      威胁 <em data-threat={p.threat}>{p.threat}</em>
+                      {p.known ? " · 认识" : " · 底细不明"}
+                    </span>
                   </span>
                 </li>
               ))}
             </ul>
           </section>
 
-          {/* G 未读 */}
+          {/* G 未读：map.panel 侧板，图标是原作通知图标 */}
           <section className={`${styles.block} ${styles.unread}`} data-layer="os">
-            <span>
-              消息 <b>2</b>
-            </span>
-            <span>
-              新闻 <b>5</b>
-            </span>
-            <span>
-              警用频段 <b>1</b>
-            </span>
-          </section>
-
-          {/* B 地点：义眼叠加层 */}
-          <section className={`${styles.block} ${styles.zone}`} data-layer="optics">
-            <div className={styles.zoneHead}>
-              <Asset id="hud.zoneIcon" tint="var(--cp-cyan)" height={28} />
-              <b>沃森 · 小唐人街</b>
+            <NineSlice id="map.panelBg" tint="rgb(14 14 23 / 72%)" slice={PANEL_SLICE} />
+            <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={PANEL_SLICE} />
+            <div className={styles.inner}>
+              <span>
+                <Asset id="notify.attention" tint="var(--cp-red)" height={18} />
+                消息 <b>2</b>
+              </span>
+              <span>
+                <Asset id="notify.journal" tint="var(--cp-red)" height={18} />
+                新闻 <b>5</b>
+              </span>
+              <span>
+                <Asset id="map.poi.police" tint="var(--cp-red)" height={18} />
+                警用频段 <b>1</b>
+              </span>
             </div>
-            <p>22:47 · 小雨</p>
-            <p className={styles.heat}>
-              <span>NCPD</span> <em>★★</em>☆☆☆
-            </p>
           </section>
 
-          {/* C 追踪：待办里最急的几条 */}
-          <section className={`${styles.block} ${styles.track}`} data-layer="optics">
-            <header className={styles.label}>追踪</header>
-            <p>
-              <b>把芯片交给罗格</b>
-              <small>来生 · 还剩 1 小时 13 分</small>
-            </p>
-            <p>
-              <b>超梦：码头那一夜</b>
-              <small>关键线索 2/3</small>
-            </p>
+          {/* B 地点：义眼叠加层。原作 zone_update 的框和图标，地区图标同 Hud */}
+          <section className={`${styles.block} ${styles.zone}`} data-layer="optics">
+            <Asset
+              id="hud.zoneFrame"
+              tint="var(--cp-yellow)"
+              height={96}
+              className={styles.zoneFrame}
+            />
+            <div className={styles.zoneText}>
+              <b>沃森 · 小唐人街</b>
+              <span>22:47 · 夜晚 · 小雨</span>
+              <span className={styles.heat}>
+                ★★<span className={styles.starsEmpty}>★★★</span>
+              </span>
+            </div>
+            <Asset id="district.watson" tint="var(--cp-yellow)" height={44} />
           </section>
 
-          {/* D 系统通知 */}
+          {/* C 追踪：待办里最急的几条，ui/Panel */}
+          <div className={`${styles.block} ${styles.track}`} data-layer="optics">
+            <Panel as="section" title="追踪" line="var(--cp-yellow)">
+              <ul className={styles.trackList}>
+                <li>
+                  <Asset id="notify.questUpdate" tint="var(--cp-yellow)" height={22} />
+                  <span>
+                    <b>把芯片交给罗格</b>
+                    <small>来生 · 还剩 1 小时 13 分</small>
+                  </span>
+                </li>
+                <li>
+                  <Asset id="braindance.clue" tint="var(--cp-yellow)" height={22} />
+                  <span>
+                    <b>超梦：码头那一夜</b>
+                    <small>关键线索 2/3</small>
+                  </span>
+                </li>
+              </ul>
+            </Panel>
+          </div>
+
+          {/* D 系统通知：原作 notification_assets 的物品格和图标 */}
           <ol className={styles.notes} aria-live="polite">
             {notes.map((n) => (
               <li key={n.id} className={styles.note} data-layer="os">
-                <small>系统通知</small>
-                {n.text}
+                <NineSlice id="notify.itemCellBg" tint="var(--cp-panel)" slice={30} />
+                <NineSlice id="notify.itemCellFg" tint="var(--cp-yellow)" slice={30} />
+                <div className={styles.inner}>
+                  <Asset id={n.icon} tint="var(--cp-yellow)" height={22} />
+                  <span>
+                    <small>系统通知</small>
+                    {n.text}
+                  </span>
+                </div>
               </li>
             ))}
           </ol>
 
-          {/* H 武器和快速破解 */}
+          {/* H 武器和快速破解：武器格同 Hud（hud.slot*），快速破解格同轮盘（qh.cell*） */}
           <section className={`${styles.block} ${styles.weapon}`} data-layer="os">
             <div className={styles.slot}>
-              <b>M-10AF 莱克星顿</b>
-              <small>弹药 14/28</small>
+              <NineSlice id="hud.slotBg" tint="rgb(14 14 23 / 85%)" slice={SLOT_SLICE} />
+              <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
+              <div className={styles.inner}>
+                <Asset id="weapon.pistol" tint="var(--cp-cyan)" height={30} />
+                <span>
+                  <b>M-10AF 莱克星顿</b>
+                  <small>14 / 28</small>
+                </span>
+              </div>
             </div>
-            <div className={styles.slot} data-layer="deck">
-              <Asset id="interaction.hack" tint="var(--cp-cyan)" height={24} />
-              <small>快速破解 · 定位</small>
+            <div className={styles.qhSlot} data-layer="deck">
+              <NineSlice id="qh.cellBg" tint="rgb(14 14 23 / 61%)" slice={QH_SLICE} />
+              <NineSlice id="qh.cellFg" tint="rgb(40 255 255)" slice={QH_SLICE} />
+              <div className={styles.inner}>
+                <Asset id="interaction.hack" tint="var(--cp-cyan)" height={24} />
+                <small>定位</small>
+              </div>
             </div>
           </section>
 
           <main className={styles.center} aria-label="剧情与行动">
             {combat && (
-              <section className={styles.combatBanner} aria-label="交战演示">
-                <Asset id="notify.warning" tint="var(--cp-red)" height={24} />
-                <div>
+              <Panel as="section" line="var(--cp-red)" className={styles.combatBanner}>
+                <div className={styles.combatRow}>
+                  <Asset id="notify.warning" tint="var(--cp-red)" height={26} />
                   <b>交战</b>
                   <span>保持掩护 · 找到离开吧台的路线</span>
+                  <small>演示状态</small>
                 </div>
-                <small>演示状态</small>
-              </section>
+              </Panel>
             )}
-            <article className={styles.story} aria-labelledby="neural-scene-title">
-              <header>
-                <p className={styles.kicker}>U0 / 视觉演示 · 不写入存档</p>
-                <h1 id="neural-scene-title">来生</h1>
-                <span className={styles.sceneMeta}>22:47 / 芯片交接</span>
-              </header>
+            {/* 正文贴底排，旧段落往上渐暗 */}
+            <article className={styles.story} aria-label="剧情">
               <div className={styles.prose}>
-                {STORY.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
+                {STORY.map((paragraph, i) => (
+                  <p key={paragraph} style={{ "--age": STORY.length - 1 - i } as CSSProperties}>
+                    {paragraph}
+                  </p>
                 ))}
               </div>
               <small className={styles.sampleNotice}>
-                自拟演示片段，未核对原作任务；不代表正式剧情。
+                U0 视觉演示，不写入存档；自拟片段，未核对原作任务。
               </small>
             </article>
             {/* 操作区：交互行属于义眼叠加，选项和输入属于现实层 */}
             <section className={styles.ops} aria-label="操作区">
               <div className={styles.interactRow} data-layer="optics">
                 <span className={styles.interact} data-active="">
-                  <Asset id="key.f" height={22} alt="F" />
-                  <Asset id="interaction.talk" tint="var(--cp-cyan)" height={20} />
-                  <span>吧台：罗格</span>
+                  <NineSlice
+                    id="dialog.skillSelect"
+                    tint="rgb(94 246 255 / 22%)"
+                    slice={TAG_SLICE}
+                  />
+                  <span className={styles.inner}>
+                    <Asset id="key.f" height={22} alt="F" />
+                    <Asset id="interaction.talk" tint="var(--cp-cyan)" height={20} />
+                    吧台：罗格
+                  </span>
                 </span>
                 <span className={styles.interact}>
-                  <Asset id="interaction.vendor" tint="var(--cp-cyan)" height={20} />
-                  <span>吧台点单</span>
-                </span>
-                <span className={styles.interactHint}>←/→ 切换</span>
-              </div>
-              <ol className={styles.options}>
-                {OPTIONS.map((o, i) => (
-                  <li
-                    key={o.key}
-                    className={styles.optionItem}
-                    style={{ "--i": i } as CSSProperties}
-                  >
-                    <button type="button" className={styles.option}>
-                      <Asset id={`key.${o.key}`} height={24} alt={o.key} />
-                      {o.tag ? <span className={styles.optionTag}>（{o.tag}）</span> : null}
-                      <span className={styles.optionText}>{o.text}</span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              <div className={styles.inputRow}>
-                <span className={styles.modes}>
-                  {["做", "说", "想", "出戏"].map((m, i) => (
-                    <button type="button" key={m} className={styles.mode} aria-pressed={i === 0}>
-                      {m}
-                    </button>
-                  ))}
-                </span>
-                <input
-                  className={styles.input}
-                  placeholder="输入你想做的事……"
-                  aria-label="输入行动"
-                />
-                <span className={styles.send}>
-                  <Asset id="key.enter" height={22} alt="Enter" />
-                  发送
+                  <span className={styles.inner}>
+                    <Asset id="interaction.vendor" tint="var(--cp-cyan)" height={20} />
+                    吧台点单
+                  </span>
                 </span>
               </div>
+              {/* 选项和输入框直接用正式剧情页的组件，不另做一套 */}
+              <ChoiceList
+                choices={CHOICES}
+                attributes={ATTRIBUTES}
+                locked={false}
+                onChoose={() => undefined}
+              />
+              <InputBar
+                busy={false}
+                streaming={false}
+                disabled={false}
+                draft={draft}
+                onDraft={(d) => setDraft((old) => ({ ...old, ...d }))}
+                onSend={() => setDraft({ text: "" })}
+                onStop={() => undefined}
+              />
             </section>
           </main>
 
-          {/* 按键栏：游戏外的提示，不套叠加样式 */}
-          <footer className={styles.keyBar}>
-            <span>
-              <kbd>I</kbd>神经界面
-            </span>
-            <span>
-              <kbd>T</kbd>消息
-            </span>
-            <span>
-              <Asset id="key.tab" height={20} alt="Tab" />
-              扫描（长按）
-            </span>
-            <span>
-              <Asset id="key.esc" height={20} alt="Esc" />
-              返回
-            </span>
-            <span className={styles.demoKeys}>
-              演示：<kbd>B</kbd>交战 <kbd>N</kbd>通知 <kbd>D</kbd>掉血 <kbd>R</kbd>重放开机
-            </span>
-          </footer>
+          {/* 按键栏：正式页面的 KeyBar/KeyHint，键位图标是原作 icons_keyboard */}
+          <div className={styles.keyBar}>
+            <KeyBar>
+              <KeyHint keyId="key.i" label="神经界面" onClick={() => setMenu((m) => !m)} />
+              <KeyHint keyId="key.t" label="消息" />
+              <KeyHint keyId="key.tab" label="扫描（长按）" />
+              <KeyHint keyId="key.esc" label="返回" />
+              <span className={styles.demoKeys}>演示</span>
+              <KeyHint keyId="key.b" label="交战" />
+              <KeyHint keyId="key.n" label="通知" />
+              <KeyHint keyId="key.d" label="掉血" />
+              <KeyHint keyId="key.r" label="重放开机" />
+            </KeyBar>
+          </div>
 
           {/* 生命低于三成：四周压暗 */}
           <span
             className={styles.vignette}
-            data-on={hp < 30 || undefined}
+            data-on={low || undefined}
             style={{ backgroundImage: cssUrl("fx.vignette") }}
             aria-hidden
           />
@@ -341,61 +444,112 @@ export function NeuralMock() {
                 style={{ backgroundImage: cssUrl("fx.scanlines") }}
                 aria-hidden
               />
-              <nav className={styles.tabs}>
+              <header className={styles.menuHead}>
+                <Asset
+                  id="menu.header"
+                  tint="var(--cp-red)"
+                  height={120}
+                  className={styles.menuHeadBg}
+                />
                 <b className={styles.tabsTitle}>神经界面</b>
+                <Asset id="fluff.code" tint="var(--cp-red)" height={18} />
+              </header>
+              {/* 标签：原作 atlas_tabs 的 tab.bg 九宫格，底线 tab.line；切法同 Button */}
+              <nav className={styles.tabs}>
                 {MENU_PAGES.map((p) => (
                   <span
                     key={p.name}
                     className={styles.tab}
                     data-active={p.name === "消息" || undefined}
                   >
-                    {p.key ? <kbd>{p.key}</kbd> : null}
-                    {p.name}
+                    <NineSlice
+                      id="tab.bg"
+                      tint="currentColor"
+                      slice={14}
+                      className={styles.tabBg}
+                    />
+                    <span className={styles.inner}>
+                      {p.key && <Asset id={p.key} tint="currentColor" height={20} />}
+                      {p.name}
+                    </span>
                   </span>
                 ))}
               </nav>
+              <span
+                className={styles.tabLine}
+                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                aria-hidden
+              />
               <div className={styles.menuBody}>
-                <ul className={styles.menuList}>
+                {/* 列表：正式主菜单的 MenuItem */}
+                <nav className={styles.menuList} aria-label="对话">
                   {THREADS.map((t, i) => (
-                    <li key={t.from} data-active={i === 0 || undefined} data-channel={t.channel}>
-                      <small>{t.channel}</small>
-                      <b>{t.from}</b>
-                      <span>{t.preview}</span>
-                    </li>
+                    <MenuItem
+                      key={t.from}
+                      label={t.from}
+                      hint={t.channel}
+                      selected={i === thread}
+                      onSelect={() => setThread(i)}
+                      onFocus={() => setThread(i)}
+                    />
                   ))}
-                </ul>
-                <article className={styles.menuDetail}>
-                  <header>
-                    <small>消息</small>
-                    <h2>罗格</h2>
-                  </header>
-                  <p className={styles.msgIn}>人到了就进来，别在门口晃。</p>
-                  <p className={styles.msgIn}>东西别给别人看。</p>
-                  <div className={styles.jobCard}>
-                    <Asset id="notify.questUpdate" tint="var(--cp-yellow)" height={28} />
-                    <div>
-                      <b>委托：芯片交接</b>
-                      <small>来生 · 报酬 1,500 欧元 · 期限今晚</small>
-                    </div>
-                  </div>
+                </nav>
+                <Panel
+                  as="section"
+                  title={active.from}
+                  line="var(--cp-cyan)"
+                  className={styles.menuDetail}
+                >
+                  <small className={styles.channel}>{active.channel}</small>
+                  <p className={styles.msgIn}>{active.preview}</p>
+                  {thread === 0 && (
+                    <>
+                      <p className={styles.msgIn}>东西别给别人看。</p>
+                      <div className={styles.jobCard}>
+                        <NineSlice
+                          id="map.tooltipBg"
+                          tint="rgb(14 14 23 / 88%)"
+                          slice={TOOLTIP_SLICE}
+                        />
+                        <NineSlice
+                          id="map.tooltipFg"
+                          tint="var(--cp-yellow)"
+                          slice={TOOLTIP_SLICE}
+                        />
+                        <div className={styles.inner}>
+                          <Asset id="notify.questUpdate" tint="var(--cp-yellow)" height={28} />
+                          <span>
+                            <b>委托：芯片交接</b>
+                            <small>来生 · 报酬 1,500 欧元 · 期限今晚</small>
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <small className={styles.sampleNotice}>自拟演示内容，未核对原作。</small>
-                </article>
+                </Panel>
               </div>
-              <p className={styles.menuKeys}>
-                <kbd>Q</kbd>/<kbd>E</kbd> 切换页面　
-                <Asset id="key.esc" height={20} alt="Esc" /> 关闭
-              </p>
+              <div className={styles.menuKeys}>
+                <KeyBar>
+                  <KeyHint keyId="key.q" label="上一个面板" />
+                  <KeyHint keyId="key.e" label="下一个面板" />
+                  <KeyHint keyId="key.esc" label="关闭" onClick={() => setMenu(false)} />
+                </KeyBar>
+              </div>
             </section>
           )}
 
-          {/* 开机：正在读取用户界面（原作原文），不超过 1.5 秒 */}
+          {/* 开机：正在读取用户界面（原作原文），原作 default_loading 的框和圈，不超过 1.5 秒 */}
           <div className={styles.boot} aria-hidden>
-            <Asset
-              id="loading.circle"
-              tint="var(--cp-red)"
-              height={56}
-              className={styles.bootCircle}
-            />
+            <span className={styles.bootMark}>
+              <Asset id="loading.frame" tint="var(--cp-red)" height={72} />
+              <Asset
+                id="loading.circle"
+                tint="var(--cp-red)"
+                height={56}
+                className={styles.bootCircle}
+              />
+            </span>
             <span className={styles.bootText}>正在读取用户界面</span>
           </div>
         </div>
