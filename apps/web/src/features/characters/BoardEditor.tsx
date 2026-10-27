@@ -227,7 +227,6 @@ export function BoardEditor({
                     className={styles.toolButton}
                     disabled={list.length >= max}
                     onClick={roll}
-                    title="按生命路径表掷一段，出身影响概率"
                   >
                     掷一段生命路径
                   </button>
@@ -347,9 +346,7 @@ export function BoardEditor({
 
       {board.combos.length > 0 && (
         <section className={styles.slotGroup}>
-          <h4>
-            联动 <small>几块模块凑在一起触发的额外能力和麻烦</small>
-          </h4>
+          <h4>联动</h4>
           <ul className={styles.modules}>
             {board.combos.map((c) => (
               <li className={styles.module} data-combo key={c.id}>

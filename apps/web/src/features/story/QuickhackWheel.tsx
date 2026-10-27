@@ -38,11 +38,7 @@ export function QuickhackWheel({
 
   return (
     <div className={styles.quickhack}>
-      <ActionButton
-        expanded={open}
-        title="快速破解轮盘：选一个程序写进输入框"
-        onClick={() => setOpen((o) => !o)}
-      >
+      <ActionButton expanded={open} onClick={() => setOpen((o) => !o)}>
         快速破解
       </ActionButton>
       {open && (

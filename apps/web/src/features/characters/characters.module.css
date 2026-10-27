@@ -1,4 +1,4 @@
-/* 角色档案：左侧身份库，中间编辑，右侧说明；沿用主界面的红、青、黄 */
+/* 角色档案：左侧身份库，右侧编辑；沿用主界面的红、青、黄 */
 .screen {
   height: 100dvh;
   display: flex;
@@ -36,14 +36,13 @@
   display: grid;
   flex: 1;
   min-height: 0;
-  grid-template-columns: minmax(200px, 250px) minmax(0, 760px) minmax(180px, 250px);
+  grid-template-columns: minmax(200px, 250px) minmax(0, 760px);
   justify-content: center;
   overflow: hidden;
 }
 
 .library,
-.editor,
-.guide {
+.editor {
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -358,29 +357,9 @@ legend.sectionTitle {
   color: var(--cp-success);
 }
 
-.guide {
-  padding: 1.6rem 1.2rem 3rem;
-  border-left: 1px solid var(--cp-red-dim);
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.8;
-}
-
-.guide p:first-child {
-  margin-top: 0;
-}
-
-.guide p:last-child {
-  margin-bottom: 0;
-}
-
 @media (max-width: 1150px) {
   .workspace {
     grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .guide {
-    display: none;
   }
 }
 

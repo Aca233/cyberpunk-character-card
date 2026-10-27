@@ -13,7 +13,6 @@ import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
-import { Panel } from "../../ui/Panel";
 import { BoardEditor, emptyBoard } from "./BoardEditor";
 import styles from "./characters.module.css";
 import { ProseField } from "./ProseField";
@@ -197,7 +196,6 @@ export function CharactersScreen() {
               </p>
             )}
           </div>
-          <p className={styles.note}>你决定自己是谁，夜之城决定如何回应。</p>
           {characters.isPending && <p role="status">正在读取角色库…</p>}
           {characters.isError && (
             <div role="alert">
@@ -206,7 +204,7 @@ export function CharactersScreen() {
             </div>
           )}
           {characters.isSuccess && characters.data.length === 0 && (
-            <p className={styles.note}>还没有角色，从一张空白档案开始。</p>
+            <p className={styles.note}>还没有角色。</p>
           )}
           <ul className={styles.cards}>
             {(characters.data ?? []).map((entry) => (
@@ -399,10 +397,6 @@ export function CharactersScreen() {
             </div>
             {!editor.card.board && (
               <div className={styles.notice}>
-                <p>
-                  主板把出身、过往、本事做成一块块模块：每块写明你能做到什么、带着什么麻烦，AI
-                  据此判断行动和给出专属选项。 只写下面的文字也能玩。
-                </p>
                 {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
                 {!editor.sample && (
                   <Button
@@ -426,8 +420,7 @@ export function CharactersScreen() {
 
             <h3 className={styles.sectionTitle}>04 / 这个人</h3>
             <p className={styles.note}>
-              每块都可以手写，也可以交给辅助模型生成、重写、续写或润色（每次花一次模型调用）；
-              模型按名片、属性、主板和别的区块来写，锁定的区块不会被改。说话方式不代表模型可以替你说话。
+              交给辅助模型生成、重写、续写或润色，每次花一次模型调用；锁定的区块不会被改。
             </p>
             <div className={styles.proseBlocks}>
               {BRIEF_BLOCKS.map((block) => (
@@ -494,15 +487,6 @@ export function CharactersScreen() {
             </footer>
           )}
         </form>
-
-        <aside className={styles.guide}>
-          <Panel title="你来扮演">
-            <p>台词、行动和心里话都由你写。背景只是让世界更了解你，不替你决定下一步。</p>
-            <p>
-              主板上的模块是你已经会的、已经欠下的；联动和钩子是夜之城找上门的理由。自写模块、角色卡正文生成和导入还没开放。
-            </p>
-          </Panel>
-        </aside>
       </div>
 
       {destination && (

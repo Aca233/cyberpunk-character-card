@@ -173,7 +173,7 @@ export function Hud({
       {character.flashback && (
         <div className={styles.flashback} role="status">
           闪回 · {character.flashback.past} · 第 {character.flashback.turn}/
-          {character.flashback.turns} 轮 · 不掷骰、不推进时间
+          {character.flashback.turns} 轮
         </div>
       )}
       {combat.active && (
@@ -327,9 +327,7 @@ export function SidePanel({
               <span>{label}</span>
               <b>{character.attributes[key] ?? "—"}</b>
               {(character.bonuses[key] ?? 0) > 0 && (
-                <small className={styles.attrBonus} title="义体加成，已经算进去了">
-                  +{character.bonuses[key]}
-                </small>
+                <small className={styles.attrBonus}>+{character.bonuses[key]}</small>
               )}
               {character.attributePoints > 0 && onSpend && (
                 <button
@@ -560,7 +558,6 @@ export function SidePanel({
               <div className={styles.gearTools}>
                 <ActionButton
                   disabled={inventory.clothing.length === 0}
-                  title="把身上穿着的记成一整套，之后一下换回来"
                   onClick={() => onOutfit("save")}
                 >
                   存为整套外观
@@ -668,7 +665,6 @@ export function SidePanel({
         {view.health.lostLimbs.length > 0 && (
           <p className={styles.lostLimbs}>
             断肢：{view.health.lostLimbs.map((l) => l.label).join("、")}
-            （找义体医生装义肢能补上）
           </p>
         )}
         {view.ripperdoc && (
@@ -683,7 +679,7 @@ export function SidePanel({
 
       <Panel as="div" title="认识的人" line="var(--cp-cyan)">
         {!view.npcs.some((n) => n.met) ? (
-          <p className={styles.dim}>还没有认识的人，人物档案会随着交谈和相处留下来。</p>
+          <p className={styles.dim}>还没有认识的人。</p>
         ) : (
           <ul className={styles.npcList}>
             {view.npcs

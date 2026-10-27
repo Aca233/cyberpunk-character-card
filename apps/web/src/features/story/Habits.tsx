@@ -29,13 +29,9 @@ export function Habits({
   };
   return (
     <section className={styles.habits} aria-label="别人眼里的你和习惯">
-      <p className={styles.perceived} title="别人眼里的你：NPC 的第一反应照这一行写">
-        {perceived}
-      </p>
+      <p className={styles.perceived}>{perceived}</p>
       <h4 className={styles.habitsTitle}>习惯</h4>
-      {habits.length === 0 && offers.length === 0 && (
-        <p className={styles.dim}>还没有习惯。可以自己写，也会在剧情里慢慢形成。</p>
-      )}
+      {habits.length === 0 && offers.length === 0 && <p className={styles.dim}>还没有习惯。</p>}
       <ul className={styles.habitList}>
         {habits.map((h) => (
           <li key={h} className={styles.habitItem}>

@@ -190,8 +190,7 @@ export function MemoryPanel({
         <Panel as="div" title="记忆" line="var(--cp-yellow)">
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
-              AI
-              写故事时参考这些：每场的摘要，和你同每个人的共同记忆。记错了可以改、可以删，每次改动都记在最下面。撤销或重新生成一轮时，那一轮写下的记忆会一起撤回。回合日志只读，不在这里改。
+              撤销或重新生成一轮时，那一轮写下的记忆会一起撤回。
             </p>
             <Button onClick={onClose}>关闭</Button>
           </div>
@@ -199,7 +198,7 @@ export function MemoryPanel({
             <section>
               <h3 className={styles.mapTitle}>场景摘要</h3>
               {scenes.length === 0 ? (
-                <p className={styles.dim}>还没有场景摘要：一场戏结束后 AI 会写一条。</p>
+                <p className={styles.dim}>还没有场景摘要。</p>
               ) : (
                 <ul className={styles.factionList}>
                   {scenes.map((s) => {
@@ -342,9 +341,6 @@ export function MemoryPanel({
                 </ul>
               )}
             </section>
-            <p className={`${styles.dim} ${styles.docNote}`}>
-              章节摘要和状态库还没有做，暂时不能在这里看。
-            </p>
           </div>
         </Panel>
       </div>

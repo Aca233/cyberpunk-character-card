@@ -72,11 +72,9 @@ export function ChroniclePanel({
       <div role="dialog" aria-label="履历" className={styles.journal}>
         <Panel as="div" title="履历" line="var(--cp-yellow)">
           <div className={styles.docHead}>
-            <p className={`${styles.dim} ${styles.docNote}`}>
-              这个角色在夜之城留下的事：AI
-              在一段剧情告一段落时写下的总结，委托怎么收场，还有最后的结局。
-              {view.restarts > 0 && ` 重来过 ${view.restarts} 个场景。`}
-            </p>
+            {view.restarts > 0 && (
+              <p className={`${styles.dim} ${styles.docNote}`}>重来过 {view.restarts} 个场景。</p>
+            )}
             <Button onClick={onClose}>关闭</Button>
           </div>
           <div className={styles.docBody}>

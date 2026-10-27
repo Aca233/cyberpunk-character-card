@@ -306,7 +306,7 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           </div>
         )}
         {characters.isSuccess && entries.length === 0 && (
-          <p className={styles.note}>先创建一个角色，再开始这段故事。</p>
+          <p className={styles.note}>还没有角色。</p>
         )}
         {selected && (
           <p className={styles.note}>

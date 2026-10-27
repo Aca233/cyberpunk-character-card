@@ -90,12 +90,12 @@ function Profile({ npc }: { readonly npc: Npc }) {
             </p>
             {npc.nemesis.ended ? (
               <p className={styles.factionReason}>{npc.nemesis.ended}</p>
-            ) : npc.nemesis.prep ? (
-              <p className={styles.factionLine}>
-                <span className={styles.memoryTag}>准备</span> {npc.nemesis.prep}
-              </p>
             ) : (
-              <p className={styles.dim}>他会针对你做准备；扫描或打听才知道是什么。</p>
+              npc.nemesis.prep && (
+                <p className={styles.factionLine}>
+                  <span className={styles.memoryTag}>准备</span> {npc.nemesis.prep}
+                </p>
+              )
             )}
           </>
         )}
@@ -127,13 +127,13 @@ function Profile({ npc }: { readonly npc: Npc }) {
                 </p>
               </>
             ) : (
-              <p className={styles.dim}>没扫描过，属性、生命和义体还看不出来。</p>
+              <p className={styles.dim}>没扫描过。</p>
             )}
           </>
         )}
         <p className={styles.npcMemoryTitle}>你知道的</p>
         {npc.known.length === 0 ? (
-          <p className={styles.dim}>除了见面看到的，还没打听到什么。</p>
+          <p className={styles.dim}>还没打听到什么。</p>
         ) : (
           <ul className={styles.memoryBonds}>
             {npc.known.map((k) => (
@@ -149,7 +149,7 @@ function Profile({ npc }: { readonly npc: Npc }) {
           <>
             <p className={styles.npcMemoryTitle}>心事{npc.arc.done && "（都有了结果）"}</p>
             {npc.arc.concerns.length === 0 ? (
-              <p className={styles.dim}>熟到能说心里话了；有什么事，等{npc.pronoun}自己开口。</p>
+              <p className={styles.dim}>还没提过什么心事。</p>
             ) : (
               <ul className={styles.memoryBonds}>
                 {npc.arc.concerns.map((c) => (
@@ -232,12 +232,11 @@ export function PhoneDialog({
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
               {view.phone.unread > 0 ? `${view.phone.unread} 条未读。` : "没有未读消息。"}
-              回复一条消息算一轮行动。
             </p>
             <Button onClick={onClose}>关上</Button>
           </div>
           {contacts.length === 0 || !current ? (
-            <p className={styles.dim}>还没有联系人：见过面或者发过消息的人会出现在这里。</p>
+            <p className={styles.dim}>还没有联系人。</p>
           ) : (
             <div className={styles.phoneLayout}>
               <ul className={styles.contactList} aria-label="联系人">

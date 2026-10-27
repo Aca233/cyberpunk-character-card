@@ -93,8 +93,7 @@ export function BraindanceEditor({
           <b>超梦体验编辑器</b>
         </span>
         <span className={styles.headMeta}>
-          录像「{bd.title}」· {bd.recorder}录制 · {bd.startedAt}接上 ·
-          只有录制者当时感知到的东西才扫描得出来
+          录像「{bd.title}」· {bd.recorder}录制 · {bd.startedAt}接上
         </span>
         {onAbandon &&
           (leaving ? (
@@ -183,7 +182,7 @@ export function BraindanceEditor({
             {bd.ready ? " · 可以下结论了" : ""}
           </p>
           {marked.length === 0 ? (
-            <p className={styles.dim}>还没标出线索。切编码层、拖时间轴，找取景框里能扫描的东西。</p>
+            <p className={styles.dim}>还没标出线索。</p>
           ) : (
             <ul className={styles.clues}>
               {marked.map((p) => (
@@ -268,7 +267,6 @@ export function BraindanceEditor({
           value={segment}
           onChange={(e) => setSegment(Number(e.target.value))}
         />
-        <p className={styles.dim}>← → 拖时间轴，1 2 3 切编码层</p>
       </div>
     </div>
   );

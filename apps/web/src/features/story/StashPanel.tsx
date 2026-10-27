@@ -54,9 +54,6 @@ export function StashPanel({
       <div role="dialog" aria-label="存放" className={styles.journal}>
         <Panel as="div" title="存放" line="var(--cp-yellow)">
           <div className={styles.docHead}>
-            <p className={`${styles.dim} ${styles.docNote}`}>
-              放进去的东西不在身上，拿出来才能用。装备着的要先在侧栏卸下。
-            </p>
             <Button onClick={onClose}>关闭</Button>
           </div>
           {boxes.length === 0 ? (

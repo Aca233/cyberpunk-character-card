@@ -5,7 +5,6 @@ import { Button } from "../../ui/Button";
 import styles from "./story.module.css";
 
 const MAX = 2000;
-const HINT = "动作、台词、心里话都直接写；想跳出角色问规则或现状，也直接问";
 
 /** 只有一个输入框；Enter 发送，Shift+Enter 换行；生成时变成“停止生成” */
 export function InputBar({
@@ -42,6 +41,13 @@ export function InputBar({
   const tooLong = text.length > MAX;
   const canSend = !busy && !disabled && text !== "" && !tooLong;
   const boosting = boost !== undefined && draft.sandevistan === true;
+  // 只在有用的时候提示：输入框不能用的原因、斯安威斯坦的规则；平时不写说明
+  const hint =
+    disabled && reason
+      ? reason
+      : boosting
+        ? `斯安威斯坦开着：最多 ${boost?.slots} 个动作，不确定的部分合并成一次掷骰，人性 −${boost?.cost}`
+        : null;
 
   // 改写检定时文字被放进输入框：把焦点也放过去
   const last = useRef(draft.text);
@@ -90,12 +96,10 @@ export function InputBar({
           value={draft.text}
           disabled={disabled}
           placeholder={
-            boosting
-              ? `时间慢下来了：这一瞬间要做的事（最多 ${boost?.slots} 件）`
-              : "你要做什么、说什么？"
+            boosting ? `时间慢下来了：这一瞬间要做的事（最多 ${boost?.slots} 件）` : undefined
           }
           aria-label="你的行动"
-          aria-describedby="story-input-hint"
+          aria-describedby={hint ? "story-input-hint" : undefined}
           onChange={(e) => onDraft({ text: e.target.value })}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -128,13 +132,11 @@ export function InputBar({
           {text.length}/{MAX} 字，太长了
         </p>
       ) : (
-        <span id="story-input-hint" className={styles.hint}>
-          {disabled && reason
-            ? reason
-            : boosting
-              ? `斯安威斯坦开着：最多 ${boost?.slots} 个动作，不确定的部分合并成一次掷骰，人性 −${boost?.cost}`
-              : HINT}
-        </span>
+        hint && (
+          <span id="story-input-hint" className={styles.hint}>
+            {hint}
+          </span>
+        )
       )}
     </form>
   );

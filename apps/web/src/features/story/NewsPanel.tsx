@@ -30,9 +30,6 @@ export function NewsPanel({
       <div role="dialog" aria-label="新闻" className={styles.journal}>
         <Panel as="div" title="新闻" line="var(--cp-yellow)">
           <div className={styles.docHead}>
-            <p className={`${styles.dim} ${styles.docNote}`}>
-              N54 快讯和电台里播过的东西。镜头外的城市一直在动，这里只收得到上了广播的那部分。
-            </p>
             <Button onClick={onClose}>关闭</Button>
           </div>
           <div className={styles.docBody}>

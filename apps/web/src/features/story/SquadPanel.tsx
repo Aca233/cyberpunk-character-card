@@ -53,7 +53,7 @@ export function SquadPanel({
         </div>
       ))}
       {squad.members.length === 0 ? (
-        <p className={styles.dim}>还没有队员；有人在剧情里答应跟你干时，会在这里等你确认。</p>
+        <p className={styles.dim}>还没有队员。</p>
       ) : (
         <ul className={styles.npcList}>
           {squad.members.map((m) => (

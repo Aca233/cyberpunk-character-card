@@ -40,7 +40,6 @@ export function GigsPanel({ gigs }: { readonly gigs: View["sidegigs"] }) {
           ))}
         </ul>
       )}
-      {here.length > 0 && !gigs.active && <p className={styles.dim}>想报名就在输入里说。</p>}
       {beaten.length > 0 && (
         <p className={styles.dim}>
           赢过：{beaten.map((g) => `${g.name}（${g.opponent}）`).join("、")}

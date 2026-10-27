@@ -43,7 +43,7 @@ export function NarrativeSettings() {
   const prefs = useNarrativePrefs();
   return (
     <div className={styles.prefs}>
-      <p className={styles.dim}>这些偏好只存在这台浏览器里；开关默认关着。</p>
+      <p className={styles.dim}>这些偏好只存在这台浏览器里。</p>
       {OPTIONS.map(([key, label, hint]) => (
         <label key={key} className={styles.pref}>
           <input

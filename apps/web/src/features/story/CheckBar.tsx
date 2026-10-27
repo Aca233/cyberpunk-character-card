@@ -72,9 +72,7 @@ export function CheckBar({
       <header className={styles.checkHead}>
         <Asset id="skillcheck.default" tint="var(--cp-yellow)" height={28} />
         <h2>{check.label}</h2>
-        <span className={styles.chance} title="按当前属性和修正算出的成功率">
-          {check.chance}%
-        </span>
+        <span className={styles.chance}>{check.chance}%</span>
       </header>
 
       <div className={styles.checkNumbers}>
@@ -138,9 +136,6 @@ export function CheckBar({
           </Button>
         )}
       </footer>
-      {check.rolled && (
-        <p className={styles.dim}>骰子已经掷过并记下了，继续只会写出结果，不会重掷。</p>
-      )}
     </section>
   );
 }
