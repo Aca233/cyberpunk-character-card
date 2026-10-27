@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { braindanceActions } from "./actions";
 import { applyBraindanceConclude, applyBraindanceMark, applyBraindanceStart } from "./apply";
+import { braindanceObjectives } from "./objectives";
 import { braindanceRules, braindanceSection } from "./prompt";
 import {
   BdConcludeCommandSchema,
@@ -36,6 +37,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
   },
   rules: [braindanceRules],
   actions: braindanceActions,
+  objectives: braindanceObjectives,
   sections: [
     {
       order: 140,
@@ -57,6 +59,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
 
 export * from "./actions";
 export * from "./apply";
+export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";
 export * from "./view";

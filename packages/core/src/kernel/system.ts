@@ -119,6 +119,46 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly actions?: Readonly<Record<string, PlayerActionDef>>;
   /** 给叙事模型的情境节，按 order 排进【当前状态】之后；只有这里可以写答案、真相这类隐藏信息 */
   readonly sections?: readonly SystemSection[];
+  /** 这个系统交给玩家的待办：只能用玩家已经知道的东西，委托转折、心事走向这类不能放进来 */
+  objectives?(ctx: ViewContext): readonly Objective[];
+  /** 这个系统交给玩家的威胁：只写玩家已经知道的，宿敌没扫描或打听到的准备不能放进来 */
+  threats?(ctx: ViewContext): readonly Threat[];
+}
+
+/** 待办的状态：offered 挂着等接，active 在办，overdue 过了期限还没了结 */
+export type ObjectiveStatus = "offered" | "active" | "overdue";
+
+/** 一条待办，格式各系统统一：右侧追踪和日志页照这个显示，不用知道是哪个系统交的 */
+export interface Objective {
+  /** 在所有待办里唯一，写成「来源:原 id」 */
+  readonly id: string;
+  /** 交这条待办的系统 id */
+  readonly source: string;
+  /** 来源的中文名，例如「委托」「NCPD 警情」 */
+  readonly sourceLabel: string;
+  readonly title: string;
+  /** 地点 id 或中文地名；不在某个地方办的是 null */
+  readonly location: string | null;
+  /** 期限的游戏时间写法；没有期限是 null */
+  readonly due: string | null;
+  /** 离期限还有多少分钟，已过期为负；没有期限是 null */
+  readonly dueIn: number | null;
+  /** 一句进度，例如「第 2/3 层」；没有是 null */
+  readonly progress: string | null;
+  readonly status: ObjectiveStatus;
+}
+
+/** 一条威胁：谁盯上了你、多严重、为什么 */
+export interface Threat {
+  /** 在所有威胁里唯一，写成「来源:原 id」 */
+  readonly id: string;
+  readonly source: string;
+  readonly sourceLabel: string;
+  /** 对方是谁，例如「NCPD」「漩涡帮」或宿敌的名字 */
+  readonly who: string;
+  /** 0–5，0 是还没动手的留意，5 是正在追杀 */
+  readonly level: number;
+  readonly reason: string;
 }
 
 /** 拼情境时系统看到的环境：只读；data 没给时为 undefined，input 是这一轮玩家的输入 */
@@ -244,6 +284,10 @@ export interface Registry {
   actionCommands(raw: unknown, ctx: ActionContext): Command[] | string;
   /** 各系统交的情境节按 order 排好、拼成「【标题】\n正文」；没内容的节跳过，只读 */
   sections(ctx: SectionContext): readonly string[];
+  /** 各系统交的待办，按系统顺序拼起来；id 重复时报错，只读 */
+  objectives(ctx: ViewContext): readonly Objective[];
+  /** 各系统交的威胁，按系统顺序拼起来；id 重复或等级不在 0–5 时报错，只读 */
+  threats(ctx: ViewContext): readonly Threat[];
 }
 
 interface Owner {
@@ -461,6 +505,41 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
         const body = section.render(ctx);
         return body === undefined ? [] : [`【${section.title}】\n${body}`];
       });
+    },
+    objectives(ctx) {
+      const result: Objective[] = [];
+      const ids = new Set<string>();
+      for (const system of order) {
+        for (const objective of system.objectives?.(ctx) ?? []) {
+          if (objective.source !== system.id || !objective.id.startsWith(`${system.id}:`)) {
+            throw new RegistryError(`${system.id} 的待办 ${objective.id} 来源不一致`);
+          }
+          if (ids.has(objective.id)) {
+            throw new RegistryError(`待办 id 重复：${objective.id}`);
+          }
+          ids.add(objective.id);
+          result.push(objective);
+        }
+      }
+      return result;
+    },
+    threats(ctx) {
+      const result: Threat[] = [];
+      const ids = new Set<string>();
+      for (const system of order) {
+        for (const threat of system.threats?.(ctx) ?? []) {
+          if (threat.source !== system.id || !threat.id.startsWith(`${system.id}:`)) {
+            throw new RegistryError(`${system.id} 的威胁 ${threat.id} 来源不一致`);
+          }
+          if (ids.has(threat.id)) throw new RegistryError(`威胁 id 重复：${threat.id}`);
+          if (!Number.isInteger(threat.level) || threat.level < 0 || threat.level > 5) {
+            throw new RegistryError(`威胁 ${threat.id} 的等级 ${threat.level} 不在 0–5`);
+          }
+          ids.add(threat.id);
+          result.push(threat);
+        }
+      }
+      return result;
     },
     initialWorld(time) {
       if (!Number.isInteger(time)) throw new RegistryError(`游戏时间必须是整数分钟：${time}`);

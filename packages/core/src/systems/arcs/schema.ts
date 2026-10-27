@@ -104,6 +104,8 @@ export const ConcernProgressSchema = z.object({
       by: ConcernBySchema,
       /** 玩家知不知道这个结果：正文里的当场知道，场外推演的要听说或撞见以后才算 */
       known: z.boolean(),
+      /** 场外结局公布前保留原来的状态，避免待办消失或重新出现泄露结果 */
+      previousStatus: ConcernStatusSchema.nullable().optional(),
     })
     .nullable()
     .default(null),

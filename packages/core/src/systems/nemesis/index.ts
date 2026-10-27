@@ -12,6 +12,7 @@ import {
   type NemesisState,
   NemesisStateSchema,
 } from "./schema";
+import { nemesisThreats } from "./threats";
 
 /** 宿敌：逃掉或被放走的有卡敌人升级而来，记着怎么输的、专克玩家的准备和屏幕外的动静 */
 export const nemesis = defineSystem<NemesisState, NemesisCommand, NemesisInternal>({
@@ -51,8 +52,10 @@ export const nemesis = defineSystem<NemesisState, NemesisCommand, NemesisInterna
         undefined,
     },
   ],
+  threats: nemesisThreats,
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./threats";

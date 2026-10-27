@@ -309,7 +309,7 @@ export function SidePanel({
   const { character, humanity, inventory } = view;
   const backpack = Object.entries(inventory.backpack);
   const itemName = (id: string) => view.names.items[id] ?? id;
-  const activeJobs = view.jobs.list.filter((job) => job.status === "active");
+  const tracked = view.objectives.filter((o) => o.status !== "offered");
   const offered = view.jobs.list.filter((job) => job.status === "offered").length;
   return (
     <aside className={styles.side}>
@@ -716,23 +716,19 @@ export function SidePanel({
         )}
       </Panel>
 
-      <Panel as="div" title="委托" line="var(--cp-red)">
-        {activeJobs.length === 0 ? (
-          <p className={styles.dim}>眼下没有接下的委托。</p>
+      <Panel as="div" title="待办" line="var(--cp-red)">
+        {tracked.length === 0 ? (
+          <p className={styles.dim}>眼下没有在办的事。</p>
         ) : (
           <ul className={styles.jobs}>
-            {activeJobs.map((job) => (
-              <li key={job.id} data-overdue={job.overdue || undefined}>
-                <strong>{job.title}</strong>
+            {tracked.map((o) => (
+              <li key={o.id} data-overdue={o.status === "overdue" || undefined}>
+                <strong>{o.title}</strong>
                 <span>
-                  {"★".repeat(job.risk)} · {job.reward.toLocaleString("en-US")} 欧元 ·{" "}
-                  {job.statusLabel}
+                  {o.sourceLabel}
+                  {o.due !== null && ` · ${o.status === "overdue" ? "已超期" : `${o.due} 前`}`}
                 </span>
-                <span>
-                  {job.fixer ? `中间人 ${job.fixer}` : `雇主 ${job.client}`}
-                  {job.due !== null && ` · ${job.overdue ? "已超期" : `${job.due} 前`}`}
-                </span>
-                {job.notes.length > 0 && <span className={styles.dim}>{job.notes.at(-1)}</span>}
+                {o.progress && <span className={styles.dim}>{o.progress}</span>}
               </li>
             ))}
           </ul>

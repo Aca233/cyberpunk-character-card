@@ -16,6 +16,7 @@ import {
   type HeatState,
   HeatStateSchema,
 } from "./schema";
+import { heatThreats } from "./threats";
 
 function districtOf(
   location: string | null,
@@ -71,9 +72,11 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       },
     },
     rules: [eventRules, heatRules],
+    threats: heatThreats,
   },
 );
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./threats";

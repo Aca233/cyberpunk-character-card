@@ -18,6 +18,7 @@ import {
   type FactionsState,
   FactionsStateSchema,
 } from "./schema";
+import { factionsThreats } from "./threats";
 import { factionsView } from "./view";
 
 /**
@@ -59,10 +60,12 @@ export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInt
     },
   ],
   view: { key: "factions", project: factionsView },
+  threats: factionsThreats,
 });
 
 export * from "./agenda";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./threats";
 export * from "./view";

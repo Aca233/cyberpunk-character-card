@@ -246,6 +246,7 @@ export function applyArcOffscreen(
       notes: [`场外：${name}的「${concern.title}」往前走了一步：${command.text}`],
     };
   }
+  const previousStatus = p.status;
   p.status = "resolved";
   p.outcome = {
     text: command.text,
@@ -253,6 +254,7 @@ export function applyArcOffscreen(
     at: now,
     by: "offscreen",
     known: false,
+    previousStatus,
   };
   return {
     ok: true,

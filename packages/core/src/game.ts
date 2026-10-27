@@ -955,21 +955,27 @@ export function projectState(
             const p = progress.concerns[c.id];
             if (!p) return [];
             const heard = p.outcome?.known === true;
-            if (p.status === null && !heard) return [];
+            // 场外暗中出的结局玩家还不知道：照结局之前的状态显示
+            const status = heard
+              ? "resolved"
+              : p.outcome
+                ? (p.outcome.previousStatus ?? null)
+                : p.status;
+            if (status === null) return [];
             return [
               {
                 id: c.id,
                 title: c.title,
-                status: heard ? "resolved" : p.status,
-                statusLabel: heard
-                  ? CONCERN_STATUS_LABELS.resolved
-                  : CONCERN_STATUS_LABELS[p.status ?? "told"],
+                status,
+                statusLabel: CONCERN_STATUS_LABELS[status],
                 outcome: heard && p.outcome ? p.outcome.text : null,
               },
             ];
           });
           if (progress.unlockedAt === null && concerns.length === 0) return null;
-          return { done: progress.doneAt !== null, concerns };
+          // 几件都了结要按玩家知道的算，doneAt 会把暗中的结局算进去
+          const done = seed.concerns.every((c) => progress.concerns[c.id]?.outcome?.known === true);
+          return { done, concerns };
         })(),
       })),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
@@ -1078,6 +1084,10 @@ export function projectState(
       })),
     },
     deadlines: clockView.deadlines,
+    /** 待办：各系统交的委托、警情、拳赛赛车、心事和超梦，只有玩家知道的；按系统顺序，不排紧急程度 */
+    objectives: registry.objectives({ world, records, data }),
+    /** 威胁：警方热度、悬赏、宿敌和敌对势力；只用玩家知道的事定等级 */
+    threats: registry.threats({ world, records, data }),
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
