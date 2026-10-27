@@ -8,6 +8,7 @@ import {
   type StealthState,
   StealthStateSchema,
 } from "./schema";
+import { stealthView } from "./view";
 
 /** 潜入警戒：按场景记 0–3，换场景归零；收尾时的热度由热度系统读最高警戒度来算 */
 export const stealth = defineSystem<StealthState, AlertCommand>({
@@ -26,8 +27,10 @@ export const stealth = defineSystem<StealthState, AlertCommand>({
     },
   },
   rules: [stealthRules],
+  view: { key: "stealth", project: stealthView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";

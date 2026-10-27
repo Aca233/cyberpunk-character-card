@@ -10,6 +10,7 @@ import {
   type BraindanceState,
   BraindanceStateSchema,
 } from "./schema";
+import { braindanceView } from "./view";
 
 /** 超梦调查：录像开始时写定冻结，玩家在编辑器里标线索，找全关键线索才能下结论，对错由代码判断 */
 export const braindance = defineSystem<BraindanceState, BraindanceCommand, BraindanceInternal>({
@@ -33,6 +34,11 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
     }
   },
   rules: [braindanceRules],
+  view: {
+    key: "braindance",
+    project: ({ world }) =>
+      braindanceView(BraindanceStateSchema.parse(world.slices.braindance ?? {})),
+  },
 });
 
 export * from "./apply";

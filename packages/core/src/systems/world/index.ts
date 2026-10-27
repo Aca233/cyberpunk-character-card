@@ -10,6 +10,7 @@ import {
   type WorldCommand,
   WorldCommandSchema,
 } from "./schema";
+import { worldView } from "./view";
 
 export const world = defineSystem<WorldClockState, WorldCommand | DeadlineCommand, EndScene>({
   id: "world",
@@ -27,8 +28,10 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
         return endScene(draft, ctx.now);
     }
   },
+  view: { key: "clock", project: worldView },
 });
 
 export * from "./apply";
 export * from "./schema";
+export * from "./view";
 export * from "./weather";

@@ -15,22 +15,18 @@ import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import { ArcsStateSchema, arcCatalog, CONCERN_STATUS_LABELS } from "./systems/arcs";
-import { BraindanceStateSchema, braindanceView } from "./systems/braindance";
+import type { braindanceView } from "./systems/braindance";
+import type { characterView } from "./systems/character";
 import { credTier } from "./systems/character/apply";
 import {
   CharacterStateSchema,
   effectiveAttribute,
   effectiveAttributes,
-  FLASHBACK_TURNS,
 } from "./systems/character/schema";
 import { ChronicleStateSchema, ENDING_LABELS } from "./systems/chronicle/schema";
-import { BULLETIN_KIND_LABELS, CityStateSchema } from "./systems/city/schema";
-import {
-  CombatStateSchema,
-  EDGE_LABELS,
-  FOE_STATE_LABELS,
-  MAX_QUICK,
-} from "./systems/combat/schema";
+import type { bulletinsView } from "./systems/city";
+import type { combatView } from "./systems/combat";
+import { bonusText, type cyberwareView } from "./systems/cyberware";
 import {
   cyberwareCatalog,
   repairCost,
@@ -49,67 +45,38 @@ import {
 } from "./systems/cyberware/schema";
 import {
   ATTRIBUTE_LABELS,
-  type Attribute,
   DiceStateSchema,
+  type Difficulty,
   OPPONENT_TIERS,
 } from "./systems/dice/schema";
-import { EconomyStateSchema, keeperOf, RARITY_LABELS } from "./systems/economy/schema";
-import {
-  AGENDA_OUTCOME_LABELS,
-  agendaCatalog,
-  attitudeLabel,
-  currentAttitude,
-  currentTurf,
-  FACTION_KIND_LABELS,
-  FactionsStateSchema,
-  factionCatalog,
-  progressOf,
-} from "./systems/factions";
-import {
-  DIVE_LAYERS,
-  DIVE_MAX,
-  deckOf,
-  CATEGORY_LABELS as HACK_CATEGORY_LABELS,
-  BREACH_GAIN_LABELS as HACK_GAIN_LABELS,
-  HackingStateSchema,
-  type QuickhackDef,
-  quickhackCatalog,
-} from "./systems/hacking";
-import { CONDITION_LABELS, woundTag } from "./systems/health/apply";
-import { HealthStateSchema, LIMB_LABELS } from "./systems/health/schema";
+import { keeperOf, type moneyView, RARITY_LABELS } from "./systems/economy";
+import type { factionsView } from "./systems/factions";
+import type { hackingView, QuickhackDef } from "./systems/hacking";
+import { HealthStateSchema, type healthView, LIMB_LABELS, woundTag } from "./systems/health";
 import { shownStars } from "./systems/heat/apply";
 import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
-import { humanityCap, humanityStage, STAGE_LABELS } from "./systems/humanity/apply";
-import { HUMANITY_MAX, HumanityStateSchema } from "./systems/humanity/schema";
+import type { humanityView } from "./systems/humanity";
+import type { inventoryView } from "./systems/inventory";
 import {
-  canDismantle,
   currentStock,
-  DISMANTLE_PARTS,
   itemCatalog,
-  nextRarity,
-  rarityOf,
   restockDue,
   sellValue,
   shopList,
   shopShelf,
-  TUNE_PARTS,
-  TUNE_TECH,
 } from "./systems/inventory/apply";
 import {
-  CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
   type InventoryState,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
-  MOD_SLOT_LABELS,
-  ModSlotSchema,
   WEAPON_CATEGORY_LABELS,
 } from "./systems/inventory/schema";
 import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
 import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
-import { NcpdStateSchema } from "./systems/ncpd";
+import type { ncpdView } from "./systems/ncpd";
 import {
   NEMESIS_CRED_HALVES,
   NEMESIS_END_LABELS,
@@ -126,39 +93,23 @@ import {
   NpcStateSchema,
 } from "./systems/npc/schema";
 import { PhoneStateSchema } from "./systems/phone/schema";
-import { blackoutTurns, lostControlOf, psychosisView } from "./systems/psychosis/apply";
+import { blackoutTurns, lostControlOf, type psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
-import {
-  apartmentList,
-  apartmentLocked,
-  type HomeDef,
-  SafehouseStateSchema,
-  trunks,
-} from "./systems/safehouse";
-import { sidegigsView } from "./systems/sidegigs/apply";
-import { squadView } from "./systems/squad/apply";
-import { currentAlert } from "./systems/stealth/apply";
-import { ALERT_LABELS, StealthStateSchema } from "./systems/stealth/schema";
-import {
-  dispatchCheck,
-  TRAUMA_PRICES,
-  TRAUMA_TIER_LABELS,
-  TraumaStateSchema,
-  isActive as traumaActive,
-} from "./systems/trauma";
+import type { HomeDef, safehouseView } from "./systems/safehouse";
+import type { sidegigsView } from "./systems/sidegigs/apply";
+import type { squadView } from "./systems/squad/apply";
+import type { stealthView } from "./systems/stealth";
+import type { traumaView } from "./systems/trauma";
 import {
   planTrip,
-  routeOptions,
   type TravelRequest,
+  type travelView,
   tripWorldOf,
-  VEHICLE_CLASS_LABELS,
-  VEHICLE_CONDITION_LABELS,
   type VehicleDef,
-  vehicleCatalog,
 } from "./systems/travel";
-import { formatGameTime, PERIOD_LABELS, periodOf } from "./systems/world/apply";
+import type { worldView } from "./systems/world";
+import { formatGameTime } from "./systems/world/apply";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
-import { weatherAt } from "./systems/world/weather";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -449,15 +400,6 @@ export function sandevistanBlock(
   return sandevistanOf(world, data) ? null : "没装能用的加速义体";
 }
 
-/** 义体的属性加成，例如“反应 +2”；没有时是空字符串 */
-function bonusText(def: CyberwareDef): string {
-  return [
-    ...Object.entries(def.attributes).map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`),
-    ...(def.armor ? ["受伤降一档"] : []),
-    ...(def.accelerator ? [`斯安威斯坦时刻 ${BOOST_SLOTS[def.rarity]} 个动作格`] : []),
-  ].join("、");
-}
-
 function ripperdocView(
   data: Readonly<Record<string, unknown>>,
   location: string | null,
@@ -519,7 +461,6 @@ function ripperdocView(
 }
 
 const CLOTHING_SLOTS = ClothingSlotSchema.options;
-const MOD_SLOTS = ModSlotSchema.options;
 
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
 /** 这一批卖过货时，下次补满的时间写成文字 */
@@ -809,14 +750,14 @@ export function projectState(
   /** 静态数据表；带物品表和地点表时给出中文名 */
   data: Readonly<Record<string, unknown>> = {},
 ) {
+  const views = registry.project({ world, records, data });
+  const clockView = views.clock as ReturnType<typeof worldView>;
   const dice = DiceStateSchema.parse(world.slices.dice);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
   // 旧存档没有履历系统
   const chronicleState = ChronicleStateSchema.parse(world.slices.chronicle ?? {});
-  const humanity = HumanityStateSchema.parse(world.slices.humanity);
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
-  const combat = CombatStateSchema.parse(world.slices.combat);
   const character = CharacterStateSchema.parse(world.slices.character);
   const npcs = NpcStateSchema.parse(world.slices.npc);
   // 旧存档没有宿敌系统
@@ -824,7 +765,6 @@ export function projectState(
   // 旧存档没有心事
   const arcState = ArcsStateSchema.parse(world.slices.arcs ?? {});
   const arcSeeds = arcCatalog(data ?? {});
-  const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   // 旧存档没有消息记录
   const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
@@ -834,14 +774,11 @@ export function projectState(
   const parts = cyberwareCatalog(data);
   const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
-  const period = periodOf(world.time);
-  const humanityLevel = humanityStage(humanity.current);
   const turns = effectiveTurns(records);
-  const active = combat.active;
 
   return {
     version: logVersion(records),
-    difficulty: dice.mode,
+    difficulty: views.difficulty as Difficulty,
     /** 角色死了时不为 null：夜之城每个场景能从开头重来一次，其他难度死了就结束 */
     death:
       health.condition === "dead"
@@ -876,201 +813,35 @@ export function projectState(
       cred: NEMESIS_CRED_HALVES / 2,
     })),
     /** 超梦调查：正在查的录像（编辑器用）和查过的几次；旧存档没有超梦系统 */
-    braindance: braindanceView(BraindanceStateSchema.parse(world.slices.braindance ?? {})),
-    character: {
-      name: character.name,
-      brief: character.brief,
-      /** 检定用的属性，已经算上义体加成 */
-      attributes: effectiveAttributes(character),
-      /** 义体加成：侧栏标出来 */
-      bonuses: character.bonuses,
-      streetCred: character.streetCred,
-      credTier: credTier(character.streetCred).label,
-      credWorld: credTier(character.streetCred).world,
-      /** 攒着半级声望，再得半级就升级 */
-      credHalf: character.credHalf,
-      attributePoints: character.attributePoints,
-      /** 主板上的模块和联动；没用主板的角色是空的 */
-      traits: character.traits,
-      /** 习惯栏，和叙事模型提议、等玩家确认的习惯 */
-      habits: character.habits,
-      habitOffers: character.habitOffers,
-      /** 角色的过往，闪回用过没有 */
-      pasts: character.traits
-        .filter((t) => t.slot === "past")
-        .map((t) => ({ label: t.label, used: character.flashbackUsed.includes(t.label) })),
-      /** 正在进行的闪回：第几轮（从 1 起），共几轮 */
-      flashback: character.flashback && {
-        past: character.flashback.past,
-        turn: character.flashback.turns + 1,
-        turns: FLASHBACK_TURNS,
-      },
-      /** 闪回里确认的事 */
-      pastFacts: character.pastFacts,
-    },
-    time: {
-      minutes: world.time,
-      text: formatGameTime(world.time),
-      period,
-      periodLabel: PERIOD_LABELS[period],
-    },
+    braindance: views.braindance as ReturnType<typeof braindanceView>,
+    character: views.character as ReturnType<typeof characterView>,
+    time: clockView.time,
     /** 天气：按时间、季节和城区算；还没有地点时按市区 */
-    weather: weatherAt(
-      world.time,
-      clock.location === null
-        ? null
-        : (locationCatalog(data).get(clock.location)?.district ?? null),
-    ),
-    location: clock.location,
+    weather: clockView.weather,
+    location: clockView.location,
     /** 界面显示用的中文名，查不到时为 id 或 null */
     names: displayNames(data, inventory, clock.location),
-    scene: clock.scene,
-    health: {
-      hp: health.hp,
-      max: health.max,
-      condition: health.condition,
-      conditionLabel: CONDITION_LABELS[health.condition],
-      wound: woundTag(health),
-      /** 断了还没装义肢的部位 */
-      lostLimbs: health.lostLimbs.map((l) => ({ id: l, label: LIMB_LABELS[l] })),
-    },
-    humanity: {
-      current: humanity.current,
-      cap: humanityCap(humanity),
-      max: HUMANITY_MAX,
-      stage: humanityLevel,
-      stageLabel: STAGE_LABELS[humanityLevel],
-    },
-    inventory: {
-      weapons: inventory.weapons,
-      active: inventory.active,
-      healing: inventory.healing,
-      grenade: inventory.grenade,
-      backpack: inventory.backpack,
-      /** 零件：拆解得来，给武器升稀有度 */
-      parts: inventory.parts,
-      /** 升过稀有度的武器：id → 稀有度名 */
-      tuned: Object.fromEntries(
-        Object.entries(inventory.tuned).map(([id, r]) => [id, RARITY_LABELS[r]]),
-      ) as Readonly<Record<string, string>>,
-      /** 背包里能拆的东西各拆出几个零件 */
-      dismantle: Object.fromEntries(
-        Object.keys(inventory.backpack).flatMap((id) => {
-          const def = items.get(id);
-          return def && canDismantle(def)
-            ? [[id, DISMANTLE_PARTS[rarityOf(def, inventory.tuned)]]]
-            : [];
-        }),
-      ) as Readonly<Record<string, number>>,
-      /** 身上的武器（武器格和背包里的）升一档：到哪一档、要几个零件、要多少技术；到顶的不列 */
-      tune: Object.fromEntries(
-        [
-          ...new Set([
-            ...inventory.weapons.filter((w): w is string => w !== null),
-            ...Object.keys(inventory.backpack),
-          ]),
-        ].flatMap((id) => {
-          const def = items.get(id);
-          if (def?.kind !== "weapon") return [];
-          const to = nextRarity(rarityOf(def, inventory.tuned));
-          return to === null
-            ? []
-            : [[id, { to: RARITY_LABELS[to], parts: TUNE_PARTS[to], tech: TUNE_TECH[to] }]];
-        }),
-      ) as Readonly<Record<string, { to: string; parts: number; tech: number }>>,
-      /** 穿着的服装，按格子顺序；没穿的格子不列 */
-      clothing: CLOTHING_SLOTS.flatMap((slot) => {
-        const id = inventory.clothing[slot];
-        return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
-      }),
-      /** 存下的整套外观，按格子顺序；没存过时为空 */
-      outfit: CLOTHING_SLOTS.flatMap((slot) => {
-        const id = inventory.outfit[slot];
-        return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
-      }),
-      /** 背包里每件东西能装到哪：weapon 武器格、quick 快捷栏、clothing 服装格；不能装的不列 */
-      equipTo: Object.fromEntries(
-        Object.keys(inventory.backpack).flatMap((id) => {
-          const kind = items.get(id)?.kind;
-          const to =
-            kind === "weapon"
-              ? "weapon"
-              : kind === "healing" || kind === "grenade"
-                ? "quick"
-                : kind === "clothing"
-                  ? "clothing"
-                  : null;
-          return to ? [[id, to]] : [];
-        }),
-      ) as Readonly<Record<string, "weapon" | "quick" | "clothing">>,
-      /** 武器栏里带专属内心声音的不朽武器 */
-      iconicVoices: inventory.weapons.flatMap((w) => {
-        const def = w === null ? undefined : items.get(w);
-        return def?.iconic && def.voice !== undefined
-          ? [{ id: def.id, name: def.name, voice: def.voice }]
-          : [];
-      }),
-      /** 武器上装着的改装件：武器 id → 按位置顺序；没装的武器不列 */
-      mods: Object.fromEntries(
-        Object.entries(inventory.mods).map(([weapon, fitted]) => [
-          weapon,
-          MOD_SLOTS.flatMap((slot) => {
-            const id = fitted[slot];
-            return id === undefined ? [] : [{ slot, label: MOD_SLOT_LABELS[slot], id }];
-          }),
-        ]),
-      ) as Readonly<Record<string, readonly { slot: string; label: string; id: string }[]>>,
-      /** 背包里的改装件能装到哪几把身上的武器（武器格和背包里的），按武器格在前 */
-      modTargets: Object.fromEntries(
-        Object.keys(inventory.backpack).flatMap((id) => {
-          const fits = items.get(id)?.modFits;
-          if (fits === undefined) return [];
-          const owned = [
-            ...new Set([
-              ...inventory.weapons.filter((w): w is string => w !== null),
-              ...Object.keys(inventory.backpack),
-            ]),
-          ];
-          const targets = owned.filter((w) => {
-            const category = items.get(w)?.category;
-            return (
-              items.get(w)?.kind === "weapon" && category !== undefined && fits.includes(category)
-            );
-          });
-          return targets.length > 0 ? [[id, targets]] : [];
-        }),
-      ) as Readonly<Record<string, readonly string[]>>,
-    },
+    scene: clockView.scene,
+    health: views.health as ReturnType<typeof healthView>,
+    humanity: views.humanity as ReturnType<typeof humanityView>,
+    inventory: views.inventory as ReturnType<typeof inventoryView>,
     /** 装着的义体，按装上的先后 */
-    cyberware: installed.map((c) => {
-      const def = parts.get(c.id);
-      return {
-        id: c.id,
-        name: def?.name ?? c.id,
-        slot: c.slot,
-        slotLabel: SLOT_LABELS[c.slot],
-        rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
-        ability: def?.ability ?? null,
-        bonusText: def ? bonusText(def) : "",
-        /** 被打坏了：修好前失去能力 */
-        broken: health.brokenChrome.includes(c.id),
-      };
-    }),
+    cyberware: views.cyberware as ReturnType<typeof cyberwareView>,
     /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */
-    hacking: hackingView(world, installed, data, clock.location),
+    hacking: views.hacking as ReturnType<typeof hackingView>,
     /** 地图上的地点和到每个地点的路线；路线面板照这里显示，结算用同一套算法 */
-    travel: travelView(world, data),
+    travel: views.travel as ReturnType<typeof travelView>,
     /** 各势力对玩家的态度，和当前地点是谁的地盘 */
-    factions: factionsView(world, data, clock.location),
+    factions: views.factions as ReturnType<typeof factionsView>,
     /** 扫描器上挂着的 NCPD 警情 */
-    ncpd: ncpdView(world, data, clock.location),
+    ncpd: views.ncpd as ReturnType<typeof ncpdView>,
     /** 创伤小组会籍，和现在叫不叫得来 */
-    trauma: traumaView(world, data, clock.location, world.time),
+    trauma: views.trauma as ReturnType<typeof traumaView>,
     /** 安全屋、存放箱、后备箱和战利品墙 */
-    safehouse: safehouseView(world, data, clock.location),
-    psychosis: psychosisView(world.slices.psychosis, world.time, clock.scene),
-    squad: squadView(world.slices.squad, npcs.npcs, world.time),
-    sidegigs: sidegigsView(world.slices.sidegigs, data, clock.location, world.time),
+    safehouse: views.safehouse as ReturnType<typeof safehouseView>,
+    psychosis: views.psychosis as ReturnType<typeof psychosisView>,
+    squad: views.squad as ReturnType<typeof squadView>,
+    sidegigs: views.sidegigs as ReturnType<typeof sidegigsView>,
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: ripperdocView(
       data,
@@ -1090,43 +861,9 @@ export function projectState(
       amount: d.amount,
       due: formatGameTime(d.due),
     })),
-    combat: {
-      active: active && {
-        /** 第几段，从 1 起 */
-        moment: active.current + 1,
-        moments: active.moments,
-        objective: active.objective ?? null,
-        defeat: active.defeat,
-        enemies: active.enemies,
-        /** 有卡敌人：没扫描过、也还没受伤的，界面不显示情况 */
-        foes: (active.foes ?? []).map((f) => ({
-          npc: f.npc,
-          name: f.name,
-          tier: f.tier,
-          tierLabel: OPPONENT_TIERS[f.tier].label,
-          state: f.state,
-          stateLabel: FOE_STATE_LABELS[f.state],
-          scanned: f.scanned,
-        })),
-        /** 这一段用了几个快捷动作，最多 quickMax 个 */
-        quick: active.quick ?? 0,
-        quickMax: MAX_QUICK,
-        /** 濒死时还剩几段结束前要被救回；不在濒死时为 null */
-        dyingMomentsLeft:
-          active.dyingUntil === null ? null : active.dyingUntil - active.current + 1,
-        /** 第一段谁占先机；过了第一段是 null */
-        edge: active.current === 0 ? (active.edge ?? null) : null,
-        edgeLabel: active.current === 0 && active.edge ? EDGE_LABELS[active.edge] : null,
-      },
-      /** 进行中的对峙 */
-      standoff: combat.standoff ?? null,
-      last: combat.last,
-    },
+    combat: views.combat as ReturnType<typeof combatView>,
     /** 当前场景的潜入警戒度 */
-    stealth: (() => {
-      const s = currentAlert(StealthStateSchema.parse(world.slices.stealth ?? {}), clock.scene);
-      return { level: s.level, label: ALERT_LABELS[s.level], peak: s.peak, lowered: s.lowered };
-    })(),
+    stealth: views.stealth as ReturnType<typeof stealthView>,
     /** 见过的人、只听说过的人和宿敌（交过手）；诉求、底线和秘密只给模型看，不在这里 */
     npcs: Object.values(npcs.npcs)
       .filter(
@@ -1236,14 +973,7 @@ export function projectState(
         })(),
       })),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
-    bulletins: [...CityStateSchema.parse(world.slices.city ?? {}).bulletins].reverse().map((b) => ({
-      id: b.id,
-      kind: b.kind,
-      label: BULLETIN_KIND_LABELS[b.kind],
-      title: b.title,
-      text: b.text,
-      time: formatGameTime(b.at),
-    })),
+    bulletins: views.bulletins as ReturnType<typeof bulletinsView>,
     /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
     memory: (() => {
       const m = MemoryStateSchema.parse(world.slices.memory ?? {});
@@ -1271,7 +1001,7 @@ export function projectState(
           })),
       };
     })(),
-    money: { eddies: economy.eddies },
+    money: views.money as ReturnType<typeof moneyView>,
     /** 警方热度：整星，另标有没有攒着半星；自然下降还要多久（分钟） */
     heat: {
       stars: shownStars(heat?.stars ?? 0),
@@ -1347,14 +1077,7 @@ export function projectState(
               },
       })),
     },
-    deadlines: clock.deadlines
-      .filter((d) => d.handledAt === null)
-      .map((d) => ({
-        id: d.id,
-        label: d.label,
-        due: formatGameTime(d.due),
-        overdue: d.due <= world.time,
-      })),
+    deadlines: clockView.deadlines,
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
@@ -1440,279 +1163,6 @@ export function projectState(
 }
 
 export type PlayerView = ReturnType<typeof projectState>;
-
-/** 接入仓按装着的义体现算（旧存档的骇入状态可能还没同步）；RAM 用状态里记的，换过接入仓按满格 */
-function hackingView(
-  world: WorldState,
-  installed: Parameters<typeof deckOf>[0],
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-) {
-  const found = deckOf(installed, data);
-  if (!found?.deck) return null;
-  const state = HackingStateSchema.parse(world.slices.hacking ?? {});
-  const parts = cyberwareCatalog(data);
-  const programs = quickhackCatalog(data);
-  const ram = state.deck === found.deck ? Math.min(state.ram, found.ramMax) : found.ramMax;
-  return {
-    deck: found.deck,
-    deckName: parts.get(found.deck)?.name ?? found.deck,
-    ram,
-    ramMax: found.ramMax,
-    slots: found.slots,
-    programs: state.programs.map((id) => {
-      const def = programs.get(id);
-      return {
-        id,
-        name: def?.name ?? id,
-        category: def?.category ?? null,
-        categoryLabel: def ? HACK_CATEGORY_LABELS[def.category] : "",
-        ram: def?.ram ?? 0,
-        effect: def?.effect ?? "",
-      };
-    }),
-    /** 正在潜网：第几层、这一层叫什么、谁守着肉身；没在潜是 null */
-    dive: state.dive && {
-      layer: state.dive.layer,
-      layers: DIVE_MAX,
-      /** 每一层的名字，从浅到深 */
-      layerLabels: DIVE_LAYERS,
-      label: DIVE_LAYERS[state.dive.layer - 1] ?? "",
-      chair: state.dive.chair,
-      guard: state.dive.guard,
-    },
-    /** 这个地点入侵过的网络，最近的在前 */
-    breaches: state.breachedNetworks
-      .filter((n) => n.location === location)
-      .reverse()
-      .map((n) => ({
-        name: n.name,
-        at: formatGameTime(n.at),
-        gains: n.gains.map((g) => HACK_GAIN_LABELS[g]),
-      })),
-  };
-}
-
-/** 地图上能去的地点、每种出行方式的耗时、花费和风险，以及这一场的路上偶遇 */
-function safehouseView(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-) {
-  const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
-  const names = itemCatalog(data);
-  const places = locationCatalog(data);
-  const list = (id: string) =>
-    Object.entries(state.stash[id] ?? {}).map(([item, count]) => ({
-      id: item,
-      name: names.get(item)?.name ?? item,
-      count,
-    }));
-  const travel = world.slices.travel as
-    | { vehicles?: Parameters<typeof trunks>[0]["vehicles"] }
-    | undefined;
-  return {
-    homes: state.homes.map((h) => ({
-      id: h.id,
-      name: h.name,
-      location: h.location,
-      locationName: places.get(h.location)?.name ?? h.location,
-      here: h.location === location,
-      items: list(h.id),
-    })),
-    trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data).map((t) => ({
-      id: t.id,
-      name: t.name,
-      cap: t.kind === "trunk" ? t.cap : 0,
-      items: list(t.id),
-    })),
-    trophies: state.trophies.map((t) => ({ ...t, at: formatGameTime(t.at) })),
-    /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */
-    forSale: apartmentList(data)
-      .filter((a) => a.location === location)
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        price: a.price,
-        note: a.note,
-        locked: apartmentLocked(state.homes, a) ?? null,
-      })),
-  };
-}
-
-function traumaView(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-  now: number,
-) {
-  const state = TraumaStateSchema.parse(world.slices.trauma ?? {});
-  const slices = world.slices as Record<string, { readonly [k: string]: unknown } | undefined>;
-  const active = traumaActive(state, now);
-  const dispatch = dispatchCheck({
-    tier: state.tier,
-    active,
-    condition: (slices.health?.condition as "up" | "down" | "dying" | "dead" | undefined) ?? "up",
-    inCombat: (slices.combat?.active ?? null) !== null,
-    district: location === null ? null : (locationCatalog(data).get(location)?.district ?? null),
-    stars: Number(slices.heat?.stars ?? 0),
-  });
-  return {
-    tier: state.tier,
-    tierLabel: TRAUMA_TIER_LABELS[state.tier],
-    active,
-    until: state.paidUntil === null ? null : formatGameTime(state.paidUntil),
-    /** 过期一周内提醒，再久就不提了 */
-    lapsed:
-      state.lapsedAt === null || now - state.lapsedAt > 7 * 1440
-        ? null
-        : formatGameTime(state.lapsedAt),
-    rescues: state.rescues,
-    prices: TRAUMA_PRICES,
-    /** 现在倒下的话来不来；没倒下时按倒下算 */
-    dispatch,
-  };
-}
-
-function ncpdView(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-) {
-  const state = NcpdStateSchema.parse(world.slices.ncpd ?? {});
-  const places = locationCatalog(data);
-  const here = location === null ? undefined : places.get(location);
-  return {
-    cleared: state.cleared,
-    alerts: state.alerts.map((a) => {
-      const place = places.get(a.location);
-      return {
-        id: a.id,
-        label: a.label,
-        note: a.note,
-        district: a.district,
-        location: a.location,
-        locationName: place?.name ?? a.location,
-        x: place?.x ?? null,
-        y: place?.y ?? null,
-        reward: a.reward,
-        risk: a.risk,
-        until: formatGameTime(a.expiresAt),
-        /** 玩家现在就在这条警情的城区 */
-        here: here?.district === a.district,
-      };
-    }),
-  };
-}
-
-function factionsView(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-) {
-  const catalog = factionCatalog(data);
-  const state = FactionsStateSchema.parse(world.slices.factions ?? {});
-  const place = location === null ? undefined : locationCatalog(data).get(location);
-  const name = (id: string) => catalog.get(id)?.name ?? id;
-  // 玩家只看得到传开了的：地盘按听说了的变化算，动向只列听说了的几步；到点没推演的、没传开的都不进视图
-  const turf = currentTurf(state, data, true);
-  const seeds = [...agendaCatalog(data).values()];
-  const newsOf = (faction: string) =>
-    seeds
-      .filter((s) => s.faction === faction)
-      .flatMap((s) =>
-        progressOf(state, s.id)
-          .moves.filter((m) => m.told)
-          .map((m) => ({
-            agenda: s.title,
-            title: m.title,
-            news: m.news,
-            label: m.kind === "move" ? AGENDA_OUTCOME_LABELS[m.outcome ?? "twist"] : `你${m.title}`,
-            mine: m.kind !== "move",
-            turf: m.turf
-              ? `${name(m.turf.faction)}${m.turf.change === "gain" ? "拿下了" : "丢了"}${m.turf.district}`
-              : null,
-            at: m.at,
-            time: formatGameTime(m.at),
-          })),
-      )
-      .sort((a, b) => b.at - a.at)
-      .slice(0, 6);
-  const list = [...catalog.values()].map((f) => {
-    const attitude = currentAttitude(state, f);
-    const stance = state.stances[f.id];
-    const held = turf.get(f.id) ?? f.turf;
-    return {
-      id: f.id,
-      name: f.name,
-      en: f.en,
-      kind: f.kind,
-      kindLabel: FACTION_KIND_LABELS[f.kind],
-      color: f.color,
-      style: f.style,
-      turf: held,
-      /** 势力卡上原来的地盘；和 turf 不同说明地盘变过 */
-      baseTurf: f.turf,
-      turfNote: f.turfNote ?? null,
-      allies: f.allies.map(name),
-      enemies: f.enemies.map(name),
-      attitude,
-      attitudeLabel: attitudeLabel(f.kind, attitude),
-      reason: stance?.reason ?? null,
-      changedAt: stance ? formatGameTime(stance.at) : null,
-      /** 当前地点所在的城区是它的地盘 */
-      here: place !== undefined && held.includes(place.district),
-      /** 传开了的动向，新的在前 */
-      news: newsOf(f.id),
-    };
-  });
-  return { list, district: place?.district ?? null };
-}
-
-function travelView(world: WorldState, data: Readonly<Record<string, unknown>>) {
-  const w = tripWorldOf(world);
-  const destinations = [...locationCatalog(data).values()].flatMap((p) =>
-    p.x === undefined || p.y === undefined
-      ? []
-      : [
-          {
-            id: p.id,
-            name: p.name,
-            district: p.district,
-            x: p.x,
-            y: p.y,
-            metro: p.metro === true,
-            here: p.id === w.location,
-            routes: p.id === w.location ? [] : routeOptions(w, data, p.id),
-          },
-        ],
-  );
-  const { encounter } = w.travel;
-  const cars = vehicleCatalog(data);
-  const vehicles = w.travel.vehicles.map((v) => {
-    const def = cars.get(v.model);
-    return {
-      id: v.id,
-      model: v.model,
-      name: def?.name ?? v.model,
-      maker: def?.maker ?? null,
-      classLabel: def ? VEHICLE_CLASS_LABELS[def.class] : "",
-      speed: def?.speed ?? 0,
-      seats: def?.seats ?? 0,
-      trunk: def?.trunk ?? 0,
-      condition: v.condition,
-      conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
-      stolen: v.stolen,
-    };
-  });
-  return {
-    destinations,
-    vehicles,
-    encounter: encounter
-      ? { label: encounter.label, note: encounter.note, district: encounter.district }
-      : null,
-  };
-}
 
 /** 路线面板提交前的检查：走不了时返回原因 */
 export function travelBlock(

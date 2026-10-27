@@ -12,6 +12,7 @@ import {
   VehicleGrantSchema,
 } from "./schema";
 import { applyVehicle, grantVehicle } from "./vehicles";
+import { travelView } from "./view";
 
 /** 出行和载具：路线面板确认的移动按路线表推进时间、扣路费、换地点，换城区时按几率定路上的偶遇；名下的车、偷车、追车 */
 export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | VehicleGrant>({
@@ -35,9 +36,11 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
     "scene.end": (draft) => clearEncounter(draft),
   },
   rules: [travelRules],
+  view: { key: "travel", project: travelView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
 export * from "./vehicles";
+export * from "./view";

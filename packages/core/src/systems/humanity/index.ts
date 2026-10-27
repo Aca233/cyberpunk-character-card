@@ -16,6 +16,7 @@ import {
   type SetTolerance,
   SetToleranceSchema,
 } from "./schema";
+import { humanityView } from "./view";
 
 export const humanity = defineSystem<
   HumanityState,
@@ -46,8 +47,10 @@ export const humanity = defineSystem<
       : setCyberwareCost(draft, command.total);
   },
   rules: [psychosisRules],
+  view: { key: "humanity", project: humanityView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";

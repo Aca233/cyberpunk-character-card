@@ -17,6 +17,7 @@ import {
   factions,
   fixers,
   gameContent,
+  gameData,
   glossary,
   homes,
   items,
@@ -60,13 +61,16 @@ import {
   LifepathEntrySchema,
   NARRATE_STAGE,
   ncpdRules,
+  newGameWorld,
   npcRules,
+  projectState,
   registry,
   safehouseRules,
   schemaDoc,
   sidegigRules,
   TwistCatalogSchema,
   travelRules,
+  withAllSlices,
   worldRules,
 } from "@cp/core";
 import type { z } from "zod";
@@ -483,6 +487,47 @@ for (const kind of ["fight", "race"] as const) {
   const n = sidegigs.filter((g) => g.kind === kind).length;
   if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
 }
+
+// 隐藏信息不能进玩家投影：每个开场建一个示例世界跑 projectState，
+// 键名里不能有 truth、answer、twist、secret 这类；开场委托塞一段带标记的 twist，投影里不能出现它的原文
+const HIDDEN_KEY = /truth|answer|twist|secret|hidden|spoiler|solution/i;
+const TWIST_MARK = "【隐藏转折探针：这段只给叙事模型看】";
+let planted = 0;
+for (const o of openings) {
+  const probe = {
+    ...o,
+    jobs: (o.jobs ?? []).map((j) => ({ ...j, twist: `${TWIST_MARK}${j.id}` })),
+  };
+  planted += probe.jobs.length;
+  const world = withAllSlices(
+    newGameWorld(
+      {
+        startTime: Date.UTC(2077, 9, 1, 22) / 60000,
+        difficulty: "nightCity",
+        opening: probe.id,
+        loadouts: [DEFAULT_LOADOUT],
+      },
+      { ...gameContent, openings: [probe] },
+    ),
+  );
+  const view = projectState(world, [], gameData);
+  const walk = (v: unknown, path: string): void => {
+    if (Array.isArray(v)) {
+      for (const [i, x] of v.entries()) walk(x, `${path}[${i}]`);
+      return;
+    }
+    if (v === null || typeof v !== "object") return;
+    for (const [k, x] of Object.entries(v)) {
+      if (HIDDEN_KEY.test(k))
+        errors.push(`玩家投影（开场 ${o.id}）：${path}.${k} 像是隐藏信息的字段名`);
+      walk(x, `${path}.${k}`);
+    }
+  };
+  walk(view, "state");
+  if (JSON.stringify(view).includes(TWIST_MARK))
+    errors.push(`玩家投影（开场 ${o.id}）：委托的隐藏转折原文进了投影`);
+}
+if (planted === 0) errors.push("玩家投影：没有一个开场带委托，隐藏转折的检查没覆盖到");
 
 const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、超梦录像 ${braindances.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);

@@ -1,6 +1,7 @@
 import { current, type Draft, enablePatches, isDraft, type Patch, produceWithPatches } from "immer";
 import type { z } from "zod";
 import type { Rng } from "./ports";
+import type { LogRecord } from "./turnlog";
 import type { WorldState } from "./world";
 
 enablePatches();
@@ -112,6 +113,22 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
   /** 这个系统给叙事模型的规则模块 */
   readonly rules?: readonly RuleModule<S>[];
+  /** 这个系统交给玩家投影的一块；诉求、底线、秘密、隐藏转折这类只给模型看的东西不能放进来 */
+  readonly view?: SystemView;
+}
+
+/** 投影时系统看到的环境：只读，不能改状态 */
+export interface ViewContext {
+  readonly world: WorldState;
+  readonly records: readonly LogRecord[];
+  /** 静态数据表（content 包）；带物品表和地点表时给出中文名 */
+  readonly data: Readonly<Record<string, unknown>>;
+}
+
+/** 玩家投影里的一块：key 是投影里的字段名，同一个 key 只能由一个系统交 */
+export interface SystemView {
+  readonly key: string;
+  project(ctx: ViewContext): unknown;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: 注册表要存放状态和指令类型各不相同的系统
@@ -177,6 +194,10 @@ export interface Registry {
   signal(world: WorldState, signal: string, ctx: ApplyContext): WorldChange;
   /** 把游戏时间推进到 to；倒退时报错 */
   advanceTo(world: WorldState, to: number, ctx: ApplyContext): WorldChange;
+  /** 交了 view 的系统的字段名，按系统顺序 */
+  readonly viewKeys: readonly string[];
+  /** 按系统顺序调用各系统的 view，返回 字段名 → 投影；只读，不改状态 */
+  project(ctx: ViewContext): Readonly<Record<string, unknown>>;
 }
 
 interface Owner {
@@ -190,6 +211,18 @@ const MAX_CHAIN = 8;
 
 export function createRegistry(systems: readonly AnySystem[]): Registry {
   const order = sortByDependencies(systems);
+  const views = new Map<string, { readonly systemId: string; readonly view: SystemView }>();
+  for (const system of order) {
+    const view = system.view;
+    if (!view) continue;
+    const existing = views.get(view.key);
+    if (existing) {
+      throw new RegistryError(
+        `投影字段 ${view.key} 同时由 ${existing.systemId} 和 ${system.id} 注册`,
+      );
+    }
+    views.set(view.key, { systemId: system.id, view });
+  }
   const owners = new Map<string, Owner>();
   for (const system of order) {
     const groups = [
@@ -327,6 +360,10 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
 
   return {
     order,
+    viewKeys: [...views.keys()],
+    project(ctx) {
+      return Object.fromEntries([...views].map(([key, { view }]) => [key, view.project(ctx)]));
+    },
     initialWorld(time) {
       if (!Number.isInteger(time)) throw new RegistryError(`游戏时间必须是整数分钟：${time}`);
       const slices: Record<string, unknown> = {};

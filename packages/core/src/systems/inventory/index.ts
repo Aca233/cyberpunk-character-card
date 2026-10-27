@@ -28,6 +28,7 @@ import {
   type TradeCommand,
   TradeCommandSchema,
 } from "./schema";
+import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
   InventoryState,
@@ -94,7 +95,9 @@ export const inventory = defineSystem<
     },
   },
   rules: [partsRules],
+  view: { key: "inventory", project: inventoryView },
 });
 
 export * from "./apply";
 export * from "./schema";
+export * from "./view";

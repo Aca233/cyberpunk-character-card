@@ -9,6 +9,7 @@ import {
   type StandoffTick,
   StandoffTickSchema,
 } from "./schema";
+import { combatView } from "./view";
 
 export const combat = defineSystem<CombatState, CombatCommand, StandoffTick>({
   id: "combat",
@@ -27,8 +28,10 @@ export const combat = defineSystem<CombatState, CombatCommand, StandoffTick>({
     },
   },
   rules: [combatRules],
+  view: { key: "combat", project: combatView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";

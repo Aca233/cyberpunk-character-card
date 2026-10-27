@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
-import { applySidegig } from "./apply";
+import { WorldClockStateSchema } from "../world";
+import { applySidegig, sidegigsView } from "./apply";
 import { sidegigRules } from "./prompt";
 import {
   type SidegigCommand,
@@ -17,6 +18,16 @@ export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
   commands: { sidegig: SidegigCommandSchema },
   apply: (draft, command, ctx) => applySidegig(draft, command, ctx),
   rules: [sidegigRules],
+  view: {
+    key: "sidegigs",
+    project: ({ world, data }) =>
+      sidegigsView(
+        world.slices.sidegigs,
+        data,
+        WorldClockStateSchema.parse(world.slices.world).location,
+        world.time,
+      ),
+  },
 });
 
 export * from "./apply";

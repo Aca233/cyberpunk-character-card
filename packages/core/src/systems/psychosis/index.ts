@@ -1,10 +1,12 @@
 import { defineSystem } from "../../kernel/system";
+import { WorldClockStateSchema } from "../world";
 import {
   applyCrisis,
   applyEpisode,
   applyLostControl,
   closeBlackouts,
   openCrisis,
+  psychosisView,
   takeSuppressant,
   tickCrisis,
 } from "./apply";
@@ -63,6 +65,15 @@ export const psychosis = defineSystem<
   },
   tick: (draft, span) => tickCrisis(draft, span.to),
   rules: [suppressantRules],
+  view: {
+    key: "psychosis",
+    project: ({ world }) =>
+      psychosisView(
+        world.slices.psychosis,
+        world.time,
+        WorldClockStateSchema.parse(world.slices.world).scene,
+      ),
+  },
 });
 
 export * from "./apply";

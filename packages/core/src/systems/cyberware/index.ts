@@ -15,6 +15,7 @@ import {
   type RipperdocDebtCommand,
   RipperdocDebtCommandSchema,
 } from "./schema";
+import { cyberwareView } from "./view";
 
 /** 义体：按部位装卸，钱交给欧元系统扣，人性上限交给人性系统算 */
 export const cyberware = defineSystem<
@@ -44,8 +45,10 @@ export const cyberware = defineSystem<
       : applyCyberware(draft, command, catalog, ctx.now, ctx.read<EconomyState>("economy").eddies);
   },
   rules: [cyberwareRules],
+  view: { key: "cyberware", project: cyberwareView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";

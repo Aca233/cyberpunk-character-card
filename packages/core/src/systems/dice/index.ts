@@ -33,6 +33,10 @@ export const dice = defineSystem<DiceState, never, DiceInternal>({
     return { ok: true };
   },
   rules: [streetLegendRules, deathCityRules],
+  view: {
+    key: "difficulty",
+    project: ({ world }) => DiceStateSchema.parse(world.slices.dice).mode,
+  },
 });
 
 export * from "./apply";

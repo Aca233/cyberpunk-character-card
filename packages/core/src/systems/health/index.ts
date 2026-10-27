@@ -11,6 +11,7 @@ import {
   type HealthState,
   HealthStateSchema,
 } from "./schema";
+import { healthView } from "./view";
 
 export const health = defineSystem<HealthState, DamageCommand | HealCommand, HealthInternal>({
   id: "health",
@@ -48,7 +49,9 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
     }
   },
   tick: (draft, span) => bleed(draft, span),
+  view: { key: "health", project: healthView },
 });
 
 export * from "./apply";
 export * from "./schema";
+export * from "./view";

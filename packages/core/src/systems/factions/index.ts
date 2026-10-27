@@ -12,6 +12,7 @@ import {
   type FactionsState,
   FactionsStateSchema,
 } from "./schema";
+import { factionsView } from "./view";
 
 /**
  * 势力：每个帮派、公司对玩家的态度标签和一句理由，叙事模型按发生的事调整；
@@ -39,9 +40,11 @@ export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInt
   },
   tick: (draft, span, ctx) => tickAgendas(draft, span, ctx.data),
   rules: [factionRules, agendaRules],
+  view: { key: "factions", project: factionsView },
 });
 
 export * from "./agenda";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";
