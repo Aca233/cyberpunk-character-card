@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { type NpcState, NpcStateSchema } from "../npc";
+import { squadActions } from "./actions";
 import { applyMember, applySquad, squadView, tickSquad } from "./apply";
 import { squadRules } from "./prompt";
 import {
@@ -29,6 +30,7 @@ export const squad = defineSystem<SquadState, SquadCommand, SquadInternal>({
   },
   tick: (draft, span, ctx) => tickSquad(draft, span.to, ctx.read<NpcState>("npc").npcs),
   rules: [squadRules],
+  actions: squadActions,
   view: {
     key: "squad",
     project: ({ world }) =>
@@ -36,6 +38,7 @@ export const squad = defineSystem<SquadState, SquadCommand, SquadInternal>({
   },
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

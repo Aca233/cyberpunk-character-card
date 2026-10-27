@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
 import type { HealthState } from "../health";
+import { cyberwareActions } from "./actions";
 import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
 import { cyberwareRules } from "./prompt";
 import {
@@ -45,9 +46,11 @@ export const cyberware = defineSystem<
       : applyCyberware(draft, command, catalog, ctx.now, ctx.read<EconomyState>("economy").eddies);
   },
   rules: [cyberwareRules],
+  actions: cyberwareActions,
   view: { key: "cyberware", project: cyberwareView },
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

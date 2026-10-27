@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import type { JobsState } from "../jobs";
 import type { NpcState } from "../npc";
+import { phoneActions } from "./actions";
 import { readAll, receiveMessage, replyMessage } from "./apply";
 import { phoneRules } from "./prompt";
 import {
@@ -40,8 +41,10 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
     }
   },
   rules: [phoneRules],
+  actions: phoneActions,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

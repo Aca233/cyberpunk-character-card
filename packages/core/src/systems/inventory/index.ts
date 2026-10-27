@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
+import { inventoryActions } from "./actions";
 import {
   applyItem,
   applyMod,
@@ -95,9 +96,11 @@ export const inventory = defineSystem<
     },
   },
   rules: [partsRules],
+  actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./schema";
 export * from "./view";

@@ -1,4 +1,4 @@
-import type { TurnInput } from "@cp/core";
+import type { PlayerAction, TurnInput } from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -15,12 +15,11 @@ import { ChroniclePanel, type StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
 import { DivePanel } from "./DivePanel";
 import { FactionsPanel } from "./FactionsPanel";
-import type { HabitAction } from "./Habits";
 import { Hud, SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
 import { MapPanel } from "./MapPanel";
-import { type MemoryEdit, MemoryPanel } from "./MemoryPanel";
+import { MemoryPanel } from "./MemoryPanel";
 import { NewsPanel } from "./NewsPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
@@ -136,17 +135,18 @@ export function StoryScreen() {
     setToasts((t) => [...t, toast].slice(-6));
   }, []);
 
-  // 分配属性点：不调用模型，失败时用提示条说明原因
-  const spend = useCallback(
-    async (attribute: keyof View["character"]["attributes"]) => {
+  // 界面操作统一走这里：不调用模型，失败时用提示条说明原因，之后刷新状态。
+  // rethrow 时刷新后把错误抛回去，让确认框或表单留着
+  const act = useCallback(
+    async (action: PlayerAction, key: string, rethrow = false) => {
       try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "spendPoint", attribute },
-        });
+        await api.action(saveId, { requestId: newRequestId(), baseVersion: version, action });
       } catch (error) {
-        warn("spend", error);
+        warn(key, error);
+        if (rethrow) {
+          await refresh();
+          throw error;
+        }
       }
       await refresh();
     },
@@ -185,202 +185,13 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 在委托板上接单：不调用模型；失败时提示原因，确认框留着
-  const acceptJob = useCallback(
-    async (id: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "acceptJob", id },
-        });
-      } catch (error) {
-        warn("accept", error);
-        await refresh();
-        throw error;
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-
-  // 义体医生那里买、卸义体：不调用模型；失败时提示原因，确认框留着
-  const cyberAction = useCallback(
-    async (
-      action:
-        | { type: "buyCyberware"; id: string; credit: boolean }
-        | { type: "removeCyberware"; id: string }
-        | { type: "repairCyberware"; id: string }
-        | { type: "repayRipperdoc" },
-    ) => {
-      const doc = view?.ripperdoc;
-      if (!doc) return;
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { ...action, doc: doc.id },
-        });
-      } catch (error) {
-        warn("ripperdoc", error);
-        await refresh();
-        throw error;
-      }
-      await refresh();
-    },
-    [view?.ripperdoc, saveId, version, refresh, warn],
-  );
-
-  // 商店里买卖：不调用模型；失败时提示原因，确认框留着
-  const shopAction = useCallback(
-    async (type: "buyItem" | "sellItem", shop: string, id: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type, shop, id },
-        });
-      } catch (error) {
-        warn("shop", error);
-        await refresh();
-        throw error;
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-
-  // 装备栏里换装备：不调用模型；战斗中由代码拒绝
-  const gearAction = useCallback(
-    async (type: "equipItem" | "unequipItem", id: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type, id },
-        });
-      } catch (error) {
-        warn("gear", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  // 存放箱和后备箱：不调用模型；战斗中由代码拒绝
-  const stashAction = useCallback(
-    async (action: "store" | "take", item: string, where: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "stash", action, item, where },
-        });
-      } catch (error) {
-        warn("gear", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  const outfitAction = useCallback(
-    async (action: "save" | "wear") => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "outfit", action },
-        });
-      } catch (error) {
-        warn("gear", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
   // 打开消息：未读的标成已读，不调用模型
   const unread = view?.phone.unread ?? 0;
   const openPhone = useCallback(async () => {
     setAtPhone(true);
     if (unread === 0) return;
-    try {
-      await api.action(saveId, {
-        requestId: newRequestId(),
-        baseVersion: version,
-        action: { type: "readMessages" },
-      });
-    } catch (error) {
-      warn("phone", error);
-    }
-    await refresh();
-  }, [saveId, version, refresh, warn, unread]);
-  // 改习惯：不调用模型，失败时用提示条说明原因
-  const habitAction = useCallback(
-    async (action: HabitAction, text: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "habit", action, text },
-        });
-      } catch (error) {
-        warn("habit", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  // 改、删记忆：不调用模型；失败时提示原因，表单留着
-  const memoryAction = useCallback(
-    async (edit: MemoryEdit) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "editMemory", ...edit },
-        });
-      } catch (error) {
-        warn("memory", error);
-        await refresh();
-        throw error;
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  // 给故事收尾：不调用模型；之后存档只读，失败时确认框留着
-  const endStory = useCallback(
-    async (how: StoryEnd, epitaph: string | undefined) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
-        });
-      } catch (error) {
-        warn("chronicle", error);
-        await refresh();
-        throw error;
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  // 超梦编辑器标线索：不调用模型、不花时间
-  const markClue = useCallback(
-    async (point: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "braindance", action: "mark", point },
-        });
-      } catch (error) {
-        warn("braindance", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
+    await act({ type: "readMessages" }, "phone");
+  }, [act, unread]);
   // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
   const bdKey = view?.braindance.active
     ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
@@ -391,67 +202,13 @@ export function StoryScreen() {
     bdSeen.current = bdKey;
     setAtBraindance(true);
   }, [bdKey]);
-  const craftAction = useCallback(
-    async (action: "dismantle" | "tune", id: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "craft", action, id },
-        });
-      } catch (error) {
-        warn("craft", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  const squadAction = useCallback(
-    async (action: "accept" | "decline" | "dismiss" | "pay", npc: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "squad", action, npc },
-        });
-      } catch (error) {
-        warn("squad", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  const modAction = useCallback(
-    async (action: "attach" | "detach", weapon: string, mod: string) => {
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "modWeapon", action, weapon, mod },
-        });
-      } catch (error) {
-        warn("gear", error);
-      }
-      await refresh();
-    },
-    [saveId, version, refresh, warn],
-  );
-  // 买公寓：不调用模型；钱不够、这里已经有住处时由代码拒绝
+  // 买公寓：先关闭确认框，再提交操作；失败时提示原因
   const homeAction = useCallback(
     async (id: string) => {
       setBuyingHome(null);
-      try {
-        await api.action(saveId, {
-          requestId: newRequestId(),
-          baseVersion: version,
-          action: { type: "buyHome", id },
-        });
-      } catch (error) {
-        warn("home", error);
-      }
-      await refresh();
+      await act({ type: "buyHome", id }, "home");
     },
-    [saveId, version, refresh, warn],
+    [act],
   );
 
   const send = useCallback(
@@ -629,17 +386,31 @@ export function StoryScreen() {
       {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
       <SidePanel
         view={view}
-        onSpend={busy || offers?.rolled ? undefined : (a) => void spend(a)}
+        onSpend={
+          busy || offers?.rolled
+            ? undefined
+            : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
+        }
         onJournal={(board) => setJournal(board ? "board" : "active")}
         onRipperdoc={() => setAtDoc(true)}
         onShop={setAtShop}
-        onEquip={busy ? undefined : (id) => void gearAction("equipItem", id)}
-        onUnequip={busy ? undefined : (id) => void gearAction("unequipItem", id)}
-        onOutfit={busy ? undefined : (action) => void outfitAction(action)}
-        onMod={busy ? undefined : (action, weapon, mod) => void modAction(action, weapon, mod)}
-        onHabit={busy ? undefined : (action, text) => void habitAction(action, text)}
-        onSquad={busy ? undefined : (action, npc) => void squadAction(action, npc)}
-        onCraft={busy ? undefined : (action, id) => void craftAction(action, id)}
+        onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
+        onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
+        onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
+        onMod={
+          busy
+            ? undefined
+            : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
+        }
+        onHabit={
+          busy ? undefined : (action, text) => void act({ type: "habit", action, text }, "habit")
+        }
+        onSquad={
+          busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
+        }
+        onCraft={
+          busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
+        }
         onPhone={() => void openPhone()}
         onMap={() => setAtMap(true)}
         onFactions={() => setAtFactions(true)}
@@ -787,7 +558,11 @@ export function StoryScreen() {
         <Journal
           view={view}
           initialTab={journal}
-          onAccept={busy || offers?.rolled ? undefined : acceptJob}
+          onAccept={
+            busy || offers?.rolled
+              ? undefined
+              : (id) => act({ type: "acceptJob", id }, "accept", true)
+          }
           onClose={closeJournal}
         />
       )}
@@ -799,8 +574,16 @@ export function StoryScreen() {
               <Shop
                 view={view}
                 shop={shop}
-                onBuy={busy ? undefined : (id) => shopAction("buyItem", shop.id, id)}
-                onSell={busy ? undefined : (id) => shopAction("sellItem", shop.id, id)}
+                onBuy={
+                  busy
+                    ? undefined
+                    : (id) => act({ type: "buyItem", shop: shop.id, id }, "shop", true)
+                }
+                onSell={
+                  busy
+                    ? undefined
+                    : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
+                }
                 onClose={() => setAtShop(null)}
               />
             )
@@ -811,18 +594,52 @@ export function StoryScreen() {
           view={view}
           doc={view.ripperdoc}
           onBuy={
-            busy ? undefined : (id, credit) => cyberAction({ type: "buyCyberware", id, credit })
+            busy
+              ? undefined
+              : async (id, credit) => {
+                  const doc = view.ripperdoc;
+                  if (!doc) return;
+                  await act({ type: "buyCyberware", id, credit, doc: doc.id }, "ripperdoc", true);
+                }
           }
-          onRemove={busy ? undefined : (id) => cyberAction({ type: "removeCyberware", id })}
-          onRepay={busy ? undefined : () => cyberAction({ type: "repayRipperdoc" })}
-          onRepair={busy ? undefined : (id) => cyberAction({ type: "repairCyberware", id })}
+          onRemove={
+            busy
+              ? undefined
+              : async (id) => {
+                  const doc = view.ripperdoc;
+                  if (!doc) return;
+                  await act({ type: "removeCyberware", id, doc: doc.id }, "ripperdoc", true);
+                }
+          }
+          onRepay={
+            busy
+              ? undefined
+              : async () => {
+                  const doc = view.ripperdoc;
+                  if (!doc) return;
+                  await act({ type: "repayRipperdoc", doc: doc.id }, "ripperdoc", true);
+                }
+          }
+          onRepair={
+            busy
+              ? undefined
+              : async (id) => {
+                  const doc = view.ripperdoc;
+                  if (!doc) return;
+                  await act({ type: "repairCyberware", id, doc: doc.id }, "ripperdoc", true);
+                }
+          }
           onClose={() => setAtDoc(false)}
         />
       )}
       {atStash && (
         <StashPanel
           view={view}
-          onMove={busy ? undefined : (action, item, where) => void stashAction(action, item, where)}
+          onMove={
+            busy
+              ? undefined
+              : (action, item, where) => void act({ type: "stash", action, item, where }, "gear")
+          }
           onClose={() => setAtStash(false)}
         />
       )}
@@ -859,14 +676,19 @@ export function StoryScreen() {
       {atMemory && (
         <MemoryPanel
           view={view}
-          onEdit={busy ? undefined : memoryAction}
+          onEdit={busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)}
           onClose={() => setAtMemory(false)}
         />
       )}
       {atChronicle && (
         <ChroniclePanel
           view={view}
-          onEnd={busy || view.death || view.ended ? undefined : endStory}
+          onEnd={
+            busy || view.death || view.ended
+              ? undefined
+              : (how: StoryEnd, epitaph: string | undefined) =>
+                  act({ type: "endStory", how, ...(epitaph ? { epitaph } : {}) }, "chronicle", true)
+          }
           onClose={() => setAtChronicle(false)}
         />
       )}
@@ -874,7 +696,11 @@ export function StoryScreen() {
       {atBraindance && view.braindance.active && (
         <BraindanceEditor
           view={view}
-          onMark={busy ? undefined : (point) => void markClue(point)}
+          onMark={
+            busy
+              ? undefined
+              : (point) => void act({ type: "braindance", action: "mark", point }, "braindance")
+          }
           onConclude={
             busy || offers?.rolled
               ? undefined

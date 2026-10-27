@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { memoryActions } from "./actions";
 import { applySceneSummary, editSceneSummary, logMemoryEdit } from "./apply";
 import {
   MemoryEditCommandSchema,
@@ -29,8 +30,10 @@ export const memory = defineSystem<MemoryState, never, MemoryInternal>({
     if (command.type === "memory.log") return logMemoryEdit(draft, command, ctx.now);
     return applySceneSummary(draft, command, ctx.now);
   },
+  actions: memoryActions,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

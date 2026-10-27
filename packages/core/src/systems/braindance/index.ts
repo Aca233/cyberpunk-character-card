@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { braindanceActions } from "./actions";
 import { applyBraindanceConclude, applyBraindanceMark, applyBraindanceStart } from "./apply";
 import { braindanceRules } from "./prompt";
 import {
@@ -34,6 +35,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
     }
   },
   rules: [braindanceRules],
+  actions: braindanceActions,
   view: {
     key: "braindance",
     project: ({ world }) =>
@@ -41,6 +43,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
   },
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

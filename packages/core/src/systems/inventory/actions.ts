@@ -1,0 +1,166 @@
+import { z } from "zod";
+import { type Command, defineAction } from "../../kernel/system";
+import type { WorldState } from "../../kernel/world";
+import { CharacterStateSchema } from "../character";
+import { EconomyStateSchema } from "../economy";
+import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./apply";
+import { InventoryStateSchema } from "./schema";
+
+/** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
+export const EquipItemActionSchema = z.strictObject({
+  type: z.literal("equipItem"),
+  id: z.string().min(1).max(64),
+  slot: z.number().int().min(1).max(3).optional(),
+});
+
+/** 把装备栏里的一件放回背包 */
+export const UnequipItemActionSchema = z.strictObject({
+  type: z.literal("unequipItem"),
+  id: z.string().min(1).max(64),
+});
+
+/** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
+export const OutfitActionSchema = z.strictObject({
+  type: z.literal("outfit"),
+  action: z.enum(["save", "wear"]),
+});
+
+/** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
+export const ModWeaponActionSchema = z.strictObject({
+  type: z.literal("modWeapon"),
+  action: z.enum(["attach", "detach"]),
+  weapon: z.string().min(1).max(64),
+  mod: z.string().min(1).max(64),
+});
+
+/** 工作台：dismantle 把背包里的一件拆成零件，tune 用零件给武器升一档稀有度 */
+export const CraftActionSchema = z.strictObject({
+  type: z.literal("craft"),
+  action: z.enum(["dismantle", "tune"]),
+  id: z.string().min(1).max(64),
+});
+
+/** 在商店买一件，放进背包 */
+export const BuyItemActionSchema = z.strictObject({
+  type: z.literal("buyItem"),
+  shop: z.string().min(1).max(40),
+  id: z.string().min(1).max(64),
+});
+
+/** 把背包里的一件卖给商店 */
+export const SellItemActionSchema = z.strictObject({
+  type: z.literal("sellItem"),
+  shop: z.string().min(1).max(40),
+  id: z.string().min(1).max(64),
+});
+
+type ShopAction = z.infer<typeof BuyItemActionSchema> | z.infer<typeof SellItemActionSchema>;
+
+/** 商店的买卖：人要在店里；买的要在货架上、肯卖，卖的只收背包里的 */
+function shopCommands(
+  world: WorldState,
+  action: ShopAction,
+  data: Readonly<Record<string, unknown>>,
+): Command[] | string {
+  const shop = shopList(data).find((s) => s.id === action.shop);
+  if (!shop) return `没有叫 ${action.shop} 的商店`;
+  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+  if (here !== shop.location) return `不在${shop.name}，先去那里`;
+  const catalog = itemCatalog(data);
+  if (action.type === "sellItem") {
+    const def = catalog.get(action.id);
+    if (!def) return `物品表里没有 ${action.id}`;
+    const inventory = InventoryStateSchema.parse(world.slices.inventory);
+    if ((inventory.backpack[def.id] ?? 0) < 1) return `背包里没有${def.name}；装备着的先卸下`;
+    const lastOne = !inventory.weapons.includes(def.id) && inventory.backpack[def.id] === 1;
+    if (lastOne && inventory.mods[def.id] !== undefined) {
+      return `${def.name}上还装着改装件，先拆下来再卖`;
+    }
+    const value = sellValue(def);
+    if (value <= 0)
+      return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
+    return [
+      { type: "item", action: "lose", id: def.id, reason: `卖给${shop.name}` },
+      { type: "money", delta: value, reason: `${shop.name}收购${def.name}` },
+    ];
+  }
+  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
+  const held = InventoryStateSchema.parse(world.slices.inventory);
+  const stock = currentStock(held.shopStock[shop.id], world.time);
+  const item = shopShelf(shop, catalog, streetCred, stock).find((i) => i.def.id === action.id);
+  if (!item) return `${shop.name}的货架上没有这件`;
+  if (item.locked) return `${shop.name}不卖${item.def.name}：${item.locked}`;
+  const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
+  if (item.price > eddies) return `欧元不够：${item.def.name}要 ${item.price}，身上只有 ${eddies}`;
+  return [
+    { type: "money", delta: -item.price, reason: `在${shop.name}买${item.def.name}` },
+    { type: "item", action: "gain", id: item.def.id, reason: `在${shop.name}买下` },
+    { type: "inventory.sold", shop: shop.id, item: item.def.id, at: world.time },
+  ];
+}
+
+function inCombat(world: WorldState): boolean {
+  return Boolean((world.slices.combat as { active?: unknown } | undefined)?.active);
+}
+
+/** 装备栏、工作台和商店的操作：只翻成指令，统一由操作入口结算 */
+export const inventoryActions = {
+  // 战斗里换装备要花一个动作，只能在行动里说
+  equipItem: defineAction({
+    schema: EquipItemActionSchema,
+    commands: (action, { world }) => {
+      if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
+      return [
+        {
+          type: "item",
+          action: "equip",
+          id: action.id,
+          reason: "在装备栏里换",
+          ...(action.slot !== undefined ? { slot: action.slot } : {}),
+        },
+      ];
+    },
+  }),
+  unequipItem: defineAction({
+    schema: UnequipItemActionSchema,
+    commands: (action, { world }) => {
+      if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
+      return [{ type: "item", action: "unequip", id: action.id, reason: "在装备栏里换" }];
+    },
+  }),
+  outfit: defineAction({
+    schema: OutfitActionSchema,
+    commands: (action, { world }) => {
+      if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
+      return [{ type: "inventory.outfit", action: action.action }];
+    },
+  }),
+  modWeapon: defineAction({
+    schema: ModWeaponActionSchema,
+    commands: (action, { world }) => {
+      if (inCombat(world)) return "战斗中来不及改装武器";
+      return [
+        { type: "inventory.mod", action: action.action, weapon: action.weapon, mod: action.mod },
+      ];
+    },
+  }),
+  craft: defineAction({
+    schema: CraftActionSchema,
+    commands: (action, { world }) => {
+      if (inCombat(world)) return "战斗中顾不上拆装";
+      if (action.action === "dismantle") return [{ type: "inventory.dismantle", id: action.id }];
+      const attributes = (world.slices.character as { attributes?: { tech?: unknown } } | undefined)
+        ?.attributes;
+      const tech = typeof attributes?.tech === "number" ? attributes.tech : 0;
+      return [{ type: "inventory.tune", id: action.id, tech }];
+    },
+  }),
+  buyItem: defineAction({
+    schema: BuyItemActionSchema,
+    commands: (action, { world, data }) => shopCommands(world, action, data),
+  }),
+  sellItem: defineAction({
+    schema: SellItemActionSchema,
+    commands: (action, { world, data }) => shopCommands(world, action, data),
+  }),
+};

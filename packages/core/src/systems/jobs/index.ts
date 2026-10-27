@@ -4,6 +4,7 @@ import type { HumanityState } from "../humanity";
 import type { NpcState } from "../npc";
 import { inCrisis, type PsychosisState } from "../psychosis";
 import type { SquadState } from "../squad";
+import { jobsActions } from "./actions";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsRules } from "./prompt";
 import {
@@ -65,8 +66,10 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   },
   tick: (draft, span) => tickJobs(draft, span),
   rules: [jobsRules],
+  actions: jobsActions,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

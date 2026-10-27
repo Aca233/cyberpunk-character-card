@@ -115,6 +115,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly rules?: readonly RuleModule<S>[];
   /** 这个系统交给玩家投影的一块；诉求、底线、秘密、隐藏转折这类只给模型看的东西不能放进来 */
   readonly view?: SystemView;
+  /** 玩家在界面上直接做的操作：键等于操作的 type，同一个 type 只能由一个系统交 */
+  readonly actions?: Readonly<Record<string, PlayerActionDef>>;
 }
 
 /** 投影时系统看到的环境：只读，不能改状态 */
@@ -129,6 +131,26 @@ export interface ViewContext {
 export interface SystemView {
   readonly key: string;
   project(ctx: ViewContext): unknown;
+}
+
+/** 界面操作翻成指令时看到的环境：整个世界的只读快照，操作的前提可能要看别的系统 */
+export interface ActionContext {
+  readonly world: WorldState;
+  readonly data: Readonly<Record<string, unknown>>;
+}
+
+/** 一种界面操作：schema 校验请求；commands 翻成内部指令，返回字符串表示操作不成立 */
+// biome-ignore lint/suspicious/noExplicitAny: 注册表要存放请求格式各不相同的操作
+export interface PlayerActionDef<A extends { readonly type: string } = any> {
+  readonly schema: z.ZodType<A>;
+  commands(action: A, ctx: ActionContext): Command[] | string;
+}
+
+/** 给系统定义一种界面操作时用，保留请求的类型 */
+export function defineAction<A extends { readonly type: string }>(
+  def: PlayerActionDef<A>,
+): PlayerActionDef<A> {
+  return def;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: 注册表要存放状态和指令类型各不相同的系统
@@ -198,6 +220,12 @@ export interface Registry {
   readonly viewKeys: readonly string[];
   /** 按系统顺序调用各系统的 view，返回 字段名 → 投影；只读，不改状态 */
   project(ctx: ViewContext): Readonly<Record<string, unknown>>;
+  /** 已注册的界面操作类型 */
+  actionTypes(): readonly string[];
+  /** 界面操作的请求 schema；不包含叙事模型指令或内部指令 */
+  actionSchema(type: string): z.ZodType<{ readonly type: string }> | undefined;
+  /** 查表校验并翻成内部指令；返回字符串表示拒绝，只读，不结算 */
+  actionCommands(raw: unknown, ctx: ActionContext): Command[] | string;
 }
 
 interface Owner {
@@ -222,6 +250,18 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       );
     }
     views.set(view.key, { systemId: system.id, view });
+  }
+  const actions = new Map<string, { readonly systemId: string; readonly def: PlayerActionDef }>();
+  for (const system of order) {
+    for (const [type, def] of Object.entries(system.actions ?? {})) {
+      const existing = actions.get(type);
+      if (existing) {
+        throw new RegistryError(
+          `界面操作 ${type} 同时由 ${existing.systemId} 和 ${system.id} 注册`,
+        );
+      }
+      actions.set(type, { systemId: system.id, def });
+    }
   }
   const owners = new Map<string, Owner>();
   for (const system of order) {
@@ -363,6 +403,27 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     viewKeys: [...views.keys()],
     project(ctx) {
       return Object.fromEntries([...views].map(([key, { view }]) => [key, view.project(ctx)]));
+    },
+    actionTypes: () => [...actions.keys()],
+    actionSchema(type) {
+      return actions.get(type)?.def.schema;
+    },
+    actionCommands(raw, ctx) {
+      const type =
+        typeof raw === "object" && raw !== null && !Array.isArray(raw)
+          ? (raw as { type?: unknown }).type
+          : undefined;
+      if (typeof type !== "string") return "界面操作缺少 type 字段";
+      const entry = actions.get(type);
+      if (!entry) return `未知的界面操作类型：${type}`;
+      const parsed = entry.def.schema.safeParse(raw);
+      if (!parsed.success) return parsed.error.message;
+      if (parsed.data.type !== type) {
+        throw new RegistryError(
+          `${entry.systemId} 的界面操作 ${type} 与 schema 输出的 type 不一致`,
+        );
+      }
+      return entry.def.commands(parsed.data, ctx);
     },
     initialWorld(time) {
       if (!Number.isInteger(time)) throw new RegistryError(`游戏时间必须是整数分钟：${time}`);

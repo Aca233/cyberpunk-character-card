@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { chronicleActions } from "./actions";
 import { applyChronicle, applyChronicleEnd, applyChronicleSeed } from "./apply";
 import { chronicleRules } from "./prompt";
 import {
@@ -32,8 +33,10 @@ export const chronicle = defineSystem<ChronicleState, ChronicleCommand, Chronicl
     return applyChronicle(draft, command, ctx.now);
   },
   rules: [chronicleRules],
+  actions: chronicleActions,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
