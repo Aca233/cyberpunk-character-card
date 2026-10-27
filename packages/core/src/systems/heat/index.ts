@@ -27,6 +27,7 @@ import {
   HeatStateSchema,
 } from "./schema";
 import { heatThreats } from "./threats";
+import { heatView } from "./view";
 
 function districtOf(
   location: string | null,
@@ -89,6 +90,7 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
     threats: heatThreats,
     events: heatEvents,
     feed: heatFeed,
+    view: { key: "heat", project: heatView },
   },
 );
 
@@ -98,3 +100,4 @@ export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./threats";
+export * from "./view";

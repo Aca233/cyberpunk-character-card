@@ -21,6 +21,7 @@ import {
   SeedFixerSchema,
 } from "./schema";
 import { jobsSections } from "./sections";
+import { jobsView } from "./view";
 
 /** 委托和中间人：委托卡、进展笔记、结局、中间人好感和结算；报酬交给欧元系统，声望交给角色系统 */
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
@@ -73,6 +74,7 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   sections: jobsSections,
   objectives: jobsObjectives,
   events: jobsEvents,
+  view: { key: "jobs", project: jobsView },
 });
 
 export * from "./actions";
@@ -82,3 +84,4 @@ export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";
+export * from "./view";

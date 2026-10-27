@@ -6,6 +6,8 @@ import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from
 import { cyberwareEvents } from "./events";
 import { cyberwareInteractions } from "./interactions";
 import { cyberwareRules } from "./prompt";
+import { ripperdocDebtsView, ripperdocView } from "./ripperdoc";
+import { sandevistanView } from "./sandevistan";
 import {
   type BoostCommand,
   BoostCommandSchema,
@@ -50,6 +52,11 @@ export const cyberware = defineSystem<
   rules: [cyberwareRules],
   actions: cyberwareActions,
   view: { key: "cyberware", project: cyberwareView },
+  views: [
+    { key: "ripperdoc", project: ripperdocView },
+    { key: "ripperdocDebts", project: ripperdocDebtsView },
+    { key: "sandevistan", project: sandevistanView },
+  ],
   interactions: cyberwareInteractions,
   events: cyberwareEvents,
 });
@@ -59,5 +66,7 @@ export * from "./apply";
 export * from "./events";
 export * from "./interactions";
 export * from "./prompt";
+export * from "./ripperdoc";
+export * from "./sandevistan";
 export * from "./schema";
 export * from "./view";

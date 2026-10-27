@@ -114,6 +114,26 @@ describe("createRegistry", () => {
     );
   });
 
+  it("一个系统可以交多个投影；投影字段重名时拒绝，同一系统里重名也算", () => {
+    const viewer = (id: string, keys: readonly string[]): AnySystem => ({
+      ...stub(id),
+      view: { key: keys[0] ?? id, project: () => `${id}:${keys[0]}` },
+      views: keys.slice(1).map((key) => ({ key, project: () => `${id}:${key}` })),
+    });
+    const registry = createRegistry([viewer("a", ["one", "two", "three"])]);
+    const world = registry.initialWorld(T0);
+    expect(registry.viewKeys).toEqual(["one", "two", "three"]);
+    expect(registry.project({ world, records: [], data: {} })).toEqual({
+      one: "a:one",
+      two: "a:two",
+      three: "a:three",
+    });
+    expect(() => createRegistry([viewer("a", ["one", "one"])])).toThrow(/one/);
+    expect(() => createRegistry([viewer("a", ["one"]), viewer("b", ["two", "one"])])).toThrow(
+      /one 同时由 a 和 b/,
+    );
+  });
+
   it("初始世界包含时间和每个系统的初始状态", () => {
     const registry = createRegistry([counter, stub("a")]);
     expect(registry.initialWorld(T0)).toEqual({

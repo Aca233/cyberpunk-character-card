@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyNpc, applyNpcPast, applyOffscreenDeath, editNpcMemory, seedNpc } from "./apply";
+import { perceivedView } from "./perceived";
 import { npcRules } from "./prompt";
 import {
   AffinityProposalSchema,
@@ -30,6 +31,7 @@ import {
   SeedNpcSchema,
 } from "./schema";
 import { npcSections } from "./sections";
+import { npcsView } from "./view";
 
 /** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、生死和位置、血量装备义体人性；路人不建卡 */
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
@@ -72,10 +74,14 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   },
   rules: [npcRules],
   sections: npcSections,
+  view: { key: "npcs", project: npcsView },
+  views: [{ key: "perceived", project: perceivedView }],
 });
 
 export * from "./apply";
 export * from "./body";
+export * from "./perceived";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";
+export * from "./view";

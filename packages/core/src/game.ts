@@ -10,90 +10,44 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
-import { chronicleEntries } from "./legends";
 import { readVoices } from "./narrator/block";
 import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
-import { ArcsStateSchema, arcCatalog, CONCERN_STATUS_LABELS } from "./systems/arcs";
+import type { arcCardsView } from "./systems/arcs";
 import type { braindanceView } from "./systems/braindance";
 import type { characterView } from "./systems/character";
-import { credTier } from "./systems/character/apply";
-import {
-  CharacterStateSchema,
-  effectiveAttribute,
-  effectiveAttributes,
-} from "./systems/character/schema";
-import { ChronicleStateSchema, ENDING_LABELS } from "./systems/chronicle/schema";
+import { CharacterStateSchema, effectiveAttribute } from "./systems/character/schema";
+import type { chronicleView, endedView } from "./systems/chronicle";
 import type { bulletinsView } from "./systems/city";
 import type { combatView } from "./systems/combat";
-import { bonusText, type cyberwareView } from "./systems/cyberware";
 import {
-  cyberwareCatalog,
-  repairCost,
-  ripperdocList,
-  ripperdocShelf,
-  tradeInValue,
-} from "./systems/cyberware/apply";
-import {
-  BOOST_SLOTS,
-  BOOST_WINDOW,
   type CyberwareDef,
-  type CyberwareSlot,
-  CyberwareStateSchema,
-  type RipperdocDebt,
-  SLOT_LABELS,
-} from "./systems/cyberware/schema";
+  type cyberwareView,
+  type ripperdocDebtsView,
+  type ripperdocView,
+  sandevistanOf,
+  type sandevistanView,
+} from "./systems/cyberware";
 import {
   ATTRIBUTE_LABELS,
   DiceStateSchema,
   type Difficulty,
   OPPONENT_TIERS,
 } from "./systems/dice/schema";
-import { keeperOf, type moneyView, RARITY_LABELS } from "./systems/economy";
+import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
-import { HealthStateSchema, type healthView, LIMB_LABELS, woundTag } from "./systems/health";
-import { shownStars } from "./systems/heat/apply";
-import { EVENT_LABELS, HEAT_DECAY_MINUTES, HeatStateSchema } from "./systems/heat/schema";
+import { HealthStateSchema, type healthView } from "./systems/health";
+import type { heatView } from "./systems/heat";
 import type { humanityView } from "./systems/humanity";
-import type { inventoryView } from "./systems/inventory";
-import {
-  currentStock,
-  itemCatalog,
-  restockDue,
-  sellValue,
-  shopList,
-  shopShelf,
-} from "./systems/inventory/apply";
-import {
-  ClothingSlotSchema,
-  type InventoryState,
-  InventoryStateSchema,
-  ITEM_KIND_LABELS,
-  type ItemDef,
-  WEAPON_CATEGORY_LABELS,
-} from "./systems/inventory/schema";
-import { isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./systems/jobs/apply";
-import { JOB_KIND_LABELS, JobsStateSchema } from "./systems/jobs/schema";
-import { IMPORTANCE_LABELS, MemoryStateSchema } from "./systems/memory/schema";
+import type { ItemDef, inventoryView, namesView, shopsView } from "./systems/inventory";
+import type { jobsView } from "./systems/jobs";
+import type { memoryView } from "./systems/memory";
 import type { ncpdView } from "./systems/ncpd";
-import {
-  NEMESIS_CRED_HALVES,
-  NEMESIS_END_LABELS,
-  NEMESIS_STYLE_LABELS,
-  NemesisStateSchema,
-} from "./systems/nemesis";
-import { deathKnown } from "./systems/npc/apply";
-import { attributeSum, bodyView } from "./systems/npc/body";
-import { onStage } from "./systems/npc/prompt";
-import {
-  KNOWN_SOURCE_LABELS,
-  LEDGER_KIND_LABELS,
-  type NpcCard,
-  NpcStateSchema,
-} from "./systems/npc/schema";
-import { PhoneStateSchema, type phoneCallsView } from "./systems/phone";
+import type { nemesesEndedView, nemesisCardsView } from "./systems/nemesis";
+import type { NpcCard, npcsView, perceivedView } from "./systems/npc";
+import { type phoneCallsView, phoneFeedUnread, type phoneMessagesView } from "./systems/phone";
 import { blackoutTurns, lostControlOf, type psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import type { HomeDef, safehouseView } from "./systems/safehouse";
@@ -111,7 +65,7 @@ import {
 } from "./systems/travel";
 import type { worldView } from "./systems/world";
 import { formatGameTime } from "./systems/world/apply";
-import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
+import { type LocationDef, WorldClockStateSchema } from "./systems/world/schema";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -367,28 +321,8 @@ function homeSeed(content: GameContent, origin: string | undefined): unknown[] {
     : [];
 }
 
-/** 装着、没坏的第一件加速义体；cost 是再开一次扣多少人性 */
-export function sandevistanOf(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-): {
-  readonly id: string;
-  readonly name: string;
-  readonly slots: number;
-  readonly cost: number;
-} | null {
-  const parts = cyberwareCatalog(data);
-  const broken = HealthStateSchema.parse(world.slices.health).brokenChrome;
-  const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
-  for (const c of state.installed) {
-    const def = parts.get(c.id);
-    if (!def?.accelerator || broken.includes(c.id)) continue;
-    const last = state.boost;
-    const cost = last && world.time - last.lastAt <= BOOST_WINDOW ? last.count + 1 : 1;
-    return { id: def.id, name: def.name, slots: BOOST_SLOTS[def.rarity], cost };
-  }
-  return null;
-}
+/** 装着、没坏的第一件加速义体；定义搬进了 cyberware 系统，这里转出保持导出名不变 */
+export { sandevistanOf } from "./systems/cyberware";
 
 /** 这一轮能不能开斯安威斯坦；能开时返回 null，否则返回原因 */
 export function sandevistanBlock(
@@ -400,126 +334,6 @@ export function sandevistanBlock(
     return "现在不是生死瞬间：叙事模型标记了 clutch 才能开斯安威斯坦";
   }
   return sandevistanOf(world, data) ? null : "没装能用的加速义体";
-}
-
-function ripperdocView(
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-  streetCred: number,
-  installed: readonly { readonly id: string; readonly slot: CyberwareSlot }[],
-  parts: ReadonlyMap<string, CyberwareDef>,
-  debts: readonly RipperdocDebt[],
-  broken: readonly string[],
-  npcs: Parameters<typeof keeperOf>[1],
-) {
-  const doc =
-    location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
-  if (!doc) return null;
-  const debt = debts.find((d) => d.doc === doc.id);
-  const keeper = keeperOf(doc.keeperNpc, npcs);
-  return {
-    id: doc.id,
-    name: doc.name,
-    /** 医生对你的好感；没有人物卡或还没见过是 null */
-    affinity: keeper?.affinity ?? null,
-    note: doc.note,
-    blackMarket: doc.blackMarket,
-    /** 最多肯赊多少；0 是不赊账 */
-    credit: doc.credit,
-    /** 欠这位医生的钱 */
-    debt: debt ? { amount: debt.amount, due: formatGameTime(debt.due) } : null,
-    /** 卸下装着的义体时回收多少，按义体 id */
-    buyback: Object.fromEntries(
-      installed.map((c) => {
-        const def = parts.get(c.id);
-        return [c.id, def ? tradeInValue(def) : 0];
-      }),
-    ) as Readonly<Record<string, number>>,
-    /** 打坏的义体修好要多少，按义体 id；没坏的不列 */
-    repair: Object.fromEntries(
-      installed.flatMap((c) => {
-        const def = parts.get(c.id);
-        return def && broken.includes(c.id) ? [[c.id, repairCost(def)]] : [];
-      }),
-    ) as Readonly<Record<string, number>>,
-    shelf: ripperdocShelf(doc, parts, streetCred, installed, keeper).map((item) => ({
-      id: item.def.id,
-      name: item.def.name,
-      slot: item.def.slot,
-      slotLabel: SLOT_LABELS[item.def.slot],
-      rarity: item.def.rarity,
-      rarityLabel: RARITY_LABELS[item.def.rarity],
-      price: item.price,
-      tradeIn: item.tradeIn,
-      net: item.net,
-      humanityCost: item.def.humanityCost,
-      ability: item.def.ability,
-      bonusText: bonusText(item.def),
-      locked: item.locked,
-      installed: item.installed,
-      replaces: item.replaces?.name ?? null,
-    })),
-  };
-}
-
-const CLOTHING_SLOTS = ClothingSlotSchema.options;
-
-/** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
-/** 这一批卖过货时，下次补满的时间写成文字 */
-function restockLabel(due: number | null): string | null {
-  return due === null ? null : formatGameTime(due);
-}
-
-function shopsView(
-  data: Readonly<Record<string, unknown>>,
-  location: string | null,
-  streetCred: number,
-  inventory: InventoryState,
-  now: number,
-  npcs: Parameters<typeof keeperOf>[1],
-) {
-  if (location === null || data.items === undefined) return [];
-  const catalog = itemCatalog(data);
-  const here = shopList(data).filter((s) => s.location === location);
-  if (here.length === 0) return [];
-  const sell = Object.entries(inventory.backpack).flatMap(([id, count]) => {
-    const def = catalog.get(id);
-    return def ? [{ id, name: def.name, count, value: sellValue(def) }] : [];
-  });
-  return here.map((shop) => {
-    const keeper = keeperOf(shop.keeperNpc, npcs);
-    return {
-      id: shop.id,
-      name: shop.name,
-      keeper: shop.keeper,
-      /** 店主对你的好感；店主没有人物卡或还没见过是 null */
-      keeperAffinity: keeper?.affinity ?? null,
-      note: shop.note,
-      blackMarket: shop.blackMarket,
-      restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
-      shelf: shopShelf(
-        shop,
-        catalog,
-        streetCred,
-        currentStock(inventory.shopStock[shop.id], now),
-        keeper,
-      ).map(({ def, price, locked, left }) => ({
-        id: def.id,
-        name: def.name,
-        group:
-          def.kind === "weapon" && def.category
-            ? WEAPON_CATEGORY_LABELS[def.category]
-            : ITEM_KIND_LABELS[def.kind],
-        rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
-        price,
-        ability: def.ability ?? null,
-        locked,
-        left,
-      })),
-      /** 背包里的东西卖给这家店给多少；0 是不收 */
-      sell,
-    };
-  });
 }
 
 /** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
@@ -563,8 +377,8 @@ export function sceneStartSeq(initial: WorldState, records: readonly LogRecord[]
   return start;
 }
 
-/** 状态接口带上的已结束委托，最近的优先 */
-export const JOBS_CLOSED_SHOWN = 5;
+/** 状态接口带上的已结束委托，最近的优先；定义搬进了 jobs 系统，这里转出保持导出名不变 */
+export { JOBS_CLOSED_SHOWN } from "./systems/jobs";
 
 function turnInput(raw: unknown): TurnInput {
   const parsed = TurnInputSchema.safeParse(raw);
@@ -634,118 +448,13 @@ function projectOffers(world: WorldState, records: readonly LogRecord[]) {
   };
 }
 
-const CJK = /[\u3400-\u9fff]/;
-
-/** 物品和地点的中文名；表外的物品用 id，表外的地点只有本身是中文时才当名字 */
-function displayNames(
-  data: Readonly<Record<string, unknown>>,
-  inventory: InventoryState,
-  location: string | null,
-) {
-  const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
-  const ids = new Set([
-    ...inventory.weapons.filter((w): w is string => w !== null),
-    ...(inventory.healing ? [inventory.healing.id] : []),
-    ...(inventory.grenade ? [inventory.grenade.id] : []),
-    ...Object.keys(inventory.backpack),
-    ...Object.values(inventory.clothing),
-  ]);
-  const place = location === null ? undefined : locationCatalog(data).get(location);
-  return {
-    items: Object.fromEntries([...ids].map((id) => [id, items.get(id)?.name ?? id])),
-    location: place?.name ?? (location !== null && CJK.test(location) ? location : null),
-    district: place?.district ?? null,
-  };
-}
+/** 别人眼里的你搬进了 npc 系统，这里转出保持导出名不变 */
+export { type Looks, perceivedLine } from "./systems/npc";
 
 /**
  * 玩家能看到的状态。只放界面要显示的东西：
  * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现
  */
-/** 出身带出来的口音和做派；查不到的出身只写出身 */
-const ORIGIN_ACCENTS: Readonly<Record<string, string>> = {
-  街头小子: "一口夜之城街头腔，黑话张嘴就来",
-  流浪者: "带着荒地口音，说话直来直去",
-  公司员工: "一口公司腔，用词客气、句句留余地",
-};
-
-/** 别人一眼看得见的义体部位 */
-const VISIBLE_CHROME: ReadonlySet<string> = new Set([
-  "eyes",
-  "integumentary",
-  "hands",
-  "arms",
-  "legs",
-]);
-/** 装到这么多件，路人会觉得浑身是铬 */
-const CHROME_HEAVY = 6;
-/** 热度到这么多星，街上算是有悬赏、被通缉 */
-const WANTED_STARS = 3;
-
-const WOUND_LOOKS: Readonly<Record<string, string>> = {
-  light: "身上带着伤",
-  severe: "伤得很重，走路都不稳",
-  zero: "浑身是血，随时会倒下",
-};
-
-export interface Looks {
-  readonly traits: readonly { readonly slot: string; readonly label: string }[];
-  readonly streetCred: number;
-  readonly clothing: Readonly<Partial<Record<string, string>>>;
-  readonly installed: readonly { readonly id: string; readonly slot: string }[];
-  readonly lostLimbs: readonly string[];
-  readonly wound: string;
-  readonly heatStars: number;
-}
-
-/** 别人眼里的你：每轮从出身、口音、穿着、看得见的义体、伤势、声望和热度拼一行 */
-export function perceivedLine(
-  looks: Looks,
-  parts: ReadonlyMap<string, { readonly name: string }>,
-  items: ReadonlyMap<string, { readonly name: string }>,
-): string {
-  const bits: string[] = [];
-  const origin = looks.traits.find((t) => t.slot === "origin")?.label;
-  if (origin) {
-    const accent = ORIGIN_ACCENTS[origin];
-    bits.push(accent ? `${origin}出身，${accent}` : `${origin}出身`);
-  }
-  const worn = CLOTHING_SLOTS.flatMap((slot) => {
-    const id = looks.clothing[slot];
-    return id === undefined ? [] : [items.get(id)?.name ?? id];
-  });
-  bits.push(worn.length > 0 ? `穿着${worn.join("、")}` : "衣着不起眼");
-  const slotLabels = SLOT_LABELS as Readonly<Record<string, string>>;
-  const shown = looks.installed
-    .filter((c) => VISIBLE_CHROME.has(c.slot))
-    .map((c) => `${parts.get(c.id)?.name ?? c.id}（${slotLabels[c.slot] ?? c.slot}）`);
-  if (looks.installed.length >= CHROME_HEAVY) {
-    bits.push(`浑身是铬${shown.length > 0 ? `，看得见${shown.join("、")}` : ""}`);
-  } else if (shown.length > 0) {
-    bits.push(`看得见${shown.join("、")}`);
-  } else {
-    bits.push(looks.installed.length > 0 ? "装的义体都藏在身体里，一眼看不出来" : "看不出装了义体");
-  }
-  if (looks.lostLimbs.length > 0) {
-    const limbLabels = LIMB_LABELS as Readonly<Record<string, string>>;
-    bits.push(`少了${looks.lostLimbs.map((l) => limbLabels[l] ?? l).join("、")}`);
-  }
-  const wound = WOUND_LOOKS[looks.wound];
-  if (wound) bits.push(wound);
-  bits.push(`街头声望 ${looks.streetCred} 级（${credTier(looks.streetCred).label}）`);
-  if (looks.heatStars >= WANTED_STARS) {
-    bits.push(`NCPD 通缉中（${looks.heatStars} 星），赏金猎人和眼尖的人认得出`);
-  } else if (looks.heatStars > 0) {
-    bits.push(`NCPD 在留意（${looks.heatStars} 星）`);
-  }
-  return bits.join("；");
-}
-
-/** 界面上最多列几条消息 */
-const PHONE_SHOWN = 20;
-/** 记忆面板显示最近几条修改记录 */
-const MEMORY_EDITS_SHOWN = 20;
-
 export function projectState(
   world: WorldState,
   records: readonly LogRecord[],
@@ -759,25 +468,6 @@ export function projectState(
   const dice = DiceStateSchema.parse(world.slices.dice);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
-  // 旧存档没有履历系统
-  const chronicleState = ChronicleStateSchema.parse(world.slices.chronicle ?? {});
-  const inventory = InventoryStateSchema.parse(world.slices.inventory);
-  const character = CharacterStateSchema.parse(world.slices.character);
-  const npcs = NpcStateSchema.parse(world.slices.npc);
-  // 旧存档没有宿敌系统
-  const nemesisState = NemesisStateSchema.parse(world.slices.nemesis ?? {});
-  // 旧存档没有心事
-  const arcState = ArcsStateSchema.parse(world.slices.arcs ?? {});
-  const arcSeeds = arcCatalog(data ?? {});
-  const jobs = JobsStateSchema.parse(world.slices.jobs);
-  // 旧存档没有消息记录
-  const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
-  const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
-  // 旧快照里没有热度系统
-  const heat = world.slices.heat === undefined ? null : HeatStateSchema.parse(world.slices.heat);
-  const parts = cyberwareCatalog(data);
-  const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
-  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const turns = effectiveTurns(records);
   const feed = registry.feed({ world, records, data });
 
@@ -792,31 +482,11 @@ export function projectState(
     /** 整局重来过几个场景，履历里记着 */
     restarts: restartedScenes(records).size,
     /** 玩家结束了故事（退休或停在这里）；没结束是 null。和死透了一样，之后存档只读 */
-    ended: chronicleState.ended && {
-      how: chronicleState.ended.how,
-      label: ENDING_LABELS[chronicleState.ended.how],
-      epitaph: chronicleState.ended.epitaph,
-      at: formatGameTime(chronicleState.ended.at),
-    },
+    ended: views.ended as ReturnType<typeof endedView>,
     /** 履历：叙事模型写的段落、结束的委托、死亡和结束故事，按游戏时间从早到晚 */
-    chronicle: chronicleEntries({
-      chronicle: chronicleState,
-      jobs: jobs.jobs,
-      death: health.condition === "dead" ? { at: world.time, location: clock.location } : null,
-    }),
+    chronicle: views.chronicle as ReturnType<typeof chronicleView>,
     /** 了结了的宿敌：界面按新出现的弹结算卡；旧的在前 */
-    nemesesEnded: nemesisState.ended.map((e) => ({
-      npc: e.npc,
-      name: e.name,
-      end: e.end,
-      endLabel: NEMESIS_END_LABELS[e.end],
-      text: e.text,
-      how: e.how,
-      since: formatGameTime(e.since),
-      at: formatGameTime(e.at),
-      /** 了结宿敌给的街头声望（级） */
-      cred: NEMESIS_CRED_HALVES / 2,
-    })),
+    nemesesEnded: views.nemesesEnded as ReturnType<typeof nemesesEndedView>,
     /** 超梦调查：正在查的录像（编辑器用）和查过的几次；旧存档没有超梦系统 */
     braindance: views.braindance as ReturnType<typeof braindanceView>,
     character: views.character as ReturnType<typeof characterView>,
@@ -825,7 +495,7 @@ export function projectState(
     weather: clockView.weather,
     location: clockView.location,
     /** 界面显示用的中文名，查不到时为 id 或 null */
-    names: displayNames(data, inventory, clock.location),
+    names: views.names as ReturnType<typeof namesView>,
     scene: clockView.scene,
     health: views.health as ReturnType<typeof healthView>,
     humanity: views.humanity as ReturnType<typeof humanityView>,
@@ -848,246 +518,35 @@ export function projectState(
     squad: views.squad as ReturnType<typeof squadView>,
     sidegigs: views.sidegigs as ReturnType<typeof sidegigsView>,
     /** 当前地点开着的义体医生；不在诊所时是 null */
-    ripperdoc: ripperdocView(
-      data,
-      clock.location,
-      character.streetCred,
-      installed,
-      parts,
-      debts,
-      health.brokenChrome,
-      npcs.npcs,
-    ),
-    /** 欠义体医生的钱 */
+    ripperdoc: views.ripperdoc as ReturnType<typeof ripperdocView>,
     /** 当前地点开着的商店 */
-    shops: shopsView(data, clock.location, character.streetCred, inventory, world.time, npcs.npcs),
-    ripperdocDebts: debts.map((d) => ({
-      docName: d.docName,
-      amount: d.amount,
-      due: formatGameTime(d.due),
-    })),
+    shops: views.shops as ReturnType<typeof shopsView>,
+    /** 欠义体医生的钱 */
+    ripperdocDebts: views.ripperdocDebts as ReturnType<typeof ripperdocDebtsView>,
     combat: views.combat as ReturnType<typeof combatView>,
     /** 当前场景的潜入警戒度 */
     stealth: views.stealth as ReturnType<typeof stealthView>,
     /** 见过的人、只听说过的人和宿敌（交过手）；诉求、底线和秘密只给模型看，不在这里 */
-    npcs: Object.values(npcs.npcs)
-      .filter(
-        (n) =>
-          n.met ||
-          n.known.length > 0 ||
-          nemesisState.nemeses.some((x) => x.npc === n.id) ||
-          nemesisState.ended.some((x) => x.npc === n.id),
-      )
-      .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
-      .map((n) => ({
-        id: n.id,
-        name: n.name,
-        alias: n.alias ?? null,
-        pronoun: n.pronoun,
-        /** 见过面没有；没见过的只是听说过，身份和样子不给 */
-        met: n.met,
-        role: n.met ? n.role : "只听说过",
-        look: n.met ? n.look : "没见过",
-        /** 玩家角色知道的这个人的事，旧的在前，带来源 */
-        known: n.known.map((k) => ({
-          text: k.text,
-          sourceLabel: KNOWN_SOURCE_LABELS[k.source],
-          at: formatGameTime(k.at),
-        })),
-        affinity: n.affinity,
-        /** 玩家知道的生死：屏幕外死的，听说以前照旧显示活着 */
-        alive: !deathKnown(n),
-        here: onStage(n, stage),
-        /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
-        lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
-        relation: n.relation?.text ?? null,
-        /** 人情和仇：没了结的在前，各自旧的在前 */
-        ledger: [
-          ...n.ledger.filter((e) => e.settledAt === null),
-          ...n.ledger.filter((e) => e.settledAt !== null),
-        ].map((e) => ({
-          kind: e.kind,
-          label: LEDGER_KIND_LABELS[e.kind],
-          text: e.text,
-          at: formatGameTime(e.at),
-          settled: e.settledAt === null ? null : formatGameTime(e.settledAt),
-          how: e.how ?? null,
-        })),
-        memories: n.memories,
-        /**
-         * 身体：见过的人看伤势和装备；扫描过的再看档位、威胁、属性、生命、义体和人性阶段。
-         * 人性数值只给叙事模型，这里没有；没见过的人是 null
-         */
-        body: n.met
-          ? bodyView(n, data, world.time, attributeSum(effectiveAttributes(character)))
-          : null,
-        /**
-         * 宿敌：怎么输给你的；准备只在扫描或打听到以后给，屏幕外的动静不在这里。
-         * 了结了的写怎么了结的；不是宿敌是 null
-         */
-        nemesis: (() => {
-          const a = nemesisState.nemeses.find((x) => x.npc === n.id);
-          if (a) {
-            return {
-              how: a.how,
-              since: formatGameTime(a.since),
-              prep:
-                a.prep && a.known
-                  ? `专克${NEMESIS_STYLE_LABELS[a.prep.against]}：${a.prep.text}`
-                  : null,
-              ended: null,
-            };
-          }
-          const e = nemesisState.ended.find((x) => x.npc === n.id);
-          return e
-            ? {
-                how: e.how,
-                since: formatGameTime(e.since),
-                prep: null,
-                ended: `${NEMESIS_END_LABELS[e.end]}：${e.text}`,
-              }
-            : null;
-        })(),
-        /**
-         * 心事：这个人跟玩家说过的事和玩家听说的结果；处境、盼头、走向和原作结局只给模型看，不在这里。
-         * 还没熟到能说心事、也没说过任何一件的是 null
-         */
-        arc: (() => {
-          const seed = arcSeeds.get(n.id);
-          const progress = arcState.arcs[n.id];
-          if (!seed || !progress) return null;
-          const concerns = seed.concerns.flatMap((c) => {
-            const p = progress.concerns[c.id];
-            if (!p) return [];
-            const heard = p.outcome?.known === true;
-            // 场外暗中出的结局玩家还不知道：照结局之前的状态显示
-            const status = heard
-              ? "resolved"
-              : p.outcome
-                ? (p.outcome.previousStatus ?? null)
-                : p.status;
-            if (status === null) return [];
-            return [
-              {
-                id: c.id,
-                title: c.title,
-                status,
-                statusLabel: CONCERN_STATUS_LABELS[status],
-                outcome: heard && p.outcome ? p.outcome.text : null,
-              },
-            ];
-          });
-          if (progress.unlockedAt === null && concerns.length === 0) return null;
-          // 几件都了结要按玩家知道的算，doneAt 会把暗中的结局算进去
-          const done = seed.concerns.every((c) => progress.concerns[c.id]?.outcome?.known === true);
-          return { done, concerns };
-        })(),
-      })),
+    npcs: (() => {
+      const rivals = views.nemesisCards as ReturnType<typeof nemesisCardsView>;
+      const arcCards = views.arcCards as ReturnType<typeof arcCardsView>;
+      return (views.npcs as ReturnType<typeof npcsView>).map((n) => ({
+        ...n,
+        /** 宿敌一栏，由宿敌系统给；不是宿敌是 null */
+        nemesis: Object.hasOwn(rivals, n.id) ? (rivals[n.id] ?? null) : null,
+        /** 心事一栏，由心事系统给；还没熟到能说、也没说过任何一件的是 null */
+        arc: Object.hasOwn(arcCards, n.id) ? (arcCards[n.id] ?? null) : null,
+      }));
+    })(),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
     bulletins: views.bulletins as ReturnType<typeof bulletinsView>,
     /** 记忆面板：场景摘要（新的在前）和最近的修改记录；共同记忆在 npcs 里 */
-    memory: (() => {
-      const m = MemoryStateSchema.parse(world.slices.memory ?? {});
-      return {
-        scenes: [...m.scenes].reverse().map((s) => ({
-          scene: s.scene,
-          at: formatGameTime(s.at),
-          title: s.title,
-          text: s.text,
-          importance: s.importance,
-          importanceLabel: IMPORTANCE_LABELS[s.importance],
-          people: s.people.map((id) => npcs.npcs[id]?.name ?? id),
-          edited: s.edited === true,
-        })),
-        edits: [...m.edits]
-          .reverse()
-          .slice(0, MEMORY_EDITS_SHOWN)
-          .map((e) => ({
-            at: formatGameTime(e.at),
-            what: e.what === "scene" ? "场景摘要" : "共同记忆",
-            ref: e.ref,
-            action: e.action === "edit" ? "改写" : "删掉",
-            before: e.before,
-            after: e.after,
-          })),
-      };
-    })(),
+    memory: views.memory as ReturnType<typeof memoryView>,
     money: views.money as ReturnType<typeof moneyView>,
     /** 警方热度：整星，另标有没有攒着半星；自然下降还要多久（分钟） */
-    heat: {
-      stars: shownStars(heat?.stars ?? 0),
-      half: (heat?.stars ?? 0) % 1 !== 0,
-      lastSeen: heat?.lastSeenAt == null ? null : formatGameTime(heat.lastSeenAt),
-      /** 没了结的悬赏：不随时间消失 */
-      bounties: (heat?.bounties ?? [])
-        .filter((b) => b.resolvedAt === null)
-        .map((b) => ({
-          id: b.id,
-          reward: b.reward,
-          reasons: b.reasons,
-          hunter: b.hunter,
-          hunterName: b.hunter === null ? null : (npcs.npcs[b.hunter]?.name ?? b.hunter),
-          since: formatGameTime(b.at),
-        })),
-      decayIn:
-        heat && heat.stars > 0 && heat.decayedAt !== null
-          ? Math.max(0, heat.decayedAt + HEAT_DECAY_MINUTES - world.time)
-          : null,
-      recent: (heat?.recent ?? [])
-        .slice(-3)
-        .reverse()
-        .map((e) => ({
-          at: formatGameTime(e.at),
-          label: EVENT_LABELS[e.kind],
-          delta: e.delta,
-          reason: e.reason,
-        })),
-    },
+    heat: views.heat as ReturnType<typeof heatView>,
     /** 委托和中间人；隐藏的转折只给模型看，不在这里 */
-    jobs: {
-      fixers: Object.values(jobs.fixers).map((f) => ({
-        id: f.id,
-        name: f.name,
-        affinity: npcs.npcs[f.id]?.affinity ?? 0,
-        maxRisk: maxRisk(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred),
-        cappedBy: riskCap(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred).by,
-        capHint: riskCap(npcs.npcs[f.id]?.affinity ?? 0, character.streetCred).hint,
-      })),
-      list: [
-        ...jobs.jobs.filter(isOpen),
-        ...jobs.jobs.filter((j) => !isOpen(j)).slice(-JOBS_CLOSED_SHOWN),
-      ].map((j) => ({
-        id: j.id,
-        title: j.title,
-        /** 委托类型，例如“护送”；没写类型是 null */
-        kindLabel: j.kind ? JOB_KIND_LABELS[j.kind] : null,
-        fixer: j.fixer === null ? null : (jobs.fixers[j.fixer]?.name ?? j.fixer),
-        client: j.client,
-        location: j.location,
-        risk: j.risk,
-        reward: j.reward,
-        due: j.due === null ? null : formatGameTime(j.due),
-        /** 离期限还有多少分钟；已过期为负 */
-        dueIn: j.due === null ? null : j.due - world.time,
-        overdue: isOpen(j) && j.due !== null && j.due <= world.time,
-        status: j.status,
-        statusLabel: JOB_STATUS_LABELS[j.status],
-        open: isOpen(j),
-        notes: j.notes,
-        paid: j.paid,
-        summary: j.summary,
-        /** 结算卡：声望按级、中间人好感变化、接单以来的人性变化 */
-        settlement:
-          j.settlement === null
-            ? null
-            : {
-                squad: j.settlement.squad,
-                streetCred: j.settlement.credHalves / 2,
-                affinity: j.settlement.affinity,
-                humanity: j.settlement.humanity,
-              },
-      })),
-    },
+    jobs: views.jobs as ReturnType<typeof jobsView>,
     deadlines: clockView.deadlines,
     /** 待办：各系统交的委托、警情、拳赛赛车、心事和超梦，只有玩家知道的；按系统顺序，不排紧急程度 */
     objectives: registry.objectives({ world, records, data }),
@@ -1113,70 +572,25 @@ export function projectState(
       : [],
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
-    sandevistan: sandevistanOf(world, data),
+    sandevistan: views.sandevistan as ReturnType<typeof sandevistanView>,
     /** 全息电话：正在响的那通和通话记录；打来的用意只给叙事模型，不在这里 */
     calls: views.calls as ReturnType<typeof phoneCallsView>,
     /** 数据库页的芯片：玩家读过的录音、邮件、日记原文，新读到的在前 */
     shards: views.shards as ReturnType<typeof shardsView>,
     /** 消息，最近的在前 */
-    phone: {
-      unread: phoneState.messages.filter((m) => !m.read).length,
-      /** 各频道未读消息的 id；打开哪个频道就把那个频道的 id 交回 readMessages 标已读 */
-      feedUnread: {
-        messages: feed.filter((i) => i.unread && i.channel === "messages").map((i) => i.id),
-        news: feed.filter((i) => i.unread && i.channel === "news").map((i) => i.id),
-        police: feed.filter((i) => i.unread && i.channel === "police").map((i) => i.id),
-        street: feed.filter((i) => i.unread && i.channel === "street").map((i) => i.id),
-      },
-      messages: [...phoneState.messages]
-        .reverse()
-        .slice(0, PHONE_SHOWN)
-        .map((m) => ({
-          id: m.id,
-          from: m.from,
-          name: m.name,
-          text: m.text,
-          at: formatGameTime(m.at),
-          read: m.read,
-          replied: m.replied,
-          reply: m.reply ?? null,
-          repliedAt: m.repliedAt === undefined ? null : formatGameTime(m.repliedAt),
-        })),
-      /** 联系人：按最后一条消息排，新的在前；有人物卡的带好感和死活 */
-      contacts: (() => {
-        const latest = new Map<string, (typeof phoneState.messages)[number]>();
-        for (const m of phoneState.messages) latest.set(m.from, m);
-        return [...latest.values()]
-          .sort((a, b) => b.at - a.at || b.id - a.id)
-          .map((m) => {
-            const npc = npcs.npcs[m.from];
-            return {
-              from: m.from,
-              name: m.name,
-              npc: npc?.met ? npc.id : null,
-              affinity: npc?.met ? npc.affinity : null,
-              alive: npc ? !deathKnown(npc) : true,
-              last: formatGameTime(Math.max(m.at, m.repliedAt ?? m.at)),
-              unread: phoneState.messages.filter((x) => x.from === m.from && !x.read).length,
-              count: phoneState.messages.filter((x) => x.from === m.from).length,
-            };
-          });
-      })(),
-    },
+    phone: (() => {
+      const m = views.phoneMessages as ReturnType<typeof phoneMessagesView>;
+      return {
+        unread: m.unread,
+        /** 各频道未读消息的 id；打开哪个频道就把那个频道的 id 交回 readMessages 标已读 */
+        feedUnread: phoneFeedUnread(feed),
+        messages: m.messages,
+        /** 联系人：按最后一条消息排，新的在前；有人物卡的带好感和死活 */
+        contacts: m.contacts,
+      };
+    })(),
     /** 别人眼里的你：交给叙事模型，NPC 的第一反应照这一行写 */
-    perceived: perceivedLine(
-      {
-        traits: character.traits,
-        streetCred: character.streetCred,
-        clothing: inventory.clothing,
-        installed,
-        lostLimbs: health.lostLimbs,
-        wound: woundTag(health),
-        heatStars: shownStars(heat?.stars ?? 0),
-      },
-      parts,
-      items,
-    ),
+    perceived: views.perceived as ReturnType<typeof perceivedView>,
     totalTurns: turns.length,
     turns: turns.slice(-VIEW_TURNS).map((t, i, shown) => ({
       seq: t.seq,

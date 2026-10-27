@@ -18,6 +18,7 @@ import {
 } from "./apply";
 import { inventoryEvents } from "./events";
 import { inventoryInteractions } from "./interactions";
+import { namesView } from "./names";
 import { partsRules } from "./prompt";
 import {
   type InventoryInternal,
@@ -31,6 +32,7 @@ import {
   type TradeCommand,
   TradeCommandSchema,
 } from "./schema";
+import { shopsView } from "./shops";
 import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
@@ -100,6 +102,10 @@ export const inventory = defineSystem<
   rules: [partsRules],
   actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
+  views: [
+    { key: "shops", project: shopsView },
+    { key: "names", project: namesView },
+  ],
   interactions: inventoryInteractions,
   events: inventoryEvents,
 });
@@ -108,5 +114,7 @@ export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./interactions";
+export * from "./names";
 export * from "./schema";
+export * from "./shops";
 export * from "./view";

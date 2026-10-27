@@ -115,6 +115,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly rules?: readonly RuleModule<S>[];
   /** 这个系统交给玩家投影的一块；诉求、底线、秘密、隐藏转折这类只给模型看的东西不能放进来 */
   readonly view?: SystemView;
+  /** 同一个系统要交好几块投影时（例如义体之外还有当前诊所）写在这里；规矩和 view 一样，key 不能和任何系统重复 */
+  readonly views?: readonly SystemView[];
   /** 玩家在界面上直接做的操作：键等于操作的 type，同一个 type 只能由一个系统交 */
   readonly actions?: Readonly<Record<string, PlayerActionDef>>;
   /** 给叙事模型的情境节，按 order 排进【当前状态】之后；只有这里可以写答案、真相这类隐藏信息 */
@@ -369,15 +371,15 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
   const order = sortByDependencies(systems);
   const views = new Map<string, { readonly systemId: string; readonly view: SystemView }>();
   for (const system of order) {
-    const view = system.view;
-    if (!view) continue;
-    const existing = views.get(view.key);
-    if (existing) {
-      throw new RegistryError(
-        `投影字段 ${view.key} 同时由 ${existing.systemId} 和 ${system.id} 注册`,
-      );
+    for (const view of [...(system.view ? [system.view] : []), ...(system.views ?? [])]) {
+      const existing = views.get(view.key);
+      if (existing) {
+        throw new RegistryError(
+          `投影字段 ${view.key} 同时由 ${existing.systemId} 和 ${system.id} 注册`,
+        );
+      }
+      views.set(view.key, { systemId: system.id, view });
     }
-    views.set(view.key, { systemId: system.id, view });
   }
   const actions = new Map<string, { readonly systemId: string; readonly def: PlayerActionDef }>();
   for (const system of order) {

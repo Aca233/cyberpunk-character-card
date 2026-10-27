@@ -4,6 +4,7 @@ import type { NpcState } from "../npc";
 import { phoneActions } from "./actions";
 import { answerCall, readAll, receiveCall, receiveMessage, replyMessage, tickCalls } from "./apply";
 import { phoneFeed } from "./feed";
+import { phoneMessagesView } from "./messages";
 import { phoneRules } from "./prompt";
 import {
   AnswerSchema,
@@ -70,6 +71,7 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
   rules: [phoneRules],
   sections: phoneSections,
   view: { key: "calls", project: phoneCallsView },
+  views: [{ key: "phoneMessages", project: phoneMessagesView }],
   actions: phoneActions,
   feed: phoneFeed,
 });
@@ -77,6 +79,7 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
 export * from "./actions";
 export * from "./apply";
 export * from "./feed";
+export * from "./messages";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";

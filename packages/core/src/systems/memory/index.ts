@@ -9,6 +9,7 @@ import {
   type MemoryState,
   MemoryStateSchema,
 } from "./schema";
+import { memoryView } from "./view";
 
 /**
  * 剧情记忆：收场后辅助模型写的场景摘要，和记忆面板的修改记录；
@@ -31,9 +32,11 @@ export const memory = defineSystem<MemoryState, never, MemoryInternal>({
     return applySceneSummary(draft, command, ctx.now);
   },
   actions: memoryActions,
+  view: { key: "memory", project: memoryView },
 });
 
 export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";

@@ -13,6 +13,7 @@ import {
   ArcsStateSchema,
 } from "./schema";
 import { arcsSections } from "./sections";
+import { arcCardsView } from "./view";
 
 /** 心事（原作人物的个人线）：熟到一定程度他会自己提起，玩家管不管都行，没人管的由场外推演往前推 */
 export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
@@ -38,6 +39,7 @@ export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
   objectives: arcsObjectives,
   events: arcsEvents,
   feed: arcsFeed,
+  view: { key: "arcCards", project: arcCardsView },
 });
 
 export * from "./apply";
@@ -47,3 +49,4 @@ export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";
+export * from "./view";

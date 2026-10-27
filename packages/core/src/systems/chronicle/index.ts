@@ -11,6 +11,7 @@ import {
   type ChronicleState,
   ChronicleStateSchema,
 } from "./schema";
+import { chronicleView, endedView } from "./view";
 
 /**
  * 履历和传说名册：叙事模型在一段剧情告一段落时写的总结、玩家结束故事的记录，
@@ -48,9 +49,12 @@ export const chronicle = defineSystem<ChronicleState, ChronicleCommand, Chronicl
         legendsSection(ChronicleStateSchema.parse(world.slices.chronicle ?? {})) || undefined,
     },
   ],
+  view: { key: "ended", project: endedView },
+  views: [{ key: "chronicle", project: chronicleView }],
 });
 
 export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./view";
