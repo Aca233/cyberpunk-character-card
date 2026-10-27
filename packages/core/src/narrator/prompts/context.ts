@@ -3,6 +3,7 @@ import type { LlmMessage } from "../../kernel/ports";
 import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
+import { ArcsStateSchema, arcSection } from "../../systems/arcs";
 import { ChronicleStateSchema, chronicleSection, legendsSection } from "../../systems/chronicle";
 import { CityStateSchema, citySection, playerRumorLine, rumorSection } from "../../systems/city";
 import { cyberwareSection } from "../../systems/cyberware/prompt";
@@ -24,7 +25,7 @@ import { JobsStateSchema } from "../../systems/jobs/schema";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
 import { NemesisStateSchema, nemesisSection } from "../../systems/nemesis";
 import { NotesStateSchema, notesSection } from "../../systems/notes";
-import { castSection } from "../../systems/npc/prompt";
+import { castSection, onStage } from "../../systems/npc/prompt";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { formatGameTime } from "../../systems/world/apply";
 import { locationCatalog, WorldClockStateSchema } from "../../systems/world/schema";
@@ -583,6 +584,19 @@ export function situation(
   if (agendas) parts.push(`【势力动向】\n${agendas}`);
   const nemeses = nemesisSection(NemesisStateSchema.parse(world.slices.nemesis ?? {}), world.time);
   if (nemeses) parts.push(`【宿敌】\n${nemeses}`);
+  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+  const present = new Set(
+    Object.values(npcs.npcs)
+      .filter((n) => onStage(n, stage))
+      .map((n) => n.id),
+  );
+  const concerns = arcSection(
+    ArcsStateSchema.parse(world.slices.arcs ?? {}),
+    extras.data ?? {},
+    npcs.npcs,
+    present,
+  );
+  if (concerns) parts.push(`【心事】\n${concerns}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);

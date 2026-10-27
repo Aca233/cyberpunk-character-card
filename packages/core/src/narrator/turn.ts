@@ -1164,6 +1164,8 @@ export async function runNarratorTurn(
           text?: string;
           cause?: string;
           npc?: string;
+          concern?: string;
+          resolve?: boolean;
         };
         if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
         else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
@@ -1175,6 +1177,10 @@ export async function runNarratorTurn(
           considered.push(`场外推演：势力动向 ${c.id}「${c.title}」${c.text ?? ""}`);
         else if (c.type === "nemesis.move")
           considered.push(`场外推演：宿敌 ${c.npc} ${c.text ?? ""}`);
+        else if (c.type === "arc.offscreen")
+          considered.push(
+            `场外推演：${c.npc} 的心事 ${c.concern}${c.resolve ? "有了结果" : ""}：${c.text ?? ""}`,
+          );
         considered.push(...result.notes.map((n) => `场外推演：${n}`));
       }
     }

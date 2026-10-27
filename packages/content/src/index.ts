@@ -1,5 +1,6 @@
 import type { GameContent } from "@cp/core";
 import { agendas } from "./agendas";
+import { arcs } from "./arcs";
 import { cyberware } from "./cyberware";
 import { encounters } from "./encounters";
 import { factions } from "./factions";
@@ -19,6 +20,7 @@ import { sidegigs } from "./sidegigs";
 import { vehicles } from "./vehicles";
 
 export { agendas } from "./agendas";
+export { arcs } from "./arcs";
 export { sampleCharacters } from "./characters";
 export { combos } from "./combos";
 export { cyberware } from "./cyberware";
@@ -71,6 +73,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   vehicles,
   factions,
   agendas,
+  arcs,
   ncpdAlerts,
   twists,
   consequences,

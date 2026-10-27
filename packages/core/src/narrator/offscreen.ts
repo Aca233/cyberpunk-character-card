@@ -4,6 +4,20 @@ import type { LlmMessage } from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
+import {
+  ARC_OFFSCREEN_RULE,
+  ARC_TEXT_MAX,
+  ArcsStateSchema,
+  arcCatalog,
+  arcOf,
+  arcOffscreenSection,
+  arcUnlocked,
+  ConcernFateSchema,
+  concernOf,
+  type OffscreenConcern,
+  offscreenConcerns,
+  openConcerns,
+} from "../systems/arcs";
 import { CRED_SIZES } from "../systems/character";
 import {
   BulletinFieldsSchema,
@@ -142,6 +156,7 @@ export interface ContactPick {
 export function contactPicks(
   world: WorldState,
   present: ReadonlySet<string> = new Set(),
+  data: Readonly<Record<string, unknown>> = {},
 ): ContactPick[] {
   const city = CityStateSchema.parse(world.slices.city ?? {});
   if (city.lastContactAt !== null && world.time - city.lastContactAt < CONTACT_HOURS * 60)
@@ -149,6 +164,8 @@ export function contactPicks(
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
   const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   const messages = PhoneStateSchema.parse(world.slices.phone ?? {}).messages;
+  const arcs = ArcsStateSchema.parse(world.slices.arcs ?? {});
+  const seeds = arcCatalog(data);
   const picks: ContactPick[] = [];
   for (const n of Object.values(npcs)) {
     if (!n.alive || !n.met || present.has(n.id) || squad.has(n.id)) continue;
@@ -178,11 +195,38 @@ export function contactPicks(
       score += 1;
       why.push(`${Math.floor((world.time - n.lastSeenAt) / DAY)} 天没见了`);
     }
+    const seed = seeds.get(n.id);
+    if (seed && arcUnlocked(arcs, seed, n)) {
+      const arc = arcOf(arcs, n.id);
+      const untold = seed.concerns.some((c) => concernOf(arc, c.id).status === null);
+      if (untold && openConcerns(seed, arc).length === 0) {
+        score += 2;
+        why.push(
+          "和玩家熟到可以说心事了，有件事还没提过（发消息只约见面或说有事想聊，不在消息里说破）",
+        );
+      }
+    }
     if (score >= CONTACT_MIN_SCORE) picks.push({ id: n.id, name: n.name, score, why });
   }
   return picks
     .sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, CONTACT_PICKS);
+}
+
+/** 这次场外推演可以推的心事：不在场、不在玩家队里的人 */
+export function arcPicks(
+  world: WorldState,
+  present: ReadonlySet<string> = new Set(),
+  data: Readonly<Record<string, unknown>> = {},
+): OffscreenConcern[] {
+  const squad = SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc);
+  return offscreenConcerns(
+    ArcsStateSchema.parse(world.slices.arcs ?? {}),
+    data,
+    NpcStateSchema.parse(world.slices.npc).npcs,
+    world.time,
+    new Set([...present, ...squad]),
+  );
 }
 
 const OFFSCREEN_STAGE = `【这一步：场外推演】
@@ -203,17 +247,19 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 势力动向：【到点的势力动向】里每一条，都要写这次实际发生了什么。种子只是素材：手段可以从「可能的法子」里挑，也可以按局面换个法子、半路改主意、被对头或别的势力（夜之城警察局、网络监察、公司）截胡；接着上次的事和钩子写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。
 - 代码掷的倾向是默认结果；局面明显不是这样的（玩家刚端了他们的据点、对头正好在那片收紧），可以改 outcome 并在 why 里写一句理由。地盘一次最多动一个城区，只在「能争的城区」里：成了，可以让这个势力拿下一个，或者让对头丢掉一个；受挫，可以让这个势力丢掉一个，或者让对头抢走一个；出了岔子不动地盘；不动地盘最常见，真打下来、真丢了才写。
 - next 写这个势力接下来可能怎么走，一句话，给以后的推演和叙事接着用；可以留空。
-- 宿敌：【宿敌】里列的是这次可以在屏幕外动一步的人，每人最多写一条 nemeses：打听玩家的下落、找玩家在乎的人（【人物】里好感高、和玩家有共同记忆的）麻烦、抢玩家的单子或截玩家的中间人，接着他怎么输的和上一步写，${MOVE_MAX} 字以内。标了「这次要写」的必须写；其余的有说得过去的理由才写。只写他做了什么，不改任何数值，不写玩家的反应，不让他亲自和玩家见面；被他找过麻烦的人可以顺手在 npcs 里写近况或在 messages 里给玩家发消息。`;
+- 宿敌：【宿敌】里列的是这次可以在屏幕外动一步的人，每人最多写一条 nemeses：打听玩家的下落、找玩家在乎的人（【人物】里好感高、和玩家有共同记忆的）麻烦、抢玩家的单子或截玩家的中间人，接着他怎么输的和上一步写，${MOVE_MAX} 字以内。标了「这次要写」的必须写；其余的有说得过去的理由才写。只写他做了什么，不改任何数值，不写玩家的反应，不让他亲自和玩家见面；被他找过麻烦的人可以顺手在 npcs 里写近况或在 messages 里给玩家发消息。
+${ARC_OFFSCREEN_RULE}`;
 
 const OFFSCREEN_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块：
-{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "agendas": ["可省：播了的势力动向 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}], "agendas": [{"id": "到点的动向 id", "outcome": "success|setback|twist，照倾向的可省", "why": "改了结果才写，一句理由", "title": "24 字以内", "text": "160 字以内：实际发生了什么、谁在背后、用的什么法子", "news": "80 字以内：传开以后街上、新闻里怎么说", "turf": {"faction": "势力 id", "district": "城区", "change": "gain|lose"}, "next": "可省：接下来可能怎么走，80 字以内"}], "nemeses": [{"npc": "【宿敌】里的人物 id", "text": "${MOVE_MAX} 字以内：他这次在屏幕外做了什么"}]}
+{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "agendas": ["可省：播了的势力动向 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语"}], "agendas": [{"id": "到点的动向 id", "outcome": "success|setback|twist，照倾向的可省", "why": "改了结果才写，一句理由", "title": "24 字以内", "text": "160 字以内：实际发生了什么、谁在背后、用的什么法子", "news": "80 字以内：传开以后街上、新闻里怎么说", "turf": {"faction": "势力 id", "district": "城区", "change": "gain|lose"}, "next": "可省：接下来可能怎么走，80 字以内"}], "nemeses": [{"npc": "【宿敌】里的人物 id", "text": "${MOVE_MAX} 字以内：他这次在屏幕外做了什么"}], "arcs": [{"npc": "【没人管的心事】里的人物 id", "concern": "心事 id", "text": "${ARC_TEXT_MAX} 字以内：这件事这次怎么了", "resolve": "可省：推出结果时写 true", "fate": "resolve 时写 better|canon|worse"}]}
 status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束了。weight：minor 街角小事，normal 几个街区在传，major 上了 N54 头条、迟早找到玩家头上。
 agendas：没有【到点的势力动向】就输出空数组；有的话每条到点的都写一条。turf 不动地盘时写 null。
 nemeses：没有【宿敌】就输出空数组。
+arcs：没有【没人管的心事】就输出空数组；有也可以空着。
 
 例：{"events": [{"id": "tyger-claws-kabuki", "title": "虎爪帮在歌舞伎区收紧地盘", "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。", "district": "沃森", "status": "heating", "weight": "normal"}], "npcs": [], "messages": []}
-玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "pasts": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "agendas": [], "nemeses": []}
+玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "pasts": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "agendas": [], "nemeses": [], "arcs": []}
 不要写没有前因的大事：玩家在街边吃了碗面，就写「荒坂塔遇袭」，这是凭空制造戏剧性。`;
 
 export const OFFSCREEN_SYSTEM = [BOOKKEEPING_BASE, OFFSCREEN_STAGE, OFFSCREEN_OUTPUT].join("\n\n");
@@ -262,7 +308,8 @@ export function buildOffscreenPrompt(
     NemesisStateSchema.parse(world.slices.nemesis ?? {}),
     world.time,
   );
-  const picks = contactPicks(world, present);
+  const picks = contactPicks(world, present, extras.data);
+  const concerns = arcOffscreenSection(arcPicks(world, present, extras.data));
   const squash = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
     .filter((n) => n.alive && n.timeline.length >= TIMELINE_SQUASH)
     .slice(0, 3);
@@ -299,6 +346,7 @@ export function buildOffscreenPrompt(
       ...(canon ? [`【原剧时间线】（只是参考）\n${canon}`] : []),
       ...(due ? [`【到点的势力动向】\n${due}`] : []),
       ...(nemeses ? [`【宿敌】\n${nemeses}`] : []),
+      ...(concerns ? [`【没人管的心事】（原作结局只是参考）\n${concerns}`] : []),
       ...(window.length > 0 ? [`【上次推演以来的正文】\n${window.join("\n\n")}`] : []),
     ],
     input: `【刚收场的这一轮正文】\n${narrative}`,
@@ -331,6 +379,13 @@ const OffscreenNemesisSchema = z.object({
   npc: z.string().trim().min(1),
   text: z.string().trim().min(1).max(MOVE_MAX),
 });
+const OffscreenArcSchema = z.object({
+  npc: z.string().trim().min(1),
+  concern: z.string().trim().min(1),
+  text: z.string().trim().min(1).max(ARC_TEXT_MAX),
+  resolve: z.boolean().optional(),
+  fate: ConcernFateSchema.optional(),
+});
 const OffscreenDeathSchema = z.object({
   id: z.string().trim().min(1),
   cause: z.string().trim().min(1).max(80),
@@ -359,7 +414,7 @@ export function readOffscreen(
 ): OffscreenResult {
   const commands: Command[] = [];
   const notes: string[] = [];
-  const picks = contactPicks(world, opts.present);
+  const picks = contactPicks(world, opts.present, opts.data);
   const contact = picks.length > 0;
   const json = parseModelJson(text);
   if (
@@ -607,6 +662,47 @@ export function readOffscreen(
     if (!moved.has(n.npc) && moveOverdue(n, world.time)) {
       notes.push(`场外推演：宿敌${n.name}标了「这次要写」却没写`);
     }
+  }
+
+  const listed = arcPicks(world, opts.present, opts.data);
+  const pushed = new Set<string>();
+  for (const [i, item] of list("arcs").entries()) {
+    const parsed = OffscreenArcSchema.safeParse(item);
+    if (!parsed.success) {
+      notes.push(`场外推演：arcs[${i}] 格式不对：${issue(parsed.error)}`);
+      continue;
+    }
+    const { npc, concern, text: what } = parsed.data;
+    const pick = listed.find((o) => o.npc === npc && o.concern.id === concern);
+    const problem = !pick
+      ? "不在【没人管的心事】里"
+      : died.has(npc)
+        ? "这次已经死了"
+        : pushed.has(npc)
+          ? "一次只写一步"
+          : undefined;
+    if (problem || !pick) {
+      notes.push(`场外推演：arcs[${i}] ${npc}/${concern} ${problem ?? ""}，不要`);
+      continue;
+    }
+    pushed.add(npc);
+    let resolve = parsed.data.resolve === true;
+    if (resolve && pick.progress.notes.length === 0) {
+      notes.push(`场外推演：arcs[${i}] ${npc}/${concern} 还没推过一步，不能直接出结果，只记这一步`);
+      resolve = false;
+    }
+    const fate = resolve ? (parsed.data.fate ?? "canon") : undefined;
+    if (resolve && !parsed.data.fate) {
+      notes.push(`场外推演：arcs[${i}] ${npc}/${concern} 出了结果没写 fate，按 canon 记`);
+    }
+    commands.push({
+      type: "arc.offscreen",
+      npc,
+      concern,
+      text: what,
+      resolve,
+      ...(fate ? { fate } : {}),
+    });
   }
 
   const rawBulletin = raw.bulletin;

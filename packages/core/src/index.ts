@@ -14,6 +14,7 @@ export * from "./schemas/character";
 export * from "./schemas/lore";
 export * from "./schemas/save";
 export * from "./schemas/turn";
+export * as arcRules from "./systems/arcs";
 export * as characterRules from "./systems/character";
 export * as chronicleRules from "./systems/chronicle";
 export * as cityRules from "./systems/city";

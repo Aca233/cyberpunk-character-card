@@ -145,6 +145,23 @@ function Profile({ npc }: { readonly npc: Npc }) {
           </ul>
         )}
         <p className={styles.factionReason}>关系：{npc.relation ?? "还说不上什么关系。"}</p>
+        {npc.arc && (
+          <>
+            <p className={styles.npcMemoryTitle}>心事{npc.arc.done && "（都有了结果）"}</p>
+            {npc.arc.concerns.length === 0 ? (
+              <p className={styles.dim}>熟到能说心里话了；有什么事，等{npc.pronoun}自己开口。</p>
+            ) : (
+              <ul className={styles.memoryBonds}>
+                {npc.arc.concerns.map((c) => (
+                  <li key={c.id} className={styles.factionLine}>
+                    <span className={styles.memoryTag}>{c.statusLabel}</span> {c.title}
+                    {c.outcome && <small className={styles.dim}>：{c.outcome}</small>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
         {npc.ledger.length > 0 && (
           <>
             <p className={styles.npcMemoryTitle}>人情和仇</p>

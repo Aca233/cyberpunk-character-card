@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   agendas,
   apartments,
+  arcs,
   boardModules,
   canonTimeline,
   combos,
@@ -34,6 +35,7 @@ import {
   vehicles,
 } from "@cp/content";
 import {
+  arcRules,
   BASE_RULES,
   BoardModuleSchema,
   CanonTimelineSchema,
@@ -401,6 +403,18 @@ for (const a of agendas) {
   if (a.canon.length === 0) errors.push(`势力动向 ${a.id}：没写参考的原作任务`);
 }
 
+// 心事的种子：人物要是原作人物卡，要写参考的原作任务；每件心事的原作结局要写原作里怎样或标本作改编
+schema("心事 arcs", arcRules.ArcCatalogSchema, arcs);
+const canonNpcIds = new Set(npcs.filter((n) => n.canon).map((n) => n.id));
+for (const a of arcs) {
+  refs(`心事 ${a.npc}`, [a.npc], canonNpcIds, "原作人物");
+  if (a.refs.length === 0) errors.push(`心事 ${a.npc}：没写参考的原作任务`);
+  for (const c of a.concerns) {
+    if (!/原作里|本作改编/.test(c.canon))
+      errors.push(`心事 ${c.id}：原作结局要写「原作里……」或标本作改编`);
+  }
+}
+
 // NCPD 警情：只能写 NCPD 管得到的城区
 unique(
   "NCPD 警情",
@@ -458,7 +472,7 @@ for (const kind of ["fight", "race"] as const) {
   if (n < 3) notes.push(`${sidegigRules.GIG_KIND_LABELS[kind]}只有 ${n} 场，M2b 计划每种 3 场`);
 }
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

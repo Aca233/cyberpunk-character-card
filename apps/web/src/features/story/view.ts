@@ -396,5 +396,22 @@ export function diffViews(prev: View, next: View): Toast[] {
       });
   }
 
+  // 心事：新说起的、听说有了结果的弹提示条
+  const arcsBefore = new Map(prev.npcs.map((n) => [n.id, n.arc?.concerns ?? []]));
+  for (const n of next.npcs) {
+    const was = new Map((arcsBefore.get(n.id) ?? []).map((c) => [c.id, c]));
+    for (const c of n.arc?.concerns ?? []) {
+      const old = was.get(c.id);
+      if (c.status === "resolved" && old?.status !== "resolved")
+        out.push({
+          icon: "notify.questUpdate",
+          text: `${n.name}的事有了结果：${c.title}`,
+          tone: "info",
+        });
+      else if (!old)
+        out.push({ icon: "notify.journal", text: `${n.name}跟你说起：${c.title}`, tone: "info" });
+    }
+  }
+
   return out.map((t, i) => ({ ...t, key: `${next.version}-${i}` }));
 }

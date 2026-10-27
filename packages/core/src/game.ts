@@ -14,6 +14,7 @@ import { readVoices } from "./narrator/block";
 import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
+import { ArcsStateSchema, arcCatalog, CONCERN_STATUS_LABELS } from "./systems/arcs";
 import { credTier } from "./systems/character/apply";
 import {
   CharacterStateSchema,
@@ -819,6 +820,9 @@ export function projectState(
   const npcs = NpcStateSchema.parse(world.slices.npc);
   // 旧存档没有宿敌系统
   const nemesisState = NemesisStateSchema.parse(world.slices.nemesis ?? {});
+  // 旧存档没有心事
+  const arcState = ArcsStateSchema.parse(world.slices.arcs ?? {});
+  const arcSeeds = arcCatalog(data ?? {});
   const economy = EconomyStateSchema.parse(world.slices.economy);
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   // 旧存档没有消息记录
@@ -1198,6 +1202,34 @@ export function projectState(
                 ended: `${NEMESIS_END_LABELS[e.end]}：${e.text}`,
               }
             : null;
+        })(),
+        /**
+         * 心事：这个人跟玩家说过的事和玩家听说的结果；处境、盼头、走向和原作结局只给模型看，不在这里。
+         * 还没熟到能说心事、也没说过任何一件的是 null
+         */
+        arc: (() => {
+          const seed = arcSeeds.get(n.id);
+          const progress = arcState.arcs[n.id];
+          if (!seed || !progress) return null;
+          const concerns = seed.concerns.flatMap((c) => {
+            const p = progress.concerns[c.id];
+            if (!p) return [];
+            const heard = p.outcome?.known === true;
+            if (p.status === null && !heard) return [];
+            return [
+              {
+                id: c.id,
+                title: c.title,
+                status: heard ? "resolved" : p.status,
+                statusLabel: heard
+                  ? CONCERN_STATUS_LABELS.resolved
+                  : CONCERN_STATUS_LABELS[p.status ?? "told"],
+                outcome: heard && p.outcome ? p.outcome.text : null,
+              },
+            ];
+          });
+          if (progress.unlockedAt === null && concerns.length === 0) return null;
+          return { done: progress.doneAt !== null, concerns };
         })(),
       })),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
