@@ -282,7 +282,8 @@ export function NeuralMock() {
                 ★★<span className={styles.starsEmpty}>★★★</span>
               </span>
             </div>
-            <Asset id="district.watson" tint="var(--cp-yellow)" height={44} />
+            {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
+            <Asset id="district.watson" height={44} />
           </section>
 
           {/* C 追踪：待办里最急的几条，ui/Panel */}

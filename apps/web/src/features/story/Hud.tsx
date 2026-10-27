@@ -234,11 +234,8 @@ export function Hud({
             <span title={view.weather.note}>{view.weather.label}</span>
           </span>
         </div>
-        <Asset
-          id={districtIcon(view.names.district ?? view.location)}
-          tint="var(--cp-yellow)"
-          height={40}
-        />
+        {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
+        <Asset id={districtIcon(view.names.district ?? view.location)} height={40} />
       </div>
     </header>
   );

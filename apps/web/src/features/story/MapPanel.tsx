@@ -717,7 +717,8 @@ export function MapPanel({
               className={styles.mapDistrictShadow}
             />
             <div className={styles.mapDistrictHead}>
-              <Asset id={districtIcon(hover.district)} tint="var(--cp-yellow)" height={44} />
+              {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
+              <Asset id={districtIcon(hover.district)} height={44} />
               <div>
                 <h3 className={styles.mapTitle}>{hover.district}</h3>
                 {hover.sub && <span className={styles.dim}>{hover.sub}</span>}
@@ -929,10 +930,7 @@ export function MapPanel({
           </details>
         </div>
 
-        <p className={styles.mapHint}>
-          {dest ? "" : "点黄色标记看怎么去，没标出来的地方用输入框写 · "}
-          滚轮缩放 · 拖动平移 · 放大到 {POI_ZOOM}× 显示服务点 · 底图和图标取自原作
-        </p>
+        <p className={styles.mapHint}>底图和图标取自原作</p>
       </div>
     </div>
   );
