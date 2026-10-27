@@ -16,6 +16,8 @@ import {
   stashMove,
   tune,
 } from "./apply";
+import { inventoryEvents } from "./events";
+import { inventoryInteractions } from "./interactions";
 import { partsRules } from "./prompt";
 import {
   type InventoryInternal,
@@ -98,9 +100,13 @@ export const inventory = defineSystem<
   rules: [partsRules],
   actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
+  interactions: inventoryInteractions,
+  events: inventoryEvents,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./events";
+export * from "./interactions";
 export * from "./schema";
 export * from "./view";

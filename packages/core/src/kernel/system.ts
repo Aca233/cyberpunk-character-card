@@ -123,6 +123,36 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   objectives?(ctx: ViewContext): readonly Objective[];
   /** 这个系统交给玩家的威胁：只写玩家已经知道的，宿敌没扫描或打听到的准备不能放进来 */
   threats?(ctx: ViewContext): readonly Threat[];
+  /** 当前地点能做的事，交互行照这个列；只看玩家站在哪、身上有什么 */
+  interactions?(ctx: ViewContext): readonly Interaction[];
+  /** 这一轮自己这块有什么变化，进系统通知；只能比玩家看得到的东西，暗中的变化不能露出来 */
+  events?(ctx: EventContext): readonly SystemEvent[];
+}
+
+/** 当前地点的一样功能：按 F 打开 panel 指的面板，target 是面板里要打开的那一项（店、医生、存放处的 id） */
+export interface Interaction {
+  /** 在所有交互里唯一，写成「来源:原 id」 */
+  readonly id: string;
+  readonly source: string;
+  readonly label: string;
+  /** 图标名，界面对到素材；core 不认识素材 */
+  readonly icon: string;
+  readonly panel: string;
+  readonly target: string | null;
+}
+
+/** 系统通知里的一条：你身上或手边的状态变了 */
+export interface SystemEvent {
+  readonly source: string;
+  readonly icon: string;
+  readonly text: string;
+  readonly tone: "good" | "bad" | "info";
+}
+
+/** 出事件时系统看到的环境：上一次玩家看到的世界和这一次的，都只读 */
+export interface EventContext {
+  readonly before: ViewContext;
+  readonly after: ViewContext;
 }
 
 /** 待办的状态：offered 挂着等接，active 在办，overdue 过了期限还没了结 */
@@ -288,6 +318,10 @@ export interface Registry {
   objectives(ctx: ViewContext): readonly Objective[];
   /** 各系统交的威胁，按系统顺序拼起来；id 重复或等级不在 0–5 时报错，只读 */
   threats(ctx: ViewContext): readonly Threat[];
+  /** 当前地点各系统交的交互，按系统顺序拼起来；id 重复时报错，只读 */
+  interactions(ctx: ViewContext): readonly Interaction[];
+  /** 各系统比前后两次世界交的系统通知，按系统顺序拼起来；只读 */
+  events(ctx: EventContext): readonly SystemEvent[];
 }
 
 interface Owner {
@@ -537,6 +571,35 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
           }
           ids.add(threat.id);
           result.push(threat);
+        }
+      }
+      return result;
+    },
+    interactions(ctx) {
+      const result: Interaction[] = [];
+      const ids = new Set<string>();
+      for (const system of order) {
+        for (const interaction of system.interactions?.(ctx) ?? []) {
+          if (interaction.source !== system.id || !interaction.id.startsWith(`${system.id}:`)) {
+            throw new RegistryError(`${system.id} 的交互 ${interaction.id} 来源不一致`);
+          }
+          if (ids.has(interaction.id)) {
+            throw new RegistryError(`交互 id 重复：${interaction.id}`);
+          }
+          ids.add(interaction.id);
+          result.push(interaction);
+        }
+      }
+      return result;
+    },
+    events(ctx) {
+      const result: SystemEvent[] = [];
+      for (const system of order) {
+        for (const event of system.events?.(ctx) ?? []) {
+          if (event.source !== system.id) {
+            throw new RegistryError(`${system.id} 交的系统通知来源写成了 ${event.source}`);
+          }
+          result.push(event);
         }
       }
       return result;

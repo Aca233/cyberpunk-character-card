@@ -1,6 +1,8 @@
 import { defineSystem } from "../../kernel/system";
 import { braindanceActions } from "./actions";
 import { applyBraindanceConclude, applyBraindanceMark, applyBraindanceStart } from "./apply";
+import { braindanceEvents } from "./events";
+import { braindanceInteractions } from "./interactions";
 import { braindanceObjectives } from "./objectives";
 import { braindanceRules, braindanceSection } from "./prompt";
 import {
@@ -38,6 +40,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
   rules: [braindanceRules],
   actions: braindanceActions,
   objectives: braindanceObjectives,
+  interactions: braindanceInteractions,
   sections: [
     {
       order: 140,
@@ -55,10 +58,13 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
     project: ({ world }) =>
       braindanceView(BraindanceStateSchema.parse(world.slices.braindance ?? {})),
   },
+  events: braindanceEvents,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./events";
+export * from "./interactions";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";

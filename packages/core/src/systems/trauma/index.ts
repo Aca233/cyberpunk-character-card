@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyTrauma, tickTrauma } from "./apply";
+import { traumaEvents } from "./events";
 import { traumaRules } from "./prompt";
 import {
   type TraumaCommand,
@@ -20,9 +21,11 @@ export const trauma = defineSystem<TraumaState, TraumaCommand>({
   tick: (draft, span) => tickTrauma(draft, span),
   rules: [traumaRules],
   view: { key: "trauma", project: traumaView },
+  events: traumaEvents,
 });
 
 export * from "./apply";
+export * from "./events";
 export * from "./prompt";
 export * from "./schema";
 export * from "./view";

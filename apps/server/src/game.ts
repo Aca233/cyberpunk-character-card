@@ -304,8 +304,11 @@ export class GameService {
 
   async state(id: string): Promise<PlayerView> {
     return this.locks.run(id, async () => {
-      const { world, records } = await this.load(id);
-      return projectState(world, records, gameData);
+      const { meta, world, records } = await this.load(id);
+      // 最后一条记录之前的世界：系统通知比的是这一步前后的变化
+      const before =
+        records.length > 0 ? await this.worldAt(id, meta, records.slice(0, -1)) : undefined;
+      return projectState(world, records, gameData, before);
     });
   }
 
@@ -1119,6 +1122,19 @@ export class GameService {
     if (version % SNAPSHOT_EVERY !== 0) return;
     const { world } = await this.load(id);
     await this.deps.saves.writeSnapshot(id, { nextSeq: version, world });
+  }
+
+  /** 从适用于这段日志的快照重建世界；调用方持有这个存档的锁 */
+  private async worldAt(
+    id: string,
+    meta: SaveMeta,
+    records: readonly LogRecord[],
+  ): Promise<WorldState> {
+    const snapshot = pickSnapshot(await this.deps.saves.readSnapshots(id), records) ?? {
+      nextSeq: 0,
+      world: newGameWorld(meta, gameContent),
+    };
+    return replay({ ...snapshot, world: withAllSlices(snapshot.world) }, records);
   }
 
   /** 调用方持有这个存档的锁 */

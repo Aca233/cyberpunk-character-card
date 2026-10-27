@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { safehouseActions } from "./actions";
 import { applyStash, applyTrophy, seedHome } from "./apply";
+import { safehouseInteractions } from "./interactions";
 import { safehouseRules } from "./prompt";
 import {
   type SafehouseInternal,
@@ -39,10 +40,12 @@ export const safehouse = defineSystem<
   rules: [safehouseRules],
   actions: safehouseActions,
   view: { key: "safehouse", project: safehouseView },
+  interactions: safehouseInteractions,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./interactions";
 export * from "./prompt";
 export * from "./schema";
 export * from "./view";

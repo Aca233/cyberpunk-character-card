@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyNcpd, tickAlerts } from "./apply";
+import { ncpdEvents } from "./events";
 import { ncpdObjectives } from "./objectives";
 import { ncpdRules } from "./prompt";
 import { type NcpdCommand, NcpdCommandSchema, type NcpdState, NcpdStateSchema } from "./schema";
@@ -17,9 +18,11 @@ export const ncpd = defineSystem<NcpdState, NcpdCommand>({
   rules: [ncpdRules],
   objectives: ncpdObjectives,
   view: { key: "ncpd", project: ncpdView },
+  events: ncpdEvents,
 });
 
 export * from "./apply";
+export * from "./events";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";

@@ -2,6 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import type { CombatState } from "../combat";
 import type { NpcState } from "../npc";
 import { applyNemesis, applyNemesisMove } from "./apply";
+import { nemesisEvents } from "./events";
 import { nemesisRules, nemesisSection } from "./prompt";
 import {
   NEMESIS_RISE_HOURS,
@@ -53,9 +54,11 @@ export const nemesis = defineSystem<NemesisState, NemesisCommand, NemesisInterna
     },
   ],
   threats: nemesisThreats,
+  events: nemesisEvents,
 });
 
 export * from "./apply";
+export * from "./events";
 export * from "./prompt";
 export * from "./schema";
 export * from "./threats";

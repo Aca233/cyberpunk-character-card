@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyHumanity, restoreHumanity, setCyberwareCost, setTolerance } from "./apply";
+import { humanityEvents } from "./events";
 import { psychosisRules } from "./prompt";
 import {
   HUMANITY_MAX,
@@ -48,9 +49,11 @@ export const humanity = defineSystem<
   },
   rules: [psychosisRules],
   view: { key: "humanity", project: humanityView },
+  events: humanityEvents,
 });
 
 export * from "./apply";
+export * from "./events";
 export * from "./prompt";
 export * from "./schema";
 export * from "./view";

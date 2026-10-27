@@ -1,9 +1,17 @@
 /**
- * S4 验收：新开局在内存里摆出各种状态，检查投影里的待办和威胁。
- * 等级、状态、期限对不对，id 唯一，只给模型看的东西（转折、未公开的结局和准备、场外动静、答案）不出现。
- * 不调用模型，不读写存档。用法：tsx objectives-check.ts
+ * S4、S5 验收：新开局在内存里摆出各种状态，检查投影里的待办、威胁、交互和系统通知。
+ * 等级、状态、期限对不对，id 唯一，只给模型看的东西（转折、未公开的结局和准备、场外动静、答案）不出现，
+ * 暗中的变化也不触发通知。不调用模型，不读写存档。用法：tsx objectives-check.ts
  */
-import { braindances, DEFAULT_LOADOUT, DEFAULT_OPENING, gameContent, gameData } from "@cp/content";
+import {
+  braindances,
+  DEFAULT_LOADOUT,
+  DEFAULT_OPENING,
+  gameContent,
+  gameData,
+  ripperdocs,
+  shops,
+} from "@cp/content";
 import { newGameWorld, projectState, withAllSlices } from "@cp/core";
 
 type World = ReturnType<typeof newGameWorld>;
@@ -38,10 +46,16 @@ function expect(name: string, ok: boolean, detail?: unknown): void {
   }
 }
 
-function view(world: World) {
-  const v = projectState(world, [], gameData);
-  const ids = [...v.objectives.map((o) => o.id), ...v.threats.map((t) => t.id)];
-  expect("id 不重复", new Set(ids).size === ids.length, ids);
+function view(world: World, before?: World) {
+  const v = projectState(world, [], gameData, before);
+  for (const [label, entries] of [
+    ["待办", v.objectives],
+    ["威胁", v.threats],
+    ["交互", v.interactions],
+  ] as const) {
+    const ids = entries.map((entry) => entry.id);
+    expect(`${label} id 不重复`, new Set(ids).size === ids.length, ids);
+  }
   return v;
 }
 const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.threats]);
@@ -232,7 +246,66 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
   }
 }
 
-// 待办（后面补）
+// 交互：商店、义体医生按当前地点出现；没在查超梦时没有编辑器入口
+{
+  const at = (location: string) => set(base, "world", { location });
+  const shop = shops[0];
+  if (shop) {
+    const here = view(at(shop.location)).interactions;
+    expect(
+      "在店里有进店交互",
+      here.some((x) => x.id === `inventory:shop:${shop.id}` && x.target === shop.id),
+      here,
+    );
+  }
+  const doc = ripperdocs[0];
+  if (doc) {
+    const here = view(at(doc.location)).interactions;
+    expect(
+      "在诊所有义体医生交互",
+      here.some((x) => x.id === `cyberware:ripperdoc:${doc.id}`),
+      here,
+    );
+  }
+  expect(
+    "没在查超梦时没有编辑器交互",
+    !view(base).interactions.some((x) => x.source === "braindance"),
+  );
+}
 
-console.log(failed === 0 ? "S4 验收通过" : `S4 验收：${failed} 条不通过`);
+// 事件：没给前态时不出；只比玩家看得到的变化，暗中的准备和结局不触发
+{
+  expect("没有前态时没有事件", view(base).events.length === 0);
+  const foe = {
+    npc: "foe",
+    name: "疤脸",
+    since: base.time,
+    how: "逃了",
+    prep: null,
+    known: false,
+    moves: [],
+    lastMoveAt: null,
+  };
+  const was = set(base, "nemesis", { nemeses: [foe] });
+  const rose = view(was, base).events;
+  expect(
+    "宿敌升级出一条事件",
+    rose.some((e) => e.text.includes("成了你的宿敌")),
+    rose,
+  );
+  const prepped = set(base, "nemesis", {
+    nemeses: [{ ...foe, prep: { against: "guns", text: "暗中的准备", at: base.time } }],
+  });
+  const quiet = view(prepped, was).events;
+  expect("没揭露的准备不出事件", quiet.length === 0, quiet);
+  const hp = set(base, "health", { condition: "down" });
+  const down = view(hp, base).events;
+  expect(
+    "倒下出状态事件",
+    down.some((e) => e.source === "health"),
+    down,
+  );
+}
+
+console.log(failed === 0 ? "S4、S5 验收通过" : `S4、S5 验收：${failed} 条不通过`);
 if (failed > 0) process.exitCode = 1;

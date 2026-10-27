@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { maxHp } from "../dice";
 import { applyDamage, applyHeal, applyLimb, bleed, die, revive, setMax } from "./apply";
+import { healthEvents } from "./events";
 import {
   type DamageCommand,
   DamageCommandSchema,
@@ -50,8 +51,10 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
   },
   tick: (draft, span) => bleed(draft, span),
   view: { key: "health", project: healthView },
+  events: healthEvents,
 });
 
 export * from "./apply";
+export * from "./events";
 export * from "./schema";
 export * from "./view";

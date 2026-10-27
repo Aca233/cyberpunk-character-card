@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { characterActions } from "./actions";
 import { gainCred, setBonuses, setCharacter, spendPoint } from "./apply";
+import { characterEvents } from "./events";
 import { applyFlashback, tickFlashback } from "./flashback";
 import { changeHabit, offerHabit } from "./habits";
 import { flashbackRules, habitRules, streetCredRules } from "./prompt";
@@ -89,10 +90,12 @@ export const character = defineSystem<
   rules: [streetCredRules, habitRules, flashbackRules],
   view: { key: "character", project: characterView },
   actions: characterActions,
+  events: characterEvents,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./events";
 export * from "./flashback";
 export * from "./habits";
 export * from "./prompt";

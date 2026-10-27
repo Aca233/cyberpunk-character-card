@@ -6,6 +6,7 @@ import { inCrisis, type PsychosisState } from "../psychosis";
 import type { SquadState } from "../squad";
 import { jobsActions } from "./actions";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
+import { jobsEvents } from "./events";
 import { jobsObjectives } from "./objectives";
 import { jobsRules } from "./prompt";
 import {
@@ -71,10 +72,12 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   actions: jobsActions,
   sections: jobsSections,
   objectives: jobsObjectives,
+  events: jobsEvents,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./events";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";

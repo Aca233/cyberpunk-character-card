@@ -749,6 +749,8 @@ export function projectState(
   records: readonly LogRecord[],
   /** 静态数据表；带物品表和地点表时给出中文名 */
   data: Readonly<Record<string, unknown>> = {},
+  /** 最新一条记录之前的世界；给了才出系统通知，没给时 events 是空的 */
+  before?: WorldState,
 ) {
   const views = registry.project({ world, records, data });
   const clockView = views.clock as ReturnType<typeof worldView>;
@@ -1088,6 +1090,15 @@ export function projectState(
     objectives: registry.objectives({ world, records, data }),
     /** 威胁：警方热度、悬赏、宿敌和敌对势力；只用玩家知道的事定等级 */
     threats: registry.threats({ world, records, data }),
+    /** 当前可打开的地点功能和超梦编辑器；打开面板不结算操作 */
+    interactions: registry.interactions({ world, records, data }),
+    /** 各系统交的状态变化通知；没有前态时不把现有状态当成新事件 */
+    events: before
+      ? registry.events({
+          before: { world: before, records: records.slice(0, -1), data },
+          after: { world, records, data },
+        })
+      : [],
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),

@@ -3,6 +3,8 @@ import type { EconomyState } from "../economy";
 import type { HealthState } from "../health";
 import { cyberwareActions } from "./actions";
 import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
+import { cyberwareEvents } from "./events";
+import { cyberwareInteractions } from "./interactions";
 import { cyberwareRules } from "./prompt";
 import {
   type BoostCommand,
@@ -48,10 +50,14 @@ export const cyberware = defineSystem<
   rules: [cyberwareRules],
   actions: cyberwareActions,
   view: { key: "cyberware", project: cyberwareView },
+  interactions: cyberwareInteractions,
+  events: cyberwareEvents,
 });
 
 export * from "./actions";
 export * from "./apply";
+export * from "./events";
+export * from "./interactions";
 export * from "./prompt";
 export * from "./schema";
 export * from "./view";

@@ -2,6 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
 import { applyBounty, applyEvent, applyHeat, applyRelief, tickHeat } from "./apply";
+import { heatEvents } from "./events";
 import { eventRules, heatRules } from "./prompt";
 import {
   type BountyCommand,
@@ -73,10 +74,12 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
     },
     rules: [eventRules, heatRules],
     threats: heatThreats,
+    events: heatEvents,
   },
 );
 
 export * from "./apply";
+export * from "./events";
 export * from "./prompt";
 export * from "./schema";
 export * from "./threats";
