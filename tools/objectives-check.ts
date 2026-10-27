@@ -12,7 +12,8 @@ import {
   ripperdocs,
   shops,
 } from "@cp/content";
-import { newGameWorld, projectState, withAllSlices } from "@cp/core";
+import { newGameWorld, projectState, registry, withAllSlices } from "@cp/core";
+import { readOffscreen } from "../packages/core/src/narrator/offscreen";
 
 type World = ReturnType<typeof newGameWorld>;
 type Slice = Record<string, unknown>;
@@ -52,6 +53,7 @@ function view(world: World, before?: World) {
     ["待办", v.objectives],
     ["威胁", v.threats],
     ["交互", v.interactions],
+    ["消息", v.feed],
   ] as const) {
     const ids = entries.map((entry) => entry.id);
     expect(`${label} id 不重复`, new Set(ids).size === ids.length, ids);
@@ -307,5 +309,331 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
   );
 }
 
-console.log(failed === 0 ? "S4、S5 验收通过" : `S4、S5 验收：${failed} 条不通过`);
+// 消息：警方频段只播实际涨了的星；传闻听说了才进街头；快讯进新闻，不带真假
+const ctx = { rng: { roll: () => 1 }, data: gameData };
+const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1]) => {
+  const r = registry.applyCommands(world, commands, ctx);
+  const bad = r.results.filter((x) => !x.result.ok);
+  expect(`指令都生效：${commands.map((c) => c.type).join("、")}`, bad.length === 0, bad);
+  return r.world;
+};
+{
+  const kill = { type: "event", kind: "kill", witnesses: 5, public: true, reason: "街头枪战" };
+  const once = run(base, [kill]);
+  const police = view(once, base).feed.filter((x) => x.channel === "police" && x.source === "heat");
+  expect("涨星进警方频段并提醒", police.length === 1 && police[0]?.notify === true, police);
+  const top = run(set(base, "heat", { stars: 5 }), [kill]);
+  expect("封顶不再播", !view(top).feed.some((x) => x.source === "heat"));
+
+  const rumor = {
+    type: "city.rumor",
+    text: "有人说他一个人端了据点",
+    truth: "exaggerated",
+    reach: "city",
+  };
+  const told = run(base, [rumor]);
+  expect("没听说的传闻不进街头", !view(told).feed.some((x) => x.channel === "street"));
+  const heard = run(told, [{ type: "rumorHeard", id: 1 }]);
+  const street = view(heard).feed.filter((x) => x.channel === "street");
+  expect("听说的传闻进街头", street.length === 1 && street[0]?.text === rumor.text, street);
+  expect("传闻真假不出现", !/夸大|exaggerated/.test(JSON.stringify(street)));
+
+  const aired = run(base, [
+    { type: "city.bulletin", kind: "news", title: "快讯", text: "公司口径" },
+  ]);
+  const news = view(aired).feed.filter((x) => x.channel === "news");
+  expect("快讯进新闻、不弹提醒", news.length === 1 && news[0]?.notify === false, news);
+}
+
+// 消息：派单附件只认挂着的委托；一轮最多两条提醒，别的来源一天一条；已读按频道记
+{
+  const jobs = (slice(base, "jobs").jobs ?? []) as Slice[];
+  const first = jobs[0];
+  if (first) {
+    const offered = set(base, "jobs", {
+      jobs: [{ ...first, status: "offered", due: base.time + 600 }],
+    });
+    const sent = run(offered, [{ type: "phone.receive", from: "x", text: "有活", job: first.id }]);
+    const msg = view(sent).feed.find((x) => x.channel === "messages");
+    expect("派单消息带委托卡", msg?.attachments[0]?.id === first.id, msg);
+    const bad = registry.applyCommands(
+      base,
+      [{ type: "phone.receive", from: "x", text: "有活", job: "no-such-job" }],
+      ctx,
+    );
+    expect("不存在的委托不能附", bad.results[0]?.result.ok === false, bad.results);
+  }
+
+  const three = run(base, [
+    { type: "phone.receive", from: "a", text: "一" },
+    { type: "phone.receive", from: "b", text: "二" },
+    { type: "phone.receive", from: "c", text: "三" },
+  ]);
+  const n = view(three, base).notifications;
+  expect("一轮最多两条提醒，多的记 more", n.items.length === 2 && n.more === 1, n);
+  expect("刷新不重复提醒", view(three).notifications.items.length === 0);
+
+  const kill = { type: "event", kind: "kill", witnesses: 5, public: true, reason: "枪战" };
+  const twice = run(base, [kill, kill]);
+  const p = view(twice, base).notifications.items.filter((x) => x.source === "heat");
+  expect("同一来源一天只提醒一条", p.length === 1, p);
+
+  const aired = run(base, [{ type: "city.bulletin", kind: "news", title: "快讯", text: "原文" }]);
+  const unread = view(aired).phone.feedUnread.news;
+  const read = run(aired, [{ type: "phone.read", feed: [...unread] }]);
+  expect("打开新闻后新闻已读", view(read).phone.feedUnread.news.length === 0, unread);
+  expect(
+    "标新闻不动人发的消息",
+    view(run(three, [{ type: "phone.read", feed: [...unread] }])).phone.unread === 3,
+  );
+}
+
+// 全息电话：来电只露身份和状态；接起、拒接各走一遍；响过时限记成没接，进消息频道
+{
+  const about = "想当面谈那批货的事，只给叙事模型";
+  const ringing = run(base, [{ type: "phone.call", from: "x", about }]);
+  const rv = view(ringing);
+  expect("来电出现在投影里", rv.calls.incoming?.status === "ringing", rv.calls);
+  expect("打来的用意不进投影", !JSON.stringify(rv).includes(about));
+  const twice = registry.applyCommands(ringing, [{ type: "phone.call", from: "y", about }], ctx);
+  expect("同一时间只响一通", twice.results[0]?.result.ok === false, twice.results);
+  const id = rv.calls.incoming?.id ?? 0;
+
+  const answered = run(ringing, [{ type: "phone.answer", id, answer: true }]);
+  const av = view(answered);
+  expect(
+    "接起后不再响，记录是接了",
+    av.calls.incoming === null && av.calls.history[0]?.status === "answered",
+    av.calls,
+  );
+  const again = registry.applyCommands(
+    answered,
+    [{ type: "phone.answer", id, answer: false }],
+    ctx,
+  );
+  expect("接过的不能再拒接", again.results[0]?.result.ok === false, again.results);
+
+  const declined = run(ringing, [{ type: "phone.answer", id, answer: false }]);
+  expect("拒接记录是拒接", view(declined).calls.history[0]?.status === "declined");
+  expect("拒接不算没接", !view(declined).feed.some((x) => x.id.startsWith("phone:call:")));
+
+  const later = registry.advanceTo(ringing, ringing.time + 10, ctx).world;
+  const mv = view(later, ringing);
+  const missed = mv.feed.filter((x) => x.id.startsWith("phone:call:"));
+  expect(
+    "响过时限记成全息电话没接！",
+    missed.length === 1 &&
+      missed[0]?.text === "全息电话没接！" &&
+      missed[0]?.channel === "messages",
+    missed,
+  );
+  expect(
+    "没接的来电弹提醒",
+    mv.notifications.items.some((x) => x.id.startsWith("phone:call:")),
+    mv.notifications,
+  );
+  expect("没接时用意也不进投影", !JSON.stringify(mv).includes(about));
+  const readMissed = run(later, [{ type: "phone.read", feed: missed.map((x) => x.id) }]);
+  expect(
+    "没接的来电可以标已读",
+    view(readMissed).feed.every((x) => !x.id.startsWith("phone:call:") || !x.unread),
+  );
+}
+
+// 场外来电：解析后真正结算；来意不泄露，和消息共用额度
+{
+  const npcs = slice(base, "npc").npcs as Record<string, Slice>;
+  const id = Object.keys(npcs)[0];
+  expect("有可测的来电人物", id !== undefined);
+  if (id) {
+    const ready = set(base, "npc", {
+      npcs: { ...npcs, [id]: { ...npcs[id], met: true, alive: true, affinity: 60 } },
+    });
+    const about = "仅供叙事模型的来电用意";
+    const raw = JSON.stringify({ calls: [{ from: id, about }] });
+    const got = readOffscreen(raw, ready, { data: gameData, messages: 2 });
+    expect(
+      "场外提议产生一通来电",
+      got.commands.filter((c) => c.type === "phone.call").length === 1,
+    );
+    const v = view(run(ready, got.commands));
+    expect("场外来电接入玩家投影", v.calls.incoming?.from === id);
+    expect("场外来意不进玩家投影", !JSON.stringify(v).includes(about));
+    const full = readOffscreen(raw, ready, { data: gameData, messages: 0 });
+    expect("联系额度用完不能来电", !full.commands.some((c) => c.type === "phone.call"));
+  }
+}
+
+// 芯片：读到的原文收进数据库，同一块不重复收，打开后标已读
+{
+  const shard = {
+    type: "shard",
+    kind: "email",
+    title: "给老莫的邮件",
+    from: "无名氏",
+    text: "货在码头三号仓，别带人。",
+  };
+  const once = run(base, [shard]);
+  const sv = view(once).shards;
+  expect(
+    "读到的芯片进数据库、未读",
+    sv.list.length === 1 && sv.list[0]?.kindLabel === "邮件" && sv.unread === 1,
+    sv,
+  );
+  expect("同一块芯片不重复收", view(run(once, [shard])).shards.list.length === 1);
+  const id = sv.list[0]?.id ?? 0;
+  const read = run(once, [{ type: "shards.read", ids: [id] }]);
+  expect("打开后芯片已读", view(read).shards.unread === 0);
+  const bad = registry.applyCommands(base, [{ ...shard, kind: "video" }], ctx);
+  expect("不认识的芯片种类不收", bad.results[0]?.result.ok === false, bad.results);
+}
+
+// 期限将至：神经界面自己发，进消息频道；离得远、办完了、过期了都不发；同一来源一天只弹一条
+{
+  const deadline = (id: string, due: number, handledAt: number | null = null) => ({
+    id,
+    label: `期限 ${id}`,
+    due,
+    handledAt,
+  });
+  const withDeadlines = (list: ReturnType<typeof deadline>[]) =>
+    set(base, "world", { deadlines: list });
+  const far = view(withDeadlines([deadline("far", base.time + 600)]));
+  expect("离期限还远不提醒", !far.feed.some((x) => x.source === "world"));
+  const near = withDeadlines([
+    deadline("near", base.time + 60),
+    deadline("done", base.time + 60, base.time - 200),
+    deadline("late", base.time - 10, base.time - 300),
+  ]);
+  const nv = view(near, withDeadlines([]));
+  const warn = nv.feed.filter((x) => x.source === "world");
+  expect(
+    "快到期的才进消息频道",
+    warn.length === 1 && warn[0]?.id === "world:deadline:near" && warn[0]?.channel === "messages",
+    warn,
+  );
+  expect(
+    "期限提醒弹出",
+    nv.notifications.items.some((x) => x.id === "world:deadline:near"),
+    nv.notifications,
+  );
+  const two = withDeadlines([deadline("a", base.time + 60), deadline("b", base.time + 90)]);
+  const tn = view(two, withDeadlines([])).notifications.items.filter((x) => x.source === "world");
+  expect("系统自己发的同一来源一天只弹一条", tn.length === 1, tn);
+  const readNear = run(near, [{ type: "phone.read", feed: ["world:deadline:near"] }]);
+  expect(
+    "期限提醒可以标已读",
+    view(readNear).feed.every((x) => x.source !== "world" || !x.unread),
+  );
+}
+
+// 宿敌动向、心事结果：系统自己发，只露名字和标题，场外原文不进投影
+{
+  const secret = "在码头堵了你的线人";
+  const foe = {
+    npc: "foe",
+    name: "疤脸",
+    since: base.time,
+    how: "逃了",
+    prep: null,
+    known: false,
+    moves: [{ text: secret, at: base.time }],
+    lastMoveAt: base.time,
+  };
+  const nv = view(set(base, "nemesis", { nemeses: [foe] }));
+  const nf = nv.feed.filter((x) => x.source === "nemesis");
+  expect("宿敌动向进消息频道", nf.length === 1 && nf[0]?.channel === "messages", nf);
+  expect("宿敌场外动作原文不进投影", !JSON.stringify(nv).includes(secret));
+
+  const seeds = ((gameData as Readonly<Record<string, unknown>>).arcs ?? []) as {
+    npc: string;
+    concerns: { id: string; title: string }[];
+  }[];
+  const seed = seeds[0];
+  const concern = seed?.concerns[0];
+  if (seed && concern) {
+    const result = "暗中落定的结果原文";
+    const arcWith = (known: boolean) =>
+      set(base, "arcs", {
+        arcs: {
+          [seed.npc]: {
+            unlockedAt: base.time,
+            concerns: {
+              [concern.id]: {
+                status: "resolved",
+                toldAt: base.time,
+                notes: [{ text: "场外推了一步", at: base.time, by: "offscreen" }],
+                outcome: { text: result, fate: "worse", at: base.time, by: "offscreen", known },
+              },
+            },
+            lastOffscreenAt: base.time,
+            doneAt: null,
+          },
+        },
+      });
+    const quiet = view(arcWith(false));
+    expect("没听说的心事结果不发", !quiet.feed.some((x) => x.source === "arcs"));
+    const heard = view(arcWith(true));
+    const af = heard.feed.filter((x) => x.source === "arcs");
+    expect(
+      "听说了的心事结果进消息",
+      af.length === 1 && af[0]?.text.includes(concern.title) === true,
+      af,
+    );
+    expect(
+      "心事结果原文和场外进展不进消息",
+      !/暗中落定的结果原文|场外推了一步/.test(JSON.stringify(heard.feed)),
+    );
+  }
+}
+
+// 连跑几天：每两小时一轮，混着人发的消息、枪战、快讯、期限，统计弹出的提醒
+{
+  type Cmd = Parameters<typeof registry.applyCommands>[1][number];
+  let world = base;
+  let maxPerTurn = 0;
+  let total = 0;
+  let moreTotal = 0;
+  const perSourceDay = new Map<string, number>();
+  const TURNS = 48;
+  for (let turn = 0; turn < TURNS; turn += 1) {
+    const before = world;
+    const cmds: Cmd[] = [];
+    if (turn % 3 === 0) cmds.push({ type: "phone.receive", from: `p${turn}`, text: "在吗" });
+    if (turn % 4 === 1) {
+      cmds.push({ type: "event", kind: "kill", witnesses: 5, public: true, reason: "枪战" });
+    }
+    if (turn % 5 === 2) {
+      cmds.push({ type: "city.bulletin", kind: "news", title: `快讯${turn}`, text: "公司口径" });
+    }
+    if (turn % 6 === 0) {
+      cmds.push({
+        type: "deadline",
+        action: "add",
+        id: `d${turn}`,
+        label: `期限${turn}`,
+        due: world.time + 240,
+      });
+    }
+    if (cmds.length > 0) world = run(world, cmds);
+    world = registry.advanceTo(world, world.time + 120, ctx).world;
+    const n = projectState(world, [], gameData, before).notifications;
+    maxPerTurn = Math.max(maxPerTurn, n.items.length);
+    total += n.items.length;
+    moreTotal += n.more;
+    for (const item of n.items) {
+      if (item.source === "phone") continue;
+      const key = `${item.source}|${Math.floor(item.at / 1440)}`;
+      perSourceDay.set(key, (perSourceDay.get(key) ?? 0) + 1);
+    }
+  }
+  const worst = Math.max(0, ...perSourceDay.values());
+  console.log(
+    `  连跑 ${TURNS} 轮（${(TURNS * 2) / 24} 天）：弹出 ${total} 条，合并进「还有 n 条」${moreTotal} 条，单轮最多 ${maxPerTurn} 条`,
+  );
+  expect("连跑几天每轮最多弹两条", maxPerTurn <= 2, maxPerTurn);
+  expect("系统自己发的同一来源一天最多一条", worst <= 1, [...perSourceDay]);
+}
+
+console.log(failed === 0 ? "S4、S5、S6 验收通过" : `S4–S6 验收：${failed} 条不通过`);
 if (failed > 0) process.exitCode = 1;

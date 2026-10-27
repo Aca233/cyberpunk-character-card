@@ -1,6 +1,7 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
 
 import { applyPatches } from "immer";
+import { feedDeliveries } from "./kernel/system";
 import {
   effectiveTurns,
   type LogRecord,
@@ -92,10 +93,11 @@ import {
   type NpcCard,
   NpcStateSchema,
 } from "./systems/npc/schema";
-import { PhoneStateSchema } from "./systems/phone/schema";
+import { PhoneStateSchema, type phoneCallsView } from "./systems/phone";
 import { blackoutTurns, lostControlOf, type psychosisView } from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import type { HomeDef, safehouseView } from "./systems/safehouse";
+import type { shardsView } from "./systems/shards";
 import type { sidegigsView } from "./systems/sidegigs/apply";
 import type { squadView } from "./systems/squad/apply";
 import type { stealthView } from "./systems/stealth";
@@ -777,6 +779,7 @@ export function projectState(
   const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const turns = effectiveTurns(records);
+  const feed = registry.feed({ world, records, data });
 
   return {
     version: logVersion(records),
@@ -1092,6 +1095,15 @@ export function projectState(
     threats: registry.threats({ world, records, data }),
     /** 当前可打开的地点功能和超梦编辑器；打开面板不结算操作 */
     interactions: registry.interactions({ world, records, data }),
+    /** 各系统交的公开消息，按时间倒序；投影不修改已读状态或发送额度 */
+    feed,
+    /**
+     * 这一轮该弹的消息提醒：只比最新一条记录前后的消息，人发来的每条都算，其余来源每个游戏日一条，
+     * 一轮最多两条，多的记 more；没有前态时是空的。按世界算出，刷新几次结果都一样
+     */
+    notifications: before
+      ? feedDeliveries(registry.feed({ world: before, records: records.slice(0, -1), data }), feed)
+      : { items: [], more: 0 },
     /** 各系统交的状态变化通知；没有前态时不把现有状态当成新事件 */
     events: before
       ? registry.events({
@@ -1102,9 +1114,20 @@ export function projectState(
     offers: projectOffers(world, records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: sandevistanOf(world, data),
+    /** 全息电话：正在响的那通和通话记录；打来的用意只给叙事模型，不在这里 */
+    calls: views.calls as ReturnType<typeof phoneCallsView>,
+    /** 数据库页的芯片：玩家读过的录音、邮件、日记原文，新读到的在前 */
+    shards: views.shards as ReturnType<typeof shardsView>,
     /** 消息，最近的在前 */
     phone: {
       unread: phoneState.messages.filter((m) => !m.read).length,
+      /** 各频道未读消息的 id；打开哪个频道就把那个频道的 id 交回 readMessages 标已读 */
+      feedUnread: {
+        messages: feed.filter((i) => i.unread && i.channel === "messages").map((i) => i.id),
+        news: feed.filter((i) => i.unread && i.channel === "news").map((i) => i.id),
+        police: feed.filter((i) => i.unread && i.channel === "police").map((i) => i.id),
+        street: feed.filter((i) => i.unread && i.channel === "street").map((i) => i.id),
+      },
       messages: [...phoneState.messages]
         .reverse()
         .slice(0, PHONE_SHOWN)

@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { applyDeadline, applyWorld, endScene } from "./apply";
 import { worldEvents } from "./events";
+import { worldFeed } from "./feed";
 import {
   type DeadlineCommand,
   DeadlineCommandSchema,
@@ -31,11 +32,13 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
   },
   view: { key: "clock", project: worldView },
   events: worldEvents,
+  feed: worldFeed,
 });
 
 export * from "./apply";
 export * from "./district";
 export * from "./events";
+export * from "./feed";
 export * from "./schema";
 export * from "./view";
 export * from "./weather";

@@ -12,6 +12,8 @@ export const MessageSchema = z.object({
   /** 显示用的名字：查得到人物卡或中间人时用中文名 */
   name: z.string().min(1),
   text: z.string().min(1).max(300),
+  /** 委托卡附件：收件时校验委托仍可接，展示和接单时再次检查当前状态 */
+  job: z.string().min(1).optional(),
   at: z.number().int(),
   read: z.boolean(),
   replied: z.boolean(),
@@ -22,9 +24,39 @@ export const MessageSchema = z.object({
 });
 export type Message = z.infer<typeof MessageSchema>;
 
+/** 全息电话响多久没接算没接（游戏分钟）；通话记录最多留几条 */
+export const CALL_RING_MINUTES = 5;
+export const CALLS_KEPT = 20;
+
+export const CallStatusSchema = z.enum(["ringing", "answered", "declined", "missed"]);
+export type CallStatus = z.infer<typeof CallStatusSchema>;
+export const CALL_STATUS_LABELS: Readonly<Record<CallStatus, string>> = {
+  ringing: "来电",
+  answered: "接了",
+  declined: "拒接",
+  missed: "全息电话没接！",
+};
+
+/** 一通全息电话：打来想说什么只给叙事模型看，接起来才写进正文 */
+export const CallSchema = z.object({
+  id: z.number().int().min(1),
+  from: z.string().min(1),
+  name: z.string().min(1),
+  /** 打来的用意；只进情境节，不进玩家投影 */
+  about: z.string().min(1).max(200),
+  at: z.number().int(),
+  status: CallStatusSchema,
+  endedAt: z.number().int().nullable().default(null),
+});
+export type Call = z.infer<typeof CallSchema>;
+
 export const PhoneStateSchema = z.object({
   messages: z.array(MessageSchema).max(PHONE_KEPT).default([]),
   nextId: z.number().int().min(1).default(1),
+  calls: z.array(CallSchema).max(CALLS_KEPT).default([]),
+  nextCall: z.number().int().min(1).default(1),
+  /** 其他系统交来的公开消息的已读 id；人物消息仍以 messages[].read 为准 */
+  feedRead: z.array(z.string().min(1)).default([]),
 });
 export type PhoneState = z.infer<typeof PhoneStateSchema>;
 
@@ -32,6 +64,12 @@ export type PhoneState = z.infer<typeof PhoneStateSchema>;
 export const IncomingMessageSchema = z.object({
   from: z.string().trim().min(1).max(40).describe("发消息的人：人物 id、中间人 id，或者一个名字"),
   text: z.string().trim().min(1).max(300).describe("消息原文：短、口语，像真的短信"),
+  job: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe("派单消息附带的委托 id；必须是已经挂出且仍可接的委托，普通消息不写"),
 });
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 
@@ -40,9 +78,15 @@ export const ReceiveSchema = z.object({
   type: z.literal("phone.receive"),
   from: z.string().min(1),
   text: z.string().min(1).max(300),
+  /** 可选的委托卡附件，收件时由 phone 系统检查委托是否仍可接 */
+  job: z.string().min(1).optional(),
 });
 /** 只能由代码发出：玩家在界面上看了消息 */
-export const ReadSchema = z.object({ type: z.literal("phone.read") });
+export const ReadSchema = z.object({
+  type: z.literal("phone.read"),
+  /** 本次实际展示的其他频道消息 id */
+  feed: z.array(z.string().min(1).max(200)).max(200).optional(),
+});
 /** 只能由代码发出：这一轮的输入是在回复第 id 条 */
 export const ReplySchema = z.object({
   type: z.literal("phone.reply"),
@@ -51,7 +95,22 @@ export const ReplySchema = z.object({
   text: z.string().min(1).max(300).optional(),
 });
 
+/** 只能由代码发出：重要的人打来全息电话；about 是打来的用意，只给叙事模型看 */
+export const CallCommandSchema = z.object({
+  type: z.literal("phone.call"),
+  from: z.string().min(1),
+  about: z.string().trim().min(1).max(200),
+});
+/** 只能由代码发出：玩家在界面上接起或拒接正在响的那通 */
+export const AnswerSchema = z.object({
+  type: z.literal("phone.answer"),
+  id: z.number().int().min(1),
+  answer: z.boolean(),
+});
+
 export type PhoneInternal =
   | z.infer<typeof ReceiveSchema>
   | z.infer<typeof ReadSchema>
-  | z.infer<typeof ReplySchema>;
+  | z.infer<typeof ReplySchema>
+  | z.infer<typeof CallCommandSchema>
+  | z.infer<typeof AnswerSchema>;

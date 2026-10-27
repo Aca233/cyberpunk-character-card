@@ -23,9 +23,10 @@ import {
 } from "./systems/inventory";
 import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
-import { ReadMessagesActionSchema } from "./systems/phone";
+import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { registry } from "./systems/registry";
 import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
+import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
@@ -61,8 +62,10 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   SellItemActionSchema,
   /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
   BuyHomeActionSchema,
-  /** 打开消息：把消息都标成已读 */
+  /** 打开消息：没给 feed 时把人发来的消息都标成已读；给了只标这几条 */
   ReadMessagesActionSchema,
+  /** 全息电话来电：接起或拒接正在响的那通 */
+  AnswerCallActionSchema,
   /** 角色卡上的习惯：add 自己写一条，confirm 认下叙事模型的提议，dismiss 不要这条提议，remove 删掉 */
   HabitActionSchema,
   /**
@@ -74,6 +77,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   EndStoryActionSchema,
   /** 超梦体验编辑器：标出一个线索点，看它的扫描结果；下结论走回合（input.braindance） */
   BraindanceActionSchema,
+  /** 数据库页：打开芯片，只标这几块已读 */
+  ReadShardsActionSchema,
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 

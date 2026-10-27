@@ -127,6 +127,36 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   interactions?(ctx: ViewContext): readonly Interaction[];
   /** 这一轮自己这块有什么变化，进系统通知；只能比玩家看得到的东西，暗中的变化不能露出来 */
   events?(ctx: EventContext): readonly SystemEvent[];
+  /** 外面的人和事来找你，进消息的四个频道；只放已经传到玩家这里的东西 */
+  feed?(ctx: ViewContext): readonly FeedItem[];
+}
+
+/** 消息的四个频道：消息（人和中间人）、新闻、警用频段、街头传闻 */
+export type FeedChannel = "messages" | "news" | "police" | "street";
+
+/** 消息上挂的附件：委托卡、地点、人物；界面按 kind 跳转或接单 */
+export interface FeedAttachment {
+  readonly kind: "job" | "location" | "npc";
+  readonly id: string;
+  readonly label: string;
+}
+
+/** 消息里的一条 */
+export interface FeedItem {
+  /** 在所有消息里唯一，写成「来源:原 id」 */
+  readonly id: string;
+  readonly source: string;
+  readonly channel: FeedChannel;
+  /** 谁发的或哪个台：人名、N54、NCPD 调度、街头 */
+  readonly from: string;
+  readonly text: string;
+  /** 游戏时间（分钟）和写法 */
+  readonly at: number;
+  readonly time: string;
+  readonly unread: boolean;
+  /** 要不要同时弹系统通知；频道默认规矩在注册表里，系统只在例外时写 true */
+  readonly notify: boolean;
+  readonly attachments: readonly FeedAttachment[];
 }
 
 /** 当前地点的一样功能：按 F 打开 panel 指的面板，target 是面板里要打开的那一项（店、医生、存放处的 id） */
@@ -322,6 +352,8 @@ export interface Registry {
   interactions(ctx: ViewContext): readonly Interaction[];
   /** 各系统比前后两次世界交的系统通知，按系统顺序拼起来；只读 */
   events(ctx: EventContext): readonly SystemEvent[];
+  /** 收齐各系统的公开消息，校验来源和唯一 id；只读，不标已读或更新发送额度 */
+  feed(ctx: ViewContext): readonly FeedItem[];
 }
 
 interface Owner {
@@ -604,6 +636,27 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       }
       return result;
     },
+    feed(ctx) {
+      const result: FeedItem[] = [];
+      const ids = new Set<string>();
+      for (const system of order) {
+        for (const item of system.feed?.(ctx) ?? []) {
+          if (item.source !== system.id || !item.id.startsWith(`${system.id}:`)) {
+            throw new RegistryError(`${system.id} 的消息 ${item.id} 来源不一致`);
+          }
+          if (ids.has(item.id)) throw new RegistryError(`消息 id 重复：${item.id}`);
+          if (!Number.isInteger(item.at)) {
+            throw new RegistryError(`消息 ${item.id} 的时间必须是整数分钟`);
+          }
+          ids.add(item.id);
+          result.push({
+            ...item,
+            notify: item.channel === "messages" || (item.channel === "police" && item.notify),
+          });
+        }
+      }
+      return result.sort((a, b) => b.at - a.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    },
     initialWorld(time) {
       if (!Number.isInteger(time)) throw new RegistryError(`游戏时间必须是整数分钟：${time}`);
       const slices: Record<string, unknown> = {};
@@ -661,6 +714,53 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       if (failed !== undefined) throw new RegistryError(failed);
       return { world: next, patches };
     },
+  };
+}
+
+/** 一轮最多自动弹几条消息提醒；多的合成一句「还有 n 条」 */
+export const FEED_NOTIFY_PER_TURN = 2;
+const FEED_DAY = 1440;
+
+export interface FeedDelivery {
+  readonly items: readonly FeedItem[];
+  /** 这一轮新到、该提醒却超了额度的条数 */
+  readonly more: number;
+}
+
+/**
+ * 这一轮该弹的提醒：上一次没有、这一次新到、未读、要提醒的消息。
+ * 人发来的消息每条都算；其余来源每个游戏日只有当天最早的一条能提醒（按全部消息算，和刷新几次无关）；
+ * 一轮最多 FEED_NOTIFY_PER_TURN 条。纯函数：不标已读，不记额度，重复调用结果一样
+ */
+export function feedDeliveries(
+  before: readonly FeedItem[],
+  after: readonly FeedItem[],
+): FeedDelivery {
+  const seen = new Set(before.map((item) => item.id));
+  const firstOfDay = new Set<string>();
+  const days = new Set<string>();
+  const ordered = [...after].sort(
+    (a, b) => a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  // 人发来的消息和来电（phone 交的）每条都算；系统自己发的提醒即使进消息频道，也按来源一天一条
+  const personal = (item: FeedItem) => item.source === "phone";
+  for (const item of ordered) {
+    if (!item.notify || personal(item)) continue;
+    const key = `${item.source}|${Math.floor(item.at / FEED_DAY)}`;
+    if (days.has(key)) continue;
+    days.add(key);
+    firstOfDay.add(item.id);
+  }
+  const fresh = ordered.filter(
+    (item) =>
+      item.notify &&
+      item.unread &&
+      !seen.has(item.id) &&
+      (personal(item) || firstOfDay.has(item.id)),
+  );
+  return {
+    items: fresh.slice(0, FEED_NOTIFY_PER_TURN),
+    more: Math.max(0, fresh.length - FEED_NOTIFY_PER_TURN),
   };
 }
 

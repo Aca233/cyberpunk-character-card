@@ -54,7 +54,12 @@ import {
   nemesisOffscreenSection,
 } from "../systems/nemesis";
 import { type Npc, NpcStateSchema, PAST_MAX, TIMELINE_SQUASH } from "../systems/npc";
-import { IncomingMessageSchema, MESSAGES_PER_TURN, PhoneStateSchema } from "../systems/phone";
+import {
+  CallCommandSchema,
+  IncomingMessageSchema,
+  MESSAGES_PER_TURN,
+  PhoneStateSchema,
+} from "../systems/phone";
 import { SquadStateSchema } from "../systems/squad";
 import { formatGameTime, WorldClockStateSchema } from "../systems/world";
 import { parseModelJson } from "./block";
@@ -166,6 +171,9 @@ export function contactPicks(
   const messages = PhoneStateSchema.parse(world.slices.phone ?? {}).messages;
   const arcs = ArcsStateSchema.parse(world.slices.arcs ?? {});
   const seeds = arcCatalog(data);
+  const rivals = new Map(
+    NemesisStateSchema.parse(world.slices.nemesis ?? {}).nemeses.map((rival) => [rival.npc, rival]),
+  );
   const picks: ContactPick[] = [];
   for (const n of Object.values(npcs)) {
     if (!n.alive || !n.met || present.has(n.id) || squad.has(n.id)) continue;
@@ -190,6 +198,14 @@ export function contactPicks(
     if (n.doing && (n.lastSeenAt === null || n.doing.at > n.lastSeenAt)) {
       score += 2;
       why.push(`分开以后有了新情况：${n.doing.text}`);
+    }
+    // 宿敌在屏幕外动过手、之后还没再照面：由代码挑出来让他放句话，动作本身仍只给模型看
+    const rival = rivals.get(n.id);
+    if (rival?.lastMoveAt != null && (n.lastSeenAt === null || rival.lastMoveAt > n.lastSeenAt)) {
+      score += 2;
+      why.push(
+        "宿敌，最近在屏幕外动过手，想让玩家知道他回来了（消息只放狠话或暗示，不说破他具体做了什么）",
+      );
     }
     if (n.lastSeenAt !== null && world.time - n.lastSeenAt >= LONG_SILENCE_DAYS * DAY) {
       score += 1;
@@ -257,6 +273,8 @@ status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束
 agendas：没有【到点的势力动向】就输出空数组；有的话每条到点的都写一条。turf 不动地盘时写 null。
 nemeses：没有【宿敌】就输出空数组。
 arcs：没有【没人管的心事】就输出空数组；有也可以空着。
+calls：重要的人确有需要当面通话的急事时，可以输出 [{"from": "人物或中间人 id", "about": "200 字以内的来意，仅给叙事模型"}]，否则输出 []。最多一通，和 messages 共用本轮 ${MESSAGES_PER_TURN} 条联系额度；同一件事不要既发消息又打电话。人物只能从【该联系玩家的人】里选，中间人必须已有记录；不让已死、本场在场或在队里的人打来。只提议来电，不替玩家接听、拒接或回应；about 不得写成玩家已经听到的内容。
+messages：派单消息附上 job 字段，值为当前状态里已经挂出、尚未接下且未到期的委托 id；普通消息不写。场外推演不能新建委托，不编造 id，不把已接下或已结束的委托当成可接的新单。
 
 例：{"events": [{"id": "tyger-claws-kabuki", "title": "虎爪帮在歌舞伎区收紧地盘", "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。", "district": "沃森", "status": "heating", "weight": "normal"}], "npcs": [], "messages": []}
 玩家只是在公寓睡了一觉、正文没提城里任何事、也没有到点的势力动向时：{"events": [], "npcs": [], "pasts": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "agendas": [], "nemeses": [], "arcs": []}
@@ -357,6 +375,9 @@ export function buildOffscreenPrompt(
     { role: "user", content },
   ];
 }
+
+/** 场外推演只提议来电身份和用意；内部指令类型由代码补上，接听决定只能来自玩家 */
+const OffscreenCallSchema = CallCommandSchema.omit({ type: true });
 
 const OffscreenNpcSchema = z.object({
   id: z.string().trim().min(1),
@@ -597,7 +618,38 @@ export function readOffscreen(
       break;
     }
     sent += 1;
-    commands.push({ type: "phone.receive", from: parsed.data.from, text: parsed.data.text });
+    commands.push({
+      type: "phone.receive",
+      from: parsed.data.from,
+      text: parsed.data.text,
+      ...(parsed.data.job === undefined ? {} : { job: parsed.data.job }),
+    });
+  }
+
+  const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
+  for (const [i, item] of list("calls").entries()) {
+    if (sent >= budget || phone.calls.some((c) => c.status === "ringing")) break;
+    const parsed = OffscreenCallSchema.safeParse(item);
+    if (!parsed.success) {
+      notes.push(`场外推演：calls[${i}] 格式不对：${issue(parsed.error)}`);
+      continue;
+    }
+    const { from } = parsed.data;
+    const npc = npcs[from];
+    const fixer = fixers[from] !== undefined;
+    if (
+      (npc ? !npc.alive || !npc.met : !fixer) ||
+      died.has(from) ||
+      opts.present?.has(from) ||
+      squad.has(from) ||
+      (!fixer && !picked.has(from))
+    ) {
+      notes.push(`场外推演：calls[${i}] 来电者不符合主动联系条件`);
+      continue;
+    }
+    commands.push({ type: "phone.call", ...parsed.data });
+    sent += 1;
+    break;
   }
 
   const data = opts.data ?? {};

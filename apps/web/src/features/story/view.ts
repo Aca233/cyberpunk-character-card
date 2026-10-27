@@ -216,6 +216,21 @@ export function diffViews(prev: View, next: View): Toast[] {
     text: event.text,
     tone: event.tone,
   }));
+  // 消息提醒：额度在 core 按世界算好，这里只照着弹，多的合成一句
+  for (const item of next.notifications.items) {
+    out.push({
+      icon: item.channel === "police" ? "notify.warning" : "notify.journal",
+      text: `${item.from}：${item.text}`,
+      tone: "info",
+    });
+  }
+  if (next.notifications.more > 0) {
+    out.push({
+      icon: "notify.journal",
+      text: `还有 ${next.notifications.more} 条`,
+      tone: "info",
+    });
+  }
 
   const hp = next.health.hp - prev.health.hp;
   if (hp !== 0) {

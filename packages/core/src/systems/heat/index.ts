@@ -1,8 +1,17 @@
 import { defineSystem } from "../../kernel/system";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
-import { applyBounty, applyEvent, applyHeat, applyRelief, tickHeat } from "./apply";
+import {
+  applyBounty,
+  applyEvent,
+  applyHeat,
+  applyRelief,
+  noticeRise,
+  shownStars,
+  tickHeat,
+} from "./apply";
 import { heatEvents } from "./events";
+import { heatFeed } from "./feed";
 import { eventRules, heatRules } from "./prompt";
 import {
   type BountyCommand,
@@ -41,6 +50,8 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       districtDay: null,
       hideoutDay: null,
       recent: [],
+      nextNotice: 1,
+      notices: [],
       bounties: [],
     }),
     commands: { event: EventCommandSchema, heat: HeatCommandSchema, bounty: BountyCommandSchema },
@@ -67,19 +78,23 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
         const alert = ctx.read<StealthState>("stealth");
         const ended = ctx.read<WorldClockState>("world").scene - 1;
         if (alert.scene === ended && alert.peak >= ALERT_HEAT_LEVEL) {
+          const before = shownStars(draft.stars);
           draft.stars = Math.min(HEAT_MAX, draft.stars + 1);
           draft.lastSeenAt = ctx.now;
+          noticeRise(draft, before, shownStars(draft.stars), ctx.now);
         }
       },
     },
     rules: [eventRules, heatRules],
     threats: heatThreats,
     events: heatEvents,
+    feed: heatFeed,
   },
 );
 
 export * from "./apply";
 export * from "./events";
+export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./threats";

@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyNcpd, tickAlerts } from "./apply";
-import { ncpdEvents } from "./events";
+import { ncpdFeed } from "./feed";
 import { ncpdObjectives } from "./objectives";
 import { ncpdRules } from "./prompt";
 import { type NcpdCommand, NcpdCommandSchema, type NcpdState, NcpdStateSchema } from "./schema";
@@ -18,11 +18,13 @@ export const ncpd = defineSystem<NcpdState, NcpdCommand>({
   rules: [ncpdRules],
   objectives: ncpdObjectives,
   view: { key: "ncpd", project: ncpdView },
-  events: ncpdEvents,
+  // 新挂的警情走警方频道的消息提醒，不再另发系统通知，免得同一条弹两次
+  feed: ncpdFeed,
 });
 
 export * from "./apply";
 export * from "./events";
+export * from "./feed";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";

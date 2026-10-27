@@ -84,8 +84,25 @@ export const RumorFieldsSchema = z.object({
   /** 说的是玩家角色 */
   player: z.boolean().default(false),
 });
-export const RumorSchema = RumorFieldsSchema.extend({ at: z.number().int() });
+export const RumorSchema = RumorFieldsSchema.extend({
+  /** 编号，递增；0 是没有编号的旧传闻，不能标听说 */
+  id: z.number().int().min(0).default(0),
+  at: z.number().int(),
+  /** 正文里有人把这条说给玩家听了；只有听说了的才进玩家的街头频道 */
+  heard: z.boolean().default(false),
+});
 export type Rumor = z.infer<typeof RumorSchema>;
+
+/** 模型使用：{"type": "rumorHeard", "id": 3} */
+export const RumorHeardSchema = z
+  .object({
+    type: z.literal("rumorHeard"),
+    id: z.number().int().min(1),
+  })
+  .describe(
+    "街头传闻传到玩家耳朵里了：这一轮正文里有人把【街头传闻】里的某一条（原话或差不多的意思）说给玩家听了才写，id 写传闻编号",
+  );
+export type RumorHeard = z.infer<typeof RumorHeardSchema>;
 
 export const BulletinKindSchema = z.enum(["news", "radio"]);
 export type BulletinKind = z.infer<typeof BulletinKindSchema>;
@@ -110,6 +127,7 @@ export const CityStateSchema = z.object({
   events: z.array(CityEventSchema).default([]),
   /** 街头传闻，旧的在前，最多 RUMORS_KEPT 条；只给模型看 */
   rumors: z.array(RumorSchema).default([]),
+  nextRumor: z.number().int().min(1).default(1),
   /** 新闻快讯和电台插段，旧的在前，最多 BULLETINS_KEPT 条 */
   bulletins: z.array(BulletinSchema).default([]),
   nextBulletin: z.number().int().min(1).default(1),

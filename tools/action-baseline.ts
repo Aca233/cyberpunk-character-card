@@ -412,7 +412,34 @@ const results = cases.map((c) => {
       action: c.action,
       commands: r.commands,
       notes: r.notes,
-      world: digest(r.world),
+      world: digest(
+        process.argv.includes("--check-before-heat-notices")
+          ? (() => {
+              if (!check) throw new Error("旧结构比对只能和 --check 一起使用，不能覆盖基准");
+              const { nextNotice, notices, ...heat } = slice(r.world, "heat");
+              if (nextNotice !== 1 || !Array.isArray(notices) || notices.length !== 0) {
+                throw new Error("警方播报已有业务数据，不能作为新增默认值排除");
+              }
+              const { calls, nextCall, ...phone } = slice(r.world, "phone");
+              if (nextCall !== 1 || !Array.isArray(calls) || calls.length !== 0) {
+                throw new Error("全息电话已有业务数据，不能作为新增默认值排除");
+              }
+              // 只去掉这几个已验证的默认字段；其余完整世界仍参与摘要比对。
+              return { ...r.world, slices: { ...r.world.slices, heat, phone } };
+            })()
+          : process.argv.includes("--check-before-shards")
+            ? (() => {
+                if (!check) throw new Error("旧结构比对只能和 --check 一起使用，不能覆盖基准");
+                const { shards, ...slices } = r.world.slices as Readonly<Record<string, unknown>>;
+                const s = (shards ?? {}) as Slice;
+                if (s.nextShard !== 1 || !Array.isArray(s.shards) || s.shards.length !== 0) {
+                  throw new Error("芯片已有业务数据，不能作为新增切片排除");
+                }
+                // 只去掉新增的空芯片切片；其余完整世界仍参与摘要比对。
+                return { ...r.world, slices };
+              })()
+            : r.world,
+      ),
       patches: digest(r.patches),
     };
   } catch (e) {

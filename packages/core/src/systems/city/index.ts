@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import type { WorldClockState } from "../world";
-import { applyBulletin, applyCityEvent, applyRumor } from "./apply";
+import { applyBulletin, applyCityEvent, applyRumor, applyRumorHeard } from "./apply";
+import { cityFeed } from "./feed";
 import { cityRules } from "./prompt";
 import {
   CityBulletinCommandSchema,
@@ -10,25 +11,28 @@ import {
   CityRumorCommandSchema,
   type CityState,
   CityStateSchema,
+  type RumorHeard,
+  RumorHeardSchema,
 } from "./schema";
 import { citySections } from "./sections";
 import { bulletinsView } from "./view";
 
 /** 城里的动静：场外推演写的世界事件，只给模型看；模型不能直接写，由回合流程在收场时推演 */
-export const city = defineSystem<CityState, never, CityInternal>({
+export const city = defineSystem<CityState, RumorHeard, CityInternal>({
   id: "city",
   dependsOn: ["world"],
   state: CityStateSchema,
   initial: () => ({
     events: [],
     rumors: [],
+    nextRumor: 1,
     bulletins: [],
     nextBulletin: 1,
     lastScene: null,
     lastAt: null,
     lastContactAt: null,
   }),
-  commands: {},
+  commands: { rumorHeard: RumorHeardSchema },
   internal: {
     "city.event": CityEventCommandSchema,
     "city.rumor": CityRumorCommandSchema,
@@ -36,6 +40,7 @@ export const city = defineSystem<CityState, never, CityInternal>({
     "city.ran": CityRanSchema,
   },
   apply(draft, command, ctx) {
+    if (command.type === "rumorHeard") return applyRumorHeard(draft, command);
     if (command.type === "city.event") return applyCityEvent(draft, command, ctx.now);
     if (command.type === "city.rumor") return applyRumor(draft, command, ctx.now);
     if (command.type === "city.bulletin") return applyBulletin(draft, command, ctx.now);
@@ -47,9 +52,11 @@ export const city = defineSystem<CityState, never, CityInternal>({
   rules: [cityRules],
   sections: citySections,
   view: { key: "bulletins", project: bulletinsView },
+  feed: cityFeed,
 });
 
 export * from "./apply";
+export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./sections";

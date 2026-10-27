@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { applyArc, applyArcOffscreen, unlockArcs } from "./apply";
 import { arcsEvents } from "./events";
+import { arcsFeed } from "./feed";
 import { arcsObjectives } from "./objectives";
 import { arcRules } from "./prompt";
 import {
@@ -36,10 +37,12 @@ export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
   sections: arcsSections,
   objectives: arcsObjectives,
   events: arcsEvents,
+  feed: arcsFeed,
 });
 
 export * from "./apply";
 export * from "./events";
+export * from "./feed";
 export * from "./objectives";
 export * from "./prompt";
 export * from "./schema";

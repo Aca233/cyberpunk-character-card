@@ -39,6 +39,7 @@ export * as phoneRules from "./systems/phone";
 export * as psychosisRules from "./systems/psychosis";
 export { registry, systems } from "./systems/registry";
 export * as safehouseRules from "./systems/safehouse";
+export * as shardsRules from "./systems/shards";
 export * as sidegigRules from "./systems/sidegigs";
 export * as squadRules from "./systems/squad";
 export * as stealthRules from "./systems/stealth";

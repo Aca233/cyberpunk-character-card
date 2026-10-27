@@ -88,6 +88,24 @@ export const HeatStateSchema = z.object({
   /** 上次因为躲在自己的安全屋多降一星是第几个游戏日；旧存档没有 */
   hideoutDay: z.number().int().nullable().default(null),
   recent: z.array(HeatEventSchema).max(RECENT_EVENTS),
+  /** 警方播报用独立递增编号，旧记录滚出列表不改变剩余消息的 id */
+  nextNotice: z.number().int().min(1).default(1),
+  /** 只记实际显示星级的上升；事件的理论增量不代表封顶后仍然涨星 */
+  notices: z
+    .array(
+      z
+        .object({
+          id: z.number().int().min(1),
+          at: z.number().int(),
+          before: z.number().int().min(0).max(HEAT_MAX),
+          after: z.number().int().min(0).max(HEAT_MAX),
+        })
+        .refine((n) => n.after > n.before, {
+          message: "警方播报必须对应实际显示星级的上升",
+        }),
+    )
+    .max(RECENT_EVENTS)
+    .default([]),
   /** 悬赏：不随时间消失，只能靠剧情了结 */
   bounties: z.array(BountySchema).default([]),
 });

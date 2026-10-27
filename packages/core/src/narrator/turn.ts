@@ -925,7 +925,12 @@ export async function runNarratorTurn(
       parse: (v) => {
         const parsed = IncomingMessageSchema.safeParse(v);
         return parsed.success
-          ? { type: "phone.receive", from: parsed.data.from, text: parsed.data.text }
+          ? {
+              type: "phone.receive",
+              from: parsed.data.from,
+              text: parsed.data.text,
+              ...(parsed.data.job === undefined ? {} : { job: parsed.data.job }),
+            }
           : undefined;
       },
     });

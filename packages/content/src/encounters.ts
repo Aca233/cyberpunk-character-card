@@ -86,7 +86,7 @@ export const encounters = travelRules.EncounterCatalogSchema.parse([
   {
     id: "ncart-busker",
     label: "车厢里的人",
-    note: "轻轨车厢里有人卖艺、传教或者偷钱包，乘客各看各的手机",
+    note: "轻轨车厢里有人卖艺、传教或者偷钱包，乘客各自盯着视野里的广告和消息，谁也不看谁",
     modes: ["metro"],
     weight: 2,
   },

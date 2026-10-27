@@ -8,6 +8,7 @@ import {
 } from "./agenda";
 import { applyFaction } from "./apply";
 import { factionsEvents } from "./events";
+import { factionsFeed } from "./feed";
 import { agendaRules, factionRules } from "./prompt";
 import {
   AgendaCommandSchema,
@@ -63,11 +64,13 @@ export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInt
   view: { key: "factions", project: factionsView },
   threats: factionsThreats,
   events: factionsEvents,
+  feed: factionsFeed,
 });
 
 export * from "./agenda";
 export * from "./apply";
 export * from "./events";
+export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./threats";

@@ -60,6 +60,23 @@ function seen(draft: Draft<HeatState>, now: number): void {
   draft.decayedAt = now;
 }
 
+/** 显示的星级真的涨了才记一条警方播报；封顶或只攒了半星不记 */
+export function noticeRise(
+  draft: Draft<HeatState>,
+  before: number,
+  after: number,
+  now: number,
+): void {
+  if (after <= before) return;
+  if (!draft.notices) draft.notices = [];
+  if (!draft.nextNotice) draft.nextNotice = 1;
+  draft.notices.push({ id: draft.nextNotice, at: now, before, after });
+  draft.nextNotice += 1;
+  if (draft.notices.length > RECENT_EVENTS) {
+    draft.notices.splice(0, draft.notices.length - RECENT_EVENTS);
+  }
+}
+
 export function applyEvent(
   draft: Draft<HeatState>,
   event: EventCommand,
@@ -73,6 +90,7 @@ export function applyEvent(
   if (district !== null) draft.district = district;
   remember(draft, { at: now, kind: event.kind, delta, reason: event.reason });
   const after = shownStars(draft.stars);
+  noticeRise(draft, before, after, now);
   const label = EVENT_LABELS[event.kind];
   const bounty = VIOLENT.has(event.kind) && delta > 0 ? postBounty(draft, event.reason, now) : null;
   if (bounty) {

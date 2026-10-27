@@ -8,6 +8,7 @@ import {
   type CityRumorCommand,
   type CityState,
   RUMORS_KEPT,
+  type RumorHeard,
 } from "./schema";
 
 /** 记一条传闻：同样的原话不重复记；说的动静要对得上 */
@@ -21,8 +22,18 @@ export function applyRumor(
     return { ok: false, reason: `没有 id 为 ${rumor.event} 的动静` };
   }
   if (draft.rumors.some((r) => r.text === rumor.text)) return { ok: true };
-  draft.rumors.push({ ...rumor, at: now });
+  draft.rumors.push({ ...rumor, id: draft.nextRumor, at: now, heard: false });
+  draft.nextRumor += 1;
   if (draft.rumors.length > RUMORS_KEPT) draft.rumors.splice(0, draft.rumors.length - RUMORS_KEPT);
+  return { ok: true };
+}
+
+/** 正文里有人把一条传闻说给玩家听了：标成听说，之后进玩家的街头频道 */
+export function applyRumorHeard(draft: Draft<CityState>, command: RumorHeard): ApplyOutcome {
+  const rumor = draft.rumors.find((r) => r.id === command.id && r.id > 0);
+  if (!rumor) return { ok: false, reason: `没有编号为 ${command.id} 的街头传闻` };
+  if (rumor.heard) return { ok: true, notes: [`传闻 #${command.id} 玩家已经听说过了`] };
+  rumor.heard = true;
   return { ok: true };
 }
 

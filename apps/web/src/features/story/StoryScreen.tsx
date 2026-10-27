@@ -192,6 +192,13 @@ export function StoryScreen() {
     if (unread === 0) return;
     await act({ type: "readMessages" }, "phone");
   }, [act, unread]);
+  // 打开新闻：只把新闻频道的未读标成已读；警方频段和街头传闻等消息界面重做时再接
+  const unreadNews = view?.phone.feedUnread.news;
+  const openNews = useCallback(async () => {
+    setAtNews(true);
+    if (!unreadNews || unreadNews.length === 0) return;
+    await act({ type: "readMessages", feed: [...unreadNews] }, "news");
+  }, [act, unreadNews]);
   // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
   const bdKey = view?.braindance.active
     ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
@@ -276,7 +283,7 @@ export function StoryScreen() {
         setAtChronicle(true);
       } else if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        setAtNews(true);
+        void openNews();
       } else if (e.key === "j" || e.key === "J") {
         e.preventDefault();
         setJournal("active");
@@ -318,6 +325,7 @@ export function StoryScreen() {
     atChronicle,
     atNews,
     atBraindance,
+    openNews,
   ]);
 
   if (query.isPending) {
@@ -416,7 +424,7 @@ export function StoryScreen() {
         onFactions={() => setAtFactions(true)}
         onMemory={() => setAtMemory(true)}
         onChronicle={() => setAtChronicle(true)}
-        onNews={() => setAtNews(true)}
+        onNews={() => void openNews()}
         onBraindance={() => setAtBraindance(true)}
         onStash={() => setAtStash(true)}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}

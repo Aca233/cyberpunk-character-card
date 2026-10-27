@@ -15,10 +15,11 @@ const NARRATE = `- 【城里的动静】是玩家角色没在场时城里在发�
 export const cityRules: RuleModule<CityState> = {
   id: "city",
   title: "城里的动静",
-  commands: [],
+  commands: ["rumorHeard"],
   when: (state) => state.events.some((e) => e.status !== "over") || state.rumors.length > 0,
   narrate: NARRATE,
-  text: NARRATE,
+  text: `${NARRATE}
+- 正文里有人把【街头传闻】里带编号的某一条说给玩家听了（原话或差不多的意思），抽取写 {"type": "rumorHeard", "id": 编号}；只是你知道、正文没让玩家听到的不写，玩家已经听说过的不再写。`,
 };
 
 /** 给模型看的【街头传闻】：新的在前；说的是玩家的标出来 */
@@ -30,7 +31,9 @@ export function rumorSection(state: CityState): string | undefined {
       const where = r.reach !== "city" && r.district ? `，${r.district}` : "";
       const about = r.player ? "，说的是玩家角色" : "";
       const event = r.event ? `，关于 ${r.event}` : "";
-      return `- 「${r.text}」［${RUMOR_TRUTH_LABELS[r.truth]}，${RUMOR_REACH_LABELS[r.reach]}${where}${about}${event}］`;
+      const heard = r.heard ? "，玩家听说过" : "";
+      const id = r.id > 0 ? `#${r.id} ` : "";
+      return `- ${id}「${r.text}」［${RUMOR_TRUTH_LABELS[r.truth]}，${RUMOR_REACH_LABELS[r.reach]}${where}${about}${event}${heard}］`;
     })
     .join("\n");
 }

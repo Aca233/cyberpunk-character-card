@@ -24,6 +24,7 @@ import { npc } from "./npc";
 import { phone } from "./phone";
 import { psychosis } from "./psychosis";
 import { safehouse } from "./safehouse";
+import { shards } from "./shards";
 import { sidegigs } from "./sidegigs";
 import { squad } from "./squad";
 import { stealth } from "./stealth";
@@ -64,6 +65,7 @@ export const systems: readonly AnySystem[] = [
   nemesis,
   arcs,
   braindance,
+  shards,
 ];
 
 export const registry = createRegistry(systems);
