@@ -32,6 +32,7 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
 });
 
 export * from "./apply";
+export * from "./district";
 export * from "./schema";
 export * from "./view";
 export * from "./weather";

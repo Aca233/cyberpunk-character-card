@@ -117,6 +117,22 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly view?: SystemView;
   /** 玩家在界面上直接做的操作：键等于操作的 type，同一个 type 只能由一个系统交 */
   readonly actions?: Readonly<Record<string, PlayerActionDef>>;
+  /** 给叙事模型的情境节，按 order 排进【当前状态】之后；只有这里可以写答案、真相这类隐藏信息 */
+  readonly sections?: readonly SystemSection[];
+}
+
+/** 拼情境时系统看到的环境：只读；data 没给时为 undefined，input 是这一轮玩家的输入 */
+export interface SectionContext {
+  readonly world: WorldState;
+  readonly data: Readonly<Record<string, unknown>> | undefined;
+  readonly input: { readonly text: string; readonly braindance?: string | undefined };
+}
+
+/** 一节情境：拼成「【title】」加正文；render 返回 undefined 时这一轮不带这一节 */
+export interface SystemSection {
+  readonly order: number;
+  readonly title: string;
+  render(ctx: SectionContext): string | undefined;
 }
 
 /** 投影时系统看到的环境：只读，不能改状态 */
@@ -226,6 +242,8 @@ export interface Registry {
   actionSchema(type: string): z.ZodType<{ readonly type: string }> | undefined;
   /** 查表校验并翻成内部指令；返回字符串表示拒绝，只读，不结算 */
   actionCommands(raw: unknown, ctx: ActionContext): Command[] | string;
+  /** 各系统交的情境节按 order 排好、拼成「【标题】\n正文」；没内容的节跳过，只读 */
+  sections(ctx: SectionContext): readonly string[];
 }
 
 interface Owner {
@@ -263,6 +281,19 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       actions.set(type, { systemId: system.id, def });
     }
   }
+  const sectionList: { readonly systemId: string; readonly section: SystemSection }[] = [];
+  for (const system of order) {
+    for (const section of system.sections ?? []) {
+      const existing = sectionList.find((s) => s.section.order === section.order);
+      if (existing) {
+        throw new RegistryError(
+          `情境节排序 ${section.order} 同时由 ${existing.systemId}（${existing.section.title}）和 ${system.id}（${section.title}）使用`,
+        );
+      }
+      sectionList.push({ systemId: system.id, section });
+    }
+  }
+  sectionList.sort((a, b) => a.section.order - b.section.order);
   const owners = new Map<string, Owner>();
   for (const system of order) {
     const groups = [
@@ -424,6 +455,12 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
         );
       }
       return entry.def.commands(parsed.data, ctx);
+    },
+    sections(ctx) {
+      return sectionList.flatMap(({ section }) => {
+        const body = section.render(ctx);
+        return body === undefined ? [] : [`【${section.title}】\n${body}`];
+      });
     },
     initialWorld(time) {
       if (!Number.isInteger(time)) throw new RegistryError(`游戏时间必须是整数分钟：${time}`);

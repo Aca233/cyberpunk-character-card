@@ -2,7 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import type { CombatState } from "../combat";
 import type { NpcState } from "../npc";
 import { applyNemesis, applyNemesisMove } from "./apply";
-import { nemesisRules } from "./prompt";
+import { nemesisRules, nemesisSection } from "./prompt";
 import {
   NEMESIS_RISE_HOURS,
   type NemesisCommand,
@@ -42,6 +42,15 @@ export const nemesis = defineSystem<NemesisState, NemesisCommand, NemesisInterna
     if (draft.recent && span.to > draft.recent.until) draft.recent = null;
   },
   rules: [nemesisRules],
+  sections: [
+    {
+      order: 120,
+      title: "宿敌",
+      render: ({ world }) =>
+        nemesisSection(NemesisStateSchema.parse(world.slices.nemesis ?? {}), world.time) ||
+        undefined,
+    },
+  ],
 });
 
 export * from "./apply";

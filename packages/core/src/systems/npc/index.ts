@@ -29,6 +29,7 @@ import {
   RelationSchema,
   SeedNpcSchema,
 } from "./schema";
+import { npcSections } from "./sections";
 
 /** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、生死和位置、血量装备义体人性；路人不建卡 */
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
@@ -70,9 +71,11 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
   },
   rules: [npcRules],
+  sections: npcSections,
 });
 
 export * from "./apply";
 export * from "./body";
 export * from "./prompt";
 export * from "./schema";
+export * from "./sections";

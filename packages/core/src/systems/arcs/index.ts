@@ -9,6 +9,7 @@ import {
   type ArcsState,
   ArcsStateSchema,
 } from "./schema";
+import { arcsSections } from "./sections";
 
 /** 心事（原作人物的个人线）：熟到一定程度他会自己提起，玩家管不管都行，没人管的由场外推演往前推 */
 export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
@@ -30,8 +31,10 @@ export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
     unlockArcs(draft, span.to, ctx);
   },
   rules: [arcRules],
+  sections: arcsSections,
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./sections";

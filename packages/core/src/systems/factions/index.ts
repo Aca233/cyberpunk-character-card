@@ -1,5 +1,11 @@
 import { defineSystem } from "../../kernel/system";
-import { applyAgenda, applyAgendaMove, applyAgendaTold, tickAgendas } from "./agenda";
+import {
+  agendaSection,
+  applyAgenda,
+  applyAgendaMove,
+  applyAgendaTold,
+  tickAgendas,
+} from "./agenda";
 import { applyFaction } from "./apply";
 import { agendaRules, factionRules } from "./prompt";
 import {
@@ -40,6 +46,18 @@ export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInt
   },
   tick: (draft, span, ctx) => tickAgendas(draft, span, ctx.data),
   rules: [factionRules, agendaRules],
+  sections: [
+    {
+      order: 110,
+      title: "势力动向",
+      render: ({ world, data }) =>
+        agendaSection(
+          FactionsStateSchema.parse(world.slices.factions ?? {}),
+          data ?? {},
+          world.time,
+        ) || undefined,
+    },
+  ],
   view: { key: "factions", project: factionsView },
 });
 

@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { applyNote, applyNoteDone } from "./apply";
-import { notesRules } from "./prompt";
+import { notesRules, notesSection } from "./prompt";
 import {
   type NoteCommand,
   NoteCommandSchema,
@@ -24,6 +24,13 @@ export const notes = defineSystem<NotesState, NoteCommand | NoteDone>({
     return applyNote(draft, command, ctx.now);
   },
   rules: [notesRules],
+  sections: [
+    {
+      order: 30,
+      title: "备忘",
+      render: ({ world }) => notesSection(NotesStateSchema.parse(world.slices.notes ?? {})),
+    },
+  ],
 });
 
 export * from "./apply";

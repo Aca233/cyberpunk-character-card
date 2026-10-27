@@ -11,6 +11,7 @@ import {
   type CityState,
   CityStateSchema,
 } from "./schema";
+import { citySections } from "./sections";
 import { bulletinsView } from "./view";
 
 /** 城里的动静：场外推演写的世界事件，只给模型看；模型不能直接写，由回合流程在收场时推演 */
@@ -44,10 +45,12 @@ export const city = defineSystem<CityState, never, CityInternal>({
     return { ok: true };
   },
   rules: [cityRules],
+  sections: citySections,
   view: { key: "bulletins", project: bulletinsView },
 });
 
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./sections";
 export * from "./view";

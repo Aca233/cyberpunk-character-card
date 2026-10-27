@@ -1,7 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { braindanceActions } from "./actions";
 import { applyBraindanceConclude, applyBraindanceMark, applyBraindanceStart } from "./apply";
-import { braindanceRules } from "./prompt";
+import { braindanceRules, braindanceSection } from "./prompt";
 import {
   BdConcludeCommandSchema,
   BdMarkCommandSchema,
@@ -36,6 +36,18 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand, Brain
   },
   rules: [braindanceRules],
   actions: braindanceActions,
+  sections: [
+    {
+      order: 140,
+      title: "超梦",
+      render: ({ world, data, input }) =>
+        braindanceSection(
+          BraindanceStateSchema.parse(world.slices.braindance ?? {}),
+          data ?? {},
+          input,
+        ) || undefined,
+    },
+  ],
   view: {
     key: "braindance",
     project: ({ world }) =>

@@ -1,7 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { chronicleActions } from "./actions";
 import { applyChronicle, applyChronicleEnd, applyChronicleSeed } from "./apply";
-import { chronicleRules } from "./prompt";
+import { chronicleRules, chronicleSection, legendsSection } from "./prompt";
 import {
   type ChronicleCommand,
   ChronicleCommandSchema,
@@ -34,6 +34,20 @@ export const chronicle = defineSystem<ChronicleState, ChronicleCommand, Chronicl
   },
   rules: [chronicleRules],
   actions: chronicleActions,
+  sections: [
+    {
+      order: 40,
+      title: "履历",
+      render: ({ world }) =>
+        chronicleSection(ChronicleStateSchema.parse(world.slices.chronicle ?? {})) || undefined,
+    },
+    {
+      order: 50,
+      title: "传说名册",
+      render: ({ world }) =>
+        legendsSection(ChronicleStateSchema.parse(world.slices.chronicle ?? {})) || undefined,
+    },
+  ],
 });
 
 export * from "./actions";

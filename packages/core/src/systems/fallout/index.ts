@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { recordFallout } from "./apply";
+import { falloutSection } from "./prompt";
 import {
   type FalloutRecord,
   FalloutRecordSchema,
@@ -16,6 +17,14 @@ export const fallout = defineSystem<FalloutState, never, FalloutRecord>({
   commands: {},
   internal: { "fallout.record": FalloutRecordSchema },
   apply: (draft, command, ctx) => recordFallout(draft, command, ctx),
+  sections: [
+    {
+      order: 60,
+      title: "近期后果",
+      render: ({ world }) =>
+        falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {})) || undefined,
+    },
+  ],
 });
 
 export * from "./apply";

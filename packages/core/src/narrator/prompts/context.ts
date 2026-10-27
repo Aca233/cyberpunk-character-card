@@ -3,15 +3,10 @@ import type { LlmMessage } from "../../kernel/ports";
 import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import type { TurnInput } from "../../schemas/turn";
-import { ArcsStateSchema, arcSection } from "../../systems/arcs";
-import { BraindanceStateSchema, braindanceSection } from "../../systems/braindance";
-import { ChronicleStateSchema, chronicleSection, legendsSection } from "../../systems/chronicle";
-import { CityStateSchema, citySection, playerRumorLine, rumorSection } from "../../systems/city";
-import { cyberwareSection } from "../../systems/cyberware/prompt";
+import { cyberwareSection } from "../../systems/cyberware";
 import { ATTRIBUTE_LABELS, type Attribute, MOD_STEP, PENALTY_CAP } from "../../systems/dice";
 import { RARITY_LABELS } from "../../systems/economy/schema";
-import { agendaSection, FactionsStateSchema } from "../../systems/factions";
-import { consequenceSection, FalloutStateSchema, falloutSection } from "../../systems/fallout";
+import { consequenceSection } from "../../systems/fallout";
 import { DAMAGE_LABELS } from "../../systems/health";
 import { itemCatalog } from "../../systems/inventory/apply";
 import {
@@ -21,15 +16,10 @@ import {
   WEAPON_TYPE_LABELS,
   weaponAttribute,
 } from "../../systems/inventory/schema";
-import { jobsSection, jobTemplateSection } from "../../systems/jobs/prompt";
-import { JobsStateSchema } from "../../systems/jobs/schema";
+import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
-import { NemesisStateSchema, nemesisSection } from "../../systems/nemesis";
-import { NotesStateSchema, notesSection } from "../../systems/notes";
-import { castSection, onStage } from "../../systems/npc/prompt";
-import { NpcStateSchema } from "../../systems/npc/schema";
-import { formatGameTime } from "../../systems/world/apply";
-import { locationCatalog, WorldClockStateSchema } from "../../systems/world/schema";
+import { registry } from "../../systems/registry";
+import { locationCatalog } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
 import type { RolledCheck } from "../pending";
@@ -423,49 +413,6 @@ export function stateSummary(view: PlayerView): string {
   return lines.join("\n");
 }
 
-export interface DueEvent {
-  readonly kind: "deadline" | "job";
-  readonly id: string;
-  readonly label: string;
-  readonly due: number;
-}
-
-/** 已经到期、叙事模型还没回应的事：期限和超期的委托；一次跳过好几天时期间到期的一起列出 */
-export function dueEvents(world: WorldState): DueEvent[] {
-  const clock = WorldClockStateSchema.parse(world.slices.world);
-  const jobs = JobsStateSchema.parse(world.slices.jobs);
-  const events: DueEvent[] = [
-    ...clock.deadlines
-      .filter((d) => d.handledAt === null && d.due <= world.time)
-      .map((d) => ({ kind: "deadline" as const, id: d.id, label: d.label, due: d.due })),
-    ...jobs.jobs.flatMap((j) =>
-      j.status === "active" && j.overdue && !j.dueHandled && j.due !== null
-        ? [{ kind: "job" as const, id: j.id, label: j.title, due: j.due }]
-        : [],
-    ),
-  ];
-  return events.sort((a, b) => a.due - b.due);
-}
-
-function elapsed(minutes: number): string {
-  if (minutes < 60) return `${minutes} 分钟`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} 小时`;
-  return `${Math.floor(minutes / 1440)} 天`;
-}
-
-/** 给模型看的【到期事件】：这一轮必须回应 */
-export function dueSection(world: WorldState): string | undefined {
-  const due = dueEvents(world);
-  if (due.length === 0) return undefined;
-  return [
-    "这些事已经到期，这一轮必须在正文里回应：人物打来电话、找上门，或者事情就这么黄了，怎么写由你决定。回应后期限写 deadline handle；委托还要接着办就写 jobNote，黄了就写 jobEnd。",
-    ...due.map(
-      (e) =>
-        `- ${e.kind === "job" ? "委托" : "期限"} ${e.label}［${e.id}］：${formatGameTime(e.due)} 到期，已经过了 ${elapsed(world.time - e.due)}`,
-    ),
-  ].join("\n");
-}
-
 export function formatInput(input: TurnInput): string {
   const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
   const reply = input.replyTo !== undefined ? `【回复消息 #${input.replyTo}】` : "";
@@ -521,23 +468,6 @@ export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   ].filter((s): s is string => s !== undefined);
 }
 
-/**
- * 地点 id 所在的城区：先查地点表；表外的地点按「沃森 · 无名小巷」这种写法认开头的城区名，
- * 开头不是地点表里的城区就查不到
- */
-export function districtResolver(
-  data: Readonly<Record<string, unknown>> | undefined,
-): (location: string) => string | undefined {
-  const catalog = data ? locationCatalog(data) : new Map<string, { readonly district: string }>();
-  const districts = new Set([...catalog.values()].map((p) => p.district));
-  return (location) => {
-    const def = catalog.get(location);
-    if (def) return def.district;
-    const head = location.split(/[·・|/]/)[0]?.trim();
-    return head !== undefined && districts.has(head) ? head : undefined;
-  };
-}
-
 /** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
 export function situation(
   world: WorldState,
@@ -545,73 +475,14 @@ export function situation(
   plan: NarratorPlan,
   extras: PromptExtras,
 ): string[] {
-  const clock = WorldClockStateSchema.parse(world.slices.world);
-  const npcs = NpcStateSchema.parse(world.slices.npc);
-  const cast = castSection(npcs, {
-    location: clock.location,
-    sceneStartedAt: clock.sceneStartedAt,
-    districtOf: districtResolver(extras.data),
-    data: extras.data,
-    now: world.time,
-  });
-  const parts = [`【当前状态】\n${stateSummary(view)}`, `【人物】\n${cast}`];
-  const jobs = jobsSection(
-    JobsStateSchema.parse(world.slices.jobs),
-    view.character.streetCred,
-    (id) => npcs.npcs[id]?.affinity ?? 0,
-  );
-  if (jobs) parts.push(`【委托】\n${jobs}`);
-  const notes = notesSection(NotesStateSchema.parse(world.slices.notes ?? {}));
-  if (notes) parts.push(`【备忘】\n${notes}`);
-  const chronicle = ChronicleStateSchema.parse(world.slices.chronicle ?? {});
-  const arcs = chronicleSection(chronicle);
-  if (arcs) parts.push(`【履历】\n${arcs}`);
-  const legends = legendsSection(chronicle);
-  if (legends) parts.push(`【传说名册】\n${legends}`);
-  const recent = falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {}));
-  if (recent) parts.push(`【近期后果】\n${recent}`);
-  const due = dueSection(world);
-  if (due) parts.push(`【到期事件】\n${due}`);
-  const cityState = CityStateSchema.parse(world.slices.city ?? {});
-  const city = citySection(cityState);
-  if (city) parts.push(`【城里的动静】\n${city}`);
-  const rumors = rumorSection(cityState);
-  if (rumors) parts.push(`【街头传闻】\n${rumors}`);
-  const heard = playerRumorLine(cityState);
-  if (heard) {
-    parts.push(
-      `【传闻里的你】\n${heard}\n听过这些说法的人第一反应照这个版本来，和状态里的「别人眼里的你」合起来看。`,
-    );
-  }
-  const agendas = agendaSection(
-    FactionsStateSchema.parse(world.slices.factions ?? {}),
-    extras.data ?? {},
-    world.time,
-  );
-  if (agendas) parts.push(`【势力动向】\n${agendas}`);
-  const nemeses = nemesisSection(NemesisStateSchema.parse(world.slices.nemesis ?? {}), world.time);
-  if (nemeses) parts.push(`【宿敌】\n${nemeses}`);
-  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
-  const present = new Set(
-    Object.values(npcs.npcs)
-      .filter((n) => onStage(n, stage))
-      .map((n) => n.id),
-  );
-  const concerns = arcSection(
-    ArcsStateSchema.parse(world.slices.arcs ?? {}),
-    extras.data ?? {},
-    npcs.npcs,
-    present,
-  );
-  if (concerns) parts.push(`【心事】\n${concerns}`);
-  const bd = braindanceSection(
-    BraindanceStateSchema.parse(world.slices.braindance ?? {}),
-    extras.data ?? {},
+  const input =
     plan.kind === "action"
       ? { text: plan.input.text, braindance: plan.input.braindance }
-      : { text: "" },
-  );
-  if (bd) parts.push(`【超梦】\n${bd}`);
+      : { text: "" };
+  const parts = [
+    `【当前状态】\n${stateSummary(view)}`,
+    ...registry.sections({ world, data: extras.data, input }),
+  ];
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
