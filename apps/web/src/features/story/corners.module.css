@@ -1,0 +1,467 @@
+/*
+ * U1 四角的位置（2077-interface-plan.md 第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下。
+ * 边框、按钮、框体一律来自原作素材（NineSlice / Asset）或正式组件，
+ * 这里只管位置、间距、字号、染色和动效，不画边框、不画渐变底。数值照 U0 视觉稿 neural.module.css
+ */
+
+/* 视野分层：神经界面红、义眼叠加青、网络接入仓蓝 */
+[data-layer="os"] {
+  --accent: var(--cp-red);
+}
+
+[data-layer="optics"] {
+  --accent: var(--cp-cyan);
+}
+
+[data-layer="deck"] {
+  --accent: var(--cp-netwatch);
+}
+
+/* 套九宫格的容器：素材铺满，内容叠在上面 */
+.block {
+  position: absolute;
+  z-index: 3;
+  font-family: var(--font-ui);
+  animation: blockIn 420ms ease-out both;
+}
+
+.inner {
+  position: relative;
+  z-index: 1;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+/* ———— A 生物监测（左上） ———— */
+
+.bio {
+  top: 24px;
+  left: var(--corner-edge);
+  width: var(--corner-w);
+}
+
+.bioRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.level {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.level b {
+  position: absolute;
+  font-size: 18px;
+  color: var(--cp-text);
+}
+
+.hp {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+
+.hpText {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+}
+
+.hpText:where([data-low]) {
+  color: var(--cp-hp-low);
+  animation: pulse 900ms ease-in-out infinite;
+}
+
+.ram {
+  display: flex;
+  gap: 3px;
+  margin-top: 10px;
+}
+
+.ramCell {
+  display: inline-flex;
+  opacity: 0.22;
+  animation: fadeIn 200ms ease-out both;
+  animation-delay: calc(var(--i) * 40ms + 300ms);
+}
+
+.ramCell:where([data-on]) {
+  opacity: 1;
+}
+
+/* ———— S 在场的人（左中，高度跟人数走） ———— */
+
+.present {
+  top: 152px;
+  left: var(--corner-edge);
+  width: var(--corner-w);
+}
+
+.present ul {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 锁定框就是 map.filterCell 本身，宽度跟着名字走 */
+.person {
+  --person-line: rgb(94 246 255 / 40%);
+  position: relative;
+  width: fit-content;
+  min-width: 180px;
+  max-width: 300px;
+  padding: 10px 18px 12px;
+  animation: nameIn 360ms ease-out both;
+  animation-delay: calc(var(--i) * 80ms + 200ms);
+}
+
+.present:where([data-scan]) .person {
+  --person-line: var(--cp-cyan);
+}
+
+.person b {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.person small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--cp-text-dim);
+}
+
+.scanCard {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  width: 210px;
+  padding: 10px 14px 16px;
+  font-size: 13px;
+  color: var(--cp-text-dim);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition:
+    opacity var(--dur-slide),
+    transform var(--dur-slide);
+  pointer-events: none;
+}
+
+.present:where([data-scan]) .scanCard {
+  opacity: 1;
+  transform: none;
+}
+
+.scanCard em {
+  font-style: normal;
+  color: var(--cp-text);
+}
+
+.scanCard em:where([data-threat="high"], [data-threat="skull"]) {
+  color: var(--cp-danger);
+}
+
+.scanCard em:where([data-threat="even"]) {
+  color: var(--cp-yellow);
+}
+
+.scanCard em:where([data-threat="low"]) {
+  color: var(--cp-success);
+}
+
+/* ———— G 未读（左下） ———— */
+
+.unread {
+  bottom: 64px;
+  left: var(--corner-edge);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: var(--corner-w);
+  height: 72px;
+  padding: 10px 20px 14px;
+}
+
+.unread .inner {
+  display: flex;
+  gap: 18px;
+}
+
+.unread span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--cp-text-dim);
+}
+
+.unread b {
+  color: var(--cp-red);
+}
+
+/* ———— B 地点、时间、热度（右上） ———— */
+
+.zone {
+  top: 24px;
+  right: var(--corner-edge);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
+  width: var(--corner-w);
+  height: 96px;
+  padding: 0 24px 0 28px;
+}
+
+.zoneFrame {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.zoneText {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.zoneText b {
+  overflow: hidden;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoneText span {
+  font-size: 13px;
+  color: var(--cp-text-dim);
+}
+
+.zone > :last-child {
+  position: relative;
+}
+
+.zoneText .heat {
+  letter-spacing: 0.1em;
+  color: var(--cp-danger);
+}
+
+.heat small {
+  letter-spacing: 0;
+  color: var(--cp-yellow);
+}
+
+.heat small:where([data-alert]) {
+  color: var(--cp-red);
+}
+
+.starsEmpty {
+  opacity: 0.25;
+}
+
+/* ———— C 追踪（右中，最多 3 条） ———— */
+
+.track {
+  top: 136px;
+  right: var(--corner-edge);
+  width: var(--corner-w);
+}
+
+.trackList {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trackList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.trackList span {
+  display: grid;
+  gap: 2px;
+}
+
+.trackList b {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.trackList small {
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.trackList :where(li[data-overdue]) small {
+  color: var(--cp-danger);
+}
+
+/* ———— H 武器和快速破解（右下） ———— */
+
+.weapon {
+  right: var(--corner-edge);
+  bottom: 64px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  width: var(--corner-w);
+}
+
+.slot {
+  position: relative;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 96px;
+  padding: 16px 24px 20px;
+}
+
+.slot .inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+}
+
+.slot b {
+  display: block;
+  max-width: 16rem;
+  overflow: hidden;
+  font-size: 15px;
+  color: var(--cp-cyan);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qhSlot {
+  position: relative;
+}
+
+/* ———— 横幅：中列顶上，同时只出一个 ———— */
+
+.banner {
+  flex: none;
+  animation: drop 320ms ease-out both;
+}
+
+.bannerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-ui);
+}
+
+.bannerRow b {
+  font-size: 18px;
+  letter-spacing: 0.2em;
+  color: var(--accent, var(--cp-red));
+}
+
+.bannerRow small {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.bannerRow small:where([data-out]) {
+  color: var(--cp-danger);
+}
+
+.bannerLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+/* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收窄名字格和扫描卡 ———— */
+
+@media (width < 1600px) {
+  .person {
+    min-width: 160px;
+    max-width: 240px;
+    padding: 8px 16px 10px;
+  }
+
+  .scanCard {
+    width: 180px;
+  }
+
+  .zoneText b {
+    font-size: 17px;
+  }
+}
+
+/* ———— 动效 ———— */
+
+@keyframes blockIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes nameIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block,
+  .block *,
+  .banner {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+    transition-duration: 1ms;
+  }
+}

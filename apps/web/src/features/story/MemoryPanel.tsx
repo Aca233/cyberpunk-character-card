@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -116,17 +117,12 @@ export function MemoryPanel({
   const [saving, setSaving] = useState(false);
 
   // Esc 先收起正在改的表单或删除确认，再按一次关面板
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (draft || confirming) {
-        setDraft(null);
-        setConfirming(null);
-      } else onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, draft, confirming]);
+  useLayer(() => {
+    if (draft || confirming) {
+      setDraft(null);
+      setConfirming(null);
+    } else onClose();
+  });
 
   const run = async (edit: MemoryEdit) => {
     if (!onEdit) return;

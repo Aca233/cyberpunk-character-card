@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import styles from "./braindance.module.css";
 import type { View } from "./view";
 
@@ -47,11 +48,12 @@ export function BraindanceEditor({
   const [leaving, setLeaving] = useState(false);
   const count = bd?.segments.length ?? 0;
 
+  useLayer(onClose);
+  // 编辑器自己的键：方向键拖时间轴，1/2/3 切编码层；Esc 由面板栈处理
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft") setSegment((s) => Math.max(0, s - 1));
+      if (e.key === "ArrowLeft") setSegment((s) => Math.max(0, s - 1));
       else if (e.key === "ArrowRight") setSegment((s) => Math.min(count - 1, s + 1));
       else if (e.key === "1" || e.key === "2" || e.key === "3") {
         const next = LAYERS[Number(e.key) - 1];
@@ -60,7 +62,7 @@ export function BraindanceEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, count]);
+  }, [count]);
 
   if (!bd) {
     return (

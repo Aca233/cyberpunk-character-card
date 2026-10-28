@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -15,13 +15,7 @@ export function NewsPanel({
   readonly view: View;
   readonly onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useLayer(onClose);
 
   const entries = view.bulletins;
 

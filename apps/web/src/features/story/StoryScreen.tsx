@@ -7,20 +7,24 @@ import { cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
+import { layerOpen } from "../../ui/layers";
 import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import { ChroniclePanel, type StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
+import { Banner, BioMonitor, Present, Track, Unread, Weapon, Zone } from "./Corners";
 import { DivePanel } from "./DivePanel";
+import { EscMenu } from "./EscMenu";
 import { FactionsPanel } from "./FactionsPanel";
-import { Hud, SidePanel } from "./Hud";
+import { SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
 import { Journal } from "./Journal";
 import { MapPanel } from "./MapPanel";
 import { MemoryPanel } from "./MemoryPanel";
 import { NewsPanel } from "./NewsPanel";
+import { type NoteEntry, NotesPanel } from "./NotesPanel";
 import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import {
@@ -29,6 +33,7 @@ import {
   type SettledJob,
   SettlementCard,
 } from "./Settlement";
+import { SheetPanel } from "./SheetPanel";
 import { Shop } from "./Shop";
 import { StashPanel } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
@@ -69,6 +74,8 @@ export function StoryScreen() {
 
   // 新的一轮写进存档后，和上一次看到的状态比，弹出变化提示
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
+  // Z 键的通知记录：弹过的系统通知都记一份，只在网页里，不写存档
+  const [notes, setNotes] = useState<readonly NoteEntry[]>([]);
   const previous = useRef<View | null>(null);
   // 委托结束后排队弹出的结算卡
   const [settled, setSettled] = useState<readonly SettledJob[]>([]);
@@ -82,7 +89,11 @@ export function StoryScreen() {
     previous.current = view;
     if (!prev) return;
     const fresh = diffViews(prev, view);
-    if (fresh.length > 0) setToasts((t) => [...t, ...fresh].slice(-6));
+    if (fresh.length > 0) {
+      setToasts((t) => [...t, ...fresh].slice(-6));
+      const at = view.time.text;
+      setNotes((n) => [...n, ...fresh.map((f) => ({ ...f, at }))].slice(-100));
+    }
     const wasOpen = new Set(prev.jobs.list.filter((j) => j.open).map((j) => j.id));
     const closed = view.jobs.list.filter(
       (j) => !j.open && j.settlement !== null && wasOpen.has(j.id),
@@ -128,6 +139,12 @@ export function StoryScreen() {
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   const closeJournal = useCallback(() => setJournal(null), []);
   const [atPhone, setAtPhone] = useState(false);
+  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
+  const [scan, setScan] = useState(false);
+  const [atNotes, setAtNotes] = useState(false);
+  const [atEsc, setAtEsc] = useState(false);
+  // U1 临时：旧左侧栏收进面板，点生物监测块打开；U2 删
+  const [atSheet, setAtSheet] = useState(false);
 
   const warn = useCallback((key: string, error: unknown) => {
     const text = error instanceof Error ? error.message : String(error);
@@ -257,76 +274,55 @@ export function StoryScreen() {
     [offers, busy, send, version],
   );
 
-  // 1–5 选选项；Esc 收起检定（已掷过骰的不能收起）
+  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，J/M/T 日志、地图、消息，Z 通知记录，按住 Tab 扫描。
+  // 有面板开着时一律不响应，Esc 由面板栈交给最上面那层；I/P/O/K 和 Q/E 跟神经界面一起在 U2 接
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (
-        journal ||
-        atDoc ||
-        atShop ||
-        atMap ||
-        atFactions ||
-        atStash ||
-        atMemory ||
-        atChronicle ||
-        atNews ||
-        atBraindance ||
-        story.spend
-      )
+      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (layerOpen() || story.spend) return;
+      if (e.key === "Tab") {
+        // 按住扫描，松开收起；不让焦点跳走
+        e.preventDefault();
+        if (!e.repeat) setScan(true);
         return;
-      if (e.key === "r" || e.key === "R") {
-        e.preventDefault();
-        setAtMemory(true);
-      } else if (e.key === "h" || e.key === "H") {
-        e.preventDefault();
-        setAtChronicle(true);
-      } else if (e.key === "n" || e.key === "N") {
-        e.preventDefault();
-        void openNews();
-      } else if (e.key === "j" || e.key === "J") {
+      }
+      if (e.repeat) return;
+      const k = e.key.toLowerCase();
+      if (k === "j") {
         e.preventDefault();
         setJournal("active");
-      } else if (e.key === "m" || e.key === "M") {
+      } else if (k === "m") {
         e.preventDefault();
         setAtMap(true);
-      } else if (e.key === "f" || e.key === "F") {
+      } else if (k === "t") {
         e.preventDefault();
-        setAtFactions(true);
-      } else if (e.key === "b" || e.key === "B") {
+        void openPhone();
+      } else if (k === "z") {
         e.preventDefault();
-        setAtStash(true);
+        setAtNotes(true);
       } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
       } else if (e.key === "Escape" && !story.failure) {
-        // 对话框自己处理 Esc；没有对话框时先收起检定，再按一次回主菜单
+        // 先收起检定（已掷过骰的不能收起），什么都没开时弹 Esc 菜单，不再直接回主菜单
         if (pickedId && !offers?.rolled) setPicked(null);
-        else if (!pickedId && !busy) navigate("/menu");
+        else if (!pickedId) setAtEsc(true);
       }
     };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key === "Tab") setScan(false);
+    };
+    // 按着 Tab 切走窗口收不到 keyup，失焦时也收起
+    const onBlur = () => setScan(false);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [
-    choose,
-    pickedId,
-    offers?.rolled,
-    story.failure,
-    story.spend,
-    busy,
-    navigate,
-    journal,
-    atDoc,
-    atShop,
-    atMap,
-    atFactions,
-    atStash,
-    atMemory,
-    atChronicle,
-    atNews,
-    atBraindance,
-    openNews,
-  ]);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, openPhone]);
 
   if (query.isPending) {
     return (
@@ -380,7 +376,16 @@ export function StoryScreen() {
       <div className={styles.fx} aria-hidden />
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <div className={styles.glitch} data-level={glitch} aria-hidden />
-      <Hud
+      {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
+      <BioMonitor view={view} onSheet={() => setAtSheet(true)} />
+      <Present view={view} scan={scan} />
+      <Unread view={view} />
+      <Zone view={view} />
+      {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
+      <Track view={view}>
+        {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
+      </Track>
+      <Weapon
         view={view}
         onQuickhack={
           busy
@@ -392,45 +397,55 @@ export function StoryScreen() {
         }
       />
       {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
-      <SidePanel
-        view={view}
-        onSpend={
-          busy || offers?.rolled
-            ? undefined
-            : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
-        }
-        onJournal={(board) => setJournal(board ? "board" : "active")}
-        onRipperdoc={() => setAtDoc(true)}
-        onShop={setAtShop}
-        onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
-        onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
-        onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
-        onMod={
-          busy
-            ? undefined
-            : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
-        }
-        onHabit={
-          busy ? undefined : (action, text) => void act({ type: "habit", action, text }, "habit")
-        }
-        onSquad={
-          busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
-        }
-        onCraft={
-          busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
-        }
-        onPhone={() => void openPhone()}
-        onMap={() => setAtMap(true)}
-        onFactions={() => setAtFactions(true)}
-        onMemory={() => setAtMemory(true)}
-        onChronicle={() => setAtChronicle(true)}
-        onNews={() => void openNews()}
-        onBraindance={() => setAtBraindance(true)}
-        onStash={() => setAtStash(true)}
-        onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
-      />
+      {/* U1 临时：旧左侧栏原样收进面板，点生物监测块打开；侧栏按钮打开的面板叠在它上面。U2 删 */}
+      {atSheet && (
+        <SheetPanel title={view.character.name ?? "未建档"} onClose={() => setAtSheet(false)}>
+          <SidePanel
+            view={view}
+            onSpend={
+              busy || offers?.rolled
+                ? undefined
+                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
+            }
+            onJournal={(board) => setJournal(board ? "board" : "active")}
+            onRipperdoc={() => setAtDoc(true)}
+            onShop={setAtShop}
+            onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
+            onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
+            onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
+            onMod={
+              busy
+                ? undefined
+                : (action, weapon, mod) =>
+                    void act({ type: "modWeapon", action, weapon, mod }, "gear")
+            }
+            onHabit={
+              busy
+                ? undefined
+                : (action, text) => void act({ type: "habit", action, text }, "habit")
+            }
+            onSquad={
+              busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
+            }
+            onCraft={
+              busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
+            }
+            onPhone={() => void openPhone()}
+            onMap={() => setAtMap(true)}
+            onFactions={() => setAtFactions(true)}
+            onMemory={() => setAtMemory(true)}
+            onChronicle={() => setAtChronicle(true)}
+            onNews={() => void openNews()}
+            onBraindance={() => setAtBraindance(true)}
+            onStash={() => setAtStash(true)}
+            onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
+          />
+        </SheetPanel>
+      )}
 
       <main className={styles.column}>
+        {/* 横幅：交战、对峙、潜网、闪回，同时只出一个 */}
+        <Banner view={view} />
         <StoryLog
           view={view}
           saveId={saveId}
@@ -531,18 +546,24 @@ export function StoryScreen() {
             onSend={send}
             onStop={() => void story.stop()}
           />
+          {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
           <KeyBar>
-            <KeyHint keyId="key.esc" label="主菜单" onClick={() => navigate("/menu")} />
-            <KeyHint
-              keyId="key.tab"
-              label="设置"
-              onClick={() => navigate(`/settings?tab=context&save=${saveId}`)}
-            />
+            <KeyHint keyId="key.j" label="日志" onClick={() => setJournal("active")} />
+            <KeyHint keyId="key.m" label="地图" onClick={() => setAtMap(true)} />
+            <KeyHint keyId="key.t" label="消息" onClick={() => void openPhone()} />
+            <KeyHint keyId="key.tab" label="扫描（长按）" />
+            <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
           </KeyBar>
         </div>
       </main>
 
-      <Toasts toasts={toasts} onDone={dropToast} />
+      {atEsc && (
+        <EscMenu
+          onResume={() => setAtEsc(false)}
+          onSettings={() => navigate(`/settings?tab=context&save=${saveId}`)}
+          onQuit={busy ? undefined : () => navigate("/menu")}
+        />
+      )}
 
       {failure?.kind === "unavailable" && (
         <Dialog
@@ -701,6 +722,7 @@ export function StoryScreen() {
         />
       )}
       {atNews && <NewsPanel view={view} onClose={() => setAtNews(false)} />}
+      {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
       {atBraindance && view.braindance.active && (
         <BraindanceEditor
           view={view}

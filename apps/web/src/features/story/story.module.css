@@ -1,13 +1,18 @@
 /* 剧情主界面：原作 HUD 的红黄青三色，正文用宽松的中文排版 */
 
 .screen {
+  --corner-edge: 32px;
+  --corner-w: 360px;
+  --corner-gap: 32px;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(0, 280px);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    "hud hud hud"
-    "side main .";
+  /* 两侧各留边距、角块和间隔；1920 宽时中列从 424 开始，宽 1072 */
+  grid-template-columns:
+    minmax(calc(var(--corner-edge) + var(--corner-w) + var(--corner-gap)), 1fr)
+    minmax(0, 1072px)
+    minmax(calc(var(--corner-edge) + var(--corner-w) + var(--corner-gap)), 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: ". main .";
   height: 100dvh;
   overflow: hidden;
   background:
@@ -448,8 +453,11 @@
   grid-area: main;
   display: flex;
   flex-direction: column;
+  gap: 0.8rem;
   min-height: 0;
-  padding: 0 1.2rem;
+  /* 正文限宽 880 居中（计划第九节）；上下留给四角的地点框和按键栏 */
+  --story-width: 880px;
+  padding: 1.5rem 1.2rem 0;
 }
 
 .log {
@@ -641,16 +649,62 @@
   color: var(--cp-red);
 }
 
+/* ———— Esc 菜单：游戏外面的东西，用主菜单的 MenuItem，这里只管宽度和间距 ———— */
+
+.escMenu {
+  width: min(360px, calc(100vw - 2rem));
+  margin: auto;
+}
+
+.escList {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.4rem 0;
+}
+
+/* ———— 通知记录（Z）：图标、正文、游戏时间一行 ———— */
+
+.noteRow {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: var(--fs-label);
+}
+
 /* ———— 底部：选项 / 检定 / 输入 ———— */
 
 .dock {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: 0.7rem;
   max-width: calc(var(--story-width) + 4rem);
   width: 100%;
+  /* 操作区最高 296，高度跟内容走（计划第九节）；选项多时在这里面滚，不压正文 */
+  max-height: 296px;
   margin: 0 auto;
   padding-bottom: 0.9rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+}
+
+/* 1280 档（计划第九节）：两侧各 24 + 280 + 24，中列 624，正文不再限宽，操作区最高 232 */
+@media (width < 1600px) {
+  .screen {
+    --corner-edge: 24px;
+    --corner-w: 280px;
+    --corner-gap: 24px;
+  }
+
+  .column {
+    --story-width: 100%;
+  }
+
+  .dock {
+    max-height: 232px;
+  }
 }
 
 .choices {
@@ -982,17 +1036,14 @@
   color: var(--cp-danger);
 }
 
-/* ———— 右侧提示 ———— */
+/* ———— D 系统通知：在 C 追踪的容器里，紧贴追踪下面，右对齐 ———— */
 
 .toasts {
-  position: fixed;
-  top: 5.5rem;
-  right: 1.4rem;
-  z-index: 20;
   display: grid;
+  justify-items: end;
   gap: 0.4rem;
   list-style: none;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   font-family: var(--font-ui);
   pointer-events: none;
@@ -1277,6 +1328,25 @@
   width: min(960px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
+}
+
+/* U1 临时容器：旧左侧栏原样收进来，宽度照侧栏原来的列宽；U2 删 */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+.sheetBody {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sheetBody > .side {
+  padding: 0;
+  overflow: visible;
 }
 
 .journalTabs {

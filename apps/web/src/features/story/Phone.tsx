@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -210,13 +211,7 @@ export function PhoneDialog({
   readonly onReply?: ((id: number) => void) | undefined;
   readonly onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useLayer(onClose);
   const contacts = contactsOf(view);
   const [picked, setPicked] = useState<string | null>(
     () => (contacts.find((c) => c.unread > 0) ?? contacts[0])?.key ?? null,

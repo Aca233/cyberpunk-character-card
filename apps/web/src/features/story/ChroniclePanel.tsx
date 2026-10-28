@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -42,15 +43,10 @@ export function ChroniclePanel({
   const [saving, setSaving] = useState(false);
 
   // Esc 先收起确认，再按一次关面板
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (confirming) setConfirming(false);
-      else onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, confirming]);
+  useLayer(() => {
+    if (confirming) setConfirming(false);
+    else onClose();
+  });
 
   const end = async () => {
     if (!onEnd) return;

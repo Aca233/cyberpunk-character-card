@@ -10,6 +10,7 @@ import {
 import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import {
   DISTRICT_SHAPES,
   MAP_POI_KINDS,
@@ -378,15 +379,10 @@ export function MapPanel({
   }, [zoomAt]);
 
   // 选中地点时 Esc 先取消选中，再按一次关掉地图
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (picked) setPicked(null);
-      else onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [picked, onClose]);
+  useLayer(() => {
+    if (picked) setPicked(null);
+    else onClose();
+  });
 
   const toScreen = (x: number, y: number) => ({
     left: (x - cam.cx) * cam.k + size.w / 2,

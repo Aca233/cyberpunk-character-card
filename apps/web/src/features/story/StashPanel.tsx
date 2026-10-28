@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -37,13 +38,7 @@ export function StashPanel({
   ];
   const [picked, setPicked] = useState(boxes.find((b) => b.usable)?.id ?? boxes[0]?.id ?? null);
   const box = boxes.find((b) => b.id === picked);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useLayer(onClose);
   const backpack = Object.entries(view.inventory.backpack);
   const itemName = (id: string) => view.names.items[id] ?? id;
   const full = box !== undefined && box.cap !== null && box.items.length >= box.cap;

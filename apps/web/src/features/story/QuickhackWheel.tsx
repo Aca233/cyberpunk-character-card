@@ -1,6 +1,7 @@
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { NineSlice } from "../../ui/Asset";
+import { useLayer } from "../../ui/layers";
 import styles from "./story.module.css";
 
 /** 原作 quickhacks.inkwidget 程序格 qh_cell_bg/fg 的切线（atlas_shapes_sync 2160p：左上右下 25/60/25/15） */
@@ -27,14 +28,7 @@ export function QuickhackWheel({
   readonly onPick: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  useLayer(() => setOpen(false), open);
 
   return (
     <div className={styles.quickhack}>

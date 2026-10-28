@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect } from "react";
+import type { ReactNode } from "react";
 import { Asset } from "./Asset";
 import styles from "./dialog.module.css";
+import { useLayer } from "./layers";
 import { Panel } from "./Panel";
 
 interface DialogProps {
@@ -12,16 +13,9 @@ interface DialogProps {
   readonly onClose?: () => void;
 }
 
-/** 原作样式的提示框：居中、左侧警示图标、底部按钮；Esc 关闭 */
+/** 原作样式的提示框：居中、左侧警示图标、底部按钮；占面板栈顶，Esc 关闭（没有 onClose 时 Esc 不穿透到下层） */
 export function Dialog({ title, tone = "warning", children, actions, onClose }: DialogProps) {
-  useEffect(() => {
-    if (!onClose) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useLayer(() => onClose?.());
   const color =
     tone === "danger"
       ? "var(--cp-danger)"

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -39,13 +40,7 @@ export function Shop({
   const money = (n: number) => n.toLocaleString("en-US");
 
   // 确认框开着时 Esc 只关确认框
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !confirming) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [confirming, onClose]);
+  useLayer(onClose, !confirming);
 
   const run = async (task: () => Promise<void>) => {
     setWorking(true);

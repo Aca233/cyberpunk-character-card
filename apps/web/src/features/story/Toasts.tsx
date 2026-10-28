@@ -30,7 +30,10 @@ function ToastItem({
   );
 }
 
-/** 右侧的状态变化提示，几秒后自己消失 */
+/** D 系统通知最多同时几条（计划第九节），更早的还在队列里等着到点消失，Z 通知记录里都能翻到 */
+const SHOW_MAX = 3;
+
+/** D 系统通知：接在 C 追踪下面，几秒后自己消失 */
 export function Toasts({
   toasts,
   onDone,
@@ -41,7 +44,7 @@ export function Toasts({
   if (toasts.length === 0) return null;
   return (
     <ul className={styles.toasts} aria-live="polite">
-      {toasts.map((t) => (
+      {toasts.slice(-SHOW_MAX).map((t) => (
         <ToastItem key={t.key} toast={t} onDone={onDone} />
       ))}
     </ul>
