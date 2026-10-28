@@ -11,33 +11,22 @@ import styles from "./neural.module.css";
  * 这里只管页签和按键，每页的内容由剧情页传进来
  */
 
-export type NeuralPage =
-  | "character"
-  | "cyberware"
-  | "inventory"
-  | "crafting"
-  | "journal"
-  | "map"
-  | "messages"
-  | "contacts"
-  | "database";
+/**
+ * 只留要整理东西的三页（计划第十二节）：物品栏、制作、义体。
+ * 人物、联系人改成左边缘抽屉，日志、消息、数据库改成右边缘抽屉，地图是浮层，都不再进全屏
+ */
+export type NeuralPage = "inventory" | "crafting" | "cyberware";
 
-/** 九页，页名照原作文本库；键位图标是原作 icons_keyboard，原作没有默认键的页留空 */
+/** 三页，页名照原作文本库；键位图标是原作 icons_keyboard，原作没有默认键的页留空 */
 export const NEURAL_PAGES: readonly {
   readonly id: NeuralPage;
   readonly name: string;
   readonly key: string | null;
   readonly icon: AssetId | null;
 }[] = [
-  { id: "character", name: "人物", key: "p", icon: "key.p" },
-  { id: "cyberware", name: "义体", key: null, icon: null },
   { id: "inventory", name: "物品栏", key: "o", icon: "key.o" },
   { id: "crafting", name: "制作", key: "k", icon: "key.k" },
-  { id: "journal", name: "日志", key: "j", icon: "key.j" },
-  { id: "map", name: "地图", key: "m", icon: "key.m" },
-  { id: "messages", name: "消息", key: "t", icon: "key.t" },
-  { id: "contacts", name: "联系人", key: null, icon: null },
-  { id: "database", name: "数据库", key: null, icon: null },
+  { id: "cyberware", name: "义体", key: null, icon: null },
 ];
 
 /** 剧情页上直接打开某一页的键（I 打开上次那页） */

@@ -201,6 +201,142 @@
   background: none;
 }
 
+/* ———— 边缘抽屉（第十二节）：贴边一条热区，展开后抽屉从这一侧滑出，盖在四角和正文上 ———— */
+
+.edge {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 8;
+  width: var(--corner-edge, 32px);
+  font-family: var(--font-ui);
+  color: var(--cp-text);
+}
+
+.edge[data-side="left"] {
+  left: 0;
+}
+
+.edge[data-side="right"] {
+  right: 0;
+}
+
+.edge[data-open] {
+  z-index: 28;
+}
+
+.edge:focus-visible {
+  outline: none;
+}
+
+/*
+ * 抽屉只占这一侧四角那一列（宽同 --corner-w），不伸进正文、选项和输入框；
+ * 底下一层衬底把这一列的四角整个压住，抽屉内容不和底下的角块叠在一起
+ */
+.drawer {
+  --accent: var(--cp-red);
+  position: fixed;
+  top: var(--corner-edge, 32px);
+  bottom: var(--corner-edge, 32px);
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  width: var(--corner-w, 360px);
+  cursor: default;
+  animation: drawerIn 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.drawer[data-side="left"] {
+  left: var(--corner-edge, 32px);
+}
+
+.drawer[data-side="right"] {
+  right: var(--corner-edge, 32px);
+  --drawer-shift: 8px;
+}
+
+/* 衬底：盖满这一侧的四角列，到正文边缘前收住；底色半透明，字照常清楚 */
+/* 抽屉开场有位移动画，fixed 会跟着抽屉定位，所以用 absolute 往外撑到屏幕边 */
+.drawerScrim {
+  position: absolute;
+  top: calc(-1 * var(--corner-edge, 32px));
+  bottom: calc(-1 * var(--corner-edge, 32px));
+  z-index: -1;
+  width: calc(var(--corner-edge, 32px) + var(--corner-w, 360px) + var(--corner-gap, 32px) / 2);
+  background: rgb(6 6 12 / 90%);
+  pointer-events: none;
+}
+
+.drawer[data-side="left"] .drawerScrim {
+  left: calc(-1 * var(--corner-edge, 32px));
+  box-shadow: 1px 0 0 rgb(255 0 60 / 18%);
+}
+
+.drawer[data-side="right"] .drawerScrim {
+  right: calc(-1 * var(--corner-edge, 32px));
+  box-shadow: -1px 0 0 rgb(255 0 60 / 18%);
+}
+
+.drawerTabs {
+  display: flex;
+  gap: 4px;
+}
+
+.drawerTabs .tab {
+  padding: 8px 16px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.drawerHead .tabLine {
+  background: var(--accent);
+}
+
+.drawerBody {
+  min-height: 0;
+  padding-right: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+/* 抽屉只有一栏宽，各页的两栏改成上下排，面板之间拉开 */
+.drawer .split,
+.drawer .stack {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+/* 换页签时内容淡入，不再整块擦入 */
+.drawerBody {
+  animation: fadeIn 200ms ease-out both;
+}
+
+/* ———— 地图浮层：左边让出四角那一列，右边盖到屏幕边 ———— */
+
+.mapLayer {
+  position: fixed;
+  top: var(--corner-edge, 32px);
+  right: var(--corner-edge, 32px);
+  bottom: var(--corner-edge, 32px);
+  left: calc(var(--corner-edge, 32px) + var(--corner-w, 360px) + var(--corner-gap, 32px));
+  z-index: 30;
+  isolation: isolate;
+  font-family: var(--font-ui);
+  color: var(--cp-text);
+  animation: fadeIn 200ms ease-out both;
+}
+
+.mapInner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
 /* 1280 档：左列表 420、右详情 812（第五节第 3 条） */
 @media (width < 1600px) {
   .menu {
@@ -210,6 +346,10 @@
   .split {
     grid-template-columns: minmax(0, 420px) minmax(0, 812px);
     gap: 20px;
+  }
+
+  .drawer {
+    gap: 12px;
   }
 }
 
@@ -241,11 +381,23 @@
   }
 }
 
+/* 抽屉打开：淡入，同时从边缘那侧挪进来 8px */
+@keyframes drawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(var(--drawer-shift, -8px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .menu,
   .menuScan,
   .tabs,
-  .body {
+  .body,
+  .drawer,
+  .drawerBody,
+  .mapLayer {
     animation-duration: 1ms;
+    animation-delay: 0ms;
   }
 }

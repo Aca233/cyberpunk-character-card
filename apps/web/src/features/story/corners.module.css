@@ -404,6 +404,280 @@
   color: var(--cp-text-dim);
 }
 
+/* ———— 就地展开：原作九宫格作底，朝视野中间展开，不挤动正文 ———— */
+
+.block:where([data-open]) {
+  z-index: 25;
+}
+
+.block:where([role="button"]),
+.person:where([role="button"]),
+.trackHit {
+  cursor: var(--cp-cursor-hand);
+}
+
+.person:where([data-open], [data-pinned], :focus-visible) {
+  --person-line: var(--cp-cyan);
+  z-index: 2;
+}
+
+.trackHit {
+  position: relative;
+}
+
+/*
+ * 展开层只在这一侧的四角列里：宽同角块，叠在角块自己上面往下（底部的块往上）长，
+ * 不伸进正文、选项和输入框；同一侧下面的次要块被它暂时压住
+ */
+.peek {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: var(--corner-w);
+  max-height: min(560px, calc(100dvh - 112px));
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--cp-text);
+  cursor: auto;
+  animation: peekIn 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.peekFrame {
+  z-index: 0;
+}
+
+.peekHead {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+.peekLine {
+  display: block;
+  height: 2px;
+  background: var(--accent);
+  mask-size: 100% 100%;
+}
+
+.peek:where([data-side="left"]) {
+  left: 0;
+}
+
+.peek:where([data-side="right"]) {
+  right: 0;
+}
+
+.peek:where([data-align="bottom"]) {
+  top: auto;
+  bottom: 0;
+}
+
+/* 地点原先把最后一个子元素当作徽章，展开层不能跟着变成相对定位 */
+.zone > .peek {
+  position: absolute;
+}
+
+/* 覆盖未读块的横向 .inner 布局，展开内容独立纵向排版 */
+.peek .peekBody {
+  display: block;
+  box-sizing: border-box;
+  max-height: inherit;
+  padding: 18px 24px 26px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+  overflow-wrap: anywhere;
+}
+
+.peek .label {
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.peekScroll {
+  max-height: min(380px, calc(100dvh - 240px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+.peekAttrs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.peekAttrs > li {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.peekAttrs b {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.peekFacts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.peekFacts dt {
+  color: var(--cp-text-dim);
+}
+
+.peekFacts dd {
+  min-width: 0;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.peekFacts dd:where([data-tone="good"]) {
+  color: var(--cp-yellow);
+}
+
+.peekChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.peekChips > li:where([data-broken]) {
+  color: var(--cp-danger);
+}
+
+.peekFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.peekGroup + .peekGroup {
+  margin-top: 20px;
+}
+
+.peekGroup h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--cp-red);
+}
+
+.peek .peekRows {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.peekRows > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  min-width: 0;
+}
+
+.peekRows b {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+.peekRows small {
+  align-self: baseline;
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.peekRows p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--cp-text-dim);
+}
+
+.peekRows :where(li[data-unread]) > b {
+  color: var(--cp-yellow);
+}
+
+.peekRows :where(li[data-level="4"], li[data-level="5"]) > b {
+  color: var(--cp-danger);
+}
+
+.peekSlots {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.peekSlots > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--cp-text-dim);
+}
+
+.peekSlots > li:where([data-active]) {
+  color: var(--cp-yellow);
+}
+
+.peekNote {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--cp-text-dim);
+}
+
+.peekSlots .peekNote {
+  margin: 0;
+}
+
+/* 展开：淡入，同时往下挪 6px */
+@keyframes peekIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peek {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
 /* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收窄名字格和扫描卡 ———— */
 
 @media (width < 1600px) {

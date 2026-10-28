@@ -16,6 +16,14 @@ import type { StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
 import { Banner, BioMonitor, Present, Track, Unread, Weapon, Zone } from "./Corners";
 import { DivePanel } from "./DivePanel";
+import {
+  type DrawerSide,
+  drawerId,
+  EdgeDrawer,
+  type LeftPage,
+  MapLayer,
+  type RightPage,
+} from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { InputBar } from "./InputBar";
 import { MapBody } from "./MapPanel";
@@ -31,6 +39,7 @@ import {
   MessagesPage,
 } from "./NeuralPages";
 import { type NoteEntry, NotesPanel } from "./NotesPanel";
+import { type Expand, peekOnTop } from "./peek";
 import { Ripperdoc } from "./Ripperdoc";
 import {
   type EndedNemesis,
@@ -128,10 +137,23 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
-  // 神经界面开着的那一页；I 键重开时回到上次看的那页
+  // 神经界面开着的那一页（只剩物品栏、制作、义体）；I 键重开时回到上次看的那页
   const [neural, setNeural] = useState<NeuralPage | null>(null);
-  const lastPage = useRef<NeuralPage>("character");
+  const lastPage = useRef<NeuralPage>("inventory");
   const closeNeural = useCallback(() => setNeural(null), []);
+  // 视野里就地展开（第十二节）：四角的块、在场的人、左右抽屉，同一时间只展开一处
+  const [expand, setExpand] = useState<Expand | null>(null);
+  const peek = useMemo(() => ({ expand, setExpand }), [expand]);
+  // 左右抽屉各自停在哪一页；收起后再展开还是那页
+  const [leftPage, setLeftPage] = useState<LeftPage>("character");
+  const [rightPage, setRightPage] = useState<RightPage>("journal");
+  // 地图浮层（M）
+  const [atMap, setAtMap] = useState(false);
+  const closeMap = useCallback(() => setAtMap(false), []);
+  const closeDrawers = useCallback(
+    () => setExpand((cur) => (cur?.id.startsWith("drawer:") ? null : cur)),
+    [],
+  );
   // 商店、义体医生、存放、超梦叠在神经界面上面（U3 商店等改走 F 交互）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
@@ -200,16 +222,49 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 打开神经界面的一页；切到消息页时未读私信标成已读，不调用模型
-  const unread = view?.phone.unread ?? 0;
-  const openNeural = useCallback(
-    (page: NeuralPage) => {
-      lastPage.current = page;
-      setNeural(page);
-      if (page === "messages" && unread > 0) void act({ type: "readMessages" }, "phone");
+  // 打开神经界面的一页：收起展开的块和地图浮层
+  const openNeural = useCallback((page: NeuralPage) => {
+    lastPage.current = page;
+    setExpand(null);
+    setAtMap(false);
+    setNeural(page);
+  }, []);
+  const openMap = useCallback(() => {
+    setExpand(null);
+    setAtMap(true);
+  }, []);
+  // 钉住一侧抽屉并切到那一页；按键打开时同一页已经钉着就收起
+  const pinnedSide = (side: DrawerSide) =>
+    expand?.id === drawerId(side) && expand.pinned ? side : null;
+  const leftPinned = pinnedSide("left") !== null;
+  const rightPinned = pinnedSide("right") !== null;
+  const showLeft = useCallback(
+    (page: LeftPage, toggle = false) => {
+      const same = toggle && leftPinned && leftPage === page;
+      setLeftPage(page);
+      setExpand(same ? null : { id: drawerId("left"), pinned: true });
     },
-    [act, unread],
+    [leftPinned, leftPage],
   );
+  const showRight = useCallback(
+    (page: RightPage, toggle = false) => {
+      const same = toggle && rightPinned && rightPage === page;
+      setRightPage(page);
+      setExpand(same ? null : { id: drawerId("right"), pinned: true });
+    },
+    [rightPinned, rightPage],
+  );
+  // 右抽屉停在消息页时未读私信标成已读，不调用模型
+  const unread = view?.phone.unread ?? 0;
+  const rightOpen = expand?.id === drawerId("right");
+  const reading = useRef(false);
+  useEffect(() => {
+    if (!rightOpen || rightPage !== "messages" || unread === 0 || reading.current) return;
+    reading.current = true;
+    void act({ type: "readMessages" }, "phone").finally(() => {
+      reading.current = false;
+    });
+  }, [rightOpen, rightPage, unread, act]);
   // 切到消息页的新闻栏：只把新闻频道的未读标成已读；警方频段和街头传闻在 U4 接
   const unreadNews = view?.phone.feedUnread.news;
   const readNews = useCallback(async () => {
@@ -280,7 +335,8 @@ export function StoryScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
-      if (layerOpen() || story.spend) return;
+      // 钉住的展开层在栈顶时照常响应，商店、确认框这类层开着时不响应
+      if ((layerOpen() && !peekOnTop()) || story.spend) return;
       if (e.key === "Tab") {
         // 按住扫描，松开收起；不让焦点跳走
         e.preventDefault();
@@ -296,6 +352,18 @@ export function StoryScreen() {
       } else if (page) {
         e.preventDefault();
         openNeural(page);
+      } else if (k === "p") {
+        e.preventDefault();
+        showLeft("character", true);
+      } else if (k === "j") {
+        e.preventDefault();
+        showRight("journal", true);
+      } else if (k === "t") {
+        e.preventDefault();
+        showRight("messages", true);
+      } else if (k === "m") {
+        e.preventDefault();
+        openMap();
       } else if (k === "z") {
         e.preventDefault();
         setAtNotes(true);
@@ -321,7 +389,17 @@ export function StoryScreen() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, openNeural]);
+  }, [
+    choose,
+    pickedId,
+    offers?.rolled,
+    story.failure,
+    story.spend,
+    openNeural,
+    showLeft,
+    showRight,
+    openMap,
+  ]);
 
   if (query.isPending) {
     return (
@@ -376,16 +454,23 @@ export function StoryScreen() {
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <div className={styles.glitch} data-level={glitch} aria-hidden />
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
-      <BioMonitor view={view} onSheet={() => openNeural("character")} />
-      <Present view={view} scan={scan} />
-      <Unread view={view} />
-      <Zone view={view} />
+      <BioMonitor
+        view={view}
+        peek={peek}
+        onCharacter={() => showLeft("character")}
+        onCyberware={() => openNeural("cyberware")}
+      />
+      <Present view={view} scan={scan} peek={peek} onContacts={() => showLeft("contacts")} />
+      <Unread view={view} peek={peek} onMessages={() => showRight("messages")} />
+      <Zone view={view} peek={peek} onMap={openMap} />
       {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
-      <Track view={view}>
+      <Track view={view} peek={peek} onJournal={() => showRight("journal")}>
         {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
       </Track>
       <Weapon
         view={view}
+        peek={peek}
+        onInventory={() => openNeural("inventory")}
         onQuickhack={
           busy
             ? undefined
@@ -401,25 +486,10 @@ export function StoryScreen() {
         <NeuralInterface
           page={neural}
           eddies={view.money.eddies}
-          badges={{ messages: view.phone.unread, database: view.shards.unread }}
+          badges={{}}
           onPage={openNeural}
           onClose={closeNeural}
         >
-          {neural === "character" && (
-            <CharacterPage
-              view={view}
-              onSpend={
-                busy || offers?.rolled
-                  ? undefined
-                  : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
-              }
-              onHabit={
-                busy
-                  ? undefined
-                  : (action, text) => void act({ type: "habit", action, text }, "habit")
-              }
-            />
-          )}
           {neural === "cyberware" && (
             <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
           )}
@@ -448,77 +518,120 @@ export function StoryScreen() {
               }
             />
           )}
-          {neural === "journal" && (
-            <JournalPage
-              view={view}
-              onAccept={
-                busy || offers?.rolled
-                  ? undefined
-                  : (id) => act({ type: "acceptJob", id }, "accept", true)
-              }
-              onBraindance={() => setAtBraindance(true)}
-            />
-          )}
-          {neural === "map" && (
-            <MapBody
-              view={view}
-              onTravel={
-                busy || offers?.rolled
-                  ? undefined
-                  : (dest, route) => {
-                      setNeural(null);
-                      send({
-                        text: `${route.label}去${dest.name}`,
-                        travel: { to: dest.id, mode: route.mode },
-                      });
-                    }
-              }
-            />
-          )}
-          {neural === "messages" && (
-            <MessagesPage
-              view={view}
-              onNews={() => void readNews()}
-              onReply={
-                busy
-                  ? undefined
-                  : (id) => {
-                      story.setDraft({ replyTo: id });
-                      setNeural(null);
-                    }
-              }
-            />
-          )}
-          {neural === "contacts" && (
-            <ContactsPage
-              view={view}
-              onSquad={
-                busy
-                  ? undefined
-                  : (action, npc) => void act({ type: "squad", action, npc }, "squad")
-              }
-            />
-          )}
-          {neural === "database" && (
-            <DatabasePage
-              view={view}
-              onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
-              onEdit={
-                busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
-              }
-              onEnd={
-                busy || view.death || view.ended
-                  ? undefined
-                  : (how: StoryEnd, epitaph: string | undefined) =>
-                      act(
-                        { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
-                        "chronicle",
-                        true,
-                      )
-              }
-            />
-          )}
         </NeuralInterface>
+      )}
+      {/* 边缘抽屉（第十二节）：左边人物、联系人，右边日志、消息、数据库；贴边停一下滑出，点一下钉住 */}
+      <EdgeDrawer<LeftPage>
+        side="left"
+        label="人物和联系人"
+        line="var(--cp-red)"
+        tabs={[
+          ["character", "人物", view.character.attributePoints],
+          ["contacts", "联系人", 0],
+        ]}
+        page={leftPage}
+        peek={peek}
+        onPage={(p) => showLeft(p)}
+      >
+        {leftPage === "character" ? (
+          <CharacterPage
+            view={view}
+            onSpend={
+              busy || offers?.rolled
+                ? undefined
+                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
+            }
+            onHabit={
+              busy
+                ? undefined
+                : (action, text) => void act({ type: "habit", action, text }, "habit")
+            }
+          />
+        ) : (
+          <ContactsPage
+            view={view}
+            onSquad={
+              busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
+            }
+          />
+        )}
+      </EdgeDrawer>
+      <EdgeDrawer<RightPage>
+        side="right"
+        label="日志、消息和数据库"
+        line="var(--cp-cyan)"
+        tabs={[
+          ["journal", "日志", 0],
+          ["messages", "消息", view.phone.unread],
+          ["database", "数据库", view.shards.unread],
+        ]}
+        page={rightPage}
+        peek={peek}
+        onPage={(p) => showRight(p)}
+      >
+        {rightPage === "journal" && (
+          <JournalPage
+            view={view}
+            onAccept={
+              busy || offers?.rolled
+                ? undefined
+                : (id) => act({ type: "acceptJob", id }, "accept", true)
+            }
+            onBraindance={() => setAtBraindance(true)}
+          />
+        )}
+        {rightPage === "messages" && (
+          <MessagesPage
+            view={view}
+            onNews={() => void readNews()}
+            onReply={
+              busy
+                ? undefined
+                : (id) => {
+                    story.setDraft({ replyTo: id });
+                    closeDrawers();
+                  }
+            }
+          />
+        )}
+        {rightPage === "database" && (
+          <DatabasePage
+            view={view}
+            onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
+            onEdit={
+              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
+            }
+            onEnd={
+              busy || view.death || view.ended
+                ? undefined
+                : (how: StoryEnd, epitaph: string | undefined) =>
+                    act(
+                      { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
+                      "chronicle",
+                      true,
+                    )
+            }
+          />
+        )}
+      </EdgeDrawer>
+      {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
+      {atMap && (
+        <MapLayer onClose={closeMap}>
+          <MapBody
+            view={view}
+            onTravel={
+              busy || offers?.rolled
+                ? undefined
+                : (dest, route) => {
+                    setAtMap(false);
+                    send({
+                      text: `${route.label}去${dest.name}`,
+                      travel: { to: dest.id, mode: route.mode },
+                    });
+                  }
+            }
+          />
+        </MapLayer>
       )}
 
       <main className={styles.column}>
@@ -596,7 +709,7 @@ export function StoryScreen() {
                 {view.ended.epitaph && `「${view.ended.epitaph}」`}
                 这份存档只能回看，角色已经进了主菜单的传说名册。
               </span>
-              <Button onClick={() => openNeural("database")}>看履历</Button>
+              <Button onClick={() => showRight("database")}>看履历</Button>
             </div>
           )}
           <InputBar
@@ -627,9 +740,9 @@ export function StoryScreen() {
           {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
           <KeyBar>
             <KeyHint keyId="key.i" label="神经界面" onClick={() => openNeural(lastPage.current)} />
-            <KeyHint keyId="key.j" label="日志" onClick={() => openNeural("journal")} />
-            <KeyHint keyId="key.m" label="地图" onClick={() => openNeural("map")} />
-            <KeyHint keyId="key.t" label="消息" onClick={() => openNeural("messages")} />
+            <KeyHint keyId="key.j" label="日志" onClick={() => showRight("journal", true)} />
+            <KeyHint keyId="key.m" label="地图" onClick={openMap} />
+            <KeyHint keyId="key.t" label="消息" onClick={() => showRight("messages", true)} />
             <KeyHint keyId="key.tab" label="扫描（长按）" />
             <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
           </KeyBar>
