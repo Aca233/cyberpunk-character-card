@@ -1,0 +1,251 @@
+/*
+ * 神经界面（2077-interface-plan.md 第五节第 4 条、第八节第 2 条）：照 U0 视觉稿 dev/neural.module.css 的 menu 一组。
+ * 框体一律是原作素材（menu.header、tab.bg、tab.line、fx.scanlines）或正式组件，这里只管位置、间距、字号和动效
+ */
+
+.menu {
+  --accent: var(--cp-red);
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  grid-template-rows: 72px auto auto minmax(0, 1fr) auto;
+  padding: 0 80px 20px;
+  font-family: var(--font-ui);
+  color: var(--cp-text);
+  animation: fadeIn 200ms ease-out both;
+}
+
+.menu > :not(.menuDim, .menuScan) {
+  position: relative;
+  z-index: 1;
+}
+
+.menuDim {
+  position: absolute;
+  inset: 0;
+  background: rgb(5 5 10 / 92%);
+}
+
+/* 打开时扫描线从上往下扫一遍（第八节第 2 条，300ms） */
+.menuScan {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: menuSweep 300ms ease-out both;
+}
+
+/* ———— 顶部 72 高：左上「神经界面」，右上欧元 ———— */
+
+.menuHead {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-left: 40px;
+}
+
+.menuHeadBg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.85;
+}
+
+.title {
+  position: relative;
+  font-size: 24px;
+  letter-spacing: 0.22em;
+  color: var(--cp-red);
+}
+
+.menuHead > :not(.menuHeadBg) {
+  position: relative;
+}
+
+.eddies {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 18px;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ———— 页签：tab.bg 九宫格，切法同 Button ———— */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  animation: tabDrop 300ms ease-out both;
+}
+
+.tab {
+  position: relative;
+  isolation: isolate;
+  padding: 10px 18px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--cp-red);
+  cursor: var(--cp-cursor-hand);
+  transition: color var(--dur-flash);
+}
+
+.tabBg {
+  z-index: -1;
+  opacity: 0.16;
+  transition: opacity var(--dur-flash);
+}
+
+.tab:hover,
+.tab:focus-visible {
+  outline: none;
+  color: var(--cp-yellow);
+}
+
+.tab[aria-pressed="true"] {
+  color: var(--cp-cyan);
+}
+
+.tab[aria-pressed="true"] .tabBg {
+  opacity: 0.34;
+}
+
+.inner {
+  position: relative;
+  z-index: 1;
+}
+
+.tab .inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  min-width: 1.2em;
+  font-weight: 400;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabLine {
+  display: block;
+  height: 2px;
+  margin-top: 4px;
+  background: var(--cp-red);
+  mask-size: 100% 100%;
+}
+
+/* ———— 页面：左列表 640、右详情 1120；各页自己决定用不用两栏 ———— */
+
+.body {
+  min-height: 0;
+  margin-top: 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  animation: fadeIn 200ms ease-out both;
+}
+
+/* 地图页整块给地图，自己管滚动和缩放 */
+.body[data-page="map"] {
+  position: relative;
+  overflow: hidden;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 640px) minmax(0, 1120px);
+  gap: 32px;
+  align-items: start;
+}
+
+.list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.stack {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.keys {
+  margin-top: 14px;
+}
+
+.keys > footer {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+  width: auto;
+  padding: 0;
+  background: none;
+}
+
+/* 1280 档：左列表 420、右详情 812（第五节第 3 条） */
+@media (width < 1600px) {
+  .menu {
+    padding: 0 24px 14px;
+  }
+
+  .split {
+    grid-template-columns: minmax(0, 420px) minmax(0, 812px);
+    gap: 20px;
+  }
+}
+
+@media (width < 960px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes menuSweep {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes tabDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu,
+  .menuScan,
+  .tabs,
+  .body {
+    animation-duration: 1ms;
+  }
+}

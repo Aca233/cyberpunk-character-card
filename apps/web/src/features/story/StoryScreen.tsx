@@ -12,20 +12,25 @@ import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
-import { ChroniclePanel, type StoryEnd } from "./ChroniclePanel";
+import type { StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
 import { Banner, BioMonitor, Present, Track, Unread, Weapon, Zone } from "./Corners";
 import { DivePanel } from "./DivePanel";
 import { EscMenu } from "./EscMenu";
-import { FactionsPanel } from "./FactionsPanel";
-import { SidePanel } from "./Hud";
 import { InputBar } from "./InputBar";
-import { Journal } from "./Journal";
-import { MapPanel } from "./MapPanel";
-import { MemoryPanel } from "./MemoryPanel";
-import { NewsPanel } from "./NewsPanel";
+import { MapBody } from "./MapPanel";
+import { NeuralInterface, type NeuralPage, PAGE_KEYS } from "./NeuralInterface";
+import {
+  CharacterPage,
+  ContactsPage,
+  CraftingPage,
+  CyberwarePage,
+  DatabasePage,
+  InventoryPage,
+  JournalPage,
+  MessagesPage,
+} from "./NeuralPages";
 import { type NoteEntry, NotesPanel } from "./NotesPanel";
-import { PhoneDialog } from "./Phone";
 import { Ripperdoc } from "./Ripperdoc";
 import {
   type EndedNemesis,
@@ -33,7 +38,6 @@ import {
   type SettledJob,
   SettlementCard,
 } from "./Settlement";
-import { SheetPanel } from "./SheetPanel";
 import { Shop } from "./Shop";
 import { StashPanel } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
@@ -124,27 +128,21 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
-  // 日志开着时停用正文的快捷键；值是打开时的标签页
-  const [journal, setJournal] = useState<"active" | "board" | null>(null);
+  // 神经界面开着的那一页；I 键重开时回到上次看的那页
+  const [neural, setNeural] = useState<NeuralPage | null>(null);
+  const lastPage = useRef<NeuralPage>("character");
+  const closeNeural = useCallback(() => setNeural(null), []);
+  // 商店、义体医生、存放、超梦叠在神经界面上面（U3 商店等改走 F 交互）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
-  const [atMap, setAtMap] = useState(false);
-  const [atFactions, setAtFactions] = useState(false);
   const [atStash, setAtStash] = useState(false);
-  const [atMemory, setAtMemory] = useState(false);
-  const [atChronicle, setAtChronicle] = useState(false);
   const [atBraindance, setAtBraindance] = useState(false);
-  const [atNews, setAtNews] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
-  const closeJournal = useCallback(() => setJournal(null), []);
-  const [atPhone, setAtPhone] = useState(false);
   // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
   const [scan, setScan] = useState(false);
   const [atNotes, setAtNotes] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
-  // U1 临时：旧左侧栏收进面板，点生物监测块打开；U2 删
-  const [atSheet, setAtSheet] = useState(false);
 
   const warn = useCallback((key: string, error: unknown) => {
     const text = error instanceof Error ? error.message : String(error);
@@ -202,17 +200,19 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 打开消息：未读的标成已读，不调用模型
+  // 打开神经界面的一页；切到消息页时未读私信标成已读，不调用模型
   const unread = view?.phone.unread ?? 0;
-  const openPhone = useCallback(async () => {
-    setAtPhone(true);
-    if (unread === 0) return;
-    await act({ type: "readMessages" }, "phone");
-  }, [act, unread]);
-  // 打开新闻：只把新闻频道的未读标成已读；警方频段和街头传闻等消息界面重做时再接
+  const openNeural = useCallback(
+    (page: NeuralPage) => {
+      lastPage.current = page;
+      setNeural(page);
+      if (page === "messages" && unread > 0) void act({ type: "readMessages" }, "phone");
+    },
+    [act, unread],
+  );
+  // 切到消息页的新闻栏：只把新闻频道的未读标成已读；警方频段和街头传闻在 U4 接
   const unreadNews = view?.phone.feedUnread.news;
-  const openNews = useCallback(async () => {
-    setAtNews(true);
+  const readNews = useCallback(async () => {
     if (!unreadNews || unreadNews.length === 0) return;
     await act({ type: "readMessages", feed: [...unreadNews] }, "news");
   }, [act, unreadNews]);
@@ -274,8 +274,9 @@ export function StoryScreen() {
     [offers, busy, send, version],
   );
 
-  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，J/M/T 日志、地图、消息，Z 通知记录，按住 Tab 扫描。
-  // 有面板开着时一律不响应，Esc 由面板栈交给最上面那层；I/P/O/K 和 Q/E 跟神经界面一起在 U2 接
+  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，I 神经界面（回到上次那页），P/O/K/J/M/T 直达各页，
+  // Z 通知记录，按住 Tab 扫描。有面板开着时一律不响应，Esc 由面板栈交给最上面那层；
+  // 神经界面里的 Q/E 翻页和 I 关闭由 NeuralInterface 自己管
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
@@ -288,15 +289,13 @@ export function StoryScreen() {
       }
       if (e.repeat) return;
       const k = e.key.toLowerCase();
-      if (k === "j") {
+      const page = (PAGE_KEYS as Readonly<Record<string, NeuralPage | undefined>>)[k];
+      if (k === "i") {
         e.preventDefault();
-        setJournal("active");
-      } else if (k === "m") {
+        openNeural(lastPage.current);
+      } else if (page) {
         e.preventDefault();
-        setAtMap(true);
-      } else if (k === "t") {
-        e.preventDefault();
-        void openPhone();
+        openNeural(page);
       } else if (k === "z") {
         e.preventDefault();
         setAtNotes(true);
@@ -322,7 +321,7 @@ export function StoryScreen() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, openPhone]);
+  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, openNeural]);
 
   if (query.isPending) {
     return (
@@ -377,7 +376,7 @@ export function StoryScreen() {
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <div className={styles.glitch} data-level={glitch} aria-hidden />
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
-      <BioMonitor view={view} onSheet={() => setAtSheet(true)} />
+      <BioMonitor view={view} onSheet={() => openNeural("character")} />
       <Present view={view} scan={scan} />
       <Unread view={view} />
       <Zone view={view} />
@@ -397,50 +396,129 @@ export function StoryScreen() {
         }
       />
       {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
-      {/* U1 临时：旧左侧栏原样收进面板，点生物监测块打开；侧栏按钮打开的面板叠在它上面。U2 删 */}
-      {atSheet && (
-        <SheetPanel title={view.character.name ?? "未建档"} onClose={() => setAtSheet(false)}>
-          <SidePanel
-            view={view}
-            onSpend={
-              busy || offers?.rolled
-                ? undefined
-                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
-            }
-            onJournal={(board) => setJournal(board ? "board" : "active")}
-            onRipperdoc={() => setAtDoc(true)}
-            onShop={setAtShop}
-            onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
-            onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
-            onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
-            onMod={
-              busy
-                ? undefined
-                : (action, weapon, mod) =>
-                    void act({ type: "modWeapon", action, weapon, mod }, "gear")
-            }
-            onHabit={
-              busy
-                ? undefined
-                : (action, text) => void act({ type: "habit", action, text }, "habit")
-            }
-            onSquad={
-              busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
-            }
-            onCraft={
-              busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
-            }
-            onPhone={() => void openPhone()}
-            onMap={() => setAtMap(true)}
-            onFactions={() => setAtFactions(true)}
-            onMemory={() => setAtMemory(true)}
-            onChronicle={() => setAtChronicle(true)}
-            onNews={() => void openNews()}
-            onBraindance={() => setAtBraindance(true)}
-            onStash={() => setAtStash(true)}
-            onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
-          />
-        </SheetPanel>
+      {/* 神经界面（计划第五节第 4 条）：九页，Q/E 翻页，I 或 Esc 关；商店、义体医生、存放、超梦叠在上面 */}
+      {neural && (
+        <NeuralInterface
+          page={neural}
+          eddies={view.money.eddies}
+          badges={{ messages: view.phone.unread, database: view.shards.unread }}
+          onPage={openNeural}
+          onClose={closeNeural}
+        >
+          {neural === "character" && (
+            <CharacterPage
+              view={view}
+              onSpend={
+                busy || offers?.rolled
+                  ? undefined
+                  : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
+              }
+              onHabit={
+                busy
+                  ? undefined
+                  : (action, text) => void act({ type: "habit", action, text }, "habit")
+              }
+            />
+          )}
+          {neural === "cyberware" && (
+            <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
+          )}
+          {neural === "inventory" && (
+            <InventoryPage
+              view={view}
+              onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
+              onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
+              onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
+              onMod={
+                busy
+                  ? undefined
+                  : (action, weapon, mod) =>
+                      void act({ type: "modWeapon", action, weapon, mod }, "gear")
+              }
+              onShop={setAtShop}
+              onStash={() => setAtStash(true)}
+              onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
+            />
+          )}
+          {neural === "crafting" && (
+            <CraftingPage
+              view={view}
+              onCraft={
+                busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
+              }
+            />
+          )}
+          {neural === "journal" && (
+            <JournalPage
+              view={view}
+              onAccept={
+                busy || offers?.rolled
+                  ? undefined
+                  : (id) => act({ type: "acceptJob", id }, "accept", true)
+              }
+              onBraindance={() => setAtBraindance(true)}
+            />
+          )}
+          {neural === "map" && (
+            <MapBody
+              view={view}
+              onTravel={
+                busy || offers?.rolled
+                  ? undefined
+                  : (dest, route) => {
+                      setNeural(null);
+                      send({
+                        text: `${route.label}去${dest.name}`,
+                        travel: { to: dest.id, mode: route.mode },
+                      });
+                    }
+              }
+            />
+          )}
+          {neural === "messages" && (
+            <MessagesPage
+              view={view}
+              onNews={() => void readNews()}
+              onReply={
+                busy
+                  ? undefined
+                  : (id) => {
+                      story.setDraft({ replyTo: id });
+                      setNeural(null);
+                    }
+              }
+            />
+          )}
+          {neural === "contacts" && (
+            <ContactsPage
+              view={view}
+              onSquad={
+                busy
+                  ? undefined
+                  : (action, npc) => void act({ type: "squad", action, npc }, "squad")
+              }
+            />
+          )}
+          {neural === "database" && (
+            <DatabasePage
+              view={view}
+              onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
+              onEdit={
+                busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
+              }
+              onEnd={
+                busy || view.death || view.ended
+                  ? undefined
+                  : (how: StoryEnd, epitaph: string | undefined) =>
+                      act(
+                        { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
+                        "chronicle",
+                        true,
+                      )
+              }
+            />
+          )}
+        </NeuralInterface>
       )}
 
       <main className={styles.column}>
@@ -518,7 +596,7 @@ export function StoryScreen() {
                 {view.ended.epitaph && `「${view.ended.epitaph}」`}
                 这份存档只能回看，角色已经进了主菜单的传说名册。
               </span>
-              <Button onClick={() => setAtChronicle(true)}>看履历</Button>
+              <Button onClick={() => openNeural("database")}>看履历</Button>
             </div>
           )}
           <InputBar
@@ -548,9 +626,10 @@ export function StoryScreen() {
           />
           {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
           <KeyBar>
-            <KeyHint keyId="key.j" label="日志" onClick={() => setJournal("active")} />
-            <KeyHint keyId="key.m" label="地图" onClick={() => setAtMap(true)} />
-            <KeyHint keyId="key.t" label="消息" onClick={() => void openPhone()} />
+            <KeyHint keyId="key.i" label="神经界面" onClick={() => openNeural(lastPage.current)} />
+            <KeyHint keyId="key.j" label="日志" onClick={() => openNeural("journal")} />
+            <KeyHint keyId="key.m" label="地图" onClick={() => openNeural("map")} />
+            <KeyHint keyId="key.t" label="消息" onClick={() => openNeural("messages")} />
             <KeyHint keyId="key.tab" label="扫描（长按）" />
             <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
           </KeyBar>
@@ -582,18 +661,6 @@ export function StoryScreen() {
           <p>{failure.message}</p>
           <p>你的输入还留在输入框里，配好以后可以直接重发。</p>
         </Dialog>
-      )}
-      {journal && (
-        <Journal
-          view={view}
-          initialTab={journal}
-          onAccept={
-            busy || offers?.rolled
-              ? undefined
-              : (id) => act({ type: "acceptJob", id }, "accept", true)
-          }
-          onClose={closeJournal}
-        />
       )}
       {atShop &&
         (() => {
@@ -701,27 +768,6 @@ export function StoryScreen() {
             )
           );
         })()}
-      {atFactions && <FactionsPanel view={view} onClose={() => setAtFactions(false)} />}
-      {atMemory && (
-        <MemoryPanel
-          view={view}
-          onEdit={busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)}
-          onClose={() => setAtMemory(false)}
-        />
-      )}
-      {atChronicle && (
-        <ChroniclePanel
-          view={view}
-          onEnd={
-            busy || view.death || view.ended
-              ? undefined
-              : (how: StoryEnd, epitaph: string | undefined) =>
-                  act({ type: "endStory", how, ...(epitaph ? { epitaph } : {}) }, "chronicle", true)
-          }
-          onClose={() => setAtChronicle(false)}
-        />
-      )}
-      {atNews && <NewsPanel view={view} onClose={() => setAtNews(false)} />}
       {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
       {atBraindance && view.braindance.active && (
         <BraindanceEditor
@@ -750,42 +796,11 @@ export function StoryScreen() {
           onClose={() => setAtBraindance(false)}
         />
       )}
-      {atMap && (
-        <MapPanel
-          view={view}
-          onTravel={
-            busy || offers?.rolled
-              ? undefined
-              : (dest, route) => {
-                  setAtMap(false);
-                  send({
-                    text: `${route.label}去${dest.name}`,
-                    travel: { to: dest.id, mode: route.mode },
-                  });
-                }
-          }
-          onClose={() => setAtMap(false)}
-        />
-      )}
       {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
       {!settled[0] && rivalsDone[0] && (
         <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />
       )}
       {!settled[0] && !rivalsDone[0] && <CloseupQueue turns={view.turns} />}
-      {atPhone && (
-        <PhoneDialog
-          view={view}
-          onClose={() => setAtPhone(false)}
-          onReply={
-            busy
-              ? undefined
-              : (id) => {
-                  story.setDraft({ replyTo: id });
-                  setAtPhone(false);
-                }
-          }
-        />
-      )}
       {story.spend && (
         <Dialog
           title={`花一大笔钱：${story.spend.label}`}

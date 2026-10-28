@@ -264,16 +264,14 @@ function onOverlay(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest("button, summary, [data-overlay]") !== null;
 }
 
-/** 地图和路线面板：全屏，滚轮缩放、拖动平移；耗时、路费和风险由代码按路线表算，不调用模型 */
-export function MapPanel({
+/** 神经界面的地图页：铺满页面主体，滚轮缩放、拖动平移；耗时、路费和风险由代码按路线表算，不调用模型 */
+export function MapBody({
   view,
   onTravel,
-  onClose,
 }: {
   readonly view: View;
   /** 正在生成时不传，路线不能点 */
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
-  readonly onClose: () => void;
 }) {
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -378,11 +376,8 @@ export function MapPanel({
     return () => el.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
 
-  // 选中地点时 Esc 先取消选中，再按一次关掉地图
-  useLayer(() => {
-    if (picked) setPicked(null);
-    else onClose();
-  });
+  // 选中地点时 Esc 先取消选中；没选中时交给神经界面关闭
+  useLayer(() => setPicked(null), picked !== null);
 
   const toScreen = (x: number, y: number) => ({
     left: (x - cam.cx) * cam.k + size.w / 2,
@@ -513,7 +508,7 @@ export function MapPanel({
   const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
 
   return (
-    <div role="dialog" aria-label="地图" className={styles.mapScreen} style={pinVars()}>
+    <section aria-label="地图" className={styles.mapScreen} style={pinVars()}>
       <header className={styles.mapTop}>
         <h2 className={styles.mapTopTitle}>夜之城</h2>
         <span className={styles.dim}>
@@ -535,7 +530,6 @@ export function MapPanel({
               复位
             </Button>
           </span>
-          <Button onClick={onClose}>关闭</Button>
         </div>
       </header>
 
@@ -928,6 +922,6 @@ export function MapPanel({
 
         <p className={styles.mapHint}>底图和图标取自原作</p>
       </div>
-    </div>
+    </section>
   );
 }

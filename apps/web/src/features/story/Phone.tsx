@@ -1,8 +1,5 @@
 import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
-import { Button } from "../../ui/Button";
-import { useLayer } from "../../ui/layers";
-import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
@@ -35,7 +32,7 @@ function contactsOf(view: View): Contact[] {
 }
 
 /** 头像：还没有原作头像素材和分层 SVG，先用名字的第一个字 */
-function Avatar({ name, dead }: { readonly name: string; readonly dead: boolean }) {
+export function Avatar({ name, dead }: { readonly name: string; readonly dead: boolean }) {
   return (
     <span className={styles.avatar} data-dead={dead || undefined} aria-hidden="true">
       {[...name][0] ?? "?"}
@@ -44,7 +41,7 @@ function Avatar({ name, dead }: { readonly name: string; readonly dead: boolean 
 }
 
 /** 人物档案：你知道的信息、关系笔记、人情和仇、共同记忆；诉求、底线和秘密不在这里 */
-function Profile({ npc }: { readonly npc: Npc }) {
+export function Profile({ npc }: { readonly npc: Npc }) {
   return (
     <section aria-label={`${npc.name}的档案`}>
       <h3 className={styles.mapTitle}>档案</h3>
@@ -200,18 +197,15 @@ function Profile({ npc }: { readonly npc: Npc }) {
   );
 }
 
-/** 消息：左边联系人，右边和这个人的消息往来，见过面的人下面是人物档案。不调用模型 */
-export function PhoneDialog({
+/** 消息页的私信栏：左边联系人，右边和这个人的消息往来，见过面的人下面是人物档案。不调用模型 */
+export function PhoneBody({
   view,
   onReply,
-  onClose,
 }: {
   readonly view: View;
   /** 回复一条：输入框进入回复状态；正在生成时不传，按钮不显示 */
   readonly onReply?: ((id: number) => void) | undefined;
-  readonly onClose: () => void;
 }) {
-  useLayer(onClose);
   const contacts = contactsOf(view);
   const [picked, setPicked] = useState<string | null>(
     () => (contacts.find((c) => c.unread > 0) ?? contacts[0])?.key ?? null,
@@ -220,85 +214,67 @@ export function PhoneDialog({
   // 消息往来旧的在前，像聊天窗口
   const thread = current ? view.phone.messages.filter((m) => m.from === current.key).reverse() : [];
 
+  if (contacts.length === 0 || !current) return <p className={styles.dim}>还没有联系人。</p>;
+
   return (
-    <div className={styles.journalBackdrop}>
-      <div role="dialog" aria-label="消息" className={styles.journal}>
-        <Panel as="div" title="消息" line="var(--cp-cyan)">
-          <div className={styles.docHead}>
-            <p className={`${styles.dim} ${styles.docNote}`}>
-              {view.phone.unread > 0 ? `${view.phone.unread} 条未读。` : "没有未读消息。"}
-            </p>
-            <Button onClick={onClose}>关上</Button>
-          </div>
-          {contacts.length === 0 || !current ? (
-            <p className={styles.dim}>还没有联系人。</p>
+    <div className={styles.phoneLayout}>
+      <ul className={styles.contactList} aria-label="联系人">
+        {contacts.map((c) => (
+          <li key={c.key}>
+            <button
+              type="button"
+              className={styles.contact}
+              aria-pressed={c.key === current.key}
+              onClick={() => setPicked(c.key)}
+            >
+              <Avatar name={c.name} dead={c.npc?.alive === false} />
+              <span className={styles.contactName}>
+                <b>{c.name}</b>
+                <small className={styles.dim}>
+                  {!c.npc
+                    ? "没有档案"
+                    : c.npc.met
+                      ? `好感 ${c.npc.affinity > 0 ? "+" : ""}${c.npc.affinity}`
+                      : "只听说过"}
+                  {c.last ? ` · ${c.last}` : ""}
+                </small>
+              </span>
+              {c.unread > 0 && <span className={styles.contactUnread}>{c.unread}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className={styles.docBody}>
+        <section aria-label={`和${current.name}的消息`}>
+          <h3 className={styles.mapTitle}>{current.name}</h3>
+          {thread.length === 0 ? (
+            <p className={styles.dim}>还没有消息往来。</p>
           ) : (
-            <div className={styles.phoneLayout}>
-              <ul className={styles.contactList} aria-label="联系人">
-                {contacts.map((c) => (
-                  <li key={c.key}>
-                    <button
-                      type="button"
-                      className={styles.contact}
-                      aria-pressed={c.key === current.key}
-                      onClick={() => setPicked(c.key)}
-                    >
-                      <Avatar name={c.name} dead={c.npc?.alive === false} />
-                      <span className={styles.contactName}>
-                        <b>{c.name}</b>
-                        <small className={styles.dim}>
-                          {!c.npc
-                            ? "没有档案"
-                            : c.npc.met
-                              ? `好感 ${c.npc.affinity > 0 ? "+" : ""}${c.npc.affinity}`
-                              : "只听说过"}
-                          {c.last ? ` · ${c.last}` : ""}
-                        </small>
-                      </span>
-                      {c.unread > 0 && <span className={styles.contactUnread}>{c.unread}</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <div className={styles.docBody}>
-                <section aria-label={`和${current.name}的消息`}>
-                  <h3 className={styles.mapTitle}>{current.name}</h3>
-                  {thread.length === 0 ? (
-                    <p className={styles.dim}>还没有消息往来。</p>
-                  ) : (
-                    <ul className={styles.phoneList}>
-                      {thread.map((m) => (
-                        <li
-                          key={m.id}
-                          className={styles.phoneItem}
-                          data-unread={!m.read || undefined}
-                        >
-                          <p className={styles.phoneHead}>
-                            <small>{m.at}</small>
-                          </p>
-                          <p className={styles.phoneText}>{m.text}</p>
-                          {m.reply && (
-                            <p className={styles.phoneReply}>
-                              <small className={styles.dim}>
-                                你回{m.repliedAt ? `（${m.repliedAt}）` : ""}：
-                              </small>
-                              {m.reply}
-                            </p>
-                          )}
-                          {m.replied && !m.reply && <small className={styles.dim}>已回复</small>}
-                          {onReply && current.npc?.alive !== false && (
-                            <ActionButton onClick={() => onReply(m.id)}>回复</ActionButton>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
+            <ul className={styles.phoneList}>
+              {thread.map((m) => (
+                <li key={m.id} className={styles.phoneItem} data-unread={!m.read || undefined}>
+                  <p className={styles.phoneHead}>
+                    <small>{m.at}</small>
+                  </p>
+                  <p className={styles.phoneText}>{m.text}</p>
+                  {m.reply && (
+                    <p className={styles.phoneReply}>
+                      <small className={styles.dim}>
+                        你回{m.repliedAt ? `（${m.repliedAt}）` : ""}：
+                      </small>
+                      {m.reply}
+                    </p>
                   )}
-                </section>
-                {current.npc && <Profile npc={current.npc} />}
-              </div>
-            </div>
+                  {m.replied && !m.reply && <small className={styles.dim}>已回复</small>}
+                  {onReply && current.npc?.alive !== false && (
+                    <ActionButton onClick={() => onReply(m.id)}>回复</ActionButton>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
-        </Panel>
+        </section>
+        {current.npc && <Profile npc={current.npc} />}
       </div>
     </div>
   );
