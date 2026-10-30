@@ -3,17 +3,31 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { api, type TurnContext } from "../../api/client";
 import { formatDate } from "../../labels";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { EmptyState } from "../status/StatusParts";
+import neural from "../story/neural.module.css";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
+import { PresetSettings } from "./PresetSettings";
 import { setNarrativePref } from "./prefs";
 import { useSpoilerView } from "./SpoilerBadge";
 import styles from "./settings.module.css";
 
-type Tab = "profiles" | "narrative" | "context";
+type Tab = "profiles" | "presets" | "narrative" | "context";
+
+const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
+  { id: "profiles", label: "模型连接" },
+  { id: "presets", label: "酒馆预设" },
+  { id: "narrative", label: "叙事偏好" },
+  { id: "context", label: "上下文（调试）" },
+];
+
+/** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
+const FRAME_SLICE = 120;
 
 const CITY_WEIGHT = { minor: "街角小事", normal: "几个街区在传", major: "头条" } as const;
 
@@ -23,7 +37,10 @@ export function SettingsScreen() {
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Tab | "menu" | null>(null);
   const tabParam = params.get("tab");
-  const tab: Tab = tabParam === "context" || tabParam === "narrative" ? tabParam : "profiles";
+  const tab: Tab =
+    tabParam === "context" || tabParam === "narrative" || tabParam === "presets"
+      ? tabParam
+      : "profiles";
 
   const go = (target: Tab | "menu") => {
     setDirty(false);
@@ -68,35 +85,54 @@ export function SettingsScreen() {
 
   return (
     <div className={styles.screen}>
+      {/* 外框照神经界面（用户定的重排）：夜之城远景压暗、扫描线、原作 panel.frame 红框，都不挡点击 */}
+      <span
+        className={styles.bg}
+        style={{ backgroundImage: cssUrl("menu.nightCity") }}
+        aria-hidden
+      />
+      <span className={styles.shade} aria-hidden />
+      <span
+        className={styles.scan}
+        style={{ backgroundImage: cssUrl("fx.scanlines") }}
+        aria-hidden
+      />
+      <NineSlice
+        id="panel.frame"
+        tint="var(--cp-red)"
+        slice={FRAME_SLICE}
+        className={styles.frame}
+      />
       <header className={styles.head}>
+        <Asset id="menu.header" tint="var(--cp-red)" height={72} className={styles.headBg} />
         <h1>设置</h1>
-        <div className={styles.tabs}>
-          <button
-            type="button"
-            aria-pressed={tab === "profiles"}
-            onClick={() => requestGo("profiles")}
-          >
-            模型连接
-          </button>
-          <button
-            type="button"
-            aria-pressed={tab === "narrative"}
-            onClick={() => requestGo("narrative")}
-          >
-            叙事偏好
-          </button>
-          <button
-            type="button"
-            aria-pressed={tab === "context"}
-            onClick={() => requestGo("context")}
-          >
-            上下文（调试）
-          </button>
-        </div>
+        <Asset id="fluff.code" tint="var(--cp-red)" height={16} />
       </header>
-      <main className={styles.body}>
+      {/* 页签：原作 tab.bg 九宫格，切法同神经界面；下面一道 tab.line */}
+      <nav className={styles.tabs} aria-label="设置分页">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={neural.tab}
+            aria-pressed={tab === t.id}
+            onClick={() => requestGo(t.id)}
+          >
+            <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
+            <span className={neural.inner}>{t.label}</span>
+          </button>
+        ))}
+      </nav>
+      <span
+        className={neural.tabLine}
+        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+        aria-hidden
+      />
+      <main className={styles.body} key={tab}>
         {tab === "profiles" ? (
           <ModelSettings onDirtyChange={setDirty} />
+        ) : tab === "presets" ? (
+          <PresetSettings />
         ) : tab === "narrative" ? (
           <NarrativeSettings />
         ) : (
@@ -184,27 +220,31 @@ function ContextViewer() {
       <div className={styles.pickers}>
         <label>
           <span>存档</span>
-          <select value={saveId} onChange={(e) => update("save", e.target.value)}>
-            {saves.data.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title} · {formatDate(s.createdAt)}
-              </option>
-            ))}
-          </select>
+          <FrameBox>
+            <select value={saveId} onChange={(e) => update("save", e.target.value)}>
+              {saves.data.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title} · {formatDate(s.createdAt)}
+                </option>
+              ))}
+            </select>
+          </FrameBox>
         </label>
         <label>
           <span>轮次</span>
-          <select
-            value={seq ?? ""}
-            onChange={(e) => update("seq", e.target.value)}
-            disabled={turns.length === 0}
-          >
-            {turns.map((t) => (
-              <option key={t.seq} value={t.seq}>
-                #{t.seq} {t.input.text.slice(0, 24)}
-              </option>
-            ))}
-          </select>
+          <FrameBox>
+            <select
+              value={seq ?? ""}
+              onChange={(e) => update("seq", e.target.value)}
+              disabled={turns.length === 0}
+            >
+              {turns.map((t) => (
+                <option key={t.seq} value={t.seq}>
+                  #{t.seq} {t.input.text.slice(0, 24)}
+                </option>
+              ))}
+            </select>
+          </FrameBox>
         </label>
       </div>
 
@@ -484,6 +524,8 @@ function Section({
 }) {
   return (
     <section className={styles.section} data-tone={tone}>
+      {/* 原作 map.filterCell 框（用户定的重排），警告段框线由 CSS 换黄；不画侧边线 */}
+      <CellFrame />
       <h2>{title}</h2>
       {children}
     </section>

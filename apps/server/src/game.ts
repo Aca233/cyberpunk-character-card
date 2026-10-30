@@ -79,6 +79,7 @@ import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { atomicWrite, KeyedMutex } from "./fsutil";
+import type { PresetStore } from "./presets";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
 import type { SaveStore } from "./storage";
@@ -143,6 +144,8 @@ export interface GameDeps {
   readonly evalDrafts?: string | undefined;
   /** 设定库：本机官方文本库的只读检索；没有文本库时不给，写正文就不带原作资料 */
   readonly lore?: LoreSource | undefined;
+  /** 玩家导入的酒馆预设（用户定的）：每轮开始时读当前启用的那一份，只给写正文 */
+  readonly presets?: PresetStore | undefined;
 }
 
 interface Loaded {
@@ -980,6 +983,8 @@ export class GameService {
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
           lore: this.deps.lore,
+          // 本轮开始前读取一次预设；生成途中切换开关，不改变这一轮已经选定的内容。
+          preset: await this.deps.presets?.active(),
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
         },

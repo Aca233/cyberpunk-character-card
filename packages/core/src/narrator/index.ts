@@ -6,6 +6,7 @@ export * from "./lore";
 export * from "./modules";
 export * from "./offscreen";
 export * from "./pending";
+export * from "./preset";
 export * from "./prompts";
 export * from "./prose";
 export * from "./retrieve";

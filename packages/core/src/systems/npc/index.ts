@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { npcActions } from "./actions";
 import { applyNpc, applyNpcPast, applyOffscreenDeath, editNpcMemory, seedNpc } from "./apply";
 import { perceivedView } from "./perceived";
 import { npcRules } from "./prompt";
@@ -74,12 +75,15 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
   },
   rules: [npcRules],
+  // 名字格和档案里的「扫描」按钮（计划第十二节第 14 条）
+  actions: npcActions,
   sections: npcSections,
   view: { key: "npcs", project: npcsView },
   views: [{ key: "perceived", project: perceivedView }],
   status: npcStatus,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./body";
 export * from "./perceived";

@@ -1,7 +1,5 @@
 import {
   type Dispatch,
-  type KeyboardEvent,
-  type MouseEvent,
   type PointerEvent,
   type SetStateAction,
   useCallback,
@@ -11,21 +9,25 @@ import {
 import { useLayer } from "../../ui/layers";
 
 /**
- * 视野里就地展开（2077-interface-plan.md 第十二节第 4 条）：
- * 鼠标停 150ms 才展开，移开留 250ms 宽限；点一下钉住，钉住后走面板栈，Esc 收起；
- * 同一时间只展开一处。正在打字时不因悬停展开；触屏没有悬停，先不做
+ * 视野里就地展开（2077-interface-plan.md 第十二节第 4、8 条）：
+ * 鼠标停稳才展开，移开留一点宽限再收起；不靠点击。
+ * P/J/T 从剧情页钉住对应的块，钉住后走面板栈，Esc 收起；同一时间只展开一处。
+ * 正在打字时不因悬停展开；触屏没有悬停，先不做
  */
 
 export interface Expand {
-  /** 展开的是哪一处：四角的块、某个在场的人或某一侧的抽屉 */
+  /** 展开的是哪一处：四角的块或某个在场的人 */
   readonly id: string;
   readonly pinned: boolean;
 }
 
 export type SetExpand = Dispatch<SetStateAction<Expand | null>>;
 
-/** 鼠标在块上停稳这么久才展开；一路划过去不算（每次移动重新计时） */
-const OPEN_MS = 180;
+/**
+ * 鼠标进块这么久就展开（用户嫌响应慢，计划第十二节第 4 条）：从进块开始算，在块里移动不再重新计时；
+ * 一路快速划过去（不到 90ms 就离开）照样不弹
+ */
+const OPEN_MS = 90;
 const CLOSE_MS = 300;
 /** 最后一次在输入框里按键之后多久之内算「正在打字」 */
 const TYPING_MS = 800;
@@ -53,21 +55,7 @@ export function peekOnTop(): boolean {
   return false;
 }
 
-/** 点击落在展开出来的部分或里面的按钮上时，不当成点了块本身 */
-function insideContent(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    target.closest("[data-peek-panel], button, a, input, textarea, select") !== null
-  );
-}
-
-export function usePeek(
-  id: string,
-  expand: Expand | null,
-  setExpand: SetExpand,
-  /** 点块本身时做什么；不传就是钉住或取消钉住 */
-  onActivate?: () => void,
-) {
+export function usePeek(id: string, expand: Expand | null, setExpand: SetExpand) {
   const openTimer = useRef<number | undefined>(undefined);
   const closeTimer = useRef<number | undefined>(undefined);
   const open = expand?.id === id;
@@ -82,6 +70,8 @@ export function usePeek(
   const clearTimers = useCallback(() => {
     window.clearTimeout(openTimer.current);
     window.clearTimeout(closeTimer.current);
+    // 置空：arm 靠它判断「是不是已经在计时」
+    openTimer.current = undefined;
   }, []);
   useEffect(() => clearTimers, [clearTimers]);
 
@@ -100,69 +90,42 @@ export function usePeek(
     };
   }, [pinned, isTop]);
 
+  // 进块开始计时，已经在计时就不重来（用户嫌响应慢）；离开块时 clearTimers 取消，一路划过四角不会乱弹
+  const arm = useCallback(() => {
+    if (Date.now() - lastTyped < TYPING_MS || openTimer.current !== undefined) return;
+    openTimer.current = window.setTimeout(() => {
+      openTimer.current = undefined;
+      // 别处钉住了就不抢；没钉住的换成这一处
+      setExpand((cur) => (cur?.pinned ? cur : { id, pinned: false }));
+    }, OPEN_MS);
+  }, [id, setExpand]);
+
   const onPointerEnter = useCallback(
     (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       window.clearTimeout(closeTimer.current);
-      if (open) return;
-      if (Date.now() - lastTyped < TYPING_MS) return;
-      window.clearTimeout(openTimer.current);
-      openTimer.current = window.setTimeout(() => {
-        // 别处钉住了就不抢；没钉住的换成这一处
-        setExpand((cur) => (cur?.pinned ? cur : { id, pinned: false }));
-      }, OPEN_MS);
+      if (!open) arm();
     },
-    [open, id, setExpand],
+    [open, arm],
   );
 
-  // 还没展开时每动一下就重新计时：只有停稳才展开，鼠标一路划过四角不会乱弹
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
       if (e.pointerType !== "mouse" || open) return;
-      if (Date.now() - lastTyped < TYPING_MS) return;
-      window.clearTimeout(openTimer.current);
-      openTimer.current = window.setTimeout(() => {
-        setExpand((cur) => (cur?.pinned ? cur : { id, pinned: false }));
-      }, OPEN_MS);
+      arm();
     },
-    [open, id, setExpand],
+    [open, arm],
   );
 
   const onPointerLeave = useCallback(
     (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
-      window.clearTimeout(openTimer.current);
-      window.clearTimeout(closeTimer.current);
+      clearTimers();
       closeTimer.current = window.setTimeout(() => {
         setExpand((cur) => (cur?.id === id && !cur.pinned ? null : cur));
       }, CLOSE_MS);
     },
-    [id, setExpand],
-  );
-
-  const pin = useCallback(() => {
-    clearTimers();
-    setExpand((cur) => (cur?.id === id && cur.pinned ? null : { id, pinned: true }));
-  }, [clearTimers, id, setExpand]);
-
-  const activate = onActivate ?? pin;
-
-  const onClick = useCallback(
-    (e: MouseEvent) => {
-      if (insideContent(e.target)) return;
-      activate();
-    },
-    [activate],
-  );
-
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      if (insideContent(e.target) && e.target !== e.currentTarget) return;
-      e.preventDefault();
-      activate();
-    },
-    [activate],
+    [clearTimers, id, setExpand],
   );
 
   return {
@@ -171,6 +134,6 @@ export function usePeek(
     isTop,
     close,
     /** 挂在块的根元素上 */
-    bind: { onPointerEnter, onPointerMove, onPointerLeave, onClick, onKeyDown },
+    bind: { onPointerEnter, onPointerMove, onPointerLeave },
   };
 }

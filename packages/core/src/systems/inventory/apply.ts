@@ -104,6 +104,7 @@ export function applyItem(
   switch (command.action) {
     case "gain":
       put(draft, def.id);
+      autoQuick(draft, def);
       return ok(def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`);
     case "lose":
       return lose(draft, def);
@@ -198,7 +199,8 @@ function wear(draft: Inventory, def: ItemDef, slot: ClothingSlot): ApplyOutcome 
 }
 
 function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyOutcome {
-  if (draft[slot]?.id === def.id) return fail(`${def.name} 已经在快捷栏`);
+  // 物品栏精简（用户定的方案 A）：拿到时已自动放进快捷栏，开局随后的 equip 不再算失败，否则旧存档重放开局会读档失败
+  if (draft[slot]?.id === def.id) return ok(`${def.name} 已经在快捷栏`);
   if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
   stow(draft, slot);
   const max = def.charges ?? 1;
@@ -206,6 +208,17 @@ function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyO
   Reflect.deleteProperty(draft.depleted, def.id);
   draft[slot] = { id: def.id, charges, max };
   return ok(`${def.name} 放进快捷栏，剩 ${charges} / ${max} 次`);
+}
+
+/** 物品栏精简（用户定的方案 A）：快捷栏不再让玩家手动摆，拿到治疗品或手雷时对应的格空着就自动放进去 */
+export function autoQuick(draft: Inventory, def: ItemDef): void {
+  const slot = quickSlotFor(def.kind);
+  if (!slot || draft[slot] !== null) return;
+  if (!take(draft, def.id)) return;
+  const max = def.charges ?? 1;
+  const charges = draft.depleted[def.id] ?? max;
+  Reflect.deleteProperty(draft.depleted, def.id);
+  draft[slot] = { id: def.id, charges, max };
 }
 
 function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
@@ -502,6 +515,7 @@ export function applyTrade(
       markSold(draft, shop.id, def.id, shop.at);
     }
     draft.backpack[def.id] = (draft.backpack[def.id] ?? 0) + 1;
+    autoQuick(draft, def);
     return {
       ok: true,
       notes: [`得到${def.name}（从${command.with}那里买的）`],

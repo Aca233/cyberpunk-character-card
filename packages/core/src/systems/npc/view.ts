@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { CharacterStateSchema, effectiveAttributes as playerAttributes } from "../character";
-import { formatGameTime, WorldClockStateSchema } from "../world";
+import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
 import { deathKnown } from "./apply";
 import { attributeSum, bodyView } from "./body";
 import { onStage } from "./prompt";
@@ -27,6 +27,10 @@ export function npcsView({ world, data }: ViewContext) {
   const character = CharacterStateSchema.parse(world.slices.character);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+  const places = locationCatalog(data);
+  /** 地点 id 换成中文名；表外的地点只有本身是中文时才当名字，同 inventory 的 namesView */
+  const placeName = (id: string | null | undefined) =>
+    id == null ? null : (places.get(id)?.name ?? (/[㐀-鿿]/.test(id) ? id : null));
   return Object.values(npcs.npcs)
     .filter(
       (n) =>
@@ -57,6 +61,9 @@ export function npcsView({ world, data }: ViewContext) {
       here: onStage(n, stage),
       /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
       lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
+      /** 最后出现的地点和常在的地点（中文名），人物档案信息栏用；没见过面的人不给 */
+      lastPlace: n.met ? placeName(n.location) : null,
+      homePlace: n.met ? placeName(n.home) : null,
       relation: n.relation?.text ?? null,
       /** 人情和仇：没了结的在前，各自旧的在前 */
       ledger: [

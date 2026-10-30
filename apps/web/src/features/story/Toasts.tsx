@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Asset } from "../../ui/Asset";
+import { Asset, NineSlice } from "../../ui/Asset";
 import styles from "./story.module.css";
 import type { Toast } from "./view";
 
@@ -24,6 +24,19 @@ function ToastItem({
         : "var(--cp-yellow)";
   return (
     <li className={styles.toast} data-tone={toast.tone}>
+      {/* 底和托架都是原作素材（用户定的换框对照表，计划第十二节第 9 条）；托架上下各留 12 原图像素不拉伸 */}
+      <NineSlice
+        id="notify.itemCellBg"
+        tint="rgb(14 14 23 / 85%)"
+        slice={30}
+        className={styles.toastBg}
+      />
+      <NineSlice
+        id="notify.bracketBg"
+        tint="var(--toast-tint)"
+        slice={[12, 0, 12, 0]}
+        className={styles.toastBracket}
+      />
       <Asset id={toast.icon} tint={tint} height={22} />
       <span>{toast.text}</span>
     </li>

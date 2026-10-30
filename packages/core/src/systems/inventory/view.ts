@@ -1,5 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
-import { RARITY_LABELS } from "../economy";
+import { RARITY_LABELS, type Rarity } from "../economy";
 import {
   canDismantle,
   DISMANTLE_PARTS,
@@ -37,6 +37,18 @@ export function inventoryView({ world, data }: ViewContext) {
     tuned: Object.fromEntries(
       Object.entries(inventory.tuned).map(([id, r]) => [id, RARITY_LABELS[r]]),
     ) as Readonly<Record<string, string>>,
+    /** 身上武器（武器格和背包里的）现在的稀有度键，含升过的档；界面按它染原作稀有度色条 */
+    rarity: Object.fromEntries(
+      [
+        ...new Set([
+          ...inventory.weapons.filter((w): w is string => w !== null),
+          ...Object.keys(inventory.backpack),
+        ]),
+      ].flatMap((id) => {
+        const def = items.get(id);
+        return def?.kind === "weapon" ? [[id, rarityOf(def, inventory.tuned)]] : [];
+      }),
+    ) as Readonly<Record<string, Rarity>>,
     /** 背包里能拆的东西各拆出几个零件 */
     dismantle: Object.fromEntries(
       Object.keys(inventory.backpack).flatMap((id) => {

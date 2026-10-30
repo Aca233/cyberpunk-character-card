@@ -1,6 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
-import { locationCatalog } from "../world";
-import { routeOptions, tripWorldOf } from "./apply";
+import { locationCatalog, radarAround } from "../world";
+import { roughPlace, routeOptions, tripWorldOf } from "./apply";
 import { VEHICLE_CLASS_LABELS, VEHICLE_CONDITION_LABELS } from "./schema";
 import { vehicleCatalog } from "./vehicles";
 
@@ -18,6 +18,8 @@ export function travelView({ world, data }: ViewContext) {
             x: p.x,
             y: p.y,
             metro: p.metro === true,
+            /** 坐标或接路是估的（§七“大概”），地图和面板照这个标 */
+            rough: roughPlace(data, p.id),
             here: p.id === w.location,
             routes: p.id === w.location ? [] : routeOptions(w, data, p.id),
           },
@@ -41,9 +43,14 @@ export function travelView({ world, data }: ViewContext) {
       stolen: v.stolen,
     };
   });
+  const places = locationCatalog(data);
   return {
     destinations,
     vehicles,
+    /** 周边雷达（§十三①）：所在地点附近最近的锚点，直线方位和距离；不在地图上时是空的 */
+    radar: radarAround(data, w.location === null ? undefined : places.get(w.location)),
+    /** 所在地点的坐标本身是估的（§七“大概”）：雷达的方位和距离只作参考 */
+    radarRough: w.location !== null && roughPlace(data, w.location),
     encounter: encounter
       ? { label: encounter.label, note: encounter.note, district: encounter.district }
       : null,

@@ -4,6 +4,7 @@ import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
 import { type Importance, MemoryStateSchema, recapScenes } from "../systems/memory";
 import { type Npc, NpcStateSchema } from "../systems/npc";
+import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
 import type { Memory } from "./stages";
@@ -319,7 +320,8 @@ export function expandMemories(
   const npcs = Object.values(NpcStateSchema.parse(world.slices.npc).npcs);
   const present = presentNpcs(world, world);
   const clock = WorldClockStateSchema.parse(world.slices.world);
-  const places = locationCatalog(data);
+  // 地点簿并进地点表（places-plan §四），输入提到地点簿里的地方也算"别的地点"
+  const places = locationCatalog(withSavedPlaces(data, world));
   const triggers: string[] = [];
   if (recalled.length > 0) triggers.push(`判断调了 ${recalled.length} 条旧记忆`);
   const named = mentioned(query.input, npcs);

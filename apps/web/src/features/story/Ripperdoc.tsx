@@ -64,7 +64,7 @@ export function Ripperdoc({
   return (
     <div className={styles.journalBackdrop}>
       <div role="dialog" aria-label={`义体医生${doc.name}`} className={styles.journal}>
-        <Panel as="div" title={`义体医生 · ${doc.name}`} line="var(--cp-cyan)">
+        <Panel as="div" title={`义体医生 · ${doc.name}`} line="var(--cp-cyan)" frame>
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
               {doc.note}

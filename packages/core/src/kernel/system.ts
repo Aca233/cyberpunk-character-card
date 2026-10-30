@@ -111,6 +111,11 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly on?: Readonly<Record<string, (draft: Draft<S>, ctx: SystemContext) => void>>;
   /** 时间推进时的结算，例如重伤失血、期限到期；不能失败 */
   tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
+  /**
+   * 往静态数据表里并进这个存档自己的东西（places-plan §四：地点簿并进地点表，各系统照旧用 locationCatalog 查）。
+   * 只读；状态没变时要返回同一个对象，各系统按对象缓存的查表才有效
+   */
+  data?(state: S, data: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>>;
   /** 这个系统给叙事模型的规则模块 */
   readonly rules?: readonly RuleModule<S>[];
   /** 这个系统交给玩家投影的一块；诉求、底线、秘密、隐藏转折这类只给模型看的东西不能放进来 */
@@ -477,6 +482,29 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     }
   }
 
+  // 交了 data 的系统按顺序把存档自己的东西并进静态数据表（§四 地点簿）；结算中的草稿先取快照
+  const extenders = order.filter((s) => s.data !== undefined);
+  const dataFor = (
+    slices: Readonly<Record<string, unknown>>,
+    data: Readonly<Record<string, unknown>>,
+  ): Readonly<Record<string, unknown>> => {
+    let out = data;
+    for (const system of extenders) {
+      const slice = slices[system.id];
+      if (slice === undefined) continue;
+      out = system.data?.(isDraft(slice) ? current(slice) : slice, out) ?? out;
+    }
+    return out;
+  };
+  const viewData = <
+    T extends { readonly world: WorldState; readonly data: Readonly<Record<string, unknown>> },
+  >(
+    ctx: T,
+  ): T => {
+    const data = dataFor(ctx.world.slices, ctx.data);
+    return data === ctx.data ? ctx : { ...ctx, data };
+  };
+
   const contextFor = (
     system: AnySystem,
     draft: Draft<WorldState>,
@@ -484,7 +512,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
   ): SystemContext => ({
     rng: ctx.rng,
     facts: ctx.facts ?? {},
-    data: ctx.data ?? {},
+    data: dataFor(draft.slices, ctx.data ?? {}),
     now: draft.time,
     read<T>(id: string): T {
       if (!(system.dependsOn ?? []).includes(id)) {
@@ -572,7 +600,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
   return {
     order,
     viewKeys: [...views.keys()],
-    project(ctx) {
+    project(raw) {
+      const ctx = viewData(raw);
       return Object.fromEntries([...views].map(([key, { view }]) => [key, view.project(ctx)]));
     },
     actionTypes: () => [...actions.keys()],
@@ -594,9 +623,11 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
           `${entry.systemId} 的界面操作 ${type} 与 schema 输出的 type 不一致`,
         );
       }
-      return entry.def.commands(parsed.data, ctx);
+      return entry.def.commands(parsed.data, viewData(ctx));
     },
-    sections(ctx) {
+    sections(raw) {
+      const ctx =
+        raw.data === undefined ? raw : { ...raw, data: dataFor(raw.world.slices, raw.data) };
       return sectionList.flatMap(({ section }) => {
         const body = section.render(ctx);
         return body === undefined ? [] : [`【${section.title}】\n${body}`];
@@ -605,7 +636,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     status(ctx) {
       return statusList.flatMap(({ status }) => status.lines(ctx));
     },
-    objectives(ctx) {
+    objectives(raw) {
+      const ctx = viewData(raw);
       const result: Objective[] = [];
       const ids = new Set<string>();
       for (const system of order) {
@@ -622,7 +654,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       }
       return result;
     },
-    threats(ctx) {
+    threats(raw) {
+      const ctx = viewData(raw);
       const result: Threat[] = [];
       const ids = new Set<string>();
       for (const system of order) {
@@ -640,7 +673,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       }
       return result;
     },
-    interactions(ctx) {
+    interactions(raw) {
+      const ctx = viewData(raw);
       const result: Interaction[] = [];
       const ids = new Set<string>();
       for (const system of order) {
@@ -657,7 +691,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       }
       return result;
     },
-    events(ctx) {
+    events(raw) {
+      const ctx = { before: viewData(raw.before), after: viewData(raw.after) };
       const result: SystemEvent[] = [];
       for (const system of order) {
         for (const event of system.events?.(ctx) ?? []) {
@@ -669,7 +704,8 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       }
       return result;
     },
-    feed(ctx) {
+    feed(raw) {
+      const ctx = viewData(raw);
       const result: FeedItem[] = [];
       const ids = new Set<string>();
       for (const system of order) {

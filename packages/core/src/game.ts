@@ -65,6 +65,7 @@ import {
 } from "./systems/travel";
 import type { worldView } from "./systems/world";
 import { formatGameTime } from "./systems/world/apply";
+import { withSavedPlaces } from "./systems/world/places";
 import { type LocationDef, WorldClockStateSchema } from "./systems/world/schema";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
@@ -628,6 +629,7 @@ export function travelBlock(
   data: Readonly<Record<string, unknown>>,
   travel: TravelRequest,
 ): string | null {
-  const plan = planTrip(tripWorldOf(world), data, travel);
+  // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也能当出行的目的地
+  const plan = planTrip(tripWorldOf(world), withSavedPlaces(data, world), travel);
   return plan.ok ? null : plan.reason;
 }

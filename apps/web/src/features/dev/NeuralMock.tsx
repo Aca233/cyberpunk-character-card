@@ -25,12 +25,12 @@ const SLOT_SLICE = [20, 38, 50, 38] as const; // Hud 武器格 hud.slot*
 const QH_SLICE = [60, 25, 15, 25] as const; // QuickhackWheel qh.cell*
 const TAG_SLICE = [0, 0, 20, 20] as const; // StoryLog 选项标签 dialog.skillSelect
 
-/** 神经界面九页，页名照原作文本库；键位图标是原作 icons_keyboard，没有原作键位的留空 */
+/** 神经界面八页，页名照原作文本库；键位图标是原作 icons_keyboard，没有原作键位的留空；
+ * 制作页随物品栏精简去掉（用户定的方案 A） */
 const MENU_PAGES: readonly { readonly name: string; readonly key: AssetId | null }[] = [
   { name: "人物", key: "key.p" },
   { name: "义体", key: null },
   { name: "物品栏", key: "key.o" },
-  { name: "制作", key: "key.k" },
   { name: "日志", key: "key.j" },
   { name: "地图", key: "key.m" },
   { name: "消息", key: "key.t" },

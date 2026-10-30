@@ -57,7 +57,7 @@ export function Shop({
   return (
     <div className={styles.journalBackdrop}>
       <div role="dialog" aria-label={shop.name} className={styles.journal}>
-        <Panel as="div" title={`商店 · ${shop.name}`} line="var(--cp-yellow)">
+        <Panel as="div" title={`商店 · ${shop.name}`} line="var(--cp-yellow)" frame>
           <div className={styles.docHead}>
             <p className={`${styles.dim} ${styles.docNote}`}>
               店主{shop.keeper}

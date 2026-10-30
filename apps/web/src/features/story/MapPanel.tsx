@@ -1,4 +1,12 @@
 import {
+  DISTRICT_SHAPES,
+  MAP_POI_KINDS,
+  MAP_POIS,
+  type MapPoi,
+  type MapPoiKind,
+  SUBDISTRICT_SHAPES,
+} from "@cp/content/mapShapes";
+import {
   type CSSProperties,
   type ReactNode,
   useCallback,
@@ -11,14 +19,6 @@ import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { useLayer } from "../../ui/layers";
-import {
-  DISTRICT_SHAPES,
-  MAP_POI_KINDS,
-  MAP_POIS,
-  type MapPoi,
-  type MapPoiKind,
-  SUBDISTRICT_SHAPES,
-} from "./mapShapes.gen";
 import styles from "./story.module.css";
 import { districtIcon, type View } from "./view";
 
@@ -268,10 +268,13 @@ function onOverlay(target: EventTarget | null): boolean {
 export function MapBody({
   view,
   onTravel,
+  onClose,
 }: {
   readonly view: View;
   /** 正在生成时不传，路线不能点 */
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
+  /** 收起地图：顶栏工具那一排最右边出「关闭」按钮，同 M、Esc（用户定的，计划第十二节）；不传不出 */
+  readonly onClose?: (() => void) | undefined;
 }) {
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -530,6 +533,12 @@ export function MapBody({
               复位
             </Button>
           </span>
+          {/* 关闭键就放在顶栏这一排最右边，用同一种小按钮，不另开一块（用户定的，计划第十二节） */}
+          {onClose && (
+            <Button small label="关闭地图（M / Esc）" onClick={onClose}>
+              关闭
+            </Button>
+          )}
         </div>
       </header>
 
@@ -615,6 +624,12 @@ export function MapBody({
                 />
               ))}
             </div>
+            {/* 原作点阵底纹（计划第十二节第 9 条）：放在地图底图之上、边界和标记之下，不拦截拖动和点击 */}
+            <span
+              className={styles.mapGrid}
+              style={{ backgroundImage: cssUrl("fx.grid") }}
+              aria-hidden
+            />
             {shapes && <MapShapes labels={false} viewBox={shapesBox} active={hover?.district} />}
 
             {shapes &&
@@ -798,6 +813,8 @@ export function MapBody({
                       />
                       <b>{r.label}</b>
                       <span>
+                        {/* §七：路程是估的标“大概” */}
+                        {r.rough ? "大概 " : ""}
                         {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
                         {r.riskLabel}
                       </span>

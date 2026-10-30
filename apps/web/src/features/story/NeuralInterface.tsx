@@ -12,12 +12,18 @@ import styles from "./neural.module.css";
  */
 
 /**
- * 只留要整理东西的三页（计划第十二节）：物品栏、制作、义体。
+ * 原作 panel.frame（1060×1560，fullscreen/thin_red_frame01）：线条离图边约 44 原图像素，切角和侧边缺口都在
+ * 离边 120 以内，按 120 切，中间只拉直线（计划第十二节第 9 条）
+ */
+const FRAME_SLICE = 120;
+
+/**
+ * 只留要整理东西的页（计划第十二节）：物品栏、义体；制作页随物品栏精简去掉（用户定的方案 A）。
  * 人物、联系人改成左边缘抽屉，日志、消息、数据库改成右边缘抽屉，地图是浮层，都不再进全屏
  */
-export type NeuralPage = "inventory" | "crafting" | "cyberware";
+export type NeuralPage = "inventory" | "cyberware";
 
-/** 三页，页名照原作文本库；键位图标是原作 icons_keyboard，原作没有默认键的页留空 */
+/** 两页，页名照原作文本库；键位图标是原作 icons_keyboard，原作没有默认键的页留空 */
 export const NEURAL_PAGES: readonly {
   readonly id: NeuralPage;
   readonly name: string;
@@ -25,7 +31,6 @@ export const NEURAL_PAGES: readonly {
   readonly icon: AssetId | null;
 }[] = [
   { id: "inventory", name: "物品栏", key: "o", icon: "key.o" },
-  { id: "crafting", name: "制作", key: "k", icon: "key.k" },
   { id: "cyberware", name: "义体", key: null, icon: null },
 ];
 
@@ -85,11 +90,26 @@ export function NeuralInterface({
 
   return (
     <section className={styles.menu} data-layer="os" role="dialog" aria-label="神经界面">
+      <span
+        className={styles.menuBg}
+        style={{ backgroundImage: cssUrl("menu.nightCity") }}
+        aria-hidden
+      />
       <span className={styles.menuDim} aria-hidden />
       <span
         className={styles.menuScan}
         style={{ backgroundImage: cssUrl("fx.scanlines") }}
         aria-hidden
+      />
+      {/*
+       * 全屏大页的外框换成原作 panel.frame 红色细线切角框（用户定的换框对照表，计划第十二节第 9 条），
+       * 和四角块的 map.panel、面板的 notify.itemCell 区分开；切线 120 原图像素，四角切角不拉伸
+       */}
+      <NineSlice
+        id="panel.frame"
+        tint="var(--cp-red)"
+        slice={FRAME_SLICE}
+        className={styles.menuFrame}
       />
       <header className={styles.menuHead}>
         <Asset id="menu.header" tint="var(--cp-red)" height={72} className={styles.menuHeadBg} />

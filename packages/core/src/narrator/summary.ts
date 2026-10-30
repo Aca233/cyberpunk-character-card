@@ -12,6 +12,7 @@ import {
   SUMMARY_TITLE_CHARS,
 } from "../systems/memory";
 import { NpcStateSchema } from "../systems/npc";
+import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { parseModelJson } from "./block";
 import { presentNpcs } from "./offscreen";
@@ -84,7 +85,10 @@ export function buildSummaryPrompt(
     );
   const place = clock.location;
   const placeName =
-    place === null ? undefined : locationCatalog(extras.data ?? {}).get(place)?.name;
+    place === null
+      ? undefined
+      : // 地点簿并进地点表（places-plan §四）；按结算后的世界查，这一轮刚记下的地点也有名字
+        locationCatalog(withSavedPlaces(extras.data ?? {}, after)).get(place)?.name;
   const content = userMessage({
     scene: [
       `【地点】${place === null ? "还没有" : `${placeName ?? place}（${place}）`}`,

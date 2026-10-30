@@ -16,15 +16,43 @@
   animation: fadeIn 200ms ease-out both;
 }
 
-.menu > :not(.menuDim, .menuScan) {
+.menu > :not(.menuBg, .menuDim, .menuScan, .menuFrame) {
   position: relative;
   z-index: 1;
 }
 
+/*
+ * 全屏外框（用户定的换框对照表，计划第十二节第 9 条）：原作 panel.frame 红色细线切角框，
+ * 压在暗层上、内容下面，四边往里收一点，不贴屏幕边；只是装饰，不挡点击（.nineSlice 自带 pointer-events: none）。
+ * 用 .menu > 提高优先级，盖过 Asset 模块里 .nineSlice 的 inset: 0
+ */
+.menu > .menuFrame {
+  inset: 6px 20px 4px;
+  opacity: 0.7;
+}
+
+/*
+ * 底图是原作全屏菜单的夜之城远景 bg_nc（ui_sprites/fullscreen/bg_nc，用户给的参考图就是这张，第八节第 2 条）。
+ * 铺满不变形，裁掉的部分对着画面中间的 H10 留
+ */
+.menuBg {
+  position: absolute;
+  inset: 0;
+  background-position: center 40%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  animation: menuBgIn 600ms ease-out both;
+}
+
+/*
+ * 底图上压一层纯色（第八节第 2 条）。原先压到 84%，原图亮度只剩 5–46 一小段，发灰发糊、出色带（用户反馈「背景好劣质」），
+ * 改成 62%，让远景的明暗和 H10 的轮廓留下来；正文不透上来靠各块面板自己的原作底框，不靠整屏压黑。
+ * 不用渐变和 backdrop-filter（只用原作素材的约定）
+ */
 .menuDim {
   position: absolute;
   inset: 0;
-  background: rgb(5 5 10 / 92%);
+  background: rgb(5 5 10 / 62%);
 }
 
 /* 打开时扫描线从上往下扫一遍（第八节第 2 条，300ms） */
@@ -54,11 +82,15 @@
   opacity: 0.85;
 }
 
+/* 标题也直接压在底图上，同按键栏垫一圈暗晕（见下面 .keys） */
 .title {
   position: relative;
   font-size: 24px;
   letter-spacing: 0.22em;
   color: var(--cp-red);
+  text-shadow:
+    0 0 3px rgb(5 5 10),
+    0 0 8px rgb(5 5 10);
 }
 
 .menuHead > :not(.menuHeadBg) {
@@ -186,8 +218,15 @@
   margin-bottom: 14px;
 }
 
+/*
+ * 按键栏和顶上的标题没有面板底框，直接压在底图上；压暗改成 62% 后，1280 档量出最亮处对比度只有 2.3–2.8，
+ * 给字垫一圈和压暗层同色的暗晕，衬出来（第八节第 2 条，不用渐变底和 backdrop-filter）
+ */
 .keys {
   margin-top: 14px;
+  text-shadow:
+    0 0 3px rgb(5 5 10),
+    0 0 8px rgb(5 5 10);
 }
 
 .keys > footer {
@@ -201,118 +240,551 @@
   background: none;
 }
 
-/* ———— 边缘抽屉（第十二节）：贴边一条热区，展开后抽屉从这一侧滑出，盖在四角和正文上 ———— */
+/* ———— 块钉住后的页签和完整内容（第十二节第 7 条）：只有四角那一列宽，两栏改成上下排 ———— */
 
-.edge {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  z-index: 8;
-  width: var(--corner-edge, 32px);
-  font-family: var(--font-ui);
-  color: var(--cp-text);
+.pinTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
 }
 
-.edge[data-side="left"] {
-  left: 0;
+.pinTabs .tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
 }
 
-.edge[data-side="right"] {
-  right: 0;
+.pinBody .split,
+.pinBody .stack {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
-.edge[data-open] {
-  z-index: 28;
-}
-
-.edge:focus-visible {
-  outline: none;
+/* 钉住后的内容只有块那么宽；设成容器，里面别的模块（私信的联系人和对话两栏等）按块宽改排法 */
+.pinBody {
+  container: pin / inline-size;
+  animation: fadeIn 200ms ease-out both;
 }
 
 /*
- * 抽屉只占这一侧四角那一列（宽同 --corner-w），不伸进正文、选项和输入框；
- * 底下一层衬底把这一列的四角整个压住，抽屉内容不和底下的角块叠在一起
+ * 块里切页签（计划第十二节第 13 条）：每个页签的内容按页签重新挂载，新内容淡入、从左往右推进 8px，
+ * 像神经界面换了一页读数；只动 opacity 和 transform（第八节第 5 条）
  */
-.drawer {
-  --accent: var(--cp-red);
-  position: fixed;
-  top: var(--corner-edge, 32px);
-  bottom: var(--corner-edge, 32px);
-  isolation: isolate;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
-  width: var(--corner-w, 360px);
-  cursor: default;
-  animation: drawerIn 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+.pinPane {
+  animation: paneIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.drawer[data-side="left"] {
-  left: var(--corner-edge, 32px);
+@keyframes paneIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.drawer[data-side="right"] {
-  right: var(--corner-edge, 32px);
-  --drawer-shift: 8px;
+/* 减少动态效果时直接切页，不滑动、不闪现（计划第八节第 5 条） */
+@media (prefers-reduced-motion: reduce) {
+  .pinPane {
+    animation: none;
+  }
 }
 
-/* 衬底：盖满这一侧的四角列，到正文边缘前收住；底色半透明，字照常清楚 */
-/* 抽屉开场有位移动画，fixed 会跟着抽屉定位，所以用 absolute 往外撑到屏幕边 */
-.drawerScrim {
+/*
+ * 义体页（原作 2.0 义体医生那一页，第五节第 4 条）：人体放大居中、几乎顶到底，两侧部位组贴着人体错开排，
+ * 最左人性条；原作没有常驻的详情栏，悬停或选中才在旁边弹出。尺寸都按 --cell 算，--cell 跟页面高走，
+ * 比例量自原作截图（格子约占页高 0.117，左组离中线 0.9 格、右组 1.8 格，一行 1.5 格）。
+ * 人体是原作 man_body 图集，格子是原作 inventory4_atlas 的 item_* 加 atlas_inventory 的电路纹，
+ * 竖条是原作 cw_bars_assets；这里只管位置、尺寸和染色
+ */
+.cyberScreen {
+  --stage: clamp(420px, calc(100dvh - 200px), 900px);
+  --cell: calc(var(--stage) * 0.115);
+  position: relative;
+  height: var(--stage);
+}
+
+/* 人性条（用户选的「只要左边人性」）：位置照原作左边的义体容量条，约在页高 9% 到 66% */
+.gauge {
   position: absolute;
-  top: calc(-1 * var(--corner-edge, 32px));
-  bottom: calc(-1 * var(--corner-edge, 32px));
-  z-index: -1;
-  width: calc(var(--corner-edge, 32px) + var(--corner-w, 360px) + var(--corner-gap, 32px) / 2);
-  background: rgb(6 6 12 / 90%);
+  top: 0;
+  left: calc(var(--cell) * 0.5 + 24px);
+  display: grid;
+  grid-template-rows: auto calc(var(--stage) * 0.6) auto;
+  justify-items: center;
+  gap: 8px;
+}
+
+.gaugeHead {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: rgb(255 190 40);
+}
+
+.gaugeTag,
+.gaugeNow {
+  position: relative;
+  padding: 1px 6px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.gaugeTag > b,
+.gaugeNow > b {
+  position: relative;
+}
+
+.gaugeTag {
+  color: rgb(5 5 10);
+}
+
+.gaugeNow {
+  color: var(--cp-red);
+}
+
+.gaugeTrack {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 123 / 487;
+}
+
+/* 原作上限牌在刻度右上，三道线从刻度里伸出去接到牌子上 */
+.gaugeTop {
+  position: absolute;
+  top: 0;
+  left: 45%;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  width: calc(100% + 40px);
+}
+
+.gaugeFan {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  padding-top: 2px;
+}
+
+.gaugeFan > span {
+  position: relative;
+  height: 3px;
+}
+
+/* 填满的部分是同一张刻度图染亮色，从下往上按 --fill 露出来 */
+.gaugeFill {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(calc((1 - var(--fill)) * 100%) 0 0 0);
+  transition: clip-path 300ms ease-out;
+}
+
+/* 当前值：原作一道红线横过刻度、左边挂一块空心红牌，停在填充的顶上 */
+.gaugeLevel {
+  position: absolute;
+  top: calc((1 - var(--fill)) * 100%);
+  left: -12px;
+  right: -12px;
+  height: 3px;
+  transform: translateY(-50%);
+  transition: top 300ms ease-out;
+}
+
+.gaugeLevel > .gaugeNow {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 2px);
+  transform: translateY(-50%);
+}
+
+.gaugeStage {
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+/*
+ * 两侧部位组：照原作每组上面一行红字，下面一排格子。左边一列右缘离中线 0.9 格、右边一列左缘离中线 1.8 格，
+ * 每组再按 --shift 顺着胳膊往外推；红字在左边靠右、在右边靠左，都贴着格子朝人体那一侧
+ */
+.cyberSide {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-auto-rows: calc(var(--cell) * 1.5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cyberSide[data-side="left"] {
+  right: calc(50% + var(--cell) * 0.9);
+}
+
+.cyberSide[data-side="right"] {
+  left: calc(50% + var(--cell) * 1.8);
+}
+
+.cyberGroup {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: end;
+  gap: 2px;
+  margin-right: calc(var(--shift) * var(--cell) * 1.1);
+}
+
+.cyberSide[data-side="right"] .cyberGroup {
+  justify-items: start;
+  margin-right: 0;
+  margin-left: calc(var(--shift) * var(--cell) * 1.1);
+}
+
+.cyberLabel {
+  font-family: var(--font-ui);
+  font-size: calc(var(--cell) * 0.3);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--cp-red);
+}
+
+.cyberCells {
+  display: flex;
+  gap: calc(var(--cell) * 0.07);
+}
+
+/*
+ * 详情浮窗：贴着格子朝人体那一侧的边对齐，上面三行往下弹、下面两行往上弹；往外弹的话最外那组会伸出页面。
+ * 浮窗不接鼠标，盖住下一组时照样能直接悬停过去
+ */
+.cyberTip {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 3;
+  width: min(18rem, 30vw);
+  pointer-events: none;
+  animation: fadeIn 120ms ease-out both;
+}
+
+.cyberSide[data-side="left"] .cyberTip {
+  right: 0;
+}
+
+.cyberSide[data-side="right"] .cyberTip {
+  left: 0;
+}
+
+.cyberGroup:nth-child(n + 4) .cyberTip {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* 原作右下角是空的：已装几件、断肢、义体医生收在这里 */
+.cyberCorner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: 10px;
+  width: min(16rem, 24vw);
+}
+
+.cyberCount {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--cp-text-dim);
+  text-align: right;
+}
+
+/*
+ * 一格：照原作是正方形，左边一道细橙条，暗底上铺一层亮金电路纹，外框暗红、右下切角；都是原作素材。
+ * 原作装了义体的格子框会亮成橙黄，空格子纹路暗一些
+ */
+.cyberCell {
+  --cell-line: rgb(214 120 50);
+  --cell-texture: rgb(214 160 40 / 85%);
+  --cell-strip: rgb(214 110 40);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 4px 4px 4px calc(var(--cell) * 0.1 + 4px);
+  font: inherit;
+  color: var(--cp-text);
+  text-align: center;
+  background: none;
+  border: 0;
+  cursor: var(--cp-cursor-hand);
+  transition: opacity 160ms ease-out;
+}
+
+.cyberCell > .cellSquare {
+  left: calc(var(--cell) * 0.1);
+}
+
+.cyberCell > .cellStrip {
+  right: auto;
+  width: calc(var(--cell) * 0.07);
+}
+
+.cyberCell:where([data-empty]) {
+  --cell-line: rgb(140 40 40 / 90%);
+  --cell-texture: rgb(214 160 40 / 50%);
+  --cell-strip: rgb(214 110 40 / 80%);
+}
+
+/* 照原作格数多画的格子（用户选的「照原作格数」）：我们一个部位只装一件，这些一直空着、压暗一点 */
+.cyberCell:where([data-extra]) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cyberCell:where([data-broken]) {
+  --cell-line: var(--cp-danger);
+}
+
+/* 悬停、聚焦、钉住：框亮成原作选中时的黄 */
+.cyberCell:where(button:hover, :focus-visible, [aria-pressed="true"]) {
+  --cell-line: var(--cp-yellow);
+  outline: none;
+}
+
+.cyberCellName {
+  position: relative;
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  word-break: break-all;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* 格里的原作义体图（item_icons 的 cw_*）：等比缩进格子，压在电路纹上面；没有原作图的那几件照旧写名字 */
+.cyberArt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cyberCell > .cyberBroken {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+/* 中间人体：照原作放大到差不多整页高、正中；几张同尺寸的原作分层图叠在一起，悬停哪个部位就淡入对应那层 */
+.cyberBody {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  display: grid;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
-.drawer[data-side="left"] .drawerScrim {
-  left: calc(-1 * var(--corner-edge, 32px));
-  box-shadow: 1px 0 0 rgb(255 0 60 / 18%);
+.cyberBodyLayer {
+  grid-area: 1 / 1;
+  width: auto;
+  height: var(--stage);
+  transition: opacity 240ms ease-out;
 }
 
-.drawer[data-side="right"] .drawerScrim {
-  right: calc(-1 * var(--corner-edge, 32px));
-  box-shadow: -1px 0 0 rgb(255 0 60 / 18%);
+.cyberName {
+  margin: 0 0 12px;
+  font-family: var(--font-body);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--cp-yellow);
 }
 
-.drawerTabs {
-  display: flex;
-  gap: 4px;
+.cyberName:where([data-broken]) {
+  color: var(--cp-danger);
 }
 
-.drawerTabs .tab {
-  padding: 8px 16px;
-  font-size: 14px;
-  letter-spacing: 0.08em;
+/*
+ * 加宽的义体块（计划第十二节第 11 条）：恢复人体居中、左右部位组，
+ * 舞台按块内宽度和视口高度缩放，不再套用全屏的 880px 高度；不缩放文字和按钮
+ */
+@container pin (width >= 480px) {
+  .cyberScreen {
+    --stage: clamp(260px, min(58cqw, calc(100dvh - 360px)), 540px);
+    --cell: calc(var(--stage) * 0.115);
+    min-width: 0;
+  }
+
+  .cyberScreen .cyberLabel {
+    font-size: clamp(13px, calc(var(--cell) * 0.3), 18px);
+  }
+
+  .cyberScreen .cyberTip {
+    width: min(18rem, 36cqw);
+  }
+
+  .cyberScreen .cyberCorner {
+    width: min(15rem, 30cqw);
+  }
 }
 
-.drawerHead .tabLine {
-  background: var(--accent);
+/* 极窄容器的备用排法（计划第十二节）：部位按行排，详情就地撑开 */
+@container pin (width < 480px) {
+  .cyberScreen {
+    --cell: 36px;
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 12px;
+    height: auto;
+    min-width: 0;
+  }
+
+  /* 人体和人性条占独立首行（计划第十二节），不再绝对定位盖住部位列表 */
+  .cyberScreen .gauge {
+    position: static;
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-rows: auto 96px auto;
+    justify-self: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .cyberScreen .gaugeTop {
+    left: 0;
+    width: auto;
+    gap: 4px;
+  }
+
+  .cyberScreen .gaugeFan {
+    flex: none;
+    width: 20px;
+  }
+
+  .cyberScreen .gaugeLevel {
+    left: 0;
+    right: 0;
+  }
+
+  .cyberScreen .gaugeLevel > .gaugeNow {
+    right: auto;
+    left: calc(100% + 4px);
+  }
+
+  .cyberScreen .cyberBody {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    align-self: center;
+    min-width: 0;
+    transform: none;
+  }
+
+  .cyberScreen .cyberBodyLayer {
+    width: auto;
+    height: 144px;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .cyberScreen .cyberSide {
+    position: static;
+    grid-column: 1 / -1;
+    grid-auto-rows: auto;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .cyberScreen .cyberSide .cyberGroup {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: stretch;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .cyberScreen .cyberLabel {
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .cyberScreen .cyberTip {
+    position: static;
+    grid-column: 1 / -1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .cyberScreen .cyberCorner {
+    position: static;
+    grid-column: 1 / -1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .cyberScreen .cyberName {
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
 }
 
-.drawerBody {
-  min-height: 0;
-  padding-right: 6px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
+/* 宽屏格子跟着 --cell 变大，格里的义体名也放大一档 */
+@media (width >= 1600px) {
+  .cyberCellName {
+    font-size: 14px;
+  }
 }
 
-/* 抽屉只有一栏宽，各页的两栏改成上下排，面板之间拉开 */
-.drawer .split,
-.drawer .stack {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
+@media (prefers-reduced-motion: reduce) {
+  .gaugeFill,
+  .gaugeLevel,
+  .cyberCell,
+  .cyberBodyLayer {
+    transition: none;
+  }
+
+  .cyberTip {
+    animation-duration: 1ms;
+  }
 }
 
-/* 换页签时内容淡入，不再整块擦入 */
-.drawerBody {
-  animation: fadeIn 200ms ease-out both;
+/*
+ * 块本身已经有框和标题，里面再套的面板收紧上下边距，能少滚就少滚（第十二节第 10 条）。
+ * 面板是别的样式模块，只能按元素选；.pinBody 带类名，优先级压得过面板自己的
+ */
+.pinBody section {
+  padding-top: 8px;
+  padding-bottom: 10px;
+}
+
+.pinBody section > h2 {
+  margin-bottom: 6px;
+}
+
+.pinBody :is(.split, .stack) {
+  gap: 10px;
+}
+
+.pinBody > .pinTabs {
+  margin-bottom: 10px;
+}
+
+/* 页签下的重复标题隐藏；兼容切页动画的内容容器（计划第十二节第 13 条） */
+.pinBody > .pinTabs + section > h2,
+.pinBody > .pinTabs + .pinPane > section > h2 {
+  display: none;
 }
 
 /* ———— 地图浮层：左边让出四角那一列，右边盖到屏幕边 ———— */
@@ -347,10 +819,6 @@
     grid-template-columns: minmax(0, 420px) minmax(0, 812px);
     gap: 20px;
   }
-
-  .drawer {
-    gap: 12px;
-  }
 }
 
 @media (width < 960px) {
@@ -381,21 +849,21 @@
   }
 }
 
-/* 抽屉打开：淡入，同时从边缘那侧挪进来 8px */
-@keyframes drawerIn {
+/* 底图打开时从略放大慢慢落定，配合扫描线那一扫（第八节第 2 条） */
+@keyframes menuBgIn {
   from {
     opacity: 0;
-    transform: translateX(var(--drawer-shift, -8px));
+    transform: scale(1.04);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .menu,
+  .menuBg,
   .menuScan,
   .tabs,
   .body,
-  .drawer,
-  .drawerBody,
+  .pinBody,
   .mapLayer {
     animation-duration: 1ms;
     animation-delay: 0ms;

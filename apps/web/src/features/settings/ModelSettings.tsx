@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router";
 import { api, type ConnectionTest, type ProfilePatch, type PublicProfile } from "../../api/client";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import styles from "./model-settings.module.css";
 
 type Preset = "gemini" | "relay" | "openai" | "ollama";
@@ -18,25 +19,25 @@ const PRESETS: Record<
 > = {
   gemini: {
     title: "Gemini 官方",
-    hint: "填写 Google AI Studio 的 API 密钥；模型名例如 gemini-3.8-flash。",
+    hint: "Google AI Studio 密钥",
     type: "gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
   },
   relay: {
     title: "中转站 / OpenAI 兼容",
-    hint: "模型名和接口地址照服务商提供的填写。",
+    hint: "照服务商文档填写",
     type: "openai",
     baseUrl: "",
   },
   openai: {
     title: "OpenAI 官方",
-    hint: "使用 OpenAI 官方账户的模型与密钥。",
+    hint: "OpenAI 官方密钥",
     type: "openai",
     baseUrl: "https://api.openai.com/v1",
   },
   ollama: {
     title: "Ollama 本地",
-    hint: "先启动 Ollama，填写已经下载的模型名。",
+    hint: "需先启动 Ollama",
     type: "ollama",
     baseUrl: "",
   },
@@ -110,8 +111,7 @@ export function ModelSettings({
       <section className={styles.root}>
         <div className={styles.intro}>
           <span className={styles.kicker}>MODEL CONNECTION</span>
-          <h2>先连接一个模型，再进夜之城。</h2>
-          <p>第一步创建本机配置；接着填写接口地址、模型名和密钥。</p>
+          <h2>先连接一个模型</h2>
           <Button primary disabled={init.isPending} onClick={() => init.mutate()}>
             {init.isPending ? "创建中…" : "创建本机配置"}
           </Button>
@@ -120,7 +120,7 @@ export function ModelSettings({
               {init.error.message}
             </p>
           )}
-          <p className={styles.help}>只创建本地文件，不发送模型请求。</p>
+          <p className={styles.help}>仅本地文件，不发请求</p>
         </div>
       </section>
     );
@@ -150,17 +150,12 @@ export function ModelSettings({
 
   return (
     <div className={styles.root}>
-      <header className={styles.intro}>
-        <span className={styles.kicker}>MODEL CONNECTION</span>
-        <h2>连接模型，开始角色扮演。</h2>
-        <p>选连接 → 填写并保存 → 设为游戏使用。通常一个连接就够了。</p>
-      </header>
-
       <section
         className={styles.readiness}
         data-ready={ready || undefined}
         aria-label="当前配置状态"
       >
+        <CellFrame />
         <div>
           <span className={styles.kicker}>{ready ? "配置已就绪" : "还差一步"}</span>
           <h3>{ready ? "模型已选好，连接尚需实际验证。" : "当前选择还不能开始剧情。"}</h3>
@@ -178,11 +173,11 @@ export function ModelSettings({
               ))}
             </ul>
           )}
-          <p className={styles.help}>这里只检查配置。已填密钥不等于服务商已经连接成功。</p>
+          <p className={styles.help}>仅检查配置，未测连通</p>
         </div>
         {!ready && candidate && (
           <div className={styles.fix}>
-            <p>「{candidate.name}」已填写所需配置，可同时用于角色和辅助。</p>
+            <p>「{candidate.name}」可直接使用</p>
             <Button
               primary
               disabled={assign.isPending || dirty}
@@ -207,6 +202,7 @@ export function ModelSettings({
 
       <div className={styles.workspace}>
         <aside className={styles.sidebar} aria-label="模型连接列表">
+          <CellFrame />
           <div className={styles.listHead}>
             <h3>我的连接</h3>
             <Button onClick={() => requestSelect("@new")}>添加连接</Button>
@@ -225,6 +221,7 @@ export function ModelSettings({
                       requestSelect(profile.name);
                     }}
                   >
+                    <CellFrame />
                     <strong>{profile.name}</strong>
                     <span className={styles.modelName}>{profile.model}</span>
                     <span className={styles.status} data-ready={issues.length === 0 || undefined}>
@@ -239,17 +236,17 @@ export function ModelSettings({
               );
             })}
           </ul>
-          <p className={styles.help}>修改连接不会自动改变游戏使用的模型。</p>
         </aside>
 
         <section className={styles.editor} aria-label="编辑模型连接">
+          <CellFrame />
           {adding ? (
             <ConnectionForm
               key="new"
               names={data.profiles.map((p) => p.name)}
               onDirty={setDirty}
               onSaved={(name) => {
-                setNotice(`「${name}」已保存。接下来点击“角色和辅助都用这个”。`);
+                setNotice(`「${name}」已保存。接下来点「设为叙事模型」或「设为辅助模型」。`);
                 select(name);
               }}
             />
@@ -267,7 +264,7 @@ export function ModelSettings({
               <section className={styles.usage}>
                 <span className={styles.kicker}>02 / 用于游戏</span>
                 <h3>保存之后，明确选它来玩。</h3>
-                <p>叙事模型扮演 NPC、推进剧情；辅助模型处理格式修复等后台工作。</p>
+                {/* 用户定的：只留「设为叙事模型」「设为辅助模型」两个按钮，不要合并按钮和折叠区 */}
                 <div className={styles.actions}>
                   <Button
                     primary
@@ -275,45 +272,31 @@ export function ModelSettings({
                       dirty ||
                       assign.isPending ||
                       problems(selected).length > 0 ||
-                      (data.narrator === selected.name && data.aux === selected.name)
+                      data.narrator === selected.name
                     }
                     reason={
-                      dirty ? "请先保存连接" : problems(selected).join("；") || "角色和辅助已经在用"
+                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是叙事模型"
                     }
-                    onClick={() => assign.mutate({ narrator: selected.name, aux: selected.name })}
+                    onClick={() => assign.mutate({ narrator: selected.name })}
                   >
-                    {data.narrator === selected.name && data.aux === selected.name
-                      ? "角色和辅助正在使用"
-                      : "角色和辅助都用这个"}
+                    {data.narrator === selected.name ? "叙事模型使用中" : "设为叙事模型"}
+                  </Button>
+                  <Button
+                    primary
+                    disabled={
+                      dirty ||
+                      assign.isPending ||
+                      problems(selected).length > 0 ||
+                      data.aux === selected.name
+                    }
+                    reason={
+                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是辅助模型"
+                    }
+                    onClick={() => assign.mutate({ aux: selected.name })}
+                  >
+                    {data.aux === selected.name ? "辅助模型使用中" : "设为辅助模型"}
                   </Button>
                 </div>
-                <details className={styles.advanced}>
-                  <summary>想分别使用两个模型？</summary>
-                  <div className={styles.actions}>
-                    <Button
-                      disabled={
-                        dirty ||
-                        assign.isPending ||
-                        problems(selected).length > 0 ||
-                        data.narrator === selected.name
-                      }
-                      onClick={() => assign.mutate({ narrator: selected.name })}
-                    >
-                      只设为叙事模型
-                    </Button>
-                    <Button
-                      disabled={
-                        dirty ||
-                        assign.isPending ||
-                        problems(selected).length > 0 ||
-                        data.aux === selected.name
-                      }
-                      onClick={() => assign.mutate({ aux: selected.name })}
-                    >
-                      只设为辅助模型
-                    </Button>
-                  </div>
-                </details>
               </section>
               <ConnectionActions
                 configVersion={overview.dataUpdatedAt}
@@ -326,10 +309,7 @@ export function ModelSettings({
           ) : null}
         </section>
       </div>
-      <p className={styles.privacy}>
-        密钥只发送到本机后端，保存在已忽略的 config.json 中；
-        保存后不会从接口返回。不要将配置文件分享或提交到 Git。
-      </p>
+      <p className={styles.privacy}>密钥仅存本机 config.json，勿分享或提交。</p>
       {leaving !== null && (
         <Dialog
           title="切换前要放弃未保存内容吗？"
@@ -515,75 +495,83 @@ function ConnectionForm({
         {!profile && (
           <label className={styles.field}>
             <span>接入方式</span>
-            <select
-              value={preset}
-              disabled={persisted.current !== null}
-              onChange={(event) => {
-                const next = event.target.value as Preset;
-                setPreset(next);
-                setBaseUrl(PRESETS[next].baseUrl);
-              }}
-            >
-              {Object.entries(PRESETS).map(([id, value]) => (
-                <option key={id} value={id}>
-                  {value.title}
-                </option>
-              ))}
-            </select>
+            <FrameBox>
+              <select
+                value={preset}
+                disabled={persisted.current !== null}
+                onChange={(event) => {
+                  const next = event.target.value as Preset;
+                  setPreset(next);
+                  setBaseUrl(PRESETS[next].baseUrl);
+                }}
+              >
+                {Object.entries(PRESETS).map(([id, value]) => (
+                  <option key={id} value={id}>
+                    {value.title}
+                  </option>
+                ))}
+              </select>
+            </FrameBox>
             <small>{PRESETS[preset].hint}</small>
           </label>
         )}
-        {profile && (
-          <p className={styles.help}>接口类型：{profile.type}。如需更换类型，请新建连接。</p>
-        )}
+        {profile && <p className={styles.help}>接口类型：{profile.type}</p>}
         {!profile && (
           <label className={styles.field}>
             <span>连接名称</span>
-            <input
-              required
-              value={name}
-              disabled={persisted.current !== null}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <FrameBox>
+              <input
+                required
+                value={name}
+                disabled={persisted.current !== null}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </FrameBox>
             <small>只是本机区分连接的名字，不是模型名。</small>
           </label>
         )}
         <label className={styles.field}>
           <span>接口地址</span>
-          <input
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            spellCheck={false}
-            placeholder="例如 https://服务商地址/v1"
-          />
+          <FrameBox>
+            <input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              spellCheck={false}
+              placeholder="例如 https://服务商地址/v1"
+            />
+          </FrameBox>
           <small>
             OpenAI 兼容通常填 /v1 根地址，不要填写 /chat/completions；本地模型可留空用默认地址。
           </small>
         </label>
         <label className={styles.field}>
           <span>模型名</span>
-          <input
-            required
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            spellCheck={false}
-            placeholder="填写服务商提供的完整模型 ID"
-          />
+          <FrameBox>
+            <input
+              required
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              spellCheck={false}
+              placeholder="填写服务商提供的完整模型 ID"
+            />
+          </FrameBox>
         </label>
         <label className={styles.field}>
           <span>API 密钥{profile?.keyStatus === "configured" ? " · 已保存" : ""}</span>
-          <input
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder={
-              profile?.keyStatus === "configured"
-                ? "留空保留现有密钥；填新密钥则替换"
-                : "在这里粘贴密钥，保存后不会回显"
-            }
-          />
+          <FrameBox>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder={
+                profile?.keyStatus === "configured"
+                  ? "留空保留现有密钥；填新密钥则替换"
+                  : "在这里粘贴密钥，保存后不会回显"
+              }
+            />
+          </FrameBox>
           <small>
             {profile?.keySource === "env"
               ? `当前使用环境变量 ${profile.apiKeyEnv ?? ""}。这里填写会保存一个本机配置密钥。`
@@ -596,29 +584,35 @@ function ConnectionForm({
           <summary>高级参数 · 不确定时先保持原值</summary>
           <label className={styles.field}>
             <span>上下文长度（tokens）</span>
-            <input
-              required
-              inputMode="numeric"
-              value={contextWindow}
-              onChange={(e) => setContextWindow(e.target.value)}
-            />
+            <FrameBox>
+              <input
+                required
+                inputMode="numeric"
+                value={contextWindow}
+                onChange={(e) => setContextWindow(e.target.value)}
+              />
+            </FrameBox>
             <small>按服务商文档填写；这不是单次回复的字数。</small>
           </label>
           <label className={styles.field}>
             <span>温度（0–2，可不设置）</span>
-            <input
-              inputMode="decimal"
-              value={temperature}
-              onChange={(e) => setTemperature(e.target.value)}
-            />
+            <FrameBox>
+              <input
+                inputMode="decimal"
+                value={temperature}
+                onChange={(e) => setTemperature(e.target.value)}
+              />
+            </FrameBox>
           </label>
           <label className={styles.field}>
             <span>最大输出长度（tokens，可不设置）</span>
-            <input
-              inputMode="numeric"
-              value={maxOutput}
-              onChange={(e) => setMaxOutput(e.target.value)}
-            />
+            <FrameBox>
+              <input
+                inputMode="numeric"
+                value={maxOutput}
+                onChange={(e) => setMaxOutput(e.target.value)}
+              />
+            </FrameBox>
           </label>
         </details>
         <div className={styles.actions}>
@@ -644,7 +638,6 @@ function ConnectionForm({
           {saved}
         </p>
       )}
-      <p className={styles.help}>保存只写入本机配置，不会发送模型请求或自动切换游戏使用的模型。</p>
     </form>
   );
 }
@@ -691,7 +684,7 @@ function ConnectionActions({
     <section className={styles.usage}>
       <span className={styles.kicker}>03 / 可选验证</span>
       <h3>测试连接会发出真实请求。</h3>
-      <p>不是保存设置的必选步骤。点击后还会确认一次费用。</p>
+      <p>可选 · 可能产生费用</p>
       <Button
         disabled={busy || dirty || problems(profile).length > 0}
         reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}
@@ -722,9 +715,7 @@ function ConnectionActions({
             删除连接
           </Button>
         </div>
-        {inUse && (
-          <p className={styles.help}>这个连接正在使用，不能删除。先将角色和辅助改用其他连接。</p>
-        )}
+        {inUse && <p className={styles.help}>使用中，不能删除</p>}
       </details>
       {remove.isError && (
         <p className={styles.error} role="alert">

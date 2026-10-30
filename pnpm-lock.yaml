@@ -244,6 +244,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@cp/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@cp/core':
         specifier: workspace:*
         version: link:../../packages/core

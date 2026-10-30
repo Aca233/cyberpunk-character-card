@@ -1,11 +1,19 @@
-import type { CSSProperties, ReactNode } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { AssetId } from "../../assets";
-import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Bar } from "../../ui/Bar";
 import { Panel } from "../../ui/Panel";
+import { itemArtOf, portraitOf } from "./art";
 import styles from "./corners.module.css";
-import { Profile } from "./Phone";
+import neural from "./neural.module.css";
+import { Profile } from "./Profile";
 import { type Expand, type SetExpand, usePeek } from "./peek";
 import { QuickhackWheel } from "./QuickhackWheel";
 import story from "./story.module.css";
@@ -23,14 +31,29 @@ const CELL_SLICE = [20, 30, 30, 20] as const; // MapPanel 筛选格 map.filterCe
 const TOOLTIP_SLICE = [10, 30, 70, 10] as const; // MapPanel 地图提示 map.tooltip*
 const PANEL_SLICE = [20, 20, 30, 30] as const; // MapPanel 侧板 map.panel*
 const SLOT_SLICE = [20, 38, 50, 38] as const; // 原 Hud 武器格 hud.slot*
+/** 原作 map.shadowSmall 模糊方块（109×109）：四边各留 40 原图像素当软边，中间拉伸 */
+const SHADOW_SLICE = 40;
+
+/**
+ * 立体感（用户定的，计划第十二节第 9 条）：框后面垫一层原作阴影素材，往右下错开，块像浮在画面上。
+ * 不用 CSS 的 box-shadow 或滤镜，位置和错开量见 corners.module.css 的 .shadow
+ */
+function BlockShadow() {
+  return (
+    <NineSlice
+      id="map.shadowSmall"
+      tint="rgb(0 0 0 / 70%)"
+      slice={SHADOW_SLICE}
+      className={styles.shadow}
+    />
+  );
+}
 
 const WOUND_LABELS = { none: "", light: "轻伤", severe: "重伤", zero: "失去意识" } as const;
 /** 左中最多列几个人，再多的进联系人 */
 const PRESENT_MAX = 8;
 /** 追踪最多几条；展开后列全部 */
 const TRACK_MAX = 3;
-/** 未读展开后每个频道列几条 */
-const UNREAD_PEEK = 3;
 
 const ATTRS: readonly (readonly [keyof View["character"]["attributes"], string, AssetId])[] = [
   ["body", "肉体", "attr.body"],
@@ -46,42 +69,171 @@ export interface PeekState {
   readonly setExpand: SetExpand;
 }
 
-/** 展开出来的那部分：原作 map.panel 侧板，叠在块自己上面，只占这一侧四角那一列；底色微透，字照常清楚 */
-function PeekPanel({
+/** 钉住后块里的页签：原作 tab.bg，切法同神经界面 */
+export function PinTabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+}: {
+  /** id、名字、角标数 */
+  readonly tabs: readonly (readonly [T, string, number])[];
+  readonly value: T;
+  readonly onChange: (id: T) => void;
+}) {
+  return (
+    <nav className={neural.pinTabs}>
+      {tabs.map(([id, name, badge]) => (
+        <button
+          key={id}
+          type="button"
+          className={neural.tab}
+          aria-pressed={id === value}
+          onClick={() => onChange(id)}
+        >
+          <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
+          <span className={neural.inner}>
+            {name}
+            {badge > 0 && <b className={neural.badge}>{badge}</b>}
+          </span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * 一侧的三块排成一列（第十二节第 9 条）：一块长高时把同侧别的块推开，不盖住；
+ * 别的块缩成一行读数，留在原位
+ */
+export function CornerSide({
   side,
-  align = "top",
-  title,
-  line,
   children,
 }: {
-  /** 块在屏幕哪一侧；展开层贴着这一侧 */
   readonly side: "left" | "right";
-  /** 底部的块向上长 */
-  readonly align?: "top" | "bottom";
-  readonly title: string;
-  readonly line: string;
   readonly children: ReactNode;
 }) {
   return (
+    <div className={styles.side} data-side={side}>
+      {children}
+    </div>
+  );
+}
+
+/** 长出来的部分最低留这么高，列再矮也不压成一条缝 */
+const ROOM_MIN = 160;
+
+/**
+ * 长出来的部分最多长到同侧这一列剩下的高度（第十二节第 10 条）：同侧别的块收成一行后空出多少就用多少，
+ * 内容放得下就不出滚动条，放不下才在里面滚。量的是块里除了长出来那部分以外的高度，长高动画不影响结果
+ */
+function useRoomLeft(open: boolean) {
+  const clip = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = clip.current;
+    const block = el?.closest<HTMLElement>("[data-side] > *");
+    const side = block?.parentElement;
+    if (!el || !block || !side) return;
+    const measure = () => {
+      const gap = Number.parseFloat(getComputedStyle(side).rowGap) || 0;
+      // 收起后 display: none 的不占位，也不算间距
+      const others = [...side.children].filter((c) => c !== block && c.getClientRects().length > 0);
+      const used = others.reduce((sum, c) => sum + c.getBoundingClientRect().height + gap, 0);
+      const fixed = block.getBoundingClientRect().height - el.getBoundingClientRect().height;
+      setRoom(Math.max(ROOM_MIN, Math.floor(side.clientHeight - used - fixed)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(side);
+    for (const c of side.children) if (c !== block) ro.observe(c);
+    return () => ro.disconnect();
+  }, [open]);
+  return { clip, room };
+}
+
+/** 同 corners.module.css 里 .grow 收起的过渡时长（用户嫌拖拉，收短到 160） */
+const GROW_MS = 160;
+
+/**
+ * 收起时晚一拍撤掉（计划第十二节第 9 条）：长出来那部分先收完，再把加宽的块、档案改回原宽，
+ * 免得内容收到一半就被挤成窄条、整块跳一下。打开时立刻生效；减少动态效果时不等
+ */
+function useLinger(on: boolean): boolean {
+  const [held, setHeld] = useState(on);
+  useEffect(() => {
+    if (on || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setHeld(on);
+      return;
+    }
+    const t = window.setTimeout(() => setHeld(false), GROW_MS);
+    return () => window.clearTimeout(t);
+  }, [on]);
+  return on || held;
+}
+
+/** 同 corners.module.css 里 .side > .block 宽度过渡的时长（用户嫌拖拉，收短到 160） */
+const WIDTH_MS = 160;
+
+/**
+ * 块开着时切到宽度不同的页签（义体→人物、私信→新闻）：宽度过渡那 260ms 里返回 true，
+ * CSS 据此先把长出来的内容淡出，宽度到位后再淡入，不让人看到内容一边缩一边重排（用户嫌过渡垃圾，计划第十二节第 11、12 条）。
+ * 整块打开、收起不算；减少动态效果时不做
+ */
+function useResizing(wideOn: boolean, open: boolean): boolean {
+  const [resizing, setResizing] = useState(false);
+  const prev = useRef(wideOn);
+  useEffect(() => {
+    const changed = prev.current !== wideOn;
+    prev.current = wideOn;
+    if (!changed || !open || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    setResizing(true);
+    const t = window.setTimeout(() => setResizing(false), WIDTH_MS);
+    return () => window.clearTimeout(t);
+  }, [wideOn, open]);
+  return resizing;
+}
+
+/**
+ * 块长出来的那部分（第十二节第 9 条）：就在块自己的框里，接在常态内容后面往下长（底部的块往上长），
+ * 框跟着变高，不另弹一层。悬停和按键钉住看到的是同一份完整内容；高度有上限，超出就在里面滚，
+ * 不会长成一整列侧栏
+ */
+function Grow({
+  open,
+  title,
+  hint,
+  line,
+  children,
+}: {
+  readonly open: boolean;
+  readonly title: string;
+  /** 标题右边写这块对应的键 */
+  readonly hint?: string;
+  readonly line: string;
+  readonly children: ReactNode;
+}) {
+  const { clip, room } = useRoomLeft(open);
+  return (
     <div
-      className={styles.peek}
-      data-side={side}
-      data-align={align}
-      data-peek-panel=""
+      className={styles.grow}
+      data-open={open || undefined}
+      aria-hidden={!open}
       style={{ "--accent": line } as CSSProperties}
     >
-      <NineSlice id="map.panelBg" tint="rgb(8 8 14 / 92%)" slice={PANEL_SLICE} />
-      <NineSlice id="map.panelFg" tint={line} slice={PANEL_SLICE} className={styles.peekFrame} />
-      <div className={`${styles.inner} ${styles.peekBody}`}>
-        <header className={styles.peekHead}>
-          <span>{title}</span>
+      <div ref={clip} className={styles.growClip}>
+        <div className={styles.growBody} style={room === null ? undefined : { maxHeight: room }}>
           <span
             className={styles.peekLine}
             style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
             aria-hidden
           />
-        </header>
-        {children}
+          <header className={styles.peekHead}>
+            <span>{title}</span>
+            {hint && <kbd>{hint}</kbd>}
+          </header>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -91,20 +243,24 @@ function PeekPanel({
 export function BioMonitor({
   view,
   peek,
-  onCharacter,
-  onCyberware,
+  full,
+  wide = false,
 }: {
   readonly view: View;
   readonly peek: PeekState;
-  /** 打开左边缘抽屉的人物页 */
-  readonly onCharacter: () => void;
-  /** 打开神经界面的义体页 */
-  readonly onCyberware: () => void;
+  /** 钉住（点块或按 P）时块里放的完整人物页 */
+  readonly full: ReactNode;
+  /** 义体页签：展开时朝中列加宽，人体和两侧部位格照原作排开，不挤成长条（第十二节第 11 条） */
+  readonly wide?: boolean;
 }) {
-  const { health, character, hacking, humanity, inventory } = view;
+  const { health, character, hacking, humanity } = view;
   const low = health.wound === "severe" || health.wound === "zero";
   const wound = WOUND_LABELS[health.wound];
   const p = usePeek("bio", peek.expand, peek.setExpand);
+  // 整块收起时等内容收完再变回原宽；还开着时切页签（义体→人物）直接跟着变，宽度由 CSS 过渡，不再停 240ms 再一下缩回（用户嫌过渡垃圾，计划第十二节第 11 条）
+  const lingered = useLinger(wide && p.open);
+  const wideOn = p.open ? wide : lingered;
+  const resizing = useResizing(wideOn, p.open);
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着面板和按钮，不能整个换成 button
     <div
@@ -113,11 +269,14 @@ export function BioMonitor({
       data-low={low || undefined}
       data-open={p.open || undefined}
       data-pinned={p.pinned || undefined}
+      data-wide={wideOn || undefined}
+      data-resizing={resizing || undefined}
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
       {...p.bind}
     >
+      <BlockShadow />
       <Panel as="section" title="生物监测" line="var(--cp-red)">
         <div className={styles.bioRow}>
           <span className={styles.level}>
@@ -159,57 +318,31 @@ export function BioMonitor({
             ))}
           </div>
         )}
-      </Panel>
-      {p.open && (
-        <PeekPanel side="left" title={character.name ?? "人物"} line="var(--cp-red)">
-          <ul className={styles.peekAttrs}>
-            {ATTRS.map(([key, label, icon]) => (
-              <li key={key}>
-                <Asset id={icon} tint="var(--cp-cyan)" height={18} />
-                {label}
-                <b>{character.attributes[key] ?? "—"}</b>
-              </li>
-            ))}
-          </ul>
-          <dl className={styles.peekFacts}>
-            <dt>街头声望</dt>
-            <dd>
-              {character.streetCred} 级 · {character.credTier}
-            </dd>
-            <dt>人性</dt>
-            <dd>
-              {humanity.current}/{humanity.cap} · {humanity.stageLabel}
-            </dd>
-            {inventory.healing && (
-              <>
-                <dt>治疗</dt>
-                <dd>
-                  {view.names.items[inventory.healing.id] ?? inventory.healing.id}{" "}
-                  {inventory.healing.charges}/{inventory.healing.max}
-                </dd>
-              </>
-            )}
-            {character.attributePoints > 0 && (
-              <>
-                <dt>属性点</dt>
-                <dd data-tone="good">{character.attributePoints}</dd>
-              </>
-            )}
-          </dl>
-          {view.cyberware.length > 0 && (
-            <ul className={styles.peekChips} aria-label="已装义体">
-              {view.cyberware.map((c) => (
-                <li key={c.id} data-broken={c.broken || undefined}>
-                  <ActionButton onClick={onCyberware}>{c.name}</ActionButton>
-                </li>
-              ))}
-            </ul>
+        {/* 常态就带五项属性和声望、人性，不用展开也看得到 */}
+        <ul className={styles.attrRow} aria-label="属性">
+          {ATTRS.map(([key, label, icon]) => (
+            <li key={key} title={label}>
+              <Asset id={icon} tint="var(--cp-cyan)" height={16} alt={label} />
+              <b>{character.attributes[key] ?? "—"}</b>
+            </li>
+          ))}
+          {character.attributePoints > 0 && (
+            <li className={styles.attrPoints}>+{character.attributePoints}</li>
           )}
-          <footer className={styles.peekFoot}>
-            <ActionButton onClick={onCharacter}>人物</ActionButton>
-          </footer>
-        </PeekPanel>
-      )}
+        </ul>
+        <p className={styles.bioLine}>
+          <span>
+            声望 {character.streetCred} · {character.credTier}
+          </span>
+          <span data-stage={humanity.stage}>
+            人性 {humanity.current}/{humanity.cap}
+          </span>
+        </p>
+        {/* 已装义体去「义体」页签看，人物页签里不再列一排义体名（用户觉得莫名其妙） */}
+        <Grow open={p.open} title={`人物 · ${character.name ?? ""}`} hint="P" line="var(--cp-red)">
+          {full}
+        </Grow>
+      </Panel>
     </div>
   );
 }
@@ -222,24 +355,27 @@ function PresentPerson({
   index,
   scan,
   peek,
-  onContacts,
+  onScan,
 }: {
   readonly person: Npc;
   readonly index: number;
   readonly scan: boolean;
   readonly peek: PeekState;
-  readonly onContacts: () => void;
+  readonly onScan?: ((id: string) => void) | undefined;
 }) {
   const s = person.body?.scan ?? null;
   const p = usePeek(`person:${person.id}`, peek.expand, peek.setExpand);
   // 按住 Tab 扫描时让给扫描卡
   const open = p.open && !scan;
+  // 名字格展开时加宽到两倍：收起时等档案收完再缩回原宽，不在收到一半时把档案挤成窄条
+  const wideOn = useLinger(open);
+  const face = portraitOf(person.id);
   return (
     // biome-ignore lint/a11y/useSemanticElements: 名字格是列表项，里面套着九宫格和展开面板，不能换成 button
     <li
       className={styles.person}
       style={{ "--i": index } as CSSProperties}
-      data-open={open || undefined}
+      data-open={wideOn || undefined}
       data-pinned={p.pinned || undefined}
       // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: 名字格本身就是可点的锁定框
       role="button"
@@ -247,11 +383,22 @@ function PresentPerson({
       aria-expanded={open}
       {...p.bind}
     >
+      <BlockShadow />
       <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 72%)" slice={CELL_SLICE} />
       <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
-      <div className={styles.inner}>
-        <b>{person.name}</b>
-        <small>{person.met ? (person.relation ?? person.role) : "底细不明"}</small>
+      {/* 常态的名字格左边也挂一个小头像（计划第十二节第 14 条）：原作头像，没有的写名字第一个字 */}
+      <div className={`${styles.inner} ${styles.personRow}`}>
+        <span className={styles.personFace} data-dead={!person.alive || undefined} aria-hidden>
+          {face ? (
+            <Asset id={face} className={styles.personFaceArt} />
+          ) : (
+            <i>{[...person.name][0] ?? "?"}</i>
+          )}
+        </span>
+        <span className={styles.personText}>
+          <b>{person.name}</b>
+          <small>{person.met ? (person.relation ?? person.role) : "底细不明"}</small>
+        </span>
       </div>
       <span className={styles.scanCard} aria-hidden={!scan}>
         <NineSlice id="map.tooltipBg" tint="rgb(14 14 23 / 88%)" slice={TOOLTIP_SLICE} />
@@ -268,16 +415,10 @@ function PresentPerson({
           {person.met ? " · 认识" : ""}
         </span>
       </span>
-      {open && (
-        <PeekPanel side="left" title={person.name} line="var(--cp-cyan)">
-          <div className={styles.peekScroll}>
-            <Profile npc={person} />
-          </div>
-          <footer className={styles.peekFoot}>
-            <ActionButton onClick={onContacts}>联系人</ActionButton>
-          </footer>
-        </PeekPanel>
-      )}
+      {/* 瞄着谁就只看谁（用户定的）：不再带「联系人 / 所有人」页签，联系人列表去消息页看 */}
+      <Grow open={open} title="档案" line="var(--cp-cyan)">
+        <Profile npc={person} onScan={onScan} />
+      </Grow>
     </li>
   );
 }
@@ -287,13 +428,13 @@ export function Present({
   view,
   scan,
   peek,
-  onContacts,
+  onScan,
 }: {
   readonly view: View;
   readonly scan: boolean;
   readonly peek: PeekState;
-  /** 打开左边缘抽屉的联系人页 */
-  readonly onContacts: () => void;
+  /** 档案里的「扫描」按钮：点一下立刻用义眼扫，不调模型（用户定的，计划第十二节第 14 条） */
+  readonly onScan?: ((id: string) => void) | undefined;
 }) {
   const people = view.npcs.filter((n) => n.here && n.alive).slice(0, PRESENT_MAX);
   if (people.length === 0) return null;
@@ -312,14 +453,7 @@ export function Present({
       </header>
       <ul>
         {people.map((n, i) => (
-          <PresentPerson
-            key={n.id}
-            person={n}
-            index={i}
-            scan={scan}
-            peek={peek}
-            onContacts={onContacts}
-          />
+          <PresentPerson key={n.id} person={n} index={i} scan={scan} peek={peek} onScan={onScan} />
         ))}
       </ul>
     </section>
@@ -330,14 +464,24 @@ export function Present({
 export function Unread({
   view,
   peek,
-  onMessages,
+  full,
+  tabs,
+  wide = false,
 }: {
   readonly view: View;
   readonly peek: PeekState;
-  /** 打开右边缘抽屉的消息页 */
-  readonly onMessages: () => void;
+  /** 钉住（点块或按 T）时块里放的消息、新闻 */
+  readonly full: ReactNode;
+  /** 消息、新闻、警用频段页签：块往上长，页签放在底下挨着常态那一行，不跟内容一起滚走（用户定的） */
+  readonly tabs?: ReactNode;
+  /** 私信页签：展开时朝中列加宽，联系人在左、消息和档案在右，不上下挤成一条（第十二节第 12 条） */
+  readonly wide?: boolean;
 }) {
-  const p = usePeek("unread", peek.expand, peek.setExpand, onMessages);
+  const p = usePeek("unread", peek.expand, peek.setExpand);
+  // 私信加宽：整块收起时等对话收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡（计划第十二节第 12 条）
+  const lingered = useLinger(wide && p.open);
+  const wideOn = p.open ? wide : lingered;
+  const resizing = useResizing(wideOn, p.open);
   const feed = view.phone.feedUnread;
   const items: readonly { readonly label: string; readonly icon: AssetId; readonly n: number }[] = [
     { label: "消息", icon: "notify.attention", n: view.phone.unread },
@@ -345,135 +489,179 @@ export function Unread({
     { label: "警用频段", icon: "map.poi.police", n: feed.police.length },
   ];
   const shown = items.filter((i) => i.n > 0);
-  if (shown.length === 0) return null;
-  const latest = (channel: "news" | "police") =>
-    view.feed
-      .filter((f) => f.channel === channel)
-      .sort((a, b) => b.at - a.at)
-      .slice(0, UNREAD_PEEK);
-  const groups = [
-    {
-      label: "消息",
-      rows: view.phone.messages
-        .slice(0, UNREAD_PEEK)
-        .map((m) => ({ key: `m${m.id}`, from: m.name, text: m.text, at: m.at, unread: !m.read })),
-    },
-    ...(["news", "police"] as const).map((c) => ({
-      label: c === "news" ? "新闻" : "警用频段",
-      rows: latest(c).map((f) => ({
-        key: f.id,
-        from: f.from,
-        text: f.text,
-        at: f.time,
-        unread: f.unread,
-      })),
-    })),
-  ].filter((g) => g.rows.length > 0);
+  // 一直显示：这里就是消息的入口，读完了也要找得到
+  const newest = view.phone.messages.find((m) => !m.read) ?? null;
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
     <div
       className={`${styles.block} ${styles.unread}`}
       data-layer="os"
       data-open={p.open || undefined}
+      data-wide={wideOn || undefined}
+      data-resizing={resizing || undefined}
       aria-label="未读"
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
       {...p.bind}
     >
+      <BlockShadow />
       <NineSlice id="map.panelBg" tint="rgb(14 14 23 / 72%)" slice={PANEL_SLICE} />
       <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={PANEL_SLICE} />
-      <div className={styles.inner}>
-        {shown.map((i) => (
-          <span key={i.label}>
-            <Asset id={i.icon} tint="var(--cp-red)" height={18} />
-            {i.label} <b>{i.n}</b>
-          </span>
-        ))}
+      <div className={`${styles.inner} ${styles.unreadInner}`}>
+        <Grow open={p.open} title="消息" hint="T" line="var(--cp-red)">
+          {full}
+        </Grow>
+        {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}
+        <div className={styles.unreadCounts}>
+          {shown.length === 0 ? (
+            <span>没有未读</span>
+          ) : (
+            shown.map((i) => (
+              <span key={i.label}>
+                <Asset id={i.icon} tint="var(--cp-red)" height={18} />
+                {i.label} <b>{i.n}</b>
+              </span>
+            ))
+          )}
+        </div>
+        {newest && (
+          <p className={styles.unreadLatest}>
+            <b>{newest.name}</b>
+            {newest.text}
+          </p>
+        )}
       </div>
-      {p.open && (
-        <PeekPanel side="left" align="bottom" title="未读" line="var(--cp-red)">
-          {groups.map((g) => (
-            <section key={g.label} className={styles.peekGroup}>
-              <h4>{g.label}</h4>
-              <ul className={styles.peekRows}>
-                {g.rows.map((r) => (
-                  <li key={r.key} data-unread={r.unread || undefined}>
-                    <b>{r.from}</b>
-                    <small>{r.at}</small>
-                    <p>{r.text}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </PeekPanel>
-      )}
     </div>
   );
 }
 
-/** B 地点、时间、热度：义眼叠加层，原作 zone_update 的框；展开后是威胁列表，点了打开大地图 */
+/** 地点块下面常态最多列几条威胁，再多的写「还有几个」，去地图里看 */
+const ZONE_THREAT_MAX = 3;
+
+/**
+ * B 地点、时间、热度：义眼叠加层，原作 zone_update 的框。
+ * 不再悬停展开（用户定的，计划第十二节第 9 条）：威胁常态就列在框下面，没人盯上就不占地方；
+ * 点地点框或按 Enter / 空格打开大地图，同 M 键。
+ * 存放（用户定的）：只在能存放的地点，框下面多一栏存放，悬停或点击就在这块里往下长，不再弹窗
+ */
 export function Zone({
   view,
-  peek,
   onMap,
+  peek,
+  stash,
 }: {
   readonly view: View;
-  readonly peek: PeekState;
   readonly onMap: () => void;
+  readonly peek: PeekState;
+  /** 能存放的地点才传：长出来的存放内容 */
+  readonly stash?: ReactNode;
 }) {
   const { heat, stealth } = view;
   const bounty = heat.bounties.reduce((sum, b) => sum + b.reward, 0);
-  const p = usePeek("zone", peek.expand, peek.setExpand, onMap);
   const threats = [...view.threats].sort((a, b) => b.level - a.level);
+  const shownThreats = threats.slice(0, ZONE_THREAT_MAX);
+  const s = usePeek("stash", peek.expand, peek.setExpand);
+  const open = s.open && stash !== undefined;
+  const pinStash = () => peek.setExpand({ id: "stash", pinned: true });
   return (
-    // biome-ignore lint/a11y/useSemanticElements: 块里套着原作框和展开面板，不能整个换成 button
     <div
       className={`${styles.block} ${styles.zone}`}
       data-layer="optics"
-      data-open={p.open || undefined}
-      aria-label="地点"
-      role="button"
-      tabIndex={0}
-      aria-expanded={p.open}
-      {...p.bind}
+      data-open={open || undefined}
     >
-      <Asset id="hud.zoneFrame" tint="var(--cp-yellow)" height={96} className={styles.zoneFrame} />
-      <div className={styles.zoneText}>
-        <b>{view.names.location ?? locationLabel(view.location)}</b>
-        <span>
-          {view.time.text} · {view.time.periodLabel} · <span>{view.weather.label}</span>
-        </span>
-        <span className={styles.heat}>
-          {"★".repeat(heat.stars)}
-          <span className={styles.starsEmpty}>{"★".repeat(5 - heat.stars)}</span>
-          {bounty > 0 && <small>{` 悬赏 ${bounty.toLocaleString("en-US")} 欧元`}</small>}
-          {stealth.level > 0 && <small data-alert={stealth.level}>{` ◆ ${stealth.label}`}</small>}
-        </span>
-      </div>
-      {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
-      <Asset id={districtIcon(view.names.district ?? view.location)} height={44} />
-      {p.open && (
-        <PeekPanel side="right" title="威胁" line="var(--cp-cyan)">
-          <p className={styles.peekNote}>{view.weather.note}</p>
-          {threats.length === 0 ? (
-            <p className={styles.peekNote}>没人盯上你。</p>
-          ) : (
-            <ul className={styles.peekRows}>
-              {threats.map((t) => (
-                <li key={t.id} data-level={t.level}>
+      {/* biome-ignore lint/a11y/useSemanticElements: 地点框里套着原作框和威胁列表，不能整个换成 button */}
+      <div
+        className={styles.zoneHit}
+        aria-label="地点，打开地图"
+        role="button"
+        tabIndex={0}
+        onClick={onMap}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onMap();
+          }
+        }}
+      >
+        <div className={styles.zoneHead}>
+          <BlockShadow />
+          <Asset
+            id="hud.zoneFrame"
+            tint="var(--cp-yellow)"
+            height={96}
+            className={styles.zoneFrame}
+          />
+          <div className={styles.zoneText}>
+            <b>{view.names.location ?? locationLabel(view.location)}</b>
+            <span>
+              {view.time.text} · {view.time.periodLabel} ·{" "}
+              {/* 天气说明不再另占一块，放进天气名的悬停提示 */}
+              <span title={view.weather.note}>{view.weather.label}</span>
+            </span>
+            <span className={styles.heat}>
+              {"★".repeat(heat.stars)}
+              <span className={styles.starsEmpty}>{"★".repeat(5 - heat.stars)}</span>
+              {bounty > 0 && <small>{` 悬赏 ${bounty.toLocaleString("en-US")} 欧元`}</small>}
+              {stealth.level > 0 && (
+                <small data-alert={stealth.level}>{` ◆ ${stealth.label}`}</small>
+              )}
+            </span>
+          </div>
+          {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
+          <Asset id={districtIcon(view.names.district ?? view.location)} height={44} />
+        </div>
+        {/* 威胁常态就列（用户定的）：不单开一块、不套侧板框（用户嫌丑），贴在地点框下面几行小字，每条一行，原因放进悬停提示；没人盯上就不出 */}
+        {shownThreats.length > 0 && (
+          <div className={styles.zoneThreats}>
+            <ul className={styles.zoneThreatList} aria-label="威胁">
+              {shownThreats.map((t) => (
+                <li key={t.id} data-level={t.level} title={t.reason}>
+                  <span className={styles.zoneThreatStars}>{"★".repeat(t.level)}</span>
                   <b>{t.who}</b>
-                  <small>
-                    {t.sourceLabel} · {"★".repeat(t.level)}
-                    <span className={styles.starsEmpty}>{"★".repeat(5 - t.level)}</span>
-                  </small>
-                  <p>{t.reason}</p>
+                  <small>{t.sourceLabel}</small>
                 </li>
               ))}
+              {threats.length > ZONE_THREAT_MAX && (
+                <li className={styles.zoneThreatMore}>
+                  还有 {threats.length - ZONE_THREAT_MAX} 个，点开地图看
+                </li>
+              )}
             </ul>
-          )}
-        </PeekPanel>
+          </div>
+        )}
+      </div>
+      {/* 存放（用户定的）：能存放的地点才出，同追踪块的写法，原作面板框里一行读数，展开的内容就在框里往下长 */}
+      {stash !== undefined && (
+        // biome-ignore lint/a11y/useSemanticElements: 存放框里套着面板和按钮，不能整个换成 button
+        <div
+          className={styles.zoneStash}
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          onClick={pinStash}
+          onKeyDown={(e) => {
+            if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              pinStash();
+            }
+          }}
+          {...s.bind}
+        >
+          <BlockShadow />
+          <Panel as="section" title="存放" line="var(--cp-yellow)">
+            <p className={styles.zoneStashLine}>
+              {view.safehouse.homes
+                .filter((h) => h.here)
+                .map((h) => `${h.name} · ${h.items.length} 样`)
+                .join("、")}
+              {view.safehouse.trunks.length > 0 && ` · 后备箱 ${view.safehouse.trunks.length}`}
+            </p>
+            <Grow open={open} title="存放" line="var(--cp-yellow)">
+              {stash}
+            </Grow>
+          </Panel>
+        </div>
       )}
     </div>
   );
@@ -484,16 +672,16 @@ export function Zone({
 export function Track({
   view,
   peek,
-  onJournal,
+  full,
   children,
 }: {
   readonly view: View;
   readonly peek: PeekState;
-  /** 打开右边缘抽屉的日志页 */
-  readonly onJournal: () => void;
+  /** 钉住（点块或按 J）时块里放的待办、委托、数据库 */
+  readonly full: ReactNode;
   readonly children?: ReactNode;
 }) {
-  const p = usePeek("track", peek.expand, peek.setExpand, onJournal);
+  const p = usePeek("track", peek.expand, peek.setExpand);
   const tracked = view.objectives
     .filter((o) => o.status !== "offered")
     .sort((a, b) => Number(b.status === "overdue") - Number(a.status === "overdue"));
@@ -530,14 +718,14 @@ export function Track({
       .sort((a, b) => (a.dueIn ?? Number.POSITIVE_INFINITY) - (b.dueIn ?? Number.POSITIVE_INFINITY))
       .map(rowOf),
   ];
-  if (rows.length === 0 && !children) return null;
+  // 一直显示：这里就是日志的入口，没有待办也要找得到
   return (
     <div
       className={`${styles.block} ${styles.track}`}
       data-layer="optics"
       data-open={p.open || undefined}
     >
-      {rows.length > 0 && (
+      {
         // biome-ignore lint/a11y/useSemanticElements: 追踪框里套着面板和展开面板，不能整个换成 button
         <div
           className={styles.trackHit}
@@ -546,8 +734,10 @@ export function Track({
           aria-expanded={p.open}
           {...p.bind}
         >
+          <BlockShadow />
           <Panel as="section" title="追踪" line="var(--cp-yellow)">
             <ul className={styles.trackList}>
+              {rows.length === 0 && <li className={styles.peekNote}>没有待办</li>}
               {rows.map((r) => (
                 <li key={r.key} data-overdue={r.overdue || undefined}>
                   <Asset id={r.icon} tint="var(--cp-yellow)" height={22} />
@@ -558,48 +748,46 @@ export function Track({
                 </li>
               ))}
             </ul>
+            <Grow
+              open={p.open}
+              title={`日志 · 待办 ${all.length}`}
+              hint="J"
+              line="var(--cp-yellow)"
+            >
+              {full}
+            </Grow>
           </Panel>
-          {p.open && (
-            <PeekPanel side="right" title={`待办 ${all.length}`} line="var(--cp-yellow)">
-              <ul className={`${styles.trackList} ${styles.peekScroll}`}>
-                {all.map((r) => (
-                  <li key={r.key} data-overdue={r.overdue || undefined}>
-                    <Asset id={r.icon} tint="var(--cp-yellow)" height={20} />
-                    <span>
-                      <b>{r.title}</b>
-                      {r.note && <small>{r.note}</small>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </PeekPanel>
-          )}
         </div>
-      )}
+      }
       {children}
     </div>
   );
 }
 
-/** H 武器和快速破解：武器格同原 Hud（hud.slot*），快速破解用现有轮盘；展开后列三个武器格和快捷位，点了开物品栏 */
+/**
+ * H 武器和快速破解：武器格同原 Hud（hud.slot*），快速破解用现有轮盘。
+ * 不再开全屏神经界面（第十二节第 10 条）：悬停或按 O/K 钉住，物品栏和制作就在这块自己的框里往上长
+ */
 export function Weapon({
   view,
   peek,
   onQuickhack,
-  onInventory,
+  full,
+  tabs,
 }: {
   readonly view: View;
   readonly peek: PeekState;
   /** 生成中为 undefined：轮盘不出 */
   readonly onQuickhack?: ((name: string) => void) | undefined;
-  /** 打开神经界面的物品栏 */
-  readonly onInventory: () => void;
+  /** 块里放的完整物品栏或制作 */
+  readonly full: ReactNode;
+  /** 物品栏、制作页签：块往上长，页签放在底下挨着武器格，同 G 未读 */
+  readonly tabs?: ReactNode;
 }) {
   const { inventory, hacking } = view;
-  const p = usePeek("weapon", peek.expand, peek.setExpand, onInventory);
+  const p = usePeek("weapon", peek.expand, peek.setExpand);
   const weaponId = inventory.active === null ? null : (inventory.weapons[inventory.active] ?? null);
   const weapon = weaponId === null ? null : (view.names.items[weaponId] ?? weaponId);
-  const nameOf = (id: string) => view.names.items[id] ?? id;
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着快速破解轮盘的按钮，不能整个换成 button
     <div
@@ -623,57 +811,42 @@ export function Weapon({
         </div>
       )}
       <div className={styles.slot}>
+        <BlockShadow />
         <NineSlice id="hud.slotBg" tint="rgb(14 14 23 / 85%)" slice={SLOT_SLICE} />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
+        {/* 物品栏在这块里长出来（第十二节第 10 条），不再跳全屏；制作页随物品栏精简去掉（用户定的方案 A） */}
+        <Grow open={p.open} title="装备 · 物品栏" hint="O" line="var(--cp-cyan)">
+          {full}
+        </Grow>
+        {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}
         <div className={styles.inner}>
-          {weapon === null ? (
-            <Asset id="weapon.fists" tint="var(--cp-cyan)" height={30} alt="空手" />
-          ) : (
-            <b>{weapon}</b>
+          {/* 名字和读数在左、原作武器图在右（用户定的，计划第十二节第 9 条）：常态排成一行，不再上图下字空一大块 */}
+          <span className={styles.slotMain}>
+            {weapon === null ? (
+              <Asset id="weapon.fists" tint="var(--cp-cyan)" height={30} alt="空手" />
+            ) : (
+              <b>{weapon}</b>
+            )}
+            {/* 常态就带治疗品和手雷剩几次 */}
+            {(inventory.healing || inventory.grenade) && (
+              <small className={styles.slotLine}>
+                {inventory.healing && `治疗 ${inventory.healing.charges}/${inventory.healing.max}`}
+                {inventory.healing && inventory.grenade && " · "}
+                {inventory.grenade && `手雷 ${inventory.grenade.charges}/${inventory.grenade.max}`}
+              </small>
+            )}
+          </span>
+          {/* 手持武器的原作图（第八节第 1 条：优先用原作素材）放在右边；没有图的照旧只写名字 */}
+          {weapon !== null && itemArtOf(weaponId) && (
+            <Asset
+              id={itemArtOf(weaponId) as AssetId}
+              width={160}
+              height={56}
+              className={`${story.weaponArt} ${styles.slotArt}`}
+            />
           )}
         </div>
       </div>
-      {p.open && (
-        <PeekPanel side="right" align="bottom" title="装备" line="var(--cp-cyan)">
-          <ol className={styles.peekSlots}>
-            {[0, 1, 2].map((i) => {
-              const id = inventory.weapons[i] ?? null;
-              return (
-                <li key={i} data-active={inventory.active === i || undefined}>
-                  <Asset id={`key.${i + 1}` as AssetId} tint="currentColor" height={18} />
-                  {id === null ? <span className={styles.peekNote}>空</span> : nameOf(id)}
-                </li>
-              );
-            })}
-          </ol>
-          <dl className={styles.peekFacts}>
-            {inventory.healing && (
-              <>
-                <dt>治疗</dt>
-                <dd>
-                  {nameOf(inventory.healing.id)} {inventory.healing.charges}/{inventory.healing.max}
-                </dd>
-              </>
-            )}
-            {inventory.grenade && (
-              <>
-                <dt>手雷</dt>
-                <dd>
-                  {nameOf(inventory.grenade.id)} {inventory.grenade.charges}/{inventory.grenade.max}
-                </dd>
-              </>
-            )}
-            {hacking && hacking.ramMax > 0 && (
-              <>
-                <dt>RAM</dt>
-                <dd>
-                  {hacking.ram}/{hacking.ramMax}
-                </dd>
-              </>
-            )}
-          </dl>
-        </PeekPanel>
-      )}
     </div>
   );
 }

@@ -9,7 +9,18 @@
   transition: color var(--dur-flash);
 }
 
-.bar {
+/* 左边的原作菱形格（计划第十二节第 9 条）：描边和实心两层叠在同一格里，实心那层平时藏着 */
+.mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.mark > * {
+  grid-area: 1 / 1;
+}
+
+.markFill {
   opacity: 0;
   transition: opacity var(--dur-flash);
 }
@@ -31,11 +42,11 @@
   color: var(--cp-cyan);
 }
 
-.item[data-selected] .bar {
+.item[data-selected] .markFill {
   opacity: 1;
 }
 
-.item:hover:not(:disabled) .bar {
+.item:hover:not(:disabled) .markFill {
   opacity: 1;
 }
 

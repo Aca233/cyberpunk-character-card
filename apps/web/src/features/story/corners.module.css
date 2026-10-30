@@ -17,9 +17,65 @@
   --accent: var(--cp-netwatch);
 }
 
-/* 套九宫格的容器：素材铺满，内容叠在上面 */
-.block {
+/*
+ * 每侧一列（第十二节第 9 条）：从 24 到底边 64，三块从上往下排，底部那块贴底。
+ * 一块长高时同侧别的块被推开、缩成一行读数，不会被盖住，也不会长成一整列侧栏
+ */
+.side {
   position: absolute;
+  top: 24px;
+  bottom: 64px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: var(--corner-w);
+  pointer-events: none;
+}
+
+.side:where([data-side="left"]) {
+  left: var(--corner-edge);
+}
+
+.side:where([data-side="right"]) {
+  right: var(--corner-edge);
+}
+
+.side > * {
+  pointer-events: auto;
+}
+
+/* 底部那块贴底 */
+.side > :is(.unread, .weapon) {
+  margin-top: auto;
+}
+
+/* 同侧有一块展开时，别的块压暗、只留一行读数 */
+/* 瞄着在场的人时同侧的块不压暗，生物监测照常亮着（用户定的） */
+.side:has(> [data-open]:not(.present)) > .block:not([data-open]) {
+  opacity: 0.55;
+  transition: opacity 180ms ease-out;
+}
+
+/* 瞄着在场的人看档案时不收：档案朝中列加宽，用不着挤占生物监测的高度（用户定的） */
+.side:has(> [data-open]:not(.present))
+  > .block:not([data-open])
+  :is(.ram, .attrRow, .bioLine, .unreadLatest, .slotLine, .label) {
+  display: none;
+}
+
+.side:has(> [data-open])
+  > .block:not([data-open])
+  :is(.trackList > li:nth-child(n + 2), ul > .person:nth-child(n + 3)) {
+  display: none;
+}
+
+/* 套九宫格的容器：素材铺满，内容叠在上面 */
+/* 块都排在 .side 那一列里，不再各自绝对定位 */
+.block {
+  position: relative;
+  flex: none;
+  min-height: 0;
   z-index: 3;
   font-family: var(--font-ui);
   animation: blockIn 420ms ease-out both;
@@ -43,10 +99,25 @@
 /* ———— A 生物监测（左上） ———— */
 
 .bio {
-  top: 24px;
-  left: var(--corner-edge);
   width: var(--corner-w);
 }
+
+/*
+ * 义体允许向中列加宽（计划第十二节第 11 条），不再硬塞进窄长列表。
+ * 最大 1040px，右侧留出地点和装备列及间隔；切回人物或收起时恢复常态宽度。
+ * 只扩大当前块，不改变侧列宽度，也不改同侧剩余高度的计算
+ */
+.bio:where([data-wide]) {
+  width: min(
+    1040px,
+    calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
+  );
+}
+
+/*
+ * 义体页签打开时，同侧下面的在场、消息两块不再藏起来（用户定的，计划第十二节第 11 条）：
+ * 照别的块展开时一样压暗、缩成一行读数留在原位，人体用 useRoomLeft 量出的剩余高度
+ */
 
 .bioRow {
   display: flex;
@@ -100,15 +171,56 @@
   opacity: 1;
 }
 
+/* 常态就有的一行五项属性、一行声望和人性 */
+.attrRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attrRow > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.attrRow b {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.attrRow .attrPoints {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--cp-yellow);
+}
+
+.bioLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.bioLine :where([data-stage="edge"], [data-stage="crisis"]) {
+  color: var(--voice-humanity);
+}
+
 /* ———— S 在场的人（左中，高度跟人数走） ———— */
 
 .present {
-  top: 152px;
-  left: var(--corner-edge);
   width: var(--corner-w);
 }
 
-.present ul {
+/* 只管名字列表本身；用子选择器，不漏进展开的人物档案（计划第十二节第 14 条） */
+.present > ul {
   display: grid;
   justify-items: start;
   gap: 10px;
@@ -133,14 +245,55 @@
   --person-line: var(--cp-cyan);
 }
 
-.person b {
+/* 常态名字格：左边小头像，右边名字和身份（计划第十二节第 14 条）；头像只放原作图，不另画框 */
+.personRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.personFace {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  color: var(--cp-cyan);
+}
+
+.personFace:where([data-dead]) {
+  opacity: 0.45;
+}
+
+.personFace > i {
+  font-style: normal;
+}
+
+.personFaceArt {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.personText {
+  min-width: 0;
+}
+
+/*
+ * 名字和身份只管名字格自己的 .inner，不漏进展开的人物档案（计划第十二节第 14 条）；
+ * :where 让优先级和原来的 .person b 一样，不盖过后面各块自己的 b、small
+ */
+.person > :where(.inner) b {
   display: block;
   font-family: var(--font-body);
   font-size: 17px;
   font-weight: 600;
 }
 
-.person small {
+.person > :where(.inner) small {
   display: block;
   margin-top: 2px;
   font-size: 13px;
@@ -188,22 +341,65 @@
 /* ———— G 未读（左下） ———— */
 
 .unread {
-  bottom: 64px;
-  left: var(--corner-edge);
   display: flex;
   align-items: center;
   box-sizing: border-box;
   width: var(--corner-w);
-  height: 72px;
-  padding: 10px 20px 14px;
+  min-height: 72px;
+  padding: 12px 20px 16px;
 }
 
-.unread .inner {
+/*
+ * 私信页签朝中列加宽（计划第十二节第 12 条）：联系人在左、消息在右，不在角块宽里挤成上下排。
+ * 只加宽到 560，刚好放下联系人列和一栏消息（用户嫌 720 太大）；高度定一截，不撑满同侧一列，见文件末尾。
+ * 右侧照样留出地点和装备列；切到新闻、警用频段或收起时恢复常态宽度
+ */
+.unread:where([data-wide]) {
+  width: min(
+    560px,
+    calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
+  );
+}
+
+/* 私信加宽时同侧的生物监测、在场两块先收起，把高度让给对话（计划第十二节第 12 条，做法同第 11 条） */
+.side:has(> .unread[data-wide]) > :not(.unread) {
+  display: none;
+}
+
+/* 里层占满块宽：长出来的消息页按块宽排，不按内容宽缩 */
+.unread .unreadInner {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 消息、新闻、警用频段页签放在底下，挨着常态那一行，手不用伸到块顶上去切（用户定的） */
+.unreadTabs > nav {
+  margin: 0;
+}
+
+.unreadCounts {
   display: flex;
   gap: 18px;
 }
 
-.unread span {
+.unreadLatest {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--cp-text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unreadLatest b {
+  margin-right: 8px;
+  color: var(--cp-yellow);
+}
+
+.unreadCounts span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -211,24 +407,92 @@
   color: var(--cp-text-dim);
 }
 
-.unread b {
+/* 只染常态那两行的数字和名字，不漏进长出来的私信页和人物档案（计划第十二节第 14 条） */
+.unreadCounts b,
+.unreadLatest b {
   color: var(--cp-red);
 }
 
 /* ———— B 地点、时间、热度（右上） ———— */
 
 .zone {
-  top: 24px;
-  right: var(--corner-edge);
+  width: var(--corner-w);
+}
+
+/* 常态那一行：原作地点框，定高 96 */
+.zoneHead {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   box-sizing: border-box;
-  width: var(--corner-w);
   height: 96px;
   padding: 0 24px 0 28px;
 }
+
+.zoneHead > :last-child {
+  position: relative;
+}
+
+/*
+ * 威胁常态就列（用户定的，计划第十二节第 9 条）：不单开一块、不套框（用户嫌丑），
+ * 贴在地点框下面几行小字，左边和地点框里的字对齐；每条一行，放不下就省略，原因在悬停提示里。
+ * 最多三条，没人盯上就整块不出；不再悬停展开，也没有展开动画
+ */
+.zoneThreats {
+  position: relative;
+  padding: 2px 24px 0 28px;
+}
+
+.zoneThreatList {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.zoneThreatList > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.zoneThreatList b {
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--cp-text);
+  text-overflow: ellipsis;
+}
+
+.zoneThreatList small {
+  flex: none;
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.zoneThreatStars {
+  flex: none;
+  letter-spacing: 0;
+  color: var(--cp-yellow);
+}
+
+.zoneThreatList > li:where([data-level="4"], [data-level="5"]) :is(b, .zoneThreatStars) {
+  color: var(--cp-danger);
+}
+
+/* 超过三条时最后一行「还有几个」：暗色小字，不用 .peekNote，免得和后面它自己的规则抢优先级 */
+.zoneThreatMore {
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+/* 同侧的追踪、武器块展开时威胁照样列着（用户定的，计划第十二节第 9 条）：它只有几行小字，长出来的部分用 useRoomLeft 量出的剩余高度 */
 
 .zoneFrame {
   position: absolute;
@@ -257,10 +521,6 @@
   color: var(--cp-text-dim);
 }
 
-.zone > :last-child {
-  position: relative;
-}
-
 .zoneText .heat {
   letter-spacing: 0.1em;
   color: var(--cp-danger);
@@ -279,11 +539,36 @@
   opacity: 0.25;
 }
 
+/* 地点框和威胁这一截点了开地图；下面的存放栏另算（用户定的） */
+.zoneHit {
+  position: relative;
+  cursor: var(--cp-cursor-hand);
+}
+
+/* 存放（用户定的）：能存放的地点才出，写法同追踪块，原作面板框，展开的内容在框里往下长 */
+.zoneStash {
+  position: relative;
+  margin-top: 12px;
+  cursor: var(--cp-cursor-hand);
+}
+
+.zoneStashLine {
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--cp-text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 同侧别的块展开时，存放栏只留标题 */
+.side:has(> [data-open]) > .zone:not([data-open]) .zoneStashLine {
+  display: none;
+}
+
 /* ———— C 追踪（右中，最多 3 条） ———— */
 
 .track {
-  top: 136px;
-  right: var(--corner-edge);
   width: var(--corner-w);
 }
 
@@ -324,8 +609,6 @@
 /* ———— H 武器和快速破解（右下） ———— */
 
 .weapon {
-  right: var(--corner-edge);
-  bottom: 64px;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
@@ -333,12 +616,16 @@
   width: var(--corner-w);
 }
 
+/* 常态 96 高；悬停时长出来的部分排在武器名上面，框往上长，武器名那一行留在底部原位 */
 .slot {
   position: relative;
   box-sizing: border-box;
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
   min-width: 0;
-  height: 96px;
+  min-height: 96px;
   padding: 16px 24px 20px;
 }
 
@@ -346,7 +633,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 100%;
+  min-height: 60px;
 }
 
 .slot b {
@@ -356,6 +643,31 @@
   font-size: 15px;
   color: var(--cp-cyan);
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 名字和读数在左，占满剩下的宽度；武器图贴右（用户定的，计划第十二节第 9 条） */
+.slotMain {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 原作武器图：保持原色和比例，最多占块宽一半，名字长了也不挤掉图 */
+.slot .slotArt {
+  flex: none;
+  width: auto;
+  max-width: 50%;
+  height: 56px;
+  margin: 0 0 0 auto;
+  object-fit: contain;
+}
+
+.slotLine {
+  font-size: 12px;
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -421,41 +733,110 @@
   z-index: 2;
 }
 
+/*
+ * 瞄着一个人看档案时，名字格朝中列加宽到角块的两倍（第十二节第 8 条的例外，用户定的）：
+ * 角块只有 280～360 宽，档案挤成一条；展开时暂时盖住一部分正文，移开就收回原宽
+ */
+.person[data-open] {
+  width: calc(var(--corner-w) * 2);
+  max-width: none;
+}
+
 .trackHit {
   position: relative;
 }
 
 /*
- * 展开层只在这一侧的四角列里：宽同角块，叠在角块自己上面往下（底部的块往上）长，
- * 不伸进正文、选项和输入框；同一侧下面的次要块被它暂时压住
+ * 块自己往下长（底部的块往上长）：长出来的部分在块自己的框里，框跟着变高，不另弹一层。
+ * 收起时高度是 0；展开时行高从 0fr 过渡到 1fr，框的九宫格跟着拉长。
+ * 这里动了布局（不只 transform/opacity），只在四角那一小块上，不碰正文
  */
-.peek {
-  position: absolute;
-  top: 0;
-  z-index: 2;
-  isolation: isolate;
-  box-sizing: border-box;
-  width: var(--corner-w);
-  max-height: min(560px, calc(100dvh - 112px));
+.grow {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 0fr;
+  min-width: 0;
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.5;
   color: var(--cp-text);
   cursor: auto;
-  animation: peekIn 250ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  opacity: 0;
+  visibility: hidden;
+  /* 时长收短到 160ms（用户嫌拖拉）；改这里要同步 Corners.tsx 的 GROW_MS */
+  transition:
+    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease-out,
+    visibility 0s linear 160ms;
 }
 
-.peekFrame {
-  z-index: 0;
+.grow:where([data-open]) {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease-out,
+    visibility 0s;
 }
 
+.growClip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * 长出来的部分最多长到同侧这一列剩下的高度（Corners.tsx 的 useRoomLeft 量好写在行内），放得下就不出滚动条；
+ * 这里的上限只在量到之前的头一帧用
+ */
+.growBody {
+  box-sizing: border-box;
+  max-height: min(520px, calc(100dvh - 480px));
+  padding-top: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+  overflow-wrap: anywhere;
+}
+
+/* 底部的块往上长：长出来的部分排在常态内容上面，间距放在下边 */
+.unread .growBody,
+.weapon .growBody {
+  padding: 0 0 14px;
+}
+
+/* 标题一行：左边写这块装的是什么，右边写对应的键 */
 .peekHead {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 10px;
   font-size: 12px;
   letter-spacing: 0.18em;
   color: var(--accent);
+}
+
+/* 紧跟在标题下面的第一样东西不再另加上边距 */
+.peekHead + .peekChips {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.peekHead kbd {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--cp-text-dim);
+}
+
+/* 块里放的完整页面：宽度跟着块走，不撑出框 */
+.growBody :where(*) {
+  min-width: 0;
 }
 
 .peekLine {
@@ -465,43 +846,6 @@
   mask-size: 100% 100%;
 }
 
-.peek:where([data-side="left"]) {
-  left: 0;
-}
-
-.peek:where([data-side="right"]) {
-  right: 0;
-}
-
-.peek:where([data-align="bottom"]) {
-  top: auto;
-  bottom: 0;
-}
-
-/* 地点原先把最后一个子元素当作徽章，展开层不能跟着变成相对定位 */
-.zone > .peek {
-  position: absolute;
-}
-
-/* 覆盖未读块的横向 .inner 布局，展开内容独立纵向排版 */
-.peek .peekBody {
-  display: block;
-  box-sizing: border-box;
-  max-height: inherit;
-  padding: 18px 24px 26px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
-  overflow-wrap: anywhere;
-}
-
-.peek .label {
-  margin-bottom: 14px;
-  font-size: 13px;
-}
-
 .peekScroll {
   max-height: min(380px, calc(100dvh - 240px));
   overflow-x: hidden;
@@ -509,30 +853,6 @@
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--accent) transparent;
-}
-
-.peekAttrs {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0 0 18px;
-  padding: 0;
-  list-style: none;
-}
-
-.peekAttrs > li {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--cp-text-dim);
-}
-
-.peekAttrs b {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--cp-cyan);
-  font-variant-numeric: tabular-nums;
 }
 
 .peekFacts {
@@ -590,7 +910,7 @@
   color: var(--cp-red);
 }
 
-.peek .peekRows {
+.peekRows {
   display: grid;
   gap: 14px;
   margin: 0;
@@ -663,20 +983,7 @@
   margin: 0;
 }
 
-/* 展开：淡入，同时往下挪 6px */
-@keyframes peekIn {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .peek {
-    animation-duration: 1ms;
-    animation-delay: 0ms;
-  }
-}
+/* 长出来的部分减少动态效果时直接切换，见文件末尾的 reduced-motion */
 
 /* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收窄名字格和扫描卡 ———— */
 
@@ -738,4 +1045,113 @@
     animation-iteration-count: 1;
     transition-duration: 1ms;
   }
+}
+
+/*
+ * ———— 立体感（用户定的，计划第十二节第 9 条）————
+ * 原作的角块像投在略微侧转的屏幕上：每侧一个透视，块绕外侧边朝视野中间转一点，左列朝右、右列朝左；
+ * 悬停、聚焦或展开时转正，方便读。只动 transform，不画边框、不画渐变，不影响排版和 useRoomLeft 的量高。
+ * 放在文件末尾，优先级从低到高排，不和前面 .block 的规则冲突
+ */
+.side {
+  perspective: 1400px;
+}
+
+/*
+ * 透明度也写在这里：同侧块收起后压暗的块渐亮回来，不再一下跳回（用户嫌过渡怪，计划第十二节第 9 条）。
+ * 宽度一起过渡：义体、私信这类加宽的页签切回窄页签时，块平滑缩回原宽，不再一下跳（计划第十二节第 11、12 条）
+ */
+/* 时长收短到 160ms（用户嫌拖拉）；改宽度时长要同步 Corners.tsx 的 WIDTH_MS */
+.side > .block {
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease-out,
+    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.side:where([data-side="left"]) > .block {
+  transform: rotateY(5deg);
+  transform-origin: left center;
+}
+
+.side:where([data-side="right"]) > .block {
+  transform: rotateY(-5deg);
+  transform-origin: right center;
+}
+
+.side > .block:is(:hover, :focus-within, [data-open]) {
+  transform: rotateY(0deg);
+}
+
+/* 减少动态效果：倾斜保留，转正时直接切换，不做转动 */
+@media (prefers-reduced-motion: reduce) {
+  .side > .block {
+    transition: none;
+  }
+}
+
+/*
+ * 投影（用户定的，计划第十二节第 9 条）：Corners.tsx 的 BlockShadow，原作 map.shadowSmall 九宫格。
+ * 排在框的前面，DOM 顺序在下层，不用 z-index；往右下错开、四边外扩一点，像块浮在画面上。
+ * 不用 box-shadow、filter，也不挡点击（.nineSlice 自带 pointer-events: none）
+ */
+/* 写成 .block .shadow：和 asset.module.css 的 .nineSlice（inset: 0）同级时谁赢看样式表加载顺序，这里压过它 */
+.block .shadow {
+  inset: 10px -14px -16px 6px;
+}
+
+/* 块转正（悬停、展开）时投影收近一点，像块贴回屏幕 */
+.side > .block:is(:hover, :focus-within, [data-open]) .shadow {
+  inset: 6px -8px -10px 4px;
+}
+
+/*
+ * 私信页签定一截高（用户定的，计划第十二节第 12 条）：块收窄到 560，高度最多 480、矮屏不超过六成屏高，
+ * 不再撑满同侧一列（用户嫌太大）；Grow 行内的 maxHeight（useRoomLeft 量的同侧剩余高度）照样再压一道。
+ * 消息少也保持这一截，多了在里面滚
+ */
+.unread[data-wide] .growBody {
+  display: flex;
+  flex-direction: column;
+  height: min(480px, 60dvh);
+}
+
+/*
+ * 里面一层层往下撑满：钉住内容（pinBody）→ 私信面板（Panel 的 section）→ 面板正文 → 联系人和消息两栏。
+ * 面板和私信栏是别的样式模块，只能按元素选；用 min-height，消息多时照样长高，在 .growBody 里滚
+ */
+.unread[data-wide] .growBody > div {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.unread[data-wide] .growBody > div > section {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.unread[data-wide] .growBody > div > section > div:last-child {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.unread[data-wide] .growBody > div > section > div:last-child > div {
+  flex: 1 0 auto;
+}
+
+/*
+ * 块开着时切到宽度不同的页签（义体→人物、私信→新闻，用户嫌过渡垃圾，计划第十二节第 11、12 条）：
+ * Corners.tsx 的 useResizing 在宽度过渡那 260ms 里挂 data-resizing，长出来的内容先 80ms 淡出，
+ * 宽度到位后再淡入，看不到内容一边缩一边重排。只动 opacity；减少动态效果时不挂这个标记
+ */
+.side > .block .growBody {
+  transition: opacity 100ms ease-out;
+}
+
+.side > .block[data-resizing] .growBody {
+  opacity: 0;
+  transition: opacity 60ms ease-out;
 }

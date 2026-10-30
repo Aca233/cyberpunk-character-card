@@ -7,6 +7,7 @@ import { AuthoringTextSearch } from "./authoring-search";
 import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
 import { LoreLibrary } from "./lore-library";
+import { PresetStore } from "./presets";
 import { SaveStore } from "./storage";
 
 /** 只监听本机 */
@@ -40,6 +41,7 @@ const app = createApp({
   config,
   saves: new SaveStore(join(root, "data")),
   characters: new CharacterStore(join(root, "data")),
+  presets: new PresetStore(join(root, "data")),
   dev,
   evalDrafts: join(root, "tools", "evals", "drafts"),
   authoring: dev ? new AuthoringStore(join(root, "data", "drafts")) : undefined,

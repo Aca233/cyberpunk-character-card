@@ -35,6 +35,9 @@ export interface LlmRequest {
   readonly messages: readonly LlmMessage[];
   readonly maxOutputTokens?: number;
   readonly temperature?: number;
+  /** 酒馆预设带来的采样参数（只给叙事模型）；服务商不支持的由各家适配层忽略 */
+  readonly topP?: number;
+  readonly topK?: number;
 }
 
 export interface LlmUsage {

@@ -1,6 +1,7 @@
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { type Npc, NpcStateSchema } from "../systems/npc";
+import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
 import { estimateTokens } from "./prompts/layers";
@@ -107,7 +108,8 @@ export function loreQuery(
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const here = clock.location;
   if (here !== null) {
-    const place = locationCatalog(data).get(here);
+    // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也按名字和城区检索
+    const place = locationCatalog(withSavedPlaces(data, world)).get(here);
     if (place) {
       add(place.name, "place");
       add(place.district, "district");

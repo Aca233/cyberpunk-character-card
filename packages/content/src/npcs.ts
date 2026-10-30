@@ -6,8 +6,15 @@ import { npcRules } from "@cp/core";
  * - 朱迪、瑞吉娜、维克多：2077 开局的引导委托用（开场 lizzies-2077 的 cast）。原作依据《赛博朋克 2077》（2.x），2026-10-25 查
  *   cyberpunk.fandom.com 的 Judy_Álvarez、Regina_Jones、Viktor_Vektor；译名照本机文本库（朱迪·阿尔瓦雷兹、瑞吉娜·琼斯、维克多·维克托）。
  *   外貌和口吻的细节、维克多的诉求底线是本作改编
- * - body（档位、属性、装备、义体、开局人性）全部是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值和具体型号。
- *   丽贝卡的 Guts、杰克的 La Chingona Dorada 照原作的不朽武器配；曼因的人性压得很低是照他瞒着的发病征兆写的
+ * - body 的档位、属性、开局人性是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值。
+ *   曼因的人性压得很低是照他瞒着的发病征兆写的
+ * - 装备和义体（用户定的补卡，2026-10-29 查 cyberpunk.fandom.com 各人词条，只有这一个来源，按单一来源对待）：
+ *   武器照词条里的型号对到物品表（罗格的 Pride 是 Liberty 改的、瑞弗的 Crash 和克里的 Archangel 是 Overture 改的、
+ *   德克斯特的 Plan B 是 Liberty 改的，表里没有这几把不朽武器，用原型）；曼因的弹射系统、皮下护甲照词条，
+ *   朱迪的破片手雷、瑞弗的闪光弹照游戏扫描数据。衣服、其余义体、没写武器的人（瑞吉娜、维克多、和歌子、
+ *   米丝蒂、神父）照旧是本作改编；维克多的荒坂外骨骼手套表里没有，没配
+ * - 常驻地点：瑞吉娜的办公室、和歌子的柏青哥店、克里的别墅照本机文本库（见 locations.ts）；
+ *   法拉第、德克斯特、神父、瑞弗查不到固定去处，home 空着，由模型按剧情安排
  */
 export const npcs = npcRules.NpcCardSchema.extend({
   affinity: npcRules.AffinitySchema.shape.delta.optional(),
@@ -57,9 +64,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "legend",
         attributes: { body: 18, reflexes: 12, tech: 6, intelligence: 6, cool: 14 },
-        gear: ["copperhead", "street-jacket"],
+        gear: ["lexington", "zhuo", "street-jacket"],
         cyberware: [
-          "gorilla-arms",
+          "projectile-launch-system",
           "subdermal-armor",
           "titanium-bones",
           "reinforced-tendons",
@@ -86,7 +93,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "pro",
         attributes: { body: 5, reflexes: 6, tech: 6, intelligence: 12, cool: 12 },
-        gear: ["corpo-suit"],
+        gear: ["omaha", "shingen", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -111,7 +118,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "pro",
         attributes: { body: 5, reflexes: 6, tech: 14, intelligence: 10, cool: 6 },
-        gear: ["techie-coverall"],
+        gear: ["chao", "frag-grenade", "techie-coverall"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -130,6 +137,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       want: "找到治赛博精神病的办法，发病的人能活捉就活捉；在沃森把生意做稳",
       limit: "滥杀发病的人；对她撒谎、拿假消息糊弄她",
       secret: "当记者那些年为了脱身欠下一笔人情债，到现在还没还清",
+      home: "regina-office",
       canon: true,
       body: {
         tier: "pro",
@@ -184,7 +192,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "elite",
         attributes: { body: 15, reflexes: 10, tech: 5, intelligence: 5, cool: 11 },
-        gear: ["la-chingona-dorada", "street-jacket"],
+        gear: ["la-chingona-dorada", "machete", "street-jacket"],
         cyberware: ["kiroshi-mk1", "titanium-bones"],
       },
     },
@@ -208,7 +216,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "legend",
         attributes: { body: 8, reflexes: 12, tech: 6, intelligence: 14, cool: 17 },
-        gear: ["overture", "street-jacket"],
+        gear: ["liberty", "nekomata", "street-jacket"],
         cyberware: ["kiroshi-mk2"],
       },
     },
@@ -227,7 +235,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       want: "把威斯特布鲁克的生意握在手里；管住虎爪帮里那几个儿子，别让他们给她惹事",
       limit: "坏了规矩还想讨价还价；在她的地盘上替荒坂办事",
       secret: "关西出身，做过 Kiroshi 的医疗技师；一个孙辈死在荒坂手里，她恨这家公司，从不说出口",
-      home: "japantown",
+      home: "wakako-pachinko",
       canon: true,
       body: {
         tier: "pro",
@@ -278,7 +286,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "pro",
         attributes: { body: 6, reflexes: 4, tech: 5, intelligence: 14, cool: 15 },
-        gear: ["corpo-suit"],
+        gear: ["liberty", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -326,7 +334,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "elite",
         attributes: { body: 9, reflexes: 14, tech: 10, intelligence: 7, cool: 12 },
-        gear: ["overwatch", "nomad-duster"],
+        gear: ["overwatch", "nova", "nomad-duster"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -351,7 +359,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       body: {
         tier: "pro",
         attributes: { body: 9, reflexes: 9, tech: 7, intelligence: 10, cool: 9 },
-        gear: ["unity", "street-jacket"],
+        gear: ["overture", "flashbang", "street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -372,11 +380,12 @@ export const npcs = npcRules.NpcCardSchema.extend({
       want: "重新写出自己真想写的歌，不再给唱片公司当摇钱树",
       limit: "被当成过气的商品摆弄；有人拿老乐队和死去的朋友开涮",
       secret: "单飞这些年被唱片公司牵着走，自己写的东西越来越少，怕自己早就写不出来了",
+      home: "kerry-estate",
       canon: true,
       body: {
         tier: "pro",
         attributes: { body: 6, reflexes: 8, tech: 5, intelligence: 9, cool: 12 },
-        gear: ["street-jacket"],
+        gear: ["overture", "omaha", "street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
     },

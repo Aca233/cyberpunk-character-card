@@ -14,31 +14,33 @@ import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import type { StoryEnd } from "./ChroniclePanel";
 import { CloseupQueue } from "./Closeup";
-import { Banner, BioMonitor, Present, Track, Unread, Weapon, Zone } from "./Corners";
-import { DivePanel } from "./DivePanel";
 import {
-  type DrawerSide,
-  drawerId,
-  EdgeDrawer,
-  type LeftPage,
-  MapLayer,
-  type RightPage,
-} from "./EdgeDrawers";
+  Banner,
+  BioMonitor,
+  CornerSide,
+  PinTabs,
+  Present,
+  Track,
+  Unread,
+  Weapon,
+  Zone,
+} from "./Corners";
+import { DivePanel } from "./DivePanel";
+import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { InputBar } from "./InputBar";
 import { MapBody } from "./MapPanel";
-import { NeuralInterface, type NeuralPage, PAGE_KEYS } from "./NeuralInterface";
 import {
   CharacterPage,
-  ContactsPage,
-  CraftingPage,
   CyberwarePage,
   DatabasePage,
   InventoryPage,
   JournalPage,
   MessagesPage,
 } from "./NeuralPages";
+import { PoliceBody } from "./NewsPanel";
 import { type NoteEntry, NotesPanel } from "./NotesPanel";
+import neuralStyles from "./neural.module.css";
 import { type Expand, peekOnTop } from "./peek";
 import { Ripperdoc } from "./Ripperdoc";
 import {
@@ -48,12 +50,20 @@ import {
   SettlementCard,
 } from "./Settlement";
 import { Shop } from "./Shop";
-import { StashPanel } from "./StashPanel";
+import { StashBody, stashHere } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
 import { diffViews, type Toast, type View } from "./view";
+
+/** 钉住的追踪块、未读块里的页签 */
+type TrackTab = "todo" | "jobs" | "database";
+type UnreadTab = "messages" | "news" | "police";
+/** 不再开全屏神经界面（第十二节第 10 条）：物品栏进 H 武器块，义体进 A 生物监测块；
+ * 物品栏精简（用户定的方案 A）：制作页签去掉，武器块只剩物品栏 */
+type GearTab = "inventory";
+type BioTab = "character" | "cyberware";
 
 function isTyping(target: EventTarget | null): boolean {
   return (
@@ -137,27 +147,23 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
-  // 神经界面开着的那一页（只剩物品栏、制作、义体）；I 键重开时回到上次看的那页
-  const [neural, setNeural] = useState<NeuralPage | null>(null);
-  const lastPage = useRef<NeuralPage>("inventory");
-  const closeNeural = useCallback(() => setNeural(null), []);
-  // 视野里就地展开（第十二节）：四角的块、在场的人、左右抽屉，同一时间只展开一处
+  // 物品栏、制作、义体不再开全屏（第十二节第 10 条），各自停在块里的哪个页签；收起后再钉住还是那个
+  const [gearTab, setGearTab] = useState<GearTab>("inventory");
+  const [bioTab, setBioTab] = useState<BioTab>("character");
+  // 视野里就地展开（第十二节第 7 条）：四角的块、在场的人，同一时间只展开一处；
+  // 钉住（点块或按 P/J/T）时块里放完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
-  // 左右抽屉各自停在哪一页；收起后再展开还是那页
-  const [leftPage, setLeftPage] = useState<LeftPage>("character");
-  const [rightPage, setRightPage] = useState<RightPage>("journal");
+  // 钉住的追踪块、未读块各自停在哪个页签；收起后再钉住还是那个
+  const [trackTab, setTrackTab] = useState<TrackTab>("todo");
+  const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
   // 地图浮层（M）
   const [atMap, setAtMap] = useState(false);
   const closeMap = useCallback(() => setAtMap(false), []);
-  const closeDrawers = useCallback(
-    () => setExpand((cur) => (cur?.id.startsWith("drawer:") ? null : cur)),
-    [],
-  );
-  // 商店、义体医生、存放、超梦叠在神经界面上面（U3 商店等改走 F 交互）
+  const closePinned = useCallback(() => setExpand(null), []);
+  // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）；存放不再弹窗，进右上角地点块（用户定的）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
-  const [atStash, setAtStash] = useState(false);
   const [atBraindance, setAtBraindance] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
@@ -222,55 +228,55 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 打开神经界面的一页：收起展开的块和地图浮层
-  const openNeural = useCallback((page: NeuralPage) => {
-    lastPage.current = page;
-    setExpand(null);
-    setAtMap(false);
-    setNeural(page);
-  }, []);
+  // O 物品栏、K 制作：钉住 H 武器块并切到那个页签；同一页签已经钉着就收起（第十二节第 10 条）
+  const showGear = useCallback(
+    (tab: GearTab) => {
+      setAtMap(false);
+      setGearTab(tab);
+      setExpand((cur) =>
+        cur?.id === "weapon" && cur.pinned && gearTab === tab
+          ? null
+          : { id: "weapon", pinned: true },
+      );
+    },
+    [gearTab],
+  );
   const openMap = useCallback(() => {
     setExpand(null);
     setAtMap(true);
   }, []);
-  // 钉住一侧抽屉并切到那一页；按键打开时同一页已经钉着就收起
-  const pinnedSide = (side: DrawerSide) =>
-    expand?.id === drawerId(side) && expand.pinned ? side : null;
-  const leftPinned = pinnedSide("left") !== null;
-  const rightPinned = pinnedSide("right") !== null;
-  const showLeft = useCallback(
-    (page: LeftPage, toggle = false) => {
-      const same = toggle && leftPinned && leftPage === page;
-      setLeftPage(page);
-      setExpand(same ? null : { id: drawerId("left"), pinned: true });
-    },
-    [leftPinned, leftPage],
-  );
-  const showRight = useCallback(
-    (page: RightPage, toggle = false) => {
-      const same = toggle && rightPinned && rightPage === page;
-      setRightPage(page);
-      setExpand(same ? null : { id: drawerId("right"), pinned: true });
-    },
-    [rightPinned, rightPage],
-  );
-  // 右抽屉停在消息页时未读私信标成已读，不调用模型
+  // 钉住一个块（P 生物监测、J 追踪、T 未读）；按键时同一块已经钉着就收起
+  const pinBlock = useCallback((id: string) => {
+    setAtMap(false);
+    setExpand((cur) => (cur?.id === id && cur.pinned ? null : { id, pinned: true }));
+  }, []);
+  const showTrack = useCallback((tab: TrackTab) => {
+    setTrackTab(tab);
+    setExpand({ id: "track", pinned: true });
+  }, []);
+  // 未读块钉在消息页签时未读私信标成已读，不调用模型
   const unread = view?.phone.unread ?? 0;
-  const rightOpen = expand?.id === drawerId("right");
+  const unreadPinned = expand?.id === "unread" && expand.pinned;
   const reading = useRef(false);
   useEffect(() => {
-    if (!rightOpen || rightPage !== "messages" || unread === 0 || reading.current) return;
+    if (!unreadPinned || unreadTab !== "messages" || unread === 0 || reading.current) return;
     reading.current = true;
     void act({ type: "readMessages" }, "phone").finally(() => {
       reading.current = false;
     });
-  }, [rightOpen, rightPage, unread, act]);
-  // 切到消息页的新闻栏：只把新闻频道的未读标成已读；警方频段和街头传闻在 U4 接
+  }, [unreadPinned, unreadTab, unread, act]);
+  // 切到消息页的新闻栏：只把新闻频道的未读标成已读；街头传闻在 U4 接
   const unreadNews = view?.phone.feedUnread.news;
   const readNews = useCallback(async () => {
     if (!unreadNews || unreadNews.length === 0) return;
     await act({ type: "readMessages", feed: [...unreadNews] }, "news");
   }, [act, unreadNews]);
+  // 切到警用频段：只把这个频道的未读标成已读（第六节第 1 条）
+  const unreadPolice = view?.phone.feedUnread.police;
+  const readPolice = useCallback(async () => {
+    if (!unreadPolice || unreadPolice.length === 0) return;
+    await act({ type: "readMessages", feed: [...unreadPolice] }, "police");
+  }, [act, unreadPolice]);
   // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
   const bdKey = view?.braindance.active
     ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
@@ -329,9 +335,9 @@ export function StoryScreen() {
     [offers, busy, send, version],
   );
 
-  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，I 神经界面（回到上次那页），P/O/K/J/M/T 直达各页，
+  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，P/O/K/J/T 钉住对应的四角块，M 地图，
   // Z 通知记录，按住 Tab 扫描。有面板开着时一律不响应，Esc 由面板栈交给最上面那层；
-  // 神经界面里的 Q/E 翻页和 I 关闭由 NeuralInterface 自己管
+  // 全屏神经界面和 I 键已去掉（第十二节第 10 条）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
@@ -345,22 +351,19 @@ export function StoryScreen() {
       }
       if (e.repeat) return;
       const k = e.key.toLowerCase();
-      const page = (PAGE_KEYS as Readonly<Record<string, NeuralPage | undefined>>)[k];
-      if (k === "i") {
+      // 不再有全屏神经界面（第十二节第 10 条）：O 物品栏钉在 H 武器块里；K 制作随制作页签去掉（物品栏精简，方案 A）
+      if (k === "o") {
         e.preventDefault();
-        openNeural(lastPage.current);
-      } else if (page) {
-        e.preventDefault();
-        openNeural(page);
+        showGear("inventory");
       } else if (k === "p") {
         e.preventDefault();
-        showLeft("character", true);
+        pinBlock("bio");
       } else if (k === "j") {
         e.preventDefault();
-        showRight("journal", true);
+        pinBlock("track");
       } else if (k === "t") {
         e.preventDefault();
-        showRight("messages", true);
+        pinBlock("unread");
       } else if (k === "m") {
         e.preventDefault();
         openMap();
@@ -389,17 +392,7 @@ export function StoryScreen() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [
-    choose,
-    pickedId,
-    offers?.rolled,
-    story.failure,
-    story.spend,
-    openNeural,
-    showLeft,
-    showRight,
-    openMap,
-  ]);
+  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, showGear, pinBlock, openMap]);
 
   if (query.isPending) {
     return (
@@ -431,6 +424,147 @@ export function StoryScreen() {
     setPicked(null);
   };
 
+  // 钉住块时块里放的完整内容（第十二节第 7 条）：还用 U2 的页面主体，只是放进四角那一列
+  // A 生物监测：人物和义体两个页签（第十二节第 10 条），义体不再开全屏
+  const characterFull = (
+    <div className={neuralStyles.pinBody}>
+      <PinTabs<BioTab>
+        tabs={[
+          ["character", "人物", view.character.attributePoints],
+          ["cyberware", "义体", view.cyberware.filter((c) => c.broken).length],
+        ]}
+        value={bioTab}
+        onChange={setBioTab}
+      />
+      {/* 按页签重新挂载，切页签时新内容淡入（第十二节第 13 条） */}
+      <div key={bioTab} className={neuralStyles.pinPane}>
+        {bioTab === "cyberware" ? (
+          <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
+        ) : (
+          <CharacterPage
+            view={view}
+            onSpend={
+              busy || offers?.rolled
+                ? undefined
+                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
+            }
+            onHabit={
+              busy
+                ? undefined
+                : (action, text) => void act({ type: "habit", action, text }, "habit")
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+  // H 武器块往上长，页签放在底下挨着武器格，同 G 未读（第十二节第 10 条）
+  // 物品栏精简（用户定的方案 A）：制作页签和整套外观去掉，武器块里只放物品栏
+  const gearTabs = (
+    <PinTabs<GearTab> tabs={[["inventory", "物品栏", 0]]} value={gearTab} onChange={setGearTab} />
+  );
+  const gearFull = (
+    <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
+      <InventoryPage
+        view={view}
+        onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
+        onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
+        onMod={
+          busy
+            ? undefined
+            : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
+        }
+        onShop={setAtShop}
+        onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
+      />
+    </div>
+  );
+  // 未读块往上长，页签放在底下挨着常态那一行，切频道时手不用伸到块顶上（用户定的）
+  const unreadTabs = (
+    <PinTabs<UnreadTab>
+      tabs={[
+        ["messages", "消息", view.phone.unread],
+        ["news", "新闻", view.phone.feedUnread.news.length],
+        ["police", "警用频段", view.phone.feedUnread.police.length],
+      ]}
+      value={unreadTab}
+      onChange={(t) => {
+        setUnreadTab(t);
+        if (t === "news") void readNews();
+        if (t === "police") void readPolice();
+      }}
+    />
+  );
+  const unreadFull = (
+    <div key={unreadTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
+      {unreadTab === "police" ? (
+        <PoliceBody view={view} onMap={openMap} />
+      ) : (
+        <MessagesPage
+          key={unreadTab}
+          view={view}
+          initialTab={unreadTab === "news" ? "news" : "dm"}
+          hideTabs
+          onNews={() => void readNews()}
+          onReply={
+            busy
+              ? undefined
+              : (id) => {
+                  story.setDraft({ replyTo: id });
+                  closePinned();
+                }
+          }
+        />
+      )}
+    </div>
+  );
+  const trackFull = (
+    <div className={neuralStyles.pinBody}>
+      <PinTabs<TrackTab>
+        tabs={[
+          ["todo", "待办", 0],
+          ["jobs", "委托", view.jobs.list.filter((j) => j.status === "offered").length],
+          ["database", "数据库", view.shards.unread],
+        ]}
+        value={trackTab}
+        onChange={setTrackTab}
+      />
+      <div key={trackTab} className={neuralStyles.pinPane}>
+        {trackTab !== "database" ? (
+          <JournalPage
+            key={trackTab}
+            part={trackTab}
+            view={view}
+            onAccept={
+              busy || offers?.rolled
+                ? undefined
+                : (id) => act({ type: "acceptJob", id }, "accept", true)
+            }
+            onBraindance={() => setAtBraindance(true)}
+          />
+        ) : (
+          <DatabasePage
+            view={view}
+            onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
+            onEdit={
+              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
+            }
+            onEnd={
+              busy || view.death || view.ended
+                ? undefined
+                : (how: StoryEnd, epitaph: string | undefined) =>
+                    act(
+                      { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
+                      "chronicle",
+                      true,
+                    )
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+
   /** 人性干扰的强度：0 没有，3 最强；人性归零、发作和记忆空白时拉满 */
   const glitch =
     view.humanity.current === 0 || view.psychosis.episodeHere || view.psychosis.blackoutOpen
@@ -454,171 +588,71 @@ export function StoryScreen() {
       <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
       <div className={styles.glitch} data-level={glitch} aria-hidden />
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
-      <BioMonitor
-        view={view}
-        peek={peek}
-        onCharacter={() => showLeft("character")}
-        onCyberware={() => openNeural("cyberware")}
-      />
-      <Present view={view} scan={scan} peek={peek} onContacts={() => showLeft("contacts")} />
-      <Unread view={view} peek={peek} onMessages={() => showRight("messages")} />
-      <Zone view={view} peek={peek} onMap={openMap} />
-      {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
-      <Track view={view} peek={peek} onJournal={() => showRight("journal")}>
-        {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
-      </Track>
-      <Weapon
-        view={view}
-        peek={peek}
-        onInventory={() => openNeural("inventory")}
-        onQuickhack={
-          busy
-            ? undefined
-            : (name) =>
-                story.setDraft({
-                  text: `${story.draft.text}${story.draft.text ? " " : ""}用快速破解「${name}」`,
-                })
-        }
-      />
+      {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
+      <CornerSide side="left">
+        <BioMonitor view={view} peek={peek} full={characterFull} wide={bioTab === "cyberware"} />
+        {/* 档案里的「扫描」：点一下立刻扫，不调模型；回合进行中不让点（用户定的，计划第十二节第 14 条） */}
+        <Present
+          view={view}
+          scan={scan}
+          peek={peek}
+          onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+        />
+        <Unread
+          view={view}
+          peek={peek}
+          full={unreadFull}
+          tabs={unreadTabs}
+          wide={unreadTab === "messages"}
+        />
+      </CornerSide>
+      <CornerSide side="right">
+        {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
+        {/* 存放进地点块（用户定的）：能存放的地点才出，不再弹窗 */}
+        <Zone
+          view={view}
+          onMap={openMap}
+          peek={peek}
+          stash={
+            stashHere(view) ? (
+              <StashBody
+                view={view}
+                onMove={
+                  busy
+                    ? undefined
+                    : (action, item, where) =>
+                        void act({ type: "stash", action, item, where }, "gear")
+                }
+              />
+            ) : undefined
+          }
+        />
+        {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
+        <Track view={view} peek={peek} full={trackFull}>
+          {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
+        </Track>
+        <Weapon
+          view={view}
+          peek={peek}
+          full={gearFull}
+          tabs={gearTabs}
+          onQuickhack={
+            busy
+              ? undefined
+              : (name) =>
+                  story.setDraft({
+                    text: `${story.draft.text}${story.draft.text ? " " : ""}用快速破解「${name}」`,
+                  })
+          }
+        />
+      </CornerSide>
       {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
-      {/* 神经界面（计划第五节第 4 条）：九页，Q/E 翻页，I 或 Esc 关；商店、义体医生、存放、超梦叠在上面 */}
-      {neural && (
-        <NeuralInterface
-          page={neural}
-          eddies={view.money.eddies}
-          badges={{}}
-          onPage={openNeural}
-          onClose={closeNeural}
-        >
-          {neural === "cyberware" && (
-            <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
-          )}
-          {neural === "inventory" && (
-            <InventoryPage
-              view={view}
-              onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
-              onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
-              onOutfit={busy ? undefined : (action) => void act({ type: "outfit", action }, "gear")}
-              onMod={
-                busy
-                  ? undefined
-                  : (action, weapon, mod) =>
-                      void act({ type: "modWeapon", action, weapon, mod }, "gear")
-              }
-              onShop={setAtShop}
-              onStash={() => setAtStash(true)}
-              onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
-            />
-          )}
-          {neural === "crafting" && (
-            <CraftingPage
-              view={view}
-              onCraft={
-                busy ? undefined : (action, id) => void act({ type: "craft", action, id }, "craft")
-              }
-            />
-          )}
-        </NeuralInterface>
-      )}
-      {/* 边缘抽屉（第十二节）：左边人物、联系人，右边日志、消息、数据库；贴边停一下滑出，点一下钉住 */}
-      <EdgeDrawer<LeftPage>
-        side="left"
-        label="人物和联系人"
-        line="var(--cp-red)"
-        tabs={[
-          ["character", "人物", view.character.attributePoints],
-          ["contacts", "联系人", 0],
-        ]}
-        page={leftPage}
-        peek={peek}
-        onPage={(p) => showLeft(p)}
-      >
-        {leftPage === "character" ? (
-          <CharacterPage
-            view={view}
-            onSpend={
-              busy || offers?.rolled
-                ? undefined
-                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
-            }
-            onHabit={
-              busy
-                ? undefined
-                : (action, text) => void act({ type: "habit", action, text }, "habit")
-            }
-          />
-        ) : (
-          <ContactsPage
-            view={view}
-            onSquad={
-              busy ? undefined : (action, npc) => void act({ type: "squad", action, npc }, "squad")
-            }
-          />
-        )}
-      </EdgeDrawer>
-      <EdgeDrawer<RightPage>
-        side="right"
-        label="日志、消息和数据库"
-        line="var(--cp-cyan)"
-        tabs={[
-          ["journal", "日志", 0],
-          ["messages", "消息", view.phone.unread],
-          ["database", "数据库", view.shards.unread],
-        ]}
-        page={rightPage}
-        peek={peek}
-        onPage={(p) => showRight(p)}
-      >
-        {rightPage === "journal" && (
-          <JournalPage
-            view={view}
-            onAccept={
-              busy || offers?.rolled
-                ? undefined
-                : (id) => act({ type: "acceptJob", id }, "accept", true)
-            }
-            onBraindance={() => setAtBraindance(true)}
-          />
-        )}
-        {rightPage === "messages" && (
-          <MessagesPage
-            view={view}
-            onNews={() => void readNews()}
-            onReply={
-              busy
-                ? undefined
-                : (id) => {
-                    story.setDraft({ replyTo: id });
-                    closeDrawers();
-                  }
-            }
-          />
-        )}
-        {rightPage === "database" && (
-          <DatabasePage
-            view={view}
-            onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
-            onEdit={
-              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
-            }
-            onEnd={
-              busy || view.death || view.ended
-                ? undefined
-                : (how: StoryEnd, epitaph: string | undefined) =>
-                    act(
-                      { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
-                      "chronicle",
-                      true,
-                    )
-            }
-          />
-        )}
-      </EdgeDrawer>
       {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
       {atMap && (
         <MapLayer onClose={closeMap}>
           <MapBody
             view={view}
+            onClose={closeMap}
             onTravel={
               busy || offers?.rolled
                 ? undefined
@@ -709,7 +743,7 @@ export function StoryScreen() {
                 {view.ended.epitaph && `「${view.ended.epitaph}」`}
                 这份存档只能回看，角色已经进了主菜单的传说名册。
               </span>
-              <Button onClick={() => showRight("database")}>看履历</Button>
+              <Button onClick={() => showTrack("database")}>看履历</Button>
             </div>
           )}
           <InputBar
@@ -739,10 +773,11 @@ export function StoryScreen() {
           />
           {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
           <KeyBar>
-            <KeyHint keyId="key.i" label="神经界面" onClick={() => openNeural(lastPage.current)} />
-            <KeyHint keyId="key.j" label="日志" onClick={() => showRight("journal", true)} />
+            <KeyHint keyId="key.p" label="人物" onClick={() => pinBlock("bio")} />
+            <KeyHint keyId="key.o" label="物品栏" onClick={() => showGear("inventory")} />
+            <KeyHint keyId="key.j" label="日志" onClick={() => pinBlock("track")} />
             <KeyHint keyId="key.m" label="地图" onClick={openMap} />
-            <KeyHint keyId="key.t" label="消息" onClick={() => showRight("messages", true)} />
+            <KeyHint keyId="key.t" label="消息" onClick={() => pinBlock("unread")} />
             <KeyHint keyId="key.tab" label="扫描（长按）" />
             <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
           </KeyBar>
@@ -839,17 +874,6 @@ export function StoryScreen() {
                 }
           }
           onClose={() => setAtDoc(false)}
-        />
-      )}
-      {atStash && (
-        <StashPanel
-          view={view}
-          onMove={
-            busy
-              ? undefined
-              : (action, item, where) => void act({ type: "stash", action, item, where }, "gear")
-          }
-          onClose={() => setAtStash(false)}
         />
       )}
       {buyingHome &&

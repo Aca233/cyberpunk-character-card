@@ -1,11 +1,12 @@
 import { characterRules } from "@cp/core";
-import { Fragment, type ReactNode, useState } from "react";
+import { type CSSProperties, Fragment, type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
 import { DIFFICULTY_LABELS } from "../../labels";
 import { ActionButton } from "../../ui/ActionButton";
-import { Asset } from "../../ui/Asset";
+import { Asset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
+import { itemArtOf } from "./art";
 import { ChronicleBody, type StoryEnd } from "./ChroniclePanel";
 import { FactionsBody } from "./FactionsPanel";
 import { GigsPanel } from "./GigsPanel";
@@ -14,7 +15,8 @@ import { countdown, JournalBody } from "./Journal";
 import { MemoryBody, type MemoryEdit } from "./MemoryPanel";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
-import { Avatar, PhoneBody, Profile } from "./Phone";
+import { Avatar, PhoneBody, UnreadBadge } from "./Phone";
+import { Profile } from "./Profile";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -26,6 +28,11 @@ import type { View } from "./view";
  */
 
 type Attribute = keyof View["character"]["attributes"];
+
+/** 物品格九宫格切法，同四角在场的人用的 map.filterCell*（计划第九节） */
+const CELL_SLICE = [20, 30, 30, 20] as const;
+/** 背包图标格（计划第十二节第 9 条）：dialog.iconSlot 四边保留 16 原图像素，中间拉伸，保留切角 */
+const ICON_SLOT_SLICE = 16;
 
 const ATTRS: readonly (readonly [Attribute, string, AssetId])[] = [
   ["body", "肉体", "attr.body"],
@@ -215,7 +222,145 @@ export function CharacterPage({
   );
 }
 
-/** 义体（原作「操作系统」那一页）：已装义体、损坏、断肢；义体医生的入口暂挂在这里，U3 走 F */
+type CyberSlot = View["cyberware"][number]["slot"];
+type CyberPart = View["cyberware"][number];
+
+/** 部位名照原作 2.0 义体医生那一页上写的字（额皮质、胳臂、面部、手掌、表皮系统），和 core 的 SLOT_LABELS 叫法不全一样 */
+const CYBER_LABELS: Readonly<Record<CyberSlot, string>> = {
+  frontalCortex: "额皮质",
+  eyes: "面部",
+  nervous: "神经系统",
+  os: "操作系统",
+  circulatory: "循环系统",
+  integumentary: "表皮系统",
+  skeleton: "骨骼",
+  hands: "手掌",
+  arms: "胳臂",
+  legs: "腿部",
+};
+
+/**
+ * 义体页的部位组，位置和每组格数照原作 2.0 义体医生那一页（第五节第 4 条）：
+ * 左边额皮质 3、胳臂 1、骨骼 3、神经系统 3、表皮系统 3，右边操作系统 1、面部 2、手掌 2、循环系统 3、腿部 1。
+ * 第三个数是这组离人体往外错开几格：原作第二、三行顺着张开的胳膊往外排，其余贴着人体。
+ * 我们一个部位只装一件，第一格放装着的那件，多出来的格子只是照原作的样子画上（用户选的「照原作格数」）
+ */
+const CYBER_SIDES: readonly (readonly (readonly [CyberSlot, number, number])[])[] = [
+  [
+    ["frontalCortex", 3, 0],
+    ["arms", 1, 0.7],
+    ["skeleton", 3, 1.4],
+    ["nervous", 3, 0],
+    ["integumentary", 3, 0],
+  ],
+  [
+    ["os", 1, 0],
+    ["eyes", 2, 0.6],
+    ["hands", 2, 1.3],
+    ["circulatory", 3, 0],
+    ["legs", 1, 0],
+  ],
+];
+
+/** 中间人体是原作 man_body 图集里同尺寸的几张分层图：选中哪个部位就显示哪层，其余部位用皮肤那层 */
+const BODY_LAYERS: readonly AssetId[] = [
+  "cyber.bodySkin",
+  "cyber.bodySkeleton",
+  "cyber.bodyNervous",
+  "cyber.bodyCirculatory",
+];
+const BODY_OF: Readonly<Record<CyberSlot, AssetId>> = {
+  frontalCortex: "cyber.bodyNervous",
+  eyes: "cyber.bodyNervous",
+  nervous: "cyber.bodyNervous",
+  os: "cyber.bodyNervous",
+  circulatory: "cyber.bodyCirculatory",
+  integumentary: "cyber.bodySkin",
+  skeleton: "cyber.bodySkeleton",
+  hands: "cyber.bodySkeleton",
+  arms: "cyber.bodySkeleton",
+  legs: "cyber.bodySkeleton",
+};
+
+/** 一格的底子：原作切角底、金色电路纹、外框和左边的竖条，颜色由 CSS 变量给 */
+function CyberCellFace() {
+  return (
+    <>
+      <NineSlice
+        id="cyber.cellShape"
+        tint="rgb(14 14 23 / 88%)"
+        slice={0}
+        className={neural.cellSquare}
+      />
+      <NineSlice
+        id="cyber.cellTexture"
+        tint="var(--cell-texture)"
+        slice={0}
+        className={neural.cellSquare}
+      />
+      <NineSlice
+        id="cyber.cellFrame"
+        tint="var(--cell-line)"
+        slice={0}
+        className={neural.cellSquare}
+      />
+      <NineSlice
+        id="cyber.cellRarity"
+        tint="var(--cell-strip)"
+        slice={0}
+        className={neural.cellStrip}
+      />
+    </>
+  );
+}
+
+/**
+ * 人性条：放在原作义体容量条的位置（用户选的「只要左边人性」）。
+ * 刻度是原作 cw_barbg，填满的部分是同一张图染亮色、按当前人性占上限的比例从下往上露出来
+ */
+function HumanityGauge({ humanity }: { readonly humanity: View["humanity"] }) {
+  const fill = humanity.cap > 0 ? Math.min(1, Math.max(0, humanity.current / humanity.cap)) : 0;
+  return (
+    <div
+      className={neural.gauge}
+      style={{ "--fill": fill } as CSSProperties}
+      title={`人性 ${humanity.current}/${humanity.cap} · ${humanity.stageLabel}`}
+    >
+      <span className={neural.gaugeHead}>人性</span>
+      <span className={neural.gaugeTrack}>
+        <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40 / 14%)" slice={0} />
+        <span className={neural.gaugeFill}>
+          <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40)" slice={0} />
+        </span>
+        {/* 原作顶上是上限：右边一块实心黄牌，左边三道越来越短的线收进刻度 */}
+        <span className={neural.gaugeTop}>
+          <span className={neural.gaugeFan}>
+            {[100, 72, 48].map((w) => (
+              <span key={w} style={{ width: `${w}%` }}>
+                <NineSlice id="cyber.gaugeBar" tint="rgb(255 190 40)" slice={0} />
+              </span>
+            ))}
+          </span>
+          <span className={neural.gaugeTag}>
+            <NineSlice id="cyber.gaugeLabel" tint="rgb(255 190 40)" slice={4} />
+            <b>{humanity.cap}</b>
+          </span>
+        </span>
+        {/* 原作中间是当前值：一道红线压在刻度上，左边一块空心红牌 */}
+        <span className={neural.gaugeLevel}>
+          <NineSlice id="cyber.gaugeBar" tint="var(--cp-red)" slice={0} />
+          <span className={neural.gaugeNow}>
+            <NineSlice id="cyber.gaugeLabelStroke" tint="var(--cp-red)" slice={4} />
+            <b>{humanity.current}</b>
+          </span>
+        </span>
+      </span>
+      <small className={neural.gaugeStage}>{humanity.stageLabel}</small>
+    </div>
+  );
+}
+
+/** 义体（原作义体医生那一页的排法）：已装义体、损坏、断肢；义体医生的入口暂挂在这里，U3 走 F */
 export function CyberwarePage({
   view,
   onRipperdoc,
@@ -223,33 +368,133 @@ export function CyberwarePage({
   readonly view: View;
   readonly onRipperdoc: () => void;
 }) {
-  return (
-    <div className={neural.split}>
-      <Panel as="section" title="已装义体" line="var(--cp-cyan)">
-        {view.cyberware.length === 0 ? (
-          <p className={styles.dim}>没装义体。</p>
-        ) : (
-          <ul className={styles.cyberList}>
-            {view.cyberware.map((c) => (
-              <li key={c.id} className={styles.cyberItem} data-broken={c.broken || undefined}>
-                <span>{c.name}</span>
-                <small className={styles.cyberSlot}>
-                  {c.slotLabel}
-                  {c.rarityLabel ? ` · ${c.rarityLabel}` : ""}
-                  {c.broken && " · 打坏了，修好前用不了"}
-                </small>
-                {c.ability && (
-                  <p className={styles.cyberAbility}>
-                    {c.ability}
-                    {c.bonusText && `（${c.bonusText}）`}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
+  const bySlot = new Map<CyberSlot, CyberPart>(view.cyberware.map((c) => [c.slot, c]));
+  /** 悬停或聚焦的那格才弹详情（原作没有常驻的详情栏）；点一下钉住，移开也不收，再点收起 */
+  const [hovered, setHovered] = useState<CyberSlot | null>(null);
+  const [pinned, setPinned] = useState<CyberSlot | null>(null);
+  const shown = hovered ?? pinned;
+  const layer = shown ? BODY_OF[shown] : "cyber.bodySkin";
+
+  /** 一个部位组：红字部位名，下面一排格子；第一格是装着的义体 */
+  const group = ([slot, count, shift]: readonly [CyberSlot, number, number]) => {
+    const part = bySlot.get(slot);
+    const label = CYBER_LABELS[slot];
+    return (
+      <li key={slot} className={neural.cyberGroup} style={{ "--shift": shift } as CSSProperties}>
+        <span className={neural.cyberLabel}>{label}</span>
+        <span className={neural.cyberCells}>
+          <button
+            type="button"
+            className={neural.cyberCell}
+            aria-pressed={slot === pinned}
+            aria-label={`${label}：${part ? part.name : "空"}`}
+            data-empty={!part || undefined}
+            data-broken={part?.broken || undefined}
+            onMouseEnter={() => setHovered(slot)}
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(slot)}
+            onBlur={() => setHovered(null)}
+            onClick={() => setPinned((p) => (p === slot ? null : slot))}
+          >
+            <CyberCellFace />
+            {part && itemArtOf(part.id) ? (
+              <Asset
+                id={itemArtOf(part.id) as AssetId}
+                alt={part.name}
+                className={neural.cyberArt}
+              />
+            ) : (
+              part && <span className={neural.cyberCellName}>{part.name}</span>
+            )}
+            {part?.broken && (
+              <Asset
+                id="cyber.disabled"
+                tint="var(--cp-danger)"
+                height={16}
+                alt="打坏了"
+                className={neural.cyberBroken}
+              />
+            )}
+          </button>
+          {Array.from({ length: count - 1 }, (_, i) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: 只是照原作格数画的空格子，没有别的身份
+              key={i}
+              className={neural.cyberCell}
+              data-empty
+              data-extra
+              aria-hidden
+            >
+              <CyberCellFace />
+            </span>
+          ))}
+        </span>
+        {shown === slot && (
+          <div className={neural.cyberTip} role="tooltip">
+            <Panel
+              as="section"
+              title={label}
+              line={part?.broken ? "var(--cp-red)" : "var(--cp-yellow)"}
+            >
+              {part ? (
+                <>
+                  <h3 className={neural.cyberName} data-broken={part.broken || undefined}>
+                    {part.name}
+                  </h3>
+                  <dl className={styles.facts}>
+                    {part.rarityLabel && (
+                      <>
+                        <dt>稀有度</dt>
+                        <dd>{part.rarityLabel}</dd>
+                      </>
+                    )}
+                    <dt>状态</dt>
+                    <dd data-tone={part.broken ? "bad" : undefined}>
+                      {part.broken ? "打坏了，修好前用不了" : "正常"}
+                    </dd>
+                    {part.bonusText && (
+                      <>
+                        <dt>加成</dt>
+                        <dd>{part.bonusText}</dd>
+                      </>
+                    )}
+                  </dl>
+                  {part.ability && <p className={styles.cyberAbility}>{part.ability}</p>}
+                </>
+              ) : (
+                <p className={styles.dim}>这个部位没装义体。</p>
+              )}
+            </Panel>
+          </div>
         )}
-      </Panel>
-      <div className={neural.stack}>
+      </li>
+    );
+  };
+
+  return (
+    <div className={neural.cyberScreen}>
+      <HumanityGauge humanity={view.humanity} />
+      <ul className={neural.cyberSide} data-side="left" aria-label="头部和躯干">
+        {CYBER_SIDES[0]?.map(group)}
+      </ul>
+      <div className={neural.cyberBody} aria-hidden>
+        {BODY_LAYERS.map((id) => (
+          <Asset
+            key={id}
+            id={id}
+            className={neural.cyberBodyLayer}
+            style={{ opacity: id === layer ? 1 : 0 }}
+          />
+        ))}
+      </div>
+      <ul className={neural.cyberSide} data-side="right" aria-label="操作系统和四肢">
+        {CYBER_SIDES[1]?.map(group)}
+      </ul>
+      {/* 原作右下角是空的；断肢和义体医生入口收在这里，不挡人体和部位格 */}
+      <div className={neural.cyberCorner}>
+        <small className={neural.cyberCount}>
+          已装 {view.cyberware.length}/{Object.keys(CYBER_LABELS).length}
+        </small>
         {view.health.lostLimbs.length > 0 && (
           <Panel as="section" title="断肢" line="var(--cp-red)">
             <p className={styles.lostLimbs}>
@@ -288,355 +533,334 @@ function SubTabs<T extends string>({
   );
 }
 
-/** 物品栏（O）：武器格、快捷栏、穿着和整套外观、背包；商店、存放、买公寓的入口暂挂在这里，U3 走 F */
+/**
+ * 物品栏（O）：武器格、穿着、背包、这里；商店、存放、买公寓的入口暂挂在这里，U3 走 F。
+ * 物品栏精简（用户定的方案 A）：快捷栏不单列，治疗品和手雷带次数排进背包；整套外观和升级档不再显示
+ */
 export function InventoryPage({
   view,
   onEquip,
   onUnequip,
-  onOutfit,
   onMod,
   onShop,
-  onStash,
   onBuyHome,
 }: {
   readonly view: View;
   /** 换装备；正在生成时不传，按钮不显示 */
   readonly onEquip?: ((id: string) => void) | undefined;
   readonly onUnequip?: ((id: string) => void) | undefined;
-  /** 整套外观：save 存下身上穿着的，wear 照存下的换好 */
-  readonly onOutfit?: ((action: "save" | "wear") => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   readonly onShop: (id: string) => void;
-  readonly onStash: () => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
   readonly onBuyHome?: ((id: string) => void) | undefined;
 }) {
   const { inventory } = view;
-  const backpack = Object.entries(inventory.backpack);
+  // 方案 A：仅合并显示，保留存档中的快捷栏与剩余次数；同款物品合并数量。
+  const quickItems = [inventory.healing, inventory.grenade].flatMap((item) => (item ? [item] : []));
+  const carried = { ...inventory.backpack };
+  for (const item of quickItems) carried[item.id] = (carried[item.id] ?? 0) + 1;
+  const backpack = Object.entries(carried);
   const itemName = (id: string) => view.names.items[id] ?? id;
-  const hasStash = view.safehouse.homes.length > 0 || view.safehouse.trunks.length > 0;
-  const places = view.shops.length > 0 || view.safehouse.forSale.length > 0 || hasStash;
+  // 存放挪到右上角地点块（用户定的），这里只剩商店和买公寓
+  const places = view.shops.length > 0 || view.safehouse.forSale.length > 0;
 
   return (
-    <div className={neural.split}>
-      <div className={neural.stack}>
-        <Panel as="section" title="武器" line="var(--cp-red)">
-          <ol className={styles.gear} aria-label="武器格">
-            {WEAPON_SLOTS.map((n) => {
-              const id = inventory.weapons[n - 1] ?? null;
-              const active = inventory.active === n - 1;
-              return (
-                <li key={n} data-active={active || undefined} data-empty={id === null || undefined}>
-                  <span className={styles.slotNum}>
-                    <Asset id={SLOT_KEYS[n]} tint="currentColor" height={20} alt={String(n)} />
-                  </span>
-                  <span>
-                    {id === null ? "空" : itemName(id)}
-                    {id !== null && inventory.tuned[id] && (
-                      <small className={styles.dim}> · {inventory.tuned[id]}</small>
-                    )}
-                    {id !== null &&
-                      (inventory.mods[id] ?? []).map((m) => (
-                        <small key={m.slot} className={styles.dim}>
-                          {" · "}
-                          {itemName(m.id)}
-                          {onMod && (
-                            <ActionButton
-                              label={`从${itemName(id)}上拆下${itemName(m.id)}`}
-                              onClick={() => onMod("detach", id, m.id)}
-                            >
-                              ×
-                            </ActionButton>
-                          )}
-                        </small>
-                      ))}
-                  </span>
-                  <span className={styles.gearTools}>
-                    {active && <small>手持</small>}
-                    {id !== null && !active && onEquip && (
-                      <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
-                    )}
-                    {id !== null && onUnequip && (
-                      <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </Panel>
-        {(inventory.healing || inventory.grenade) && (
-          <Panel as="section" title="快捷栏" line="var(--cp-yellow)">
-            <ul className={styles.backpack}>
-              {[inventory.healing, inventory.grenade].map(
-                (q) =>
-                  q && (
-                    <li key={q.id}>
-                      <span>
-                        {itemName(q.id)} {q.charges}/{q.max}
-                      </span>
-                      {onUnequip && (
-                        <ActionButton onClick={() => onUnequip(q.id)}>放回背包</ActionButton>
-                      )}
-                    </li>
-                  ),
-              )}
-            </ul>
-          </Panel>
-        )}
-        {(inventory.clothing.length > 0 || inventory.outfit.length > 0) && (
-          <Panel as="section" title="穿着" line="var(--cp-cyan)">
-            <ul className={styles.backpack}>
-              {inventory.clothing.map((c) => (
-                <li key={c.slot}>
-                  <span>
-                    <small className={styles.dim}>{c.label}</small> {itemName(c.id)}
-                  </span>
-                  {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
-                </li>
-              ))}
-            </ul>
-            {inventory.outfit.length > 0 && (
-              <p className={styles.dim}>
-                整套外观：
-                {inventory.outfit.map((o) => `${o.label} ${itemName(o.id)}`).join("、")}
-              </p>
-            )}
-            {onOutfit && (
-              <div className={styles.gearTools}>
-                <ActionButton
-                  disabled={inventory.clothing.length === 0}
-                  onClick={() => onOutfit("save")}
-                >
-                  存为整套外观
-                </ActionButton>
-                {inventory.outfit.length > 0 && (
-                  <ActionButton onClick={() => onOutfit("wear")}>换上整套外观</ActionButton>
+    <div className={neural.stack}>
+      {/* 计划第八节第 1 条：照原作物品栏，武器格在页顶横排占满宽，快捷栏、穿着、背包、这里在下面分两栏 */}
+      <Panel as="section" title="武器" line="var(--cp-red)">
+        <ol className={styles.gear} aria-label="武器格">
+          {WEAPON_SLOTS.map((n) => {
+            const id = inventory.weapons[n - 1] ?? null;
+            const active = inventory.active === n - 1;
+            const art = itemArtOf(id);
+            const rarity = id === null ? undefined : inventory.rarity[id];
+            return (
+              <li
+                key={n}
+                data-active={active || undefined}
+                data-empty={id === null || undefined}
+                data-rarity={rarity}
+                style={{ "--i": n - 1 } as CSSProperties}
+              >
+                {/* 计划第八节第 1 条：武器格照原作物品格做成大卡片，底和框用筛选格素材，手持的那把框亮成黄 */}
+                <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 72%)" slice={CELL_SLICE} />
+                {/* 手持的那把：卡片底下铺原作 shapes_bg_glow 的底光（计划第八节第 1 条） */}
+                {active && (
+                  <NineSlice
+                    id="panel.glowBottom"
+                    tint="var(--cp-yellow)"
+                    slice={0}
+                    className={styles.gearGlow}
+                  />
                 )}
-              </div>
-            )}
-          </Panel>
-        )}
-      </div>
-      <div className={neural.stack}>
-        <Panel as="section" title="背包" line="var(--cp-yellow)">
-          {backpack.length === 0 ? (
-            <p className={styles.dim}>空的。</p>
-          ) : (
-            <ul className={styles.backpack}>
-              {backpack.map(([id, count]) => {
-                const to = inventory.equipTo[id];
-                return (
-                  <li key={id}>
-                    <span>
-                      {itemName(id)}
-                      {count > 1 && <b> ×{count}</b>}
-                    </span>
-                    {to && onEquip && (
-                      <ActionButton onClick={() => onEquip(id)}>
-                        {to === "clothing" ? "穿上" : to === "quick" ? "放进快捷栏" : "装上"}
-                      </ActionButton>
-                    )}
-                    {onMod &&
-                      (inventory.modTargets[id] ?? []).map((w) => (
-                        <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
-                          装到{itemName(w)}
-                        </ActionButton>
-                      ))}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-        {places && (
-          <Panel as="section" title="这里" line="var(--cp-cyan)">
-            {view.shops.map((shop) => (
-              <div className={styles.docLink} key={shop.id}>
-                <Button onClick={() => onShop(shop.id)}>进{shop.name}</Button>
-              </div>
-            ))}
-            {hasStash && (
-              <div className={styles.docLink}>
-                <Button onClick={onStash}>存放</Button>
-              </div>
-            )}
-            {view.safehouse.forSale.map((home) => (
-              <div className={styles.docLink} key={home.id}>
-                <p className={styles.dim}>{home.locked ?? home.note}</p>
-                {onBuyHome && !home.locked && (
-                  <Button
-                    disabled={home.price > view.money.eddies}
-                    onClick={() => onBuyHome(home.id)}
-                  >
-                    买下{home.name}（{home.price.toLocaleString("en-US")} 欧元）
-                  </Button>
+                <NineSlice id="map.filterCellFg" tint="var(--gear-line)" slice={CELL_SLICE} />
+                {/* 左边一道原作 inventory4 的稀有度竖条，颜色按稀有度给 */}
+                {rarity && (
+                  <NineSlice
+                    id="cyber.cellRarity"
+                    tint="var(--rarity)"
+                    slice={0}
+                    className={styles.gearRarity}
+                  />
                 )}
-              </div>
-            ))}
-          </Panel>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** 制作（K）：零件数、能拆的东西、能升级的武器；结算都由代码按规则做，不调用模型 */
-export function CraftingPage({
-  view,
-  onCraft,
-}: {
-  readonly view: View;
-  /** dismantle 拆成零件，tune 给武器升一档稀有度；正在生成时不传，按钮不显示 */
-  readonly onCraft?: ((action: "dismantle" | "tune", id: string) => void) | undefined;
-}) {
-  const { inventory } = view;
-  const itemName = (id: string) => view.names.items[id] ?? id;
-  const dismantle = Object.entries(inventory.dismantle);
-  const tune = Object.entries(inventory.tune);
-
-  return (
-    <div className={neural.split}>
-      <Panel as="section" title={`拆解 · 零件 ${inventory.parts}`} line="var(--cp-yellow)">
-        {dismantle.length === 0 ? (
-          <p className={styles.dim}>没有能拆的东西。</p>
-        ) : (
-          <ul className={styles.backpack}>
-            {dismantle.map(([id, parts]) => (
-              <li key={id}>
-                <span>
-                  {itemName(id)}
-                  {(inventory.backpack[id] ?? 0) > 1 && <b> ×{inventory.backpack[id]}</b>}
-                  <small className={styles.dim}> · 得 {parts} 个零件</small>
+                {active && (
+                  <span className={styles.gearHeld}>
+                    <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                    <b>手持</b>
+                  </span>
+                )}
+                <span className={styles.slotNum}>
+                  <Asset id={SLOT_KEYS[n]} tint="currentColor" height={20} alt={String(n)} />
                 </span>
-                {onCraft && (
-                  <ActionButton onClick={() => onCraft("dismantle", id)}>拆解</ActionButton>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-      <Panel as="section" title="升级" line="var(--cp-cyan)">
-        {tune.length === 0 ? (
-          <p className={styles.dim}>没有能升级的武器。</p>
-        ) : (
-          <ul className={styles.backpack}>
-            {tune.map(([id, t]) => (
-              <li key={id}>
-                <span>
-                  {itemName(id)}
-                  {inventory.tuned[id] && (
-                    <small className={styles.dim}> · {inventory.tuned[id]}</small>
+                <span className={styles.gearArt} aria-hidden>
+                  {art && <Asset id={art} className={styles.weaponArt} />}
+                </span>
+                <span className={styles.gearName}>
+                  {id === null ? "空" : itemName(id)}
+                  {id !== null &&
+                    (inventory.mods[id] ?? []).map((m) => (
+                      <small key={m.slot} className={styles.dim}>
+                        {" · "}
+                        {itemName(m.id)}
+                        {onMod && (
+                          <ActionButton
+                            label={`从${itemName(id)}上拆下${itemName(m.id)}`}
+                            onClick={() => onMod("detach", id, m.id)}
+                          >
+                            ×
+                          </ActionButton>
+                        )}
+                      </small>
+                    ))}
+                </span>
+                <span className={styles.gearTools}>
+                  {id !== null && !active && onEquip && (
+                    <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
                   )}
-                  <small className={styles.dim}>
-                    {" "}
-                    → {t.to} · {t.parts} 个零件 · 技术 {t.tech}
-                  </small>
+                  {id !== null && onUnequip && (
+                    <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>
+                  )}
                 </span>
-                {onCraft && (
-                  <ActionButton
-                    disabled={inventory.parts < t.parts}
-                    onClick={() => onCraft("tune", id)}
-                  >
-                    升级
-                  </ActionButton>
-                )}
               </li>
-            ))}
-          </ul>
-        )}
+            );
+          })}
+        </ol>
       </Panel>
+      <div className={neural.split}>
+        <div className={neural.stack}>
+          {inventory.clothing.length > 0 && (
+            <Panel as="section" title="穿着" line="var(--cp-cyan)">
+              <ul className={styles.backpack}>
+                {inventory.clothing.map((c) => (
+                  <li key={c.slot}>
+                    <span>
+                      <small className={styles.dim}>{c.label}</small> {itemName(c.id)}
+                    </span>
+                    {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+        </div>
+        <div className={neural.stack}>
+          <Panel as="section" title="背包" line="var(--cp-yellow)">
+            {backpack.length === 0 ? (
+              <p className={styles.dim}>空的。</p>
+            ) : (
+              <ul className={styles.backpack}>
+                {backpack.map(([id, count]) => {
+                  const to = inventory.equipTo[id];
+                  const art = itemArtOf(id);
+                  const rarity = inventory.rarity[id];
+                  // 治疗品和手雷在名字旁写剩几次（物品栏精简，方案 A）
+                  const quick = quickItems.find((q) => q.id === id);
+                  return (
+                    <li key={id} data-art={art ? true : undefined} data-rarity={rarity}>
+                      {/*
+                       * 计划第八节第 1 条：有原作图的物品做成卡片，图在上、名字在下。
+                       * 框换成原作对话图标格 dialog.iconSlot（72×72，左下、右上切角），和武器格的筛选格区分开
+                       * （用户定的换框对照表，计划第十二节第 9 条）；它是实心一块、没有描边层，
+                       * 铺一层深色底，再叠一层淡金色同形，透出物品格的颜色
+                       */}
+                      {art && (
+                        <>
+                          <NineSlice
+                            id="dialog.iconSlot"
+                            tint="rgb(14 14 23 / 80%)"
+                            slice={ICON_SLOT_SLICE}
+                            className={styles.cardFrame}
+                          />
+                          <NineSlice
+                            id="dialog.iconSlot"
+                            tint="rgb(255 190 40 / 12%)"
+                            slice={ICON_SLOT_SLICE}
+                            className={styles.cardFrame}
+                          />
+                          {/* 背包里的武器也贴原作稀有度竖条，和武器格一样（计划第八节第 1 条） */}
+                          {rarity && (
+                            <NineSlice
+                              id="cyber.cellRarity"
+                              tint="var(--rarity)"
+                              slice={0}
+                              className={styles.packRarity}
+                            />
+                          )}
+                          <span className={styles.packArt} aria-hidden>
+                            <Asset id={art} className={styles.weaponArt} />
+                          </span>
+                        </>
+                      )}
+                      <span className={styles.packName}>
+                        {itemName(id)}
+                        {count > 1 && <b> ×{count}</b>}
+                        {quick && (
+                          <small className={styles.dim}>
+                            {" "}
+                            · {quick.charges}/{quick.max} 次
+                          </small>
+                        )}
+                      </span>
+                      {to && to !== "quick" && onEquip && (
+                        <ActionButton onClick={() => onEquip(id)}>
+                          {to === "clothing" ? "穿上" : "装上"}
+                        </ActionButton>
+                      )}
+                      {onMod &&
+                        (inventory.modTargets[id] ?? []).map((w) => (
+                          <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
+                            装到{itemName(w)}
+                          </ActionButton>
+                        ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+          {places && (
+            <Panel as="section" title="这里" line="var(--cp-cyan)">
+              {view.shops.map((shop) => (
+                <div className={styles.docLink} key={shop.id}>
+                  <Button onClick={() => onShop(shop.id)}>进{shop.name}</Button>
+                </div>
+              ))}
+              {view.safehouse.forSale.map((home) => (
+                <div className={styles.docLink} key={home.id}>
+                  <p className={styles.dim}>{home.locked ?? home.note}</p>
+                  {onBuyHome && !home.locked && (
+                    <Button
+                      disabled={home.price > view.money.eddies}
+                      onClick={() => onBuyHome(home.id)}
+                    >
+                      买下{home.name}（{home.price.toLocaleString("en-US")} 欧元）
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </Panel>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
+// 物品栏精简（用户定的方案 A）：制作页（拆解、升级）去掉；后台的 craft 动作和零件规则留着，以后想加回来再接界面
 
 /** 日志（J）：左边待办、期限、中间人、拳赛和赛车、超梦；右边委托（进行中、委托板、已结束） */
 export function JournalPage({
   view,
   onAccept,
   onBraindance,
+  part,
 }: {
   readonly view: View;
   /** 接下一单；正在生成时不传，按钮不能点 */
   readonly onAccept?: ((id: string) => Promise<void>) | undefined;
   /** 打开超梦体验编辑器；有在查的超梦时才有按钮 */
   readonly onBraindance: () => void;
+  /** 钉住的追踪块分页签时只放一半：todo 左边待办那一栏，jobs 右边委托；不传两栏都放 */
+  readonly part?: "todo" | "jobs";
 }) {
   const tracked = view.objectives.filter((o) => o.status !== "offered");
   const offered = view.jobs.list.some((job) => job.status === "offered");
 
   return (
     <div className={neural.split}>
-      <div className={neural.stack}>
-        <Panel as="section" title="待办" line="var(--cp-red)">
-          {tracked.length === 0 ? (
-            <p className={styles.dim}>眼下没有在办的事。</p>
-          ) : (
-            <ul className={styles.jobs}>
-              {tracked.map((o) => (
-                <li key={o.id} data-overdue={o.status === "overdue" || undefined}>
-                  <strong>{o.title}</strong>
-                  <span>
-                    {o.sourceLabel}
-                    {o.due !== null && ` · ${o.status === "overdue" ? "已超期" : `${o.due} 前`}`}
-                  </span>
-                  {o.progress && <span className={styles.dim}>{o.progress}</span>}
-                </li>
-              ))}
-            </ul>
+      {part !== "jobs" && (
+        <div className={neural.stack}>
+          <Panel as="section" title="待办" line="var(--cp-red)">
+            {tracked.length === 0 ? (
+              <p className={styles.dim}>眼下没有在办的事。</p>
+            ) : (
+              <ul className={styles.jobs}>
+                {tracked.map((o) => (
+                  <li key={o.id} data-overdue={o.status === "overdue" || undefined}>
+                    <strong>{o.title}</strong>
+                    <span>
+                      {o.sourceLabel}
+                      {o.due !== null && ` · ${o.status === "overdue" ? "已超期" : `${o.due} 前`}`}
+                    </span>
+                    {o.progress && <span className={styles.dim}>{o.progress}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          {view.deadlines.length > 0 && (
+            <Panel as="section" title="期限" line="var(--cp-yellow)">
+              <ul className={styles.deadlines}>
+                {view.deadlines.map((d) => (
+                  <li key={d.id} data-overdue={d.overdue || undefined}>
+                    <Asset
+                      id="status.timeCircle"
+                      tint={d.overdue ? "var(--cp-danger)" : "var(--cp-yellow)"}
+                      height={16}
+                    />
+                    <span>{d.label}</span>
+                    <time>{d.overdue ? "已到期" : d.due}</time>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
           )}
+          {view.jobs.fixers.length > 0 && (
+            <Panel as="section" title="中间人" line="var(--cp-cyan)">
+              <dl className={styles.facts}>
+                {view.jobs.fixers.map((f) => (
+                  <Fragment key={f.id}>
+                    <dt>{f.name}</dt>
+                    <dd>
+                      好感 {f.affinity} · 最多 {f.maxRisk} 星
+                      {f.capHint && <small> · {f.capHint}</small>}
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            </Panel>
+          )}
+          <GigsPanel gigs={view.sidegigs} />
+          {view.braindance.active && (
+            <Panel as="section" title="超梦" line="var(--cp-cyan)">
+              <Button onClick={onBraindance}>
+                超梦体验编辑器 · 关键线索 {view.braindance.active.keys.found}/
+                {view.braindance.active.keys.total}
+              </Button>
+            </Panel>
+          )}
+        </div>
+      )}
+      {part !== "todo" && (
+        <Panel as="section" title="委托" line="var(--cp-red)">
+          <JournalBody
+            view={view}
+            initialTab={offered && tracked.length === 0 ? "board" : "active"}
+            onAccept={onAccept}
+          />
         </Panel>
-        {view.deadlines.length > 0 && (
-          <Panel as="section" title="期限" line="var(--cp-yellow)">
-            <ul className={styles.deadlines}>
-              {view.deadlines.map((d) => (
-                <li key={d.id} data-overdue={d.overdue || undefined}>
-                  <Asset
-                    id="status.timeCircle"
-                    tint={d.overdue ? "var(--cp-danger)" : "var(--cp-yellow)"}
-                    height={16}
-                  />
-                  <span>{d.label}</span>
-                  <time>{d.overdue ? "已到期" : d.due}</time>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-        {view.jobs.fixers.length > 0 && (
-          <Panel as="section" title="中间人" line="var(--cp-cyan)">
-            <dl className={styles.facts}>
-              {view.jobs.fixers.map((f) => (
-                <Fragment key={f.id}>
-                  <dt>{f.name}</dt>
-                  <dd>
-                    好感 {f.affinity} · 最多 {f.maxRisk} 星
-                    {f.capHint && <small> · {f.capHint}</small>}
-                  </dd>
-                </Fragment>
-              ))}
-            </dl>
-          </Panel>
-        )}
-        <GigsPanel gigs={view.sidegigs} />
-        {view.braindance.active && (
-          <Panel as="section" title="超梦" line="var(--cp-cyan)">
-            <Button onClick={onBraindance}>
-              超梦体验编辑器 · 关键线索 {view.braindance.active.keys.found}/
-              {view.braindance.active.keys.total}
-            </Button>
-          </Panel>
-        )}
-      </div>
-      <Panel as="section" title="委托" line="var(--cp-red)">
-        <JournalBody
-          view={view}
-          initialTab={offered && tracked.length === 0 ? "board" : "active"}
-          onAccept={onAccept}
-        />
-      </Panel>
+      )}
     </div>
   );
 }
@@ -648,27 +872,34 @@ export function MessagesPage({
   view,
   onReply,
   onNews,
+  initialTab = "dm",
+  hideTabs = false,
 }: {
   readonly view: View;
   /** 回复一条：输入框进入回复状态；正在生成时不传，按钮不显示 */
   readonly onReply?: ((id: number) => void) | undefined;
   /** 切到新闻栏：把新闻记成已读 */
   readonly onNews: () => void;
+  readonly initialTab?: MessagesTab;
+  /** 外面已经有页签（钉住的未读块）时不再出页内分栏 */
+  readonly hideTabs?: boolean;
 }) {
-  const [tab, setTab] = useState<MessagesTab>("dm");
+  const [tab, setTab] = useState<MessagesTab>(initialTab);
   return (
     <>
-      <SubTabs<MessagesTab>
-        tabs={[
-          ["dm", view.phone.unread > 0 ? `私信 ${view.phone.unread}` : "私信"],
-          ["news", "新闻"],
-        ]}
-        value={tab}
-        onChange={(t) => {
-          setTab(t);
-          if (t === "news") onNews();
-        }}
-      />
+      {!hideTabs && (
+        <SubTabs<MessagesTab>
+          tabs={[
+            ["dm", view.phone.unread > 0 ? `私信 ${view.phone.unread}` : "私信"],
+            ["news", "新闻"],
+          ]}
+          value={tab}
+          onChange={(t) => {
+            setTab(t);
+            if (t === "news") onNews();
+          }}
+        />
+      )}
       <Panel as="section" title={tab === "dm" ? "私信" : "新闻"} line="var(--cp-cyan)">
         {tab === "dm" ? <PhoneBody view={view} onReply={onReply} /> : <NewsBody view={view} />}
       </Panel>
@@ -718,7 +949,7 @@ export function ContactsPage({
                       aria-pressed={n.id === current.id}
                       onClick={() => setPicked(n.id)}
                     >
-                      <Avatar name={n.name} dead={!n.alive} />
+                      <Avatar npc={n.id} name={n.name} dead={!n.alive} />
                       <span className={styles.contactName}>
                         <b>{n.name}</b>
                         <small className={styles.dim}>
@@ -807,7 +1038,7 @@ export function DatabasePage({
                           {s.kindLabel} · {s.at}
                         </small>
                       </span>
-                      {!s.read && <span className={styles.contactUnread}>新</span>}
+                      {!s.read && <UnreadBadge>新</UnreadBadge>}
                     </button>
                   </li>
                 ))}

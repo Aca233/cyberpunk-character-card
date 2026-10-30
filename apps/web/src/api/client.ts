@@ -195,6 +195,42 @@ export interface PublicProfile {
   readonly keySource: "config" | "env" | null;
 }
 
+/** 酒馆预设摘要：与 /api/presets 对齐，不包含提示词全文或脚本源码。 */
+export interface PresetSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly importedAt: string;
+  readonly active: boolean;
+  readonly warnings: readonly string[];
+  readonly sampling: {
+    readonly temperature?: number;
+    readonly topP?: number;
+    readonly topK?: number;
+    readonly maxOutputTokens?: number;
+  };
+  readonly entries: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly role: "system" | "user" | "assistant";
+    readonly enabled: boolean;
+    readonly depth: number | null;
+    readonly chars: number;
+  }[];
+  readonly regex: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly enabled: boolean;
+  }[];
+}
+
+export interface PresetPatch {
+  readonly entries?: Readonly<Record<string, boolean>>;
+  /** 条目 id → 新正文 */
+  readonly contents?: Readonly<Record<string, string>>;
+  readonly regex?: Readonly<Record<string, boolean>>;
+  readonly useSampling?: boolean;
+}
+
 export interface ProfilesOverview {
   readonly status: "ok" | "missing" | "invalid";
   readonly errors: readonly string[];
@@ -359,6 +395,23 @@ export type TurnBody = { requestId: string; baseVersion: number } & (
 
 export const api = {
   health: () => request<Health>("GET", "/health"),
+  /** 酒馆预设管理：只访问本机后端，不发送模型请求；导入后需单独启用。 */
+  tavernPresets: () =>
+    request<{ active: string | null; presets: PresetSummary[] }>("GET", "/presets"),
+  importPreset: (input: { fileName: string; raw: unknown }) =>
+    request<{ preset: PresetSummary }>("POST", "/presets", input),
+  setActivePreset: (id: string | null) =>
+    request<{ active: string | null }>("PUT", "/presets/-/active", { id }),
+  updatePreset: (id: string, patch: PresetPatch) =>
+    request<{ preset: PresetSummary }>("PATCH", `/presets/${encodeURIComponent(id)}`, patch),
+  /** 展开条目时取正文：列表只带字数，不带全文 */
+  presetEntry: (id: string, entry: string) =>
+    request<{ id: string; content: string }>(
+      "GET",
+      `/presets/${encodeURIComponent(id)}/entries/${encodeURIComponent(entry)}`,
+    ),
+  deletePreset: (id: string) =>
+    request<{ ok: true }>("DELETE", `/presets/${encodeURIComponent(id)}`),
   profiles: () => request<ProfilesOverview>("GET", "/profiles"),
   updateProfile: (name: string, patch: ProfilePatch) =>
     request<{ profile: PublicProfile }>("PUT", `/profiles/${encodeURIComponent(name)}`, patch),

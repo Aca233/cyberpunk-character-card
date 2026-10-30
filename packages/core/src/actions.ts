@@ -23,6 +23,7 @@ import {
 } from "./systems/inventory";
 import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
+import { ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { registry } from "./systems/registry";
 import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
@@ -79,6 +80,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   BraindanceActionSchema,
   /** 数据库页：打开芯片，只标这几块已读 */
   ReadShardsActionSchema,
+  /** 在场的人：点「扫描」立刻用义眼扫一下，不调用模型、不花时间；要人在场、义眼装着没坏（计划第十二节第 14 条） */
+  ScanNpcActionSchema,
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 

@@ -127,6 +127,8 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
       candidateCount: 1,
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
       ...(temperature !== undefined ? { temperature } : {}),
+      // 酒馆预设采样参数：topP 按原生字段传入；topK 需要先确认模型元数据支持，不能无条件发送。
+      ...(request.topP !== undefined ? { topP: request.topP } : {}),
       ...(profile.thinkingLevel !== undefined
         ? { thinkingConfig: { thinkingLevel: profile.thinkingLevel, includeThoughts: false } }
         : {}),

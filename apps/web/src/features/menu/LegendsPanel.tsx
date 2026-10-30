@@ -2,8 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Difficulty, type SavedLegend } from "../../api/client";
 import { DIFFICULTY_LABELS } from "../../labels";
-import { Asset } from "../../ui/Asset";
+import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
 import styles from "./menu.module.css";
@@ -25,6 +26,11 @@ function LegendDetail({
   const difficulty = DIFFICULTY_LABELS[legend.difficulty as Difficulty] ?? legend.difficulty;
   return (
     <section className={styles.legendDetail} aria-label={`${legend.name}的履历`}>
+      <span
+        className={styles.legendLine}
+        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+        aria-hidden
+      />
       <header>
         <b>{legend.name}</b>
         <small>
@@ -77,7 +83,7 @@ export function LegendsPanel({ onOpen }: { readonly onOpen: (saveId: string) => 
   const list = legends.data ?? [];
   const chosen = list.find((l) => l.saveId === picked) ?? null;
   return (
-    <Panel title="传说名册">
+    <Panel>
       <p className={styles.legendNote}>
         死在夜之城、或者收了尾的角色都记在这里。新角色开局时，AI
         会知道最近的几位。牌面按角色最高的属性挑。
@@ -100,6 +106,7 @@ export function LegendsPanel({ onOpen }: { readonly onOpen: (saveId: string) => 
                 aria-pressed={picked === l.saveId}
                 onClick={() => setPicked(picked === l.saveId ? null : l.saveId)}
               >
+                <CellFrame />
                 <Asset id={`tarot.${l.card}`} height={180} alt={l.cardLabel} />
                 <b>{l.name}</b>
                 <small>{l.endingLabel}</small>

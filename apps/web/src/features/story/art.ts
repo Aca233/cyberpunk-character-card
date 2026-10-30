@@ -1,0 +1,128 @@
+import type { AssetId } from "../../assets";
+
+/**
+ * 物品和人物的原作图（第八节第 1 条：优先用原作素材）：
+ * 武器是原作 item_icons 里各型号的默认涂装，义体是 item_icons 的 cw_*，头像是 avatars 图集。
+ * 原作没有对应图的（胁差、通用义肢手臂和腿、曼因、丽贝卡、法拉第）不在表里，调用处退回到原来的样子
+ */
+
+/** 人物 id → 原作头像 */
+const PORTRAITS: Readonly<Record<string, AssetId>> = {
+  judy: "portrait.judy",
+  regina: "portrait.regina",
+  viktor: "portrait.viktor",
+  jackie: "portrait.jackie",
+  rogue: "portrait.rogue",
+  wakako: "portrait.wakako",
+  misty: "portrait.misty",
+  dex: "portrait.dex",
+  padre: "portrait.padre",
+  panam: "portrait.panam",
+  river: "portrait.river",
+  kerry: "portrait.kerry",
+};
+
+/** 物品 id（武器、义体）→ 原作物品图 */
+const ITEM_ART: Readonly<Record<string, AssetId>> = {
+  // 武器
+  unity: "weaponArt.unity",
+  lexington: "weaponArt.lexington",
+  nue: "weaponArt.nue",
+  liberty: "weaponArt.liberty",
+  omaha: "weaponArt.omaha",
+  kenshin: "weaponArt.kenshin",
+  yukimura: "weaponArt.yukimura",
+  chao: "weaponArt.chao",
+  nova: "weaponArt.nova",
+  overture: "weaponArt.overture",
+  burya: "weaponArt.burya",
+  saratoga: "weaponArt.saratoga",
+  pulsar: "weaponArt.pulsar",
+  shingen: "weaponArt.shingen",
+  dian: "weaponArt.dian",
+  copperhead: "weaponArt.copperhead",
+  ajax: "weaponArt.ajax",
+  masamune: "weaponArt.masamune",
+  sidewinder: "weaponArt.sidewinder",
+  osprey: "weaponArt.osprey",
+  carnage: "weaponArt.carnage",
+  satara: "weaponArt.satara",
+  igla: "weaponArt.igla",
+  tactician: "weaponArt.tactician",
+  zhuo: "weaponArt.zhuo",
+  achilles: "weaponArt.achilles",
+  ashura: "weaponArt.ashura",
+  grad: "weaponArt.grad",
+  nekomata: "weaponArt.nekomata",
+  ma70: "weaponArt.ma70",
+  defender: "weaponArt.defender",
+  knife: "weaponArt.knife",
+  machete: "weaponArt.machete",
+  kukri: "weaponArt.kukri",
+  tomahawk: "weaponArt.tomahawk",
+  katana: "weaponArt.katana",
+  "baseball-bat": "weaponArt.baseballBat",
+  crowbar: "weaponArt.crowbar",
+  "steel-pipe": "weaponArt.steelPipe",
+  knuckles: "weaponArt.knuckles",
+  baton: "weaponArt.baton",
+  kanabo: "weaponArt.kanabo",
+  sledgehammer: "weaponArt.sledgehammer",
+  "la-chingona-dorada": "weaponArt.laChingonaDorada",
+  guts: "weaponArt.guts",
+  "malorian-3516": "weaponArt.malorian3516",
+  skippy: "weaponArt.skippy",
+  satori: "weaponArt.satori",
+  overwatch: "weaponArt.overwatch",
+  // 义体
+  "ram-upgrade": "cyberArt.ramUpgrade",
+  "limbic-enhancement": "cyberArt.limbicEnhancement",
+  "visual-cortex-support": "cyberArt.visualCortexSupport",
+  "mechatronic-core": "cyberArt.mechatronicCore",
+  "kiroshi-mk1": "cyberArt.kiroshiMk1",
+  "kiroshi-mk2": "cyberArt.kiroshiMk2",
+  "kiroshi-clairvoyant": "cyberArt.kiroshiClairvoyant",
+  nanorelays: "cyberArt.nanorelays",
+  neofiber: "cyberArt.neofiber",
+  "synaptic-accelerator": "cyberArt.synapticAccelerator",
+  "reflex-tuner": "cyberArt.reflexTuner",
+  kerenzikov: "cyberArt.kerenzikov",
+  "militech-paraline": "cyberArt.militechParaline",
+  "biotech-sigma": "cyberArt.biotechSigma",
+  "raven-microcyber": "cyberArt.ravenMicrocyber",
+  "zetatech-sandevistan": "cyberArt.zetatechSandevistan",
+  "dynalar-sandevistan": "cyberArt.dynalarSandevistan",
+  "moore-berserk": "cyberArt.mooreBerserk",
+  "netwatch-netdriver": "cyberArt.netwatchNetdriver",
+  biomonitor: "cyberArt.biomonitor",
+  "syn-lungs": "cyberArt.synLungs",
+  "blood-pump": "cyberArt.bloodPump",
+  "second-heart": "cyberArt.secondHeart",
+  "subdermal-armor": "cyberArt.subdermalArmor",
+  "fireproof-coating": "cyberArt.fireproofCoating",
+  "grounding-plating": "cyberArt.groundingPlating",
+  "optical-camo": "cyberArt.opticalCamo",
+  "titanium-bones": "cyberArt.titaniumBones",
+  "dense-marrow": "cyberArt.denseMarrow",
+  "bionic-joints": "cyberArt.bionicJoints",
+  "epimorphic-skeleton": "cyberArt.epimorphicSkeleton",
+  "clutch-padding": "cyberArt.clutchPadding",
+  "smart-link": "cyberArt.smartLink",
+  "ballistic-coprocessor": "cyberArt.ballisticCoprocessor",
+  "gorilla-arms": "cyberArt.gorillaArms",
+  "mantis-blades": "cyberArt.mantisBlades",
+  "maxtac-mantis-blades": "cyberArt.mantisBlades",
+  monowire: "cyberArt.monowire",
+  "projectile-launch-system": "cyberArt.projectileLaunchSystem",
+  "fortified-ankles": "cyberArt.fortifiedAnkles",
+  "reinforced-tendons": "cyberArt.reinforcedTendons",
+  "jenkins-tendons": "cyberArt.jenkinsTendons",
+};
+
+export function portraitOf(npc: string | null | undefined): AssetId | undefined {
+  return npc ? PORTRAITS[npc] : undefined;
+}
+
+export function itemArtOf(item: string | null | undefined): AssetId | undefined {
+  return item ? ITEM_ART[item] : undefined;
+}

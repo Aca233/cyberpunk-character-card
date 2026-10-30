@@ -34,7 +34,7 @@ import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema"
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
-import { formatGameTime, WorldClockStateSchema } from "../systems/world";
+import { formatGameTime, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type Choice,
   ChoiceProposalSchema,
@@ -71,6 +71,7 @@ import {
   readOffscreen,
 } from "./offscreen";
 import { prepareFor } from "./pending";
+import { applyPreset, applyPresetRegex, type TavernPreset } from "./preset";
 import {
   buildExtractPrompt,
   buildJudgePrompt,
@@ -79,6 +80,8 @@ import {
   EXTRACT_TEMPERATURE,
   HISTORY_TURNS,
   JUDGE_TEMPERATURE,
+  NARRATE_LENGTH,
+  NARRATE_LENGTH_PRESET,
   type NarratorPlan,
   type PromptExtras,
   VERIFY_TEMPERATURE,
@@ -310,6 +313,13 @@ export interface NarratorDeps {
   readonly lore?: LoreSource | undefined;
   /** 叙事模型方案的上下文窗口（token）；按它分上下文预算，没给按 32K */
   readonly contextWindow?: number | undefined;
+  /**
+   * 玩家导入并启用的酒馆预设（用户定的）：只给写正文那一步，条目叠在本作提示词前面、本作规则在后，
+   * 采样参数和正则也只用在这一步；判断、抽取、核对、修复、场外推演、摘要都不套
+   */
+  readonly preset?: TavernPreset | undefined;
+  /** 预设宏里 {{user}} 换成什么：玩家角色名 */
+  readonly userName?: string | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -695,10 +705,16 @@ export async function runNarratorTurn(
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
   if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
-    const planned = planTrip(tripWorldOf(world), deps.data ?? {}, plan.input.travel, {
-      rng: deps.rng,
-      factor: deps.encounters ?? 1,
-    });
+    // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也能当出行的目的地，和 travelBlock 一致
+    const planned = planTrip(
+      tripWorldOf(world),
+      withSavedPlaces(deps.data ?? {}, world),
+      plan.input.travel,
+      {
+        rng: deps.rng,
+        factor: deps.encounters ?? 1,
+      },
+    );
     if (planned.ok) {
       trip = planned.trip;
       decided.push(tripText(planned.trip));
@@ -779,10 +795,43 @@ export async function runNarratorTurn(
     lore && loreSection === undefined && lore.section !== undefined
       ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
       : lore?.trace;
+  // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；采样参数只给这一步；场外提问不套
+  const preset = ooc ? undefined : deps.preset;
+  // 预设兼容：启用时把本作默认篇幅让给预设，只改本轮系统提示，不改历史正文或检定规则。
+  const gameMessages = preset
+    ? prompt.messages.map((message) =>
+        message.role === "system"
+          ? {
+              ...message,
+              content: message.content.replace(NARRATE_LENGTH, NARRATE_LENGTH_PRESET),
+            }
+          : message,
+      )
+    : prompt.messages;
+  const narrateMessages = preset
+    ? applyPreset(gameMessages, preset, {
+        // 酒馆预设的 {{user}} 使用当前存档角色名；旧存档没有名字时才回退为玩家。
+        user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
+        char: "叙事者",
+        lastUserMessage: plan.input.text,
+        roll: (sides) => deps.rng.roll(sides),
+      })
+    : prompt.messages;
+  const sampling = preset?.sampling ?? {};
+  if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
   const splitter = new StateSplitter();
   b.checkAborted();
   for await (const event of deps.llm.stream(
-    { purpose: "narrator", messages: prompt.messages },
+    {
+      purpose: "narrator",
+      messages: narrateMessages,
+      ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+      ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
+      ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
+      ...(sampling.maxOutputTokens !== undefined
+        ? { maxOutputTokens: sampling.maxOutputTokens }
+        : {}),
+    },
     deps.signal,
   )) {
     if (event.type === "text") {
@@ -795,8 +844,17 @@ export async function runNarratorTurn(
     }
   }
   b.checkAborted();
-  const { rest, narrative, block } = splitter.finish();
+  const split = splitter.finish();
+  const { rest, block } = split;
   if (rest !== "") deps.onText?.(rest);
+  // 预设正则改存下来的正文（思维链、八股词之类）；边收边放的那份不改，存档和抽取按改过的
+  const cleaned = preset ? applyPresetRegex(split.narrative, preset).trim() : split.narrative;
+  // 正则把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
+  const wiped = preset !== undefined && cleaned === "" && split.narrative.trim() !== "";
+  const narrative = wiped ? split.narrative : cleaned;
+  if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
+  else if (preset && narrative !== split.narrative.trim())
+    b.notes.push("正文按预设正则清理过（思维链、标签等）");
   if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
   if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
 
@@ -1280,7 +1338,8 @@ export async function runNarratorTurn(
       auxUsage: b.auxUsage,
       repairs: b.repairs,
       repairUsage: b.repairUsage,
-      messages: prompt.messages,
+      // 返回实际发送的消息，包含预设条目和展开后的宏，供上下文检查与测评使用
+      messages: narrateMessages,
       decided,
       recalled,
       expanded,

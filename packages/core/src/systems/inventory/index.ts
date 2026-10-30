@@ -19,7 +19,6 @@ import {
 import { inventoryEvents } from "./events";
 import { inventoryInteractions } from "./interactions";
 import { namesView } from "./names";
-import { partsRules } from "./prompt";
 import {
   type InventoryInternal,
   InventoryInternalSchemas,
@@ -100,7 +99,8 @@ export const inventory = defineSystem<
       recharge(draft);
     },
   },
-  rules: [partsRules],
+  // 物品栏精简（用户定的方案 A）：零件和升级不再出现，零件规则不发给模型；partsRules 留着，以后想加回来再挂上
+  rules: [],
   actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
   views: [

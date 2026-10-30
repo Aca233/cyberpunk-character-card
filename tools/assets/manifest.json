@@ -219,6 +219,7 @@
         "atlas": "fullscreen/menu_background",
         "slot": "tex_header"
       },
+      { "id": "menu.nightCity", "atlas": "fullscreen/bg_nc", "slot": "bg_nc" },
       {
         "id": "tarot.strength",
         "atlas": "fullscreen/atlas_tarot2",
@@ -790,6 +791,507 @@
         "atlas": "fullscreen/fullscreen_elements",
         "slot": "time-circle-small"
       }
+    ],
+    "cyberware": [
+      { "id": "cyber.frontalCortex", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_brain" },
+      { "id": "cyber.eyes", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_eyes" },
+      { "id": "cyber.nervous", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_nervous" },
+      { "id": "cyber.os", "atlas": "fullscreen/hub_atlas", "slot": "ico_cyberware" },
+      {
+        "id": "cyber.circulatory",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_cardiovascular"
+      },
+      { "id": "cyber.integumentary", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_skin" },
+      {
+        "id": "cyber.skeleton",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_muscoskeletal"
+      },
+      { "id": "cyber.hands", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_hands" },
+      { "id": "cyber.arms", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_arms" },
+      { "id": "cyber.legs", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_legs" },
+      {
+        "id": "cyber.disabled",
+        "atlas": "widgets/atlas_buffinfo",
+        "slot": "cyberware_disabled_icon"
+      },
+      { "id": "cyber.bodySkin", "atlas": "fullscreen/man_body", "slot": "ma_intergumentary" },
+      { "id": "cyber.bodySkeleton", "atlas": "fullscreen/man_body", "slot": "ma_full_skeleton" },
+      { "id": "cyber.bodyNervous", "atlas": "fullscreen/man_body", "slot": "ma_nervous" },
+      { "id": "cyber.bodyCirculatory", "atlas": "fullscreen/man_body", "slot": "ma_circular" },
+      { "id": "cyber.bodyImmune", "atlas": "fullscreen/man_body", "slot": "ma_immune" },
+      { "id": "cyber.cellShape", "atlas": "fullscreen/inventory4_atlas", "slot": "item_shape" },
+      { "id": "cyber.cellFrame", "atlas": "fullscreen/inventory4_atlas", "slot": "item_frame" },
+      { "id": "cyber.cellLeft", "atlas": "fullscreen/inventory4_atlas", "slot": "item_left_frame" },
+      {
+        "id": "cyber.cellRarity",
+        "atlas": "fullscreen/inventory4_atlas",
+        "slot": "item_left_rarity"
+      },
+      { "id": "cyber.cellTexture", "atlas": "fullscreen/atlas_inventory", "slot": "texture_1slot" },
+      { "id": "cyber.gaugeBg", "atlas": "fullscreen/cw_bars_assets", "slot": "cw_barbg" },
+      { "id": "cyber.gaugeMask", "atlas": "fullscreen/cw_bars_assets", "slot": "cw_mask" },
+      { "id": "cyber.gaugeBar", "atlas": "fullscreen/cw_bars_assets", "slot": "bar_long1" },
+      { "id": "cyber.gaugeLabel", "atlas": "fullscreen/cw_bars_assets", "slot": "counterLabel" },
+      {
+        "id": "cyber.gaugeLabelStroke",
+        "atlas": "fullscreen/cw_bars_assets",
+        "slot": "counterLabel_stroke"
+      }
+    ],
+    "implants": [
+      {
+        "id": "cyberArt.ramUpgrade",
+        "atlas": "common/item_icons8",
+        "slot": "cw_frontalcortex_memoryboost"
+      },
+      {
+        "id": "cyberArt.limbicEnhancement",
+        "atlas": "common/item_icons6",
+        "slot": "cw_frontalcortex_limbicsystemenhancement"
+      },
+      {
+        "id": "cyberArt.visualCortexSupport",
+        "atlas": "common/item_icons10",
+        "slot": "cw_frontalcortex_improvedperception"
+      },
+      {
+        "id": "cyberArt.mechatronicCore",
+        "atlas": "common/item_icons15",
+        "slot": "cw_frontalcortex_roboticcore"
+      },
+      {
+        "id": "cyberArt.kiroshiMk1",
+        "atlas": "common/item_icons9",
+        "slot": "cw_eyes_kiroshioptics"
+      },
+      { "id": "cyberArt.kiroshiMk2", "atlas": "common/item_icons7", "slot": "cw_eyes_2eye" },
+      {
+        "id": "cyberArt.kiroshiClairvoyant",
+        "atlas": "common/item_icons11",
+        "slot": "cw_eyes_3eye"
+      },
+      {
+        "id": "cyberArt.nanorelays",
+        "atlas": "common/item_icons9",
+        "slot": "cw_nervoussystem_improvedreaction"
+      },
+      {
+        "id": "cyberArt.neofiber",
+        "atlas": "common/item_icons10",
+        "slot": "cw_nervoussystem_neofibre"
+      },
+      {
+        "id": "cyberArt.synapticAccelerator",
+        "atlas": "common/item_icons19",
+        "slot": "cw_nervoussystem_synapticaccelerator"
+      },
+      {
+        "id": "cyberArt.reflexTuner",
+        "atlas": "common/item_icons7",
+        "slot": "cw_nervoussystem_reflexrecorder"
+      },
+      {
+        "id": "cyberArt.kerenzikov",
+        "atlas": "common/item_icons13",
+        "slot": "cw_nervoussystem_kerenzikov"
+      },
+      {
+        "id": "cyberArt.militechParaline",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_militechcyberdeck"
+      },
+      {
+        "id": "cyberArt.biotechSigma",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_biotechcyberdeck"
+      },
+      {
+        "id": "cyberArt.ravenMicrocyber",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_ravencyberdeck"
+      },
+      {
+        "id": "cyberArt.zetatechSandevistan",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_sandevistanc1"
+      },
+      {
+        "id": "cyberArt.dynalarSandevistan",
+        "atlas": "common/item_icons9",
+        "slot": "cw_system_sandevistanc2"
+      },
+      {
+        "id": "cyberArt.mooreBerserk",
+        "atlas": "common/item_icons7",
+        "slot": "cw_system_berserkc1"
+      },
+      {
+        "id": "cyberArt.netwatchNetdriver",
+        "atlas": "common/item_icons5",
+        "slot": "cw_system_netwatchnetdrivercyberdeck"
+      },
+      {
+        "id": "cyberArt.biomonitor",
+        "atlas": "common/item_icons6",
+        "slot": "cw_circulatory_healthmonitor"
+      },
+      {
+        "id": "cyberArt.synLungs",
+        "atlas": "common/item_icons5",
+        "slot": "cw_circulatory_ironlungs"
+      },
+      {
+        "id": "cyberArt.bloodPump",
+        "atlas": "common/item_icons7",
+        "slot": "cw_circulatory_bloodpump"
+      },
+      {
+        "id": "cyberArt.secondHeart",
+        "atlas": "common/item_icons12",
+        "slot": "cw_circulatory_secondheart"
+      },
+      {
+        "id": "cyberArt.subdermalArmor",
+        "atlas": "common/item_icons10",
+        "slot": "cw_integumentary_subdermalarmorcommon"
+      },
+      {
+        "id": "cyberArt.fireproofCoating",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_fireproofskin"
+      },
+      {
+        "id": "cyberArt.groundingPlating",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_groundingplating"
+      },
+      {
+        "id": "cyberArt.opticalCamo",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_opticalcamo"
+      },
+      {
+        "id": "cyberArt.titaniumBones",
+        "atlas": "common/item_icons14",
+        "slot": "cw_skeleton_titaniuminfusedbones"
+      },
+      {
+        "id": "cyberArt.denseMarrow",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_densemarrow"
+      },
+      {
+        "id": "cyberArt.bionicJoints",
+        "atlas": "common/item_icons16",
+        "slot": "cw_skeleton_jointlock"
+      },
+      {
+        "id": "cyberArt.epimorphicSkeleton",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_endoskeleton"
+      },
+      { "id": "cyberArt.clutchPadding", "atlas": "common/item_icons16", "slot": "cw_hands_recoil" },
+      { "id": "cyberArt.smartLink", "atlas": "common/item_icons9", "slot": "cw_hands_smartlink" },
+      {
+        "id": "cyberArt.ballisticCoprocessor",
+        "atlas": "common/item_icons10",
+        "slot": "cw_hands_recoil_iconic"
+      },
+      { "id": "cyberArt.gorillaArms", "atlas": "common/item_icons7", "slot": "cw_arms_strongarms" },
+      {
+        "id": "cyberArt.mantisBlades",
+        "atlas": "common/item_icons12",
+        "slot": "cw_arms_mantisblades"
+      },
+      { "id": "cyberArt.monowire", "atlas": "common/item_icons13", "slot": "cw_arms_nanowires" },
+      {
+        "id": "cyberArt.projectileLaunchSystem",
+        "atlas": "common/item_icons13",
+        "slot": "cw_arms_projectilelauncher"
+      },
+      {
+        "id": "cyberArt.fortifiedAnkles",
+        "atlas": "common/item_icons18",
+        "slot": "cw_legs_fortifiedankles"
+      },
+      {
+        "id": "cyberArt.reinforcedTendons",
+        "atlas": "common/item_icons6",
+        "slot": "cw_legs_boostedtendons"
+      },
+      {
+        "id": "cyberArt.jenkinsTendons",
+        "atlas": "common/item_icons14",
+        "slot": "cw_legs_reinforcedmuscles"
+      }
+    ],
+    "weapons": [
+      {
+        "id": "weaponArt.unity",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_V_Unity_None__Default"
+      },
+      {
+        "id": "weaponArt.lexington",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Base_Lexington_None__Default"
+      },
+      {
+        "id": "weaponArt.nue",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Nue_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.liberty",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Liberty_Rogue_None__Default"
+      },
+      {
+        "id": "weaponArt.omaha",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Omaha_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kenshin",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Kenshin_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.yukimura",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Yukimura_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.chao",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Chao_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.nova",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Nova_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.overture",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Overture_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.burya",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Burya_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.saratoga",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Saratoga_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.pulsar",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Pulsar_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.shingen",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Shingen_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.dian",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Dian_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.copperhead",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Base_Copperhead_None__Default"
+      },
+      {
+        "id": "weaponArt.ajax",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Ajax_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.masamune",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Base_Masamune_None__Default"
+      },
+      {
+        "id": "weaponArt.sidewinder",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Sidewinder_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.osprey",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Osprey_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.carnage",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Carnage_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.satara",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Satara_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.igla",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Igla_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.tactician",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Tactician_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.zhuo",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Zhuo_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.achilles",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Achilles_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.ashura",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Ashura_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.grad",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Grad_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.nekomata",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Nekomata_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.ma70",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_MA70_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.defender",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Defender_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.knife",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Combat_Knife_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.machete",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Machete_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kukri",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Kukri_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.tomahawk",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Tomahawk_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.katana",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.baseballBat",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Baseball_Bat_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.crowbar",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Crowbar_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.steelPipe",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Iron_Pipe_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.knuckles",
+        "atlas": "common/item_icons18",
+        "slot": "preset_knuckles_military"
+      },
+      {
+        "id": "weaponArt.baton",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Baton_Alpha_None__Baton_Alpha"
+      },
+      {
+        "id": "weaponArt.kanabo",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Kanabo_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.sledgehammer",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Hammer_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.laChingonaDorada",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Nue_Jackie_None__Jackie_Nue"
+      },
+      {
+        "id": "weaponArt.guts",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Carnage_Default_None__Edgerunners_Carnage"
+      },
+      {
+        "id": "weaponArt.malorian3516",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Silverhand_3516_None__Silverhand_Malorian"
+      },
+      {
+        "id": "weaponArt.skippy",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Yukimura_Default_None__Skippy_Yukimura"
+      },
+      {
+        "id": "weaponArt.satori",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Saburo_Katana"
+      },
+      {
+        "id": "weaponArt.overwatch",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Grad_Default_None__Panam_Grad"
+      }
+    ],
+    "portrait": [
+      { "id": "portrait.unknown", "atlas": "common/avatars2", "slot": "unknown" },
+      { "id": "portrait.judy", "atlas": "common/avatars1", "slot": "judy" },
+      { "id": "portrait.regina", "atlas": "common/avatars1", "slot": "regina" },
+      { "id": "portrait.viktor", "atlas": "common/avatars_ep1", "slot": "ep1_viktor" },
+      { "id": "portrait.jackie", "atlas": "common/avatars2", "slot": "jackie_a" },
+      {
+        "id": "portrait.rogue",
+        "atlas": "fullscreen/photomode_npc_icons_atlas",
+        "slot": "rogue_old"
+      },
+      { "id": "portrait.wakako", "atlas": "common/avatars2", "slot": "wakako" },
+      { "id": "portrait.misty", "atlas": "common/avatars1", "slot": "misty" },
+      { "id": "portrait.dex", "atlas": "common/avatars0", "slot": "dex" },
+      { "id": "portrait.padre", "atlas": "common/avatars1", "slot": "padre" },
+      { "id": "portrait.panam", "atlas": "common/avatars1", "slot": "panam" },
+      { "id": "portrait.river", "atlas": "common/avatars1", "slot": "river" },
+      { "id": "portrait.kerry", "atlas": "common/avatars1", "slot": "kerry" }
     ],
     "map": [
       {

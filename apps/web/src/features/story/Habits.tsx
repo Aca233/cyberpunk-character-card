@@ -1,5 +1,3 @@
-import { characterRules } from "@cp/core";
-import { type FormEvent, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import styles from "./story.module.css";
 
@@ -19,14 +17,6 @@ export function Habits({
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
 }) {
-  const [draft, setDraft] = useState("");
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (text === "" || !onHabit) return;
-    onHabit("add", text);
-    setDraft("");
-  };
   return (
     <section className={styles.habits} aria-label="别人眼里的你和习惯">
       <p className={styles.perceived}>{perceived}</p>
@@ -60,21 +50,6 @@ export function Habits({
           </li>
         ))}
       </ul>
-      {onHabit && habits.length < characterRules.HABITS_MAX && (
-        <form className={styles.habitForm} onSubmit={submit}>
-          <input
-            className={styles.habitInput}
-            value={draft}
-            maxLength={40}
-            placeholder="常去的店、睡前做什么……"
-            aria-label="新习惯"
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <ActionButton submit disabled={draft.trim() === ""}>
-            记下
-          </ActionButton>
-        </form>
-      )}
     </section>
   );
 }

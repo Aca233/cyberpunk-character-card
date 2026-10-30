@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { markVisit, resolveLocation } from "./places";
 import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
@@ -51,11 +52,15 @@ function dueNotes(draft: Draft<WorldClockState>, from: number, to: number): stri
     .map((d) => `到期：${d.label}（${formatGameTime(d.due)}）`);
 }
 
-/** 时间只往前走，倒退的不改；没写 time 时间不动；地点随指令更新 */
+/**
+ * 时间只往前走，倒退的不改；没写 time 时间不动；地点随指令更新。
+ * 地点先按地点表和地点簿换成 id（places-plan §四：中文名对得上的用原来那条；poi:、ft: 第一次去的记进地点簿）
+ */
 export function applyWorld(
   draft: Draft<WorldClockState>,
   command: WorldCommand,
   now: number,
+  data: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
   const notes: string[] = [];
   let target = now;
@@ -66,9 +71,15 @@ export function applyWorld(
         `时间不能倒退：${formatGameTime(command.time)} 早于现在 ${formatGameTime(now)}，时间没动`,
       );
   }
-  if (command.location !== undefined && command.location !== draft.location) {
-    draft.location = command.location;
-    notes.push(`来到 ${command.location}`);
+  if (command.location !== undefined) {
+    const resolved = resolveLocation(draft, command.location, data, target);
+    if (!resolved.ok) return fail(resolved.reason);
+    if (resolved.note) notes.push(resolved.note);
+    if (resolved.id !== draft.location) {
+      draft.location = resolved.id;
+      markVisit(draft, resolved.id, target);
+      notes.push(`来到 ${resolved.id}`);
+    }
   }
   if (target > now) notes.push(`${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`);
   notes.push(...dueNotes(draft, now, target));

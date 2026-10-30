@@ -6,10 +6,12 @@ import type { AuthoringTextSearch } from "./authoring-search";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
+import type { PresetStore } from "./presets";
 import { LlmRouter } from "./providers/index";
 import { cryptoRng } from "./rng";
 import { authoringRoutes } from "./routes/authoring";
 import { characterRoutes } from "./routes/characters";
+import { presetRoutes } from "./routes/presets";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
 import type { SaveStore } from "./storage";
@@ -33,6 +35,8 @@ export interface AppDeps {
   readonly authoringText?: AuthoringTextSearch | undefined;
   /** 设定库：本机官方文本库的只读检索；没有文本库时不传 */
   readonly lore?: LoreSource | undefined;
+  /** 玩家导入的酒馆预设（用户定的）；不传时没有预设接口，写正文也不套预设 */
+  readonly presets?: PresetStore | undefined;
 }
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -64,6 +68,7 @@ export function createApp(deps: AppDeps): Hono {
     log: deps.log,
     evalDrafts: deps.evalDrafts,
     lore: deps.lore,
+    presets: deps.presets,
   });
   const app = new Hono();
   app.onError(async (error, c) => {
@@ -95,6 +100,8 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get("/api/glossary", (c) => c.json({ glossary }));
   app.route("/api/profiles", profileRoutes(deps.config));
+  // 酒馆预设接口沿用上面的本机来源校验；导入和切换不发送模型请求。
+  if (deps.presets) app.route("/api/presets", presetRoutes(deps.presets, clock));
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
   app.route("/api/saves", saveRoutes(game, hub, deps.dev === true));
   if (deps.dev && deps.authoring) {

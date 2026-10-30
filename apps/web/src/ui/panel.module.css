@@ -17,3 +17,16 @@
 .body {
   position: relative;
 }
+
+/*
+ * 大页外框（用户定的换框对照表，计划第十二节第 9 条）：原作 panel.frame 的细线离图边约 44 原图像素，
+ * 1080p 下是 22 CSS 像素。外层 .journal 带 overflow: auto，框不能往外扩，否则会被裁掉；
+ * 所以框铺满面板，底往里收 22 对齐框线，内边距跟着加大，字不压线。只是装饰，不挡点击
+ */
+.panel > .frameBg {
+  inset: 22px;
+}
+
+.panel:where([data-frame]) {
+  padding: 36px 40px 40px;
+}

@@ -45,8 +45,7 @@ export const inventoryStatus: readonly SystemStatus[] = [
       const backpack = Object.entries(inv.backpack);
       if (backpack.length > 0)
         lines.push(`背包：${backpack.map(([id, n]) => `${id}×${n}`).join("、")}`);
-      if (inv.parts > 0)
-        lines.push(`零件：${inv.parts} 个（拆解和升级玩家在界面上做；剧情里得到或花掉写 parts）`);
+      // 物品栏精简（用户定的方案 A）：零件不再出现，不写进【当前状态】；存档里的零件数照旧留着
       return lines;
     },
   },

@@ -9,6 +9,7 @@ import {
   formatGameTime,
   type LocationDef,
   locationCatalog,
+  METERS_PER_PERCENT,
   PERIOD_LABELS,
   type Period,
   periodOf,
@@ -31,7 +32,8 @@ import {
 import { activeVehicle, vehicleCatalog, vehicleFactor } from "./vehicles";
 
 /**
- * 耗时 = 固定 + 每单位距离的分钟数；距离是底图百分比坐标的直线距离，1 单位约 100 米（本作改编，待校准）。
+ * 耗时 = 固定 + 每单位距离的分钟数；1 单位 100 米。两头都在路线表里时按路面距离（§七 简单版做法，步行和开车共用一张路面图，用户定的），
+ * 否则按底图百分比坐标的直线距离，1 个百分点约 78 米（本作改编，待校准）。
  * 步行约每小时 5 公里；轻轨的固定时间是走到站、等车；出租车的固定时间是等车来。
  */
 export const TRAVEL_SPEEDS: Readonly<
@@ -63,6 +65,8 @@ export interface RouteOption {
   readonly riskLabel: string;
   /** 走不了时写原因 */
   readonly blocked?: string;
+  /** 路程是估的（§七：有一头离路面太远、坐标待核对，或不在路线表里只能按直线）；准的时候不带这个字段 */
+  readonly rough?: true;
 }
 
 /** 算路线要看的状态 */
@@ -107,6 +111,135 @@ export function distanceBetween(a: LocationDef | undefined, b: LocationDef | und
   return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : undefined;
 }
 
+/**
+ * 路面距离表（places-plan §七 简单版做法，用户定的“车和人先合在一起”）：content 包离线算好的锚点两两路面米数，
+ * 放在 data.routes；meters 是上三角摊平，下标 i*n - i*(i+1)/2 + (j-i-1)
+ */
+interface RouteTableData {
+  readonly anchors: readonly { readonly id: string; readonly rough: boolean }[];
+  readonly meters: readonly number[];
+}
+
+const routeIndexes = new WeakMap<object, ReadonlyMap<string, number>>();
+
+function routeTableOf(data: Readonly<Record<string, unknown>>): RouteTableData | undefined {
+  const raw = data.routes as Partial<RouteTableData> | undefined;
+  return raw && Array.isArray(raw.anchors) && Array.isArray(raw.meters)
+    ? (raw as RouteTableData)
+    : undefined;
+}
+
+function routeIndexOf(table: RouteTableData): ReadonlyMap<string, number> {
+  const cached = routeIndexes.get(table);
+  if (cached) return cached;
+  const index = new Map(table.anchors.map((a, i) => [a.id, i] as const));
+  routeIndexes.set(table, index);
+  return index;
+}
+
+/**
+ * 这个地点标了“大概”：路线表里标的（离路面超过 250 米或坐标本身待核对，§七），
+ * 或者是地点簿里代码推算坐标的新地点（places-plan §四"大概位置"）
+ */
+export function roughPlace(data: Readonly<Record<string, unknown>>, id: string): boolean {
+  if (locationCatalog(data).get(id)?.rough === true) return true;
+  const table = routeTableOf(data);
+  if (!table) return false;
+  const i = routeIndexOf(table).get(id);
+  return i !== undefined && table.anchors[i]?.rough === true;
+}
+
+/** 路线表锚点的坐标：从地点表（含地点簿）和周边锚点（poi:、ft:）里找；按 data 缓存 */
+const anchorSpots = new WeakMap<object, readonly { id: string; x: number; y: number }[]>();
+
+function anchorSpotsOf(
+  data: Readonly<Record<string, unknown>>,
+  table: RouteTableData,
+): readonly { id: string; x: number; y: number }[] {
+  const cached = anchorSpots.get(data);
+  if (cached) return cached;
+  const spots = new Map<string, { x: number; y: number }>();
+  if (Array.isArray(data.radar)) {
+    for (const a of data.radar as { id: string; x: number; y: number }[]) {
+      spots.set(a.id, { x: a.x, y: a.y });
+    }
+  }
+  for (const p of locationCatalog(data).values()) {
+    const s = spot(p);
+    if (s) spots.set(p.id, s);
+  }
+  const out = table.anchors.flatMap((a) => {
+    const s = spots.get(a.id);
+    return s ? [{ id: a.id, ...s }] : [];
+  });
+  anchorSpots.set(data, out);
+  return out;
+}
+
+/** 离这个点最近的路线表锚点和直线米数；表里的锚点都没有坐标时是 undefined */
+function nearestAnchor(
+  data: Readonly<Record<string, unknown>>,
+  table: RouteTableData,
+  p: { x: number; y: number },
+): { readonly id: string; readonly meters: number } | undefined {
+  let best: { id: string; meters: number } | undefined;
+  for (const a of anchorSpotsOf(data, table)) {
+    const meters = Math.hypot(a.x - p.x, a.y - p.y) * METERS_PER_PERCENT;
+    if (!best || meters < best.meters) best = { id: a.id, meters };
+  }
+  return best;
+}
+
+/** 两地的路面距离（米）；表里没有其中一头时是 undefined，调用方退回直线 */
+export function roadMetersBetween(
+  data: Readonly<Record<string, unknown>>,
+  from: string,
+  to: string,
+): number | undefined {
+  const table = routeTableOf(data);
+  if (!table) return undefined;
+  const index = routeIndexOf(table);
+  const a = index.get(from);
+  const b = index.get(to);
+  if (a === undefined || b === undefined) return undefined;
+  if (a === b) return 0;
+  const [i, j] = a < b ? [a, b] : [b, a];
+  const n = table.anchors.length;
+  return table.meters[i * n - (i * (i + 1)) / 2 + (j - i - 1)];
+}
+
+/**
+ * 出行用的距离（单位约 100 米）：两头都在路线表里按路面距离，否则按地图直线（§七 简单版做法）；
+ * rough 是有一头标了“大概”，或者只能按直线算
+ */
+export function tripDistance(
+  data: Readonly<Record<string, unknown>>,
+  a: LocationDef | undefined,
+  b: LocationDef | undefined,
+): { readonly d: number; readonly rough: boolean } | undefined {
+  const straight = distanceBetween(a, b);
+  if (!a || !b || straight === undefined) return undefined;
+  const table = routeTableOf(data);
+  // 没有路线表（旧数据、测试）时照旧按直线，不标“大概”
+  if (!table) return { d: straight, rough: false };
+  const road = roadMetersBetween(data, a.id, b.id);
+  if (road !== undefined) {
+    return { d: road / 100, rough: roughPlace(data, a.id) || roughPlace(data, b.id) };
+  }
+  // §七：表里没有的一头（地点簿的新地点等）先直线走到离它最近的锚点，再按路面；标“大概”
+  const index = routeIndexOf(table);
+  const leg = (p: LocationDef) => {
+    if (index.has(p.id)) return { id: p.id, meters: 0 };
+    const s = spot(p);
+    return s ? nearestAnchor(data, table, s) : undefined;
+  };
+  const la = leg(a);
+  const lb = leg(b);
+  const mid = la && lb ? roadMetersBetween(data, la.id, lb.id) : undefined;
+  if (!la || !lb || mid === undefined) return { d: straight, rough: true };
+  return { d: (la.meters + mid + lb.meters) / 100, rough: true };
+}
+
 function riskOf(mode: TravelMode, period: Period, heat: number): Risk {
   if (mode === "stolen") return "high";
   if (mode === "walk") {
@@ -126,7 +259,8 @@ export function routeOptions(
   const places = locationCatalog(data);
   const here = w.location === null ? undefined : places.get(w.location);
   const there = places.get(to);
-  const d = distanceBetween(here, there);
+  const trip = tripDistance(data, here, there);
+  const d = trip?.d;
   const period = periodOf(w.now);
   const cars = vehicleCatalog(data);
   return MODES.map((mode) => {
@@ -150,6 +284,7 @@ export function routeOptions(
       cost,
       risk,
       riskLabel: RISK_LABELS[risk],
+      ...(trip?.rough ? { rough: true as const } : {}),
     };
     const blocked = blockOf(w, mode, here, there, d, cost, car !== undefined);
     return blocked ? { ...base, blocked } : base;
@@ -263,8 +398,10 @@ export function planTrip(
 export function tripText(trip: PlannedTrip): string {
   const { route, from, to } = trip;
   const money = route.cost > 0 ? `路费 ${route.cost} 欧元由代码扣` : "不花钱";
+  // §七：路程是估的就照实说“大概”，正文别写成精确的路线
+  const about = route.rough ? "大概" : "";
   const lines = [
-    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
+    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上${about} ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
   ];
   if (trip.encounter) {
     lines.push(

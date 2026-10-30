@@ -3,8 +3,9 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type Difficulty, type SaveSummary } from "../../api/client";
 import { DIFFICULTY_LABELS, DIFFICULTY_NOTES, formatDate } from "../../labels";
-import { Asset, cssUrl } from "../../ui/Asset";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
@@ -14,9 +15,23 @@ import styles from "./menu.module.css";
 
 type Item = "continue" | "new" | "load" | "legends" | "characters" | "settings";
 
+/** 右侧舞台的标题，跟着左边选中的菜单项走 */
+const STAGE_TITLES: Partial<Record<Item, string>> = {
+  continue: "继续",
+  new: "新建存档",
+  load: "读取存档",
+  legends: "传说名册",
+};
+
+/** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
+const FRAME_SLICE = 120;
+
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
-/** 最简主菜单：左侧红色菜单，右侧是选中项的预览 */
+/**
+ * 主菜单（用户定的重排）：照神经界面的外框，夜之城远景压暗、扫描线、原作 panel.frame 红框；
+ * 左边一列是标志、菜单和状态，右边是选中项的舞台，标题压在原作 menu.header 上
+ */
 export function MainMenu() {
   const navigate = useNavigate();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
@@ -63,67 +78,145 @@ export function MainMenu() {
     if (saves.isSuccess && !latest && focus === "continue") setFocus("new");
   }, [saves.isSuccess, latest, focus]);
 
+  const modelReady = health.data
+    ? health.data.config === "ok" && health.data.models?.ready !== false
+    : null;
+  const stageTitle = STAGE_TITLES[focus] ?? "";
+  const stageCount =
+    focus === "load" && saves.isSuccess
+      ? `${sorted.length} 个存档`
+      : focus === "continue" && latest
+        ? "最近的存档"
+        : "";
+
   return (
-    <main className={styles.menu} style={{ backgroundImage: cssUrl("menu.background") }}>
-      <div className={styles.scan} style={{ backgroundImage: cssUrl("fx.scanlines") }} />
-      <header className={styles.header}>
-        <Asset id="splash.logo" height={72} alt="赛博朋克 2077" />
-        <span className={styles.subtitle}>夜之城角色卡</span>
-      </header>
-      <nav className={styles.nav} aria-label="主菜单">
-        {items.map((item) => (
-          <MenuItem
-            key={item.id}
-            label={item.label}
-            selected={focus === item.id}
-            disabled={item.disabled ?? false}
-            reason={item.reason}
-            onFocus={() => !item.disabled && setFocus(item.id)}
-            onSelect={() => select(item.id)}
-          />
-        ))}
-      </nav>
-      <section className={styles.preview}>
-        {health.data && (health.data.config !== "ok" || health.data.models?.ready === false) && (
-          <Panel line="var(--cp-yellow)" className={styles.warn}>
-            {health.data.models?.narrator.error ??
-              health.data.models?.aux.error ??
-              "模型还没配好，剧情暂时不能开始。"}
-            <Button onClick={() => navigate("/settings")}>去设置</Button>
-          </Panel>
-        )}
-        {health.isError && (
-          <Panel line="var(--cp-danger)" className={styles.warn}>
-            {health.error.message}
-          </Panel>
-        )}
-        {focus === "continue" && latest && (
-          <SaveCard save={latest} onOpen={() => navigate(`/play/${latest.id}`)} />
-        )}
-        {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
-        {focus === "legends" && <LegendsPanel onOpen={(id) => navigate(`/play/${id}`)} />}
-        {focus === "load" && (
-          <Panel title="读取存档">
-            {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
-            <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
-            {sorted.length === 0 ? (
-              <EmptyState
-                text="还没有存档"
-                action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
-              />
-            ) : (
-              <ul className={styles.saveList}>
-                {sorted.map((save) => (
-                  <li key={save.id}>
-                    <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
-                    <ExportSave save={save} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        )}
+    <main className={styles.menu}>
+      <span
+        className={styles.bg}
+        style={{ backgroundImage: cssUrl("menu.nightCity") }}
+        aria-hidden
+      />
+      <span className={styles.dim} aria-hidden />
+      <span
+        className={styles.strip}
+        style={{ backgroundImage: cssUrl("menu.background") }}
+        aria-hidden
+      />
+      <span
+        className={styles.scan}
+        style={{ backgroundImage: cssUrl("fx.scanlines") }}
+        aria-hidden
+      />
+      <NineSlice
+        id="panel.frame"
+        tint="var(--cp-red)"
+        slice={FRAME_SLICE}
+        className={styles.frame}
+      />
+
+      <aside className={styles.side}>
+        <header className={styles.brand}>
+          <Asset id="splash.logo" height={84} alt="赛博朋克 2077" />
+          <span className={styles.subtitle}>
+            <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
+            夜之城角色卡
+          </span>
+        </header>
+        <nav className={styles.nav} aria-label="主菜单">
+          {items.map((item) => (
+            <MenuItem
+              key={item.id}
+              label={item.label}
+              selected={focus === item.id}
+              disabled={item.disabled ?? false}
+              reason={item.reason}
+              onFocus={() => !item.disabled && setFocus(item.id)}
+              onSelect={() => select(item.id)}
+            />
+          ))}
+        </nav>
+        <dl className={styles.status}>
+          <dt>存档</dt>
+          <dd className="num">{saves.isSuccess ? sorted.length : "—"}</dd>
+          <dt>模型</dt>
+          <dd data-tone={modelReady === false ? "warn" : modelReady ? "ok" : undefined}>
+            {modelReady === null ? "检查中" : modelReady ? "就绪" : "未配好"}
+          </dd>
+        </dl>
+      </aside>
+
+      <section className={styles.stage} aria-label={stageTitle}>
+        <header className={styles.stageHead}>
+          <Asset id="menu.header" tint="var(--cp-red)" height={56} className={styles.stageHeadBg} />
+          <b className={styles.stageTitle}>{stageTitle}</b>
+          {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
+        </header>
+        <span
+          className={styles.stageLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
+        <div className={styles.stageBody} key={focus}>
+          {health.data && (health.data.config !== "ok" || health.data.models?.ready === false) && (
+            <Panel line="var(--cp-yellow)" className={styles.warn}>
+              <div className={styles.warnRow}>
+                <span>
+                  {health.data.models?.narrator.error ??
+                    health.data.models?.aux.error ??
+                    "模型还没配好，剧情暂时不能开始。"}
+                </span>
+                <Button onClick={() => navigate("/settings")}>去设置</Button>
+              </div>
+            </Panel>
+          )}
+          {health.isError && (
+            <Panel line="var(--cp-danger)" className={styles.warn}>
+              {health.error.message}
+            </Panel>
+          )}
+          {focus === "continue" && latest && (
+            <div className={styles.continue}>
+              <SaveCard save={latest} onOpen={() => navigate(`/play/${latest.id}`)} />
+              {sorted.length > 1 && (
+                <>
+                  <h3 className={styles.groupHead}>其他存档</h3>
+                  <ul className={styles.saveList}>
+                    {sorted.slice(1, 4).map((save) => (
+                      <li key={save.id}>
+                        <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+          {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
+          {focus === "legends" && <LegendsPanel onOpen={(id) => navigate(`/play/${id}`)} />}
+          {focus === "load" && (
+            <div className={styles.load}>
+              {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
+              <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
+              {sorted.length === 0 ? (
+                <EmptyState
+                  text="还没有存档"
+                  action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
+                />
+              ) : (
+                <ul className={styles.saveList}>
+                  {sorted.map((save) => (
+                    <li key={save.id} className={styles.saveRow}>
+                      <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
+                      <ExportSave save={save} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       </section>
+
       <div className={styles.keys}>
         <KeyBar>
           <KeyHint keyId="key.enter" label="选择" />
@@ -161,7 +254,7 @@ function ExportSave({ save }: { save: SaveSummary }) {
   };
   return (
     <div className={styles.saveTools}>
-      <Button onClick={() => void run()}>完整导出（含剧透）</Button>
+      <Button onClick={() => void run()}>导出</Button>
       {error && <span className={styles.error}>{error}</span>}
     </div>
   );
@@ -194,7 +287,7 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
     }
   };
   return (
-    <div className={styles.saveTools}>
+    <div className={styles.importRow}>
       <Button onClick={() => input.current?.click()} disabled={busy}>
         {busy ? "导入中……" : "导入存档"}
       </Button>
@@ -209,12 +302,13 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
           if (file) void onFile(file);
         }}
       />
-      <span className={styles.note}>导入完整导出的文件，建成一个新存档</span>
+      <span className={styles.note}>导入完整导出的文件，建成新存档；导出的文件含剧透</span>
       {error && <span className={styles.error}>{error}</span>}
     </div>
   );
 }
 
+/** 存档卡：原作 map.filterCell 格框（用户定的，不手画边框），悬停变青 */
 function SaveCard({
   save,
   onOpen,
@@ -231,7 +325,13 @@ function SaveCard({
       data-compact={compact || undefined}
       onClick={onOpen}
     >
-      <Asset id="menu.saveSlot" height={compact ? 22 : 30} tint="var(--cp-red)" />
+      <CellFrame />
+      <Asset
+        id="menu.saveSlot"
+        height={compact ? 22 : 36}
+        tint="currentColor"
+        className={styles.saveIcon}
+      />
       <span className={styles.saveTitle}>{save.title}</span>
       <span className={styles.saveMeta}>
         {DIFFICULTY_LABELS[save.difficulty]} · 建于{" "}
@@ -267,38 +367,52 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   };
   const reason = create.isPending ? "正在创建" : !title.trim() ? "先写存档名" : "先选一个可用角色";
   return (
-    <Panel title="新建存档">
+    <Panel>
       <form className={styles.form} onSubmit={submit}>
-        <label className={styles.field}>
-          <span>存档名</span>
-          <input
-            value={title}
-            maxLength={80}
-            disabled={create.isPending}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="例如：沃森的第一单"
-          />
-        </label>
-        <label className={styles.field}>
-          <span>扮演的角色</span>
-          <select
-            value={characterId}
-            disabled={create.isPending || !characters.isSuccess || entries.length === 0}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            {entries.length === 0 && (
-              <option value="">{characters.isPending ? "正在读取角色…" : "暂无可选角色"}</option>
-            )}
-            {entries.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.card.name} · {entry.card.origin}
-                {entry.sample ? "（示例）" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className={styles.fields}>
+          <label className={styles.field}>
+            <span>存档名</span>
+            <FrameBox>
+              <input
+                value={title}
+                maxLength={80}
+                disabled={create.isPending}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="例如：沃森的第一单"
+              />
+            </FrameBox>
+          </label>
+          <div className={styles.field}>
+            <label htmlFor="new-save-character">扮演的角色</label>
+            <div className={styles.fieldRow}>
+              <FrameBox className={styles.grow}>
+                <select
+                  id="new-save-character"
+                  value={characterId}
+                  disabled={create.isPending || !characters.isSuccess || entries.length === 0}
+                  onChange={(e) => setSelectedId(e.target.value)}
+                >
+                  {entries.length === 0 && (
+                    <option value="">
+                      {characters.isPending ? "正在读取角色…" : "暂无可选角色"}
+                    </option>
+                  )}
+                  {entries.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.card.name} · {entry.card.origin}
+                      {entry.sample ? "（示例）" : ""}
+                    </option>
+                  ))}
+                </select>
+              </FrameBox>
+              <Button disabled={create.isPending} onClick={() => navigate("/characters")}>
+                管理角色
+              </Button>
+            </div>
+          </div>
+        </div>
         {characters.isError && (
-          <div role="alert">
+          <div role="alert" className={styles.fieldRow}>
             <p className={styles.error}>{characters.error.message}</p>
             <Button disabled={characters.isFetching} onClick={() => void characters.refetch()}>
               重新读取角色
@@ -309,18 +423,16 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <p className={styles.note}>还没有角色。</p>
         )}
         {selected && (
-          <p className={styles.note}>
+          <p className={styles.charNote}>
             {selected.card.alias ? `外号「${selected.card.alias}」。` : ""}
             {selected.card.personality || selected.card.origin}
           </p>
         )}
-        <Button disabled={create.isPending} onClick={() => navigate("/characters")}>
-          管理角色
-        </Button>
         <fieldset className={styles.difficulty} disabled={create.isPending}>
           <legend>难度</legend>
           {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((d) => (
             <label key={d} data-checked={difficulty === d || undefined}>
+              <CellFrame />
               <input
                 type="radio"
                 name="difficulty"
@@ -332,15 +444,17 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
             </label>
           ))}
         </fieldset>
-        <p className={styles.note}>开档时保存角色快照，以后修改角色卡不会改变这个存档。</p>
         {create.isError && (
           <p className={styles.error} role="alert">
             {create.error.message}
           </p>
         )}
-        <Button type="submit" primary disabled={!canCreate} reason={reason}>
-          {create.isPending ? "创建中…" : "开始"}
-        </Button>
+        <div className={styles.submit}>
+          <p className={styles.note}>开档时保存角色快照，以后修改角色卡不会改变这个存档。</p>
+          <Button type="submit" primary disabled={!canCreate} reason={reason}>
+            {create.isPending ? "创建中…" : "开始"}
+          </Button>
+        </div>
       </form>
     </Panel>
   );

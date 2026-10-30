@@ -1,0 +1,57 @@
+/* 原作格框（用户定的：只用原作素材，不手画边框）：两层九宫格垫在内容下面，颜色靠 --box-fill / --box-line */
+.slice {
+  z-index: -1;
+}
+
+.box {
+  --box-line: var(--cp-red-dim);
+  position: relative;
+  isolation: isolate;
+  display: block;
+  min-width: 0;
+  transition: --box-line var(--dur-flash);
+}
+
+.box:focus-within {
+  --box-line: var(--cp-cyan);
+}
+
+.box:has(:disabled) {
+  opacity: 0.55;
+}
+
+.box input,
+.box select,
+.box textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  /* 输入框和下拉框同高：原先下拉 41、输入 44，并排时底边对不齐 */
+  min-height: 44px;
+  padding: 9px 16px 11px 12px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--cp-text);
+  font: inherit;
+  font-size: var(--fs-ui);
+}
+
+.box textarea {
+  resize: vertical;
+}
+
+.box select {
+  cursor: var(--cp-cursor-hand);
+}
+
+.box select option {
+  background: var(--cp-bg);
+  color: var(--cp-text);
+}
+
+.box input::placeholder,
+.box textarea::placeholder {
+  color: var(--cp-text-faint);
+}

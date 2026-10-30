@@ -31,7 +31,7 @@ export function NotesPanel({
   return (
     <div className={styles.journalBackdrop}>
       <div role="dialog" aria-label="通知" className={styles.journal}>
-        <Panel as="div" title="通知" line="var(--cp-yellow)">
+        <Panel as="div" title="通知" line="var(--cp-yellow)" frame>
           <div className={styles.docHead}>
             <Button onClick={onClose}>关闭</Button>
           </div>
