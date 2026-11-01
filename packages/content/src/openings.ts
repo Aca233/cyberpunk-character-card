@@ -1,4 +1,5 @@
 import type { GameOpening } from "@cp/core";
+import { RADAR_ANCHORS } from "./radar";
 
 /** 新存档默认用的开场 */
 export const DEFAULT_OPENING = "lizzies-2077";
@@ -104,7 +105,28 @@ export const openings: readonly GameOpening[] = [
   },
 ];
 
-/** 存档用的开场设定；旧存档没有开场 */
-export function openingPremise(id: string | undefined): string | undefined {
-  return id === undefined ? undefined : openings.find((o) => o.id === id)?.premise;
+/** 地图锚点的说法：没有原作店名的服务点只有类别名，写成“一处义体医生”这样，不编店名 */
+function anchorWords(id: string): string {
+  const anchor = RADAR_ANCHORS.find((a) => a.id === id);
+  if (!anchor) return id;
+  return anchor.kind !== null && anchor.name === anchor.kind ? `一处${anchor.kind}` : anchor.name;
+}
+
+/**
+ * 存档用的开场设定；旧存档没有开场。
+ * startLocation 是建档时在地图上选的开局地点（用户定的，2026-10-30："可以选择地点开局"，"在地图上选择"）：
+ * 和开场自带的地点不同时，在原设定后面补一段，交代玩家眼下在哪、第一轮从哪切进去；
+ * 引导委托、出场人物照旧，交货的约定地点仍是开场地点。没选或选的就是开场地点时原样返回，旧存档的提示词不变
+ */
+export function openingPremise(
+  id: string | undefined,
+  startLocation?: string | undefined,
+): string | undefined {
+  const opening = id === undefined ? undefined : openings.find((o) => o.id === id);
+  if (!opening) return undefined;
+  if (startLocation === undefined || startLocation === opening.location) return opening.premise;
+  const here = anchorWords(startLocation);
+  const home = anchorWords(opening.location);
+  return `${opening.premise}
+开局地点改了：玩家角色眼下在${here}（地点 ${startLocation}），不在${home}。上面写的“从${home}开始”“从酒吧里的一个具体瞬间切进去”，改成从${here}的一个具体瞬间切进去；委托照旧，约好的交货地点仍是${home}，玩家角色得自己过去。`;
 }

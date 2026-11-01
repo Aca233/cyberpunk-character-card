@@ -3,8 +3,6 @@ import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import type { Npc, NpcState } from "../npc";
 import {
   ARC_NOTES_KEPT,
-  ARC_OFFSCREEN_GAP_DAYS,
-  ARC_OFFSCREEN_PER_RUN,
   ARC_OPEN_MAX,
   ArcCatalogSchema,
   type ArcCommand,
@@ -20,7 +18,6 @@ import {
 type State = Draft<ArcsState>;
 type Data = Readonly<Record<string, unknown>>;
 
-const DAY = 24 * 60;
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, ArcSeed>>();
@@ -39,7 +36,6 @@ export function arcCatalog(data: Data): ReadonlyMap<string, ArcSeed> {
 const EMPTY_ARC: ArcProgress = {
   unlockedAt: null,
   concerns: {},
-  lastOffscreenAt: null,
   doneAt: null,
 };
 const EMPTY_CONCERN: ConcernProgress = { status: null, toldAt: null, notes: [], outcome: null };
@@ -78,7 +74,7 @@ export function openConcerns(seed: ArcSeed, arc: ArcProgress): ArcConcernSeed[] 
 function slot(draft: State, npc: string): Draft<ArcProgress> {
   const existing = draft.arcs[npc];
   if (existing) return existing;
-  draft.arcs[npc] = { unlockedAt: null, concerns: {}, lastOffscreenAt: null, doneAt: null };
+  draft.arcs[npc] = { unlockedAt: null, concerns: {}, doneAt: null };
   return draft.arcs[npc] as Draft<ArcProgress>;
 }
 
@@ -212,7 +208,11 @@ export function applyArc(draft: State, command: ArcCommand, ctx: SystemContext):
   }
 }
 
-/** 场外推演推一件没人管的心事：玩家在管的、已有结果的不推；同一个人隔 ARC_OFFSCREEN_GAP_DAYS 天 */
+/**
+ * 【城里在发酵的事】里一件心事在场外走了一步或收场：由那边发来，这里只记进展和结果。
+ * 不再卡间隔、不再拦玩家在管的事；已经有结果的不改，也不算失败，免得那边的一步跟着作废
+ * （用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）
+ */
 export function applyArcOffscreen(
   draft: State,
   command: ArcOffscreenCommand,
@@ -220,25 +220,13 @@ export function applyArcOffscreen(
 ): ApplyOutcome {
   const found = resolve(command.npc, command.concern, ctx);
   if (typeof found === "string") return fail(found);
-  const { seed, concern, card, name } = found;
+  const { seed, concern, name } = found;
   const now = ctx.now;
-  if (!card?.alive) return fail(`${name}已经死了`);
-  const before = arcOf(draft, seed.npc);
-  const current = concernOf(before, concern.id);
-  if (current.status === "involved") return fail(`玩家在管${name}的「${concern.title}」，场外不推`);
-  if (current.status === "resolved") return fail(`「${concern.title}」已经有结果了`);
-  if (
-    before.lastOffscreenAt !== null &&
-    now - before.lastOffscreenAt < ARC_OFFSCREEN_GAP_DAYS * DAY
-  ) {
-    return fail(`${name}的心事上次推过才 ${Math.floor((now - before.lastOffscreenAt) / DAY)} 天`);
-  }
-  if (command.resolve && current.notes.length === 0) {
-    return fail(`「${concern.title}」还没有过进展，先推一步，不能直接出结果`);
-  }
+  const current = concernOf(arcOf(draft, seed.npc), concern.id);
+  if (current.status === "resolved") return { ok: true, notes: [] };
   const arc = slot(draft, seed.npc);
   const p = concernSlot(arc, concern.id);
-  arc.lastOffscreenAt = now;
+  // 推进时间由新单子的定时器管理，心事这里只记发生的事（用户 2026-11-01 定的「全改」第 4 步）
   pushNote(p, command.text, now, "offscreen");
   if (!command.resolve) {
     return {
@@ -274,47 +262,5 @@ export function unlockArcs(draft: State, at: number, ctx: SystemContext): void {
   }
 }
 
-export interface OffscreenConcern {
-  readonly npc: string;
-  readonly name: string;
-  readonly concern: ArcConcernSeed;
-  readonly progress: ConcernProgress;
-}
-
-/**
- * 这次场外推演可以推的心事：活着、不在场也不在队里的原作人物，每人只挑一件（玩家知道但没管的优先），
- * 离上次推他满 ARC_OFFSCREEN_GAP_DAYS 天；最多 ARC_OFFSCREEN_PER_RUN 件，没推过的、推得早的在前
- */
-export function offscreenConcerns(
-  state: ArcsState,
-  data: Data,
-  npcs: Readonly<Record<string, Npc>>,
-  now: number,
-  exclude: ReadonlySet<string>,
-): OffscreenConcern[] {
-  const picks: { pick: OffscreenConcern; rank: number; last: number }[] = [];
-  for (const seed of arcCatalog(data).values()) {
-    const card = npcs[seed.npc];
-    if (!card?.alive || exclude.has(seed.npc)) continue;
-    const arc = arcOf(state, seed.npc);
-    if (arc.lastOffscreenAt !== null && now - arc.lastOffscreenAt < ARC_OFFSCREEN_GAP_DAYS * DAY) {
-      continue;
-    }
-    const free = seed.concerns.filter((c) => {
-      const s = concernOf(arc, c.id).status;
-      return s !== "involved" && s !== "resolved";
-    });
-    const known = free.find((c) => concernOf(arc, c.id).status !== null);
-    const concern = known ?? free[0];
-    if (!concern) continue;
-    picks.push({
-      pick: { npc: seed.npc, name: card.name, concern, progress: concernOf(arc, concern.id) },
-      rank: known ? 0 : 1,
-      last: arc.lastOffscreenAt ?? -1,
-    });
-  }
-  return picks
-    .sort((a, b) => a.rank - b.rank || a.last - b.last || (a.pick.npc < b.pick.npc ? -1 : 1))
-    .slice(0, ARC_OFFSCREEN_PER_RUN)
-    .map((p) => p.pick);
-}
+// 场外心事的挑选结果类型随旧挑选函数一起删了（用户 2026-11-01 定的「全改」第 4 步）
+// 不再按人物挑选场外心事，开哪件、何时推进统一交给新单子（用户 2026-11-01 定的"全改"第 4 步）

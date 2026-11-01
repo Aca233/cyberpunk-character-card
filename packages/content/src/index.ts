@@ -18,6 +18,7 @@ import { npcs } from "./npcs";
 import { openings } from "./openings";
 import { RADAR_ANCHORS } from "./radar";
 import { ripperdocs } from "./ripperdocs";
+import { ROAD_SPOTS } from "./roadSpots.gen";
 import { ROUTE_ANCHORS, ROUTE_METERS } from "./routeTable.gen";
 import { apartments, homes } from "./safehouses";
 import { SERVICE_POINTS } from "./servicePoints.gen";
@@ -48,6 +49,8 @@ export { boardModules } from "./modules";
 export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
 export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
+// 开局地点“在地图上选择”（用户定的，2026-10-30）：选点与服务端校验共用已有锚点，不为缺坐标的地点补造位置
+export { RADAR_ANCHORS, type RadarAnchor } from "./radar";
 export { ripperdocs } from "./ripperdocs";
 // 地图锚点（固定地点、poi:服务点、ft:地标）两两之间沿原作路面网格的路程，整数米；步行和开车先合在一起（用户定的）。见 docs/places-plan.md 第七节"简单版做法"
 export { ROUTE_ANCHORS, type RouteAnchor, routeMeters } from "./routeTable.gen";
@@ -57,6 +60,21 @@ export { SERVICE_POINTS, type ServicePoint, type ServicePointKind } from "./serv
 export { shops } from "./shops";
 export { sidegigs } from "./sidegigs";
 export { vehicles } from "./vehicles";
+
+/**
+ * 建档和剧情结算共用的地点解析数据（用户定的，2026-10-30：开局地点“在地图上选择”）。
+ * 地标、服务点和城区形状沿用原作数据，不另编坐标
+ */
+const mapData = {
+  radar: RADAR_ANCHORS,
+  mapAreas: {
+    districts: DISTRICT_SHAPES,
+    subdistricts: SUBDISTRICT_SHAPES,
+    centers: DISTRICT_CENTERS,
+    kinds: MAP_POI_KINDS,
+  },
+  servicePoints: SERVICE_POINTS,
+};
 
 /** 新存档放进世界的内容 */
 export const gameContent: GameContent = {
@@ -70,6 +88,7 @@ export const gameContent: GameContent = {
   quickhacks,
   vehicles,
   homes,
+  mapData,
   // 没有开场的旧存档种的人
   defaultCast: ["rebecca", "maine", "faraday"],
 };
@@ -96,16 +115,12 @@ export const gameData: Readonly<Record<string, unknown>> = {
   apartments,
   // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点退回直线
   routes: { anchors: ROUTE_ANCHORS, meters: ROUTE_METERS },
-  // 周边雷达的锚点（§十三①）；出行系统按玩家坐标挑最近的写进【当前状态】
-  radar: RADAR_ANCHORS,
-  // 地点簿推算坐标用（places-plan §四）：城区、街区轮廓和标签点，城区中心，服务点类别名
-  mapAreas: {
-    districts: DISTRICT_SHAPES,
-    subdistricts: SUBDISTRICT_SHAPES,
-    centers: DISTRICT_CENTERS,
-    kinds: MAP_POI_KINDS,
-  },
-  // 原作服务点（§五）：place 写 kind 时代码在这里挑一家；poi: 第一次去时记进地点簿
-  servicePoints: SERVICE_POINTS,
+  // 和建档共用同一份（见上面 mapData）：
+  // radar 是周边雷达的锚点（§十三①），出行系统按玩家坐标挑最近的写进【当前状态】；
+  // mapAreas 给地点簿推算坐标（places-plan §四）：城区、街区轮廓和标签点，城区中心，服务点类别名；
+  // servicePoints 是原作服务点（§五）：place 写 kind 时代码在这里挑一家，poi: 第一次去时记进地点簿
+  ...mapData,
+  // 原作路面的路边点（3dmap_roads 主连通分量，25 m 一格去重，x、y 交替摊平）：模型新建的地点贴到最近的路边（用户定的"先贴路面"，2026-10-30），坐标本作改编、标大概位置
+  roadSpots: ROAD_SPOTS,
   // 原剧第 1–6 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };

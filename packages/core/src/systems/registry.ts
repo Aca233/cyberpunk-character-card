@@ -28,6 +28,7 @@ import { shards } from "./shards";
 import { sidegigs } from "./sidegigs";
 import { squad } from "./squad";
 import { stealth } from "./stealth";
+import { threads } from "./threads";
 import { trauma } from "./trauma";
 import { travel } from "./travel";
 import { world } from "./world";
@@ -64,6 +65,7 @@ export const systems: readonly AnySystem[] = [
   chronicle,
   nemesis,
   arcs,
+  threads,
   braindance,
   shards,
 ];

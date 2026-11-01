@@ -81,6 +81,8 @@ function ProfileInfo({ npc }: { readonly npc: Npc }) {
         /* 信息压成一行小字（计划第十二节第 14 条）：身份、代词、地点、好感按顺序排，没有的就不写，好感条缩成一小截 */
         <div className={styles.brief}>
           <span>{npc.role}</span>
+          {/* 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：不属于任何势力显示「无」 */}
+          {npc.faction && <span>势力 {npc.faction}</span>}
           <span>{npc.pronoun}</span>
           {npc.lastPlace && <span>最后出现 {npc.lastPlace}</span>}
           {npc.homePlace && <span>常在 {npc.homePlace}</span>}
@@ -189,12 +191,14 @@ function BodySection({
   );
 }
 
-type TabId = "relation" | "nemesis" | "body" | "known" | "arc" | "ledger" | "memories";
+type TabId = "relation" | "ties" | "nemesis" | "body" | "known" | "arc" | "ledger" | "memories";
 type Tab = readonly [TabId, string, number];
 
 /** 下面各栏的页签（计划第十二节第 14 条）：只列这个人有的栏，角标是条数 */
 function profileTabs(npc: Npc): Tab[] {
   const tabs: Tab[] = [["relation", "关系", 0]];
+  // 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：有才列
+  if (npc.ties.length > 0) tabs.push(["ties", "认识的人", npc.ties.length]);
   if (npc.nemesis) tabs.push(["nemesis", npc.nemesis.ended ? "旧宿敌" : "宿敌", 0]);
   if (npc.body) tabs.push(["body", "身体", 0]);
   tabs.push(["known", "你知道的", npc.known.length]);
@@ -247,6 +251,20 @@ export function Profile({
           {tab === "relation" && (
             <Panel as="section" title="关系" line="var(--cp-yellow)">
               <p className={styles.relation}>{npc.relation ?? "还说不上什么关系。"}</p>
+            </Panel>
+          )}
+          {/* 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：沿用列表样式，不加新框 */}
+          {tab === "ties" && npc.ties.length > 0 && (
+            <Panel as="section" title="认识的人" line="var(--cp-cyan)">
+              <ul className={styles.list}>
+                {npc.ties.map((t) => (
+                  <li key={t.id} data-settled={!t.alive || undefined}>
+                    <span className={styles.kind}>{t.name}</span>
+                    {t.text}
+                    {!t.alive && <small>已故</small>}
+                  </li>
+                ))}
+              </ul>
             </Panel>
           )}
           {tab === "nemesis" && npc.nemesis && <NemesisSection nemesis={npc.nemesis} />}

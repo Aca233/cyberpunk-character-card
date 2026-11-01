@@ -1,19 +1,22 @@
 import { randomBytes } from "node:crypto";
-import { boardModules, combos, cyberware, lifepath } from "@cp/content";
+import { boardModules, combos, cyberware, lifepath, npcs } from "@cp/content";
 import {
   BoardSchema,
   BoardSlotSchema,
   CharacterCardSchema,
   type Clock,
   cyberwareRules,
+  DraftRequestSchema,
   ImportRequestSchema,
   interpretModule,
   interpretTavernCard,
   type LlmClient,
   normalizeBoard,
   ProseRequestSchema,
+  pruneAcquaintances,
   readTavernCard,
   START_CYBERWARE_POINTS,
+  streamDraft,
   streamProse,
   tavernToCard,
 } from "@cp/core";
@@ -34,7 +37,9 @@ async function readCard(c: Context) {
   if (parsed.success) {
     if (!parsed.data.board) return { ok: true as const, card: parsed.data };
     // 开局义体的点数、人性消耗和联动按内容表重算，再校验一次预算
-    const fixed = normalizeBoard(parsed.data.board, { cyberware, combos });
+    // 旧识只认原作人物表和模块带出的人，对不上的去掉（用户定的，2026-10-30：15 个原作人物全部能选）
+    const board = pruneAcquaintances(parsed.data.board, npcs);
+    const fixed = normalizeBoard(board, { cyberware, combos });
     if (!fixed.ok) return { ok: false as const, error: fixed.error };
     return readCardAgain({ ...parsed.data, board: fixed.board });
   }
@@ -74,6 +79,14 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
       modules: boardModules,
       combos,
       lifepath,
+      // 捏人第 3 步能选的原作人物：只给名片上公开的几项，秘密和身体不下发
+      npcs: npcs.map((n) => ({
+        id: n.id,
+        name: n.name,
+        ...(n.alias ? { alias: n.alias } : {}),
+        role: n.role,
+        look: n.look,
+      })),
       cyberware: cyberware.flatMap((def) => {
         const points = START_CYBERWARE_POINTS[def.rarity];
         return def.iconic || points === undefined
@@ -84,6 +97,8 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 name: def.name,
                 slot: def.slot,
                 slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
+                // 稀有度给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）
+                rarity: def.rarity,
                 points,
                 humanityCost: def.humanityCost,
                 ability: def.ability,
@@ -175,6 +190,32 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
       } catch (error) {
         if (error instanceof AbortedError) return;
         const message = error instanceof UpstreamError ? error.message : "写正文时出错了，可以重试";
+        if (!(error instanceof UpstreamError)) console.error(error);
+        await send({ type: "error", message });
+      }
+    });
+  });
+  // 一键成稿（第三期，用户定的 2026-10-30）：一次写外貌、背景故事、性格、说话方式，顺带补旧识
+  // "是什么事"；按行吐 JSON 事件，原文带【】标记，由前端收齐后拆开；不进回合日志
+  app.post("/draft", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const input = DraftRequestSchema.safeParse(raw);
+    if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
+    const signal = c.req.raw.signal;
+    c.header("content-type", "application/x-ndjson; charset=utf-8");
+    c.header("cache-control", "no-store");
+    return stream(c, async (out) => {
+      const send = (event: unknown) => out.write(`${JSON.stringify(event)}\n`);
+      try {
+        for await (const event of streamDraft(llm, input.data, signal)) await send(event);
+      } catch (error) {
+        if (error instanceof AbortedError) return;
+        const message = error instanceof UpstreamError ? error.message : "成稿时出错了，可以重试";
         if (!(error instanceof UpstreamError)) console.error(error);
         await send({ type: "error", message });
       }

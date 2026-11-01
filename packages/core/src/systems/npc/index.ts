@@ -30,6 +30,7 @@ import {
   NpcStateSchema,
   RelationSchema,
   SeedNpcSchema,
+  TieSchema,
 } from "./schema";
 import { npcSections } from "./sections";
 import { npcStatus } from "./status";
@@ -48,6 +49,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcDeath: NpcDeathSchema,
     doing: DoingSchema,
     relation: RelationSchema,
+    tie: TieSchema,
     ledger: LedgerSchema,
     ledgerSettle: LedgerSettleSchema,
     learn: LearnSchema,
@@ -66,7 +68,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     "npc.offscreenDeath": NpcOffscreenDeathSchema,
   },
   apply(draft, command, ctx) {
-    if (command.type === "npc.seed") return seedNpc(draft, command, ctx.data);
+    if (command.type === "npc.seed") return seedNpc(draft, command, ctx.data, ctx.now);
     if (command.type === "npc.memoryEdit") return editNpcMemory(draft, command);
     if (command.type === "npc.past") return applyNpcPast(draft, command, ctx.now);
     if (command.type === "npc.offscreenDeath") {

@@ -5,37 +5,19 @@ import type { NpcState } from "../npc";
 import {
   NEMESES_MAX,
   NEMESIS_CRED_HALVES,
-  NEMESIS_DUE_DAYS,
   NEMESIS_END_LABELS,
-  NEMESIS_GAP_DAYS,
-  NEMESIS_MOVES_KEPT,
   NEMESIS_RISE_HOURS,
   NEMESIS_STYLE_LABELS,
-  type Nemesis,
   type NemesisCommand,
-  type NemesisMoveCommand,
   type NemesisState,
 } from "./schema";
 
 type State = Draft<NemesisState>;
 
-const DAY = 24 * 60;
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
-/** 上次动作（没动过就是成为宿敌那一刻）到现在过了几分钟 */
-export function sinceLastMove(n: Pick<Nemesis, "lastMoveAt" | "since">, now: number): number {
-  return now - (n.lastMoveAt ?? n.since);
-}
-
-/** 离上次动作满 NEMESIS_GAP_DAYS 天：可以在屏幕外动、也可以亲自出场 */
-export function canMove(n: Pick<Nemesis, "lastMoveAt" | "since">, now: number): boolean {
-  return sinceLastMove(n, now) >= NEMESIS_GAP_DAYS * DAY;
-}
-
-/** 满 NEMESIS_DUE_DAYS 天还没动：这次推演该写他了 */
-export function moveOverdue(n: Pick<Nemesis, "lastMoveAt" | "since">, now: number): boolean {
-  return sinceLastMove(n, now) >= NEMESIS_DUE_DAYS * DAY;
-}
+// 宿敌隔几天才能动、拖几天必须动的计时删了，什么时候动由【城里在发酵的事】的定时器和主持人定
+// （用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）
 
 function rise(draft: State, command: NemesisCommand, ctx: SystemContext): ApplyOutcome {
   const id = command.npc;
@@ -71,8 +53,6 @@ function rise(draft: State, command: NemesisCommand, ctx: SystemContext): ApplyO
         ? { against: command.against, text: command.prep, at: ctx.now }
         : null,
     known: false,
-    moves: [],
-    lastMoveAt: null,
   });
   return { ok: true, notes: [`${card.name}成了你的宿敌：${how}`] };
 }
@@ -149,19 +129,4 @@ export function applyNemesis(
   }
 }
 
-/** 场外推演写的动作：离上次动作不满 NEMESIS_GAP_DAYS 天的拒绝 */
-export function applyNemesisMove(
-  draft: State,
-  command: NemesisMoveCommand,
-  now: number,
-): ApplyOutcome {
-  const n = draft.nemeses.find((x) => x.npc === command.npc);
-  if (!n) return fail(`${command.npc} 不是宿敌`);
-  if (!canMove(n, now)) {
-    return fail(`${n.name}上次动作才过了 ${Math.floor(sinceLastMove(n, now) / DAY)} 天`);
-  }
-  n.moves.push({ text: command.text, at: now });
-  if (n.moves.length > NEMESIS_MOVES_KEPT) n.moves.splice(0, n.moves.length - NEMESIS_MOVES_KEPT);
-  n.lastMoveAt = now;
-  return { ok: true, notes: [`${n.name}在屏幕外动了：${command.text}`] };
-}
+// 场外动作只记在统一单子的步骤里，宿敌不再另记一份（用户 2026-11-01 定的"全改"第 4 步）

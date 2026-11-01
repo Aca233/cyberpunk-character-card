@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { DamageTierSchema } from "../dice";
 
+/** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
+export const NO_FACTION = "none";
+export const NO_FACTION_LABEL = "无";
+
 export const AFFINITY_MIN = -100;
 export const AFFINITY_MAX = 100;
 /** 单条好感变化的上限，超出的截断 */
@@ -130,6 +134,16 @@ export const NpcCardSchema = z.object({
   pronoun: z.string().trim().min(1).max(4),
   /** 身份，例如中间人、义体医生、漩涡帮打手 */
   role: z.string().trim().min(1).max(40),
+  /**
+   * 所属势力（用户 2026-10-31："感觉好没存在感 npc加个所属势力 没有就填无"）：势力表里的 id，
+   * 不属于任何势力写 none，档案里显示「无」；旧存档和没写的按 none。id 在不在势力表里由结算校验
+   */
+  faction: z
+    .string()
+    .trim()
+    .min(1)
+    .default(NO_FACTION)
+    .describe("所属势力：势力 id（和 faction 指令用的一致）；不属于任何势力写 none"),
   look: z.string().trim().min(1).max(200),
   /** 说话方式：口癖、语气、爱用的词 */
   voice: z.string().trim().min(1).max(200),
@@ -196,6 +210,20 @@ export const KnownFactSchema = z.object({
 });
 export type KnownFact = z.infer<typeof KnownFactSchema>;
 
+/** 每个人最多记这么多个认识的人，满了先删最早的（暂定，试玩时调） */
+export const TIES_KEPT = 8;
+/** 认识的人的关系一句的长度上限 */
+export const TIE_CHARS = 40;
+
+/** 一个人认识的另一个有卡的人：对方 id、一句关系（从这个人的角度写）、外人看不看得出来 */
+export const NpcTieSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1).max(TIE_CHARS),
+  open: z.boolean().default(true),
+  at: z.number().int(),
+});
+export type NpcTie = z.infer<typeof NpcTieSchema>;
+
 export const NpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   alive: z.boolean(),
@@ -234,6 +262,11 @@ export const NpcSchema = NpcCardSchema.extend({
   /** 玩家角色知道的这个人的事，旧的在前；人物档案只显示这些；旧存档没有 */
   known: z.array(KnownFactSchema).default([]),
   /**
+   * 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：和别的有卡的人的关系，两边各记一份；
+   * 旧的在前，最多 TIES_KEPT 条；open 是外人看得出来的关系，暗地里的（私通、卧底、暗中勾结）是 false，只给模型看
+   */
+  ties: z.array(NpcTieSchema).default([]),
+  /**
    * 会变的身体数值：生命值（hp 是 hpAt 那一刻的值，之后按时间惰性回复）、人性数值、最近一次受伤和被扫描的时间。
    * 第一次受伤、治疗、换装备或装义体时按 body 补上；旧存档和没碰过的人是 null。人性数值只给叙事模型
    */
@@ -258,14 +291,14 @@ export type NpcState = z.infer<typeof NpcStateSchema>;
 
 const LocationSchema = z.string().min(1).describe("地点 id，和 world 指令用的一致");
 
-/** 模型使用：剧情里新认识、有名有姓并有实质互动的人，当场建卡 */
+/** 模型使用：剧情里新认识、有实质互动或推动剧情的人，当场建卡；没名字先用称呼（用户定的 2026-10-30：在场块一直只有朱迪） */
 export const NewNpcSchema = NpcCardSchema.omit({ canon: true, samples: true, home: true })
   .extend({
     type: z.literal("npc"),
     location: LocationSchema.optional(),
   })
   .describe(
-    "新人物建卡：有名字、并且和玩家角色有了实质互动（交谈、交易、冲突、人情）才建；路人不建。want、limit、secret 写定以后不能改",
+    "新人物建卡：和玩家角色有了实质互动（交谈、交易、冲突、人情）或推动了剧情（递货、接头、对暗号、要玩家角色跟着走）就建；正文没给名字时 name 用正文里的称呼（例如「兜帽男」）。擦肩而过、待在背景里的路人不建。want、limit、secret 写定以后不能改",
   );
 export type NewNpc = z.infer<typeof NewNpcSchema>;
 
@@ -384,6 +417,29 @@ export const RelationSchema = z
     "关系笔记：一句话写这个人和玩家角色现在的关系（例如「信得过，但还没说过真心话」）；一起扛过事、说过真心话、背叛、被拆穿大谎这类关系真的变了才写，会替换掉旧的",
   );
 export type Relation = z.infer<typeof RelationSchema>;
+
+/** 模型使用：两个有卡的人之间的关系（用户 2026-10-31："npc也有自己的生活，也有认识的npc"） */
+export const TieSchema = z
+  .object({
+    type: z.literal("tie"),
+    a: NpcIdSchema,
+    b: NpcIdSchema,
+    aToB: z
+      .string()
+      .trim()
+      .min(1)
+      .max(TIE_CHARS)
+      .describe("从 a 的角度写 b 是谁，例如「老搭档，欠他一条命」「前夫」「上家，供货给他」"),
+    bToA: z.string().trim().min(1).max(TIE_CHARS).describe("从 b 的角度写 a 是谁"),
+    open: z
+      .boolean()
+      .default(true)
+      .describe("外人看得出来的关系写 true；暗中勾结、私情、卧底这类见不得光的写 false"),
+  })
+  .describe(
+    "两个有卡的人之间的关系：认识、搭档、亲人、旧情、上下家、结仇；正文或场外推演里透出来、或者关系变了才写，会替换两人之间旧的那条；和玩家角色的关系写 relation",
+  );
+export type Tie = z.infer<typeof TieSchema>;
 
 export const LedgerSchema = z
   .object({
@@ -509,6 +565,7 @@ export type NpcCommand =
   | NpcDeath
   | Doing
   | Relation
+  | Tie
   | Ledger
   | LedgerSettle;
 
@@ -518,6 +575,16 @@ export const SeedNpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX).default(0),
   /** 主板带出的人物是角色过去就认识的 */
   met: z.boolean().default(false),
+  /**
+   * 捏人第 3 步选的旧识关系写成的开局关系笔记（老朋友、前任）；原作人物和旧存档没有。
+   * 用户定的（2026-10-30）：旧识"无数个"，关系表里老朋友、前任附带关系笔记
+   */
+  relation: z.string().trim().min(1).max(RELATION_CHARS).optional(),
+  /** 旧识关系附带的开局人情或仇（他欠你人情、你欠他人情、旧仇）；同上，用户定的关系表 */
+  ledger: z
+    .array(z.object({ kind: LedgerKindSchema, text: z.string().trim().min(1).max(80) }))
+    .max(2)
+    .default([]),
 });
 export type SeedNpc = z.infer<typeof SeedNpcSchema>;
 

@@ -14,6 +14,7 @@ import {
   type Ripperdoc,
   type RipperdocDebtCommand,
   RipperdocListSchema,
+  SLOT_CAPACITY,
   SLOT_LABELS,
   TRADE_IN_RATE,
 } from "./schema";
@@ -70,7 +71,7 @@ export interface ShelfItem {
   readonly net: number;
   readonly locked: string | null;
   readonly installed: boolean;
-  /** 同一部位已经装着、装上会换下来的那件 */
+  /** 部位装满了时，装上会换下来的那件（这个部位最早装的）；没装满是 null */
   readonly replaces: CyberwareDef | null;
 }
 
@@ -88,7 +89,9 @@ export function ripperdocShelf(
     const locked = def.iconic
       ? "不朽义体只从剧情获得"
       : rarityLock(def.rarity, doc.credGates, streetCred, keeper);
-    const old = installed.find((c) => c.slot === def.slot && c.id !== id);
+    // 部位装满了才会换下旧件，换下的是最早装的那件（和 install 一致，用户 2026-10-31 改成按原作格数装）
+    const inSlot = installed.filter((c) => c.slot === def.slot && c.id !== id);
+    const old = inSlot.length >= SLOT_CAPACITY[def.slot] ? inSlot[0] : undefined;
     const replaces = old ? (catalog.get(old.id) ?? null) : null;
     const price = Math.round((def.price * doc.priceFactor) / 100) * 100;
     const tradeIn = replaces ? Math.min(price, tradeInValue(replaces)) : 0;
@@ -139,7 +142,7 @@ export interface Purchase {
   readonly event?: string | undefined;
 }
 
-/** 装上一件义体：同一部位的旧件换下来；买的要先付得起，钱交给欧元系统扣 */
+/** 装上一件义体：部位按 SLOT_CAPACITY 的格数装，装满了换下最早装的那件；买的要先付得起，钱交给欧元系统扣 */
 export function install(
   draft: Draft<CyberwareState>,
   id: string,
@@ -159,7 +162,10 @@ export function install(
     };
   }
   const notes: string[] = [];
-  const old = draft.installed.findIndex((c) => c.slot === def.slot);
+  // 按原作格数装（用户 2026-10-31："为什么每个地方的义体只能选一个"）：没装满直接加，装满了换下这个部位最早装的那件
+  const inSlot = draft.installed.filter((c) => c.slot === def.slot).length;
+  const old =
+    inSlot >= SLOT_CAPACITY[def.slot] ? draft.installed.findIndex((c) => c.slot === def.slot) : -1;
   const emit: Command[] = [];
   if (old >= 0) {
     const [prev] = draft.installed.splice(old, 1);

@@ -5,7 +5,30 @@ import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world
 import { deathKnown } from "./apply";
 import { attributeSum, bodyView } from "./body";
 import { onStage } from "./prompt";
-import { KNOWN_SOURCE_LABELS, LEDGER_KIND_LABELS, NpcStateSchema } from "./schema";
+import {
+  KNOWN_SOURCE_LABELS,
+  LEDGER_KIND_LABELS,
+  NO_FACTION,
+  NO_FACTION_LABEL,
+  NpcStateSchema,
+} from "./schema";
+
+/**
+ * 所属势力的中文名（用户 2026-10-31："npc加个所属势力 没有就填无"）：直接读内容数据的 factions 取 name，
+ * 不引 factions 系统免得互相依赖；none 显示「无」，表里查不到的照 id 显示
+ */
+function factionName(faction: string, data: Readonly<Record<string, unknown>>): string {
+  if (faction === NO_FACTION) return NO_FACTION_LABEL;
+  const raw = data.factions;
+  if (Array.isArray(raw)) {
+    for (const f of raw) {
+      if (typeof f !== "object" || f === null) continue;
+      const { id, name } = f as { id?: unknown; name?: unknown };
+      if (id === faction && typeof name === "string") return name;
+    }
+  }
+  return faction;
+}
 
 /**
  * 只读宿敌名单里的人物 id：交过手的宿敌没见过面也要列出来。
@@ -48,6 +71,8 @@ export function npcsView({ world, data }: ViewContext) {
       /** 见过面没有；没见过的只是听说过，身份和样子不给 */
       met: n.met,
       role: n.met ? n.role : "只听说过",
+      /** 所属势力的中文名，不属于任何势力是「无」；没见过的人和身份一样不给 */
+      faction: n.met ? factionName(n.faction, data) : null,
       look: n.met ? n.look : "没见过",
       /** 玩家角色知道的这个人的事，旧的在前，带来源 */
       known: n.known.map((k) => ({
@@ -65,6 +90,24 @@ export function npcsView({ world, data }: ViewContext) {
       lastPlace: n.met ? placeName(n.location) : null,
       homePlace: n.met ? placeName(n.home) : null,
       relation: n.relation?.text ?? null,
+      /**
+       * 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：只给公开的、两边玩家都见过的；
+       * 私下的关系只给模型看。生死照玩家知道的显示，新的在前
+       */
+      ties: n.met
+        ? n.ties
+            .filter((t) => t.open && npcs.npcs[t.id]?.met === true)
+            .map((t) => {
+              const other = npcs.npcs[t.id];
+              return other
+                ? { id: other.id, name: other.name, text: t.text, alive: !deathKnown(other) }
+                : null;
+            })
+            .filter(
+              (t): t is { id: string; name: string; text: string; alive: boolean } => t !== null,
+            )
+            .reverse()
+        : [],
       /** 人情和仇：没了结的在前，各自旧的在前 */
       ledger: [
         ...n.ledger.filter((e) => e.settledAt === null),

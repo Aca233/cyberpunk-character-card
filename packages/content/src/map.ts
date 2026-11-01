@@ -31,6 +31,12 @@ export const MAP_SPOTS: Readonly<Record<string, MapSpot>> = {
   dogtown: { x: 27.7, y: 85.5, metro: false },
   /** 待核对：恶土的图钉散布 3 公里，取的中位数 */
   badlands: { x: 67.9, y: 74.9, metro: false },
+  /** 原作服务点 wat_fixer（歌舞伎区的中间人图钉，servicePoints.gen.ts），离医疗中心站约 340 米 */
+  "regina-office": { x: 35.4, y: 32.5, metro: true },
+  /** 原作服务点 wbr_fixer（日本街的中间人图钉）；扭扭街数据终端没有坐标，所以没用它。离门罗街和萨根街站约 340 米 */
+  "wakako-pachinko": { x: 41.4, y: 42.0, metro: true },
+  /** 原作服务点 kerry_villa（北橡区），旁边的数据终端在 52.8, 38.8；最近的地铁站约 670 米，算没站 */
+  "kerry-estate": { x: 51.7, y: 38.7, metro: false },
 };
 
 /** 城区中心：新地点没坐标时先放在这里，玩家可以拖到准确位置 */

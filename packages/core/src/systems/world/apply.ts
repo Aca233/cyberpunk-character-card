@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { markVisit, resolveLocation } from "./places";
+import { applyPlace, markVisit, resolveLocation } from "./places";
 import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
@@ -71,7 +71,13 @@ export function applyWorld(
         `时间不能倒退：${formatGameTime(command.time)} 早于现在 ${formatGameTime(now)}，时间没动`,
       );
   }
-  if (command.location !== undefined) {
+  if (command.location !== undefined && typeof command.location === "object") {
+    // 新地方直接写在 location 里（用户定的：新地点并进 location，2026-10-30）：和 place 指令同一套建法，贴路面、标大概位置
+    const { in: district, ...rest } = command.location;
+    const made = applyPlace(draft, { type: "place", ...rest, district }, data, target);
+    if (!made.ok) return made;
+    notes.push(...(made.notes ?? []));
+  } else if (command.location !== undefined) {
     const resolved = resolveLocation(draft, command.location, data, target);
     if (!resolved.ok) return fail(resolved.reason);
     if (resolved.note) notes.push(resolved.note);

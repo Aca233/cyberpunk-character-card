@@ -29,13 +29,14 @@ import { registry } from "./systems/registry";
 import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
+import { MovePlaceActionSchema } from "./systems/world";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 分配一个街头声望攒下的属性点 */
   SpendPointActionSchema,
   /** 在委托板上接下一单挂着的委托 */
   AcceptJobActionSchema,
-  /** 在义体医生那里买一件装上；同一部位的旧件换下来折价；credit 是钱不够时赊账 */
+  /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
   BuyCyberwareActionSchema,
   /** 请义体医生卸下一件，医生折价回收 */
   RemoveCyberwareActionSchema,
@@ -82,6 +83,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   ReadShardsActionSchema,
   /** 在场的人：点「扫描」立刻用义眼扫一下，不调用模型、不花时间；要人在场、义眼装着没坏（计划第十二节第 14 条） */
   ScanNpcActionSchema,
+  /** 地图：把剧情里记下的地点（place:）拖到准确的位置；原作店和地标不能拖（places-plan 第二期，用户定的 2026-10-30） */
+  MovePlaceActionSchema,
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 

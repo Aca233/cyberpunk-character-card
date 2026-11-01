@@ -1,15 +1,18 @@
 import { z } from "zod";
 import type { Trait } from "../systems/character/schema";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
+import { NO_FACTION } from "../systems/npc/schema";
 import {
+  type Acquaintance,
   BOARD_SLOT_LABELS,
   type Board,
   BoardSchema,
   boardBrief,
   boardIssues,
   boardModules,
+  RELATION_INFO,
 } from "./board";
-import type { BoardStart, SaveCharacter } from "./save";
+import type { BoardStart, SaveCharacter, StartAcquaintance } from "./save";
 
 /** 创建时各项属性从这个值起步 */
 export const ATTRIBUTE_BASE = 3;
@@ -155,6 +158,8 @@ export function boardPeople(board: Board): BoardStart["people"] {
         name: p.name,
         pronoun: "TA",
         role: (p.role || `${BOARD_SLOT_LABELS[m.slot]}「${m.label}」里的人`).slice(0, 40),
+        // 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：模块里没写，按不属于任何势力
+        faction: NO_FACTION,
         look: UNDECIDED,
         voice: UNDECIDED,
         samples: [],
@@ -166,21 +171,75 @@ export function boardPeople(board: Board): BoardStart["people"] {
         canon: false,
         affinity: flaw ? -10 : 0,
         met: true,
+        ledger: [],
       });
     });
   }
-  return people;
+  // 捏人第 3 步给模块带出的人改过关系的，按关系表盖过上面的默认好感（用户定的，2026-10-30："模块带出的人也列出来，可以改关系"）
+  return people.map((p) => {
+    const a = board.acquaintances.find((x) => x.id === p.id);
+    return a ? { ...p, ...acquaintanceSeed(a) } : p;
+  });
 }
 
-/** 建档时从主板带进存档的东西：开局义体、义体耐受和模块带出的人物 */
+/**
+ * 一个旧识按关系表换成开局的好感、关系笔记和人情（用户定的关系表，2026-10-30）。
+ * "是什么事"没写时（一键成稿也没补上），关系笔记写关系名，人情和仇写一句占位，叙事模型第一次提起时再定细节
+ */
+export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
+  const info = RELATION_INFO[a.relation];
+  const note = a.note.trim();
+  // 老朋友、前任一定写关系笔记；别的关系手写了"是什么事"又没有人情可记的，也记成关系笔记，免得丢掉
+  const relation =
+    info.note || (!info.ledger && note) ? (note ? `${info.label}：${note}` : info.label) : "";
+  return {
+    id: a.id,
+    affinity: info.affinity,
+    ...(relation ? { relation: relation.slice(0, 60) } : {}),
+    ledger: info.ledger
+      ? [
+          {
+            kind: info.ledger,
+            text: (note || `${info.label}：开局以前的旧事，细节第一次提起时再定`).slice(0, 80),
+          },
+        ]
+      : [],
+  };
+}
+
+/** 建档时从主板带进存档的东西：开局义体、义体耐受、模块带出的人物和原作人物旧识 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
+  const people = boardPeople(card.board);
   return {
     cyberware: card.board.cyberware.map((c) => c.id),
     tolerance: card.board.tolerance,
     ...(card.board.origin ? { origin: card.board.origin.id } : {}),
-    people: boardPeople(card.board),
+    people,
+    // 模块带出的人已经在 people 里按关系改过；剩下的是原作人物，由 newGameWorld 盖到原作人物卡上
+    acquaintances: card.board.acquaintances
+      .filter((a) => !people.some((p) => p.id === a.id))
+      .map(acquaintanceSeed),
   };
+}
+
+/**
+ * 旧识里对不上人的去掉（原作人物表里没有、带出这个人的模块已经拔掉），名字按原表重写。
+ * 服务端存卡时调一次；捏人界面改了模块后也调，免得留着已经不存在的人
+ */
+export function pruneAcquaintances(
+  board: Board,
+  canon: readonly { readonly id: string; readonly name: string }[],
+): Board {
+  const names = new Map<string, string>([
+    ...canon.map((n) => [n.id, n.name] as const),
+    ...boardPeople(board).map((p) => [p.id, p.name] as const),
+  ]);
+  const acquaintances = board.acquaintances.flatMap((a) => {
+    const name = names.get(a.id);
+    return name ? [{ ...a, name }] : [];
+  });
+  return { ...board, acquaintances };
 }
 
 /** 主板上的模块和联动，记进角色状态：专属选项的来源按它核对 */

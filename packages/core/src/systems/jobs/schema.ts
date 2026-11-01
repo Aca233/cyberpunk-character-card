@@ -87,6 +87,11 @@ export const JobSchema = z.object({
   kind: JobKindSchema.nullable().default(null),
   /** 派单的中间人 id；熟人求助、过往钩子这类没有中间人 */
   fixer: z.string().min(1).nullable(),
+  /**
+   * 熟人托事的托事人人物卡 id（用户 2026-10-31 选的「托事影响好感」：答应熟人的事办成加好感，拖着不办或办砸扣好感）；
+   * 中间人派的单、旧存档是 null
+   */
+  asker: z.string().min(1).nullable().default(null),
   /** 真正的雇主 */
   client: z.string().min(1),
   location: z.string().min(1).nullable(),
@@ -133,11 +138,19 @@ export const JobOfferSchema = z
     title: z.string().min(1),
     kind: JobKindSchema.optional(),
     fixer: z.string().min(1).optional(),
+    /** 熟人托事的托事人：只由代码在场外推演里按发消息的人填（用户 2026-10-31 选的「托事影响好感」），模型写的会被覆盖 */
+    asker: z.string().min(1).optional(),
     client: z
       .string()
       .min(1)
       .describe("必填：真正的雇主；派单的人不肯说时写「身份不明」或「某某的客户（身份不明）」"),
-    location: z.string().min(1).optional(),
+    location: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "办事的地点：尽量写常用地点、【地点簿】【周边】里已有的 id（例如 kabuki-market、place:3、poi:…），对得上的地图上会标出来；都没有的新地方同一轮写一条 place（name + district，玩家没去过加 heard: true），这里写一模一样的中文名（新地点的编号要结算后才有，不要自己编 place: 编号）；说不清在哪就不写",
+      ),
     risk: z.number().int().min(1).max(5),
     reward: z.number().int().min(0).max(100_000),
     due: GameTimeSchema.optional(),
@@ -145,7 +158,7 @@ export const JobOfferSchema = z
     twist: z.string().min(1).optional(),
   })
   .describe(
-    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人 id，熟人求助不写；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和中间人好感检查中间人肯不肯派这个星级",
+    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人的人物卡 id，熟人求助不写；【委托】里没列的中间人也能写，只要他有人物卡（新的中间人同一轮先写 npc 建卡、role 写中间人，再写这条），代码会登记成中间人；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和中间人好感检查中间人肯不肯派这个星级",
   );
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 
@@ -169,7 +182,7 @@ export const JobEndSchema = z
     summary: z.string().min(1),
   })
   .describe(
-    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；代码按结局给报酬、改中间人好感；summary 一句话总评",
+    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；代码按结局给报酬、改中间人或托事熟人的好感（熟人托事拖过期限再多扣），不要另写 affinity；summary 一句话总评",
   );
 export type JobEnd = z.infer<typeof JobEndSchema>;
 

@@ -22,3 +22,5 @@ tools/evals/drafts/
 test-results/
 playwright-report/
 .run/
+# Playwright MCP 留下的页面快照
+.playwright-mcp/

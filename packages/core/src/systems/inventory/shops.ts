@@ -4,6 +4,7 @@ import { CharacterStateSchema } from "../character";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { currentStock, itemCatalog, restockDue, sellValue, shopList, shopShelf } from "./apply";
+import { moodLock, moodPrice, shopMood } from "./mood";
 import { InventoryStateSchema, ITEM_KIND_LABELS, WEAPON_CATEGORY_LABELS } from "./schema";
 
 /**
@@ -41,6 +42,9 @@ export function shopsView({ world, data }: ViewContext) {
   });
   return here.map((shop) => {
     const keeper = keeperOf(shop.keeperNpc, npcs);
+    // 势力态度影响店价（用户 2026-10-31 选的「势力进机制」）：和买的时候一样算
+    const mood = shopMood(world, data, shop);
+    const moodLocked = moodLock(mood);
     return {
       id: shop.id,
       name: shop.name,
@@ -64,9 +68,9 @@ export function shopsView({ world, data }: ViewContext) {
             ? WEAPON_CATEGORY_LABELS[def.category]
             : ITEM_KIND_LABELS[def.kind],
         rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
-        price,
+        price: moodPrice(price, mood),
         ability: def.ability ?? null,
-        locked,
+        locked: moodLocked ?? locked,
         left,
       })),
       /** 背包里的东西卖给这家店给多少；0 是不收 */

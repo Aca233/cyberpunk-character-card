@@ -37,8 +37,8 @@ import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
   InventoryState,
-  ItemCommand | TradeCommand | PartsCommand,
-  InventoryInternal
+  ItemCommand | TradeCommand,
+  InventoryInternal | PartsCommand
 >({
   id: "inventory",
   dependsOn: ["dice", "economy"],
@@ -57,8 +57,9 @@ export const inventory = defineSystem<
     tuned: {},
     shopStock: {},
   }),
-  commands: { item: ItemCommandSchema, trade: TradeCommandSchema, parts: PartsCommandSchema },
-  internal: InventoryInternalSchemas,
+  commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
+  // 物品栏精简（用户定的方案 A）：零件规则不发给模型，parts 跟着从模型可用指令挪成内部指令；旧存档记录里的 parts 照旧能结算
+  internal: { ...InventoryInternalSchemas, parts: PartsCommandSchema },
   apply(draft, command, ctx) {
     switch (command.type) {
       case "item":

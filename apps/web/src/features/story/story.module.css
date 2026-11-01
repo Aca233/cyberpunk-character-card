@@ -2487,6 +2487,38 @@
   cursor: var(--cp-cursor);
 }
 
+/* 第一次去的原作店：同一个原作图标，能点出路线卡（places-plan 第二期，用户定的 2026-10-30）；按钮自带的框和内边距去掉 */
+.mapPoi[data-go] {
+  padding: 0;
+  border: 0;
+  cursor: var(--cp-cursor);
+}
+
+.mapPoi[data-go]:hover,
+.mapPoi[data-go]:focus-visible {
+  color: var(--cp-yellow);
+}
+
+/* 委托标记（用户同意的 2026-10-30）：在地点图钉左下方显示，不遮住玩家箭头和拖动入口；只偏移显示，不改坐标 */
+.mapPoi.mapJob {
+  margin-left: -26px;
+  margin-top: 24px;
+  z-index: 1;
+  cursor: var(--cp-cursor-hand);
+}
+
+/* 遮罩会裁掉轮廓；聚焦、悬停和选中用提亮与放大区分，不加动画 */
+.mapPoi.mapJob:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  outline: none;
+  color: #fff8a8;
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+.mapPoi.mapJob:disabled {
+  opacity: 0.45;
+  cursor: var(--cp-cursor-invalid);
+}
+
 /*
  * 地点标记：原作世界地图的 mappin，贴图都当遮罩、按上面的 --pin-* 上色。
  * 可以去的地点照 default_mappin：mappin_icons 图标（原作按任务种类换图，本作统一用实心的 fast_travel 定位针；
@@ -2523,11 +2555,13 @@
   border: 0;
   color: var(--pin-yellow);
   background: currentColor;
-  mask: var(--pin-dest) center / contain no-repeat;
+  /* 地点簿里的原作店带 --icon，照原作同类图标画；其余用目的地图钉（places-plan 第二期） */
+  mask: var(--icon, var(--pin-dest)) center / contain no-repeat;
   cursor: var(--cp-cursor-hand);
   transition:
     color var(--dur-flash),
-    transform var(--dur-flash);
+    transform var(--dur-flash),
+    opacity var(--dur-flash);
 }
 
 /* 悬停、键盘焦点和选中：原作的悬停动画没解出来，本作放大一点、提亮；描边会被遮罩裁掉，所以不用 outline */
@@ -2537,6 +2571,12 @@
   outline: none;
   color: #fff8a8;
   transform: scale(1.25);
+}
+
+/* 拖地点（places-plan 第二期，用户定的 2026-10-30）：按住图钉拖；触屏拖动时不让页面跟着滚 */
+.mapDest[data-moving] .mapDestPin {
+  touch-action: none;
+  cursor: move;
 }
 
 /* 当前位置：player 箭头 1080p 原图 26×23；没有朝向数据，箭头一直朝上，原作的视野扇形 playerCone 不画 */
@@ -2621,6 +2661,20 @@
 
 .mapDest[data-picked] .mapDestLabel {
   color: var(--cp-yellow);
+}
+
+/* 剧情地点用青色底色，不覆盖当前位置的绿色和悬停提亮（places-plan 第二期） */
+.mapDest[data-layer="place"] {
+  --pin-yellow: var(--cp-cyan);
+}
+
+/* 听说过的图钉和名字一起压暗；悬停、键盘聚焦或选中时恢复，不加动画（places-plan 第二期） */
+.mapDest[data-heard] {
+  opacity: 0.55;
+}
+
+.mapDest[data-heard]:is(:hover, :focus-within, [data-picked]) {
+  opacity: 1;
 }
 
 .mapHereTag {
@@ -2796,6 +2850,13 @@ ul.mapLegend > li {
   display: flex;
   gap: 0.4rem;
   margin-bottom: 0.5rem;
+}
+
+/* 路线卡里拖地点的说明和保存、取消（places-plan 第二期）：不加框，沿用路线卡的底 */
+.mapMoveBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 /*

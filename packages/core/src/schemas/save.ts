@@ -19,8 +19,17 @@ export const BoardStartSchema = z.object({
     .array(SeedNpcSchema.omit({ type: true }))
     .max(20)
     .default([]),
+  /**
+   * 捏人第 3 步给原作人物选的旧识：建档时盖过原作人物卡的开局好感、记成见过，带上关系笔记和人情。
+   * 用户定的（2026-10-30）：15 个原作人物全部能选、没有预设关系；旧存档没有
+   */
+  acquaintances: z
+    .array(SeedNpcSchema.pick({ id: true, affinity: true, relation: true, ledger: true }))
+    .max(40)
+    .default([]),
 });
 export type BoardStart = z.infer<typeof BoardStartSchema>;
+export type StartAcquaintance = BoardStart["acquaintances"][number];
 
 /** 存档目录里的 meta.json */
 export const SaveMetaSchema = z.object({
@@ -34,6 +43,11 @@ export const SaveMetaSchema = z.object({
   character: SaveCharacterSchema.optional(),
   /** 旧存档没有：用的是内容包里哪个开场 */
   opening: z.string().min(1).optional(),
+  /**
+   * 建档时选的开局地点（地点簿里的地点 id），盖过开场自带的地点；引导委托、出场人物和行装照开场不变。
+   * 用户定的（2026-10-30）："可以选择地点开局"。旧存档和没选的存档没有，照旧用开场自带的地点
+   */
+  startLocation: z.string().min(1).optional(),
   /** 旧存档没有：建档时按出身和经历挑的开局行装，读档重放时照这个发 */
   loadouts: z.array(z.string().min(1)).optional(),
   /** 旧存档和没用主板的角色没有 */

@@ -9,10 +9,12 @@ import {
   formatGameTime,
   type LocationDef,
   locationCatalog,
+  locationForTravel,
   METERS_PER_PERCENT,
   PERIOD_LABELS,
   type Period,
   periodOf,
+  placeKey,
   WorldClockStateSchema,
 } from "../world";
 import {
@@ -256,9 +258,9 @@ export function routeOptions(
   data: Readonly<Record<string, unknown>>,
   to: string,
 ): RouteOption[] {
-  const places = locationCatalog(data);
-  const here = w.location === null ? undefined : places.get(w.location);
-  const there = places.get(to);
+  // 原作店和地标第一次去也能预览路线；只查定义，不提前登记访问（places-plan 第二期）
+  const here = w.location === null ? undefined : locationForTravel(data, w.location);
+  const there = locationForTravel(data, to);
   const trip = tripDistance(data, here, there);
   const d = trip?.d;
   const period = periodOf(w.now);
@@ -365,9 +367,11 @@ export function planTrip(
   const route = routeOptions(w, data, request.to).find((r) => r.mode === request.mode);
   if (!route) return { ok: false, reason: `没有这种出行方式：${request.mode}` };
   if (route.blocked) return { ok: false, reason: route.blocked };
-  const places = locationCatalog(data);
-  const from = places.get(w.location ?? "") as LocationDef;
-  const to = places.get(request.to) as LocationDef;
+  // 规划和路线预览用同一套地点查询，首次去原作地点也能结算（places-plan 第二期）
+  const from = w.location === null ? undefined : locationForTravel(data, w.location);
+  const to = locationForTravel(data, request.to);
+  if (!from) return { ok: false, reason: "现在的位置不在地图上，用自由输入写怎么去" };
+  if (!to) return { ok: false, reason: `没有这个出行地点：${request.to}` };
   const arriveAt = w.now + route.minutes;
   const defs = EncounterCatalogSchema.parse(data.encounters ?? []);
   let encounter: EncounterDef | null = null;
@@ -403,9 +407,10 @@ export function tripText(trip: PlannedTrip): string {
   const lines = [
     `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上${about} ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
   ];
+  // 偶遇是代码抽的素材，合适才写、可以改写或推迟（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
   if (trip.encounter) {
     lines.push(
-      `【路上偶遇】代码定的，这一场要写出来：${trip.encounter.label}——${trip.encounter.note}。玩家可以不理，不理就照素材让事情在屏幕外发展；这一场不要再加别的偶遇。`,
+      `【路上偶遇】代码抽的素材：${trip.encounter.label}——${trip.encounter.note}。这一场合适就写出来，局面不合适可以改写或推迟；玩家可以不理，不理就照素材让事情在屏幕外发展。`,
     );
   }
   return lines.join("\n");
@@ -413,6 +418,45 @@ export function tripText(trip: PlannedTrip): string {
 
 export function tripFact(trip: PlannedTrip) {
   return { to: trip.to.id, mode: trip.route.mode, encounter: trip.encounter?.id ?? null };
+}
+
+/** 多近算"就在附近"：走过去，不转出行（用户定的 500 米，2026-10-30） */
+export const NEAR_METERS = 500;
+/** 自动转出行时挑哪种方式：有车开车，两头有站坐轻轨，钱够打车，都不行走路（本作改编） */
+const AUTO_MODES: readonly TravelMode[] = ["car", "metro", "taxi", "walk"];
+
+export type AutoMove =
+  | { readonly kind: "near"; readonly to: string; readonly minutes: number }
+  | { readonly kind: "trip"; readonly trip: PlannedTrip }
+  | { readonly kind: "none" };
+
+/**
+ * 叙事模型直接在 world 里写了 location（用户定的"自动转"，2026-10-30）：
+ * 500 米内算走过去，代码按步行算用时；更远的自动转成一次出行，照路线表扣时间和路费，不抽路上偶遇（正文已经写完了）。
+ * 目的地不在地点表（含地点簿）里、现在的位置不在地图上、或者哪种方式都走不了时是 none，照旧直接换位置
+ */
+export function autoMove(
+  w: TripWorld,
+  data: Readonly<Record<string, unknown>>,
+  raw: string,
+): AutoMove {
+  const places = locationCatalog(data);
+  const key = placeKey(raw);
+  const to = places.get(raw.trim()) ?? [...places.values()].find((p) => placeKey(p.name) === key);
+  if (!to || w.location === null || to.id === w.location) return { kind: "none" };
+  const dist = tripDistance(data, places.get(w.location), to);
+  if (!dist) return { kind: "none" };
+  if (dist.d * 100 <= NEAR_METERS) {
+    const walk = routeOptions(w, data, to.id).find((r) => r.mode === "walk");
+    return walk && !walk.blocked
+      ? { kind: "near", to: to.id, minutes: walk.minutes }
+      : { kind: "none" };
+  }
+  for (const mode of AUTO_MODES) {
+    const planned = planTrip(w, data, { to: to.id, mode });
+    if (planned.ok) return { kind: "trip", trip: planned.trip };
+  }
+  return { kind: "none" };
 }
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });

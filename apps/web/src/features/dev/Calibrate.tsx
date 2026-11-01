@@ -46,14 +46,17 @@ export function Calibrate() {
     try {
       const view = await api.state(saveId);
       setSpots(
-        view.travel.destinations.map((d) => ({
-          id: d.id,
-          name: d.name,
-          x: d.x,
-          y: d.y,
-          metro: d.metro,
-          moved: false,
-        })),
+        // 没去过的原作店（places-plan 第二期）坐标照原作，不进校准列表
+        view.travel.destinations
+          .filter((d) => !d.firstVisit)
+          .map((d) => ({
+            id: d.id,
+            name: d.name,
+            x: d.x,
+            y: d.y,
+            metro: d.metro,
+            moved: false,
+          })),
       );
       setError(null);
     } catch (e) {

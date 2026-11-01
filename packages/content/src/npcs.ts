@@ -103,6 +103,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       alias: "朱迪",
       pronoun: "她",
       role: "超梦剪辑师，莫克斯帮的人",
+      faction: "mox",
       look: "头发一侧剃短、染着绿和粉，耳朵上一排金属环，工装背带裤上沾着焊锡；说话时手上还在摆弄线缆。",
       voice: "直来直去，看不惯就开口，嘴上带刺；聊到超梦和技术话就多，对陌生人先冷着。",
       samples: [
@@ -226,6 +227,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       alias: "和歌子",
       pronoun: "她",
       role: "威斯特布鲁克的中间人，在日本街一家柏青哥店里做生意",
+      // 所属势力（用户 2026-10-31 确认："改"）：原作里和歌子替虎爪帮管着日本街的生意
+      faction: "tyger-claws",
       look: "矮小的老妇人，和服外罩着开衫，白发盘得一丝不乱，坐在柏青哥机的噪声里慢慢喝茶。",
       voice: "说话轻、礼数周全，像头客气的母狮；夸人和威胁用的是同一种语气，算账从不含糊。",
       samples: [
@@ -295,6 +298,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       name: "神父",
       pronoun: "他",
       role: "海伍德的中间人，以前是瓦伦蒂诺帮的神父",
+      // 所属势力（用户 2026-10-31 确认："改"）：照本卡 role 和底线里写的他和瓦伦蒂诺帮的关系
+      faction: "valentinos",
       look: "年纪不小，满身旧纹身，穿着整洁的衬衫，手里常握着一串念珠；坐过几年牢，眼神还带着那股劲。",
       voice: "说话温和，像在布道，常引一两句经文；讲规矩、讲人情，生气时反而更安静。",
       samples: [
@@ -319,6 +324,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       alias: "帕南",
       pronoun: "她",
       role: "阿德卡多的游牧民，和族里闹翻了，一个人在恶土和城边接活",
+      faction: "aldecaldos",
       look: "黑色长发扎在脑后，脸颊上有几道旧划痕；流浪者夹克和工装裤上全是沙土，背着一把带好镜的狙击枪。",
       voice: "火气大、嘴硬，直来直去，看不惯就骂；对自己人护得要命，承认欠了人情时会别扭地岔开话。",
       samples: [
@@ -344,6 +350,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       alias: "瑞弗",
       pronoun: "他",
       role: "NCPD 的警探，在局里不怎么合群",
+      faction: "ncpd",
       look: "高个子，一头整齐的长辫子，下巴上留着短胡茬；旧皮夹克底下别着警徽和配枪，左眼是一只老式义眼。",
       voice:
         "说话慢、沉，带点老派的冷幽默；讲证据也讲良心，对体制失望但还没放弃，说起家里人语气会软下来。",

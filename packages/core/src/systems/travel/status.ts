@@ -20,7 +20,8 @@ export const travelStatus: readonly SystemStatus[] = [
         );
       if (t.encounter)
         lines.push(
-          `路上偶遇（代码定的，这一场要写出来，玩家可以不理）：${t.encounter.label}——${t.encounter.note}`,
+          // 偶遇是素材，合适才写（用户 2026-11-01 定的「全改」第 3 步）
+          `路上偶遇（代码抽的素材，合适就写，玩家可以不理）：${t.encounter.label}——${t.encounter.note}`,
         );
       // §十三① 周边雷达：每轮按玩家坐标挑最近的锚点
       const radar = radarLine(t.radar);

@@ -1,17 +1,9 @@
 import type { RuleModule } from "../../kernel/system";
 import type { Npc } from "../npc";
 import { formatGameTime } from "../world";
-import {
-  arcCatalog,
-  arcOf,
-  arcUnlocked,
-  concernOf,
-  type OffscreenConcern,
-  openConcerns,
-} from "./apply";
+import { arcCatalog, arcOf, arcUnlocked, concernOf, openConcerns } from "./apply";
 import {
   ARC_BOND_MAX,
-  ARC_OFFSCREEN_GAP_DAYS,
   ARC_OPEN_MAX,
   ARC_TEXT_MAX,
   type ArcConcernSeed,
@@ -98,17 +90,4 @@ export function arcSection(
   return lines.join("\n");
 }
 
-/** 给场外推演的【没人管的心事】：可以往前推一步或推出结果的几件 */
-export function arcOffscreenSection(list: readonly OffscreenConcern[]): string {
-  return list
-    .map((o) => {
-      const c = o.concern;
-      const p = o.progress;
-      const status = p.status === null ? "还没跟玩家说过" : CONCERN_STATUS_LABELS[p.status];
-      const last = p.notes[p.notes.length - 1];
-      return `- ${o.npc} / ${c.id}：${o.name}「${c.title}」，${status}；情况：${c.situation}；可能的走向：${c.turns.join(" / ")}；原作结局：${c.canon}${last ? `；上一步：${last.text}` : ""}；${p.notes.length > 0 ? "可以推出结果" : "只能先推一步，还不能出结果"}`;
-    })
-    .join("\n");
-}
-
-export const ARC_OFFSCREEN_RULE = `- 没人管的心事：【没人管的心事】里的事这时候该有动静才写（不写也行），每件一步：text 写这次发生了什么（${ARC_TEXT_MAX} 字以内）；标了「可以推出结果」的才能写 resolve: true，同时写 fate（better、canon、worse，和原作结局比）。原作结局只是参考，可以照原作，也可以更好或更糟；玩家不是 V，不要写成玩家做了什么。同一个人隔 ${ARC_OFFSCREEN_GAP_DAYS} 天才会再列出来。`;
+// 场外心事改由【城里在发酵的事】推进，这里不再单列一栏和一条规则（用户 2026-11-01 定的「全改」第 4 步）

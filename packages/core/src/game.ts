@@ -97,6 +97,12 @@ export interface GameContent {
   readonly homes?: readonly HomeDef[];
   /** 开场没写 cast 时种哪些人物卡和中间人（旧存档）；都没写就全种 */
   readonly defaultCast?: readonly string[];
+  /**
+   * 解析开局地点用的地图数据（和结算时 data 里的同名几项一样：radar、mapAreas、servicePoints）。
+   * 建档时在地图上选了原作地标（ft:）或服务点（poi:）开局，要靠它记进地点簿，坐标照原作
+   * （用户定的，2026-10-30："可以选择地点开局"，开局地点"在地图上选择"）；没给时只能从常用地点开局
+   */
+  readonly mapData?: Readonly<Record<string, unknown>>;
 }
 
 /** 开场：从哪里开始、身上带什么、眼下有什么活 */
@@ -239,7 +245,9 @@ const setupRng = { roll: () => 1 };
 /** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
   meta: Pick<SaveMeta, "startTime" | "difficulty"> &
-    Partial<Pick<SaveMeta, "character" | "opening" | "loadouts" | "board" | "legends">>,
+    Partial<
+      Pick<SaveMeta, "character" | "opening" | "startLocation" | "loadouts" | "board" | "legends">
+    >,
   content: GameContent = {},
 ): WorldState {
   const opening =
@@ -253,8 +261,24 @@ export function newGameWorld(
     return found;
   });
   const castIds = opening?.cast ?? content.defaultCast;
-  const inCast = (id: string) => castIds === undefined || castIds.includes(id);
+  // 捏人第 3 步选成旧识的原作人物：不在开场人物里的也放进来（用户定的，2026-10-30："15 个原作人物全部能选"）
+  const acquaintances = meta.board?.acquaintances ?? [];
+  const inCast = (id: string) =>
+    castIds === undefined || castIds.includes(id) || acquaintances.some((a) => a.id === id);
   const cast = (content.npcs ?? []).filter((c) => inCast(c.id));
+  /** 旧识按关系表盖过原作人物卡的开局好感，记成见过，带上关系笔记和人情 */
+  const castSeed = (card: (typeof cast)[number]) => {
+    const a = acquaintances.find((x) => x.id === card.id);
+    return a
+      ? {
+          ...card,
+          affinity: a.affinity,
+          met: true,
+          ...(a.relation ? { relation: a.relation } : {}),
+          ledger: a.ledger,
+        }
+      : card;
+  };
   const base = registry.initialWorld(meta.startTime);
   const clock = WorldClockStateSchema.parse(base.slices.world);
   const world: WorldState = {
@@ -264,13 +288,14 @@ export function newGameWorld(
       dice: DiceStateSchema.parse({ mode: meta.difficulty }),
       world: {
         ...clock,
+        // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进地点簿（见 commands 末尾）
         location: opening?.location ?? clock.location,
         sceneStartedAt: meta.startTime,
       },
     },
   };
   const kit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
-  // 主板的义体在开局行装之后装：同一部位的会换下行装里的那件
+  // 主板的义体在开局行装之后装：部位按原作格数装（SLOT_CAPACITY，用户 2026-10-31 改的），装满了才换下行装里最早装的那件
   const boardCyberware = (meta.board?.cyberware ?? []).filter(
     (id) => !(kit?.cyberware ?? []).includes(id),
   );
@@ -278,7 +303,7 @@ export function newGameWorld(
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     // 耐受要在装任何义体之前写进去，人性消耗才按它折算
     ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
-    ...cast.map((card) => ({ type: "npc.seed", ...card })),
+    ...cast.map((card) => ({ type: "npc.seed", ...castSeed(card) })),
     ...(meta.board?.people ?? [])
       .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
       .map((p) => ({ type: "npc.seed", ...p })),
@@ -291,6 +316,10 @@ export function newGameWorld(
     ...(meta.legends && meta.legends.length > 0
       ? [{ type: "chronicle.seedLegends", legends: meta.legends }]
       : []),
+    // 开局地点“在地图上选择”（用户定的，2026-10-30）：沿用 world 的解析登记原作地点，不写 time，不推进时间
+    ...(meta.startLocation !== undefined
+      ? [{ type: "world", activity: "travel", location: meta.startLocation }]
+      : []),
   ];
   if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
@@ -301,6 +330,9 @@ export function newGameWorld(
   const applied = registry.applyCommands(world, parsed, {
     rng: setupRng,
     data: {
+      // 开局地点在地图上选择（用户定的，2026-10-30）：沿用地点簿解析，不另编坐标
+      ...(content.mapData ?? {}),
+      ...(content.locations ? { locations: content.locations } : {}),
       ...(content.items ? { items: content.items } : {}),
       ...(content.cyberware ? { cyberware: content.cyberware } : {}),
       ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),

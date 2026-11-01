@@ -7,10 +7,7 @@ import { z } from "zod";
 
 /** 每个人同时最多挂几件说出口、玩家还没表态或正在管的心事 */
 export const ARC_OPEN_MAX = 1;
-/** 场外推演推过一个人的心事以后，至少隔几天才能再推他的 */
-export const ARC_OFFSCREEN_GAP_DAYS = 5;
-/** 场外推演一次最多推几件 */
-export const ARC_OFFSCREEN_PER_RUN = 2;
+// 场外推演推心事的间隔和条数删了，改由【城里在发酵的事】的定时器管（用户 2026-11-01 定的「全改」第 4 步）
 /** 每件心事留几条进展 */
 export const ARC_NOTES_KEPT = 6;
 export const ARC_TITLE_MAX = 24;
@@ -116,8 +113,6 @@ export const ArcProgressSchema = z.object({
   /** 第一次够条件的游戏时间；够过一次就一直算解锁 */
   unlockedAt: z.number().int().nullable().default(null),
   concerns: z.record(z.string(), ConcernProgressSchema).default({}),
-  /** 场外推演上次推他的心事的时间 */
-  lastOffscreenAt: z.number().int().nullable().default(null),
   /** 几件心事都有了结果的时间 */
   doneAt: z.number().int().nullable().default(null),
 });

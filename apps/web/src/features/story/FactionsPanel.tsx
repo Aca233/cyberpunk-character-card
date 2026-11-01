@@ -86,12 +86,8 @@ export function FactionsBody({ view }: { readonly view: View }) {
                         ` · 原来的地盘：${f.baseTurf.length > 0 ? f.baseTurf.join("、") : "没有"}`}
                     </p>
                     {f.news.map((n) => (
-                      <p
-                        key={`${n.at}-${n.title}`}
-                        className={n.mine ? styles.factionReason : styles.factionLine}
-                      >
-                        动向「{n.agenda}」{n.label}：{n.news}
-                        {n.turf && ` · ${n.turf}`}
+                      <p key={`${n.at}-${n.turf}`} className={styles.factionLine}>
+                        {n.turf}
                         <span className={styles.dim}>（{n.time}）</span>
                       </p>
                     ))}

@@ -26,6 +26,8 @@ import {
   type CheckSpec,
   checkFactFrom,
   legacyDvToEdge,
+  resolveCheck,
+  rollFaces,
 } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { HealthStateSchema } from "../systems/health";
@@ -33,7 +35,14 @@ import { itemCatalog, shopList } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
-import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
+import {
+  autoMove,
+  type PlannedTrip,
+  planTrip,
+  tripFact,
+  tripText,
+  tripWorldOf,
+} from "../systems/travel";
 import { formatGameTime, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type Choice,
@@ -70,7 +79,7 @@ import {
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
-import { prepareFor } from "./pending";
+import { prepareFor, type RolledCheck } from "./pending";
 import { applyPreset, applyPresetRegex, type TavernPreset } from "./preset";
 import {
   buildExtractPrompt,
@@ -228,8 +237,10 @@ export interface NarratorTurn {
   readonly choices: readonly Choice[];
   /** 内心声音，0–2 条 */
   readonly voices: readonly Voice[];
-  /** 判断给出、等玩家确认的检定 */
+  /** 判断给出、等玩家确认的检定；当场掷过的不在这里，见 rolled */
   readonly check: CheckSpec | undefined;
+  /** 当场掷过的检定（用户 2026-11-01 选的「全改」）：骰子记进这一轮的 dice，不再等确认 */
+  readonly rolled: RolledCheck | undefined;
   /** 判断给出的门槛和代码判定的结果 */
   readonly gate: GateResult | undefined;
   /** 生效的指令，按结算顺序 */
@@ -696,11 +707,20 @@ export async function runNarratorTurn(
   // ② 拼上下文：写正文之前代码已经定下的事
   const decided: string[] = [];
   if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
+  // 当场掷骰（用户 2026-11-01 选的「全改」第 1 步）：判断给了检定就直接掷，不再停笔等玩家确认；
+  // 结果按确认检定那条路交给写正文、抽取和核对，一轮写完、一轮记账
+  let rolled: RolledCheck | undefined;
   if (check) {
-    decided.push(
-      `先给检定：${check.intent}。这一轮只写到行动将要发生的那一刻（一两句），不写结果，停笔等玩家确认`,
-    );
+    const prepared = prepareFor(world, check);
+    if (prepared.ok) {
+      rolled = {
+        offer: { id: `inline.${records.length}`, label: check.intent, spec: check },
+        prepared: prepared.check,
+        result: resolveCheck(prepared.check, rollFaces(deps.rng)),
+      };
+    }
   }
+  const live: NarratorPlan = rolled ? { kind: "resolve", input: plan.input, check: rolled } : plan;
   if (gate) decided.push(gateText(gate));
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
@@ -725,7 +745,9 @@ export async function runNarratorTurn(
     !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
       ? judge.foes.trim().slice(0, FOES_CHARS)
       : undefined;
-  if (foes) decided.push(`对手这一轮的打算（照这个写对手的行动，对手不会只等着挨打）：${foes}`);
+  // 对手的打算从“照这个写”改成素材（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
+  if (foes)
+    decided.push(`对手这一轮的打算（对手不会只等着挨打；按局面写进对手的行动，可以改）：${foes}`);
   // 裁决理由：给了检定或门槛时留档，只在剧透视图里看
   const ruling =
     (check || gate) && typeof judge.why === "string" && judge.why.trim() !== ""
@@ -739,7 +761,7 @@ export async function runNarratorTurn(
     : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {}, budget.parts.world);
   let loreSection = lore?.section;
   const build = () =>
-    buildNarratorPrompt(world, records, plan, {
+    buildNarratorPrompt(world, records, live, {
       ...extras,
       decided,
       recalled: [...recalled, ...expanded],
@@ -858,11 +880,11 @@ export async function runNarratorTurn(
   if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
   if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
 
-  // ④ 抽取：场外提问和等检定的轮次不抽，状态不变
+  // ④ 抽取：场外提问不抽，状态不变；检定当场掷过，这一轮照常记账
   let shape: ExtractShape = {};
-  const settle = !ooc && check === undefined;
+  const settle = !ooc && (check === undefined || rolled !== undefined);
   if (settle) {
-    const extract = buildExtractPrompt(world, records, plan, extras, narrative);
+    const extract = buildExtractPrompt(world, records, live, extras, narrative);
     const reply = await b.call({
       purpose: "aux",
       temperature: EXTRACT_TEMPERATURE,
@@ -1000,7 +1022,7 @@ export async function runNarratorTurn(
     buildVerifyPrompt(
       world,
       records,
-      plan,
+      live,
       extras,
       narrative,
       proposals.map((p) => p.value),
@@ -1062,6 +1084,35 @@ export async function runNarratorTurn(
     b.notes.push(`时间停在 ${formatGameTime(stop.at)}：${stop.label}到期，接下来交给玩家`);
   }
 
+  // 模型直接在 world 里写了 location（用户定的"自动转"，2026-10-30）：500 米内按步行补上用时，
+  // 更远的转成一次出行，照路线表扣时间和路费；玩家在路线面板确认过出行的这一轮不管
+  if (!trip && !ooc && !inFlashback) {
+    const moveData = withSavedPlaces(deps.data ?? {}, world);
+    for (const [i, c] of commands.entries()) {
+      if (c.type !== "world") continue;
+      const loc = (c as { location?: unknown }).location;
+      if (typeof loc !== "string") continue;
+      const move = autoMove(tripWorldOf(world), moveData, loc);
+      if (move.kind === "near") {
+        const time = (c as { time?: unknown }).time;
+        const at = world.time + move.minutes;
+        if (typeof time !== "number" || time < at) {
+          commands[i] = { ...c, time: at } as Command;
+          b.notes.push(`就在附近，走过去 ${move.minutes} 分钟（代码按步行算）`);
+        }
+      } else if (move.kind === "trip") {
+        // 到达和时间由出行结算，world 里的 location 去掉，免得绕过路线
+        trip = move.trip;
+        const { location: _location, ...rest } = c as Command & { location?: unknown };
+        commands[i] = rest as Command;
+        b.notes.push(
+          `远处的地点自动转成出行：${move.trip.route.label}去${move.trip.to.name}，${move.trip.route.minutes} 分钟`,
+        );
+      }
+      break;
+    }
+  }
+
   // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
   if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
     commands.push({ type: "combat.standoffTick" });
@@ -1079,8 +1130,8 @@ export async function runNarratorTurn(
   }
 
   const facts: Record<string, unknown> = {};
-  if (plan.kind === "resolve") {
-    facts.check = checkFactFrom(plan.check.offer.id, plan.check.prepared, plan.check.result);
+  if (live.kind === "resolve") {
+    facts.check = checkFactFrom(live.check.offer.id, live.check.prepared, live.check.result);
   }
   // 门槛结果：入侵协议等要门槛达标的指令据此核对
   if (gate) facts.gate = { attribute: gate.gate.attribute, met: gate.met };
@@ -1166,7 +1217,7 @@ export async function runNarratorTurn(
       ? applied
       : registry.applyCommands(
           applied.world,
-          [{ type: "fallout.record", kinds: falloutKinds(accepted, plan.kind === "resolve") }],
+          [{ type: "fallout.record", kinds: falloutKinds(accepted, live.kind === "resolve") }],
           applyCtx,
         );
 
@@ -1197,7 +1248,6 @@ export async function runNarratorTurn(
       reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
     };
     let offscreen: Command[] = [];
-    let contact = false;
     if ("blocked" in reply) {
       considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
     } else {
@@ -1210,12 +1260,12 @@ export async function runNarratorTurn(
       });
       considered.push(...got.notes);
       offscreen = got.commands;
-      contact = got.contact;
     }
-    // 读不了也记下场次和时间，下一轮不马上重试
+    // 读不了也记下场次和时间，下一轮不马上重试；到点没写的事代码不替它编，只提醒一次再往后拨
+    // （用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）
     final = registry.applyCommands(
       settled.world,
-      [...offscreen, { type: "city.ran", contact }],
+      [...offscreen, { type: "thread.remind" }, { type: "city.ran" }],
       applyCtx,
     );
     for (const { command, result } of final.results) {
@@ -1239,11 +1289,10 @@ export async function runNarratorTurn(
         else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
         else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
         else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
-        else if (c.type === "agendaTold") considered.push(`场外推演：快讯播了势力动向 ${c.id}`);
-        else if (c.type === "agenda.move")
-          considered.push(`场外推演：势力动向 ${c.id}「${c.title}」${c.text ?? ""}`);
-        else if (c.type === "nemesis.move")
-          considered.push(`场外推演：宿敌 ${c.npc} ${c.text ?? ""}`);
+        else if (c.type === "threadTold") considered.push(`场外推演：快讯播了事项 ${c.id}`);
+        else if (c.type === "jobOffer") considered.push(`场外推演：新委托 ${c.id}「${c.title}」`);
+        else if (c.type.startsWith("thread.") && c.id)
+          considered.push(`场外推演：事项 ${c.id}（${c.type}）${c.text ?? ""}`);
         else if (c.type === "arc.offscreen")
           considered.push(
             `场外推演：${c.npc} 的心事 ${c.concern}${c.resolve ? "有了结果" : ""}：${c.text ?? ""}`,
@@ -1306,7 +1355,8 @@ export async function runNarratorTurn(
       read,
       choices,
       voices,
-      check,
+      check: rolled ? undefined : check,
+      rolled,
       gate,
       commands: accepted,
       dropped: b.dropped,

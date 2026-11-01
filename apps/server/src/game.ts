@@ -7,6 +7,7 @@ import {
   gameContent,
   gameData,
   openingPremise,
+  RADAR_ANCHORS,
 } from "@cp/content";
 import {
   type ActionRecord,
@@ -95,6 +96,11 @@ export const CreateSaveSchema = z.strictObject({
   difficulty: z.enum(["streetLegend", "nightCity", "deathCity"]).default("nightCity"),
   /** 开场时间，格式 YYYY-MM-DD HH:mm；没给时用 DEFAULT_START（prefault 先填默认文本再解析） */
   startTime: worldRules.GameTimeSchema.prefault(DEFAULT_START),
+  /**
+   * 开局地点：常用地点 id，或原作地标 ft:、服务点 poi:（用户定的，2026-10-30："可以选择地点开局"，"在地图上选择"）。
+   * 不给时照旧用开场自带的丽姿酒吧；建档时按地图数据校验，对不上的拒收
+   */
+  startLocation: z.string().trim().min(1).max(80).optional(),
 });
 
 /** 完整导出的文件格式：meta、整份回合日志和最新快照；含剧透，只用来备份和换电脑 */
@@ -220,6 +226,13 @@ export class GameService {
   }
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
+    // 开局地点“在地图上选择”（用户定的，2026-10-30）：只收已有地图锚点，不接受自编地点或其他存档的 place:
+    if (
+      input.startLocation !== undefined &&
+      !RADAR_ANCHORS.some((anchor) => anchor.id === input.startLocation)
+    ) {
+      return { status: 400, body: { error: "开局地点不在可选的地图地点里，请重新选择" } };
+    }
     const id = newSaveId();
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
@@ -406,7 +419,17 @@ export class GameService {
           dv: check.result.dv,
           outcome: check.result.outcome,
         });
-        void this.execute(run, world, log, plan, meta.opening, meta.startTime, request.offscreen);
+        void this.execute(
+          run,
+          world,
+          log,
+          plan,
+          meta.opening,
+          meta.startTime,
+          request.offscreen,
+          undefined,
+          meta.startLocation,
+        );
         return { status: 202, body: { turnId: run.turnId, replayed: false } };
       }
 
@@ -455,6 +478,7 @@ export class GameService {
         meta.startTime,
         request.offscreen,
         request.encounters,
+        meta.startLocation,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
@@ -715,7 +739,7 @@ export class GameService {
         }
         const extras = {
           data: gameData,
-          opening: openingPremise(meta.opening),
+          opening: openingPremise(meta.opening, meta.startLocation),
           startTime: meta.startTime,
         };
         const stage = (
@@ -918,7 +942,7 @@ export class GameService {
         ask = { confirm: { checkId: record.resolves, faces: rolled.roll.faces } };
       }
       const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
-      const opening = openingPremise(meta.opening);
+      const opening = openingPremise(meta.opening, meta.startLocation);
       const caseId = `playtest-${id}-${seq}`;
       const draft = {
         id: caseId,
@@ -962,6 +986,7 @@ export class GameService {
     startTime: number,
     offscreen: OffscreenPace | undefined,
     encounters?: travelRules.EncounterPace,
+    startLocation?: string | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
@@ -978,7 +1003,7 @@ export class GameService {
           contextWindow: resolved.profile.contextWindow,
           rng: this.deps.rng,
           data: gameData,
-          opening: openingPremise(opening),
+          opening: openingPremise(opening, startLocation),
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
@@ -1054,10 +1079,13 @@ export class GameService {
         requestId: run.requestId,
         baseVersion: run.baseVersion,
         input: plan.input,
+        // 当场掷过的检定（用户 2026-11-01 选的"全改"第 1 步）也记进这一轮的骰子
         dice:
           plan.kind === "resolve"
             ? [diceRules.diceRecord(plan.check.prepared, plan.check.result)]
-            : [],
+            : turn.rolled
+              ? [diceRules.diceRecord(turn.rolled.prepared, turn.rolled.result)]
+              : [],
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,

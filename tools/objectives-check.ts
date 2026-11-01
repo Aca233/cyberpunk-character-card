@@ -97,7 +97,7 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
   expect("赏金猎人找上来算 5 级", b[0]?.level === 5, b[0]);
 }
 
-// 威胁：宿敌的准备和场外动静
+// 威胁：宿敌的准备
 {
   const foe = {
     npc: "foe",
@@ -106,13 +106,11 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
     how: "跳进排水渠逃了",
     prep: { against: "guns", text: "没揭露的准备", at: base.time },
     known: false,
-    moves: [{ text: "场外的动静", at: base.time }],
-    lastMoveAt: base.time,
   };
   const hidden = view(set(base, "nemesis", { nemeses: [foe] }));
   const t = hidden.threats.find((x) => x.id === "nemesis:foe");
   expect("准备没揭露时 3 级", t?.level === 3, t);
-  expect("没揭露的准备和场外动静不出现", !/没揭露的准备|场外的动静/.test(text(hidden)));
+  expect("没揭露的准备不出现", !text(hidden).includes("没揭露的准备"));
   const known = view(set(base, "nemesis", { nemeses: [{ ...foe, known: true }] }));
   expect("准备揭露后 4 级并写出来", known.threats.find((x) => x.id === "nemesis:foe")?.level === 4);
 }
@@ -186,7 +184,6 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
           [seed.npc]: {
             unlockedAt: at,
             concerns: { [concern.id]: p },
-            lastOffscreenAt: null,
             doneAt: null,
           },
         },
@@ -285,8 +282,6 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
     how: "逃了",
     prep: null,
     known: false,
-    moves: [],
-    lastMoveAt: null,
   };
   const was = set(base, "nemesis", { nemeses: [foe] });
   const rose = view(was, base).events;
@@ -527,24 +522,8 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
   );
 }
 
-// 宿敌动向、心事结果：系统自己发，只露名字和标题，场外原文不进投影
+// 心事结果：系统自己发，只露名字和标题，场外原文不进投影
 {
-  const secret = "在码头堵了你的线人";
-  const foe = {
-    npc: "foe",
-    name: "疤脸",
-    since: base.time,
-    how: "逃了",
-    prep: null,
-    known: false,
-    moves: [{ text: secret, at: base.time }],
-    lastMoveAt: base.time,
-  };
-  const nv = view(set(base, "nemesis", { nemeses: [foe] }));
-  const nf = nv.feed.filter((x) => x.source === "nemesis");
-  expect("宿敌动向进消息频道", nf.length === 1 && nf[0]?.channel === "messages", nf);
-  expect("宿敌场外动作原文不进投影", !JSON.stringify(nv).includes(secret));
-
   const seeds = ((gameData as Readonly<Record<string, unknown>>).arcs ?? []) as {
     npc: string;
     concerns: { id: string; title: string }[];
@@ -566,7 +545,6 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
                 outcome: { text: result, fate: "worse", at: base.time, by: "offscreen", known },
               },
             },
-            lastOffscreenAt: base.time,
             doneAt: null,
           },
         },

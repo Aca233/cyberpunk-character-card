@@ -1,13 +1,16 @@
 import { defineSystem } from "../../kernel/system";
+import { worldActions } from "./actions";
 import { applyDeadline, applyWorld, endScene } from "./apply";
 import { worldEvents } from "./events";
 import { worldFeed } from "./feed";
-import { applyPlace, placeRules, placeSections, withPlaces } from "./places";
+import { applyPlace, movePlace, placeRules, placeSections, withPlaces } from "./places";
 import {
   type DeadlineCommand,
   DeadlineCommandSchema,
   type EndScene,
   EndSceneSchema,
+  type MovePlace,
+  MovePlaceSchema,
   type PlaceCommand,
   PlaceCommandSchema,
   type WorldClockState,
@@ -21,7 +24,7 @@ import { worldView } from "./view";
 export const world = defineSystem<
   WorldClockState,
   WorldCommand | DeadlineCommand | PlaceCommand,
-  EndScene
+  EndScene | MovePlace
 >({
   id: "world",
   state: WorldClockStateSchema,
@@ -31,7 +34,7 @@ export const world = defineSystem<
     deadline: DeadlineCommandSchema,
     place: PlaceCommandSchema,
   },
-  internal: { "world.endScene": EndSceneSchema },
+  internal: { "world.endScene": EndSceneSchema, "world.movePlace": MovePlaceSchema },
   apply(draft, command, ctx) {
     switch (command.type) {
       case "world":
@@ -42,10 +45,14 @@ export const world = defineSystem<
         return applyPlace(draft, command, ctx.data, ctx.now);
       case "world.endScene":
         return endScene(draft, ctx.now);
+      case "world.movePlace":
+        return movePlace(draft, command, ctx.data, ctx.now);
     }
   },
   // 地点簿并进地点表和周边锚点（places-plan §四），别的系统照旧用 locationCatalog 查
   data: (state, data) => withPlaces(data, state.places),
+  // 地图上拖剧情地点（places-plan 第二期，用户定的 2026-10-30）
+  actions: worldActions,
   rules: [placeRules],
   sections: placeSections,
   view: { key: "clock", project: worldView },
@@ -54,6 +61,7 @@ export const world = defineSystem<
   feed: worldFeed,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./district";
 export * from "./events";

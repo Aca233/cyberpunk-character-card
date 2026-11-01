@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AttributeSchema } from "../dice";
 import { RaritySchema } from "../economy";
 
-/** 义体部位，按原作分类；同一部位只装一件 */
+/** 义体部位，按原作分类；每个部位能装几件见 SLOT_CAPACITY */
 export const CYBERWARE_SLOTS = [
   "frontalCortex",
   "eyes",
@@ -29,6 +29,23 @@ export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
   hands: "手部",
   arms: "手臂",
   legs: "腿部",
+};
+
+/**
+ * 每个部位能装几件：照原作 2.0 义体医生那一页每组的格数（apps/web 的 CyberDoll.tsx 里 CYBER_SIDES 已经照着画了）。
+ * 原来一个部位只装一件，用户 2026-10-31 说"为什么每个地方的义体只能选一个""现在 ui 和能装的义体数量对不上"，改成按格数装
+ */
+export const SLOT_CAPACITY: Readonly<Record<CyberwareSlot, number>> = {
+  frontalCortex: 3,
+  eyes: 2,
+  nervous: 3,
+  os: 1,
+  circulatory: 3,
+  integumentary: 3,
+  skeleton: 3,
+  hands: 2,
+  arms: 1,
+  legs: 1,
 };
 
 /** 义体表的一条；数据在 content 包的 cyberware.ts */
@@ -149,7 +166,7 @@ export const CyberwareCommandSchema = z
     event: z.string().min(1).optional(),
   })
   .describe(
-    "义体医生装、卸义体：install 按义体表扣欧元（谈下来的价或白送时写 price，白送写 0），余额不够时整条不生效；同一部位只装一件，装新的换下旧的；remove 卸下。人性上限由代码算，不另写 humanity",
+    "义体医生装、卸义体：install 按义体表扣欧元（谈下来的价或白送时写 price，白送写 0），余额不够时整条不生效；每个部位按格数装（额皮质、神经系统、循环系统、表皮系统、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件），装满了再装会换下最早装的那件；remove 卸下。人性上限由代码算，不另写 humanity",
   );
 export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 

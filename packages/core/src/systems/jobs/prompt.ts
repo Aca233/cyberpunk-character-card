@@ -1,6 +1,6 @@
 import type { RuleModule } from "../../kernel/system";
 import { formatGameTime } from "../world";
-import { isOpen, JOB_STATUS_LABELS, maxRisk } from "./apply";
+import { FACTION_RISK_BONUS, type FixerCard, isOpen, JOB_STATUS_LABELS, maxRisk } from "./apply";
 import { JOB_KIND_LABELS, type Job, type JobsState, JobTemplateCatalogSchema } from "./schema";
 
 /** 已结束的委托最多列这么多单，最近的优先 */
@@ -21,6 +21,7 @@ export const jobsRules: RuleModule<JobsState> = {
 - 失败和坏选择要有真实的后果；被放走的人、被得罪的雇主以后可能回来。`,
   text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们对玩家角色的好感；隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
 - 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门。挂出时写 jobOffer，玩家角色在正文里答应了再写 jobAccept；中间人只派他现在肯派的星级，派不出的活就让他说“你还不够格”。
+- 中间人不只【委托】里列的这几位：有人物卡的人都能当中间人派单，jobOffer 的 fixer 写他的 id，代码第一次派单时登记。剧情里冒出新的中间人，同一轮先写 npc 给他建卡（role 写清是哪一带的中间人），再写 jobOffer；新中间人好感从 0 起，先派 1、2 星的活。
 - 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的降低风险或免去检定。
 - 玩家也能在委托板上直接接单：进展笔记里写着“在委托板上接下”的单子已经算接下，不要再写 jobAccept；找个自然的时机让中间人或雇主联系玩家角色，交代细节。
 - 有实质进展、玩家选了某条路、转折被揭开时写 jobNote。
@@ -53,13 +54,20 @@ export function jobsSection(
   state: JobsState,
   streetCred: number,
   affinityOf: (id: string) => number,
+  /** 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）；不传时不算 */
+  sideOf: (id: string) => FixerCard["faction"] = () => undefined,
 ): string | undefined {
   const fixers = Object.values(state.fixers);
   if (fixers.length === 0 && state.jobs.length === 0) return undefined;
-  const lines = fixers.map(
-    (f) =>
-      `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，现在最多派 ${maxRisk(affinityOf(f.id), streetCred)} 星`,
-  );
+  const lines = fixers.map((f) => {
+    const side = sideOf(f.id);
+    const bonus = side === undefined ? 0 : FACTION_RISK_BONUS[side.attitude];
+    if (side !== undefined && bonus === null) {
+      return `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单`;
+    }
+    const max = Math.min(5, maxRisk(affinityOf(f.id), streetCred) + (bonus ?? 0));
+    return `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，现在最多派 ${max} 星${bonus ? `（${side?.name}待玩家好，多派一星）` : ""}`;
+  });
   const open = state.jobs.filter(isOpen);
   if (open.length === 0) lines.push("- 眼下没有挂着或接下的委托");
   else lines.push(...open.map((j) => jobLine(j, state)));

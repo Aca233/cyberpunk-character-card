@@ -4,6 +4,7 @@ import type { WorldState } from "../../kernel/world";
 import { CharacterStateSchema } from "../character";
 import { EconomyStateSchema } from "../economy";
 import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./apply";
+import { moodLock, moodPrice, shopMood } from "./mood";
 import { InventoryStateSchema } from "./schema";
 
 /** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
@@ -89,11 +90,15 @@ function shopCommands(
   const stock = currentStock(held.shopStock[shop.id], world.time);
   const item = shopShelf(shop, catalog, streetCred, stock).find((i) => i.def.id === action.id);
   if (!item) return `${shop.name}的货架上没有这件`;
-  if (item.locked) return `${shop.name}不卖${item.def.name}：${item.locked}`;
+  // 势力态度影响店价（用户 2026-10-31 选的「势力进机制」）：和货架上显示的一样算
+  const mood = shopMood(world, data, shop);
+  const locked = moodLock(mood) ?? item.locked;
+  if (locked) return `${shop.name}不卖${item.def.name}：${locked}`;
+  const price = moodPrice(item.price, mood);
   const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
-  if (item.price > eddies) return `欧元不够：${item.def.name}要 ${item.price}，身上只有 ${eddies}`;
+  if (price > eddies) return `欧元不够：${item.def.name}要 ${price}，身上只有 ${eddies}`;
   return [
-    { type: "money", delta: -item.price, reason: `在${shop.name}买${item.def.name}` },
+    { type: "money", delta: -price, reason: `在${shop.name}买${item.def.name}` },
     { type: "item", action: "gain", id: item.def.id, reason: `在${shop.name}买下` },
     { type: "inventory.sold", shop: shop.id, item: item.def.id, at: world.time },
   ];

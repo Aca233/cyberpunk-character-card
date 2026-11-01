@@ -14,9 +14,6 @@ export const OFFSCREEN_RUMORS = 3;
 /** 新闻快讯和电台插段最多留这么多段，一段最长这么多字 */
 export const BULLETINS_KEPT = 20;
 export const BULLETIN_MAX = 200;
-/** 隔这么多小时代码才再挑一次该主动联系玩家的人；一次最多挑几个 */
-export const CONTACT_HOURS = 24;
-export const CONTACT_PICKS = 2;
 /** 一次推演最多让几个原作人物死在屏幕外 */
 export const OFFSCREEN_DEATHS = 1;
 
@@ -134,8 +131,7 @@ export const CityStateSchema = z.object({
   /** 上次场外推演时是第几场、游戏时间几点；还没推演过为 null */
   lastScene: z.number().int().nullable().default(null),
   lastAt: z.number().int().nullable().default(null),
-  /** 上次代码挑人主动联系玩家的游戏时间；还没挑过为 null */
-  lastContactAt: z.number().int().nullable().default(null),
+  // 谁来联系玩家改由主持人定，不再记挑人的时间（用户 2026-11-01 定的「全改」第 4 步）
 });
 export type CityState = z.infer<typeof CityStateSchema>;
 
@@ -157,10 +153,9 @@ export const CityBulletinCommandSchema = BulletinFieldsSchema.extend({
 });
 export type CityBulletinCommand = z.infer<typeof CityBulletinCommandSchema>;
 
-/** 只能由代码发出：记下这次场外推演的场次和时间；contact 为真时这次挑过该主动联系的人 */
+/** 只能由代码发出：记下这次场外推演的场次和时间 */
 export const CityRanSchema = z.object({
   type: z.literal("city.ran"),
-  contact: z.boolean().optional(),
 });
 
 export type CityInternal =

@@ -1,6 +1,13 @@
 import type { RuleModule } from "../../kernel/system";
 import { bodyLine, woundNote } from "./body";
-import { KNOWN_SOURCE_LABELS, type LedgerKind, type Npc, type NpcState } from "./schema";
+import {
+  KNOWN_SOURCE_LABELS,
+  type LedgerKind,
+  NO_FACTION,
+  NO_FACTION_LABEL,
+  type Npc,
+  type NpcState,
+} from "./schema";
 
 /** 不在场的人最多列这么多个，最近出场的优先 */
 export const OFFSTAGE_LISTED = 20;
@@ -23,6 +30,7 @@ export const npcRules: RuleModule<NpcState> = {
     "npcDeath",
     "doing",
     "relation",
+    "tie",
     "ledger",
     "ledgerSettle",
     "learn",
@@ -40,19 +48,26 @@ export const npcRules: RuleModule<NpcState> = {
 - 死了的人不再出场。`,
   narrate: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
+- 人物后面括号里的「势力」带着这个组织现在对玩家的态度（用户 2026-10-31："势力还是感觉好没存在感"）：没打过交道的成员先按组织的态度对待玩家（敌对的提防、盘问、找茬，见面就打的直接动手，友好的给方便、递消息，自己人当兄弟）；打过交道的按好感，但会顾忌组织的立场，当着同伙的面更要表态。言谈里带出自己是哪家的人：帮派的颜色和黑话、公司的工牌和腔调、警察的警徽。
 - 要写新人物之前，先看【人物】里「这一带的老面孔」和不在场的人有没有合适的能用；同一个酒保、总被撞见的混混、上次放走的人可以反复出现，让他们出场写 meet，不要另建一张差不多的卡。
+- 会再出现、或者推动剧情的配角（递货的、接头的、要玩家角色跟着走的、开口谈条件的），让他在正文里自报名字或外号，或者由旁人叫出来；擦肩而过的路人不用起名。
 - 承诺、人情、冲突这类以后会被提起的事，让人物记着、以后提起。死了的人不再出场，也不会发消息。
+- 人物有自己的日子，不是为玩家角色存在的（用户 2026-10-31："感觉没有活人感""感觉是为了我才存在的"）：见面时先带着他自己的事来（刚碰上的麻烦、心情、手上正忙的活），会主动提起「最近」和「这段时间的经历」里的事，会提起「共同记忆」里的旧事、翻旧账、兑现或追问承诺；有自己的事要忙时会拒绝、改约、让玩家等，不随叫随到。好感和「关系」要看得出变化：熟了说话更随便、开玩笑、说点心里话，生分了客气、冷淡、话少。
+- 人物之间也认识（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：卡上的「认识的人」是他和别的有卡的人的关系，演的时候会提起、会打听、会替对方说话或记对方的仇，熟人出事他会知道、会有反应；标了「暗地里」的关系不当着外人提。
 - 卡上的「最近」是这个人在屏幕外的近况，演的时候接着它写。时间大段跳过（半天以上）时，可以让一两个和玩家有关的人有点离屏进展，借新闻、传闻、一条消息或者本人的一句话透出来；只写一两句，不替玩家做事。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。
 - 卡上的「身体」是这个人的档位、属性、生命和伤势、装备、义体和人性：打起来按属性和装备写他的本事，受了伤照伤势写。人性数值和阶段只有你知道，不直接说给玩家；人性低了从言行里透出征兆（手抖、说话变冷、嗑药、对义体着魔），队员也会发作，可能走上大卫那条路，人性到 0 怎么收场按剧情处理。`,
   text: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
 - 要写新人物之前，先看【人物】里「这一带的老面孔」和不在场的人有没有合适的能用；同一个酒保、总被撞见的混混、上次放走的人可以反复出现，让他们出场写 meet，不要另建一张差不多的卡。
-- 人物出场、或者第一次见面，写一条 meet；有名字、并且和玩家角色有了实质互动的新人物，当场用 npc 建卡，id 用小写拼音或英文。路人不建卡。
+- 人物出场、或者第一次见面，写一条 meet；和玩家角色有了实质互动、或者推动了剧情（递货、接头、对暗号、要玩家角色跟着走、开口谈条件）的新人物，当场用 npc 建卡，id 用小写拼音或英文；正文没给名字时 name 用正文里的称呼（例如「兜帽男」「灰夹克」），不要因为没名字就不建。只是擦肩而过、端盘子、待在背景里的是路人，不建卡。
+- 用 npc 建卡时写 faction：这个人属于哪个势力就写【当前状态】势力列表里的 id（漩涡帮打手写 maelstrom、荒坂的人写 arasaka），不属于任何势力写 none；帮派成员、公司雇员、警察要写对，单干的佣兵、街坊、店主写 none。【人物】里每行的「势力」就是这个。
+- 玩家角色对有势力的人做的事大到组织会知道（杀了、救了、当众羞辱、替他办成大事），好感之外同时写一条 faction 改这个势力的态度（用户 2026-10-31："势力还是感觉好没存在感"）；私下的小恩小怨只写好感。
 - 用 npc 建卡时可以带 body：tier 按身份选（mook 普通人、pro 老手、elite 精英、legend 传奇），属性、装备和义体要符合身份，装备和义体写物品表、义体表里的 id；不写按普通人的默认值补。
 - 好感只在对方真的有理由改变态度时才写，一轮里同一个人最多一条；承诺、人情、冲突这类以后会被提起的事写一条 memory。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
 - 关系真的变了（一起扛过事、说过真心话、生死与共，或者背叛、被拆穿大谎、伤了对方在乎的人）才写一条 relation，一句话写现在的关系，会替换旧的；好感高只说明对方愿意见你，不等于关系深。
+- 人物之间也认识（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：卡上的「认识的人」是他和别的有卡的人的关系，演的时候会提起、会打听、会替对方说话或记对方的仇，熟人出事他会知道、会有反应。正文里透出两个有卡的人之间的关系（搭档、亲人、旧情、上下家、结仇），或者关系变了，写一条 tie，aToB、bToA 各从一边的角度写一句，会替换两人之间旧的那条；见不得光的关系 open 写 false。
 - 欠下或结下以后会被讨回来的人情和仇，写一条 ledger（owesYou 对方欠玩家角色、youOwe 玩家角色欠对方、grudge 对方记玩家角色的仇）；还了、报了、放下了，写 ledgerSettle，entry 填卡上「人情和仇」那一条的编号。
 - 死了的人不再出场，也不会发消息。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。
@@ -71,6 +86,11 @@ export interface Stage {
   /** 内容数据（物品表、义体表）和此刻的游戏时间；都传了才写「身体」和伤势 */
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   readonly now?: number | undefined;
+  /**
+   * 势力 id 换成「名字，对玩家什么态度」（用户 2026-10-31："势力还是感觉好没存在感"）：
+   * 由组合层按势力表和势力态度给，人物系统不引势力系统；不传只写 id
+   */
+  readonly factionOf?: ((faction: string) => string | undefined) | undefined;
 }
 
 /** 「这一带的老面孔」最多列这么多个，见过的、最近出场的优先 */
@@ -82,13 +102,36 @@ export function onStage(npc: Npc, stage: Stage): boolean {
   return npc.lastSeenAt !== null && npc.lastSeenAt >= stage.sceneStartedAt;
 }
 
-function label(npc: Npc): string {
-  return `${npc.name}${npc.alias ? `（外号${npc.alias}）` : ""}［${npc.id}，${npc.pronoun}］`;
+/** 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：写势力 id，模型写 faction 指令时对得上 */
+function factionNote(npc: Npc, stage: Stage): string {
+  if (npc.faction === NO_FACTION) return `势力${NO_FACTION_LABEL}`;
+  const detail = stage.factionOf?.(npc.faction);
+  return detail ? `势力 ${npc.faction}（${detail}）` : `势力 ${npc.faction}`;
 }
 
-function fullCard(npc: Npc, stage: Stage): string {
+function label(npc: Npc, stage: Stage): string {
+  return `${npc.name}${npc.alias ? `（外号${npc.alias}）` : ""}［${npc.id}，${npc.pronoun}，${factionNote(npc, stage)}］`;
+}
+
+/**
+ * 卡上的「认识的人」（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：名字、id、一句关系，
+ * 死了的标出来，见不得光的标「暗地里」；只给模型看
+ */
+function tiesNote(npc: Npc, npcs: NpcState["npcs"]): string | undefined {
+  if (npc.ties.length === 0) return undefined;
+  return npc.ties
+    .map((t) => {
+      const other = npcs[t.id];
+      const name = other?.name ?? t.id;
+      const marks = [...(other && !other.alive ? ["已死"] : []), ...(t.open ? [] : ["暗地里"])];
+      return `${name}［${t.id}］：${t.text}${marks.length > 0 ? `（${marks.join("，")}）` : ""}`;
+    })
+    .join("；");
+}
+
+function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   const lines = [
-    `- ${label(npc)} ${npc.role}；好感 ${npc.affinity}${npc.met ? "" : "；还没见过玩家角色"}`,
+    `- ${label(npc, stage)} ${npc.role}；好感 ${npc.affinity}${npc.met ? "" : "；还没见过玩家角色"}`,
     `  外貌：${npc.look}`,
     `  说话：${npc.voice}`,
   ];
@@ -101,6 +144,8 @@ function fullCard(npc: Npc, stage: Stage): string {
     lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
   }
   if (npc.relation) lines.push(`  关系：${npc.relation.text}`);
+  const ties = tiesNote(npc, npcs);
+  if (ties) lines.push(`  认识的人：${ties}`);
   if (npc.known.length > 0) {
     lines.push(
       `  玩家角色知道：${npc.known.map((k) => `${k.text}（${KNOWN_SOURCE_LABELS[k.source]}）`).join("；")}`,
@@ -127,12 +172,12 @@ function oneLine(npc: Npc, stage: Stage): string {
   if (!npc.alive) {
     const off = npc.offscreenDeath;
     if (off !== null && !npc.known.some((k) => k.at >= off.at)) {
-      return `- ${label(npc)} ${npc.role}；在玩家没看着的地方死了（${off.cause}），玩家角色还不知道；正文里让玩家听说或撞见时写一条 learn`;
+      return `- ${label(npc, stage)} ${npc.role}；在玩家没看着的地方死了（${off.cause}），玩家角色还不知道；正文里让玩家听说或撞见时写一条 learn`;
     }
-    return `- ${label(npc)} ${npc.role}；已死`;
+    return `- ${label(npc, stage)} ${npc.role}；已死`;
   }
   if (!npc.met) {
-    return `- ${label(npc)} ${npc.role}；还没见过${npc.location ? `，常在 ${npc.location}` : ""}`;
+    return `- ${label(npc, stage)} ${npc.role}；还没见过${npc.location ? `，常在 ${npc.location}` : ""}`;
   }
   const wound =
     stage.data !== undefined && stage.now !== undefined
@@ -140,7 +185,7 @@ function oneLine(npc: Npc, stage: Stage): string {
       : undefined;
   const hurt = wound ? `；${wound}` : "";
   const doing = npc.doing ? `；最近：${npc.doing.text}` : "";
-  return `- ${label(npc)} ${npc.role}；好感 ${npc.affinity}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}`;
+  return `- ${label(npc, stage)} ${npc.role}；好感 ${npc.affinity}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}`;
 }
 
 /** 玩家角色所在的城区；不在地点表里、或者没传 districtOf 时是 undefined */
@@ -179,7 +224,7 @@ export function castSection(state: NpcState, stage: Stage): string {
   const parts: string[] = [];
   parts.push(
     here.length > 0
-      ? `在场：\n${here.map((n) => fullCard(n, stage)).join("\n")}`
+      ? `在场：\n${here.map((n) => fullCard(n, stage, state.npcs)).join("\n")}`
       : "在场：没有有卡的人。",
   );
   if (locals.length > 0) {

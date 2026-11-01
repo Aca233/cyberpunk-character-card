@@ -6,27 +6,31 @@ import {
   type MapPoiKind,
   SUBDISTRICT_SHAPES,
 } from "@cp/content/mapShapes";
-import {
-  type CSSProperties,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { type AssetId, asset } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { useLayer } from "../../ui/layers";
+// 视角、瓦片和图标抽到 mapCamera.ts，和捏人选开局地点的地图共用（2026-10-30，用户定的"在地图上选择"）
+import {
+  clamp,
+  iconStyle,
+  MAP,
+  onOverlay,
+  POI_ZOOM,
+  pinVars,
+  poiIcon,
+  SUB_ZOOM,
+  shapesViewBox,
+  tileImages,
+  useMapCamera,
+  useMapTiles,
+} from "./mapCamera";
 import styles from "./story.module.css";
 import { districtIcon, type View } from "./view";
 
 export type MapDestination = View["travel"]["destinations"][number];
 export type MapRoute = MapDestination["routes"][number];
-
-/** 底图整图：瓦片没生成或还没载入时垫在下面，正方形 */
-const MAP: AssetId = "map.roads";
 /** NCPD 警情用原作地图上的悬赏标记 */
 const POLICE_ICON: AssetId = "map.poi.police";
 
@@ -77,25 +81,6 @@ export function MapShapes({
         ))}
     </>
   );
-}
-
-/** 视角：中心点（底图百分比）和缩放（每 1% 底图占多少屏幕像素） */
-interface Camera {
-  readonly k: number;
-  readonly cx: number;
-  readonly cy: number;
-}
-
-/** 默认视角尽量框住城区和狗镇；底图至少铺满视野，所以宽屏时上下会裁掉一些 */
-const CITY = { x0: 4, x1: 72, y0: 2, y1: 96 } as const;
-/** 放大到默认的几倍以后显示街区名和服务点 */
-const SUB_ZOOM = 1.35;
-const POI_ZOOM = 1.6;
-const MAX_ZOOM = 8;
-
-/** 服务点图标：原作 mappin_icons 图集里的同类标记 */
-function poiIcon(kind: MapPoiKind): AssetId {
-  return `map.poi.${kind}` as const;
 }
 
 const KIND_NAME = new Map(MAP_POI_KINDS.map((k) => [k.id, k.name]));
@@ -161,9 +146,18 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
   barghest: "gang.barghest",
 };
 
-/** 图例每一项都能开关：当前位置、可以去的地点、NCPD 警情和每类服务点 */
-type LegendKey = "here" | "dest" | "police" | MapPoiKind;
-const LEGEND_KEYS = new Set<string>(["here", "dest", "police", ...MAP_POI_KINDS.map((k) => k.id)]);
+/** 委托地点用原作地图上的任务标记（mappin_icons 的 quest，同类图标已在图集里，用户同意的 2026-10-30） */
+const JOB_ICON: AssetId = "map.poi.quest";
+
+/** 图例每一项都能开关：当前位置、可以去的地点、委托、NCPD 警情和每类服务点 */
+type LegendKey = "here" | "dest" | "jobs" | "police" | MapPoiKind;
+const LEGEND_KEYS = new Set<string>([
+  "here",
+  "dest",
+  "jobs",
+  "police",
+  ...MAP_POI_KINDS.map((k) => k.id),
+]);
 /** 关掉的图例项记在浏览器里，下次打开地图照旧 */
 const HIDDEN_STORE = "cp.mapHidden";
 
@@ -201,51 +195,17 @@ const TEXT_SHADOW_SLICE = [18, 28, 16, 28] as const;
 /** 原作 atlas_shapes_sync 的 cell_flip_bg / cell_flip_fg（左下斜角）切线：2160p 左/上/右/下 30/20/20/30，这里是 CSS 顺序 */
 const PANEL_SLICE = [20, 20, 30, 30] as const;
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, v));
-}
-
-/** 图标用遮罩上色：返回带 --icon 的样式；图集里没有这张图时返回 undefined（缺图列表会报出来） */
-function iconStyle(id: AssetId, at?: { left: number; top: number }): CSSProperties | undefined {
-  const info = asset(id);
-  if (!info) return undefined;
-  return { ...at, "--icon": `url("${info.url}")` } as CSSProperties;
-}
-
-/**
- * 地点标记照原作世界地图的 mappin（fullscreen/world_map/mappins）：
- * 目的地是 default_mappin 的 mappin_icons 图标垫 shadowBlobSquare_big 黑影；
- * 当前位置是 player_mappin 的 atlas_minimap player 箭头和 braindance_icons recording1 圆圈。
- * 都当遮罩用、CSS 上色，挂在地图根节点上，图例也能用；缺图时变量为空（缺图列表会报出来）
- */
-function pinVars(): CSSProperties {
-  return {
-    "--pin-dest": cssUrl("map.pinDest"),
-    "--pin-shadow": cssUrl("map.pinShadow"),
-    "--pin-player": cssUrl("map.pinPlayer"),
-    "--pin-ping": cssUrl("map.pinPing"),
-  } as CSSProperties;
-}
-
-/** 底图不能缩到比视野小，也不能拖出边：四边都不露黑 */
-function limit(c: Camera, w: number, h: number, kMax: number): Camera {
-  if (w === 0 || h === 0) return c;
-  const kMin = Math.max(w, h) / 100;
-  const k = clamp(c.k, kMin, Math.max(kMin, kMax));
-  const hw = w / (2 * k);
-  const hh = h / (2 * k);
-  return { k, cx: clamp(c.cx, hw, 100 - hw), cy: clamp(c.cy, hh, 100 - hh) };
-}
-
-function fit(w: number, h: number): Camera {
-  const cx = (CITY.x0 + CITY.x1) / 2;
-  const cy = (CITY.y0 + CITY.y1) / 2;
-  if (w === 0 || h === 0) return { k: 0, cx, cy };
-  const k = Math.max(
-    Math.min(w / (CITY.x1 - CITY.x0), h / (CITY.y1 - CITY.y0)),
-    Math.max(w, h) / 100,
-  );
-  return limit({ k, cx, cy }, w, h, k);
+/** 地点图钉的悬停说明：名字、城区，再标当前位置、听说过、大概位置（places-plan 第二期） */
+function destTitle(d: MapDestination): string {
+  const tags = [
+    d.here ? "当前位置" : undefined,
+    d.heard ? "听说过、没去过" : undefined,
+    // 玩家拖过的照实标，不冒充原作入口（places-plan 第二期）
+    d.moved ? "你放的位置" : d.rough ? "大概位置" : undefined,
+    d.layer === "place" ? "剧情里记下的地方" : undefined,
+    d.firstVisit ? "原作地点，还没去过" : undefined,
+  ].filter((t): t is string => t !== undefined);
+  return `${d.name} · ${d.district}${tags.length > 0 ? `（${tags.join("，")}）` : ""}`;
 }
 
 interface Box {
@@ -259,20 +219,21 @@ function overlaps(a: Box, list: readonly Box[]): boolean {
   return list.some((b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0);
 }
 
-/** 浮在地图上的卡片和图例：在上面点击、滚轮不拖动也不缩放地图 */
-function onOverlay(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest("button, summary, [data-overlay]") !== null;
-}
-
 /** 神经界面的地图页：铺满页面主体，滚轮缩放、拖动平移；耗时、路费和风险由代码按路线表算，不调用模型 */
 export function MapBody({
   view,
   onTravel,
+  onMovePlace,
   onClose,
 }: {
   readonly view: View;
   /** 正在生成时不传，路线不能点 */
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
+  /**
+   * 把剧情里记下的地点拖到准确的位置后保存（places-plan 第二期，用户定的 2026-10-30）：不调用模型；
+   * 失败时抛错，拖动状态留着可以再存或取消。正在生成时不传
+   */
+  readonly onMovePlace?: ((id: string, x: number, y: number) => Promise<void>) | undefined;
   /** 收起地图：顶栏工具那一排最右边出「关闭」按钮，同 M、Esc（用户定的，计划第十二节）；不传不出 */
   readonly onClose?: (() => void) | undefined;
 }) {
@@ -280,22 +241,23 @@ export function MapBody({
   const [hover, setHover] = useState<Hover | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
   const [picked, setPicked] = useState<string | null>(null);
-  const [tiles, setTiles] = useState<MapTiles | null>(null);
+  const tiles = useMapTiles();
   const destinations = view.travel.destinations;
   const here = destinations.find((d) => d.here);
   const dest = destinations.find((d) => d.id === picked);
+  // 委托地点（用户同意的 2026-10-30）：挂着和接下的委托，location 对得上目的地的 id 或名字才标；对不上不猜坐标
+  const openJobs = view.jobs.list.filter((j) => j.open && j.location !== null);
+  const jobsAt = new Map<string, (typeof openJobs)[number][]>();
+  for (const j of openJobs) {
+    const exact = destinations.find((x) => x.id === j.location);
+    // 旧委托可能写的是名字；同名地点不止一个时不随便挑，避免把委托标到别处
+    const named = exact ? [] : destinations.filter((x) => x.name === j.location);
+    const d = exact ?? (named.length === 1 ? named[0] : undefined);
+    if (d) jobsAt.set(d.id, [...(jobsAt.get(d.id) ?? []), j]);
+  }
+  const destJobs = dest ? (jobsAt.get(dest.id) ?? []) : [];
   const info = asset(MAP);
   const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
-
-  useEffect(() => {
-    let live = true;
-    void loadMapTiles().then((t) => {
-      if (live) setTiles(t);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
 
   useEffect(() => {
     try {
@@ -313,118 +275,64 @@ export function MapBody({
       return next;
     });
 
-  // ———— 视角：滚轮缩放、拖动平移、键盘 ————
-  const viewport = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [camera, setCamera] = useState<Camera | null>(null);
-  const drag = useRef<{ x: number; y: number; id: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const home = fit(size.w, size.h);
-  const cam = camera ? limit(camera, size.w, size.h, home.k * MAX_ZOOM) : home;
-  const zoom = home.k > 0 ? cam.k / home.k : 1;
+  // ———— 视角：滚轮缩放、拖动平移、键盘（共用 mapCamera.ts，算法照旧） ————
+  const {
+    viewport,
+    size,
+    cam,
+    zoom,
+    dragging,
+    zoomBy,
+    reset,
+    toScreen,
+    onScreen,
+    pointAt,
+    dragStart,
+    dragMove,
+    dragEnd,
+    keyPan,
+  } = useMapCamera();
 
-  useLayoutEffect(() => {
-    const el = viewport.current;
-    if (!el) return;
-    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  // 拖地点（places-plan 第二期）：只对选中的那个有效，换了选中就当取消；还没保存的坐标只在这里
+  const [moving, setMoving] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const move = moving && moving.id === picked ? moving : null;
+  const moveDrag = useRef<number | null>(null);
 
-  /** 以屏幕上 (mx, my) 为不动点缩放 */
-  const zoomAt = useCallback(
-    (factor: number, mx: number, my: number) => {
-      const { w, h } = size;
-      if (w === 0 || h === 0) return;
-      setCamera((prev) => {
-        const base = fit(w, h);
-        const kMax = base.k * MAX_ZOOM;
-        const c = prev ? limit(prev, w, h, kMax) : base;
-        const k = clamp(c.k * factor, Math.max(w, h) / 100, kMax);
-        const px = c.cx + (mx - w / 2) / c.k;
-        const py = c.cy + (my - h / 2) / c.k;
-        return limit({ k, cx: px - (mx - w / 2) / k, cy: py - (my - h / 2) / k }, w, h, kMax);
-      });
-    },
-    [size],
-  );
+  // 选中地点时 Esc 先取消拖动、再取消选中；没选中时交给神经界面关闭
+  useLayer(() => (move ? setMoving(null) : setPicked(null)), picked !== null);
 
-  const pan = useCallback(
-    (dx: number, dy: number) => {
-      const { w, h } = size;
-      if (w === 0 || h === 0) return;
-      setCamera((prev) => {
-        const base = fit(w, h);
-        const kMax = base.k * MAX_ZOOM;
-        const c = prev ? limit(prev, w, h, kMax) : base;
-        return limit({ k: c.k, cx: c.cx - dx / c.k, cy: c.cy - dy / c.k }, w, h, kMax);
-      });
-    },
-    [size],
-  );
-
-  // 滚轮要能阻止页面滚动，React 的 onWheel 是被动监听，所以手动挂；在图例和路线卡上滚动时不缩放
-  useEffect(() => {
-    const el = viewport.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.target instanceof Element && e.target.closest("[data-overlay]")) return;
-      e.preventDefault();
-      const r = el.getBoundingClientRect();
-      zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomAt]);
-
-  // 选中地点时 Esc 先取消选中；没选中时交给神经界面关闭
-  useLayer(() => setPicked(null), picked !== null);
-
-  const toScreen = (x: number, y: number) => ({
-    left: (x - cam.cx) * cam.k + size.w / 2,
-    top: (y - cam.cy) * cam.k + size.h / 2,
-  });
-  const onScreen = (p: { left: number; top: number }) =>
-    p.left > -120 && p.left < size.w + 120 && p.top > -40 && p.top < size.h + 40;
-
-  // 瓦片：挑一级让瓦片像素不少于屏幕物理像素，只摆视野里的几块；
-  // 下面垫低两级的几块，换级时新瓦片没载完也不露底（不再垫整张底图：放大后它会被拉成上万像素）
-  const tileImgs: { key: string; src: string; left: number; top: number; size: number }[] = [];
-  if (tiles && size.w > 0) {
-    const worldPx = cam.k * 100;
-    const dpr = window.devicePixelRatio || 1;
-    const top = clamp(Math.ceil(Math.log2((worldPx * dpr) / tiles.tile)), 0, tiles.maxZoom);
-    const origin = toScreen(0, 0);
-    const levels = top >= 2 ? [top - 2, top] : [top];
-    for (const z of levels) {
-      const n = 2 ** z;
-      const ts = worldPx / n;
-      const x0 = clamp(Math.floor(-origin.left / ts), 0, n - 1);
-      const x1 = clamp(Math.floor((size.w - origin.left) / ts), 0, n - 1);
-      const y0 = clamp(Math.floor(-origin.top / ts), 0, n - 1);
-      const y1 = clamp(Math.floor((size.h - origin.top) / ts), 0, n - 1);
-      for (let x = x0; x <= x1; x++) {
-        for (let y = y0; y <= y1; y++) {
-          tileImgs.push({
-            key: `${z}/${x}/${y}`,
-            src: tiles.url(z, x, y),
-            left: x * ts,
-            top: y * ts,
-            size: ts + 0.5,
-          });
-        }
-      }
+  /** 屏幕坐标换回底图百分比（拖地点用），取到 0.01，不出底图 */
+  const toMap = (clientX: number, clientY: number) => {
+    const p = pointAt(clientX, clientY);
+    const pct = (v: number) => Math.round(clamp(v, 0, 100) * 100) / 100;
+    return p ? { x: pct(p.x), y: pct(p.y) } : null;
+  };
+  /** 拖到的点在哪个城区；拖出原来的城区不让存（后端也会拒） */
+  const moveDistrict = move ? (districtAt(move.x, move.y)?.district ?? null) : null;
+  const saveMove = async () => {
+    if (!move || !onMovePlace) return;
+    setSaving(true);
+    try {
+      await onMovePlace(move.id, move.x, move.y);
+      setMoving(null);
+    } catch {
+      // 失败原因由提示条说；拖动状态留着，可以再存或取消
+    } finally {
+      setSaving(false);
     }
-  }
-  // 边界 SVG 只画视野这一块
-  const shapesBox = `${cam.cx - size.w / (2 * cam.k)} ${cam.cy - size.h / (2 * cam.k)} ${size.w / cam.k} ${size.h / cam.k}`;
+  };
 
-  // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点
+  // 瓦片和边界 SVG 的视野（共用 mapCamera.ts，算法照旧）
+  const tileImgs = tileImages(tiles, cam, size, toScreen(0, 0));
+  const shapesBox = shapesViewBox(cam, size);
+
+  // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点。
+  // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）
   const visibleDests = destinations.filter(
-    (d) => d.id === picked || !hidden.has(d.here ? "here" : "dest"),
+    (d) => d.id === picked || (!d.firstVisit && !hidden.has(d.here ? "here" : "dest")),
   );
+  const firstVisits = new Map(destinations.filter((d) => d.firstVisit).map((d) => [d.id, d]));
 
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
   const sides = new Map<string, "right" | "left" | "hidden">();
@@ -455,8 +363,12 @@ export function MapBody({
   const pois: { readonly poi: MapPoi; readonly style: CSSProperties }[] = [];
   if (zoom >= POI_ZOOM) {
     const taken = new Set<string>();
+    // 已进地点簿的原作店作为目的地图钉画，装饰图标不再重复画（places-plan 第二期）
+    const booked = new Set(destinations.filter((d) => !d.firstVisit).map((d) => d.id));
     for (const poi of MAP_POIS) {
-      if (hidden.has(poi.kind)) continue;
+      // 选中的第一次去的店已经当图钉画了
+      if (hidden.has(poi.kind) || booked.has(`poi:${poi.id}`) || picked === `poi:${poi.id}`)
+        continue;
       const at = toScreen(poi.x, poi.y);
       if (!onScreen(at)) continue;
       const cell = `${Math.round(at.left / 24)}:${Math.round(at.top / 24)}`;
@@ -468,8 +380,6 @@ export function MapBody({
     }
   }
 
-  const center = () => ({ x: size.w / 2, y: size.h / 2 });
-  const zoomBy = (factor: number) => zoomAt(factor, center().x, center().y);
   const policeLegend = iconStyle(POLICE_ICON);
 
   // 图例即筛选：每项一个开关，后面标地图上有几个
@@ -484,9 +394,19 @@ export function MapBody({
       key: "dest",
       name: "可以去的地点",
       icon: <i className={styles.legendDest} />,
-      count: destinations.filter((d) => !d.here).length,
+      count: destinations.filter((d) => !d.here && !d.firstVisit).length,
     },
   ];
+  const jobLegend = iconStyle(JOB_ICON);
+  if (jobLegend) {
+    legend.push({
+      key: "jobs",
+      name: "委托地点",
+      icon: <span className={styles.mapPoi} data-kind="quest" data-legend="" style={jobLegend} />,
+      // 只数地图上标得出来的：地点对不上的委托不算
+      count: [...jobsAt.values()].reduce((n, list) => n + list.length, 0),
+    });
+  }
   if (policeLegend) {
     legend.push({
       key: "police",
@@ -529,7 +449,7 @@ export function MapBody({
             <Button small label="放大" onClick={() => zoomBy(1.4)}>
               ＋
             </Button>
-            <Button small onClick={() => setCamera(null)}>
+            <Button small onClick={reset}>
               复位
             </Button>
           </span>
@@ -552,48 +472,23 @@ export function MapBody({
         tabIndex={0}
         onPointerDown={(e) => {
           if (onOverlay(e.target)) return;
-          drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-          e.currentTarget.setPointerCapture(e.pointerId);
-          setDragging(true);
+          dragStart(e);
         }}
         onPointerMove={(e) => {
-          const d = drag.current;
-          if (!d || d.id !== e.pointerId) {
-            // 不在拖动：看鼠标停在哪个城区，右上角显示这里的帮派
-            if (e.pointerType === "touch" || onOverlay(e.target)) return;
-            const r = e.currentTarget.getBoundingClientRect();
-            const next = districtAt(
-              cam.cx + (e.clientX - r.left - size.w / 2) / cam.k,
-              cam.cy + (e.clientY - r.top - size.h / 2) / cam.k,
-            );
-            setHover((prev) =>
-              prev?.district === next?.district && prev?.sub === next?.sub ? prev : next,
-            );
-            return;
-          }
-          drag.current = { ...d, x: e.clientX, y: e.clientY };
-          pan(e.clientX - d.x, e.clientY - d.y);
+          if (dragMove(e)) return;
+          // 不在拖动：看鼠标停在哪个城区，右上角显示这里的帮派
+          if (e.pointerType === "touch" || onOverlay(e.target)) return;
+          const p = pointAt(e.clientX, e.clientY);
+          const next = p ? districtAt(p.x, p.y) : null;
+          setHover((prev) =>
+            prev?.district === next?.district && prev?.sub === next?.sub ? prev : next,
+          );
         }}
         onPointerLeave={() => setHover(null)}
-        onPointerUp={() => {
-          drag.current = null;
-          setDragging(false);
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-          setDragging(false);
-        }}
+        onPointerUp={dragEnd}
+        onPointerCancel={dragEnd}
         onKeyDown={(e) => {
-          const step = 80;
-          if (e.key === "+" || e.key === "=") zoomBy(1.25);
-          else if (e.key === "-" || e.key === "_") zoomBy(0.8);
-          else if (e.key === "0") setCamera(null);
-          else if (e.key === "ArrowLeft") pan(step, 0);
-          else if (e.key === "ArrowRight") pan(-step, 0);
-          else if (e.key === "ArrowUp") pan(0, step);
-          else if (e.key === "ArrowDown") pan(0, -step);
-          else return;
-          e.preventDefault();
+          keyPan(e);
         }}
       >
         {size.w > 0 && (
@@ -659,13 +554,28 @@ export function MapBody({
 
             {pois.map(({ poi, style }) => {
               const sub = poi.sub ? SUB_NAME.get(poi.sub) : undefined;
-              return (
+              const label = `${KIND_NAME.get(poi.kind) ?? poi.kind}${sub ? ` · ${sub}` : ""}`;
+              const go = firstVisits.get(`poi:${poi.id}`);
+              // 原作店第一次去：图标点了出路线卡，照常出行，到了才记进地点簿（places-plan 第二期，用户定的 2026-10-30）
+              return go ? (
+                <button
+                  key={poi.id}
+                  type="button"
+                  className={styles.mapPoi}
+                  data-kind={poi.kind}
+                  data-go=""
+                  style={style}
+                  title={`${go.name}（${label}，还没去过）`}
+                  aria-label={`去${go.name}`}
+                  onClick={() => setPicked(go.id)}
+                />
+              ) : (
                 <span
                   key={poi.id}
                   className={styles.mapPoi}
                   data-kind={poi.kind}
                   style={style}
-                  title={`${KIND_NAME.get(poi.kind) ?? poi.kind}${sub ? ` · ${sub}` : ""}`}
+                  title={label}
                 />
               );
             })}
@@ -691,7 +601,11 @@ export function MapBody({
                 className={styles.mapDest}
                 data-here={d.here || undefined}
                 data-picked={d.id === picked || undefined}
-                style={toScreen(d.x, d.y)}
+                data-layer={d.layer}
+                data-heard={d.heard || undefined}
+                data-rough={d.rough || undefined}
+                data-moving={move?.id === d.id || undefined}
+                style={move?.id === d.id ? toScreen(move.x, move.y) : toScreen(d.x, d.y)}
               >
                 {d.here && <span className={styles.mapHereTag}>当前位置</span>}
                 {/* 原作 mappin 的 shadow2 / iconBlack：图标下垫一块黑影，压住底图 */}
@@ -699,10 +613,43 @@ export function MapBody({
                 <button
                   type="button"
                   className={styles.mapDestPin}
-                  title={`${d.name} · ${d.district}${d.here ? "（当前位置）" : ""}`}
+                  // 地点簿里的原作店照原作图标画（places-plan 第二期）
+                  style={d.kind ? iconStyle(poiIcon(d.kind as MapPoiKind)) : undefined}
+                  title={destTitle(d)}
                   aria-label={d.name}
                   aria-pressed={d.id === picked}
-                  onClick={() => setPicked(d.here ? null : d.id)}
+                  onClick={() => {
+                    // 站着的剧情地点也能选中，好拖它的位置（刚记下的地点玩家多半就站在那里）
+                    if (move?.id !== d.id) setPicked(d.here && !d.movable ? null : d.id);
+                  }}
+                  // 拖地点（places-plan 第二期）：拖动状态下按住图钉拖，或用方向键一次挪 0.1%（约 8 米）
+                  onPointerDown={(e) => {
+                    if (move?.id !== d.id) return;
+                    moveDrag.current = e.pointerId;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={(e) => {
+                    if (move?.id !== d.id || moveDrag.current !== e.pointerId) return;
+                    const p = toMap(e.clientX, e.clientY);
+                    if (p) setMoving({ id: d.id, ...p });
+                  }}
+                  onPointerUp={() => {
+                    moveDrag.current = null;
+                  }}
+                  onPointerCancel={() => {
+                    moveDrag.current = null;
+                  }}
+                  onKeyDown={(e) => {
+                    if (move?.id !== d.id) return;
+                    const step = 0.1;
+                    const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+                    const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+                    if (dx === 0 && dy === 0) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const r = (v: number) => Math.round(clamp(v, 0, 100) * 100) / 100;
+                    setMoving({ id: d.id, x: r(move.x + dx), y: r(move.y + dy) });
+                  }}
                 />
                 <span className={styles.mapDestLabel} data-side={sides.get(d.id) ?? "hidden"}>
                   {d.name}
@@ -711,6 +658,36 @@ export function MapBody({
             ))}
           </>
         )}
+
+        {/* 委托按地点合并为一个标记；点开仍走普通出行，不直接接单或传送 */}
+        {size.w > 0 &&
+          !hidden.has("jobs") &&
+          [...jobsAt.entries()].map(([id, list]) => {
+            const d = destinations.find((p) => p.id === id);
+            if (!d) return null;
+            const point = move?.id === id ? move : d;
+            const at = toScreen(point.x, point.y);
+            if (!onScreen(at)) return null;
+            const style = iconStyle(JOB_ICON, at);
+            if (!style) return null;
+            const title = `委托：${list.map((j) => `${j.title}（${j.statusLabel}）`).join("；")} · ${destTitle(d)}`;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`${styles.mapPoi} ${styles.mapJob}`}
+                data-kind="quest"
+                data-go=""
+                data-job-location={id}
+                style={style}
+                title={title}
+                aria-label={title}
+                aria-pressed={picked === id}
+                disabled={saving}
+                onClick={() => setPicked(id)}
+              />
+            );
+          })}
 
         {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
         {hover && (
@@ -783,19 +760,73 @@ export function MapBody({
                   <span className={styles.dim}>
                     {dest.district}
                     {dest.metro && " · 有 NCART 站台"}
+                    {/* 第一次去的原作店：到了才记进地点簿（places-plan 第二期） */}
+                    {dest.firstVisit && " · 还没去过，到了记进地点簿"}
                   </span>
                 </div>
                 <Button small label="取消选中" onClick={() => setPicked(null)}>
                   ✕
                 </Button>
               </div>
+              {/* 这里挂着或接下的委托（用户同意的 2026-10-30）：只列名字、状态、星级和报酬，不在地图上接单 */}
+              {destJobs.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destJobs.map((j) => (
+                    <li key={j.id} data-overdue={j.overdue || undefined}>
+                      <strong>{j.title}</strong>
+                      <span>
+                        {`委托 · ${j.statusLabel} · ${j.risk} 星 · 报酬 ${j.reward} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* 拖地点（places-plan 第二期，用户定的 2026-10-30）：只有剧情里记下的地点能拖，不调用模型 */}
+              {dest.movable && onMovePlace && !move && (
+                <div className={styles.mapFilterBar}>
+                  <Button small onClick={() => setMoving({ id: dest.id, x: dest.x, y: dest.y })}>
+                    调整位置
+                  </Button>
+                  {dest.moved && <span className={styles.dim}>位置是你放的</span>}
+                </div>
+              )}
+              {move && (
+                <div className={styles.mapMoveBox}>
+                  <p className={styles.dim}>
+                    按住图钉拖到准确的位置（选中图钉后也能用方向键微调）；只改坐标，不改名字和城区。
+                  </p>
+                  {moveDistrict !== dest.district && (
+                    <p className={styles.dim}>
+                      {`拖到了${moveDistrict ?? "地图外"}，${dest.name}在${dest.district}：拖回${dest.district}才能保存`}
+                    </p>
+                  )}
+                  <div className={styles.mapFilterBar}>
+                    <Button
+                      small
+                      disabled={
+                        saving ||
+                        !onMovePlace ||
+                        moveDistrict !== dest.district ||
+                        (move.x === dest.x && move.y === dest.y)
+                      }
+                      onClick={() => void saveMove()}
+                    >
+                      {saving ? "保存中…" : "保存位置"}
+                    </Button>
+                    <Button small disabled={saving} onClick={() => setMoving(null)}>
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              )}
               <ul className={styles.routeList}>
                 {dest.routes.map((r) => (
                   <li key={r.mode}>
                     <button
                       type="button"
                       className={styles.routeOption}
-                      disabled={!onTravel || r.blocked !== undefined}
+                      // 拖着地点还没保存时先不出发
+                      disabled={!onTravel || r.blocked !== undefined || move !== null}
                       onClick={() => onTravel?.(dest, r)}
                     >
                       {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
@@ -823,7 +854,10 @@ export function MapBody({
                   </li>
                 ))}
               </ul>
-              {!onTravel && <p className={styles.dim}>这一轮还没写完，写完再出发。</p>}
+              {dest.here && <p className={styles.dim}>你就在这里。</p>}
+              {!onTravel && !dest.here && (
+                <p className={styles.dim}>这一轮还没写完，写完再出发。</p>
+              )}
               {view.travel.vehicles.length > 0 && (
                 <>
                   <h4 className={styles.mapSubtitle}>名下的车</h4>

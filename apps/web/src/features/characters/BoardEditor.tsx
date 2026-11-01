@@ -251,7 +251,8 @@ export function BoardEditor({
 
       <section className={styles.slotGroup}>
         <h4>
-          开局义体 <small>普通 1 点、罕见 2 点；同一部位只装一件，会扣人性上限</small>
+          {/* 按原作格数装（用户 2026-10-31："为什么每个地方的义体只能选一个"） */}
+          开局义体 <small>普通 1 点起、传说 5 点；每个部位按格数装，会扣人性上限</small>
         </h4>
         {board.cyberware.length > 0 && (
           <ul className={styles.modules}>

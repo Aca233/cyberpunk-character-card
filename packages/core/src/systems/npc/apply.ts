@@ -11,6 +11,7 @@ import {
   LEDGER_KEPT,
   LEDGER_KIND_LABELS,
   MEMORY_KEPT,
+  NO_FACTION,
   type Npc,
   type NpcCommand,
   type NpcMemoryEdit,
@@ -18,9 +19,38 @@ import {
   type NpcPast,
   type NpcState,
   type SeedNpc,
+  TIES_KEPT,
   TIMELINE_KEPT,
   TIMELINE_TAIL,
+  type Tie,
 } from "./schema";
+
+/**
+ * 势力表里的 id（用户 2026-10-31："npc加个所属势力 没有就填无"）：直接读内容数据的 factions，
+ * 不引 factions 系统免得互相依赖；没有势力表时是 undefined，不校验
+ */
+function factionIds(data: Readonly<Record<string, unknown>>): ReadonlySet<string> | undefined {
+  const raw = data.factions;
+  if (!Array.isArray(raw)) return undefined;
+  const ids = new Set<string>();
+  for (const f of raw) {
+    if (typeof f === "object" && f !== null && typeof (f as { id?: unknown }).id === "string") {
+      ids.add((f as { id: string }).id);
+    }
+  }
+  return ids;
+}
+
+/** 所属势力写的不是 none、也不在势力表里时返回出错原因 */
+function factionProblem(
+  faction: string,
+  data: Readonly<Record<string, unknown>>,
+): string | undefined {
+  if (faction === NO_FACTION) return undefined;
+  const ids = factionIds(data);
+  if (ids === undefined || ids.has(faction)) return undefined;
+  return `势力表里没有 ${faction}；不属于任何势力写 ${NO_FACTION}，现有：${[...ids].join("、")}`;
+}
 
 function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -39,11 +69,15 @@ export function seedNpc(
   draft: Draft<NpcState>,
   command: SeedNpc,
   data: Readonly<Record<string, unknown>> = {},
+  /** 开局关系笔记和人情记在这个游戏时间；旧调用方不传时按 0 */
+  now = 0,
 ): ApplyOutcome {
-  const { type: _type, affinity, met, ...card } = command;
+  const { type: _type, affinity, met, relation, ledger, ...card } = command;
   if (draft.npcs[card.id]) return { ok: false, reason: `人物 ${card.id} 已经有卡了` };
   const problems = bodyProblems(card.body, data);
   if (problems.length) return { ok: false, reason: `${card.name} 的身体：${problems.join("；")}` };
+  const wrongFaction = factionProblem(card.faction, data);
+  if (wrongFaction) return { ok: false, reason: `${card.name} 的所属势力：${wrongFaction}` };
   draft.npcs[card.id] = {
     ...card,
     affinity,
@@ -56,9 +90,11 @@ export function seedNpc(
     timeline: [],
     past: null,
     offscreenDeath: null,
-    relation: null,
-    ledger: [],
+    // 捏人第 3 步的旧识关系（用户定的关系表，2026-10-30）：老朋友、前任带关系笔记，人情和旧仇记进人情和仇
+    relation: relation ? { text: relation, at: now } : null,
+    ledger: ledger.map((e) => ({ kind: e.kind, text: e.text, at: now, settledAt: null })),
     known: [],
+    ties: [],
     vitals: null,
   };
   return { ok: true };
@@ -115,6 +151,36 @@ export function applyOffscreenDeath(
   return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`] };
 }
 
+/** 在一个人的卡上记下认识的人：替换和同一个人的旧关系，满了删最早的 */
+function putTie(npc: Draft<Npc>, other: string, text: string, open: boolean, now: number): void {
+  const at = npc.ties.findIndex((t) => t.id === other);
+  if (at !== -1) npc.ties.splice(at, 1);
+  npc.ties.push({ id: other, text, open, at: now });
+  if (npc.ties.length > TIES_KEPT) npc.ties.splice(0, npc.ties.length - TIES_KEPT);
+}
+
+/**
+ * 两个有卡的人之间的关系（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：两边各记一份。
+ * 死了的人也能有关系（「死去的哥哥」），两个都死了不再记
+ */
+export function applyTie(draft: Draft<NpcState>, command: Tie, now: number): ApplyOutcome {
+  if (command.a === command.b) return { ok: false, reason: "tie 的 a 和 b 不能是同一个人" };
+  const a = draft.npcs[command.a];
+  const b = draft.npcs[command.b];
+  if (!a || !b) {
+    const missing = [command.a, command.b].filter((id) => !draft.npcs[id]);
+    return { ok: false, reason: `没有 id 为 ${missing.join("、")} 的人物卡，先用 npc 建卡` };
+  }
+  if (!a.alive && !b.alive) return { ok: false, reason: `${a.name}和${b.name}都死了` };
+  const same =
+    a.ties.some((t) => t.id === b.id && t.text === command.aToB && t.open === command.open) &&
+    b.ties.some((t) => t.id === a.id && t.text === command.bToA && t.open === command.open);
+  if (same) return { ok: true };
+  putTie(a, b.id, command.aToB, command.open, now);
+  putTie(b, a.id, command.bToA, command.open, now);
+  return { ok: true };
+}
+
 /** 人物档案里显示死了没有：屏幕外死的，要等玩家在那之后听说了这个人的事（learn）才算知道 */
 export function deathKnown(npc: Npc): boolean {
   if (npc.alive) return false;
@@ -148,6 +214,8 @@ export function applyNpc(
         reason: `${card.name} 的 body：${problems.join("；")}；id 照物品表和义体表写`,
       };
     }
+    const wrongFaction = factionProblem(card.faction, data);
+    if (wrongFaction) return { ok: false, reason: `${card.name} 的 faction：${wrongFaction}` };
     draft.npcs[card.id] = {
       ...card,
       samples: [],
@@ -165,10 +233,12 @@ export function applyNpc(
       relation: null,
       ledger: [],
       known: [],
+      ties: [],
       vitals: null,
     };
     return { ok: true, notes: [`新人物：${card.name}`] };
   }
+  if (command.type === "tie") return applyTie(draft, command, now);
 
   const npc = draft.npcs[command.id];
   if (!npc) {

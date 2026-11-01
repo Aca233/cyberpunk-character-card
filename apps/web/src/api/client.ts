@@ -80,14 +80,41 @@ export interface ProseInput {
  * 角色正文：后端按行吐 JSON 事件，边收边交给 onText；停止时 fetch 抛 AbortError，由调用方处理。
  * 返回 truncated：模型写超了字数，后面的被截掉
  */
-async function streamProse(
+function streamProse(
   input: ProseInput,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<{ truncated: boolean }> {
+  return streamEvents("/api/characters/prose", input, onText, signal);
+}
+
+export interface DraftInput {
+  readonly card: CharacterCard;
+  readonly instruction?: string;
+}
+
+/**
+ * 一键成稿（第三期，用户定的 2026-10-30）：和逐块写一样按行吐事件，原文带【外貌】这类标记，
+ * 收齐后由调用方用 core 的 splitDraft 拆开
+ */
+function streamDraft(
+  input: DraftInput,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<{ truncated: boolean }> {
+  return streamEvents("/api/characters/draft", input, onText, signal);
+}
+
+/** 逐块写和一键成稿共用：POST 之后按行读 JSON 事件（text / error / done） */
+async function streamEvents(
+  url: string,
+  input: unknown,
   onText: (text: string) => void,
   signal: AbortSignal,
 ): Promise<{ truncated: boolean }> {
   let response: Response;
   try {
-    response = await fetch("/api/characters/prose", {
+    response = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -169,10 +196,22 @@ export interface BoardData {
     readonly name: string;
     readonly slot: string;
     readonly slotLabel: string;
+    /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
+    readonly rarity?: string;
     readonly points: number;
     readonly humanityCost: number;
     readonly ability: string;
   }[];
+  /** 捏人第 3 步能选成旧识的原作人物（用户定的，2026-10-30：15 个全部能选）；服务端只给公开的几项 */
+  readonly npcs: readonly CanonNpcBrief[];
+}
+
+export interface CanonNpcBrief {
+  readonly id: string;
+  readonly name: string;
+  readonly alias?: string;
+  readonly role: string;
+  readonly look: string;
 }
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
@@ -448,6 +487,8 @@ export const api = {
     request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),
   /** 角色正文的一个区块交给辅助模型写，流式；会花一次模型调用 */
   streamProse,
+  /** 一键成稿：一次写外貌、背景故事、性格、说话方式并补旧识，流式；会花一次模型调用 */
+  draftCharacter: streamDraft,
   /** 导入 Character Card；useModel 时花一次模型调用插主板、分属性。结果不保存，由玩家确认 */
   importCharacter: (input: { raw: unknown; useModel: boolean }) =>
     request<{ card: CharacterCard; warnings: string[]; own: boolean }>(
@@ -465,8 +506,13 @@ export const api = {
   /** 导入完整导出的文件，建成一个新存档；notes 是快照对不上之类的提示 */
   importSave: (data: unknown) =>
     request<SaveSummary & { notes: readonly string[] }>("POST", "/saves/import", data),
-  createSave: (input: { title: string; characterId: string; difficulty: Difficulty }) =>
-    request<SaveSummary>("POST", "/saves", input),
+  createSave: (input: {
+    title: string;
+    characterId: string;
+    difficulty: Difficulty;
+    /** 地图上选中的开局地点 id（用户定的，2026-10-30：“在地图上选择”）；不传沿用默认开局 */
+    startLocation?: string;
+  }) => request<SaveSummary>("POST", "/saves", input),
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
   state: (saveId: string) => request<PlayerView>("GET", `/saves/${saveId}/state`),
   async submit(saveId: string, body: TurnBody): Promise<SubmitResult> {

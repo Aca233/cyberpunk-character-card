@@ -5,6 +5,7 @@ import { NpcStateSchema } from "../npc";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { jobsSection } from "./prompt";
 import { JobsStateSchema } from "./schema";
+import { factionSide } from "./side";
 
 export interface DueEvent {
   readonly kind: "deadline" | "job";
@@ -54,12 +55,14 @@ export const jobsSections: readonly SystemSection[] = [
   {
     order: 20,
     title: "委托",
-    render: ({ world }) => {
+    render: ({ world, data }) => {
       const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
       return jobsSection(
         JobsStateSchema.parse(world.slices.jobs),
         CharacterStateSchema.parse(world.slices.character).streetCred,
         (id) => npcs[id]?.affinity ?? 0,
+        // 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）：和派单时一样算
+        (id) => factionSide(npcs[id]?.faction, data ?? {}, world.slices.factions),
       );
     },
   },

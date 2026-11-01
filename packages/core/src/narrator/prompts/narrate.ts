@@ -12,10 +12,10 @@ import {
   HISTORY_TURNS,
   type NarratorPlan,
   type NarratorPrompt,
+  narrateTablesOf,
   type PromptExtras,
   recapFor,
   situation,
-  tablesOf,
 } from "./context";
 import { BASE_RULES, estimateTokens, systemMessage, userMessage } from "./layers";
 
@@ -24,16 +24,19 @@ import { BASE_RULES, estimateTokens, systemMessage, userMessage } from "./layers
  */
 
 /** 【写作】里的篇幅一句；启用酒馆预设时换成 NARRATE_LENGTH_PRESET */
+// 检定当场掷、一次写完（用户 2026-11-01 定的「全改」第 1 步），不再有“等检定的那一轮”，篇幅里也不再提它
 export const NARRATE_LENGTH =
-  "- 每轮 100–350 字，等检定的那一轮更短；以对话为主，停在 NPC 说完话、或需要玩家接话的地方。";
+  "- 每轮 100–350 字；以对话为主，停在 NPC 说完话、或需要玩家接话的地方。";
 
-/** 启用了酒馆预设时（用户定的）：篇幅和写法交给预设，等检定的那一轮仍然只写到行动将要发生的那一刻 */
+/** 启用了酒馆预设时（用户定的）：篇幅和写法交给预设 */
 export const NARRATE_LENGTH_PRESET =
-  "- 篇幅、段落、对话和描写的比例照前面玩家导入的写作预设来，不受字数限制；等检定的那一轮仍然只写一两句，停在行动将要发生的那一刻。";
+  "- 篇幅、段落、对话和描写的比例照前面玩家导入的写作预设来，不受字数限制。";
 
 /** L1：这一步做什么，带三条守则 */
+// 只有检定成败、门槛、出行耗时和到达是必须照写的账；偶遇和对手的打算改成素材，合适就用、可以改写或推迟
+// （用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
 export const NARRATE_STAGE = `【这一步：写正文】
-要不要掷骰、门槛达没达标在你之前由代码定好，记账在你之后由代码从正文里抽；【本轮已定的事】里的结果，正文必须照着写。
+要不要掷骰、门槛达没达标在你之前由代码定好，记账在你之后由代码从正文里抽。【检定结果】的成败、门槛达没达标、出行的耗时和到达，正文必须照着写；【本轮已定的事】里其余的（路上偶遇、对手的打算）是给你的素材，按局面写，合适就用，可以改写或推迟。
 
 【三条守则】
 - 反套话：不用“空气仿佛凝固了”“一丝不易察觉的”“嘴角勾起一抹弧度”“眼中闪过一道光”“时间仿佛静止”这类空话和陈词；【最近用过的写法】里列出的开头和词，这一轮换个说法。
@@ -54,7 +57,6 @@ export const NARRATE_STAGE = `【这一步：写正文】
 - 不可能的事让世界或 NPC 拒绝（门锁死了、对方冷笑着摇头）；玩家声称有、资料里找不到的东西，可以让玩家试着“装作有”。
 
 【检定和门槛】
-- 【本轮已定的事】写了“先给检定”时：这一轮只写到行动将要发生的那一刻（一两句），不写结果，停笔等玩家确认。
 - 有【检定结果】时照事先说明的写：成功就办成，失败后果不比事先说明的更重，剧情照样往前走。
 - 门槛达标的直接办成；没达标的让世界或人物拒绝，或者让玩家付出别的代价。
 
@@ -178,7 +180,8 @@ export function buildNarratorPrompt(
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const rules = systemMessage("narrate", [coreRules()], modules);
-  const system = [rules, ...tablesOf(view, extras)].join("\n\n");
+  // 写正文不带对 id 用的表，只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"）
+  const system = [rules, ...narrateTablesOf(view, extras)].join("\n\n");
   const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
   let history = 0;

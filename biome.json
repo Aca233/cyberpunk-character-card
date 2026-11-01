@@ -14,7 +14,8 @@
       "!tools/evals/results",
       "!tools/evals/drafts",
       "!test-results",
-      "!playwright-report"
+      "!playwright-report",
+      "!.playwright-mcp"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

@@ -1,80 +1,63 @@
 import { defineSystem } from "../../kernel/system";
-import {
-  agendaSection,
-  applyAgenda,
-  applyAgendaMove,
-  applyAgendaTold,
-  tickAgendas,
-} from "./agenda";
 import { applyFaction } from "./apply";
 import { factionsEvents } from "./events";
-import { factionsFeed } from "./feed";
-import { agendaRules, factionRules } from "./prompt";
+import { factionRules } from "./prompt";
 import {
-  AgendaCommandSchema,
-  AgendaMoveCommandSchema,
-  AgendaToldSchema,
   FactionCommandSchema,
   type FactionsCommand,
   type FactionsInternal,
   type FactionsState,
   FactionsStateSchema,
+  FactionTurfSchema,
+  FactionTurfToldSchema,
 } from "./schema";
 import { factionsStatus } from "./status";
-import { factionsThreats } from "./threats";
+import { factionsThreats, turfSection } from "./threats";
+import { applyTurf, applyTurfTold } from "./turf";
 import { factionsView } from "./view";
 
 /**
  * 势力：每个帮派、公司对玩家的态度标签和一句理由，叙事模型按发生的事调整；
- * 势力动向是种子：每 2 个游戏日代码让一个势力到点、掷个倾向，具体发生什么由场外推演即兴写（agenda.move），
- * 一步最多改一个城区的地盘；玩家可以推一把、拖住或搅黄
+ * 势力的打算并进了【城里在发酵的事】（用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账），
+ * 这里只记那边核对过的地盘变化
  */
 export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInternal>({
   id: "factions",
   dependsOn: [],
   state: FactionsStateSchema,
-  initial: () => ({ stances: {}, agendas: {}, due: [], agendaClock: null }),
+  initial: () => ({ stances: {}, turf: [] }),
   commands: {
     faction: FactionCommandSchema,
-    agenda: AgendaCommandSchema,
-    agendaTold: AgendaToldSchema,
   },
   internal: {
-    "agenda.move": AgendaMoveCommandSchema,
+    "faction.turf": FactionTurfSchema,
+    "faction.turfTold": FactionTurfToldSchema,
   },
   apply(draft, command, ctx) {
-    if (command.type === "agenda.move") return applyAgendaMove(draft, command, ctx);
-    if (command.type === "agenda") return applyAgenda(draft, command, ctx);
-    if (command.type === "agendaTold") return applyAgendaTold(draft, command, ctx);
+    if (command.type === "faction.turf") return applyTurf(draft, command, ctx);
+    if (command.type === "faction.turfTold") return applyTurfTold(draft, command);
     return applyFaction(draft, command, ctx);
   },
-  tick: (draft, span, ctx) => tickAgendas(draft, span, ctx.data),
-  rules: [factionRules, agendaRules],
+  rules: [factionRules],
   sections: [
+    // 地盘伏击（用户 2026-10-31 选的「势力进机制」）：人在谁的地盘、对方什么态度，由代码给出街上的气氛
     {
-      order: 110,
-      title: "势力动向",
-      render: ({ world, data }) =>
-        agendaSection(
-          FactionsStateSchema.parse(world.slices.factions ?? {}),
-          data ?? {},
-          world.time,
-        ) || undefined,
+      order: 111,
+      title: "这里是谁的地盘",
+      render: ({ world, data }) => turfSection({ world, data: data ?? {} }),
     },
   ],
   view: { key: "factions", project: factionsView },
   status: factionsStatus,
   threats: factionsThreats,
   events: factionsEvents,
-  feed: factionsFeed,
 });
 
-export * from "./agenda";
 export * from "./apply";
 export * from "./events";
-export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./status";
 export * from "./threats";
+export * from "./turf";
 export * from "./view";

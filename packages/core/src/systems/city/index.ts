@@ -30,7 +30,6 @@ export const city = defineSystem<CityState, RumorHeard, CityInternal>({
     nextBulletin: 1,
     lastScene: null,
     lastAt: null,
-    lastContactAt: null,
   }),
   commands: { rumorHeard: RumorHeardSchema },
   internal: {
@@ -46,7 +45,6 @@ export const city = defineSystem<CityState, RumorHeard, CityInternal>({
     if (command.type === "city.bulletin") return applyBulletin(draft, command, ctx.now);
     draft.lastScene = ctx.read<WorldClockState>("world").scene;
     draft.lastAt = ctx.now;
-    if (command.contact) draft.lastContactAt = ctx.now;
     return { ok: true };
   },
   rules: [cityRules],

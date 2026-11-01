@@ -1,43 +1,27 @@
 import type { ViewContext } from "../../kernel/system";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
-import { agendaCatalog, currentTurf, progressOf } from "./agenda";
 import { currentAttitude, factionCatalog } from "./apply";
-import {
-  AGENDA_OUTCOME_LABELS,
-  attitudeLabel,
-  FACTION_KIND_LABELS,
-  FactionsStateSchema,
-} from "./schema";
+import { attitudeLabel, FACTION_KIND_LABELS, FactionsStateSchema } from "./schema";
+import { currentTurf } from "./turf";
 
-/** 各势力对玩家的态度、传开了的动向，和当前地点是谁的地盘 */
+/** 各势力对玩家的态度、听说了的地盘变化，和当前地点是谁的地盘 */
 export function factionsView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const catalog = factionCatalog(data);
   const state = FactionsStateSchema.parse(world.slices.factions ?? {});
   const place = location === null ? undefined : locationCatalog(data).get(location);
   const name = (id: string) => catalog.get(id)?.name ?? id;
-  // 玩家只看得到传开了的：地盘按听说了的变化算，动向只列听说了的几步；到点没推演的、没传开的都不进视图
+  // 玩家只看得到传开了的地盘变化；势力的打算本身由【城里在发酵的事】交给玩家
+  // （用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）
   const turf = currentTurf(state, data, true);
-  const seeds = [...agendaCatalog(data).values()];
   const newsOf = (faction: string) =>
-    seeds
-      .filter((s) => s.faction === faction)
-      .flatMap((s) =>
-        progressOf(state, s.id)
-          .moves.filter((m) => m.told)
-          .map((m) => ({
-            agenda: s.title,
-            title: m.title,
-            news: m.news,
-            label: m.kind === "move" ? AGENDA_OUTCOME_LABELS[m.outcome ?? "twist"] : `你${m.title}`,
-            mine: m.kind !== "move",
-            turf: m.turf
-              ? `${name(m.turf.faction)}${m.turf.change === "gain" ? "拿下了" : "丢了"}${m.turf.district}`
-              : null,
-            at: m.at,
-            time: formatGameTime(m.at),
-          })),
-      )
+    state.turf
+      .filter((r) => r.told && r.faction === faction)
+      .map((r) => ({
+        turf: `${name(r.faction)}${r.change === "gain" ? "拿下了" : "丢了"}${r.district}`,
+        at: r.at,
+        time: formatGameTime(r.at),
+      }))
       .sort((a, b) => b.at - a.at)
       .slice(0, 6);
   const list = [...catalog.values()].map((f) => {

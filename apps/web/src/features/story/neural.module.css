@@ -541,14 +541,50 @@
   --cell-strip: rgb(214 110 40 / 80%);
 }
 
-/* 照原作格数多画的格子（用户选的「照原作格数」）：我们一个部位只装一件，这些一直空着、压暗一点 */
-.cyberCell:where([data-extra]) {
-  opacity: 0.6;
+/*
+ * 选择框里每件义体前面的格子（用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）：
+ * 和部位格同一套原作底子，固定大小、不接鼠标；装着的框亮成原作选中的黄
+ */
+.cyberCell:where([data-item]) {
+  --cell: 56px;
   cursor: default;
+  pointer-events: none;
+}
+
+.cyberCell:where([data-item][data-on]) {
+  --cell-line: var(--cp-yellow);
 }
 
 .cyberCell:where([data-broken]) {
   --cell-line: var(--cp-danger);
+}
+
+/*
+ * 左边竖条（原作 item_left_rarity）按稀有度染色，颜色用 tokens 里的 --rar-*；标志性义体用标志性的金色
+ * （用户 2026-10-31："怎么没有稀有度颜色区分"）
+ */
+.cyberCell:where([data-rarity="common"]) {
+  --cell-strip: var(--rar-common);
+}
+
+.cyberCell:where([data-rarity="uncommon"]) {
+  --cell-strip: var(--rar-uncommon);
+}
+
+.cyberCell:where([data-rarity="rare"]) {
+  --cell-strip: var(--rar-rare);
+}
+
+.cyberCell:where([data-rarity="epic"]) {
+  --cell-strip: var(--rar-epic);
+}
+
+.cyberCell:where([data-rarity="legendary"]) {
+  --cell-strip: var(--rar-legendary);
+}
+
+.cyberCell:where([data-iconic]) {
+  --cell-strip: var(--rar-iconic);
 }
 
 /* 悬停、聚焦、钉住：框亮成原作选中时的黄 */
@@ -619,10 +655,24 @@
  * 舞台按块内宽度和视口高度缩放，不再套用全屏的 880px 高度；不缩放文字和按钮
  */
 @container pin (width >= 480px) {
+  /*
+   * 2026-10-31 对照截图（捏人第 5 步 929 和 1920 宽）：人性条按左边缘摆，上限牌压住额皮质第一格、刻度贴着骨骼格。
+   * 改成跟部位格一样按中线摆：骨骼组最外到中线 5.6 格，刻度宽约 1.3 格，往左再留一点；
+   * 舞台再限一档（60cqw - 64px），让左边挂着的当前值红牌不伸出这一栏
+   */
   .cyberScreen {
-    --stage: clamp(260px, min(58cqw, calc(100dvh - 360px)), 540px);
+    --stage: clamp(260px, min(58cqw, 60cqw - 64px, calc(100dvh - 360px)), 540px);
     --cell: calc(var(--stage) * 0.115);
     min-width: 0;
+  }
+
+  .cyberScreen .gauge {
+    left: max(44px, calc(50% - var(--cell) * 7.2));
+  }
+
+  /* 929 宽量出来上限牌右边正好顶到额皮质第一格，收窄 16px 留出空当 */
+  .cyberScreen .gaugeTop {
+    width: calc(100% + 24px);
   }
 
   .cyberScreen .cyberLabel {

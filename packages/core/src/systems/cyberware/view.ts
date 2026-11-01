@@ -27,6 +27,9 @@ export function cyberwareView({ world, data }: ViewContext) {
       slot: c.slot,
       slotLabel: SLOT_LABELS[c.slot],
       rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
+      // 稀有度和标志性给义体页格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）
+      rarity: def?.rarity ?? null,
+      iconic: def?.iconic ?? false,
       ability: def?.ability ?? null,
       bonusText: def ? bonusText(def) : "",
       /** 被打坏了：修好前失去能力 */

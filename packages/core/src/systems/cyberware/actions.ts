@@ -7,7 +7,7 @@ import { HealthStateSchema } from "../health";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { CyberwareStateSchema } from "./schema";
 
-/** 在义体医生那里买一件装上；同一部位的旧件换下来折价；credit 是钱不够时赊账 */
+/** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
 export const BuyCyberwareActionSchema = z.strictObject({
   type: z.literal("buyCyberware"),
   doc: z.string().min(1).max(40),

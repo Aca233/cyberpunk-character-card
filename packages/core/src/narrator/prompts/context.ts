@@ -154,6 +154,17 @@ export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   ].filter((s): s is string => s !== undefined);
 }
 
+/**
+ * 写正文只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"，同意改："可以"）：
+ * 物品、义体、地点表和委托模板是给抽取对 id 用的，抽取那一步自己带着；写正文只输出纯文本，用不上
+ */
+export function narrateTablesOf(view: PlayerView, extras: PromptExtras): string[] {
+  if (!extras.data) return [];
+  return [twistSection(extras.data), consequenceSection(extras.data, view.difficulty)].filter(
+    (s): s is string => s !== undefined,
+  );
+}
+
 /** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
 export function situation(
   world: WorldState,
@@ -183,8 +194,8 @@ export function boostNote(
   plan: NarratorPlan,
   stage: "judge" | "narrate",
 ): string | undefined {
-  if (plan.kind !== "action" || plan.input.sandevistan !== true || !view.sandevistan)
-    return undefined;
+  // 当场掷骰的轮次也算（用户 2026-11-01 选的「全改」）：确认检定那条路的输入不带斯安威斯坦，不受影响
+  if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
   const { name, slots } = view.sandevistan;
   return stage === "judge"
     ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。所有真正不确定的部分合并成一次 check，事先在 failure 里写明失败时哪几个动作会落空。`

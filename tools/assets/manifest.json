@@ -1025,6 +1025,220 @@
         "id": "cyberArt.jenkinsTendons",
         "atlas": "common/item_icons14",
         "slot": "cw_legs_reinforcedmuscles"
+      },
+      {
+        "id": "cyberArt.exDisk",
+        "atlas": "common/item_icons19",
+        "slot": "cw_frontalcortex_braincapacitybooster"
+      },
+      {
+        "id": "cyberArt.camilloRamManager",
+        "atlas": "common/item_icons7",
+        "slot": "cw_frontalcortex_memoryreplenishment"
+      },
+      {
+        "id": "cyberArt.selfIce",
+        "atlas": "common/item_icons10",
+        "slot": "cw_frontalcortex_antivirus"
+      },
+      {
+        "id": "cyberArt.newtonModule",
+        "atlas": "common/item_icons6",
+        "slot": "cw_skeleton_subdermalcoprocessor"
+      },
+      {
+        "id": "cyberArt.bioconductor",
+        "atlas": "common/item_icons13",
+        "slot": "cw_circulatory_bioconductors"
+      },
+      {
+        "id": "cyberArt.burnoutBuffer",
+        "atlas": "common/item_icons6",
+        "slot": "cw_skeleton_smartstorage"
+      },
+      {
+        "id": "cyberArt.kerenzikovBoost",
+        "atlas": "common/item_icons7",
+        "slot": "cw_skeleton_kerenziovboostsystem"
+      },
+      { "id": "cyberArt.quantumTuner", "atlas": "common/item_icons7", "slot": "TimeBank" },
+      { "id": "cyberArt.kiroshiStalker", "atlas": "common/item_icons6", "slot": "cw_eyes_4eye" },
+      { "id": "cyberArt.atomicSensors", "atlas": "common/item_icons5", "slot": "TroubleFinder" },
+      {
+        "id": "cyberArt.tyrosineInjector",
+        "atlas": "common/item_icons5",
+        "slot": "cw_painspliter"
+      },
+      { "id": "cyberArt.stabber", "atlas": "common/item_icons11", "slot": "cw_toxinmixer" },
+      {
+        "id": "cyberArt.adrenalineConverter",
+        "atlas": "common/item_icons5",
+        "slot": "DetectorRush"
+      },
+      {
+        "id": "cyberArt.arasakaDeck",
+        "atlas": "common/item_icons2",
+        "slot": "cw_cyberdeck_arasaka"
+      },
+      {
+        "id": "cyberArt.tetratronicRippler",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_tetratroniccyberdeck"
+      },
+      {
+        "id": "cyberArt.militechCanto",
+        "atlas": "common/item_icons3",
+        "slot": "blackwall_cyberdeck"
+      },
+      {
+        "id": "cyberArt.qiantWarpDancer",
+        "atlas": "common/item_icons11",
+        "slot": "cw_system_sandevistanc3"
+      },
+      {
+        "id": "cyberArt.militechFalcon",
+        "atlas": "common/item_icons9",
+        "slot": "cw_system_sandevistanc4"
+      },
+      {
+        "id": "cyberArt.militechApogee",
+        "atlas": "common/item_icons9",
+        "slot": "cw_system_sandevistanedgerunner"
+      },
+      {
+        "id": "cyberArt.biodyneBerserk",
+        "atlas": "common/item_icons7",
+        "slot": "cw_system_berserkc2"
+      },
+      {
+        "id": "cyberArt.zetatechBerserk",
+        "atlas": "common/item_icons10",
+        "slot": "cw_system_berserkc3"
+      },
+      {
+        "id": "cyberArt.militechBerserk",
+        "atlas": "common/item_icons7",
+        "slot": "cw_system_berserkc4"
+      },
+      { "id": "cyberArt.threatEvac", "atlas": "common/item_icons5", "slot": "CatchMeIfYouCan" },
+      {
+        "id": "cyberArt.adrenalineBooster",
+        "atlas": "common/item_icons9",
+        "slot": "cw_circulatory_staminaregenbooster"
+      },
+      {
+        "id": "cyberArt.healOnKill",
+        "atlas": "common/item_icons11",
+        "slot": "cw_frontalcortex_healonkill"
+      },
+      {
+        "id": "cyberArt.feedbackCircuit",
+        "atlas": "common/item_icons14",
+        "slot": "cw_circulatory_dischargeconnector"
+      },
+      {
+        "id": "cyberArt.microrotors",
+        "atlas": "common/item_icons9",
+        "slot": "cw_skeleton_cyberrotors"
+      },
+      {
+        "id": "cyberArt.blackMamba",
+        "atlas": "common/item_icons5",
+        "slot": "cw_nervoussystem_hardbeat"
+      },
+      {
+        "id": "cyberArt.cogitoLattice",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_neuroactivearmor_capacitors"
+      },
+      {
+        "id": "cyberArt.nanoPlating",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_nanotechplates"
+      },
+      {
+        "id": "cyberArt.painducer",
+        "atlas": "common/item_icons6",
+        "slot": "cw_nervoussystem_painducer"
+      },
+      {
+        "id": "cyberArt.proxiShield",
+        "atlas": "common/item_icons6",
+        "slot": "cw_skeleton_proximityreducer"
+      },
+      {
+        "id": "cyberArt.countershell",
+        "atlas": "common/item_icons11",
+        "slot": "cw_skeleton_suddenaid"
+      },
+      {
+        "id": "cyberArt.rangeGuard",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_extra"
+      },
+      {
+        "id": "cyberArt.carapace",
+        "atlas": "common/item_icons6",
+        "slot": "cw_skeleton_weirdtankyplating"
+      },
+      {
+        "id": "cyberArt.defenzikov",
+        "atlas": "common/item_icons8",
+        "slot": "cw_skeleton_platingglitch"
+      },
+      {
+        "id": "cyberArt.shockNAwe",
+        "atlas": "common/item_icons13",
+        "slot": "cw_immunesystem_electroshockmechanism"
+      },
+      {
+        "id": "cyberArt.painEditor",
+        "atlas": "common/item_icons8",
+        "slot": "cw_skeleton_paineditor"
+      },
+      {
+        "id": "cyberArt.universalBooster",
+        "atlas": "common/item_icons14",
+        "slot": "cw_circulatory_enhancedbloodvessels"
+      },
+      {
+        "id": "cyberArt.feenX",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_neurasync_adapters"
+      },
+      { "id": "cyberArt.ramRecoup", "atlas": "common/item_icons18", "slot": "CompilingSkeleton" },
+      {
+        "id": "cyberArt.scarab",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_rapidmusclenurish"
+      },
+      { "id": "cyberArt.scarCoalescer", "atlas": "common/item_icons7", "slot": "NoPainNoGain" },
+      {
+        "id": "cyberArt.kineticFrame",
+        "atlas": "common/item_icons13",
+        "slot": "cw_skeleton_microvibrationsgenerator"
+      },
+      { "id": "cyberArt.paraBellum", "atlas": "common/item_icons5", "slot": "T_1000" },
+      {
+        "id": "cyberArt.microgenerator",
+        "atlas": "common/item_icons5",
+        "slot": "cw_hands_electricexplosion"
+      },
+      {
+        "id": "cyberArt.handleWrap",
+        "atlas": "common/item_icons6",
+        "slot": "cw_hands_knifesharpener"
+      },
+      { "id": "cyberArt.lynxPaws", "atlas": "common/item_icons6", "slot": "cw_legs_catpaws" },
+      {
+        "id": "cyberArt.chitin",
+        "atlas": "common/item_icons9",
+        "slot": "cw_integumentary_subdermalarmor_iconic"
+      },
+      {
+        "id": "cyberArt.leeroyLigament",
+        "atlas": "common/item_icons6",
+        "slot": "cw_legs_speed_iconic"
       }
     ],
     "weapons": [
