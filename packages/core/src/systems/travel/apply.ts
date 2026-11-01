@@ -120,6 +120,8 @@ export function distanceBetween(a: LocationDef | undefined, b: LocationDef | und
 interface RouteTableData {
   readonly anchors: readonly { readonly id: string; readonly rough: boolean }[];
   readonly meters: readonly number[];
+  /** 和表里某个锚点同一位置的地点：地点 id → 锚点 id，查表时当作那个锚点（用户定的，2026-11-01） */
+  readonly aliases?: Readonly<Record<string, string>>;
 }
 
 const routeIndexes = new WeakMap<object, ReadonlyMap<string, number>>();
@@ -135,6 +137,10 @@ function routeIndexOf(table: RouteTableData): ReadonlyMap<string, number> {
   const cached = routeIndexes.get(table);
   if (cached) return cached;
   const index = new Map(table.anchors.map((a, i) => [a.id, i] as const));
+  for (const [place, anchor] of Object.entries(table.aliases ?? {})) {
+    const i = index.get(anchor);
+    if (i !== undefined && !index.has(place)) index.set(place, i);
+  }
   routeIndexes.set(table, index);
   return index;
 }

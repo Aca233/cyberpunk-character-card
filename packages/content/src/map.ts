@@ -39,6 +39,16 @@ export const MAP_SPOTS: Readonly<Record<string, MapSpot>> = {
   "kerry-estate": { x: 51.7, y: 38.7, metro: false },
 };
 
+/**
+ * 坐标直接取自路线表里某个服务点的地点：查路程时当作那个锚点，按精确路面算、不标"大概"
+ * （用户定的，2026-11-01；不用为这几处重跑 build_route_table.py）
+ */
+export const ROUTE_ALIASES: Readonly<Record<string, string>> = {
+  "regina-office": "poi:wat_fixer",
+  "wakako-pachinko": "poi:wbr_fixer",
+  "kerry-estate": "poi:kerry_villa",
+};
+
 /** 城区中心：新地点没坐标时先放在这里，玩家可以拖到准确位置 */
 export const DISTRICT_CENTERS: Readonly<
   Record<string, { readonly x: number; readonly y: number }>

@@ -11,7 +11,7 @@ import { items } from "./items";
 import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
-import { DISTRICT_CENTERS } from "./map";
+import { DISTRICT_CENTERS, ROUTE_ALIASES } from "./map";
 import { DISTRICT_SHAPES, MAP_POI_KINDS, SUBDISTRICT_SHAPES } from "./mapShapes.gen";
 import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
@@ -113,8 +113,9 @@ export const gameData: Readonly<Record<string, unknown>> = {
   jobTemplates,
   sidegigs,
   apartments,
-  // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点退回直线
-  routes: { anchors: ROUTE_ANCHORS, meters: ROUTE_METERS },
+  // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点退回直线；
+  // aliases 是坐标直接取自某个锚点的地点，当作那个锚点查（map.ts 的 ROUTE_ALIASES）
+  routes: { anchors: ROUTE_ANCHORS, meters: ROUTE_METERS, aliases: ROUTE_ALIASES },
   // 和建档共用同一份（见上面 mapData）：
   // radar 是周边雷达的锚点（§十三①），出行系统按玩家坐标挑最近的写进【当前状态】；
   // mapAreas 给地点簿推算坐标（places-plan §四）：城区、街区轮廓和标签点，城区中心，服务点类别名；

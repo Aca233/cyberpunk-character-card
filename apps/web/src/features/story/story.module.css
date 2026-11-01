@@ -322,7 +322,7 @@
   display: none;
 }
 
-.npcCard summary strong {
+.npcCard summary :where(strong) {
   color: var(--cp-cyan);
 }
 
@@ -343,7 +343,7 @@
   border-left-color: var(--cp-red-dim);
 }
 
-.npcCard[data-dead] summary strong {
+.npcCard[data-dead] summary :where(strong) {
   color: var(--cp-text-dim);
 }
 
@@ -372,7 +372,7 @@
   margin-bottom: 0;
 }
 
-.npcDetail li + li {
+.npcDetail li + :where(li) {
   margin-top: 0.45rem;
 }
 
@@ -1126,6 +1126,7 @@
   grid-column: 1;
   grid-row: 1;
   align-self: start;
+  z-index: 1;
 }
 
 .gear > li > .gearTools {
@@ -1252,10 +1253,6 @@
   width: 100%;
   height: var(--art-h, 5.5rem);
   margin: 0;
-}
-
-.gear > li > .slotNum {
-  z-index: 1;
 }
 
 .gearName {

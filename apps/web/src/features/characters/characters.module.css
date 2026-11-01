@@ -182,7 +182,7 @@
   --box-fill: rgb(15 34 39 / 94%);
 }
 
-.card[aria-pressed="true"] strong {
+.card[aria-pressed="true"] :where(strong) {
   color: var(--cp-cyan);
 }
 

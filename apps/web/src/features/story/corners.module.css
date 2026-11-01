@@ -820,12 +820,6 @@
   color: var(--accent);
 }
 
-/* 紧跟在标题下面的第一样东西不再另加上边距 */
-.peekHead + .peekChips {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
-
 .peekHead kbd {
   font-family: var(--font-ui);
   font-size: 12px;
@@ -888,6 +882,12 @@
 
 .peekChips > li:where([data-broken]) {
   color: var(--cp-danger);
+}
+
+/* 紧跟在标题下面的第一样东西不再另加上边距 */
+.peekHead + .peekChips {
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .peekFoot {
