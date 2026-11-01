@@ -33,7 +33,7 @@ function world(eddies: number, location: string | null = "a"): TripWorld {
   };
 }
 
-/** 首访原作地点的测试数据（places-plan 第二期）：店和地标只有原始定义，尚未登记进地点簿 */
+/** 首访原作地点的测试数据（places-plan 第二期）：店和地标只有原始定义，存档里还没记下 */
 const anchorData: Readonly<Record<string, unknown>> = {
   ...data,
   mapAreas: {
@@ -65,7 +65,7 @@ const anchorData: Readonly<Record<string, unknown>> = {
 };
 
 describe("首次去原作地点（places-plan 第二期）", () => {
-  it.each(["poi:clinic", "ft:market"])("%s：预览不登记，到达才记入地点簿", (id) => {
+  it.each(["poi:clinic", "ft:market"])("%s：预览不登记，到达才记下地点", (id) => {
     const w = world(1000);
     const before = JSON.stringify({ w, data: anchorData });
     const route = routeOptions(w, anchorData, id).find((r) => r.mode === "taxi");
@@ -99,7 +99,7 @@ describe("首次去原作地点（places-plan 第二期）", () => {
     expect(out.ok).toBe(true);
     expect(clock.location).toBe(id);
     expect(clock.places).toHaveLength(1);
-    expect(clock.places[0]).toMatchObject({ id, visitedAt: plan.trip.arriveAt, rough: false });
+    expect(clock.places[0]).toMatchObject({ id, visitedAt: plan.trip.arriveAt });
   });
 });
 

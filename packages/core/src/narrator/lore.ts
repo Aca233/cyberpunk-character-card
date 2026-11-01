@@ -108,7 +108,7 @@ export function loreQuery(
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const here = clock.location;
   if (here !== null) {
-    // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也按名字和城区检索
+    // 存档记下的地点并进地点表：place:、poi:、ft: 也按名字和城区检索
     const place = locationCatalog(withSavedPlaces(data, world)).get(here);
     if (place) {
       add(place.name, "place");

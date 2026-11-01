@@ -112,7 +112,7 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   /** 时间推进时的结算，例如重伤失血、期限到期；不能失败 */
   tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
   /**
-   * 往静态数据表里并进这个存档自己的东西（places-plan §四：地点簿并进地点表，各系统照旧用 locationCatalog 查）。
+   * 往静态数据表里并进这个存档自己的东西（例如存档记下的地点并进地点表，各系统照旧用 locationCatalog 查）。
    * 只读；状态没变时要返回同一个对象，各系统按对象缓存的查表才有效
    */
   data?(state: S, data: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>>;
@@ -482,7 +482,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     }
   }
 
-  // 交了 data 的系统按顺序把存档自己的东西并进静态数据表（§四 地点簿）；结算中的草稿先取快照
+  // 交了 data 的系统按顺序把存档自己的东西并进静态数据表（例如存档记下的地点）；结算中的草稿先取快照
   const extenders = order.filter((s) => s.data !== undefined);
   const dataFor = (
     slices: Readonly<Record<string, unknown>>,

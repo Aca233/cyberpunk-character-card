@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { applyPlace, markVisit, resolveLocation } from "./places";
+import { createPlace, markVisit, resolveLocation } from "./places";
 import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
@@ -54,7 +54,7 @@ function dueNotes(draft: Draft<WorldClockState>, from: number, to: number): stri
 
 /**
  * 时间只往前走，倒退的不改；没写 time 时间不动；地点随指令更新。
- * 地点先按地点表和地点簿换成 id（places-plan §四：中文名对得上的用原来那条；poi:、ft: 第一次去的记进地点簿）
+ * 地点先按地点表换成 id（中文名对得上的用原来那条；poi:、ft: 第一次去的记进存档），{name, in} 建新地点
  */
 export function applyWorld(
   draft: Draft<WorldClockState>,
@@ -72,9 +72,8 @@ export function applyWorld(
       );
   }
   if (command.location !== undefined && typeof command.location === "object") {
-    // 新地方直接写在 location 里（用户定的：新地点并进 location，2026-10-30）：和 place 指令同一套建法，贴路面、标大概位置
-    const { in: district, ...rest } = command.location;
-    const made = applyPlace(draft, { type: "place", ...rest, district }, data, target);
+    // 新地方写成 {name, in, note?}（用户定的"统一为地点"，2026-11-02）：代码定坐标、贴路面
+    const made = createPlace(draft, command.location, data, target);
     if (!made.ok) return made;
     notes.push(...(made.notes ?? []));
   } else if (command.location !== undefined) {

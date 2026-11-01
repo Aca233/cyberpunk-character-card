@@ -1,8 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
-import { radarLine } from "./radar";
 import type { travelView } from "./view";
 
-/** 【当前状态】里出行的几行：名下的车、这一场代码定下的路上偶遇、周边雷达 */
+/** 【当前状态】里出行的几行：名下的车、这一场代码定下的路上偶遇；附近的地方在世界系统的【地点】里 */
 
 type TravelView = ReturnType<typeof travelView>;
 
@@ -22,13 +21,6 @@ export const travelStatus: readonly SystemStatus[] = [
         lines.push(
           // 偶遇是素材，合适才写（用户 2026-11-01 定的「全改」第 3 步）
           `路上偶遇（代码抽的素材，合适就写，玩家可以不理）：${t.encounter.label}——${t.encounter.note}`,
-        );
-      // §十三① 周边雷达：每轮按玩家坐标挑最近的锚点
-      const radar = radarLine(t.radar);
-      // §七：所在地点坐标本身是估的（恶土、狗镇等），方位只作参考
-      if (radar)
-        lines.push(
-          t.radarRough ? `${radar}（你所在位置的坐标本身是估的，方位和距离只作参考）` : radar,
         );
       return lines;
     },

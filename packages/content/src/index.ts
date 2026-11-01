@@ -113,15 +113,15 @@ export const gameData: Readonly<Record<string, unknown>> = {
   jobTemplates,
   sidegigs,
   apartments,
-  // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点退回直线；
+  // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点先直线连到最近的锚点，再按路面距离算；
   // aliases 是坐标直接取自某个锚点的地点，当作那个锚点查（map.ts 的 ROUTE_ALIASES）
   routes: { anchors: ROUTE_ANCHORS, meters: ROUTE_METERS, aliases: ROUTE_ALIASES },
   // 和建档共用同一份（见上面 mapData）：
-  // radar 是周边雷达的锚点（§十三①），出行系统按玩家坐标挑最近的写进【当前状态】；
-  // mapAreas 给地点簿推算坐标（places-plan §四）：城区、街区轮廓和标签点，城区中心，服务点类别名；
-  // servicePoints 是原作服务点（§五）：place 写 kind 时代码在这里挑一家，poi: 第一次去时记进地点簿
+  // radar 是周边雷达的锚点（§十三①），【地点】一节按玩家坐标挑最近的列出来；
+  // mapAreas 给新地点推算坐标（places-plan §四）：城区、街区轮廓和标签点，城区中心，服务点类别名；
+  // servicePoints 是原作服务点（§五）：【地点】按类别名列，poi: 第一次去时记进存档
   ...mapData,
-  // 原作路面的路边点（3dmap_roads 主连通分量，25 m 一格去重，x、y 交替摊平）：模型新建的地点贴到最近的路边（用户定的"先贴路面"，2026-10-30），坐标本作改编、标大概位置
+  // 原作路面的路边点（3dmap_roads 主连通分量，25 m 一格去重，x、y 交替摊平）：模型新建的地点贴到最近的路边（用户定的"先贴路面"，2026-10-30），坐标本作改编
   roadSpots: ROAD_SPOTS,
   // 原剧第 1–6 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
 };

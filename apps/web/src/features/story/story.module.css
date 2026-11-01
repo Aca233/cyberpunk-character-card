@@ -2552,7 +2552,7 @@
   border: 0;
   color: var(--pin-yellow);
   background: currentColor;
-  /* 地点簿里的原作店带 --icon，照原作同类图标画；其余用目的地图钉（places-plan 第二期） */
+  /* 存档记下的原作店带 --icon，照原作同类图标画；其余用目的地图钉（places-plan 第二期） */
   mask: var(--icon, var(--pin-dest)) center / contain no-repeat;
   cursor: var(--cp-cursor-hand);
   transition:
@@ -2568,12 +2568,6 @@
   outline: none;
   color: #fff8a8;
   transform: scale(1.25);
-}
-
-/* 拖地点（places-plan 第二期，用户定的 2026-10-30）：按住图钉拖；触屏拖动时不让页面跟着滚 */
-.mapDest[data-moving] .mapDestPin {
-  touch-action: none;
-  cursor: move;
 }
 
 /* 当前位置：player 箭头 1080p 原图 26×23；没有朝向数据，箭头一直朝上，原作的视野扇形 playerCone 不画 */
@@ -2663,15 +2657,6 @@
 /* 剧情地点用青色底色，不覆盖当前位置的绿色和悬停提亮（places-plan 第二期） */
 .mapDest[data-layer="place"] {
   --pin-yellow: var(--cp-cyan);
-}
-
-/* 听说过的图钉和名字一起压暗；悬停、键盘聚焦或选中时恢复，不加动画（places-plan 第二期） */
-.mapDest[data-heard] {
-  opacity: 0.55;
-}
-
-.mapDest[data-heard]:is(:hover, :focus-within, [data-picked]) {
-  opacity: 1;
 }
 
 .mapHereTag {
@@ -2847,13 +2832,6 @@ ul.mapLegend > li {
   display: flex;
   gap: 0.4rem;
   margin-bottom: 0.5rem;
-}
-
-/* 路线卡里拖地点的说明和保存、取消（places-plan 第二期）：不加框，沿用路线卡的底 */
-.mapMoveBox {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
 }
 
 /*

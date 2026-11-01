@@ -11,7 +11,6 @@ import { catalogSection } from "../../systems/inventory";
 import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
 import { registry } from "../../systems/registry";
-import { locationSection } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
 import type { RolledCheck } from "../pending";
@@ -66,8 +65,6 @@ const OUTCOME_LABELS = {
 } as const;
 
 export { catalogSection } from "../../systems/inventory";
-
-export { locationSection } from "../../systems/world";
 
 /** 提示词里随存档而定、但不在世界状态里的东西 */
 export interface PromptExtras {
@@ -147,7 +144,6 @@ export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   return [
     catalogSection(extras.data),
     cyberwareSection(extras.data),
-    locationSection(extras.data),
     twistSection(extras.data),
     jobTemplateSection(extras.data),
     consequenceSection(extras.data, view.difficulty),

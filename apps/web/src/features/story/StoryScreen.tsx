@@ -653,12 +653,6 @@ export function StoryScreen() {
           <MapBody
             view={view}
             onClose={closeMap}
-            // 地图上拖剧情地点：不调用模型；失败时提示条说原因，保存键留着（places-plan 第二期）
-            onMovePlace={
-              busy
-                ? undefined
-                : (id, x, y) => act({ type: "movePlace", id, x, y }, "movePlace", true)
-            }
             onTravel={
               busy || offers?.rolled
                 ? undefined

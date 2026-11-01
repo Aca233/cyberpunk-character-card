@@ -725,7 +725,7 @@ export async function runNarratorTurn(
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
   if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
-    // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也能当出行的目的地，和 travelBlock 一致
+    // 存档记下的地点并进地点表：place:、poi:、ft: 也能当出行的目的地，和 travelBlock 一致
     const planned = planTrip(
       tripWorldOf(world),
       withSavedPlaces(deps.data ?? {}, world),

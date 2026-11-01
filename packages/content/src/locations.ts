@@ -1,7 +1,7 @@
 import { worldRules } from "@cp/core";
 import { MAP_SPOTS } from "./map";
 
-/** 常用地点：界面显示中文名，模型换地点时优先用这些 id；表外的地点模型直接写中文名 */
+/** 原作固定地点：界面显示中文名，模型换地点时写这些 id；表外的新地方模型写 {name, in}，由代码记进存档 */
 const table = [
   {
     id: "lizzies-bar",

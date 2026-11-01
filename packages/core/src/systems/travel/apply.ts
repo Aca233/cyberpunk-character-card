@@ -67,8 +67,6 @@ export interface RouteOption {
   readonly riskLabel: string;
   /** 走不了时写原因 */
   readonly blocked?: string;
-  /** 路程是估的（§七：有一头离路面太远、坐标待核对，或不在路线表里只能按直线）；准的时候不带这个字段 */
-  readonly rough?: true;
 }
 
 /** 算路线要看的状态 */
@@ -145,19 +143,7 @@ function routeIndexOf(table: RouteTableData): ReadonlyMap<string, number> {
   return index;
 }
 
-/**
- * 这个地点标了“大概”：路线表里标的（离路面超过 250 米或坐标本身待核对，§七），
- * 或者是地点簿里代码推算坐标的新地点（places-plan §四"大概位置"）
- */
-export function roughPlace(data: Readonly<Record<string, unknown>>, id: string): boolean {
-  if (locationCatalog(data).get(id)?.rough === true) return true;
-  const table = routeTableOf(data);
-  if (!table) return false;
-  const i = routeIndexOf(table).get(id);
-  return i !== undefined && table.anchors[i]?.rough === true;
-}
-
-/** 路线表锚点的坐标：从地点表（含地点簿）和周边锚点（poi:、ft:）里找；按 data 缓存 */
+/** 路线表锚点的坐标：从地点表（含存档记下的地点）和周边锚点（poi:、ft:）里找；按 data 缓存 */
 const anchorSpots = new WeakMap<object, readonly { id: string; x: number; y: number }[]>();
 
 function anchorSpotsOf(
@@ -217,24 +203,21 @@ export function roadMetersBetween(
 }
 
 /**
- * 出行用的距离（单位约 100 米）：两头都在路线表里按路面距离，否则按地图直线（§七 简单版做法）；
- * rough 是有一头标了“大概”，或者只能按直线算
+ * 出行用的距离（单位约 100 米）：两头都在路线表里按路面距离；表里没有的一头先直线走到离它最近的锚点，再按路面；
+ * 都不行按地图直线（§七 简单版做法）
  */
 export function tripDistance(
   data: Readonly<Record<string, unknown>>,
   a: LocationDef | undefined,
   b: LocationDef | undefined,
-): { readonly d: number; readonly rough: boolean } | undefined {
+): { readonly d: number } | undefined {
   const straight = distanceBetween(a, b);
   if (!a || !b || straight === undefined) return undefined;
   const table = routeTableOf(data);
-  // 没有路线表（旧数据、测试）时照旧按直线，不标“大概”
-  if (!table) return { d: straight, rough: false };
+  // 没有路线表（旧数据、测试）时照旧按直线
+  if (!table) return { d: straight };
   const road = roadMetersBetween(data, a.id, b.id);
-  if (road !== undefined) {
-    return { d: road / 100, rough: roughPlace(data, a.id) || roughPlace(data, b.id) };
-  }
-  // §七：表里没有的一头（地点簿的新地点等）先直线走到离它最近的锚点，再按路面；标“大概”
+  if (road !== undefined) return { d: road / 100 };
   const index = routeIndexOf(table);
   const leg = (p: LocationDef) => {
     if (index.has(p.id)) return { id: p.id, meters: 0 };
@@ -244,8 +227,8 @@ export function tripDistance(
   const la = leg(a);
   const lb = leg(b);
   const mid = la && lb ? roadMetersBetween(data, la.id, lb.id) : undefined;
-  if (!la || !lb || mid === undefined) return { d: straight, rough: true };
-  return { d: (la.meters + mid + lb.meters) / 100, rough: true };
+  if (!la || !lb || mid === undefined) return { d: straight };
+  return { d: (la.meters + mid + lb.meters) / 100 };
 }
 
 function riskOf(mode: TravelMode, period: Period, heat: number): Risk {
@@ -292,7 +275,6 @@ export function routeOptions(
       cost,
       risk,
       riskLabel: RISK_LABELS[risk],
-      ...(trip?.rough ? { rough: true as const } : {}),
     };
     const blocked = blockOf(w, mode, here, there, d, cost, car !== undefined);
     return blocked ? { ...base, blocked } : base;
@@ -408,10 +390,8 @@ export function planTrip(
 export function tripText(trip: PlannedTrip): string {
   const { route, from, to } = trip;
   const money = route.cost > 0 ? `路费 ${route.cost} 欧元由代码扣` : "不花钱";
-  // §七：路程是估的就照实说“大概”，正文别写成精确的路线
-  const about = route.rough ? "大概" : "";
   const lines = [
-    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上${about} ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
+    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
   ];
   // 偶遇是代码抽的素材，合适才写、可以改写或推迟（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
   if (trip.encounter) {
@@ -439,7 +419,7 @@ export type AutoMove =
 /**
  * 叙事模型直接在 world 里写了 location（用户定的"自动转"，2026-10-30）：
  * 500 米内算走过去，代码按步行算用时；更远的自动转成一次出行，照路线表扣时间和路费，不抽路上偶遇（正文已经写完了）。
- * 目的地不在地点表（含地点簿）里、现在的位置不在地图上、或者哪种方式都走不了时是 none，照旧直接换位置
+ * 目的地不在地点表（含存档记下的地点）里、现在的位置不在地图上、或者哪种方式都走不了时是 none，照旧直接换位置
  */
 export function autoMove(
   w: TripWorld,

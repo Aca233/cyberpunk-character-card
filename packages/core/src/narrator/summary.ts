@@ -87,7 +87,7 @@ export function buildSummaryPrompt(
   const placeName =
     place === null
       ? undefined
-      : // 地点簿并进地点表（places-plan §四）；按结算后的世界查，这一轮刚记下的地点也有名字
+      : // 存档记下的地点并进地点表；按结算后的世界查，这一轮刚记下的地点也有名字
         locationCatalog(withSavedPlaces(extras.data ?? {}, after)).get(place)?.name;
   const content = userMessage({
     scene: [

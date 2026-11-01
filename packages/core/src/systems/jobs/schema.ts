@@ -149,7 +149,7 @@ export const JobOfferSchema = z
       .min(1)
       .optional()
       .describe(
-        "办事的地点：尽量写常用地点、【地点簿】【周边】里已有的 id（例如 kabuki-market、place:3、poi:…），对得上的地图上会标出来；都没有的新地方同一轮写一条 place（name + district，玩家没去过加 heard: true），这里写一模一样的中文名（新地点的编号要结算后才有，不要自己编 place: 编号）；说不清在哪就不写",
+        "办事的地点：尽量写【地点】里已有的 id（例如 kabuki-market、place:3、poi:…），对得上的地图上会标出来；【地点】里没有的地方直接写中文名，不要自己编 place: 编号；说不清在哪就不写",
       ),
     risk: z.number().int().min(1).max(5),
     reward: z.number().int().min(0).max(100_000),

@@ -1,7 +1,7 @@
 /**
- * 周边雷达的锚点（places-plan §十三①，用户同意写入，2026-10-30）：出行系统每轮按玩家坐标挑最近的几个写进【当前状态】。
- * 来源：第 ① 层地点（有坐标的）、原作服务点 SERVICE_POINTS（id 写 poi:<id>）、有坐标的原作地标 FAST_TRAVEL_POINTS（id 写 ft:<id>，本作约定）。
- * 地点簿（第 ③ 层）还没做，做了再并进来。坐标都是底图百分比。
+ * 周边雷达的锚点（places-plan §十三①，用户同意写入，2026-10-30）：【地点】一节每轮按玩家坐标挑最近的几个列出来。
+ * 来源：原作固定地点（有坐标的）、原作服务点 SERVICE_POINTS（id 写 poi:<id>）、有坐标的原作地标 FAST_TRAVEL_POINTS（id 写 ft:<id>，本作约定）。
+ * 存档记下的地点由 world 系统的 data 钩子并进来。坐标都是底图百分比。
  */
 import { FAST_TRAVEL_POINTS } from "./fastTravel.gen";
 import { locations } from "./locations";

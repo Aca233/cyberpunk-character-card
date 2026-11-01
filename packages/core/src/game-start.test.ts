@@ -61,13 +61,13 @@ function startAt(startLocation?: string) {
 }
 
 describe("建档时选开局地点", () => {
-  it("没选的照旧从开场自带的地点开始，地点簿是空的（旧存档同此）", () => {
+  it("没选的照旧从开场自带的地点开始，没有记下的地点（旧存档同此）", () => {
     const { clock } = startAt();
     expect(clock.location).toBe("home-bar");
     expect(clock.places).toEqual([]);
   });
 
-  it("选常用地点：换过去，不推进时间、不换场景", () => {
+  it("选原作固定地点：换过去，不推进时间、不换场景", () => {
     const { world, clock } = startAt("vapt");
     expect(clock.location).toBe("vapt");
     expect(clock.places).toEqual([]);
@@ -76,14 +76,20 @@ describe("建档时选开局地点", () => {
     expect(clock.sceneStartedAt).toBe(START);
   });
 
-  it("选原作服务点：记进地点簿，坐标照原作，不标大概位置", () => {
+  it("选原作服务点：记下地点，坐标和类别照原作", () => {
     const { world, clock } = startAt("poi:rd_c");
     expect(clock.location).toBe("poi:rd_c");
-    expect(clock.places[0]).toMatchObject({ id: "poi:rd_c", rough: false, x: 40, y: 40 });
+    expect(clock.places[0]).toMatchObject({
+      id: "poi:rd_c",
+      kind: "ripperdoc",
+      x: 40,
+      y: 40,
+      visitedAt: START,
+    });
     expect(world.time).toBe(START);
   });
 
-  it("选原作地标：记进地点簿，城区和街区按地图形状定", () => {
+  it("选原作地标：记下地点，城区和街区按地图形状定", () => {
     const { clock } = startAt("ft:kabuki_market");
     expect(clock.location).toBe("ft:kabuki_market");
     expect(clock.places[0]).toMatchObject({

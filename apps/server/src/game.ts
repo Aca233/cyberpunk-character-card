@@ -97,7 +97,7 @@ export const CreateSaveSchema = z.strictObject({
   /** 开场时间，格式 YYYY-MM-DD HH:mm；没给时用 DEFAULT_START（prefault 先填默认文本再解析） */
   startTime: worldRules.GameTimeSchema.prefault(DEFAULT_START),
   /**
-   * 开局地点：常用地点 id，或原作地标 ft:、服务点 poi:（用户定的，2026-10-30："可以选择地点开局"，"在地图上选择"）。
+   * 开局地点：原作固定地点 id，或原作地标 ft:、服务点 poi:（用户定的，2026-10-30："可以选择地点开局"，"在地图上选择"）。
    * 不给时照旧用开场自带的丽姿酒吧；建档时按地图数据校验，对不上的拒收
    */
   startLocation: z.string().trim().min(1).max(80).optional(),

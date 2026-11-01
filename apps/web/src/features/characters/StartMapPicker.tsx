@@ -104,7 +104,7 @@ export function StartMapPicker({
     if (focus) lookAt(a.x, a.y, POI_ZOOM);
   };
 
-  // 常用地点一直画；地铁站和地标放大到能看街区名时画；服务点放大到能看店时画，挤在一起的只留一个
+  // 原作固定地点一直画；地铁站和地标放大到能看街区名时画；服务点放大到能看店时画，挤在一起的只留一个
   const pins: RadarAnchor[] = [];
   const pois: { readonly a: RadarAnchor; readonly style: CSSProperties }[] = [];
   if (size.w > 0) {
@@ -127,7 +127,7 @@ export function StartMapPicker({
     }
   }
 
-  // 名字：选中的先摆，常用地点其次；右边放不下放左边，再放不下只在悬停时显示
+  // 名字：选中的先摆，原作固定地点其次；右边放不下放左边，再放不下只在悬停时显示
   const sides = new Map<string, "right" | "left" | "hidden">();
   {
     const boxes: Box[] = [];

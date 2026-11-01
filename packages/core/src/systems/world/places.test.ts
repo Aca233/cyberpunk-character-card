@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { applyPlace, placeBookText, promotePlace, resolveLocation, withPlaces } from "./places";
+import { createPlace, placesText, resolveLocation, withPlaces } from "./places";
 import {
   locationCatalog,
-  type PlaceCommand,
   type SavedPlace,
   type WorldClockState,
   WorldClockStateSchema,
 } from "./schema";
 
 /**
- * 地点簿（places-plan §四、§五、§八、§九、§十三②）。
- * 用一张手搭的小地图测，不读 content 包：沃森在左上、威斯特布鲁克在右上，各一个街区
+ * 统一的地点（用户定的"统一为地点"，2026-11-02）：location 只有 id 和 {name, in, note?} 两种写法，
+ * 提示词只有一段【地点】。用一张手搭的小地图测，不读 content 包：沃森在左上、威斯特布鲁克在右上
  */
 const data: Readonly<Record<string, unknown>> = {
   mapAreas: {
@@ -26,13 +25,6 @@ const data: Readonly<Record<string, unknown>> = {
         label: [20, 20],
         points: "0,0 25,0 25,25 0,25",
       },
-      {
-        id: "japantown",
-        name: "日本町",
-        district: "westbrook",
-        label: [70, 20],
-        points: "50,0 75,0 75,25 50,25",
-      },
     ],
     centers: { 沃森: { x: 25, y: 25 }, 威斯特布鲁克: { x: 75, y: 25 }, 恶土: { x: 50, y: 90 } },
     kinds: [{ id: "ripperdoc", name: "义体医生" }],
@@ -47,12 +39,11 @@ const data: Readonly<Record<string, unknown>> = {
       x: 10,
       y: 10,
     },
-    { id: "rd_b", kind: "ripperdoc", name: null, district: "watson", sub: "kabuki", x: 22, y: 10 },
     { id: "rd_c", kind: "ripperdoc", name: null, district: "watson", sub: null, x: 40, y: 40 },
   ],
   radar: [
     { id: "ft:kabuki_market", name: "歌舞伎町市场", kind: null, x: 12, y: 12 },
-    { id: "poi:rd_a", name: "植入不求人", kind: "义体医生", x: 10, y: 10 },
+    { id: "poi:rd_a", name: "植入不求人", kind: "ripperdoc", x: 10, y: 10 },
   ],
   locations: [{ id: "vapt", name: "V 的公寓", district: "沃森", x: 15, y: 15 }],
 };
@@ -61,116 +52,131 @@ function fresh(location: string | null = null): WorldClockState {
   return WorldClockStateSchema.parse({ location, deadlines: [], scene: 0, sceneStartedAt: 0 });
 }
 
-const place = (fields: Omit<PlaceCommand, "type">): PlaceCommand => ({ type: "place", ...fields });
-
-describe("place 建新地点（§四）", () => {
-  it("建在街区里，标大概位置，玩家到了那里", () => {
+describe("location 写 {name, in} 建新地点", () => {
+  it("建 place:N，坐标在城区里，玩家到了那里", () => {
     const clock = fresh();
-    const out = applyPlace(
-      clock,
-      place({ name: "老王面馆", district: "沃森", sub: "歌舞伎町" }),
-      data,
-      100,
-    );
+    const out = createPlace(clock, { name: "老王面馆", in: "沃森", note: "通宵营业" }, data, 100);
     expect(out.ok).toBe(true);
     const entry = clock.places[0];
-    expect(entry?.id).toBe("place:1");
-    expect(entry?.rough).toBe(true);
-    expect(entry?.sub).toBe("歌舞伎町");
-    expect(entry?.x).toBeLessThan(25);
-    expect(entry?.y).toBeLessThan(25);
+    expect(entry).toMatchObject({
+      id: "place:1",
+      name: "老王面馆",
+      district: "沃森",
+      note: "通宵营业",
+      firstSeenAt: 100,
+      visitedAt: 100,
+    });
+    expect(entry?.x).toBeLessThanOrEqual(50);
+    expect(entry?.y).toBeLessThanOrEqual(50);
     expect(clock.location).toBe("place:1");
   });
 
   it("同名的用原来那一条", () => {
     const clock = fresh();
-    applyPlace(clock, place({ name: "老王面馆", district: "沃森" }), data, 100);
-    applyPlace(clock, place({ name: "  老王面馆 ", district: "沃森" }), data, 200);
+    createPlace(clock, { name: "老王面馆", in: "沃森" }, data, 100);
+    clock.location = null;
+    createPlace(clock, { name: "  老王面馆 ", in: "沃森" }, data, 200);
     expect(clock.places).toHaveLength(1);
     expect(clock.places[0]?.visitedAt).toBe(200);
+    expect(clock.location).toBe("place:1");
   });
 
-  it("城区写错拒收，街区写错丢掉", () => {
+  it("名字对得上原作地点时用原作那一条，不另建", () => {
     const clock = fresh();
-    expect(applyPlace(clock, place({ name: "某处", district: "火星" }), data, 0).ok).toBe(false);
-    applyPlace(clock, place({ name: "小巷", district: "沃森", sub: "日本町" }), data, 0);
-    expect(clock.places[0]?.sub).toBeUndefined();
-    expect(clock.places[0]?.district).toBe("沃森");
-  });
-
-  it("heard 只记下，不换位置", () => {
-    const clock = fresh("vapt");
-    applyPlace(clock, place({ name: "传说中的酒吧", district: "沃森", heard: true }), data, 0);
+    expect(createPlace(clock, { name: "V 的公寓", in: "沃森" }, data, 0).ok).toBe(true);
+    expect(clock.places).toEqual([]);
     expect(clock.location).toBe("vapt");
-    expect(clock.places[0]?.visitedAt).toBeNull();
   });
 
-  it("from + dir + dist：相对周边里的点推坐标（§十三②）", () => {
-    const clock = fresh("vapt");
-    applyPlace(
-      clock,
-      place({ name: "黑市摊", district: "沃森", from: "ft:kabuki_market", dir: "北", dist: "近" }),
-      data,
-      0,
-    );
-    // 近 = 100 米 ≈ 1.28 个百分点，北是 y 变小
-    expect(clock.places[0]?.x).toBeCloseTo(12, 1);
-    expect(clock.places[0]?.y).toBeCloseTo(10.72, 1);
+  it("城区写错拒收", () => {
+    const clock = fresh();
+    const out = createPlace(clock, { name: "某处", in: "火星" }, data, 0);
+    expect(out.ok).toBe(false);
+    expect(clock.places).toEqual([]);
+  });
+
+  it("没有地图数据时拒收", () => {
+    expect(createPlace(fresh(), { name: "某处", in: "沃森" }, {}, 0).ok).toBe(false);
+  });
+
+  it("旧存档没有 places：读出来是空的，照样能建", () => {
+    expect(fresh().places).toEqual([]);
+    const old = {
+      location: null,
+      deadlines: [],
+      scene: 0,
+      sceneStartedAt: 0,
+    } as unknown as WorldClockState;
+    expect(createPlace(old, { name: "老地方", in: "沃森" }, data, 0).ok).toBe(true);
+    expect(old.places).toHaveLength(1);
+  });
+
+  it("旧存档里的 near、parent、tempScene、alias、rough、movedAt 读档时丢掉", () => {
+    const clock = WorldClockStateSchema.parse({
+      location: null,
+      deadlines: [],
+      scene: 0,
+      sceneStartedAt: 0,
+      places: [
+        {
+          id: "place:1",
+          name: "天台",
+          district: "沃森",
+          near: "vapt",
+          parent: "vapt",
+          tempScene: 0,
+          alias: "楼顶",
+          rough: true,
+          movedAt: 5,
+          x: 15,
+          y: 15,
+          firstSeenAt: 0,
+          visitedAt: 0,
+        },
+      ],
+    });
+    const entry = clock.places[0] as Record<string, unknown>;
+    for (const key of ["near", "parent", "tempScene", "alias", "rough", "movedAt"]) {
+      expect(entry[key]).toBeUndefined();
+    }
   });
 });
 
 describe('新地点贴路面（用户定的"先贴路面"，2026-10-30）', () => {
-  it("没写 from、near 时从玩家脚下找最近的路边", () => {
+  it("玩家就在这个城区时从玩家脚下找最近的路边", () => {
     const roads = { ...data, roadSpots: [16, 15, 40, 40] };
     const clock = fresh("vapt");
-    applyPlace(clock, place({ name: "楼下面馆", district: "沃森" }), roads, 0);
-    expect(clock.places[0]).toMatchObject({ x: 16, y: 15, rough: true });
+    createPlace(clock, { name: "楼下面馆", in: "沃森" }, roads, 0);
+    expect(clock.places[0]).toMatchObject({ x: 16, y: 15 });
   });
 
-  it("路边不在这个城区里就不用，退回旧的推算", () => {
+  it("路边不在这个城区里就不用，退回玩家脚下", () => {
     const roads = { ...data, roadSpots: [55, 15] };
     const clock = fresh("vapt");
-    applyPlace(clock, place({ name: "楼下面馆", district: "沃森" }), roads, 0);
-    expect(clock.places[0]).toMatchObject({ x: 15, y: 15, rough: true });
+    createPlace(clock, { name: "楼下面馆", in: "沃森" }, roads, 0);
+    expect(clock.places[0]).toMatchObject({ x: 15, y: 15 });
+  });
+
+  it("玩家不在这个城区时从城区中心找", () => {
+    const clock = fresh("vapt");
+    createPlace(clock, { name: "海边仓库", in: "威斯特布鲁克" }, data, 0);
+    expect(clock.places[0]).toMatchObject({ district: "威斯特布鲁克", x: 75, y: 25 });
   });
 });
 
-describe("place 带 kind 挑原作的店（§五）", () => {
-  it("挑离玩家最近的，名字照原作，模型起的称呼当别名", () => {
-    const clock = fresh("vapt");
-    const cmd = place({ name: "街角诊所", district: "沃森", sub: "歌舞伎町", kind: "ripperdoc" });
-    expect(applyPlace(clock, cmd, data, 0).ok).toBe(true);
-    expect(clock.places[0]?.id).toBe("poi:rd_a");
-    expect(clock.places[0]?.name).toBe("植入不求人");
-    expect(clock.places[0]?.alias).toBe("街角诊所");
-    expect(clock.places[0]?.rough).toBe(false);
-    expect(clock.location).toBe("poi:rd_a");
-    // 已经进地点簿的不再挑，换下一家；原作没名字的用街区 + 类别
-    applyPlace(clock, place({ district: "沃森", sub: "歌舞伎町", kind: "ripperdoc" }), data, 1);
-    expect(clock.places[1]?.id).toBe("poi:rd_b");
-    expect(clock.places[1]?.name).toBe("歌舞伎町义体医生");
-  });
-
-  it("那一带没有这一类就拒收", () => {
-    const clock = fresh();
-    const out = applyPlace(clock, place({ district: "威斯特布鲁克", kind: "ripperdoc" }), data, 0);
-    expect(out.ok).toBe(false);
-  });
-
-  it("别名也能按名字找到", () => {
-    const clock = fresh("vapt");
-    applyPlace(clock, place({ name: "街角诊所", district: "沃森", kind: "ripperdoc" }), data, 0);
-    const got = resolveLocation(clock, "街角诊所", data, 1);
-    expect(got).toEqual({ ok: true, id: "poi:rd_a" });
-  });
-});
-
-describe("world 的 location（§九、§十三①）", () => {
-  it("poi:、ft: 第一次去时记进地点簿，坐标照原作", () => {
+describe("location 写 id", () => {
+  it("poi:、ft: 第一次去时记下来，坐标照原作", () => {
     const clock = fresh();
     const poi = resolveLocation(clock, "poi:rd_c", data, 5);
     expect(poi.ok).toBe(true);
-    expect(clock.places[0]).toMatchObject({ id: "poi:rd_c", rough: false, x: 40, y: 40 });
+    expect(clock.places[0]).toMatchObject({
+      id: "poi:rd_c",
+      kind: "ripperdoc",
+      district: "沃森",
+      x: 40,
+      y: 40,
+      visitedAt: 5,
+    });
     resolveLocation(clock, "ft:kabuki_market", data, 6);
     expect(clock.places[1]).toMatchObject({
       id: "ft:kabuki_market",
@@ -192,82 +198,63 @@ describe("world 的 location（§九、§十三①）", () => {
     });
     expect(clock.places).toEqual([]);
   });
+});
 
-  it("旧存档没有 places：读出来是空的，照样能建", () => {
+describe("并进地点表", () => {
+  it("没有记下的原样返回；有条目时并进 locations 和 radar，带类别", () => {
+    expect(withPlaces(data, [])).toBe(data);
     const clock = fresh();
-    expect(clock.places).toEqual([]);
-    const old = {
-      location: null,
-      deadlines: [],
-      scene: 0,
-      sceneStartedAt: 0,
-    } as unknown as WorldClockState;
-    expect(applyPlace(old, place({ name: "老地方", district: "沃森" }), data, 0).ok).toBe(true);
-    expect(old.places).toHaveLength(1);
+    createPlace(clock, { name: "老王面馆", in: "沃森" }, data, 0);
+    resolveLocation(clock, "poi:rd_c", data, 1);
+    const merged = withPlaces(data, clock.places);
+    expect(locationCatalog(merged).get("place:1")).toMatchObject({ district: "沃森" });
+    expect(locationCatalog(merged).get("poi:rd_c")).toMatchObject({ kind: "ripperdoc" });
+    const radar = merged.radar as { id: string; kind: string | null }[];
+    expect(radar.some((a) => a.id === "place:1")).toBe(true);
+    expect(radar.find((a) => a.id === "poi:rd_c")?.kind).toBe("ripperdoc");
+    // 同一批地点再并一次用缓存
+    expect(withPlaces(data, clock.places)).toBe(merged);
   });
 });
 
-describe("并进地点表和提示词（§八）", () => {
-  it("空簿原样返回；有条目时并进 locations 和 radar", () => {
-    expect(withPlaces(data, [])).toBe(data);
-    const clock = fresh();
-    applyPlace(clock, place({ name: "老王面馆", district: "沃森" }), data, 0);
-    // 刚建的是临时地点（用户定的：用到第二次才转正，2026-10-30）：进地点表，不进周边
-    const temp = withPlaces(data, clock.places);
-    expect(locationCatalog(temp).get("place:1")).toMatchObject({ district: "沃森", rough: true });
-    expect((temp.radar as { id: string }[]).some((a) => a.id === "place:1")).toBe(false);
-    promotePlace(clock, "place:1");
-    const merged = withPlaces(data, clock.places);
-    expect((merged.radar as { id: string }[]).some((a) => a.id === "place:1")).toBe(true);
-    // 同一份地点簿再并一次用缓存
-    expect(withPlaces(data, clock.places)).toBe(merged);
+describe("【地点】", () => {
+  it("原作固定地点全列，附近的带方位、距离和类别", () => {
+    const text = placesText(fresh("vapt"), data) ?? "";
+    expect(text).toContain("- vapt：V 的公寓（沃森，你在这里）");
+    expect(text).toContain("- ft:kabuki_market：歌舞伎町市场（沃森，西北 330 米）");
+    expect(text).toContain("- poi:rd_a：植入不求人（沃森，义体医生，西北 550 米）");
   });
 
-  it("临时地点换了场景又来才转正；没转正的不进【地点簿】，玩家正在那里的除外", () => {
-    const clock = fresh();
-    applyPlace(clock, place({ name: "老王面馆", district: "沃森" }), data, 0);
-    expect(clock.places[0]?.tempScene).toBe(0);
-    expect(placeBookText(clock, data)).toContain("place:1");
-    // 同一个场景里再来不转正
-    applyPlace(clock, place({ name: "老王面馆", district: "沃森" }), data, 5);
-    expect(clock.places[0]?.tempScene).toBe(0);
-    // 走开以后不列
-    clock.location = null;
-    expect(placeBookText(clock, data) ?? "").not.toContain("place:1");
-    // 换了场景又来，转正
-    clock.scene = 1;
-    applyPlace(clock, place({ name: "老王面馆", district: "沃森" }), data, 60);
-    expect(clock.places[0]?.tempScene).toBeUndefined();
-    expect(clock.places).toHaveLength(1);
+  it("同一个地方只列一次", () => {
+    const clock = fresh("vapt");
+    resolveLocation(clock, "poi:rd_a", data, 1);
+    clock.location = "vapt";
+    const text = placesText(clock, withPlaces(data, clock.places)) ?? "";
+    expect(text.split("poi:rd_a：")).toHaveLength(2);
   });
 
-  it("听说过的地方不算临时", () => {
-    const clock = fresh();
-    applyPlace(clock, place({ name: "海边仓库", district: "沃森", heard: true }), data, 0);
-    expect(clock.places[0]?.tempScene).toBeUndefined();
-  });
-
-  it("最多列 20 条，多的按城区折叠", () => {
+  it("最近去过的列 20 条，最近的在前，多的只给个数", () => {
     const places: SavedPlace[] = Array.from({ length: 25 }, (_, i) => ({
       id: `place:${i + 1}`,
       name: `地方${i + 1}`,
       district: "沃森",
       x: 10,
       y: 10,
-      rough: true,
       firstSeenAt: i,
-      visitedAt: null,
+      visitedAt: i,
     }));
-    const text = placeBookText({ location: null, places }, data) ?? "";
-    expect(text.split("\n").filter((l) => l.startsWith("- place:"))).toHaveLength(20);
-    expect(text).toContain("沃森还有 5 处");
-    // 最近的在前
-    expect(text).toContain("place:25");
+    const text = placesText({ location: null, places }, data) ?? "";
+    const lines = text.split("\n").filter((l) => l.startsWith("- place:"));
+    expect(lines).toHaveLength(20);
+    expect(lines[0]).toContain("place:25");
     expect(text).not.toContain("place:1：");
+    expect(text).toContain("另有 5 处");
+    // 原作固定地点照样列
+    expect(text).toContain("- vapt：");
   });
 
   it("现在的位置是表外中文名时提醒把 location 写成 {name, in}", () => {
-    const text = placeBookText({ location: "沃森 · 无名小巷", places: [] }, data);
+    const text = placesText({ location: "沃森 · 无名小巷", places: [] }, data);
     expect(text).toContain('{"name": "沃森 · 无名小巷", "in": "城区"}');
   });
 });

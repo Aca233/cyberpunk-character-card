@@ -27,7 +27,7 @@ export function sceneTitle(
 ): string | undefined {
   const clock = WorldClockStateSchema.parse(world.slices.world);
   if (clock.location === null) return undefined;
-  // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 的标题卡也显示城区和名字
+  // 存档记下的地点并进地点表：place:、poi:、ft: 的标题卡也显示城区和名字
   const def = locationCatalog(withSavedPlaces(data, world)).get(clock.location);
   const place = def ? `${def.district} · ${def.name}` : clock.location;
   return `${place} · ${clockText(world.time)} · ${weatherAt(world.time, def?.district ?? null).label}`;

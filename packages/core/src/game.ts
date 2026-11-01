@@ -87,7 +87,7 @@ export interface GameContent {
     readonly id: string;
     readonly name: string;
   }[];
-  /** 常用地点的中文名 */
+  /** 原作固定地点（地点表） */
   readonly locations?: readonly LocationDef[];
   /** 可选的开场；存档的 meta.opening 记着用的是哪一个 */
   readonly openings?: readonly GameOpening[];
@@ -99,8 +99,8 @@ export interface GameContent {
   readonly defaultCast?: readonly string[];
   /**
    * 解析开局地点用的地图数据（和结算时 data 里的同名几项一样：radar、mapAreas、servicePoints）。
-   * 建档时在地图上选了原作地标（ft:）或服务点（poi:）开局，要靠它记进地点簿，坐标照原作
-   * （用户定的，2026-10-30："可以选择地点开局"，开局地点"在地图上选择"）；没给时只能从常用地点开局
+   * 建档时在地图上选了原作地标（ft:）或服务点（poi:）开局，要靠它记进存档，坐标照原作
+   * （用户定的，2026-10-30："可以选择地点开局"，开局地点"在地图上选择"）；没给时只能从原作固定地点开局
    */
   readonly mapData?: Readonly<Record<string, unknown>>;
 }
@@ -288,7 +288,7 @@ export function newGameWorld(
       dice: DiceStateSchema.parse({ mode: meta.difficulty }),
       world: {
         ...clock,
-        // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进地点簿（见 commands 末尾）
+        // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进存档（见 commands 末尾）
         location: opening?.location ?? clock.location,
         sceneStartedAt: meta.startTime,
       },
@@ -330,7 +330,7 @@ export function newGameWorld(
   const applied = registry.applyCommands(world, parsed, {
     rng: setupRng,
     data: {
-      // 开局地点在地图上选择（用户定的，2026-10-30）：沿用地点簿解析，不另编坐标
+      // 开局地点在地图上选择（用户定的，2026-10-30）：沿用 world 的地点解析，不另编坐标
       ...(content.mapData ?? {}),
       ...(content.locations ? { locations: content.locations } : {}),
       ...(content.items ? { items: content.items } : {}),
@@ -661,7 +661,7 @@ export function travelBlock(
   data: Readonly<Record<string, unknown>>,
   travel: TravelRequest,
 ): string | null {
-  // 地点簿并进地点表（places-plan §四）：place:、poi:、ft: 也能当出行的目的地
+  // 存档记下的地点并进地点表：place:、poi:、ft: 也能当出行的目的地
   const plan = planTrip(tripWorldOf(world), withSavedPlaces(data, world), travel);
   return plan.ok ? null : plan.reason;
 }

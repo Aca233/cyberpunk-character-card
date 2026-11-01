@@ -3,7 +3,7 @@ import { applyWorld } from "./apply";
 import { type WorldClockState, WorldClockStateSchema, WorldCommandSchema } from "./schema";
 
 /**
- * world 的 location 直接写新地方（用户定的：新地点并进 location，place 只留给听说过的，2026-10-30）。
+ * world 的 location 只有两种写法：地点 id，或新地方 {name, in, note?}（用户定的"统一为地点"，2026-11-02）。
  * 手搭的小地图：沃森占左上四分之一
  */
 const data: Readonly<Record<string, unknown>> = {
@@ -30,7 +30,7 @@ const world = (location: unknown) =>
   WorldCommandSchema.parse({ type: "world", activity: "travel", location });
 
 describe("world 的 location 写 {name, in}", () => {
-  it("建新地点，贴路面，标大概位置，玩家换过去", () => {
+  it("建新地点，贴路面，玩家换过去", () => {
     const clock = fresh();
     const out = applyWorld(clock, world({ name: "老王面馆", in: "沃森" }), 0, data);
     expect(out.ok).toBe(true);
@@ -40,9 +40,14 @@ describe("world 的 location 写 {name, in}", () => {
       district: "沃森",
       x: 16,
       y: 15,
-      rough: true,
     });
     expect(clock.location).toBe("place:1");
+  });
+
+  it("note 记在地点上", () => {
+    const clock = fresh();
+    applyWorld(clock, world({ name: "老王面馆", in: "沃森", note: "通宵营业" }), 0, data);
+    expect(clock.places[0]?.note).toBe("通宵营业");
   });
 
   it("同名的用原来那一条", () => {
@@ -68,28 +73,13 @@ describe("world 的 location 写 {name, in}", () => {
   });
 });
 
-describe("场景点挂在上级下面（用户定的，2026-10-30）", () => {
-  it("坐标照上级，不贴路面，记下 parent", () => {
+describe("world 的 location 写 id", () => {
+  it("写已有的 id 直接换过去，不另建", () => {
     const clock = fresh();
-    const out = applyWorld(clock, world({ name: "天台", in: "沃森", parent: "vapt" }), 0, data);
+    applyWorld(clock, world({ name: "老王面馆", in: "沃森" }), 0, data);
+    const out = applyWorld(clock, world("vapt"), 10, data);
     expect(out.ok).toBe(true);
-    expect(clock.places[0]).toMatchObject({
-      id: "place:1",
-      name: "天台",
-      parent: "vapt",
-      x: 15,
-      y: 15,
-      rough: false,
-    });
-    expect(clock.location).toBe("place:1");
-  });
-
-  it("同一个上级下面同名的算同一处，上级写中文名也认", () => {
-    const clock = fresh();
-    applyWorld(clock, world({ name: "天台", in: "沃森", parent: "vapt" }), 0, data);
-    applyWorld(clock, world("vapt"), 10, data);
-    applyWorld(clock, world({ name: "天台", in: "沃森", parent: "V 的公寓" }), 20, data);
+    expect(clock.location).toBe("vapt");
     expect(clock.places).toHaveLength(1);
-    expect(clock.location).toBe("place:1");
   });
 });

@@ -59,8 +59,9 @@ export const DeadlineSchema = z.object({
 export type Deadline = z.infer<typeof DeadlineSchema>;
 
 /**
- * 地点簿的一条（places-plan §四，第 ③ 层；第一次去的原作服务点、地标也记在这里，§五）。
- * id 由代码生成：新地点 place:<序号>，原作服务点 poi:<id>，原作地标 ft:<id>
+ * 存档自己记下的地点（用户定的，2026-11-01："统一为地点"）：剧情里新到的地方，和第一次去的原作店、地标；
+ * 和原作固定地点一样并进地点表。id 由代码生成：新地点 place:<序号>，原作服务点 poi:<id>，原作地标 ft:<id>。
+ * 旧存档里的 near、parent、tempScene、alias、rough、movedAt 读档时丢掉
  */
 export const SavedPlaceSchema = z.object({
   id: z.string().min(1),
@@ -68,35 +69,14 @@ export const SavedPlaceSchema = z.object({
   name: z.string().min(1),
   /** 城区中文名，照 DISTRICT_CENTERS */
   district: z.string().min(1),
-  /** 街区中文名，照 SUBDISTRICT_SHAPES；选填，写错的已丢掉（用户定的，§四） */
+  /** 街区中文名，照 SUBDISTRICT_SHAPES；选填 */
   sub: z.string().min(1).optional(),
-  /** 建的时候说在哪个已知地点附近 */
-  near: z.string().min(1).optional(),
-  /**
-   * 场景点（天台、后巷、包间……）挂在哪个地点下面（用户定的：场景点挂在所属地点下，不单独钉，2026-10-30）：
-   * 坐标照上级的，地图上不单独画；同一个上级下面同名的算同一处
-   */
-  parent: z.string().min(1).optional(),
-  /**
-   * 临时地点：在第几个场景建的（用户定的：新地点先临时，用到第二次才转正，2026-10-30）。
-   * 换了场景以后又去了、从这里出发出行过，就转正（去掉这个字段）；没转正的不进【地点簿】、不进周边，留在存档里不删
-   */
-  tempScene: z.number().int().min(0).optional(),
   note: z.string().min(1).optional(),
   /** 原作服务点的类别 id（gun、ripperdoc……）；新地点没有 */
   kind: z.string().min(1).optional(),
-  /** 模型给原作服务点起的称呼：本作改编，只当别名，不冒充原作店名（§五） */
-  alias: z.string().min(1).optional(),
   /** 底图百分比 */
   x: z.number(),
   y: z.number(),
-  /** 代码推算的大概位置；原作坐标的是 false */
-  rough: z.boolean(),
-  /**
-   * 玩家在地图上拖过、改过坐标的游戏时间（places-plan 第二期，用户定的 2026-10-30）；
-   * 只说明是玩家放的，不算核对过的原作入口，rough 照旧
-   */
-  movedAt: z.number().int().optional(),
   firstSeenAt: z.number().int(),
   /** 最近一次到这里的游戏时间；只听说过、没去过的是 null */
   visitedAt: z.number().int().nullable(),
@@ -110,30 +90,18 @@ export const WorldClockStateSchema = z.object({
   /** 第几个场景，从 0 起 */
   scene: z.number().int().min(0),
   sceneStartedAt: z.number().int(),
-  /** 地点簿（§四）；旧存档没有这个字段，当空表（§九） */
+  /** 存档记下的地点，并进地点表；旧存档没有这个字段，当空表（§九） */
   places: z.array(SavedPlaceSchema).default([]),
 });
 export type WorldClockState = z.infer<typeof WorldClockStateSchema>;
 
-/** 八方位，和周边雷达同一套写法（§十三②） */
-export const PlaceDirSchema = z.enum(["北", "东北", "东", "东南", "南", "西南", "西", "西北"]);
-/** 近、中、远约 100、300、800 米（§十三②，本作改编） */
-export const PlaceDistSchema = z.enum(["近", "中", "远"]);
-
 /**
- * world 的 location 直接写新地方（用户定的：新地点并进 location，place 只留给听说过的，2026-10-30）：
- * name 中文名，in 城区中文名（必填）；sub、near、from+dir+dist、note 和 place 指令同一套写法，不写坐标
+ * world 的 location 写新地方（用户定的，2026-11-01："统一为地点"，只留 id 和 {name, in} 两种写法）：
+ * name 中文名，in 城区中文名（必填）；不写坐标，代码放在玩家附近或城区里最近的原作路边
  */
 export const NewPlaceSchema = z.object({
   name: z.string().min(1),
   in: z.string().min(1),
-  sub: z.string().min(1).optional(),
-  near: z.string().min(1).optional(),
-  /** 场景点（天台、后巷、包间……）挂在哪个已知地点下面：坐标照上级，地图上不单独钉（用户定的，2026-10-30） */
-  parent: z.string().min(1).optional(),
-  from: z.string().min(1).optional(),
-  dir: PlaceDirSchema.optional(),
-  dist: PlaceDistSchema.optional(),
   note: z.string().min(1).optional(),
 });
 export type NewPlace = z.infer<typeof NewPlaceSchema>;
@@ -145,11 +113,11 @@ export const WorldCommandSchema = z
     activity: ActivitySchema,
     /** 这一轮结束时是几点，按情境写；不能早于现在，没写就是时间没动 */
     time: GameTimeSchema.optional(),
-    /** 地点 id 或中文名；到了表外的新地方写 {name, in, ...} */
+    /** 【地点】里的 id；到了新地方写 {name, in} */
     location: z.union([z.string().min(1), NewPlaceSchema]).optional(),
   })
   .describe(
-    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在，没写就是时间没动；location 是换到的地点 id（或中文名），到了【常用地点】【地点簿】【周边】都没有的新地方写 {name, in（城区中文名，必填）, sub?, near? 或 from+dir+dist?, note?}，不写坐标，代码贴着原作路面放；收场（sceneEnd）不会自动推进时间，过了多久照样写在 time 里",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, note?}，不写坐标；收场（sceneEnd）不会自动推进时间，过了多久照样写在 time 里",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 
@@ -172,59 +140,7 @@ export const DeadlineCommandSchema = z
   );
 export type DeadlineCommand = z.infer<typeof DeadlineCommandSchema>;
 
-/** 原作服务点的 13 类，照原作地图图例（MAP_POI_KINDS） */
-export const PlaceKindSchema = z.enum([
-  "fixer",
-  "ripperdoc",
-  "gun",
-  "melee",
-  "netrunner",
-  "clothes",
-  "meds",
-  "junk",
-  "food",
-  "bar",
-  "apartment",
-  "rent",
-  "autofixer",
-]);
-export type PlaceKind = z.infer<typeof PlaceKindSchema>;
-
-/**
- * 模型使用：到了表外的新地方（places-plan §四），或者去某一类原作店（§五，写 kind）。
- * 不写坐标，坐标由代码推算；district 必须是城区表里的名字，否则拒收
- */
-export const PlaceCommandSchema = z
-  .object({
-    type: z.literal("place"),
-    /** 中文名；写 kind 时可以不写，写了只当别名 */
-    name: z.string().min(1).optional(),
-    district: z.string().min(1),
-    sub: z.string().min(1).optional(),
-    /** 在哪个已知地点附近：地点 id、poi:、ft:、place: 都行 */
-    near: z.string().min(1).optional(),
-    /** 场景点挂在哪个已知地点下面：坐标照上级，地图上不单独钉（用户定的，2026-10-30） */
-    parent: z.string().min(1).optional(),
-    /** 相对【当前状态】周边里的一个 id：from + dir + dist（§十三②） */
-    from: z.string().min(1).optional(),
-    dir: PlaceDirSchema.optional(),
-    dist: PlaceDistSchema.optional(),
-    kind: PlaceKindSchema.optional(),
-    note: z.string().min(1).optional(),
-    /** 只是听说、玩家没去：记进地点簿，不换位置 */
-    heard: z.boolean().optional(),
-  })
-  .superRefine((c, ctx) => {
-    if (c.name === undefined && c.kind === undefined) {
-      ctx.addIssue({ code: "custom", message: "place 要写 name（新地点）或 kind（某类原作店）" });
-    }
-  })
-  .describe(
-    "地点簿（用户定的：亲自到的新地方写在 world 的 location {name, in} 里，place 只留给下面两种，2026-10-30）：只是听说、玩家没去的地方写 name + district（必填，城区中文名）+ heard: true，sub、near 或 from+dir+dist 选填，不写坐标，只记下、不换位置；要去某类店写 kind + district（可加 sub），代码挑一家原作的店，玩家换到那里",
-  );
-export type PlaceCommand = z.infer<typeof PlaceCommandSchema>;
-
-/** 地点表的一条；数据在 content 包的 locations.ts，只用来显示中文名和告诉模型有哪些常用地点 */
+/** 地点表的一条：原作固定地点（content 包的 locations.ts），和存档记下的地点（并进来的） */
 export const LocationDefSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -237,8 +153,8 @@ export const LocationDefSchema = z.object({
   y: z.number().min(0).max(100).optional(),
   /** 附近有 NCART 轻轨站 */
   metro: z.boolean().optional(),
-  /** 坐标是代码推算的大概位置（地点簿里的新地点，places-plan §四）；出行和周边都标"大概" */
-  rough: z.boolean().optional(),
+  /** 原作服务点的类别 id（gun、ripperdoc……）：【地点】里写成类别名，模型按类别挑店 */
+  kind: z.string().min(1).optional(),
 });
 export type LocationDef = z.infer<typeof LocationDefSchema>;
 
@@ -266,15 +182,3 @@ export function locationCatalog(
 /** 只能由代码发出：叙事模型标了 sceneEnd 之后由回合流程发出 */
 export const EndSceneSchema = z.object({ type: z.literal("world.endScene") });
 export type EndScene = z.infer<typeof EndSceneSchema>;
-
-/**
- * 只能由代码发出：玩家在地图上把剧情里记下的地点（place:）拖到准确的位置（places-plan 第二期，用户定的 2026-10-30）。
- * 不调用模型；原作店和地标照原作坐标，不能拖
- */
-export const MovePlaceSchema = z.object({
-  type: z.literal("world.movePlace"),
-  id: z.string().min(1),
-  x: z.number().min(0).max(100),
-  y: z.number().min(0).max(100),
-});
-export type MovePlace = z.infer<typeof MovePlaceSchema>;
