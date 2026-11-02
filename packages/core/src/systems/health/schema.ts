@@ -79,6 +79,18 @@ export const HealthInternalSchemas = {
     id: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
   }),
+  /**
+   * 战斗里没拦下、打中你的一下（用户 2026-11-02 定的"战斗推倒重来"）：你挑拿什么抵。
+   * chrome 打坏一件义体（不扣血），limb 断一条胳膊腿（降一档扣血），flesh 照档位扣血
+   */
+  "health.hit": z.object({
+    type: z.literal("health.hit"),
+    tier: DamageTierSchema,
+    pay: z.enum(["chrome", "limb", "flesh"]),
+    chrome: z.string().min(1).optional(),
+    limb: LimbSchema.optional(),
+    reason: z.string().min(1),
+  }),
 };
 export type HealthInternal = z.infer<
   (typeof HealthInternalSchemas)[keyof typeof HealthInternalSchemas]

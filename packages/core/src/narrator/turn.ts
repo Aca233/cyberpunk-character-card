@@ -19,7 +19,7 @@ import {
   type TraitSlot,
 } from "../systems/character";
 import { OFFSCREEN_SCENES } from "../systems/city";
-import { CombatStateSchema, MAX_QUICK } from "../systems/combat";
+import { CombatStateSchema } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
 import {
   CheckProposalSchema,
@@ -1058,19 +1058,9 @@ export async function runNarratorTurn(
     proposals,
   );
 
-  // 代码校验第二步：业务规则（闪回、战斗中的限制、快捷动作上限）
+  // 代码校验第二步：业务规则（闪回、战斗中的限制）
   const commands: Command[] = [];
-  // 快捷动作（用治疗品、扔手雷、放快速破解）每段最多两个：超出的在结算前拦下
   const fight = CombatStateSchema.parse(world.slices.combat).active;
-  let quick = fight ? (fight.quick ?? 0) : 0;
-  const isQuick = (c: Command) => {
-    const x = c as { type: string; source?: unknown; action?: unknown; id?: unknown };
-    if (x.type === "heal") return x.source === "maxdoc";
-    if (x.type === "hack") return (x.action ?? "use") === "use";
-    return x.type === "item" && x.action === "use" && typeof x.id === "string"
-      ? items.get(x.id)?.kind === "grenade"
-      : false;
-  };
   for (const proposal of verified) {
     const command = proposal.parse(proposal.value);
     if (!command) continue;
@@ -1091,12 +1081,20 @@ export async function runNarratorTurn(
       b.drop(where, command, "战斗中不能闪回", "rules");
       continue;
     }
-    if (fight && isQuick(command)) {
-      if (quick >= MAX_QUICK) {
-        b.drop(where, command, `这一段的快捷动作已经用了 ${MAX_QUICK} 个`, "rules");
-        continue;
-      }
-      quick += 1;
+    // 战斗里挨打由代码按没拦下的打算记账，模型写的 damage 不算
+    if (fight && command.type === "damage") {
+      b.drop(where, command, "战斗中挨打由代码按敌人的打算结算", "rules");
+      continue;
+    }
+    // 玩家点按钮选好了拿什么抵，代码已经记了；模型再发的 pay 不算，免得一下伤抵两次
+    if (
+      fight &&
+      command.type === "combat" &&
+      command.action === "pay" &&
+      plan.input.pay !== undefined
+    ) {
+      b.drop(where, command, "玩家已经在界面上选好拿什么抵", "rules");
+      continue;
     }
     commands.push(command);
   }
@@ -1141,10 +1139,8 @@ export async function runNarratorTurn(
     }
   }
 
-  // 对峙倒数：这一轮开始前就在对峙才扣，这一轮刚开的不扣；化解或开打了倒数什么也不做
-  if (!ooc && !inFlashback && CombatStateSchema.parse(world.slices.combat).standoff) {
-    commands.push({ type: "combat.standoffTick" });
-  }
+  // 一轮打完：这一轮开始前就在打才结算，刚开打的不算；没落空的打算打中玩家，再抽下一轮
+  if (!ooc && !inFlashback && fight) commands.push({ type: "combat.round" });
   const flashbackAction = (c: Command) =>
     c.type === "flashback" ? (c as { action?: unknown }).action : undefined;
   // 闪回里过一轮；这一轮写了 end 就不再扣
@@ -1193,6 +1189,12 @@ export async function runNarratorTurn(
   if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
+  }
+  // 战斗：玩家挑了拿什么抵上一轮打中的那一下、开了超频，都在这一轮出手之前结算
+  if (plan.kind === "action" && fight && !ooc && !inFlashback) {
+    if (plan.input.overclock === true) commands.unshift({ type: "combat.overclock" });
+    const choice = plan.input.pay;
+    if (choice && fight.pending.length > 0) commands.unshift({ type: "combat.pay", ...choice });
   }
   // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
   if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {

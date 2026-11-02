@@ -12,6 +12,16 @@ export const TurnInputSchema = z.strictObject({
   text: z.string().trim().min(1, "行动不能为空").max(2000, "一次最多 2000 字"),
   /** 生死瞬间开了斯安威斯坦：这段输入写的是慢动作里的几个动作 */
   sandevistan: z.boolean().optional(),
+  /** 战斗中超频义体：这一轮必中，拿人性换 */
+  overclock: z.boolean().optional(),
+  /** 战斗中打中你的那一下拿什么抵：义体（写 id）、胳膊腿（写哪条）还是肉身 */
+  pay: z
+    .strictObject({
+      pay: z.enum(["chrome", "limb", "flesh"]),
+      chrome: z.string().min(1).optional(),
+      limb: z.enum(["left-arm", "right-arm", "left-leg", "right-leg"]).optional(),
+    })
+    .optional(),
   /** 回复第几条消息 */
   replyTo: z.number().int().min(1).optional(),
   /** 玩家已经在提交前确认过这一轮的大额花费 */

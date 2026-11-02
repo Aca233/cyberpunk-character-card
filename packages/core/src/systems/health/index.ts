@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { maxHp } from "../dice";
-import { applyDamage, applyHeal, applyLimb, bleed, die, revive, setMax } from "./apply";
+import { applyDamage, applyHeal, applyHit, applyLimb, bleed, die, revive, setMax } from "./apply";
 import { healthEvents } from "./events";
 import {
   type DamageCommand,
@@ -48,6 +48,8 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
         return die(draft, command.reason);
       case "health.limb":
         return applyLimb(draft, command);
+      case "health.hit":
+        return applyHit(draft, command, ctx);
     }
   },
   tick: (draft, span) => bleed(draft, span),

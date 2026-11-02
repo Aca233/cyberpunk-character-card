@@ -1,6 +1,6 @@
 {
   "id": "modules-standoff-input",
-  "title": "僵持场面带战斗模块，好开对峙",
+  "title": "僵持喊话不再带战斗模块：对峙机制已删，没动手就不开战",
   "tags": ["modules"],
   "setup": {
     "history": [
@@ -14,11 +14,11 @@
   "input": { "text": "慢慢举起双手：“把枪放下，货的事可以谈。”" },
   "expect": {
     "modules": {
-      "require": ["combat"]
+      "forbid": ["combat"]
     }
   },
   "rubric": [
-    "是否开了对峙（combat standoff）而不是直接开打",
+    "瓦伦蒂诺帮的人对这句话的反应是否合乎情理（未必会信）",
     "正文是否停在僵持的那一刻，没有替玩家开枪或让步"
   ]
 }

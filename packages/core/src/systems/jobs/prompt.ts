@@ -86,7 +86,7 @@ export function jobTemplateSection(data: Readonly<Record<string, unknown>>): str
   if (list.length === 0) return undefined;
   const lines = list.map(
     (t) =>
-      `- ${t.kind} ${JOB_KIND_LABELS[t.kind]}：分段 ${t.moments}；潜入 ${t.stealth}；对峙 ${t.standoff}；典型败局 ${t.defeat}${t.twists.length > 0 ? `；适合的转折 ${t.twists.join("、")}` : ""}`,
+      `- ${t.kind} ${JOB_KIND_LABELS[t.kind]}：交火 ${t.moments}；潜入 ${t.stealth}；摊牌 ${t.standoff}；典型败局 ${t.defeat}${t.twists.length > 0 ? `；适合的转折 ${t.twists.join("、")}` : ""}`,
   );
-  return `【委托类型模板】\n挂委托时 jobOffer 写 kind；按类型取分段结构、潜入和对峙的位置、典型败局和转折，可以改写或组合，不强制套用。\n${lines.join("\n")}`;
+  return `【委托类型模板】\n挂委托时 jobOffer 写 kind；按类型取会在哪里交火、潜入和摊牌的位置、典型败局和转折，可以改写或组合，不强制套用。摊牌只是正文里的僵持和谈判，没有专门的指令，真动手了才发 combat start。\n${lines.join("\n")}`;
 }

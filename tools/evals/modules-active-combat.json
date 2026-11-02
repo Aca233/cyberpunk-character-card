@@ -7,14 +7,18 @@
       {
         "type": "combat",
         "action": "start",
-        "moments": 2,
         "objective": "从仓库里把货抢出来",
         "defeat": "被迫撤出仓库，货物丢失",
-        "enemies": [
+        "foes": [
           {
-            "group": "漩涡帮打手",
-            "tier": "street",
-            "count": 4
+            "name": "漩涡帮枪手",
+            "archetype": "gunner",
+            "tier": "street"
+          },
+          {
+            "name": "漩涡帮打手",
+            "archetype": "brute",
+            "tier": "street"
           }
         ]
       }

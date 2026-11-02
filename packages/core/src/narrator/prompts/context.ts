@@ -97,7 +97,15 @@ export function stateSummary(
 }
 
 export function formatInput(input: TurnInput): string {
-  const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
+  const boost = `${input.sandevistan ? "【开斯安威斯坦】" : ""}${input.overclock ? "【超频义体】" : ""}${
+    input.pay
+      ? input.pay.pay === "flesh"
+        ? "【这一下皮肉硬吃】"
+        : input.pay.pay === "chrome"
+          ? `【这一下拿义体 ${input.pay.chrome ?? ""} 去挡】`
+          : `【这一下舍掉肢体 ${input.pay.limb ?? ""}】`
+      : ""
+  }`;
   const reply = input.replyTo !== undefined ? `【回复消息 #${input.replyTo}】` : "";
   const bd =
     input.braindance === undefined

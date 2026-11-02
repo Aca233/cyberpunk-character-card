@@ -862,58 +862,34 @@ export function Banner({ view }: { readonly view: View }) {
         <div className={styles.bannerRow} role="status">
           <Asset id="notify.warning" tint="var(--cp-red)" height={26} />
           <b>交战</b>
-          <span className={story.combatTitle}>
-            第 {a.moment}/{a.moments} 段
-          </span>
-          <span className={story.combatResults}>
-            {Array.from({ length: a.moments }, (_, i) => (
-              <i
-                // biome-ignore lint/suspicious/noArrayIndexKey: 第几段就是格子的身份
-                key={i}
-                data-result={i + 1 < a.moment ? "done" : i + 1 === a.moment ? "now" : "todo"}
-              />
-            ))}
-          </span>
-          <small>
-            快捷动作 {a.quick}/{a.quickMax}
-          </small>
+          <span className={story.combatTitle}>第 {a.round} 轮</span>
+          {a.overclocked && <small>超频中</small>}
+          {a.takeover && <small className={story.dying}>你的手自己动了</small>}
         </div>
         <div className={styles.bannerLines}>
-          {a.objective && <span>目标：{a.objective}</span>}
+          <span>目标：{a.objective}</span>
           <span>败局：{a.defeat}</span>
-          <span>
-            {[
-              ...a.enemies.map((e) => `${e.group}×${e.count}`),
-              ...a.foes.map((f) =>
-                f.scanned || f.state !== "up"
-                  ? `${f.name}（${f.stateLabel}）`
-                  : `${f.name}（未扫描）`,
-              ),
-            ].join("、")}
-          </span>
-          {a.edgeLabel && <span>{a.edgeLabel}</span>}
-          {a.dyingMomentsLeft !== null && (
-            <span className={story.dying}>濒死：{a.dyingMomentsLeft} 段内要被救回</span>
-          )}
+          {a.foes.map((f) => (
+            <span key={f.id}>
+              {f.name}（{f.stateLabel}）
+              {f.state === "up" || f.state === "hurt"
+                ? `：${f.fooled ? "这一轮落空" : (f.intentLabel ?? "打算还盖着")}`
+                : ""}
+              {f.bracedLabel && ` · 防着你的${f.bracedLabel}`}
+            </span>
+          ))}
+          {a.pending.map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 同一个人可能打中两下
+            <span key={i} className={story.dying}>
+              {p.name}
+              {p.label}打中了你：挑拿义体、胳膊腿还是肉身去抵
+            </span>
+          ))}
         </div>
       </Panel>
     );
   }
-  if (combat.standoff) {
-    const s = combat.standoff;
-    return (
-      <Panel as="section" line="var(--cp-yellow)" className={styles.banner}>
-        <div className={styles.bannerRow} role="status">
-          <Asset id="notify.warning" tint="var(--cp-yellow)" height={26} />
-          <b>对峙</b>
-          <span>和{s.opponent}</span>
-          <small data-out={s.left === 0 || undefined}>
-            {s.left > 0 ? `还剩 ${s.left} 轮` : "时间到了，对方要动手"}
-          </small>
-        </div>
-      </Panel>
-    );
-  }
+  // 不在交战中时，继续显示潜网或闪回横幅。
   if (dive) {
     return (
       <Panel as="section" line="var(--cp-netwatch)" className={styles.banner}>

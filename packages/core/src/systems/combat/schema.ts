@@ -1,22 +1,70 @@
 import { z } from "zod";
-import { MOD_STEP, TierSchema } from "../dice";
+import { TierSchema } from "../dice";
 
-/** 敌群：杂兵不建卡，按档位和大致人数合成一组 */
-export const EnemyGroupSchema = z.object({
-  group: z.string().min(1),
-  tier: TierSchema,
-  count: z.number().int().min(1).max(50),
-});
-export type EnemyGroup = z.infer<typeof EnemyGroupSchema>;
+/**
+ * 战斗推倒重来（用户 2026-11-02 定的"战斗推倒重来"）：一轮一轮打，敌人每轮有盖着的打算，
+ * 看穿、拦下、骗过它是这一仗的玩法；没拦下的打中你，由你挑拿身体哪一块去抵。
+ * 超频义体拿人性换必中，人性太低时代码替你出手；你用惯的打法，下一伙敌人会防着
+ */
 
-/** 有名有姓的敌人：有人物卡，情况由叙事模型按正文写，代码不算命中次数 */
-export const FoeSchema = z.object({
-  npc: z.string().min(1).describe("人物卡 id"),
-  tier: TierSchema,
-});
-export type Foe = z.infer<typeof FoeSchema>;
+/** 打法：玩家这一手靠什么；和宿敌针对的打法是同一套 */
+export const TacticSchema = z.enum([
+  "guns",
+  "blades",
+  "brawl",
+  "quickhack",
+  "stealth",
+  "talk",
+  "tech",
+]);
+export type Tactic = z.infer<typeof TacticSchema>;
+export const TACTIC_LABELS: Readonly<Record<Tactic, string>> = {
+  guns: "枪械",
+  blades: "刀刃",
+  brawl: "拳脚",
+  quickhack: "快速破解",
+  stealth: "潜入",
+  talk: "嘴皮子",
+  tech: "科技装置",
+};
 
-/** 有卡敌人现在怎样了 */
+/** 敌人的路数：决定每轮从哪几种打算里抽 */
+export const ArchetypeSchema = z.enum(["gunner", "brute", "netrunner", "boss"]);
+export type Archetype = z.infer<typeof ArchetypeSchema>;
+
+/** 敌人一轮的打算 */
+export const IntentSchema = z.enum(["shoot", "aim", "rush", "hack", "call", "flee", "execute"]);
+export type Intent = z.infer<typeof IntentSchema>;
+
+/** 打算表：打中时最重扣到哪一档（null 是不伤人）、哪些打法这一轮能拦下它 */
+export const INTENTS: Readonly<
+  Record<
+    Intent,
+    {
+      readonly label: string;
+      readonly hit: "graze" | "heavy" | "lethal" | null;
+      readonly counters: readonly Tactic[];
+    }
+  >
+> = {
+  shoot: { label: "开枪压制", hit: "graze", counters: ["stealth", "tech"] },
+  aim: { label: "瞄准要害", hit: "heavy", counters: ["guns", "quickhack", "stealth"] },
+  rush: { label: "冲上来近身", hit: "heavy", counters: ["guns", "tech", "blades"] },
+  hack: { label: "上传快速破解", hit: "graze", counters: ["quickhack", "tech"] },
+  call: { label: "叫增援", hit: null, counters: ["quickhack", "talk", "guns"] },
+  flee: { label: "想跑", hit: null, counters: ["guns", "brawl", "blades", "talk"] },
+  execute: { label: "下死手", hit: "lethal", counters: ["guns", "blades", "brawl", "quickhack"] },
+};
+
+/** 各路数每轮从哪几种打算里抽；重复的权重高 */
+export const ARCHETYPE_INTENTS: Readonly<Record<Archetype, readonly Intent[]>> = {
+  gunner: ["shoot", "shoot", "aim", "call", "flee"],
+  brute: ["rush", "rush", "shoot", "execute"],
+  netrunner: ["hack", "hack", "call", "flee"],
+  boss: ["aim", "rush", "hack", "execute", "call"],
+};
+
+/** 敌人现在怎样了 */
 export const FoeStateSchema = z.enum(["up", "hurt", "down", "fled"]);
 export type FoeState = z.infer<typeof FoeStateSchema>;
 export const FOE_STATE_LABELS: Readonly<Record<FoeState, string>> = {
@@ -26,140 +74,159 @@ export const FOE_STATE_LABELS: Readonly<Record<FoeState, string>> = {
   fled: "逃走了",
 };
 
+/** 场上的一个敌人（一个有卡的人，或者一伙杂兵合成一个） */
 export const ActiveFoeSchema = z.object({
-  npc: z.string().min(1),
+  /** 有卡的写人物卡 id，杂兵由代码编 foe1、foe2 */
+  id: z.string().min(1),
   name: z.string().min(1),
+  /** 有人物卡时的卡 id */
+  npc: z.string().min(1).nullable(),
+  archetype: ArchetypeSchema,
   tier: TierSchema,
-  /** 旧存档没有，按还能打算 */
-  state: FoeStateSchema.default("up"),
-  /** 玩家扫描过才显示情况 */
-  scanned: z.boolean(),
+  state: FoeStateSchema,
+  /** 这一轮的打算；倒下、逃走后是 null */
+  intent: IntentSchema.nullable(),
+  /** 玩家看穿了这一轮的打算 */
+  known: z.boolean(),
+  /** 被玩家骗了：这一轮的打算落空 */
+  fooled: z.boolean(),
+  /** 这伙人防着你哪种打法（你用惯了的）；没防是 null */
+  braced: TacticSchema.nullable(),
 });
 export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
 
-/** 每段最多几个快捷动作（用治疗品、扔手雷），不算主行动 */
-export const MAX_QUICK = 2;
-
-export const CombatOutcomeSchema = z.enum(["victory", "defeat", "retreat"]);
-export type CombatOutcome = z.infer<typeof CombatOutcomeSchema>;
-
-/** 第一段谁占先机：对峙里先开枪、埋伏得手是 player，谈崩被抢先、被埋伏是 enemy */
-export const EdgeSchema = z.enum(["player", "enemy"]);
-export type Edge = z.infer<typeof EdgeSchema>;
-export const EDGE_LABELS: Readonly<Record<Edge, string>> = {
-  player: `你占先机，检定 +${MOD_STEP}`,
-  enemy: `对方占先机，检定 −${MOD_STEP}`,
-};
-
-/** 对峙：枪口对着枪口，最多几轮发言，时间到了对方先动手 */
-export const StandoffSchema = z.object({
-  startedAt: z.number().int(),
-  /** 对面是谁 */
-  opponent: z.string().min(1),
-  rounds: z.number().int().min(1).max(3),
-  /** 还剩几轮；0 是时间到了 */
-  left: z.number().int().min(0).max(3),
+/** 打中你的一下：等你挑拿什么去抵 */
+export const PendingHitSchema = z.object({
+  /** 打你的敌人 id */
+  from: z.string().min(1),
+  name: z.string().min(1),
+  intent: IntentSchema,
+  tier: z.enum(["graze", "heavy", "lethal"]),
 });
-export type Standoff = z.infer<typeof StandoffSchema>;
+export type PendingHit = z.infer<typeof PendingHitSchema>;
+
+/** 拿什么去抵：一件义体打坏、一条胳膊腿、或者肉身扣血 */
+export const PaySchema = z.enum(["chrome", "limb", "flesh"]);
+export type Pay = z.infer<typeof PaySchema>;
 
 export const ActiveCombatSchema = z.object({
   startedAt: z.number().int(),
-  /** 分几段，1–3 */
-  moments: z.number().int().min(1).max(3),
-  /** 当前是第几段（从 0 起） */
-  current: z.number().int().min(0),
-  /** 开战时写明的目标：这一仗要达成什么；旧存档没有 */
-  objective: z.string().min(1).nullable().default(null),
-  /** 开战时写明的败局 */
+  /** 第几轮，从 1 起 */
+  round: z.number().int().min(1),
+  objective: z.string().min(1),
   defeat: z.string().min(1),
-  enemies: z.array(EnemyGroupSchema),
-  /** 有卡敌人；旧存档里没有 */
-  foes: z.array(ActiveFoeSchema).default([]),
-  /** 这一段已经做了几个快捷动作 */
-  quick: z.number().int().min(0).default(0),
-  /** 濒死要在这一段（从 0 起）结束前被救回；不在濒死时为 null */
-  dyingUntil: z.number().int().min(0).nullable(),
-  /** 第一段谁占先机；没写是 null */
-  edge: EdgeSchema.nullable().default(null),
+  foes: z.array(ActiveFoeSchema),
+  /** 上一轮打中、还没抵的 */
+  pending: z.array(PendingHitSchema),
+  /** 这一轮超频了义体 */
+  overclocked: z.boolean(),
+  /** 这一仗超频了几次：越超人性代价越高 */
+  overclocks: z.number().int().min(0),
+  /** 上一次代码替你出手是第几轮；没有是 null */
+  takeoverRound: z.number().int().nullable(),
 });
 export type ActiveCombat = z.infer<typeof ActiveCombatSchema>;
 
+const zeroHabits = () =>
+  Object.fromEntries(TacticSchema.options.map((t) => [t, 0])) as Record<Tactic, number>;
+
 export const CombatStateSchema = z.object({
   active: ActiveCombatSchema.nullable(),
-  /** 进行中的对峙；旧存档没有 */
-  standoff: StandoffSchema.nullable().default(null),
+  /** 你各种打法用了多少次（跨场记，慢慢淡忘）；下一伙敌人防着最多的那种 */
+  habits: z.record(TacticSchema, z.number().min(0)).default(zeroHabits),
   last: z
     .object({
-      outcome: CombatOutcomeSchema,
-      defeat: z.string().nullable(),
+      outcome: z.enum(["victory", "defeat", "retreat"]),
       endedAt: z.number().int(),
-      /** 收场时有卡敌人的情况：宿敌从这里挑；旧存档没有 */
-      foes: z
-        .array(z.object({ npc: z.string().min(1), name: z.string().min(1), state: FoeStateSchema }))
-        .default([]),
+      foes: z.array(
+        z.object({ npc: z.string().min(1), name: z.string().min(1), state: FoeStateSchema }),
+      ),
     })
     .nullable(),
 });
 export type CombatState = z.infer<typeof CombatStateSchema>;
 
+/** start 写进来的敌人：有卡的写 npc，杂兵一伙写一条 */
+export const FoeInputSchema = z.object({
+  name: z.string().min(1),
+  npc: z.string().min(1).optional(),
+  archetype: ArchetypeSchema,
+  tier: TierSchema,
+});
+export type FoeInput = z.infer<typeof FoeInputSchema>;
+
 /**
- * 模型使用：
- * {"type": "combat", "action": "start", "moments": 2, "objective": "抢在他们之前把货运出仓库",
- *  "defeat": "被迫撤退，货物丢失",
- *  "enemies": [{"group": "漩涡帮打手", "tier": "street", "count": 5}]}
- * action 可为 start、next（这一段打完，进下一段）、end（写结局）、retreat（撤退成功）、foe（有卡敌人的情况变了）
+ * 模型使用：start 开打；act 玩家这一轮用什么打法、对谁；reveal 看穿某人的打算；
+ * fool 骗过某人（这一轮他落空）；foe 某人受伤、倒下或逃走；end 写结局；retreat 撤成了
  */
 export const CombatCommandSchema = z
   .object({
     type: z.literal("combat"),
-    action: z.enum(["start", "next", "retreat", "end", "foe", "scan", "standoff", "defuse"]),
-    moments: z.number().int().min(1).max(3).optional(),
-    /** start：这一仗要达成什么 */
+    action: z.enum(["start", "act", "reveal", "fool", "foe", "end", "retreat", "pay"]),
+    /** pay：玩家在正文里说了拿什么抵最早那一下 */
+    pay: PaySchema.optional(),
+    chrome: z.string().min(1).optional(),
+    limb: z.enum(["left-arm", "right-arm", "left-leg", "right-leg"]).optional(),
     objective: z.string().min(1).max(80).optional(),
-    defeat: z.string().min(1).optional(),
-    enemies: z.array(EnemyGroupSchema).min(1).max(6).optional(),
-    /** 有卡敌人，不放进敌群 */
-    foes: z.array(FoeSchema).min(1).max(4).optional(),
-    /** foe、scan：说的是哪个有卡敌人 */
+    defeat: z.string().min(1).max(80).optional(),
+    foes: z.array(FoeInputSchema).min(1).max(5).optional(),
+    tactic: TacticSchema.optional(),
     target: z.string().min(1).optional(),
-    /** foe：他现在怎样了 */
     state: z.enum(["hurt", "down", "fled"]).optional(),
-    /** end：赢了还是输了 */
     outcome: z.enum(["victory", "defeat"]).optional(),
-    /** start：第一段谁占先机 */
-    edge: EdgeSchema.optional(),
-    /** standoff：对面是谁 */
-    opponent: z.string().min(1).optional(),
-    /** standoff：最多几轮发言 */
-    rounds: z.number().int().min(1).max(3).optional(),
   })
   .superRefine((c, ctx) => {
-    if (c.action === "standoff" && (c.opponent === undefined || c.rounds === undefined)) {
-      ctx.addIssue({ code: "custom", message: "对峙要写 opponent 和 rounds" });
-    }
+    const need = (ok: boolean, message: string) => {
+      if (!ok) ctx.addIssue({ code: "custom", message });
+    };
     if (c.action === "start") {
-      if (c.moments === undefined || c.objective === undefined || c.defeat === undefined) {
-        ctx.addIssue({ code: "custom", message: "开战要写 moments、objective 和 defeat" });
-      }
-      if (c.enemies === undefined && c.foes === undefined) {
-        ctx.addIssue({ code: "custom", message: "开战要写 enemies 或 foes" });
-      }
+      need(c.objective !== undefined && c.defeat !== undefined, "开打要写 objective 和 defeat");
+      need(c.foes !== undefined, "开打要写 foes");
     }
-    if (c.action === "end" && c.outcome === undefined) {
-      ctx.addIssue({ code: "custom", message: "结束要写 outcome：victory 或 defeat" });
-    }
-    if (c.action === "foe" && (c.target === undefined || c.state === undefined)) {
-      ctx.addIssue({ code: "custom", message: "foe 要写 target 和 state" });
-    }
-    if (c.action === "scan" && c.target === undefined) {
-      ctx.addIssue({ code: "custom", message: "scan 要写 target" });
+    if (c.action === "act") need(c.tactic !== undefined, "act 要写 tactic");
+    if (c.action === "reveal" || c.action === "fool")
+      need(c.target !== undefined, `${c.action} 要写 target`);
+    if (c.action === "foe")
+      need(c.target !== undefined && c.state !== undefined, "foe 要写 target 和 state");
+    if (c.action === "end") need(c.outcome !== undefined, "end 要写 outcome");
+    if (c.action === "pay") {
+      need(c.pay !== undefined, "pay 要写拿什么抵：chrome、limb 或 flesh");
+      if (c.pay === "chrome") need(c.chrome !== undefined, "拿义体抵要写 chrome（义体 id）");
+      if (c.pay === "limb") need(c.limb !== undefined, "拿胳膊腿抵要写 limb");
     }
   })
   .describe(
-    "战斗：start 开打（要写 moments 分几段、objective 这一仗要达成什么、defeat 输了会怎样，敌群写 enemies，有人物卡的敌人写 foes），next 这一段打完、进下一段，end 写结局（outcome 写 victory 或 defeat），retreat 撤退成功，foe 有卡敌人的情况变了（target 写他的 id，state 写 hurt、down 或 fled），scan 玩家扫描了某个有卡敌人；standoff 开一场对峙（写 opponent、rounds 2–3），defuse 对峙化解、不打了；start 可以写 edge（player 或 enemy）说明第一段谁占先机",
+    "战斗：start 开打（objective、defeat、foes：每个敌人写 name、archetype gunner/brute/netrunner/boss、tier，有卡的写 npc）；act 玩家这一轮的打法（tactic，target 对谁）；reveal 看穿 target 这一轮的打算；fool 骗过 target，他这一轮落空；foe 某人 hurt、down 或 fled；end 写 outcome；retreat 撤成了；pay 玩家在输入里说了拿什么抵挨的那一下（pay chrome 加 chrome 义体 id、limb 加 limb、flesh）",
   );
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 
-/** 只能由代码发出：对峙每过一轮倒数一次 */
-export const StandoffTickSchema = z.object({ type: z.literal("combat.standoffTick") });
-export type StandoffTick = z.infer<typeof StandoffTickSchema>;
+/** 只能由代码发出：round 一轮打完结算打算并抽下一轮；pay 玩家挑了拿什么抵；overclock 超频义体 */
+export const CombatInternalSchemas = {
+  "combat.round": z.object({ type: z.literal("combat.round") }),
+  "combat.pay": z.object({
+    type: z.literal("combat.pay"),
+    pay: PaySchema,
+    /** chrome：打坏哪件义体（id） */
+    chrome: z.string().min(1).optional(),
+    /** limb：断哪条胳膊腿 */
+    limb: z.enum(["left-arm", "right-arm", "left-leg", "right-leg"]).optional(),
+  }),
+  "combat.overclock": z.object({ type: z.literal("combat.overclock") }),
+};
+export type CombatInternal = z.infer<
+  (typeof CombatInternalSchemas)[keyof typeof CombatInternalSchemas]
+>;
+
+/** 超频一次扣多少人性；同一仗里每多超一次再多扣这么多（暂定，试玩时调） */
+export const OVERCLOCK_COST = 4;
+export const OVERCLOCK_STEP = 2;
+/** 人性低于这个数时，代码可能替你出手 */
+export const TAKEOVER_BELOW = 40;
+/** 人性每低于门槛 1 点，每轮被接管的机会加几个百分点 */
+export const TAKEOVER_PERCENT_PER_POINT = 2;
+/** 一种打法用到几次，下一伙敌人就防着它 */
+export const BRACE_AT = 3;
+/** 每打完一仗，习惯次数乘这个数（慢慢淡忘） */
+export const HABIT_DECAY = 0.5;
+/** 一仗最多打几轮；到了还没分出胜负，按败局收场 */
+export const MAX_ROUNDS = 6;

@@ -1,42 +1,34 @@
 import type { RuleModule } from "../../kernel/system";
-import { MOD_STEP, PENALTY_CAP } from "../dice";
-import type { CombatState } from "./schema";
+import { type CombatState, INTENTS, TACTIC_LABELS, TacticSchema } from "./schema";
 
 /** 输入里像要开打的说法；宁可多带，漏带时模型不知道怎么开战 */
 const FIGHT =
   /开枪|开火|射击|扫射|动手|打(他|她|它|过去|起来|一架)|揍|砍|捅|刺(向|过去)|扑(上去|过去)|拔(枪|刀)|冲上去|干掉|宰了|杀了|攻击|拼了|突突/;
 
-/** 像要僵持、摊牌的说法 */
-const STANDOFF = /对峙|僵持|摊牌|把枪放下|放下枪|枪口对着/;
+const tactics = TacticSchema.options.map((t) => `${t} ${TACTIC_LABELS[t]}`).join("、");
+const intents = Object.values(INTENTS)
+  .map((i) => `${i.label}（${i.counters.map((t) => TACTIC_LABELS[t]).join("、")}拦得住）`)
+  .join("；");
 
 export const combatRules: RuleModule<CombatState> = {
   id: "combat",
   title: "战斗",
   commands: ["combat"],
-  when: (state, input) =>
-    state.active !== null ||
-    (state.standoff ?? null) !== null ||
-    (input.mode !== "ooc" && (FIGHT.test(input.text) || STANDOFF.test(input.text))),
-  judge: `- 战斗按“段”结算，不是回合制：小冲突 1 段，正经火并 2 段，硬仗 3 段。每段玩家只有一个主行动，结果不确定时给 check，tier 用对面最强那一组的档位。
-- 失败可能受伤时在 check 写 damage；只有写了 lethal 才可能濒死，否则血量归零只是倒下。
-- 快捷动作（用快捷栏的治疗品、扔手雷）每段最多 2 个，不掷骰，也不决定胜负；撤退也是主行动，撤不撤得掉照常给 check。
-- 对峙按顺序判：说中对方的诉求、亮出把柄或筹码不掷骰；镇定达标走 gate；触到底线立刻开打。
-- 第一段的先机：玩家在对峙里先开枪、埋伏得手时检定 +${MOD_STEP}；谈崩被抢先、被埋伏、潜入到交战档时在 penalties 加一项（−${MOD_STEP}，计入 −${PENALTY_CAP} 上限）。`,
-  narrate: `- 正文里写出现在是第几段、局面朝哪边倒，不写血量数字；一段只写玩家的一个主行动和对面的反应。
-- 敌人也会动脑子：找掩体、包抄、叫增援、拿人质、见势不妙就跑。杂兵成群地写，有名有姓的敌人有自己的打法和台词。
-- 有名有姓的敌人倒下以后，杀、放还是抓由玩家决定，正文不替玩家下手。
-- 濒死要在下一段结束前被救回：只有在场的原作人物或现场医生能救；没人救的结局由代码定，正文不替代码宣布死亡。
-- 对峙时正文停在僵持的那一刻：枪口、呼吸、对方手指的位置；不替玩家开枪或让步。时间到了对方先动手。`,
-  text: `- 战斗按“段”结算，不是回合制。开打时发 combat start：分几段 moments 1–3（小冲突 1 段，正经火并 2 段，硬仗 3 段）、目标 objective（这一仗要达成什么：脱身、护住某人、抢到东西、拿下对方）、败局 defeat（输了会怎样，写具体）、敌群 enemies（档位决定难度值，杂兵按组合并，不逐个建卡）。
-- 每段玩家只有一个主行动，结果不确定时先给 check（tier 用对面最强那一组的档位）。一段打完、要进下一段时发 combat next；最后一段打完、或者敌人提前溃散，发 combat end 写结局 outcome（victory 或 defeat）。赢没赢由你按检定结果和正文判断，代码只记打到了第几段。
-- 有名有姓、有人物卡的敌人写进 start 的 foes：[{"npc": 人物卡 id, "tier": 档位}]，不放进 enemies；没卡的先用 npc 指令建卡。他的情况变了发 combat foe：target 写他的 id，state 写 hurt（受伤了）、down（倒下了）或 fled（逃走了）。倒下以后杀、放还是抓由玩家决定，正文不要替玩家下手。
-- 玩家扫描了有卡敌人（义体扫描、快速破解）时发 combat scan，target 写他的 id；界面上这才显示他的情况。
-- 每段除了主行动，还能做最多 2 个快捷动作：用快捷栏的治疗品（heal maxdoc）、扔手雷（item use）。代码扣次数、记账，超了会被拦下；快捷动作不掷骰，也不决定这一段的胜负。
-- 撤退也是主行动：撤成了发 combat retreat，没撤成照常 next 或 end。
-- 失败扣血只能用 check 里事先写的 damage 档位，不能更重；只有事先写了 lethal 才可能濒死，否则血量归零只是倒下。
-- 濒死要在下一段结束前被救回：只有在场的原作人物或现场医生能救；没人救就是死亡，正文不要替代码宣布结果。玩家倒下或死了，代码按败局收场。
-- 正文里写出现在是第几段、局面朝哪边倒，不写血量数字。
-- 双方摊牌、有人拔枪或要谈判时，可以先开对峙：combat standoff（opponent 写对面是谁，rounds 2–3 轮）。代码每轮倒数，时间到了下一轮对方先动手。对峙时正文停在僵持的那一刻，不替玩家开枪或让步。
-- 对峙按顺序判：说中对方的诉求、亮出把柄或筹码、镇定门槛达标，可以 combat defuse 免掉这场仗，或者开战时少写一段；触到底线立刻 combat start。
-- 开战时用 edge 写第一段谁占先机：玩家在对峙里先开枪、埋伏得手写 player（检定 +${MOD_STEP}），同时按先动手发 event，对没拔枪的人开枪可以扣人性；谈崩被抢先、被埋伏、潜入到交战档写 enemy（检定 −${MOD_STEP}，在 penalties 加一项，计入 −${PENALTY_CAP} 上限）。对峙时间到了不写 edge 也按 enemy 算。`,
+  when: (state, input) => state.active !== null || (input.mode !== "ooc" && FIGHT.test(input.text)),
+  judge: `- 战斗一轮一轮打。每个敌人每轮有一个打算，由代码抽，【当前状态】里写着；玩家没看穿时是盖着的。
+- 打算和拦得住它的打法：${intents}。玩家这一轮的打法对上了，又过了检定，就拦下了；敌人防着这种打法时拦不住。
+- 扫描、细看、逼问都可以看穿一个敌人的打算：扫描要义眼能用，细看和逼问给检定。装死、放假消息、冒充他们的人可以骗过一个敌人，让他这一轮落空，也给检定。
+- 有打中玩家还没抵的伤时，这一轮先问玩家拿什么抵，不另给检定。
+- 代码替玩家出手的那一轮，按代码定的写，不给检定。`,
+  narrate: `- 没看穿的打算不点破，只写动静：他在换弹匣、往侧面挪、手指在终端上敲。看穿了的照直写。
+- 打中玩家的那一下写冲击，不写血量；停在玩家要挑拿什么去抵的那一刻：义体、胳膊腿还是肉身。
+- 代码替玩家出手时，写"你看着自己的手动了"：动作、冷感，不替玩家的念头找理由。
+- 超频义体写过热、视野发白、过后的空洞感。
+- 有名有姓的敌人倒下以后，杀、放还是抓由玩家决定。`,
+  text: `- 开打发 combat start：objective 这一仗要达成什么，defeat 输了会怎样，foes 每个敌人写 name、archetype（gunner 枪手、brute 打手、netrunner 网络黑客、boss 头目）、tier；有人物卡的写 npc，杂兵一伙合成一条。打算由代码抽，你不写。
+- 每轮玩家出手发 combat act：tactic 写 ${tactics} 之一，target 写对谁（敌人 id）。拦没拦下由代码按打算、检定和防备算。
+- 看穿了某人的打算发 combat reveal（target）；骗过了某人发 combat fool（target）。
+- 某人受伤、倒下、逃走发 combat foe（target、state）。敌人全倒下或跑光时代码自动收场；玩家主动收场发 combat end（outcome），撤成了发 combat retreat。
+- 没拦下的打算打中玩家时由代码记账，战斗里你不写 damage。
+- 有待抵的伤、玩家在输入里说了拿什么去挡（"用义臂格开""拿左腿去顶""硬吃这一枪"），发 combat pay：pay 写 chrome（加 chrome 写那件义体的 id）、limb（加 limb 写 left-arm、right-arm、left-leg、right-leg 之一）或 flesh；一次只抵最早那一下。输入开头带了【这一下……】标记的，是玩家点按钮选好的，代码已经记了，不要再发 pay。玩家没说拿什么挡，就不发，停在问他的那一刻。`,
 };
