@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api, newRequestId } from "../../api/client";
+import { LOCAL_MODE } from "../../api/transport";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
@@ -148,6 +149,16 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
+  // 纯前端模式下这一轮只在这个页面里跑，刷新或关掉就没了；生成中离开先提醒（服务器版刷新后能续上，不提醒）
+  useEffect(() => {
+    if (!LOCAL_MODE || !busy) return;
+    const warnLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnLeave);
+    return () => window.removeEventListener("beforeunload", warnLeave);
+  }, [busy]);
   // 物品栏、制作、义体不再开全屏（第十二节第 10 条），各自停在块里的哪个页签；收起后再钉住还是那个
   const [gearTab, setGearTab] = useState<GearTab>("inventory");
   const [bioTab, setBioTab] = useState<BioTab>("character");
@@ -1033,7 +1044,13 @@ export function StoryScreen() {
           }
         >
           <p>{failure.message}</p>
-          {!failure.retryable && <p>这个错误重试也不会好，先看看设置或后端日志。</p>}
+          {!failure.retryable && (
+            <p>
+              {LOCAL_MODE
+                ? "这个错误重试也不会好，先看看设置；详细原因在浏览器的开发者工具控制台里。"
+                : "这个错误重试也不会好，先看看设置或后端日志。"}
+            </p>
+          )}
         </Dialog>
       )}
     </div>

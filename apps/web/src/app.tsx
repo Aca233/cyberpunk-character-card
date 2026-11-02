@@ -6,7 +6,12 @@ import { MainMenu } from "./features/menu/MainMenu";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import { SpoilerBadge } from "./features/settings/SpoilerBadge";
 import { Splash } from "./features/splash/Splash";
-import { FanNotice, MissingAssetsAlert, RouteError } from "./features/status/StatusParts";
+import {
+  FanNotice,
+  MissingAssetsAlert,
+  RouteError,
+  TabNotice,
+} from "./features/status/StatusParts";
 import { StoryScreen } from "./features/story/StoryScreen";
 
 function Shell() {
@@ -16,6 +21,7 @@ function Shell() {
       <MissingAssetsAlert />
       <FanNotice />
       <SpoilerBadge />
+      <TabNotice />
     </>
   );
 }

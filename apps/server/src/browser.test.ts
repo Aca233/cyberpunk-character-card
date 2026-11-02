@@ -59,4 +59,25 @@ describe("本地服务层（浏览器里直接跑 app.fetch）", () => {
     expect(state.status).toBe(200);
     expect(state.data.version).toBe(0);
   });
+
+  it("一个后端导出的存档能导入另一个全新的浏览器后端（服务器版换到网页版也走这条）", async () => {
+    const from = await backend();
+    const created = await call(from, "POST", "/saves", {
+      title: "要搬走的存档",
+      characterId: "sample-1",
+      difficulty: "nightCity",
+    });
+    const exported = await call(from, "GET", `/saves/${String(created.data.id)}/export`);
+    expect(exported.status).toBe(200);
+
+    const to = await backend();
+    expect(((await call(to, "GET", "/saves")).data.saves as unknown[]).length).toBe(0);
+    const imported = await call(to, "POST", "/saves/import", exported.data);
+    expect(imported.status).toBeLessThan(300);
+    const id = String(imported.data.id);
+    const saves = await call(to, "GET", "/saves");
+    expect((saves.data.saves as { id: string; title: string }[]).map((s) => s.id)).toEqual([id]);
+    const state = await call(to, "GET", `/saves/${id}/state`);
+    expect(state.status).toBe(200);
+  });
 });
