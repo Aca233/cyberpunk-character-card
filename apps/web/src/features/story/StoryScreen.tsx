@@ -1,9 +1,8 @@
 import type { PlayerAction, TurnInput } from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ApiError, api, newRequestId } from "../../api/client";
-import { cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
@@ -419,7 +418,6 @@ export function StoryScreen() {
   }
 
   const failure = story.failure;
-  const severe = view.health.wound === "severe" || view.health.condition !== "up";
   const draftFromCheck = (label: string) => {
     story.setDraft({ text: label });
     setPicked(null);
@@ -578,12 +576,8 @@ export function StoryScreen() {
   return (
     <div
       className={styles.screen}
-      data-severe={severe || undefined}
       data-stage={view.humanity.stage}
       data-glitch={glitch || undefined}
-      style={
-        severe ? ({ "--glow-img": cssUrl("hud.damageGlow") ?? "none" } as CSSProperties) : undefined
-      }
     >
       <CityBackdrop />
       {/* 天气、人性干扰、重伤红光三层叠在正文上的特效去掉了（用户 2026-11-02 嫌丑） */}
