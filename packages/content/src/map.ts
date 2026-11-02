@@ -40,7 +40,7 @@ export const MAP_SPOTS: Readonly<Record<string, MapSpot>> = {
 };
 
 /**
- * 坐标直接取自路线表里某个服务点的地点：查路程时当作那个锚点，按精确路面算、不标"大概"
+ * 坐标直接取自路线表里某个服务点的地点：查路程时当作那个锚点，按精确路面算
  * （用户定的，2026-11-01；不用为这几处重跑 build_route_table.py）
  */
 export const ROUTE_ALIASES: Readonly<Record<string, string>> = {
