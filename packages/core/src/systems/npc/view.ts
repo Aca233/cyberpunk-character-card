@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { CharacterStateSchema, effectiveAttributes as playerAttributes } from "../character";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
-import { deathKnown } from "./apply";
+import { currentOutfit, deathKnown } from "./apply";
 import { attributeSum, bodyView } from "./body";
 import { onStage } from "./prompt";
 import {
@@ -74,6 +74,8 @@ export function npcsView({ world, data }: ViewContext) {
       /** 所属势力的中文名，不属于任何势力是「无」；没见过的人和身份一样不给 */
       faction: n.met ? factionName(n.faction, data) : null,
       look: n.met ? n.look : "没见过",
+      /** 现在穿什么（用户定的，2026-11-02："长相 + 当前穿着"）；没见过面、或旧卡衣着还在 look 里时是 null */
+      outfit: n.met ? (currentOutfit(n) ?? null) : null,
       /** 玩家角色知道的这个人的事，旧的在前，带来源 */
       known: n.known.map((k) => ({
         text: k.text,

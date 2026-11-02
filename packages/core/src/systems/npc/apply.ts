@@ -90,6 +90,7 @@ export function seedNpc(
     timeline: [],
     past: null,
     offscreenDeath: null,
+    wearing: null,
     // 捏人第 3 步的旧识关系（用户定的关系表，2026-10-30）：老朋友、前任带关系笔记，人情和旧仇记进人情和仇
     relation: relation ? { text: relation, at: now } : null,
     ledger: ledger.map((e) => ({ kind: e.kind, text: e.text, at: now, settledAt: null })),
@@ -181,6 +182,11 @@ export function applyTie(draft: Draft<NpcState>, command: Tie, now: number): App
   return { ok: true };
 }
 
+/** 现在穿什么：换过装按存档的 wearing，没换过按卡上的 outfit；旧卡两样都没有时是 undefined（衣着还在 look 里） */
+export function currentOutfit(npc: Npc): string | undefined {
+  return npc.wearing?.text ?? npc.outfit;
+}
+
 /** 人物档案里显示死了没有：屏幕外死的，要等玩家在那之后听说了这个人的事（learn）才算知道 */
 export function deathKnown(npc: Npc): boolean {
   if (npc.alive) return false;
@@ -230,6 +236,7 @@ export function applyNpc(
       timeline: [],
       past: null,
       offscreenDeath: null,
+      wearing: null,
       relation: null,
       ledger: [],
       known: [],
@@ -313,6 +320,12 @@ export function applyNpc(
       if (npc.relation?.text === command.text) return { ok: true };
       npc.relation = { text: command.text, at: now };
       return { ok: true, notes: [`和${npc.name}的关系：${command.text}`] };
+    }
+    case "npcOutfit": {
+      // 换装（用户定的，2026-11-02："长相 + 当前穿着"）：和现在穿的一样就不记
+      if (currentOutfit(npc as Npc) === command.text) return { ok: true };
+      npc.wearing = { text: command.text, at: now };
+      return { ok: true };
     }
     case "ledger": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };

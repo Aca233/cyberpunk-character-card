@@ -128,6 +128,8 @@ function ProfileInfo({ npc, fixer }: { readonly npc: Npc; readonly fixer?: Fixer
       )}
       {/* 外貌：见过面的人才有，一整句放在信息栏最底下 */}
       {npc.met && <p className={styles.look}>{npc.look}</p>}
+      {/* 现在穿（用户定的，2026-11-02："长相 + 当前穿着"）：换装后跟着变；旧卡衣着还在外貌里时不显示 */}
+      {npc.met && npc.outfit && <p className={styles.look}>现在穿：{npc.outfit}</p>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { RuleModule } from "../../kernel/system";
+import { currentOutfit } from "./apply";
 import { bodyLine, woundNote } from "./body";
 import {
   KNOWN_SOURCE_LABELS,
@@ -30,6 +31,7 @@ export const npcRules: RuleModule<NpcState> = {
     "npcDeath",
     "doing",
     "relation",
+    "npcOutfit",
     "tie",
     "ledger",
     "ledgerSettle",
@@ -48,6 +50,7 @@ export const npcRules: RuleModule<NpcState> = {
 - 死了的人不再出场。`,
   narrate: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，诉求、底线和秘密只有你知道，不能直接说给玩家，只能从言行里透出来；不在场的只有一行。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。好感决定态度的冷热，诉求和底线决定会不会答应。
+- 写人物的样子照卡上的「长相」和「现在穿」（用户定的，2026-11-02）：长相不会变，穿着只在正文里真的换了衣服时才变，前后一致，不要每次见面换一身。
 - 人物后面括号里的「势力」带着这个组织现在对玩家的态度（用户 2026-10-31："势力还是感觉好没存在感"）：没打过交道的成员先按组织的态度对待玩家（敌对的提防、盘问、找茬，见面就打的直接动手，友好的给方便、递消息，自己人当兄弟）；打过交道的按好感，但会顾忌组织的立场，当着同伙的面更要表态。言谈里带出自己是哪家的人：帮派的颜色和黑话、公司的工牌和腔调、警察的警徽。
 - 要写新人物之前，先看【人物】里「这一带的老面孔」和不在场的人有没有合适的能用；同一个酒保、总被撞见的混混、上次放走的人可以反复出现，让他们出场写 meet，不要另建一张差不多的卡。
 - 会再出现、或者推动剧情的配角（递货的、接头的、要玩家角色跟着走的、开口谈条件的），让他在正文里自报名字或外号，或者由旁人叫出来；擦肩而过的路人不用起名。
@@ -63,6 +66,7 @@ export const npcRules: RuleModule<NpcState> = {
 - 人物出场、或者第一次见面，写一条 meet；和玩家角色有了实质互动、或者推动了剧情（递货、接头、对暗号、要玩家角色跟着走、开口谈条件）的新人物，当场用 npc 建卡，id 用小写拼音或英文；正文没给名字时 name 用正文里的称呼（例如「兜帽男」「灰夹克」），不要因为没名字就不建。只是擦肩而过、端盘子、待在背景里的是路人，不建卡。
 - 用 npc 建卡时写 faction：这个人属于哪个势力就写【当前状态】势力列表里的 id（漩涡帮打手写 maelstrom、荒坂的人写 arasaka），不属于任何势力写 none；帮派成员、公司雇员、警察要写对，单干的佣兵、街坊、店主写 none。【人物】里每行的「势力」就是这个。
 - 玩家角色对有势力的人做的事大到组织会知道（杀了、救了、当众羞辱、替他办成大事），好感之外同时写一条 faction 改这个势力的态度（用户 2026-10-31："势力还是感觉好没存在感"）；私下的小恩小怨只写好感。
+- 用 npc 建卡时 look 只写不会变的长相（身材、发型、脸、纹身、义体、伤疤），衣服、鞋和随身带的显眼东西写 outfit。正文里有卡的人换了穿着（换上潜水服、穿正装赴宴、衣服被打烂换了一件），写一条 npcOutfit，一句话写现在穿什么，会替换卡上的「现在穿」；没换就不写（用户定的，2026-11-02）。
 - 用 npc 建卡时可以带 body：tier 按身份选（mook 普通人、pro 老手、elite 精英、legend 传奇），属性、装备和义体要符合身份，装备和义体写物品表、义体表里的 id；不写按普通人的默认值补。
 - 好感只在对方真的有理由改变态度时才写，一轮里同一个人最多一条；承诺、人情、冲突这类以后会被提起的事写一条 memory。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
@@ -129,10 +133,19 @@ function tiesNote(npc: Npc, npcs: NpcState["npcs"]): string | undefined {
     .join("；");
 }
 
+/** 卡上的长相和现在穿的；没有穿着（旧卡衣着还写在 look 里）时照旧写一行「外貌」 */
+function appearanceLines(npc: Npc): string[] {
+  const wearing = currentOutfit(npc);
+  return wearing === undefined
+    ? [`  外貌：${npc.look}`]
+    : [`  长相：${npc.look}`, `  现在穿：${wearing}`];
+}
+
 function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   const lines = [
     `- ${label(npc, stage)} ${npc.role}；好感 ${npc.affinity}${npc.met ? "" : "；还没见过玩家角色"}`,
-    `  外貌：${npc.look}`,
+    // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
+    ...appearanceLines(npc),
     `  说话：${npc.voice}`,
   ];
   if (npc.samples.length > 0) {

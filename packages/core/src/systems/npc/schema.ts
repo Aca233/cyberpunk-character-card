@@ -18,6 +18,8 @@ export const TIMELINE_SQUASH = 6;
 export const TIMELINE_TAIL = 3;
 /** 经历摘要最长这么多字 */
 export const PAST_MAX = 160;
+/** 穿着一句的长度上限 */
+export const OUTFIT_CHARS = 120;
 
 const NpcIdSchema = z
   .string()
@@ -144,7 +146,19 @@ export const NpcCardSchema = z.object({
     .min(1)
     .default(NO_FACTION)
     .describe("所属势力：势力 id（和 faction 指令用的一致）；不属于任何势力写 none"),
+  /**
+   * 长相：不会随换衣服变的部分（身材、发型、脸、纹身、义体、伤疤）。
+   * 用户定的（2026-11-02，"长相 + 当前穿着"）：衣着拆到 outfit；旧卡没拆时 look 里还带着衣着，照旧能用
+   */
   look: z.string().trim().min(1).max(200),
+  /** 开局穿着：衣服、随身带的显眼东西；换装后以存档里的 wearing 为准。旧卡没有 */
+  outfit: z
+    .string()
+    .trim()
+    .min(1)
+    .max(OUTFIT_CHARS)
+    .optional()
+    .describe("现在穿什么：衣服、鞋、随身带的显眼东西（背着的枪、挂着的链子）；长相写 look"),
   /** 说话方式：口癖、语气、爱用的词 */
   voice: z.string().trim().min(1).max(200),
   /** 几句说话样本，只给模型参考口吻，不照搬 */
@@ -250,6 +264,11 @@ export const NpcSchema = NpcCardSchema.extend({
   /** 在玩家没看着的地方死的（场外推演写的）：死因和时间；玩家听说以前人物档案照旧显示活着 */
   offscreenDeath: z
     .object({ cause: z.string().min(1), at: z.number().int() })
+    .nullable()
+    .default(null),
+  /** 换过装以后现在穿的（npcOutfit 写的）和换装的游戏时间；没换过是 null，按卡上的 outfit。旧存档没有 */
+  wearing: z
+    .object({ text: z.string().min(1).max(OUTFIT_CHARS), at: z.number().int() })
     .nullable()
     .default(null),
   /** 关系笔记：叙事模型写的一句关系状态，显示在人物档案里；旧存档没有 */
@@ -418,6 +437,18 @@ export const RelationSchema = z
   );
 export type Relation = z.infer<typeof RelationSchema>;
 
+/** 模型使用：有卡的人换了衣服（用户定的，2026-11-02："长相 + 当前穿着"） */
+export const NpcOutfitSchema = z
+  .object({
+    type: z.literal("npcOutfit"),
+    id: NpcIdSchema,
+    text: z.string().trim().min(1).max(OUTFIT_CHARS),
+  })
+  .describe(
+    "有卡的人换了穿着（换上潜水服、穿了正装赴宴、衣服被打烂换了一件）：一句话写现在穿什么，会替换卡上的「现在穿」；长相不变，不写进来",
+  );
+export type NpcOutfit = z.infer<typeof NpcOutfitSchema>;
+
 /** 模型使用：两个有卡的人之间的关系（用户 2026-10-31："npc也有自己的生活，也有认识的npc"） */
 export const TieSchema = z
   .object({
@@ -565,6 +596,7 @@ export type NpcCommand =
   | NpcDeath
   | Doing
   | Relation
+  | NpcOutfit
   | Tie
   | Ledger
   | LedgerSettle;
