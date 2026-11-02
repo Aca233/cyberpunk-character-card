@@ -1,5 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { OPPONENT_TIERS } from "../dice";
+import { itemCatalog } from "../inventory";
 import {
   CombatStateSchema,
   FOE_STATE_LABELS,
@@ -10,10 +11,17 @@ import {
 } from "./schema";
 
 /** 玩家可见的战斗：敌人的打算没看穿时盖着；打中你、还没抵的那几下；你用惯的打法 */
-export function combatView({ world }: ViewContext) {
+export function combatView({ world, data }: ViewContext) {
   const combat = CombatStateSchema.parse(world.slices.combat);
   const active = combat.active;
+  const catalog = data.items === undefined ? undefined : itemCatalog(data);
+  const named = (ids: readonly string[]) =>
+    ids.map((id) => ({ id, name: catalog?.get(id)?.name ?? id }));
   return {
+    /** 倒下的人身上还没捡走的（打完以后） */
+    loot: (combat.last?.loot ?? [])
+      .filter((l) => l.items.length > 0)
+      .map((l) => ({ from: l.from, name: l.name, items: named(l.items) })),
     active: active && {
       round: active.round,
       objective: active.objective,
@@ -29,6 +37,8 @@ export function combatView({ world }: ViewContext) {
         intentLabel: f.known && f.intent ? INTENTS[f.intent].label : null,
         fooled: f.fooled,
         bracedLabel: f.braced ? TACTIC_LABELS[f.braced] : null,
+        /** 倒下了才看得到、捡得到身上的东西 */
+        carry: f.state === "down" ? named(f.carry) : [],
       })),
       pending: active.pending.map((p) => ({
         name: p.name,

@@ -92,8 +92,17 @@ export const ActiveFoeSchema = z.object({
   fooled: z.boolean(),
   /** 这伙人防着你哪种打法（你用惯了的）；没防是 null */
   braced: TacticSchema.nullable(),
+  /** 身上带着的东西（物品表 id），开打时由代码按路数和档位抽；倒下后能捡，跑了就带走 */
+  carry: z.array(z.string().min(1)).default([]),
 });
 export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
+
+/** 打完还没捡走的：倒下的人身上剩的东西 */
+export const LeftLootSchema = z.object({
+  from: z.string().min(1),
+  name: z.string().min(1),
+  items: z.array(z.string().min(1)),
+});
 
 /** 打中你的一下：等你挑拿什么去抵 */
 export const PendingHitSchema = z.object({
@@ -141,6 +150,8 @@ export const CombatStateSchema = z.object({
       foes: z.array(
         z.object({ npc: z.string().min(1), name: z.string().min(1), state: FoeStateSchema }),
       ),
+      /** 倒下的人身上还没捡走的东西；下一仗开打时清掉 */
+      loot: z.array(LeftLootSchema).default([]),
     })
     .nullable(),
 });
@@ -162,7 +173,7 @@ export type FoeInput = z.infer<typeof FoeInputSchema>;
 export const CombatCommandSchema = z
   .object({
     type: z.literal("combat"),
-    action: z.enum(["start", "act", "reveal", "fool", "foe", "end", "retreat", "pay"]),
+    action: z.enum(["start", "act", "reveal", "fool", "foe", "end", "retreat", "pay", "loot"]),
     /** pay：玩家在正文里说了拿什么抵最早那一下 */
     pay: PaySchema.optional(),
     chrome: z.string().min(1).optional(),
@@ -174,6 +185,8 @@ export const CombatCommandSchema = z
     target: z.string().min(1).optional(),
     state: z.enum(["hurt", "down", "fled"]).optional(),
     outcome: z.enum(["victory", "defeat"]).optional(),
+    /** loot：从 target 身上捡哪件（物品表 id） */
+    item: z.string().min(1).optional(),
   })
   .superRefine((c, ctx) => {
     const need = (ok: boolean, message: string) => {
@@ -189,6 +202,8 @@ export const CombatCommandSchema = z
     if (c.action === "foe")
       need(c.target !== undefined && c.state !== undefined, "foe 要写 target 和 state");
     if (c.action === "end") need(c.outcome !== undefined, "end 要写 outcome");
+    if (c.action === "loot")
+      need(c.target !== undefined && c.item !== undefined, "loot 要写 target 和 item");
     if (c.action === "pay") {
       need(c.pay !== undefined, "pay 要写拿什么抵：chrome、limb 或 flesh");
       if (c.pay === "chrome") need(c.chrome !== undefined, "拿义体抵要写 chrome（义体 id）");
@@ -196,7 +211,7 @@ export const CombatCommandSchema = z
     }
   })
   .describe(
-    "战斗：start 开打（objective、defeat、foes：每个敌人写 name、archetype gunner/brute/netrunner/boss、tier，有卡的写 npc）；act 玩家这一轮的打法（tactic，target 对谁）；reveal 看穿 target 这一轮的打算；fool 骗过 target，他这一轮落空；foe 某人 hurt、down 或 fled；end 写 outcome；retreat 撤成了；pay 玩家在输入里说了拿什么抵挨的那一下（pay chrome 加 chrome 义体 id、limb 加 limb、flesh）",
+    "战斗：start 开打（objective、defeat、foes：每个敌人写 name、archetype gunner/brute/netrunner/boss、tier，有卡的写 npc）；act 玩家这一轮的打法（tactic，target 对谁）；reveal 看穿 target 这一轮的打算；fool 骗过 target，他这一轮落空；foe 某人 hurt、down 或 fled；end 写 outcome；retreat 撤成了；pay 玩家在输入里说了拿什么抵挨的那一下（pay chrome 加 chrome 义体 id、limb 加 limb、flesh）；loot 从倒下的 target 身上捡一件 item（只能是【当前状态】里他身上带着的，打完了也能捡剩下的）",
   );
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 
@@ -230,3 +245,20 @@ export const BRACE_AT = 3;
 export const HABIT_DECAY = 0.5;
 /** 一仗最多打几轮；到了还没分出胜负，按败局收场 */
 export const MAX_ROUNDS = 6;
+
+/** 掉落表（暂定，试玩时调）：各路数身上带哪几类武器（物品表的 category），抽一把 */
+export const LOOT_WEAPONS: Readonly<Record<Archetype, readonly string[]>> = {
+  gunner: ["pistol", "revolver", "smg", "assaultRifle", "shotgun"],
+  brute: ["blade", "blunt", "shotgun", "lmg"],
+  netrunner: ["pistol", "smg"],
+  boss: ["assaultRifle", "precisionRifle", "sniperRifle", "shotgun", "blade"],
+};
+/** 档位决定能抽到哪几档稀有度；抽不到就往下一档找。不朽物品不会掉 */
+export const LOOT_RARITY: Readonly<Record<z.infer<typeof TierSchema>, readonly string[]>> = {
+  street: ["common"],
+  veteran: ["common", "uncommon"],
+  elite: ["uncommon", "rare"],
+  legend: ["rare", "epic"],
+};
+/** 除了武器，有一半机会再带一件这几类里的东西 */
+export const LOOT_EXTRA_KINDS: readonly string[] = ["healing", "grenade"];

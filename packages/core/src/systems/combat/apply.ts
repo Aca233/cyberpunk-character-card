@@ -4,6 +4,7 @@ import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import { checkFact, type DiceState, isSuccess, OPPONENT_TIERS } from "../dice";
 import type { HealthState } from "../health";
 import type { HumanityState } from "../humanity";
+import { type ItemDef, itemCatalog } from "../inventory";
 import type { NpcState } from "../npc";
 import {
   type ActiveFoe,
@@ -15,6 +16,9 @@ import {
   FOE_STATE_LABELS,
   HABIT_DECAY,
   INTENTS,
+  LOOT_EXTRA_KINDS,
+  LOOT_RARITY,
+  LOOT_WEAPONS,
   MAX_ROUNDS,
   OVERCLOCK_COST,
   OVERCLOCK_STEP,
@@ -55,6 +59,28 @@ export function bracedTactic(habits: Readonly<Partial<Record<Tactic, number>>>):
   return best;
 }
 
+/** 开打时按路数和档位抽敌人身上带的：一把武器，一半机会再带一件治疗品或手雷；不朽的不掉 */
+export function drawLoot(
+  foe: Pick<ActiveFoe, "archetype" | "tier">,
+  data: Readonly<Record<string, unknown>>,
+  rng: Rng,
+): string[] {
+  if (data.items === undefined) return [];
+  const all = [...itemCatalog(data).values()].filter((d) => !d.iconic);
+  const rarities: readonly string[] = LOOT_RARITY[foe.tier];
+  const pick = (fits: (d: ItemDef) => boolean): string[] => {
+    let pool = all.filter((d) => fits(d) && rarities.includes(d.rarity ?? "common"));
+    if (pool.length === 0) pool = all.filter((d) => fits(d) && (d.rarity ?? "common") === "common");
+    // 骰子至少两面：只剩一件就直接给，不掷
+    const got = pool.length > 1 ? pool[rng.roll(pool.length) - 1] : pool[0];
+    return got ? [got.id] : [];
+  };
+  const weapons: readonly string[] = LOOT_WEAPONS[foe.archetype];
+  const carry = pick((d) => d.kind === "weapon" && weapons.includes(d.category ?? ""));
+  if (rng.roll(2) === 2) carry.push(...pick((d) => LOOT_EXTRA_KINDS.includes(d.kind)));
+  return carry;
+}
+
 export function startCombat(
   draft: Combat,
   command: CombatCommand,
@@ -83,8 +109,10 @@ export function startCombat(
       known: false,
       fooled: false,
       braced,
+      carry: [],
     };
     foe.intent = drawIntent(foe, ctx.rng);
+    foe.carry = drawLoot(foe, ctx.data, ctx.rng);
     foes.push(foe);
   }
   if (foes.length === 0) return fail("开打要写 foes");
@@ -180,7 +208,13 @@ function finish(
   const foes = (active?.foes ?? []).flatMap((f) =>
     f.npc === null ? [] : [{ npc: f.npc, name: f.name, state: f.state }],
   );
-  draft.last = { outcome, endedAt: now, foes };
+  // 倒下的人身上剩的东西留在原地，打完还能搜；跑了的带走了
+  const loot = (active?.foes ?? []).flatMap((f) =>
+    f.state === "down" && f.carry.length > 0
+      ? [{ from: f.id, name: f.name, items: [...f.carry] }]
+      : [],
+  );
+  draft.last = { outcome, endedAt: now, foes, loot };
   draft.active = null;
   for (const t of TacticSchema.options) draft.habits[t] = (draft.habits[t] ?? 0) * HABIT_DECAY;
   notes.push(
@@ -238,6 +272,35 @@ export function endRound(draft: Combat, ctx: SystemContext): ApplyOutcome {
   return { ok: true, notes, emit, signals: ["combat.next"] };
 }
 
+/** 从倒下的人身上捡一件，不占这一轮出手；打完了从剩下的里捡。捡到的直接进物品栏 */
+export function loot(draft: Combat, command: CombatCommand): ApplyOutcome {
+  const { target, item } = command;
+  if (target === undefined || item === undefined) return fail("loot 要写 target 和 item");
+  let bag: string[];
+  let name: string;
+  if (draft.active) {
+    const foe = foeOf(draft, target);
+    if (!foe) return fail(`战斗里没有 ${target}`);
+    if (foe.state === "fled") return fail(`${foe.name}跑了，东西也带走了`);
+    if (foe.state !== "down") return fail(`${foe.name}还站着，捡不了他身上的东西`);
+    bag = foe.carry;
+    name = foe.name;
+  } else {
+    const left = draft.last?.loot.find((l) => l.from === target || l.name === target);
+    if (!left) return fail(`${target}身上没有剩下的东西`);
+    bag = left.items;
+    name = left.name;
+  }
+  const i = bag.indexOf(item);
+  if (i < 0) return fail(`${name}身上没有 ${item}`);
+  bag.splice(i, 1);
+  return {
+    ok: true,
+    notes: [],
+    emit: [{ type: "item", action: "gain", id: item, reason: `从${name}身上捡的` }],
+  };
+}
+
 /** 玩家挑了拿什么抵最早那一下：交给 health 记（打坏义体、断肢或扣血） */
 export function pay(draft: Combat, command: CombatPay): ApplyOutcome {
   const hit = draft.active?.pending.shift();
@@ -290,6 +353,8 @@ export function applyCombat(
       return fool(draft, command.target, ctx);
     case "foe":
       return setFoe(draft, command);
+    case "loot":
+      return loot(draft, command);
     case "retreat":
       return draft.active ? finish(draft, "retreat", [], [], ctx.now) : fail("不在战斗中");
     case "pay":

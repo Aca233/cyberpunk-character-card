@@ -1086,6 +1086,11 @@ export async function runNarratorTurn(
       b.drop(where, command, "战斗中挨打由代码按敌人的打算结算", "rules");
       continue;
     }
+    // 战斗里捡东西只能从倒下的人身上捡，走 combat loot；模型自己编的 item gain 不算
+    if (fight && command.type === "item" && command.action === "gain") {
+      b.drop(where, command, "战斗中捡东西要发 combat loot，从倒下的人身上捡", "rules");
+      continue;
+    }
     // 玩家点按钮选好了拿什么抵，代码已经记了；模型再发的 pay 不算，免得一下伤抵两次
     if (
       fight &&

@@ -11,10 +11,19 @@ export const combatStatus: readonly SystemStatus[] = [
   {
     order: 280,
     lines(ctx) {
-      const a = combatOf(ctx).active;
-      if (!a) return [];
+      const view = combatOf(ctx);
+      const a = view.active;
+      const goods = (items: readonly { id: string; name: string }[]) =>
+        items.map((i) => `${i.name}（${i.id}）`).join("、");
+      if (!a) {
+        return view.loot.map(
+          (l) =>
+            `上一仗倒下的${l.name}（id ${l.from}）身上还剩：${goods(l.items)}；玩家搜身拿走发 combat loot`,
+        );
+      }
       const foes = a.foes.map((f) => {
         const bits = [`id ${f.id}`, f.tierLabel, f.stateLabel];
+        if (f.carry.length > 0) bits.push(`身上有${goods(f.carry)}，能捡`);
         if (f.intentLabel) bits.push(`这一轮要${f.intentLabel}（玩家已看穿）`);
         else if (f.state === "up" || f.state === "hurt") bits.push("打算还盖着");
         if (f.fooled) bits.push("这一轮落空了");

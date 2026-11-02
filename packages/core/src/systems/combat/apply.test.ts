@@ -183,3 +183,56 @@ describe("玩家用文字说拿什么抵", () => {
     expect(applyCombat(c, payCmd({}), ctxOf([])).ok).toBe(false);
   });
 });
+
+describe("从倒下的人身上捡东西", () => {
+  const gun = { kind: "weapon", category: "pistol", attribute: "cool", weaponType: "power" };
+  const items = [
+    { id: "unity", name: "统一", rarity: "common", ...gun },
+    { id: "kenshin", name: "健信", rarity: "rare", ...gun },
+    { id: "plain", name: "破枪", iconic: true, rarity: "common", ...gun },
+    {
+      id: "maxdoc",
+      name: "MaxDoc",
+      kind: "healing",
+      charges: 2,
+      healPercent: 40,
+      rarity: "common",
+    },
+  ];
+  const withItems = (rolls: number[]) => ({ ...ctxOf(rolls), data: { items } }) as SystemContext;
+  const cmd = (more: object) => ({ type: "combat", ...more }) as CombatCommand;
+  const begin = () => {
+    const c = fresh();
+    // 打算 1；武器池只剩档位够得着、不是不朽的那一把，不用掷；掷 2 再带一件治疗品
+    startCombat(c, start(), withItems([1, 2]));
+    return c;
+  };
+
+  it("开打时按路数和档位抽身上带的，不朽的不掉", () => {
+    expect(begin().active?.foes[0]?.carry).toEqual(["unity", "maxdoc"]);
+  });
+  it("站着的捡不到；倒下了捡一件进物品栏，捡过的没了", () => {
+    const c = begin();
+    const take = cmd({ action: "loot", target: "foe1", item: "unity" });
+    expect(applyCombat(c, take, ctxOf([])).ok).toBe(false);
+    applyCombat(c, cmd({ action: "foe", target: "foe1", state: "down" }), ctxOf([]));
+    expect(applyCombat(c, take, ctxOf([]))).toMatchObject({
+      ok: true,
+      emit: [{ type: "item", action: "gain", id: "unity" }],
+    });
+    expect(applyCombat(c, take, ctxOf([])).ok).toBe(false);
+  });
+
+  it("跑了的带走了；打完剩下的还能搜", () => {
+    const take = (item: string) => cmd({ action: "loot", target: "foe1", item });
+    const a = begin();
+    applyCombat(a, cmd({ action: "foe", target: "foe1", state: "fled" }), ctxOf([]));
+    expect(applyCombat(a, take("unity"), ctxOf([])).ok).toBe(false);
+    const b = begin();
+    applyCombat(b, cmd({ action: "foe", target: "foe1", state: "down" }), ctxOf([]));
+    endRound(b, ctxOf([]));
+    expect(b.last?.loot).toEqual([{ from: "foe1", name: "枪手", items: ["unity", "maxdoc"] }]);
+    expect(applyCombat(b, take("maxdoc"), ctxOf([])).ok).toBe(true);
+    expect(b.last?.loot[0]?.items).toEqual(["unity"]);
+  });
+});
