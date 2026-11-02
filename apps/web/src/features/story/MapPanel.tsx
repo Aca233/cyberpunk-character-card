@@ -221,17 +221,24 @@ export function MapBody({
   view,
   onTravel,
   onClose,
+  focus,
 }: {
   readonly view: View;
   /** 正在生成时不传，路线不能点 */
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
   /** 收起地图：顶栏工具那一排最右边出「关闭」按钮，同 M、Esc（用户定的，计划第十二节）；不传不出 */
   readonly onClose?: (() => void) | undefined;
+  /** 打开时先选中的地点 id（正文里点了地名，第 3 条）：照常出路线卡，不传送；当前位置不选 */
+  readonly focus?: string | undefined;
 }) {
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(() =>
+    focus !== undefined && view.travel.destinations.some((d) => d.id === focus && !d.here)
+      ? focus
+      : null,
+  );
   const tiles = useMapTiles();
   const destinations = view.travel.destinations;
   const here = destinations.find((d) => d.here);

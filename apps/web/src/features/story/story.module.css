@@ -1087,7 +1087,36 @@
   color: var(--cp-yellow);
 }
 
-/* 随身物品：三个武器格加背包；装上的武器不在背包里 */
+/* 正文里的地名（第 3 条）：和人名分开，用绿色 */
+.speaker[data-place] {
+  color: var(--cp-success);
+}
+
+/*
+ * 能点的人名和地名（第 3 条，用户定的"本地匹配"）：去掉按钮自带的底、框和内边距，
+ * 字体跟正文走；平时只上色，悬停和键盘聚焦时出下划线，人物开档案、地点开地图
+ */
+.mark {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  text-indent: 0;
+  cursor: var(--cp-cursor-hand);
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-flash);
+}
+
+.mark:hover,
+.mark:focus-visible {
+  outline: none;
+  text-decoration-color: currentColor;
+  text-decoration-style: solid;
+}
 .gear,
 .backpack {
   list-style: none;

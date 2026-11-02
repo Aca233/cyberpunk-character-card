@@ -42,21 +42,50 @@ function useGlossary() {
   }).data;
 }
 
-/** 一段正文；名字上色：自己用黄色，别人用青色；黑话加虚线，悬停看释义 */
+/** 点了正文里的人名或地名：人物开档案，地点开地图并选中（第 3 条） */
+export type OnMark = (mark: Speaker) => void;
+
+/**
+ * 一段正文；名字上色：自己用黄色，别人用青色，地点另一种颜色；黑话加虚线，悬停看释义。
+ * 人物和地点在给了 onMark 时可以点，正文原样不改
+ */
 function Paragraph({
   text,
   speakers,
+  onMark,
 }: {
   readonly text: string;
   readonly speakers: readonly Speaker[];
+  readonly onMark?: OnMark | undefined;
 }) {
   const glossary = useGlossary();
   return (
     <p>
-      {splitSpeakers(text, speakers).map((part, i) =>
-        part.speaker ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
-          <b key={i} className={styles.speaker} data-self={part.speaker.self || undefined}>
+      {splitSpeakers(text, speakers).map((part, i) => {
+        const s = part.speaker;
+        if (s && onMark && (s.npc !== undefined || s.place !== undefined)) {
+          return (
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
+              key={i}
+              type="button"
+              className={`${styles.speaker} ${styles.mark}`}
+              data-place={s.place !== undefined || undefined}
+              title={s.place !== undefined ? `在地图上看${part.text}` : `看${part.text}的档案`}
+              onClick={() => onMark(s)}
+            >
+              {part.text}
+            </button>
+          );
+        }
+        return s ? (
+          <b
+            // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
+            key={i}
+            className={styles.speaker}
+            data-self={s.self || undefined}
+            data-place={s.place !== undefined || undefined}
+          >
             {part.text}
           </b>
         ) : (
@@ -73,8 +102,8 @@ function Paragraph({
               ),
             )}
           </Fragment>
-        ),
-      )}
+        );
+      })}
     </p>
   );
 }
@@ -92,6 +121,7 @@ function TurnBlock({
   speakers,
   onRegenerate,
   onRewrite,
+  onMark,
 }: {
   readonly turn: Turn;
   readonly saveId: string;
@@ -100,6 +130,8 @@ function TurnBlock({
   readonly onRegenerate?: (() => void) | undefined;
   /** 按账目改写；和重新生成同样只给最后一轮 */
   readonly onRewrite?: (() => Promise<void>) | undefined;
+  /** 点了正文里的人名或地名 */
+  readonly onMark?: OnMark | undefined;
 }) {
   const prefs = useNarrativePrefs();
   const [rewriting, setRewriting] = useState(false);
@@ -132,13 +164,13 @@ function TurnBlock({
           </summary>
           {paragraphs(turn.text).map((p, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-            <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
+            <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
           ))}
         </details>
       ) : (
         paragraphs(turn.text).map((p, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-          <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} />
+          <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
         ))
       )}
       {turn.voices.map((v, i) => (
@@ -204,6 +236,7 @@ export function StoryLog({
   live,
   onRegenerate,
   onRewrite,
+  onMark,
 }: {
   readonly view: View;
   readonly saveId: string;
@@ -212,6 +245,8 @@ export function StoryLog({
   readonly onRegenerate?: (() => void) | undefined;
   /** 按账目改写最后一轮；角色死了时不给 */
   readonly onRewrite?: (() => Promise<void>) | undefined;
+  /** 点了正文里的人名或地名（第 3 条）；正在生成的这一轮还在变，不给点 */
+  readonly onMark?: OnMark | undefined;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -260,6 +295,7 @@ export function StoryLog({
                 : undefined
             }
             onRewrite={onRewrite}
+            onMark={onMark}
           />
         ))}
 

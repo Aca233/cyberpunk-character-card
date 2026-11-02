@@ -41,6 +41,7 @@ import {
 import { PoliceBody } from "./NewsPanel";
 import { type NoteEntry, NotesPanel } from "./NotesPanel";
 import neuralStyles from "./neural.module.css";
+import { Profile } from "./Profile";
 import { type Expand, peekOnTop } from "./peek";
 import { Ripperdoc } from "./Ripperdoc";
 import {
@@ -55,7 +56,7 @@ import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
-import { diffViews, type Toast, type View } from "./view";
+import { diffViews, type Speaker, type Toast, type View } from "./view";
 
 /** 钉住的追踪块、未读块里的页签 */
 type TrackTab = "todo" | "jobs" | "database";
@@ -157,10 +158,13 @@ export function StoryScreen() {
   // 钉住的追踪块、未读块各自停在哪个页签；收起后再钉住还是那个
   const [trackTab, setTrackTab] = useState<TrackTab>("todo");
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
-  // 地图浮层（M）
+  // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点（第 3 条），按 M 打开时不选
   const [atMap, setAtMap] = useState(false);
+  const [mapFocus, setMapFocus] = useState<string | undefined>(undefined);
   const closeMap = useCallback(() => setAtMap(false), []);
   const closePinned = useCallback(() => setExpand(null), []);
+  // 正文里点了人名：弹出这个人的档案（第 3 条）
+  const [person, setPerson] = useState<string | null>(null);
   // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）；存放不再弹窗，进右上角地点块（用户定的）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
@@ -243,7 +247,18 @@ export function StoryScreen() {
   );
   const openMap = useCallback(() => {
     setExpand(null);
+    setMapFocus(undefined);
     setAtMap(true);
+  }, []);
+  // 正文里点了名字（第 3 条）：地点打开地图并选中，出普通路线卡；人物弹档案
+  const onMark = useCallback((mark: Speaker) => {
+    if (mark.place !== undefined) {
+      setExpand(null);
+      setMapFocus(mark.place);
+      setAtMap(true);
+    } else if (mark.npc !== undefined) {
+      setPerson(mark.npc);
+    }
   }, []);
   // 钉住一个块（P 生物监测、J 追踪、T 未读）；按键时同一块已经钉着就收起
   const pinBlock = useCallback((id: string) => {
@@ -647,6 +662,7 @@ export function StoryScreen() {
           <MapBody
             view={view}
             onClose={closeMap}
+            focus={mapFocus}
             onTravel={
               busy || offers?.rolled
                 ? undefined
@@ -671,6 +687,7 @@ export function StoryScreen() {
           live={story}
           onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
           onRewrite={view.death || view.ended ? undefined : rewrite}
+          onMark={onMark}
         />
 
         {failure &&
@@ -900,6 +917,27 @@ export function StoryScreen() {
           );
         })()}
       {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
+      {person &&
+        (() => {
+          // 正文里点了人名（第 3 条）：弹这个人的档案；扫描照档案里的按钮，回合进行中不让点
+          const npc = view.npcs.find((n) => n.id === person);
+          return (
+            npc && (
+              <Dialog
+                title={npc.name}
+                tone="info"
+                onClose={() => setPerson(null)}
+                actions={<Button onClick={() => setPerson(null)}>关闭</Button>}
+              >
+                <Profile
+                  npc={npc}
+                  fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
+                  onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+                />
+              </Dialog>
+            )
+          );
+        })()}
       {atBraindance && view.braindance.active && (
         <BraindanceEditor
           view={view}

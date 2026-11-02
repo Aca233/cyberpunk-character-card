@@ -55,6 +55,10 @@ export function locationLabel(location: string | null): string {
 export interface Speaker {
   readonly name: string;
   readonly self: boolean;
+  /** 人物的 id：点了打开人物档案；玩家自己和地点没有 */
+  readonly npc?: string | undefined;
+  /** 地点的 id：点了打开地图并选中它，照常出行，不传送；人物没有 */
+  readonly place?: string | undefined;
 }
 
 export interface Segment {
@@ -62,15 +66,32 @@ export interface Segment {
   readonly speaker?: Speaker | undefined;
 }
 
-/** 正文里要上色的名字：玩家自己，和见过的人（连同外号）；长的先匹配，免得「丽贝」吃掉「丽贝卡」 */
+/**
+ * 正文里要标出来的名字：玩家自己、见过和听说过的人（连同外号）、地图上的地点（第 3 条，用户定的"本地匹配"，2026-11-02）。
+ * 只在网页上按名字匹配，正文原样不改。同名时人物优先，去过的地点优先于没去过的原作地点；
+ * 长的先匹配，免得「丽贝」吃掉「丽贝卡」
+ */
 export function speakersOf(view: View): Speaker[] {
   const out: Speaker[] = [];
   if (view.character.name) out.push({ name: view.character.name, self: true });
   for (const npc of view.npcs) {
-    out.push({ name: npc.name, self: false });
-    if (npc.alias) out.push({ name: npc.alias, self: false });
+    out.push({ name: npc.name, self: false, npc: npc.id });
+    if (npc.alias) out.push({ name: npc.alias, self: false, npc: npc.id });
   }
-  return out.filter((s) => s.name.trim().length > 0).sort((a, b) => b.name.length - a.name.length);
+  const places = [...view.travel.destinations].sort(
+    (a, b) => Number(a.firstVisit) - Number(b.firstVisit),
+  );
+  for (const d of places) out.push({ name: d.name, self: false, place: d.id });
+  const seen = new Set<string>();
+  return out
+    .filter((s) => {
+      const name = s.name.trim();
+      // 单个字太容易误标（比如地点叫「港」），至少两个字才标
+      if ([...name].length < 2 || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    })
+    .sort((a, b) => b.name.length - a.name.length);
 }
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -78,7 +99,9 @@ const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** 把一段正文切成普通文字和名字 */
 export function splitSpeakers(text: string, speakers: readonly Speaker[]): Segment[] {
   if (speakers.length === 0) return [{ text }];
-  const byName = new Map(speakers.map((s) => [s.name, s]));
+  // 同名的只认第一个（speakersOf 已经去重，这里再保一次）
+  const byName = new Map<string, Speaker>();
+  for (const s of speakers) if (!byName.has(s.name)) byName.set(s.name, s);
   const pattern = new RegExp(`(${speakers.map((s) => escapeRegExp(s.name)).join("|")})`, "g");
   return text
     .split(pattern)
