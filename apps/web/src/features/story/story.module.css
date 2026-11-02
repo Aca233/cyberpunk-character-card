@@ -15,26 +15,74 @@
   grid-template-areas: ". main .";
   height: 100dvh;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 50% 120%, rgb(255 0 60 / 8%), transparent 60%),
-    linear-gradient(180deg, rgb(0 0 0 / 30%), transparent 30%), var(--cp-bg);
+  /* 背后的街道层用 z-index -1 垫在所有内容下面，不压到正文 */
+  isolation: isolate;
+  background: var(--cp-bg);
   color: var(--cp-text);
 }
 
-/* 扫描线和重伤时的屏幕边缘红光 */
+/*
+ * 正文背后的夜之城（用户定的"H10 全景当正文背景"，2026-11-02，CityBackdrop.tsx）：
+ * 原作主菜单的 H10 全景压暗、偏冷；正文那一列再压暗、四周暗角，字不受影响
+ */
+.city {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--cp-bg);
+}
+
+.cityImage {
+  position: absolute;
+  inset: -3%;
+  background-position: center 30%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: saturate(0.75) brightness(0.4) contrast(1.1);
+  animation: cityDrift 120s ease-in-out infinite alternate;
+}
+
+.city::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 34% 80% at 50% 55%, rgb(5 5 12 / 72%), transparent 100%),
+    radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 70%) 100%),
+    linear-gradient(180deg, rgb(8 14 30 / 35%), rgb(5 6 14 / 70%));
+}
+
+@keyframes cityDrift {
+  from {
+    scale: 1;
+    translate: -1% 0;
+  }
+  to {
+    scale: 1.06;
+    translate: 1% -1%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cityImage {
+    animation: none;
+  }
+}
+
+/* 重伤时的屏幕边缘红光；平时不叠扫描线（用户 2026-11-02 嫌特效丑，去掉了） */
 .fx {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 5;
-  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 1.5%) 0 1px, transparent 1px 3px);
 }
 
 .screen[data-severe] .fx {
   background:
     var(--glow-img, none) center / 100% 100% no-repeat,
-    radial-gradient(ellipse at center, transparent 55%, rgb(255 30 50 / 22%) 100%),
-    repeating-linear-gradient(0deg, rgb(255 255 255 / 1.5%) 0 1px, transparent 1px 3px);
+    radial-gradient(ellipse at center, transparent 55%, rgb(255 30 50 / 22%) 100%);
   animation: pulse 2.4s ease-in-out infinite;
 }
 

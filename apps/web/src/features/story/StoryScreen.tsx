@@ -13,6 +13,7 @@ import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import type { StoryEnd } from "./ChroniclePanel";
+import { CityBackdrop } from "./CityBackdrop";
 import { CloseupQueue } from "./Closeup";
 import {
   Banner,
@@ -584,9 +585,8 @@ export function StoryScreen() {
         severe ? ({ "--glow-img": cssUrl("hud.damageGlow") ?? "none" } as CSSProperties) : undefined
       }
     >
-      <div className={styles.fx} aria-hidden />
-      <div className={styles.weather} data-weather={view.weather.kind} aria-hidden />
-      <div className={styles.glitch} data-level={glitch} aria-hidden />
+      <CityBackdrop />
+      {/* 天气、人性干扰、重伤红光三层叠在正文上的特效去掉了（用户 2026-11-02 嫌丑） */}
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
       {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
       <CornerSide side="left">
