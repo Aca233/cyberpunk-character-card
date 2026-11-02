@@ -144,8 +144,11 @@ export const RELATION_INFO: Readonly<Record<RelationKind, RelationInfo>> = {
   grudge: { label: "旧仇", affinity: -30, points: 0, ledger: "grudge", note: false },
 };
 
-/** 旧识最多记这么多人：原作人物 15 个加模块带出的人，用户说"无数个"，这里只防异常数据 */
-export const ACQUAINTANCE_MAX = 40;
+/**
+ * 旧识最多记这么多人：用户说"无数个"，这里只防异常数据。
+ * 原作人物补到 40 多个（用户 2026-11-02："把所有能预设好的角色都预设好"），再加模块带出的人（每块最多 2 个），40 不够用，放到 100
+ */
+export const ACQUAINTANCE_MAX = 100;
 /** 每个旧识"是什么事"的一句话 */
 export const ACQUAINTANCE_NOTE_CHARS = 60;
 

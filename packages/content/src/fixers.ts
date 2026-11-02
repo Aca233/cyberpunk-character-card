@@ -14,4 +14,9 @@ export const fixers: readonly {
   { id: "wakako", name: "冈田和歌子" },
   { id: "padre", name: "神父" },
   { id: "dex", name: "德克斯特·德肖恩" },
+  // 2026-11-02 补（用户："把所有能预设好的角色都预设好"）：fandom 中间人导航栏里剩下的四位，人物卡见 npcs.ts
+  { id: "dino", name: "戴诺·蒂诺维奇" },
+  { id: "el-capitan", name: "老船长" },
+  { id: "dakota", name: "达科塔·史密斯" },
+  { id: "mr-hands", name: "汉兹先生" },
 ];

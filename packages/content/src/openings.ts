@@ -10,7 +10,9 @@ export const openings: readonly GameOpening[] = [
     id: "lizzies-2077",
     title: "丽姿酒吧的一块芯片",
     location: "lizzies-bar",
-    // 前三个是引导委托用的；其余是 2077 年还活着、带心事（arcs.ts）的原作人物，开局有卡但没见过
+    // 前三个是引导委托用的；其余原作人物开局有卡但没见过，不代表全在开场现场，也不要求都有 arcs.ts 条目。
+    // 2026-11-02 用户选择"全部放进开局"：新增 29 人，共 41 人；海外角色的位置见人物卡。
+    // 不种已死的边缘行者人物；强尼、德拉曼、奥特、蓝眼睛先生按用户选择暂不建卡。
     cast: [
       "judy",
       "regina",
@@ -24,6 +26,35 @@ export const openings: readonly GameOpening[] = [
       "panam",
       "river",
       "kerry",
+      "dino",
+      "el-capitan",
+      "dakota",
+      "mr-hands",
+      "takemura",
+      "evelyn",
+      "hanako",
+      "yorinobu",
+      "saburo",
+      "hellman",
+      "t-bug",
+      "dum-dum",
+      "royce",
+      "placide",
+      "brigitte",
+      "mama-welles",
+      "meredith",
+      "claire",
+      "nix",
+      "lizzy-wizzy",
+      "smasher",
+      "saul",
+      "mitch",
+      "carol",
+      "songbird",
+      "reed",
+      "myers",
+      "hansen",
+      "alex",
     ],
     premise: `这一档从沃森区的丽姿酒吧开始，2077 年刚开头的一个深夜。玩家角色已经接下中间人瑞吉娜·琼斯的一单（委托 regina-shard）：今晚有人会在丽姿酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到瑞吉娜手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在正文里安排，随着剧情慢慢揭开。
 《边缘行者》里的事已经过去了，是街头的旧闻：大卫、丽贝卡、曼恩一伙和中间人法拉第都死了，有人提起时照旧闻写，他们不会出场。

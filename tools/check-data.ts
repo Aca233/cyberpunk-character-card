@@ -395,6 +395,21 @@ for (const f of factions) {
     errors.push(`势力 ${f.id}：关系里写了自己`);
 }
 
+// 人物卡的常在地点和所属势力：要在地点表、势力表里（none 是不属于任何势力）；
+// 中间人的好感记在同 id 的人物卡上，每个中间人都要有人物卡（用户 2026-11-02 补卡时加的检查）
+const npcIds = new Set(npcs.map((n) => n.id));
+for (const n of npcs) {
+  if (n.home) refs(`人物 ${n.id} 的常在地点`, [n.home], locationIds, "地点");
+  if (n.faction && n.faction !== "none")
+    refs(`人物 ${n.id} 的势力`, [n.faction], factionIds, "势力");
+}
+refs(
+  "中间人",
+  fixers.map((f) => f.id),
+  npcIds,
+  "人物卡",
+);
+
 // 势力动向的种子：势力和对头要在势力表里，能争的城区要在城区表里，每条要有原作参考
 unique(
   "势力动向",
