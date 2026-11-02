@@ -28,11 +28,13 @@ import {
   legacyDvToEdge,
   resolveCheck,
   rollFaces,
+  withOpponentChrome,
 } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { HealthStateSchema } from "../systems/health";
 import { itemCatalog, shopList } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
+import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import {
@@ -156,6 +158,27 @@ function legacyChoice(item: unknown, notes: string[]): unknown {
     }
   }
   return out;
+}
+
+/**
+ * 检定写了对手（有卡的人）时，他身上利于这项属性的义体让难度提高一档（用户 2026-11-02 选的"对抗时提高难度"）。
+ * 在检定记进回合之前加进 dvMods，之后 prepareFor、重放、重新生成都照存下来的算
+ */
+function withOpponent(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  spec: CheckSpec,
+): CheckSpec {
+  if (spec.opponent === undefined) return spec;
+  const state = NpcStateSchema.safeParse(world.slices.npc ?? { npcs: {} });
+  const npc = state.success ? state.data.npcs[spec.opponent] : undefined;
+  if (!npc?.alive) return spec;
+  const catalog = cyberwareCatalog(data);
+  const favors = (npc.body?.cyberware ?? []).flatMap((id) => {
+    const def = catalog.get(id);
+    return def?.checks.includes(spec.attribute) ? [def.name] : [];
+  });
+  return withOpponentChrome(spec, npc.name, favors);
 }
 
 /** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
@@ -634,7 +657,8 @@ export async function runNarratorTurn(
     } else {
       const legacy = legacyDvToEdge(judge.check);
       if (legacy.note !== undefined) noteOnce(b.notes, legacy.note);
-      const spec = await b.validate("check", legacy.value, CheckProposalSchema);
+      const parsed = await b.validate("check", legacy.value, CheckProposalSchema);
+      const spec = parsed ? withOpponent(world, deps.data ?? {}, parsed) : undefined;
       const prepared = spec && prepareFor(world, spec);
       if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
       else check = spec;
@@ -929,9 +953,13 @@ export async function runNarratorTurn(
       choices.push(verifySource(plain as Choice, chrome, traits, b.notes));
       continue;
     }
-    const prepared = choice.check && prepareFor(world, choice.check);
-    if (prepared && !prepared.ok) b.drop(where, choice, prepared.reason, "rules");
-    else choices.push(verifySource(choice, chrome, traits, b.notes));
+    // 选项预先带的检定也按对手的义体加难度，选中时照存下来的掷
+    const withFoe: Choice = choice.check
+      ? { ...choice, check: withOpponent(world, deps.data ?? {}, choice.check) }
+      : choice;
+    const prepared = withFoe.check && prepareFor(world, withFoe.check);
+    if (prepared && !prepared.ok) b.drop(where, withFoe, prepared.reason, "rules");
+    else choices.push(verifySource(withFoe, chrome, traits, b.notes));
   }
 
   const voices: Voice[] = [];

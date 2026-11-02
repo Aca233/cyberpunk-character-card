@@ -4,6 +4,7 @@ import type { CombatState } from "../combat";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { checkFact } from "../dice";
 import { HUMANITY_KINDS } from "../humanity";
+import { currentVitals, filledBody, type NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import {
   BREACH_GAIN_LABELS,
@@ -16,6 +17,7 @@ import {
   type DiveCommand,
   type HackCommand,
   type HackingState,
+  type NpcHackCommand,
   QuickhackCatalogSchema,
   type QuickhackDef,
   RAM_SEGMENT_REGEN,
@@ -66,14 +68,21 @@ export function syncDeck(draft: Hacking, ctx: SystemContext): number {
   return found.slots;
 }
 
-/** 场景结束、战斗收尾、休整：RAM 回满 */
+/** 场景结束、战斗收尾、休整：RAM 回满；有卡的人的 RAM 也回满，自我 ICE 恢复 */
 export function refill(draft: Hacking): void {
   draft.ram = draft.ramMax;
+  draft.npcRamUsed = {};
+  draft.selfIceSpent = false;
 }
 
-/** 战斗打完一段：回一部分 RAM */
+/** 战斗打完一段：回一部分 RAM；有卡的人也一样 */
 export function regen(draft: Hacking): void {
   draft.ram = Math.min(draft.ramMax, draft.ram + RAM_SEGMENT_REGEN);
+  for (const [id, used] of Object.entries(draft.npcRamUsed)) {
+    const left = used - RAM_SEGMENT_REGEN;
+    if (left > 0) draft.npcRamUsed[id] = left;
+    else delete draft.npcRamUsed[id];
+  }
 }
 
 function findProgram(
@@ -245,4 +254,78 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
 /** 场景结束：还在潜的自动退出 */
 export function surfaceOnSceneEnd(draft: Hacking): void {
   draft.dive = null;
+}
+
+/** 玩家角色的自我 ICE（义体 id）；装着时每场替他挡下一次有卡的人放的快速破解 */
+export const SELF_ICE = "self-ice";
+
+/** 有卡的人的接入仓和 RAM 上限：按他身上装着的义体算，和玩家同一套（接入仓给底数，其他义体再加） */
+export function npcDeckOf(
+  cyberware: readonly string[],
+  data: Readonly<Record<string, unknown>>,
+): { readonly deck: string | null; readonly ramMax: number } {
+  const catalog = cyberwareCatalog(data);
+  const defs = cyberware.flatMap((id) => catalog.get(id) ?? []);
+  const deck = defs.find((d) => d.programSlots !== undefined);
+  if (!deck) return { deck: null, ramMax: 0 };
+  return { deck: deck.name, ramMax: defs.reduce((sum, d) => sum + (d.ram ?? 0), 0) };
+}
+
+/**
+ * 有卡的人放快速破解（用户 2026-11-02 选的"代码结算"）：要装着接入仓、人还站着，RAM 够才放得出去；
+ * 对玩家角色放时，玩家装着自我 ICE 每场先挡一次（RAM 照扣）。伤害仍走玩家的检定和 damage，这里不扣血；
+ * 终极类按残忍行为扣放的人的人性
+ */
+export function applyNpcHack(
+  draft: Hacking,
+  command: NpcHackCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const npc = ctx.read<NpcState>("npc").npcs[command.id];
+  if (!npc) return fail(`【人物】里没有 ${command.id}`);
+  if (!npc.alive) return fail(`${npc.name} 已经死了`);
+  if (currentVitals(npc, ctx.data, ctx.now).hp === 0)
+    return fail(`${npc.name} 倒下了，放不了快速破解`);
+  const def = findProgram(quickhackCatalog(ctx.data), command.program);
+  if (!def) return fail(`快速破解表里没有 ${command.program}`);
+  const { deck, ramMax } = npcDeckOf(filledBody(npc.body).cyberware, ctx.data);
+  if (!deck) return fail(`${npc.name} 没装网络接入仓，放不了快速破解：照他的装备和义体换个打法`);
+  const used = draft.npcRamUsed[command.id] ?? 0;
+  const left = Math.max(0, ramMax - used);
+  if (left < def.ram) {
+    return fail(`${npc.name} 的 RAM 不够：「${def.name}」要 ${def.ram} 格，他只剩 ${left} 格`);
+  }
+  draft.npcRamUsed[command.id] = used + def.ram;
+  const ramNote = `${npc.name} 的 RAM ${left - def.ram}/${ramMax}`;
+  const atPlayer = command.target === "你";
+  const hasIce = ctx.read<CyberwareState>("cyberware").installed.some((c) => c.id === SELF_ICE);
+  if (atPlayer && hasIce && !draft.selfIceSpent) {
+    draft.selfIceSpent = true;
+    return {
+      ok: true,
+      notes: [
+        `${npc.name} 对你放「${def.name}」，被你的自我 ICE 挡下了（这一场不再挡）：${ramNote}`,
+      ],
+    };
+  }
+  const notes = [
+    `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}：${ramNote}`,
+  ];
+  if (atPlayer && (def.category === "damage" || def.category === "ultimate")) {
+    notes.push("打中你之前先让玩家掷检定抵抗，失败再按事先写的 damage 扣血");
+  }
+  const emit: Command[] =
+    def.category === "ultimate"
+      ? [
+          {
+            type: "npcHumanity",
+            id: command.id,
+            kind: "cruelty",
+            size: "medium",
+            reason: `终极快速破解「${def.name}」：${command.target}`,
+          },
+        ]
+      : [];
+  const inCombat = ctx.read<CombatState>("combat").active !== null;
+  return { ok: true, notes, emit, ...(inCombat ? { signals: ["combat.quick"] } : {}) };
 }

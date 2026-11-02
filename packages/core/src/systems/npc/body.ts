@@ -1,5 +1,5 @@
 import type { ApplyOutcome } from "../../kernel/system";
-import { cyberwareCatalog } from "../cyberware";
+import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from "../cyberware";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema, type DamageTier, maxHp } from "../dice";
 import { DAMAGE_PERCENT } from "../health";
 import { HUMANITY_KINDS, humanityStage, STAGE_LABELS } from "../humanity";
@@ -68,6 +68,33 @@ export function bodyProblems(body: NpcBodyCard | undefined, data: Data): string[
   const problems: string[] = [];
   for (const id of body.gear) if (!items.has(id)) problems.push(`物品表里没有「${id}」`);
   for (const id of body.cyberware) if (!chrome.has(id)) problems.push(`义体表里没有「${id}」`);
+  problems.push(...slotProblems(body.cyberware, chrome));
+  return problems;
+}
+
+/**
+ * 按部位数格子（用户 2026-11-02 选的"按部位给 NPC 定规矩"）：和玩家同一套 SLOT_CAPACITY，
+ * 操作系统只有 1 格，所以网络接入仓、斯安威斯坦、狂暴只能装一个；表里没有的 id 不算
+ */
+export function slotProblems(
+  ids: readonly string[],
+  chrome: ReadonlyMap<string, { readonly slot: CyberwareSlot; readonly name: string }>,
+): string[] {
+  const bySlot = new Map<CyberwareSlot, string[]>();
+  for (const id of ids) {
+    const def = chrome.get(id);
+    if (!def) continue;
+    bySlot.set(def.slot, [...(bySlot.get(def.slot) ?? []), def.name]);
+  }
+  const problems: string[] = [];
+  for (const [slot, list] of bySlot) {
+    const cap = SLOT_CAPACITY[slot];
+    if (list.length > cap) {
+      problems.push(
+        `${SLOT_LABELS[slot]}最多装 ${cap} 件，现在装了 ${list.length} 件（${list.join("、")}）`,
+      );
+    }
+  }
   return problems;
 }
 
@@ -234,19 +261,26 @@ export function applyNpcBody(
       return { ok: true, notes: npc.met ? [`${npc.name} 不再带着 ${def.name}`] : [] };
     }
     case "npcChrome": {
-      const def = cyberwareCatalog(data).get(command.cyberware);
+      const catalog = cyberwareCatalog(data);
+      const def = catalog.get(command.cyberware);
       if (!def) return { ok: false, reason: `义体表里没有「${command.cyberware}」` };
       const { body } = settle(npc, data, now);
       const has = body.cyberware.includes(command.cyberware);
+      let swapped: string | undefined;
       if (command.action === "install") {
         if (has) return { ok: true };
-        if (body.cyberware.length >= NPC_CHROME_MAX) {
+        // 部位装满了换下这个部位最早装的那件，和玩家的 cyberware 指令一样；操作系统只有 1 格
+        const sameSlot = body.cyberware.filter((c) => catalog.get(c)?.slot === def.slot);
+        const out = sameSlot.length >= SLOT_CAPACITY[def.slot] ? sameSlot[0] : undefined;
+        const kept = out === undefined ? body.cyberware : body.cyberware.filter((c) => c !== out);
+        if (kept.length >= NPC_CHROME_MAX) {
           return {
             ok: false,
             reason: `${npc.name} 已经装了 ${NPC_CHROME_MAX} 件义体，先 remove 一件`,
           };
         }
-        npc.body = { ...body, cyberware: [...body.cyberware, command.cyberware] };
+        npc.body = { ...body, cyberware: [...kept, command.cyberware] };
+        if (out !== undefined) swapped = catalog.get(out)?.name ?? out;
       } else {
         if (!has) return { ok: false, reason: `${npc.name} 没装 ${def.name}` };
         npc.body = { ...body, cyberware: body.cyberware.filter((c) => c !== command.cyberware) };
@@ -257,7 +291,8 @@ export function applyNpcBody(
       v.humanity = Math.min(v.humanity, npcHumanityCap(after, data));
       v.hp = Math.min(v.hp, npcMaxHp(after, data));
       const verb = command.action === "install" ? "装上了" : "拆掉了";
-      return { ok: true, notes: npc.met ? [`${npc.name} ${verb} ${def.name}`] : [] };
+      const swapNote = swapped === undefined ? "" : `，换下了 ${swapped}`;
+      return { ok: true, notes: npc.met ? [`${npc.name} ${verb} ${def.name}${swapNote}`] : [] };
     }
     case "npcHumanity": {
       const { body, v } = settle(npc, data, now);
@@ -285,17 +320,45 @@ function names(
   return ids.map((id) => lookup.get(id)?.name ?? id);
 }
 
-/** 完整卡上的一行身体：档位、有效属性、生命和伤势、装备、义体、人性数值和阶段；只给叙事模型 */
+/** 一件义体的名字、部位和效果说明（义体表的 ability）；表里没有的 id 只有名字 */
+export interface ChromeDetail {
+  readonly name: string;
+  readonly slot: string;
+  readonly ability: string;
+}
+
+/**
+ * 义体不再只是一串名字（用户 2026-11-02："npc的义体是不是太简单了，只有一个文字描述"）：
+ * 叙事模型和扫描面板都拿到部位和效果说明
+ */
+export function chromeDetails(ids: readonly string[], data: Data): ChromeDetail[] {
+  const catalog = cyberwareCatalog(data);
+  return ids.map((id) => {
+    const def = catalog.get(id);
+    return def
+      ? { name: def.name, slot: SLOT_LABELS[def.slot], ability: def.ability }
+      : { name: id, slot: "", ability: "" };
+  });
+}
+
+function chromeText(list: readonly ChromeDetail[]): string {
+  if (list.length === 0) return "没有";
+  return list
+    .map((c) => (c.ability ? `${c.name}（${c.slot}：${c.ability.replace(/。$/, "")}）` : c.name))
+    .join("、");
+}
+
+/** 完整卡上的一行身体：档位、有效属性、生命和伤势、装备、义体（带部位和效果）、人性数值和阶段；只给叙事模型 */
 export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): string {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const gear = names(body.gear, itemCatalog(data));
-  const chrome = names(body.cyberware, cyberwareCatalog(data));
+  const chrome = chromeDetails(body.cyberware, data);
   return [
     `身体：${NPC_TIER_LABELS[body.tier]}；${attrText(effectiveAttributes(body, data))}`,
     `生命 ${v.hp}/${v.max}（${woundLabel(v.hp, v.max)}）`,
     `装备：${gear.length ? gear.join("、") : "没有"}`,
-    `义体：${chrome.length ? chrome.join("、") : "没有"}`,
+    `义体：${chromeText(chrome)}`,
     `人性 ${v.humanity}（${STAGE_LABELS[humanityStage(v.humanity)]}）`,
   ].join("；");
 }
@@ -322,7 +385,7 @@ export interface NpcBodyView {
     readonly attributes: readonly { readonly label: string; readonly value: number }[];
     readonly hp: number;
     readonly max: number;
-    readonly chrome: readonly string[];
+    readonly chrome: readonly ChromeDetail[];
     readonly humanityStage: string;
     readonly at: number;
   } | null;
@@ -356,7 +419,7 @@ export function bodyView(
       })),
       hp: v.hp,
       max: v.max,
-      chrome: names(body.cyberware, cyberwareCatalog(data)),
+      chrome: chromeDetails(body.cyberware, data),
       humanityStage: STAGE_LABELS[humanityStage(v.humanity)],
       at: v.scannedAt,
     },

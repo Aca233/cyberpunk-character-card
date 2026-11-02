@@ -93,8 +93,28 @@ export const HackingStateSchema = z.object({
   breachedNetworks: z.array(BreachedNetworkSchema).default([]),
   /** 正在潜网；没在潜是 null */
   dive: DiveSchema.nullable().default(null),
+  /**
+   * 有卡的人放快速破解用掉的 RAM（用户 2026-11-02 选的"代码结算"）：人物 id → 已用格数。
+   * 战斗中每打完一段回 RAM_SEGMENT_REGEN 格，战斗收尾、场景结束、休整清空；旧存档没有
+   */
+  npcRamUsed: z.record(z.string(), z.number().int().min(0)).default({}),
+  /** 玩家装着的自我 ICE 这一场已经替他挡过一次快速破解；战斗收尾、场景结束、休整后恢复；旧存档没有 */
+  selfIceSpent: z.boolean().default(false),
 });
 export type HackingState = z.infer<typeof HackingStateSchema>;
+
+/** 模型使用：{"type": "npcHack", "id": "placide", "program": "overheat", "target": "你"} */
+export const NpcHackCommandSchema = z
+  .object({
+    type: z.literal("npcHack"),
+    id: z.string().min(1).describe("放快速破解的人的卡 id"),
+    program: z.string().min(1).describe("程序 id（快速破解表里的）"),
+    target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
+  })
+  .describe(
+    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。打中玩家的伤害类、终极类要让玩家先掷检定抵抗（智力或肉体），失败再按检定事先写的 damage 写 damage；控制、隐蔽类照效果写",
+  );
+export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
 /** 模型使用：{"type": "hack", "program": "overheat", "target": "门口的漩涡帮"} */
 export const HackCommandSchema = z

@@ -66,8 +66,46 @@ export const CheckSpecSchema = z.object({
     .boolean()
     .optional()
     .describe("失败可能失去手臂或腿（failure 里要写明）；只能和 damage: lethal 一起写"),
+  /**
+   * 和有卡的人对抗（躲他、骗他、和他对打、破他的防）时写他的卡 id（用户 2026-11-02 选的"对抗时提高难度"）：
+   * 他装着利于这项属性的义体时，代码在记下检定前把难度提高一档，不用另写 dvMods
+   */
+  opponent: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "和有卡的人对抗时写他的卡 id（潜行躲他、骗他、和他对打）；他的义体利于这项属性时代码自动加一档难度，不用另写",
+    ),
 });
 export type CheckSpec = z.infer<typeof CheckSpecSchema>;
+
+/** 对手义体加的难度修正的来源；同一个检定只加一次 */
+export const OPPONENT_CHROME_SOURCE = "对手义体";
+
+/**
+ * 对手义体利于这项属性时难度提高一档（MOD_STEP）：favors 是他身上利于 spec.attribute 的义体名字。
+ * 没写 opponent、没有利于的义体、或者已经加过时原样返回
+ */
+export function withOpponentChrome(
+  spec: CheckSpec,
+  opponentName: string,
+  favors: readonly string[],
+): CheckSpec {
+  if (favors.length === 0) return spec;
+  if (spec.dvMods.some((m) => m.source === OPPONENT_CHROME_SOURCE)) return spec;
+  return {
+    ...spec,
+    dvMods: [
+      ...spec.dvMods,
+      {
+        source: OPPONENT_CHROME_SOURCE,
+        value: MOD_STEP,
+        reason: `${opponentName}装着${favors.join("、")}，${ATTRIBUTE_LABELS[spec.attribute]}上占优`,
+      },
+    ],
+  };
+}
 
 /** 上下沿：low 取对手档位的下限（偏容易），high 取上限（偏难） */
 export const EdgeSchema = z.enum(["low", "high"]);

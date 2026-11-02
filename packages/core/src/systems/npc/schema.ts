@@ -559,7 +559,7 @@ export const NpcChromeSchema = z
     cyberware: z.string().min(1).describe("义体表里的 id"),
   })
   .describe(
-    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，装上会压低他的人性上限。玩家角色出钱装的，同时写 money 扣钱`,
+    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，每个部位按格数装（额叶皮质、神经系统、循环系统、皮肤、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件；网络接入仓、斯安威斯坦、狂暴都占操作系统，只能装一个），部位装满了再装会换下这个部位最早装的那件；装上会压低他的人性上限。玩家角色出钱装的，同时写 money 扣钱`,
   );
 export type NpcChrome = z.infer<typeof NpcChromeSchema>;
 

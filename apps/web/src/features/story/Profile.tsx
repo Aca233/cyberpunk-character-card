@@ -189,7 +189,18 @@ function BodySection({
       {scan ? (
         <ul className={styles.list}>
           <li>{scan.attributes.map((a) => `${a.label} ${a.value}`).join(" · ")}</li>
-          <li>义体：{scan.chrome.join("、") || "没扫出义体"}</li>
+          {/* 义体带部位和效果（用户 2026-11-02："npc的义体是不是太简单了，只有一个文字描述"）：沿用列表样式，部位放小牌 */}
+          {scan.chrome.length === 0 ? (
+            <li>义体：没扫出义体</li>
+          ) : (
+            scan.chrome.map((c) => (
+              <li key={c.name}>
+                {c.slot && <span className={styles.kind}>{c.slot}</span>}
+                {c.name}
+                {c.ability && <small>{c.ability}</small>}
+              </li>
+            ))
+          )}
         </ul>
       ) : (
         <p className={styles.note}>没扫描过；用义眼扫一下能看到属性、威胁和义体。</p>

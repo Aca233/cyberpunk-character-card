@@ -10,7 +10,7 @@ const CRUELTY = -HUMANITY_KINDS.cruelty.sizes.medium;
 export const hackingRules: RuleModule<HackingState> = {
   id: "hacking",
   title: "骇入和快速破解",
-  commands: ["hack", "breach", "dive"],
+  commands: ["hack", "breach", "dive", "npcHack"],
   when: (state, input) =>
     state.deck !== null || state.dive !== null || (input.mode !== "ooc" && HACK.test(input.text)),
   judge: `- 快速破解要装网络接入仓，只能放【当前状态】里已装的程序；RAM 不够就放不了，代码会拦下，这时让玩家换办法。
@@ -29,6 +29,7 @@ export const hackingRules: RuleModule<HackingState> = {
 - 对没有人物卡的杂兵直接生效，不检定；对有人物卡的人、敌方网络黑客要先掷智力，hack 里写 npc（卡的 id），失败是被 ICE 挡下、对方察觉或反向追踪你。
 - 终极类（赛博精神病、自我了断、系统崩溃）代码自动按残忍行为扣 ${CRUELTY} 点人性，不要再另写 humanity；正文写得冷，不渲染快感。
 - 得到新程序（买到、从芯片里拷来）写 hack 的 action learn 并写 reason；程序格满了先 drop 一个。
+- 有卡的人放快速破解写 npcHack（id 写他的卡，program 写程序 id，target 对玩家角色写「你」）：他要装着网络接入仓（【人物】身体里的义体看得到），RAM 由代码扣，不够、没装接入仓或人倒下了时代码拦下，这时让他换别的打法。玩家装着自我 ICE 时每场代码先替玩家挡下一次。打中玩家角色的伤害类、终极类先让玩家掷智力或肉体抵抗（check 事先写 damage），失败再写 damage；控制、隐蔽类照效果写。终极类代码按残忍行为扣放的人的人性。
 - 入侵协议：接进接入点或终端开门、关摄像头、拿数据，写 breach（network、via、gains）；普通的网络给智力门槛，有网络黑客守着、公司级的 ICE 掷智力。代码要本轮门槛达标或检定成功才记下，不扣 RAM；【当前状态】里列着这个地点已经入侵过的网络，门和摄像头照那里写。
 - RAM 用完就只能换别的办法；战斗中每打完一段回 ${RAM_SEGMENT_REGEN} 格，场景结束、休整后回满。
 - 入侵协议成功后，这个网络上的门禁、摄像头、炮塔照拿下的写；拿到的数据可能是密码、行程、把柄，也可能值钱（按 loot 记）。

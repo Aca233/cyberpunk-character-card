@@ -3,6 +3,7 @@ import {
   applyBreach,
   applyDive,
   applyHack,
+  applyNpcHack,
   refill,
   regen,
   surfaceOnSceneEnd,
@@ -18,14 +19,22 @@ import {
   HackCommandSchema,
   type HackingState,
   HackingStateSchema,
+  type NpcHackCommand,
+  NpcHackCommandSchema,
 } from "./schema";
 import { hackingStatus } from "./status";
 import { hackingView } from "./view";
 
-/** 骇入：接入仓和 RAM 由装着的义体推出来；放快速破解扣 RAM，打完一段回一点，收尾回满 */
-export const hacking = defineSystem<HackingState, HackCommand | BreachCommand | DiveCommand>({
+/**
+ * 骇入：接入仓和 RAM 由装着的义体推出来；放快速破解扣 RAM，打完一段回一点，收尾回满。
+ * 有卡的人放快速破解（npcHack）也在这里结算：读 npc 拿他的义体，读 cyberware 看玩家的自我 ICE
+ */
+export const hacking = defineSystem<
+  HackingState,
+  HackCommand | BreachCommand | DiveCommand | NpcHackCommand
+>({
   id: "hacking",
-  dependsOn: ["cyberware", "humanity", "combat", "world"],
+  dependsOn: ["cyberware", "humanity", "combat", "world", "npc"],
   state: HackingStateSchema,
   initial: () => ({
     deck: null,
@@ -34,11 +43,19 @@ export const hacking = defineSystem<HackingState, HackCommand | BreachCommand | 
     programs: [],
     breachedNetworks: [],
     dive: null,
+    npcRamUsed: {},
+    selfIceSpent: false,
   }),
-  commands: { hack: HackCommandSchema, breach: BreachCommandSchema, dive: DiveCommandSchema },
+  commands: {
+    hack: HackCommandSchema,
+    breach: BreachCommandSchema,
+    dive: DiveCommandSchema,
+    npcHack: NpcHackCommandSchema,
+  },
   apply(draft, command, ctx) {
     if (command.type === "breach") return applyBreach(draft, command, ctx);
     if (command.type === "dive") return applyDive(draft, command, ctx);
+    if (command.type === "npcHack") return applyNpcHack(draft, command, ctx);
     return applyHack(draft, command, ctx);
   },
   on: {
