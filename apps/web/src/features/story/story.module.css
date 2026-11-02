@@ -2522,8 +2522,9 @@
   cursor: help;
 }
 
+/* 委托用 MainColors.Red（没有兜底值，用本作红色），和地点图钉的黄分开（用户 2026-11-02 嫌委托"图标不显眼"，选了红色） */
 .mapPoi[data-kind="quest"] {
-  color: var(--cp-yellow);
+  color: var(--cp-red);
 }
 
 .mapPoi[data-kind="apartment"],
@@ -2557,22 +2558,53 @@
   color: var(--cp-yellow);
 }
 
-/* 委托标记（用户同意的 2026-10-30）：在地点图钉左下方显示，不遮住玩家箭头和拖动入口；只偏移显示，不改坐标 */
-.mapPoi.mapJob {
-  margin-left: -26px;
-  margin-top: 24px;
+/*
+ * 委托标记（用户同意的 2026-10-30）：在地点图钉左下方显示，不遮住玩家箭头和拖动入口；只偏移显示，不改坐标。
+ * 用户 2026-11-02 嫌"图标不显眼"：原作 quest 图标从 22 放大到 30，染红（选的红色），下面照地点图钉垫一块原作黑影
+ */
+.mapJob {
+  position: absolute;
   z-index: 1;
+  width: 0;
+  height: 0;
+  margin-left: -30px;
+  margin-top: 28px;
+}
+
+/* 黑影比图标大一圈，同地点图钉的 shadowBlobSquare_big */
+.mapJob > .mapPinShadow {
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  opacity: 0.75;
+}
+
+.mapJobPin {
+  position: absolute;
+  left: -15px;
+  top: -15px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  color: var(--cp-red);
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
   cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    transform var(--dur-flash);
 }
 
 /* 遮罩会裁掉轮廓；聚焦、悬停和选中用提亮与放大区分，不加动画 */
-.mapPoi.mapJob:is(:hover, :focus-visible, [aria-pressed="true"]) {
+.mapJobPin:is(:hover, :focus-visible, [aria-pressed="true"]) {
   outline: none;
-  color: #fff8a8;
-  transform: translate(-50%, -50%) scale(1.2);
+  color: #fff;
+  transform: scale(1.2);
 }
 
-.mapPoi.mapJob:disabled {
+.mapJobPin:disabled {
   opacity: 0.45;
   cursor: var(--cp-cursor-invalid);
 }

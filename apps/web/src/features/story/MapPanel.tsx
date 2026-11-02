@@ -16,7 +16,6 @@ import {
   iconStyle,
   MAP,
   onOverlay,
-  POI_ZOOM,
   pinVars,
   poiIcon,
   SUB_ZOOM,
@@ -308,13 +307,13 @@ export function MapBody({
 
   // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点。
   // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）；
-  // 没去过的原作地标（数据终端、地铁站）放大到能看街区名时画图钉，点了照常出行、不传送（用户定的，2026-11-02）
-  // 地标和其他地点共用「地点」开关，保留地标的缩放门槛，避免全城图钉挤在一起
+  // 没去过的原作地标（数据终端、地铁站）当普通地点画，不再另设缩放门槛（用户 2026-11-02 选的"当普通地点"），
+  // 点了照常出行、不传送；和其他地点共用「地点」开关
   const visibleDests = destinations.filter(
     (d) =>
       d.id === picked ||
       (d.firstVisit
-        ? d.layer === "ft" && zoom >= SUB_ZOOM && !hidden.has("dest")
+        ? d.layer === "ft" && !hidden.has("dest")
         : !hidden.has(d.here ? "here" : "dest")),
   );
   const firstVisits = new Map(destinations.filter((d) => d.firstVisit).map((d) => [d.id, d]));
@@ -344,9 +343,10 @@ export function MapBody({
     }
   }
 
-  // 服务点：放大后才显示；挤在一起的只留第一个，避免糊成一片；图例里关掉的类别不占位置
+  // 服务点：1 倍就显示，不再等放大（用户 2026-11-02 选的"降低门槛"）；挤在一起的只留第一个，避免糊成一片；
+  // 图例里关掉的类别不占位置
   const pois: { readonly poi: MapPoi; readonly style: CSSProperties }[] = [];
-  if (zoom >= POI_ZOOM) {
+  {
     const taken = new Set<string>();
     // 已经去过、记下的原作店作为目的地图钉画，装饰图标不再重复画
     const booked = new Set(destinations.filter((d) => !d.firstVisit).map((d) => d.id));
@@ -625,23 +625,25 @@ export function MapBody({
             if (!d) return null;
             const at = toScreen(d.x, d.y);
             if (!onScreen(at)) return null;
-            const style = iconStyle(JOB_ICON, at);
+            const style = iconStyle(JOB_ICON);
             if (!style) return null;
             const title = `委托：${list.map((j) => `${j.title}（${j.statusLabel}）`).join("；")} · ${destTitle(d)}`;
+            // 用户 2026-11-02 嫌"图标不显眼"：放大、染红，下面照地点图钉垫原作黑影
             return (
-              <button
-                key={id}
-                type="button"
-                className={`${styles.mapPoi} ${styles.mapJob}`}
-                data-kind="quest"
-                data-go=""
-                data-job-location={id}
-                style={style}
-                title={title}
-                aria-label={title}
-                aria-pressed={picked === id}
-                onClick={() => setPicked(id)}
-              />
+              <div key={id} className={styles.mapJob} style={at}>
+                <i className={styles.mapPinShadow} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.mapJobPin}
+                  data-kind="quest"
+                  data-job-location={id}
+                  style={style}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={picked === id}
+                  onClick={() => setPicked(id)}
+                />
+              </div>
             );
           })}
 
