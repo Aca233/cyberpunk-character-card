@@ -2,6 +2,7 @@ import type { TurnEvent, TurnInput } from "@cp/core";
 import { create } from "zustand";
 import { ApiError, api, newRequestId } from "../../api/client";
 import { followTurn } from "../../api/events";
+import { beginProgress, type EndCategory, type ProgressHandle } from "../../progress";
 
 /**
  * 一轮生成的进度：提交 → 事件流（掷骰、正文逐字）→ 终止事件 → 刷新存档状态。
@@ -76,6 +77,14 @@ interface StoryState {
 
 let unsubscribe: (() => void) | null = null;
 
+/** 这一轮的进度（第 2 条）：提交时开始，下面每条走到 idle 的路各结束一次；重复结束不会再发 */
+let progress: ProgressHandle | null = null;
+
+function finish(category: EndCategory, message?: string): void {
+  progress?.end(category, message);
+  progress = null;
+}
+
 const EMPTY_DRAFT: TurnInput = { text: "" };
 
 export const useStory = create<StoryState>()((set, get) => {
@@ -95,7 +104,7 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           case "done": {
             const wasInput = get().pending?.kind === "input";
-            void refresh().finally(() =>
+            void refresh().finally(() => {
               set((s) => ({
                 phase: "idle",
                 turnId: null,
@@ -103,12 +112,14 @@ export const useStory = create<StoryState>()((set, get) => {
                 rolled: null,
                 pending: null,
                 draft: wasInput ? EMPTY_DRAFT : s.draft,
-              })),
-            );
+              }));
+              finish("ok");
+            });
             return;
           }
           case "confirmSpend": {
             const pending = get().pending;
+            finish("confirmSpend");
             set({
               phase: "idle",
               turnId: null,
@@ -127,6 +138,7 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           }
           case "blocked":
+            finish("blocked", event.reason);
             set({
               phase: "idle",
               turnId: null,
@@ -134,6 +146,7 @@ export const useStory = create<StoryState>()((set, get) => {
             });
             return;
           case "stopped":
+            finish("stopped");
             set({
               phase: "idle",
               turnId: null,
@@ -145,6 +158,7 @@ export const useStory = create<StoryState>()((set, get) => {
             });
             return;
           case "error":
+            finish("error", event.message);
             set({
               phase: "idle",
               turnId: null,
@@ -155,6 +169,7 @@ export const useStory = create<StoryState>()((set, get) => {
         }
       },
       onLost: (reason) => {
+        finish("lost", reason);
         set({
           phase: "idle",
           turnId: null,
@@ -182,6 +197,8 @@ export const useStory = create<StoryState>()((set, get) => {
       if (get().saveId === saveId) return;
       unsubscribe?.();
       unsubscribe = null;
+      // 换了存档：上一个存档没收尾的这一轮算被顶掉
+      finish("aborted");
       set({
         saveId,
         phase: "idle",
@@ -197,6 +214,9 @@ export const useStory = create<StoryState>()((set, get) => {
     async submit(saveId, baseVersion, pending, refresh) {
       if (get().phase !== "idle") return;
       set({ phase: "submitting", pending, failure: null, spend: null, text: "", rolled: null });
+      // 上一次没收尾的（照理不会有）先算被顶掉，再开这一次
+      finish("aborted");
+      progress = beginProgress("turn");
       const body =
         pending.kind === "input"
           ? { requestId: newRequestId(), baseVersion, input: pending.input }
@@ -214,6 +234,7 @@ export const useStory = create<StoryState>()((set, get) => {
         }
         await refresh();
         set({ phase: "idle", pending: null });
+        finish("ok");
       } catch (error) {
         if (
           error instanceof ApiError &&
@@ -231,6 +252,7 @@ export const useStory = create<StoryState>()((set, get) => {
             : error instanceof ApiError && error.status === 409
               ? "rejected"
               : "error";
+        finish(kind, message);
         set({ phase: "idle", failure: { kind, message, retryable: kind === "error" } });
         if (kind === "rejected") await refresh();
       }
