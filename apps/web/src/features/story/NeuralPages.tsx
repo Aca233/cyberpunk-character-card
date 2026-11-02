@@ -554,7 +554,7 @@ export function InventoryPage({
 
 // 物品栏精简（用户定的方案 A）：制作页（拆解、升级）去掉；后台的 craft 动作和零件规则留着，以后想加回来再接界面
 
-/** 日志（J）：左边待办、期限、中间人、拳赛和赛车、超梦；右边委托（进行中、委托板、已结束） */
+/** 日志（J）：左边待办、期限、拳赛和赛车、超梦；右边委托（进行中、委托板、已结束）；中间人的派单上限在人物档案里 */
 export function JournalPage({
   view,
   onAccept,
@@ -611,21 +611,7 @@ export function JournalPage({
               </ul>
             </Panel>
           )}
-          {view.jobs.fixers.length > 0 && (
-            <Panel as="section" title="中间人" line="var(--cp-cyan)">
-              <dl className={styles.facts}>
-                {view.jobs.fixers.map((f) => (
-                  <Fragment key={f.id}>
-                    <dt>{f.name}</dt>
-                    <dd>
-                      好感 {f.affinity} · 最多 {f.maxRisk} 星
-                      {f.capHint && <small> · {f.capHint}</small>}
-                    </dd>
-                  </Fragment>
-                ))}
-              </dl>
-            </Panel>
-          )}
+          {/* 中间人并进人物档案（用户定的，2026-11-02）：派单上限在联系人→人物里，这里不再单列 */}
           <GigsPanel gigs={view.sidegigs} />
           {view.braindance.active && (
             <Panel as="section" title="超梦" line="var(--cp-cyan)">
@@ -752,7 +738,7 @@ export function ContactsPage({
                 ))}
               </ul>
             </Panel>
-            <Profile npc={current} />
+            <Profile npc={current} fixer={view.jobs.fixers.find((f) => f.id === current.id)} />
           </div>
         ))}
       {tab === "squad" && <SquadPanel squad={view.squad} onSquad={onSquad} />}

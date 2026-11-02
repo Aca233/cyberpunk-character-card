@@ -7,6 +7,8 @@ import styles from "./profile.module.css";
 import type { View } from "./view";
 
 type Npc = View["npcs"][number];
+/** 中间人的派单信息（委托系统按好感、声望和势力算）；人物档案里同 id 的中间人才有 */
+type Fixer = View["jobs"]["fixers"][number];
 
 /** 同四角在场的人用的 map.filterCell*、map.panel* 切法（计划第九节） */
 const CELL_SLICE = [20, 30, 30, 20] as const;
@@ -38,7 +40,13 @@ function Tag({ tint, children }: { readonly tint: string; readonly children: str
 }
 
 /** 头一块：左边原作头像格，右边名字、状态牌和信息栏；私信页头像浮层也只用这一块（用户定的，计划第十二节第 14 条） */
-export function ProfileHead({ npc }: { readonly npc: Npc }) {
+export function ProfileHead({
+  npc,
+  fixer,
+}: {
+  readonly npc: Npc;
+  readonly fixer?: Fixer | undefined;
+}) {
   const portrait = portraitOf(npc.id);
   return (
     <header className={styles.head}>
@@ -59,13 +67,13 @@ export function ProfileHead({ npc }: { readonly npc: Npc }) {
         )}
         <NineSlice id="map.filterCellFg" tint="var(--cp-cyan)" slice={CELL_SLICE} />
       </span>
-      <ProfileInfo npc={npc} />
+      <ProfileInfo npc={npc} fixer={fixer} />
     </header>
   );
 }
 
-/** 信息栏：名字和外号、状态牌，见过面的人再列身份、代词、地点和好感条 */
-function ProfileInfo({ npc }: { readonly npc: Npc }) {
+/** 信息栏：名字和外号、状态牌，见过面的人再列身份、代词、地点和好感条；中间人再列派单上限 */
+function ProfileInfo({ npc, fixer }: { readonly npc: Npc; readonly fixer?: Fixer | undefined }) {
   const fill = Math.min(1, Math.abs(npc.affinity) / AFFINITY_MAX);
   return (
     <div className={styles.info}>
@@ -105,6 +113,13 @@ function ProfileInfo({ npc }: { readonly npc: Npc }) {
               </span>
             </span>
           </span>
+          {/* 中间人并进人物档案（用户定的，2026-11-02）：派单上限和卡在哪，原先在日志页单独一个中间人面板 */}
+          {fixer && (
+            <span>
+              派单 {fixer.maxRisk > 0 ? `最多 ${fixer.maxRisk} 星` : "暂停"}
+              {fixer.capHint && ` · ${fixer.capHint}`}
+            </span>
+          )}
         </div>
       ) : (
         <p className={styles.note}>
@@ -215,9 +230,12 @@ function profileTabs(npc: Npc): Tab[] {
  */
 export function Profile({
   npc,
+  fixer,
   onScan,
 }: {
   readonly npc: Npc;
+  /** 这个人是中间人时传委托系统算的派单信息（用户定的，2026-11-02：中间人并进人物档案） */
+  readonly fixer?: Fixer | undefined;
   /** 有就在身体栏里出「扫描」按钮：点一下立刻用义眼扫，不调模型（用户定的，计划第十二节第 14 条） */
   readonly onScan?: ((id: string) => void) | undefined;
 }) {
@@ -227,7 +245,7 @@ export function Profile({
   const tab = tabs.some(([id]) => id === picked) ? picked : "relation";
   return (
     <article className={styles.profile} aria-label={`${npc.name}的档案`}>
-      <ProfileHead npc={npc} />
+      <ProfileHead npc={npc} fixer={fixer} />
       {/* 左右排：左边头像和信息，右边页签和当前一栏；窄的时候自动折成上下（计划第十二节第 14 条） */}
       <div className={styles.side}>
         <nav className={styles.tabs} aria-label="档案分栏">
