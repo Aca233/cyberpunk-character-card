@@ -1,4 +1,5 @@
 import type { TurnEvent } from "@cp/core";
+import { followLocalTurn, LOCAL_MODE } from "./transport";
 
 const NAMES = [
   "started",
@@ -31,6 +32,8 @@ export interface FollowHandlers {
  * 收到终止事件后关闭。返回取消订阅的函数
  */
 export function followTurn(saveId: string, turnId: string, handlers: FollowHandlers): () => void {
+  // 本地模式（静态网站）：游戏在浏览器里跑，直接跟内存里的 TurnHub，不走 EventSource
+  if (LOCAL_MODE) return followLocalTurn(saveId, turnId, isTerminal, handlers);
   const source = new EventSource(`/api/saves/${saveId}/turns/${turnId}/events`);
   let finished = false;
   const close = () => {

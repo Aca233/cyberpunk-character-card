@@ -78,8 +78,14 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["@cp/server", "@cp/server/**", "**/server", "**/server/**"],
-                    "message": "web 不能引用 server；通过 HTTP 接口访问后端，共享类型放在 packages/core"
+                    "group": [
+                      "@cp/server",
+                      "@cp/server/**",
+                      "**/server",
+                      "**/server/**",
+                      "!@cp/server/browser"
+                    ],
+                    "message": "web 不能引用 server；通过 HTTP 接口访问后端，共享类型放在 packages/core（唯一例外：纯前端模式只经 api/transport.ts 引用 @cp/server/browser）"
                   },
                   {
                     "group": ["node:*", "node:*/**"],

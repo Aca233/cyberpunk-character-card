@@ -7,16 +7,10 @@ import {
   TextSearchRequestSchema,
   TextSourceRequestSchema,
 } from "@cp/core";
+import { OfficialTextError } from "./authoring-errors";
 
 const PREVIEW_CHARS = 600;
 const SOURCE_LIMIT = 20;
-
-export class OfficialTextError extends Error {
-  constructor() {
-    super("官方文本库暂时无法读取，请检查本机数据库及全文索引");
-    this.name = "OfficialTextError";
-  }
-}
 
 interface TextRow {
   readonly rowId: number;

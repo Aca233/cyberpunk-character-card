@@ -16,8 +16,21 @@ import type {
 
 import { encounterPace, offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
+import { apiFetch, LOCAL_MODE } from "./transport";
 
-/** 后端接口；只走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥 */
+/**
+ * 后端接口。连服务器时走同源的 /api（开发时由 Vite 转给 127.0.0.1 上的后端），网页里没有任何密钥；
+ * 本地模式（静态网站）下同一套接口在浏览器里直接跑，密钥只存在这个网站自己的浏览器存储里
+ */
+
+/** 请求根本没送到的提示：本地模式是浏览器存储打不开，连服务器时是后端没启动 */
+function unreachable(error: unknown): string {
+  if (LOCAL_MODE) {
+    const detail = error instanceof Error ? `：${error.message}` : "";
+    return `打不开浏览器里的游戏存储${detail}（隐私模式或禁用了站点数据时可能用不了）`;
+  }
+  return "连不上后端：确认已经在项目根目录运行 pnpm --filter @cp/server dev";
+}
 
 export class ApiError extends Error {
   override name = "ApiError";
@@ -42,7 +55,7 @@ async function request<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await apiFetch(path, {
       method,
       headers: {
         ...(body === undefined ? {} : { "content-type": "application/json" }),
@@ -50,8 +63,8 @@ async function request<T>(
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-  } catch {
-    throw new ApiError("连不上后端：确认已经在项目根目录运行 pnpm --filter @cp/server dev", 0);
+  } catch (error) {
+    throw new ApiError(unreachable(error), 0);
   }
   let data: Record<string, unknown> = {};
   try {
@@ -85,7 +98,7 @@ function streamProse(
   onText: (text: string) => void,
   signal: AbortSignal,
 ): Promise<{ truncated: boolean }> {
-  return streamEvents("/api/characters/prose", input, onText, signal);
+  return streamEvents("/characters/prose", input, onText, signal);
 }
 
 export interface DraftInput {
@@ -102,19 +115,19 @@ function streamDraft(
   onText: (text: string) => void,
   signal: AbortSignal,
 ): Promise<{ truncated: boolean }> {
-  return streamEvents("/api/characters/draft", input, onText, signal);
+  return streamEvents("/characters/draft", input, onText, signal);
 }
 
 /** 逐块写和一键成稿共用：POST 之后按行读 JSON 事件（text / error / done） */
 async function streamEvents(
-  url: string,
+  path: string,
   input: unknown,
   onText: (text: string) => void,
   signal: AbortSignal,
 ): Promise<{ truncated: boolean }> {
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await apiFetch(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -122,7 +135,7 @@ async function streamEvents(
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new ApiError("连不上后端：确认已经在项目根目录运行 pnpm --filter @cp/server dev", 0);
+    throw new ApiError(unreachable(error), 0);
   }
   if (!response.ok || !response.body) {
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;

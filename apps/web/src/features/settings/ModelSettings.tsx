@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { api, type ConnectionTest, type ProfilePatch, type PublicProfile } from "../../api/client";
+import { LOCAL_MODE } from "../../api/transport";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
@@ -128,7 +129,11 @@ export function ModelSettings({
     return (
       <section className={styles.notice} role="alert">
         <h2>配置文件有错误，暂时不能安全修改</h2>
-        <p>不会覆盖现有文件或密钥。请按下面的具体错误修正 config.json。</p>
+        <p>
+          {LOCAL_MODE
+            ? "不会覆盖现有配置或密钥。配置保存在这个浏览器里，不能直接改文件；出现这个错误通常是版本不兼容，请带上下面的具体错误反馈。"
+            : "不会覆盖现有文件或密钥。请按下面的具体错误修正 config.json。"}
+        </p>
         <ul>
           {data.errors.map((e) => (
             <li key={e}>{e}</li>
@@ -309,7 +314,11 @@ export function ModelSettings({
           ) : null}
         </section>
       </div>
-      <p className={styles.privacy}>密钥仅存本机 config.json，勿分享或提交。</p>
+      <p className={styles.privacy}>
+        {LOCAL_MODE
+          ? "密钥只存在这个浏览器里（IndexedDB），由浏览器直接发给模型服务商，不经过本站服务器；公用电脑上用完请清除密钥。服务商需允许网页跨域访问（CORS），本地 Ollama 要设置 OLLAMA_ORIGINS。"
+          : "密钥仅存本机 config.json，勿分享或提交。"}
+      </p>
       {leaving !== null && (
         <Dialog
           title="切换前要放弃未保存内容吗？"
@@ -763,7 +772,9 @@ function ConnectionActions({
               ? `向「${profile.name}」的 ${profile.model} 发送一条短请求，可能按服务商价格计费。`
               : dialog === "delete"
                 ? `删除「${profile.name}」及其本机密钥，之后需要重新添加。`
-                : "只删除 config.json 中的密钥。若配置了环境变量密钥，仍可能继续使用环境变量。"}
+                : LOCAL_MODE
+                  ? "只删除这个浏览器里保存的密钥，连接的其他设置保留；之后要重新填写密钥才能用于剧情。"
+                  : "只删除 config.json 中的密钥。若配置了环境变量密钥，仍可能继续使用环境变量。"}
           </p>
         </Dialog>
       )}

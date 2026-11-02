@@ -6,25 +6,14 @@ import {
   AuthoringDraftSchema,
   type AuthoringInput,
   AuthoringInputSchema,
-  type AuthoringIssue,
   authoringReviewIssues,
   validateAuthoringContent,
 } from "@cp/core";
+import { AuthoringError } from "./authoring-errors";
 import { atomicWrite, isNotFound } from "./fsutil";
 import { KeyedMutex } from "./mutex";
 
 const DRAFT_ID = /^a-[a-z0-9-]{1,60}$/;
-
-export class AuthoringError extends Error {
-  constructor(
-    readonly status: 400 | 404 | 409 | 422,
-    message: string,
-    readonly issues: readonly AuthoringIssue[] = [],
-  ) {
-    super(message);
-    this.name = "AuthoringError";
-  }
-}
 
 /** 本机草稿仓库；root 由服务端指定，请求只能提供受限 id，不能提供路径。 */
 export class AuthoringStore {

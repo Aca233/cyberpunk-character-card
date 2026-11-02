@@ -1,8 +1,7 @@
 import { glossary } from "@cp/content";
 import type { Clock, LoreSource, Rng } from "@cp/core";
 import { Hono } from "hono";
-import type { AuthoringStore } from "./authoring";
-import type { AuthoringTextSearch } from "./authoring-search";
+import type { AuthoringDrafts, OfficialTextSearch } from "./authoring-ports";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
@@ -31,8 +30,8 @@ export interface AppDeps {
   /** 「存为评测用例」写草稿的地方（服务器上是 tools/evals/drafts/） */
   readonly evalDrafts?: DocStore | undefined;
   /** 本机内容工坊；非开发模式即使传入也不挂载接口。 */
-  readonly authoring?: AuthoringStore | undefined;
-  readonly authoringText?: AuthoringTextSearch | undefined;
+  readonly authoring?: AuthoringDrafts | undefined;
+  readonly authoringText?: OfficialTextSearch | undefined;
   /** 设定库：本机官方文本库的只读检索；没有文本库时不传 */
   readonly lore?: LoreSource | undefined;
   /** 玩家导入的酒馆预设（用户定的）；不传时没有预设接口，写正文也不套预设 */

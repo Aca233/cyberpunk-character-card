@@ -254,6 +254,9 @@ importers:
       '@cp/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cp/server':
+        specifier: workspace:*
+        version: link:../server
       '@fontsource-variable/noto-sans-sc':
         specifier: ^5.3.1
         version: 5.3.1

@@ -16,8 +16,8 @@ import {
 } from "@cp/core";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
-import { AuthoringError, type AuthoringStore } from "../authoring";
-import { type AuthoringTextSearch, OfficialTextError } from "../authoring-search";
+import { AuthoringError, OfficialTextError } from "../authoring-errors";
+import type { AuthoringDrafts, OfficialTextSearch } from "../authoring-ports";
 import { AbortedError, UpstreamError } from "../providers/http";
 
 /** 起草时给模型看的格式示例：各类取内容包里的第一条 */
@@ -89,9 +89,9 @@ function textResponse(c: Context, operation: () => OfficialTextResult) {
 }
 
 export function authoringRoutes(
-  store: AuthoringStore,
+  store: AuthoringDrafts,
   clock: Clock,
-  text?: AuthoringTextSearch,
+  text?: OfficialTextSearch,
   llm?: LlmClient,
 ): Hono {
   const app = new Hono();

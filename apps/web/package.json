@@ -5,12 +5,15 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "dev": "vite",
+    "dev:local": "VITE_CP_BACKEND=local vite",
     "build": "pnpm --dir ../.. check-assets && vite build",
+    "build:static": "pnpm --dir ../.. check-assets && VITE_CP_BACKEND=local vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@cp/content": "workspace:*",
     "@cp/core": "workspace:*",
+    "@cp/server": "workspace:*",
     "@fontsource-variable/noto-sans-sc": "^5.3.1",
     "@fontsource/rajdhani": "^5.3.0",
     "@tanstack/react-query": "^5.104.5",
