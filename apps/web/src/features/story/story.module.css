@@ -2749,11 +2749,7 @@
   color: var(--cp-yellow);
 }
 
-/* 剧情地点用青色底色，不覆盖当前位置的绿色和悬停提亮（places-plan 第二期） */
-.mapDest[data-layer="place"] {
-  --pin-yellow: var(--cp-cyan);
-}
-
+/* 剧情里记下的地点和原作地点同一种颜色，不再按来源区分（用户 2026-11-02："只把地点图钉统一"） */
 .mapHereTag {
   position: absolute;
   left: 0;

@@ -16,7 +16,7 @@
 - 玩家换地点：模型每轮发 `{"type": "world", ..., "location": "..."}`（`systems/world/schema.ts:71-81`）。表外的地点模型直接写中文名，存进 `clock.location`，没有城区、没有坐标。
 - 人物换地点：模型发 `meet {id, location}`（`systems/npc/schema.ts:273`），`apply.ts:203-204` 更新 `location` 和 `lastSeenAt`。
 - 人物位置进提示词：没见过的写「常在 X」，见过的写「最后在 X」（`npc/prompt.ts:135,143`）；挑附近的人按 `location ?? home` 的城区（`prompt.ts:160`）。
-- 地图 `apps/web/src/features/story/MapPanel.tsx`：画当前位置、可以去的地点、NCPD 警情、原作服务点图标、城区帮派；**不画人物**。
+- 地图 `apps/web/src/features/story/MapPanel.tsx`：画当前位置和地点（统一一种图钉，用户 2026-11-02 定的"只把地点图钉统一"）、委托、人物（按现在所在地点）、NCPD 警情、原作服务点图标（不含中间人）、城区帮派。
 - 原作服务点 `MAP_POIS`（`mapShapes.gen.ts`）：13 类（中间人、义体医生、武器店、近战武器商贩、网络黑客、服装、医疗点、垃圾商店、饮食、酒吧、公寓、公寓出租、好车中间人终端），只有类型、坐标、所在街区，**没有店名**，现在只是地图装饰。名字另见 `SERVICE_POINTS`（174 条，含 `MAP_POIS` 全部 146 条，90 条有原作名字，见第十三节）。
 - 能买东西的店 `packages/content/src/shops.ts`：4 家（威尔逊的枪店、阿涛的摊子、日本町商店街、维克多的药柜），挂在固定地点 id 上，和地图图标没对上。
 

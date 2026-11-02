@@ -149,14 +149,14 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
 const JOB_ICON: AssetId = "map.poi.quest";
 
 /**
- * 图例每一项都能开关：当前位置、可以去的地点、没去过的原作地标、委托、人物、NCPD 警情和每类服务点。
- * 人物（用户 2026-11-02："npc是能移动的""地图上不要搞专门的中间人了，都是npc"）：见过的人按现在在的地点画，中间人也一样
+ * 图例每一项都能开关：当前位置、地点、委托、人物、NCPD 警情和每类服务点。
+ * 地点统一一个开关，不按来源或是否去过分类；服务点分类不动（用户 2026-11-02："只把地点图钉统一"）。
+ * 见过的人按现在在的地点画，中间人也一样
  */
-type LegendKey = "here" | "dest" | "ft" | "jobs" | "npcs" | "police" | MapPoiKind;
+type LegendKey = "here" | "dest" | "jobs" | "npcs" | "police" | MapPoiKind;
 const LEGEND_KEYS = new Set<string>([
   "here",
   "dest",
-  "ft",
   "jobs",
   "npcs",
   "police",
@@ -199,14 +199,9 @@ const TEXT_SHADOW_SLICE = [18, 28, 16, 28] as const;
 /** 原作 atlas_shapes_sync 的 cell_flip_bg / cell_flip_fg（左下斜角）切线：2160p 左/上/右/下 30/20/20/30，这里是 CSS 顺序 */
 const PANEL_SLICE = [20, 20, 30, 30] as const;
 
-/** 地点图钉的悬停说明：名字、城区，再标当前位置、剧情里记下的、还没去过的原作地点 */
+/** 地点图钉的悬停说明：名字、城区，当前位置再标一下；不再按来源区分（用户 2026-11-02："只把地点图钉统一"） */
 function destTitle(d: MapDestination): string {
-  const tags = [
-    d.here ? "当前位置" : undefined,
-    d.layer === "place" ? "剧情里记下的地方" : undefined,
-    d.firstVisit ? "原作地点，还没去过" : undefined,
-  ].filter((t): t is string => t !== undefined);
-  return `${d.name} · ${d.district}${tags.length > 0 ? `（${tags.join("，")}）` : ""}`;
+  return `${d.name} · ${d.district}${d.here ? "（当前位置）" : ""}`;
 }
 
 interface Box {
@@ -314,14 +309,14 @@ export function MapBody({
   // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点。
   // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）；
   // 没去过的原作地标（数据终端、地铁站）放大到能看街区名时画图钉，点了照常出行、不传送（用户定的，2026-11-02）
+  // 地标和其他地点共用「地点」开关，保留地标的缩放门槛，避免全城图钉挤在一起
   const visibleDests = destinations.filter(
     (d) =>
       d.id === picked ||
       (d.firstVisit
-        ? d.layer === "ft" && zoom >= SUB_ZOOM && !hidden.has("ft")
+        ? d.layer === "ft" && zoom >= SUB_ZOOM && !hidden.has("dest")
         : !hidden.has(d.here ? "here" : "dest")),
   );
-  const landmarkCount = destinations.filter((d) => d.firstVisit && d.layer === "ft").length;
   const firstVisits = new Map(destinations.filter((d) => d.firstVisit).map((d) => [d.id, d]));
 
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
@@ -382,15 +377,9 @@ export function MapBody({
     { key: "here", name: "当前位置", icon: <i className={styles.legendHere} />, count: null },
     {
       key: "dest",
-      name: "可以去的地点",
+      name: "地点",
       icon: <i className={styles.legendDest} />,
-      count: destinations.filter((d) => !d.here && !d.firstVisit).length,
-    },
-    {
-      key: "ft",
-      name: "没去过的地标",
-      icon: <i className={styles.legendDest} />,
-      count: landmarkCount,
+      count: destinations.filter((d) => !d.here && (!d.firstVisit || d.layer === "ft")).length,
     },
   ];
   const jobLegend = iconStyle(JOB_ICON);
