@@ -77,7 +77,7 @@ import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { KeyedMutex } from "./mutex";
-import type { DocStore, SaveStorage } from "./ports";
+import { type DocStore, SaveMovedError, type SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
@@ -684,7 +684,13 @@ export class GameService {
         replaces: last.seq,
         ...(usage ? { usage } : {}),
       };
-      await this.deps.saves.appendLog(id, serializeRecord(record));
+      try {
+        // 写回前核对（第 4 项）：条数对不上就什么都不写，不自动重试
+        await this.deps.saves.appendAt(id, version, serializeRecord(record));
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
+      }
       return { status: 200, body: { version: version + 1, replaced: last.seq } };
     });
   }
@@ -1046,7 +1052,8 @@ export class GameService {
           message: redact(error.message),
           retryable: error.retryable,
         });
-      } else if (error instanceof VersionMovedError) {
+      } else if (error instanceof VersionMovedError || error instanceof SaveMovedError) {
+        // 写回前核对没通过：什么都没写，不自动重试，原因直接告诉玩家
         hub.push(run, { type: "error", message: error.message, retryable: false });
       } else {
         this.deps.log(
@@ -1065,10 +1072,13 @@ export class GameService {
   ): Promise<{ seq: number; version: number }> {
     const { saves } = this.deps;
     return this.locks.run(run.saveId, async () => {
-      const { records } = await saves.loadLog(run.saveId);
-      const seq = logVersion(records);
-      if (seq !== run.baseVersion)
-        throw new VersionMovedError("存档在生成期间被改动，这一轮没有保存");
+      // 写回前核对（第 4 项）：等锁期间玩家可能点了停止，或者这一轮已经结束、被新的一轮顶掉
+      if (run.controller.signal.aborted) throw new NarratorAbortedError("已停止");
+      if (run.finishedAt !== null || this.deps.hub.running(run.saveId) !== run) {
+        throw new VersionMovedError("这一轮已经结束或被新的一轮顶掉，没有保存");
+      }
+      // 记录条数的核对和追加由 appendAt 一起做，条数不对时抛 SaveMovedError、什么都不写
+      const seq = run.baseVersion;
       const record: TurnRecord = {
         kind: "turn",
         seq,
@@ -1140,7 +1150,7 @@ export class GameService {
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
       };
-      await saves.appendLog(run.saveId, serializeRecord(record));
+      await saves.appendAt(run.saveId, seq, serializeRecord(record));
       const version = seq + 1;
       await this.maybeSnapshot(run.saveId, version);
       return { seq, version };

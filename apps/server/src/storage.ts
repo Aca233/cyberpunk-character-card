@@ -1,22 +1,18 @@
 import { mkdir, open, readdir, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type ParsedLog, parseLog, type SaveMeta, SaveMetaSchema, type Snapshot } from "@cp/core";
-import { z } from "zod";
 import { atomicWrite, hasCode, isNotFound } from "./fsutil";
 import {
   isSaveId,
   SaveExistsError,
+  SaveMovedError,
   SaveNotFoundError,
   type SaveStorage,
   SNAPSHOT_KEEP,
+  SnapshotFileSchema,
 } from "./ports";
 
 const SNAPSHOT_FILE = /^\d{8}\.json$/;
-
-const SnapshotFileSchema = z.object({
-  nextSeq: z.number().int().min(0),
-  world: z.object({ time: z.number().int(), slices: z.record(z.string(), z.unknown()) }),
-});
 
 /** 文件版存档：data/saves/<id>/ 下的 meta.json、turns.jsonl、snapshots/ */
 export class SaveStore implements SaveStorage {
@@ -100,6 +96,13 @@ export class SaveStore implements SaveStorage {
   /** 导入存档：一次写下整份日志（调用方已经逐行校验过，存档是刚建的空档） */
   async importLog(id: string, text: string): Promise<void> {
     await atomicWrite(this.logPath(id), text);
+  }
+
+  /** 写回前核对条数再追加；调用方持有存档锁，核对和追加之间不会有别的写入。条数不对时什么都不写 */
+  async appendAt(id: string, seq: number, line: string): Promise<void> {
+    const { records } = await this.loadLog(id);
+    if (records.length !== seq) throw new SaveMovedError(seq, records.length);
+    await this.appendLog(id, line);
   }
 
   /** 读取并解析日志；末尾有写到一半的行时，把文件截到最后一条完整记录 */

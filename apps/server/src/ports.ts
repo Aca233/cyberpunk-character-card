@@ -1,4 +1,5 @@
 import type { ParsedLog, SaveMeta, Storage } from "@cp/core";
+import { z } from "zod";
 
 /**
  * 存储接口：服务器用文件版（file-store.ts、storage.ts），纯前端用 IndexedDB 版。
@@ -31,11 +32,22 @@ export interface SaveStorage extends Storage {
   loadLog(id: string): Promise<ParsedLog>;
   /** 导入存档：一次写下整份日志（调用方已经逐行校验过，存档是刚建的空档） */
   importLog(id: string, text: string): Promise<void>;
+  /**
+   * 写回前的快照核对：确认日志现在正好有 seq 条记录，再追加这一行，核对和追加不可分
+   * （IndexedDB 版在同一个事务里做）。条数不对时什么都不写，抛 SaveMovedError；不自动重试
+   */
+  appendAt(id: string, seq: number, line: string): Promise<void>;
 }
 
 const SAVE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 /** 快照保留最近 10 个 */
 export const SNAPSHOT_KEEP = 10;
+
+/** 读快照时的格式校验；文件版和 IndexedDB 版共用 */
+export const SnapshotFileSchema = z.object({
+  nextSeq: z.number().int().min(0),
+  world: z.object({ time: z.number().int(), slices: z.record(z.string(), z.unknown()) }),
+});
 
 export class SaveNotFoundError extends Error {
   override name = "SaveNotFoundError";
@@ -43,6 +55,17 @@ export class SaveNotFoundError extends Error {
 
 export class SaveExistsError extends Error {
   override name = "SaveExistsError";
+}
+
+/** 写回前核对发现存档在等待期间被改过（记录条数和预期不同）；这一次什么都没写 */
+export class SaveMovedError extends Error {
+  override name = "SaveMovedError";
+  constructor(
+    readonly expected: number,
+    readonly actual: number,
+  ) {
+    super(`存档在生成期间被改动（应有 ${expected} 条记录，实际 ${actual} 条），这一轮没有保存`);
+  }
 }
 
 export function isSaveId(id: string): boolean {
