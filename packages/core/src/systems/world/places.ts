@@ -123,6 +123,18 @@ export function serviceAnchors(
   return servicePointsOf(data).map((p) => ({ id: `poi:${p.id}`, kind: p.kind }));
 }
 
+/**
+ * 原作地标（ft:，数据终端和地铁站）的 id 和类别名：地图上放大后画出来，点了照常出行，不传送
+ * （用户定的"画出来，走普通出行"，2026-11-02；仍然不要快速移动）
+ */
+export function landmarkAnchors(
+  data: Data,
+): readonly { readonly id: string; readonly kind: string | null }[] {
+  return radarOf(data)
+    .filter((a) => a.id.startsWith("ft:"))
+    .map((a) => ({ id: a.id, kind: (a as { kind?: string | null }).kind ?? null }));
+}
+
 function radarOf(data: Data): readonly { id: string; name: string; x: number; y: number }[] {
   return Array.isArray(data.radar)
     ? (data.radar as { id: string; name: string; x: number; y: number }[])

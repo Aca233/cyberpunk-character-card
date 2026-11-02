@@ -1,5 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import {
+  landmarkAnchors,
   locationCatalog,
   locationForTravel,
   serviceAnchors,
@@ -59,6 +60,26 @@ export function travelView({ world, data }: ViewContext) {
       metro: def.metro === true,
       layer: "poi" as const,
       kind: anchor.kind,
+      here: false,
+      firstVisit: true,
+      routes: routeOptions(w, data, def.id),
+    });
+    known.add(def.id);
+  }
+  // 原作地标（数据终端、地铁站）第一次去：同上，只算路线；照常出行，不传送（用户定的"画出来，走普通出行"，2026-11-02）
+  for (const anchor of landmarkAnchors(data)) {
+    if (known.has(anchor.id)) continue;
+    const def = locationForTravel(data, anchor.id);
+    if (!def || def.x === undefined || def.y === undefined) continue;
+    destinations.push({
+      id: def.id,
+      name: def.name,
+      district: def.district,
+      x: def.x,
+      y: def.y,
+      metro: anchor.kind === "地铁站",
+      layer: "ft" as const,
+      kind: null,
       here: false,
       firstVisit: true,
       routes: routeOptions(w, data, def.id),

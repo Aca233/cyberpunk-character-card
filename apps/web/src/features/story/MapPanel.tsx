@@ -148,11 +148,12 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
 /** 委托地点用原作地图上的任务标记（mappin_icons 的 quest，同类图标已在图集里，用户同意的 2026-10-30） */
 const JOB_ICON: AssetId = "map.poi.quest";
 
-/** 图例每一项都能开关：当前位置、可以去的地点、委托、NCPD 警情和每类服务点 */
-type LegendKey = "here" | "dest" | "jobs" | "police" | MapPoiKind;
+/** 图例每一项都能开关：当前位置、可以去的地点、没去过的原作地标、委托、NCPD 警情和每类服务点 */
+type LegendKey = "here" | "dest" | "ft" | "jobs" | "police" | MapPoiKind;
 const LEGEND_KEYS = new Set<string>([
   "here",
   "dest",
+  "ft",
   "jobs",
   "police",
   ...MAP_POI_KINDS.map((k) => k.id),
@@ -291,10 +292,16 @@ export function MapBody({
   const shapesBox = shapesViewBox(cam, size);
 
   // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点。
-  // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）
+  // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）；
+  // 没去过的原作地标（数据终端、地铁站）放大到能看街区名时画图钉，点了照常出行、不传送（用户定的，2026-11-02）
   const visibleDests = destinations.filter(
-    (d) => d.id === picked || (!d.firstVisit && !hidden.has(d.here ? "here" : "dest")),
+    (d) =>
+      d.id === picked ||
+      (d.firstVisit
+        ? d.layer === "ft" && zoom >= SUB_ZOOM && !hidden.has("ft")
+        : !hidden.has(d.here ? "here" : "dest")),
   );
+  const landmarkCount = destinations.filter((d) => d.firstVisit && d.layer === "ft").length;
   const firstVisits = new Map(destinations.filter((d) => d.firstVisit).map((d) => [d.id, d]));
 
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
@@ -358,6 +365,12 @@ export function MapBody({
       name: "可以去的地点",
       icon: <i className={styles.legendDest} />,
       count: destinations.filter((d) => !d.here && !d.firstVisit).length,
+    },
+    {
+      key: "ft",
+      name: "没去过的地标",
+      icon: <i className={styles.legendDest} />,
+      count: landmarkCount,
     },
   ];
   const jobLegend = iconStyle(JOB_ICON);
