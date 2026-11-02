@@ -1,16 +1,18 @@
-import { randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
 import { readTavernPreset, type TavernPreset } from "@cp/core";
 import { z } from "zod";
-import { atomicWrite, isNotFound, KeyedMutex } from "./fsutil";
+import { KeyedMutex } from "./mutex";
+import type { DocStore } from "./ports";
+import { randomHex } from "./random";
 
 /**
- * data/presets/<id>.json：玩家导入的酒馆预设（用户定的）；active.json 记当前给叙事模型用哪一份。
- * 存的是读好的条目、正则和采样参数，不存原文件；导入时的提醒一起存，设置页照样显示
+ * presets/<id>.json：玩家导入的酒馆预设（用户定的）；presets/active.json 记当前给叙事模型用哪一份。
+ * 存的是读好的条目、正则和采样参数，不存原文件；导入时的提醒一起存，设置页照样显示。
+ * 存在哪由 DocStore 决定（文件或 IndexedDB）
  */
 
 const PRESET_ID = /^p-[a-z0-9-]{1,40}$/;
+const FOLDER = "presets";
+const ACTIVE = `${FOLDER}/active.json`;
 const ROLE = z.enum(["system", "user", "assistant"]);
 
 const PresetSchema = z.object({
@@ -67,27 +69,28 @@ export const PresetPatchSchema = z.strictObject({
 /** 一份预设最多这么大（原文件约 1MB，读好以后小得多），防止误传别的大文件 */
 export const PRESET_MAX_BYTES = 8 * 1024 * 1024;
 
+/** 解析 JSON；坏了返回 undefined */
+function parseJson(text: string | undefined): unknown {
+  if (text === undefined) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 export class PresetStore {
   private readonly lock = new KeyedMutex();
 
-  constructor(private readonly root: string) {}
-
-  private dir(): string {
-    return join(this.root, "presets");
-  }
+  constructor(private readonly docs: DocStore) {}
 
   private path(id: string): string {
     if (!PRESET_ID.test(id)) throw new Error(`预设 id 不合法：${id}`);
-    return join(this.dir(), `${id}.json`);
+    return `${FOLDER}/${id}.json`;
   }
 
   async list(): Promise<StoredPreset[]> {
-    let names: string[] = [];
-    try {
-      names = await readdir(this.dir());
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
-    }
+    const names = await this.docs.list(FOLDER);
     const out: StoredPreset[] = [];
     for (const name of names.filter((n) => n.startsWith("p-") && n.endsWith(".json"))) {
       const entry = await this.get(name.slice(0, -5));
@@ -99,15 +102,8 @@ export class PresetStore {
   /** 找不到或文件坏了返回 undefined */
   async get(id: string): Promise<StoredPreset | undefined> {
     if (!PRESET_ID.test(id)) return undefined;
-    try {
-      const parsed = StoredPresetSchema.safeParse(
-        JSON.parse(await readFile(this.path(id), "utf8")),
-      );
-      return parsed.success ? parsed.data : undefined;
-    } catch (error) {
-      if (isNotFound(error) || error instanceof SyntaxError) return undefined;
-      throw error;
-    }
+    const parsed = StoredPresetSchema.safeParse(parseJson(await this.docs.read(this.path(id))));
+    return parsed.success ? parsed.data : undefined;
   }
 
   /** 读酒馆预设的 JSON，存成一份新的；不自动启用 */
@@ -119,13 +115,12 @@ export class PresetStore {
     const read = readTavernPreset(raw, fileName);
     if (!read.ok) return read;
     const entry: StoredPreset = {
-      id: `p-${now.getTime().toString(36)}-${randomBytes(3).toString("hex")}`,
+      id: `p-${now.getTime().toString(36)}-${randomHex(3)}`,
       importedAt: now.toISOString(),
       warnings: [...read.warnings],
       preset: PresetSchema.parse(read.preset),
     };
-    await mkdir(this.dir(), { recursive: true });
-    await atomicWrite(this.path(entry.id), `${JSON.stringify(entry, null, 2)}\n`);
+    await this.docs.write(this.path(entry.id), `${JSON.stringify(entry, null, 2)}\n`);
     return { ok: true, entry };
   }
 
@@ -148,7 +143,7 @@ export class PresetStore {
           sampling: patch.useSampling === false ? {} : preset.sampling,
         },
       };
-      await atomicWrite(this.path(id), `${JSON.stringify(next, null, 2)}\n`);
+      await this.docs.write(this.path(id), `${JSON.stringify(next, null, 2)}\n`);
       return next;
     });
   }
@@ -156,32 +151,18 @@ export class PresetStore {
   async remove(id: string): Promise<boolean> {
     if (!PRESET_ID.test(id)) return false;
     if ((await this.activeId()) === id) await this.setActive(null);
-    try {
-      await rm(this.path(id));
-      return true;
-    } catch (error) {
-      if (isNotFound(error)) return false;
-      throw error;
-    }
+    return this.docs.remove(this.path(id));
   }
 
   async activeId(): Promise<string | null> {
-    try {
-      const parsed = ActiveSchema.safeParse(
-        JSON.parse(await readFile(join(this.dir(), "active.json"), "utf8")),
-      );
-      return parsed.success ? parsed.data.id : null;
-    } catch (error) {
-      if (isNotFound(error) || error instanceof SyntaxError) return null;
-      throw error;
-    }
+    const parsed = ActiveSchema.safeParse(parseJson(await this.docs.read(ACTIVE)));
+    return parsed.success ? parsed.data.id : null;
   }
 
   /** null：不用预设，照本作原样写 */
   async setActive(id: string | null): Promise<boolean> {
     if (id !== null && !(await this.get(id))) return false;
-    await mkdir(this.dir(), { recursive: true });
-    await atomicWrite(join(this.dir(), "active.json"), `${JSON.stringify({ id })}\n`);
+    await this.docs.write(ACTIVE, `${JSON.stringify({ id })}\n`);
     return true;
   }
 

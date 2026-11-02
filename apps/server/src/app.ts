@@ -6,20 +6,20 @@ import type { AuthoringTextSearch } from "./authoring-search";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
+import type { DocStore, SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
 import { LlmRouter } from "./providers/index";
-import { cryptoRng } from "./rng";
+import { cryptoRng } from "./random";
 import { authoringRoutes } from "./routes/authoring";
 import { characterRoutes } from "./routes/characters";
 import { presetRoutes } from "./routes/presets";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
-import type { SaveStore } from "./storage";
 import { TurnHub } from "./turns";
 
 export interface AppDeps {
   readonly config: ConfigService;
-  readonly saves: SaveStore;
+  readonly saves: SaveStorage;
   readonly characters: CharacterStore;
   readonly dev: boolean;
   /** 写后端日志；传进来的文本已经去掉密钥 */
@@ -28,8 +28,8 @@ export interface AppDeps {
   readonly hub?: TurnHub;
   /** 测试时可以换成固定骰子 */
   readonly rng?: Rng;
-  /** 「存为评测用例」写草稿的目录 */
-  readonly evalDrafts?: string | undefined;
+  /** 「存为评测用例」写草稿的地方（服务器上是 tools/evals/drafts/） */
+  readonly evalDrafts?: DocStore | undefined;
   /** 本机内容工坊；非开发模式即使传入也不挂载接口。 */
   readonly authoring?: AuthoringStore | undefined;
   readonly authoringText?: AuthoringTextSearch | undefined;

@@ -14,7 +14,7 @@ import {
   runNarratorTurn,
   seededRng,
 } from "@cp/core";
-import { ConfigService, LlmRouter, UpstreamError } from "@cp/server/llm";
+import { configAt, LlmRouter, UpstreamError } from "@cp/server/llm";
 import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
 import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
 import { grade, type Score } from "./narrator-eval/grader";
@@ -233,7 +233,7 @@ async function main(): Promise<number> {
   }
   if (args.offline) return offline(cases, scenarios);
 
-  const config = new ConfigService(args.config);
+  const config = configAt(args.config);
   const redact = await config.redactor();
   const pick = {
     ...(args.narrator ? { narrator: args.narrator } : {}),

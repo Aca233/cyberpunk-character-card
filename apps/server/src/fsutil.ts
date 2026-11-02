@@ -18,25 +18,6 @@ export async function atomicWrite(path: string, data: string, mode = 0o644): Pro
   }
 }
 
-/** 按键排队的异步锁：同一个键上的任务一个接一个执行 */
-export class KeyedMutex {
-  private readonly tails = new Map<string, Promise<void>>();
-
-  run<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const previous = this.tails.get(key) ?? Promise.resolve();
-    const result = previous.then(task);
-    const tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.tails.set(key, tail);
-    void tail.then(() => {
-      if (this.tails.get(key) === tail) this.tails.delete(key);
-    });
-    return result;
-  }
-}
-
 export function hasCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 }

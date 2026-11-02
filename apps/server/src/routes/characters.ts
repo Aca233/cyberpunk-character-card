@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { boardModules, combos, cyberware, lifepath, npcs } from "@cp/content";
 import {
   BoardSchema,
@@ -25,6 +24,7 @@ import { stream } from "hono/streaming";
 import { z } from "zod";
 import type { CharacterStore } from "../characters";
 import { AbortedError, UpstreamError } from "../providers/http";
+import { randomHex } from "../random";
 
 async function readCard(c: Context) {
   let raw: unknown;
@@ -117,7 +117,7 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
     }
     const input = InterpretSchema.safeParse(raw);
     if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
-    const id = `custom-${randomBytes(4).toString("hex")}`;
+    const id = `custom-${randomHex(4)}`;
     try {
       const result = await interpretModule(
         llm,

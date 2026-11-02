@@ -10,7 +10,8 @@ import {
   authoringReviewIssues,
   validateAuthoringContent,
 } from "@cp/core";
-import { atomicWrite, isNotFound, KeyedMutex } from "./fsutil";
+import { atomicWrite, isNotFound } from "./fsutil";
+import { KeyedMutex } from "./mutex";
 
 const DRAFT_ID = /^a-[a-z0-9-]{1,60}$/;
 

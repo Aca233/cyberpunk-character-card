@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { isTerminalEvent, type TurnEvent } from "@cp/core";
+import { randomId } from "./random";
 
 /** 结束的轮次在内存里留 10 分钟，网页断线重连还能补收终止事件 */
 export const FINISHED_RETAIN_MS = 10 * 60 * 1000;
@@ -28,7 +28,7 @@ export class TurnHub {
   start(saveId: string, requestId: string, baseVersion: number): TurnRun {
     this.sweep();
     const run: TurnRun = {
-      turnId: randomUUID(),
+      turnId: randomId(),
       saveId,
       requestId,
       baseVersion,
@@ -89,8 +89,9 @@ export class TurnHub {
         const set = this.waiters.get(run.turnId) ?? new Set();
         set.add(resolve);
         this.waiters.set(run.turnId, set);
-        // 定时醒来检查 closed，网页断开后不让等待一直挂着
-        setTimeout(resolve, 15_000).unref();
+        // 定时醒来检查 closed，网页断开后不让等待一直挂着；Node 上 unref 不挡退出，浏览器没有 unref
+        const timer: unknown = setTimeout(resolve, 15_000);
+        (timer as { unref?: () => void }).unref?.();
       });
     }
   }

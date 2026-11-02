@@ -1,40 +1,25 @@
 import { mkdir, open, readdir, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  type ParsedLog,
-  parseLog,
-  type SaveMeta,
-  SaveMetaSchema,
-  type Snapshot,
-  type Storage,
-} from "@cp/core";
+import { type ParsedLog, parseLog, type SaveMeta, SaveMetaSchema, type Snapshot } from "@cp/core";
 import { z } from "zod";
 import { atomicWrite, hasCode, isNotFound } from "./fsutil";
+import {
+  isSaveId,
+  SaveExistsError,
+  SaveNotFoundError,
+  type SaveStorage,
+  SNAPSHOT_KEEP,
+} from "./ports";
 
-const SAVE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SNAPSHOT_FILE = /^\d{8}\.json$/;
-/** 快照保留最近 10 个 */
-export const SNAPSHOT_KEEP = 10;
 
 const SnapshotFileSchema = z.object({
   nextSeq: z.number().int().min(0),
   world: z.object({ time: z.number().int(), slices: z.record(z.string(), z.unknown()) }),
 });
 
-export class SaveNotFoundError extends Error {
-  override name = "SaveNotFoundError";
-}
-
-export class SaveExistsError extends Error {
-  override name = "SaveExistsError";
-}
-
-export function isSaveId(id: string): boolean {
-  return SAVE_ID.test(id);
-}
-
-/** data/saves/<id>/ 下的 meta.json、turns.jsonl、snapshots/ */
-export class SaveStore implements Storage {
+/** 文件版存档：data/saves/<id>/ 下的 meta.json、turns.jsonl、snapshots/ */
+export class SaveStore implements SaveStorage {
   constructor(private readonly root: string) {}
 
   private dir(id: string): string {

@@ -1,6 +1,3 @@
-import { randomBytes } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import {
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
@@ -79,11 +76,12 @@ import {
 import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
-import { atomicWrite, KeyedMutex } from "./fsutil";
+import { KeyedMutex } from "./mutex";
+import type { DocStore, SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
-import type { SaveStore } from "./storage";
+import { randomHex } from "./random";
 import type { TurnHub, TurnRun } from "./turns";
 
 /** 每追加这么多条记录写一次快照 */
@@ -128,7 +126,7 @@ function stableJson(value: unknown): string {
   );
 }
 
-const newSaveId = () => `s-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+const newSaveId = () => `s-${Date.now().toString(36)}-${randomHex(3)}`;
 
 /** 路由直接把 body 按 status 返回 */
 export interface Reply {
@@ -137,7 +135,7 @@ export interface Reply {
 }
 
 export interface GameDeps {
-  readonly saves: SaveStore;
+  readonly saves: SaveStorage;
   readonly characters: CharacterStore;
   readonly config: ConfigService;
   readonly llm: LlmRouter;
@@ -146,8 +144,8 @@ export interface GameDeps {
   /** 玩家检定用的骰子 */
   readonly rng: Rng;
   readonly log: (message: string) => void;
-  /** 「存为评测用例」写草稿的目录；不给时不能存 */
-  readonly evalDrafts?: string | undefined;
+  /** 「存为评测用例」写草稿的地方（服务器上是 tools/evals/drafts/）；不给时不能存 */
+  readonly evalDrafts?: DocStore | undefined;
   /** 设定库：本机官方文本库的只读检索；没有文本库时不给，写正文就不带原作资料 */
   readonly lore?: LoreSource | undefined;
   /** 玩家导入的酒馆预设（用户定的）：每轮开始时读当前启用的那一份，只给写正文 */
@@ -963,8 +961,7 @@ export class GameService {
           choices: record.choices ?? [],
         },
       };
-      await mkdir(dir, { recursive: true });
-      await atomicWrite(join(dir, `${caseId}.json`), `${JSON.stringify(draft, null, 2)}\n`);
+      await dir.write(`${caseId}.json`, `${JSON.stringify(draft, null, 2)}\n`);
       return { status: 201, body: { id: caseId, file: `tools/evals/drafts/${caseId}.json` } };
     });
   }

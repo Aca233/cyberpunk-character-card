@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { z } from "zod";
-import { atomicWrite, isNotFound, KeyedMutex } from "./fsutil";
+import { KeyedMutex } from "./mutex";
+import type { DocStore } from "./ports";
 
 z.config(z.locales.zhCN());
 
@@ -170,33 +169,30 @@ function withProfile(config: Config, name: string, change: (p: Profile) => unkno
   };
 }
 
-/** config.json 里存着密钥，只让当前用户能读写 */
-const CONFIG_MODE = 0o600;
+/** 示例配置的文件名，和 config.json 放在同一个 DocStore 里 */
+const EXAMPLE_FILE = "config.example.json";
 
+/**
+ * 模型方案配置。存在哪由 DocStore 决定（文件版放项目根目录的 config.json，纯前端放 IndexedDB）；
+ * env 是读密钥的环境变量（服务器传 process.env，浏览器里没有就不传）
+ */
 export class ConfigService {
   private readonly lock = new KeyedMutex();
-  readonly examplePath: string;
 
   constructor(
-    readonly path: string,
-    private readonly env: Readonly<Record<string, string | undefined>> = process.env,
-  ) {
-    this.examplePath = join(dirname(path), "config.example.json");
-  }
+    private readonly docs: DocStore,
+    readonly file = "config.json",
+    private readonly env: Readonly<Record<string, string | undefined>> = {},
+  ) {}
 
-  /** 每次都从磁盘读，用户改了 config.json 不用重启 */
+  /** 每次都重新读，用户改了 config.json 不用重启 */
   async load(): Promise<ConfigState> {
-    let text: string;
-    try {
-      text = await readFile(this.path, "utf8");
-    } catch (error) {
-      if (isNotFound(error)) {
-        return {
-          status: "missing",
-          errors: ["还没有 config.json：在设置页点「用示例创建」"],
-        };
-      }
-      throw error;
+    const text = await this.docs.read(this.file);
+    if (text === undefined) {
+      return {
+        status: "missing",
+        errors: ["还没有 config.json：在设置页点「用示例创建」"],
+      };
     }
     let raw: unknown;
     try {
@@ -266,13 +262,17 @@ export class ConfigService {
       if (state.status !== "missing") return fail(409, "config.json 已经存在，不会覆盖");
       let raw: unknown;
       try {
-        raw = JSON.parse(await readFile(this.examplePath, "utf8"));
+        const text = await this.docs.read(EXAMPLE_FILE);
+        if (text === undefined) throw new Error("没有示例配置");
+        raw = JSON.parse(text);
       } catch {
         return fail(409, "读不了 config.example.json，没法照着它创建");
       }
       const parsed = ConfigSchema.safeParse(raw);
       if (!parsed.success) return fail(409, "config.example.json 本身格式不对，没法照着它创建");
-      await atomicWrite(this.path, `${JSON.stringify(parsed.data, null, 2)}\n`, CONFIG_MODE);
+      await this.docs.write(this.file, `${JSON.stringify(parsed.data, null, 2)}\n`, {
+        secret: true,
+      });
       return { ok: true, value: null };
     });
   }
@@ -387,7 +387,9 @@ export class ConfigService {
             .join("；"),
         );
       }
-      await atomicWrite(this.path, `${JSON.stringify(next.data, null, 2)}\n`, CONFIG_MODE);
+      await this.docs.write(this.file, `${JSON.stringify(next.data, null, 2)}\n`, {
+        secret: true,
+      });
       return { ok: true, value: pick(next.data) };
     });
   }

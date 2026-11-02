@@ -6,6 +6,7 @@ import { AuthoringStore } from "./authoring";
 import { AuthoringTextSearch } from "./authoring-search";
 import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
+import { FileDocStore } from "./file-store";
 import { LoreLibrary } from "./lore-library";
 import { PresetStore } from "./presets";
 import { SaveStore } from "./storage";
@@ -16,7 +17,9 @@ const root = process.env.CP_ROOT ?? fileURLToPath(new URL("../../../", import.me
 const port = Number(process.env.CP_PORT ?? 8077);
 const dev = process.argv.includes("--dev");
 
-const config = new ConfigService(join(root, "config.json"));
+/** config.json 和 config.example.json 在项目根目录；角色卡、预设在 data/ */
+const config = new ConfigService(new FileDocStore(root), "config.json", process.env);
+const dataDocs = new FileDocStore(join(root, "data"));
 const textDb =
   process.env.CP_TEXT_DB ?? "/mnt/c/Cyberpunk 2077/_unpack/export/text/cyberpunk2077_text.db";
 
@@ -40,10 +43,10 @@ function openLore(): LoreLibrary | undefined {
 const app = createApp({
   config,
   saves: new SaveStore(join(root, "data")),
-  characters: new CharacterStore(join(root, "data")),
-  presets: new PresetStore(join(root, "data")),
+  characters: new CharacterStore(dataDocs),
+  presets: new PresetStore(dataDocs),
   dev,
-  evalDrafts: join(root, "tools", "evals", "drafts"),
+  evalDrafts: new FileDocStore(join(root, "tools", "evals", "drafts")),
   authoring: dev ? new AuthoringStore(join(root, "data", "drafts")) : undefined,
   authoringText: dev ? new AuthoringTextSearch(textDb) : undefined,
   lore: openLore(),
