@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:local": "VITE_CP_BACKEND=local vite",
     "build": "pnpm --dir ../.. check-assets && vite build",
-    "build:static": "pnpm --dir ../.. check-assets && VITE_CP_BACKEND=local vite build",
+    "build:static": "VITE_CP_BACKEND=local pnpm --dir ../.. check-assets && VITE_CP_BACKEND=local vite build",
     "preview": "vite preview"
   },
   "dependencies": {

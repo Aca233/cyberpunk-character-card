@@ -94,6 +94,12 @@ async function main(): Promise<number> {
   console.log(
     `素材检查通过：${specs.length} 张（${index?.tier} 档，生成于 ${index?.generatedAt}）`,
   );
+  // 纯前端版要公开部署（build:static 会设 VITE_CP_BACKEND=local）：demo 档照样放行，只提醒（用户定的）
+  if (process.env.VITE_CP_BACKEND === "local" && index?.tier === "demo") {
+    console.warn(
+      "注意：这是 demo 档素材，按 pick.ts 的约定只在本机用；公开部署前应换成 release 档（pnpm pick-assets --tier release --install <游戏目录> --source <解包目录>）。页面底部会照旧显示「demo 素材，仅限本机使用」",
+    );
+  }
   return 0;
 }
 

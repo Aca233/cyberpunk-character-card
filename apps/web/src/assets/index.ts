@@ -8,7 +8,13 @@ export type { AssetId } from "./ids.gen";
  * 缺图不退回任何替代样式：记进缺图列表，界面显示报错框
  */
 
-const INDEX_URL = "/assets/local/ui/index.json";
+/**
+ * 站点根路径：本机是 /，部署到子路径（如 GitHub Pages 的 /仓库名/）时由构建的 base 决定。
+ * index.json 里的路径都以 / 开头，取用时在前面拼上它
+ */
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const INDEX_URL = `${BASE}/assets/local/ui/index.json`;
 
 interface Entry {
   readonly path: string;
@@ -78,7 +84,7 @@ export function asset(id: AssetId): AssetInfo | undefined {
     return undefined;
   }
   return {
-    url: entry.path,
+    url: `${BASE}${entry.path}`,
     width: entry.width,
     height: entry.height,
     scale: entry.scale,
@@ -95,7 +101,7 @@ export function assetUrl(id: AssetId): string | undefined {
  * 地图瓦片：解包目录下的 build_map_tiles.py 从原作 3D 地图的网格烘焙，
  * 第 z 级把整张底图切成 2^z × 2^z 块，每块 tile 像素。没有瓦片时返回 null，地图退回 map.roads 整图
  */
-const TILES_URL = "/assets/local/maptiles";
+const TILES_URL = `${BASE}/assets/local/maptiles`;
 
 export interface MapTiles {
   /** 每块的像素边长 */

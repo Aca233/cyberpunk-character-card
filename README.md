@@ -13,6 +13,24 @@ pnpm check   # 类型检查 + Biome + Vitest
 - `config.json`（含密钥）由用户在本地创建，不进版本库。
 - 原作素材放在 `apps/web/public/assets/local/`，不进版本库，也不随项目分享。
 
+## 纯前端静态版
+
+整个游戏在浏览器里跑：存档、角色卡、模型配置和密钥都存在浏览器的 IndexedDB 里，网页拿玩家自己的密钥直接调模型服务商，不经过任何服务器。本机的 Hono 服务器照旧留作开发模式。
+
+```bash
+pnpm --filter @cp/web dev:local      # 本机预览纯前端版
+pnpm --filter @cp/web build:static   # 构建到 apps/web/dist
+CP_BASE=/仓库名/ pnpm --filter @cp/web build:static   # GitHub Pages 项目站点（前后都要斜杠）
+```
+
+- 路由用 hash（`#/menu`），静态托管刷新子页面不会 404，不需要额外的 404 回退配置。
+- Cloudflare Pages 和 GitHub Pages 用户站点放在根路径，不用设 `CP_BASE`；`public/.nojekyll` 让 GitHub Pages 不跑 Jekyll。
+- 素材目录不进版本库，CI 里拿不到：在本机构建后把 `apps/web/dist` 整个上传（约 27 MB、1900 个文件左右）。
+- 素材是 demo 档时构建照常进行，只打印警告，页面底部也会显示「demo 素材，仅限本机使用」；公开部署前应换成 release 档（`pnpm pick-assets --tier release --install <游戏目录> --source <解包目录>`）。
+- 模型服务商要允许网页跨域访问（CORS）；本地 Ollama 要设 `OLLAMA_ORIGINS`，不支持 CORS 的中转站在网页版里连不上。
+- 同一时间只有一个标签页能读写存档（Web Locks）；生成过程中刷新或关页面，这一轮会丢掉。
+- 存档只在这个浏览器里，清除网站数据就没了，记得在「读取存档」里导出备份；服务器版导出的文件可以直接导入。
+
 ## 开工前核实（2026-10-23）
 
 ### 叙事模型：Gemini 3.8 Flash
