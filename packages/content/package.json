@@ -4,7 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./mapShapes": "./src/mapShapes.gen.ts",
+    "./mapShapes": "./src/mapShapes.ts",
     "./radar": "./src/radar.ts"
   },
   "scripts": {

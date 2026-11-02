@@ -306,6 +306,9 @@ export function applyNpc(
       return { ok: true };
     }
     case "doing": {
+      // NPC 会移动（用户 2026-11-02："npc是能移动的"）：近况带了地点就挪过去；地点 id 由调用方核对
+      const moved = command.location !== undefined && command.location !== npc.location;
+      if (moved) npc.location = command.location ?? null;
       if (npc.doing?.text === command.text) return { ok: true };
       npc.doing = { text: command.text, at: now };
       npc.timeline.push({ text: command.text, at: now });

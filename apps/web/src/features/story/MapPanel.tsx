@@ -148,13 +148,17 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
 /** 委托地点用原作地图上的任务标记（mappin_icons 的 quest，同类图标已在图集里，用户同意的 2026-10-30） */
 const JOB_ICON: AssetId = "map.poi.quest";
 
-/** 图例每一项都能开关：当前位置、可以去的地点、没去过的原作地标、委托、NCPD 警情和每类服务点 */
-type LegendKey = "here" | "dest" | "ft" | "jobs" | "police" | MapPoiKind;
+/**
+ * 图例每一项都能开关：当前位置、可以去的地点、没去过的原作地标、委托、人物、NCPD 警情和每类服务点。
+ * 人物（用户 2026-11-02："npc是能移动的""地图上不要搞专门的中间人了，都是npc"）：见过的人按现在在的地点画，中间人也一样
+ */
+type LegendKey = "here" | "dest" | "ft" | "jobs" | "npcs" | "police" | MapPoiKind;
 const LEGEND_KEYS = new Set<string>([
   "here",
   "dest",
   "ft",
   "jobs",
+  "npcs",
   "police",
   ...MAP_POI_KINDS.map((k) => k.id),
 ]);
@@ -254,6 +258,15 @@ export function MapBody({
     if (d) jobsAt.set(d.id, [...(jobsAt.get(d.id) ?? []), j]);
   }
   const destJobs = dest ? (jobsAt.get(dest.id) ?? []) : [];
+  // 人物（用户 2026-11-02："npc是能移动的"，中间人也是普通人物）：见过、活着的人按现在在的地点合并成一个标记；
+  // 地点 id 对不上地图上的地点就不画，不猜坐标。在玩家眼前的人跟着当前位置走
+  const npcsAt = new Map<string, View["npcs"][number][]>();
+  for (const n of view.npcs) {
+    if (!n.alive || n.placeId === null) continue;
+    const d = destinations.find((x) => x.id === n.placeId);
+    if (d) npcsAt.set(d.id, [...(npcsAt.get(d.id) ?? []), n]);
+  }
+  const destNpcs = dest ? (npcsAt.get(dest.id) ?? []) : [];
   const info = asset(MAP);
   const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
 
@@ -390,6 +403,13 @@ export function MapBody({
       count: [...jobsAt.values()].reduce((n, list) => n + list.length, 0),
     });
   }
+  legend.push({
+    key: "npcs",
+    name: "人物",
+    icon: <i className={styles.legendNpc} />,
+    // 只数地图上标得出来的：地点对不上的人不算
+    count: [...npcsAt.values()].reduce((n, list) => n + list.length, 0),
+  });
   if (policeLegend) {
     legend.push({
       key: "police",
@@ -636,6 +656,32 @@ export function MapBody({
             );
           })}
 
+        {/* 人物按地点合并为一个标记，标在地点图钉右上角，免得盖住委托标记；点开照常出路线卡，不传送 */}
+        {size.w > 0 &&
+          !hidden.has("npcs") &&
+          [...npcsAt.entries()].map(([id, list]) => {
+            const d = destinations.find((p) => p.id === id);
+            if (!d) return null;
+            const at = toScreen(d.x, d.y);
+            if (!onScreen(at)) return null;
+            const title = `人物：${list.map((n) => n.name).join("、")} · ${destTitle(d)}`;
+            return (
+              <button
+                key={`npcs-${id}`}
+                type="button"
+                className={styles.mapNpc}
+                data-npc-location={id}
+                style={{ left: at.left + 12, top: at.top - 12 }}
+                title={title}
+                aria-label={title}
+                aria-pressed={picked === id}
+                onClick={() => setPicked(d.here ? null : id)}
+              >
+                {list.length}
+              </button>
+            );
+          })}
+
         {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
         {hover && (
           <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
@@ -722,6 +768,17 @@ export function MapBody({
                       <span>
                         {`委托 · ${j.statusLabel} · ${j.risk} 星 · 报酬 ${j.reward} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
                       </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* 这里现在有谁（用户 2026-11-02："npc是能移动的"）：只列名字和身份，见面照常靠剧情 */}
+              {destNpcs.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destNpcs.map((n) => (
+                    <li key={n.id}>
+                      <strong>{n.name}</strong>
+                      <span>{`人物 · ${n.role}${n.here ? " · 就在你身边" : ""}`}</span>
                     </li>
                   ))}
                 </ul>

@@ -46,7 +46,12 @@ import {
   ThreadsStateSchema,
   threadSection,
 } from "../systems/threads";
-import { formatGameTime, WorldClockStateSchema } from "../systems/world";
+import {
+  formatGameTime,
+  locationCatalog,
+  WorldClockStateSchema,
+  withSavedPlaces,
+} from "../systems/world";
 import { parseModelJson } from "./block";
 import { canonSection } from "./canon";
 import { type PromptExtras, stateSummary } from "./prompts/context";
@@ -122,15 +127,15 @@ export function offscreenSkipReason(o: {
 }
 
 /**
- * 普通熟人的联系范围：见过、活着、不在场也不在队里；中间人另列。
+ * 熟人的联系范围：见过、活着、不在场也不在队里；中间人也是普通人物，一样在里面
+ * （用户 2026-11-02："都是npc"）。派单另走【能派单的中间人】。
  * 不打分、不挑前几名，谁来联系由主持人定（用户 2026-11-01 定的"全改"第 4 步）
  */
 export function contactable(world: WorldState, present: ReadonlySet<string> = new Set()): Npc[] {
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
-  const fixers = JobsStateSchema.parse(world.slices.jobs).fixers;
   const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   return Object.values(npcs).filter(
-    (n) => n.alive && n.met && fixers[n.id] === undefined && !present.has(n.id) && !squad.has(n.id),
+    (n) => n.alive && n.met && !present.has(n.id) && !squad.has(n.id),
   );
 }
 
@@ -227,6 +232,7 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 【城里的动静】里已有的照原 id 更新（升级、平息、结束），整条重写；新的事才起新 id。
 - 动静一般不超过 ${OFFSCREEN_EVENTS} 条，major 一般 ${OFFSCREEN_MAJOR} 条（多的 major 代码按 normal 记）：城不能每次都在爆炸；真有那么多事也可以多写。
 - 人物近况写这次推演牵涉到的、【人物】里活着的人，一人一句，一般不超过 ${OFFSCREEN_NPCS} 个；标了「本场在场」的人就在玩家眼前，不写近况。
+- 人物移动：中间人也是普通人物，同样有自己的生活、可以离开办公室或常驻地点；派单身份不代表固定站在那里。近况里确实去了别处时，在 npcs 的同一条里写 location，值必须是已有地点 id，doing 和目的地要对得上；没移动就省略，不凭空编地点 id。移动要符合这段时间和前因，不瞬移，不强行安排与玩家见面；本场在场或在玩家队里的人不由场外推演移动。
 - 各过各的日子：【该过自己日子的人】是代码按多久没写近况轮出来的建议，这次尽量在 npcs 里给他们各写一句近况（不占上面的名额），别的人想写也行，写他自己的生活，不围着玩家转：照他的诉求、秘密、身份和所属势力，接着他上一条近况往下走（工作上的进展或麻烦、和身边人的来往、吵架和好、生病受伤、换住处、攒钱或欠债、迷上什么、碰上城里的动静）。大多是小事，有起有落、不总是顺的；可以和卡上「认识的人」或【人物】里别的人有来往（一起喝酒、闹翻、帮忙、结怨），两边对得上；两个有卡的人这次新认识了、或者关系真的变了，在 ties 里写一条（一次最多 ${OFFSCREEN_TIES} 条，aToB 写 a 眼里的 b，bToA 写 b 眼里的 a，各一句；私下的、外人不该知道的关系 open 写 false），只是照旧来往不写。不写玩家角色，不写他在等玩家、想玩家，也不为了引出委托才写。
 - 不改任何数值（欧元、人性、生命、好感、通缉星；声望只按下面「头条和声望」由代码涨），不改已有委托和期限（新委托只按下面「中间人派单」写）；动静里可以提到没卡的人，但不建新人物。
 - 原作人物没到时候的结局不提前写；死在屏幕外见下面「原作人物」。
@@ -245,7 +251,7 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 
 const OFFSCREEN_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块：
-{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "ties": [{"a": "人物 id", "b": "另一个人物 id", "aToB": "a 眼里的 b 是他什么人，一句话", "bToA": "b 眼里的 a 是他什么人，一句话", "open": "可省：私下的、外人不该知道的写 false"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "threads": ["可省：播了的【城里在发酵的事】事项 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语", "job": "可省：派单消息写委托 id"}], "jobs": [{"id": "小写英文和连字符，不和已有委托重复", "title": "24 字以内", "kind": "可省：委托类型", "fixer": "中间人派单写【能派单的中间人】里的 id；熟人托事不写", "client": "真正的雇主", "location": "可省：地点 id 或中文地名", "risk": 1, "reward": 1500, "due": "可省：YYYY-MM-DD HH:mm", "conflict": "谁想要什么、谁会受害", "twist": "可省：只有你知道的转折"}], "threads": [{"type": "thread.step", "id": "【城里在发酵的事】里的事项 id", "text": "160 字以内：实际发生了什么，只给主持人看", "news": "80 字以内：传开后的公开说法，不泄露幕后秘密", "stage": "可省：80 字以内的当前阶段", "turf": null, "days": 3}]}
+{"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内", "location": "可省：这段时间去了别处时写现在在的地点 id"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "ties": [{"a": "人物 id", "b": "另一个人物 id", "aToB": "a 眼里的 b 是他什么人，一句话", "bToA": "b 眼里的 a 是他什么人，一句话", "open": "可省：私下的、外人不该知道的写 false"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "threads": ["可省：播了的【城里在发酵的事】事项 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语", "job": "可省：派单消息写委托 id"}], "jobs": [{"id": "小写英文和连字符，不和已有委托重复", "title": "24 字以内", "kind": "可省：委托类型", "fixer": "中间人派单写【能派单的中间人】里的 id；熟人托事不写", "client": "真正的雇主", "location": "可省：地点 id 或中文地名", "risk": 1, "reward": 1500, "due": "可省：YYYY-MM-DD HH:mm", "conflict": "谁想要什么、谁会受害", "twist": "可省：只有你知道的转折"}], "threads": [{"type": "thread.step", "id": "【城里在发酵的事】里的事项 id", "text": "160 字以内：实际发生了什么，只给主持人看", "news": "80 字以内：传开后的公开说法，不泄露幕后秘密", "stage": "可省：80 字以内的当前阶段", "turf": null, "days": 3}]}
 status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束了。weight：minor 街角小事，normal 几个街区在传，major 上了 N54 头条、迟早找到玩家头上。
 threads：三类事情共用这个数组，每件一次只写一个操作；没有要处理的事就输出 []。操作格式：
 - 开新事：{"type": "thread.open", "id": "新的小写英文和连字符编号", "kind": "faction|nemesis|concern", "owner": "势力或人物 id", "seed": "素材种子 id，无种子写 null", "title": "24 字以内", "want": "120 字以内的目标", "stage": "80 字以内的当前阶段", "days": 3}。心事必须对应那个人已有的心事种子；同时最多 ${THREADS_MAX} 件，不必填满。
@@ -288,6 +294,8 @@ function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>> = {}): s
     `底线：${n.limit}`,
   ];
   if (n.secret) parts.push(`秘密：${n.secret}`);
+  parts.push(`当前地点：${n.location ?? "未知"}`);
+  if (n.home) parts.push(`常驻地点：${n.home}（不代表现在在那里）`);
   if (n.past) parts.push(`更早的经历：${n.past.text}`);
   const earlier = n.timeline.slice(-4, -1);
   if (earlier.length > 0) {
@@ -322,7 +330,6 @@ export function buildOffscreenPrompt(
       .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
       .slice(0, Math.max(0, MAX_CARDS - lives.length)),
   ];
-  const fixers = Object.values(JobsStateSchema.parse(world.slices.jobs).fixers);
   const dispatch = offscreenFixers(world, present);
   // 三类事情共用一张单子；期限只给主持人看，不进玩家视图（用户 2026-11-01 定的"全改"第 4 步）
   const threads = ThreadsStateSchema.parse(world.slices.threads ?? {});
@@ -359,9 +366,7 @@ export function buildOffscreenPrompt(
     scene: [
       `【当前状态】\n${stateSummary(world, records, extras.data)}`,
       `【人物】\n${npcs.length > 0 ? npcs.map((n) => card(n, present.has(n.id), roster)).join("\n") : "（还没有）"}`,
-      ...(fixers.length > 0
-        ? [`【中间人】\n${fixers.map((f) => `- ${f.id}｜${f.name}`).join("\n")}`]
-        : []),
+      // 中间人不再单列一节（用户 2026-11-02："都是npc"）：他们照普通人物进【人物】和【能联系玩家的人】，派单另看【能派单的中间人】
       ...(dispatch.length > 0
         ? [
             `【能派单的中间人】（这次最多派 ${OFFSCREEN_JOBS} 单）\n${dispatch.map((f) => `- ${f.id}｜${f.name}：最多 ${f.max} 星`).join("\n")}`,
@@ -376,7 +381,7 @@ export function buildOffscreenPrompt(
             const cap = askers.get(n.id);
             return `- ${n.id}｜${n.name}：好感 ${n.affinity}${cap === undefined ? "" : `；可以托事，最多 ${cap} 星`}`;
           })
-          .join("\n") || "（这次没有：人物不发消息，中间人有生意上的事照常可以发）"
+          .join("\n") || "（这次没有：人物不发消息，【能派单的中间人】派单照常可以发）"
       }`,
       ...(lives.length > 0
         ? [
@@ -436,6 +441,8 @@ const OffscreenThreadSchema = z.discriminatedUnion("type", [
 const OffscreenNpcSchema = z.object({
   id: z.string().trim().min(1),
   doing: z.string().trim().min(1).max(80),
+  // 场外换地点不算和玩家见面，不更新 met 和 lastSeenAt；地点是否存在由 readOffscreen 核对
+  location: z.string().trim().min(1).optional(),
 });
 
 /** 推演写的动静可以多标玩家是不是当事人、声望涨多少；进 city.event 前去掉 */
@@ -542,6 +549,8 @@ export function readOffscreen(
   const majorWritten = majors > 0;
 
   // 【该过自己日子的人】的近况不占 OFFSCREEN_NPCS 的名额（用户 2026-10-31："感觉是为了我才存在的"）
+  // 换地点时同时核对内容表和存档里新增的地点，不只认开局地点
+  const places = locationCatalog(withSavedPlaces(opts.data ?? {}, world));
   const lives = new Map(lifePicks(world, opts.present).map((n) => [n.id, n]));
   const lived = new Set<string>();
   let updated = 0;
@@ -574,7 +583,18 @@ export function readOffscreen(
       if (updated === OFFSCREEN_NPCS + 1)
         notes.push(`场外推演：人物近况超过建议的 ${OFFSCREEN_NPCS} 个，照收`);
     }
-    commands.push({ type: "doing", id: npc.id, text: parsed.data.doing });
+    // NPC 会移动（用户 2026-11-02："npc是能移动的"）：地点 id 在地点表里才挪，不在的只去掉地点，近况照收
+    let location = parsed.data.location;
+    if (location !== undefined && !places.has(location)) {
+      notes.push(`场外推演：${npc.name}去的 ${location} 不在地点表里，近况照收，位置不动`);
+      location = undefined;
+    }
+    commands.push({
+      type: "doing",
+      id: npc.id,
+      text: parsed.data.doing,
+      ...(location === undefined ? {} : { location }),
+    });
   }
   // 【该过自己日子的人】只是建议（「全改」第 2 步），没写不算错，记一笔给剧透视图
   for (const n of lives.values()) {
@@ -777,7 +797,8 @@ export function readOffscreen(
     if (offer && offer.fixer !== null && offer.fixer !== parsed.data.from) {
       notes.push(`场外推演：新委托「${offer.title}」不是 ${parsed.data.from} 派的，消息去掉委托`);
       job = undefined;
-    } else if (offer && offer.fixer === null && fixer) {
+    } else if (offer && offer.fixer === null && fixer && !picked.has(parsed.data.from)) {
+      // 中间人也是普通人物（用户 2026-11-02："都是npc"）：见过、在联系名单里的中间人可以本人托事；没见过的只能派单
       notes.push(`场外推演：求助「${offer.title}」要由托事的人本人发，中间人不能带，消息去掉委托`);
       job = undefined;
     } else if (offer && job !== undefined) {

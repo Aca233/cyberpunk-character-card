@@ -2522,7 +2522,6 @@
   cursor: help;
 }
 
-.mapPoi[data-kind="fixer"],
 .mapPoi[data-kind="quest"] {
   color: var(--cp-yellow);
 }
@@ -2576,6 +2575,40 @@
 .mapPoi.mapJob:disabled {
   opacity: 0.45;
   cursor: var(--cp-cursor-invalid);
+}
+
+/*
+ * 人物标记（用户 2026-11-02："npc是能移动的""地图上不要搞专门的中间人了，都是npc"）：
+ * 一个地点合并成一个青色小方块，写这里有几个人，在地点图钉右上方，不和左下方的委托标记重叠；只偏移显示，不改坐标
+ */
+.mapNpc {
+  position: absolute;
+  z-index: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--cp-cyan);
+  background: rgb(0 0 0 / 80%);
+  color: var(--cp-cyan);
+  font-size: 0.7rem;
+  line-height: 16px;
+  text-align: center;
+  cursor: var(--cp-cursor-hand);
+}
+
+.mapNpc:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  outline: none;
+  color: #000;
+  background: var(--cp-cyan);
+}
+
+.legendNpc {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--cp-cyan);
+  background: rgb(0 0 0 / 80%);
 }
 
 /*

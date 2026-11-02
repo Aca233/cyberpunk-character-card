@@ -420,9 +420,16 @@ export const DoingSchema = z
     type: z.literal("doing"),
     id: NpcIdSchema,
     text: z.string().trim().min(1).max(80),
+    /**
+     * NPC 会移动（用户 2026-11-02："npc是能移动的"）：这段时间他去了别处，写现在在的地点 id；
+     * 没挪地方不写。场外推演由代码核对地点 id 必须存在
+     */
+    location: LocationSchema.optional().describe(
+      "可省：他这段时间去了别处时写现在在的地点 id；没挪地方不写",
+    ),
   })
   .describe(
-    "这个人最近在做什么（换了活、搬去哪、在忙什么、和谁走得近）；一句话，只写正文里透出来的（本人说的、新闻、传闻、消息），会替换掉旧的",
+    "这个人最近在做什么（换了活、搬去哪、在忙什么、和谁走得近）；一句话，只写正文里透出来的（本人说的、新闻、传闻、消息），会替换掉旧的；人换了地方时写 location",
   );
 export type Doing = z.infer<typeof DoingSchema>;
 

@@ -91,6 +91,11 @@ export function npcsView({ world, data }: ViewContext) {
       /** 最后出现的地点和常在的地点（中文名），人物档案信息栏用；没见过面的人不给 */
       lastPlace: n.met ? placeName(n.location) : null,
       homePlace: n.met ? placeName(n.home) : null,
+      /**
+       * 现在所在地点的 id（用户 2026-11-02："npc是能移动的"，地图上画见过的人，中间人也一样）：
+       * 没记下位置的按常在的地点；没见过面、或玩家知道已经死了的人不给
+       */
+      placeId: n.met && !deathKnown(n) ? (n.location ?? n.home ?? null) : null,
       relation: n.relation?.text ?? null,
       /**
        * 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：只给公开的、两边玩家都见过的；

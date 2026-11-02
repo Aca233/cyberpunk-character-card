@@ -5,7 +5,8 @@
  */
 import { FAST_TRAVEL_POINTS } from "./fastTravel.gen";
 import { locations } from "./locations";
-import { SERVICE_POINTS, type ServicePointKind } from "./servicePoints.gen";
+// 经 mapShapes.ts 去掉了中间人一类（用户 2026-11-02："地图上不要搞专门的中间人了，都是npc"）
+import { SERVICE_POINTS, type ServicePointKind } from "./mapShapes";
 
 export interface RadarAnchor {
   readonly id: string;
@@ -19,7 +20,6 @@ export interface RadarAnchor {
 
 /** 服务点类别的中文名，照原作地图图例文字（UI-MappinTypes-*，与 mapShapes.gen.ts 的 MAP_POI_KINDS 同一份） */
 const KIND_NAMES: Readonly<Record<ServicePointKind, string>> = {
-  fixer: "中间人",
   ripperdoc: "义体医生",
   gun: "武器店",
   melee: "近战武器商贩",
