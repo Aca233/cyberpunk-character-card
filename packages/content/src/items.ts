@@ -20,7 +20,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 300,
     ability:
-      "宪法军工的廉价半自动手枪。体积小，适合藏在衣服里，在交涉破裂时迅速拔出；近处能单手持枪，另一只手开门、拖人或扶住伤员。换弹利索，但面对重甲和远处目标就显得吃力。想借硬质表面跳弹逼出掩体后的人，得先找好角度，不能指望子弹自己拐弯。",
+      "宪法军工出货量最大的紧凑型半自动。机加工粗糙但耐操，塞在外套内衬里极少卡壳；近身变故时拔枪即响，单手操作还能腾出另一只手拉人或踹门。威能跳弹适合借着混凝土和金属墙壁折射压制拐角，不过对付重型外骨骼和远距离目标就显得吃力了。",
   },
   {
     id: "lexington",
@@ -32,7 +32,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 250,
     ability:
-      "军用科技的速射手枪，适合在近距离用短促连射逼退追兵，给自己腾出退进掩体的空当。枪口容易压住，追着移动目标补射比慢慢等一枪更顺手；一直扣着扳机却会很快打空弹匣，远处的目标也不能靠泼洒子弹解决。适合边打边撤，不适合隔着整条街与步枪对射。",
+      "军用科技的标准速射配枪。击发循环极快，枪口上跳易于控制，在楼道遭遇或掩体交替时用短点射泼水能硬生生把追兵压回拐角。泼洒火力能买来走位空当，但一直扣着扳机弹匣会转瞬见底，拉开交火距离后散布也会迅速放大。",
   },
   {
     id: "nue",
@@ -44,7 +44,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 350,
     ability:
-      "海啸公司的重型手枪，适合守住门口、楼梯转角这些只能逐个露头的位置，用有分量的单发逼对方缩回去。比起边跑边扫，更适合站稳后抓住短暂露出的破绽；后坐会打断连续瞄准，被多人从不同方向贴近时就难以兼顾。命中护甲不等于击穿，遇到重装目标仍得寻找薄弱处。",
+      "海啸防务出品的沉重半自动。单发制止力惊人，卡在门框、楼梯转角这些要道上一枪就能震碎对方的探头企图。枪机后坐沉重且复进干脆，适合站稳脚跟抓破绽点杀；遇到重装防暴盾或厚重机械外壳仍需精确瞄准缝隙弱点。",
   },
   {
     id: "liberty",
@@ -56,7 +56,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 1600,
     ability:
-      "宪法军工的重型手枪，适合从掩体边缘探身点射，趁对手转移位置时截住去路。薄车门和轻质隔板未必挡得住它，但穿透后能否伤到人仍取决于材质、角度和目标位置，不能隔着车身盲打就算命中。枪声和冲击都很显眼，适合亮明火力逼人退让，不适合悄悄解决麻烦。",
+      "宪法军工标志性的重型佩枪。枪声沉闷如炸雷，大口径弹头出膛动能十足，隔着薄铁皮车门或石膏板也能打得碎屑横飞。适合在掩体边缘探身抓对手转移路线，高调亮出火力和破坏力，完全不适合暗中办事。",
   },
   {
     id: "omaha",
@@ -68,7 +68,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2500,
     ability:
-      "军用科技的技术手枪，蓄力射击能穿透薄墙和轻质掩体，让躲在柜台后的人不敢一直守着原位。配合能标出遮挡后目标的义眼，可以抓住对方停留的瞬间开火；没有定位时只能推测位置，穿墙不等于必中。蓄力需要空当，被贴身追打时很难从容完成，厚重结构也不是它能随意打穿的。",
+      "军用科技的技术手枪，内置磁轨加速线圈。短促蓄能后打出高初速三连发，能直接穿透轻质隔墙或柜台薄板，将藏身后的敌人逼出掩体；配合透视义眼能精准穿透点射，近战贴身缠斗时则需要留出充能空当。",
   },
   {
     id: "kenshin",
@@ -80,7 +80,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6500,
     ability:
-      "荒坂的技术手枪，适合预先守住射界，等对手躲进轻质掩体后蓄力追击，迫使对方放弃原来的藏身处。与能透视标记的义眼配合时，可以隔着遮挡追踪目标的移动；标记消失或目标换位后，不能继续把旧位置当成命中依据。蓄力穿透不是无限穿墙，也不能代替瞄准；被人近身打断节奏时，需要先拉开距离。",
+      "荒坂安保人员的标准技术佩枪。工艺严丝合缝，电磁导轨蓄能迅速，在卡准射界后能隔着薄掩体打出致命穿透，撕碎自以为安全的藏身点。精准度极高，但蓄能节奏容易被贴脸近身打乱，需要射手时刻保持交火间距。",
   },
   {
     id: "yukimura",
@@ -92,7 +92,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2800,
     ability:
-      "荒坂的智能手枪。接上有效的手部智能连接、完成锁定后，弹丸会修正飞行路线追向目标，适合对付在门口一闪而过或横向奔跑的敌人，让你把更多注意力留给移动和寻找掩护。锁定需要机会，干扰和封死路线的障碍仍能让射击落空；不能追着一个名字凭空找到人。没有智能连接时只能当普通手枪使用。",
+      "荒坂微电机打造的三连发智能手枪。手部植入智能连接后，陀螺微型弹药在雷达锁定下能沿弧形轨迹自修正追踪，专治频繁横向突进或露头闪身的滑头目标；未连入手部芯片时退化为普通击发，实心厚墙与强电磁干扰依然会让微型弹头撞毁在半途。",
   },
   {
     id: "chao",
@@ -104,7 +104,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "康陶的智能手枪，接上有效的手部智能连接后，可以先锁住威胁最大的敌人，再一边转移一边射击，由弹丸修正追踪路线。适合撤离时牵制追兵，也能配合队友逼目标离开遮挡；遇到人群混杂的场面，得先辨清锁定的是谁。追踪不等于穿墙，目标躲进封闭掩体或锁定受到干扰时仍会失手；没装智能连接就没有追踪能力。",
+      "康陶早期投放民用安保市场的经典智能武器。握把植入智能连接后，弹头在出膛瞬间计算弹道曲度，配合侧移或后撤步边退边打，用自导弹道压制追击路线；在狭小走廊中弧线容易刮蹭死角，需要手部芯片保持稳定的火控握持。",
   },
   // 左轮
   {
@@ -117,7 +117,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 900,
     ability:
-      "达拉理工的六发大口径左轮，适合抓住对方露出破绽的瞬间果断开火，也能在近距离对峙中形成威慑。弹量有限，每次出手都得有所选择；打空后需要换弹的空当，不适合独自压制接连涌来的敌人。中枪是否倒下取决于命中位置和防护，不能因为对方没穿甲就保证一枪解决。",
+      "达拉理工生产的六发实心大口径左轮。结构原始但咬合极紧，击发时的枪口焰和后坐力极具震慑，适合在近身对峙或对方露出破绽的刹那一击毙命。转轮容量有限，换弹容错低，考验射手在生死一线间的开火决断。",
   },
   {
     id: "overture",
@@ -129,7 +129,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "马洛里安的重型左轮，枪声震耳，适合从掩护后打出沉重的一击，再收回身位重新瞄准。面对轻型防护仍有威胁，能迫使对手认真找掩体，而不是靠衣服里的护板硬扛。代价是后坐明显，仓促连射容易失去准头；厚甲和坚固遮挡仍然挡得住它，开枪也会让附近的人知道冲突已经升级。",
+      "马洛里安的经典重管左轮。每扣动一次扳机都伴随着撕裂耳膜的轰鸣与沉重后坐，重型威能弹丸的初速能轻易击穿轻型防弹织物并留下巨大贯穿创口。探身打出致命单发后往往需要收枪归位重新瞄准，是老派佣兵的心头好。",
   },
   {
     id: "burya",
@@ -140,7 +140,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "rare",
     price: 7000,
-    ability: "高科军工 RT-46，技术左轮：蓄力后一发穿墙",
+    ability:
+      "高科军工研制的单动手持手炮。内部电磁充能结构几乎占满下机匣，射击时不需要手动蓄力即可直接打出相当于步枪级的穿甲电磁弹丸，足以硬生生轰碎掩体后的掩护。巨大的后坐力和无机械保险设计对未经义体加固的手腕极不友好。",
   },
   // 冲锋枪（反应）
   {
@@ -153,7 +154,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 600,
     ability:
-      "军用科技的高射速冲锋枪，近距离能用连续火力封住门口或狭窄通道，为同伴穿过危险地带争取空当。配合侧面包抄，可以让对手顾此失彼；压制只是让人不敢轻易露头，不代表所有人都已中弹。长时间扫射会很快耗尽弹匣，距离拉远后散布也更难控制，换弹时需要掩护。",
+      "军用科技的招牌突击冲锋枪。极高的射速能够在两秒内倾泻整盒弹药，在门口、楼道等狭窄死角泼出致密火网，强行截断对方的突进路线。泼弹速度快导致枪管急热与弹药骤降，需要射手掌握短促点射的节奏。",
   },
   {
     id: "pulsar",
@@ -165,7 +166,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 700,
     ability:
-      "达拉理工的小型冲锋枪，枪身短，在车厢、楼梯间和拥挤走廊里转向方便，不必像长枪那样先腾出一大块空间。适合突然遭遇时用短连射抢出撤离路线，也方便藏在外套下面带进现场。狭窄地方同样容易误伤身边的人；出了近距离，火力再急也弥补不了瞄准和射程上的劣势。",
+      "达拉理工专为紧凑空间设计的冲锋枪。短枪身配折叠托，藏在大衣里不显山不露水，在狭窄车厢、防火通道里急转开火毫无阻碍。虽然有效射程有限且弹道散布大，但近身遭遇时抢先倾泻的密集弹雨足以砸出一条活路。",
   },
   {
     id: "shingen",
@@ -177,7 +178,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 3200,
     ability:
-      "荒坂的智能冲锋枪，接上有效的手部智能连接后，可以同时锁定多个暴露的目标，让弹丸分头追踪，牵制试图分散包围你的敌人。分散射击也会分散火力，不等于每个目标都会倒下；需要集中对付一人时，应重新选择锁定对象。遮挡、干扰和混入射界的旁人都会影响使用，没装智能连接时没有多目标追踪能力。",
+      "荒坂安保特勤配发的高阶智能冲锋枪。配合手部智能芯片，多重火控雷达可同时锁定视界内散开的数名目标，弹头在出膛后分头循迹扑杀，有效瓦解包抄企图；集中锁定单一目标时则能形成外科手术般的连续追踪打击。",
   },
   {
     id: "dian",
@@ -189,7 +190,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6500,
     ability:
-      "康陶的智能冲锋枪，接上有效的手部智能连接并锁定目标后，弹丸能沿弯曲路线追击，让只遮住正面的低矮掩体不再那么可靠。适合追着频繁换位的敌人保持压力，与队友从不同方向牵制时尤其有用。弹丸仍需有路可走，绕不过封闭墙体，也不能追踪已经丢失的目标；连接损坏或受到干扰时，这套优势就用不上。",
+      "康陶旗舰级智能冲锋枪。射频极高且自导微电脑运算迅速，弹药能在空中拉出大角度弧线绕过半身掩体咬住目标。即便在高速侧向奔袭或掩体换位时，只要智能握把保持火控链路，弹头就能死死黏住对手。",
   },
   // 突击步枪（反应）
   {
@@ -202,7 +203,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 900,
     ability:
-      "诺科他的老式突击步枪，皮实耐用，适合恶土赶路和缺少维护条件的长途差事。中距离既能点射，也能用连续火力掩护同伴转移，不依赖智能连接才能发挥用途。它的长处是应付多种局面，而不是某一项特别出众：进狭窄车厢不如短枪灵活，远距离也不能代替狙击枪；沙尘和磕碰照样需要事后清理检查。",
+      "诺科他经久不衰的全天候突击步枪。机械结构粗犷皮实，在恶土沙暴和下水道污水里泡过甩干还能正常上膛。中距离点射稳定，全自动压制可靠，没有娇贵的电子元器件，是流浪者和街头老兵最信赖的干粮枪。",
   },
   {
     id: "ajax",
@@ -214,7 +215,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "军用科技的制式突击步枪，适合守住街口、护送车队，也适合跟着队伍逐段推进。稳定的射击节奏让你能在掩护同伴和集中攻击之间切换，配上瞄准镜后更容易辨清远处露出的目标。枪身显眼，带进公司大厅或酒吧很难装作普通访客；连续开火仍需要控制后坐，可靠的制式装备也不能替你发现侧面的敌人。",
+      "军用科技正规军与企业安保的标配步枪。气动布局成熟，后坐力传递线性平稳，在中距离无论是三发点射还是交替掩护射击都极具压迫感。握感扎实、战术扩展性强，是公司武装阵列推进时的中坚火力。",
   },
   {
     id: "masamune",
@@ -226,7 +227,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2600,
     ability:
-      "荒坂的突击步枪，短时间内能打出密集火力，适合抓住敌人离开掩体的短暂空当，而不是一直扫射等人露头。与队友配合时，可以让同伴先迫使目标移动，再集中射击；对方若始终藏好，就得另找角度。急促开火很快会耗尽弹匣，仓促转向也容易丢掉准头，更适合有准备的交火，不适合毫无节制地追着人扫。",
+      "荒坂军械精工制造的三连发突击步枪。扳机行程清晰，单次扣动即以极高射速送出三枚弹药，几乎落于同一弹着点，专为在交火缝隙中撕裂防弹板而设计。射击节奏冷峻苛刻，讲究一击见血，适合纪律严明的神射手。",
   },
   {
     id: "sidewinder",
@@ -238,7 +239,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 7500,
     ability:
-      "诺科他的智能突击步枪，接上有效的手部智能连接后，能用追踪火力紧咬正在转移的目标，让对方难以轻松穿过开阔地带。配合队友从侧面施压，可以迫使敌人在继续躲藏和冒险换位之间选择。弹丸只能沿可通行的路线修正方向，不能穿过封闭墙体；锁定丢失或受到干扰时需要重新捕捉目标，没有智能连接时只能当普通步枪使用。",
+      "诺科他将粗犷枪身与智能火控结合的步枪。接入智能握把后，弹丸能追踪开阔地带奔逃的目标，以大口径追踪弹幕封锁敌方撤退路径。虽比康陶的产品重上几分，但弹丸动能更强，弹道修正力道凶悍。",
   },
   {
     id: "osprey",
@@ -249,7 +250,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "rare",
     price: 8000,
-    ability: "诺科他 NDI 鱼鹰，技术步枪：蓄力射击能穿透墙和车身",
+    ability:
+      "诺科他重工业出品的技术连发狙击步枪。搭载重型电磁感应加速轨，蓄满电能后轰出的穿甲重弹能洞穿装甲掩体与车身钢板，在远距离将墙后的受害者连人带掩体一同轰碎。",
     source: `${W}Ranged-Base_Osprey`,
   },
   // 霰弹枪（肉体）
@@ -262,7 +264,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 1100,
-    ability: "平价火力的大口径霰弹枪，近距离一枪把人轰出门外",
+    ability:
+      "平价火力生产的 4 号口径手炮级泵动霰弹枪。枪管粗如排水管，近距离轰击爆发的恐怖动能足以直接将成年人掀飞撞上墙面。后坐力如同被大锤砸中肩膀，普通人开枪若没站稳甚至会自己踉跄。",
   },
   {
     id: "satara",
@@ -273,7 +276,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 700,
-    ability: "罗斯托维奇 DB-2 双管霰弹枪，两发打完就得换弹，但两发都要命",
+    ability:
+      "罗斯托维奇研制的双管技术霰弹枪。手工焊制的硬派外观下包裹着高压充能电容，双发齐射的电磁高爆破片能在瞬间将轻型掩体与人体撕成碎片。虽然两发即空，但在破门近身的瞬间毫无生还余地。",
   },
   {
     id: "igla",
@@ -284,7 +288,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 800,
-    ability: "罗斯托维奇 DB-4 泵动霰弹枪，结实，泡过水也照样响",
+    ability:
+      "罗斯托维奇出品的双管折开式霰弹枪。结构简单粗暴到近乎蛮荒，两发大号铅弹一并喷涌，贴脸开火时足以制造毁灭性的贯通伤口。耐操程度极高，在烂泥和血泊中滚过依旧开火如常。",
   },
   {
     id: "tactician",
@@ -295,7 +300,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "uncommon",
     price: 2200,
-    ability: "M2038 半自动霰弹枪，连发快，破门清屋好用",
+    ability:
+      "宪法军工生产的半自动战术霰弹枪。内置大容量管状弹仓，击发循环紧凑平稳，在突入室内、转角相逢时能以凶猛的连续轰击彻底清空房间，是防暴队破门清障的经典重器。",
   },
   {
     id: "zhuo",
@@ -306,7 +312,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "rare",
     price: 6000,
-    ability: "康陶 L-69，智能霰弹枪：弹丸散开后各自追目标；手部没装智能连接时只是普通霰弹枪",
+    ability:
+      "康陶研制的八管转轮智能霰弹枪。手部接入智能链接后，每次开火喷射出的八枚微型火箭弹丸会各自锁定不同弱点呈伞状散开后合围扑击，将掩体周边的敌人一同撕碎。",
   },
   // 精准步枪和狙击步枪（镇定；技术用技术）
   {
@@ -318,7 +325,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "uncommon",
     price: 4000,
-    ability: "军用科技 M-179e，技术精准步枪：中远距离点射，蓄力穿透掩体",
+    ability:
+      "军用科技出品的高精度技术步枪。半自动单发精度惊人，磁轨蓄力充能后能一次性喷射出多枚电磁针弹，贯穿石柱与混凝土防御工事，将中远距离的狙击手直接狙杀在掩体后方。",
   },
   {
     id: "ashura",
@@ -329,7 +337,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "uncommon",
     price: 4500,
-    ability: "海啸公司的栓动狙击步枪，几百米外一枪解决问题；近距离笨重难用",
+    ability:
+      "海啸防务制造的单发智能重型狙击枪。每次拉栓推入一枚带有独立推进器的火箭破甲弹，锁定后弹丸可在数百米外掠过障碍自拐弯洞穿目标颅骨，是远距离处决目标的终极刺杀工具。",
   },
   {
     id: "grad",
@@ -340,7 +349,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "rare",
     price: 9500,
-    ability: "高科军工 SPT32，大口径反器材狙击枪，能打穿轻型装甲车",
+    ability:
+      "高科军工的栓动反器材狙击巨炮。发射大口径穿甲高爆弹，射击时的膛口冲击波足以掀翻地面的碎石，命中时连装甲运兵车的车门与轻型机甲外壳都能生生撕裂开洞。",
   },
   {
     id: "nekomata",
@@ -351,7 +361,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "epic",
     price: 22000,
-    ability: "海啸公司的技术狙击步枪：蓄满电一发穿透几道墙，墙后的人也逃不掉",
+    ability:
+      "海啸防务的高精密电磁技术狙击枪。长枪管内多级线圈全力蓄满过载电能，轰出的超高速钨芯弹能贯穿多道建筑承重墙与装甲板，让任何藏匿在建筑物深处的窥探者无所遁形。",
   },
   // 轻机枪（肉体）
   {
@@ -363,7 +374,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "uncommon",
     price: 4000,
-    ability: "大弹链轻机枪，持续火力压得一整队人抬不起头；带着它很难不被注意",
+    ability:
+      "重装风冷全自动轻机枪。大弹箱配合高韧性弹链，持续泼洒的重弹火网能将整条街区的掩体削成碎屑，把对方整支行动队死死钉在死角不敢抬头；沉重枪身需要过人臂力与稳固重心支撑。",
     source: `${W}Ranged-Base_Ma70`,
   },
   {
@@ -375,7 +387,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "rare",
     price: 8500,
-    ability: "M2067 重型机枪，火力足以撕开路障和车辆",
+    ability:
+      "宪法军工制造的单兵班组轻机枪。高初速大口径弹药连贯喷吐，扫射动能足以轻易撕碎防暴路障与民用车体引擎盖，火力全开时宛如移动的固定炮台。",
   },
   // 刀剑（反应）
   {
@@ -386,7 +399,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 80,
-    ability: "随身的小刀，藏得住，能割绳、撬锁、近身捅人，也能扔出去",
+    ability:
+      "贴身隐匿的战术折刀。刃口经碳化处理，易于藏在靴筒或袖口，适合锁喉、刺割缝隙与潜入暗杀，在紧急关头也能当飞刀脱手掷出。",
   },
   {
     id: "machete",
@@ -396,7 +410,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 300,
-    ability: "劈得开铁丝网和人，街头帮派的老伙计",
+    ability:
+      "重刃砍刀，重心靠前，势大力沉。能轻松劈开铁丝网、灌木与骨肉，是东加利福尼亚帮派街头火拼与清道夫最常用的粗暴利刃。",
     source: `${W}Melee-DisplayName-Preset_Machete`,
   },
   {
@@ -407,7 +422,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 450,
-    ability: "弯刃短刀，出手快，适合贴身缠斗",
+    ability:
+      "前倾曲刃战刀。独特的重力前倾弧度让挥砍具备极强的断骨劈砍力，兼顾近身格挡与狭窄空间里的致命挑割。",
     source: `${W}Melee-DisplayName-Preset_Kukri`,
   },
   {
@@ -418,7 +434,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 500,
-    ability: "单手短斧，劈门、劈人，扔出去也有准头",
+    ability:
+      "全钢一体锻造战术斧。单手劈击动能巨大，能劈开防暴头盔与车身铁皮，投掷出手时力道足以贯穿轻型防弹背心。",
     source: `${W}Melee-DisplayName-Preset_Tomahawk`,
   },
   {
@@ -429,7 +446,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "uncommon",
     price: 1600,
-    ability: "短武士刀，室内也挥得开，虎爪帮常佩",
+    ability:
+      "日式近身短武士刀。刀身柔韧锐利，在走廊、电梯与车厢等狭小封闭环境内出鞘迅猛，深得虎爪帮杀手偏爱。",
     source: `${W}Melee-DisplayName-Preset_Wakizashi`,
   },
   {
@@ -440,7 +458,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "uncommon",
     price: 2000,
-    ability: "单分子刃武士刀，砍得开防弹衣，反应够快时能把子弹挡开",
+    ability:
+      "荒坂标准单分子刃武士刀。刀锋震荡高频切割，不仅能轻巧削开碳纤维护甲，在神经反应强化者手中更能借着反光与弧度凌空切开来袭子弹。",
     source: `${W}Melee-DisplayName-Preset_Katana`,
   },
   // 钝器（肉体）
@@ -452,7 +471,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 60,
-    ability: "砸车窗、砸膝盖，打晕人不出人命",
+    ability:
+      "铝合金或加固木质球棒。简单结实，挥击破风，砸膝盖或闷棍敲后脑足以让人当场休克昏厥，是街头流氓收保护费的标准教具。",
     source: `${W}Melee-DisplayName-Preset_Baseball_Bat`,
   },
   {
@@ -463,7 +483,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 50,
-    ability: "撬门撬箱子，顺手也能抡人",
+    ability:
+      "高碳钢锻造撬棍。物理破坏工具里的常青树，能撬开锈蚀的气密门和装甲箱锁扣，反手抡击也能砸裂颅骨与金属外骨骼。",
     source: `${W}Melee-DisplayName-Preset_Crowbar`,
   },
   {
@@ -474,7 +495,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 40,
-    ability: "工地上随手捡的钢管，不起眼，打得人站不起来",
+    ability:
+      "工地上随处可见的镀锌重型钢管。沉重生锈，毫无科技含量，但顺手抡下去的纯粹物理打击足以把义体关节敲到变形脱臼。",
     source: `${W}Melee-DisplayName-Preset_Iron_Pipe`,
   },
   {
@@ -485,7 +507,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 150,
-    ability: "套在拳头上，揣在兜里谁也看不出来，地下拳赛也让用",
+    ability:
+      "硬质合金冲压指虎。套在指关节上挥拳，将力量高度集中于一点，击碎面骨与下颌，揣在口袋里难以被金属探测轻易察觉。",
     source: `${W}Melee-DisplayName-Preset_Knuckles`,
   },
   {
@@ -496,7 +519,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "common",
     price: 600,
-    ability: "带电的警棍，一下电得人抽搐倒地，打晕不打死",
+    ability:
+      "军用级高压防暴电警棍。击打瞬间释放高频脉冲电流，能使目标全身肌肉瞬间痉挛昏厥，迅速制服目标而不造成致命穿透。",
     source: `${W}Melee-DisplayName-Preset_Baton_Alpha`,
   },
   {
@@ -507,7 +531,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "uncommon",
     price: 2000,
-    ability: "带铁钉的长棒，双手抡起来能砸扁车门",
+    ability:
+      "嵌满合金淬火铆钉的重型长棒。双手抡圆带着呼啸风声，重击之下连防弹车门都会被砸出深凹，专克身穿重甲的顽抗之敌。",
     source: `${W}Melee-DisplayName-Preset_Kanabo`,
   },
   {
@@ -518,7 +543,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "rare",
     price: 6000,
-    ability: "双手大锤，砸得穿墙、砸得翻机器人，挥一下要花不少力气",
+    ability:
+      "高硬度双手破拆大锤。每一次抡砸都倾注全身离心力，足以粉碎砖墙、破开铁铸闸门，正面命中足以将战斗机器人砸到系统停摆。",
     source: `${W}Melee-DisplayName-Preset_Hammer`,
   },
   // 不朽武器：只从剧情获得
@@ -531,7 +557,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
-    ability: "杰克·威尔斯的一对镀金手枪，左右开弓；拿在谁手里都会被认出来",
+    ability:
+      "杰克·威尔斯定制的一对镀金海啸鵺。握柄雕花，枪膛改模，双枪齐射倾泻着瓦伦蒂诺帮的傲骨与家族义气；枪一拔出来，整条街的熟面孔都知道来者是谁。",
     voice: "像杰克在耳边说话：豪爽、讲义气，叫你“兄弟”，劝你别丢下朋友",
     source: `${W}Ranged-Preset_Nue_Jackie`,
   },
@@ -544,7 +571,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "legendary",
     iconic: true,
-    ability: "丽贝卡留下的改装霰弹枪（她死在《边缘行者》的结局里），一枪能把人轰飞好几米",
+    ability:
+      "丽贝卡生前亲手改装的大口径杀戮霰弹枪。涂鸦斑驳、后坐凶暴，一枪轰出能将重装士兵轰飞数米撞穿隔墙；握在手里似乎还能听到那个暴躁绿发姑娘在耳边咆哮着先开枪再说。",
     voice: "像丽贝卡还在耳边嚷嚷：嘴快、暴躁、护短，劝你先开枪再说",
     source: `${W}Ranged-Preset_Carnage_Edgerunners`,
   },
@@ -557,7 +585,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
-    ability: "强尼·银手的重型手枪，一枪能打穿人再打穿后面的墙；认得它的人会以为见了鬼",
+    ability:
+      "强尼·银手的半自动定制重型手炮。专为义肢后坐设计的巨型枪机，子弹能穿透掩体和敌人躯体后引燃烈火；枪口甩转间，依稀可见当年银手向荒坂大厦开火的狂傲冷笑。",
     voice: "像强尼在冷笑：刻薄、反公司，嘲笑你的犹豫，怂恿你把事情闹大",
     source: `${W}Ranged-Preset_Silverhand_3516`,
   },
@@ -570,7 +599,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
-    ability: "会说话的智能手枪：自己锁定目标，可以设成专打要害或专打腿；要手部装智能连接才能用",
+    ability:
+      "拥有独立人格的实验型智能手枪。手部接入智能链接后，内置 AI 会用欢快话痨的口吻对你的战术评头论足，并能自主选择锁头爆头或截肢弹道。",
     voice: "枪里的人工智能真的会出声：欢快、话多，爱对你的目标评头论足",
     source: `${W}Ranged-Preset_Yukimura_Skippy`,
   },
@@ -582,7 +612,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
-    ability: "荒坂三郎的武士刀，刀刃薄得发亮，出鞘快到看不清；荒坂的人见了会变脸色",
+    ability:
+      "荒坂三郎随身佩戴的传世武士刀。刃薄如蝉翼，寒芒刺骨，出鞘极快且切削暴击时断金切玉；任何认得刀铭的荒坂特工见到此刀都会脸色煞白。",
     voice: "像一位老派武士在训诫：克制、冷峻，讲究一击见分晓，看不起拖泥带水",
     source: `${W}Melee-Preset_Katana_Saburo`,
   },
@@ -595,7 +626,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
-    ability: "帕南的狙击枪，自带好镜，几百米外一枪定局；流浪者认得它的主人",
+    ability:
+      "帕南·帕尔默亲手校准的改装冰暴狙击枪。搭载独家定制重型消音器与战术高倍镜，数公里外无声扣动扳机，大口径穿甲弹便能在静默中撕裂敌方首领的装甲。",
     voice: "像帕南在耳机里：直来直去，护着家人，讨厌公司和磨磨蹭蹭",
     source: `${W}Ranged-Preset_Grad_Panam`,
   },
@@ -635,7 +667,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     charges: 2,
     rarity: "common",
     price: 200,
-    ability: "炸开一片弹片，清掉掩体后面扎堆的人",
+    ability:
+      "高爆预制破片手雷。引爆瞬间向四周激射上千颗钢珠破片，撕裂防御薄弱的软组织，清空密闭掩体内的敌人。",
   },
   {
     id: "emp-grenade",
@@ -644,7 +677,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     charges: 2,
     rarity: "uncommon",
     price: 450,
-    ability: "瘫痪一片范围里的机器人、摄像头、炮塔和敌人的义体，对没装义体的人没用",
+    ability:
+      "高能微波脉冲手雷。爆破时产生强烈电磁风暴，瞬间过载瘫痪范围内的义体、炮塔、摄像头与战斗无人机网络。",
   },
   {
     id: "incendiary-grenade",
@@ -653,7 +687,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     charges: 2,
     rarity: "uncommon",
     price: 400,
-    ability: "烧出一片火海，封住走廊和门口",
+    ability:
+      "军用白磷燃烧手雷。起爆后泼洒粘稠高热铝热剂火海，持续数秒燃烧封闭走廊与出口，让企图穿越火线的敌人化为焦炭。",
   },
   {
     id: "flashbang",
@@ -662,7 +697,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     charges: 2,
     rarity: "common",
     price: 250,
-    ability: "闪得人几秒看不见、听不见，抓人、脱身都好用，不伤人",
+    ability:
+      "超高分贝爆震闪光弹。轰然爆发的强光与刺耳音波剥夺数秒内的视觉与平衡感，适合无伤强行突入或在被围困时脱身。",
   },
   {
     id: "recon-grenade",
@@ -671,7 +707,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     charges: 2,
     rarity: "uncommon",
     price: 350,
-    ability: "扔进屋里，标出墙后所有人的位置",
+    ability:
+      "微型声呐脉冲侦察弹。落地后向四周发射高频穿透脉冲，将掩体后敌方人员的实时轮廓与站位同步投射在你的 HUD 战术目镜上。",
   },
   // 消耗品：按数量扣
   {
@@ -680,7 +717,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "consumable",
     rarity: "common",
     price: 120,
-    ability: "一针下去这一场打斗更扛揍；不治伤",
+    ability:
+      "高浓度神经合成兴奋注射剂。静脉注射后短时间内强化心肺机能与细胞耐受，让你在交火中承受更多创伤而不倒下。",
   },
   {
     id: "black-lace",
@@ -688,7 +726,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "consumable",
     rarity: "uncommon",
     price: 300,
-    ability: "街头毒品，用了感觉不到疼、出手更狠；会上瘾，赛博精神病风险的人用了更危险",
+    ability:
+      "街头提纯重度神经毒品。吸入后多巴胺与痛觉阻断剂狂暴泵入大脑，丧失恐惧与疼痛，出招暴虐嗜血；极度容易上瘾，并在神经边缘疯狂滑向赛博精神病。",
   },
   {
     id: "glitter",
@@ -696,7 +735,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "consumable",
     rarity: "common",
     price: 80,
-    ability: "派对上流行的兴奋剂，让人亢奋、话多、胆子大",
+    ability:
+      "来生与地下俱乐部流行的气雾兴奋剂。吸食后神经过度激活，感官放大的同时让人胆气暴涨、亢奋狂热。",
   },
   { id: "nicola", name: "小可可乐", kind: "consumable", rarity: "common", price: 10 },
   { id: "hawtdawg", name: "奶酪乐狗", kind: "consumable", rarity: "common", price: 15 },
@@ -709,7 +749,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "outer",
     rarity: "common",
     price: 150,
-    ability: "旧皮夹克，在沃森和圣多明戈不惹眼",
+    ability: "沃森与圣多明戈最常见的二手磨损皮夹克。穿上它走在街头暗巷毫不起眼，完美融入市井底层。",
   },
   {
     id: "corpo-suit",
@@ -718,7 +758,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "outer",
     rarity: "uncommon",
     price: 1200,
-    ability: "剪裁合身的公司西装，混进写字楼和公司酒会不会被多看一眼；在街头反倒招人",
+    ability:
+      "剪裁考究、面料挺括的企业高管西装。出入市政中心摩天大楼与高级酒会畅通无阻，但在海伍德后巷里会格外招致混混的敌意与抢劫目光。",
   },
   {
     id: "nomad-duster",
@@ -727,7 +768,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "outer",
     rarity: "common",
     price: 200,
-    ability: "落满沙尘的长风衣，流浪者家族的打扮，城里人一看就知道你从恶土来",
+    ability:
+      "落满沙尘与机油印记的高领厚帆布风衣。恶土流浪者家族的标志性行头，城里人搭眼一看便知来者出自车队。",
   },
   {
     id: "techie-coverall",
@@ -736,7 +778,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "outer",
     rarity: "common",
     price: 120,
-    ability: "带工具袋的连体工装，装成维修工进出设备间和后门",
+    ability:
+      "挂满多功能工具挂环与机油斑的耐磨工装裤套装。便于伪装成外部维修承包商潜入服务器机房与后勤维修间。",
   },
   {
     id: "netrunner-suit",
@@ -745,7 +788,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "inner",
     rarity: "uncommon",
     price: 900,
-    ability: "贴身的冷却服，长时间潜网不容易过热；穿在外面一看就是网络黑客",
+    ability:
+      "内置微通道冷却液与高导电触点的紧身潜网服。在神经长时间潜网连线时保持躯体恒温并抑制神经发热，是黑客的标准行头。",
   },
   {
     id: "security-uniform",
@@ -754,7 +798,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     clothingSlot: "outer",
     rarity: "uncommon",
     price: 600,
-    ability: "私人安保公司的制服，配上工牌能骗过门口的人；遇到真同事就露馅",
+    ability:
+      "连锁私人安保公司的正规巡逻制服。搭配伪造工牌足以应付前台与普通门禁，但极易被同公司的熟面孔当面识破。",
   },
   // 杂物
   { id: "shard", name: "数据芯片", kind: "misc" },
@@ -762,7 +807,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     id: "corpo-badge",
     name: "公司工牌",
     kind: "misc",
-    ability: "自家公司的门禁工牌：刷得开员工通道和自己楼层的门；公司随时能把它停用",
+    ability:
+      "企业内部员工电子工牌：可刷开指定办公楼层的闸机与员工电梯；一旦被总务后台注销便会立刻报警。",
   },
   // 改装件：枪口、瞄准镜和插件，名字照官方文本；只在装到武器上时才算数
   {
@@ -773,7 +819,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["pistol", "smg"],
     rarity: "common",
     price: 400,
-    ability: "消音器：枪声压到隔壁听不见，能安静放倒落单的守卫；威力略降",
+    ability:
+      "通用战术消音器。多腔膨胀有效消除枪口焰并将爆鸣降至窃窃私语声，利于潜行无声摸哨暗杀，略微牺牲弹头末端初速。",
     source: "text:Gameplay-Weapons-Attachments-DisplayName-Silencer02",
   },
   {
@@ -784,7 +831,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["pistol", "revolver", "smg"],
     rarity: "uncommon",
     price: 1800,
-    ability: "好一些的消音器：连开几枪也不惊动隔壁房间，左轮也装得上",
+    ability:
+      "军工级精密消音器。特化气密锁闭设计，即使配合高压大口径左轮连发开火也不会惊动隔壁房间，兼顾隐蔽与杀伤破坏。",
     source: "text:Gameplay-Weapons-Attachments-DisplayName-Silencer04",
   },
   {
@@ -795,7 +843,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["pistol", "revolver", "smg", "assaultRifle", "shotgun"],
     rarity: "common",
     price: 350,
-    ability: "短程瞄准镜：中距离瞄得更稳，对射时先看清对方的掩体",
+    ability:
+      "轻量化全息近距反射瞄具。视野宽阔无畸变，在中近距离交火中大幅加快举枪对齐准星与捕捉掩体破绽的反应速度。",
     source: "text:Gameplay-Parts-Scopes-DisplayName-w_att_scope_short_07",
   },
   {
@@ -806,7 +855,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["assaultRifle", "precisionRifle", "sniperRifle"],
     rarity: "uncommon",
     price: 1600,
-    ability: "长程瞄准镜：一两百米外也打得准，能在街对面的楼顶盯梢",
+    ability:
+      "中长程战术瞄准镜。多层抗反射镀膜与电子测距分划，令百米开外的移动目标清晰可辨，适于远距离火力压制与狙杀。",
     source: "text:Gameplay-Parts-Scopes-DisplayName-w_att_scope_long_04",
   },
   {
@@ -817,7 +867,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["precisionRifle", "sniperRifle"],
     rarity: "rare",
     price: 6000,
-    ability: "狙击镜：三百米外看得清人脸，配狙击枪才能打远距离的冷枪",
+    ability:
+      "高精度专业狙击镜。超高倍率光学变焦结合弹道风偏落点预测，数百米外清晰锁定目标面部神经接头，专为极限冷枪设计。",
     source: "text:Gameplay-Parts-Scopes-DisplayName-w_att_scope_sniper_03",
   },
   {
@@ -828,7 +879,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["assaultRifle", "smg", "lmg"],
     rarity: "rare",
     price: 5500,
-    ability: "插件：弹匣更大，压制火力能多撑一会儿，不用在要紧时换弹",
+    ability:
+      "扩展供弹弹鼓与加长弹匣套件。显著提升弹容量，让全自动火网压制能持久维持，避免在决定生死的冲锋关头陷入换弹硬直。",
   },
   {
     id: "kneel-mod",
@@ -838,7 +890,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["shotgun"],
     rarity: "common",
     price: 500,
-    ability: "插件：近距离打中腿时更容易把人打得跪倒",
+    ability:
+      "霰弹枪战术破膝插件。喷射的霰弹破片优化低位散布，近距离命中敌方下肢时爆发凶狠截肢力，瞬间瓦解其平衡令其跪倒在地。",
   },
   {
     id: "bleedout-mod",
@@ -848,7 +901,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["blade"],
     rarity: "common",
     price: 500,
-    ability: "插件：刀口更容易让人流血不止，拖得越久对方越撑不住",
+    ability:
+      "刀身微型倒刺与锯齿研磨套件。斩切创口撕裂不可逆，令受创目标大出血不止，随着剧烈运动体力与生命极速流失。",
   },
   {
     id: "parallax-mod",
@@ -858,7 +912,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     modFits: ["pistol", "revolver"],
     rarity: "common",
     price: 600,
-    ability: "插件：手枪瞄头部更准，适合一枪解决问题",
+    ability:
+      "弹道视差微处理器。配合手枪准星自动微调准心轴线，大幅提升短枪快速拔枪瞄准头部时的首发命中精准度。",
   },
   // 本作改编：原作没有这种药，是本作的虚构药物；效果写在这里，由代码结算
   {
@@ -868,6 +923,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 500,
     ability:
-      "义体医生开的药：约 6 小时内发作相关检定 +4；只缓解症状，不恢复人性上限；常吃会耐受、依赖，停药有戒断",
+      "义体医生特调神经抑制药剂：注射后约 6 小时内狂暴压制幻觉与神经失控发作（发作相关检定 +4）；但仅能迟滞神经突触坏死，无法恢复人性上限；长期依赖将产生严重耐药性与致命戒断反应。",
   },
 ]);
