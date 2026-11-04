@@ -36,7 +36,7 @@ export type BoardSlot = z.infer<typeof BoardSlotSchema>;
 export const BOARD_SLOT_LABELS: Readonly<Record<BoardSlot, string>> = {
   origin: "出身",
   past: "过往",
-  skill: "本事",
+  skill: "特长",
   flaw: "负面经历",
 };
 
@@ -252,10 +252,10 @@ export function boardIssues(board: Board): string[] {
   const issues: string[] = [];
   if (!board.origin) issues.push("出身插槽还空着");
   if (board.pasts.length < PAST_MIN) {
-    issues.push(`过往至少插 ${PAST_MIN} 块，现在 ${board.pasts.length} 块`);
+    issues.push(`过往至少配置 ${PAST_MIN} 段，当前 ${board.pasts.length} 段`);
   }
   if (board.skills.length < SKILL_MIN) {
-    issues.push(`本事至少插 ${SKILL_MIN} 块，现在 ${board.skills.length} 块`);
+    issues.push(`特长至少选择 ${SKILL_MIN} 项，当前 ${board.skills.length} 项`);
   }
   const placed: [BoardSlot, readonly BoardModule[]][] = [
     ["origin", board.origin ? [board.origin] : []],

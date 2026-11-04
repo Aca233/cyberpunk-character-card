@@ -114,7 +114,7 @@ export function BoardEditor({
         disabled={full}
         onClick={() => setWriting(slot)}
       >
-        自己写一块
+        自定义模块
       </button>
     );
   const customForm = (slot: BoardSlot, accept: (module: BoardModule) => void) =>

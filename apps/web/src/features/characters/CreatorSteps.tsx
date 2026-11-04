@@ -93,14 +93,14 @@ export function StepOrigin({ board, data, commit }: StepProps) {
                 {m.tags.length > 0 && (
                   <span className={styles.moduleTags}>{m.tags.join(" · ")}</span>
                 )}
-                {m.ability && <Line k="能力">{m.ability}</Line>}
-                {m.hook && <Line k="钩子">{m.hook}</Line>}
-                {m.people.length > 0 && <Line k="认得的人">{people(m)}</Line>}
+                {m.ability && <Line k="专长能力">{m.ability}</Line>}
+                {m.hook && <Line k="剧情钩子">{m.hook}</Line>}
+                {m.people.length > 0 && <Line k="关联人脉">{people(m)}</Line>}
                 {lean.length > 0 && (
-                  <Line k="更容易掷到">{lean.map((l) => `「${l.label}」`).join("")}</Line>
+                  <Line k="高契合过往">{lean.map((l) => `「${l.label}」`).join("")}</Line>
                 )}
                 {never.length > 0 && (
-                  <Line k="掷不到">{never.map((l) => `「${l.label}」`).join("")}</Line>
+                  <Line k="不相容经历">{never.map((l) => `「${l.label}」`).join("")}</Line>
                 )}
               </button>
             </li>
@@ -112,14 +112,14 @@ export function StepOrigin({ board, data, commit }: StepProps) {
               <CellFrame />
               <span className={styles.pickHead}>
                 <strong className={styles.pickName}>{custom.label}</strong>
-                <span className={styles.modulePoints}>自己写的 · {custom.points} 点</span>
+                <span className={styles.modulePoints}>自定义 · {custom.points} 点</span>
               </span>
-              {custom.ability && <Line k="能力">{custom.ability}</Line>}
-              {custom.hook && <Line k="钩子">{custom.hook}</Line>}
-              {custom.people.length > 0 && <Line k="认得的人">{people(custom)}</Line>}
+              {custom.ability && <Line k="专长能力">{custom.ability}</Line>}
+              {custom.hook && <Line k="剧情钩子">{custom.hook}</Line>}
+              {custom.people.length > 0 && <Line k="关联人脉">{people(custom)}</Line>}
               <span className={styles.pickTools}>
                 <Button small disabled={writing} onClick={() => setWriting(true)}>
-                  重新写
+                  重新编辑
                 </Button>
               </span>
             </div>
@@ -134,9 +134,9 @@ export function StepOrigin({ board, data, commit }: StepProps) {
             >
               <CellFrame />
               <span className={styles.pickHead}>
-                <strong className={styles.pickName}>自己写</strong>
+                <strong className={styles.pickName}>自定义出身</strong>
               </span>
-              <span>写几句，交给模型解读（花一次模型调用）</span>
+              <span>自由撰写设定背景，交由模型智能解析为专属模块</span>
             </button>
           )}
         </li>
@@ -196,17 +196,17 @@ export function StepSkills({ board, data, commit }: StepProps) {
   return (
     <>
       <h3 className={styles.stepTitle}>
-        本事{" "}
+        特长{" "}
         <small className={styles.stepNote}>
           {board.skills.length} / {SKILL_MAX}
-          {board.skills.length < SKILL_MIN && ` · 至少 ${SKILL_MIN} 块`}
+          {board.skills.length < SKILL_MIN && ` · 至少选择 ${SKILL_MIN} 项`}
         </small>
       </h3>
       {hints.length > 0 && (
-        <ul className={styles.hints} aria-label="差一块就能凑成的联动">
+        <ul className={styles.hints} aria-label="待激活的联动组合">
           {hints.map((h) => (
             <li key={h.combo.id}>
-              再插一块{h.candidates.map((c) => `「${c.label}」`).join("或")} → 解锁「{h.combo.label}
+              再配置{h.candidates.map((c) => `「${c.label}」`).join("或")} → 解锁「{h.combo.label}
               」：{h.combo.ability}
             </li>
           ))}
@@ -224,7 +224,11 @@ export function StepSkills({ board, data, commit }: StepProps) {
                 aria-pressed={pressed}
                 disabled={!pressed && (full || short)}
                 title={
-                  !pressed && full ? `本事最多 ${SKILL_MAX} 块` : short ? "背景点不够" : undefined
+                  !pressed && full
+                    ? `特长最多选择 ${SKILL_MAX} 项`
+                    : short
+                      ? "背景点不足"
+                      : undefined
                 }
                 onClick={() => toggle(m)}
               >
@@ -235,7 +239,7 @@ export function StepSkills({ board, data, commit }: StepProps) {
                 </span>
                 {m.ability && <span>{m.ability}</span>}
                 {m.checks.length > 0 && (
-                  <Line k="检定有利">{m.checks.map((c) => ATTR[c]).join("、")}</Line>
+                  <Line k="检定优势">{m.checks.map((c) => ATTR[c]).join("、")}</Line>
                 )}
                 {m.tags.length > 0 && (
                   <span className={styles.moduleTags}>{m.tags.join(" · ")}</span>
@@ -248,7 +252,7 @@ export function StepSkills({ board, data, commit }: StepProps) {
       <div className={styles.slotTools}>
         {!writing && (
           <Button small disabled={full} onClick={() => setWriting(true)}>
-            自己写一块本事
+            自定义特长
           </Button>
         )}
       </div>
@@ -616,9 +620,9 @@ export function StepReview({
         ))}
       </article>
 
-      <h3 className={styles.stepTitle}>检查</h3>
+      <h3 className={styles.stepTitle}>档案校验</h3>
       {checks.length === 0 ? (
-        <p className={styles.success}>都齐了，可以保存。</p>
+        <p className={styles.success}>所有关键设定已齐备，可建立档案。</p>
       ) : (
         <ul className={styles.checks}>
           {checks.map((c) => (
@@ -626,14 +630,14 @@ export function StepReview({
               <button type="button" className={styles.linkButton} onClick={() => onJump(c.step)}>
                 {c.text}
               </button>
-              {c.soft && <span className={styles.note}>（不挡保存）</span>}
+              {c.soft && <span className={styles.note}>（建议调整，不影响建档）</span>}
             </li>
           ))}
         </ul>
       )}
 
       <details className={styles.tavern}>
-        <summary>酒馆卡面（不交给 AI）</summary>
+        <summary>酒馆角色卡扩展设定（场景与台词范例）</summary>
         <div className={styles.proseBlocks}>
           {CARD_BLOCKS.map((block) => (
             <ProseField key={block} block={block} card={card} onChange={change} />

@@ -15,7 +15,7 @@ export type TraitSlot = z.infer<typeof TraitSlotSchema>;
 export const TRAIT_LABELS: Readonly<Record<TraitSlot, string>> = {
   origin: "出身",
   past: "过往",
-  skill: "本事",
+  skill: "特长",
   flaw: "负面经历",
   combo: "联动",
 };

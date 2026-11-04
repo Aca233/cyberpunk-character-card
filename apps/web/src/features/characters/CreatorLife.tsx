@@ -124,9 +124,9 @@ export function StepPast({
     <>
       {/* 用户 2026-10-31 嫌页面"解释性说明一大堆"：引导段删掉，段数和重掷次数只留在标题小字里 */}
       <h3 className={styles.stepTitle}>
-        过往{" "}
+        过往经历{" "}
         <small className={styles.stepNote}>
-          {board.pasts.length} / {PAST_MAX} · 重掷剩 {left} 次
+          {board.pasts.length} / {PAST_MAX} · 重掷剩余 {left} 次
         </small>
       </h3>
       {board.pasts.length > 0 && (
@@ -143,20 +143,20 @@ export function StepPast({
                   <strong className={styles.pickName}>{m.label}</strong>
                   <span className={styles.modulePoints}>{m.points} 点</span>
                 </span>
-                {m.ability && <Line k="能力">{m.ability}</Line>}
-                {m.hook && <Line k="钩子">{m.hook}</Line>}
-                {m.people.length > 0 && <Line k="认得的人">{peopleText(m)}</Line>}
+                {m.ability && <Line k="专长能力">{m.ability}</Line>}
+                {m.hook && <Line k="剧情钩子">{m.hook}</Line>}
+                {m.people.length > 0 && <Line k="关联人脉">{peopleText(m)}</Line>}
                 <span className={styles.pickTools}>
                   <Button
                     small
                     disabled={left <= 0}
-                    reason={`${REROLLS} 次重掷用完了，可以拔下后从卡片墙挑`}
+                    reason={`${REROLLS} 次重掷已用尽，可卸下后从经历库中手选`}
                     onClick={() => reroll(i)}
                   >
-                    重掷这一段
+                    重掷该段经历
                   </Button>
                   <Button small onClick={() => remove(m.id)}>
-                    拔下
+                    卸下
                   </Button>
                 </span>
               </div>
@@ -166,21 +166,21 @@ export function StepPast({
       )}
       <div className={styles.slotTools}>
         <Button small primary={board.pasts.length < PAST_MIN} disabled={full} onClick={roll}>
-          掷一段生命路径
+          抽取生命路径
         </Button>
         <Button
           small
           disabled={board.pasts.length >= PAST_MIN}
           onClick={() => commit(fillPasts(board, data.lifepath, data.modules, Math.random))}
         >
-          随机插满 {PAST_MIN} 段
+          快速补齐 {PAST_MIN} 段
         </Button>
         <Button small aria-expanded={wall} onClick={() => setWall((w) => !w)}>
-          {wall ? "收起卡片墙" : "从卡片墙挑"}
+          {wall ? "收起经历库" : "从经历库手选"}
         </Button>
       </div>
       {wall && (
-        <ul className={styles.skillWall} aria-label="全部过往">
+        <ul className={styles.skillWall} aria-label="全部经历库">
           {data.modules
             .filter((m) => m.slot === "past")
             .map((m) => {
@@ -205,13 +205,13 @@ export function StepPast({
                     </span>
                     {m.ability && <span>{m.ability}</span>}
                     {board.origin && weight !== 1 && (
-                      <Line k="这个出身">
+                      <Line k="出身契合度">
                         {/* 权重小于 1 时不能写"更容易"（第四期走查发现，2026-10-31） */}
                         {weight === 0
-                          ? "掷不到，只能手挑"
+                          ? "不相容，仅能手选"
                           : weight > 1
-                            ? `更容易掷到 ×${weight}`
-                            : `不太容易掷到 ×${weight}`}
+                            ? `高契合度抽取 ×${weight}`
+                            : `低契合度抽取 ×${weight}`}
                       </Line>
                     )}
                   </button>
@@ -222,22 +222,22 @@ export function StepPast({
       )}
 
       <h3 className={styles.stepTitle}>
-        代价{" "}
+        负面经历与代价{" "}
         <small className={styles.stepNote}>
-          {board.flaws.length} / {FLAW_MAX} · 最多换 {REFUND_MAX} 点
+          {board.flaws.length} / {FLAW_MAX} · 最多换取 {REFUND_MAX} 点
           {flawPoints > REFUND_MAX && `（超出 ${flawPoints - REFUND_MAX} 点不算）`}
         </small>
       </h3>
       {costs.length === 0 ? (
-        <p className={styles.note}>先掷过往。</p>
+        <p className={styles.note}>请先抽取过往经历。</p>
       ) : (
-        <ul className={styles.skillWall} aria-label="跟过往沾边的代价">
+        <ul className={styles.skillWall} aria-label="与过往关联的代价">
           {costs.map((c) => flawCard(c.module, c.from))}
         </ul>
       )}
       {others.length > 0 && (
         <>
-          <h3 className={styles.stepTitle}>别的负面经历</h3>
+          <h3 className={styles.stepTitle}>其他负面经历</h3>
           <ul className={styles.skillWall}>{others.map((m) => flawCard(m))}</ul>
         </>
       )}
@@ -341,13 +341,13 @@ export function StepPeople({ board, data, commit }: StepProps) {
       <nav className={styles.peopleList} aria-label="联系人">
         {modulePeople.length > 0 && (
           <>
-            <h3 className={styles.peopleGroup}>模块带出的人</h3>
+            <h3 className={styles.peopleGroup}>背景关联人脉</h3>
             <ul>{modulePeople.map(contact)}</ul>
           </>
         )}
         <h3 className={styles.peopleGroup}>
           {/* 只数原作人物，模块带出的人改了关系不算在这里（第四期走查发现，2026-10-31） */}
-          夜之城的人<small className={styles.peopleCount}>已选 {chosen} 人</small>
+          夜之城人脉网络<small className={styles.peopleCount}>已建立联系 {chosen} 人</small>
         </h3>
         <ul>{canon.map(contact)}</ul>
       </nav>
@@ -374,7 +374,9 @@ export function StepPeople({ board, data, commit }: StepProps) {
               aria-pressed={!a}
               onClick={() => setRelation(current, "")}
             >
-              <b className={styles.relationLabel}>{current.fromModule ? "照模块默认" : "不认识"}</b>
+              <b className={styles.relationLabel}>
+                {current.fromModule ? "沿用默认关系" : "暂无交集"}
+              </b>
             </button>
             {RELATIONS.map((r) => (
               <button
@@ -402,7 +404,7 @@ export function StepPeople({ board, data, commit }: StepProps) {
               maxLength={60}
               value={a.note}
               aria-label={`和${current.name}是什么事`}
-              placeholder="是什么事（可不写）"
+              placeholder="过往恩怨或交集契机（可留空交由AI推演）"
               onChange={(e) => setNote(current.id, e.target.value)}
             />
           )}
@@ -414,7 +416,7 @@ export function StepPeople({ board, data, commit }: StepProps) {
 
 // ———— 第 5 步：属性 ————
 
-/** 每项属性标出"你插的本事里有几块靠它"，加一键推荐分配（计划第 5 步） */
+/** 每项属性标出"你插的特长里有几项靠它"，加一键推荐分配（计划第 5 步） */
 export function StepAttributes({
   card,
   board,
@@ -432,7 +434,7 @@ export function StepAttributes({
     <>
       <div className={styles.slotTools}>
         <Button small onClick={() => change({ attributes: recommendAttributes(board) })}>
-          按本事一键推荐
+          按特长偏好一键推荐
         </Button>
         <Button
           small
@@ -449,7 +451,7 @@ export function StepAttributes({
             })
           }
         >
-          全部退回
+          重置分配
         </Button>
       </div>
       <div className={styles.attributes}>

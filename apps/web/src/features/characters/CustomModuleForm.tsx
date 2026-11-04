@@ -55,7 +55,7 @@ export function CustomModuleForm({
     <div className={styles.customForm}>
       <label className={styles.field}>
         <span>
-          自己写一块{label}
+          自定义{label}
           <small>{text.length} / 600</small>
         </span>
         <textarea
@@ -64,8 +64,8 @@ export function CustomModuleForm({
           value={text}
           placeholder={
             slot === "flaw"
-              ? "欠了谁、得罪了谁、身上落下了什么……"
-              : "这段经历或本事是什么，在哪里学的，到什么程度。"
+              ? "欠了谁、得罪了谁、身上落下了何种神经创伤……"
+              : "该特长或经历的来龙去脉、专精程度与实战表现。"
           }
           onChange={(event) => setText(event.target.value)}
         />
@@ -75,10 +75,10 @@ export function CustomModuleForm({
           type="button"
           className={styles.toolButton}
           disabled={interpret.isPending || text.trim().length < 4}
-          title="交给辅助模型生成标签、能力、钩子和建议标价；会花一次模型调用"
+          title="交由模型智能解析标签、能力、剧情钩子与参考点数消耗"
           onClick={() => interpret.mutate()}
         >
-          {interpret.isPending ? "解读中…" : draft ? "重新解读" : "交给模型解读"}
+          {interpret.isPending ? "解析中…" : draft ? "重新解析" : "智能解析模块"}
         </button>
         {!draft && (
           <button
@@ -88,7 +88,7 @@ export function CustomModuleForm({
               setDraft({ ...blankModule(slot), label: text.trim().slice(0, 24) || "未命名" })
             }
           >
-            不用模型，直接手写
+            手动录入
           </button>
         )}
         <button type="button" className={styles.toolButton} onClick={onCancel}>
@@ -137,7 +137,7 @@ export function CustomModuleForm({
             </label>
           </div>
           <label className={styles.field}>
-            <span>{slot === "flaw" ? "处境" : "能力：能做到什么"}</span>
+            <span>{slot === "flaw" ? "处境 / 负面效应" : "专长能力"}</span>
             <textarea
               rows={2}
               maxLength={200}
@@ -146,7 +146,7 @@ export function CustomModuleForm({
             />
           </label>
           <label className={styles.field}>
-            <span>钩子</span>
+            <span>剧情钩子</span>
             <textarea
               rows={2}
               maxLength={200}

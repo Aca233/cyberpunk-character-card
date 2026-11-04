@@ -39,13 +39,21 @@ export type ProseBlock = z.infer<typeof ProseBlockSchema>;
 export const PROSE_BLOCK_INFO: Readonly<
   Record<ProseBlock, { readonly label: string; readonly max: number; readonly hint: string }>
 > = {
-  look: { label: "外貌", max: 300, hint: "衣着、神态、义体的样子、留下的伤疤" },
-  past: { label: "背景故事", max: 800, hint: "从哪来，失去过什么，还有什么没了结" },
-  personality: { label: "性格", max: 300, hint: "在乎什么，忍不了什么，习惯把什么藏起来" },
-  voice: { label: "说话方式", max: 300, hint: "口头禅、语气、爱用的词" },
-  scene: { label: "场景", max: 400, hint: "故事开始时角色身在何处、处境如何" },
-  greeting: { label: "开场白", max: 600, hint: "角色登场的一段描写，可以带一句台词" },
-  examples: { label: "对话示例", max: 800, hint: "几句这个角色会说的话，一句一行，用来定口吻" },
+  look: { label: "外貌", max: 300, hint: "衣着风格、神态特征、外显义体与身体伤疤细节" },
+  past: { label: "背景故事", max: 800, hint: "生平来历、重大转折经历、失去的事物与未了恩怨" },
+  personality: { label: "性格", max: 300, hint: "价值信条、行事底线、高压下的真实反应与深层软肋" },
+  voice: { label: "说话方式", max: 300, hint: "语速语气、口头禅、惯用黑话与特定情境下的腔调" },
+  scene: { label: "场景", max: 400, hint: "故事揭幕时角色身处夜之城何处、眼前面临的局势" },
+  greeting: {
+    label: "开场白",
+    max: 600,
+    hint: "角色初次登场的特写画面与动作描写，可附带一句开场台词",
+  },
+  examples: {
+    label: "对话示例",
+    max: 800,
+    hint: "3–5 句典型台词，每句一行，用于确立角色的语态风格",
+  },
 };
 
 /** 玩家自己写的角色卡；开档时整理成一段简介交给模型 */

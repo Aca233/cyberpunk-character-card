@@ -225,11 +225,11 @@ export function CharacterCreator({
                 <section className={styles.actions} aria-label="保存">
                   <div className={styles.launch}>
                     <label className={styles.field}>
-                      <span>新档标题（开新档时用）</span>
+                      <span>战局代号 / 存档标题</span>
                       <input
                         maxLength={40}
                         value={title}
-                        placeholder={`${card.name.trim() || "角色"}的夜之城`}
+                        placeholder={`${card.name.trim() || "夜之城游民"}的档案`}
                         onChange={(e) => setTitle(e.target.value)}
                       />
                     </label>
@@ -254,7 +254,7 @@ export function CharacterCreator({
                       ))}
                     </fieldset>
                   </div>
-                  <p className={styles.note}>修改或删除角色卡不会改写已有存档里的角色。</p>
+                  <p className={styles.note}>修改或删除角色卡不会改写已有战局存档中的角色数据。</p>
                   {saveError && (
                     <p className={styles.error} role="alert">
                       {saveError}
@@ -267,7 +267,7 @@ export function CharacterCreator({
                   )}
                   {saved && !launch.isPending && (
                     <p className={styles.success} role="status">
-                      角色已保存，可以用于新存档。
+                      角色档案已保存，可随时用于开启新战局。
                     </p>
                   )}
                   <div className={styles.buttons}>
@@ -284,14 +284,14 @@ export function CharacterCreator({
                         }
                       }}
                     >
-                      {saving && !launch.isPending ? "保存中…" : "保存"}
+                      {saving && !launch.isPending ? "正在写入数据…" : "保存档案"}
                     </Button>
                     <Button
                       disabled={busy || !parsed.success}
                       reason={reason}
                       onClick={() => launch.mutate()}
                     >
-                      {launch.isPending ? "正在开新档…" : "保存并开新档"}
+                      {launch.isPending ? "正在初始化战局…" : "保存并开启新战局"}
                     </Button>
                   </div>
                 </section>
@@ -388,14 +388,14 @@ function StepPerson({
         ))}
         <label className={styles.field}>
           <span>
-            本事补充说明（可选）
+            特长补充说明（可选）
             <small>{card.skills.length} / 400</small>
           </span>
           <textarea
             rows={3}
             maxLength={400}
             value={card.skills}
-            placeholder="主板本事之外还想交代的：会什么、不会什么。"
+            placeholder="除核心特长外想要补充的实战习惯与技能底子（如专精武器、黑客流派、实战短板等）。"
             onChange={(e) => change({ skills: e.target.value })}
           />
         </label>

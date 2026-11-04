@@ -29,10 +29,10 @@ export const STEPS = [
   { id: "origin", label: "出身" },
   { id: "past", label: "过往" },
   { id: "people", label: "旧识" },
-  { id: "skills", label: "本事" },
+  { id: "skills", label: "特长" },
   { id: "cyberware", label: "义体" },
   { id: "attributes", label: "属性" },
-  { id: "person", label: "这个人" },
+  { id: "person", label: "角色特写" },
   { id: "review", label: "档案确认" },
 ] as const;
 export type StepId = (typeof STEPS)[number]["id"];
@@ -213,11 +213,11 @@ export function creatorChecks(card: CharacterCard): Check[] {
   // 上面已经用人话报过的字段，schema 再报同一个字段就不重复列
   const covered = new Set<string>();
   if (card.name.trim() === "") {
-    checks.push({ step: "person", text: "还没起名字" });
+    checks.push({ step: "person", text: "尚未命名" });
     covered.add("name");
   }
   if (card.pronoun.trim() === "") {
-    checks.push({ step: "person", text: "代词还空着" });
+    checks.push({ step: "person", text: "尚未设定代词" });
     covered.add("pronoun");
   }
   if (card.board) {
@@ -229,12 +229,12 @@ export function creatorChecks(card: CharacterCard): Check[] {
   }
   const spent = pointsSpent(card.attributes);
   if (spent > ATTRIBUTE_POINTS) {
-    checks.push({ step: "attributes", text: `属性点多分了 ${spent - ATTRIBUTE_POINTS} 点` });
+    checks.push({ step: "attributes", text: `属性点超额分配 ${spent - ATTRIBUTE_POINTS} 点` });
     covered.add("attributes");
   } else if (spent < ATTRIBUTE_POINTS) {
     checks.push({
       step: "attributes",
-      text: `还有 ${ATTRIBUTE_POINTS - spent} 点属性没分`,
+      text: `尚有 ${ATTRIBUTE_POINTS - spent} 点属性点待分配`,
       soft: true,
     });
   }

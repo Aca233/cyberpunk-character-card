@@ -506,6 +506,7 @@ const SOURCE_SLOTS: Readonly<Record<string, readonly TraitSlot[]>> = {
   出身: ["origin"],
   过往: ["past", "flaw"],
   本事: ["skill"],
+  特长: ["skill"],
   负面经历: ["flaw"],
   联动: ["combo"],
 };

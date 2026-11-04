@@ -120,7 +120,7 @@ export function DraftAll({
   return (
     <div className={styles.prose}>
       {/* 说明缩成一句（用户 2026-10-31："解释性说明一大堆"） */}
-      <p className={styles.note}>一键写：{scope || "没有能写的"}</p>
+      <p className={styles.note}>待生成内容：{scope || "所有区块均已定稿"}</p>
       <div className={styles.slotTools}>
         {busy ? (
           <button
@@ -137,14 +137,14 @@ export function DraftAll({
             disabled={noName || nothing}
             title={
               noName
-                ? "先给角色起个名字"
+                ? "请先给角色起个名字"
                 : nothing
-                  ? "四块都锁定了，旧识也都写了"
-                  : "交给辅助模型写；会花一次模型调用"
+                  ? "正文区块均已锁定，旧识恩怨亦已补齐"
+                  : "交给辅助模型生成正文，会消耗一次模型调用"
             }
             onClick={() => void run()}
           >
-            一键成稿
+            一键生成生平
           </button>
         )}
         <button
