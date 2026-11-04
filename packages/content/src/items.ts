@@ -306,7 +306,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6800,
     ability:
-      "荒坂精工制造的高频技术冲锋枪。短促三连发射击配合电磁加速，不仅在中距离拥有激光般的精准散布，蓄能释放后更能将一整梭电磁针弹泼进掩体深处。",
+      "荒坂精工制造的高频技术冲锋枪。三连发点射散布极小，蓄能后可发射高穿透电磁弹丸，直接贯穿掩体打击目标。",
     source: `${W}Ranged-DisplayName-Base_Senkoh`,
   },
   // 突击步枪（反应）
@@ -434,7 +434,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 1100,
     ability:
-      "平价火力生产的 4 号口径手炮级泵动霰弹枪。枪管粗如排水管，近距离轰击爆发的恐怖动能足以直接将成年人掀飞撞上墙面。后坐力如同被大锤砸中肩膀，普通人开枪若没站稳甚至会自己踉跄。",
+      "平价火力生产的 4 号口径手炮级泵动霰弹枪。枪管粗如排水管，近距离轰击动能强劲，能直接将目标轰飞撞上墙面；后坐力极大，普通人开火若没站稳甚至会自己踉跄。",
   },
   {
     id: "satara",
@@ -482,7 +482,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2300,
     ability:
-      "高科军工研发的全自动弹鼓霰弹枪。击发循环狂暴，大容量弹鼓支持连续不间断倾泻狂暴铅弹，在狭窄街巷或仓库火拼中能将整面墙壁连同掩体后的敌人一起轰塌。",
+      "高科军工研发的全自动弹鼓霰弹枪。大容量弹鼓配合高射速循环，可在狭窄街巷和室内交火中持续泼洒重型铅弹，迅速压制掩体后的目标。",
     source: `${W}Ranged-DisplayName-Base_Pozhar`,
   },
   {
@@ -596,7 +596,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 8500,
     ability:
-      "宪法军工制造的单兵班组轻机枪。高初速大口径弹药连贯喷吐，扫射动能足以轻易撕碎防暴路障与民用车体引擎盖，火力全开时宛如移动的固定炮台。",
+      "宪法军工单兵轻机枪。大口径弹药连贯压制，动能足以贯穿掩体和车辆外壳，是街头火拼中最凶狠的移动火力点。",
   },
   // 刀剑（反应）
   {
@@ -619,7 +619,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 120,
     ability:
-      "传统日式极短怀中匕首。极度便于隐匿在和服袖管、内衣夹层或靴跟处，出鞘刺喉无声无息，是刺客与特工在最后时刻同归于尽的袖中暗器。",
+      "传统日式极短怀中匕首。易于隐匿在袖管、内衬或靴侧，出鞘无声，常作为特工与暗杀者在绝境下的贴身底牌。",
     source: `${W}Melee-DisplayName-Preset_Tanto`,
   },
   {
@@ -655,7 +655,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 110,
     ability:
-      "重型切肉剁骨砍刀。刀背厚重、刃口宽大，势大力沉的当头劈砍足以连皮带骨一刀两断，清道夫解剖义体与火拼时极度钟爱。",
+      "重型剁骨砍刀。刀背厚重、刃口宽大，势大力沉的劈砍足以斩断肢体，清道夫拆解义体和街头斗殴时很常见。",
     source: `${W}Melee-DisplayName-Preset_Butchers_Knife`,
   },
   {
@@ -739,7 +739,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2000,
     ability:
-      "荒坂标准单分子刃武士刀。刀锋震荡高频切割，不仅能轻巧削开碳纤维护甲，在神经反应强化者手中更能借着反光与弧度凌空切开来袭子弹。",
+      "荒坂标准单分子刃武士刀。高频震荡刀锋能轻易切开轻型防弹装甲；神经反应出色的使用者配合特定体态，甚至能挥刃偏折来袭子弹。",
     source: `${W}Melee-DisplayName-Preset_Katana`,
   },
   {
@@ -900,7 +900,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "苏西·Q 留在莫克斯酒吧地下的粉红涂装奥马哈。电磁改装后蓄力可喷射出狂暴的多发穿甲电浆弹幕，在近距离撕碎任何敢在酒吧闹事的混蛋。",
+      "苏西·Q 留在莫克斯酒吧地下的粉红涂装奥马哈。电磁改装后蓄力可喷射多发密集弹幕，近距离重击足以放倒任何敢在店里闹事的混混。",
     voice: "像莫克斯的姑娘在耳边冷笑：泼辣、护短，教训那些敢欺负流莺的人渣",
     source: `${W}Ranged-DisplayName-Preset_Omaha_Suzie`,
   },
@@ -916,7 +916,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     ability:
       "威尔逊在第二修正案武器店为 V 量身定制的莱克星顿。加重枪管配人体工学握把，大幅加快换弹速度并提高爆头时的致命穿透暴击伤害。",
     voice: "像威尔逊在射击场大嗓门吆喝：踏实点，伙计，瞄准弱点扣扳机",
-    source: `${W}Ranged-DisplayName-Preset_Lexington_Wilson`,
+    source: `${W}Ranged-DisplayName-Base_Lexington_Wilson`,
   },
   {
     id: "crash",
@@ -942,7 +942,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "克里·欧罗伯斯随身携带的大口径艺术左轮。击发后坐力经由特殊配重极为平缓，命中时伴随着高压电击麻痹，开火声宛如电吉他的失真重音。",
+      "克里·欧罗伯斯随身携带的大口径定制左轮。配重经专门调校，后坐力平稳；弹头附带高压电弧，开火声像插满失真单块的重型电吉他。",
     voice: "像克里在台上狂飙失真吉他：撕裂伪善，跟着摇滚节拍把子弹倾泻出去",
     source: `${W}Melee-DisplayName-Preset_Overture_Kerry`,
   },
@@ -956,7 +956,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "漩涡帮前头目罗伊斯的改装谦信。每次换弹都会随机重构弹药物理特性，在燃烧、电击、剧毒与流血伤害之间狂乱切换，极度不可预测。",
+      "漩涡帮前头目罗伊斯的改装谦信。每次换弹都会随机切换弹药特化涂层，在燃烧、电击、生化与撕裂伤害之间轮转，难以预判。",
     voice: "像罗伊斯神经质地怪笑：猜猜下一发是什么伤害？把眼前的一切炸烂！",
     source: `${W}Ranged-DisplayName-Preset_Kenshin_Royce`,
   },
@@ -1012,7 +1012,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "杜姆·杜姆魔改的新星左轮手枪。单次扣动扳机即可连发喷射出四枚大口径威能穿甲弹丸，在近距离具备撕碎肢体与炸烂掩体的狂暴动能。",
+      "杜姆·杜姆魔改的新星左轮手枪。单次扣动扳机可连发四枚大口径弹丸，近距离交火能轻易轰烂木板掩体并打碎骨头。",
     voice: "像杜姆·杜姆嚼着口香糖狂笑：扫成蜂窝！看他们怎么在四重火网里跳舞！",
     source: `${W}Ranged-DisplayName-Preset_Nova_Doom_Doom`,
   },
@@ -1054,7 +1054,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "乱刀会营地缴获的超极限射速萨拉托加。拥有翻倍的超大弹匣容量与全游戏最狂暴的倾泻射速，在数秒内以绝对弹雨压死一切面前的活物。",
+      "乱刀会营地缴获的改装萨拉托加。加装翻倍容量弹鼓与过载击发连杆，射速被拉到危险的临界点，能瞬间用密集弹雨压制整片区域。",
     voice: "像老派恶土重装枪手在叫嚣：火力压过一切！换弹？等所有人死光了再换！",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Raffen`,
   },
@@ -1068,7 +1068,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "荒坂工业园绝密集装箱里的原型智能冲锋枪。手部接入智能链接后，陀螺弹丸不仅自修正追踪，命中瞬间更会引爆高热爆炸撕裂周边集群敌人。",
+      "荒坂工业园密级集装箱里的原型智能冲锋枪。配合智能链接，陀螺微弹自修正弹道，命中后引爆微型热能破片，杀伤周遭敌人。",
     voice: "像荒坂实验室警报红光闪烁：原型火控系统上线，授权执行最高烈度灭杀",
     source: `${W}Ranged-DisplayName-Preset_Shingen_Prototype`,
   },
@@ -1082,7 +1082,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "康陶典式智能冲锋枪的军用试验型。弹丸在命中目标瞬间有极高概率释放狂暴的 EMP 电磁脉冲，连续电击瘫痪周遭敌群与机械义体。",
+      "康陶典式智能冲锋枪军用测试型。弹头装填微型放电芯片，命中时释放局部 EMP 脉冲，能短时间瘫痪目标义体与临近设备。",
     voice: "像康陶实验室的冷酷播报：电磁脉冲过载，全面摧毁神经中枢",
     source: `${W}Melee-DisplayName-Preset_Dian_Yinglong`,
   },
@@ -1096,8 +1096,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "军工科技深渊封印设施打捞出的流窜 AI 寄生冲锋枪。倾泻的弹雨伴随着黑墙红光，当敌人生命垂危时直接入侵其神经系统将其灵魂烧蚀吞噬殆尽。",
-    voice: "像来自黑墙之外的无数低语重叠冷笑：碳基生物的脆弱意识，终将被终极深渊吞噬",
+      "军用科技废弃地下设施打捞出的黑墙污染冲锋枪。射击时枪身渗出暗红代码微光；当目标重伤濒死时，内置的黑墙恶意进程会顺着神经接口直接烧穿对方大脑。",
+    voice: "像黑墙之外的杂音在冷笑：碳基生物的神经突触，不过是一碰就碎的代码",
     source: `${W}Ranged-DisplayName-Preset_Borg4a_Haunted_Gun`,
   },
   {
@@ -1180,7 +1180,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "经狂暴改装的单发 RT-46 风暴左轮。弹巢仅容纳一枚超规格高爆穿甲弹，击发瞬间产生毁天灭地的电磁殉爆，连掩体带敌人一并轰至灰飞烟灭。",
+      "深度改装的单发 RT-46 风暴左轮。弹巢仅装填一枚高装药穿甲爆破弹，蓄能击发伴随剧烈电磁轰鸣，能直接穿透混凝土掩体击碎目标。",
     voice: "像老近卫军的怒吼：一发高爆，足够粉碎所有反动装甲！",
     source: `${W}Melee-DisplayName-Preset_Burya_Comrade`,
   },
@@ -1206,7 +1206,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "竹村五郎贴身佩戴的精工武士刀。在光学迷彩激活或克伦齐科夫生效的瞬间出鞘斩击，暴击率直接飙升至极限，刀锋所过之处肢解无情。",
+      "竹村五郎贴身佩戴的精工武士刀。在光学迷彩或克伦齐科夫生效状态下出鞘斩击，暴击率大幅跃升，出刀极快且招招直奔要害。",
     voice: "像竹村五郎沉声训斥：持刀如持心，恪守武士的专注与尊严",
     source: `${W}Melee-DisplayName-Preset_Katana_Takemura`,
   },
@@ -1233,7 +1233,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "熔解炉深处打捞出的热能过载武士刀。整把刀刃处于赤红炽热状态，劈砍时直接灼烧割开伤口，对处于燃烧状态的敌人必定打出致死暴击。",
-    voice: "像地狱锻炉的烈焰咆哮：赤红烈火，在焦黑的灰烬中重铸杀戮",
+    voice: "像热熔切割机在耳边轰鸣：烧红的刀刃切开皮肉，只留下焦黑的切口",
     source: `${W}Melee-DisplayName-Preset_Katana_E3`,
   },
   {
@@ -1260,7 +1260,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "海啸猫又技术的终极魔改版本。电磁穿甲钨芯弹在贯穿墙壁与掩体后不仅不损耗动能，反而会在建筑内部折射跳跃，无视任何障碍连续诛杀目标。",
+      "海啸“猫又”重度改装版本。电磁加速的钨芯穿甲弹穿透掩体后弹道更加平直，能无视多层墙壁直接击中后方掩蔽的目标。",
     voice: "像顶尖刺客在瞄准镜后深呼吸：无论藏在多少堵墙后，你的命已经留在那儿了",
     source: `${W}Melee-DisplayName-Preset_Nekomata_Breakthrough`,
   },
@@ -1287,7 +1287,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "军用科技特工梅瑞狄斯·斯托特在汽车旅馆遗落的高频震动钝器。通电后持续剧烈震颤，抡击在敌人脸上不仅造成沉重钝击击倒，更附带极大精神侮辱伤害。",
+      "军用科技特工斯托特在汽车旅馆落下的高频震动钝器。通电后剧烈震动，抽在脸上钝击沉重，而且带有极具侮辱性的戏剧效果。",
     voice: "像斯托特在审讯室里皮笑肉不笑：学会服从，佣兵，或者用这个让你长点记性",
     source: `${W}Melee-DisplayName-Preset_Dildo_Stout`,
   },
@@ -1387,7 +1387,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 300,
     ability:
-      "街头提纯重度神经毒品。吸入后多巴胺与痛觉阻断剂狂暴泵入大脑，丧失恐惧与疼痛，出招暴虐嗜血；极度容易上瘾，并在神经边缘疯狂滑向赛博精神病。",
+      "街头粗提合成兴奋剂。吸入后多巴胺与痛觉阻断剂迅速冲刷神经系统，暂时消除疼痛与恐惧；成瘾性极高，滥用会导致严重的神经退行与精神恍惚。",
   },
   {
     id: "glitter",
@@ -1583,6 +1583,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 500,
     ability:
-      "义体医生特调神经抑制药剂：注射后约 6 小时内狂暴压制幻觉与神经失控发作（发作相关检定 +4）；但仅能迟滞神经突触坏死，无法恢复人性上限；长期依赖将产生严重耐药性与致命戒断反应。",
+      "义体医生特调神经抑制药剂：注射后约 6 小时内强制压制幻觉与神经失控发作（发作相关检定 +4）；但仅能迟滞神经突触坏死，无法恢复人性上限；长期依赖将产生严重耐药性与致命戒断反应。",
   },
 ]);

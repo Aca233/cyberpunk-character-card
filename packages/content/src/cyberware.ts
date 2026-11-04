@@ -334,7 +334,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 72000,
     humanityCost: 2,
     ability:
-      "交火爆发神经整流器，在枪声响起的头数十秒内将狂暴的肾上腺素转化为爆发性奔跑动能，助你抢占有利交火掩体或强行突击破阵。",
+      "交火爆发神经整流器。交火打响的头数十秒内，高浓度肾上腺素刺激下肢运动神经，提升冲刺速度，便于抢占掩体或撕开火线。",
     checks: ["reflexes"],
   },
   {
@@ -420,7 +420,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 25000,
     humanityCost: 8,
     ability:
-      "摩尔科技的狂暴作战中枢。启动时向循环系统泵入海量神经阻断剂与合成类固醇，肉体钝化一切痛苦，近战打击力量暴涨，甚至可自高空跃下轰击地面震翻周遭敌群。",
+      "摩尔科技军规狂暴中枢。启动时向循环系统泵入大剂量合成类固醇与痛觉阻断剂，大幅强化肉体耐受力与近战打击动能，并可在下落重击时向地面释放冲击波。",
     checks: ["body"],
   },
   {
@@ -470,7 +470,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 12,
     ability:
-      "千替工业的顶尖时间加速装置。神经超频流速拉到极致，在时间停滞的领域内大幅提升肢体卸力与规避能力，肉身对烈火、神经毒素与高压电弧展现出超常抗性。",
+      "千替工业顶级时间膨胀装置。大幅拉高神经反射流速，在极限减速中强化机动回避与卸力，并借助绝缘与过滤涂层提升对燃烧、中毒与电击的抗性。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -482,7 +482,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 90000,
     humanityCost: 12,
     ability:
-      "军用科技全天候战术斯安威斯坦。支持随开随关的自适应神经超频，在时间缓速中提升命中暴击与伤害，每撕碎一名敌人便借由神经反馈延长加速时长并回涌生命活力。",
+      "军用科技战术斯安威斯坦。支持随时开关的神经超频，在减速状态下提升弱点命中与暴击伤害；击杀目标后通过神经接口回收冷却时间并稳定生命体征。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -494,7 +494,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 99000,
     humanityCost: 15,
     ability:
-      "军用科技传说级远地点斯安威斯坦。超频爆发力登峰造极，在静止世界中将爆头穿透与致命暴击提升至极境，击杀瞬间直接逆流反哺神经系统，重燃生命体征与加速循环。",
+      "军用科技原型斯安威斯坦。超频时将视觉与神经反射压至极慢，大幅强化要害暴击与弱点穿透；每次击杀目标都能快速重置加速循环并恢复部分体力。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -506,7 +506,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 50000,
     humanityCost: 9,
     ability:
-      "生物动力重型狂暴。超频期间锁死痛觉与生命体征底线使你免疫濒死，近战挥砍速度与精准度暴增；狂暴褪去时，战场上的每一个亡魂都将通过神经反馈反哺你的躯体。",
+      "生物动力重装狂暴。超频期间锁死痛觉中枢并提供暂时的濒死免疫，大幅提高近战挥砍频率；超频结束后，根据期间消灭的敌人数量折算恢复体力。",
     checks: ["body"],
   },
   {
@@ -517,7 +517,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 11,
     ability:
-      "泽塔科技重装狂暴。启动后近战攻速激增且免疫高坠伤害，可在半空中如陨石般重砸地面，引发恐怖的冲击波将周边敌人集体震翻在地。",
+      "泽塔科技重装狂暴。启动后近战攻速显著提升且免疫坠落伤害，可自高处下砸地面释放动能冲击波，震退并击倒周遭敌人。",
     checks: ["body"],
   },
   {
@@ -528,7 +528,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 90000,
     humanityCost: 12,
     ability:
-      "军用科技终极狂暴系统。开启后狂暴装甲全面硬化肉身，所受伤害大幅削减，移速与近战攻速双重过载；伤势越重，嗜血的神经脉冲反而催生出越发骇人的破坏力。",
+      "军用科技旗舰型狂暴系统。开启后硬化体表装甲，大幅减免所受伤害，同时拉高移速与挥砍速率；自身伤势越重，神经回馈激发的近战破坏力越高。",
     checks: ["body"],
   },
   // 循环系统
@@ -697,7 +697,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 24000,
     humanityCost: 6,
     ability:
-      "表皮下微型发光棱镜与自适应全息涂层。激活后扭曲周围光线，令身体轮廓与环境背景完美融为一体，短时间内宛如遁入虚无的幽灵。",
+      "表皮下微型棱镜与自适应全息涂层。激活后偏折可见光与红外热源，将身体融入环境背景，提供数秒的高效光学隐形。",
     checks: ["cool"],
   },
   {
@@ -1000,7 +1000,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 22000,
     humanityCost: 3,
     ability:
-      "手骨微型动能充电机。在彻底打空弹匣并快速完成装填后的第一发致命出膛弹丸中附带高压电弧，命中瞬间引爆狂暴电击瘫痪周遭。",
+      "手骨微型动能充电机。打空弹匣并快速装填后，击发的第一枚弹丸附带高压电弧，命中时引发范围电击瘫痪敌人。",
     checks: ["tech"],
   },
   {
@@ -1055,7 +1055,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 24000,
     humanityCost: 8,
     ability:
-      "腕骨内置超强韧单分子切割线。挥动时光刃如幽灵般横扫数米射程，无声将血肉与护甲一分为二，更能顺着物理接口无声注入快速破解程序。",
+      "腕骨内置超强韧单分子切割线。挥动时光刃横扫数米射程，能无声切开血肉与轻护甲，并可通过物理接口上传快速破解程序。",
     checks: ["reflexes", "intelligence"],
   },
   {
@@ -1120,7 +1120,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 8000,
     humanityCost: 2,
     ability:
-      "足底消音软垫与轻量化吸震步态调节器。彻底消除奔跑、落地与潜行时的脚步声，犹如夜色中的猞猁，紧贴守卫背后滑行亦悄无声息。",
+      "足底消音聚合物软垫与吸震步态调节器。消除奔跑、落地与潜行时的脚步声，即便贴着守卫背后移动也不会引发警觉。",
     checks: ["cool"],
   },
   // 不朽义体：军用级和原型，只从剧情获得
@@ -1133,7 +1133,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 12,
     iconic: true,
     ability:
-      "暴恐机动队专用特种军规螳螂刀。单分子刃镀有一层军用消光黑涂层，刀锋切断钛合金外骨骼如切凝脂；这东西一旦亮出来，所有人都会怀疑你刚屠杀了一整队疯子。",
+      "暴恐机动队专用军规螳螂刀。单分子刃镀有消光黑涂层，能轻易切断钛合金外骨骼；这东西一旦亮出来，任何人都会怀疑你刚干掉了一队疯子。",
     checks: ["reflexes"],
   },
   {
@@ -1159,7 +1159,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 13,
     iconic: true,
     ability:
-      "军工原型电磁能量回收中枢。技术武器蓄满轰出的电磁穿透弹在命中敌人的刹那，逆向回流的脉冲既瞬间修复受损细胞，又迅速充盈全身行动体力。",
+      "军工原型电磁回收中枢。技术武器蓄力弹丸命中敌人时，逆向感应脉冲可刺激神经系统并回收能量，迅速恢复生命值与体力。",
     checks: ["tech"],
   },
   {
@@ -1171,7 +1171,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 12,
     iconic: true,
     ability:
-      "军用级动能配重与力场整流器。彻底重塑双手力学传导，不管是高频挥动大锤还是连续掌控重机枪狂暴开火，体力消耗都被压制至难以置信的平稳水准。",
+      "军规级动能配重与力学整流器。重塑双手力学传导，大幅压低挥舞重型钝器与掌控重武器连发时的体力消耗。",
     checks: ["body"],
   },
   {
@@ -1183,7 +1183,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 17,
     iconic: true,
     ability:
-      "采用转基因高密度生物几丁质打造的皮下重甲。不仅提供比肩军用坦克的被动防御硬度，更能催化肉体细胞以惊人的速度自行凝血愈合创口。",
+      "转基因高密度生物几丁质皮下护层。提供接近重型装甲的被动防护硬度，并在脱离火线后加速伤口凝血与组织修复。",
     checks: ["body"],
     armor: true,
   },
@@ -1196,7 +1196,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 2,
     iconic: true,
     ability:
-      "改装至近乎违规的过载运动神经韧带。双腿神经脉冲永远处于狂暴就绪态，让你在任何地形与交火泥潭中都具备远超常人的常驻飞驰极速。",
+      "深度改装的过载运动神经韧带。持续向腿部肌群输送高频脉冲，在各种地形与复杂交火中提供更高的常驻奔跑速度。",
     checks: ["reflexes"],
   },
   {
@@ -1208,7 +1208,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 15,
     iconic: true,
     ability:
-      "粗犷绝伦的超密合金全身外置仿生骨架。骨骼厚重得犹如直接焊在体内的活动装甲板，赋予肉体宛如重型运兵车般的硬核减伤防护。",
+      "超密合金外置仿生骨架。钛合金支撑架直接铆接在核心骨骼上，大幅强化躯干承重并提供强劲的物理减伤。",
     checks: ["body"],
   },
   {
@@ -1256,7 +1256,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 10,
     iconic: true,
     ability:
-      "生体神经突触优化器。彻底打通接入仓快速破解与大脑视觉要害解算的壁垒，允许上传的攻击性快速破解像枪弹一样对敌方神经中枢触发毁灭性致命暴击。",
+      "生体神经突触优化器。连通接入仓快速破解与视觉解算系统，允许针对要害上传的攻击性快速破解造成暴击伤害。",
     checks: ["intelligence"],
   },
   {
@@ -1268,7 +1268,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 9,
     iconic: true,
     ability:
-      "近场逆向偏折装甲。敌对目标与你的距离越近，皮下装甲板被动激发的防御力场越发致密坚固，在被多名近战敌人贴身合围肉搏时展现出极高的减伤韧性。",
+      "近场逆向偏折装甲。目标与自身的距离越近，皮下装甲激发的偏折力场越强，在贴身近战时提供更高的伤害减免。",
     checks: ["body"],
   },
   {
@@ -1280,7 +1280,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     iconic: true,
     ability:
-      "神经系统极限生存过载保护芯片。当生命体征遭受重创跌破濒死红线时，瞬间不计代价强制超频运动神经，让周围时空骤然陷入极度慢动作，为绝境反杀或逃脱求援换来决定性窗口。",
+      "神经应急过载芯片。当生命体征跌破临界红线时，瞬间超频运动神经，触发极高倍率的时间膨胀，为脱身或绝境反击争取关键窗口。",
     checks: ["reflexes"],
   },
   {
@@ -1316,7 +1316,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     iconic: true,
     ability:
-      "岐路司光学登峰造极的不朽原型义眼。搭载超高帧率神经直连微扫描仪，在战斗中以毫秒级频率标记敌方一切微小破绽，赋予极其恐怖的全局暴击率跃升。",
+      "岐路司光学不朽原型义眼。搭载超高帧率战术扫描仪，在交火中持续标记目标的防弹薄弱点，显著提升全局暴击概率。",
     checks: ["cool"],
   },
   {
@@ -1328,7 +1328,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 7,
     iconic: true,
     ability:
-      "战斗触发式神经导引器。每当从潜行暗处被察觉或主动拔枪开火打响战斗的第一时间，瞬间向全身肌肉释放高浓度人造兴奋剂，赋予持续数十秒的高速奔袭冲刺加成。",
+      "战斗触发神经导引。从潜行被发现或主动开火打响战斗时，向肌群注入兴奋剂，提供数十秒的高速冲刺加成。",
     checks: ["reflexes"],
   },
   {
@@ -1340,7 +1340,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 12,
     iconic: true,
     ability:
-      "全身真皮生化细胞自适应重塑矩阵。依托角色深厚的技术能力底蕴，全方位拔高体表物理护甲、元素抗性与爆炸冲击减免，将肉身打造成坚不可摧的生化要塞。",
+      "全身真皮自适应重塑矩阵。根据安装者的技术专长动态调节皮下分子结构，提升物理护甲、元素抗性与防爆减伤。",
     checks: ["tech"],
   },
 ]);
