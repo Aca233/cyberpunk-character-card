@@ -1,57 +1,55 @@
 # 赛博朋克 2077 角色卡
 
-以角色扮演为主、由大模型驱动的文字游戏：玩家扮演自建角色，模型扮演 NPC 和夜之城本身。以自建角色为中心，界面还原原作风格。策划案见 `~/.claude/plans/2077-generic-hamster.md`。
+夜之城文字角色扮演游戏。由大语言模型扮演所有 NPC 与夜之城本身，玩家扮演自建佣兵，通过自由文字交互与检定推动剧情发展，界面还原游戏原作视觉风格。
 
-#### 叙事战斗
+### 核心特性
 
-- 打斗过程由叙事决定；代码只登记交战、人物结局和持续后果，不再运行战斗轮次、敌人意图、拦招、超频或身体抵伤。
-- 保留战利品；死者留下亲属与延迟复仇，伤口记录来源，未处理的重伤愈合后留疤，流言逐日传播走样，录像转手后可能形成警方证据。
-- 处理伤口收费且不立即愈合；重复处理不重复收费，余额不足时整条操作回滚。
-- NPC 对玩家的伤害类或终极类快速破解，必须在检定前用 check.npcHack 绑定攻击者和程序。npcHack 统一结算 RAM、自我 ICE、抵抗与伤害，不另写 damage 或 combat wound，避免重复扣血。
-- 本次战斗重构不提供旧战斗存档迁移；验证和使用以新建存档为准，不自动删除已有存档。
+- **叙事导向的自由行动**：没有死板的轮次与技能槽限制。打斗、交涉、潜入或逃亡完全依据叙事推进，底层代码负责结算检定、伤口留疤、战利品与人际影响（死者亲属结仇、黑客反噬、流言扩散）。
+- **纯前端静态运行**：整个游戏可以直接托管在静态网页上运行。存档、模型连接配置与密钥全部保存在浏览器本地 IndexedDB 中，前端直接请求模型 API，隐私安全且零后端成本。
+- **混合开发模式**：同时支持单机静态运行与本地 Hono 开发服务器模式。
 
-## 开发
+---
+
+## 快速上手
 
 ```bash
 pnpm install
 pnpm check   # 类型检查 + Biome + Vitest
 ```
 
-- 需要 Node 24 以上、pnpm 12。
-- `config.json`（含密钥）由用户在本地创建，不进版本库。
-- 原作素材放在 `apps/web/public/assets/local/`，不进版本库，也不随项目分享。
+- **环境要求**：Node 24+，pnpm 12。
+- **模型配置**：本地新建 `config.json`（参考 `config.example.json`），包含 API Key 等配置，默认不进入版本库。
+- **游戏素材**：原作解包素材放置于 `apps/web/public/assets/local/`（仅供个人本地使用，不随仓库分发）。
 
-## 纯前端静态版
+## 纯前端静态部署
 
-整个游戏在浏览器里跑：存档、角色卡、模型配置和密钥都存在浏览器的 IndexedDB 里，网页拿玩家自己的密钥直接调模型服务商，不经过任何服务器。本机的 Hono 服务器照旧留作开发模式。
+静态版无需自建服务器，所有数据（存档、角色卡、模型密钥）均由浏览器 IndexedDB 本地管理，页面直接通过 CORS 调用模型服务商。
 
 ```bash
-pnpm --filter @cp/web dev:local      # 本机预览纯前端版
-pnpm --filter @cp/web build:static   # 构建到 apps/web/dist
-CP_BASE=/仓库名/ pnpm --filter @cp/web build:static   # GitHub Pages 项目站点（前后都要斜杠）
+pnpm --filter @cp/web dev:local      # 本地预览纯前端版
+pnpm --filter @cp/web build:static   # 构建静态产物至 apps/web/dist
+CP_BASE=/仓库名/ pnpm --filter @cp/web build:static   # GitHub Pages 项目子路径站点构建
 ```
 
-- 路由用 hash（`#/menu`），静态托管刷新子页面不会 404，不需要额外的 404 回退配置。
-- Cloudflare Pages 和 GitHub Pages 用户站点放在根路径，不用设 `CP_BASE`；`public/.nojekyll` 让 GitHub Pages 不跑 Jekyll。
-- 素材目录不进版本库，CI 里拿不到：在本机构建后把 `apps/web/dist` 整个上传（约 30 MB、2000 个文件左右）。
-- 素材是 demo 档时构建照常进行，只打印警告，页面底部也会显示「demo 素材，仅限本机使用」；公开部署前应换成 release 档（`pnpm pick-assets --tier release --install <游戏目录> --source <解包目录>`），release 档会核验 Steam / GOG / Epic 安装标记。
-- 模型服务商要允许网页跨域访问（CORS）；本地 Ollama 要设 `OLLAMA_ORIGINS`，不支持 CORS 的中转站在网页版里连不上。
-- 同一时间只有一个标签页能读写存档（Web Locks）；生成过程中刷新或关页面，这一轮会丢掉。
-- 存档只在这个浏览器里，清除网站数据就没了，记得在「读取存档」里导出备份；服务器版导出的文件可以直接导入。
+- **路由与刷新**：使用 Hash 路由（`#/menu`），静态托管任意子路径刷新均不会 404，无需配置服务端重定向。
+- **素材与构建**：素材目录不进 Git。本地完成构建后，直接将 `apps/web/dist` 上传托管。如果未解包正式素材，会以 demo 素材兜底运行并在界面标注提示。
+- **跨域与连接**：所选模型服务商需支持浏览器端 CORS 访问；若使用本地 Ollama，请配置 `OLLAMA_ORIGINS`。
+- **数据安全**：存档仅保存在当前浏览器的存储区，清理浏览器缓存会导致存档丢失；请随时在「读取存档」页面导出 JSON 备份。
 
 ### 部署到 Cloudflare Pages
 
-用直接上传（Pages 的 Git 集成拿不到素材）；`apps/web/wrangler.toml` 里项目名是 `cyberpunk`，输出目录是 `dist`。
+通过命令行直接上传构建产物（`apps/web/wrangler.toml` 项目名为 `cyberpunk`）：
 
 ```bash
-npx wrangler login                 # 一次就够
-pnpm --filter @cp/web build:static # 先构建出 apps/web/dist
+npx wrangler login                 # 首次使用需登录
+pnpm --filter @cp/web build:static # 构建产物
 npx wrangler pages deploy apps/web/dist --project-name cyberpunk
 ```
 
-- Windows PowerShell 里 `build:static` 脚本的 `VAR=val cmd` 写法不生效，改成：`cd apps/web` 后 `$env:VITE_CP_BACKEND='local'; $env:CP_BASE='/'; ..\..\node_modules\.bin\vite.CMD build`。
-- 线上：https://cyberpunk-am6.pages.dev （`cyberpunk` 子域被占，Cloudflare 自动加了后缀）。
-- 浏览器版第一次打开就会照 `config.example.json` 建好 `config.json`；示例里 `profiles` 是空的，所以进设置页直接落在「添加连接」表单，没有任何预置连接。
+> **Windows PowerShell 构建提示**：PowerShell 不支持 `VAR=val cmd` 行内环境变量写法，可在 `apps/web` 目录下执行：  
+> `$env:VITE_CP_BACKEND='local'; $env:CP_BASE='/'; ..\..\node_modules\.bin\vite.CMD build`。
+- 线上体验示例：https://cyberpunk-am6.pages.dev
+- 首次进入时系统会依据 `config.example.json` 自动初始化本地配置，初次使用请在设置中添加自己的模型连接。
 
 
 ## 开工前核实（2026-10-23）
