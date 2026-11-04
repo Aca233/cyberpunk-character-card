@@ -271,7 +271,7 @@ export function CharactersScreen() {
                 disabled={busy}
                 onChange={(event) => setUseModel(event.target.checked)}
               />
-              <span>用模型插主板、分属性（花一次模型调用；本作导出的卡不调用）</span>
+              <span>由 AI 自动配置主板与属性（消耗一次模型调用；导入本作导出的角色卡除外）</span>
             </label>
             <input
               ref={fileInput}
@@ -366,7 +366,7 @@ export function CharactersScreen() {
                 <p>
                   {editor.imported.own
                     ? "这是本作导出的角色卡，已经原样还原。"
-                    : "从角色卡导入：文字已经对上正文，主板和属性是模型挑的，代码按规矩截过。"}
+                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配并完成合规校准。"}
                   检查一遍再保存，保存后才进角色库。
                 </p>
                 {editor.imported.warnings.length > 0 && (
@@ -431,7 +431,7 @@ export function CharactersScreen() {
                 <p>
                   {editor.imported.own
                     ? "这是本作导出的角色卡，已经原样还原。"
-                    : "从角色卡导入：文字已经对上正文，主板和属性是模型挑的，代码按规矩截过。"}
+                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配并完成合规校准。"}
                   检查一遍再保存，保存后才进角色库。
                 </p>
                 {editor.imported.warnings.length > 0 && (
@@ -591,7 +591,7 @@ export function CharactersScreen() {
 
               <h3 className={styles.sectionTitle}>04 / 这个人</h3>
               <p className={styles.note}>
-                交给辅助模型生成、重写、续写或润色，每次花一次模型调用；锁定的区块不会被改。
+                可调用辅助模型生成、重写、续写或润色（消耗一次调用）；锁定的区块不会被改写。
               </p>
               <div className={styles.proseBlocks}>
                 {BRIEF_BLOCKS.map((block) => (
@@ -606,7 +606,7 @@ export function CharactersScreen() {
                     rows={3}
                     maxLength={400}
                     value={editor.card.skills}
-                    placeholder="会什么、不会什么；已有的能力，不是希望将来获得的能力。"
+                    placeholder="掌握的核心能力、软肋与缺陷；记录当前已有实力，而非未来的期望。"
                     onChange={(event) => change({ skills: event.target.value })}
                   />
                 </label>

@@ -401,7 +401,7 @@ export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
   "street-kid": {
     originId: "street-kid",
     name: "街头小子·街霸突击",
-    summary: "体魄与反应双精通，精通街头肉搏与黑诊所急救，解锁【铁笼凶兽】与【暗巷医者】特长联动",
+    summary: "体魄与反应出众，擅长街头肉搏与黑诊所急救，解锁【铁笼凶兽】与【暗巷医者】特长联动",
     pasts: ["gang-runner", "clinic-apprentice", "pit-fighter"],
     skills: ["brawling", "lockpick", "streetwise"],
     attributes: { body: 5, reflexes: 5, tech: 3, intelligence: 4, cool: 5 },
@@ -409,7 +409,7 @@ export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
   nomad: {
     originId: "nomad",
     name: "流浪者·恶土游侠",
-    summary: "技术与体魄兼备，精通恶劣环境驾驶、机械拆修与智能武器改装，解锁【职业车手】特长联动",
+    summary: "技术与体魄兼备，擅长恶劣环境驾驶、机械拆修与智能武器改装，解锁【职业车手】特长联动",
     pasts: ["smuggler", "merc-crew", "clinic-apprentice"],
     skills: ["driving", "mechanic", "smart-weapon-mod"],
     attributes: { body: 5, reflexes: 4, tech: 6, intelligence: 3, cool: 4 },

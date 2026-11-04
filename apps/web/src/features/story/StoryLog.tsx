@@ -219,7 +219,7 @@ function TurnBlock({
           </button>
         )}
         {turn.dropped > 0 && !turn.unsettled && (
-          <span className={styles.dropped} title="模型这轮写的部分指令没能通过校验，被丢弃了">
+          <span className={styles.dropped} title="本轮部分指令未能通过系统校验，已自动舍弃">
             本轮数值未结算（{turn.dropped} 条）
           </span>
         )}

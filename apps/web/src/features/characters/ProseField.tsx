@@ -59,13 +59,13 @@ export function ProseField({
         controller.signal,
       );
       finish();
-      if (result.truncated) setNote(`模型写超了 ${max} 字，后面的截掉了`);
+      if (result.truncated) setNote(`字数超出 ${max} 字上限，多余内容已截断`);
     } catch (caught) {
       if (controller.signal.aborted) {
         finish();
-        if (text !== "") setNote("已停止，保留了写出来的部分");
+        if (text !== "") setNote("已停止生成，保留了已输出内容");
       } else {
-        setError(caught instanceof ApiError ? caught.message : "写正文时出错了，可以重试");
+        setError(caught instanceof ApiError ? caught.message : "文本生成失败，请重试");
       }
     } finally {
       abort.current = null;
@@ -122,7 +122,7 @@ export function ProseField({
                   ? "锁定了，模型不会改它"
                   : card.name.trim() === ""
                     ? "先给角色起个名字"
-                    : "交给辅助模型写；会花一次模型调用"
+                    : "调用辅助模型生成正文（消耗一次模型调用）"
               }
               onClick={() => void run(mode)}
             >
@@ -157,7 +157,7 @@ export function ProseField({
           className={styles.toolButton}
           aria-pressed={locked}
           disabled={busy}
-          title="锁定后模型不会改它，写别的区块时当作定稿；手写照样可以改"
+          title="锁定后 AI 不会改动此区块，写其他区块时作为参考基准；仍可手动修改"
           onClick={() =>
             onChange({
               locked: locked ? card.locked.filter((b) => b !== block) : [...card.locked, block],
@@ -170,7 +170,7 @@ export function ProseField({
       {asking && !locked && (
         <label className={styles.field}>
           <span>
-            给模型的要求
+            生成要求 / 补充设定
             <small>{instruction.length} / 200</small>
           </span>
           <input

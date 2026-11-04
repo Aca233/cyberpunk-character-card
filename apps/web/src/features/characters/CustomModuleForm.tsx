@@ -65,7 +65,7 @@ export function CustomModuleForm({
           placeholder={
             slot === "flaw"
               ? "欠了谁、得罪了谁、身上落下了何种神经创伤……"
-              : "该特长或经历的来龙去脉、专精程度与实战表现。"
+              : "这项本事是怎么练出来的，或者在街头闯出过什么名堂。"
           }
           onChange={(event) => setText(event.target.value)}
         />
@@ -75,10 +75,10 @@ export function CustomModuleForm({
           type="button"
           className={styles.toolButton}
           disabled={interpret.isPending || text.trim().length < 4}
-          title="交由模型智能解析标签、能力、剧情钩子与参考点数消耗"
+          title="让 AI 提取标签、能力效果、剧情钩子与参考点数"
           onClick={() => interpret.mutate()}
         >
-          {interpret.isPending ? "解析中…" : draft ? "重新解析" : "智能解析模块"}
+          {interpret.isPending ? "解析中…" : draft ? "重新解析" : "AI 解析模块"}
         </button>
         {!draft && (
           <button
@@ -88,7 +88,7 @@ export function CustomModuleForm({
               setDraft({ ...blankModule(slot), label: text.trim().slice(0, 24) || "未命名" })
             }
           >
-            手动录入
+            直接手写
           </button>
         )}
         <button type="button" className={styles.toolButton} onClick={onCancel}>

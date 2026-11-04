@@ -116,7 +116,7 @@ export function StepOrigin({ card, board, data, commit, change, onJump }: StepPr
           <input
             maxLength={20}
             value={card.alias}
-            placeholder="江湖代号 / 街头称呼"
+            placeholder="街头代号 / 圈内绰号"
             onChange={(e) => change({ alias: e.target.value })}
           />
         </label>
@@ -212,7 +212,7 @@ export function StepOrigin({ card, board, data, commit, change, onJump }: StepPr
               <span className={styles.pickHead}>
                 <strong className={styles.pickName}>自定义出身</strong>
               </span>
-              <span>自由撰写设定背景，交由模型智能解析为专属模块</span>
+              <span>自由输入背景设定，让 AI 生成对应的专属模块</span>
             </button>
           )}
         </li>

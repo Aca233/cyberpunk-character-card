@@ -408,7 +408,7 @@ export function StepPeople({ board, data, commit }: StepProps) {
                 maxLength={60}
                 value={a.note}
                 aria-label={`和${current.name}是什么事`}
-                placeholder="过往恩怨或交集契机（可留空交由AI推演）"
+                placeholder="过往过节或交情（留空则由 AI 自由推演）"
                 onChange={(e) => setNote(current.id, e.target.value)}
               />
             )}

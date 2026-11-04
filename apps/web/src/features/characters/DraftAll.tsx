@@ -139,8 +139,8 @@ export function DraftAll({
               noName
                 ? "请先给角色起个名字"
                 : nothing
-                  ? "正文区块均已锁定，旧识恩怨亦已补齐"
-                  : "交给辅助模型生成正文，会消耗一次模型调用"
+                  ? "生平区块均已锁定，旧识恩怨也已补齐"
+                  : "调用辅助模型生成正文（消耗一次模型调用）"
             }
             onClick={() => void run()}
           >
@@ -173,7 +173,7 @@ export function DraftAll({
       {asking && (
         <label className={styles.field}>
           <span>
-            给模型的要求
+            生成要求 / 补充设定
             <small>{instruction.length} / 200</small>
           </span>
           <input

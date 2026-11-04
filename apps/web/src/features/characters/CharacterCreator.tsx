@@ -395,7 +395,7 @@ function StepPerson({
             rows={3}
             maxLength={400}
             value={card.skills}
-            placeholder="除核心特长外想要补充的实战习惯与技能底子（如专精武器、黑客流派、实战短板等）。"
+            placeholder="除特长外补充的实操底子与习惯（如擅长枪械、黑客流派、近战死穴等）。"
             onChange={(e) => change({ skills: e.target.value })}
           />
         </label>
