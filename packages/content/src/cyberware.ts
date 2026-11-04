@@ -337,6 +337,17 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
       "交火爆发神经整流器，在枪声响起的头数十秒内将狂暴的肾上腺素转化为爆发性奔跑动能，助你抢占有利交火掩体或强行突击破阵。",
     checks: ["reflexes"],
   },
+  {
+    id: "maneuvering-system",
+    name: "机动系统",
+    slot: "nervous",
+    rarity: "rare",
+    price: 20000,
+    humanityCost: 4,
+    ability:
+      "重力突触矢量协调器。突破地面摩擦力束缚，允许操作者在起跳凌空、下落或滑铲半空中强行进行二次侧向空中闪避与突进步伐，极大拓展空中战术机动性。",
+    checks: ["reflexes"],
+  },
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
   {
     id: "militech-paraline",
@@ -630,6 +641,17 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     ability:
       "神经毒素催化器。改造自身循环对毒素产生抗性，并能敏锐感知敌方中毒迹象；对已被生化毒性腐蚀的敌人，你的每一记打击都会引发剧烈的毒性创伤共振。",
+    checks: ["tech"],
+  },
+  {
+    id: "metabolic-editor",
+    name: "代谢编辑器",
+    slot: "circulatory",
+    rarity: "rare",
+    price: 22000,
+    humanityCost: 5,
+    ability:
+      "生化代谢逆转过滤器。当体表或血液遭受生化毒素腐蚀侵袭时，微型生化工厂瞬间将毒性成分逆转分解为高效细胞营养液，非但不扣减生命，反而转化为持续自愈回复。",
     checks: ["tech"],
   },
   // 皮肤
@@ -1188,5 +1210,137 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     ability:
       "粗犷绝伦的超密合金全身外置仿生骨架。骨骼厚重得犹如直接焊在体内的活动装甲板，赋予肉体宛如重型运兵车般的硬核减伤防护。",
     checks: ["body"],
+  },
+  {
+    id: "chrome-compressor",
+    name: "装植减缩",
+    slot: "os",
+    rarity: "legendary",
+    price: 85000,
+    humanityCost: 0,
+    iconic: true,
+    ability:
+      "彻底放弃传统接入仓、斯安威斯坦或狂暴系统的极端改装中枢。以腾出的中枢神经带宽为代价，大幅拔高角色的整体义体负荷上限，允许在全身加装更多重型战斗义体。",
+    checks: ["tech"],
+  },
+  {
+    id: "axolotl",
+    name: "皮下变色",
+    slot: "integumentary",
+    rarity: "legendary",
+    price: 92000,
+    humanityCost: 14,
+    iconic: true,
+    ability:
+      "美西螈仿生皮下纳米修复再生层。每当在战场上击杀一名敌方目标，强力神经刺激信号瞬间流转全身，显著缩短所有处于过载冷却中的义体就绪周期。",
+    checks: ["body"],
+  },
+  {
+    id: "ram-reallocator",
+    name: "RAM 配平",
+    slot: "frontalCortex",
+    rarity: "legendary",
+    price: 88000,
+    humanityCost: 8,
+    iconic: true,
+    ability:
+      "额叶神经应急缓存重置芯片。当网络接入仓可用 RAM 跌入临界低谷时，瞬间强制分流重构神经运算总线，短时间内一次性补充满额可用 RAM。",
+    checks: ["intelligence"],
+  },
+  {
+    id: "cox2-optimizer",
+    name: "COX-2 赛博生体优化",
+    slot: "frontalCortex",
+    rarity: "legendary",
+    price: 89000,
+    humanityCost: 10,
+    iconic: true,
+    ability:
+      "生体神经突触优化器。彻底打通接入仓快速破解与大脑视觉要害解算的壁垒，允许上传的攻击性快速破解像枪弹一样对敌方神经中枢触发毁灭性致命暴击。",
+    checks: ["intelligence"],
+  },
+  {
+    id: "peripheral-inverse",
+    name: "外周逆反",
+    slot: "integumentary",
+    rarity: "legendary",
+    price: 84000,
+    humanityCost: 9,
+    iconic: true,
+    ability:
+      "近场逆向偏折装甲。敌对目标与你的距离越近，皮下装甲板被动激发的防御力场越发致密坚固，在被多名近战敌人贴身合围肉搏时展现出极高的减伤韧性。",
+    checks: ["body"],
+  },
+  {
+    id: "revulsor",
+    name: "乖离排异",
+    slot: "nervous",
+    rarity: "legendary",
+    price: 86000,
+    humanityCost: 8,
+    iconic: true,
+    ability:
+      "神经系统极限生存过载保护芯片。当生命体征遭受重创跌破濒死红线时，瞬间不计代价强制超频运动神经，让周围时空骤然陷入极度慢动作，为绝境反杀或逃脱求援换来决定性窗口。",
+    checks: ["reflexes"],
+  },
+  {
+    id: "deep-field-visual",
+    name: "长焦可视界面",
+    slot: "frontalCortex",
+    rarity: "legendary",
+    price: 85000,
+    humanityCost: 6,
+    iconic: true,
+    ability:
+      "远距战术弹道解算中枢。目标距离自身越远，视觉系统提供的弱点穿透与风偏补偿越精准，在中长距离狙杀与掩体对射时暴击伤害获得显著增幅。",
+    checks: ["cool"],
+  },
+  {
+    id: "isometric-stabilizer",
+    name: "等距稳定",
+    slot: "hands",
+    rarity: "legendary",
+    price: 82000,
+    humanityCost: 8,
+    iconic: true,
+    ability:
+      "手腕与手掌肌腱等距力矩稳定器。重塑每一次握持与发力力矩，大幅度降低挥舞冷兵器重击、空手搏击以及全自动重武器扫射压制时的体力与耐力消耗。",
+    checks: ["body"],
+  },
+  {
+    id: "kiroshi-cockatrice",
+    name: "岐路司义眼“石化鸡蛇”",
+    slot: "eyes",
+    rarity: "legendary",
+    price: 90000,
+    humanityCost: 5,
+    iconic: true,
+    ability:
+      "岐路司光学登峰造极的不朽原型义眼。搭载超高帧率神经直连微扫描仪，在战斗中以毫秒级频率标记敌方一切微小破绽，赋予极其恐怖的全局暴击率跃升。",
+    checks: ["cool"],
+  },
+  {
+    id: "adreno-trigger",
+    name: "肾上腺导引",
+    slot: "nervous",
+    rarity: "legendary",
+    price: 80000,
+    humanityCost: 7,
+    iconic: true,
+    ability:
+      "战斗触发式神经导引器。每当从潜行暗处被察觉或主动拔枪开火打响战斗的第一时间，瞬间向全身肌肉释放高浓度人造兴奋剂，赋予持续数十秒的高速奔袭冲刺加成。",
+    checks: ["reflexes"],
+  },
+  {
+    id: "cellular-adapter",
+    name: "细胞适配",
+    slot: "integumentary",
+    rarity: "legendary",
+    price: 88000,
+    humanityCost: 12,
+    iconic: true,
+    ability:
+      "全身真皮生化细胞自适应重塑矩阵。依托角色深厚的技术能力底蕴，全方位拔高体表物理护甲、元素抗性与爆炸冲击减免，将肉身打造成坚不可摧的生化要塞。",
+    checks: ["tech"],
   },
 ]);
