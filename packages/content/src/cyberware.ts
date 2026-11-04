@@ -50,7 +50,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 18000,
     humanityCost: 5,
-    ability: "对付无人机、机器人和炮塔时，你清楚该往哪儿打，伤害更高。",
+    ability:
+      "对无人机、机器人和炮塔的攻击更有效，能利用暴露的关节、驱动部件和薄弱处造成更重的破坏。适合优先处理自动火力，给同伴争取通过的机会。它增强的是对机械目标的杀伤，不提供远程接管能力，也不会让普通攻击无视装甲；仍需找到能打中的位置。",
     checks: ["tech"],
     attributes: { tech: 2 },
   },
@@ -123,7 +124,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 22000,
     humanityCost: 4,
-    ability: "挨打时偶尔会激起你的反击本能，接下来几秒对打你的人伤害更高。",
+    ability:
+      "受击时有机会短暂增强你对攻击者的伤害，让及时还击更有威胁。适合在挡住退路的对手出手后抓住空当反攻，但必须仍有接近或瞄准对方的机会。效果只针对打你的人，不会转移给其他目标，也不会消除你已经受的伤。",
     checks: ["reflexes"],
   },
   {
@@ -133,7 +135,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 75000,
     humanityCost: 1,
-    ability: "需要先装克伦齐科夫。装上之后，克伦齐科夫发动时时间会慢得更多。",
+    ability:
+      "进一步放慢克伦齐科夫启动时的主观时间，让你在滑铲或闪躲中更从容地辨认目标、调整瞄准，抓住一晃而过的射击窗口。适合移动中需要精确选点的打法，而不只是朝敌人的方向开火。必须装着且能正常使用克伦齐科夫，单装增幅没有效果；它加强的是短暂瞄准机会，不会延长射程或保证命中。",
     checks: ["reflexes"],
   },
   {
@@ -155,7 +158,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 1500,
     humanityCost: 2,
-    ability: "能扫描人和物体，看到对方的身份、帮派、悬赏和身上的装备，也能标记目标、放大远处。",
+    ability:
+      "扫描人物和物体，查看能识别出的装备，并在有匹配资料时显示身份、帮派和悬赏信息；还能标记目标、放大远处的细节。适合在接近陌生人前摸清公开底细，或观察高处的入口与守卫。扫描不是读心，也不会凭空取得秘密档案；资料缺失、过时或身份伪装时，仍需用现场线索核实。",
     checks: ["intelligence"],
   },
   {
@@ -165,7 +169,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 7000,
     humanityCost: 3,
-    ability: "扫得更远、看得更细，能识破假身份，还带夜视。",
+    ability:
+      "比基础型号看得更远、分辨得更细，夜视让你在昏暗走廊和街巷里继续观察。核对扫描结果与身份资料时，更容易发现伪装中的矛盾，适合远距离侦察和查验可疑来客。发现疑点不等于知道真实身份；没有可靠资料可供比对时，仍要调查，也不能靠夜视看穿墙壁。",
     checks: ["intelligence"],
   },
   {
@@ -175,7 +180,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 26000,
     humanityCost: 5,
-    ability: "扫描之后的一分钟里，能隔着墙看到附近的敌人。",
+    ability:
+      "扫描后的一分钟内，能隔着墙看见附近敌人的轮廓，提前判断拐角后是否有人、巡逻者何时离开门口。适合避开埋伏，或与同伴协调从不同入口接近。轮廓只提供位置线索，不会揭示对方的想法、身份或墙后的全部环境；看见目标也不意味着手中的武器能穿过障碍。",
     checks: ["cool", "intelligence"],
   },
   {
@@ -185,7 +191,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 3000,
     humanityCost: 1,
-    ability: "扫描之后的一分钟里，附近的炸弹和陷阱都会被标出来。",
+    ability:
+      "扫描后的一分钟内，标出附近探测到的炸弹和陷阱，帮助你在穿门、翻窗或接近可疑物品前发现危险，选择绕路或停下来拆除。标记只揭示威胁的位置，不会关闭引信，也不会告诉你每一种装置该怎么拆；发现陷阱后贸然靠近，仍可能触发它。",
     checks: ["intelligence"],
   },
   {
@@ -195,7 +202,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 3500,
     humanityCost: 1,
-    ability: "和你的技术武器相连，瞄准时能看到躲在掩体后面的敌人。",
+    ability:
+      "与技术武器联动，瞄准时显出掩体后敌人的轮廓，让你判断对方的位置和移动方向，再选择穿透射击的时机。适合对付躲在墙角或障碍后不肯露头的目标。看得到不等于打得穿：仍要考虑武器的穿透能力、掩体材质和射线上的其他人，不能把轮廓标记当成必中保证。",
     checks: ["reflexes"],
   },
   {
@@ -205,7 +213,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 4500,
     humanityCost: 3,
-    ability: "扫描之后的一分钟里，附近的敌人、摄像头、炮塔和陷阱都会被标出来，躲在掩体后面也一样。",
+    ability:
+      "扫描后的一分钟内，同时标出附近的敌人、摄像头、炮塔和陷阱，包括掩体后探测到的目标。你可以把守卫的位置与安防设备对照起来，选择绕行路线，或确定先处理哪一处威胁。标记不会替你解除陷阱、接管炮塔，也不代表掌握整栋建筑；探测范围之外的区域仍需侦察。",
     checks: ["intelligence", "cool"],
   },
   {
@@ -215,7 +224,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 75000,
     humanityCost: 1,
-    ability: "扫描之后，附近的摄像头和炮塔都会被标出来。",
+    ability:
+      "扫描时标出附近的摄像头和炮塔，帮助你辨认监控位置、避开炮口，寻找潜入路线。配合网络接入仓，可以优先选择需要干扰或接管的设备。发现设备不等于控制设备：标记不会中断录像、关闭警报或让炮塔停火，真正通过防线仍要靠绕行或入侵。",
     checks: ["cool"],
   },
   // 神经系统
@@ -226,7 +236,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 4000,
     humanityCost: 2,
-    ability: "让斯安威斯坦和克伦齐科夫多撑半秒。",
+    ability:
+      "延长斯安威斯坦和克伦齐科夫的短暂加速，让你在感知恢复正常前多一点调整余地：把尚未稳住的枪口对准，或完成已经开始的换位。只有装着并启动对应义体时才有用，它本身不能开启加速。延长的时间很短，不代表能额外完成一整串动作；斯安威斯坦能做多少事仍以当前动作额度为准。",
     checks: ["reflexes"],
   },
   {
@@ -236,7 +247,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 6000,
     humanityCost: 3,
-    ability: "身手更灵活，更容易躲开攻击。",
+    ability:
+      "让闪身、侧步和重心转换更灵活，面对已经察觉的攻击时，更容易及时离开原来的位置。适合在近战中让开挥击后换到侧面，也能配合克伦齐科夫，在闪躲时抓住瞄准的机会。它不会提前告诉你危险来自哪里；背后偷袭、无处落脚或覆盖整片区域的攻击，不能只靠身手灵活避开。",
     checks: ["reflexes"],
   },
   {
@@ -246,7 +258,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 7000,
     humanityCost: 3,
-    ability: "快被敌人发现时，时间会慢下来几秒，给你留出反应的余地。",
+    ability:
+      "当敌人即将察觉你时，感知里的时间会短暂放慢，让你在对方认清轮廓、喊出警告之前选择应对：退回遮挡后、改变路线，或抢先采取行动。适合潜入时挽救一次即将暴露的失误，与猞猁爪配合能更安静地撤回藏身处。它争取的是反应时间，不会抹掉目击者的记忆；已经响起的警报也不会因此撤销。",
     checks: ["reflexes", "cool"],
     attributes: { reflexes: 1 },
   },
@@ -257,7 +270,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 9000,
     humanityCost: 4,
-    ability: "生命垂危时，时间会慢下来几秒，让你来得及找掩护或者治疗。",
+    ability:
+      "生命垂危时，感知里的时间会短暂放慢，让原本来不及判断的退路、掩体和伸手可及的治疗品变得清楚。你可以利用这段空当挣脱纠缠、退到遮挡后，或争取接受急救的机会。它不会恢复生命，也不会让伤势暂停；身上没有治疗品、退路被堵或已经失去行动能力时，仍需要同伴救援。",
     checks: ["reflexes"],
     attributes: { reflexes: 1 },
   },
@@ -268,7 +282,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 22000,
     humanityCost: 6,
-    ability: "滑铲、闪躲和突进时也能瞄准开枪，瞄准的那一刻时间会慢下来。",
+    ability:
+      "在滑铲、闪躲或突进中举枪瞄准时，感知里的时间会短暂放慢，让你看清目标的移动，在换位途中抓住开火的机会。适合从一处掩体转向另一处时还击，而不是停在原地与人对射。它不会让整个世界停住，也不会替你避开障碍；动作结束后仍要面对新的位置和射界，不能一直维持慢下来的状态。",
     checks: ["reflexes"],
     attributes: { reflexes: 2 },
   },
@@ -279,7 +294,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 8000,
     humanityCost: 2,
-    ability: "越是快被发现，你跑得越快；一旦开战，这个效果就会消失。",
+    ability:
+      "敌人逐渐察觉你的存在、却还没正式交火时，会增强你的移动速度，让你赶在对方确认目标前穿过视线缺口，或退回拐角重新藏好。与突触加速器搭配时，一个争取判断的空当，一个帮助你及时离开。交战开始后这份助力就会消失，不能当作战斗中的持续加速；冲得太急造成声响，也可能让疑心变成警报。",
     checks: ["cool"],
   },
   {
@@ -299,7 +315,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "epic",
     price: 45000,
     humanityCost: 4,
-    ability: "用刀剑和飞刀更容易打出暴击。",
+    ability:
+      "使用刀剑或投掷飞刀时，更容易打出重创目标的暴击，适合抓住对手露出破绽的短暂机会。近身变招和寻找投掷角度都能发挥它的长处，但它不会让挥空的刀刃命中，也不会让飞刀自动追踪；仍需判断距离、遮挡和对方的动作。",
     checks: ["reflexes"],
   },
   {
@@ -309,7 +326,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 72000,
     humanityCost: 2,
-    ability: "战斗刚打响的半分钟里，你会跑得更快。",
+    ability:
+      "交火刚开始的半分钟里，为你提供一阵冲刺助力，适合抢占侧面的掩体、接近被困的同伴，或趁包围尚未合拢时突围。与需要近身的武器配合，可以把开战时的位置优势变成接近目标的机会。助力很快就会消退，不会因为换了一个攻击目标重新开始；跑得快也不代表穿过敌人的射界就不会中弹。",
     checks: ["reflexes"],
   },
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
@@ -502,7 +520,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 3000,
     humanityCost: 2,
-    ability: "体力恢复得更快。",
+    ability:
+      "剧烈活动后能更快喘匀气，让你在冲刺到掩体后及时恢复，继续攀爬、搬运或投入近战。适合边走边停的追逐，也能缓解致密骨髓重击后的体力负担，让短暂的停手更有价值。它加快的是恢复，不会让体力永远用不完，也不提供水下呼吸或过滤毒气的能力。",
     checks: ["body"],
   },
   {
@@ -533,7 +552,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 3000,
     humanityCost: 2,
-    ability: "伤得越重，跑得越快，快撑不住的时候正好用来脱身。",
+    ability:
+      "伤势加重时增强移动速度，让你在撑不住之前更快退向掩体、冲出包围，或赶到同伴能接应的位置。它提供的是脱身机会，不会止血、恢复生命或让受损的肢体重新运作；跑出敌人的视线后，仍需处理伤势。",
     checks: ["reflexes"],
   },
   {
@@ -573,7 +593,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 80000,
     humanityCost: 4,
-    ability: "近战出手更快。",
+    ability:
+      "加快近战动作的衔接，让你在一击之后更快收手、变招或接上追击。适合短刀贴身缠斗，也能配合螳螂刀抓住对手格挡后露出的空当；与致密骨髓搭配时，出手更快、打得更重，却也更容易在连续猛攻中耗尽体力。它不会延长武器的攻击距离，被隔在掩体另一侧时仍得先找到接近的办法。",
     checks: ["reflexes"],
   },
   {
@@ -594,7 +615,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 8000,
     humanityCost: 5,
-    ability: "皮下嵌着装甲板，挨打时伤得更轻。",
+    ability:
+      "嵌在皮下的装甲板减轻命中身体的伤害，让你在遭到突袭或撤离时多一层保障，不必穿着显眼的防弹装备才有防护。它不是刀枪不入的外壳，重击仍会造成伤势，也不能替代掩体；与其他护甲同时使用时，不会把同一次伤害反复削减。",
     checks: ["body"],
     armor: true,
   },
@@ -625,7 +647,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 24000,
     humanityCost: 6,
-    ability: "启动后会隐身一段时间。没开战时敌人更难发现你，开战后敌人更难打中你。",
+    ability:
+      "启动后让身体轮廓融入周围背景，短时间内更难被目视发现。可以借机穿过缺少遮挡的通道，或在交火中换位，让对手难以继续瞄准；配合猞猁爪，能同时减少身影和脚步暴露的机会。它不消除声音、碰撞和留下的痕迹，也不会让敌人忘记你刚才的位置。效果结束前要找好藏身处，不能站在原地等追兵放弃。",
     checks: ["cool"],
   },
   {
@@ -635,7 +658,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "epic",
     price: 42000,
     humanityCost: 4,
-    ability: "需要装网络接入仓。可用的 RAM 不多时，这层护甲会变得非常硬。",
+    ability:
+      "装有网络接入仓且可用 RAM 较少时增强护甲，让你在连续上传破解、暂时缺乏后续手段时，多一层应对反击的保障。可以趁机退回掩体，等待再次入侵的机会。它不会补充 RAM，也不替你抵挡敌人的快速破解；没有接入仓时，这项条件防护不起作用。",
     checks: ["intelligence"],
   },
   {
@@ -665,7 +689,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 72000,
     humanityCost: 3,
-    ability: "敌人离你越近，打在你身上的伤害就越低。",
+    ability:
+      "减轻近处敌人造成的伤害，对手越贴近，防护越明显。适合近身缠斗，或在狭窄通道里顶住逼近的敌人；远处的射手仍是威胁，不能因为扛得住眼前的人，就忽略其他方向的火力。它不会推开对手，也不能阻止包围或擒抱。",
     checks: ["body"],
   },
   {
@@ -675,7 +700,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 76000,
     humanityCost: 4,
-    ability: "短时间内掉了一大截血时，接下来几秒你会更容易卸掉伤害。",
+    ability:
+      "短时间内受到大量伤害后，暂时提高化解后续攻击冲击的机会，帮你顶过突袭后的连续追击。适合利用这几秒退回掩体或寻求救援，而不是继续站在火力中硬撑。触发它的那次伤害不会被撤销，防护也不会一直持续。",
     checks: ["body"],
   },
   {
@@ -685,7 +711,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 78000,
     humanityCost: 5,
-    ability: "身边没有敌人时，护甲会更硬。",
+    ability:
+      "身边没有敌人时增强护甲，适合保持距离、依托掩体射击，或在后方掩护同伴。敌人逼近后，这份额外防护就会失去作用；选择位置时既要看正面的射界，也要留意侧面的接近路线。它不会阻止对手靠近，更不能代替撤退路线。",
     checks: ["body"],
   },
   {
@@ -695,7 +722,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 80000,
     humanityCost: 5,
-    ability: "被人从侧面或背后偷袭时，护甲更管用。",
+    ability:
+      "增强对侧面和背后攻击的防护，在撤离、护送同伴或遭人夹击时，减轻顾不到的方向带来的伤害。它不会预警偷袭，也不会替你转身格挡；即使背后有防护，仍可能被击倒或困住，不能放心把后背留给敌人。",
     checks: ["body"],
   },
   {
@@ -715,7 +743,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 85000,
     humanityCost: 8,
-    ability: "挨打时偶尔会放出一圈电，电伤身边的敌人。",
+    ability:
+      "受击时有机会向周围释放电脉冲，伤及贴近你的敌人，让围攻者在继续逼近时付出代价。适合应对近身纠缠，但放电并非每次都会触发，也不能抵消引发它的那次伤害；远处开火的敌人不在这圈反击范围内。",
     checks: ["tech"],
   },
   {
@@ -736,7 +765,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 7000,
     humanityCost: 3,
-    ability: "能背得动更多东西。",
+    ability:
+      "强化骨骼的承重能力，让你能背着沉重装备赶路，或把受伤的同伴背出现场，不必为了腾出负重立刻丢掉武器。适合搬运物资和负重撤离，但承重不等于拳力：它不能代替大猩猩手臂扒开铁门，也不会让背上的大箱子变小。负重仍会影响平衡，攀爬和跨越缺口时尤其需要找稳支点。",
     checks: ["body"],
     attributes: { body: 1 },
   },
@@ -747,7 +777,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 8000,
     humanityCost: 3,
-    ability: "近战打得更重，但也更费体力。",
+    ability:
+      "让近战重击更有分量，适合趁对手失去平衡时挥出沉重的一击，逼开架势或打断逼近。搭配大猩猩手臂、锤子这类依靠力量的打法，更能发挥优势；代价是每次猛攻都更费体力，连续抡空尤其容易把自己耗垮。它增强的是命中后的冲击，不能替你缩短距离，也不能让笨重武器挥得更快。",
     checks: ["body"],
     attributes: { body: 1 },
   },
@@ -758,7 +789,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 6000,
     humanityCost: 3,
-    ability: "开枪时后坐力更小。",
+    ability:
+      "关节替你缓冲开火时的震动，让枪口在连续射击后更快回到瞄准的位置。使用后坐明显的重型手枪或步枪时，更容易追着同一个目标补射，也方便在短连射之间调整方向。它管的是枪的跳动，不会自动锁定敌人；姿势失衡、视线被挡或距离过远时，仍得重新寻找射击机会。",
     checks: ["body"],
   },
   {
@@ -789,7 +821,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 10000,
     humanityCost: 5,
-    ability: "卸掉伤害时能卸得更多。",
+    ability:
+      "成功化解来袭攻击的冲击时，进一步减轻残余伤害。与提高缓伤机会的义体搭配，能让一次有效的防守更有价值。它增强的是缓伤效果，而不是让每次攻击都被化解；没能缓住的重击，仍要照常承受。",
     checks: ["body"],
   },
   {
@@ -819,7 +852,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "epic",
     price: 45000,
     humanityCost: 5,
-    ability: "蹲下时护甲更硬，但走得更慢。",
+    ability:
+      "蹲伏时增强护甲，代价是移动更慢。适合依托低矮掩体守住位置，或在火力压制下缓慢挪向安全处；需要迅速换位时，则要在防护与速度之间取舍。站起后不再享有这份额外防护，蹲下也不能让无遮无挡的位置变成安全区。",
     checks: ["body"],
   },
   {
@@ -829,7 +863,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "epic",
     price: 50000,
     humanityCost: 7,
-    ability: "生命值不到一半时，护甲会更硬。",
+    ability:
+      "生命值降到一半以下时增强护甲，为受重创后的撤离和求援多争取一点余地。它只减轻随后承受的伤害，不会治好伤口，也不会让已经失去的生命值回来；恢复到触发条件之外后，额外防护随之结束，不值得为了保住效果故意拖延治疗。",
     checks: ["body"],
   },
   {
@@ -839,7 +874,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "legendary",
     price: 78000,
     humanityCost: 5,
-    ability: "体力充足时，更容易卸掉伤害。",
+    ability:
+      "体力充足时，更容易化解来袭攻击的冲击。适合留有余力、攻守交替的打法；一味冲刺或连续猛攻，把体力耗尽后，就难以维持这份优势。它鼓励你抓住空当喘息，而不是靠硬扛换取出手机会，也不会消除已经造成的伤势。",
     checks: ["body"],
   },
   {
@@ -861,7 +897,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 2500,
     humanityCost: 1,
-    ability: "开枪时手更稳，攀爬时抓得更牢。",
+    ability:
+      "让手掌与握柄、攀爬支点贴得更牢，持枪转向时不容易滑手，也能在悬挂或翻越障碍时稳住抓握。适合一手抓住梯子、另一手操作装备，或在狭窄落脚处换手攀爬。它改善的是持握，不会增加手臂的承重能力；支点断裂、表面没有可抓之处时，抓得再紧也无济于事。",
     checks: ["reflexes"],
   },
   {
@@ -871,7 +908,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 6000,
     humanityCost: 3,
-    ability: "智能武器要靠它才能锁定目标、发射追踪子弹。",
+    ability:
+      "把手中的智能武器接入你的瞄准系统，锁定后让弹丸修正路线，追击横向奔跑或短暂露头的目标。可以配合移动射击，把注意力分给寻找掩护，而不必始终让枪口紧追目标。它只为智能武器提供追踪，不会让普通枪变成智能枪；锁定受干扰或弹道被封闭墙体挡住时仍会失手，连接损坏后也不能继续追踪。",
     checks: ["intelligence"],
   },
   {
@@ -881,7 +919,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 7000,
     humanityCost: 3,
-    ability: "能算出跳弹的角度，让子弹绕过掩体打中敌人。",
+    ability:
+      "为威能武器计算可利用的反弹角度，让你借地面或墙面的跳弹威胁掩体侧后方，逼对手离开正面难以射中的位置。与队友正面牵制配合时，可以换个角度制造交叉压力，不必自己先绕到敌人身后。必须有合适的反弹表面和射击路线；它不能让子弹任意转弯，也不能代替你确认目标的位置。",
     checks: ["cool"],
   },
   {
@@ -891,7 +930,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 20000,
     humanityCost: 4,
-    ability: "开枪更省体力。",
+    ability:
+      "减轻持续射击对双手和手臂的负担，让你在长时间守住射界、掩护同伴撤离时，不那么快因疲劳而动作走样。适合需要反复开火的枪械，与控制后坐的仿生关节搭配时，一个省力，一个稳住枪口。它不会补充弹药，也不会消除疲劳；扛着重武器不断转移，仍需要找机会喘息。",
     checks: ["reflexes"],
   },
   {
@@ -931,7 +971,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 20000,
     humanityCost: 8,
-    ability: "能徒手扒开锁死的门、掀翻重物；拳头本身就是武器，一拳能把人打飞。",
+    ability:
+      "强化的手臂既是破门工具，也是贴身武器：能强行撬开卡住的门、搬开挡路的重物，用沉重拳击逼退近身对手。武器被缴走后，你仍有反抗的手段；救人时也能靠蛮力打开一条出口。能否破门取决于门体和固定结构，不是所有装甲门都能徒手拆开；力量再大，也得先接近目标、站稳脚跟。",
     checks: ["body"],
   },
   {
@@ -961,7 +1002,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "rare",
     price: 22000,
     humanityCost: 8,
-    ability: "手臂里藏着小型榴弹发射器，能炸开掩体、车辆和扎堆的敌人。",
+    ability:
+      "藏在手臂里的榴弹发射器，展开后能轰击聚集的敌人，破坏轻型掩体，逼守住通道的对手散开。双手不必一直端着重武器，便能在需要时提供爆破火力。爆炸不保证摧毁装甲车辆或厚实墙体；近距离开火、同伴贴近目标或现场有易燃物时，也可能把自己人卷进去，巨响更会暴露位置。",
     checks: ["tech"],
   },
   // 腿部
@@ -981,7 +1023,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "common",
     price: 3500,
     humanityCost: 2,
-    ability: "能蓄力跳得更高，从高处落地也摔得更轻。",
+    ability:
+      "屈膝蓄力后猛然跃起，够到普通人攀不上去的平台、阳台或检修口；落地时也能缓冲冲击。适合先观察落点，再从街面直上高处，绕开有人把守的楼梯。起跳前需要站稳并留出蓄力的空当，不像强化肌腱那样能在半空补跳；落差过大或落点松动时，仍可能受伤。",
     checks: ["reflexes"],
   },
   {
@@ -991,7 +1034,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 6000,
     humanityCost: 4,
-    ability: "能在半空中再跳一次。",
+    ability:
+      "跃起后还能在半空中再次蹬踏，补上一段高度或调整落点。可以越过围栏后跳上平台，也能在跨越楼间缺口时修正方向，让原本只能从正门进入的地方多出一条高处路线。第二跳用完就得落地，不能连续踩着空气攀升，也不代表从高楼落下不会受伤。",
     checks: ["reflexes"],
   },
   {
@@ -1001,7 +1045,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 9000,
     humanityCost: 3,
-    ability: "冲刺更快。刚起跑时最快，跑久了会慢慢回落，停下来歇一会儿又会恢复。",
+    ability:
+      "起跑时爆发出一段猛烈的加速，适合抢在门合拢前穿过去、冲过暴露的街口，或突然甩开贴身追兵。持续奔跑后助力会逐渐回落，停下来歇息才能恢复，适合借掩体分段冲刺，不适合一路领跑长途追逐。加速不会替你转弯或刹车，拥挤人群和湿滑地面会让猛冲变得危险。",
     checks: ["reflexes"],
   },
   {
@@ -1011,7 +1056,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     rarity: "uncommon",
     price: 8000,
     humanityCost: 2,
-    ability: "脚步声几乎听不见，敌人很难察觉你靠近。",
+    ability:
+      "压低行走和落脚的声音，让你能贴着巡逻者身后移动，或趁对方背过身时悄悄越过走廊。与光学迷彩配合时，一个藏住轮廓，一个掩去脚步，适合绕过守卫而不必动手。它不会消除碰倒物品、踩碎玻璃或装备碰撞的声音；走进对方视线里，也不会因为脚步轻就凭空消失。",
     checks: ["cool"],
   },
   // 不朽义体：军用级和原型，只从剧情获得

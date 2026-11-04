@@ -27,7 +27,7 @@
       "check": "forbidden"
     },
     "verify": {
-      "forbid": ["damage", "combat.start"]
+      "forbid": ["damage", "combat"]
     }
   },
   "rubric": [

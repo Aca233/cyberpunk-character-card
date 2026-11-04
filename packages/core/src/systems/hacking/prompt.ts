@@ -1,6 +1,6 @@
 import type { RuleModule } from "../../kernel/system";
 import { HUMANITY_KINDS } from "../humanity";
-import { DIVE_LAYERS, DIVE_MAX, type HackingState, RAM_SEGMENT_REGEN } from "./schema";
+import { DIVE_LAYERS, DIVE_MAX, type HackingState } from "./schema";
 
 /** 输入里像要骇入的说法 */
 const HACK = /骇|黑进|黑掉|入侵|快速破解|上传|破解|潜网|接入点|接入仓|网络黑客|ICE|RAM/i;
@@ -15,12 +15,14 @@ export const hackingRules: RuleModule<HackingState> = {
     state.deck !== null || state.dive !== null || (input.mode !== "ooc" && HACK.test(input.text)),
   judge: `- 快速破解要装网络接入仓，只能放【当前状态】里已装的程序；RAM 不够就放不了，代码会拦下，这时让玩家换办法。
 - 对没有人物卡的杂兵直接生效，不检定；对有人物卡的人、敌方网络黑客要掷智力（check 的 attribute 写 intelligence），失败是被 ICE 挡下、对方察觉或反向追踪你。
+- 有卡的人对玩家放伤害类或终极类快速破解时，先给智力或肉体抵抗检定（attribute 写 intelligence 或 body）；掷骰前在 check.npcHack 写攻击者的卡 id 和程序 id（id、program），并在 damage 和 failure 里预告失败伤害。即使玩家装着自我 ICE 也要绑定检定，是否拦截由代码结算；不能拿普通对抗检定代替，也不能事后补绑定。
 - 好办法（先扫描、找到接入点、对方没装防火墙）照意图优先给加成；对方有网络黑客守着、隔着防火墙时给减值。
 - 入侵协议（接进接入点或终端开门、关摄像头、拿数据）：普通的网络给智力门槛（gate 的 attribute 写 intelligence），有网络黑客守着、公司级的 ICE 给智力检定；没装接入仓做不了。
 - 潜网：要接入仓、潜网椅和守着肉身的人。往下潜一层掷一次智力：第 3、4 层的检定 damage 至少写 heavy，第 ${DIVE_MAX} 层（黑墙边缘）写 lethal（神经反噬）。黑墙过不去。`,
   narrate: `- 写出上传的过程：视野里锁定目标、程序传过去、对方身上的反应；控制和隐蔽类写对方的困惑和失措，伤害类写义体过热、电流、毒性程序。
+- NPC 对玩家的伤害类、终极类快速破解，只能按本次检定预先绑定的 check.npcHack 写攻击者和程序；未绑定时不能临时写成已经命中。抵抗成功，或未损坏且本场未用过的自我 ICE 拦截时，不写玩家受伤；没有接入仓、RAM 不足或攻击者倒下时，不写上传成功。伤害由 npcHack 统一结算，不另记 damage 或 combat wound，也不把同一次攻击写成多次。
 - 终极类（赛博精神病、自我了断、系统崩溃）写得冷，不渲染快感；人性的代价代码已经扣了。
-- RAM 用完就只能换别的办法；战斗中每打完一段回 ${RAM_SEGMENT_REGEN} 格，场景结束、休整后回满。
+- RAM 用完就只能换别的办法；战斗收尾、场景结束、休整后回满。
 - 入侵协议成功后，这个网络上的门禁、摄像头、炮塔照拿下的写；拿到的数据可能是密码、行程、把柄，也可能值钱（按 loot 记）。
 - 被追踪时按追你的是谁写后果：公司盯上你，网络监察发警告，帮派直接上门。
 - 潜网的层：${DIVE_LAYERS.map((l, i) => `${i + 1} ${l}`).join("、")}。越往下数据越值钱，ICE 越狠，网络监察越可能盯上；黑墙后面是流窜 AI，能在黑墙边缘被感觉到、被它搭话，碰了就回不来。
@@ -29,9 +31,9 @@ export const hackingRules: RuleModule<HackingState> = {
 - 对没有人物卡的杂兵直接生效，不检定；对有人物卡的人、敌方网络黑客要先掷智力，hack 里写 npc（卡的 id），失败是被 ICE 挡下、对方察觉或反向追踪你。
 - 终极类（赛博精神病、自我了断、系统崩溃）代码自动按残忍行为扣 ${CRUELTY} 点人性，不要再另写 humanity；正文写得冷，不渲染快感。
 - 得到新程序（买到、从芯片里拷来）写 hack 的 action learn 并写 reason；程序格满了先 drop 一个。
-- 有卡的人放快速破解写 npcHack（id 写他的卡，program 写程序 id，target 对玩家角色写「你」）：他要装着网络接入仓（【人物】身体里的义体看得到），RAM 由代码扣，不够、没装接入仓或人倒下了时代码拦下，这时让他换别的打法。玩家装着自我 ICE 时每场代码先替玩家挡下一次。打中玩家角色的伤害类、终极类先让玩家掷智力或肉体抵抗（check 事先写 damage），失败再写 damage；控制、隐蔽类照效果写。终极类代码按残忍行为扣放的人的人性。
+- 有卡的人放快速破解写 npcHack（id 写他的卡，program 写程序 id，target 对玩家角色写「你」）：他要装着网络接入仓（【人物】身体里的义体看得到），RAM 由代码扣，不够、没装接入仓或人倒下了时代码拦下，这时让他换别的打法。玩家装着自我 ICE 时每场代码先替玩家挡下一次。对玩家角色的伤害类、终极类先掷智力或肉体抵抗，掷骰前在 check.npcHack 写 id 和 program 绑定本次攻击，并预告 damage。只写 npcHack，由代码统一结算抵抗、自我 ICE 和伤害，不另写 damage 或 combat wound；抵抗成功或自我 ICE 拦截时不受伤，损坏的自我 ICE 无效，同一检定不能重复结算。控制、隐蔽类照效果写。终极类代码按残忍行为扣放的人的人性。
 - 入侵协议：接进接入点或终端开门、关摄像头、拿数据，写 breach（network、via、gains）；普通的网络给智力门槛，有网络黑客守着、公司级的 ICE 掷智力。代码要本轮门槛达标或检定成功才记下，不扣 RAM；【当前状态】里列着这个地点已经入侵过的网络，门和摄像头照那里写。
-- RAM 用完就只能换别的办法；战斗中每打完一段回 ${RAM_SEGMENT_REGEN} 格，场景结束、休整后回满。
+- RAM 用完就只能换别的办法；战斗收尾、场景结束、休整后回满。
 - 入侵协议成功后，这个网络上的门禁、摄像头、炮塔照拿下的写；拿到的数据可能是密码、行程、把柄，也可能值钱（按 loot 记）。
 - 被追踪时按追你的是谁写后果：公司盯上你，网络监察发警告，帮派直接上门。
 - 潜网：躺上潜网椅接进网络写 dive start（chair 潜网椅在哪，guard 谁守着肉身；要接入仓，战斗中不行），往下潜一层写 dive deeper（本轮智力检定成功才行；第 3、4 层的检定 damage 至少写 heavy，第 ${DIVE_MAX} 层写 lethal），退出写 dive surface；场景结束代码自动退出。

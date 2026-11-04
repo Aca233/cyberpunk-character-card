@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { type CombatState, EVIDENCE_STARS } from "../combat";
 import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
 import {
@@ -42,7 +43,7 @@ function districtOf(
 export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyCommand, HeatRelief>(
   {
     id: "heat",
-    dependsOn: ["world", "economy", "stealth"],
+    dependsOn: ["world", "economy", "stealth", "combat"],
     state: HeatStateSchema,
     initial: () => ({
       stars: 0,
@@ -66,13 +67,34 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       return applyEvent(draft, command, district, ctx.now);
     },
     tick(draft, span, ctx) {
-      // heat 不能读安全屋（safehouse→travel→heat 会成环），回合流程把“这一轮躲在自己的安全屋里”放进事实
-      tickHeat(
-        draft,
-        span,
-        districtOf(ctx.read<WorldClockState>("world").location, ctx.data),
-        ctx.facts.hideout === true,
-      );
+      const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
+      // 证据按实际入库时间结算；中间只衰减，安全屋和换区仍按完整跨度结算一次。
+      let from = span.from;
+      // combat 先结算录像；只处理本次时间跨度内入库的证据，后续推进不重复涨星
+      const evidence = ctx
+        .read<CombatState>("combat")
+        .footage.filter(
+          (f) =>
+            f.fired === "evidence" &&
+            f.firedAt !== null &&
+            f.firedAt > span.from &&
+            f.firedAt <= span.to,
+        );
+      const arrivals = new Map<number, number>();
+      for (const f of evidence) {
+        if (f.firedAt === null) continue;
+        arrivals.set(f.firedAt, (arrivals.get(f.firedAt) ?? 0) + 1);
+      }
+      for (const [at, count] of [...arrivals].sort(([a], [b]) => a - b)) {
+        tickHeat(draft, { from, to: at }, null);
+        from = at;
+        const before = shownStars(draft.stars);
+        draft.stars = Math.min(HEAT_MAX, draft.stars + count * EVIDENCE_STARS);
+        draft.lastSeenAt = at;
+        draft.decayedAt = at;
+        noticeRise(draft, before, shownStars(draft.stars), at);
+      }
+      tickHeat(draft, span, district, ctx.facts.hideout === true);
     },
     on: {
       // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星

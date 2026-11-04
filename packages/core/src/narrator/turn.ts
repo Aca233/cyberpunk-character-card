@@ -183,6 +183,8 @@ function withOpponent(
 
 /** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
 const KEY_ITEMS: Readonly<Record<string, string>> = {
+  combat: "战斗后果",
+  npcHack: "快速破解",
   damage: "伤害",
   "health.limb": "断肢",
   "health.die": "死亡",
@@ -219,7 +221,7 @@ function roleOf(raw: unknown): Role | undefined {
   if (c.type === "trade" && c.action === "service") return "pay";
   if (c.type === "item" && c.action === "gain") return "goods";
   if (c.type === "combat" && c.action === "start") return "fightStart";
-  if (c.type === "damage") return "hit";
+  if (c.type === "damage" || (c.type === "combat" && c.action === "wound")) return "hit";
   return undefined;
 }
 
@@ -1060,7 +1062,16 @@ export async function runNarratorTurn(
 
   // 代码校验第二步：业务规则（闪回、战斗中的限制）
   const commands: Command[] = [];
-  const fight = CombatStateSchema.parse(world.slices.combat).active;
+  // 同批开打或收场仍属于这场交战，不能靠条目顺序绕过伤害和战利品过滤
+  const fight =
+    CombatStateSchema.parse(world.slices.combat).active !== null ||
+    (!inFlashback &&
+      verified.some((proposal) => {
+        const command = proposal.parse(proposal.value);
+        return (
+          command?.type === "combat" && (command.action === "start" || command.action === "end")
+        );
+      }));
   for (const proposal of verified) {
     const command = proposal.parse(proposal.value);
     if (!command) continue;
@@ -1081,24 +1092,28 @@ export async function runNarratorTurn(
       b.drop(where, command, "战斗中不能闪回", "rules");
       continue;
     }
-    // 战斗里挨打由代码按没拦下的打算记账，模型写的 damage 不算
+    // 绑定快速破解的抵抗由 npcHack 原子结算；不允许独立伤害绕过 RAM、ICE 或攻击校验
+    if (
+      live.kind === "resolve" &&
+      live.check.prepared.spec.npcHack !== undefined &&
+      (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
+    ) {
+      b.drop(
+        where,
+        command,
+        "本次快速破解抵抗只由 npcHack 结算，不另记 damage 或 combat wound",
+        "rules",
+      );
+      continue;
+    }
+    // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；模型另写的 damage 不算，免得扣两次
     if (fight && command.type === "damage") {
-      b.drop(where, command, "战斗中挨打由代码按敌人的打算结算", "rules");
+      b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
       continue;
     }
     // 战斗里捡东西只能从倒下的人身上捡，走 combat loot；模型自己编的 item gain 不算
     if (fight && command.type === "item" && command.action === "gain") {
       b.drop(where, command, "战斗中捡东西要发 combat loot，从倒下的人身上捡", "rules");
-      continue;
-    }
-    // 玩家点按钮选好了拿什么抵，代码已经记了；模型再发的 pay 不算，免得一下伤抵两次
-    if (
-      fight &&
-      command.type === "combat" &&
-      command.action === "pay" &&
-      plan.input.pay !== undefined
-    ) {
-      b.drop(where, command, "玩家已经在界面上选好拿什么抵", "rules");
       continue;
     }
     commands.push(command);
@@ -1144,8 +1159,6 @@ export async function runNarratorTurn(
     }
   }
 
-  // 一轮打完：这一轮开始前就在打才结算，刚开打的不算；没落空的打算打中玩家，再抽下一轮
-  if (!ooc && !inFlashback && fight) commands.push({ type: "combat.round" });
   const flashbackAction = (c: Command) =>
     c.type === "flashback" ? (c as { action?: unknown }).action : undefined;
   // 闪回里过一轮；这一轮写了 end 就不再扣
@@ -1194,12 +1207,6 @@ export async function runNarratorTurn(
   if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
-  }
-  // 战斗：玩家挑了拿什么抵上一轮打中的那一下、开了超频，都在这一轮出手之前结算
-  if (plan.kind === "action" && fight && !ooc && !inFlashback) {
-    if (plan.input.overclock === true) commands.unshift({ type: "combat.overclock" });
-    const choice = plan.input.pay;
-    if (choice && fight.pending.length > 0) commands.unshift({ type: "combat.pay", ...choice });
   }
   // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
   if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {

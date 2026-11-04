@@ -59,6 +59,16 @@ export const CheckSpecSchema = z.object({
   dvMods: z.array(ModifierSchema.refine((m) => m.value !== 0, "修正不能为 0")).default([]),
   success: z.string().min(1).describe("成功会怎样"),
   failure: z.string().min(1).describe("失败会怎样，后果不会比这更重"),
+  /** 抵抗某次快速破解时在掷骰前绑定来源，不能用对手或失败描述猜测 */
+  npcHack: z
+    .object({
+      id: z.string().min(1).describe("放快速破解的 NPC 卡 id"),
+      program: z.string().min(1).describe("快速破解表里的程序 id"),
+    })
+    .optional()
+    .describe(
+      "抵抗 NPC 对玩家的快速破解时填写，绑定本次检定对应的攻击；attribute 用 intelligence 或 body",
+    ),
   /** 失败时最多扣到哪一档；不写表示失败不扣血 */
   damage: DamageTierSchema.optional().describe("失败最多扣到哪一档；不写表示失败不扣血"),
   /** 失败可能失去手臂或腿；只能和 damage lethal 一起写 */

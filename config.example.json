@@ -1,27 +1,3 @@
 {
-  "profiles": [
-    {
-      "name": "gemini-flash",
-      "type": "gemini",
-      "model": "gemini-3.8-flash",
-      "apiKeyEnv": "GEMINI_API_KEY",
-      "contextWindow": 1048576,
-      "maxOutputTokens": 8192,
-      "temperature": 1,
-      "thinkingLevel": "medium",
-      "safety": "off"
-    },
-    {
-      "name": "relay",
-      "type": "openai",
-      "baseUrl": "https://api.aca233.icu/v1",
-      "model": "gemini-3.8-flash",
-      "apiKeyEnv": "CP_RELAY_KEY",
-      "contextWindow": 1048576,
-      "maxOutputTokens": 8192,
-      "temperature": 1
-    }
-  ],
-  "narrator": "relay",
-  "aux": "relay"
+  "profiles": []
 }

@@ -1,11 +1,9 @@
 import { defineSystem } from "../../kernel/system";
-import { applyCombat, endRound, overclock, pay } from "./apply";
+import { applyCombat, tickCombat } from "./apply";
 import { combatRules } from "./prompt";
 import {
   type CombatCommand,
   CombatCommandSchema,
-  type CombatInternal,
-  CombatInternalSchemas,
   type CombatState,
   CombatStateSchema,
 } from "./schema";
@@ -13,34 +11,25 @@ import { combatStatus } from "./status";
 import { combatView } from "./view";
 
 /**
- * 战斗（用户 2026-11-02 定的"战斗推倒重来"）：敌人每轮有盖着的打算，看穿、拦下、骗过它；
- * 没拦下的打中你，你挑拿身体哪块抵；超频拿人性换必中，人性太低时代码替你出手；用惯的打法下一伙人防着
+ * 战斗（用户 2026-11-03 定的"重新构建战斗体系"）：打斗过程全交给叙事，代码只记后果。
+ * 每一架留下案底：死者有名有姓、伤口带着来历、流言会走样、录像在别人手里；战利品照旧
  */
-export const combat = defineSystem<CombatState, CombatCommand, CombatInternal>({
+export const combat = defineSystem<CombatState, CombatCommand, never>({
   id: "combat",
-  dependsOn: ["dice", "health", "inventory", "npc", "humanity"],
+  dependsOn: ["dice", "economy", "health", "inventory", "npc", "world"],
   state: CombatStateSchema,
   initial: () => CombatStateSchema.parse({ active: null, last: null }),
   commands: { combat: CombatCommandSchema },
-  internal: CombatInternalSchemas,
-  apply(draft, command, ctx) {
-    switch (command.type) {
-      case "combat":
-        return applyCombat(draft, command, ctx);
-      case "combat.round":
-        return endRound(draft, ctx);
-      case "combat.pay":
-        return pay(draft, command);
-      case "combat.overclock":
-        return overclock(draft);
-    }
-  },
+  internal: {},
+  apply: (draft, command, ctx) => applyCombat(draft, command, ctx),
+  tick: (draft, span, ctx) => tickCombat(draft, span, ctx),
   rules: [combatRules],
   view: { key: "combat", project: combatView },
   status: combatStatus,
 });
 
 export * from "./apply";
+export * from "./names";
 export * from "./prompt";
 export * from "./schema";
 export * from "./status";

@@ -74,37 +74,6 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-const LIMBS = [
-  ["left-arm", "左臂"],
-  ["right-arm", "右臂"],
-  ["left-leg", "左腿"],
-  ["right-leg", "右腿"],
-] as const;
-
-/** 战斗中给输入框的超频代价和付伤选项；不在战斗中是 undefined */
-function fightOf(view: View) {
-  const active = view.combat.active;
-  if (!active) return undefined;
-  const lost = new Set<string>(view.health.lostLimbs.map((l) => l.id));
-  const payOptions =
-    active.pending.length === 0
-      ? null
-      : [
-          { label: "皮肉硬吃", pay: { pay: "flesh" as const } },
-          ...view.cyberware
-            .filter((c) => !c.broken)
-            .map((c) => ({
-              label: `废掉${c.name}`,
-              pay: { pay: "chrome" as const, chrome: c.id },
-            })),
-          ...LIMBS.filter(([id]) => !lost.has(id)).map(([limb, label]) => ({
-            label: `舍掉${label}`,
-            pay: { pay: "limb" as const, limb },
-          })),
-        ];
-  return { overclockCost: active.overclockCost, payOptions };
-}
-
 /** 剧情主界面：顶部 HUD、左侧角色栏、中间正文、底部选项 / 检定确认 / 输入框 */
 export function StoryScreen() {
   const { saveId = "" } = useParams();
@@ -821,7 +790,6 @@ export function StoryScreen() {
             }
             onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
             boost={offers?.clutch && view.sandevistan ? view.sandevistan : undefined}
-            fight={fightOf(view)}
             onSend={send}
             onStop={() => void story.stop()}
           />

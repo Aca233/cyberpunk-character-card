@@ -32,10 +32,10 @@
   "narrative": "两个漩涡帮的人慢慢转过头。高个的那个把烟按灭在桌上，笑了一声：“挡着你了？出了这扇门，我们会让你知道什么叫挡路。”他没有站起来，只是看着你，等你先眨眼。",
   "expect": {
     "extract": {
-      "forbid": ["damage", "combat.start"]
+      "forbid": ["damage", "combat"]
     },
     "verify": {
-      "forbid": ["damage", "combat.start"]
+      "forbid": ["damage", "combat"]
     }
   }
 }

@@ -157,14 +157,7 @@ export function splitSlang(
 export function formatInput(input: TurnInput): string {
   const text = plainInput(input);
   const reply = input.replyTo !== undefined ? `【回复 #${input.replyTo}】` : "";
-  const pay = input.pay
-    ? input.pay.pay === "flesh"
-      ? "【皮肉硬吃】"
-      : input.pay.pay === "chrome"
-        ? "【拿义体去挡】"
-        : "【舍掉肢体】"
-    : "";
-  return `${input.sandevistan ? "【斯安威斯坦】" : ""}${input.overclock ? "【超频】" : ""}${pay}${reply}${text}`;
+  return `${input.sandevistan ? "【斯安威斯坦】" : ""}${reply}${text}`;
 }
 
 function plainInput(input: TurnInput): string {

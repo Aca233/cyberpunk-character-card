@@ -473,7 +473,7 @@ export const api = {
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
   setRoles: (roles: { narrator?: string; aux?: string }) =>
-    request<{ narrator: string; aux: string }>("PUT", "/profiles/-/roles", roles),
+    request<{ narrator?: string; aux?: string }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),
   deleteProfile: (name: string) =>

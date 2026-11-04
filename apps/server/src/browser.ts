@@ -30,9 +30,13 @@ export async function createLocalBackend(
   const docs = new IdbDocStore(db);
   // 示例配置跟着网页版本走：每次启动都写一份最新的，「用示例创建」照它建 config.json
   await docs.write(EXAMPLE_FILE, `${JSON.stringify(exampleConfig, null, 2)}\n`);
+  // 浏览器里没有「文件」这回事：第一次打开就照示例建好 config.json，省掉「创建本机配置」那一步。
+  // 已经有了就什么都不做（init 会拒绝覆盖）；示例本身不带连接，所以新存档是一份空配置
+  const config = new ConfigService(docs, "config.json");
+  await config.init();
   const hub = new TurnHub();
   const app = createApp({
-    config: new ConfigService(docs, "config.json"),
+    config,
     saves: new IdbSaveStore(db),
     characters: new CharacterStore(docs),
     presets: new PresetStore(docs),

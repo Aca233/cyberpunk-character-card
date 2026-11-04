@@ -862,27 +862,13 @@ export function Banner({ view }: { readonly view: View }) {
         <div className={styles.bannerRow} role="status">
           <Asset id="notify.warning" tint="var(--cp-red)" height={26} />
           <b>交战</b>
-          <span className={story.combatTitle}>第 {a.round} 轮</span>
-          {a.overclocked && <small>超频中</small>}
-          {a.takeover && <small className={story.dying}>你的手自己动了</small>}
+          {a.district && <span className={story.combatTitle}>{a.district}</span>}
         </div>
         <div className={styles.bannerLines}>
-          <span>目标：{a.objective}</span>
-          <span>败局：{a.defeat}</span>
           {a.foes.map((f) => (
             <span key={f.id}>
-              {f.name}（{f.stateLabel}）
-              {f.state === "up" || f.state === "hurt"
-                ? `：${f.fooled ? "这一轮落空" : (f.intentLabel ?? "打算还盖着")}`
-                : ""}
-              {f.bracedLabel && ` · 防着你的${f.bracedLabel}`}
-            </span>
-          ))}
-          {a.pending.map((p, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 同一个人可能打中两下
-            <span key={i} className={story.dying}>
-              {p.name}
-              {p.label}打中了你：挑拿义体、胳膊腿还是肉身去抵
+              {f.name}（{f.stateLabel}）{f.gang && ` · ${f.gang}`}
+              {f.carry.length > 0 && ` · 可拾取：${f.carry.map((i) => i.name).join("、")}`}
             </span>
           ))}
         </div>

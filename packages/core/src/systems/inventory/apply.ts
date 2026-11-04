@@ -265,8 +265,7 @@ export function spend(draft: Inventory, slot: QuickSlotName, id?: string): Apply
   if (!held || (id !== undefined && held.id !== id)) return fail("快捷栏里没有这件物品");
   if (held.charges < 1) return fail("次数用完了，休整或场景结束后恢复");
   held.charges -= 1;
-  // 战斗系统听这个信号记快捷动作
-  return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`], signals: ["combat.quick"] };
+  return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`] };
 }
 
 /** 休整或场景结束：快捷栏次数回满 */

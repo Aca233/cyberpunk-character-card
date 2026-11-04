@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CheckOutcome, CheckResult, PreparedCheck } from "./apply";
-import { DamageTierSchema } from "./schema";
+import { AttributeSchema, CheckSpecSchema, DamageTierSchema } from "./schema";
 
 export const CheckOutcomeSchema: z.ZodType<CheckOutcome> = z.enum([
   "critical",
@@ -14,6 +14,11 @@ export const CheckFactSchema = z.object({
   /** 检定 id，同一次检定只能扣一次血 */
   id: z.string().min(1),
   outcome: CheckOutcomeSchema,
+  /** 检定使用的属性与对手，供抵抗快速破解时核对；旧事实可缺省 */
+  attribute: AttributeSchema.optional(),
+  opponent: z.string().min(1).optional(),
+  /** 掷骰前绑定的快速破解来源，与检定 id 一起标识本次攻击 */
+  npcHack: CheckSpecSchema.shape.npcHack,
   /** check 里事先说明的伤害档位 */
   damage: DamageTierSchema.optional(),
   /** check 里事先写明了断肢风险 */
@@ -27,6 +32,9 @@ export function checkFactFrom(id: string, check: PreparedCheck, result: CheckRes
   return {
     id,
     outcome: result.outcome,
+    attribute: check.spec.attribute,
+    ...(check.spec.opponent === undefined ? {} : { opponent: check.spec.opponent }),
+    ...(check.spec.npcHack === undefined ? {} : { npcHack: { ...check.spec.npcHack } }),
     ...(check.spec.damage === undefined ? {} : { damage: check.spec.damage }),
     ...(check.spec.limb === true ? { limb: true } : {}),
     failure: check.spec.failure,

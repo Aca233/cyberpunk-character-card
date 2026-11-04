@@ -34,9 +34,9 @@ function rise(draft: State, command: NemesisCommand, ctx: SystemContext): ApplyO
   const last = combat.last;
   const after = last?.foes.find((f) => f.npc === id);
   const recent = last !== null && ctx.now - last.endedAt <= NEMESIS_RISE_HOURS * 60;
-  // 逃掉的随时算；打完还活着、玩家没输的算放走了
+  // 逃掉的随时算；打完还活着的算放走了（战斗只记后果，不再分胜负）
   const escaped = fleeing !== undefined || (recent && after?.state === "fled");
-  const spared = recent && after !== undefined && last?.outcome !== "defeat";
+  const spared = recent && after !== undefined && after.state !== "dead";
   if (!escaped && !spared) {
     return fail(
       `${card.name}不是刚打完、活着逃掉或被放走的有卡敌人（要在战斗里写进 foes，收场 ${NEMESIS_RISE_HOURS} 小时内升级）`,

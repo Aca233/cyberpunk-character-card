@@ -2,57 +2,60 @@ import type { ViewContext } from "../../kernel/system";
 import { OPPONENT_TIERS } from "../dice";
 import { itemCatalog } from "../inventory";
 import {
+  BODY_PART_LABELS,
   CombatStateSchema,
+  DRIFT_LABELS,
   FOE_STATE_LABELS,
-  INTENTS,
-  OVERCLOCK_COST,
-  OVERCLOCK_STEP,
-  TACTIC_LABELS,
+  HOLDER_LABELS,
+  MOURNER_LABELS,
 } from "./schema";
 
-/** 玩家可见的战斗：敌人的打算没看穿时盖着；打中你、还没抵的那几下；你用惯的打法 */
+/** 玩家可见的战斗：谁在场、倒下的人身上有什么；案底里的死者、伤、疤、流言、录像 */
 export function combatView({ world, data }: ViewContext) {
   const combat = CombatStateSchema.parse(world.slices.combat);
   const active = combat.active;
+  const now = world.time;
   const catalog = data.items === undefined ? undefined : itemCatalog(data);
   const named = (ids: readonly string[]) =>
     ids.map((id) => ({ id, name: catalog?.get(id)?.name ?? id }));
+  const lootable = (state: string) => state === "down" || state === "dead";
   return {
-    /** 倒下的人身上还没捡走的（打完以后） */
-    loot: (combat.last?.loot ?? [])
-      .filter((l) => l.items.length > 0)
-      .map((l) => ({ from: l.from, name: l.name, items: named(l.items) })),
     active: active && {
-      round: active.round,
-      objective: active.objective,
-      defeat: active.defeat,
+      district: active.district,
       foes: active.foes.map((f) => ({
         id: f.id,
         npc: f.npc,
         name: f.name,
+        gang: f.gang,
         tierLabel: OPPONENT_TIERS[f.tier].label,
         state: f.state,
         stateLabel: FOE_STATE_LABELS[f.state],
-        /** 看穿了才有；没看穿是 null */
-        intentLabel: f.known && f.intent ? INTENTS[f.intent].label : null,
-        fooled: f.fooled,
-        bracedLabel: f.braced ? TACTIC_LABELS[f.braced] : null,
-        /** 倒下了才看得到、捡得到身上的东西 */
-        carry: f.state === "down" ? named(f.carry) : [],
+        carry: lootable(f.state) ? named(f.carry) : [],
       })),
-      pending: active.pending.map((p) => ({
-        name: p.name,
-        label: INTENTS[p.intent].label,
-        tier: p.tier,
-      })),
-      overclocked: active.overclocked,
-      overclocks: active.overclocks,
-      /** 再超频一次要扣多少人性 */
-      overclockCost: OVERCLOCK_COST + OVERCLOCK_STEP * active.overclocks,
-      /** 这一轮代码替你出手 */
-      takeover: active.takeoverRound === active.round,
     },
-    habits: combat.habits,
+    loot: (combat.last?.loot ?? [])
+      .filter((l) => l.items.length > 0)
+      .map((l) => ({ from: l.from, name: l.name, items: named(l.items) })),
+    dead: combat.dead.map((d) => ({
+      ...d,
+      mournerLabel: MOURNER_LABELS[d.mourner],
+    })),
+    wounds: combat.wounds.map((w) => ({
+      ...w,
+      partLabel: BODY_PART_LABELS[w.part],
+      /** 还要几天长好，向上取整 */
+      daysLeft: Math.max(0, Math.ceil((w.healsAt - now) / 1440)),
+    })),
+    scars: combat.scars.map((s) => ({ ...s, partLabel: BODY_PART_LABELS[s.part] })),
+    rumors: combat.rumors.map((r) => {
+      const latest = r.hops[r.hops.length - 1];
+      return {
+        ...r,
+        latest,
+        driftLabels: (latest?.drifts ?? []).map((d) => DRIFT_LABELS[d]),
+      };
+    }),
+    footage: combat.footage.map((f) => ({ ...f, holderLabel: HOLDER_LABELS[f.holder] })),
     last: combat.last,
   };
 }

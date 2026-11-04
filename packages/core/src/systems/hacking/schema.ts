@@ -12,9 +12,6 @@ export const CATEGORY_LABELS: Readonly<Record<QuickhackCategory, string>> = {
   ultimate: "终极",
 };
 
-/** 战斗中每打完一段回几格 RAM（本作改编，暂定，试玩时调） */
-export const RAM_SEGMENT_REGEN = 1;
-
 /** 快速破解表的一条；数据在 content 包的 hacking.ts */
 export const QuickhackDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
@@ -95,11 +92,13 @@ export const HackingStateSchema = z.object({
   dive: DiveSchema.nullable().default(null),
   /**
    * 有卡的人放快速破解用掉的 RAM（用户 2026-11-02 选的"代码结算"）：人物 id → 已用格数。
-   * 战斗中每打完一段回 RAM_SEGMENT_REGEN 格，战斗收尾、场景结束、休整清空；旧存档没有
+   * 战斗收尾、场景结束、休整清空；旧存档没有
    */
   npcRamUsed: z.record(z.string(), z.number().int().min(0)).default({}),
   /** 玩家装着的自我 ICE 这一场已经替他挡过一次快速破解；战斗收尾、场景结束、休整后恢复；旧存档没有 */
   selfIceSpent: z.boolean().default(false),
+  /** 已结算的快速破解抵抗检定 id；包括 ICE 拦截和抵抗成功，恢复 RAM 时不清空 */
+  resolvedNpcHacks: z.array(z.string().min(1)).default([]),
 });
 export type HackingState = z.infer<typeof HackingStateSchema>;
 
@@ -112,7 +111,7 @@ export const NpcHackCommandSchema = z
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。打中玩家的伤害类、终极类要让玩家先掷检定抵抗（智力或肉体），失败再按检定事先写的 damage 写 damage；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。对玩家的伤害类、终极类要先掷智力或肉体抵抗，掷骰前在 check.npcHack 写 id 和 program 绑定攻击，并预告 damage；代码统一结算抵抗、自我 ICE 和伤害，同一检定只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 

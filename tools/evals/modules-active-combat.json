@@ -7,8 +7,6 @@
       {
         "type": "combat",
         "action": "start",
-        "objective": "从仓库里把货抢出来",
-        "defeat": "被迫撤出仓库，货物丢失",
         "foes": [
           {
             "name": "漩涡帮枪手",

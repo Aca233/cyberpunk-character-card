@@ -19,7 +19,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "common",
     price: 300,
-    ability: "宪法军工的廉价半自动手枪，街上最常见，好藏、好换弹，子弹能打墙角跳弹",
+    ability:
+      "宪法军工的廉价半自动手枪。体积小，适合藏在衣服里，在交涉破裂时迅速拔出；近处能单手持枪，另一只手开门、拖人或扶住伤员。换弹利索，但面对重甲和远处目标就显得吃力。想借硬质表面跳弹逼出掩体后的人，得先找好角度，不能指望子弹自己拐弯。",
   },
   {
     id: "lexington",
@@ -30,7 +31,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "common",
     price: 250,
-    ability: "军用科技 M-10AF，射速快、后坐小，帮派小弟人手一把",
+    ability:
+      "军用科技的速射手枪，适合在近距离用短促连射逼退追兵，给自己腾出退进掩体的空当。枪口容易压住，追着移动目标补射比慢慢等一枪更顺手；一直扣着扳机却会很快打空弹匣，远处的目标也不能靠泼洒子弹解决。适合边打边撤，不适合隔着整条街与步枪对射。",
   },
   {
     id: "nue",
@@ -41,7 +43,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "common",
     price: 350,
-    ability: "海啸公司的大弹匣手枪，连射压得住，适合近距离对射",
+    ability:
+      "海啸公司的重型手枪，适合守住门口、楼梯转角这些只能逐个露头的位置，用有分量的单发逼对方缩回去。比起边跑边扫，更适合站稳后抓住短暂露出的破绽；后坐会打断连续瞄准，被多人从不同方向贴近时就难以兼顾。命中护甲不等于击穿，遇到重装目标仍得寻找薄弱处。",
   },
   {
     id: "liberty",
@@ -52,7 +55,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "uncommon",
     price: 1600,
-    ability: "宪法军工的重型手枪，单发威力大，一枪能打穿车门",
+    ability:
+      "宪法军工的重型手枪，适合从掩体边缘探身点射，趁对手转移位置时截住去路。薄车门和轻质隔板未必挡得住它，但穿透后能否伤到人仍取决于材质、角度和目标位置，不能隔着车身盲打就算命中。枪声和冲击都很显眼，适合亮明火力逼人退让，不适合悄悄解决麻烦。",
   },
   {
     id: "omaha",
@@ -63,7 +67,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "uncommon",
     price: 2500,
-    ability: "军用科技 M-76e，技术手枪：蓄力后子弹能穿透薄墙和掩体",
+    ability:
+      "军用科技的技术手枪，蓄力射击能穿透薄墙和轻质掩体，让躲在柜台后的人不敢一直守着原位。配合能标出遮挡后目标的义眼，可以抓住对方停留的瞬间开火；没有定位时只能推测位置，穿墙不等于必中。蓄力需要空当，被贴身追打时很难从容完成，厚重结构也不是它能随意打穿的。",
   },
   {
     id: "kenshin",
@@ -74,7 +79,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "rare",
     price: 6500,
-    ability: "荒坂 JKE-X2，技术手枪：蓄满电一发打穿掩体后面的人，公司保镖的标配",
+    ability:
+      "荒坂的技术手枪，适合预先守住射界，等对手躲进轻质掩体后蓄力追击，迫使对方放弃原来的藏身处。与能透视标记的义眼配合时，可以隔着遮挡追踪目标的移动；标记消失或目标换位后，不能继续把旧位置当成命中依据。蓄力穿透不是无限穿墙，也不能代替瞄准；被人近身打断节奏时，需要先拉开距离。",
   },
   {
     id: "yukimura",
@@ -85,7 +91,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "uncommon",
     price: 2800,
-    ability: "荒坂 HJKE-11，智能手枪：子弹自己拐弯追目标；手部没装智能连接时只是普通手枪",
+    ability:
+      "荒坂的智能手枪。接上有效的手部智能连接、完成锁定后，弹丸会修正飞行路线追向目标，适合对付在门口一闪而过或横向奔跑的敌人，让你把更多注意力留给移动和寻找掩护。锁定需要机会，干扰和封死路线的障碍仍能让射击落空；不能追着一个名字凭空找到人。没有智能连接时只能当普通手枪使用。",
   },
   {
     id: "chao",
@@ -96,7 +103,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "uncommon",
     price: 2200,
-    ability: "康陶 A-22B，智能手枪：锁定后子弹追着人跑；手部没装智能连接时只是普通手枪",
+    ability:
+      "康陶的智能手枪，接上有效的手部智能连接后，可以先锁住威胁最大的敌人，再一边转移一边射击，由弹丸修正追踪路线。适合撤离时牵制追兵，也能配合队友逼目标离开遮挡；遇到人群混杂的场面，得先辨清锁定的是谁。追踪不等于穿墙，目标躲进封闭掩体或锁定受到干扰时仍会失手；没装智能连接就没有追踪能力。",
   },
   // 左轮
   {
@@ -108,7 +116,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "common",
     price: 900,
-    ability: "达拉理工 DR5，六发大口径，一枪放倒没穿甲的人",
+    ability:
+      "达拉理工的六发大口径左轮，适合抓住对方露出破绽的瞬间果断开火，也能在近距离对峙中形成威慑。弹量有限，每次出手都得有所选择；打空后需要换弹的空当，不适合独自压制接连涌来的敌人。中枪是否倒下取决于命中位置和防护，不能因为对方没穿甲就保证一枪解决。",
   },
   {
     id: "overture",
@@ -119,7 +128,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "uncommon",
     price: 2200,
-    ability: "马洛里安的重型左轮，枪声震耳，打得穿轻型护甲",
+    ability:
+      "马洛里安的重型左轮，枪声震耳，适合从掩护后打出沉重的一击，再收回身位重新瞄准。面对轻型防护仍有威胁，能迫使对手认真找掩体，而不是靠衣服里的护板硬扛。代价是后坐明显，仓促连射容易失去准头；厚甲和坚固遮挡仍然挡得住它，开枪也会让附近的人知道冲突已经升级。",
   },
   {
     id: "burya",
@@ -142,7 +152,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 600,
-    ability: "军用科技 M221，射速高，近距离一梭子压住一群人",
+    ability:
+      "军用科技的高射速冲锋枪，近距离能用连续火力封住门口或狭窄通道，为同伴穿过危险地带争取空当。配合侧面包抄，可以让对手顾此失彼；压制只是让人不敢轻易露头，不代表所有人都已中弹。长时间扫射会很快耗尽弹匣，距离拉远后散布也更难控制，换弹时需要掩护。",
   },
   {
     id: "pulsar",
@@ -153,7 +164,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 700,
-    ability: "达拉理工 DS1，小巧好藏，适合车里和走廊里的乱战",
+    ability:
+      "达拉理工的小型冲锋枪，枪身短，在车厢、楼梯间和拥挤走廊里转向方便，不必像长枪那样先腾出一大块空间。适合突然遭遇时用短连射抢出撤离路线，也方便藏在外套下面带进现场。狭窄地方同样容易误伤身边的人；出了近距离，火力再急也弥补不了瞄准和射程上的劣势。",
   },
   {
     id: "shingen",
@@ -164,7 +176,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "uncommon",
     price: 3200,
-    ability: "荒坂 TKI-20，智能冲锋枪：一次锁定好几个目标；手部没装智能连接时只是普通冲锋枪",
+    ability:
+      "荒坂的智能冲锋枪，接上有效的手部智能连接后，可以同时锁定多个暴露的目标，让弹丸分头追踪，牵制试图分散包围你的敌人。分散射击也会分散火力，不等于每个目标都会倒下；需要集中对付一人时，应重新选择锁定对象。遮挡、干扰和混入射界的旁人都会影响使用，没装智能连接时没有多目标追踪能力。",
   },
   {
     id: "dian",
@@ -175,7 +188,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "rare",
     price: 6500,
-    ability: "康陶 G-58，智能冲锋枪：子弹绕过掩体追人；手部没装智能连接时只是普通冲锋枪",
+    ability:
+      "康陶的智能冲锋枪，接上有效的手部智能连接并锁定目标后，弹丸能沿弯曲路线追击，让只遮住正面的低矮掩体不再那么可靠。适合追着频繁换位的敌人保持压力，与队友从不同方向牵制时尤其有用。弹丸仍需有路可走，绕不过封闭墙体，也不能追踪已经丢失的目标；连接损坏或受到干扰时，这套优势就用不上。",
   },
   // 突击步枪（反应）
   {
@@ -187,7 +201,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "common",
     price: 900,
-    ability: "诺科他 D5，皮实耐用的老式突击步枪，中距离火力压制",
+    ability:
+      "诺科他的老式突击步枪，皮实耐用，适合恶土赶路和缺少维护条件的长途差事。中距离既能点射，也能用连续火力掩护同伴转移，不依赖智能连接才能发挥用途。它的长处是应付多种局面，而不是某一项特别出众：进狭窄车厢不如短枪灵活，远距离也不能代替狙击枪；沙尘和磕碰照样需要事后清理检查。",
   },
   {
     id: "ajax",
@@ -198,7 +213,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "uncommon",
     price: 2200,
-    ability: "军用科技 M251s，军警制式步枪，准、稳、火力足",
+    ability:
+      "军用科技的制式突击步枪，适合守住街口、护送车队，也适合跟着队伍逐段推进。稳定的射击节奏让你能在掩护同伴和集中攻击之间切换，配上瞄准镜后更容易辨清远处露出的目标。枪身显眼，带进公司大厅或酒吧很难装作普通访客；连续开火仍需要控制后坐，可靠的制式装备也不能替你发现侧面的敌人。",
   },
   {
     id: "masamune",
@@ -209,7 +225,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "uncommon",
     price: 2600,
-    ability: "荒坂 HJSH-18，射速极快，弹匣打空得也快",
+    ability:
+      "荒坂的突击步枪，短时间内能打出密集火力，适合抓住敌人离开掩体的短暂空当，而不是一直扫射等人露头。与队友配合时，可以让同伴先迫使目标移动，再集中射击；对方若始终藏好，就得另找角度。急促开火很快会耗尽弹匣，仓促转向也容易丢掉准头，更适合有准备的交火，不适合毫无节制地追着人扫。",
   },
   {
     id: "sidewinder",
@@ -220,7 +237,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "rare",
     price: 7500,
-    ability: "诺科他 D5，智能突击步枪：子弹追着目标绕过掩体；手部没装智能连接时只是普通步枪",
+    ability:
+      "诺科他的智能突击步枪，接上有效的手部智能连接后，能用追踪火力紧咬正在转移的目标，让对方难以轻松穿过开阔地带。配合队友从侧面施压，可以迫使敌人在继续躲藏和冒险换位之间选择。弹丸只能沿可通行的路线修正方向，不能穿过封闭墙体；锁定丢失或受到干扰时需要重新捕捉目标，没有智能连接时只能当普通步枪使用。",
   },
   {
     id: "osprey",

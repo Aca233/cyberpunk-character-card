@@ -26,6 +26,11 @@ export class LlmRouter implements LlmClient {
     const name = this.pick[purpose] ?? state.config[purpose];
     const profile = state.config.profiles.find((p) => p.name === name);
     const role = purpose === "narrator" ? "叙事模型" : "辅助模型";
+    if (name === undefined)
+      return {
+        ok: false,
+        error: `还没有选${role}：到设置页添加一个模型连接，再点「设为${role}」`,
+      };
     if (!profile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };
     const key = this.config.keyFor(profile);
     switch (profile.type) {

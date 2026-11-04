@@ -215,38 +215,14 @@ function wound(draft: Health, tier: DamageTier, ctx: SystemContext, notes: strin
   trackSevere(draft, ctx.now);
 }
 
-/** 战斗里打中的一下：玩家挑拿义体、胳膊腿还是肉身去抵 */
+/** 战斗登记伤口时按档位扣血，护甲照常减伤 */
 export function applyHit(
   draft: Health,
   command: Extract<HealthInternal, { type: "health.hit" }>,
   ctx: SystemContext,
 ): ApplyOutcome {
   if (draft.condition !== "up") return fail(`角色${CONDITION_LABELS[draft.condition]}，不能再挨打`);
-  const notes: string[] = [`${command.reason}`];
-  if (command.pay === "chrome") {
-    if (!command.chrome) return fail("拿义体抵要写是哪件");
-    if (draft.brokenChrome.includes(command.chrome)) return fail("这件义体本来就坏着");
-    draft.brokenChrome.push(command.chrome);
-    notes.push("义体替你挡了这一下，被打坏了：修好前用不了");
-    return ok(...notes);
-  }
-  if (command.pay === "limb") {
-    const limb = command.limb;
-    if (!limb) return fail("拿胳膊腿抵要写是哪条");
-    const chrome = ChromeLimbsFactSchema.safeParse(ctx.facts.chrome ?? {});
-    const part = chrome.success ? chrome.data[limbSlot(limb)] : undefined;
-    if (part && !draft.brokenChrome.includes(part.id)) {
-      draft.brokenChrome.push(part.id);
-      notes.push(`${LIMB_LABELS[limb]}的${part.name}替你挡了，被打坏了`);
-    } else if (draft.lostLimbs.includes(limb)) return fail(`${LIMB_LABELS[limb]}已经没了`);
-    else {
-      draft.lostLimbs.push(limb);
-      notes.push(`失去${LIMB_LABELS[limb]}：相关检定 −${MOD_STEP}，找义体医生装义肢能补上`);
-    }
-    const lower = DAMAGE_TIERS[DAMAGE_RANK[command.tier] - 1];
-    if (lower) wound(draft, lower, ctx, notes);
-    return ok(...notes);
-  }
+  const notes: string[] = [command.reason];
   wound(draft, command.tier, ctx, notes);
   return ok(...notes);
 }

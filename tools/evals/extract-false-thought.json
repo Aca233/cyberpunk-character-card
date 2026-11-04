@@ -32,10 +32,10 @@
   "narrative": "你端起酒杯抿了一口。合成威士忌又辣又涩，顺着喉咙烧下去。角落里的漩涡帮还在笑，声音越来越大，没人往你这边看。",
   "expect": {
     "extract": {
-      "forbid": ["damage", "event", "combat.start", "humanity"]
+      "forbid": ["damage", "event", "combat", "humanity"]
     },
     "verify": {
-      "forbid": ["damage", "event", "combat.start"]
+      "forbid": ["damage", "event", "combat"]
     }
   }
 }

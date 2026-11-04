@@ -32,7 +32,9 @@ export function applyAlert(draft: Stealth, command: AlertCommand, scene: number)
     `警戒 ${from} → ${draft.level}（${ALERT_LABELS[draft.level]}）：${command.reason}`,
   ];
   if (draft.level === ALERT_MAX && from < ALERT_MAX) {
-    notes.push("交战：发 combat start，第一段敌人占优");
+    notes.push(
+      "交战：尚未登记交战时发 combat start；守卫已经发现你，按现场位置、掩体和退路写局面，不预定谁先命中",
+    );
   }
   return { ok: true, notes };
 }

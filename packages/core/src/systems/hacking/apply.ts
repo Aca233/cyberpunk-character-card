@@ -3,6 +3,7 @@ import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { CombatState } from "../combat";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { checkFact } from "../dice";
+import type { HealthState } from "../health";
 import { HUMANITY_KINDS } from "../humanity";
 import { currentVitals, filledBody, type NpcState } from "../npc";
 import type { WorldClockState } from "../world";
@@ -20,7 +21,6 @@ import {
   type NpcHackCommand,
   QuickhackCatalogSchema,
   type QuickhackDef,
-  RAM_SEGMENT_REGEN,
 } from "./schema";
 
 type Hacking = Draft<HackingState>;
@@ -73,16 +73,6 @@ export function refill(draft: Hacking): void {
   draft.ram = draft.ramMax;
   draft.npcRamUsed = {};
   draft.selfIceSpent = false;
-}
-
-/** 战斗打完一段：回一部分 RAM；有卡的人也一样 */
-export function regen(draft: Hacking): void {
-  draft.ram = Math.min(draft.ramMax, draft.ram + RAM_SEGMENT_REGEN);
-  for (const [id, used] of Object.entries(draft.npcRamUsed)) {
-    const left = used - RAM_SEGMENT_REGEN;
-    if (left > 0) draft.npcRamUsed[id] = left;
-    else delete draft.npcRamUsed[id];
-  }
 }
 
 function findProgram(
@@ -144,8 +134,7 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
           },
         ]
       : [];
-  const inCombat = ctx.read<CombatState>("combat").active !== null;
-  return { ok: true, notes, emit, ...(inCombat ? { signals: ["combat.quick"] } : {}) };
+  return { ok: true, notes, emit };
 }
 
 /** 本轮的智力门槛结果；回合流程放进 ctx.facts.gate */
@@ -273,7 +262,7 @@ export function npcDeckOf(
 
 /**
  * 有卡的人放快速破解（用户 2026-11-02 选的"代码结算"）：要装着接入仓、人还站着，RAM 够才放得出去；
- * 对玩家角色放时，玩家装着自我 ICE 每场先挡一次（RAM 照扣）。伤害仍走玩家的检定和 damage，这里不扣血；
+ * 对玩家角色放时，未损坏的自我 ICE 每场先挡一次（RAM 照扣）；伤害类和终极类按预绑定的抵抗检定自动发出 damage，同一检定只结算一次；
  * 终极类按残忍行为扣放的人的人性
  */
 export function applyNpcHack(
@@ -295,10 +284,32 @@ export function applyNpcHack(
   if (left < def.ram) {
     return fail(`${npc.name} 的 RAM 不够：「${def.name}」要 ${def.ram} 格，他只剩 ${left} 格`);
   }
+  const harmful =
+    command.target === "你" && (def.category === "damage" || def.category === "ultimate");
+  const check = harmful ? checkFact(ctx.facts) : undefined;
+  if (harmful) {
+    if (!check || check.npcHack?.id !== command.id || check.npcHack.program !== def.id) {
+      return fail("抵抗快速破解要先检定，check.npcHack 必须绑定这名 NPC 和这个程序");
+    }
+    if (check.attribute !== "intelligence" && check.attribute !== "body") {
+      return fail("抵抗快速破解的检定属性必须是智力或肉体");
+    }
+    if (check.damage === undefined) {
+      return fail("抵抗伤害类或终极类快速破解要事先写明 damage");
+    }
+    if (draft.resolvedNpcHacks.includes(check.id)) {
+      return fail("这次快速破解抵抗检定已经结算过了");
+    }
+    // 与 RAM、ICE 和伤害一起提交；连锁失败时由内核一起回滚
+    draft.resolvedNpcHacks.push(check.id);
+  }
   draft.npcRamUsed[command.id] = used + def.ram;
   const ramNote = `${npc.name} 的 RAM ${left - def.ram}/${ramMax}`;
   const atPlayer = command.target === "你";
-  const hasIce = ctx.read<CyberwareState>("cyberware").installed.some((c) => c.id === SELF_ICE);
+  const health = ctx.read<HealthState>("health");
+  const hasIce =
+    !health.brokenChrome.includes(SELF_ICE) &&
+    ctx.read<CyberwareState>("cyberware").installed.some((c) => c.id === SELF_ICE);
   if (atPlayer && hasIce && !draft.selfIceSpent) {
     draft.selfIceSpent = true;
     return {
@@ -311,8 +322,8 @@ export function applyNpcHack(
   const notes = [
     `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}：${ramNote}`,
   ];
-  if (atPlayer && (def.category === "damage" || def.category === "ultimate")) {
-    notes.push("打中你之前先让玩家掷检定抵抗，失败再按事先写的 damage 扣血");
+  if (harmful) {
+    notes.push("本次快速破解按绑定的抵抗检定结算，不另记 damage 或 combat wound");
   }
   const emit: Command[] =
     def.category === "ultimate"
@@ -326,6 +337,16 @@ export function applyNpcHack(
           },
         ]
       : [];
-  const inCombat = ctx.read<CombatState>("combat").active !== null;
-  return { ok: true, notes, emit, ...(inCombat ? { signals: ["combat.quick"] } : {}) };
+  if (harmful && check?.damage !== undefined) {
+    if (check.outcome === "failure" || check.outcome === "fumble") {
+      emit.push({
+        type: "damage",
+        tier: check.damage,
+        reason: `${npc.name}的快速破解「${def.name}」`,
+      });
+    } else {
+      notes.push("你抵抗住了这次快速破解，没有受伤");
+    }
+  }
+  return { ok: true, notes, emit };
 }

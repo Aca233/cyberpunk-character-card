@@ -67,11 +67,12 @@ export const ConfigSchema = z.preprocess(
   legacyRoles,
   z
     .strictObject({
-      profiles: z.array(ProfileSchema).min(1, "至少要有一个方案"),
-      /** 叙事模型（扮演 NPC、写剧情）用哪个方案 */
-      narrator: z.string().min(1),
+      /** 可以为空：示例配置不带任何连接，玩家自己加；设置页会直接落在「添加连接」表单上 */
+      profiles: z.array(ProfileSchema),
+      /** 叙事模型（扮演 NPC、写剧情）用哪个方案；还没选就没有这个键 */
+      narrator: z.string().min(1).optional(),
       /** 辅助模型（摘要、格式修复、模块解读）用哪个方案 */
-      aux: z.string().min(1),
+      aux: z.string().min(1).optional(),
     })
     .superRefine((config, ctx) => {
       const names = new Set<string>();
@@ -86,8 +87,9 @@ export const ConfigSchema = z.preprocess(
         names.add(profile.name);
       }
       for (const role of ["narrator", "aux"] as const) {
-        if (!names.has(config[role])) {
-          ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${config[role]} 的方案` });
+        const name = config[role];
+        if (name !== undefined && !names.has(name)) {
+          ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${name} 的方案` });
         }
       }
     }),
@@ -191,7 +193,7 @@ export class ConfigService {
     if (text === undefined) {
       return {
         status: "missing",
-        errors: ["还没有 config.json：在设置页点「用示例创建」"],
+        errors: ["还没有 config.json：在设置页点「创建本机配置」"],
       };
     }
     let raw: unknown;
@@ -350,14 +352,17 @@ export class ConfigService {
   }
 
   /** 换角色 / 辅助用的方案 */
-  setRoles(body: unknown): Promise<Result<{ narrator: string; aux: string }>> {
+  setRoles(body: unknown): Promise<Result<{ narrator?: string; aux?: string }>> {
     const parsed = RolesSchema.safeParse(body);
     if (!parsed.success) {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
     return this.edit(
       (config) => ({ draft: { ...config, ...parsed.data } }),
-      (config) => ({ narrator: config.narrator, aux: config.aux }),
+      (config) => ({
+        ...(config.narrator === undefined ? {} : { narrator: config.narrator }),
+        ...(config.aux === undefined ? {} : { aux: config.aux }),
+      }),
     );
   }
 

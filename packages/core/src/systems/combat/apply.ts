@@ -1,65 +1,67 @@
 import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
-import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
-import { checkFact, type DiceState, isSuccess, OPPONENT_TIERS } from "../dice";
-import type { HealthState } from "../health";
-import type { HumanityState } from "../humanity";
+import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
+import { OPPONENT_TIERS } from "../dice";
+import { SERVICES } from "../economy";
 import { type ItemDef, itemCatalog } from "../inventory";
 import type { NpcState } from "../npc";
+import { locationCatalog, type WorldClockState } from "../world";
+import { familyOf, pickName } from "./names";
 import {
   type ActiveFoe,
-  ARCHETYPE_INTENTS,
-  BRACE_AT,
+  AVENGE_PERCENT,
+  BLACKMAIL_EDDIES,
+  BODY_PART_LABELS,
+  BUY_RUMOR_EDDIES,
   type CombatCommand,
-  type CombatInternal,
   type CombatState,
+  type Dead,
+  type Drift,
+  DriftSchema,
   FOE_STATE_LABELS,
-  HABIT_DECAY,
-  INTENTS,
+  FOOTAGE_DUE_MINUTES,
+  HEAL_MINUTES,
+  HOLDER_LABELS,
+  type Holder,
   LOOT_EXTRA_KINDS,
   LOOT_RARITY,
   LOOT_WEAPONS,
-  MAX_ROUNDS,
-  OVERCLOCK_COST,
-  OVERCLOCK_STEP,
-  TACTIC_LABELS,
-  TAKEOVER_BELOW,
-  TAKEOVER_PERCENT_PER_POINT,
-  type Tactic,
-  TacticSchema,
+  MOURNER_LABELS,
+  MournerSchema,
+  RECKON_MINUTES,
+  RUMOR_HOP_MINUTES,
+  RUMOR_MAX_HOPS,
+  SCARRING_TIERS,
 } from "./schema";
 
-type CombatPay = Extract<CombatInternal, { type: "combat.pay" }>;
+/**
+ * 战斗只记后果：开打登记谁在场，某人倒下、死了、跑了，玩家挨了哪一下，收场时起流言、定录像在谁手里；
+ * 时间推进时伤长好或留疤、死者家里人找不找上门、流言往外传并走样、录像到期出事
+ */
 
 type Combat = Draft<CombatState>;
-type Outcome = "victory" | "defeat" | "retreat";
-
-export const OUTCOME_LABELS: Readonly<Record<Outcome, string>> = {
-  victory: "战斗胜利",
-  defeat: "败局",
-  retreat: "撤退成功",
-};
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
-const standing = (f: { state: string }) => f.state === "up" || f.state === "hurt";
+const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 
-/** 按路数抽一轮的打算；重复的权重高 */
-export function drawIntent(foe: Pick<ActiveFoe, "archetype">, rng: Rng) {
-  const pool = ARCHETYPE_INTENTS[foe.archetype];
-  return pool[rng.roll(pool.length) - 1] ?? pool[0] ?? "shoot";
+/** 从表里抽一个；只有一个时不掷（骰子至少两面） */
+const at = <T>(list: readonly T[], rng: Rng): T =>
+  list.length > 1 ? (list[rng.roll(list.length) - 1] as T) : (list[0] as T);
+
+/** 案底条目的 id：前缀加递增编号 */
+function newId(draft: Combat, prefix: string): string {
+  const id = `${prefix}${draft.nextId}`;
+  draft.nextId += 1;
+  return id;
 }
 
-/** 用得最多、到了门槛的打法：下一伙敌人防着它；没有是 null */
-export function bracedTactic(habits: Readonly<Partial<Record<Tactic, number>>>): Tactic | null {
-  let best: Tactic | null = null;
-  for (const t of TacticSchema.options) {
-    const n = habits[t] ?? 0;
-    if (n >= BRACE_AT && (best === null || n > (habits[best] ?? 0))) best = t;
-  }
-  return best;
+/** 玩家现在在哪个地区；地点表里查不到是 null */
+function districtHere(ctx: SystemContext): string | null {
+  const here = ctx.read<WorldClockState>("world").location;
+  return here === null ? null : (locationCatalog(ctx.data).get(here)?.district ?? null);
 }
 
-/** 开打时按路数和档位抽敌人身上带的：一把武器，一半机会再带一件治疗品或手雷；不朽的不掉 */
+/** 开打时按路数和档位抽这人身上带的：一把武器，一半机会再带一件治疗品或手雷；不朽的不掉 */
 export function drawLoot(
   foe: Pick<ActiveFoe, "archetype" | "tier">,
   data: Readonly<Record<string, unknown>>,
@@ -71,9 +73,7 @@ export function drawLoot(
   const pick = (fits: (d: ItemDef) => boolean): string[] => {
     let pool = all.filter((d) => fits(d) && rarities.includes(d.rarity ?? "common"));
     if (pool.length === 0) pool = all.filter((d) => fits(d) && (d.rarity ?? "common") === "common");
-    // 骰子至少两面：只剩一件就直接给，不掷
-    const got = pool.length > 1 ? pool[rng.roll(pool.length) - 1] : pool[0];
-    return got ? [got.id] : [];
+    return pool.length === 0 ? [] : [at(pool, rng).id];
   };
   const weapons: readonly string[] = LOOT_WEAPONS[foe.archetype];
   const carry = pick((d) => d.kind === "weapon" && weapons.includes(d.category ?? ""));
@@ -81,208 +81,16 @@ export function drawLoot(
   return carry;
 }
 
-export function startCombat(
-  draft: Combat,
-  command: CombatCommand,
-  ctx: SystemContext,
-): ApplyOutcome {
-  if (draft.active) return fail("已经在战斗中");
-  const { objective, defeat } = command;
-  if (objective === undefined || defeat === undefined) return fail("开打要写 objective 和 defeat");
-  const cards = ctx.read<NpcState>("npc").npcs;
-  const braced = bracedTactic(draft.habits);
-  const foes: ActiveFoe[] = [];
-  for (const [i, f] of (command.foes ?? []).entries()) {
-    const card = f.npc === undefined ? undefined : cards[f.npc];
-    if (f.npc !== undefined && !card) return fail(`没有 ${f.npc} 的人物卡；杂兵不写 npc`);
-    if (card && !card.alive) return fail(`${card.name}已经死了`);
-    const id = f.npc ?? `foe${i + 1}`;
-    if (foes.some((x) => x.id === id)) return fail(`${f.name}写了两次`);
-    const foe: ActiveFoe = {
-      id,
-      name: card?.name ?? f.name,
-      npc: f.npc ?? null,
-      archetype: f.archetype,
-      tier: f.tier,
-      state: "up",
-      intent: null,
-      known: false,
-      fooled: false,
-      braced,
-      carry: [],
-    };
-    foe.intent = drawIntent(foe, ctx.rng);
-    foe.carry = drawLoot(foe, ctx.data, ctx.rng);
-    foes.push(foe);
-  }
-  if (foes.length === 0) return fail("开打要写 foes");
-  draft.active = {
-    startedAt: ctx.now,
-    round: 1,
-    objective,
-    defeat,
-    foes,
-    pending: [],
-    overclocked: false,
-    overclocks: 0,
-    takeoverRound: null,
-  };
-  const named = foes.map((f) => `${f.name}（${OPPONENT_TIERS[f.tier].label}）`);
-  return {
-    ok: true,
-    notes: [
-      `战斗开始：目标 ${objective}；败局 ${defeat}`,
-      `敌人：${named.join("、")}；他们这一轮的打算还盖着`,
-      ...(braced ? [`这伙人防着你的${TACTIC_LABELS[braced]}：你用得太多了`] : []),
-    ],
-  };
-}
-
-/** 这一轮的检定没掷或成功了；超频时算成功 */
-function landed(draft: Combat, ctx: SystemContext): boolean {
-  if (draft.active?.overclocked) return true;
-  const fact = checkFact(ctx.facts);
-  return fact === undefined || isSuccess(fact.outcome);
-}
-
-function foeOf(draft: Combat, target: string | undefined) {
-  return draft.active?.foes.find((f) => f.id === target || f.npc === target);
-}
-
-/** 玩家这一轮的打法：记进习惯；对上了 target 的打算、他又没防着这一手，就拦下 */
-export function act(draft: Combat, command: CombatCommand, ctx: SystemContext): ApplyOutcome {
-  const active = draft.active;
-  const tactic = command.tactic;
-  if (!active) return fail("不在战斗中");
-  if (tactic === undefined) return fail("act 要写 tactic");
-  draft.habits[tactic] = (draft.habits[tactic] ?? 0) + 1;
-  const foe = foeOf(draft, command.target);
-  if (!foe || !standing(foe) || foe.intent === null) return { ok: true, notes: [] };
-  const intent = INTENTS[foe.intent];
-  if (!intent.counters.includes(tactic)) return { ok: true, notes: [] };
-  if (foe.braced === tactic && !active.overclocked) {
-    return {
-      ok: true,
-      notes: [`${foe.name}防着你的${TACTIC_LABELS[tactic]}，没拦住他${intent.label}`],
-    };
-  }
-  if (!landed(draft, ctx)) return { ok: true, notes: [`没拦住${foe.name}${intent.label}`] };
-  foe.fooled = true;
-  return { ok: true, notes: [`拦下了${foe.name}：他这一轮${intent.label}落空`] };
-}
-
-export function reveal(draft: Combat, target: string | undefined): ApplyOutcome {
-  const foe = foeOf(draft, target);
-  if (!foe) return fail(`战斗里没有 ${target}`);
-  if (foe.intent === null || foe.known) return { ok: true, notes: [] };
-  foe.known = true;
-  return { ok: true, notes: [`看穿了${foe.name}：这一轮要${INTENTS[foe.intent].label}`] };
-}
-
-export function fool(draft: Combat, target: string | undefined, ctx: SystemContext): ApplyOutcome {
-  const foe = foeOf(draft, target);
-  if (!foe || !standing(foe)) return fail(`战斗里没有还能打的 ${target}`);
-  if (!landed(draft, ctx)) return fail("检定没成，骗不过他");
-  foe.fooled = true;
-  return { ok: true, notes: [`骗过了${foe.name}：他这一轮扑了个空`] };
-}
-
-export function setFoe(draft: Combat, command: CombatCommand): ApplyOutcome {
-  const foe = foeOf(draft, command.target);
-  if (!foe || command.state === undefined) return fail(`战斗里没有 ${command.target}`);
-  if (foe.state === command.state) return { ok: true, notes: [] };
-  foe.state = command.state;
-  if (!standing(foe)) foe.intent = null;
-  const down = command.state === "down" ? "：杀、放还是抓，由玩家决定" : "";
-  return { ok: true, notes: [`${foe.name}${FOE_STATE_LABELS[command.state]}${down}`] };
-}
-
-function finish(
-  draft: Combat,
-  outcome: Outcome,
-  notes: string[],
-  emit: Command[],
-  now: number,
-): ApplyOutcome {
-  const active = draft.active;
-  const foes = (active?.foes ?? []).flatMap((f) =>
-    f.npc === null ? [] : [{ npc: f.npc, name: f.name, state: f.state }],
-  );
-  // 倒下的人身上剩的东西留在原地，打完还能搜；跑了的带走了
-  const loot = (active?.foes ?? []).flatMap((f) =>
-    f.state === "down" && f.carry.length > 0
-      ? [{ from: f.id, name: f.name, items: [...f.carry] }]
-      : [],
-  );
-  draft.last = { outcome, endedAt: now, foes, loot };
-  draft.active = null;
-  for (const t of TacticSchema.options) draft.habits[t] = (draft.habits[t] ?? 0) * HABIT_DECAY;
-  notes.push(
-    outcome === "defeat"
-      ? `${OUTCOME_LABELS.defeat}：${active?.defeat ?? ""}`
-      : OUTCOME_LABELS[outcome],
-  );
-  emit.push({ type: "inventory.recharge" });
-  return { ok: true, notes, emit, signals: ["combat.end"] };
-}
-
-/** 一轮打完：没落空的打算打中你（记进 pending 等你挑拿什么抵）、想跑的跑掉，再抽下一轮 */
-export function endRound(draft: Combat, ctx: SystemContext): ApplyOutcome {
-  const active = draft.active;
-  if (!active) return { ok: true, notes: [] };
-  const notes: string[] = [];
-  const emit: Command[] = [];
-  for (const foe of active.foes) {
-    if (!standing(foe) || foe.intent === null || foe.fooled) continue;
-    const def = INTENTS[foe.intent];
-    if (def.hit) {
-      active.pending.push({ from: foe.id, name: foe.name, intent: foe.intent, tier: def.hit });
-      notes.push(`${foe.name}${def.label}，打中了你：要拿身体的一部分去抵`);
-    } else if (foe.intent === "flee") {
-      foe.state = "fled";
-      notes.push(`${foe.name}跑了，带着他看到的你的打法`);
-    } else notes.push(`${foe.name}${def.label}得手了`);
-  }
-  // 倒下、死了按败局；濒死这一轮没人救回来：街头传说有人拖你出去，其他难度死亡
-  const health = ctx.read<HealthState>("health");
-  if (health.condition === "dying") {
-    if (ctx.read<DiceState>("dice").mode === "streetLegend") {
-      emit.push({ type: "health.revive" });
-      notes.push("街头传说：有人把你拖了出来；代价在正文里写（欧元、人性或关系）");
-    } else emit.push({ type: "health.die", reason: "濒死时没人救治" });
-    return finish(draft, "defeat", notes, emit, ctx.now);
-  }
-  if (health.condition !== "up") return finish(draft, "defeat", notes, emit, ctx.now);
-  if (!active.foes.some(standing)) return finish(draft, "victory", notes, emit, ctx.now);
-  if (active.round >= MAX_ROUNDS) return finish(draft, "defeat", notes, emit, ctx.now);
-  active.round += 1;
-  active.overclocked = false;
-  for (const foe of active.foes) {
-    foe.known = false;
-    foe.fooled = false;
-    foe.intent = standing(foe) ? drawIntent(foe, ctx.rng) : null;
-  }
-  // 人性太低：每低于门槛一点多几分机会，下一轮你的手自己动；连着两轮不接管
-  const humanity = ctx.read<HumanityState>("humanity").current;
-  const chance = (TAKEOVER_BELOW - humanity) * TAKEOVER_PERCENT_PER_POINT;
-  if (chance > 0 && active.takeoverRound !== active.round - 1 && ctx.rng.roll(100) <= chance) {
-    active.takeoverRound = active.round;
-    notes.push("这一轮你的手自己动了：代码替你出手，对离你最近的人下死手");
-  }
-  return { ok: true, notes, emit, signals: ["combat.next"] };
-}
-
-/** 从倒下的人身上捡一件，不占这一轮出手；打完了从剩下的里捡。捡到的直接进物品栏 */
+/** 从倒下或死了的人身上捡一件，直接进物品栏；打完了从剩下的里捡 */
 export function loot(draft: Combat, command: CombatCommand): ApplyOutcome {
   const { target, item } = command;
   if (target === undefined || item === undefined) return fail("loot 要写 target 和 item");
   let bag: string[];
   let name: string;
-  if (draft.active) {
-    const foe = foeOf(draft, target);
-    if (!foe) return fail(`战斗里没有 ${target}`);
+  const foe = draft.active?.foes.find((f) => f.id === target || f.npc === target);
+  if (foe) {
     if (foe.state === "fled") return fail(`${foe.name}跑了，东西也带走了`);
-    if (foe.state !== "down") return fail(`${foe.name}还站着，捡不了他身上的东西`);
+    if (foe.state === "up") return fail(`${foe.name}还站着，捡不了他身上的东西`);
     bag = foe.carry;
     name = foe.name;
   } else {
@@ -301,40 +109,321 @@ export function loot(draft: Combat, command: CombatCommand): ApplyOutcome {
   };
 }
 
-/** 玩家挑了拿什么抵最早那一下：交给 health 记（打坏义体、断肢或扣血） */
-export function pay(draft: Combat, command: CombatPay): ApplyOutcome {
-  const hit = draft.active?.pending.shift();
-  if (!hit) return fail("没有要抵的伤");
-  const reason = `${hit.name}${INTENTS[hit.intent].label}`;
+/** 开打：登记谁在场、在哪个地区；过程由叙事写，代码只等后果 */
+export function startCombat(
+  draft: Combat,
+  command: CombatCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  if (draft.active) return fail("已经在打了");
+  const cards = ctx.read<NpcState>("npc").npcs;
+  const foes: ActiveFoe[] = [];
+  for (const [i, f] of (command.foes ?? []).entries()) {
+    const card = f.npc === undefined ? undefined : cards[f.npc];
+    if (f.npc !== undefined && !card) return fail(`没有 ${f.npc} 的人物卡；杂兵不写 npc`);
+    if (card && !card.alive) return fail(`${card.name}已经死了`);
+    const id = f.npc ?? `foe${i + 1}`;
+    if (foes.some((x) => x.id === id)) return fail(`${f.name}写了两次`);
+    const foe: ActiveFoe = {
+      id,
+      name: card?.name ?? f.name,
+      npc: f.npc ?? null,
+      gang: f.gang ?? null,
+      archetype: f.archetype,
+      tier: f.tier,
+      state: "up",
+      carry: [],
+    };
+    foe.carry = drawLoot(foe, ctx.data, ctx.rng);
+    foes.push(foe);
+  }
+  if (foes.length === 0) return fail("开打要写 foes");
+  // 上一架没捡走的东西留不到这一架
+  if (draft.last) draft.last.loot = [];
+  draft.active = { startedAt: ctx.now, district: districtHere(ctx), foes };
+  const named = foes.map((f) => `${f.name}（${OPPONENT_TIERS[f.tier].label}）`);
+  return ok(`动手了：${named.join("、")}`);
+}
+
+/** 死者进案底：没名没姓的由代码起名，再定一个等他回家的人；过几天掷有没有人找上门 */
+function recordDead(draft: Combat, foe: ActiveFoe, ctx: SystemContext): Dead {
+  // 有卡的用卡上的名字；一伙杂兵合成的那条，死的是其中一个具体的人
+  const name = foe.npc ? foe.name : pickName(ctx.rng);
+  const mourner = at(MournerSchema.options, ctx.rng);
+  const kin = mourner === "sibling" || mourner === "parent" || mourner === "child";
+  const dead: Dead = {
+    id: newId(draft, "d"),
+    name,
+    gang: foe.gang,
+    tier: foe.tier,
+    mourner,
+    mournerName: pickName(ctx.rng, kin ? familyOf(name) : undefined),
+    killedAt: ctx.now,
+    district: draft.active?.district ?? districtHere(ctx),
+    reckonAt: ctx.now + RECKON_MINUTES,
+    avenger: null,
+  };
+  draft.dead.push(dead);
+  return dead;
+}
+
+/** 某人倒下、死了或跑了 */
+export function setFoe(draft: Combat, command: CombatCommand, ctx: SystemContext): ApplyOutcome {
+  const foe = draft.active?.foes.find((f) => f.id === command.target || f.npc === command.target);
+  if (!foe || command.state === undefined) return fail(`场上没有 ${command.target}`);
+  if (foe.state === command.state || foe.state === "dead") return ok();
+  foe.state = command.state;
+  if (command.state !== "dead") return ok(`${foe.name}${FOE_STATE_LABELS[command.state]}`);
+  const d = recordDead(draft, foe, ctx);
+  const who = d.gang ? `${d.gang}的${d.name}` : d.name;
+  return ok(`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`);
+}
+
+/** 玩家挨了一下：伤口记下谁、用什么、打在哪、什么时候长好；扣血交给 health */
+export function wound(draft: Combat, command: CombatCommand, ctx: SystemContext): ApplyOutcome {
+  const { by, weapon, part, tier } = command;
+  if (by === undefined || weapon === undefined || part === undefined || tier === undefined) {
+    return fail("wound 要写 by、weapon、part、tier");
+  }
+  // by 写的是场上那人的 id 时换成名字，帮派跟着他
+  const foe = draft.active?.foes.find((f) => f.id === by || f.npc === by || f.name === by);
+  const w = {
+    id: newId(draft, "w"),
+    by: foe?.name ?? by,
+    gang: foe?.gang ?? null,
+    weapon,
+    part,
+    tier,
+    at: ctx.now,
+    district: draft.active?.district ?? districtHere(ctx),
+    healsAt: ctx.now + HEAL_MINUTES[tier],
+    treated: false,
+  };
+  draft.wounds.push(w);
+  const from = w.gang ? `${w.gang}的${w.by}` : w.by;
   return {
     ok: true,
-    notes: [],
+    notes: [`${BODY_PART_LABELS[part]}挨了${from}的${weapon}`],
+    emit: [{ type: "health.hit", tier, reason: `${from}的${weapon}` }],
+  };
+}
+
+/** 处理一处伤：缩短恢复时间、不留疤；医疗费与治疗由内核连锁事务一起结算，失败一起回滚 */
+export function treat(draft: Combat, target: string | undefined, ctx: SystemContext): ApplyOutcome {
+  const w = draft.wounds.find((x) => x.id === target);
+  if (!w) return fail(`没有 ${target} 这处伤`);
+  if (w.treated) return ok();
+  w.treated = true;
+  w.healsAt = Math.min(w.healsAt, ctx.now + Math.ceil(HEAL_MINUTES[w.tier] / 2));
+  return {
+    ok: true,
+    notes: [`${BODY_PART_LABELS[w.part]}的伤处理过了，不会留疤`],
     emit: [
       {
-        type: "health.hit",
-        tier: hit.tier,
-        pay: command.pay,
-        ...(command.chrome ? { chrome: command.chrome } : {}),
-        ...(command.limb ? { limb: command.limb } : {}),
-        reason,
+        type: "money",
+        delta: -SERVICES.medical.price,
+        reason: `处理伤口 ${w.id}（${BODY_PART_LABELS[w.part]}）`,
       },
     ],
   };
 }
 
-/** 超频：这一轮必中、拦得住防着你的人；人性代价同一仗里越超越贵 */
-export function overclock(draft: Combat): ApplyOutcome {
+/** 起一条流言：从当地起，一天往外传一站 */
+function startRumor(
+  draft: Combat,
+  truth: string,
+  dead: number,
+  district: string | null,
+  ctx: SystemContext,
+) {
+  const rumor = {
+    id: newId(draft, "r"),
+    truth,
+    dead,
+    hops: [{ district: district ?? "本地", at: ctx.now, count: dead, drifts: [] }],
+    nextAt: ctx.now + RUMOR_HOP_MINUTES,
+    confirmed: false,
+    stopped: null,
+  };
+  draft.rumors.push(rumor);
+  return rumor;
+}
+
+const OWNERS: readonly Holder[] = ["ncpd", "dealer", "blackmailer"];
+
+/** 定录像在谁手里：监控拍的直接落到某一方；路人录的先在路人手里，到期前转手 */
+function startFootage(
+  draft: Combat,
+  shows: string,
+  cameras: boolean,
+  district: string | null,
+  rumor: string,
+  ctx: SystemContext,
+) {
+  const tape = {
+    id: newId(draft, "f"),
+    shows,
+    source: cameras ? "街角的监控" : "一个路人的义眼",
+    holder: cameras ? at(OWNERS, ctx.rng) : ("bystander" as Holder),
+    passTo: cameras ? null : at(OWNERS, ctx.rng),
+    at: ctx.now,
+    district,
+    dueAt: ctx.now + FOOTAGE_DUE_MINUTES,
+    fired: null,
+    firedAt: null,
+    resolved: null,
+    rumor,
+  };
+  draft.footage.push(tape);
+  return tape;
+}
+
+/** 收场：有卡的人后来怎样记给宿敌；倒下和死了的人身上剩的留着搜；有人看见就起流言、有录像 */
+export function endCombat(draft: Combat, command: CombatCommand, ctx: SystemContext): ApplyOutcome {
   const active = draft.active;
-  if (!active) return fail("不在战斗中，不能超频");
-  if (active.overclocked) return { ok: true, notes: [] };
-  const cost = OVERCLOCK_COST + active.overclocks * OVERCLOCK_STEP;
-  active.overclocked = true;
-  active.overclocks += 1;
+  if (!active) return fail("没在打");
+  const foes = active.foes.flatMap((f) =>
+    f.npc === null ? [] : [{ npc: f.npc, name: f.name, state: f.state }],
+  );
+  const left = active.foes.flatMap((f) =>
+    (f.state === "down" || f.state === "dead") && f.carry.length > 0
+      ? [{ from: f.id, name: f.name, items: [...f.carry] }]
+      : [],
+  );
+  draft.last = { endedAt: ctx.now, foes, loot: left };
+  draft.active = null;
+  const witnesses = command.witnesses ?? 0;
+  const cameras = command.cameras ?? false;
+  const notes = ["收场了"];
+  if (witnesses > 0 || cameras) {
+    const dead = active.foes.filter((f) => f.state === "dead").length;
+    const truth = command.truth ?? `在${active.district ?? "街上"}和人动了手`;
+    const rumor = startRumor(draft, truth, dead, active.district, ctx);
+    notes.push(`有人看见了：流言从${rumor.hops[0]?.district}传开`);
+    const tape = startFootage(draft, truth, cameras, active.district, rumor.id, ctx);
+    notes.push(`${tape.source}录下了这一架，现在在${HOLDER_LABELS[tape.holder]}手里`);
+  }
   return {
     ok: true,
-    notes: [`超频义体：这一轮必中，人性 −${cost}`],
-    emit: [{ type: "humanity", delta: -cost, reason: "战斗中超频义体" }],
+    notes,
+    emit: [{ type: "inventory.recharge" }],
+    signals: ["combat.end"],
   };
+}
+
+/** 压下或收买一条流言：停在现在传到的地方；收买要花钱 */
+export function settleRumor(draft: Combat, command: CombatCommand): ApplyOutcome {
+  const r = draft.rumors.find((x) => x.id === command.target);
+  if (!r) return fail(`没有 ${command.target} 这条流言`);
+  if (command.how !== "silenced" && command.how !== "bought")
+    return fail("rumor 的 how 写 silenced 或 bought");
+  if (r.stopped) return ok();
+  if (r.confirmed) return fail("录像已经卖成了超梦，这条流言压不住了");
+  r.stopped = command.how;
+  r.nextAt = null;
+  if (command.how === "silenced") return ok("流言压下去了，不再往外传");
+  return {
+    ok: true,
+    notes: ["收买了传话的人，流言停了"],
+    emit: [{ type: "money", delta: -BUY_RUMOR_EDDIES, reason: "收买传流言的人" }],
+  };
+}
+
+/** 了结一段录像：追回、销毁，或者付钱给敲诈的人 */
+export function settleFootage(draft: Combat, command: CombatCommand): ApplyOutcome {
+  const f = draft.footage.find((x) => x.id === command.target);
+  if (!f) return fail(`没有 ${command.target} 这段录像`);
+  const how = command.how;
+  if (how !== "recovered" && how !== "destroyed" && how !== "paid") {
+    return fail("footage 的 how 写 recovered、destroyed 或 paid");
+  }
+  if (f.resolved) return ok();
+  if (f.fired === "evidence" || f.fired === "sold") return fail("录像已经流出去了，追不回来");
+  f.resolved = how;
+  f.dueAt = null;
+  if (how !== "paid") return ok(how === "recovered" ? "录像追回来了" : "录像销毁了");
+  return {
+    ok: true,
+    notes: ["付了钱，录像交到了你手里"],
+    emit: [{ type: "money", delta: -BLACKMAIL_EDDIES, reason: "买下拍了你的录像" }],
+  };
+}
+
+/** 死者那边找上门的人：came 叙事里写他来了，settled 了结了 */
+export function settleAvenger(draft: Combat, command: CombatCommand): ApplyOutcome {
+  const d = draft.dead.find((x) => x.id === command.target);
+  if (!d) return fail(`案底里没有 ${command.target}`);
+  if (command.how !== "came" && command.how !== "settled")
+    return fail("avenger 的 how 写 came 或 settled");
+  if (d.avenger === null) return fail(`${d.name}那边还没人找上门`);
+  if (d.avenger === "settled") return ok();
+  d.avenger = command.how;
+  return ok(command.how === "came" ? `${d.mournerName}找上门了` : `${d.name}的事了结了`);
+}
+
+/** 流言往外传一站：挑一个还没传到的地区，走样一处；人数走样就翻倍 */
+function hop(r: Combat["rumors"][number], districts: readonly string[], at_: number, rng: Rng) {
+  const seen = new Set(r.hops.map((h) => h.district));
+  const fresh = districts.filter((d) => !seen.has(d));
+  const prev = r.hops[r.hops.length - 1];
+  if (!prev || fresh.length === 0 || r.hops.length > RUMOR_MAX_HOPS) {
+    r.stopped = "faded";
+    r.nextAt = null;
+    return;
+  }
+  const drift: Drift = at(DriftSchema.options, rng);
+  r.hops.push({
+    district: at(fresh, rng),
+    at: at_,
+    count: drift === "count" ? Math.max(1, prev.count * 2) : prev.count,
+    drifts: [...prev.drifts, drift],
+  });
+  r.nextAt = at_ + RUMOR_HOP_MINUTES;
+}
+
+/** 时间推进：伤长好（没治的重伤留疤）、死者那边掷找不找上门、流言往外传、录像到期出事 */
+export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): void {
+  const now = span.to;
+  for (const w of [...draft.wounds]) {
+    if (w.healsAt > now) continue;
+    if (!w.treated && SCARRING_TIERS.includes(w.tier)) {
+      draft.scars.push({
+        by: w.by,
+        gang: w.gang,
+        weapon: w.weapon,
+        part: w.part,
+        at: w.at,
+        district: w.district,
+      });
+    }
+    draft.wounds.splice(draft.wounds.indexOf(w), 1);
+  }
+  for (const d of draft.dead) {
+    if (d.reckonAt === null || d.reckonAt > now) continue;
+    d.reckonAt = null;
+    if (ctx.rng.roll(100) <= AVENGE_PERCENT[d.tier]) d.avenger = "pending";
+  }
+  const districts = [...new Set([...locationCatalog(ctx.data).values()].map((l) => l.district))];
+  for (const r of draft.rumors) {
+    while (r.nextAt !== null && r.nextAt <= now) hop(r, districts, r.nextAt, ctx.rng);
+  }
+  for (const f of draft.footage) {
+    if (f.dueAt === null || f.dueAt > now) continue;
+    // 路人手里的先转手，再过一阵才出事
+    if (f.holder === "bystander" && f.passTo !== null) {
+      f.holder = f.passTo;
+      f.passTo = null;
+      f.dueAt += FOOTAGE_DUE_MINUTES;
+      if (f.dueAt > now) continue;
+    }
+    f.firedAt = f.dueAt;
+    f.dueAt = null;
+    f.fired = f.holder === "ncpd" ? "evidence" : f.holder === "dealer" ? "sold" : "demand";
+    if (f.fired === "sold") {
+      const r = draft.rumors.find((x) => x.id === f.rumor);
+      if (r) r.confirmed = true;
+    }
+  }
 }
 
 export function applyCombat(
@@ -345,31 +434,21 @@ export function applyCombat(
   switch (command.action) {
     case "start":
       return startCombat(draft, command, ctx);
-    case "act":
-      return act(draft, command, ctx);
-    case "reveal":
-      return reveal(draft, command.target);
-    case "fool":
-      return fool(draft, command.target, ctx);
     case "foe":
-      return setFoe(draft, command);
+      return setFoe(draft, command, ctx);
+    case "wound":
+      return wound(draft, command, ctx);
+    case "end":
+      return endCombat(draft, command, ctx);
     case "loot":
       return loot(draft, command);
-    case "retreat":
-      return draft.active ? finish(draft, "retreat", [], [], ctx.now) : fail("不在战斗中");
-    case "pay":
-      // 玩家在输入里说了拿什么抵：和点按钮走同一条路，由 health 校验义体、胳膊腿还在不在
-      return command.pay === undefined
-        ? fail("pay 要写拿什么抵：chrome、limb 或 flesh")
-        : pay(draft, {
-            type: "combat.pay",
-            pay: command.pay,
-            ...(command.chrome ? { chrome: command.chrome } : {}),
-            ...(command.limb ? { limb: command.limb } : {}),
-          });
-    case "end":
-      return draft.active
-        ? finish(draft, command.outcome ?? "victory", [], [], ctx.now)
-        : fail("不在战斗中");
+    case "treat":
+      return treat(draft, command.target, ctx);
+    case "rumor":
+      return settleRumor(draft, command);
+    case "footage":
+      return settleFootage(draft, command);
+    case "avenger":
+      return settleAvenger(draft, command);
   }
 }
