@@ -8,10 +8,15 @@ import {
 } from "@cp/core";
 import { describe, expect, it } from "vitest";
 import {
+  applyOriginPreset,
   attributeReliance,
   budgetKind,
   comboHints,
   creatorChecks,
+  isAnyOriginPreset,
+  isOriginPreset,
+  ORIGIN_KEYS,
+  ORIGIN_PRESETS,
   originLean,
   originNever,
   recommendAttributes,
@@ -145,5 +150,67 @@ describe("creatorChecks", () => {
   it("出身插槽空着只报一次，链回出身那一步", () => {
     const origin = creatorChecks(draft).filter((c) => c.step === "origin");
     expect(origin).toHaveLength(1);
+  });
+
+  it("姓名或代词未填写时链回出身与身份那一步", () => {
+    const unnamed = { ...draft, name: "", pronoun: "" } as CharacterCard;
+    const checks = creatorChecks(unnamed);
+    expect(checks.find((c) => c.text === "尚未命名")?.step).toBe("origin");
+    expect(checks.find((c) => c.text === "尚未设定代词")?.step).toBe("origin");
+  });
+});
+
+describe("ORIGIN_PRESETS and applyOriginPreset", () => {
+  const streetMod = mod("street-kid", "origin");
+  const past1 = mod("gang-runner", "past");
+  const past2 = mod("clinic-apprentice", "past");
+  const past3 = mod("pit-fighter", "past");
+  const skill1 = mod("brawling", "skill", ["近战", "格斗"]);
+  const skill2 = mod("lockpick", "skill");
+  const skill3 = mod("streetwise", "skill");
+  const allMods = [streetMod, past1, past2, past3, skill1, skill2, skill3];
+
+  const blankCard = {
+    name: "V",
+    alias: "",
+    pronoun: "他",
+    origin: "",
+    look: "",
+    past: "",
+    personality: "",
+    voice: "",
+    skills: "",
+    scene: "",
+    greeting: "",
+    examples: "",
+    locked: [],
+    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
+    board: BoardSchema.parse({}),
+  } as unknown as CharacterCard;
+
+  it("各出身预设的属性点总消耗严格等于 7", () => {
+    for (const key of ORIGIN_KEYS) {
+      const preset = ORIGIN_PRESETS[key];
+      const spent = Object.values(preset.attributes).reduce((s, v) => s + (v - 3), 0);
+      expect(spent).toBe(7);
+      expect(preset.pasts).toHaveLength(3);
+      expect(preset.skills).toHaveLength(3);
+    }
+  });
+
+  it("一键载入街头小子预设，生成完整的过往、特长和属性分配", () => {
+    const updated = applyOriginPreset("street-kid", blankCard, allMods, []);
+    expect(updated.origin).toBe("street-kid");
+    expect(updated.board?.origin?.id).toBe("street-kid");
+    expect(updated.board?.pasts.map((p) => p.id)).toEqual([
+      "gang-runner",
+      "clinic-apprentice",
+      "pit-fighter",
+    ]);
+    expect(updated.board?.skills.map((s) => s.id)).toEqual(["brawling", "lockpick", "streetwise"]);
+    expect(updated.attributes).toEqual(ORIGIN_PRESETS["street-kid"].attributes);
+    if (!updated.board) throw new Error("board should be defined");
+    expect(isOriginPreset("street-kid", updated.board)).toBe(true);
+    expect(isAnyOriginPreset(updated.board)).toBe(true);
   });
 });

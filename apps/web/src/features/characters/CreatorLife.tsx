@@ -337,80 +337,85 @@ export function StepPeople({ board, data, commit }: StepProps) {
   const chosen = board.acquaintances.filter((x) => data.npcs.some((n) => n.id === x.id)).length;
 
   return (
-    <div className={styles.people}>
-      <nav className={styles.peopleList} aria-label="联系人">
-        {modulePeople.length > 0 && (
-          <>
-            <h3 className={styles.peopleGroup}>背景关联人脉</h3>
-            <ul>{modulePeople.map(contact)}</ul>
-          </>
-        )}
-        <h3 className={styles.peopleGroup}>
-          {/* 只数原作人物，模块带出的人改了关系不算在这里（第四期走查发现，2026-10-31） */}
-          夜之城人脉网络<small className={styles.peopleCount}>已建立联系 {chosen} 人</small>
-        </h3>
-        <ul>{canon.map(contact)}</ul>
-      </nav>
-      {current && (
-        <section className={styles.peopleCard} aria-label={current.name}>
-          <CellFrame />
-          <header className={styles.peopleHead}>
-            <span className={styles.peopleFace} data-big="" aria-hidden="true">
-              {face ? (
-                <Asset id={face} className={styles.peopleFaceArt} />
-              ) : (
-                ([...current.name][0] ?? "?")
-              )}
-            </span>
-            <span className={styles.peopleName}>
-              <b className={styles.peopleTitle}>{current.name}</b>
-              <small className={styles.peopleSub}>{current.role}</small>
-            </span>
-          </header>
-          <fieldset className={styles.relations} aria-label={`和${current.name}的关系`}>
-            <button
-              type="button"
-              className={styles.relation}
-              aria-pressed={!a}
-              onClick={() => setRelation(current, "")}
-            >
-              <b className={styles.relationLabel}>
-                {current.fromModule ? "沿用默认关系" : "暂无交集"}
-              </b>
-            </button>
-            {RELATIONS.map((r) => (
+    <>
+      <div className={styles.stepTip}>
+        可选辅助模块：可在此建立初始人脉网络，也可留空，在战局推进中自然结识夜之城各路豪杰。
+      </div>
+      <div className={styles.people}>
+        <nav className={styles.peopleList} aria-label="联系人">
+          {modulePeople.length > 0 && (
+            <>
+              <h3 className={styles.peopleGroup}>背景关联人脉</h3>
+              <ul>{modulePeople.map(contact)}</ul>
+            </>
+          )}
+          <h3 className={styles.peopleGroup}>
+            {/* 只数原作人物，模块带出的人改了关系不算在这里（第四期走查发现，2026-10-31） */}
+            夜之城人脉网络<small className={styles.peopleCount}>已建立联系 {chosen} 人</small>
+          </h3>
+          <ul>{canon.map(contact)}</ul>
+        </nav>
+        {current && (
+          <section className={styles.peopleCard} aria-label={current.name}>
+            <CellFrame />
+            <header className={styles.peopleHead}>
+              <span className={styles.peopleFace} data-big="" aria-hidden="true">
+                {face ? (
+                  <Asset id={face} className={styles.peopleFaceArt} />
+                ) : (
+                  ([...current.name][0] ?? "?")
+                )}
+              </span>
+              <span className={styles.peopleName}>
+                <b className={styles.peopleTitle}>{current.name}</b>
+                <small className={styles.peopleSub}>{current.role}</small>
+              </span>
+            </header>
+            <fieldset className={styles.relations} aria-label={`和${current.name}的关系`}>
               <button
-                key={r}
                 type="button"
                 className={styles.relation}
-                aria-pressed={a?.relation === r}
-                data-tone={RELATION_INFO[r].affinity < 0 ? "bad" : undefined}
-                disabled={a?.relation !== r && RELATION_INFO[r].points - had > left}
-                title={
-                  a?.relation !== r && RELATION_INFO[r].points - had > left
-                    ? "背景点不够"
-                    : undefined
-                }
-                onClick={() => setRelation(current, r)}
+                aria-pressed={!a}
+                onClick={() => setRelation(current, "")}
               >
-                <b className={styles.relationLabel}>{RELATION_INFO[r].label}</b>
-                <small className={styles.relationNote}>{relationNote(r)}</small>
+                <b className={styles.relationLabel}>
+                  {current.fromModule ? "沿用默认关系" : "暂无交集"}
+                </b>
               </button>
-            ))}
-          </fieldset>
-          {a && (
-            <input
-              className={styles.startInput}
-              maxLength={60}
-              value={a.note}
-              aria-label={`和${current.name}是什么事`}
-              placeholder="过往恩怨或交集契机（可留空交由AI推演）"
-              onChange={(e) => setNote(current.id, e.target.value)}
-            />
-          )}
-        </section>
-      )}
-    </div>
+              {RELATIONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={styles.relation}
+                  aria-pressed={a?.relation === r}
+                  data-tone={RELATION_INFO[r].affinity < 0 ? "bad" : undefined}
+                  disabled={a?.relation !== r && RELATION_INFO[r].points - had > left}
+                  title={
+                    a?.relation !== r && RELATION_INFO[r].points - had > left
+                      ? "背景点不够"
+                      : undefined
+                  }
+                  onClick={() => setRelation(current, r)}
+                >
+                  <b className={styles.relationLabel}>{RELATION_INFO[r].label}</b>
+                  <small className={styles.relationNote}>{relationNote(r)}</small>
+                </button>
+              ))}
+            </fieldset>
+            {a && (
+              <input
+                className={styles.startInput}
+                maxLength={60}
+                value={a.note}
+                aria-label={`和${current.name}是什么事`}
+                placeholder="过往恩怨或交集契机（可留空交由AI推演）"
+                onChange={(e) => setNote(current.id, e.target.value)}
+              />
+            )}
+          </section>
+        )}
+      </div>
+    </>
   );
 }
 

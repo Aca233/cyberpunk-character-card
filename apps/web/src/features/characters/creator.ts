@@ -6,6 +6,7 @@ import {
   type BoardModule,
   BoardSchema,
   boardBudget,
+  boardCombos,
   boardIssues,
   type CharacterCard,
   CharacterCardSchema,
@@ -22,16 +23,16 @@ import {
  */
 
 /**
- * 8 步：出身 → 过往 → 旧识 → 本事 → 义体 → 属性 → 这个人 → 档案确认
- * （"旧识"是后来加的一步；本事和义体原来是一步，用户 2026-10-31 说"本事和义体分开两块"）
+ * 8 步：出身 → 过往 → 旧识 → 特长 → 义体 → 属性 → 角色特写 → 档案确认
+ * （旧识与义体标记为可选；全部步骤均可自由无阻切换）
  */
 export const STEPS = [
-  { id: "origin", label: "出身" },
-  { id: "past", label: "过往" },
-  { id: "people", label: "旧识" },
-  { id: "skills", label: "特长" },
-  { id: "cyberware", label: "义体" },
-  { id: "attributes", label: "属性" },
+  { id: "origin", label: "出身与身份" },
+  { id: "past", label: "过往经历" },
+  { id: "people", label: "旧识 (可选)" },
+  { id: "skills", label: "核心特长" },
+  { id: "cyberware", label: "义体 (可选)" },
+  { id: "attributes", label: "属性分配" },
   { id: "person", label: "角色特写" },
   { id: "review", label: "档案确认" },
 ] as const;
@@ -195,9 +196,9 @@ const FIELD_STEP: Partial<Record<keyof CharacterCard, StepId>> = {
   origin: "origin",
   board: "skills",
   attributes: "attributes",
-  name: "person",
-  alias: "person",
-  pronoun: "person",
+  name: "origin",
+  alias: "origin",
+  pronoun: "origin",
   look: "person",
   past: "person",
   personality: "person",
@@ -213,11 +214,11 @@ export function creatorChecks(card: CharacterCard): Check[] {
   // 上面已经用人话报过的字段，schema 再报同一个字段就不重复列
   const covered = new Set<string>();
   if (card.name.trim() === "") {
-    checks.push({ step: "person", text: "尚未命名" });
+    checks.push({ step: "origin", text: "尚未命名" });
     covered.add("name");
   }
   if (card.pronoun.trim() === "") {
-    checks.push({ step: "person", text: "尚未设定代词" });
+    checks.push({ step: "origin", text: "尚未设定代词" });
     covered.add("pronoun");
   }
   if (card.board) {
@@ -380,4 +381,113 @@ export function recommendAttributes(board: Board): CharacterCard["attributes"] {
     values[best] += 1;
   }
   return values;
+}
+
+// ———— 出身流派初始构筑预设（用户 2026-11-04："角色的属性/装备构建"） ————
+
+export type OriginKey = "street-kid" | "nomad" | "corpo";
+export const ORIGIN_KEYS: readonly OriginKey[] = ["street-kid", "nomad", "corpo"];
+
+export interface OriginPreset {
+  readonly originId: string;
+  readonly name: string;
+  readonly summary: string;
+  readonly pasts: readonly string[];
+  readonly skills: readonly string[];
+  readonly attributes: CharacterCard["attributes"];
+}
+
+export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
+  "street-kid": {
+    originId: "street-kid",
+    name: "街头小子·街霸突击",
+    summary: "体魄与反应双精通，精通街头肉搏与黑诊所急救，解锁【铁笼凶兽】与【暗巷医者】特长联动",
+    pasts: ["gang-runner", "clinic-apprentice", "pit-fighter"],
+    skills: ["brawling", "lockpick", "streetwise"],
+    attributes: { body: 5, reflexes: 5, tech: 3, intelligence: 4, cool: 5 },
+  },
+  nomad: {
+    originId: "nomad",
+    name: "流浪者·恶土游侠",
+    summary: "技术与体魄兼备，精通恶劣环境驾驶、机械拆修与智能武器改装，解锁【职业车手】特长联动",
+    pasts: ["smuggler", "merc-crew", "clinic-apprentice"],
+    skills: ["driving", "mechanic", "smart-weapon-mod"],
+    attributes: { body: 5, reflexes: 4, tech: 6, intelligence: 3, cool: 4 },
+  },
+  corpo: {
+    originId: "corpo",
+    name: "企业员工·特工谍影",
+    summary:
+      "极高镇定与网络智力，熟稔企业博弈谈判、快速网络入侵与安防破解，解锁【潜网幽灵】特长联动",
+    pasts: ["arasaka-ex", "gang-runner", "clinic-apprentice"],
+    skills: ["corpo-negotiation", "quickhacking", "lockpick"],
+    attributes: { body: 3, reflexes: 4, tech: 4, intelligence: 5, cool: 6 },
+  },
+};
+
+export function isOriginPreset(originId: string, board: Board): boolean {
+  const preset = ORIGIN_PRESETS[originId as OriginKey] as OriginPreset | undefined;
+  if (!preset) return false;
+  const currentPastIds = board.pasts.map((p) => p.id).sort();
+  const presetPastIds = [...preset.pasts].sort();
+  if (currentPastIds.length !== presetPastIds.length) return false;
+  if (!currentPastIds.every((id, idx) => id === presetPastIds[idx])) return false;
+
+  const currentSkillIds = board.skills.map((s) => s.id).sort();
+  const presetSkillIds = [...preset.skills].sort();
+  if (currentSkillIds.length !== presetSkillIds.length) return false;
+  if (!currentSkillIds.every((id, idx) => id === presetSkillIds[idx])) return false;
+
+  return true;
+}
+
+export function isAnyOriginPreset(board: Board): boolean {
+  return Object.keys(ORIGIN_PRESETS).some((id) => isOriginPreset(id, board));
+}
+
+export function applyOriginPreset(
+  originId: string,
+  card: CharacterCard,
+  modules: readonly BoardModule[],
+  combos: readonly Combo[],
+): CharacterCard {
+  const preset = ORIGIN_PRESETS[originId as OriginKey] as OriginPreset | undefined;
+  if (!preset) return card;
+
+  const originMod = modules.find((m) => m.id === originId && m.slot === "origin");
+  const pastMods = preset.pasts
+    .map((id) => modules.find((m) => m.id === id && m.slot === "past"))
+    .filter((m): m is BoardModule => Boolean(m));
+  const skillMods = preset.skills
+    .map((id) => modules.find((m) => m.id === id && m.slot === "skill"))
+    .filter((m): m is BoardModule => Boolean(m));
+
+  const baseBoard: Board = card.board ?? {
+    origin: null,
+    pasts: [],
+    skills: [],
+    flaws: [],
+    cyberware: [],
+    tolerance: "normal",
+    combos: [],
+    acquaintances: [],
+  };
+
+  const newBoard: Board = {
+    ...baseBoard,
+    origin: originMod ?? baseBoard.origin,
+    pasts: pastMods,
+    skills: skillMods,
+    combos: [],
+  };
+
+  const calculatedCombos = boardCombos(newBoard, combos).map(({ requires: _, ...c }) => c);
+  newBoard.combos = calculatedCombos;
+
+  return {
+    ...card,
+    origin: originMod?.label ?? card.origin,
+    attributes: { ...preset.attributes },
+    board: newBoard,
+  };
 }

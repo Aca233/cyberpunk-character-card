@@ -26,7 +26,19 @@ import {
 } from "../story/CyberDoll";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
-import { type Check, comboHints, originLean, originNever, type StepId } from "./creator";
+import {
+  applyOriginPreset,
+  type Check,
+  comboHints,
+  isAnyOriginPreset,
+  isOriginPreset,
+  ORIGIN_PRESETS,
+  type OriginKey,
+  type OriginPreset,
+  originLean,
+  originNever,
+  type StepId,
+} from "./creator";
 import { ProseField } from "./ProseField";
 import { StartMapPicker } from "./StartMapPicker";
 
@@ -43,6 +55,7 @@ export interface StepProps {
   /** 改主板：联动由外壳重算；origin 是换了出身时名片上跟着变的字 */
   readonly commit: (board: Board, origin?: string) => void;
   readonly change: (patch: Partial<CharacterCard>) => void;
+  readonly onJump?: (step: StepId) => void;
 }
 
 type Attribute = keyof CharacterCard["attributes"];
@@ -64,17 +77,66 @@ export function Line({ k, children }: { readonly k: string; readonly children: R
 // ———— 第 1 步：出身 ————
 
 /** 三张出身大卡加"自己写"：能力、钩子、带出的人，以及按生命路径权重更容易掷到哪些过往 */
-export function StepOrigin({ board, data, commit }: StepProps) {
+export function StepOrigin({ card, board, data, commit, change, onJump }: StepProps) {
   const [writing, setWriting] = useState(false);
   const origins = data.modules.filter((m) => m.slot === "origin");
   const custom = board.origin?.custom ? board.origin : null;
+
+  const handleSelectOrigin = (m: BoardModule) => {
+    if (ORIGIN_PRESETS[m.id as OriginKey]) {
+      if ((board.pasts.length === 0 && board.skills.length === 0) || isAnyOriginPreset(board)) {
+        const updated = applyOriginPreset(m.id, card, data.modules, data.combos);
+        change({
+          origin: m.label,
+          attributes: updated.attributes,
+          board: updated.board,
+        });
+        return;
+      }
+    }
+    commit({ ...board, origin: m }, m.label);
+  };
+
   return (
     <>
-      {/* 引导段删掉（用户 2026-10-31："解释性说明一大堆"）：卡片上已经写了能力、钩子和更容易掷到的过往 */}
+      <div className={styles.identity}>
+        <label className={styles.field}>
+          <span>姓名 *</span>
+          <input
+            required
+            maxLength={20}
+            value={card.name}
+            autoComplete="off"
+            placeholder="例如：文森特 / 瓦莱丽"
+            onChange={(e) => change({ name: e.target.value })}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>外号</span>
+          <input
+            maxLength={20}
+            value={card.alias}
+            placeholder="江湖代号 / 街头称呼"
+            onChange={(e) => change({ alias: e.target.value })}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>代词 *</span>
+          <input
+            required
+            maxLength={4}
+            value={card.pronoun}
+            placeholder="他 / 她 / TA"
+            onChange={(e) => change({ pronoun: e.target.value })}
+          />
+        </label>
+      </div>
+
       <ul className={styles.originGrid}>
         {origins.map((m) => {
           const lean = originLean(m.id, data.lifepath, data.modules);
           const never = originNever(m.id, data.lifepath, data.modules);
+          const preset = ORIGIN_PRESETS[m.id as OriginKey] as OriginPreset | undefined;
           return (
             <li key={m.id}>
               <button
@@ -82,7 +144,7 @@ export function StepOrigin({ board, data, commit }: StepProps) {
                 className={styles.pick}
                 data-big=""
                 aria-pressed={board.origin?.id === m.id}
-                onClick={() => commit({ ...board, origin: m }, m.label)}
+                onClick={() => handleSelectOrigin(m)}
               >
                 {/* 原作 map.filterCell 框（用户 2026-10-30 嫌"没有排版"），框色走 .pick 上的 --box-line */}
                 <CellFrame />
@@ -101,6 +163,20 @@ export function StepOrigin({ board, data, commit }: StepProps) {
                 )}
                 {never.length > 0 && (
                   <Line k="不相容经历">{never.map((l) => `「${l.label}」`).join("")}</Line>
+                )}
+                {preset && (
+                  <div className={styles.presetBox}>
+                    <span className={styles.presetTitle}>流派构筑：{preset.name}</span>
+                    {board.origin?.id === m.id && (
+                      <span className={styles.presetStatus}>
+                        {isOriginPreset(m.id, board) ? (
+                          <span className={styles.presetActive}>✓ 已装配此流派构筑</span>
+                        ) : (
+                          <span>（已自定义微调）</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             </li>
@@ -151,6 +227,54 @@ export function StepOrigin({ board, data, commit }: StepProps) {
             setWriting(false);
           }}
         />
+      )}
+      {board.origin && (
+        <aside className={styles.quickStartBar} aria-label="构筑状态">
+          <div className={styles.quickStartInfo}>
+            <strong className={styles.quickReadyBadge}>
+              {card.name.trim() ? `【${card.name}】基础构筑就绪` : "构筑合规就绪（请填入姓名）"}
+            </strong>
+            <p>
+              已搭载完整的出身背景、过往履历、特长技能与属性点。你可以随时点击上方页签深度微调，或直接前往确认档案开启战局。
+            </p>
+          </div>
+          <div className={styles.quickStartActions}>
+            {board.origin &&
+              ORIGIN_PRESETS[board.origin.id as OriginKey] &&
+              !isOriginPreset(board.origin.id, board) && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!board.origin) return;
+                    const updated = applyOriginPreset(
+                      board.origin.id,
+                      card,
+                      data.modules,
+                      data.combos,
+                    );
+                    change({
+                      origin: board.origin.label,
+                      attributes: updated.attributes,
+                      board: updated.board,
+                    });
+                  }}
+                >
+                  载入【{ORIGIN_PRESETS[board.origin.id as OriginKey]?.name}】预设构筑
+                </Button>
+              )}
+            <Button
+              type="button"
+              primary
+              disabled={!card.name.trim()}
+              onClick={() => onJump?.("review")}
+            >
+              直接前往【档案确认】启程
+            </Button>
+            <Button type="button" onClick={() => onJump?.("skills")}>
+              微调特长与属性
+            </Button>
+          </div>
+        </aside>
       )}
     </>
   );
@@ -381,139 +505,143 @@ export function StepCyberware({ board, data, commit }: StepProps) {
   const tol = toleranceText(board.tolerance);
 
   return (
-    // 去掉"开局义体"小标题：上面已经有"05 义体"
-    <div className={styles.cyberStep}>
-      {/* 套一层 pin 容器：人体图照剧情页加宽块的排法按这一栏的宽度缩放，不按全屏尺寸排（浏览器走查时发现被裁掉） */}
-      <div className={styles.dollFrame}>
-        <CyberDoll
-          parts={parts}
-          humanity={humanity}
-          selected={slot}
-          // 点空格选部位，点装着的格直接卸下（用户 2026-10-31："格子不能直接装卸"）
-          onCell={(s, part) => {
-            if (s !== slot) pickSlot(s);
-            if (part) uninstall(part.id);
-          }}
-        />
+    <>
+      <div className={styles.stepTip}>
+        可选辅助模块：开局可利用背景点加装基础义体，也可肉身开局，后续可在夜之城义体医生处逐步升级改装。
       </div>
-      <section className={styles.shelf} aria-label={`${CYBER_LABELS[slot]}能装的义体`}>
-        <header className={styles.shelfHead}>
-          <h3 className={styles.shelfTitle}>
-            {CYBER_LABELS[slot]}{" "}
-            <small className={styles.stepNote}>
-              {mounted.length} / {cap}
-            </small>
-          </h3>
-          <span className={styles.shelfStats}>
-            <span>
-              已装 <b className={styles.shelfNum}>{board.cyberware.length}</b> 件
+      <div className={styles.cyberStep}>
+        {/* 套一层 pin 容器：人体图照剧情页加宽块的排法按这一栏的宽度缩放，不按全屏尺寸排（浏览器走查时发现被裁掉） */}
+        <div className={styles.dollFrame}>
+          <CyberDoll
+            parts={parts}
+            humanity={humanity}
+            selected={slot}
+            // 点空格选部位，点装着的格直接卸下（用户 2026-10-31："格子不能直接装卸"）
+            onCell={(s, part) => {
+              if (s !== slot) pickSlot(s);
+              if (part) uninstall(part.id);
+            }}
+          />
+        </div>
+        <section className={styles.shelf} aria-label={`${CYBER_LABELS[slot]}能装的义体`}>
+          <header className={styles.shelfHead}>
+            <h3 className={styles.shelfTitle}>
+              {CYBER_LABELS[slot]}{" "}
+              <small className={styles.stepNote}>
+                {mounted.length} / {cap}
+              </small>
+            </h3>
+            <span className={styles.shelfStats}>
+              <span>
+                已装 <b className={styles.shelfNum}>{board.cyberware.length}</b> 件
+              </span>
+              <span>
+                人性 <b className={styles.shelfNum}>{now}</b> / {humanityRules.HUMANITY_MAX}
+              </span>
+              <span>
+                背景点 <b className={styles.shelfNum}>{left}</b>
+              </span>
             </span>
-            <span>
-              人性 <b className={styles.shelfNum}>{now}</b> / {humanityRules.HUMANITY_MAX}
-            </span>
-            <span>
-              背景点 <b className={styles.shelfNum}>{left}</b>
-            </span>
-          </span>
-        </header>
-        {rarities.length > 1 && (
-          <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
-            <button
-              type="button"
-              className={styles.shelfChip}
-              aria-pressed={rarity === null}
-              onClick={() => setRarity(null)}
-            >
-              全部
-            </button>
-            {rarities.map((r) => (
+          </header>
+          {rarities.length > 1 && (
+            <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
               <button
-                key={r}
                 type="button"
                 className={styles.shelfChip}
-                data-rarity={r}
-                aria-pressed={rarity === r}
-                onClick={() => setRarity(r)}
+                aria-pressed={rarity === null}
+                onClick={() => setRarity(null)}
               >
-                {RARITY_LABELS[r]}
+                全部
+              </button>
+              {rarities.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={styles.shelfChip}
+                  data-rarity={r}
+                  aria-pressed={rarity === r}
+                  onClick={() => setRarity(r)}
+                >
+                  {RARITY_LABELS[r]}
+                </button>
+              ))}
+            </fieldset>
+          )}
+          {options.length === 0 ? (
+            <p className={styles.note}>开局没有能装的。</p>
+          ) : (
+            <ul className={styles.shelfGrid}>
+              {shown.map((o) => (
+                <li key={o.id}>
+                  {/* 单击看详情，双击直接装上或卸下 */}
+                  <button
+                    type="button"
+                    className={styles.shelfItem}
+                    aria-pressed={o.id === item?.id}
+                    aria-label={`${o.name}${isOn(o) ? "（已装）" : ""}`}
+                    title={o.name}
+                    data-short={blocked(o) || undefined}
+                    onMouseEnter={() => setHover(o.id)}
+                    onMouseLeave={() => setHover(null)}
+                    onFocus={() => setHover(o.id)}
+                    onBlur={() => setHover(null)}
+                    onClick={() => setPicked(o.id)}
+                    onDoubleClick={() => toggle(o)}
+                  >
+                    <CyberItemCell id={o.id} name={o.name} on={isOn(o)} rarity={o.rarity} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {item && (
+            <article className={styles.shelfDetail}>
+              <CellFrame />
+              <span className={styles.pickHead}>
+                <strong className={styles.pickName}>{item.name}</strong>
+                {item.rarity && (
+                  <span className={styles.shelfRarity} data-rarity={item.rarity}>
+                    {RARITY_LABELS[item.rarity]}
+                  </span>
+                )}
+              </span>
+              <p>{item.ability}</p>
+              <span className={styles.shelfDelta}>
+                <span>
+                  背景点 {left} → <b className={styles.shelfNum}>{nextLeft}</b>
+                </span>
+                <span>
+                  人性 {now} → <b className={styles.shelfNum}>{nextHumanity}</b>
+                </span>
+              </span>
+              <span className={styles.pickTools}>
+                <Button small disabled={blocked(item)} reason={reason} onClick={() => toggle(item)}>
+                  {itemOn ? "卸下" : "装上"}
+                </Button>
+              </span>
+            </article>
+          )}
+          <fieldset className={styles.shelfFilter} aria-label="义体耐受">
+            <span className={styles.pickKey}>耐受</span>
+            {TOLERANCES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={styles.shelfChip}
+                aria-pressed={board.tolerance === t}
+                onClick={() => commit({ ...board, tolerance: t })}
+              >
+                {TOLERANCE_LEVELS[t].label}
               </button>
             ))}
           </fieldset>
-        )}
-        {options.length === 0 ? (
-          <p className={styles.note}>开局没有能装的。</p>
-        ) : (
-          <ul className={styles.shelfGrid}>
-            {shown.map((o) => (
-              <li key={o.id}>
-                {/* 单击看详情，双击直接装上或卸下 */}
-                <button
-                  type="button"
-                  className={styles.shelfItem}
-                  aria-pressed={o.id === item?.id}
-                  aria-label={`${o.name}${isOn(o) ? "（已装）" : ""}`}
-                  title={o.name}
-                  data-short={blocked(o) || undefined}
-                  onMouseEnter={() => setHover(o.id)}
-                  onMouseLeave={() => setHover(null)}
-                  onFocus={() => setHover(o.id)}
-                  onBlur={() => setHover(null)}
-                  onClick={() => setPicked(o.id)}
-                  onDoubleClick={() => toggle(o)}
-                >
-                  <CyberItemCell id={o.id} name={o.name} on={isOn(o)} rarity={o.rarity} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {item && (
-          <article className={styles.shelfDetail}>
-            <CellFrame />
-            <span className={styles.pickHead}>
-              <strong className={styles.pickName}>{item.name}</strong>
-              {item.rarity && (
-                <span className={styles.shelfRarity} data-rarity={item.rarity}>
-                  {RARITY_LABELS[item.rarity]}
-                </span>
-              )}
-            </span>
-            <p>{item.ability}</p>
-            <span className={styles.shelfDelta}>
-              <span>
-                背景点 {left} → <b className={styles.shelfNum}>{nextLeft}</b>
-              </span>
-              <span>
-                人性 {now} → <b className={styles.shelfNum}>{nextHumanity}</b>
-              </span>
-            </span>
-            <span className={styles.pickTools}>
-              <Button small disabled={blocked(item)} reason={reason} onClick={() => toggle(item)}>
-                {itemOn ? "卸下" : "装上"}
-              </Button>
-            </span>
-          </article>
-        )}
-        <fieldset className={styles.shelfFilter} aria-label="义体耐受">
-          <span className={styles.pickKey}>耐受</span>
-          {TOLERANCES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={styles.shelfChip}
-              aria-pressed={board.tolerance === t}
-              onClick={() => commit({ ...board, tolerance: t })}
-            >
-              {TOLERANCE_LEVELS[t].label}
-            </button>
-          ))}
-        </fieldset>
-        <p className={styles.shelfNote}>
-          {tol.loss} · {tol.price}
-          {tol.hook ? ` · 代价：${tol.hook}` : ""}
-        </p>
-      </section>
-    </div>
+          <p className={styles.shelfNote}>
+            {tol.loss} · {tol.price}
+            {tol.hook ? ` · 代价：${tol.hook}` : ""}
+          </p>
+        </section>
+      </div>
+    </>
   );
 }
 

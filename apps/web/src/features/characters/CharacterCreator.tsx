@@ -136,14 +136,14 @@ export function CharacterCreator({
   const busy = saving || launch.isPending;
   const reason = parsed.success ? undefined : parsed.error.issues[0]?.message;
 
-  const props = { card, board, data, commit, change: onChange };
+  const props = { card, board, data, commit, change: onChange, onJump: goTo };
   const kind = budgetKind(step);
   const budget = boardBudget(board);
   const attrLeft = ATTRIBUTE_POINTS - pointsSpent(card.attributes);
 
   return (
     <div className={styles.creator} ref={root}>
-      {/* 步骤页签：原作 tab.bg 九宫格，切法同神经界面和设置页的页签；下面一道 tab.line（用户 2026-10-30 嫌原先的侧栏没排版） */}
+      {/* 步骤页签：自由切换，无强制顺序限制 */}
       <nav className={styles.rail} aria-label="捏人步骤">
         <ol>
           {STEPS.map((s, i) => (
@@ -154,7 +154,7 @@ export function CharacterCreator({
                 aria-pressed={s.id === step}
                 aria-current={s.id === step ? "step" : undefined}
                 data-done={i < reached || undefined}
-                disabled={i > reached || busy}
+                disabled={busy}
                 onClick={() => goTo(s.id)}
               >
                 <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />

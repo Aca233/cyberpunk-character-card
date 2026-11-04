@@ -1091,6 +1091,81 @@ legend.sectionTitle {
   line-height: 1.6;
 }
 
+.stepTip {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  color: var(--cp-text-dim);
+  background: rgb(94 246 255 / 4%);
+  border-left: 2px solid var(--cp-cyan-dim);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+}
+
+.presetBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgb(0 255 240 / 5%);
+  border: 1px dashed var(--cp-cyan-dim);
+  font-size: var(--fs-label);
+}
+
+.presetTitle {
+  color: var(--cp-cyan);
+  font-weight: 500;
+}
+
+.presetStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.presetActive {
+  color: var(--cp-success);
+  font-weight: 500;
+}
+
+.quickStartBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 1.5rem;
+  padding: 1rem 1.2rem;
+  background: rgb(0 255 240 / 4%);
+  border: 1px solid var(--cp-cyan-dim);
+}
+
+.quickStartInfo {
+  flex: 1;
+  min-width: 260px;
+}
+
+.quickStartInfo p {
+  margin: 4px 0 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+}
+
+.quickReadyBadge {
+  color: var(--cp-cyan);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+
+.quickStartActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 /*
  * 义体详情框里的候选，照原作义体医生的货架一行一件（用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）：
  * 左边原作格子放义体图，中间名字、点数和能力，右边装上/卸下；装着的那行名字亮成原作选中的黄。不画边框、渐变
