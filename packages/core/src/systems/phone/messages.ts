@@ -31,6 +31,7 @@ export function phoneMessagesView({ world }: ViewContext) {
         name: m.name,
         text: m.text,
         at: formatGameTime(m.at),
+        atMinutes: m.at,
         read: m.read,
         replied: m.replied,
         reply: m.reply ?? null,
