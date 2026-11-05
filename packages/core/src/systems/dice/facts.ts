@@ -1,19 +1,30 @@
 import { z } from "zod";
-import type { CheckOutcome, CheckResult, PreparedCheck } from "./apply";
+import type { CheckBand, CheckOutcome, CheckResult, PreparedCheck } from "./apply";
 import { AttributeSchema, CheckSpecSchema, DamageTierSchema } from "./schema";
+
+export const CheckBandSchema: z.ZodType<CheckBand> = z.enum(["clean", "costly", "fail"]);
 
 export const CheckOutcomeSchema: z.ZodType<CheckOutcome> = z.enum([
   "critical",
   "success",
+  "costly",
   "failure",
   "fumble",
 ]);
 
-/** 本轮检定结果，由回合流程放进 ctx.facts.check，伤害等系统据此校验 */
+/** 本轮检定结果，由回合流程放进 ctx.facts.check，伤害与态势系统据此校验 */
 export const CheckFactSchema = z.object({
   /** 检定 id，同一次检定只能扣一次血 */
   id: z.string().min(1),
   outcome: CheckOutcomeSchema,
+  /** 3.0 三段式结果档位：clean / costly / fail */
+  band: CheckBandSchema.optional(),
+  /** 差值 Δ = total - dv */
+  delta: z.number().int().optional(),
+  /** 后台推进增量与风险增量 */
+  progressDelta: z.number().int().optional(),
+  riskDelta: z.number().int().optional(),
+  tacticalTags: z.array(z.string()).optional(),
   /** 检定使用的属性与对手，供抵抗快速破解时核对；旧事实可缺省 */
   attribute: AttributeSchema.optional(),
   opponent: z.string().min(1).optional(),
@@ -32,6 +43,11 @@ export function checkFactFrom(id: string, check: PreparedCheck, result: CheckRes
   return {
     id,
     outcome: result.outcome,
+    band: result.band,
+    delta: result.delta,
+    progressDelta: result.progressDelta,
+    riskDelta: result.riskDelta,
+    ...(result.tacticalTags ? { tacticalTags: [...result.tacticalTags] } : {}),
     attribute: check.spec.attribute,
     ...(check.spec.opponent === undefined ? {} : { opponent: check.spec.opponent }),
     ...(check.spec.npcHack === undefined ? {} : { npcHack: { ...check.spec.npcHack } }),
@@ -65,7 +81,7 @@ export function memberDeathBlocked(
   return names.some((n) => n.trim() !== "" && text.includes(n.trim())) ? undefined : why;
 }
 
-/** 生命上限（暂定，试玩时调平衡）：随肉体和街头声望等级增长 */
+/** 内部兼容血量换算基准（前台已改为 0..4 四格具象伤势） */
 export function maxHp(body: number, streetCred: number): number {
   return 150 + body * 20 + streetCred * 5;
 }

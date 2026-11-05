@@ -14,12 +14,12 @@ import {
 } from "./board";
 import type { BoardStart, SaveCharacter, StartAcquaintance } from "./save";
 
-/** 创建时各项属性从这个值起步 */
-export const ATTRIBUTE_BASE = 3;
-/** 创建时可以额外分配的属性点 */
-export const ATTRIBUTE_POINTS = 7;
-/** 创建时单项最高 */
-export const ATTRIBUTE_CREATE_MAX = 6;
+/** 创建时各项属性从这个值起步（3.0：全属性 2 起步） */
+export const ATTRIBUTE_BASE = 2;
+/** 创建时可以额外分配的属性点（3.0：自由分配 5 点） */
+export const ATTRIBUTE_POINTS = 5;
+/** 创建时单项最高（3.0：开局单项上限 5） */
+export const ATTRIBUTE_CREATE_MAX = 5;
 
 const text = (max: number) => z.string().trim().max(max);
 

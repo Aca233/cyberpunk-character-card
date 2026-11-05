@@ -3,6 +3,7 @@ import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { CharacterStateSchema } from "../character";
 import { EconomyStateSchema } from "../economy";
+import { HealthStateSchema } from "../health";
 import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./apply";
 import { moodLock, moodPrice, shopMood } from "./mood";
 import { InventoryStateSchema } from "./schema";
@@ -12,6 +13,12 @@ export const EquipItemActionSchema = z.strictObject({
   type: z.literal("equipItem"),
   id: z.string().min(1).max(64),
   slot: z.number().int().min(1).max(3).optional(),
+});
+
+/** 非战斗时直接使用治疗品；投掷和其他情境性使用仍走行动回合。 */
+export const UseHealingActionSchema = z.strictObject({
+  type: z.literal("useHealing"),
+  id: z.string().min(1).max(64),
 });
 
 /** 把装备栏里的一件放回背包 */
@@ -110,6 +117,38 @@ function inCombat(world: WorldState): boolean {
 
 /** 装备栏、工作台和商店的操作：只翻成指令，统一由操作入口结算 */
 export const inventoryActions = {
+  useHealing: defineAction({
+    schema: UseHealingActionSchema,
+    commands: (action, { world, data }) => {
+      if (inCombat(world)) return "战斗中治疗要花一个动作，在行动里使用";
+      const def = itemCatalog(data).get(action.id);
+      if (def?.kind !== "healing") return "这件物品不是治疗品";
+      const inventory = InventoryStateSchema.parse(world.slices.inventory);
+      const held = inventory.healing;
+      const current = held?.id === action.id;
+      if (!current && (inventory.backpack[action.id] ?? 0) < 1) {
+        return "背包里没有这件治疗品";
+      }
+      const charges = current ? held.charges : (inventory.depleted[action.id] ?? def.charges ?? 1);
+      if (charges < 1) return "次数用完了，休整或场景结束后恢复";
+      const health = HealthStateSchema.parse(world.slices.health);
+      if (health.condition !== "up") return "当前无法自行治疗，需要别人救治";
+      const ceiling =
+        health.hp * 100 < health.max * 30 ? Math.floor(health.max * 0.29) : health.max;
+      if (health.hp >= ceiling) return "已达到当前治疗上限，不消耗次数";
+      const commands: Command[] = [];
+      if (!current) {
+        commands.push({
+          type: "item",
+          action: "equip",
+          id: action.id,
+          reason: "使用背包里的治疗品",
+        });
+      }
+      commands.push({ type: "heal", source: "maxdoc" });
+      return commands;
+    },
+  }),
   // 战斗里换装备要花一个动作，只能在行动里说
   equipItem: defineAction({
     schema: EquipItemActionSchema,

@@ -19,7 +19,16 @@ import { worldView } from "./view";
 export const world = defineSystem<WorldClockState, WorldCommand | DeadlineCommand, EndScene>({
   id: "world",
   state: WorldClockStateSchema,
-  initial: () => ({ location: null, deadlines: [], scene: 0, sceneStartedAt: 0, places: [] }),
+  initial: () => ({
+    location: null,
+    deadlines: [],
+    scene: 0,
+    sceneStartedAt: 0,
+    places: [],
+    phasesAwake: 0,
+    blackLaceDoses: [],
+    blackLaceActiveUntil: null,
+  }),
   commands: {
     world: WorldCommandSchema,
     deadline: DeadlineCommandSchema,

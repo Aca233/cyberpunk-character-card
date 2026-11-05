@@ -20,6 +20,7 @@ import {
   OutfitActionSchema,
   SellItemActionSchema,
   UnequipItemActionSchema,
+  UseHealingActionSchema,
 } from "./systems/inventory";
 import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
@@ -45,6 +46,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   RepairCyberwareActionSchema,
   /** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
   EquipItemActionSchema,
+  /** 非战斗时使用当前治疗品，回复生命并扣除一次使用次数 */
+  UseHealingActionSchema,
   /** 把装备栏里的一件放回背包 */
   UnequipItemActionSchema,
   /** 存放箱和后备箱：store 从背包放进去，take 拿回背包；where 写安全屋 id 或车的 id */

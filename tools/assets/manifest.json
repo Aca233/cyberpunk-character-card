@@ -1241,7 +1241,339 @@
         "slot": "cw_legs_speed_iconic"
       }
     ],
+    "items": [
+      {
+        "id": "itemArt.securityUniform",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_outfit_02_q005_militech_suit__Male_TPP_"
+      },
+      { "id": "itemArt.corpoBadge", "atlas": "common/item_icons0", "slot": "ncart_pass" },
+      { "id": "itemArt.saikaScope", "atlas": "common/item_icons8", "slot": "saika_default" },
+      {
+        "id": "itemArt.nomadDuster",
+        "atlas": "common/item_icons20",
+        "slot": "clothing_player_outer_torso_item_t2_coat_01_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.streetJacket",
+        "atlas": "common/item_icons10",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_03_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.corpoSuit",
+        "atlas": "common/item_icons16",
+        "slot": "clothing_player_outer_torso_item_set_01_corporate_01_t2__Male_TPP_"
+      },
+      {
+        "id": "itemArt.techieCoverall",
+        "atlas": "common/item_icons17",
+        "slot": "clothing_player_outer_torso_item_set_01_techie_01_t2__Male_TPP_"
+      },
+      {
+        "id": "itemArt.netrunnerSuit",
+        "atlas": "common/item_icons22",
+        "slot": "clothing_player_inner_torso_item_set_01_netrunner_01_t1__Male_TPP_"
+      },
+      { "id": "itemArt.mod", "atlas": "common/item_icons4", "slot": "mod_generic" },
+      { "id": "itemArt.healthBooster", "atlas": "common/item_icons12", "slot": "health_booster" },
+      {
+        "id": "itemArt.psychoSuppressant",
+        "atlas": "common/item_icons21",
+        "slot": "injector_3_stabilization"
+      },
+      {
+        "id": "itemArt.blackLace",
+        "atlas": "common/item_icons20",
+        "slot": "inhaler_1_royce_blacklace"
+      },
+      { "id": "itemArt.glitter", "atlas": "common/item_icons20", "slot": "inhaler_7_glitter" },
+      { "id": "itemArt.strixSilencer", "atlas": "common/item_icons13", "slot": "silencer_2" },
+      { "id": "itemArt.alectoSilencer", "atlas": "common/item_icons13", "slot": "silencer_4" },
+      {
+        "id": "itemArt.kanetsuguScope",
+        "atlas": "common/item_icons9",
+        "slot": "w_att_scope_short_07"
+      },
+      {
+        "id": "itemArt.gakiScope",
+        "atlas": "common/item_icons1",
+        "slot": "w_att__scope_sniper_03"
+      },
+      { "id": "itemArt.shard", "atlas": "common/item_icons2", "slot": "undefined_shard_None_" },
+      {
+        "id": "itemArt.maxdoc",
+        "atlas": "common/item_icons13",
+        "slot": "inhaler_4_medical_maxdoc"
+      },
+      {
+        "id": "itemArt.bounceBack",
+        "atlas": "common/item_icons14",
+        "slot": "injector_13_bounce_back"
+      },
+      { "id": "itemArt.frag", "atlas": "common/item_icons13", "slot": "grenade_frag_normal" },
+      { "id": "itemArt.emp", "atlas": "common/item_icons14", "slot": "grenade_emp_normal" },
+      {
+        "id": "itemArt.incendiary",
+        "atlas": "common/item_icons13",
+        "slot": "grenade_incendiary_normal"
+      },
+      {
+        "id": "itemArt.flashbang",
+        "atlas": "common/item_icons13",
+        "slot": "grenade_flash_normal_1_militech"
+      },
+      { "id": "itemArt.recon", "atlas": "common/item_icons13", "slot": "grenade_recon_normal" },
+      { "id": "itemArt.nicola", "atlas": "common/item_icons18", "slot": "nicola" },
+      { "id": "itemArt.hawtdawg", "atlas": "common/item_icons13", "slot": "food_hawt_dawg_cheese" },
+      { "id": "itemArt.coffee", "atlas": "common/item_icons13", "slot": "coffee_drip" }
+    ],
     "weapons": [
+      {
+        "id": "weaponArt.pipeWrench",
+        "atlas": "widgets/atlas_ammo_counter",
+        "slot": "Preset_Pipe_Wrench_Default"
+      },
+      {
+        "id": "weaponArt.shigure",
+        "atlas": "common/assets_preview4",
+        "slot": "w_arasaka_shigurine"
+      },
+      {
+        "id": "weaponArt.errata",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Thermal_Katana"
+      },
+      {
+        "id": "weaponArt.neurotoxinKnife",
+        "atlas": "common/assets_preview6",
+        "slot": "w_neurotoxin_knife"
+      },
+      {
+        "id": "weaponArt.butchersCleaver",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Butchers_Knife_Default_None__Butchers_Cleaver"
+      },
+      {
+        "id": "weaponArt.cattleProd",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Cattle_Prod_Default_None__PeterPan_Baton"
+      },
+      {
+        "id": "weaponArt.pride",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Liberty_Rogue_None__Rogue_Liberty"
+      },
+      {
+        "id": "weaponArt.baXingChong",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Zhuo_Default_None__Star_Cannon_Zhuo"
+      },
+      {
+        "id": "weaponArt.sirJohn",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Dildo_Stout_None__Stout_Dildo"
+      },
+      {
+        "id": "weaponArt.erebus",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Borg4a_Default_None__Haunted_Midnight"
+      },
+      {
+        "id": "weaponArt.herMajesty",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_V_Unity_None__Agent_Unity"
+      },
+      {
+        "id": "weaponArt.comradesHammer",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Burya_Default_None__Comrade_Burya"
+      },
+      {
+        "id": "weaponArt.jinchuMaru",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Takemura_Katana"
+      },
+      {
+        "id": "weaponArt.byakko",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Wakako_Katana"
+      },
+      {
+        "id": "weaponArt.breakthrough",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Nekomata_Default_None__Breakthrough_Nekomata"
+      },
+      {
+        "id": "weaponArt.ofive",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Grad_Default_None__Buck_Grad"
+      },
+      {
+        "id": "weaponArt.doomDoom",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Nova_Default_None__Doom_Doom_Nova"
+      },
+      {
+        "id": "weaponArt.widowMaker",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Achilles_Default_None__Nash_Achilles"
+      },
+      {
+        "id": "weaponArt.fenrir",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Saratoga_Default_None__Maelstrom_Saratoga"
+      },
+      {
+        "id": "weaponArt.problemSolver",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Saratoga_Default_None__Raffen_Saratoga"
+      },
+      {
+        "id": "weaponArt.shingenPrototype",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Shingen_Default_None__Prototype_Shingen"
+      },
+      {
+        "id": "weaponArt.yinglong",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Dian_Default_None__Yinglong_Dian"
+      },
+      {
+        "id": "weaponArt.lizzie",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Omaha_Default_None__Suzie_Omaha"
+      },
+      {
+        "id": "weaponArt.dyingNight",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Base_Lexington_None__Wilson_Lexington"
+      },
+      {
+        "id": "weaponArt.crash",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Overture_Default_None__River_Overture"
+      },
+      {
+        "id": "weaponArt.archangel",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Overture_Default_None__Kerry_Overture"
+      },
+      {
+        "id": "weaponArt.chaos",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Kenshin_Default_None__Royce_Kenshin"
+      },
+      {
+        "id": "weaponArt.kongou",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Liberty_Rogue_None__Yorinobu_Liberty"
+      },
+      {
+        "id": "weaponArt.planB",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Liberty_Rogue_None__Dex_Liberty"
+      },
+      { "id": "weaponArt.nowaki", "atlas": "common/assets_preview4", "slot": "w_arasaka_nowaki" },
+      {
+        "id": "weaponArt.rasetsu",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Tech_Sniper_Rifle_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kaiken",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Tanto_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.punknife",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Punk_Knife_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.razor",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Machete_Borg_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.claw",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Fanged_Axe_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.cutOMatic",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Chainsword_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.tireIron",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Tire_Iron_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.umbra",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Umbra_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kyubi",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Kyubi_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.hercules",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Hercules_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.pozhar",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Pozhar_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kolac",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Kolac_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.tamayura",
+        "atlas": "common/assets_preview5",
+        "slot": "w_arasaka_tamayura"
+      },
+      {
+        "id": "weaponArt.grit",
+        "atlas": "common/item_icons11",
+        "slot": "weapon_Preset_Grit_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.ticon",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Ticon_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.kappa",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Kappa_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.metel",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Metel_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.guillotine",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Guillotine_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.warden",
+        "atlas": "common/item_icons4",
+        "slot": "weapon_Preset_Warden_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.senkoh",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Senkoh_Default_None__Default"
+      },
       {
         "id": "weaponArt.unity",
         "atlas": "common/item_icons1",

@@ -13,15 +13,38 @@ import {
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
   InventoryStateSchema,
+  ITEM_KIND_LABELS,
   type ItemDef,
+  loadoutSummary,
   MOD_SLOT_LABELS,
   ModSlotSchema,
+  WEAPON_CATEGORY_LABELS,
+  WEAPON_TYPE_LABELS,
+  weaponSlotCost,
 } from "./schema";
 
 const CLOTHING_SLOTS = ClothingSlotSchema.options;
 const MOD_SLOTS = ModSlotSchema.options;
 
-/** 玩家看到的背包：武器格、快捷栏、背包、零件、服装、改装件，以及能拆、能升、能装到哪 */
+function itemSubLabel(def: ItemDef): string {
+  if (def.kind === "weapon") {
+    return [
+      def.weaponType ? WEAPON_TYPE_LABELS[def.weaponType] : null,
+      def.category ? WEAPON_CATEGORY_LABELS[def.category] : null,
+    ]
+      .filter(Boolean)
+      .join("");
+  }
+  if (def.kind === "clothing" && def.clothingSlot) {
+    return CLOTHING_SLOT_LABELS[def.clothingSlot];
+  }
+  if (def.kind === "mod" && def.modSlot) {
+    return `改装 · ${MOD_SLOT_LABELS[def.modSlot]}`;
+  }
+  return ITEM_KIND_LABELS[def.kind];
+}
+
+/** 玩家看到的背包：武器格、快捷栏、背包、零件、服装、改装件、随身 6 格负荷与穿搭风格标签 */
 export function inventoryView({ world, data }: ViewContext) {
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
@@ -31,6 +54,40 @@ export function inventoryView({ world, data }: ViewContext) {
     healing: inventory.healing,
     grenade: inventory.grenade,
     backpack: inventory.backpack,
+    /** 3.0 随身 6 格负荷与四大穿搭通行证 */
+    loadout: loadoutSummary(inventory, items),
+    /** 随身物品的分类和说明；只投影持有的物品，供物品栏筛选和详情使用。 */
+    details: Object.fromEntries(
+      [
+        ...new Set([
+          ...inventory.weapons.filter((id): id is string => id !== null),
+          ...Object.keys(inventory.backpack),
+          ...Object.values(inventory.clothing),
+          ...[inventory.healing, inventory.grenade].flatMap((slot) => (slot ? [slot.id] : [])),
+        ]),
+      ].flatMap((id) => {
+        const def = items.get(id);
+        if (!def) return [];
+        const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, inventory.tuned) : null;
+        return [
+          [
+            id,
+            {
+              kind: def.kind,
+              subLabel: itemSubLabel(def),
+              rarity: rar,
+              rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
+              iconic: Boolean(def.iconic),
+              slotCost: def.kind === "weapon" ? weaponSlotCost(def.category) : null,
+              ability: def.ability ?? "",
+              healPercent: def.healPercent ?? null,
+              charges: def.charges ?? null,
+              remaining: inventory.depleted[id] ?? def.charges ?? null,
+            },
+          ],
+        ];
+      }),
+    ),
     /** 零件：拆解得来，给武器升稀有度 */
     parts: inventory.parts,
     /** 升过稀有度的武器：id → 稀有度名 */

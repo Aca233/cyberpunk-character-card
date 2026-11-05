@@ -1117,14 +1117,66 @@
   text-decoration-color: currentColor;
   text-decoration-style: solid;
 }
-.gear,
-.backpack {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.inventoryRoot {
   display: grid;
-  gap: 0.3rem;
-  font-size: var(--fs-label);
+  gap: 0.75rem;
+}
+
+.loadoutSection,
+.packSection {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.loadoutBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.1rem 0.15rem 0.3rem;
+  border-bottom: 1px solid rgb(94 246 255 / 18%);
+}
+
+.loadoutTitle {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cp-cyan);
+}
+
+.loadoutMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-xs);
+}
+
+.loadoutBadge {
+  padding: 0.08rem 0.45rem;
+  background: rgb(94 246 255 / 10%);
+  border-left: 2px solid var(--cp-cyan);
+  color: var(--cp-text);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.loadoutMeter {
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.loadoutMeter :where(b) {
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.loadoutMeter:where([data-over]),
+.loadoutMeter:where([data-over] b) {
+  color: var(--cp-danger);
 }
 
 /* 武器原作图（计划第八节第 1 条）：保持原色和比例，装备格与背包共用，不拉伸枪身 */
@@ -1136,335 +1188,615 @@
   vertical-align: middle;
 }
 
-.gearTools {
+/*
+ * 稀有度色条：原作 inventory4_atlas 的 item_left_rarity 竖条，颜色照原作五档稀有度；
+ * 武器格、背包列表卡与右侧详情卡共用
+ */
+:where([data-rarity="common"]) {
+  --rarity: var(--rar-common, rgb(160 160 160));
+}
+
+:where([data-rarity="uncommon"]) {
+  --rarity: var(--rar-uncommon, rgb(60 220 110));
+}
+
+:where([data-rarity="rare"]) {
+  --rarity: var(--rar-rare, rgb(60 150 255));
+}
+
+:where([data-rarity="epic"]) {
+  --rarity: var(--rar-epic, rgb(190 80 255));
+}
+
+:where([data-rarity="legendary"]) {
+  --rarity: var(--rar-legendary, rgb(255 160 30));
+}
+
+/*
+ * 武器格（计划第八节第 1 条）：照原作物品栏做成三栏横向武器槽，原作筛选格当底和框，
+ * 顶部键位与武器子类/手持牌、中间原画、底部名称/配件/换枪按钮；手持的那把框亮成黄。
+ */
+.gear {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  font-size: var(--fs-label);
+}
+
+.gearCard {
+  --gear-line: rgb(94 246 255 / 42%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.3rem;
+  min-height: 7.2rem;
+  padding: 0.5rem 0.65rem 0.55rem 0.7rem;
+  animation: gearIn 240ms ease-out both;
+  animation-delay: calc(80ms + var(--i, 0) * 60ms);
+}
+
+.gearCard:where([data-empty]) {
+  --gear-line: rgb(94 246 255 / 18%);
+  color: var(--cp-text-dim);
+}
+
+.gearCard:where([data-active]) {
+  --gear-line: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+@keyframes gearIn {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gearCard {
+    animation: none;
+  }
+}
+
+.gearRarity {
+  top: 0.55rem;
+  right: auto;
+  bottom: 0.95rem;
+  left: 0.22rem;
+  width: 3px;
+}
+
+.gearGlow {
+  top: auto;
+  height: 45%;
+  opacity: 0.32;
+}
+
+.gearHead {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  min-height: 1.25rem;
 }
 
 .slotNum {
   display: grid;
   place-items: center;
-  height: 1.3rem;
+  height: 1.2rem;
   color: var(--cp-text-dim);
 }
 
-/*
- * 武器格（计划第八节第 1 条）：照原作物品栏做成大卡片，原作筛选格当底和框，
- * 左边键位、中间大图、图下名字和改装、右边按钮；手持的那把框亮成黄。
- * 行列直接写在各格上，不用 grid-template-areas（biome 按字符串长度判格数，会误报）
- */
-.gear {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
+.gearCard:where([data-active]) .slotNum {
+  color: var(--cp-yellow);
 }
 
-/* 钉在四角块里时只有一列宽，三格改回上下排（计划第十二节第 7 条） */
-@container pin (width < 640px) {
+.gearSub {
+  color: var(--cp-text-dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gearHeld {
+  position: relative;
+  margin-left: auto;
+  padding: 1px 6px;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: rgb(5 5 10);
+}
+
+.gearHeld > :where(b) {
+  position: relative;
+}
+
+.gearArt {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  height: var(--art-h, 3.3rem);
+  padding: 0 0.35rem;
+}
+
+.gearArt > :where(.weaponArt) {
+  width: 100%;
+  height: var(--art-h, 3.3rem);
+  margin: 0;
+}
+
+.gearEmptyHint {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: rgb(148 163 184 / 42%);
+}
+
+.gearFoot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.gearName {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gearMods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.gearModTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.35rem;
+  background: rgb(94 246 255 / 10%);
+  border: 1px solid rgb(94 246 255 / 26%);
+  color: var(--cp-cyan);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.modDetach {
+  padding: 0 0.15rem;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+}
+
+.modDetach:hover {
+  color: var(--cp-danger);
+}
+
+.gearTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+@container pin (width < 520px) {
   .gear {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0.4rem;
+  }
+
+  .gearCard {
+    --art-h: 2.6rem;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: auto minmax(3.8rem, 30%) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .gearHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .gearHeld {
+    margin-left: 0;
   }
 }
 
-.gear > li {
-  --gear-line: rgb(94 246 255 / 45%);
-  position: relative;
-  display: grid;
-  grid-template-columns: 1.6rem minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr;
-  gap: 0.4rem 0.6rem;
+.clothingStrip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.clothingChip {
+  display: inline-flex;
   align-items: center;
-  padding: 0.7rem 1rem 0.8rem 0.8rem;
-  /* 打开动效见下面 gearIn */
-  animation: gearIn 260ms ease-out both;
-  animation-delay: calc(120ms + var(--i, 0) * 70ms);
+  gap: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  background: rgb(14 14 23 / 78%);
+  border: 1px solid rgb(94 246 255 / 22%);
+  border-left: 2px solid var(--cp-cyan);
+  font-size: var(--fs-xs);
 }
 
-.gear > li > :is(.slotNum, .gearArt, .gearName, .gearTools) {
-  position: relative;
+.clothingChip > :where(b) {
+  color: var(--cp-text);
+  font-weight: 600;
 }
 
-.gear > li > .slotNum {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: start;
-  z-index: 1;
+.inventoryToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.65rem;
 }
 
-.gear > li > .gearTools {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  align-self: end;
-  justify-content: flex-end;
-  min-height: 1.4rem;
+.inventorySearch {
+  flex: 0 1 170px;
+  min-width: 120px;
+  height: 1.8rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgb(94 246 255 / 35%);
+  background: rgb(10 10 18 / 86%);
+  color: var(--cp-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.gear > li[data-empty] {
-  --gear-line: rgb(94 246 255 / 20%);
+.inventorySearch::placeholder {
   color: var(--cp-text-dim);
 }
 
-.gear > li[data-active] {
-  --gear-line: var(--cp-yellow);
+.inventorySearch:focus-visible {
+  border-color: var(--cp-yellow);
+  box-shadow: 0 0 8px rgb(243 230 0 / 22%);
+}
+
+.inventoryNotice {
+  margin: 0;
+  padding: 0.3rem 0.55rem;
+  background: rgb(243 230 0 / 10%);
+  border-left: 2px solid var(--cp-yellow);
+  color: var(--cp-yellow);
+  font-size: var(--fs-xs);
+}
+
+.inventoryEmpty {
+  margin: 0;
+  padding: 1.1rem 0.75rem;
+  background: rgb(14 14 23 / 55%);
+  border: 1px dashed rgb(94 246 255 / 22%);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+
+/* 物品选择与操作分开，左侧筛选格列表，右侧原作通知框详情卡。 */
+.inventoryBrowser {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(225px, 0.95fr);
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.inventoryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 0.35rem;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 2px 0 0;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.gridItem {
+  --item-line: rgb(94 246 255 / 32%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 3.1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 3.05rem;
+  padding: 0.38rem 0.65rem 0.42rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font: inherit;
+  font-size: var(--fs-label);
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+}
+
+.gridItem:hover {
+  --item-line: rgb(94 246 255 / 72%);
+}
+
+.gridItem:where([aria-pressed="true"]) {
+  --item-line: var(--cp-yellow);
   color: var(--cp-yellow);
 }
 
-.gear > li[data-active] .slotNum {
-  color: var(--cp-yellow);
+.gridItem:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 1px;
 }
 
-/*
- * 打开动效（计划第八节第 2 条）：三张卡跟在扫描线后面从左往右依次滑入，每张错开 70ms；
- * 减少动态效果时直接出现；animation 写在上面 .gear > li 里，单独再写一条会和 .npcDetail li + li 撞优先级顺序
- */
-@keyframes gearIn {
-  from {
-    opacity: 0;
-    transform: translateX(-16px);
-  }
-}
-
-/*
- * 稀有度色条：原作 inventory4_atlas 的 item_left_rarity 竖条，贴在卡片左边，颜色照原作五档稀有度；
- * 武器格和背包里的武器卡共用（计划第八节第 1 条）
- */
-:is(.gear, .backpack) > li[data-rarity="common"] {
-  --rarity: var(--rar-common, rgb(160 160 160));
-}
-
-:is(.gear, .backpack) > li[data-rarity="uncommon"] {
-  --rarity: var(--rar-uncommon, rgb(60 220 110));
-}
-
-:is(.gear, .backpack) > li[data-rarity="rare"] {
-  --rarity: var(--rar-rare, rgb(60 150 255));
-}
-
-:is(.gear, .backpack) > li[data-rarity="epic"] {
-  --rarity: var(--rar-epic, rgb(190 80 255));
-}
-
-:is(.gear, .backpack) > li[data-rarity="legendary"] {
-  --rarity: var(--rar-legendary, rgb(255 160 30));
-}
-
-.gear > li > .gearRarity {
-  top: 0.7rem;
+.gridRarity {
+  top: 0.42rem;
   right: auto;
-  bottom: 1.2rem;
+  bottom: 0.72rem;
+  left: 0.2rem;
+  width: 3px;
+}
+
+.gridThumb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 1.95rem;
+}
+
+.gridThumb > :where(.weaponArt) {
+  width: 100%;
+  height: 1.95rem;
+  margin: 0;
+}
+
+.gridInfo {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.gridName {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gridSub {
+  color: var(--cp-text-dim);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gridMeta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.gridMeta > :where(b) {
+  color: var(--cp-cyan);
+}
+
+.quickBadge {
+  font-style: normal;
+  padding: 0.06rem 0.36rem;
+  background: rgb(243 230 0 / 14%);
+  border: 1px solid rgb(243 230 0 / 45%);
+  color: var(--cp-yellow);
+  font-size: 0.68rem;
+}
+
+.inventoryDetail {
+  --detail-line: var(--rarity, rgb(94 246 255 / 52%));
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem 0.85rem 0.95rem;
+}
+
+.inventoryDetail:where([data-iconic]) {
+  --detail-line: var(--cp-yellow);
+}
+
+.detailRarity {
+  top: 0.6rem;
+  right: auto;
+  bottom: 1.05rem;
   left: 0.25rem;
   width: 4px;
 }
 
-/* 背包卡片矮一些，竖条上下各让出框的切角 */
-.backpack > li > .packRarity {
-  top: 0.5rem;
-  right: auto;
-  bottom: 0.9rem;
-  left: 0.2rem;
-  z-index: -1;
-  width: 3px;
-}
-
-/* 手持标记：卡片底下铺原作 shapes_bg_glow 的底光，右上挂一块原作 counterLabel 实心黄牌写「手持」 */
-.gear > li > .gearGlow {
-  top: auto;
-  height: 45%;
-  opacity: 0.35;
-}
-
-.gear > li > .gearHeld {
-  position: absolute;
-  top: 0.55rem;
-  right: 1rem;
-  z-index: 1;
-  padding: 1px 8px;
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  color: rgb(5 5 10);
-}
-
-.gearHeld > b {
+.detailHead {
   position: relative;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gear > li {
-    animation: none;
-  }
-}
-
-.gear small {
-  color: var(--cp-yellow);
-  font-size: 0.7rem;
-}
-
-/* 图占卡片主体，固定高度，窄图宽图都等比缩进去，空格子也留同样的高度，三格对齐；高度走 --art-h，块里改矮 */
-.gearArt {
-  grid-column: 1 / -1;
-  grid-row: 1;
+  z-index: 1;
   display: grid;
-  place-items: center;
-  height: var(--art-h, 5.5rem);
-  padding: 0 1.2rem;
+  gap: 0.3rem;
 }
 
-/* 图高直接写定值：外层网格行高是 auto，写 100% 算不出来，原图会按自身比例撑破格子 */
-.gearArt > .weaponArt {
-  width: 100%;
-  height: var(--art-h, 5.5rem);
-  margin: 0;
-}
-
-.gearName {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  font-size: var(--fs-body, 0.95rem);
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-/*
- * 放进 H 武器块（第十二节第 10 条）：只有块那么宽，三张大卡竖着叠要滚很远，改成横排矮卡：
- * 左键位、中间图、右边上名字下按钮，一张高度从 169 压到 80 上下，背包不用滚就露出来
- */
-@container pin (width < 640px) {
-  /* 图那一栏按块宽占比，280 档（第五节第 3 条）也给名字留出一半宽 */
-  .gear > li {
-    --art-h: 3.4rem;
-    grid-template-columns: 1.2rem minmax(4rem, 34%) minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    gap: 0.2rem 0.5rem;
-    padding: 0.5rem 0.8rem 0.6rem 0.7rem;
-  }
-
-  .gear > li > .slotNum {
-    grid-column: 1;
-    grid-row: 1 / -1;
-    align-self: center;
-  }
-
-  .gear > li > .gearArt {
-    grid-column: 2;
-    grid-row: 1 / -1;
-    padding: 0;
-  }
-
-  .gear > li > .gearName {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: end;
-    font-size: var(--fs-label);
-  }
-
-  /* 手持黄牌挂在右上，名字给它让出位置 */
-  .gear > li[data-active] > .gearName {
-    padding-right: 3rem;
-  }
-
-  .gear > li > .gearTools {
-    grid-column: 3;
-    grid-row: 2;
-    align-self: start;
-    justify-content: flex-start;
-    min-height: 0;
-  }
-
-  .gear > li > .gearHeld {
-    top: 0.45rem;
-    right: 0.8rem;
-  }
-}
-
-/*
- * 1280 档的块只有 280 宽（第五节第 3 条），三栏横排时名字只剩一指宽、被挤成一字一行：
- * 改成图在上、名字占一整行、按钮和手持牌并在最下一行，牌子不再压着名字
- */
-@container pin (width < 280px) {
-  .gear > li {
-    --art-h: 2.6rem;
-    grid-template-columns: 1.2rem minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
-  }
-
-  .gear > li > .slotNum {
-    grid-row: 1;
-  }
-
-  .gear > li > .gearArt {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .gear > li > .gearName,
-  .gear > li[data-active] > .gearName {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    padding-right: 0;
-  }
-
-  .gear > li > .gearTools {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    justify-self: start;
-  }
-
-  .gear > li > .gearHeld {
-    position: relative;
-    top: auto;
-    right: auto;
-    grid-column: 1 / -1;
-    grid-row: 3;
-    justify-self: end;
-    align-self: center;
-  }
-}
-
-.backpack > li {
+.detailTitleRow {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-/*
- * 背包里有原作图的物品（计划第八节第 1 条）：做成带筛选格框的卡片，图占上半、名字和按钮在下面一行；
- * isolation 让框的 z-index: -1 只沉到卡片自己底下，不盖住按钮
- */
-.backpack > li[data-art] {
+.detailTitle {
+  font-size: var(--fs-body, 0.95rem);
+  font-weight: 700;
+  color: var(--cp-yellow);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.detailCount {
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.detailTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.detailRarityTag {
+  padding: 0.06rem 0.4rem;
+  background: rgb(255 255 255 / 6%);
+  border-left: 2px solid var(--rarity, var(--cp-cyan));
+  color: var(--rarity, var(--cp-cyan));
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.detailTag {
+  padding: 0.06rem 0.4rem;
+  background: rgb(94 246 255 / 8%);
+  border: 1px solid rgb(94 246 255 / 22%);
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+}
+
+.detailTagActive {
+  padding: 0.06rem 0.4rem;
+  background: rgb(243 230 0 / 14%);
+  border: 1px solid rgb(243 230 0 / 45%);
+  color: var(--cp-yellow);
+  font-size: 0.68rem;
+}
+
+.detailShowcase {
   position: relative;
   isolation: isolate;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 0.6rem 0.9rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  height: 4.4rem;
+  padding: 0.35rem 0.75rem;
 }
 
 .cardFrame {
   z-index: -1;
 }
 
-.packArt {
-  display: grid;
-  flex: 1 0 100%;
-  place-items: center;
-  height: 4rem;
-}
-
-/* 同武器格：图高写定值，100% 在 auto 行里算不出来 */
-.packArt > .weaponArt {
+.detailArt {
   width: 100%;
-  height: 4rem;
+  height: 3.6rem;
+  object-fit: contain;
+}
+
+.detailDesc {
+  position: relative;
+  z-index: 1;
   margin: 0;
+  color: var(--cp-text);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
-.backpack > li[data-art] > .packName {
-  flex: 1;
-  font-weight: 600;
-}
-
-.backpack b {
+.detailStat {
+  position: relative;
+  z-index: 1;
+  margin: 0;
   color: var(--cp-cyan);
-  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.detailActions {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgb(94 246 255 / 16%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.detailActionGroup {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.modTargetList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+@container pin (width < 520px) {
+  .inventoryBrowser {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inventoryGrid {
+    max-height: 190px;
+  }
+}
+
+.placesBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgb(94 246 255 / 18%);
+}
+
+.placesActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 /* 委托：标题、星级和报酬、中间人和期限、最新进展 */

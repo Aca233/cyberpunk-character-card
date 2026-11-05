@@ -318,9 +318,11 @@ function SubTabs<T extends string>({
   );
 }
 
+type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "misc";
+
 /**
- * 物品栏（O）：武器格、穿着、背包、这里；商店、存放、买公寓的入口暂挂在这里，U3 走 F。
- * 物品栏精简（用户定的方案 A）：快捷栏不单列，治疗品和手雷带次数排进背包；整套外观和升级档不再显示
+ * 物品栏（O）：上方常驻三格随身武器、负荷与当前穿着，下方单行筛选与左列表右详情浏览；
+ * 无需在「已装备」和「背包」之间来回切页即可直接换枪、装配件、穿脱衣服或使用消耗品。
  */
 export function InventoryPage({
   view,
@@ -329,8 +331,15 @@ export function InventoryPage({
   onMod,
   onShop,
   onBuyHome,
+  onHeal,
+  onUse,
+  disabledReason,
 }: {
   readonly view: View;
+  /** 非战斗治疗直接结算；情境性使用交给行动输入，由玩家确认。 */
+  readonly onHeal?: ((id: string) => Promise<void>) | undefined;
+  readonly onUse?: ((id: string) => void) | undefined;
+  readonly disabledReason?: string | undefined;
   /** 换装备；正在生成时不传，按钮不显示 */
   readonly onEquip?: ((id: string) => void) | undefined;
   readonly onUnequip?: ((id: string) => void) | undefined;
@@ -341,36 +350,96 @@ export function InventoryPage({
   readonly onBuyHome?: ((id: string) => void) | undefined;
 }) {
   const { inventory } = view;
-  // 方案 A：仅合并显示，保留存档中的快捷栏与剩余次数；同款物品合并数量。
   const quickItems = [inventory.healing, inventory.grenade].flatMap((item) => (item ? [item] : []));
   const carried = { ...inventory.backpack };
   for (const item of quickItems) carried[item.id] = (carried[item.id] ?? 0) + 1;
-  const backpack = Object.entries(carried);
+
+  const [filter, setFilter] = useState<InventoryFilter>("all");
+  const [search, setSearch] = useState("");
+  const [pickedItem, setPickedItem] = useState<string | null>(null);
+  const [healing, setHealing] = useState(false);
+  const [useError, setUseError] = useState("");
+
+  const isUsable = (id: string) => {
+    const kind = inventory.details?.[id]?.kind;
+    return (
+      quickItems.some((item) => item.id === id) ||
+      kind === "healing" ||
+      kind === "grenade" ||
+      kind === "consumable"
+    );
+  };
+
   const itemName = (id: string) => view.names.items[id] ?? id;
+  const allCarried = Object.entries(carried).filter(([, count]) => count > 0);
+  const backpack = allCarried.filter(([id]) => {
+    const kind = inventory.details?.[id]?.kind;
+    const matches = filter === "all" || (filter === "usable" ? isUsable(id) : kind === filter);
+    return matches && itemName(id).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
+  });
+  const selectedEntry = backpack.find(([id]) => id === pickedItem) ?? backpack[0] ?? null;
+  const selectedItem = selectedEntry?.[0] ?? null;
+
+  const selectItem = (id: string) => {
+    setPickedItem(id);
+    setUseError("");
+  };
+
+  const heal = async (id: string) => {
+    if (!onHeal || healing || disabledReason) return;
+    setHealing(true);
+    setUseError("");
+    try {
+      await onHeal(id);
+    } catch (error) {
+      setUseError(error instanceof Error ? error.message : "使用失败，请重试");
+    } finally {
+      setHealing(false);
+    }
+  };
+
   // 存放挪到右上角地点块（用户定的），这里只剩商店和买公寓
   const places = view.shops.length > 0 || view.safehouse.forSale.length > 0;
 
   return (
-    <div className={neural.stack}>
-      {/* 计划第八节第 1 条：照原作物品栏，武器格在页顶横排占满宽，快捷栏、穿着、背包、这里在下面分两栏 */}
-      <Panel as="section" title="武器" line="var(--cp-red)">
+    <div className={styles.inventoryRoot}>
+      <section className={styles.loadoutSection} aria-label="随身装备">
+        <header className={styles.loadoutBar}>
+          <span className={styles.loadoutTitle}>武器槽（1–3）</span>
+          <span className={styles.loadoutMeta}>
+            <span className={styles.loadoutBadge}>{inventory.loadout.styleLabel}</span>
+            <span
+              className={styles.loadoutMeter}
+              data-over={inventory.loadout.overloaded || undefined}
+            >
+              随身负荷{" "}
+              <b>
+                {inventory.loadout.usedSlots}/{inventory.loadout.maxSlots}
+              </b>{" "}
+              格
+            </span>
+          </span>
+        </header>
+
         <ol className={styles.gear} aria-label="武器格">
           {WEAPON_SLOTS.map((n) => {
             const id = inventory.weapons[n - 1] ?? null;
             const active = inventory.active === n - 1;
             const art = itemArtOf(id);
-            const rarity = id === null ? undefined : inventory.rarity[id];
+            const wDetail = id === null ? undefined : inventory.details?.[id];
+            const rarity = id === null ? undefined : (wDetail?.rarity ?? inventory.rarity[id]);
+            const mods = id === null ? [] : (inventory.mods[id] ?? []);
             return (
               <li
                 key={n}
+                className={styles.gearCard}
                 data-active={active || undefined}
                 data-empty={id === null || undefined}
-                data-rarity={rarity}
+                data-rarity={rarity ?? undefined}
+                data-iconic={wDetail?.iconic || undefined}
                 style={{ "--i": n - 1 } as CSSProperties}
               >
-                {/* 计划第八节第 1 条：武器格照原作物品格做成大卡片，底和框用筛选格素材，手持的那把框亮成黄 */}
-                <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 72%)" slice={CELL_SLICE} />
-                {/* 手持的那把：卡片底下铺原作 shapes_bg_glow 的底光（计划第八节第 1 条） */}
+                <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 82%)" slice={CELL_SLICE} />
                 {active && (
                   <NineSlice
                     id="panel.glowBottom"
@@ -380,7 +449,6 @@ export function InventoryPage({
                   />
                 )}
                 <NineSlice id="map.filterCellFg" tint="var(--gear-line)" slice={CELL_SLICE} />
-                {/* 左边一道原作 inventory4 的稀有度竖条，颜色按稀有度给 */}
                 {rarity && (
                   <NineSlice
                     id="cyber.cellRarity"
@@ -389,165 +457,392 @@ export function InventoryPage({
                     className={styles.gearRarity}
                   />
                 )}
-                {active && (
-                  <span className={styles.gearHeld}>
-                    <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                    <b>手持</b>
+
+                <div className={styles.gearHead}>
+                  <span className={styles.slotNum}>
+                    <Asset id={SLOT_KEYS[n]} tint="currentColor" height={18} alt={String(n)} />
                   </span>
-                )}
-                <span className={styles.slotNum}>
-                  <Asset id={SLOT_KEYS[n]} tint="currentColor" height={20} alt={String(n)} />
-                </span>
+                  <small className={styles.gearSub}>
+                    {id === null ? "空槽位" : (wDetail?.subLabel ?? "武器")}
+                  </small>
+                  {active && (
+                    <span className={styles.gearHeld}>
+                      <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                      <b>手持</b>
+                    </span>
+                  )}
+                </div>
+
                 <span className={styles.gearArt} aria-hidden>
-                  {art && <Asset id={art} className={styles.weaponArt} />}
-                </span>
-                <span className={styles.gearName}>
-                  {id === null ? "空" : itemName(id)}
-                  {id !== null &&
-                    (inventory.mods[id] ?? []).map((m) => (
-                      <small key={m.slot} className={styles.dim}>
-                        {" · "}
-                        {itemName(m.id)}
-                        {onMod && (
-                          <ActionButton
-                            label={`从${itemName(id)}上拆下${itemName(m.id)}`}
-                            onClick={() => onMod("detach", id, m.id)}
-                          >
-                            ×
-                          </ActionButton>
-                        )}
-                      </small>
-                    ))}
-                </span>
-                <span className={styles.gearTools}>
-                  {id !== null && !active && onEquip && (
-                    <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
-                  )}
-                  {id !== null && onUnequip && (
-                    <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>
+                  {art ? (
+                    <Asset id={art} className={styles.weaponArt} />
+                  ) : (
+                    <span className={styles.gearEmptyHint}>{id === null ? "未装备" : ""}</span>
                   )}
                 </span>
+
+                <div className={styles.gearFoot}>
+                  <span className={styles.gearName}>{id === null ? "空" : itemName(id)}</span>
+                  {mods.length > 0 && id !== null && (
+                    <div className={styles.gearMods}>
+                      {mods.map((m) => (
+                        <span key={m.slot} className={styles.gearModTag}>
+                          {itemName(m.id)}
+                          {onMod && (
+                            <button
+                              type="button"
+                              className={styles.modDetach}
+                              aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
+                              title={`拆下${itemName(m.id)}`}
+                              onClick={() => onMod("detach", id, m.id)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {id !== null && ((!active && onEquip) || onUnequip) && (
+                    <span className={styles.gearTools}>
+                      {!active && onEquip && (
+                        <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
+                      )}
+                      {onUnequip && <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>}
+                    </span>
+                  )}
+                </div>
               </li>
             );
           })}
         </ol>
-      </Panel>
-      <div className={neural.split}>
-        <div className={neural.stack}>
-          {inventory.clothing.length > 0 && (
-            <Panel as="section" title="穿着" line="var(--cp-cyan)">
-              <ul className={styles.backpack}>
-                {inventory.clothing.map((c) => (
-                  <li key={c.slot}>
-                    <span>
-                      <small className={styles.dim}>{c.label}</small> {itemName(c.id)}
-                    </span>
-                    {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
+
+        {inventory.clothing.length > 0 && (
+          <ul className={styles.clothingStrip} aria-label="当前穿着">
+            {inventory.clothing.map((c) => (
+              <li key={c.slot} className={styles.clothingChip}>
+                <small className={styles.dim}>{c.label}</small>
+                <b>{itemName(c.id)}</b>
+                {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className={styles.packSection} aria-label="随身背包">
+        <div className={styles.inventoryToolbar}>
+          <SubTabs<InventoryFilter>
+            tabs={[
+              ["all", "全部"],
+              ["usable", "可使用"],
+              ["weapon", "武器"],
+              ["clothing", "服装"],
+              ["mod", "改装件"],
+              ["misc", "杂物"],
+            ]}
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              setPickedItem(null);
+              setUseError("");
+            }}
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索物品…"
+            aria-label="搜索物品"
+            className={styles.inventorySearch}
+          />
         </div>
-        <div className={neural.stack}>
-          <Panel as="section" title="背包" line="var(--cp-yellow)">
-            {backpack.length === 0 ? (
-              <p className={styles.dim}>空的。</p>
-            ) : (
-              <ul className={styles.backpack}>
-                {backpack.map(([id, count]) => {
-                  const to = inventory.equipTo[id];
-                  const art = itemArtOf(id);
-                  const rarity = inventory.rarity[id];
-                  // 治疗品和手雷在名字旁写剩几次（物品栏精简，方案 A）
-                  const quick = quickItems.find((q) => q.id === id);
-                  return (
-                    <li key={id} data-art={art ? true : undefined} data-rarity={rarity}>
-                      {/*
-                       * 计划第八节第 1 条：有原作图的物品做成卡片，图在上、名字在下。
-                       * 框换成原作对话图标格 dialog.iconSlot（72×72，左下、右上切角），和武器格的筛选格区分开
-                       * （用户定的换框对照表，计划第十二节第 9 条）；它是实心一块、没有描边层，
-                       * 铺一层深色底，再叠一层淡金色同形，透出物品格的颜色
-                       */}
-                      {art && (
-                        <>
-                          <NineSlice
-                            id="dialog.iconSlot"
-                            tint="rgb(14 14 23 / 80%)"
-                            slice={ICON_SLOT_SLICE}
-                            className={styles.cardFrame}
-                          />
-                          <NineSlice
-                            id="dialog.iconSlot"
-                            tint="rgb(255 190 40 / 12%)"
-                            slice={ICON_SLOT_SLICE}
-                            className={styles.cardFrame}
-                          />
-                          {/* 背包里的武器也贴原作稀有度竖条，和武器格一样（计划第八节第 1 条） */}
-                          {rarity && (
-                            <NineSlice
-                              id="cyber.cellRarity"
-                              tint="var(--rarity)"
-                              slice={0}
-                              className={styles.packRarity}
-                            />
-                          )}
-                          <span className={styles.packArt} aria-hidden>
-                            <Asset id={art} className={styles.weaponArt} />
-                          </span>
-                        </>
+
+        {disabledReason && (
+          <p role="status" className={styles.inventoryNotice}>
+            {disabledReason}
+          </p>
+        )}
+        {useError && (
+          <p role="alert" className={styles.warn}>
+            {useError}
+          </p>
+        )}
+
+        {backpack.length === 0 ? (
+          <p className={styles.inventoryEmpty}>
+            {allCarried.length === 0 ? "随身背包是空的。" : "没有符合筛选条件的物品。"}
+          </p>
+        ) : (
+          <div className={styles.inventoryBrowser}>
+            <ul className={styles.inventoryGrid} aria-label="选择背包物品">
+              {backpack.map(([id, count]) => {
+                const quick = quickItems.find((item) => item.id === id);
+                const art = itemArtOf(id);
+                const detail = inventory.details?.[id];
+                const rarity = detail?.rarity ?? inventory.rarity[id];
+                const isSelected = selectedItem === id;
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      className={styles.gridItem}
+                      aria-pressed={isSelected}
+                      data-rarity={rarity ?? undefined}
+                      data-iconic={detail?.iconic || undefined}
+                      onClick={() => selectItem(id)}
+                    >
+                      <NineSlice
+                        id="map.filterCellBg"
+                        tint="rgb(14 14 23 / 78%)"
+                        slice={CELL_SLICE}
+                      />
+                      <NineSlice id="map.filterCellFg" tint="var(--item-line)" slice={CELL_SLICE} />
+                      {rarity && (
+                        <NineSlice
+                          id="cyber.cellRarity"
+                          tint="var(--rarity)"
+                          slice={0}
+                          className={styles.gridRarity}
+                        />
                       )}
-                      <span className={styles.packName}>
-                        {itemName(id)}
-                        {count > 1 && <b> ×{count}</b>}
-                        {quick && (
-                          <small className={styles.dim}>
-                            {" "}
-                            · {quick.charges}/{quick.max} 次
-                          </small>
+                      <span className={styles.gridThumb} aria-hidden>
+                        {art ? (
+                          <Asset id={art} className={styles.weaponArt} />
+                        ) : (
+                          <Asset id="notify.inventory" tint="var(--cp-cyan)" height={20} />
                         )}
                       </span>
-                      {to && to !== "quick" && onEquip && (
-                        <ActionButton onClick={() => onEquip(id)}>
-                          {to === "clothing" ? "穿上" : "装上"}
-                        </ActionButton>
+                      <span className={styles.gridInfo}>
+                        <strong className={styles.gridName}>{itemName(id)}</strong>
+                        <small className={styles.gridSub}>
+                          {detail?.subLabel ?? "物品"}
+                          {detail?.rarityLabel ? ` · ${detail.rarityLabel}` : ""}
+                        </small>
+                      </span>
+                      <span className={styles.gridMeta}>
+                        {quick ? (
+                          <em className={styles.quickBadge}>
+                            {quick.charges}/{quick.max} 次
+                          </em>
+                        ) : count > 1 ? (
+                          <b>×{count}</b>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {selectedEntry &&
+              (() => {
+                const [id, count] = selectedEntry;
+                const to = inventory.equipTo[id];
+                const art = itemArtOf(id);
+                const detail = inventory.details?.[id];
+                const rarity = detail?.rarity ?? inventory.rarity[id];
+                const quick = quickItems.find((q) => q.id === id);
+                const kind = detail?.kind;
+                const usable = kind === "healing" || kind === "grenade" || kind === "consumable";
+                const remaining = quick?.charges ?? detail?.remaining;
+                const ceiling =
+                  view.health.wound === "severe"
+                    ? Math.floor(view.health.max * 0.29)
+                    : view.health.max;
+                const useBlocked =
+                  disabledReason ||
+                  (healing
+                    ? "正在使用治疗品…"
+                    : view.health.condition !== "up"
+                      ? "当前无法自行使用物品"
+                      : (kind === "healing" || kind === "grenade") && remaining === 0
+                        ? "次数已用完，休整或场景结束后恢复"
+                        : kind === "healing" && view.health.hp >= ceiling
+                          ? "已达到当前治疗上限"
+                          : !quick &&
+                              (kind === "grenade" ||
+                                (kind === "healing" && Boolean(view.combat.active)))
+                            ? "先设为当前使用的物品"
+                            : undefined);
+                const directHeal = kind === "healing" && !view.combat.active;
+                const modTargets = inventory.modTargets[id] ?? [];
+
+                return (
+                  <article
+                    key={id}
+                    className={styles.inventoryDetail}
+                    data-rarity={rarity ?? undefined}
+                    data-iconic={detail?.iconic || undefined}
+                    aria-label="选中物品详情"
+                  >
+                    <NineSlice id="notify.itemCellBg" tint="rgb(12 8 14 / 90%)" slice={30} />
+                    <NineSlice
+                      id="notify.itemCellFg"
+                      tint="var(--detail-line, rgb(94 246 255 / 55%))"
+                      slice={30}
+                    />
+                    {rarity && (
+                      <NineSlice
+                        id="cyber.cellRarity"
+                        tint="var(--rarity)"
+                        slice={0}
+                        className={styles.detailRarity}
+                      />
+                    )}
+
+                    <header className={styles.detailHead}>
+                      <div className={styles.detailTitleRow}>
+                        <strong className={styles.detailTitle}>{itemName(id)}</strong>
+                        {count > 1 && <b className={styles.detailCount}>×{count}</b>}
+                      </div>
+                      <div className={styles.detailTags}>
+                        {detail?.rarityLabel && (
+                          <span className={styles.detailRarityTag}>{detail.rarityLabel}</span>
+                        )}
+                        {detail?.subLabel && (
+                          <span className={styles.detailTag}>{detail.subLabel}</span>
+                        )}
+                        {detail?.slotCost && (
+                          <span className={styles.detailTag}>占 {detail.slotCost} 格负荷</span>
+                        )}
+                        {quick ? (
+                          <span className={styles.detailTagActive}>
+                            快捷栏 · {quick.charges}/{quick.max} 次
+                          </span>
+                        ) : remaining !== null && remaining !== undefined && detail?.charges ? (
+                          <span className={styles.detailTag}>
+                            剩余 {remaining}/{detail.charges} 次
+                          </span>
+                        ) : null}
+                      </div>
+                    </header>
+
+                    {art && (
+                      <div className={styles.detailShowcase} aria-hidden>
+                        <NineSlice
+                          id="dialog.iconSlot"
+                          tint="rgb(8 8 14 / 88%)"
+                          slice={ICON_SLOT_SLICE}
+                          className={styles.cardFrame}
+                        />
+                        <NineSlice
+                          id="dialog.iconSlot"
+                          tint="rgb(94 246 255 / 10%)"
+                          slice={ICON_SLOT_SLICE}
+                          className={styles.cardFrame}
+                        />
+                        <Asset id={art} className={styles.detailArt} />
+                      </div>
+                    )}
+
+                    {detail?.ability && <p className={styles.detailDesc}>{detail.ability}</p>}
+
+                    {kind === "healing" && detail?.healPercent && (
+                      <p className={styles.detailStat}>
+                        每次恢复生命上限的 {detail.healPercent}%（当前生命 {view.health.hp}/
+                        {view.health.max}）
+                      </p>
+                    )}
+
+                    <div className={styles.detailActions}>
+                      {usable && (
+                        <div className={styles.detailActionGroup}>
+                          <Button
+                            small
+                            primary={!useBlocked}
+                            disabled={Boolean(useBlocked) || (directHeal ? !onHeal : !onUse)}
+                            onClick={() => {
+                              if (useBlocked) return;
+                              if (directHeal) void heal(id);
+                              else onUse?.(id);
+                            }}
+                          >
+                            {directHeal
+                              ? "使用治疗品"
+                              : kind === "grenade"
+                                ? "准备投掷"
+                                : "准备使用"}
+                          </Button>
+                          {useBlocked ? (
+                            <small className={styles.dim}>{useBlocked}</small>
+                          ) : (
+                            !directHeal && (
+                              <small className={styles.dim}>填入行动框，确认后执行。</small>
+                            )
+                          )}
+                        </div>
                       )}
-                      {onMod &&
-                        (inventory.modTargets[id] ?? []).map((w) => (
-                          <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
-                            装到{itemName(w)}
-                          </ActionButton>
-                        ))}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Panel>
-          {places && (
-            <Panel as="section" title="这里" line="var(--cp-cyan)">
-              {view.shops.map((shop) => (
-                <div className={styles.docLink} key={shop.id}>
-                  <Button onClick={() => onShop(shop.id)}>进{shop.name}</Button>
-                </div>
-              ))}
-              {view.safehouse.forSale.map((home) => (
-                <div className={styles.docLink} key={home.id}>
-                  <p className={styles.dim}>{home.locked ?? home.note}</p>
-                  {onBuyHome && !home.locked && (
-                    <Button
-                      disabled={home.price > view.money.eddies}
-                      onClick={() => onBuyHome(home.id)}
-                    >
-                      买下{home.name}（{home.price.toLocaleString("en-US")} 欧元）
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </Panel>
-          )}
-        </div>
-      </div>
+
+                      {to === "quick" && !quick && (
+                        <div className={styles.detailActionGroup}>
+                          <Button
+                            small
+                            disabled={
+                              !onEquip ||
+                              Boolean(disabledReason) ||
+                              healing ||
+                              Boolean(view.combat.active)
+                            }
+                            onClick={() => onEquip?.(id)}
+                          >
+                            {kind === "healing" ? "设为当前治疗品" : "设为当前手雷"}
+                          </Button>
+                          {view.combat.active && (
+                            <small className={styles.dim}>战斗中更换物品需要在行动中进行。</small>
+                          )}
+                        </div>
+                      )}
+
+                      {to && to !== "quick" && onEquip && (
+                        <Button small primary onClick={() => onEquip(id)}>
+                          {to === "clothing" ? "穿上" : "装上武器"}
+                        </Button>
+                      )}
+
+                      {onMod && modTargets.length > 0 && (
+                        <div className={styles.modTargetList}>
+                          {modTargets.map((w) => (
+                            <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
+                              装到{itemName(w)}
+                            </ActionButton>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                );
+              })()}
+          </div>
+        )}
+      </section>
+
+      {places && (
+        <section className={styles.placesBar} aria-label="当前地点服务">
+          <span className={styles.loadoutTitle}>这里</span>
+          <div className={styles.placesActions}>
+            {view.shops.map((shop) => (
+              <Button key={shop.id} small onClick={() => onShop(shop.id)}>
+                进{shop.name}
+              </Button>
+            ))}
+            {view.safehouse.forSale.map((home) => (
+              <div className={styles.docLink} key={home.id}>
+                <small className={styles.dim}>{home.locked ?? home.note}</small>
+                {onBuyHome && !home.locked && (
+                  <Button
+                    small
+                    disabled={home.price > view.money.eddies}
+                    onClick={() => onBuyHome(home.id)}
+                  >
+                    买下{home.name}（{home.price.toLocaleString("en-US")} 欧元）
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

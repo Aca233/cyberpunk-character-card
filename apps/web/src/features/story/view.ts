@@ -8,7 +8,7 @@ export type Turn = View["turns"][number];
 export type CheckOffer = View["offers"]["checks"][number];
 export type Choice = View["offers"]["choices"][number];
 export type DamageTier = NonNullable<CheckOffer["damage"]>;
-export type Outcome = "critical" | "success" | "failure" | "fumble";
+export type Outcome = "critical" | "success" | "costly" | "failure" | "fumble";
 
 /** 地点 id 里出现这些词就用对应地区的图标；都不匹配时用夜之城 */
 const DISTRICTS: readonly (readonly [AssetId, readonly string[]])[] = [
@@ -176,13 +176,14 @@ function plainInput(input: TurnInput): string {
 
 export const OUTCOME_LABELS: Readonly<Record<Outcome, string>> = {
   critical: "大成功",
-  success: "成功",
+  success: "干净利落",
+  costly: "惨胜",
   failure: "失败",
   fumble: "大失败",
 };
 
 export function isSuccess(outcome: Outcome): boolean {
-  return outcome === "critical" || outcome === "success";
+  return outcome === "critical" || outcome === "success" || outcome === "costly";
 }
 
 export const DAMAGE: Readonly<

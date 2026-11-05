@@ -370,7 +370,14 @@ export function StoryScreen() {
       // 钉住的展开层在栈顶时照常响应，商店、确认框这类层开着时不响应
       if ((layerOpen() && !peekOnTop()) || story.spend) return;
       if (e.key === "Tab") {
-        // 按住扫描，松开收起；不让焦点跳走
+        // 展开面板内保留 Tab 焦点导航，避免键盘无法访问物品和操作按钮。
+        if (
+          peekOnTop() ||
+          (e.target instanceof Element && e.target.closest("[aria-expanded='true']"))
+        ) {
+          return;
+        }
+        // 没有展开面板时，按住扫描，松开收起。
         e.preventDefault();
         if (!e.repeat) setScan(true);
         return;
@@ -483,19 +490,49 @@ export function StoryScreen() {
       </div>
     </div>
   );
-  // H 武器块往上长，页签放在底下挨着武器格，同 G 未读（第十二节第 10 条）
-  // 物品栏精简（用户定的方案 A）：制作页签和整套外观去掉，武器块里只放物品栏
-  const gearTabs = (
-    <PinTabs<GearTab> tabs={[["inventory", "物品栏", 0]]} value={gearTab} onChange={setGearTab} />
-  );
+  // 武器块只放物品栏，不再显示只有一个选项的重复页签。
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
       <InventoryPage
         view={view}
-        onEquip={busy ? undefined : (id) => void act({ type: "equipItem", id }, "gear")}
-        onUnequip={busy ? undefined : (id) => void act({ type: "unequipItem", id }, "gear")}
+        disabledReason={
+          view.death || view.ended
+            ? "这份存档已结束，只能查看物品"
+            : busy
+              ? "正在处理行动，请稍候"
+              : offers?.rolled
+                ? "请先完成当前检定的结算"
+                : undefined
+        }
+        onHeal={
+          busy || offers?.rolled || view.death || view.ended
+            ? undefined
+            : (id) => act({ type: "useHealing", id }, "healing", true)
+        }
+        onUse={
+          busy || offers?.rolled || view.death || view.ended
+            ? undefined
+            : (id) => {
+                const name = view.names.items[id] ?? id;
+                const verb = view.inventory.details?.[id]?.kind === "grenade" ? "投掷" : "使用";
+                story.setDraft({
+                  text: `${story.draft.text}${story.draft.text ? "\n" : ""}${verb}${name}`,
+                });
+                closePinned();
+              }
+        }
+        onEquip={
+          busy || offers?.rolled || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => void act({ type: "equipItem", id }, "gear")
+        }
+        onUnequip={
+          busy || offers?.rolled || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => void act({ type: "unequipItem", id }, "gear")
+        }
         onMod={
-          busy
+          busy || offers?.rolled || view.death || view.ended || view.combat.active
             ? undefined
             : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
         }
@@ -655,7 +692,6 @@ export function StoryScreen() {
           view={view}
           peek={peek}
           full={gearFull}
-          tabs={gearTabs}
           onQuickhack={
             busy
               ? undefined

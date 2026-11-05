@@ -1,5 +1,6 @@
 export * from "./actions";
 export * from "./authoring";
+export * from "./dice";
 export * from "./game";
 export * from "./kernel/ports";
 export * from "./kernel/rng";
@@ -9,11 +10,44 @@ export * from "./kernel/world";
 export * from "./ledger";
 export * from "./legends";
 export * from "./narrator";
+export {
+  type AccessVector,
+  AccessVectorSchema,
+  evaluateHackTopology,
+  type HackTopologyCheckInput,
+  type HackTopologyResult,
+  hasSubnetAccess,
+} from "./netrunning";
+export {
+  type CroppedNpcPersona,
+  computeNpcVectors,
+  cropNpcPersona,
+  evaluateBetrayal,
+  evaluatePhoneAvailability,
+  isCoreTruthUnlocked,
+  type NpcVectors,
+  NpcVectorsSchema,
+  RIVAL_MERC_POOL,
+  recordSeedEncounter,
+  type SeedTag,
+  SeedTagSchema,
+} from "./npc";
+export {
+  computeLootBudgetCap,
+  evaluatePhysicsBoundaries,
+  type LootBudgetCap,
+  type NarrativeContentMode,
+  type NarrativeIntensity,
+  type PhysicsLockInput,
+  type PhysicsLockResult,
+  resolveDynamicWordCountBudget,
+} from "./pipeline";
 export * from "./schemas/board";
 export * from "./schemas/character";
 export * from "./schemas/lore";
 export * from "./schemas/save";
 export * from "./schemas/turn";
+export * from "./state";
 export * as arcRules from "./systems/arcs";
 export * as braindanceRules from "./systems/braindance";
 export * as characterRules from "./systems/character";
@@ -46,3 +80,18 @@ export * as stealthRules from "./systems/stealth";
 export * as traumaRules from "./systems/trauma";
 export * as travelRules from "./systems/travel";
 export * as worldRules from "./systems/world";
+export * from "./tension";
+export {
+  type CorpoAssessmentInput,
+  type CorpoAssessmentResult,
+  type DistrictSecurityInput,
+  type DistrictSecurityResult,
+  evaluateCorpoStanding,
+  evaluateDistrictSecurityCheck,
+  type HousingTier,
+  rollSecondhandCyberwareDefect,
+  type SecondhandDefectKind,
+  type SecondhandDefectResult,
+  settleWeeklyLifestyleBill,
+  WEEKLY_LIFESTYLE_BILLS,
+} from "./worldClock";

@@ -1,8 +1,14 @@
 import { z } from "zod";
 import { type Attribute, AttributeSchema } from "../dice";
 
-export const ATTRIBUTE_MAX = 20;
-export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
+export const ATTRIBUTE_MAX = 10;
+export const AttributeValueSchema = z.preprocess(
+  (v) =>
+    typeof v === "number" && Number.isInteger(v) && v > ATTRIBUTE_MAX
+      ? Math.max(1, Math.min(ATTRIBUTE_MAX, Math.round(v / 2)))
+      : v,
+  z.number().int().min(1).max(ATTRIBUTE_MAX),
+);
 
 export const STREET_CRED_MAX = 50;
 /** 街头声望每升这么多级得 1 个属性点 */

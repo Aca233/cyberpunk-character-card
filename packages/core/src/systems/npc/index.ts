@@ -41,7 +41,7 @@ import { npcsView } from "./view";
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   id: "npc",
   state: NpcStateSchema,
-  initial: () => ({ npcs: {} }),
+  initial: () => ({ npcs: {}, seedTags: {} }),
   commands: {
     npc: NewNpcSchema,
     meet: MeetSchema,

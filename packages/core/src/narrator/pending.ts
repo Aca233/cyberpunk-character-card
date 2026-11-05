@@ -93,11 +93,88 @@ export function currentOffers(records: readonly LogRecord[]): Offers {
   return { turn, choices: readChoices(turn.choices), checks, rolled };
 }
 
-/** 按角色当前的属性和难度模式算出难度值和成功率 */
+/** 按角色当前的属性、生理伤势/疲劳/成瘾状态和难度模式算出难度值和成功率 */
 export function prepareFor(world: WorldState, spec: CheckSpec): PrepareResult {
   const character = CharacterStateSchema.parse(world.slices.character);
   const dice = DiceStateSchema.parse(world.slices.dice);
-  return prepareCheck(spec, effectiveAttribute(character, spec.attribute), dice.mode);
+  const attrVal = effectiveAttribute(character, spec.attribute);
+  const reflexesValue = spec.reflexesValue ?? effectiveAttribute(character, "reflexes");
+  const intelligenceValue = spec.intelligenceValue ?? effectiveAttribute(character, "intelligence");
+
+  const penalties = [...spec.penalties];
+  const bonuses = [...spec.bonuses];
+
+  const rawHealth = world.slices.health as
+    | { hp?: number; max?: number; painSuppressed?: boolean; lostLimbs?: readonly string[] }
+    | undefined;
+  const rawClock = world.slices.world as
+    | {
+        phasesAwake?: number;
+        blackLaceDoses?: readonly number[];
+        blackLaceActiveUntil?: number | null;
+      }
+    | undefined;
+
+  const blackLaceActive =
+    rawClock?.blackLaceActiveUntil !== undefined &&
+    rawClock.blackLaceActiveUntil !== null &&
+    rawClock.blackLaceActiveUntil > world.time;
+
+  if (rawHealth && typeof rawHealth.hp === "number" && typeof rawHealth.max === "number") {
+    const slot =
+      rawHealth.hp <= 0
+        ? 4
+        : (rawHealth.lostLimbs?.length ?? 0) > 0 || rawHealth.hp * 100 < rawHealth.max * 30
+          ? 3
+          : rawHealth.hp * 100 < rawHealth.max * 60
+            ? 2
+            : 0;
+    if (!blackLaceActive && !penalties.some((p) => p.source === "wound" || p.source === "伤势")) {
+      if (slot >= 3) {
+        penalties.push({ source: "伤势", value: 4, reason: "失能重残（全检定 −4）" });
+      } else if (
+        slot === 2 &&
+        !rawHealth.painSuppressed &&
+        (spec.attribute === "body" || spec.attribute === "reflexes")
+      ) {
+        penalties.push({ source: "伤势", value: 2, reason: "贯通重创（肉体/反应 −2）" });
+      }
+    }
+  }
+
+  if (blackLaceActive && spec.attribute === "body") {
+    bonuses.push({
+      source: "黑蕾丝药效",
+      value: 2,
+      reason: "战斗兴奋剂麻痹痛觉并激发潜能（肉体 +2）",
+      pool: "hardware",
+    });
+  }
+
+  if ((rawClock?.phasesAwake ?? 0) >= 4 && !penalties.some((p) => p.source === "疲劳")) {
+    penalties.push({ source: "疲劳", value: 1, reason: "连续熬夜未眠（全属性 −1）" });
+  }
+
+  const recentDoses = (rawClock?.blackLaceDoses ?? []).filter((t) => t >= world.time - 7 * 1440);
+  if (recentDoses.length >= 3 && !blackLaceActive) {
+    if (spec.attribute === "reflexes" && !penalties.some((p) => p.source === "戒断")) {
+      penalties.push({ source: "戒断", value: 1, reason: "黑蕾丝停药戒断手抖（反应 −1）" });
+    } else if (spec.attribute === "cool" && !penalties.some((p) => p.source === "戒断")) {
+      penalties.push({ source: "戒断", value: 2, reason: "黑蕾丝停药戒断焦虑（镇定 −2）" });
+    }
+  }
+
+  return prepareCheck(
+    {
+      ...spec,
+      bonuses,
+      penalties,
+      reflexesValue,
+      intelligenceValue,
+    },
+    attrVal,
+    dice.mode,
+  );
 }
 
 /** 用已经写进日志的骰面结算；重试和重新生成都走这里，不重掷 */

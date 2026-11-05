@@ -2,8 +2,8 @@ import type { AssetId } from "../../assets";
 
 /**
  * 物品和人物的原作图（第八节第 1 条：优先用原作素材）：
- * 武器是原作 item_icons 里各型号的默认涂装，义体是 item_icons 的 cw_*，头像是 avatars 图集。
- * 原作没有对应图的（胁差、通用义肢手臂和腿、曼因、丽贝卡、法拉第）不在表里，调用处退回到原来的样子
+ * 武器优先使用对应型号及不朽涂装，物品使用 item_icons，义体使用 cw_*，头像使用 avatars 图集。
+ * 缺少专图的物品使用同类示意图，并在映射旁注明；未收录的人物与义体由调用处处理。
  */
 
 /** 人物 id → 原作头像 */
@@ -24,7 +24,95 @@ const PORTRAITS: Readonly<Record<string, AssetId>> = {
 
 /** 物品 id（武器、义体）→ 原作物品图 */
 const ITEM_ART: Readonly<Record<string, AssetId>> = {
+  // 治疗品、手雷与食品
+  "health-booster": "itemArt.healthBooster",
+  // 本作虚构药物，借用原作稳定剂注射器作为示意图。
+  "psycho-suppressant": "itemArt.psychoSuppressant",
+  errata: "weaponArt.errata",
+  maxdoc: "itemArt.maxdoc",
+  "maxdoc-mk2": "itemArt.maxdoc",
+  "bounce-back": "itemArt.bounceBack",
+  "frag-grenade": "itemArt.frag",
+  "emp-grenade": "itemArt.emp",
+  "incendiary-grenade": "itemArt.incendiary",
+  flashbang: "itemArt.flashbang",
+  "recon-grenade": "itemArt.recon",
+  nicola: "itemArt.nicola",
+  hawtdawg: "itemArt.hawtdawg",
+  coffee: "itemArt.coffee",
+  "black-lace": "itemArt.blackLace",
+  glitter: "itemArt.glitter",
+  "strix-silencer": "itemArt.strixSilencer",
+  "alecto-silencer": "itemArt.alectoSilencer",
+  "kanetsugu-scope": "itemArt.kanetsuguScope",
+  "gaki-scope": "itemArt.gakiScope",
+  shard: "itemArt.shard",
+  "saika-scope": "itemArt.saikaScope",
+  "nomad-duster": "itemArt.nomadDuster",
+  shigure: "weaponArt.shigure",
+  // 通用服装使用同类原作服装示意图；插件共用原作改装件图标。
+  "street-jacket": "itemArt.streetJacket",
+  "corpo-suit": "itemArt.corpoSuit",
+  "techie-coverall": "itemArt.techieCoverall",
+  "netrunner-suit": "itemArt.netrunnerSuit",
+  "big-mag": "itemArt.mod",
+  "kneel-mod": "itemArt.mod",
+  "bleedout-mod": "itemArt.mod",
+  "parallax-mod": "itemArt.mod",
+  // 通用保安制服借用军用科技制服，工牌借用原作通行卡作为示意图。
+  "security-uniform": "itemArt.securityUniform",
+  "corpo-badge": "itemArt.corpoBadge",
   // 武器
+  "pipe-wrench": "weaponArt.pipeWrench",
+  // 解包素材中未找到胁差专图，使用同类刀剑图示。
+  wakizashi: "weaponArt.katana",
+  "neurotoxin-knife": "weaponArt.neurotoxinKnife",
+  "butchers-cleaver": "weaponArt.butchersCleaver",
+  "cattle-prod": "weaponArt.cattleProd",
+  pride: "weaponArt.pride",
+  "ba-xing-chong": "weaponArt.baXingChong",
+  "sir-john": "weaponArt.sirJohn",
+  "doom-doom": "weaponArt.doomDoom",
+  "widow-maker": "weaponArt.widowMaker",
+  fenrir: "weaponArt.fenrir",
+  "problem-solver": "weaponArt.problemSolver",
+  "shingen-prototype": "weaponArt.shingenPrototype",
+  yinglong: "weaponArt.yinglong",
+  erebus: "weaponArt.erebus",
+  "her-majesty": "weaponArt.herMajesty",
+  "comrades-hammer": "weaponArt.comradesHammer",
+  "jinchu-maru": "weaponArt.jinchuMaru",
+  byakko: "weaponArt.byakko",
+  breakthrough: "weaponArt.breakthrough",
+  ofive: "weaponArt.ofive",
+  lizzie: "weaponArt.lizzie",
+  "dying-night": "weaponArt.dyingNight",
+  crash: "weaponArt.crash",
+  archangel: "weaponArt.archangel",
+  chaos: "weaponArt.chaos",
+  kongou: "weaponArt.kongou",
+  "plan-b": "weaponArt.planB",
+  nowaki: "weaponArt.nowaki",
+  rasetsu: "weaponArt.rasetsu",
+  kaiken: "weaponArt.kaiken",
+  punknife: "weaponArt.punknife",
+  razor: "weaponArt.razor",
+  claw: "weaponArt.claw",
+  "cut-o-matic": "weaponArt.cutOMatic",
+  "tire-iron": "weaponArt.tireIron",
+  tamayura: "weaponArt.tamayura",
+  grit: "weaponArt.grit",
+  ticon: "weaponArt.ticon",
+  kappa: "weaponArt.kappa",
+  metel: "weaponArt.metel",
+  guillotine: "weaponArt.guillotine",
+  warden: "weaponArt.warden",
+  senkoh: "weaponArt.senkoh",
+  umbra: "weaponArt.umbra",
+  kyubi: "weaponArt.kyubi",
+  hercules: "weaponArt.hercules",
+  pozhar: "weaponArt.pozhar",
+  kolac: "weaponArt.kolac",
   unity: "weaponArt.unity",
   lexington: "weaponArt.lexington",
   nue: "weaponArt.nue",

@@ -1,9 +1,21 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import { createPlace, markVisit, resolveLocation } from "./places";
-import type { Deadline, DeadlineCommand, WorldClockState, WorldCommand } from "./schema";
+import {
+  type Deadline,
+  type DeadlineCommand,
+  PHASE_LABELS,
+  type PhaseClock,
+  type PhaseIndex,
+  type WorldClockState,
+  type WorldCommand,
+} from "./schema";
 
 const MINUTES_PER_DAY = 1440;
+/** 1 个相位标准时长：6 小时 = 360 分钟 */
+export const MINUTES_PER_PHASE = 360;
+/** 连续多少个相位不睡觉触发【疲劳（全属性 -1）】 */
+export const FATIGUE_PHASE_THRESHOLD = 4;
 
 export type Period = "dawn" | "day" | "dusk" | "night";
 
@@ -14,7 +26,6 @@ export const PERIOD_LABELS: Readonly<Record<Period, string>> = {
   night: "深夜",
 };
 
-/** 时段的起点（小时），只作显示用 */
 const PERIOD_STARTS: readonly (readonly [number, Period])[] = [
   [5, "dawn"],
   [9, "day"],
@@ -37,6 +48,50 @@ export function periodOf(minutes: number): Period {
   return period;
 }
 
+/**
+ * 3.0 四段相位换算：
+ * - 0 ☀️昼 (day)
+ * - 1 🌆昏 (dusk)
+ * - 2 🌙夜 (night)
+ * - 3 🌫️晓 (dawn)
+ */
+export function phaseIndexOf(minutes: number): PhaseIndex {
+  const p = periodOf(minutes);
+  if (p === "day") return 0;
+  if (p === "dusk") return 1;
+  if (p === "night") return 2;
+  return 3;
+}
+
+export function phaseClockOf(
+  minutes: number,
+  startTime = 0,
+): PhaseClock & { readonly label: string } {
+  const elapsedDays = Math.max(0, Math.floor((minutes - startTime) / MINUTES_PER_DAY));
+  const phase = phaseIndexOf(minutes);
+  return {
+    day: elapsedDays + 1,
+    phase,
+    label: `第 ${elapsedDays + 1} 天 · ${PHASE_LABELS[phase]}`,
+  };
+}
+
+/** 是否处于疲劳状态（连续 4 相位未睡，全属性 -1） */
+export function isFatigued(state: Pick<WorldClockState, "phasesAwake">): boolean {
+  return (state.phasesAwake ?? 0) >= FATIGUE_PHASE_THRESHOLD;
+}
+
+/** 是否染上黑蕾丝毒瘾（7 天内服用 ≥ 3 次）且当前处于停药戒断期（反应 -1，镇定 -2） */
+export function isBlackLaceWithdrawal(
+  state: Pick<WorldClockState, "blackLaceDoses" | "blackLaceActiveUntil">,
+  now: number,
+): boolean {
+  const windowStart = now - 7 * MINUTES_PER_DAY;
+  const recent = (state.blackLaceDoses ?? []).filter((t) => t >= windowStart);
+  if (recent.length < 3) return false;
+  return state.blackLaceActiveUntil === null || state.blackLaceActiveUntil <= now;
+}
+
 /** 已经到期、还没回应的事件；一次跳过好几天时全部列出 */
 export function dueDeadlines(state: WorldClockState, now: number): readonly Deadline[] {
   return state.deadlines
@@ -52,10 +107,6 @@ function dueNotes(draft: Draft<WorldClockState>, from: number, to: number): stri
     .map((d) => `到期：${d.label}（${formatGameTime(d.due)}）`);
 }
 
-/**
- * 时间只往前走，倒退的不改；没写 time 时间不动；地点随指令更新。
- * 地点先按地点表换成 id（中文名对得上的用原来那条；poi:、ft: 第一次去的记进存档），{name, in} 建新地点
- */
 export function applyWorld(
   draft: Draft<WorldClockState>,
   command: WorldCommand,
@@ -70,9 +121,10 @@ export function applyWorld(
       notes.push(
         `时间不能倒退：${formatGameTime(command.time)} 早于现在 ${formatGameTime(now)}，时间没动`,
       );
+  } else if (command.phases !== undefined && command.phases > 0) {
+    target = now + command.phases * MINUTES_PER_PHASE;
   }
   if (command.location !== undefined && typeof command.location === "object") {
-    // 新地方写成 {name, in, note?}（用户定的"统一为地点"，2026-11-02）：代码定坐标、贴路面
     const made = createPlace(draft, command.location, data, target);
     if (!made.ok) return made;
     notes.push(...(made.notes ?? []));
@@ -86,7 +138,30 @@ export function applyWorld(
       notes.push(`来到 ${resolved.id}`);
     }
   }
-  if (target > now) notes.push(`${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]}）`);
+
+  // 3.0 相位与疲劳推进
+  const crossedPhases =
+    command.phases ??
+    Math.max(
+      phaseIndexOf(target) !== phaseIndexOf(now) ? 1 : 0,
+      Math.floor((target - now) / MINUTES_PER_PHASE),
+    );
+  if (command.activity === "rest") {
+    draft.phasesAwake = 0;
+  } else if (crossedPhases > 0) {
+    const beforeFatigued = isFatigued(draft);
+    draft.phasesAwake = (draft.phasesAwake ?? 0) + crossedPhases;
+    if (!beforeFatigued && isFatigued(draft)) {
+      notes.push("连续 4 相位未睡眠，进入【疲劳】状态（全属性 −1）");
+    }
+  }
+
+  if (target > now) {
+    const phase = phaseIndexOf(target);
+    notes.push(
+      `${formatGameTime(target)}（${PERIOD_LABELS[periodOf(target)]} · ${PHASE_LABELS[phase]}）`,
+    );
+  }
   notes.push(...dueNotes(draft, now, target));
   const signals = command.activity === "rest" ? ["rest"] : [];
   return target > now
@@ -115,7 +190,6 @@ export function applyDeadline(
   return { ok: true, notes: [`${early ? "提前办完" : "已回应"}：${existing.label}`] };
 }
 
-/** 场景结束：不推进时间（过了多久由叙事模型在 world 里写），广播 scene.end */
 export function endScene(draft: Draft<WorldClockState>, now: number): ApplyOutcome {
   draft.scene += 1;
   draft.sceneStartedAt = now;

@@ -15,6 +15,23 @@ export const ActivitySchema = z.enum([
 ]);
 export type Activity = z.infer<typeof ActivitySchema>;
 
+/** 3.0 四段相位索引：0 ☀️昼 / 1 🌆昏 / 2 🌙夜 / 3 🌫️晓 */
+export const PhaseIndexSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]);
+export type PhaseIndex = z.infer<typeof PhaseIndexSchema>;
+
+export const PHASE_LABELS: Readonly<Record<PhaseIndex, string>> = {
+  0: "☀️昼",
+  1: "🌆昏",
+  2: "🌙夜",
+  3: "🌫️晓",
+};
+
+export const PhaseClockSchema = z.object({
+  day: z.number().int().min(1).default(1),
+  phase: PhaseIndexSchema.default(0),
+});
+export type PhaseClock = z.infer<typeof PhaseClockSchema>;
+
 const GAME_TIME = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 
 export function parseGameTime(text: string): number | undefined {
@@ -58,11 +75,7 @@ export const DeadlineSchema = z.object({
 });
 export type Deadline = z.infer<typeof DeadlineSchema>;
 
-/**
- * 存档自己记下的地点（用户定的，2026-11-01："统一为地点"）：剧情里新到的地方，和第一次去的原作店、地标；
- * 和原作固定地点一样并进地点表。id 由代码生成：新地点 place:<序号>，原作服务点 poi:<id>，原作地标 ft:<id>。
- * 旧存档里的 near、parent、tempScene、alias、rough、movedAt 读档时丢掉
- */
+/** 存档自己记下的地点 */
 export const SavedPlaceSchema = z.object({
   id: z.string().min(1),
   /** 中文名；同名归一，按名字查回同一条 */
@@ -90,15 +103,17 @@ export const WorldClockStateSchema = z.object({
   /** 第几个场景，从 0 起 */
   scene: z.number().int().min(0),
   sceneStartedAt: z.number().int(),
-  /** 存档记下的地点，并进地点表；旧存档没有这个字段，当空表（§九） */
+  /** 存档记下的地点，并进地点表；旧存档没有这个字段，当空表 */
   places: z.array(SavedPlaceSchema).default([]),
+  /** 3.0 连续未睡眠的相位数（连续 ≥ 4 相位不睡挂疲劳：全属性 -1） */
+  phasesAwake: z.number().int().min(0).default(0),
+  /** 3.0 最近 7 天服用黑蕾丝（Black Lace）的时间点（分钟） */
+  blackLaceDoses: z.array(z.number().int()).default([]),
+  /** 3.0 黑蕾丝药效维持截止时间（期间无视伤势减值且肉体 +2） */
+  blackLaceActiveUntil: z.number().int().nullable().default(null),
 });
 export type WorldClockState = z.infer<typeof WorldClockStateSchema>;
 
-/**
- * world 的 location 写新地方（用户定的，2026-11-01："统一为地点"，只留 id 和 {name, in} 两种写法）：
- * name 中文名，in 城区中文名（必填）；不写坐标，代码放在玩家附近或城区里最近的原作路边
- */
 export const NewPlaceSchema = z.object({
   name: z.string().min(1),
   in: z.string().min(1),
@@ -113,11 +128,13 @@ export const WorldCommandSchema = z
     activity: ActivitySchema,
     /** 这一轮结束时是几点，按情境写；不能早于现在，没写就是时间没动 */
     time: GameTimeSchema.optional(),
+    /** 3.0 相位推进步数（跨区办事、打完一场委托、动手术、睡觉各耗 1 相位） */
+    phases: z.number().int().min(0).max(4).optional(),
     /** 【地点】里的 id；到了新地方写 {name, in} */
     location: z.union([z.string().min(1), NewPlaceSchema]).optional(),
   })
   .describe(
-    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），过了多久由你按情境定（一句寒暄可以不过一分钟，一场谈判半小时，睡到第二天几点也由你写），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, note?}，不写坐标；收场（sceneEnd）不会自动推进时间，过了多久照样写在 time 里",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, note?}，不写坐标",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 

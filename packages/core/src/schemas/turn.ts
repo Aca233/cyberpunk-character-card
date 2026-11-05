@@ -89,7 +89,7 @@ export type TurnEvent =
       readonly faces: readonly number[];
       readonly total: number;
       readonly dv: number;
-      readonly outcome: "critical" | "success" | "failure" | "fumble";
+      readonly outcome: "critical" | "success" | "costly" | "failure" | "fumble";
     }
   | { readonly type: "text"; readonly text: string }
   /** 以下五种是终止事件，每一轮恰好一个 */

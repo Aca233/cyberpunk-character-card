@@ -2,6 +2,8 @@ import type { RuleModule } from "../../kernel/system";
 import { currentOutfit } from "./apply";
 import { bodyLine, woundNote } from "./body";
 import {
+  computeNpcVectors,
+  isCoreTruthUnlocked,
   KNOWN_SOURCE_LABELS,
   type LedgerKind,
   NO_FACTION,
@@ -142,8 +144,10 @@ function appearanceLines(npc: Npc): string[] {
 }
 
 function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
+  const vectors = computeNpcVectors(npc);
+  const unlocked = isCoreTruthUnlocked(npc);
   const lines = [
-    `- ${label(npc, stage)} ${npc.role}；好感 ${npc.affinity}${npc.met ? "" : "；还没见过玩家角色"}`,
+    `- ${label(npc, stage)} ${npc.role}；好感 ${npc.affinity}（信任 ${vectors.trust} / 把柄 ${vectors.leverage} / 敬畏 ${vectors.respect}）${npc.met ? "" : "；还没见过玩家角色"}`,
     // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
     ...appearanceLines(npc),
     `  说话：${npc.voice}`,
@@ -152,7 +156,15 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
     lines.push(`  样本：${npc.samples.map((s) => `「${s}」`).join(" ")}`);
   }
   lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
-  if (npc.secret) lines.push(`  秘密：${npc.secret}`);
+  if (npc.secret) {
+    if (unlocked) {
+      lines.push(`  秘密（已解锁真我）：${npc.secret}`);
+    } else {
+      lines.push(
+        "  【社交面具锁】：当前信任与把柄均未达标（<40），该人物对玩家戴着社交面具，严禁主动吐露核心秘密或表现脆弱真心",
+      );
+    }
+  }
   if (stage.data !== undefined && stage.now !== undefined) {
     lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
   }

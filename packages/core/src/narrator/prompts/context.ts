@@ -58,10 +58,11 @@ const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
 };
 
 const OUTCOME_LABELS = {
-  critical: "大成功",
-  success: "成功",
-  failure: "失败",
-  fumble: "大失败",
+  critical: "大成功（干净利落）",
+  success: "干净利落（Clean）",
+  costly: "惨胜（Costly：事办成了，但带刺）",
+  failure: "失败（搞砸）",
+  fumble: "大失败（彻底搞砸）",
 } as const;
 
 export { catalogSection } from "../../systems/inventory";
@@ -114,11 +115,17 @@ export function checkResultText(rolled: RolledCheck): string {
   const { prepared, result, offer } = rolled;
   const spec = offer.spec;
   const faces =
-    result.faces.length > 1
-      ? `${result.faces[0]}（再掷 ${result.faces[1]}）`
-      : `${result.faces[0]}`;
+    result.faces.length > 1 ? `${result.faces.join(" + ")} = ${result.roll}` : `${result.faces[0]}`;
+  const costHint =
+    result.outcome === "costly"
+      ? "\n【惨胜演绎指令】玩家成功达成了意图，但过程带刺！请根据现场情境自然演绎 1 项合理代价（如流弹擦伤、弄出声响引起门外警觉、工具受损或留下蛛丝马迹）。"
+      : "";
+  const tagsLine =
+    result.tacticalTags && result.tacticalTags.length > 0
+      ? `\n【物理/战术结算】${result.tacticalTags.join("；")}`
+      : "";
   const lines = [
-    `【检定结果】${ATTRIBUTE_LABELS[spec.attribute]}检定，难度值 ${prepared.dv}：掷出 ${faces}，加检定值 ${prepared.modifier}，合计 ${result.total} → ${OUTCOME_LABELS[result.outcome]}`,
+    `【检定结果】${ATTRIBUTE_LABELS[spec.attribute]}检定，难度值 ${prepared.dv}：2d6 掷出 ${faces}，加修正 ${prepared.modifier}，合计 ${result.total}（Δ=${result.delta}） → ${OUTCOME_LABELS[result.outcome]}${tagsLine}${costHint}`,
     `事先说明——成功：${spec.success}；失败：${spec.failure}${spec.damage ? `；失败最多${DAMAGE_LABELS[spec.damage]}` : "；失败不扣血"}`,
     "按这个结果写这一轮的正文，正文里不提骰子和数值；失败时后果不比事先说明的更重。",
   ];

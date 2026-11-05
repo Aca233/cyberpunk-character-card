@@ -81,6 +81,8 @@ export function seedNpc(
   draft.npcs[card.id] = {
     ...card,
     affinity,
+    goalProgress: 0,
+    crisis: null,
     alive: true,
     met,
     location: card.home ?? null,
@@ -227,6 +229,8 @@ export function applyNpc(
       samples: [],
       canon: false,
       affinity: 0,
+      goalProgress: 0,
+      crisis: null,
       alive: true,
       met: true,
       location: location ?? null,

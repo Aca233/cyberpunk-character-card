@@ -2,27 +2,26 @@ import type { StatusContext, SystemStatus } from "../../kernel/system";
 import { MOD_STEP, PENALTY_CAP } from "../dice";
 import type { healthView } from "./view";
 
-/** 【当前状态】里生命的几行：开头的生命值，义体之后的断肢 */
+/** 【当前状态】里伤势与身体状况（3.0 废除数字血条剧透，改为四格具象伤势描述） */
 
 type HealthView = ReturnType<typeof healthView>;
 
 const healthOf = (ctx: StatusContext) => ctx.views.health as HealthView;
-
-/** 伤势标签给模型看的写法；没受伤不写 */
-const WOUND_TEXT: Readonly<Record<string, string>> = {
-  light: "轻伤",
-  severe: "重伤",
-  zero: "生命归零",
-};
 
 export const healthStatus: readonly SystemStatus[] = [
   {
     order: 30,
     lines(ctx) {
       const h = healthOf(ctx);
-      return [
-        `生命：${h.hp}/${h.max}，${h.conditionLabel}${WOUND_TEXT[h.wound] ? `，${WOUND_TEXT[h.wound]}` : ""}`,
-      ];
+      const painNote =
+        h.wounds === 2
+          ? h.painSuppressed
+            ? "（医疗针临时压制疼痛中）"
+            : "（肉体/反应检定 −2，需打医疗针或找医生缝合）"
+          : h.wounds === 3
+            ? "（全检定 −4）"
+            : "";
+      return [`身体伤势：${h.woundLabel}，${h.conditionLabel}${painNote}`];
     },
   },
   {

@@ -766,39 +766,78 @@ export function Track({
 
 /**
  * H 武器和快速破解：武器格同原 Hud（hud.slot*），快速破解用现有轮盘。
- * 不再开全屏神经界面（第十二节第 10 条）：悬停或按 O/K 钉住，物品栏和制作就在这块自己的框里往上长
+ * 悬停或按 O 钉住时，框朝中列平滑加宽、往上长出完整物品栏，常驻武器读数稳在底部。
  */
 export function Weapon({
   view,
   peek,
-  onQuickhack,
   full,
   tabs,
+  onQuickhack,
 }: {
   readonly view: View;
   readonly peek: PeekState;
-  /** 生成中为 undefined：轮盘不出 */
-  readonly onQuickhack?: ((name: string) => void) | undefined;
-  /** 块里放的完整物品栏或制作 */
+  /** 展开区里的完整物品栏 */
   readonly full: ReactNode;
-  /** 物品栏、制作页签：块往上长，页签放在底下挨着武器格，同 G 未读 */
+  /** 展开区底部的页签 */
   readonly tabs?: ReactNode;
+  /** 生成中为 undefined：不显示快速破解入口 */
+  readonly onQuickhack?: ((name: string) => void) | undefined;
 }) {
   const { inventory, hacking } = view;
   const p = usePeek("weapon", peek.expand, peek.setExpand);
+  const wideOn = useLinger(p.open);
   const weaponId = inventory.active === null ? null : (inventory.weapons[inventory.active] ?? null);
   const weapon = weaponId === null ? null : (view.names.items[weaponId] ?? weaponId);
+  const activeDetail = weaponId === null ? undefined : inventory.details?.[weaponId];
   return (
-    // biome-ignore lint/a11y/useSemanticElements: 块里套着快速破解轮盘的按钮，不能整个换成 button
+    // biome-ignore lint/a11y/useSemanticElements: 块里套着快速破解轮盘和物品栏按钮，不能整个换成 button
     <div
       className={`${styles.block} ${styles.weapon}`}
       data-layer="os"
       data-open={p.open || undefined}
-      aria-label="武器"
+      data-pinned={p.pinned || undefined}
+      data-wide={wideOn || undefined}
+      aria-label="武器与物品栏，点击固定展开，按 Esc 收起"
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
-      {...p.bind}
+      onClick={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest("button, input, textarea, select, a, [role='button']") !==
+            event.currentTarget
+        )
+          return;
+        if (p.pinned) p.close();
+        else peek.setExpand({ id: "weapon", pinned: true });
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          if (p.pinned) p.close();
+          else peek.setExpand({ id: "weapon", pinned: true });
+        }
+      }}
+      onPointerEnter={(event) => {
+        if (event.target instanceof Element && event.target.closest("[data-layer='deck']")) return;
+        p.bind.onPointerEnter(event);
+      }}
+      onPointerOver={(event) => {
+        const inDeck =
+          event.target instanceof Element && event.target.closest("[data-layer='deck']");
+        const fromDeck =
+          event.relatedTarget instanceof Element &&
+          event.relatedTarget.closest("[data-layer='deck']");
+        if (inDeck && !fromDeck) p.bind.onPointerLeave(event);
+        else if (!inDeck && fromDeck) p.bind.onPointerEnter(event);
+      }}
+      onPointerMove={(event) => {
+        if (event.target instanceof Element && event.target.closest("[data-layer='deck']")) return;
+        p.bind.onPointerEnter(event);
+      }}
+      onPointerLeave={p.bind.onPointerLeave}
     >
       {hacking && hacking.programs.length > 0 && onQuickhack && (
         <div className={styles.qhSlot} data-layer="deck">
@@ -812,39 +851,50 @@ export function Weapon({
       )}
       <div className={styles.slot}>
         <BlockShadow />
-        <NineSlice id="hud.slotBg" tint="rgb(14 14 23 / 85%)" slice={SLOT_SLICE} />
+        <NineSlice id="hud.slotBg" tint="rgb(14 14 23 / 90%)" slice={SLOT_SLICE} />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
-        {/* 物品栏在这块里长出来（第十二节第 10 条），不再跳全屏；制作页随物品栏精简去掉（用户定的方案 A） */}
         <Grow open={p.open} title="装备 · 物品栏" hint="O" line="var(--cp-cyan)">
           {full}
         </Grow>
         {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}
         <div className={styles.inner}>
-          {/* 名字和读数在左、原作武器图在右（用户定的，计划第十二节第 9 条）：常态排成一行，不再上图下字空一大块 */}
           <span className={styles.slotMain}>
-            {weapon === null ? (
-              <Asset id="weapon.fists" tint="var(--cp-cyan)" height={30} alt="空手" />
-            ) : (
-              <b>{weapon}</b>
-            )}
-            {/* 常态就带治疗品和手雷剩几次 */}
-            {(inventory.healing || inventory.grenade) && (
-              <small className={styles.slotLine}>
-                {inventory.healing && `治疗 ${inventory.healing.charges}/${inventory.healing.max}`}
-                {inventory.healing && inventory.grenade && " · "}
-                {inventory.grenade && `手雷 ${inventory.grenade.charges}/${inventory.grenade.max}`}
-              </small>
-            )}
+            <span className={styles.slotHead}>
+              {weapon === null ? (
+                <>
+                  <Asset id="weapon.fists" tint="var(--cp-cyan)" height={24} alt="徒手" />
+                  <b>徒手</b>
+                </>
+              ) : (
+                <>
+                  <b>{weapon}</b>
+                  {activeDetail?.subLabel && (
+                    <small className={styles.slotSub}>{activeDetail.subLabel}</small>
+                  )}
+                </>
+              )}
+            </span>
+            <small className={styles.slotLine}>
+              {inventory.healing
+                ? `治疗 ${inventory.healing.charges}/${inventory.healing.max}`
+                : "无治疗品"}
+              {" · "}
+              {inventory.grenade
+                ? `手雷 ${inventory.grenade.charges}/${inventory.grenade.max}`
+                : "无手雷"}
+              {" · "}
+              负荷 {inventory.loadout.usedSlots}/{inventory.loadout.maxSlots}
+            </small>
           </span>
-          {/* 手持武器的原作图（第八节第 1 条：优先用原作素材）放在右边；没有图的照旧只写名字 */}
           {weapon !== null && itemArtOf(weaponId) && (
             <Asset
               id={itemArtOf(weaponId) as AssetId}
-              width={160}
-              height={56}
+              width={148}
+              height={54}
               className={`${story.weaponArt} ${styles.slotArt}`}
             />
           )}
+          <kbd className={styles.slotHint}>{p.pinned ? "ESC" : "O"}</kbd>
         </div>
       </div>
     </div>

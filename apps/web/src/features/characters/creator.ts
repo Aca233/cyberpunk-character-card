@@ -404,7 +404,7 @@ export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
     summary: "体魄与反应出众，擅长街头肉搏与黑诊所急救，解锁【铁笼凶兽】与【暗巷医者】特长联动",
     pasts: ["gang-runner", "clinic-apprentice", "pit-fighter"],
     skills: ["brawling", "lockpick", "streetwise"],
-    attributes: { body: 5, reflexes: 5, tech: 3, intelligence: 4, cool: 5 },
+    attributes: { body: 4, reflexes: 4, tech: 2, intelligence: 2, cool: 3 },
   },
   nomad: {
     originId: "nomad",
@@ -412,7 +412,7 @@ export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
     summary: "技术与体魄兼备，擅长恶劣环境驾驶、机械拆修与智能武器改装，解锁【职业车手】特长联动",
     pasts: ["smuggler", "merc-crew", "clinic-apprentice"],
     skills: ["driving", "mechanic", "smart-weapon-mod"],
-    attributes: { body: 5, reflexes: 4, tech: 6, intelligence: 3, cool: 4 },
+    attributes: { body: 3, reflexes: 3, tech: 5, intelligence: 2, cool: 2 },
   },
   corpo: {
     originId: "corpo",
@@ -421,7 +421,7 @@ export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
       "极高镇定与网络智力，熟稔企业博弈谈判、快速网络入侵与安防破解，解锁【潜网幽灵】特长联动",
     pasts: ["arasaka-ex", "gang-runner", "clinic-apprentice"],
     skills: ["corpo-negotiation", "quickhacking", "lockpick"],
-    attributes: { body: 3, reflexes: 4, tech: 4, intelligence: 5, cool: 6 },
+    attributes: { body: 2, reflexes: 2, tech: 3, intelligence: 4, cool: 4 },
   },
 };
 

@@ -13,6 +13,8 @@ const body = (hp = 100): HealthState => ({
   hp,
   max: 100,
   condition: "up",
+  wounds: 0,
+  painSuppressed: false,
   severeSince: null,
   bleeds: 0,
   damagedBy: null,

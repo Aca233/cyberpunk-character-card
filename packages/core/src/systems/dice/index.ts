@@ -10,14 +10,14 @@ const streetLegendRules: RuleModule<DiceState> = {
   title: "难度：街头传说",
   when: (s) => s.mode === "streetLegend",
   text: `- 当前难度是街头传说：致命失败时总有一条退路，角色不会死，代价落在欧元、人性或关系上。
-- 濒死撑到期限还没人救时，代码会让角色被人拖出来（生命很低，战斗按败局结束）；你在正文里写出是谁救的、怎么救的、欠下了什么，再写对应的 trade（付医药费、打点写 service）、humanity 或 affinity。`,
+- 触及第 4 格生死线没人救时，代码会让角色被熟人或副心脏拖回黑诊所（欠下救命血债）；你在正文里写出是谁救的、怎么救的、欠下了什么。`,
 };
 
 const deathCityRules: RuleModule<DiceState> = {
   id: "deathCity",
   title: "难度：死亡之城",
   when: (s) => s.mode === "deathCity",
-  text: "- 当前难度是死亡之城：死了就结束，不能重来。致命的危险一定先在正文里明确提示，并在检定的失败后果里写清楚会死；没提示过的失败不能致死。",
+  text: "- 当前难度是死亡之城：触及第 4 格生死线且无白金创伤卡、无副心脏、无在场盟友时角色正式谢幕，生平载入来生传奇名册。致命的危险一定先在正文里明确提示。",
 };
 
 export const dice = defineSystem<DiceState, never, DiceInternal>({

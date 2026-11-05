@@ -5,6 +5,32 @@ import { DamageTierSchema } from "../dice";
 export const ConditionSchema = z.enum(["up", "down", "dying", "dead"]);
 export type Condition = z.infer<typeof ConditionSchema>;
 
+/** 3.0 四阶段具象伤势与濒死休克（0 完好 / 1 轻伤挂彩 / 2 贯通重创 / 3 失能重残 / 4 濒死休克） */
+export const WoundSlotSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+]);
+export type WoundSlot = z.infer<typeof WoundSlotSchema>;
+
+export const WOUND_SLOT_LABELS: Readonly<Record<WoundSlot, string>> = {
+  0: "🟢 完好（0 格）",
+  1: "🟡 挂彩（1 格）",
+  2: "🟠 重创（2 格）",
+  3: "🔴 残废（3 格）",
+  4: "💀 生死线（4 格）",
+};
+
+/** 生死线三大保底通道 */
+export const DeathLineChannelSchema = z.enum([
+  "traumaPlatinum",
+  "secondHeartOrAlly",
+  "deathCityCurtain",
+]);
+export type DeathLineChannel = z.infer<typeof DeathLineChannelSchema>;
+
 /** 断肢的部位 */
 export const LimbSchema = z.enum(["left-arm", "right-arm", "left-leg", "right-leg"]);
 export type Limb = z.infer<typeof LimbSchema>;
@@ -29,6 +55,10 @@ export const HealthStateSchema = z.object({
   hp: z.number().int().min(0),
   max: z.number().int().min(1),
   condition: ConditionSchema,
+  /** 3.0 四格具象伤势（0 完好 / 1 挂彩 / 2 重创 / 3 残废 / 4 生死线） */
+  wounds: WoundSlotSchema.default(0),
+  /** 是否已打医疗针临时压制本场【重创 -2】疼痛减值 */
+  painSuppressed: z.boolean().default(false),
   /** 进入重伤的游戏时间；不在重伤时为 null */
   severeSince: z.number().int().nullable(),
   /** 这次重伤已经按天失血几次 */
@@ -42,7 +72,7 @@ export const HealthStateSchema = z.object({
 });
 export type HealthState = z.infer<typeof HealthStateSchema>;
 
-/** 模型使用：{"type": "damage", "tier": "graze", "reason": "..."}，只能在掷骰失败后出现 */
+/** 模型使用：{"type": "damage", "tier": "graze", "reason": "..."}，只能在掷骰失败或惨胜代价后出现 */
 export const DamageCommandSchema = z
   .object({
     type: z.literal("damage"),
@@ -52,7 +82,7 @@ export const DamageCommandSchema = z
     reason: z.string().min(1),
   })
   .describe(
-    "扣血：只能出现在检定失败的那一轮，档位不超过 check 事先写的 damage；limb 只在 check 写了 limb 的致命档失败时写",
+    "受伤记账：出现在检定失败或惨胜（Costly）受反击代价的那一轮，档位不超过事先说明的 damage；limb 只在写了 limb 的致命档失败时写",
   );
 export type DamageCommand = z.infer<typeof DamageCommandSchema>;
 
@@ -63,7 +93,9 @@ export const HealCommandSchema = z
     source: z.enum(["maxdoc", "ripperdoc", "rest"]),
     reason: z.string().min(1).optional(),
   })
-  .describe("回血：maxdoc 用快捷栏里的治疗品，ripperdoc 找义体医生，rest 休整");
+  .describe(
+    "处理伤势：maxdoc 打医疗针临时压制重创疼痛或回伤势，ripperdoc 找义体医生缝合，rest 休整消除挂彩",
+  );
 export type HealCommand = z.infer<typeof HealCommandSchema>;
 
 /** 只能由代码发出：建档和成长改上限、救治倒下或濒死的角色、判定死亡 */

@@ -60,7 +60,7 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
       "语速偏快且短促，说话带着沃森汽修工特有的脏字与黑话，紧张时会下意识揉搓后颈；从不轻易说谢谢，但欠下的人情必定会拿命去还。",
     skills:
       "精通内燃机与底盘调校，熟练绕过普通电子门禁与监控回传；恶土与窄巷驾驶经验丰富。未掌握高阶黑客入侵，未植入攻击型义体，基础枪械射击达标。",
-    attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 4, cool: 3 },
+    attributes: { body: 3, reflexes: 3, tech: 5, intelligence: 2, cool: 2 },
     board: {
       ...loBoard,
       combos: boardCombos(loBoard, combos).map(({ requires: _, ...combo }) => combo),

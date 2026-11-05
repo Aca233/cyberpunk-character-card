@@ -60,6 +60,14 @@ export { ROUTE_ANCHORS, type RouteAnchor, routeMeters } from "./routeTable.gen";
 export { apartments, homes } from "./safehouses";
 export { shops } from "./shops";
 export { sidegigs } from "./sidegigs";
+export {
+  DISTRICT_LAWS,
+  type DistrictLaw,
+  FIXER_TEMPERAMENTS,
+  type FixerTemperament,
+  NIGHT_CITY_SLICES,
+  type NightCitySlice,
+} from "./slices";
 export { vehicles } from "./vehicles";
 
 /**

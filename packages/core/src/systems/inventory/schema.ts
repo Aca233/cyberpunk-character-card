@@ -346,3 +346,155 @@ export const PartsCommandSchema = z
     "零件：搜刮、拆了场景里的设备、别人送的写正数，剧情里花掉写负数；玩家自己拆解和给武器升级在界面上做，不写这个",
   );
 export type PartsCommand = z.infer<typeof PartsCommandSchema>;
+
+/** 3.0 随身 6 格负荷上限 */
+export const LOADOUT_MAX_SLOTS = 6;
+
+/**
+ * 3.0 四大穿搭通行证（Style Tag）：
+ * - entropism【熵增主义】：底层工装/破烂（T1）
+ * - kitsch【刻奇】：街头霓虹/潮牌（T2，海伍德/沃森/圣多明戈打听消息 +1）
+ * - neomilitarism【新军权】：冷酷黑金/公司正装（T3，大厦/公司安检通行证）
+ * - neokitsch【新刻奇】：权贵礼服/奢华定制（T4，市政中心高端酒会/权贵公馆通行证）
+ */
+export const StyleTagSchema = z.enum(["entropism", "kitsch", "neomilitarism", "neokitsch"]);
+export type StyleTag = z.infer<typeof StyleTagSchema>;
+
+export const STYLE_TAG_LABELS: Readonly<
+  Record<StyleTag, { readonly label: string; readonly tier: 1 | 2 | 3 | 4 }>
+> = {
+  entropism: { label: "熵增主义（街头工装）", tier: 1 },
+  kitsch: { label: "刻奇（街头霓虹）", tier: 2 },
+  neomilitarism: { label: "新军权（冷酷黑金）", tier: 3 },
+  neokitsch: { label: "新刻奇（权贵礼服）", tier: 4 },
+};
+
+/**
+ * 武器隐蔽度（Concealment）：
+ * - pocket（贴身可藏）：手枪（可藏进西装/礼服内）
+ * - coat（风衣遮蔽）：左轮、冲锋枪、短钝器（穿外套/夹克可藏匿）
+ * - open（显眼长械）：突击步枪、霰弹枪、精准步枪、武士刀（无法藏进衣服，高安保区上街即被盘查）
+ * - heavy（重型军火）：狙击步枪、轻机枪（平时放后备箱）
+ */
+export function weaponConcealment(
+  category: WeaponCategory | undefined,
+): "pocket" | "coat" | "open" | "heavy" {
+  switch (category) {
+    case "pistol":
+      return "pocket";
+    case "revolver":
+    case "smg":
+    case "blunt":
+      return "coat";
+    case "assaultRifle":
+    case "shotgun":
+    case "precisionRifle":
+    case "blade":
+      return "open";
+    case "sniperRifle":
+    case "lmg":
+      return "heavy";
+    default:
+      return "pocket";
+  }
+}
+
+/** 手枪/左轮/刀剑/钝器占 1 格；步枪/狙击/霰弹/冲锋枪/机枪占 2 格（长枪/重武器） */
+export function weaponSlotCost(category: WeaponCategory | undefined): 1 | 2 {
+  if (
+    category === "pistol" ||
+    category === "revolver" ||
+    category === "blade" ||
+    category === "blunt"
+  ) {
+    return 1;
+  }
+  return 2;
+}
+
+export function isHeavyWeapon(category: WeaponCategory | undefined): boolean {
+  const c = weaponConcealment(category);
+  return c === "open" || c === "heavy";
+}
+
+/** 根据身上所穿服装推断四大穿搭通行证（StyleTag） */
+export function inferStyleTag(
+  clothing: InventoryState["clothing"],
+  catalog: ReadonlyMap<string, ItemDef>,
+): StyleTag {
+  const worn = Object.values(clothing)
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => ({ id, def: catalog.get(id) }));
+  const text = worn.map((w) => `${w.id} ${w.def?.name ?? ""} ${w.def?.ability ?? ""}`).join(" ");
+  if (
+    text.includes("neokitsch") ||
+    text.includes("礼服") ||
+    text.includes("权贵") ||
+    text.includes("奢华") ||
+    worn.some((w) => w.def?.rarity === "legendary")
+  ) {
+    return "neokitsch";
+  }
+  if (
+    text.includes("corpo") ||
+    text.includes("西装") ||
+    text.includes("正装") ||
+    text.includes("军用") ||
+    text.includes("荒坂") ||
+    text.includes("neomilitarism")
+  ) {
+    return "neomilitarism";
+  }
+  if (
+    text.includes("kitsch") ||
+    text.includes("霓虹") ||
+    text.includes("夹克") ||
+    text.includes("street-jacket") ||
+    text.includes("莫克斯")
+  ) {
+    return "kitsch";
+  }
+  return "entropism";
+}
+
+const CONCEALMENT_RANK: Readonly<Record<"pocket" | "coat" | "open" | "heavy", number>> = {
+  pocket: 0,
+  coat: 1,
+  open: 2,
+  heavy: 3,
+};
+
+/** 计算随身携带隐蔽度、负荷与穿搭状态 */
+export function loadoutSummary(
+  state: Pick<InventoryState, "weapons" | "healing" | "grenade" | "clothing">,
+  catalog: ReadonlyMap<string, ItemDef>,
+) {
+  let usedSlots = 0;
+  let hasHeavy = false;
+  let profile: "pocket" | "coat" | "open" | "heavy" = "pocket";
+  for (const weaponId of state.weapons) {
+    if (!weaponId) continue;
+    const def = catalog.get(weaponId);
+    const cost = weaponSlotCost(def?.category);
+    const conc = weaponConcealment(def?.category);
+    usedSlots += cost;
+    if (conc === "open" || conc === "heavy") hasHeavy = true;
+    if (CONCEALMENT_RANK[conc] > CONCEALMENT_RANK[profile]) {
+      profile = conc;
+    }
+  }
+  if (state.clothing.outer) usedSlots += 1;
+  if (state.healing || state.grenade) usedSlots += 1;
+  const styleTag = inferStyleTag(state.clothing, catalog);
+  const styleInfo = STYLE_TAG_LABELS[styleTag];
+  return {
+    usedSlots,
+    maxSlots: LOADOUT_MAX_SLOTS,
+    overloaded: usedSlots > LOADOUT_MAX_SLOTS,
+    hasHeavyWeapon: hasHeavy,
+    concealment: profile,
+    styleTag,
+    styleLabel: styleInfo.label,
+    styleTier: styleInfo.tier,
+  };
+}

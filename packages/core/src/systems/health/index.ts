@@ -25,6 +25,8 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
       hp: max,
       max,
       condition: "up",
+      wounds: 0,
+      painSuppressed: false,
       severeSince: null,
       bleeds: 0,
       damagedBy: null,

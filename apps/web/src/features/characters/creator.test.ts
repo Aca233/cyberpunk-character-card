@@ -38,20 +38,20 @@ describe("attributeReliance / recommendAttributes", () => {
     expect(r.body).toEqual([]);
   });
 
-  it("7 点分完、单项不过 6，靠得多的那项分得多", () => {
+  it("5 点分完、单项不过 5，靠得多的那项分得多", () => {
     const board = BoardSchema.parse({
       skills: [skill("a", ["reflexes"]), skill("b", ["reflexes"]), skill("c", ["cool"])],
     });
     const a = recommendAttributes(board);
-    expect(total(a)).toBe(15 + 7);
-    expect(Math.max(...Object.values(a))).toBeLessThanOrEqual(6);
+    expect(total(a)).toBe(10 + 5);
+    expect(Math.max(...Object.values(a))).toBeLessThanOrEqual(5);
     expect(a.reflexes).toBeGreaterThanOrEqual(a.cool);
     expect(a.cool).toBeGreaterThan(a.body);
   });
 
   it("没有本事写 checks 时平均分", () => {
     const a = recommendAttributes(BoardSchema.parse({}));
-    expect(total(a)).toBe(15 + 7);
+    expect(total(a)).toBe(10 + 5);
     expect(Math.max(...Object.values(a)) - Math.min(...Object.values(a))).toBeLessThanOrEqual(1);
   });
 });
@@ -188,11 +188,11 @@ describe("ORIGIN_PRESETS and applyOriginPreset", () => {
     board: BoardSchema.parse({}),
   } as unknown as CharacterCard;
 
-  it("各出身预设的属性点总消耗严格等于 7", () => {
+  it("各出身预设的属性点总消耗严格等于 5", () => {
     for (const key of ORIGIN_KEYS) {
       const preset = ORIGIN_PRESETS[key];
-      const spent = Object.values(preset.attributes).reduce((s, v) => s + (v - 3), 0);
-      expect(spent).toBe(7);
+      const spent = Object.values(preset.attributes).reduce((s, v) => s + (v - 2), 0);
+      expect(spent).toBe(5);
       expect(preset.pasts).toHaveLength(3);
       expect(preset.skills).toHaveLength(3);
     }

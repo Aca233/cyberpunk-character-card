@@ -37,19 +37,19 @@ export const NPC_TIER_LABELS: Readonly<Record<NpcTier, string>> = {
   elite: "精英",
   legend: "传奇",
 };
-/** 五项属性（不算义体加成）加起来的范围，建卡时代码校验（暂定，试玩时调） */
+/** 五项属性（1~10 标度，不算义体加成）加起来的范围，建卡时代码校验 */
 export const NPC_TIER_ATTR_SUM: Readonly<Record<NpcTier, readonly [number, number]>> = {
-  mook: [15, 35],
-  pro: [25, 50],
-  elite: [40, 70],
-  legend: [55, 100],
+  mook: [5, 18],
+  pro: [10, 26],
+  elite: [18, 40],
+  legend: [25, 50],
 };
-/** 没写属性时每项的默认值 */
+/** 没写属性时每项的默认值（T1=2, T2=4, T3=7, T4=9） */
 export const NPC_TIER_DEFAULT_ATTR: Readonly<Record<NpcTier, number>> = {
-  mook: 5,
-  pro: 7,
-  elite: 10,
-  legend: 13,
+  mook: 2,
+  pro: 4,
+  elite: 7,
+  legend: 9,
 };
 /** 算生命上限时当作的街头声望 */
 export const NPC_TIER_CRED: Readonly<Record<NpcTier, number>> = {
@@ -58,21 +58,43 @@ export const NPC_TIER_CRED: Readonly<Record<NpcTier, number>> = {
   elite: 25,
   legend: 40,
 };
-export const NPC_ATTR_MIN = 3;
-export const NPC_ATTR_MAX = 20;
+export const NPC_ATTR_MIN = 1;
+export const NPC_ATTR_MAX = 10;
 /** 装备栏最多几件、义体最多几件 */
 export const NPC_GEAR_MAX = 6;
 export const NPC_CHROME_MAX = 8;
 
 const NpcAttrValueSchema = z.number().int().min(NPC_ATTR_MIN).max(NPC_ATTR_MAX);
-/** 和玩家同一套五项属性 */
-export const NpcAttributesSchema = z.object({
-  body: NpcAttrValueSchema,
-  reflexes: NpcAttrValueSchema,
-  tech: NpcAttrValueSchema,
-  intelligence: NpcAttrValueSchema,
-  cool: NpcAttrValueSchema,
-});
+/** 和玩家同一套五项属性（1~10 点；若传入旧 20 点制数据则自动按比例折算至 1~10） */
+export const NpcAttributesSchema = z.preprocess(
+  (raw) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+    const rec = raw as Record<string, unknown>;
+    const vals = [rec.body, rec.reflexes, rec.tech, rec.intelligence, rec.cool];
+    if (
+      vals.every((v) => typeof v === "number") &&
+      vals.some((v) => (v as number) > NPC_ATTR_MAX)
+    ) {
+      const scale = (n: number) =>
+        Math.max(NPC_ATTR_MIN, Math.min(NPC_ATTR_MAX, Math.round(n / 2)));
+      return {
+        body: scale(rec.body as number),
+        reflexes: scale(rec.reflexes as number),
+        tech: scale(rec.tech as number),
+        intelligence: scale(rec.intelligence as number),
+        cool: scale(rec.cool as number),
+      };
+    }
+    return raw;
+  },
+  z.object({
+    body: NpcAttrValueSchema,
+    reflexes: NpcAttrValueSchema,
+    tech: NpcAttrValueSchema,
+    intelligence: NpcAttrValueSchema,
+    cool: NpcAttrValueSchema,
+  }),
+);
 export type NpcAttributes = z.infer<typeof NpcAttributesSchema>;
 
 function attrSum(a: NpcAttributes): number {
@@ -83,48 +105,78 @@ function attrSum(a: NpcAttributes): number {
  * 人物卡上的身体：档位、属性、装备栏（物品表 id）、义体（义体表 id）、开局人性。
  * id 在不在表里要拿内容数据才能查，由结算校验；这里只查范围和重复
  */
-export const NpcBodyCardSchema = z
-  .object({
-    tier: NpcTierSchema.describe("mook 普通人，pro 老手，elite 精英，legend 传奇；按身份选"),
-    attributes: NpcAttributesSchema.optional().describe(
-      `五项属性 ${NPC_ATTR_MIN}–${NPC_ATTR_MAX}，不算义体加成；不写按档位给默认值`,
-    ),
-    gear: z
-      .array(z.string().min(1))
-      .max(NPC_GEAR_MAX)
-      .default([])
-      .describe("装备栏：物品表里的 id，手里的武器和身上的衣服"),
-    cyberware: z
-      .array(z.string().min(1))
-      .max(NPC_CHROME_MAX)
-      .default([])
-      .describe("装着的义体：义体表里的 id"),
-    humanity: z
-      .number()
-      .int()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("开局人性；不写按 100 减去义体消耗"),
-  })
-  .superRefine((b, ctx) => {
-    if (b.attributes) {
-      const sum = attrSum(b.attributes);
-      const [lo, hi] = NPC_TIER_ATTR_SUM[b.tier];
-      if (sum < lo || sum > hi) {
-        ctx.addIssue({
-          code: "custom",
-          message: `${NPC_TIER_LABELS[b.tier]}的五项属性加起来要在 ${lo}–${hi}，现在是 ${sum}`,
-        });
+export const NpcBodyCardSchema = z.preprocess(
+  (raw) => {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+    const rec = raw as Record<string, unknown>;
+    const tier = NpcTierSchema.safeParse(rec.tier);
+    const attrs = rec.attributes as Record<string, unknown> | undefined;
+    if (tier.success && attrs && typeof attrs === "object") {
+      const vals = [attrs.body, attrs.reflexes, attrs.tech, attrs.intelligence, attrs.cool];
+      if (vals.every((v) => typeof v === "number")) {
+        const sum = (vals as number[]).reduce((a, b) => a + b, 0);
+        const [, hi] = NPC_TIER_ATTR_SUM[tier.data];
+        if (sum > hi || (vals as number[]).some((v) => v > NPC_ATTR_MAX)) {
+          const scale = (n: number) =>
+            Math.max(NPC_ATTR_MIN, Math.min(NPC_ATTR_MAX, Math.round(n / 2)));
+          return {
+            ...rec,
+            attributes: {
+              body: scale(attrs.body as number),
+              reflexes: scale(attrs.reflexes as number),
+              tech: scale(attrs.tech as number),
+              intelligence: scale(attrs.intelligence as number),
+              cool: scale(attrs.cool as number),
+            },
+          };
+        }
       }
     }
-    if (new Set(b.gear).size !== b.gear.length) {
-      ctx.addIssue({ code: "custom", message: "装备栏里有重复的物品" });
-    }
-    if (new Set(b.cyberware).size !== b.cyberware.length) {
-      ctx.addIssue({ code: "custom", message: "义体里有重复的" });
-    }
-  });
+    return raw;
+  },
+  z
+    .object({
+      tier: NpcTierSchema.describe("mook 普通人，pro 老手，elite 精英，legend 传奇；按身份选"),
+      attributes: NpcAttributesSchema.optional().describe(
+        `五项属性 ${NPC_ATTR_MIN}–${NPC_ATTR_MAX}，不算义体加成；不写按档位给默认值`,
+      ),
+      gear: z
+        .array(z.string().min(1))
+        .max(NPC_GEAR_MAX)
+        .default([])
+        .describe("装备栏：物品表里的 id，手里的武器和身上的衣服"),
+      cyberware: z
+        .array(z.string().min(1))
+        .max(NPC_CHROME_MAX)
+        .default([])
+        .describe("装着的义体：义体表里的 id"),
+      humanity: z
+        .number()
+        .int()
+        .min(0)
+        .max(100)
+        .optional()
+        .describe("开局人性；不写按 100 减去义体消耗"),
+    })
+    .superRefine((b, ctx) => {
+      if (b.attributes) {
+        const sum = attrSum(b.attributes);
+        const [lo, hi] = NPC_TIER_ATTR_SUM[b.tier];
+        if (sum < lo || sum > hi) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${NPC_TIER_LABELS[b.tier]}的五项属性加起来要在 ${lo}–${hi}，现在是 ${sum}`,
+          });
+        }
+      }
+      if (new Set(b.gear).size !== b.gear.length) {
+        ctx.addIssue({ code: "custom", message: "装备栏里有重复的物品" });
+      }
+      if (new Set(b.cyberware).size !== b.cyberware.length) {
+        ctx.addIssue({ code: "custom", message: "义体里有重复的" });
+      }
+    }),
+);
 export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
@@ -238,8 +290,37 @@ export const NpcTieSchema = z.object({
 });
 export type NpcTie = z.infer<typeof NpcTieSchema>;
 
+/**
+ * 3.0 NPC 三维关系向量（-100 ~ +100）：
+ * - trust【信任】：是否愿意把后背交给你、对你说真话
+ * - leverage【把柄/依附】：正数代表你捏着他的死穴或他有求于你；负数代表你欠他命债或把柄在他手里
+ * - respect【敬畏】：对你的行事手腕、凶名与实力的忌惮程度
+ */
+export const NpcVectorsSchema = z.object({
+  trust: z.number().int().min(-100).max(100).default(0),
+  leverage: z.number().int().min(-100).max(100).default(0),
+  respect: z.number().int().min(-100).max(100).default(0),
+});
+export type NpcVectors = z.infer<typeof NpcVectorsSchema>;
+
+/** 路人轻量种子（SeedTag）：二次交集或主动深交时升格为正式 NPC 卡 */
+export const SeedTagSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  role: z.string().min(1),
+  location: z.string().min(1).nullable().default(null),
+  encounters: z.number().int().min(1).default(1),
+  note: z.string().min(1),
+});
+export type SeedTag = z.infer<typeof SeedTagSchema>;
+
 export const NpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
+  /** 3.0 三维关系向量（未显式写入时由 affinity + ledger + known 动态推导） */
+  vectors: NpcVectorsSchema.optional(),
+  /** 自走人生目标进度（0..4）与当前面临的危机 */
+  goalProgress: z.number().int().min(0).max(4).optional(),
+  crisis: z.string().min(1).nullable().optional(),
   alive: z.boolean(),
   /** 玩家角色见过没有；原作人物开局就有卡，但还没见过 */
   met: z.boolean(),
@@ -303,8 +384,47 @@ export const NpcSchema = NpcCardSchema.extend({
 export type Npc = z.infer<typeof NpcSchema>;
 export type NpcVitals = NonNullable<Npc["vitals"]>;
 
+/** 计算 NPC 当前的三维关系向量（Trust × Leverage × Respect） */
+export function computeNpcVectors(
+  npc: Pick<Npc, "affinity" | "ledger" | "known"> & {
+    readonly vectors?: NpcVectors | undefined;
+  },
+): NpcVectors {
+  if (npc.vectors) return npc.vectors;
+  const openLedger = npc.ledger.filter((e) => e.settledAt === null);
+  const owesYouCount = openLedger.filter((e) => e.kind === "owesYou").length;
+  const youOweCount = openLedger.filter((e) => e.kind === "youOwe").length;
+  const grudgeCount = openLedger.filter((e) => e.kind === "grudge").length;
+  const secretKnownCount = npc.known.filter(
+    (k) => k.source === "scan" || k.source === "seen",
+  ).length;
+
+  const trust = Math.max(-100, Math.min(100, npc.affinity - grudgeCount * 20));
+  const leverage = Math.max(
+    -100,
+    Math.min(100, owesYouCount * 25 - youOweCount * 25 + secretKnownCount * 10),
+  );
+  const respect = Math.max(
+    -100,
+    Math.min(100, Math.round(npc.affinity * 0.5) + owesYouCount * 15 + grudgeCount * 10),
+  );
+  return { trust, leverage, respect };
+}
+
+/** 是否已解锁该 NPC 的真我与核心秘密（CoreTruth）：需 Trust ≥ 40 或 Leverage ≥ 40 */
+export function isCoreTruthUnlocked(
+  npc: Pick<Npc, "affinity" | "ledger" | "known"> & {
+    readonly vectors?: NpcVectors | undefined;
+  },
+): boolean {
+  const { trust, leverage } = computeNpcVectors(npc);
+  return trust >= 40 || leverage >= 40;
+}
+
 export const NpcStateSchema = z.object({
   npcs: z.record(z.string(), NpcSchema),
+  /** 街头偶遇的轻量路人种子（二次重逢时升格为正式 NPC 卡） */
+  seedTags: z.record(z.string(), SeedTagSchema).optional(),
 });
 export type NpcState = z.infer<typeof NpcStateSchema>;
 

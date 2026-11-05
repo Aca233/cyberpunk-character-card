@@ -22,6 +22,8 @@ export const HumanityStateSchema = z.object({
   cyberwareCost: z.number().int().min(0).max(HUMANITY_MAX),
   /** 旧存档没有：都按普通 */
   tolerance: ToleranceSchema.default("normal"),
+  /** 免疫抑制剂/神经阻断剂药效截止时间（分钟）；在药效期内可暂时压制低人性神经排异与感知失真 */
+  immunosuppressantUntil: z.number().int().optional(),
   /** 某个游戏日（序号）已经恢复了多少 */
   recovery: z.object({ day: z.number().int(), amount: z.number().int().min(0) }),
   /** 已经结算过的事件 id；同一事件只结算一次 */
@@ -46,7 +48,7 @@ export const HumanityCommandSchema = z
   );
 export type HumanityCommand = z.infer<typeof HumanityCommandSchema>;
 
-/** 人性的类别和大小档；换算表只在这里写一份（暂定，试玩时调） */
+/** 人性的类别和大小档 */
 export const HUMANITY_KINDS = {
   cruelty: { label: "残忍行为", sizes: { small: -2, medium: -3, large: -5 } },
   loss: { label: "失去重要的人", sizes: { small: -10, medium: -10, large: -10 } },
@@ -141,3 +143,10 @@ export const RestoreHumanitySchema = z.object({
   value: z.number().int().min(0).max(HUMANITY_MAX),
 });
 export type RestoreHumanity = z.infer<typeof RestoreHumanitySchema>;
+
+/** 只能由代码发出：注射免疫抑制剂/神经阻断剂，在指定时长内压制低人性神经排异与感知失真 */
+export const SuppressHumanitySchema = z.object({
+  type: z.literal("humanity.suppress"),
+  durationMinutes: z.number().int().min(30).default(720),
+});
+export type SuppressHumanity = z.infer<typeof SuppressHumanitySchema>;

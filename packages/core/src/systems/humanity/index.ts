@@ -1,5 +1,11 @@
 import { defineSystem } from "../../kernel/system";
-import { applyHumanity, restoreHumanity, setCyberwareCost, setTolerance } from "./apply";
+import {
+  applyHumanity,
+  applySuppressHumanity,
+  restoreHumanity,
+  setCyberwareCost,
+  setTolerance,
+} from "./apply";
 import { humanityEvents } from "./events";
 import { psychosisRules } from "./prompt";
 import {
@@ -16,6 +22,8 @@ import {
   SetCyberwareCostSchema,
   type SetTolerance,
   SetToleranceSchema,
+  type SuppressHumanity,
+  SuppressHumanitySchema,
 } from "./schema";
 import { humanityStatus } from "./status";
 import { humanityView } from "./view";
@@ -23,7 +31,7 @@ import { humanityView } from "./view";
 export const humanity = defineSystem<
   HumanityState,
   HumanityCommand,
-  SetCyberwareCost | SetTolerance | RestoreHumanity
+  SetCyberwareCost | SetTolerance | RestoreHumanity | SuppressHumanity
 >({
   id: "humanity",
   state: HumanityStateSchema,
@@ -40,10 +48,14 @@ export const humanity = defineSystem<
     "humanity.setCyberwareCost": SetCyberwareCostSchema,
     "humanity.setTolerance": SetToleranceSchema,
     "humanity.restore": RestoreHumanitySchema,
+    "humanity.suppress": SuppressHumanitySchema,
   },
   apply(draft, command, ctx) {
     if (command.type === "humanity") return applyHumanity(draft, command, ctx.now);
     if (command.type === "humanity.restore") return restoreHumanity(draft, command.value);
+    if (command.type === "humanity.suppress") {
+      return applySuppressHumanity(draft, command, ctx.now);
+    }
     return command.type === "humanity.setTolerance"
       ? setTolerance(draft, command.tolerance)
       : setCyberwareCost(draft, command.total);

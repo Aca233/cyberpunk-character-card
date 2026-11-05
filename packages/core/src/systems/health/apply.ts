@@ -1,12 +1,12 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import {
+  type Attribute,
   type CheckFact,
   checkFact,
   type DamageTier,
   type DiceState,
-  isSuccess,
-  MOD_STEP,
+  isCleanSuccess,
   type Modifier,
 } from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
@@ -14,18 +14,21 @@ import {
   ChromeLimbsFactSchema,
   type Condition,
   type DamageCommand,
+  type DeathLineChannel,
   type HealCommand,
   type HealthInternal,
   type HealthState,
   LIMB_LABELS,
   type Limb,
   limbSlot,
+  WOUND_SLOT_LABELS,
+  type WoundSlot,
 } from "./schema";
 
 type Health = Draft<HealthState>;
 
 const MINUTES_PER_DAY = 1440;
-/** 重伤超过这么多天不处理，开始按天失血 */
+/** 重伤超过这么多天不处理，开始按天恶化 */
 export const BLEED_GRACE_DAYS = 2;
 const BLEED_PERCENT = 10;
 /** 重伤时用治疗品最多回到这个比例 */
@@ -33,7 +36,7 @@ const SEVERE_HEAL_CEILING = 29;
 const REST_FLOOR = 60;
 const REVIVE_PERCENT: Readonly<Partial<Record<Condition, number>>> = { dying: 10, down: 30 };
 
-/** 伤害档位按生命上限的比例换算 */
+/** 伤害档位按生命上限的比例换算（后台同步驱动 0~4 格伤势） */
 export const DAMAGE_PERCENT: Readonly<Record<DamageTier, number>> = {
   graze: 10,
   heavy: 30,
@@ -55,7 +58,28 @@ export const CONDITION_LABELS: Readonly<Record<Condition, string>> = {
 
 export type WoundTag = "none" | "light" | "severe" | "zero";
 
-/** 伤势标签由血量自动决定：60% 以上无，30%–59% 轻伤，1%–29% 重伤 */
+/**
+ * 3.0 四格具象伤势映射（0 完好 / 1 挂彩 / 2 重创 / 3 残废 / 4 生死线）：
+ * - 0 格（完好）：无伤且满状态
+ * - 1 格（挂彩）：轻擦伤（60% ~ 99%），无检定惩罚，休整 1 相位即消
+ * - 2 格（重创）：30% ~ 59%，肉体/反应检定 -2（可打医疗针临时压制 1 场，或由【情感解离】免疫）
+ * - 3 格（残废）：1% ~ 29% 或伴随断肢，全检定 -4
+ * - 4 格（生死线）：0%（濒死/倒下/死亡），触发三大保底通道
+ */
+export function woundSlotOf(
+  state: Pick<HealthState, "hp" | "max"> & {
+    readonly wounds?: number;
+    readonly lostLimbs?: readonly Limb[];
+  },
+): WoundSlot {
+  if (state.hp <= 0) return 4;
+  if ((state.lostLimbs?.length ?? 0) > 0 || state.hp * 100 < state.max * 30) return 3;
+  if (state.hp * 100 < state.max * 60) return 2;
+  if (state.hp < state.max) return 1;
+  return 0;
+}
+
+/** 伤势标签由血量自动决定：60% 以上无，30%–59% 轻伤（对应 3.0 重创 2 格），1%–29% 重伤（对应 3.0 残废 3 格） */
 export function woundTag(state: Pick<HealthState, "hp" | "max">): WoundTag {
   if (state.hp === 0) return "zero";
   if (state.hp * 100 >= state.max * 60) return "none";
@@ -63,12 +87,86 @@ export function woundTag(state: Pick<HealthState, "hp" | "max">): WoundTag {
   return "severe";
 }
 
-/** 伤势减值，交给检定的 penalties；计入 PENALTY_CAP 的减值上限 */
-export function woundPenalty(state: Pick<HealthState, "hp" | "max">): Modifier | undefined {
-  const tag = woundTag(state);
-  if (tag === "light") return { source: "wound", value: MOD_STEP, reason: "轻伤" };
-  if (tag === "severe") return { source: "wound", value: 2 * MOD_STEP, reason: "重伤" };
+/**
+ * 3.0 伤势减值计算：
+ * - 0 格（完好）/ 1 格（轻伤挂彩）：无检定惩罚
+ * - 2 格（贯通重创）：肉体/反应检定 -2（若打了医疗针/止痛剂临时压制则免除）
+ * - 3 格（失能重残）：全检定 -4
+ */
+export function woundPenalty(
+  state: Pick<HealthState, "hp" | "max"> & {
+    readonly painSuppressed?: boolean;
+    readonly lostLimbs?: readonly Limb[];
+  },
+  attribute?: Attribute,
+): Modifier | undefined {
+  const slot = woundSlotOf(state);
+  if (slot === 3 || slot === 4) {
+    return { source: "wound", value: 4, reason: "失能重残（3 级伤势：全检定 -4）" };
+  }
+  if (slot === 2) {
+    if (state.painSuppressed) return undefined;
+    if (attribute !== undefined && attribute !== "body" && attribute !== "reflexes") {
+      return undefined;
+    }
+    return { source: "wound", value: 2, reason: "贯通重创（2 级伤势：肉体/反应 -2）" };
+  }
   return undefined;
+}
+
+/**
+ * 3.0 第 4 级【濒死休克】真实抢救通道判定：
+ * ① 创伤小组白金卡（hasPlatinumTrauma 且未处于地下信号屏蔽区/禁飞区 !inSignalDeadZone）
+ * ② 副心脏义体（hasSecondHeart）或在场队友/高信任熟人拖离（hasAllyRescue）
+ * ③ 街头横死（mode === "deathCity" 且无卡无友 -> 正式死亡）
+ */
+export function resolveDeathLineChannel(options: {
+  readonly hasPlatinumTrauma?: boolean;
+  readonly inSignalDeadZone?: boolean;
+  readonly hasSecondHeart?: boolean;
+  readonly hasAllyRescue?: boolean;
+  readonly mode: DiceState["mode"];
+}): {
+  readonly channel: DeathLineChannel;
+  readonly targetWoundSlot: WoundSlot;
+  readonly eddyCost: number;
+  readonly bloodDebt: boolean;
+  readonly summary: string;
+} {
+  if (options.hasPlatinumTrauma && !options.inSignalDeadZone) {
+    return {
+      channel: "traumaPlatinum",
+      targetWoundSlot: 1,
+      eddyCost: 5000,
+      bloodDebt: false,
+      summary: "创伤小组白金卡信号激活：武装浮空车数分钟内降落清场急救，扣除 5,000€ 医疗费",
+    };
+  }
+  if (options.hasSecondHeart) {
+    return {
+      channel: "secondHeartOrAlly",
+      targetWoundSlot: 2,
+      eddyCost: 0,
+      bloodDebt: false,
+      summary: "体内【副心脏】义体自动高压电击起搏，从濒死休克强行拉回重创状态",
+    };
+  }
+  if (options.hasAllyRescue || options.mode !== "deathCity") {
+    return {
+      channel: "secondHeartOrAlly",
+      targetWoundSlot: 2,
+      eddyCost: 300,
+      bloodDebt: true,
+      summary: "同伴/熟人将昏迷的你拖出火线送往就近黑诊所抢救，拉回重创状态并欠下人情与手术债",
+    };
+  }
+  return {
+    channel: "deathCityCurtain",
+    targetWoundSlot: 4,
+    eddyCost: 0,
+    bloodDebt: false,
+    summary: "无创伤信号接应、无副心脏、无同伴救援，在夜之城冰冷的街头失血谢幕",
+  };
 }
 
 export function percentOf(max: number, percent: number): number {
@@ -77,9 +175,18 @@ export function percentOf(max: number, percent: number): number {
 
 const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
-const hpNote = (draft: Health) => `HP ${draft.hp} / ${draft.max}`;
+
+function syncWounds(draft: Health): void {
+  draft.wounds = woundSlotOf(draft);
+}
+
+const hpNote = (draft: Health) => {
+  syncWounds(draft);
+  return `${WOUND_SLOT_LABELS[draft.wounds]}（HP ${draft.hp} / ${draft.max}）`;
+};
 
 function trackSevere(draft: Health, now: number): void {
+  syncWounds(draft);
   if (woundTag(draft) === "severe") {
     if (draft.severeSince === null) {
       draft.severeSince = now;
@@ -91,7 +198,7 @@ function trackSevere(draft: Health, now: number): void {
   }
 }
 
-/** 没掷骰不扣血；档位不超过 check 事先说明的（大失败最多高一档）；同一次检定只扣一次；护甲义体再降一档 */
+/** 没掷骰不扣血；干净利落成功（Clean）不扣血，惨胜（Costly）或失败（Fail）可按情境扣血；同一次检定只扣一次；护甲义体再降一档 */
 export function applyDamage(
   draft: Health,
   command: DamageCommand,
@@ -100,21 +207,23 @@ export function applyDamage(
   if (draft.condition !== "up") return fail(`角色${CONDITION_LABELS[draft.condition]}，不能再扣血`);
   const fact = checkFact(ctx.facts);
   if (!fact) return fail("没掷骰不扣血：本轮没有检定结果");
-  if (isSuccess(fact.outcome)) return fail("检定成功，不能扣血");
-  if (fact.damage === undefined) return fail("check 没有事先写明伤害档位，失败不扣血");
+  if (isCleanSuccess(fact.outcome)) return fail("检定干净利落成功，不能扣血");
+  if (fact.damage === undefined && fact.outcome !== "costly") {
+    return fail("check 没有事先写明伤害档位，失败不扣血");
+  }
+  const declaredDamage = fact.damage ?? "graze";
   const cap = Math.min(
     DAMAGE_RANK.lethal,
-    DAMAGE_RANK[fact.damage] + (fact.outcome === "fumble" ? 1 : 0),
+    DAMAGE_RANK[declaredDamage] + (fact.outcome === "fumble" ? 1 : 0),
   );
   if (DAMAGE_RANK[command.tier] > cap) {
     return fail(
-      `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[fact.damage]}（大失败最多高一档）`,
+      `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[declaredDamage]}（大失败最多高一档）`,
     );
   }
   if (draft.damagedBy === fact.id) return fail("这次检定已经扣过血");
   draft.damagedBy = fact.id;
 
-  // 护甲降一档；几件护甲同时装着也只降一档（turn 只放一件的名字进来）
   const armor = typeof ctx.facts.armor === "string" ? ctx.facts.armor : undefined;
   const rank = DAMAGE_RANK[command.tier] - (armor ? 1 : 0);
   if (rank < 0) {
@@ -132,11 +241,11 @@ export function applyDamage(
   ];
   if (command.limb) notes.push(loseLimb(draft, command.limb, tier, fact, ctx));
   if (draft.hp === 0) {
-    draft.condition = fact.damage === "lethal" ? "dying" : "down";
+    draft.condition = declaredDamage === "lethal" ? "dying" : "down";
     notes.push(
       draft.condition === "dying"
-        ? "血量归零：濒死，撑到下一段结束"
-        : "血量归零：倒下（没有事先警告致命危险，不会死）",
+        ? "触及第 4 格【生死线】：濒死，需创伤白金卡、副心脏或熟人拖离"
+        : "触及第 4 格【生死线】：倒下（没有事先警告致命危险，不会死）",
     );
   }
   trackSevere(draft, ctx.now);
@@ -164,14 +273,16 @@ function loseLimb(
   if (part) {
     if (draft.brokenChrome.includes(part.id)) return `${label}的${part.name}本来就坏着`;
     draft.brokenChrome.push(part.id);
+    syncWounds(draft);
     return `${label}是义肢：${part.name}被打坏了，找义体医生修好前用不了`;
   }
   if (draft.lostLimbs.includes(limb)) return `${label}已经没了`;
   draft.lostLimbs.push(limb);
-  return `失去${label}：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，相关检定 −${MOD_STEP}；找义体医生装义肢能补上`;
+  syncWounds(draft);
+  return `失去${label}（进入 3 格残废）：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，全检定 −4；找义体医生装义肢能补上`;
 }
 
-/** 义肢和义体损坏：只能由代码发出 */
+/** 义肢与义体损坏修复：只能由代码发出 */
 export function applyLimb(
   draft: Health,
   command: Extract<HealthInternal, { type: "health.limb" }>,
@@ -180,6 +291,7 @@ export function applyLimb(
     const fixed = draft.lostLimbs.filter((l) => limbSlot(l) === command.slot);
     if (fixed.length === 0) return ok();
     draft.lostLimbs = draft.lostLimbs.filter((l) => limbSlot(l) !== command.slot);
+    syncWounds(draft);
     return ok(
       `装上${command.name ?? "义肢"}，断了的${fixed.map((l) => LIMB_LABELS[l]).join("、")}补上了`,
     );
@@ -209,7 +321,9 @@ function wound(draft: Health, tier: DamageTier, ctx: SystemContext, notes: strin
   if (draft.hp === 0) {
     draft.condition = tier === "lethal" ? "dying" : "down";
     notes.push(
-      draft.condition === "dying" ? "血量归零：濒死，这一轮结束前要被救回" : "血量归零：倒下",
+      draft.condition === "dying"
+        ? "触及第 4 格【生死线】：濒死，这一轮结束前要被救回"
+        : "触及第 4 格【生死线】：倒下",
     );
   }
   trackSevere(draft, ctx.now);
@@ -241,18 +355,24 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
       if (percent === undefined) return fail(`物品表里的 ${slot.id} 没有回复比例`);
       const ceiling = severe ? Math.floor((draft.max * SEVERE_HEAL_CEILING) / 100) : draft.max;
       draft.hp = Math.max(draft.hp, Math.min(draft.hp + percentOf(draft.max, percent), ceiling));
+      draft.painSuppressed = true;
       trackSevere(draft, ctx.now);
-      const notes = [`治疗品回血，${hpNote(draft)}`];
-      if (severe) notes.push("重伤时治疗品最多回到 29%，要找义体医生或用药品");
+      const notes = [`使用医疗针，临时压制本场重创疼痛，${hpNote(draft)}`];
+      if (severe) notes.push("残废/重伤时医疗针最多回到 29%，需找义体医生缝合");
       return { ok: true, notes, emit: [{ type: "inventory.spend", slot: "healing" }] };
     }
     case "ripperdoc":
       draft.hp = draft.max;
+      draft.painSuppressed = false;
       trackSevere(draft, ctx.now);
-      return ok(`义体医生处理了伤势，${hpNote(draft)}`);
+      return ok(`义体医生缝合处理了伤势，${hpNote(draft)}`);
     case "rest":
       if (severe) return ok("重伤靠休整好不了，要找义体医生或用药品");
       draft.hp = Math.max(draft.hp, percentOf(draft.max, REST_FLOOR));
+      if (draft.wounds === 1) {
+        draft.hp = draft.max;
+      }
+      draft.painSuppressed = false;
       trackSevere(draft, ctx.now);
       return ok(`休整后 ${hpNote(draft)}`);
   }
@@ -281,11 +401,12 @@ export function die(draft: Health, reason: string): ApplyOutcome {
   if (draft.condition === "dead") return fail("角色已经死亡");
   draft.condition = "dead";
   draft.hp = 0;
+  draft.wounds = 4;
   draft.severeSince = null;
   return ok(`角色死亡：${reason}`);
 }
 
-/** 重伤拖过宽限期后每天失血，最多扣到 1，不会因此进入濒死 */
+/** 重伤拖过宽限期后恶化失血，最多扣到 1 */
 export function bleed(draft: Health, span: TimeSpan): void {
   if (draft.condition !== "up" || draft.severeSince === null) return;
   const days = Math.floor((span.to - draft.severeSince) / MINUTES_PER_DAY);
@@ -295,4 +416,5 @@ export function bleed(draft: Health, span: TimeSpan): void {
     draft.hp = Math.max(1, draft.hp - step);
     draft.bleeds += 1;
   }
+  syncWounds(draft);
 }

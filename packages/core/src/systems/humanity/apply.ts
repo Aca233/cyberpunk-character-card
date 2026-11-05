@@ -7,6 +7,7 @@ import {
   type HumanityState,
   LOSS_CAP,
   MINUTES_PER_DAY,
+  type SuppressHumanity,
   TOLERANCE_FACTOR,
   type Tolerance,
 } from "./schema";
@@ -21,6 +22,23 @@ export const STAGE_LABELS: Readonly<Record<HumanityStage, string>> = {
   crisis: "危机",
 };
 
+/**
+ * 神经负荷感知失真区（当前人性 < 40 且未注射免疫抑制剂压制）：
+ * 义眼偶发红帧噪点、耳鸣幻听、高压下易发生非自愿过激失控（无任何正面检定 Buff）
+ */
+export function isGlitchZone(current: number, suppressed = false): boolean {
+  if (suppressed) return false;
+  return current >= 1 && current <= 39;
+}
+
+/** 当前是否处于免疫抑制剂/神经阻断剂药效期内 */
+export function isImmunosuppressed(
+  state: Pick<HumanityState, "immunosuppressantUntil">,
+  nowMinutes: number,
+): boolean {
+  return state.immunosuppressantUntil !== undefined && nowMinutes < state.immunosuppressantUntil;
+}
+
 /** 人性阶段：注入提示词作为描写的严重程度参考，界面据此切换效果 */
 export function humanityStage(value: number): HumanityStage {
   if (value >= 70) return "stable";
@@ -30,9 +48,9 @@ export function humanityStage(value: number): HumanityStage {
   return "crisis";
 }
 
-/** 人性上限 = 100 − 已装义体的人性消耗之和 */
+/** 人性上限 = 100 − 已装义体神经占用(cyberwareCost) */
 export function humanityCap(state: Pick<HumanityState, "cyberwareCost">): number {
-  return HUMANITY_MAX - state.cyberwareCost;
+  return Math.max(0, HUMANITY_MAX - state.cyberwareCost);
 }
 
 export function gameDay(minutes: number): number {
@@ -80,8 +98,21 @@ export function applyHumanity(
   if (from !== to) notes.push(`人性阶段：${STAGE_LABELS[from]} → ${STAGE_LABELS[to]}`);
   const zero = draft.current === 0 && before > 0;
   if (zero) notes.push("人性归零，进入危机章节");
-  // 赛博精神病系统听这个信号打开危机章节
   return zero ? { ok: true, notes, signals: ["humanity.zero"] } : { ok: true, notes };
+}
+
+/** 注射免疫抑制剂/神经阻断剂，暂时压制低人性带来的神经排异与感知失真 */
+export function applySuppressHumanity(
+  draft: Draft<HumanityState>,
+  command: SuppressHumanity,
+  now: number,
+): ApplyOutcome {
+  draft.immunosuppressantUntil = now + command.durationMinutes;
+  const hours = Math.round(command.durationMinutes / 60);
+  return {
+    ok: true,
+    notes: [`已注射免疫抑制剂：未来 ${hours} 小时内暂时压制义体神经排异与感官失真`],
+  };
 }
 
 /** 义体装卸后更新消耗合计（按义体耐受折算）；当前人性超过新上限时降到上限 */
@@ -120,7 +151,7 @@ export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance):
   };
 }
 
-/** 被拉回来：人性直接回到给定的值，不超过上限 */
+/** 被拉回来：人性回到给定值，但不超过上限 */
 export function restoreHumanity(draft: Draft<HumanityState>, value: number): ApplyOutcome {
   const cap = humanityCap(draft);
   const before = draft.current;
