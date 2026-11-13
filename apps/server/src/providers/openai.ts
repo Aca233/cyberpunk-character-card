@@ -85,6 +85,9 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         // 酒馆预设的 top_p；不能仅凭地址不同就认定上游支持 top_k，未确认能力时不发送扩展字段。
         // baseUrl 留空也可能走官方接口，不能用它与默认地址的字符串比较判断支持情况。
         ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+        ...(request.responseFormat?.type === "json"
+          ? { response_format: { type: "json_object" } }
+          : {}),
       };
       const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
       const res = await post(provider, chatCompletionsUrl(profile), headers, body, signal);

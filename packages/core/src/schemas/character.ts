@@ -14,11 +14,19 @@ import {
 } from "./board";
 import type { BoardStart, SaveCharacter, StartAcquaintance } from "./save";
 
-/** 创建时各项属性从这个值起步（3.0：全属性 2 起步） */
+/** 创建时各项属性默认值（历史兼容，UI 与叙事不再使用属性点） */
+export const DEFAULT_CARD_ATTRIBUTES = {
+  body: 2,
+  reflexes: 2,
+  tech: 2,
+  intelligence: 2,
+  cool: 2,
+} as const;
+/** 创建时各项属性从这个值起步（历史兼容，UI 与叙事不再使用属性点） */
 export const ATTRIBUTE_BASE = 2;
-/** 创建时可以额外分配的属性点（3.0：自由分配 5 点） */
+/** 创建时可以额外分配的属性点（历史兼容导出） */
 export const ATTRIBUTE_POINTS = 5;
-/** 创建时单项最高（3.0：开局单项上限 5） */
+/** 创建时单项最高（历史兼容导出） */
 export const ATTRIBUTE_CREATE_MAX = 5;
 
 const text = (max: number) => z.string().trim().max(max);
@@ -79,22 +87,13 @@ export const CharacterCardSchema = z
     locked: z.array(ProseBlockSchema).max(PROSE_BLOCKS.length).default([]),
     /** 本事：会什么、不会什么 */
     skills: text(400).default(""),
-    attributes: z.record(
-      AttributeSchema,
-      z.number().int().min(ATTRIBUTE_BASE).max(ATTRIBUTE_CREATE_MAX),
-    ),
+    attributes: z
+      .record(AttributeSchema, z.number().int().min(ATTRIBUTE_BASE).max(ATTRIBUTE_CREATE_MAX))
+      .default({ body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 }),
     /** 角色主板；只写了文字的旧卡没有 */
     board: BoardSchema.optional(),
   })
   .superRefine((card, ctx) => {
-    const spent = pointsSpent(card.attributes);
-    if (spent > ATTRIBUTE_POINTS) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["attributes"],
-        message: `属性点只有 ${ATTRIBUTE_POINTS} 点，现在分了 ${spent} 点`,
-      });
-    }
     for (const message of card.board ? boardIssues(card.board) : []) {
       ctx.addIssue({ code: "custom", path: ["board"], message });
     }
@@ -136,9 +135,15 @@ function boardWords(board: Board | undefined, key: "origin" | "pasts" | "skills"
   return list.flatMap((m) => [m.label, ...m.tags]).join(" ");
 }
 
-/** 挑开局行装看的文字：手写的出身、过往、本事，加上主板模块的名字和标签 */
-export function loadoutText(card: CharacterCard): { origin: string; past: string; skills: string } {
+/** 挑开局行装看的文字：手写的出身、过往、本事，加上主板模块的名字、标签与准确出身 id */
+export function loadoutText(card: CharacterCard): {
+  originId?: string;
+  origin: string;
+  past: string;
+  skills: string;
+} {
   return {
+    ...(card.board?.origin ? { originId: card.board.origin.id } : {}),
     origin: [card.origin, boardWords(card.board, "origin")].join(" "),
     past: [card.past, boardWords(card.board, "pasts")].join("\n"),
     skills: [card.skills, boardWords(card.board, "skills")].join("\n"),
@@ -147,22 +152,36 @@ export function loadoutText(card: CharacterCard): { origin: string; past: string
 
 const UNDECIDED = "还没定：第一次出场时按身份和那段经历定下来，之后一直保持一致";
 
+function safeNpcId(raw: string, used: ReadonlySet<string>): string {
+  const base =
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "custom-npc";
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
+function isCustomAcquaintance(a: Acquaintance): boolean {
+  return Boolean(a.custom) || a.id.startsWith("custom-") || a.id.startsWith("wk-");
+}
+
 /** 主板模块带出的人物：过去就认识，外貌和口吻留给第一次出场时定；负面经历带出的人开局有敌意 */
 export function boardPeople(board: Board): BoardStart["people"] {
   const people: BoardStart["people"] = [];
   const names = new Set<string>();
+  const usedIds = new Set<string>();
   for (const m of boardModules(board)) {
     m.people.forEach((p, i) => {
       if (names.has(p.name)) return;
       names.add(p.name);
-      const base =
-        m.id
-          .toLowerCase()
-          .replace(/[^a-z0-9-]+/g, "-")
-          .replace(/^-+|-+$/g, "") || "m";
+      const id = safeNpcId(`board-${m.id}-${i + 1}`, usedIds);
+      usedIds.add(id);
       const flaw = m.slot === "flaw";
       people.push({
-        id: `board-${base}-${i + 1}`,
+        id,
         name: p.name,
         pronoun: "TA",
         role: (p.role || `${BOARD_SLOT_LABELS[m.slot]}「${m.label}」里的人`).slice(0, 40),
@@ -183,11 +202,35 @@ export function boardPeople(board: Board): BoardStart["people"] {
       });
     });
   }
-  // 捏人第 3 步给模块带出的人改过关系的，按关系表盖过上面的默认好感（用户定的，2026-10-30："模块带出的人也列出来，可以改关系"）
-  return people.map((p) => {
+  // 捏人给模块带出的人改过关系的，按关系表盖过上面的默认好感
+  const seeded = people.map((p) => {
     const a = board.acquaintances.find((x) => x.id === p.id);
     return a ? { ...p, ...acquaintanceSeed(a) } : p;
   });
+  // 创意工坊/自定义旧识兜底：规范化 id 后凭自包含快照生成局内人物卡
+  for (const a of board.acquaintances) {
+    if (isCustomAcquaintance(a) && !seeded.some((p) => p.id === a.id || p.name === a.name)) {
+      const id = safeNpcId(a.id, usedIds);
+      usedIds.add(id);
+      const seed = acquaintanceSeed(a);
+      seeded.push({
+        ...seed,
+        id,
+        name: a.name,
+        pronoun: "TA",
+        role: (a.role || "夜之城旧识").slice(0, 40),
+        faction: NO_FACTION,
+        look: UNDECIDED,
+        voice: UNDECIDED,
+        samples: [],
+        want: (a.note ? `和玩家角色的旧事：${a.note}` : "在夜之城按自己的信条活下去").slice(0, 160),
+        limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
+        canon: false,
+        met: true,
+      });
+    }
+  }
+  return seeded;
 }
 
 /**
@@ -215,7 +258,7 @@ export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   };
 }
 
-/** 建档时从主板带进存档的东西：开局义体、义体耐受、模块带出的人物和原作人物旧识 */
+/** 建档时从主板带进存档的东西：开局义体、义体耐受、开局行装定制、模块带出的人物和原作人物旧识 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
   const people = boardPeople(card.board);
@@ -223,17 +266,18 @@ export function boardStart(card: CharacterCard): BoardStart | undefined {
     cyberware: card.board.cyberware.map((c) => c.id),
     tolerance: card.board.tolerance,
     ...(card.board.origin ? { origin: card.board.origin.id } : {}),
+    ...(card.board.kit ? { kit: card.board.kit } : {}),
     people,
-    // 模块带出的人已经在 people 里按关系改过；剩下的是原作人物，由 newGameWorld 盖到原作人物卡上
+    // 模块带出的人和自定义旧识已经在 people 里按关系处理过；剩下的是原作人物，由 newGameWorld 盖到原作人物卡上
     acquaintances: card.board.acquaintances
-      .filter((a) => !people.some((p) => p.id === a.id))
+      .filter((a) => !isCustomAcquaintance(a) && !people.some((p) => p.id === a.id))
       .map(acquaintanceSeed),
   };
 }
 
 /**
- * 旧识里对不上人的去掉（原作人物表里没有、带出这个人的模块已经拔掉），名字按原表重写。
- * 服务端存卡时调一次；捏人界面改了模块后也调，免得留着已经不存在的人
+ * 旧识里对不上人的去掉（原作人物表里没有、带出这个人的模块已经拔掉），名字按原表重写；
+ * 自定义/创意工坊旧识（custom 为 true）原样保留。
  */
 export function pruneAcquaintances(
   board: Board,
@@ -244,18 +288,16 @@ export function pruneAcquaintances(
     ...boardPeople(board).map((p) => [p.id, p.name] as const),
   ]);
   const acquaintances = board.acquaintances.flatMap((a) => {
+    if (a.custom || a.id.startsWith("custom-") || a.id.startsWith("wk-")) return [a];
     const name = names.get(a.id);
     return name ? [{ ...a, name }] : [];
   });
   return { ...board, acquaintances };
 }
 
-/** 主板上的模块和联动，记进角色状态：专属选项的来源按它核对 */
+/** 主板上的模块，记进角色状态：专属选项的来源按它核对（不再输出联动） */
 export function boardTraits(board: Board): Trait[] {
-  return [
-    ...boardModules(board).map((m) => ({ slot: m.slot, label: m.label, ability: m.ability })),
-    ...board.combos.map((c) => ({ slot: "combo" as const, label: c.label, ability: c.ability })),
-  ];
+  return boardModules(board).map((m) => ({ slot: m.slot, label: m.label, ability: m.ability }));
 }
 
 /** 开档时写进存档的角色快照 */

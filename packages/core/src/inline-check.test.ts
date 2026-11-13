@@ -6,9 +6,10 @@ import { runNarratorTurn } from "./narrator/turn";
 import { TurnInputSchema } from "./schemas/turn";
 
 /**
- * 「全改」第 1 步（用户定的，2026-11-01：模型当主持人，代码只管记账；检定选了 1「先掷再写」）：
- * 判断给了检定时代码当场掷骰，写正文一次写出结果，不再停笔等玩家确认。
- * 用一个假的模型客户端测：判断回一份带检定的 JSON，写正文回一行字，抽取回空账
+ * 零掷骰定性因果测试：
+ * ① 判断使用原生 JSON Schema（ruling），不再产出或掷任何检定骰；
+ * ② 定性裁决结果写进【本轮已定的事】和 ctx.facts.ruling；
+ * ③ 抽取使用纯 JSON 模式（responseFormat: { type: "json", name: "extract" }），且不再发起额外质检调用。
  */
 const content: GameContent = {
   locations: [{ id: "home-bar", name: "开场酒吧", district: "沃森", x: 20, y: 20 }],
@@ -24,25 +25,27 @@ const content: GameContent = {
   ],
 };
 
-/** 结算要一张物品表；这一轮不碰物品，给空表就够 */
 const data: Readonly<Record<string, unknown>> = { items: [] };
 
 const JUDGE_REPLY = JSON.stringify({
-  check: {
-    intent: "翻过后墙",
-    attribute: "reflexes",
-    tier: "street",
-    edge: "low",
-    success: "翻进后院没人发现",
-    failure: "落地时踢翻了垃圾桶",
+  read: "你想趁夜翻过布满碎铁皮的后墙潜入院子",
+  ooc: false,
+  ruling: {
+    kind: "costly",
+    outcome: "翻上去了，但铁皮晃动割破了掌心，落地声也引来了屋檐下的目光",
+    harm: "graze",
+    reason: "墙头铁皮年久松动，且没有夜视或隔音义体掩护",
   },
-  gate: null,
   buy: null,
   foes: null,
   recall: [],
 });
 
-const AUX_REPLY = JSON.stringify({ changes: [], choices: [], dropped: [] });
+const AUX_REPLY = JSON.stringify({
+  changes: [{ type: "damage", tier: "graze", reason: "墙头铁皮划伤掌心" }],
+  choices: [],
+  dropped: [],
+});
 
 function fakeLlm() {
   const requests: LlmRequest[] = [];
@@ -54,7 +57,7 @@ function fakeLlm() {
           ? AUX_REPLY
           : request.temperature === JUDGE_TEMPERATURE
             ? JUDGE_REPLY
-            : "你攀上墙头，一翻身落进了后院。";
+            : "你蹬着潮湿的砖墙翻上去，生锈铁皮在掌心撕开一道血口。";
       yield { type: "text", text };
       yield { type: "done", finishReason: "stop" };
     },
@@ -64,8 +67,8 @@ function fakeLlm() {
 
 const textOf = (request: LlmRequest) => request.messages.map((m) => m.content).join("\n");
 
-describe("检定当场掷，不停笔等确认", () => {
-  it("判断给了检定：代码当场掷骰，写正文拿到结果，这一轮照常结算", async () => {
+describe("零掷骰定性裁决与原生 JSON 约束", () => {
+  it("判断输出定性裁决且不掷骰，写正文拿到客观后果并一次结算，不跑额外质检", async () => {
     const world = newGameWorld(
       { startTime: 1000, difficulty: "nightCity", opening: "test-open" },
       content,
@@ -80,15 +83,32 @@ describe("检定当场掷，不停笔等确认", () => {
     expect(result.kind).toBe("done");
     if (result.kind !== "done") return;
     expect(result.turn.check).toBeUndefined();
-    expect(result.turn.rolled?.offer.label).toBe("翻过后墙");
+    expect(result.turn.rolled).toBeUndefined();
+    expect(result.turn.gate).toBeUndefined();
+    expect(result.turn.closeup).toBeUndefined();
+    expect(result.turn.ruling).toContain("铁皮");
 
-    const narrate = requests.find(
-      (r) => r.purpose === "narrator" && r.temperature !== JUDGE_TEMPERATURE,
-    );
+    // 本轮共 3 次调用：judge、narrate、extract（已退休 verify）
+    expect(requests).toHaveLength(3);
+    const judge = requests[0];
+    const narrate = requests[1];
+    const extract = requests[2];
+    expect(judge?.responseFormat?.type).toBe("json");
+    expect(judge?.responseFormat?.name).toBe("judge");
+    expect(judge?.responseFormat?.schema).toBeDefined();
+    expect(extract?.responseFormat).toEqual({ type: "json", name: "extract" });
+
     expect(narrate).toBeDefined();
-    if (!narrate) return;
-    expect(textOf(narrate)).toContain("【检定结果】");
-    expect(textOf(narrate)).not.toContain("停笔等玩家确认");
-    expect(requests.some((r) => r.purpose === "aux")).toBe(true);
+    if (narrate) {
+      const prompt = textOf(narrate);
+      expect(prompt).toContain("【条件与代价】");
+      expect(prompt).not.toContain("【检定结果】");
+      expect(prompt).not.toContain("2d6");
+    }
+    expect(result.turn.commands).toContainEqual({
+      type: "damage",
+      tier: "graze",
+      reason: "墙头铁皮划伤掌心",
+    });
   });
 });

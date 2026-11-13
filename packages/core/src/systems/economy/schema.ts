@@ -53,7 +53,7 @@ export function rarityLock(
   const warm = KEEPER_AFFINITY_GATES[rarity];
   if (keeper === undefined || warm === undefined) return `街头声望 ${gate} 级才肯卖`;
   if (keeper.affinity >= warm) return null;
-  return `街头声望 ${gate} 级，或者${keeper.name}的好感到 ${warm}，才肯卖`;
+  return `街头声望 ${gate} 级，或者和${keeper.name}交情够深，才肯卖`;
 }
 
 export const MONEY_CAP = 100_000;

@@ -60,6 +60,6 @@ export const SidegigCommandSchema = z
     reason: z.string().trim().min(1).max(80).optional(),
   })
   .describe(
-    "拳赛和赛车：enter 报名（代码扣押金，要人在那里，赛车要有自己的车）；比赛按检定，成功写 win（代码付奖金、加声望），失败写 lose；中途不比写 quit，押金不退",
+    "拳赛和赛车：enter 报名（代码扣押金，要人在那里，赛车要有自己的车）；按现场实力、状态与临场条件裁决胜负，赢了写 win（代码付奖金、加声望），输了写 lose；中途不比写 quit，押金不退",
   );
 export type SidegigCommand = z.infer<typeof SidegigCommandSchema>;

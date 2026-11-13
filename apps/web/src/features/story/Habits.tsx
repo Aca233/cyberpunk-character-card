@@ -3,25 +3,22 @@ import styles from "./story.module.css";
 
 export type HabitAction = "add" | "confirm" | "dismiss" | "remove";
 
-/** 侧栏：别人眼里的你，和角色卡上的习惯栏 */
+/** 角色卡上的习惯栏（没有习惯且没有 AI 提议时不占位） */
 export function Habits({
-  perceived,
   habits,
   offers,
   onHabit,
 }: {
-  readonly perceived: string;
   readonly habits: readonly string[];
   /** 叙事模型提议、等玩家确认的习惯 */
   readonly offers: readonly string[];
   /** 改习惯；正在生成时不传，按钮不显示 */
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
 }) {
+  if (habits.length === 0 && offers.length === 0) return null;
   return (
-    <section className={styles.habits} aria-label="别人眼里的你和习惯">
-      <p className={styles.perceived}>{perceived}</p>
+    <section className={styles.habits} aria-label="习惯">
       <h4 className={styles.habitsTitle}>习惯</h4>
-      {habits.length === 0 && offers.length === 0 && <p className={styles.dim}>还没有习惯。</p>}
       <ul className={styles.habitList}>
         {habits.map((h) => (
           <li key={h} className={styles.habitItem}>

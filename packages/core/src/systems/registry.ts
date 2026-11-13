@@ -28,6 +28,7 @@ import { shards } from "./shards";
 import { sidegigs } from "./sidegigs";
 import { squad } from "./squad";
 import { stealth } from "./stealth";
+import { tension } from "./tension";
 import { threads } from "./threads";
 import { trauma } from "./trauma";
 import { travel } from "./travel";
@@ -49,6 +50,7 @@ export const systems: readonly AnySystem[] = [
   heat,
   fallout,
   stealth,
+  tension,
   phone,
   city,
   memory,

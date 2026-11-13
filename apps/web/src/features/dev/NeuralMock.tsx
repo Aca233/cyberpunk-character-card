@@ -8,7 +8,7 @@ import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
 import { InputBar } from "../story/InputBar";
 import { ChoiceList } from "../story/StoryLog";
-import type { Choice, View } from "../story/view";
+import type { Choice } from "../story/view";
 import styles from "./neural.module.css";
 
 /**
@@ -60,22 +60,14 @@ const STORY = [
   "吧台另一头，穿防弹夹克的人放下了杯子。",
 ] as const;
 
-/** 演示属性和选项：形状照投影里的 offers.choices，交给正式剧情页的 ChoiceList 画 */
-const ATTRIBUTES: View["character"]["attributes"] = {
-  body: 4,
-  reflexes: 5,
-  tech: 6,
-  intelligence: 5,
-  cool: 3,
-};
-
+/** 演示选项：形状照投影里的 offers.choices，交给正式剧情页的 ChoiceList 画 */
 const CHOICES: readonly Choice[] = [
   { text: "我就是来送货的。", gate: null, checkId: "demo.1", source: null },
   {
     text: "先看看那台终端。",
-    gate: { attribute: "tech", value: 6, attributeLabel: "技术", met: true },
+    gate: null,
     checkId: null,
-    source: null,
+    source: "黑客专长",
   },
   { text: "（看向那个穿夹克的人）", gate: null, checkId: null, source: "过往：街头小子" },
 ];
@@ -395,12 +387,7 @@ export function NeuralMock() {
                 </span>
               </div>
               {/* 选项和输入框直接用正式剧情页的组件，不另做一套 */}
-              <ChoiceList
-                choices={CHOICES}
-                attributes={ATTRIBUTES}
-                locked={false}
-                onChoose={() => undefined}
-              />
+              <ChoiceList choices={CHOICES} locked={false} onChoose={() => undefined} />
               <InputBar
                 busy={false}
                 streaming={false}

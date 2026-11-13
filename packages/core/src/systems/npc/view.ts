@@ -1,9 +1,8 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
-import { CharacterStateSchema, effectiveAttributes as playerAttributes } from "../character";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
 import { currentOutfit, deathKnown } from "./apply";
-import { attributeSum, bodyView } from "./body";
+import { bodyView } from "./body";
 import { onStage } from "./prompt";
 import {
   KNOWN_SOURCE_LABELS,
@@ -47,7 +46,6 @@ export function npcsView({ world, data }: ViewContext) {
   const npcs = NpcStateSchema.parse(world.slices.npc);
   // 旧存档没有宿敌系统
   const rivals = NemesisIdsSchema.parse(world.slices.nemesis ?? {});
-  const character = CharacterStateSchema.parse(world.slices.character);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const places = locationCatalog(data);
@@ -129,9 +127,8 @@ export function npcsView({ world, data }: ViewContext) {
       })),
       memories: n.memories,
       /**
-       * 身体：见过的人看伤势和装备；扫描过的再看档位、威胁、属性、生命、义体和人性阶段。
-       * 人性数值只给叙事模型，这里没有；没见过的人是 null
+       * 身体：见过的人看伤势和装备；扫描过的看义体配置与精神/人性状态。没见过的人是 null
        */
-      body: n.met ? bodyView(n, data, world.time, attributeSum(playerAttributes(character))) : null,
+      body: n.met ? bodyView(n, data, world.time) : null,
     }));
 }

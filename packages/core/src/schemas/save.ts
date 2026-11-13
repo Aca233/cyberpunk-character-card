@@ -4,28 +4,30 @@ import { LEGENDS_SEEDED, LegendNoteSchema } from "../systems/chronicle/schema";
 import { DifficultySchema } from "../systems/dice/schema";
 import { ToleranceSchema } from "../systems/humanity/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
+import { StartKitSchema } from "./board";
 
 /** 开档时角色卡的快照：之后改角色卡不影响已有存档 */
 export const SaveCharacterSchema = SetCharacterSchema.omit({ type: true });
 export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 
-/** 建档时从角色主板带进来的：开局义体 id、义体耐受和模块带出的人物卡 */
+/** 建档时从角色主板带进来的：开局义体 id、义体耐受、开局行装定制和模块/自定义带出的人物卡 */
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
   tolerance: ToleranceSchema.default("normal"),
   /** 出身模块 id：按它给开局住所；旧存档没有 */
   origin: z.string().min(1).optional(),
+  /** 开局行装定制（资金档位、额外随身武器与专属载具） */
+  kit: StartKitSchema.optional(),
   people: z
     .array(SeedNpcSchema.omit({ type: true }))
-    .max(20)
+    .max(60)
     .default([]),
   /**
-   * 捏人第 3 步给原作人物选的旧识：建档时盖过原作人物卡的开局好感、记成见过，带上关系笔记和人情。
-   * 用户定的（2026-10-30）：15 个原作人物全部能选、没有预设关系；旧存档没有
+   * 捏人给原作人物选的旧识：建档时盖过原作人物卡的开局好感、记成见过，带上关系笔记和人情。
    */
   acquaintances: z
     .array(SeedNpcSchema.pick({ id: true, affinity: true, relation: true, ledger: true }))
-    .max(40)
+    .max(100)
     .default([]),
 });
 export type BoardStart = z.infer<typeof BoardStartSchema>;

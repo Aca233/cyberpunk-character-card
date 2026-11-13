@@ -26,6 +26,7 @@ import {
   type cyberwareView,
   type ripperdocDebtsView,
   type ripperdocView,
+  SLOT_CAPACITY,
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
@@ -143,8 +144,12 @@ export interface Loadout {
   readonly label: string;
   /** origin：出身的整套行装，只取一套；background：经历附带的东西，可以叠加 */
   readonly kind: "origin" | "background";
+  /** 精确匹配的出身模块 id 列表（优先于 keywords）；未列出时按 keywords 匹配 */
+  readonly origins?: readonly string[];
   /** origin 看角色卡的出身，background 还看过往和本事；出现这些词就用这一套 */
   readonly keywords: readonly string[];
+  /** 该出身进入自由沙盘时默认出生点锚点 id（须在地图锚点表中） */
+  readonly defaultLocation?: string;
   readonly gear: GameOpening["gear"];
   readonly eddies?: number;
   readonly cyberware?: readonly string[];
@@ -154,27 +159,63 @@ export interface Loadout {
   readonly vehicles?: readonly string[];
 }
 
-/** 建档时按角色卡挑行装：出身里最后出现关键词的那一套（中文的中心词在后，“在公司打过零工的街头小子”是街头小子），
- * 没有就用 fallback；经历附带的可以有好几套 */
+export interface LoadoutMatchInput {
+  readonly originId?: string;
+  readonly origin: string;
+  readonly past?: string;
+  readonly skills?: string;
+}
+
+/**
+ * 建档时按角色卡挑行装：
+ * 1) 有精确出身模块 id（board.origin.id）时，先按 id / origins 列表精确命中出身套装；
+ * 2) 未命中（例如自定义出身或旧纯文字卡）再按 keywords 末次出现位置匹配，没有就用 fallback；
+ * 3) background 附带行装可由出身 id 或过往/特长关键词触发叠加。
+ */
 export function pickLoadouts(
-  card: { readonly origin: string; readonly past?: string; readonly skills?: string },
+  card: LoadoutMatchInput,
   loadouts: readonly Loadout[],
   fallback: string,
 ): string[] {
+  const { originId } = card;
   const at = (text: string, l: Loadout) => {
     const hits = l.keywords
       .map((k) => text.toLowerCase().lastIndexOf(k.toLowerCase()))
       .filter((i) => i >= 0);
     return hits.length === 0 ? -1 : Math.max(...hits);
   };
-  const origins = loadouts
-    .filter((l) => l.kind === "origin")
+  const originList = loadouts.filter((l) => l.kind === "origin");
+  const exactOrigin =
+    originId === undefined
+      ? undefined
+      : originList.find((l) => l.id === originId || l.origins?.includes(originId));
+  const keywordOrigin = originList
     .map((l) => [l, at(card.origin, l)] as const)
     .filter(([, i]) => i >= 0)
-    .sort((a, b) => b[1] - a[1]);
+    .sort((a, b) => b[1] - a[1])[0]?.[0];
+  const chosenOrigin = exactOrigin?.id ?? keywordOrigin?.id ?? fallback;
   const story = [card.origin, card.past ?? "", card.skills ?? ""].join("\n");
-  const extras = loadouts.filter((l) => l.kind === "background" && at(story, l) >= 0);
-  return [origins[0]?.[0].id ?? fallback, ...extras.map((l) => l.id)];
+  const extras = loadouts.filter(
+    (l) =>
+      l.kind === "background" &&
+      ((originId !== undefined && l.origins?.includes(originId)) || at(story, l) >= 0),
+  );
+  return [chosenOrigin, ...extras.map((l) => l.id)];
+}
+
+/** 按出身挑自由沙盘的默认出生点锚点；未指定时退回 fallback */
+export function pickStartLocation(
+  card: LoadoutMatchInput,
+  loadouts: readonly Loadout[],
+  fallback = "megabuilding-h10",
+): string {
+  if (loadouts.length === 0) return fallback;
+  const ids = pickLoadouts(card, loadouts, "");
+  for (const id of ids) {
+    const hit = loadouts.find((l) => l.id === id);
+    if (hit?.kind === "origin" && hit.defaultLocation) return hit.defaultLocation;
+  }
+  return fallback;
 }
 
 export interface OpeningJob {
@@ -200,12 +241,109 @@ interface Kit {
 }
 
 function mergeKits(loadouts: readonly Loadout[]): Kit {
+  const gearById = new Map<string, GameOpening["gear"][number]>();
+  for (const l of loadouts) {
+    for (const g of l.gear) {
+      const prev = gearById.get(g.id);
+      gearById.set(
+        g.id,
+        prev
+          ? {
+              id: g.id,
+              ...(prev.equip || g.equip ? { equip: true } : {}),
+              ...(g.slot !== undefined
+                ? { slot: g.slot }
+                : prev.slot !== undefined
+                  ? { slot: prev.slot }
+                  : {}),
+            }
+          : g,
+      );
+    }
+  }
   return {
-    gear: loadouts.flatMap((l) => l.gear),
+    gear: [...gearById.values()],
     eddies: loadouts.reduce((sum, l) => sum + (l.eddies ?? 0), 0),
     cyberware: [...new Set(loadouts.flatMap((l) => l.cyberware ?? []))],
     programs: [...new Set(loadouts.flatMap((l) => l.programs ?? []))],
-    vehicles: loadouts.flatMap((l) => l.vehicles ?? []),
+    vehicles: [...new Set(loadouts.flatMap((l) => l.vehicles ?? []))],
+  };
+}
+
+/** 结合玩家自选义体结算行装自带义体和快速破解：操作系统被斯安威斯坦/狂暴顶掉时不发废程序 */
+function resolveStartKit(
+  kit: Kit,
+  boardCyberware: readonly string[],
+  cyberwareCatalog: readonly CyberwareDef[] | undefined,
+): Kit {
+  if (!cyberwareCatalog || cyberwareCatalog.length === 0) return kit;
+  const byId = new Map(cyberwareCatalog.map((c) => [c.id, c]));
+  const usedSlots = new Map<string, number>();
+  for (const id of boardCyberware) {
+    const def = byId.get(id);
+    if (!def) continue;
+    usedSlots.set(def.slot, (usedSlots.get(def.slot) ?? 0) + 1);
+  }
+  const cyberware: string[] = [];
+  for (const id of kit.cyberware ?? []) {
+    const def = byId.get(id);
+    if (!def) {
+      cyberware.push(id);
+      continue;
+    }
+    const used = usedSlots.get(def.slot) ?? 0;
+    const cap = (SLOT_CAPACITY as Readonly<Record<string, number>>)[def.slot] ?? 1;
+    if (used >= cap) continue;
+    usedSlots.set(def.slot, used + 1);
+    cyberware.push(id);
+  }
+  const finalOs = [...cyberware, ...boardCyberware]
+    .map((id) => byId.get(id))
+    .filter((def): def is CyberwareDef => def?.slot === "os");
+  const deckSlots = finalOs.reduce((max, def) => Math.max(max, def.programSlots ?? 0), 0);
+  const programs = deckSlots > 0 ? (kit.programs ?? []).slice(0, deckSlots) : [];
+  return { ...kit, cyberware, programs };
+}
+
+function applyBoardKit(
+  base: Kit,
+  boardKit: NonNullable<SaveMeta["board"]>["kit"],
+  content: GameContent,
+): Kit {
+  if (!boardKit) return base;
+  const eddies =
+    boardKit.cashTier === "broke"
+      ? 0
+      : boardKit.cashTier === "stash"
+        ? (base.eddies ?? 0) + 2500
+        : boardKit.cashTier === "windfall"
+          ? (base.eddies ?? 0) + 6000
+          : base.eddies;
+  const gear = [...base.gear];
+  const usedSlots = new Set<number>(gear.flatMap((g) => (g.slot !== undefined ? [g.slot] : [])));
+  const validItems = content.items ? new Set(content.items.map((i) => i.id)) : null;
+  for (const weaponId of boardKit.weapons) {
+    if (validItems && !validItems.has(weaponId)) continue;
+    if (gear.some((g) => g.id === weaponId)) continue;
+    const freeSlot = ([1, 2, 3] as const).find((s) => !usedSlots.has(s));
+    if (freeSlot !== undefined) {
+      usedSlots.add(freeSlot);
+      gear.push({ id: weaponId, equip: true, slot: freeSlot });
+    } else {
+      gear.push({ id: weaponId, equip: false });
+    }
+  }
+  const validVehicles = content.vehicles ? new Set(content.vehicles.map((v) => v.id)) : null;
+  const extraVehicle =
+    boardKit.vehicle && (!validVehicles || validVehicles.has(boardKit.vehicle))
+      ? [boardKit.vehicle]
+      : [];
+  const vehicles = [...new Set([...(base.vehicles ?? []), ...extraVehicle])];
+  return {
+    ...base,
+    gear,
+    eddies,
+    vehicles,
   };
 }
 
@@ -294,11 +432,15 @@ export function newGameWorld(
       },
     },
   };
-  const kit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
-  // 主板的义体在开局行装之后装：部位按原作格数装（SLOT_CAPACITY，用户 2026-10-31 改的），装满了才换下行装里最早装的那件
+  const rawKit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
+  const adjustedKit = rawKit && applyBoardKit(rawKit, meta.board?.kit, content);
+  const validCyberware = content.cyberware ? new Set(content.cyberware.map((c) => c.id)) : null;
+  // 主板的义体在开局行装之后装：先根据部位上限筛掉会被顶掉的自带件（并联动过滤黑客程序）
   const boardCyberware = (meta.board?.cyberware ?? []).filter(
-    (id) => !(kit?.cyberware ?? []).includes(id),
+    (id) =>
+      !(adjustedKit?.cyberware ?? []).includes(id) && (!validCyberware || validCyberware.has(id)),
   );
+  const kit = adjustedKit && resolveStartKit(adjustedKit, boardCyberware, content.cyberware);
   const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
     // 耐受要在装任何义体之前写进去，人性消耗才按它折算
@@ -345,10 +487,13 @@ export function newGameWorld(
   return applied.world;
 }
 
-/** 按出身给开局住所；对不上时用 default 那一处 */
+/** 按出身给开局住所；先精确匹配 origin 或 origins 列表，对不上时回退 default */
 function homeSeed(content: GameContent, origin: string | undefined): unknown[] {
   const homes = content.homes ?? [];
-  const home = homes.find((h) => h.origin === origin) ?? homes.find((h) => h.origin === "default");
+  const home =
+    (origin !== undefined
+      ? homes.find((h) => h.origin === origin || h.origins?.includes(origin))
+      : undefined) ?? homes.find((h) => h.origin === "default");
   return home
     ? [{ type: "safehouse.seed", id: home.id, name: home.name, location: home.location }]
     : [];

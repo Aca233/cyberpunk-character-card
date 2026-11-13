@@ -1,7 +1,5 @@
 import { z } from "zod";
 import type { WorldState } from "../kernel/world";
-import { CharacterStateSchema, effectiveAttribute } from "../systems/character/schema";
-import { ATTRIBUTE_LABELS, CheckProposalSchema } from "../systems/dice";
 import {
   DiscountSchema,
   discounted,
@@ -14,11 +12,10 @@ import { itemCatalog } from "../systems/inventory/apply";
 import { JobsStateSchema } from "../systems/jobs/schema";
 import { vehicleCatalog } from "../systems/travel/vehicles";
 import { WorldClockStateSchema } from "../systems/world/schema";
-import { type Gate, GateProposalSchema } from "./block";
 
 /**
- * 一轮分五步：① 判断 → ② 拼上下文 → ③ 写正文 → ④ 抽取 → ⑤ 核对。
- * 这里放 ① 和 ⑤ 的格式、门槛判定、旧记忆候选；调模型和结算在 turn.ts
+ * 一轮核心流程：① 判断（记忆调度与定性物理/社会裁决）→ ② 拼上下文 → ③ 写正文 → ④ 抽取。
+ * 这里放 ① 的 JSON 结构、大额消费确认与时间跨越拦截；定性物理硬约束校验在 pipeline.ts
  */
 
 /** ① 判断里玩家这一轮要花的钱：只写买什么，价钱由代码查表 */
@@ -37,7 +34,40 @@ export const BuyProposalSchema = z
   });
 export type BuyProposal = z.infer<typeof BuyProposalSchema>;
 
-/** ① 判断的格式，只用来生成说明；check、gate 和 buy 另外逐条校验 */
+/** ① 判断里的定性物理与社会因果裁决；日常闲聊写 null */
+export const JudgeRulingSchema = z.object({
+  kind: z
+    .enum(["possible", "costly", "blocked"])
+    .describe(
+      "possible 条件充分可顺畅做成；costly 做得到但要付出代价/受挫/引发冲突；blocked 受物理、权限、气隙、装备或现实常识阻断而做不到",
+    ),
+  outcome: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("一句话定性写明这一轮现实会怎么回应：怎么成、付出什么代价，或被什么具体阻拦卡住"),
+  harm: z
+    .enum(["none", "graze", "heavy", "lethal"])
+    .describe(
+      "玩家角色本轮客观面临的最高身体伤害风险：none 无伤，graze 擦伤磕碰，heavy 重击/中枪，lethal 致命绝境",
+    ),
+  limb: z
+    .boolean()
+    .optional()
+    .describe("仅在刀刃、霰弹枪、爆炸、重型机械等真可能当场断肢的致命场面写 true；其余不写"),
+  reason: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe(
+      "定性因果依据：基于哪些在场装备、伤势、地形、目击者、权限或人物立场作出此裁决，不写数字",
+    ),
+});
+export type JudgeRuling = z.infer<typeof JudgeRulingSchema>;
+
+/** ① 判断的格式，同时用于原生 JSON Schema 约束与说明生成；ruling 和 buy 另外逐条校验 */
 export const JudgeDocSchema = z.object({
   read: z
     .string()
@@ -46,8 +76,9 @@ export const JudgeDocSchema = z.object({
   ooc: z
     .boolean()
     .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
-  check: CheckProposalSchema.nullable().describe("结果真不确定、需要掷骰时给出；不需要时写 null"),
-  gate: GateProposalSchema.nullable().describe("属性达标就直接成功的门槛；没有写 null"),
+  ruling: JudgeRulingSchema.nullable().describe(
+    "平时日常对话、吃喝赶路、普通观察写 null；只有发生物理碰撞、潜入越界、黑客入侵、武装冲突或违背常识阻断时才给定性裁决",
+  ),
   buy: BuyProposalSchema.nullable().describe(
     "玩家这一轮要掏钱买东西或买服务时写买什么，不写价钱；不花钱写 null",
   ),
@@ -58,23 +89,17 @@ export const JudgeDocSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "在场的对手（敌人、要对付或要骗过的人）这一轮想干什么、会怎么应对玩家，一句话，只给写正文的一步看；没有对手写 null",
+      "在场的对手或防备你的人（敌人、安保、黑客、要应付或试探的人）这一轮打算干什么、会怎么反制玩家，一句话，只给写正文的一步看；没有对手写 null",
     ),
-  why: z
-    .string()
-    .nullable()
-    .describe("给了 check 或 gate 时，一句话说为什么是这个档位和难度、风险从哪来；没给写 null"),
 });
 
 const JudgeShapeSchema = z.object({
   read: z.string().nullable().optional().catch(undefined),
   ooc: z.boolean().optional().catch(undefined),
-  check: z.unknown().optional(),
-  gate: z.unknown().optional(),
+  ruling: z.unknown().optional(),
   buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
   foes: z.string().nullable().optional().catch(undefined),
-  why: z.string().nullable().optional().catch(undefined),
 });
 export type JudgeShape = z.infer<typeof JudgeShapeSchema>;
 
@@ -92,25 +117,18 @@ export function readJudgeShape(value: unknown): JudgeShapeResult {
 
 export const MAX_RECALL = 3;
 
-/** 门槛由代码直接判定，不掷骰 */
-export interface GateResult {
-  readonly gate: Gate;
-  /** 角色这项属性的当前值（算上义体加成） */
-  readonly value: number;
-  readonly met: boolean;
-}
-
-export function judgeGate(world: WorldState, gate: Gate): GateResult {
-  const character = CharacterStateSchema.parse(world.slices.character);
-  const value = effectiveAttribute(character, gate.attribute);
-  return { gate, value, met: value >= gate.value };
-}
-
-export function gateText(result: GateResult): string {
-  const label = ATTRIBUTE_LABELS[result.gate.attribute];
-  return result.met
-    ? `【门槛】${label}要 ${result.gate.value}，角色是 ${result.value}：达标，这件事直接办成，不掷骰`
-    : `【门槛】${label}要 ${result.gate.value}，角色是 ${result.value}：没达标，这条路现在走不通；让世界或人物拒绝，或者让玩家付出别的代价换一条路`;
+export function rulingText(ruling: JudgeRuling): string {
+  const lead =
+    ruling.kind === "blocked"
+      ? "【物理/现实阻断】这条路现在走不通"
+      : ruling.kind === "costly"
+        ? "【条件与代价】做得到，但有硬代价或冲突"
+        : "【物理可行】条件到位，可以直接发生";
+  const harm =
+    ruling.harm === "none"
+      ? "（无身体创伤）"
+      : `（可能身体受损档位：${ruling.harm}${ruling.limb ? "，存在断肢风险" : ""}）`;
+  return `${lead}${harm}：${ruling.outcome}（依据：${ruling.reason}）。按现实因果照写，不提数值和规则词。`;
 }
 
 /** 要玩家先确认的大额花费 */
@@ -178,107 +196,4 @@ export function skipStop(
 export interface Memory {
   readonly title: string;
   readonly text: string;
-}
-
-/** ⑤ 核对的一行 */
-export type PatchLine =
-  | { readonly op: "keep"; readonly n: number }
-  | { readonly op: "drop"; readonly n: number; readonly reason: string }
-  | {
-      readonly op: "fix";
-      readonly n: number;
-      readonly fields: Readonly<Record<string, string | number>>;
-      readonly reason: string;
-    };
-
-const PATCH_BLOCK = /<patch>([\s\S]*?)(?:<\/patch>|$)/;
-const PATCH_LINE = /^(keep|drop|fix)\s+(\d+)\s*([^;；]*?)\s*(?:[;；]\s*(.*))?$/;
-
-/** 解析 <patch> 块；没有块时返回 undefined，认不出的行跳过 */
-export function parsePatch(text: string): PatchLine[] | undefined {
-  const block = PATCH_BLOCK.exec(text);
-  if (!block) return undefined;
-  const out: PatchLine[] = [];
-  for (const raw of (block[1] ?? "").split("\n")) {
-    const m = PATCH_LINE.exec(raw.trim());
-    if (!m) continue;
-    const n = Number(m[2]);
-    const reason = (m[4] ?? "").trim();
-    if (m[1] === "keep") out.push({ op: "keep", n });
-    else if (m[1] === "drop") out.push({ op: "drop", n, reason: reason || "正文里没有依据" });
-    else {
-      const fields: Record<string, string | number> = {};
-      for (const pair of (m[3] ?? "").split(/\s+/)) {
-        const eq = pair.indexOf("=");
-        if (eq <= 0) continue;
-        const value = pair.slice(eq + 1).replace(/^["']|["']$/g, "");
-        fields[pair.slice(0, eq)] = /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
-      }
-      if (Object.keys(fields).length > 0) out.push({ op: "fix", n, fields, reason });
-    }
-  }
-  return out;
-}
-
-/** ⑤ 审守则：一轮最多记几条提醒 */
-const MAX_FLAGS = 5;
-const FLAG_LINE = /^flag\s+(代说|泄密|死人)\s*(?:[;；]\s*(.*))?$/;
-
-/** 解析 <patch> 块里的 flag 行，返回「类别：说明」；认不出的类别跳过 */
-export function parseFlags(text: string): string[] {
-  const block = PATCH_BLOCK.exec(text);
-  if (!block) return [];
-  const out: string[] = [];
-  for (const raw of (block[1] ?? "").split("\n")) {
-    const m = FLAG_LINE.exec(raw.trim());
-    if (!m) continue;
-    const note = (m[2] ?? "").trim();
-    out.push(note ? `${m[1]}：${note}` : (m[1] as string));
-  }
-  return out.slice(0, MAX_FLAGS);
-}
-
-/** 档位从轻到重；fix 只能往轻里改 */
-const LADDERS: readonly (readonly string[])[] = [
-  ["graze", "heavy", "lethal"],
-  ["small", "medium", "large"],
-  ["few", "some", "lots"],
-];
-
-/** 这些字段决定“是什么、对谁”，核对不能改 */
-const FIXED_FIELDS = new Set(["type", "action", "id", "target", "npc", "from", "source", "kind"]);
-
-export type FixResult =
-  | { readonly ok: true; readonly value: Record<string, unknown> }
-  | { readonly ok: false; readonly reason: string };
-
-/** 按核对的 fix 改一条提议：只能改已有的字段，档位只能降、数值只能往 0 靠 */
-export function applyFix(
-  original: Readonly<Record<string, unknown>>,
-  fields: Readonly<Record<string, string | number>>,
-): FixResult {
-  const next: Record<string, unknown> = { ...original };
-  for (const [key, value] of Object.entries(fields)) {
-    if (FIXED_FIELDS.has(key)) return { ok: false, reason: `核对不能改 ${key}` };
-    if (!(key in original)) return { ok: false, reason: `核对不能加新字段 ${key}` };
-    const old = original[key];
-    if (typeof old === "number" && typeof value === "number") {
-      const sameSide = value === 0 || Math.sign(value) === Math.sign(old);
-      if (!sameSide || Math.abs(value) > Math.abs(old)) {
-        return { ok: false, reason: `${key} 只能往小改（原来 ${old}，核对写 ${value}）` };
-      }
-      next[key] = value;
-      continue;
-    }
-    if (typeof old === "string" && typeof value === "string") {
-      const ladder = LADDERS.find((l) => l.includes(old));
-      if (!ladder?.includes(value) || ladder.indexOf(value) > ladder.indexOf(old)) {
-        return { ok: false, reason: `${key} 只能把档位往轻里改（原来 ${old}，核对写 ${value}）` };
-      }
-      next[key] = value;
-      continue;
-    }
-    return { ok: false, reason: `${key} 不能这样改` };
-  }
-  return { ok: true, value: next };
 }

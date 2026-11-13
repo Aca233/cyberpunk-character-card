@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { LlmMessage } from "../kernel/ports";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
@@ -43,6 +44,15 @@ const SUMMARY_OUTPUT = `【输出格式】
 例：{"title": "面馆里接下第一单", "text": "你在小摊面馆见到中间人老莫，他让你去沃森的一间废弃诊所取回一块芯片，事成给 2,000 欧元。你答应了，想先要一半定金，他没给。摊主阿珍提醒你那一带最近有帮派出没。你打算天黑以后再去。", "people": ["old-mo", "a-zhen"], "importance": "normal", "keywords": ["老莫", "芯片", "废弃诊所", "沃森"]}`;
 
 export const SUMMARY_SYSTEM = [BOOKKEEPING_BASE, SUMMARY_STAGE, SUMMARY_OUTPUT].join("\n\n");
+
+export const SummaryDocSchema = z.object({
+  title: z.string().describe("12 字以内的场景标题"),
+  text: z.string().describe(`100–${SUMMARY_CHARS} 字的场景客观摘要`),
+  people: z.array(z.string()).describe("这一场真出场或被认真提起的有卡人物 id"),
+  importance: ImportanceSchema,
+  keywords: z.array(z.string()).describe(`2–${SUMMARY_KEYWORDS} 个检索关键词`),
+});
+export type SummaryDoc = z.infer<typeof SummaryDocSchema>;
 
 function clip(text: string, max: number): string {
   return [...text].slice(0, max).join("");

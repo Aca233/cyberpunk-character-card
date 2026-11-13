@@ -27,13 +27,13 @@ import story from "../story/story.module.css";
 import styles from "./characters.module.css";
 
 /**
- * 捏人第 7 步：在地图上选开局地点（用户定的"在地图上选择"，2026-10-30）。
+ * 自由沙盘开局地点选择器：
  * 可选的点就是周边雷达的锚点 RADAR_ANCHORS，和服务端白名单同一份；坐标照原作，不编。
- * 只换玩家开局站在哪：引导委托、出场人物、行装不变，芯片交货地仍是丽姿酒吧（服务端 openingPremise 会写明）
+ * 未手动指定时，开局地点跟随当前所选出身的生活圈默认地点（街头/沃森 H10、恶土、公司广场等）。
  */
 
-/** 没选时的开局地点：开场自带的丽姿酒吧 */
-export const DEFAULT_START = "lizzies-bar";
+/** 找不到出身对应地点时的兜底开局锚点：超级摩天楼 H10 */
+export const DEFAULT_START = "megabuilding-h10";
 
 const ANCHOR = new Map(RADAR_ANCHORS.map((a) => [a.id, a]));
 /** 服务点锚点 id 是 poi:<原作 id>，图标照原作同类标记 */
@@ -62,10 +62,13 @@ function overlaps(a: Box, list: readonly Box[]): boolean {
 
 export function StartMapPicker({
   value,
+  defaultStart = DEFAULT_START,
   onChange,
 }: {
   /** 选中的锚点 id */
   readonly value: string;
+  /** 出身对应的默认开局锚点 id */
+  readonly defaultStart?: string;
   readonly onChange: (id: string) => void;
 }) {
   const tiles = useMapTiles();
@@ -88,6 +91,7 @@ export function StartMapPicker({
   const [query, setQuery] = useState("");
   const searchId = useId();
   const picked = ANCHOR.get(value);
+  const resetAnchor = ANCHOR.get(defaultStart) ?? ANCHOR.get(DEFAULT_START);
   const info = asset(MAP);
 
   const results = useMemo(() => {
@@ -191,13 +195,12 @@ export function StartMapPicker({
         />
         <Button
           small
-          disabled={value === DEFAULT_START}
+          disabled={!resetAnchor || value === resetAnchor.id}
           onClick={() => {
-            const a = ANCHOR.get(DEFAULT_START);
-            if (a) choose(a, true);
+            if (resetAnchor) choose(resetAnchor, true);
           }}
         >
-          回到丽姿酒吧
+          回到{resetAnchor?.name ?? "出身起点"}
         </Button>
       </div>
       {query.trim() !== "" && (

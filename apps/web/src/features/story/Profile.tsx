@@ -153,7 +153,7 @@ function NemesisSection({ nemesis }: { readonly nemesis: NonNullable<Npc["nemesi
   );
 }
 
-/** 身体：伤势和装备；扫描过的再列档位、威胁、属性、生命、义体和人性阶段 */
+/** 身体：伤势和装备；扫描过的列出精神稳定性与义体 */
 function BodySection({
   body,
   onScan,
@@ -171,24 +171,13 @@ function BodySection({
         <dd>{body.gear.join("、") || "—"}</dd>
         {scan && (
           <>
-            <dt>档位</dt>
-            <dd>{scan.tier}</dd>
-            <dt>威胁</dt>
-            <dd data-threat={scan.threat}>
-              {scan.threat === "skull" ? "☠ 骷髅" : scan.threatLabel}
-            </dd>
-            <dt>生命</dt>
-            <dd>
-              {scan.hp}/{scan.max}
-            </dd>
-            <dt>人性</dt>
+            <dt>精神稳定性</dt>
             <dd>{scan.humanityStage}</dd>
           </>
         )}
       </dl>
       {scan ? (
         <ul className={styles.list}>
-          <li>{scan.attributes.map((a) => `${a.label} ${a.value}`).join(" · ")}</li>
           {/* 义体带部位和效果（用户 2026-11-02："npc的义体是不是太简单了，只有一个文字描述"）：沿用列表样式，部位放小牌 */}
           {scan.chrome.length === 0 ? (
             <li>义体：没扫出义体</li>
@@ -203,7 +192,7 @@ function BodySection({
           )}
         </ul>
       ) : (
-        <p className={styles.note}>没扫描过；用义眼扫一下能看到属性、威胁和义体。</p>
+        <p className={styles.note}>没扫描过；用义眼扫一下能看出对方装了什么义体和精神状态。</p>
       )}
       {/* 点一下立刻扫（用户定的，计划第十二节第 14 条）：按钮用原作 tab.bg，同上面的页签；没装义眼由后端拒绝、提示条说明 */}
       {onScan && (

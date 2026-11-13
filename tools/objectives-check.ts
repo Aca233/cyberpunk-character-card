@@ -145,21 +145,43 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
 // 待办：委托
 {
   const jobs = (slice(base, "jobs").jobs ?? []) as Slice[];
-  const first = jobs[0];
-  expect("开局有委托可以测", first !== undefined);
-  if (first) {
-    const withJob = (j: Slice) =>
-      set(base, "jobs", { jobs: [{ ...first, twist: "隐藏的转折", ...j }] });
-    const offered = view(withJob({ status: "offered", due: base.time + 600 }));
-    const o = offered.objectives.find((x) => x.id === `jobs:${first.id}`);
-    expect("挂着的委托是 offered，期限 600 分钟", o?.status === "offered" && o?.dueIn === 600, o);
-    expect("委托转折不出现", !text(offered).includes("隐藏的转折"));
-    const late = view(withJob({ status: "active", due: base.time - 10 }));
-    const l = late.objectives.find((x) => x.id === `jobs:${first.id}`);
-    expect("过了期限的在办委托是 overdue", l?.status === "overdue" && l?.dueIn === -10, l);
-    const done = view(withJob({ status: "clean" }));
-    expect("结束的委托不进待办", !done.objectives.some((x) => x.id === `jobs:${first.id}`));
-  }
+  expect("自由沙盘开局不强塞委托", jobs.length === 0, jobs);
+  const first: Slice = jobs[0] ?? {
+    id: "probe-job",
+    title: "试测委托",
+    kind: null,
+    fixer: "regina",
+    asker: null,
+    client: "匿名客户",
+    location: null,
+    risk: 1,
+    reward: 1000,
+    due: null,
+    conflict: "测试利益冲突",
+    twist: null,
+    notes: [],
+    status: "offered",
+    offeredAt: base.time,
+    acceptedAt: null,
+    closedAt: null,
+    overdue: false,
+    dueHandled: false,
+    paid: null,
+    summary: null,
+    humanityAtAccept: null,
+    settlement: null,
+  };
+  const withJob = (j: Slice) =>
+    set(base, "jobs", { jobs: [{ ...first, twist: "隐藏的转折", ...j }] });
+  const offered = view(withJob({ status: "offered", due: base.time + 600 }));
+  const o = offered.objectives.find((x) => x.id === `jobs:${first.id}`);
+  expect("挂着的委托是 offered，期限 600 分钟", o?.status === "offered" && o?.dueIn === 600, o);
+  expect("委托转折不出现", !text(offered).includes("隐藏的转折"));
+  const late = view(withJob({ status: "active", due: base.time - 10 }));
+  const l = late.objectives.find((x) => x.id === `jobs:${first.id}`);
+  expect("过了期限的在办委托是 overdue", l?.status === "overdue" && l?.dueIn === -10, l);
+  const done = view(withJob({ status: "clean" }));
+  expect("结束的委托不进待办", !done.objectives.some((x) => x.id === `jobs:${first.id}`));
 }
 
 // 待办：心事；场外暗中出了结局，待办和人物卡都不能变

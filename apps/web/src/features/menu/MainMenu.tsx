@@ -10,6 +10,8 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
+import { defaultStartLocationFor } from "../characters/creator";
+import { anchorLabel, startAnchor } from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
 import { LegendsPanel } from "./LegendsPanel";
 import styles from "./menu.module.css";
@@ -351,14 +353,37 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
+  const boardData = useQuery({
+    queryKey: ["characterBoard"],
+    queryFn: api.characterBoard,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("nightCity");
+  const lastCharacter = useRef("");
   const entries = characters.data ?? [];
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const characterId = selected?.id ?? "";
+  useEffect(() => {
+    if (!selected || selected.id === lastCharacter.current) return;
+    lastCharacter.current = selected.id;
+    setDifficulty(selected.card.board?.difficulty ?? "nightCity");
+  }, [selected]);
+  const startLocation = selected
+    ? selected.card.board?.startLocation && startAnchor(selected.card.board.startLocation)
+      ? selected.card.board.startLocation
+      : defaultStartLocationFor(selected.card, boardData.data)
+    : undefined;
+  const startSpot = startAnchor(startLocation);
   const create = useMutation({
-    mutationFn: () => api.createSave({ title: title.trim(), characterId, difficulty }),
+    mutationFn: () =>
+      api.createSave({
+        title: title.trim(),
+        characterId,
+        difficulty,
+        ...(startLocation ? { startLocation } : {}),
+      }),
     onSuccess: async (save) => {
       await client.invalidateQueries({ queryKey: ["saves"] });
       onCreated(save.id);
@@ -431,6 +456,7 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <p className={styles.charNote}>
             {selected.card.alias ? `外号「${selected.card.alias}」。` : ""}
             {selected.card.personality || selected.card.origin}
+            {startSpot ? ` · 开局地点：${anchorLabel(startSpot)}` : ""}
           </p>
         )}
         <fieldset className={styles.difficulty} disabled={create.isPending}>

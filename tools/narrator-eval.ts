@@ -7,7 +7,6 @@ import {
   buildJudgePrompt,
   buildNarratorPrompt,
   estimateTokens,
-  fixedRng,
   type LlmClient,
   type LlmUsage,
   RULE_BUDGET_TOKENS,
@@ -267,7 +266,7 @@ async function main(): Promise<number> {
   await pool(tasks, jobs, async ({ c, rep }) => {
     const scenario = scenarios.get(c.id) as Scenario;
     const started = Date.now();
-    const rng = c.dice ? fixedRng(c.dice) : seededRng(rep + 1);
+    const rng = seededRng(rep + 1);
     let run: RunResult;
     try {
       const result = await runNarratorTurn(
@@ -303,7 +302,7 @@ async function main(): Promise<number> {
         add(usage.narrator, turn.usage);
         add(usage.aux, turn.auxUsage);
         add(usage.repair, turn.repairUsage);
-        const findings = codeFindings(c, scenario.plan, turn);
+        const findings = codeFindings(c, turn);
         let scores: readonly Score[] = [];
         let gradeError: string | undefined;
         if (graderLlm && c.rubric.length > 0) {
@@ -325,8 +324,7 @@ async function main(): Promise<number> {
           text: turn.text,
           block: {
             read: turn.read,
-            check: turn.check ?? null,
-            choices: turn.choices,
+            ruling: turn.ruling ?? null,
             commands: turn.commands,
             dropped: turn.dropped,
             notes: turn.notes,

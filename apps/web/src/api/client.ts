@@ -7,6 +7,7 @@ import type {
   Combo,
   Legend,
   LifepathEntry,
+  Loadout,
   PlayerView,
   ProseBlock,
   ProseMode,
@@ -14,7 +15,7 @@ import type {
   TurnUsage,
 } from "@cp/core";
 
-import { encounterPace, offscreenPace, spoilersOn } from "../features/settings/prefs";
+import { offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
 import { apiFetch, LOCAL_MODE } from "./transport";
 
@@ -213,10 +214,39 @@ export interface BoardData {
     readonly rarity?: string;
     readonly points: number;
     readonly humanityCost: number;
+    readonly programSlots?: number;
     readonly ability: string;
   }[];
-  /** 捏人第 3 步能选成旧识的原作人物（用户定的，2026-10-30：15 个全部能选）；服务端只给公开的几项 */
+  /** 捏人能选成旧识的原作人物；服务端只给公开的几项 */
   readonly npcs: readonly CanonNpcBrief[];
+  /** 开局行装可选随身武器（普通/罕见/稀有） */
+  readonly weapons?: readonly StartWeaponOption[];
+  /** 开局行装可选专属载具 */
+  readonly vehicles?: readonly StartVehicleOption[];
+  /** 出身自带的开局行装表（同建档时 pickLoadouts 用的那张）；旧后端没有 */
+  readonly loadouts?: readonly Loadout[];
+  /** 物品、载具、程序、义体 id → 中文名 */
+  readonly names?: Readonly<Record<string, string>>;
+}
+
+export interface StartWeaponOption {
+  readonly id: string;
+  readonly name: string;
+  readonly category?: string;
+  readonly rarity: string;
+  readonly points: number;
+  readonly ability: string;
+}
+
+export interface StartVehicleOption {
+  readonly id: string;
+  readonly name: string;
+  readonly maker: string;
+  readonly class: string;
+  readonly seats: number;
+  readonly trunk: number;
+  readonly points: number;
+  readonly note?: string;
 }
 
 export interface CanonNpcBrief {
@@ -532,12 +562,11 @@ export const api = {
     const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, {
       ...body,
       offscreen: offscreenPace(),
-      encounters: encounterPace(),
     });
     if (typeof r.turnId === "string") return { kind: "started", turnId: r.turnId };
     return { kind: "duplicate", seq: Number(r.seq), version: Number(r.version) };
   },
-  /** 界面操作（分配属性点……），不调用模型 */
+  /** 界面操作（习惯、医疗、义体……），不调用模型 */
   action: (saveId: string, body: ActionRequest) =>
     request<{ version: number; notes?: string[] }>("POST", `/saves/${saveId}/actions`, body),
   /** 夜之城难度死亡后从这个场景开头重来；每个场景一次 */

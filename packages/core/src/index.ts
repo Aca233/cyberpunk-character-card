@@ -20,22 +20,16 @@ export {
 } from "./netrunning";
 export {
   type CroppedNpcPersona,
-  computeNpcVectors,
   cropNpcPersona,
-  evaluateBetrayal,
   evaluatePhoneAvailability,
-  isCoreTruthUnlocked,
-  type NpcVectors,
-  NpcVectorsSchema,
+  hasDeepBond,
   RIVAL_MERC_POOL,
   recordSeedEncounter,
   type SeedTag,
   SeedTagSchema,
 } from "./npc";
 export {
-  computeLootBudgetCap,
   evaluatePhysicsBoundaries,
-  type LootBudgetCap,
   type NarrativeContentMode,
   type NarrativeIntensity,
   type PhysicsLockInput,
@@ -82,16 +76,10 @@ export * as travelRules from "./systems/travel";
 export * as worldRules from "./systems/world";
 export * from "./tension";
 export {
-  type CorpoAssessmentInput,
-  type CorpoAssessmentResult,
   type DistrictSecurityInput,
   type DistrictSecurityResult,
-  evaluateCorpoStanding,
   evaluateDistrictSecurityCheck,
   type HousingTier,
-  rollSecondhandCyberwareDefect,
-  type SecondhandDefectKind,
-  type SecondhandDefectResult,
   settleWeeklyLifestyleBill,
   WEEKLY_LIFESTYLE_BILLS,
 } from "./worldClock";

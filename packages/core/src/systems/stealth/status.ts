@@ -13,7 +13,7 @@ export const stealthStatus: readonly SystemStatus[] = [
     lines(ctx) {
       const s = stealthOf(ctx);
       if (s.level <= 0) return [];
-      return [`潜入警戒：${s.level}/3 ${s.label}${s.lowered ? "，这个场景已经降过一档" : ""}`];
+      return [`潜入警戒：${s.label}${s.lowered ? "，这个场景已经降过一档" : ""}`];
     },
   },
 ];

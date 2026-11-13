@@ -1,0 +1,745 @@
+/*
+ * CK3「自定义统治者」× 2077 原作控件工作台：
+ * 左栏（极简身份、难度、出身与人脉行装）、中栏（主角级对称 2077 CyberDoll）、
+ * 右栏（map.panel 原作斜切工作卡：定制点数 + tab.bg 页签 + 2×3 原作图标能力格 + 独立 AI 人设）、
+ * 底栏（左保存/导出/删除 · 右代号与开局）。
+ * 只用原作素材框线（NineSlice / CellFrame / FrameBox / tab.bg / tab.line），不手画 CSS 细框线。
+ */
+
+.bench {
+  display: grid;
+  grid-template-columns: 280px minmax(520px, 1fr) 435px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  height: 100%;
+  min-height: 0;
+  color: var(--cp-text);
+}
+
+.left,
+.center {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ———— 左栏：平静暗底身份总览，只用 tab.line 分区与 CellFrame 卡片 ———— */
+.left {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+  background: rgb(5 5 10 / 52%);
+}
+
+.groupLabel {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.idStack {
+  display: grid;
+  gap: 7px;
+}
+
+.idSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr);
+  gap: 7px;
+}
+
+.compactBox input {
+  min-height: 35px;
+  padding: 6px 12px 7px 10px;
+  font-size: var(--fs-label);
+}
+
+.searchBox {
+  flex: 1 1 12rem;
+}
+
+.searchBox input {
+  min-height: 34px;
+  padding: 6px 12px 6px 10px;
+  font-size: var(--fs-label);
+}
+
+.titleBox {
+  width: 210px;
+}
+
+.titleBox input {
+  min-height: 34px;
+  padding: 5px 12px 6px 10px;
+  font-size: var(--fs-label);
+}
+
+.hairline {
+  display: block;
+  flex: none;
+  height: 2px;
+  margin: 2px 0;
+  background: var(--cp-red-dim);
+  mask-size: 100% 100%;
+  opacity: 0.55;
+}
+
+.btnStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* 原作 map.filterCell 九宫格卡片（CellFrame 垫底） */
+.navCard {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 74%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 14px 10px 12px;
+  border: 0;
+  color: var(--cp-text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+}
+
+.navCard:hover {
+  --box-line: var(--cp-red);
+}
+
+.navCard[aria-pressed="true"] {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(13 32 37 / 86%);
+}
+
+.navCard[data-empty] {
+  --box-line: rgb(252 238 10 / 60%);
+}
+
+.navCardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardEyebrow {
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+}
+
+.cardAction {
+  color: var(--cp-red);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.cardTitle {
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardSub {
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  line-height: 1.38;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navCard[aria-pressed="true"] .cardTitle,
+.navCard[aria-pressed="true"] .cardAction {
+  color: var(--cp-cyan);
+}
+
+/* ———— 中栏：宽阔对称 2077 CyberDoll 主舞台 ———— */
+.center {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  overflow: hidden;
+}
+
+.heroPlate {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: min(440px, 90%);
+  text-align: center;
+  text-shadow:
+    0 0 4px rgb(5 5 10),
+    0 0 10px rgb(5 5 10);
+}
+
+.heroName {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.heroAlias {
+  margin-left: 0.4rem;
+  color: var(--cp-yellow);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.heroMeta {
+  margin: 0;
+  color: var(--cp-cyan);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  opacity: 0.9;
+}
+
+.heroLine {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin-top: 3px;
+  background: var(--cp-red-dim);
+  mask-size: 100% 100%;
+  opacity: 0.55;
+}
+
+.dollFrame {
+  container: pin / inline-size;
+  width: 100%;
+  min-width: 0;
+  margin: auto 0;
+}
+
+.centerFoot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.tolBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.installedList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.installedChip {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(13 32 37 / 55%);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+}
+
+.installedChip[data-inherent] {
+  --box-line: rgb(94 246 255 / 26%);
+  --box-fill: rgb(14 14 23 / 62%);
+  color: var(--cp-text-dim);
+}
+
+.installedLink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: var(--cp-cursor-hand);
+}
+
+.installedLink:hover {
+  color: var(--cp-cyan);
+}
+
+.chipMuted {
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+}
+
+.chipDrop {
+  padding: 0 3px;
+  border: 0;
+  color: var(--cp-text-dim);
+  background: transparent;
+  font: inherit;
+  cursor: var(--cp-cursor-hand);
+}
+
+.chipDrop:hover {
+  color: var(--cp-red);
+}
+
+/* ———— 右栏：map.panel 原作斜切控制表 ———— */
+.right {
+  grid-column: 3;
+  grid-row: 1;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 16px 12px;
+}
+
+.sheetLayer {
+  z-index: -1;
+}
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meterHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  font-size: var(--fs-label);
+}
+
+.meterVal {
+  color: var(--cp-yellow);
+  font-size: 1.08rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.meterVal[data-over] {
+  color: var(--cp-yellow);
+}
+
+.badge {
+  color: var(--cp-cyan);
+  font-size: 0.72rem;
+}
+
+.badge[data-over] {
+  color: var(--cp-yellow);
+}
+
+.meterTrack {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 12%);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  background: var(--cp-cyan);
+  transition:
+    width var(--dur-flash),
+    background var(--dur-flash);
+}
+
+.meterFill[data-over] {
+  background: var(--cp-yellow);
+}
+
+.meterFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.meterNote {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 0;
+  color: var(--cp-yellow);
+  font-size: 0.72rem;
+  list-style: none;
+}
+
+.sheetNav {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheetNav button {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+}
+
+.drawerBody {
+  flex: 1;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.subHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.subTitle {
+  color: var(--cp-cyan);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.buildStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slotBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slotHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slotTitle {
+  margin: 0;
+  color: var(--cp-red);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.slotSub {
+  margin-left: 0.45rem;
+  color: var(--cp-text-dim);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.slotTools {
+  display: flex;
+  gap: 6px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(13 32 37 / 58%);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  font-size: 0.75rem;
+}
+
+.chip[data-flaw] {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(255 60 60 / 8%);
+}
+
+.empty {
+  color: var(--cp-text-dim);
+  font-size: 0.74rem;
+}
+
+/* ———— 右栏五维 2×3 能力卡（CK3 双列布局 + 原作 attr.* 图标 + CellFrame） ———— */
+.attrGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.attrTile {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 74%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 11px 9px 10px;
+}
+
+.attrTile[data-relied] {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(13 32 37 / 64%);
+}
+
+.attrTileHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attrNameWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.attrRel {
+  color: var(--cp-cyan);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.attrSteppers {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.attrBtn {
+  --box-line: var(--cp-cyan-dim);
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+}
+
+.attrBtn:hover:not(:disabled) {
+  background: rgb(94 246 255 / 24%);
+}
+
+.attrBtn:disabled {
+  color: var(--cp-text-faint);
+  background: rgb(255 255 255 / 4%);
+  cursor: var(--cp-cursor);
+}
+
+.attrVal {
+  min-width: 1.4rem;
+  color: var(--cp-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.attrActions {
+  --box-line: rgb(255 255 255 / 12%);
+  --box-fill: rgb(14 14 23 / 46%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px 9px;
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+}
+
+.attrActionBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.slotRibbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+
+/* ———— 底栏：极简一字单行（左存档工具 / 右开局启动） ———— */
+.bar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-top: 2px;
+}
+
+.barActions,
+.launchRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusHint {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+}
+
+/* ———— 页面外壳与角色库抽屉 ———— */
+.workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.libraryDrawer {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(5 5 10 / 96%);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(320px, 90%);
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgb(5 5 10 / 97%);
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.editorWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editorWrap > .benchHost {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meterFill {
+    transition: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .bench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+  }
+
+  .left,
+  .center,
+  .right,
+  .bar {
+    grid-column: 1;
+    grid-row: auto;
+    overflow-y: visible;
+  }
+
+  .workspace {
+    grid-template-rows: auto;
+    overflow-y: auto;
+  }
+}

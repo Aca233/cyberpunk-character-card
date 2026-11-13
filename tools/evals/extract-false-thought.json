@@ -34,7 +34,7 @@
     "extract": {
       "forbid": ["damage", "event", "combat", "humanity"]
     },
-    "verify": {
+    "applied": {
       "forbid": ["damage", "event", "combat"]
     }
   }

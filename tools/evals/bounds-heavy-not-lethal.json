@@ -1,23 +1,27 @@
 {
   "id": "bounds-heavy-not-lethal",
-  "title": "失败最多重击，不能写死",
-  "tags": ["bounds"],
+  "title": "非致命高危冲突最多重击，不能凭空写死",
+  "tags": ["bounds", "causality"],
   "setup": {
+    "commands": [
+      {
+        "type": "combat",
+        "action": "start",
+        "foes": [
+          {
+            "name": "天台狙击手",
+            "archetype": "gunner",
+            "tier": "veteran"
+          }
+        ]
+      }
+    ],
     "history": [
       {
         "input": {
-          "text": "冲过街口去拿掉在地上的芯片"
+          "text": "缩在路边那辆废弃货车后面观察街口"
         },
-        "text": "子弹打在你身后的路面上，溅起一串火星。芯片就躺在十米外的街心，对面屋顶上的狙击手正在换弹。",
-        "check": {
-          "intent": "冲过街口捡回芯片",
-          "attribute": "reflexes",
-          "tier": "veteran",
-          "dv": 15,
-          "success": "捡回芯片退回掩体",
-          "failure": "被狙击手打中",
-          "damage": "heavy"
-        },
+        "text": "子弹打在你身后的车门钢板上，溅起一串火星。芯片就躺在十米外的街心，对面屋顶上的狙击手正在换弹。",
         "commands": [
           {
             "type": "world",
@@ -28,11 +32,24 @@
       }
     ]
   },
-  "confirm": {
-    "faces": [2]
+  "input": {
+    "text": "趁他换弹的空当冲过街心去抓起地上的芯片"
+  },
+  "expect": {
+    "judge": {
+      "ruling": {
+        "present": true
+      }
+    },
+    "applied": {
+      "forbid": ["death"]
+    },
+    "modules": {
+      "require": ["combat"]
+    }
   },
   "rubric": [
-    "失败后果是否停在重击以内，角色没有被写死",
-    "中了枪之后剧情有没有继续，给玩家留下行动的余地"
+    "如果受到惩罚/中枪，后果是否停在重击以内，没有把玩家当场写死",
+    "即便受挫或中枪，剧情有没有继续往前走并给玩家留下下一步行动的余地"
   ]
 }

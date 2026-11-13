@@ -29,6 +29,12 @@ export interface LlmMessage {
   readonly content: string;
 }
 
+export interface LlmResponseFormat {
+  readonly type: "json";
+  readonly name?: string;
+  readonly schema?: Record<string, unknown>;
+}
+
 export interface LlmRequest {
   /** narrator 用叙事模型，aux 用辅助模型 */
   readonly purpose: "narrator" | "aux";
@@ -38,6 +44,8 @@ export interface LlmRequest {
   /** 酒馆预设带来的采样参数（只给叙事模型）；服务商不支持的由各家适配层忽略 */
   readonly topP?: number;
   readonly topK?: number;
+  /** 开启服务商原生结构化 JSON 输出（纯文本流式叙事不传） */
+  readonly responseFormat?: LlmResponseFormat;
 }
 
 export interface LlmUsage {

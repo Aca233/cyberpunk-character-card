@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { extractEdgeLedgerState } from "../../state";
 import { resolveDeathLineChannel, woundPenalty, woundSlotOf } from "../health/apply";
 import { humanityCap, isGlitchZone, isImmunosuppressed } from "../humanity/apply";
-import { inferStyleTag, loadoutSummary, weaponConcealment } from "../inventory/schema";
+import { weaponConcealment } from "../inventory/schema";
 import { isBlackLaceWithdrawal, isFatigued, phaseClockOf } from "../world/apply";
 import { computeTierCrush, prepareCheck, resolveCheck } from "./apply";
 import { CheckSpecSchema } from "./schema";

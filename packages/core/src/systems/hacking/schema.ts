@@ -111,7 +111,7 @@ export const NpcHackCommandSchema = z
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。对玩家的伤害类、终极类要先掷智力或肉体抵抗，掷骰前在 check.npcHack 写 id 和 program 绑定攻击，并预告 damage；代码统一结算抵抗、自我 ICE 和伤害，同一检定只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。对玩家的伤害类、终极类要经前置因果裁决与事实绑定（turnId + id + program），代码统一结算防御、自我 ICE 和伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
@@ -122,7 +122,11 @@ export const HackCommandSchema = z
     action: z.enum(["use", "learn", "drop"]).default("use"),
     program: z.string().min(1).describe("程序 id（见【当前状态】的已装程序）"),
     target: z.string().trim().min(1).max(40).optional().describe("use 要写：对谁或什么放"),
-    npc: z.string().min(1).optional().describe("目标有人物卡时写卡的 id；对有卡的人要先掷智力"),
+    npc: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("目标有人物卡时写卡的 id；对有卡的人要先经前置潜网对抗裁决"),
     reason: z
       .string()
       .trim()
@@ -168,7 +172,7 @@ export const BreachCommandSchema = z
       .describe("拿到了什么：doors 门禁，cameras 摄像头，turrets 炮塔，data 数据，alarms 警报"),
   })
   .describe(
-    "入侵协议：接进一个网络，开门、关摄像头、拿数据；要装网络接入仓，并且本轮智力门槛达标或检定成功，代码核对，不扣 RAM",
+    "入侵协议：接进一个网络，开门、关摄像头、拿数据；必须装着网络接入仓，并且前置物理与潜网裁决确认通过了安全接入条件才记下，不扣 RAM",
   );
 export type BreachCommand = z.infer<typeof BreachCommandSchema>;
 
@@ -187,6 +191,6 @@ export const DiveCommandSchema = z
     }
   })
   .describe(
-    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（本轮智力检定成功才行，深层的检定要事先写明伤害），surface 退出回到肉身；场景结束自动退出",
+    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（需在前置潜网裁决中扛住当前层黑冰防御、未在强防下退却，越深神经反噬越致命），surface 退出回到肉身；场景结束自动退出",
   );
 export type DiveCommand = z.infer<typeof DiveCommandSchema>;

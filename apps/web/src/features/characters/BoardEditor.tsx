@@ -5,7 +5,6 @@ import {
   BoardSchema,
   type BoardSlot,
   boardBudget,
-  boardCombos,
   boardHumanityCost,
   FLAW_MAX,
   fillPasts,
@@ -33,7 +32,7 @@ const LISTS: readonly {
   readonly max: number;
   readonly hint: string;
 }[] = [
-  { key: "pasts", slot: "past", min: PAST_MIN, max: PAST_MAX, hint: "几段经历：前 3 段必填" },
+  { key: "pasts", slot: "past", min: PAST_MIN, max: PAST_MAX, hint: "几段经历（可选）" },
   {
     key: "skills",
     slot: "skill",
@@ -93,7 +92,7 @@ export function BoardEditor({
   readonly onChange: (board: Board, origin?: string) => void;
 }) {
   const commit = (next: Board, origin?: string) => {
-    const combos = boardCombos(next, data.combos).map(({ requires: _, ...combo }) => combo);
+    const combos: Board["combos"] = [];
     onChange({ ...next, combos }, origin);
   };
   const budget = boardBudget(board);
@@ -138,7 +137,7 @@ export function BoardEditor({
     <div className={styles.board}>
       <div className={styles.budget} role="status">
         <span data-tone={budget.remaining < 0 ? "bad" : undefined}>
-          背景点剩余 <b>{budget.remaining}</b> / {budget.total}
+          背景点结余（参考） <b>{budget.remaining}</b> / {budget.total}
         </span>
         <span>
           花了 {budget.spent} · 返还 {budget.refund}
@@ -233,7 +232,7 @@ export function BoardEditor({
                   <button
                     type="button"
                     className={styles.toolButton}
-                    disabled={list.length >= PAST_MIN}
+                    disabled={list.length >= 3}
                     onClick={() =>
                       commit(fillPasts(board, data.lifepath, data.modules, Math.random))
                     }
@@ -344,23 +343,6 @@ export function BoardEditor({
           })}
         </div>
       </section>
-
-      {board.combos.length > 0 && (
-        <section className={styles.slotGroup}>
-          <h4>联动</h4>
-          <ul className={styles.modules}>
-            {board.combos.map((c) => (
-              <li className={styles.module} data-combo key={c.id}>
-                <div className={styles.moduleHead}>
-                  <strong>{c.label}</strong>
-                </div>
-                <p>{c.ability}</p>
-                {c.hook && <p className={styles.moduleHook}>钩子：{c.hook}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

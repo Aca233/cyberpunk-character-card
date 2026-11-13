@@ -1,7 +1,7 @@
 {
   "id": "intent-mundane",
-  "title": "日常行动不掷骰",
-  "tags": ["intent", "dice"],
+  "title": "日常行动不强加冲突",
+  "tags": ["intent", "causality"],
   "setup": {
     "history": [
       {
@@ -24,9 +24,11 @@
   },
   "expect": {
     "judge": {
-      "check": "forbidden"
+      "ruling": {
+        "present": false
+      }
     },
-    "verify": {
+    "applied": {
       "forbid": ["damage", "combat"]
     }
   },

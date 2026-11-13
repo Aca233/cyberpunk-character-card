@@ -10,6 +10,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
 import styles from "./characters.module.css";
+import { saveLocalCustomModule } from "./creator";
 
 function blankModule(slot: BoardSlot): BoardModule {
   return BoardModuleSchema.parse({
@@ -166,9 +167,18 @@ export function CustomModuleForm({
               type="button"
               className={styles.toolButton}
               disabled={!valid}
-              onClick={() => onAccept({ ...draft, label: draft.label.trim() })}
+              onClick={() => {
+                const mod: BoardModule = {
+                  ...draft,
+                  label: draft.label.trim(),
+                  custom: true,
+                  packId: draft.packId ?? "local",
+                };
+                saveLocalCustomModule(mod);
+                onAccept(mod);
+              }}
             >
-              插上这块{label}
+              加入角色并存入创意库
             </button>
           </div>
         </div>

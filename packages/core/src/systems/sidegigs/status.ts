@@ -15,7 +15,7 @@ export const sidegigsStatus: readonly SystemStatus[] = [
       const lines: string[] = [];
       if (gigs.active)
         lines.push(
-          `正在比：${gigs.active.kindLabel}「${gigs.active.name}」，对手${gigs.active.opponent}（${gigs.active.tierLabel}，id ${gigs.active.id}）；按检定结果写 sidegig win 或 lose`,
+          `正在比：${gigs.active.kindLabel}「${gigs.active.name}」，对手${gigs.active.opponent}（${gigs.active.tierLabel}，id ${gigs.active.id}）；按双方体格、伤势、装备与临场应对写 sidegig win 或 lose`,
         );
       const gigsHere = gigs.list.filter((g) => g.here && gigs.active?.id !== g.id);
       if (gigsHere.length > 0)

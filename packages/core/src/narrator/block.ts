@@ -1,79 +1,17 @@
 import { z } from "zod";
-import {
-  AttributeSchema,
-  CheckProposalSchema,
-  CheckSpecSchema,
-  EdgeSchema,
-} from "../systems/dice/schema";
+import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
 export const STATE_OPEN = "<state>";
 export const STATE_CLOSE = "</state>";
 
-/** 门槛：属性达标直接成功，不掷骰 */
+/** 旧存档回放兼容用的门槛字段；运行期已废除门槛判定，仅用于解析历史记录 */
 export const GateSchema = z.object({
   attribute: AttributeSchema,
   value: z.number().int().min(1).max(20),
 });
 export type Gate = z.infer<typeof GateSchema>;
-
-/** 门槛按区域分档：前期、中期、后期，上下沿取两端；换算表只在这里写一份（暂定，试玩时调） */
-export const GATE_LEVELS = { early: [4, 8], mid: [9, 14], late: [15, 20] } as const;
-export type GateLevel = keyof typeof GATE_LEVELS;
-const GATE_LEVEL_LABELS: Readonly<Record<GateLevel, string>> = {
-  early: "前期",
-  mid: "中期",
-  late: "后期",
-};
-
-/** 模型写的门槛：只选属性、阶段和上下沿，代码查表换成数字 */
-export const GateProposalSchema = z
-  .object({
-    attribute: AttributeSchema,
-    level: z
-      .enum(["early", "mid", "late"])
-      .describe("early 前期，mid 中期，late 后期：按这里是城里哪一层的地方、对手是什么人选"),
-    edge: EdgeSchema.describe("low 这一档里偏容易，high 偏难"),
-  })
-  .transform(
-    ({ attribute, level, edge }): Gate => ({
-      attribute,
-      value: GATE_LEVELS[level][edge === "low" ? 0 : 1],
-    }),
-  );
-
-/** 模型仍写了数字门槛时：换成最近的阶段和上下沿（一样近取容易的），数字不用 */
-export function legacyGate(raw: unknown): {
-  readonly value: unknown;
-  readonly note: string | undefined;
-} {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw) || !("value" in raw)) {
-    return { value: raw, note: undefined };
-  }
-  const { value, ...rest } = raw as Record<string, unknown>;
-  if (rest.level !== undefined) {
-    return { value: rest, note: "门槛写了数字，按写的阶段处理，数字不用" };
-  }
-  if (typeof value !== "number" || !Number.isFinite(value)) return { value: raw, note: undefined };
-  let best: [GateLevel, "low" | "high", number] = ["early", "low", GATE_LEVELS.early[0]];
-  for (const [level, [low, high]] of Object.entries(GATE_LEVELS) as [
-    GateLevel,
-    readonly [number, number],
-  ][]) {
-    for (const [edge, n] of [
-      ["low", low],
-      ["high", high],
-    ] as const) {
-      if (Math.abs(n - value) < Math.abs(best[2] - value)) best = [level, edge, n];
-    }
-  }
-  const [level, edge] = best;
-  return {
-    value: { ...rest, level, edge },
-    note: `门槛写了数字，已按最近的档位（${GATE_LEVEL_LABELS[level]}${edge === "low" ? "下沿" : "上沿"}）处理`,
-  };
-}
 
 const ChoiceBaseSchema = z.object({
   text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
@@ -87,18 +25,15 @@ const ChoiceBaseSchema = z.object({
 });
 const oneOf = "一个选项只能有 gate 或 check 之一";
 
-/** 存档里的建议选项：check 带查表后的难度值 */
+/** 存档里的建议选项：兼容旧记录里的 gate / check 字段 */
 export const ChoiceSchema = ChoiceBaseSchema.extend({
-  gate: GateSchema.optional().describe("门槛判定，属性达标直接成功"),
-  check: CheckSpecSchema.optional().describe("风险掷骰，选中就直接掷"),
+  gate: GateSchema.optional().describe("历史记录字段"),
+  check: CheckSpecSchema.optional().describe("历史记录字段"),
 }).refine((c) => !(c.gate && c.check), oneOf);
 export type Choice = z.infer<typeof ChoiceSchema>;
 
-/** 模型提出的建议选项：check 只写档位和上下沿，校验后换成 Choice */
-export const ChoiceProposalSchema = ChoiceBaseSchema.extend({
-  gate: GateProposalSchema.optional().describe("门槛判定，属性达标直接成功"),
-  check: CheckProposalSchema.optional().describe("风险掷骰，选中就直接掷"),
-}).refine((c) => !(c.gate && c.check), oneOf);
+/** 模型提出的建议选项：零掷骰、零属性门槛，只给行动本身与特长/义体来源 */
+export const ChoiceProposalSchema = ChoiceBaseSchema;
 
 export const MAX_CHOICES = 5;
 

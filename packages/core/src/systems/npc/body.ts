@@ -1,6 +1,6 @@
 import type { ApplyOutcome } from "../../kernel/system";
 import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from "../cyberware";
-import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema, type DamageTier, maxHp } from "../dice";
+import { type Attribute, type DamageTier, maxHp } from "../dice";
 import { DAMAGE_PERCENT } from "../health";
 import { HUMANITY_KINDS, humanityStage, STAGE_LABELS } from "../humanity";
 import { itemCatalog } from "../inventory";
@@ -10,7 +10,6 @@ import {
   NPC_GEAR_MAX,
   NPC_TIER_CRED,
   NPC_TIER_DEFAULT_ATTR,
-  NPC_TIER_LABELS,
   type Npc,
   type NpcAttributes,
   type NpcBodyCard,
@@ -20,7 +19,6 @@ import {
   type NpcHumanity,
   type NpcHurt,
   type NpcScan,
-  type NpcTier,
   type NpcVitals,
 } from "./schema";
 
@@ -113,7 +111,7 @@ export function effectiveAttributes(body: FilledBody, data: Data): NpcAttributes
 }
 
 export function attributeSum(a: NpcAttributes): number {
-  return AttributeSchema.options.reduce((s, k) => s + a[k], 0);
+  return a.body + a.reflexes + a.tech + a.intelligence + a.cool;
 }
 
 export function npcMaxHp(body: FilledBody, data: Data): number {
@@ -174,22 +172,6 @@ export function woundLabel(hp: number, max: number): string {
   if (hp * 2 >= max) return "轻伤";
   if (hp > 0) return "重伤";
   return "倒下";
-}
-
-export type Threat = "low" | "even" | "high" | "skull";
-export const THREAT_LABELS: Readonly<Record<Threat, string>> = {
-  low: "低",
-  even: "相当",
-  high: "高",
-  skull: "骷髅",
-};
-/** 威胁：他的有效属性总和比玩家角色的高多少；远高于玩家时是骷髅（原作扫描的图标，阈值本作改编） */
-export function threatOf(npcSum: number, playerSum: number): Threat {
-  const diff = npcSum - playerSum;
-  if (diff <= -8) return "low";
-  if (diff < 8) return "even";
-  if (diff <= 20) return "high";
-  return "skull";
 }
 
 /** 写回人物：补齐身体，把此刻的数值记下来 */
@@ -309,10 +291,6 @@ export function applyNpcBody(
   }
 }
 
-function attrText(a: NpcAttributes): string {
-  return AttributeSchema.options.map((k) => `${ATTRIBUTE_LABELS[k]} ${a[k]}`).join("、");
-}
-
 function names(
   ids: readonly string[],
   lookup: ReadonlyMap<string, { readonly name: string }>,
@@ -348,18 +326,17 @@ function chromeText(list: readonly ChromeDetail[]): string {
     .join("、");
 }
 
-/** 完整卡上的一行身体：档位、有效属性、生命和伤势、装备、义体（带部位和效果）、人性数值和阶段；只给叙事模型 */
+/** 完整卡上的一行身体：定性伤势、装备、义体（带部位和效果）、人性阶段；不输出 RPG 阶层或属性数字 */
 export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): string {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const gear = names(body.gear, itemCatalog(data));
   const chrome = chromeDetails(body.cyberware, data);
   return [
-    `身体：${NPC_TIER_LABELS[body.tier]}；${attrText(effectiveAttributes(body, data))}`,
-    `生命 ${v.hp}/${v.max}（${woundLabel(v.hp, v.max)}）`,
+    `身体状态：${woundLabel(v.hp, v.max)}`,
     `装备：${gear.length ? gear.join("、") : "没有"}`,
     `义体：${chromeText(chrome)}`,
-    `人性 ${v.humanity}（${STAGE_LABELS[humanityStage(v.humanity)]}）`,
+    `人性状态：${STAGE_LABELS[humanityStage(v.humanity)]}`,
   ].join("；");
 }
 
@@ -374,29 +351,18 @@ export function woundNote(
   return v.hp >= v.max ? undefined : woundLabel(v.hp, v.max);
 }
 
-/** 玩家视图里的身体：见过的人看伤势和装备；扫描过的再看档位、威胁、属性、生命、义体和人性阶段。人性数值永远不给 */
+/** 玩家视图里的身体：见过的人看伤势和装备；扫描过的看实际义体配置与精神/人性稳定度，不展示游戏数值 */
 export interface NpcBodyView {
   readonly wound: string;
   readonly gear: readonly string[];
   readonly scan: {
-    readonly tier: string;
-    readonly threat: Threat;
-    readonly threatLabel: string;
-    readonly attributes: readonly { readonly label: string; readonly value: number }[];
-    readonly hp: number;
-    readonly max: number;
     readonly chrome: readonly ChromeDetail[];
     readonly humanityStage: string;
     readonly at: number;
   } | null;
 }
 
-export function bodyView(
-  npc: Pick<Npc, "body" | "vitals">,
-  data: Data,
-  now: number,
-  playerAttributeSum: number,
-): NpcBodyView {
+export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): NpcBodyView {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const view: NpcBodyView = {
@@ -405,20 +371,9 @@ export function bodyView(
     scan: null,
   };
   if (v.scannedAt === null) return view;
-  const eff = effectiveAttributes(body, data);
-  const threat = threatOf(attributeSum(eff), playerAttributeSum);
   return {
     ...view,
     scan: {
-      tier: NPC_TIER_LABELS[body.tier as NpcTier],
-      threat,
-      threatLabel: THREAT_LABELS[threat],
-      attributes: AttributeSchema.options.map((k) => ({
-        label: ATTRIBUTE_LABELS[k],
-        value: eff[k],
-      })),
-      hp: v.hp,
-      max: v.max,
       chrome: chromeDetails(body.cyberware, data),
       humanityStage: STAGE_LABELS[humanityStage(v.humanity)],
       at: v.scannedAt,

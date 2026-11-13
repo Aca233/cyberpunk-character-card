@@ -47,7 +47,6 @@ import {
   characterRules,
   contentPriceIssues,
   cyberwareRules,
-  diceRules,
   EXTRACT_STAGE,
   factionsRules,
   falloutRules,
@@ -313,9 +312,8 @@ if (existsSync(TERMS)) {
   notes.push("本机没有官方译名表 data/lore/terms.json，跳过译名核对（需要时先跑 pnpm terms）");
 }
 
-// 档位换算：发给模型的说明里只出现档位，不出现换算表的数；修正值只能是一档或上限
+// 档位换算：发给模型的说明里只出现定性档位，不出现换算表数字或属性加减公式
 {
-  const { BONUS_CAP, DV_MOD_CAP, MOD_STEP, PENALTY_CAP } = diceRules;
   const { AFFINITY_SIZES } = npcRules;
   const { HUMANITY_KINDS } = humanityRules;
   const { DAMAGE_PERCENT } = healthRules;
@@ -335,14 +333,9 @@ if (existsSync(TERMS)) {
       return s ? [[`指令 ${type} 的格式说明`, schemaDoc(s)]] : [];
     }),
   ];
-  const allowed = new Set([1, MOD_STEP, BONUS_CAP, PENALTY_CAP, DV_MOD_CAP]);
   for (const [where, text] of texts) {
     for (const m of text.matchAll(/(?<![\w\d])[+−](\d+)/g)) {
-      if (!allowed.has(Number(m[1]))) {
-        errors.push(
-          `${where}：出现了「${m[0]}」，修正只能是一档 ${MOD_STEP} 或上限，换算的数由代码查表`,
-        );
-      }
+      errors.push(`${where}：出现了「${m[0]}」，模型说明里不应出现加减数值，换算的数由代码查表`);
     }
     for (const m of text.matchAll(/\d+\s?%/g)) {
       errors.push(`${where}：出现了「${m[0]}」，伤害按档位写，百分比由代码换算`);
@@ -353,7 +346,7 @@ if (existsSync(TERMS)) {
     .map((k) => `${k.label} ${[...new Set(Object.values(k.sizes))].map(signed).join("/")}`)
     .join("，");
   notes.push(
-    `换算表（和计划里的"档位换算"对照）：伤害 ${Object.values(DAMAGE_PERCENT).join("/")}%；好感 ±${Object.values(AFFINITY_SIZES).join("/")}；人性 ${humanity}；声望 ${Object.values(CRED_SIZES).join("/")} 级；修正一档 ${MOD_STEP}，上限 +${BONUS_CAP}/−${PENALTY_CAP}/+${DV_MOD_CAP}`,
+    `换算表：伤害 ${Object.values(DAMAGE_PERCENT).join("/")}%；好感 ±${Object.values(AFFINITY_SIZES).join("/")}；人性 ${humanity}；声望 ${Object.values(CRED_SIZES).join("/")} 级`,
   );
 }
 
@@ -509,9 +502,23 @@ const HIDDEN_KEY = /truth|answer|twist|secret|hidden|spoiler|solution/i;
 const TWIST_MARK = "【隐藏转折探针：这段只给叙事模型看】";
 let planted = 0;
 for (const o of openings) {
+  const baseJobs =
+    o.jobs && o.jobs.length > 0
+      ? o.jobs
+      : [
+          {
+            id: "probe-twist",
+            title: "匿名委托探针",
+            client: "匿名客户",
+            risk: 1,
+            reward: 1000,
+            conflict: "测试隐秘冲突",
+            afterMinutes: 60,
+          },
+        ];
   const probe = {
     ...o,
-    jobs: (o.jobs ?? []).map((j) => ({ ...j, twist: `${TWIST_MARK}${j.id}` })),
+    jobs: baseJobs.map((j) => ({ ...j, twist: `${TWIST_MARK}${j.id}` })),
   };
   planted += probe.jobs.length;
   const world = withAllSlices(

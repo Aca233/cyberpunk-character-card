@@ -1,4 +1,14 @@
-import { boardModules, combos, cyberware, lifepath, npcs } from "@cp/content";
+import {
+  boardModules,
+  combos,
+  cyberware,
+  items,
+  lifepath,
+  loadouts,
+  npcs,
+  quickhacks,
+  vehicles,
+} from "@cp/content";
 import {
   BoardSchema,
   BoardSlotSchema,
@@ -73,13 +83,13 @@ const KNOWN_TAGS = [...new Set(boardModules.flatMap((m) => m.tags))];
 export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmClient): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ characters: await store.list() }));
-  // 主板要用的表：模块库、联动、生命路径和创建时能装的义体；要放在 /:id 前面
+  // 主板要用的表：模块库、联动、生命路径、创建时能装的义体与开局武器/载具；要放在 /:id 前面
   app.get("/board", (c) =>
     c.json({
       modules: boardModules,
       combos,
       lifepath,
-      // 捏人第 3 步能选的原作人物：只给名片上公开的几项，秘密和身体不下发
+      // 捏人能选的原作人物：只给名片上公开的几项，秘密和身体不下发
       npcs: npcs.map((n) => ({
         id: n.id,
         name: n.name,
@@ -97,14 +107,61 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 name: def.name,
                 slot: def.slot,
                 slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
-                // 稀有度给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）
                 rarity: def.rarity,
                 points,
                 humanityCost: def.humanityCost,
+                ...(def.programSlots !== undefined ? { programSlots: def.programSlots } : {}),
                 ability: def.ability,
               },
             ];
       }),
+      weapons: items.flatMap((def) => {
+        if (def.kind !== "weapon" || def.iconic) return [];
+        const points =
+          def.rarity === "common"
+            ? 1
+            : def.rarity === "uncommon"
+              ? 2
+              : def.rarity === "rare"
+                ? 3
+                : undefined;
+        if (points === undefined) return [];
+        return [
+          {
+            id: def.id,
+            name: def.name,
+            ...(def.category ? { category: def.category } : {}),
+            rarity: def.rarity,
+            points,
+            ability: def.ability,
+          },
+        ];
+      }),
+      vehicles: vehicles.map((v) => ({
+        id: v.id,
+        name: v.name,
+        maker: v.maker,
+        class: v.class,
+        seats: v.seats,
+        trunk: v.trunk,
+        points:
+          v.class === "economy"
+            ? 1
+            : v.class === "offroad" || v.class === "executive" || v.class === "moto"
+              ? 2
+              : v.class === "sport"
+                ? 3
+                : 4,
+        ...(v.note ? { note: v.note } : {}),
+      })),
+      // 出身自带的开局行装（和建档时 pickLoadouts 用的同一张表），建卡界面据此透明展示家底和自带义体
+      loadouts,
+      names: Object.fromEntries([
+        ...items.map((i) => [i.id, i.name] as const),
+        ...vehicles.map((v) => [v.id, v.name] as const),
+        ...quickhacks.map((q) => [q.id, q.name] as const),
+        ...cyberware.map((c) => [c.id, c.name] as const),
+      ]),
     }),
   );
   // 自写模块交给辅助模型解读；不进回合日志，结果由玩家确认后才插上

@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
-import { checkFact } from "../dice";
+import { checkFact, rulingFact } from "../dice";
 import {
   type OwnedVehicle,
   REPAIR_SHARE,
@@ -123,10 +123,14 @@ export function applyVehicle(
     }
     const check = checkFact(ctx.facts);
     const gate = gateMet(ctx.facts, ["tech", "body"]);
-    if (check === undefined && gate === undefined)
-      return fail("偷车要先过技术（或肉体）门槛、或者掷骰：本轮没有门槛结果，也没有检定结果");
     if (check !== undefined ? failed(check.outcome) : gate === false)
       return fail("偷车没成：写车警报响、车主追来或者 NCPD 到场");
+    if (check === undefined && gate === undefined) {
+      const ruling = rulingFact(ctx.facts);
+      if (ruling?.kind === "blocked") {
+        return fail(ruling.reason ?? "车辆安防或现场条件阻断，没偷成");
+      }
+    }
     draft.vehicles.push(owned);
     return {
       ok: true,
@@ -185,7 +189,13 @@ export function applyVehicle(
     case "chase": {
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，开不了`);
       const check = checkFact(ctx.facts);
-      if (check === undefined) return fail("追车要先掷反应：本轮没有检定结果");
+      if (check === undefined) {
+        const ruling = rulingFact(ctx.facts);
+        if (ruling?.kind === "blocked") {
+          return fail(ruling.reason ?? "地形或对手堵死了路线，没能甩开");
+        }
+        return { ok: true, notes: [`开着${name(target)}甩开了：${command.reason}`] };
+      }
       if (!failed(check.outcome))
         return { ok: true, notes: [`开着${name(target)}甩开了：${command.reason}`] };
       if (command.stake === "damage") {

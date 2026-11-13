@@ -34,7 +34,7 @@
     "extract": {
       "require": ["item.gain"]
     },
-    "verify": {
+    "applied": {
       "require": ["item.gain"]
     }
   }

@@ -51,7 +51,7 @@ export { SERVICE_POINTS, type ServicePoint, type ServicePointKind } from "./mapS
 export { boardModules } from "./modules";
 export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
-export { DEFAULT_OPENING, openingPremise, openings } from "./openings";
+export { DEFAULT_OPENING, type OpeningContext, openingPremise, openings } from "./openings";
 // 开局地点“在地图上选择”（用户定的，2026-10-30）：选点与服务端校验共用已有锚点，不为缺坐标的地点补造位置
 export { RADAR_ANCHORS, type RadarAnchor } from "./radar";
 export { ripperdocs } from "./ripperdocs";
@@ -98,8 +98,7 @@ export const gameContent: GameContent = {
   vehicles,
   homes,
   mapData,
-  // 没有开场的旧存档种的人
-  defaultCast: ["rebecca", "maine", "faraday"],
+  defaultCast: openings[0]?.cast ?? [],
 };
 
 /** 结算时传给各系统的静态数据表 */

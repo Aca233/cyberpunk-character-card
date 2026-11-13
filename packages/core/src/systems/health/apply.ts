@@ -8,6 +8,8 @@ import {
   type DiceState,
   isCleanSuccess,
   type Modifier,
+  type RulingFact,
+  rulingFact,
 } from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
 import {
@@ -198,7 +200,7 @@ function trackSevere(draft: Health, now: number): void {
   }
 }
 
-/** 没掷骰不扣血；干净利落成功（Clean）不扣血，惨胜（Costly）或失败（Fail）可按情境扣血；同一次检定只扣一次；护甲义体再降一档 */
+/** 零掷骰模式下按定性裁决或直接伤口档位扣血（同轮不重复结算）；保留兼容旧检定回放；护甲义体再降一档 */
 export function applyDamage(
   draft: Health,
   command: DamageCommand,
@@ -206,23 +208,42 @@ export function applyDamage(
 ): ApplyOutcome {
   if (draft.condition !== "up") return fail(`角色${CONDITION_LABELS[draft.condition]}，不能再扣血`);
   const fact = checkFact(ctx.facts);
-  if (!fact) return fail("没掷骰不扣血：本轮没有检定结果");
-  if (isCleanSuccess(fact.outcome)) return fail("检定干净利落成功，不能扣血");
-  if (fact.damage === undefined && fact.outcome !== "costly") {
-    return fail("check 没有事先写明伤害档位，失败不扣血");
-  }
-  const declaredDamage = fact.damage ?? "graze";
-  const cap = Math.min(
-    DAMAGE_RANK.lethal,
-    DAMAGE_RANK[declaredDamage] + (fact.outcome === "fumble" ? 1 : 0),
-  );
-  if (DAMAGE_RANK[command.tier] > cap) {
-    return fail(
-      `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[declaredDamage]}（大失败最多高一档）`,
+  let declaredLethal = false;
+  let limbRule: { readonly fact?: CheckFact; readonly ruling?: RulingFact } = {};
+
+  if (fact) {
+    if (isCleanSuccess(fact.outcome)) return fail("检定干净利落成功，不能扣血");
+    if (fact.damage === undefined && fact.outcome !== "costly") {
+      return fail("check 没有事先写明伤害档位，失败不扣血");
+    }
+    const declaredDamage = fact.damage ?? "graze";
+    const cap = Math.min(
+      DAMAGE_RANK.lethal,
+      DAMAGE_RANK[declaredDamage] + (fact.outcome === "fumble" ? 1 : 0),
     );
+    if (DAMAGE_RANK[command.tier] > cap) {
+      return fail(
+        `伤害档位${DAMAGE_LABELS[command.tier]}超过了事先说明的${DAMAGE_LABELS[declaredDamage]}（大失败最多高一档）`,
+      );
+    }
+    if (draft.damagedBy === fact.id) return fail("这次检定已经扣过血");
+    draft.damagedBy = fact.id;
+    declaredLethal = declaredDamage === "lethal";
+    limbRule = { fact };
+  } else {
+    const ruling = rulingFact(ctx.facts);
+    if (ruling) {
+      if (draft.damagedBy === ruling.id) return fail("这一轮已经结算过伤害");
+      if (command.tier === "lethal" && ruling.harm !== "lethal") {
+        return fail("现场判断不属于致命绝境，这一击最重记 heavy");
+      }
+      draft.damagedBy = ruling.id;
+      declaredLethal = ruling.harm === "lethal";
+      limbRule = { ruling };
+    } else if (command.tier === "lethal") {
+      declaredLethal = true;
+    }
   }
-  if (draft.damagedBy === fact.id) return fail("这次检定已经扣过血");
-  draft.damagedBy = fact.id;
 
   const armor = typeof ctx.facts.armor === "string" ? ctx.facts.armor : undefined;
   const rank = DAMAGE_RANK[command.tier] - (armor ? 1 : 0);
@@ -239,33 +260,34 @@ export function applyDamage(
       ? `${armor}把${DAMAGE_LABELS[command.tier]}降成${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`
       : `${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`,
   ];
-  if (command.limb) notes.push(loseLimb(draft, command.limb, tier, fact, ctx));
+  if (command.limb) notes.push(loseLimb(draft, command.limb, tier, limbRule, ctx));
   if (draft.hp === 0) {
-    draft.condition = declaredDamage === "lethal" ? "dying" : "down";
+    draft.condition = declaredLethal ? "dying" : "down";
     notes.push(
       draft.condition === "dying"
         ? "触及第 4 格【生死线】：濒死，需创伤白金卡、副心脏或熟人拖离"
-        : "触及第 4 格【生死线】：倒下（没有事先警告致命危险，不会死）",
+        : "触及第 4 格【生死线】：倒下（未定性为致命绝境，不会当场死）",
     );
   }
   trackSevere(draft, ctx.now);
   return ok(...notes);
 }
 
-/** 断肢：致命档、事先写明、难度允许才断；原本是义肢的部位改记为义体损坏 */
+/** 断肢：致命档、事先裁决存在断肢危险、难度允许才断；原本是义肢的部位改记为义体损坏 */
 function loseLimb(
   draft: Health,
   limb: Limb,
   tier: DamageTier,
-  fact: CheckFact,
+  rule: { readonly fact?: CheckFact | undefined; readonly ruling?: RulingFact | undefined },
   ctx: SystemContext,
 ): string {
   const label = LIMB_LABELS[limb];
-  if (fact.limb !== true) return `没断${label}：check 没有事先写明断肢风险`;
+  const limbAllowed = rule.fact ? rule.fact.limb === true : rule.ruling?.limb === true;
+  if (!limbAllowed) return `没断${label}：当前场面没有认定存在直接断肢危险`;
   if (tier !== "lethal") return `没断${label}：降档后不到致命`;
   const mode = ctx.read<DiceState>("dice").mode;
   if (mode === "streetLegend") return `没断${label}：街头传说难度不会断肢`;
-  if (fact.damage !== "lethal" && mode !== "deathCity") {
+  if (rule.fact && rule.fact.damage !== "lethal" && mode !== "deathCity") {
     return `没断${label}：事先写的不是致命档（只有死亡之城大失败升到致命也会断）`;
   }
   const chrome = ChromeLimbsFactSchema.safeParse(ctx.facts.chrome ?? {});

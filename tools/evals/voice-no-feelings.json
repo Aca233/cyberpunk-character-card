@@ -7,11 +7,11 @@
       "name": "洛·门多萨",
       "brief": "沃森区长大的修理工。妹妹卡拉半年前在一次帮派火并里死了，之后再没回过她住过的公寓。",
       "attributes": {
-        "body": 5,
-        "reflexes": 6,
-        "tech": 7,
-        "intelligence": 5,
-        "cool": 4
+        "body": 2,
+        "reflexes": 2,
+        "tech": 2,
+        "intelligence": 2,
+        "cool": 2
       },
       "streetCred": 3
     }
@@ -21,7 +21,9 @@
   },
   "expect": {
     "judge": {
-      "check": "forbidden"
+      "ruling": {
+        "present": false
+      }
     },
     "text": {
       "forbid": ["你(感到|觉得)(悲伤|难过|心痛|痛苦)", "你决定"]

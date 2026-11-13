@@ -5,7 +5,6 @@ import {
   ATTRIBUTE_MAX,
   type CharacterState,
   effectiveAttribute,
-  LEVELS_PER_POINT,
   type SetBonuses,
   type SetCharacter,
   type SpendPoint,
@@ -57,26 +56,16 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   return { ok: true, emit: [setMax(draft)] };
 }
 
-/** 义体装卸后换上新的属性加成；肉体变了生命上限跟着变 */
+/** 义体装卸同步兼容状态快照（不再输出 RPG 属性加减提示） */
 export function setBonuses(draft: Draft<CharacterState>, command: SetBonuses): ApplyOutcome {
-  const notes: string[] = [];
-  for (const a of Object.keys(ATTRIBUTE_LABELS) as (keyof typeof ATTRIBUTE_LABELS)[]) {
-    const before = draft.bonuses[a] ?? 0;
-    const after = command.bonuses[a] ?? 0;
-    if (before !== after) {
-      notes.push(
-        `义体让${ATTRIBUTE_LABELS[a]}${after > before ? "+" : "−"}${Math.abs(after - before)}`,
-      );
-    }
-  }
   const bodyChanged = (draft.bonuses.body ?? 0) !== (command.bonuses.body ?? 0);
   draft.bonuses = Object.fromEntries(
     Object.entries(command.bonuses).filter(([, n]) => n !== undefined && n > 0),
   );
-  return { ok: true, notes, ...(bodyChanged ? { emit: [setMax(draft)] } : {}) };
+  return { ok: true, ...(bodyChanged ? { emit: [setMax(draft)] } : {}) };
 }
 
-/** 声望按半级累加，满两个半级升一级；每跨过 5 级得 1 个属性点，升级后生命上限跟着涨 */
+/** 声望按半级累加，只更新街头名声里程碑，不再发放 RPG 属性升级点 */
 export function gainCred(
   draft: Draft<CharacterState>,
   halves: number,
@@ -89,29 +78,23 @@ export function gainCred(
   draft.credSettled.push(event);
   const before = draft.streetCred;
   if (before >= STREET_CRED_MAX) {
-    return { ok: true, notes: [`街头声望已经是最高的 ${STREET_CRED_MAX} 级`] };
+    return { ok: true, notes: [`${reason}：在夜之城的名头已经传到顶了`] };
   }
   const total = Math.min(STREET_CRED_MAX * 2, before * 2 + (draft.credHalf ? 1 : 0) + halves);
   draft.streetCred = Math.floor(total / 2);
   draft.credHalf = total % 2 === 1;
-  const notes = [`${reason}：街头声望 +${halves / 2} 级`];
+  const notes: string[] = [];
   if (draft.streetCred === before) {
-    notes.push(`还差半级升到 ${before + 1} 级`);
+    notes.push(`${reason}：街面上多了些你的风声`);
     return { ok: true, notes };
   }
-  notes.push(`街头声望升到 ${draft.streetCred} 级`);
   const tier = credTier(draft.streetCred);
-  if (tier !== credTier(before)) notes.push(`声望里程碑「${tier.label}」：${tier.world}`);
-  const points =
-    Math.floor(draft.streetCred / LEVELS_PER_POINT) - Math.floor(before / LEVELS_PER_POINT);
-  if (points > 0) {
-    draft.attributePoints += points;
-    notes.push(`得到 ${points} 个属性点，可以在角色栏分配`);
-  }
+  if (tier !== credTier(before)) notes.push(`名声变化「${tier.label}」：${tier.world}`);
+  else notes.push(`${reason}：名声又传开了一些`);
   return { ok: true, notes, emit: [setMax(draft)] };
 }
 
-/** 分配一个属性点；单项属性最高 20，加肉体时生命上限跟着涨 */
+/** 分配一个属性点；单项属性最高 10，加肉体时生命上限跟着涨 */
 export function spendPoint(draft: Draft<CharacterState>, command: SpendPoint): ApplyOutcome {
   if (draft.attributePoints <= 0) return { ok: false, reason: "没有可分配的属性点" };
   const label = ATTRIBUTE_LABELS[command.attribute];

@@ -7,10 +7,10 @@
 .screen {
   position: relative;
   display: grid;
-  grid-template-rows: 72px minmax(0, 1fr);
+  grid-template-rows: 56px minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
-  padding: 0 64px 20px;
+  padding: 0 28px 10px;
   box-sizing: border-box;
   color: var(--cp-text);
   background: var(--cp-bg);
@@ -60,8 +60,8 @@
 .head {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding-left: 40px;
+  gap: 12px;
+  padding: 0 6px 0 28px;
 }
 
 .headBg {
@@ -79,9 +79,9 @@
 .head h1 {
   margin: 0;
   color: var(--cp-red);
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-shadow:
     0 0 3px rgb(5 5 10),
     0 0 8px rgb(5 5 10);
@@ -722,7 +722,7 @@ legend.sectionTitle {
 }
 
 .subTitle {
-  margin: 1.5rem 0 0.75rem;
+  margin: 0.55rem 0 0.3rem;
   color: var(--cp-text);
   font-size: var(--fs-label);
 }
@@ -973,7 +973,25 @@ legend.sectionTitle {
   background: var(--cp-bg);
 }
 
-/* 可选的卡：出身大卡、本事卡片墙 */
+/* 右栏选择器容器与出身默认行装卡 */
+.pickerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.loadoutBase {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(14 14 23 / 86%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 16px 16px;
+}
+
+/* 可选的卡：出身大卡、特质/行装卡片墙（在右栏抽屉里自适应单列，避免窄卡片折行） */
 .originGrid,
 .skillWall {
   display: grid;
@@ -984,11 +1002,11 @@ legend.sectionTitle {
 }
 
 .originGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .skillWall {
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
 }
 
 .originGrid > li,
@@ -1005,16 +1023,15 @@ legend.sectionTitle {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
-  padding: 16px 20px 18px 18px;
+  padding: 11px 14px 12px 13px;
   border: 0;
-  /* 2026-10-31 对照用户截图：12px 灰字压在暗底上太小太淡，卡片正文放到 14px、颜色提亮一档 */
   color: rgb(205 200 196);
   background: none;
   font: inherit;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13.5px;
+  line-height: 1.5;
   text-align: left;
   cursor: var(--cp-cursor-hand);
 }
@@ -1045,7 +1062,7 @@ legend.sectionTitle {
 
 .pickHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
@@ -1413,8 +1430,8 @@ legend.sectionTitle {
  */
 .people {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
 }
 
@@ -1426,7 +1443,7 @@ legend.sectionTitle {
 
 .peopleList > ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
   gap: 4px 8px;
   margin: 0 0 10px;
   padding: 0;
@@ -1535,12 +1552,11 @@ legend.sectionTitle {
   text-overflow: ellipsis;
 }
 
-/* 右边选中那个人：套原作 map.filterCell 框（CellFrame），钉在步骤栏下面，滚左边名单时一直看得到 */
+/* 选中那个人：套原作 map.filterCell 框（CellFrame），紧跟在列表下方 */
 .peopleCard {
   --box-line: var(--cp-cyan);
   --box-fill: rgb(14 14 23 / 92%);
-  position: sticky;
-  top: 56px;
+  position: relative;
   isolation: isolate;
   display: grid;
   gap: 14px;
@@ -1617,21 +1633,6 @@ legend.sectionTitle {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 1150px) {
-  /*
-   * 2026-10-31 浏览器走查 929 宽：单列时卡排在 605 高的名单下面，点了人看不到卡；挪到名单上面钉住又压住步骤栏和刚点的那一行。
-   * 改成名单收窄成一列、卡片在右边继续钉住；这个宽度下步骤栏折成两行（实测 118 高），卡片钉在它下面
-   */
-  .people {
-    grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
-    gap: 16px;
-  }
-
-  .peopleCard {
-    top: 126px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1801,7 +1802,6 @@ legend.sectionTitle {
     white-space: nowrap;
   }
 
-  .originGrid,
   .dossierAttrs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

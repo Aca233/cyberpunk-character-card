@@ -11,9 +11,10 @@ export function scriptedNarrator(c: EvalCase, aux: LlmClient): LlmClient {
   const judged = JSON.stringify({
     read: null,
     ooc: false,
-    check: null,
-    gate: null,
+    ruling: null,
+    buy: null,
     recall: [],
+    foes: null,
     ...c.judged,
   });
   let narratorCalls = 0;

@@ -1,0 +1,42 @@
+{
+  "id": "preset-pacing-dialogue",
+  "title": "安静文戏与酒馆对话节奏不被多余系统规则打断",
+  "tags": ["preset", "modules"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "text": "在沃森的小诊所外屋找张塑料凳坐下"
+        },
+        "text": "雨敲在波纹铁皮棚顶上没完没了。诊所里只有消毒水和劣质合成烟的味道，医生背对着你把镊子扔进酒精盆里，发出一声轻响。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "talk",
+            "location": "watson-clinic"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "把袖口卷起来露出一截旧疤，淡淡问一句：“当年欠你的最后那笔账，算清了吧？”"
+  },
+  "expect": {
+    "judge": {
+      "ruling": {
+        "present": false
+      }
+    },
+    "modules": {
+      "forbid": ["combat", "hacking", "stealth", "ncpd"]
+    },
+    "applied": {
+      "forbid": ["damage", "combat"]
+    }
+  },
+  "rubric": [
+    "对话和场景节律是否舒缓克制，没有莫名其妙强行插入危机、战斗或突兀反转",
+    "有没有照原话保留玩家台词，也没有替玩家角色做决定或写心理活动"
+  ]
+}

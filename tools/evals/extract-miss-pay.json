@@ -34,7 +34,7 @@
     "extract": {
       "require": ["trade"]
     },
-    "verify": {
+    "applied": {
       "require": ["trade"]
     }
   }

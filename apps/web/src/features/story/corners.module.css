@@ -200,6 +200,11 @@
   color: var(--cp-yellow);
 }
 
+/* 「人物」页展开时已经有 5 格属性卡，顶部迷你五维行收起，不上下重复两遍 */
+.bio:where([data-char-open]) .attrRow {
+  display: none;
+}
+
 .bioLine {
   display: flex;
   justify-content: space-between;
@@ -356,7 +361,7 @@
  */
 .unread:where([data-wide]) {
   width: min(
-    560px,
+    580px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
 }
@@ -375,13 +380,44 @@
 }
 
 /* 消息、新闻、警用频段页签放在底下，挨着常态那一行，手不用伸到块顶上去切（用户定的） */
+.unreadTabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid rgb(255 64 64 / 20%);
+}
+
 .unreadTabs > nav {
   margin: 0;
 }
 
+.unreadTabMeta {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+}
+
 .unreadCounts {
   display: flex;
+  align-items: center;
   gap: 18px;
+  width: 100%;
+}
+
+.unreadIdle {
+  color: var(--cp-text-dim);
+}
+
+.unreadKey {
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cp-text-dim);
 }
 
 .unreadLatest {
@@ -876,6 +912,7 @@
 /* 标题一行：左边写这块装的是什么，右边写对应的键 */
 .peekHead {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -900,6 +937,7 @@
 
 .peekLine {
   display: block;
+  flex: none;
   height: 2px;
   background: var(--accent);
   mask-size: 100% 100%;
@@ -1171,40 +1209,29 @@
 }
 
 /*
- * 私信页签定一截高（用户定的，计划第十二节第 12 条）：块收窄到 560，高度最多 480、矮屏不超过六成屏高，
+ * 私信页签定一截高（用户定的，计划第十二节第 12 条）：块收窄到 580，高度最多 440、矮屏不超过 56% 屏高，
  * 不再撑满同侧一列（用户嫌太大）；Grow 行内的 maxHeight（useRoomLeft 量的同侧剩余高度）照样再压一道。
- * 消息少也保持这一截，多了在里面滚
+ * 标题头和左边联系人列固定在视图里，右边消息流独立滚动，不再整块滚走或留一大片空白
  */
 .unread[data-wide] .growBody {
   display: flex;
   flex-direction: column;
-  height: min(480px, 60dvh);
+  height: min(440px, 56dvh);
+  overflow: hidden;
+  padding: 0 0 10px;
 }
 
-/*
- * 里面一层层往下撑满：钉住内容（pinBody）→ 私信面板（Panel 的 section）→ 面板正文 → 联系人和消息两栏。
- * 面板和私信栏是别的样式模块，只能按元素选；用 min-height，消息多时照样长高，在 .growBody 里滚
- */
+/* pinBody / pinPane -> PhoneBody (.phoneLayout) 一路撑满剩余高度 */
 .unread[data-wide] .growBody > div {
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 0%;
   flex-direction: column;
+  min-height: 0;
 }
 
-.unread[data-wide] .growBody > div > section {
-  display: flex;
-  flex: 1 0 auto;
-  flex-direction: column;
-}
-
-.unread[data-wide] .growBody > div > section > div:last-child {
-  display: flex;
-  flex: 1 0 auto;
-  flex-direction: column;
-}
-
-.unread[data-wide] .growBody > div > section > div:last-child > div {
-  flex: 1 0 auto;
+.unread[data-wide] .growBody > div > div {
+  flex: 1 1 0%;
+  min-height: 0;
 }
 
 /*

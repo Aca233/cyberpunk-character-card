@@ -316,9 +316,9 @@ export type SeedTag = z.infer<typeof SeedTagSchema>;
 
 export const NpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
-  /** 3.0 三维关系向量（未显式写入时由 affinity + ledger + known 动态推导） */
+  /** 历史存档兼容字段 */
   vectors: NpcVectorsSchema.optional(),
-  /** 自走人生目标进度（0..4）与当前面临的危机 */
+  /** 自走人生目标进度与当前面临的危机 */
   goalProgress: z.number().int().min(0).max(4).optional(),
   crisis: z.string().min(1).nullable().optional(),
   alive: z.boolean(),
@@ -384,41 +384,13 @@ export const NpcSchema = NpcCardSchema.extend({
 export type Npc = z.infer<typeof NpcSchema>;
 export type NpcVitals = NonNullable<Npc["vitals"]>;
 
-/** 计算 NPC 当前的三维关系向量（Trust × Leverage × Respect） */
-export function computeNpcVectors(
-  npc: Pick<Npc, "affinity" | "ledger" | "known"> & {
-    readonly vectors?: NpcVectors | undefined;
-  },
-): NpcVectors {
-  if (npc.vectors) return npc.vectors;
-  const openLedger = npc.ledger.filter((e) => e.settledAt === null);
-  const owesYouCount = openLedger.filter((e) => e.kind === "owesYou").length;
-  const youOweCount = openLedger.filter((e) => e.kind === "youOwe").length;
-  const grudgeCount = openLedger.filter((e) => e.kind === "grudge").length;
-  const secretKnownCount = npc.known.filter(
-    (k) => k.source === "scan" || k.source === "seen",
-  ).length;
-
-  const trust = Math.max(-100, Math.min(100, npc.affinity - grudgeCount * 20));
-  const leverage = Math.max(
-    -100,
-    Math.min(100, owesYouCount * 25 - youOweCount * 25 + secretKnownCount * 10),
-  );
-  const respect = Math.max(
-    -100,
-    Math.min(100, Math.round(npc.affinity * 0.5) + owesYouCount * 15 + grudgeCount * 10),
-  );
-  return { trust, leverage, respect };
-}
-
-/** 是否已解锁该 NPC 的真我与核心秘密（CoreTruth）：需 Trust ≥ 40 或 Leverage ≥ 40 */
-export function isCoreTruthUnlocked(
-  npc: Pick<Npc, "affinity" | "ledger" | "known"> & {
-    readonly vectors?: NpcVectors | undefined;
-  },
-): boolean {
-  const { trust, leverage } = computeNpcVectors(npc);
-  return trust >= 40 || leverage >= 40;
+/** 判定玩家与该人物是否已脱离泛泛之交（见过、结过深交或互相欠下实在人情/秘密暴露） */
+export function hasDeepBond(npc: Pick<Npc, "met" | "relation" | "ledger" | "known">): boolean {
+  if (!npc.met) return false;
+  if (npc.relation !== null && npc.relation.text.trim() !== "") return true;
+  if (npc.ledger.some((e) => e.settledAt === null)) return true;
+  if (npc.known.some((k) => k.source === "scan" || k.source === "seen")) return true;
+  return false;
 }
 
 export const NpcStateSchema = z.object({
@@ -704,7 +676,7 @@ export const NpcScanSchema = z
     id: NpcIdSchema,
   })
   .describe(
-    "玩家角色用义眼扫描了有卡的人（打斗里扫描有卡敌人也写这条）：之后人物档案能看到他的属性、威胁、生命、显眼的义体和人性阶段",
+    "玩家角色用义眼扫描了有卡的人（打斗里扫描有卡敌人也写这条）：之后人物档案能看到他的身体状况、装备、显眼的义体和人性阶段",
   );
 export type NpcScan = z.infer<typeof NpcScanSchema>;
 

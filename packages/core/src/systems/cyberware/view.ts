@@ -1,14 +1,12 @@
 import type { ViewContext } from "../../kernel/system";
-import { ATTRIBUTE_LABELS, type Attribute } from "../dice";
 import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
 import { BOOST_SLOTS, type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./schema";
 
-/** 义体的属性加成，例如“反应 +2”；没有时是空字符串 */
+/** 义体的特殊机制效果，例如护甲或斯安威斯坦动作格；没有时是空字符串 */
 export function bonusText(def: CyberwareDef): string {
   return [
-    ...Object.entries(def.attributes).map(([a, n]) => `${ATTRIBUTE_LABELS[a as Attribute]} +${n}`),
     ...(def.armor ? ["受伤降一档"] : []),
     ...(def.accelerator ? [`斯安威斯坦时刻 ${BOOST_SLOTS[def.rarity]} 个动作格`] : []),
   ].join("、");

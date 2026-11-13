@@ -34,7 +34,7 @@
     "extract": {
       "forbid": ["trade", "item.gain"]
     },
-    "verify": {
+    "applied": {
       "forbid": ["trade", "item.gain"]
     }
   }

@@ -2,22 +2,27 @@ import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
 import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
+import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
 import type { TurnInput } from "../../schemas/turn";
+import type { CorpoRank } from "../../state";
 import { cyberwareSection } from "../../systems/cyberware";
-import { ATTRIBUTE_LABELS } from "../../systems/dice";
+import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
+import { HackingStateSchema } from "../../systems/hacking/schema";
 import { DAMAGE_LABELS } from "../../systems/health";
-import { catalogSection } from "../../systems/inventory";
+import { catalogSection, itemCatalog } from "../../systems/inventory";
+import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
 import { registry } from "../../systems/registry";
+import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
 import type { RolledCheck } from "../pending";
 import type { Memory } from "../stages";
 
 /**
- * 各步共用的材料：当前状态、人物、委托、到期事件、物品和地点表、玩家输入的写法。
+ * 各步共用的材料：当前状态、人物、委托、近期后果、到期事件、物理与安防约束、物品与地点表、玩家输入的写法。
  * 这些填进 L2 任务模板的槽位；模板和各层的拼法在 layers.ts
  */
 
@@ -46,7 +51,7 @@ export const CORE_COMMANDS = ["world", "humanity", "item", "damage", "heal", "de
 
 export type NarratorPlan =
   | { readonly kind: "action"; readonly input: TurnInput }
-  /** 玩家确认了检定，骰子已经写进日志，这一轮写结果 */
+  /** 兼容历史存档回放：旧已确认检定记录 */
   | { readonly kind: "resolve"; readonly input: TurnInput; readonly check: RolledCheck };
 
 /** 旧存档的输入方式 */
@@ -73,7 +78,7 @@ export interface PromptExtras {
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   /** 这个存档的开场设定；故事还没开始时放进最后一条消息 */
   readonly opening?: string | undefined;
-  /** 写正文之前代码已经定下的事：场外提问、先给检定、门槛结果 */
+  /** 写正文之前代码已经定下的事：场外提问、物理定性裁决、出行耗时 */
   readonly decided?: readonly string[] | undefined;
   /** ① 判断调出的旧记忆；写正文时单独放一栏 */
   readonly recalled?: readonly Memory[] | undefined;
@@ -85,6 +90,10 @@ export interface PromptExtras {
   readonly recapTokens?: number | undefined;
   /** 开场的游戏时间；按它算原剧时间线走到第几天，没给就不带 */
   readonly startTime?: number | undefined;
+  /** 本轮是否启用酒馆预设（影响节律引导方式，不污染系统提示前缀缓存） */
+  readonly hasPreset?: boolean | undefined;
+  /** 未启用预设时的柔性场景烈度 */
+  readonly intensity?: NarrativeIntensity | undefined;
 }
 
 export function stateSummary(
@@ -111,25 +120,18 @@ export function formatInput(input: TurnInput): string {
     : `【玩家】${boost}${bd}${reply}${input.text}`;
 }
 
+/** @deprecated 仅保留兼容历史回放或过渡期评测加载；运行期已全面废除检定与属性计算 */
 export function checkResultText(rolled: RolledCheck): string {
-  const { prepared, result, offer } = rolled;
+  const { result, offer } = rolled;
   const spec = offer.spec;
-  const faces =
-    result.faces.length > 1 ? `${result.faces.join(" + ")} = ${result.roll}` : `${result.faces[0]}`;
-  const costHint =
-    result.outcome === "costly"
-      ? "\n【惨胜演绎指令】玩家成功达成了意图，但过程带刺！请根据现场情境自然演绎 1 项合理代价（如流弹擦伤、弄出声响引起门外警觉、工具受损或留下蛛丝马迹）。"
-      : "";
   const tagsLine =
     result.tacticalTags && result.tacticalTags.length > 0
       ? `\n【物理/战术结算】${result.tacticalTags.join("；")}`
       : "";
-  const lines = [
-    `【检定结果】${ATTRIBUTE_LABELS[spec.attribute]}检定，难度值 ${prepared.dv}：2d6 掷出 ${faces}，加修正 ${prepared.modifier}，合计 ${result.total}（Δ=${result.delta}） → ${OUTCOME_LABELS[result.outcome]}${tagsLine}${costHint}`,
-    `事先说明——成功：${spec.success}；失败：${spec.failure}${spec.damage ? `；失败最多${DAMAGE_LABELS[spec.damage]}` : "；失败不扣血"}`,
-    "按这个结果写这一轮的正文，正文里不提骰子和数值；失败时后果不比事先说明的更重。",
-  ];
-  return lines.join("\n");
+  return [
+    `【历史事件结算】${spec.intent} → ${OUTCOME_LABELS[result.outcome]}${tagsLine}`,
+    `预期代价——成功：${spec.success}；失手：${spec.failure}${spec.damage ? `；伤势最高${DAMAGE_LABELS[spec.damage]}` : ""}`,
+  ].join("\n");
 }
 
 export interface NarratorPrompt {
@@ -145,7 +147,7 @@ export interface NarratorPrompt {
 /** 判断只看最近几轮的原文 */
 export const JUDGE_TURNS = 4;
 
-/** 物品、义体、地点等表：写正文和抽取都要用 id */
+/** 物品、义体、地点等表：抽取步用来对 id */
 export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
   return [
@@ -157,10 +159,7 @@ export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
   ].filter((s): s is string => s !== undefined);
 }
 
-/**
- * 写正文只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"，同意改："可以"）：
- * 物品、义体、地点表和委托模板是给抽取对 id 用的，抽取那一步自己带着；写正文只输出纯文本，用不上
- */
+/** 写正文只带剧情素材，不带 id 查阅表 */
 export function narrateTablesOf(view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
   return [twistSection(extras.data), consequenceSection(extras.data, view.difficulty)].filter(
@@ -168,7 +167,76 @@ export function narrateTablesOf(view: PlayerView, extras: PromptExtras): string[
   );
 }
 
-/** 各步共用的局面：状态、人物、委托、近期后果、到期事件、开场和检定结果 */
+const DISTRICT_ID_MAP: Readonly<Record<string, string>> = {
+  市政中心: "city-center",
+  市中心: "city-center",
+  公司广场: "city-center",
+  威斯特布鲁克: "westbrook",
+  日本街: "westbrook",
+  宪章山: "westbrook",
+  北橡区: "westbrook",
+  沃森: "watson",
+  海伍德: "heywood",
+  圣多明戈: "santo-domingo",
+  太平洲: "pacifica",
+};
+
+const HACK_ATTEMPT = /(?:快速破解|骇入|入侵|潜网|接入点|子网|断网|直插|终端|摄像头|防火墙)/;
+const DIRECT_LINK = /(?:个人连接线|直插|数据线|插孔)/;
+const HIGH_END_VENUE =
+  /(?:进门|大门|过安检|走进|进入|混进).*?(?:大厦|塔|会所|俱乐部|vip|顶层|余烬|绀碧|酒店)/i;
+
+/** 计算当前局面客观触发的物理与安防约束（余额、高安区明火武器/高档场所门禁、无接入仓骇入） */
+export function physicsSection(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>> | undefined,
+  inputText: string,
+): string | undefined {
+  const safeData = data ?? {};
+  const economy = EconomyStateSchema.parse(world.slices.economy ?? {});
+  const clock = WorldClockStateSchema.parse(world.slices.world ?? {});
+  const mergedData = withSavedPlaces(safeData, world);
+  const place = clock.location ? locationCatalog(mergedData).get(clock.location) : undefined;
+  const districtId = place ? (DISTRICT_ID_MAP[place.district] ?? place.district) : undefined;
+
+  const inv = InventoryStateSchema.safeParse(world.slices.inventory);
+  const items = safeData.items ? itemCatalog(safeData) : new Map();
+  const loadout = inv.success ? loadoutSummary(inv.data, items) : undefined;
+
+  const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
+  const corpo = world.slices.corpo as { rank?: CorpoRank } | undefined;
+
+  const wantHack = HACK_ATTEMPT.test(inputText);
+  const vector = DIRECT_LINK.test(inputText) ? "directLink" : "wireless";
+  const result = evaluatePhysicsBoundaries({
+    currentEddies: economy.eddies,
+    ...(districtId && loadout
+      ? {
+          securityCheck: {
+            districtId,
+            weaponConcealment: loadout.concealment,
+            styleTag: loadout.styleTag,
+            ...(HIGH_END_VENUE.test(inputText) ? { enteringHighEndVenue: true } : {}),
+            ...(corpo?.rank ? { corpoRank: corpo.rank } : {}),
+          },
+        }
+      : {}),
+    ...(wantHack && hacking.success
+      ? {
+          hackCheck: {
+            vector,
+            hasCyberdeck: hacking.data.deck !== null,
+            breachedSubnets: hacking.data.breachedNetworks.map((b) => b.name),
+          },
+        }
+      : {}),
+  });
+
+  if (result.directives.length === 0) return undefined;
+  return result.directives.map((d) => `- ${d}`).join("\n");
+}
+
+/** 各步共用的局面：状态、人物、委托、物理约束、近期后果、到期事件、开场 */
 export function situation(
   world: WorldState,
   records: readonly LogRecord[],
@@ -184,6 +252,8 @@ export function situation(
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
     ...registry.sections({ world, data: extras.data, input }),
   ];
+  const physics = physicsSection(world, extras.data, input.text);
+  if (physics) parts.push(`【物理与安防现状】\n${physics}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
@@ -197,10 +267,9 @@ export function boostNote(
   plan: NarratorPlan,
   stage: "judge" | "narrate",
 ): string | undefined {
-  // 当场掷骰的轮次也算（用户 2026-11-01 选的「全改」）：确认检定那条路的输入不带斯安威斯坦，不受影响
   if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
   const { name, slots } = view.sandevistan;
   return stage === "judge"
-    ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。所有真正不确定的部分合并成一次 check，事先在 failure 里写明失败时哪几个动作会落空。`
-    : `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬间最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序不执行，正文里写明哪几件没来得及。把这些动作写成一段连贯的慢动作。人性已经由代码扣过。`;
+    ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬最多连贯做出 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。在 ruling 里一口气定性裁决这几步在物理与速度上哪几下能先手做成、哪里会被硬挡住。`
+    : `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序来不及做，在正文里写出时空骤停般的慢动作与错位感，明确哪几下抢先成了、哪几件差了半步。人性已经由代码扣过。`;
 }

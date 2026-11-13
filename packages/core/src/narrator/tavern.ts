@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 import {
+  BACKGROUND_POINTS,
   BOARD_SLOT_LABELS,
   type Board,
   type BoardModule,
@@ -10,23 +11,22 @@ import {
   FLAW_MAX,
   PAST_MAX,
   PAST_MIN,
+  REFUND_MAX,
   SKILL_MAX,
   SKILL_MIN,
 } from "../schemas/board";
 import {
-  ATTRIBUTE_BASE,
-  ATTRIBUTE_CREATE_MAX,
-  ATTRIBUTE_POINTS,
   type CharacterCard,
   CharacterCardSchema,
+  DEFAULT_CARD_ATTRIBUTES,
   PROSE_BLOCK_INFO,
 } from "../schemas/character";
-import { ATTRIBUTE_LABELS, type Attribute } from "../systems/dice/schema";
+import { responseJsonSchema } from "./doc";
 
 /**
  * Character Card V2（SillyTavern 等通用的角色卡格式）的导入和导出。
  * 导出时整张卡放进 extensions.cp2077，导回来原样还原；别处来的卡先按字段对上正文，
- * 再交给辅助模型从模块库里挑模块、分属性，代码把预算和属性截到规矩以内，玩家确认后才保存
+ * 再交给辅助模型从模块库里挑模块，代码把定制点数预算截到规矩以内，玩家确认后才保存
  */
 
 const EXTENSION_KEY = "cp2077";
@@ -118,7 +118,7 @@ export function tavernToCard(tavern: TavernCard): { card: CharacterCard; warning
     greeting: fit("开场白", tavern.firstMes, PROSE_BLOCK_INFO.greeting.max),
     examples: fit("对话示例", tavern.mesExample, PROSE_BLOCK_INFO.examples.max),
     locked: [],
-    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
+    attributes: { ...DEFAULT_CARD_ATTRIBUTES },
   };
   return { card, warnings };
 }
@@ -151,7 +151,7 @@ export function exportTavernCard(card: CharacterCard): Record<string, unknown> {
             .map((l) => `{{char}}: ${l.trim()}`)
             .join("\n")}`
         : "",
-      creator_notes: "《赛博朋克 2077》文字角色扮演的角色卡；主板和属性在 extensions.cp2077",
+      creator_notes: "《赛博朋克 2077》文字角色扮演的角色卡；主板设定在 extensions.cp2077",
       system_prompt: "",
       post_history_instructions: "",
       alternate_greetings: [],
@@ -163,7 +163,18 @@ export function exportTavernCard(card: CharacterCard): Record<string, unknown> {
   };
 }
 
-const ATTRIBUTES = Object.keys(ATTRIBUTE_LABELS) as Attribute[];
+export const TavernImportReplySchema = z.object({
+  pronoun: z.string(),
+  alias: z.string(),
+  origin: z.string(),
+  pasts: z.array(z.string()),
+  skills: z.array(z.string()),
+  flaws: z.array(z.string()),
+  look: z.string(),
+  voice: z.string(),
+  skillsText: z.string(),
+  conflicts: z.array(z.string()),
+});
 
 export function buildImportPrompt(
   tavern: TavernCard,
@@ -182,14 +193,13 @@ export function buildImportPrompt(
     '- "alias"：外号，没有就空字符串，20 字以内',
     '- "origin"：出身模块的 id',
     `- "pasts"：${PAST_MIN}–${PAST_MAX} 个过往模块的 id`,
-    `- "skills"：${SKILL_MIN}–${SKILL_MAX} 个本事模块的 id`,
-    `- "flaws"：0–${FLAW_MAX} 个负面经历模块的 id`,
-    `- "attributes"：${ATTRIBUTES.map((a) => `"${a}"（${ATTRIBUTE_LABELS[a]}）`).join("、")}，每项 ${ATTRIBUTE_BASE}–${ATTRIBUTE_CREATE_MAX}，比 ${ATTRIBUTE_BASE} 多出来的合计正好 ${ATTRIBUTE_POINTS} 点`,
+    `- "skills"：${SKILL_MIN}–${SKILL_MAX} 个${BOARD_SLOT_LABELS.skill}模块的 id`,
+    `- "flaws"：0–${FLAW_MAX} 个${BOARD_SLOT_LABELS.flaw}模块的 id`,
     `- "look"：从描述里整理外貌，${PROSE_BLOCK_INFO.look.max} 字以内；描述里没有就空字符串`,
     `- "voice"：从描述和对话示例里整理说话方式，${PROSE_BLOCK_INFO.voice.max} 字以内`,
-    `- "skillsText"：会什么、不会什么，400 字以内`,
+    `- "skillsText"：会什么、不会什么（专长与短板），400 字以内`,
     '- "conflicts"：和夜之城设定冲突、没有合适模块、或者能力过强被你压下来的地方，一条一句',
-    "规则：模块只能从下面的模块库里挑，用 id；模块花的背景点合计不超过 12 点（负面经历返还的点数最多算 6 点）。",
+    `规则：模块只能从下面的模块库里挑，用 id；模块花的定制点合计不超过 ${BACKGROUND_POINTS} 点（负面缺陷返还的点数最多算 ${REFUND_MAX} 点）。`,
     "不要夸大：魔法、超能力、异世界的设定换成夜之城里说得通的东西，或者在 conflicts 里说明舍掉了。",
     "模块库（id｜插槽｜名字｜点数｜能力）：",
     library,
@@ -263,27 +273,7 @@ function fitBudget(board: Board, warnings: string[]): Board {
   return next;
 }
 
-/** 属性截到 3–6，超出 7 点从最高的往下减 */
-function fitAttributes(raw: unknown, warnings: string[]): CharacterCard["attributes"] {
-  const given = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-  const attributes = Object.fromEntries(
-    ATTRIBUTES.map((a) => {
-      const v = typeof given[a] === "number" ? Math.round(given[a] as number) : ATTRIBUTE_BASE;
-      return [a, Math.min(ATTRIBUTE_CREATE_MAX, Math.max(ATTRIBUTE_BASE, v))];
-    }),
-  ) as Record<Attribute, number>;
-  const spent = () => ATTRIBUTES.reduce((s, a) => s + attributes[a] - ATTRIBUTE_BASE, 0);
-  if (spent() > ATTRIBUTE_POINTS)
-    warnings.push(`属性多分了 ${spent() - ATTRIBUTE_POINTS} 点，从最高的往下减了`);
-  while (spent() > ATTRIBUTE_POINTS) {
-    const top = ATTRIBUTES.reduce((a, b) => (attributes[b] > attributes[a] ? b : a));
-    attributes[top] -= 1;
-  }
-  if (spent() < ATTRIBUTE_POINTS) warnings.push(`还有 ${ATTRIBUTE_POINTS - spent()} 点属性没分`);
-  return attributes;
-}
-
-/** 读模型的回复，和直接对上的正文合成一张卡；预算和属性由代码截到规矩以内 */
+/** 读模型的回复，和直接对上的正文合成一张卡；定制点数预算由代码截到规矩以内 */
 export function parseImportReply(
   text: string,
   tavern: TavernCard,
@@ -329,7 +319,7 @@ export function parseImportReply(
     look: cut(raw.look, PROSE_BLOCK_INFO.look.max),
     voice: cut(raw.voice, PROSE_BLOCK_INFO.voice.max),
     skills: cut(raw.skillsText, 400),
-    attributes: fitAttributes(raw.attributes, warnings),
+    attributes: { ...DEFAULT_CARD_ATTRIBUTES },
     board,
   };
   return { ok: true, card, warnings };
@@ -353,6 +343,7 @@ export async function interpretTavernCard(
       messages: buildImportPrompt(tavern, modules),
       maxOutputTokens: 1500,
       temperature: 0.3,
+      responseFormat: responseJsonSchema("tavernImport", TavernImportReplySchema),
     },
     signal,
   )) {

@@ -6,27 +6,44 @@ import { JOB_KIND_LABELS, type Job, type JobsState, JobTemplateCatalogSchema } f
 /** 已结束的委托最多列这么多单，最近的优先 */
 export const CLOSED_LISTED = 5;
 
+/** 给模型的定性委托分量描述（不泄漏游戏星级字眼） */
+export const JOB_RISK_LABELS: Readonly<Record<number, string>> = {
+  1: "跑腿零活",
+  2: "街头常规单",
+  3: "高危硬单",
+  4: "公司/精锐硬仗",
+  5: "玩命死活",
+};
+
+function trustNote(affinity: number): string {
+  if (affinity >= 40) return "过命交情、极信得过";
+  if (affinity >= 15) return "关系熟络、比较信任";
+  if (affinity >= 0) return "一般交道";
+  if (affinity >= -25) return "心存防备";
+  return "积怨已深";
+}
+
 export const jobsRules: RuleModule<JobsState> = {
   id: "jobs",
   title: "委托",
   commands: ["jobOffer", "jobAccept", "jobNote", "jobEnd"],
   when: () => true,
-  judge: `- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的降低风险或免去检定，或者给加成。
-- 委托里的检定档位照委托星级和对手来；失败后果写进 failure，不超过事先说明的范围。
-- 中间人只派他现在肯派的星级（【委托】里写着）。`,
+  judge: `- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能绕开硬碰硬、把局势拆开解决。
+- 委托里的危险与对手火力，按委托分量、雇主/目标势力与现场物理准备实际裁决。
+- 中间人只会派他眼下信得过玩家接的活（【委托】里写着各人的口风）。`,
   narrate: `- 委托是故事的燃料。隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
-- 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门；派不出的活就让中间人说“你还不够格”。
+- 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门；还没到托付硬单的分量时，就让中间人干脆地说“这活还轮不到你扛”。
 - 玩家在委托板上直接接下的单子已经算接下：找个自然的时机让中间人或雇主联系玩家角色，交代细节。
 - 这单了结时正文写清结局和到手多少；讨价还价、被克扣、顺手多拿都要说得通。
 - 失败和坏选择要有真实的后果；被放走的人、被得罪的雇主以后可能回来。`,
-  text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们对玩家角色的好感；隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
-- 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门。挂出时写 jobOffer，玩家角色在正文里答应了再写 jobAccept；中间人只派他现在肯派的星级，派不出的活就让他说“你还不够格”。
-- 中间人不只【委托】里列的这几位：有人物卡的人都能当中间人派单，jobOffer 的 fixer 写他的 id，代码第一次派单时登记。剧情里冒出新的中间人，同一轮先写 npc 给他建卡（role 写清是哪一带的中间人），再写 jobOffer；新中间人好感从 0 起，先派 1、2 星的活。
-- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的降低风险或免去检定。
+  text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们眼下对玩家角色的交情与口风；隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
+- 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门。挂出时写 jobOffer，玩家角色在正文里答应了再写 jobAccept；中间人只派符合他当前信任分寸的活，分量过重的活就让他直接拒绝。
+- 中间人不只【委托】里列的这几位：有人物卡的人都能当中间人派单，jobOffer 的 fixer 写他的 id，代码第一次派单时登记。剧情里冒出新的中间人，同一轮先写 npc 给他建卡（role 写清是哪一带的中间人），再写 jobOffer；刚打交道的新中间人只会先丢些低门槛的试水单。
+- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能把风险拆解掉。
 - 玩家也能在委托板上直接接单：进展笔记里写着“在委托板上接下”的单子已经算接下，不要再写 jobAccept；找个自然的时机让中间人或雇主联系玩家角色，交代细节。
 - 有实质进展、玩家选了某条路、转折被揭开时写 jobNote。
 - 这单在正文里了结时写 jobEnd，结局按实际发生的事定。讨价还价、被克扣、顺手多拿都写进 paid，要在正文里说得通；到手的钱由代码记账。
-- 失败和坏选择要有真实的后果，但不超过事先说明的范围；被放走的人、被得罪的雇主以后可能回来。`,
+- 失败和坏选择要有真实的后果，但不写脱离局势的空降惩罚；被放走的人、被得罪的雇主以后可能回来。`,
 };
 
 function jobLine(job: Job, state: JobsState): string {
@@ -34,7 +51,7 @@ function jobLine(job: Job, state: JobsState): string {
   const parts = [
     JOB_STATUS_LABELS[job.status],
     ...(job.kind ? [JOB_KIND_LABELS[job.kind]] : []),
-    `${job.risk} 星`,
+    JOB_RISK_LABELS[job.risk] ?? `风险 ${job.risk}`,
     `报酬 ${job.reward} 欧元`,
     fixer ? `中间人 ${fixer.name}［${fixer.id}］` : "没有中间人",
     `雇主 ${job.client}`,
@@ -60,13 +77,15 @@ export function jobsSection(
   const fixers = Object.values(state.fixers);
   if (fixers.length === 0 && state.jobs.length === 0) return undefined;
   const lines = fixers.map((f) => {
+    const affinity = affinityOf(f.id);
     const side = sideOf(f.id);
     const bonus = side === undefined ? 0 : FACTION_RISK_BONUS[side.attitude];
     if (side !== undefined && bonus === null) {
-      return `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单`;
+      return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单`;
     }
-    const max = Math.min(5, maxRisk(affinityOf(f.id), streetCred) + (bonus ?? 0));
-    return `- 中间人 ${f.name}［${f.id}］：好感 ${affinityOf(f.id)}，现在最多派 ${max} 星${bonus ? `（${side?.name}待玩家好，多派一星）` : ""}`;
+    const max = Math.min(5, maxRisk(affinity, streetCred) + (bonus ?? 0));
+    const scope = JOB_RISK_LABELS[max] ?? "各类委托";
+    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，眼下顶多肯派到「${scope}」为止${bonus ? `（${side?.name}照应，门路宽一档）` : ""}`;
   });
   const open = state.jobs.filter(isOpen);
   if (open.length === 0) lines.push("- 眼下没有挂着或接下的委托");

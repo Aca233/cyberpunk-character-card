@@ -24,9 +24,7 @@ export function GigsPanel({ gigs }: { readonly gigs: View["sidegigs"] }) {
                   <span className={styles.npcStatus}>
                     {g.beaten ? "赢过" : g.rematch ? `${g.rematch} 后再比` : g.kindLabel}
                   </span>
-                  <span className={styles.npcRole}>
-                    {g.opponent} · {g.tierLabel}
-                  </span>
+                  <span className={styles.npcRole}>{g.opponent}</span>
                 </summary>
                 <div className={styles.npcDetail}>
                   <p>

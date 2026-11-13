@@ -23,7 +23,7 @@
     "text": "从外套里掏出我的荒坂智能手枪，拍在桌上"
   },
   "expect": {
-    "verify": {
+    "applied": {
       "forbid": ["item.gain", "item.equip"]
     }
   },

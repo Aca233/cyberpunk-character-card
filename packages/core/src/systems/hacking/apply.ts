@@ -2,7 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { CombatState } from "../combat";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
-import { checkFact } from "../dice";
+import { checkFact, rulingFact } from "../dice";
 import type { HealthState } from "../health";
 import { HUMANITY_KINDS } from "../humanity";
 import { currentVitals, filledBody, type NpcState } from "../npc";
@@ -117,8 +117,12 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
   if (draft.ram < def.ram) {
     return fail(`RAM 不够：「${def.name}」要 ${def.ram} 格，只剩 ${draft.ram} 格`);
   }
-  if (command.npc !== undefined && checkFact(ctx.facts) === undefined) {
-    return fail("对有人物卡的人放快速破解要先掷智力：本轮没有检定结果");
+  const check = checkFact(ctx.facts);
+  if (check && (check.outcome === "failure" || check.outcome === "fumble")) {
+    return fail("抵抗/入侵没过，这次快速破解没放出去");
+  }
+  if (!check && rulingFact(ctx.facts)?.kind === "blocked") {
+    return fail(rulingFact(ctx.facts)?.reason ?? "网络拓扑或硬条件阻断，这次快速破解没放出去");
   }
   draft.ram -= def.ram;
   const notes = [
@@ -154,14 +158,15 @@ export function applyBreach(
   if (!draft.deck) return fail("没装网络接入仓，做不了入侵协议");
   const check = checkFact(ctx.facts);
   const gate = gateMet(ctx.facts);
-  if (check === undefined && gate === undefined) {
-    return fail("入侵协议要先过智力门槛或掷智力：本轮没有门槛结果，也没有检定结果");
-  }
   if (check !== undefined && (check.outcome === "failure" || check.outcome === "fumble")) {
     return fail("检定没过，入侵没成功：写被 ICE 挡下、被对方察觉或被追踪的后果");
   }
   if (check === undefined && gate === false) {
     return fail("智力门槛没达标，入侵没成功：让玩家换一条路");
+  }
+  const ruling = check === undefined && gate === undefined ? rulingFact(ctx.facts) : undefined;
+  if (ruling?.kind === "blocked") {
+    return fail(ruling.reason ?? "目标存在物理气隙隔离或硬化防火墙，无法接入");
   }
   const location = ctx.read<WorldClockState>("world").location ?? null;
   if (draft.breachedNetworks.some((n) => n.name === command.network && n.location === location)) {
@@ -219,17 +224,23 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
     return fail("已经到黑墙边缘，再往里是黑墙，过不去；后面是流窜 AI");
   }
   const check = checkFact(ctx.facts);
-  if (check === undefined) return fail("往下潜一层要先掷智力：本轮没有检定结果");
-  if (check.outcome === "failure" || check.outcome === "fumble") {
+  if (check && (check.outcome === "failure" || check.outcome === "fumble")) {
     return fail("检定没过，没潜下去：写 ICE 反噬、被追踪或被迫上浮");
   }
   const target = dive.layer + 1;
-  const need = DIVE_DAMAGE[target];
-  if (
-    need !== undefined &&
-    (check.damage === undefined || TIER_ORDER.indexOf(check.damage) < TIER_ORDER.indexOf(need))
-  ) {
-    return fail(`潜到第 ${target} 层的检定要事先写明 damage 至少 ${need}（神经反噬）`);
+  if (check) {
+    const need = DIVE_DAMAGE[target];
+    if (
+      need !== undefined &&
+      (check.damage === undefined || TIER_ORDER.indexOf(check.damage) < TIER_ORDER.indexOf(need))
+    ) {
+      return fail(`潜到第 ${target} 层的检定要事先写明 damage 至少 ${need}（神经反噬）`);
+    }
+  } else {
+    const ruling = rulingFact(ctx.facts);
+    if (ruling?.kind === "blocked") {
+      return fail(ruling.reason ?? "深层冰墙阻断了通道，没能继续往下潜");
+    }
   }
   dive.layer = target;
   return {
@@ -287,21 +298,31 @@ export function applyNpcHack(
   const harmful =
     command.target === "你" && (def.category === "damage" || def.category === "ultimate");
   const check = harmful ? checkFact(ctx.facts) : undefined;
+  const ruling = harmful && !check ? rulingFact(ctx.facts) : undefined;
   if (harmful) {
-    if (!check || check.npcHack?.id !== command.id || check.npcHack.program !== def.id) {
-      return fail("抵抗快速破解要先检定，check.npcHack 必须绑定这名 NPC 和这个程序");
+    if (check) {
+      if (check.npcHack?.id !== command.id || check.npcHack.program !== def.id) {
+        return fail("抵抗快速破解要先检定，check.npcHack 必须绑定这名 NPC 和这个程序");
+      }
+      if (check.attribute !== "intelligence" && check.attribute !== "body") {
+        return fail("抵抗快速破解的检定属性必须是智力或肉体");
+      }
+      if (check.damage === undefined) {
+        return fail("抵抗伤害类或终极类快速破解要事先写明 damage");
+      }
+      if (draft.resolvedNpcHacks.includes(check.id)) {
+        return fail("这次快速破解抵抗检定已经结算过了");
+      }
+      // 与 RAM、ICE 和伤害一起提交；连锁失败时由内核一起回滚
+      draft.resolvedNpcHacks.push(check.id);
+    } else if (ruling) {
+      if (draft.resolvedNpcHacks.includes(ruling.id)) {
+        return fail("这一轮敌方快速破解已经结算过一次，不再重复扣血");
+      }
+      draft.resolvedNpcHacks.push(ruling.id);
+    } else {
+      return fail("缺乏本轮对抗或裁决依据，无法结算伤害类快速破解");
     }
-    if (check.attribute !== "intelligence" && check.attribute !== "body") {
-      return fail("抵抗快速破解的检定属性必须是智力或肉体");
-    }
-    if (check.damage === undefined) {
-      return fail("抵抗伤害类或终极类快速破解要事先写明 damage");
-    }
-    if (draft.resolvedNpcHacks.includes(check.id)) {
-      return fail("这次快速破解抵抗检定已经结算过了");
-    }
-    // 与 RAM、ICE 和伤害一起提交；连锁失败时由内核一起回滚
-    draft.resolvedNpcHacks.push(check.id);
   }
   draft.npcRamUsed[command.id] = used + def.ram;
   const ramNote = `${npc.name} 的 RAM ${left - def.ram}/${ramMax}`;
@@ -323,7 +344,7 @@ export function applyNpcHack(
     `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}：${ramNote}`,
   ];
   if (harmful) {
-    notes.push("本次快速破解按绑定的抵抗检定结算，不另记 damage 或 combat wound");
+    notes.push("本次快速破解按本轮统一结算，不另记 damage 或 combat wound");
   }
   const emit: Command[] =
     def.category === "ultimate"
@@ -347,6 +368,14 @@ export function applyNpcHack(
     } else {
       notes.push("你抵抗住了这次快速破解，没有受伤");
     }
+  } else if (harmful && ruling) {
+    const tier =
+      ruling.harm !== "none" ? ruling.harm : def.category === "ultimate" ? "lethal" : "heavy";
+    emit.push({
+      type: "damage",
+      tier,
+      reason: `${npc.name}的快速破解「${def.name}」`,
+    });
   }
   return { ok: true, notes, emit };
 }

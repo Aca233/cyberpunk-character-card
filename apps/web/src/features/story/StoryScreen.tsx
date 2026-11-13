@@ -8,13 +8,11 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { layerOpen } from "../../ui/layers";
-import { useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import type { StoryEnd } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
-import { CloseupQueue } from "./Closeup";
 import {
   Banner,
   BioMonitor,
@@ -329,7 +327,6 @@ export function StoryScreen() {
     },
     [story, saveId, version, view, refresh],
   );
-  const narrative = useNarrativePrefs();
   const confirm = useCallback(
     (checkId: string, label: string, matrix?: number) => {
       void story.submit(
@@ -462,7 +459,7 @@ export function StoryScreen() {
     <div className={neuralStyles.pinBody}>
       <PinTabs<BioTab>
         tabs={[
-          ["character", "人物", view.character.attributePoints],
+          ["character", "人物", 0],
           ["cyberware", "义体", view.cyberware.filter((c) => c.broken).length],
         ]}
         value={bioTab}
@@ -475,11 +472,6 @@ export function StoryScreen() {
         ) : (
           <CharacterPage
             view={view}
-            onSpend={
-              busy || offers?.rolled
-                ? undefined
-                : (attribute) => void act({ type: "spendPoint", attribute }, "spend")
-            }
             onHabit={
               busy
                 ? undefined
@@ -753,12 +745,7 @@ export function StoryScreen() {
             <CheckBar
               key={openCheck.id}
               check={openCheck}
-              matrix={
-                narrative.breachMatrix &&
-                view.hacking !== null &&
-                openCheck.attribute === "intelligence" &&
-                !offers?.rolled
-              }
+              matrix={false}
               busy={busy}
               closable={!offers?.rolled && openCheck.id === pickedId}
               onConfirm={(matrix) => confirm(openCheck.id, openCheck.label, matrix)}
@@ -770,7 +757,6 @@ export function StoryScreen() {
             !busy && (
               <ChoiceList
                 choices={view.offers.choices}
-                attributes={view.character.attributes}
                 locked={offers?.rolled != null}
                 onChoose={choose}
               />
@@ -780,7 +766,7 @@ export function StoryScreen() {
             <div className={styles.notice} data-kind="dead" role="alert">
               <span>
                 {view.death.canRestart
-                  ? "你死了。夜之城难度下可以从这个场景开头重来一次：这个场景发生的事全部作废，骰子重新掷，履历里记一笔“重来过”。"
+                  ? "你死了。夜之城难度下可以从这个场景开头重来一次：这个场景发生的事全部作废，所有抉择从这一刻重新推演，履历里记一笔“重来过”。"
                   : view.difficulty === "nightCity"
                     ? "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"
                     : "你死了。这份存档到此为止，只能回看。"}
@@ -1016,7 +1002,6 @@ export function StoryScreen() {
       {!settled[0] && rivalsDone[0] && (
         <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />
       )}
-      {!settled[0] && !rivalsDone[0] && <CloseupQueue turns={view.turns} />}
       {story.spend && (
         <Dialog
           title={`花一大笔钱：${story.spend.label}`}

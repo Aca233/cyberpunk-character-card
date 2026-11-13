@@ -103,7 +103,7 @@ export const LostControlCommandSchema = z
     actual: z.string().min(1).max(160).describe("实际发生的事"),
   })
   .describe(
-    "短暂失控：这个场景发作过、检定失败时才写；界面标 [失控] 并同时显示意图和实际。不改写玩家的输入，不替玩家去杀人",
+    "短暂失控：这个场景发作过、精神防线彻底崩不住失控时才写；界面标 [失控] 并同时显示意图和实际。不改写玩家的输入，不替玩家去杀人",
   );
 export type LostControlCommand = z.infer<typeof LostControlCommandSchema>;
 
@@ -114,7 +114,7 @@ export const CrisisCommandSchema = z
     path: z
       .enum(["pulledBack", "lastStand", "surrender"])
       .describe(
-        "pulledBack 被身边的人或诊所拉回来（镇定检定成功之后才写），lastStand 带着全部义体走向最后一战，surrender 向暴恐机动队投降",
+        "pulledBack 被身边的人或诊所拉回来（人确实被稳住、危机平息后才写），lastStand 带着全部义体走向最后一战，surrender 向暴恐机动队投降",
       ),
     who: z.string().min(1).max(40).optional().describe("pulledBack：谁把角色拉回来"),
     reason: z.string().min(1),

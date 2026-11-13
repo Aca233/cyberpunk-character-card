@@ -1,18 +1,18 @@
 import type { GameOpening } from "@cp/core";
+import { locations } from "./locations";
+import { DISTRICT_SHAPES } from "./mapShapes.gen";
 import { RADAR_ANCHORS } from "./radar";
+import { DISTRICT_LAWS, NIGHT_CITY_SLICES } from "./slices";
 
-/** 新存档默认用的开场 */
-export const DEFAULT_OPENING = "lizzies-2077";
+/** 新存档默认用的自由沙盘开场 */
+export const DEFAULT_OPENING = "sandbox-2077";
 
 export const openings: readonly GameOpening[] = [
   {
-    // 2077 开局：《边缘行者》已经过去，引导委托换成 2077 年还活着的人
-    id: "lizzies-2077",
-    title: "丽姿酒吧的一块芯片",
-    location: "lizzies-bar",
-    // 前三个是引导委托用的；其余原作人物开局有卡但没见过，不代表全在开场现场，也不要求都有 arcs.ts 条目。
-    // 2026-11-02 用户选择"全部放进开局"：新增 29 人，共 41 人；海外角色的位置见人物卡。
-    // 不种已死的边缘行者人物；强尼、德拉曼、奥特、蓝眼睛先生按用户选择暂不建卡。
+    // 2077 自由沙盘开局：《边缘行者》已是旧闻，不强加任何主线芯片委托或倒计时
+    id: "sandbox-2077",
+    title: "夜之城自由沙盘",
+    location: "megabuilding-h10",
     cast: [
       "judy",
       "regina",
@@ -56,85 +56,97 @@ export const openings: readonly GameOpening[] = [
       "hansen",
       "alex",
     ],
-    premise: `这一档从沃森区的丽姿酒吧开始，2077 年刚开头的一个深夜。玩家角色已经接下中间人瑞吉娜·琼斯的一单（委托 regina-shard）：今晚有人会在丽姿酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到瑞吉娜手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在正文里安排，随着剧情慢慢揭开。
+    premise: `这是一场 2077 年初夜之城自由沙盘开局：没有强塞给玩家的预设芯片死线或必接任务，城市照自己的逻辑运转，各方中间人、帮派与巨企各怀盘算。
 《边缘行者》里的事已经过去了，是街头的旧闻：大卫、丽贝卡、曼恩一伙和中间人法拉第都死了，有人提起时照旧闻写，他们不会出场。
-第一轮直接从酒吧里的一个具体瞬间切进去：声音、气味、一个人物主动开口或者递来东西。不要用旁白交代背景，不要列选项，也不要问玩家想做什么。玩家的第一句话已经写了自己在做什么，就顺着它接。
-芯片交到玩家角色手上时发 item gain shard；见到瑞吉娜交了货、或者这单黄了，按实际结局发 jobEnd regina-shard。`,
-    gear: [
-      // 最后装上的武器拿在手里，所以手枪放在刀后面
-      { id: "knife", equip: true, slot: 2 },
-      { id: "lexington", equip: true, slot: 1 },
-      { id: "bounce-back", equip: true },
-    ],
-    eddies: 300,
-    cyberware: ["kiroshi-mk1"],
+第一轮直接从玩家当前所在地点的一个具体瞬间切进去：感官噪音、气味、街角摊贩/过路人或旧识的动静。绝不写干巴巴的背景综述，不要列选项，也不要反问玩家想做什么；玩家的第一句话已经写了在做什么或说什么，就顺着它接着往下推。
+如玩家主动打听活计、联系中间人或撞上现场麻烦，可通过正常的委托/人际机制自然生出差事（jobOffer），不要硬塞线性剧本。`,
+    gear: [],
+    eddies: 0,
+    cyberware: [],
     deadlines: [],
-    jobs: [
-      {
-        id: "regina-shard",
-        title: "把芯片交给瑞吉娜",
-        fixer: "regina",
-        client: "瑞吉娜的客户（身份不明）",
-        location: "lizzies-bar",
-        risk: 1,
-        reward: 2000,
-        conflict: "瑞吉娜的客户想要芯片里的东西；芯片原来的主人想把它追回来，交货人夹在中间",
-        afterMinutes: 22 * 60,
-      },
-    ],
-  },
-  {
-    // 旧存档用的版本：法拉第派单，种的是《边缘行者》的三个人
-    id: "lizzies-job",
-    hidden: true,
-    cast: ["rebecca", "maine", "faraday"],
-    title: "丽姿酒吧的一块芯片",
-    location: "lizzies-bar",
-    premise: `这一档从沃森区的丽姿酒吧开始，深夜。玩家角色已经接下中间人法拉第的一单（委托 faraday-shard）：今晚有人会在丽姿酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到法拉第手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在正文里安排，随着剧情慢慢揭开。
-第一轮直接从酒吧里的一个具体瞬间切进去：声音、气味、一个人物主动开口或者递来东西。不要用旁白交代背景，不要列选项，也不要问玩家想做什么。玩家的第一句话已经写了自己在做什么，就顺着它接。
-芯片交到玩家角色手上时发 item gain shard；见到法拉第交了货、或者这单黄了，按实际结局发 jobEnd faraday-shard。`,
-    gear: [
-      // 最后装上的武器拿在手里，所以手枪放在刀后面
-      { id: "knife", equip: true, slot: 2 },
-      { id: "lexington", equip: true, slot: 1 },
-      { id: "bounce-back", equip: true },
-    ],
-    eddies: 300,
-    cyberware: ["kiroshi-mk1"],
-    deadlines: [],
-    jobs: [
-      {
-        id: "faraday-shard",
-        title: "把芯片交给法拉第",
-        fixer: "faraday",
-        client: "法拉第的客户（身份不明）",
-        location: "lizzies-bar",
-        risk: 1,
-        reward: 2000,
-        conflict: "法拉第的客户想要芯片里的东西；芯片原来的主人想把它追回来，交货人夹在中间",
-        afterMinutes: 22 * 60,
-      },
-    ],
-  },
-  {
-    // 旧存档用的版本：期限挂在世界时钟上，没有委托卡
-    id: "lizzies-shard",
-    hidden: true,
-    cast: ["rebecca", "maine", "faraday"],
-    title: "丽姿酒吧的一块芯片",
-    location: "lizzies-bar",
-    premise: `这一档从沃森区的丽姿酒吧开始，深夜。中间人法拉第发来消息派了一单：今晚有人会在丽姿酒吧把一块数据芯片（物品 shard）交给玩家角色，明晚十点前送到法拉第手上，报酬两千欧元。交货人是谁、芯片里有什么、还有谁盯着这块芯片，都由你在正文里安排，随着剧情慢慢揭开。
-第一轮直接从酒吧里的一个具体瞬间切进去：声音、气味、一个人物主动开口或者递来东西。不要用旁白交代背景，不要列选项，也不要问玩家想做什么。玩家的第一句话已经写了自己在做什么，就顺着它接。
-芯片交到玩家角色手上时发 item gain shard；见到法拉第交了货、或者这单黄了，发 deadline handle。`,
-    gear: [
-      // 最后装上的武器拿在手里，所以手枪放在刀后面
-      { id: "knife", equip: true, slot: 2 },
-      { id: "lexington", equip: true, slot: 1 },
-      { id: "bounce-back", equip: true },
-    ],
-    deadlines: [{ id: "faraday-shard", label: "把芯片交给法拉第", afterMinutes: 24 * 60 }],
+    jobs: [],
   },
 ];
+
+export interface OpeningContext {
+  /** 开场游戏时间（分钟），用于匹配时段生活切片 */
+  readonly timeMinutes?: number;
+  /** 角色卡身份一句话摘要 */
+  readonly origin?: string;
+  /** 角色名下安全屋名字 */
+  readonly homes?: readonly string[];
+  /** 开局已建立关系的旧识 */
+  readonly acquaintances?: readonly { readonly name: string; readonly relation?: string }[];
+}
+
+const DISTRICT_NAME_TO_ID: Readonly<Record<string, string>> = {
+  沃森: "watson",
+  沃森区: "watson",
+  威斯特布鲁克: "westbrook",
+  威斯布鲁克: "westbrook",
+  市政中心: "city-center",
+  海伍德: "heywood",
+  圣多明戈: "santo-domingo",
+  太平洲: "pacifica",
+  狗镇: "dogtown",
+  恶土: "badlands",
+};
+
+const SHAPE_ID_TO_LAW_ID: Readonly<Record<string, string>> = {
+  city_center: "city-center",
+  santo_domingo: "santo-domingo",
+};
+
+type Pt = readonly [number, number];
+
+function parsePoly(raw: string): readonly Pt[] {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((pair) => {
+      const [x, y] = pair.split(",").map(Number);
+      return [x ?? 0, y ?? 0] as const;
+    });
+}
+
+const DISTRICT_POLYS = DISTRICT_SHAPES.map((shape) => ({
+  id: SHAPE_ID_TO_LAW_ID[shape.id] ?? shape.id,
+  poly: parsePoly(shape.points),
+}));
+
+function pointInPoly(poly: readonly Pt[], x: number, y: number): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (!a || !b) continue;
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) {
+      hit = !hit;
+    }
+  }
+  return hit;
+}
+
+function districtIdOf(locationId: string): string {
+  const known = locations.find((l) => l.id === locationId);
+  if (known) return DISTRICT_NAME_TO_ID[known.district] ?? "watson";
+  const anchor = RADAR_ANCHORS.find((a) => a.id === locationId);
+  if (anchor) {
+    const found = DISTRICT_POLYS.find((d) => pointInPoly(d.poly, anchor.x, anchor.y));
+    return found?.id ?? "badlands";
+  }
+  return "watson";
+}
+
+function periodOf(timeMinutes: number | undefined): "dawn" | "day" | "dusk" | "night" | "any" {
+  if (timeMinutes === undefined) return "any";
+  const mins = ((Math.floor(timeMinutes) % 1440) + 1440) % 1440;
+  const hour = Math.floor(mins / 60);
+  if (hour >= 5 && hour < 9) return "dawn";
+  if (hour >= 9 && hour < 17) return "day";
+  if (hour >= 17 && hour < 20) return "dusk";
+  return "night";
+}
 
 /** 地图锚点的说法：没有原作店名的服务点只有类别名，写成“一处义体医生”这样，不编店名 */
 function anchorWords(id: string): string {
@@ -144,20 +156,42 @@ function anchorWords(id: string): string {
 }
 
 /**
- * 存档用的开场设定；旧存档没有开场。
- * startLocation 是建档时在地图上选的开局地点（用户定的，2026-10-30："可以选择地点开局"，"在地图上选择"）：
- * 和开场自带的地点不同时，在原设定后面补一段，交代玩家眼下在哪、第一轮从哪切进去；
- * 引导委托、出场人物照旧，交货的约定地点仍是开场地点。没选或选的就是开场地点时原样返回，旧存档的提示词不变
+ * 自由沙盘动态开场设定：
+ * 根据玩家开局所选地点（或出身默认地点）所属城区注入安检/执法/穿衣法则与夜之城街头切片，
+ * 并带上角色身份定位、名下住所与已建立关系的旧识，供首轮叙事直接使用。
  */
 export function openingPremise(
   id: string | undefined,
   startLocation?: string | undefined,
+  context?: OpeningContext,
 ): string | undefined {
   const opening = id === undefined ? undefined : openings.find((o) => o.id === id);
   if (!opening) return undefined;
-  if (startLocation === undefined || startLocation === opening.location) return opening.premise;
-  const here = anchorWords(startLocation);
-  const home = anchorWords(opening.location);
-  return `${opening.premise}
-开局地点改了：玩家角色眼下在${here}（地点 ${startLocation}），不在${home}。上面写的“从${home}开始”“从酒吧里的一个具体瞬间切进去”，改成从${here}的一个具体瞬间切进去；委托照旧，约好的交货地点仍是${home}，玩家角色得自己过去。`;
+  const hereId = startLocation ?? opening.location;
+  const hereName = anchorWords(hereId);
+  const districtId = districtIdOf(hereId);
+  const law = DISTRICT_LAWS[districtId];
+  const period = periodOf(context?.timeMinutes);
+  const slice =
+    NIGHT_CITY_SLICES.find(
+      (s) => s.district === districtId && (s.period === period || s.period === "any"),
+    ) ?? NIGHT_CITY_SLICES.find((s) => s.district === districtId);
+
+  const lines: string[] = [
+    opening.premise,
+    `当前开局地点：${hereName}（地点 ${hereId}，所属城区：${law?.name ?? districtId}）。第一轮直接从${hereName}的一个具体瞬间切进去。`,
+  ];
+  if (law) lines.push(`城区治安与安检法则：${law.lawSummary}`);
+  if (slice) lines.push(`街头生活气息参考（自然融入氛围即可，不必照抄）：${slice.text}`);
+  if (context?.origin) lines.push(`主角此刻身份：${context.origin}`);
+  if (context?.homes && context.homes.length > 0) {
+    lines.push(`名下可落脚的安全屋：${context.homes.join("、")}`);
+  }
+  if (context?.acquaintances && context.acquaintances.length > 0) {
+    const rels = context.acquaintances
+      .map((a) => (a.relation ? `${a.name}（${a.relation}）` : a.name))
+      .join("、");
+    lines.push(`城里本来就认识的旧识：${rels}`);
+  }
+  return lines.join("\n");
 }

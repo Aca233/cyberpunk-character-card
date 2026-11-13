@@ -158,7 +158,7 @@ export const JobOfferSchema = z
     twist: z.string().min(1).optional(),
   })
   .describe(
-    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人的人物卡 id，熟人求助不写；【委托】里没列的中间人也能写，只要他有人物卡（新的中间人同一轮先写 npc 建卡、role 写中间人，再写这条），代码会登记成中间人；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；代码按街头声望和中间人好感检查中间人肯不肯派这个星级",
+    "挂出委托：kind 是委托类型（见【委托类型模板】）；fixer 是派单的中间人的人物卡 id，熟人求助不写；【委托】里没列的中间人也能写，只要他有人物卡（新的中间人同一轮先写 npc 建卡、role 写中间人，再写这条），代码会登记成中间人；conflict 写谁想要什么、谁会受害；twist 是只有你知道的转折，约三成委托不写；中间人按自身口风与对玩家的信任底细决定接不接这单",
   );
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 

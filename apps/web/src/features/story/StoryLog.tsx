@@ -140,7 +140,7 @@ function TurnBlock({
       {prefs.sceneTitles && turn.sceneTitle && (
         <p className={styles.sceneTitle}>{turn.sceneTitle}</p>
       )}
-      {turn.seq > 0 && (
+      {turn.input.text.trim() !== "" && (
         <p className={styles.input} data-mode={turn.input.mode}>
           {formatInput(turn.input)}
         </p>
@@ -276,11 +276,12 @@ export function StoryLog({
         {earlier > 0 && <p className={styles.dim}>更早的 {earlier} 轮暂不显示</p>}
         {view.turns.length === 0 && !generating && (
           <p className={styles.dim}>
-            故事还没开始。
+            自由沙盘已就绪
+            {view.location ? ` · 当前位于${view.names.location ?? view.location}` : ""}
             {view.deadlines[0]
-              ? `眼下的活：${view.deadlines[0].label}，${view.deadlines[0].due} 前。`
+              ? ` · 眼下期限：${view.deadlines[0].label}（${view.deadlines[0].due} 前）`
               : ""}
-            写下你的第一句话或第一个行动。
+            。写下你的第一句话，或第一个行动。
           </p>
         )}
         {view.turns.map((t, i) => (
@@ -290,7 +291,7 @@ export function StoryLog({
             saveId={saveId}
             speakers={speakers}
             onRegenerate={
-              i === view.turns.length - 1 && t.seq > 0 && !generating && !view.offers.rolled
+              i === view.turns.length - 1 && !generating && !view.offers.rolled
                 ? onRegenerate
                 : undefined
             }
@@ -336,24 +337,19 @@ const KEYS: readonly AssetId[] = ["key.1", "key.2", "key.3", "key.4"];
 /** dialog.skillSelect 的切线（4K 原图像素，CSS 顺序上、右、下、左）：原作只切左 20、下 20，左下是切角 */
 const TAG_SLICE = [0, 0, 20, 20] as const;
 
-/** 选项：门槛不够的锁住并写明差几点；带检定的选中后打开确认栏 */
+/** 选项 */
 export function ChoiceList({
   choices,
-  attributes,
   locked,
   onChoose,
 }: {
   readonly choices: readonly Choice[];
-  readonly attributes: View["character"]["attributes"];
   readonly locked: boolean;
   readonly onChoose: (index: number) => void;
 }) {
   return (
     <ol className={styles.choices}>
       {choices.map((c, i) => {
-        const short =
-          c.gate && !c.gate.met ? c.gate.value - (attributes[c.gate.attribute] ?? 0) : 0;
-        const disabled = locked || short > 0;
         const key = KEYS[i];
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: 选项的位置对应数字键，位置就是身份
@@ -361,10 +357,8 @@ export function ChoiceList({
             <button
               type="button"
               className={styles.choice}
-              disabled={disabled}
+              disabled={locked}
               data-check={c.checkId !== null || undefined}
-              data-short={short > 0 || undefined}
-              title={short > 0 ? `${c.gate?.attributeLabel}差 ${short} 点` : undefined}
               onClick={() => onChoose(i)}
             >
               {key ? (
@@ -374,18 +368,10 @@ export function ChoiceList({
               )}
               {c.source && <span className={styles.source}>[{c.source}]</span>}
               <span className={styles.choiceText}>{c.text}</span>
-              {/* 原作 CaptionImageIcons：底是 skill_select 九宫格（4K 切线左 20、下 20），满足染 Green、不满足染 CombatRed */}
-              {c.gate && (
-                <span className={styles.tag} data-met={c.gate.met || undefined}>
-                  <NineSlice id="dialog.skillSelect" tint="var(--tag-tint)" slice={TAG_SLICE} />
-                  {c.gate.attributeLabel} {c.gate.value}
-                  {short > 0 && ` · 差 ${short} 点`}
-                </span>
-              )}
               {c.checkId && (
                 <span className={styles.tag}>
                   <NineSlice id="dialog.skillSelect" tint="var(--tag-tint)" slice={TAG_SLICE} />
-                  检定
+                  冒险
                 </span>
               )}
             </button>

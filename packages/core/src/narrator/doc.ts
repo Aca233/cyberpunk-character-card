@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { LlmResponseFormat } from "../kernel/ports";
 
 /** 从 Zod schema 生成给模型看的简写格式，例如 {"type": "heal", "source": "maxdoc"|"rest"} */
 
@@ -78,4 +79,20 @@ export function commandDoc(type: string, schema: z.ZodType): string {
   const { description, ...shape } = jsonSchemaOf(schema);
   const line = `- ${type}：${render(shape)}`;
   return description ? `${line}\n  ${description}` : line;
+}
+
+/** 构造传给模型供应商的原生 JSON 输出约束；不传 schema 时仅约束返回合法 JSON */
+export function responseJsonSchema(name: string, schema?: z.ZodType): LlmResponseFormat {
+  return {
+    type: "json",
+    name,
+    ...(schema
+      ? {
+          schema: z.toJSONSchema(schema, {
+            io: "input",
+            unrepresentable: "any",
+          }) as Record<string, unknown>,
+        }
+      : {}),
+  };
 }

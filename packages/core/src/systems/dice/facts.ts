@@ -57,6 +57,41 @@ export function checkFactFrom(id: string, check: PreparedCheck, result: CheckRes
   };
 }
 
+/** 本轮定性物理与社会裁决，由回合流程放进 ctx.facts.ruling，伤害、骇入与态势系统据此校验（零掷骰模式） */
+export const RulingFactSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["possible", "costly", "blocked"]).default("costly"),
+  harm: DamageTierSchema.or(z.literal("none")).default("none"),
+  limb: z.boolean().optional(),
+  reason: z.string().optional(),
+});
+export type RulingFact = z.infer<typeof RulingFactSchema>;
+
+export function rulingFactFrom(
+  id: string,
+  ruling?: {
+    readonly kind: "possible" | "costly" | "blocked";
+    readonly harm: "none" | "graze" | "heavy" | "lethal";
+    readonly limb?: boolean | undefined;
+    readonly reason?: string | undefined;
+  },
+): RulingFact {
+  return {
+    id,
+    kind: ruling?.kind ?? "costly",
+    harm: ruling?.harm ?? "none",
+    ...(ruling?.limb === true ? { limb: true } : {}),
+    ...(ruling?.reason ? { reason: ruling.reason } : {}),
+  };
+}
+
+/** 读取本轮定性裁决；没有时返回 undefined */
+export function rulingFact(facts: Readonly<Record<string, unknown>>): RulingFact | undefined {
+  if (facts.ruling === undefined) return undefined;
+  const parsed = RulingFactSchema.safeParse(facts.ruling);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** 读取本轮检定结果；没有检定时返回 undefined，格式不对时报错 */
 export function checkFact(facts: Readonly<Record<string, unknown>>): CheckFact | undefined {
   if (facts.check === undefined) return undefined;
@@ -66,8 +101,9 @@ export function checkFact(facts: Readonly<Record<string, unknown>>): CheckFact |
 }
 
 /**
- * 队员之死的保底：这一轮有检定、检定失败（或大失败），且检定事先写的失败后果里点了这名队员的名字，
- * 才允许写死；否则返回拒绝的原因（最坏是重伤或被抓）
+ * 队员之死的保底：
+ * - 零掷骰模式下要求本轮面临明确致命危机（ruling.harm === "lethal"）；
+ * - 兼容旧掷骰回放时的失败检定点名规则
  */
 export function memberDeathBlocked(
   facts: Readonly<Record<string, unknown>>,
@@ -75,10 +111,15 @@ export function memberDeathBlocked(
 ): string | undefined {
   const check = checkFact(facts);
   const who = names[0] ?? "队员";
-  const why = `${who}是队员：只有检定事先在失败后果里点名写明${who}有致命危险、检定又失败时才会死；没有这样警告过的，最坏写 squad status hurt 或 captured`;
-  if (!check || (check.outcome !== "failure" && check.outcome !== "fumble")) return why;
-  const text = check.failure ?? "";
-  return names.some((n) => n.trim() !== "" && text.includes(n.trim())) ? undefined : why;
+  if (check) {
+    const why = `${who}是队员：只有检定事先在失败后果里点名写明${who}有致命危险、检定又失败时才会死；没有这样警告过的，最坏写 squad status hurt 或 captured`;
+    if (check.outcome !== "failure" && check.outcome !== "fumble") return why;
+    const text = check.failure ?? "";
+    return names.some((n) => n.trim() !== "" && text.includes(n.trim())) ? undefined : why;
+  }
+  const ruling = rulingFact(facts);
+  if (ruling?.harm === "lethal") return undefined;
+  return `${who}是队员：只有在致命危机（harm=lethal）且战场上真出事时才会死；平常受创最坏写 squad status hurt 或 captured`;
 }
 
 /** 内部兼容血量换算基准（前台已改为 0..4 四格具象伤势） */

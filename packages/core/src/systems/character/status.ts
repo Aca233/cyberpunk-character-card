@@ -1,18 +1,11 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
-import { ATTRIBUTE_LABELS, type Attribute } from "../dice";
 import type { characterView } from "./view";
 
-/** 【当前状态】里人物的几组行：开头的名字和属性、习惯和闪回、过往里确认的事 */
+/** 【当前状态】里人物的几组行：名字与履历背景、习惯和闪回、过往里确认的事（彻底不展示属性点） */
 
 type CharacterView = ReturnType<typeof characterView>;
 
 const characterOf = (ctx: StatusContext) => ctx.views.character as CharacterView;
-
-function attributeLine(values: Readonly<Record<Attribute, number>>): string {
-  return (Object.keys(ATTRIBUTE_LABELS) as Attribute[])
-    .map((a) => `${ATTRIBUTE_LABELS[a]} ${values[a]}`)
-    .join("，");
-}
 
 export const characterStatus: readonly SystemStatus[] = [
   {
@@ -20,8 +13,8 @@ export const characterStatus: readonly SystemStatus[] = [
     lines(ctx) {
       const c = characterOf(ctx);
       return [
-        `角色：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
-        `属性：${attributeLine(c.attributes)}；街头声望 ${c.streetCred} 级${c.credHalf ? "（再得半级就升级）" : ""}，${c.credTier}：${c.credWorld}`,
+        `人物：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
+        `街面名声：${c.credTier}——${c.credWorld}`,
       ];
     },
   },
@@ -35,7 +28,7 @@ export const characterStatus: readonly SystemStatus[] = [
         lines.push(`提议过、等玩家确认的习惯：${c.habitOffers.join("；")}（不要再提）`);
       if (c.flashback) {
         lines.push(
-          `闪回中：${c.flashback.past}，第 ${c.flashback.turn}/${c.flashback.turns} 轮；不掷骰、不推进时间、不记账，最后一轮写 flashback end 和确认的事`,
+          `闪回中：${c.flashback.past}，第 ${c.flashback.turn}/${c.flashback.turns} 轮；不推进时间、不记账，最后一轮写 flashback end 和确认的事`,
         );
       } else if (c.pasts.some((p) => !p.used)) {
         lines.push(

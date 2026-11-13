@@ -55,14 +55,6 @@ const PRESENT_MAX = 8;
 /** 追踪最多几条；展开后列全部 */
 const TRACK_MAX = 3;
 
-const ATTRS: readonly (readonly [keyof View["character"]["attributes"], string, AssetId])[] = [
-  ["body", "肉体", "attr.body"],
-  ["reflexes", "反应", "attr.reflexes"],
-  ["tech", "技术", "attr.tech"],
-  ["intelligence", "智力", "attr.intelligence"],
-  ["cool", "镇定", "attr.cool"],
-];
-
 /** 每一块都拿到同一份展开状态，同一时间只展开一处 */
 export interface PeekState {
   readonly expand: Expand | null;
@@ -268,6 +260,7 @@ export function BioMonitor({
       data-layer="os"
       data-low={low || undefined}
       data-open={p.open || undefined}
+      data-char-open={(p.open && !wide) || undefined}
       data-pinned={p.pinned || undefined}
       data-wide={wideOn || undefined}
       data-resizing={resizing || undefined}
@@ -318,24 +311,12 @@ export function BioMonitor({
             ))}
           </div>
         )}
-        {/* 常态就带五项属性和声望、人性，不用展开也看得到 */}
-        <ul className={styles.attrRow} aria-label="属性">
-          {ATTRS.map(([key, label, icon]) => (
-            <li key={key} title={label}>
-              <Asset id={icon} tint="var(--cp-cyan)" height={16} alt={label} />
-              <b>{character.attributes[key] ?? "—"}</b>
-            </li>
-          ))}
-          {character.attributePoints > 0 && (
-            <li className={styles.attrPoints}>+{character.attributePoints}</li>
-          )}
-        </ul>
         <p className={styles.bioLine}>
-          <span>
-            声望 {character.streetCred} · {character.credTier}
+          <span title={`${character.credWorld}${character.credHalf ? "；再得半级声望就升级" : ""}`}>
+            街头声望：{character.credTier}
           </span>
           <span data-stage={humanity.stage}>
-            人性 {humanity.current}/{humanity.cap}
+            人性 {humanity.current}/{humanity.cap} · {humanity.stageLabel}
           </span>
         </p>
         {/* 已装义体去「义体」页签看，人物页签里不再列一排义体名（用户觉得莫名其妙） */}
@@ -404,14 +385,7 @@ function PresentPerson({
         <NineSlice id="map.tooltipBg" tint="rgb(14 14 23 / 88%)" slice={TOOLTIP_SLICE} />
         <NineSlice id="map.tooltipFg" tint="var(--cp-cyan)" slice={TOOLTIP_SLICE} />
         <span className={styles.inner}>
-          {s ? (
-            <>
-              威胁 <em data-threat={s.threat}>{s.threat === "skull" ? "骷髅" : s.threatLabel}</em>
-              {` · ${s.tier}`}
-            </>
-          ) : (
-            "没扫描过"
-          )}
+          {s ? `义体 ${s.chrome.length} 件 · ${s.humanityStage}` : "没扫描过"}
           {person.met ? " · 认识" : ""}
         </span>
       </span>
@@ -491,6 +465,7 @@ export function Unread({
   const shown = items.filter((i) => i.n > 0);
   // 一直显示：这里就是消息的入口，读完了也要找得到
   const newest = view.phone.messages.find((m) => !m.read) ?? null;
+  const totalUnread = view.phone.unread + feed.news.length + feed.police.length;
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
     <div
@@ -512,24 +487,38 @@ export function Unread({
         <Grow open={p.open} title="消息" hint="T" line="var(--cp-red)">
           {full}
         </Grow>
-        {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}
-        <div className={styles.unreadCounts}>
-          {shown.length === 0 ? (
-            <span>没有未读</span>
-          ) : (
-            shown.map((i) => (
-              <span key={i.label}>
-                <Asset id={i.icon} tint="var(--cp-red)" height={18} />
-                {i.label} <b>{i.n}</b>
-              </span>
-            ))
-          )}
-        </div>
-        {newest && (
-          <p className={styles.unreadLatest}>
-            <b>{newest.name}</b>
-            {newest.text}
-          </p>
+        {p.open && tabs ? (
+          <div className={styles.unreadTabs}>
+            {tabs}
+            <span className={styles.unreadTabMeta}>
+              {totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className={styles.unreadCounts}>
+              {shown.length === 0 ? (
+                <span className={styles.unreadIdle}>
+                  <Asset id="notify.attention" tint="var(--cp-red-dim)" height={16} />
+                  没有未读消息
+                </span>
+              ) : (
+                shown.map((i) => (
+                  <span key={i.label}>
+                    <Asset id={i.icon} tint="var(--cp-red)" height={18} />
+                    {i.label} <b>{i.n}</b>
+                  </span>
+                ))
+              )}
+              <kbd className={styles.unreadKey}>T</kbd>
+            </div>
+            {newest && (
+              <p className={styles.unreadLatest}>
+                <b>{newest.name}</b>
+                {newest.text}
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

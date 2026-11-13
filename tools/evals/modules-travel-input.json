@@ -1,7 +1,7 @@
 {
   "id": "modules-travel-input",
-  "title": "说要去哪时带出行模块，不为路途本身检定",
-  "tags": ["modules", "dice"],
+  "title": "说要去哪时带出行模块，不为坐轻轨平白制造冲突",
+  "tags": ["modules", "causality"],
   "setup": {
     "history": [
       {
@@ -13,11 +13,18 @@
   },
   "input": { "text": "吃完坐轻轨去日本町" },
   "expect": {
-    "judge": { "check": "forbidden" },
+    "judge": {
+      "ruling": {
+        "present": false
+      }
+    },
     "modules": {
       "require": ["travel"],
       "forbid": ["combat", "hacking"]
     }
   },
-  "rubric": ["是否没有为坐轻轨本身给检定", "正文是否写清过了多久、到了哪里，而不是停在半路"]
+  "rubric": [
+    "是否没有为坐轻轨本身凭空制造无谓阻碍或检定口吻",
+    "正文是否写清过了多久、到了哪里，而不是停在半路"
+  ]
 }

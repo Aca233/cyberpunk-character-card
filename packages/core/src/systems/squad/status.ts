@@ -13,9 +13,17 @@ export const squadStatus: readonly SystemStatus[] = [
     lines(ctx) {
       const squad = squadOf(ctx);
       const lines: string[] = [];
+      function squadTrustNote(affinity: number): string {
+        if (affinity >= 40) return "过命交情";
+        if (affinity >= 15) return "信得过";
+        if (affinity >= -10) return "一般交情";
+        if (affinity >= -35) return "心存芥蒂";
+        return "随时可能翻脸";
+      }
+
       if (squad.members.length > 0)
         lines.push(
-          `小队（${squad.members.length}/${squad.max}；玩家在输入里调度，队员按专长用自己的属性出手，失败时受伤的是队员）：${squad.members.map((m) => `${m.name}（${m.npc}，${m.specialty}，${m.terms}，${m.statusLabel}，好感 ${m.affinity}；个人麻烦：${m.trouble}）`).join("；")}`,
+          `小队（${squad.members.length}/${squad.max}；玩家在输入里调度，队员按各自专长与身体状况出手，风险和伤亡也算在队员头上）：${squad.members.map((m) => `${m.name}（${m.npc}，${m.specialty}，${m.terms}，${m.statusLabel}，${squadTrustNote(m.affinity)}；个人麻烦：${m.trouble}）`).join("；")}`,
         );
       for (const m of squad.members)
         if (m.owed > 0)

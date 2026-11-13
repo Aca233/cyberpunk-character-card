@@ -1,5 +1,4 @@
-import { BoardSchema, boardCombos, CharacterCardSchema } from "@cp/core";
-import { combos } from "./combos";
+import { BoardSchema, CharacterCardSchema } from "@cp/core";
 import { boardModules } from "./modules";
 
 const library = (id: string) => {
@@ -61,9 +60,6 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
     skills:
       "精通内燃机与底盘调校，熟练绕过普通电子门禁与监控回传；恶土与窄巷驾驶经验丰富。未掌握高阶黑客入侵，未植入攻击型义体，基础枪械射击达标。",
     attributes: { body: 3, reflexes: 3, tech: 5, intelligence: 2, cool: 2 },
-    board: {
-      ...loBoard,
-      combos: boardCombos(loBoard, combos).map(({ requires: _, ...combo }) => combo),
-    },
+    board: loBoard,
   },
 ]);

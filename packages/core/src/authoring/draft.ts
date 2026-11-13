@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
-import { schemaDoc } from "../narrator/doc";
+import { responseJsonSchema, schemaDoc } from "../narrator/doc";
 import { CHROME_PRICES, type PriceBand, WEAPON_PRICES } from "./prices";
 import {
   AUTHORING_LABELS,
@@ -127,6 +127,7 @@ export async function generateAuthoringDraft(
       messages: buildAuthoringPrompt(request, example),
       maxOutputTokens: 1600,
       temperature: 0.5,
+      responseFormat: responseJsonSchema("authoringDraft"),
     },
     signal,
   )) {

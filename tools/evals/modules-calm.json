@@ -24,7 +24,9 @@
   },
   "expect": {
     "judge": {
-      "check": "forbidden"
+      "ruling": {
+        "present": false
+      }
     },
     "modules": {
       "forbid": ["combat", "cyberpsychosis"]

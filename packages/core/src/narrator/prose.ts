@@ -13,10 +13,10 @@ import {
   type ProseBlock,
   ProseBlockSchema,
 } from "../schemas/character";
-import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
+import { AttributeSchema } from "../systems/dice/schema";
 
 /**
- * 角色正文：按名片、属性、主板和别的区块，让辅助模型写外貌、背景故事、性格、说话方式、
+ * 角色正文：按名片、主板、本事和别的区块，让辅助模型写外貌、背景故事、性格、说话方式、
  * 场景、开场白和对话示例。四种写法：生成（不看原文）、重写（换个写法）、续写（接着原文往下写）、
  * 润色（不改内容只改文字）。锁定的区块不能写，写别的区块时当作定稿。流式返回，不进回合日志。
  * 另有一键成稿（第三期，用户定的 2026-10-30："保留逐块重写、续写、润色、锁定，加一键成稿"）：
@@ -114,20 +114,10 @@ const STYLE = [
   "原作人物：主板上确立为旧识的原作人物可在经历中展开交集，但必须严格遵循其在夜之城原作中的真实性格与地位；其余原作核心角色仅可作为街头传闻一笔带过。",
 ];
 
-function attributesLine(card: ProseCard): string {
-  if (!card.attributes) return "";
-  const parts = (Object.keys(ATTRIBUTE_LABELS) as Attribute[]).flatMap((a) => {
-    const v = card.attributes?.[a];
-    return v === undefined ? [] : [`${ATTRIBUTE_LABELS[a]} ${v}`];
-  });
-  return parts.length > 0 ? `属性（3 普通，6 出众）：${parts.join("、")}` : "";
-}
-
-/** 名片、属性、主板、本事：逐块写和一键成稿都放在提示词最前面 */
+/** 名片、主板、本事：逐块写和一键成稿都放在提示词最前面 */
 function cardFacts(card: ProseCard): string[] {
   return [
     `名字：${card.name}${card.alias ? `，外号${card.alias}` : ""}；人称：${card.pronoun}${card.origin ? `；出身：${card.origin}` : ""}`,
-    attributesLine(card),
     card.board ? boardBrief(card.board) : "",
     card.skills && `本事：${card.skills}`,
   ];

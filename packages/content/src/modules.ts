@@ -5,7 +5,7 @@ import { BoardModuleSchema } from "@cp/core";
  * 负面经历的点数是返还的。人物名是自创的，不用原作角色。数值暂定，试玩后再调
  */
 export const boardModules = BoardModuleSchema.array().parse([
-  // 出身
+  // 出身（打破原版 3 出身局限，扩充为 17 种鲜活夜之城单层出身背景，均 0 点免费，自带家底、故人 NPC 与身世钩子）
   {
     id: "street-kid",
     slot: "origin",
@@ -20,7 +20,7 @@ export const boardModules = BoardModuleSchema.array().parse([
   {
     id: "nomad",
     slot: "origin",
-    label: "流浪者",
+    label: "恶土部族流浪者",
     points: 0,
     tags: ["恶土", "家族", "车"],
     ability:
@@ -31,13 +31,187 @@ export const boardModules = BoardModuleSchema.array().parse([
   {
     id: "corpo",
     slot: "origin",
-    label: "企业员工",
+    label: "企业雇员",
     points: 0,
-    tags: ["公司"],
+    tags: ["巨企", "公司"],
     ability:
       "曾跻身巨型跨国企业的摩天大楼：洞悉企业内部暗算晋升的潜规则与商业协议漏洞，能一眼看穿高管的虚张声势，懂得在冷酷博弈中周旋自保",
     hook: "前东家的企业安保与反情报卷宗里，依然保留着关于你的监控评估档案",
     checks: ["cool"],
+  },
+  {
+    id: "origin-arasaka-ex",
+    slot: "origin",
+    label: "荒坂反情报弃子",
+    points: 0,
+    tags: ["巨企", "公司", "荒坂"],
+    ability:
+      "曾任职于荒坂塔反情报外围行动组：熟悉企业安保巡查机制、加密通信暗号与部门派系倾轧，手头作废的旧员工密钥或许还能在紧急关头发挥奇效",
+    hook: "派系清洗后你虽侥幸保命，但荒坂反情报部的猎犬至今仍将你标在离职监控清单上",
+    people: [{ name: "佐藤真", role: "荒坂反情报部现任专员，私下欠过你一条命的旧同事" }],
+    checks: ["intelligence", "cool"],
+  },
+  {
+    id: "origin-ex-ncpd",
+    slot: "origin",
+    label: "前 NCPD 巡警",
+    points: 0,
+    tags: ["巨企", "警察", "枪"],
+    ability:
+      "曾在夜之城警局穿过防弹警服巡逻高危街区：深谙警队无线电通联暗语、现场勘查与出警战术规程，分局档案室内尚有旧部人脉",
+    hook: "当年因触碰权贵黑幕被迫脱下警服时，你悄悄扣下了一桩涉企凶杀悬案的绝密卷宗",
+    people: [
+      { name: "卡斯蒂略", role: "昔日巡警时期的巡逻搭档，为人正直固执，信守旧情但恪守底线" },
+    ],
+    checks: ["cool"],
+  },
+  {
+    id: "origin-trauma-medic",
+    slot: "origin",
+    label: "创伤小组前外勤医护",
+    points: 0,
+    tags: ["巨企", "公司", "医疗"],
+    ability:
+      "曾随创伤小组浮空装甲车深入交火区抢救白金会员：精通战场止血、神经除颤与高压火力下的战术掩护，一眼便知伤者还能撑几分钟",
+    hook: "一次救援任务中你违抗「放弃无保平民」的指令被公司除名，当时的车载黑匣子录音仍在某处流转",
+    people: [{ name: "琳达·陈", role: "创伤小组资深航电调度员，仍能在暗中为你调阅急救档案" }],
+    checks: ["tech"],
+  },
+  {
+    id: "origin-corpo-pr",
+    slot: "origin",
+    label: "企业危机公关猎犬",
+    points: 0,
+    tags: ["巨企", "公司", "谈判"],
+    ability:
+      "专门替公司高管擦屁股、封口目击者与操纵媒体舆情的幕后白手套：精于抓人软肋、伪造不在场证明与体面威胁",
+    hook: "你亲手压下的某桩企业实验室泄漏丑闻正在死灰复燃，知情者接连离奇暴毙",
+    people: [{ name: "维克多·索恩", role: "游走于各大企业法务部的善后掮客，手握不少高管黑料" }],
+    checks: ["cool"],
+  },
+  {
+    id: "origin-war-vet",
+    slot: "origin",
+    label: "公司战争退伍老兵",
+    points: 0,
+    tags: ["巨企", "战斗", "枪"],
+    ability:
+      "从企业代理战争的焦土战壕里爬出来的活口：习惯在硝烟与弹片中冷静判断火力死角，对制式军用枪械与爆破物了如指掌",
+    hook: "退役时军方承诺的神经修复补贴被层层克扣，当年同排战友的抚恤金下落不明",
+    people: [
+      { name: "老铁砧", role: "同在一个战壕扛过轰炸的退伍军士长，如今在河谷区经营黑市靶场" },
+    ],
+    checks: ["body"],
+  },
+  {
+    id: "origin-clinic-apprentice",
+    slot: "origin",
+    label: "黑诊所学徒",
+    points: 0,
+    tags: ["街头", "医疗", "义体"],
+    ability:
+      "混迹于无照黑诊所的消毒水与血腥气味中长大：擅长枪伤缝合与紧急断肢止血，认得市面各大厂商的义体翻新成色与走私货源",
+    hook: "你曾帮一名满身弹孔的神秘客取出一枚带军用级追踪信标的芯片，麻烦随之找上门来",
+    people: [
+      { name: "泰勒医生", role: "脾气暴躁但手艺过硬的黑诊所义体医生，曾手把手教你拆解神经插座" },
+    ],
+    checks: ["tech"],
+  },
+  {
+    id: "origin-gang-runner",
+    slot: "origin",
+    label: "帮派底层奔卒",
+    points: 0,
+    tags: ["街头", "帮派"],
+    ability:
+      "曾在街头帮派底层充当生死线上的跑腿马仔：熟记弱肉强食的帮规，认得各堂口头目的嘴脸，深谙在枪口下何时该闭嘴",
+    hook: "当年经手的一批黑市神经芯片半路失窃，幕后堂口至今仍把这笔烂账记在你的头上",
+    people: [{ name: "老秦", role: "带你混迹街头的帮派老油条，如今掌管着两条街道的地下盘口" }],
+    checks: ["cool"],
+  },
+  {
+    id: "origin-pit-fighter",
+    slot: "origin",
+    label: "地下铁笼拳手",
+    points: 0,
+    tags: ["街头", "格斗"],
+    ability:
+      "在地下黑市铁笼拳赛的血泊与欢呼声中搏过命：抗击打神经早已被粗暴磨砺，擅长贴身缠抱与致命关节锁",
+    hook: "在那场被资本操控的假拳决赛里你拒绝倒下，输得倾家荡产的庄家正四处悬赏你的双拳",
+    people: [{ name: "铜牙", role: "地下铁笼拳赛的退役经纪人，熟知各区黑拳庄家的底细" }],
+    checks: ["body"],
+  },
+  {
+    id: "origin-bd-editor",
+    slot: "origin",
+    label: "黑超梦剪辑师",
+    points: 0,
+    tags: ["街头", "超梦", "技术"],
+    ability:
+      "曾混迹于歌舞伎区地下超梦产业的非线性编辑台：精通神经调谐装置与痛觉/快感波形解析，能捕捉常人无法察觉的潜意识感官痕迹",
+    hook: "你曾亲手剪辑过一段涉及市政高层丑闻的未删减黑超梦原片，原片买主正在灭口知情人",
+    people: [{ name: "零度", role: "歌舞伎区地下超梦作坊的神经调音师，手头总有稀奇古怪的原片" }],
+    checks: ["intelligence"],
+  },
+  {
+    id: "origin-fixer-protege",
+    slot: "origin",
+    label: "中间人跑腿学徒",
+    points: 0,
+    tags: ["街头", "谈判"],
+    ability:
+      "从小在老牌中间人手下递送加密芯片、踩点接应与清点佣金：熟悉夜之城各区地下委托的行规与佣兵身价，懂得如何与各方势力体面传话",
+    hook: "领你入行的老联络人突然神秘失踪，只留给你一部存满未结悬赏的加密终端",
+    people: [{ name: "宋叔", role: "半隐退的沃森区老牌联络人，曾教你如何识别委托人的谎言" }],
+    checks: ["cool"],
+  },
+  {
+    id: "origin-netrunner",
+    slot: "origin",
+    label: "野狐禅潜网黑客",
+    points: 0,
+    tags: ["潜网", "黑客"],
+    ability:
+      "在暗网黑客论坛的碎片代码中野蛮自学成才：懂得破译数据矩阵的入侵协议，能在网络接入仓支持下发起底层快速破解",
+    hook: "早年潜网演练时曾在某企业子网留下专属黑客签名，如今已有高阶网监节点在追踪该代号",
+    people: [{ name: "幽灵回声", role: "只在加密BBS上露面的暗网领路人，曾救过被黑冰锁死的你" }],
+    checks: ["intelligence"],
+  },
+  {
+    id: "origin-arasaka-netrunner",
+    slot: "origin",
+    label: "荒坂叛逆潜网客",
+    points: 0,
+    tags: ["潜网", "黑客", "公司", "荒坂"],
+    ability:
+      "曾是荒坂子网的受训潜网员，携一份加密冷备份叛逃出局：深谙企业级冰墙架构与反追踪协议，能在高危子网中冷静周旋",
+    hook: "脑后神经插槽里仍藏着半截未破译的旧网密钥，暗网买家与荒坂猎犬都在搜寻你的信号",
+    people: [{ name: "雾岛", role: "同样从荒坂子网逃出来的潜网同僚，如今隐姓埋名靠倒卖密钥维生" }],
+    checks: ["intelligence"],
+  },
+  {
+    id: "origin-merc-survivor",
+    slot: "origin",
+    label: "雇佣兵战术组幸存者",
+    points: 0,
+    tags: ["佣兵", "战斗", "枪"],
+    ability:
+      "曾跟随正规雇佣兵小队接过无数脏活：通晓潜入踩点、交叉掩护撤离与黑市分赃流程，在实战交火的腥风血雨中见过生死大场面",
+    hook: "小队在最后一次突袭行动中惨遭伏击覆灭，侥幸活下来的你仍在追查究竟是谁出卖了撤退坐标",
+    people: [{ name: "灰狼", role: "当年小队覆灭之夜负责外围接应的狙击手，至今仍在追查内鬼" }],
+    checks: ["reflexes"],
+  },
+  {
+    id: "origin-badlands-smuggler",
+    slot: "origin",
+    label: "荒原边境走私客",
+    points: 0,
+    tags: ["恶土", "走私", "车"],
+    ability:
+      "常年驾车在恶土哨卡与城郊隔离墙之间运送违禁暗货：熟悉边境联合检查站的巡逻盲区与改装夹层藏匿技巧，拥有稳定的地下黑市销赃网络",
+    hook: "最后一次边境运送中整箱高价军火被巡逻队扣押，幕后货主至今仍在追索这笔高额赔付",
+    people: [{ name: "达科塔·小杰", role: "恶土边境中继站的改装技师，专门帮走私车改暗格与假车牌" }],
+    checks: ["cool", "tech"],
   },
   // 过往
   {
@@ -157,7 +331,84 @@ export const boardModules = BoardModuleSchema.array().parse([
     hook: "最后一次边境运送中整箱高价军火被企业巡逻队扣押，幕后货主至今仍在追索这笔高额赔付",
     checks: ["cool"],
   },
-  // 本事 / 特长
+  // 角色特质 · 身心禀赋与处事作风（CK3 式个人先天/性格特质，带「禀赋」标签）
+  {
+    id: "pain-editor-nerve",
+    slot: "skill",
+    label: "痛觉钝化",
+    points: 2,
+    tags: ["禀赋", "体质"],
+    ability:
+      "天生痛觉阈值异于常人或经历过残酷脱敏磨砺，中弹、骨折或遭受电击时仍能面不改色地强行搏命",
+    checks: ["body"],
+  },
+  {
+    id: "ice-veins",
+    slot: "skill",
+    label: "绝对冷静",
+    points: 2,
+    tags: ["禀赋", "心智"],
+    ability:
+      "哪怕被大口径枪口顶住额头或身处交叉火力网中心，心率也稳如死水，任何威逼利诱都休想让你露出破绽",
+    checks: ["cool"],
+  },
+  {
+    id: "danger-sense",
+    slot: "skill",
+    label: "危险直觉",
+    points: 2,
+    tags: ["禀赋", "感知"],
+    ability: "后颈寒毛比战术雷达更灵，总能在红外狙击线锁定、埋伏圈合拢或合约陷阱触发前半秒察觉杀机",
+    checks: ["reflexes", "intelligence"],
+  },
+  {
+    id: "silver-tongue",
+    slot: "skill",
+    label: "八面玲珑",
+    points: 2,
+    tags: ["禀赋", "社交"],
+    ability:
+      "天生自来熟与察言观色的高手，见人说人话、见鬼说鬼话，无论在帮派堂口还是高管酒会都能迅速混熟套出底牌",
+    checks: ["cool"],
+  },
+  {
+    id: "lone-wolf",
+    slot: "skill",
+    label: "孤狼信条",
+    points: 1,
+    tags: ["禀赋", "作风"],
+    ability: "习惯独来独往、从不把后背交给外人；单兵潜入与孤身绝境突围时专注力拉满，反应快人一步",
+    checks: ["reflexes"],
+  },
+  {
+    id: "chrome-junkie",
+    slot: "skill",
+    label: "铬金狂热",
+    points: 1,
+    tags: ["禀赋", "义体"],
+    ability:
+      "对精密义体与机械结构有着近乎偏执的迷恋，仅凭伺服电机的微弱嗡鸣就能听出对手装了哪家厂商的植入物",
+    checks: ["tech"],
+  },
+  {
+    id: "eidetic-memory",
+    slot: "skill",
+    label: "过目不忘",
+    points: 2,
+    tags: ["禀赋", "心智"],
+    ability: "扫过一眼的安保巡逻表、复杂门禁拓扑图与数据流结构都能在脑海里分毫不差地精准复刻",
+    checks: ["intelligence"],
+  },
+  {
+    id: "bloodlust-rush",
+    slot: "skill",
+    label: "嗜血肾上腺",
+    points: 2,
+    tags: ["禀赋", "战斗"],
+    ability: "见血越狠、神经兴奋度越高，近身厮杀进入白热化时爆发力与出招速度惊人，气势如虹",
+    checks: ["body", "reflexes"],
+  },
+  // 角色特质 · 战斗与技艺专长
   {
     id: "driving",
     slot: "skill",

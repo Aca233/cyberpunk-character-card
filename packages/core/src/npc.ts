@@ -1,11 +1,12 @@
-import { computeNpcVectors, isCoreTruthUnlocked, type Npc, type SeedTag } from "./systems/npc";
+import { hasDeepBond, type Npc, type SeedTag } from "./systems/npc";
 import { periodOf } from "./systems/world";
 
 /**
- * 《赛博朋克 2077：边缘账本》3.0 自走式 NPC 与去中心化人际引擎门面模块（Chapter 4 & Chapter 7）
- * - 三维关系向量 `{ trust, leverage, respect }`（-100 ~ +100）
- * - `Mask vs CoreTruth` 双层人格锁动态裁剪器（`trust < 40 && leverage < 40` 时隐藏真我与秘密）
- * - 现实利益/胁迫背叛判定、24 小时真实作息与电话闭门羹、同行竞争池（Rival Pool）与 `SeedTag` 路人升格机
+ * 夜之城真实人际动力学门面：
+ * - 表里分层（未建立深度关系或利益牵绊前，只展示社交表层诉求与防备；深交后才显露隐秘动机）
+ * - 24 小时现实作息与拒接来电（不再依赖数值阈值，只看时段、职业习惯、手上正在忙的事、人情与过往经历）
+ * - 路人轻量种子（SeedTag）多次碰面升格
+ * （已移除 trust>=40 解锁秘密与 externalWeight > trust+respect 数学背叛公式）
  */
 
 export interface CroppedNpcPersona {
@@ -14,75 +15,66 @@ export interface CroppedNpcPersona {
   readonly role: string;
   readonly voice: string;
   readonly maskWant: string;
-  readonly coreTruthUnlocked: boolean;
+  readonly coreTruthRevealed: boolean;
   readonly coreSecret: string | null;
 }
 
-/** 按 Trust/Leverage 动态裁剪 NPC 人设：未达标者仅暴露社交面具与语言指纹 */
+/** 裁剪给前端/非剧透视角的 NPC 人设：真正涉密前保密核心底牌 */
 export function cropNpcPersona(npc: Npc): CroppedNpcPersona {
-  const unlocked = isCoreTruthUnlocked(npc);
+  const revealed = hasDeepBond(npc);
   return {
     id: npc.id,
     name: npc.name,
     role: npc.role,
     voice: npc.voice,
     maskWant: npc.want,
-    coreTruthUnlocked: unlocked,
-    coreSecret: unlocked ? (npc.secret ?? null) : null,
+    coreTruthRevealed: revealed,
+    coreSecret: revealed ? (npc.secret ?? null) : null,
   };
 }
 
 /**
- * 现实利益与胁迫背叛判定：
- * 当外部存在巨额收买或灭口胁迫（externalWeight，0~150）且大于 `trust + respect` 时，触发背叛/出卖
- */
-export function evaluateBetrayal(
-  npc: Pick<Npc, "affinity" | "ledger" | "known" | "vectors">,
-  externalTemptationOrThreatWeight: number,
-): { readonly betrayed: boolean; readonly margin: number; readonly reason: string } {
-  const { trust, respect } = computeNpcVectors(npc);
-  const threshold = trust + respect;
-  const betrayed =
-    externalTemptationOrThreatWeight > 0 && externalTemptationOrThreatWeight > threshold;
-  return {
-    betrayed,
-    margin: externalTemptationOrThreatWeight - threshold,
-    reason: betrayed
-      ? `外部筹码/威胁（${externalTemptationOrThreatWeight}）压倒了信任与敬畏之和（${threshold}），触发反水出卖`
-      : `信任与敬畏之和（${threshold}）抵御了外部诱惑（${externalTemptationOrThreatWeight}）`,
-  };
-}
-
-/**
- * 24 小时真实作息与电话接听判定：
- * 深夜/凌晨（21:00 ~ 08:59）给非夜行职业且信任度 < 45 的人物打电话，或对方正在忙棘手活计，会转入语音信箱或被挂断
+ * 24 小时真实作息与全息来电接听判定：
+ * - 深夜/凌晨给非夜行生计的人打电话（且非熟人紧急牵绊），对方关机或挂断
+ * - 对方手上正忙着手术、交火、潜网、审讯、逃亡或开会时，无人接听
+ * - 若双方记着未了的仇怨，大概率直接拉黑/不接
  */
 export function evaluatePhoneAvailability(
-  npc: Pick<Npc, "name" | "role" | "doing" | "affinity" | "ledger" | "known" | "vectors">,
+  npc: Pick<Npc, "name" | "role" | "doing" | "met" | "relation" | "ledger" | "known">,
   nowMinutes: number,
 ): { readonly answered: boolean; readonly reason?: string } {
   const period = periodOf(nowMinutes);
-  const { trust, leverage } = computeNpcVectors(npc);
   const isNightOwl = /中间人|酒保|黑客|佣兵|玩偶|夜店|莫克斯/.test(npc.role);
+  const deep = hasDeepBond(npc);
+  const hasGrudge = npc.ledger.some((e) => e.settledAt === null && e.kind === "grudge");
 
-  if ((period === "night" || period === "dawn") && !isNightOwl && trust < 45 && leverage < 40) {
+  if (hasGrudge && !npc.ledger.some((e) => e.settledAt === null && e.kind === "owesYou")) {
     return {
       answered: false,
-      reason: `正值${period === "night" ? "深夜" : "凌晨"}，${npc.name}已将私人通讯切入免打扰语音信箱（或被吵醒后不耐烦地直接挂断）`,
+      reason: `${npc.name}和你心里还记着梁子，屏幕亮了两下就直接挂断拒接了`,
     };
   }
-  if (npc.doing && /手术|交火|潜网|审讯|逃亡|开会/.test(npc.doing.text) && leverage < 50) {
+
+  if ((period === "night" || period === "dawn") && !isNightOwl && !deep) {
     return {
       answered: false,
-      reason: `${npc.name}此刻正忙于「${npc.doing.text}」，全息呼叫无人接听，稍后才会回拨`,
+      reason: `现在是${period === "night" ? "深夜" : "凌晨"}，${npc.name}不是熬夜吃街头饭的人，这通全息呼叫直接转进了语音信箱`,
     };
   }
+
+  if (npc.doing && /手术|交火|潜网|审讯|逃亡|开会/.test(npc.doing.text)) {
+    return {
+      answered: false,
+      reason: `${npc.name}眼下正脱不开身（${npc.doing.text}），响了几声自动断线，得晚点再回拨`,
+    };
+  }
+
   return { answered: true };
 }
 
 /**
  * 路人轻量种子（SeedTag）交集记录与升格判定：
- * 当发生第 2 次重逢或玩家主动深交时，返回 `promoteToFullCard: true`
+ * 当发生第 2 次碰面或深度交谈时，返回 `promoteToFullCard: true`
  */
 export function recordSeedEncounter(
   existing: Readonly<Record<string, SeedTag>>,
@@ -108,8 +100,7 @@ export function recordSeedEncounter(
 }
 
 /**
- * 夜之城活跃同行佣兵竞争池（Rival Merc Pool）：
- * 委托拖延过久会被他们截胡，或在现场撞车争抢同一目标
+ * 夜之城同行业生计竞争者名录（用于真实市井流言、抢单风声或场外背景交汇）
  */
 export const RIVAL_MERC_POOL = [
   {

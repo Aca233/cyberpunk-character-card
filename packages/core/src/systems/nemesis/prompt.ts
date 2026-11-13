@@ -1,5 +1,4 @@
 import type { RuleModule } from "../../kernel/system";
-import { DV_MOD_CAP, MOD_STEP } from "../dice";
 import { formatGameTime } from "../world";
 import {
   HOW_MAX,
@@ -25,11 +24,11 @@ export const nemesisRules: RuleModule<NemesisState> = {
     input.mode !== "ooc" &&
     (state.nemeses.length > 0 || state.recent !== null || WORDS.test(input.text)),
   text: `- 有人物卡、活着的敌人在战斗里逃走（combat foe 写了 fled），或战斗结束后 ${NEMESIS_RISE_HOURS} 小时内被玩家放走，而且真结下了梁子（被当众羞辱、丢了地盘或手下、发誓报复），写 nemesis rise 把他升级成宿敌：how 写他是怎么输给玩家的（${HOW_MAX} 字以内）。同时最多 ${NEMESES_MAX} 个；只是跑掉的杂鱼不要升。
-- rise 或之后的 prep 写他回来前做的准备：against 写玩家最常用的打法（${STYLES}），按玩家这一路的检定和打法判断；prep 写他怎么专克这一手（例如装了防火墙专克快速破解，${PREP_MAX} 字以内）。打法变了可以再写 prep。
+- rise 或之后的 prep 写他回来前做的准备：against 写玩家最常用的打法（${STYLES}），按玩家这一路实际使顺手的战斗与应对方式判断；prep 写他怎么专克这一手（例如装了防火墙专克快速破解，${PREP_MAX} 字以内）。打法变了可以再写 prep。
 - 玩家扫描他、找人打听或亲眼看穿时写 nemesis reveal；在这之前正文只露端倪，不点破准备的内容。
 - 他什么时候亲自露面由你按情势定；没露面时通过消息、传闻和被他找过麻烦的人带出他的动静。他在屏幕外的报复（打听玩家的下落、找玩家在乎的人麻烦、抢玩家的单子）记在【城里在发酵的事】里，正文写这些行动的后果，不要自己另编一次。
 - 了结宿敌写 nemesis end：end 写 killed（要先写他的死）、reconciled 或 gone（彻底退场），text 写怎么了结的。街头声望由代码自动加 ${NEMESIS_CRED_HALVES / 2} 级，不要另写 streetCred。`,
-  judge: `- 玩家对上宿敌，用的打法正是他准备专克的（【宿敌】里写了专克什么）时，dvMods 加一项：source 写「宿敌的准备：他的名字」，+${MOD_STEP}，和其他修正合计不超过 +${DV_MOD_CAP}。玩家还不知道这个准备也照样加。`,
+  judge: `- 玩家对上宿敌，用的打法正是他准备专克的（【宿敌】里写了专克什么）时，对方有备而来、手里握着克制手段（反制黑冰、重甲、埋伏等），玩家再用这套老办法会被直接卡死或反咬，裁决必须如实体现这份针对性优势。玩家还不知道这个准备也照样生效。`,
 };
 
 /**

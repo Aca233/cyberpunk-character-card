@@ -8,6 +8,8 @@ export const HomeDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   /** 出身模块 id（street-kid、nomad、corpo），或 default */
   origin: z.string().min(1),
+  /** 共享同一处开局住所的出身模块 id 列表 */
+  origins: z.array(z.string().min(1)).optional(),
   name: z.string().min(1).max(24),
   /** 地点表里的 id */
   location: z.string().min(1),

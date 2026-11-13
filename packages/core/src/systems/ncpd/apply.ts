@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
-import { checkFact } from "../dice";
+import { checkFact, rulingFact } from "../dice";
 import { locationCatalog, type WorldClockState } from "../world";
 import {
   ALERT_EXCLUDED_DISTRICTS,
@@ -110,6 +110,10 @@ export function applyNcpd(
     return fail(
       "检定没过，警情没处理完：写对方跑了、人质出事或者 NCPD 先到的后果；警情还挂着，可以再试或者写 drop",
     );
+  const ruling = check ? undefined : rulingFact(ctx.facts);
+  if (ruling?.kind === "blocked") {
+    return fail(ruling.reason ?? "现场局势被阻断，这起警情还没处理完");
+  }
   draft.alerts.splice(index, 1);
   draft.cleared += 1;
   return {

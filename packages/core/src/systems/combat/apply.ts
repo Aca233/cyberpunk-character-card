@@ -1,7 +1,6 @@
 import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
-import { OPPONENT_TIERS } from "../dice";
 import { SERVICES } from "../economy";
 import { type ItemDef, itemCatalog } from "../inventory";
 import type { NpcState } from "../npc";
@@ -141,7 +140,7 @@ export function startCombat(
   // 上一架没捡走的东西留不到这一架
   if (draft.last) draft.last.loot = [];
   draft.active = { startedAt: ctx.now, district: districtHere(ctx), foes };
-  const named = foes.map((f) => `${f.name}（${OPPONENT_TIERS[f.tier].label}）`);
+  const named = foes.map((f) => (f.gang ? `${f.gang}的${f.name}` : f.name));
   return ok(`动手了：${named.join("、")}`);
 }
 

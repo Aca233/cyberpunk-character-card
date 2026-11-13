@@ -97,7 +97,7 @@ export const SquadCommandSchema = z
     reason: z.string().trim().min(1).max(80),
   })
   .describe(
-    "小队：offer 是有人物卡、见过面的人在剧情里答应跟玩家干（写 kind、friend 写 share、hired 写 wage，再写 specialty 和 trouble），要玩家在小队面板确认才算入队；leave 队员自己离开或收回请求；status 写队员 ok、hurt、captured；dead 队员死亡（只有确认条事先点名警告过致命危险、检定又失败时才写）",
+    "小队：offer 是有人物卡、见过面的人在剧情里答应跟玩家干（写 kind、friend 写 share、hired 写 wage，再写 specialty 和 trouble），要玩家在小队面板确认才算入队；leave 队员自己离开或收回请求；status 写队员 ok、hurt、captured；dead 队员死亡（只有场面进入必死绝境 lethal 且确实避无可避时才写）",
   );
 export type SquadCommand = z.infer<typeof SquadCommandSchema>;
 

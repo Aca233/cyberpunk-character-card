@@ -82,7 +82,7 @@ export const DamageCommandSchema = z
     reason: z.string().min(1),
   })
   .describe(
-    "受伤记账：出现在检定失败或惨胜（Costly）受反击代价的那一轮，档位不超过事先说明的 damage；limb 只在写了 limb 的致命档失败时写",
+    "受伤记账：当本轮物理与局势裁决确认玩家受伤、或惨胜付出身体代价时写入；档位不超过裁决的伤害范围；limb 只在写明断肢级重创时写",
   );
 export type DamageCommand = z.infer<typeof DamageCommandSchema>;
 

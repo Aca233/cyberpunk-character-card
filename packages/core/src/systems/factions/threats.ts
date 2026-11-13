@@ -57,7 +57,7 @@ export function turfSection({
     const attitude = currentAttitude(state, f);
     if (attitude === "kos") {
       lines.push(
-        `- ${f.name}（${f.id}）对玩家${attitudeLabel(f.kind, attitude)}，这里是它的地盘${place.district}：他们随时会找上门（埋伏、堵路、开枪），什么时候来、怎么来看局面，玩家躲进室内或飞快离开也只能拖一时；${f.kind === "corp" ? "公司派的是外包的打手或安保小队" : "来的是这个帮派的人"}，按威胁档位写战斗`,
+        `- ${f.name}（${f.id}）对玩家${attitudeLabel(f.kind, attitude)}，这里是它的地盘${place.district}：他们随时会找上门（埋伏、堵路、开枪），什么时候来、怎么来看局面，玩家躲进室内或飞快离开也只能拖一时；${f.kind === "corp" ? "公司派的是外包的打手或安保小队" : "来的是这个帮派的人"}，按对方的真实火力与人数写冲突`,
       );
     } else if (attitude === "hostile") {
       lines.push(

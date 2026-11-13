@@ -188,7 +188,7 @@ export const VehicleCommandSchema = z
       ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
   })
   .describe(
-    "载具：buy 买车（代码按车价扣钱）；steal 偷车（本轮要技术门槛达标或检定成功，写 witnesses）；damage 车受损一档；wreck 报废；repair 修好受损的车（代码按车价一成收钱）；abandon 扔掉；chase 追车或被追（本轮要掷反应，stake 写失败的代价）",
+    "载具：buy 买车（代码按车价扣钱）；steal 偷车（需突破防盗/物理阻拦成功，写 witnesses）；damage 车受损一档；wreck 报废；repair 修好受损的车（代码按车价一成收钱）；abandon 扔掉；chase 追车或被追（需有惊险追逐因果且写清 stake 代价）",
   );
 export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
 

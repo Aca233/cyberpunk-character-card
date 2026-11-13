@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 import {
   BOARD_SLOT_LABELS,
@@ -8,12 +9,22 @@ import {
   boardModules,
   MODULE_POINTS,
 } from "../schemas/board";
-import { ATTRIBUTE_LABELS, type Attribute } from "../systems/dice/schema";
+import { responseJsonSchema } from "./doc";
 
 /**
- * 自写模块的解读：玩家写一段设定，辅助模型整理成模块（名字、建议标价、标签、能力、钩子、人物、
- * 加成属性），和原作设定冲突的地方只提醒。标价由代码截到插槽的范围里，玩家还可以手动改
+ * 自写模块的解读：玩家写一段设定，辅助模型整理成模块（名字、建议标价、标签、能力、钩子、人物），
+ * 和原作设定冲突的地方只提醒。标价由代码截到插槽的范围里，玩家还可以手动改
  */
+
+export const ModuleReplySchema = z.object({
+  label: z.string(),
+  points: z.number().int(),
+  tags: z.array(z.string()),
+  ability: z.string(),
+  hook: z.string(),
+  people: z.array(z.object({ name: z.string(), role: z.string() })),
+  conflicts: z.array(z.string()),
+});
 
 export interface ModuleRequest {
   readonly slot: BoardSlot;
@@ -31,27 +42,24 @@ export interface ModuleReading {
   readonly warnings: readonly string[];
 }
 
-const ATTRIBUTES = Object.keys(ATTRIBUTE_LABELS) as Attribute[];
-
 export function buildModulePrompt(request: ModuleRequest): LlmMessage[] {
   const label = BOARD_SLOT_LABELS[request.slot];
   const [min, max] = MODULE_POINTS[request.slot];
   const pricing =
     request.slot === "flaw"
-      ? `points 是返还的背景点，${min}–${max}：麻烦越大、越容易找上门，返还越多`
+      ? `points 是返还的定制点，${min}–${max}：麻烦越大、越容易找上门，返还越多`
       : request.slot === "origin"
-        ? `points 是花费的背景点，${min}–${max}：普通出身 0，自带明显优势的出身 1–2`
-        : `points 是花费的背景点，${min}–${max}：普通 1–2，强力 3–4（能直接解决一类难题的才算强力）`;
+        ? `points 是花费的定制点，${min}–${max}：普通出身 0，自带明显优势的出身 1–2`
+        : `points 是花费的定制点，${min}–${max}：普通 1–2，强力 3–4（能直接解决一类难题的才算强力）`;
   const system = [
     "你在帮玩家把自己写的一段角色设定，整理成《赛博朋克 2077》夜之城文字角色扮演游戏里的一块“模块”。",
     "只输出一个 JSON 对象，不要代码块，不要别的文字。字段：",
     '- "label"：模块名，24 字以内',
     `- "points"：整数，${pricing}`,
     `- "tags"：1–6 个标签，每个 12 字以内；能用这些现成标签就用：${(request.knownTags ?? []).join("、") || "（无）"}`,
-    `- "ability"：200 字以内，${request.slot === "flaw" ? "这段负面经历让角色眼下处在什么处境" : "这块模块让角色已经能做到什么"}，写具体的、叙事模型能据此判断行动可不可行的事`,
-    '- "hook"：200 字以内，叙事模型可以拿来做文章的剧情线头；没有就写空字符串',
+    `- "ability"：200 字以内，${request.slot === "flaw" ? "这段负面缺陷让角色眼下处在什么真实处境" : "这块模块让角色实际懂什么手艺、掌握什么经验或门路"}，写具体、扎实的事实，方便叙事根据真实能力判断`,
+    '- "hook"：200 字以内，叙事可以拿来做文章的剧情线头；没有就写空字符串',
     `- "people"：${request.slot === "past" || request.slot === "flaw" ? "0–2 个带出的人物" : "空数组"}，每个 {"name": 20 字以内, "role": 80 字以内}；用自创的名字，不用原作的主要角色`,
-    `- "checks"：0–2 个做检定时算有利条件的属性，只能从 ${ATTRIBUTES.join("、")} 里选（${ATTRIBUTES.map((a) => `${a}=${ATTRIBUTE_LABELS[a]}`).join("，")}）`,
     '- "conflicts"：和原作设定冲突、或者能力过强被你压下来的地方，一条一句；没有就空数组',
     "原则：不要夸大，一段经历不会让角色成为传奇；超出常人的能力降到合理范围，并在 conflicts 里说明。不要替玩家添加他们没写的重大设定。",
   ].join("\n");
@@ -73,7 +81,7 @@ export function buildModulePrompt(request: ModuleRequest): LlmMessage[] {
 const cut = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 
-/** 读模型的回复：找出 JSON 对象，过长的截短，标价截到插槽范围，不认识的属性去掉 */
+/** 读模型的回复：找出 JSON 对象，过长的截短，标价截到插槽范围 */
 export function parseModuleReply(
   text: string,
   slot: BoardSlot,
@@ -112,11 +120,6 @@ export function parseModuleReply(
           .filter((p) => p.name !== "")
           .slice(0, 2)
       : [];
-  const checks = Array.isArray(raw.checks)
-    ? [
-        ...new Set(raw.checks.filter((c): c is Attribute => ATTRIBUTES.includes(c as Attribute))),
-      ].slice(0, 2)
-    : [];
   const parsed = BoardModuleSchema.safeParse({
     id,
     slot,
@@ -126,7 +129,7 @@ export function parseModuleReply(
     ability: cut(raw.ability, 200),
     hook: cut(raw.hook, 200),
     people,
-    checks,
+    checks: [],
     custom: true,
   });
   if (!parsed.success) return { ok: false, error: "模型给的模块不合格式，可以重新解读" };
@@ -150,6 +153,7 @@ export async function interpretModule(
       messages: buildModulePrompt(request),
       maxOutputTokens: 800,
       temperature: 0.4,
+      responseFormat: responseJsonSchema("module", ModuleReplySchema),
     },
     signal,
   )) {

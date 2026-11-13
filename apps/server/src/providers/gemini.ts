@@ -105,6 +105,112 @@ export function geminiStreamUrl(profile: Profile): string {
   return base.toString();
 }
 
+const GEMINI_TYPES: Readonly<Record<string, string>> = {
+  object: "OBJECT",
+  array: "ARRAY",
+  string: "STRING",
+  number: "NUMBER",
+  integer: "INTEGER",
+  boolean: "BOOLEAN",
+};
+
+function sanitizeGeminiSchema(
+  raw: unknown,
+  defs?: Record<string, unknown>,
+  depth = 0,
+): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || depth > 12) return undefined;
+  const src = raw as Record<string, unknown>;
+  const rootDefs =
+    defs ??
+    (src.$defs as Record<string, unknown> | undefined) ??
+    (src.definitions as Record<string, unknown> | undefined);
+
+  if (typeof src.$ref === "string" && rootDefs) {
+    const key = src.$ref.replace(/^#\/(?:\$defs|definitions)\//, "");
+    const target = rootDefs[key];
+    return target ? sanitizeGeminiSchema(target, rootDefs, depth + 1) : undefined;
+  }
+
+  const union = Array.isArray(src.anyOf)
+    ? src.anyOf
+    : Array.isArray(src.oneOf)
+      ? src.oneOf
+      : undefined;
+  if (union) {
+    const nonNull = union.filter(
+      (v) => !(v && typeof v === "object" && (v as Record<string, unknown>).type === "null"),
+    );
+    const hasNull = nonNull.length < union.length;
+    if (nonNull.length === 1) {
+      const inner = sanitizeGeminiSchema(nonNull[0], rootDefs, depth + 1);
+      if (!inner) return undefined;
+      return {
+        ...inner,
+        ...(hasNull ? { nullable: true } : {}),
+        ...(typeof src.description === "string" && !inner.description
+          ? { description: src.description }
+          : {}),
+      };
+    }
+    const variants = nonNull
+      .map((v) => sanitizeGeminiSchema(v, rootDefs, depth + 1))
+      .filter((v): v is Record<string, unknown> => v !== undefined);
+    if (variants.length === 0) return undefined;
+    return {
+      anyOf: variants,
+      ...(hasNull ? { nullable: true } : {}),
+      ...(typeof src.description === "string" ? { description: src.description } : {}),
+    };
+  }
+
+  let typeStr: string | undefined;
+  let nullable = src.nullable === true;
+  if (typeof src.type === "string") {
+    typeStr = src.type;
+  } else if (Array.isArray(src.type)) {
+    const nonNullTypes = src.type.filter((t): t is string => typeof t === "string" && t !== "null");
+    nullable = nullable || nonNullTypes.length < src.type.length;
+    typeStr = nonNullTypes[0];
+  }
+
+  const mappedType = typeStr ? GEMINI_TYPES[typeStr.toLowerCase()] : undefined;
+  if (!mappedType) return undefined;
+
+  const out: Record<string, unknown> = { type: mappedType };
+  if (nullable) out.nullable = true;
+  if (typeof src.description === "string") out.description = src.description;
+  if (Array.isArray(src.enum)) {
+    out.enum = src.enum.filter((v) => v !== null);
+  }
+
+  if (mappedType === "OBJECT") {
+    const props = src.properties as Record<string, unknown> | undefined;
+    if (!props || typeof props !== "object") return undefined;
+    const cleanProps: Record<string, Record<string, unknown>> = {};
+    const dropped = new Set<string>();
+    for (const [k, v] of Object.entries(props)) {
+      const clean = sanitizeGeminiSchema(v, rootDefs, depth + 1);
+      if (clean) cleanProps[k] = clean;
+      else dropped.add(k);
+    }
+    if (Object.keys(cleanProps).length === 0) return undefined;
+    out.properties = cleanProps;
+    if (Array.isArray(src.required)) {
+      const req = src.required.filter(
+        (k): k is string => typeof k === "string" && !dropped.has(k) && k in cleanProps,
+      );
+      if (req.length > 0) out.required = req;
+    }
+  } else if (mappedType === "ARRAY") {
+    const itemSchema = sanitizeGeminiSchema(src.items, rootDefs, depth + 1);
+    if (!itemSchema) return undefined;
+    out.items = itemSchema;
+  }
+
+  return out;
+}
+
 /** system 单独传入；assistant 转成 model，其余对话保留顺序。 */
 export function geminiBody(profile: Profile, request: LlmRequest) {
   const system = request.messages
@@ -120,6 +226,10 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
   if (contents.length === 0) throw new UpstreamError("Gemini 请求里没有对话内容");
   const maxOutputTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
   const temperature = request.temperature ?? profile.temperature;
+  const responseSchema =
+    request.responseFormat?.type === "json" && request.responseFormat.schema
+      ? sanitizeGeminiSchema(request.responseFormat.schema)
+      : undefined;
   return {
     contents,
     ...(system !== "" ? { systemInstruction: { parts: [{ text: system }] } } : {}),
@@ -129,6 +239,8 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
       ...(temperature !== undefined ? { temperature } : {}),
       // 酒馆预设采样参数：topP 按原生字段传入；topK 需要先确认模型元数据支持，不能无条件发送。
       ...(request.topP !== undefined ? { topP: request.topP } : {}),
+      ...(request.responseFormat?.type === "json" ? { responseMimeType: "application/json" } : {}),
+      ...(responseSchema ? { responseSchema } : {}),
       ...(profile.thinkingLevel !== undefined
         ? { thinkingConfig: { thinkingLevel: profile.thinkingLevel, includeThoughts: false } }
         : {}),

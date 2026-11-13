@@ -1,7 +1,6 @@
 import { characterRules, cyberwareRules } from "@cp/core";
 import { type CSSProperties, Fragment, type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
-import { DIFFICULTY_LABELS } from "../../labels";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -12,7 +11,7 @@ import { CyberDoll, type CyberSlot } from "./CyberDoll";
 import { FactionsBody } from "./FactionsPanel";
 import { GigsPanel } from "./GigsPanel";
 import { type HabitAction, Habits } from "./Habits";
-import { countdown, JournalBody } from "./Journal";
+import { JournalBody } from "./Journal";
 import { MemoryBody, type MemoryEdit } from "./MemoryPanel";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
@@ -28,23 +27,10 @@ import type { View } from "./view";
  * 暂时挂在物品栏和义体页，U3 改走 F 交互
  */
 
-type Attribute = keyof View["character"]["attributes"];
-
 /** 物品格九宫格切法，同四角在场的人用的 map.filterCell*（计划第九节） */
 const CELL_SLICE = [20, 30, 30, 20] as const;
 /** 背包图标格（计划第十二节第 9 条）：dialog.iconSlot 四边保留 16 原图像素，中间拉伸，保留切角 */
 const ICON_SLOT_SLICE = 16;
-
-const ATTRS: readonly (readonly [Attribute, string, AssetId])[] = [
-  ["body", "肉体", "attr.body"],
-  ["reflexes", "反应", "attr.reflexes"],
-  ["tech", "技术", "attr.tech"],
-  ["intelligence", "智力", "attr.intelligence"],
-  ["cool", "镇定", "attr.cool"],
-];
-
-/** 单项属性的上限 */
-const ATTRIBUTE_MAX = 20;
 
 /** 武器格的编号，和数字键 1–3 对应 */
 const WEAPON_SLOTS = [1, 2, 3] as const;
@@ -56,84 +42,84 @@ const SLOT_KEYS: Record<(typeof WEAPON_SLOTS)[number], AssetId> = {
   3: "key.3",
 };
 
-/** 人物（P）：属性和属性点、角色主板、习惯、街头声望、人性和身上挂着的状态 */
+/** 人物（P）：出身与角色主板芯片、生物/医疗专属告警与习惯 */
 export function CharacterPage({
   view,
-  onSpend,
   onHabit,
 }: {
   readonly view: View;
-  /** 分配一个属性点；正在生成时不传，按钮不显示 */
-  readonly onSpend?: ((attribute: Attribute) => void) | undefined;
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
 }) {
-  const { character, humanity, inventory } = view;
+  const { character } = view;
+  const firstWithAbility = character.traits.find((t) => Boolean(t.ability));
+  const [activeTraitKey, setActiveTraitKey] = useState<string | null>(
+    firstWithAbility ? `${firstWithAbility.slot}-${firstWithAbility.label}` : null,
+  );
+  const activeTrait =
+    character.traits.find((t) => `${t.slot}-${t.label}` === activeTraitKey) ??
+    firstWithAbility ??
+    null;
+
+  const hasCrisis = Boolean(view.psychosis.crisis);
+  const hasSuppressant = Boolean(
+    view.psychosis.suppressant.until || view.psychosis.suppressant.dependent,
+  );
+  const hasTrauma = Boolean(view.trauma.active || view.trauma.lapsed);
+  const hasBioAlerts = hasCrisis || hasSuppressant || hasTrauma;
+
   return (
-    <div className={neural.split}>
-      <Panel as="section" title={character.name ?? "未建档"} line="var(--cp-red)">
-        {character.name === null && (
-          <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
-        )}
-        <ul className={styles.attrs}>
-          {ATTRS.map(([key, label, icon]) => (
-            <li key={key}>
-              <Asset id={icon} tint="var(--cp-cyan)" height={22} />
-              <span>{label}</span>
-              <b>{character.attributes[key] ?? "—"}</b>
-              {(character.bonuses[key] ?? 0) > 0 && (
-                <small className={styles.attrBonus}>+{character.bonuses[key]}</small>
-              )}
-              {character.attributePoints > 0 && onSpend && (
-                <button
-                  type="button"
-                  className={styles.spend}
-                  disabled={(character.attributes[key] ?? 0) >= ATTRIBUTE_MAX}
-                  aria-label={`用 1 个属性点提升${label}`}
-                  onClick={() => onSpend(key)}
-                >
-                  +
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        {character.attributePoints > 0 && (
-          <p className={styles.points}>可分配属性点 {character.attributePoints}</p>
-        )}
-        {character.traits.length > 0 && (
-          <ul className={styles.traits} aria-label="角色主板">
-            {character.traits.map((t) => (
-              <li
-                key={`${t.slot}-${t.label}`}
-                className={styles.trait}
-                data-slot={t.slot}
-                title={t.ability || undefined}
-              >
-                <small className={styles.traitKind}>{characterRules.TRAIT_LABELS[t.slot]}</small>
-                {t.label}
-              </li>
-            ))}
+    <div className={styles.characterRoot}>
+      {character.name === null && (
+        <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
+      )}
+      {character.traits.length > 0 && (
+        <section className={styles.traitSection} aria-label="角色主板">
+          <ul className={styles.traits}>
+            {character.traits.map((t) => {
+              const key = `${t.slot}-${t.label}`;
+              const selected = activeTrait
+                ? `${activeTrait.slot}-${activeTrait.label}` === key
+                : false;
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    className={styles.traitChip}
+                    data-slot={t.slot}
+                    aria-pressed={selected}
+                    title={t.ability || undefined}
+                    onClick={() => setActiveTraitKey(key)}
+                    onMouseEnter={() => {
+                      if (t.ability) setActiveTraitKey(key);
+                    }}
+                    onFocus={() => {
+                      if (t.ability) setActiveTraitKey(key);
+                    }}
+                  >
+                    <small className={styles.traitKind}>
+                      {characterRules.TRAIT_LABELS[t.slot]}
+                    </small>
+                    <span className={styles.traitLabel}>{t.label}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-        )}
-        <Habits
-          perceived={view.perceived}
-          habits={character.habits}
-          offers={character.habitOffers}
-          onHabit={onHabit}
-        />
-      </Panel>
-      <Panel as="section" title="状态" line="var(--cp-yellow)">
-        <dl className={styles.facts}>
-          <dt>街头声望</dt>
-          <dd title={`${character.credWorld}${character.credHalf ? "；再得半级声望就升级" : ""}`}>
-            {character.streetCred} 级 · {character.credTier}
-            {character.credHalf && <small> · 半级</small>}
-          </dd>
-          <dt>人性</dt>
-          <dd data-stage={humanity.stage}>
-            {humanity.current}/{humanity.cap}
-            <small> · {humanity.stageLabel}</small>
-          </dd>
+          {activeTrait?.ability && (
+            <div className={styles.traitDetail} data-slot={activeTrait.slot} role="status">
+              <div className={styles.traitDetailHead}>
+                <small className={styles.traitKind}>
+                  {characterRules.TRAIT_LABELS[activeTrait.slot]}
+                </small>
+                <b>{activeTrait.label}</b>
+              </div>
+              <p className={styles.traitDetailText}>{activeTrait.ability}</p>
+            </div>
+          )}
+        </section>
+      )}
+      {hasBioAlerts && (
+        <dl className={`${styles.facts} ${styles.bioAlerts}`} aria-label="生物监测告警">
           {view.psychosis.crisis && (
             <>
               <dt>危机</dt>
@@ -159,31 +145,6 @@ export function CharacterPage({
               </dd>
             </>
           )}
-          <dt>生命</dt>
-          <dd data-tone={view.health.wound === "none" ? undefined : "bad"}>
-            {view.health.hp}/{view.health.max}
-            {view.health.condition !== "up" && <small> · {view.health.conditionLabel}</small>}
-          </dd>
-          <dt>警方热度</dt>
-          <dd
-            data-tone={view.heat.stars >= 3 ? "bad" : undefined}
-            title={
-              view.heat.decayIn === null
-                ? undefined
-                : `再过 ${countdown(view.heat.decayIn).replace("还剩 ", "")}不犯事就降一星`
-            }
-          >
-            {view.heat.stars} 星{view.heat.half && <small> · 多半星</small>}
-          </dd>
-          {view.heat.bounties.map((b) => (
-            <Fragment key={b.id}>
-              <dt>悬赏</dt>
-              <dd data-tone="bad" title={`${b.since} 起：${b.reasons.join("；")}`}>
-                {b.reward.toLocaleString("en-US")} 欧元
-                {b.hunterName && <small> · {b.hunterName}在追你</small>}
-              </dd>
-            </Fragment>
-          ))}
           {(view.trauma.active || view.trauma.lapsed) && (
             <>
               <dt>创伤小组</dt>
@@ -197,28 +158,9 @@ export function CharacterPage({
               </dd>
             </>
           )}
-          {inventory.healing && (
-            <>
-              <dt>治疗</dt>
-              <dd>
-                {view.names.items[inventory.healing.id] ?? inventory.healing.id}{" "}
-                {inventory.healing.charges}/{inventory.healing.max}
-              </dd>
-            </>
-          )}
-          {inventory.grenade && (
-            <>
-              <dt>手雷</dt>
-              <dd>
-                {view.names.items[inventory.grenade.id] ?? inventory.grenade.id}{" "}
-                {inventory.grenade.charges}/{inventory.grenade.max}
-              </dd>
-            </>
-          )}
-          <dt>难度</dt>
-          <dd>{DIFFICULTY_LABELS[view.difficulty]}</dd>
         </dl>
-      </Panel>
+      )}
+      <Habits habits={character.habits} offers={character.habitOffers} onHabit={onHabit} />
     </div>
   );
 }
@@ -966,9 +908,17 @@ export function MessagesPage({
           }}
         />
       )}
-      <Panel as="section" title={tab === "dm" ? "私信" : "新闻"} line="var(--cp-cyan)">
-        {tab === "dm" ? <PhoneBody view={view} onReply={onReply} /> : <NewsBody view={view} />}
-      </Panel>
+      {hideTabs ? (
+        tab === "dm" ? (
+          <PhoneBody view={view} onReply={onReply} />
+        ) : (
+          <NewsBody view={view} />
+        )
+      ) : (
+        <Panel as="section" title={tab === "dm" ? "私信" : "新闻"} line="var(--cp-cyan)" frame>
+          {tab === "dm" ? <PhoneBody view={view} onReply={onReply} /> : <NewsBody view={view} />}
+        </Panel>
+      )}
     </>
   );
 }

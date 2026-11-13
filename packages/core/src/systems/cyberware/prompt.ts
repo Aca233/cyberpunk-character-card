@@ -1,5 +1,4 @@
 import type { RuleModule } from "../../kernel/system";
-import { ATTRIBUTE_LABELS } from "../dice";
 import { RARITY_LABELS } from "../economy";
 import { cyberwareCatalog } from "./apply";
 import { type CyberwareState, SLOT_LABELS } from "./schema";
@@ -9,8 +8,8 @@ export const cyberwareRules: RuleModule<CyberwareState> = {
   title: "义体",
   commands: ["cyberware"],
   when: () => true,
-  judge: `- 【当前状态】里的「义体」是角色身上真的装着的东西，写着的能力角色真的做得到：装着螳螂刀就能爬墙，装着义眼就能扫描，不用检定；没装的义体做不到，也不算加成。
-- 坏着的义体修好前用不了，不算加成。`,
+  judge: `- 【当前状态】里的「义体」是角色身上真的装着的东西，写着的能力角色真的做得到：装着螳螂刀就能爬墙，装着义眼就能扫描、读弹道或看透敌方植入件；没装的义体做不到，也不算硬件优势。
+- 坏着的义体修好前用不了，无法提供任何能力或硬件支持。`,
   narrate: `- 装着的义体写进动作里：螳螂刀弹出、义眼扫描时视野里叠出的数据、加速义体启动时世界慢下来。
 - 只有义体医生能装卸义体；街上捡到、从敌人身上拆下的义体只写在正文里，要装得先找医生。钱不够就装不上，写成讨价还价、赊账被拒或者另想办法。`,
   text: `- 【当前状态】里的「义体」是角色身上真的装着的东西，写着的能力角色真的做得到：装着螳螂刀就能爬墙，装着义眼就能扫描，不用再问；没装的义体角色做不到。
@@ -30,9 +29,6 @@ export function cyberwareSection(data: Readonly<Record<string, unknown>>): strin
       RARITY_LABELS[p.rarity],
       p.iconic ? "不朽" : String(p.price),
       `人性-${p.humanityCost}`,
-      ...(p.checks.length > 0
-        ? [`利于${p.checks.map((a) => ATTRIBUTE_LABELS[a]).join("、")}`]
-        : []),
     ];
     const group = SLOT_LABELS[p.slot];
     groups.set(group, [
@@ -43,6 +39,6 @@ export function cyberwareSection(data: Readonly<Record<string, unknown>>): strin
   const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
   return `【义体表】
 cyberware 指令的 id 只能用下面这些，正文里用名称。
-每行是：id 名称｜稀有度｜参考价（欧元）｜装上后人性上限降多少｜利于哪些属性：能力。“利于”的属性检定里用得上这件义体时算有利条件；不朽义体只从剧情获得，义体医生不卖。
+每行是：id 名称｜稀有度｜参考价（欧元）｜装上后人性上限降多少：能力。装在身上即按其硬件功能起效；不朽义体只从剧情获得，义体医生不卖。
 ${body}`;
 }

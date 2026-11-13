@@ -102,7 +102,7 @@ describe("场外推演派单", () => {
     );
     const offers = got.commands.filter((c) => c.type === "jobOffer");
     expect(offers.map((c) => [c.id, c.risk])).toEqual([["scav-den", 2]]);
-    expect(got.notes.some((n) => n.includes("压到 2 星"))).toBe(true);
+    expect(got.notes.some((n) => n.includes("压到 2"))).toBe(true);
     expect(got.notes.some((n) => n.includes("不在【能派单的中间人】里"))).toBe(true);
   });
 
@@ -243,7 +243,7 @@ describe("场外推演熟人求助", () => {
     expect(got.commands.find((c) => c.type === "phone.receive")?.job).toBe("misty-shop");
     const after = apply(world, got.commands);
     expect(after.results.map((r) => r.result.ok)).toEqual(after.results.map(() => true));
-    expect(got.notes.some((n) => n.includes("最多求 2 星"))).toBe(true);
+    expect(got.notes.some((n) => n.includes("risk 2"))).toBe(true);
   });
 
   it("求助的单由中间人带不要；好感低的熟人也能发", () => {

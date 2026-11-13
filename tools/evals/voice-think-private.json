@@ -36,7 +36,9 @@
   },
   "expect": {
     "judge": {
-      "check": "forbidden"
+      "ruling": {
+        "present": false
+      }
     }
   },
   "rubric": [

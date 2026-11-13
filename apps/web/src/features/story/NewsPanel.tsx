@@ -1,4 +1,7 @@
 import { ActionButton } from "../../ui/ActionButton";
+import { Asset } from "../../ui/Asset";
+import { CellFrame } from "../../ui/FrameBox";
+import { UnreadBadge } from "./Phone";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
@@ -19,36 +22,54 @@ export function PoliceBody({
   const alerts = new Map(view.ncpd.alerts.map((a) => [`ncpd:${a.id}`, a]));
 
   return (
-    <div className={styles.docBody}>
-      <section>
-        {entries.length === 0 ? (
-          <p className={styles.dim}>频段里很安静，没有截听到警情。</p>
-        ) : (
-          <ul className={styles.factionList}>
-            {entries.map((i) => {
-              const place = i.attachments.find((a) => a.kind === "location");
-              const alert = alerts.get(i.id);
-              return (
-                <li key={i.id} className={styles.factionLine} data-unread={i.unread || undefined}>
-                  <span className={styles.dim}>
-                    {i.time} · {i.from}
+    <section className={styles.feedSection} aria-label="警用频段">
+      {entries.length === 0 ? (
+        <div className={styles.feedEmpty}>
+          <CellFrame />
+          <Asset id="map.poi.police" tint="var(--cp-red-dim)" height={24} />
+          <b className={styles.feedEmptyTitle}>警用频段静默</b>
+          <p className={styles.feedEmptyText}>当前未截听到 NCPD 调度通报或赏金警情。</p>
+        </div>
+      ) : (
+        <ul className={styles.feedList}>
+          {entries.map((i) => {
+            const place = i.attachments.find((a) => a.kind === "location");
+            const alert = alerts.get(i.id);
+            return (
+              <li
+                key={i.id}
+                className={styles.feedCard}
+                data-channel="police"
+                data-unread={i.unread || undefined}
+              >
+                <CellFrame />
+                <header className={styles.feedHead}>
+                  <span className={styles.feedSource}>
+                    <Asset id="map.poi.police" tint="var(--cp-red)" height={14} />
+                    {i.from}
                   </span>
-                  <p>{i.text}</p>
-                  {alert && (
-                    <p className={styles.dim}>
-                      赏金 {alert.reward.toLocaleString("en-US")} 欧元 · {alert.until} 前
-                    </p>
-                  )}
-                  {place && onMap && (
-                    <ActionButton onClick={onMap}>在地图上看 {place.label}</ActionButton>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </div>
+                  {i.unread && <UnreadBadge>新</UnreadBadge>}
+                  <time className={styles.feedTime}>{i.time}</time>
+                </header>
+                <p className={styles.feedText}>{i.text}</p>
+                {(alert || (place && onMap)) && (
+                  <footer className={styles.feedFoot}>
+                    {alert && (
+                      <span className={styles.feedBounty}>
+                        赏金 {alert.reward.toLocaleString("en-US")} 欧元 · {alert.until} 前
+                      </span>
+                    )}
+                    {place && onMap && (
+                      <ActionButton onClick={onMap}>在地图看 {place.label}</ActionButton>
+                    )}
+                  </footer>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -60,24 +81,32 @@ export function NewsBody({ view }: { readonly view: View }) {
   const entries = view.bulletins;
 
   return (
-    <div className={styles.docBody}>
-      <section>
-        {entries.length === 0 ? (
-          <p className={styles.dim}>还没有播报。</p>
-        ) : (
-          <ul className={styles.factionList}>
-            {entries.map((b) => (
-              <li key={b.id} className={styles.factionLine} data-kind={b.kind}>
-                <span className={styles.dim}>
-                  {b.time} · {b.label}
-                </span>{" "}
-                <b>{b.title}</b>
-                {b.text && <p>{b.text}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+    <section className={styles.feedSection} aria-label="新闻快讯">
+      {entries.length === 0 ? (
+        <div className={styles.feedEmpty}>
+          <CellFrame />
+          <Asset id="notify.journal" tint="var(--cp-cyan-dim)" height={24} />
+          <b className={styles.feedEmptyTitle}>暂无新闻播报</b>
+          <p className={styles.feedEmptyText}>N54 与街头电台的新近简讯会同步推送到这里。</p>
+        </div>
+      ) : (
+        <ul className={styles.feedList}>
+          {entries.map((b) => (
+            <li key={b.id} className={styles.feedCard} data-channel="news" data-kind={b.kind}>
+              <CellFrame />
+              <header className={styles.feedHead}>
+                <span className={styles.feedSource}>
+                  <Asset id="notify.journal" tint="var(--cp-cyan)" height={14} />
+                  {b.label}
+                </span>
+                <time className={styles.feedTime}>{b.time}</time>
+              </header>
+              <b className={styles.feedTitle}>{b.title}</b>
+              {b.text && <p className={styles.feedText}>{b.text}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

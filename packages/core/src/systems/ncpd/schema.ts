@@ -59,6 +59,6 @@ export const NcpdCommandSchema = z
     reason: z.string().trim().min(1).max(80),
   })
   .describe(
-    "NCPD 警情：clear 是在现场把事处理完了（本轮检定没失败），代码发赏金、警方热度降一星；drop 是搞砸了或者放弃了，警情撤掉、不给钱",
+    "NCPD 警情：clear 是在现场把事彻底摆平（交火解围或控场妥善解决），代码发赏金、警方追查压力随之缓和；drop 是搞砸了或者放弃了，警情撤掉、不给钱",
   );
 export type NcpdCommand = z.infer<typeof NcpdCommandSchema>;

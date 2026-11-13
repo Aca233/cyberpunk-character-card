@@ -1,4 +1,4 @@
-import { type Command, diceRules, type NarratorPlan, type NarratorTurn } from "@cp/core";
+import type { Command, NarratorTurn } from "@cp/core";
 import type { EvalCase } from "./case";
 
 /** 代码检查：不用模型，能直接判对错的项 */
@@ -13,17 +13,6 @@ export interface Finding {
 export function commandKeys(command: Command): string[] {
   const action = (command as { action?: unknown }).action;
   return typeof action === "string" ? [command.type, `${command.type}.${action}`] : [command.type];
-}
-
-const sum = (mods: readonly { readonly value: number }[]) =>
-  mods.reduce((n, m) => n + Math.abs(m.value), 0);
-
-function overCap(spec: diceRules.CheckSpec): string | undefined {
-  const over: string[] = [];
-  if (sum(spec.bonuses) > diceRules.BONUS_CAP) over.push(`加成合计 ${sum(spec.bonuses)}`);
-  if (sum(spec.penalties) > diceRules.PENALTY_CAP) over.push(`减值合计 ${sum(spec.penalties)}`);
-  if (sum(spec.dvMods) > diceRules.DV_MOD_CAP) over.push(`难度修正合计 ${sum(spec.dvMods)}`);
-  return over.length > 0 ? `${spec.intent}：${over.join("，")}` : undefined;
 }
 
 const finding = (name: string, problems: readonly string[]): Finding =>
@@ -41,7 +30,7 @@ export function moduleFindings(c: EvalCase, modules: readonly string[]): Finding
   ];
 }
 
-export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn): Finding[] {
+export function codeFindings(c: EvalCase, turn: NarratorTurn): Finding[] {
   const out: Finding[] = [];
   const whole = new Set(["判断", "抽取"]);
   out.push(
@@ -58,9 +47,9 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
         .map((d) => `${d.where}：${d.reason}`),
     ),
   );
-  // 用例期望"该抽、但不该生效"的指令（例如没掷骰的伤害），被代码拦下正是想要的结果，不算失败
+  // 用例期望"该抽、但不该生效"的指令（例如死人行动），被代码拦下正是想要的结果，不算失败
   const meantToBlock = new Set(
-    c.expect.extract.require.filter((k) => c.expect.verify.forbid.includes(k)),
+    c.expect.extract.require.filter((k) => c.expect.applied.forbid.includes(k)),
   );
   const rawKeys = (raw: unknown): string[] =>
     typeof raw === "object" && raw !== null && typeof (raw as { type?: unknown }).type === "string"
@@ -75,28 +64,29 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
     ),
   );
 
-  const specs = [
-    ...(turn.check ? [turn.check] : []),
-    ...turn.choices.flatMap((ch) => (ch.check ? [ch.check] : [])),
-  ];
-  const ledger = specs.map(overCap).filter((x): x is string => x !== undefined);
-  if (plan.kind !== "resolve" && turn.commands.some((cmd) => cmd.type === "damage")) {
-    ledger.push("没掷骰却扣血");
-  }
-  if (
-    plan.kind === "resolve" &&
-    plan.check.result.outcome !== "failure" &&
-    plan.check.result.outcome !== "fumble"
-  ) {
-    if (turn.commands.some((cmd) => cmd.type === "damage")) ledger.push("检定成功却扣血");
-  }
-  out.push(finding("账目", ledger));
-
   const { judge } = c.expect;
-  if (judge.check === "required")
-    out.push(finding("判断：给出检定", turn.check ? [] : ["这一轮应当给出 check"]));
-  if (judge.check === "forbidden") {
-    out.push(finding("判断：不该掷骰", turn.check ? [`给了 check：${turn.check.intent}`] : []));
+  if (judge.ruling) {
+    if (judge.ruling.present === true) {
+      out.push(finding("判断：定性裁决", turn.ruling ? [] : ["应当给出定性裁决 ruling"]));
+    } else if (judge.ruling.present === false) {
+      out.push(
+        finding("判断：不无事生非", turn.ruling ? [`日常动作不该给裁决：${turn.ruling}`] : []),
+      );
+    }
+    if (judge.ruling.match.require.length > 0 || judge.ruling.match.forbid.length > 0) {
+      const summary = turn.ruling ?? "";
+      out.push(
+        finding("判断：裁决内容", [
+          ...judge.ruling.match.require
+            .filter((p) => !new RegExp(p, "u").test(summary))
+            .map((p) => `裁决里没有 /${p}/`),
+          ...judge.ruling.match.forbid.flatMap((p) => {
+            const hit = new RegExp(p, "u").exec(summary);
+            return hit ? [`裁决里出现了「${hit[0]}」`] : [];
+          }),
+        ]),
+      );
+    }
   }
   if (judge.ooc !== undefined) {
     out.push(
@@ -121,15 +111,15 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
     );
   }
 
-  // ④ 抽取提了什么：生效的，加上被核对、业务校验和结算拒掉的指令（格式坏的不算提了；检定、选项、声音、消息不是指令）
-  const notCommand = /^(check|gate|recall|choices|voices|messages)\b|^(判断|抽取)$/;
+  // ④ 抽取提了什么：生效的，加上被规则/防呆拦下的指令（格式坏的不算；记忆、内心声音、消息、裁决字段不是指令）
+  const notCommand = /^(ruling|buy|foes|recall|choices|voices|messages)\b|^(判断|抽取)$/;
   const proposed = new Set([
     ...turn.commands.flatMap(commandKeys),
     ...turn.dropped
       .filter((d) => d.stage !== "format" && !notCommand.test(d.where))
       .flatMap((d) => rawKeys(d.raw)),
   ]);
-  const { extract, verify } = c.expect;
+  const { extract, applied } = c.expect;
   if (extract.require.length > 0 || extract.forbid.length > 0) {
     out.push(
       finding("抽取", [
@@ -140,11 +130,11 @@ export function codeFindings(c: EvalCase, plan: NarratorPlan, turn: NarratorTurn
   }
 
   const keys = new Set(turn.commands.flatMap(commandKeys));
-  if (verify.require.length > 0 || verify.forbid.length > 0) {
+  if (applied.require.length > 0 || applied.forbid.length > 0) {
     out.push(
-      finding("核对后", [
-        ...verify.require.filter((k) => !keys.has(k)).map((k) => `缺少 ${k}`),
-        ...verify.forbid.filter((k) => keys.has(k)).map((k) => `不该生效 ${k}`),
+      finding("校验后生效", [
+        ...applied.require.filter((k) => !keys.has(k)).map((k) => `缺少 ${k}`),
+        ...applied.forbid.filter((k) => keys.has(k)).map((k) => `不该生效 ${k}`),
       ]),
     );
   }

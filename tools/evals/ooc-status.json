@@ -24,7 +24,6 @@
   },
   "expect": {
     "judge": {
-      "check": "forbidden",
       "ooc": true
     },
     "maxChars": 150

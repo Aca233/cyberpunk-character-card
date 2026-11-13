@@ -1,14 +1,6 @@
 import { projectState } from "../../game";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
-import {
-  ATTRIBUTE_LABELS,
-  BONUS_CAP,
-  DV_MOD_CAP,
-  MOD_STEP,
-  OPPONENT_TIERS,
-  PENALTY_CAP,
-} from "../../systems/dice";
 import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
@@ -24,58 +16,47 @@ import {
 } from "./context";
 import { BASE_RULES, systemMessage, userMessage } from "./layers";
 
-/** ① 判断：叙事模型，低温，只输出 JSON */
+/** ① 判断：叙事模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
 export const JUDGE_TEMPERATURE = 0.3;
-
-const tiers = Object.entries(OPPONENT_TIERS)
-  .map(([id, t]) => `${id}（${t.label}）`)
-  .join("，");
-
-const attributes = Object.entries(ATTRIBUTE_LABELS)
-  .map(([id, label]) => `${id} ${label}`)
-  .join("、");
 
 /** L1 */
 export const JUDGE_STAGE = `【这一步：判断】
-读玩家这一轮的输入和当前局面，定下玩家想做什么、要不要检定或门槛、要不要调旧记忆。正文由后面一步写，记账在正文之后由代码另做；你不写剧情，也不写指令。
+读玩家这一轮的输入、当前状态与物理约束，负责两件事：理解意图并调度相关旧记忆；对违背物理/权限/装备常识或充满风险冲突的行动给出定性因果裁决（日常闲聊、赶路、吃饭直接留 null）。正文由后面一步写，记账在正文之后由代码另做；你不写剧情，也不写指令。
 
-【意图】
-- read：一句话说出玩家想达成什么，用“你想……”开头，例如“你想借以前的工号混进去，而不是硬闯”。理解错了玩家会一键改写。
-- 玩家一次可能同时写了动作、台词和念头：引号里的或明显说出口的是台词；括号里的或“我心想”是念头，NPC 听不到；拿不准时按没说出口理解，并在 read 里写明。
+【意图理解】
+- read：一句话说出玩家想达成什么，用“你想……”开头（例如“你想靠以前在荒坂跑腿记住的排班表从后门混进去”）。理解错了玩家会一键改写。
+- 动作、台词和念头分辨：引号里或明显说出口的是台词；括号里或“我心想”是念头，NPC 听不到；拿不准按没说出口处理，并在 read 里写明。
 
 【场外提问】
-- 玩家跳出角色问你（问规则、问能不能这么做、问现在什么情况、问前情），而不是让角色行动：ooc 写 true，read、check、gate 写 null。场外提问和行动混在一起时按行动处理。
+- 玩家跳出角色向你问设定、可行性、余额、现状，而非让角色行动时：ooc 写 true，read 与 ruling 写 null。出戏提问和行动混在一起时按行动处理。
 
-【暗中判定】按固定顺序：
-1. 对话、说服、谈判、调情、威胁：看有没有说中对方的诉求或触到底线，由 NPC 的性格决定怎么回应，不掷骰，check 写 null。
-2. 门槛：属性达标直接成功，不掷骰，写在 gate：选属性、阶段 level（early 前期、mid 中期、late 后期，按这里是城里哪一层的地方、对手是什么人）和 edge（low 偏容易，high 偏难）。门槛的数由代码查表，你不写数字。
-3. 只有结果真不确定、失败有意义的后果、成败都能让故事继续时才给 check，写清 success 和 failure。合理的办法直接成功，不给 check；不可能的事也不给 check，后面一步会让世界拒绝。
-- 属性：${attributes}。
-- 难度按对手档位 tier 给：${tiers}；没有对手的环境风险（攀爬、追车路况、恶劣天气）按同一张表选相当的档位。再选 edge：low 是这一档里偏容易的，high 是偏难的。难度值由代码查表，你不写数字。
-- 加成 bonuses（本事、义体、物品、人物、准备）和减值 penalties（伤势、恶劣环境）每项只写来源 source 和理由 reason，不写数，每项一档 ${MOD_STEP}；基础值之上的难度修正 dvMods 每项写 dir（harder 更难，easier 更容易）和理由，也是一档 ${MOD_STEP}。合计上限：加成 +${BONUS_CAP}，减值 −${PENALTY_CAP}，难度修正 +${DV_MOD_CAP}，代码统一截断。聪明的计划、充分的准备、利用人物关系和环境，可以免检定、降低难度值或获得加成。
-- 加成的来源必须在【当前状态】里找得到：没装的义体、没有的物品、不认识的人不算。
-- 跟有人物卡的人正面对抗（和他比枪、比快、比力气、比黑客、骗过他的眼睛）时，在 check 写 opponent：他的人物 id。他装的义体利于这项属性时，代码自动加一档难度修正，你不用再为他的义体写 dvMods；没有人物卡的路人、和人无关的环境风险不写 opponent。
-- 失败可能受伤时在 check 写 damage（graze 擦伤、heavy 重击、lethal 致命）；只有写了 lethal 才可能死，不写 damage 失败就不扣血。
-- 断肢很少见：只在刀刃、霰弹枪、爆炸、重型机械这类真能打断手脚的场面，致命档失败可能失去手臂或腿时，在 check 写 limb: true 并在 failure 里写明。
+【定性物理与社会因果裁决（ruling）】
+- 日常对话、逛街看景、正常休息、普通信息交换：不要没事找事，ruling 直接写 null，让剧情自然流淌。
+- 只有当行动涉及物理硬条件（护甲/口径/断肢/没装接入仓/离线气隙/城区安防门禁/重伤疲惫）、硬闯潜入、正面交锋，或触及 NPC 利益与底线时，才给出 ruling：
+  1. blocked（客观阻断）：明确违背现实逻辑或缺少硬条件（比如没装螳螂刀却要弹出刀片、轻手枪正面轰重型机甲、无线黑没有电子接口的纯肉体/气隙主机、在防备森严的公司大堂公然提长枪硬闯），在 outcome 写明它怎么在现实里被挡回来。
+  2. costly（有代价地做成 / 高危硬碰）：做得成或部分做成，但基于对方警惕、环境磨损、伤势拖累、武器后坐或帮派视线，必然带出代价或受伤（例如翻松动铁皮响动惊动人、硬切军用冰墙遭神经反噬、跟持械雇佣兵正面对射吃枪子）。在 outcome 写明收获与代价，并诚实定下玩家面临的最高身体伤害风险 harm（none / graze / heavy / lethal）。
+  3. possible（条件充分顺畅做成）：玩家规划周密、条件全对得上（用对钥匙、穿对衣服、从暗格避过安检、找准对方诉求或过往恩怨谈拢），写明顺理成章怎么成，harm 写 none。
+- 社交与说服不按好感数字放水：哪怕熟人深交，触到底线也会讨价还价或拒绝；看【人物】里的诉求、忌讳、人情债与秘密判断对方会怎么接招。
+- 加成的条件（武器、义体、物品、人脉）必须在【当前状态】或【装备/义体】里真实存在；没有就是没有。
+- limb：仅在刀刃、霰弹枪、爆炸、重型机械等真可能当场打断手臂或腿的致命场面写 true；平常不写。
 
-【对手】
-- 场上有对手（敌人、要对付、要骗过或要说服的人）时，在 foes 用一句话写他这一轮想干什么、会怎么应对玩家：他有自己的目标和打算，不是站着等玩家出手。后面写正文的一步照这一句写对手的行动；没有对手写 null。
-- 给了 check 或 gate 时，在 why 用一句话写为什么定这个档位和难度、风险从哪来（对手是谁、环境怎样、玩家做了什么准备）；只留档给开发时查，不给玩家看。
+【对手行动】
+- foes：场上有敌对人物、安保、黑客或防备你的人时，用一句话点出他这一轮的真实反应、防守站位或反制算盘（他不是木桩）；没有对手写 null。
 
-【花钱】
-- 玩家这一轮要掏钱买东西或买服务（买枪、包一辆车、请人办事、看伤）时在 buy 写买什么：物品写物品表的 id，服务写服务名，讲价写 discount。你不写价钱；一笔太大时代码会先请玩家确认。不花钱写 null。
+【花钱确认】
+- buy：玩家这一轮明确要买东西或买服务时写物品 id（或车 id）或服务名，讲价写 discount，不写价格；不花钱写 null。
 
 【旧记忆】
-- recall 只能从【可调的旧记忆】里原样抄标题，抄错的会被丢掉；没有列出、或这一轮用不上时写 []。`;
+- recall：只能从【可调的旧记忆】里原样抄标题，最多 3 条；没有列出或用不上写 []。`;
 
 /** ① 判断的例子 */
-export const JUDGE_EXAMPLE = `{"read": "你想不被发现地翻上棚顶，继续盯着那个中间人", "ooc": false, "check": {"intent": "不被发现地翻上棚顶", "attribute": "reflexes", "tier": "street", "edge": "low", "success": "看清他和谁接头", "failure": "铁皮响动惊动了他", "damage": "graze"}, "gate": null, "buy": null, "recall": [], "foes": "那个中间人一直留意着门口，听到动静会先从后门溜", "why": "棚顶铁皮松动，对方只是街头的普通人，没带保镖"}`;
+export const JUDGE_EXAMPLE = `{"read": "你想翻上铁皮棚顶借着夜色偷听中间人接头", "ooc": false, "ruling": {"kind": "costly", "outcome": "铁皮能踩上去看清下面的接头人，但年久失修的波纹板会嘎吱作响、震落铁锈惊动放风的人", "harm": "graze", "reason": "棚顶铁皮松动且下面有人把风，你穿的普通皮夹克能兜住刮擦但掩护不了声音"}, "buy": null, "recall": [], "foes": "中间人旁边那个嚼口香糖的保镖一直盯着二楼窗台和棚顶，听到响动会第一时间拔枪照手电"}`;
 
 let output: string | undefined;
 
-/** L3：严格 JSON；recall 原样抄标题 */
+/** L3：JSON 结构（配合原生 responseFormat 约束） */
 function judgeOutput(): string {
-  output ??= `【输出格式】\n只输出一个 JSON 对象，不要解释，不要代码块。字段都要写，没有就写 null 或 []。\n${schemaDoc(JudgeDocSchema)}\n例：\n${JUDGE_EXAMPLE}`;
+  output ??= `【输出格式】\n只输出一个 JSON 对象，不要解释，不要 markdown 代码块。字段都要写，没有就写 null 或 []。\n${schemaDoc(JudgeDocSchema)}\n例：\n${JUDGE_EXAMPLE}`;
   return output;
 }
 

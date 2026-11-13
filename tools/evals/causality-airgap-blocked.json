@@ -1,0 +1,42 @@
+{
+  "id": "causality-airgap-blocked",
+  "title": "没装接入仓又面对离线气隙目标时，按物理阻断退回",
+  "tags": ["causality", "grounding", "hacking"],
+  "setup": {
+    "history": [
+      {
+        "input": {
+          "text": "绕到仓库后面，看看仓库里的货柜和锁"
+        },
+        "text": "门缝里看得清清楚楚：角落桌上摆着一只纯机械老式密码铁盒，旁边墙上的本地安保终端连着一根粗缆线通向独立电源，指示灯写着离线封闭模式。",
+        "commands": [
+          {
+            "type": "world",
+            "activity": "observe",
+            "location": "watson-warehouse"
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "text": "直接用快速破解无线黑进那台断网封闭终端，把铁盒弹开"
+  },
+  "expect": {
+    "judge": {
+      "ruling": {
+        "present": true
+      }
+    },
+    "modules": {
+      "require": ["hacking"]
+    },
+    "text": {
+      "forbid": ["检定", "DV\\s*\\d+", "T[1-4]"]
+    }
+  },
+  "rubric": [
+    "有没有明确用物理与前提条件拦下：角色不会骇客且没有网络接入仓，目标又是离线气隙/机械盒，不可能无线黑开",
+    "有没有给出顺着现实线索可行的物理备选（例如找物理线缆或从机械部分下手）"
+  ]
+}

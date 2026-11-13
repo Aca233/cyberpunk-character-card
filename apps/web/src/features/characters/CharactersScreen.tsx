@@ -1,12 +1,4 @@
-import {
-  ATTRIBUTE_BASE,
-  ATTRIBUTE_CREATE_MAX,
-  ATTRIBUTE_POINTS,
-  type CharacterCard,
-  CharacterCardSchema,
-  diceRules,
-  pointsSpent,
-} from "@cp/core";
+import { type CharacterCard, CharacterCardSchema, DEFAULT_CARD_ATTRIBUTES } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -21,8 +13,7 @@ import styles from "./characters.module.css";
 import { clearDraft, loadDraft, STEPS } from "./creator";
 import { ProseField } from "./ProseField";
 import { downloadCard, readCardFile } from "./tavernFile";
-
-type Attribute = keyof CharacterCard["attributes"];
+import wb from "./workbench.module.css";
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切（同设置页） */
 const FRAME_SLICE = 120;
@@ -58,7 +49,7 @@ function blankCard(): CharacterCard {
     greeting: "",
     examples: "",
     locked: [],
-    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
+    attributes: { ...DEFAULT_CARD_ATTRIBUTES },
     board: emptyBoard(),
   };
 }
@@ -111,7 +102,6 @@ function initialEditor(): Editor {
 
 /** 交给叙事模型的正文在前；场景、开场白、对话示例只留在卡上 */
 const BRIEF_BLOCKS = ["look", "past", "personality", "voice"] as const;
-const CARD_BLOCKS = ["scene", "greeting", "examples"] as const;
 
 /** 角色库和手写角色卡；改卡只影响以后新建的存档 */
 export function CharactersScreen() {
@@ -126,10 +116,10 @@ export function CharactersScreen() {
   const [editor, setEditor] = useState<Editor>(initialEditor);
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const dirty = !editor.sample && JSON.stringify(editor.card) !== editor.original;
   const parsed = CharacterCardSchema.safeParse(editor.card);
-  const remaining = ATTRIBUTE_POINTS - pointsSpent(editor.card.attributes);
 
   const save = useMutation({
     mutationFn: ({ id, card }: { id: string | null; card: CharacterCard }) =>
@@ -196,6 +186,7 @@ export function CharactersScreen() {
     if ("back" in next) navigate("/menu");
     else {
       setEditor(next.editor);
+      setShowLibrary(false);
       save.reset();
       remove.reset();
     }
@@ -241,132 +232,121 @@ export function CharactersScreen() {
         className={styles.frame}
       />
       <header className={styles.head}>
-        <Asset id="menu.header" tint="var(--cp-red)" height={72} className={styles.headBg} />
+        <Asset id="menu.header" tint="var(--cp-red)" height={56} className={styles.headBg} />
         <h1>身份档案</h1>
-        <Asset id="fluff.code" tint="var(--cp-red)" height={16} />
+        <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
         <span className={styles.headSpacer} />
-        <Button disabled={busy} onClick={() => requestGo({ back: true })}>
+        <Button
+          small
+          disabled={busy}
+          pressed={showLibrary}
+          onClick={() => setShowLibrary((open) => !open)}
+        >
+          角色库{characters.data ? `（${characters.data.length}）` : ""}
+        </Button>
+        <Button small disabled={busy} onClick={() => requestGo({ back: true })}>
           返回主菜单
         </Button>
       </header>
 
-      <div className={styles.workspace}>
-        <aside className={styles.library} aria-label="角色库">
-          <Button
-            primary
-            disabled={busy}
-            onClick={() => requestGo({ editor: editorFor(blankCard()) })}
-          >
-            ＋ 新建角色
-          </Button>
-          <div className={styles.importBox}>
-            <Button disabled={busy} onClick={() => fileInput.current?.click()}>
-              {importCard.isPending ? "正在导入…" : "导入角色卡"}
-            </Button>
-            <label className={styles.importOption}>
-              <input
-                type="checkbox"
-                className={styles.importCheck}
-                checked={useModel}
-                disabled={busy}
-                onChange={(event) => setUseModel(event.target.checked)}
-              />
-              <span>由 AI 自动配置主板与属性（消耗一次模型调用；导入本作导出的角色卡除外）</span>
-            </label>
-            <input
-              ref={fileInput}
-              type="file"
-              hidden
-              accept=".json,.png,application/json,image/png"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) importCard.mutate({ file, model: useModel });
-              }}
-            />
-            {importCard.isError && (
-              <p className={styles.error} role="alert">
-                {importCard.error.message}
-              </p>
-            )}
-          </div>
-          {characters.isPending && <p role="status">正在读取角色库…</p>}
-          {characters.isError && (
-            <div role="alert">
-              <p className={styles.error}>{characters.error.message}</p>
-              <Button onClick={() => void characters.refetch()}>重新读取</Button>
+      <div className={wb.workspace}>
+        {showLibrary && (
+          <aside className={wb.libraryDrawer} aria-label="角色库">
+            <div className={wb.topBar}>
+              <strong>角色库</strong>
+              <span className={styles.headSpacer} />
+              <button
+                type="button"
+                className={styles.toolButton}
+                onClick={() => setShowLibrary(false)}
+              >
+                收起
+              </button>
             </div>
-          )}
-          {characters.isSuccess && characters.data.length === 0 && (
-            <p className={styles.note}>还没有角色。</p>
-          )}
-          <ul className={styles.cards}>
-            {(characters.data ?? []).map((entry) => (
-              <li key={entry.id}>
-                <button
-                  type="button"
-                  className={styles.card}
-                  aria-pressed={editor.id === entry.id}
+            <Button
+              primary
+              disabled={busy}
+              onClick={() => requestGo({ editor: editorFor(blankCard()) })}
+            >
+              ＋ 新建角色
+            </Button>
+            <div className={styles.importBox}>
+              <Button disabled={busy} onClick={() => fileInput.current?.click()}>
+                {importCard.isPending ? "正在导入…" : "导入角色卡"}
+              </Button>
+              <label className={styles.importOption}>
+                <input
+                  type="checkbox"
+                  className={styles.importCheck}
+                  checked={useModel}
                   disabled={busy}
-                  onClick={() =>
-                    requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })
-                  }
-                >
-                  <CellFrame />
-                  <span className={styles.cardKind}>
-                    {entry.sample ? "示例 / 只读" : "自建角色"}
-                  </span>
-                  <strong>{entry.card.name}</strong>
-                  <span>
-                    {entry.card.origin}
-                    {entry.card.alias ? ` · ${entry.card.alias}` : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
+                  onChange={(event) => setUseModel(event.target.checked)}
+                />
+                <span>由 AI 自动配置主板与属性（消耗一次模型调用；导入本作导出的角色卡除外）</span>
+              </label>
+              <input
+                ref={fileInput}
+                type="file"
+                hidden
+                accept=".json,.png,application/json,image/png"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) importCard.mutate({ file, model: useModel });
+                }}
+              />
+              {importCard.isError && (
+                <p className={styles.error} role="alert">
+                  {importCard.error.message}
+                </p>
+              )}
+            </div>
+            {characters.isPending && <p role="status">正在读取角色库…</p>}
+            {characters.isError && (
+              <div role="alert">
+                <p className={styles.error}>{characters.error.message}</p>
+                <Button onClick={() => void characters.refetch()}>重新读取</Button>
+              </div>
+            )}
+            {characters.isSuccess && characters.data.length === 0 && (
+              <p className={styles.note}>还没有角色。</p>
+            )}
+            <ul className={styles.cards}>
+              {(characters.data ?? []).map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    className={styles.card}
+                    aria-pressed={editor.id === entry.id}
+                    disabled={busy}
+                    onClick={() =>
+                      requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })
+                    }
+                  >
+                    <CellFrame />
+                    <span className={styles.cardKind}>
+                      {entry.sample ? "示例 / 只读" : "自建角色"}
+                    </span>
+                    <strong>{entry.card.name}</strong>
+                    <span>
+                      {entry.card.origin}
+                      {entry.card.alias ? ` · ${entry.card.alias}` : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
 
         {editor.card.board && !editor.sample ? (
-          <section className={styles.editor} aria-label="分步捏人">
-            <div className={styles.editorHead}>
-              <div>
-                <span className={styles.eyebrow}>{editor.id ? "编辑档案" : "新身份"}</span>
-                <h2>{editor.card.name.trim() || "尚未命名"}</h2>
-              </div>
-              <div className={styles.headTools}>
-                <span className={styles.note}>{dirty ? "有未保存的修改" : "本地角色库"}</span>
-                <Button
-                  disabled={busy || !parsed.success}
-                  reason="角色卡还没填完整"
-                  onClick={() => {
-                    if (parsed.success) downloadCard(parsed.data);
-                  }}
-                >
-                  导出角色卡
-                </Button>
-                {editor.id !== null && (
-                  <Button
-                    disabled={busy}
-                    onClick={() => {
-                      const entry = characters.data?.find((item) => item.id === editor.id);
-                      if (entry && !entry.sample) {
-                        remove.reset();
-                        setDeleting(entry);
-                      }
-                    }}
-                  >
-                    删除角色
-                  </Button>
-                )}
-              </div>
-            </div>
+          <section className={wb.editorWrap} aria-label="角色设计工作台">
             {editor.imported && (
               <div className={styles.notice} role="status">
                 <p>
                   {editor.imported.own
                     ? "这是本作导出的角色卡，已经原样还原。"
-                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配并完成合规校准。"}
+                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配。"}
                   检查一遍再保存，保存后才进角色库。
                 </p>
                 {editor.imported.warnings.length > 0 && (
@@ -381,18 +361,32 @@ export function CharactersScreen() {
             {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
             {boardData.isPending && <p role="status">正在读取模块库…</p>}
             {boardData.isSuccess && (
-              <CharacterCreator
-                key={editor.session}
-                card={{ ...editor.card, board: editor.card.board }}
-                data={boardData.data}
-                onChange={change}
-                start={editor.start}
-                draftable={editor.id === null && !editor.imported}
-                saving={save.isPending}
-                saveError={save.isError ? save.error.message : null}
-                saved={save.isSuccess && !dirty}
-                onSave={(card) => save.mutateAsync({ id: editor.id, card })}
-              />
+              <div className={wb.benchHost}>
+                <CharacterCreator
+                  key={editor.session}
+                  card={{ ...editor.card, board: editor.card.board }}
+                  data={boardData.data}
+                  onChange={change}
+                  start={editor.start}
+                  draftable={editor.id === null && !editor.imported}
+                  saving={save.isPending}
+                  saveError={save.isError ? save.error.message : null}
+                  saved={save.isSuccess && !dirty}
+                  onSave={(card) => save.mutateAsync({ id: editor.id, card })}
+                  onExport={parsed.success ? () => downloadCard(parsed.data) : undefined}
+                  onDelete={
+                    editor.id !== null
+                      ? () => {
+                          const entry = characters.data?.find((item) => item.id === editor.id);
+                          if (entry && !entry.sample) {
+                            remove.reset();
+                            setDeleting(entry);
+                          }
+                        }
+                      : undefined
+                  }
+                />
+              </div>
             )}
           </section>
         ) : (
@@ -500,62 +494,7 @@ export function CharactersScreen() {
               </div>
 
               <div className={styles.sectionHead}>
-                <h3 className={styles.sectionTitle}>02 / 属性</h3>
-                <span className={styles.points} role="status">
-                  剩余 {remaining} / {ATTRIBUTE_POINTS} 点
-                </span>
-              </div>
-              <p className={styles.note}>
-                各项从 {ATTRIBUTE_BASE} 起步，额外分配 {ATTRIBUTE_POINTS} 点，创建时单项最高{" "}
-                {ATTRIBUTE_CREATE_MAX}。
-              </p>
-              <div className={styles.attributes}>
-                {(Object.entries(diceRules.ATTRIBUTE_LABELS) as [Attribute, string][]).map(
-                  ([key, label]) => (
-                    <div className={styles.attribute} key={key}>
-                      <label htmlFor={`character-${key}`}>{label}</label>
-                      <div className={styles.stepper}>
-                        <button
-                          type="button"
-                          aria-label={`减少${label}`}
-                          disabled={editor.card.attributes[key] <= ATTRIBUTE_BASE}
-                          onClick={() =>
-                            change({
-                              attributes: {
-                                ...editor.card.attributes,
-                                [key]: editor.card.attributes[key] - 1,
-                              },
-                            })
-                          }
-                        >
-                          −
-                        </button>
-                        <output id={`character-${key}`}>{editor.card.attributes[key]}</output>
-                        <button
-                          type="button"
-                          aria-label={`增加${label}`}
-                          disabled={
-                            remaining <= 0 || editor.card.attributes[key] >= ATTRIBUTE_CREATE_MAX
-                          }
-                          onClick={() =>
-                            change({
-                              attributes: {
-                                ...editor.card.attributes,
-                                [key]: editor.card.attributes[key] + 1,
-                              },
-                            })
-                          }
-                        >
-                          ＋
-                        </button>
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
-
-              <div className={styles.sectionHead}>
-                <h3 className={styles.sectionTitle}>03 / 角色主板</h3>
+                <h3 className={styles.sectionTitle}>02 / 角色主板</h3>
                 {editor.card.board && !editor.sample && (
                   <button type="button" className={styles.toolButton} onClick={dropBoard}>
                     拆掉主板
@@ -589,36 +528,12 @@ export function CharactersScreen() {
               )}
               {editor.card.board && boardData.isPending && <p role="status">正在读取模块库…</p>}
 
-              <h3 className={styles.sectionTitle}>04 / 这个人</h3>
+              <h3 className={styles.sectionTitle}>03 / 这个人</h3>
               <p className={styles.note}>
                 可调用辅助模型生成、重写、续写或润色（消耗一次调用）；锁定的区块不会被改写。
               </p>
               <div className={styles.proseBlocks}>
                 {BRIEF_BLOCKS.map((block) => (
-                  <ProseField key={block} block={block} card={editor.card} onChange={change} />
-                ))}
-                <label className={styles.field}>
-                  <span>
-                    本事
-                    <small>{editor.card.skills.length} / 400</small>
-                  </span>
-                  <textarea
-                    rows={3}
-                    maxLength={400}
-                    value={editor.card.skills}
-                    placeholder="掌握的核心能力、软肋与缺陷；记录当前已有实力，而非未来的期望。"
-                    onChange={(event) => change({ skills: event.target.value })}
-                  />
-                </label>
-              </div>
-              <h4 className={styles.subTitle}>
-                卡面{" "}
-                <small className={styles.subNote}>
-                  场景、开场白和对话示例只留在卡上，不交给 AI
-                </small>
-              </h4>
-              <div className={styles.proseBlocks}>
-                {CARD_BLOCKS.map((block) => (
                   <ProseField key={block} block={block} card={editor.card} onChange={change} />
                 ))}
               </div>

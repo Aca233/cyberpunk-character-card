@@ -3,6 +3,7 @@ import {
   DEFAULT_OPENING,
   gameContent,
   gameData,
+  type OpeningContext,
   openingPremise,
   RADAR_ANCHORS,
 } from "@cp/content";
@@ -18,6 +19,7 @@ import {
   buildNarratorPrompt,
   type CheckRecord,
   type Clock,
+  characterRules,
   cityRules,
   currentOffers,
   diceRules,
@@ -39,6 +41,7 @@ import {
   type NarratorPlan,
   type NarratorTurn,
   newGameWorld,
+  npcRules,
   OFFSCREEN_PACE_SCENES,
   OFFSCREEN_SYSTEM,
   type OffscreenPace,
@@ -47,6 +50,7 @@ import {
   phoneRules,
   pickLoadouts,
   pickSnapshot,
+  pickStartLocation,
   prepareFor,
   projectState,
   type Rng,
@@ -57,6 +61,7 @@ import {
   type SaveMeta,
   SaveMetaSchema,
   SUMMARY_SYSTEM,
+  safehouseRules,
   sandevistanBlock,
   saveCharacter,
   sceneStartSeq,
@@ -124,6 +129,29 @@ function stableJson(value: unknown): string {
       ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
       : v,
   );
+}
+
+function openingContextOf(world: WorldState, startTime: number): OpeningContext {
+  const char = characterRules.CharacterStateSchema.safeParse(world.slices.character);
+  const safehouse = safehouseRules.SafehouseStateSchema.safeParse(world.slices.safehouse);
+  const npcs = npcRules.NpcStateSchema.safeParse(world.slices.npc);
+  const acquaintances = npcs.success
+    ? Object.values(npcs.data.npcs)
+        .filter((n) => n.met)
+        .slice(0, 6)
+        .map((n) => {
+          const relation = n.relation?.text ?? n.role;
+          return { name: n.name, ...(relation ? { relation } : {}) };
+        })
+    : [];
+  return {
+    timeMinutes: startTime,
+    ...(char.success && char.data.brief ? { origin: char.data.brief.split("\n")[0] } : {}),
+    ...(safehouse.success && safehouse.data.homes.length > 0
+      ? { homes: safehouse.data.homes.map((h) => h.name) }
+      : {}),
+    ...(acquaintances.length > 0 ? { acquaintances } : {}),
+  };
 }
 
 const newSaveId = () => `s-${Date.now().toString(36)}-${randomHex(3)}`;
@@ -224,7 +252,7 @@ export class GameService {
   }
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
-    // 开局地点“在地图上选择”（用户定的，2026-10-30）：只收已有地图锚点，不接受自编地点或其他存档的 place:
+    // 开局地点“在地图上选择”：只收已有地图锚点，未传时优先取角色卡预设位置或出身默认起点
     if (
       input.startLocation !== undefined &&
       !RADAR_ANCHORS.some((anchor) => anchor.id === input.startLocation)
@@ -234,18 +262,34 @@ export class GameService {
     const id = newSaveId();
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
+    const matchInput = loadoutText(entry.card);
+    const cardStart = entry.card.board?.startLocation;
+    const startLocation =
+      input.startLocation ??
+      (cardStart && RADAR_ANCHORS.some((anchor) => anchor.id === cardStart)
+        ? cardStart
+        : pickStartLocation(matchInput, gameContent.loadouts ?? []));
     const start = boardStart(entry.card);
     // 名册摘要在建档时冻结进 meta：之后名册再变，这份存档重放出来的提示词也不变
     const legends = legendNotes(await this.legends());
     const meta: SaveMeta = {
       ...input,
+      startLocation,
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),
       opening: DEFAULT_OPENING,
-      loadouts: pickLoadouts(loadoutText(entry.card), gameContent.loadouts ?? [], DEFAULT_LOADOUT),
+      loadouts: pickLoadouts(matchInput, gameContent.loadouts ?? [], DEFAULT_LOADOUT),
       ...(start ? { board: start } : {}),
       ...(legends.length > 0 ? { legends } : {}),
     };
+    try {
+      newGameWorld(meta, gameContent);
+    } catch (error) {
+      return {
+        status: 400,
+        body: { error: error instanceof Error ? error.message : "角色开局设定无法初始化" },
+      };
+    }
     await this.deps.saves.create(id, meta);
     return { status: 201, body: { id, ...meta } };
   }
@@ -591,7 +635,7 @@ export class GameService {
       }
       const voided = voidedSeqs(records);
       const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
-      if (last?.kind !== "turn" || last.seq === 0) {
+      if (last?.kind !== "turn") {
         return {
           status: 409,
           body: { error: "最后一步不是可以重写的回合（之后可能有别的操作）", version },
@@ -636,7 +680,7 @@ export class GameService {
         if (projectState(world, records, gameData).death) return refuse("角色已经死了，不能改写");
         const voided = voidedSeqs(records);
         const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
-        if (last?.kind !== "turn" || last.seq === 0) {
+        if (last?.kind !== "turn") {
           return refuse("最后一步不是可以改写的回合（之后可能有别的操作）");
         }
         if (last.unsettled === undefined) return refuse("这一轮的正文和账目对得上，不用改写");
@@ -743,7 +787,11 @@ export class GameService {
         }
         const extras = {
           data: gameData,
-          opening: openingPremise(meta.opening, meta.startLocation),
+          opening: openingPremise(
+            meta.opening,
+            meta.startLocation,
+            openingContextOf(world, meta.startTime),
+          ),
           startTime: meta.startTime,
         };
         const stage = (
@@ -946,7 +994,11 @@ export class GameService {
         ask = { confirm: { checkId: record.resolves, faces: rolled.roll.faces } };
       }
       const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
-      const opening = openingPremise(meta.opening, meta.startLocation);
+      const opening = openingPremise(
+        meta.opening,
+        meta.startLocation,
+        openingContextOf(world, meta.startTime),
+      );
       const caseId = `playtest-${id}-${seq}`;
       const draft = {
         id: caseId,
@@ -1006,7 +1058,7 @@ export class GameService {
           contextWindow: resolved.profile.contextWindow,
           rng: this.deps.rng,
           data: gameData,
-          opening: openingPremise(opening, startLocation),
+          opening: openingPremise(opening, startLocation, openingContextOf(world, startTime)),
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],

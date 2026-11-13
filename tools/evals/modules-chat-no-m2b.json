@@ -13,7 +13,11 @@
   },
   "input": { "text": "跟酒保聊聊最近城里有什么新鲜事" },
   "expect": {
-    "judge": { "check": "forbidden" },
+    "judge": {
+      "ruling": {
+        "present": false
+      }
+    },
     "modules": {
       "forbid": [
         "hacking",

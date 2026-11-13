@@ -1,5 +1,4 @@
 import type { ViewContext } from "../../kernel/system";
-import { OPPONENT_TIERS } from "../dice";
 import { itemCatalog } from "../inventory";
 import {
   BODY_PART_LABELS,
@@ -27,7 +26,6 @@ export function combatView({ world, data }: ViewContext) {
         npc: f.npc,
         name: f.name,
         gang: f.gang,
-        tierLabel: OPPONENT_TIERS[f.tier].label,
         state: f.state,
         stateLabel: FOE_STATE_LABELS[f.state],
         carry: lootable(f.state) ? named(f.carry) : [],

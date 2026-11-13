@@ -8,7 +8,7 @@ import { CombatStateSchema } from "../systems/combat/schema";
 import { HackingStateSchema } from "../systems/hacking/schema";
 import { HealthStateSchema } from "../systems/health/schema";
 import { NpcSchema } from "../systems/npc/schema";
-import { JUDGE_TEMPERATURE, VERIFY_TEMPERATURE } from "./prompts";
+import { JUDGE_TEMPERATURE } from "./prompts";
 import { runNarratorTurn } from "./turn";
 
 function ready() {
@@ -124,14 +124,10 @@ describe("叙事战斗伤害去重", () => {
     const result = await runNarratorTurn(
       {
         llm: fakeLlm([damage, attack, wound], {
-          intent: "抵抗过热",
-          attribute: "body",
-          tier: "elite",
-          edge: "high",
-          success: "挡住",
-          failure: "过热受伤",
-          damage: "heavy",
-          npcHack: { id: "runner", program: "overheat" },
+          kind: "costly",
+          outcome: "敌方黑客强行上传过热程序",
+          harm: "heavy",
+          reason: "敌方黑客在场且接入仓就绪",
         }),
         rng: { roll: () => 2 },
         offscreen: null,
@@ -147,7 +143,7 @@ describe("叙事战斗伤害去重", () => {
     expect(result.turn.world.slices.hacking).toMatchObject({
       selfIceSpent: true,
       npcRamUsed: { runner: 2 },
-      resolvedNpcHacks: ["inline.0"],
+      resolvedNpcHacks: ["turn.0"],
     });
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
     expect(result.turn.commands).toContainEqual(attack);
@@ -165,14 +161,10 @@ describe("叙事战斗伤害去重", () => {
     const result = await runNarratorTurn(
       {
         llm: fakeLlm([damage, attack, wound], {
-          intent: "抵抗过热",
-          attribute: "intelligence",
-          tier: "elite",
-          edge: "high",
-          success: "挡住",
-          failure: "过热受伤",
-          damage: "heavy",
-          npcHack: { id: "runner", program: "overheat" },
+          kind: "costly",
+          outcome: "黑客试图继续上传过热程序",
+          harm: "heavy",
+          reason: "敌方尝试侵入你的神经链",
         }),
         rng: { roll: () => 2 },
         offscreen: null,
@@ -194,14 +186,10 @@ describe("叙事战斗伤害去重", () => {
     const result = await runNarratorTurn(
       {
         llm: fakeLlm([start, damage, attack, wound], {
-          intent: "抵抗过热",
-          attribute: "intelligence",
-          tier: "elite",
-          edge: "high",
-          success: "挡住程序",
-          failure: "过热受伤",
-          damage: "heavy",
-          npcHack: { id: "runner", program: "overheat" },
+          kind: "costly",
+          outcome: "过热程序击穿防护引发灼伤",
+          harm: "heavy",
+          reason: "敌方网络黑客近距离直接上传攻击程序",
         }),
         rng: { roll: () => 2 },
         offscreen: null,
@@ -229,13 +217,10 @@ describe("叙事战斗伤害去重", () => {
     const result = await runNarratorTurn(
       {
         llm: fakeLlm(changes, {
-          intent: "躲开霰弹",
-          attribute: "reflexes",
-          tier: "elite",
-          edge: "high",
-          success: "躲开",
-          failure: "左臂中弹",
-          damage: "heavy",
+          kind: "costly",
+          outcome: "近距霰弹枪口炸响，左臂中弹",
+          harm: "heavy",
+          reason: "近距离交火没有足够掩体",
         }),
         rng: { roll: () => 2 },
         offscreen: null,
@@ -256,16 +241,21 @@ describe("叙事战斗伤害去重", () => {
   });
 });
 
-function fakeLlm(changes: Command[], check: unknown = null): LlmClient {
+function fakeLlm(changes: Command[], ruling: unknown = null): LlmClient {
   return {
     async *stream(request) {
       const text =
         request.purpose === "aux"
-          ? request.temperature === VERIFY_TEMPERATURE
-            ? `<patch>\n${changes.map((_, i) => `keep ${i + 1}`).join("\n")}\n</patch>`
-            : JSON.stringify({ changes, choices: [], dropped: [] })
+          ? JSON.stringify({ changes, choices: [], dropped: [] })
           : request.temperature === JUDGE_TEMPERATURE
-            ? JSON.stringify({ check, gate: null, buy: null, foes: null, recall: [] })
+            ? JSON.stringify({
+                read: "测试战斗判定",
+                ooc: false,
+                ruling,
+                buy: null,
+                foes: null,
+                recall: [],
+              })
             : "枪手开火，你的左臂被霰弹擦过，留下了一处伤口。";
       yield { type: "text", text };
       yield { type: "done", finishReason: "stop" };

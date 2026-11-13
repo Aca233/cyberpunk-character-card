@@ -254,7 +254,7 @@ export function applyPreset(
   const bridge: LlmMessage = {
     role: "system",
     content:
-      "以上是玩家导入的写作预设，只管文风和写法。下面是本游戏的规则、世界状态和输出格式；两边冲突时以下面为准，状态格式、检定和结算一律照下面做。",
+      "以上是玩家导入的写作预设，只管文风和写法。下面是本游戏的规则、世界状态和输出格式；两边冲突时以下面为准，状态格式和结算一律照下面做。",
   };
   const out: LlmMessage[] = [...head, ...(head.length > 0 ? [bridge] : []), ...messages];
   for (const { depth, message } of [...inChat].sort((a, b) => b.depth - a.depth)) {

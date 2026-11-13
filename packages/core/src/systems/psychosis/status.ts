@@ -16,15 +16,14 @@ export const psychosisStatus: readonly SystemStatus[] = [
       const s = p.suppressant;
       if (s.until)
         lines.push(
-          `压制剂起效到 ${s.until}：发作相关检定可以写两项加成（来源：压制剂）${s.tolerant ? "；已经耐受，药效变短" : ""}`,
+          `压制剂起效到 ${s.until}：药力压住了神经震颤与幻觉冲动${s.tolerant ? "；已经耐受，药效变短" : ""}`,
         );
-      if (s.withdrawal)
-        lines.push("压制剂戒断中：烦躁、手抖、睡不好；相关检定写一项减值（来源：戒断）");
+      if (s.withdrawal) lines.push("压制剂戒断中：烦躁、手抖、失眠，情绪与精细动作明显吃力");
       else if (s.dependent) lines.push("已经依赖压制剂：停药一天就会戒断");
       const c = p.crisis;
       if (c?.status === "open")
         lines.push(
-          `危机章节（${c.since} 人性归零）：普通委托暂停；方向：被拉回来（身边的人或诊所出面，镇定检定成功后写 crisis pulledBack）、带着全部义体走向最后一战（crisis lastStand）、向暴恐机动队投降（crisis surrender），玩家别的合理办法也能接住`,
+          `危机章节（${c.since} 人性归零）：普通委托暂停；方向：被拉回来（身边的人或诊所出面，稳住局面后写 crisis pulledBack）、带着全部义体走向最后一战（crisis lastStand）、向暴恐机动队投降（crisis surrender），玩家别的合理办法也能接住`,
         );
       else if (c?.status === "lastStand")
         lines.push(

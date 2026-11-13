@@ -1,6 +1,6 @@
 {
   "id": "extract-miss-damage",
-  "title": "没检定却写了挨打：抽取要提 damage，代码按没掷骰拦下",
+  "title": "正文写清被打中流血：抽取要提 damage 并生效",
   "tags": ["extract"],
   "setup": {
     "commands": [
@@ -34,12 +34,17 @@
     "extract": {
       "require": ["damage"]
     },
-    "verify": {
-      "forbid": ["damage"]
+    "applied": {
+      "require": ["damage"]
     }
   },
   "judged": {
     "read": "你想趁他不注意抢枪",
-    "check": null
+    "ruling": {
+      "kind": "costly",
+      "outcome": "还没摸到枪就被对方察觉并用手肘打中鼻梁",
+      "harm": "graze",
+      "reason": "你在对方近身警戒时直接伸手抢枪"
+    }
   }
 }

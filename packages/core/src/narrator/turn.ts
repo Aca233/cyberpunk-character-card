@@ -9,9 +9,10 @@ import type {
   Rng,
 } from "../kernel/ports";
 import type { Command } from "../kernel/system";
-import type { Closeup, LogRecord } from "../kernel/turnlog";
+import type { LogRecord } from "../kernel/turnlog";
 import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
+import type { NarrativeIntensity } from "../physics";
 import {
   CharacterStateSchema,
   TRAIT_LABELS,
@@ -21,22 +22,16 @@ import {
 import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
-import {
-  CheckProposalSchema,
-  type CheckSpec,
-  checkFactFrom,
-  legacyDvToEdge,
-  resolveCheck,
-  rollFaces,
-  withOpponentChrome,
-} from "../systems/dice";
+import { type CheckSpec, checkFactFrom, rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
+import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
 import { itemCatalog, shopList } from "../systems/inventory/apply";
 import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
 import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
+import { TensionStateSchema } from "../systems/tension";
 import {
   autoMove,
   type PlannedTrip,
@@ -51,9 +46,7 @@ import {
   ChoiceProposalSchema,
   ExtractDocSchema,
   type ExtractShape,
-  GateProposalSchema,
   issueText,
-  legacyGate,
   MAX_CHOICES,
   MAX_VOICES,
   parseModelJson,
@@ -71,7 +64,7 @@ import {
   MIN_HISTORY,
   memoryTokens,
 } from "./budget";
-import { schemaDoc } from "./doc";
+import { responseJsonSchema, schemaDoc } from "./doc";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import {
   buildOffscreenPrompt,
@@ -81,56 +74,49 @@ import {
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
-import { prepareFor, type RolledCheck } from "./pending";
+import type { RolledCheck } from "./pending";
 import { applyPreset, applyPresetRegex, type TavernPreset } from "./preset";
 import {
   buildExtractPrompt,
   buildJudgePrompt,
   buildNarratorPrompt,
-  buildVerifyPrompt,
   EXTRACT_TEMPERATURE,
   HISTORY_TURNS,
   JUDGE_TEMPERATURE,
-  NARRATE_LENGTH,
-  NARRATE_LENGTH_PRESET,
   type NarratorPlan,
   type PromptExtras,
-  VERIFY_TEMPERATURE,
 } from "./prompts";
 import { estimateTokens } from "./prompts/layers";
 import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
-import { closeupFor, sceneTitle } from "./scene";
+import { sceneTitle } from "./scene";
 import {
-  applyFix,
   type BigSpend,
   BuyProposalSchema,
   bigSpend,
-  type GateResult,
-  gateText,
   JudgeDocSchema,
+  type JudgeRuling,
+  JudgeRulingSchema,
   type JudgeShape,
-  judgeGate,
   MAX_RECALL,
   type Memory,
-  parseFlags,
-  parsePatch,
   readJudgeShape,
+  rulingText,
   skipStop,
 } from "./stages";
-import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE } from "./summary";
+import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE, SummaryDocSchema } from "./summary";
 
 /**
- * 一轮五步：① 判断（叙事模型，JSON）→ ② 拼上下文 → ③ 写正文（叙事模型，纯文本，边收边放）
- * → ④ 抽取（辅助模型，JSON）→ ⑤ 核对（辅助模型，<patch>）→ 代码校验和记账。
+ * 一轮四步：① 判断（叙事模型，JSON Schema：记忆调度与定性物理/社会因果裁决）→ ② 拼上下文
+ * → ③ 写正文（叙事模型，纯文本，边收边放）→ ④ 抽取（辅助模型，JSON）+ 确定性规则核验与记账。
  * 只算出结果，不写日志：写日志、加锁和版本核对由调用方负责
  */
 
 export interface Dropped {
-  /** 出问题的位置，例如 changes[2]、check、choices[1]、抽取 */
+  /** 出问题的位置，例如 changes[2]、ruling、choices[1]、抽取 */
   readonly where: string;
   readonly raw: unknown;
   readonly reason: string;
-  /** format：格式不合格，修过一次仍不行；verify：核对认为正文里没有依据；rules：业务校验没通过 */
+  /** format：格式不合格，修过一次仍不行；verify：历史字段；rules：业务校验没通过 */
   readonly stage: "format" | "verify" | "rules";
 }
 
@@ -139,49 +125,7 @@ function noteOnce(notes: string[], note: string): void {
   if (!notes.includes(note)) notes.push(note);
 }
 
-/** 建议选项里的检定或门槛仍写了数字时，先换成档位再校验 */
-function legacyChoice(item: unknown, notes: string[]): unknown {
-  if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
-  let out = item as Record<string, unknown>;
-  if ("check" in out) {
-    const legacy = legacyDvToEdge(out.check);
-    if (legacy.note !== undefined) {
-      noteOnce(notes, legacy.note);
-      out = { ...out, check: legacy.value };
-    }
-  }
-  if ("gate" in out) {
-    const legacy = legacyGate(out.gate);
-    if (legacy.note !== undefined) {
-      noteOnce(notes, legacy.note);
-      out = { ...out, gate: legacy.value };
-    }
-  }
-  return out;
-}
-
-/**
- * 检定写了对手（有卡的人）时，他身上利于这项属性的义体让难度提高一档（用户 2026-11-02 选的"对抗时提高难度"）。
- * 在检定记进回合之前加进 dvMods，之后 prepareFor、重放、重新生成都照存下来的算
- */
-function withOpponent(
-  world: WorldState,
-  data: Readonly<Record<string, unknown>>,
-  spec: CheckSpec,
-): CheckSpec {
-  if (spec.opponent === undefined) return spec;
-  const state = NpcStateSchema.safeParse(world.slices.npc ?? { npcs: {} });
-  const npc = state.success ? state.data.npcs[spec.opponent] : undefined;
-  if (!npc?.alive) return spec;
-  const catalog = cyberwareCatalog(data);
-  const favors = (npc.body?.cyberware ?? []).flatMap((id) => {
-    const def = catalog.get(id);
-    return def?.checks.includes(spec.attribute) ? [def.name] : [];
-  });
-  return withOpponentChrome(spec, npc.name, favors);
-}
-
-/** 关键条目：被拒、被丢或被核对删掉时，这一轮正文标为未定稿 */
+/** 关键条目：被拒、被丢或规则拦截时，这一轮正文标为未定稿 */
 const KEY_ITEMS: Readonly<Record<string, string>> = {
   combat: "战斗后果",
   npcHack: "快速破解",
@@ -262,20 +206,20 @@ export interface NarratorTurn {
   readonly choices: readonly Choice[];
   /** 内心声音，0–2 条 */
   readonly voices: readonly Voice[];
-  /** 判断给出、等玩家确认的检定；当场掷过的不在这里，见 rolled */
+  /** @deprecated 兼容旧回合日志类型；运行期已废除检定与属性门槛 */
   readonly check: CheckSpec | undefined;
-  /** 当场掷过的检定（用户 2026-11-01 选的「全改」）：骰子记进这一轮的 dice，不再等确认 */
+  /** @deprecated 兼容旧回合日志类型；运行期已废除掷骰 */
   readonly rolled: RolledCheck | undefined;
-  /** 判断给出的门槛和代码判定的结果 */
-  readonly gate: GateResult | undefined;
+  /** @deprecated 兼容旧回合日志类型；运行期已废除门槛 */
+  readonly gate: undefined;
   /** 生效的指令，按结算顺序 */
   readonly commands: readonly Command[];
   readonly dropped: readonly Dropped[];
-  /** 未定稿：关键条目没记上时的原因；正文照常显示，但不进旧记忆、不弹特写卡 */
+  /** 未定稿：关键条目没记上时的原因；正文照常显示，但不进旧记忆 */
   readonly unsettled: string | undefined;
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
-  /** 判断给检定或门槛时写的理由，只供剧透视图 */
+  /** 判断给出物理与社会因果裁决时留档的摘要，只供剧透视图 */
   readonly ruling: string | undefined;
   /** ⑥ 场外推演跑了时：发出的用户消息和原始回复，只供剧透视图 */
   readonly offscreen: { readonly prompt: string; readonly reply: string } | undefined;
@@ -284,7 +228,7 @@ export interface NarratorTurn {
   /** ⑦ 场景摘要跑了时：发出的用户消息和原始回复，只供剧透视图 */
   readonly summary: { readonly prompt: string; readonly reply: string } | undefined;
   readonly notes: readonly string[];
-  /** ⑤ 审守则的提醒（替玩家角色说话、泄露秘密、死人出场）；只供剧透视图，不拦这一轮 */
+  /** 历史提醒字段，只供剧透视图 */
   readonly flags: readonly string[];
   readonly world: WorldState;
   readonly patches: readonly Patch[];
@@ -296,9 +240,9 @@ export interface NarratorTurn {
   readonly scene: number;
   /** 场景标题卡的一行；还没有地点时为 undefined */
   readonly title: string | undefined;
-  /** 这一轮弹出的特写卡 */
-  readonly closeup: Closeup | undefined;
-  /** 判断认为这次是场外提问：不改状态，也不顶掉上一轮的选项和检定 */
+  /** @deprecated 特写弹窗已退役，恒为 undefined */
+  readonly closeup: undefined;
+  /** 判断认为这次是场外提问：不改状态，也不顶掉上一轮的选项 */
   readonly ooc: boolean;
   /** 叙事模型的用量（判断和写正文） */
   readonly usage: LlmUsage | undefined;
@@ -430,6 +374,7 @@ class TurnBuilder {
     const reply = await this.call({
       purpose: "aux",
       temperature: 0,
+      responseFormat: responseJsonSchema("repair"),
       messages: [
         { role: "system", content: REPAIR_SYSTEM },
         { role: "user", content: `${task}\n\n原文：\n${raw}` },
@@ -461,7 +406,7 @@ class TurnBuilder {
     return undefined;
   }
 
-  /** ① 判断的顶层结构；解析不了修一次，仍不行按“不检定、不调记忆”继续 */
+  /** ① 判断的顶层结构；解析不了修一次，仍不行按“不裁决、不调记忆”继续 */
   async readJudge(text: string): Promise<JudgeShape> {
     const json = parseModelJson(text);
     const shape = json.ok ? readJudgeShape(json.value) : undefined;
@@ -476,8 +421,8 @@ class TurnBuilder {
       this.notes.push("判断的格式已自动修正");
       return second.judge;
     }
-    this.drop("判断", text, `${reason}；修过一次仍然不行，这一轮按不检定、不调记忆继续`, "format");
-    this.notes.push("这一轮的判断没解析出来，按不检定继续");
+    this.drop("判断", text, `${reason}；修过一次仍然不行，这一轮按不裁决、不调记忆继续`, "format");
+    this.notes.push("这一轮的判断没解析出来，按常规推演继续");
     return {};
   }
 
@@ -552,49 +497,49 @@ function readConsidered(raw: readonly unknown[] | undefined): string[] {
   });
 }
 
-/** ⑤ 核对：没有正文依据的删掉，写重了的按正文改小；核对出问题时提议原样保留 */
-async function verify(
+const DEAD_NPC_BLOCKED_TYPES = new Set([
+  "npcHack",
+  "npcHumanity",
+  "npcDeath",
+  "npc.move",
+  "npc.hurt",
+  "npc.heal",
+  "npc.status",
+  "npc.equip",
+]);
+
+/** 确定性常识与物理一致性复核：不再调用额外的辅助模型质检，代码拦截死人行动等硬错误 */
+function sanityGuard(
   b: TurnBuilder,
-  messages: readonly LlmMessage[],
-  proposals: Proposal[],
-): Promise<Proposal[]> {
-  if (proposals.length === 0) return proposals;
-  const reply = await b.call({ purpose: "aux", temperature: VERIFY_TEMPERATURE, messages });
-  if ("blocked" in reply) {
-    b.notes.push("核对被辅助模型拒答，提议原样保留");
-    return proposals;
-  }
-  b.auxUsage = addUsage(b.auxUsage, reply.usage);
-  const lines = parsePatch(reply.text);
-  b.flags.push(...parseFlags(reply.text));
-  if (lines === undefined) {
-    b.notes.push("核对没给出 <patch>，提议原样保留");
-    return proposals;
-  }
-  const seen = new Set<number>();
-  const removed = new Set<number>();
-  for (const line of lines) {
-    const index = line.n - 1;
-    const proposal = proposals[index];
-    if (!proposal || seen.has(index)) continue;
-    seen.add(index);
-    if (line.op === "drop") {
-      b.drop(proposal.where, proposal.value, `核对：${line.reason}`, "verify");
-      removed.add(index);
-    } else if (line.op === "fix") {
-      const fixed = applyFix(proposal.value, line.fields);
-      const parsed = fixed.ok ? proposal.parse(fixed.value) : undefined;
-      if (fixed.ok && parsed) {
-        proposal.value = fixed.value;
-        b.notes.push(`核对按正文改小了 ${proposal.where}${line.reason ? `：${line.reason}` : ""}`);
-      } else {
-        b.notes.push(
-          `核对对 ${proposal.where} 的改动不合规（${fixed.ok ? "改完格式不对" : fixed.reason}），按原样保留`,
+  world: WorldState,
+  proposals: readonly Proposal[],
+): Proposal[] {
+  const npcs = NpcStateSchema.safeParse(world.slices.npc ?? { npcs: {} });
+  const cards = npcs.success ? npcs.data.npcs : {};
+  const kept: Proposal[] = [];
+  for (const proposal of proposals) {
+    if (proposal.kind === "change") {
+      const type = proposal.value.type;
+      const npcId = proposal.value.id;
+      if (
+        typeof type === "string" &&
+        DEAD_NPC_BLOCKED_TYPES.has(type) &&
+        typeof npcId === "string" &&
+        cards[npcId] &&
+        !cards[npcId].alive
+      ) {
+        b.drop(
+          proposal.where,
+          proposal.value,
+          `${cards[npcId].name}已经死了，不能再行动或改状态`,
+          "rules",
         );
+        continue;
       }
     }
+    kept.push(proposal);
   }
-  return proposals.filter((_, i) => !removed.has(i));
+  return kept;
 }
 
 export async function runNarratorTurn(
@@ -613,13 +558,13 @@ export async function runNarratorTurn(
   const addNarrator = (u: LlmUsage | undefined) => {
     if (u) usage = addUsage(usage ?? ZERO, u);
   };
-  // 闪回里不掷骰、不推进时间、不记账：只认 flashback 指令
+  // 闪回里不推进时间、不记账：只认 flashback 指令
   const inFlashback = CharacterStateSchema.parse(world.slices.character).flashback !== null;
-  const flashbackReason = "闪回里不掷骰、不推进时间、不记账";
+  const flashbackReason = "闪回里不推进时间、不记账";
   const oocReason = "场外提问不改状态";
   const legacyOoc = plan.kind === "action" && plan.input.mode === "ooc";
 
-  // ① 判断：确认过的检定（包括预先带检定的选项）跳过；旧存档选了出戏也跳过
+  // ① 判断：用原生 JSON Schema 获取意图、物理/社会因果定性裁决和记忆调度；旧存档选了出戏也跳过
   let judge: JudgeShape = {};
   // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
   const budget = contextBudget(deps.contextWindow);
@@ -640,6 +585,7 @@ export async function runNarratorTurn(
     const reply = await b.call({
       purpose: "narrator",
       temperature: JUDGE_TEMPERATURE,
+      responseFormat: responseJsonSchema("judge", JudgeDocSchema),
       messages: prompt.messages,
     });
     if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
@@ -652,32 +598,13 @@ export async function runNarratorTurn(
       ? judge.read.trim()
       : undefined;
 
-  // 待确认的检定：格式对了还要能算出难度值（档位范围、属性）
-  let check: CheckSpec | undefined;
-  if (judge.check !== undefined && judge.check !== null) {
+  // 定性物理与社会因果裁决：日常对话写 null，冲突/受阻/险境才给出
+  let rulingSpec: JudgeRuling | undefined;
+  if (judge.ruling !== undefined && judge.ruling !== null) {
     if (ooc || inFlashback) {
-      b.drop("check", judge.check, ooc ? oocReason : flashbackReason, "rules");
+      b.drop("ruling", judge.ruling, ooc ? oocReason : flashbackReason, "rules");
     } else {
-      const legacy = legacyDvToEdge(judge.check);
-      if (legacy.note !== undefined) noteOnce(b.notes, legacy.note);
-      const parsed = await b.validate("check", legacy.value, CheckProposalSchema);
-      const spec = parsed ? withOpponent(world, deps.data ?? {}, parsed) : undefined;
-      const prepared = spec && prepareFor(world, spec);
-      if (spec && prepared && !prepared.ok) b.drop("check", spec, prepared.reason, "rules");
-      else check = spec;
-    }
-  }
-
-  // 门槛：代码直接判定，不掷骰；这一轮已经给了检定就不再判
-  let gate: GateResult | undefined;
-  if (judge.gate !== undefined && judge.gate !== null) {
-    if (ooc) b.drop("gate", judge.gate, oocReason, "rules");
-    else {
-      const legacyG = legacyGate(judge.gate);
-      if (legacyG.note !== undefined) noteOnce(b.notes, legacyG.note);
-      const spec = await b.validate("gate", legacyG.value, GateProposalSchema);
-      if (spec && check) b.drop("gate", spec, "这一轮已经给了检定，门槛不再判", "rules");
-      else if (spec) gate = judgeGate(world, spec);
+      rulingSpec = await b.validate("ruling", judge.ruling, JudgeRulingSchema);
     }
   }
 
@@ -734,21 +661,8 @@ export async function runNarratorTurn(
   // ② 拼上下文：写正文之前代码已经定下的事
   const decided: string[] = [];
   if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
-  // 当场掷骰（用户 2026-11-01 选的「全改」第 1 步）：判断给了检定就直接掷，不再停笔等玩家确认；
-  // 结果按确认检定那条路交给写正文、抽取和核对，一轮写完、一轮记账
-  let rolled: RolledCheck | undefined;
-  if (check) {
-    const prepared = prepareFor(world, check);
-    if (prepared.ok) {
-      rolled = {
-        offer: { id: `inline.${records.length}`, label: check.intent, spec: check },
-        prepared: prepared.check,
-        result: resolveCheck(prepared.check, rollFaces(deps.rng)),
-      };
-    }
-  }
-  const live: NarratorPlan = rolled ? { kind: "resolve", input: plan.input, check: rolled } : plan;
-  if (gate) decided.push(gateText(gate));
+  const live: NarratorPlan = plan;
+  if (rulingSpec) decided.push(rulingText(rulingSpec));
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
   if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
@@ -772,14 +686,12 @@ export async function runNarratorTurn(
     !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
       ? judge.foes.trim().slice(0, FOES_CHARS)
       : undefined;
-  // 对手的打算从“照这个写”改成素材（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
   if (foes)
     decided.push(`对手这一轮的打算（对手不会只等着挨打；按局面写进对手的行动，可以改）：${foes}`);
-  // 裁决理由：给了检定或门槛时留档，只在剧透视图里看
-  const ruling =
-    (check || gate) && typeof judge.why === "string" && judge.why.trim() !== ""
-      ? judge.why.trim().slice(0, RULING_CHARS)
-      : undefined;
+  // 裁决理由：仅留档在剧透视图里查看，不进游戏正文
+  const ruling = rulingSpec
+    ? `${rulingSpec.outcome}（${rulingSpec.reason}）`.slice(0, RULING_CHARS)
+    : undefined;
 
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
   // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
@@ -787,9 +699,26 @@ export async function runNarratorTurn(
     ? undefined
     : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {}, budget.parts.world);
   let loreSection = lore?.section;
+  const preset = ooc ? undefined : deps.preset;
+  const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
+  const tensionNow = TensionStateSchema.safeParse(world.slices.tension ?? {});
+  const exposure = tensionNow.success ? tensionNow.data.exposure : "hidden";
+  const intensity: NarrativeIntensity =
+    inCombatNow ||
+    rulingSpec?.harm === "heavy" ||
+    rulingSpec?.harm === "lethal" ||
+    rulingSpec?.kind === "costly" ||
+    exposure === "openConflict" ||
+    exposure === "compromised"
+      ? "climax"
+      : trip !== undefined || rulingSpec !== undefined || exposure === "suspicious"
+        ? "exploration"
+        : "dialogue";
   const build = () =>
     buildNarratorPrompt(world, records, live, {
       ...extras,
+      hasPreset: preset !== undefined,
+      intensity,
       decided,
       recalled: [...recalled, ...expanded],
       lore: loreSection,
@@ -844,21 +773,9 @@ export async function runNarratorTurn(
     lore && loreSection === undefined && lore.section !== undefined
       ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
       : lore?.trace;
-  // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；采样参数只给这一步；场外提问不套
-  const preset = ooc ? undefined : deps.preset;
-  // 预设兼容：启用时把本作默认篇幅让给预设，只改本轮系统提示，不改历史正文或检定规则。
-  const gameMessages = preset
-    ? prompt.messages.map((message) =>
-        message.role === "system"
-          ? {
-              ...message,
-              content: message.content.replace(NARRATE_LENGTH, NARRATE_LENGTH_PRESET),
-            }
-          : message,
-      )
-    : prompt.messages;
+  // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；节律提示由用户消息尾端自适应处理，不破坏系统前缀缓存
   const narrateMessages = preset
-    ? applyPreset(gameMessages, preset, {
+    ? applyPreset(prompt.messages, preset, {
         // 酒馆预设的 {{user}} 使用当前存档角色名；旧存档没有名字时才回退为玩家。
         user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
         char: "叙事者",
@@ -907,14 +824,15 @@ export async function runNarratorTurn(
   if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
   if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
 
-  // ④ 抽取：场外提问不抽，状态不变；检定当场掷过，这一轮照常记账
+  // ④ 抽取：场外提问不抽，状态不变；其余常规与裁决回合都照常记账
   let shape: ExtractShape = {};
-  const settle = !ooc && (check === undefined || rolled !== undefined);
+  const settle = !ooc;
   if (settle) {
     const extract = buildExtractPrompt(world, records, live, extras, narrative);
     const reply = await b.call({
       purpose: "aux",
       temperature: EXTRACT_TEMPERATURE,
+      responseFormat: responseJsonSchema("extract"),
       messages: extract.messages,
     });
     if ("blocked" in reply) {
@@ -947,22 +865,9 @@ export async function runNarratorTurn(
       b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
       continue;
     }
-    const choice = await b.validate(where, legacyChoice(item, b.notes), ChoiceProposalSchema);
+    const choice = await b.validate(where, item, ChoiceProposalSchema);
     if (!choice) continue;
-    // 闪回里不掷骰：选项去掉检定，只留行动
-    if (inFlashback && choice.check) {
-      const { check: _dropped, ...plain } = choice;
-      b.notes.push(`选项「${choice.text}」在闪回里，去掉了检定`);
-      choices.push(verifySource(plain as Choice, chrome, traits, b.notes));
-      continue;
-    }
-    // 选项预先带的检定也按对手的义体加难度，选中时照存下来的掷
-    const withFoe: Choice = choice.check
-      ? { ...choice, check: withOpponent(world, deps.data ?? {}, choice.check) }
-      : choice;
-    const prepared = withFoe.check && prepareFor(world, withFoe.check);
-    if (prepared && !prepared.ok) b.drop(where, withFoe, prepared.reason, "rules");
-    else choices.push(verifySource(withFoe, chrome, traits, b.notes));
+    choices.push(verifySource(choice, chrome, traits, b.notes));
   }
 
   const voices: Voice[] = [];
@@ -1047,22 +952,21 @@ export async function runNarratorTurn(
     });
   }
 
-  // ⑤ 核对：没有正文依据的删掉，写重了的改小
-  const verified = await verify(
-    b,
-    buildVerifyPrompt(
-      world,
-      records,
-      live,
-      extras,
-      narrative,
-      proposals.map((p) => p.value),
-    ),
-    proposals,
-  );
+  // 确定性规则核验（退休辅助模型质检）：拦掉死人行动等硬错误
+  const verified = sanityGuard(b, world, proposals);
 
-  // 代码校验第二步：业务规则（闪回、战斗中的限制）
+  // 代码校验第二步：业务规则（闪回、战斗、快速破解去重）
   const commands: Command[] = [];
+  const quickhacks = quickhackCatalog(deps.data ?? {});
+  const hasHarmfulNpcHack = verified.some((proposal) => {
+    const cmd = proposal.parse(proposal.value);
+    if (cmd?.type !== "npcHack") return false;
+    const c = cmd as { target?: unknown; program?: unknown };
+    if (c.target !== "你" || typeof c.program !== "string") return false;
+    const def =
+      quickhacks.get(c.program) ?? [...quickhacks.values()].find((q) => q.name === c.program);
+    return def?.category === "damage" || def?.category === "ultimate";
+  });
   // 同批开打或收场仍属于这场交战，不能靠条目顺序绕过伤害和战利品过滤
   const fight =
     CombatStateSchema.parse(world.slices.combat).active !== null ||
@@ -1093,16 +997,16 @@ export async function runNarratorTurn(
       b.drop(where, command, "战斗中不能闪回", "rules");
       continue;
     }
-    // 绑定快速破解的抵抗由 npcHack 原子结算；不允许独立伤害绕过 RAM、ICE 或攻击校验
+    // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
     if (
-      live.kind === "resolve" &&
-      live.check.prepared.spec.npcHack !== undefined &&
+      ((live.kind === "resolve" && live.check.prepared.spec.npcHack !== undefined) ||
+        hasHarmfulNpcHack) &&
       (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
     ) {
       b.drop(
         where,
         command,
-        "本次快速破解抵抗只由 npcHack 结算，不另记 damage 或 combat wound",
+        "本次快速破解由 npcHack 统一结算，不另记 damage 或 combat wound",
         "rules",
       );
       continue;
@@ -1175,9 +1079,9 @@ export async function runNarratorTurn(
   const facts: Record<string, unknown> = {};
   if (live.kind === "resolve") {
     facts.check = checkFactFrom(live.check.offer.id, live.check.prepared, live.check.result);
+  } else {
+    facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
   }
-  // 门槛结果：入侵协议等要门槛达标的指令据此核对
-  if (gate) facts.gate = { attribute: gate.gate.attribute, met: gate.met };
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
   const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
   if (armor) facts.armor = armor.name;
@@ -1285,7 +1189,12 @@ export async function runNarratorTurn(
   ) {
     const present = presentNpcs(world, settled.world);
     const messages = buildOffscreenPrompt(settled.world, records, extras, narrative, present);
-    const reply = await b.call({ purpose: "aux", temperature: OFFSCREEN_TEMPERATURE, messages });
+    const reply = await b.call({
+      purpose: "aux",
+      temperature: OFFSCREEN_TEMPERATURE,
+      messages,
+      responseFormat: responseJsonSchema("offscreen"),
+    });
     offscreenTrace = {
       prompt: messages[messages.length - 1]?.content ?? "",
       reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
@@ -1364,7 +1273,12 @@ export async function runNarratorTurn(
     else if (unsettled !== undefined) considered.push("场景摘要：这一轮没结算干净，不写");
     else {
       const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
-      const reply = await b.call({ purpose: "aux", temperature: SUMMARY_TEMPERATURE, messages });
+      const reply = await b.call({
+        purpose: "aux",
+        temperature: SUMMARY_TEMPERATURE,
+        messages,
+        responseFormat: responseJsonSchema("summary", SummaryDocSchema),
+      });
       summaryTrace = {
         prompt: messages[messages.length - 1]?.content ?? "",
         reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
@@ -1386,11 +1300,6 @@ export async function runNarratorTurn(
       }
     }
   }
-  const closeup =
-    ooc || unsettled !== undefined
-      ? undefined
-      : closeupFor(accepted, world, records, deps.data ?? {});
-
   return {
     kind: "done",
     turn: {
@@ -1398,9 +1307,9 @@ export async function runNarratorTurn(
       read,
       choices,
       voices,
-      check: rolled ? undefined : check,
-      rolled,
-      gate,
+      check: undefined,
+      rolled: undefined,
+      gate: undefined,
       commands: accepted,
       dropped: b.dropped,
       unsettled,
@@ -1425,7 +1334,7 @@ export async function runNarratorTurn(
       clutch: settle && shape.clutch === true,
       scene: before.scene,
       title,
-      closeup,
+      closeup: undefined,
       ooc,
       usage,
       auxUsage: b.auxUsage,
