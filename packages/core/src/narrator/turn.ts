@@ -62,6 +62,7 @@ import {
   MIN_HISTORY,
   memoryTokens,
 } from "./budget";
+import { completeFinish } from "./completion";
 import { responseJsonSchema, schemaDoc } from "./doc";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import {
@@ -222,6 +223,8 @@ export interface NarratorTurn {
   readonly dropped: readonly Dropped[];
   /** 未定稿：关键条目没记上时的原因；正文照常显示，但不进旧记忆 */
   readonly unsettled: string | undefined;
+  /** 正文/整份记账尚未完整返回的零结算草稿，只能重新生成，不能按已结算账目改写。 */
+  readonly draft?: true;
   /** 抽取考虑过但没抽的，和原因 */
   readonly considered: readonly string[];
   /** 判断给出物理与社会因果裁决时留档的摘要，只供剧透视图 */
@@ -323,10 +326,6 @@ export class NarratorAbortedError extends Error {
 }
 
 class IncompleteReplyError extends Error {}
-
-function completeFinish(reason: string): boolean {
-  return reason === "stop" || reason === "STOP" || reason === "end_turn";
-}
 
 const REPAIR_SYSTEM =
   "你负责修复 JSON 格式。只输出修好的 JSON，不要解释，不要代码块。不改原意，不补充原文没有的内容；实在修不了就输出 null。";
@@ -717,7 +716,7 @@ export async function runNarratorTurn(
       ? expandMemories(
           pool,
           world,
-          records,
+          promptRecords,
           hot,
           { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
           recalled,
@@ -775,7 +774,14 @@ export async function runNarratorTurn(
   // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
   const lore = ooc
     ? undefined
-    : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {}, budget.parts.world);
+    : lookupLore(
+        deps.lore,
+        world,
+        promptRecords,
+        plan.input.text,
+        deps.data ?? {},
+        budget.parts.world,
+      );
   let loreSection = lore?.section;
   const preset = ooc ? undefined : deps.preset;
   // 宏只展开一次，预设的前置、深度条目及衔接说明都计入最终请求预算。
@@ -947,6 +953,7 @@ export async function runNarratorTurn(
       commands: [],
       dropped: b.dropped,
       unsettled: reason,
+      draft: true,
       considered: [reason],
       ruling,
       offscreen: undefined,

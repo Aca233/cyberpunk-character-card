@@ -677,6 +677,10 @@ export class GameService {
           return refuse("最后一步不是可以改写的回合（之后可能有别的操作）");
         }
         if (last.unsettled === undefined) return refuse("这一轮的正文和账目对得上，不用改写");
+        if (last.draft)
+          return refuse(
+            "这一轮是尚未完成生成或记账的草稿，请使用重新生成；没有已结算账目可供改写。",
+          );
         return { last, version };
       },
     );
@@ -1130,6 +1134,7 @@ export class GameService {
         ...(turn.ooc ? { ooc: true } : {}),
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),
+        ...(turn.draft ? { draft: true as const } : {}),
         ...(turn.considered.length > 0 ? { considered: [...turn.considered] } : {}),
         ...(turn.ruling !== undefined ? { ruling: turn.ruling } : {}),
         ...(turn.flags.length > 0 ? { flags: [...turn.flags] } : {}),

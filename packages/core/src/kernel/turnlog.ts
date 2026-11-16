@@ -67,6 +67,8 @@ const TurnRecordSchema = z.object({
   notes: z.array(z.string()).optional(),
   /** 未定稿：关键条目被拒、被丢或被核对删掉时的原因；不进旧记忆 */
   unsettled: z.string().optional(),
+  /** 未完整生成或尚未完成整份抽取，保存文字但没有结算；不能按账目改写为正式事实。 */
+  draft: z.literal(true).optional(),
   /** 按账目改写：这一条替换掉第几轮（那一轮按作废算）；一行写完，不会只作废不替换 */
   replaces: seq.optional(),
   /** 抽取考虑过但没抽的，和原因；只供调试 */

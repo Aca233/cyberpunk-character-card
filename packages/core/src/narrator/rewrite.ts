@@ -1,5 +1,6 @@
 import type { AbortSignalLike, LlmClient, LlmMessage, LlmUsage } from "../kernel/ports";
 import type { TurnRecord } from "../kernel/turnlog";
+import { completeFinish } from "./completion";
 import { BASE_RULES } from "./prompts/layers";
 
 /** 按账目改写：未定稿的一轮，账目已经结算，只把正文改得和账目一致；不重掷、不改状态 */
@@ -53,6 +54,7 @@ export async function rewriteNarrative(
   record: TurnRecord,
   signal?: AbortSignalLike,
 ): Promise<RewriteResult> {
+  if (record.draft) return { ok: false, error: "未完成结算的草稿需要重新生成，不能按账目改写" };
   let text = "";
   let usage: LlmUsage | undefined;
   let finished = false;
@@ -64,7 +66,7 @@ export async function rewriteNarrative(
     else if (event.type === "blocked")
       return { ok: false, error: `模型拒绝了这次改写：${event.reason}；原来的正文保留` };
     else {
-      finished = true;
+      finished = completeFinish(event.finishReason);
       usage = event.usage;
     }
   }
