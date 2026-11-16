@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { DISCOUNT_FACTORS, discounted, type EconomyState, type Rarity, SERVICES } from "../economy";
+import type { Rarity } from "../economy";
 import type { NpcState } from "../npc";
 import {
   CLOTHING_SLOT_LABELS,
@@ -17,7 +17,6 @@ import {
   SELL_RATE,
   type Shop,
   ShopListSchema,
-  type TradeCommand,
   WEAPON_CATEGORY_LABELS,
 } from "./schema";
 
@@ -367,34 +366,6 @@ export function shopList(data: Readonly<Record<string, unknown>>): readonly Shop
   return list;
 }
 
-/** 这一轮人在哪家店里：回合流程把店 id 和游戏时间放进事实 shop，叙事模型写的买卖据此占库存 */
-export interface ShopHere {
-  readonly id: string;
-  readonly name: string;
-  readonly shelf: readonly string[];
-  readonly at: number;
-}
-
-export function shopHere(
-  fact: unknown,
-  data: Readonly<Record<string, unknown>>,
-): ShopHere | undefined {
-  if (typeof fact !== "object" || fact === null) return undefined;
-  const { id, at } = fact as { id?: unknown; at?: unknown };
-  if (typeof id !== "string" || typeof at !== "number") return undefined;
-  const shop = shopList(data).find((s) => s.id === id);
-  return shop ? { id, name: shop.name, shelf: shop.shelf, at } : undefined;
-}
-
-/** 货架上的一件：价格按店的系数折算到十位；locked 是不卖的原因 */
-export interface ShopItem {
-  readonly def: ItemDef;
-  readonly price: number;
-  readonly locked: string | null;
-  /** 这一批还剩几件 */
-  readonly left: number;
-}
-
 /** 商店每 3 个游戏日补一次货 */
 export const RESTOCK_MINUTES = 3 * 1440;
 
@@ -434,24 +405,9 @@ export function markSold(draft: Inventory, shop: string, item: string, at: numbe
   return { ok: true, notes: [], emit: [] };
 }
 
-export function shopShelf(
-  shop: Shop,
-  catalog: ReadonlyMap<string, ItemDef>,
-  stock?: ShopStock,
-): ShopItem[] {
-  return shop.shelf.flatMap((id) => {
-    const def = catalog.get(id);
-    if (!def || def.price === undefined) return [];
-    const left = Math.max(0, stockOf(def) - (stock?.sold[id] ?? 0));
-    const locked = def.iconic ? "不朽物品只从剧情获得" : left === 0 ? "这一批卖完了，等补货" : null;
-    const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
-    return [{ def, price, locked, left }];
-  });
-}
-
-/** 卖给商店给多少：参考价的两成，舍到十位；不朽物品和没有标价的不收，返回 0 */
+/** 未另行约定时的收购参考价；没有标价则须先谈妥报价。 */
 export function sellValue(def: ItemDef): number {
-  if (def.iconic || def.price === undefined) return 0;
+  if (def.price === undefined) return 0;
   return Math.floor((def.price * SELL_RATE) / 10) * 10;
 }
 
@@ -538,123 +494,6 @@ export function applyMod(
   return ok(
     `${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}${old === undefined ? "" : "，换下的放回背包"}`,
   );
-}
-
-/**
- * 买卖：价钱查表，讲价按折扣档；物品在这里进出背包，钱发一条 money 由欧元系统结算。
- * 卖出按商店收购价（参考价两成）再乘讲价档的反向：讲价讲得好卖得更贵，最多参考价三成
- */
-export function applyTrade(
-  draft: Inventory,
-  command: TradeCommand,
-  catalog: ReadonlyMap<string, ItemDef>,
-  economy: EconomyState,
-  shop?: ShopHere,
-  now = 0,
-  location: string | null = null,
-  npcs: NpcState["npcs"] = {},
-): ApplyOutcome {
-  if (command.action === "service") {
-    const service = command.service;
-    if (service === undefined) return fail("买服务要写 service");
-    const def = SERVICES[service];
-    const price = discounted(def.price, command.discount);
-    if (price > economy.eddies) {
-      return fail(`欧元不够：${def.label}要 ${price}，身上只有 ${economy.eddies}`);
-    }
-    return {
-      ok: true,
-      notes: [],
-      emit: [{ type: "money", delta: -price, reason: `${def.label}（${command.with}）` }],
-    };
-  }
-  const id = command.item;
-  if (id === undefined) return fail("买卖物品要写 item");
-  const def = catalog.get(id);
-  if (!def) return fail(`物品表里没有 ${id}`);
-  if (command.action === "buy") {
-    const object = draft.objects[def.id];
-    if (
-      object &&
-      (object.holder === "player" || object.holder === "consumed" || object.holder === "stash")
-    )
-      return fail("这件独立物件并不在卖方手中");
-    if (def.iconic) return fail(`${def.name}是不朽物品，只能从剧情获得，没人卖`);
-    if (def.price === undefined) return fail(`${def.name}没有标价，不能买`);
-    const price = discounted(def.price, command.discount);
-    if (price > economy.eddies) {
-      return fail(`欧元不够：${def.name}要 ${price}，身上只有 ${economy.eddies}`);
-    }
-    // 人在店里、买的是这家货架上的东西：和界面买一样占这一批的库存
-    if (shop?.shelf.includes(def.id)) {
-      const stock = currentStock(draft.shopStock[shop.id], shop.at);
-      if (stockOf(def) - (stock?.sold[def.id] ?? 0) < 1) {
-        return fail(`${shop.name}的${def.name}这一批卖完了，等补货`);
-      }
-      markSold(draft, shop.id, def.id, shop.at);
-    }
-    const received = applyItem(
-      draft,
-      {
-        type: "item",
-        action: "gain",
-        id: def.id,
-        reason: `向${command.with}买下：${command.reason}`,
-      },
-      catalog,
-      now,
-      location,
-      npcs,
-    );
-    if (!received.ok) return received;
-    return {
-      ok: true,
-      notes: [`得到${def.name}（从${command.with}那里买的）`],
-      emit: [
-        ...(received.emit ?? []),
-        { type: "money", delta: -price, reason: `向${command.with}买${def.name}` },
-      ],
-    };
-  }
-  if (def.iconic) return fail(`${def.name}是不朽物品，不卖`);
-  absorbLegacyWeapons(draft);
-  if ((draft.backpack[def.id] ?? 0) < 1)
-    return fail(`背包里没有${def.name}；穿着的衣服或快捷栏里的药/雷先脱下`);
-  const base = sellValue(def);
-  if (base <= 0) return fail(`${def.name}没有标价，卖不出去`);
-  const bonus = 2 - DISCOUNT_FACTORS[command.discount];
-  const price = Math.min(
-    Math.floor(((def.price ?? 0) * 0.3) / 10) * 10,
-    Math.round((base * bonus) / 10) * 10,
-  );
-  const delivered = applyItem(
-    draft,
-    {
-      type: "item",
-      action: "lose",
-      id: def.id,
-      recipient: command.with,
-      reason: `卖给${command.with}：${command.reason}`,
-    },
-    catalog,
-    now,
-    location,
-    npcs,
-  );
-  if (!delivered.ok) return delivered;
-  const left = draft.backpack[def.id] ?? 0;
-  // 卖掉最后一把时升级记录跟着清掉，免得下次买到同款带着升过的稀有度
-  if (def.kind === "weapon" && left < 1) {
-    Reflect.deleteProperty(draft.tuned, def.id);
-  }
-  return {
-    ok: true,
-    notes: [`卖掉${def.name}（卖给${command.with}）`],
-    emit: [
-      ...(delivered.emit ?? []),
-      { type: "money", delta: price, reason: `卖给${command.with}：${def.name}` },
-    ],
-  };
 }
 
 /** 物品现在的稀有度：升过的按升过的，没写稀有度的按普通 */

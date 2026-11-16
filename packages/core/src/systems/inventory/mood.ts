@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { WorldState } from "../../kernel/world";
-import { locationCatalog } from "../world";
 import type { Shop } from "./schema";
 
 /**
@@ -14,8 +13,6 @@ const FactionRowsSchema = z
     z.object({
       id: z.string(),
       name: z.string(),
-      kind: z.string(),
-      turf: z.array(z.string()).default([]),
       initial: z.enum(ATTITUDE_IDS).default("neutral"),
     }),
   )
@@ -38,13 +35,12 @@ export const ATTITUDE_PRICE: Readonly<Record<AttitudeId, number | null>> = {
   family: 0.8,
 };
 
-/** 这家店看谁的脸色：店主自己的势力，或者店开在哪个帮派的地盘上 */
+/** 这家店已知的经营者势力立场。 */
 export interface ShopMood {
   readonly faction: string;
   readonly name: string;
   /** 乘在货架价上的系数；null 是不卖 */
   readonly factor: number | null;
-  readonly why: "keeper" | "turf";
 }
 
 /** 只读人物卡上的所属势力，不引用 npc 的入口（npc 引用了 inventory） */
@@ -58,7 +54,7 @@ function keeperFaction(world: WorldState, id: string | undefined): string | unde
 
 /**
  * 这家店受哪个势力的态度影响；中立、或者谁也不看的店是 undefined。
- * 地盘按势力表上的原始地盘算，势力动向打下、丢掉的城区这里不算（暂定）
+ * 只认店主明确登记的所属势力；不把城区地盘当作每家店的立场。
  */
 export function shopMood(
   world: WorldState,
@@ -68,19 +64,12 @@ export function shopMood(
   const rows = FactionRowsSchema.parse(data.factions);
   if (rows.length === 0) return undefined;
   const ownId = keeperFaction(world, shop.keeperNpc);
-  let def = ownId === undefined ? undefined : rows.find((f) => f.id === ownId);
-  let why: ShopMood["why"] = "keeper";
-  if (!def) {
-    const district = locationCatalog(data).get(shop.location)?.district;
-    if (district === undefined) return undefined;
-    def = rows.find((f) => f.kind === "gang" && f.turf.includes(district));
-    why = "turf";
-  }
+  const def = ownId === undefined ? undefined : rows.find((f) => f.id === ownId);
   if (!def) return undefined;
   const attitude =
     StancesSchema.parse(world.slices.factions ?? {}).stances[def.id]?.attitude ?? def.initial;
   if (attitude === "neutral") return undefined;
-  return { faction: def.id, name: def.name, factor: ATTITUDE_PRICE[attitude], why };
+  return { faction: def.id, name: def.name, factor: ATTITUDE_PRICE[attitude] };
 }
 
 /** 按势力态度折算一件货的价钱，舍到十位，最少 10 */
@@ -92,7 +81,5 @@ export function moodPrice(price: number, mood: ShopMood | undefined): number {
 /** 见面就打的势力的店不卖：给货架上的锁写原因 */
 export function moodLock(mood: ShopMood | undefined): string | null {
   if (!mood || mood.factor !== null) return null;
-  return mood.why === "keeper"
-    ? `店主是${mood.name}的人，${mood.name}要你的命，不卖`
-    : `这里是${mood.name}的地盘，${mood.name}要你的命，店家不敢卖`;
+  return `店主是${mood.name}的人，${mood.name}要你的命，拒绝交易`;
 }

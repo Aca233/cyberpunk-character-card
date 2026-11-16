@@ -1,5 +1,4 @@
 import { defineSystem } from "../../kernel/system";
-import type { EconomyState } from "../economy";
 import type { NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import { inventoryActions } from "./actions";
@@ -8,10 +7,7 @@ import {
   applyMod,
   applyOutfit,
   applyParts,
-  applyTrade,
   itemCatalog,
-  markSold,
-  shopHere,
   spend,
   stashMove,
   withWorldObjects,
@@ -33,6 +29,7 @@ import {
 } from "./schema";
 import { shopsView } from "./shops";
 import { inventoryStatus } from "./status";
+import { applyTrade } from "./trade";
 import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
@@ -41,7 +38,7 @@ export const inventory = defineSystem<
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
-  dependsOn: ["economy", "world", "npc"],
+  dependsOn: ["economy", "world", "npc", "factions", "commerce"],
   state: InventoryStateSchema,
   initial: () => ({
     objects: {},
@@ -57,6 +54,7 @@ export const inventory = defineSystem<
     parts: 0,
     tuned: {},
     shopStock: {},
+    shopReturns: {},
   }),
   commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
   // 物品栏精简（用户定的方案 A）：零件规则不发给模型，parts 跟着从模型可用指令挪成内部指令；旧存档记录里的 parts 照旧能结算
@@ -76,17 +74,22 @@ export const inventory = defineSystem<
         return applyTrade(
           draft,
           command,
-          itemCatalog(ctx.data),
-          ctx.read<EconomyState>("economy"),
-          shopHere(ctx.facts.shop, ctx.data),
-          ctx.now,
-          ctx.read<WorldClockState>("world").location,
-          ctx.read<NpcState>("npc").npcs,
+          {
+            time: ctx.now,
+            slices: {
+              inventory: draft,
+              economy: ctx.read("economy"),
+              world: ctx.read("world"),
+              npc: ctx.read("npc"),
+              factions: ctx.read("factions"),
+              commerce: ctx.read("commerce"),
+            },
+          },
+          ctx.data,
+          ctx.facts,
         );
       case "inventory.spend":
         return spend(draft, command.slot, undefined, ctx.now);
-      case "inventory.sold":
-        return markSold(draft, command.shop, command.item, command.at);
       case "inventory.outfit":
         return applyOutfit(draft, command.action, itemCatalog(ctx.data));
       case "inventory.stash":
@@ -149,4 +152,5 @@ export * from "./prompt";
 export * from "./schema";
 export * from "./shops";
 export * from "./status";
+export * from "./trade";
 export * from "./view";

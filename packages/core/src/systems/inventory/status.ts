@@ -13,7 +13,7 @@ export const inventoryStatus: readonly SystemStatus[] = [
     lines(ctx: StatusContext) {
       return (ctx.views.shops as ShopsView).map(
         (shop) =>
-          `商店：${shop.name}在这里（店主${shop.keeper}，${shop.note}）；玩家可以在界面上直接买卖，代码按货架价结算，你只写场面${shop.blackMarket ? "。这是黑市货，买到的东西可能来路不明，可以在剧情里兑现" : ""}`,
+          `商店 ${shop.id}：${shop.name}在这里（店主${shop.keeper}，${shop.note}）。按钮与自由输入共用实际报价；询价不交付，已成交写 trade with:${shop.id}，店内私人交易写实际人物 id，不占本店货源。`,
       );
     },
   },

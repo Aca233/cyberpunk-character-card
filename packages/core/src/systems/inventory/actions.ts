@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { EconomyStateSchema } from "../economy";
 import { HealthStateSchema } from "../health";
-import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./apply";
-import { moodLock, moodPrice, shopMood } from "./mood";
+import { itemCatalog } from "./apply";
 import { InventoryStateSchema } from "./schema";
+import { quoteTrade } from "./trade";
 
 /** 从背包装上一件：治疗品和手雷进快捷栏，服装穿到对应的格子；武器进背包即可直接使用 */
 export const EquipItemActionSchema = z.strictObject({
@@ -61,52 +60,15 @@ function shopCommands(
   action: ShopAction,
   data: Readonly<Record<string, unknown>>,
 ): Command[] | string {
-  const shop = shopList(data).find((s) => s.id === action.shop);
-  if (!shop) return `没有叫 ${action.shop} 的商店`;
-  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
-  if (here !== shop.location) return `不在${shop.name}，先去那里`;
-  const catalog = itemCatalog(data);
-  if (action.type === "sellItem") {
-    const def = catalog.get(action.id);
-    if (!def) return `物品表里没有 ${action.id}`;
-    const inventory = InventoryStateSchema.parse(world.slices.inventory);
-    const carried =
-      (inventory.backpack[def.id] ?? 0) + inventory.weapons.filter((w) => w === def.id).length;
-    if (carried < 1) return `背包里没有${def.name}；穿着的衣服或快捷栏里的药/雷先脱下`;
-    const lastOne = carried === 1 && Object.values(inventory.mods[def.id] ?? {}).length > 0;
-    if (lastOne) {
-      return `${def.name}上还装着改装件，先拆下来再卖`;
-    }
-    const value = sellValue(def);
-    if (value <= 0)
-      return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
-    return [
-      {
-        type: "item",
-        action: "lose",
-        id: def.id,
-        recipient: shop.keeper,
-        reason: `卖给${shop.name}`,
-      },
-      { type: "money", delta: value, reason: `${shop.name}收购${def.name}` },
-    ];
-  }
-  const held = InventoryStateSchema.parse(world.slices.inventory);
-  const stock = currentStock(held.shopStock[shop.id], world.time);
-  const item = shopShelf(shop, catalog, stock).find((i) => i.def.id === action.id);
-  if (!item) return `${shop.name}的货架上没有这件`;
-  // 势力态度影响店价（用户 2026-10-31 选的「势力进机制」）：和货架上显示的一样算
-  const mood = shopMood(world, data, shop);
-  const locked = moodLock(mood) ?? item.locked;
-  if (locked) return `${shop.name}不卖${item.def.name}：${locked}`;
-  const price = moodPrice(item.price, mood);
-  const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
-  if (price > eddies) return `欧元不够：${item.def.name}要 ${price}，身上只有 ${eddies}`;
-  return [
-    { type: "money", delta: -price, reason: `在${shop.name}买${item.def.name}` },
-    { type: "item", action: "gain", id: item.def.id, reason: `在${shop.name}买下` },
-    { type: "inventory.sold", shop: shop.id, item: item.def.id, at: world.time },
-  ];
+  const command = {
+    type: "trade",
+    action: action.type === "buyItem" ? "buy" : "sell",
+    item: action.id,
+    with: action.shop,
+    reason: "通过商店面板完成交易",
+  } as const;
+  const quote = quoteTrade(world, data, command);
+  return quote.ok ? [command] : quote.reason;
 }
 
 function inCombat(world: WorldState): boolean {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type Attribute, AttributeSchema } from "../dice";
-import { DiscountSchema, RaritySchema, ServiceSchema } from "../economy";
+import { RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -196,6 +196,8 @@ const QuickSlotSchema = z
 
 export const InventoryStateSchema = z.object({
   objects: z.record(z.string(), WorldObjectSchema).default({}),
+  /** 商家实际收回的物品，独立于定期补货批次。 */
+  shopReturns: z.record(z.string(), z.record(z.string(), z.number().int().min(1))).default({}),
   /** 3 个武器格，按 1/2/3 切换 */
   weapons: z.array(z.string().min(1).nullable()).length(3),
   /** 当前手持的武器格（从 0 起），空手时为 null */
@@ -259,9 +261,9 @@ export const ItemCommandSchema = z
   );
 export type ItemCommand = z.infer<typeof ItemCommandSchema>;
 
-/** 模型使用：买卖，价钱由代码查表；物品按物品表的参考价，服务按服务价目表 */
+/** 模型使用：实际交付；报价与按钮共用，议价引用已登记的条件。 */
 export const TradeCommandSchema = z
-  .object({
+  .strictObject({
     type: z.literal("trade"),
     action: z
       .enum(["buy", "sell", "service"])
@@ -270,16 +272,31 @@ export const TradeCommandSchema = z
     service: ServiceSchema.optional().describe(
       "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点、请人帮个小忙",
     ),
-    discount: DiscountSchema.default("none").describe(
-      "讲价讲下来多少：none 没有，small 小，large 大",
-    ),
-    with: z.string().min(1).max(40).describe("和谁交易"),
+    offer: z
+      .string()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("引用已谈妥报价的 id；省略时使用同条件有效报价或当前店价"),
+    with: z
+      .string()
+      .min(1)
+      .max(80)
+      .describe("实际交易对象的稳定店铺 id、人物 id 或已登记经营者 id；店内私人买卖写人物 id"),
     reason: z.string().min(1),
   })
-  .refine((t) => (t.action === "service" ? t.service !== undefined : t.item !== undefined), {
-    message: "buy 和 sell 写 item，service 写 service",
-  })
-  .describe("买卖：只写买什么、讲价档，不写价钱；钱不够时整条不生效");
+  .refine(
+    (t) =>
+      t.action === "service"
+        ? t.service !== undefined && t.item === undefined
+        : t.item !== undefined && t.service === undefined,
+    {
+      message: "buy 和 sell 只写 item，service 只写 service",
+    },
+  )
+  .describe(
+    "已经同意且实际交付的买卖；仅询价、计划或尚未落实的赊账不发。钱、货或地点不成立时整笔不生效，不另发同笔 item 或 money",
+  );
 export type TradeCommand = z.infer<typeof TradeCommandSchema>;
 
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);
@@ -288,13 +305,6 @@ export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 /** 只能由代码发出：其他系统消耗实际携带的补给 */
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
-  /** 界面里在商店货架上买走一件：记进这一批的已卖数量 */
-  "inventory.sold": z.object({
-    type: z.literal("inventory.sold"),
-    shop: z.string().min(1),
-    item: z.string().min(1),
-    at: z.number().int(),
-  }),
   /** 界面动作：save 把身上穿着的存成整套外观，wear 照存下的一次换好 */
   "inventory.outfit": z.object({
     type: z.literal("inventory.outfit"),
