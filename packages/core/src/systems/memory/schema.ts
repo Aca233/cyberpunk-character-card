@@ -27,6 +27,25 @@ export const MemoryEvidenceSchema = z.object({
   quote: z.string().trim().min(1).max(240),
 });
 
+/** 可由账本核实的本轮净变化；用于事实记忆，不把输入的打算当成结算。 */
+export const MemorySettlementSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("item"),
+    id: z.string().min(1),
+    delta: z
+      .number()
+      .int()
+      .refine((value) => value !== 0),
+  }),
+  z.object({
+    type: z.literal("money"),
+    delta: z
+      .number()
+      .int()
+      .refine((value) => value !== 0),
+  }),
+]);
+
 export const MemoryAnchorFieldsSchema = z.object({
   id: z
     .string()
@@ -34,11 +53,17 @@ export const MemoryAnchorFieldsSchema = z.object({
     .min(1)
     .max(80)
     .regex(/^[a-z0-9][a-z0-9-]*$/),
-  kind: z.enum(["fact", "promise", "plan", "question"]),
+  kind: z.enum(["fact", "promise", "plan", "question", "report"]),
   text: z.string().trim().min(1).max(MEMORY_ANCHOR_CHARS),
   people: z.array(z.string().min(1)).max(SUMMARY_PEOPLE),
   keywords: z.array(z.string().trim().min(1).max(KEYWORD_CHARS)).max(SUMMARY_KEYWORDS),
   evidence: MemoryEvidenceSchema,
+  settlement: z
+    .array(MemorySettlementSchema)
+    .min(1)
+    .max(8)
+    .optional()
+    .describe("已发生物品归属或欧元变化必须写本轮净变化；只核对玩家账本，不能把说法/计划当变化"),
 });
 export type MemoryAnchorFields = z.infer<typeof MemoryAnchorFieldsSchema>;
 
@@ -47,6 +72,7 @@ export const MemoryAnchorResolutionSchema = z.object({
   outcome: z.enum(["fulfilled", "cancelled", "answered"]),
   text: z.string().trim().min(1).max(MEMORY_ANCHOR_CHARS),
   evidence: MemoryEvidenceSchema,
+  settlement: z.array(MemorySettlementSchema).min(1).max(8).optional(),
 });
 
 export const SceneMemoryUpdateSchema = z.object({
@@ -76,7 +102,7 @@ export const MemoryAnchorSchema = MemoryAnchorFieldsSchema.extend({
   place: z.string().nullable(),
   at: z.number().int(),
   resolution: MemoryAnchorResolutionSchema.omit({ id: true })
-    .extend({ at: z.number().int() })
+    .extend({ at: z.number().int(), scene: z.number().int().min(0) })
     .nullable(),
 });
 export type MemoryAnchor = z.infer<typeof MemoryAnchorSchema>;
@@ -144,6 +170,17 @@ export const MemoryStateSchema = z.object({
   /** 收场整理失败时保留完整提要，后续可检索；不是已完成的场景摘要。 */
   pending: z.record(z.string(), ActiveSceneMemorySchema).default({}),
   anchors: z.record(z.string(), MemoryAnchorSchema).default({}),
+  /** 玩家修改正文或删除摘要后，该场原文及衍生记忆不再作为模型事实来源。 */
+  corrections: z
+    .record(
+      z.string(),
+      z.object({
+        at: z.number().int(),
+        through: z.number().int().min(-1),
+        action: z.enum(["edit", "remove"]),
+      }),
+    )
+    .default({}),
 });
 export type MemoryState = z.infer<typeof MemoryStateSchema>;
 

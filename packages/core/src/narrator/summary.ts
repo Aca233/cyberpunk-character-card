@@ -8,6 +8,7 @@ import {
   KEYWORD_CHARS,
   type MemorySceneCommand,
   MemoryStateSchema,
+  memoryRecords,
   SUMMARY_CHARS,
   SUMMARY_KEYWORDS,
 } from "../systems/memory";
@@ -18,7 +19,12 @@ import { parseModelJson } from "./block";
 import { presentNpcs } from "./offscreen";
 import { formatInput, type PromptExtras } from "./prompts/context";
 import { BOOKKEEPING_BASE, userMessage } from "./prompts/layers";
-import { memoryAnchorText, type SceneSummarySource, summaryFromExtract } from "./scene-memory";
+import {
+  memoryAnchorText,
+  type SceneSummarySource,
+  summaryFromExtract,
+  unresolvedMemoryAnchor,
+} from "./scene-memory";
 
 /** 场景摘要：辅助模型，低温，只复述正文 */
 export const SUMMARY_TEMPERATURE = 0.2;
@@ -79,12 +85,11 @@ export function buildSummaryPrompt(
     .filter((anchor) => anchor.scene === clock.scene)
     .sort(
       (a, b) =>
-        Number(b.resolution === null && b.kind !== "fact") -
-          Number(a.resolution === null && a.kind !== "fact") || a.at - b.at,
+        Number(unresolvedMemoryAnchor(b)) - Number(unresolvedMemoryAnchor(a)) || a.at - b.at,
     )
     .slice(0, 24);
   const remembered = new Set(sceneAnchors.flatMap((anchor) => anchor.people));
-  const earlier = effectiveTurns(records)
+  const earlier = effectiveTurns(memoryRecords(after, records))
     .filter((t) => t.scene === clock.scene && t.ooc !== true && t.unsettled === undefined)
     .flatMap((t) => {
       const parsed = TurnInputSchema.safeParse(t.input);

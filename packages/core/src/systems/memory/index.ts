@@ -20,7 +20,14 @@ export const memory = defineSystem<MemoryState, never, MemoryInternal>({
   id: "memory",
   dependsOn: ["world"],
   state: MemoryStateSchema,
-  initial: () => ({ scenes: [], edits: [], active: null, pending: {}, anchors: {} }),
+  initial: () => ({
+    scenes: [],
+    edits: [],
+    active: null,
+    pending: {},
+    anchors: {},
+    corrections: {},
+  }),
   commands: {},
   internal: {
     "memory.scene": MemorySceneCommandSchema,
@@ -29,7 +36,8 @@ export const memory = defineSystem<MemoryState, never, MemoryInternal>({
     "memory.log": MemoryLogCommandSchema,
   },
   apply(draft, command, ctx) {
-    if (command.type === "memory.edit") return editSceneSummary(draft, command);
+    if (command.type === "memory.edit")
+      return editSceneSummary(draft, command, ctx.now, ctx.facts.memorySourceThrough);
     if (command.type === "memory.log") return logMemoryEdit(draft, command, ctx.now);
     if (command.type === "memory.working") return applyWorkingMemory(draft, command, ctx.now);
     return applySceneSummary(draft, command, ctx.now);
@@ -41,5 +49,6 @@ export const memory = defineSystem<MemoryState, never, MemoryInternal>({
 export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
+export * from "./records";
 export * from "./schema";
 export * from "./view";

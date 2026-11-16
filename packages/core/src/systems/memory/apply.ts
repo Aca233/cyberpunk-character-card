@@ -16,6 +16,8 @@ export function applySceneSummary(
   command: MemorySceneCommand,
   now: number,
 ): ApplyOutcome {
+  if (draft.corrections[String(command.scene)])
+    return { ok: false, reason: "该场记忆已由玩家修正，模型不能用旧来源覆盖" };
   const { type: _type, ...fields } = command;
   const entry = { ...fields, at: now };
   const old = draft.scenes.findIndex((s) => s.scene === entry.scene);
@@ -47,7 +49,8 @@ export function applyWorkingMemory(
     resolved.add(resolution.id);
     const anchor = draft.anchors[resolution.id];
     if (!anchor) return { ok: false, reason: `没有记忆锚点 ${resolution.id}` };
-    if (anchor.kind === "fact") return { ok: false, reason: "既有事实不能当作待办勾销" };
+    if (anchor.kind === "fact" || anchor.kind === "report")
+      return { ok: false, reason: "事实和待核实说法不能当作待办勾销" };
     if (anchor.resolution !== null)
       return { ok: false, reason: `记忆锚点 ${resolution.id} 已经有了结果` };
     if (resolution.outcome === "answered" && anchor.kind !== "question")
@@ -70,7 +73,7 @@ export function applyWorkingMemory(
   }
   for (const { id, ...resolution } of command.resolve) {
     const anchor = draft.anchors[id];
-    if (anchor) anchor.resolution = { ...resolution, at: now };
+    if (anchor) anchor.resolution = { ...resolution, at: now, scene: command.scene };
   }
   return { ok: true };
 }
@@ -79,6 +82,8 @@ export function applyWorkingMemory(
 export function editSceneSummary(
   draft: Draft<MemoryState>,
   command: MemoryEditCommand,
+  now: number,
+  sourceThrough: unknown,
 ): ApplyOutcome {
   const i = draft.scenes.findIndex((s) => s.scene === command.scene);
   const scene = draft.scenes[i];
@@ -86,7 +91,15 @@ export function editSceneSummary(
   if (scene.text !== command.before) {
     return { ok: false, reason: `第 ${command.scene} 场的摘要已经变了，刷新后再改` };
   }
+  const invalidating =
+    command.action === "remove" || (command.text !== undefined && command.text !== scene.text);
+  if (
+    invalidating &&
+    (typeof sourceThrough !== "number" || !Number.isInteger(sourceThrough) || sourceThrough < -1)
+  )
+    return { ok: false, reason: "记忆纠错缺少来源截止位置，未修改" };
   if (command.action === "remove") {
+    invalidateSceneSources(draft, command.scene, "remove", now, sourceThrough as number);
     draft.scenes.splice(i, 1);
     return { ok: true, notes: [`删掉了第 ${command.scene} 场的摘要`] };
   }
@@ -96,11 +109,31 @@ export function editSceneSummary(
   if (title === scene.title && text === scene.text && importance === scene.importance) {
     return { ok: false, reason: "内容没变" };
   }
+  // 只改标题/重要度不否定原事实；正文纠错使同场派生来源失效。
+  if (text !== scene.text)
+    invalidateSceneSources(draft, command.scene, "edit", now, sourceThrough as number);
   scene.title = title;
   scene.text = text;
   scene.importance = importance;
   scene.edited = true;
   return { ok: true, notes: [`改写了第 ${command.scene} 场的摘要`] };
+}
+
+/** 场景是当前可定位的最小共同来源；不删除原始日志，也不影响别场锚点。 */
+function invalidateSceneSources(
+  draft: Draft<MemoryState>,
+  scene: number,
+  action: "edit" | "remove",
+  now: number,
+  through: number,
+): void {
+  draft.corrections[String(scene)] = { at: now, action, through };
+  if (draft.active?.scene === scene) draft.active = null;
+  delete draft.pending[String(scene)];
+  for (const [id, anchor] of Object.entries(draft.anchors)) {
+    if (anchor.scene === scene) delete draft.anchors[id];
+    else if (anchor.resolution?.scene === scene) anchor.resolution = null;
+  }
 }
 
 /** 记一条修改记录；超出上限删最早的 */

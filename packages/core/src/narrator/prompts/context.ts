@@ -12,7 +12,7 @@ import { HealthStateSchema } from "../../systems/health";
 import { catalogSection, itemCatalog } from "../../systems/inventory";
 import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
-import { MemoryStateSchema, recapSection } from "../../systems/memory";
+import { MemoryStateSchema, memoryRecords, recapSection } from "../../systems/memory";
 import { registry } from "../../systems/registry";
 import { SafehouseStateSchema } from "../../systems/safehouse/schema";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
@@ -36,7 +36,7 @@ export function recapFor(
   hot: number,
   maxTokens?: number,
 ): string | undefined {
-  const turns = effectiveTurns(records);
+  const turns = effectiveTurns(memoryRecords(world, records));
   const shown = new Set(
     (hot > 0 ? turns.slice(-hot) : [])
       .map((t) => t.scene)

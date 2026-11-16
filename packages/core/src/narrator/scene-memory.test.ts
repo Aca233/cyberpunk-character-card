@@ -144,7 +144,7 @@ describe("场景记忆与独立锚点", () => {
             id: promise.id,
             outcome: "fulfilled",
             text: "你已当面交付芯片。",
-            evidence: { source: "input", quote: "把芯片交给老莫" },
+            evidence: { source: "narrative", quote: "老莫接过了芯片" },
           },
         ],
       },
@@ -261,5 +261,113 @@ describe("摘要质量与恢复材料", () => {
       readSummary(JSON.stringify(tooLong), after, working(before).scene, null, source).command,
     ).toBeUndefined();
     expect(MemoryStateSchema.parse(after.slices.memory).active).not.toBeNull();
+  });
+});
+
+describe("记忆所称事实与结算证据", () => {
+  it("玩家说要买药不能凭同一引文升级为已买到；转述保留为未核实说法", () => {
+    const before = start();
+    const said = { text: "明天我想去诊所买药。" };
+    const prose = "你仍坐在酒吧，诊所没有送来任何东西。";
+    const fact = {
+      ...promise,
+      id: "medicine",
+      kind: "fact",
+      text: "你已经买到了药。",
+      evidence: { source: "input", quote: "明天我想去诊所买药" },
+    };
+    expect(
+      readSceneMemory({ ...working(before), anchors: [fact] }, before, before, said, prose).command,
+    ).toBeUndefined();
+    const report = { ...fact, kind: "report", text: "你说自己明天想去诊所买药。" };
+    const checked = readSceneMemory(
+      { ...working(before), anchors: [report] },
+      before,
+      before,
+      said,
+      prose,
+    );
+    expect(checked.command).toBeDefined();
+    const world = apply(before, checked.command as MemoryWorkingCommand);
+    expect(sceneMemorySection(world)).toContain("转述或自述，真伪未核实");
+    expect(
+      memoryPool(world, [], 0).find((entry) => entry.id === "anchor:medicine")?.importance,
+    ).toBe("normal");
+  });
+
+  it("正文声称买药但账本没有变化时，结构化物品与付款证据不能通过", () => {
+    const before = start();
+    const prose = "店主把一瓶蓝色药剂交给你，终端确认你支付了100欧元。";
+    const fact = {
+      ...promise,
+      id: "medicine",
+      kind: "fact",
+      text: "你拿到一瓶蓝色药剂，并付了100欧元。",
+      evidence: { source: "narrative", quote: prose },
+      settlement: [
+        { type: "item", id: "blue-medicine", delta: 1 },
+        { type: "money", delta: -100 },
+      ],
+    };
+    const raw = { ...working(before), anchors: [fact] };
+    expect(
+      readSceneMemory(raw, before, before, { text: "买一瓶药" }, prose).command,
+    ).toBeUndefined();
+    const inv = before.slices.inventory as { backpack: Record<string, number> };
+    const paid = {
+      ...before,
+      slices: {
+        ...before.slices,
+        inventory: { ...inv, backpack: { ...inv.backpack, "blue-medicine": 1 } },
+        economy: { eddies: 0, settled: [] },
+      },
+    };
+    const funded = {
+      ...before,
+      slices: { ...before.slices, economy: { eddies: 100, settled: [] } },
+    };
+    expect(readSceneMemory(raw, funded, paid, { text: "买一瓶药" }, prose).command).toBeDefined();
+    expect(readSceneMemory(raw, before, paid, { text: "买一瓶药" }, prose).notes.join()).toContain(
+      "欧元净变化",
+    );
+  });
+
+  it("准备兑现不结清承诺，正文实际结果与账本一致后才保存兑现", () => {
+    let before = start();
+    before = apply(before, working(before));
+    const intent = {
+      id: promise.id,
+      outcome: "fulfilled",
+      text: "你已支付100欧元。",
+      evidence: { source: "input", quote: "我会付钱" },
+      settlement: [{ type: "money", delta: -100 }],
+    };
+    const raw = { ...working(before, []), resolve: [intent] };
+    expect(
+      readSceneMemory(
+        raw,
+        before,
+        before,
+        { text: "我会付钱" },
+        "老莫还在等款。意思是你答应稍后付钱。",
+      ).command,
+    ).toBeUndefined();
+    const beforeFunded = {
+      ...before,
+      slices: { ...before.slices, economy: { eddies: 100, settled: [] } },
+    };
+    const evidence = { source: "narrative", quote: "老莫确认收到100欧元" };
+    const checked = readSceneMemory(
+      { ...raw, resolve: [{ ...intent, evidence }] },
+      beforeFunded,
+      before,
+      { text: "转账100欧元" },
+      "老莫确认收到100欧元。",
+    );
+    expect(checked.command).toBeDefined();
+    expect(
+      MemoryStateSchema.parse(apply(before, checked.command as MemoryWorkingCommand).slices.memory)
+        .anchors[promise.id]?.resolution,
+    ).toMatchObject({ outcome: "fulfilled", settlement: [{ type: "money", delta: -100 }] });
   });
 });

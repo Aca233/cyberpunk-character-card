@@ -1,6 +1,7 @@
 import { projectState } from "../../game";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
+import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
 import { ExtractDocSchema } from "../block";
 import { commandDoc, schemaDoc } from "../doc";
@@ -39,9 +40,10 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 【场景记忆】
 - 每轮给 sceneMemory：text 是这一场至今的简短提要（最多 600 字），在【场景记忆与未完事项】基础上加入本轮确认事实，保留早期承诺、线索和关系变化；普通气氛不必反复记录。这里不代替 changes 的实际记账。
 - anchors 只增记本轮以后还重要的事实、承诺、计划或问题；引用本轮 input 或 narrative 的原文片段作 evidence.quote，source 标明出处。玩家行动和承诺只能据玩家输入，正文替玩家补写的不算。
-- 承诺写 promise（尚未兑现），打算写 plan（尚未实行），疑问写 question（尚未回答），已经确认的重要事实写 fact。未发生的计划不能记为已经完成。稳定 id 用小写英文和连字符；已有锚点不重建、不改写。
+- 承诺写 promise（尚未兑现），打算写 plan（尚未实行），疑问写 question（尚未回答）。fact 必须有本轮正文中实际结果的证据，不能只凭玩家输入判定已经发生；玩家自述、人物转述、传闻和未核实说法用 report，text 标明谁说了什么，不把说法当客观事实。稳定 id 用小写英文和连字符；已有锚点不重建、不改写。
+- fact 或兑现结果涉及玩家物品获得/失去、支付/收款时，写 settlement：[{"type":"item","id":"物品id","delta":1}] 或 [{"type":"money","delta":-100}]，两者同时发生就同时列。delta 是本轮对应物品总数量或欧元的净变化，必须与 changes 的实际结算相符；换装不算获得，承诺付款不算已支付。普通观察、对话事实无需 settlement。
 - 记忆正文中的“明天”“今晚”等相对日期按本轮游戏时间写成具体日期；原文 evidence.quote 保持原样。日后读旧锚点时以登记时间为参照，不把约定日期跟着当前时间顺延。
-- resolve 只在本轮确实兑现、取消或回答后引用旧 id，并给原文证据及具体结果；没提到的旧锚点由代码原样保留。没新增或没解决时相应数组写 []。
+- resolve 只在本轮确实兑现、取消或回答后引用旧 id，并给原文证据及具体结果；fulfilled 必须引用正文的实际结果，不能只引用“我要交给你”这种输入意图。没提到的旧锚点由代码原样保留。没新增或没解决时相应数组写 []。
 - sceneEnd 为 true 时，同时给 summary：结合本场提要、重要锚点和本轮正文，用 100–200 字概括这一场。计划和承诺仍标清尚未兑现，不把场外信息写成玩家已知；不要为了收尾强行解决问题。
 
 【建议选项】
@@ -91,6 +93,7 @@ export function buildExtractPrompt(
   extras: PromptExtras,
   narrative: string,
 ): NarratorPrompt {
+  records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const data = extractCatalogData(world, extras.data ?? {});
   const details = extractCatalogDetails(world, view, data, `${plan.input.text}\n${narrative}`);

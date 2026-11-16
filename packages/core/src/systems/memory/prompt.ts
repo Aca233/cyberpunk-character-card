@@ -42,7 +42,9 @@ export function recapScenes(
   shown: ReadonlySet<number>,
   maxTokens?: number,
 ): SceneSummary[] {
-  const eligible = state.scenes.filter((s) => !shown.has(s.scene));
+  const eligible = state.scenes.filter(
+    (s) => !shown.has(s.scene) || state.corrections[String(s.scene)]?.action === "edit",
+  );
   const recent = eligible.slice(-RECAP_RECENT);
   const older = eligible
     .slice(0, Math.max(0, eligible.length - RECAP_RECENT))

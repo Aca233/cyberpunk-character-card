@@ -1,6 +1,7 @@
 import { projectState } from "../../game";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
+import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
@@ -72,6 +73,7 @@ export function buildJudgePrompt(
   extras: PromptExtras,
   memories: readonly Memory[],
 ): NarratorPrompt {
+  records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const recent = view.turns

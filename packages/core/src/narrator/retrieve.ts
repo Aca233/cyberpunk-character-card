@@ -2,12 +2,12 @@ import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
-import { type Importance, MemoryStateSchema, recapScenes } from "../systems/memory";
+import { type Importance, MemoryStateSchema, memoryRecords, recapScenes } from "../systems/memory";
 import { type Npc, NpcStateSchema } from "../systems/npc";
 import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
-import { memoryAnchorText } from "./scene-memory";
+import { memoryAnchorText, unresolvedMemoryAnchor } from "./scene-memory";
 import type { Memory } from "./stages";
 
 /**
@@ -81,6 +81,7 @@ export function memoryPool(
   hot: number,
   recapTokens?: number,
 ): MemoryEntry[] {
+  records = memoryRecords(world, records);
   const npcs = Object.values(NpcStateSchema.parse(world.slices.npc).npcs);
   const shown = hotScenes(records, hot);
   const out: MemoryEntry[] = [];
@@ -135,7 +136,7 @@ export function memoryPool(
       people: anchor.people,
       place: anchor.place,
       at: anchor.resolution?.at ?? anchor.at,
-      importance: anchor.resolution === null && anchor.kind !== "fact" ? "key" : "normal",
+      importance: unresolvedMemoryAnchor(anchor) ? "key" : "normal",
       keywords: anchor.keywords,
     });
   }
