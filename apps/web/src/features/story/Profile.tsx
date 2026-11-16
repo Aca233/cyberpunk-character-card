@@ -1,7 +1,7 @@
 import { worldRules } from "@cp/core";
 import { type CSSProperties, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
-import { portraitOf } from "./art";
+import { itemArtOf, portraitOf } from "./art";
 import neural from "./neural.module.css";
 import styles from "./profile.module.css";
 import { npcWoundSummary, type View } from "./view";
@@ -537,9 +537,25 @@ function BodySection({
             {wound.headline}
           </dd>
         </div>
-        <div className={styles.telemetryRow}>
+        <div className={`${styles.telemetryRow} ${styles.gearRow}`}>
           <dt>随身装备</dt>
-          <dd className={styles.telemetryVal}>{body.gear.join("、") || "—"}</dd>
+          <dd className={styles.telemetryVal}>
+            {body.gear.length > 0 ? (
+              <ul className={styles.gearList} aria-label="随身装备清单">
+                {body.gear.map((item) => {
+                  const art = itemArtOf(item.id);
+                  return (
+                    <li key={item.id} className={styles.gearItem}>
+                      {art && <Asset id={art} alt={item.name} className={styles.gearArt} />}
+                      <span>{item.name}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
         {scan && (
           <div className={styles.telemetryRow}>
@@ -587,15 +603,21 @@ function BodySection({
             <span className={styles.subCount}>{scan.chrome.length}</span>
           </header>
           <ul className={styles.chromeList}>
-            {scan.chrome.map((c) => (
-              <li key={c.name} className={styles.chromeItem}>
-                <div className={styles.chromeHead}>
-                  <b>{c.name}</b>
-                  {c.slot && <span className={styles.chromeSlot}>{c.slot}</span>}
-                </div>
-                {c.ability && <p className={styles.chromeDesc}>{c.ability}</p>}
-              </li>
-            ))}
+            {scan.chrome.map((c) => {
+              const art = itemArtOf(c.id);
+              return (
+                <li key={c.id} className={styles.chromeItem} data-art={art ? true : undefined}>
+                  {art && <Asset id={art} alt={c.name} className={styles.chromeArt} />}
+                  <div className={styles.chromeCopy}>
+                    <div className={styles.chromeHead}>
+                      <b>{c.name}</b>
+                      {c.slot && <span className={styles.chromeSlot}>{c.slot}</span>}
+                    </div>
+                    {c.ability && <p className={styles.chromeDesc}>{c.ability}</p>}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
