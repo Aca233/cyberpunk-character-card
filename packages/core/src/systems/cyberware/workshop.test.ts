@@ -5,6 +5,7 @@ import type { Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { EconomyStateSchema } from "../economy";
 import { registry } from "../registry";
+import { tradeInValue } from "./apply";
 import { quoteCyberware } from "./quote";
 import { CyberwareDefSchema, CyberwareStateSchema, RipperdocSchema } from "./schema";
 import { quoteCyberwareService, type ServiceIntent } from "./service";
@@ -83,6 +84,9 @@ function service(world: WorldState, intent: ServiceIntent) {
 const surgery = { action: "install" as const, doc: "clinic-a", id: "field-eye" };
 
 describe("持久义体库存与真实手术阶段", () => {
+  it("不朽标签不把真实已持有义体的回收价强制归零", () => {
+    expect(tradeInValue(CyberwareDefSchema.parse({ ...def, iconic: true }))).toBe(200);
+  });
   it("买下实物和安装分开，售罄后重访及时间流逝不刷新；自带件只付手术部分", () => {
     let world = run(setup(), {
       type: "cyberware",

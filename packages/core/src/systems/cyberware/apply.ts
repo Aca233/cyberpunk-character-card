@@ -59,14 +59,13 @@ export function ripperdocList(
   return list;
 }
 
-/** 医生回收一件旧义体给多少：参考价的两成，舍到百位；不朽义体不回收 */
 /** 修好一件打坏的义体：参考价的三成，舍到百位，最少 100 */
 export function repairCost(def: CyberwareDef): number {
   return Math.max(100, Math.round((def.price * REPAIR_RATE) / 100) * 100);
 }
 
 export function tradeInValue(def: CyberwareDef): number {
-  return def.iconic ? 0 : Math.floor((def.price * TRADE_IN_RATE) / 100) * 100;
+  return Math.floor((def.price * TRADE_IN_RATE) / 100) * 100;
 }
 
 /** 货架上的一件：价格按医生的系数折算到百位；locked 是不卖的原因 */
