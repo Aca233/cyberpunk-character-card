@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ApplyContext, Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
 import { BraindanceActionSchema } from "./systems/braindance";
-import { HabitActionSchema, SpendPointActionSchema } from "./systems/character";
+import { HabitActionSchema } from "./systems/character";
 import { EndStoryActionSchema } from "./systems/chronicle";
 import {
   BuyCyberwareActionSchema,
@@ -31,8 +31,6 @@ import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
-  /** 分配一个街头声望攒下的属性点 */
-  SpendPointActionSchema,
   /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
   BuyCyberwareActionSchema,
   /** 请义体医生卸下一件，医生折价回收 */

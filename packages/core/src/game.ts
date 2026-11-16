@@ -10,13 +10,12 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
-import { currentOffers, prepareFor } from "./narrator/pending";
+import { currentOffers } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import type { arcCardsView } from "./systems/arcs";
 import type { braindanceView } from "./systems/braindance";
 import type { characterView } from "./systems/character";
-import { CharacterStateSchema, effectiveAttribute } from "./systems/character/schema";
 import type { chronicleView, endedView } from "./systems/chronicle";
 import type { bulletinsView } from "./systems/city";
 import type { combatView } from "./systems/combat";
@@ -31,7 +30,8 @@ import {
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
-import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
+import type { CappedTotal } from "./systems/dice/apply";
+import { type Attribute, type DamageTier, DiceStateSchema } from "./systems/dice/schema";
 import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
@@ -567,66 +567,57 @@ function turnInput(raw: unknown): TurnInput {
   return parsed.success ? parsed.data : { text: String(raw) };
 }
 
-/** 最近一轮留给玩家的选项和待确认的检定；成功率按当前属性现算 */
-function projectOffers(world: WorldState, records: readonly LogRecord[]) {
+/** 保持现有界面的投影字段；沙盘不生成检定卡或属性门槛。 */
+interface CheckPanelProjection {
+  readonly id: string;
+  readonly label: string;
+  readonly attribute: Attribute;
+  readonly attributeLabel: string;
+  readonly attributeValue: number;
+  readonly tierLabel: string;
+  readonly baseDv: number;
+  readonly dv: number;
+  readonly modeDv: number;
+  readonly modifier: number;
+  readonly bonuses: CappedTotal;
+  readonly penalties: CappedTotal;
+  readonly dvMods: CappedTotal;
+  readonly capped: boolean;
+  readonly chance: number;
+  readonly success: string;
+  readonly failure: string;
+  readonly damage: DamageTier | null;
+  readonly rolled: boolean;
+}
+
+interface ChoicePanelProjection {
+  readonly text: string;
+  readonly gate: {
+    readonly attribute: Attribute;
+    readonly value: number;
+    readonly attributeLabel: string;
+    readonly met: boolean;
+  } | null;
+  readonly checkId: string | null;
+  readonly source: string | null;
+}
+
+/** 建议是可选的文字行动，玩家始终可以自由输入。 */
+function projectOffers(records: readonly LogRecord[]) {
   const offers = currentOffers(records);
-  const character = CharacterStateSchema.parse(world.slices.character);
-  const checks = offers.checks.flatMap((offer) => {
-    const prepared = prepareFor(world, offer.spec);
-    if (!prepared.ok) return [];
-    const { spec } = offer;
-    const { check } = prepared;
-    return [
-      {
-        id: offer.id,
-        label: offer.label,
-        attribute: spec.attribute,
-        attributeLabel: ATTRIBUTE_LABELS[spec.attribute],
-        attributeValue: check.attributeValue,
-        tierLabel: OPPONENT_TIERS[spec.tier].label,
-        /** 档位给的基础难度值；最终难度值 dv = 基础值 + 修正（封顶后）+ 难度模式 */
-        baseDv: spec.dv,
-        dv: check.dv,
-        modeDv: check.modeDv,
-        /** 检定值：属性 + 加成 − 减值（封顶后） */
-        modifier: check.modifier,
-        /** 逐条来源；raw 是封顶前的合计，和 total 不同时界面标“已封顶” */
-        bonuses: check.bonus,
-        penalties: check.penalty,
-        dvMods: check.dvMods,
-        capped:
-          check.bonus.raw !== check.bonus.total ||
-          check.penalty.raw !== check.penalty.total ||
-          check.dvMods.raw !== check.dvMods.total,
-        chance: check.chance,
-        success: spec.success,
-        failure: spec.failure,
-        damage: spec.damage ?? null,
-        rolled: offers.rolled?.offer.id === offer.id,
-      },
-    ];
-  });
-  const seq = offers.turn?.seq;
   return {
     read: offers.turn?.read ?? null,
-    choices: offers.choices.map((choice, i) => ({
-      text: choice.text,
-      gate: choice.gate
-        ? {
-            ...choice.gate,
-            attributeLabel: ATTRIBUTE_LABELS[choice.gate.attribute],
-            met: effectiveAttribute(character, choice.gate.attribute) >= choice.gate.value,
-          }
-        : null,
-      checkId: choice.check && seq !== undefined ? `${seq}.${i + 1}` : null,
-      /** 专属选项的来源，例如“过往：荒坂前员工” */
-      source: choice.source ?? null,
-    })),
-    checks,
-    /** 叙事模型标记了生死瞬间：这一轮可以开斯安威斯坦 */
+    choices: offers.choices.map(
+      (choice): ChoicePanelProjection => ({
+        text: choice.text,
+        gate: null,
+        checkId: null,
+        source: choice.source ?? null,
+      }),
+    ),
+    checks: [] as readonly CheckPanelProjection[],
     clutch: offers.turn?.clutch === true,
-    /** 已经掷过骰的检定 id；这时只能确认它 */
-    rolled: offers.rolled?.offer.id ?? null,
+    rolled: null as string | null,
   };
 }
 
@@ -786,7 +777,7 @@ export function projectState(
           after: { world, records, data },
         })
       : [],
-    offers: projectOffers(world, records),
+    offers: projectOffers(records),
     /** 能用的加速义体；没装或打坏了是 null */
     sandevistan: views.sandevistan as ReturnType<typeof sandevistanView>,
     /** 全息电话：正在响的那通和通话记录；打来的用意只给叙事模型，不在这里 */

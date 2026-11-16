@@ -17,12 +17,9 @@ import {
   buildJudgePrompt,
   buildLedger,
   buildNarratorPrompt,
-  type CheckRecord,
   type Clock,
   characterRules,
   cityRules,
-  currentOffers,
-  diceRules,
   effectiveTurns,
   HISTORY_TURNS,
   isSnapshotValid,
@@ -52,12 +49,10 @@ import {
   pickLoadouts,
   pickSnapshot,
   pickStartLocation,
-  prepareFor,
   projectState,
   type Rng,
   replay,
   rewriteNarrative,
-  rolledFrom,
   runNarratorTurn,
   runPhoneChat,
   type SaveMeta,
@@ -171,7 +166,7 @@ export interface GameDeps {
   readonly llm: LlmRouter;
   readonly hub: TurnHub;
   readonly clock: Clock;
-  /** 玩家检定用的骰子 */
+  /** 初始细节与世界事件抽样，不结算玩家行动成败 */
   readonly rng: Rng;
   readonly log: (message: string) => void;
   /** 「存为评测用例」写草稿的地方（服务器上是 tools/evals/drafts/）；不给时不能存 */
@@ -206,8 +201,7 @@ function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined
 /**
  * 存档和回合：同一存档的读写都排在一把锁里。
  * 行动的顺序是 校验 → 登记进行中 → 调叙事模型（锁外） → 加锁追加回合日志；
- * 确认检定时先在锁里掷骰并写进日志，再走同样的流程，这样重试和刷新都不会重掷。
- * 被拦截、停止或出错的轮次不写回合记录，已经写下的骰子保留，下次确认同一个检定时沿用
+ * 被拦截、停止或出错的轮次不写回合记录；重试由 requestId 和版本核对防止重复写入。
  */
 export class GameService {
   private readonly locks = new KeyedMutex();
@@ -389,105 +383,6 @@ export class GameService {
           status: 409,
           body: { error: "上一轮还在生成，先等它结束或停止", turnId: busy.turnId, version },
         };
-      const offers = currentOffers(records);
-
-      if (request.confirm !== undefined) {
-        const offer = offers.checks.find((c) => c.id === request.confirm);
-        if (!offer) {
-          return { status: 409, body: { error: "检定已失效，请刷新后再选", version } };
-        }
-        const rolled = offers.rolled;
-        if (rolled && rolled.offer.id !== offer.id) {
-          return {
-            status: 409,
-            body: {
-              error: `已经掷过「${rolled.offer.label}」，先确认它的结果`,
-              checkId: rolled.offer.id,
-              version,
-            },
-          };
-        }
-        if (request.baseVersion !== version && request.baseVersion !== rolled?.record.seq) {
-          return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
-        }
-        const unavailable = await this.llmUnavailable();
-        if (unavailable) return unavailable;
-
-        // 矩阵小游戏的完成情况在掷骰时记进骰子记录；已经掷过的照记录里的算
-        const target = rolled
-          ? rolled.offer
-          : { ...offer, spec: diceRules.withMatrix(offer.spec, request.matrix) };
-        let log = records;
-        let faces: readonly number[];
-        let baseVersion = version;
-        if (rolled) {
-          faces = rolled.record.roll.faces;
-        } else {
-          const prepared = prepareFor(world, target.spec);
-          if (!prepared.ok) {
-            return {
-              status: 409,
-              body: { error: `这个检定已经不能掷：${prepared.reason}`, version },
-            };
-          }
-          faces = diceRules.rollFaces(this.deps.rng);
-          const record: CheckRecord = {
-            kind: "check",
-            seq: version,
-            at: this.deps.clock.now().toISOString(),
-            requestId: request.requestId,
-            checkId: offer.id,
-            ...(request.matrix === undefined ? {} : { matrix: request.matrix }),
-            roll: diceRules.diceRecord(
-              prepared.check,
-              diceRules.resolveCheck(prepared.check, faces),
-            ),
-          };
-          await this.deps.saves.appendLog(id, serializeRecord(record));
-          baseVersion = version + 1;
-          await this.maybeSnapshot(id, baseVersion);
-          log = [...records, record];
-        }
-        const check = rolledFrom(world, target, faces);
-        const plan: NarratorPlan = {
-          kind: "resolve",
-          input: { text: offer.label },
-          check,
-        };
-        const run = hub.start(id, request.requestId, baseVersion);
-        hub.push(run, {
-          type: "rolled",
-          checkId: offer.id,
-          faces: check.result.faces,
-          total: check.result.total,
-          dv: check.result.dv,
-          outcome: check.result.outcome,
-        });
-        void this.execute(
-          run,
-          world,
-          log,
-          plan,
-          meta.opening,
-          meta.startTime,
-          request.offscreen,
-          undefined,
-          meta.startLocation,
-        );
-        return { status: 202, body: { turnId: run.turnId, replayed: false } };
-      }
-
-      if (request.input === undefined) throw new Error("回合请求既没有行动也没有确认");
-      if (offers.rolled) {
-        return {
-          status: 409,
-          body: {
-            error: `已经掷过「${offers.rolled.offer.label}」，先确认它的结果`,
-            checkId: offers.rolled.offer.id,
-            version,
-          },
-        };
-      }
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
       }
@@ -528,7 +423,7 @@ export class GameService {
     });
   }
 
-  /** 界面操作（分配属性点……）：不调用模型，结算后写一条 action 记录 */
+  /** 界面操作（装备、交易、读消息等）：不调用模型，结算后写一条 action 记录 */
   action(id: string, request: ActionRequest): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
       const { world, records } = await this.load(id);
@@ -539,9 +434,6 @@ export class GameService {
       if (dead) return dead;
       if (this.deps.hub.running(id)) {
         return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
-      }
-      if (currentOffers(records).rolled) {
-        return { status: 409, body: { error: "先确认已经掷过的检定", version } };
       }
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
@@ -584,7 +476,6 @@ export class GameService {
           reply: { status: 409, body: { error, version } },
         });
         if (this.deps.hub.running(id)) return refuse("这一轮还在生成，等它结束再发消息");
-        if (currentOffers(records).rolled) return refuse("先确认已经掷过的检定");
         if (request.baseVersion !== version) return refuse("存档已经更新过，请刷新后再发");
         const target = validatePhoneChatTarget(world, request.contact);
         if (!target.ok) return refuse(target.reason);
@@ -719,8 +610,8 @@ export class GameService {
   }
 
   /**
-   * 重新生成最后一轮：把它作废（reason regenerate），返回当时的输入或确认的检定，
-   * 网页再按原来的提交流程重发；掷过的骰子还在日志里，不重掷
+   * 重新生成最后一轮：把它作废（reason regenerate），返回当时的玩家输入，
+   * 网页再按输入提交流程重发。
    */
   regenerate(id: string, request: z.output<typeof RegenerateRequestSchema>): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
@@ -755,18 +646,15 @@ export class GameService {
         reason: "regenerate",
       };
       await this.deps.saves.appendLog(id, serializeRecord(record));
-      const pending =
-        last.resolves !== undefined
-          ? { kind: "confirm", checkId: last.resolves, label: input.data.text }
-          : { kind: "input", input: input.data };
+      const pending = { kind: "input", input: input.data };
       return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
     });
   }
 
   /**
-   * 按账目改写最后一轮：只按已经结算的账目重写正文，不重掷、不改状态。
+   * 按账目改写最后一轮：只按已经结算的账目重写正文，不改状态。
    * 和回合一样：锁里校验 → 锁外调叙事模型 → 锁里确认存档没动过再追加；
-   * 追加的回合照抄指令、骰子和状态变化，只换正文，用 replaces 一行替换掉原来那一轮
+   * 追加的回合照抄指令和状态变化，只换正文，用 replaces 一行替换掉原来那一轮
    */
   async rewrite(id: string, request: z.output<typeof RegenerateRequestSchema>): Promise<Reply> {
     const checked = await this.locks.run(
@@ -870,23 +758,7 @@ export class GameService {
       let rebuildError: string | null = null;
       try {
         if (!input.success) throw new Error("这一轮的玩家输入格式不对");
-        let plan: NarratorPlan = { kind: "action", input: input.data };
-        if (record.resolves !== undefined) {
-          const offer = currentOffers(before).checks.find((o) => o.id === record.resolves);
-          const rolled = before.findLast(
-            (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
-          );
-          if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
-          plan = {
-            ...plan,
-            kind: "resolve",
-            check: rolledFrom(
-              world,
-              { ...offer, spec: diceRules.withMatrix(offer.spec, rolled.matrix) },
-              rolled.roll.faces,
-            ),
-          };
-        }
+        const plan: NarratorPlan = { kind: "action", input: input.data };
         const extras = {
           data: gameData,
           opening: openingPremise(
@@ -954,7 +826,7 @@ export class GameService {
           ),
         );
         // ④ 抽取：场外提问和等检定的轮次不抽
-        if (record.ooc !== true && record.check === undefined) {
+        if (record.ooc !== true) {
           prompts.push(
             stage(
               "extract",
@@ -1037,11 +909,7 @@ export class GameService {
           offscreenSkip: record.offscreen
             ? null
             : (record.offscreenSkip ??
-              (record.ooc
-                ? "场外提问，不推演"
-                : record.check !== undefined
-                  ? "这一轮在等检定，还没结算"
-                  : "这一轮没收场")),
+              (record.ooc ? "场外提问，不推演" : "尚未触发需要推演的世界变化")),
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
             replay(
@@ -1095,16 +963,7 @@ export class GameService {
       const input = TurnInputSchema.safeParse(record.input);
       if (!input.success) return { status: 400, body: { error: "这一轮的玩家输入格式不对" } };
       const before = records.slice(0, seq);
-      let ask: Record<string, unknown> = { input: input.data };
-      if (record.resolves !== undefined) {
-        const rolled = before.findLast(
-          (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
-        );
-        if (!rolled) {
-          return { status: 409, body: { error: `找不到检定 ${record.resolves} 的骰子记录` } };
-        }
-        ask = { confirm: { checkId: record.resolves, faces: rolled.roll.faces } };
-      }
+      const ask = { input: input.data };
       const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
       const opening = openingPremise(
         meta.opening,
@@ -1250,13 +1109,7 @@ export class GameService {
         requestId: run.requestId,
         baseVersion: run.baseVersion,
         input: plan.input,
-        // 当场掷过的检定（用户 2026-11-01 选的"全改"第 1 步）也记进这一轮的骰子
-        dice:
-          plan.kind === "resolve"
-            ? [diceRules.diceRecord(plan.check.prepared, plan.check.result)]
-            : turn.rolled
-              ? [diceRules.diceRecord(turn.rolled.prepared, turn.rolled.result)]
-              : [],
+        dice: [],
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,
@@ -1267,8 +1120,6 @@ export class GameService {
         scene: turn.scene,
         ...(turn.title !== undefined ? { title: turn.title } : {}),
         ...(turn.closeup !== undefined ? { closeup: turn.closeup } : {}),
-        ...(turn.check !== undefined ? { check: turn.check } : {}),
-        ...(plan.kind === "resolve" ? { resolves: plan.check.offer.id } : {}),
         ...(turn.ooc ? { ooc: true } : {}),
         ...(turn.notes.length > 0 ? { notes: [...turn.notes] } : {}),
         ...(turn.unsettled !== undefined ? { unsettled: turn.unsettled } : {}),

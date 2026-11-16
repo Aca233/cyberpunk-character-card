@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { MATRIX_MAX } from "../systems/dice/schema";
 import { EncounterPaceSchema, TravelRequestSchema } from "../systems/travel/schema";
 
 /** 旧存档里的输入方式：做、说、想、出戏。新输入只有一个文本框，由叙事模型自己判断 */
@@ -40,33 +39,20 @@ export const OFFSCREEN_PACE_SCENES: Readonly<Record<OffscreenPace, number | null
   fast: 2,
 };
 
-/** POST /api/saves/:id/turns 的请求体：一次行动（input），或确认一个待定的检定（confirm），二选一 */
-export const TurnRequestSchema = z
-  .strictObject({
-    /** 网页生成的请求 id；同一个 id 重复提交只执行一次 */
-    requestId: z
-      .string()
-      .regex(/^[A-Za-z0-9_-]{8,64}$/, "requestId 只能是 8–64 位字母、数字、- 或 _"),
-    /** 提交时网页看到的存档版本；和后端不一致说明别处已经改过，需要先刷新 */
-    baseVersion: z.number().int().min(0),
-    input: TurnInputSchema.optional(),
-    /** 状态投影 offers.checks 里的检定 id，例如 12 或 12.2 */
-    confirm: z
-      .string()
-      .regex(/^\d+(\.\d+)?$/, "confirm 应为检定 id，例如 12 或 12.2")
-      .optional(),
-    /** 没带时按常规 */
-    offscreen: OffscreenPaceSchema.optional(),
-    /** 路上偶遇的频率；没带时按常规 */
-    encounters: EncounterPaceSchema.optional(),
-    /** 确认检定前玩了入侵协议矩阵小游戏：解开了几段序列；只对智力检定换算成修正 */
-    matrix: z.number().int().min(0).max(MATRIX_MAX).optional(),
-  })
-  .refine(
-    (r) => (r.input === undefined) !== (r.confirm === undefined),
-    "input 和 confirm 要有且只有一个",
-  )
-  .refine((r) => r.matrix === undefined || r.confirm !== undefined, "matrix 只能和 confirm 一起带");
+/** POST /api/saves/:id/turns：每次请求提交一条自由行动 */
+export const TurnRequestSchema = z.strictObject({
+  /** 网页生成的请求 id；同一个 id 重复提交只执行一次 */
+  requestId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/, "requestId 只能是 8–64 位字母、数字、- 或 _"),
+  /** 提交时网页看到的存档版本；不一致时先刷新 */
+  baseVersion: z.number().int().min(0),
+  input: TurnInputSchema,
+  /** 没带时按常规 */
+  offscreen: OffscreenPaceSchema.optional(),
+  /** 路上偶遇的频率；没带时按常规 */
+  encounters: EncounterPaceSchema.optional(),
+});
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 export interface TurnUsage {

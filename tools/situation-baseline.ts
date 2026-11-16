@@ -14,9 +14,6 @@ import {
   buildExtractPrompt,
   buildJudgePrompt,
   buildNarratorPrompt,
-  type CheckRecord,
-  currentOffers,
-  diceRules,
   effectiveTurns,
   HISTORY_TURNS,
   judgeCandidates,
@@ -27,7 +24,6 @@ import {
   newGameWorld,
   parseLog,
   replay,
-  rolledFrom,
   type SaveMeta,
   SaveMetaSchema,
   type TurnInput,
@@ -53,30 +49,14 @@ function stagesFor(
   record?: TurnRecord,
 ): Stage[] {
   const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
-  let plan: NarratorPlan = { kind: "action", input };
-  if (record?.resolves !== undefined) {
-    const offer = currentOffers(before).checks.find((o) => o.id === record.resolves);
-    const rolled = before.findLast(
-      (r): r is CheckRecord => r.kind === "check" && r.checkId === record.resolves,
-    );
-    if (!offer || !rolled) throw new Error(`找不到检定 ${record.resolves} 的骰子记录`);
-    plan = {
-      ...plan,
-      kind: "resolve",
-      check: rolledFrom(
-        world,
-        { ...offer, spec: diceRules.withMatrix(offer.spec, rolled.matrix) },
-        rolled.roll.faces,
-      ),
-    };
-  }
+  const plan: NarratorPlan = { kind: "action", input };
   const extras = {
     data: gameData,
     opening: openingPremise(meta.opening),
     startTime: meta.startTime,
   };
   const stages: Stage[] = [];
-  if (plan.kind === "action" && input.mode !== "ooc") {
+  if (input.mode !== "ooc") {
     const lately = effectiveTurns(before)
       .slice(-2)
       .map((t) => t.text)
@@ -100,7 +80,7 @@ function stagesFor(
     recapTokens: record?.budget?.recapTokens,
   });
   stages.push({ stage: "narrate", messages: narrate.messages });
-  if (record === undefined || (record.ooc !== true && record.check === undefined)) {
+  if (record === undefined || record.ooc !== true) {
     const extract = buildExtractPrompt(world, before, plan, extras, record?.text ?? "");
     stages.push({ stage: "extract", messages: extract.messages });
   }
