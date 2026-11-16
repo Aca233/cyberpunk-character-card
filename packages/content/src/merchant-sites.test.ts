@@ -5,7 +5,7 @@ describe("content merchant index", () => {
   it("ships one shared content set into gameContent and mapData", () => {
     expect(gameContent.shops).toBe(shops);
     expect(gameContent.ripperdocs).toBe(ripperdocs);
-    expect(gameContent.mapData.merchantSites).toBe(merchantSites);
+    expect(gameContent.mapData?.merchantSites).toBe(merchantSites);
   });
 
   it("keeps all shelves inside the corresponding static catalogs", () => {

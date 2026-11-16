@@ -2,6 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import { applyDeadline, applyWorld, endScene } from "./apply";
 import { worldEvents } from "./events";
 import { worldFeed } from "./feed";
+import { merchantEntranceText } from "./merchant-context";
 import { placeRules, placeSections, withPlaces } from "./places";
 import {
   type DeadlineCommand,
@@ -47,7 +48,19 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
   // 统一的地点表（用户定的，2026-11-01："统一为地点"）：存档里记下的地点并进地点表和周边锚点，别的系统照旧用 locationCatalog 查
   data: (state, data) => withPlaces(data, state.places),
   rules: [placeRules],
-  sections: placeSections,
+  sections: [
+    ...placeSections,
+    {
+      order: 75.5,
+      title: "相关经营入口",
+      render: ({ world, data, input }) =>
+        merchantEntranceText(
+          WorldClockStateSchema.parse(world.slices.world),
+          data ?? {},
+          input.text,
+        ),
+    },
+  ],
   view: { key: "clock", project: worldView },
   status: worldStatus,
   events: worldEvents,
@@ -58,6 +71,7 @@ export * from "./apply";
 export * from "./district";
 export * from "./events";
 export * from "./feed";
+export * from "./merchant-context";
 export * from "./merchant-sites";
 export * from "./places";
 export * from "./radar";
