@@ -136,6 +136,9 @@ export function applyShopOrder(
   const location = ctx.read<WorldClockState>("world").location;
   if (!location || !merchantAt(ctx.data, shop.id, shop.location, location))
     return { ok: false, reason: "尚未在这家店落实订货条件" };
+  const world = { time: ctx.now, slices: { npc: ctx.read("npc") } };
+  const unavailable = shopUnavailable(world, shop, ctx.data);
+  if (unavailable) return { ok: false, reason: unavailable };
   const existing = draft.supplyOrders[command.id];
   if (command.action === "cancel") {
     if (!existing || existing.shop !== shop.id || existing.requestedBy !== "player")
@@ -161,9 +164,6 @@ export function applyShopOrder(
   const catalog = itemCatalog(ctx.data);
   if (!catalog.has(command.item) || draft.objects[command.item])
     return { ok: false, reason: "这不是可按现有合同订购的普通商品" };
-  const world = { time: ctx.now, slices: { npc: ctx.read("npc") } };
-  const unavailable = shopUnavailable(world, shop, ctx.data);
-  if (unavailable) return { ok: false, reason: unavailable };
   const merchant = ensureMerchant(draft, shop, catalog, ctx.now);
   if (!merchant.open) return { ok: false, reason: merchant.closureReason ?? "商店当前停业" };
   createOrder(
