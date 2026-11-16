@@ -1,17 +1,7 @@
 import { ConsequenceTableSchema, FALLOUT_KINDS, FALLOUT_LABELS, type FalloutState } from "./schema";
 
-const SHIFT: Readonly<Record<string, string>> = {
-  streetLegend:
-    "当前难度是街头传说：参考低一档的例子；仍以既定因果和实际条件为准，不凭档位追加伤害。",
-  deathCity:
-    "当前难度是死亡之城：参考高一档的例子，第 5 档照旧；仍须有具体原因，不凭难度推翻已定结果。",
-};
-
 /** 给模型看的【后果参考表】：按局面与对手分量给例子 */
-export function consequenceSection(
-  data: Readonly<Record<string, unknown>>,
-  mode = "nightCity",
-): string | undefined {
+export function consequenceSection(data: Readonly<Record<string, unknown>>): string | undefined {
   if (data.consequences === undefined) return undefined;
   const table = [...ConsequenceTableSchema.parse(data.consequences)].sort(
     (a, b) => a.risk - b.risk,
@@ -19,8 +9,7 @@ export function consequenceSection(
   const lines = [
     "【后果参考表】",
     "仅在既有条件确实引出后果时参考，不是每轮挑选惩罚的清单。按实际行动、环境和对手能力判断；伤害遵循前置物理裁决与当前伤势，暴露、跟踪或失去先机也必须有具体原因。准备充分可以顺利成功，无事发生时不补后果；同一损伤或警戒持续存在，不重复制造一次新伤害。",
-    ...(SHIFT[mode] ? [SHIFT[mode]] : []),
-    ...table.map((t) => `- 第 ${t.risk} 档（${t.label}）：${t.examples.join("；")}`),
+    ...table.map((t) => `- ${t.label}：${t.examples.join("；")}`),
   ];
   return lines.join("\n");
 }

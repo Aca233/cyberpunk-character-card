@@ -316,6 +316,11 @@ if (existsSync(TERMS)) {
     ["判断", JUDGE_STAGE],
     ["抽取", EXTRACT_STAGE],
     ["写正文", NARRATE_STAGE],
+    ...consequences.map((entry): [string, string] => [
+      `后果素材 ${entry.label}`,
+      entry.examples.join("\n"),
+    ]),
+    ...twists.map((entry): [string, string] => [`局面素材 ${entry.id}`, entry.text]),
     ...registry.rules.flatMap((m): [string, string][] =>
       [m.text, m.judge, m.narrate]
         .filter((t): t is string => t !== undefined)
@@ -334,7 +339,7 @@ if (existsSync(TERMS)) {
       errors.push(`${where}：出现了「${m[0]}」，伤害应记录具体损伤，不按固定生命百分比结算`);
     }
   }
-  notes.push("提示词检查：不包含固定伤害百分比或属性加减公式；不依赖废弃换算表");
+  notes.push("提示词与后果/局面素材检查：不包含固定伤害百分比或属性加减公式；不依赖废弃换算表");
 }
 
 // 地图和偶遇：地点都要有坐标，偶遇只能写地点表里有的城区
