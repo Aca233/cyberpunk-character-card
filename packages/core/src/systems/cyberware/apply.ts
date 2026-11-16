@@ -70,7 +70,7 @@ export interface ShelfItem {
   readonly net: number;
   readonly locked: string | null;
   readonly installed: boolean;
-  /** 部位装满了时，装上会换下来的那件（这个部位最早装的）；没装满是 null */
+  /** 原确认面板默认提出的替换候选（部位内最早装的）；未授权时不会自动拆卸 */
   readonly replaces: CyberwareDef | null;
 }
 
@@ -83,7 +83,7 @@ export function ripperdocShelf(
     const def = catalog.get(id);
     if (!def) return [];
     const locked = null;
-    // 部位装满了才会换下旧件，换下的是最早装的那件（和 install 一致，用户 2026-10-31 改成按原作格数装）
+    // 满位时为原确认面板选出候选；实际结算仍必须明确授权该旧件。
     const inSlot = installed.filter((c) => c.slot === def.slot && c.id !== id);
     const old = inSlot.length >= SLOT_CAPACITY[def.slot] ? inSlot[0] : undefined;
     const replaces = old ? (catalog.get(old.id) ?? null) : null;
@@ -245,6 +245,9 @@ export function applyCyberware(
     action: command.action,
     target: quote.id ?? "repay",
     price: command.action === "remove" ? quote.receive : quote.total,
+    cash: quote.cash,
+    credit: quote.credit,
+    creditAllowed: command.credit === true,
     replace: command.replace,
     tradeIn: command.tradeIn,
   });

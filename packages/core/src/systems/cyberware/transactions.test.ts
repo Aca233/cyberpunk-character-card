@@ -223,6 +223,9 @@ describe("义体按钮与正文共享交易事实", () => {
       action: "install",
       target: "eye",
       price: 1000,
+      cash: 1000,
+      credit: 0,
+      creditAllowed: false,
     };
     for (const facts of [
       { tradeQuote: { ...expected, price: 800 } },
@@ -354,6 +357,51 @@ describe("义体按钮与正文共享交易事实", () => {
     expect(EconomyStateSchema.parse(paid.slices.economy).eddies).toBe(200);
     expect(CyberwareStateSchema.parse(paid.slices.cyberware).debts).toEqual([]);
     expect(WorldClockStateSchema.parse(paid.slices.world).deadlines[0]?.handledAt).toBe(paid.time);
+  });
+
+  it("正文前没有授权的借款不能由抽取临时补上，现金和借款额也必须一致", () => {
+    const before = world({ old: true, cash: 1000 });
+    const command = CyberwareCommandSchema.parse({
+      type: "cyberware",
+      action: "install",
+      doc: "needle",
+      id: "new-arm",
+      replace: "old-arm",
+      tradeIn: true,
+      credit: true,
+      reason: "接受安装",
+    });
+    const expected = {
+      seller: "needle",
+      kind: "cyberware",
+      action: "install",
+      target: "new-arm",
+      price: 3800,
+      cash: 1000,
+      credit: 2800,
+      creditAllowed: true,
+      replace: "old-arm",
+      tradeIn: true,
+    };
+    for (const unauthorized of [
+      { ...expected, creditAllowed: false },
+      { ...expected, cash: 3800, credit: 0 },
+      { ...expected, cash: 1200, credit: 2600 },
+    ]) {
+      const result = registry.applyCommands(before, [command], {
+        ...context(),
+        facts: { tradeNarrative: "针眼准备安装新义体。", tradeQuote: unauthorized },
+      });
+      expect(result.results[0]?.result.ok).toBe(false);
+      expect(result.world).toEqual(before);
+    }
+    const result = registry.applyCommands(before, [command], {
+      ...context(),
+      facts: { tradeNarrative: "针眼同意现金一千、尾款赊账。", tradeQuote: expected },
+    });
+    expect(result.results[0]?.result.ok).toBe(true);
+    expect(EconomyStateSchema.parse(result.world.slices.economy).eddies).toBe(0);
+    expect(CyberwareStateSchema.parse(result.world.slices.cyberware).debts[0]?.amount).toBe(2800);
   });
 
   it("谈妥净价只扣一次，面板一致，显式过期/已使用报价不能重用", () => {
