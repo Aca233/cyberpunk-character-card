@@ -1,6 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { itemCatalog } from "../inventory";
-import type { NpcState } from "../npc/schema";
+import type { NpcState } from "../npc";
 import {
   BODY_PART_LABELS,
   CombatStateSchema,

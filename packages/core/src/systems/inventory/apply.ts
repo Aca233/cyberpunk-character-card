@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import type { NpcState } from "../npc/schema";
+import type { NpcState } from "../npc";
 import {
   DISCOUNT_FACTORS,
   discounted,

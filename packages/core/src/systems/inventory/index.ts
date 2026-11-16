@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
-import type { NpcState } from "../npc/schema";
+import type { NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import { inventoryActions } from "./actions";
 import {
