@@ -120,7 +120,7 @@ export function seedNpc(
 ): ApplyOutcome {
   const { type: _type, affinity, met, relation, ledger, ...card } = command;
   if (draft.npcs[card.id]) return { ok: false, reason: `人物 ${card.id} 已经有卡了` };
-  const problems = bodyProblems(card.body, data);
+  const problems = bodyProblems(card.body, data, card.id);
   if (problems.length) return { ok: false, reason: `${card.name} 的身体：${problems.join("；")}` };
   const wrongFaction = factionProblem(card.faction, data);
   if (wrongFaction) return { ok: false, reason: `${card.name} 的所属势力：${wrongFaction}` };
@@ -265,7 +265,7 @@ export function applyNpc(
     const resolvedFaction = resolveFaction(faction, data, notes);
     const resolvedHome = home === undefined ? undefined : resolvePlace(home, data);
     const resolvedLocation = location === undefined ? null : resolvePlace(location, data);
-    const resolvedBody = body ? sanitizeNpcBody(body, data, notes) : EMPTY_NPC_BODY;
+    const resolvedBody = body ? sanitizeNpcBody(body, data, notes, card.id) : EMPTY_NPC_BODY;
     draft.npcs[card.id] = {
       ...card,
       faction: resolvedFaction,
@@ -385,7 +385,7 @@ export function applyNpc(
       }
       const nextBody =
         command.body !== undefined
-          ? sanitizeNpcBody(command.body, data, notes)
+          ? sanitizeNpcBody(command.body, data, notes, npc.id)
           : npc.body === undefined
             ? EMPTY_NPC_BODY
             : undefined;

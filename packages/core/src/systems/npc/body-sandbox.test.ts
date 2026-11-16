@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyNpc } from "./apply";
-import { applyNpcBody, applyNpcCondition, currentVitals, bodyView } from "./body";
+import { applyNpcBody, applyNpcCondition, sanitizeNpcBody, currentVitals, bodyView } from "./body";
 import { NpcSchema, type NpcState } from "./schema";
 import { ItemDefSchema } from "../inventory/schema";
 
@@ -47,6 +47,15 @@ describe("NPC 的身体与物件持续存在", () => {
     expect(applyNpcBody(npc, { type: "npcHumanity", id: npc.id, action: "recover", symptomId: "unknown", reason: "未发生的恢复" }, 2, {}).ok).toBe(false);
     applyNpcBody(npc, { type: "npcHumanity", id: npc.id, action: "recover", symptomId: "rejection", reason: "修复受损接口" }, 3, {});
     expect(bodyView(npc, {}, 3).scan?.humanityStage).toBe("稳定");
+  });
+  it("人物装备与补卡不能复制玩家持有的唯一物件", () => {
+    const npc = person();
+    const data = { items: [ItemDefSchema.parse({ id: "unique-key", name: "唯一钥匙", kind: "misc" })], worldObjects: { "unique-key": { holder: "player" } } };
+    expect(applyNpcBody(npc, { type: "npcGear", id: npc.id, action: "add", item: "unique-key" }, 0, data).ok).toBe(false);
+    const notes: string[] = [];
+    expect(sanitizeNpcBody({ gear: ["unique-key"], cyberware: [] }, data, notes, npc.id).gear).toEqual([]);
+    expect(notes[0]).toContain("不能在人物卡中复制");
+    expect(applyNpcBody(npc, { type: "npcGear", id: npc.id, action: "add", item: "unique-key" }, 0, { ...data, worldObjects: { "unique-key": { holder: npc.id } } }).ok).toBe(true);
   });
   it("死者实际持有的物品能被移除一次，但不会给死者添加新东西", () => {
     const npc = person();

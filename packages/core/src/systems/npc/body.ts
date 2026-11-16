@@ -21,6 +21,11 @@ import {
 } from "./schema";
 
 type Data = Readonly<Record<string, unknown>>;
+function objectHolder(data: Data, id: string): string | undefined {
+  const objects = data.worldObjects as Record<string, { holder?: unknown }> | undefined;
+  const holder = objects?.[id]?.holder;
+  return typeof holder === "string" ? holder : undefined;
+}
 
 export const NPC_DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
   graze: "擦伤",
@@ -66,7 +71,7 @@ export function filledBody(body: NpcBodyCard | undefined): FilledBody {
 }
 
 /** 运行期对模型写的 body 做温和解析与清理：支持按中文名回退、剔除表外或超格的项，不因单项笔误丢整张卡 */
-export function sanitizeNpcBody(body: NpcBodyCard, data: Data, notes: string[]): NpcBodyCard {
+export function sanitizeNpcBody(body: NpcBodyCard, data: Data, notes: string[], npcId?: string): NpcBodyCard {
   const hasItemCatalog = Array.isArray(data.items);
   const items = hasItemCatalog ? itemCatalog(data) : null;
   const itemByName = items
@@ -85,6 +90,11 @@ export function sanitizeNpcBody(body: NpcBodyCard, data: Data, notes: string[]):
         droppedGear.push(raw);
         continue;
       }
+    }
+    const holder = objectHolder(data, id);
+    if (holder !== undefined && holder !== npcId) {
+      notes.push(`物件 ${id} 当前属于 ${holder}，先实际转交，不能在人物卡中复制`);
+      continue;
     }
     if (!gear.includes(id)) gear.push(id);
   }
@@ -136,12 +146,16 @@ export function sanitizeNpcBody(body: NpcBodyCard, data: Data, notes: string[]):
 }
 
 /** 卡上写的物品和义体 id 是不是都在表里；返回问题列表 */
-export function bodyProblems(body: NpcBodyCard | undefined, data: Data): string[] {
+export function bodyProblems(body: NpcBodyCard | undefined, data: Data, npcId?: string): string[] {
   if (!body) return [];
   const problems: string[] = [];
   if (body.gear.length > 0) {
     const items = itemCatalog(data);
-    for (const id of body.gear) if (!items.has(id)) problems.push(`物品表里没有「${id}」`);
+    for (const id of body.gear) {
+      if (!items.has(id)) problems.push(`物品表里没有「${id}」`);
+      const holder = objectHolder(data, id);
+      if (holder !== undefined && holder !== npcId) problems.push(`独立物件 ${id} 属于 ${holder}，不能给人物重复配置`);
+    }
   }
   if (body.cyberware.length > 0) {
     const chrome = cyberwareCatalog(data);
@@ -254,6 +268,8 @@ export function applyNpcBody(
       const { body } = settle(npc, data, now);
       const has = body.gear.includes(command.item);
       if (command.action === "add") {
+        const holder = objectHolder(data, command.item);
+        if (holder !== undefined && holder !== npc.id) return { ok: false, reason: `独立物件当前属于 ${holder}；先用 item lose recipient:${npc.id} 实际转交` };
         if (has) return { ok: true };
         if (body.gear.length >= NPC_GEAR_MAX) {
           return {
