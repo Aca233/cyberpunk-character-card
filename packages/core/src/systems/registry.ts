@@ -6,7 +6,6 @@ import { chronicle } from "./chronicle";
 import { city } from "./city";
 import { combat } from "./combat";
 import { cyberware } from "./cyberware";
-import { dice } from "./dice";
 import { economy } from "./economy";
 import { factions } from "./factions";
 import { fallout } from "./fallout";
@@ -36,7 +35,6 @@ import { world } from "./world";
 
 /** 所有游戏系统；新系统在这里登记，顺序无关，结算顺序由 dependsOn 决定 */
 export const systems: readonly AnySystem[] = [
-  dice,
   humanity,
   inventory,
   health,

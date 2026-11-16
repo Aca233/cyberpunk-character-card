@@ -16,7 +16,7 @@ import { combatView } from "./view";
  */
 export const combat = defineSystem<CombatState, CombatCommand, never>({
   id: "combat",
-  dependsOn: ["dice", "economy", "health", "inventory", "npc", "world"],
+  dependsOn: ["economy", "health", "inventory", "npc", "world"],
   state: CombatStateSchema,
   initial: () => CombatStateSchema.parse({ active: null, last: null }),
   commands: { combat: CombatCommandSchema },

@@ -94,8 +94,3 @@ export const ModifierSchema = z.object({
   pool: BonusPoolKindSchema.optional(),
 });
 export type Modifier = z.infer<typeof ModifierSchema>;
-
-export const DiceStateSchema = z.object({
-  mode: DifficultySchema,
-});
-export type DiceState = z.infer<typeof DiceStateSchema>;

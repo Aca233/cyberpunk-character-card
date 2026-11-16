@@ -30,7 +30,7 @@ import {
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
-import { type Attribute, type DamageTier, DiceStateSchema } from "./systems/dice/schema";
+import type { Attribute, DamageTier } from "./systems/dice/schema";
 import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
@@ -429,7 +429,6 @@ export function newGameWorld(
     ...base,
     slices: {
       ...base.slices,
-      dice: DiceStateSchema.parse({ mode: "nightCity" }),
       world: {
         ...clock,
         // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进存档（见 commands 末尾）

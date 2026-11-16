@@ -11,7 +11,6 @@ import {
 /** 近期后果：回合流程每轮把生效的指令归类后记下来，提醒叙事模型别重复、别让失败落空 */
 export const fallout = defineSystem<FalloutState, never, FalloutRecord>({
   id: "fallout",
-  dependsOn: ["dice"],
   state: FalloutStateSchema,
   initial: () => ({ recent: [], owed: null }),
   commands: {},
