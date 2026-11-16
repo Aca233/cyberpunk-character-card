@@ -150,9 +150,10 @@ export function quoteTrade(
         (!shop?.keeperNpc || object.holder !== shop.keeperNpc)
       )
         return fail(`${item.name}不属于${party.name}，不能从别人的持有记录取得`);
-      const objectLocation = object
-        ? ((world.slices.npc as NpcState).npcs[object.holder]?.location ?? object.location)
-        : null;
+      const holder = object ? (world.slices.npc as NpcState).npcs[object.holder] : undefined;
+      if (holder && !holder.body?.gear.includes(item.id))
+        return fail(`${holder.name}已经不再带着${item.name}，现有归属记录不能证明能够交付`);
+      const objectLocation = object ? (holder?.location ?? object.location) : null;
       if (objectLocation !== null && objectLocation !== location)
         return fail(`${item.name}仍在别处，不能隔空取得`);
       if (shop) {

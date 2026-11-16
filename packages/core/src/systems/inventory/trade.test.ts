@@ -380,6 +380,27 @@ describe("普通交易共用实际报价和货源", () => {
     );
     expect(trade(offered).world).toEqual(offered);
   });
+  it("商店列出的独立物件仍要核对实际持有人的装备记录", () => {
+    const world = alter(base(), {
+      npc: { npcs: { "keeper-a": person("keeper-a") } },
+      inventory: {
+        ...inventory(base()),
+        objects: {
+          gun: {
+            definition: gun,
+            origin: "老板的旧手枪",
+            holder: "keeper-a",
+            location: "market",
+            changedAt: 0,
+            lastChange: "曾随身携带",
+            remaining: null,
+          },
+        },
+      },
+    });
+    expect(quoteTrade(world, data, { action: "buy", item: gun.id, with: "shop-a" }).ok).toBe(false);
+    expect(trade(world).world).toEqual(world);
+  });
   it("已给正文的价格不同于当前实扣时不悄悄成交", () => {
     const world = base();
     const result = registry.applyCommands(
