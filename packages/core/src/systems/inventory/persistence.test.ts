@@ -55,6 +55,20 @@ describe("持续物件", () => {
 });
 
 describe("补给来自实物", () => {
+  it("独立补给丢下再捡起也保留剩余用量", () => {
+    const inv = inventory.initial();
+    const unique = { ...packet, id: "obj-found-grenade" };
+    expect(applyItem(inv, { type: "item", action: "gain", id: unique.id, definition: unique, origin: "维修工送的一包", reason: "收下补给" }, new Map(), 0, "street").ok).toBe(true);
+    expect(spend(inv, "grenade").ok).toBe(true);
+    const catalog = itemCatalog(withWorldObjects({ items: [] }, inv.objects));
+    expect(applyItem(inv, { type: "item", action: "lose", id: unique.id, reason: "放在地上" }, catalog, 1, "street").ok).toBe(true);
+    expect(applyItem(inv, { type: "item", action: "gain", id: unique.id, reason: "捡回原来的一包" }, catalog, 2, "street").ok).toBe(true);
+    expect(inv.grenade?.charges).toBe(1);
+    expect(spend(inv, "grenade").ok).toBe(true);
+    expect(inv.objects[unique.id]?.holder).toBe("consumed");
+    applyItem(inv, { type: "item", action: "lose", id: unique.id, reason: "丢弃空包" }, catalog, 3, "street");
+    expect(applyItem(inv, { type: "item", action: "gain", id: unique.id, reason: "再拿一次" }, catalog, 4, "street").ok).toBe(false);
+  });
   it("场景结束和休整不恢复余量，只有携带的补充包可用", () => {
     let world = registry.applyCommands(registry.initialWorld(0), [
       { type: "item", action: "gain", id: packet.id, reason: "在车里取得一包" },

@@ -149,6 +149,7 @@ export function applyItem(
     draft.objects[def.id] = {
       definition: def, origin: command.origin, holder: "world", location,
       changedAt: now, lastChange: command.reason.slice(0, 240),
+      remaining: def.charges ?? null,
     };
   }
   if (!def) return fail(`未登记物件 ${command.id}：首次取得需提供 definition 与 origin`);
@@ -236,7 +237,7 @@ function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyO
   if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
   stow(draft, slot);
   const max = def.charges ?? 1;
-  const charges = draft.depleted[def.id] ?? max;
+  const charges = draft.objects[def.id]?.remaining ?? draft.depleted[def.id] ?? max;
   Reflect.deleteProperty(draft.depleted, def.id);
   draft[slot] = { id: def.id, charges, max };
   return ok(`${def.name} 放进快捷栏，剩 ${charges} / ${max} 次`);
@@ -248,7 +249,7 @@ export function autoQuick(draft: Inventory, def: ItemDef): void {
   if (!slot || draft[slot] !== null) return;
   if (!take(draft, def.id)) return;
   const max = def.charges ?? 1;
-  const charges = draft.depleted[def.id] ?? max;
+  const charges = draft.objects[def.id]?.remaining ?? draft.depleted[def.id] ?? max;
   Reflect.deleteProperty(draft.depleted, def.id);
   draft[slot] = { id: def.id, charges, max };
 }
@@ -299,6 +300,8 @@ export function spend(draft: Inventory, slot: QuickSlotName, id?: string, now = 
     held.charges = held.max;
   }
   held.charges -= 1;
+  const object = draft.objects[held.id];
+  if (object) object.remaining = held.charges;
   if (held.charges === 0) moveObject(draft, held.id, "consumed", null, now, "这份补给已经耗尽");
   return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`] };
 }

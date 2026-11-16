@@ -115,7 +115,7 @@ export const ItemDefSchema = z
     kind: ItemKindSchema,
     /** 武器用哪项属性检定 */
     attribute: AttributeSchema.optional(),
-    /** 治疗品和手雷：休整或场景结束时恢复的使用次数 */
+    /** 治疗品和手雷：一份实际补给内的可用数量 */
     charges: z.number().int().min(1).optional(),
     /** 治疗品：每次回复生命上限的百分之几 */
     healPercent: z.number().int().min(1).max(100).optional(),
@@ -183,6 +183,7 @@ export const WorldObjectSchema = z.object({
   location: z.string().nullable(),
   changedAt: z.number().int(),
   lastChange: z.string().min(1).max(240),
+  remaining: z.number().int().min(0).nullable(),
 });
 
 const QuickSlotSchema = z
