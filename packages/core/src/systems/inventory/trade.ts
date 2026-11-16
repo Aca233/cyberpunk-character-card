@@ -3,7 +3,7 @@ import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
 import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
-import type { NpcState } from "../npc";
+import { NPC_GEAR_MAX, type NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import {
   applyItem,
@@ -177,6 +177,8 @@ export function quoteTrade(
         return fail(`${item.name}上还装着改装件，先拆下来再卖`);
       if (party.npc?.body?.gear.includes(item.id))
         return fail(`${party.name}已有同款装备，目前无法将另一件合并到其持有记录`);
+      if (party.npc && (party.npc.body?.gear.length ?? 0) >= NPC_GEAR_MAX)
+        return fail(`${party.name}当前无法再接收装备，交易尚不能交付`);
       if (!shop && !party.npc && !object)
         return fail("无人物装备记录的交易对象只能接收已经登记的独立物件");
     }

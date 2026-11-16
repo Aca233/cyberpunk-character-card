@@ -366,6 +366,9 @@ describe("普通交易共用实际报价和货源", () => {
       inventory: { ...inventory(base()), backpack: { gun: 1 } },
     });
     const offered = offer(world, 75, "sale", "buyer", gun.id, "item", "sell");
+    expect(quoteTrade(offered, data, { action: "sell", item: gun.id, with: "buyer" }).ok).toBe(
+      false,
+    );
     const result = trade(offered, "buyer", "sell", gun.id, "sale");
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toEqual(offered);
