@@ -1,6 +1,8 @@
 import type { Draft } from "immer";
-import type { ApplyOutcome, Command } from "../../kernel/system";
+import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
+import { checkNarratedPurchase } from "../commerce";
 import type { Attribute } from "../dice";
+import { quoteCyberware } from "./quote";
 import {
   CyberwareCatalogSchema,
   type CyberwareCommand,
@@ -123,9 +125,10 @@ export interface Purchase {
   /** 身上现有的欧元 */
   readonly eddies: number;
   readonly event?: string | undefined;
+  readonly replace?: string | undefined;
 }
 
-/** 装上一件义体：部位按 SLOT_CAPACITY 的格数装，装满了换下最早装的那件；买的要先付得起，钱交给欧元系统扣 */
+/** 装上一件义体；满位必须明确指定替换目标，结算层不得自行出售旧件。 */
 export function install(
   draft: Draft<CyberwareState>,
   id: string,
@@ -145,10 +148,14 @@ export function install(
     };
   }
   const notes: string[] = [];
-  // 按原作格数装（用户 2026-10-31："为什么每个地方的义体只能选一个"）：没装满直接加，装满了换下这个部位最早装的那件
   const inSlot = draft.installed.filter((c) => c.slot === def.slot).length;
-  const old =
-    inSlot >= SLOT_CAPACITY[def.slot] ? draft.installed.findIndex((c) => c.slot === def.slot) : -1;
+  const old = purchase?.replace
+    ? draft.installed.findIndex((c) => c.id === purchase.replace && c.slot === def.slot)
+    : -1;
+  if (purchase?.replace && old < 0) return { ok: false, reason: "指定换下的义体没有装在这个部位" };
+  if (inSlot >= SLOT_CAPACITY[def.slot] && old < 0) {
+    return { ok: false, reason: "这个部位已装满，尚未授权替换具体义体" };
+  }
   const emit: Command[] = [];
   if (old >= 0) {
     const [prev] = draft.installed.splice(old, 1);
@@ -212,23 +219,97 @@ export function applyBoost(
 export function applyCyberware(
   draft: Draft<CyberwareState>,
   command: CyberwareCommand,
-  catalog: ReadonlyMap<string, CyberwareDef>,
-  now: number,
-  eddies: number,
+  ctx: SystemContext,
 ): ApplyOutcome {
   if (command.event !== undefined && draft.settled.includes(command.event)) {
     return { ok: false, reason: `事件 ${command.event} 的义体已经结算过` };
   }
-  const outcome =
-    command.action === "install"
-      ? install(draft, command.id, catalog, now, {
-          price: command.price ?? catalog.get(command.id)?.price ?? 0,
-          eddies,
-          event: command.event && `cyberware:${command.event}`,
-        })
-      : remove(draft, command.id, catalog);
-  if (outcome.ok && command.event !== undefined) draft.settled.push(command.event);
-  return outcome;
+  const world = {
+    time: ctx.now,
+    slices: {
+      cyberware: draft,
+      economy: ctx.read("economy"),
+      health: ctx.read("health"),
+      world: ctx.read("world"),
+      npc: ctx.read("npc"),
+      commerce: ctx.read("commerce"),
+    },
+  };
+  const quoted = quoteCyberware(world, ctx.data, command);
+  if (!quoted.ok) return quoted;
+  const quote = quoted.quote;
+  if (quote.blocked) return { ok: false, reason: quote.blocked };
+  const changed = checkNarratedPurchase(ctx.facts, {
+    seller: quote.doc,
+    kind: "cyberware",
+    action: command.action,
+    target: quote.id ?? "repay",
+    price: command.action === "remove" ? quote.receive : quote.total,
+    replace: command.replace,
+    tradeIn: command.tradeIn,
+  });
+  if (changed) return { ok: false, reason: changed };
+  const catalog = cyberwareCatalog(ctx.data);
+  let outcome: ApplyOutcome;
+  if (command.action === "repay") {
+    outcome = applyDebt(
+      draft,
+      { type: "cyberware.debt", action: "repay", doc: quote.doc, docName: quote.docName },
+      ctx.now,
+    );
+  } else if (command.action === "install") {
+    outcome = install(draft, quote.id as string, catalog, ctx.now, {
+      price: 0,
+      eddies: 0,
+      replace: quote.replaces?.id,
+    });
+  } else if (command.action === "remove") {
+    outcome = remove(draft, quote.id as string, catalog);
+  } else {
+    outcome = {
+      ok: true,
+      notes: [],
+      emit: [{ type: "health.limb", action: "repair", id: quote.id, name: quote.name }],
+    };
+  }
+  if (!outcome.ok) return outcome;
+  const notes = [...(outcome.notes ?? [])];
+  const emit: Command[] = [...(outcome.emit ?? [])];
+  if (quote.credit > 0) {
+    const debt = applyDebt(
+      draft,
+      {
+        type: "cyberware.debt",
+        action: "add",
+        doc: quote.doc,
+        docName: quote.docName,
+        amount: quote.credit,
+        item: quote.name,
+      },
+      ctx.now,
+    );
+    if (!debt.ok) return debt;
+    notes.push(...(debt.notes ?? []));
+    emit.push(...(debt.emit ?? []));
+  }
+  if (quote.cash > 0) {
+    emit.push({
+      type: "money",
+      delta: -quote.cash,
+      reason: `${quote.docName}：${quote.name}`,
+    });
+  }
+  if (quote.receive > 0) {
+    emit.push({
+      type: "money",
+      delta: quote.receive,
+      reason: `${quote.docName}回收${quote.name}`,
+    });
+  }
+  if (quote.offer) emit.push({ type: "commerce.used", id: quote.offer });
+  if (quote.replaces) notes.push(`${quote.replaces.name}按已确认条件交给${quote.docName}`);
+  if (command.event !== undefined) draft.settled.push(command.event);
+  return { ...outcome, notes, emit };
 }
 
 /** 赊账和还钱：赊账记一条期限，还清时把期限标成办完 */

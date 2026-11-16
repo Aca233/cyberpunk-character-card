@@ -79,12 +79,14 @@ export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
 
 export const CyberwareCatalogSchema = z.array(CyberwareDefSchema);
 
-/** 义体医生：开在某个地点，有自己的货架和价格；高稀有度的货随街头声望解锁。数据在 content 包的 ripperdocs.ts */
+/** 义体医生：开在某个地点，有自己的货架和价格；不以声望等级锁定货物。 */
 export const RipperdocSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(20),
-  /** 医生本人的人物卡 id；有卡时见过面、好感够了，没到街头声望门槛的货也肯卖 */
+  /** 医生本人的人物卡 id；已确认死亡或在别处时不能亲自服务 */
   keeperNpc: z.string().min(1).optional(),
+  /** 已登记、可在这间诊所提供同类服务的其他医生 */
+  serviceNpcs: z.array(z.string().min(1)).default([]),
   /** 地点表里的 id：玩家在这里时才能找他 */
   location: z.string().min(1),
   note: z.string().max(120).default(""),
@@ -92,7 +94,7 @@ export const RipperdocSchema = z.object({
   priceFactor: z.number().min(0.5).max(2).default(1),
   /** 黑市货：便宜，但可能有故障或追踪器，由叙事模型在剧情里兑现 */
   blackMarket: z.boolean().default(false),
-  /** 货架上的义体 id；不朽义体放上来也不卖 */
+  /** 货架上的义体 id；标签不替代实际货源 */
   shelf: z.array(z.string().min(1)).min(1),
   /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
   credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
@@ -142,20 +144,30 @@ export const CyberwareStateSchema = z.object({
 });
 export type CyberwareState = z.infer<typeof CyberwareStateSchema>;
 
-/** 模型使用：义体医生装、卸义体 */
+/** 模型和按钮共用的义体交易；成交金额由当前医生报价决定。 */
 export const CyberwareCommandSchema = z
-  .object({
+  .strictObject({
     type: z.literal("cyberware"),
-    action: z.enum(["install", "remove"]),
-    id: z.string().min(1),
-    /** 不写时按义体表的价钱；谈下来的价或剧情白送时写，白送写 0 */
-    price: z.number().int().min(0).max(200_000).optional(),
+    action: z.enum(["install", "remove", "repair", "repay"]),
+    doc: z.string().min(1).describe("实际提供服务的诊所/医生 id，使用当前义体医生报价中的 id"),
+    id: z.string().min(1).optional().describe("安装、拆卸或维修的义体 id；repay 不填"),
+    replace: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("玩家明确选定要换下的已装义体 id；满槽不得自行选最早一件"),
+    tradeIn: z
+      .boolean()
+      .optional()
+      .describe("只有玩家同意出售旧件时写 true；拆卸回收或替换折抵必须明确授权"),
+    credit: z.boolean().optional().describe("只有玩家明确接受赊账时写 true；不自动借款"),
+    offer: z.string().min(1).optional().describe("已登记、已谈妥的报价 id；不直接填写任意价格"),
     reason: z.string().min(1),
     /** 事件 id；带上后同一事件只结算一次 */
     event: z.string().min(1).optional(),
   })
   .describe(
-    "义体医生装、卸义体：install 按义体表扣欧元（谈下来的价或白送时写 price，白送写 0），余额不够时整条不生效；每个部位按格数装（额皮质、神经系统、循环系统、表皮系统、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件），装满了再装会换下最早装的那件；remove 卸下。安装本身不自动扣人性；只在实际出现神经症状时记录 humanity",
+    "义体交易：install 购买并安装、remove 拆卸回收、repair 维修、repay 还清欠款。现场、医生、货架、报价、折抵、余额与债务由代码统一核验；满槽须有玩家指定的 replace 和同意出售旧件的 tradeIn:true，未授权不替换。赊账须 credit:true。报价与交易不是一回事，只有实际接受并完成才写；失败整笔不生效，不能另写 money/trade 重复记账。安装本身不扣人性。",
   );
 export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 

@@ -12,7 +12,7 @@ import { bonusText } from "./view";
 
 /**
  * 每个部位按原作格数装（用户 2026-10-31："为什么每个地方的义体只能选一个""现在 ui 和能装的义体数量对不上"）：
- * 没装满直接加，装满了换下最早装的那件；开局主板超过格数才不收
+ * 没装满直接加，装满需要明确授权替换；开局主板超过格数不收
  */
 
 const def = (id: string, slot: CyberwareDef["slot"]) =>
@@ -57,16 +57,23 @@ describe("义体按部位格数装", () => {
     ]);
   });
 
-  it("装满了再装，换下这个部位最早装的那件", () => {
+  it("装满后没有指定替换目标，不自行删除最早安装的旧件", () => {
     expect(installAll(["cortex-a", "cortex-b", "cortex-c", "cortex-d"])).toEqual([
+      "cortex-a",
       "cortex-b",
       "cortex-c",
-      "cortex-d",
     ]);
   });
 
-  it("只有一格的部位还是换下旧的", () => {
-    expect(installAll(["arm-a", "arm-b"])).toEqual(["arm-b"]);
+  it("只有一格的部位也必须指定目标才替换", () => {
+    expect(installAll(["arm-a", "arm-b"])).toEqual(["arm-a"]);
+    const replaced = produce(CyberwareStateSchema.parse({}), (draft) => {
+      install(draft, "arm-a", catalog, 0);
+      expect(
+        install(draft, "arm-b", catalog, 1, { price: 0, eddies: 0, replace: "arm-a" }).ok,
+      ).toBe(true);
+    });
+    expect(replaced.installed.map((c) => c.id)).toEqual(["arm-b"]);
   });
 });
 

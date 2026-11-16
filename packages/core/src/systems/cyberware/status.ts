@@ -37,7 +37,7 @@ export const cyberwareStatus: readonly SystemStatus[] = [
       const doc = ctx.views.ripperdoc as RipperdocView;
       if (!doc) return [];
       return [
-        `义体医生：${doc.name}在这里（${doc.note}）；玩家可以在界面上直接买、卸义体，代码按货架价结算，你只写场面${doc.blackMarket ? "。这是黑市货，装上的东西可能有故障或追踪器，可以在剧情里兑现" : ""}`,
+        `义体诊所：${doc.name}（doc=${doc.id}，${doc.note}）；按钮与正文共用医生、货架、报价、折抵和债务校验。玩家接受具体服务与旧件处置后才成交；黑市标签本身不等于存在故障或追踪器。`,
       ];
     },
   },
@@ -47,7 +47,7 @@ export const cyberwareStatus: readonly SystemStatus[] = [
       const debts = ctx.views.ripperdocDebts as RipperdocDebtsView;
       if (debts.length === 0) return [];
       return [
-        `欠义体医生的钱：${debts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；还钱在界面上做，你不写 trade。到期没还，医生会派人来催或上门`,
+        `欠义体医生的钱：${debts.map((d) => `${d.docName} ${d.amount} 欧元，${d.due} 前还`).join("、")}；按钮或正文 cyberware repay 共用还款结算，不另写 trade。催款要符合实际到期和医生知情。`,
       ];
     },
   },
