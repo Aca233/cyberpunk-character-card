@@ -18,13 +18,15 @@ const data = {
   ],
 };
 
-function commands(hp: number, charges = 2, combat = false) {
+const injury = { id: "inj1", part: "left-arm", tier: "heavy", cause: "玻璃划伤", at: 0, healsAt: null, treated: false, source: "injury" };
+
+function commands(hurt: boolean, charges = 2, combat = false, suppressed = false) {
   const base = registry.initialWorld(0);
   const world = {
     ...base,
     slices: {
       ...base.slices,
-      health: { ...HealthStateSchema.parse(base.slices.health), hp, max: 100 },
+      health: { ...HealthStateSchema.parse(base.slices.health), injuries: hurt ? [injury] : [], painSuppressed: suppressed },
       inventory: {
         ...InventoryStateSchema.parse(base.slices.inventory),
         healing: { id: "maxdoc", charges, max: 3 },
@@ -37,7 +39,7 @@ function commands(hp: number, charges = 2, combat = false) {
 
 describe("物品栏直接治疗", () => {
   it("非战斗时调用治疗结算", () => {
-    expect(commands(50)).toEqual([{ type: "heal", source: "maxdoc" }]);
+    expect(commands(true)).toEqual([{ type: "heal", source: "maxdoc" }]);
   });
   it("备用治疗品先装备再治疗，耗尽时不切换", () => {
     const base = registry.initialWorld(0);
@@ -49,7 +51,7 @@ describe("物品栏直接治疗", () => {
       ...base,
       slices: {
         ...base.slices,
-        health: { ...HealthStateSchema.parse(base.slices.health), hp: 50, max: 100 },
+        health: { ...HealthStateSchema.parse(base.slices.health), injuries: [injury] },
         inventory,
       },
     };
@@ -71,13 +73,13 @@ describe("物品栏直接治疗", () => {
       }),
     ).toBe("string");
   });
-  it("备用治疗品实际回血并扣次，不修改输入世界", () => {
+  it("备用治疗品镇痛并消耗实物余量，不修改输入世界", () => {
     const base = registry.initialWorld(0);
     const world = {
       ...base,
       slices: {
         ...base.slices,
-        health: { ...HealthStateSchema.parse(base.slices.health), hp: 50, max: 100 },
+        health: { ...HealthStateSchema.parse(base.slices.health), injuries: [injury] },
         inventory: {
           ...InventoryStateSchema.parse(base.slices.inventory),
           backpack: { maxdoc: 1 },
@@ -93,19 +95,19 @@ describe("物品栏直接治疗", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.reason);
-    expect(HealthStateSchema.parse(result.world.slices.health).hp).toBe(80);
+    expect(HealthStateSchema.parse(result.world.slices.health)).toMatchObject({ painSuppressed: true, injuries: [injury] });
     const inventory = InventoryStateSchema.parse(result.world.slices.inventory);
     expect(inventory.healing).toEqual({ id: "maxdoc", charges: 1, max: 3 });
     expect(inventory.backpack.maxdoc).toBeUndefined();
     expect(inventory.depleted.maxdoc).toBeUndefined();
     expect(world).toEqual(before);
   });
-  it("满血或重伤上限时拒绝浪费次数", () => {
-    expect(typeof commands(100)).toBe("string");
-    expect(typeof commands(29)).toBe("string");
+  it("无伤或已有镇痛效果时不重复消耗", () => {
+    expect(typeof commands(false)).toBe("string");
+    expect(typeof commands(true, 2, false, true)).toBe("string");
   });
   it("次数耗尽或战斗中拒绝直接治疗", () => {
-    expect(typeof commands(50, 0)).toBe("string");
-    expect(typeof commands(50, 2, true)).toBe("string");
+    expect(typeof commands(true, 0)).toBe("string");
+    expect(typeof commands(true, 2, true)).toBe("string");
   });
 });

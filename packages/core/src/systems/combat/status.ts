@@ -16,7 +16,7 @@ function fightLines(view: CombatView): string[] {
   if (!a) {
     return view.loot.map(
       (l) =>
-        `上一架倒下的${l.name}（id ${l.from}）身上还剩：${goods(l.items)}；玩家搜身拿走发 combat loot`,
+        `此地${l.name}（id ${l.from}）身上还剩：${goods(l.items)}；玩家搜身拿走发 combat loot`,
     );
   }
   const foes = a.foes.map((f) => {
@@ -37,9 +37,9 @@ function recordLines(view: CombatView): string[] {
       ? "处理过了"
       : w.tier === "graze"
         ? "没处理，自然长好不留疤"
-        : "没处理，长好会留疤";
+        : "尚未处理，深层创伤不能仅靠切场或休息消失";
     lines.push(
-      `伤 ${w.id}：${w.partLabel}，${from(w.by, w.gang)}的${w.weapon}，还要 ${w.daysLeft} 天，${care}；付费处理伤口发 combat treat，处理后仍需等待恢复`,
+      `伤 ${w.id}：${w.partLabel}，${from(w.by, w.gang)}的${w.weapon}，${w.healsAt === null ? "尚未开始愈合过程" : `还要 ${w.daysLeft} 天`}，${care}；付费处理伤口发 combat treat，处理后仍需等待恢复`,
     );
   }
   if (view.scars.length > 0) {

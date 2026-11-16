@@ -52,6 +52,10 @@ function injured(eddies: number) {
     slices: {
       ...world.slices,
       economy: { eddies, settled: [] },
+      health: { ...(world.slices.health as object), injuries: [{
+        id: "w1", part: "left-arm", tier: "heavy", cause: "枪手的霰弹枪", at: 0,
+        healsAt: null, treated: false, source: "combat",
+      }] },
       combat: CombatStateSchema.parse({
         active: null,
         last: null,
@@ -66,7 +70,7 @@ function injured(eddies: number) {
             tier: "heavy",
             at: 0,
             district: "沃森",
-            healsAt: 4 * DAY,
+            healsAt: null,
             treated: false,
           },
         ],
@@ -203,59 +207,42 @@ describe("录像与警方热度", () => {
   });
 });
 
-describe("治疗费用连锁结算", () => {
+describe("治疗费用与身体事实连锁结算", () => {
   it.each([0, 125])("治疗扣一次医疗费，余款 %i", (remaining) => {
     const world = injured(SERVICES.medical.price + remaining);
     const first = registry.applyCommands(world, [care], context());
     expect(first.results[0]?.result.ok).toBe(true);
     expect(first.world.slices.economy).toMatchObject({ eddies: remaining });
-    const combat = CombatStateSchema.parse(first.world.slices.combat);
-    expect(combat.wounds[0]).toMatchObject({ treated: true, healsAt: 2 * DAY });
-    expect(combat.scars).toEqual([]);
-
+    expect(CombatStateSchema.parse(first.world.slices.combat).wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
+    expect(first.world.slices.health).toMatchObject({ injuries: [{ id: "w1", treated: true, healsAt: 4 * DAY }] });
     const repeated = registry.applyCommands(first.world, [care], context());
     expect(repeated.results[0]?.result.ok).toBe(true);
     expect(repeated.world).toEqual(first.world);
-    expect(repeated.patches).toEqual([]);
   });
-  it.each([3 * DAY, 4 * DAY - 1])("第 %i 分钟治疗不延长恢复期限", (time) => {
-    const world = registry.advanceTo(injured(SERVICES.medical.price), time, context()).world;
-    const result = registry.applyCommands(world, [care], context());
-    expect(result.results[0]?.result.ok).toBe(true);
-    expect(result.world.slices.economy).toMatchObject({ eddies: 0 });
-    expect(CombatStateSchema.parse(result.world.slices.combat).wounds[0]).toMatchObject({
-      treated: true,
-      healsAt: 4 * DAY,
-    });
-    const healed = registry.advanceTo(result.world, 4 * DAY, context()).world;
-    const combat = CombatStateSchema.parse(healed.slices.combat);
-    expect(combat.wounds).toEqual([]);
-    expect(combat.scars).toEqual([]);
+  it("未治伤不随时间消失；处理后两个系统按同一愈合时间恢复", () => {
+    const waiting = registry.advanceTo(injured(SERVICES.medical.price), 20 * DAY, context()).world;
+    expect(CombatStateSchema.parse(waiting.slices.combat).wounds).toHaveLength(1);
+    const treated = registry.applyCommands(waiting, [care], context()).world;
+    expect(CombatStateSchema.parse(treated.slices.combat).wounds[0]?.healsAt).toBe(24 * DAY);
+    const healed = registry.advanceTo(treated, 24 * DAY, context()).world;
+    expect(CombatStateSchema.parse(healed.slices.combat).wounds).toEqual([]);
+    expect(healed.slices.health).toMatchObject({ injuries: [] });
+    const again = registry.applyCommands(healed, [care], context());
+    expect(again.results[0]?.result.ok).toBe(false);
+    expect(again.world).toBe(healed);
   });
-
-  it.each([4 * DAY, 4 * DAY + 1])("第 %i 分钟伤已愈合，不能收费或消除疤痕", (time) => {
-    const world = registry.advanceTo(injured(SERVICES.medical.price), time, context()).world;
-    const combat = CombatStateSchema.parse(world.slices.combat);
-    expect(combat.wounds).toEqual([]);
-    expect(combat.scars).toHaveLength(1);
-    expect(combat.scars[0]).toMatchObject({
-      by: "枪手",
-      weapon: "霰弹枪",
-      part: "left-arm",
-      district: "沃森",
-    });
-    const result = registry.applyCommands(world, [care], context());
-    expect(result.results[0]?.result.ok).toBe(false);
-    expect(result.world).toBe(world);
-    expect(result.patches).toEqual([]);
-    expect(result.world.slices.economy).toMatchObject({ eddies: SERVICES.medical.price });
-  });
-
   it("余额不足时治疗和扣款一起回滚", () => {
     const world = injured(SERVICES.medical.price - 1);
     const result = registry.applyCommands(world, [care], context());
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toBe(world);
     expect(result.patches).toEqual([]);
+  });
+  it("诊所统一治疗会同步战斗伤口的护理和恢复时间", () => {
+    const world = injured(SERVICES.medical.price);
+    const result = registry.applyCommands(world, [{ type: "heal", source: "ripperdoc" }], context());
+    expect(result.results[0]?.result.ok).toBe(true);
+    const ticked = registry.advanceTo(result.world, 1, context()).world;
+    expect(CombatStateSchema.parse(ticked.slices.combat).wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
   });
 });

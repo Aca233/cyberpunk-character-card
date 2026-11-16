@@ -12,7 +12,7 @@ function open(s: CombatState): boolean {
     s.dead.some((d) => d.avenger === "pending" || d.avenger === "came") ||
     s.rumors.some((r) => r.stopped === null) ||
     s.footage.some((f) => f.resolved === null) ||
-    (s.last?.loot ?? []).some((l) => l.items.length > 0)
+    s.groundLoot.some((l) => l.items.length > 0)
   );
 }
 
@@ -32,9 +32,10 @@ export const combatRules: RuleModule<CombatState> = {
 - 找上门的人挑合适的时候出场，不要一来就开打：他可能来讨说法、来谈价钱、来报仇，也可能只是站在街对面看着。`,
   text: `- 真动手了发 combat start：foes 每人写 name、archetype（gunner 枪手、brute 打手、netrunner 网络黑客、boss 头目）、tier，属于哪伙人写 gang；有人物卡的写 npc，杂兵一伙合成一条。
 - 场上有人倒下、死了、跑了发 combat foe（target 写他的 id，state 写 down、dead、fled）。死了的由代码补名字和等他的人，你不编。
-- 玩家挨了一下发 combat wound：by 写谁打的（场上的 id 或名字），weapon 写用什么，part 写 head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一，tier 写 graze、heavy、lethal。扣血由代码算，战斗里不另写 damage。
+- 玩家挨了一下发 combat wound：by 写谁打的（场上的 id 或名字），weapon 写用什么，part 写 head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一，tier 写 graze、heavy、lethal。记录具体创口和机能影响，不扣抽象血量，战斗里不另写 damage。
 - 打完了发 combat end：witnesses 写看见的人数，cameras 写有没有摄像头，truth 用一句话写真实发生了什么。有人看见时代码起流言、定录像在谁手里。
 - 从倒下或死了的人身上捡东西发 combat loot（target、item，只能是【当前状态】里他身上有的 id）。物品由代码放进背包，同一次拾取不另发 item gain。
+- 已有人物的随身物以人物卡为准，开打不会重新生成。未拾取的物件留在原地，换场或下一次冲突不清空；只能在它所在地点拾取。桌上的工具等环境物件照常发 item gain，必须说明真实来源。
 - 找人处理一处伤发 combat treat（target 写伤口 id），代码按街头诊所价目扣一次医疗费，余额不足则治疗和扣款都不生效；同一处伤重复处理不再收费。处理后仍需恢复时间，不是立刻痊愈。同一次伤口治疗不另发 trade service medical，避免重复扣钱。
 - 压下流言发 combat rumor（target、how silenced）；收买传话的人写 how bought，钱由代码扣。
 - 录像追回、毁掉、付钱买下发 combat footage（target，how 写 recovered、destroyed、paid）。

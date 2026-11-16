@@ -68,6 +68,7 @@ export function drawLoot(
 ): string[] {
   if (data.items === undefined) return [];
   const all = [...itemCatalog(data).values()].filter((d) => !d.iconic);
+  if (all.length === 0) return [];
   const rarities: readonly string[] = LOOT_RARITY[foe.tier];
   const pick = (fits: (d: ItemDef) => boolean): string[] => {
     let pool = all.filter((d) => fits(d) && rarities.includes(d.rarity ?? "common"));
@@ -81,22 +82,30 @@ export function drawLoot(
 }
 
 /** 从倒下或死了的人身上捡一件，直接进物品栏；打完了从剩下的里捡 */
-export function loot(draft: Combat, command: CombatCommand): ApplyOutcome {
+export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext): ApplyOutcome {
   const { target, item } = command;
   if (target === undefined || item === undefined) return fail("loot 要写 target 和 item");
   let bag: string[];
   let name: string;
+  let npc: string | null;
+  const here = ctx.read<WorldClockState>("world").location;
   const foe = draft.active?.foes.find((f) => f.id === target || f.npc === target);
   if (foe) {
+    if (draft.active?.location !== here) return fail("这些物件不在当前地点，不能隔空拾取");
     if (foe.state === "fled") return fail(`${foe.name}跑了，东西也带走了`);
     if (foe.state === "up") return fail(`${foe.name}还站着，捡不了他身上的东西`);
     bag = foe.carry;
     name = foe.name;
+    npc = foe.npc;
   } else {
-    const left = draft.last?.loot.find((l) => l.from === target || l.name === target);
+    const left = draft.groundLoot.find((l) => l.from === target && l.location === here);
     if (!left) return fail(`${target}身上没有剩下的东西`);
     bag = left.items;
     name = left.name;
+    npc = left.npc;
+  }
+  if (npc !== null && !ctx.read<NpcState>("npc").npcs[npc]?.body?.gear.includes(item)) {
+    return fail(`${name}已经不再带着 ${item}，不能重复取得`);
   }
   const i = bag.indexOf(item);
   if (i < 0) return fail(`${name}身上没有 ${item}`);
@@ -104,7 +113,10 @@ export function loot(draft: Combat, command: CombatCommand): ApplyOutcome {
   return {
     ok: true,
     notes: [],
-    emit: [{ type: "item", action: "gain", id: item, reason: `从${name}身上捡的` }],
+    emit: [
+      ...(npc === null ? [] : [{ type: "npcGear", id: npc, action: "remove", item }]),
+      { type: "item", action: "gain", id: item, reason: `从${name}身上捡的` },
+    ],
   };
 }
 
@@ -117,11 +129,11 @@ export function startCombat(
   if (draft.active) return fail("已经在打了");
   const cards = ctx.read<NpcState>("npc").npcs;
   const foes: ActiveFoe[] = [];
-  for (const [i, f] of (command.foes ?? []).entries()) {
+  for (const f of command.foes ?? []) {
     const card = f.npc === undefined ? undefined : cards[f.npc];
     if (f.npc !== undefined && !card) return fail(`没有 ${f.npc} 的人物卡；杂兵不写 npc`);
     if (card && !card.alive) return fail(`${card.name}已经死了`);
-    const id = f.npc ?? `foe${i + 1}`;
+    const id = f.npc ?? `foe${draft.nextFoe++}`;
     if (foes.some((x) => x.id === id)) return fail(`${f.name}写了两次`);
     const foe: ActiveFoe = {
       id,
@@ -133,13 +145,13 @@ export function startCombat(
       state: "up",
       carry: [],
     };
-    foe.carry = drawLoot(foe, ctx.data, ctx.rng);
+    // 已有卡的人带着已记录的物品；空装备也是事实，不能因开战重新抽奖。
+    foe.carry = card ? [...(card.body?.gear ?? [])] : drawLoot(foe, ctx.data, ctx.rng);
+    if (card) draft.groundLoot = draft.groundLoot.filter((l) => l.npc !== f.npc);
     foes.push(foe);
   }
   if (foes.length === 0) return fail("开打要写 foes");
-  // 上一架没捡走的东西留不到这一架
-  if (draft.last) draft.last.loot = [];
-  draft.active = { startedAt: ctx.now, district: districtHere(ctx), foes };
+  draft.active = { startedAt: ctx.now, district: districtHere(ctx), location: ctx.read<WorldClockState>("world").location, foes };
   const named = foes.map((f) => (f.gang ? `${f.gang}的${f.name}` : f.name));
   return ok(`动手了：${named.join("、")}`);
 }
@@ -195,7 +207,7 @@ export function wound(draft: Combat, command: CombatCommand, ctx: SystemContext)
     tier,
     at: ctx.now,
     district: draft.active?.district ?? districtHere(ctx),
-    healsAt: ctx.now + HEAL_MINUTES[tier],
+    healsAt: tier === "graze" ? ctx.now + HEAL_MINUTES[tier] : null,
     treated: false,
   };
   draft.wounds.push(w);
@@ -203,7 +215,7 @@ export function wound(draft: Combat, command: CombatCommand, ctx: SystemContext)
   return {
     ok: true,
     notes: [`${BODY_PART_LABELS[part]}挨了${from}的${weapon}`],
-    emit: [{ type: "health.hit", tier, reason: `${from}的${weapon}` }],
+    emit: [{ type: "health.hit", tier, part, injuryId: w.id, reason: `${from}的${weapon}` }],
   };
 }
 
@@ -213,11 +225,12 @@ export function treat(draft: Combat, target: string | undefined, ctx: SystemCont
   if (!w) return fail(`没有 ${target} 这处伤`);
   if (w.treated) return ok();
   w.treated = true;
-  w.healsAt = Math.min(w.healsAt, ctx.now + Math.ceil(HEAL_MINUTES[w.tier] / 2));
+  w.healsAt ??= ctx.now + HEAL_MINUTES[w.tier];
   return {
     ok: true,
     notes: [`${BODY_PART_LABELS[w.part]}的伤处理过了，不会留疤`],
     emit: [
+      { type: "health.treat", id: w.id },
       {
         type: "money",
         delta: -SERVICES.medical.price,
@@ -286,10 +299,11 @@ export function endCombat(draft: Combat, command: CombatCommand, ctx: SystemCont
   );
   const left = active.foes.flatMap((f) =>
     (f.state === "down" || f.state === "dead") && f.carry.length > 0
-      ? [{ from: f.id, name: f.name, items: [...f.carry] }]
+      ? [{ from: f.id, name: f.name, npc: f.npc, location: active.location, leftAt: ctx.now, items: [...f.carry] }]
       : [],
   );
-  draft.last = { endedAt: ctx.now, foes, loot: left };
+  draft.groundLoot.push(...left);
+  draft.last = { endedAt: ctx.now, foes };
   draft.active = null;
   const witnesses = command.witnesses ?? 0;
   const cameras = command.cameras ?? false;
@@ -382,8 +396,11 @@ function hop(r: Combat["rumors"][number], districts: readonly string[], at_: num
 /** 时间推进：伤长好（没治的重伤留疤）、死者那边掷找不找上门、流言往外传、录像到期出事 */
 export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): void {
   const now = span.to;
+  const injuries = ctx.read<{ injuries?: { id: string; healsAt: number | null; treated: boolean }[] }>("health").injuries;
   for (const w of [...draft.wounds]) {
-    if (w.healsAt > now) continue;
+    const injury = injuries?.find((i) => i.id === w.id);
+    if (injury) { w.healsAt = injury.healsAt; w.treated = injury.treated; }
+    if (w.healsAt === null || w.healsAt > now) continue;
     if (!w.treated && SCARRING_TIERS.includes(w.tier)) {
       draft.scars.push({
         by: w.by,
@@ -439,7 +456,7 @@ export function applyCombat(
     case "end":
       return endCombat(draft, command, ctx);
     case "loot":
-      return loot(draft, command);
+      return loot(draft, command, ctx);
     case "treat":
       return treat(draft, command.target, ctx);
     case "rumor":

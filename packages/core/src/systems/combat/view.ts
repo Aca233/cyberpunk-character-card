@@ -14,6 +14,7 @@ export function combatView({ world, data }: ViewContext) {
   const combat = CombatStateSchema.parse(world.slices.combat);
   const active = combat.active;
   const now = world.time;
+  const here = (world.slices.world as { location?: string | null } | undefined)?.location ?? null;
   const catalog = data.items === undefined ? undefined : itemCatalog(data);
   const named = (ids: readonly string[]) =>
     ids.map((id) => ({ id, name: catalog?.get(id)?.name ?? id }));
@@ -31,8 +32,8 @@ export function combatView({ world, data }: ViewContext) {
         carry: lootable(f.state) ? named(f.carry) : [],
       })),
     },
-    loot: (combat.last?.loot ?? [])
-      .filter((l) => l.items.length > 0)
+    loot: combat.groundLoot
+      .filter((l) => l.location === here && l.items.length > 0)
       .map((l) => ({ from: l.from, name: l.name, items: named(l.items) })),
     dead: combat.dead.map((d) => ({
       ...d,
@@ -42,7 +43,7 @@ export function combatView({ world, data }: ViewContext) {
       ...w,
       partLabel: BODY_PART_LABELS[w.part],
       /** 还要几天长好，向上取整 */
-      daysLeft: Math.max(0, Math.ceil((w.healsAt - now) / 1440)),
+      daysLeft: w.healsAt === null ? 0 : Math.max(0, Math.ceil((w.healsAt - now) / 1440)),
     })),
     scars: combat.scars.map((s) => ({ ...s, partLabel: BODY_PART_LABELS[s.part] })),
     rumors: combat.rumors.map((r) => {

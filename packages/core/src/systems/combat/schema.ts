@@ -46,6 +46,9 @@ export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
 export const LeftLootSchema = z.object({
   from: z.string().min(1),
   name: z.string().min(1),
+  npc: z.string().nullable(),
+  location: z.string().nullable(),
+  leftAt: z.number().int(),
   items: z.array(z.string().min(1)),
 });
 
@@ -98,7 +101,7 @@ export const WoundSchema = z.object({
   at: z.number().int(),
   district: z.string().nullable(),
   /** 什么时候长好；治了提前 */
-  healsAt: z.number().int(),
+  healsAt: z.number().int().nullable(),
   treated: z.boolean(),
 });
 export type Wound = z.infer<typeof WoundSchema>;
@@ -193,6 +196,7 @@ export type Footage = z.infer<typeof FootageSchema>;
 export const ActiveCombatSchema = z.object({
   startedAt: z.number().int(),
   district: z.string().nullable(),
+  location: z.string().nullable().default(null),
   foes: z.array(ActiveFoeSchema),
 });
 export type ActiveCombat = z.infer<typeof ActiveCombatSchema>;
@@ -206,9 +210,11 @@ export const CombatStateSchema = z.object({
       foes: z.array(
         z.object({ npc: z.string().min(1), name: z.string().min(1), state: FoeStateSchema }),
       ),
-      loot: z.array(LeftLootSchema).default([]),
     })
     .nullable(),
+  /** 留在各个实际地点的遗留物；不随下一场冲突清空。 */
+  groundLoot: z.array(LeftLootSchema).default([]),
+  nextFoe: z.number().int().min(1).default(1),
   /** 案底：一直留着，后面的故事从这里长出来 */
   dead: z.array(DeadSchema).default([]),
   wounds: z.array(WoundSchema).default([]),
@@ -295,7 +301,7 @@ const DAY = 1440;
 export const HEAL_MINUTES: Readonly<Record<Wound["tier"], number>> = {
   graze: 1 * DAY,
   heavy: 4 * DAY,
-  lethal: 10 * DAY,
+  lethal: 7 * DAY,
 };
 /** 只有这几档的伤没治就长好会留疤 */
 export const SCARRING_TIERS: readonly Wound["tier"][] = ["heavy", "lethal"];

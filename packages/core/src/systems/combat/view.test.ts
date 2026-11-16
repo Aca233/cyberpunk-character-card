@@ -49,8 +49,8 @@ describe("战利品投影", () => {
 describe("伤疤的投影和状态提示", () => {
   it.each([
     ["graze", false, "没处理，自然长好不留疤"],
-    ["heavy", false, "没处理，长好会留疤"],
-    ["lethal", false, "没处理，长好会留疤"],
+    ["heavy", false, "尚未处理，深层创伤不能仅靠切场或休息消失"],
+    ["lethal", false, "尚未处理，深层创伤不能仅靠切场或休息消失"],
     ["heavy", true, "处理过了"],
   ] as const)("%s 处理状态 %s 的提示符合恢复规则", (tier, treated, care) => {
     const view = project(

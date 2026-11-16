@@ -82,7 +82,7 @@ describe("死者有名有姓", () => {
         applyCombat(
           state,
           cmd("foe", {
-            target: "foe1",
+            target: state.active?.foes[0]?.id,
             state: "dead",
           }),
           ctxOf([1, 1, 1, 2]),
@@ -130,87 +130,38 @@ describe("死者有名有姓", () => {
 });
 
 describe("伤口带着来历", () => {
-  const hit = cmd("wound", {
-    by: "foe1",
-    weapon: "霰弹枪",
-    part: "left-arm",
-    tier: "heavy",
-  });
-
-  it("记下伤口来源并交给 health 扣血，未处理的重伤到期留下疤", () => {
+  const hit = cmd("wound", { by: "foe1", weapon: "霰弹枪", part: "left-arm", tier: "heavy" });
+  it("记录具体伤处；未经处理的深层创伤不会因时间或切场消失", () => {
     const state = begin();
-    expect(applyCombat(state, hit, ctxOf())).toMatchObject({
-      ok: true,
-      emit: [{ type: "health.hit", tier: "heavy", reason: "虎爪帮的枪手的霰弹枪" }],
-    });
-    expect(state.wounds[0]).toMatchObject({
-      by: "枪手",
-      gang: "虎爪帮",
-      weapon: "霰弹枪",
-      part: "left-arm",
-      district: "沃森",
-      healsAt: 4 * DAY,
-      treated: false,
-    });
-    advance(state, 0, 4 * DAY - 1);
+    expect(applyCombat(state, hit, ctxOf())).toMatchObject({ ok: true,
+      emit: [{ type: "health.hit", tier: "heavy", part: "left-arm", injuryId: "w1", reason: "虎爪帮的枪手的霰弹枪" }] });
+    expect(state.wounds[0]).toMatchObject({ by: "枪手", gang: "虎爪帮", part: "left-arm", district: "沃森", healsAt: null, treated: false });
+    advance(state, 0, 20 * DAY);
     expect(state.wounds).toHaveLength(1);
     expect(state.scars).toEqual([]);
-    advance(state, 4 * DAY - 1, 4 * DAY);
-    expect(state.wounds).toEqual([]);
-    expect(state.scars).toEqual([
-      {
-        by: "枪手",
-        gang: "虎爪帮",
-        weapon: "霰弹枪",
-        part: "left-arm",
-        at: 0,
-        district: "沃森",
-      },
-    ]);
-    advance(state, 4 * DAY, 5 * DAY);
-    expect(state.scars).toHaveLength(1);
   });
-
-  it("处理过的伤提前长好，不留疤；重复处理不继续缩短时间", () => {
+  it("处理后开始恢复，重复处理不重设时间", () => {
     const state = begin();
     applyCombat(state, hit, ctxOf());
     const care = cmd("treat", { target: state.wounds[0]?.id });
-    expect(applyCombat(state, care, ctxOf()).ok).toBe(true);
-    expect(state.wounds[0]).toMatchObject({ treated: true, healsAt: 2 * DAY });
+    expect(applyCombat(state, care, ctxOf())).toMatchObject({ok: true, emit: [{ type: "health.treat", id: "w1" }, {type: "money"}]});
+    expect(state.wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
     expect(applyCombat(state, care, ctxOf([], DAY)).ok).toBe(true);
-    expect(state.wounds[0]?.healsAt).toBe(2 * DAY);
-    advance(state, 0, 2 * DAY);
-    expect(state.wounds).toEqual([]);
-    expect(state.scars).toEqual([]);
-    expect(applyCombat(state, care, ctxOf([], 2 * DAY)).ok).toBe(false);
-  });
-
-  it("超过二十处伤仍保留最早来源，长好后的疤也不截断", () => {
-    const state = begin();
-    for (let i = 0; i < 21; i += 1) {
-      expect(applyCombat(state, { ...hit, weapon: `霰弹枪${i}` }, ctxOf()).ok).toBe(true);
-    }
-    expect(state.wounds).toHaveLength(21);
-    expect(state.wounds[0]).toMatchObject({ weapon: "霰弹枪0", healsAt: 4 * DAY });
+    expect(state.wounds[0]?.healsAt).toBe(4 * DAY);
     advance(state, 0, 4 * DAY);
     expect(state.wounds).toEqual([]);
-    expect(state.scars).toHaveLength(21);
-    expect(state.scars.map((s) => s.weapon)).toEqual(
-      Array.from({ length: 21 }, (_, i) => `霰弹枪${i}`),
-    );
-    expect(state.scars[0]).toMatchObject({
-      by: "枪手",
-      gang: "虎爪帮",
-      district: "沃森",
-      at: 0,
-    });
-    advance(state, 4 * DAY, 20 * DAY);
-    expect(state.scars).toHaveLength(21);
+    expect(state.scars).toEqual([]);
   });
-
-  it("擦伤自然长好也不留疤", () => {
+  it("长时间未处理不会丢失早期创口记录", () => {
     const state = begin();
-    expect(applyCombat(state, { ...hit, tier: "graze" }, ctxOf()).ok).toBe(true);
+    for (let i = 0; i < 21; i++) applyCombat(state, { ...hit, weapon: `霰弹枪${i}` }, ctxOf());
+    advance(state, 0, 20 * DAY);
+    expect(state.wounds).toHaveLength(21);
+    expect(state.wounds[0]).toMatchObject({weapon: "霰弹枪0", healsAt: null});
+  });
+  it("擦伤自然愈合", () => {
+    const state = begin();
+    applyCombat(state, { ...hit, tier: "graze" }, ctxOf());
     advance(state, 0, DAY);
     expect(state.wounds).toEqual([]);
     expect(state.scars).toEqual([]);
@@ -481,7 +432,7 @@ describe("从倒下的人身上捡东西", () => {
     applyCombat(state, cmd("foe", { target: "foe1", state: "fled" }), ctxOf());
     expect(applyCombat(state, take("unity"), ctxOf()).ok).toBe(false);
     applyCombat(state, end, ctxOf());
-    expect(state.last?.loot).toEqual([]);
+    expect(state.groundLoot).toEqual([]);
     expect(applyCombat(state, take("unity"), ctxOf()).ok).toBe(false);
   });
 
@@ -489,15 +440,16 @@ describe("从倒下的人身上捡东西", () => {
     const state = armed();
     applyCombat(state, cmd("foe", { target: "foe1", state: "down" }), ctxOf());
     expect(applyCombat(state, end, ctxOf()).ok).toBe(true);
-    expect(state.last?.loot).toEqual([{ from: "foe1", name: "枪手", items: ["unity", "maxdoc"] }]);
+    expect(state.groundLoot).toMatchObject([{ from: "foe1", name: "枪手", location: "kabuki", items: ["unity", "maxdoc"] }]);
     expect(applyCombat(state, take("maxdoc"), ctxOf())).toMatchObject({
       ok: true,
       emit: [{ type: "item", action: "gain", id: "maxdoc" }],
     });
-    expect(state.last?.loot[0]?.items).toEqual(["unity"]);
+    expect(state.groundLoot[0]?.items).toEqual(["unity"]);
     expect(applyCombat(state, take("maxdoc"), ctxOf()).ok).toBe(false);
     expect(applyCombat(state, start, ctxOf()).ok).toBe(true);
-    expect(state.last?.loot).toEqual([]);
-    expect(applyCombat(state, take("unity"), ctxOf()).ok).toBe(false);
+    expect(state.active?.foes[0]?.id).toBe("foe2");
+    expect(state.groundLoot[0]?.items).toEqual(["unity"]);
+    expect(applyCombat(state, take("unity"), ctxOf()).ok).toBe(true);
   });
 });
