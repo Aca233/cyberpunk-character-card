@@ -133,6 +133,8 @@ export const CityStateSchema = z.object({
   lastAt: z.number().int().nullable().default(null),
   /** 已成功推演到的回合序号；-1 表示尚未处理任何回合。 */
   processedThrough: z.number().int().min(-1).default(-1),
+  /** 只处理完部分历史；后续回合继续下一批，不视为已追上当前世界。 */
+  backlog: z.boolean().default(false),
   /** 失败尝试独立记录，不覆盖最后成功的时刻。 */
   lastAttemptAt: z.number().int().nullable().default(null),
   retryAt: z.number().int().nullable().default(null),
@@ -163,6 +165,7 @@ export type CityBulletinCommand = z.infer<typeof CityBulletinCommandSchema>;
 export const CityRanSchema = z.object({
   type: z.literal("city.ran"),
   through: z.number().int().min(-1),
+  backlog: z.boolean(),
 });
 
 /** 解析、业务校验或上游拒答失败：保留待推演事项，按游戏时间退避。 */

@@ -21,6 +21,7 @@ import {
 } from "../systems/city";
 import { agendaCatalog } from "../systems/factions";
 import { JobOfferSchema, JobsStateSchema } from "../systems/jobs";
+import { memoryRecords } from "../systems/memory";
 import {
   attitudeLabel,
   NO_FACTION,
@@ -56,7 +57,7 @@ import {
 import { parseModelJson } from "./block";
 import { canonSection } from "./canon";
 import { type PromptExtras, stateSummary } from "./prompts/context";
-import { BOOKKEEPING_BASE, userMessage } from "./prompts/layers";
+import { BOOKKEEPING_BASE, estimateTokens, userMessage } from "./prompts/layers";
 
 /** 场外推演：辅助模型，温度略高，城里的事才有变化 */
 export const OFFSCREEN_TEMPERATURE = 0.6;
@@ -99,6 +100,7 @@ export function offscreenDue(
   const now = WorldClockStateSchema.parse(after.slices.world);
   const city = CityStateSchema.parse(after.slices.city ?? {});
   if (city.retryAt !== null) return after.time >= city.retryAt;
+  if (city.backlog) return true;
   if (now.scene !== was.scene && now.scene - (city.lastScene ?? 0) >= every) return true;
   // 统一看新单子的期限，不再分别催势力和宿敌（用户 2026-11-01 定的"全改"第 4 步）
   // 同一个期限只触发一次额外推演；遗漏的留到正常推演再提醒，避免每轮反复调用
@@ -319,12 +321,19 @@ function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>> = {}): s
 }
 
 /** 只带尚未成功处理的正文；本批的因果材料不因场次、同分钟或固定字数而丢失。 */
-function pendingTurns(records: readonly LogRecord[], through: number) {
-  return effectiveTurns(records).filter((r) => {
+function pendingTurns(world: WorldState, records: readonly LogRecord[], through: number) {
+  return effectiveTurns(memoryRecords(world, records)).filter((r) => {
     if (r.seq <= through || r.ooc || r.unsettled) return false;
     const input = TurnInputSchema.safeParse(r.input);
     return !input.success || input.data.mode !== "ooc";
   });
+}
+
+export interface OffscreenPromptScope {
+  /** 本批实际包含的历史正文终点；未处理的后续轮次不混入本批因果。 */
+  readonly through: number;
+  /** 仍有后续待处理正文；当前轮仅作防止旧事实覆盖现状的保护上下文。 */
+  readonly backlog: boolean;
 }
 
 /** 场外推演：当前事实、相关详卡、完整身份索引和成功游标之后的增量。 */
@@ -334,13 +343,16 @@ export function buildOffscreenPrompt(
   extras: PromptExtras,
   narrative: string,
   present: ReadonlySet<string> = new Set(),
+  scope?: OffscreenPromptScope,
 ): LlmMessage[] {
   const city = CityStateSchema.parse(world.slices.city ?? {});
   const clock = WorldClockStateSchema.parse(world.slices.world);
-  const lives = lifePicks(world, present);
+  const lives = scope?.backlog ? [] : lifePicks(world, present);
   const roster = NpcStateSchema.parse(world.slices.npc).npcs;
   const threads = ThreadsStateSchema.parse(world.slices.threads ?? {});
-  const pending = pendingTurns(records, city.processedThrough);
+  const pending = pendingTurns(world, records, city.processedThrough).filter(
+    (record) => scope === undefined || record.seq <= scope.through,
+  );
   const jobs = JobsStateSchema.parse(world.slices.jobs).jobs.filter(
     (j) =>
       ["active", "offered", "expired"].includes(j.status) ||
@@ -374,7 +386,7 @@ export function buildOffscreenPrompt(
       .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
       .slice(0, EXTRA_CARDS),
   ];
-  const dispatch = offscreenFixers(world, present);
+  const dispatch = scope?.backlog ? [] : offscreenFixers(world, present);
   const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   const due = [
     `当前 ${threads.threads.length}/${THREADS_MAX} 件；有空位且有前因才开新事，不必填满。`,
@@ -413,7 +425,7 @@ export function buildOffscreenPrompt(
       .map((s) => s.id),
   );
   const distantSeeds = seeds.filter((s) => !selectedSeeds.has(s.id));
-  if (distantSeeds.length > 0) {
+  if (distantSeeds.length > 0 && !scope?.backlog) {
     // 保留远端素材轮换；同一批重试时仍取同一素材。
     const offset = Math.max(0, city.processedThrough + 1) % distantSeeds.length;
     for (let i = 0; i < Math.min(2, distantSeeds.length); i += 1) {
@@ -422,13 +434,20 @@ export function buildOffscreenPrompt(
     }
   }
   const squash = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
-    .filter((n) => n.alive && n.timeline.length >= TIMELINE_SQUASH)
+    .filter((n) => !scope?.backlog && n.alive && n.timeline.length >= TIMELINE_SQUASH)
     .slice(0, 3);
-  const canon = canonSection(extras.data, extras.startTime, world.time);
+  const canon = scope?.backlog
+    ? undefined
+    : canonSection(extras.data, extras.startTime, world.time);
   const content = userMessage({
     scene: [
       `【当前状态】\n${stateSummary(world, records, extras.data)}`,
       `【本批范围】\n上次成功：${city.lastAt === null ? "尚未推演" : formatGameTime(city.lastAt)}；已处理到回合 ${city.processedThrough}；当前 ${formatGameTime(world.time)}。失败尝试未处理的事实仍在本批。`,
+      ...(scope?.backlog
+        ? [
+            `【积压分批处理】\n本批只处理回合 ${city.processedThrough + 1} 至 ${scope.through} 的已定稿正文。后续旧轮与当前轮尚未完成处理，不能声称已把全城推进到当前。当前状态始终优先于历史描述：旧轮里还活着、持有物件、身处某地，不代表现在仍如此，不能回滚人物生死、位置、归属或已经结束的事件。只写本批已读事实直接支持、且当前状态尚未否定的后果；缺少后续过程就保留未知，不补写被跳过的因果。不要仅因到期就重复推进事项，不补例行生活、派单或原剧时间线进度。当前轮正文只用于保护现状，不在本批提前处理其后果。`,
+          ]
+        : []),
       `【人物索引】（只供推演核对身份，不等于玩家知道这些人）\n${
         Object.values(roster)
           .map(
@@ -503,13 +522,121 @@ export function buildOffscreenPrompt(
           ]
         : []),
     ],
-    input: `【当前这一轮正文】\n${narrative}`,
+    input: `【当前这一轮正文${scope?.backlog ? "：仅作现状保护，后续批次处理" : ""}】\n${narrative}`,
     reminder: "（只输出一个 JSON 对象。）",
   });
   return [
     { role: "system", content: OFFSCREEN_SYSTEM },
     { role: "user", content },
   ];
+}
+
+export interface OffscreenCapacity {
+  readonly contextWindow: number;
+  readonly maxOutputTokens?: number;
+}
+
+export type OffscreenBatch =
+  | {
+      readonly kind: "ready";
+      readonly messages: LlmMessage[];
+      readonly through: number;
+      readonly backlog: boolean;
+      readonly inputTokens: number;
+      readonly inputLimit: number;
+      readonly maxOutputTokens: number;
+    }
+  | {
+      readonly kind: "blocked";
+      readonly reason: string;
+      readonly inputTokens: number;
+      readonly inputLimit: number;
+      readonly maxOutputTokens: number;
+    };
+
+/** 完整轮次从旧到新装入辅助模型窗口；不截断正文、不跳过放不下的因果。 */
+export function prepareOffscreenBatch(
+  world: WorldState,
+  records: readonly LogRecord[],
+  extras: PromptExtras,
+  narrative: string,
+  present: ReadonlySet<string>,
+  capacity: OffscreenCapacity,
+): OffscreenBatch {
+  const window = Math.max(1, Math.floor(capacity.contextWindow));
+  const maxOutputTokens = Math.max(
+    1,
+    Math.floor(capacity.maxOutputTokens ?? Math.min(4096, window / 4)),
+  );
+  // 估算并非上游 tokenizer，额外留出协议开销和近似分词余量。
+  const inputLimit = Math.max(
+    0,
+    window - maxOutputTokens - Math.max(512, Math.ceil(window * 0.05)),
+  );
+  const city = CityStateSchema.parse(world.slices.city ?? {});
+  const currentSeq = records.reduce((next, record) => Math.max(next, record.seq + 1), 0);
+  const pending = pendingTurns(world, records, city.processedThrough);
+  const build = (through: number, backlog: boolean) => {
+    const messages = buildOffscreenPrompt(world, records, extras, narrative, present, {
+      through,
+      backlog,
+    });
+    return {
+      messages,
+      inputTokens: messages.reduce((sum, message) => sum + estimateTokens(message.content), 0),
+    };
+  };
+  const complete = build(currentSeq, false);
+  if (complete.inputTokens <= inputLimit) {
+    return {
+      kind: "ready",
+      ...complete,
+      through: currentSeq,
+      backlog: false,
+      inputLimit,
+      maxOutputTokens,
+    };
+  }
+  // 没有历史积压时，不能靠截断当前正文或删除必需人物来强行塞入。
+  if (pending.length === 0) {
+    return {
+      kind: "blocked",
+      inputTokens: complete.inputTokens,
+      inputLimit,
+      maxOutputTokens,
+      reason: `场外推演所需当前状态、人物与完整本轮正文约 ${complete.inputTokens} token，超过辅助模型输入预算 ${inputLimit}；本轮未调用场外模型，待处理事实仍保留。请提高辅助模型上下文窗口或降低其输出预留。`,
+    };
+  }
+  const base = build(city.processedThrough, true);
+  if (base.inputTokens > inputLimit) {
+    return {
+      kind: "blocked",
+      inputTokens: base.inputTokens,
+      inputLimit,
+      maxOutputTokens,
+      reason: `场外推演必要背景与当前正文约 ${base.inputTokens} token，已超过辅助模型输入预算 ${inputLimit}；没有发送请求或推进游标。请提高辅助模型上下文窗口或降低其输出预留。`,
+    };
+  }
+  let fitted: ReturnType<typeof build> | undefined;
+  let through = city.processedThrough;
+  for (const record of pending) {
+    const candidate = build(record.seq, true);
+    if (candidate.inputTokens > inputLimit) break;
+    fitted = candidate;
+    through = record.seq;
+  }
+  if (!fitted) {
+    const first = pending[0];
+    const oversized = build(first?.seq ?? currentSeq, true);
+    return {
+      kind: "blocked",
+      inputTokens: oversized.inputTokens,
+      inputLimit,
+      maxOutputTokens,
+      reason: `场外推演待处理回合 ${first?.seq ?? currentSeq} 与必要背景约 ${oversized.inputTokens} token，超过辅助模型输入预算 ${inputLimit}；没有截断或跳过该轮，也没有发送请求。请提高辅助模型上下文窗口或降低其输出预留。`,
+    };
+  }
+  return { kind: "ready", ...fitted, through, backlog: true, inputLimit, maxOutputTokens };
 }
 
 /** 场外推演只提议来电身份和用意；内部指令类型由代码补上，接听决定只能来自玩家 */

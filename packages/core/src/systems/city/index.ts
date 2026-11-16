@@ -32,6 +32,7 @@ export const city = defineSystem<CityState, RumorHeard, CityInternal>({
     lastScene: null,
     lastAt: null,
     processedThrough: -1,
+    backlog: false,
     lastAttemptAt: null,
     retryAt: null,
     failures: 0,
@@ -55,9 +56,16 @@ export const city = defineSystem<CityState, RumorHeard, CityInternal>({
       draft.retryAt = ctx.now + Math.min(120, 15 * 2 ** Math.min(3, draft.failures - 1));
       return { ok: true };
     }
-    draft.lastScene = ctx.read<WorldClockState>("world").scene;
-    draft.lastAt = ctx.now;
+    if (command.through < draft.processedThrough)
+      return { ok: false, reason: "场外推演成功游标不能倒退" };
+    if (command.backlog && command.through === draft.processedThrough)
+      return { ok: false, reason: "分批推演必须实际处理至少一轮" };
+    if (!command.backlog) {
+      draft.lastScene = ctx.read<WorldClockState>("world").scene;
+      draft.lastAt = ctx.now;
+    }
     draft.processedThrough = command.through;
+    draft.backlog = command.backlog;
     draft.failures = 0;
     draft.retryAt = null;
     return { ok: true };
