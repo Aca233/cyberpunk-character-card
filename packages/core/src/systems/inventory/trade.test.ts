@@ -4,6 +4,7 @@ import { fixedRng } from "../../kernel/rng";
 import type { Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { CommerceStateSchema } from "../commerce";
+import { CyberwareStateSchema } from "../cyberware";
 import { EconomyStateSchema } from "../economy";
 import { NpcSchema, NpcStateSchema } from "../npc";
 import { registry } from "../registry";
@@ -472,5 +473,86 @@ describe("普通交易共用实际报价和货源", () => {
     );
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toEqual(world);
+  });
+});
+
+describe("诊所普通看伤共用经营身份", () => {
+  const medicalData = {
+    ...data,
+    ripperdocs: [
+      { id: "doctor", name: "街角医生", keeperNpc: "doctor", location: "market", shelf: ["model"] },
+    ],
+    merchantSites: [
+      {
+        merchant: "doctor",
+        kind: "ripperdoc",
+        locations: ["market"],
+        services: ["medical"],
+        source: "已核对诊所",
+      },
+    ],
+  };
+  function clinicWorld() {
+    return registry.signal(
+      alter(base(), { npc: { npcs: { doctor: person("doctor") } } }),
+      "world.arrived",
+      { rng: fixedRng([]), data: medicalData },
+    ).world;
+  }
+  const command = {
+    type: "trade",
+    action: "service",
+    service: "medical",
+    with: "doctor",
+    reason: "接受看伤服务",
+  };
+  function treatment(world: WorldState) {
+    return registry.applyCommands(world, [command], { rng: fixedRng([]), data: medicalData });
+  }
+  it("医生卡与诊所共用id时按诊所接诊且只扣一次款，不修改义体", () => {
+    const before = clinicWorld();
+    expect(
+      quoteTrade(before, medicalData, { action: "service", service: "medical", with: "doctor" }).ok,
+    ).toBe(true);
+    const treated = treatment(before);
+    expect(treated.results[0]?.result.ok).toBe(true);
+    expect(money(treated.world)).toBe(money(before) - 300);
+    expect(treated.world.slices.cyberware).toEqual(before.slices.cyberware);
+    expect(treated.world.slices.inventory).toEqual(before.slices.inventory);
+  });
+  it("实际停业、医生死亡或已清空人员时一致拒绝，不因只读投影绕过校验", () => {
+    const before = clinicWorld();
+    const cyberware = CyberwareStateSchema.parse(before.slices.cyberware);
+    const clinic = cyberware.clinics.doctor;
+    if (!clinic) throw new Error("诊所未激活");
+    const closed = alter(before, {
+      cyberware: { ...cyberware, clinics: { doctor: { ...clinic, open: false, reason: "停电" } } },
+    });
+    const unstaffed = alter(before, {
+      cyberware: { ...cyberware, clinics: { doctor: { ...clinic, staff: [] } } },
+    });
+    const dead = alter(before, {
+      npc: { npcs: { doctor: { ...person("doctor"), alive: false } } },
+    });
+    for (const blocked of [closed, unstaffed, dead]) {
+      expect(
+        quoteTrade(blocked, medicalData, { action: "service", service: "medical", with: "doctor" })
+          .ok,
+      ).toBe(false);
+      expect(treatment(blocked).world).toEqual(blocked);
+    }
+  });
+  it("诊所不能凭普通服务买饭或代售目录物品，医生私人卖货仍核对实际持有", () => {
+    const before = clinicWorld();
+    expect(
+      quoteTrade(before, medicalData, { action: "service", service: "meal", with: "doctor" }).ok,
+    ).toBe(false);
+    expect(quoteTrade(before, medicalData, { action: "buy", item: "gun", with: "doctor" }).ok).toBe(
+      false,
+    );
+    const held = alter(before, { npc: { npcs: { doctor: person("doctor", ["gun"]) } } });
+    expect(quoteTrade(held, medicalData, { action: "buy", item: "gun", with: "doctor" }).ok).toBe(
+      true,
+    );
   });
 });

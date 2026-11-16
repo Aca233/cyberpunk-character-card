@@ -101,6 +101,7 @@ export const inventory = defineSystem<
               factions: ctx.read("factions"),
               commerce: ctx.read("commerce"),
               logistics: ctx.read("logistics"),
+              cyberware: ctx.data.clinicOperations,
             },
           },
           ctx.data,

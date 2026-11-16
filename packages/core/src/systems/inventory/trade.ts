@@ -2,6 +2,13 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
+import {
+  CyberwareStateSchema,
+  clinicProvider,
+  clinicState,
+  type Ripperdoc,
+  ripperdocList,
+} from "../cyberware";
 import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
 import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
@@ -27,6 +34,7 @@ type Counterparty = {
   name: string;
   location: string | null;
   shop?: Shop;
+  clinic?: Ripperdoc;
   npc?: NpcState["npcs"][string];
 };
 export type TradeQuote =
@@ -48,16 +56,22 @@ function counterparty(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
   id: string,
+  service: boolean,
 ): Counterparty | string {
   const shops = shopList(data);
+  const clinics = service ? ripperdocList(data) : [];
   const npcs = Object.values((world.slices.npc as NpcState).npcs);
   const shop = shops.find((s) => s.id === id);
   const npc = npcs.find((n) => n.id === id);
+  const clinic = clinics.find((doc) => doc.id === id);
   const party = registeredParty(world, id);
   const exact: Counterparty[] = [
     ...(shop ? [{ id: shop.id, name: shop.name, location: shop.location, shop }] : []),
-    ...(npc ? [{ id: npc.id, name: npc.name, location: npc.location, npc }] : []),
-    ...(party && !shop && !npc ? [party] : []),
+    ...(clinic ? [{ id: clinic.id, name: clinic.name, location: clinic.location, clinic }] : []),
+    ...(npc && clinic?.keeperNpc !== npc.id && !clinic?.serviceNpcs.includes(npc.id)
+      ? [{ id: npc.id, name: npc.name, location: npc.location, npc }]
+      : []),
+    ...(party && !shop && !npc && !clinic ? [party] : []),
   ];
   if (exact.length === 1) return exact[0] as Counterparty;
   if (exact.length > 1) return `交易对象 ${id} 的身份不唯一`;
@@ -65,6 +79,9 @@ function counterparty(
     ...shops
       .filter((s) => s.name === id || s.keeper === id)
       .map((s) => ({ id: s.id, name: s.name, location: s.location, shop: s })),
+    ...clinics
+      .filter((doc) => doc.name === id)
+      .map((doc) => ({ id: doc.id, name: doc.name, location: doc.location, clinic: doc })),
     ...npcs
       .filter((n) => n.name === id || n.alias === id)
       .map((n) => ({ id: n.id, name: n.name, location: n.location, npc: n })),
@@ -85,12 +102,12 @@ export function quoteTrade(
 ): TradeQuote {
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   data = withMerchants(data, inventory.merchants);
-  const party = counterparty(world, data, request.with);
+  const party = counterparty(world, data, request.with, request.action === "service");
   if (typeof party === "string") return { ok: false, reason: party };
   const location = (world.slices.world as WorldClockState).location;
   if (
     location === null ||
-    (party.shop
+    (party.shop || party.clinic
       ? !merchantAt(data, party.id, party.location as string, location)
       : party.location !== location)
   )
@@ -98,6 +115,8 @@ export function quoteTrade(
   if (party.npc?.alive === false) return { ok: false, reason: `${party.name}已经死亡，无法交易` };
   const shop = party.shop;
   const services = merchantServices(data, party.id);
+  if (party.clinic && (request.action !== "service" || request.service !== "medical"))
+    return { ok: false, reason: "诊所的普通服务只处理看伤；义体购买、安装和维修需走义体交易" };
   if (
     request.action === "service" &&
     services !== undefined &&
@@ -144,6 +163,28 @@ export function quoteTrade(
     return { ok: false, reason: "这笔交易没有有效现金报价；赠与使用实际物件转交" };
   const fail = (reason: string): TradeQuote => ({ ok: false, reason, price });
   if (price > MONEY_CAP) return fail("这笔报价超过当前单笔现金结算额度，尚不能交付");
+  if (party.clinic) {
+    const state = CyberwareStateSchema.parse(world.slices.cyberware);
+    const clinic = clinicState(state, party.clinic, world.time);
+    if (!clinic.open) return fail(`诊所暂停服务：${clinic.reason}`);
+    const provider = clinicProvider(
+      party.clinic,
+      (world.slices.npc as NpcState).npcs,
+      clinic.staff,
+      data,
+    );
+    if (!provider.ok) return fail(provider.reason);
+    if (
+      Object.values(state.services).some(
+        (service) =>
+          service.provider === provider.id &&
+          ["booked", "active"].includes(service.status) &&
+          service.scheduledAt <= world.time &&
+          service.endsAt > world.time,
+      )
+    )
+      return fail(`${provider.name}正在履行已确认的手术服务，尚不能同时接诊`);
+  }
   if (shop) {
     const merchant = merchantState(inventory, shop, catalog, world.time);
     if (!merchant.open) return fail(merchant.closureReason ?? `${shop.name}目前暂停营业`);
