@@ -7,7 +7,7 @@ import { CityStateSchema } from "../systems/city";
 import { MemoryStateSchema } from "../systems/memory";
 import { ThreadsStateSchema } from "../systems/threads";
 import { memoryPool } from "./retrieve";
-import { type NarratorTurn, runNarratorTurn } from "./turn";
+import { NarratorAbortedError, type NarratorTurn, runNarratorTurn } from "./turn";
 
 const narrative =
   "诊所的百叶窗已经放下，药柜上的蓝色封条没有动过。你把明早取药的时间写进终端，准备离开。走廊的灯在身后熄灭，这一晚没有人取走药品，也没有人替你向诊所付款。";
@@ -42,13 +42,21 @@ async function run(
     enabled?: boolean;
     records?: LogRecord[];
     ooc?: boolean;
+    failStage?: "offscreen" | "summary";
+    cancel?: boolean;
   } = {},
 ) {
   const requests: LlmRequest[] = [];
+  const signal = { aborted: false, addEventListener() {} };
   const llm: LlmClient = {
     async *stream(request) {
       requests.push(request);
       const stage = request.responseFormat?.name;
+      if (stage === options.failStage && options.failStage !== undefined) {
+        yield { type: "text", text: '{"partial":' };
+        signal.aborted = options.cancel ?? false;
+        throw new Error("辅助连接中断");
+      }
       const value =
         stage === "judge"
           ? {
@@ -79,7 +87,13 @@ async function run(
     },
   };
   const result = await runNarratorTurn(
-    { llm, rng: { roll: () => 1 }, data: { items: [] }, offscreen: options.enabled ? 1 : null },
+    {
+      llm,
+      rng: { roll: () => 1 },
+      data: { items: [] },
+      offscreen: options.enabled ? 1 : null,
+      signal,
+    },
     world,
     options.records ?? [],
     { kind: "action", input: TurnInputSchema.parse({ text: input }) },
@@ -206,6 +220,69 @@ describe("正文优先的场景记忆回合", () => {
 });
 
 describe("场外推演批次不完整时可靠恢复", () => {
+  it.each(["offscreen", "summary"] as const)(
+    "%s 连接中断仍保存正文，用户主动取消则停止",
+    async (failStage) => {
+      const options = {
+        enabled: true,
+        failStage,
+        extract: { changes: [], sceneEnd: true, sceneMemory: working },
+      };
+      const { turn } = await run(undefined, options);
+      expect(turn.text).toBe(narrative);
+      expect(
+        MemoryStateSchema.parse(turn.world.slices.memory).anchors[anchor.id]?.resolution,
+      ).toBeNull();
+      if (failStage === "offscreen")
+        expect(CityStateSchema.parse(turn.world.slices.city).failures).toBe(1);
+      else
+        expect(
+          memoryPool(turn.world, [], 12).some((entry) => entry.text.includes(working.text)),
+        ).toBe(true);
+      await expect(run(undefined, { ...options, cancel: true })).rejects.toBeInstanceOf(
+        NarratorAbortedError,
+      );
+    },
+  );
+
+  it("合法格式里的业务非法操作也整批回滚，不泄漏前面已应用的事件", async () => {
+    const { turn } = await run(undefined, {
+      enabled: true,
+      offscreen: {
+        events: [
+          {
+            id: "restock",
+            title: "补货车驶入街区",
+            body: "供应商发来的货车已进入诊所所在街区",
+            status: "brewing",
+            weight: "minor",
+          },
+        ],
+        npcs: [],
+        messages: [],
+        threads: [
+          {
+            type: "thread.open",
+            id: "illegal-owner",
+            kind: "faction",
+            owner: "missing-faction",
+            title: "外来公司",
+            want: "接管诊所",
+            stage: "派人调查",
+            days: 1,
+          },
+        ],
+      },
+    });
+    expect(turn.considered.some((n) => n.includes("批次未提交：thread.open"))).toBe(true);
+    expect(CityStateSchema.parse(turn.world.slices.city)).toMatchObject({
+      events: [],
+      failures: 1,
+      lastAt: null,
+    });
+    expect(ThreadsStateSchema.parse(turn.world.slices.threads).threads).toEqual([]);
+  });
+
   it("不提交半份事件、不挪待办期限，退避后成功一次并可重放撤回", async () => {
     const base = newGameWorld({ startTime: 1000 });
     const initial = {

@@ -377,6 +377,17 @@ class TurnBuilder {
     return { text, usage };
   }
 
+  /** 已结算后的补充请求失败不能丢掉正文；玩家主动停止仍终止整个回合。 */
+  async supplement(request: LlmRequest): Promise<Reply | { failed: true }> {
+    try {
+      return await this.call(request);
+    } catch (error) {
+      this.checkAborted();
+      if (error instanceof NarratorAbortedError) throw error;
+      return { failed: true };
+    }
+  }
+
   /** 顶层和条目修复共用阶段额度；不因错误数量增加调用次数。 */
   async repair(stage: RepairStage, task: string, raw: string): Promise<unknown> {
     const content = `${task}\n\n原文：\n${raw}`;
@@ -1221,7 +1232,7 @@ export async function runNarratorTurn(
   ) {
     const present = presentNpcs(world, settled.world);
     const messages = buildOffscreenPrompt(settled.world, records, extras, narrative, present);
-    const reply = await b.call({
+    const reply = await b.supplement({
       purpose: "aux",
       temperature: OFFSCREEN_TEMPERATURE,
       messages,
@@ -1229,11 +1240,18 @@ export async function runNarratorTurn(
     });
     offscreenTrace = {
       prompt: messages[messages.length - 1]?.content ?? "",
-      reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
+      reply:
+        "failed" in reply
+          ? "（辅助请求失败，未采用不完整回复）"
+          : "blocked" in reply
+            ? `（拒答：${reply.blocked}）`
+            : reply.text,
     };
     let offscreen: Command[] = [];
     let offscreenComplete = false;
-    if ("blocked" in reply) {
+    if ("failed" in reply) {
+      considered.push("场外推演请求失败，保留本轮正文与待处理事项");
+    } else if ("blocked" in reply) {
       considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
     } else {
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
@@ -1342,7 +1360,7 @@ export async function runNarratorTurn(
       if (merged.command) saveMemory(merged.command);
       else {
         const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
-        const reply = await b.call({
+        const reply = await b.supplement({
           purpose: "aux",
           temperature: SUMMARY_TEMPERATURE,
           messages,
@@ -1350,9 +1368,16 @@ export async function runNarratorTurn(
         });
         summaryTrace = {
           prompt: messages[messages.length - 1]?.content ?? "",
-          reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
+          reply:
+            "failed" in reply
+              ? "（辅助请求失败，未采用不完整回复）"
+              : "blocked" in reply
+                ? `（拒答：${reply.blocked}）`
+                : reply.text,
         };
-        if ("blocked" in reply) {
+        if ("failed" in reply) {
+          considered.push("场景摘要请求失败，保留完整场景提要与记忆锚点");
+        } else if ("blocked" in reply) {
           considered.push(`场景摘要被辅助模型拒答：${reply.blocked}`);
         } else {
           b.auxUsage = addUsage(b.auxUsage, reply.usage);
