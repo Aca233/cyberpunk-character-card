@@ -65,7 +65,10 @@ export function replenishAfterSale(
   const target = shop.initialStock?.[def.id] ?? stockOf(def);
   const missing = target - (merchant.stock[def.id] ?? 0) - incoming;
   if (missing <= 0) return;
-  const id = `supply:${shop.id}:${draft.nextSupply++}`;
+  let id: string;
+  do {
+    id = `supply:${shop.id}:${draft.nextSupply++}`;
+  } while (draft.supplyOrders[id]);
   createOrder(draft, id, shop, def.id, missing, now, "store");
   progressSupplies(draft, now, routes);
 }
