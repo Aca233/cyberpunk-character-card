@@ -98,6 +98,46 @@ function register(command = offer(), world = initial(), tradeNarrative = command
 }
 
 describe("交易报价的证据与生命周期", () => {
+  it("从同店地图入口继续谈判仍能读到已谈报价及实物和旧件条件", () => {
+    const quoted = register(
+      offer({
+        kind: "cyberware",
+        action: "install",
+        part: "loose-eye",
+        disposition: "keep",
+        replace: "old-eye",
+      }),
+    ).world;
+    const world = {
+      ...quoted,
+      slices: {
+        ...quoted.slices,
+        world: { ...(quoted.slices.world as object), location: "poi:market" },
+      },
+    };
+    const sections = registry
+      .sections({
+        world,
+        input: { text: "就按刚才说好的办" },
+        data: {
+          ...data,
+          merchantSites: [
+            {
+              merchant: terms.seller,
+              kind: "ripperdoc",
+              locations: ["market", "poi:market"],
+              source: "已核对入口",
+            },
+          ],
+        },
+      })
+      .join("\n");
+    expect(sections).toContain("lin-pistol-offer");
+    expect(sections).toContain("最终对价 800 欧元");
+    expect(sections).toContain("自带实物 loose-eye");
+    expect(sections).toContain("旧件去向 keep");
+    expect(sections).toContain(evidence);
+  });
   it("只保存对方报价，不交货、不扣钱；跨轮仍可自动匹配", () => {
     const before = initial();
     const quoted = register(offer(), before);

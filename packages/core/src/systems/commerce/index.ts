@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { NpcState } from "../npc";
-import type { WorldClockState } from "../world";
+import { merchantAt, type WorldClockState } from "../world";
 import { priceMentioned, sameQuoteTerms, tradeEvidence } from "./quotes";
 import {
   type CommerceCommand,
@@ -98,7 +98,8 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
         for (const rows of [data?.shops, data?.ripperdocs]) {
           if (!Array.isArray(rows)) continue;
           for (const row of rows) {
-            if (row.location === here || input.text.includes(row.name)) localSellers.add(row.id);
+            if (merchantAt(data ?? {}, row.id, row.location, here) || input.text.includes(row.name))
+              localSellers.add(row.id);
           }
         }
         const people = (world.slices.npc as NpcState).npcs;
@@ -118,7 +119,7 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
           ...parties.map((p) => `交易对方 ${p.id}：${p.name}，地点 ${p.location}`),
           ...relevant.map(
             (q) =>
-              `报价 ${q.id}：${q.seller} ${q.action} ${q.target}，最终对价 ${q.price} 欧元${q.replace ? `；拆下 ${q.replace}` : ""}${q.tradeIn ? "；出售旧件" : ""}；尚未成交；来源：${q.evidence}`,
+              `报价 ${q.id}：${q.seller} ${q.action} ${q.target}，最终对价 ${q.price} 欧元${q.replace ? `；拆下 ${q.replace}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.disposition ? `；旧件去向 ${q.disposition}` : q.tradeIn ? "；出售旧件" : ""}；尚未成交；来源：${q.evidence}`,
           ),
         ];
         return lines.length ? lines.join("\n") : undefined;
