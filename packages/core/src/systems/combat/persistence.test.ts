@@ -65,5 +65,24 @@ describe("财物随人物和地点持续存在", () => {
     const result = registry.applyCommands(first, [take("key")], ctx);
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toEqual(first);
+    expect(combatView({ world: first, data, records: [] }).loot[0]?.items.map((i) => i.id)).toEqual(["known-gun"]);
+  });
+
+  it("死者遗物可以真实转移，空身尸体不能重复搜出同一物件", () => {
+    const first = registry.applyCommands(initial(), [start, down, end], ctx).world;
+    const npcs = NpcStateSchema.parse(first.slices.npc);
+    const dead = { ...first, slices: { ...first.slices, npc: { npcs: { ...npcs.npcs, guard: { ...npcs.npcs.guard, alive: false } } } } };
+    const looted = registry.applyCommands(dead, [take("key")], ctx);
+    expect(looted.results[0]?.result.ok).toBe(true);
+    expect(NpcStateSchema.parse(looted.world.slices.npc).npcs.guard?.body?.gear).toEqual(["known-gun"]);
+    expect(registry.applyCommands(looted.world, [take("key")], ctx).results[0]?.result.ok).toBe(false);
+  });
+
+  it("原主人带着物件离开后，旧地点不能凭遗留记录复制其财物", () => {
+    const first = registry.applyCommands(initial(), [start, down, end], ctx).world;
+    const npcs = NpcStateSchema.parse(first.slices.npc);
+    const left = { ...first, slices: { ...first.slices, npc: { npcs: { ...npcs.npcs, guard: { ...npcs.npcs.guard, location: "street" } } } } };
+    expect(combatView({ world: left, data, records: [] }).loot).toEqual([]);
+    expect(registry.applyCommands(left, [take("key")], ctx).results[0]?.result.ok).toBe(false);
   });
 });

@@ -104,8 +104,10 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
     name = left.name;
     npc = left.npc;
   }
-  if (npc !== null && !ctx.read<NpcState>("npc").npcs[npc]?.body?.gear.includes(item)) {
-    return fail(`${name}已经不再带着 ${item}，不能重复取得`);
+  if (npc !== null) {
+    const card = ctx.read<NpcState>("npc").npcs[npc];
+    if (!card?.body?.gear.includes(item)) return fail(`${name}已经不再带着 ${item}，不能重复取得`);
+    if (card.location !== null && card.location !== here) return fail(`${name}已经带着物件离开这里`);
   }
   const i = bag.indexOf(item);
   if (i < 0) return fail(`${name}身上没有 ${item}`);

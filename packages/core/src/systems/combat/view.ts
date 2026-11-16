@@ -1,5 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { itemCatalog } from "../inventory";
+import type { NpcState } from "../npc/schema";
 import {
   BODY_PART_LABELS,
   CombatStateSchema,
@@ -15,6 +16,13 @@ export function combatView({ world, data }: ViewContext) {
   const active = combat.active;
   const now = world.time;
   const here = (world.slices.world as { location?: string | null } | undefined)?.location ?? null;
+  const npcs = (world.slices.npc as NpcState | undefined)?.npcs ?? {};
+  const stillCarried = (npc: string | null, ids: readonly string[]) => {
+    if (npc === null) return ids;
+    const card = npcs[npc];
+    if (!card || (card.location !== null && card.location !== here)) return [];
+    return ids.filter((id) => card.body?.gear.includes(id));
+  };
   const catalog = data.items === undefined ? undefined : itemCatalog(data);
   const named = (ids: readonly string[]) =>
     ids.map((id) => ({ id, name: catalog?.get(id)?.name ?? id }));
@@ -29,12 +37,13 @@ export function combatView({ world, data }: ViewContext) {
         gang: f.gang,
         state: f.state,
         stateLabel: FOE_STATE_LABELS[f.state],
-        carry: lootable(f.state) ? named(f.carry) : [],
+        carry: lootable(f.state) ? named(stillCarried(f.npc, f.carry)) : [],
       })),
     },
     loot: combat.groundLoot
       .filter((l) => l.location === here && l.items.length > 0)
-      .map((l) => ({ from: l.from, name: l.name, items: named(l.items) })),
+      .map((l) => ({ from: l.from, name: l.name, items: named(stillCarried(l.npc, l.items)) }))
+      .filter((l) => l.items.length > 0),
     dead: combat.dead.map((d) => ({
       ...d,
       mournerLabel: MOURNER_LABELS[d.mourner],
