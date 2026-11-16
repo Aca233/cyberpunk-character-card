@@ -244,5 +244,8 @@ describe("治疗费用与身体事实连锁结算", () => {
     expect(result.results[0]?.result.ok).toBe(true);
     const ticked = registry.advanceTo(result.world, 1, context()).world;
     expect(CombatStateSchema.parse(ticked.slices.combat).wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
+    const jumped = registry.advanceTo(result.world, 10 * DAY, context()).world;
+    expect(CombatStateSchema.parse(jumped.slices.combat).wounds).toEqual([]);
+    expect(jumped.slices.health).toMatchObject({ injuries: [] });
   });
 });

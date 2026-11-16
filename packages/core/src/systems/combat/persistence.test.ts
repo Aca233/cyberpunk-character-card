@@ -78,6 +78,14 @@ describe("财物随人物和地点持续存在", () => {
     expect(registry.applyCommands(looted.world, [take("key")], ctx).results[0]?.result.ok).toBe(false);
   });
 
+  it("冲突中确认死亡同步人物存活状态，不能下次重新站起开战", () => {
+    const result = registry.applyCommands(initial(), [start, { type: "combat", action: "foe", target: "guard", state: "dead" }, end], { rng: fixedRng([1, 1, 1]), data });
+    expect(result.results.every((r) => r.result.ok)).toBe(true);
+    expect(NpcStateSchema.parse(result.world.slices.npc).npcs.guard?.alive).toBe(false);
+    expect(registry.applyCommands(result.world, [start], ctx).results[0]?.result.ok).toBe(false);
+    expect(registry.applyCommands(result.world, [take("key")], ctx).results[0]?.result.ok).toBe(true);
+  });
+
   it("原主人带着物件离开后，旧地点不能凭遗留记录复制其财物", () => {
     const first = registry.applyCommands(initial(), [start, down, end], ctx).world;
     const npcs = NpcStateSchema.parse(first.slices.npc);

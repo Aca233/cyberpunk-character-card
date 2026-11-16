@@ -189,7 +189,13 @@ export function setFoe(draft: Combat, command: CombatCommand, ctx: SystemContext
   if (command.state !== "dead") return ok(`${foe.name}${FOE_STATE_LABELS[command.state]}`);
   const d = recordDead(draft, foe, ctx);
   const who = d.gang ? `${d.gang}的${d.name}` : d.name;
-  return ok(`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`);
+  return {
+    ok: true,
+    notes: [`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`],
+    emit: foe.npc !== null && ctx.read<NpcState>("npc").npcs[foe.npc]?.alive
+      ? [{ type: "npcDeath", id: foe.npc, reason: "在已记录的这次冲突中死亡" }]
+      : [],
+  };
 }
 
 /** 玩家挨了一下：伤口记下谁、用什么、打在哪、什么时候长好；扣血交给 health */
@@ -401,6 +407,11 @@ export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): v
   const injuries = ctx.read<{ injuries?: { id: string; healsAt: number | null; treated: boolean }[] }>("health").injuries;
   for (const w of [...draft.wounds]) {
     const injury = injuries?.find((i) => i.id === w.id);
+    // health 先结算时间；一次跳过整个恢复期时，已愈合的镜像记录可能已被移除。
+    if (injuries !== undefined && !injury) {
+      draft.wounds.splice(draft.wounds.indexOf(w), 1);
+      continue;
+    }
     if (injury) { w.healsAt = injury.healsAt; w.treated = injury.treated; }
     if (w.healsAt === null || w.healsAt > now) continue;
     if (!w.treated && SCARRING_TIERS.includes(w.tier)) {
