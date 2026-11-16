@@ -3,7 +3,6 @@ import { evaluateHackTopology } from "./netrunning";
 import {
   cropNpcPersona,
   evaluatePhoneAvailability,
-  hasDeepBond,
   type Npc,
   NpcSchema,
   recordSeedEncounter,
@@ -91,21 +90,18 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
       memories: [],
     });
 
-    it("hides NPC core secret before genuine bond or concrete leverage exists", () => {
-      expect(hasDeepBond(baseNpc)).toBe(false);
+    it("keeps backstage secrets private even after a life-saving bond", () => {
       const cropped = cropNpcPersona(baseNpc);
-      expect(cropped.coreTruthRevealed).toBe(false);
-      expect(cropped.coreSecret).toBeNull();
+      expect(cropped.known).toEqual([]);
+      expect(JSON.stringify(cropped)).not.toContain("Relic");
 
       const bondedNpc: Npc = {
         ...baseNpc,
         met: true,
         relation: { text: "把她从清道夫手里拽出来的救命交情", at: 1200 },
       };
-      expect(hasDeepBond(bondedNpc)).toBe(true);
-      const revealed = cropNpcPersona(bondedNpc);
-      expect(revealed.coreTruthRevealed).toBe(true);
-      expect(revealed.coreSecret).toContain("Relic");
+      expect(cropNpcPersona(bondedNpc).known).toEqual([]);
+      expect(JSON.stringify(cropNpcPersona(bondedNpc))).not.toContain("Relic");
     });
 
     it("enforces realistic sleep schedules, busy state, grudge blocking, and seed promotion", () => {

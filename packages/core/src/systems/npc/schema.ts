@@ -323,15 +323,6 @@ export type Npc = z.infer<typeof NpcSchema>;
 export type NpcVitals = NonNullable<Npc["vitals"]>;
 export type NpcInjury = NpcVitals["injuries"][number];
 
-/** 判定玩家与该人物是否已脱离泛泛之交（见过、结过深交或互相欠下实在人情/秘密暴露） */
-export function hasDeepBond(npc: Pick<Npc, "met" | "relation" | "ledger" | "known">): boolean {
-  if (!npc.met) return false;
-  if (npc.relation !== null && npc.relation.text.trim() !== "") return true;
-  if (npc.ledger.some((e) => e.settledAt === null)) return true;
-  if (npc.known.some((k) => k.source === "scan" || k.source === "seen")) return true;
-  return false;
-}
-
 export const NpcStateSchema = z.object({
   npcs: z.record(z.string(), NpcSchema),
   /** 街头偶遇的轻量路人种子（二次重逢时升格为正式 NPC 卡） */

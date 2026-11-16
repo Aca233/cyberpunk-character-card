@@ -3,6 +3,8 @@ import type { LlmMessage } from "../../kernel/ports";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { resolveDynamicWordCountBudget } from "../../physics";
+import { InventoryStateSchema } from "../../systems/inventory/schema";
+import { memoryRecords } from "../../systems/memory";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { registry } from "../../systems/registry";
 import { examplesSection } from "../examples";
@@ -43,9 +45,9 @@ export const NARRATE_STAGE = `【这一步：写正文】
 - 只写确实发生的物理后果：受伤才写疼痛，设备受干扰才写异常，门禁确有条件才写阻拦。不把示例中的伤残、警报或敌意当作本轮事实。
 
 【彻底去 AI 味守则】
-- 反套话与机械修辞：严禁“空气仿佛凝固”“一丝不易察觉的”“嘴角勾起一抹弧度”“眼中闪过一道光”“时间仿佛静止”“深吸了一口气”“不仅……更……”；禁止三连形容词堆砌（如“冷漠、警惕而又疲倦”）；【最近用过的写法】列出的开头与高频词本轮一律换掉。
+- 避免空泛套话和重复修辞，例如反复写“空气仿佛凝固”“一丝不易察觉的”“嘴角勾起一抹弧度”、三连形容词或无意义的深呼吸。【最近用过的写法】只作修辞提醒；事实、玩家原话、人物惯用语和反复讨论的物件名称保持准确，不能为了换词而改动。
 - 严禁总结腔与升华说教：事件、动作或台词说完干脆收刀，绝不在段末来一句人生感悟或宏观叹息（严禁“这就是夜之城的生存法则”“在这座冰冷的城市里”“今晚没人能独善其身”）。
-- 糙劲口吻与差异化人声：NPC 照各自经历与地位开口，多用短句、反问、冷哼、打断、半截话与适量街头黑话；把书面官腔彻底踢出去。
+- 人物口吻以卡上的说话方式、样本、经历、关系和当下目的为先：公司人员可以正式克制，医生可以直接解释，街头人物也可以耐心或沉默。短句、打断、黑话、冷哼只在符合这个人和此刻情境时使用，不给所有人套同一副腔调；文风偏好不覆盖人物身份与玩家原话。
 
 【玩家角色边界】
 - 玩家写了台词时，用引号一字不改、不润色地原话保留，再写别人听完怎么反应。
@@ -86,10 +88,10 @@ function openingOf(text: string): string {
   return [...first].slice(0, OPENING_MAX).join("");
 }
 
-/** 反套话：最近几轮正文的开头，和在好几轮里反复出现的三字词；人物名不算 */
+/** 重复修辞参考；稳定名称与当前讨论的术语豁免，不禁止故事所需的重复事实。 */
 export function proseHabits(
   texts: readonly string[],
-  names: readonly string[] = [],
+  stableTerms: readonly string[] = [],
 ): string | undefined {
   const openings = [
     ...new Set(
@@ -107,7 +109,8 @@ export function proseHabits(
       const gram = chars.slice(i, i + 3).join("");
       if (!HAN3.test(gram)) continue;
       if ([...gram].filter((c) => COMMON.has(c)).length >= 2) continue;
-      if (names.some((n) => n.includes(gram) || (n.length >= 2 && gram.includes(n)))) continue;
+      if (stableTerms.some((n) => n.includes(gram) || (n.length >= 2 && gram.includes(n))))
+        continue;
       seen.add(gram);
     }
     for (const gram of seen) counts.set(gram, (counts.get(gram) ?? 0) + 1);
@@ -142,14 +145,17 @@ export function proseHabits(
     if (repeats.some((r) => r.includes(gram))) continue;
     const phrase = grow(gram);
     if (repeats.some((r) => r.includes(phrase) || phrase.includes(r))) continue;
+    if (stableTerms.some((term) => term.length >= 2 && phrase.includes(term))) continue;
     repeats.push(phrase);
   }
   if (openings.length < 2 && repeats.length === 0) return undefined;
   const lines = ["【最近用过的写法】"];
   if (openings.length >= 2)
     lines.push(`最近几轮的开头：${openings.map((o) => `「${o}」`).join("")}`);
-  if (repeats.length > 0) lines.push(`反复出现的词：${repeats.map((r) => `「${r}」`).join("")}`);
-  lines.push("这一轮换个开头和说法，别再用这些；人物名和地名照常用。");
+  if (repeats.length > 0) lines.push(`可能重复的修辞：${repeats.map((r) => `「${r}」`).join("")}`);
+  lines.push(
+    "只调整无意义的重复修辞；人名、地点、物件名称、必要事实、玩家原话和人物惯用语照常保留，不为换词改变指代。",
+  );
   return lines.join("\n");
 }
 
@@ -166,6 +172,7 @@ export function buildNarratorPrompt(
   plan: NarratorPlan,
   extras: PromptExtras = {},
 ): NarratorPrompt {
+  records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
   const rules = systemMessage("narrate", [coreRules()], modules);
@@ -181,9 +188,23 @@ export function buildNarratorPrompt(
     history += estimateTokens(input) + estimateTokens(turn.text);
   }
   const npcs = NpcStateSchema.parse(world.slices.npc);
+  const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const names = [
     view.character.name ?? "",
     ...Object.values(npcs.npcs).flatMap((n) => [n.name, n.alias ?? ""]),
+    ...Object.values(inventory.objects).map((object) => object.definition.name),
+    ...["items", "cyberware", "locations", "factions", "quickhacks"].flatMap((key) =>
+      Array.isArray(extras.data?.[key])
+        ? (extras.data[key] as unknown[]).flatMap((entry) =>
+            typeof entry === "object" &&
+            entry !== null &&
+            "name" in entry &&
+            typeof entry.name === "string"
+              ? [entry.name]
+              : [],
+          )
+        : [],
+    ),
   ].filter((n) => n !== "");
   const recap = recapFor(world, records, hot, extras.recapTokens);
   const scene = situation(world, records, view, plan, extras);

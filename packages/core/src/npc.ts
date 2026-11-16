@@ -1,9 +1,9 @@
-import { hasDeepBond, type Npc, type SeedTag } from "./systems/npc";
+import type { KnownFact, Npc, SeedTag } from "./systems/npc";
 import { periodOf } from "./systems/world";
 
 /**
  * 夜之城真实人际动力学门面：
- * - 表里分层（未建立深度关系或利益牵绊前，只展示社交表层诉求与防备；深交后才显露隐秘动机）
+ * - 表里分层：公开侧只展示玩家实际得知的内容，不因关系、人情或扫描自动公开幕后秘密
  * - 24 小时现实作息与拒接来电（不再依赖数值阈值，只看时段、职业习惯、手上正在忙的事、人情与过往经历）
  * - 路人轻量种子（SeedTag）多次碰面升格
  * （已移除 trust>=40 解锁秘密与 externalWeight > trust+respect 数学背叛公式）
@@ -14,22 +14,17 @@ export interface CroppedNpcPersona {
   readonly name: string;
   readonly role: string;
   readonly voice: string;
-  readonly maskWant: string;
-  readonly coreTruthRevealed: boolean;
-  readonly coreSecret: string | null;
+  readonly known: readonly KnownFact[];
 }
 
-/** 裁剪给前端/非剧透视角的 NPC 人设：真正涉密前保密核心底牌 */
+/** 非剧透人设只返回实际得知的内容及来源；传闻和本人说法不冒充幕后真相。 */
 export function cropNpcPersona(npc: Npc): CroppedNpcPersona {
-  const revealed = hasDeepBond(npc);
   return {
     id: npc.id,
     name: npc.name,
     role: npc.role,
     voice: npc.voice,
-    maskWant: npc.want,
-    coreTruthRevealed: revealed,
-    coreSecret: revealed ? (npc.secret ?? null) : null,
+    known: npc.known.map((fact) => ({ ...fact })),
   };
 }
 
@@ -45,7 +40,9 @@ export function evaluatePhoneAvailability(
 ): { readonly answered: boolean; readonly reason?: string } {
   const period = periodOf(nowMinutes);
   const isNightOwl = /中间人|酒保|黑客|佣兵|玩偶|夜店|莫克斯/.test(npc.role);
-  const deep = hasDeepBond(npc);
+  // 未了的人情可能让对方半夜接听；关系描述、扫描和已知情报不自动代表亲密。
+  const personalStake =
+    npc.met && npc.ledger.some((e) => e.settledAt === null && e.kind !== "grudge");
   const hasGrudge = npc.ledger.some((e) => e.settledAt === null && e.kind === "grudge");
 
   if (hasGrudge && !npc.ledger.some((e) => e.settledAt === null && e.kind === "owesYou")) {
@@ -55,7 +52,7 @@ export function evaluatePhoneAvailability(
     };
   }
 
-  if ((period === "night" || period === "dawn") && !isNightOwl && !deep) {
+  if ((period === "night" || period === "dawn") && !isNightOwl && !personalStake) {
     return {
       answered: false,
       reason: `现在是${period === "night" ? "深夜" : "凌晨"}，${npc.name}不是熬夜吃街头饭的人，这通全息呼叫直接转进了语音信箱`,

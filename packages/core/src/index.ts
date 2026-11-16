@@ -22,7 +22,6 @@ export {
   type CroppedNpcPersona,
   cropNpcPersona,
   evaluatePhoneAvailability,
-  hasDeepBond,
   RIVAL_MERC_POOL,
   recordSeedEncounter,
   type SeedTag,
