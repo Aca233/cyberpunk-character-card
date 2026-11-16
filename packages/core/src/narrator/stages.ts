@@ -135,6 +135,17 @@ export function readJudgeShape(value: unknown): JudgeShapeResult {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { ok: false, error: "判断要是一个 JSON 对象" };
   }
+  // 缺少关键控制字段不能按“没有风险/没有交易”处理，也不能把修复出的空对象当成功。
+  if (
+    !("ooc" in value) ||
+    typeof value.ooc !== "boolean" ||
+    !("ruling" in value) ||
+    value.ruling === undefined ||
+    !("buy" in value) ||
+    value.buy === undefined
+  ) {
+    return { ok: false, error: "判断必须明确给出 ooc（布尔值）、ruling 和 buy（无则写 null）" };
+  }
   const parsed = JudgeShapeSchema.safeParse(value);
   return parsed.success ? { ok: true, judge: parsed.data } : { ok: false, error: "字段类型不对" };
 }

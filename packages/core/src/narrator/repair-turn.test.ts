@@ -56,6 +56,33 @@ async function run(replies: {
 }
 
 describe("回合修复请求有界且账目可核对", () => {
+  it.each([{}, { ...judge, ooc: "false" }, { ooc: false, ruling: null }])(
+    "判断缺失关键字段时不能用修复空对象绕过停止：%j",
+    async (invalid) => {
+      const { result, requests } = await run({ judge: invalid, repair: () => ({}) });
+      expect(result.kind).toBe("blocked");
+      expect(requests.map((r) => r.responseFormat?.name)).toEqual(["judge", "repair"]);
+    },
+  );
+
+  it("显式无裁决、无交易的日常判断仍可直接写正文", async () => {
+    const { result, requests } = await run({ judge: { ...judge, ruling: null, buy: null } });
+    expect(result.kind).toBe("done");
+    expect(requests).toHaveLength(3);
+  });
+
+  it.each([{}, { fixes: [] }, "无效抽取"])(
+    "抽取缺少changes且修复为空时，保留未结算标记：%j",
+    async (invalid) => {
+      const { result, requests, world } = await run({ extract: invalid, repair: () => ({}) });
+      expect(result.kind).toBe("done");
+      if (result.kind !== "done") return;
+      expect(result.turn.unsettled).toBeDefined();
+      expect(result.turn.world.time).toBe(world.time);
+      expect(requests.filter((r) => r.responseFormat?.name === "repair")).toHaveLength(1);
+    },
+  );
+
   it("多条错误合为一次修复，可选建议不占修复额度", async () => {
     const { result, requests } = await run({
       extract: {

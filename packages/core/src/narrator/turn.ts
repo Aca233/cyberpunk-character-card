@@ -191,7 +191,7 @@ function dropFollowers(
 /** 正文和账目对不上的原因；没有关键条目出问题时为 undefined */
 export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
   for (const d of dropped) {
-    if (d.where === "抽取") return "这一轮的记账没抽出来，状态没有变";
+    if (d.where === "抽取") return "这一轮的记账没完整抽出来，正文尚未定稿";
     if (d.stage === "format" && /^(changes|messages)\[/.test(d.where))
       return `本轮事实尚未完整记账：${d.reason}`;
     const raw = d.raw;
@@ -417,7 +417,7 @@ class TurnBuilder {
     return result.values;
   }
 
-  /** ① 判断的顶层结构；解析不了修一次，仍不行按“不裁决、不调记忆”继续 */
+  /** ① 判断的顶层结构；有限修复仍失败时交给调用处停止本轮。 */
   async readJudge(text: string): Promise<JudgeShape> {
     const json = parseModelJson(text);
     const shape = json.ok ? readJudgeShape(json.value) : undefined;
@@ -437,7 +437,7 @@ class TurnBuilder {
     return {};
   }
 
-  /** ④ 抽取的顶层结构；解析不了修一次，仍不行就只保留正文、状态不变 */
+  /** ④ 抽取的顶层结构；有限修复仍失败则不接收模型账目，正文标为未定稿。 */
   async readExtract(text: string): Promise<ExtractShape> {
     const json = parseModelJson(text);
     const shape = json.ok ? readExtractShape(json.value) : undefined;

@@ -142,6 +142,9 @@ export function readExtractShape(value: unknown): ShapeResult {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { ok: false, error: "抽取结果要是一个 JSON 对象" };
   }
+  if (!("changes" in value) || !Array.isArray(value.changes)) {
+    return { ok: false, error: "抽取必须明确给出 changes 数组；无变化写 []，不能省略" };
+  }
   const parsed = ExtractShapeSchema.safeParse(value);
   return parsed.success
     ? { ok: true, extract: parsed.data }
