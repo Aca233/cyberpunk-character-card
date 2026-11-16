@@ -76,7 +76,7 @@ const soft = (n: number) => n * SOFT_CAP;
 
 /** 刚收的这一场里出场过、还在原地的人：他就在玩家眼前，近况由正文写 */
 export function presentNpcs(before: WorldState, after: WorldState): Set<string> {
-  const clock = WorldClockStateSchema.parse(before.slices.world);
+  const clock = WorldClockStateSchema.parse(after.slices.world);
   const npcs = NpcStateSchema.parse(after.slices.npc).npcs;
   return new Set(
     Object.values(npcs)
@@ -85,7 +85,7 @@ export function presentNpcs(before: WorldState, after: WorldState): Set<string> 
           n.location !== null &&
           n.location === clock.location &&
           n.lastSeenAt !== null &&
-          n.lastSeenAt >= clock.sceneStartedAt,
+          n.lastSeenAt >= Math.min(clock.sceneStartedAt, before.time),
       )
       .map((n) => n.id),
   );
@@ -112,7 +112,7 @@ export function offscreenDue(
     (city.lastAt === null || job.due > city.lastAt))) return true;
   if (now.deadlines.some((deadline) => deadline.handledAt === null && deadline.due <= after.time &&
     (city.lastAt === null || deadline.due > city.lastAt))) return true;
-  const since = city.lastAt ?? (was.sceneStartedAt > 0 ? was.sceneStartedAt : before.time);
+  const since = city.lastAt ?? was.sceneStartedAt;
   return after.time > before.time && after.time - since >= OFFSCREEN_HOURS * 60;
 }
 

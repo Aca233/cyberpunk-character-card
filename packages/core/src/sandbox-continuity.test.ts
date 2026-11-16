@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import { seededRng } from "./kernel/rng";
 import type { Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
-import { offscreenDue } from "./narrator/offscreen";
+import type { LlmClient, LlmRequest } from "./kernel/ports";
+import { offscreenDue, presentNpcs } from "./narrator/offscreen";
 import { accelerationRequested } from "./narrator/stages";
+import { runNarratorTurn } from "./narrator/turn";
+import { InventoryStateSchema } from "./systems/inventory";
+import { NpcSchema } from "./systems/npc";
 import { JobsStateSchema } from "./systems/jobs";
 import { registry } from "./systems/registry";
 import { currentTension, tensionFacts } from "./systems/tension";
@@ -59,6 +63,21 @@ describe("持续世界的因果与时间", () => {
     const ran = apply(later, [{ type: "city.ran" }]);
     expect(offscreenDue(ran, registry.advanceTo(ran, 1721, ctx).world)).toBe(false);
   });
+  it("从第零分钟分段推进也累积世界时间", () => {
+    const world = registry.initialWorld(0);
+    const midway = registry.advanceTo(world, 360, ctx).world;
+    expect(offscreenDue(world, midway)).toBe(false);
+    expect(offscreenDue(midway, registry.advanceTo(midway, 720, ctx).world)).toBe(true);
+  });
+  it("换地点后眼前刚见到的人不会又被场外推演移动", () => {
+    const before = start();
+    const after = at({ ...before, slices: { ...before.slices, npc: { npcs: {
+      host: NpcSchema.parse({ id: "host", name: "屋主", pronoun: "她", role: "住户",
+        look: "穿着便服", voice: "简短", want: "休息", limit: "不许打扰", affinity: 0,
+        alive: true, met: true, location: "apartment", lastSeenAt: before.time, memories: [] }),
+    } } } }, "apartment");
+    expect(presentNpcs(before, after).has("host")).toBe(true);
+  });
   it("主动等待可以越过期限，约定自然逾期且同一节点只触发一次推演", () => {
     const world = apply(start(), [
       { type: "jobOffer", id: "delivery", title: "送信", client: "邻居", risk: 1, reward: 200,
@@ -84,6 +103,44 @@ describe("持续世界的因果与时间", () => {
     expect(later.slices.character).toEqual(world.slices.character);
     expect(later.slices.npc).toEqual(world.slices.npc);
     expect(JobsStateSchema.parse(later.slices.jobs).jobs[0]?.settlement).toMatchObject({ credHalves: 0, affinity: null });
+  });
+});
+
+describe("动态物件穿过完整叙事流程", () => {
+  it("一次三步调用即可记下新工具，下次输入能读到同一物件定义与来源", async () => {
+    const requests: LlmRequest[] = [];
+    const run = async (world: WorldState, changes: Command[], text: string) => {
+      const replies = [
+        JSON.stringify({ read: "你想取用这件工具", ooc: false, ruling: null, buy: null, recall: [], foes: null }),
+        text,
+        JSON.stringify({ changes, choices: [], dropped: [], sceneEnd: false }),
+      ];
+      const llm: LlmClient = { async *stream(request) {
+        requests.push(request);
+        const reply = replies.shift();
+        if (reply === undefined) throw new Error("出现了意外的额外调用");
+        yield { type: "text", text: reply };
+      } };
+      const result = await runNarratorTurn({ llm, rng: ctx.rng, offscreen: null, data: { items: [] } },
+        world, [], { kind: "action", input: { text } });
+      expect(result.kind).toBe("done");
+      if (result.kind !== "done") throw new Error(result.kind);
+      expect(result.turn.unsettled).toBeUndefined();
+      expect(result.turn.repairs).toBe(0);
+      expect(replies).toEqual([]);
+      return result.turn.world;
+    };
+    const first = await run(start(), [{ type: "item", action: "gain", id: "handmade-probe",
+      definition: { id: "handmade-probe", name: "绕线探针", kind: "misc", ability: "接触测试旧门锁线路" },
+      origin: "从仓库废弃门锁上拆下的铜线制作，归玩家所有", reason: "绕好铜线并收入工具包" }], "我把绕好的探针收入包里。");
+    expect(InventoryStateSchema.parse(first.slices.inventory).backpack["handmade-probe"]).toBe(1);
+    const saved = JSON.parse(JSON.stringify(first)) as WorldState;
+    const second = await run(saved, [], "我查看包里的绕线探针。");
+    expect(InventoryStateSchema.parse(second.slices.inventory).objects["handmade-probe"]?.holder).toBe("player");
+    expect(requests).toHaveLength(6);
+    const secondPrompt = requests[3]?.messages.map((message) => message.content).join("\n");
+    expect(secondPrompt).toContain("handmade-probe");
+    expect(secondPrompt).toContain("仓库废弃门锁");
   });
 });
 

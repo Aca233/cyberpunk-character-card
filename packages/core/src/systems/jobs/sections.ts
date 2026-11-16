@@ -37,12 +37,12 @@ function elapsed(minutes: number): string {
   return `${Math.floor(minutes / 1440)} 天`;
 }
 
-/** 给模型看的【到期事件】：这一轮必须回应 */
+/** 到期事实持续可查；只有实际发生并可感知的后果才进入当前镜头。 */
 export function dueSection(world: WorldState): string | undefined {
   const due = dueEvents(world);
   if (due.length === 0) return undefined;
   return [
-    "这些事已经到期，这一轮必须在正文里回应：人物打来电话、找上门，或者事情就这么黄了，怎么写由你决定。回应后期限写 deadline handle；委托还要接着办就写 jobNote，黄了就写 jobEnd。",
+    "这些约定已经到期。根据人物日程、通信条件和已发生的事推进后果；玩家可以继续当前行动，不因期限强制让人打电话或找上门，也不把离场信息直接告知玩家。实际回应后期限写 deadline handle；委托有后续事实写 jobNote，确已了结才写 jobEnd。",
     ...due.map(
       (e) =>
         `- ${e.kind === "job" ? "委托" : "期限"} ${e.label}［${e.id}］：${formatGameTime(e.due)} 到期，已经过了 ${elapsed(world.time - e.due)}`,
