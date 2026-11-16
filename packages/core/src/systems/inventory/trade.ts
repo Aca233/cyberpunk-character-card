@@ -49,6 +49,19 @@ export type TradeQuote =
     }
   | { ok: false; reason: string; price?: number };
 
+/** 只有明确登记的店主或代班店员能接待；尚未记录位置不等于离场。 */
+function shopUnavailable(world: WorldState, shop: Shop): string | undefined {
+  const ids = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs];
+  if (ids.length === 0) return undefined;
+  const people = (world.slices.npc as NpcState).npcs;
+  for (const id of ids) {
+    const person = people[id];
+    if (!person || (person.alive && (person.location == null || person.location === shop.location)))
+      return undefined;
+  }
+  return `${shop.name}当前没有已登记的在场店主或代班店员，暂时不能交易`;
+}
+
 /** 稳定 ID 优先；名字只接受唯一匹配，绝不从玩家所在店铺猜交易对象。 */
 function counterparty(
   world: WorldState,
@@ -138,6 +151,8 @@ export function quoteTrade(
   const fail = (reason: string): TradeQuote => ({ ok: false, reason, price });
   if (price > MONEY_CAP) return fail("这笔报价超过当前单笔现金结算额度，尚不能交付");
   if (shop) {
+    const unavailable = shopUnavailable(world, shop);
+    if (unavailable) return fail(unavailable);
     const locked = moodLock(mood);
     if (locked) return fail(`${shop.name}拒绝交易：${locked}`);
   }

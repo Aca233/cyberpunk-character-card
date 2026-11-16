@@ -335,8 +335,10 @@ export const ShopSchema = z.object({
   name: z.string().min(1).max(24),
   /** 店主；给叙事模型写场面用 */
   keeper: z.string().min(1).max(20),
-  /** 店主的人物卡 id；有卡时见过面、好感够了，没到街头声望门槛的货也肯卖 */
+  /** 已登记店主的人物卡 id。 */
   keeperNpc: z.string().min(1).optional(),
+  /** 可以代班经营的明确店员；无位置记录不等于已确认离场。 */
+  serviceNpcs: z.array(z.string().min(1)).max(12).default([]),
   /** 地点表里的 id：玩家在这里时才能进店 */
   location: z.string().min(1),
   note: z.string().max(120).default(""),

@@ -222,6 +222,63 @@ describe("普通交易共用实际报价和货源", () => {
     const neutralKeeper = alter(world, { npc: { npcs: {} } });
     expect(money(trade(neutralKeeper).world)).toBe(1820);
   });
+  it.each([
+    { alive: false, location: "market" },
+    { alive: true, location: "far" },
+  ])("店主已死亡或明确离场时，货架、按钮与文字一致暂停交易：%o", (status) => {
+    const world = alter(base(), {
+      npc: { npcs: { "keeper-a": { ...person("keeper-a"), ...status } } },
+      inventory: { ...inventory(base()), backpack: { gun: 1 } },
+    });
+    const shelf = shopsView({ world, data, records: [] })[0];
+    expect(shelf?.shelf[0]?.locked).toContain("没有已登记的在场店主或代班店员");
+    expect(shelf?.sell[0]?.value).toBe(0);
+    expect(button(world).ok).toBe(false);
+    expect(button(world, "sellItem").ok).toBe(false);
+    expect(trade(world).world).toEqual(world);
+    expect(trade(world, "shop-a", "sell").world).toEqual(world);
+  });
+  it("店主位置尚未记录时不误判已离场", () => {
+    const world = alter(base(), {
+      npc: { npcs: { "keeper-a": { ...person("keeper-a"), location: null } } },
+    });
+    expect(quoteTrade(world, data, { action: "buy", item: gun.id, with: "shop-a" }).ok).toBe(true);
+    expect(button(world).ok).toBe(true);
+    expect(shopsView({ world, data, records: [] })[0]?.shelf[0]?.locked).toBeNull();
+  });
+  it("店主死亡后仅已登记的在场代班店员可以继续经营", () => {
+    const world = alter(base(), {
+      npc: {
+        npcs: {
+          "keeper-a": { ...person("keeper-a"), alive: false },
+          clerk: person("clerk"),
+        },
+      },
+    });
+    expect(quoteTrade(world, data, { action: "buy", item: gun.id, with: "shop-a" }).ok).toBe(false);
+    const staffed = {
+      ...data,
+      shops: data.shops.map((s) => (s.id === "shop-a" ? { ...s, serviceNpcs: ["clerk"] } : s)),
+    };
+    const bought = applyPlayerAction(
+      world,
+      { type: "buyItem", shop: "shop-a", id: gun.id },
+      { rng: fixedRng([]), data: staffed },
+    );
+    expect(bought.ok).toBe(true);
+    expect(shopsView({ world, data: staffed, records: [] })[0]?.shelf[0]?.locked).toBeNull();
+    const gone = alter(world, {
+      npc: {
+        npcs: {
+          ...NpcStateSchema.parse(world.slices.npc).npcs,
+          clerk: { ...person("clerk"), location: "far" },
+        },
+      },
+    });
+    expect(quoteTrade(gone, staffed, { action: "buy", item: gun.id, with: "shop-a" }).ok).toBe(
+      false,
+    );
+  });
   it("店内向另一人物买实际装备，不扣店库存，不能重复买其唯一一把", () => {
     const world = alter(base(), { npc: { npcs: { friend: person("friend", [gun.id]) } } });
     const result = trade(world, "friend");
