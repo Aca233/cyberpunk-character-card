@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DamageTierSchema } from "../dice";
+import { BodyPartSchema } from "../health";
 
 /** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
 export const NO_FACTION = "none";
@@ -18,128 +19,97 @@ export const TIMELINE_SQUASH = 6;
 export const TIMELINE_TAIL = 3;
 /** 经历摘要最长这么多字 */
 export const PAST_MAX = 160;
+/** 主板/自定义旧识尚未出场定型前的占位前缀（prompt 与 view 共用识别） */
+export const NPC_UNDECIDED_PREFIX = "还没定：";
+/** 人物卡基础文本字段长度与样本上限 */
+export const NAME_CHARS = 20;
+export const ROLE_CHARS = 40;
+export const LOOK_CHARS = 200;
 /** 穿着一句的长度上限 */
 export const OUTFIT_CHARS = 120;
+export const VOICE_CHARS = 200;
+export const SAMPLE_CHARS = 120;
+export const NPC_SAMPLES_MAX = 4;
+export const WANT_CHARS = 160;
+export const LIMIT_CHARS = 160;
+export const SECRET_CHARS = 160;
 
 const NpcIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 rebecca");
 
-/**
- * 人物的档位：mook 普通人、pro 老手、elite 精英、legend 传奇（本作改编）。
- * 决定属性总和的范围、没写属性时的默认值、算生命上限时当作多少街头声望
- */
-export const NpcTierSchema = z.enum(["mook", "pro", "elite", "legend"]);
-export type NpcTier = z.infer<typeof NpcTierSchema>;
-export const NPC_TIER_LABELS: Readonly<Record<NpcTier, string>> = {
-  mook: "普通人",
-  pro: "老手",
-  elite: "精英",
-  legend: "传奇",
-};
-/** 五项属性（1~10 标度，不算义体加成）加起来的范围，建卡时代码校验 */
-export const NPC_TIER_ATTR_SUM: Readonly<Record<NpcTier, readonly [number, number]>> = {
-  mook: [5, 18],
-  pro: [10, 26],
-  elite: [18, 40],
-  legend: [25, 50],
-};
-/** 没写属性时每项的默认值（T1=2, T2=4, T3=7, T4=9） */
-export const NPC_TIER_DEFAULT_ATTR: Readonly<Record<NpcTier, number>> = {
+export const NPC_HP_MAX = 100;
+/** 装备栏最多几件、义体最多几件 */
+export const NPC_GEAR_MAX = 6;
+export const NPC_CHROME_MAX = 8;
+
+const LEGACY_TIER_BODY: Readonly<Record<string, number>> = {
   mook: 2,
   pro: 4,
   elite: 7,
   legend: 9,
 };
-/** 算生命上限时当作的街头声望 */
-export const NPC_TIER_CRED: Readonly<Record<NpcTier, number>> = {
+const LEGACY_TIER_CRED: Readonly<Record<string, number>> = {
   mook: 0,
   pro: 10,
   elite: 25,
   legend: 40,
 };
-export const NPC_ATTR_MIN = 1;
-export const NPC_ATTR_MAX = 10;
-/** 装备栏最多几件、义体最多几件 */
-export const NPC_GEAR_MAX = 6;
-export const NPC_CHROME_MAX = 8;
 
-const NpcAttrValueSchema = z.number().int().min(NPC_ATTR_MIN).max(NPC_ATTR_MAX);
-/** 和玩家同一套五项属性（1~10 点；若传入旧 20 点制数据则自动按比例折算至 1~10） */
-export const NpcAttributesSchema = z.preprocess(
-  (raw) => {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
-    const rec = raw as Record<string, unknown>;
-    const vals = [rec.body, rec.reflexes, rec.tech, rec.intelligence, rec.cool];
-    if (
-      vals.every((v) => typeof v === "number") &&
-      vals.some((v) => (v as number) > NPC_ATTR_MAX)
-    ) {
-      const scale = (n: number) =>
-        Math.max(NPC_ATTR_MIN, Math.min(NPC_ATTR_MAX, Math.round(n / 2)));
-      return {
-        body: scale(rec.body as number),
-        reflexes: scale(rec.reflexes as number),
-        tech: scale(rec.tech as number),
-        intelligence: scale(rec.intelligence as number),
-        cool: scale(rec.cool as number),
-      };
-    }
-    return raw;
-  },
-  z.object({
-    body: NpcAttrValueSchema,
-    reflexes: NpcAttrValueSchema,
-    tech: NpcAttrValueSchema,
-    intelligence: NpcAttrValueSchema,
-    cool: NpcAttrValueSchema,
-  }),
-);
-export type NpcAttributes = z.infer<typeof NpcAttributesSchema>;
-
-function attrSum(a: NpcAttributes): number {
-  return a.body + a.reflexes + a.tech + a.intelligence + a.cool;
+/** 历史存档 NPC 生命值从旧版 190–550 区间无损折算为 0–100 百分比上限 */
+export function normalizeLegacyNpcHp(
+  rawHp: number,
+  rawBody: unknown,
+  hurtAt: unknown,
+  injuryCount: number,
+): number {
+  const body =
+    typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)
+      ? (rawBody as Record<string, unknown>)
+      : undefined;
+  const tier =
+    typeof body?.tier === "string" && body.tier in LEGACY_TIER_CRED ? body.tier : undefined;
+  if (!tier && rawHp <= NPC_HP_MAX) return Math.max(0, Math.round(rawHp));
+  if (hurtAt === null && injuryCount === 0 && (tier !== undefined || rawHp > NPC_HP_MAX)) {
+    return NPC_HP_MAX;
+  }
+  if (tier !== undefined) {
+    const attrs =
+      typeof body?.attributes === "object" &&
+      body.attributes !== null &&
+      !Array.isArray(body.attributes)
+        ? (body.attributes as Record<string, unknown>)
+        : undefined;
+    const attrBody =
+      typeof attrs?.body === "number" && Number.isFinite(attrs.body)
+        ? attrs.body
+        : (LEGACY_TIER_BODY[tier] ?? 2);
+    const legacyMax = 150 + attrBody * 20 + (LEGACY_TIER_CRED[tier] ?? 0) * 5;
+    const denom = Math.max(legacyMax, rawHp);
+    return denom <= 0
+      ? 0
+      : Math.min(NPC_HP_MAX, Math.max(0, Math.round((rawHp / denom) * NPC_HP_MAX)));
+  }
+  return Math.min(
+    NPC_HP_MAX - 1,
+    Math.max(1, Math.round((rawHp / Math.max(rawHp, 300)) * NPC_HP_MAX)),
+  );
 }
 
 /**
- * 人物卡上的身体：档位、属性、装备栏（物品表 id）、义体（义体表 id）、开局人性。
- * id 在不在表里要拿内容数据才能查，由结算校验；这里只查范围和重复
+ * 人物卡上的身体：随身武装/衣物（物品表 id）、义体（义体表 id）、开局人性。
+ * 兼容剥离旧版残留的 tier / attributes 字段；id 在不在表里由结算校验
  */
 export const NpcBodyCardSchema = z.preprocess(
   (raw) => {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
     const rec = raw as Record<string, unknown>;
-    const tier = NpcTierSchema.safeParse(rec.tier);
-    const attrs = rec.attributes as Record<string, unknown> | undefined;
-    if (tier.success && attrs && typeof attrs === "object") {
-      const vals = [attrs.body, attrs.reflexes, attrs.tech, attrs.intelligence, attrs.cool];
-      if (vals.every((v) => typeof v === "number")) {
-        const sum = (vals as number[]).reduce((a, b) => a + b, 0);
-        const [, hi] = NPC_TIER_ATTR_SUM[tier.data];
-        if (sum > hi || (vals as number[]).some((v) => v > NPC_ATTR_MAX)) {
-          const scale = (n: number) =>
-            Math.max(NPC_ATTR_MIN, Math.min(NPC_ATTR_MAX, Math.round(n / 2)));
-          return {
-            ...rec,
-            attributes: {
-              body: scale(attrs.body as number),
-              reflexes: scale(attrs.reflexes as number),
-              tech: scale(attrs.tech as number),
-              intelligence: scale(attrs.intelligence as number),
-              cool: scale(attrs.cool as number),
-            },
-          };
-        }
-      }
-    }
-    return raw;
+    if (!("tier" in rec) && !("attributes" in rec)) return raw;
+    const { tier: _tier, attributes: _attrs, ...rest } = rec;
+    return rest;
   },
   z
     .object({
-      tier: NpcTierSchema.describe("mook 普通人，pro 老手，elite 精英，legend 传奇；按身份选"),
-      attributes: NpcAttributesSchema.optional().describe(
-        `五项属性 ${NPC_ATTR_MIN}–${NPC_ATTR_MAX}，不算义体加成；不写按档位给默认值`,
-      ),
       gear: z
         .array(z.string().min(1))
         .max(NPC_GEAR_MAX)
@@ -159,16 +129,6 @@ export const NpcBodyCardSchema = z.preprocess(
         .describe("开局人性；不写按 100 减去义体消耗"),
     })
     .superRefine((b, ctx) => {
-      if (b.attributes) {
-        const sum = attrSum(b.attributes);
-        const [lo, hi] = NPC_TIER_ATTR_SUM[b.tier];
-        if (sum < lo || sum > hi) {
-          ctx.addIssue({
-            code: "custom",
-            message: `${NPC_TIER_LABELS[b.tier]}的五项属性加起来要在 ${lo}–${hi}，现在是 ${sum}`,
-          });
-        }
-      }
       if (new Set(b.gear).size !== b.gear.length) {
         ctx.addIssue({ code: "custom", message: "装备栏里有重复的物品" });
       }
@@ -182,12 +142,23 @@ export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
 export const NpcCardSchema = z.object({
   id: NpcIdSchema,
-  name: z.string().trim().min(1).max(20),
-  alias: z.string().trim().min(1).max(20).optional(),
+  name: z.string().trim().min(1).max(NAME_CHARS),
+  alias: z
+    .string()
+    .trim()
+    .min(1)
+    .max(NAME_CHARS)
+    .optional()
+    .describe("外号或简称（如老维、蝎子、小刀）；没有或还不知道可不写"),
   /** 他、她、TA */
-  pronoun: z.string().trim().min(1).max(4),
+  pronoun: z.string().trim().min(1).max(4).describe("代词：他、她、TA"),
   /** 身份，例如中间人、义体医生、漩涡帮打手 */
-  role: z.string().trim().min(1).max(40),
+  role: z
+    .string()
+    .trim()
+    .min(1)
+    .max(ROLE_CHARS)
+    .describe("具体身份或行当，例如「漩涡帮改枪匠」「虎爪帮外围收账人」「独立情报掮客」"),
   /**
    * 所属势力（用户 2026-10-31："感觉好没存在感 npc加个所属势力 没有就填无"）：势力表里的 id，
    * 不属于任何势力写 none，档案里显示「无」；旧存档和没写的按 none。id 在不在势力表里由结算校验
@@ -197,12 +168,21 @@ export const NpcCardSchema = z.object({
     .trim()
     .min(1)
     .default(NO_FACTION)
-    .describe("所属势力：势力 id（和 faction 指令用的一致）；不属于任何势力写 none"),
+    .describe(
+      "所属势力：势力 id（和 faction 指令一致，如 maelstrom、tyger-claws、arasaka）；无势力写 none",
+    ),
   /**
    * 长相：不会随换衣服变的部分（身材、发型、脸、纹身、义体、伤疤）。
    * 用户定的（2026-11-02，"长相 + 当前穿着"）：衣着拆到 outfit；旧卡没拆时 look 里还带着衣着，照旧能用
    */
-  look: z.string().trim().min(1).max(200),
+  look: z
+    .string()
+    .trim()
+    .min(1)
+    .max(LOOK_CHARS)
+    .describe(
+      "不会随换衣变的体貌：身形骨架、年龄质感、发型疤痕、纹身、外露义体或小习惯动作，至少 2–3 个具体记忆点",
+    ),
   /** 开局穿着：衣服、随身带的显眼东西；换装后以存档里的 wearing 为准。旧卡没有 */
   outfit: z
     .string()
@@ -210,22 +190,59 @@ export const NpcCardSchema = z.object({
     .min(1)
     .max(OUTFIT_CHARS)
     .optional()
-    .describe("现在穿什么：衣服、鞋、随身带的显眼东西（背着的枪、挂着的链子）；长相写 look"),
+    .describe("现在穿什么：上衣、裤鞋、徽章饰物、明面挎着的枪或工具包；别混进 look"),
   /** 说话方式：口癖、语气、爱用的词 */
-  voice: z.string().trim().min(1).max(200),
+  voice: z
+    .string()
+    .trim()
+    .min(1)
+    .max(VOICE_CHARS)
+    .describe("说话方式：语速停顿、音色腔调、口癖黑话、社交面具与被踩痛处时的语气变化"),
   /** 几句说话样本，只给模型参考口吻，不照搬 */
-  samples: z.array(z.string().trim().min(1).max(120)).max(4).default([]),
+  samples: z
+    .array(z.string().trim().min(1).max(SAMPLE_CHARS))
+    .max(NPC_SAMPLES_MAX)
+    .default([])
+    .describe("1–3 句符合身份的示范台词，只定口吻不照搬（正文说过原话优先收录，不足按性格补齐）"),
   /** 诉求：这个人想要什么 */
-  want: z.string().trim().min(1).max(160),
+  want: z
+    .string()
+    .trim()
+    .min(1)
+    .max(WANT_CHARS)
+    .describe(
+      "具体诉求或当下图谋（写明想从谁手里拿什么、要保谁或脱身什么，别只写「赚钱」「活下去」）",
+    ),
   /** 底线：这个人绝不会做、也不能容忍的事 */
-  limit: z.string().trim().min(1).max(160),
+  limit: z
+    .string()
+    .trim()
+    .min(1)
+    .max(LIMIT_CHARS)
+    .describe("绝不跨越的底线或逆鳞（具体到人、规矩或一碰就翻脸的事）"),
   /** 秘密：真实动机、隐藏身份或计划；只有模型看得到 */
-  secret: z.string().trim().min(1).max(160).optional(),
+  secret: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SECRET_CHARS)
+    .optional()
+    .describe(
+      "暗中瞒着的事、私下交易或致命软肋（只给叙事模型在幕后把握，不直接透给玩家；关键/常驻人物尽量写一条）",
+    ),
   /** 常在的地点 id */
-  home: z.string().min(1).optional(),
+  home: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "常驻地点 id（有固定店面/据点/常混的街区地标时填表内地点 id 或当前 location；流动作战可不写）",
+    ),
   canon: z.boolean().default(false),
-  /** 身体：档位、属性、装备、义体、开局人性；不写按普通人的默认值补 */
-  body: NpcBodyCardSchema.optional(),
+  /** 身体：随身装备、义体、开局人性；不写按空身补 */
+  body: NpcBodyCardSchema.optional().describe(
+    "随身武装与义体：gear（物品表 id，含武器与衣物）、cyberware（义体表 id）；不写属性点或档位",
+  ),
 });
 export type NpcCard = z.infer<typeof NpcCardSchema>;
 
@@ -314,7 +331,7 @@ export const SeedTagSchema = z.object({
 });
 export type SeedTag = z.infer<typeof SeedTagSchema>;
 
-export const NpcSchema = NpcCardSchema.extend({
+const BaseNpcSchema = NpcCardSchema.extend({
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   /** 历史存档兼容字段 */
   vectors: NpcVectorsSchema.optional(),
@@ -367,7 +384,7 @@ export const NpcSchema = NpcCardSchema.extend({
    */
   ties: z.array(NpcTieSchema).default([]),
   /**
-   * 会变的身体数值：生命值（hp 是 hpAt 那一刻的值，之后按时间惰性回复）、人性数值、最近一次受伤和被扫描的时间。
+   * 会变的身体数值：生命值（hp 是 hpAt 那一刻的值，之后按时间惰性回复）、人性数值、具体伤势明细、最近一次受伤和被扫描的时间。
    * 第一次受伤、治疗、换装备或装义体时按 body 补上；旧存档和没碰过的人是 null。人性数值只给叙事模型
    */
   vitals: z
@@ -377,12 +394,39 @@ export const NpcSchema = NpcCardSchema.extend({
       humanity: z.number().int().min(0).max(100),
       hurtAt: z.number().int().nullable(),
       scannedAt: z.number().int().nullable(),
+      injuries: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            part: BodyPartSchema.nullable().default(null),
+            tier: DamageTierSchema,
+            cause: z.string().min(1),
+            at: z.number().int(),
+            treated: z.boolean().default(false),
+          }),
+        )
+        .default([]),
     })
     .nullable()
     .default(null),
 });
+
+/** 兼容历史存档：将旧版 190–550 区间的 NPC vitals.hp 按旧体型与档位折算为 0–100 */
+export const NpcSchema = z.preprocess((raw) => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+  const rec = raw as Record<string, unknown>;
+  const vitals = rec.vitals;
+  if (typeof vitals !== "object" || vitals === null || Array.isArray(vitals)) return raw;
+  const v = vitals as Record<string, unknown>;
+  if (typeof v.hp !== "number" || !Number.isFinite(v.hp)) return raw;
+  const injCount = Array.isArray(v.injuries) ? v.injuries.length : 0;
+  const nextHp = normalizeLegacyNpcHp(v.hp, rec.body, v.hurtAt ?? null, injCount);
+  if (nextHp === v.hp) return raw;
+  return { ...rec, vitals: { ...v, hp: nextHp } };
+}, BaseNpcSchema);
 export type Npc = z.infer<typeof NpcSchema>;
 export type NpcVitals = NonNullable<Npc["vitals"]>;
+export type NpcInjury = NpcVitals["injuries"][number];
 
 /** 判定玩家与该人物是否已脱离泛泛之交（见过、结过深交或互相欠下实在人情/秘密暴露） */
 export function hasDeepBond(npc: Pick<Npc, "met" | "relation" | "ledger" | "known">): boolean {
@@ -403,15 +447,47 @@ export type NpcState = z.infer<typeof NpcStateSchema>;
 const LocationSchema = z.string().min(1).describe("地点 id，和 world 指令用的一致");
 
 /** 模型使用：剧情里新认识、有实质互动或推动剧情的人，当场建卡；没名字先用称呼（用户定的 2026-10-30：在场块一直只有朱迪） */
-export const NewNpcSchema = NpcCardSchema.omit({ canon: true, samples: true, home: true })
+export const NewNpcSchema = NpcCardSchema.omit({ canon: true })
   .extend({
     type: z.literal("npc"),
     location: LocationSchema.optional(),
   })
   .describe(
-    "新人物建卡：和玩家角色有了实质互动（交谈、交易、冲突、人情）或推动了剧情（递货、接头、对暗号、要玩家角色跟着走）就建；正文没给名字时 name 用正文里的称呼（例如「兜帽男」）。擦肩而过、待在背景里的路人不建。want、limit、secret 写定以后不能改",
+    "新人物建卡：和玩家角色有了实质互动（交谈、交易、冲突、人情）或推动剧情（递货、接头、对暗号、要玩家角色跟着走、开口谈条件）就建；正文没给名字时 name 用正文里的称呼（例如「兜帽男」）。擦肩路人不建。look、outfit、voice、samples、want、limit、secret 与 body 要趁这一笔立完整，别建成空壳「普通人」",
   );
 export type NewNpc = z.infer<typeof NewNpcSchema>;
+
+/** 模型使用：补全或定型非原作人物卡（如主板/自定义旧识首次正式出场时替掉「还没定」，或补充瘦弱新卡细节） */
+export const NpcUpdateSchema = z
+  .object({
+    type: z.literal("npcUpdate"),
+    id: NpcIdSchema,
+    alias: NpcCardSchema.shape.alias,
+    role: NpcCardSchema.shape.role.optional(),
+    faction: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("所属势力：势力 id；不属于任何势力写 none"),
+    look: NpcCardSchema.shape.look.optional(),
+    outfit: NpcCardSchema.shape.outfit,
+    voice: NpcCardSchema.shape.voice.optional(),
+    samples: z
+      .array(z.string().trim().min(1).max(SAMPLE_CHARS))
+      .max(NPC_SAMPLES_MAX)
+      .optional()
+      .describe("补入的示范台词 1–3 句，只用来定口吻"),
+    want: NpcCardSchema.shape.want.optional(),
+    limit: NpcCardSchema.shape.limit.optional(),
+    secret: NpcCardSchema.shape.secret,
+    home: NpcCardSchema.shape.home,
+    body: NpcBodyCardSchema.optional(),
+  })
+  .describe(
+    "补全或定型非原作人物卡：用于「还没定」的旧识首次正式出场，或给先前建得很简略的非原作人物补写长相、现在穿、说话方式与样本、诉求底线秘密、常驻地与体格装备义体；原作人物核心卡面固定，不用这条",
+  );
+export type NpcUpdate = z.infer<typeof NpcUpdateSchema>;
 
 /** 模型使用：已有人物出场或换了地点 */
 export const MeetSchema = z
@@ -611,11 +687,14 @@ export const NpcHurtSchema = z
   .object({
     type: z.literal("npcHurt"),
     id: NpcIdSchema,
+    part: BodyPartSchema.optional().describe(
+      "受伤部位（head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一），打中哪就写哪",
+    ),
     tier: DamageTierSchema.describe("graze 擦伤，heavy 重伤，lethal 致命；和玩家的伤害档一样"),
-    reason: z.string().trim().min(1).max(80),
+    reason: z.string().trim().min(1).max(80).describe("具体怎么伤的、用了什么家伙"),
   })
   .describe(
-    "有卡的人受了伤（打斗里中枪挨刀、出事故）：按档扣他的生命值，装着护甲义体降一档；打到 0 是倒下，不会自己好，死没死另写 npcDeath",
+    "有卡的人受了伤（打斗里中枪挨刀、出事故）：写明 part 部位、tier 档位和 reason 致伤经过；按档扣他的生命值并记入伤势明细，装着护甲义体降一档；打到 0 是倒下，不会自己好，死没死另写 npcDeath",
   );
 export type NpcHurt = z.infer<typeof NpcHurtSchema>;
 
@@ -689,6 +768,7 @@ export type NpcCommand =
   | NpcScan
   | Learn
   | NewNpc
+  | NpcUpdate
   | Meet
   | Affinity
   | Memory
@@ -699,6 +779,128 @@ export type NpcCommand =
   | Tie
   | Ledger
   | LedgerSettle;
+
+function normalizeTextField(
+  obj: Record<string, unknown>,
+  key: string,
+  maxLen: number,
+  optional: boolean,
+): boolean {
+  const val = obj[key];
+  if (val === undefined) return false;
+  if (typeof val !== "string") return false;
+  const trimmed = val.trim();
+  if (trimmed === "" && optional) {
+    delete obj[key];
+    return true;
+  }
+  const sliced = trimmed.slice(0, maxLen).trimEnd();
+  if (sliced !== val) {
+    obj[key] = sliced;
+    return true;
+  }
+  return false;
+}
+
+/** 运行期对模型发出的 npc / npcUpdate 做温和规整（修小超长、非法字符 id、去重与剥离旧版冗余字段） */
+export function normalizeNpcProposal(
+  raw: Readonly<Record<string, unknown>>,
+): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
+  const out: Record<string, unknown> = { ...raw };
+  let changed = false;
+
+  if (typeof out.id === "string") {
+    const cleanId = out.id
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (cleanId !== "" && cleanId !== out.id) {
+      out.id = cleanId;
+      changed = true;
+    }
+  }
+  if (raw.type === "npc" && (typeof out.pronoun !== "string" || out.pronoun.trim() === "")) {
+    out.pronoun = "TA";
+    changed = true;
+  }
+
+  for (const [key, max, opt] of [
+    ["name", NAME_CHARS, false],
+    ["alias", NAME_CHARS, true],
+    ["pronoun", 4, false],
+    ["role", ROLE_CHARS, false],
+    ["look", LOOK_CHARS, false],
+    ["outfit", OUTFIT_CHARS, true],
+    ["voice", VOICE_CHARS, false],
+    ["want", WANT_CHARS, false],
+    ["limit", LIMIT_CHARS, false],
+    ["secret", SECRET_CHARS, true],
+  ] as const) {
+    if (normalizeTextField(out, key, max, opt)) changed = true;
+  }
+
+  if (out.samples !== undefined) {
+    const listRaw = typeof out.samples === "string" ? [out.samples] : out.samples;
+    if (Array.isArray(listRaw)) {
+      const cleaned = [
+        ...new Set(
+          listRaw
+            .filter((s): s is string => typeof s === "string")
+            .map((s) => s.trim().slice(0, SAMPLE_CHARS).trimEnd())
+            .filter((s) => s !== ""),
+        ),
+      ].slice(0, NPC_SAMPLES_MAX);
+      if (
+        typeof out.samples === "string" ||
+        cleaned.length !== listRaw.length ||
+        cleaned.some((s, i) => s !== listRaw[i])
+      ) {
+        out.samples = cleaned;
+        changed = true;
+      }
+    }
+  }
+
+  if (typeof out.body === "object" && out.body !== null && !Array.isArray(out.body)) {
+    const body = { ...(out.body as Record<string, unknown>) };
+    let bodyChanged = false;
+    for (const [k, cap] of [
+      ["gear", NPC_GEAR_MAX],
+      ["cyberware", NPC_CHROME_MAX],
+    ] as const) {
+      const arr = body[k];
+      if (Array.isArray(arr)) {
+        const list = [
+          ...new Set(
+            arr
+              .filter((x): x is string => typeof x === "string")
+              .map((x) => x.trim())
+              .filter((x) => x !== ""),
+          ),
+        ].slice(0, cap);
+        if (list.length !== arr.length || list.some((x, i) => x !== arr[i])) {
+          body[k] = list;
+          bodyChanged = true;
+        }
+      }
+    }
+    if ("tier" in body) {
+      delete body.tier;
+      bodyChanged = true;
+    }
+    if ("attributes" in body) {
+      delete body.attributes;
+      bodyChanged = true;
+    }
+    if (bodyChanged) {
+      out.body = body;
+      changed = true;
+    }
+  }
+
+  return changed ? { value: out, note: "人物卡字段已按长度与去重规则微调" } : undefined;
+}
 
 /** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
 export const SeedNpcSchema = NpcCardSchema.extend({

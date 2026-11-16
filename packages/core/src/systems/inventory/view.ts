@@ -1,30 +1,36 @@
+import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS, type Rarity } from "../economy";
-import {
-  canDismantle,
-  DISMANTLE_PARTS,
-  itemCatalog,
-  nextRarity,
-  rarityOf,
-  TUNE_PARTS,
-  TUNE_TECH,
-} from "./apply";
+import { itemCatalog, rarityOf } from "./apply";
 import {
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
+  carriedItemCounts,
+  carriedWeaponIds,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
+  isBulkyItem,
   loadoutSummary,
   MOD_SLOT_LABELS,
   ModSlotSchema,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
-  weaponSlotCost,
 } from "./schema";
 
 const CLOTHING_SLOTS = ClothingSlotSchema.options;
 const MOD_SLOTS = ModSlotSchema.options;
+
+/**
+ * health 依赖 inventory，这里不反向引用 health / cyberware 的入口；
+ * 只读取已安装与损坏的义体 id，计算随身大件上限（如钛金骨骼 +1）
+ */
+const InstalledChromeSliceSchema = z
+  .object({ installed: z.array(z.object({ id: z.string() })).default([]) })
+  .catch({ installed: [] });
+const BrokenChromeSliceSchema = z
+  .object({ brokenChrome: z.array(z.string()).default([]) })
+  .catch({ brokenChrome: [] });
 
 function itemSubLabel(def: ItemDef): string {
   if (def.kind === "weapon") {
@@ -44,24 +50,43 @@ function itemSubLabel(def: ItemDef): string {
   return ITEM_KIND_LABELS[def.kind];
 }
 
-/** 玩家看到的背包：武器格、快捷栏、背包、零件、服装、改装件、随身 6 格负荷与穿搭风格标签 */
+/** 玩家看到的背包：统一随身背包与武器、快捷栏、服装、改装件及随身大件统计 */
 export function inventoryView({ world, data }: ViewContext) {
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
+  const counts = carriedItemCounts(inventory);
+  const weaponIds = carriedWeaponIds(inventory, items);
+  const cyber = InstalledChromeSliceSchema.parse(world.slices.cyberware ?? {});
+  const health = BrokenChromeSliceSchema.parse(world.slices.health ?? {});
+  const loadout = loadoutSummary(inventory, items, {
+    installed: cyber.installed,
+    brokenChrome: health.brokenChrome,
+  });
+
   return {
-    weapons: inventory.weapons,
-    active: inventory.active,
     healing: inventory.healing,
     grenade: inventory.grenade,
-    backpack: inventory.backpack,
-    /** 3.0 随身 6 格负荷与四大穿搭通行证 */
-    loadout: loadoutSummary(inventory, items),
+    /** 统一后的随身背包（自动合并历史存档武器槽条目），数量均在此展示 */
+    backpack: Object.fromEntries(counts) as Readonly<Record<string, number>>,
+    /** 随身携带的武器列表（保留兼容顺序），用于 HUD 展示与模型状态 */
+    carriedWeapons: weaponIds.map((id) => ({
+      id,
+      count: counts.get(id) ?? 1,
+      bulky: isBulkyItem(items.get(id)),
+    })),
+    /** 随身大件负荷（2 起步，承重骨骼 +1，超出时软超重） */
+    bulky: {
+      count: loadout.bulkyCount,
+      max: loadout.bulkyMax,
+      overloaded: loadout.bulkyOverloaded,
+    },
+    /** 随身大件与隐蔽度统计 */
+    loadout,
     /** 随身物品的分类和说明；只投影持有的物品，供物品栏筛选和详情使用。 */
     details: Object.fromEntries(
       [
         ...new Set([
-          ...inventory.weapons.filter((id): id is string => id !== null),
-          ...Object.keys(inventory.backpack),
+          ...counts.keys(),
           ...Object.values(inventory.clothing),
           ...[inventory.healing, inventory.grenade].flatMap((slot) => (slot ? [slot.id] : [])),
         ]),
@@ -78,7 +103,7 @@ export function inventoryView({ world, data }: ViewContext) {
               rarity: rar,
               rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
               iconic: Boolean(def.iconic),
-              slotCost: def.kind === "weapon" ? weaponSlotCost(def.category) : null,
+              bulky: isBulkyItem(def),
               ability: def.ability ?? "",
               healPercent: def.healPercent ?? null,
               charges: def.charges ?? null,
@@ -88,49 +113,17 @@ export function inventoryView({ world, data }: ViewContext) {
         ];
       }),
     ),
-    /** 零件：拆解得来，给武器升稀有度 */
-    parts: inventory.parts,
-    /** 升过稀有度的武器：id → 稀有度名 */
+    /** 升过稀有度的武器（历史存档保留）：id → 稀有度名 */
     tuned: Object.fromEntries(
       Object.entries(inventory.tuned).map(([id, r]) => [id, RARITY_LABELS[r]]),
     ) as Readonly<Record<string, string>>,
-    /** 身上武器（武器格和背包里的）现在的稀有度键，含升过的档；界面按它染原作稀有度色条 */
+    /** 身上武器现在的稀有度键，含升过的档；界面按它染原作稀有度色条 */
     rarity: Object.fromEntries(
-      [
-        ...new Set([
-          ...inventory.weapons.filter((w): w is string => w !== null),
-          ...Object.keys(inventory.backpack),
-        ]),
-      ].flatMap((id) => {
+      weaponIds.flatMap((id) => {
         const def = items.get(id);
         return def?.kind === "weapon" ? [[id, rarityOf(def, inventory.tuned)]] : [];
       }),
     ) as Readonly<Record<string, Rarity>>,
-    /** 背包里能拆的东西各拆出几个零件 */
-    dismantle: Object.fromEntries(
-      Object.keys(inventory.backpack).flatMap((id) => {
-        const def = items.get(id);
-        return def && canDismantle(def)
-          ? [[id, DISMANTLE_PARTS[rarityOf(def, inventory.tuned)]]]
-          : [];
-      }),
-    ) as Readonly<Record<string, number>>,
-    /** 身上的武器（武器格和背包里的）升一档：到哪一档、要几个零件、要多少技术；到顶的不列 */
-    tune: Object.fromEntries(
-      [
-        ...new Set([
-          ...inventory.weapons.filter((w): w is string => w !== null),
-          ...Object.keys(inventory.backpack),
-        ]),
-      ].flatMap((id) => {
-        const def = items.get(id);
-        if (def?.kind !== "weapon") return [];
-        const to = nextRarity(rarityOf(def, inventory.tuned));
-        return to === null
-          ? []
-          : [[id, { to: RARITY_LABELS[to], parts: TUNE_PARTS[to], tech: TUNE_TECH[to] }]];
-      }),
-    ) as Readonly<Record<string, { to: string; parts: number; tech: number }>>,
     /** 穿着的服装，按格子顺序；没穿的格子不列 */
     clothing: CLOTHING_SLOTS.flatMap((slot) => {
       const id = inventory.clothing[slot];
@@ -141,28 +134,19 @@ export function inventoryView({ world, data }: ViewContext) {
       const id = inventory.outfit[slot];
       return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
     }),
-    /** 背包里每件东西能装到哪：weapon 武器格、quick 快捷栏、clothing 服装格；不能装的不列 */
+    /** 背包里每件东西能装到哪：quick 快捷栏、clothing 服装格；武器直接放背包使用不再单装 */
     equipTo: Object.fromEntries(
-      Object.keys(inventory.backpack).flatMap((id) => {
+      [...counts.keys()].flatMap((id) => {
         const kind = items.get(id)?.kind;
         const to =
-          kind === "weapon"
-            ? "weapon"
-            : kind === "healing" || kind === "grenade"
-              ? "quick"
-              : kind === "clothing"
-                ? "clothing"
-                : null;
+          kind === "healing" || kind === "grenade"
+            ? "quick"
+            : kind === "clothing"
+              ? "clothing"
+              : null;
         return to ? [[id, to]] : [];
       }),
-    ) as Readonly<Record<string, "weapon" | "quick" | "clothing">>,
-    /** 武器栏里带专属内心声音的不朽武器 */
-    iconicVoices: inventory.weapons.flatMap((w) => {
-      const def = w === null ? undefined : items.get(w);
-      return def?.iconic && def.voice !== undefined
-        ? [{ id: def.id, name: def.name, voice: def.voice }]
-        : [];
-    }),
+    ) as Readonly<Record<string, "quick" | "clothing">>,
     /** 武器上装着的改装件：武器 id → 按位置顺序；没装的武器不列 */
     mods: Object.fromEntries(
       Object.entries(inventory.mods).map(([weapon, fitted]) => [
@@ -173,22 +157,14 @@ export function inventoryView({ world, data }: ViewContext) {
         }),
       ]),
     ) as Readonly<Record<string, readonly { slot: string; label: string; id: string }[]>>,
-    /** 背包里的改装件能装到哪几把身上的武器（武器格和背包里的），按武器格在前 */
+    /** 背包里的改装件能装到哪几把随身武器上 */
     modTargets: Object.fromEntries(
-      Object.keys(inventory.backpack).flatMap((id) => {
+      [...counts.keys()].flatMap((id) => {
         const fits = items.get(id)?.modFits;
         if (fits === undefined) return [];
-        const owned = [
-          ...new Set([
-            ...inventory.weapons.filter((w): w is string => w !== null),
-            ...Object.keys(inventory.backpack),
-          ]),
-        ];
-        const targets = owned.filter((w) => {
+        const targets = weaponIds.filter((w) => {
           const category = items.get(w)?.category;
-          return (
-            items.get(w)?.kind === "weapon" && category !== undefined && fits.includes(category)
-          );
+          return category !== undefined && fits.includes(category);
         });
         return targets.length > 0 ? [[id, targets]] : [];
       }),

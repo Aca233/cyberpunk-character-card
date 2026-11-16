@@ -38,12 +38,11 @@ const MENU_PAGES: readonly { readonly name: string; readonly key: AssetId | null
   { name: "数据库", key: null },
 ];
 
-/** 消息页样例：四个频道合在一个列表里 */
+/** 消息页样例：三个频道合在一个列表里 */
 const THREADS = [
   { channel: "消息", from: "罗格", preview: "人到了就进来，别在门口晃。" },
   { channel: "消息", from: "米丝蒂", preview: "今晚的牌说你会遇到麻烦。" },
   { channel: "新闻", from: "54 台晚间新闻", preview: "沃森区今夜再次停电……" },
-  { channel: "警用频段", from: "NCPD 调度", preview: "小唐人街，可疑交易，暂无警力。" },
   { channel: "街头", from: "来生吧台", preview: "听说码头那边有人在收芯片。" },
 ] as const;
 
@@ -96,7 +95,7 @@ const SAMPLE_NOTES: readonly Omit<Note, "id">[] = [
   { text: "拿到 500 欧元", icon: "notify.cash" },
   { text: "岐路司义眼已断开", icon: "notify.warning" },
   { text: "罗格发来一条消息", icon: "notify.attention" },
-  { text: "街头声望 +1", icon: "notify.streetCred" },
+  { text: "街头名声升至 · 小有名气", icon: "notify.streetCred" },
 ];
 
 const HP_MAX = 340;
@@ -169,9 +168,14 @@ export function NeuralMock() {
           >
             <Panel as="section" title="生物监测" line="var(--cp-red)">
               <div className={styles.bioRow}>
-                <span className={styles.level} title="街头声望">
+                <span className={styles.level} title="街头名声 · 小有名气">
                   <Asset id="hud.levelFrame" tint="var(--cp-red)" height={44} />
-                  <b>12</b>
+                  <Asset
+                    id="notify.streetCred"
+                    tint="var(--cp-red)"
+                    height={20}
+                    className={styles.levelIcon}
+                  />
                 </span>
                 <div className={styles.hp}>
                   <Bar
@@ -251,10 +255,6 @@ export function NeuralMock() {
               <span>
                 <Asset id="notify.journal" tint="var(--cp-red)" height={18} />
                 新闻 <b>5</b>
-              </span>
-              <span>
-                <Asset id="map.poi.police" tint="var(--cp-red)" height={18} />
-                警用频段 <b>1</b>
               </span>
             </div>
           </section>

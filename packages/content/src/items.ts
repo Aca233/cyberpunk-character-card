@@ -887,7 +887,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "杰克·威尔斯定制的一对镀金海啸鵺。握柄雕花，枪膛改模，双枪齐射倾泻着瓦伦蒂诺帮的傲骨与家族义气；枪一拔出来，整条街的熟面孔都知道来者是谁。",
-    voice: "像杰克在耳边说话：豪爽、讲义气，叫你“兄弟”，劝你别丢下朋友",
     source: `${W}Ranged-Preset_Nue_Jackie`,
   },
   {
@@ -901,7 +900,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "苏西·Q 留在莫克斯酒吧地下的粉红涂装奥马哈。电磁改装后蓄力可喷射多发密集弹幕，近距离重击足以放倒任何敢在店里闹事的混混。",
-    voice: "像莫克斯的姑娘在耳边冷笑：泼辣、护短，教训那些敢欺负流莺的人渣",
     source: `${W}Ranged-DisplayName-Preset_Omaha_Suzie`,
   },
   {
@@ -915,7 +913,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "威尔逊在第二修正案武器店为 V 量身定制的莱克星顿。加重枪管配人体工学握把，大幅加快换弹速度并提高爆头时的致命穿透暴击伤害。",
-    voice: "像威尔逊在射击场大嗓门吆喝：踏实点，伙计，瞄准弱点扣扳机",
     source: `${W}Ranged-DisplayName-Base_Lexington_Wilson`,
   },
   {
@@ -929,7 +926,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "瑞弗·沃德赠予的重型前奏左轮。改装了特殊机械蓄发扳机，长按蓄力后释放可在瞬间将整个弹仓的重型威能弹全自动暴烈倾泻而出。",
-    voice: "像瑞弗在风雨里沉声低语：别放过蛛丝马迹，正义总得有人扛",
     source: `${W}Melee-DisplayName-Preset_Overture_River`,
   },
   {
@@ -943,7 +939,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "克里·欧罗伯斯随身携带的大口径定制左轮。配重经专门调校，后坐力平稳；弹头附带高压电弧，开火声像插满失真单块的重型电吉他。",
-    voice: "像克里在台上狂飙失真吉他：撕裂伪善，跟着摇滚节拍把子弹倾泻出去",
     source: `${W}Melee-DisplayName-Preset_Overture_Kerry`,
   },
   {
@@ -957,7 +952,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "漩涡帮前头目罗伊斯的改装谦信。每次换弹都会随机切换弹药特化涂层，在燃烧、电击、生化与撕裂伤害之间轮转，难以预判。",
-    voice: "像罗伊斯神经质地怪笑：猜猜下一发是什么伤害？把眼前的一切炸烂！",
     source: `${W}Ranged-DisplayName-Preset_Kenshin_Royce`,
   },
   {
@@ -971,7 +965,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "来生女王罗格佩戴一生的金质自由手枪。第一发弹丸具备极高的首发要害伤害与暴击率，对生命体征处于低谷的目标拥有无情的终结制止力。",
-    voice: "像罗格坐在来生隔间吞云吐雾：冷静点佣兵，在夜之城活到老的规矩是别犯蠢",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Rogue`,
   },
   {
@@ -985,7 +978,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "荒坂赖宣藏在绀碧大厦顶层套房枕边的改装自由。即使使用者手部未植入弹道协同处理器，也能完全激活威能子弹在墙面地表的高角度反弹跳弹。",
-    voice: "像赖宣在暗夜里紧攥拳头：烧尽荒坂的铁锁，连同你父亲的幽灵",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Yorinobu`,
   },
   {
@@ -999,7 +991,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "中间人德克斯特·德肖恩的镀金自由手枪。改装了资金接口，每一发子弹直接从你的银行账户扣除 1 欧元作为击发弹药，并造成大量出血伤口。",
-    voice: "像德克斯特吐着雪茄烟圈：去他妈的无名小卒，开枪打出你的大人物身价",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Dex`,
   },
   {
@@ -1013,7 +1004,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "杜姆·杜姆魔改的新星左轮手枪。单次扣动扳机可连发四枚大口径弹丸，近距离交火能轻易轰烂木板掩体并打碎骨头。",
-    voice: "像杜姆·杜姆嚼着口香糖狂笑：扫成蜂窝！看他们怎么在四重火网里跳舞！",
     source: `${W}Ranged-DisplayName-Preset_Nova_Doom_Doom`,
   },
   {
@@ -1027,7 +1017,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "乱刀会头目纳什改装的阿喀琉斯技术步枪。每次蓄力开火射出双倍的电磁穿甲弹丸，并在穿透掩体命中敌人时引爆严重的生化化学毒性伤害。",
-    voice: "像荒原乱刀会土匪在狞笑：技术穿透掩体，看着他们像地鼠一样无处可逃",
     source: `${W}Ranged-DisplayName-Preset_Achilles_Nash`,
   },
   {
@@ -1041,7 +1030,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "漩涡帮狂热分子祭坛上的萨拉托加冲锋枪。射出的威能弹丸附带高热燃烧涂层，击中敌人有极高概率瞬间点燃目标并引发网络过热瘫痪。",
-    voice: "像漩涡帮疯子在低吼：烧！火网会洗净血肉，让金属主宰街道！",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Maelstrom`,
   },
   {
@@ -1055,7 +1043,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "乱刀会营地缴获的改装萨拉托加。加装翻倍容量弹鼓与过载击发连杆，射速被拉到危险的临界点，能瞬间用密集弹雨压制整片区域。",
-    voice: "像老派恶土重装枪手在叫嚣：火力压过一切！换弹？等所有人死光了再换！",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Raffen`,
   },
   {
@@ -1069,7 +1056,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "荒坂工业园密级集装箱里的原型智能冲锋枪。配合智能链接，陀螺微弹自修正弹道，命中后引爆微型热能破片，杀伤周遭敌人。",
-    voice: "像荒坂实验室警报红光闪烁：原型火控系统上线，授权执行最高烈度灭杀",
     source: `${W}Ranged-DisplayName-Preset_Shingen_Prototype`,
   },
   {
@@ -1083,7 +1069,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "康陶典式智能冲锋枪军用测试型。弹头装填微型放电芯片，命中时释放局部 EMP 脉冲，能短时间瘫痪目标义体与临近设备。",
-    voice: "像康陶实验室的冷酷播报：电磁脉冲过载，全面摧毁神经中枢",
     source: `${W}Melee-DisplayName-Preset_Dian_Yinglong`,
   },
   {
@@ -1097,7 +1082,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "军用科技废弃地下设施打捞出的黑墙污染冲锋枪。射击时枪身渗出暗红代码微光；当目标重伤濒死时，内置的黑墙恶意进程会顺着神经接口直接烧穿对方大脑。",
-    voice: "像黑墙之外的杂音在冷笑：碳基生物的神经突触，不过是一碰就碎的代码",
     source: `${W}Ranged-DisplayName-Preset_Borg4a_Haunted_Gun`,
   },
   {
@@ -1111,7 +1095,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "丽贝卡生前亲手改装的大口径杀戮霰弹枪。涂鸦斑驳、后坐凶暴，一枪轰出能将重装士兵轰飞数米撞穿隔墙；握在手里似乎还能听到那个暴躁绿发姑娘在耳边咆哮着先开枪再说。",
-    voice: "像丽贝卡还在耳边嚷嚷：嘴快、暴躁、护短，劝你先开枪再说",
     source: `${W}Ranged-Preset_Carnage_Edgerunners`,
   },
   {
@@ -1125,7 +1108,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "亚当·重锤的个人专属智能霰弹重炮。发射一整串微型追踪高爆导弹，出膛后呈扇面散开自锁定敌人弱点群，爆炸动能足以将机甲与外骨骼轰成碎渣。",
-    voice: "像亚当·重锤的金属发音器在轰鸣：全都是可以碾碎的软弱血肉！",
     source: `${W}Melee-DisplayName-Preset_Zhou_Eight_Star`,
   },
   {
@@ -1139,7 +1121,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "强尼·银手的半自动定制重型手炮。专为义肢后坐设计的巨型枪机，子弹能穿透掩体和敌人躯体后引燃烈火；枪口甩转间，依稀可见当年银手向荒坂大厦开火的狂傲冷笑。",
-    voice: "像强尼在冷笑：刻薄、反公司，嘲笑你的犹豫，怂恿你把事情闹大",
     source: `${W}Ranged-Preset_Silverhand_3516`,
   },
   {
@@ -1153,7 +1134,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "亚历克斯移交的潜行特工统一手枪。搭载特化消音器与光学反射，在光学迷彩激活期间射击必定触发绝对暴击，冷酷处决目标而不留一丝声息。",
-    voice: "像亚历克斯在监听耳机里耳语：无声扣动扳机，幽灵从不留下脚印",
     source: `${W}Ranged-DisplayName-Preset_Unity_Agent`,
   },
   {
@@ -1167,7 +1147,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "拥有独立人格的实验型智能手枪。手部接入智能链接后，内置 AI 会用欢快话痨的口吻对你的战术评头论足，并能自主选择锁头爆头或截肢弹道。",
-    voice: "枪里的人工智能真的会出声：欢快、话多，爱对你的目标评头论足",
     source: `${W}Ranged-Preset_Yukimura_Skippy`,
   },
   {
@@ -1181,7 +1160,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "深度改装的单发 RT-46 风暴左轮。弹巢仅装填一枚高装药穿甲爆破弹，蓄能击发伴随剧烈电磁轰鸣，能直接穿透混凝土掩体击碎目标。",
-    voice: "像老近卫军的怒吼：一发高爆，足够粉碎所有反动装甲！",
     source: `${W}Melee-DisplayName-Preset_Burya_Comrade`,
   },
   {
@@ -1194,7 +1172,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "荒坂三郎随身佩戴的传世武士刀。刃薄如蝉翼，寒芒刺骨，出鞘极快且切削暴击时断金切玉；任何认得刀铭的荒坂特工见到此刀都会脸色煞白。",
-    voice: "像一位老派武士在训诫：克制、冷峻，讲究一击见分晓，看不起拖泥带水",
     source: `${W}Melee-Preset_Katana_Saburo`,
   },
   {
@@ -1207,7 +1184,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "竹村五郎贴身佩戴的精工武士刀。在光学迷彩或克伦齐科夫生效状态下出鞘斩击，暴击率大幅跃升，出刀极快且招招直奔要害。",
-    voice: "像竹村五郎沉声训斥：持刀如持心，恪守武士的专注与尊严",
     source: `${W}Melee-DisplayName-Preset_Katana_Takemura`,
   },
   {
@@ -1220,7 +1196,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "冈田和歌子赠予的家传单分子武士刀。刀身注入微型动能弹簧，挥刀重击时能跨越数米距离直接向远处的敌人执行瞬身飞跃斩杀。",
-    voice: "像和歌子在居酒屋敲击指甲：优雅地跃过缝隙，让利刃完成最后的清算",
     source: `${W}Melee-DisplayName-Preset_Katana_Wakako`,
   },
   {
@@ -1233,7 +1208,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "熔解炉深处打捞出的热能过载武士刀。整把刀刃处于赤红炽热状态，劈砍时直接灼烧割开伤口，对处于燃烧状态的敌人必定打出致死暴击。",
-    voice: "像热熔切割机在耳边轰鸣：烧红的刀刃切开皮肉，只留下焦黑的切口",
     source: `${W}Melee-DisplayName-Preset_Katana_E3`,
   },
   {
@@ -1247,7 +1221,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "帕南·帕尔默亲手校准的改装冰暴狙击枪。搭载独家定制重型消音器与战术高倍镜，数公里外无声扣动扳机，大口径穿甲弹便能在静默中撕裂敌方首领的装甲。",
-    voice: "像帕南在耳机里：直来直去，护着家人，讨厌公司和磨磨蹭蹭",
     source: `${W}Ranged-Preset_Grad_Panam`,
   },
   {
@@ -1261,7 +1234,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "海啸“猫又”重度改装版本。电磁加速的钨芯穿甲弹穿透掩体后弹道更加平直，能无视多层墙壁直接击中后方掩蔽的目标。",
-    voice: "像顶尖刺客在瞄准镜后深呼吸：无论藏在多少堵墙后，你的命已经留在那儿了",
     source: `${W}Melee-DisplayName-Preset_Nekomata_Breakthrough`,
   },
   {
@@ -1275,7 +1247,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "从阿罗约拳赛老兵巴克手中赢下的改装冰暴狙击枪。弹膛专供重型高爆杀伤弹，每一发扣动都在百米外引发迫击炮级别的剧烈爆炸。",
-    voice: "像擂台狂热分子在狂吼：一拳打碎下巴，一枪炸翻整辆卡车！",
     source: `${W}Ranged-DisplayName-Preset_Grad_Buck`,
   },
   {
@@ -1288,7 +1259,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     ability:
       "军用科技特工斯托特在汽车旅馆落下的高频震动钝器。通电后剧烈震动，抽在脸上钝击沉重，而且带有极具侮辱性的戏剧效果。",
-    voice: "像斯托特在审讯室里皮笑肉不笑：学会服从，佣兵，或者用这个让你长点记性",
     source: `${W}Melee-DisplayName-Preset_Dildo_Stout`,
   },
   // 治疗品：休整或场景结束时恢复次数
@@ -1583,6 +1553,6 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 500,
     ability:
-      "义体医生特调神经抑制药剂：注射后约 6 小时内强制压制幻觉与神经失控发作（发作相关检定 +4）；但仅能迟滞神经突触坏死，无法恢复人性上限；长期依赖将产生严重耐药性与致命戒断反应。",
+      "义体医生特调神经抑制药剂：注射后约 6 小时内压制感官失真与常规神经失控（人性归零时仍防不住极端创伤触发的重度突破）；仅能暂缓症状，无法恢复人性或人性上限；频繁注射会产生耐受（药效减半）与依赖，停药一天即出现戒断反应。",
   },
 ]);

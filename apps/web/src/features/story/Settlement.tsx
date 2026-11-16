@@ -11,6 +11,12 @@ function signed(n: number): string {
   return n > 0 ? `+${n}` : String(n);
 }
 
+function credGainText(delta: number): string {
+  if (delta >= 2) return "名声大噪";
+  if (delta >= 1) return "名声传开";
+  return "多了些风声";
+}
+
 /** 委托结束后弹出的结算卡：结局、报酬、声望、中间人好感、人性和一句总评 */
 export function SettlementCard({
   job,
@@ -32,7 +38,7 @@ export function SettlementCard({
   for (const c of s?.squad ?? []) {
     rows.push([`分给${c.name}`, `−${c.cut.toLocaleString("en-US")} 欧元`, undefined]);
   }
-  if (s && s.streetCred > 0) rows.push(["街头声望", `+${s.streetCred} 级`, "good"]);
+  if (s && s.streetCred > 0) rows.push(["街头名声", credGainText(s.streetCred), "good"]);
   if (s?.affinity && job.fixer) {
     const delta = s.affinity.to - s.affinity.from;
     rows.push([
@@ -42,7 +48,11 @@ export function SettlementCard({
     ]);
   }
   if (s && s.humanity !== null && s.humanity !== 0) {
-    rows.push(["人性", signed(s.humanity), s.humanity > 0 ? "good" : "bad"]);
+    rows.push([
+      "神经稳态",
+      s.humanity > 0 ? "有所缓和" : "负荷加重",
+      s.humanity > 0 ? "good" : "bad",
+    ]);
   }
   return (
     <Dialog
@@ -56,7 +66,7 @@ export function SettlementCard({
       }
     >
       <p className={styles.settleMeta}>
-        {job.risk} 星 · 雇主 {job.client}
+        雇主 {job.client}
         {job.fixer ? ` · 中间人 ${job.fixer}` : ""}
       </p>
       <dl className={styles.settle}>
@@ -85,7 +95,7 @@ export function NemesisSettlementCard({
   const rows: [string, string, "good" | undefined][] = [
     ["结下梁子", `${nemesis.since} · ${nemesis.how}`, undefined],
     ["了结", `${nemesis.at} · ${nemesis.endLabel}`, undefined],
-    ["街头声望", `+${nemesis.cred} 级`, "good"],
+    ["街头名声", credGainText(nemesis.cred), "good"],
   ];
   return (
     <Dialog

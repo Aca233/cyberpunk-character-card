@@ -1,31 +1,57 @@
 import { defineSystem } from "../../kernel/system";
-import type { JobsState } from "../jobs";
+import { isOpen, type JobsState } from "../jobs";
 import type { NpcState } from "../npc";
 import { phoneActions } from "./actions";
-import { answerCall, readAll, receiveCall, receiveMessage, replyMessage, tickCalls } from "./apply";
+import {
+  answerCall,
+  applyChatMeta,
+  readAll,
+  receiveCall,
+  receiveMessage,
+  replyMessage,
+  sendPlayerMessage,
+  tickCalls,
+} from "./apply";
 import { phoneFeed } from "./feed";
 import { phoneMessagesView } from "./messages";
 import { phoneRules } from "./prompt";
 import {
   AnswerSchema,
   CallCommandSchema,
+  ChatMetaSchema,
   type PhoneInternal,
   type PhoneState,
   PhoneStateSchema,
   ReadSchema,
   ReceiveSchema,
   ReplySchema,
+  SendSchema,
 } from "./schema";
 import { phoneSections } from "./sections";
 import { phoneStatus } from "./status";
 import { phoneCallsView } from "./view";
 
-/** 消息：抽取按正文记 messages，玩家看、回复；联系人、全息电话和完整通讯界面在 M3 */
+function openJobIdsOf(jobs: JobsState): ReadonlySet<string> {
+  return new Set(jobs.jobs.filter((j) => isOpen(j)).map((j) => j.id));
+}
+
+function contactNameOf(id: string, npcs: NpcState, jobs: JobsState): string {
+  return npcs.npcs[id]?.name ?? jobs.fixers[id]?.name ?? id;
+}
+
+/** 消息：抽取按正文记 messages，玩家看、回复、私聊、全息电话 */
 export const phone = defineSystem<PhoneState, never, PhoneInternal>({
   id: "phone",
   dependsOn: ["npc", "jobs"],
   state: PhoneStateSchema,
-  initial: () => ({ messages: [], nextId: 1, calls: [], nextCall: 1, feedRead: [] }),
+  initial: () => ({
+    messages: [],
+    nextId: 1,
+    calls: [],
+    nextCall: 1,
+    feedRead: [],
+    chatBudget: {},
+  }),
   commands: {},
   internal: {
     "phone.receive": ReceiveSchema,
@@ -33,6 +59,8 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
     "phone.reply": ReplySchema,
     "phone.call": CallCommandSchema,
     "phone.answer": AnswerSchema,
+    "phone.send": SendSchema,
+    "phone.chatMeta": ChatMetaSchema,
   },
   apply(draft, command, ctx) {
     switch (command.type) {
@@ -56,12 +84,31 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
             };
           }
         }
-        const name =
-          ctx.read<NpcState>("npc").npcs[command.from]?.name ??
-          jobs.fixers[command.from]?.name ??
-          command.from;
-        return receiveMessage(draft, command.from, name, command.text, ctx.now, command.job);
+        const npcs = ctx.read<NpcState>("npc");
+        return receiveMessage(
+          draft,
+          command.from,
+          contactNameOf(command.from, npcs, jobs),
+          command.text,
+          ctx.now,
+          command.job,
+          openJobIdsOf(jobs),
+        );
       }
+      case "phone.send": {
+        const jobs = ctx.read<JobsState>("jobs");
+        const npcs = ctx.read<NpcState>("npc");
+        return sendPlayerMessage(
+          draft,
+          command.to,
+          contactNameOf(command.to, npcs, jobs),
+          command.text,
+          ctx.now,
+          openJobIdsOf(jobs),
+        );
+      }
+      case "phone.chatMeta":
+        return applyChatMeta(draft, command);
       case "phone.read":
         return readAll(draft, command.feed);
       case "phone.reply":

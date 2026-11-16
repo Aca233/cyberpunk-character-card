@@ -10,7 +10,7 @@ export const TurnInputSchema = z.strictObject({
   /** 只有旧存档带；新输入不写 */
   mode: InputModeSchema.optional(),
   text: z.string().trim().min(1, "行动不能为空").max(2000, "一次最多 2000 字"),
-  /** 生死瞬间开了斯安威斯坦：这段输入写的是慢动作里的几个动作 */
+  /** 这一轮开了斯安威斯坦（选项或判断阶段自动开启）：慢动作里的几个动作 */
   sandevistan: z.boolean().optional(),
   /** 回复第几条消息 */
   replyTo: z.number().int().min(1).optional(),
@@ -91,6 +91,8 @@ export type TurnEvent =
       readonly dv: number;
       readonly outcome: "critical" | "success" | "costly" | "failure" | "fumble";
     }
+  /** 这一轮激活了斯安威斯坦（前端主动开启或判断阶段识别）：不是终止事件 */
+  | { readonly type: "boost"; readonly id: string; readonly name: string }
   | { readonly type: "text"; readonly text: string }
   /** 以下五种是终止事件，每一轮恰好一个 */
   | {
@@ -116,5 +118,10 @@ export type TerminalTurnEvent = Extract<
 >;
 
 export function isTerminalEvent(event: TurnEvent): event is TerminalTurnEvent {
-  return event.type !== "started" && event.type !== "rolled" && event.type !== "text";
+  return (
+    event.type !== "started" &&
+    event.type !== "rolled" &&
+    event.type !== "boost" &&
+    event.type !== "text"
+  );
 }

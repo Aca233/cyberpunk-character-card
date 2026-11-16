@@ -5,7 +5,12 @@ import { keeperOf, RARITY_LABELS } from "../economy";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { currentStock, itemCatalog, restockDue, sellValue, shopList, shopShelf } from "./apply";
 import { moodLock, moodPrice, shopMood } from "./mood";
-import { InventoryStateSchema, ITEM_KIND_LABELS, WEAPON_CATEGORY_LABELS } from "./schema";
+import {
+  carriedItemCounts,
+  InventoryStateSchema,
+  ITEM_KIND_LABELS,
+  WEAPON_CATEGORY_LABELS,
+} from "./schema";
 
 /**
  * npc 的入口引用了 inventory（npc/body.ts），这里不反向引用 npc 的入口；
@@ -36,7 +41,7 @@ export function shopsView({ world, data }: ViewContext) {
   const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
   const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
   const now = world.time;
-  const sell = Object.entries(inventory.backpack).flatMap(([id, count]) => {
+  const sell = [...carriedItemCounts(inventory)].flatMap(([id, count]) => {
     const def = catalog.get(id);
     return def ? [{ id, name: def.name, count, value: sellValue(def) }] : [];
   });

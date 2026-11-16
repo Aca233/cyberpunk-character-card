@@ -17,6 +17,7 @@ export function humanityView({ world }: ViewContext) {
     current: humanity.current,
     cap: humanityCap(humanity),
     max: HUMANITY_MAX,
+    tolerance: humanity.tolerance,
     stage,
     stageLabel: STAGE_LABELS[stage],
     suppressed,

@@ -1,14 +1,14 @@
 /*
- * CK3「自定义统治者」× 2077 原作控件工作台：
- * 左栏（极简身份、难度、出身与人脉行装）、中栏（主角级对称 2077 CyberDoll）、
- * 右栏（map.panel 原作斜切工作卡：定制点数 + tab.bg 页签 + 2×3 原作图标能力格 + 独立 AI 人设）、
- * 底栏（左保存/导出/删除 · 右代号与开局）。
- * 只用原作素材框线（NineSlice / CellFrame / FrameBox / tab.bg / tab.line），不手画 CSS 细框线。
+ * 2077 赛博档案工作台（三栏对称解剖台 + 原作九宫格控件）：
+ * 左栏（身份铭牌 + 出身背景 + 开局态势导航）
+ * 中栏（主角级对称 2077 CyberDoll / 档案总览切换 + 生理耐受 × 术后人性实时控制台）
+ * 右栏（map.panel 原作斜切工作卡：构筑槽位与就绪状态栏 + tab.bg 页签 + 能力与特质 / 义体货架 / 人设小传）
+ * 底栏（左保存/导出/删除 · 右代号与开局）
  */
 
 .bench {
   display: grid;
-  grid-template-columns: 280px minmax(520px, 1fr) 435px;
+  grid-template-columns: clamp(275px, 21vw, 315px) minmax(430px, 1fr) clamp(450px, 34vw, 560px);
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px 14px;
   height: 100%;
@@ -22,43 +22,68 @@
   min-height: 0;
 }
 
-/* ———— 左栏：平静暗底身份总览，只用 tab.line 分区与 CellFrame 卡片 ———— */
+/* ———— 左栏：身份铭牌、出身流派中枢与开局态势 ———— */
 .left {
   grid-column: 1;
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   padding: 10px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--cp-red-dim) transparent;
   scrollbar-width: thin;
-  background: rgb(5 5 10 / 52%);
+  background: rgb(5 5 10 / 56%);
 }
 
 .groupLabel {
   display: block;
-  margin-bottom: 4px;
   color: var(--cp-text-dim);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
+}
+
+.idCard {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 78%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 12px 10px;
+}
+
+.idCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sampleBadge {
+  padding: 1px 6px;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
 }
 
 .idStack {
   display: grid;
-  gap: 7px;
+  gap: 6px;
 }
 
 .idSplit {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr);
-  gap: 7px;
+  gap: 6px;
 }
 
 .compactBox input {
-  min-height: 35px;
-  padding: 6px 12px 7px 10px;
+  min-height: 34px;
+  padding: 5px 11px 6px 10px;
   font-size: var(--fs-label);
 }
 
@@ -73,7 +98,7 @@
 }
 
 .titleBox {
-  width: 210px;
+  width: 220px;
 }
 
 .titleBox input {
@@ -82,24 +107,61 @@
   font-size: var(--fs-label);
 }
 
+.pronounRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pronounLabel {
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+}
+
+.pronounPills {
+  display: flex;
+  gap: 4px;
+}
+
+.pronounPill {
+  padding: 2px 9px;
+  border: 0;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.pronounPill:hover {
+  color: var(--cp-text);
+  background: rgb(255 255 255 / 12%);
+}
+
+.pronounPill[aria-pressed="true"] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 18%);
+}
+
 .hairline {
   display: block;
   flex: none;
   height: 2px;
-  margin: 2px 0;
+  margin: 1px 0;
   background: var(--cp-red-dim);
   mask-size: 100% 100%;
   opacity: 0.55;
 }
 
-.btnStrip {
+.originHub {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  flex-direction: column;
+  gap: 7px;
 }
 
 /* 原作 map.filterCell 九宫格卡片（CellFrame 垫底） */
@@ -111,7 +173,7 @@
   display: grid;
   gap: 2px;
   width: 100%;
-  padding: 9px 14px 10px 12px;
+  padding: 8px 14px 9px 12px;
   border: 0;
   color: var(--cp-text);
   background: transparent;
@@ -130,7 +192,7 @@
 }
 
 .navCard[data-empty] {
-  --box-line: rgb(252 238 10 / 60%);
+  --box-line: rgb(252 238 10 / 65%);
 }
 
 .navCardHead {
@@ -142,12 +204,12 @@
 
 .cardEyebrow {
   color: var(--cp-text-dim);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 .cardAction {
   color: var(--cp-red);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 0.04em;
 }
 
@@ -162,8 +224,8 @@
 
 .cardSub {
   color: var(--cp-text-dim);
-  font-size: 0.72rem;
-  line-height: 1.38;
+  font-size: 0.71rem;
+  line-height: 1.36;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -174,7 +236,7 @@
   color: var(--cp-cyan);
 }
 
-/* ———— 中栏：宽阔对称 2077 CyberDoll 主舞台 ———— */
+/* ———— 中栏：宽阔对称 2077 CyberDoll 主舞台与档案总览 ———— */
 .center {
   grid-column: 2;
   grid-row: 1;
@@ -184,18 +246,26 @@
   justify-content: space-between;
   gap: 6px;
   padding: 4px 8px 6px;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
 .heroPlate {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  width: min(440px, 90%);
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(560px, 96%);
   text-shadow:
     0 0 4px rgb(5 5 10),
     0 0 10px rgb(5 5 10);
+}
+
+.heroTopRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
 }
 
 .heroName {
@@ -203,29 +273,57 @@
   color: var(--cp-text);
   font-size: 1.12rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
 }
 
 .heroAlias {
-  margin-left: 0.4rem;
+  margin-left: 0.35rem;
   color: var(--cp-yellow);
   font-size: 0.86rem;
   font-weight: 500;
 }
 
 .heroMeta {
-  margin: 0;
+  margin: 2px 0 0;
   color: var(--cp-cyan);
   font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  opacity: 0.92;
+}
+
+.centerSwitch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  background: rgb(5 5 10 / 78%);
+}
+
+.centerSwitchBtn {
+  padding: 4px 11px;
+  border: 0;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 5%);
+  font: inherit;
+  font-size: 0.72rem;
   letter-spacing: 0.06em;
-  opacity: 0.9;
+  cursor: var(--cp-cursor-hand);
+}
+
+.centerSwitchBtn:hover {
+  color: var(--cp-text);
+  background: rgb(255 255 255 / 11%);
+}
+
+.centerSwitchBtn[aria-selected="true"] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 18%);
 }
 
 .heroLine {
   display: block;
   width: 100%;
   height: 2px;
-  margin-top: 3px;
   background: var(--cp-red-dim);
   mask-size: 100% 100%;
   opacity: 0.55;
@@ -233,6 +331,7 @@
 
 .dollFrame {
   container: pin / inline-size;
+  zoom: 0.8;
   width: 100%;
   min-width: 0;
   margin: auto 0;
@@ -243,15 +342,129 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  width: min(560px, 96%);
+}
+
+/* 生理耐受 × 术后人性实时控制台 */
+.humanityConsole {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(10 18 24 / 84%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   width: 100%;
+  padding: 8px 13px 9px;
+}
+
+.humanityConsole[data-tone="warn"] {
+  --box-line: rgb(252 238 10 / 68%);
+}
+
+.humanityConsole[data-tone="danger"] {
+  --box-line: var(--cp-red);
+}
+
+.humanityHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.humanityTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.humanityLabel {
+  color: var(--cp-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.humanityStageBadge {
+  padding: 1px 7px;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.humanityStageBadge[data-tone="warn"] {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
+}
+
+.humanityStageBadge[data-tone="danger"] {
+  color: var(--cp-red);
+  background: rgb(255 60 60 / 18%);
+}
+
+.humanityNums {
+  color: var(--cp-text);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.humanityNums b {
+  color: var(--cp-cyan);
+  font-size: 0.96rem;
+}
+
+.humanityNums small {
+  margin-left: 4px;
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+}
+
+.humanityTrack {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 12%);
+}
+
+.humanityFill {
+  display: block;
+  height: 100%;
+  background: var(--cp-cyan);
+  transition:
+    width var(--dur-flash),
+    background var(--dur-flash);
+}
+
+.humanityFill[data-tone="warn"] {
+  background: var(--cp-yellow);
+}
+
+.humanityFill[data-tone="danger"] {
+  background: var(--cp-red);
+}
+
+.humanityFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.humanityNote {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
 }
 
 .tolBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 6px 8px;
+  gap: 5px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -271,14 +484,25 @@
 
 .installedChip {
   --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(13 32 37 / 55%);
+  --box-fill: rgb(13 32 37 / 58%);
   position: relative;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
+  padding: 3px 9px 3px 12px;
   font-size: 0.72rem;
+}
+
+.installedChip::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: 3px;
+  background: var(--rarity, var(--cp-cyan));
+  opacity: 0.9;
 }
 
 .installedChip[data-inherent] {
@@ -321,6 +545,94 @@
   color: var(--cp-red);
 }
 
+/* 中栏：档案总览预览卡 */
+.dossierWrap {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.dossierCard {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(10 12 20 / 88%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.dossierSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dossierHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dossierHeading {
+  margin: 0;
+  color: var(--cp-cyan);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.dossierText {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.dossierText b {
+  color: var(--cp-text-dim);
+  font-weight: 500;
+}
+
+.dossierText[data-warn] {
+  color: var(--cp-yellow);
+}
+
+.dossierProseList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dossierProseItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.dossierProseKey {
+  color: var(--cp-red);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+
+.dossierProseVal {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 0.76rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ———— 右栏：map.panel 原作斜切控制表 ———— */
 .right {
   grid-column: 3;
@@ -339,85 +651,100 @@
   z-index: -1;
 }
 
-.meter {
+/* 右栏顶部：构筑槽位与就绪状态栏 */
+.telemetry {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-.meterHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 10px;
-  font-size: var(--fs-label);
-}
-
-.meterVal {
-  color: var(--cp-yellow);
-  font-size: 1.08rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.meterVal[data-over] {
-  color: var(--cp-yellow);
-}
-
-.badge {
-  color: var(--cp-cyan);
-  font-size: 0.72rem;
-}
-
-.badge[data-over] {
-  color: var(--cp-yellow);
-}
-
-.meterTrack {
-  position: relative;
-  height: 4px;
-  overflow: hidden;
-  background: rgb(255 255 255 / 12%);
-}
-
-.meterFill {
-  display: block;
-  height: 100%;
-  background: var(--cp-cyan);
-  transition:
-    width var(--dur-flash),
-    background var(--dur-flash);
-}
-
-.meterFill[data-over] {
-  background: var(--cp-yellow);
-}
-
-.meterFoot {
+.telemetryHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 8px;
+  gap: 4px 10px;
 }
 
-.meterNote {
-  margin: 0;
+.telemetryTitle {
   color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.readyBadge {
+  padding: 1px 8px;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 14%);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.readyBadge[data-ready] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+}
+
+.slotPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.slotPill {
+  padding: 3px 8px;
+  border: 0;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
   font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
+  cursor: var(--cp-cursor-hand);
+}
+
+.slotPill:hover {
+  color: var(--cp-text);
+  background: rgb(255 255 255 / 12%);
+}
+
+.slotPill b {
+  color: var(--cp-cyan);
+}
+
+.slotPill[data-warn] {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 14%);
+}
+
+.slotPill[data-warn] b {
+  color: var(--cp-yellow);
 }
 
 .checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 4px 6px;
   margin: 0;
   padding: 0;
-  color: var(--cp-yellow);
-  font-size: 0.72rem;
   list-style: none;
+}
+
+.checkJumpBtn {
+  padding: 2px 7px;
+  border: 0;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.checkJumpBtn:hover {
+  background: rgb(252 238 10 / 22%);
 }
 
 .sheetNav {
@@ -490,6 +817,7 @@
 
 .slotTools {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -520,11 +848,41 @@
 }
 
 .empty {
+  margin: 0;
   color: var(--cp-text-dim);
   font-size: 0.74rem;
+  line-height: 1.45;
 }
 
-/* ———— 右栏五维 2×3 能力卡（CK3 双列布局 + 原作 attr.* 图标 + CellFrame） ———— */
+.comboHintBox {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(13 32 37 / 48%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 11px;
+}
+
+.comboHintRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.comboHintText {
+  color: var(--cp-text);
+  font-size: 0.73rem;
+}
+
+.comboHintName {
+  color: var(--cp-cyan);
+}
+
+/* ———— 右栏五维 2×3 能力卡（双列布局 + 原作 attr.* 图标 + CellFrame） ———— */
 .attrGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -630,13 +988,77 @@
 }
 
 .slotRibbon {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
   min-width: 0;
   margin: 0 0 10px;
   padding: 0;
   border: 0;
+}
+
+.slotRibbonBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 0;
+  background: rgb(255 255 255 / 5%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  cursor: var(--cp-cursor-hand);
+}
+
+.slotRibbonBtn:hover {
+  background: rgb(255 255 255 / 11%);
+  color: var(--cp-text);
+}
+
+.slotRibbonBtn[aria-pressed="true"] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+}
+
+/* ———— 右栏：人设小传栈 ———— */
+.personStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.proseSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proseList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.extraProse {
+  padding: 8px 10px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.extraProseSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--cp-cyan);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: var(--cp-cursor-hand);
+}
+
+.extraProse[open] .extraProseSummary {
+  margin-bottom: 10px;
 }
 
 /* ———— 底栏：极简一字单行（左存档工具 / 右开局启动） ———— */
@@ -648,7 +1070,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  padding-top: 2px;
+  padding: 6px 26px 14px;
 }
 
 .barActions,
@@ -657,12 +1079,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .statusHint {
   margin: 0;
   color: var(--cp-text-dim);
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 
 /* ———— 页面外壳与角色库抽屉 ———— */
@@ -687,7 +1111,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  width: min(320px, 90%);
+  width: min(340px, 92%);
   padding: 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -717,8 +1141,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .meterFill {
+  .humanityFill {
     transition: none;
+  }
+}
+
+@media (1180px < width <= 1400px) {
+  .bench {
+    grid-template-columns: 245px minmax(350px, 1fr) 400px;
+    column-gap: 10px;
   }
 }
 
@@ -741,5 +1172,299 @@
   .workspace {
     grid-template-rows: auto;
     overflow-y: auto;
+  }
+
+  .drawerBody,
+  .dossierWrap {
+    flex: none;
+    overflow-y: visible;
+  }
+
+  .dollFrame {
+    max-width: 700px;
+  }
+}
+
+/* 开局武器：只显示图与名，描述放 title 悬停 */
+.weaponGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weaponTile {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 72%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 4px 7px;
+  border: 0;
+  color: var(--cp-text);
+  background: transparent;
+  font: inherit;
+  cursor: var(--cp-cursor-hand);
+}
+
+.weaponTile:hover:not(:disabled) {
+  --box-line: var(--cp-cyan);
+}
+
+.weaponTile[aria-pressed="true"] {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(13 32 37 / 88%);
+}
+
+.weaponTile:disabled {
+  opacity: 0.45;
+  cursor: var(--cp-cursor);
+}
+
+.weaponImg {
+  max-width: 100%;
+  max-height: 44px;
+  object-fit: contain;
+}
+
+.weaponName {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.68rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 人性控制台：单行紧凑 */
+.humanityRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.humanityRow .humanityTrack {
+  flex: 1 1 90px;
+  min-width: 70px;
+}
+
+/* 档案总览：2 列卡片网格 */
+.dossierGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.dossierBlock {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(10 12 20 / 86%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 14px 12px 12px;
+}
+
+.dossierBlock[data-wide] {
+  grid-column: 1 / -1;
+}
+
+.dossierHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dossierEdit {
+  padding: 0;
+  border: 0;
+  color: var(--cp-red);
+  background: transparent;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.dossierEdit:hover {
+  color: var(--cp-cyan);
+}
+
+.dossierBig {
+  color: var(--cp-text);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.dossierBig small {
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.dossierBig[data-tone="warn"] {
+  color: var(--cp-yellow);
+}
+
+.dossierBig[data-tone="danger"] {
+  color: var(--cp-red);
+}
+
+.dossierDim {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.dossierLabel {
+  margin: 4px 0 0;
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+}
+
+.dossierChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dossierChip {
+  padding: 2px 8px;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+  font-size: 0.72rem;
+}
+
+.dossierChip[data-warn] {
+  color: var(--cp-red);
+  background: rgb(255 60 60 / 12%);
+}
+
+/* 居中大弹窗 */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 66%);
+}
+
+.modal {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(1060px, calc(100vw - 64px));
+  height: min(780px, calc(100dvh - 64px));
+  padding: 26px 30px 22px;
+  box-sizing: border-box;
+}
+
+.modalLayer {
+  z-index: -1;
+}
+
+.modalHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modalHead > div {
+  min-width: 0;
+}
+
+.modalTitle {
+  margin: 0;
+  color: var(--cp-cyan);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.modalHint {
+  margin: 3px 0 0;
+  color: var(--cp-text-dim);
+  font-size: 0.76rem;
+}
+
+.modalBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding-right: 8px;
+  padding-bottom: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
+}
+
+.drawerBody {
+  padding-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .modal {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 24px);
+    padding: 18px 14px 12px;
+  }
+
+  .modalHead {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modalHead > div {
+    flex: 1 1 200px;
+  }
+
+  .modalBody {
+    padding-right: 2px;
+  }
+
+  .dossierGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slotRibbon {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .slotHead {
+    flex-wrap: wrap;
+  }
+
+  .bar {
+    padding: 10px 12px 20px;
+  }
+
+  .barActions,
+  .launchRow,
+  .titleBox {
+    width: 100%;
+  }
+
+  .statusHint {
+    flex-basis: 100%;
   }
 }

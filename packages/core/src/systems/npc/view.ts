@@ -9,6 +9,7 @@ import {
   LEDGER_KIND_LABELS,
   NO_FACTION,
   NO_FACTION_LABEL,
+  NPC_UNDECIDED_PREFIX,
   NpcStateSchema,
 } from "./schema";
 
@@ -71,7 +72,11 @@ export function npcsView({ world, data }: ViewContext) {
       role: n.met ? n.role : "只听说过",
       /** 所属势力的中文名，不属于任何势力是「无」；没见过的人和身份一样不给 */
       faction: n.met ? factionName(n.faction, data) : null,
-      look: n.met ? n.look : "没见过",
+      look: n.met
+        ? n.look.startsWith(NPC_UNDECIDED_PREFIX)
+          ? "初见时未细看长相，待正式照面后写入档案"
+          : n.look
+        : "没见过",
       /** 现在穿什么（用户定的，2026-11-02："长相 + 当前穿着"）；没见过面、或旧卡衣着还在 look 里时是 null */
       outfit: n.met ? (currentOutfit(n) ?? null) : null,
       /** 玩家角色知道的这个人的事，旧的在前，带来源 */
@@ -95,6 +100,7 @@ export function npcsView({ world, data }: ViewContext) {
        */
       placeId: n.met && !deathKnown(n) ? (n.location ?? n.home ?? null) : null,
       relation: n.relation?.text ?? null,
+      doing: n.met ? (n.doing?.text ?? null) : null,
       /**
        * 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：只给公开的、两边玩家都见过的；
        * 私下的关系只给模型看。生死照玩家知道的显示，新的在前

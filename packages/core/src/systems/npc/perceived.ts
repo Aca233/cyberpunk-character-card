@@ -83,7 +83,7 @@ export function perceivedLine(
   }
   const wound = WOUND_LOOKS[looks.wound];
   if (wound) bits.push(wound);
-  bits.push(`街头声望 ${looks.streetCred} 级（${credTier(looks.streetCred).label}）`);
+  bits.push(`街头名声：${credTier(looks.streetCred).label}`);
   if (looks.heatStars >= WANTED_STARS) {
     bits.push(`NCPD 通缉中（${looks.heatStars} 星），赏金猎人和眼尖的人认得出`);
   } else if (looks.heatStars > 0) {

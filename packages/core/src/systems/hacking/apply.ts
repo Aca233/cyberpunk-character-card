@@ -363,6 +363,7 @@ export function applyNpcHack(
       emit.push({
         type: "damage",
         tier: check.damage,
+        part: "head",
         reason: `${npc.name}的快速破解「${def.name}」`,
       });
     } else {
@@ -374,6 +375,7 @@ export function applyNpcHack(
     emit.push({
       type: "damage",
       tier,
+      part: "head",
       reason: `${npc.name}的快速破解「${def.name}」`,
     });
   }

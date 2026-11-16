@@ -274,3 +274,59 @@ export function portraitOf(npc: string | null | undefined): AssetId | undefined 
 export function itemArtOf(item: string | null | undefined): AssetId | undefined {
   return item ? ITEM_ART[item] : undefined;
 }
+
+/** 武器 ID 与副标题 → 右下角 HUD 用的高对比 2077 单色武器轮廓剪影 */
+export function weaponHudIconOf(id: string, subLabel?: string): AssetId {
+  const low = id.toLowerCase();
+  if (
+    low.includes("knife") ||
+    low.includes("cleaver") ||
+    low === "blue-fang" ||
+    low === "fang" ||
+    low === "headhunter" ||
+    low === "stinger"
+  ) {
+    return "weapon.knife";
+  }
+  if (subLabel?.includes("刀剑")) {
+    if (
+      low.includes("katana") ||
+      low === "wakizashi" ||
+      low === "errata" ||
+      low === "jinchu-maru" ||
+      low === "byakko" ||
+      low === "satori" ||
+      low === "scalpel"
+    ) {
+      return "weapon.katana";
+    }
+    return "weapon.longBlade";
+  }
+  if (subLabel?.includes("钝器")) {
+    return low.includes("hammer") || low.includes("sasquatch") ? "weapon.hammer" : "weapon.club";
+  }
+  if (subLabel?.includes("左轮手枪")) {
+    return subLabel.includes("技术") ? "weapon.revolverTech" : "weapon.revolverPower";
+  }
+  if (subLabel?.includes("手枪")) {
+    return "weapon.pistolPower";
+  }
+  if (subLabel?.includes("冲锋枪")) {
+    return subLabel.includes("智能") ? "weapon.smgSmart" : "weapon.smgPower";
+  }
+  if (subLabel?.includes("精准步枪") || subLabel?.includes("突击步枪")) {
+    return subLabel.includes("技术") ? "weapon.riflePrecisionTech" : "weapon.riflePrecision";
+  }
+  if (subLabel?.includes("狙击步枪")) {
+    return subLabel.includes("智能") ? "weapon.sniperSmart" : "weapon.sniper";
+  }
+  if (subLabel?.includes("霰弹枪")) {
+    if (subLabel.includes("智能")) return "weapon.shotgunSmart";
+    if (subLabel.includes("技术")) return "weapon.shotgunDoubleTech";
+    return "weapon.shotgunPower";
+  }
+  if (subLabel?.includes("轻机枪")) {
+    return "weapon.lightMachine";
+  }
+  return "weapon.pistol";
+}

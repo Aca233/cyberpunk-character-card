@@ -14,7 +14,7 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
     location: "vik-clinic",
     note: "老派义体医生，手艺好、收价公道，不卖来路不明的货",
     shelf: cyberware.filter((c) => !c.iconic).map((c) => c.id),
-    credGates: { rare: 5, epic: 15, legendary: 30 },
+    credGates: { rare: 5, epic: 20, legendary: 35 },
     credit: 20000,
   },
   {

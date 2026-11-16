@@ -64,7 +64,6 @@ export interface Legend {
   readonly days: number;
   readonly streetCred: number;
   readonly credTier: string;
-  readonly difficulty: string;
   readonly epitaph: string | null;
   readonly card: TarotCard;
   readonly cardLabel: string;
@@ -90,7 +89,6 @@ export function legendOf(view: PlayerView, now: number, startTime: number): Lege
     days: Math.max(0, Math.floor((now - startTime) / 1440)),
     streetCred: view.character.streetCred,
     credTier: view.character.credTier,
-    difficulty: view.difficulty,
     epitaph: view.ended?.epitaph ?? null,
     card: tarotOf(view.character.attributes),
     cardLabel: TAROT_LABELS[tarotOf(view.character.attributes)],

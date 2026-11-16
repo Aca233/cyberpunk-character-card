@@ -5,7 +5,7 @@ import { DamageTierSchema } from "../dice";
 export const ConditionSchema = z.enum(["up", "down", "dying", "dead"]);
 export type Condition = z.infer<typeof ConditionSchema>;
 
-/** 3.0 四阶段具象伤势与濒死休克（0 完好 / 1 轻伤挂彩 / 2 贯通重创 / 3 失能重残 / 4 濒死休克） */
+/** 伤势状态：完好 / 表皮擦伤 / 贯通重创 / 机能重残 / 濒死休克 */
 export const WoundSlotSchema = z.union([
   z.literal(0),
   z.literal(1),
@@ -16,12 +16,53 @@ export const WoundSlotSchema = z.union([
 export type WoundSlot = z.infer<typeof WoundSlotSchema>;
 
 export const WOUND_SLOT_LABELS: Readonly<Record<WoundSlot, string>> = {
-  0: "🟢 完好（0 格）",
-  1: "🟡 挂彩（1 格）",
-  2: "🟠 重创（2 格）",
-  3: "🔴 残废（3 格）",
-  4: "💀 生死线（4 格）",
+  0: "体征平稳",
+  1: "表皮擦伤",
+  2: "贯通重创",
+  3: "机能重残",
+  4: "濒死休克",
 };
+
+/** 伤在哪一处解剖部位 */
+export const BodyPartSchema = z.enum([
+  "head",
+  "face",
+  "chest",
+  "belly",
+  "left-arm",
+  "right-arm",
+  "left-leg",
+  "right-leg",
+]);
+export type BodyPart = z.infer<typeof BodyPartSchema>;
+export const BODY_PART_LABELS: Readonly<Record<BodyPart, string>> = {
+  head: "头",
+  face: "脸",
+  chest: "胸口",
+  belly: "肚子",
+  "left-arm": "左臂",
+  "right-arm": "右臂",
+  "left-leg": "左腿",
+  "right-leg": "右腿",
+};
+
+/** 具体伤势：非战斗伤害（跌落、电击、爆破、代价等）记下部位、原因、档位与愈合时间；战斗伤口由 combat.wounds 单独留档 */
+export const INJURY_TIER_LABELS = {
+  graze: "擦伤",
+  heavy: "重创",
+  lethal: "致命伤",
+} as const;
+
+export const InjurySchema = z.object({
+  id: z.string().min(1),
+  part: BodyPartSchema.nullable().default(null),
+  tier: DamageTierSchema,
+  cause: z.string().min(1),
+  at: z.number().int(),
+  healsAt: z.number().int().nullable().default(null),
+  treated: z.boolean().default(false),
+});
+export type Injury = z.infer<typeof InjurySchema>;
 
 /** 生死线三大保底通道 */
 export const DeathLineChannelSchema = z.enum([
@@ -55,7 +96,7 @@ export const HealthStateSchema = z.object({
   hp: z.number().int().min(0),
   max: z.number().int().min(1),
   condition: ConditionSchema,
-  /** 3.0 四格具象伤势（0 完好 / 1 挂彩 / 2 重创 / 3 残废 / 4 生死线） */
+  /** 内部伤势阶段（0 完好 / 1 擦伤 / 2 重创 / 3 重残 / 4 濒死） */
   wounds: WoundSlotSchema.default(0),
   /** 是否已打医疗针临时压制本场【重创 -2】疼痛减值 */
   painSuppressed: z.boolean().default(false),
@@ -65,6 +106,8 @@ export const HealthStateSchema = z.object({
   bleeds: z.number().int().min(0),
   /** 最近一次扣血用的检定 id；同一次检定只扣一次 */
   damagedBy: z.string().nullable(),
+  /** 具体伤势档案（部位、原因、愈合期）；战斗伤口由 combat.wounds 单独留档 */
+  injuries: z.array(InjurySchema).default([]),
   /** 断了还没装义肢的部位 */
   lostLimbs: z.array(LimbSchema).default([]),
   /** 被打坏、还没修的义体 id；修好前失去能力 */
@@ -72,17 +115,19 @@ export const HealthStateSchema = z.object({
 });
 export type HealthState = z.infer<typeof HealthStateSchema>;
 
-/** 模型使用：{"type": "damage", "tier": "graze", "reason": "..."}，只能在掷骰失败或惨胜代价后出现 */
+/** 模型使用：{"type": "damage", "tier": "graze", "part": "left-leg", "reason": "..."}，只能在掷骰失败或惨胜代价后出现 */
 export const DamageCommandSchema = z
   .object({
     type: z.literal("damage"),
     tier: DamageTierSchema,
+    /** 伤在哪处部位（head/face/chest/belly/left-arm/right-arm/left-leg/right-leg） */
+    part: BodyPartSchema.optional(),
     /** 断了哪里：只在 check 写了 limb 的致命档失败时写 */
     limb: LimbSchema.optional(),
     reason: z.string().min(1),
   })
   .describe(
-    "受伤记账：当本轮物理与局势裁决确认玩家受伤、或惨胜付出身体代价时写入；档位不超过裁决的伤害范围；limb 只在写明断肢级重创时写",
+    "受伤记账：当本轮物理与局势裁决确认玩家受伤、或惨胜付出身体代价时写入；part 填受伤部位（head/face/chest/belly/left-arm/right-arm/left-leg/right-leg），reason 写明具体致伤经过；档位不超过裁决的伤害范围；limb 只在写明断肢级重创时写",
   );
 export type DamageCommand = z.infer<typeof DamageCommandSchema>;
 

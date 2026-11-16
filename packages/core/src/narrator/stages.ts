@@ -91,6 +91,12 @@ export const JudgeDocSchema = z.object({
     .describe(
       "在场的对手或防备你的人（敌人、安保、黑客、要应付或试探的人）这一轮打算干什么、会怎么反制玩家，一句话，只给写正文的一步看；没有对手写 null",
     ),
+  sandevistan: z
+    .boolean()
+    .optional()
+    .describe(
+      "只有【当前状态】列有可用的「加速义体」时才可能写 true：当玩家明确要求开启/使用加速神经（含“开斯安威斯坦”“斯安慰斯坦”“远地点”“飞隼”“沙坦”“时间加速”“子弹时间”“神经超频”等），或陷入必须靠超常神经加速才能抢先手的一瞬爆发/绝境时写 true；否则或未装/损坏/ooc 一律写 false",
+    ),
 });
 
 const JudgeShapeSchema = z.object({
@@ -100,6 +106,7 @@ const JudgeShapeSchema = z.object({
   buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
   foes: z.string().nullable().optional().catch(undefined),
+  sandevistan: z.boolean().optional().catch(undefined),
 });
 export type JudgeShape = z.infer<typeof JudgeShapeSchema>;
 

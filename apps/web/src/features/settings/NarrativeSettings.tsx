@@ -1,6 +1,8 @@
 import type { OffscreenPace } from "@cp/core";
 import type { ReactNode } from "react";
-import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
+import { FrameBox } from "../../ui/FrameBox";
+import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import {
   type NarrativeToggle,
@@ -28,34 +30,71 @@ const DEBUG: readonly [NarrativeToggle, string, string][] = [
 
 /**
  * 叙事偏好：存在这台浏览器里，换设备要重新选。
- * 版式照模型连接页（设置排版优化）：按组排，每项一行，控件放右边
+ * 版式统一使用原作 notify.itemCell 外框 + 左侧发光标记，控件右对齐
  */
 export function NarrativeSettings() {
   const prefs = useNarrativePrefs();
   const toggle = ([key, label, hint]: readonly [NarrativeToggle, string, string]) => (
     <Row key={key} id={`pref-${key}`} label={label} hint={hint}>
-      <input
+      <ToggleCheck
         id={`pref-${key}`}
-        type="checkbox"
+        variant="switch"
         checked={prefs[key]}
-        onChange={(e) => setNarrativePref(key, e.target.checked)}
+        onChange={(checked) => setNarrativePref(key, checked)}
       />
     </Row>
   );
   return (
-    <div className={ms.root}>
+    <div className={styles.prefsRoot}>
       <p className={styles.dim}>仅存于本浏览器 · 即时生效</p>
 
       <section className={styles.prefGroup} aria-label="呈现">
-        {/* 每组套原作 map.filterCell 框，照模型连接页（用户定的重排） */}
-        <CellFrame />
-        <span className={ms.kicker}>01 / 呈现</span>
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 84%)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint="var(--cp-red-dim)"
+          className={styles.slice}
+        />
+        <div className={styles.groupHeader}>
+          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+          <span className={ms.kicker}>01 / 呈现</span>
+        </div>
+        <span
+          className={styles.thinLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
         {SHOW.map(toggle)}
       </section>
 
       <section className={styles.prefGroup} aria-label="城市节奏">
-        <CellFrame />
-        <span className={ms.kicker}>02 / 城市节奏</span>
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 84%)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint="var(--cp-red-dim)"
+          className={styles.slice}
+        />
+        <div className={styles.groupHeader}>
+          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+          <span className={ms.kicker}>02 / 城市节奏</span>
+        </div>
+        <span
+          className={styles.thinLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
         <Row id="pref-offscreen" label="城里的动静" hint="你不在场时城里的城市运转与人物动向">
           <FrameBox>
             <select
@@ -74,8 +113,27 @@ export function NarrativeSettings() {
       </section>
 
       <section className={styles.prefGroup} aria-label="调试">
-        <CellFrame />
-        <span className={ms.kicker}>03 / 调试</span>
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 84%)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint="var(--cp-yellow)"
+          className={styles.slice}
+        />
+        <div className={styles.groupHeader}>
+          <Asset id="panel.glowLeft" height={18} tint="var(--cp-yellow)" />
+          <span className={ms.kicker}>03 / 调试</span>
+        </div>
+        <span
+          className={styles.thinLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
         {DEBUG.map(toggle)}
       </section>
     </div>

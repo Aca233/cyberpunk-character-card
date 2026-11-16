@@ -3,28 +3,25 @@ import { WorldClockStateSchema } from "../world";
 import { sidegigsView } from "./apply";
 
 /**
- * 拳赛和赛车交的待办：正在比的那一场，和当前地点能报名、还没赢过的场次；
- * 别处的场次只在地图上看，不进待办，免得一直挂着一排
+ * 拳赛和赛车交的待办：只有玩家真正下场正在比的那一场才进追踪，
+ * 平时只在街区氛围和地图风声里自然存在，不提前列成预设待办
  */
 export function sidegigsObjectives({ world, data }: ViewContext): readonly Objective[] {
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const view = sidegigsView(world.slices.sidegigs, data, clock.location, world.time);
   const active = view.active;
-  const shown = view.list.filter(
-    (g) => g.id === active?.id || (g.here && !g.beaten && g.rematch === null),
-  );
-  return shown.map((g) => ({
-    id: `sidegigs:${g.id}`,
-    source: "sidegigs",
-    sourceLabel: g.kindLabel,
-    title: `${g.name}：对手${g.opponent}`,
-    location: g.location,
-    due: null,
-    dueIn: null,
-    progress:
-      g.id === active?.id
-        ? "正在比"
-        : `押金 ${g.stake}、奖金 ${g.purse}${g.losses > 0 ? `；输过 ${g.losses} 次` : ""}`,
-    status: g.id === active?.id ? "active" : "offered",
-  }));
+  if (!active) return [];
+  return [
+    {
+      id: `sidegigs:${active.id}`,
+      source: "sidegigs",
+      sourceLabel: active.kindLabel,
+      title: `${active.name}：对手${active.opponent}`,
+      location: active.location,
+      due: null,
+      dueIn: null,
+      progress: "正在比",
+      status: "active",
+    },
+  ];
 }

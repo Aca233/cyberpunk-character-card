@@ -5,9 +5,7 @@ import {
   discounted,
   type EconomyState,
   type Keeper,
-  RARITY_LABELS,
   type Rarity,
-  RaritySchema,
   rarityLock,
   SERVICES,
 } from "../economy";
@@ -29,12 +27,24 @@ import {
   WEAPON_CATEGORY_LABELS,
 } from "./schema";
 
-export const WEAPON_SLOTS = 3;
-
 type Inventory = Draft<InventoryState>;
 
 const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
+
+/** 将旧存档武器槽里的武器统一并入背包并清空历史槽位指针 */
+function absorbLegacyWeapons(draft: Inventory): void {
+  let changed = draft.active !== null;
+  for (let i = 0; i < draft.weapons.length; i++) {
+    const w = draft.weapons[i];
+    if (w !== null && w !== undefined) {
+      put(draft, w);
+      draft.weapons[i] = null;
+      changed = true;
+    }
+  }
+  if (changed) draft.active = null;
+}
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, ItemDef>>();
 
@@ -69,6 +79,7 @@ export function stashMove(draft: Inventory, action: "out" | "in", id: string): A
     put(draft, id);
     return { ok: true, notes: [] };
   }
+  absorbLegacyWeapons(draft);
   return take(draft, id) ? { ok: true, notes: [] } : { ok: false, reason: `背包里没有 ${id}` };
 }
 
@@ -78,11 +89,6 @@ function take(draft: Inventory, id: string): boolean {
   if (count === 1) Reflect.deleteProperty(draft.backpack, id);
   else draft.backpack[id] = count - 1;
   return true;
-}
-
-function firstWeapon(draft: Inventory): number | null {
-  const index = draft.weapons.findIndex((w) => w !== null);
-  return index >= 0 ? index : null;
 }
 
 /** 快捷栏的东西放回背包，没恢复的次数记下来 */
@@ -109,7 +115,7 @@ export function applyItem(
     case "lose":
       return lose(draft, def);
     case "equip":
-      return equip(draft, def, command.slot);
+      return equip(draft, def);
     case "unequip":
       return unequip(draft, def);
     case "use":
@@ -119,12 +125,9 @@ export function applyItem(
 
 /** 丢了最后一把武器时，装在上面的改装件跟着没了 */
 function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
+  absorbLegacyWeapons(draft);
   const outcome = loseOne(draft, def);
-  const gone =
-    outcome.ok &&
-    def.kind === "weapon" &&
-    !draft.weapons.includes(def.id) &&
-    (draft.backpack[def.id] ?? 0) < 1;
+  const gone = outcome.ok && def.kind === "weapon" && (draft.backpack[def.id] ?? 0) < 1;
   if (gone) Reflect.deleteProperty(draft.tuned, def.id);
   if (!gone || draft.mods[def.id] === undefined) return outcome;
   Reflect.deleteProperty(draft.mods, def.id);
@@ -133,12 +136,6 @@ function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
 
 function loseOne(draft: Inventory, def: ItemDef): ApplyOutcome {
   if (take(draft, def.id)) return ok(`失去 ${def.name}`);
-  const slot = draft.weapons.indexOf(def.id);
-  if (slot >= 0) {
-    draft.weapons[slot] = null;
-    if (draft.active === slot) draft.active = firstWeapon(draft);
-    return ok(`失去 ${def.name}`);
-  }
   const quick = quickSlotFor(def.kind);
   if (quick && draft[quick]?.id === def.id) {
     draft[quick] = null;
@@ -151,39 +148,15 @@ function loseOne(draft: Inventory, def: ItemDef): ApplyOutcome {
   return fail(`身上没有 ${def.name}`);
 }
 
-function equip(draft: Inventory, def: ItemDef, slot: number | undefined): ApplyOutcome {
+function equip(draft: Inventory, def: ItemDef): ApplyOutcome {
   const quick = quickSlotFor(def.kind);
   if (quick) return equipQuick(draft, def, quick);
   if (def.clothingSlot) return wear(draft, def, def.clothingSlot);
   if (def.kind !== "weapon") return fail(`${def.name} 不能装到装备栏`);
-
-  const target = slot === undefined ? undefined : slot - 1;
-  const current = draft.weapons.indexOf(def.id);
-  if (current >= 0) {
-    if (target === undefined || target === current) {
-      draft.active = current;
-      return ok(`切换到 ${def.name}`);
-    }
-    const other = draft.weapons[target] ?? null;
-    draft.weapons[target] = def.id;
-    draft.weapons[current] = other;
-    draft.active = target;
-    return ok(`${def.name} 换到第 ${target + 1} 格`);
-  }
-
+  // 武器放进背包直接可用；兼容旧存档和开局先 gain 再 equip 的流水
+  absorbLegacyWeapons(draft);
   if ((draft.backpack[def.id] ?? 0) < 1) return fail(`背包里没有 ${def.name}`);
-  const free = target ?? draft.weapons.indexOf(null);
-  if (free < 0) return fail(`${WEAPON_SLOTS} 个武器格都满了，先卸下一把或指定格子`);
-  take(draft, def.id);
-  const old = draft.weapons[free] ?? null;
-  if (old !== null) put(draft, old);
-  draft.weapons[free] = def.id;
-  draft.active = free;
-  return ok(
-    old === null
-      ? `${def.name} 装到第 ${free + 1} 格`
-      : `${def.name} 装到第 ${free + 1} 格，换下的放回背包`,
-  );
+  return ok();
 }
 
 /** 穿上一件服装：同一格的旧衣服放回背包 */
@@ -222,12 +195,10 @@ export function autoQuick(draft: Inventory, def: ItemDef): void {
 }
 
 function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
-  const slot = draft.weapons.indexOf(def.id);
-  if (slot >= 0) {
-    draft.weapons[slot] = null;
-    put(draft, def.id);
-    if (draft.active === slot) draft.active = firstWeapon(draft);
-    return ok(`${def.name} 放回背包`);
+  if (def.kind === "weapon") {
+    absorbLegacyWeapons(draft);
+    if ((draft.backpack[def.id] ?? 0) >= 1) return ok();
+    return fail(`没有带着 ${def.name}`);
   }
   const quick = quickSlotFor(def.kind);
   if (quick && draft[quick]?.id === def.id) {
@@ -444,7 +415,8 @@ export function applyMod(
     return fail(`物品表里没有武器 ${weaponId}`);
   }
   if (mod?.kind !== "mod" || mod.modSlot === undefined) return fail(`物品表里没有改装件 ${modId}`);
-  if (!draft.weapons.includes(weaponId) && (draft.backpack[weaponId] ?? 0) < 1) {
+  absorbLegacyWeapons(draft);
+  if ((draft.backpack[weaponId] ?? 0) < 1) {
     return fail(`身上没有 ${weapon.name}`);
   }
   const slot = mod.modSlot;
@@ -522,7 +494,9 @@ export function applyTrade(
     };
   }
   if (def.iconic) return fail(`${def.name}是不朽物品，不卖`);
-  if ((draft.backpack[def.id] ?? 0) < 1) return fail(`背包里没有${def.name}；装备着的先卸下`);
+  absorbLegacyWeapons(draft);
+  if ((draft.backpack[def.id] ?? 0) < 1)
+    return fail(`背包里没有${def.name}；穿着的衣服或快捷栏里的药/雷先脱下`);
   const base = sellValue(def);
   if (base <= 0) return fail(`${def.name}没有标价，卖不出去`);
   const bonus = 2 - DISCOUNT_FACTORS[command.discount];
@@ -534,7 +508,7 @@ export function applyTrade(
   if (left > 0) draft.backpack[def.id] = left;
   else delete draft.backpack[def.id];
   // 卖掉最后一把时升级记录跟着清掉，免得下次买到同款带着升过的稀有度
-  if (def.kind === "weapon" && left < 1 && !draft.weapons.includes(def.id)) {
+  if (def.kind === "weapon" && left < 1) {
     Reflect.deleteProperty(draft.tuned, def.id);
   }
   return {
@@ -544,48 +518,9 @@ export function applyTrade(
   };
 }
 
-/**
- * 零件和升级。本作改编：原作 2.0 拆解得到按品质分的零件、用零件升级武器品质；这里合成一种零件，
- * 拆出和升级要的数量、升级要的技术是自定的，试玩后再调
- */
-/** 拆一件能得几个零件，按（升过的）稀有度 */
-export const DISMANTLE_PARTS: Readonly<Record<Rarity, number>> = {
-  common: 2,
-  uncommon: 4,
-  rare: 8,
-  epic: 14,
-  legendary: 24,
-};
-/** 升到这一档要几个零件 */
-export const TUNE_PARTS: Readonly<Record<Rarity, number>> = {
-  common: 0,
-  uncommon: 5,
-  rare: 10,
-  epic: 20,
-  legendary: 35,
-};
-/** 升到这一档要多少技术 */
-export const TUNE_TECH: Readonly<Record<Rarity, number>> = {
-  common: 0,
-  uncommon: 3,
-  rare: 5,
-  epic: 8,
-  legendary: 11,
-};
-
 /** 物品现在的稀有度：升过的按升过的，没写稀有度的按普通 */
 export function rarityOf(def: ItemDef, tuned: Readonly<Record<string, Rarity>>): Rarity {
   return tuned[def.id] ?? def.rarity ?? "common";
-}
-
-export function nextRarity(r: Rarity): Rarity | null {
-  const order = RaritySchema.options;
-  return order[order.indexOf(r) + 1] ?? null;
-}
-
-/** 能拆的：武器、服装、改装件，不朽武器不拆 */
-export function canDismantle(def: ItemDef): boolean {
-  return !def.iconic && (def.kind === "weapon" || def.kind === "clothing" || def.kind === "mod");
 }
 
 export function applyParts(draft: Inventory, command: PartsCommand): ApplyOutcome {
@@ -597,51 +532,4 @@ export function applyParts(draft: Inventory, command: PartsCommand): ApplyOutcom
   return ok(
     `零件 ${command.delta > 0 ? "+" : "−"}${Math.abs(command.delta)}（${command.reason}），现有 ${draft.parts}`,
   );
-}
-
-export function dismantle(
-  draft: Inventory,
-  id: string,
-  catalog: ReadonlyMap<string, ItemDef>,
-): ApplyOutcome {
-  const def = catalog.get(id);
-  if (!def) return fail(`物品表里没有 ${id}`);
-  if (def.iconic) return fail(`${def.name}是不朽武器，不能拆`);
-  if (!canDismantle(def)) return fail(`${def.name}拆不出零件；能拆的是武器、服装和改装件`);
-  const have = draft.backpack[id] ?? 0;
-  if (have < 1) return fail(`背包里没有${def.name}；装备着的要先收起或脱下`);
-  const last = def.kind === "weapon" && !draft.weapons.includes(id) && have === 1;
-  if (last && draft.mods[id] !== undefined) return fail(`${def.name}上还装着改装件，先拆下来`);
-  const gain = DISMANTLE_PARTS[rarityOf(def, draft.tuned)];
-  take(draft, id);
-  draft.parts += gain;
-  if (last) Reflect.deleteProperty(draft.tuned, id);
-  return ok(`拆了${def.name}，得到 ${gain} 个零件，现有 ${draft.parts}`);
-}
-
-export function tune(
-  draft: Inventory,
-  id: string,
-  tech: number,
-  catalog: ReadonlyMap<string, ItemDef>,
-): ApplyOutcome {
-  const def = catalog.get(id);
-  if (!def) return fail(`物品表里没有 ${id}`);
-  if (def.kind !== "weapon") return fail("只有武器能升稀有度");
-  if (!draft.weapons.includes(id) && (draft.backpack[id] ?? 0) < 1) {
-    return fail(`身上没有${def.name}`);
-  }
-  const from = rarityOf(def, draft.tuned);
-  const to = nextRarity(from);
-  if (to === null) return fail(`${def.name}已经是${RARITY_LABELS[from]}，不能再升`);
-  if (tech < TUNE_TECH[to]) {
-    return fail(`升到${RARITY_LABELS[to]}要技术 ${TUNE_TECH[to]}，你的技术是 ${tech}`);
-  }
-  const cost = TUNE_PARTS[to];
-  if (draft.parts < cost) {
-    return fail(`零件不够：升到${RARITY_LABELS[to]}要 ${cost} 个，现有 ${draft.parts}`);
-  }
-  draft.parts -= cost;
-  draft.tuned[id] = to;
-  return ok(`${def.name}从${RARITY_LABELS[from]}升到${RARITY_LABELS[to]}，用掉 ${cost} 个零件`);
 }

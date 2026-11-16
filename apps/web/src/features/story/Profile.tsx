@@ -1,14 +1,16 @@
+import { worldRules } from "@cp/core";
 import { type CSSProperties, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
-import { Panel } from "../../ui/Panel";
 import { portraitOf } from "./art";
 import neural from "./neural.module.css";
 import styles from "./profile.module.css";
-import type { View } from "./view";
+import { npcWoundSummary, type View } from "./view";
 
 type Npc = View["npcs"][number];
 /** 中间人的派单信息（委托系统按好感、声望和势力算）；人物档案里同 id 的中间人才有 */
 type Fixer = View["jobs"]["fixers"][number];
+export type SquadMember = View["squad"]["members"][number];
+export type CombatFoe = NonNullable<View["combat"]["active"]>["foes"][number];
 
 /** 同四角在场的人用的 map.filterCell*、map.panel* 切法（计划第九节） */
 const CELL_SLICE = [20, 30, 30, 20] as const;
@@ -21,6 +23,102 @@ const HEAD_SLICE = [4, 20, 20, 4] as const;
 /** 好感的范围，同 core 的 AFFINITY_MAX */
 const AFFINITY_MAX = 100;
 
+/** 扫描出的人性阶段转威胁档位 */
+export function threatOfHumanity(stage: string): "high" | "even" | "low" {
+  if (stage === "边缘" || stage === "临界" || stage === "危机") return "high";
+  if (stage === "不稳定" || stage === "疏离") return "even";
+  return "low";
+}
+
+/** 好感度语气档位 */
+export function affinityTone(affinity: number): "pos" | "neg" | "neutral" {
+  if (affinity >= 20) return "pos";
+  if (affinity <= -10) return "neg";
+  return "neutral";
+}
+
+/** 带符号的好感度文本 */
+export function formatAffinity(affinity: number): string {
+  return affinity > 0 ? `+${affinity}` : `${affinity}`;
+}
+
+/** 人物关系/战斗态势的统一边框语气 */
+export function profileTone(
+  npc: Pick<Npc, "met" | "affinity" | "nemesis">,
+  squad?: SquadMember,
+  foe?: CombatFoe,
+): "hostile" | "nemesis" | "ally" | undefined {
+  if (foe) return "hostile";
+  if (npc.nemesis && !npc.nemesis.ended) return "nemesis";
+  if (squad || (npc.met && npc.affinity >= 50)) return "ally";
+  return undefined;
+}
+
+/** 共用双向好感刻度条（原作 cyber.gaugeBar，0 为中线，正黄负红） */
+export function AffinityMeter({
+  affinity,
+  className,
+}: {
+  readonly affinity: number;
+  readonly className?: string | undefined;
+}) {
+  const fill = Math.min(1, Math.abs(affinity) / AFFINITY_MAX);
+  return (
+    <span
+      className={className}
+      data-neg={affinity < 0 || undefined}
+      style={{ "--fill": fill } as CSSProperties}
+      aria-hidden
+    >
+      <NineSlice
+        id="cyber.gaugeBar"
+        tint={affinity < 0 ? "rgb(255 97 88 / 32%)" : "rgb(94 246 255 / 32%)"}
+        slice={0}
+      />
+      <span className={styles.affinityFill}>
+        <NineSlice
+          id="cyber.gaugeBar"
+          tint={affinity < 0 ? "var(--cp-red)" : "var(--cp-yellow)"}
+          slice={0}
+        />
+      </span>
+    </span>
+  );
+}
+
+/**
+ * 切角头像格：有原作头像用原作图，未照面且无原作头像时显示 portrait.unknown 全息轮廓，
+ * 认识但无原作头像的显示名字首字；框用原作 map.filterCell*
+ */
+export function NpcPortrait({
+  npc,
+  className,
+  artClassName,
+  line = "var(--cp-cyan)",
+  tint = "rgb(14 14 23 / 78%)",
+}: {
+  readonly npc: Pick<Npc, "id" | "name" | "met" | "alive">;
+  readonly className?: string | undefined;
+  readonly artClassName?: string | undefined;
+  readonly line?: string;
+  readonly tint?: string;
+}) {
+  const portrait = portraitOf(npc.id);
+  return (
+    <span className={className} data-dead={!npc.alive || undefined} aria-hidden>
+      <NineSlice id="map.filterCellBg" tint={tint} slice={CELL_SLICE} />
+      {portrait ? (
+        <Asset id={portrait} className={artClassName} />
+      ) : !npc.met ? (
+        <Asset id="portrait.unknown" className={artClassName} />
+      ) : (
+        <b className={artClassName}>{[...npc.name][0] ?? "?"}</b>
+      )}
+      <NineSlice id="map.filterCellFg" tint={line} slice={CELL_SLICE} />
+    </span>
+  );
+}
+
 /** 一句话写这个人现在在哪、死活 */
 function whereabouts(npc: Npc): string {
   if (!npc.alive) return "已故";
@@ -30,130 +128,385 @@ function whereabouts(npc: Npc): string {
 }
 
 /** 原作 cyber.gaugeLabel 小牌，颜色由 tint 给 */
-function Tag({ tint, children }: { readonly tint: string; readonly children: string }) {
+function Tag({
+  tint,
+  lightInk,
+  title,
+  children,
+}: {
+  readonly tint: string;
+  readonly lightInk?: boolean | undefined;
+  readonly title?: string | undefined;
+  readonly children: string;
+}) {
   return (
-    <li className={styles.tag}>
+    <li className={styles.tag} data-ink={lightInk ? "light" : undefined} title={title}>
       <NineSlice id="cyber.gaugeLabel" tint={tint} slice={4} />
       <b>{children}</b>
     </li>
   );
 }
 
-/** 头一块：左边原作头像格，右边名字、状态牌和信息栏；私信页头像浮层也只用这一块（用户定的，计划第十二节第 14 条） */
+/** 左栏身份卡：统一沿用 dialog.lineSelect 软底与点阵；独立悬停浮层额外保留柔光与侧边色条 */
 export function ProfileHead({
   npc,
   fixer,
+  squad,
+  foe,
+  embedded = false,
 }: {
   readonly npc: Npc;
   readonly fixer?: Fixer | undefined;
+  readonly squad?: SquadMember | undefined;
+  readonly foe?: CombatFoe | undefined;
+  readonly embedded?: boolean | undefined;
 }) {
-  const portrait = portraitOf(npc.id);
+  const tone = profileTone(npc, squad, foe);
+  const wound = npcWoundSummary(npc.body);
+  const hasFaction = Boolean(npc.faction && npc.faction !== "无");
+  const showLastPlace = !npc.here && Boolean(npc.lastPlace);
+  const showBlocked = Boolean(fixer?.blocked && fixer.blockReason);
+  const metaRows: readonly (readonly [string, string])[] = [
+    ...(hasFaction && npc.faction ? ([["势力", npc.faction]] as const) : []),
+    ...(showLastPlace && npc.lastPlace ? ([["最后出现", npc.lastPlace]] as const) : []),
+    ...(npc.homePlace ? ([["常在地点", npc.homePlace]] as const) : []),
+    ...(npc.doing ? ([["近期动向", npc.doing]] as const) : []),
+    ...(showBlocked && fixer?.blockReason ? ([["中间人渠道", fixer.blockReason]] as const) : []),
+  ];
+  const hasAppearance = npc.met && Boolean(npc.look || npc.outfit);
+
   return (
-    <header className={styles.head}>
-      {/* dialog.lineSelect 是一整块实心条、没有描边层，只铺一层深色底；青色线条留给头像格 */}
-      <NineSlice id="dialog.lineSelect" tint="rgb(14 14 23 / 78%)" slice={HEAD_SLICE} />
-      {/* 档案底纹（计划第十二节第 9 条、第 14 条）：原作点阵垫在头像和信息下面，不占布局、不接收点击 */}
+    <header
+      className={embedded ? styles.head : `${styles.head} ${styles.headStandalone}`}
+      data-tone={tone}
+      data-dead={!npc.alive || undefined}
+    >
+      <NineSlice
+        id="dialog.lineSelect"
+        tint="var(--head-bg, rgb(14 14 23 / 84%))"
+        slice={HEAD_SLICE}
+      />
+      {!embedded && (
+        <>
+          <NineSlice
+            id="panel.glowLeft"
+            tint="var(--head-glow, rgb(94 246 255 / 14%))"
+            slice={[16, 20, 16, 20]}
+            className={styles.headGlow}
+          />
+          <NineSlice
+            id="cyber.cellRarity"
+            tint="var(--portrait-line, var(--cp-cyan))"
+            slice={0}
+            className={styles.headRail}
+          />
+        </>
+      )}
+      {/* 档案点阵：原作 fx.grid 按约半尺寸平铺，静态低透明度，不影响阅读 */}
       <span
         className={styles.headGrid}
         style={{ backgroundImage: cssUrl("fx.grid") }}
         aria-hidden
       />
-      <span className={styles.portrait} data-dead={!npc.alive || undefined} aria-hidden>
-        <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 72%)" slice={CELL_SLICE} />
-        {portrait ? (
-          <Asset id={portrait} className={styles.portraitArt} />
-        ) : (
-          <b className={styles.portraitArt}>{[...npc.name][0] ?? "?"}</b>
-        )}
-        <NineSlice id="map.filterCellFg" tint="var(--cp-cyan)" slice={CELL_SLICE} />
-      </span>
-      <ProfileInfo npc={npc} fixer={fixer} />
-    </header>
-  );
-}
 
-/** 信息栏：名字和外号、状态牌，见过面的人再列身份、代词、地点和好感条；中间人再列派单上限 */
-function ProfileInfo({ npc, fixer }: { readonly npc: Npc; readonly fixer?: Fixer | undefined }) {
-  const fill = Math.min(1, Math.abs(npc.affinity) / AFFINITY_MAX);
-  return (
-    <div className={styles.info}>
-      <h3 className={styles.name}>
-        {npc.name}
-        {npc.alias && <small>外号 {npc.alias}</small>}
-      </h3>
-      <ul className={styles.tags}>
-        <Tag tint={npc.alive ? "var(--cp-cyan)" : "var(--cp-text-dim)"}>{whereabouts(npc)}</Tag>
-        {npc.nemesis && <Tag tint="var(--cp-red)">{npc.nemesis.ended ? "旧宿敌" : "宿敌"}</Tag>}
-      </ul>
+      <div className={styles.headTop}>
+        <NpcPortrait
+          npc={npc}
+          className={styles.portrait}
+          artClassName={styles.portraitArt}
+          line="var(--portrait-line, var(--cp-cyan))"
+        />
+        <div className={styles.identity}>
+          <h3 className={styles.name}>
+            {npc.name}
+            {npc.alias && <small>{`// ${npc.alias}`}</small>}
+            {npc.pronoun && <small className={styles.pronoun}>· {npc.pronoun}</small>}
+          </h3>
+          <ul className={styles.tags}>
+            <Tag tint={npc.alive ? "var(--cp-cyan)" : "var(--cp-text-dim)"}>{whereabouts(npc)}</Tag>
+            {foe && (
+              <Tag tint="var(--cp-danger)" lightInk>
+                {foe.stateLabel}
+              </Tag>
+            )}
+            {npc.nemesis && (
+              <Tag tint="var(--cp-red)" lightInk={!npc.nemesis.ended}>
+                {npc.nemesis.ended ? "旧宿敌" : "宿敌"}
+              </Tag>
+            )}
+            {squad && (
+              <Tag tint="var(--cp-yellow)">
+                {squad.specialty ? `小队 · ${squad.specialty}` : "小队"}
+              </Tag>
+            )}
+            {fixer && <Tag tint="var(--cp-yellow)">中间人</Tag>}
+            {wound.badge && (
+              <Tag
+                tint={wound.threat === "high" ? "var(--cp-danger)" : "var(--cp-yellow)"}
+                lightInk={wound.threat === "high"}
+                title={wound.detail ?? undefined}
+              >
+                {wound.badge}
+              </Tag>
+            )}
+          </ul>
+        </div>
+      </div>
+
       {npc.met ? (
-        /* 信息压成一行小字（计划第十二节第 14 条）：身份、代词、地点、好感按顺序排，没有的就不写，好感条缩成一小截 */
         <div className={styles.brief}>
-          <span>{npc.role}</span>
-          {/* 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：不属于任何势力显示「无」 */}
-          {npc.faction && <span>势力 {npc.faction}</span>}
-          <span>{npc.pronoun}</span>
-          {npc.lastPlace && <span>最后出现 {npc.lastPlace}</span>}
-          {npc.homePlace && <span>常在 {npc.homePlace}</span>}
-          <span className={styles.briefAffinity}>
-            好感 {npc.affinity > 0 ? "+" : ""}
-            {npc.affinity}
-            <span
-              className={styles.affinity}
-              data-neg={npc.affinity < 0 || undefined}
-              style={{ "--fill": fill } as CSSProperties}
-              aria-hidden
-            >
-              <NineSlice id="cyber.gaugeBar" tint="rgb(255 190 40 / 18%)" slice={0} />
-              <span className={styles.affinityFill}>
-                <NineSlice
-                  id="cyber.gaugeBar"
-                  tint={npc.affinity < 0 ? "var(--cp-red)" : "var(--cp-yellow)"}
-                  slice={0}
-                />
-              </span>
-            </span>
-          </span>
-          {/* 中间人并进人物档案（用户定的，2026-11-02）：派单上限和卡在哪，原先在日志页单独一个中间人面板 */}
-          {fixer && (
-            <span>
-              派单 {fixer.maxRisk > 0 ? `最多 ${fixer.maxRisk} 星` : "暂停"}
-              {fixer.capHint && ` · ${fixer.capHint}`}
-            </span>
+          <p className={styles.briefRole}>{npc.role}</p>
+          {metaRows.length > 0 && (
+            <dl className={styles.briefFacts}>
+              {metaRows.map(([label, value]) => (
+                <div key={label} className={styles.briefRow}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
           )}
+          <div className={styles.affinityBlock} data-tone={affinityTone(npc.affinity)}>
+            <div className={styles.affinityTop}>
+              <span>关系好感</span>
+              <b className={styles.affinityVal} data-tone={affinityTone(npc.affinity)}>
+                {formatAffinity(npc.affinity)}
+              </b>
+            </div>
+            <AffinityMeter affinity={npc.affinity} className={styles.affinity} />
+          </div>
         </div>
       ) : (
         <p className={styles.note}>
           {npc.nemesis ? "只在交手时照过面，底细还不清楚。" : "还没见过面，下面是听来的。"}
         </p>
       )}
-      {/* 外貌：见过面的人才有，一整句放在信息栏最底下 */}
-      {npc.met && <p className={styles.look}>{npc.look}</p>}
-      {/* 现在穿（用户定的，2026-11-02："长相 + 当前穿着"）：换装后跟着变；旧卡衣着还在外貌里时不显示 */}
-      {npc.met && npc.outfit && <p className={styles.look}>现在穿：{npc.outfit}</p>}
+
+      {hasAppearance && (
+        <>
+          <span
+            className={styles.headRule}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
+          />
+          <div className={styles.lookStrip}>
+            {/* 外貌：见过面的人才有 */}
+            {npc.look && (
+              <p className={styles.look}>
+                <em className={styles.lookKey}>外貌</em>
+                <span>{npc.look}</span>
+              </p>
+            )}
+            {/* 现在穿（用户定的，2026-11-02："长相 + 当前穿着"）：换装后跟着变；旧卡衣着还在外貌里时不显示 */}
+            {npc.outfit && (
+              <p className={styles.look}>
+                <em className={styles.lookKey}>衣着</em>
+                <span>{npc.outfit}</span>
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </header>
+  );
+}
+
+/** 关系与情报分栏：细左竖线与轻衬底平铺关系态势、共同记忆（含人情和仇）、已知情报与认识的人 */
+function OverviewSection({
+  npc,
+  squad,
+  foe,
+}: {
+  readonly npc: Npc;
+  readonly squad?: SquadMember | undefined;
+  readonly foe?: CombatFoe | undefined;
+}) {
+  const unsettledLedger = npc.ledger.filter((e) => e.settled === null);
+  const settledLedger = npc.ledger.filter((e) => e.settled !== null);
+  const concerns = npc.arc?.concerns ?? [];
+  const hasMemories = npc.ledger.length > 0 || npc.memories.length > 0;
+  const hasKnownInfo = npc.known.length > 0 || concerns.length > 0;
+  const hasTies = npc.ties.length > 0;
+  const hasOther = hasKnownInfo || hasTies;
+  const showSquadDoing = Boolean(squad?.doing && squad.doing !== npc.doing);
+  const tone = profileTone(npc, squad, foe);
+  const relationTone =
+    tone === "hostile" || tone === "nemesis"
+      ? "danger"
+      : tone === "ally" || npc.affinity >= 20
+        ? "ally"
+        : "neutral";
+  const memoryCount = npc.ledger.length + npc.memories.length;
+  const knownCount = npc.known.length + concerns.length;
+
+  const memoryBlock = hasMemories && (
+    <div className={styles.subSection}>
+      <header className={styles.subHead}>
+        <h3 className={styles.subTitle}>共同记忆</h3>
+        <span className={styles.subCount}>{memoryCount}</span>
+      </header>
+      <ul className={styles.list}>
+        {unsettledLedger.map((e) => (
+          <li key={`${e.at}|${e.kind}|${e.text}`}>
+            <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
+              {e.label}
+            </span>
+            {e.text}
+            <small>{e.at} · 未了结</small>
+          </li>
+        ))}
+        {npc.memories.map((m) => (
+          <li key={m}>
+            <span className={styles.kind} data-tone="memory">
+              记忆
+            </span>
+            {m}
+          </li>
+        ))}
+        {settledLedger.map((e) => (
+          <li key={`${e.at}|${e.kind}|${e.text}`} data-settled>
+            <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
+              {e.label}
+            </span>
+            {e.text}
+            <small>
+              {e.at}，{e.settled} 了结{e.how ? `：${e.how}` : ""}
+            </small>
+          </li>
+        ))}
+      </ul>
     </div>
   );
-}
 
-/** 宿敌：怎么输给你的、在准备什么，了结了写怎么了结的 */
-function NemesisSection({ nemesis }: { readonly nemesis: NonNullable<Npc["nemesis"]> }) {
-  return (
-    <Panel as="section" title={nemesis.ended ? "旧宿敌" : "宿敌"} line="var(--cp-red)">
+  const knownBlock = hasKnownInfo && (
+    <div className={styles.subSection}>
+      <header className={styles.subHead}>
+        <h3 className={styles.subTitle}>已知情报</h3>
+        <span className={styles.subCount}>{knownCount}</span>
+      </header>
       <ul className={styles.list}>
-        <li>
-          怎么输给你的：{nemesis.how}
-          <small>{nemesis.since} 结下梁子</small>
-        </li>
-        {nemesis.ended ? (
-          <li className={styles.relation}>{nemesis.ended}</li>
-        ) : (
-          nemesis.prep && <li>在准备：{nemesis.prep}</li>
-        )}
+        {npc.known.map((k) => (
+          <li key={k.text}>
+            <span className={styles.kind}>{k.sourceLabel}</span>
+            {k.text}
+            <small>{k.at}</small>
+          </li>
+        ))}
+        {concerns.map((c) => (
+          <li key={c.id}>
+            <span className={styles.kind} data-tone="warn">
+              心事 · {c.statusLabel}
+            </span>
+            {c.title}
+            {c.outcome && <small>{c.outcome}</small>}
+          </li>
+        ))}
       </ul>
-    </Panel>
+    </div>
+  );
+
+  const tiesBlock = hasTies && (
+    <div className={styles.subSection}>
+      <header className={styles.subHead}>
+        <h3 className={styles.subTitle}>认识的人</h3>
+        <span className={styles.subCount}>{npc.ties.length}</span>
+      </header>
+      <ul className={styles.list}>
+        {npc.ties.map((t) => (
+          <li key={t.id} data-settled={!t.alive || undefined}>
+            <span className={styles.kind} data-tone="tie">
+              {t.name}
+            </span>
+            {t.text}
+            {!t.alive && <small>已故</small>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <section className={styles.sectionBody} aria-label="关系与情报">
+      <div className={styles.overviewStack}>
+        <div
+          className={styles.relationCallout}
+          data-tone={relationTone}
+          data-empty={!npc.relation || undefined}
+        >
+          <p className={styles.relationText}>{npc.relation ?? "还说不上什么关系。"}</p>
+        </div>
+
+        {foe && (
+          <div className={styles.contextCallout} data-tone="danger">
+            <p className={styles.contextMeta}>
+              <strong>交战状态：{foe.stateLabel}</strong>
+              {foe.gang && ` · ${foe.gang}`}
+            </p>
+            {foe.carry.length > 0 && (
+              <p className={styles.contextMeta}>
+                随身可拾取：{foe.carry.map((i) => i.name).join("、")}
+              </p>
+            )}
+          </div>
+        )}
+
+        {squad && (
+          <div className={styles.contextCallout} data-tone="ally">
+            <p className={styles.contextMeta}>
+              <strong>
+                小队 · {squad.statusLabel}（{squad.kindLabel}）
+              </strong>{" "}
+              · {squad.terms}
+            </p>
+            {showSquadDoing && <p className={styles.contextMeta}>在忙：{squad.doing}</p>}
+            <p className={styles.contextMeta}>个人麻烦：{squad.trouble}</p>
+            {squad.owed > 0 && (
+              <p className={styles.contextWarn}>
+                欠薪 {squad.owed} 周{squad.leavesAt ? `（${squad.leavesAt} 前不发就走）` : ""}
+              </p>
+            )}
+          </div>
+        )}
+
+        {npc.nemesis && (
+          <div className={styles.contextCallout} data-tone="danger">
+            <p className={styles.contextMeta}>
+              <strong>{npc.nemesis.ended ? "旧宿敌恩怨" : "宿敌恩怨"}</strong> · {npc.nemesis.since}
+              ：{npc.nemesis.how}
+            </p>
+            {npc.nemesis.ended ? (
+              <p className={styles.contextMeta}>结局：{npc.nemesis.ended}</p>
+            ) : (
+              npc.nemesis.prep && <p className={styles.contextWarn}>动向：{npc.nemesis.prep}</p>
+            )}
+          </div>
+        )}
+
+        {hasMemories && hasOther ? (
+          <div className={styles.duoGrid}>
+            {memoryBlock}
+            <div className={styles.subStack}>
+              {knownBlock}
+              {tiesBlock}
+            </div>
+          </div>
+        ) : (
+          <>
+            {memoryBlock}
+            {knownBlock}
+            {tiesBlock}
+          </>
+        )}
+
+        {!hasMemories && !hasOther && (
+          <p className={styles.emptyNote}>还没攒下共同记忆，也还没打听到更多消息。</p>
+        )}
+      </div>
+    </section>
   );
 }
 
-/** 身体：伤势和装备；扫描过的列出精神稳定性与义体 */
+/** 身体与扫描：生物监测风格细线指标条 + 具体创伤明细 + 植入体行 + 底栏扫描动作 */
 function BodySection({
   body,
   onScan,
@@ -162,205 +515,188 @@ function BodySection({
   readonly onScan?: (() => void) | undefined;
 }) {
   const { scan } = body;
+  const wound = npcWoundSummary(body);
+  const injuries = body.injuries ?? [];
+  const scanTimeText = scan
+    ? scan.at > 0
+      ? `扫于 ${worldRules.formatGameTime(scan.at)}`
+      : "已建档"
+    : null;
+  const scanFootText = scan
+    ? scan.chrome.length === 0
+      ? `${scanTimeText} · 未检出植入体`
+      : `${scanTimeText} · 检出 ${scan.chrome.length} 件植入体`
+    : "尚未扫描；用义眼扫描可识别神经稳态与植入体。";
+
   return (
-    <Panel as="section" title="身体" line="var(--cp-cyan)">
-      <dl className={styles.facts}>
-        <dt>伤势</dt>
-        <dd>{body.wound}</dd>
-        <dt>装备</dt>
-        <dd>{body.gear.join("、") || "—"}</dd>
+    <section className={styles.sectionBody} aria-label="身体与扫描">
+      <dl className={styles.telemetry}>
+        <div className={styles.telemetryRow}>
+          <dt>伤势状态</dt>
+          <dd className={styles.telemetryVal} data-threat={wound.threat}>
+            {wound.headline}
+          </dd>
+        </div>
+        <div className={styles.telemetryRow}>
+          <dt>随身装备</dt>
+          <dd className={styles.telemetryVal}>{body.gear.join("、") || "—"}</dd>
+        </div>
         {scan && (
-          <>
-            <dt>精神稳定性</dt>
-            <dd>{scan.humanityStage}</dd>
-          </>
+          <div className={styles.telemetryRow}>
+            <dt>神经稳态</dt>
+            <dd className={styles.telemetryVal} data-threat={threatOfHumanity(scan.humanityStage)}>
+              {scan.humanityStage}
+            </dd>
+          </div>
         )}
       </dl>
-      {scan ? (
-        <ul className={styles.list}>
-          {/* 义体带部位和效果（用户 2026-11-02："npc的义体是不是太简单了，只有一个文字描述"）：沿用列表样式，部位放小牌 */}
-          {scan.chrome.length === 0 ? (
-            <li>义体：没扫出义体</li>
-          ) : (
-            scan.chrome.map((c) => (
-              <li key={c.name}>
-                {c.slot && <span className={styles.kind}>{c.slot}</span>}
-                {c.name}
-                {c.ability && <small>{c.ability}</small>}
+
+      {injuries.length > 0 ? (
+        <div className={styles.subSection}>
+          <header className={styles.subHead}>
+            <h3 className={styles.subTitle}>创伤明细</h3>
+            <span className={styles.subCount}>{injuries.length}</span>
+          </header>
+          <ul className={styles.woundList} aria-label="具体伤势">
+            {injuries.map((inj) => (
+              <li key={inj.id} className={styles.woundItem} data-tier={inj.tier}>
+                <span className={styles.woundPart}>{inj.partLabel}</span>
+                <span className={styles.woundInfo}>
+                  <b>
+                    {inj.tierLabel} · {inj.cause}
+                  </b>
+                  <small>{worldRules.formatGameTime(inj.at)}</small>
+                </span>
+                <span className={styles.woundTag} data-treated={inj.treated || undefined}>
+                  {inj.treated ? "已处理" : "未处理"}
+                </span>
               </li>
-            ))
-          )}
-        </ul>
+            ))}
+          </ul>
+        </div>
       ) : (
-        <p className={styles.note}>没扫描过；用义眼扫一下能看出对方装了什么义体和精神状态。</p>
+        body.wound !== "没受伤" && (
+          <p className={styles.emptyNote}>当前呈{body.wound}状态，暂无具体部位创口记录。</p>
+        )
       )}
-      {/* 点一下立刻扫（用户定的，计划第十二节第 14 条）：按钮用原作 tab.bg，同上面的页签；没装义眼由后端拒绝、提示条说明 */}
-      {onScan && (
-        <button type="button" className={`${neural.tab} ${styles.scanButton}`} onClick={onScan}>
-          <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-          <span className={neural.inner}>
-            <Asset id="interaction.scan" tint="currentColor" height={14} />
-            {scan ? "再扫一次" : "扫描"}
-          </span>
-        </button>
+
+      {scan && scan.chrome.length > 0 && (
+        <div className={styles.subSection}>
+          <header className={styles.subHead}>
+            <h3 className={styles.subTitle}>已检出植入体</h3>
+            <span className={styles.subCount}>{scan.chrome.length}</span>
+          </header>
+          <ul className={styles.chromeList}>
+            {scan.chrome.map((c) => (
+              <li key={c.name} className={styles.chromeItem}>
+                <div className={styles.chromeHead}>
+                  <b>{c.name}</b>
+                  {c.slot && <span className={styles.chromeSlot}>{c.slot}</span>}
+                </div>
+                {c.ability && <p className={styles.chromeDesc}>{c.ability}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
-    </Panel>
+
+      <div className={styles.bodyFoot}>
+        <span className={styles.scanFootNote}>{scanFootText}</span>
+        {/* 点一下立刻扫（用户定的，计划第十二节第 14 条）：沿用 tab.bg 与义眼青色体系 */}
+        {onScan && (
+          <button type="button" className={`${neural.tab} ${styles.scanButton}`} onClick={onScan}>
+            <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
+            <span className={neural.inner}>
+              <Asset id="interaction.scan" tint="currentColor" height={14} />
+              {scan ? "再扫一次" : "义眼扫描"}
+            </span>
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
-type TabId = "relation" | "ties" | "nemesis" | "body" | "known" | "arc" | "ledger" | "memories";
+type TabId = "relation" | "body";
 type Tab = readonly [TabId, string, number];
 
-/** 下面各栏的页签（计划第十二节第 14 条）：只列这个人有的栏，角标是条数 */
+/** 下面各栏的页签：整合为「关系与情报」「身体与扫描」两栏，避免碎片化 */
 function profileTabs(npc: Npc): Tab[] {
-  const tabs: Tab[] = [["relation", "关系", 0]];
-  // 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：有才列
-  if (npc.ties.length > 0) tabs.push(["ties", "认识的人", npc.ties.length]);
-  if (npc.nemesis) tabs.push(["nemesis", npc.nemesis.ended ? "旧宿敌" : "宿敌", 0]);
-  if (npc.body) tabs.push(["body", "身体", 0]);
-  tabs.push(["known", "你知道的", npc.known.length]);
-  if (npc.arc) tabs.push(["arc", "心事", npc.arc.concerns.length]);
-  if (npc.ledger.length > 0) tabs.push(["ledger", "人情和仇", npc.ledger.length]);
-  tabs.push(["memories", "共同记忆", npc.memories.length]);
+  const relationAlerts =
+    npc.ledger.filter((e) => e.settled === null).length +
+    (npc.nemesis && !npc.nemesis.ended ? 1 : 0);
+  const tabs: Tab[] = [["relation", "关系与情报", relationAlerts]];
+  if (npc.body) tabs.push(["body", "身体与扫描", npc.body.injuries.length]);
   return tabs;
 }
 
 /**
- * 人物档案（计划第十二节第 14 条）：照原作资料卡排，头一块小头像、名字和一行信息；
- * 下面各栏改成原作 tab.bg 页签切换、一次只显示一栏，不再整页往下滚。
- * 你知道的信息、关系、心事、人情和仇、共同记忆；诉求、底线和秘密不在这里
+ * 人物档案：左栏 Kiroshi 身份卡 + 右栏双页签（关系与情报、身体与扫描）；
+ * 去掉多层套框与空心方块格，宽容器左右并排、窄容器自然叠排。
  */
 export function Profile({
   npc,
   fixer,
+  squad,
+  foe,
   onScan,
 }: {
   readonly npc: Npc;
   /** 这个人是中间人时传委托系统算的派单信息（用户定的，2026-11-02：中间人并进人物档案） */
   readonly fixer?: Fixer | undefined;
+  readonly squad?: SquadMember | undefined;
+  readonly foe?: CombatFoe | undefined;
   /** 有就在身体栏里出「扫描」按钮：点一下立刻用义眼扫，不调模型（用户定的，计划第十二节第 14 条） */
   readonly onScan?: ((id: string) => void) | undefined;
 }) {
   const tabs = profileTabs(npc);
-  const [picked, setPicked] = useState<TabId>("relation");
-  // 换了人、这一栏没有时退回关系
-  const tab = tabs.some(([id]) => id === picked) ? picked : "relation";
+  const [picked, setPicked] = useState<TabId | null>(null);
+  // 未照面且有身体情报时默认切到「身体与扫描」（如战场上扫描陌生敌人），否则留在「关系与情报」
+  const fallback: TabId = !npc.met && npc.body ? "body" : "relation";
+  const wanted = picked ?? fallback;
+  // 换了人、这一栏没有时退回关系与情报
+  const tab = tabs.some(([id]) => id === wanted) ? wanted : "relation";
   return (
     <article className={styles.profile} aria-label={`${npc.name}的档案`}>
-      <ProfileHead npc={npc} fixer={fixer} />
-      {/* 左右排：左边头像和信息，右边页签和当前一栏；窄的时候自动折成上下（计划第十二节第 14 条） */}
-      <div className={styles.side}>
-        <nav className={styles.tabs} aria-label="档案分栏">
-          {tabs.map(([id, name, count]) => (
-            <button
-              key={id}
-              type="button"
-              className={neural.tab}
-              aria-pressed={id === tab}
-              onClick={() => setPicked(id)}
-            >
-              <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-              <span className={neural.inner}>
-                {name}
-                {count > 0 && <b className={neural.badge}>{count}</b>}
-              </span>
-            </button>
-          ))}
-        </nav>
-        <div className={styles.pane} key={tab}>
-          {tab === "relation" && (
-            <Panel as="section" title="关系" line="var(--cp-yellow)">
-              <p className={styles.relation}>{npc.relation ?? "还说不上什么关系。"}</p>
-            </Panel>
-          )}
-          {/* 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：沿用列表样式，不加新框 */}
-          {tab === "ties" && npc.ties.length > 0 && (
-            <Panel as="section" title="认识的人" line="var(--cp-cyan)">
-              <ul className={styles.list}>
-                {npc.ties.map((t) => (
-                  <li key={t.id} data-settled={!t.alive || undefined}>
-                    <span className={styles.kind}>{t.name}</span>
-                    {t.text}
-                    {!t.alive && <small>已故</small>}
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-          {tab === "nemesis" && npc.nemesis && <NemesisSection nemesis={npc.nemesis} />}
-          {tab === "body" && npc.body && (
-            <BodySection body={npc.body} onScan={onScan && (() => onScan(npc.id))} />
-          )}
-          {tab === "known" && (
-            <Panel as="section" title="你知道的" line="var(--cp-cyan)">
-              {npc.known.length === 0 ? (
-                <p className={styles.note}>还没打听到什么。</p>
-              ) : (
-                <ul className={styles.list}>
-                  {npc.known.map((k) => (
-                    <li key={k.text}>
-                      <span className={styles.kind}>{k.sourceLabel}</span>
-                      {k.text}
-                      <small>{k.at}</small>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
-          {tab === "arc" && npc.arc && (
-            <Panel
-              as="section"
-              title={`心事${npc.arc.done ? "（都有了结果）" : ""}`}
-              line="var(--cp-yellow)"
-            >
-              {npc.arc.concerns.length === 0 ? (
-                <p className={styles.note}>还没提过什么心事。</p>
-              ) : (
-                <ul className={styles.list}>
-                  {npc.arc.concerns.map((c) => (
-                    <li key={c.id}>
-                      <span className={styles.kind}>{c.statusLabel}</span>
-                      {c.title}
-                      {c.outcome && <small>{c.outcome}</small>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
-          {tab === "ledger" && npc.ledger.length > 0 && (
-            <Panel as="section" title="人情和仇" line="var(--cp-red)">
-              <ul className={styles.list}>
-                {npc.ledger.map((e) => (
-                  <li
-                    key={`${e.at}|${e.kind}|${e.text}`}
-                    data-settled={e.settled !== null || undefined}
-                  >
-                    <span className={styles.kind}>{e.label}</span>
-                    {e.text}
-                    <small>
-                      {e.at}
-                      {e.settled !== null && `，${e.settled} 了结${e.how ? `：${e.how}` : ""}`}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-          {tab === "memories" && (
-            <Panel as="section" title="共同记忆" line="var(--cp-yellow)">
-              {npc.memories.length === 0 ? (
-                <p className={styles.note}>还没有记录。</p>
-              ) : (
-                <ul className={styles.list}>
-                  {npc.memories.map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
+      <div className={styles.profileGrid}>
+        <ProfileHead npc={npc} fixer={fixer} squad={squad} foe={foe} embedded />
+        <div className={styles.workspace}>
+          <nav className={styles.tabs} aria-label="档案分栏">
+            {tabs.map(([id, name, count]) => (
+              <button
+                key={id}
+                type="button"
+                className={neural.tab}
+                aria-pressed={id === tab}
+                data-danger={
+                  (id === "relation" &&
+                    (Boolean(foe) || Boolean(npc.nemesis && !npc.nemesis.ended))) ||
+                  (id === "body" && npcWoundSummary(npc.body).threat === "high") ||
+                  undefined
+                }
+                onClick={() => setPicked(id)}
+              >
+                <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
+                <span className={neural.inner}>
+                  {name}
+                  {count > 0 && <b className={neural.badge}>{count}</b>}
+                </span>
+                {id === tab && (
+                  <span
+                    className={styles.tabActiveLine}
+                    style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                    aria-hidden
+                  />
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className={styles.pane} key={tab}>
+            {tab === "relation" && <OverviewSection npc={npc} squad={squad} foe={foe} />}
+            {tab === "body" && npc.body && (
+              <BodySection body={npc.body} onScan={onScan && (() => onScan(npc.id))} />
+            )}
+          </div>
         </div>
       </div>
     </article>

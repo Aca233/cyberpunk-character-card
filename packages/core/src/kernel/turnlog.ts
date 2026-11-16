@@ -47,7 +47,7 @@ const TurnRecordSchema = z.object({
   read: z.string().optional(),
   /** 建议选项，原样存下，展示时再按 schema 读 */
   choices: z.array(z.unknown()).optional(),
-  /** 内心声音，原样存下，展示时再按 schema 读 */
+  /** @deprecated 兼容旧回合日志；运行期已移除内心声音 */
   voices: z.array(z.unknown()).optional(),
   /** 叙事模型标记的生死瞬间：下一轮可以开斯安威斯坦 */
   clutch: z.boolean().optional(),
@@ -315,6 +315,9 @@ const RETIRED_PATHS: readonly (readonly string[])[] = [
   ["slices", "psychosis", "anchors"],
   ["slices", "psychosis", "lost"],
   ["slices", "humanity", "anchored"],
+  // 危机章节已删除
+  ["slices", "psychosis", "crisis"],
+  ["slices", "psychosis", "crises"],
 ];
 
 function retired(path: readonly (string | number)[]): boolean {

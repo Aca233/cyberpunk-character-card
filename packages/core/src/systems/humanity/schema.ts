@@ -123,10 +123,10 @@ export function legacyHumanity(
   };
 }
 
-/** 只能由代码发出：义体装卸后更新消耗合计 */
+/** 只能由代码发出：义体装卸后更新原始消耗合计，耐受折算后才限制到人性上限。 */
 export const SetCyberwareCostSchema = z.object({
   type: z.literal("humanity.setCyberwareCost"),
-  total: z.number().int().min(0).max(HUMANITY_MAX),
+  total: z.number().int().min(0),
 });
 export type SetCyberwareCost = z.infer<typeof SetCyberwareCostSchema>;
 
@@ -136,13 +136,6 @@ export const SetToleranceSchema = z.object({
   tolerance: ToleranceSchema,
 });
 export type SetTolerance = z.infer<typeof SetToleranceSchema>;
-
-/** 只能由代码发出：危机章节里被拉回来，人性直接回到某个值（不受每天恢复上限限制，仍不超过上限） */
-export const RestoreHumanitySchema = z.object({
-  type: z.literal("humanity.restore"),
-  value: z.number().int().min(0).max(HUMANITY_MAX),
-});
-export type RestoreHumanity = z.infer<typeof RestoreHumanitySchema>;
 
 /** 只能由代码发出：注射免疫抑制剂/神经阻断剂，在指定时长内压制低人性神经排异与感知失真 */
 export const SuppressHumanitySchema = z.object({

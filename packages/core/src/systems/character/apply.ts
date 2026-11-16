@@ -33,12 +33,21 @@ export function credTier(level: number): CredTier {
   return CRED_TIERS.findLast((t) => level >= t.from) ?? CRED_TIERS[0];
 }
 
+/** 把声望门槛换算成不带数字和「级」字的定性条件 */
+export function credGateLabel(threshold: number): string {
+  if (threshold >= 50) return "在夜之城成为「传奇」";
+  if (threshold >= 35) return "街头名声达到「响当当」";
+  if (threshold >= 20) return "街头名声达到「道上有名」";
+  if (threshold >= 10) return "街头名声达到「小有名气」";
+  return "在街上先混出点风声";
+}
+
 function setMax(
-  state: Pick<CharacterState, "attributes" | "streetCred"> & {
+  state: Pick<CharacterState, "attributes"> & {
     readonly bonuses?: CharacterState["bonuses"];
   },
 ): Command {
-  return { type: "health.setMax", max: maxHp(effectiveAttribute(state, "body"), state.streetCred) };
+  return { type: "health.setMax", max: maxHp(effectiveAttribute(state, "body"), 0) };
 }
 
 /** 建档：写入角色，声望进度和属性点从零开始 */
@@ -91,7 +100,7 @@ export function gainCred(
   const tier = credTier(draft.streetCred);
   if (tier !== credTier(before)) notes.push(`名声变化「${tier.label}」：${tier.world}`);
   else notes.push(`${reason}：名声又传开了一些`);
-  return { ok: true, notes, emit: [setMax(draft)] };
+  return { ok: true, notes };
 }
 
 /** 分配一个属性点；单项属性最高 10，加肉体时生命上限跟着涨 */

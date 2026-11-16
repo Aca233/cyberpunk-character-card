@@ -10,7 +10,6 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
-import { readVoices } from "./narrator/block";
 import { currentOffers, prepareFor } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
@@ -23,33 +22,41 @@ import type { bulletinsView } from "./systems/city";
 import type { combatView } from "./systems/combat";
 import {
   type CyberwareDef,
+  CyberwareStateSchema,
   type cyberwareView,
   type ripperdocDebtsView,
+  ripperdocList,
   type ripperdocView,
   SLOT_CAPACITY,
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
-import {
-  ATTRIBUTE_LABELS,
-  DiceStateSchema,
-  type Difficulty,
-  OPPONENT_TIERS,
-} from "./systems/dice/schema";
+import { ATTRIBUTE_LABELS, DiceStateSchema, OPPONENT_TIERS } from "./systems/dice/schema";
 import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
 import { HealthStateSchema, type healthView } from "./systems/health";
 import type { heatView } from "./systems/heat";
 import type { humanityView } from "./systems/humanity";
-import type { ItemDef, inventoryView, namesView, shopsView } from "./systems/inventory";
+import {
+  type ItemDef,
+  type inventoryView,
+  type namesView,
+  shopList,
+  type shopsView,
+} from "./systems/inventory";
 import type { jobsView } from "./systems/jobs";
 import type { memoryView } from "./systems/memory";
 import type { ncpdView } from "./systems/ncpd";
 import type { nemesesEndedView, nemesisCardsView } from "./systems/nemesis";
 import type { NpcCard, npcsView, perceivedView } from "./systems/npc";
 import { type phoneCallsView, phoneFeedUnread, type phoneMessagesView } from "./systems/phone";
-import { blackoutTurns, lostControlOf, type psychosisView } from "./systems/psychosis/apply";
+import {
+  blackoutTurns,
+  episodeOf,
+  lostControlOf,
+  type psychosisView,
+} from "./systems/psychosis/apply";
 import { registry } from "./systems/registry";
 import type { HomeDef, safehouseView } from "./systems/safehouse";
 import type { shardsView } from "./systems/shards";
@@ -67,7 +74,7 @@ import {
 import type { worldView } from "./systems/world";
 import { formatGameTime } from "./systems/world/apply";
 import { withSavedPlaces } from "./systems/world/places";
-import { type LocationDef, WorldClockStateSchema } from "./systems/world/schema";
+import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -380,9 +387,9 @@ function openingCommands(opening: GameOpening, start: number, kit: Kit = opening
 
 const setupRng = { roll: () => 1 };
 
-/** 新存档的世界：按存档的开场时间和难度模式初始化，写入玩家角色和原作人物卡 */
+/** 新存档的世界：按存档的开场时间与标准夜之城规则初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
-  meta: Pick<SaveMeta, "startTime" | "difficulty"> &
+  meta: Pick<SaveMeta, "startTime"> &
     Partial<
       Pick<SaveMeta, "character" | "opening" | "startLocation" | "loadouts" | "board" | "legends">
     >,
@@ -423,7 +430,7 @@ export function newGameWorld(
     ...base,
     slices: {
       ...base.slices,
-      dice: DiceStateSchema.parse({ mode: meta.difficulty }),
+      dice: DiceStateSchema.parse({ mode: "nightCity" }),
       world: {
         ...clock,
         // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进存档（见 commands 末尾）
@@ -505,12 +512,9 @@ export { sandevistanOf } from "./systems/cyberware";
 /** 这一轮能不能开斯安威斯坦；能开时返回 null，否则返回原因 */
 export function sandevistanBlock(
   world: WorldState,
-  records: readonly LogRecord[],
+  _records: readonly LogRecord[],
   data: Readonly<Record<string, unknown>>,
 ): string | null {
-  if (currentOffers(records).turn?.clutch !== true) {
-    return "现在不是生死瞬间：叙事模型标记了 clutch 才能开斯安威斯坦";
-  }
   return sandevistanOf(world, data) ? null : "没装能用的加速义体";
 }
 
@@ -643,7 +647,6 @@ export function projectState(
 ) {
   const views = registry.project({ world, records, data });
   const clockView = views.clock as ReturnType<typeof worldView>;
-  const dice = DiceStateSchema.parse(world.slices.dice);
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
   const turns = effectiveTurns(records);
@@ -651,11 +654,10 @@ export function projectState(
 
   return {
     version: logVersion(records),
-    difficulty: views.difficulty as Difficulty,
-    /** 角色死了时不为 null：夜之城每个场景能从开头重来一次，其他难度死了就结束 */
+    /** 角色死了时不为 null：每个场景能从开头重来一次，重来过后再死则落幕 */
     death:
       health.condition === "dead"
-        ? { canRestart: dice.mode === "nightCity" && !restartedScenes(records).has(clock.scene) }
+        ? { canRestart: !restartedScenes(records).has(clock.scene) }
         : null,
     /** 整局重来过几个场景，履历里记着 */
     restarts: restartedScenes(records).size,
@@ -690,7 +692,7 @@ export function projectState(
     ncpd: views.ncpd as ReturnType<typeof ncpdView>,
     /** 创伤小组会籍，和现在叫不叫得来 */
     trauma: views.trauma as ReturnType<typeof traumaView>,
-    /** 安全屋、存放箱、后备箱和战利品墙 */
+    /** 安全屋、存放箱与后备箱 */
     safehouse: views.safehouse as ReturnType<typeof safehouseView>,
     psychosis: views.psychosis as ReturnType<typeof psychosisView>,
     squad: views.squad as ReturnType<typeof squadView>,
@@ -708,13 +710,49 @@ export function projectState(
     npcs: (() => {
       const rivals = views.nemesisCards as ReturnType<typeof nemesisCardsView>;
       const arcCards = views.arcCards as ReturnType<typeof arcCardsView>;
-      return (views.npcs as ReturnType<typeof npcsView>).map((n) => ({
-        ...n,
-        /** 宿敌一栏，由宿敌系统给；不是宿敌是 null */
-        nemesis: Object.hasOwn(rivals, n.id) ? (rivals[n.id] ?? null) : null,
-        /** 心事一栏，由心事系统给；还没熟到能说、也没说过任何一件的是 null */
-        arc: Object.hasOwn(arcCards, n.id) ? (arcCards[n.id] ?? null) : null,
-      }));
+      const docs = ripperdocList(data);
+      const stores = shopList(data);
+      const places = locationCatalog(withSavedPlaces(data, world));
+      const debts = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).debts;
+      const placeLabel = (loc: string) => places.get(loc)?.name ?? loc;
+      return (views.npcs as ReturnType<typeof npcsView>).map((n) => {
+        const doc = n.met ? docs.find((d) => d.keeperNpc === n.id) : undefined;
+        const ownedShops = n.met ? stores.filter((s) => s.keeperNpc === n.id) : [];
+        const debt = doc ? debts.find((d) => d.doc === doc.id) : undefined;
+        const services =
+          doc || ownedShops.length > 0
+            ? {
+                ripperdoc: doc
+                  ? {
+                      id: doc.id,
+                      name: doc.name,
+                      location: doc.location,
+                      locationName: placeLabel(doc.location),
+                      blackMarket: doc.blackMarket,
+                      credit: doc.credit,
+                      debt: debt ? { amount: debt.amount, due: formatGameTime(debt.due) } : null,
+                    }
+                  : null,
+                shops: ownedShops.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  location: s.location,
+                  locationName: placeLabel(s.location),
+                  blackMarket: s.blackMarket,
+                  priceFactor: s.priceFactor,
+                })),
+              }
+            : null;
+        return {
+          ...n,
+          /** 宿敌一栏，由宿敌系统给；不是宿敌是 null */
+          nemesis: Object.hasOwn(rivals, n.id) ? (rivals[n.id] ?? null) : null,
+          /** 心事一栏，由心事系统给；还没熟到能说、也没说过任何一件的是 null */
+          arc: Object.hasOwn(arcCards, n.id) ? (arcCards[n.id] ?? null) : null,
+          /** 关联的常驻服务点（义体医生 / 商店）；没见过面或不经营服务点时为 null */
+          services,
+        };
+      });
     })(),
     /** 侧栏「新闻」：场外推演写的 N54 快讯和电台插段，新的在前；本来就是公开播的，只有原文，不带动静和传闻的真假 */
     bulletins: views.bulletins as ReturnType<typeof bulletinsView>,
@@ -770,31 +808,43 @@ export function projectState(
     /** 别人眼里的你：交给叙事模型，NPC 的第一反应照这一行写 */
     perceived: views.perceived as ReturnType<typeof perceivedView>,
     totalTurns: turns.length,
-    turns: turns.slice(-VIEW_TURNS).map((t, i, shown) => ({
-      seq: t.seq,
-      /** 场景的第一轮：给出场景标题卡的一行；界面按叙事偏好决定显示不显示 */
-      sceneTitle:
-        t.title !== undefined &&
-        t.scene !== undefined &&
-        turns[turns.length - shown.length + i - 1]?.scene !== t.scene
-          ? t.title
-          : null,
-      /** 这一轮弹出的特写卡 */
-      closeup: t.closeup ?? null,
-      at: t.at,
-      input: turnInput(t.input),
-      text: t.text,
-      voices: readVoices(t.voices),
-      dice: t.dice,
-      /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
-      dropped: t.dropped.length,
-      /** 未定稿的原因：正文和账目对不上，界面提示并给“重新生成” */
-      unsettled: t.unsettled ?? null,
-      /** 这一轮短暂失控：玩家的意图和实际发生的事 */
-      lostControl: lostControlOf(t.commands),
-      /** 落在严重发作后的记忆空白里：角色视角折起来，原文以回合日志为准 */
-      blackout: blackoutTurns(turns, world.slices.psychosis).has(t.seq),
-    })),
+    turns: turns.slice(-VIEW_TURNS).map((t, i, shown) => {
+      const input = turnInput(t.input);
+      const boosted = t.commands.some(
+        (c) =>
+          typeof c === "object" &&
+          c !== null &&
+          (c as { type?: unknown }).type === "cyberware.boost",
+      );
+      return {
+        seq: t.seq,
+        /** 场景的第一轮：给出场景标题卡的一行；界面按叙事偏好决定显示不显示 */
+        sceneTitle:
+          t.title !== undefined &&
+          t.scene !== undefined &&
+          turns[turns.length - shown.length + i - 1]?.scene !== t.scene
+            ? t.title
+            : null,
+        /** 这一轮弹出的特写卡 */
+        closeup: t.closeup ?? null,
+        at: t.at,
+        input,
+        /** 这一轮是否真正开启了斯安威斯坦（含界面开关、选项或判断阶段识别） */
+        sandevistan: input.sandevistan === true || boosted,
+        text: t.text,
+        dice: t.dice,
+        /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
+        dropped: t.dropped.length,
+        /** 未定稿的原因：正文和账目对不上，界面提示并给“重新生成” */
+        unsettled: t.unsettled ?? null,
+        /** 这一轮短暂失控：玩家的意图和实际发生的事 */
+        lostControl: lostControlOf(t.commands),
+        /** 这一轮的赛博精神病发作：诱因和严重度 */
+        episode: episodeOf(t.commands),
+        /** 落在严重发作后的记忆空白里：角色视角折起来，原文以回合日志为准 */
+        blackout: blackoutTurns(turns, world.slices.psychosis).has(t.seq),
+      };
+    }),
   };
 }
 

@@ -9,8 +9,6 @@ import {
   type SafehouseInternal,
   type SafehouseState,
   type StashCommand,
-  TROPHIES_MAX,
-  type TrophyCommand,
 } from "./schema";
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
@@ -73,8 +71,10 @@ export function applyStash(
   const name = itemCatalog(ctx.data).get(command.item)?.name ?? command.item;
   const items = draft.stash[box.id] ?? {};
   if (command.action === "store") {
-    const backpack = ctx.read<InventoryState>("inventory").backpack;
-    if ((backpack[command.item] ?? 0) < 1) return fail(`背包里没有${name}；装备着的要先卸下`);
+    const inv = ctx.read<InventoryState>("inventory");
+    const carried =
+      (inv.backpack[command.item] ?? 0) + inv.weapons.filter((w) => w === command.item).length;
+    if (carried < 1) return fail(`背包里没有${name}；穿着的衣服或快捷栏里的药/雷需要先脱下`);
     if (
       box.kind === "trunk" &&
       items[command.item] === undefined &&
@@ -98,19 +98,6 @@ export function applyStash(
     notes: [`从${box.name}拿出${name}（${command.reason}）`],
     emit: [{ type: "inventory.stash", action: "in", id: command.item }],
   };
-}
-
-export function applyTrophy(
-  draft: Draft<SafehouseState>,
-  command: TrophyCommand,
-  ctx: SystemContext,
-): ApplyOutcome {
-  const location = ctx.read<WorldClockState>("world").location;
-  const home = draft.homes.find((h) => h.location === location);
-  if (!home) return fail("战利品墙在安全屋里，先回去");
-  if (draft.trophies.length >= TROPHIES_MAX) return fail(`战利品墙挂满了（${TROPHIES_MAX} 件）`);
-  draft.trophies.push({ label: command.label, note: command.note, at: ctx.now });
-  return { ok: true, notes: [`${command.label}挂上了${home.name}的战利品墙`] };
 }
 
 export function seedHome(

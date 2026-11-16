@@ -53,7 +53,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "kneel-mod",
       "parallax-mod",
     ],
-    credGates: { rare: 5, epic: 15, legendary: 30 },
+    credGates: { rare: 5, epic: 20, legendary: 35 },
   },
   {
     id: "kabuki-arms",
@@ -87,7 +87,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "black-lace",
       "glitter",
     ],
-    credGates: { rare: 3, epic: 10 },
+    credGates: { rare: 5, epic: 10 },
   },
   {
     id: "japantown-arcade",

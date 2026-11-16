@@ -1,17 +1,13 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 import {
-  BACKGROUND_POINTS,
   BOARD_SLOT_LABELS,
-  type Board,
   type BoardModule,
   BoardSchema,
   type BoardSlot,
-  boardBudget,
   FLAW_MAX,
   PAST_MAX,
   PAST_MIN,
-  REFUND_MAX,
   SKILL_MAX,
   SKILL_MIN,
 } from "../schemas/board";
@@ -26,7 +22,7 @@ import { responseJsonSchema } from "./doc";
 /**
  * Character Card V2（SillyTavern 等通用的角色卡格式）的导入和导出。
  * 导出时整张卡放进 extensions.cp2077，导回来原样还原；别处来的卡先按字段对上正文，
- * 再交给辅助模型从模块库里挑模块，代码把定制点数预算截到规矩以内，玩家确认后才保存
+ * 再交给辅助模型从模块库里挑模块，仅检查模块类型、重复项与插槽数量，玩家确认后才保存。
  */
 
 const EXTENSION_KEY = "cp2077";
@@ -181,10 +177,7 @@ export function buildImportPrompt(
   modules: readonly BoardModule[],
 ): LlmMessage[] {
   const library = modules
-    .map(
-      (m) =>
-        `${m.id}｜${BOARD_SLOT_LABELS[m.slot]}｜${m.label}｜${m.slot === "flaw" ? "返还" : ""}${m.points} 点｜${m.ability}`,
-    )
+    .map((m) => `${m.id}｜${BOARD_SLOT_LABELS[m.slot]}｜${m.label}｜${m.ability}`)
     .join("\n");
   const system = [
     "你在帮玩家把一张别处的角色卡，改成《赛博朋克 2077》夜之城文字角色扮演游戏的角色。",
@@ -199,9 +192,9 @@ export function buildImportPrompt(
     `- "voice"：从描述和对话示例里整理说话方式，${PROSE_BLOCK_INFO.voice.max} 字以内`,
     `- "skillsText"：会什么、不会什么（专长与短板），400 字以内`,
     '- "conflicts"：和夜之城设定冲突、没有合适模块、或者能力过强被你压下来的地方，一条一句',
-    `规则：模块只能从下面的模块库里挑，用 id；模块花的定制点合计不超过 ${BACKGROUND_POINTS} 点（负面缺陷返还的点数最多算 ${REFUND_MAX} 点）。`,
+    "规则：模块只能从下面的模块库里挑，用 id，不要超过各插槽的数量上限。",
     "不要夸大：魔法、超能力、异世界的设定换成夜之城里说得通的东西，或者在 conflicts 里说明舍掉了。",
-    "模块库（id｜插槽｜名字｜点数｜能力）：",
+    "模块库（id｜插槽｜名字｜能力）：",
     library,
   ].join("\n");
   const user = [
@@ -248,32 +241,7 @@ function pickModules(
   return picked;
 }
 
-/** 超支时从后往前拔：先拔超出必填块数的本事和过往，再拔点数最高的 */
-function fitBudget(board: Board, warnings: string[]): Board {
-  let next = board;
-  while (boardBudget(next).remaining < 0) {
-    const key =
-      next.skills.length > SKILL_MIN ? "skills" : next.pasts.length > PAST_MIN ? "pasts" : null;
-    if (key) {
-      const list = next[key];
-      const dropped = list.reduce((a, b) => (b.points > a.points ? b : a));
-      warnings.push(`背景点超支，拔掉了「${dropped.label}」`);
-      next = { ...next, [key]: list.filter((m) => m !== dropped) };
-      continue;
-    }
-    const all = [...next.pasts, ...next.skills];
-    const dropped = all.reduce((a, b) => (b.points > a.points ? b : a));
-    warnings.push(`背景点超支，拔掉了「${dropped.label}」，回主板补一块便宜的`);
-    next = {
-      ...next,
-      pasts: next.pasts.filter((m) => m !== dropped),
-      skills: next.skills.filter((m) => m !== dropped),
-    };
-  }
-  return next;
-}
-
-/** 读模型的回复，和直接对上的正文合成一张卡；定制点数预算由代码截到规矩以内 */
+/** 读模型的回复，和直接对上的正文合成一张卡（仅按插槽数量上限约束） */
 export function parseImportReply(
   text: string,
   tavern: TavernCard,
@@ -297,15 +265,12 @@ export function parseImportReply(
   warnings.push(...base.warnings);
   const origin = pickModules([raw.origin], "origin", 1, modules, warnings)[0] ?? null;
   if (!origin) warnings.push("没挑出合适的出身，回主板选一个");
-  const board = fitBudget(
-    BoardSchema.parse({
-      origin,
-      pasts: pickModules(raw.pasts, "past", PAST_MAX, modules, warnings),
-      skills: pickModules(raw.skills, "skill", SKILL_MAX, modules, warnings),
-      flaws: pickModules(raw.flaws, "flaw", FLAW_MAX, modules, warnings),
-    }),
-    warnings,
-  );
+  const board = BoardSchema.parse({
+    origin,
+    pasts: pickModules(raw.pasts, "past", PAST_MAX, modules, warnings),
+    skills: pickModules(raw.skills, "skill", SKILL_MAX, modules, warnings),
+    flaws: pickModules(raw.flaws, "flaw", FLAW_MAX, modules, warnings),
+  });
   if (board.pasts.length < PAST_MIN)
     warnings.push(`过往只有 ${board.pasts.length} 块，至少要 ${PAST_MIN} 块`);
   if (board.skills.length < SKILL_MIN)

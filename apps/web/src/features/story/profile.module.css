@@ -1,71 +1,135 @@
 /*
- * 人物档案（计划第十二节第 14 条）：照原作资料卡排，左边小头像、右边名字和一行信息，下面各栏用页签切换、一次只显示一栏。
- * 框和标签一律用原作素材（NineSlice），这里只管位置、间距、字号和颜色，不画边框、不画渐变
+ * 人物档案：左栏 Kiroshi 身份卡 + 右栏双页签（关系与情报、身体与扫描）。
+ * 沿用生物监测面板与追踪面板的轻量化细竖线/细分割线文法，去掉多层套框与空心方块格。
  */
 
-/* 档案自己是尺寸容器：放在在场块、私信页、联系人页里宽窄不同，按自身宽度排，见文件末尾的容器查询 */
-/*
- * 左右排：左边头像和信息（基准 15rem），右边页签和当前一栏（基准 20rem，多出的宽度都给它）；
- * 两边放不下时自动折成上下，不用断点（计划第十二节第 14 条）
- */
 .profile {
   container: profile / inline-size;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 14px;
   min-width: 0;
 }
 
-/* 左边那块的伸缩写在下面 .head 里，右边这块： */
-.side {
+.profileGrid {
   display: grid;
-  flex: 999 1 20rem;
-  gap: 10px;
-  min-width: 0;
-}
-
-/*
- * 头一块：小头像 + 信息栏，底是原作对话选中行 dialog.lineSelect（右下切角），和四角块的 map.panel 区分开；
- * 头像不值得占大块，缩到 56（计划第十二节第 14 条）
- */
-.head {
-  position: relative;
-  display: grid;
-  flex: 1 1 15rem;
-  min-width: 0;
-  grid-template-columns: 56px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  padding: 12px 16px 14px;
-  isolation: isolate;
+  min-width: 0;
 }
 
-/*
- * 档案点阵（计划第十二节第 9 条、第 14 条）：原作 fx.grid 按约半尺寸平铺，
- * 四周内缩避开底板切角；绝对定位不占网格，放在头像和信息之前作底纹。
- * 静态低透明度，不影响阅读、不接收点击
- */
-.headGrid {
-  position: absolute;
-  inset: 10px 12px;
-  background-repeat: repeat;
-  background-size: 255px 238px;
-  opacity: 0.18;
+.workspace {
+  container: workspace / inline-size;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* 左栏身份卡：软透明切角底 + 原作低透明点阵；仅独立浮层保留柔光与侧边色条 */
+.head {
+  container: profilehead / inline-size;
+  position: relative;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 13px;
+  isolation: isolate;
+  --head-bg: rgb(14 14 23 / 84%);
+  --head-glow: rgb(94 246 255 / 14%);
+  --portrait-line: var(--cp-cyan);
+}
+
+.headStandalone {
+  padding: 11px 14px 12px 16px;
+  --head-bg: rgb(19 26 39 / 94%);
+}
+
+.head:where([data-tone="hostile"]) {
+  --head-glow: rgb(255 0 60 / 18%);
+  --portrait-line: var(--cp-danger);
+}
+
+.head:where([data-tone="nemesis"]) {
+  --head-glow: rgb(255 97 88 / 18%);
+  --portrait-line: var(--cp-red);
+}
+
+.head:where([data-tone="ally"]) {
+  --head-glow: rgb(252 238 10 / 14%);
+  --portrait-line: var(--cp-yellow);
+}
+
+.head:where([data-dead]) {
+  --head-glow: rgb(168 163 160 / 8%);
+  --portrait-line: var(--cp-text-dim);
+}
+
+.headGlow,
+.headRail {
+  z-index: 0;
   pointer-events: none;
 }
 
-/* 头像格：原作筛选格的底和框，图等比铺满、超出的裁掉；没有原作头像的写名字第一个字 */
+.headGlow {
+  opacity: 0.72;
+}
+
+.headRail {
+  top: 4px;
+  right: auto;
+  bottom: 4px;
+  width: 4px;
+  opacity: 0.88;
+}
+
+/* 档案点阵：原作 fx.grid 按约半尺寸平铺，静态低透明度，不影响阅读 */
+.headGrid {
+  position: absolute;
+  inset: 6px 8px 8px 10px;
+  z-index: 0;
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.11;
+  pointer-events: none;
+}
+
+.headTop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* 头像格：原作筛选格的底和框 + 下角斜切裁边，图等比铺满 */
 .portrait {
   position: relative;
+  z-index: 1;
+  isolation: isolate;
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
+  width: 50px;
+  height: 50px;
   overflow: hidden;
   font-family: var(--font-ui);
-  font-size: 24px;
-  color: var(--cp-cyan);
+  font-size: 20px;
+  color: var(--portrait-line, var(--cp-cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+.portrait > :first-child {
+  z-index: 0;
+}
+
+.portrait > :last-child {
+  z-index: 2;
+}
+
+.portrait > b {
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: var(--portrait-line, var(--cp-cyan));
 }
 
 .portrait:where([data-dead]) {
@@ -74,16 +138,15 @@
 
 .portraitArt {
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* 信息栏：名字一行，标签一行，下面两列键值 */
-.info {
-  position: relative;
+.identity {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   font-family: var(--font-ui);
 }
@@ -92,24 +155,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
+  gap: 2px 7px;
   margin: 0;
-  font-size: 24px;
-  letter-spacing: 0.06em;
+  font-size: 18.5px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
   color: var(--cp-yellow);
 }
 
 .name small {
-  font-size: 13px;
-  letter-spacing: 0.04em;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   color: var(--cp-text-dim);
+}
+
+.pronoun {
+  color: rgb(148 184 196 / 80%);
 }
 
 /* 状态标签：原作 cyber.gaugeLabel 小牌，字压在牌上 */
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -117,10 +186,14 @@
 
 .tag {
   position: relative;
-  padding: 1px 10px 2px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  padding: 1px 8px 2px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
   color: var(--tag-ink, rgb(14 14 23));
+}
+
+.tag:where([data-ink="light"]) {
+  --tag-ink: var(--cp-text);
 }
 
 .tag > b {
@@ -128,65 +201,100 @@
   font-weight: 600;
 }
 
-/* 键值两列（键、值）：只有身体栏还用；头部信息已改成一行小字，见上面 .brief（计划第十二节第 14 条） */
-.facts {
+/* 身份介绍与结构化键值对 */
+.brief {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+
+.briefRole {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.48;
+  color: #dfe4ea;
+}
+
+.briefFacts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid rgb(94 246 255 / 12%);
+}
+
+.briefRow {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 14px;
+  gap: 3px 10px;
   align-items: baseline;
-  margin: 0;
-  font-size: 13px;
-}
-
-.facts dt {
-  color: var(--cp-text-dim);
-}
-
-.facts dd {
   min-width: 0;
+}
+
+.briefRow > dt {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: rgb(138 176 188);
+}
+
+.briefRow > dd {
   margin: 0;
-  color: var(--cp-text);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 信息压成一行小字（计划第十二节第 14 条）：各项之间用暗色竖线隔开，放不下就折到下一行 */
-/*
- * 竖线挂在每项前面、定宽 17px；整行往左挪 17px 再把左边 17px 裁掉，
- * 每行开头那根竖线都看不见，行尾也不会挂一根「|」（用户嫌窄栏里怪，计划第十二节第 14 条）
- */
-.brief {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 0;
-  margin-left: -17px;
+  min-width: 0;
   font-size: 12px;
-  color: var(--cp-text-dim);
-  clip-path: inset(0 0 0 17px);
-}
-
-.brief > span::before {
-  content: "|";
-  display: inline-block;
-  width: 17px;
-  color: var(--cp-text-faint);
-  text-align: center;
-}
-
-.briefAffinity {
-  display: inline-flex;
-  align-items: center;
+  line-height: 1.4;
   color: var(--cp-text);
-  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
-/* 好感条：原作 cyber.gaugeBar 横条，缩成数字后面一小截；暗的一条作底，亮的一条按 --fill 从中线往左或往右露出来 */
+.affinityBlock {
+  display: grid;
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid rgb(94 246 255 / 12%);
+}
+
+.affinityTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.affinityTop > span {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: rgb(138 176 188);
+}
+
+.affinityVal {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cp-text);
+}
+
+.affinityVal:where([data-tone="pos"]) {
+  color: var(--cp-yellow);
+}
+
+.affinityVal:where([data-tone="neg"]) {
+  color: var(--cp-red);
+}
+
+/* 好感条：原作 cyber.gaugeBar 横条，从中心零点向左右延展 */
 .affinity {
   position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 4px;
-  margin-left: 6px;
+  display: block;
+  width: 100%;
+  height: 5px;
+}
+
+.headStandalone .affinity {
+  max-width: 140px;
 }
 
 .affinityFill {
@@ -202,43 +310,124 @@
   left: auto;
 }
 
-/* 下面各栏：原作 tab.bg 页签切换，一次只显示一栏（计划第十二节第 14 条），不再整页往下滚 */
+.note {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cp-text-dim);
+}
+
+/* 头部档案分割线：用原作 tab.line 遮罩，把概览和外貌/穿着自然隔开 */
+.headRule {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 1px;
+  background: var(--portrait-line, var(--cp-cyan-dim));
+  opacity: 0.42;
+  mask-size: 100% 100%;
+}
+
+.lookStrip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+}
+
+.look {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.48;
+  color: #c8d0d6;
+}
+
+.lookKey {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  color: var(--portrait-line, var(--cp-cyan));
+  opacity: 0.88;
+}
+
+/*
+ * 右侧页签栏：压过 neural.module.css 的全局红色页签底，统一为蓝青义眼色系；
+ * tab.bg 保留半透明冷青衬底，选中加 tab.line 底线
+ */
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgb(94 246 255 / 16%);
 }
 
 .tabs > button {
   padding: 5px 12px;
-  font-size: 13px;
+  font-size: 12.5px;
   letter-spacing: 0.06em;
+  color: rgb(94 210 230 / 48%);
 }
 
-/* 身体栏里的「扫描」按钮：原作 tab.bg 页签，靠左放在栏底，图标和字排一行（计划第十二节第 14 条） */
-.scanButton {
-  justify-self: start;
-  margin-top: 12px;
-  padding: 5px 14px;
-  font-size: 13px;
-  letter-spacing: 0.06em;
+.tabs > button > span:not([aria-hidden]):not(.tabActiveLine) {
+  position: relative;
+  z-index: 1;
+  color: #dbe6eb;
+  transition: color 140ms ease;
 }
 
-.scanButton > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.tabs > button:is(:hover, :focus-visible) {
+  color: var(--cp-yellow);
 }
 
-/* 换栏时新内容淡入、从左推进 6px，同块里切页签（第十二节第 13 条）；只动 opacity 和 transform */
+.tabs > button:is(:hover, :focus-visible) > span:not([aria-hidden]):not(.tabActiveLine) {
+  color: var(--cp-yellow);
+}
+
+.tabs > button[aria-pressed="true"] {
+  color: var(--cp-cyan);
+}
+
+.tabs > button[aria-pressed="true"] > span:not([aria-hidden]):not(.tabActiveLine) {
+  color: var(--cp-cyan);
+}
+
+.tabs > button[data-danger][aria-pressed="true"] {
+  color: var(--cp-red);
+}
+
+.tabs > button[data-danger][aria-pressed="true"] > span:not([aria-hidden]):not(.tabActiveLine) {
+  color: var(--cp-red);
+}
+
+.tabActiveLine {
+  position: absolute;
+  right: 6px;
+  bottom: 1px;
+  left: 6px;
+  height: 2px;
+  background: currentColor;
+  mask-size: 100% 100%;
+  pointer-events: none;
+}
+
+/* 换栏时新内容淡入、从左推进 6px */
 .pane {
   min-width: 0;
   animation: paneIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* 页签已经写了栏名，面板自己的标题不再重复 */
-.pane > section > h2 {
-  display: none;
+.sectionBody {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
 }
 
 @keyframes paneIn {
@@ -254,40 +443,185 @@
   }
 }
 
-.list {
+/* 关系与情报：轻量化细左竖线，不用空心套框 */
+.overviewStack {
   display: grid;
   gap: 10px;
+}
+
+.relationCallout {
+  padding: 6px 10px 6px 11px;
+  border-inline-start: 2px solid rgb(94 246 255 / 48%);
+  background: rgb(94 246 255 / 4%);
+}
+
+.relationCallout:where([data-empty]) {
+  border-inline-start-color: rgb(94 246 255 / 26%);
+  background: transparent;
+}
+
+.relationCallout:where([data-tone="ally"]) {
+  border-inline-start-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 5%);
+}
+
+.relationCallout:where([data-tone="danger"]) {
+  border-inline-start-color: var(--cp-red);
+  background: rgb(255 97 88 / 6%);
+}
+
+.relationText {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+  color: #e4edf2;
+}
+
+.relationCallout:where([data-tone="ally"]) .relationText {
+  color: var(--cp-yellow);
+}
+
+.relationCallout:where([data-tone="danger"]) .relationText {
+  color: #ff9c94;
+}
+
+.relationCallout:where([data-empty]) .relationText {
+  color: #8ea5b2;
+}
+
+.contextCallout {
+  display: grid;
+  gap: 3px;
+  padding: 6px 10px 6px 11px;
+  border-inline-start: 2px solid rgb(94 246 255 / 45%);
+  background: rgb(14 21 33 / 44%);
+}
+
+.contextCallout:where([data-tone="ally"]) {
+  border-inline-start-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 5%);
+}
+
+.contextCallout:where([data-tone="danger"]) {
+  border-inline-start-color: var(--cp-danger);
+  background: rgb(255 0 60 / 6%);
+}
+
+.contextMeta {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cp-text-dim);
+}
+
+.contextMeta strong {
+  color: var(--cp-text);
+  font-weight: 600;
+}
+
+.contextWarn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cp-red);
+}
+
+.duoGrid {
+  display: grid;
+  gap: 11px 16px;
+  min-width: 0;
+}
+
+.subStack {
+  display: grid;
+  gap: 11px;
+  align-content: start;
+  min-width: 0;
+}
+
+.subSection {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  align-content: start;
+}
+
+.subHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgb(94 246 255 / 14%);
+}
+
+.subTitle {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgb(148 184 196);
+}
+
+.subCount {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: rgb(138 176 188);
+  font-variant-numeric: tabular-nums;
+}
+
+.emptyNote {
+  margin: 0;
+  padding-inline-start: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cp-text-dim);
+}
+
+/* 记忆、情报与传闻列表 */
+.list {
+  display: grid;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12.5px;
+  line-height: 1.58;
+  color: #dde3e8;
 }
 
 .list > li:where([data-settled]) {
   opacity: 0.55;
 }
 
-/* 每条前面的来源或种类：小号青字，和正文隔开 */
 .kind {
-  margin-right: 8px;
+  margin-right: 7px;
   font-family: var(--font-ui);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--cp-cyan);
 }
 
-/* 扫描出的威胁：颜色同在场块的扫描卡 */
-.facts dd:where([data-threat="high"], [data-threat="skull"]) {
-  color: var(--cp-danger);
+.kind:where([data-tone="danger"]) {
+  color: var(--cp-red);
 }
 
-.facts dd:where([data-threat="even"]) {
+.kind:where([data-tone="accent"]) {
   color: var(--cp-yellow);
 }
 
-.facts dd:where([data-threat="low"]) {
-  color: var(--cp-success);
+.kind:where([data-tone="warn"]) {
+  color: #ff9c42;
+}
+
+.kind:where([data-tone="tie"]) {
+  color: rgb(148 212 224);
+}
+
+.kind:where([data-tone="memory"]) {
+  color: rgb(148 184 196);
 }
 
 .list small {
@@ -295,110 +629,241 @@
   color: var(--cp-text-dim);
 }
 
-.note {
+/* 身体与扫描：生物监测风格细线体征行，不做空心三格矩阵 */
+.telemetry {
   margin: 0;
-  font-size: 13px;
-  color: var(--cp-text-dim);
+  border-top: 1px solid rgb(94 246 255 / 12%);
 }
 
-.relation {
+.telemetryRow {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px 12px;
+  align-items: baseline;
+  padding: 7px 2px;
+  border-bottom: 1px solid rgb(94 246 255 / 12%);
+}
+
+.telemetryRow > dt {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgb(148 184 196);
+}
+
+.telemetryVal {
+  min-width: 0;
   margin: 0;
-  font-family: var(--font-body);
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--cp-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.telemetryVal:where([data-threat="high"], [data-threat="skull"]) {
+  color: var(--cp-danger);
+}
+
+.telemetryVal:where([data-threat="even"]) {
   color: var(--cp-yellow);
 }
 
-/* 外貌：信息栏最底下一整句，正文字体，暗一档 */
-.look {
-  margin: 4px 0 0;
-  font-family: var(--font-body);
-  font-size: 13px;
-  line-height: 1.65;
+.telemetryVal:where([data-threat="low"]) {
+  color: var(--cp-success);
+}
+
+/* 具体伤势明细 */
+.woundList {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.woundItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 8px;
+  background: rgb(94 246 255 / 6%);
+  border-inline-start: 2px solid var(--cp-yellow);
+}
+
+.woundItem:where([data-tier="heavy"]) {
+  background: rgb(255 156 66 / 9%);
+  border-inline-start-color: #ff9c42;
+}
+
+.woundItem:where([data-tier="lethal"]) {
+  background: rgb(255 0 60 / 12%);
+  border-inline-start-color: var(--cp-danger);
+}
+
+.woundPart {
+  flex: none;
+  padding: 1px 6px;
+  background: rgb(255 255 255 / 7%);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cp-text);
+}
+
+.woundInfo {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+
+.woundInfo > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.woundInfo > small {
+  font-size: 11px;
   color: var(--cp-text-dim);
 }
 
-/* 没有原作头像时的首字：在头像格里正中 */
-.portrait > b {
-  display: grid;
-  place-items: center;
-  font-weight: 600;
+.woundTag {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+}
+
+.woundItem:where([data-tier="heavy"]) .woundTag {
+  color: #ff9c42;
+}
+
+.woundItem:where([data-tier="lethal"]) .woundTag {
+  color: var(--cp-hp-low);
+}
+
+.woundTag:where([data-treated]) {
   color: var(--cp-cyan);
 }
 
-/*
- * 头像下面不留空（用户定的，计划第十二节第 14 条）：头像只占名字和状态牌那两行，
- * 一行信息、外貌和备注从头像下面起铺满整宽，不再整列缩在头像右边、左下空一大块。
- * 信息栏自己不再成盒子（display: contents），各行直接排进 .head 的网格；
- * 每行照旧 position: relative，压在底板和点阵上面
- */
-.info {
-  display: contents;
+/* 已检出植入体行 */
+.chromeList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-/* 信息各行直接排进 .head 后，行距用 .head 的；收紧到 6，列距照旧 */
-.head {
-  row-gap: 6px;
+.chromeItem {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 10px;
+  background: rgb(14 21 33 / 52%);
+  border-inline-start: 2px solid var(--cp-cyan);
 }
 
-.info > * {
+.chromeHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chromeHead > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.chromeSlot {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+  opacity: 0.88;
+}
+
+.chromeDesc {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.48;
+  color: var(--cp-text-dim);
+}
+
+/* 身体栏底部扫描状态与操作条 */
+.bodyFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(94 246 255 / 14%);
+}
+
+.scanFootNote {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bodyFoot > .scanButton {
+  flex: none;
+  margin-top: 0;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: var(--cp-cyan);
+}
+
+.bodyFoot > .scanButton:is(:hover, :focus-visible) {
+  color: var(--cp-yellow);
+}
+
+.bodyFoot > .scanButton > span {
   position: relative;
-  grid-column: 2;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.portrait {
-  grid-row: 1 / span 2;
-}
-
-.info > :is(.brief, .note, .look) {
-  grid-column: 1 / -1;
-}
-
-/*
- * 按档案自身宽度排（计划第十二节第 14 条）：
- * 窄（在场块、私信页右栏）头像再缩到 44、名字小一号；信息已经是一行小字，各栏靠页签切换，不用再分档
- */
-@container profile (width < 520px) {
-  .head {
-    gap: 6px 10px;
-    padding: 10px 14px 12px;
+@container profile (width >= 520px) {
+  .profileGrid {
+    grid-template-columns: minmax(222px, 246px) minmax(0, 1fr);
+    gap: 16px;
   }
+}
 
+@container workspace (width >= 520px) {
+  .duoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container profilehead (width < 220px) {
   .portrait {
     width: 44px;
     height: 44px;
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .name {
-    font-size: 18px;
-  }
-}
-
-/*
- * 档案头自己也按自身宽度排（用户嫌窄栏里怪，计划第十二节第 14 条）：在场档案里它排在页签左边，只有 15rem 左右，
- * 外层 .profile 却很宽，上面的查询管不到。头像列跟头像走，窄的时候头像和名字缩一号，
- * 一行信息改成逐行小字、去掉竖线，不再在行尾挂一串「|」
- */
-.head {
-  container: profilehead / inline-size;
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-@container profilehead (width < 320px) {
-  .portrait {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
-  }
-
-  .name {
-    font-size: 18px;
-    letter-spacing: 0.02em;
-  }
-
-  /* 逐行排时每项各占一行，行首那根竖线照样被上面的裁切藏掉 */
-  .brief {
-    display: grid;
-    gap: 2px;
+    font-size: 17px;
   }
 }

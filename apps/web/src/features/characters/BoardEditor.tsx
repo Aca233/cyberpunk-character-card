@@ -4,14 +4,12 @@ import {
   type BoardModule,
   BoardSchema,
   type BoardSlot,
-  boardBudget,
   boardHumanityCost,
   FLAW_MAX,
   fillPasts,
   humanityRules,
   PAST_MAX,
   PAST_MIN,
-  REFUND_MAX,
   rollLifepath,
   SKILL_MAX,
   SKILL_MIN,
@@ -45,7 +43,7 @@ const LISTS: readonly {
     slot: "flaw",
     min: 0,
     max: FLAW_MAX,
-    hint: `欠债、仇家、旧伤……每项返还点数，合计最多返还 ${REFUND_MAX} 点，也会带来期限和仇家`,
+    hint: "欠债、仇家、旧伤……带来剧情钩子、期限与宿敌",
   },
 ];
 
@@ -56,14 +54,11 @@ export function emptyBoard(): Board {
 }
 
 function ModuleCard({ module, onRemove }: { module: BoardModule; onRemove: () => void }) {
-  const refund = module.slot === "flaw";
+  const isFlaw = module.slot === "flaw";
   return (
-    <li className={styles.module} data-flaw={refund || undefined}>
+    <li className={styles.module} data-flaw={isFlaw || undefined}>
       <div className={styles.moduleHead}>
         <strong>{module.label}</strong>
-        <span className={styles.modulePoints}>
-          {refund ? `返还 ${module.points}` : `${module.points}`} 点
-        </span>
         <button type="button" aria-label={`拔下${module.label}`} onClick={onRemove}>
           ×
         </button>
@@ -80,7 +75,7 @@ function ModuleCard({ module, onRemove }: { module: BoardModule; onRemove: () =>
   );
 }
 
-/** 角色主板：插槽、背景点预算、联动预览和开局义体；预算和联动最后由服务端按内容表重算 */
+/** 角色主板：插槽与开局义体 */
 export function BoardEditor({
   board,
   data,
@@ -95,7 +90,6 @@ export function BoardEditor({
     const combos: Board["combos"] = [];
     onChange({ ...next, combos }, origin);
   };
-  const budget = boardBudget(board);
   const humanityCost = boardHumanityCost(board);
   const of = (slot: BoardSlot) => data.modules.filter((m) => m.slot === slot);
   const plugged = new Set(
@@ -136,19 +130,12 @@ export function BoardEditor({
   return (
     <div className={styles.board}>
       <div className={styles.budget} role="status">
-        <span data-tone={budget.remaining < 0 ? "bad" : undefined}>
-          背景点结余（参考） <b>{budget.remaining}</b> / {budget.total}
-        </span>
-        <span>
-          花了 {budget.spent} · 返还 {budget.refund}
-          {budget.wasted > 0 && `（负面经历超出上限的 ${budget.wasted} 点不算）`}
-        </span>
-        <span>主板义体占人性上限 {humanityCost}（开局行装自带的义体另算）</span>
+        <span>主板自选义体占用人性上限 {humanityCost}（出身标配义体另算）</span>
       </div>
 
       <section className={styles.slotGroup}>
         <h4>
-          {BOARD_SLOT_LABELS.origin} <small>选一个；不收点数</small>
+          {BOARD_SLOT_LABELS.origin} <small>选一个出身背景</small>
         </h4>
         <select
           className={styles.picker}
@@ -213,8 +200,7 @@ export function BoardEditor({
                   <option value="">＋ 插一块{BOARD_SLOT_LABELS[slot]}</option>
                   {available.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.label}（{slot === "flaw" ? "返还 " : ""}
-                      {m.points} 点）
+                      {m.label}
                     </option>
                   ))}
                 </select>
@@ -250,8 +236,7 @@ export function BoardEditor({
 
       <section className={styles.slotGroup}>
         <h4>
-          {/* 按原作格数装（用户 2026-10-31："为什么每个地方的义体只能选一个"） */}
-          开局义体 <small>普通 1 点起、传说 5 点；每个部位按格数装，会扣人性上限</small>
+          开局义体 <small>每个部位按格数装，占用人性上限</small>
         </h4>
         {board.cyberware.length > 0 && (
           <ul className={styles.modules}>
@@ -261,9 +246,7 @@ export function BoardEditor({
                 <li className={styles.module} key={c.id}>
                   <div className={styles.moduleHead}>
                     <strong>{c.name}</strong>
-                    <span className={styles.modulePoints}>
-                      {c.points} 点 · 人性 −{c.humanityCost}
-                    </span>
+                    <span className={styles.modulePoints}>人性 −{c.humanityCost}</span>
                     <button
                       type="button"
                       aria-label={`拔下${c.name}`}
@@ -297,7 +280,7 @@ export function BoardEditor({
                 ...board,
                 cyberware: [
                   ...board.cyberware,
-                  { id: o.id, name: o.name, points: o.points, humanityCost: o.humanityCost },
+                  { id: o.id, name: o.name, points: 0, humanityCost: o.humanityCost },
                 ],
               });
             }
@@ -308,7 +291,7 @@ export function BoardEditor({
             .filter((o) => !takenSlots.has(o.slot))
             .map((o) => (
               <option key={o.id} value={o.id}>
-                {o.slotLabel} · {o.name}（{o.points} 点，人性 −{o.humanityCost}）
+                {o.slotLabel} · {o.name}（人性 −{o.humanityCost}）
               </option>
             ))}
         </select>
@@ -330,14 +313,7 @@ export function BoardEditor({
                 title={level.hook || undefined}
               >
                 <strong>{level.label}</strong>
-                <span>
-                  ×{humanityRules.TOLERANCE_FACTOR[t]} ·{" "}
-                  {level.points > 0
-                    ? `${level.points} 点`
-                    : level.points < 0
-                      ? `返还 ${-level.points} 点`
-                      : "不花点数"}
-                </span>
+                <span>×{humanityRules.TOLERANCE_FACTOR[t]}</span>
               </button>
             );
           })}

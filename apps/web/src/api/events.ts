@@ -4,6 +4,7 @@ import { followLocalTurn, LOCAL_MODE } from "./transport";
 const NAMES = [
   "started",
   "rolled",
+  "boost",
   "text",
   "done",
   "blocked",

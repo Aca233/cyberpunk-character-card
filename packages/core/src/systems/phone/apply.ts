@@ -5,10 +5,45 @@ import {
   CALL_RING_MINUTES,
   CALL_STATUS_LABELS,
   CALLS_KEPT,
+  type ChatMeta,
+  type Message,
   PHONE_KEPT,
+  PHONE_THREAD_MIN,
   type PhoneState,
   PhoneStateSchema,
 } from "./schema";
+
+function isProtectedJobMessage(m: Message, openJobIds: ReadonlySet<string>): boolean {
+  return m.job !== undefined && openJobIds.has(m.job);
+}
+
+/** 超过总上限时淘汰最旧消息，优先保住各会话最近几条以及未结束的派单附件消息 */
+function trimMessages(messages: Message[], openJobIds: ReadonlySet<string>): void {
+  if (messages.length <= PHONE_KEPT) return;
+  const counts = new Map<string, number>();
+  for (const m of messages) counts.set(m.from, (counts.get(m.from) ?? 0) + 1);
+
+  const dropAt = (index: number) => {
+    const [removed] = messages.splice(index, 1);
+    if (removed) counts.set(removed.from, (counts.get(removed.from) ?? 1) - 1);
+  };
+
+  while (messages.length > PHONE_KEPT) {
+    const excessIdx = messages.findIndex(
+      (m) => !isProtectedJobMessage(m, openJobIds) && (counts.get(m.from) ?? 0) > PHONE_THREAD_MIN,
+    );
+    if (excessIdx >= 0) {
+      dropAt(excessIdx);
+      continue;
+    }
+    const nonJobIdx = messages.findIndex((m) => !isProtectedJobMessage(m, openJobIds));
+    if (nonJobIdx >= 0) {
+      dropAt(nonJobIdx);
+      continue;
+    }
+    dropAt(0);
+  }
+}
 
 export function receiveMessage(
   draft: Draft<PhoneState>,
@@ -17,11 +52,13 @@ export function receiveMessage(
   text: string,
   now: number,
   job?: string,
+  openJobIds: ReadonlySet<string> = new Set(),
 ): ApplyOutcome {
   draft.messages.push({
     id: draft.nextId,
     from,
     name,
+    sender: "npc",
     text,
     at: now,
     read: false,
@@ -29,8 +66,54 @@ export function receiveMessage(
     ...(job === undefined ? {} : { job }),
   });
   draft.nextId += 1;
-  while (draft.messages.length > PHONE_KEPT) draft.messages.shift();
+  trimMessages(draft.messages, openJobIds);
   return { ok: true, notes: [`消息：${name}：${text}`] };
+}
+
+/** 手机直聊发出玩家的消息：把同一会话里未读短信顺手标成已读，再写入发件记录 */
+export function sendPlayerMessage(
+  draft: Draft<PhoneState>,
+  to: string,
+  name: string,
+  text: string,
+  now: number,
+  openJobIds: ReadonlySet<string> = new Set(),
+): ApplyOutcome {
+  for (const m of draft.messages) {
+    if (m.from === to && !m.read) m.read = true;
+  }
+  draft.messages.push({
+    id: draft.nextId,
+    from: to,
+    name,
+    sender: "player",
+    text,
+    at: now,
+    read: true,
+    replied: true,
+  });
+  draft.nextId += 1;
+  trimMessages(draft.messages, openJobIds);
+  return { ok: true, notes: [`发给 ${name}：${text}`] };
+}
+
+/** 记录本场景同人物手机私聊的轮数、已加好感与派单占用，同时清理过期场景条目 */
+export function applyChatMeta(draft: Draft<PhoneState>, command: ChatMeta): ApplyOutcome {
+  for (const [key, entry] of Object.entries(draft.chatBudget)) {
+    if (entry.scene < command.scene) delete draft.chatBudget[key];
+  }
+  const prev = draft.chatBudget[command.npc];
+  const base =
+    prev && prev.scene === command.scene
+      ? prev
+      : { scene: command.scene, turns: 0, affinityGained: 0, jobOffered: false };
+  draft.chatBudget[command.npc] = {
+    scene: command.scene,
+    turns: base.turns + 1,
+    affinityGained: base.affinityGained + (command.affinityGained ?? 0),
+    jobOffered: base.jobOffered || Boolean(command.jobOffered),
+  };
+  return { ok: true };
 }
 
 /**

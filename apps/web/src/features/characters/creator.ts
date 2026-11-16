@@ -5,9 +5,7 @@ import {
   type BoardModule,
   BoardModuleSchema,
   BoardSchema,
-  boardBudget,
   boardIssues,
-  CASH_TIER_INFO,
   type CharacterCard,
   CharacterCardSchema,
   type Combo,
@@ -19,75 +17,18 @@ import {
   ProseBlockSchema,
   pickLoadouts,
   pickStartLocation,
-  REFUND_MAX,
-  RELATION_INFO,
   SKILL_MAX,
-  TOLERANCE_LEVELS,
   type WorkshopPack,
   WorkshopPackSchema,
 } from "@cp/core";
-import type { BoardData, Difficulty } from "../../api/client";
+import type { BoardData } from "../../api/client";
 
-const { HUMANITY_MAX, TOLERANCE_FACTOR } = humanityRules;
+const { HUMANITY_MAX, STAGE_LABELS, TOLERANCE_FACTOR, humanityStage, isGlitchZone } = humanityRules;
 
 /**
- * CK3「自定义统治者」风格角色创建逻辑 + 创意工坊底座（Workshop-Ready Foundation）
+ * 2077 赛博档案工作台核心纯逻辑 + 创意工坊底座（Workshop-Ready Foundation）
+ * 无点数上限束缚，仅受槽位容量与义体神经负荷（人性值 × 耐受档位）约束。
  */
-
-export const STEPS = [
-  { id: "origin", label: "出身与身份" },
-  { id: "past", label: "过往经历" },
-  { id: "people", label: "旧识 (可选)" },
-  { id: "skills", label: "核心特长" },
-  { id: "cyberware", label: "义体 (可选)" },
-  { id: "person", label: "角色特写" },
-  { id: "review", label: "档案确认" },
-] as const;
-export type StepId = (typeof STEPS)[number]["id"];
-
-export function stepIndex(id: StepId): number {
-  return STEPS.findIndex((s) => s.id === id);
-}
-
-export function budgetKind(step: StepId): "background" | null {
-  if (step === "past" || step === "people" || step === "skills" || step === "cyberware") {
-    return "background";
-  }
-  return null;
-}
-
-// ———— CK3 按战局难度划分的统一定制点数上限 ————
-
-export const DIFFICULTY_BUDGET: Readonly<Record<Difficulty, number>> = {
-  streetLegend: 24,
-  nightCity: 17,
-  deathCity: 12,
-};
-
-export interface UnifiedBudget {
-  /** 当前难度给定的标准定制点数上限（24 / 17 / 12） */
-  readonly limit: number;
-  /** 正面特质（出身 + 专长 + 履历）花费的点数 */
-  readonly traitSpent: number;
-  /** 选购义体 + 高耐受花费的点数 */
-  readonly cyberwareSpent: number;
-  /** 高好感人脉花费的点数 */
-  readonly peopleSpent: number;
-  /** 开局行装（私房金库/黑金 + 额外武器 + 额外载具）花费的点数 */
-  readonly kitSpent: number;
-  /** 各项正面开销总计 */
-  readonly grossSpent: number;
-  /** 负面缺陷、低耐受与一贫如洗合计返还的点数 */
-  readonly refund: number;
-  /** 负面缺陷超出上限未计入的点数 */
-  readonly wastedRefund: number;
-  /** 净消耗点数（grossSpent - refund） */
-  readonly netSpent: number;
-  /** 距离难度上限还剩多少点（负数表示超出难度预算的点数） */
-  readonly remaining: number;
-  /** 是否超出当前难度预算（进入 CK3 传奇沙盒超限开局模式，不阻塞保存） */
-  readonly overLimit: boolean;
-}
 
 /** 建档时 pickLoadouts 会给这张卡发哪几套行装（和服务端同一个函数、同一张表，建卡界面看到的就是开局拿到的） */
 export function pickedLoadouts(card: CharacterCard, data?: Pick<BoardData, "loadouts">): Loadout[] {
@@ -95,84 +36,6 @@ export function pickedLoadouts(card: CharacterCard, data?: Pick<BoardData, "load
   if (table.length === 0) return [];
   const ids = pickLoadouts(loadoutText(card), table, "street-kid");
   return ids.flatMap((id) => table.find((l) => l.id === id) ?? []);
-}
-
-/** 计算开局行装定制（资金档位 + 随身武器 + 专属载具）的点数开销与返还 */
-export function kitPoints(
-  card: CharacterCard,
-  data?: Pick<BoardData, "weapons" | "vehicles" | "loadouts">,
-): { readonly spent: number; readonly refund: number } {
-  const board = card.board;
-  const kit = board?.kit ?? { cashTier: "standard" as const, weapons: [], vehicle: null };
-  const cashPts = CASH_TIER_INFO[kit.cashTier].points;
-  const weaponPts = kit.weapons.reduce((sum, id) => {
-    const found = data?.weapons?.find((w) => w.id === id);
-    return sum + (found?.points ?? 1);
-  }, 0);
-  const free = new Set(pickedLoadouts(card, data).flatMap((l) => l.vehicles ?? []));
-  let vehiclePts = 0;
-  if (kit.vehicle && !free.has(kit.vehicle)) {
-    const found = data?.vehicles?.find((v) => v.id === kit.vehicle);
-    vehiclePts = found?.points ?? 2;
-  }
-  return {
-    spent: Math.max(0, cashPts) + weaponPts + vehiclePts,
-    refund: Math.max(0, -cashPts),
-  };
-}
-
-/** CK3 统一定制点数池结算：汇总特质、义体、耐受、人脉、行装与负面返还 */
-export function unifiedBudget(
-  card: CharacterCard,
-  difficulty: Difficulty = "nightCity",
-  data?: Pick<BoardData, "weapons" | "vehicles" | "loadouts">,
-): UnifiedBudget {
-  const limit = DIFFICULTY_BUDGET[difficulty] ?? 17;
-  const board = card.board;
-  if (!board) {
-    return {
-      limit,
-      traitSpent: 0,
-      cyberwareSpent: 0,
-      peopleSpent: 0,
-      kitSpent: 0,
-      grossSpent: 0,
-      refund: 0,
-      wastedRefund: 0,
-      netSpent: 0,
-      remaining: limit,
-      overLimit: false,
-    };
-  }
-  const tolerancePts = TOLERANCE_LEVELS[board.tolerance].points;
-  const traitModules = [...(board.origin ? [board.origin] : []), ...board.pasts, ...board.skills];
-  const traitSpent = traitModules.reduce((sum, m) => sum + m.points, 0);
-  const cyberwareSpent =
-    board.cyberware.reduce((sum, c) => sum + c.points, 0) + Math.max(0, tolerancePts);
-  const peopleSpent = board.acquaintances.reduce(
-    (sum, a) => sum + RELATION_INFO[a.relation].points,
-    0,
-  );
-  const kit = kitPoints(card, data);
-  const grossSpent = traitSpent + cyberwareSpent + peopleSpent + kit.spent;
-  const rawFlaws = board.flaws.reduce((sum, m) => sum + m.points, 0);
-  const cappedFlaws = Math.min(REFUND_MAX, rawFlaws);
-  const refund = cappedFlaws + Math.max(0, -tolerancePts) + kit.refund;
-  const netSpent = grossSpent - refund;
-  const remaining = limit - netSpent;
-  return {
-    limit,
-    traitSpent,
-    cyberwareSpent,
-    peopleSpent,
-    kitSpent: kit.spent,
-    grossSpent,
-    refund,
-    wastedRefund: Math.max(0, rawFlaws - REFUND_MAX),
-    netSpent,
-    remaining,
-    overLimit: remaining < 0,
-  };
 }
 
 // ———— 出身分类、默认行装与自带免费义体计算 ————
@@ -208,7 +71,7 @@ export const TRAIT_FILTER_LABELS: Readonly<Record<TraitFilter, string>> = {
   all: "全部特质",
   innate: "身心禀赋",
   craft: "专长技艺",
-  past: "旧履历",
+  past: "过往履历",
   custom: "自定义与模组",
 };
 
@@ -255,7 +118,7 @@ export function defaultStartLocationFor(
   return pickStartLocation(loadoutText(card), data?.loadouts ?? [], fallback);
 }
 
-/** 切换出身时清理已被新出身免费附带的武器与载具，避免重复占点或界面卡死 */
+/** 切换出身时清理已被新出身免费附带的武器与载具，避免重复配置 */
 export function pruneKitForOrigin(
   card: CharacterCard,
   nextBoard: Board,
@@ -364,7 +227,7 @@ export function inherentCyberware(
         name: data?.names?.[id] ?? def.name,
         slot: def.slot,
         humanityCost: def.humanityCost,
-        source: `${loadout.label}标配 · 0 点`,
+        source: `${loadout.label}标配`,
         replaced: chosenInSlot(def.slot) >= cap,
       });
     }
@@ -387,6 +250,65 @@ export function totalStartHumanityCost(
     HUMANITY_MAX,
     Math.round((inherentRaw + chosenRaw) * TOLERANCE_FACTOR[board.tolerance]),
   );
+}
+
+export interface HumanityStageInfo {
+  readonly stage: humanityRules.HumanityStage;
+  readonly label: string;
+  readonly tone: "ok" | "warn" | "danger";
+  readonly glitchZone: boolean;
+  readonly note: string;
+}
+
+/** 根据术后剩余人性返回阶段标签、色彩倾向与神经感知说明 */
+export function humanityStageInfo(humanityNow: number): HumanityStageInfo {
+  const clamped = Math.max(0, Math.min(HUMANITY_MAX, Math.round(humanityNow)));
+  const stage = humanityStage(clamped);
+  const label = STAGE_LABELS[stage];
+  const glitchZone = isGlitchZone(clamped);
+  if (stage === "stable") {
+    return {
+      stage,
+      label,
+      tone: "ok",
+      glitchZone,
+      note: "神经回路稳定，义体与肉身同步良好",
+    };
+  }
+  if (stage === "detached") {
+    return {
+      stage,
+      label,
+      tone: "ok",
+      glitchZone,
+      note: "情绪略显抽离，感官偶尔泛起冷铁般的金属质感",
+    };
+  }
+  if (stage === "unstable") {
+    return {
+      stage,
+      label,
+      tone: "warn",
+      glitchZone,
+      note: "进入神经感知失真区（<40）：义眼偶发红帧雪花，强刺激下易产生冲动",
+    };
+  }
+  if (stage === "edge") {
+    return {
+      stage,
+      label,
+      tone: "danger",
+      glitchZone,
+      note: "赛博精神病边缘（<20）：视野重影与金属耳鸣频发，高压下易误判与短暂失控",
+    };
+  }
+  return {
+    stage,
+    label,
+    tone: "danger",
+    glitchZone,
+    note: "神经负荷临界（0）：躯壳濒临重度失控与断片，急需压制剂或卸除重型义体",
+  };
 }
 
 // ———— 创意工坊底座：本地自定义模块池 & 目录合并管线 ————
@@ -470,14 +392,12 @@ const DRAFT_KEY = "cp.creatorDraft";
 
 export interface CreatorDraft {
   readonly card: CharacterCard;
-  readonly step: StepId;
-  readonly reached: number;
   readonly startLocation: string;
-  readonly rerolls: number;
   readonly savedAt: string;
+  readonly characterId?: string | null;
+  readonly original?: string;
+  readonly sample?: boolean;
 }
-
-export const REROLLS = 3;
 
 export function saveDraft(draft: Omit<CreatorDraft, "savedAt">): boolean {
   try {
@@ -498,8 +418,6 @@ export function clearDraft(): void {
     // ignore
   }
 }
-
-const isStep = (v: unknown): v is StepId => STEPS.some((s) => s.id === v);
 
 export function loadDraft(blank: CharacterCard): CreatorDraft | null {
   try {
@@ -554,73 +472,66 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
     };
     return {
       card: merged,
-      step: isStep(d.step) ? d.step : "origin",
-      reached:
-        typeof d.reached === "number" && Number.isFinite(d.reached)
-          ? Math.max(0, Math.min(STEPS.length - 1, Math.floor(d.reached)))
-          : 0,
       startLocation:
         typeof d.startLocation === "string" ? d.startLocation : (board.data.startLocation ?? ""),
-      rerolls:
-        typeof d.rerolls === "number" && Number.isFinite(d.rerolls)
-          ? Math.max(0, Math.min(REROLLS, Math.floor(d.rerolls)))
-          : 0,
       savedAt: typeof d.savedAt === "string" ? d.savedAt : "",
+      characterId: typeof d.characterId === "string" ? d.characterId : null,
+      original: typeof d.original === "string" ? d.original : "",
+      sample: d.sample === true,
     };
   } catch {
     return null;
   }
 }
 
-// ———— 检查项（CK3 沙盒超限模式：仅拦截缺姓名、代词、出身或重复模块） ————
+// ———— 档案就绪检查（仅拦截缺姓名、代词、出身或重复模块） ————
+
+export type CheckTarget = "identity" | "origin" | "build" | "cyber" | "people" | "person";
 
 export interface Check {
-  readonly step: StepId;
+  readonly target: CheckTarget;
   readonly text: string;
-  readonly soft?: boolean;
 }
 
-function issueStep(text: string): StepId {
+function issueTarget(text: string): CheckTarget {
   if (text.includes("出身")) return "origin";
   if (text.includes("旧识")) return "people";
-  if (text.includes("过往")) return "past";
-  if (text.includes("负面")) return "past";
-  if (text.includes("义体")) return "cyberware";
-  return "skills";
+  if (text.includes("义体")) return "cyber";
+  return "build";
 }
 
-const FIELD_STEP: Partial<Record<keyof CharacterCard, StepId>> = {
+const FIELD_TARGET: Partial<Record<keyof CharacterCard, CheckTarget>> = {
   origin: "origin",
-  board: "skills",
-  name: "origin",
-  alias: "origin",
-  pronoun: "origin",
+  board: "build",
+  name: "identity",
+  alias: "identity",
+  pronoun: "identity",
   look: "person",
   past: "person",
   personality: "person",
   voice: "person",
   skills: "person",
-  scene: "review",
-  greeting: "review",
-  examples: "review",
+  scene: "person",
+  greeting: "person",
+  examples: "person",
 };
 
 export function creatorChecks(card: CharacterCard): Check[] {
   const checks: Check[] = [];
   const covered = new Set<string>();
   if (card.name.trim() === "") {
-    checks.push({ step: "origin", text: "尚未填写角色姓名" });
+    checks.push({ target: "identity", text: "尚未填写角色姓名" });
     covered.add("name");
   }
   if (card.pronoun.trim() === "") {
-    checks.push({ step: "origin", text: "尚未设定人称代词" });
+    checks.push({ target: "identity", text: "尚未设定人称代词" });
     covered.add("pronoun");
   }
   if (card.board) {
     const issues = boardIssues(card.board);
-    for (const text of issues) checks.push({ step: issueStep(text), text });
+    for (const text of issues) checks.push({ target: issueTarget(text), text });
     if (issues.length > 0) covered.add("board");
-    if (issues.some((text) => issueStep(text) === "origin")) covered.add("origin");
+    if (issues.some((text) => issueTarget(text) === "origin")) covered.add("origin");
   }
   const parsed = CharacterCardSchema.safeParse(card);
   if (!parsed.success) {
@@ -628,15 +539,16 @@ export function creatorChecks(card: CharacterCard): Check[] {
       const key = issue.path[0];
       if (typeof key === "string" && covered.has(key)) continue;
       if (checks.some((c) => c.text === issue.message)) continue;
-      const step =
-        (typeof key === "string" ? FIELD_STEP[key as keyof CharacterCard] : undefined) ?? "review";
-      checks.push({ step, text: issue.message });
+      const target =
+        (typeof key === "string" ? FIELD_TARGET[key as keyof CharacterCard] : undefined) ??
+        "person";
+      checks.push({ target, text: issue.message });
     }
   }
   return checks;
 }
 
-// ———— 兼容辅助函数 ————
+// ———— 出身倾向与联动提示辅助函数 ————
 
 export function originLean(
   originId: string,
@@ -698,107 +610,4 @@ export function comboHints(
     if (candidates.length > 0) out.push({ combo, need, candidates });
   }
   return out;
-}
-
-export function backgroundLeft(board: Board): number {
-  return boardBudget(board).remaining;
-}
-
-// ———— 出身流派初始构筑预设（基于特质、身手与职业专长，不设属性点） ————
-
-export type OriginKey = "street-kid" | "nomad" | "corpo";
-export const ORIGIN_KEYS: readonly OriginKey[] = ["street-kid", "nomad", "corpo"];
-
-export interface OriginPreset {
-  readonly originId: string;
-  readonly name: string;
-  readonly summary: string;
-  readonly pasts: readonly string[];
-  readonly skills: readonly string[];
-}
-
-export const ORIGIN_PRESETS: Record<OriginKey, OriginPreset> = {
-  "street-kid": {
-    originId: "street-kid",
-    name: "街霸突击构筑",
-    summary: "近身肉搏、黑市门路、安防破拆，外加痛觉钝化",
-    pasts: [],
-    skills: ["brawling", "lockpick", "streetwise", "pain-editor-nerve"],
-  },
-  nomad: {
-    originId: "nomad",
-    name: "恶土游侠构筑",
-    summary: "恶劣环境驾驶、机械拆修与智能武器改装，外加孤狼信条",
-    pasts: [],
-    skills: ["driving", "mechanic", "smart-weapon-mod", "lone-wolf"],
-  },
-  corpo: {
-    originId: "corpo",
-    name: "特工谍影构筑",
-    summary: "企业博弈谈判、快速网络入侵与安防破解，外加绝对冷静",
-    pasts: [],
-    skills: ["corpo-negotiation", "quickhacking", "lockpick", "ice-veins"],
-  },
-};
-
-export function isOriginPreset(originId: string, board: Board): boolean {
-  const preset = ORIGIN_PRESETS[originId as OriginKey] as OriginPreset | undefined;
-  if (!preset || board.origin?.id !== preset.originId) return false;
-  const currentPastIds = board.pasts.map((p) => p.id).sort();
-  const presetPastIds = [...preset.pasts].sort();
-  if (currentPastIds.length !== presetPastIds.length) return false;
-  if (!currentPastIds.every((id, idx) => id === presetPastIds[idx])) return false;
-
-  const currentSkillIds = board.skills.map((s) => s.id).sort();
-  const presetSkillIds = [...preset.skills].sort();
-  if (currentSkillIds.length !== presetSkillIds.length) return false;
-  if (!currentSkillIds.every((id, idx) => id === presetSkillIds[idx])) return false;
-
-  return true;
-}
-
-export function isAnyOriginPreset(board: Board): boolean {
-  return Object.keys(ORIGIN_PRESETS).some((id) => isOriginPreset(id, board));
-}
-
-export function applyOriginPreset(
-  originId: string,
-  card: CharacterCard,
-  modules: readonly BoardModule[],
-  _combos: readonly Combo[] = [],
-): CharacterCard {
-  const preset = ORIGIN_PRESETS[originId as OriginKey] as OriginPreset | undefined;
-  if (!preset) return card;
-
-  const originMod = modules.find((m) => m.id === originId && m.slot === "origin");
-  const pastMods = preset.pasts
-    .map((id) => modules.find((m) => m.id === id && m.slot === "past"))
-    .filter((m): m is BoardModule => Boolean(m));
-  const skillMods = preset.skills
-    .map((id) => modules.find((m) => m.id === id && m.slot === "skill"))
-    .filter((m): m is BoardModule => Boolean(m));
-
-  if (
-    !originMod ||
-    pastMods.length !== preset.pasts.length ||
-    skillMods.length !== preset.skills.length
-  ) {
-    return card;
-  }
-
-  const baseBoard: Board = card.board ?? BoardSchema.parse({});
-
-  const newBoard: Board = {
-    ...baseBoard,
-    origin: originMod ?? baseBoard.origin,
-    pasts: pastMods,
-    skills: skillMods,
-    combos: [],
-  };
-
-  return {
-    ...card,
-    origin: originMod?.label ?? card.origin,
-    board: newBoard,
-  };
 }

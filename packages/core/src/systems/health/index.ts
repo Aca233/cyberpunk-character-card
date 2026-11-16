@@ -20,7 +20,7 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
   dependsOn: ["dice", "inventory"],
   state: HealthStateSchema,
   initial: () => {
-    const max = maxHp(3, 1);
+    const max = maxHp(3, 0);
     return {
       hp: max,
       max,
@@ -30,6 +30,7 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
       severeSince: null,
       bleeds: 0,
       damagedBy: null,
+      injuries: [],
       lostLimbs: [],
       brokenChrome: [],
     };

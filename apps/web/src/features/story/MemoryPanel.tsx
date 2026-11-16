@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../ui/Button";
 import { useLayer } from "../../ui/layers";
+import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
@@ -326,6 +327,31 @@ export function MemoryBody({
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+/** 从 Esc 菜单打开的 AI 记忆管理弹层：查看、微调或删除场景摘要与共同记忆 */
+export function MemoryModal({
+  view,
+  onEdit,
+  onClose,
+}: {
+  readonly view: View;
+  readonly onEdit?: ((edit: MemoryEdit) => Promise<void>) | undefined;
+  readonly onClose: () => void;
+}) {
+  useLayer(onClose);
+  return (
+    <div className={styles.journalBackdrop}>
+      <div role="dialog" aria-label="记忆管理" className={styles.journal}>
+        <Panel as="div" title="记忆管理" line="var(--cp-red)" frame>
+          <MemoryBody view={view} onEdit={onEdit} />
+          <div className={styles.journalActions}>
+            <Button onClick={onClose}>关闭</Button>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

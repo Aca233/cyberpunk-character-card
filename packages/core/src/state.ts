@@ -11,7 +11,6 @@ import {
   InventoryStateSchema,
   type ItemDef,
   loadoutSummary,
-  StyleTagSchema,
   weaponConcealment,
 } from "./systems/inventory/schema";
 import { isBlackLaceWithdrawal, isFatigued, phaseClockOf } from "./systems/world/apply";
@@ -57,12 +56,11 @@ export const EdgeLedgerStateSchema = z.object({
   wounds: WoundSlotSchema,
   phaseClock: PhaseClockSchema,
   loadout: z.object({
-    slots: z.number().int().min(0).max(12),
-    maxSlots: z.literal(6),
-    overloaded: z.boolean(),
+    bulkyCount: z.number().int().min(0),
+    bulkyMax: z.number().int().min(2),
+    bulkyOverloaded: z.boolean(),
     hasHeavyWeapon: z.boolean(),
     concealment: WeaponConcealmentSchema,
-    styleTag: StyleTagSchema,
   }),
   humanity: z.object({
     current: z.number().int().min(0).max(100),
@@ -98,12 +96,11 @@ export function extractEdgeLedgerState(
     wounds,
     phaseClock: { day: phase.day, phase: phase.phase },
     loadout: {
-      slots: loadout.usedSlots,
-      maxSlots: 6,
-      overloaded: loadout.overloaded,
+      bulkyCount: loadout.bulkyCount,
+      bulkyMax: loadout.bulkyMax,
+      bulkyOverloaded: loadout.bulkyOverloaded,
       hasHeavyWeapon: loadout.hasHeavyWeapon,
       concealment: loadout.concealment,
-      styleTag: loadout.styleTag,
     },
     humanity: {
       current: humanity.current,
@@ -124,7 +121,6 @@ export {
   HumanityStateSchema,
   InventoryStateSchema,
   PhaseClockSchema,
-  StyleTagSchema,
   WeaponConcealmentSchema,
   WOUND_SLOT_LABELS,
   WorldClockStateSchema,

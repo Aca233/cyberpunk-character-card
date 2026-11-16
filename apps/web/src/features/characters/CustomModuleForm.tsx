@@ -4,7 +4,6 @@ import {
   type BoardModule,
   BoardModuleSchema,
   type BoardSlot,
-  MODULE_POINTS,
 } from "@cp/core";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,14 +16,27 @@ function blankModule(slot: BoardSlot): BoardModule {
     id: `custom-${Date.now().toString(36)}`,
     slot,
     label: "未命名",
-    points: MODULE_POINTS[slot][0],
+    points: 0,
     custom: true,
   });
 }
 
+function slotPlaceholder(slot: BoardSlot): string {
+  if (slot === "origin") {
+    return "角色来自哪个阶层、巨企部门、帮派或边缘聚落？带着什么看家门路……";
+  }
+  if (slot === "past") {
+    return "曾经经历过哪场恶仗、背叛、走私交易或地下生涯？留下了什么人脉与余波……";
+  }
+  if (slot === "flaw") {
+    return "欠了谁、得罪了谁、身上落下了何种神经创伤或致命软肋……";
+  }
+  return "这项本事是怎么练出来的，或者在街头闯出过什么独门绝活。";
+}
+
 /**
  * 自己写一块模块：先写设定，交给辅助模型解读（花一次模型调用），也可以不用模型直接手写；
- * 解读结果可以改名字、标价、能力和钩子，确认后才插上
+ * 解读结果可以改名字、能力和钩子，确认后才插上
  */
 export function CustomModuleForm({
   slot,
@@ -43,11 +55,10 @@ export function CustomModuleForm({
   const interpret = useMutation({
     mutationFn: () => api.interpretModule({ slot, text, board }),
     onSuccess: (reading) => {
-      setDraft(reading.module);
+      setDraft({ ...reading.module, points: 0 });
       setWarnings(reading.warnings);
     },
   });
-  const [min, max] = MODULE_POINTS[slot];
   const label = BOARD_SLOT_LABELS[slot];
   const patch = (next: Partial<BoardModule>) => setDraft((d) => (d ? { ...d, ...next } : d));
   const valid = draft !== null && BoardModuleSchema.safeParse(draft).success;
@@ -63,11 +74,7 @@ export function CustomModuleForm({
           rows={3}
           maxLength={600}
           value={text}
-          placeholder={
-            slot === "flaw"
-              ? "欠了谁、得罪了谁、身上落下了何种神经创伤……"
-              : "这项本事是怎么练出来的，或者在街头闯出过什么名堂。"
-          }
+          placeholder={slotPlaceholder(slot)}
           onChange={(event) => setText(event.target.value)}
         />
       </label>
@@ -76,7 +83,7 @@ export function CustomModuleForm({
           type="button"
           className={styles.toolButton}
           disabled={interpret.isPending || text.trim().length < 4}
-          title="让 AI 提取标签、能力效果、剧情钩子与参考点数"
+          title="让 AI 提取标签、能力效果与剧情钩子"
           onClick={() => interpret.mutate()}
         >
           {interpret.isPending ? "解析中…" : draft ? "重新解析" : "AI 解析模块"}
@@ -110,33 +117,14 @@ export function CustomModuleForm({
       )}
       {draft && (
         <div className={styles.customDraft}>
-          <div className={styles.identity}>
-            <label className={styles.field}>
-              <span>模块名</span>
-              <input
-                maxLength={24}
-                value={draft.label}
-                onChange={(event) => patch({ label: event.target.value })}
-              />
-            </label>
-            <label className={styles.field}>
-              <span>
-                {slot === "flaw" ? "返还点数" : "标价"}
-                <small>
-                  {min}–{max} 点
-                </small>
-              </span>
-              <input
-                type="number"
-                min={min}
-                max={max}
-                value={draft.points}
-                onChange={(event) =>
-                  patch({ points: Math.min(max, Math.max(min, Number(event.target.value) || min)) })
-                }
-              />
-            </label>
-          </div>
+          <label className={styles.field}>
+            <span>模块名</span>
+            <input
+              maxLength={24}
+              value={draft.label}
+              onChange={(event) => patch({ label: event.target.value })}
+            />
+          </label>
           <label className={styles.field}>
             <span>{slot === "flaw" ? "处境 / 负面效应" : "专长能力"}</span>
             <textarea
@@ -170,6 +158,7 @@ export function CustomModuleForm({
               onClick={() => {
                 const mod: BoardModule = {
                   ...draft,
+                  points: 0,
                   label: draft.label.trim(),
                   custom: true,
                   packId: draft.packId ?? "local",

@@ -3,7 +3,7 @@ import { type DistrictSecurityInput, evaluateDistrictSecurityCheck } from "./wor
 
 /**
  * 夜之城定性物理与现实约束门面：
- * - 前置核查客观硬条件：余额缺口、城区安检与着装门禁、物理气隙与网络拓扑、枪械口径与重甲错配
+ * - 前置核查客观硬条件：余额缺口、城区武器安检与门禁、物理气隙与网络拓扑、枪械口径与重甲错配
  * - 无预设启用时提供按气氛节律伸缩的柔性篇幅参考（启用 SillyTavern 预设时全权交由预设）
  */
 
@@ -12,6 +12,12 @@ export interface PhysicsLockInput {
   readonly spendMoney?: number;
   readonly securityCheck?: DistrictSecurityInput;
   readonly hackCheck?: HackTopologyCheckInput;
+  /** 随身携带过多大件（软超重）：不阻塞行动，但施加定性物理劣势引导 */
+  readonly bulkyOverload?: {
+    readonly count: number;
+    readonly max: number;
+    readonly items: readonly string[];
+  };
   /** 当尝试轻武器正面硬撼重甲/机甲时，给出定性物理反馈 */
   readonly ballisticMismatch?: string;
 }
@@ -58,6 +64,14 @@ export function evaluatePhysicsBoundaries(input: PhysicsLockInput): PhysicsLockR
   if (input.ballisticMismatch) {
     blocked = true;
     directives.push(input.ballisticMismatch);
+  }
+
+  if (input.bulkyOverload) {
+    const list =
+      input.bulkyOverload.items.length > 0 ? `（${input.bulkyOverload.items.join("、")}）` : "";
+    directives.push(
+      `随身大件超重（带着 ${input.bulkyOverload.count}/${input.bulkyOverload.max} 件显眼大件${list}）：身上鼓囊沉重、重心受阻，翻墙、钻缝、潜行、近身闪避与高速追逐动作均吃物理劣势（可将多余长件寄存在安全屋存放箱或车辆后备箱）`,
+    );
   }
 
   return {

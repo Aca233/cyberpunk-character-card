@@ -1,7 +1,7 @@
 import type { ViewContext } from "../../kernel/system";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { itemCatalog } from "./apply";
-import { InventoryStateSchema, type ItemDef } from "./schema";
+import { carriedItemCounts, InventoryStateSchema, type ItemDef } from "./schema";
 
 const CJK = /[㐀-鿿]/;
 
@@ -11,10 +11,9 @@ export function namesView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
   const ids = new Set([
-    ...inventory.weapons.filter((w): w is string => w !== null),
+    ...carriedItemCounts(inventory).keys(),
     ...(inventory.healing ? [inventory.healing.id] : []),
     ...(inventory.grenade ? [inventory.grenade.id] : []),
-    ...Object.keys(inventory.backpack),
     ...Object.values(inventory.clothing),
   ]);
   const place = location === null ? undefined : locationCatalog(data).get(location);

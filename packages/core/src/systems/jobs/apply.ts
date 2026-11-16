@@ -45,60 +45,12 @@ export const AFFINITY_CHANGE: Readonly<Record<JobOutcome, number>> = {
  */
 export const ASK_OVERDUE_PENALTY = -3;
 
-/** 完成一单得到的街头声望，按半级计：1 星半级到 5 星三级；带瑕疵完成减半 */
+/** 完成一单得到的街头声望，按半级计（1 到 5 档）；带瑕疵完成减半 */
 export const CRED_HALVES: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 6 };
 
-/** 能接的星级取街头声望和中间人好感两者中较低的一项 */
-export function starsByCred(cred: number): number {
-  if (cred >= 35) return 5;
-  if (cred >= 20) return 4;
-  if (cred >= 10) return 3;
-  return 2;
-}
-
-export function starsByAffinity(affinity: number): number {
-  if (affinity >= 70) return 5;
-  if (affinity >= 40) return 4;
-  if (affinity >= 20) return 3;
-  return 2;
-}
-
-export function maxRisk(affinity: number, streetCred: number): number {
-  return Math.min(starsByCred(streetCred), starsByAffinity(affinity));
-}
-
-const CRED_STEPS = [
-  { at: 10, stars: 3 },
-  { at: 20, stars: 4 },
-  { at: 35, stars: 5 },
-] as const;
-const AFFINITY_STEPS = [
-  { at: 20, stars: 3 },
-  { at: 40, stars: 4 },
-  { at: 70, stars: 5 },
-] as const;
-
-export interface RiskCap {
-  readonly max: number;
-  /** 卡在哪一项；两项一样或已经到 5 星时为 null */
-  readonly by: "cred" | "affinity" | null;
-  /** 要多接一星差什么，界面直接显示 */
-  readonly hint: string | null;
-}
-
-/** 能接的星级卡在哪一项、再往上要什么，委托板标明 */
-export function riskCap(affinity: number, streetCred: number): RiskCap {
-  const byCred = starsByCred(streetCred);
-  const byAffinity = starsByAffinity(affinity);
-  const max = Math.min(byCred, byAffinity);
-  if (max >= 5) return { max, by: null, hint: null };
-  const cred = CRED_STEPS.find((s) => s.stars === max + 1);
-  const liking = AFFINITY_STEPS.find((s) => s.stars === max + 1);
-  const needs: string[] = [];
-  if (byCred <= max && cred) needs.push(`街头声望 ${cred.at} 级`);
-  if (byAffinity <= max && liking) needs.push(`中间人好感 ${liking.at}`);
-  const by = byCred === byAffinity ? null : byCred < byAffinity ? "cred" : "affinity";
-  return { max, by, hint: `需要${needs.join("和")}，才能接 ${max + 1} 星` };
+/** 派单人所属势力的态度：见面就打和敌对的不派单 */
+export function fixerBlocked(attitude: string | undefined): boolean {
+  return attitude === "kos" || attitude === "hostile";
 }
 
 export function isOpen(job: Pick<Job, "status">): boolean {
@@ -111,7 +63,7 @@ export function seedFixer(draft: Draft<JobsState>, command: SeedFixer): ApplyOut
   return { ok: true };
 }
 
-/** 派单人的人物卡：查好感、自动登记中间人用 */
+/** 派单人的人物卡：查势力态度、自动登记中间人用 */
 export interface FixerCard {
   readonly name: string;
   readonly alive: boolean;
@@ -121,19 +73,7 @@ export interface FixerCard {
 }
 
 /**
- * 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」："态度影响……派单"；本作改编，暂定，试玩时调）：
- * 见面就打和敌对的不派单；友好、自己人能多派一星
- */
-export const FACTION_RISK_BONUS: Readonly<Record<string, number | null>> = {
-  kos: null,
-  hostile: null,
-  neutral: 0,
-  friendly: 1,
-  family: 1,
-};
-
-/**
- * cardOf：按 id 查人物卡，没有卡是 undefined（好感算 0）。
+ * cardOf：按 id 查人物卡，没有卡是 undefined。
  * fixer 还没登记、但有同 id 的活人物卡时，在这里登记成中间人（用户定的，2026-10-30："llm 也要能生成中间人"）：
  * 模型先用 npc 建卡、再在 jobOffer 写 fixer 就行；旧存档里有卡没登记的罗格、和歌子等也走这条路
  */
@@ -141,7 +81,6 @@ export function offerJob(
   draft: Draft<JobsState>,
   command: JobOffer,
   now: number,
-  streetCred: number,
   cardOf: (id: string) => FixerCard | undefined,
 ): ApplyOutcome {
   if (draft.jobs.some((j) => j.id === command.id)) return fail(`委托 ${command.id} 已经存在`);
@@ -164,18 +103,9 @@ export function offerJob(
   }
   if (fixer) {
     const card = cardOf(fixer.id);
-    const affinity = card?.affinity ?? 0;
-    // 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）：敌对以下不派单，友好以上多派一星
     const side = card?.faction;
-    const bonus = side === undefined ? 0 : FACTION_RISK_BONUS[side.attitude];
-    if (side !== undefined && bonus === null) {
+    if (side !== undefined && fixerBlocked(side.attitude)) {
       return fail(`${fixer.name}是${side.name}的人，${side.name}现在和玩家结了仇，不会给玩家派单`);
-    }
-    const max = Math.min(5, maxRisk(affinity, streetCred) + (bonus ?? 0));
-    if (command.risk > max) {
-      return fail(
-        `${fixer.name}现在最多派 ${max} 星的活（街头声望 ${streetCred} 级、好感 ${affinity}${bonus ? `，${side?.name}待玩家好、多派一星` : ""}），这单是 ${command.risk} 星`,
-      );
     }
   }
   draft.jobs.push({
@@ -206,7 +136,7 @@ export function offerJob(
   });
   return {
     ok: true,
-    notes: [...notes, `新委托：${command.title}（${command.risk} 星，${command.reward} 欧元）`],
+    notes: [...notes, `新委托：${command.title}（${command.reward} 欧元）`],
   };
 }
 

@@ -13,18 +13,20 @@ export function phoneFeed({ world }: ViewContext): readonly FeedItem[] {
     return [{ kind: "job", id: job.id, label: job.title }];
   };
   const read = new Set(state.feedRead);
-  const messages: FeedItem[] = state.messages.map((message) => ({
-    id: `phone:message:${message.id}`,
-    source: "phone",
-    channel: "messages",
-    from: message.name,
-    text: message.text,
-    at: message.at,
-    time: formatGameTime(message.at),
-    unread: !message.read,
-    notify: true,
-    attachments: attachments(message.job),
-  }));
+  const messages: FeedItem[] = state.messages
+    .filter((message) => message.sender !== "player")
+    .map((message) => ({
+      id: `phone:message:${message.id}`,
+      source: "phone",
+      channel: "messages",
+      from: message.name,
+      text: message.text,
+      at: message.at,
+      time: formatGameTime(message.at),
+      unread: !message.read,
+      notify: true,
+      attachments: attachments(message.job),
+    }));
   // 没接的全息电话记一条；打来的用意只给叙事模型看，这里只写原作那句提示
   const missed: FeedItem[] = state.calls
     .filter((call) => call.status === "missed")

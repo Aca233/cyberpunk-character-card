@@ -53,8 +53,8 @@ export function FactionsBody({ view }: { readonly view: View }) {
                     {f.id === "ncpd" &&
                       view.ncpd.alerts.map((a) => (
                         <p key={a.id} className={styles.factionLine}>
-                          警情「{a.label}」在{a.locationName}（{a.district}，{"★".repeat(a.risk)}
-                          ，赏金 {a.reward} 欧元，{a.until} 前）：{a.note}
+                          警情「{a.label}」在{a.locationName}（{a.district}，赏金 {a.reward} 欧元，
+                          {a.until} 前）：{a.note}
                         </p>
                       ))}
                     {f.id === "trauma-team" && (

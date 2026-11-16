@@ -7,12 +7,11 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame } from "../../ui/FrameBox";
-import { BoardEditor, emptyBoard } from "./BoardEditor";
-import { CharacterCreator, type CreatorStart } from "./CharacterCreator";
+import { emptyBoard } from "./BoardEditor";
+import { CharacterCreator } from "./CharacterCreator";
 import styles from "./characters.module.css";
-import { clearDraft, loadDraft, STEPS } from "./creator";
-import { ProseField } from "./ProseField";
-import { downloadCard, readCardFile } from "./tavernFile";
+import { clearDraft, loadDraft, saveDraft } from "./creator";
+import { readCardFile } from "./tavernFile";
 import wb from "./workbench.module.css";
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切（同设置页） */
@@ -23,17 +22,15 @@ interface Editor {
   readonly sample: boolean;
   readonly card: CharacterCard;
   readonly original: string;
-  /** 分步捏人（creator-plan，2026-10-30）：切换角色才换会话，保存拿到 id 时不换，避免打断建档 */
+  /** 切换角色才换会话，保存拿到 id 时不换，避免打断建档 */
   readonly session: string;
-  /** 新角色从出身开始，草稿恢复进度，已有主板的角色从档案确认开始 */
-  readonly start: CreatorStart;
   /** 刚导入、还没保存的卡：导入时的提示 */
   readonly imported?: { readonly warnings: readonly string[]; readonly own: boolean };
 }
 
 type Destination = { readonly editor: Editor } | { readonly back: true };
 
-/** 新角色一律带主板（creator-plan "主板必选"）；出身由第 1 步选的出身模块填 */
+/** 新角色默认带空白主板 */
 function blankCard(): CharacterCard {
   return {
     name: "",
@@ -57,53 +54,42 @@ function blankCard(): CharacterCard {
 let sessions = 0;
 const newSession = () => `editor-${++sessions}`;
 
-const FRESH: CreatorStart = { step: "origin", reached: 0, startLocation: "", rerolls: 0 };
-/** 已有主板的卡：直接到档案确认，走过的步都能点回去 */
-const REVIEW: CreatorStart = {
-  step: "review",
-  reached: STEPS.length - 1,
-  startLocation: "",
-  rerolls: 0,
-};
-
 function editorFor(card: CharacterCard, id: string | null = null, sample = false): Editor {
-  const copy = { ...card, attributes: { ...card.attributes } };
+  const board = card.board ?? emptyBoard();
+  const copy: CharacterCard = {
+    ...card,
+    attributes: { ...card.attributes },
+    board,
+  };
   return {
     id,
     sample,
     card: copy,
     original: JSON.stringify(copy),
     session: newSession(),
-    start: id === null ? FRESH : REVIEW,
   };
 }
 
-/** 打开页面时有没存进角色库的草稿就接着捏；草稿没进过角色库，算未保存（original 留空） */
+/** 恢复未保存的修改，同时保留原角色 id，避免刷新后再保存生成重复角色。 */
 function initialEditor(): Editor {
   const draft = loadDraft(blankCard());
   if (!draft) return editorFor(blankCard());
   return {
-    id: null,
-    sample: false,
-    card: draft.card,
-    original: "",
-    session: newSession(),
-    start: {
-      step: draft.step,
-      reached: Math.max(
-        Math.floor(draft.reached),
-        STEPS.findIndex((s) => s.id === draft.step),
-      ),
-      startLocation: draft.startLocation,
-      rerolls: draft.rerolls,
+    id: draft.characterId ?? null,
+    sample: draft.sample ?? false,
+    card: {
+      ...draft.card,
+      board: {
+        ...(draft.card.board ?? emptyBoard()),
+        ...(draft.startLocation ? { startLocation: draft.startLocation } : {}),
+      },
     },
+    original: draft.original ?? "",
+    session: newSession(),
   };
 }
 
-/** 交给叙事模型的正文在前；场景、开场白、对话示例只留在卡上 */
-const BRIEF_BLOCKS = ["look", "past", "personality", "voice"] as const;
-
-/** 角色库和手写角色卡；改卡只影响以后新建的存档 */
+/** 角色库与 2077 赛博档案工作台 */
 export function CharactersScreen() {
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -117,29 +103,37 @@ export function CharactersScreen() {
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(true);
 
-  const dirty = !editor.sample && JSON.stringify(editor.card) !== editor.original;
+  const modified = JSON.stringify(editor.card) !== editor.original;
+  const dirty = modified;
   const parsed = CharacterCardSchema.safeParse(editor.card);
 
   const save = useMutation({
-    mutationFn: ({ id, card }: { id: string | null; card: CharacterCard }) =>
+    mutationFn: ({ id, card }: { id: string | null; card: CharacterCard; session: string }) =>
       id === null ? api.createCharacter(card) : api.updateCharacter(id, card),
-    onSuccess: (entry) => {
-      // 同一个会话里保存：只换 id、卡和"已保存"的基准，分步外壳不重建（保存并开新档还在等这一步）
+    onSuccess: (entry, submitted) => {
       setEditor((old) => {
+        if (old.session !== submitted.session) return old;
         const { imported: _, ...current } = old;
-        const copy = { ...entry.card, attributes: { ...entry.card.attributes } };
+        const copy: CharacterCard = {
+          ...entry.card,
+          attributes: { ...entry.card.attributes },
+          board: entry.card.board ?? emptyBoard(),
+        };
         return {
           ...current,
           id: entry.id,
           sample: false,
-          card: copy,
+          card: JSON.stringify(old.card) === JSON.stringify(submitted.card) ? copy : old.card,
           original: JSON.stringify(copy),
         };
       });
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
   });
+
   const remove = useMutation({
     mutationFn: api.deleteCharacter,
     onSuccess: (_result, id) => {
@@ -148,13 +142,13 @@ export function CharactersScreen() {
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
   });
+
   const [useModel, setUseModel] = useState(true);
   const fileInput = useRef<HTMLInputElement>(null);
   const importCard = useMutation({
     mutationFn: async ({ file, model }: { file: File; model: boolean }) =>
       api.importCharacter({ raw: await readCardFile(file), useModel: model }),
     onSuccess: ({ card, warnings, own }) => {
-      // 导入的卡不保存，original 留空让它算作未保存
       const next: Destination = {
         editor: {
           ...editorFor(card),
@@ -166,7 +160,23 @@ export function CharactersScreen() {
       else go(next);
     },
   });
-  const busy = save.isPending || remove.isPending || importCard.isPending;
+  const busy = save.isPending || remove.isPending || importCard.isPending || launching;
+
+  useEffect(() => {
+    if (!dirty) {
+      clearDraft();
+      return;
+    }
+    setDraftSaved(
+      saveDraft({
+        card: editor.card,
+        startLocation: editor.card.board?.startLocation ?? "",
+        characterId: editor.id,
+        sample: editor.sample,
+        original: editor.original,
+      }),
+    );
+  }, [editor, dirty]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -179,10 +189,7 @@ export function CharactersScreen() {
   }, [dirty]);
 
   const go = (next: Destination) => {
-    // 从新角色离开（换新会话、看示例、切到已存角色、回主菜单）时，草稿要么已经在确认框里放弃、要么没改过，
-    // 清掉免得下次打开又被接上（2026-10-30 浏览器走查发现：点了"放弃修改"草稿还在）。
-    // 关页面、刷新不经过这里，草稿照旧留着接着捏
-    if (editor.id === null) clearDraft();
+    clearDraft();
     if ("back" in next) navigate("/menu");
     else {
       setEditor(next.editor);
@@ -191,29 +198,20 @@ export function CharactersScreen() {
       remove.reset();
     }
   };
+
   const requestGo = (next: Destination) => {
     if (busy) return;
     if (dirty) setDestination(next);
     else go(next);
   };
-  const change = (patch: Partial<CharacterCard>) => {
-    setEditor((old) => ({ ...old, card: { ...old.card, ...patch } }));
-    save.reset();
-  };
-  const dropBoard = () => {
-    setEditor((old) => {
-      const { board: _, ...card } = old.card;
-      return { ...old, card };
-    });
-    save.reset();
+
+  const handleCardChange = (next: CharacterCard | ((current: CharacterCard) => CharacterCard)) => {
+    setEditor((old) => ({ ...old, card: typeof next === "function" ? next(old.card) : next }));
+    if (!save.isPending) save.reset();
   };
 
   return (
     <main className={styles.screen}>
-      {/*
-       * 外框照设置页和神经界面（用户 2026-10-30 反馈"这UI好丑而且完全没有排版"）：
-       * 夜之城远景压暗、扫描线、原作 panel.frame 红框，顶部 menu.header 垫标题；都不挡点击
-       */}
       <span
         className={styles.bg}
         style={{ backgroundImage: cssUrl("menu.nightCity") }}
@@ -236,6 +234,9 @@ export function CharactersScreen() {
         <h1>身份档案</h1>
         <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
         <span className={styles.headSpacer} />
+        <Button small disabled={busy} onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
+          ＋ 新建空白档案
+        </Button>
         <Button
           small
           disabled={busy}
@@ -253,7 +254,7 @@ export function CharactersScreen() {
         {showLibrary && (
           <aside className={wb.libraryDrawer} aria-label="角色库">
             <div className={wb.topBar}>
-              <strong>角色库</strong>
+              <strong>夜之城角色库</strong>
               <span className={styles.headSpacer} />
               <button
                 type="button"
@@ -272,7 +273,7 @@ export function CharactersScreen() {
             </Button>
             <div className={styles.importBox}>
               <Button disabled={busy} onClick={() => fileInput.current?.click()}>
-                {importCard.isPending ? "正在导入…" : "导入角色卡"}
+                {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
               </Button>
               <label className={styles.importOption}>
                 <input
@@ -282,7 +283,7 @@ export function CharactersScreen() {
                   disabled={busy}
                   onChange={(event) => setUseModel(event.target.checked)}
                 />
-                <span>由 AI 自动配置主板与属性（消耗一次模型调用；导入本作导出的角色卡除外）</span>
+                <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
               </label>
               <input
                 ref={fileInput}
@@ -312,272 +313,100 @@ export function CharactersScreen() {
               <p className={styles.note}>还没有角色。</p>
             )}
             <ul className={styles.cards}>
-              {(characters.data ?? []).map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    className={styles.card}
-                    aria-pressed={editor.id === entry.id}
-                    disabled={busy}
-                    onClick={() =>
-                      requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })
-                    }
-                  >
-                    <CellFrame />
-                    <span className={styles.cardKind}>
-                      {entry.sample ? "示例 / 只读" : "自建角色"}
-                    </span>
-                    <strong>{entry.card.name}</strong>
-                    <span>
-                      {entry.card.origin}
-                      {entry.card.alias ? ` · ${entry.card.alias}` : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {(characters.data ?? []).map((entry) => {
+                const b = entry.card.board;
+                const traitCount = (b?.skills.length ?? 0) + (b?.pasts.length ?? 0);
+                const cyberCount = b?.cyberware.length ?? 0;
+                return (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      className={styles.card}
+                      aria-pressed={editor.id === entry.id}
+                      disabled={busy}
+                      onClick={() =>
+                        requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })
+                      }
+                    >
+                      <CellFrame />
+                      <span className={styles.cardKind}>
+                        {entry.sample ? "官方预设 · 可直接开局或另存" : "自建角色"}
+                      </span>
+                      <strong>
+                        {entry.card.name}
+                        {entry.card.alias ? `「${entry.card.alias}」` : ""}
+                      </strong>
+                      <span>
+                        {entry.card.origin || b?.origin?.label || "未知出身"}
+                        {b ? ` · 特质 ${traitCount} · 义体 ${cyberCount}` : ""}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </aside>
         )}
 
-        {editor.card.board && !editor.sample ? (
-          <section className={wb.editorWrap} aria-label="角色设计工作台">
-            {editor.imported && (
-              <div className={styles.notice} role="status">
-                <p>
-                  {editor.imported.own
-                    ? "这是本作导出的角色卡，已经原样还原。"
-                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配。"}
-                  检查一遍再保存，保存后才进角色库。
-                </p>
-                {editor.imported.warnings.length > 0 && (
-                  <ul className={styles.warnings}>
-                    {editor.imported.warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
-            {boardData.isPending && <p role="status">正在读取模块库…</p>}
-            {boardData.isSuccess && (
-              <div className={wb.benchHost}>
-                <CharacterCreator
-                  key={editor.session}
-                  card={{ ...editor.card, board: editor.card.board }}
-                  data={boardData.data}
-                  onChange={change}
-                  start={editor.start}
-                  draftable={editor.id === null && !editor.imported}
-                  saving={save.isPending}
-                  saveError={save.isError ? save.error.message : null}
-                  saved={save.isSuccess && !dirty}
-                  onSave={(card) => save.mutateAsync({ id: editor.id, card })}
-                  onExport={parsed.success ? () => downloadCard(parsed.data) : undefined}
-                  onDelete={
-                    editor.id !== null
-                      ? () => {
-                          const entry = characters.data?.find((item) => item.id === editor.id);
-                          if (entry && !entry.sample) {
-                            remove.reset();
-                            setDeleting(entry);
-                          }
-                        }
-                      : undefined
-                  }
-                />
-              </div>
-            )}
-          </section>
-        ) : (
-          <form
-            className={styles.editor}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!busy && !editor.sample && parsed.success) {
-                save.mutate({ id: editor.id, card: parsed.data });
-              }
-            }}
-          >
-            <div className={styles.editorHead}>
-              <div>
-                <span className={styles.eyebrow}>
-                  {editor.sample ? "示例档案" : editor.id ? "编辑档案" : "新身份"}
-                </span>
-                <h2>{editor.card.name.trim() || "尚未命名"}</h2>
-              </div>
-              <div className={styles.headTools}>
-                <span className={styles.note}>{dirty ? "有未保存的修改" : "本地角色库"}</span>
-                <Button
-                  disabled={busy || !parsed.success}
-                  reason="角色卡还没填完整"
-                  onClick={() => {
-                    if (parsed.success) downloadCard(parsed.data);
-                  }}
-                >
-                  导出角色卡
-                </Button>
-              </div>
-            </div>
-
-            {editor.imported && (
-              <div className={styles.notice} role="status">
-                <p>
-                  {editor.imported.own
-                    ? "这是本作导出的角色卡，已经原样还原。"
-                    : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配并完成合规校准。"}
-                  检查一遍再保存，保存后才进角色库。
-                </p>
-                {editor.imported.warnings.length > 0 && (
-                  <ul className={styles.warnings}>
-                    {editor.imported.warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            {editor.sample && (
-              <div className={styles.notice}>
-                <p>示例角色可以直接用于新存档。想改写背景，先复制成自己的角色。</p>
-                <Button
-                  disabled={busy}
-                  onClick={() => requestGo({ editor: editorFor(editor.card) })}
-                >
-                  复制并编辑
-                </Button>
-              </div>
-            )}
-
-            <fieldset className={styles.fields} disabled={busy || editor.sample}>
-              <legend className={styles.sectionTitle}>01 / 名片</legend>
-              <div className={styles.identity}>
-                <label className={styles.field}>
-                  <span>姓名 *</span>
-                  <input
-                    required
-                    maxLength={20}
-                    value={editor.card.name}
-                    onChange={(event) => change({ name: event.target.value })}
-                    autoComplete="off"
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>外号</span>
-                  <input
-                    maxLength={20}
-                    value={editor.card.alias}
-                    onChange={(event) => change({ alias: event.target.value })}
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>代词</span>
-                  <input
-                    required
-                    maxLength={4}
-                    value={editor.card.pronoun}
-                    onChange={(event) => change({ pronoun: event.target.value })}
-                    placeholder="他 / 她 / TA"
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>出身 *</span>
-                  <input
-                    required
-                    maxLength={40}
-                    value={editor.card.origin}
-                    onChange={(event) => change({ origin: event.target.value })}
-                    placeholder="街头小子、流浪者，或自己的出身"
-                  />
-                </label>
-              </div>
-
-              <div className={styles.sectionHead}>
-                <h3 className={styles.sectionTitle}>02 / 角色主板</h3>
-                {editor.card.board && !editor.sample && (
-                  <button type="button" className={styles.toolButton} onClick={dropBoard}>
-                    拆掉主板
-                  </button>
-                )}
-              </div>
-              {!editor.card.board && (
-                <div className={styles.notice}>
-                  {/* 旧卡兼容（creator-plan "主板必选"）：照旧能编辑、能开档；补上主板后换成分步捏人，按新流程校验 */}
-                  {!editor.sample && (
-                    <p>这是旧式纯文字卡，可以照旧编辑，也可以补一块主板，改用分步捏人。</p>
-                  )}
-                  {boardData.isError && <p className={styles.error}>{boardData.error.message}</p>}
-                  {!editor.sample && (
-                    <Button
-                      disabled={!boardData.isSuccess}
-                      reason="正在读取模块库"
-                      onClick={() => change({ board: emptyBoard() })}
-                    >
-                      补一块主板
-                    </Button>
-                  )}
-                </div>
-              )}
-              {editor.card.board && boardData.isSuccess && (
-                <BoardEditor
-                  board={editor.card.board}
-                  data={boardData.data}
-                  onChange={(board, origin) => change({ board, ...(origin ? { origin } : {}) })}
-                />
-              )}
-              {editor.card.board && boardData.isPending && <p role="status">正在读取模块库…</p>}
-
-              <h3 className={styles.sectionTitle}>03 / 这个人</h3>
-              <p className={styles.note}>
-                可调用辅助模型生成、重写、续写或润色（消耗一次调用）；锁定的区块不会被改写。
+        <section className={wb.editorWrap} aria-label="角色设计工作台">
+          {editor.imported && (
+            <div className={styles.notice} role="status">
+              <p>
+                {editor.imported.own
+                  ? "这是本作导出的角色卡，已经原样还原。"
+                  : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配。"}
+                检查一遍再保存，保存后才进角色库。
               </p>
-              <div className={styles.proseBlocks}>
-                {BRIEF_BLOCKS.map((block) => (
-                  <ProseField key={block} block={block} card={editor.card} onChange={change} />
-                ))}
-              </div>
-            </fieldset>
-
-            {!editor.sample && (
-              <footer className={styles.actions}>
-                <p className={styles.note}>修改或删除角色卡不会改写已有存档里的角色。</p>
-                {!parsed.success && (
-                  <p className={styles.note}>{parsed.error.issues[0]?.message}</p>
-                )}
-                {save.isError && (
-                  <p className={styles.error} role="alert">
-                    {save.error.message}
-                  </p>
-                )}
-                {save.isSuccess && (
-                  <p className={styles.success} role="status">
-                    角色已保存，可以用于新存档。
-                  </p>
-                )}
-                <div className={styles.buttons}>
-                  <Button type="submit" primary disabled={busy || !parsed.success}>
-                    {save.isPending ? "保存中…" : "保存角色"}
-                  </Button>
-                  {editor.id !== null && (
-                    <Button
-                      disabled={busy}
-                      onClick={() => {
-                        const entry = characters.data?.find((item) => item.id === editor.id);
-                        if (entry && !entry.sample) {
-                          remove.reset();
-                          setDeleting(entry);
-                        }
-                      }}
-                    >
-                      删除角色
-                    </Button>
-                  )}
-                </div>
-              </footer>
-            )}
-          </form>
-        )}
+              {editor.imported.warnings.length > 0 && (
+                <ul className={styles.warnings}>
+                  {editor.imported.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
+          {boardData.isError && (
+            <div role="alert">
+              <p className={styles.error}>{boardData.error.message}</p>
+              <Button onClick={() => void boardData.refetch()}>重新读取创角目录</Button>
+            </div>
+          )}
+          <div className={wb.benchHost}>
+            <CharacterCreator
+              key={editor.session}
+              card={{ ...editor.card, board: editor.card.board ?? emptyBoard() }}
+              boardData={boardData.data}
+              busy={busy}
+              canSave={parsed.success}
+              canDelete={editor.id !== null && !editor.sample}
+              isSample={editor.sample && !modified}
+              characterId={editor.id}
+              saveError={save.isError ? save.error.message : null}
+              saved={editor.id !== null && !editor.sample && !dirty}
+              draftSaved={draftSaved}
+              onLaunchingChange={setLaunching}
+              onChange={handleCardChange}
+              onSave={(card) =>
+                save.mutateAsync({
+                  id: editor.sample ? null : editor.id,
+                  card,
+                  session: editor.session,
+                })
+              }
+              onDelete={() => {
+                if (!editor.id || editor.sample) return;
+                const entry = characters.data?.find((item) => item.id === editor.id);
+                if (entry && !entry.sample) {
+                  remove.reset();
+                  setDeleting(entry);
+                }
+              }}
+              onLaunch={(saveId) => navigate(`/play/${saveId}`)}
+            />
+          </div>
+        </section>
       </div>
 
       {destination && (

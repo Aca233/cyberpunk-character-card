@@ -19,16 +19,16 @@ export const STAGE_LABELS: Readonly<Record<HumanityStage, string>> = {
   detached: "疏离",
   unstable: "不稳定",
   edge: "边缘",
-  crisis: "危机",
+  crisis: "临界",
 };
 
 /**
- * 神经负荷感知失真区（当前人性 < 40 且未注射免疫抑制剂压制）：
- * 义眼偶发红帧噪点、耳鸣幻听、高压下易发生非自愿过激失控（无任何正面检定 Buff）
+ * 神经负荷感知失真区（当前人性 < 40 且未注射压制剂压制）：
+ * 义眼偶发红帧噪点、耳鸣幻听、高压下易发生非自愿失控（无任何正面检定 Buff）
  */
 export function isGlitchZone(current: number, suppressed = false): boolean {
   if (suppressed) return false;
-  return current >= 1 && current <= 39;
+  return current < 40;
 }
 
 /** 当前是否处于免疫抑制剂/神经阻断剂药效期内 */
@@ -97,8 +97,8 @@ export function applyHumanity(
   const to = humanityStage(draft.current);
   if (from !== to) notes.push(`人性阶段：${STAGE_LABELS[from]} → ${STAGE_LABELS[to]}`);
   const zero = draft.current === 0 && before > 0;
-  if (zero) notes.push("人性归零，进入危机章节");
-  return zero ? { ok: true, notes, signals: ["humanity.zero"] } : { ok: true, notes };
+  if (zero) notes.push("人性归零，神经排异到达临界点");
+  return { ok: true, notes };
 }
 
 /** 注射免疫抑制剂/神经阻断剂，暂时压制低人性带来的神经排异与感知失真 */
@@ -129,8 +129,7 @@ export function setCyberwareCost(draft: Draft<HumanityState>, total: number): Ap
     draft.current = cap;
   }
   if (draft.current === 0 && before > 0) {
-    notes.push("人性归零，进入危机章节");
-    return { ok: true, notes, signals: ["humanity.zero"] };
+    notes.push("人性归零，神经排异到达临界点");
   }
   return { ok: true, notes };
 }
@@ -149,16 +148,4 @@ export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance):
       `义体耐受：${TOLERANCE_LABELS[tolerance]}，义体的人性消耗 ×${TOLERANCE_FACTOR[tolerance]}`,
     ],
   };
-}
-
-/** 被拉回来：人性回到给定值，但不超过上限 */
-export function restoreHumanity(draft: Draft<HumanityState>, value: number): ApplyOutcome {
-  const cap = humanityCap(draft);
-  const before = draft.current;
-  draft.current = Math.max(draft.current, Math.min(value, cap));
-  const notes = [`人性回到 ${draft.current}`];
-  const from = humanityStage(before);
-  const to = humanityStage(draft.current);
-  if (from !== to) notes.push(`人性阶段：${STAGE_LABELS[from]} → ${STAGE_LABELS[to]}`);
-  return { ok: true, notes };
 }

@@ -12,7 +12,6 @@ import {
   tickHeat,
 } from "./apply";
 import { heatEvents } from "./events";
-import { heatFeed } from "./feed";
 import { eventRules, heatRules } from "./prompt";
 import {
   type BountyCommand,
@@ -112,7 +111,6 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
     rules: [eventRules, heatRules],
     threats: heatThreats,
     events: heatEvents,
-    feed: heatFeed,
     view: { key: "heat", project: heatView },
     status: heatStatus,
   },
@@ -120,7 +118,6 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
 
 export * from "./apply";
 export * from "./events";
-export * from "./feed";
 export * from "./prompt";
 export * from "./schema";
 export * from "./status";

@@ -1,0 +1,837 @@
+/* 生物检测（U1 展开面板）：Kiroshi 生理扫描图 + 创伤/神经稳态阵列/外设调度 */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-ui);
+}
+
+/* 顶部总控横条 */
+.banner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 5px 10px;
+  isolation: isolate;
+  --box-fill: rgb(14 10 16 / 94%);
+  --box-line: var(--cp-red-dim);
+}
+
+.banner:where([data-tone="warn"]) {
+  --box-line: var(--cp-yellow-dim);
+}
+
+.banner:where([data-tone="hurt"]) {
+  --box-line: #b45318;
+}
+
+.banner:where([data-tone="bad"], [data-tone="dead"]) {
+  --box-fill: rgb(32 8 14 / 94%);
+  --box-line: var(--cp-danger);
+}
+
+.bannerBrand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.bannerCrest {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.bannerCrestIcon {
+  position: absolute;
+  pointer-events: none;
+}
+
+.bannerTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bannerCode {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--cp-cyan);
+}
+
+.bannerHostRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+  min-width: 0;
+}
+
+.bannerName {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-text);
+}
+
+.bannerSub {
+  font-size: 11.5px;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+}
+
+.bannerPills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusPill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  isolation: isolate;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+}
+
+.statusPill:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.statusPill:where([data-tone="hurt"]) {
+  color: #ff9c42;
+}
+
+.statusPill:where([data-tone="bad"], [data-tone="dead"]) {
+  color: var(--cp-danger);
+  animation: bioPulse 950ms ease-in-out infinite;
+}
+
+.ttPill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  isolation: isolate;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--cp-text-dim);
+}
+
+.ttPill:where([data-ok]) {
+  color: var(--cp-success);
+}
+
+.ttPill:where([data-blocked]) {
+  color: var(--cp-yellow);
+}
+
+/* 主工作区：左体征解剖 + 右三组诊断 */
+.workspace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 9px;
+}
+
+/* 左栏：全息躯体扫描区 */
+.scanCol {
+  position: relative;
+  flex: 1 1 146px;
+  max-width: 170px;
+  min-width: 136px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 9px;
+  isolation: isolate;
+  overflow: hidden;
+  --box-fill: rgb(9 12 20 / 94%);
+  --box-line: var(--cp-red-dim);
+}
+
+.scanCol:where([data-tone="bad"], [data-tone="dead"]) {
+  --box-fill: rgb(24 8 14 / 94%);
+  --box-line: var(--cp-danger);
+}
+
+.scanGridBg {
+  position: absolute;
+  inset: 4px;
+  z-index: 0;
+  opacity: 0.16;
+  background-repeat: repeat;
+  pointer-events: none;
+}
+
+.scanHead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cp-text-dim);
+}
+
+.scanLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cp-cyan);
+}
+
+.scanLive i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.scanLive:where([data-alert="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.scanLive:where([data-alert="bad"]) {
+  color: var(--cp-danger);
+}
+
+.bodyStage {
+  position: relative;
+  z-index: 1;
+  height: 108px;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.bodyReticle {
+  position: absolute;
+  inset: 4px 10px;
+  background:
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 0 0 / 8px 1px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 0 0 / 1px 8px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 100% 0 / 8px 1px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 100% 0 / 1px 8px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 0 100% / 8px 1px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 0 100% / 1px 8px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 100% 100% / 8px 1px no-repeat,
+    linear-gradient(var(--cp-cyan), var(--cp-cyan)) 100% 100% / 1px 8px no-repeat;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.bodyLayer {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: auto;
+  height: 104px;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transition:
+    opacity 220ms ease-out,
+    filter 220ms ease-out;
+}
+
+.bodyGlow {
+  position: absolute;
+  inset: 8px;
+  margin: auto;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.zonePin,
+.scarPin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.zonePin {
+  width: 9px;
+  height: 9px;
+  background: var(--cp-yellow);
+  border: 1.5px solid rgb(12 13 22 / 90%);
+  box-shadow: 0 0 8px var(--cp-yellow);
+}
+
+.zonePin:where([data-tone="hurt"]) {
+  background: #ff9c42;
+  box-shadow: 0 0 9px rgb(255 156 66 / 85%);
+}
+
+.zonePin:where([data-tone="bad"], [data-tone="dead"]) {
+  width: 11px;
+  height: 11px;
+  background: var(--cp-danger);
+  box-shadow: 0 0 10px var(--cp-danger);
+}
+
+.scarPin {
+  width: 6px;
+  height: 6px;
+  background: rgb(252 238 10 / 45%);
+  border: 1px solid rgb(252 238 10 / 75%);
+}
+
+.scanBeam {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cp-cyan), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: bioScanSweep 3.4s linear infinite;
+}
+
+.scanCol:where([data-tone="bad"], [data-tone="dead"]) .scanBeam {
+  background: linear-gradient(90deg, transparent, var(--cp-danger), transparent);
+}
+
+.systemLegend {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.sysDot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+}
+
+.sysDot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--cp-cyan);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.sysDot:where([data-alert="warn"])::before {
+  background: var(--cp-yellow);
+}
+
+.sysDot:where([data-alert="bad"])::before {
+  background: var(--cp-danger);
+}
+
+.sysDot:where([data-alert="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.sysDot:where([data-alert="bad"]) {
+  color: var(--cp-hp-low);
+}
+
+.credLine {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgb(255 97 88 / 22%);
+  font-size: 11px;
+}
+
+.credLine small {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-red);
+}
+
+.credLine span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cp-text);
+  font-weight: 600;
+}
+
+/* 右栏：三大核心诊断卡 */
+.telemetryCol {
+  flex: 2 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  isolation: isolate;
+  --box-fill: rgb(12 13 22 / 88%);
+  --box-line: var(--cp-red-dim);
+}
+
+.card:where([data-tone="warn"]) {
+  --box-line: var(--cp-yellow-dim);
+}
+
+.card:where([data-tone="hurt"]) {
+  --box-line: #b45318;
+}
+
+.card:where([data-tone="bad"], [data-tone="dead"]) {
+  --box-fill: rgb(28 9 15 / 90%);
+  --box-line: var(--cp-danger);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-text-dim);
+}
+
+.cardValue {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cp-cyan);
+}
+
+.cardValue:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.cardValue:where([data-tone="hurt"]) {
+  color: #ff9c42;
+}
+
+.cardValue:where([data-tone="bad"], [data-tone="dead"]) {
+  color: var(--cp-danger);
+}
+
+/* 具体伤势档案列表 */
+.traumaList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.traumaItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  background: rgb(94 246 255 / 6%);
+  border-inline-start: 2px solid var(--cp-yellow);
+}
+
+.traumaItem:where([data-tone="hurt"]) {
+  background: rgb(255 156 66 / 9%);
+  border-inline-start-color: #ff9c42;
+}
+
+.traumaItem:where([data-tone="bad"], [data-tone="dead"]) {
+  background: rgb(255 0 60 / 12%);
+  border-inline-start-color: var(--cp-danger);
+}
+
+.traumaPart {
+  flex: none;
+  padding: 1px 6px;
+  background: rgb(255 255 255 / 7%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cp-text);
+}
+
+.traumaInfo {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.traumaHeadline {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traumaCare {
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.traumaTag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+}
+
+.traumaItem:where([data-tone="hurt"]) .traumaTag {
+  color: #ff9c42;
+}
+
+.traumaItem:where([data-tone="bad"], [data-tone="dead"]) .traumaTag {
+  color: var(--cp-hp-low);
+}
+
+.traumaTag:where([data-treated]) {
+  color: var(--cp-cyan);
+}
+
+.traumaClear {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cp-cyan);
+}
+
+.scarBox {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 4px;
+  border-top: 1px dashed rgb(252 238 10 / 26%);
+}
+
+.scarHead {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+}
+
+.scarList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.scarChip {
+  padding: 1px 6px;
+  background: rgb(252 238 10 / 9%);
+  border-inline-start: 2px solid rgb(252 238 10 / 55%);
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.cardNote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cp-text);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.alertChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  background: rgb(255 0 60 / 16%);
+  border-inline-start: 2px solid var(--cp-danger);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cp-hp-low);
+}
+
+.alertChip:where([data-kind="suppress"]) {
+  background: rgb(94 246 255 / 12%);
+  border-inline-start-color: var(--cp-cyan);
+  color: var(--cp-cyan);
+}
+
+.alertChip:where([data-kind="warn"]) {
+  background: rgb(252 238 10 / 12%);
+  border-inline-start-color: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+/* 20 格神经稳态与义体负载矩阵（消除空黑长条，保留 40% 临界线） */
+.neuroGaugeWrap {
+  position: relative;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.neuroMatrix {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  height: 10px;
+}
+
+.neuroCell {
+  height: 100%;
+  background: rgb(94 246 255 / 12%);
+  clip-path: polygon(0 0, calc(100% - 2px) 0, 100% 100%, 2px 100%);
+  transition: background-color 180ms ease-out;
+}
+
+.neuroCell:where([data-kind="reserve"]) {
+  background: rgb(94 246 255 / 14%);
+  box-shadow: inset 0 0 0 1px rgb(94 246 255 / 26%);
+}
+
+.neuroCell:where([data-kind="chrome"]) {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(255 0 60 / 32%) 0 2px,
+    rgb(255 0 60 / 10%) 2px 5px
+  );
+  box-shadow: inset 0 -1px 0 rgb(255 97 88 / 32%);
+}
+
+.neuroCell:where([data-kind="active"]) {
+  background: var(--cp-cyan);
+  box-shadow: 0 0 6px rgb(94 246 255 / 35%);
+}
+
+.neuroCell:where([data-kind="active"][data-tone="warn"]) {
+  background: var(--cp-yellow);
+  box-shadow: 0 0 6px rgb(252 238 10 / 35%);
+}
+
+.neuroCell:where([data-kind="active"][data-tone="bad"]) {
+  background: var(--cp-danger);
+  box-shadow: 0 0 8px rgb(255 0 60 / 45%);
+}
+
+.neuroCell:where([data-kind="active"][data-suppress]) {
+  background: var(--cp-success);
+  box-shadow: 0 0 6px rgb(58 232 140 / 38%);
+}
+
+.neuroThreshold {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 40%;
+  width: 2px;
+  background: rgb(252 238 10 / 88%);
+  box-shadow: 0 0 5px rgb(252 238 10 / 45%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.neuroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  font-size: 11.5px;
+  color: var(--cp-text-dim);
+}
+
+.neuroMeta b {
+  color: var(--cp-text);
+  font-weight: 600;
+}
+
+/* 外设与生理负载列表 */
+.subRows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.subRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.subRow + .subRow {
+  padding-top: 5px;
+  border-top: 1px solid rgb(94 246 255 / 10%);
+}
+
+.subKey {
+  flex: none;
+  color: var(--cp-text-dim);
+  font-size: 11.5px;
+}
+
+.subVal {
+  min-width: 0;
+  text-align: right;
+  color: var(--cp-text);
+}
+
+.subVal:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.subVal:where([data-tone="bad"]) {
+  color: var(--cp-hp-low);
+}
+
+.subVal:where([data-tone="ok"]) {
+  color: var(--cp-success);
+}
+
+.subVal:where([data-tone="cyan"]) {
+  color: var(--cp-cyan);
+}
+
+.deckMeterWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.deckMeterTrack {
+  width: 68px;
+  height: 5px;
+  background: rgb(94 246 255 / 14%);
+  overflow: hidden;
+  flex: none;
+}
+
+.deckMeterFill {
+  display: block;
+  height: 100%;
+  background: var(--cp-ram);
+  transition: width 220ms ease-out;
+}
+
+.deckMeterFill:where([data-low]) {
+  background: var(--cp-hp-low);
+}
+
+.deckState {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cp-cyan);
+  text-align: right;
+}
+
+.deckState:where([data-low]) {
+  color: var(--cp-hp-low);
+}
+
+/* 仅当角色手写了外貌/过往等额外档案时显示的精简注记（不含模型主板提示词） */
+.dossierBox {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  border-inline-start: 2px solid rgb(94 246 255 / 40%);
+  background: rgb(94 246 255 / 4%);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cp-text-dim);
+}
+
+.dossierBox p {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .scanCol {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
+@keyframes bioScanSweep {
+  0% {
+    top: 4%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.52;
+  }
+  90% {
+    opacity: 0.52;
+  }
+  100% {
+    top: 94%;
+    opacity: 0;
+  }
+}
+
+@keyframes bioPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.52;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanBeam,
+  .statusPill:where([data-tone="bad"], [data-tone="dead"]) {
+    animation: none;
+  }
+  .bodyLayer,
+  .traumaSeg,
+  .neuroCell {
+    transition: none;
+  }
+}

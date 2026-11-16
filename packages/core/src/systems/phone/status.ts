@@ -19,10 +19,16 @@ export const phoneStatus: readonly SystemStatus[] = [
       return [
         `消息（最近的在前，未读 ${m.unread} 条）：${m.messages
           .slice(0, PROMPT_MESSAGES)
-          .map(
-            (msg) =>
-              `#${msg.id} ${msg.name}（${msg.at}${msg.read ? (msg.replied ? "，已回复" : "") : "，未读"}）：${msg.text}`,
-          )
+          .map((msg) => {
+            if (msg.sender === "player") {
+              return `#${msg.id} 你 -> ${msg.name}（${msg.at}）：${msg.text}`;
+            }
+            const jobNote =
+              msg.job && (msg.job.status === "offered" || msg.job.status === "active")
+                ? `［关联委托 ${msg.job.id}「${msg.job.title}」(${msg.job.statusLabel})］`
+                : "";
+            return `#${msg.id} ${msg.name}（${msg.at}${msg.read ? (msg.replied ? "，已回复" : "") : "，未读"}）${jobNote}：${msg.text}`;
+          })
           .join("；")}`,
       ];
     },

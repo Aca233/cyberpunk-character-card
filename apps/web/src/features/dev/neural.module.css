@@ -97,11 +97,9 @@
   place-items: center;
 }
 
-.level b {
+.levelIcon {
   position: absolute;
-  font-family: var(--font-ui);
-  font-size: 18px;
-  color: var(--cp-text);
+  pointer-events: none;
 }
 
 .hp {

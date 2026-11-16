@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Trait } from "../systems/character/schema";
 import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
-import { NO_FACTION } from "../systems/npc/schema";
+import { NO_FACTION, NPC_UNDECIDED_PREFIX } from "../systems/npc/schema";
 import {
   type Acquaintance,
   BOARD_SLOT_LABELS,
@@ -150,7 +150,7 @@ export function loadoutText(card: CharacterCard): {
   };
 }
 
-const UNDECIDED = "还没定：第一次出场时按身份和那段经历定下来，之后一直保持一致";
+const UNDECIDED = `${NPC_UNDECIDED_PREFIX}第一次出场时按身份和那段经历定下来，之后一直保持一致`;
 
 function safeNpcId(raw: string, used: ReadonlySet<string>): string {
   const base =
@@ -180,11 +180,12 @@ export function boardPeople(board: Board): BoardStart["people"] {
       const id = safeNpcId(`board-${m.id}-${i + 1}`, usedIds);
       usedIds.add(id);
       const flaw = m.slot === "flaw";
+      const role = (p.role || `${BOARD_SLOT_LABELS[m.slot]}「${m.label}」里的人`).slice(0, 40);
       people.push({
         id,
         name: p.name,
         pronoun: "TA",
-        role: (p.role || `${BOARD_SLOT_LABELS[m.slot]}「${m.label}」里的人`).slice(0, 40),
+        role,
         // 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：模块里没写，按不属于任何势力
         faction: NO_FACTION,
         look: UNDECIDED,
@@ -195,6 +196,7 @@ export function boardPeople(board: Board): BoardStart["people"] {
           (m.hook ? `——${m.hook}` : m.ability ? `——${m.ability}` : "")
         ).slice(0, 160),
         limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
+        body: { gear: [], cyberware: [] },
         canon: false,
         affinity: flaw ? -10 : 0,
         met: true,
@@ -213,18 +215,20 @@ export function boardPeople(board: Board): BoardStart["people"] {
       const id = safeNpcId(a.id, usedIds);
       usedIds.add(id);
       const seed = acquaintanceSeed(a);
+      const role = (a.role || "夜之城旧识").slice(0, 40);
       seeded.push({
         ...seed,
         id,
         name: a.name,
         pronoun: "TA",
-        role: (a.role || "夜之城旧识").slice(0, 40),
+        role,
         faction: NO_FACTION,
         look: UNDECIDED,
         voice: UNDECIDED,
         samples: [],
         want: (a.note ? `和玩家角色的旧事：${a.note}` : "在夜之城按自己的信条活下去").slice(0, 160),
         limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
+        body: { gear: [], cyberware: [] },
         canon: false,
         met: true,
       });

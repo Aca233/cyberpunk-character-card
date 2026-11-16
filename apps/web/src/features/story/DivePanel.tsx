@@ -1,9 +1,11 @@
 import styles from "./story.module.css";
+import { type View, woundTelemetry } from "./view";
 
 /** 潜网：逐层往下的结构图，肉身状态常驻在角落 */
 export function DivePanel({
   dive,
   health,
+  combat,
 }: {
   readonly dive: {
     readonly layer: number;
@@ -12,13 +14,10 @@ export function DivePanel({
     readonly chair: string;
     readonly guard: string;
   };
-  readonly health: {
-    readonly hp: number;
-    readonly max: number;
-    readonly condition: string;
-    readonly conditionLabel: string;
-  };
+  readonly health: View["health"];
+  readonly combat?: View["combat"];
 }) {
+  const wound = woundTelemetry(health, combat);
   return (
     <aside className={styles.divePanel} aria-label="潜网">
       <p className={styles.diveTitle}>
@@ -44,7 +43,7 @@ export function DivePanel({
       <div className={styles.diveBody} role="status">
         <small>肉身</small>
         <b>
-          HP {health.hp}/{health.max}
+          {wound.title}
           {health.condition !== "up" && ` · ${health.conditionLabel}`}
         </b>
         <span>

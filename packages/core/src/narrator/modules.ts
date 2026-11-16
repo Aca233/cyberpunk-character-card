@@ -7,18 +7,16 @@ import {
   BoardModuleSchema,
   type BoardSlot,
   boardModules,
-  MODULE_POINTS,
 } from "../schemas/board";
 import { responseJsonSchema } from "./doc";
 
 /**
- * 自写模块的解读：玩家写一段设定，辅助模型整理成模块（名字、建议标价、标签、能力、钩子、人物），
- * 和原作设定冲突的地方只提醒。标价由代码截到插槽的范围里，玩家还可以手动改
+ * 自写模块的解读：玩家写一段设定，辅助模型整理成模块（名字、标签、能力、钩子、人物），
+ * 和原作设定冲突的地方只提醒
  */
 
 export const ModuleReplySchema = z.object({
   label: z.string(),
-  points: z.number().int(),
   tags: z.array(z.string()),
   ability: z.string(),
   hook: z.string(),
@@ -44,18 +42,10 @@ export interface ModuleReading {
 
 export function buildModulePrompt(request: ModuleRequest): LlmMessage[] {
   const label = BOARD_SLOT_LABELS[request.slot];
-  const [min, max] = MODULE_POINTS[request.slot];
-  const pricing =
-    request.slot === "flaw"
-      ? `points 是返还的定制点，${min}–${max}：麻烦越大、越容易找上门，返还越多`
-      : request.slot === "origin"
-        ? `points 是花费的定制点，${min}–${max}：普通出身 0，自带明显优势的出身 1–2`
-        : `points 是花费的定制点，${min}–${max}：普通 1–2，强力 3–4（能直接解决一类难题的才算强力）`;
   const system = [
     "你在帮玩家把自己写的一段角色设定，整理成《赛博朋克 2077》夜之城文字角色扮演游戏里的一块“模块”。",
     "只输出一个 JSON 对象，不要代码块，不要别的文字。字段：",
     '- "label"：模块名，24 字以内',
-    `- "points"：整数，${pricing}`,
     `- "tags"：1–6 个标签，每个 12 字以内；能用这些现成标签就用：${(request.knownTags ?? []).join("、") || "（无）"}`,
     `- "ability"：200 字以内，${request.slot === "flaw" ? "这段负面缺陷让角色眼下处在什么真实处境" : "这块模块让角色实际懂什么手艺、掌握什么经验或门路"}，写具体、扎实的事实，方便叙事根据真实能力判断`,
     '- "hook"：200 字以内，叙事可以拿来做文章的剧情线头；没有就写空字符串',
@@ -81,7 +71,7 @@ export function buildModulePrompt(request: ModuleRequest): LlmMessage[] {
 const cut = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 
-/** 读模型的回复：找出 JSON 对象，过长的截短，标价截到插槽范围 */
+/** 读模型的回复：找出 JSON 对象，过长的截短 */
 export function parseModuleReply(
   text: string,
   slot: BoardSlot,
@@ -103,10 +93,6 @@ export function parseModuleReply(
     : [];
   const label = cut(raw.label, 24);
   if (label === "") return { ok: false, error: "模型没有给模块起名字，可以重新解读" };
-  const [min, max] = MODULE_POINTS[slot];
-  const suggested = typeof raw.points === "number" ? Math.round(raw.points) : min;
-  const points = Math.min(max, Math.max(min, suggested));
-  if (points !== suggested) warnings.push(`建议标价 ${suggested} 点超出范围，改成 ${points} 点`);
   const tags = Array.isArray(raw.tags)
     ? [...new Set(raw.tags.map((t) => cut(t, 12)).filter((t) => t !== ""))].slice(0, 6)
     : [];
@@ -124,7 +110,7 @@ export function parseModuleReply(
     id,
     slot,
     label,
-    points,
+    points: 0,
     tags,
     ability: cut(raw.ability, 200),
     hook: cut(raw.hook, 200),

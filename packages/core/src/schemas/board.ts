@@ -5,7 +5,7 @@ import {
   SLOT_CAPACITY,
   SLOT_LABELS,
 } from "../systems/cyberware/schema";
-import { AttributeSchema, DifficultySchema } from "../systems/dice/schema";
+import { AttributeSchema } from "../systems/dice/schema";
 import {
   HUMANITY_MAX,
   TOLERANCE_FACTOR,
@@ -16,7 +16,7 @@ import type { LedgerKind } from "../systems/npc/schema";
 
 /**
  * 角色主板：出身、过往、本事三类插槽各插几块模块，再加负面经历、开局义体、开局行装和义体耐受。
- * 模块用定制点数买，负面经历返还点数；超出难度点数上限时作为传奇沙盒构筑放行
+ * 模块自由组合，只保留各类插槽数量与义体部位容量约束；点价字段仅供旧内容解析。
  */
 
 /** 背景点（旧版默认基准，兼容保留） */
@@ -45,12 +45,12 @@ export const BOARD_SLOT_LABELS: Readonly<Record<BoardSlot, string>> = {
   flaw: "负面缺陷",
 };
 
-/** 每类模块的标价范围：出身不另收点数（自写的强出身最多 2 点），负面经历的点数是返还 */
+/** 每类模块的预设权重参考范围（已取消捏人点数预算上限，自定义模块默认为 0） */
 export const MODULE_POINTS: Readonly<Record<BoardSlot, readonly [number, number]>> = {
   origin: [0, 2],
-  past: [1, 4],
-  skill: [1, 4],
-  flaw: [1, 4],
+  past: [0, 4],
+  skill: [0, 4],
+  flaw: [0, 4],
 };
 
 const line = (max: number) => z.string().trim().max(max);
@@ -66,8 +66,8 @@ export const BoardModuleSchema = z.object({
   id: z.string().trim().min(1).max(60),
   slot: BoardSlotSchema,
   label: z.string().trim().min(1, "模块要有名字").max(24),
-  /** 花多少定制点；负面经历是返还多少 */
-  points: z.number().int().min(0).max(4),
+  /** 已取消点数上限（内容库兼容保留字段，默认 0） */
+  points: z.number().default(0),
   /** 标签：分类筛选和检定加成按标签判断 */
   tags: z.array(z.string().trim().min(1).max(12)).max(6).default([]),
   /** 这块模块让角色能做到什么；叙事模型据此判断行动是否可行 */
@@ -90,8 +90,8 @@ export type BoardModule = z.infer<typeof BoardModuleSchema>;
 export const StartCyberwareSchema = z.object({
   id: z.string().min(1).max(60),
   name: z.string().min(1).max(40),
-  // 传说件开局 5 点（用户 2026-10-31 选了"全部放开"）
-  points: z.number().int().min(1).max(5),
+  // 内容库兼容保留字段，捏人界面已取消点数上限
+  points: z.number().default(0),
   humanityCost: z.number().int().min(0).max(20),
   /** 创意工坊/自定义义体自包含快照字段 */
   slot: CyberwareSlotSchema.optional(),
@@ -121,7 +121,7 @@ export const CASH_TIER_INFO: Readonly<
     label: "一贫如洗",
     points: -1,
     eddiesDelta: 0,
-    desc: "开局账户归零，返还 +1 定制点数",
+    desc: "开局账户归零，从身无分文开始",
   },
   standard: {
     label: "出身标配",
@@ -133,13 +133,13 @@ export const CASH_TIER_INFO: Readonly<
     label: "私房金库",
     points: 2,
     eddiesDelta: 2500,
-    desc: "消耗 2 点，额外携带 +2,500 欧元私房钱",
+    desc: "额外携带 2,500 欧元私房钱",
   },
   windfall: {
     label: "巨额黑金",
     points: 4,
     eddiesDelta: 6000,
-    desc: "消耗 4 点，额外携带 +6,000 欧元黑金",
+    desc: "额外携带 6,000 欧元黑金",
   },
 };
 
@@ -241,13 +241,12 @@ export const BoardSchema = z.object({
   acquaintances: z.array(AcquaintanceSchema).max(ACQUAINTANCE_MAX).default([]),
   /** 开局行装定制：资金档位、额外随身武器与专属载具 */
   kit: StartKitSchema.default({ cashTier: "standard", weapons: [], vehicle: null }),
-  /** 角色绑定的推荐难度（决定 24/17/12 定制点数上限）与开局地图锚点 */
-  difficulty: DifficultySchema.optional(),
+  /** 开局地图锚点 */
   startLocation: z.string().trim().min(1).max(80).optional(),
 });
 export type Board = z.infer<typeof BoardSchema>;
 
-/** 义体耐受档位：高耐受花点数换更低的人性消耗和一个钩子，低耐受返还点数 */
+/** 义体耐受档位：影响人性消耗倍率和剧情钩子；points 仅为旧内容兼容字段 */
 export const TOLERANCE_LEVELS: Readonly<
   Record<Tolerance, { readonly label: string; readonly points: number; readonly hook: string }>
 > = {
@@ -292,6 +291,7 @@ export interface BoardBudget {
   readonly remaining: number;
 }
 
+/** 旧版预算统计，兼容外部调用；不参与创角、导入或保存校验。 */
 export function boardBudget(board: Board): BoardBudget {
   const tolerance = TOLERANCE_LEVELS[board.tolerance].points;
   const cashPoints = CASH_TIER_INFO[board.kit?.cashTier ?? "standard"].points;
@@ -320,7 +320,7 @@ export function boardHumanityCost(board: Board): number {
   return Math.min(HUMANITY_MAX, Math.round(raw * TOLERANCE_FACTOR[board.tolerance]));
 }
 
-/** 主板哪里不合规矩；空数组表示可以保存（CK3 沙盒超限模式：不拦截点数超支或特质数量下限） */
+/** 主板哪里不合规矩；空数组表示通过模块校验，不限制点数或要求特质数量下限。 */
 export function boardIssues(board: Board): string[] {
   const issues: string[] = [];
   if (!board.origin) issues.push("出身插槽还空着");
@@ -332,15 +332,11 @@ export function boardIssues(board: Board): string[] {
   ];
   const seen = new Set<string>();
   for (const [slot, list] of placed) {
-    const [min, max] = MODULE_POINTS[slot];
     for (const m of list) {
       if (m.slot !== slot) {
         issues.push(
           `「${m.label}」是${BOARD_SLOT_LABELS[m.slot]}模块，不能插在${BOARD_SLOT_LABELS[slot]}插槽`,
         );
-      }
-      if (m.points < min || m.points > max) {
-        issues.push(`${BOARD_SLOT_LABELS[slot]}模块「${m.label}」的点数要在 ${min}–${max} 之间`);
       }
       if (seen.has(m.id)) issues.push(`「${m.label}」插了不止一次`);
       seen.add(m.id);

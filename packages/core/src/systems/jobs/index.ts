@@ -1,10 +1,7 @@
 import { defineSystem } from "../../kernel/system";
-import type { CharacterState } from "../character";
 import type { HumanityState } from "../humanity";
 import type { NpcState } from "../npc";
-import { inCrisis, type PsychosisState } from "../psychosis";
 import type { SquadState } from "../squad";
-import { jobsActions } from "./actions";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsEvents } from "./events";
 import { jobsObjectives } from "./objectives";
@@ -28,7 +25,7 @@ import { jobsView } from "./view";
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
   // factions：派单看派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）；势力系统不依赖别的系统，不会循环
-  dependsOn: ["economy", "character", "humanity", "npc", "psychosis", "squad", "factions"],
+  dependsOn: ["economy", "character", "humanity", "npc", "squad", "factions"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -44,29 +41,20 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
         return seedFixer(draft, command);
       case "jobOffer": {
         const npcs = ctx.read<NpcState>("npc").npcs;
-        return offerJob(
-          draft,
-          command,
-          ctx.now,
-          ctx.read<CharacterState>("character").streetCred,
-          (id) => {
-            // 同一轮先写的 npc 建卡已经结算进来（applyCommands 逐条结算），这里读得到
-            const card = npcs[id];
-            return card
-              ? {
-                  name: card.name,
-                  alive: card.alive,
-                  affinity: card.affinity,
-                  faction: factionSide(card.faction, ctx.data, ctx.read("factions")),
-                }
-              : undefined;
-          },
-        );
+        return offerJob(draft, command, ctx.now, (id) => {
+          // 同一轮先写的 npc 建卡已经结算进来（applyCommands 逐条结算），这里读得到
+          const card = npcs[id];
+          return card
+            ? {
+                name: card.name,
+                alive: card.alive,
+                affinity: card.affinity,
+                faction: factionSide(card.faction, ctx.data, ctx.read("factions")),
+              }
+            : undefined;
+        });
       }
       case "jobAccept":
-        if (inCrisis(ctx.read<PsychosisState>("psychosis"))) {
-          return { ok: false, reason: "危机章节里普通委托暂停：先解决眼前的事" };
-        }
         return acceptJob(draft, command, ctx.now, ctx.read<HumanityState>("humanity").current);
       case "jobNote":
         return noteJob(draft, command);
@@ -83,14 +71,12 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   },
   tick: (draft, span) => tickJobs(draft, span),
   rules: [jobsRules],
-  actions: jobsActions,
   sections: jobsSections,
   objectives: jobsObjectives,
   events: jobsEvents,
   view: { key: "jobs", project: jobsView },
 });
 
-export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./objectives";

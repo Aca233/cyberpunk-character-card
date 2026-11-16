@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { api, type Difficulty, type SaveSummary } from "../../api/client";
+import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
 import { LOCAL_MODE } from "../../api/transport";
-import { DIFFICULTY_LABELS, DIFFICULTY_NOTES, formatDate } from "../../labels";
+import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { MenuItem } from "../../ui/MenuItem";
@@ -26,31 +27,97 @@ const STAGE_TITLES: Partial<Record<Item, string>> = {
   legends: "传说名册",
 };
 
+const STAGE_CODES: Partial<Record<Item, string>> = {
+  continue: "01 // RESUME",
+  new: "02 // NEW_RUN",
+  load: "03 // ARCHIVE",
+  legends: "04 // LEGENDS",
+};
+
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
 const FRAME_SLICE = 120;
 
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
 /**
- * 主菜单（用户定的重排）：照神经界面的外框，夜之城远景压暗、扫描线、原作 panel.frame 红框；
- * 左边一列是标志、菜单和状态，右边是选中项的舞台，标题压在原作 menu.header 上
+ * 主菜单：夜之城远景压暗、扫描线、原作 panel.frame 红框；
+ * 左列是标志、菜单和状态终端，右边是选中项的舞台
  */
 export function MainMenu() {
   const navigate = useNavigate();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health });
-  const sorted = [...(saves.data ?? [])].sort(byNewest);
-  const latest = sorted[0];
-  const [focus, setFocus] = useState<Item>("continue");
+  const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
+  const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles, retry: false });
 
-  const items: { id: Item; label: string; disabled?: boolean; reason?: string }[] = [
-    { id: "continue", label: "继续", disabled: !latest, reason: "还没有存档" },
-    { id: "new", label: "新建存档" },
-    { id: "load", label: "读取存档" },
+  const sorted = useMemo(() => [...(saves.data ?? [])].sort(byNewest), [saves.data]);
+  const latest = sorted[0];
+  const charById = useMemo(
+    () => new Map((characters.data ?? []).map((entry) => [entry.id, entry])),
+    [characters.data],
+  );
+
+  const [focus, setFocus] = useState<Item>("continue");
+  const [loadFilter, setLoadFilter] = useState("");
+  const navRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  const itemRefs = useRef<Partial<Record<Item, HTMLButtonElement | null>>>({});
+
+  const modelReady = health.data
+    ? health.data.config === "ok" && health.data.models?.ready !== false
+    : null;
+
+  const primaryItems: {
+    id: Item;
+    label: string;
+    hint?: string | undefined;
+    hintTone?: "dim" | "cyan" | "warn" | undefined;
+    disabled?: boolean;
+    reason?: string;
+  }[] = [
+    {
+      id: "continue",
+      label: "继续",
+      hint: latest?.title ?? (saves.isSuccess ? "无存档" : undefined),
+      hintTone: latest ? "cyan" : "dim",
+      disabled: !latest,
+      reason: "还没有存档",
+    },
+    {
+      id: "new",
+      label: "新建存档",
+      hint: characters.data ? `${characters.data.length} 张卡` : undefined,
+    },
+    {
+      id: "load",
+      label: "读取存档",
+      hint: saves.isSuccess ? `${sorted.length} 份` : undefined,
+    },
     { id: "legends", label: "传说名册" },
-    { id: "characters", label: "角色" },
-    { id: "settings", label: "设置" },
   ];
+
+  const utilityItems: {
+    id: Item;
+    label: string;
+    hint?: string | undefined;
+    hintTone?: "dim" | "cyan" | "warn" | undefined;
+    disabled?: boolean;
+    reason?: string;
+  }[] = [
+    {
+      id: "characters",
+      label: "角色",
+      hint: characters.data ? `${characters.data.length}` : undefined,
+    },
+    {
+      id: "settings",
+      label: "设置",
+      hint: modelReady === false ? "未配好" : modelReady ? "就绪" : undefined,
+      hintTone: modelReady === false ? "warn" : modelReady ? "cyan" : "dim",
+    },
+  ];
+
+  const allItems = [...primaryItems, ...utilityItems];
 
   const select = (id: Item) => {
     if (id === "continue" && latest) navigate(`/play/${latest.id}`);
@@ -61,17 +128,37 @@ export function MainMenu() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const active = document.activeElement;
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement
-      )
+      ) {
+        if (e.key === "Escape" && stageRef.current?.contains(active)) {
+          e.preventDefault();
+          itemRefs.current[focus]?.focus();
+        }
         return;
-      const enabled = items.filter((i) => !i.disabled).map((i) => i.id);
+      }
+      if (e.key === "Escape" && stageRef.current?.contains(active)) {
+        e.preventDefault();
+        itemRefs.current[focus]?.focus();
+        return;
+      }
+      const inStage = Boolean(active && stageRef.current?.contains(active));
+      if (inStage) return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const enabled = allItems.filter((i) => !i.disabled).map((i) => i.id);
       const at = enabled.indexOf(focus);
-      if (e.key === "ArrowDown") setFocus(enabled[(at + 1) % enabled.length] ?? focus);
-      else if (e.key === "ArrowUp")
-        setFocus(enabled[(at - 1 + enabled.length) % enabled.length] ?? focus);
+      if (at === -1) return;
+      e.preventDefault();
+      const next =
+        e.key === "ArrowDown"
+          ? (enabled[(at + 1) % enabled.length] ?? focus)
+          : (enabled[(at - 1 + enabled.length) % enabled.length] ?? focus);
+      setFocus(next);
+      itemRefs.current[next]?.focus();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -81,16 +168,33 @@ export function MainMenu() {
     if (saves.isSuccess && !latest && focus === "continue") setFocus("new");
   }, [saves.isSuccess, latest, focus]);
 
-  const modelReady = health.data
-    ? health.data.config === "ok" && health.data.models?.ready !== false
-    : null;
+  const normalizedFilter = loadFilter.trim().toLowerCase();
+  const filteredSaves = useMemo(() => {
+    if (!normalizedFilter) return sorted;
+    return sorted.filter((save) => {
+      const char = charById.get(save.characterId);
+      const text = [save.title, char?.card.name, char?.card.alias, char?.card.origin]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return text.includes(normalizedFilter);
+    });
+  }, [sorted, charById, normalizedFilter]);
+
   const stageTitle = STAGE_TITLES[focus] ?? "";
+  const stageCode = STAGE_CODES[focus] ?? "";
   const stageCount =
     focus === "load" && saves.isSuccess
-      ? `${sorted.length} 个存档`
+      ? normalizedFilter
+        ? `${filteredSaves.length} / ${sorted.length} 个存档`
+        : `${sorted.length} 个存档`
       : focus === "continue" && latest
-        ? "最近的存档"
-        : "";
+        ? "最近一次冒险"
+        : focus === "new" && characters.data
+          ? `${characters.data.length} 名可用角色`
+          : "";
+
+  const narratorName = profiles.data?.narrator;
 
   return (
     <main className={styles.menu}>
@@ -119,17 +223,49 @@ export function MainMenu() {
 
       <aside className={styles.side}>
         <header className={styles.brand}>
-          <Asset id="splash.logo" height={84} alt="赛博朋克 2077" />
-          <span className={styles.subtitle}>
-            <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
-            夜之城角色卡
-          </span>
+          <Asset id="splash.logo" height={78} alt="赛博朋克 2077" />
+          <div className={styles.subtitleRow}>
+            <Asset id="panel.glowLeft" height={16} tint="var(--cp-cyan)" />
+            <span className={styles.subtitle}>夜之城角色卡</span>
+          </div>
+          <span
+            className={styles.brandLine}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
+          />
         </header>
-        <nav className={styles.nav} aria-label="主菜单">
-          {items.map((item) => (
+
+        <nav ref={navRef} className={styles.nav} aria-label="主菜单">
+          {primaryItems.map((item) => (
             <MenuItem
               key={item.id}
+              buttonRef={(el) => {
+                itemRefs.current[item.id] = el;
+              }}
               label={item.label}
+              hint={item.hint}
+              hintTone={item.hintTone}
+              selected={focus === item.id}
+              disabled={item.disabled ?? false}
+              reason={item.reason}
+              onFocus={() => !item.disabled && setFocus(item.id)}
+              onSelect={() => select(item.id)}
+            />
+          ))}
+          <span
+            className={styles.navDivider}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
+          />
+          {utilityItems.map((item) => (
+            <MenuItem
+              key={item.id}
+              buttonRef={(el) => {
+                itemRefs.current[item.id] = el;
+              }}
+              label={item.label}
+              hint={item.hint}
+              hintTone={item.hintTone}
               selected={focus === item.id}
               disabled={item.disabled ?? false}
               reason={item.reason}
@@ -138,20 +274,63 @@ export function MainMenu() {
             />
           ))}
         </nav>
-        <dl className={styles.status}>
-          <dt>存档</dt>
-          <dd className="num">{saves.isSuccess ? sorted.length : "—"}</dd>
-          <dt>模型</dt>
-          <dd data-tone={modelReady === false ? "warn" : modelReady ? "ok" : undefined}>
-            {modelReady === null ? "检查中" : modelReady ? "就绪" : "未配好"}
-          </dd>
-        </dl>
+
+        <div className={styles.statusCard}>
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="rgb(10 7 14 / 86%)"
+            className={styles.statusSlice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint={modelReady === false ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
+            className={styles.statusSlice}
+          />
+          <div className={styles.statusTop}>
+            <span className={styles.statusHead}>终端状态</span>
+            <span className={styles.statusMode}>{LOCAL_MODE ? "浏览器本地" : "本机服务"}</span>
+          </div>
+          <dl className={styles.status}>
+            <dt>模型</dt>
+            <dd data-tone={modelReady === false ? "warn" : modelReady ? "ok" : undefined}>
+              {modelReady === null ? (
+                "检查中…"
+              ) : modelReady ? (
+                <>就绪{narratorName ? ` · ${narratorName}` : ""}</>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.inlineLink}
+                  onClick={() => navigate("/settings")}
+                >
+                  未配好 · 去设置 →
+                </button>
+              )}
+            </dd>
+            <dt>存档</dt>
+            <dd className="num">
+              {saves.isSuccess ? `${sorted.length} 个` : "—"}
+              {characters.data ? ` · ${characters.data.length} 张角色卡` : ""}
+            </dd>
+          </dl>
+        </div>
       </aside>
 
-      <section className={styles.stage} aria-label={stageTitle}>
+      <section ref={stageRef} className={styles.stage} aria-label={stageTitle}>
         <header className={styles.stageHead}>
-          <Asset id="menu.header" tint="var(--cp-red)" height={56} className={styles.stageHeadBg} />
-          <b className={styles.stageTitle}>{stageTitle}</b>
+          <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.stageHeadBg} />
+          <Asset
+            id="panel.glowLeft"
+            height={28}
+            tint="var(--cp-cyan)"
+            className={styles.stageGlow}
+          />
+          <div className={styles.stageHeading}>
+            {stageCode && <span className={styles.stageCode}>{stageCode}</span>}
+            <h1 className={styles.stageTitle}>{stageTitle}</h1>
+          </div>
           {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
         </header>
         <span
@@ -177,16 +356,34 @@ export function MainMenu() {
               {health.error.message}
             </Panel>
           )}
+
           {focus === "continue" && latest && (
             <div className={styles.continue}>
-              <SaveCard save={latest} onOpen={() => navigate(`/play/${latest.id}`)} />
+              <SaveCard
+                save={latest}
+                character={charById.get(latest.characterId)}
+                featured
+                onOpen={() => navigate(`/play/${latest.id}`)}
+              />
               {sorted.length > 1 && (
                 <>
-                  <h3 className={styles.groupHead}>其他存档</h3>
+                  <div className={styles.groupRow}>
+                    <h2 className={styles.groupHead}>其他近期存档</h2>
+                    {sorted.length > 4 && (
+                      <Button small onClick={() => setFocus("load")}>
+                        全部 {sorted.length} 份 →
+                      </Button>
+                    )}
+                  </div>
                   <ul className={styles.saveList}>
                     {sorted.slice(1, 4).map((save) => (
                       <li key={save.id}>
-                        <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
+                        <SaveCard
+                          save={save}
+                          character={charById.get(save.characterId)}
+                          onOpen={() => navigate(`/play/${save.id}`)}
+                          compact
+                        />
                       </li>
                     ))}
                   </ul>
@@ -194,22 +391,51 @@ export function MainMenu() {
               )}
             </div>
           )}
+
           {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
           {focus === "legends" && <LegendsPanel onOpen={(id) => navigate(`/play/${id}`)} />}
+
           {focus === "load" && (
             <div className={styles.load}>
               {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
-              <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
+              <div className={styles.loadToolbar}>
+                {sorted.length > 0 && (
+                  <FrameBox className={styles.loadSearch}>
+                    <input
+                      value={loadFilter}
+                      onChange={(e) => setLoadFilter(e.target.value)}
+                      placeholder="筛选存档名、角色或出身…"
+                      aria-label="筛选存档"
+                    />
+                  </FrameBox>
+                )}
+                <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
+              </div>
+              <p className={styles.note}>
+                {LOCAL_MODE
+                  ? "存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份。本机服务器版导出的文件也能在这里导入，建成新存档；导出的文件含剧透。"
+                  : "导入完整导出的文件会建成一个新存档；导出文件含剧透信息，请妥善保管。"}
+              </p>
               {sorted.length === 0 ? (
                 <EmptyState
                   text="还没有存档"
                   action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
                 />
+              ) : filteredSaves.length === 0 ? (
+                <EmptyState
+                  text={`没有匹配「${loadFilter}」的存档`}
+                  action={<Button onClick={() => setLoadFilter("")}>清空筛选</Button>}
+                />
               ) : (
                 <ul className={styles.saveList}>
-                  {sorted.map((save) => (
+                  {filteredSaves.map((save) => (
                     <li key={save.id} className={styles.saveRow}>
-                      <SaveCard save={save} onOpen={() => navigate(`/play/${save.id}`)} compact />
+                      <SaveCard
+                        save={save}
+                        character={charById.get(save.characterId)}
+                        onOpen={() => navigate(`/play/${save.id}`)}
+                        compact
+                      />
                       <ExportSave save={save} />
                     </li>
                   ))}
@@ -222,8 +448,9 @@ export function MainMenu() {
 
       <div className={styles.keys}>
         <KeyBar>
-          <KeyHint keyId="key.enter" label="选择" />
-          <KeyHint keyId="key.esc" label="返回" />
+          <KeyHint keyId="key.enter" label="进入 / 选择" />
+          <KeyHint keyId="key.tab" label="切到右侧" />
+          <KeyHint keyId="key.esc" label="回菜单栏" />
         </KeyBar>
       </div>
     </main>
@@ -243,22 +470,49 @@ function downloadJson(data: unknown, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** 完整导出：先提示有剧透，确认后下载 */
+/** 完整导出：弹窗提示剧透，确认后下载 */
 function ExportSave({ save }: { save: SaveSummary }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const run = async () => {
-    if (!window.confirm(SPOILER_WARNING)) return;
     setError(null);
+    setBusy(true);
     try {
       downloadJson(await api.exportSave(save.id), `存档-${save.title}.json`);
+      setConfirmOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   };
+
   return (
     <div className={styles.saveTools}>
-      <Button onClick={() => void run()}>导出</Button>
+      <Button onClick={() => setConfirmOpen(true)}>导出</Button>
       {error && <span className={styles.error}>{error}</span>}
+      {confirmOpen && (
+        <Dialog
+          title={`导出「${save.title}」`}
+          tone="warning"
+          onClose={() => !busy && setConfirmOpen(false)}
+          actions={
+            <>
+              <Button disabled={busy} onClick={() => setConfirmOpen(false)}>
+                取消
+              </Button>
+              <Button primary disabled={busy} onClick={() => void run()}>
+                {busy ? "导出中……" : "确认导出"}
+              </Button>
+            </>
+          }
+        >
+          <p>{SPOILER_WARNING}</p>
+          {error && <p className={styles.error}>{error}</p>}
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -268,7 +522,12 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notesDialog, setNotesDialog] = useState<{
+    id: string;
+    notes: readonly string[];
+  } | null>(null);
   const [busy, setBusy] = useState(false);
+
   const onFile = async (file: File) => {
     setError(null);
     setBusy(true);
@@ -281,14 +540,18 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
       }
       const made = await api.importSave(data);
       await queryClient.invalidateQueries({ queryKey: ["saves"] });
-      if (made.notes.length > 0) window.alert(made.notes.join("\n"));
-      onImported(made.id);
+      if (made.notes.length > 0) {
+        setNotesDialog({ id: made.id, notes: made.notes });
+      } else {
+        onImported(made.id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
+
   return (
     <div className={styles.importRow}>
       <Button onClick={() => input.current?.click()} disabled={busy}>
@@ -305,46 +568,92 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
           if (file) void onFile(file);
         }}
       />
-      <span className={styles.note}>
-        {LOCAL_MODE
-          ? "存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份。本机服务器版导出的文件也能在这里导入，建成新存档；导出的文件含剧透"
-          : "导入完整导出的文件，建成新存档；导出的文件含剧透"}
-      </span>
       {error && <span className={styles.error}>{error}</span>}
+      {notesDialog && (
+        <Dialog
+          title="导入提示"
+          tone="info"
+          onClose={() => {
+            const id = notesDialog.id;
+            setNotesDialog(null);
+            onImported(id);
+          }}
+          actions={
+            <Button
+              primary
+              onClick={() => {
+                const id = notesDialog.id;
+                setNotesDialog(null);
+                onImported(id);
+              }}
+            >
+              进入存档
+            </Button>
+          }
+        >
+          {notesDialog.notes.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </Dialog>
+      )}
     </div>
   );
 }
 
-/** 存档卡：原作 map.filterCell 格框（用户定的，不手画边框），悬停变青 */
+/** 存档卡：原作 map.filterCell 格框，悬停变青，附带主角信息与难度标记 */
 function SaveCard({
   save,
+  character,
   onOpen,
   compact,
+  featured,
 }: {
   save: SaveSummary;
+  character?: CharacterEntry | undefined;
   onOpen: () => void;
   compact?: boolean;
+  featured?: boolean;
 }) {
   return (
     <button
       type="button"
       className={styles.saveCard}
       data-compact={compact || undefined}
+      data-featured={featured || undefined}
       onClick={onOpen}
     >
       <CellFrame />
+      {featured && (
+        <Asset
+          id="panel.glowLeft"
+          height={54}
+          tint="var(--cp-yellow)"
+          className={styles.saveGlow}
+        />
+      )}
       <Asset
         id="menu.saveSlot"
-        height={compact ? 22 : 36}
+        height={compact ? 24 : 40}
         tint="currentColor"
         className={styles.saveIcon}
       />
-      <span className={styles.saveTitle}>{save.title}</span>
-      <span className={styles.saveMeta}>
-        {DIFFICULTY_LABELS[save.difficulty]} · 建于{" "}
-        <span className="num">{formatDate(save.createdAt)}</span>
-        {save.running ? " · 正在生成" : ""}
-      </span>
+      <div className={styles.saveInfo}>
+        {featured && <span className={styles.featuredTag}>最近存档</span>}
+        <span className={styles.saveTitle}>{save.title}</span>
+        <span className={styles.saveMeta}>
+          {character && (
+            <span className={styles.saveChar}>
+              {character.card.name}
+              {character.card.origin ? ` · ${character.card.origin}` : ""}
+            </span>
+          )}
+          <span className={styles.saveDate}>
+            建于 <span className="num">{formatDate(save.createdAt)}</span>
+          </span>
+          {save.running && <span className={styles.runningBadge}>正在生成</span>}
+        </span>
+      </div>
+      {featured && <span className={styles.saveCta}>继续 →</span>}
     </button>
   );
 }
@@ -360,16 +669,9 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   });
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("nightCity");
-  const lastCharacter = useRef("");
   const entries = characters.data ?? [];
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const characterId = selected?.id ?? "";
-  useEffect(() => {
-    if (!selected || selected.id === lastCharacter.current) return;
-    lastCharacter.current = selected.id;
-    setDifficulty(selected.card.board?.difficulty ?? "nightCity");
-  }, [selected]);
   const startLocation = selected
     ? selected.card.board?.startLocation && startAnchor(selected.card.board.startLocation)
       ? selected.card.board.startLocation
@@ -381,7 +683,6 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
       api.createSave({
         title: title.trim(),
         characterId,
-        difficulty,
         ...(startLocation ? { startLocation } : {}),
       }),
     onSuccess: async (save) => {
@@ -453,28 +754,23 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <p className={styles.note}>还没有角色。</p>
         )}
         {selected && (
-          <p className={styles.charNote}>
-            {selected.card.alias ? `外号「${selected.card.alias}」。` : ""}
-            {selected.card.personality || selected.card.origin}
-            {startSpot ? ` · 开局地点：${anchorLabel(startSpot)}` : ""}
-          </p>
+          <div className={styles.charDossier}>
+            <CellFrame />
+            <div className={styles.charDossierHead}>
+              <strong>{selected.card.name}</strong>
+              {selected.card.alias && (
+                <span className={styles.charTag}>外号「{selected.card.alias}」</span>
+              )}
+              <span className={styles.charTag}>{selected.card.origin}</span>
+              {startSpot && (
+                <span className={styles.charSpot}>开局地点：{anchorLabel(startSpot)}</span>
+              )}
+            </div>
+            {selected.card.personality && (
+              <p className={styles.charBio}>{selected.card.personality}</p>
+            )}
+          </div>
         )}
-        <fieldset className={styles.difficulty} disabled={create.isPending}>
-          <legend>难度</legend>
-          {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((d) => (
-            <label key={d} data-checked={difficulty === d || undefined}>
-              <CellFrame />
-              <input
-                type="radio"
-                name="difficulty"
-                checked={difficulty === d}
-                onChange={() => setDifficulty(d)}
-              />
-              <strong>{DIFFICULTY_LABELS[d]}</strong>
-              <span>{DIFFICULTY_NOTES[d]}</span>
-            </label>
-          ))}
-        </fieldset>
         {create.isError && (
           <p className={styles.error} role="alert">
             {create.error.message}

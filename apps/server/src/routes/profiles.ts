@@ -1,10 +1,21 @@
 import type { LlmUsage } from "@cp/core";
 import { type Context, Hono } from "hono";
-import type { ConfigService, Result } from "../config";
+import { z } from "zod";
+import { type ConfigService, ProviderTypeSchema, type Result, redact } from "../config";
+import { AbortedError } from "../providers/http";
 import { LlmRouter } from "../providers/index";
+import { fetchProviderModels } from "../providers/models";
 
 /** 测试连接最多等这么久 */
 const TEST_TIMEOUT_MS = 30_000;
+const MODELS_TIMEOUT_MS = 15_000;
+
+const FetchModelsBodySchema = z.object({
+  profileName: z.string().trim().min(1).optional(),
+  type: ProviderTypeSchema.optional(),
+  baseUrl: z.string().optional(),
+  apiKey: z.string().optional(),
+});
 
 async function readBody(c: Context): Promise<unknown> {
   return c.req.json().catch(() => undefined);
@@ -28,6 +39,50 @@ export function profileRoutes(config: ConfigService): Hono {
     const body = await readBody(c);
     if (body === undefined) return badJson(c);
     return send(c, await config.setRoles(body), (roles) => roles);
+  });
+  /** 拉取模型列表：支持传入表单未保存的参数，或复用已保存连接的密钥（只进不出） */
+  routes.post("/-/models", async (c) => {
+    const body = await readBody(c);
+    if (body === undefined) return badJson(c);
+    const parsed = FetchModelsBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: parsed.error.issues[0]?.message ?? "请求参数格式有误" });
+    }
+    const { profileName, type: rawType, baseUrl: rawBaseUrl, apiKey: rawKey } = parsed.data;
+    const state = profileName ? await config.load() : undefined;
+    const existing =
+      state?.status === "ok"
+        ? state.config.profiles.find((p) => p.name === profileName)
+        : undefined;
+    if (profileName && !existing) {
+      return c.json({ ok: false, error: `找不到连接「${profileName}」` });
+    }
+    const type = rawType ?? existing?.type;
+    if (!type) return c.json({ ok: false, error: "请先选择提供方类型或连接" });
+    const baseUrl = rawBaseUrl !== undefined ? rawBaseUrl : existing?.baseUrl;
+    const suppliedKey = rawKey?.trim() ?? "";
+    const apiKey = suppliedKey || (existing ? await config.keyFor(existing) : undefined);
+    const rawSecrets = await config.secrets();
+    const secrets = suppliedKey ? [...rawSecrets, suppliedKey] : rawSecrets;
+    try {
+      const models = await fetchProviderModels(
+        {
+          type,
+          ...(baseUrl !== undefined ? { baseUrl } : {}),
+          ...(apiKey !== undefined ? { apiKey } : {}),
+        },
+        AbortSignal.timeout(MODELS_TIMEOUT_MS),
+      );
+      return c.json({ ok: true, models });
+    } catch (error) {
+      const message =
+        error instanceof AbortedError || (error instanceof Error && error.name === "TimeoutError")
+          ? "获取模型列表超时，请检查网络或接口地址"
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      return c.json({ ok: false, error: redact(message, secrets) });
+    }
   });
 
   routes.post("/", async (c) => {

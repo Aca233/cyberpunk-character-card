@@ -3,6 +3,12 @@ import type { AssetId } from "../../assets";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Panel } from "../../ui/Panel";
 import { itemArtOf } from "./art";
+import {
+  type BodyLayerId,
+  CYBER_SLOT_ICON,
+  humanityToneOf,
+  SLOT_BODY_LAYERS,
+} from "./cyberwareMeta";
 import neural from "./neural.module.css";
 import type { View } from "./view";
 
@@ -52,33 +58,22 @@ const CYBER_SIDES: readonly (readonly (readonly [CyberSlot, number, number])[])[
   ],
 ];
 
-/** 中间人体是原作 man_body 图集里同尺寸的几张分层图：选中哪个部位就显示哪层，其余部位用皮肤那层 */
-const BODY_LAYERS: readonly AssetId[] = [
-  "cyber.bodySkin",
-  "cyber.bodySkeleton",
-  "cyber.bodyNervous",
-  "cyber.bodyCirculatory",
+/** 中间人体是原作 man_body 图集里同尺寸的几张分层图：皮肤打底、免疫脉络微亮，悬停/选中哪个部位就点亮对应生理图层 */
+const BODY_LAYER_ASSETS: readonly { readonly key: BodyLayerId; readonly id: AssetId }[] = [
+  { key: "skin", id: "cyber.bodySkin" },
+  { key: "immune", id: "cyber.bodyImmune" },
+  { key: "skeleton", id: "cyber.bodySkeleton" },
+  { key: "nervous", id: "cyber.bodyNervous" },
+  { key: "circulatory", id: "cyber.bodyCirculatory" },
 ];
-const BODY_OF: Readonly<Record<CyberSlot, AssetId>> = {
-  frontalCortex: "cyber.bodyNervous",
-  eyes: "cyber.bodyNervous",
-  nervous: "cyber.bodyNervous",
-  os: "cyber.bodyNervous",
-  circulatory: "cyber.bodyCirculatory",
-  integumentary: "cyber.bodySkin",
-  skeleton: "cyber.bodySkeleton",
-  hands: "cyber.bodySkeleton",
-  arms: "cyber.bodySkeleton",
-  legs: "cyber.bodySkeleton",
-};
 
-/** 一格的底子：原作切角底、金色电路纹、外框和左边的竖条，颜色由 CSS 变量给 */
+/** 一格的底子：原作切角底、金色电路纹、外框和稀有度竖条，颜色由 CSS 变量给 */
 function CyberCellFace() {
   return (
     <>
       <NineSlice
         id="cyber.cellShape"
-        tint="rgb(14 14 23 / 88%)"
+        tint="rgb(12 14 24 / 90%)"
         slice={0}
         className={neural.cellSquare}
       />
@@ -105,38 +100,62 @@ function CyberCellFace() {
 }
 
 /**
- * 选择框里一件义体的格子：和部位格同样的原作底子、电路纹和义体图，只看不点；装着的框亮成原作选中的黄
+ * 选择框里一件义体的格子：和部位格同样的原作底子、电路纹和义体图；装着的框亮成原作选中的黄
  * （用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）
  */
 export function CyberItemCell({
   id,
   name,
+  slot,
   on = false,
   rarity,
   iconic = false,
+  broken = false,
+  size,
 }: {
   readonly id: string;
   readonly name: string;
+  readonly slot?: CyberSlot | undefined;
   readonly on?: boolean;
   /** 稀有度，给左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"） */
   readonly rarity?: string | undefined;
   readonly iconic?: boolean | undefined;
+  readonly broken?: boolean | undefined;
+  readonly size?: number | undefined;
 }) {
   const art = itemArtOf(id);
+  const style = size !== undefined ? ({ "--cell": `${size}px` } as CSSProperties) : undefined;
   return (
     <span
       className={neural.cyberCell}
       data-item
       data-on={on || undefined}
+      data-broken={broken || undefined}
       data-rarity={rarity}
       data-iconic={iconic || undefined}
+      style={style}
       aria-hidden
     >
       <CyberCellFace />
       {art ? (
         <Asset id={art as AssetId} alt={name} className={neural.cyberArt} />
+      ) : slot ? (
+        <Asset
+          id={CYBER_SLOT_ICON[slot]}
+          tint="rgb(245 240 232 / 78%)"
+          className={neural.cellFallbackIcon}
+        />
       ) : (
         <span className={neural.cyberCellName}>{name}</span>
+      )}
+      {broken && (
+        <Asset
+          id="cyber.disabled"
+          tint="var(--cp-danger)"
+          height={14}
+          alt="已损坏"
+          className={neural.cyberBroken}
+        />
       )}
     </span>
   );
@@ -146,23 +165,27 @@ export interface GaugeValue {
   readonly current: number;
   readonly cap: number;
   readonly stageLabel: string;
+  readonly suppressed?: boolean | undefined;
 }
 
 /**
  * 人性条：放在原作义体容量条的位置（用户选的「只要左边人性」）。
- * 刻度是原作 cw_barbg，填满的部分是同一张图染亮色、按当前人性占上限的比例从下往上露出来
+ * 刻度是原作 cw_barbg，填满的部分是同一张图染亮色、按当前人性占上限的比例从下往上露出来；
+ * 在 40 点处标出感知失真警戒线
  */
 function HumanityGauge({ humanity }: { readonly humanity: GaugeValue }) {
   const fill = humanity.cap > 0 ? Math.min(1, Math.max(0, humanity.current / humanity.cap)) : 0;
+  const tone = humanityToneOf(humanity.current);
   return (
     <div
       className={neural.gauge}
+      data-tone={tone}
       style={{ "--fill": fill } as CSSProperties}
-      title={`人性 ${humanity.current}/${humanity.cap} · ${humanity.stageLabel}`}
+      title={`人性 ${humanity.current}/${humanity.cap} · ${humanity.stageLabel}${humanity.suppressed ? "（阻断中）" : ""}`}
     >
       <span className={neural.gaugeHead}>人性</span>
       <span className={neural.gaugeTrack}>
-        <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40 / 14%)" slice={0} />
+        <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40 / 16%)" slice={0} />
         <span className={neural.gaugeFill}>
           <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40)" slice={0} />
         </span>
@@ -189,7 +212,6 @@ function HumanityGauge({ humanity }: { readonly humanity: GaugeValue }) {
           </span>
         </span>
       </span>
-      <small className={neural.gaugeStage}>{humanity.stageLabel}</small>
     </div>
   );
 }
@@ -222,31 +244,57 @@ export function CyberDoll({
   /** 每个部位装着的义体，按装上的先后排 */
   readonly parts: ReadonlyMap<CyberSlot, readonly DollPart[]>;
   readonly humanity: GaugeValue;
-  /** 悬停或钉住时弹出的详情；不传就不弹（捏人时详情放右边整栏，用户 2026-10-31："框关不掉还挡格子"） */
-  readonly tip?: (slot: CyberSlot, parts: readonly DollPart[]) => ReactNode;
-  /** 详情框线的颜色；不传按有没有打坏给 */
-  readonly tipLine?: (slot: CyberSlot, parts: readonly DollPart[]) => string;
+  /** 悬停或钉住单个格子时弹出的详情；不传就不弹（捏人时详情放右边整栏，用户 2026-10-31："框关不掉还挡格子"） */
+  readonly tip?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => ReactNode;
+  /** 详情框线的颜色；不传按当前这格有没有打坏给 */
+  readonly tipLine?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => string;
   /** 右下角的东西：已装几件、断肢、义体医生入口、点数 */
   readonly corner?: ReactNode;
   /** 调用方正在看的部位，那组格子亮着 */
   readonly selected?: CyberSlot | null;
-  /** 点格子交给调用方（捏人时空格选部位、装着的格直接卸下，用户 2026-10-31："格子不能直接装卸"）；不传就是钉住详情 */
+  /** 点格子交给调用方（捏人时空格选部位、装着的格直接卸下，用户 2026-10-31："格子不能直接装卸"）；不传就是钉住单个格子的详情 */
   readonly onCell?: (slot: CyberSlot, part: DollPart | undefined) => void;
 }) {
-  const [hovered, setHovered] = useState<CyberSlot | null>(null);
-  const [pinned, setPinned] = useState<CyberSlot | null>(null);
+  const [hovered, setHovered] = useState<{ slot: CyberSlot; index: number } | null>(null);
+  const [pinned, setPinned] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const shown = hovered ?? pinned;
-  const focus = hovered ?? selected ?? pinned;
-  const layer = focus ? BODY_OF[focus] : "cyber.bodySkin";
+  const focus = hovered?.slot ?? selected ?? pinned?.slot ?? null;
+  const activeLayers = focus ? SLOT_BODY_LAYERS[focus] : null;
 
-  /** 一个部位组：红字部位名，下面一排格子；装着的义体依次放在前面几格，后面是空格 */
+  /** 计算每层解剖图透明度：未选中部位时皮肤常亮、免疫脉络幽微发光；聚焦时对应系统亮起 */
+  const layerOpacity = (key: BodyLayerId): number => {
+    if (!activeLayers) {
+      if (key === "skin") return 0.92;
+      if (key === "immune") return 0.22;
+      return 0;
+    }
+    if (activeLayers.includes(key)) return 1;
+    if (key === "skin") return 0.44;
+    if (key === "immune") return 0.14;
+    return 0;
+  };
+
+  /** 一个部位组：部位名下面一排格子；装着的义体依次放在前面几格，后面留空 */
   const group = ([slot, count, shift]: readonly [CyberSlot, number, number]) => {
     const list = parts.get(slot) ?? [];
     const label = CYBER_LABELS[slot];
+    const shownCell = shown?.slot === slot ? shown.index : null;
+    const cellPart = shownCell !== null ? list[shownCell] : undefined;
+    const isPinnedTip = !hovered && pinned?.slot === slot && pinned.index === shownCell;
     const line =
-      tipLine?.(slot, list) ?? (list.some((p) => p.broken) ? "var(--cp-red)" : "var(--cp-yellow)");
+      shownCell !== null
+        ? (tipLine?.(slot, list, shownCell) ??
+          (cellPart?.broken ? "var(--cp-red)" : "var(--cp-yellow)"))
+        : list.some((p) => p.broken)
+          ? "var(--cp-red)"
+          : "var(--cp-yellow)";
     return (
-      <li key={slot} className={neural.cyberGroup} style={{ "--shift": shift } as CSSProperties}>
+      <li
+        key={slot}
+        className={neural.cyberGroup}
+        data-focus={focus === slot || undefined}
+        style={{ "--shift": shift } as CSSProperties}
+      >
         <span className={neural.cyberLabel}>{label}</span>
         <span className={neural.cyberCells}>
           {Array.from({ length: count }, (_, i) => {
@@ -258,26 +306,33 @@ export function CyberDoll({
                 key={i}
                 type="button"
                 className={neural.cyberCell}
-                aria-pressed={slot === (onCell ? selected : pinned)}
+                aria-pressed={
+                  onCell ? slot === selected : pinned?.slot === slot && pinned.index === i
+                }
                 aria-label={`${label}第 ${i + 1} 格：${part ? part.name : "空"}`}
                 data-empty={!part || undefined}
                 data-broken={part?.broken || undefined}
                 data-rarity={part?.rarity}
                 data-iconic={part?.iconic || undefined}
-                onMouseEnter={() => setHovered(slot)}
+                onMouseEnter={() => setHovered({ slot, index: i })}
                 onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(slot)}
+                onFocus={() => setHovered({ slot, index: i })}
                 onBlur={() => setHovered(null)}
                 onClick={() =>
-                  onCell ? onCell(slot, part) : setPinned((p) => (p === slot ? null : slot))
+                  onCell
+                    ? onCell(slot, part)
+                    : setPinned((p) =>
+                        p?.slot === slot && p.index === i ? null : { slot, index: i },
+                      )
                 }
               >
                 <CyberCellFace />
-                {part && art ? (
-                  <Asset id={art as AssetId} alt={part.name} className={neural.cyberArt} />
-                ) : (
-                  part && <span className={neural.cyberCellName}>{part.name}</span>
-                )}
+                {part &&
+                  (art ? (
+                    <Asset id={art as AssetId} alt={part.name} className={neural.cyberArt} />
+                  ) : (
+                    <span className={neural.cyberCellName}>{part.name}</span>
+                  ))}
                 {part?.broken && (
                   <Asset
                     id="cyber.disabled"
@@ -291,11 +346,11 @@ export function CyberDoll({
             );
           })}
         </span>
-        {/* 只读详情；捏人时不弹，操作放右栏（用户 2026-10-31："悬停框按钮点不了"） */}
-        {tip && shown === slot && (
+        {/* 悬停或钉住那一格才弹详情；简洁呈现不堆杂框 */}
+        {tip && shownCell !== null && (
           <div className={neural.cyberTip} role="tooltip">
-            <Panel as="section" title={label} line={line}>
-              {tip(slot, list)}
+            <Panel as="section" title={isPinnedTip ? `${label} · 已固定` : label} line={line}>
+              {tip(slot, list, shownCell)}
             </Panel>
           </div>
         )}
@@ -310,12 +365,12 @@ export function CyberDoll({
         {CYBER_SIDES[0]?.map(group)}
       </ul>
       <div className={neural.cyberBody} aria-hidden>
-        {BODY_LAYERS.map((id) => (
+        {BODY_LAYER_ASSETS.map(({ key, id }) => (
           <Asset
             key={id}
             id={id}
             className={neural.cyberBodyLayer}
-            style={{ opacity: id === layer ? 1 : 0 }}
+            style={{ opacity: layerOpacity(key) }}
           />
         ))}
       </div>

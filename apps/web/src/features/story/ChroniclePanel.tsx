@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../ui/Button";
 import { useLayer } from "../../ui/layers";
+import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
@@ -22,39 +23,8 @@ const ENDS: readonly [StoryEnd, string, string][] = [
   ["ended", "故事停在这里", "不交代去向，就停在现在这一刻。"],
 ];
 
-/**
- * 数据库页的履历栏：AI 在剧情告一段落时写的总结、委托的结局、死亡和收尾，按时间排；
- * 底部可以给这个角色的故事收尾，收尾后存档只读，角色进传说名册
- */
-export function ChronicleBody({
-  view,
-  onEnd,
-}: {
-  readonly view: View;
-  /** 正在生成、已经死了或已经收尾时是 undefined：只能看 */
-  readonly onEnd?: ((how: StoryEnd, epitaph: string | undefined) => Promise<void>) | undefined;
-}) {
-  const [confirming, setConfirming] = useState(false);
-  const [how, setHow] = useState<StoryEnd>("retired");
-  const [epitaph, setEpitaph] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // 收尾确认开着时 Esc 先收起它；没开时交给神经界面关闭
-  useLayer(() => setConfirming(false), confirming);
-
-  const end = async () => {
-    if (!onEnd) return;
-    setSaving(true);
-    try {
-      await onEnd(how, epitaph.trim() || undefined);
-      setConfirming(false);
-    } catch {
-      // 失败原因由提示条说明；确认框留着
-    } finally {
-      setSaving(false);
-    }
-  };
-
+/** 生物监测页的履历栏：AI 在剧情告一段落时写的总结、委托的结局、死亡和收尾，按时间排 */
+export function ChronicleBody({ view }: { readonly view: View }) {
   const entries = view.chronicle;
 
   return (
@@ -89,49 +59,76 @@ export function ChronicleBody({
           {view.ended.epitaph && `——「${view.ended.epitaph}」`}。这份存档只能回看。
         </p>
       )}
-      {onEnd && !view.ended && (
-        <section>
-          <h3 className={styles.mapTitle}>结束这个角色的故事</h3>
-          {confirming ? (
-            <div className={styles.memoryForm}>
-              {ENDS.map(([id, label, hint]) => (
-                <label key={id} className={styles.factionLine}>
-                  <input
-                    type="radio"
-                    name="story-end"
-                    checked={how === id}
-                    onChange={() => setHow(id)}
-                  />{" "}
-                  <b>{label}</b> <span className={styles.dim}>{hint}</span>
-                </label>
-              ))}
-              <div className={styles.habitForm}>
+    </div>
+  );
+}
+
+/** 从 Esc 系统菜单打开的收尾弹窗：退休或将故事停在当下，结束后存档只读并记入传说名册 */
+export function EndStoryModal({
+  onEnd,
+  onClose,
+}: {
+  readonly onEnd: (how: StoryEnd, epitaph: string | undefined) => Promise<void>;
+  readonly onClose: () => void;
+}) {
+  const [how, setHow] = useState<StoryEnd>("retired");
+  const [epitaph, setEpitaph] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useLayer(onClose);
+
+  const end = async () => {
+    setSaving(true);
+    try {
+      await onEnd(how, epitaph.trim() || undefined);
+      onClose();
+    } catch {
+      // 失败原因由提示条说明；弹窗留着
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={styles.journalBackdrop}>
+      <div role="dialog" aria-label="结束故事" className={styles.journal}>
+        <Panel as="div" title="结束这个角色的故事" line="var(--cp-red)" frame>
+          <div className={styles.memoryForm}>
+            {ENDS.map(([id, label, hint]) => (
+              <label key={id} className={styles.factionLine}>
                 <input
-                  value={epitaph}
-                  maxLength={EPITAPH_CHARS}
-                  placeholder="留一句话（可以不写）"
-                  aria-label="留给名册的一句话"
-                  onChange={(e) => setEpitaph(e.target.value)}
-                />
-              </div>
-              <p className={styles.dim}>
-                收尾之后不能再继续这份存档，角色会进主菜单的传说名册，之后的新角色开局时 AI
-                会知道这个人。
-              </p>
-              <div className={styles.memoryActions}>
-                <Button primary disabled={saving} onClick={() => void end()}>
-                  确定收尾
-                </Button>
-                <Button disabled={saving} onClick={() => setConfirming(false)}>
-                  再想想
-                </Button>
-              </div>
+                  type="radio"
+                  name="story-end"
+                  checked={how === id}
+                  onChange={() => setHow(id)}
+                />{" "}
+                <b>{label}</b> <span className={styles.dim}>{hint}</span>
+              </label>
+            ))}
+            <div className={styles.habitForm}>
+              <input
+                value={epitaph}
+                maxLength={EPITAPH_CHARS}
+                placeholder="留一句话（可以不写）"
+                aria-label="留给名册的一句话"
+                onChange={(e) => setEpitaph(e.target.value)}
+              />
             </div>
-          ) : (
-            <Button onClick={() => setConfirming(true)}>结束这个角色的故事</Button>
-          )}
-        </section>
-      )}
+            <p className={styles.dim}>
+              收尾之后不能再继续这份存档，角色会进主菜单的传说名册，之后的新角色开局时 AI
+              会知道这个人。
+            </p>
+            <div className={styles.memoryActions}>
+              <Button primary disabled={saving} onClick={() => void end()}>
+                确定收尾
+              </Button>
+              <Button disabled={saving} onClick={onClose}>
+                再想想
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

@@ -14,7 +14,6 @@ import {
 } from "./systems/cyberware";
 import {
   BuyItemActionSchema,
-  CraftActionSchema,
   EquipItemActionSchema,
   ModWeaponActionSchema,
   OutfitActionSchema,
@@ -22,10 +21,10 @@ import {
   UnequipItemActionSchema,
   UseHealingActionSchema,
 } from "./systems/inventory";
-import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
 import { ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
+import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
 import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
@@ -34,8 +33,6 @@ import { SquadActionSchema } from "./systems/squad";
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 分配一个街头声望攒下的属性点 */
   SpendPointActionSchema,
-  /** 在委托板上接下一单挂着的委托 */
-  AcceptJobActionSchema,
   /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
   BuyCyberwareActionSchema,
   /** 请义体医生卸下一件，医生折价回收 */
@@ -44,11 +41,13 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   RepayRipperdocActionSchema,
   /** 请义体医生修好一件打坏的义体 */
   RepairCyberwareActionSchema,
-  /** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
+  /** 从背包装上一件：治疗品和手雷进快捷栏，服装穿到对应的格子 */
   EquipItemActionSchema,
   /** 非战斗时使用当前治疗品，回复生命并扣除一次使用次数 */
   UseHealingActionSchema,
-  /** 把装备栏里的一件放回背包 */
+  /** 非战斗时在背包主动注射神经压制剂 */
+  UseSuppressantActionSchema,
+  /** 把装备栏里穿着的一件脱下放回背包 */
   UnequipItemActionSchema,
   /** 存放箱和后备箱：store 从背包放进去，take 拿回背包；where 写安全屋 id 或车的 id */
   StashActionSchema,
@@ -56,8 +55,6 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   OutfitActionSchema,
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   ModWeaponActionSchema,
-  /** 工作台：dismantle 把背包里的一件拆成零件，tune 用零件给武器升一档稀有度 */
-  CraftActionSchema,
   /** 小队面板：accept、decline 回应入队请求，dismiss 请队员离开，pay 发雇佣型队员的薪水 */
   SquadActionSchema,
   /** 在商店买一件，放进背包 */

@@ -1,6 +1,6 @@
 /**
  * 《赛博朋克 2077：边缘账本》3.0 城区物理安检法则与夜之城百态生活切片库（Chapter 5 & Chapter 7）
- * - 收录八大城区安检/着装/显眼武器执法法则
+ * - 收录八大城区安检与显眼武器执法法则
  * - 收录中间人脾气与信誉偏好权重
  * - 收录常态闲逛时注入的【夜之城百态烟火气生活切片】（无强制任务绑定，营造真实呼吸感）
  */
@@ -12,10 +12,6 @@ export interface DistrictLaw {
   readonly securityTier: 0 | 1 | 2 | 3 | 4;
   /** 是否严禁公开携带显眼长武器（open / heavy）上街 */
   readonly forbidsOpenLongArms: boolean;
-  /** 进入高档建筑、酒店或企业总部所需的着装风格（不满足时触发安保门禁拦截） */
-  readonly highEndDressGate?: readonly ("neomilitarism" | "neokitsch")[];
-  /** 街区信息打听有加成的着装风格 */
-  readonly streetInfoBonusStyle?: "entropism" | "kitsch" | "neomilitarism" | "neokitsch";
   /** 创伤小组普通响应是否覆盖（太平洲与地下屏蔽区不覆盖） */
   readonly traumaCoverage: "full" | "platinumOnly" | "blocked";
   /** 执法与环境物理法则描述 */
@@ -28,38 +24,33 @@ export const DISTRICT_LAWS: Readonly<Record<string, DistrictLaw>> = {
     name: "市政中心",
     securityTier: 4,
     forbidsOpenLongArms: true,
-    highEndDressGate: ["neomilitarism", "neokitsch"],
     traumaCoverage: "full",
     lawSummary:
-      "巨企总部与公司广场核心区。街头遍布安保无人机与面部识别，严禁公开拎长枪/重武器上街；进入企业大厦与五星酒店必须身穿【新军权】或【新刻奇】正装礼服并通过安检。",
+      "巨企总部与公司广场核心区。街头遍布安保无人机与面部识别，严禁公开拎长枪/重武器上街；进入企业大厦与五星酒店需穿着得体并通过门口安检。",
   },
   westbrook: {
     id: "westbrook",
     name: "威斯布鲁克",
     securityTier: 3,
     forbidsOpenLongArms: true,
-    highEndDressGate: ["neomilitarism", "neokitsch"],
-    streetInfoBonusStyle: "kitsch",
     traumaCoverage: "full",
     lawSummary:
-      "日本街繁华夜生活与北橡区权贵豪宅并存。高档会所与私人公馆要求正装礼服（新刻奇/新军权）；街头显眼长枪会引起虎爪帮巡街刀手或私人安保盘查。",
+      "日本街繁华夜生活与北橡区权贵豪宅并存。高档会所与私人公馆注重门面与安检；街头显眼长枪会引起虎爪帮巡街刀手或私人安保盘查。",
   },
   heywood: {
     id: "heywood",
     name: "海伍德",
     securityTier: 2,
     forbidsOpenLongArms: false,
-    streetInfoBonusStyle: "kitsch",
     traumaCoverage: "full",
     lawSummary:
-      "市政中心南侧的密集居住区，瓦伦蒂诺帮与六街帮势力交错。穿【刻奇】街头服饰更容易在酒吧与巷口搭上话；穿昂贵公司西装独闯暗巷易被当成肥羊。",
+      "市政中心南侧的密集居住区，瓦伦蒂诺帮与六街帮势力交错。穿街头夹克更容易在酒吧与巷口搭上话；穿昂贵公司西装独闯暗巷易被当成肥羊。",
   },
   watson: {
     id: "watson",
     name: "沃森区",
     securityTier: 1,
     forbidsOpenLongArms: false,
-    streetInfoBonusStyle: "kitsch",
     traumaCoverage: "full",
     lawSummary:
       "歌舞伎町黑市、丽姿酒吧与北侧老工业区。漩涡帮与虎爪帮在暗巷活动，风衣下藏手枪或冲锋枪司空见惯，NCPD 巡逻迟缓。",
@@ -69,7 +60,6 @@ export const DISTRICT_LAWS: Readonly<Record<string, DistrictLaw>> = {
     name: "圣多明戈",
     securityTier: 1,
     forbidsOpenLongArms: false,
-    streetInfoBonusStyle: "entropism",
     traumaCoverage: "full",
     lawSummary:
       "河谷区重工业厂房与科罗纳多农场。空气常年弥漫化工酸雾，六街帮武装巡逻普遍；南侧公路直通恶土，流浪者车队常在此交接走私货。",
@@ -97,7 +87,6 @@ export const DISTRICT_LAWS: Readonly<Record<string, DistrictLaw>> = {
     name: "恶土",
     securityTier: 1,
     forbidsOpenLongArms: false,
-    streetInfoBonusStyle: "entropism",
     traumaCoverage: "platinumOnly",
     lawSummary:
       "环绕夜之城的广袤荒漠、垃圾场与风力电网。跨距极远必须驾车出行，NCPD 通缉令无法直接触达，阿德卡多等流浪者家族与乱刀会在此争夺公路控制权。",

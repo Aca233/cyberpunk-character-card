@@ -10,9 +10,8 @@ import { ApiError, api } from "../../api/client";
 import styles from "./characters.module.css";
 
 /**
- * 角色正文的一个区块：可以手写，也可以交给辅助模型生成、重写、续写、润色（每次花一次模型调用），
- * 边写边显示，中途能停，停下时保留已经写出的部分；写完能撤销一步。锁定后模型不改它，
- * 写别的区块时把它当定稿
+ * 角色正文区块：可手写，也可交由辅助模型单块生成、重写、续写、润色，
+ * 边写边流式显示，中途可停并保留已输出内容，支持单步撤销与锁定定稿。
  */
 export function ProseField({
   block,
@@ -79,94 +78,87 @@ export function ProseField({
   const modes: ProseMode[] = empty ? ["generate"] : ["rewrite", "continue", "polish"];
 
   return (
-    <div className={styles.prose} data-locked={locked || undefined}>
-      <label className={styles.field}>
-        <span>
-          {label}
-          {locked && " · 已锁定"}
-          <small>
+    <div
+      className={styles.prose}
+      data-locked={locked || undefined}
+      data-filled={!empty || undefined}
+    >
+      <div className={styles.proseHead}>
+        <span className={styles.proseTitleWrap}>
+          <strong className={styles.proseTitle}>{label}</strong>
+          {locked && <span className={styles.proseLockBadge}>已锁定</span>}
+          <small className={styles.proseCount}>
             {shown.length} / {max}
           </small>
         </span>
-        <textarea
-          rows={block === "past" || block === "examples" ? 5 : 3}
-          maxLength={max}
-          value={shown}
-          readOnly={busy}
-          aria-busy={busy}
-          placeholder={hint}
-          onChange={(event) => {
-            setPrevious(null);
-            onChange({ [block]: event.target.value });
-          }}
-        />
-      </label>
-      <div className={styles.slotTools}>
-        {busy ? (
-          <button
-            type="button"
-            className={styles.toolButton}
-            onClick={() => abort.current?.abort()}
-          >
-            停止
-          </button>
-        ) : (
-          modes.map((mode) => (
+        <div className={styles.slotTools}>
+          {busy ? (
             <button
               type="button"
-              key={mode}
               className={styles.toolButton}
-              disabled={locked || card.name.trim() === ""}
-              title={
-                locked
-                  ? "锁定了，模型不会改它"
-                  : card.name.trim() === ""
-                    ? "先给角色起个名字"
-                    : "调用辅助模型生成正文（消耗一次模型调用）"
-              }
-              onClick={() => void run(mode)}
+              onClick={() => abort.current?.abort()}
             >
-              {PROSE_MODE_LABELS[mode]}
+              停止
             </button>
-          ))
-        )}
-        <button
-          type="button"
-          className={styles.toolButton}
-          aria-pressed={asking}
-          disabled={busy || locked}
-          onClick={() => setAsking((a) => !a)}
-        >
-          要求
-        </button>
-        {previous !== null && !busy && (
+          ) : (
+            modes.map((mode) => (
+              <button
+                type="button"
+                key={mode}
+                className={styles.toolButton}
+                disabled={locked || card.name.trim() === ""}
+                title={
+                  locked
+                    ? "已锁定定稿，模型不会改动此区块"
+                    : card.name.trim() === ""
+                      ? "请先给角色起个名字"
+                      : "调用辅助模型撰写此区块"
+                }
+                onClick={() => void run(mode)}
+              >
+                {PROSE_MODE_LABELS[mode]}
+              </button>
+            ))
+          )}
           <button
             type="button"
             className={styles.toolButton}
-            onClick={() => {
-              onChange({ [block]: previous });
-              setPrevious(null);
-              setNote(null);
-            }}
+            aria-pressed={asking}
+            disabled={busy || locked}
+            onClick={() => setAsking((a) => !a)}
           >
-            撤销
+            要求
           </button>
-        )}
-        <button
-          type="button"
-          className={styles.toolButton}
-          aria-pressed={locked}
-          disabled={busy}
-          title="锁定后 AI 不会改动此区块，写其他区块时作为参考基准；仍可手动修改"
-          onClick={() =>
-            onChange({
-              locked: locked ? card.locked.filter((b) => b !== block) : [...card.locked, block],
-            })
-          }
-        >
-          {locked ? "解锁" : "锁定"}
-        </button>
+          {previous !== null && !busy && (
+            <button
+              type="button"
+              className={styles.toolButton}
+              onClick={() => {
+                onChange({ [block]: previous });
+                setPrevious(null);
+                setNote(null);
+              }}
+            >
+              撤销
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.toolButton}
+            aria-pressed={locked}
+            disabled={busy}
+            title="锁定后 AI 不会改动此区块，写其他区块时作为参考基准；仍可手动修改"
+            onClick={() =>
+              onChange({
+                locked: locked ? card.locked.filter((b) => b !== block) : [...card.locked, block],
+              })
+            }
+          >
+            {locked ? "解锁" : "锁定"}
+          </button>
+        </div>
       </div>
+
       {asking && !locked && (
         <label className={styles.field}>
           <span>
@@ -181,6 +173,23 @@ export function ProseField({
           />
         </label>
       )}
+
+      <label className={styles.field}>
+        <textarea
+          rows={block === "past" || block === "examples" ? 4 : 3}
+          maxLength={max}
+          value={shown}
+          readOnly={busy}
+          aria-busy={busy}
+          aria-label={label}
+          placeholder={hint}
+          onChange={(event) => {
+            setPrevious(null);
+            onChange({ [block]: event.target.value });
+          }}
+        />
+      </label>
+
       {note && (
         <p className={styles.note} role="status">
           {note}

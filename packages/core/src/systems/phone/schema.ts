@@ -1,16 +1,27 @@
 import { z } from "zod";
 
-/** 消息记录最多留这么多条，旧的先删 */
-export const PHONE_KEPT = 40;
+/** 消息记录最多留这么多条；按会话保底后淘汰最旧 */
+export const PHONE_KEPT = 80;
+/** 每个会话在总容量满了之后至少保底保留几条最近往来（连同进行中委托附件） */
+export const PHONE_THREAD_MIN = 8;
+/** 同场景同人物私信好感累计上限（+2/+4 封顶） */
+export const CHAT_AFFINITY_SCENE_CAP = 4;
+/** 同场景同人物私信自然收尾软上限（超过后引导转回线下正文） */
+export const CHAT_SCENE_TURN_SOFT_CAP = 6;
 /** 叙事模型每轮最多发几条 */
 export const MESSAGES_PER_TURN = 2;
 
+export const MessageSenderSchema = z.enum(["npc", "player"]);
+export type MessageSender = z.infer<typeof MessageSenderSchema>;
+
 export const MessageSchema = z.object({
   id: z.number().int().min(1),
-  /** 人物 id、中间人 id，或者叙事模型写的名字 */
+  /** 人物 id、中间人 id，或者叙事模型写的名字（player 发出的也写对方频道 key，方便按会话归拢） */
   from: z.string().min(1),
   /** 显示用的名字：查得到人物卡或中间人时用中文名 */
   name: z.string().min(1),
+  /** 消息发起方：npc 对方发来，player 玩家发去；旧存档没写按 npc */
+  sender: MessageSenderSchema.default("npc"),
   text: z.string().min(1).max(300),
   /** 委托卡附件：收件时校验委托仍可接，展示和接单时再次检查当前状态 */
   job: z.string().min(1).optional(),
@@ -50,6 +61,14 @@ export const CallSchema = z.object({
 });
 export type Call = z.infer<typeof CallSchema>;
 
+export const ChatSceneBudgetSchema = z.object({
+  scene: z.number().int().min(0),
+  turns: z.number().int().min(0).default(0),
+  affinityGained: z.number().int().min(0).default(0),
+  jobOffered: z.boolean().default(false),
+});
+export type ChatSceneBudget = z.infer<typeof ChatSceneBudgetSchema>;
+
 export const PhoneStateSchema = z.object({
   messages: z.array(MessageSchema).max(PHONE_KEPT).default([]),
   nextId: z.number().int().min(1).default(1),
@@ -57,6 +76,8 @@ export const PhoneStateSchema = z.object({
   nextCall: z.number().int().min(1).default(1),
   /** 其他系统交来的公开消息的已读 id；人物消息仍以 messages[].read 为准 */
   feedRead: z.array(z.string().min(1)).default([]),
+  /** 手机直聊每个人物在当前场景下的次数/好感/派单配额；旧存档没有 */
+  chatBudget: z.record(z.string(), ChatSceneBudgetSchema).default({}),
 });
 export type PhoneState = z.infer<typeof PhoneStateSchema>;
 
@@ -108,9 +129,29 @@ export const AnswerSchema = z.object({
   answer: z.boolean(),
 });
 
+/** 只能由代码发出：手机私聊窗口玩家发出一条短讯 */
+export const SendSchema = z.object({
+  type: z.literal("phone.send"),
+  to: z.string().min(1),
+  text: z.string().trim().min(1).max(300),
+});
+export type SendCommand = z.infer<typeof SendSchema>;
+
+/** 只能由代码发出：记录当前场景同人物私聊次数、好感配额与是否已派单 */
+export const ChatMetaSchema = z.object({
+  type: z.literal("phone.chatMeta"),
+  npc: z.string().min(1),
+  scene: z.number().int().min(0),
+  affinityGained: z.number().int().min(0).optional(),
+  jobOffered: z.boolean().optional(),
+});
+export type ChatMeta = z.infer<typeof ChatMetaSchema>;
+
 export type PhoneInternal =
   | z.infer<typeof ReceiveSchema>
   | z.infer<typeof ReadSchema>
   | z.infer<typeof ReplySchema>
   | z.infer<typeof CallCommandSchema>
-  | z.infer<typeof AnswerSchema>;
+  | z.infer<typeof AnswerSchema>
+  | SendCommand
+  | ChatMeta;

@@ -241,8 +241,8 @@ export function MapBody({
   const destinations = view.travel.destinations;
   const here = destinations.find((d) => d.here);
   const dest = destinations.find((d) => d.id === picked);
-  // 委托地点（用户同意的 2026-10-30）：挂着和接下的委托，location 对得上目的地的 id 或名字才标；对不上不猜坐标
-  const openJobs = view.jobs.list.filter((j) => j.open && j.location !== null);
+  // 委托地点：只标手头已经接下的委托，免得未接的对话传闻像预设任务点那样挂在地图上
+  const openJobs = view.jobs.list.filter((j) => j.status === "active" && j.location !== null);
   const jobsAt = new Map<string, (typeof openJobs)[number][]>();
   for (const j of openJobs) {
     const exact = destinations.find((x) => x.id === j.location);
@@ -261,6 +261,8 @@ export function MapBody({
     if (d) npcsAt.set(d.id, [...(npcsAt.get(d.id) ?? []), n]);
   }
   const destNpcs = dest ? (npcsAt.get(dest.id) ?? []) : [];
+  const destAlerts = dest ? view.ncpd.alerts.filter((a) => a.location === dest.id) : [];
+  const destGigs = dest ? view.sidegigs.list.filter((g) => g.location === dest.id) : [];
   const info = asset(MAP);
   const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
 
@@ -572,21 +574,6 @@ export function MapBody({
               );
             })}
 
-            {!hidden.has("police") &&
-              view.ncpd.alerts.map((a) => {
-                if (a.x === null || a.y === null) return null;
-                const style = iconStyle(POLICE_ICON, toScreen(a.x, a.y));
-                return style ? (
-                  <span
-                    key={a.id}
-                    className={styles.mapPoi}
-                    data-kind="police"
-                    style={style}
-                    title={`NCPD 警情：${a.label}（${a.locationName}，赏金 ${a.reward} 欧元，${a.until} 前）`}
-                  />
-                ) : null;
-              })}
-
             {visibleDests.map((d) => (
               <div
                 key={d.id}
@@ -673,6 +660,42 @@ export function MapBody({
             );
           })}
 
+        {/* NCPD 警情：放在地点图钉右下方，点开直接拉出该地点的路线卡 */}
+        {size.w > 0 &&
+          !hidden.has("police") &&
+          view.ncpd.alerts.map((a) => {
+            if (a.x === null || a.y === null) return null;
+            const at = toScreen(a.x, a.y);
+            if (!onScreen(at)) return null;
+            const style = iconStyle(POLICE_ICON);
+            if (!style) return null;
+            const title = `NCPD 警情：${a.label}（${a.locationName}，赏金 ${a.reward} 欧元，${a.until} 前）：${a.note}`;
+            const hasDest = destinations.some((d) => d.id === a.location);
+            return hasDest ? (
+              <div key={a.id} className={styles.mapPolice} style={at}>
+                <i className={styles.mapPoliceShadow} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.mapPolicePin}
+                  data-kind="police"
+                  style={style}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={picked === a.location}
+                  onClick={() => setPicked(a.location)}
+                />
+              </div>
+            ) : (
+              <span
+                key={a.id}
+                className={styles.mapPoi}
+                data-kind="police"
+                style={{ ...style, ...at }}
+                title={title}
+              />
+            );
+          })}
+
         {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
         {hover && (
           <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
@@ -750,14 +773,40 @@ export function MapBody({
                   ✕
                 </Button>
               </div>
-              {/* 这里挂着或接下的委托（用户同意的 2026-10-30）：只列名字、状态、星级和报酬，不在地图上接单 */}
+              {/* 这里进行中的委托：只列名字、状态和报酬，不在地图上预设任务 */}
               {destJobs.length > 0 && (
                 <ul className={styles.jobs}>
                   {destJobs.map((j) => (
                     <li key={j.id} data-overdue={j.overdue || undefined}>
                       <strong>{j.title}</strong>
                       <span>
-                        {`委托 · ${j.statusLabel} · ${j.risk} 星 · 报酬 ${j.reward} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
+                        {`委托 · ${j.statusLabel} · 报酬 ${j.reward.toLocaleString("en-US")} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {destAlerts.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destAlerts.map((a) => (
+                    <li key={a.id}>
+                      <strong>NCPD 警情 · {a.label}</strong>
+                      <span>
+                        {`赏金 ${a.reward.toLocaleString("en-US")} 欧元 · ${a.until} 前 · ${a.note}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {destGigs.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destGigs.map((g) => (
+                    <li key={g.id}>
+                      <strong>{g.name}</strong>
+                      <span>
+                        {g.beaten
+                          ? `街头风声 · 听说${g.opponent}被人放倒之后，这阵子台上冷清了不少`
+                          : `街头风声 · ${g.note}${g.rematch ? `（听说${g.rematch}才重新凑局）` : ""}`}
                       </span>
                     </li>
                   ))}

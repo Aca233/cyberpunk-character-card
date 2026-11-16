@@ -1,13 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { api, type TurnContext } from "../../api/client";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
-import { CellFrame, FrameBox } from "../../ui/FrameBox";
-import { KeyBar, KeyHint } from "../../ui/KeyHint";
+import { FrameBox } from "../../ui/FrameBox";
+import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
 import neural from "../story/neural.module.css";
 import { ModelSettings } from "./ModelSettings";
@@ -31,31 +31,53 @@ const FRAME_SLICE = 120;
 
 const CITY_WEIGHT = { minor: "街角小事", normal: "几个街区在传", major: "头条" } as const;
 
+type Destination = Tab | "back" | "menu";
+
+function safeBackTarget(state: unknown, fromParam: string | null): string | null {
+  const raw =
+    typeof state === "object" && state !== null && "from" in state && typeof state.from === "string"
+      ? state.from
+      : fromParam;
+  if (!raw?.startsWith("/") || raw.startsWith("//")) return null;
+  if (raw === "/settings" || raw.startsWith("/settings?")) return null;
+  return raw;
+}
+
 export function SettingsScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const [dirty, setDirty] = useState(false);
-  const [leaving, setLeaving] = useState<Tab | "menu" | null>(null);
+  const [leaving, setLeaving] = useState<Destination | null>(null);
   const tabParam = params.get("tab");
   const tab: Tab =
     tabParam === "context" || tabParam === "narrative" || tabParam === "presets"
       ? tabParam
       : "profiles";
+  const backTarget = safeBackTarget(location.state, params.get("from"));
+  const canReturnBack = backTarget !== null && backTarget !== "/menu";
+  const escTarget: "back" | "menu" = canReturnBack ? "back" : "menu";
+  const backLabel = backTarget?.startsWith("/play/") ? "返回游戏" : "返回上一页";
 
-  const go = (target: Tab | "menu") => {
+  const go = (target: Destination) => {
     setDirty(false);
     setLeaving(null);
-    if (target === "menu") {
+    if (target === "back") {
+      navigate(backTarget ?? "/menu");
+    } else if (target === "menu") {
       navigate("/menu");
     } else {
-      setParams((p) => {
-        const next = new URLSearchParams(p);
-        next.set("tab", target);
-        return next;
-      });
+      setParams(
+        (p) => {
+          const next = new URLSearchParams(p);
+          next.set("tab", target);
+          return next;
+        },
+        { replace: true, state: location.state },
+      );
     }
   };
-  const requestGo = (target: Tab | "menu") => {
+  const requestGo = (target: Destination) => {
     if (target === tab) return;
     if (dirty) setLeaving(target);
     else go(target);
@@ -66,12 +88,12 @@ export function SettingsScreen() {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (document.querySelector("[role=dialog]")) return;
       if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
-      if (dirty) setLeaving("menu");
-      else navigate("/menu");
+      if (dirty) setLeaving(escTarget);
+      else navigate(canReturnBack ? backTarget : "/menu");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dirty, navigate]);
+  }, [backTarget, canReturnBack, dirty, escTarget, navigate]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -104,9 +126,13 @@ export function SettingsScreen() {
         className={styles.frame}
       />
       <header className={styles.head}>
-        <Asset id="menu.header" tint="var(--cp-red)" height={72} className={styles.headBg} />
-        <h1>设置</h1>
-        <Asset id="fluff.code" tint="var(--cp-red)" height={16} />
+        <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.headBg} />
+        <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" />
+        <div className={styles.headTitleWrap}>
+          <span className={styles.headCode}>{"SYS // CONFIG"}</span>
+          <h1>设置</h1>
+        </div>
+        <Asset id="fluff.code" tint="var(--cp-red)" height={18} className={styles.headFluff} />
       </header>
       {/* 页签：原作 tab.bg 九宫格，切法同神经界面；下面一道 tab.line */}
       <nav className={styles.tabs} aria-label="设置分页">
@@ -140,9 +166,20 @@ export function SettingsScreen() {
         )}
       </main>
       <footer className={styles.foot}>
-        <KeyBar>
-          <KeyHint keyId="key.esc" label="返回主菜单" onClick={() => requestGo("menu")} />
-        </KeyBar>
+        {canReturnBack ? (
+          <>
+            <Button small keyId="key.esc" onClick={() => requestGo("back")}>
+              {backLabel}
+            </Button>
+            <Button small onClick={() => requestGo("menu")}>
+              返回主菜单
+            </Button>
+          </>
+        ) : (
+          <Button small keyId="key.esc" onClick={() => requestGo("menu")}>
+            返回主菜单
+          </Button>
+        )}
       </footer>
       {leaving !== null && (
         <Dialog
@@ -168,6 +205,7 @@ export function SettingsScreen() {
 
 function ContextViewer() {
   const { open } = useSpoilerView();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const saveId = params.get("save") ?? saves.data?.[0]?.id ?? "";
@@ -188,32 +226,59 @@ function ContextViewer() {
   });
 
   const update = (key: "save" | "seq", value: string) =>
-    setParams((p) => {
-      p.set("tab", "context");
-      p.set(key, value);
-      if (key === "save") p.delete("seq");
-      return p;
-    });
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.set("tab", "context");
+        next.set(key, value);
+        if (key === "save") next.delete("seq");
+        return next;
+      },
+      { replace: true, state: location.state },
+    );
 
   if (!open) {
     return (
-      <div className={styles.prefs}>
-        <p>
-          这里是剧透调试视图：会显示发给模型的全部内容，包括人物的诉求、底线、秘密和委托的隐藏信息。
-        </p>
-        <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
-        <div>
-          <Button primary onClick={() => setNarrativePref("spoilers", true)}>
-            显示剧透
-          </Button>
+      <Panel line="var(--cp-yellow)" className={styles.gateCard}>
+        <div className={styles.gateBody}>
+          <div className={styles.gateHead}>
+            <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
+            <h2>剧透调试视图</h2>
+          </div>
+          <p>
+            这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
+          </p>
+          <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
+          <div>
+            <Button primary onClick={() => setNarrativePref("spoilers", true)}>
+              显示剧透
+            </Button>
+          </div>
         </div>
-      </div>
+      </Panel>
     );
   }
-  if (saves.isPending) return <p className={styles.dim}>正在读取存档…</p>;
-  if (saves.isError) return <EmptyState text={`读取存档失败：${saves.error.message}`} />;
+  if (saves.isPending)
+    return (
+      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+        <p className={styles.dim}>正在读取存档…</p>
+      </Panel>
+    );
+  if (saves.isError)
+    return (
+      <Panel line="var(--cp-danger)" className={styles.gateCard}>
+        <EmptyState
+          text={`读取存档失败：${saves.error.message}`}
+          action={<Button onClick={() => void saves.refetch()}>重试</Button>}
+        />
+      </Panel>
+    );
   if (saves.data.length === 0)
-    return <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容" />;
+    return (
+      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+        <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容" />
+      </Panel>
+    );
 
   return (
     <div className={styles.context}>
@@ -248,9 +313,20 @@ function ContextViewer() {
         </label>
       </div>
 
-      {turns.length === 0 && state.isSuccess && <EmptyState text="这个存档还没有写进任何一轮" />}
+      {turns.length === 0 && state.isSuccess && (
+        <Panel line="var(--cp-red-dim)">
+          <EmptyState text="这个存档还没有写进任何一轮" />
+        </Panel>
+      )}
       {context.isPending && seq !== null && <p className={styles.dim}>正在重建这一轮的上下文…</p>}
-      {context.isError && <EmptyState text={`读取失败：${context.error.message}`} />}
+      {context.isError && (
+        <Panel line="var(--cp-danger)">
+          <EmptyState
+            text={`读取失败：${context.error.message}`}
+            action={<Button onClick={() => void context.refetch()}>重试</Button>}
+          />
+        </Panel>
+      )}
       {context.data && <ContextDetail ctx={context.data} saveId={saveId} />}
     </div>
   );
@@ -279,21 +355,29 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
     <div className={styles.detail}>
       <SaveAsCase key={`${saveId}-${ctx.seq}`} saveId={saveId} seq={ctx.seq} />
       <dl className={styles.facts}>
-        <dt>时间</dt>
-        <dd>{formatDate(ctx.at)}</dd>
-        <dt>本轮用量</dt>
-        <dd>
-          {ctx.usage
-            ? `输入 ${ctx.usage.inputTokens} · 输出 ${ctx.usage.outputTokens} tokens`
-            : "没有记录"}
-        </dd>
-        <dt>存档累计</dt>
-        <dd>
-          {ctx.totalUsage.turns} 轮 · 输入 {ctx.totalUsage.inputTokens.toLocaleString()} · 输出{" "}
-          {ctx.totalUsage.outputTokens.toLocaleString()} tokens
-        </dd>
-        <dt>载入模块</dt>
-        <dd>{ctx.modules.length > 0 ? ctx.modules.join("、") : "无"}</dd>
+        <div className={styles.factCard}>
+          <dt>时间</dt>
+          <dd className="num">{formatDate(ctx.at)}</dd>
+        </div>
+        <div className={styles.factCard}>
+          <dt>本轮用量</dt>
+          <dd className="num">
+            {ctx.usage
+              ? `输入 ${ctx.usage.inputTokens} · 输出 ${ctx.usage.outputTokens} tokens`
+              : "没有记录"}
+          </dd>
+        </div>
+        <div className={styles.factCard}>
+          <dt>存档累计</dt>
+          <dd className="num">
+            {ctx.totalUsage.turns} 轮 · 输入 {ctx.totalUsage.inputTokens.toLocaleString()} · 输出{" "}
+            {ctx.totalUsage.outputTokens.toLocaleString()} tokens
+          </dd>
+        </div>
+        <div className={`${styles.factCard} ${styles.factCardWide}`}>
+          <dt>载入模块</dt>
+          <dd>{ctx.modules.length > 0 ? ctx.modules.join("、") : "无"}</dd>
+        </div>
       </dl>
 
       {ctx.rebuildError && (
@@ -524,8 +608,18 @@ function Section({
 }) {
   return (
     <section className={styles.section} data-tone={tone}>
-      {/* 原作 map.filterCell 框（用户定的重排），警告段框线由 CSS 换黄；不画侧边线 */}
-      <CellFrame />
+      <NineSlice
+        id="notify.itemCellBg"
+        slice={30}
+        tint="rgb(12 10 18 / 82%)"
+        className={styles.slice}
+      />
+      <NineSlice
+        id="notify.itemCellFg"
+        slice={30}
+        tint={tone === "warn" ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
+        className={styles.slice}
+      />
       <h2>{title}</h2>
       {children}
     </section>

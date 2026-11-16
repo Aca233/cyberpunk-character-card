@@ -1,7 +1,15 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import { memberDeathBlocked } from "../dice";
-import { applyNpcBody, bodyProblems } from "./body";
+import { locationCatalog } from "../world";
+import {
+  applyNpcBody,
+  bodyProblems,
+  EMPTY_NPC_BODY,
+  filledBody,
+  npcHumanityCap,
+  sanitizeNpcBody,
+} from "./body";
 import {
   AFFINITY_MAX,
   AFFINITY_MIN,
@@ -12,6 +20,8 @@ import {
   LEDGER_KIND_LABELS,
   MEMORY_KEPT,
   NO_FACTION,
+  NPC_HP_MAX,
+  NPC_SAMPLES_MAX,
   type Npc,
   type NpcCommand,
   type NpcMemoryEdit,
@@ -50,6 +60,44 @@ function factionProblem(
   const ids = factionIds(data);
   if (ids === undefined || ids.has(faction)) return undefined;
   return `势力表里没有 ${faction}；不属于任何势力写 ${NO_FACTION}，现有：${[...ids].join("、")}`;
+}
+
+/** 运行期对模型给出的 faction 做容错解析：支持中文/英文名映射，实在对不上回落到 none */
+function resolveFaction(
+  faction: string,
+  data: Readonly<Record<string, unknown>>,
+  notes: string[],
+): string {
+  if (faction === NO_FACTION) return NO_FACTION;
+  const raw = data.factions;
+  if (!Array.isArray(raw)) return faction;
+  const needle = faction.trim().toLowerCase();
+  for (const f of raw) {
+    if (typeof f !== "object" || f === null) continue;
+    const rec = f as { id?: unknown; name?: unknown; en?: unknown };
+    if (typeof rec.id !== "string") continue;
+    if (
+      rec.id.toLowerCase() === needle ||
+      (typeof rec.name === "string" && rec.name.trim().toLowerCase() === needle) ||
+      (typeof rec.en === "string" && rec.en.trim().toLowerCase() === needle)
+    ) {
+      return rec.id;
+    }
+  }
+  notes.push(`未知势力「${faction}」已按无势力归档`);
+  return NO_FACTION;
+}
+
+/** 运行期地点名容错解析：如果写了地点中文名且能命中地点表，自动翻成对应 id */
+function resolvePlace(place: string, data: Readonly<Record<string, unknown>>): string {
+  if (!Array.isArray(data.locations)) return place;
+  const catalog = locationCatalog(data);
+  if (catalog.has(place)) return place;
+  const needle = place.trim().toLowerCase();
+  for (const loc of catalog.values()) {
+    if (loc.name.trim().toLowerCase() === needle) return loc.id;
+  }
+  return place;
 }
 
 function sameName(a: string, b: string): boolean {
@@ -204,7 +252,7 @@ export function applyNpc(
   data: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
   if (command.type === "npc") {
-    const { type: _type, location, ...card } = command;
+    const { type: _type, location, home, body, faction, ...card } = command;
     if (draft.npcs[card.id]) {
       return { ok: false, reason: `已经有 id 为 ${card.id} 的人物卡，见到这个人用 meet` };
     }
@@ -215,25 +263,23 @@ export function applyNpc(
         reason: `已经有叫「${taken.name}」的人物（${taken.id}）；是同一个人就用 meet，不是就换个名字`,
       };
     }
-    const problems = bodyProblems(card.body, data);
-    if (problems.length) {
-      return {
-        ok: false,
-        reason: `${card.name} 的 body：${problems.join("；")}；id 照物品表和义体表写`,
-      };
-    }
-    const wrongFaction = factionProblem(card.faction, data);
-    if (wrongFaction) return { ok: false, reason: `${card.name} 的 faction：${wrongFaction}` };
+    const notes = [`新人物：${card.name}`];
+    const resolvedFaction = resolveFaction(faction, data, notes);
+    const resolvedHome = home === undefined ? undefined : resolvePlace(home, data);
+    const resolvedLocation = location === undefined ? null : resolvePlace(location, data);
+    const resolvedBody = body ? sanitizeNpcBody(body, data, notes) : EMPTY_NPC_BODY;
     draft.npcs[card.id] = {
       ...card,
-      samples: [],
+      faction: resolvedFaction,
+      ...(resolvedHome === undefined ? {} : { home: resolvedHome }),
+      body: resolvedBody,
       canon: false,
       affinity: 0,
       goalProgress: 0,
       crisis: null,
       alive: true,
       met: true,
-      location: location ?? null,
+      location: resolvedLocation ?? resolvedHome ?? null,
       lastSeenAt: now,
       memories: [],
       doing: null,
@@ -247,7 +293,7 @@ export function applyNpc(
       ties: [],
       vitals: null,
     };
-    return { ok: true, notes: [`新人物：${card.name}`] };
+    return { ok: true, notes };
   }
   if (command.type === "tie") return applyTie(draft, command, now);
 
@@ -278,6 +324,85 @@ export function applyNpc(
   }
 
   switch (command.type) {
+    case "npcUpdate": {
+      if (npc.canon) {
+        return {
+          ok: false,
+          reason: `${npc.name} 是原作人物，核心卡面固定；换装改装备请用 npcOutfit / npcGear / npcChrome`,
+        };
+      }
+      const notes: string[] = [];
+      let updated = false;
+      if (command.alias !== undefined && command.alias !== npc.alias) {
+        const collide = Object.values(draft.npcs).find(
+          (other) =>
+            other.id !== npc.id &&
+            (sameName(other.name, command.alias as string) ||
+              (other.alias !== undefined && sameName(other.alias, command.alias as string))),
+        );
+        if (collide) {
+          return { ok: false, reason: `外号「${command.alias}」与已有角色 ${collide.name} 重复` };
+        }
+        npc.alias = command.alias;
+        updated = true;
+      }
+      for (const field of ["role", "look", "voice", "want", "limit", "secret"] as const) {
+        const val = command[field];
+        if (val !== undefined && val !== npc[field]) {
+          npc[field] = val;
+          updated = true;
+        }
+      }
+      if (command.faction !== undefined) {
+        const nextFaction = resolveFaction(command.faction, data, notes);
+        if (nextFaction !== npc.faction) {
+          npc.faction = nextFaction;
+          updated = true;
+        }
+      }
+      if (command.outfit !== undefined && command.outfit !== npc.outfit) {
+        npc.outfit = command.outfit;
+        npc.wearing = null;
+        updated = true;
+      }
+      if (command.samples !== undefined && command.samples.length > 0) {
+        const merged = [...npc.samples];
+        for (const s of command.samples) {
+          if (!merged.includes(s)) merged.push(s);
+        }
+        const trimmed = merged.slice(-NPC_SAMPLES_MAX);
+        if (trimmed.length !== npc.samples.length || trimmed.some((s, i) => s !== npc.samples[i])) {
+          npc.samples = trimmed;
+          updated = true;
+        }
+      }
+      if (command.home !== undefined) {
+        const nextHome = resolvePlace(command.home, data);
+        if (nextHome !== npc.home) {
+          npc.home = nextHome;
+          if (npc.location === null) npc.location = nextHome;
+          updated = true;
+        }
+      }
+      const nextBody =
+        command.body !== undefined
+          ? sanitizeNpcBody(command.body, data, notes)
+          : npc.body === undefined
+            ? EMPTY_NPC_BODY
+            : undefined;
+      if (nextBody !== undefined) {
+        npc.body = nextBody;
+        if (npc.vitals !== null) {
+          const filled = filledBody(nextBody);
+          npc.vitals.humanity = Math.min(npc.vitals.humanity, npcHumanityCap(filled, data));
+          npc.vitals.hp = Math.min(npc.vitals.hp, NPC_HP_MAX);
+        }
+        updated = true;
+      }
+      return updated
+        ? { ok: true, notes: [`完善了 ${npc.name} 的人物档案`, ...notes] }
+        : { ok: true, notes };
+    }
     case "meet": {
       const notes = npc.met ? [] : [`认识了 ${npc.name}`];
       npc.met = true;

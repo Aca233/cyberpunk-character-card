@@ -45,6 +45,7 @@ import {
   OFFSCREEN_PACE_SCENES,
   OFFSCREEN_SYSTEM,
   type OffscreenPace,
+  type PhoneChatRequest,
   type PlayerView,
   parseLog,
   phoneRules,
@@ -58,6 +59,7 @@ import {
   rewriteNarrative,
   rolledFrom,
   runNarratorTurn,
+  runPhoneChat,
   type SaveMeta,
   SaveMetaSchema,
   SUMMARY_SYSTEM,
@@ -73,6 +75,7 @@ import {
   travelBlock,
   travelRules,
   type VoidRecord,
+  validatePhoneChatTarget,
   voidedSeqs,
   type WorldState,
   withAllSlices,
@@ -96,7 +99,6 @@ export const DEFAULT_START = "2077-01-01 22:00";
 export const CreateSaveSchema = z.strictObject({
   title: z.string().trim().min(1, "存档名不能为空").max(80, "存档名最多 80 字"),
   characterId: z.string().min(1),
-  difficulty: z.enum(["streetLegend", "nightCity", "deathCity"]).default("nightCity"),
   /** 开场时间，格式 YYYY-MM-DD HH:mm；没给时用 DEFAULT_START（prefault 先填默认文本再解析） */
   startTime: worldRules.GameTimeSchema.prefault(DEFAULT_START),
   /**
@@ -565,6 +567,109 @@ export class GameService {
     });
   }
 
+  /** 手机窗口内轻量直聊：仅调辅助模型与双人窄上下文，推进 1–3 分钟游戏时钟并记入 action 日志 */
+  async phoneChat(id: string, request: PhoneChatRequest): Promise<Reply> {
+    const checked = await this.locks.run(
+      id,
+      async (): Promise<{ reply: Reply } | { world: WorldState; version: number }> => {
+        const { world, records } = await this.load(id);
+        const version = logVersion(records);
+        const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
+        if (done) {
+          return { reply: { status: 200, body: { duplicate: true, seq: done.seq, version } } };
+        }
+        const dead = deathBlock(world, records, version);
+        if (dead) return { reply: dead };
+        const refuse = (error: string): { reply: Reply } => ({
+          reply: { status: 409, body: { error, version } },
+        });
+        if (this.deps.hub.running(id)) return refuse("这一轮还在生成，等它结束再发消息");
+        if (currentOffers(records).rolled) return refuse("先确认已经掷过的检定");
+        if (request.baseVersion !== version) return refuse("存档已经更新过，请刷新后再发");
+        const target = validatePhoneChatTarget(world, request.contact);
+        if (!target.ok) return refuse(target.reason);
+        return { world, version };
+      },
+    );
+    if ("reply" in checked) return checked.reply;
+    const { world, version } = checked;
+
+    const redact = await this.deps.config.redactor();
+    const aux = await this.deps.llm.resolve("aux");
+    let purpose: "aux" | "narrator" = "aux";
+    if (!aux.ok) {
+      if (aux.error.startsWith("还没有选辅助模型")) {
+        const unavailable = await this.llmUnavailable();
+        if (unavailable) return unavailable;
+        purpose = "narrator";
+      } else {
+        return { status: 503, body: { error: redact(aux.error) } };
+      }
+    }
+
+    let chat: Awaited<ReturnType<typeof runPhoneChat>>;
+    try {
+      chat = await runPhoneChat(
+        {
+          llm: this.deps.llm,
+          rng: this.deps.rng,
+          data: gameData,
+          purpose,
+          signal: AbortSignal.timeout(PHONE_CHAT_TIMEOUT_MS),
+        },
+        world,
+        request.contact,
+        request.text,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { status: 502, body: { error: `消息发送失败：${redact(message)}`, version } };
+    }
+    if (!chat.ok) {
+      return { status: chat.status, body: { error: redact(chat.reason), version } };
+    }
+
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { records } = await this.load(id);
+      const now = logVersion(records);
+      const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
+      if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version: now } };
+      if (now !== version || this.deps.hub.running(id)) {
+        return {
+          status: 409,
+          body: { error: "等待回复期间存档已有新的变化，这次私信未写入，请重发", version: now },
+        };
+      }
+      const record: ActionRecord = {
+        kind: "action",
+        seq: version,
+        at: this.deps.clock.now().toISOString(),
+        requestId: request.requestId,
+        action: { type: "phoneChat", contact: request.contact, text: request.text },
+        commands: [...chat.commands],
+        notes: [...chat.notes],
+        patches: [...chat.patches],
+      };
+      try {
+        await this.deps.saves.appendAt(id, version, serializeRecord(record));
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
+      }
+      await this.maybeSnapshot(id, version + 1);
+      return {
+        status: 200,
+        body: {
+          seq: version,
+          version: version + 1,
+          notes: chat.notes,
+          reply: chat.reply,
+          minutes: chat.minutes,
+        },
+      };
+    });
+  }
+
   /**
    * 夜之城难度死亡后从这个场景开头重来：把场景开始以后的回合、掷骰和操作都作废，
    * 骰子之后重新掷；每个场景只能重来一次，作废记录就是履历里的“重来过”
@@ -585,10 +690,7 @@ export class GameService {
         return {
           status: 409,
           body: {
-            error:
-              view.difficulty === "nightCity"
-                ? "这个场景已经重来过一次，这一次是真的死了"
-                : "这个难度死了就结束，不能重来",
+            error: "这个场景已经重来过一次，这一次是真的死了",
             version,
           },
         };
@@ -825,13 +927,23 @@ export class GameService {
             stage("judge", "① 判断", buildJudgePrompt(world, before, plan, extras, memories)),
           );
         }
+        const boosted = record.commands.some(
+          (c) =>
+            typeof c === "object" &&
+            c !== null &&
+            (c as { type?: unknown }).type === "cyberware.boost",
+        );
+        const livePlan: NarratorPlan =
+          plan.kind === "action" && boosted && plan.input.sandevistan !== true
+            ? { ...plan, input: { ...plan.input, sandevistan: true } }
+            : plan;
         prompts.push(
           stage(
             "narrate",
             record.decided === undefined
               ? "③ 写正文（旧存档没记已定的事，只是大致还原）"
               : "③ 写正文",
-            buildNarratorPrompt(world, before, plan, {
+            buildNarratorPrompt(world, before, livePlan, {
               ...extras,
               decided: record.decided,
               recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
@@ -847,7 +959,7 @@ export class GameService {
             stage(
               "extract",
               "④ 抽取",
-              buildExtractPrompt(world, before, plan, extras, record.text),
+              buildExtractPrompt(world, before, livePlan, extras, record.text),
             ),
           );
         }
@@ -1005,7 +1117,6 @@ export class GameService {
         title: `试玩「${meta.title}」第 ${seq} 轮：写清这一轮哪里不对`,
         tags: ["playtest"],
         setup: {
-          difficulty: meta.difficulty,
           snapshot: { ...(opening ? { opening } : {}), world, records: before },
         },
         ...ask,
@@ -1067,6 +1178,7 @@ export class GameService {
           preset: await this.deps.presets?.active(),
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
+          onBoost: (boost) => hub.push(run, { type: "boost", ...boost }),
         },
         world,
         records,
@@ -1151,7 +1263,6 @@ export class GameService {
         patches: [...turn.patches],
         ...(turn.read !== undefined ? { read: turn.read } : {}),
         ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),
-        ...(turn.voices.length > 0 ? { voices: [...turn.voices] } : {}),
         ...(turn.clutch ? { clutch: true } : {}),
         scene: turn.scene,
         ...(turn.title !== undefined ? { title: turn.title } : {}),
@@ -1262,6 +1373,8 @@ export const RestartRequestSchema = z.object({ baseVersion: z.number().int().min
 /** 重新生成最后一轮：基于哪个日志版本 */
 /** 按账目改写最多等这么久 */
 const REWRITE_TIMEOUT_MS = 120_000;
+/** 手机私信直聊最多等这么久 */
+const PHONE_CHAT_TIMEOUT_MS = 45_000;
 
 export const RegenerateRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
 

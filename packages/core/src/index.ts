@@ -28,6 +28,7 @@ export {
   type SeedTag,
   SeedTagSchema,
 } from "./npc";
+export * from "./phone-chat";
 export {
   evaluatePhysicsBoundaries,
   type NarrativeContentMode,

@@ -21,13 +21,12 @@ import {
 } from "../systems/character";
 import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
-import { CyberwareStateSchema, cyberwareCatalog } from "../systems/cyberware";
+import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
 import { type CheckSpec, checkFactFrom, rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
-import { itemCatalog, shopList } from "../systems/inventory/apply";
-import { InventoryStateSchema, type ItemDef } from "../systems/inventory/schema";
+import { shopList } from "../systems/inventory/apply";
 import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
@@ -48,12 +47,9 @@ import {
   type ExtractShape,
   issueText,
   MAX_CHOICES,
-  MAX_VOICES,
   parseModelJson,
   readExtractShape,
   StateSplitter,
-  type Voice,
-  VoiceSchema,
 } from "./block";
 import {
   BUDGET_LABELS,
@@ -204,8 +200,6 @@ export interface NarratorTurn {
   readonly text: string;
   readonly read: string | undefined;
   readonly choices: readonly Choice[];
-  /** 内心声音，0–2 条 */
-  readonly voices: readonly Voice[];
   /** @deprecated 兼容旧回合日志类型；运行期已废除检定与属性门槛 */
   readonly check: CheckSpec | undefined;
   /** @deprecated 兼容旧回合日志类型；运行期已废除掷骰 */
@@ -285,6 +279,8 @@ export interface NarratorDeps {
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
+  /** 判断或前端触发了斯安威斯坦时，在正文流式输出前通知前端激活超频特效 */
+  readonly onBoost?: (boost: { readonly id: string; readonly name: string }) => void;
   /** 场外推演隔几场跑一次；null 是关掉，没写按默认 3 场 */
   readonly offscreen?: number | null | undefined;
   /** 路上偶遇的频率倍数；0 是关掉，没写按 1 */
@@ -498,6 +494,7 @@ function readConsidered(raw: readonly unknown[] | undefined): string[] {
 }
 
 const DEAD_NPC_BLOCKED_TYPES = new Set([
+  "npcUpdate",
   "npcHack",
   "npcHumanity",
   "npcDeath",
@@ -593,6 +590,17 @@ export async function runNarratorTurn(
     judge = await b.readJudge(reply.text);
   }
   const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
+  const activeBoost = sandevistanOf(world, deps.data ?? {});
+  const sandevistanBoosted =
+    plan.kind === "action" &&
+    !ooc &&
+    !inFlashback &&
+    activeBoost !== null &&
+    (plan.input.sandevistan === true || judge.sandevistan === true);
+  const live: NarratorPlan =
+    sandevistanBoosted && plan.kind === "action" && plan.input.sandevistan !== true
+      ? { ...plan, input: { ...plan.input, sandevistan: true } }
+      : plan;
   const read =
     !ooc && typeof judge.read === "string" && judge.read.trim() !== ""
       ? judge.read.trim()
@@ -661,7 +669,6 @@ export async function runNarratorTurn(
   // ② 拼上下文：写正文之前代码已经定下的事
   const decided: string[] = [];
   if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
-  const live: NarratorPlan = plan;
   if (rulingSpec) decided.push(rulingText(rulingSpec));
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
@@ -693,6 +700,9 @@ export async function runNarratorTurn(
     ? `${rulingSpec.outcome}（${rulingSpec.reason}）`.slice(0, RULING_CHARS)
     : undefined;
 
+  if (sandevistanBoosted && activeBoost) {
+    deps.onBoost?.({ id: activeBoost.id, name: activeBoost.name });
+  }
   // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
   // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
   const lore = ooc
@@ -844,20 +854,14 @@ export async function runNarratorTurn(
   }
   const considered: string[] = settle ? readConsidered(shape.dropped) : [];
 
-  // 装着的义体的名字：义体来源的专属选项和义体的内心声音要对得上
+  // 装着的义体的名字：义体来源的专属选项要对得上
   const parts = cyberwareCatalog(deps.data ?? {});
-  // 打坏的义体修好前失去能力：不算专属选项的来源、不会说话、不挡伤害
+  // 打坏的义体修好前失去能力：不算专属选项的来源、不挡伤害
   const installedChrome = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
   const broken = new Set(HealthStateSchema.parse(world.slices.health).brokenChrome);
   const working = installedChrome.filter((c) => !broken.has(c.id));
   const chrome = new Set(working.map((c) => parts.get(c.id)?.name ?? c.id));
   const traits = CharacterStateSchema.parse(world.slices.character).traits;
-  // 武器栏里有带专属声音的不朽武器时，它才会说话
-  const items = deps.data?.items ? itemCatalog(deps.data) : new Map<string, ItemDef>();
-  const inventory = InventoryStateSchema.safeParse(world.slices.inventory);
-  const iconicHeld =
-    inventory.success &&
-    inventory.data.weapons.some((w) => w !== null && items.get(w)?.voice !== undefined);
   const choices: Choice[] = [];
   for (const [i, item] of (shape.choices ?? []).entries()) {
     const where = `choices[${i}]`;
@@ -868,26 +872,6 @@ export async function runNarratorTurn(
     const choice = await b.validate(where, item, ChoiceProposalSchema);
     if (!choice) continue;
     choices.push(verifySource(choice, chrome, traits, b.notes));
-  }
-
-  const voices: Voice[] = [];
-  for (const [i, item] of (shape.voices ?? []).entries()) {
-    const where = `voices[${i}]`;
-    if (i >= MAX_VOICES) {
-      b.drop(where, item, `内心声音每轮最多 ${MAX_VOICES} 条`, "rules");
-      continue;
-    }
-    const voice = await b.validate(where, item, VoiceSchema);
-    if (!voice) continue;
-    if (voice.from === "chrome" && chrome.size === 0) {
-      b.drop(where, voice, "身上没装义体，义体不会说话", "rules");
-      continue;
-    }
-    if (voice.from === "iconic" && !iconicHeld) {
-      b.drop(where, voice, "武器栏里没有会说话的不朽武器", "rules");
-      continue;
-    }
-    voices.push(voice);
   }
 
   // 代码校验第一步：白名单和逐条格式
@@ -1108,8 +1092,8 @@ export async function runNarratorTurn(
       ? undefined
       : shopList(deps.data ?? {}).find((s) => s.location === here);
   if (shopHereNow) facts.shop = { id: shopHereNow.id, at: world.time };
-  // 开了斯安威斯坦：先扣人性再结算；能不能开（clutch、义体能用）由后端在调模型前拦下
-  if (plan.kind === "action" && plan.input.sandevistan === true && !ooc && !inFlashback) {
+  // 开了斯安威斯坦（前端开关、选项或判断阶段识别）：先扣人性再结算
+  if (sandevistanBoosted) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
     if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
   }
@@ -1306,7 +1290,6 @@ export async function runNarratorTurn(
       text: narrative,
       read,
       choices,
-      voices,
       check: undefined,
       rolled: undefined,
       gate: undefined,

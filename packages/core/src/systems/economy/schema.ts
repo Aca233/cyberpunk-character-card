@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { credGateLabel } from "../character";
 
 /** 单条指令最多进出多少欧元；更大的交易拆开写，各自说明来由 */
 /** 稀有度：义体和物品共用，决定价格档位（价格表见策划书的经济部分） */
@@ -50,10 +51,11 @@ export function rarityLock(
   if (rarity === undefined) return null;
   const gate = credGates[rarity];
   if (gate === undefined || streetCred >= gate) return null;
+  const req = credGateLabel(gate);
   const warm = KEEPER_AFFINITY_GATES[rarity];
-  if (keeper === undefined || warm === undefined) return `街头声望 ${gate} 级才肯卖`;
+  if (keeper === undefined || warm === undefined) return `${req}才肯卖`;
   if (keeper.affinity >= warm) return null;
-  return `街头声望 ${gate} 级，或者和${keeper.name}交情够深，才肯卖`;
+  return `${req}，或者和${keeper.name}交情够深，才肯卖`;
 }
 
 export const MONEY_CAP = 100_000;

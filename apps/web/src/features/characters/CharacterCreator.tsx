@@ -1,650 +1,845 @@
 import {
   type Board,
+  type BoardModule,
+  BoardSchema,
   CASH_TIER_INFO,
   type CharacterCard,
-  CharacterCardSchema,
+  cyberwareRules,
+  FLAW_MAX,
   humanityRules,
-  pruneAcquaintances,
+  PAST_MAX,
+  PROSE_BLOCK_INFO,
+  PROSE_BLOCKS,
+  type ProseBlock,
+  RELATION_INFO,
+  rollLifepath,
+  SKILL_MAX,
   TOLERANCE_LEVELS,
 } from "@cp/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { api, type BoardData, type CharacterEntry, type Difficulty } from "../../api/client";
-import { DIFFICULTY_LABELS, DIFFICULTY_NOTES } from "../../labels";
+import { type ReactNode, useRef, useState } from "react";
+import { api, type BoardData } from "../../api/client";
 import { cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
-import neural from "../story/neural.module.css";
 import { PeoplePicker } from "./CreatorLife";
+import { CreatorModal } from "./CreatorModal";
 import {
   CyberwareShelf,
   FlawPicker,
   LoadoutPicker,
   OriginPicker,
+  type PickerProps,
   TraitPicker,
 } from "./CreatorSteps";
-import styles from "./characters.module.css";
 import {
+  type CheckTarget,
   clearDraft,
+  comboHints,
   creatorChecks,
-  DIFFICULTY_BUDGET,
   defaultStartLocationFor,
+  exportLocalWorkshopPack,
+  humanityStageInfo,
   inherentCyberware,
-  kitPoints,
   loadLocalCustomModules,
   mergeCreatorCatalog,
+  ORIGIN_ECOSYSTEM_LABELS,
   originDefaultLoadout,
+  originEcosystem,
   rollTraits,
-  type StepId,
-  saveDraft,
+  type TraitFilter,
   totalStartHumanityCost,
-  unifiedBudget,
 } from "./creator";
 import { DraftAll } from "./DraftAll";
 import { ProseField } from "./ProseField";
-import { anchorLabel, DEFAULT_START, StartMapPicker, startAnchor } from "./StartMapPicker";
+import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
+import { downloadCard } from "./tavernFile";
 import wb from "./workbench.module.css";
 
-/**
- * CK3「自定义统治者」× 2077 原作控件工作台：
- * 左栏身份与出身摘要、中栏宽阔对称 2077 义体全息人像、
- * 右栏 map.panel 定制控制表（定制点数 + tab.bg 页签 + 2×3 能力格 + 独立 AI 人设）、
- * 底栏单行存档与开局控制。只使用游戏原作切图框架，不堆叠手画细框。
- */
+const { TOLERANCE_FACTOR } = humanityRules;
+type Tolerance = Board["tolerance"];
+const TOLERANCES: readonly Tolerance[] = ["low", "normal", "high"];
+const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 
-const BRIEF_BLOCKS = ["look", "past", "personality", "voice"] as const;
-const TOLERANCES: readonly Board["tolerance"][] = ["low", "normal", "high"];
-const DIFFICULTIES = Object.keys(DIFFICULTY_BUDGET) as Difficulty[];
-const CYBER_SLOTS = Object.keys(CYBER_LABELS) as CyberSlot[];
-const SHEET_SLICE = 24;
+const CORE_PROSE_BLOCKS: readonly ProseBlock[] = ["look", "past", "personality", "voice"];
+const EXTRA_PROSE_BLOCKS: readonly ProseBlock[] = ["scene", "greeting", "examples"];
 
-export interface CreatorStart {
-  readonly step: StepId;
-  readonly reached: number;
-  readonly startLocation: string;
-  /** 旧草稿字段，保留兼容 */
-  readonly rerolls: number;
-}
+const CYBER_SLOT_LIST: readonly CyberSlot[] = [
+  "frontalCortex",
+  "eyes",
+  "nervous",
+  "os",
+  "circulatory",
+  "integumentary",
+  "skeleton",
+  "hands",
+  "arms",
+  "legs",
+];
 
-type Drawer =
-  | { readonly kind: "build" }
-  | { readonly kind: "origin" }
-  | { readonly kind: "traits" }
-  | { readonly kind: "flaws" }
-  | { readonly kind: "loadout" }
-  | { readonly kind: "people" }
-  | { readonly kind: "map" }
-  | { readonly kind: "cyber"; readonly slot: CyberSlot }
-  | { readonly kind: "person" };
+type RightTab = "build" | "cyber" | "person";
+type SubDrawer = "origin" | "traits" | "flaws" | "loadout" | "people" | "map" | null;
+type CenterMode = "doll" | "dossier";
 
-type SubKind = "origin" | "traits" | "flaws" | "loadout" | "people" | "map";
-
-const SUB_TITLES: Readonly<Record<SubKind, string>> = {
+const SUB_TITLES: Readonly<Record<Exclude<SubDrawer, null>, string>> = {
   origin: "选择出身背景",
-  traits: "挑选角色特质",
-  flaws: "挑选负面缺陷",
-  loadout: "调整开局行装",
-  people: "建立夜之城人脉",
-  map: "选择开局地点",
+  traits: "挑选特质与过往履历",
+  flaws: "挂载负面缺陷",
+  loadout: "定制开局行装与座驾",
+  people: "夜之城人脉网络",
+  map: "选择开局出生锚点",
 };
 
+const SUB_HINTS: Readonly<Record<Exclude<SubDrawer, null>, string>> = {
+  origin: "出身决定初始家底、自带标配义体与街头人脉；也可以自己写一个。",
+  traits: "身心禀赋、专长技艺与过往履历都在这里；点卡片选中/取消，悬停看详情。",
+  flaws: "缺陷不扣任何资源，只会带来债主、通缉、宿敌之类的剧情钩子。",
+  loadout: "出身有默认家底；这里可调资金档位、额外武器与专属载具。",
+  people: "把夜之城的人物设为旧识，或新建自己的故人。",
+  map: "拖动、缩放地图，点一个锚点作为开局位置。",
+};
+
+function DossierBlock({
+  title,
+  onEdit,
+  wide = false,
+  children,
+}: {
+  readonly title: string;
+  readonly onEdit: () => void;
+  readonly wide?: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section className={wb.dossierBlock} data-wide={wide || undefined}>
+      <CellFrame />
+      <header className={wb.dossierHead}>
+        <h3 className={wb.dossierHeading}>{title}</h3>
+        <button type="button" className={wb.dossierEdit} onClick={onEdit}>
+          修改 ▸
+        </button>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function ChipList({
+  items,
+  empty,
+  warn = false,
+}: {
+  readonly items: readonly { readonly k: string; readonly t: string; readonly tip?: string }[];
+  readonly empty: string;
+  readonly warn?: boolean;
+}) {
+  if (items.length === 0) return <p className={wb.dossierDim}>{empty}</p>;
+  return (
+    <ul className={wb.dossierChips}>
+      {items.map((i) => (
+        <li key={i.k} className={wb.dossierChip} data-warn={warn || undefined} title={i.tip}>
+          {i.t}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function downloadJson(name: string, payload: unknown): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name.trim() || "character"}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 2077 赛博角色创建工作台：
+ * 左栏（身份铭牌 + 出身背景 + 开局态势导航）
+ * 中栏（主角级对称 2077 CyberDoll / 档案总览切换 + 生理耐受 × 术后人性实时控制台）
+ * 右栏（map.panel 原作斜切工作表：构筑槽位与就绪状态栏 + 能力与特质 / 义体货架 / 人设小传）
+ * 底栏（左保存/导出/删除 · 右战局代号与一键开局）
+ */
 export function CharacterCreator({
   card,
-  data: rawData,
+  boardData,
+  busy,
+  canDelete,
+  canSave,
+  isSample = false,
+  characterId,
+  saveError = null,
+  saved = false,
+  draftSaved,
+  onLaunchingChange,
   onChange,
-  start,
-  draftable,
-  saving,
-  saveError,
-  saved,
   onSave,
-  onExport,
   onDelete,
+  onLaunch,
 }: {
-  readonly card: CharacterCard & { readonly board: Board };
-  readonly data: BoardData;
-  readonly onChange: (patch: Partial<CharacterCard>) => void;
-  readonly start: CreatorStart;
-  /** 还没进角色库的新角色：改动存成本地草稿 */
-  readonly draftable: boolean;
-  readonly saving: boolean;
-  readonly saveError: string | null;
-  readonly saved: boolean;
-  /** 存进角色库；失败时抛错 */
-  readonly onSave: (card: CharacterCard) => Promise<CharacterEntry>;
-  readonly onExport?: (() => void) | undefined;
-  readonly onDelete?: (() => void) | undefined;
+  readonly card: CharacterCard;
+  readonly boardData: BoardData | undefined;
+  readonly busy: boolean;
+  readonly canDelete: boolean;
+  readonly canSave: boolean;
+  readonly isSample?: boolean;
+  readonly characterId: string | null;
+  readonly saveError?: string | null;
+  readonly saved?: boolean;
+  readonly draftSaved: boolean;
+  readonly onLaunchingChange: (launching: boolean) => void;
+  readonly onChange: (next: CharacterCard | ((current: CharacterCard) => CharacterCard)) => void;
+  readonly onSave: (card: CharacterCard) => Promise<{ readonly id: string }>;
+  readonly onDelete: () => void;
+  readonly onLaunch: (saveId: string) => void;
 }) {
-  const navigate = useNavigate();
-  const client = useQueryClient();
-  const board = card.board;
-  const [drawer, setDrawer] = useState<Drawer>({ kind: "build" });
-  const [lastCyberSlot, setLastCyberSlot] = useState<CyberSlot>("os");
-  const [title, setTitle] = useState("");
-  // 官方模块库 + 本地创意库（玩家自己写过的特质、出身和缺陷）
-  const data = mergeCreatorCatalog(rawData, loadLocalCustomModules());
-  const originDefault = defaultStartLocationFor(card, data, DEFAULT_START);
-  const [customStart, setCustomStart] = useState<string>(() => {
-    const saved = start.startLocation || board.startLocation || "";
-    return saved && startAnchor(saved) && saved !== originDefault ? saved : "";
-  });
-  const startLocation = customStart && startAnchor(customStart) ? customStart : originDefault;
-  const difficulty: Difficulty = board.difficulty ?? "nightCity";
-  const parsed = CharacterCardSchema.safeParse(card);
-  const checks = creatorChecks(card);
+  const board = card.board ?? BoardSchema.parse({});
+  const [tab, setTab] = useState<RightTab>("build");
+  const [sub, setSub] = useState<SubDrawer>(null);
+  const [traitFilter, setTraitFilter] = useState<TraitFilter>("all");
+  const [centerMode, setCenterMode] = useState<CenterMode>("doll");
+  const [activeSlot, setActiveSlot] = useState<CyberSlot>("os");
+  const [saveTitle, setSaveTitle] = useState("");
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const queryClient = useQueryClient();
 
-  // 草稿有没有存上：存不下（隐私模式、空间满）时页脚不能再写"草稿自动存在本机"
-  const [draftStored, setDraftStored] = useState(true);
-  useEffect(() => {
-    if (draftable) {
-      setDraftStored(
-        saveDraft({
-          card,
-          step: start.step,
-          reached: start.reached,
-          startLocation: customStart,
-          rerolls: start.rerolls,
-        }),
-      );
-    }
-  }, [draftable, card, customStart, start.step, start.reached, start.rerolls]);
+  const localModules = loadLocalCustomModules();
+  const data = boardData ? mergeCreatorCatalog(boardData, localModules) : undefined;
+  const fallbackLoc = defaultStartLocationFor(card, data);
+  const startLoc = board.startLocation || fallbackLoc;
 
-  /** 改主板：拔掉模块后它带出的人从旧识里去掉；联动不再生成 */
   const commit = (next: Board, origin?: string) => {
-    const pruned = pruneAcquaintances(next, data.npcs);
-    onChange({ board: { ...pruned, combos: [] }, ...(origin ? { origin } : {}) });
-  };
-  const setDifficulty = (d: Difficulty) => commit({ ...board, difficulty: d });
-  const pickLocation = (id: string) => {
-    if (id === originDefault) {
-      setCustomStart("");
-      commit({ ...board, startLocation: undefined });
-    } else {
-      setCustomStart(id);
-      commit({ ...board, startLocation: id });
-    }
+    const nextBoard: Board = {
+      ...next,
+      combos: [],
+    };
+    onChange({
+      ...card,
+      ...(origin !== undefined ? { origin } : {}),
+      board: nextBoard,
+    });
   };
 
-  const launch = useMutation({
+  const change = (patch: Partial<CharacterCard>) =>
+    onChange((current) => ({ ...current, ...patch }));
+
+  const setLoc = (loc: string) => {
+    const { startLocation: _, ...rest } = board;
+    onChange({ ...card, board: { ...rest, ...(loc ? { startLocation: loc } : {}) } });
+  };
+
+  const launchMutation = useMutation({
     mutationFn: async () => {
-      if (!parsed.success) throw new Error("角色卡还没填完整");
-      const entry = await onSave(parsed.data);
-      clearDraft();
-      return api.createSave({
-        title: title.trim() || `${entry.card.name}的夜之城`,
-        characterId: entry.id,
-        difficulty,
-        startLocation,
+      const targetCard: CharacterCard = {
+        ...card,
+        board,
+      };
+      const savedEntry = isSample && characterId ? { id: characterId } : await onSave(targetCard);
+      const save = await api.createSave({
+        characterId: savedEntry.id,
+        title: saveTitle.trim() || `${card.name.trim()}的夜之城传奇`,
+        ...(startLoc ? { startLocation: startLoc } : {}),
       });
+      await queryClient.invalidateQueries({ queryKey: ["saves"] });
+      clearDraft();
+      return save.id;
     },
-    onSuccess: async (save) => {
-      await client.invalidateQueries({ queryKey: ["saves"] });
-      navigate(`/play/${save.id}`);
-    },
+    onSuccess: (saveId) => onLaunch(saveId),
+    onSettled: () => onLaunchingChange(false),
   });
-  const busy = saving || launch.isPending;
-  const reason = parsed.success ? undefined : parsed.error.issues[0]?.message;
 
-  const budget = unifiedBudget(card, difficulty, data);
-  const humanityCost = totalStartHumanityCost(card, data);
-  const humanityNow = humanityRules.HUMANITY_MAX - humanityCost;
-  const loadout = originDefaultLoadout(card, data);
-  const kit = kitPoints(card, data);
-  const props = { card, board, data, commit, change: onChange };
+  const checks = creatorChecks(card);
+  const canLaunch =
+    Boolean(data) && canSave && checks.length === 0 && !busy && !launchMutation.isPending;
 
-  // ———— 中栏：义体界面（自选义体 + 出身自带义体） ————
-  const slotOf = new Map(data.cyberware.map((o) => [o.id, o.slot as CyberSlot]));
-  const rarityOf = new Map(data.cyberware.map((o) => [o.id, o.rarity]));
+  const jumpToCheck = (target: CheckTarget) => {
+    if (target === "identity") {
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (target === "origin") {
+      setSub("origin");
+      return;
+    }
+    if (target === "people") {
+      setSub("people");
+      return;
+    }
+    if (target === "cyber") {
+      setSub(null);
+      setTab("cyber");
+      return;
+    }
+    if (target === "person") {
+      setSub(null);
+      setTab("person");
+      return;
+    }
+    setSub(null);
+    setTab("build");
+  };
+
+  // ———— 义体、耐受与人性计算 ————
   const inherent = inherentCyberware(card, data);
-  const inherentIds = new Set(inherent.map((c) => c.id));
-  const parts = new Map<CyberSlot, DollPart[]>();
-  const addPart = (slot: CyberSlot | undefined, part: DollPart) => {
-    if (slot) parts.set(slot, [...(parts.get(slot) ?? []), part]);
-  };
-  for (const c of inherent) {
-    if (c.replaced) continue;
-    const rarity = rarityOf.get(c.id);
-    addPart(c.slot as CyberSlot, {
-      id: c.id,
-      name: `${c.name} · 自带`,
-      ...(rarity ? { rarity } : {}),
-    });
-  }
+  const humanityCost = totalStartHumanityCost(card, data);
+  const humanityNow = Math.max(0, 100 - humanityCost);
+  const stageInfo = humanityStageInfo(humanityNow);
+  const slotOf = new Map(data?.cyberware.map((o) => [o.id, o.slot]) ?? []);
+  const rarityOf = new Map(data?.cyberware.map((o) => [o.id, o.rarity]) ?? []);
+
+  const dollParts = new Map<CyberSlot, DollPart[]>();
   for (const c of board.cyberware) {
-    const rarity = rarityOf.get(c.id);
-    addPart(slotOf.get(c.id) ?? (c.slot as CyberSlot | undefined), {
-      id: c.id,
-      name: c.name,
-      ...(rarity ? { rarity } : {}),
-    });
+    const slot = (slotOf.get(c.id) ?? c.slot) as CyberSlot | undefined;
+    if (!slot) continue;
+    const list = dollParts.get(slot) ?? [];
+    list.push({ id: c.id, name: c.name, rarity: rarityOf.get(c.id) });
+    dollParts.set(slot, list);
   }
-  const gauge = {
-    current: humanityNow,
-    cap: humanityRules.HUMANITY_MAX,
-    stageLabel: humanityRules.STAGE_LABELS[humanityRules.humanityStage(humanityNow)],
+  for (const i of inherent) {
+    if (i.replaced) continue;
+    const slot = i.slot as CyberSlot;
+    const list = dollParts.get(slot) ?? [];
+    list.push({ id: i.id, name: `${i.name}（标配）`, rarity: rarityOf.get(i.id) });
+    dollParts.set(slot, list);
+  }
+
+  const selectCyberSlot = (s: CyberSlot) => {
+    setActiveSlot(s);
+    setSub(null);
+    setTab("cyber");
   };
 
-  const traits = [...board.pasts, ...board.skills];
-  const anchor = startAnchor(startLocation);
-  const locationName = anchor ? anchorLabel(anchor) : "超级摩天楼 H10";
-  const filledBrief = BRIEF_BLOCKS.filter((b) => card[b].trim().length > 0).length;
-  const briefSnippet =
-    card.look.trim() || card.past.trim() || card.personality.trim() || card.voice.trim();
-
-  const open = (next: Drawer) => {
-    if (next.kind === "cyber") setLastCyberSlot(next.slot);
-    setDrawer(next);
+  const handleDollCell = (slot: CyberSlot, part: DollPart | undefined) => {
+    if (part && activeSlot === slot && board.cyberware.some((c) => c.id === part.id)) {
+      commit({
+        ...board,
+        cyberware: board.cyberware.filter((c) => c.id !== part.id),
+      });
+      return;
+    }
+    selectCyberSlot(slot);
   };
 
-  const primaryTab =
-    drawer.kind === "cyber" ? "cyber" : drawer.kind === "person" ? "person" : "build";
-  const subTitle =
-    drawer.kind !== "build" && drawer.kind !== "cyber" && drawer.kind !== "person"
-      ? SUB_TITLES[drawer.kind]
-      : null;
-
-  const hairlineStyle = {
-    maskImage: cssUrl("tab.line"),
-    WebkitMaskImage: cssUrl("tab.line"),
+  const openSub = (target: Exclude<SubDrawer, null>, initialTraitFilter?: TraitFilter) => {
+    if (initialTraitFilter) setTraitFilter(initialTraitFilter);
+    setSub((curr) => (curr === target && !initialTraitFilter ? null : target));
   };
+
+  // ———— 摘要数据 ————
+  const anchor = startAnchor(startLoc);
+  const loadoutSummary = originDefaultLoadout(card, data);
+  const weaponNames = board.kit.weapons.map(
+    (id) => data?.weapons?.find((w) => w.id === id)?.name ?? id,
+  );
+  const customVehicleName = board.kit.vehicle
+    ? (data?.vehicles?.find((v) => v.id === board.kit.vehicle)?.name ?? board.kit.vehicle)
+    : null;
+  const allVehicles = [
+    ...loadoutSummary.freeVehicleNames,
+    ...(customVehicleName ? [customVehicleName] : []),
+  ];
+  const filledProseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
+  const hasExtraProse = EXTRA_PROSE_BLOCKS.some((b) => card[b].trim() !== "");
+  const hints = data ? comboHints(board, data.combos, data.modules) : [];
+
+  const rollPast = () => {
+    if (!data) return;
+    const rolled = rollLifepath(board, data.lifepath, data.modules, Math.random);
+    if (rolled) commit({ ...board, pasts: [...board.pasts, rolled] });
+  };
+
+  const pickerProps: PickerProps | null = data ? { card, board, data, commit, change } : null;
+  const tabLineMask = cssUrl("tab.line");
+  const tabBgUrl = cssUrl("tab.bg");
 
   return (
     <div className={wb.bench}>
-      {/* ———— 左栏：平静身份与出身摘要 ———— */}
-      <aside className={wb.left} aria-label="身份与开局摘要">
-        <div className={wb.idStack}>
-          <div>
-            <span className={wb.groupLabel}>姓名 *</span>
+      {/* —————— 左栏：身份铭牌、出身流派中枢与开局态势 —————— */}
+      <aside className={wb.left} aria-label="身份与开局配置" inert={busy}>
+        <section className={wb.idCard} aria-label="角色身份铭牌">
+          <CellFrame />
+          <div className={wb.idCardHead}>
+            <span className={wb.groupLabel}>身份铭牌 · NC CITIZEN ID</span>
+            {isSample && <span className={wb.sampleBadge}>官方预设</span>}
+          </div>
+          <div className={wb.idStack}>
             <FrameBox className={wb.compactBox}>
               <input
-                required
-                aria-label="姓名"
+                ref={nameInputRef}
                 maxLength={20}
                 value={card.name}
-                autoComplete="off"
-                placeholder="文森特 / 瓦莱丽"
-                onChange={(e) => onChange({ name: e.target.value })}
+                aria-label="姓名"
+                placeholder="角色姓名 *"
+                onChange={(e) => change({ name: e.target.value })}
               />
             </FrameBox>
-          </div>
-          <div className={wb.idSplit}>
-            <div>
-              <span className={wb.groupLabel}>外号</span>
+            <div className={wb.idSplit}>
               <FrameBox className={wb.compactBox}>
                 <input
-                  aria-label="外号"
                   maxLength={20}
                   value={card.alias}
-                  placeholder="街头代号"
-                  onChange={(e) => onChange({ alias: e.target.value })}
+                  aria-label="外号"
+                  placeholder="街头外号（可选）"
+                  onChange={(e) => change({ alias: e.target.value })}
                 />
               </FrameBox>
-            </div>
-            <div>
-              <span className={wb.groupLabel}>代词 *</span>
               <FrameBox className={wb.compactBox}>
                 <input
-                  required
-                  aria-label="代词"
                   maxLength={4}
                   value={card.pronoun}
-                  placeholder="TA"
-                  onChange={(e) => onChange({ pronoun: e.target.value })}
+                  aria-label="代词"
+                  placeholder="代词 *"
+                  onChange={(e) => change({ pronoun: e.target.value })}
                 />
               </FrameBox>
             </div>
+            <fieldset className={wb.pronounRow} aria-label="快捷代词">
+              <span className={wb.pronounLabel}>快捷代词</span>
+              <div className={wb.pronounPills}>
+                {PRONOUN_PRESETS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={wb.pronounPill}
+                    aria-pressed={card.pronoun === p}
+                    onClick={() => change({ pronoun: p })}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           </div>
-        </div>
+        </section>
 
-        <div>
-          <span className={wb.groupLabel}>战局难度 · 决定定制点数上限</span>
-          <fieldset className={wb.btnStrip} aria-label="战局难度">
-            {DIFFICULTIES.map((d) => (
-              <Button
-                key={d}
-                small
-                pressed={difficulty === d}
-                reason={DIFFICULTY_NOTES[d]}
-                onClick={() => setDifficulty(d)}
-              >
-                {DIFFICULTY_LABELS[d]} {DIFFICULTY_BUDGET[d]}点
-              </Button>
-            ))}
-          </fieldset>
-        </div>
+        <span className={wb.hairline} style={{ maskImage: tabLineMask }} aria-hidden="true" />
 
-        <span className={wb.hairline} style={hairlineStyle} aria-hidden />
+        {/* 出身背景卡 */}
+        <section className={wb.originHub} aria-label="出身背景">
+          <button
+            type="button"
+            className={wb.navCard}
+            aria-pressed={sub === "origin"}
+            data-empty={!board.origin ? "" : undefined}
+            onClick={() => openSub("origin")}
+          >
+            <CellFrame />
+            <span className={wb.navCardHead}>
+              <span className={wb.cardEyebrow}>
+                出身背景
+                {board.origin
+                  ? ` · ${ORIGIN_ECOSYSTEM_LABELS[originEcosystem(board.origin)]}`
+                  : " · 必选"}
+              </span>
+              <span className={wb.cardAction}>{sub === "origin" ? "收起" : "更换 / 自创 ▸"}</span>
+            </span>
+            <strong className={wb.cardTitle}>{board.origin?.label ?? "点击选择出身背景"}</strong>
+            <span className={wb.cardSub}>
+              {board.origin?.ability ||
+                board.origin?.hook ||
+                "决定初始家底、街头人脉与专属叙事钩子"}
+            </span>
+          </button>
+        </section>
 
+        <span className={wb.hairline} style={{ maskImage: tabLineMask }} aria-hidden="true" />
+
+        {/* 开局态势导航卡 */}
+        <span className={wb.groupLabel}>开局态势与社会关系</span>
         <button
           type="button"
           className={wb.navCard}
-          data-empty={board.origin ? undefined : ""}
-          aria-pressed={drawer.kind === "origin"}
-          onClick={() => open({ kind: "origin" })}
-        >
-          <CellFrame />
-          <span className={wb.navCardHead}>
-            <span className={wb.cardEyebrow}>出身背景</span>
-            <span className={wb.cardAction}>{board.origin ? "更换 →" : "必选 →"}</span>
-          </span>
-          <span className={wb.cardTitle}>{board.origin?.label ?? "尚未选择出身"}</span>
-          <span className={wb.cardSub}>
-            {board.origin
-              ? board.origin.people.length > 0
-                ? `故人：${board.origin.people.map((p) => p.name).join("、")}`
-                : board.origin.ability
-              : "决定开局自带义体、起步预算与人脉"}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className={wb.navCard}
-          aria-pressed={drawer.kind === "map"}
-          onClick={() => open({ kind: "map" })}
+          aria-pressed={sub === "map"}
+          onClick={() => openSub("map")}
         >
           <CellFrame />
           <span className={wb.navCardHead}>
             <span className={wb.cardEyebrow}>开局地点</span>
-            <span className={wb.cardAction}>切换 →</span>
+            <span className={wb.cardAction}>{sub === "map" ? "收起" : "地图选点 ▸"}</span>
           </span>
-          <span className={wb.cardTitle}>{locationName}</span>
-          <span className={wb.cardSub}>{anchor?.kind ?? "在夜之城地图上选定开局位置"}</span>
+          <strong className={wb.cardTitle}>
+            {anchor ? anchorLabel(anchor) : startLoc || "按出身自动落位"}
+          </strong>
+          <span className={wb.cardSub}>
+            {anchor?.kind ? `地标类别：${anchor.kind}` : "点击在夜之城地图上自选出生锚点"}
+          </span>
         </button>
-
-        <span className={wb.hairline} style={hairlineStyle} aria-hidden />
 
         <button
           type="button"
           className={wb.navCard}
-          aria-pressed={drawer.kind === "loadout"}
-          onClick={() => open({ kind: "loadout" })}
+          aria-pressed={sub === "loadout"}
+          onClick={() => openSub("loadout")}
         >
           <CellFrame />
           <span className={wb.navCardHead}>
-            <span className={wb.cardEyebrow}>开局行装</span>
-            <span className={wb.cardAction}>调整 →</span>
+            <span className={wb.cardEyebrow}>开局行装与座驾</span>
+            <span className={wb.cardAction}>{sub === "loadout" ? "收起" : "定制 ▸"}</span>
           </span>
-          <span className={wb.cardTitle}>
-            {loadout.finalEddies} 欧元 · {CASH_TIER_INFO[board.kit.cashTier].label}
-          </span>
+          <strong className={wb.cardTitle}>
+            {loadoutSummary.finalEddies} € · {CASH_TIER_INFO[board.kit.cashTier].label}
+          </strong>
           <span className={wb.cardSub}>
-            {loadout.gearNames.length > 0 ? loadout.gearNames.slice(0, 3).join("、") : "标准行装"}
-            {kit.spent + kit.refund > 0 &&
-              ` · ${kit.spent - kit.refund >= 0 ? "花" : "返"} ${Math.abs(kit.spent - kit.refund)} 点`}
+            {[...weaponNames, ...allVehicles].join(" · ") ||
+              loadoutSummary.gearNames.slice(0, 2).join(" · ") ||
+              "随身家底、武器与专属载具"}
           </span>
         </button>
 
         <button
           type="button"
           className={wb.navCard}
-          aria-pressed={drawer.kind === "people"}
-          onClick={() => open({ kind: "people" })}
+          aria-pressed={sub === "people"}
+          onClick={() => openSub("people")}
         >
           <CellFrame />
           <span className={wb.navCardHead}>
             <span className={wb.cardEyebrow}>夜之城人脉</span>
-            <span className={wb.cardAction}>挑选 →</span>
+            <span className={wb.cardAction}>{sub === "people" ? "收起" : "人脉网 ▸"}</span>
           </span>
-          <span className={wb.cardTitle}>
+          <strong className={wb.cardTitle}>
             {board.acquaintances.length > 0
-              ? `已建立 ${board.acquaintances.length} 位旧识`
-              : "暂无预设旧识"}
-          </span>
+              ? `已建立 ${board.acquaintances.length} 人交集`
+              : "尚无自选旧识"}
+          </strong>
           <span className={wb.cardSub}>
             {board.acquaintances.length > 0
-              ? board.acquaintances
-                  .slice(0, 4)
-                  .map((a) => a.name)
-                  .join("、")
-              : "可选添加，否则在战局中自然结识"}
+              ? board.acquaintances.map((a) => a.name).join("、")
+              : "结交挚友、点头之交或宿敌"}
           </span>
         </button>
       </aside>
 
-      {/* ———— 中栏：宽阔对称 2077 CyberDoll 主舞台 ———— */}
-      <section className={wb.center} aria-label="角色与义体拓扑">
+      {/* —————— 中栏：2077 赛博解剖台 & 完整档案总览 —————— */}
+      <section className={wb.center} aria-label="角色义体拓扑与档案预览" inert={busy}>
         <header className={wb.heroPlate}>
-          <h2 className={wb.heroName}>
-            {card.name.trim() || "未命名新秀"}
-            {card.alias.trim() && <span className={wb.heroAlias}>「{card.alias.trim()}」</span>}
-          </h2>
-          <p className={wb.heroMeta}>
-            {board.origin?.label ?? "尚未选择出身"} · {locationName}
-          </p>
-          <span className={wb.heroLine} style={hairlineStyle} aria-hidden />
+          <div className={wb.heroTopRow}>
+            <div>
+              <h2 className={wb.heroName}>
+                {card.name.trim() || "未命名角色"}
+                {card.alias.trim() && <span className={wb.heroAlias}>「{card.alias.trim()}」</span>}
+              </h2>
+              <p className={wb.heroMeta}>
+                {[
+                  card.pronoun.trim() || "未设代词",
+                  board.origin?.label ?? "未选出身",
+                  anchor ? anchorLabel(anchor) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <div className={wb.centerSwitch} role="tablist" aria-label="中栏视图切换">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={centerMode === "doll"}
+                className={wb.centerSwitchBtn}
+                onClick={() => setCenterMode("doll")}
+              >
+                义体拓扑
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={centerMode === "dossier"}
+                className={wb.centerSwitchBtn}
+                onClick={() => setCenterMode("dossier")}
+              >
+                档案总览
+              </button>
+            </div>
+          </div>
+          <span className={wb.heroLine} style={{ maskImage: tabLineMask }} aria-hidden="true" />
         </header>
 
-        <div className={wb.dollFrame}>
-          <CyberDoll
-            parts={parts}
-            humanity={gauge}
-            selected={drawer.kind === "cyber" ? drawer.slot : null}
-            onCell={(slot, part) => {
-              if (part && !inherentIds.has(part.id)) {
-                commit({ ...board, cyberware: board.cyberware.filter((c) => c.id !== part.id) });
-              }
-              open({ kind: "cyber", slot });
-            }}
-          />
-        </div>
+        {centerMode === "doll" ? (
+          <>
+            <div className={wb.dollFrame}>
+              <CyberDoll
+                parts={dollParts}
+                selected={activeSlot}
+                onCell={handleDollCell}
+                humanity={{ current: humanityNow, cap: 100, stageLabel: stageInfo.label }}
+              />
+            </div>
 
-        <div className={wb.centerFoot}>
-          <fieldset className={wb.tolBar} aria-label="义体耐受">
-            <span className={wb.cardEyebrow}>义体耐受</span>
-            {TOLERANCES.map((t) => {
-              const level = TOLERANCE_LEVELS[t];
-              const pts = level.points;
-              const tag = pts > 0 ? `-${pts}点` : pts < 0 ? `+${-pts}点` : "0点";
-              return (
-                <Button
-                  key={t}
-                  small
-                  pressed={board.tolerance === t}
-                  onClick={() => commit({ ...board, tolerance: t })}
-                >
-                  {level.label} {tag}
-                </Button>
-              );
-            })}
-          </fieldset>
+            <div className={wb.humanityConsole} data-tone={stageInfo.tone}>
+              <CellFrame />
+              <div className={wb.humanityRow}>
+                <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
+                  {stageInfo.label}
+                </span>
+                <span className={wb.humanityNums}>
+                  人性 <b>{humanityNow}</b> / 100
+                </span>
+                <div className={wb.humanityTrack} aria-hidden="true">
+                  <span
+                    className={wb.humanityFill}
+                    data-tone={stageInfo.tone}
+                    style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
+                  />
+                </div>
+                <fieldset className={wb.tolBar} aria-label="义体生理耐受">
+                  {TOLERANCES.map((t) => {
+                    const level = TOLERANCE_LEVELS[t];
+                    const active = board.tolerance === t;
+                    return (
+                      <Button
+                        key={t}
+                        small
+                        primary={active}
+                        pressed={active}
+                        onClick={() => commit({ ...board, tolerance: t })}
+                      >
+                        {level.label} ×{TOLERANCE_FACTOR[t]}
+                      </Button>
+                    );
+                  })}
+                </fieldset>
+              </div>
+              <p className={wb.humanityNote}>{stageInfo.note}</p>
+            </div>
+          </>
+        ) : (
+          /* ———— 档案总览模式（Dossier Preview） ———— */
+          <div className={wb.dossierWrap}>
+            <div className={wb.dossierGrid}>
+              <DossierBlock title="出身背景" onEdit={() => openSub("origin")}>
+                <strong className={wb.dossierBig}>{board.origin?.label ?? "尚未选择"}</strong>
+                <p className={wb.dossierText}>
+                  {board.origin?.ability || "决定初始家底与街头人脉"}
+                </p>
+                {board.origin?.hook && <p className={wb.dossierDim}>钩子：{board.origin.hook}</p>}
+              </DossierBlock>
 
-          {(inherent.length > 0 || board.cyberware.length > 0) && (
-            <ul className={wb.installedList} aria-label="已装义体">
-              {inherent.map((c) => {
-                const slot = c.slot as CyberSlot;
-                return (
-                  <li
-                    key={`inh-${c.id}`}
-                    className={wb.installedChip}
-                    data-inherent=""
-                    title={`${c.source}自带 · 0 点${c.replaced ? "（已被自选件顶替）" : ""}`}
-                  >
-                    <CellFrame />
-                    <button
-                      type="button"
-                      className={wb.installedLink}
-                      onClick={() => open({ kind: "cyber", slot })}
-                    >
-                      <span className={wb.chipMuted}>{CYBER_LABELS[slot]}</span>
-                      <span>{c.name}</span>
-                      <span className={wb.chipMuted}>{c.replaced ? "已顶替" : "自带"}</span>
-                    </button>
-                  </li>
-                );
-              })}
-              {board.cyberware.map((c) => {
-                const slot = slotOf.get(c.id) ?? (c.slot as CyberSlot | undefined) ?? "os";
-                return (
-                  <li key={c.id} className={wb.installedChip}>
-                    <CellFrame />
-                    <button
-                      type="button"
-                      className={wb.installedLink}
-                      onClick={() => open({ kind: "cyber", slot })}
-                    >
-                      <span className={wb.chipMuted}>{CYBER_LABELS[slot]}</span>
-                      <span>{c.name}</span>
-                      <span className={wb.chipMuted}>{c.points}点</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={wb.chipDrop}
-                      aria-label={`卸下${c.name}`}
-                      onClick={() =>
-                        commit({
-                          ...board,
-                          cyberware: board.cyberware.filter((x) => x.id !== c.id),
-                        })
-                      }
-                    >
-                      ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+              <DossierBlock title="义体与人性" onEdit={() => setCenterMode("doll")}>
+                <strong className={wb.dossierBig} data-tone={stageInfo.tone}>
+                  {humanityNow}
+                  <small> / 100 · {stageInfo.label}</small>
+                </strong>
+                <p className={wb.dossierDim}>
+                  {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
+                </p>
+                <ChipList
+                  empty="无义体改造"
+                  items={[
+                    ...inherent
+                      .filter((i) => !i.replaced)
+                      .map((i) => ({ k: i.id, t: `${i.name}（标配）` })),
+                    ...board.cyberware.map((c) => ({ k: c.id, t: c.name })),
+                  ]}
+                />
+              </DossierBlock>
+
+              <DossierBlock
+                title={`核心特质 ${board.skills.length}/${SKILL_MAX}`}
+                onEdit={() => openSub("traits", "all")}
+              >
+                <ChipList
+                  empty="尚未选择"
+                  items={board.skills.map((m) => ({ k: m.id, t: m.label, tip: m.ability }))}
+                />
+                <p className={wb.dossierLabel}>
+                  过往经历 {board.pasts.length}/{PAST_MAX}
+                </p>
+                <ChipList
+                  empty="无"
+                  items={board.pasts.map((m) => ({
+                    k: m.id,
+                    t: m.label,
+                    tip: m.hook || m.ability,
+                  }))}
+                />
+                <p className={wb.dossierLabel}>
+                  负面缺陷 {board.flaws.length}/{FLAW_MAX}
+                </p>
+                <ChipList
+                  warn
+                  empty="无"
+                  items={board.flaws.map((m) => ({
+                    k: m.id,
+                    t: m.label,
+                    tip: m.hook || m.ability,
+                  }))}
+                />
+              </DossierBlock>
+
+              <DossierBlock title="行装与人脉" onEdit={() => openSub("loadout")}>
+                <strong className={wb.dossierBig}>
+                  {loadoutSummary.finalEddies} €
+                  <small> · {CASH_TIER_INFO[board.kit.cashTier].label}</small>
+                </strong>
+                <ChipList
+                  empty="无随身装备"
+                  items={[...loadoutSummary.gearNames, ...weaponNames, ...allVehicles].map((t) => ({
+                    k: t,
+                    t,
+                  }))}
+                />
+                <p className={wb.dossierLabel}>人脉 {board.acquaintances.length}</p>
+                <ChipList
+                  empty="暂无自选旧识"
+                  items={board.acquaintances.map((a) => ({
+                    k: a.id,
+                    t: `${a.name} · ${RELATION_INFO[a.relation].label}`,
+                    tip: a.note,
+                  }))}
+                />
+              </DossierBlock>
+
+              <DossierBlock
+                wide
+                title={`人设小传 ${filledProseCount}/7`}
+                onEdit={() => {
+                  setTab("person");
+                }}
+              >
+                {filledProseCount === 0 ? (
+                  <p className={wb.dossierDim}>
+                    还没写：在右侧「人设小传」手写，或让 AI 一键成稿。
+                  </p>
+                ) : (
+                  PROSE_BLOCKS.filter((b) => card[b].trim() !== "").map((b) => (
+                    <p key={b} className={wb.dossierText}>
+                      <span className={wb.dossierLabel}>{PROSE_BLOCK_INFO[b].label} </span>
+                      {card[b]}
+                    </p>
+                  ))
+                )}
+              </DossierBlock>
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* ———— 右栏：map.panel 原作斜切工作卡 ———— */}
-      <aside className={wb.right} aria-label="角色定制工作表">
+      {/* —————— 右栏：map.panel 构筑槽位与人设工作表 —————— */}
+      <aside className={wb.right} aria-label="角色构筑与人设工作表" inert={busy}>
         <NineSlice
           id="map.panelBg"
-          tint="rgb(10 10 18 / 86%)"
-          slice={SHEET_SLICE}
+          tint="rgb(5 5 10 / 92%)"
+          slice={[110, 85, 75, 85]}
           className={wb.sheetLayer}
         />
         <NineSlice
           id="map.panelFg"
-          tint="var(--cp-red-dim)"
-          slice={SHEET_SLICE}
+          tint="var(--cp-red)"
+          slice={[110, 85, 75, 85]}
           className={wb.sheetLayer}
         />
 
-        {/* CK3 定制点数池 */}
-        <div className={wb.meter} role="status">
-          <div className={wb.meterHead}>
-            <span>
-              定制点数{" "}
-              <span className={wb.meterVal} data-over={budget.overLimit || undefined}>
-                {budget.netSpent}
-              </span>{" "}
-              / {budget.limit}
-            </span>
-            <span className={wb.badge} data-over={budget.overLimit || undefined}>
-              {budget.overLimit ? `超出 ${-budget.remaining} 点 · 传奇沙盒` : "标准合规构筑"}
-            </span>
-            <span>
-              人性 <strong>{humanityNow}</strong>/{humanityRules.HUMANITY_MAX}
+        {/* 构筑槽位与就绪状态栏（无点数限制） */}
+        <div className={wb.telemetry} role="status">
+          <div className={wb.telemetryHead}>
+            <span className={wb.telemetryTitle}>构筑槽位与档案状态 · 自由配装</span>
+            <span className={wb.readyBadge} data-ready={checks.length === 0 ? "" : undefined}>
+              {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
             </span>
           </div>
-          <div className={wb.meterTrack} aria-hidden="true">
-            <span
-              className={wb.meterFill}
-              data-over={budget.overLimit || undefined}
-              style={{ width: `${Math.min(100, (budget.netSpent / budget.limit) * 100)}%` }}
-            />
-          </div>
-          <div className={wb.meterFoot}>
-            <p className={wb.meterNote}>
-              特质{budget.traitSpent} · 义体{budget.cyberwareSpent} · 人脉{budget.peopleSpent} ·
-              行装{budget.kitSpent}
-              {budget.refund > 0 && ` · 返+${budget.refund}`}
-              {budget.remaining >= 0 && ` · 余${budget.remaining}点`}
-            </p>
-            {checks.length > 0 && (
-              <ul className={wb.checks}>
-                {checks.map((c) => (
-                  <li key={c.text}>{c.text}</li>
-                ))}
-              </ul>
-            )}
-          </div>
+
+          {checks.length > 0 && (
+            <ul className={wb.checks} aria-label="待完善项">
+              {checks.map((c) => (
+                <li key={c.text}>
+                  <button
+                    type="button"
+                    className={wb.checkJumpBtn}
+                    onClick={() => jumpToCheck(c.target)}
+                  >
+                    ⚠ {c.text} ▸
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* 原作 tab.bg 顶栏 + tab.line 分割线 */}
-        <div className={wb.sheetNav}>
-          <nav className={neural.tabs} aria-label="定制板块">
+        {/* 顶层导航页签（tab.bg + tab.line） */}
+        <nav className={wb.sheetNav} aria-label="工作表页签">
+          <div className="cp-tabs">
             <button
               type="button"
-              className={neural.tab}
-              aria-pressed={primaryTab === "build"}
-              onClick={() => open({ kind: "build" })}
+              aria-current={tab === "build" ? "page" : undefined}
+              style={{ ["--tab-bg" as string]: tabBgUrl }}
+              onClick={() => {
+                setSub(null);
+                setTab("build");
+              }}
             >
-              <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-              <span className={neural.inner}>能力与特质</span>
+              能力与特质
             </button>
             <button
               type="button"
-              className={neural.tab}
-              aria-pressed={primaryTab === "cyber"}
-              onClick={() => open({ kind: "cyber", slot: lastCyberSlot })}
+              aria-current={tab === "cyber" ? "page" : undefined}
+              style={{ ["--tab-bg" as string]: tabBgUrl }}
+              onClick={() => {
+                setSub(null);
+                setTab("cyber");
+              }}
             >
-              <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-              <span className={neural.inner}>义体货架</span>
+              义体货架 ({board.cyberware.length})
             </button>
             <button
               type="button"
-              className={neural.tab}
-              aria-pressed={primaryTab === "person"}
-              onClick={() => open({ kind: "person" })}
+              aria-current={tab === "person" ? "page" : undefined}
+              style={{ ["--tab-bg" as string]: tabBgUrl }}
+              onClick={() => {
+                setSub(null);
+                setTab("person");
+              }}
             >
-              <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-              <span className={neural.inner}>AI 人设</span>
+              人设小传 ({filledProseCount}/7)
             </button>
-          </nav>
-          <span className={neural.tabLine} style={hairlineStyle} aria-hidden />
-        </div>
+          </div>
+          <span className="cp-tab-line" style={{ maskImage: tabLineMask }} aria-hidden="true" />
+        </nav>
 
+        {/* 抽屉内容区 */}
         <div className={wb.drawerBody}>
-          <fieldset className={styles.fields} disabled={busy}>
-            {subTitle && (
-              <div className={wb.subHead}>
-                <span className={wb.subTitle}>{subTitle}</span>
-                <Button small onClick={() => open({ kind: "build" })}>
-                  ← 返回总览
-                </Button>
-              </div>
-            )}
-
-            {drawer.kind === "build" && (
-              <div className={wb.buildStack}>
-                <div className={wb.slotBlock}>
-                  <div className={wb.slotHead}>
-                    <h3 className={wb.slotTitle}>角色特质</h3>
-                    <span className={wb.slotTools}>
-                      <Button
-                        small
-                        onClick={() => commit(rollTraits(board, data.modules, Math.random))}
-                      >
-                        随机
-                      </Button>
-                      <Button small onClick={() => open({ kind: "traits" })}>
-                        ＋ 挑选
-                      </Button>
-                    </span>
+          {!data || !pickerProps ? (
+            <p className={wb.empty}>正在加载夜之城内容库…</p>
+          ) : tab === "build" ? (
+            <div className={wb.buildStack}>
+              {/* 1. 核心特质 */}
+              <section className={wb.slotBlock} aria-label="角色核心特质">
+                <header className={wb.slotHead}>
+                  <h3 className={wb.slotTitle}>
+                    核心特质
+                    <small className={wb.slotSub}>
+                      {board.skills.length} / {SKILL_MAX} · 身心禀赋与专长技艺
+                    </small>
+                  </h3>
+                  <div className={wb.slotTools}>
+                    <Button
+                      small
+                      disabled={board.skills.length >= SKILL_MAX}
+                      onClick={() => commit(rollTraits(board, data.modules, Math.random, 3))}
+                    >
+                      随机搭配
+                    </Button>
+                    <Button small onClick={() => openSub("traits", "all")}>
+                      ＋ 挑选特质
+                    </Button>
                   </div>
+                </header>
+                {board.skills.length === 0 ? (
+                  <p className={wb.empty}>尚未选择特质。可点击「挑选特质」、或随机搭配。</p>
+                ) : (
                   <ul className={wb.chips}>
-                    {traits.length === 0 && (
-                      <li className={wb.empty}>未装备特质（0 项也可开局）</li>
-                    )}
-                    {traits.map((m) => (
+                    {board.skills.map((m: BoardModule) => (
                       <li key={m.id} className={wb.chip} title={m.ability}>
                         <CellFrame />
                         <span>{m.label}</span>
-                        <span className={wb.chipMuted}>{m.points}点</span>
                         <button
                           type="button"
                           className={wb.chipDrop}
-                          aria-label={`拔下${m.label}`}
+                          aria-label={`移除${m.label}`}
                           onClick={() =>
                             commit({
                               ...board,
-                              pasts: board.pasts.filter((x) => x.id !== m.id),
                               skills: board.skills.filter((x) => x.id !== m.id),
                             })
                           }
@@ -654,30 +849,46 @@ export function CharacterCreator({
                       </li>
                     ))}
                   </ul>
-                </div>
+                )}
+              </section>
 
-                <div className={wb.slotBlock}>
-                  <div className={wb.slotHead}>
-                    <h3 className={wb.slotTitle}>
-                      负面缺陷 <span className={wb.slotSub}>返还定制点数</span>
-                    </h3>
-                    <Button small onClick={() => open({ kind: "flaws" })}>
-                      ＋ 挑选
+              {/* 2. 过往经历（生命路径） */}
+              <section className={wb.slotBlock} aria-label="过往经历">
+                <header className={wb.slotHead}>
+                  <h3 className={wb.slotTitle}>
+                    过往经历
+                    <small className={wb.slotSub}>
+                      {board.pasts.length} / {PAST_MAX} · 街头履历与故人恩怨
+                    </small>
+                  </h3>
+                  <div className={wb.slotTools}>
+                    <Button small disabled={board.pasts.length >= PAST_MAX} onClick={rollPast}>
+                      🎲 掷生命路径
+                    </Button>
+                    <Button small onClick={() => openSub("traits", "past")}>
+                      ＋ 挑选过往
                     </Button>
                   </div>
+                </header>
+                {board.pasts.length === 0 ? (
+                  <p className={wb.empty}>
+                    可选：掷一段契合出身的生命路径，或手动挑选过往履历带出故人。
+                  </p>
+                ) : (
                   <ul className={wb.chips}>
-                    {board.flaws.length === 0 && <li className={wb.empty}>无负面缺陷</li>}
-                    {board.flaws.map((m) => (
-                      <li key={m.id} className={wb.chip} data-flaw="" title={m.ability}>
+                    {board.pasts.map((m: BoardModule) => (
+                      <li key={m.id} className={wb.chip} title={m.hook || m.ability}>
                         <CellFrame />
                         <span>{m.label}</span>
-                        <span className={wb.chipMuted}>+{m.points}点</span>
                         <button
                           type="button"
                           className={wb.chipDrop}
-                          aria-label={`撤回${m.label}`}
+                          aria-label={`移除${m.label}`}
                           onClick={() =>
-                            commit({ ...board, flaws: board.flaws.filter((x) => x.id !== m.id) })
+                            commit({
+                              ...board,
+                              pasts: board.pasts.filter((x) => x.id !== m.id),
+                            })
                           }
                         >
                           ×
@@ -685,140 +896,237 @@ export function CharacterCreator({
                       </li>
                     ))}
                   </ul>
-                </div>
+                )}
+              </section>
 
-                <span className={wb.hairline} style={hairlineStyle} aria-hidden />
+              {/* 3. 负面缺陷 */}
+              <section className={wb.slotBlock} aria-label="负面缺陷">
+                <header className={wb.slotHead}>
+                  <h3 className={wb.slotTitle}>
+                    负面缺陷
+                    <small className={wb.slotSub}>
+                      {board.flaws.length} / {FLAW_MAX} · 带来剧情钩子、债主与宿敌
+                    </small>
+                  </h3>
+                  <Button small onClick={() => openSub("flaws")}>
+                    ＋ 挑选缺陷
+                  </Button>
+                </header>
+                {board.flaws.length === 0 ? (
+                  <p className={wb.empty}>
+                    未挂载负面缺陷。想要更刺激的开局可挂载债主、通缉或旧伤。
+                  </p>
+                ) : (
+                  <ul className={wb.chips}>
+                    {board.flaws.map((m: BoardModule) => (
+                      <li key={m.id} className={wb.chip} data-flaw="" title={m.hook || m.ability}>
+                        <CellFrame />
+                        <span>{m.label}</span>
+                        <button
+                          type="button"
+                          className={wb.chipDrop}
+                          aria-label={`移除${m.label}`}
+                          onClick={() =>
+                            commit({
+                              ...board,
+                              flaws: board.flaws.filter((x) => x.id !== m.id),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
 
-                <button
-                  type="button"
-                  className={wb.navCard}
-                  onClick={() => open({ kind: "person" })}
-                >
+              {/* 4. 联动提示（差 1 项可触发组合时提示） */}
+              {hints.length > 0 && (
+                <section className={wb.comboHintBox} aria-label="流派联动提示">
                   <CellFrame />
-                  <span className={wb.navCardHead}>
-                    <span className={wb.cardEyebrow}>角色传记 · 外貌 · 性格 · 语态</span>
-                    <span className={wb.cardAction}>撰写 / AI 生成 →</span>
-                  </span>
-                  <span className={wb.cardTitle}>AI 人设（已填 {filledBrief} / 4 项）</span>
-                  <span className={wb.cardSub}>
-                    {briefSnippet || "点击打开独立编辑页填写或由 AI 一键生成人物生平"}
-                  </span>
-                </button>
-              </div>
-            )}
-
-            {drawer.kind === "origin" && <OriginPicker {...props} />}
-            {drawer.kind === "traits" && <TraitPicker board={board} data={data} commit={commit} />}
-            {drawer.kind === "flaws" && <FlawPicker board={board} data={data} commit={commit} />}
-            {drawer.kind === "loadout" && <LoadoutPicker {...props} />}
-            {drawer.kind === "people" && <PeoplePicker board={board} data={data} commit={commit} />}
-            {drawer.kind === "map" && (
-              <StartMapPicker
-                value={startLocation}
-                defaultStart={originDefault}
-                onChange={pickLocation}
-              />
-            )}
-            {drawer.kind === "cyber" && (
-              <>
-                <fieldset className={wb.slotRibbon} aria-label="选择义体部位">
-                  {CYBER_SLOTS.map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      className={styles.shelfChip}
-                      aria-pressed={drawer.slot === slot}
-                      onClick={() => open({ kind: "cyber", slot })}
-                    >
-                      {CYBER_LABELS[slot]}
-                    </button>
+                  <span className={wb.groupLabel}>流派特质共鸣推荐</span>
+                  {hints.slice(0, 2).map((h) => (
+                    <div key={h.combo.id} className={wb.comboHintRow}>
+                      <span className={wb.comboHintText}>
+                        <strong className={wb.comboHintName}>{h.combo.label}</strong>（
+                        {h.combo.ability}）— 差 1 项：
+                      </span>
+                      <div className={wb.slotTools}>
+                        {h.candidates.slice(0, 2).map((cand) => (
+                          <Button
+                            key={cand.id}
+                            small
+                            disabled={board.skills.length >= SKILL_MAX}
+                            onClick={() => commit({ ...board, skills: [...board.skills, cand] })}
+                          >
+                            ＋ {cand.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </fieldset>
-                <CyberwareShelf {...props} slot={drawer.slot} />
-              </>
-            )}
-            {drawer.kind === "person" && (
-              <>
-                <DraftAll card={card} onChange={onChange} />
-                <div className={styles.proseBlocks}>
-                  {BRIEF_BLOCKS.map((block) => (
-                    <ProseField key={block} block={block} card={card} onChange={onChange} />
+                </section>
+              )}
+            </div>
+          ) : tab === "cyber" ? (
+            <>
+              <fieldset className={wb.slotRibbon} aria-label="义体部位切换">
+                {CYBER_SLOT_LIST.map((s) => {
+                  const count = (dollParts.get(s) ?? []).length;
+                  const cap = cyberwareRules.SLOT_CAPACITY[s];
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      className={wb.slotRibbonBtn}
+                      aria-pressed={activeSlot === s}
+                      onClick={() => setActiveSlot(s)}
+                    >
+                      <span>{CYBER_LABELS[s]}</span>
+                      <small className={wb.chipMuted}>
+                        {count}/{cap}
+                      </small>
+                    </button>
+                  );
+                })}
+              </fieldset>
+              <CyberwareShelf {...pickerProps} slot={activeSlot} />
+            </>
+          ) : (
+            <div className={wb.personStack}>
+              <DraftAll card={card} onChange={change} />
+
+              <section className={wb.proseSection} aria-label="核心人设区块">
+                <header className={wb.slotHead}>
+                  <h3 className={wb.slotTitle}>
+                    核心人设小传
+                    <small className={wb.slotSub}>
+                      注入开局 AI 叙事上下文 · 可手写或交由上方 AI 协同成稿
+                    </small>
+                  </h3>
+                </header>
+                <div className={wb.proseList}>
+                  {CORE_PROSE_BLOCKS.map((b) => (
+                    <ProseField key={b} block={b} card={card} onChange={change} />
                   ))}
                 </div>
-              </>
-            )}
-          </fieldset>
+              </section>
+
+              <details className={wb.extraProse} open={hasExtraProse || undefined}>
+                <summary className={wb.extraProseSummary}>
+                  <span>卡面演出与补充设定（开场场景、开场白、对话示例）</span>
+                  <small className={wb.chipMuted}>可选展开</small>
+                </summary>
+                <div className={wb.proseList}>
+                  {EXTRA_PROSE_BLOCKS.map((b) => (
+                    <ProseField key={b} block={b} card={card} onChange={change} />
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* ———— 底栏：极简一字工具条 ———— */}
+      {/* —————— 底栏：保存/导出/删除 与 战局启动 —————— */}
       <footer className={wb.bar}>
         <div className={wb.barActions}>
           <Button
             small
-            primary
-            disabled={busy || !parsed.success}
-            reason={reason}
+            disabled={!canSave || busy}
+            reason={checks[0]?.text}
             onClick={() => {
-              if (parsed.success) {
-                void onSave(parsed.data).then(
-                  () => clearDraft(),
-                  () => undefined,
-                );
-              }
+              // 保存错误由父级 mutation 展示，避免产生未处理的 Promise rejection。
+              void onSave({ ...card, board }).catch(() => {});
             }}
           >
-            {saving && !launch.isPending ? "正在写入…" : "保存档案"}
+            {busy ? "保存中…" : isSample ? "另存为自定义角色" : "保存角色"}
           </Button>
-          {onExport && (
-            <Button small disabled={busy} onClick={onExport}>
-              导出角色卡
+          <Button small onClick={() => downloadCard(card)}>
+            导出角色卡
+          </Button>
+          {localModules.length > 0 && (
+            <Button small onClick={() => downloadJson("workshop-pack", exportLocalWorkshopPack())}>
+              导出扩展包 ({localModules.length})
             </Button>
           )}
-          {onDelete && (
+          {canDelete && (
             <Button small disabled={busy} onClick={onDelete}>
               删除
             </Button>
           )}
-          {saveError ? (
-            <span className={styles.error} role="alert">
-              {saveError}
-            </span>
-          ) : launch.isError ? (
-            <span className={styles.error} role="alert">
-              {launch.error.message}
-            </span>
-          ) : saved && !launch.isPending ? (
-            <span className={styles.success} role="status">
-              角色档案已保存
-            </span>
-          ) : draftable ? (
-            <span className={wb.statusHint}>
-              {draftStored ? "改动已自动暂存在本机草稿" : "本机无法存草稿"}
-            </span>
-          ) : null}
+          <span className={wb.statusHint}>
+            {saveError
+              ? saveError
+              : saved
+                ? "✓ 角色已保存至本地角色库"
+                : isSample
+                  ? "官方预设角色：可直接开启战局，或修改后另存为自定义角色"
+                  : draftSaved
+                    ? "已自动暂存本地草稿"
+                    : "本地草稿暂存失败"}
+          </span>
         </div>
 
         <div className={wb.launchRow}>
+          {launchMutation.isError && (
+            <span className={wb.statusHint} role="alert">
+              {launchMutation.error.message}
+            </span>
+          )}
           <FrameBox className={wb.titleBox}>
             <input
-              aria-label="战局代号"
-              maxLength={40}
-              value={title}
-              placeholder={`${card.name.trim() || "夜之城游民"}的档案`}
-              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              value={saveTitle}
+              aria-label="新战局代号"
+              placeholder={`${card.name.trim() || "未命名"}的夜之城传奇`}
+              onChange={(e) => setSaveTitle(e.target.value)}
             />
           </FrameBox>
           <Button
             primary
-            disabled={busy || !parsed.success}
-            reason={reason}
-            onClick={() => launch.mutate()}
+            disabled={!canLaunch}
+            reason={!data ? "请等待创角目录读取完成" : (checks[0]?.text ?? "正在保存角色")}
+            onClick={() => {
+              onLaunchingChange(true);
+              launchMutation.mutate();
+            }}
           >
-            {launch.isPending ? "正在初始化…" : "保存并开启战局"}
+            {launchMutation.isPending
+              ? "正在接入夜之城…"
+              : isSample
+                ? "用此预设开启战局"
+                : "保存并开启战局"}
           </Button>
         </div>
       </footer>
+
+      {sub !== null && data && pickerProps && (
+        <CreatorModal title={SUB_TITLES[sub]} hint={SUB_HINTS[sub]} onClose={() => setSub(null)}>
+          {sub === "origin" && <OriginPicker {...pickerProps} />}
+          {sub === "traits" && (
+            <TraitPicker
+              key={traitFilter}
+              board={board}
+              data={data}
+              commit={commit}
+              initialFilter={traitFilter}
+            />
+          )}
+          {sub === "flaws" && <FlawPicker board={board} data={data} commit={commit} />}
+          {sub === "loadout" && <LoadoutPicker {...pickerProps} />}
+          {sub === "people" && <PeoplePicker board={board} data={data} commit={commit} />}
+          {sub === "map" && (
+            <StartMapPicker
+              value={startLoc}
+              defaultStart={fallbackLoc}
+              automatic={!board.startLocation}
+              onChange={setLoc}
+            />
+          )}
+        </CreatorModal>
+      )}
     </div>
   );
 }

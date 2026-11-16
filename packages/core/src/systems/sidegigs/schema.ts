@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { TierSchema } from "../dice";
 
 /** 输了之后多久才肯再比（分钟） */
 export const REMATCH_MINUTES = 1440;
@@ -8,7 +7,11 @@ export const GigKindSchema = z.enum(["fight", "race"]);
 export type GigKind = z.infer<typeof GigKindSchema>;
 export const GIG_KIND_LABELS: Readonly<Record<GigKind, string>> = { fight: "拳赛", race: "赛车" };
 
-export const OPPONENT_TIER_LABELS: Readonly<Record<z.infer<typeof TierSchema>, string>> = {
+/** 对手成色与威望：不对应 T1–T4 骰点表，仅用于提示对手斤两 */
+export const OpponentTierSchema = z.enum(["street", "veteran", "elite", "legend"]);
+export type OpponentTier = z.infer<typeof OpponentTierSchema>;
+
+export const OPPONENT_TIER_LABELS: Readonly<Record<OpponentTier, string>> = {
   street: "街头",
   veteran: "老手",
   elite: "精英",
@@ -23,7 +26,7 @@ export const GigDefSchema = z.object({
   opponent: z.string().min(1).max(20),
   /** 地点表里的 id */
   location: z.string().min(1),
-  tier: TierSchema,
+  tier: OpponentTierSchema,
   /** 报名押金 */
   stake: z.number().int().min(0).max(20_000),
   /** 赢了拿多少 */

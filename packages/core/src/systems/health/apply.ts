@@ -13,6 +13,8 @@ import {
 } from "../dice";
 import { type InventoryState, itemCatalog } from "../inventory";
 import {
+  BODY_PART_LABELS,
+  type BodyPart,
   ChromeLimbsFactSchema,
   type Condition,
   type DamageCommand,
@@ -20,6 +22,7 @@ import {
   type HealCommand,
   type HealthInternal,
   type HealthState,
+  type Injury,
   LIMB_LABELS,
   type Limb,
   limbSlot,
@@ -30,6 +33,11 @@ import {
 type Health = Draft<HealthState>;
 
 const MINUTES_PER_DAY = 1440;
+const INJURY_HEAL_MINUTES: Readonly<Record<DamageTier, number>> = {
+  graze: MINUTES_PER_DAY,
+  heavy: 4 * MINUTES_PER_DAY,
+  lethal: 7 * MINUTES_PER_DAY,
+};
 /** 重伤超过这么多天不处理，开始按天恶化 */
 export const BLEED_GRACE_DAYS = 2;
 const BLEED_PERCENT = 10;
@@ -38,7 +46,7 @@ const SEVERE_HEAL_CEILING = 29;
 const REST_FLOOR = 60;
 const REVIVE_PERCENT: Readonly<Partial<Record<Condition, number>>> = { dying: 10, down: 30 };
 
-/** 伤害档位按生命上限的比例换算（后台同步驱动 0~4 格伤势） */
+/** 伤害档位按生命上限的比例换算 */
 export const DAMAGE_PERCENT: Readonly<Record<DamageTier, number>> = {
   graze: 10,
   heavy: 30,
@@ -187,6 +195,44 @@ const hpNote = (draft: Health) => {
   return `${WOUND_SLOT_LABELS[draft.wounds]}（HP ${draft.hp} / ${draft.max}）`;
 };
 
+function ensureInjuries(draft: Health): Injury[] {
+  draft.injuries ??= [];
+  return draft.injuries;
+}
+
+function recordInjury(
+  draft: Health,
+  entry: {
+    readonly part: BodyPart | null;
+    readonly tier: DamageTier;
+    readonly cause: string;
+    readonly now: number;
+  },
+): Injury {
+  const list = ensureInjuries(draft);
+  const nextNum =
+    list.reduce(
+      (max, item) => Math.max(max, Number.parseInt(item.id.replace(/\D+/g, ""), 10) || 0),
+      0,
+    ) + 1;
+  const created: Injury = {
+    id: `i${nextNum}`,
+    part: entry.part,
+    tier: entry.tier,
+    cause: entry.cause,
+    at: entry.now,
+    healsAt: entry.now + INJURY_HEAL_MINUTES[entry.tier],
+    treated: false,
+  };
+  list.push(created);
+  return created;
+}
+
+function pruneGrazeInjuries(draft: Health): void {
+  if (!draft.injuries || draft.injuries.length === 0) return;
+  draft.injuries = draft.injuries.filter((inj) => inj.tier !== "graze");
+}
+
 function trackSevere(draft: Health, now: number): void {
   syncWounds(draft);
   if (woundTag(draft) === "severe") {
@@ -255,18 +301,21 @@ export function applyDamage(
   const tier = DAMAGE_TIERS[rank] ?? "graze";
   const amount = percentOf(draft.max, DAMAGE_PERCENT[tier]);
   draft.hp = Math.max(0, draft.hp - amount);
+  const part = command.part ?? command.limb ?? null;
+  recordInjury(draft, { part, tier, cause: command.reason, now: ctx.now });
+  const partTag = part ? `${BODY_PART_LABELS[part]}·` : "";
   const notes = [
     armor
-      ? `${armor}把${DAMAGE_LABELS[command.tier]}降成${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`
-      : `${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`,
+      ? `${armor}把${DAMAGE_LABELS[command.tier]}降成${partTag}${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`
+      : `${partTag}${DAMAGE_LABELS[tier]} −${amount}，${hpNote(draft)}`,
   ];
   if (command.limb) notes.push(loseLimb(draft, command.limb, tier, limbRule, ctx));
   if (draft.hp === 0) {
     draft.condition = declaredLethal ? "dying" : "down";
     notes.push(
       draft.condition === "dying"
-        ? "触及第 4 格【生死线】：濒死，需创伤白金卡、副心脏或熟人拖离"
-        : "触及第 4 格【生死线】：倒下（未定性为致命绝境，不会当场死）",
+        ? "跌入【生死线】：濒死，需创伤白金卡、副心脏或熟人拖离"
+        : "跌入【生死线】：倒下（未定性为致命绝境，不会当场死）",
     );
   }
   trackSevere(draft, ctx.now);
@@ -301,7 +350,7 @@ function loseLimb(
   if (draft.lostLimbs.includes(limb)) return `${label}已经没了`;
   draft.lostLimbs.push(limb);
   syncWounds(draft);
-  return `失去${label}（进入 3 格残废）：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，全检定 −4；找义体医生装义肢能补上`;
+  return `失去${label}（进入重残状态）：${limbSlot(limb) === "arms" ? "不能用双手武器" : "不能追车或步行逃跑"}，全检定 −4；找义体医生装义肢能补上`;
 }
 
 /** 义肢与义体损坏修复：只能由代码发出 */
@@ -344,8 +393,8 @@ function wound(draft: Health, tier: DamageTier, ctx: SystemContext, notes: strin
     draft.condition = tier === "lethal" ? "dying" : "down";
     notes.push(
       draft.condition === "dying"
-        ? "触及第 4 格【生死线】：濒死，这一轮结束前要被救回"
-        : "触及第 4 格【生死线】：倒下",
+        ? "跌入【生死线】：濒死，这一轮结束前要被救回"
+        : "跌入【生死线】：倒下",
     );
   }
   trackSevere(draft, ctx.now);
@@ -378,6 +427,7 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
       const ceiling = severe ? Math.floor((draft.max * SEVERE_HEAL_CEILING) / 100) : draft.max;
       draft.hp = Math.max(draft.hp, Math.min(draft.hp + percentOf(draft.max, percent), ceiling));
       draft.painSuppressed = true;
+      if (draft.hp === draft.max) pruneGrazeInjuries(draft);
       trackSevere(draft, ctx.now);
       const notes = [`使用医疗针，临时压制本场重创疼痛，${hpNote(draft)}`];
       if (severe) notes.push("残废/重伤时医疗针最多回到 29%，需找义体医生缝合");
@@ -386,6 +436,7 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
     case "ripperdoc":
       draft.hp = draft.max;
       draft.painSuppressed = false;
+      draft.injuries = [];
       trackSevere(draft, ctx.now);
       return ok(`义体医生缝合处理了伤势，${hpNote(draft)}`);
     case "rest":
@@ -394,6 +445,7 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
       if (draft.wounds === 1) {
         draft.hp = draft.max;
       }
+      pruneGrazeInjuries(draft);
       draft.painSuppressed = false;
       trackSevere(draft, ctx.now);
       return ok(`休整后 ${hpNote(draft)}`);
@@ -428,8 +480,11 @@ export function die(draft: Health, reason: string): ApplyOutcome {
   return ok(`角色死亡：${reason}`);
 }
 
-/** 重伤拖过宽限期后恶化失血，最多扣到 1 */
+/** 随时间推移：到期的具体浅伤自然长好；重伤拖过宽限期后恶化失血，最多扣到 1 */
 export function bleed(draft: Health, span: TimeSpan): void {
+  if (draft.condition !== "dead" && draft.injuries && draft.injuries.length > 0) {
+    draft.injuries = draft.injuries.filter((inj) => inj.healsAt === null || span.to < inj.healsAt);
+  }
   if (draft.condition !== "up" || draft.severeSince === null) return;
   const days = Math.floor((span.to - draft.severeSince) / MINUTES_PER_DAY);
   const due = Math.max(0, days - BLEED_GRACE_DAYS + 1);

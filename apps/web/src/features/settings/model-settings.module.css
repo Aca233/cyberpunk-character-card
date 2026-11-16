@@ -1,28 +1,40 @@
 /*
- * 模型连接页（用户定的重排）：状态条、连接列表、编辑区三块各套原作 map.filterCell 格框（ui/FrameBox 的 CellFrame），
- * 颜色走 --box-line / --box-fill；输入框套 FrameBox。不手画边框、不用渐变
+ * 模型连接与酒馆预设共享工作台布局：
+ * 外层大容器用原作 notify.itemCellBg / notify.itemCellFg，列表项用 CellFrame，输入框用 FrameBox；
+ * 不手画边框、不用渐变
  */
 .root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
-  max-width: 76rem;
+  max-width: 75rem;
   min-width: 0;
-  display: grid;
-  gap: 1rem;
+}
+
+.slice {
+  z-index: -1;
+}
+
+@media (width >= 760px) {
+  .root {
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 .intro h2 {
-  margin: 0.3rem 0;
-  font-size: clamp(1.2rem, 2vw, 1.5rem);
-  line-height: 1.4;
+  margin: 0.25rem 0 0.5rem;
   color: var(--cp-text);
-  letter-spacing: 0.03em;
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+  letter-spacing: 0.04em;
 }
 
 .intro p {
-  max-width: 76ch;
+  max-width: 72ch;
   margin: 0.35rem 0 0;
-  font-size: var(--fs-label);
   color: var(--cp-text-dim);
+  font-size: var(--fs-label);
   line-height: 1.65;
 }
 
@@ -30,129 +42,175 @@
   display: block;
   color: var(--cp-cyan);
   font-size: var(--fs-label);
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.14em;
 }
 
-/* 状态条：没配好时框染黄，配好了染青；状态与操作并排 */
+/* 顶部紧凑状态条：没配好染黄，就绪染青 */
 .readiness {
-  --box-line: var(--cp-yellow);
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.75rem 1.5rem;
-  padding: 16px 30px 20px 20px;
+  gap: 10px 16px;
+  flex: none;
+  padding: 11px 18px 12px 14px;
 }
 
-.readiness[data-ready] {
-  --box-line: var(--cp-cyan);
+.readyGlow {
+  flex: none;
 }
 
-.readiness > * {
+.readyMain {
+  display: grid;
+  gap: 4px;
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
-.readiness p {
-  margin: 0.25rem 0;
+.readyTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 
-.readiness h3,
-.usage h3,
-.form h3 {
-  margin: 0.4rem 0 0.7rem;
-  font-size: 1.1rem;
+.statusBadge {
+  padding: 2px 9px;
+  background: rgb(252 238 10 / 16%);
+  color: var(--cp-yellow);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 
-.readiness p,
-.readiness li,
-.usage p {
-  line-height: 1.8;
+.statusBadge[data-ready] {
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
 }
 
-.readiness ul {
-  margin: 0.3rem 0;
-  padding-left: 1.2rem;
+.readyTitle {
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+}
+
+.readyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.rolePair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roleChip {
+  padding: 1px 8px;
+  background: rgb(255 255 255 / 7%);
+  color: var(--cp-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.roleChip:hover:not(:disabled) {
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+}
+
+.roleChip:disabled {
+  cursor: default;
+  color: var(--cp-yellow);
+}
+
+.readyErrors {
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
 }
 
 .fix {
-  align-self: center;
+  justify-self: end;
 }
 
-.fix p {
-  margin: 0 0 0.5rem;
-  color: var(--cp-text-dim);
-}
-
-/* 列表收窄、详情优先；两块各自一张原作格框 */
+/* 左侧列表 + 右侧编辑器，铺满剩余高，内部各自滚动，底框绝不裁断 */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr);
-  align-items: start;
-  gap: clamp(1rem, 2vw, 1.5rem);
+  grid-template-columns: minmax(248px, 286px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+  flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .sidebar {
   position: relative;
   isolation: isolate;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 14px 24px 18px 16px;
-}
-
-/* 宽屏滚动详情时仍能切换列表；窄屏保持上下排，不占住阅读区域 */
-@media (width >= 760px) {
-  .sidebar {
-    position: sticky;
-    top: 0;
-    max-height: calc(100dvh - 15rem);
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--cp-red-dim) transparent;
-  }
+  min-height: 0;
+  padding: 14px 12px 14px 14px;
 }
 
 .listHead {
   display: flex;
+  flex: none;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 10px;
 }
 
 .listHead h3 {
-  margin: 0.3rem 0;
-  font-size: var(--fs-ui);
-  letter-spacing: 0.12em;
+  margin: 0;
   color: var(--cp-red);
+  font-size: var(--fs-ui);
+  letter-spacing: 0.14em;
+}
+
+.listScroll {
+  flex: 1;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
 }
 
 .list {
-  list-style: none;
-  padding: 0;
-  margin: 0.9rem 0 0;
   display: grid;
-  gap: 0.5rem;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-/* 一条连接：小一号的原作格框，悬停变红、选中变青 */
+/* 一条连接：小号 CellFrame 格框，悬停变红、选中变青 */
 .connection {
   --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 60%);
+  --box-fill: rgb(14 14 23 / 68%);
   position: relative;
   isolation: isolate;
   display: grid;
+  gap: 4px;
   width: 100%;
-  gap: 0.3rem;
-  text-align: left;
-  padding: 12px 22px 15px 14px;
-  font: inherit;
-  color: var(--cp-text);
+  padding: 10px 14px 12px 12px;
   background: none;
   border: 0;
+  color: var(--cp-text);
+  font: inherit;
+  text-align: left;
   cursor: var(--cp-cursor-hand);
-  overflow-wrap: anywhere;
 }
 
 .connection:hover {
@@ -161,133 +219,224 @@
 
 .connection[aria-pressed="true"] {
   --box-line: var(--cp-cyan);
-  --box-fill: rgb(18 36 44 / 78%);
+  --box-fill: rgb(18 36 44 / 82%);
 }
 
 .connection:focus-visible,
 .advanced summary:focus-visible {
   outline: 2px solid var(--cp-cyan);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
-.modelName,
+.connTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.connTop strong {
+  overflow: hidden;
+  font-size: var(--fs-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelName {
+  overflow: hidden;
+  color: var(--cp-text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .help,
 .privacy {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
-  line-height: 1.7;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-.status {
+.statusDot {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--cp-yellow);
-  font-size: var(--fs-label);
+  white-space: nowrap;
 }
 
-.status[data-ready] {
+.statusDot[data-ready] {
   color: var(--cp-cyan);
 }
 
 .roles {
-  color: var(--cp-yellow);
-  font-size: var(--fs-label);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.roles:empty {
-  display: none;
+.rolePill {
+  padding: 1px 6px;
+  background: rgb(252 238 10 / 15%);
+  color: var(--cp-yellow);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.rolePill[data-role="narrator"] {
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
 }
 
 .editor {
   position: relative;
   isolation: isolate;
   min-width: 0;
-  padding: 20px 36px 28px 26px;
+  min-height: 0;
+  padding: 18px 24px 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+}
+
+.editorHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.editorHead h3 {
+  margin: 2px 0 0;
+  font-size: 1.15rem;
+  color: var(--cp-text);
+}
+
+.typePill {
+  padding: 2px 10px;
+  background: rgb(255 255 255 / 7%);
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
 .form {
   display: grid;
-  gap: 0.35rem;
+  gap: 10px;
 }
 
 .form fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
   display: grid;
-  gap: 1rem;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.span2 {
+  grid-column: 1 / -1;
+}
+
+.advGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
 }
 
 .field {
   display: grid;
   align-content: start;
-  gap: 0.45rem;
+  gap: 5px;
   min-width: 0;
 }
 
 .field > span {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .field small {
   color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .advanced {
-  padding: 0.4rem 0 0.2rem;
+  padding: 2px 0;
 }
 
 .advanced summary {
   color: var(--cp-text-dim);
-  cursor: var(--cp-cursor-hand);
+  font-size: var(--fs-label);
   line-height: 1.6;
+  cursor: var(--cp-cursor-hand);
 }
 
 .advanced[open] summary {
-  margin-bottom: 1rem;
+  margin-bottom: 10px;
   color: var(--cp-cyan);
-}
-
-.advanced .field + .field {
-  margin-top: 1rem;
 }
 
 .actions {
   display: flex;
-  gap: 0.7rem;
   flex-wrap: wrap;
   align-items: center;
+  gap: 10px;
 }
 
-/* 02 / 03 两段：只靠留白和编号分开 */
 .usage {
-  margin-top: 1.8rem;
+  display: grid;
+  gap: 8px;
 }
 
-.usage > .kicker {
-  margin-bottom: 0.4rem;
+.usageHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.usageHead h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--cp-text);
 }
 
 .notice {
-  padding: 0.7rem 0;
+  padding: 8px 12px;
+  background: rgb(252 238 10 / 7%);
   color: var(--cp-yellow);
-  line-height: 1.75;
+  font-size: var(--fs-label);
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 
 .notice p {
-  margin: 0.25rem 0;
+  margin: 2px 0;
 }
 
 .error,
 .success {
-  margin: 0.4rem 0 0;
+  margin: 2px 0 0;
+  font-size: var(--fs-label);
+  line-height: 1.65;
   overflow-wrap: anywhere;
-  line-height: 1.75;
 }
 
 .error {
@@ -299,21 +448,139 @@
 }
 
 .privacy {
+  flex: none;
   margin: 0;
+}
+
+.fieldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modelPicker {
+  grid-column: 1 / -1;
+}
+
+.pickerInner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pickerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pickerTitle {
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
+}
+
+.pickerControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pickerFilter {
+  width: 12rem;
+  max-width: 100%;
+}
+
+.modelList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 6px;
+  max-height: 12.5rem;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.modelOption {
+  position: relative;
+  isolation: isolate;
+  --box-fill: rgb(14 14 23 / 72%);
+  --box-line: var(--cp-red-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font: inherit;
+  font-size: var(--fs-label);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelOption:hover,
+.modelOption:focus-visible {
+  --box-fill: rgb(0 240 255 / 8%);
+  --box-line: var(--cp-cyan);
+  color: var(--cp-cyan);
+  outline: none;
+}
+
+.modelOptionActive {
+  --box-fill: rgb(0 240 255 / 14%);
+  --box-line: var(--cp-cyan);
+  color: var(--cp-cyan);
+}
+
+.modelOptionName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelOptionTag {
+  flex: none;
+  font-size: var(--fs-micro);
+  color: var(--cp-yellow);
+}
+
+@media (width < 980px) {
+  .formGrid,
+  .advGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (width < 900px) {
   .readiness {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .readyGlow {
+    display: none;
+  }
+
+  .fix {
+    justify-self: start;
   }
 }
 
 @media (width < 760px) {
   .workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .list {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  .editor {
+    overflow: visible;
+  }
+
+  .listScroll {
+    max-height: 18rem;
   }
 }

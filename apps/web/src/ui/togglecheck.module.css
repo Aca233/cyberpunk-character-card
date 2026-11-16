@@ -1,0 +1,140 @@
+.input {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: var(--cp-cursor-hand);
+}
+
+.input:disabled {
+  cursor: default;
+}
+
+/* ── 紧凑复选框（用于条目开关列表） ── */
+
+.checkbox {
+  --chk-fill: rgb(14 14 23 / 82%);
+  --chk-line: var(--cp-red-dim);
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  isolation: isolate;
+  width: 20px;
+  height: 20px;
+  transition:
+    --chk-line var(--dur-flash),
+    --chk-fill var(--dur-flash);
+}
+
+.slice {
+  z-index: -1;
+}
+
+.tick {
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity var(--dur-flash),
+    transform var(--dur-flash);
+}
+
+.checkbox:hover:not([data-disabled]) {
+  --chk-line: var(--cp-red);
+}
+
+.checkbox[data-checked] {
+  --chk-fill: rgb(94 246 255 / 16%);
+  --chk-line: var(--cp-cyan);
+}
+
+.checkbox[data-checked] .tick {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkbox:has(.input:focus-visible) {
+  outline: 1px solid var(--cp-yellow);
+  outline-offset: 2px;
+}
+
+.checkbox[data-disabled] {
+  opacity: 0.45;
+}
+
+/* ── 战术开关（用于偏好设置等独立开关行） ── */
+
+.switch {
+  --box-fill: rgb(14 14 23 / 82%);
+  --box-line: var(--cp-red-dim);
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  isolation: isolate;
+  width: 74px;
+  height: 32px;
+  padding: 4px 6px;
+}
+
+.switch:hover:not([data-disabled]) {
+  --box-line: var(--cp-red);
+}
+
+.switch[data-checked] {
+  --box-fill: rgb(94 246 255 / 12%);
+  --box-line: var(--cp-cyan);
+}
+
+.switch:has(.input:focus-visible) {
+  outline: 1px solid var(--cp-yellow);
+  outline-offset: 2px;
+}
+
+.switch[data-disabled] {
+  opacity: 0.45;
+}
+
+.switchState {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: center;
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+
+.switch[data-checked] .switchState {
+  grid-column: 1;
+  color: var(--cp-cyan);
+}
+
+.thumb {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  width: 26px;
+  height: 22px;
+  pointer-events: none;
+}
+
+.switch[data-checked] .thumb {
+  grid-column: 2;
+  justify-self: end;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkbox,
+  .tick {
+    transition: none;
+  }
+}

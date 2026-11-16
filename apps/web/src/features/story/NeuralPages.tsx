@@ -1,25 +1,25 @@
-import { characterRules, cyberwareRules } from "@cp/core";
-import { type CSSProperties, Fragment, type ReactNode, useState } from "react";
-import type { AssetId } from "../../assets";
+import { characterRules } from "@cp/core";
+import { type ReactNode, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
-import { Asset, NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { itemArtOf } from "./art";
-import { ChronicleBody, type StoryEnd } from "./ChroniclePanel";
-import { CyberDoll, type CyberSlot } from "./CyberDoll";
+import { BiomonitorPanel } from "./BiomonitorPanel";
+import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
+import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import { FactionsBody } from "./FactionsPanel";
-import { GigsPanel } from "./GigsPanel";
 import { type HabitAction, Habits } from "./Habits";
-import { JournalBody } from "./Journal";
-import { MemoryBody, type MemoryEdit } from "./MemoryPanel";
+import { countdown } from "./Journal";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
-import { Avatar, PhoneBody, UnreadBadge } from "./Phone";
+import { Avatar, type PhoneActions, PhoneBody, UnreadBadge } from "./Phone";
 import { Profile } from "./Profile";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
+import { StashSection } from "./StashPanel";
 import styles from "./story.module.css";
-import type { View } from "./view";
+import { trackTelemetry, type View, woundTelemetry } from "./view";
 
 /**
  * 神经界面里由旧左侧栏拆出来的几页（2077-interface-plan.md 第五节第 4 条）：
@@ -29,20 +29,8 @@ import type { View } from "./view";
 
 /** 物品格九宫格切法，同四角在场的人用的 map.filterCell*（计划第九节） */
 const CELL_SLICE = [20, 30, 30, 20] as const;
-/** 背包图标格（计划第十二节第 9 条）：dialog.iconSlot 四边保留 16 原图像素，中间拉伸，保留切角 */
-const ICON_SLOT_SLICE = 16;
 
-/** 武器格的编号，和数字键 1–3 对应 */
-const WEAPON_SLOTS = [1, 2, 3] as const;
-
-/** 武器格编号用原作 icons_keyboard 的数字键图标，和剧情选项的数字键一样 */
-const SLOT_KEYS: Record<(typeof WEAPON_SLOTS)[number], AssetId> = {
-  1: "key.1",
-  2: "key.2",
-  3: "key.3",
-};
-
-/** 人物（P）：出身与角色主板芯片、生物/医疗专属告警与习惯 */
+/** 人物（P）：3.0 生物检测读数、角色主板与习惯（无桌面端数值属性栏） */
 export function CharacterPage({
   view,
   onHabit,
@@ -60,55 +48,86 @@ export function CharacterPage({
     firstWithAbility ??
     null;
 
-  const hasCrisis = Boolean(view.psychosis.crisis);
-  const hasSuppressant = Boolean(
-    view.psychosis.suppressant.until || view.psychosis.suppressant.dependent,
-  );
-  const hasTrauma = Boolean(view.trauma.active || view.trauma.lapsed);
-  const hasBioAlerts = hasCrisis || hasSuppressant || hasTrauma;
+  const origins = character.traits.filter((t) => t.slot === "origin");
+  const modules = character.traits.filter((t) => t.slot !== "origin");
+
+  const bindTrait = (t: View["character"]["traits"][number]) => {
+    const key = `${t.slot}-${t.label}`;
+    return {
+      key,
+      selected: activeTrait ? `${activeTrait.slot}-${activeTrait.label}` === key : false,
+      title: t.ability || undefined,
+      onClick: () => setActiveTraitKey(key),
+      onMouseEnter: () => {
+        if (t.ability) setActiveTraitKey(key);
+      },
+      onFocus: () => {
+        if (t.ability) setActiveTraitKey(key);
+      },
+    };
+  };
 
   return (
     <div className={styles.characterRoot}>
       {character.name === null && (
         <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
       )}
+      <BiomonitorPanel view={view} />
+
       {character.traits.length > 0 && (
         <section className={styles.traitSection} aria-label="角色主板">
-          <ul className={styles.traits}>
-            {character.traits.map((t) => {
-              const key = `${t.slot}-${t.label}`;
-              const selected = activeTrait
-                ? `${activeTrait.slot}-${activeTrait.label}` === key
-                : false;
+          <div className={styles.traitBoard}>
+            {origins.map((t) => {
+              const { key, selected, ...interactive } = bindTrait(t);
               return (
-                <li key={key}>
-                  <button
-                    type="button"
-                    className={styles.traitChip}
-                    data-slot={t.slot}
-                    aria-pressed={selected}
-                    title={t.ability || undefined}
-                    onClick={() => setActiveTraitKey(key)}
-                    onMouseEnter={() => {
-                      if (t.ability) setActiveTraitKey(key);
-                    }}
-                    onFocus={() => {
-                      if (t.ability) setActiveTraitKey(key);
-                    }}
-                  >
-                    <small className={styles.traitKind}>
-                      {characterRules.TRAIT_LABELS[t.slot]}
-                    </small>
-                    <span className={styles.traitLabel}>{t.label}</span>
-                  </button>
-                </li>
+                <button
+                  key={key}
+                  type="button"
+                  className={styles.originPlaque}
+                  aria-pressed={selected}
+                  {...interactive}
+                >
+                  <small className={styles.originStamp}>
+                    {characterRules.TRAIT_LABELS[t.slot]}
+                  </small>
+                  <span className={styles.originLabel}>{t.label}</span>
+                </button>
               );
             })}
-          </ul>
+            {origins.length > 0 && modules.length > 0 && (
+              <span className={styles.traitSep} aria-hidden />
+            )}
+            {modules.length > 0 && (
+              <ul className={styles.traits}>
+                {modules.map((t) => {
+                  const { key, selected, ...interactive } = bindTrait(t);
+                  return (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className={styles.traitChip}
+                        data-slot={t.slot}
+                        aria-pressed={selected}
+                        {...interactive}
+                      >
+                        <i className={styles.traitDot} aria-hidden />
+                        <small className={styles.traitKind}>
+                          {characterRules.TRAIT_LABELS[t.slot]}
+                        </small>
+                        <span className={styles.traitLabel}>{t.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
           {activeTrait?.ability && (
             <div className={styles.traitDetail} data-slot={activeTrait.slot} role="status">
               <div className={styles.traitDetailHead}>
-                <small className={styles.traitKind}>
+                <small
+                  className={activeTrait.slot === "origin" ? styles.originStamp : styles.traitKind}
+                >
                   {characterRules.TRAIT_LABELS[activeTrait.slot]}
                 </small>
                 <b>{activeTrait.label}</b>
@@ -118,48 +137,6 @@ export function CharacterPage({
           )}
         </section>
       )}
-      {hasBioAlerts && (
-        <dl className={`${styles.facts} ${styles.bioAlerts}`} aria-label="生物监测告警">
-          {view.psychosis.crisis && (
-            <>
-              <dt>危机</dt>
-              <dd data-tone={view.psychosis.crisis.status === "recovering" ? undefined : "bad"}>
-                {view.psychosis.crisis.label}
-                {view.psychosis.crisis.until && <small> · 到 {view.psychosis.crisis.until}</small>}
-                {view.psychosis.crisis.status === "open" && <small> · 普通委托暂停</small>}
-              </dd>
-            </>
-          )}
-          {(view.psychosis.suppressant.until || view.psychosis.suppressant.dependent) && (
-            <>
-              <dt>压制剂</dt>
-              <dd data-tone={view.psychosis.suppressant.withdrawal ? "bad" : undefined}>
-                {view.psychosis.suppressant.until
-                  ? `起效到 ${view.psychosis.suppressant.until}`
-                  : view.psychosis.suppressant.withdrawal
-                    ? "戒断中"
-                    : "依赖"}
-                {view.psychosis.suppressant.until && view.psychosis.suppressant.dependent && (
-                  <small> · 依赖</small>
-                )}
-              </dd>
-            </>
-          )}
-          {(view.trauma.active || view.trauma.lapsed) && (
-            <>
-              <dt>创伤小组</dt>
-              <dd
-                data-tone={view.trauma.active ? undefined : "bad"}
-                title={view.trauma.dispatch.ok ? "倒下时会来" : view.trauma.dispatch.why}
-              >
-                {view.trauma.active
-                  ? `${view.trauma.tierLabel}，到 ${view.trauma.until}`
-                  : `${view.trauma.lapsed} 过期了`}
-              </dd>
-            </>
-          )}
-        </dl>
-      )}
       <Habits habits={character.habits} offers={character.habitOffers} onHabit={onHabit} />
     </div>
   );
@@ -167,7 +144,7 @@ export function CharacterPage({
 
 type CyberPart = View["cyberware"][number];
 
-/** 义体（原作义体医生那一页的排法，人体、部位格、人性条在 CyberDoll 里，和捏人共用）：已装义体、损坏、断肢；义体医生的入口暂挂在这里，U3 走 F */
+/** 义体（原作 2077 义体页面布局：人体部位图 + 左侧人性条 + 悬停精简详情 + 右下角义体医生入口） */
 export function CyberwarePage({
   view,
   onRipperdoc,
@@ -175,67 +152,88 @@ export function CyberwarePage({
   readonly view: View;
   readonly onRipperdoc: () => void;
 }) {
-  // 一个部位按原作格数能装几件（用户 2026-10-31："为什么每个地方的义体只能选一个"），按装上的先后排
+  // 一个部位按原作格数能装几件，按装上的先后排
   const bySlot = new Map<CyberSlot, CyberPart[]>();
   for (const c of view.cyberware) bySlot.set(c.slot, [...(bySlot.get(c.slot) ?? []), c]);
-  const tip = (slot: CyberSlot) => {
+  const brokenCount = view.cyberware.filter((c) => c.broken).length;
+
+  const tip = (slot: CyberSlot, _parts: readonly unknown[], index: number) => {
     const list = bySlot.get(slot) ?? [];
-    if (list.length === 0) return <p className={styles.dim}>这个部位没装义体。</p>;
-    return list.map((part) => (
-      <Fragment key={part.id}>
+    const part = list[index];
+    if (!part) {
+      return (
+        <p className={neural.cyberTipMuted}>
+          {view.ripperdoc
+            ? `空余槽位，可在${view.ripperdoc.name}的诊所安装或更换。`
+            : "空余槽位，可前往义体医生诊所安装。"}
+        </p>
+      );
+    }
+    const rarityLabel = rarityLabelOf(part.rarity, part.iconic);
+    return (
+      <>
         <h3 className={neural.cyberName} data-broken={part.broken || undefined}>
           {part.name}
         </h3>
-        <dl className={styles.facts}>
-          {part.rarityLabel && (
-            <>
-              <dt>稀有度</dt>
-              <dd>{part.rarityLabel}</dd>
-            </>
-          )}
-          <dt>状态</dt>
-          <dd data-tone={part.broken ? "bad" : undefined}>
-            {part.broken ? "打坏了，修好前用不了" : "正常"}
-          </dd>
-          {part.bonusText && (
-            <>
-              <dt>加成</dt>
-              <dd>{part.bonusText}</dd>
-            </>
-          )}
-        </dl>
+        <p className={neural.cyberTipMeta} data-broken={part.broken || undefined}>
+          {[rarityLabel, CYBER_LABELS[slot], part.broken ? "已损毁（待修）" : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
         {part.ability && <p className={styles.cyberAbility}>{part.ability}</p>}
-      </Fragment>
-    ));
+        {slot === "os" && view.hacking && view.hacking.programs.length > 0 && (
+          <div className={styles.deckPrograms}>
+            <small className={styles.dim}>已载入快速破解</small>
+            <ul className={styles.deckProgramList}>
+              {view.hacking.programs.map((prog) => (
+                <li key={prog.id} title={`${prog.categoryLabel}：${prog.effect}`}>
+                  <span>{prog.name}</span>
+                  <small className={styles.dim}>{prog.categoryLabel}</small>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </>
+    );
   };
-  // 总格数照人体图上的格数（原作 2.0 义体医生那一页），不再按部位个数算
-  const cells = Object.values(cyberwareRules.SLOT_CAPACITY).reduce((sum, n) => sum + n, 0);
 
   return (
-    <CyberDoll
-      parts={bySlot}
-      humanity={view.humanity}
-      tip={tip}
-      corner={
-        <>
-          <small className={neural.cyberCount}>
-            已装 {view.cyberware.length}/{cells}
-          </small>
-          {view.health.lostLimbs.length > 0 && (
-            <Panel as="section" title="断肢" line="var(--cp-red)">
-              <p className={styles.lostLimbs}>
-                {view.health.lostLimbs.map((l) => l.label).join("、")}
-              </p>
-            </Panel>
-          )}
-          {view.ripperdoc && (
-            <Panel as="section" title="义体医生" line="var(--cp-cyan)">
-              <Button onClick={onRipperdoc}>找{view.ripperdoc.name}装义体</Button>
-            </Panel>
-          )}
-        </>
-      }
-    />
+    <div className={neural.cyberPage}>
+      <CyberDoll
+        parts={bySlot}
+        humanity={view.humanity}
+        tip={tip}
+        tipLine={(_slot, list, index) => {
+          const part = list[index];
+          if (!part) return "var(--cp-cyan)";
+          return part.broken ? "var(--cp-danger)" : rarityTintOf(part.rarity, part.iconic);
+        }}
+        corner={
+          (view.health.lostLimbs.length > 0 || view.ripperdoc) && (
+            <>
+              {view.health.lostLimbs.length > 0 && (
+                <Panel as="section" title="断肢" line="var(--cp-red)">
+                  <p className={styles.lostLimbs}>
+                    {view.health.lostLimbs.map((l) => l.label).join("、")}
+                  </p>
+                </Panel>
+              )}
+              {view.ripperdoc && (
+                <div>
+                  {brokenCount > 0 && (
+                    <p className={neural.cyberClinicHint}>{brokenCount} 件义体损毁待修</p>
+                  )}
+                  <Button primary onClick={onRipperdoc}>
+                    义体医生 · {view.ripperdoc.name}
+                  </Button>
+                </div>
+              )}
+            </>
+          )
+        }
+      />
+    </div>
   );
 }
 
@@ -263,30 +261,37 @@ function SubTabs<T extends string>({
 type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "misc";
 
 /**
- * 物品栏（O）：上方常驻三格随身武器、负荷与当前穿着，下方单行筛选与左列表右详情浏览；
- * 无需在「已装备」和「背包」之间来回切页即可直接换枪、装配件、穿脱衣服或使用消耗品。
+ * 物品栏（O）：上方展示随身大件负担与当前穿着，中间单行筛选与左列表右详情浏览，
+ * 底部折叠展开安全屋存放箱与车辆后备箱；无需在「已装备」和「背包」之间来回切页即可直接装配件、穿脱衣服或使用消耗品。
  */
 export function InventoryPage({
   view,
   onEquip,
   onUnequip,
   onMod,
+  onStashMove,
   onShop,
   onBuyHome,
   onHeal,
+  onSuppressant,
   onUse,
   disabledReason,
 }: {
   readonly view: View;
-  /** 非战斗治疗直接结算；情境性使用交给行动输入，由玩家确认。 */
+  /** 非战斗治疗和压制剂直接结算；情境性使用交给行动输入，由玩家确认。 */
   readonly onHeal?: ((id: string) => Promise<void>) | undefined;
+  readonly onSuppressant?: (() => Promise<void>) | undefined;
   readonly onUse?: ((id: string) => void) | undefined;
   readonly disabledReason?: string | undefined;
-  /** 换装备；正在生成时不传，按钮不显示 */
+  /** 换服装或快捷药剂/手雷；正在生成时不传，按钮不显示 */
   readonly onEquip?: ((id: string) => void) | undefined;
   readonly onUnequip?: ((id: string) => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
+  /** 存放箱与车辆后备箱存取 */
+  readonly onStashMove?:
+    | ((action: "store" | "take", item: string, where: string) => void)
+    | undefined;
   readonly onShop: (id: string) => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
   readonly onBuyHome?: ((id: string) => void) | undefined;
@@ -298,8 +303,8 @@ export function InventoryPage({
 
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [search, setSearch] = useState("");
-  const [pickedItem, setPickedItem] = useState<string | null>(null);
-  const [healing, setHealing] = useState(false);
+  const [pickedItem, setPickedItem] = useState<{ id: string; worn?: boolean } | null>(null);
+  const [usingItem, setUsingItem] = useState(false);
   const [useError, setUseError] = useState("");
 
   const isUsable = (id: string) => {
@@ -319,164 +324,110 @@ export function InventoryPage({
     const matches = filter === "all" || (filter === "usable" ? isUsable(id) : kind === filter);
     return matches && itemName(id).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
   });
-  const selectedEntry = backpack.find(([id]) => id === pickedItem) ?? backpack[0] ?? null;
-  const selectedItem = selectedEntry?.[0] ?? null;
+  const wornMatch = pickedItem?.worn
+    ? inventory.clothing.find((c) => c.id === pickedItem.id)
+    : undefined;
+  const packMatch =
+    !wornMatch && !pickedItem?.worn && pickedItem?.id
+      ? backpack.find(([id]) => id === pickedItem.id)
+      : undefined;
+  const selectedEntry = wornMatch
+    ? ([wornMatch.id, 1] as const)
+    : (packMatch ?? backpack[0] ?? null);
+  const selectedId = selectedEntry?.[0] ?? null;
+  const selectedIsWorn = Boolean(wornMatch);
 
-  const selectItem = (id: string) => {
-    setPickedItem(id);
+  const selectItem = (id: string, worn = false) => {
+    setPickedItem({ id, worn });
     setUseError("");
   };
 
-  const heal = async (id: string) => {
-    if (!onHeal || healing || disabledReason) return;
-    setHealing(true);
+  const runDirectUse = async (task: () => Promise<void>) => {
+    if (usingItem || disabledReason) return;
+    setUsingItem(true);
     setUseError("");
     try {
-      await onHeal(id);
+      await task();
     } catch (error) {
       setUseError(error instanceof Error ? error.message : "使用失败，请重试");
     } finally {
-      setHealing(false);
+      setUsingItem(false);
     }
   };
 
-  // 存放挪到右上角地点块（用户定的），这里只剩商店和买公寓
   const places = view.shops.length > 0 || view.safehouse.forSale.length > 0;
+  const { bulky } = inventory;
 
   return (
     <div className={styles.inventoryRoot}>
-      <section className={styles.loadoutSection} aria-label="随身装备">
-        <header className={styles.loadoutBar}>
-          <span className={styles.loadoutTitle}>武器槽（1–3）</span>
-          <span className={styles.loadoutMeta}>
-            <span className={styles.loadoutBadge}>{inventory.loadout.styleLabel}</span>
-            <span
-              className={styles.loadoutMeter}
-              data-over={inventory.loadout.overloaded || undefined}
-            >
-              随身负荷{" "}
-              <b>
-                {inventory.loadout.usedSlots}/{inventory.loadout.maxSlots}
-              </b>{" "}
-              格
-            </span>
-          </span>
-        </header>
-
-        <ol className={styles.gear} aria-label="武器格">
-          {WEAPON_SLOTS.map((n) => {
-            const id = inventory.weapons[n - 1] ?? null;
-            const active = inventory.active === n - 1;
-            const art = itemArtOf(id);
-            const wDetail = id === null ? undefined : inventory.details?.[id];
-            const rarity = id === null ? undefined : (wDetail?.rarity ?? inventory.rarity[id]);
-            const mods = id === null ? [] : (inventory.mods[id] ?? []);
-            return (
-              <li
-                key={n}
-                className={styles.gearCard}
-                data-active={active || undefined}
-                data-empty={id === null || undefined}
-                data-rarity={rarity ?? undefined}
-                data-iconic={wDetail?.iconic || undefined}
-                style={{ "--i": n - 1 } as CSSProperties}
-              >
-                <NineSlice id="map.filterCellBg" tint="rgb(14 14 23 / 82%)" slice={CELL_SLICE} />
-                {active && (
-                  <NineSlice
-                    id="panel.glowBottom"
-                    tint="var(--cp-yellow)"
-                    slice={0}
-                    className={styles.gearGlow}
-                  />
-                )}
-                <NineSlice id="map.filterCellFg" tint="var(--gear-line)" slice={CELL_SLICE} />
-                {rarity && (
-                  <NineSlice
-                    id="cyber.cellRarity"
-                    tint="var(--rarity)"
-                    slice={0}
-                    className={styles.gearRarity}
-                  />
-                )}
-
-                <div className={styles.gearHead}>
-                  <span className={styles.slotNum}>
-                    <Asset id={SLOT_KEYS[n]} tint="currentColor" height={18} alt={String(n)} />
-                  </span>
-                  <small className={styles.gearSub}>
-                    {id === null ? "空槽位" : (wDetail?.subLabel ?? "武器")}
-                  </small>
-                  {active && (
-                    <span className={styles.gearHeld}>
-                      <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                      <b>手持</b>
-                    </span>
-                  )}
-                </div>
-
-                <span className={styles.gearArt} aria-hidden>
-                  {art ? (
-                    <Asset id={art} className={styles.weaponArt} />
-                  ) : (
-                    <span className={styles.gearEmptyHint}>{id === null ? "未装备" : ""}</span>
-                  )}
+      {(inventory.clothing.length > 0 || bulky.count > 0 || bulky.overloaded) && (
+        <section className={styles.loadoutSection} aria-label="随身行装">
+          <header className={styles.loadoutBar}>
+            <span className={styles.loadoutTitle}>随身行装</span>
+            {(bulky.count > 0 || bulky.overloaded) && (
+              <span className={styles.loadoutMeta}>
+                <span className={styles.loadoutMeter} data-over={bulky.overloaded || undefined}>
+                  <span>随身大件</span>
+                  <b className={styles.loadoutCount}>
+                    {bulky.count}/{bulky.max}
+                  </b>
+                  {bulky.overloaded && <span>沉重显眼</span>}
                 </span>
+              </span>
+            )}
+          </header>
 
-                <div className={styles.gearFoot}>
-                  <span className={styles.gearName}>{id === null ? "空" : itemName(id)}</span>
-                  {mods.length > 0 && id !== null && (
-                    <div className={styles.gearMods}>
-                      {mods.map((m) => (
-                        <span key={m.slot} className={styles.gearModTag}>
-                          {itemName(m.id)}
-                          {onMod && (
-                            <button
-                              type="button"
-                              className={styles.modDetach}
-                              aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
-                              title={`拆下${itemName(m.id)}`}
-                              onClick={() => onMod("detach", id, m.id)}
-                            >
-                              ×
-                            </button>
-                          )}
+          {inventory.clothing.length > 0 && (
+            <div className={styles.clothingRow}>
+              <span className={styles.clothingLabel}>当前着装</span>
+              <ul className={styles.clothingStrip} aria-label="当前穿着">
+                {inventory.clothing.map((c) => {
+                  const art = itemArtOf(c.id);
+                  const isSelected = selectedIsWorn && selectedId === c.id;
+                  return (
+                    <li
+                      key={c.slot}
+                      className={styles.clothingChip}
+                      data-active={isSelected || undefined}
+                    >
+                      <CellFrame />
+                      <button
+                        type="button"
+                        className={styles.clothingPick}
+                        aria-pressed={isSelected}
+                        onClick={() => selectItem(c.id, true)}
+                      >
+                        {art && (
+                          <span className={styles.clothingThumb} aria-hidden>
+                            <span
+                              className={styles.clothingThumbGrid}
+                              style={{ backgroundImage: cssUrl("fx.grid") }}
+                            />
+                            <Asset id={art} className={styles.clothingArt} />
+                          </span>
+                        )}
+                        <span className={styles.clothingMeta}>
+                          <small className={styles.dim}>{c.label}</small>
+                          <b className={styles.clothingName}>{itemName(c.id)}</b>
                         </span>
-                      ))}
-                    </div>
-                  )}
-                  {id !== null && ((!active && onEquip) || onUnequip) && (
-                    <span className={styles.gearTools}>
-                      {!active && onEquip && (
-                        <ActionButton onClick={() => onEquip(id)}>拿上</ActionButton>
+                      </button>
+                      {onUnequip && (
+                        <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>
                       )}
-                      {onUnequip && <ActionButton onClick={() => onUnequip(id)}>收起</ActionButton>}
-                    </span>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-
-        {inventory.clothing.length > 0 && (
-          <ul className={styles.clothingStrip} aria-label="当前穿着">
-            {inventory.clothing.map((c) => (
-              <li key={c.slot} className={styles.clothingChip}>
-                <small className={styles.dim}>{c.label}</small>
-                <b>{itemName(c.id)}</b>
-                {onUnequip && <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className={styles.packSection} aria-label="随身背包">
         <div className={styles.inventoryToolbar}>
           <SubTabs<InventoryFilter>
             tabs={[
-              ["all", "全部"],
+              ["all", allCarried.length > 0 ? `全部 ${allCarried.length}` : "全部"],
               ["usable", "可使用"],
               ["weapon", "武器"],
               ["clothing", "服装"],
@@ -490,14 +441,16 @@ export function InventoryPage({
               setUseError("");
             }}
           />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索物品…"
-            aria-label="搜索物品"
-            className={styles.inventorySearch}
-          />
+          <FrameBox className={styles.inventorySearchBox}>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="搜索物品…"
+              aria-label="搜索物品"
+              className={styles.inventorySearch}
+            />
+          </FrameBox>
         </div>
 
         {disabledReason && (
@@ -511,104 +464,125 @@ export function InventoryPage({
           </p>
         )}
 
-        {backpack.length === 0 ? (
-          <p className={styles.inventoryEmpty}>
+        {backpack.length === 0 && !selectedIsWorn ? (
+          <div className={styles.inventoryEmpty}>
+            <CellFrame />
             {allCarried.length === 0 ? "随身背包是空的。" : "没有符合筛选条件的物品。"}
-          </p>
+          </div>
         ) : (
           <div className={styles.inventoryBrowser}>
-            <ul className={styles.inventoryGrid} aria-label="选择背包物品">
-              {backpack.map(([id, count]) => {
-                const quick = quickItems.find((item) => item.id === id);
-                const art = itemArtOf(id);
-                const detail = inventory.details?.[id];
-                const rarity = detail?.rarity ?? inventory.rarity[id];
-                const isSelected = selectedItem === id;
-                return (
-                  <li key={id}>
-                    <button
-                      type="button"
-                      className={styles.gridItem}
-                      aria-pressed={isSelected}
-                      data-rarity={rarity ?? undefined}
-                      data-iconic={detail?.iconic || undefined}
-                      onClick={() => selectItem(id)}
-                    >
-                      <NineSlice
-                        id="map.filterCellBg"
-                        tint="rgb(14 14 23 / 78%)"
-                        slice={CELL_SLICE}
-                      />
-                      <NineSlice id="map.filterCellFg" tint="var(--item-line)" slice={CELL_SLICE} />
-                      {rarity && (
+            {backpack.length === 0 ? (
+              <div className={styles.inventoryEmpty}>
+                <CellFrame />
+                {allCarried.length === 0 ? "随身背包是空的。" : "没有符合筛选条件的物品。"}
+              </div>
+            ) : (
+              <ul className={styles.inventoryGrid} aria-label="选择背包物品">
+                {backpack.map(([id, count]) => {
+                  const quick = quickItems.find((item) => item.id === id);
+                  const art = itemArtOf(id);
+                  const detail = inventory.details?.[id];
+                  const rarity = detail?.rarity ?? inventory.rarity[id];
+                  const isSelected = !selectedIsWorn && selectedId === id;
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        className={styles.gridItem}
+                        aria-pressed={isSelected}
+                        data-rarity={rarity ?? undefined}
+                        data-iconic={detail?.iconic || undefined}
+                        onClick={() => selectItem(id)}
+                      >
                         <NineSlice
-                          id="cyber.cellRarity"
-                          tint="var(--rarity)"
-                          slice={0}
-                          className={styles.gridRarity}
+                          id="map.filterCellBg"
+                          tint="var(--item-fill, rgb(14 14 23 / 80%))"
+                          slice={CELL_SLICE}
                         />
-                      )}
-                      <span className={styles.gridThumb} aria-hidden>
-                        {art ? (
-                          <Asset id={art} className={styles.weaponArt} />
-                        ) : (
-                          <Asset id="notify.inventory" tint="var(--cp-cyan)" height={20} />
+                        <NineSlice
+                          id="map.filterCellFg"
+                          tint="var(--item-line)"
+                          slice={CELL_SLICE}
+                        />
+                        {rarity && (
+                          <NineSlice
+                            id="cyber.cellRarity"
+                            tint="var(--rarity)"
+                            slice={0}
+                            className={styles.gridRarity}
+                          />
                         )}
-                      </span>
-                      <span className={styles.gridInfo}>
-                        <strong className={styles.gridName}>{itemName(id)}</strong>
-                        <small className={styles.gridSub}>
-                          {detail?.subLabel ?? "物品"}
-                          {detail?.rarityLabel ? ` · ${detail.rarityLabel}` : ""}
-                        </small>
-                      </span>
-                      <span className={styles.gridMeta}>
-                        {quick ? (
-                          <em className={styles.quickBadge}>
-                            {quick.charges}/{quick.max} 次
-                          </em>
-                        ) : count > 1 ? (
-                          <b>×{count}</b>
-                        ) : null}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        <span className={styles.gridThumb} aria-hidden>
+                          {art ? (
+                            <Asset id={art} className={styles.weaponArt} />
+                          ) : (
+                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={20} />
+                          )}
+                        </span>
+                        <span className={styles.gridInfo}>
+                          <strong className={styles.gridName}>{itemName(id)}</strong>
+                          <small className={styles.gridSub}>
+                            {detail?.subLabel ?? "物品"}
+                            {detail?.rarityLabel ? ` · ${detail.rarityLabel}` : ""}
+                          </small>
+                        </span>
+                        <span className={styles.gridMeta}>
+                          {quick ? (
+                            <UnreadBadge>{`${quick.charges}/${quick.max} 次`}</UnreadBadge>
+                          ) : count > 1 ? (
+                            <b className={styles.gridCount}>×{count}</b>
+                          ) : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
             {selectedEntry &&
               (() => {
                 const [id, count] = selectedEntry;
-                const to = inventory.equipTo[id];
+                const to = selectedIsWorn ? undefined : inventory.equipTo[id];
                 const art = itemArtOf(id);
                 const detail = inventory.details?.[id];
                 const rarity = detail?.rarity ?? inventory.rarity[id];
-                const quick = quickItems.find((q) => q.id === id);
+                const quick = selectedIsWorn ? undefined : quickItems.find((q) => q.id === id);
                 const kind = detail?.kind;
-                const usable = kind === "healing" || kind === "grenade" || kind === "consumable";
+                const usable =
+                  !selectedIsWorn &&
+                  (kind === "healing" || kind === "grenade" || kind === "consumable");
                 const remaining = quick?.charges ?? detail?.remaining;
                 const ceiling =
                   view.health.wound === "severe"
                     ? Math.floor(view.health.max * 0.29)
                     : view.health.max;
+                const directHeal = kind === "healing" && !view.combat.active;
+                const directSuppressant = id === "psycho-suppressant" && !view.combat.active;
+                const suppressantUntil = view.psychosis.suppressant.until;
                 const useBlocked =
                   disabledReason ||
-                  (healing
-                    ? "正在使用治疗品…"
+                  (usingItem
+                    ? "正在使用物品…"
                     : view.health.condition !== "up"
                       ? "当前无法自行使用物品"
                       : (kind === "healing" || kind === "grenade") && remaining === 0
                         ? "次数已用完，休整或场景结束后恢复"
                         : kind === "healing" && view.health.hp >= ceiling
                           ? "已达到当前治疗上限"
-                          : !quick &&
-                              (kind === "grenade" ||
-                                (kind === "healing" && Boolean(view.combat.active)))
-                            ? "先设为当前使用的物品"
-                            : undefined);
-                const directHeal = kind === "healing" && !view.combat.active;
-                const modTargets = inventory.modTargets[id] ?? [];
+                          : directSuppressant && suppressantUntil
+                            ? `压制剂仍在起效中（到 ${suppressantUntil}）`
+                            : !quick &&
+                                (kind === "grenade" ||
+                                  (kind === "healing" && Boolean(view.combat.active)))
+                              ? "先设为当前使用的物品"
+                              : undefined);
+                const directUseMissing = directHeal
+                  ? !onHeal
+                  : directSuppressant
+                    ? !onSuppressant
+                    : !onUse;
+                const modTargets = selectedIsWorn ? [] : (inventory.modTargets[id] ?? []);
 
                 return (
                   <article
@@ -618,11 +592,11 @@ export function InventoryPage({
                     data-iconic={detail?.iconic || undefined}
                     aria-label="选中物品详情"
                   >
-                    <NineSlice id="notify.itemCellBg" tint="rgb(12 8 14 / 90%)" slice={30} />
-                    <NineSlice
-                      id="notify.itemCellFg"
-                      tint="var(--detail-line, rgb(94 246 255 / 55%))"
-                      slice={30}
+                    <CellFrame />
+                    <span
+                      className={styles.detailGrid}
+                      style={{ backgroundImage: cssUrl("fx.grid") }}
+                      aria-hidden
                     />
                     {rarity && (
                       <NineSlice
@@ -640,21 +614,58 @@ export function InventoryPage({
                       </div>
                       <div className={styles.detailTags}>
                         {detail?.rarityLabel && (
-                          <span className={styles.detailRarityTag}>{detail.rarityLabel}</span>
+                          <span className={styles.detailRarityTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="var(--rarity, var(--cp-cyan))"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>{detail.rarityLabel}</span>
+                          </span>
                         )}
                         {detail?.subLabel && (
-                          <span className={styles.detailTag}>{detail.subLabel}</span>
+                          <span className={styles.detailTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(94 246 255 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>{detail.subLabel}</span>
+                          </span>
                         )}
-                        {detail?.slotCost && (
-                          <span className={styles.detailTag}>占 {detail.slotCost} 格负荷</span>
+                        {detail?.bulky && (
+                          <span className={styles.detailTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(148 163 184 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>大件装备</span>
+                          </span>
+                        )}
+                        {selectedIsWorn && (
+                          <span className={styles.detailTagActive}>
+                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                            <span className={styles.pillText}>当前穿着</span>
+                          </span>
                         )}
                         {quick ? (
                           <span className={styles.detailTagActive}>
-                            快捷栏 · {quick.charges}/{quick.max} 次
+                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                            <span className={styles.pillText}>
+                              快捷栏 · {quick.charges}/{quick.max} 次
+                            </span>
                           </span>
                         ) : remaining !== null && remaining !== undefined && detail?.charges ? (
                           <span className={styles.detailTag}>
-                            剩余 {remaining}/{detail.charges} 次
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(94 246 255 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>
+                              剩余 {remaining}/{detail.charges} 次
+                            </span>
                           </span>
                         ) : null}
                       </div>
@@ -662,29 +673,52 @@ export function InventoryPage({
 
                     {art && (
                       <div className={styles.detailShowcase} aria-hidden>
-                        <NineSlice
-                          id="dialog.iconSlot"
-                          tint="rgb(8 8 14 / 88%)"
-                          slice={ICON_SLOT_SLICE}
-                          className={styles.cardFrame}
-                        />
-                        <NineSlice
-                          id="dialog.iconSlot"
-                          tint="rgb(94 246 255 / 10%)"
-                          slice={ICON_SLOT_SLICE}
-                          className={styles.cardFrame}
+                        <CellFrame />
+                        <span
+                          className={styles.detailShowcaseGrid}
+                          style={{ backgroundImage: cssUrl("fx.grid") }}
                         />
                         <Asset id={art} className={styles.detailArt} />
                       </div>
                     )}
 
-                    {detail?.ability && <p className={styles.detailDesc}>{detail.ability}</p>}
+                    {(detail?.ability || (kind === "healing" && detail?.healPercent)) && (
+                      <div className={styles.detailBodyCopy}>
+                        {detail?.ability && <p className={styles.detailDesc}>{detail.ability}</p>}
 
-                    {kind === "healing" && detail?.healPercent && (
-                      <p className={styles.detailStat}>
-                        每次恢复生命上限的 {detail.healPercent}%（当前生命 {view.health.hp}/
-                        {view.health.max}）
-                      </p>
+                        {kind === "healing" && detail?.healPercent && (
+                          <p className={styles.detailStat}>
+                            便携医疗急救 · 当前伤势：
+                            {woundTelemetry(view.health, view.combat, view.cyberware).title}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {kind === "weapon" && (inventory.mods[id]?.length ?? 0) > 0 && (
+                      <div className={styles.gearMods}>
+                        {(inventory.mods[id] ?? []).map((m) => (
+                          <span key={m.slot} className={styles.gearModTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(94 246 255 / 14%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>{itemName(m.id)}</span>
+                            {onMod && (
+                              <button
+                                type="button"
+                                className={styles.modDetach}
+                                aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
+                                title={`拆下${itemName(m.id)}`}
+                                onClick={() => onMod("detach", id, m.id)}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     )}
 
                     <div className={styles.detailActions}>
@@ -693,24 +727,29 @@ export function InventoryPage({
                           <Button
                             small
                             primary={!useBlocked}
-                            disabled={Boolean(useBlocked) || (directHeal ? !onHeal : !onUse)}
+                            disabled={Boolean(useBlocked) || directUseMissing}
                             onClick={() => {
                               if (useBlocked) return;
-                              if (directHeal) void heal(id);
-                              else onUse?.(id);
+                              if (directHeal && onHeal) void runDirectUse(() => onHeal(id));
+                              else if (directSuppressant && onSuppressant) {
+                                void runDirectUse(onSuppressant);
+                              } else onUse?.(id);
                             }}
                           >
                             {directHeal
                               ? "使用治疗品"
-                              : kind === "grenade"
-                                ? "准备投掷"
-                                : "准备使用"}
+                              : directSuppressant
+                                ? "注射压制剂"
+                                : kind === "grenade"
+                                  ? "准备投掷"
+                                  : "准备使用"}
                           </Button>
                           {useBlocked ? (
-                            <small className={styles.dim}>{useBlocked}</small>
+                            <small className={styles.detailHint}>{useBlocked}</small>
                           ) : (
-                            !directHeal && (
-                              <small className={styles.dim}>填入行动框，确认后执行。</small>
+                            !directHeal &&
+                            !directSuppressant && (
+                              <small className={styles.detailHint}>填入行动框，确认后执行。</small>
                             )
                           )}
                         </div>
@@ -723,7 +762,7 @@ export function InventoryPage({
                             disabled={
                               !onEquip ||
                               Boolean(disabledReason) ||
-                              healing ||
+                              usingItem ||
                               Boolean(view.combat.active)
                             }
                             onClick={() => onEquip?.(id)}
@@ -731,14 +770,22 @@ export function InventoryPage({
                             {kind === "healing" ? "设为当前治疗品" : "设为当前手雷"}
                           </Button>
                           {view.combat.active && (
-                            <small className={styles.dim}>战斗中更换物品需要在行动中进行。</small>
+                            <small className={styles.detailHint}>
+                              战斗中更换物品需要在行动中进行。
+                            </small>
                           )}
                         </div>
                       )}
 
-                      {to && to !== "quick" && onEquip && (
+                      {selectedIsWorn && onUnequip && (
+                        <Button small onClick={() => onUnequip(id)}>
+                          脱下
+                        </Button>
+                      )}
+
+                      {to === "clothing" && onEquip && (
                         <Button small primary onClick={() => onEquip(id)}>
-                          {to === "clothing" ? "穿上" : "装上武器"}
+                          穿上
                         </Button>
                       )}
 
@@ -761,7 +808,8 @@ export function InventoryPage({
 
       {places && (
         <section className={styles.placesBar} aria-label="当前地点服务">
-          <span className={styles.loadoutTitle}>这里</span>
+          <CellFrame />
+          <span className={styles.placesLabel}>当前地点</span>
           <div className={styles.placesActions}>
             {view.shops.map((shop) => (
               <Button key={shop.id} small onClick={() => onShop(shop.id)}>
@@ -785,89 +833,157 @@ export function InventoryPage({
           </div>
         </section>
       )}
+      <StashSection view={view} onMove={onStashMove} />
     </div>
   );
 }
 
 // 物品栏精简（用户定的方案 A）：制作页（拆解、升级）去掉；后台的 craft 动作和零件规则留着，以后想加回来再接界面
 
-/** 日志（J）：左边待办、期限、拳赛和赛车、超梦；右边委托（进行中、委托板、已结束）；中间人的派单上限在人物档案里 */
+/** 追踪（J）：只列眼下揽在手里的单子、正在查的超梦与期限约定；点开看笔记详情 */
 export function JournalPage({
   view,
-  onAccept,
   onBraindance,
-  part,
 }: {
   readonly view: View;
-  /** 接下一单；正在生成时不传，按钮不能点 */
-  readonly onAccept?: ((id: string) => Promise<void>) | undefined;
   /** 打开超梦体验编辑器；有在查的超梦时才有按钮 */
   readonly onBraindance: () => void;
-  /** 钉住的追踪块分页签时只放一半：todo 左边待办那一栏，jobs 右边委托；不传两栏都放 */
-  readonly part?: "todo" | "jobs";
 }) {
-  const tracked = view.objectives.filter((o) => o.status !== "offered");
-  const offered = view.jobs.list.some((job) => job.status === "offered");
+  const track = trackTelemetry(view);
+  const placeNames = new Map((view.travel?.destinations ?? []).map((d) => [d.id, d.name]));
+  const activeJobs = [...view.jobs.list.filter((j) => j.status === "active")].sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    if (a.dueIn !== null && b.dueIn !== null) return a.dueIn - b.dueIn;
+    if (a.dueIn !== null) return -1;
+    if (b.dueIn !== null) return 1;
+    return 0;
+  });
+  const otherActive = track.active.filter(
+    (item) => item.kind !== "braindance" && item.source !== "jobs",
+  );
+  const nothingActive =
+    !view.braindance.active && activeJobs.length === 0 && otherActive.length === 0;
 
   return (
-    <div className={neural.split}>
-      {part !== "jobs" && (
-        <div className={neural.stack}>
-          <Panel as="section" title="待办" line="var(--cp-red)">
-            {tracked.length === 0 ? (
-              <p className={styles.dim}>眼下没有在办的事。</p>
-            ) : (
-              <ul className={styles.jobs}>
-                {tracked.map((o) => (
-                  <li key={o.id} data-overdue={o.status === "overdue" || undefined}>
-                    <strong>{o.title}</strong>
-                    <span>
-                      {o.sourceLabel}
-                      {o.due !== null && ` · ${o.status === "overdue" ? "已超期" : `${o.due} 前`}`}
-                    </span>
-                    {o.progress && <span className={styles.dim}>{o.progress}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-          {view.deadlines.length > 0 && (
-            <Panel as="section" title="期限" line="var(--cp-yellow)">
-              <ul className={styles.deadlines}>
-                {view.deadlines.map((d) => (
-                  <li key={d.id} data-overdue={d.overdue || undefined}>
-                    <Asset
-                      id="status.timeCircle"
-                      tint={d.overdue ? "var(--cp-danger)" : "var(--cp-yellow)"}
-                      height={16}
-                    />
-                    <span>{d.label}</span>
-                    <time>{d.overdue ? "已到期" : d.due}</time>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-          {/* 中间人并进人物档案（用户定的，2026-11-02）：派单上限在联系人→人物里，这里不再单列 */}
-          <GigsPanel gigs={view.sidegigs} />
-          {view.braindance.active && (
-            <Panel as="section" title="超梦" line="var(--cp-cyan)">
-              <Button onClick={onBraindance}>
-                超梦体验编辑器 · 关键线索 {view.braindance.active.keys.found}/
-                {view.braindance.active.keys.total}
-              </Button>
-            </Panel>
-          )}
+    <div className={styles.trackPane}>
+      {view.braindance.active && (
+        <div className={styles.trackBdCard}>
+          <div className={styles.trackBdInfo}>
+            <span className={styles.trackBdTag}>超梦调查中</span>
+            <strong>
+              {view.braindance.active.title}（{view.braindance.active.recorder}的录像）
+            </strong>
+            <small className={styles.dim}>
+              {view.braindance.active.ready
+                ? "关键线索找全了，可以下结论"
+                : `关键线索找到 ${view.braindance.active.keys.found}/${view.braindance.active.keys.total} 条`}
+            </small>
+          </div>
+          <Button small onClick={onBraindance}>
+            打开超梦编辑器
+          </Button>
         </div>
       )}
-      {part !== "todo" && (
-        <Panel as="section" title="委托" line="var(--cp-red)">
-          <JournalBody
-            view={view}
-            initialTab={offered && tracked.length === 0 ? "board" : "active"}
-            onAccept={onAccept}
-          />
-        </Panel>
+
+      {nothingActive && (
+        <p className={styles.trackQuietNote}>
+          手头眼下没有在办单子或约定；街头走动、回消息时谈妥的事会记到这里。
+        </p>
+      )}
+
+      {activeJobs.length > 0 && (
+        <section className={styles.trackSection}>
+          <h3 className={styles.trackMicroHead}>手头在办</h3>
+          <div className={styles.trackCleanList}>
+            {activeJobs.map((job) => {
+              const place =
+                job.location === null ? null : (placeNames.get(job.location) ?? job.location);
+              const metaTag = job.overdue
+                ? "已超期"
+                : job.dueIn !== null
+                  ? countdown(job.dueIn)
+                  : (job.kindLabel ?? (job.fixer ? `${job.fixer} 递话` : job.client));
+              const detailsLine = [
+                job.kindLabel,
+                place,
+                `委托方 ${job.client}`,
+                job.fixer ? `牵线 ${job.fixer}` : null,
+                job.reward > 0 ? `谈妥 ${job.reward.toLocaleString("en-US")} 欧元` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+
+              return (
+                <details
+                  key={job.id}
+                  className={styles.trackGigItem}
+                  data-overdue={job.overdue || undefined}
+                >
+                  <summary>
+                    <strong>{job.title}</strong>
+                    <span className={styles.trackGigMeta}>{metaTag}</span>
+                  </summary>
+                  <div className={styles.trackGigDetail}>
+                    {detailsLine && <p>{detailsLine}</p>}
+                    {job.due !== null && (
+                      <p>
+                        期限：{job.due}
+                        {job.dueIn !== null ? ` · ${countdown(job.dueIn)}` : ""}
+                      </p>
+                    )}
+                    {job.notes.length > 0 && (
+                      <ol className={styles.trackNotes}>
+                        {job.notes.map((note, i) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: 进展笔记按序追加
+                          <li key={i}>{note}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {otherActive.length > 0 && (
+        <section className={styles.trackSection}>
+          <h3 className={styles.trackMicroHead}>
+            {activeJobs.length > 0 ? "约定与进行中" : "正在进行"}
+          </h3>
+          <ul className={styles.trackCleanList}>
+            {otherActive.map((item) => (
+              <li
+                key={item.id}
+                className={styles.trackCleanRow}
+                data-kind={item.kind}
+                data-overdue={item.status === "overdue" || undefined}
+              >
+                <div className={styles.trackCleanTop}>
+                  <strong>{item.title}</strong>
+                  {item.dueLabel && (
+                    <time
+                      className={styles.trackCleanTime}
+                      data-overdue={item.status === "overdue" || undefined}
+                    >
+                      {item.dueIn !== null && item.status !== "overdue"
+                        ? `${item.dueLabel} · ${countdown(item.dueIn)}`
+                        : item.dueLabel}
+                    </time>
+                  )}
+                </div>
+                <div className={styles.trackCleanMeta}>
+                  <span>{item.sourceLabel}</span>
+                  {item.location && !item.progress?.includes(item.location) && (
+                    <span>{item.location}</span>
+                  )}
+                  {item.progress && <span>{item.progress}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
@@ -879,20 +995,39 @@ type MessagesTab = "dm" | "news";
 export function MessagesPage({
   view,
   onReply,
+  onMessageNpc,
+  onSendChat,
+  onReadThread,
+  chatSending,
+  pendingChat,
+  busy,
+  onLocatePlace,
+  onOpenRipperdoc,
+  onOpenShop,
   onNews,
   initialTab = "dm",
   hideTabs = false,
 }: {
   readonly view: View;
-  /** 回复一条：输入框进入回复状态；正在生成时不传，按钮不显示 */
-  readonly onReply?: ((id: number) => void) | undefined;
   /** 切到新闻栏：把新闻记成已读 */
   readonly onNews: () => void;
   readonly initialTab?: MessagesTab;
   /** 外面已经有页签（钉住的未读块）时不再出页内分栏 */
   readonly hideTabs?: boolean;
-}) {
+} & PhoneActions) {
   const [tab, setTab] = useState<MessagesTab>(initialTab);
+  const actions: PhoneActions = {
+    onReply,
+    onMessageNpc,
+    onSendChat,
+    onReadThread,
+    chatSending,
+    pendingChat,
+    busy,
+    onLocatePlace,
+    onOpenRipperdoc,
+    onOpenShop,
+  };
   return (
     <>
       {!hideTabs && (
@@ -910,13 +1045,13 @@ export function MessagesPage({
       )}
       {hideTabs ? (
         tab === "dm" ? (
-          <PhoneBody view={view} onReply={onReply} />
+          <PhoneBody view={view} {...actions} />
         ) : (
           <NewsBody view={view} />
         )
       ) : (
         <Panel as="section" title={tab === "dm" ? "私信" : "新闻"} line="var(--cp-cyan)" frame>
-          {tab === "dm" ? <PhoneBody view={view} onReply={onReply} /> : <NewsBody view={view} />}
+          {tab === "dm" ? <PhoneBody view={view} {...actions} /> : <NewsBody view={view} />}
         </Panel>
       )}
     </>
@@ -996,23 +1131,15 @@ export function ContactsPage({
   );
 }
 
-type DatabaseTab = "shards" | "memory" | "chronicle";
-
-/** 数据库：读过的芯片、记忆（场景摘要和共同记忆）、履历和收尾 */
-export function DatabasePage({
+/** 芯片阅读器：放入左下未读终端，左侧列表点开即标已读，右侧显示原文 */
+export function ShardsPanel({
   view,
   onReadShard,
-  onEdit,
-  onEnd,
 }: {
   readonly view: View;
   /** 打开一张没读过的芯片：记成已读 */
   readonly onReadShard: (id: number) => void;
-  /** 正在生成时是 undefined：只能看 */
-  readonly onEdit?: ((edit: MemoryEdit) => Promise<void>) | undefined;
-  readonly onEnd?: ((how: StoryEnd, epitaph: string | undefined) => Promise<void>) | undefined;
 }) {
-  const [tab, setTab] = useState<DatabaseTab>("shards");
   const shards = view.shards.list;
   const [picked, setPicked] = useState<number | null>(null);
   const current = shards.find((s) => s.id === picked) ?? null;
@@ -1022,65 +1149,50 @@ export function DatabasePage({
     if (!read) onReadShard(id);
   };
 
+  if (shards.length === 0) {
+    return (
+      <div className={styles.phoneEmpty}>
+        <p className={styles.dim}>还没拾获过数据芯片。</p>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <SubTabs<DatabaseTab>
-        tabs={[
-          ["shards", view.shards.unread > 0 ? `芯片 ${view.shards.unread}` : "芯片"],
-          ["memory", "记忆"],
-          ["chronicle", "履历"],
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-      {tab === "shards" &&
-        (shards.length === 0 ? (
-          <p className={styles.dim}>还没读过芯片。</p>
-        ) : (
-          <div className={neural.split}>
-            <Panel as="section" title="芯片" line="var(--cp-yellow)">
-              <ul className={styles.contactList} aria-label="芯片">
-                {shards.map((s) => (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      className={styles.contact}
-                      aria-pressed={s.id === current?.id}
-                      onClick={() => open(s.id, s.read)}
-                    >
-                      <span className={styles.contactName}>
-                        <b>{s.title}</b>
-                        <small className={styles.dim}>
-                          {s.kindLabel} · {s.at}
-                        </small>
-                      </span>
-                      {!s.read && <UnreadBadge>新</UnreadBadge>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-            {current && (
-              <Panel as="section" title={current.title} line="var(--cp-yellow)">
-                <p className={styles.dim}>
-                  {current.kindLabel}
-                  {current.from && ` · ${current.from}`} · {current.at}
-                </p>
-                <p className={styles.factionReason}>{current.text}</p>
-              </Panel>
-            )}
-          </div>
+    <div className={styles.dbSplit}>
+      <ul className={`${styles.contactList} ${styles.dbList}`} aria-label="芯片">
+        {shards.map((s) => (
+          <li key={s.id}>
+            <button
+              type="button"
+              className={styles.contact}
+              aria-pressed={s.id === current?.id}
+              onClick={() => open(s.id, s.read)}
+            >
+              <span className={styles.contactName}>
+                <b>{s.title}</b>
+                <small className={styles.dim}>
+                  {s.kindLabel} · {s.at}
+                </small>
+              </span>
+              {!s.read && <UnreadBadge>新</UnreadBadge>}
+            </button>
+          </li>
         ))}
-      {tab === "memory" && (
-        <Panel as="section" title="记忆" line="var(--cp-yellow)">
-          <MemoryBody view={view} onEdit={onEdit} />
-        </Panel>
-      )}
-      {tab === "chronicle" && (
-        <Panel as="section" title="履历" line="var(--cp-yellow)">
-          <ChronicleBody view={view} onEnd={onEnd} />
-        </Panel>
-      )}
-    </>
+      </ul>
+      <article className={styles.dbReader}>
+        {current ? (
+          <>
+            <h3 className={styles.dbReaderTitle}>{current.title}</h3>
+            <p className={styles.dim}>
+              {current.kindLabel}
+              {current.from && ` · ${current.from}`} · {current.at}
+            </p>
+            <p className={styles.factionReason}>{current.text}</p>
+          </>
+        ) : (
+          <p className={styles.dim}>从左侧选择一张芯片阅读原文。</p>
+        )}
+      </article>
+    </div>
   );
 }

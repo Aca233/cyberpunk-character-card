@@ -1,8 +1,7 @@
 import type { ViewContext } from "../../kernel/system";
-import { CharacterStateSchema } from "../character";
 import { NpcStateSchema } from "../npc";
 import { formatGameTime } from "../world";
-import { FACTION_RISK_BONUS, isOpen, JOB_STATUS_LABELS, maxRisk, riskCap } from "./apply";
+import { fixerBlocked, isOpen, JOB_STATUS_LABELS } from "./apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./schema";
 import { factionSide } from "./side";
 
@@ -13,32 +12,17 @@ export const JOBS_CLOSED_SHOWN = 5;
 export function jobsView({ world, data }: ViewContext) {
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc);
-  const character = CharacterStateSchema.parse(world.slices.character);
   return {
     fixers: Object.values(jobs.fixers).map((f) => {
       const affinity = npcs.npcs[f.id]?.affinity ?? 0;
-      const cap = riskCap(affinity, character.streetCred);
-      // 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）：和派单时一样算
       const side = factionSide(npcs.npcs[f.id]?.faction, data, world.slices.factions);
-      const bonus = side === undefined ? 0 : FACTION_RISK_BONUS[side.attitude];
-      if (side !== undefined && bonus === null) {
-        return {
-          id: f.id,
-          name: f.name,
-          affinity,
-          maxRisk: 0,
-          cappedBy: null,
-          capHint: `${side.name}和你结了仇，不派单`,
-        };
-      }
-      const max = Math.min(5, maxRisk(affinity, character.streetCred) + (bonus ?? 0));
+      const blocked = side !== undefined && fixerBlocked(side.attitude);
       return {
         id: f.id,
         name: f.name,
         affinity,
-        maxRisk: max,
-        cappedBy: max >= 5 ? null : cap.by,
-        capHint: max >= 5 ? null : cap.hint,
+        blocked,
+        blockReason: blocked && side ? `${side.name}和你结了仇，当前暂停派单` : null,
       };
     }),
     list: [

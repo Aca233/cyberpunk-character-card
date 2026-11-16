@@ -140,8 +140,8 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   feed?(ctx: ViewContext): readonly FeedItem[];
 }
 
-/** 消息的四个频道：消息（人和中间人）、新闻、警用频段、街头传闻 */
-export type FeedChannel = "messages" | "news" | "police" | "street";
+/** 消息的三个频道：消息（人和中间人）、新闻、街头传闻 */
+export type FeedChannel = "messages" | "news" | "street";
 
 /** 消息上挂的附件：委托卡、地点、人物；界面按 kind 跳转或接单 */
 export interface FeedAttachment {
@@ -156,7 +156,7 @@ export interface FeedItem {
   readonly id: string;
   readonly source: string;
   readonly channel: FeedChannel;
-  /** 谁发的或哪个台：人名、N54、NCPD 调度、街头 */
+  /** 谁发的或哪个台：人名、N54、街头 */
   readonly from: string;
   readonly text: string;
   /** 游戏时间（分钟）和写法 */
@@ -720,7 +720,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
           ids.add(item.id);
           result.push({
             ...item,
-            notify: item.channel === "messages" || (item.channel === "police" && item.notify),
+            notify: item.channel === "messages",
           });
         }
       }

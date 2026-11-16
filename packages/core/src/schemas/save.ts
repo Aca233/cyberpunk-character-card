@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
 import { LEGENDS_SEEDED, LegendNoteSchema } from "../systems/chronicle/schema";
-import { DifficultySchema } from "../systems/dice/schema";
 import { ToleranceSchema } from "../systems/humanity/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
 import { StartKitSchema } from "./board";
@@ -37,7 +36,6 @@ export type StartAcquaintance = BoardStart["acquaintances"][number];
 export const SaveMetaSchema = z.object({
   title: z.string().min(1).max(80),
   characterId: z.string().min(1),
-  difficulty: DifficultySchema,
   createdAt: z.string().min(1),
   /** 开场的游戏时间（从 1970-01-01 00:00 起的分钟数） */
   startTime: z.number().int(),

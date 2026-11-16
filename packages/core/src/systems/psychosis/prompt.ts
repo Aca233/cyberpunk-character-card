@@ -1,7 +1,7 @@
 import type { RuleModule } from "../../kernel/system";
 import type { PsychosisState } from "./schema";
 
-const WORDS = /压制剂|吃药|药片|戒断/;
+const WORDS = /压制剂|抑制剂|阻断剂|吃药|打药|注射|药片|戒断/;
 
 export const suppressantRules: RuleModule<PsychosisState> = {
   id: "suppressant",
@@ -9,5 +9,10 @@ export const suppressantRules: RuleModule<PsychosisState> = {
   commands: ["suppressant"],
   when: (state, input) =>
     input.mode !== "ooc" && (state.doses.length > 0 || WORDS.test(input.text)),
-  text: `- 角色吞下压制剂写 suppressant，背包里要有；药效期内药力能压住神经震颤与幻觉冲动。压制剂只缓解症状，不恢复人性上限；吃多了会耐受、依赖，戒断时烦躁、手抖、失眠，情绪与精细动作明显吃力。`,
+  judge: `- 角色当场吞服或注射神经压制剂时写 suppressant（需确认背包里确实有货，没有就写没摸到）。
+- 若【当前状态】写明压制剂正在起效：感官失真与手抖已被暂时摁住，人性 > 0 时挡住一般高压发作；人性归零时只挡住轻微不适，重大创伤仍可能突破。
+- 若处于戒断期：冷汗、指尖颤抖、干渴与暴躁会实质拖累精细操作与耐心，直至补一针或硬熬过去。`,
+  narrate: `- 压制剂只暂时封住神经噪点，绝不能写成“喝完/打完恢复了人性”；背包里没有时就写空药盒或摸了个空。
+- 针剂推入颈侧接口时写出那股刺骨冰凉顺着血管蹿上耳后、把颅内杂音硬生生切断的麻木清醒感；戒断期则写出指尖压不住的细颤、嘴里发苦、皮肤底下发痒像爬过电流。`,
+  text: `- 角色吞服或注射神经压制剂写 suppressant，背包里要有；药效内压住神经颤抖与常规发作（7 天内 ≥3 次耐药导致药效减半，14 天内 ≥5 次形成依赖，停药一天即戒断）。压制剂只缓解症状，绝不恢复人性或人性上限。`,
 };

@@ -23,7 +23,10 @@ import {
   type View,
 } from "./view";
 
-type Live = Pick<ReturnType<typeof useStory.getState>, "phase" | "text" | "rolled" | "pending">;
+type Live = Pick<
+  ReturnType<typeof useStory.getState>,
+  "phase" | "text" | "rolled" | "boost" | "pending"
+>;
 
 function paragraphs(text: string): string[] {
   return text
@@ -108,13 +111,6 @@ function Paragraph({
   );
 }
 
-const VOICE_LABELS = {
-  past: "过往",
-  chrome: "义体",
-  humanity: "人性",
-  iconic: "不朽武器",
-} as const;
-
 function TurnBlock({
   turn,
   saveId,
@@ -136,13 +132,22 @@ function TurnBlock({
   const prefs = useNarrativePrefs();
   const [rewriting, setRewriting] = useState(false);
   return (
-    <article className={styles.turn}>
+    <article className={styles.turn} data-boost={turn.sandevistan || undefined}>
       {prefs.sceneTitles && turn.sceneTitle && (
         <p className={styles.sceneTitle}>{turn.sceneTitle}</p>
       )}
       {turn.input.text.trim() !== "" && (
-        <p className={styles.input} data-mode={turn.input.mode}>
+        <p
+          className={styles.input}
+          data-mode={turn.input.mode}
+          data-boost={turn.sandevistan || undefined}
+        >
           {formatInput(turn.input)}
+        </p>
+      )}
+      {turn.sandevistan && (
+        <p className={styles.boostLine}>
+          <span>{"SANDEVISTAN // 斯安威斯坦超频"}</span>
         </p>
       )}
       {turn.dice.map((d, i) => (
@@ -152,6 +157,12 @@ function TurnBlock({
           {d.purpose} · d{d.sides} → {d.faces.join(" / ")}
         </p>
       ))}
+      {turn.episode && (
+        <p className={styles.episode} data-severity={turn.episode.severity}>
+          <strong>{turn.episode.severity === "severe" ? "// 神经突触过载" : "// 神经飘移"}</strong>{" "}
+          · {turn.episode.trigger}
+        </p>
+      )}
       {turn.lostControl && (
         <p className={styles.lostControl}>
           <strong>[失控]</strong> 你想：{turn.lostControl.intent}；实际：{turn.lostControl.actual}
@@ -173,17 +184,6 @@ function TurnBlock({
           <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
         ))
       )}
-      {turn.voices.map((v, i) => (
-        <p
-          // biome-ignore lint/suspicious/noArrayIndexKey: 同一轮的内心声音按写下的顺序排，不会重排
-          key={`${turn.seq}-v${i}`}
-          className={styles.voice}
-          data-from={v.from}
-          title={`内心声音 · ${VOICE_LABELS[v.from]}`}
-        >
-          {v.text}
-        </p>
-      ))}
       <footer className={styles.turnMeta}>
         {turn.unsettled && (
           <span className={styles.unsettled} title={turn.unsettled}>
@@ -267,6 +267,9 @@ export function StoryLog({
   });
 
   const generating = live.phase !== "idle";
+  const liveBoosting =
+    live.boost !== null ||
+    (live.pending?.kind === "input" && live.pending.input.sandevistan === true);
   const earlier = view.totalTurns - view.turns.length;
   const speakers = speakersOf(view);
 
@@ -303,14 +306,23 @@ export function StoryLog({
         {!generating && view.offers.read && <p className={styles.read}>{view.offers.read}</p>}
 
         {generating && (
-          <article className={styles.turn} data-live>
+          <article className={styles.turn} data-live data-boost={liveBoosting || undefined}>
             {live.pending?.kind === "input" && (
-              <p className={styles.input} data-mode={live.pending.input.mode}>
+              <p
+                className={styles.input}
+                data-mode={live.pending.input.mode}
+                data-boost={liveBoosting || undefined}
+              >
                 {formatInput(live.pending.input)}
               </p>
             )}
             {live.pending?.kind === "confirm" && (
               <p className={styles.input}>检定：{live.pending.label}</p>
+            )}
+            {liveBoosting && (
+              <p className={styles.boostLine}>
+                <span>{`SANDEVISTAN // ${live.boost?.name ?? "斯安威斯坦"}超频`}</span>
+              </p>
             )}
             {live.rolled && (
               <p
@@ -387,7 +399,10 @@ function ContextLink({ saveId, seq }: { readonly saveId: string; readonly seq: n
   const { open } = useSpoilerView();
   if (!open) return null;
   return (
-    <Link to={`/settings?tab=context&save=${encodeURIComponent(saveId)}&seq=${seq}`}>
+    <Link
+      to={`/settings?tab=context&save=${encodeURIComponent(saveId)}&seq=${seq}`}
+      state={{ from: `/play/${encodeURIComponent(saveId)}` }}
+    >
       #{seq} 上下文
     </Link>
   );

@@ -1,6 +1,6 @@
 import type { RuleModule } from "../../kernel/system";
 import { formatGameTime } from "../world";
-import { FACTION_RISK_BONUS, type FixerCard, isOpen, JOB_STATUS_LABELS, maxRisk } from "./apply";
+import { type FixerCard, fixerBlocked, isOpen, JOB_STATUS_LABELS } from "./apply";
 import { JOB_KIND_LABELS, type Job, type JobsState, JobTemplateCatalogSchema } from "./schema";
 
 /** 已结束的委托最多列这么多单，最近的优先 */
@@ -33,14 +33,14 @@ export const jobsRules: RuleModule<JobsState> = {
 - 中间人只会派他眼下信得过玩家接的活（【委托】里写着各人的口风）。`,
   narrate: `- 委托是故事的燃料。隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
 - 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门；还没到托付硬单的分量时，就让中间人干脆地说“这活还轮不到你扛”。
-- 玩家在委托板上直接接下的单子已经算接下：找个自然的时机让中间人或雇主联系玩家角色，交代细节。
+- 中间人派的或熟人托的活都在私信或正文对话里自然提出；玩家口头或回消息答应下来才算接下（写 jobAccept），没有“委托板”这种东西。
 - 这单了结时正文写清结局和到手多少；讨价还价、被克扣、顺手多拿都要说得通。
 - 失败和坏选择要有真实的后果；被放走的人、被得罪的雇主以后可能回来。`,
   text: `- 委托是故事的燃料。【委托】里列着挂出和接下的单子、中间人和他们眼下对玩家角色的交情与口风；隐藏的转折只有你知道，到合适的时候在正文里揭开，不直接说给玩家。
 - 新单子由人物在正文里给出：中间人打电话、熟人求助、仇家找上门。挂出时写 jobOffer，玩家角色在正文里答应了再写 jobAccept；中间人只派符合他当前信任分寸的活，分量过重的活就让他直接拒绝。
 - 中间人不只【委托】里列的这几位：有人物卡的人都能当中间人派单，jobOffer 的 fixer 写他的 id，代码第一次派单时登记。剧情里冒出新的中间人，同一轮先写 npc 给他建卡（role 写清是哪一带的中间人），再写 jobOffer；刚打交道的新中间人只会先丢些低门槛的试水单。
 - 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能把风险拆解掉。
-- 玩家也能在委托板上直接接单：进展笔记里写着“在委托板上接下”的单子已经算接下，不要再写 jobAccept；找个自然的时机让中间人或雇主联系玩家角色，交代细节。
+- 玩家在私信或对话里答应接单时写 jobAccept 才算接下；没有“委托板”。找个自然的时机或由中间人/雇主直接交代细节。
 - 有实质进展、玩家选了某条路、转折被揭开时写 jobNote。
 - 这单在正文里了结时写 jobEnd，结局按实际发生的事定。讨价还价、被克扣、顺手多拿都写进 paid，要在正文里说得通；到手的钱由代码记账。
 - 失败和坏选择要有真实的后果，但不写脱离局势的空降惩罚；被放走的人、被得罪的雇主以后可能回来。`,
@@ -69,9 +69,9 @@ function jobLine(job: Job, state: JobsState): string {
 /** 给模型看的【委托】：中间人、挂着和接下的单子，加最近结束的几单 */
 export function jobsSection(
   state: JobsState,
-  streetCred: number,
+  _streetCred: number,
   affinityOf: (id: string) => number,
-  /** 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）；不传时不算 */
+  /** 派单人所属势力的态度；不传时不算 */
   sideOf: (id: string) => FixerCard["faction"] = () => undefined,
 ): string | undefined {
   const fixers = Object.values(state.fixers);
@@ -79,13 +79,11 @@ export function jobsSection(
   const lines = fixers.map((f) => {
     const affinity = affinityOf(f.id);
     const side = sideOf(f.id);
-    const bonus = side === undefined ? 0 : FACTION_RISK_BONUS[side.attitude];
-    if (side !== undefined && bonus === null) {
+    if (side !== undefined && fixerBlocked(side.attitude)) {
       return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单`;
     }
-    const max = Math.min(5, maxRisk(affinity, streetCred) + (bonus ?? 0));
-    const scope = JOB_RISK_LABELS[max] ?? "各类委托";
-    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，眼下顶多肯派到「${scope}」为止${bonus ? `（${side?.name}照应，门路宽一档）` : ""}`;
+    const friendly = side && (side.attitude === "friendly" || side.attitude === "family");
+    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}${friendly ? `（所属${side.name}待玩家友善）` : ""}`;
   });
   const open = state.jobs.filter(isOpen);
   if (open.length === 0) lines.push("- 眼下没有挂着或接下的委托");

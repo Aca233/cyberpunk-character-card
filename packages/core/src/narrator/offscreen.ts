@@ -3,7 +3,7 @@ import type { LlmMessage } from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
-import { CharacterStateSchema, CRED_SIZES } from "../systems/character";
+import { CRED_SIZES } from "../systems/character";
 import {
   BulletinFieldsSchema,
   CityEventFieldsSchema,
@@ -19,13 +19,7 @@ import {
   rumorSection,
 } from "../systems/city";
 import { agendaCatalog } from "../systems/factions";
-import {
-  JOB_RISK_LABELS,
-  JobOfferSchema,
-  JobsStateSchema,
-  jobTemplateSection,
-  maxRisk,
-} from "../systems/jobs";
+import { JobOfferSchema, JobsStateSchema, jobTemplateSection } from "../systems/jobs";
 import {
   attitudeLabel,
   NO_FACTION,
@@ -42,7 +36,6 @@ import {
   MESSAGES_PER_TURN,
   PhoneStateSchema,
 } from "../systems/phone";
-import { inCrisis, PsychosisStateSchema } from "../systems/psychosis";
 import { SquadStateSchema } from "../systems/squad";
 import {
   THREADS_MAX,
@@ -179,7 +172,7 @@ export function lifePicks(world: WorldState, present: ReadonlySet<string> = new 
 
 /**
  * 场外推演里中间人主动派单（用户定的，2026-10-30："能不能接到世界演变里"）：
- * 一次最多派这么多单；挂着没接、没过期的委托到 OFFERED_CAP 单就不再派，免得委托板堆满
+ * 一次最多派这么多单；挂着没接、没过期的委托到 OFFERED_CAP 单就不再派，免得消息里同时堆太多活
  */
 export const OFFSCREEN_JOBS = 1;
 export const OFFERED_CAP = 3;
@@ -187,27 +180,14 @@ export const OFFERED_CAP = 3;
 export interface OffscreenFixer {
   readonly id: string;
   readonly name: string;
-  /** 按街头声望和他的好感，现在最多派几星 */
-  readonly max: number;
 }
 
-/** 场外推演这次能不能派新单：危机章节里、或者挂着没接的委托已经够多时不派 */
+/** 场外推演这次能不能派新单：挂着没接的委托已经够多时不派 */
 export function offscreenJobsOpen(world: WorldState): boolean {
-  if (inCrisis(PsychosisStateSchema.parse(world.slices.psychosis ?? {}))) return false;
   const offered = JobsStateSchema.parse(world.slices.jobs).jobs.filter(
     (j) => j.status === "offered" && (j.due === null || j.due > world.time),
   ).length;
   return offered < OFFERED_CAP;
-}
-
-/**
- * 不是中间人的熟人在场外发消息求玩家帮忙（用户定的，2026-10-30："npc发消息也接入"）：
- * 只有【能联系玩家的人】里挑出来的人能求；星级上限和中间人一样按街头声望和他的好感算
- */
-export function requestCap(world: WorldState, id: string): number {
-  const npc = NpcStateSchema.parse(world.slices.npc).npcs[id];
-  const cred = CharacterStateSchema.parse(world.slices.character).streetCred;
-  return maxRisk(npc?.affinity ?? 0, cred);
 }
 
 /**
@@ -222,10 +202,9 @@ export function offscreenFixers(
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
   const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
-  const cred = CharacterStateSchema.parse(world.slices.character).streetCred;
   return Object.values(jobs.fixers)
     .filter((f) => npcs[f.id]?.alive !== false && !present.has(f.id) && !squad.has(f.id))
-    .map((f) => ({ id: f.id, name: f.name, max: maxRisk(npcs[f.id]?.affinity ?? 0, cred) }));
+    .map((f) => ({ id: f.id, name: f.name }));
 }
 
 /**
@@ -253,8 +232,8 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 开新事：单子有空位、又有前因时才写 thread.open：kind 写 faction（owner 写势力 id，seed 可以写【势力打算素材】里的种子 id）、nemesis（owner 写宿敌的人物 id）或 concern（owner 写人物 id，seed 写他的心事 id）；want 写他想要什么，stage 写眼下走到哪，days 写第一次几天后推。宿敌刚冒出来时代码会自己开一件，不用再开。
 - 素材只是素材：手段可以从「可能的法子」里挑，也可以按局面换、半路改主意、被对头或别的势力截胡；接着上一步写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。宿敌的一步只写他在屏幕外做了什么（打听玩家下落、找玩家在乎的人麻烦、截玩家的单子），不让他亲自和玩家见面；心事的原作结局只是没人插手时的参考，玩家不是 V。
 - 地盘：只有势力的事能动地盘，一步最多一个城区（照种子开的只在「能争的城区」里），改的是这个势力或它的对头；不动地盘最常见，真打下来、真丢了才写 turf，不动写 null。
-- 中间人派单：【能派单的中间人】里的人这段时间可以主动找玩家派活，一般一次 ${OFFSCREEN_JOBS} 单。活要从已有的东西里长出来：城里的动静、势力动向、委托里的对手、玩家做完事留下的余波、这个中间人自己的近况；没有说得过去的生意就不派。派的话在 jobs 里写这一单，同时在 messages 里由同一个中间人发一条派单消息、job 写这一单的 id（忘了写消息代码会补一条干巴巴的，最好自己写）。委托风险（risk 1–5）不超过名单上他肯托的分量上限（超了代码压到上限）；期限晚于现在；location 写【当前状态】【地点】里已有的地点 id，没有就写中文地名或不写，不新建地点；client 是真正的雇主，中间人不肯说就写「身份不明」；twist 约三成不写。没有【能派单的中间人】、也没有人标「可以托事」时 jobs 写空数组。
-- 熟人托事：【能联系玩家的人】里标了「可以托事」的人，也可以发消息托玩家办件事，和中间人派单共用这一单的名额：jobs 里这一单不写 fixer，由他本人发的那条消息的 job 写这一单的 id；risk 不超过他后面标的可托分量上限。托的事不一定是真心的：可以是真的求救、谈一笔交易、递一个活，也可以是借口、圈套、拿玩家当枪使、把玩家引到某个地方（交恶怀恨、秘密里有图谋、近况里正走投无路的人更可能这样）。消息、title、client 都照他对玩家说的写（client 写他自称的雇主，一般就是他自己或他要护着的人），真相和他真正的打算写进 twist，只有你知道；真心的托事 twist 可以不写。要接着他的近况、心事、挂着的人情或仇、他的诉求和秘密写，说得过去才托；只是想闲聊的就发闲聊消息，不硬塞委托。`;
+- 中间人派单：【能派单的中间人】里的人这段时间可以主动找玩家派活，一般一次 ${OFFSCREEN_JOBS} 单。活要从已有的东西里长出来：城里的动静、势力动向、委托里的对手、玩家做完事留下的余波、这个中间人自己的近况；没有说得过去的生意就不派。派的话在 jobs 里写这一单，同时在 messages 里由同一个中间人发一条派单消息、job 写这一单的 id（忘了写消息代码会补一条干巴巴的，最好自己写）。按中间人的口风、和玩家的交情与当前局面定这一单的分量（risk 1–5 仅给后台参考，不按声望设星级卡死）；期限晚于现在；location 写【当前状态】【地点】里已有的地点 id，没有就写中文地名或不写，不新建地点；client 是真正的雇主，中间人不肯说就写「身份不明」；twist 约三成不写。没有【能派单的中间人】、也没有人标「可以托事」时 jobs 写空数组。
+- 熟人托事：【能联系玩家的人】里标了「可以托事」的人，也可以发消息托玩家办件事，和中间人派单共用这一单的名额：jobs 里这一单不写 fixer，由他本人发的那条消息的 job 写这一单的 id。托的事不一定是真心的：可以是真的求救、谈一笔交易、递一个活，也可以是借口、圈套、拿玩家当枪使、把玩家引到某个地方（交恶怀恨、秘密里有图谋、近况里正走投无路的人更可能这样）。消息、title、client 都照他对玩家说的写（client 写他自称的雇主，一般就是他自己或他要护着的人），真相和他真正的打算写进 twist，只有你知道；真心的托事 twist 可以不写。要接着他的近况、心事、挂着的人情或仇、他的诉求和秘密写，说得过去才托；只是想闲聊的就发闲聊消息，不硬塞委托。`;
 
 const OFFSCREEN_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块：
@@ -351,15 +330,11 @@ export function buildOffscreenPrompt(
     .filter((line): line is string => line !== undefined)
     .join("\n");
   const rumors = rumorSection(city);
-  // 熟人托事：谁来托由主持人定，代码只给见过的活人标星级上限（用户 2026-11-01 定的「全改」第 4 步）。
-  // 托的事不一定是真心求助，也可以是借口、圈套、当枪使（用户定的，2026-10-30："不一定是真的求助信息啊"）
-  const askers = new Map(
-    offscreenJobsOpen(world)
-      ? contactable(world, present).map((n) => [n.id, requestCap(world, n.id)] as const)
-      : [],
-  );
+  const canAsk = offscreenJobsOpen(world);
   const templates =
-    dispatch.length > 0 || askers.size > 0 ? jobTemplateSection(extras.data ?? {}) : undefined;
+    dispatch.length > 0 || (canAsk && contactable(world, present).length > 0)
+      ? jobTemplateSection(extras.data ?? {})
+      : undefined;
   const squash = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
     .filter((n) => n.alive && n.timeline.length >= TIMELINE_SQUASH)
     .slice(0, 3);
@@ -376,7 +351,7 @@ export function buildOffscreenPrompt(
       // 中间人不再单列一节（用户 2026-11-02："都是npc"）：他们照普通人物进【人物】和【能联系玩家的人】，派单另看【能派单的中间人】
       ...(dispatch.length > 0
         ? [
-            `【能派单的中间人】（这次最多派 ${OFFSCREEN_JOBS} 单）\n${dispatch.map((f) => `- ${f.id}｜${f.name}：最多派「${JOB_RISK_LABELS[f.max] ?? f.max}」（risk ≤ ${f.max}）`).join("\n")}`,
+            `【能派单的中间人】（这次最多派 ${OFFSCREEN_JOBS} 单）\n${dispatch.map((f) => `- ${f.id}｜${f.name}`).join("\n")}`,
             ...(templates ? [templates] : []),
           ]
         : []),
@@ -384,10 +359,9 @@ export function buildOffscreenPrompt(
       ...(rumors ? [`【街头传闻】\n${rumors}`] : []),
       `【能联系玩家的人】（谁发、发不发由你看局面定）\n${
         contactable(world, present)
-          .map((n) => {
-            const cap = askers.get(n.id);
-            return `- ${n.id}｜${n.name}：态度「${attitudeLabel(n)}」${cap === undefined ? "" : `；可以托事，最多「${JOB_RISK_LABELS[cap] ?? cap}」（risk ≤ ${cap}）`}`;
-          })
+          .map(
+            (n) => `- ${n.id}｜${n.name}：态度「${attitudeLabel(n)}」${canAsk ? "；可以托事" : ""}`,
+          )
           .join("\n") || "（这次没有：人物不发消息，【能派单的中间人】派单照常可以发）"
       }`,
       ...(lives.length > 0
@@ -735,7 +709,7 @@ export function readOffscreen(
     const { asker: _asker, ...job } = parsed.data;
     const fixer = job.fixer === undefined ? undefined : dispatch.get(job.fixer);
     const problem = !jobsOpen
-      ? "这次不能派新单（危机章节里，或者挂着没接的委托已经够多）"
+      ? "这次不能派新单（挂着没接的委托已经够多）"
       : existing.has(job.id) || offers.has(job.id)
         ? "编号和已有委托重复"
         : job.fixer !== undefined && !fixer
@@ -752,13 +726,6 @@ export function readOffscreen(
     if (offers.size >= soft(OFFSCREEN_JOBS)) {
       notes.push(`场外推演：派单和求助写了 ${soft(OFFSCREEN_JOBS)} 单以上，后面的不收`);
       break;
-    }
-    // 风险规模超了压到上限，不整单作废（「全改」第 2 步）；熟人托事的上限要等知道是谁发的消息再压
-    if (fixer && job.risk > fixer.max) {
-      notes.push(
-        `场外推演：${fixer.name}现在最多肯托 ${JOB_RISK_LABELS[fixer.max] ?? fixer.max}（risk ${fixer.max}），「${job.title}」写了 risk ${job.risk}，压到 ${fixer.max}`,
-      );
-      job.risk = fixer.max;
     }
     offers.set(job.id, {
       fixer: fixer?.id ?? null,
@@ -811,17 +778,10 @@ export function readOffscreen(
     } else if (offer && job !== undefined) {
       delivered.add(job);
       if (offer.fixer === null) {
-        const cap = requestCap(world, parsed.data.from);
-        if (offer.risk > cap) {
-          notes.push(
-            `场外推演：${npc?.name ?? parsed.data.from}现在最多托 ${JOB_RISK_LABELS[cap] ?? cap}（risk ${cap}）的忙，「${offer.title}」写了 risk ${offer.risk}，压到 ${cap}`,
-          );
-        }
         // 托事人就是发这条消息的人，结束时按结局改他的好感（用户 2026-10-31 选的「托事影响好感」）
         offer.command = {
           ...offer.command,
           asker: parsed.data.from,
-          ...(offer.risk > cap ? { risk: cap } : {}),
         };
       }
     }

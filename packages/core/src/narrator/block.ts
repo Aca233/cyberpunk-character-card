@@ -37,25 +37,6 @@ export const ChoiceProposalSchema = ChoiceBaseSchema;
 
 export const MAX_CHOICES = 5;
 
-/** 内心声音：过往和出身、义体、人性、武器栏里的不朽武器四种来源 */
-export const VoiceSchema = z.object({
-  from: z
-    .enum(["past", "chrome", "humanity", "iconic"])
-    .describe("past 过往和出身，chrome 义体，humanity 人性，iconic 武器栏里的不朽武器"),
-  text: z.string().trim().min(1).max(60).describe("一句脑子里冒出来的念头"),
-});
-export type Voice = z.infer<typeof VoiceSchema>;
-
-export const MAX_VOICES = 2;
-
-/** 存档里的内心声音按 schema 读，格式不对的跳过 */
-export function readVoices(raw: readonly unknown[] | undefined): Voice[] {
-  return (raw ?? []).flatMap((v) => {
-    const parsed = VoiceSchema.safeParse(v);
-    return parsed.success ? [parsed.data] : [];
-  });
-}
-
 /** ④ 抽取的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
 export const ExtractDocSchema = z.object({
   changes: z
@@ -64,10 +45,6 @@ export const ExtractDocSchema = z.object({
   choices: z
     .array(ChoiceProposalSchema)
     .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
-  voices: z
-    .array(VoiceSchema)
-    .optional()
-    .describe(`内心声音，只在关键时刻写，最多 ${MAX_VOICES} 条；平常不写`),
   messages: z
     .array(IncomingMessageSchema)
     .optional()
@@ -77,7 +54,7 @@ export const ExtractDocSchema = z.object({
   clutch: z
     .boolean()
     .optional()
-    .describe("正文停在生死瞬间时写 true：下一轮玩家可以开斯安威斯坦；一场战斗最多一两次"),
+    .describe("正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；一场战斗最多一两次"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
   dropped: z
@@ -89,7 +66,6 @@ export const ExtractDocSchema = z.object({
 const ExtractShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
   changes: z.array(z.unknown()).optional(),
-  voices: z.array(z.unknown()).optional().catch(undefined),
   messages: z.array(z.unknown()).optional().catch(undefined),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),

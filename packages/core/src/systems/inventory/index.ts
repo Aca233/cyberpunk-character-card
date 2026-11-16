@@ -7,14 +7,12 @@ import {
   applyOutfit,
   applyParts,
   applyTrade,
-  dismantle,
   itemCatalog,
   markSold,
   recharge,
   shopHere,
   spend,
   stashMove,
-  tune,
 } from "./apply";
 import { inventoryEvents } from "./events";
 import { inventoryInteractions } from "./interactions";
@@ -86,10 +84,6 @@ export const inventory = defineSystem<
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
       case "parts":
         return applyParts(draft, command);
-      case "inventory.dismantle":
-        return dismantle(draft, command.id, itemCatalog(ctx.data));
-      case "inventory.tune":
-        return tune(draft, command.id, command.tech, itemCatalog(ctx.data));
     }
   },
   on: {

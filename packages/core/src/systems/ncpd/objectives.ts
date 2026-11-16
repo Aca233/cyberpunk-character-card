@@ -14,7 +14,7 @@ export function ncpdObjectives({ world, data }: ViewContext): readonly Objective
     location: a.location,
     due: formatGameTime(a.expiresAt),
     dueIn: a.expiresAt - world.time,
-    progress: `${places.get(a.location)?.name ?? a.location}（${a.district}），${"★".repeat(a.risk)}，赏金 ${a.reward} 欧元`,
+    progress: `${places.get(a.location)?.name ?? a.location}（${a.district}），赏金 ${a.reward} 欧元`,
     status: "offered",
   }));
 }

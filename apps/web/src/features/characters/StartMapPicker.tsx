@@ -63,12 +63,14 @@ function overlaps(a: Box, list: readonly Box[]): boolean {
 export function StartMapPicker({
   value,
   defaultStart = DEFAULT_START,
+  automatic = false,
   onChange,
 }: {
   /** 选中的锚点 id */
   readonly value: string;
   /** 出身对应的默认开局锚点 id */
   readonly defaultStart?: string;
+  readonly automatic?: boolean;
   readonly onChange: (id: string) => void;
 }) {
   const tiles = useMapTiles();
@@ -195,12 +197,15 @@ export function StartMapPicker({
         />
         <Button
           small
-          disabled={!resetAnchor || value === resetAnchor.id}
+          disabled={!resetAnchor || automatic}
           onClick={() => {
-            if (resetAnchor) choose(resetAnchor, true);
+            if (resetAnchor) {
+              onChange("");
+              lookAt(resetAnchor.x, resetAnchor.y, POI_ZOOM);
+            }
           }}
         >
-          回到{resetAnchor?.name ?? "出身起点"}
+          {automatic ? "已跟随出身" : "跟随出身"} · {resetAnchor?.name ?? "出身起点"}
         </Button>
       </div>
       {query.trim() !== "" && (

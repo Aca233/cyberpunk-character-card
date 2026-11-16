@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, type Difficulty, type SavedLegend } from "../../api/client";
-import { DIFFICULTY_LABELS } from "../../labels";
+import { api, type SavedLegend } from "../../api/client";
 import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
@@ -23,7 +22,6 @@ function LegendDetail({
   readonly legend: SavedLegend;
   readonly onOpen: () => void;
 }) {
-  const difficulty = DIFFICULTY_LABELS[legend.difficulty as Difficulty] ?? legend.difficulty;
   return (
     <section className={styles.legendDetail} aria-label={`${legend.name}的履历`}>
       <span
@@ -31,29 +29,43 @@ function LegendDetail({
         style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
         aria-hidden
       />
-      <header>
-        <b>{legend.name}</b>
-        <small>
-          {legend.cardLabel} · {legend.endingLabel}
-        </small>
+      <header className={styles.legendHead}>
+        <div>
+          <b>{legend.name}</b>
+          <small>
+            {legend.cardLabel} · {legend.endingLabel}
+          </small>
+        </div>
+        <Button primary onClick={onOpen}>
+          回看「{legend.title}」
+        </Button>
       </header>
-      {legend.brief && <p>{legend.brief}</p>}
-      {legend.epitaph && <p className={styles.legendEpitaph}>「{legend.epitaph}」</p>}
+      {legend.brief && <p className={styles.legendBrief}>{legend.brief}</p>}
+      {legend.epitaph && (
+        <div className={styles.legendEpitaphBox}>
+          <CellFrame />
+          <p className={styles.legendEpitaph}>「{legend.epitaph}」</p>
+        </div>
+      )}
       <dl className={styles.legendFacts}>
-        <dt>结局</dt>
-        <dd>
-          {legend.endingLabel} · {legend.when}
-        </dd>
-        <dt>在夜之城</dt>
-        <dd>{legend.days} 天</dd>
-        <dt>街头声望</dt>
-        <dd>
-          {legend.streetCred} 级 · {legend.credTier}
-        </dd>
-        <dt>做成的委托</dt>
-        <dd>{legend.jobsDone} 单</dd>
-        <dt>难度</dt>
-        <dd>{difficulty}</dd>
+        <div className={styles.legendFactCard}>
+          <dt>结局</dt>
+          <dd>
+            {legend.endingLabel} · {legend.when}
+          </dd>
+        </div>
+        <div className={styles.legendFactCard}>
+          <dt>在夜之城</dt>
+          <dd className="num">{legend.days} 天</dd>
+        </div>
+        <div className={styles.legendFactCard}>
+          <dt>街头名声</dt>
+          <dd>{legend.credTier}</dd>
+        </div>
+        <div className={styles.legendFactCard}>
+          <dt>做成的委托</dt>
+          <dd className="num">{legend.jobsDone} 单</dd>
+        </div>
       </dl>
       {legend.chronicle.length > 0 && (
         <ul className={styles.legendChronicle}>
@@ -68,7 +80,6 @@ function LegendDetail({
           ))}
         </ul>
       )}
-      <Button onClick={onOpen}>回看「{legend.title}」</Button>
     </section>
   );
 }

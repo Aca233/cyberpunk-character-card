@@ -7,16 +7,18 @@ import { LOCAL_MODE } from "../../api/transport";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
-import { layerOpen } from "../../ui/layers";
+import { layerOpen, useLayer } from "../../ui/layers";
+import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
-import type { StoryEnd } from "./ChroniclePanel";
+import { ChronicleBody, EndStoryModal } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
 import {
   Banner,
   BioMonitor,
   CornerSide,
+  HoloCall,
   PinTabs,
   Present,
   Track,
@@ -29,17 +31,18 @@ import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { InputBar } from "./InputBar";
 import { MapBody } from "./MapPanel";
+import { MemoryModal } from "./MemoryPanel";
 import {
   CharacterPage,
   CyberwarePage,
-  DatabasePage,
   InventoryPage,
   JournalPage,
   MessagesPage,
+  ShardsPanel,
 } from "./NeuralPages";
-import { PoliceBody } from "./NewsPanel";
 import { type NoteEntry, NotesPanel } from "./NotesPanel";
 import neuralStyles from "./neural.module.css";
+import type { PhoneSendResult } from "./Phone";
 import { Profile } from "./Profile";
 import { type Expand, peekOnTop } from "./peek";
 import { Ripperdoc } from "./Ripperdoc";
@@ -50,26 +53,35 @@ import {
   SettlementCard,
 } from "./Settlement";
 import { Shop } from "./Shop";
-import { StashBody, stashHere } from "./StashPanel";
 import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
 import { diffViews, type Speaker, type Toast, type View } from "./view";
 
-/** 钉住的追踪块、未读块里的页签 */
-type TrackTab = "todo" | "jobs" | "database";
-type UnreadTab = "messages" | "news" | "police";
-/** 不再开全屏神经界面（第十二节第 10 条）：物品栏进 H 武器块，义体进 A 生物监测块；
+/** 钉住的未读块、生物监测块里的页签 */
+type UnreadTab = "messages" | "news" | "shards";
+/** 不再开全屏神经界面（第十二节第 10 条）：物品栏进 H 武器块，义体与履历进 A 生物监测块；
  * 物品栏精简（用户定的方案 A）：制作页签去掉，武器块只剩物品栏 */
 type GearTab = "inventory";
-type BioTab = "character" | "cyberware";
+type BioTab = "character" | "cyberware" | "chronicle";
 
 function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
     (target.isContentEditable || target.closest("input, textarea, select") !== null)
   );
+}
+
+/** 人性干扰的强度：0 没有，1 轻度失真，2 边缘干扰，3 临界/发作/戒断高危；压制剂压住日常噪点 */
+function glitchLevel(view: View): 0 | 1 | 2 | 3 {
+  const { humanity, psychosis } = view;
+  if (psychosis.blackoutOpen || psychosis.episodeHere) return 3;
+  if (humanity.suppressed) return psychosis.suppressant.withdrawal ? 1 : 0;
+  if (humanity.current === 0 || psychosis.suppressant.withdrawal) return 3;
+  if (humanity.current < 20) return 2;
+  if (humanity.current < 40) return 1;
+  return 0;
 }
 
 /** 剧情主界面：顶部 HUD、左侧角色栏、中间正文、底部选项 / 检定确认 / 输入框 */
@@ -164,8 +176,7 @@ export function StoryScreen() {
   // 钉住（点块或按 P/J/T）时块里放完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
-  // 钉住的追踪块、未读块各自停在哪个页签；收起后再钉住还是那个
-  const [trackTab, setTrackTab] = useState<TrackTab>("todo");
+  // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
   // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点（第 3 条），按 M 打开时不选
   const [atMap, setAtMap] = useState(false);
@@ -180,10 +191,12 @@ export function StoryScreen() {
   const [atBraindance, setAtBraindance] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
-  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
+  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单及其记忆管理弹窗
   const [scan, setScan] = useState(false);
   const [atNotes, setAtNotes] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
+  const [atMemory, setAtMemory] = useState(false);
+  const [atEndStory, setAtEndStory] = useState(false);
 
   const warn = useCallback((key: string, error: unknown) => {
     const text = error instanceof Error ? error.message : String(error);
@@ -274,33 +287,69 @@ export function StoryScreen() {
     setAtMap(false);
     setExpand((cur) => (cur?.id === id && cur.pinned ? null : { id, pinned: true }));
   }, []);
-  const showTrack = useCallback((tab: TrackTab) => {
-    setTrackTab(tab);
-    setExpand({ id: "track", pinned: true });
-  }, []);
-  // 未读块钉在消息页签时未读私信标成已读，不调用模型
-  const unread = view?.phone.unread ?? 0;
-  const unreadPinned = expand?.id === "unread" && expand.pinned;
-  const reading = useRef(false);
-  useEffect(() => {
-    if (!unreadPinned || unreadTab !== "messages" || unread === 0 || reading.current) return;
-    reading.current = true;
-    void act({ type: "readMessages" }, "phone").finally(() => {
-      reading.current = false;
-    });
-  }, [unreadPinned, unreadTab, unread, act]);
-  // 切到消息页的新闻栏：只把新闻频道的未读标成已读；街头传闻在 U4 接
+  // 只在具体某个会话被打开时按联系人粒度标已读；不再在切页签时把全部联系人的未读角标一次清光
+  const readingPromise = useRef<Promise<void> | null>(null);
+  const unreadCallFeeds = (view?.phone.feedUnread.messages ?? []).filter((id) =>
+    id.startsWith("phone:call:"),
+  );
+  const readThread = useCallback(
+    (unreadIds: readonly number[]) => {
+      const feed = [...unreadIds.map((id) => `phone:message:${id}`), ...unreadCallFeeds];
+      if (feed.length === 0 || readingPromise.current !== null) return;
+      const pending = act({ type: "readMessages", feed }, "phone").finally(() => {
+        if (readingPromise.current === pending) readingPromise.current = null;
+      });
+      readingPromise.current = pending;
+    },
+    [act, unreadCallFeeds],
+  );
+  // 手机窗口内轻量直聊：先等已读版本落库再取最新 version，失败时吐司提示并就地回显原因与还原草稿
+  const [pendingChat, setPendingChat] = useState<{
+    readonly contact: string;
+    readonly text: string;
+  } | null>(null);
+  const sendingChat = useRef(false);
+  const chatSending = pendingChat?.contact ?? null;
+  const sendPhoneChat = useCallback(
+    async (contact: string, text: string): Promise<PhoneSendResult> => {
+      if (sendingChat.current) {
+        return { ok: false, error: "上一条私信还在发送中，请稍候" };
+      }
+      sendingChat.current = true;
+      setPendingChat({ contact, text });
+      try {
+        if (readingPromise.current !== null) {
+          await readingPromise.current;
+        }
+        const baseVersion = client.getQueryData<View>(["state", saveId])?.version ?? version;
+        await api.phoneChat(saveId, {
+          requestId: newRequestId(),
+          baseVersion,
+          contact,
+          text,
+        });
+        await refresh();
+        return { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        warn("phone-chat", error);
+        await refresh();
+        return { ok: false, error: message };
+      } finally {
+        sendingChat.current = false;
+        setPendingChat(null);
+      }
+    },
+    [client, saveId, version, refresh, warn],
+  );
+  // 切到消息页的新闻栏：把新闻播报和听说过的街头传闻一并标成已读
   const unreadNews = view?.phone.feedUnread.news;
+  const unreadStreet = view?.phone.feedUnread.street;
   const readNews = useCallback(async () => {
-    if (!unreadNews || unreadNews.length === 0) return;
-    await act({ type: "readMessages", feed: [...unreadNews] }, "news");
-  }, [act, unreadNews]);
-  // 切到警用频段：只把这个频道的未读标成已读（第六节第 1 条）
-  const unreadPolice = view?.phone.feedUnread.police;
-  const readPolice = useCallback(async () => {
-    if (!unreadPolice || unreadPolice.length === 0) return;
-    await act({ type: "readMessages", feed: [...unreadPolice] }, "police");
-  }, [act, unreadPolice]);
+    const ids = [...(unreadNews ?? []), ...(unreadStreet ?? [])];
+    if (ids.length === 0) return;
+    await act({ type: "readMessages", feed: ids }, "news");
+  }, [act, unreadNews, unreadStreet]);
   // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
   const bdKey = view?.braindance.active
     ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
@@ -353,9 +402,14 @@ export function StoryScreen() {
         setPicked({ id: choice.checkId, version });
         return;
       }
-      send({ text: choice.text });
+      const choiceBoost =
+        view?.sandevistan != null && Boolean(choice.source?.includes(view.sandevistan.name));
+      send({
+        text: choice.text,
+        ...(choiceBoost ? { sandevistan: true } : {}),
+      });
     },
-    [offers, busy, send, version],
+    [offers, busy, send, version, view?.sandevistan],
   );
 
   // 剧情页的键（计划第七节第 2 条）：1–5 选选项，P/O/K/J/T 钉住对应的四角块，M 地图，
@@ -453,22 +507,26 @@ export function StoryScreen() {
     setPicked(null);
   };
 
-  // 钉住块时块里放的完整内容（第十二节第 7 条）：还用 U2 的页面主体，只是放进四角那一列
-  // A 生物监测：人物和义体两个页签（第十二节第 10 条），义体不再开全屏
+  // 钉住块时块里放的完整内容（第十二节第 7 条）：页签放进 BioMonitor 展开顶栏，不再上下叠两道标题
+  const characterTabs = (
+    <PinTabs<BioTab>
+      tabs={[
+        ["character", "人物", 0],
+        ["cyberware", "义体", view.cyberware.filter((c) => c.broken).length],
+        ["chronicle", "履历", 0],
+      ]}
+      value={bioTab}
+      onChange={setBioTab}
+    />
+  );
   const characterFull = (
     <div className={neuralStyles.pinBody}>
-      <PinTabs<BioTab>
-        tabs={[
-          ["character", "人物", 0],
-          ["cyberware", "义体", view.cyberware.filter((c) => c.broken).length],
-        ]}
-        value={bioTab}
-        onChange={setBioTab}
-      />
       {/* 按页签重新挂载，切页签时新内容淡入（第十二节第 13 条） */}
       <div key={bioTab} className={neuralStyles.pinPane}>
         {bioTab === "cyberware" ? (
           <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
+        ) : bioTab === "chronicle" ? (
+          <ChronicleBody view={view} />
         ) : (
           <CharacterPage
             view={view}
@@ -501,6 +559,11 @@ export function StoryScreen() {
             ? undefined
             : (id) => act({ type: "useHealing", id }, "healing", true)
         }
+        onSuppressant={
+          busy || offers?.rolled || view.death || view.ended
+            ? undefined
+            : () => act({ type: "useSuppressant" }, "suppressant", true)
+        }
         onUse={
           busy || offers?.rolled || view.death || view.ended
             ? undefined
@@ -528,31 +591,38 @@ export function StoryScreen() {
             ? undefined
             : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
         }
+        onStashMove={
+          busy || offers?.rolled || view.death || view.ended || view.combat.active
+            ? undefined
+            : (action, item, where) => void act({ type: "stash", action, item, where }, "gear")
+        }
         onShop={setAtShop}
         onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
       />
     </div>
   );
-  // 未读块往上长，页签放在底下挨着常态那一行，切频道时手不用伸到块顶上（用户定的）
+  // 未读块往上长，页签放在底下挨着常态那一行，切频道或看芯片时手不用伸到块顶上（用户定的）
   const unreadTabs = (
     <PinTabs<UnreadTab>
       tabs={[
         ["messages", "消息", view.phone.unread],
-        ["news", "新闻", view.phone.feedUnread.news.length],
-        ["police", "警用频段", view.phone.feedUnread.police.length],
+        ["news", "新闻", view.phone.feedUnread.news.length + view.phone.feedUnread.street.length],
+        ["shards", "芯片", view.shards.unread],
       ]}
       value={unreadTab}
       onChange={(t) => {
         setUnreadTab(t);
         if (t === "news") void readNews();
-        if (t === "police") void readPolice();
       }}
     />
   );
   const unreadFull = (
     <div key={unreadTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
-      {unreadTab === "police" ? (
-        <PoliceBody view={view} onMap={openMap} />
+      {unreadTab === "shards" ? (
+        <ShardsPanel
+          view={view}
+          onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
+        />
       ) : (
         <MessagesPage
           key={unreadTab}
@@ -560,86 +630,86 @@ export function StoryScreen() {
           initialTab={unreadTab === "news" ? "news" : "dm"}
           hideTabs
           onNews={() => void readNews()}
+          onSendChat={sendPhoneChat}
+          onReadThread={readThread}
+          chatSending={chatSending}
+          pendingChat={pendingChat}
+          busy={busy}
           onReply={
-            busy
+            busy || view.death || view.ended
               ? undefined
               : (id) => {
                   story.setDraft({ replyTo: id });
                   closePinned();
                 }
           }
+          onMessageNpc={
+            busy || view.death || view.ended
+              ? undefined
+              : (_id, name) => {
+                  story.setDraft({
+                    text: `${story.draft.text}${story.draft.text ? "\n" : ""}给 ${name} 发私信：`,
+                    replyTo: undefined,
+                  } as Partial<TurnInput>);
+                  closePinned();
+                }
+          }
+          onLocatePlace={(placeId) => {
+            closePinned();
+            setMapFocus(placeId);
+            setAtMap(true);
+          }}
+          onOpenRipperdoc={() => {
+            closePinned();
+            setAtDoc(true);
+          }}
+          onOpenShop={(shopId) => {
+            closePinned();
+            setAtShop(shopId);
+          }}
         />
       )}
     </div>
   );
   const trackFull = (
     <div className={neuralStyles.pinBody}>
-      <PinTabs<TrackTab>
-        tabs={[
-          ["todo", "待办", 0],
-          ["jobs", "委托", view.jobs.list.filter((j) => j.status === "offered").length],
-          ["database", "数据库", view.shards.unread],
-        ]}
-        value={trackTab}
-        onChange={setTrackTab}
-      />
-      <div key={trackTab} className={neuralStyles.pinPane}>
-        {trackTab !== "database" ? (
-          <JournalPage
-            key={trackTab}
-            part={trackTab}
-            view={view}
-            onAccept={
-              busy || offers?.rolled
-                ? undefined
-                : (id) => act({ type: "acceptJob", id }, "accept", true)
-            }
-            onBraindance={() => setAtBraindance(true)}
-          />
-        ) : (
-          <DatabasePage
-            view={view}
-            onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
-            onEdit={
-              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
-            }
-            onEnd={
-              busy || view.death || view.ended
-                ? undefined
-                : (how: StoryEnd, epitaph: string | undefined) =>
-                    act(
-                      { type: "endStory", how, ...(epitaph ? { epitaph } : {}) },
-                      "chronicle",
-                      true,
-                    )
-            }
-          />
-        )}
+      <div className={neuralStyles.pinPane}>
+        <JournalPage view={view} onBraindance={() => setAtBraindance(true)} />
       </div>
     </div>
   );
 
-  /** 人性干扰的强度：0 没有，3 最强；人性归零、发作和记忆空白时拉满 */
-  const glitch =
-    view.humanity.current === 0 || view.psychosis.episodeHere || view.psychosis.blackoutOpen
-      ? 3
-      : view.humanity.current < 25
-        ? 2
-        : view.humanity.current < 40
-          ? 1
-          : 0;
+  const glitch = glitchLevel(view);
+  const screenBoost =
+    story.phase !== "idle" &&
+    (story.boost !== null ||
+      (story.pending?.kind === "input" && story.pending.input.sandevistan === true));
   return (
     <div
       className={styles.screen}
       data-stage={view.humanity.stage}
       data-glitch={glitch || undefined}
+      data-boost={screenBoost || undefined}
     >
       <CityBackdrop />
-      {/* 天气、人性干扰、重伤红光三层叠在正文上的特效去掉了（用户 2026-11-02 嫌丑） */}
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
       {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
       <CornerSide side="left">
-        <BioMonitor view={view} peek={peek} full={characterFull} wide={bioTab === "cyberware"} />
+        <BioMonitor
+          view={view}
+          peek={peek}
+          tabs={characterTabs}
+          full={characterFull}
+          wide={bioTab === "cyberware"}
+          diag={bioTab === "character" || bioTab === "chronicle"}
+        />
+        <HoloCall
+          view={view}
+          onOpenPhone={() => {
+            setUnreadTab("messages");
+            pinBlock("unread");
+          }}
+        />
         {/* 档案里的「扫描」：点一下立刻扫，不调模型；回合进行中不让点（用户定的，计划第十二节第 14 条） */}
         <Present
           view={view}
@@ -652,49 +722,21 @@ export function StoryScreen() {
           peek={peek}
           full={unreadFull}
           tabs={unreadTabs}
-          wide={unreadTab === "messages"}
+          wide={unreadTab === "messages" || unreadTab === "shards"}
         />
       </CornerSide>
       <CornerSide side="right">
         {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
-        {/* 存放进地点块（用户定的）：能存放的地点才出，不再弹窗 */}
-        <Zone
-          view={view}
-          onMap={openMap}
-          peek={peek}
-          stash={
-            stashHere(view) ? (
-              <StashBody
-                view={view}
-                onMove={
-                  busy
-                    ? undefined
-                    : (action, item, where) =>
-                        void act({ type: "stash", action, item, where }, "gear")
-                }
-              />
-            ) : undefined
-          }
-        />
+        <Zone view={view} onMap={openMap} />
         {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
         <Track view={view} peek={peek} full={trackFull}>
           {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
         </Track>
-        <Weapon
-          view={view}
-          peek={peek}
-          full={gearFull}
-          onQuickhack={
-            busy
-              ? undefined
-              : (name) =>
-                  story.setDraft({
-                    text: `${story.draft.text}${story.draft.text ? " " : ""}用快速破解「${name}」`,
-                  })
-          }
-        />
+        <Weapon view={view} peek={peek} full={gearFull} />
       </CornerSide>
-      {view.hacking?.dive && <DivePanel dive={view.hacking.dive} health={view.health} />}
+      {view.hacking?.dive && (
+        <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
+      )}
       {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
       {atMap && (
         <MapLayer onClose={closeMap}>
@@ -766,10 +808,8 @@ export function StoryScreen() {
             <div className={styles.notice} data-kind="dead" role="alert">
               <span>
                 {view.death.canRestart
-                  ? "你死了。夜之城难度下可以从这个场景开头重来一次：这个场景发生的事全部作废，所有抉择从这一刻重新推演，履历里记一笔“重来过”。"
-                  : view.difficulty === "nightCity"
-                    ? "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"
-                    : "你死了。这份存档到此为止，只能回看。"}
+                  ? "你死了。可以从这个场景开头重来一次：这个场景发生的事全部作废，所有抉择从这一刻重新推演，履历里记一笔“重来过”。"
+                  : "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"}
               </span>
               {view.death.canRestart && (
                 <Button onClick={() => void restart()} disabled={busy}>
@@ -787,7 +827,14 @@ export function StoryScreen() {
                 {view.ended.epitaph && `「${view.ended.epitaph}」`}
                 这份存档只能回看，角色已经进了主菜单的传说名册。
               </span>
-              <Button onClick={() => showTrack("database")}>看履历</Button>
+              <Button
+                onClick={() => {
+                  setBioTab("chronicle");
+                  setExpand({ id: "bio", pinned: true });
+                }}
+              >
+                看履历
+              </Button>
             </div>
           )}
           <InputBar
@@ -811,7 +858,6 @@ export function StoryScreen() {
                 : view.phone.messages.find((m) => m.id === story.draft.replyTo)
             }
             onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
-            boost={offers?.clutch && view.sandevistan ? view.sandevistan : undefined}
             onSend={send}
             onStop={() => void story.stop()}
           />
@@ -831,8 +877,42 @@ export function StoryScreen() {
       {atEsc && (
         <EscMenu
           onResume={() => setAtEsc(false)}
-          onSettings={() => navigate(`/settings?tab=context&save=${saveId}`)}
+          onMemory={() => {
+            setAtEsc(false);
+            setAtMemory(true);
+          }}
+          canEndStory={!view.death && !view.ended}
+          onEndStory={
+            busy
+              ? undefined
+              : () => {
+                  setAtEsc(false);
+                  setAtEndStory(true);
+                }
+          }
+          onSettings={() =>
+            navigate(`/settings?tab=context&save=${encodeURIComponent(saveId)}`, {
+              state: { from: `/play/${encodeURIComponent(saveId)}` },
+            })
+          }
           onQuit={busy ? undefined : () => navigate("/menu")}
+        />
+      )}
+
+      {atMemory && (
+        <MemoryModal
+          view={view}
+          onEdit={busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)}
+          onClose={() => setAtMemory(false)}
+        />
+      )}
+
+      {atEndStory && !view.death && !view.ended && (
+        <EndStoryModal
+          onEnd={(how, epitaph) =>
+            act({ type: "endStory", how, ...(epitaph ? { epitaph } : {}) }, "chronicle", true)
+          }
+          onClose={() => setAtEndStory(false)}
         />
       )}
 
@@ -843,7 +923,14 @@ export function StoryScreen() {
           onClose={story.dismiss}
           actions={
             <>
-              <Button primary onClick={() => navigate("/settings")}>
+              <Button
+                primary
+                onClick={() =>
+                  navigate("/settings", {
+                    state: { from: `/play/${encodeURIComponent(saveId)}` },
+                  })
+                }
+              >
                 去设置
               </Button>
               <Button onClick={story.dismiss}>关闭</Button>
@@ -956,18 +1043,16 @@ export function StoryScreen() {
           const npc = view.npcs.find((n) => n.id === person);
           return (
             npc && (
-              <Dialog
-                title={npc.name}
-                tone="info"
+              <PersonModal
+                npc={npc}
+                fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
+                squad={view.squad.members.find((m) => m.npc === npc.id)}
+                foe={view.combat.active?.foes.find(
+                  (f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name,
+                )}
+                onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
                 onClose={() => setPerson(null)}
-                actions={<Button onClick={() => setPerson(null)}>关闭</Button>}
-              >
-                <Profile
-                  npc={npc}
-                  fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
-                  onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
-                />
-              </Dialog>
+              />
             )
           );
         })()}
@@ -1074,6 +1159,37 @@ export function StoryScreen() {
           )}
         </Dialog>
       )}
+    </div>
+  );
+}
+
+/** 正文点人名打开的人物档案弹层：沿用夜之城档案 Panel 与全宽双栏排布，不再套用警告弹窗的惊叹号窄框 */
+function PersonModal({
+  npc,
+  fixer,
+  squad,
+  foe,
+  onScan,
+  onClose,
+}: {
+  readonly npc: View["npcs"][number];
+  readonly fixer?: View["jobs"]["fixers"][number] | undefined;
+  readonly squad?: View["squad"]["members"][number] | undefined;
+  readonly foe?: NonNullable<View["combat"]["active"]>["foes"][number] | undefined;
+  readonly onScan?: ((id: string) => void) | undefined;
+  readonly onClose: () => void;
+}) {
+  useLayer(onClose);
+  return (
+    <div className={styles.journalBackdrop}>
+      <div role="dialog" aria-label={npc.name} className={styles.dossierDialog}>
+        <Panel as="div" title="人物档案" line="var(--cp-cyan)" frame>
+          <Profile npc={npc} fixer={fixer} squad={squad} foe={foe} onScan={onScan} />
+          <div className={styles.journalActions}>
+            <Button onClick={onClose}>关闭</Button>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

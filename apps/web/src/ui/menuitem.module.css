@@ -3,10 +3,12 @@
   align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 4px 0;
+  padding: 5px 8px 5px 2px;
   color: var(--cp-red);
   text-align: left;
-  transition: color var(--dur-flash);
+  transition:
+    color var(--dur-flash),
+    transform var(--dur-flash);
 }
 
 /* 左边的原作菱形格（计划第十二节第 9 条）：描边和实心两层叠在同一格里，实心那层平时藏着 */
@@ -26,20 +28,36 @@
 }
 
 .label {
+  flex: none;
   font-family: var(--font-ui);
   font-size: var(--fs-menu);
   font-weight: 600;
 }
 
 .hint {
+  max-width: 150px;
   margin-left: auto;
+  overflow: hidden;
   color: var(--cp-text-dim);
-  font-size: var(--fs-ui);
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint[data-tone="cyan"] {
+  color: var(--cp-cyan);
+}
+
+.hint[data-tone="warn"] {
+  color: var(--cp-yellow);
+  font-weight: 700;
 }
 
 .item:hover:not(:disabled),
 .item[data-selected] {
   color: var(--cp-cyan);
+  transform: translateX(3px);
 }
 
 .item[data-selected] .markFill {
@@ -52,4 +70,17 @@
 
 .item:disabled {
   color: var(--cp-red-dim);
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .markFill {
+    transition: none;
+  }
+
+  .item:hover:not(:disabled),
+  .item[data-selected] {
+    transform: none;
+  }
 }

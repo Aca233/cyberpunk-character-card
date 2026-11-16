@@ -30,6 +30,13 @@ export function cyberwareView({ world, data }: ViewContext) {
       iconic: def?.iconic ?? false,
       ability: def?.ability ?? null,
       bonusText: def ? bonusText(def) : "",
+      humanityCost: def?.humanityCost ?? 0,
+      attributes: def?.attributes ?? {},
+      checks: def?.checks ?? [],
+      armor: def?.armor ?? false,
+      accelerator: def?.accelerator ?? false,
+      programSlots: def?.programSlots,
+      ram: def?.ram,
       /** 被打坏了：修好前失去能力 */
       broken: health.brokenChrome.includes(c.id),
     };

@@ -1,13 +1,16 @@
+import type { Ref } from "react";
 import { Asset } from "./Asset";
 import styles from "./menuitem.module.css";
 
 interface MenuItemProps {
   readonly label: string;
   readonly hint?: string | undefined;
+  readonly hintTone?: "dim" | "cyan" | "warn" | undefined;
   readonly selected?: boolean;
   readonly disabled?: boolean;
   /** 不能选时的原因，悬停显示 */
   readonly reason?: string | undefined;
+  readonly buttonRef?: Ref<HTMLButtonElement> | undefined;
   readonly onSelect: () => void;
   readonly onFocus?: () => void;
 }
@@ -20,14 +23,17 @@ interface MenuItemProps {
 export function MenuItem({
   label,
   hint,
+  hintTone = "dim",
   selected,
   disabled,
   reason,
+  buttonRef,
   onSelect,
   onFocus,
 }: MenuItemProps) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={styles.item}
       data-selected={selected || undefined}
@@ -42,7 +48,11 @@ export function MenuItem({
         <Asset id="menu.cellFill" height={20} tint="currentColor" className={styles.markFill} />
       </span>
       <span className={styles.label}>{label}</span>
-      {hint !== undefined && <span className={styles.hint}>{hint}</span>}
+      {hint !== undefined && (
+        <span className={styles.hint} data-tone={hintTone}>
+          {hint}
+        </span>
+      )}
     </button>
   );
 }

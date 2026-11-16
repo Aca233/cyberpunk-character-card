@@ -46,7 +46,7 @@ async function readCard(c: Context) {
   const parsed = CharacterCardSchema.safeParse(raw);
   if (parsed.success) {
     if (!parsed.data.board) return { ok: true as const, card: parsed.data };
-    // 开局义体的点数、人性消耗和联动按内容表重算，再校验一次预算
+    // 按内容表重算开局义体快照并校验部位容量，再检查角色卡结构。
     // 旧识只认原作人物表和模块带出的人，对不上的去掉（用户定的，2026-10-30：15 个原作人物全部能选）
     const board = pruneAcquaintances(parsed.data.board, npcs);
     const fixed = normalizeBoard(board, { cyberware, combos });
@@ -111,6 +111,11 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 points,
                 humanityCost: def.humanityCost,
                 ...(def.programSlots !== undefined ? { programSlots: def.programSlots } : {}),
+                ...(def.ram !== undefined ? { ram: def.ram } : {}),
+                ...(def.armor ? { armor: true } : {}),
+                ...(def.accelerator ? { accelerator: true } : {}),
+                ...(def.checks.length > 0 ? { checks: def.checks } : {}),
+                ...(Object.keys(def.attributes).length > 0 ? { attributes: def.attributes } : {}),
                 ability: def.ability,
               },
             ];

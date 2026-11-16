@@ -29,6 +29,8 @@ import {
   NpcScanSchema,
   type NpcState,
   NpcStateSchema,
+  NpcUpdateSchema,
+  normalizeNpcProposal,
   RelationSchema,
   SeedNpcSchema,
   TieSchema,
@@ -44,6 +46,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   initial: () => ({ npcs: {}, seedTags: {} }),
   commands: {
     npc: NewNpcSchema,
+    npcUpdate: NpcUpdateSchema,
     meet: MeetSchema,
     affinity: AffinitySchema,
     memory: MemorySchema,
@@ -62,7 +65,11 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcHumanity: NpcHumanitySchema,
     npcScan: NpcScanSchema,
   },
-  proposals: { affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity } },
+  proposals: {
+    affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity },
+    npc: { schema: NewNpcSchema, legacy: normalizeNpcProposal },
+    npcUpdate: { schema: NpcUpdateSchema, legacy: normalizeNpcProposal },
+  },
   internal: {
     "npc.seed": SeedNpcSchema,
     "npc.memoryEdit": NpcMemoryEditSchema,

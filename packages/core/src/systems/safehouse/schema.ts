@@ -40,7 +40,7 @@ export const HomeSchema = z.object({
 });
 export type Home = z.infer<typeof HomeSchema>;
 
-/** 战利品墙上的一件：只做展示，点开是当时的履历片段 */
+/** @deprecated 仅作历史存档反序列化兼容；战利品墙展示与 trophy 指令已下线 */
 export const TrophySchema = z.object({
   label: z.string().min(1).max(20),
   note: z.string().min(1).max(120),
@@ -52,6 +52,7 @@ export const SafehouseStateSchema = z.object({
   homes: z.array(HomeSchema).default([]),
   /** 存放的东西：安全屋 id 或车的 id → 物品 id → 数量 */
   stash: z.record(z.string(), z.record(z.string(), z.number().int().min(1))).default({}),
+  /** 历史存档兼容字段；战利品墙已下线 */
   trophies: z.array(TrophySchema).default([]),
 });
 export type SafehouseState = z.infer<typeof SafehouseStateSchema>;
@@ -67,20 +68,16 @@ export const StashCommandSchema = z
     reason: z.string().trim().min(1).max(80),
   })
   .describe(
-    "存放：store 把背包里的东西放进安全屋存放箱或后备箱，take 拿出来放回背包；where 写安全屋 id 或车的 id，人在安全屋里可以不写。装备着的要先卸下",
+    "存放：store 把背包里的东西放进安全屋存放箱或后备箱，take 拿出来放回背包；where 写安全屋 id 或车的 id，人在安全屋里可以不写",
   );
 export type StashCommand = z.infer<typeof StashCommandSchema>;
 
-/** 模型使用：{"type": "trophy", "label": "...", "note": "..."} */
-export const TrophyCommandSchema = z
-  .object({
-    type: z.literal("trophy"),
-    label: z.string().trim().min(1).max(20),
-    note: z.string().trim().min(1).max(120),
-  })
-  .describe(
-    "战利品墙：人在安全屋、把一件有纪念意义的东西挂上墙时写；label 是东西的名字，note 是一句当时的事。只做展示，不改物品栏",
-  );
+/** @deprecated 战利品墙指令已下线 */
+export const TrophyCommandSchema = z.object({
+  type: z.literal("trophy"),
+  label: z.string().trim().min(1).max(20),
+  note: z.string().trim().min(1).max(120),
+});
 export type TrophyCommand = z.infer<typeof TrophyCommandSchema>;
 
 /** 只能由代码发出：建档时给开局住所 */

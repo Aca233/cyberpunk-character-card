@@ -1,10 +1,10 @@
 import type { ViewContext } from "../../kernel/system";
 import { itemCatalog } from "../inventory";
-import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
+import { locationCatalog, WorldClockStateSchema } from "../world";
 import { apartmentList, apartmentLocked, trunks } from "./apply";
 import { SafehouseStateSchema } from "./schema";
 
-/** 安全屋、存放箱、后备箱、战利品墙，和当前地点能买下的公寓 */
+/** 安全屋、存放箱、后备箱，和当前地点能买下的公寓 */
 export function safehouseView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
@@ -34,7 +34,6 @@ export function safehouseView({ world, data }: ViewContext) {
       cap: t.kind === "trunk" ? t.cap : 0,
       items: list(t.id),
     })),
-    trophies: state.trophies.map((t) => ({ ...t, at: formatGameTime(t.at) })),
     /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */
     forSale: apartmentList(data)
       .filter((a) => a.location === location)

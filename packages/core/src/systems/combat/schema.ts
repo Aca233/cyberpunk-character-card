@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { TierSchema } from "../dice";
+/** 对手威望与武装成色：决定掉落稀有度与死后寻仇概率，不再对应 T1–T4 骰点难度 */
+export const FoeTierSchema = z.enum(["street", "veteran", "elite", "legend"]);
+export type FoeTier = z.infer<typeof FoeTierSchema>;
+
+import { BODY_PART_LABELS, type BodyPart, BodyPartSchema } from "../health";
 
 /**
  * 战斗（用户 2026-11-03 定的"重新构建战斗体系"）：打斗过程全交给叙事，代码只记后果。
@@ -29,7 +33,9 @@ export const ActiveFoeSchema = z.object({
   /** 哪个帮派、公司；死后找上门的人从这里来 */
   gang: z.string().min(1).nullable(),
   archetype: ArchetypeSchema,
-  tier: TierSchema,
+  tier: FoeTierSchema.describe(
+    "对手成色与威望：street 街头混混，veteran 帮派精锐/公司保安，elite 精锐特勤/重装，legend 传奇大人物；仅影响战利品稀有度与寻仇概率",
+  ),
   state: FoeStateSchema,
   /** 身上带着的东西（物品表 id）；倒下或死了能捡，跑了就带走 */
   carry: z.array(z.string().min(1)).default([]),
@@ -60,7 +66,9 @@ export const DeadSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   gang: z.string().min(1).nullable(),
-  tier: TierSchema,
+  tier: FoeTierSchema.describe(
+    "对手成色与威望：street 街头混混，veteran 帮派精锐/公司保安，elite 精锐特勤/重装，legend 传奇大人物；仅影响战利品稀有度与寻仇概率",
+  ),
   /** 等他的人：关系和名字 */
   mourner: MournerSchema,
   mournerName: z.string().min(1),
@@ -74,28 +82,8 @@ export const DeadSchema = z.object({
 });
 export type Dead = z.infer<typeof DeadSchema>;
 
-/** 伤在哪 */
-export const BodyPartSchema = z.enum([
-  "head",
-  "face",
-  "chest",
-  "belly",
-  "left-arm",
-  "right-arm",
-  "left-leg",
-  "right-leg",
-]);
-export type BodyPart = z.infer<typeof BodyPartSchema>;
-export const BODY_PART_LABELS: Readonly<Record<BodyPart, string>> = {
-  head: "头",
-  face: "脸",
-  chest: "胸口",
-  belly: "肚子",
-  "left-arm": "左臂",
-  "right-arm": "右臂",
-  "left-leg": "左腿",
-  "right-leg": "右腿",
-};
+/** 伤在哪（沿用 health 部位定义） */
+export { BODY_PART_LABELS, type BodyPart, BodyPartSchema };
 
 /** 一处伤：谁、用什么、打在哪；恢复需要时间，处理过的不留疤，未处理的 heavy/lethal 留疤，graze 自然愈合不留疤 */
 export const WoundSchema = z.object({
@@ -238,7 +226,9 @@ export const FoeInputSchema = z.object({
   npc: z.string().min(1).optional(),
   gang: z.string().min(1).max(30).optional(),
   archetype: ArchetypeSchema,
-  tier: TierSchema,
+  tier: FoeTierSchema.describe(
+    "对手成色与威望：street 街头混混，veteran 帮派精锐/公司保安，elite 精锐特勤/重装，legend 传奇大人物；仅影响战利品稀有度与寻仇概率",
+  ),
 });
 export type FoeInput = z.infer<typeof FoeInputSchema>;
 
@@ -312,7 +302,7 @@ export const SCARRING_TIERS: readonly Wound["tier"][] = ["heavy", "lethal"];
 /** 人死后多久掷找不找上门 */
 export const RECKON_MINUTES = 3 * DAY;
 /** 按死者的分量，有几成机会有人找上门（百分比） */
-export const AVENGE_PERCENT: Readonly<Record<z.infer<typeof TierSchema>, number>> = {
+export const AVENGE_PERCENT: Readonly<Record<FoeTier, number>> = {
   street: 25,
   veteran: 45,
   elite: 70,
@@ -337,7 +327,7 @@ export const LOOT_WEAPONS: Readonly<Record<Archetype, readonly string[]>> = {
   boss: ["assaultRifle", "precisionRifle", "sniperRifle", "shotgun", "blade"],
 };
 /** 档位决定能抽到哪几档稀有度；抽不到就找普通的。不朽物品不会掉 */
-export const LOOT_RARITY: Readonly<Record<z.infer<typeof TierSchema>, readonly string[]>> = {
+export const LOOT_RARITY: Readonly<Record<FoeTier, readonly string[]>> = {
   street: ["common"],
   veteran: ["common", "uncommon"],
   elite: ["uncommon", "rare"],

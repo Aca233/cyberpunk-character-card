@@ -2,14 +2,14 @@ import { ConsequenceTableSchema, FALLOUT_KINDS, FALLOUT_LABELS, type FalloutStat
 
 const SHIFT: Readonly<Record<string, string>> = {
   streetLegend:
-    "当前难度是街头传说：后果整体轻一档，按低一星的那一行挑；1 星时只让局面变坏，不扣数值。",
-  deathCity: "当前难度是死亡之城：后果整体重一档，按高一星的那一行挑；5 星照旧。",
+    "当前难度是街头传说：后果整体轻一档，按低一档的那一行挑；第 1 档时只让局面变坏，不扣数值。",
+  deathCity: "当前难度是死亡之城：后果整体重一档，按高一档的那一行挑；第 5 档照旧。",
 };
 
-/** 给模型看的【后果参考表】：按委托星级给分量和例子；难度模式整体挪一档 */
+/** 给模型看的【后果参考表】：按局面与对手分量给例子 */
 export function consequenceSection(
   data: Readonly<Record<string, unknown>>,
-  mode: string,
+  mode = "nightCity",
 ): string | undefined {
   if (data.consequences === undefined) return undefined;
   const table = [...ConsequenceTableSchema.parse(data.consequences)].sort(
@@ -19,7 +19,7 @@ export function consequenceSection(
     "【后果参考表】",
     "失败、冒险和坏选择要有真实的后果。按这单和对手的分量挑一两样（街头混混、帮派精锐、公司安保到强敌各不相同）；只是参考，按情境换成说得通的别的东西也行。伤害必须严格遵循前置物理裁决与当前伤势，也可以不扣数值、让局面变坏（对方有了防备、被跟上、丢了先机），但要真的落进后面的戏里。",
     ...(SHIFT[mode] ? [SHIFT[mode]] : []),
-    ...table.map((t) => `- ${t.risk} 星（${t.label}）：${t.examples.join("；")}`),
+    ...table.map((t) => `- 第 ${t.risk} 档（${t.label}）：${t.examples.join("；")}`),
   ];
   return lines.join("\n");
 }

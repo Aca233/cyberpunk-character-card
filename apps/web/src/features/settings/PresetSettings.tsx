@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type ReactNode, useState } from "react";
+import { type ChangeEvent, type ReactNode, useId, useState } from "react";
 import { api, type PresetSummary } from "../../api/client";
 import { formatDate } from "../../labels";
-import { NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { Panel } from "../../ui/Panel";
+import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import styles from "./settings.module.css";
 
 /**
  * 酒馆预设（用户定的）：导入 SillyTavern 聊天补全预设，只给叙事模型写正文那一步用；
  * 条目叠在本作提示词前面当文风，本作的规则、状态格式在后面说了算。导入后要手动启用。
- * 版式照模型连接页：左边列表、右边详情，信息分组排，不堆在一张长卡片里
  */
 
 async function readPresetFile(file: File): Promise<unknown> {
@@ -55,15 +56,35 @@ export function PresetSettings() {
         data-ready={active ? true : undefined}
         aria-label="当前预设"
       >
-        {/* 框照模型连接页：原作 map.filterCell（用户定的重排） */}
-        <CellFrame />
-        <div>
-          <span className={ms.kicker}>{active ? "正在使用" : "未启用"}</span>
-          <h3>{active ? active.name : "默认写法"}</h3>
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 86%)"
+          className={ms.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint={active ? "var(--cp-cyan)" : "var(--cp-yellow)"}
+          className={ms.slice}
+        />
+        <Asset
+          id="panel.glowLeft"
+          height={34}
+          tint={active ? "var(--cp-cyan)" : "var(--cp-yellow)"}
+          className={ms.readyGlow}
+        />
+        <div className={ms.readyMain}>
+          <div className={ms.readyTop}>
+            <span className={ms.statusBadge} data-ready={active ? true : undefined}>
+              {active ? "预设启用中" : "未启用预设"}
+            </span>
+            <strong className={ms.readyTitle}>{active ? active.name : "当前使用默认写法"}</strong>
+          </div>
           <p className={ms.help}>
             {active
-              ? `条目 ${active.entries.filter((e) => e.enabled).length}/${active.entries.length} 开着 · 采样参数${Object.keys(active.sampling).length > 0 ? "按预设" : "按模型连接"}`
-              : "从左侧选择或导入"}
+              ? `条目 ${active.entries.filter((e) => e.enabled).length}/${active.entries.length} 开启 · 采样参数${Object.keys(active.sampling).length > 0 ? "按预设覆盖" : "沿用模型连接"}`
+              : "从左侧列表选择已导入的酒馆预设，或点击「导入 .json」新增"}
           </p>
         </div>
         {active && (
@@ -74,6 +95,7 @@ export function PresetSettings() {
           </div>
         )}
       </section>
+
       {choose.isError && (
         <p className={ms.error} role="alert">
           没切换：{choose.error.message}
@@ -92,43 +114,79 @@ export function PresetSettings() {
 
       <div className={ms.workspace}>
         <aside className={ms.sidebar} aria-label="预设列表">
-          <CellFrame />
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="rgb(12 10 18 / 84%)"
+            className={ms.slice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint="var(--cp-red-dim)"
+            className={ms.slice}
+          />
           <div className={ms.listHead}>
             <h3>我的预设</h3>
             <label className={styles.fileButton}>
-              {/* 外形同 Button：原作 tab.bg 九宫格垫底，不画 CSS 边框（只用原作素材的约定） */}
               <NineSlice id="tab.bg" tint="currentColor" slice={14} className={styles.fileBg} />
               <input type="file" accept=".json,application/json" onChange={onFile} />
               <span>{upload.isPending ? "导入中…" : "导入 .json"}</span>
             </label>
           </div>
-          {list.isPending && <p className={ms.help}>正在读取预设…</p>}
-          {list.isError && <p className={ms.error}>读取失败：{list.error.message}</p>}
-          {list.isSuccess && presets.length === 0 && <p className={ms.help}>还没有预设</p>}
-          <ul className={ms.list}>
-            {presets.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className={ms.connection}
-                  aria-pressed={selected?.id === p.id}
-                  onClick={() => setPicked(p.id)}
-                >
-                  <CellFrame />
-                  <strong>{p.name}</strong>
-                  <span className={ms.modelName}>
-                    条目 {p.entries.filter((e) => e.enabled).length}/{p.entries.length} · 正则{" "}
-                    {p.regex.filter((r) => r.enabled).length}/{p.regex.length}
-                  </span>
-                  {p.active && <span className={ms.roles}>使用中</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className={ms.listScroll}>
+            {list.isPending && <p className={ms.help}>正在读取预设…</p>}
+            {list.isError && (
+              <div className={styles.sidebarState}>
+                <p className={ms.error}>读取失败：{list.error.message}</p>
+                <Button small onClick={() => void list.refetch()}>
+                  重试
+                </Button>
+              </div>
+            )}
+            {list.isSuccess && presets.length === 0 && (
+              <p className={ms.help}>还没有预设，点右上角导入酒馆 .json</p>
+            )}
+            {presets.length > 0 && (
+              <ul className={ms.list}>
+                {presets.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      className={ms.connection}
+                      aria-pressed={selected?.id === p.id}
+                      onClick={() => setPicked(p.id)}
+                    >
+                      <CellFrame />
+                      <div className={ms.connTop}>
+                        <strong>{p.name}</strong>
+                        {p.active && <span className={ms.rolePill}>使用中</span>}
+                      </div>
+                      <span className={ms.modelName}>
+                        条目 {p.entries.filter((e) => e.enabled).length}/{p.entries.length} · 正则{" "}
+                        {p.regex.filter((r) => r.enabled).length}/{p.regex.length}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </aside>
 
         <section className={ms.editor} aria-label="预设详情">
-          <CellFrame />
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="rgb(12 10 18 / 84%)"
+            className={ms.slice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint="var(--cp-red-dim)"
+            className={ms.slice}
+          />
           {selected ? (
             <PresetDetail
               key={selected.id}
@@ -139,7 +197,9 @@ export function PresetSettings() {
               onDeleted={() => setPicked(null)}
             />
           ) : (
-            <p className={ms.help}>未选择预设</p>
+            <Panel line="var(--cp-red-dim)">
+              <p className={ms.help}>未选择预设。导入或从左侧选择一份预设即可查看和调整条目。</p>
+            </Panel>
           )}
         </section>
       </div>
@@ -176,7 +236,6 @@ function PresetDetail({
 
   return (
     <div className={ms.form} aria-busy={pending}>
-      {/* 标题和启用按钮并排、采样参数横排（用户反馈「太空了」：少竖着堆，一屏多放内容） */}
       <header className={styles.detailHead}>
         <div>
           <span className={ms.kicker}>预设详情</span>
@@ -187,13 +246,20 @@ function PresetDetail({
           {preset.active ? "正在使用" : "启用这份预设"}
         </Button>
       </header>
+
+      <span
+        className={styles.thinLine}
+        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+        aria-hidden
+      />
+
       <section className={ms.usage}>
         <span className={ms.kicker}>01 / 采样参数</span>
         <dl className={styles.samplingFacts}>
           {samplingRows(preset.sampling).map(([k, v]) => (
             <div key={k}>
               <dt>{k}</dt>
-              <dd>{v}</dd>
+              <dd className="num">{v}</dd>
             </div>
           ))}
         </dl>
@@ -216,17 +282,23 @@ function PresetDetail({
         </div>
       )}
 
+      <span
+        className={styles.thinLine}
+        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+        aria-hidden
+      />
+
       <section className={ms.usage}>
         <span className={ms.kicker}>
           02 / 提示词条目 · {preset.entries.filter((e) => e.enabled).length}/{preset.entries.length}{" "}
-          开着
+          开启
         </span>
         <ToggleList
           items={preset.entries.map((e) => ({
             id: e.id,
             name: e.name,
             enabled: e.enabled,
-            meta: `${ROLE_LABELS[e.role]} · ${e.chars.toLocaleString()} 字${e.depth === null ? "" : ` · 聊天记录深度 ${e.depth}`}`,
+            meta: `${ROLE_LABELS[e.role]} · ${e.chars.toLocaleString()} 字${e.depth === null ? "" : ` · 深度 ${e.depth}`}`,
           }))}
           disabled={pending}
           onToggle={(id, on) => patch.mutate({ entries: { [id]: on } })}
@@ -242,17 +314,24 @@ function PresetDetail({
       </section>
 
       {preset.regex.length > 0 && (
-        <section className={ms.usage}>
-          <span className={ms.kicker}>
-            03 / 正则脚本 · {preset.regex.filter((r) => r.enabled).length}/{preset.regex.length}{" "}
-            开着
-          </span>
-          <ToggleList
-            items={preset.regex.map((r) => ({ id: r.id, name: r.name, enabled: r.enabled }))}
-            disabled={pending}
-            onToggle={(id, on) => patch.mutate({ regex: { [id]: on } })}
+        <>
+          <span
+            className={styles.thinLine}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
           />
-        </section>
+          <section className={ms.usage}>
+            <span className={ms.kicker}>
+              03 / 正则脚本 · {preset.regex.filter((r) => r.enabled).length}/{preset.regex.length}{" "}
+              开启
+            </span>
+            <ToggleList
+              items={preset.regex.map((r) => ({ id: r.id, name: r.name, enabled: r.enabled }))}
+              disabled={pending}
+              onToggle={(id, on) => patch.mutate({ regex: { [id]: on } })}
+            />
+          </section>
+        </>
       )}
       {patch.isError && (
         <p className={ms.error} role="alert">
@@ -313,7 +392,7 @@ function samplingRows(s: PresetSummary["sampling"]): [string, string][] {
   return rows.length > 0 ? rows : [["状态", "不带"]];
 }
 
-/** 开关列表：可以按名字筛，几十条也找得到；给了 renderDetail 的每行能展开（用户定的：条目展开查看、编辑） */
+/** 开关列表：可以按名字筛，几十条也找得到；给了 renderDetail 的每行能展开 */
 function ToggleList({
   items,
   disabled,
@@ -330,6 +409,7 @@ function ToggleList({
   readonly onToggle: (id: string, on: boolean) => void;
   readonly renderDetail?: (id: string) => ReactNode;
 }) {
+  const listId = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const shown = items.filter((i) => i.name.toLowerCase().includes(query.trim().toLowerCase()));
@@ -346,39 +426,46 @@ function ToggleList({
         </FrameBox>
       )}
       <ul className={styles.presetToggles} data-expandable={renderDetail ? true : undefined}>
-        {shown.map((i) => (
-          <li
-            key={i.id}
-            data-off={i.enabled ? undefined : true}
-            data-open={open === i.id || undefined}
-          >
-            <div className={styles.toggleRow}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={i.enabled}
-                  disabled={disabled}
-                  onChange={(e) => onToggle(i.id, e.target.checked)}
-                />
-                <span>{i.name}</span>
-                {i.meta && <small>{i.meta}</small>}
-              </label>
-              {renderDetail && (
-                <button
-                  type="button"
-                  className={styles.expand}
-                  aria-expanded={open === i.id}
-                  onClick={() => setOpen(open === i.id ? null : i.id)}
-                >
-                  {open === i.id ? "收起" : "展开"}
-                </button>
+        {shown.map((i, index) => {
+          const isOpen = open === i.id;
+          const controlId = `${listId}-${index}`;
+          return (
+            <li key={i.id} data-off={i.enabled ? undefined : true} data-open={isOpen || undefined}>
+              <div className={styles.toggleRow}>
+                <label htmlFor={controlId}>
+                  <ToggleCheck
+                    id={controlId}
+                    variant="checkbox"
+                    checked={i.enabled}
+                    disabled={disabled}
+                    onChange={(checked) => onToggle(i.id, checked)}
+                  />
+                  <span>{i.name}</span>
+                  {i.meta && <small>{i.meta}</small>}
+                </label>
+                {renderDetail && (
+                  <button
+                    type="button"
+                    className={styles.expand}
+                    aria-expanded={isOpen}
+                    onClick={() => setOpen(isOpen ? null : i.id)}
+                  >
+                    <span>{isOpen ? "收起" : "展开"}</span>
+                    <Asset
+                      id="menu.arrowFill"
+                      width={9}
+                      tint="currentColor"
+                      className={styles.expandArrow}
+                    />
+                  </button>
+                )}
+              </div>
+              {renderDetail && isOpen && (
+                <div className={styles.entryDetail}>{renderDetail(i.id)}</div>
               )}
-            </div>
-            {renderDetail && open === i.id && (
-              <div className={styles.entryDetail}>{renderDetail(i.id)}</div>
-            )}
-          </li>
-        ))}
+            </li>
+          );
+        })}
         {shown.length === 0 && <li className={ms.help}>没有名字里带「{query}」的</li>}
       </ul>
     </div>

@@ -16,7 +16,6 @@ export function InputBar({
   onDraft,
   onSend,
   onStop,
-  boost,
   reply,
   onCancelReply,
 }: {
@@ -28,10 +27,6 @@ export function InputBar({
   readonly onDraft: (draft: Partial<TurnInput>) => void;
   readonly onSend: (input: TurnInput) => void;
   readonly onStop: () => void;
-  /** 生死瞬间、装着能用的加速义体时才有：可以开斯安威斯坦 */
-  readonly boost?:
-    | { readonly name: string; readonly slots: number; readonly cost: number }
-    | undefined;
   /** 正在回复的消息 */
   readonly reply?: { readonly name: string; readonly text: string } | undefined;
   readonly onCancelReply?: (() => void) | undefined;
@@ -40,33 +35,27 @@ export function InputBar({
   const text = draft.text.trim();
   const tooLong = text.length > MAX;
   const canSend = !busy && !disabled && text !== "" && !tooLong;
-  const boosting = boost !== undefined && draft.sandevistan === true;
-  // 只提示输入框不能用的原因和斯安威斯坦的规则；平时不写说明
-  const hint =
-    disabled && reason
-      ? reason
-      : boosting
-        ? `斯安威斯坦开着：最多 ${boost?.slots} 个动作，不确定的部分合并成一次掷骰，人性 −${boost?.cost}`
-        : null;
+  // 只提示输入框不能用的原因；斯安威斯坦由模型按文本与局势自动判断开启
+  const hint = disabled && reason ? reason : null;
 
-  // 改写检定时文字被放进输入框：把焦点也放过去
+  // 改写检定文字或点选「回复」时，把焦点放进输入框
   const last = useRef(draft.text);
+  const lastReplyTo = useRef(draft.replyTo);
   useEffect(() => {
-    if (
-      draft.text !== last.current &&
-      document.activeElement !== area.current &&
-      draft.text !== ""
-    ) {
+    const textInjected =
+      draft.text !== last.current && document.activeElement !== area.current && draft.text !== "";
+    const replySelected = draft.replyTo !== undefined && draft.replyTo !== lastReplyTo.current;
+    if (textInjected || replySelected) {
       area.current?.focus();
     }
     last.current = draft.text;
-  }, [draft.text]);
+    lastReplyTo.current = draft.replyTo;
+  }, [draft.text, draft.replyTo]);
 
   const send = () => {
     if (!canSend) return;
     onSend({
       text,
-      ...(boosting ? { sandevistan: true } : {}),
       ...(reply && draft.replyTo !== undefined ? { replyTo: draft.replyTo } : {}),
     });
   };
@@ -74,7 +63,6 @@ export function InputBar({
   return (
     <form
       className={styles.inputBar}
-      data-boost={boosting || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         send();
@@ -96,7 +84,7 @@ export function InputBar({
           value={draft.text}
           disabled={disabled}
           placeholder={
-            boosting ? `时间慢下来了：这一瞬间要做的事（最多 ${boost?.slots} 件）` : undefined
+            reply ? `回消息给 ${reply.name}（可直接答应接活、谈条件或回绝…）` : undefined
           }
           aria-label="你的行动"
           aria-describedby={hint ? "story-input-hint" : undefined}
@@ -108,11 +96,6 @@ export function InputBar({
             }
           }}
         />
-        {boost && !streaming && (
-          <Button disabled={busy || disabled} onClick={() => onDraft({ sandevistan: !boosting })}>
-            {boosting ? "关掉义体" : `开${boost.name}`}
-          </Button>
-        )}
         {streaming ? (
           <Button onClick={onStop}>停止生成</Button>
         ) : (

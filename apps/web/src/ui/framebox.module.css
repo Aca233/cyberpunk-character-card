@@ -12,6 +12,10 @@
   transition: --box-line var(--dur-flash);
 }
 
+.box:hover:not(:has(:disabled)) {
+  --box-line: var(--cp-red);
+}
+
 .box:focus-within {
   --box-line: var(--cp-cyan);
 }
@@ -36,6 +40,7 @@
   color: var(--cp-text);
   font: inherit;
   font-size: var(--fs-ui);
+  line-height: 1.4;
 }
 
 .box textarea {
@@ -43,7 +48,35 @@
 }
 
 .box select {
+  display: inline-block;
+  height: 44px;
+  padding-right: 36px;
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: var(--cp-cursor-hand);
+}
+
+.box select::picker-icon {
+  display: none;
+}
+
+.selectArrow {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: none;
+  place-items: center;
+  color: var(--box-line);
+  pointer-events: none;
+  transform: translateY(-50%) rotate(180deg);
+  transition: color var(--dur-flash);
+}
+
+.box:has(> select) .selectArrow {
+  display: grid;
 }
 
 .box select option {

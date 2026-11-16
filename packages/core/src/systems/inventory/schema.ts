@@ -121,8 +121,6 @@ export const ItemDefSchema = z
     healPercent: z.number().int().min(1).max(100).optional(),
     /** 不朽物品（原作的 Iconic）：只能从剧情获得 */
     iconic: z.boolean().default(false),
-    /** 不朽武器的专属内心声音：拿在武器栏里时，它用什么口吻在脑子里说话；写给模型 */
-    voice: z.string().min(1).max(80).optional(),
     price: z.number().int().min(0).optional(),
     rarity: RaritySchema.optional(),
     /** 武器类别；武器必须写 */
@@ -159,9 +157,6 @@ export const ItemDefSchema = z
     if (item.kind === "clothing" && item.clothingSlot === undefined)
       report("服装必须写明穿在哪一格");
     if (item.kind !== "clothing" && item.clothingSlot !== undefined) report("只有服装才写格子");
-    if (item.voice !== undefined && !(item.iconic && item.kind === "weapon")) {
-      report("只有不朽武器才有专属内心声音");
-    }
     if (item.kind === "mod") {
       if (item.modSlot === undefined || item.modFits === undefined) {
         report("改装件必须写明装在哪个位置、配哪些武器");
@@ -229,11 +224,11 @@ export const ItemCommandSchema = z
     action: z.enum(["gain", "lose", "use", "equip", "unequip"]),
     id: z.string().min(1),
     reason: z.string().min(1),
-    /** equip 武器时指定第几格（1–3） */
+    /** 历史存档兼容字段；所有武器统一放进背包，不再使用武器栏槽位 */
     slot: z.number().int().min(1).max(3).optional(),
   })
   .describe(
-    "物品：gain 获得、lose 失去、use 使用、equip 装备（武器写 slot 1–3）、unequip 卸下；id 必须是物品表或物品栏里有的",
+    "物品：gain 获得、lose 失去、use 使用、equip 穿上衣服/放入快捷药剂手雷、unequip 脱下；武器获得即放进背包可直接使用；id 必须是物品表或物品栏里有的",
   );
 export type ItemCommand = z.infer<typeof ItemCommandSchema>;
 
@@ -284,17 +279,6 @@ export const InventoryInternalSchemas = {
     type: z.literal("inventory.stash"),
     action: z.enum(["out", "in"]),
     id: z.string().min(1),
-  }),
-  /** 界面动作：把背包里的一件拆成零件 */
-  "inventory.dismantle": z.object({
-    type: z.literal("inventory.dismantle"),
-    id: z.string().min(1),
-  }),
-  /** 界面动作：用零件给武器升一档稀有度；tech 是玩家角色的技术，由代码带上 */
-  "inventory.tune": z.object({
-    type: z.literal("inventory.tune"),
-    id: z.string().min(1),
-    tech: z.number().int().min(0),
   }),
   /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */
   "inventory.mod": z.object({
@@ -347,27 +331,11 @@ export const PartsCommandSchema = z
   );
 export type PartsCommand = z.infer<typeof PartsCommandSchema>;
 
-/** 3.0 随身 6 格负荷上限 */
-export const LOADOUT_MAX_SLOTS = 6;
+/** 默认从容携带的随身大件上限（长枪、重武器、大号砍刀/长钝器） */
+export const BASE_BULKY_LIMIT = 2;
 
-/**
- * 3.0 四大穿搭通行证（Style Tag）：
- * - entropism【熵增主义】：底层工装/破烂（T1）
- * - kitsch【刻奇】：街头霓虹/潮牌（T2，海伍德/沃森/圣多明戈打听消息 +1）
- * - neomilitarism【新军权】：冷酷黑金/公司正装（T3，大厦/公司安检通行证）
- * - neokitsch【新刻奇】：权贵礼服/奢华定制（T4，市政中心高端酒会/权贵公馆通行证）
- */
-export const StyleTagSchema = z.enum(["entropism", "kitsch", "neomilitarism", "neokitsch"]);
-export type StyleTag = z.infer<typeof StyleTagSchema>;
-
-export const STYLE_TAG_LABELS: Readonly<
-  Record<StyleTag, { readonly label: string; readonly tier: 1 | 2 | 3 | 4 }>
-> = {
-  entropism: { label: "熵增主义（街头工装）", tier: 1 },
-  kitsch: { label: "刻奇（街头霓虹）", tier: 2 },
-  neomilitarism: { label: "新军权（冷酷黑金）", tier: 3 },
-  neokitsch: { label: "新刻奇（权贵礼服）", tier: 4 },
-};
+/** 未损坏时可额外多带 1 件大件的承重骨骼义体 */
+const LOAD_BEARING_CYBERWARE = new Set(["titanium-bones"]);
 
 /**
  * 武器隐蔽度（Concealment）：
@@ -376,20 +344,43 @@ export const STYLE_TAG_LABELS: Readonly<
  * - open（显眼长械）：突击步枪、霰弹枪、精准步枪、武士刀（无法藏进衣服，高安保区上街即被盘查）
  * - heavy（重型军火）：狙击步枪、轻机枪（平时放后备箱）
  */
+/** 可藏入袖口、靴筒或口袋里的紧凑武器（小刀与指虎），不算街头长枪也不算大件 */
+const POCKET_MELEE_WEAPONS = new Set([
+  "knife",
+  "kaiken",
+  "punknife",
+  "neurotoxin-knife",
+  "knuckles",
+]);
+
+/** 大衣或随身包可遮掩的中短兵刃与工具 */
+const COAT_MELEE_WEAPONS = new Set([
+  "butchers-cleaver",
+  "kukri",
+  "wakizashi",
+  "tire-iron",
+  "pipe-wrench",
+  "baton",
+  "sir-john",
+]);
+
 export function weaponConcealment(
   category: WeaponCategory | undefined,
+  id?: string,
 ): "pocket" | "coat" | "open" | "heavy" {
+  if (id !== undefined && POCKET_MELEE_WEAPONS.has(id)) return "pocket";
+  if (id !== undefined && COAT_MELEE_WEAPONS.has(id)) return "coat";
   switch (category) {
     case "pistol":
       return "pocket";
     case "revolver":
     case "smg":
-    case "blunt":
       return "coat";
     case "assaultRifle":
     case "shotgun":
     case "precisionRifle":
     case "blade":
+    case "blunt":
       return "open";
     case "sniperRifle":
     case "lmg":
@@ -399,62 +390,59 @@ export function weaponConcealment(
   }
 }
 
-/** 手枪/左轮/刀剑/钝器占 1 格；步枪/狙击/霰弹/冲锋枪/机枪占 2 格（长枪/重武器） */
-export function weaponSlotCost(category: WeaponCategory | undefined): 1 | 2 {
-  if (
-    category === "pistol" ||
-    category === "revolver" ||
-    category === "blade" ||
-    category === "blunt"
-  ) {
-    return 1;
-  }
-  return 2;
-}
-
-export function isHeavyWeapon(category: WeaponCategory | undefined): boolean {
-  const c = weaponConcealment(category);
+/** 是否属于沉重显眼的大件装备（长枪、重武器、大号砍刀/战斧/长钝器） */
+export function isBulkyItem(def: Pick<ItemDef, "id" | "kind" | "category"> | undefined): boolean {
+  if (def?.kind !== "weapon") return false;
+  const c = weaponConcealment(def.category, def.id);
   return c === "open" || c === "heavy";
 }
 
-/** 根据身上所穿服装推断四大穿搭通行证（StyleTag） */
-export function inferStyleTag(
-  clothing: InventoryState["clothing"],
+export function isHeavyWeapon(category: WeaponCategory | undefined, id?: string): boolean {
+  const c = weaponConcealment(category, id);
+  return c === "open" || c === "heavy";
+}
+
+/** 根据已安装且未损坏的承重骨骼义体计算从容携带大件上限 */
+export function bulkyLimit(cyberware?: {
+  readonly installed?: readonly { readonly id: string }[];
+  readonly brokenChrome?: readonly string[];
+}): number {
+  if (!cyberware?.installed?.length) return BASE_BULKY_LIMIT;
+  const broken = new Set(cyberware.brokenChrome ?? []);
+  const bonus = cyberware.installed.filter(
+    (c) => LOAD_BEARING_CYBERWARE.has(c.id) && !broken.has(c.id),
+  ).length;
+  return BASE_BULKY_LIMIT + bonus;
+}
+
+/** 合并背包与旧存档武器槽里的随身物品数量（旧武器槽条目排在前面） */
+export function carriedItemCounts(
+  state: Pick<InventoryState, "backpack" | "weapons">,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const w of state.weapons) {
+    if (w !== null) counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  for (const [id, count] of Object.entries(state.backpack)) {
+    if (count > 0) counts.set(id, (counts.get(id) ?? 0) + count);
+  }
+  return counts;
+}
+
+/** 身上所有随身武器的去重 id 列表（兼容旧存档武器槽 + 当前背包） */
+export function carriedWeaponIds(
+  state: Pick<InventoryState, "backpack" | "weapons">,
   catalog: ReadonlyMap<string, ItemDef>,
-): StyleTag {
-  const worn = Object.values(clothing)
-    .filter((id): id is string => typeof id === "string")
-    .map((id) => ({ id, def: catalog.get(id) }));
-  const text = worn.map((w) => `${w.id} ${w.def?.name ?? ""} ${w.def?.ability ?? ""}`).join(" ");
-  if (
-    text.includes("neokitsch") ||
-    text.includes("礼服") ||
-    text.includes("权贵") ||
-    text.includes("奢华") ||
-    worn.some((w) => w.def?.rarity === "legendary")
-  ) {
-    return "neokitsch";
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of carriedItemCounts(state).keys()) {
+    if (!seen.has(id) && catalog.get(id)?.kind === "weapon") {
+      seen.add(id);
+      out.push(id);
+    }
   }
-  if (
-    text.includes("corpo") ||
-    text.includes("西装") ||
-    text.includes("正装") ||
-    text.includes("军用") ||
-    text.includes("荒坂") ||
-    text.includes("neomilitarism")
-  ) {
-    return "neomilitarism";
-  }
-  if (
-    text.includes("kitsch") ||
-    text.includes("霓虹") ||
-    text.includes("夹克") ||
-    text.includes("street-jacket") ||
-    text.includes("莫克斯")
-  ) {
-    return "kitsch";
-  }
-  return "entropism";
+  return out;
 }
 
 const CONCEALMENT_RANK: Readonly<Record<"pocket" | "coat" | "open" | "heavy", number>> = {
@@ -464,37 +452,39 @@ const CONCEALMENT_RANK: Readonly<Record<"pocket" | "coat" | "open" | "heavy", nu
   heavy: 3,
 };
 
-/** 计算随身携带隐蔽度、负荷与穿搭状态 */
+/** 计算随身携带隐蔽度与大件软超重状态 */
 export function loadoutSummary(
-  state: Pick<InventoryState, "weapons" | "healing" | "grenade" | "clothing">,
+  state: Pick<InventoryState, "weapons" | "backpack">,
   catalog: ReadonlyMap<string, ItemDef>,
+  cyberware?: {
+    readonly installed?: readonly { readonly id: string }[];
+    readonly brokenChrome?: readonly string[];
+  },
 ) {
-  let usedSlots = 0;
+  let bulkyCount = 0;
+  const bulkyItems: string[] = [];
   let hasHeavy = false;
   let profile: "pocket" | "coat" | "open" | "heavy" = "pocket";
-  for (const weaponId of state.weapons) {
-    if (!weaponId) continue;
+  for (const [weaponId, count] of carriedItemCounts(state)) {
     const def = catalog.get(weaponId);
-    const cost = weaponSlotCost(def?.category);
-    const conc = weaponConcealment(def?.category);
-    usedSlots += cost;
-    if (conc === "open" || conc === "heavy") hasHeavy = true;
+    if (def?.kind !== "weapon") continue;
+    const conc = weaponConcealment(def.category, def.id);
+    if (conc === "heavy") hasHeavy = true;
     if (CONCEALMENT_RANK[conc] > CONCEALMENT_RANK[profile]) {
       profile = conc;
     }
+    if (isBulkyItem(def)) {
+      bulkyCount += count;
+      bulkyItems.push(count > 1 ? `${def.name}×${count}` : def.name);
+    }
   }
-  if (state.clothing.outer) usedSlots += 1;
-  if (state.healing || state.grenade) usedSlots += 1;
-  const styleTag = inferStyleTag(state.clothing, catalog);
-  const styleInfo = STYLE_TAG_LABELS[styleTag];
+  const bulkyMax = bulkyLimit(cyberware);
   return {
-    usedSlots,
-    maxSlots: LOADOUT_MAX_SLOTS,
-    overloaded: usedSlots > LOADOUT_MAX_SLOTS,
+    bulkyCount,
+    bulkyMax,
+    bulkyOverloaded: bulkyCount > bulkyMax,
+    bulkyItems,
     hasHeavyWeapon: hasHeavy,
     concealment: profile,
-    styleTag,
-    styleLabel: styleInfo.label,
-    styleTier: styleInfo.tier,
   };
 }

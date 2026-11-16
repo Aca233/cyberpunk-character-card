@@ -4,17 +4,17 @@ import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
 import type { TurnInput } from "../../schemas/turn";
-import type { CorpoRank } from "../../state";
-import { cyberwareSection } from "../../systems/cyberware";
+import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
 import { HackingStateSchema } from "../../systems/hacking/schema";
-import { DAMAGE_LABELS } from "../../systems/health";
+import { DAMAGE_LABELS, HealthStateSchema } from "../../systems/health";
 import { catalogSection, itemCatalog } from "../../systems/inventory";
 import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, recapSection } from "../../systems/memory";
 import { registry } from "../../systems/registry";
+import { SafehouseStateSchema } from "../../systems/safehouse/schema";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
@@ -148,21 +148,21 @@ export interface NarratorPrompt {
 export const JUDGE_TURNS = 4;
 
 /** 物品、义体、地点等表：抽取步用来对 id */
-export function tablesOf(view: PlayerView, extras: PromptExtras): string[] {
+export function tablesOf(_view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
   return [
     catalogSection(extras.data),
     cyberwareSection(extras.data),
     twistSection(extras.data),
     jobTemplateSection(extras.data),
-    consequenceSection(extras.data, view.difficulty),
+    consequenceSection(extras.data),
   ].filter((s): s is string => s !== undefined);
 }
 
 /** 写正文只带剧情素材，不带 id 查阅表 */
-export function narrateTablesOf(view: PlayerView, extras: PromptExtras): string[] {
+export function narrateTablesOf(_view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
-  return [twistSection(extras.data), consequenceSection(extras.data, view.difficulty)].filter(
+  return [twistSection(extras.data), consequenceSection(extras.data)].filter(
     (s): s is string => s !== undefined,
   );
 }
@@ -201,10 +201,21 @@ export function physicsSection(
 
   const inv = InventoryStateSchema.safeParse(world.slices.inventory);
   const items = safeData.items ? itemCatalog(safeData) : new Map();
-  const loadout = inv.success ? loadoutSummary(inv.data, items) : undefined;
+  const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
+  const health = HealthStateSchema.safeParse(world.slices.health ?? {});
+  const loadout = inv.success
+    ? loadoutSummary(inv.data, items, {
+        installed: cyber.success ? cyber.data.installed : [],
+        brokenChrome: health.success ? health.data.brokenChrome : [],
+      })
+    : undefined;
 
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
-  const corpo = world.slices.corpo as { rank?: CorpoRank } | undefined;
+  const safehouse = SafehouseStateSchema.safeParse(world.slices.safehouse ?? {});
+  const inSafehouse =
+    clock.location !== null &&
+    safehouse.success &&
+    safehouse.data.homes.some((h) => h.location === clock.location);
 
   const wantHack = HACK_ATTEMPT.test(inputText);
   const vector = DIRECT_LINK.test(inputText) ? "directLink" : "wireless";
@@ -215,9 +226,17 @@ export function physicsSection(
           securityCheck: {
             districtId,
             weaponConcealment: loadout.concealment,
-            styleTag: loadout.styleTag,
+            ...(inSafehouse ? { inSafehouse: true } : {}),
             ...(HIGH_END_VENUE.test(inputText) ? { enteringHighEndVenue: true } : {}),
-            ...(corpo?.rank ? { corpoRank: corpo.rank } : {}),
+          },
+        }
+      : {}),
+    ...(loadout?.bulkyOverloaded
+      ? {
+          bulkyOverload: {
+            count: loadout.bulkyCount,
+            max: loadout.bulkyMax,
+            items: loadout.bulkyItems,
           },
         }
       : {}),
@@ -270,6 +289,6 @@ export function boostNote(
   if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
   const { name, slots } = view.sandevistan;
   return stage === "judge"
-    ? `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬最多连贯做出 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。在 ruling 里一口气定性裁决这几步在物理与速度上哪几下能先手做成、哪里会被硬挡住。`
-    : `【斯安威斯坦时刻】\n玩家开了${name}：这一瞬最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序来不及做，在正文里写出时空骤停般的慢动作与错位感，明确哪几下抢先成了、哪几件差了半步。人性已经由代码扣过。`;
+    ? `【斯安威斯坦时刻】\n这一轮开启了${name}：这一瞬最多连贯做出 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。在 ruling 里一口气定性裁决这几步在物理与速度上哪几下能先手做成、哪里会被硬挡住。`
+    : `【斯安威斯坦时刻】\n这一轮触发了${name}：这一瞬最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序来不及做，在正文里写出时空骤停般的慢动作与错位感，明确哪几下抢先成了、哪几件差了半步。人性已经由代码扣过。`;
 }

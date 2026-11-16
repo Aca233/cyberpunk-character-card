@@ -1,30 +1,34 @@
 /*
- * 设置页（用户定的重排：主菜单和设置统一成神经界面的外框）：
- * 夜之城远景压暗 + 扫描线一扫 + 原作 panel.frame 红框；顶部 menu.header 垫标题，tab.bg 页签，tab.line 分隔。
- * 只用原作素材，不画 CSS 边框、不用渐变和 backdrop-filter（只用原作素材的约定）。
+ * 设置页（统一使用原作面板/线/底图：menu.header、tab.bg、tab.line、panel.frame、notify.itemCell*、CellFrame）
+ * 不手画边框、不用渐变和 backdrop-filter
  */
 
 .screen {
   position: relative;
   display: grid;
-  grid-template-rows: 72px auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 52px auto auto minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: 100%;
   height: 100dvh;
+  padding: 48px 72px 38px;
   overflow: hidden;
-  padding: 0 80px 20px;
   box-sizing: border-box;
   background: var(--cp-bg);
   color: var(--cp-text);
   font-family: var(--font-ui);
 }
 
-/* 内容压在背景层上面；背景层和外框都是绝对定位，不进网格 */
+.slice {
+  z-index: -1;
+}
+
 .screen > :where(header, nav, main, footer),
 .screen > span:not(.bg, .shade, .scan, .frame) {
   position: relative;
   z-index: 1;
 }
 
-/* 底图同神经界面 .menuBg：夜之城远景铺满，打开时从略放大落定 */
 .bg {
   position: absolute;
   inset: 0;
@@ -34,45 +38,42 @@
   animation: bgIn 600ms ease-out both;
 }
 
-/* 压暗比主菜单略重一点（66%），设置页文字多，要读得清；纯色，不用渐变 */
-/* 叫 shade 不叫 dim：.dim 已经是弱化文字的类，各页 span/li 都在用 */
 .shade {
   position: absolute;
   inset: 0;
-  background: rgb(5 5 10 / 66%);
+  background: rgb(5 5 10 / 70%);
 }
 
-/* 打开时扫描线从上往下扫一遍（第八节第 2 条，300ms） */
 .scan {
   position: absolute;
   inset: 0;
   background-repeat: repeat;
-  opacity: 0.12;
+  opacity: 0.1;
   mix-blend-mode: screen;
   pointer-events: none;
   animation: sweep 300ms ease-out both;
 }
 
-/* 原作 panel.frame 外框，四边往里收一点；用 .screen > 盖过 .nineSlice 的 inset: 0 */
 .screen > .frame {
   inset: 6px 20px 4px;
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
-/* ———— 顶部 72 高：menu.header 垫底的「设置」 ———— */
+/* ———— 顶部标题区：避开 panel.frame 顶部编号文字 ———— */
 
 .head {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding-left: 40px;
+  gap: 12px;
+  padding-left: 4px;
 }
 
 .headBg {
   position: absolute;
   top: 0;
   left: 0;
-  opacity: 0.85;
+  opacity: 0.34;
   pointer-events: none;
 }
 
@@ -80,29 +81,50 @@
   position: relative;
 }
 
-.head h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  color: var(--cp-red);
-  text-shadow:
-    0 0 3px rgb(5 5 10),
-    0 0 8px rgb(5 5 10);
+.headTitleWrap {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 
-/* 页签按钮本身用神经界面的 .tab，这里只排一行 */
+.headCode {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.head h1 {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-shadow:
+    0 0 4px rgb(5 5 10),
+    0 0 12px rgb(5 5 10);
+}
+
+.headFluff {
+  margin-left: auto;
+  opacity: 0.52;
+  pointer-events: none;
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .body {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  margin-top: 20px;
-  padding: 4px 16px 16px 4px;
+  margin-top: 16px;
+  padding: 2px 6px 6px 2px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
@@ -110,24 +132,16 @@
 }
 
 .foot {
-  margin-top: 14px;
-  text-shadow:
-    0 0 3px rgb(5 5 10),
-    0 0 8px rgb(5 5 10);
-}
-
-.foot > footer {
-  position: static;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 22px;
-  width: auto;
-  padding: 0;
-  background: none;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .dim {
+  margin: 0;
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
 }
@@ -143,111 +157,61 @@
 }
 
 .errors {
-  margin: 0.4rem 0 0;
+  margin: 8px 0 0;
   padding-left: 1.2rem;
   color: var(--cp-danger);
   font-size: var(--fs-label);
 }
 
-/* ———— 方案 ———— */
+.thinLine {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin: 4px 0;
+  background: var(--cp-red-dim);
+  opacity: 0.65;
+  mask-size: 100% 100%;
+}
 
-.profiles {
+.sidebarState {
   display: grid;
-  gap: 1.2rem;
-  max-width: 72rem;
+  justify-items: start;
+  gap: 8px;
 }
 
-.profileList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
-  gap: 1rem;
-}
+/* ———— 采样参数格、细节抬头 ———— */
 
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.6rem;
-}
-
-/* 标记用底色区分，不画边框 */
-.badge,
-.role {
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  color: var(--cp-text-dim);
-  background: rgb(255 255 255 / 6%);
-}
-
-.role {
-  color: var(--cp-bg);
-  background: var(--cp-yellow);
-  font-weight: 700;
-}
-
-.badge[data-key="configured"] {
-  color: var(--cp-success);
-}
-
-.badge[data-key="missing"] {
-  color: var(--cp-danger);
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.35rem 1.2rem;
-  margin: 0;
-  font-size: var(--fs-label);
-}
-
-.facts dt {
-  color: var(--cp-text-dim);
-}
-
-.facts dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.9rem;
-}
-
-/* 预设详情顶部：名字和导入时间在左、启用按钮在右（用户反馈「太空了」） */
 .detailHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem 1.5rem;
+  gap: 10px 18px;
 }
 
 .detailHead h3 {
-  margin: 0.3rem 0 0.2rem;
+  margin: 2px 0;
+  font-size: 1.15rem;
 }
 
 .detailHead p {
   margin: 0;
 }
 
-/* 采样参数横排成几格，一行放下，不竖着占好几行 */
 .samplingFacts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: 0.5rem 1rem;
-  margin: 0.6rem 0 0;
-  font-size: var(--fs-label);
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
 }
 
-.samplingFacts > div,
+.samplingFacts > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgb(14 14 23 / 68%);
+}
+
 .samplingFacts dt,
 .samplingFacts dd {
   margin: 0;
@@ -255,74 +219,112 @@
 
 .samplingFacts dt {
   color: var(--cp-text-dim);
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
 .samplingFacts dd {
-  font-size: var(--fs-ui);
   color: var(--cp-cyan);
+  font-size: var(--fs-ui);
+  font-weight: 600;
 }
 
-.testResult {
-  margin: 0.7rem 0 0;
-  font-size: var(--fs-label);
-  color: var(--cp-danger);
-  overflow-wrap: anywhere;
+/* ———— 上下文（调试） ———— */
+
+.gateCard {
+  max-width: 44rem;
 }
 
-.testResult[data-ok] {
-  color: var(--cp-success);
-}
-
-.form {
+.gateBody {
   display: grid;
-  gap: 0.55rem;
-  margin-top: 1.2rem;
+  gap: 12px;
 }
 
-.form label,
-.pickers label {
-  display: grid;
-  gap: 0.4rem;
-  font-size: var(--fs-label);
-  color: var(--cp-text-dim);
+.gateHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-/* ———— 上下文 ———— */
+.gateHead h2 {
+  margin: 0;
+  color: var(--cp-yellow);
+  font-size: var(--fs-body);
+}
+
+.gateBody p {
+  margin: 0;
+  line-height: 1.65;
+}
 
 .context {
   display: grid;
-  gap: 1.2rem;
-  max-width: 72rem;
+  gap: 14px;
+  width: 100%;
+  max-width: 75rem;
 }
 
 .pickers {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1rem;
+  gap: 12px;
+}
+
+.pickers label {
+  display: grid;
+  gap: 6px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
 }
 
 .detail {
   display: grid;
-  gap: 1rem;
+  gap: 12px;
 }
 
-/* 每段套原作 map.filterCell 框（CellFrame），警告段框线换黄 */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.factCard {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  background: rgb(14 14 23 / 72%);
+}
+
+.factCardWide {
+  grid-column: 1 / -1;
+}
+
+.factCard dt {
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.factCard dd {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+
+/* 每段上下文使用 notify.itemCell 框 */
 .section {
   position: relative;
   isolation: isolate;
-  padding: 14px 20px 16px 16px;
-  --box-line: var(--cp-red-dim);
-}
-
-.section[data-tone="warn"] {
-  --box-line: var(--cp-yellow);
+  padding: 14px 18px 16px;
 }
 
 .section h2 {
-  margin: 0 0 0.6rem;
+  margin: 0 0 8px;
+  color: var(--cp-cyan);
   font-size: var(--fs-ui);
   letter-spacing: 0.1em;
-  color: var(--cp-cyan);
 }
 
 .section[data-tone="warn"] h2 {
@@ -337,111 +339,83 @@
 }
 
 .section pre {
-  margin: 0;
   max-height: 28rem;
+  margin: 0;
+  padding: 10px 14px;
   overflow: auto;
-  padding: 0.7rem 0.9rem;
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  background: rgb(0 0 0 / 50%);
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
-  background: rgb(0 0 0 / 50%);
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
 }
 
 .stageModules {
-  margin: 0 0 0.5rem;
-  font-size: var(--fs-label);
+  margin: 0 0 8px;
   color: var(--cp-text-dim);
+  font-size: var(--fs-label);
 }
 
 .message {
-  margin-bottom: 0.4rem;
+  margin-bottom: 6px;
 }
 
 .message summary {
-  cursor: var(--cp-cursor-hand);
-  padding: 0.25rem 0;
-  font-size: var(--fs-label);
+  padding: 4px 0;
   color: var(--cp-yellow);
-}
-
-/* ———— 密钥 ———— */
-
-.keyForm {
-  display: grid;
-  gap: 0.4rem;
-  margin-top: 1.2rem;
-}
-
-.keyForm label {
-  display: grid;
-  gap: 0.4rem;
   font-size: var(--fs-label);
-  color: var(--cp-text-dim);
-}
-
-.keyForm .actions {
-  margin-top: 0.2rem;
-}
-
-.ok {
-  color: var(--cp-success);
-  font-size: var(--fs-label);
+  cursor: var(--cp-cursor-hand);
 }
 
 .caseRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
-.prefs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-  max-width: 40rem;
-}
+/* ———— 叙事偏好 ———— */
 
-.pref {
+.prefsRoot {
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 0.6rem;
-  align-items: baseline;
-  cursor: var(--cp-cursor-hand);
+  gap: 14px;
+  width: 100%;
+  max-width: 75rem;
+  min-width: 0;
 }
 
-.pref > small {
-  grid-column: 2;
-}
-
-/* 偏好按组排列，每组套原作 map.filterCell 框（CellFrame，用户定的重排），不画 CSS 边框 */
 .prefGroup {
   position: relative;
   isolation: isolate;
   display: grid;
-  gap: 0.25rem;
+  gap: 6px;
   max-width: 60rem;
   min-width: 0;
-  padding: 14px 22px 10px 18px;
+  padding: 14px 20px 12px;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .prefRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 0;
-  cursor: var(--cp-cursor-hand);
+  gap: 16px;
+  padding: 10px 0 4px;
 }
 
 .prefText {
   display: grid;
-  gap: 0.35rem;
+  gap: 4px;
   min-width: 0;
+  cursor: var(--cp-cursor-hand);
 }
 
 .prefText strong {
@@ -452,7 +426,7 @@
 .prefText small {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
-  line-height: 1.65;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -460,46 +434,31 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
 }
 
-.prefControl input {
-  width: 1.15rem;
-  height: 1.15rem;
-  accent-color: var(--cp-cyan);
+/* 下拉框限宽 */
+.prefControl > span:has(> select) {
+  width: min(13rem, 42vw);
 }
 
-/* 下拉框外面套 FrameBox，这里只限宽 */
-.prefControl > span {
-  width: min(11rem, 38vw);
-}
-
-.prefControl :focus-visible {
-  outline: 2px solid var(--cp-cyan);
-  outline-offset: 3px;
-}
-
-/* ———— 酒馆预设（用户定的）：版式照模型连接页，这里只管开关列表和选文件按钮 ———— */
+/* ———— 酒馆预设条目开关列表 & 导入按钮 ———— */
 
 .toggleBox {
   display: grid;
-  gap: 0.6rem;
-  margin-top: 0.8rem;
+  gap: 10px;
 }
 
 .toggleFilter {
   width: 100%;
 }
 
-/* 两列排开，每条一行：勾选框、名字，下面一行小字说明；关掉的压暗 */
 .presetToggles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
-  gap: 0.25rem 1rem;
+  gap: 4px 14px;
   max-height: 24rem;
   margin: 0;
-  padding: 0 0.4rem 0 0;
+  padding: 0 4px 0 0;
   overflow-y: auto;
   list-style: none;
   font-size: var(--fs-label);
@@ -510,13 +469,12 @@
 .presetToggles label {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 0.55rem;
-  align-items: baseline;
-  padding: 0.4rem 0.5rem;
+  column-gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
   cursor: var(--cp-cursor-hand);
 }
 
-/* 悬停只铺一层青色底，不画侧边线 */
 .presetToggles label:hover {
   background: rgb(94 246 255 / 7%);
 }
@@ -531,21 +489,17 @@
 .presetToggles label > small {
   grid-column: 2;
   color: var(--cp-text-dim);
-  font-size: 0.75rem;
+  font-size: 12px;
 }
 
 .presetToggles li[data-off] label > span {
   color: var(--cp-text-dim);
 }
 
-/*
- * 能展开的条目列表（用户定的：提示词条目展开查看、编辑）：单列整行，名字左、角色字数右、最右「展开」，
- * 一行占满宽度不留空；隔行铺一层很淡的底色好对行，展开的那行整行变青底
- */
 .presetToggles[data-expandable] {
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  max-height: 40rem;
+  max-height: 36rem;
 }
 
 .presetToggles[data-expandable] > li:nth-child(odd) {
@@ -553,19 +507,18 @@
 }
 
 .presetToggles[data-expandable] > li[data-open] {
-  background: rgb(94 246 255 / 6%);
+  background: rgb(94 246 255 / 7%);
 }
 
 .toggleRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .presetToggles[data-expandable] label {
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
 }
 
 .presetToggles[data-expandable] label > small {
@@ -574,20 +527,31 @@
 }
 
 .expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 32px;
-  padding: 0 12px;
-  font: inherit;
-  font-size: var(--fs-label);
-  letter-spacing: 0.08em;
-  color: var(--cp-cyan);
+  padding: 0 10px;
   background: none;
   border: 0;
+  color: var(--cp-cyan);
+  font: inherit;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
   cursor: var(--cp-cursor-hand);
 }
 
-.expand:hover,
+.expandArrow {
+  transform: rotate(180deg);
+  transition: transform var(--dur-flash);
+}
+
 .expand[aria-expanded="true"] {
   color: var(--cp-yellow);
+}
+
+.expand[aria-expanded="true"] .expandArrow {
+  transform: rotate(0deg);
 }
 
 .expand:focus-visible {
@@ -596,38 +560,37 @@
 }
 
 .entryDetail {
-  padding: 4px 12px 14px 34px;
+  padding: 4px 12px 14px 38px;
 }
 
 .entryEditor {
   display: grid;
-  gap: 0.6rem;
+  gap: 8px;
 }
 
 .entryEditor textarea {
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   line-height: 1.6;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
 }
 
-.entryEditor .actions {
-  margin-top: 0;
-}
-
-/* 选文件按钮：外形同 Button，原作 tab.bg 九宫格垫底；原生 input 藏起来，点整块文字就弹选择框 */
+/* 导入 .json 按钮：对齐 Button.tsx 底板透明度，黄字深底可读 */
 .fileButton {
   position: relative;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0 18px;
-  font-size: var(--fs-ui);
-  letter-spacing: 0.08em;
+  min-height: 32px;
+  padding: 0 14px;
   color: var(--cp-yellow);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   cursor: var(--cp-cursor-hand);
+  transition: color var(--dur-flash);
 }
 
 .fileButton:hover {
@@ -636,7 +599,12 @@
 
 .fileBg {
   z-index: -1;
-  opacity: 0.85;
+  opacity: 0.16;
+  transition: opacity var(--dur-flash);
+}
+
+.fileButton:hover .fileBg {
+  opacity: 0.28;
 }
 
 .fileButton input {
@@ -651,12 +619,11 @@
   outline-offset: 2px;
 }
 
-/* 剧透调试视图的常驻标记：深红底白字，对比度 7:1 以上 */
+/* 剧透调试视图的常驻标记 */
 .spoilerBadge {
   position: fixed;
   top: 0;
   left: 50%;
-  transform: translateX(-50%);
   z-index: 1000;
   padding: 2px 14px;
   background: #7f1d1d;
@@ -664,25 +631,52 @@
   font-size: 12px;
   letter-spacing: 0.2em;
   pointer-events: none;
+  transform: translateX(-50%);
 }
 
 @media (width < 1280px) {
   .screen {
-    padding: 0 40px 16px;
+    padding: 44px 56px 36px;
   }
 }
 
 @media (width < 760px) {
   .screen {
-    padding: 0 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 36px 28px 34px;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
-  .head {
-    padding-left: 16px;
+  .screen > .frame {
+    position: fixed;
+    inset: 6px 10px 4px;
+    pointer-events: none;
+  }
+
+  .body {
+    flex: none;
+    overflow: visible;
+    margin-top: 8px;
+  }
+
+  .headFluff {
+    display: none;
   }
 
   .pickers {
     grid-template-columns: 1fr;
+  }
+
+  .prefRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .prefControl {
+    justify-content: flex-start;
   }
 }
 
@@ -708,12 +702,15 @@
   }
 }
 
-/* 减少动态效果时直接出现（计划第八节第 5 条） */
 @media (prefers-reduced-motion: reduce) {
   .bg,
   .scan,
   .body {
     animation-duration: 1ms;
     animation-delay: 0ms;
+  }
+
+  .expandArrow {
+    transition: none;
   }
 }

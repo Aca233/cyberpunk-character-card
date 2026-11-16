@@ -6,7 +6,7 @@ import { npcRules } from "@cp/core";
  * - 朱迪、瑞吉娜、维克多：2077 开局的引导委托用（开场 lizzies-2077 的 cast）。原作依据《赛博朋克 2077》（2.x），2026-10-25 查
  *   cyberpunk.fandom.com 的 Judy_Álvarez、Regina_Jones、Viktor_Vektor；译名照本机文本库（朱迪·阿尔瓦雷兹、瑞吉娜·琼斯、维克多·维克托）。
  *   外貌和口吻的细节、维克多的诉求底线是本作改编
- * - body 的档位、属性、开局人性是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值。
+ * - body 的随身武装、义体与开局人性是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值。
  *   曼因的人性压得很低是照他瞒着的发病征兆写的
  * - 装备和义体（用户定的补卡，2026-10-29 查 cyberpunk.fandom.com 各人词条，只有这一个来源，按单一来源对待）：
  *   武器照词条里的型号对到物品表（罗格的 Pride 是 Liberty 改的、瑞弗的 Crash 和克里的 Archangel 是 Overture 改的、
@@ -41,8 +41,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "lizzies-bar",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 6, reflexes: 15, tech: 6, intelligence: 5, cool: 10 },
         gear: ["guts", "street-jacket"],
         cyberware: ["prosthetic-arms", "kiroshi-mk1"],
       },
@@ -67,8 +65,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "lizzies-bar",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 18, reflexes: 12, tech: 6, intelligence: 6, cool: 14 },
         gear: ["lexington", "zhuo", "street-jacket"],
         cyberware: [
           "projectile-launch-system",
@@ -99,8 +95,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "私下与军用科技签署活体实验对赌协议，拿底层佣兵当高危义体测试小白鼠；一旦出事会直接格式化所有联络记录灭口",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 5, reflexes: 6, tech: 6, intelligence: 12, cool: 12 },
         gear: ["omaha", "shingen", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -128,8 +122,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "lizzies-bar",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 5, reflexes: 6, tech: 14, intelligence: 10, cool: 6 },
         gear: ["chao", "frag-grenade", "techie-coverall"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -154,8 +146,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "regina-office",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 12, cool: 10 },
         gear: ["street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -181,8 +171,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "vik-clinic",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 14, reflexes: 10, tech: 16, intelligence: 10, cool: 10 },
         gear: ["techie-coverall"],
         cyberware: ["biomonitor"],
       },
@@ -206,8 +194,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "coyote-cojo",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 15, reflexes: 10, tech: 5, intelligence: 5, cool: 11 },
         gear: ["la-chingona-dorada", "machete", "street-jacket"],
         cyberware: ["kiroshi-mk1", "titanium-bones"],
       },
@@ -232,8 +218,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "afterlife",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 8, reflexes: 12, tech: 6, intelligence: 14, cool: 17 },
         gear: ["liberty", "nekomata", "street-jacket"],
         cyberware: ["kiroshi-mk2"],
       },
@@ -261,8 +245,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "wakako-pachinko",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 3, reflexes: 4, tech: 8, intelligence: 15, cool: 14 },
         gear: [],
         cyberware: ["kiroshi-mk1"],
       },
@@ -287,8 +269,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "vik-clinic",
       canon: true,
       body: {
-        tier: "mook",
-        attributes: { body: 4, reflexes: 5, tech: 6, intelligence: 9, cool: 8 },
         gear: [],
         cyberware: [],
       },
@@ -312,8 +292,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "两年前在太平洲被巫毒帮洗劫一空狼狈出逃，如今的豪车保镖全靠高利贷撑场面，后路只留了一张不记名穿梭艇票",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 6, reflexes: 4, tech: 5, intelligence: 14, cool: 15 },
         gear: ["liberty", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -339,8 +317,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "曾亲手对沾染毒品并出卖教区兄弟的亲侄子执行家法，念珠十字架里藏着当年那颗取出的 9mm 弹头",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 7, reflexes: 6, tech: 5, intelligence: 12, cool: 13 },
         gear: [],
         cyberware: ["kiroshi-mk1"],
       },
@@ -367,8 +343,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "badlands",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 9, reflexes: 14, tech: 10, intelligence: 7, cool: 12 },
         gear: ["overwatch", "nova", "nomad-duster"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -394,8 +368,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "私下备份了内务部与多起市议员命案的压案卷宗，藏在妹妹家农场的废弃发电机组里，随时做好了被踢出警局的准备",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 9, reflexes: 9, tech: 7, intelligence: 10, cool: 9 },
         gear: ["overture", "flashbang", "street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -421,8 +393,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "kerry-estate",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 6, reflexes: 8, tech: 5, intelligence: 9, cool: 12 },
         gear: ["overture", "omaha", "street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -430,7 +400,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
     // 2026-11-02 补卡（用户："把所有能预设好的角色都预设好"，选了"全部放进开局"）：
     // 原作依据 cyberpunk.fandom.com 各人词条，2026-11-02 查，只有这一个来源，按单一来源对待；
     // 译名照本机文本库（data/lore/terms.json）。下面每张卡标了词条地址。
-    // 外貌细节、衣服、档位和属性、词条里没写武器的人的装备是本作改编；
+    // 外貌细节、衣服与词条里没写武器的人的随身武装是本作改编；
     // 表里没有的原作义体（义体手、电磁脉冲线路等）没配
     // —— 中间人 ——
     {
@@ -455,8 +425,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "corpo-plaza",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 6, reflexes: 6, tech: 5, intelligence: 11, cool: 12 },
         gear: ["unity", "street-jacket"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -481,8 +449,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "之所以能源源不断截获军规车辆与货运情报，是因为他在荒坂物流调配中心安插了自己的亲生私生子",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 7, reflexes: 7, tech: 6, intelligence: 11, cool: 12 },
         gear: ["liberty", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -511,8 +477,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "badlands",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 5, reflexes: 5, tech: 12, intelligence: 11, cool: 10 },
         gear: ["satara", "techie-coverall"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -539,8 +503,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "dogtown",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 5, reflexes: 6, tech: 8, intelligence: 13, cool: 13 },
         gear: ["unity", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -570,8 +532,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "出身千叶 11 区赤贫贫民窟，幼年靠从垃圾堆翻烂菜叶为生；深知荒坂繁荣背后的累累白骨，却选择将盲目效忠作为自己唯一的信仰支柱",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 12, reflexes: 14, tech: 5, intelligence: 9, cool: 13 },
         gear: ["kenshin", "shingen", "flashbang", "corpo-suit"],
         cyberware: ["kiroshi-mk2", "subdermal-armor", "kerenzikov"],
       },
@@ -598,8 +558,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "japantown",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 5, reflexes: 7, tech: 6, intelligence: 11, cool: 13 },
         gear: [],
         cyberware: ["kiroshi-mk1"],
       },
@@ -626,8 +584,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "深知父亲三郎准备在寿终前夺舍赖宣肉身的‘守护神’计划，表面顺从父亲，暗中却在推演一旦家族内讧爆发时的独立避险矩阵",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 6, reflexes: 8, tech: 10, intelligence: 15, cool: 15 },
         gear: ["corpo-suit"],
         cyberware: ["arasaka-deck", "kiroshi-mk2"],
       },
@@ -655,8 +611,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "年轻时创立‘钢铁之龙’暴走族反抗荒坂失败后，意识到外部无法撼动巨兽，潜伏回家族只为等待亲手从内部将荒坂帝国点燃殉葬的时机",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 9, reflexes: 11, tech: 7, intelligence: 12, cool: 13 },
         gear: ["kenshin"],
         cyberware: ["kiroshi-mk2"],
       },
@@ -682,8 +636,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "早已将自己的数字化意识（神舆）上传至全球三个脱机冷库节点，视血肉之躯为随时可替换的旧衣服，连亲生儿女都只是他意识降临的候选容器",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 5, reflexes: 5, tech: 6, intelligence: 20, cool: 20 },
         gear: ["satori"],
         cyberware: ["kiroshi-mk2", "prosthetic-arms"],
       },
@@ -710,8 +662,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "私自复制了 Relic 核心架构的代码签名秘钥，早已暗中与康陶中层建立安全信道，一旦荒坂问责便立刻携核心技术叛逃",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 4, reflexes: 4, tech: 13, intelligence: 16, cool: 8 },
         gear: ["corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -737,8 +687,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "曾在一次旧网深潜事故中目睹过黑墙外游荡的流窜 AI，后颈接缝至今留有神经灼伤暗斑，因此对任何涉及黑墙的委托避之不及",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 4, reflexes: 7, tech: 10, intelligence: 14, cool: 8 },
         gear: ["unity", "netrunner-suit"],
         cyberware: ["militech-paraline", "kiroshi-mk1"],
       },
@@ -765,8 +713,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "全脸重度义体化导致面部痛觉神经永久坏死，必须每隔六小时吸食一剂高纯度黑蕾丝来压制脑干的剧烈痉挛",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 10, reflexes: 9, tech: 9, intelligence: 8, cool: 8 },
         gear: ["nova", "black-lace", "street-jacket"],
         cyberware: ["kiroshi-mk2", "militech-paraline"],
       },
@@ -793,8 +739,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "将前任老大布里克用高爆炸弹项圈锁死在食品厂深处的禁闭室，每晚嗑药后都要亲自去羞辱前任以排解篡位后的被害妄想",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 14, reflexes: 12, tech: 8, intelligence: 10, cool: 12 },
         gear: ["lexington", "street-jacket"],
         cyberware: ["kiroshi-mk2", "subdermal-armor"],
       },
@@ -819,8 +763,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "在给外来佣兵植入的个人链接引导程序里暗藏了一键烧毁脑神经的后门木马，从一开始就没打算让任何知情者活着走出太平洲",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 12, reflexes: 14, tech: 9, intelligence: 10, cool: 9 },
         gear: ["tactician", "machete", "emp-grenade"],
         cyberware: ["zetatech-sandevistan", "kerenzikov"],
       },
@@ -847,8 +789,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "为了撕开黑墙接触奥特·坎宁安的遗留数据意识，已经暗中牺牲了两个完整编制的海地黑客小组，并将事故伪装成网络监察的外部清洗",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 5, reflexes: 8, tech: 12, intelligence: 18, cool: 14 },
         gear: ["netrunner-suit"],
         cyberware: ["raven-microcyber", "kiroshi-mk2", "self-ice"],
       },
@@ -876,8 +816,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "coyote-cojo",
       canon: true,
       body: {
-        tier: "mook",
-        attributes: { body: 6, reflexes: 4, tech: 4, intelligence: 8, cool: 10 },
         gear: [],
         cyberware: [],
       },
@@ -904,8 +842,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "车队泄密直接牵扯到她竞争副总裁的死对头吉尔克里斯特，她不惜动用黑账雇佣法外狂徒截杀同僚以换取自保",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 8, reflexes: 9, tech: 6, intelligence: 12, cool: 13 },
         gear: ["ajax", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -932,8 +868,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "afterlife",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 7, reflexes: 8, tech: 12, intelligence: 9, cool: 10 },
         gear: ["lexington", "copperhead", "techie-coverall"],
         cyberware: [],
       },
@@ -959,8 +893,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "afterlife",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 4, reflexes: 6, tech: 10, intelligence: 14, cool: 8 },
         gear: ["netrunner-suit"],
         cyberware: ["biotech-sigma", "kiroshi-mk1"],
       },
@@ -986,8 +918,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "全身义体置换导致神经递质代谢彻底失调，已经滑向赛博精神病早期，日常完全依赖特调的情感阻断剂维持表面理智",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 9, reflexes: 8, tech: 6, intelligence: 10, cool: 15 },
         gear: [],
         cyberware: ["kiroshi-mk2", "prosthetic-arms", "prosthetic-legs", "subdermal-armor"],
       },
@@ -1015,8 +945,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "早在半个世纪前就将自己最后的人性底线连同大脑边缘系统一并切除，荒坂给他的每一个杀戮指令都被他当作检验新型军规武器极限的游乐场",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 20, reflexes: 16, tech: 8, intelligence: 8, cool: 14 },
         gear: ["defender"],
         cyberware: [
           "zetatech-sandevistan",
@@ -1054,8 +982,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "badlands",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 12, reflexes: 12, tech: 8, intelligence: 10, cool: 13 },
         gear: ["copperhead", "tactician", "satara", "nomad-duster"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -1083,8 +1009,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "badlands",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 12, reflexes: 10, tech: 12, intelligence: 8, cool: 10 },
         gear: ["copperhead", "nomad-duster"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -1112,8 +1036,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "badlands",
       canon: true,
       body: {
-        tier: "pro",
-        attributes: { body: 6, reflexes: 7, tech: 12, intelligence: 12, cool: 8 },
         gear: ["copperhead", "nomad-duster"],
         cyberware: ["militech-paraline", "kiroshi-mk1"],
       },
@@ -1142,8 +1064,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "神经系统已被深网流窜 AI 侵蚀超过 70%，为求生暗中策划了总统专机坠毁事件，利用矩阵核心与矩阵网络欺骗所有试图‘拯救’她的人",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 5, reflexes: 9, tech: 12, intelligence: 20, cool: 14 },
         gear: ["yukimura", "netrunner-suit"],
         cyberware: ["militech-canto", "kiroshi-mk2", "smart-link", "self-ice"],
       },
@@ -1170,8 +1090,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "当年在列车遇袭前其实已截获了刺杀预警，但在迈尔斯以国家最高利益下达绝对服从指令后，平静地选择走进必死埋伏以成全棋局",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 14, reflexes: 14, tech: 8, intelligence: 13, cool: 15 },
         gear: ["lexington", "ashura", "flashbang", "street-jacket"],
         cyberware: ["subdermal-armor", "gorilla-arms", "fortified-ankles", "kiroshi-mk2"],
       },
@@ -1197,8 +1115,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "私自签署了跨越黑墙捕获自主战斗 AI 的非法‘百灵鸟工程’，一旦此等反人类行径曝光将直接引发第五次全境企业世界大战并导致新美国政权解体",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 8, reflexes: 8, tech: 6, intelligence: 15, cool: 16 },
         gear: ["liberty", "corpo-suit"],
         cyberware: ["kiroshi-mk1"],
       },
@@ -1227,8 +1143,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "dogtown",
       canon: true,
       body: {
-        tier: "legend",
-        attributes: { body: 15, reflexes: 15, tech: 9, intelligence: 14, cool: 15 },
         gear: ["liberty", "knife", "flashbang"],
         cyberware: [
           "zetatech-sandevistan",
@@ -1262,8 +1176,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "dogtown",
       canon: true,
       body: {
-        tier: "elite",
-        attributes: { body: 8, reflexes: 13, tech: 8, intelligence: 12, cool: 15 },
         gear: ["lexington", "street-jacket"],
         cyberware: ["zetatech-sandevistan", "kiroshi-mk1"],
       },

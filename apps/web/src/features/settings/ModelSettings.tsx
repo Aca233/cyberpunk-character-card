@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { api, type ConnectionTest, type ProfilePatch, type PublicProfile } from "../../api/client";
 import { LOCAL_MODE } from "../../api/transport";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { Panel } from "../../ui/Panel";
 import styles from "./model-settings.module.css";
+import shared from "./settings.module.css";
 
 type Preset = "gemini" | "relay" | "openai" | "ollama";
 const PRESETS: Record<
@@ -67,6 +70,7 @@ export function ModelSettings({
 }: {
   readonly onDirtyChange: (dirty: boolean) => void;
 }) {
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const overview = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const refresh = useRefresh();
@@ -85,62 +89,78 @@ export function ModelSettings({
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const select = (id: string) => {
     setDirty(false);
-    setParams((p) => {
-      const next = new URLSearchParams(p);
-      next.set("profile", id);
-      return next;
-    });
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.set("profile", id);
+        return next;
+      },
+      { replace: true, state: location.state },
+    );
   };
   const requestSelect = (id: string) => {
     if (dirty) setLeaving(id);
     else select(id);
   };
 
-  if (overview.isPending) return <p role="status">正在读取模型连接…</p>;
+  if (overview.isPending)
+    return (
+      <Panel line="var(--cp-red-dim)" className={shared.gateCard}>
+        <p role="status" className={styles.help}>
+          正在读取模型连接…
+        </p>
+      </Panel>
+    );
   if (overview.isError)
     return (
-      <div className={styles.notice} role="alert">
-        <h2>没有读到配置</h2>
-        <p>{overview.error.message}</p>
-        <Button onClick={() => void overview.refetch()}>重试</Button>
-      </div>
+      <Panel line="var(--cp-danger)" className={shared.gateCard}>
+        <div className={styles.notice} role="alert">
+          <h2>没有读到配置</h2>
+          <p>{overview.error.message}</p>
+          <Button onClick={() => void overview.refetch()}>重试</Button>
+        </div>
+      </Panel>
     );
 
   const data = overview.data;
   if (data.status === "missing")
     return (
       <section className={styles.root}>
-        <div className={styles.intro}>
-          <span className={styles.kicker}>MODEL CONNECTION</span>
-          <h2>先连接一个模型</h2>
-          <Button primary disabled={init.isPending} onClick={() => init.mutate()}>
-            {init.isPending ? "创建中…" : "创建本机配置"}
-          </Button>
-          {init.isError && (
-            <p className={styles.error} role="alert">
-              {init.error.message}
-            </p>
-          )}
-          <p className={styles.help}>仅本地文件，不发请求</p>
-        </div>
+        <Panel line="var(--cp-yellow)" className={shared.gateCard}>
+          <div className={styles.intro}>
+            <span className={styles.kicker}>MODEL CONNECTION</span>
+            <h2>先连接一个模型</h2>
+            <Button primary disabled={init.isPending} onClick={() => init.mutate()}>
+              {init.isPending ? "创建中…" : "创建本机配置"}
+            </Button>
+            {init.isError && (
+              <p className={styles.error} role="alert">
+                {init.error.message}
+              </p>
+            )}
+            <p className={styles.help}>仅本地文件，不发请求</p>
+          </div>
+        </Panel>
       </section>
     );
   if (data.status === "invalid")
     return (
-      <section className={styles.notice} role="alert">
-        <h2>配置文件有错误，暂时不能安全修改</h2>
-        <p>
-          {LOCAL_MODE
-            ? "不会覆盖现有配置或密钥。配置保存在这个浏览器里，不能直接改文件；出现这个错误通常是版本不兼容，请带上下面的具体错误反馈。"
-            : "不会覆盖现有文件或密钥。请按下面的具体错误修正 config.json。"}
-        </p>
-        <ul>
-          {data.errors.map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
-        <Button onClick={() => void overview.refetch()}>修好后重新读取</Button>
-      </section>
+      <Panel line="var(--cp-danger)" className={shared.gateCard}>
+        <section className={styles.notice} role="alert">
+          <h2>配置文件有错误，暂时不能安全修改</h2>
+          <p>
+            {LOCAL_MODE
+              ? "不会覆盖现有配置或密钥。配置保存在这个浏览器里，不能直接改文件；出现这个错误通常是版本不兼容，请带上下面的具体错误反馈。"
+              : "不会覆盖现有文件或密钥。请按下面的具体错误修正 config.json。"}
+          </p>
+          <ul>
+            {data.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+          <Button onClick={() => void overview.refetch()}>修好后重新读取</Button>
+        </section>
+      </Panel>
     );
 
   const narrator = data.profiles.find((p) => p.name === data.narrator);
@@ -160,29 +180,74 @@ export function ModelSettings({
         data-ready={ready || undefined}
         aria-label="当前配置状态"
       >
-        <CellFrame />
-        <div>
-          <span className={styles.kicker}>{ready ? "配置已就绪" : "还差一步"}</span>
-          <h3>{ready ? "模型已选好，连接尚需实际验证。" : "当前选择还不能开始剧情。"}</h3>
-          <p>
-            叙事模型：<strong>{data.narrator ?? "未选择"}</strong> · 辅助模型：
-            <strong>{data.aux ?? "未选择"}</strong>
-          </p>
-          {!ready && (
-            <ul>
-              {narratorProblems.map((p) => (
-                <li key={`narrator-${p}`}>叙事模型：{p}</li>
-              ))}
-              {auxProblems.map((p) => (
-                <li key={`aux-${p}`}>辅助模型：{p}</li>
-              ))}
-            </ul>
-          )}
-          <p className={styles.help}>仅检查配置，未测连通</p>
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 86%)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint={ready ? "var(--cp-cyan)" : "var(--cp-yellow)"}
+          className={styles.slice}
+        />
+        <Asset
+          id="panel.glowLeft"
+          height={34}
+          tint={ready ? "var(--cp-cyan)" : "var(--cp-yellow)"}
+          className={styles.readyGlow}
+        />
+        <div className={styles.readyMain}>
+          <div className={styles.readyTop}>
+            <span className={styles.statusBadge} data-ready={ready || undefined}>
+              {ready ? "配置已就绪" : "还差一步"}
+            </span>
+            <strong className={styles.readyTitle}>
+              {ready ? "模型已选好 · 仅检查配置，未发连通测试" : "当前选择还不能开始剧情"}
+            </strong>
+          </div>
+          <div className={styles.readyMeta}>
+            <span className={styles.rolePair}>
+              叙事模型：
+              <button
+                type="button"
+                className={styles.roleChip}
+                disabled={!data.narrator}
+                onClick={() => {
+                  if (!data.narrator || (!adding && selected?.name === data.narrator)) return;
+                  requestSelect(data.narrator);
+                }}
+              >
+                {data.narrator ?? "未选择"}
+              </button>
+            </span>
+            <span className={styles.rolePair}>
+              辅助模型：
+              <button
+                type="button"
+                className={styles.roleChip}
+                disabled={!data.aux}
+                onClick={() => {
+                  if (!data.aux || (!adding && selected?.name === data.aux)) return;
+                  requestSelect(data.aux);
+                }}
+              >
+                {data.aux ?? "未选择"}
+              </button>
+            </span>
+            {!ready && (
+              <span className={styles.readyErrors}>
+                {[
+                  ...narratorProblems.map((p) => `叙事：${p}`),
+                  ...auxProblems.map((p) => `辅助：${p}`),
+                ].join(" · ")}
+              </span>
+            )}
+          </div>
         </div>
         {!ready && candidate && (
           <div className={styles.fix}>
-            <p>「{candidate.name}」可直接使用</p>
             <Button
               primary
               disabled={assign.isPending || dirty}
@@ -194,6 +259,7 @@ export function ModelSettings({
           </div>
         )}
       </section>
+
       {notice && (
         <p className={styles.success} role="status">
           {notice}
@@ -207,44 +273,88 @@ export function ModelSettings({
 
       <div className={styles.workspace}>
         <aside className={styles.sidebar} aria-label="模型连接列表">
-          <CellFrame />
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="rgb(12 10 18 / 84%)"
+            className={styles.slice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint="var(--cp-red-dim)"
+            className={styles.slice}
+          />
           <div className={styles.listHead}>
             <h3>我的连接</h3>
-            <Button onClick={() => requestSelect("@new")}>添加连接</Button>
+            <Button
+              small
+              onClick={() => {
+                if (!adding) requestSelect("@new");
+              }}
+            >
+              添加连接
+            </Button>
           </div>
-          <ul className={styles.list}>
-            {data.profiles.map((profile) => {
-              const issues = problems(profile);
-              return (
-                <li key={profile.name}>
-                  <button
-                    type="button"
-                    className={styles.connection}
-                    aria-pressed={!adding && selected?.name === profile.name}
-                    onClick={() => {
-                      if (!adding && selected?.name === profile.name) return;
-                      requestSelect(profile.name);
-                    }}
-                  >
-                    <CellFrame />
-                    <strong>{profile.name}</strong>
-                    <span className={styles.modelName}>{profile.model}</span>
-                    <span className={styles.status} data-ready={issues.length === 0 || undefined}>
-                      {issues.length ? "需要处理" : "配置齐全 · 未验证"}
-                    </span>
-                    <span className={styles.roles}>
-                      {data.narrator === profile.name ? "叙事模型 " : ""}
-                      {data.aux === profile.name ? "辅助模型" : ""}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <div className={styles.listScroll}>
+            <ul className={styles.list}>
+              {data.profiles.map((profile) => {
+                const issues = problems(profile);
+                const isNarrator = data.narrator === profile.name;
+                const isAux = data.aux === profile.name;
+                return (
+                  <li key={profile.name}>
+                    <button
+                      type="button"
+                      className={styles.connection}
+                      aria-pressed={!adding && selected?.name === profile.name}
+                      onClick={() => {
+                        if (!adding && selected?.name === profile.name) return;
+                        requestSelect(profile.name);
+                      }}
+                    >
+                      <CellFrame />
+                      <div className={styles.connTop}>
+                        <strong>{profile.name}</strong>
+                        <span
+                          className={styles.statusDot}
+                          data-ready={issues.length === 0 || undefined}
+                        >
+                          {issues.length ? "待处理" : "已配"}
+                        </span>
+                      </div>
+                      <span className={styles.modelName}>{profile.model || "未填模型名"}</span>
+                      {(isNarrator || isAux) && (
+                        <div className={styles.roles}>
+                          {isNarrator && (
+                            <span className={styles.rolePill} data-role="narrator">
+                              叙事模型
+                            </span>
+                          )}
+                          {isAux && <span className={styles.rolePill}>辅助模型</span>}
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </aside>
 
         <section className={styles.editor} aria-label="编辑模型连接">
-          <CellFrame />
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="rgb(12 10 18 / 84%)"
+            className={styles.slice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint="var(--cp-red-dim)"
+            className={styles.slice}
+          />
           {adding ? (
             <ConnectionForm
               key="new"
@@ -256,7 +366,7 @@ export function ModelSettings({
               }}
             />
           ) : selected ? (
-            <div key={selected.name}>
+            <div key={selected.name} className={styles.form}>
               <ConnectionForm
                 profile={selected}
                 names={data.profiles.map((p) => p.name)}
@@ -266,9 +376,16 @@ export function ModelSettings({
                   setNotice("连接设置已保存。未发送模型请求。");
                 }}
               />
+              <span
+                className={shared.thinLine}
+                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                aria-hidden
+              />
               <section className={styles.usage}>
-                <span className={styles.kicker}>02 / 用于游戏</span>
-                <h3>保存之后，明确选它来玩。</h3>
+                <div className={styles.usageHead}>
+                  <span className={styles.kicker}>02 / 用于游戏</span>
+                  <h3>保存之后，明确选它来玩。</h3>
+                </div>
                 {/* 用户定的：只留「设为叙事模型」「设为辅助模型」两个按钮，不要合并按钮和折叠区 */}
                 <div className={styles.actions}>
                   <Button
@@ -303,6 +420,11 @@ export function ModelSettings({
                   </Button>
                 </div>
               </section>
+              <span
+                className={shared.thinLine}
+                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                aria-hidden
+              />
               <ConnectionActions
                 configVersion={overview.dataUpdatedAt}
                 profile={selected}
@@ -314,11 +436,13 @@ export function ModelSettings({
           ) : null}
         </section>
       </div>
+
       <p className={styles.privacy}>
         {LOCAL_MODE
           ? "密钥只存在这个浏览器里（IndexedDB），由浏览器直接发给模型服务商，不经过本站服务器；公用电脑上用完请清除密钥。服务商需允许网页跨域访问（CORS），本地 Ollama 要设置 OLLAMA_ORIGINS。"
           : "密钥仅存本机 config.json，勿分享或提交。"}
       </p>
+
       {leaving !== null && (
         <Dialog
           title="切换前要放弃未保存内容吗？"
@@ -373,10 +497,14 @@ function ConnectionForm({
   const [maxOutput, setMaxOutput] = useState(profile?.maxOutputTokens?.toString() ?? "");
   const [stage, setStage] = useState("");
   const [saved, setSaved] = useState("");
+  const [modelList, setModelList] = useState<readonly string[] | null>(null);
+  const [modelFilter, setModelFilter] = useState("");
+  const [modelError, setModelError] = useState("");
   // 创建成功后保留名字；后续步骤失败时重试更新，不重复创建。
   const persisted = useRef<string | null>(profile?.name ?? null);
+  const baseDefault = PRESETS[preset].baseUrl;
   const edited = !profile
-    ? Boolean(model || baseUrl || key)
+    ? Boolean(model.trim() || key || (baseUrl.trim() !== "" && baseUrl !== baseDefault))
     : model !== profile.model ||
       baseUrl !== (profile.baseUrl ?? "") ||
       contextWindow !== String(profile.contextWindow) ||
@@ -397,7 +525,6 @@ function ConnectionForm({
       if (!modelName) throw new Error("请填写服务商提供的模型名。");
       const size = Number(contextWindow);
       if (!Number.isSafeInteger(size) || size < 1) throw new Error("上下文长度要填正整数。");
-
       const url = baseUrl.trim();
       if (url) {
         let parsed: URL;
@@ -473,6 +600,61 @@ function ConnectionForm({
   });
 
   useEffect(() => onDirty(edited || save.isPending), [edited, save.isPending, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
+  useEffect(() => {
+    void preset;
+    setModelList(null);
+    setModelError("");
+    setModelFilter("");
+  }, [preset]);
+
+  const fetchModels = useMutation({
+    gcTime: 0,
+    retry: false,
+    // 不把密钥放进 mutation variables，避免留在 React Query 内存状态里
+    mutationFn: async () => {
+      const trimmedBase = baseUrl.trim();
+      const profileName = persisted.current;
+      const type = profile ? profile.type : PRESETS[preset].type;
+      return api.fetchModels({
+        ...(profileName ? { profileName } : {}),
+        type,
+        baseUrl: trimmedBase,
+        ...(key.trim() ? { apiKey: key.trim() } : {}),
+      });
+    },
+    onSuccess: (res) => {
+      if (!res.ok) {
+        setModelError(res.error);
+        return;
+      }
+      setModelError("");
+      setModelFilter("");
+      setModelList(res.models);
+    },
+    onError: (err) => {
+      setModelError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const handleFetchModels = () => {
+    const trimmedBase = baseUrl.trim();
+    if (!profile && preset === "relay" && !trimmedBase) {
+      setModelError("请先填写兼容接口地址（例如 https://服务商地址/v1）再获取模型列表");
+      return;
+    }
+    setModelError("");
+    fetchModels.mutate();
+  };
+
+  const visibleModels = modelList
+    ? modelList.filter((id) =>
+        modelFilter.trim() === ""
+          ? true
+          : id.toLowerCase().includes(modelFilter.trim().toLowerCase()),
+      )
+    : [];
+
   const reset = () => {
     setModel(profile?.model ?? "");
     setBaseUrl(profile?.baseUrl ?? "");
@@ -490,9 +672,14 @@ function ConnectionForm({
   };
 
   return (
-    <form className={styles.form} onSubmit={submit}>
-      <span className={styles.kicker}>01 / 连接资料</span>
-      <h3>{profile ? profile.name : "添加一个模型连接"}</h3>
+    <form className={styles.form} autoComplete="off" onSubmit={submit}>
+      <div className={styles.editorHead}>
+        <div>
+          <span className={styles.kicker}>01 / 连接资料</span>
+          <h3>{profile ? profile.name : "添加一个模型连接"}</h3>
+        </div>
+        {profile && <span className={styles.typePill}>接口：{profile.type}</span>}
+      </div>
       {profile && problems(profile).length > 0 && (
         <div className={styles.notice}>
           {problems(profile).map((p) => (
@@ -501,129 +688,242 @@ function ConnectionForm({
         </div>
       )}
       <fieldset disabled={save.isPending}>
-        {!profile && (
+        <div className={styles.formGrid}>
+          {!profile && (
+            <label className={styles.field}>
+              <span>接入方式</span>
+              <FrameBox>
+                <select
+                  value={preset}
+                  disabled={persisted.current !== null}
+                  onChange={(event) => {
+                    const next = event.target.value as Preset;
+                    setPreset(next);
+                    setBaseUrl(PRESETS[next].baseUrl);
+                  }}
+                >
+                  {Object.entries(PRESETS).map(([id, value]) => (
+                    <option key={id} value={id}>
+                      {value.title}
+                    </option>
+                  ))}
+                </select>
+              </FrameBox>
+              <small>{PRESETS[preset].hint}</small>
+            </label>
+          )}
+          {!profile && (
+            <label className={styles.field}>
+              <span>连接名称</span>
+              <FrameBox>
+                <input
+                  name="cp-conn-name"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  required
+                  value={name}
+                  disabled={persisted.current !== null}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </FrameBox>
+              <small>只是本机区分连接的名字，不是模型名。</small>
+            </label>
+          )}
           <label className={styles.field}>
-            <span>接入方式</span>
-            <FrameBox>
-              <select
-                value={preset}
-                disabled={persisted.current !== null}
-                onChange={(event) => {
-                  const next = event.target.value as Preset;
-                  setPreset(next);
-                  setBaseUrl(PRESETS[next].baseUrl);
-                }}
-              >
-                {Object.entries(PRESETS).map(([id, value]) => (
-                  <option key={id} value={id}>
-                    {value.title}
-                  </option>
-                ))}
-              </select>
-            </FrameBox>
-            <small>{PRESETS[preset].hint}</small>
-          </label>
-        )}
-        {profile && <p className={styles.help}>接口类型：{profile.type}</p>}
-        {!profile && (
-          <label className={styles.field}>
-            <span>连接名称</span>
+            <span>接口地址</span>
             <FrameBox>
               <input
-                required
-                value={name}
-                disabled={persisted.current !== null}
-                onChange={(e) => setName(e.target.value)}
+                name="cp-base-url"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                spellCheck={false}
+                placeholder="例如 https://服务商地址/v1"
               />
             </FrameBox>
-            <small>只是本机区分连接的名字，不是模型名。</small>
+            <small>OpenAI 兼容填 /v1 根地址，不要填 /chat/completions。</small>
           </label>
-        )}
-        <label className={styles.field}>
-          <span>接口地址</span>
-          <FrameBox>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              spellCheck={false}
-              placeholder="例如 https://服务商地址/v1"
-            />
-          </FrameBox>
-          <small>
-            OpenAI 兼容通常填 /v1 根地址，不要填写 /chat/completions；本地模型可留空用默认地址。
-          </small>
-        </label>
-        <label className={styles.field}>
-          <span>模型名</span>
-          <FrameBox>
-            <input
-              required
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              spellCheck={false}
-              placeholder="填写服务商提供的完整模型 ID"
-            />
-          </FrameBox>
-        </label>
-        <label className={styles.field}>
-          <span>API 密钥{profile?.keyStatus === "configured" ? " · 已保存" : ""}</span>
-          <FrameBox>
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder={
-                profile?.keyStatus === "configured"
-                  ? "留空保留现有密钥；填新密钥则替换"
-                  : "在这里粘贴密钥，保存后不会回显"
-              }
-            />
-          </FrameBox>
-          <small>
-            {profile?.keySource === "env"
-              ? `当前使用环境变量 ${profile.apiKeyEnv ?? ""}。这里填写会保存一个本机配置密钥。`
-              : profile?.type === "ollama" || (!profile && preset === "ollama")
-                ? "本地 Ollama 通常不需要密钥。"
-                : "没有密钥也可以先保存连接，但不能用于剧情。"}
-          </small>
-        </label>
+          <div className={styles.field}>
+            <div className={styles.fieldHead}>
+              <label htmlFor="cp-model-id">模型名</label>
+              <Button
+                small
+                disabled={fetchModels.isPending || save.isPending}
+                onClick={handleFetchModels}
+              >
+                {fetchModels.isPending ? "获取中..." : "获取模型"}
+              </Button>
+            </div>
+            <FrameBox>
+              <input
+                id="cp-model-id"
+                name="cp-model-id"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
+                required
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                spellCheck={false}
+                placeholder="填写或点击「获取模型」选择模型 ID"
+              />
+            </FrameBox>
+            {modelError && (
+              <p className={styles.error} role="alert">
+                {modelError}
+              </p>
+            )}
+          </div>
+          {modelList !== null && (
+            <Panel as="div" line="var(--cp-red-dim)" className={styles.modelPicker}>
+              <div className={styles.pickerInner}>
+                <div className={styles.pickerHead}>
+                  <span className={styles.pickerTitle}>
+                    {modelFilter.trim()
+                      ? `可用模型 · 匹配 ${visibleModels.length} / ${modelList.length} 个`
+                      : `可用模型 · 共 ${modelList.length} 个`}
+                  </span>
+                  <div className={styles.pickerControls}>
+                    {modelList.length > 0 && (
+                      <div className={styles.pickerFilter}>
+                        <FrameBox>
+                          <input
+                            aria-label="筛选模型"
+                            name="cp-model-filter"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            value={modelFilter}
+                            onChange={(e) => setModelFilter(e.target.value)}
+                            spellCheck={false}
+                            placeholder="筛选模型 ID..."
+                          />
+                        </FrameBox>
+                      </div>
+                    )}
+                    <Button small onClick={() => setModelList(null)}>
+                      收起
+                    </Button>
+                  </div>
+                </div>
+                {modelList.length === 0 ? (
+                  <div className={styles.notice}>
+                    <p>连接成功，但接口没有返回可用模型（可在上方手动输入模型名）。</p>
+                  </div>
+                ) : visibleModels.length === 0 ? (
+                  <div className={styles.notice}>
+                    <p>没有匹配「{modelFilter.trim()}」的模型。</p>
+                  </div>
+                ) : (
+                  <div className={styles.modelList} role="listbox" aria-label="可用模型列表">
+                    {visibleModels.map((id) => {
+                      const active = id === model.trim();
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          title={id}
+                          className={[styles.modelOption, active ? styles.modelOptionActive : ""]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={() => {
+                            setModel(id);
+                            setModelError("");
+                          }}
+                        >
+                          <CellFrame />
+                          <span className={styles.modelOptionName}>{id}</span>
+                          {active && <span className={styles.modelOptionTag}>当前</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Panel>
+          )}
+          <label className={`${styles.field} ${styles.span2}`}>
+            <span>API 密钥{profile?.keyStatus === "configured" ? " · 已保存" : ""}</span>
+            <FrameBox>
+              <input
+                type="password"
+                name="cp-api-key"
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                spellCheck={false}
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder={
+                  profile?.keyStatus === "configured"
+                    ? "留空保留现有密钥；填新密钥则替换"
+                    : "在这里粘贴密钥，保存后不会回显"
+                }
+              />
+            </FrameBox>
+            <small>
+              {profile?.keySource === "env"
+                ? `当前使用环境变量 ${profile.apiKeyEnv ?? ""}。这里填写会保存一个本机配置密钥。`
+                : profile?.type === "ollama" || (!profile && preset === "ollama")
+                  ? "本地 Ollama 通常不需要密钥。"
+                  : "没有密钥也可以先保存连接，但不能用于剧情。"}
+            </small>
+          </label>
+        </div>
+
         <details className={styles.advanced}>
           <summary>高级参数 · 不确定时先保持原值</summary>
-          <label className={styles.field}>
-            <span>上下文长度（tokens）</span>
-            <FrameBox>
-              <input
-                required
-                inputMode="numeric"
-                value={contextWindow}
-                onChange={(e) => setContextWindow(e.target.value)}
-              />
-            </FrameBox>
-            <small>按服务商文档填写；这不是单次回复的字数。</small>
-          </label>
-          <label className={styles.field}>
-            <span>温度（0–2，可不设置）</span>
-            <FrameBox>
-              <input
-                inputMode="decimal"
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-              />
-            </FrameBox>
-          </label>
-          <label className={styles.field}>
-            <span>最大输出长度（tokens，可不设置）</span>
-            <FrameBox>
-              <input
-                inputMode="numeric"
-                value={maxOutput}
-                onChange={(e) => setMaxOutput(e.target.value)}
-              />
-            </FrameBox>
-          </label>
+          <div className={styles.advGrid}>
+            <label className={styles.field}>
+              <span>上下文长度（tokens）</span>
+              <FrameBox>
+                <input
+                  name="cp-context-window"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  required
+                  inputMode="numeric"
+                  value={contextWindow}
+                  onChange={(e) => setContextWindow(e.target.value)}
+                />
+              </FrameBox>
+              <small>按服务商文档填写，非单次输出字数。</small>
+            </label>
+            <label className={styles.field}>
+              <span>温度（0–2，可留空）</span>
+              <FrameBox>
+                <input
+                  name="cp-temperature"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  inputMode="decimal"
+                  value={temperature}
+                  onChange={(e) => setTemperature(e.target.value)}
+                />
+              </FrameBox>
+            </label>
+            <label className={styles.field}>
+              <span>最大输出（tokens，可留空）</span>
+              <FrameBox>
+                <input
+                  name="cp-max-output"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  inputMode="numeric"
+                  value={maxOutput}
+                  onChange={(e) => setMaxOutput(e.target.value)}
+                />
+              </FrameBox>
+            </label>
+          </div>
         </details>
+
         <div className={styles.actions}>
           <Button primary type="submit" disabled={save.isPending || (Boolean(profile) && !edited)}>
             {save.isPending ? "保存中…" : profile ? "保存连接" : "保存连接，继续"}
@@ -635,7 +935,11 @@ function ConnectionForm({
           )}
         </div>
       </fieldset>
-      {save.isPending && <p role="status">{stage}</p>}
+      {save.isPending && (
+        <p role="status" className={styles.help}>
+          {stage}
+        </p>
+      )}
       {save.isError && (
         <div className={styles.error} role="alert">
           <p>{save.error.message}</p>
@@ -681,7 +985,6 @@ function ConnectionActions({
   });
   const clear = useMutation({ mutationFn: () => api.clearKey(profile.name), onSuccess: refresh });
   const busy = test.isPending || remove.isPending || clear.isPending;
-  // 配置刷新后使旧测试结果失效，包括替换密钥但公开状态未变化的情况。
   const previousConfigVersion = useRef(configVersion);
   useEffect(() => {
     if (previousConfigVersion.current !== configVersion) {
@@ -691,16 +994,32 @@ function ConnectionActions({
   }, [configVersion]);
   return (
     <section className={styles.usage}>
-      <span className={styles.kicker}>03 / 可选验证</span>
-      <h3>测试连接会发出真实请求。</h3>
-      <p>可选 · 可能产生费用</p>
-      <Button
-        disabled={busy || dirty || problems(profile).length > 0}
-        reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}
-        onClick={() => setDialog("test")}
-      >
-        {test.isPending ? "正在测试…" : "测试连接…"}
-      </Button>
+      <div className={styles.usageHead}>
+        <span className={styles.kicker}>03 / 可选验证与管理</span>
+        <span className={styles.help}>测试连接会发出真实请求，可能产生费用</span>
+      </div>
+      <div className={styles.actions}>
+        <Button
+          disabled={busy || dirty || problems(profile).length > 0}
+          reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}
+          onClick={() => setDialog("test")}
+        >
+          {test.isPending ? "正在测试…" : "测试连接…"}
+        </Button>
+        {profile.keySource === "config" && (
+          <Button disabled={busy || dirty} onClick={() => setDialog("key")}>
+            清除已保存密钥
+          </Button>
+        )}
+        <Button
+          disabled={busy || dirty || inUse}
+          reason={inUse ? "先将角色和辅助模型改用其他连接" : "先保存或撤销修改"}
+          onClick={() => setDialog("delete")}
+        >
+          删除连接
+        </Button>
+        {inUse && <span className={styles.help}>使用中，不能删除</span>}
+      </div>
       {result && (
         <p role="status" className={result.ok ? styles.success : styles.error}>
           {result.ok
@@ -708,24 +1027,6 @@ function ConnectionActions({
             : `连接失败：${result.error}`}
         </p>
       )}
-      <details className={styles.advanced}>
-        <summary>连接管理：删除或清除密钥</summary>
-        <div className={styles.actions}>
-          {profile.keySource === "config" && (
-            <Button disabled={busy || dirty} onClick={() => setDialog("key")}>
-              清除已保存密钥
-            </Button>
-          )}
-          <Button
-            disabled={busy || dirty || inUse}
-            reason={inUse ? "先将角色和辅助模型改用其他连接" : "先保存或撤销修改"}
-            onClick={() => setDialog("delete")}
-          >
-            删除连接
-          </Button>
-        </div>
-        {inUse && <p className={styles.help}>使用中，不能删除</p>}
-      </details>
       {remove.isError && (
         <p className={styles.error} role="alert">
           {remove.error.message}

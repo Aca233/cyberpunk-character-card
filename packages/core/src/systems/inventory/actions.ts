@@ -8,11 +8,10 @@ import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./app
 import { moodLock, moodPrice, shopMood } from "./mood";
 import { InventoryStateSchema } from "./schema";
 
-/** 从背包装上一件：武器写 slot（1–3），治疗品和手雷进快捷栏，服装穿到对应的格子；已在武器格里的切成手持 */
+/** 从背包装上一件：治疗品和手雷进快捷栏，服装穿到对应的格子；武器进背包即可直接使用 */
 export const EquipItemActionSchema = z.strictObject({
   type: z.literal("equipItem"),
   id: z.string().min(1).max(64),
-  slot: z.number().int().min(1).max(3).optional(),
 });
 
 /** 非战斗时直接使用治疗品；投掷和其他情境性使用仍走行动回合。 */
@@ -21,7 +20,7 @@ export const UseHealingActionSchema = z.strictObject({
   id: z.string().min(1).max(64),
 });
 
-/** 把装备栏里的一件放回背包 */
+/** 把穿着的服装脱下放回背包 */
 export const UnequipItemActionSchema = z.strictObject({
   type: z.literal("unequipItem"),
   id: z.string().min(1).max(64),
@@ -39,13 +38,6 @@ export const ModWeaponActionSchema = z.strictObject({
   action: z.enum(["attach", "detach"]),
   weapon: z.string().min(1).max(64),
   mod: z.string().min(1).max(64),
-});
-
-/** 工作台：dismantle 把背包里的一件拆成零件，tune 用零件给武器升一档稀有度 */
-export const CraftActionSchema = z.strictObject({
-  type: z.literal("craft"),
-  action: z.enum(["dismantle", "tune"]),
-  id: z.string().min(1).max(64),
 });
 
 /** 在商店买一件，放进背包 */
@@ -79,9 +71,11 @@ function shopCommands(
     const def = catalog.get(action.id);
     if (!def) return `物品表里没有 ${action.id}`;
     const inventory = InventoryStateSchema.parse(world.slices.inventory);
-    if ((inventory.backpack[def.id] ?? 0) < 1) return `背包里没有${def.name}；装备着的先卸下`;
-    const lastOne = !inventory.weapons.includes(def.id) && inventory.backpack[def.id] === 1;
-    if (lastOne && inventory.mods[def.id] !== undefined) {
+    const carried =
+      (inventory.backpack[def.id] ?? 0) + inventory.weapons.filter((w) => w === def.id).length;
+    if (carried < 1) return `背包里没有${def.name}；穿着的衣服或快捷栏里的药/雷先脱下`;
+    const lastOne = carried === 1 && Object.values(inventory.mods[def.id] ?? {}).length > 0;
+    if (lastOne) {
       return `${def.name}上还装着改装件，先拆下来再卖`;
     }
     const value = sellValue(def);
@@ -152,23 +146,26 @@ export const inventoryActions = {
   // 战斗里换装备要花一个动作，只能在行动里说
   equipItem: defineAction({
     schema: EquipItemActionSchema,
-    commands: (action, { world }) => {
+    commands: (action, { world, data }) => {
       if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
+      const def = itemCatalog(data).get(action.id);
+      if (def?.kind === "weapon") return "武器放进背包即可直接使用，无需装武器槽";
       return [
         {
           type: "item",
           action: "equip",
           id: action.id,
           reason: "在装备栏里换",
-          ...(action.slot !== undefined ? { slot: action.slot } : {}),
         },
       ];
     },
   }),
   unequipItem: defineAction({
     schema: UnequipItemActionSchema,
-    commands: (action, { world }) => {
+    commands: (action, { world, data }) => {
       if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
+      const def = itemCatalog(data).get(action.id);
+      if (def?.kind === "weapon") return "武器已在随身背包里，无需单独收起";
       return [{ type: "item", action: "unequip", id: action.id, reason: "在装备栏里换" }];
     },
   }),
@@ -186,17 +183,6 @@ export const inventoryActions = {
       return [
         { type: "inventory.mod", action: action.action, weapon: action.weapon, mod: action.mod },
       ];
-    },
-  }),
-  craft: defineAction({
-    schema: CraftActionSchema,
-    commands: (action, { world }) => {
-      if (inCombat(world)) return "战斗中顾不上拆装";
-      if (action.action === "dismantle") return [{ type: "inventory.dismantle", id: action.id }];
-      const attributes = (world.slices.character as { attributes?: { tech?: unknown } } | undefined)
-        ?.attributes;
-      const tech = typeof attributes?.tech === "number" ? attributes.tech : 0;
-      return [{ type: "inventory.tune", id: action.id, tech }];
     },
   }),
   buyItem: defineAction({

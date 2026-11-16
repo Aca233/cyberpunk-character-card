@@ -8,14 +8,14 @@ import { portraitOf } from "../story/art";
 import styles from "./characters.module.css";
 
 /**
- * 工作台的人脉选择器。点数只提示不拦截（超出难度预算算传奇沙盒开局）
+ * 工作台的人脉选择器：自由建立与夜之城人物的交集或自定义旧识
  */
 
-/** 关系按钮上的小字：开局好感、花不花点（用户定的关系表，2026-10-30） */
+/** 关系按钮上的小字：开局初始好感 */
 function relationNote(r: RelationKind): string {
   const info = RELATION_INFO[r];
   const affinity = info.affinity > 0 ? `+${info.affinity}` : `${info.affinity}`;
-  return `好感 ${affinity}${info.points > 0 ? ` · ${info.points} 点` : ""}`;
+  return `好感 ${affinity}`;
 }
 
 interface Person {

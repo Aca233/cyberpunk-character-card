@@ -11,46 +11,28 @@ import {
 import { describe, expect, it } from "vitest";
 import type { BoardData } from "../../api/client";
 import {
-  applyOriginPreset,
-  budgetKind,
   comboHints,
   creatorChecks,
-  DIFFICULTY_BUDGET,
+  humanityStageInfo,
   inherentCyberware,
-  isAnyOriginPreset,
-  isOriginPreset,
-  kitPoints,
   mergeCreatorCatalog,
-  ORIGIN_KEYS,
-  ORIGIN_PRESETS,
+  originDefaultLoadout,
   originEcosystem,
   originLean,
   originNever,
+  pruneKitForOrigin,
   rollTraits,
   totalStartHumanityCost,
   traitCategory,
-  unifiedBudget,
 } from "./creator";
 
-/** 分步捏人的纯逻辑（docs/creator-plan.md 分期第 1 条）：不碰界面和 localStorage */
+/** 2077 赛博档案工作台纯逻辑测试：无点数上限束缚，仅受槽位容量与人性耐受约束 */
 
 const mod = (id: string, slot: "origin" | "past" | "skill" | "flaw", tags: string[] = []) =>
-  BoardModuleSchema.parse({ id, slot, label: id, points: slot === "origin" ? 0 : 1, tags });
-
-describe("budgetKind", () => {
-  it("背景点只在过往、旧识、特长、义体四步", () => {
-    expect(budgetKind("origin")).toBeNull();
-    expect(budgetKind("past")).toBe("background");
-    expect(budgetKind("people")).toBe("background");
-    expect(budgetKind("skills")).toBe("background");
-    expect(budgetKind("cyberware")).toBe("background");
-    expect(budgetKind("review")).toBeNull();
-  });
-});
+  BoardModuleSchema.parse({ id, slot, label: id, points: 0, tags });
 
 describe("originLean / originNever", () => {
   const modules = [mod("a", "past"), mod("b", "past"), mod("c", "past"), mod("s", "skill")];
-  // 走 schema 解析：生命路径表加了 costs 一栏（第 2 步的代价，2026-10-31），默认空着
   const lifepath = LifepathEntrySchema.array().parse([
     { id: "a", weights: { street: 2 } },
     { id: "b", weights: { street: 3 } },
@@ -101,7 +83,6 @@ describe("comboHints", () => {
 });
 
 describe("creatorChecks", () => {
-  // 只填检查要看的字段，其余空着；草稿本来就可能没填完
   const draft = {
     name: "测试",
     alias: "",
@@ -120,20 +101,19 @@ describe("creatorChecks", () => {
     board: BoardSchema.parse({}),
   } as unknown as CharacterCard;
 
-  // 2026-10-31 浏览器检查发现：出身插槽空着时又多报一条"出身不能为空"
-  it("出身插槽空着只报一次，链回出身那一步", () => {
-    const origin = creatorChecks(draft).filter((c) => c.step === "origin");
+  it("出身插槽空着只报一次，跳转目标指向 origin", () => {
+    const origin = creatorChecks(draft).filter((c) => c.target === "origin");
     expect(origin).toHaveLength(1);
   });
 
-  it("姓名或代词未填写时链回出身与身份那一步", () => {
+  it("姓名或代词未填写时跳转目标指向 identity", () => {
     const unnamed = { ...draft, name: "", pronoun: "" } as CharacterCard;
     const checks = creatorChecks(unnamed);
-    expect(checks.find((c) => c.text === "尚未填写角色姓名")?.step).toBe("origin");
-    expect(checks.find((c) => c.text === "尚未设定人称代词")?.step).toBe("origin");
+    expect(checks.find((c) => c.text === "尚未填写角色姓名")?.target).toBe("identity");
+    expect(checks.find((c) => c.text === "尚未设定人称代词")?.target).toBe("identity");
   });
 
-  it("零过往、零特长与超出 5 点的属性沙盒构筑不阻塞保存", () => {
+  it("零过往、零特长与自由高属性构筑不阻塞保存", () => {
     const sandbox = {
       ...draft,
       origin: "街头流浪小子",
@@ -148,59 +128,7 @@ describe("creatorChecks", () => {
   });
 });
 
-describe("ORIGIN_PRESETS and applyOriginPreset", () => {
-  const streetMod = mod("street-kid", "origin");
-  const skill1 = mod("brawling", "skill", ["近战", "格斗"]);
-  const skill2 = mod("lockpick", "skill");
-  const skill3 = mod("streetwise", "skill");
-  const skill4 = mod("pain-editor-nerve", "skill", ["禀赋"]);
-  const allMods = [streetMod, skill1, skill2, skill3, skill4];
-
-  const blankCard = {
-    name: "V",
-    alias: "",
-    pronoun: "他",
-    origin: "",
-    look: "",
-    past: "",
-    personality: "",
-    voice: "",
-    skills: "",
-    scene: "",
-    greeting: "",
-    examples: "",
-    locked: [],
-    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
-    board: BoardSchema.parse({}),
-  } as unknown as CharacterCard;
-
-  it("各出身预设无强制过往、配齐 4 项特质", () => {
-    for (const key of ORIGIN_KEYS) {
-      const preset = ORIGIN_PRESETS[key];
-      expect(preset.pasts).toHaveLength(0);
-      expect(preset.skills).toHaveLength(4);
-    }
-  });
-
-  it("一键载入街头小子预设，写入出身与 4 项特质，且不生成联动组合", () => {
-    const updated = applyOriginPreset("street-kid", blankCard, allMods, []);
-    expect(updated.origin).toBe("street-kid");
-    expect(updated.board?.origin?.id).toBe("street-kid");
-    expect(updated.board?.pasts).toEqual([]);
-    expect(updated.board?.skills.map((s) => s.id)).toEqual([
-      "brawling",
-      "lockpick",
-      "streetwise",
-      "pain-editor-nerve",
-    ]);
-    expect(updated.board?.combos).toEqual([]);
-    if (!updated.board) throw new Error("board should be defined");
-    expect(isOriginPreset("street-kid", updated.board)).toBe(true);
-    expect(isAnyOriginPreset(updated.board)).toBe(true);
-  });
-});
-
-describe("DIFFICULTY_BUDGET / unifiedBudget / kitPoints", () => {
+describe("originDefaultLoadout & pruneKitForOrigin", () => {
   const streetLoadout: Loadout = {
     id: "street-kid",
     label: "街头小子行装",
@@ -208,133 +136,47 @@ describe("DIFFICULTY_BUDGET / unifiedBudget / kitPoints", () => {
     keywords: ["街头", "street-kid"],
     eddies: 500,
     cyberware: ["kiroshi-mk1"],
-    gear: [{ id: "street-jacket" }],
+    gear: [{ id: "unity" }],
     vehicles: ["archer-hella"],
   };
   const data = {
     loadouts: [streetLoadout],
-    weapons: [
-      { id: "unity", name: "统一手枪", rarity: "common" as const, points: 1, ability: "可靠" },
-      { id: "katana", name: "武士刀", rarity: "rare" as const, points: 3, ability: "利刃" },
-    ],
-    vehicles: [
-      {
-        id: "archer-hella",
-        name: "赫拉",
-        class: "sedan" as const,
-        maker: "Archer",
-        seats: 4,
-        trunk: 8,
-        points: 2,
-      },
-      {
-        id: "kusanagi",
-        name: "草薙",
-        class: "bike" as const,
-        maker: "Yaiba",
-        seats: 2,
-        trunk: 2,
-        points: 4,
-      },
-    ],
-  } as Pick<BoardData, "weapons" | "vehicles" | "loadouts">;
+    names: {
+      unity: "统一手枪",
+      "archer-hella": "赫拉 EC-D",
+    },
+    cyberware: [],
+  } as unknown as Pick<BoardData, "loadouts" | "names" | "cyberware">;
 
-  it("三种战局难度给到不同的统一定制点数上限", () => {
-    expect(DIFFICULTY_BUDGET).toEqual({
-      streetLegend: 24,
-      nightCity: 17,
-      deathCity: 12,
-    });
-  });
-
-  it("统一结算属性、特质、义体、耐受、人脉、行装开销与负面返还，且不阻塞传奇沙盒超限", () => {
-    const flaw1 = BoardModuleSchema.parse({ id: "debt", slot: "flaw", label: "高利贷", points: 4 });
-    const flaw2 = BoardModuleSchema.parse({ id: "wanted", slot: "flaw", label: "通缉", points: 4 });
-    const flaw3 = BoardModuleSchema.parse({
-      id: "insomnia",
-      slot: "flaw",
-      label: "失眠",
-      points: 4,
-    });
-    const card = {
-      name: "V",
-      alias: "",
-      pronoun: "她",
-      origin: "街头小子",
-      look: "",
-      past: "",
-      personality: "",
-      voice: "",
-      skills: "",
-      scene: "",
-      greeting: "",
-      examples: "",
-      locked: [],
-      attributes: { body: 4, reflexes: 4, tech: 3, intelligence: 3, cool: 3 }, // attr = 7
-      board: BoardSchema.parse({
-        origin: BoardModuleSchema.parse({
-          id: "street-kid",
-          slot: "origin",
-          label: "街头小子",
-          points: 1,
+  it("按资金档位折算实际进场欧元，不再计算定制点数", () => {
+    const makeCard = (cashTier: "broke" | "standard" | "stash" | "windfall") =>
+      ({
+        origin: "街头小子",
+        board: BoardSchema.parse({
+          origin: mod("street-kid", "origin"),
+          kit: { cashTier, weapons: [], vehicle: null },
         }),
-        skills: [BoardModuleSchema.parse({ id: "gun", slot: "skill", label: "神枪手", points: 3 })],
-        flaws: [flaw1, flaw2, flaw3], // 4 + 4 + 4 = 12, capped at 10 (wasted 2)
-        cyberware: [{ id: "optics", name: "义眼", points: 3, humanityCost: 4 }],
-        tolerance: "low", // refund 2
-        acquaintances: [{ id: "jackie", name: "杰克", relation: "friend", note: "" }], // 2 pts
-        kit: { cashTier: "stash", weapons: ["katana"], vehicle: "archer-hella" }, // stash=2, katana=3, free vehicle=0
-      }),
-    } as unknown as CharacterCard;
+      }) as unknown as CharacterCard;
 
-    const u = unifiedBudget(card, "deathCity", data);
-    expect(u.limit).toBe(12);
-    expect(u.traitSpent).toBe(4); // 1 + 3
-    expect(u.cyberwareSpent).toBe(3);
-    expect(u.peopleSpent).toBe(2);
-    expect(u.kitSpent).toBe(5); // 2 + 3 + 0 (free vehicle)
-    expect(u.grossSpent).toBe(14);
-    expect(u.refund).toBe(12); // 10 (capped) + 2 (low tolerance)
-    expect(u.wastedRefund).toBe(2);
-    expect(u.netSpent).toBe(2);
-    expect(u.remaining).toBe(10);
-    expect(u.overLimit).toBe(false);
-
-    // 换算成非免费载具 + 巨额黑金且无负面缺陷 -> 超过死城 12 点上限，标记 overLimit 而不报错
-    if (!card.board) throw new Error("board should be defined");
-    const richCard = {
-      ...card,
-      board: {
-        ...card.board,
-        flaws: [],
-        tolerance: "normal" as const,
-        kit: { cashTier: "windfall" as const, weapons: ["katana"], vehicle: "kusanagi" },
-      },
-    } as CharacterCard;
-    expect(kitPoints(richCard, data)).toEqual({ spent: 4 + 3 + 4, refund: 0 });
-    const over = unifiedBudget(richCard, "deathCity", data);
-    expect(over.overLimit).toBe(true);
-    expect(over.remaining).toBeLessThan(0);
+    expect(originDefaultLoadout(makeCard("broke"), data).finalEddies).toBe(0);
+    expect(originDefaultLoadout(makeCard("standard"), data).finalEddies).toBe(500);
+    expect(originDefaultLoadout(makeCard("stash"), data).finalEddies).toBe(3000);
+    expect(originDefaultLoadout(makeCard("windfall"), data).finalEddies).toBe(6500);
   });
 
-  it("一贫如洗档位返还 1 点定制点数", () => {
-    const brokeCard = {
-      name: "V",
-      alias: "",
-      pronoun: "她",
-      origin: "街头小子",
-      attributes: { body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 },
-      board: BoardSchema.parse({ kit: { cashTier: "broke", weapons: [], vehicle: null } }),
-    } as unknown as CharacterCard;
-    expect(kitPoints(brokeCard, data)).toEqual({ spent: 0, refund: 1 });
-    const u = unifiedBudget(brokeCard, "nightCity", data);
-    expect(u.refund).toBe(1);
-    expect(u.netSpent).toBe(-1);
-    expect(u.remaining).toBe(18);
+  it("切换出身时自动清理已被新出身免费附带的武器与载具", () => {
+    const board = BoardSchema.parse({
+      origin: mod("street-kid", "origin"),
+      kit: { cashTier: "standard", weapons: ["unity", "katana"], vehicle: "archer-hella" },
+    });
+    const card = { origin: "街头小子", board } as unknown as CharacterCard;
+    const pruned = pruneKitForOrigin(card, board, data);
+    expect(pruned.kit.weapons).toEqual(["katana"]);
+    expect(pruned.kit.vehicle).toBeNull();
   });
 });
 
-describe("inherentCyberware & totalStartHumanityCost", () => {
+describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => {
   const streetLoadout: Loadout = {
     id: "street-kid",
     label: "街头小子",
@@ -409,7 +251,6 @@ describe("inherentCyberware & totalStartHumanityCost", () => {
             id: "quickhacking",
             slot: "skill",
             label: "快速入侵",
-            points: 2,
             tags: ["黑客"],
           }),
         ],
@@ -424,7 +265,6 @@ describe("inherentCyberware & totalStartHumanityCost", () => {
   });
 
   it("自选义体占满槽位后标配义体自动标为已顶替，未占满部位的标配共存", () => {
-    // 眼部容量 2、操作系统容量 1：各装 1 件时，操作系统标配被顶替，眼部标配仍保留
     const card = {
       origin: "街头小子",
       board: BoardSchema.parse({
@@ -434,13 +274,12 @@ describe("inherentCyberware & totalStartHumanityCost", () => {
             id: "quickhacking",
             slot: "skill",
             label: "快速入侵",
-            points: 2,
             tags: ["黑客"],
           }),
         ],
         cyberware: [
-          { id: "kiroshi-mk2", name: "Kiroshi Mk.2", points: 2, humanityCost: 4, slot: "eyes" },
-          { id: "sandevistan", name: "斯安威斯坦", points: 3, humanityCost: 12, slot: "os" },
+          { id: "kiroshi-mk2", name: "Kiroshi Mk.2", humanityCost: 4, slot: "eyes" },
+          { id: "sandevistan", name: "斯安威斯坦", humanityCost: 12, slot: "os" },
         ],
         tolerance: "high", // TOLERANCE_FACTOR.high = 0.7
       }),
@@ -454,9 +293,42 @@ describe("inherentCyberware & totalStartHumanityCost", () => {
     // 保留的 kiroshi-mk1 (2) + kiroshi-mk2 (4) + sandevistan (12) = 18; 18 * 0.7 = 12.6 -> round 13
     expect(totalStartHumanityCost(card, data)).toBe(13);
   });
+
+  it("humanityStageInfo 返回准确的神经阶段与感知失真阈值（<40）", () => {
+    expect(humanityStageInfo(85)).toMatchObject({
+      stage: "stable",
+      label: "稳定",
+      tone: "ok",
+      glitchZone: false,
+    });
+    expect(humanityStageInfo(50)).toMatchObject({
+      stage: "detached",
+      label: "疏离",
+      tone: "ok",
+      glitchZone: false,
+    });
+    expect(humanityStageInfo(35)).toMatchObject({
+      stage: "unstable",
+      label: "不稳定",
+      tone: "warn",
+      glitchZone: true,
+    });
+    expect(humanityStageInfo(12)).toMatchObject({
+      stage: "edge",
+      label: "边缘",
+      tone: "danger",
+      glitchZone: true,
+    });
+    expect(humanityStageInfo(0)).toMatchObject({
+      stage: "crisis",
+      label: "临界",
+      tone: "danger",
+      glitchZone: true,
+    });
+  });
 });
 
-describe("CK3 分类、随机特质与工坊合并", () => {
+describe("分类、随机特质与工坊合并", () => {
   it("按标签将出身分成企业/潜网/恶土/街头/自定义五大类", () => {
     expect(originEcosystem(mod("corpo", "origin"))).toBe("corpo");
     expect(originEcosystem(mod("o-net", "origin", ["黑客"]))).toBe("net");
@@ -468,14 +340,13 @@ describe("CK3 分类、随机特质与工坊合并", () => {
           id: "o-custom",
           slot: "origin",
           label: "自写",
-          points: 0,
           custom: true,
         }),
       ),
     ).toBe("custom");
   });
 
-  it("traitCategory 正确识别身心禀赋、专长技艺、旧履历与自定义", () => {
+  it("traitCategory 正确识别身心禀赋、专长技艺、过往履历与自定义", () => {
     expect(traitCategory(mod("ice-veins", "skill", ["禀赋"]))).toBe("innate");
     expect(traitCategory(mod("gun", "skill", ["枪械"]))).toBe("craft");
     expect(traitCategory(mod("old-past", "past"))).toBe("past");
@@ -485,7 +356,6 @@ describe("CK3 分类、随机特质与工坊合并", () => {
           id: "c",
           slot: "skill",
           label: "自定义",
-          points: 1,
           custom: true,
         }),
       ),
@@ -502,7 +372,6 @@ describe("CK3 分类、随机特质与工坊合并", () => {
         id: "s-custom",
         slot: "skill",
         label: "自定义",
-        points: 1,
         custom: true,
       }),
     ];
@@ -523,7 +392,6 @@ describe("CK3 分类、随机特质与工坊合并", () => {
       id: "local-1",
       slot: "skill",
       label: "本地",
-      points: 1,
       custom: true,
     });
     const pack = WorkshopPackSchema.parse({

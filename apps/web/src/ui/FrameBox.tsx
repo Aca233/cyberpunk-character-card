@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { NineSlice } from "./Asset";
+import { Asset, NineSlice } from "./Asset";
 import styles from "./framebox.module.css";
 
 /** 原作 MapPanel 筛选格 map.filterCell* 的切法（同四角在场的人，计划第九节） */
@@ -41,6 +41,9 @@ export function FrameBox({
     <span className={[styles.box, className].filter(Boolean).join(" ")}>
       <CellFrame />
       {children}
+      <span className={styles.selectArrow} aria-hidden>
+        <Asset id="menu.arrowFill" width={11} tint="currentColor" />
+      </span>
     </span>
   );
 }

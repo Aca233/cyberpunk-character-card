@@ -17,11 +17,18 @@ export const worldStatus: readonly SystemStatus[] = [
     lines(ctx) {
       const v = clockOf(ctx);
       const name = locationNameOf(ctx);
-      return [
+      const lines = [
         `时间：${v.time.text}（${v.time.periodLabel}）`,
         `天气：${v.weather.label}，${v.weather.note}；写进氛围，有时也是掩护或麻烦`,
         `地点：${v.location ?? "尚未确定，由你在开场时安排"}${name && name !== v.location ? `（${name}）` : ""}`,
       ];
+      if (v.time.fatigued) {
+        lines.push("身体疲劳：连续多个时段未睡觉，眼皮发沉、发力与反应明显发滞");
+      }
+      if (v.time.blackLaceWithdrawal) {
+        lines.push("药物戒断：黑蕾丝停药戒断发作，太阳穴抽痛、指尖细颤且情绪焦躁");
+      }
+      return lines;
     },
   },
   {

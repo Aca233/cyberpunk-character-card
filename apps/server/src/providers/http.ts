@@ -40,19 +40,15 @@ export function statusError(provider: string, status: number, detail: string): U
   return new UpstreamError(`${provider} 拒绝了请求（HTTP ${status}）${tail}`, status);
 }
 
-/** 发请求；网络失败和停止都转成上面两种错误 */
-export async function post(
+async function send(
   provider: string,
   url: string,
-  headers: Record<string, string>,
-  body: unknown,
+  init: RequestInit,
   signal?: AbortSignal,
 ): Promise<Response> {
   try {
     return await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "text/event-stream", ...headers },
-      body: JSON.stringify(body),
+      ...init,
       ...(signal ? { signal } : {}),
     });
   } catch (error) {
@@ -65,6 +61,44 @@ export async function post(
         : String(error);
     throw new UpstreamError(`连不上 ${provider}：${reason}`, undefined, true);
   }
+}
+
+/** 发 POST 请求；网络失败和停止都转成上面两种错误 */
+export async function post(
+  provider: string,
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return send(
+    provider,
+    url,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "text/event-stream", ...headers },
+      body: JSON.stringify(body),
+    },
+    signal,
+  );
+}
+
+/** 发 GET 请求；网络失败和停止都转成上面两种错误 */
+export async function get(
+  provider: string,
+  url: string,
+  headers: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return send(
+    provider,
+    url,
+    {
+      method: "GET",
+      headers: { accept: "application/json", ...headers },
+    },
+    signal,
+  );
 }
 
 /** 读出错误响应里的说明文字，兼容 {error: {message, code}} 和 {error: "..."} 两种写法 */

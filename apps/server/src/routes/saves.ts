@@ -1,4 +1,4 @@
-import { ActionRequestSchema, TurnRequestSchema } from "@cp/core";
+import { ActionRequestSchema, PhoneChatRequestSchema, TurnRequestSchema } from "@cp/core";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -92,6 +92,12 @@ export function saveRoutes(game: GameService, hub: TurnHub, dev = false): Hono {
     const parsed = await body(c, ActionRequestSchema);
     if (!parsed.ok) return c.json({ error: "提交的操作不对", details: parsed.errors }, 400);
     return reply(c, await game.action(c.req.param("id"), parsed.value));
+  });
+
+  app.post("/:id/phone/chat", async (c) => {
+    const parsed = await body(c, PhoneChatRequestSchema);
+    if (!parsed.ok) return c.json({ error: "提交的私信内容不对", details: parsed.errors }, 400);
+    return reply(c, await game.phoneChat(c.req.param("id"), parsed.value));
   });
 
   app.post("/:id/restart", async (c) => {

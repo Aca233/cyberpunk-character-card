@@ -1,19 +1,16 @@
 import { defineSystem } from "../../kernel/system";
 import { WorldClockStateSchema } from "../world";
+import { psychosisActions } from "./actions";
 import {
-  applyCrisis,
   applyEpisode,
   applyLostControl,
   closeBlackouts,
-  openCrisis,
   psychosisView,
   takeSuppressant,
-  tickCrisis,
 } from "./apply";
+import { psychosisEvents } from "./events";
 import { suppressantRules } from "./prompt";
 import {
-  type CrisisCommand,
-  CrisisCommandSchema,
   type EpisodeCommand,
   EpisodeCommandSchema,
   type LostControlCommand,
@@ -25,13 +22,13 @@ import {
 } from "./schema";
 import { psychosisStatus } from "./status";
 
-/** 赛博精神病：压制剂、发作、失控、记忆空白和危机章节；人性本身在 humanity 系统 */
+/** 赛博精神病：压制剂、发作、失控与记忆空白；人性本身在 humanity 系统 */
 export const psychosis = defineSystem<
   PsychosisState,
-  SuppressantCommand | EpisodeCommand | LostControlCommand | CrisisCommand
+  SuppressantCommand | EpisodeCommand | LostControlCommand
 >({
   id: "psychosis",
-  dependsOn: ["humanity", "inventory", "world", "cyberware"],
+  dependsOn: ["humanity", "inventory", "world"],
   state: PsychosisStateSchema,
   initial: () => ({
     doses: [],
@@ -39,14 +36,11 @@ export const psychosis = defineSystem<
     events: [],
     blackouts: [],
     lostControl: 0,
-    crisis: null,
-    crises: 0,
   }),
   commands: {
     suppressant: SuppressantCommandSchema,
     episode: EpisodeCommandSchema,
     lostControl: LostControlCommandSchema,
-    crisis: CrisisCommandSchema,
   },
   apply(draft, command, ctx) {
     switch (command.type) {
@@ -56,16 +50,14 @@ export const psychosis = defineSystem<
         return applyEpisode(draft, command, ctx);
       case "lostControl":
         return applyLostControl(draft, command, ctx);
-      case "crisis":
-        return applyCrisis(draft, command, ctx);
     }
   },
   on: {
     "scene.end": (draft, ctx) => closeBlackouts(draft, ctx.now),
-    "humanity.zero": (draft, ctx) => openCrisis(draft, ctx.now),
   },
-  tick: (draft, span) => tickCrisis(draft, span.to),
   rules: [suppressantRules],
+  actions: psychosisActions,
+  events: psychosisEvents,
   view: {
     key: "psychosis",
     project: ({ world }) =>
@@ -78,7 +70,9 @@ export const psychosis = defineSystem<
   status: psychosisStatus,
 });
 
+export * from "./actions";
 export * from "./apply";
+export * from "./events";
 export * from "./prompt";
 export * from "./schema";
 export * from "./status";

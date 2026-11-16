@@ -2,7 +2,6 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
 import { type Keeper, rarityLock } from "../economy";
-import { HUMANITY_MAX } from "../humanity";
 import {
   BOOST_WINDOW,
   CyberwareCatalogSchema,
@@ -115,7 +114,8 @@ function costCommand(
   catalog: ReadonlyMap<string, CyberwareDef>,
 ): Command {
   const total = draft.installed.reduce((sum, c) => sum + (catalog.get(c.id)?.humanityCost ?? 0), 0);
-  return { type: "humanity.setCyberwareCost", total: Math.min(HUMANITY_MAX, total) };
+  // 传递原始合计，人性系统先按耐受折算，再限制到 100；提前截断会让高耐受少计费用。
+  return { type: "humanity.setCyberwareCost", total };
 }
 
 /** 装着的义体一共给哪些属性加多少 */

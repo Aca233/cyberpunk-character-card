@@ -40,6 +40,7 @@ export interface Failure {
 }
 
 export type Rolled = Extract<TurnEvent, { type: "rolled" }>;
+export type LiveBoost = Extract<TurnEvent, { type: "boost" }>;
 
 /** 提交前确认：这一轮要一次花掉一大笔钱；确认后带 spendOk 原样重发 */
 export interface Spend {
@@ -56,6 +57,7 @@ interface StoryState {
   /** 正在生成的正文；记账在正文之后由后端另外抽 */
   readonly text: string;
   readonly rolled: Rolled | null;
+  readonly boost: LiveBoost | null;
   readonly pending: Pending | null;
   readonly failure: Failure | null;
   readonly spend: Spend | null;
@@ -99,6 +101,9 @@ export const useStory = create<StoryState>()((set, get) => {
           case "rolled":
             set({ rolled: event });
             return;
+          case "boost":
+            set({ boost: event });
+            return;
           case "text":
             set((s) => ({ text: s.text + event.text }));
             return;
@@ -110,6 +115,7 @@ export const useStory = create<StoryState>()((set, get) => {
                 turnId: null,
                 text: "",
                 rolled: null,
+                boost: null,
                 pending: null,
                 draft: wasInput ? EMPTY_DRAFT : s.draft,
               }));
@@ -124,6 +130,7 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               turnId: null,
               text: "",
+              boost: null,
               pending: null,
               spend:
                 pending?.kind === "input"
@@ -142,6 +149,7 @@ export const useStory = create<StoryState>()((set, get) => {
             set({
               phase: "idle",
               turnId: null,
+              boost: null,
               failure: { kind: "blocked", message: event.reason, retryable: true },
             });
             return;
@@ -150,6 +158,7 @@ export const useStory = create<StoryState>()((set, get) => {
             set({
               phase: "idle",
               turnId: null,
+              boost: null,
               failure: {
                 kind: "stopped",
                 message: "已停止生成，这一轮没有写进存档",
@@ -162,6 +171,7 @@ export const useStory = create<StoryState>()((set, get) => {
             set({
               phase: "idle",
               turnId: null,
+              boost: null,
               failure: { kind: "error", message: event.message, retryable: event.retryable },
             });
             void refresh();
@@ -173,6 +183,7 @@ export const useStory = create<StoryState>()((set, get) => {
         set({
           phase: "idle",
           turnId: null,
+          boost: null,
           failure: { kind: "lost", message: reason, retryable: true },
         });
         void refresh();
@@ -186,6 +197,7 @@ export const useStory = create<StoryState>()((set, get) => {
     turnId: null,
     text: "",
     rolled: null,
+    boost: null,
     pending: null,
     failure: null,
     spend: null,
@@ -205,6 +217,7 @@ export const useStory = create<StoryState>()((set, get) => {
         turnId: null,
         text: "",
         rolled: null,
+        boost: null,
         pending: null,
         failure: null,
         spend: null,
@@ -213,7 +226,18 @@ export const useStory = create<StoryState>()((set, get) => {
     },
     async submit(saveId, baseVersion, pending, refresh) {
       if (get().phase !== "idle") return;
-      set({ phase: "submitting", pending, failure: null, spend: null, text: "", rolled: null });
+      set({
+        phase: "submitting",
+        pending,
+        failure: null,
+        spend: null,
+        text: "",
+        rolled: null,
+        boost:
+          pending.kind === "input" && pending.input.sandevistan === true
+            ? { type: "boost", id: "pending", name: "斯安威斯坦" }
+            : null,
+      });
       // 上一次没收尾的（照理不会有）先算被顶掉，再开这一次
       finish("aborted");
       progress = beginProgress("turn");

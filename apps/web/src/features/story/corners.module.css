@@ -60,13 +60,13 @@
 /* 瞄着在场的人看档案时不收：档案朝中列加宽，用不着挤占生物监测的高度（用户定的） */
 .side:has(> [data-open]:not(.present))
   > .block:not([data-open])
-  :is(.ram, .attrRow, .bioLine, .unreadLatest, .slotLine, .label) {
+  :is(.bioLine, .unreadLatest, .slotLine, .label, .trackLeadHint, .trackMore) {
   display: none;
 }
 
 .side:has(> [data-open])
   > .block:not([data-open])
-  :is(.trackList > li:nth-child(n + 2), ul > .person:nth-child(n + 3)) {
+  :is(.trackList > li:nth-child(n + 2), ul > .person:nth-child(n + 3), .presentMore) {
   display: none;
 }
 
@@ -102,11 +102,22 @@
   width: var(--corner-w);
 }
 
+.bio:where([data-open]) {
+  --cp-panel: rgb(9 11 17 / 96%);
+}
+
 /*
  * 义体允许向中列加宽（计划第十二节第 11 条），不再硬塞进窄长列表。
  * 最大 1040px，右侧留出地点和装备列及间隔；切回人物或收起时恢复常态宽度。
  * 只扩大当前块，不改变侧列宽度，也不改同侧剩余高度的计算
  */
+.bio:where([data-diag]) {
+  width: min(
+    620px,
+    calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
+  );
+}
+
 .bio:where([data-wide]) {
   width: min(
     1040px,
@@ -118,6 +129,26 @@
  * 义体页签打开时，同侧下面的在场、消息两块不再藏起来（用户定的，计划第十二节第 11 条）：
  * 照别的块展开时一样压暗、缩成一行读数留在原位，人体用 useRoomLeft 量出的剩余高度
  */
+
+.bioSummary {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 100ms ease-out;
+}
+
+.bioSummaryInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bio:where([data-open]) .bioSummary {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .bioRow {
   display: flex;
@@ -131,78 +162,192 @@
   place-items: center;
 }
 
-.level b {
+.levelIcon {
   position: absolute;
-  font-size: 18px;
-  color: var(--cp-text);
+  pointer-events: none;
 }
 
-.hp {
+.trauma {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
-  gap: 4px;
+  min-width: 0;
+  gap: 5px;
 }
 
-.hpText {
+.woundHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.woundText {
   font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--cp-text-dim);
+  color: var(--cp-cyan);
 }
 
-.hpText:where([data-low]) {
+.woundText:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.woundText:where([data-tone="hurt"]) {
+  color: #ff9c42;
+}
+
+.woundText:where([data-tone="bad"], [data-tone="dead"]) {
   color: var(--cp-hp-low);
   animation: pulse 900ms ease-in-out infinite;
 }
 
-.ram {
+.woundCode {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.woundCode:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+}
+
+.woundCode:where([data-tone="hurt"]) {
+  color: #ff9c42;
+}
+
+.woundCode:where([data-tone="bad"], [data-tone="dead"]) {
+  color: var(--cp-hp-low);
+}
+
+.woundList {
   display: flex;
+  flex-direction: column;
   gap: 3px;
-  margin-top: 10px;
 }
 
-.ramCell {
-  display: inline-flex;
-  opacity: 0.22;
-  animation: fadeIn 200ms ease-out both;
-  animation-delay: calc(var(--i) * 40ms + 300ms);
-}
-
-.ramCell:where([data-on]) {
-  opacity: 1;
-}
-
-/* 常态就有的一行五项属性、一行声望和人性 */
-.attrRow {
+.woundChip {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 6px;
+  background: rgb(94 246 255 / 7%);
+  border-inline-start: 2px solid var(--cp-yellow);
+  font-size: 11px;
+  line-height: 1.25;
 }
 
-.attrRow > li {
-  display: inline-flex;
+.woundChip:where([data-tone="hurt"]) {
+  background: rgb(255 156 66 / 10%);
+  border-inline-start-color: #ff9c42;
+}
+
+.woundChip:where([data-tone="bad"], [data-tone="dead"]) {
+  background: rgb(255 0 60 / 13%);
+  border-inline-start-color: var(--cp-hp-low);
+}
+
+.woundPart {
+  flex: none;
+  font-weight: 700;
+  color: var(--cp-text);
+}
+
+.woundDesc {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cp-text-dim);
+}
+
+.woundCare {
+  flex: none;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+}
+
+.woundChip:where([data-tone="hurt"]) .woundCare {
+  color: #ff9c42;
+}
+
+.woundChip:where([data-tone="bad"], [data-tone="dead"]) .woundCare {
+  color: var(--cp-hp-low);
+}
+
+.woundMore {
+  font-size: 10.5px;
+  color: var(--cp-text-dim);
+}
+
+.woundNominal {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--cp-text-dim);
+}
+
+.woundNominal:where([data-scar]) {
+  color: var(--cp-yellow);
+}
+
+.bioHwBar {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 14px;
 }
 
-.attrRow b {
-  font-size: 15px;
-  font-weight: 600;
+.bioHwText {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--cp-cyan);
   font-variant-numeric: tabular-nums;
 }
 
-.attrRow .attrPoints {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--cp-yellow);
+.bioSandy {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--cp-cyan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 「人物」页展开时已经有 5 格属性卡，顶部迷你五维行收起，不上下重复两遍 */
-.bio:where([data-char-open]) .attrRow {
-  display: none;
+.bioMiniGauge {
+  flex: 1;
+  height: 4px;
+  background: rgb(94 246 255 / 14%);
+  overflow: hidden;
+}
+
+.bioMiniFill {
+  display: block;
+  height: 100%;
+  background: var(--cp-cyan);
+  transition: width 220ms ease-out;
+}
+
+.bioMiniFill:where([data-hw="ram"]) {
+  background: var(--cp-ram);
+}
+
+.bioMiniFill:where([data-tone="warn"]) {
+  background: var(--cp-yellow);
+}
+
+.bioMiniFill:where([data-tone="bad"]) {
+  background: var(--cp-danger);
 }
 
 .bioLine {
@@ -214,8 +359,61 @@
   color: var(--cp-text-dim);
 }
 
-.bioLine :where([data-stage="edge"], [data-stage="crisis"]) {
+.bioLine :where([data-tone="bad"], [data-stage="edge"], [data-stage="crisis"]),
+.bioAlert {
   color: var(--voice-humanity);
+}
+
+.bioWarn {
+  color: var(--cp-yellow);
+}
+
+.bioGood {
+  color: var(--cp-success);
+}
+
+.bioDrawerHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+
+.bio:where([data-open]) .bioDrawerHead {
+  margin: 0 0 5px;
+}
+
+.bioDrawerHead > nav {
+  margin: 0;
+}
+
+.bioDrawerTitle {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.bioDrawerMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.bioDrawerMeta > em {
+  font-style: normal;
+  letter-spacing: 0.08em;
+  color: var(--cp-text);
+}
+
+.bioDrawerMeta > kbd {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cp-text-dim);
 }
 
 /* ———— S 在场的人（左中，高度跟人数走） ———— */
@@ -224,62 +422,216 @@
   width: var(--corner-w);
 }
 
+.present:where([data-scan]) > .label {
+  color: var(--cp-cyan);
+}
+
+.presentCount {
+  padding: 0 5px;
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  color: var(--cp-text);
+}
+
+.labelLine {
+  flex: 1 1 auto;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.35;
+  mask-size: 100% 100%;
+}
+
+.labelHint {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+}
+
+.present:where([data-scan]) .labelHint {
+  color: var(--cp-cyan);
+}
+
 /* 只管名字列表本身；用子选择器，不漏进展开的人物档案（计划第十二节第 14 条） */
 .present > ul {
   display: grid;
-  justify-items: start;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* 锁定框就是 map.filterCell 本身，宽度跟着名字走 */
+/* 锁定框就是 map.filterCell 本身；统一列宽对齐上下角块，展开时朝中列加宽 */
 .person {
-  --person-line: rgb(94 246 255 / 40%);
+  --person-bg: rgb(12 16 26 / 90%);
+  --person-line: rgb(94 246 255 / 44%);
+  --person-glow: rgb(94 246 255 / 14%);
+  --person-rail: var(--cp-cyan);
   position: relative;
-  width: fit-content;
-  min-width: 180px;
-  max-width: 300px;
-  padding: 10px 18px 12px;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 14px 11px 19px;
   animation: nameIn 360ms ease-out both;
   animation-delay: calc(var(--i) * 80ms + 200ms);
+  transition:
+    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease-out;
+}
+
+.person:where([data-tone="hostile"]) {
+  --person-line: rgb(255 0 60 / 72%);
+  --person-glow: rgb(255 0 60 / 20%);
+  --person-rail: var(--cp-danger);
+  --face-line: var(--cp-danger);
+}
+
+.person:where([data-tone="nemesis"]) {
+  --person-line: rgb(255 97 88 / 60%);
+  --person-glow: rgb(255 97 88 / 18%);
+  --person-rail: var(--cp-red);
+  --face-line: var(--cp-red);
+}
+
+.person:where([data-tone="ally"]) {
+  --person-line: rgb(94 246 255 / 55%);
+  --person-glow: rgb(252 238 10 / 12%);
+  --person-rail: var(--cp-yellow);
+  --face-line: var(--cp-yellow);
+}
+
+.person:where([data-pinned]) {
+  --person-rail: var(--cp-yellow);
 }
 
 .present:where([data-scan]) .person {
   --person-line: var(--cp-cyan);
 }
 
-/* 常态名字格：左边小头像，右边名字和身份（计划第十二节第 14 条）；头像只放原作图，不另画框 */
+.present:where([data-scan]) .person:where([data-tone="hostile"]) {
+  --person-line: var(--cp-danger);
+}
+
+.present:where([data-open]) .person:where(:not([data-open]):not(:hover):not(:focus-within)) {
+  opacity: 0.56;
+}
+
+.personGlow,
+.personRail,
+.personCircuit {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.personGlow {
+  opacity: 0.78;
+  transition: opacity 140ms ease-out;
+}
+
+.personRail {
+  top: 5px;
+  right: auto;
+  bottom: 5px;
+  width: 5px;
+  opacity: 0.85;
+  transition:
+    width 140ms ease-out,
+    opacity 140ms ease-out;
+}
+
+.personCircuit {
+  left: auto;
+  width: 116px;
+  opacity: 0.65;
+}
+
+.personGrid {
+  position: absolute;
+  inset: 4px 6px 4px 10px;
+  z-index: 0;
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.1;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+.person:where(:hover, [data-open], [data-pinned]) > .personGlow,
+.person:where(:hover, [data-open], [data-pinned]) > .personRail {
+  opacity: 1;
+}
+
+.person:where(:hover, [data-open], [data-pinned]) > .personGrid {
+  opacity: 0.18;
+}
+
+/* 常态名字格包一层折叠容器：展开档案时同步收起，避免头像与名字上下重复 */
+.personSummary {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 100ms ease-out;
+}
+
+.person:where([data-active]) > .personSummary {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 常态名字格：左边切角头像格，中间名字/身份/状态牌，右边好感与固定提示 */
 .personRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .personFace {
+  position: relative;
+  isolation: isolate;
   display: grid;
   flex: none;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   overflow: hidden;
   font-family: var(--font-ui);
-  font-size: 17px;
-  color: var(--cp-cyan);
+  font-size: 19px;
+  color: var(--face-line, var(--cp-cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+.personFace > :first-child {
+  z-index: 0;
+}
+
+.personFace > :last-child {
+  z-index: 2;
 }
 
 .personFace:where([data-dead]) {
   opacity: 0.45;
 }
 
-.personFace > i {
-  font-style: normal;
-}
-
 .personFaceArt {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
+  font-weight: 600;
   object-fit: cover;
 }
 
@@ -287,31 +639,151 @@
   min-width: 0;
 }
 
-/*
- * 名字和身份只管名字格自己的 .inner，不漏进展开的人物档案（计划第十二节第 14 条）；
- * :where 让优先级和原来的 .person b 一样，不盖过后面各块自己的 b、small
- */
-.person > :where(.inner) b {
+.personHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 名字格自己的标题与高亮样式，只作用于常态列表行内的 .personName */
+.personName {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-body);
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cp-text);
+  transition: color 120ms ease-out;
+}
+
+.person:where(:hover, [data-pinned], :focus-visible) .personName {
+  color: var(--cp-yellow);
+}
+
+.personAlias {
+  flex: none;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--cp-text-dim);
+}
+
+.personSub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.personSub:where([data-tone="hostile"]) {
+  color: var(--cp-red);
+}
+
+.personWound {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cp-yellow);
+}
+
+.personWound:where([data-threat="high"]) {
+  color: var(--cp-danger);
+}
+
+.personBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.personBadge {
+  position: relative;
+  padding: 0 7px 1px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  color: rgb(14 14 23);
+}
+
+.personBadge:where([data-ink="light"]) {
+  color: var(--cp-text);
+}
+
+.personBadge > b {
+  position: relative;
   font-weight: 600;
 }
 
-.person > :where(.inner) small {
-  display: block;
-  margin-top: 2px;
-  font-size: 13px;
+.personSide {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.personAffinity {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--cp-text-dim);
+}
+
+.personAffinity:where([data-tone="pos"]) {
+  color: var(--cp-yellow);
+}
+
+.personAffinity:where([data-tone="neg"]) {
+  color: var(--cp-red);
+}
+
+.personSide > .personMeter {
+  width: 44px;
+  flex: none;
+  height: 5px;
+  margin: 1px 0 2px;
+}
+
+.personState {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: rgb(156 178 186);
+}
+
+.personState:where([data-scanned]) {
+  color: var(--cp-cyan);
+}
+
+.personState:where([data-pinned]) {
+  color: var(--cp-yellow);
+}
+
+.presentMore {
+  margin: 8px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+  text-align: right;
 }
 
 .scanCard {
   position: absolute;
   top: 0;
   left: calc(100% + 12px);
-  width: 210px;
-  padding: 10px 14px 16px;
-  font-size: 13px;
+  z-index: 4;
+  width: 264px;
+  padding: 9px 15px 17px;
+  font-size: 12px;
   color: var(--cp-text-dim);
   opacity: 0;
   transform: translateX(-6px);
@@ -324,6 +796,40 @@
 .present:where([data-scan]) .scanCard {
   opacity: 1;
   transform: none;
+}
+
+.scanInner {
+  display: grid;
+  gap: 3px;
+}
+
+.scanTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.scanMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.scanWound {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--cp-yellow);
+}
+
+.scanWound:where([data-threat="high"]) {
+  color: var(--cp-danger);
 }
 
 .scanCard em {
@@ -355,15 +861,14 @@
 }
 
 /*
- * 私信页签朝中列加宽（计划第十二节第 12 条）：联系人在左、消息在右，不在角块宽里挤成上下排。
- * 只加宽到 560，刚好放下联系人列和一栏消息（用户嫌 720 太大）；高度定一截，不撑满同侧一列，见文件末尾。
- * 右侧照样留出地点和装备列；切到新闻、警用频段或收起时恢复常态宽度
+ * 私信页签朝中列舒展加宽：左栏放宽到能完整看清人名与用途，右栏保留充裕对话气泡区，同时仍不挡中间小说正文。
  */
 .unread:where([data-wide]) {
   width: min(
-    580px,
+    680px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
+  padding: 12px 18px 14px;
 }
 
 /* 私信加宽时同侧的生物监测、在场两块先收起，把高度让给对话（计划第十二节第 12 条，做法同第 11 条） */
@@ -379,7 +884,7 @@
   min-width: 0;
 }
 
-/* 消息、新闻、警用频段页签放在底下，挨着常态那一行，手不用伸到块顶上去切（用户定的） */
+/* 消息、新闻页签放在底下，挨着常态那一行，手不用伸到块顶上去切（用户定的） */
 .unreadTabs {
   display: flex;
   align-items: center;
@@ -394,6 +899,9 @@
 }
 
 .unreadTabMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-ui);
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -418,6 +926,10 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--cp-text-dim);
+}
+
+.unreadTabMeta > .unreadKey {
+  margin-left: 0;
 }
 
 .unreadLatest {
@@ -575,42 +1087,144 @@
   opacity: 0.25;
 }
 
-/* 地点框和威胁这一截点了开地图；下面的存放栏另算（用户定的） */
+/* 地点框和威胁这一截点了开地图（用户定的） */
 .zoneHit {
   position: relative;
   cursor: var(--cp-cursor-hand);
 }
 
-/* 存放（用户定的）：能存放的地点才出，写法同追踪块，原作面板框，展开的内容在框里往下长 */
-.zoneStash {
-  position: relative;
-  margin-top: 12px;
-  cursor: var(--cp-cursor-hand);
-}
-
-.zoneStashLine {
-  margin: 0;
-  overflow: hidden;
-  font-size: 13px;
-  color: var(--cp-text-dim);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 同侧别的块展开时，存放栏只留标题 */
-.side:has(> [data-open]) > .zone:not([data-open]) .zoneStashLine {
-  display: none;
-}
-
-/* ———— C 追踪（右中，最多 3 条） ———— */
+/* ———— C 追踪（右中，常态摘要最多 3 条；展开默认收束至 390px，切到有单可接的委托时加宽到 560px） ———— */
 
 .track {
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
   width: var(--corner-w);
+}
+
+.track:where([data-open]) {
+  --cp-panel: rgb(7 9 14 / 98%);
+  --tab-tint: rgb(252 238 10 / 78%);
+  width: min(
+    390px,
+    calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
+  );
+}
+
+/*
+ * 独立衬底放在 section 的 isolation 堆叠底层，既能彻底压住正文不透字，
+ * 又不会像直接裁 <section> 那样把外层 notify.itemCellFg 黄色斜切描边剪出毛边
+ */
+.track:where([data-open]) > .trackHit > section::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  z-index: -1;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 18px),
+    calc(100% - 18px) 100%,
+    4px 100%,
+    0 calc(100% - 4px)
+  );
+  background: rgb(7 9 15 / 94%);
+  pointer-events: none;
+}
+
+.trackHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.track:where([data-open]) .trackHead {
+  margin-bottom: 6px;
+}
+
+.trackHeadLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trackTitle {
+  margin: 0;
+  color: var(--cp-yellow);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.trackStatus {
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.trackStatus:where([data-tone="bad"]) {
+  border-left-color: var(--cp-danger);
+  background: rgb(255 0 60 / 15%);
+  color: var(--cp-danger);
+}
+
+.trackStatus:where([data-tone="muted"]) {
+  border-left-color: rgb(184 206 214 / 35%);
+  background: rgb(184 206 214 / 8%);
+  color: var(--cp-text-dim);
+}
+
+.trackKeyHint {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cp-text-dim);
+}
+
+.trackSummary {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 100ms ease-out;
+}
+
+.trackSummaryInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.track:where([data-open]) .trackSummary {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.trackEmpty,
+.trackMore {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.trackMore {
+  margin-top: 8px;
+  font-size: 11px;
 }
 
 .trackList {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -619,25 +1233,56 @@
 .trackList li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 9px;
+  min-width: 0;
 }
 
-.trackList span {
+.trackItemText {
   display: grid;
+  flex: 1;
   gap: 2px;
+  min-width: 0;
+}
+
+.trackItemTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .trackList b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
+  color: var(--cp-text);
+}
+
+.trackItemTop time {
+  flex: none;
+  font-size: 11px;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.trackItemTop time:where([data-overdue]) {
+  color: var(--cp-danger);
+  font-weight: 700;
 }
 
 .trackList small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--cp-text-dim);
 }
 
+.trackList :where(li[data-overdue]) b,
 .trackList :where(li[data-overdue]) small {
   color: var(--cp-danger);
 }
@@ -650,7 +1295,7 @@
   align-self: flex-end;
   align-items: stretch;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
   width: var(--corner-w);
 }
 
@@ -662,24 +1307,9 @@
   );
 }
 
-/* 物品栏加宽时同侧的地点、追踪两块先收起，把高度让给三格武器和背包（同左下 .unread[data-wide]） */
+/* 物品栏加宽时同侧的地点、追踪两块先收起，把高度让给随身行装和背包（同左下 .unread[data-wide]） */
 .side:has(> .weapon[data-wide]) > :not(.weapon) {
   display: none;
-}
-
-.qhSlot {
-  position: relative;
-  z-index: 2;
-  align-self: flex-end;
-}
-
-/* 右下入口的轮盘向上、向左展开，右缘留出程序格的外伸空间 */
-.qhSlot [role="menu"] {
-  top: auto;
-  right: 8px;
-  bottom: calc(100% + 12px);
-  left: auto;
-  margin-left: 0;
 }
 
 /* 常态 92 高；展开时物品栏在同一个 hud.slot 框里往上长，武器读数稳在底栏 */
@@ -700,12 +1330,14 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 58px;
+  min-height: 54px;
   width: 100%;
 }
 
 .weapon:where([data-open]) .slot > .inner {
-  padding-top: 10px;
+  min-height: 0;
+  margin-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid rgb(94 246 255 / 22%);
 }
 
@@ -713,9 +1345,18 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  align-items: stretch;
+  gap: 6px;
   min-width: 0;
+}
+
+.slotFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
 }
 
 .slotHead {
@@ -730,7 +1371,7 @@
 .slot > :where(.inner) b {
   display: block;
   overflow: hidden;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--cp-cyan);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -751,29 +1392,118 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  min-width: 0;
 }
 
-/* 原作武器图：保持原色和比例，居右陈列 */
-.slot > .inner > .slotArt {
+.slotOverload {
+  color: var(--cp-danger);
+  font-weight: 700;
+}
+
+/* 只有 1 把武器：沿用原作横向构图（左侧信息+稀有度竖条，右侧高对比单色剪影），不画内套娃方框 */
+.slotWeaponSingle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 9px;
+}
+
+.slotWeaponSingleText {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.slotWeaponCount {
+  color: var(--cp-yellow);
+  font-weight: 600;
+}
+
+/* 2～3 把武器平权并排：去掉内套娃白框，用极克制微亮底+稀有度左竖条+2077 武器剪影 */
+.slotWeapons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.slotWeapon {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 5px 6px 4px 9px;
+  background: linear-gradient(90deg, rgb(94 246 255 / 7%), rgb(94 246 255 / 2%));
+}
+
+.slotWeaponRail {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 2px;
+  background: var(--rarity, rgb(94 246 255 / 55%));
+}
+
+.slotWeapon:where([data-bulky]) .slotWeaponRail {
+  box-shadow: 0 0 6px rgb(252 238 10 / 45%);
+}
+
+.slotWeaponArt {
   flex: none;
-  width: auto;
-  max-width: 44%;
-  height: 54px;
-  margin: 0 0 0 auto;
-  object-fit: contain;
+  max-width: 100%;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  pointer-events: none;
 }
 
+.slotWeaponName {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--cp-text);
+}
+
+.slotWeaponMore {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  background: rgb(252 238 10 / 8%);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 与左下角 Unread 的 T 保持一致：克制暗字，不画刺眼青块以免 O 看成 0 */
 .slotHint {
   flex: none;
-  padding: 2px 7px;
-  border: 1px solid rgb(94 246 255 / 35%);
-  background: rgb(14 14 23 / 65%);
-  color: var(--cp-cyan);
+  margin-left: auto;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
 }
 
 /* ———— 横幅：中列顶上，同时只出一个 ———— */
@@ -829,22 +1559,47 @@
   cursor: var(--cp-cursor-hand);
 }
 
-.person:where([data-open], [data-pinned], :focus-visible) {
+.person:where(:hover, [data-open], [data-pinned], :focus-visible) {
   --person-line: var(--cp-cyan);
   z-index: 2;
 }
 
+.person:where([data-tone="hostile"]):where(:hover, [data-open], [data-pinned], :focus-visible) {
+  --person-line: var(--cp-danger);
+}
+
+.person:where([data-tone="nemesis"]):where(:hover, [data-open], [data-pinned], :focus-visible) {
+  --person-line: var(--cp-red);
+}
+
 /*
- * 瞄着一个人看档案时，名字格朝中列加宽到角块的两倍（第十二节第 8 条的例外，用户定的）：
- * 角块只有 280～360 宽，档案挤成一条；展开时暂时盖住一部分正文，移开就收回原宽
+ * 瞄着一个人看档案时，名字格朝中列加宽并限在右侧栏外（第十二节第 8 条的例外，用户定的）：
+ * 既让双栏档案在 1280 档也能并排舒适阅读，又防止小窗撞上右栏；移开后先收档案再缩回原宽
  */
 .person[data-open] {
-  width: calc(var(--corner-w) * 2);
+  --person-bg: rgb(8 11 18 / 97%);
+  width: min(
+    680px,
+    calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
+  );
   max-width: none;
+  padding: 12px 16px 14px 18px;
+}
+
+.person[data-open] > .personRail {
+  width: 4px;
+}
+
+.personPeekTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .trackHit {
   position: relative;
+  cursor: var(--cp-cursor-hand);
 }
 
 /*
@@ -909,6 +1664,18 @@
   padding: 0 0 14px;
 }
 
+.bio:where([data-open]) .growBody,
+.track:where([data-open]) .growBody {
+  padding-top: 2px;
+}
+
+/* 常态名字格已经同步收起，长出的档案顶上不再空一大截；写在 .growBody 之后以免被默认 480px 余量覆盖 */
+.person .growBody {
+  max-height: min(600px, calc(100dvh - 240px));
+  padding-top: 2px;
+  scrollbar-color: rgb(94 246 255 / 32%) transparent;
+}
+
 /* 标题一行：左边写这块装的是什么，右边写对应的键 */
 .peekHead {
   display: flex;
@@ -930,6 +1697,22 @@
   color: var(--cp-text-dim);
 }
 
+.person :where(.peekHead) {
+  margin: 2px 0 10px;
+  padding-bottom: 4px;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: var(--person-line, var(--accent));
+}
+
+.person :where(.peekHead) kbd {
+  color: rgb(184 206 214);
+}
+
+.person:where([data-pinned]) :where(.peekHead) kbd {
+  color: var(--cp-yellow);
+}
+
 /* 块里放的完整页面：宽度跟着块走，不撑出框 */
 .growBody :where(*) {
   min-width: 0;
@@ -941,6 +1724,11 @@
   height: 2px;
   background: var(--accent);
   mask-size: 100% 100%;
+}
+
+.track :where(.peekLine) {
+  margin-bottom: 10px;
+  opacity: 0.45;
 }
 
 .peekScroll {
@@ -1088,17 +1876,22 @@
 
 /* 长出来的部分减少动态效果时直接切换，见文件末尾的 reduced-motion */
 
-/* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收窄名字格和扫描卡 ———— */
+/* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收紧凑态名字格和扫描卡 ———— */
 
 @media (width < 1600px) {
-  .person {
-    min-width: 160px;
-    max-width: 240px;
-    padding: 8px 16px 10px;
+  .person:not([data-open]) {
+    padding: 9px 14px 9px 16px;
+  }
+
+  .personFace {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
   }
 
   .scanCard {
-    width: 180px;
+    width: 224px;
+    padding: 7px 14px 14px;
   }
 
   .zoneText b {
@@ -1209,16 +2002,20 @@
 }
 
 /*
- * 私信页签定一截高（用户定的，计划第十二节第 12 条）：块收窄到 580，高度最多 440、矮屏不超过 56% 屏高，
- * 不再撑满同侧一列（用户嫌太大）；Grow 行内的 maxHeight（useRoomLeft 量的同侧剩余高度）照样再压一道。
- * 标题头和左边联系人列固定在视图里，右边消息流独立滚动，不再整块滚走或留一大片空白
+ * 私信页签定高但不浪费同侧已清空的空间（生物监测与在场已隐藏）：高上限提至 min(620px, 72dvh)，
+ * Grow 行内的 maxHeight 仍负责保底不超出侧栏；标题头与左栏定住，中间消息流舒展滚动。
  */
 .unread[data-wide] .growBody {
   display: flex;
   flex-direction: column;
-  height: min(440px, 56dvh);
+  height: min(620px, 72dvh);
   overflow: hidden;
-  padding: 0 0 10px;
+  padding: 0 0 6px;
+}
+
+.unread:where([data-wide]) .peekLine {
+  margin-bottom: 6px;
+  opacity: 0.55;
 }
 
 /* pinBody / pinPane -> PhoneBody (.phoneLayout) 一路撑满剩余高度 */
@@ -1246,4 +2043,120 @@
 .side > .block[data-resizing] .growBody {
   opacity: 0;
   transition: opacity 60ms ease-out;
+}
+
+/* ———— 全息来电 HUD（view.calls.incoming） ———— */
+
+.holocall {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  padding: 10px 14px 10px 16px;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  animation: holoIn 240ms ease-out both;
+}
+
+.holoGlow {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.holoRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.holoFaceWrap {
+  position: relative;
+  display: inline-grid;
+}
+
+.holoScan {
+  position: absolute;
+  inset: 2px;
+  z-index: 3;
+  background-repeat: repeat;
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.holoMeta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+
+.holoMeta small {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--cp-cyan);
+}
+
+.holoMeta b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  color: var(--cp-text);
+}
+
+.holoMeta span {
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.holoWave {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+}
+
+.holoWave > i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  background: var(--cp-cyan);
+  transform-origin: bottom;
+  animation: holoWaveBar 650ms ease-in-out infinite alternate;
+}
+
+.holoWave > i:nth-child(2) {
+  animation-delay: 140ms;
+}
+
+.holoWave > i:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+.holoWave > i:nth-child(4) {
+  animation-delay: 420ms;
+}
+
+@keyframes holoIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes holoWaveBar {
+  from {
+    transform: scaleY(0.28);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holocall,
+  .holoWave > i {
+    animation: none;
+  }
 }

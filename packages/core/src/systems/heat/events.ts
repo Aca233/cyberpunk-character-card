@@ -1,15 +1,24 @@
 import type { EventContext, SystemEvent } from "../../kernel/system";
+import { shownStars } from "./apply";
 import { HeatStateSchema } from "./schema";
 
-/** 悬赏新挂、涨价和了结；不读取赏金猎人的隐藏资料 */
+/** 悬赏新挂、涨价、了结与通缉星级上升；不读取赏金猎人的隐藏资料 */
 export function heatEvents({ before, after }: EventContext): readonly SystemEvent[] {
-  const was = HeatStateSchema.parse(before.world.slices.heat).bounties.filter(
-    (b) => b.resolvedAt === null,
-  );
-  const now = HeatStateSchema.parse(after.world.slices.heat).bounties.filter(
-    (b) => b.resolvedAt === null,
-  );
+  const prevState = HeatStateSchema.parse(before.world.slices.heat);
+  const nextState = HeatStateSchema.parse(after.world.slices.heat);
+  const was = prevState.bounties.filter((b) => b.resolvedAt === null);
+  const now = nextState.bounties.filter((b) => b.resolvedAt === null);
   const result: SystemEvent[] = [];
+  const prevStars = shownStars(prevState.stars);
+  const nextStars = shownStars(nextState.stars);
+  if (nextStars > prevStars) {
+    result.push({
+      source: "heat",
+      icon: "warning",
+      text: `通缉等级上升：${prevStars} → ${nextStars} 星`,
+      tone: "bad",
+    });
+  }
   for (const b of now) {
     const old = was.find((p) => p.id === b.id);
     if (old && old.reward === b.reward) continue;

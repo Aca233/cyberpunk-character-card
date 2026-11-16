@@ -8,6 +8,7 @@ import type {
   Legend,
   LifepathEntry,
   Loadout,
+  PhoneChatRequest,
   PlayerView,
   ProseBlock,
   ProseMode,
@@ -177,13 +178,10 @@ export interface Health {
   };
 }
 
-export type Difficulty = PlayerView["difficulty"];
-
 export interface SaveSummary {
   readonly id: string;
   readonly title: string;
   readonly characterId: string;
-  readonly difficulty: Difficulty;
   readonly createdAt: string;
   readonly startTime: number;
   readonly running: boolean;
@@ -215,6 +213,11 @@ export interface BoardData {
     readonly points: number;
     readonly humanityCost: number;
     readonly programSlots?: number;
+    readonly ram?: number;
+    readonly armor?: boolean;
+    readonly accelerator?: boolean;
+    readonly checks?: readonly string[];
+    readonly attributes?: Readonly<Record<string, number>>;
     readonly ability: string;
   }[];
   /** 捏人能选成旧识的原作人物；服务端只给公开的几项 */
@@ -347,6 +350,17 @@ export type ConnectionTest =
       readonly usage?: TurnUsage;
     }
   | { readonly ok: false; readonly error: string; readonly ms?: number };
+
+export interface FetchModelsInput {
+  readonly profileName?: string;
+  readonly type?: PublicProfile["type"];
+  readonly baseUrl?: string;
+  readonly apiKey?: string;
+}
+
+export type ModelsResult =
+  | { readonly ok: true; readonly models: readonly string[] }
+  | { readonly ok: false; readonly error: string };
 
 export type SubmitResult =
   | { readonly kind: "started"; readonly turnId: string }
@@ -500,6 +514,9 @@ export const api = {
   /** 会用这个方案发一条很短的请求，产生极少量费用 */
   testProfile: (name: string) =>
     request<ConnectionTest>("POST", `/profiles/${encodeURIComponent(name)}/test`),
+  /** 按当前表单参数或已保存密钥向提供方拉取模型列表（不落盘、不扣对话费） */
+  fetchModels: (input: FetchModelsInput) =>
+    request<ModelsResult>("POST", "/profiles/-/models", input),
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
   setRoles: (roles: { narrator?: string; aux?: string }) =>
@@ -552,7 +569,6 @@ export const api = {
   createSave: (input: {
     title: string;
     characterId: string;
-    difficulty: Difficulty;
     /** 地图上选中的开局地点 id（用户定的，2026-10-30：“在地图上选择”）；不传沿用默认开局 */
     startLocation?: string;
   }) => request<SaveSummary>("POST", "/saves", input),
@@ -569,7 +585,14 @@ export const api = {
   /** 界面操作（习惯、医疗、义体……），不调用模型 */
   action: (saveId: string, body: ActionRequest) =>
     request<{ version: number; notes?: string[] }>("POST", `/saves/${saveId}/actions`, body),
-  /** 夜之城难度死亡后从这个场景开头重来；每个场景一次 */
+  /** 手机私信直聊：只调用辅助模型，推进 1–3 分钟时钟并更新双人会话与关联委托 */
+  phoneChat: (saveId: string, body: PhoneChatRequest) =>
+    request<{ version: number; notes?: string[]; reply?: string; minutes?: number }>(
+      "POST",
+      `/saves/${saveId}/phone/chat`,
+      body,
+    ),
+  /** 死亡后从当前场景开头重来；每个场景一次 */
   restart: (saveId: string, baseVersion: number) =>
     request<{ version: number; voided: number }>("POST", `/saves/${saveId}/restart`, {
       baseVersion,

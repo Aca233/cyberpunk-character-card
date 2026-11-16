@@ -4,16 +4,27 @@ import {
   draftAcquaintances,
   draftTargets,
   PROSE_BLOCK_INFO,
+  type ProseBlock,
   splitDraft,
 } from "@cp/core";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api/client";
+import { CellFrame } from "../../ui/FrameBox";
 import styles from "./characters.module.css";
 
+const CORE_DRAFT_BLOCKS: readonly DraftBlock[] = ["look", "past", "personality", "voice"];
+
+const TONE_PRESETS: readonly string[] = [
+  "冷峻黑色电影风",
+  "街头痞气与冷幽默",
+  "创伤与宿命感",
+  "干练职业佣兵",
+  "简练克制少修饰",
+];
+
 /**
- * 一键成稿（第三期，用户定的 2026-10-30："保留逐块重写、续写、润色、锁定，加一键成稿"）：
- * 一次写外貌、背景故事、性格、说话方式里没锁定的几块，顺带补第 3 步空着的旧识"是什么事"。
- * 玩家点了才调模型（花一次模型调用）；边写边显示原文，中途能停，写完能整体撤销一步
+ * 一键成稿：一次写外貌、背景故事、性格、说话方式里未锁定的区块，顺带补空着的旧识过节。
+ * 边写边流式显示原文，中途能停，写完能整体撤销一步；支持一键锁定已填项或点选文风基调。
  */
 export function DraftAll({
   card,
@@ -36,6 +47,31 @@ export function DraftAll({
   const needs = draftAcquaintances(prose);
   const nothing = targets.length === 0 && needs.length === 0;
   const noName = card.name.trim() === "";
+
+  const filledCoreBlocks = CORE_DRAFT_BLOCKS.filter((b) => card[b].trim() !== "");
+  const unlockedFilledBlocks = filledCoreBlocks.filter((b) => !card.locked.includes(b));
+
+  const lockFilled = () => {
+    const nextLocked = [...new Set<ProseBlock>([...card.locked, ...filledCoreBlocks])];
+    onChange({ locked: nextLocked });
+  };
+
+  const unlockAll = () => {
+    onChange({ locked: [] });
+  };
+
+  const toggleTone = (tone: string) => {
+    setAsking(true);
+    setInstruction((curr) => {
+      if (curr.includes(tone)) {
+        return curr
+          .replace(tone, "")
+          .replace(/[；;、\s]+/g, "；")
+          .replace(/^；|；$/g, "");
+      }
+      return curr.trim() ? `${curr.trim()}；${tone}` : tone;
+    });
+  };
 
   const run = async () => {
     const controller = new AbortController();
@@ -80,15 +116,15 @@ export function DraftAll({
       );
       const { wrote, filled, cut } = apply();
       if (wrote === 0 && filled === 0) {
-        setError("模型没按格式写，拆不出区块，可以重试");
+        setError("模型未按格式返回，拆不出区块，请重试");
       } else {
         const parts = [
-          wrote > 0 ? `写进了 ${wrote} 块` : "",
-          filled > 0 ? `补了 ${filled} 个旧识的事` : "",
+          wrote > 0 ? `已写入 ${wrote} 个区块` : "",
+          filled > 0 ? `补全了 ${filled} 位旧识的过往交集` : "",
           cut.length > 0
-            ? `${cut.map((b) => `「${PROSE_BLOCK_INFO[b].label}」`).join("")}超了字数，截短了`
+            ? `${cut.map((b) => `「${PROSE_BLOCK_INFO[b].label}」`).join("")}超出字数已截断`
             : "",
-          result.truncated ? "模型写超了总字数，最后的截掉了" : "",
+          result.truncated ? "总字数达上限已截尾" : "",
         ].filter((p) => p !== "");
         setNote(parts.join("；"));
       }
@@ -97,11 +133,11 @@ export function DraftAll({
         const { wrote, filled } = apply();
         setNote(
           wrote > 0 || filled > 0
-            ? "已停止，保留了写出来的部分（最后一块可能没写完）"
-            : "已停止，还没写出完整的区块",
+            ? "已停止，保留了已写出内容（最后一块可能未写完）"
+            : "已停止，尚未写出完整区块",
         );
       } else {
-        setError(caught instanceof ApiError ? caught.message : "成稿时出错了，可以重试");
+        setError(caught instanceof ApiError ? caught.message : "成稿时出错，请重试");
       }
     } finally {
       abort.current = null;
@@ -112,85 +148,132 @@ export function DraftAll({
   const busy = streaming !== null;
   const scope = [
     ...targets.map((b) => `「${PROSE_BLOCK_INFO[b].label}」`),
-    needs.length > 0 ? `${needs.length} 个旧识的事` : "",
+    needs.length > 0 ? `${needs.length} 位旧识交集` : "",
   ]
     .filter((p) => p !== "")
     .join("、");
 
   return (
-    <div className={styles.prose}>
-      {/* 说明缩成一句（用户 2026-10-31："解释性说明一大堆"） */}
-      <p className={styles.note}>待生成内容：{scope || "所有区块均已定稿"}</p>
-      <div className={styles.slotTools}>
-        {busy ? (
+    <div className={styles.draftAllBox}>
+      <CellFrame />
+      <div className={styles.draftAllHead}>
+        <div>
+          <strong className={styles.draftAllTitle}>AI 角色小传协同成稿</strong>
+          <p className={styles.note}>
+            {noName
+              ? "请先在左栏填写角色姓名，再调用 AI 成稿"
+              : `待生成范围：${scope || "所有核心区块与旧识交集均已定稿"}`}
+          </p>
+        </div>
+        <div className={styles.slotTools}>
+          {busy ? (
+            <button
+              type="button"
+              className={styles.toolButton}
+              onClick={() => abort.current?.abort()}
+            >
+              停止生成
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.toolButton}
+              data-primary=""
+              disabled={noName || nothing}
+              title={
+                noName
+                  ? "请先给角色起个名字"
+                  : nothing
+                    ? "生平区块均已锁定，旧识恩怨也已补齐"
+                    : "根据出身、特质、义体与旧识一键撰写未锁定的人设正文"
+              }
+              onClick={() => void run()}
+            >
+              ✦ 一键生成生平
+            </button>
+          )}
           <button
             type="button"
             className={styles.toolButton}
-            onClick={() => abort.current?.abort()}
+            aria-pressed={asking}
+            disabled={busy}
+            onClick={() => setAsking((a) => !a)}
           >
-            停止
+            文风与要求
           </button>
-        ) : (
-          <button
-            type="button"
-            className={styles.toolButton}
-            disabled={noName || nothing}
-            title={
-              noName
-                ? "请先给角色起个名字"
-                : nothing
-                  ? "生平区块均已锁定，旧识恩怨也已补齐"
-                  : "调用辅助模型生成正文（消耗一次模型调用）"
-            }
-            onClick={() => void run()}
-          >
-            一键生成生平
-          </button>
-        )}
-        <button
-          type="button"
-          className={styles.toolButton}
-          aria-pressed={asking}
-          disabled={busy}
-          onClick={() => setAsking((a) => !a)}
-        >
-          要求
-        </button>
-        {previous !== null && !busy && (
-          <button
-            type="button"
-            className={styles.toolButton}
-            onClick={() => {
-              onChange(previous);
-              setPrevious(null);
-              setNote(null);
-            }}
-          >
-            撤销成稿
-          </button>
-        )}
+          {unlockedFilledBlocks.length > 0 && !busy && (
+            <button
+              type="button"
+              className={styles.toolButton}
+              title="将目前已填写的区块全部锁定，AI 仅补写空白区块"
+              onClick={lockFilled}
+            >
+              仅补空白项
+            </button>
+          )}
+          {card.locked.length > 0 && !busy && (
+            <button
+              type="button"
+              className={styles.toolButton}
+              title="解除所有区块的锁定状态"
+              onClick={unlockAll}
+            >
+              全部解锁 ({card.locked.length})
+            </button>
+          )}
+          {previous !== null && !busy && (
+            <button
+              type="button"
+              className={styles.toolButton}
+              onClick={() => {
+                onChange(previous);
+                setPrevious(null);
+                setNote(null);
+              }}
+            >
+              撤销成稿
+            </button>
+          )}
+        </div>
       </div>
+
       {asking && (
-        <label className={styles.field}>
-          <span>
-            生成要求 / 补充设定
-            <small>{instruction.length} / 200</small>
-          </span>
-          <input
-            maxLength={200}
-            value={instruction}
-            placeholder="例如：整体冷一点；背景故事少写打斗"
-            onChange={(event) => setInstruction(event.target.value)}
-          />
-        </label>
+        <div className={styles.draftAllAsk}>
+          <div className={styles.tonePills}>
+            {TONE_PRESETS.map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                className={styles.tonePill}
+                aria-pressed={instruction.includes(tone)}
+                onClick={() => toggleTone(tone)}
+              >
+                {tone}
+              </button>
+            ))}
+          </div>
+          <label className={styles.field}>
+            <span>
+              生成要求 / 补充设定
+              <small>{instruction.length} / 200</small>
+            </span>
+            <input
+              maxLength={200}
+              value={instruction}
+              placeholder="例如：整体冷一点；背景故事少写打斗；突出在荒坂反情报部的旧伤"
+              onChange={(event) => setInstruction(event.target.value)}
+            />
+          </label>
+        </div>
       )}
+
       {busy && (
         <label className={styles.field}>
           <span>
-            正在写
+            正在流式撰写生平…
             <small>{streaming.length} 字</small>
           </span>
-          <textarea rows={8} readOnly aria-busy value={streaming} />
+          <textarea rows={7} readOnly aria-busy value={streaming} />
         </label>
       )}
       {note && (

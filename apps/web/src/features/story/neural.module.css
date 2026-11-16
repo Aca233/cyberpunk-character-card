@@ -124,7 +124,7 @@
   background: none;
   font: inherit;
   font-size: 15px;
-  color: var(--cp-red);
+  color: var(--tab-tint, var(--cp-red));
   cursor: var(--cp-cursor-hand);
   transition: color var(--dur-flash);
 }
@@ -300,8 +300,40 @@
  * 人体是原作 man_body 图集，格子是原作 inventory4_atlas 的 item_* 加 atlas_inventory 的电路纹，
  * 竖条是原作 cw_bars_assets；这里只管位置、尺寸和染色
  */
+/* ———— 义体页顶栏汇总 + 标签芯片 + 详情增强 ———— */
+
+.cyberPage {
+  display: grid;
+  gap: 10px;
+}
+
+.cyberTipMeta {
+  margin: 4px 0 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--cp-text-dim);
+}
+
+.cyberTipMeta[data-broken] {
+  color: var(--cp-danger);
+}
+
+.cyberTipMuted {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cp-text-dim);
+}
+
+.cyberClinicHint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--cp-danger);
+}
+
 .cyberScreen {
-  --stage: clamp(420px, calc(100dvh - 200px), 900px);
+  --stage: clamp(420px, calc(100dvh - 235px), 860px);
   --cell: calc(var(--stage) * 0.115);
   position: relative;
   height: var(--stage);
@@ -313,7 +345,7 @@
   top: 0;
   left: calc(var(--cell) * 0.5 + 24px);
   display: grid;
-  grid-template-rows: auto calc(var(--stage) * 0.6) auto;
+  grid-template-rows: auto calc(var(--stage) * 0.6);
   justify-items: center;
   gap: 8px;
 }
@@ -403,14 +435,8 @@
   transform: translateY(-50%);
 }
 
-.gaugeStage {
-  font-size: 12px;
-  color: var(--cp-text-dim);
-}
-
 /*
- * 两侧部位组：照原作每组上面一行红字，下面一排格子。左边一列右缘离中线 0.9 格、右边一列左缘离中线 1.8 格，
- * 每组再按 --shift 顺着胳膊往外推；红字在左边靠右、在右边靠左，都贴着格子朝人体那一侧
+ * 两侧部位组：照原作每组上面一行红字部位名，下面一排格子。左边一列右缘离中线 0.9 格、右边一列左缘离中线 1.8 格
  */
 .cyberSide {
   position: absolute;
@@ -440,6 +466,11 @@
   margin-right: calc(var(--shift) * var(--cell) * 1.1);
 }
 
+.cyberSide:has(.cyberTip),
+.cyberGroup:has(> .cyberTip) {
+  z-index: 20;
+}
+
 .cyberSide[data-side="right"] .cyberGroup {
   justify-items: start;
   margin-right: 0;
@@ -452,6 +483,11 @@
   font-weight: 600;
   line-height: 1.1;
   color: var(--cp-red);
+  transition: color 140ms ease-out;
+}
+
+.cyberGroup[data-focus] .cyberLabel {
+  color: var(--cp-yellow);
 }
 
 .cyberCells {
@@ -460,15 +496,17 @@
 }
 
 /*
- * 详情浮窗：贴着格子朝人体那一侧的边对齐，上面三行往下弹、下面两行往上弹；往外弹的话最外那组会伸出页面。
+ * 详情浮窗：贴着格子朝人体那一侧的边对齐，上面两行往下弹、中间行居中不裁切、下面两行往上弹；
  * 浮窗不接鼠标，盖住下一组时照样能直接悬停过去
  */
 .cyberTip {
+  --cp-panel: rgb(8 10 16 / 97%);
   position: absolute;
   top: calc(100% + 6px);
-  z-index: 3;
-  width: min(18rem, 30vw);
+  z-index: 30;
+  width: min(21rem, 34vw);
   pointer-events: none;
+  backdrop-filter: blur(10px);
   animation: fadeIn 120ms ease-out both;
 }
 
@@ -480,19 +518,24 @@
   left: 0;
 }
 
+.cyberGroup:nth-child(3) .cyberTip {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .cyberGroup:nth-child(n + 4) .cyberTip {
   top: auto;
   bottom: calc(100% + 6px);
 }
 
-/* 原作右下角是空的：已装几件、断肢、义体医生收在这里 */
+/* 原作右下角是空的：断肢告警、义体医生入口收在这里 */
 .cyberCorner {
   position: absolute;
   right: 0;
   bottom: 0;
   display: grid;
   gap: 10px;
-  width: min(16rem, 24vw);
+  width: min(17rem, 26vw);
 }
 
 .cyberCount {
@@ -504,8 +547,7 @@
 }
 
 /*
- * 一格：照原作是正方形，左边一道细橙条，暗底上铺一层亮金电路纹，外框暗红、右下切角；都是原作素材。
- * 原作装了义体的格子框会亮成橙黄，空格子纹路暗一些
+ * 一格：照原作是正方形，左边一道带槽口的细竖条按稀有度染色，暗底上铺亮金电路纹，外框暗红/橙、右下切角
  */
 .cyberCell {
   --cell-line: rgb(214 120 50);
@@ -523,7 +565,9 @@
   background: none;
   border: 0;
   cursor: var(--cp-cursor-hand);
-  transition: opacity 160ms ease-out;
+  transition:
+    opacity 160ms ease-out,
+    transform 140ms ease-out;
 }
 
 .cyberCell > .cellSquare {
@@ -532,23 +576,39 @@
 
 .cyberCell > .cellStrip {
   right: auto;
+  left: 1px;
   width: calc(var(--cell) * 0.07);
 }
 
+.cellFallbackIcon {
+  position: relative;
+  width: 52%;
+  height: 52%;
+  opacity: 0.85;
+}
+
 .cyberCell:where([data-empty]) {
-  --cell-line: rgb(140 40 40 / 90%);
-  --cell-texture: rgb(214 160 40 / 50%);
-  --cell-strip: rgb(214 110 40 / 80%);
+  --cell-line: rgb(140 40 40 / 88%);
+  --cell-texture: rgb(214 160 40 / 42%);
+  --cell-strip: rgb(140 52 44 / 75%);
 }
 
 /*
- * 选择框里每件义体前面的格子（用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）：
- * 和部位格同一套原作底子，固定大小、不接鼠标；装着的框亮成原作选中的黄
+ * 选择框里每件义体前面的格子：固定大小、不接鼠标；装着的框亮成原作选中的黄
  */
 .cyberCell:where([data-item]) {
   --cell: 56px;
   cursor: default;
   pointer-events: none;
+}
+
+/* 格里的原作义体图（item_icons 的 cw_*）：等比缩进格子，压在电路纹上面 */
+.cyberArt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: filter 160ms ease-out;
 }
 
 .cyberCell:where([data-item][data-on]) {
@@ -559,9 +619,13 @@
   --cell-line: var(--cp-danger);
 }
 
+.cyberCell:where([data-broken]) .cyberArt {
+  opacity: 0.36;
+  filter: saturate(0.25);
+}
+
 /*
  * 左边竖条（原作 item_left_rarity）按稀有度染色，颜色用 tokens 里的 --rar-*；标志性义体用标志性的金色
- * （用户 2026-10-31："怎么没有稀有度颜色区分"）
  */
 .cyberCell:where([data-rarity="common"]) {
   --cell-strip: var(--rar-common);
@@ -593,6 +657,10 @@
   outline: none;
 }
 
+.cyberCell:where(button:hover, :focus-visible, [aria-pressed="true"]) .cyberArt {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cell-strip) 55%, transparent));
+}
+
 .cyberCellName {
   position: relative;
   display: -webkit-box;
@@ -606,21 +674,13 @@
   -webkit-line-clamp: 3;
 }
 
-/* 格里的原作义体图（item_icons 的 cw_*）：等比缩进格子，压在电路纹上面；没有原作图的那几件照旧写名字 */
-.cyberArt {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .cyberCell > .cyberBroken {
   position: absolute;
   top: 3px;
   right: 3px;
 }
 
-/* 中间人体：照原作放大到差不多整页高、正中；几张同尺寸的原作分层图叠在一起，悬停哪个部位就淡入对应那层 */
+/* 中间人体：照原作放大居中；几层官方图交叠平滑点亮 */
 .cyberBody {
   position: absolute;
   top: 0;
@@ -639,9 +699,9 @@
 }
 
 .cyberName {
-  margin: 0 0 12px;
+  margin: 0;
   font-family: var(--font-body);
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 600;
   color: var(--cp-yellow);
 }
@@ -655,13 +715,8 @@
  * 舞台按块内宽度和视口高度缩放，不再套用全屏的 880px 高度；不缩放文字和按钮
  */
 @container pin (width >= 480px) {
-  /*
-   * 2026-10-31 对照截图（捏人第 5 步 929 和 1920 宽）：人性条按左边缘摆，上限牌压住额皮质第一格、刻度贴着骨骼格。
-   * 改成跟部位格一样按中线摆：骨骼组最外到中线 5.6 格，刻度宽约 1.3 格，往左再留一点；
-   * 舞台再限一档（60cqw - 64px），让左边挂着的当前值红牌不伸出这一栏
-   */
   .cyberScreen {
-    --stage: clamp(260px, min(58cqw, 60cqw - 64px, calc(100dvh - 360px)), 540px);
+    --stage: clamp(260px, min(58cqw, 60cqw - 64px, calc(100dvh - 400px)), 520px);
     --cell: calc(var(--stage) * 0.115);
     min-width: 0;
   }
@@ -670,7 +725,6 @@
     left: max(44px, calc(50% - var(--cell) * 7.2));
   }
 
-  /* 929 宽量出来上限牌右边正好顶到额皮质第一格，收窄 16px 留出空当 */
   .cyberScreen .gaugeTop {
     width: calc(100% + 24px);
   }
@@ -680,11 +734,11 @@
   }
 
   .cyberScreen .cyberTip {
-    width: min(18rem, 36cqw);
+    width: min(20.5rem, 42cqw);
   }
 
   .cyberScreen .cyberCorner {
-    width: min(15rem, 30cqw);
+    width: min(16rem, 32cqw);
   }
 }
 
@@ -775,6 +829,7 @@
     grid-column: 1 / -1;
     width: auto;
     min-width: 0;
+    transform: none;
   }
 
   .cyberScreen .cyberCorner {
@@ -801,6 +856,8 @@
   .gaugeFill,
   .gaugeLevel,
   .cyberCell,
+  .cyberLabel,
+  .cyberArt,
   .cyberBodyLayer {
     transition: none;
   }

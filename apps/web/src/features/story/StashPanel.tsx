@@ -1,27 +1,69 @@
 import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { PinTabs } from "./Corners";
-import styles from "./corners.module.css";
+import cornerStyles from "./corners.module.css";
+import styles from "./story.module.css";
 import type { View } from "./view";
 
-/** 能存放的地点（用户定的）：人在自己的安全屋里才出存放入口 */
-export function stashHere(view: View): boolean {
-  return view.safehouse.homes.some((h) => h.here);
+/** 当前位置能打开存放箱（住在当前安全屋）或名下有可用后备箱 */
+export function hasStorageAccess(view: View): boolean {
+  return view.safehouse.homes.some((h) => h.here) || view.safehouse.trunks.length > 0;
 }
 
 /**
- * 存放（用户定的）：不再弹窗，放进右上角地点块里往下长，同四角别的块；
- * 只在能存放的地点出，当前安全屋的存放箱和名下车的后备箱一起列。不调用模型
+ * 物品栏底部的可折叠「储物」区：安全屋存放箱（仅在对应安全屋内可存取）与名下车辆后备箱。
+ * 默认收起为一行摘要，点开即可原地存/取背包物品（含全部随身武器）；没有可用储物空间时完全不渲染。
  */
+export function StashSection({
+  view,
+  onMove,
+}: {
+  readonly view: View;
+  /** 忙、战斗中或已结局时不传，隐藏操作按钮 */
+  readonly onMove?: ((action: "store" | "take", item: string, where: string) => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const { homes, trunks } = view.safehouse;
+  const hereHomes = homes.filter((h) => h.here);
+  if (hereHomes.length === 0 && trunks.length === 0) return null;
+
+  const summaryParts = [
+    ...hereHomes.map((h) => {
+      const total = h.items.reduce((sum, i) => sum + i.count, 0);
+      return `${h.name}存放箱 ${total}`;
+    }),
+    ...trunks.map((t) => `${t.name} ${t.items.length}/${t.cap}`),
+  ];
+
+  return (
+    <section className={styles.stashSection} aria-label="储物">
+      <button
+        type="button"
+        className={styles.stashToggle}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={styles.stashSummary}>储物 · {summaryParts.join(" · ")}</span>
+        <span className={styles.stashCaret}>{open ? "收起 ▴" : "展开 ▾"}</span>
+      </button>
+      {open && (
+        <div className={styles.stashBody}>
+          <StashBody view={view} onMove={onMove} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** 存放箱与车辆后备箱的双向存取明细 */
 export function StashBody({
   view,
   onMove,
 }: {
   readonly view: View;
-  /** 忙的时候不给操作 */
   readonly onMove?: ((action: "store" | "take", item: string, where: string) => void) | undefined;
 }) {
-  const { homes, trunks, trophies } = view.safehouse;
+  const { homes, trunks } = view.safehouse;
   const boxes = [
     ...homes
       .filter((h) => h.here)
@@ -44,71 +86,61 @@ export function StashBody({
     <>
       {boxes.length > 1 && (
         <PinTabs
-          tabs={boxes.map((b) => [b.id, b.name, 0] as const)}
+          tabs={boxes.map((b) => [b.id, b.name, b.items.length] as const)}
           value={box.id}
           onChange={setPicked}
         />
       )}
-      <section className={styles.peekGroup}>
-        <h4>
-          {box.name}
-          {box.cap !== null && ` ${box.items.length}/${box.cap}`}
-        </h4>
-        {box.items.length === 0 ? (
-          <p className={styles.peekNote}>空的</p>
-        ) : (
-          <ul className={styles.peekRows}>
-            {box.items.map((i) => (
-              <li key={i.id}>
-                <b>
-                  {i.name}
-                  {i.count > 1 && ` ×${i.count}`}
-                </b>
-                {onMove && (
-                  <ActionButton onClick={() => onMove("take", i.id, box.id)}>拿出来</ActionButton>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className={styles.peekGroup}>
-        <h4>背包</h4>
-        {backpack.length === 0 ? (
-          <p className={styles.peekNote}>空的</p>
-        ) : (
-          <ul className={styles.peekRows}>
-            {backpack.map(([id, count]) => (
-              <li key={id}>
-                <b>
-                  {itemName(id)}
-                  {count > 1 && ` ×${count}`}
-                </b>
-                {onMove && (
-                  <ActionButton
-                    disabled={full && !box.items.some((i) => i.id === id)}
-                    onClick={() => onMove("store", id, box.id)}
-                  >
-                    放进去
-                  </ActionButton>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      {trophies.length > 0 && (
-        <section className={styles.peekGroup}>
-          <h4>战利品墙</h4>
-          <ul className={styles.peekRows}>
-            {trophies.map((t) => (
-              <li key={`${t.label}-${t.at}`} title={`${t.at}：${t.note}`}>
-                <b>{t.label}</b>
-              </li>
-            ))}
-          </ul>
+      <div className={styles.stashColumns}>
+        <section className={cornerStyles.peekGroup}>
+          <h4>
+            {box.name}
+            {box.cap !== null && ` ${box.items.length}/${box.cap}`}
+          </h4>
+          {box.items.length === 0 ? (
+            <p className={cornerStyles.peekNote}>空的</p>
+          ) : (
+            <ul className={styles.stashList}>
+              {box.items.map((i) => (
+                <li key={i.id} className={styles.stashRow}>
+                  <span>
+                    {i.name}
+                    {i.count > 1 && ` ×${i.count}`}
+                  </span>
+                  {onMove && (
+                    <ActionButton onClick={() => onMove("take", i.id, box.id)}>拿出</ActionButton>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
-      )}
+        <section className={cornerStyles.peekGroup}>
+          <h4>随身背包</h4>
+          {backpack.length === 0 ? (
+            <p className={cornerStyles.peekNote}>空的</p>
+          ) : (
+            <ul className={styles.stashList}>
+              {backpack.map(([id, count]) => (
+                <li key={id} className={styles.stashRow}>
+                  <span>
+                    {itemName(id)}
+                    {count > 1 && ` ×${count}`}
+                  </span>
+                  {onMove && (
+                    <ActionButton
+                      disabled={full && !box.items.some((i) => i.id === id)}
+                      onClick={() => onMove("store", id, box.id)}
+                    >
+                      存入
+                    </ActionButton>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </>
   );
 }

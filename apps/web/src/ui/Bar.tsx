@@ -15,7 +15,6 @@ interface BarProps {
 export function Bar({ id, value, max, color, width, label }: BarProps) {
   const info = asset(id);
   if (!info) return <MissingAsset id={id} />;
-  const height = (width * info.height) / info.width;
   const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
     // biome-ignore lint/a11y/useSemanticElements: 原生 meter 里放不了血条蒙版的子元素
@@ -26,7 +25,12 @@ export function Bar({ id, value, max, color, width, label }: BarProps) {
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={value}
-      style={{ width, height, maskImage: `url("${info.url}")` }}
+      style={{
+        width,
+        maxWidth: "100%",
+        aspectRatio: `${info.width} / ${info.height}`,
+        maskImage: `url("${info.url}")`,
+      }}
     >
       <span className={styles.track} style={{ backgroundColor: color }} />
       <span className={styles.fill} style={{ backgroundColor: color, width: `${ratio * 100}%` }} />
