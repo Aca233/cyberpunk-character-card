@@ -2,12 +2,7 @@ import { z } from "zod";
 import type { WorldState } from "../kernel/world";
 import type { NarratedPurchase } from "../systems/commerce/quotes";
 import { quoteCyberware } from "../systems/cyberware/quote";
-import {
-  DiscountSchema,
-  EconomyStateSchema,
-  isBigSpend,
-  ServiceSchema,
-} from "../systems/economy/schema";
+import { EconomyStateSchema, isBigSpend, ServiceSchema } from "../systems/economy/schema";
 import { quoteTrade } from "../systems/inventory/trade";
 import { vehicleCatalog } from "../systems/travel/vehicles";
 
@@ -44,9 +39,6 @@ export const BuyProposalSchema = z
     credit: z.boolean().optional().describe("玩家明确申请赊账时才为 true"),
     service: ServiceSchema.optional().describe(
       "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
-    ),
-    discount: DiscountSchema.default("none").describe(
-      "此字段不产生实际优惠，写 none；普通物品/服务/义体议价使用已保存 offer，车辆按真实目录价",
     ),
   })
   .refine(

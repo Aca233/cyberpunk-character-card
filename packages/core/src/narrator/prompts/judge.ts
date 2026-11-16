@@ -50,7 +50,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 
 【交易确认】
 - buy：只在玩家明确要买入、卖出、支付服务、安装、拆卸、维修或还款时填写；询价、砍价和提出尚未获同意的新条件写 null。单笔写一个对象；多笔或多件按玩家授权的实际顺序逐件列数组，同款买两件也列两项，不能从一次授权推断重复成交。
-- 普通物品写 item，买入写 action:buy、卖出写 action:sell；服务写 service。with 始终写实际交易对方的稳定商店/人物 id，不能默认同地点第一家；已谈妥报价写 offer。价格由代码与货架共用报价，不能自行猜折扣；discount 写 none，车辆按真实目录价。
+- 普通物品写 item，买入写 action:buy、卖出写 action:sell；服务写 service。with 始终写实际交易对方的稳定商店/人物 id，不能默认同地点第一家；已谈妥报价写 offer。价格由代码与货架共用报价，不能自行猜折扣；车辆按真实目录价。
 - 义体写 cyberware、医生 with 与 operation（install/remove/repair/repay）；还款不写 cyberware。拆卸回收、替换指定旧件、出售旧件和赊账都只认玩家明确授权，分别填写 operation:remove、replace、tradeIn:true、credit:true；不能为了让交易成立替玩家补同意。
 - 仅玩家明确要先到店再交易时，destination 写对应目标地点 id；只是提到异地商店或询价不等于授权出行。已有路线面板出行按当前出行信息理解，不另猜目的地。
 
