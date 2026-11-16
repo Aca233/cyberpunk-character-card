@@ -399,14 +399,20 @@ export function applyNpcBody(
   }
 }
 
-function gearNames(ids: readonly string[], data: Data): string[] {
-  if (ids.length === 0) return [];
-  const items = itemCatalog(data);
-  return ids.map((id) => items.get(id)?.name ?? id);
+interface GearDetail {
+  readonly id: string;
+  readonly name: string;
 }
 
-/** 一件义体的名字、部位和效果说明（义体表的 ability）；表里没有的 id 只有名字 */
+function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
+  if (ids.length === 0) return [];
+  const items = itemCatalog(data);
+  return ids.map((id) => ({ id, name: items.get(id)?.name ?? id }));
+}
+
+/** 一件义体的稳定标识、名字、部位和效果说明（义体表的 ability） */
 export interface ChromeDetail {
+  readonly id: string;
   readonly name: string;
   readonly slot: string;
   readonly ability: string;
@@ -422,8 +428,8 @@ export function chromeDetails(ids: readonly string[], data: Data): ChromeDetail[
   return ids.map((id) => {
     const def = catalog.get(id);
     return def
-      ? { name: def.name, slot: SLOT_LABELS[def.slot], ability: def.ability }
-      : { name: id, slot: "", ability: "" };
+      ? { id, name: def.name, slot: SLOT_LABELS[def.slot], ability: def.ability }
+      : { id, name: id, slot: "", ability: "" };
   });
 }
 
@@ -474,7 +480,7 @@ export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   const injuries = projectInjuries(v.injuries);
   const woundText =
     injuries.length > 0 ? `${woundLabel(v)}（${injurySummaryText(injuries)}）` : woundLabel(v);
-  const gear = gearNames(body.gear, data);
+  const gear = gearDetails(body.gear, data).map((item) => item.name);
   const chrome = chromeDetails(body.cyberware, data);
   return [
     `身体状态：${woundText}`,
@@ -505,7 +511,7 @@ export function woundNote(
 export interface NpcBodyView {
   readonly wound: string;
   readonly injuries: readonly NpcInjuryView[];
-  readonly gear: readonly string[];
+  readonly gear: readonly GearDetail[];
   readonly scan: {
     readonly chrome: readonly ChromeDetail[];
     readonly humanityStage: string;
@@ -519,7 +525,7 @@ export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   const view: NpcBodyView = {
     wound: woundLabel(v),
     injuries: projectInjuries(v.injuries),
-    gear: gearNames(body.gear, data),
+    gear: gearDetails(body.gear, data),
     scan: null,
   };
   if (v.scannedAt === null) return view;

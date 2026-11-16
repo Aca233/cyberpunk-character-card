@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { CyberwareDefSchema } from "../cyberware";
 import { ItemDefSchema } from "../inventory";
 import { applyNpc } from "./apply";
-import { applyNpcBody, applyNpcCondition, bodyView, currentVitals, sanitizeNpcBody } from "./body";
+import {
+  applyNpcBody,
+  applyNpcCondition,
+  bodyLine,
+  bodyView,
+  currentVitals,
+  sanitizeNpcBody,
+} from "./body";
 import { NpcSchema, type NpcState } from "./schema";
 
 function person() {
@@ -25,6 +33,51 @@ function person() {
 }
 
 describe("NPC 的身体与物件持续存在", () => {
+  it("装备和义体投影保留素材标识与显示名，扫描前不暴露植入体", () => {
+    const npc = person();
+    npc.body = { gear: ["unity"], cyberware: ["kiroshi-mk1"] };
+    const data = {
+      items: [
+        ItemDefSchema.parse({
+          id: "unity",
+          name: "统一手枪",
+          kind: "weapon",
+          category: "pistol",
+          weaponType: "power",
+          attribute: "cool",
+        }),
+      ],
+      cyberware: [
+        CyberwareDefSchema.parse({
+          id: "kiroshi-mk1",
+          name: "基础岐路司义眼",
+          slot: "eyes",
+          rarity: "common",
+          price: 1500,
+          humanityCost: 2,
+          ability: "提供变焦和目标扫描。",
+        }),
+      ],
+    };
+    const beforeScan = bodyView(npc, data, 10);
+    expect(beforeScan.gear).toEqual([{ id: "unity", name: "统一手枪" }]);
+    expect(beforeScan.scan).toBeNull();
+    expect(applyNpcBody(npc, { type: "npcScan", id: npc.id }, 10, data).ok).toBe(true);
+    expect(bodyView(npc, data, 10).scan).toMatchObject({
+      at: 10,
+      chrome: [
+        {
+          id: "kiroshi-mk1",
+          name: "基础岐路司义眼",
+          slot: "眼部",
+          ability: "提供变焦和目标扫描。",
+        },
+      ],
+    });
+    expect(bodyLine(npc, data, 10)).toContain(
+      "装备：统一手枪；义体：基础岐路司义眼（眼部：提供变焦和目标扫描）",
+    );
+  });
   it("浅伤不按次数扣死人物；未治疗重伤不靠跨场等待消失", () => {
     const npc = person();
     for (let i = 0; i < 12; i++)
