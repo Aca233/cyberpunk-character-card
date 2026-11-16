@@ -28,11 +28,11 @@ export const characterStatus: readonly SystemStatus[] = [
         lines.push(`提议过、等玩家确认的习惯：${c.habitOffers.join("；")}（不要再提）`);
       if (c.flashback) {
         lines.push(
-          `闪回中：${c.flashback.past}，第 ${c.flashback.turn}/${c.flashback.turns} 轮；不推进时间、不记账，最后一轮写 flashback end 和确认的事`,
+          `闪回中：${c.flashback.past}，本段已经交互 ${c.flashback.turn} 次；不推进当前时间、不改当前财物；内容结束或玩家返回现在时写 flashback end 和确认的事`,
         );
       } else if (c.pasts.some((p) => !p.used)) {
         lines.push(
-          `还能闪回的过往：${c.pasts
+          `可以回忆的过往：${c.pasts
             .filter((p) => !p.used)
             .map((p) => p.label)
             .join("、")}`,

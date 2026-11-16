@@ -1,64 +1,56 @@
 import { describe, expect, it } from "vitest";
 import { fixedRng } from "../../kernel/rng";
 import type { SystemContext } from "../../kernel/system";
-import { applyHit } from "./apply";
-import type { HealthState } from "./schema";
+import { applyDamage, applyHeal, applyHit, healthDisplay, recoverInjuries, revive } from "./apply";
+import { health } from "./index";
 
-/** 战斗伤口按档位扣血，保留已有断肢和义体损坏 */
-
-const ctxOf = (facts: Record<string, unknown> = {}) =>
-  ({ rng: fixedRng([]), facts, data: {}, now: 0, read: () => ({}) }) as unknown as SystemContext;
-
-const body = (hp = 100): HealthState => ({
-  hp,
-  max: 100,
-  condition: "up",
-  wounds: 0,
-  painSuppressed: false,
-  severeSince: null,
-  bleeds: 0,
-  damagedBy: null,
-  lostLimbs: [],
-  brokenChrome: [],
+const ctx = (now = 0, facts: Record<string, unknown> = {}): SystemContext => ({
+  rng: fixedRng([]), facts, data: {}, now,
+  read: <T>() => ({ healing: { id: "maxdoc", charges: 1 } }) as T,
 });
 
-const hit = (tier: "graze" | "heavy" | "lethal") =>
-  ({ type: "health.hit", tier, reason: "测试" }) as const;
-
-describe("战斗伤口扣血", () => {
-  it.each([
-    ["graze", 90],
-    ["heavy", 70],
-    ["lethal", 40],
-  ] as const)("%s 按档位扣血，不新增身体损坏", (tier, hp) => {
-    const h = body();
-    expect(applyHit(h, { type: "health.hit", tier, reason: "测试" }, ctxOf()).ok).toBe(true);
-    expect(h.hp).toBe(hp);
-    expect(h.lostLimbs).toEqual([]);
-    expect(h.brokenChrome).toEqual([]);
+describe("伤势由身体事实驱动", () => {
+  it("大量浅伤不会按固定百分比累加成死亡或损坏义体", () => {
+    const state = health.initial();
+    for (let i = 0; i < 30; i++) applyDamage(state, { type: "damage", tier: "graze", part: "left-arm", reason: `玻璃擦伤 ${i}` }, ctx(i));
+    expect(state.injuries).toHaveLength(30);
+    expect(state.condition).toBe("up");
+    expect(state).not.toHaveProperty("hp");
+    expect(state.brokenChrome).toEqual([]);
+    expect(healthDisplay(state)).toEqual({ hp: 90, max: 100 });
   });
-
-  it("登记新伤不会清除已有断肢和义体损坏", () => {
-    const h = body();
-    h.lostLimbs = ["left-arm"];
-    h.brokenChrome = ["kiroshi-mk1"];
-    applyHit(h, { type: "health.hit", tier: "heavy", reason: "测试" }, ctxOf());
-    expect(h.hp).toBe(70);
-    expect(h.lostLimbs).toEqual(["left-arm"]);
-    expect(h.brokenChrome).toEqual(["kiroshi-mk1"]);
+  it("致命伤立即需要救援，未治疗不随等待消失", () => {
+    const state = health.initial();
+    applyHit(state, { type: "health.hit", tier: "lethal", part: "chest", injuryId: "shot-1", reason: "贯穿胸口" }, ctx());
+    expect(state.condition).toBe("dying");
+    recoverInjuries(state, { from: 0, to: 20 * 1440 });
+    expect(state.injuries).toHaveLength(1);
+    expect(revive(state, 20 * 1440).ok).toBe(true);
+    expect(state.condition).toBe("up");
+    expect(state.injuries[0]).toMatchObject({ id: "shot-1", treated: true, healsAt: 27 * 1440 });
+    recoverInjuries(state, { from: 20 * 1440, to: 27 * 1440 });
+    expect(state.injuries).toEqual([]);
   });
-
-  it("皮肉硬吃：致命一下打空血量就濒死，护甲降一档", () => {
-    const a = body(50);
-    applyHit(a, hit("lethal"), ctxOf());
-    expect(a.condition).toBe("dying");
-    const b = body();
-    applyHit(b, hit("heavy"), ctxOf({ armor: "防弹衣" }));
-    expect(b.hp).toBe(90);
+  it("治疗针只缓解症状并消耗真实补给，休整不会清除重伤", () => {
+    const state = health.initial();
+    applyDamage(state, { type: "damage", tier: "heavy", part: "right-leg", reason: "骨折" }, ctx());
+    const use = applyHeal(state, { type: "heal", source: "maxdoc" }, ctx(5));
+    expect(use).toMatchObject({ ok: true, emit: [{ type: "inventory.spend", slot: "healing" }] });
+    applyHeal(state, { type: "heal", source: "rest" }, ctx(60));
+    expect(state.injuries[0]).toMatchObject({ cause: "骨折", treated: false, healsAt: null });
+    expect(state.painSuppressed).toBe(true);
+    recoverInjuries(state, { from: 60, to: 125 });
+    expect(state.painSuppressed).toBe(false);
   });
-
-  it("已经倒下不能再挨打", () => {
-    const h = { ...body(0), condition: "down" as const };
-    expect(applyHit(h, hit("graze"), ctxOf()).ok).toBe(false);
+  it("新伤保留已有断肢与设备损坏，重复战斗伤处不会重复登记", () => {
+    const state = health.initial();
+    state.lostLimbs.push("left-arm");
+    state.brokenChrome.push("kiroshi");
+    const hit = { type: "health.hit", tier: "heavy", injuryId: "one", reason: "击伤" } as const;
+    expect(applyHit(state, hit, ctx()).ok).toBe(true);
+    expect(applyHit(state, hit, ctx()).ok).toBe(false);
+    expect(state.injuries).toHaveLength(1);
+    expect(state.lostLimbs).toEqual(["left-arm"]);
+    expect(state.brokenChrome).toEqual(["kiroshi"]);
   });
 });

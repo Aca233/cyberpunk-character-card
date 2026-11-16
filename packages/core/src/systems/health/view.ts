@@ -1,5 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
-import { CONDITION_LABELS, woundSlotOf, woundTag } from "./apply";
+import { CONDITION_LABELS, healthDisplay, woundSlotOf, woundTag } from "./apply";
 import {
   BODY_PART_LABELS,
   HealthStateSchema,
@@ -10,13 +10,12 @@ import {
 
 const MINUTES_PER_DAY = 1440;
 
-/** 玩家可见的生理状态：含具体伤势档案、痛觉阻断与断肢情况，并保留兼容旧投影字段 */
+/** 玩家可见的生理状态：含具体伤势档案、痛觉阻断与断肢情况，健康条仅为状态读出 */
 export function healthView({ world }: ViewContext) {
   const health = HealthStateSchema.parse(world.slices.health);
   const wounds = woundSlotOf(health);
   return {
-    hp: health.hp,
-    max: health.max,
+    ...healthDisplay(health),
     wounds,
     woundLabel: WOUND_SLOT_LABELS[wounds],
     painSuppressed: health.painSuppressed ?? false,
@@ -24,7 +23,7 @@ export function healthView({ world }: ViewContext) {
     conditionLabel: CONDITION_LABELS[health.condition],
     wound: woundTag(health),
     /** 具体非战斗伤势记录（战斗伤口由 combat.wounds 提供） */
-    injuries: (health.injuries ?? []).map((inj) => ({
+    injuries: health.injuries.filter((inj) => inj.source !== "combat").map((inj) => ({
       ...inj,
       partLabel: inj.part ? BODY_PART_LABELS[inj.part] : null,
       tierLabel: INJURY_TIER_LABELS[inj.tier],

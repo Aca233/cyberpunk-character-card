@@ -2,9 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import {
   type CharacterState,
-  FLASHBACK_TURNS,
   type FlashbackCommand,
-  PAST_FACTS_MAX,
 } from "./schema";
 
 /** 角色主板上的过往名字 */
@@ -25,14 +23,11 @@ function startFlashback(draft: Draft<CharacterState>, past: string, now: number)
           : `没有这段过往：${past}；角色的过往是 ${pasts.join("、")}`,
     };
   }
-  if (draft.flashbackUsed.includes(past)) {
-    return { ok: false, reason: `${past}已经闪回过，每段过往一生只闪回一次` };
-  }
-  draft.flashbackUsed.push(past);
+  if (!draft.flashbackUsed.includes(past)) draft.flashbackUsed.push(past);
   draft.flashback = { past, startedAt: now, turns: 0 };
   return {
     ok: true,
-    notes: [`闪回：${past}（最多 ${FLASHBACK_TURNS} 轮，不掷骰、不推进时间、不记账）`],
+    notes: [`闪回：${past}（由内容或玩家结束，不推进当前时间、不改变当前财物）`],
   };
 }
 
@@ -43,7 +38,6 @@ function endFlashback(draft: Draft<CharacterState>, fact: string | undefined): A
   draft.flashback = null;
   const notes = [`${active.past}的闪回结束，回到现在`];
   if (fact) {
-    if (draft.pastFacts.length >= PAST_FACTS_MAX) draft.pastFacts.shift();
     draft.pastFacts.push({ past: active.past, text: fact });
     notes.push(`${active.past}里确认的事：${fact}`);
   }
@@ -59,14 +53,8 @@ export function applyFlashback(
   return startFlashback(draft, command.past ?? "", now);
 }
 
-/** 闪回里过了一轮；玩满自动回到现在 */
+/** 交互计数只用于日志，不是玩法配额。 */
 export function tickFlashback(draft: Draft<CharacterState>): ApplyOutcome {
-  const active = draft.flashback;
-  if (!active) return { ok: true, notes: [] };
-  active.turns += 1;
-  if (active.turns >= FLASHBACK_TURNS) {
-    draft.flashback = null;
-    return { ok: true, notes: [`${active.past}的闪回玩满 ${FLASHBACK_TURNS} 轮，回到现在`] };
-  }
-  return { ok: true, notes: [`闪回还剩 ${FLASHBACK_TURNS - active.turns} 轮`] };
+  if (draft.flashback) draft.flashback.turns += 1;
+  return { ok: true };
 }

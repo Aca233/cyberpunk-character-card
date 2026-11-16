@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { characterActions } from "./actions";
-import { gainCred, setBonuses, setCharacter, spendPoint } from "./apply";
+import { gainCred, setBonuses, setCharacter } from "./apply";
 import { characterEvents } from "./events";
 import { applyFlashback, tickFlashback } from "./flashback";
 import { changeHabit, offerHabit } from "./habits";
@@ -19,7 +19,6 @@ import {
   legacyStreetCred,
   SetBonusesSchema,
   SetCharacterSchema,
-  SpendPointSchema,
   type StreetCredCommand,
   StreetCredCommandSchema,
   StreetCredProposalSchema,
@@ -34,7 +33,6 @@ export const character = defineSystem<
   CharacterInternal
 >({
   id: "character",
-  dependsOn: ["health"],
   state: CharacterStateSchema,
   initial: () => ({
     name: null,
@@ -61,7 +59,6 @@ export const character = defineSystem<
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,
-    "character.spendPoint": SpendPointSchema,
     "character.setBonuses": SetBonusesSchema,
     "character.habit": HabitChangeSchema,
     "character.flashbackTick": FlashbackTickSchema,
@@ -72,8 +69,6 @@ export const character = defineSystem<
         return setCharacter(draft, command);
       case "character.cred":
         return gainCred(draft, command.halves, command.reason, command.event);
-      case "character.spendPoint":
-        return spendPoint(draft, command);
       case "character.setBonuses":
         return setBonuses(draft, command);
       case "streetCred":

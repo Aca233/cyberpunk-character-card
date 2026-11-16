@@ -1,6 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { maxHp } from "../dice";
-import { applyDamage, applyHeal, applyHit, applyLimb, bleed, die, revive, setMax } from "./apply";
+import { applyDamage, applyHeal, applyHit, applyLimb, recoverInjuries, die, revive, treatInjury } from "./apply";
 import { healthEvents } from "./events";
 import {
   type DamageCommand,
@@ -17,24 +16,10 @@ import { healthView } from "./view";
 
 export const health = defineSystem<HealthState, DamageCommand | HealCommand, HealthInternal>({
   id: "health",
-  dependsOn: ["dice", "inventory"],
+  dependsOn: ["inventory"],
   state: HealthStateSchema,
-  initial: () => {
-    const max = maxHp(3, 0);
-    return {
-      hp: max,
-      max,
-      condition: "up",
-      wounds: 0,
-      painSuppressed: false,
-      severeSince: null,
-      bleeds: 0,
-      damagedBy: null,
-      injuries: [],
-      lostLimbs: [],
-      brokenChrome: [],
-    };
-  },
+  initial: () => ({ condition: "up", painSuppressed: false, painSuppressedUntil: null,
+    damagedBy: null, injuries: [], lostLimbs: [], brokenChrome: [] }),
   commands: { damage: DamageCommandSchema, heal: HealCommandSchema },
   internal: HealthInternalSchemas,
   apply(draft, command, ctx) {
@@ -43,19 +28,19 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
         return applyDamage(draft, command, ctx);
       case "heal":
         return applyHeal(draft, command, ctx);
-      case "health.setMax":
-        return setMax(draft, command.max, ctx.now);
       case "health.revive":
         return revive(draft, ctx.now);
       case "health.die":
         return die(draft, command.reason);
       case "health.limb":
         return applyLimb(draft, command);
+      case "health.treat":
+        return treatInjury(draft, command.id, ctx.now);
       case "health.hit":
         return applyHit(draft, command, ctx);
     }
   },
-  tick: (draft, span) => bleed(draft, span),
+  tick: (draft, span) => recoverInjuries(draft, span),
   view: { key: "health", project: healthView },
   status: healthStatus,
   events: healthEvents,

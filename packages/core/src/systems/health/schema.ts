@@ -61,6 +61,7 @@ export const InjurySchema = z.object({
   at: z.number().int(),
   healsAt: z.number().int().nullable().default(null),
   treated: z.boolean().default(false),
+  source: z.enum(["injury", "combat"]).default("injury"),
 });
 export type Injury = z.infer<typeof InjurySchema>;
 
@@ -93,18 +94,11 @@ export const ChromeLimbsFactSchema = z.object({
 });
 
 export const HealthStateSchema = z.object({
-  hp: z.number().int().min(0),
-  max: z.number().int().min(1),
   condition: ConditionSchema,
-  /** 内部伤势阶段（0 完好 / 1 擦伤 / 2 重创 / 3 重残 / 4 濒死） */
-  wounds: WoundSlotSchema.default(0),
-  /** 是否已打医疗针临时压制本场【重创 -2】疼痛减值 */
+  /** 药物是否正在抑制疼痛；不代表创口愈合 */
   painSuppressed: z.boolean().default(false),
-  /** 进入重伤的游戏时间；不在重伤时为 null */
-  severeSince: z.number().int().nullable(),
-  /** 这次重伤已经按天失血几次 */
-  bleeds: z.number().int().min(0),
-  /** 最近一次扣血用的检定 id；同一次检定只扣一次 */
+  painSuppressedUntil: z.number().int().nullable().default(null),
+  /** 最近一次已登记伤害的裁决 id，避免重复登记同一事件 */
   damagedBy: z.string().nullable(),
   /** 具体伤势档案（部位、原因、愈合期）；战斗伤口由 combat.wounds 单独留档 */
   injuries: z.array(InjurySchema).default([]),
@@ -115,14 +109,14 @@ export const HealthStateSchema = z.object({
 });
 export type HealthState = z.infer<typeof HealthStateSchema>;
 
-/** 模型使用：{"type": "damage", "tier": "graze", "part": "left-leg", "reason": "..."}，只能在掷骰失败或惨胜代价后出现 */
+/** 模型使用：{"type": "damage", "tier": "graze", "part": "left-leg", "reason": "..."}，记录实际受伤经过，不做数值扣除 */
 export const DamageCommandSchema = z
   .object({
     type: z.literal("damage"),
     tier: DamageTierSchema,
     /** 伤在哪处部位（head/face/chest/belly/left-arm/right-arm/left-leg/right-leg） */
     part: BodyPartSchema.optional(),
-    /** 断了哪里：只在 check 写了 limb 的致命档失败时写 */
+    /** 断了哪里：只在裁决确认直接断肢危险并确实发生时写 */
     limb: LimbSchema.optional(),
     reason: z.string().min(1),
   })
@@ -139,13 +133,12 @@ export const HealCommandSchema = z
     reason: z.string().min(1).optional(),
   })
   .describe(
-    "处理伤势：maxdoc 打医疗针临时压制重创疼痛或回伤势，ripperdoc 找义体医生缝合，rest 休整消除挂彩",
+    "处理伤势：maxdoc 用现有医疗针暂时缓解疼痛，ripperdoc 清创缝合并开始恢复期，rest 休整；创口按已确认的愈合过程恢复，不立刻消失",
   );
 export type HealCommand = z.infer<typeof HealCommandSchema>;
 
 /** 只能由代码发出：建档和成长改上限、救治倒下或濒死的角色、判定死亡 */
 export const HealthInternalSchemas = {
-  "health.setMax": z.object({ type: z.literal("health.setMax"), max: z.number().int().min(1) }),
   "health.revive": z.object({ type: z.literal("health.revive") }),
   "health.die": z.object({ type: z.literal("health.die"), reason: z.string().min(1) }),
   /** fit 装上手臂或腿部义体，补上断了的；repair 义体医生修好打坏的义体；clear 义体卸下时去掉损坏记录 */
@@ -156,12 +149,15 @@ export const HealthInternalSchemas = {
     id: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
   }),
-  /** 战斗登记伤口时按档位扣血，不再选择拿义体或肢体抵伤 */
+  /** 战斗登记具体损伤，和非战斗伤势共用身体事实 */
   "health.hit": z.object({
     type: z.literal("health.hit"),
     tier: DamageTierSchema,
+    part: BodyPartSchema.optional(),
+    injuryId: z.string().min(1).optional(),
     reason: z.string().min(1),
   }),
+  "health.treat": z.object({ type: z.literal("health.treat"), id: z.string().min(1) }),
 };
 export type HealthInternal = z.infer<
   (typeof HealthInternalSchemas)[keyof typeof HealthInternalSchemas]

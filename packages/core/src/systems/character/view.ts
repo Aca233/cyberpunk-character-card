@@ -1,6 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { credTier } from "./apply";
-import { CharacterStateSchema, effectiveAttributes, FLASHBACK_TURNS } from "./schema";
+import { CharacterStateSchema, effectiveAttributes } from "./schema";
 
 /** 玩家看到的角色：属性（算上义体加成）、街头声望、主板模块、习惯、过往和闪回 */
 export function characterView({ world }: ViewContext) {
@@ -26,12 +26,12 @@ export function characterView({ world }: ViewContext) {
     /** 角色的过往，闪回用过没有 */
     pasts: character.traits
       .filter((t) => t.slot === "past")
-      .map((t) => ({ label: t.label, used: character.flashbackUsed.includes(t.label) })),
+      .map((t) => ({ label: t.label, used: false })),
     /** 正在进行的闪回：第几轮（从 1 起），共几轮 */
     flashback: character.flashback && {
       past: character.flashback.past,
       turn: character.flashback.turns + 1,
-      turns: FLASHBACK_TURNS,
+      turns: null,
     },
     /** 闪回里确认的事 */
     pastFacts: character.pastFacts,

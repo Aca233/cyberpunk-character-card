@@ -2,17 +2,9 @@ import { z } from "zod";
 import { type Attribute, AttributeSchema } from "../dice";
 
 export const ATTRIBUTE_MAX = 10;
-export const AttributeValueSchema = z.preprocess(
-  (v) =>
-    typeof v === "number" && Number.isInteger(v) && v > ATTRIBUTE_MAX
-      ? Math.max(1, Math.min(ATTRIBUTE_MAX, Math.round(v / 2)))
-      : v,
-  z.number().int().min(1).max(ATTRIBUTE_MAX),
-);
+export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
 
 export const STREET_CRED_MAX = 50;
-/** 街头声望每升这么多级得 1 个属性点 */
-export const LEVELS_PER_POINT = 5;
 
 /** 角色主板上的一块：出身、过往、本事、负面经历或联动；专属选项的来源按它核对，侧栏也显示 */
 export const TRAIT_SLOTS = ["origin", "past", "skill", "flaw", "combo"] as const;
@@ -38,8 +30,6 @@ export const HABITS_MAX = 8;
 /** 一条习惯：常去的店、爱吃的东西、睡前做什么、车里放什么歌 */
 export const HabitTextSchema = z.string().trim().min(1).max(40);
 
-/** 闪回最多玩几轮，到了自动回到现在 */
-export const FLASHBACK_TURNS = 3;
 /** 闪回里确认的事最多记这么多条 */
 export const PAST_FACTS_MAX = 24;
 
@@ -81,12 +71,12 @@ export const CharacterStateSchema = z.object({
   habits: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
   /** 叙事模型提议、玩家还没确认的习惯 */
   habitOffers: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
-  /** 闪回过的过往；每段过往一生只闪回一次 */
+  /** 闪回过的过往；记录曾回忆的内容，不限制重访 */
   flashbackUsed: z.array(z.string().min(1)).default([]),
   /** 正在进行的闪回；不在闪回时为 null */
   flashback: ActiveFlashbackSchema.nullable().default(null),
   /** 闪回里确认的事：已确定的事实 */
-  pastFacts: z.array(PastFactSchema).max(PAST_FACTS_MAX).default([]),
+  pastFacts: z.array(PastFactSchema).default([]),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -137,7 +127,7 @@ export const StreetCredProposalSchema = z
     event: z.string().min(1),
   })
   .describe(
-    "街头声望上涨：只选大小，不写数字；同一事件只结算一次。委托完成的声望由代码自动加，不要另写",
+    "街头声望上涨：只选大小，不写数字；同一事件只结算一次。只有确实公开传播的事件才改变名声，完成委托本身不自动奖励名声",
   )
   .transform(({ size, ...rest }): StreetCredCommand => ({ ...rest, levels: CRED_SIZES[size] }));
 
@@ -169,13 +159,6 @@ export const GainCredSchema = z.object({
   event: z.string().min(1),
 });
 export type GainCred = z.infer<typeof GainCredSchema>;
-
-/** 只能由代码发出：玩家在界面上分配一个属性点 */
-export const SpendPointSchema = z.object({
-  type: z.literal("character.spendPoint"),
-  attribute: AttributeSchema,
-});
-export type SpendPoint = z.infer<typeof SpendPointSchema>;
 
 /** 只能由代码发出：义体装卸后重算的属性加成 */
 export const SetBonusesSchema = z.object({
@@ -214,18 +197,17 @@ export const FlashbackCommandSchema = z
     }
   })
   .describe(
-    "过往闪回：start 开一段闪回，past 写状态里还能闪回的过往名字，每段一生一次；end 回到现在，fact 写这段闪回里确认的事（一句话，成为已确定的事实）",
+    "过往闪回：start 开一段闪回，past 写状态里还能闪回的过往名字，可以再次回忆同一段过往，不覆盖已确定的事实；end 回到现在，fact 写这段闪回里确认的事（一句话，成为已确定的事实）",
   );
 export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
 
-/** 只能由代码发出：闪回里每过一轮由回合流程发出，玩满自动回到现在 */
+/** 只能由代码发出：闪回里每过一轮由回合流程发出，只记录交互次数，不自动结束 */
 export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
 export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
 
 export type CharacterInternal =
   | SetCharacter
   | GainCred
-  | SpendPoint
   | SetBonuses
   | HabitChange
   | FlashbackTick;

@@ -1,13 +1,9 @@
 import type { Draft } from "immer";
-import type { ApplyOutcome, Command } from "../../kernel/system";
-import { ATTRIBUTE_LABELS, maxHp } from "../dice";
+import type { ApplyOutcome } from "../../kernel/system";
 import {
-  ATTRIBUTE_MAX,
   type CharacterState,
-  effectiveAttribute,
   type SetBonuses,
   type SetCharacter,
-  type SpendPoint,
   STREET_CRED_MAX,
 } from "./schema";
 
@@ -42,14 +38,6 @@ export function credGateLabel(threshold: number): string {
   return "在街上先混出点风声";
 }
 
-function setMax(
-  state: Pick<CharacterState, "attributes"> & {
-    readonly bonuses?: CharacterState["bonuses"];
-  },
-): Command {
-  return { type: "health.setMax", max: maxHp(effectiveAttribute(state, "body"), 0) };
-}
-
 /** 建档：写入角色，声望进度和属性点从零开始 */
 export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter): ApplyOutcome {
   draft.name = command.name;
@@ -62,16 +50,15 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.flashbackUsed = [];
   draft.flashback = null;
   draft.pastFacts = [];
-  return { ok: true, emit: [setMax(draft)] };
+  return { ok: true };
 }
 
 /** 义体装卸同步兼容状态快照（不再输出 RPG 属性加减提示） */
 export function setBonuses(draft: Draft<CharacterState>, command: SetBonuses): ApplyOutcome {
-  const bodyChanged = (draft.bonuses.body ?? 0) !== (command.bonuses.body ?? 0);
   draft.bonuses = Object.fromEntries(
     Object.entries(command.bonuses).filter(([, n]) => n !== undefined && n > 0),
   );
-  return { ok: true, ...(bodyChanged ? { emit: [setMax(draft)] } : {}) };
+  return { ok: true };
 }
 
 /** 声望按半级累加，只更新街头名声里程碑，不再发放 RPG 属性升级点 */
@@ -103,19 +90,3 @@ export function gainCred(
   return { ok: true, notes };
 }
 
-/** 分配一个属性点；单项属性最高 10，加肉体时生命上限跟着涨 */
-export function spendPoint(draft: Draft<CharacterState>, command: SpendPoint): ApplyOutcome {
-  if (draft.attributePoints <= 0) return { ok: false, reason: "没有可分配的属性点" };
-  const label = ATTRIBUTE_LABELS[command.attribute];
-  const value = draft.attributes[command.attribute] ?? 0;
-  if (value >= ATTRIBUTE_MAX) {
-    return { ok: false, reason: `${label}已经是最高的 ${ATTRIBUTE_MAX}` };
-  }
-  draft.attributes[command.attribute] = value + 1;
-  draft.attributePoints -= 1;
-  return {
-    ok: true,
-    notes: [`${label}升到 ${value + 1}`],
-    ...(command.attribute === "body" ? { emit: [setMax(draft)] } : {}),
-  };
-}
