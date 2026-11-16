@@ -33,14 +33,14 @@ export const EXPOSURE_LABELS: Readonly<Record<ExposureStage, string>> = {
 /**
  * 现场持续物理危机状态：只记客观硬件损耗、增援距离与已露出的突破口，不输出游戏条框与套话模板
  */
-export const TensionStateSchema = z.object({
+export const TensionSiteSchema = z.object({
   active: z.boolean().default(false),
   mode: TensionModeSchema.default("stealth"),
   exposure: ExposureStageSchema.default("hidden"),
-  /** 历史存档兼容字段，不再用于数学升级 */
-  risk: z.number().int().min(0).max(4).optional(),
   /** 安保/NCPD/快速反应力量大约还要几分钟赶到；null 表示尚未呼叫增援 */
   backupEtaMinutes: z.number().int().min(0).nullable().default(null),
+  backupCause: z.string().nullable().default(null),
+  backupArrived: z.boolean().default(false),
   /** 通过侦查、扫描或交谈摸清的真实物理弱点或门路 */
   exposedWeakpoints: z.array(z.string()).default([]),
   /** 已看穿或扫描到的对方真实义体与安保硬件 */
@@ -48,6 +48,8 @@ export const TensionStateSchema = z.object({
   /** 已被 EMP、断电、破坏或烧毁失灵的敌方义体与安保硬件 */
   disabledEnemyChrome: z.array(z.string()).default([]),
 });
+export type TensionSite = z.infer<typeof TensionSiteSchema>;
+export const TensionStateSchema = z.object({ sites: z.record(z.string(), TensionSiteSchema).default({}) });
 export type TensionState = z.infer<typeof TensionStateSchema>;
 
 export const TensionCommandSchema = z
@@ -78,6 +80,10 @@ export const TensionCommandSchema = z
       .max(40)
       .optional()
       .describe("已被破坏、EMP 烧毁或切断失灵的敌方义体与安保硬件"),
+    repairChrome: z.string().trim().min(1).max(40).optional().describe("实际完成维修的硬件；仅离场或收场不算维修"),
+    backupCause: z.string().trim().min(1).max(200).optional().describe("已发生的呼叫/警报、响应者及可到达路线；没有前因不能启动增援"),
+    cancelBackupReason: z.string().trim().min(1).max(200).optional().describe("实际阻止或取消这次增援的事件"),
+    backupArrived: z.boolean().optional().describe("增援已经实际到达时才写 true，预计时间到零不等于到达"),
     triggerBackupInMinutes: z
       .number()
       .int()

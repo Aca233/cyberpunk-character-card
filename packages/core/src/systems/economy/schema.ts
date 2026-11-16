@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { credGateLabel } from "../character";
 
 /** 单条指令最多进出多少欧元；更大的交易拆开写，各自说明来由 */
 /** 稀有度：义体和物品共用，决定价格档位（价格表见策划书的经济部分） */
@@ -12,16 +11,6 @@ export const RARITY_LABELS: Readonly<Record<Rarity, string>> = {
   rare: "稀有",
   epic: "史诗",
   legendary: "传说",
-};
-
-/**
- * 店主好感解锁（本作改编，暂定，试玩后再调）：店主有人物卡、见过面、还活着，好感到这一档时，
- * 街头声望没到门槛的这档货也肯卖
- */
-export const KEEPER_AFFINITY_GATES: Readonly<Partial<Record<Rarity, number>>> = {
-  rare: 20,
-  epic: 40,
-  legendary: 60,
 };
 
 /** 店主：人物卡上的名字和好感 */
@@ -39,23 +28,6 @@ export function keeperOf(
 ): Keeper | undefined {
   const card = npc === undefined ? undefined : npcs[npc];
   return card?.met && card.alive ? { name: card.name, affinity: card.affinity } : undefined;
-}
-
-/** 稀有度门槛：街头声望够，或者店主好感到了就卖；都不够时返回原因，卖就返回 null */
-export function rarityLock(
-  rarity: Rarity | undefined,
-  credGates: Readonly<Partial<Record<Rarity, number>>>,
-  streetCred: number,
-  keeper?: Keeper,
-): string | null {
-  if (rarity === undefined) return null;
-  const gate = credGates[rarity];
-  if (gate === undefined || streetCred >= gate) return null;
-  const req = credGateLabel(gate);
-  const warm = KEEPER_AFFINITY_GATES[rarity];
-  if (keeper === undefined || warm === undefined) return `${req}才肯卖`;
-  if (keeper.affinity >= warm) return null;
-  return `${req}，或者和${keeper.name}交情够深，才肯卖`;
 }
 
 export const MONEY_CAP = 100_000;

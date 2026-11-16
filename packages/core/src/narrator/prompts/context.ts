@@ -8,7 +8,7 @@ import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware"
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
 import { HackingStateSchema } from "../../systems/hacking/schema";
-import { DAMAGE_LABELS, HealthStateSchema } from "../../systems/health";
+import { HealthStateSchema } from "../../systems/health";
 import { catalogSection, itemCatalog } from "../../systems/inventory";
 import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
@@ -18,7 +18,6 @@ import { SafehouseStateSchema } from "../../systems/safehouse/schema";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
-import type { RolledCheck } from "../pending";
 import type { Memory } from "../stages";
 
 /**
@@ -49,10 +48,7 @@ export function recapFor(
 /** 常驻核心负责说明的指令；其余指令由各系统的规则模块说明 */
 export const CORE_COMMANDS = ["world", "humanity", "item", "damage", "heal", "deadline"] as const;
 
-export type NarratorPlan =
-  | { readonly kind: "action"; readonly input: TurnInput }
-  /** 兼容历史存档回放：旧已确认检定记录 */
-  | { readonly kind: "resolve"; readonly input: TurnInput; readonly check: RolledCheck };
+export type NarratorPlan = { readonly kind: "action"; readonly input: TurnInput };
 
 /** 旧存档的输入方式 */
 const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
@@ -61,14 +57,6 @@ const MODE_LABELS: Readonly<Record<NonNullable<TurnInput["mode"]>, string>> = {
   think: "想",
   ooc: "出戏",
 };
-
-const OUTCOME_LABELS = {
-  critical: "大成功（干净利落）",
-  success: "干净利落（Clean）",
-  costly: "惨胜（Costly：事办成了，但带刺）",
-  failure: "失败（搞砸）",
-  fumble: "大失败（彻底搞砸）",
-} as const;
 
 export { catalogSection } from "../../systems/inventory";
 
@@ -118,20 +106,6 @@ export function formatInput(input: TurnInput): string {
   return input.mode
     ? `【${MODE_LABELS[input.mode]}】${boost}${bd}${reply}${input.text}`
     : `【玩家】${boost}${bd}${reply}${input.text}`;
-}
-
-/** @deprecated 仅保留兼容历史回放或过渡期评测加载；运行期已全面废除检定与属性计算 */
-export function checkResultText(rolled: RolledCheck): string {
-  const { result, offer } = rolled;
-  const spec = offer.spec;
-  const tagsLine =
-    result.tacticalTags && result.tacticalTags.length > 0
-      ? `\n【物理/战术结算】${result.tacticalTags.join("；")}`
-      : "";
-  return [
-    `【历史事件结算】${spec.intent} → ${OUTCOME_LABELS[result.outcome]}${tagsLine}`,
-    `预期代价——成功：${spec.success}；失手：${spec.failure}${spec.damage ? `；伤势最高${DAMAGE_LABELS[spec.damage]}` : ""}`,
-  ].join("\n");
 }
 
 export interface NarratorPrompt {
@@ -276,7 +250,6 @@ export function situation(
   const canon = canonSection(extras.data, extras.startTime, world.time);
   if (canon) parts.push(`【原剧时间线】\n${canon}`);
   if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
-  if (plan.kind === "resolve") parts.push(checkResultText(plan.check));
   return parts;
 }
 
@@ -287,8 +260,6 @@ export function boostNote(
   stage: "judge" | "narrate",
 ): string | undefined {
   if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
-  const { name, slots } = view.sandevistan;
-  return stage === "judge"
-    ? `【斯安威斯坦时刻】\n这一轮开启了${name}：这一瞬最多连贯做出 ${slots} 个动作（快速破解、换武器、扔手雷各占一格）。在 ruling 里一口气定性裁决这几步在物理与速度上哪几下能先手做成、哪里会被硬挡住。`
-    : `【斯安威斯坦时刻】\n这一轮触发了${name}：这一瞬最多做 ${slots} 个动作（快速破解、换武器、扔手雷各占一格），超出的按顺序来不及做，在正文里写出时空骤停般的慢动作与错位感，明确哪几下抢先成了、哪几件差了半步。人性已经由代码扣过。`;
+  const { name } = view.sandevistan;
+  return `【斯安威斯坦时刻】\n玩家要求开启${name}。根据实际距离、身体动作、设备状态和对手反应判断能完成什么，不设固定动作格；快速破解的上传、装填和物体运动各有实际耗时。${stage === "narrate" ? "写出加速感知和动作的可见结果；只有实际出现的过热、神经症状或损伤才记后果，不按使用次数扣人性。" : "在 ruling 中说明具体可行条件与阻碍，不替玩家追加动作。"}`;
 }

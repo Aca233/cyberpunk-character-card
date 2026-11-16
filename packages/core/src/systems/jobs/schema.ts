@@ -177,12 +177,12 @@ export const JobEndSchema = z
     type: z.literal("jobEnd"),
     id: z.string().min(1),
     outcome: JobOutcomeSchema,
-    /** 实际到手的欧元；不写时干净或带瑕疵完成按说好的报酬，其余为 0 */
-    paid: z.number().int().min(0).max(100_000).optional(),
+    /** 实际已经收到的欧元；未到账写 0，不因完成任务自动付款 */
+    paid: z.number().int().min(0).max(100_000).default(0),
     summary: z.string().min(1),
   })
   .describe(
-    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；代码按结局给报酬、改中间人或托事熟人的好感（熟人托事拖过期限再多扣），不要另写 affinity；summary 一句话总评",
+    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；paid 仅记录实际到账，未收款写 0；不会按结局发声望或好感，关系后果应有实际事实；summary 一句话总评",
   );
 export type JobEnd = z.infer<typeof JobEndSchema>;
 

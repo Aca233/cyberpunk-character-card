@@ -22,7 +22,7 @@ import {
 import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
-import { type CheckSpec, checkFactFrom, rulingFactFrom } from "../systems/dice";
+import { rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
@@ -30,7 +30,7 @@ import { shopList } from "../systems/inventory/apply";
 import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
-import { TensionStateSchema } from "../systems/tension";
+import { currentTension } from "../systems/tension";
 import {
   autoMove,
   type PlannedTrip,
@@ -70,7 +70,6 @@ import {
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
-import type { RolledCheck } from "./pending";
 import { applyPreset, applyPresetRegex, type TavernPreset } from "./preset";
 import {
   buildExtractPrompt,
@@ -86,6 +85,7 @@ import { estimateTokens } from "./prompts/layers";
 import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
 import { sceneTitle } from "./scene";
 import {
+  accelerationRequested,
   type BigSpend,
   BuyProposalSchema,
   bigSpend,
@@ -97,7 +97,6 @@ import {
   type Memory,
   readJudgeShape,
   rulingText,
-  skipStop,
 } from "./stages";
 import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE, SummaryDocSchema } from "./summary";
 
@@ -200,11 +199,11 @@ export interface NarratorTurn {
   readonly text: string;
   readonly read: string | undefined;
   readonly choices: readonly Choice[];
-  /** @deprecated 兼容旧回合日志类型；运行期已废除检定与属性门槛 */
-  readonly check: CheckSpec | undefined;
-  /** @deprecated 兼容旧回合日志类型；运行期已废除掷骰 */
-  readonly rolled: RolledCheck | undefined;
-  /** @deprecated 兼容旧回合日志类型；运行期已废除门槛 */
+  /** 自由行动不产生检定；投影维持现有界面形状 */
+  readonly check: undefined;
+  /** 自由行动不产生掷骰 */
+  readonly rolled: undefined;
+  /** 自由行动不产生属性门槛 */
   readonly gate: undefined;
   /** 生效的指令，按结算顺序 */
   readonly commands: readonly Command[];
@@ -596,7 +595,8 @@ export async function runNarratorTurn(
     !ooc &&
     !inFlashback &&
     activeBoost !== null &&
-    (plan.input.sandevistan === true || judge.sandevistan === true);
+    (plan.input.sandevistan === true ||
+      (judge.sandevistan === true && accelerationRequested(plan.input, activeBoost.name)));
   const live: NarratorPlan =
     sandevistanBoosted && plan.kind === "action" && plan.input.sandevistan !== true
       ? { ...plan, input: { ...plan.input, sandevistan: true } }
@@ -711,8 +711,7 @@ export async function runNarratorTurn(
   let loreSection = lore?.section;
   const preset = ooc ? undefined : deps.preset;
   const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
-  const tensionNow = TensionStateSchema.safeParse(world.slices.tension ?? {});
-  const exposure = tensionNow.success ? tensionNow.data.exposure : "hidden";
+  const exposure = currentTension(world).exposure;
   const intensity: NarrativeIntensity =
     inCombatNow ||
     rulingSpec?.harm === "heavy" ||
@@ -983,8 +982,7 @@ export async function runNarratorTurn(
     }
     // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
     if (
-      ((live.kind === "resolve" && live.check.prepared.spec.npcHack !== undefined) ||
-        hasHarmfulNpcHack) &&
+      hasHarmfulNpcHack &&
       (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
     ) {
       b.drop(
@@ -1000,24 +998,9 @@ export async function runNarratorTurn(
       b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
       continue;
     }
-    // 战斗里捡东西只能从倒下的人身上捡，走 combat loot；模型自己编的 item gain 不算
-    if (fight && command.type === "item" && command.action === "gain") {
-      b.drop(where, command, "战斗中捡东西要发 combat loot，从倒下的人身上捡", "rules");
-      continue;
-    }
     commands.push(command);
   }
   b.checkAborted();
-
-  // 长时间跳过在决策点停下：中间有期限或委托到期时，时间截在最早到期的那一刻，交给玩家
-  for (const [i, c] of commands.entries()) {
-    const time = c.type === "world" ? (c as { time?: unknown }).time : undefined;
-    if (typeof time !== "number") continue;
-    const stop = skipStop(world, time);
-    if (!stop) continue;
-    commands[i] = { ...c, time: stop.at } as Command;
-    b.notes.push(`时间停在 ${formatGameTime(stop.at)}：${stop.label}到期，接下来交给玩家`);
-  }
 
   // 模型直接在 world 里写了 location（用户定的"自动转"，2026-10-30）：500 米内按步行补上用时，
   // 更远的转成一次出行，照路线表扣时间和路费；玩家在路线面板确认过出行的这一轮不管
@@ -1048,12 +1031,6 @@ export async function runNarratorTurn(
     }
   }
 
-  const flashbackAction = (c: Command) =>
-    c.type === "flashback" ? (c as { action?: unknown }).action : undefined;
-  // 闪回里过一轮；这一轮写了 end 就不再扣
-  if (!ooc && inFlashback && !commands.some((c) => flashbackAction(c) === "end")) {
-    commands.push({ type: "character.flashbackTick" });
-  }
   // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
   if (settle && shape.sceneEnd === true) {
     if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
@@ -1061,11 +1038,7 @@ export async function runNarratorTurn(
   }
 
   const facts: Record<string, unknown> = {};
-  if (live.kind === "resolve") {
-    facts.check = checkFactFrom(live.check.offer.id, live.check.prepared, live.check.result);
-  } else {
-    facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
-  }
+  facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
   const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
   if (armor) facts.armor = armor.name;
@@ -1148,7 +1121,7 @@ export async function runNarratorTurn(
       ? applied
       : registry.applyCommands(
           applied.world,
-          [{ type: "fallout.record", kinds: falloutKinds(accepted, live.kind === "resolve") }],
+          [{ type: "fallout.record", kinds: falloutKinds(accepted, false) }],
           applyCtx,
         );
 
@@ -1158,7 +1131,7 @@ export async function runNarratorTurn(
   const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
   const unsettled = settle ? unsettledReason(b.dropped) : undefined;
 
-  // ⑥ 场外推演：收场时隔了几场或半天，推演玩家没看着的地方；结果只进补丁，和本轮一起落盘撤回
+  // ⑥ 按游戏时间、到期事件和收场批次推演；结果与本次行动一起落盘撤回
   const dead = HealthStateSchema.parse(settled.world.slices.health).condition === "dead";
   let final = settled;
   let offscreenTrace: { prompt: string; reply: string } | undefined;

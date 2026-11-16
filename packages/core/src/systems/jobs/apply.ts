@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, TimeSpan } from "../../kernel/system";
-import { AFFINITY_MAX, AFFINITY_MIN, type NpcState } from "../npc";
+import type { NpcState } from "../npc";
 import { formatGameTime } from "../world";
 import type {
   Job,
@@ -27,26 +27,9 @@ export const JOB_OUTCOME_LABELS: Readonly<Record<JobOutcome, string>> = {
 export const JOB_STATUS_LABELS: Readonly<Record<JobStatus, string>> = {
   offered: "待接",
   active: "进行中",
-  expired: "被别人接走",
+  expired: "已过期",
   ...JOB_OUTCOME_LABELS,
 };
-
-/** 委托结局对中间人好感的影响；中间人要有见过面、还活着的人物卡才算 */
-export const AFFINITY_CHANGE: Readonly<Record<JobOutcome, number>> = {
-  clean: 5,
-  flawed: 2,
-  abandoned: -2,
-  failed: -5,
-  betrayed: -10,
-};
-
-/**
- * 熟人托事拖过了期限才了结，托事人的好感再多扣这么多（用户 2026-10-31 选的「托事影响好感」：拖着不办扣好感；暂定，试玩时调）
- */
-export const ASK_OVERDUE_PENALTY = -3;
-
-/** 完成一单得到的街头声望，按半级计（1 到 5 档）；带瑕疵完成减半 */
-export const CRED_HALVES: Readonly<Record<number, number>> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 6 };
 
 /** 派单人所属势力的态度：见面就打和敌对的不派单 */
 export function fixerBlocked(attitude: string | undefined): boolean {
@@ -113,7 +96,7 @@ export function offerJob(
     title: command.title,
     kind: command.kind ?? null,
     fixer: command.fixer ?? null,
-    // 熟人托事记下托事人，结束时按结局改他的好感（用户 2026-10-31 选的「托事影响好感」）
+    // 托事人与约定持续记在档案里；关系后果依据实际交往单独记录
     asker: command.fixer === undefined ? (command.asker ?? null) : null,
     client: command.client,
     location: command.location ?? null,
@@ -148,7 +131,6 @@ export function acceptJob(
   draft: Draft<JobsState>,
   command: JobAccept,
   now: number,
-  humanity: number,
 ): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
@@ -157,7 +139,7 @@ export function acceptJob(
   }
   job.status = "active";
   job.acceptedAt = now;
-  job.humanityAtAccept = humanity;
+  job.humanityAtAccept = null;
   return { ok: true, notes: [`接下委托：${job.title}`] };
 }
 
@@ -170,12 +152,11 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
   return { ok: true };
 }
 
-/** 委托结束：写结局和总评；报酬交给欧元系统，声望交给角色系统，中间人好感交给人物系统；结算记在委托上 */
+/** 记录约定结果和实际到款；不按任务结局自动兑换声望或好感。 */
 export function endJob(
   draft: Draft<JobsState>,
   command: JobEnd,
   now: number,
-  humanity: number,
   npcs: NpcState["npcs"],
   squad: readonly { npc: string; name: string; kind: string; share: number }[] = [],
 ): ApplyOutcome {
@@ -187,8 +168,7 @@ export function endJob(
     );
   }
   const label = JOB_OUTCOME_LABELS[command.outcome];
-  const done = command.outcome === "clean" || command.outcome === "flawed";
-  const paid = command.paid ?? (done ? job.reward : 0);
+  const paid = command.paid ?? 0;
   job.status = command.outcome;
   job.closedAt = now;
   job.paid = paid;
@@ -198,38 +178,6 @@ export function endJob(
     paid > 0
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
-  const full = CRED_HALVES[job.risk] ?? 1;
-  const credHalves = done ? (command.outcome === "clean" ? full : Math.ceil(full / 2)) : 0;
-  if (credHalves > 0) {
-    emit.push({
-      type: "character.cred",
-      halves: credHalves,
-      reason: `委托${label}`,
-      event: `job:${job.id}`,
-    });
-  }
-  let affinity: { from: number; to: number } | null = null;
-  // 中间人派的单改中间人好感；熟人托事改托事人好感（用户 2026-10-31 选的「托事影响好感」：办成加好感，办砸扣好感）
-  const who = job.fixer ?? job.asker;
-  if (who !== null) {
-    const card = npcs[who];
-    if (card?.met && card.alive) {
-      // 熟人托事拖过了期限：再多扣一点（用户 2026-10-31 选的「托事影响好感」：拖着不办扣好感）
-      const late = job.fixer === null && job.overdue ? ASK_OVERDUE_PENALTY : 0;
-      const delta = AFFINITY_CHANGE[command.outcome] + late;
-      if (late !== 0) notes.push(`拖过了期限，${card.name}好感再 ${late}`);
-      affinity = {
-        from: card.affinity,
-        to: Math.min(AFFINITY_MAX, Math.max(AFFINITY_MIN, card.affinity + delta)),
-      };
-      emit.push({
-        type: "affinity",
-        id: who,
-        delta,
-        reason: job.fixer === null ? `托的事${label}` : `委托${label}`,
-      });
-    }
-  }
   const cuts: { name: string; cut: number }[] = [];
   for (const m of squad) {
     if (m.kind !== "friend" || m.share <= 0 || paid <= 0 || !npcs[m.npc]?.alive) continue;
@@ -251,14 +199,14 @@ export function endJob(
   }
   job.settlement = {
     squad: cuts,
-    credHalves,
-    affinity,
-    humanity: job.humanityAtAccept === null ? null : humanity - job.humanityAtAccept,
+    credHalves: 0,
+    affinity: null,
+    humanity: null,
   };
   return { ok: true, notes, emit };
 }
 
-/** 时间推进：没接的单子到期被别人接走；接下的超期只做标记，由叙事模型在正文里回应 */
+/** 时间推进只记自然逾期；是否有人接走、雇主如何回应必须有实际事件。 */
 export function tickJobs(draft: Draft<JobsState>, span: TimeSpan): void {
   for (const job of draft.jobs) {
     if (job.due === null || job.due > span.to) continue;

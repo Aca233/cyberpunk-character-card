@@ -91,7 +91,7 @@ export function presentNpcs(before: WorldState, after: WorldState): Set<string> 
   );
 }
 
-/** 这一轮收了场，并且离上次推演隔了几场（默认 3 场，设置里可调）或者游戏时间过了半天 */
+/** 到期事件、经过的游戏时间或场景批次触发；每批更新 lastAt，避免同一到期事件反复调用。 */
 export function offscreenDue(
   before: WorldState,
   after: WorldState,
@@ -99,15 +99,21 @@ export function offscreenDue(
 ): boolean {
   const was = WorldClockStateSchema.parse(before.slices.world);
   const now = WorldClockStateSchema.parse(after.slices.world);
-  if (now.scene === was.scene) return false;
   const city = CityStateSchema.parse(after.slices.city ?? {});
-  if (now.scene - (city.lastScene ?? 0) >= every) return true;
+  if (now.scene !== was.scene && now.scene - (city.lastScene ?? 0) >= every) return true;
   // 统一看新单子的期限，不再分别催势力和宿敌（用户 2026-11-01 定的"全改"第 4 步）
   // 同一个期限只触发一次额外推演；遗漏的留到正常推演再提醒，避免每轮反复调用
   const threads = ThreadsStateSchema.parse(after.slices.threads ?? {}).threads;
   if (threads.some((t) => t.dueAt <= after.time && (city.lastAt === null || t.dueAt > city.lastAt)))
     return true;
-  return city.lastAt !== null && after.time - city.lastAt >= OFFSCREEN_HOURS * 60;
+  const jobs = JobsStateSchema.parse(after.slices.jobs).jobs;
+  if (jobs.some((job) => job.due !== null && job.due <= after.time &&
+    (job.status === "active" || job.status === "expired") &&
+    (city.lastAt === null || job.due > city.lastAt))) return true;
+  if (now.deadlines.some((deadline) => deadline.handledAt === null && deadline.due <= after.time &&
+    (city.lastAt === null || deadline.due > city.lastAt))) return true;
+  const since = city.lastAt ?? was.sceneStartedAt;
+  return after.time > before.time && after.time - since >= OFFSCREEN_HOURS * 60;
 }
 
 /** ⑥ 收了场却没推演时给剧透视图的原因；没收场返回 undefined，不记 */

@@ -9,13 +9,11 @@ import {
   ServiceSchema,
 } from "../systems/economy/schema";
 import { itemCatalog } from "../systems/inventory/apply";
-import { JobsStateSchema } from "../systems/jobs/schema";
 import { vehicleCatalog } from "../systems/travel/vehicles";
-import { WorldClockStateSchema } from "../systems/world/schema";
 
 /**
  * 一轮核心流程：① 判断（记忆调度与定性物理/社会裁决）→ ② 拼上下文 → ③ 写正文 → ④ 抽取。
- * 这里放 ① 的 JSON 结构、大额消费确认与时间跨越拦截；定性物理硬约束校验在 pipeline.ts
+ * 这里放 ① 的 JSON 结构、大额消费确认；定性物理硬约束校验在 pipeline.ts
  */
 
 /** ① 判断里玩家这一轮要花的钱：只写买什么，价钱由代码查表 */
@@ -67,6 +65,17 @@ export const JudgeRulingSchema = z.object({
 });
 export type JudgeRuling = z.infer<typeof JudgeRulingSchema>;
 
+/** 主动设备只响应玩家的明确使用意图；模型判断不能因危险擅自替玩家启动。 */
+export function accelerationRequested(input: { text: string; sandevistan?: boolean | undefined }, deviceName?: string): boolean {
+  if (input.sandevistan === true) return true;
+  const named = /斯安.{0,2}斯坦|远地点|飞隼|沙坦|时间加速|子弹时间|神经超频|加速义体/;
+  return input.text.split(/[，。；！\n]/).some((clause) => {
+    if (!named.test(clause) && !(deviceName && clause.includes(deviceName))) return false;
+    if (/(?:不|别|没|未|不要|不用|无需|停止|关闭|关掉|取消|能否|是否|能不能|可以|如果|假如|曾经|上次|刚才)|[吗？?]/.test(clause)) return false;
+    return /开|启动|发动|激活|使用|用|借助|超频/.test(clause);
+  });
+}
+
 /** ① 判断的格式，同时用于原生 JSON Schema 约束与说明生成；ruling 和 buy 另外逐条校验 */
 export const JudgeDocSchema = z.object({
   read: z
@@ -95,7 +104,7 @@ export const JudgeDocSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      "只有【当前状态】列有可用的「加速义体」时才可能写 true：当玩家明确要求开启/使用加速神经（含“开斯安威斯坦”“斯安慰斯坦”“远地点”“飞隼”“沙坦”“时间加速”“子弹时间”“神经超频”等），或陷入必须靠超常神经加速才能抢先手的一瞬爆发/绝境时写 true；否则或未装/损坏/ooc 一律写 false",
+      "只有【当前状态】列有可用的「加速义体」时才可能写 true：当玩家明确要求开启/使用加速神经（含“开斯安威斯坦”“斯安慰斯坦”“远地点”“飞隼”“沙坦”“时间加速”“子弹时间”“神经超频”等），且是角色当前实际行动意图时写 true；不能因为危险替玩家自动开启；否则或未装/损坏/ooc 一律写 false",
     ),
 });
 
@@ -173,30 +182,6 @@ export function bigSpend(
   }
   const price = discounted(base, buy.discount);
   return isBigSpend(price, eddies) ? { label, price, eddies } : undefined;
-}
-
-/** 一次跳过这么多分钟以上算长时间跳过（睡觉、等到天黑、长途移动） */
-export const LONG_SKIP = 120;
-
-/** 长时间跳过中间最早到期的事：没回应的期限、还没超期的委托；没有时为 undefined */
-export function skipStop(
-  world: WorldState,
-  to: number,
-): { readonly at: number; readonly label: string } | undefined {
-  if (to - world.time < LONG_SKIP) return undefined;
-  const clock = WorldClockStateSchema.parse(world.slices.world);
-  const jobs = JobsStateSchema.parse(world.slices.jobs);
-  const points = [
-    ...clock.deadlines
-      .filter((d) => d.handledAt === null)
-      .map((d) => ({ at: d.due, label: d.label })),
-    ...jobs.jobs.flatMap((j) =>
-      j.status === "active" && !j.overdue && j.due !== null
-        ? [{ at: j.due, label: `委托「${j.title}」` }]
-        : [],
-    ),
-  ];
-  return points.filter((p) => p.at > world.time && p.at < to).sort((a, b) => a.at - b.at)[0];
 }
 
 /** 一条旧记忆：标题给判断原样抄，正文给写正文；候选池和扩展层检索在 retrieve.ts */

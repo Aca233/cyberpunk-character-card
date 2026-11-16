@@ -1,5 +1,4 @@
 import { defineSystem } from "../../kernel/system";
-import type { HumanityState } from "../humanity";
 import type { NpcState } from "../npc";
 import type { SquadState } from "../squad";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
@@ -25,7 +24,7 @@ import { jobsView } from "./view";
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
   // factions：派单看派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）；势力系统不依赖别的系统，不会循环
-  dependsOn: ["economy", "character", "humanity", "npc", "squad", "factions"],
+  dependsOn: ["economy", "npc", "squad", "factions"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -55,7 +54,7 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
         });
       }
       case "jobAccept":
-        return acceptJob(draft, command, ctx.now, ctx.read<HumanityState>("humanity").current);
+        return acceptJob(draft, command, ctx.now);
       case "jobNote":
         return noteJob(draft, command);
       case "jobEnd":
@@ -63,7 +62,6 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
           draft,
           command,
           ctx.now,
-          ctx.read<HumanityState>("humanity").current,
           ctx.read<NpcState>("npc").npcs,
           ctx.read<SquadState>("squad").members,
         );
