@@ -56,6 +56,12 @@ import {
 } from "../systems/world";
 import { parseModelJson } from "./block";
 import { canonSection } from "./canon";
+import {
+  OFFSCREEN_MERCHANT_OUTPUT,
+  OFFSCREEN_MERCHANT_RULE,
+  offscreenMerchantContext,
+  readOffscreenMerchantChanges,
+} from "./offscreen-merchants";
 import { type PromptExtras, stateSummary } from "./prompts/context";
 import { BOOKKEEPING_BASE, estimateTokens, userMessage } from "./prompts/layers";
 
@@ -276,7 +282,13 @@ jobs：没有【能派单的中间人】、也没有人标「可以托事」就�
 玩家只是在公寓睡了一觉、正文没提城里任何事、【城里在发酵的事】里也没有到点的时：{"events": [], "npcs": [], "pasts": [], "ties": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "jobs": [], "threads": []}
 不要写没有前因的大事：玩家在街边吃了碗面，就写「荒坂塔遇袭」，这是凭空制造戏剧性。`;
 
-export const OFFSCREEN_SYSTEM = [BOOKKEEPING_BASE, OFFSCREEN_STAGE, OFFSCREEN_OUTPUT].join("\n\n");
+export const OFFSCREEN_SYSTEM = [
+  BOOKKEEPING_BASE,
+  OFFSCREEN_STAGE,
+  OFFSCREEN_MERCHANT_RULE,
+  OFFSCREEN_OUTPUT,
+  OFFSCREEN_MERCHANT_OUTPUT,
+].join("\n\n");
 
 /**
  * 卡上「认识的人」（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：
@@ -464,6 +476,7 @@ export function buildOffscreenPrompt(
           ]
         : []),
       `【城里的动静】\n${citySection(city) ?? "（还没有记下的）"}`,
+      ...offscreenMerchantContext(world, extras.data ?? {}),
       ...(jobs.length > 0
         ? [
             `【当前委托及近期收场】（只作因果背景，不在场外改已有委托账）\n${jobs.map((j) => `- ${j.id}｜${j.title}｜${j.status}｜派单：${j.fixer ?? j.asker ?? "无"}｜雇主：${j.client}｜地点：${j.location ?? "未知"}｜期限：${j.due === null ? "无" : formatGameTime(j.due)}｜冲突：${j.conflict}${j.twist ? `｜幕后：${j.twist}` : ""}${j.notes.length ? `｜进展：${j.notes.join("；")}` : ""}${j.summary ? `｜收场：${j.summary}` : ""}`).join("\n")}`,
@@ -777,6 +790,14 @@ export function readOffscreen(
     }
   }
   const majorWritten = majors > 0;
+  const merchantChanges = readOffscreenMerchantChanges(
+    raw.merchantChanges,
+    world,
+    commands,
+    opts.data ?? {},
+  );
+  for (const note of merchantChanges.notes) reject(`场外推演：${note}`);
+  commands.push(...merchantChanges.commands);
 
   // 【该过自己日子的人】的近况不占 OFFSCREEN_NPCS 的名额（用户 2026-10-31："感觉是为了我才存在的"）
   // 换地点时同时核对内容表和存档里新增的地点，不只认开局地点
