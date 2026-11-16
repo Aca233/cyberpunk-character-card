@@ -16,6 +16,7 @@ import { heat } from "./heat";
 import { humanity } from "./humanity";
 import { inventory } from "./inventory";
 import { jobs } from "./jobs";
+import { logistics } from "./logistics";
 import { memory } from "./memory";
 import { ncpd } from "./ncpd";
 import { nemesis } from "./nemesis";
@@ -43,6 +44,7 @@ export const systems: readonly AnySystem[] = [
   world,
   combat,
   commerce,
+  logistics,
   npc,
   economy,
   jobs,
