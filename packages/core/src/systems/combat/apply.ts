@@ -2,8 +2,9 @@ import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { SERVICES } from "../economy";
-import { type ItemDef, itemCatalog } from "../inventory";
+import { type InventoryState, type ItemDef, itemCatalog } from "../inventory";
 import type { NpcState } from "../npc";
+import { currentVitals } from "../npc/body";
 import { locationCatalog, type WorldClockState } from "../world";
 import { familyOf, pickName } from "./names";
 import {
@@ -112,11 +113,12 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
   const i = bag.indexOf(item);
   if (i < 0) return fail(`${name}身上没有 ${item}`);
   bag.splice(i, 1);
+  const trackedObject = ctx.read<InventoryState>("inventory")?.objects[item];
   return {
     ok: true,
     notes: [],
     emit: [
-      ...(npc === null ? [] : [{ type: "npcGear", id: npc, action: "remove", item }]),
+      ...(npc === null || trackedObject ? [] : [{ type: "npcGear", id: npc, action: "remove", item }]),
       { type: "item", action: "gain", id: item, reason: `从${name}身上捡的` },
     ],
   };
@@ -144,7 +146,7 @@ export function startCombat(
       gang: f.gang ?? null,
       archetype: f.archetype,
       tier: f.tier,
-      state: "up",
+      state: card && currentVitals(card, ctx.data, ctx.now).condition !== "up" ? "down" : "up",
       carry: [],
     };
     // 已有卡的人带着已记录的物品；空装备也是事实，不能因开战重新抽奖。
@@ -186,7 +188,13 @@ export function setFoe(draft: Combat, command: CombatCommand, ctx: SystemContext
   if (!foe || command.state === undefined) return fail(`场上没有 ${command.target}`);
   if (foe.state === command.state || foe.state === "dead") return ok();
   foe.state = command.state;
-  if (command.state !== "dead") return ok(`${foe.name}${FOE_STATE_LABELS[command.state]}`);
+  if (command.state !== "dead") return {
+    ok: true,
+    notes: [`${foe.name}${FOE_STATE_LABELS[command.state]}`],
+    emit: command.state === "down" && foe.npc !== null
+      ? [{ type: "npc.condition", id: foe.npc, condition: "down", reason: "在已记录的冲突中倒下" }]
+      : [],
+  };
   const d = recordDead(draft, foe, ctx);
   const who = d.gang ? `${d.gang}的${d.name}` : d.name;
   return {

@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
+import type { NpcState } from "../npc/schema";
 import type { WorldClockState } from "../world";
 import { inventoryActions } from "./actions";
 import {
@@ -40,7 +41,7 @@ export const inventory = defineSystem<
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
-  dependsOn: ["economy", "world"],
+  dependsOn: ["economy", "world", "npc"],
   state: InventoryStateSchema,
   initial: () => ({
     objects: {},
@@ -69,6 +70,7 @@ export const inventory = defineSystem<
           itemCatalog(ctx.data),
           ctx.now,
           ctx.read<WorldClockState>("world").location,
+          ctx.read<NpcState>("npc").npcs,
         );
       case "trade":
         return applyTrade(
@@ -79,6 +81,7 @@ export const inventory = defineSystem<
           shopHere(ctx.facts.shop, ctx.data),
           ctx.now,
           ctx.read<WorldClockState>("world").location,
+          ctx.read<NpcState>("npc").npcs,
         );
       case "inventory.spend":
         return spend(draft, command.slot, undefined, ctx.now);

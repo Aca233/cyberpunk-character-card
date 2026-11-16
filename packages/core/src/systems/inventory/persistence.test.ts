@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fixedRng } from "../../kernel/rng";
 import { registry } from "../registry";
+import { NpcSchema, NpcStateSchema } from "../npc";
 import { applyItem, itemCatalog, spend, withWorldObjects } from "./apply";
 import { inventory } from "./index";
 import { InventoryStateSchema, type ItemDef } from "./schema";
@@ -16,6 +17,22 @@ const gain = { type: "item", action: "gain", id: token.id, reason: "安娜亲手
 const ctx = { rng: fixedRng([]), data: { items: [packet], locations: [] } };
 
 describe("持续物件", () => {
+  it("独立物件赠予和归还在一次事务内同步人物财物，不能复制双重归属", () => {
+    const base = registry.initialWorld(10);
+    const guard = NpcSchema.parse({ id: "guard", name: "护卫", pronoun: "他", role: "护卫", look: "夹克", voice: "低沉", want: "看守", limit: "背叛", affinity: 0, alive: true, met: true, location: "workshop", lastSeenAt: 0, memories: [], body: { gear: [], cyberware: [] } });
+    const world = { ...base, slices: { ...base.slices, npc: { npcs: { guard } }, world: { ...(base.slices.world as object), location: "workshop" } } };
+    const given = registry.applyCommands(world, [gain, { type: "item", action: "lose", id: token.id, recipient: "guard", reason: "交给护卫保管" }], ctx);
+    expect(given.results.every((r) => r.result.ok)).toBe(true);
+    expect(NpcStateSchema.parse(given.world.slices.npc).npcs.guard?.body?.gear).toEqual([token.id]);
+    expect(InventoryStateSchema.parse(given.world.slices.inventory).objects[token.id]?.holder).toBe("guard");
+    const returned = registry.applyCommands(given.world, [{ type: "item", action: "gain", id: token.id, reason: "护卫交还" }], ctx);
+    expect(returned.results[0]?.result.ok).toBe(true);
+    expect(NpcStateSchema.parse(returned.world.slices.npc).npcs.guard?.body?.gear).toEqual([]);
+    expect(InventoryStateSchema.parse(returned.world.slices.inventory).backpack[token.id]).toBe(1);
+    const duplicate = registry.applyCommands(returned.world, [{ type: "npcGear", id: "guard", action: "add", item: token.id }], ctx);
+    expect(duplicate.results[0]?.result.ok).toBe(false);
+    expect(duplicate.world).toEqual(returned.world);
+  });
   it("目录外物件的定义、来历、归属在保存载入后仍可查阅与使用", () => {
     const first = registry.applyCommands(registry.initialWorld(10), [gain], ctx);
     expect(first.results[0]?.result.ok).toBe(true);

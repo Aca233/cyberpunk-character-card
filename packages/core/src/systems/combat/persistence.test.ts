@@ -36,8 +36,22 @@ describe("财物随人物和地点持续存在", () => {
     expect(InventoryStateSchema.parse(looted.world.slices.inventory).backpack["known-gun"]).toBe(1);
     const again = registry.applyCommands(looted.world, [end, start, down, take("known-gun")], ctx);
     expect(again.results.at(-1)?.result.ok).toBe(false);
+    expect(NpcStateSchema.parse(again.world.slices.npc).npcs.guard?.vitals?.condition).toBe("down");
+    expect(CombatStateSchema.parse(again.world.slices.combat).active?.foes[0]?.state).toBe("down");
     expect(CombatStateSchema.parse(again.world.slices.combat).active?.foes[0]?.carry).toEqual(["key"]);
     expect(InventoryStateSchema.parse(again.world.slices.inventory).backpack["known-gun"]).toBe(1);
+  });
+
+  it("同一个独立物件由人物持有时可通过冲突拾取，转移只结算一次", () => {
+    const unique = { id: "one-key", name: "唯一钥匙", kind: "misc", iconic: false };
+    const first = registry.applyCommands(initial([]), [
+      { type: "item", action: "gain", id: unique.id, definition: unique, origin: "屋主给的唯一一把钥匙", reason: "收下" },
+      { type: "item", action: "lose", id: unique.id, recipient: "guard", reason: "交给护卫保管" },
+      start, down, take(unique.id),
+    ], ctx);
+    expect(first.results.every((r) => r.result.ok)).toBe(true);
+    expect(NpcStateSchema.parse(first.world.slices.npc).npcs.guard?.body?.gear).toEqual([]);
+    expect(InventoryStateSchema.parse(first.world.slices.inventory).backpack[unique.id]).toBe(1);
   });
 
   it("空装备的人不会因身份或稀有度生成武器", () => {
