@@ -11,6 +11,7 @@ export * from "./prompts";
 export * from "./prose";
 export * from "./retrieve";
 export * from "./rewrite";
+export * from "./scene-memory";
 export * from "./stages";
 export * from "./summary";
 export * from "./tavern";

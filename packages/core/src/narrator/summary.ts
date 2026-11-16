@@ -7,10 +7,9 @@ import {
   ImportanceSchema,
   KEYWORD_CHARS,
   type MemorySceneCommand,
+  MemoryStateSchema,
   SUMMARY_CHARS,
   SUMMARY_KEYWORDS,
-  SUMMARY_PEOPLE,
-  SUMMARY_TITLE_CHARS,
 } from "../systems/memory";
 import { NpcStateSchema } from "../systems/npc";
 import { withSavedPlaces } from "../systems/world/places";
@@ -19,6 +18,7 @@ import { parseModelJson } from "./block";
 import { presentNpcs } from "./offscreen";
 import { formatInput, type PromptExtras } from "./prompts/context";
 import { BOOKKEEPING_BASE, userMessage } from "./prompts/layers";
+import { memoryAnchorText, type SceneSummarySource, summaryFromExtract } from "./scene-memory";
 
 /** 场景摘要：辅助模型，低温，只复述正文 */
 export const SUMMARY_TEMPERATURE = 0.2;
@@ -29,8 +29,9 @@ const TURN_CHARS = 800;
 const MAX_CARDS = 16;
 
 const SUMMARY_STAGE = `【这一步：场景摘要】
-玩家刚收了一场。把这一场写成一条摘要：以后这一场的原文不再给叙事模型，只留这条摘要。
-- text 写 100–${SUMMARY_CHARS} 字，只写正文里已经发生的事：谁、做了什么、结果怎样、留下了什么（答应的事、欠下的人情、结下的仇、拿到的东西和线索）。计划和打算写成“打算……”“答应……”，不写成已经发生。
+玩家刚收了一场。合并摘要未通过质量检查，需要结合本场提要、持久锚点和原文重新整理。摘要会和锚点一起供后续检索，不能忽略提要里早期已确认的转折。
+- text 通常写 100–${SUMMARY_CHARS} 字，极短场景可更短，不能灌水；只写已经发生的事：谁、做了什么、结果怎样、留下了什么（答应的事、欠下的人情、结下的仇、拿到的东西和线索）。计划和打算写成“打算……”“答应……”，不写成已经发生。
+- 锚点会独立保留，不必硬把全部待办塞进摘要；优先交代本场实质变化与结果，留下的承诺和未完事项不能写成已解决。不把正文未揭露的场外真相写成玩家已知。
 - 玩家角色写“你”；他说了什么、做了什么决定只认【玩家输入】，正文里替他写出来的不算。
 - 人物写名字；people 写【人物】里对应的 id，只写这一场真出场或被认真提起的人，没卡的人只写进 text。
 - importance：minor 小事（路过、闲聊、买东西），normal 普通，key 关键（有人死了、翻脸、结盟、委托办成或办砸、拿到关键线索、改变命运的决定）。
@@ -58,10 +59,6 @@ function clip(text: string, max: number): string {
   return [...text].slice(0, max).join("");
 }
 
-function flat(value: unknown): string {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
-}
-
 /**
  * 场景摘要的提示词：这一场里定稿的正文和刚收场的这一轮。
  * before 是这一轮开始时的世界（场次、地点按它），after 是结算后的（人物卡按它，刚建的卡也在）
@@ -75,6 +72,18 @@ export function buildSummaryPrompt(
   extras: PromptExtras,
 ): LlmMessage[] {
   const clock = WorldClockStateSchema.parse(before.slices.world);
+  const memory = MemoryStateSchema.parse(after.slices.memory ?? {});
+  const overview =
+    memory.active?.scene === clock.scene ? memory.active : memory.pending[String(clock.scene)];
+  const sceneAnchors = Object.values(memory.anchors)
+    .filter((anchor) => anchor.scene === clock.scene)
+    .sort(
+      (a, b) =>
+        Number(b.resolution === null && b.kind !== "fact") -
+          Number(a.resolution === null && a.kind !== "fact") || a.at - b.at,
+    )
+    .slice(0, 24);
+  const remembered = new Set(sceneAnchors.flatMap((anchor) => anchor.people));
   const earlier = effectiveTurns(records)
     .filter((t) => t.scene === clock.scene && t.ooc !== true && t.unsettled === undefined)
     .flatMap((t) => {
@@ -86,8 +95,12 @@ export function buildSummaryPrompt(
     .slice(-SCENE_TURNS);
   const present = presentNpcs(before, after);
   const cards = Object.values(NpcStateSchema.parse(after.slices.npc).npcs)
-    .filter((n) => n.lastSeenAt !== null)
-    .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
+    .filter((n) => n.lastSeenAt !== null || remembered.has(n.id))
+    .sort(
+      (a, b) =>
+        Number(remembered.has(b.id)) - Number(remembered.has(a.id)) ||
+        (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1),
+    )
     .slice(0, MAX_CARDS)
     .map(
       (n) =>
@@ -103,6 +116,12 @@ export function buildSummaryPrompt(
     scene: [
       `【地点】${place === null ? "还没有" : `${placeName ?? place}（${place}）`}`,
       `【人物】\n${cards.length > 0 ? cards.join("\n") : "（还没有）"}`,
+      ...(overview ? [`【本场已保存提要】\n${overview.text}`] : []),
+      ...(sceneAnchors.length > 0
+        ? [
+            `【本场持久锚点】\n${sceneAnchors.map((anchor) => `- ${anchor.id}｜${memoryAnchorText(anchor)}`).join("\n")}`,
+          ]
+        : []),
       ...(earlier.length > 0 ? [`【这一场前面的正文】\n${earlier.join("\n\n")}`] : []),
     ],
     input: `【刚收场的这一轮】\n${formatInput(input)}\n${narrative}`,
@@ -121,12 +140,13 @@ export interface SummaryResult {
   readonly notes: string[];
 }
 
-/** 读场景摘要：超长的截短，人物 id 要对得上卡，地点由代码按收场前的位置填 */
+/** 恢复摘要使用同一质量门槛；不截断结尾，避免把尚未完成的限定语删掉。 */
 export function readSummary(
   text: string,
   world: WorldState,
   scene: number,
   place: string | null,
+  source: SceneSummarySource,
 ): SummaryResult {
   const notes: string[] = [];
   const json = parseModelJson(text);
@@ -139,54 +159,6 @@ export function readSummary(
     notes.push(`场景摘要读不了${json.ok ? "" : `：${json.error}`}，这一场不记摘要`);
     return { notes };
   }
-  const raw = json.value as Record<string, unknown>;
-  const body = flat(raw.text);
-  if (body === "") {
-    notes.push("场景摘要没写 text，这一场不记摘要");
-    return { notes };
-  }
-  let summary = body;
-  if ([...body].length > SUMMARY_CHARS) {
-    summary = `${clip(body, SUMMARY_CHARS - 1)}…`;
-    notes.push(`场景摘要超过 ${SUMMARY_CHARS} 字，截短了`);
-  }
-  const title = clip(flat(raw.title) || clip(summary, 12), SUMMARY_TITLE_CHARS);
-
-  const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
-  const people: string[] = [];
-  for (const id of Array.isArray(raw.people) ? raw.people : []) {
-    const key = flat(id);
-    if (key === "") continue;
-    if (!npcs[key]) {
-      notes.push(`场景摘要：people 里的 ${key} 不在人物卡里，去掉了`);
-      continue;
-    }
-    if (!people.includes(key) && people.length < SUMMARY_PEOPLE) people.push(key);
-  }
-
-  const importance = ImportanceSchema.safeParse(raw.importance);
-  if (!importance.success) notes.push("场景摘要的 importance 认不出，按 normal 记");
-
-  const keywords: string[] = [];
-  for (const k of Array.isArray(raw.keywords) ? raw.keywords : []) {
-    const word = clip(flat(k), KEYWORD_CHARS);
-    if (word !== "" && !keywords.includes(word) && keywords.length < SUMMARY_KEYWORDS) {
-      keywords.push(word);
-    }
-  }
-  if (keywords.length < 2) notes.push("场景摘要的关键词不到 2 个");
-
-  return {
-    notes,
-    command: {
-      type: "memory.scene",
-      scene,
-      title,
-      text: summary,
-      people,
-      place,
-      importance: importance.success ? importance.data : "normal",
-      keywords,
-    },
-  };
+  const checked = summaryFromExtract(json.value, world, scene, place, source);
+  return { ...checked, notes: checked.notes.map((note) => note.replace(/^合并摘要/, "恢复摘要")) };
 }

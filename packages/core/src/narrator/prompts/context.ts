@@ -18,6 +18,7 @@ import { SafehouseStateSchema } from "../../systems/safehouse/schema";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
+import { sceneMemorySection } from "../scene-memory";
 import type { Memory } from "../stages";
 
 /**
@@ -243,6 +244,8 @@ export function situation(
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
     ...registry.sections({ world, data: extras.data, input }),
   ];
+  const sceneMemory = sceneMemorySection(world, input.text);
+  if (sceneMemory) parts.push(sceneMemory);
   const physics = physicsSection(world, extras.data, input.text);
   if (physics) parts.push(`【物理与安防现状】\n${physics}`);
   const canon = canonSection(extras.data, extras.startTime, world.time);

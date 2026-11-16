@@ -7,13 +7,14 @@ import { type Npc, NpcStateSchema } from "../systems/npc";
 import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
+import { memoryAnchorText } from "./scene-memory";
 import type { Memory } from "./stages";
 
 /**
  * 扩展层：热层以外的旧记忆，覆盖不够时按分数补几条。
  * 条目有四种：掉出窗口的旧轮次、【前情】没带的场景摘要、热层没带的共同记忆、已经结束的城里的动静
  */
-export type MemoryKind = "turn" | "scene" | "bond" | "city";
+export type MemoryKind = "turn" | "scene" | "bond" | "city" | "anchor" | "pending";
 
 export interface MemoryEntry extends Memory {
   /** 稳定 id：turn:12、scene:3、bond:judy:4、city:<事件 id> */
@@ -107,6 +108,37 @@ export function memoryPool(
 
   // 【前情】没带的场景摘要
   const memory = MemoryStateSchema.parse(world.slices.memory ?? {});
+  const currentScene = WorldClockStateSchema.parse(world.slices.world).scene;
+  const pending = new Map(Object.values(memory.pending).map((entry) => [entry.scene, entry]));
+  if (memory.active && memory.active.scene !== currentScene)
+    pending.set(memory.active.scene, memory.active);
+  for (const entry of pending.values()) {
+    out.push({
+      id: `pending:${entry.scene}`,
+      kind: "pending",
+      title: `第 ${entry.scene + 1} 场待整理提要（非完整摘要）`,
+      text: entry.text,
+      people: mentioned(entry.text, npcs),
+      place: entry.place,
+      at: entry.at,
+      importance: "key",
+      keywords: [],
+    });
+  }
+  // 锚点不随滚动提要覆盖或收场消失；未兑现事项保留状态后独立参与检索。
+  for (const anchor of Object.values(memory.anchors)) {
+    out.push({
+      id: `anchor:${anchor.id}`,
+      kind: "anchor",
+      title: `记忆锚点 ${anchor.id}：${oneLine(anchor.text, 24)}`,
+      text: memoryAnchorText(anchor),
+      people: anchor.people,
+      place: anchor.place,
+      at: anchor.resolution?.at ?? anchor.at,
+      importance: anchor.resolution === null && anchor.kind !== "fact" ? "key" : "normal",
+      keywords: anchor.keywords,
+    });
+  }
   const recapped = new Set(recapScenes(memory, shown, recapTokens).map((s) => s.scene));
   for (const s of memory.scenes) {
     if (shown.has(s.scene) || recapped.has(s.scene)) continue;

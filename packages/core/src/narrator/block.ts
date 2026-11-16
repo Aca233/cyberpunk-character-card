@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SceneMemoryUpdateSchema, SceneSummaryProposalSchema } from "../systems/memory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
@@ -45,6 +46,12 @@ export const ExtractDocSchema = z.object({
       "正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；只在实际发生危机时标记，不限制次数",
     ),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
+  sceneMemory: SceneMemoryUpdateSchema.describe(
+    "每轮更新本场提要与锚点增量，保留事实与未兑现事项；不改写正文",
+  ),
+  summary: SceneSummaryProposalSchema.optional().describe(
+    "收场时给整场摘要，结合此前场景记忆和本轮正文；未收场不写",
+  ),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
   dropped: z
     .array(z.string())
@@ -58,6 +65,8 @@ const ExtractShapeSchema = z.object({
   messages: z.array(z.unknown()).optional().catch(undefined),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
+  sceneMemory: z.unknown().optional(),
+  summary: z.unknown().optional(),
   pin: z.boolean().optional().catch(undefined),
   dropped: z.array(z.unknown()).optional().catch(undefined),
 });

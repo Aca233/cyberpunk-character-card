@@ -9,6 +9,9 @@ export const SUMMARY_TITLE_CHARS = 24;
 export const SUMMARY_PEOPLE = 10;
 export const SUMMARY_KEYWORDS = 5;
 export const KEYWORD_CHARS = 12;
+/** 当前场的提要和锚点各自限长；锚点以增量保存，不因提要压缩而丢弃。 */
+export const SCENE_MEMORY_CHARS = 600;
+export const MEMORY_ANCHOR_CHARS = 140;
 
 /** minor 小事，normal 普通，key 关键；检索分数乘它 */
 export const ImportanceSchema = z.enum(["minor", "normal", "key"]);
@@ -18,6 +21,81 @@ export const IMPORTANCE_LABELS: Readonly<Record<Importance, string>> = {
   normal: "普通",
   key: "关键",
 };
+
+export const MemoryEvidenceSchema = z.object({
+  source: z.enum(["input", "narrative"]),
+  quote: z.string().trim().min(1).max(240),
+});
+
+export const MemoryAnchorFieldsSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9][a-z0-9-]*$/),
+  kind: z.enum(["fact", "promise", "plan", "question"]),
+  text: z.string().trim().min(1).max(MEMORY_ANCHOR_CHARS),
+  people: z.array(z.string().min(1)).max(SUMMARY_PEOPLE),
+  keywords: z.array(z.string().trim().min(1).max(KEYWORD_CHARS)).max(SUMMARY_KEYWORDS),
+  evidence: MemoryEvidenceSchema,
+});
+export type MemoryAnchorFields = z.infer<typeof MemoryAnchorFieldsSchema>;
+
+export const MemoryAnchorResolutionSchema = z.object({
+  id: z.string().min(1),
+  outcome: z.enum(["fulfilled", "cancelled", "answered"]),
+  text: z.string().trim().min(1).max(MEMORY_ANCHOR_CHARS),
+  evidence: MemoryEvidenceSchema,
+});
+
+export const SceneMemoryUpdateSchema = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SCENE_MEMORY_CHARS)
+    .describe(
+      `这一场至今的滚动提要，不超过${SCENE_MEMORY_CHARS}字；旧事实保留，计划与承诺仍写为未兑现，不补剧情`,
+    ),
+  anchors: z
+    .array(MemoryAnchorFieldsSchema)
+    .describe(
+      "本轮新增的重要事实、承诺、计划或待解问题；每条给稳定id和本轮原文证据；已登记的不重写，没有新增写[]",
+    ),
+  resolve: z
+    .array(MemoryAnchorResolutionSchema)
+    .describe(
+      "本轮确实兑现、取消或回答的旧锚点；引用原id并给本轮证据，计划和威胁不算兑现；没有写[]",
+    ),
+});
+export type SceneMemoryUpdate = z.infer<typeof SceneMemoryUpdateSchema>;
+
+export const MemoryAnchorSchema = MemoryAnchorFieldsSchema.extend({
+  scene: z.number().int().min(0),
+  place: z.string().nullable(),
+  at: z.number().int(),
+  resolution: MemoryAnchorResolutionSchema.omit({ id: true })
+    .extend({ at: z.number().int() })
+    .nullable(),
+});
+export type MemoryAnchor = z.infer<typeof MemoryAnchorSchema>;
+
+export const ActiveSceneMemorySchema = z.object({
+  scene: z.number().int().min(0),
+  place: z.string().nullable(),
+  text: z.string().trim().min(1).max(SCENE_MEMORY_CHARS),
+  at: z.number().int(),
+});
+
+/** 抽取中顺带给出的收场摘要；人物和地点还要在结算后验证。 */
+export const SceneSummaryProposalSchema = z.object({
+  title: z.string().trim().min(1).max(SUMMARY_TITLE_CHARS),
+  text: z.string().trim().min(1).max(SUMMARY_CHARS),
+  people: z.array(z.string().min(1)).max(SUMMARY_PEOPLE),
+  importance: ImportanceSchema,
+  keywords: z.array(z.string().trim().min(1).max(KEYWORD_CHARS)).min(2).max(SUMMARY_KEYWORDS),
+});
 
 /** 辅助模型写、代码校验过的一条场景摘要 */
 export const SceneSummaryFieldsSchema = z.object({
@@ -62,14 +140,26 @@ export type MemoryEditLog = z.infer<typeof MemoryEditLogSchema>;
 export const MemoryStateSchema = z.object({
   scenes: z.array(SceneSummarySchema).default([]),
   edits: z.array(MemoryEditLogSchema).default([]),
+  active: ActiveSceneMemorySchema.nullable().default(null),
+  /** 收场整理失败时保留完整提要，后续可检索；不是已完成的场景摘要。 */
+  pending: z.record(z.string(), ActiveSceneMemorySchema).default({}),
+  anchors: z.record(z.string(), MemoryAnchorSchema).default({}),
 });
 export type MemoryState = z.infer<typeof MemoryStateSchema>;
 
-/** 只能由代码发出：收场后辅助模型写的场景摘要；同一场再写一次整条替换 */
+/** 只能由代码发出：抽取或恢复调用写的场景摘要；同一场再写一次整条替换 */
 export const MemorySceneCommandSchema = SceneSummaryFieldsSchema.extend({
   type: z.literal("memory.scene"),
 });
 export type MemorySceneCommand = z.infer<typeof MemorySceneCommandSchema>;
+
+/** 只能由回合结算发出：保留同一场提要并增量登记锚点，不随省略而删除旧锚点。 */
+export const MemoryWorkingCommandSchema = SceneMemoryUpdateSchema.extend({
+  type: z.literal("memory.working"),
+  scene: z.number().int().min(0),
+  place: z.string().nullable(),
+});
+export type MemoryWorkingCommand = z.infer<typeof MemoryWorkingCommandSchema>;
 
 /** 只能由代码发出：玩家在记忆面板改写或删掉一条场景摘要；before 是玩家看到的正文，对不上就不改 */
 export const MemoryEditCommandSchema = z.object({
@@ -89,4 +179,8 @@ export const MemoryLogCommandSchema = MemoryEditLogSchema.omit({ at: true }).ext
 });
 export type MemoryLogCommand = z.infer<typeof MemoryLogCommandSchema>;
 
-export type MemoryInternal = MemorySceneCommand | MemoryEditCommand | MemoryLogCommand;
+export type MemoryInternal =
+  | MemorySceneCommand
+  | MemoryWorkingCommand
+  | MemoryEditCommand
+  | MemoryLogCommand;
