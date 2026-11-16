@@ -174,6 +174,7 @@ describe("服务器绑定具体交易的大额确认", () => {
 
   it.each([
     ["商品", BuyProposalSchema.parse({ item: "omaha", with: "wilson" }), 2500],
+    ["低于大额门槛的商品", BuyProposalSchema.parse({ item: "unity", with: "wilson" }), 300],
     ["卖方", BuyProposalSchema.parse({ item: "liberty", with: "private-seller" }), 1600],
   ] as const)("同一输入点确认后，判断换了%s仍必须再次确认", async (_what, changed, price) => {
     const fixture = await setup();
