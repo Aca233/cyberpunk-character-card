@@ -3,7 +3,8 @@ import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
 import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
-import { NPC_GEAR_MAX, type NpcState } from "../npc";
+// biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
+import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
 import type { WorldClockState } from "../world";
 import {
   applyItem,
