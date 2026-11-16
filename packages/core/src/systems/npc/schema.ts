@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DamageTierSchema } from "../dice";
-import { BodyPartSchema } from "../health";
+import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health/schema";
+import { NeuralSymptomSchema } from "../humanity/schema";
 
 /** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
 export const NO_FACTION = "none";
@@ -38,105 +39,18 @@ const NpcIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 rebecca");
 
-export const NPC_HP_MAX = 100;
-/** 装备栏最多几件、义体最多几件 */
+/** 装备与植入物记录上限。 */
 export const NPC_GEAR_MAX = 6;
 export const NPC_CHROME_MAX = 8;
-
-const LEGACY_TIER_BODY: Readonly<Record<string, number>> = {
-  mook: 2,
-  pro: 4,
-  elite: 7,
-  legend: 9,
-};
-const LEGACY_TIER_CRED: Readonly<Record<string, number>> = {
-  mook: 0,
-  pro: 10,
-  elite: 25,
-  legend: 40,
-};
-
-/** 历史存档 NPC 生命值从旧版 190–550 区间无损折算为 0–100 百分比上限 */
-export function normalizeLegacyNpcHp(
-  rawHp: number,
-  rawBody: unknown,
-  hurtAt: unknown,
-  injuryCount: number,
-): number {
-  const body =
-    typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)
-      ? (rawBody as Record<string, unknown>)
-      : undefined;
-  const tier =
-    typeof body?.tier === "string" && body.tier in LEGACY_TIER_CRED ? body.tier : undefined;
-  if (!tier && rawHp <= NPC_HP_MAX) return Math.max(0, Math.round(rawHp));
-  if (hurtAt === null && injuryCount === 0 && (tier !== undefined || rawHp > NPC_HP_MAX)) {
-    return NPC_HP_MAX;
-  }
-  if (tier !== undefined) {
-    const attrs =
-      typeof body?.attributes === "object" &&
-      body.attributes !== null &&
-      !Array.isArray(body.attributes)
-        ? (body.attributes as Record<string, unknown>)
-        : undefined;
-    const attrBody =
-      typeof attrs?.body === "number" && Number.isFinite(attrs.body)
-        ? attrs.body
-        : (LEGACY_TIER_BODY[tier] ?? 2);
-    const legacyMax = 150 + attrBody * 20 + (LEGACY_TIER_CRED[tier] ?? 0) * 5;
-    const denom = Math.max(legacyMax, rawHp);
-    return denom <= 0
-      ? 0
-      : Math.min(NPC_HP_MAX, Math.max(0, Math.round((rawHp / denom) * NPC_HP_MAX)));
-  }
-  return Math.min(
-    NPC_HP_MAX - 1,
-    Math.max(1, Math.round((rawHp / Math.max(rawHp, 300)) * NPC_HP_MAX)),
-  );
-}
-
-/**
- * 人物卡上的身体：随身武装/衣物（物品表 id）、义体（义体表 id）、开局人性。
- * 兼容剥离旧版残留的 tier / attributes 字段；id 在不在表里由结算校验
- */
-export const NpcBodyCardSchema = z.preprocess(
-  (raw) => {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
-    const rec = raw as Record<string, unknown>;
-    if (!("tier" in rec) && !("attributes" in rec)) return raw;
-    const { tier: _tier, attributes: _attrs, ...rest } = rec;
-    return rest;
-  },
-  z
-    .object({
-      gear: z
-        .array(z.string().min(1))
-        .max(NPC_GEAR_MAX)
-        .default([])
-        .describe("装备栏：物品表里的 id，手里的武器和身上的衣服"),
-      cyberware: z
-        .array(z.string().min(1))
-        .max(NPC_CHROME_MAX)
-        .default([])
-        .describe("装着的义体：义体表里的 id"),
-      humanity: z
-        .number()
-        .int()
-        .min(0)
-        .max(100)
-        .optional()
-        .describe("开局人性；不写按 100 减去义体消耗"),
-    })
-    .superRefine((b, ctx) => {
-      if (new Set(b.gear).size !== b.gear.length) {
-        ctx.addIssue({ code: "custom", message: "装备栏里有重复的物品" });
-      }
-      if (new Set(b.cyberware).size !== b.cyberware.length) {
-        ctx.addIssue({ code: "custom", message: "义体里有重复的" });
-      }
-    }),
-);
+/** 具体装备、义体与已确认的初始症状，不含阶层、HP 或人性点数。 */
+export const NpcBodyCardSchema = z.object({
+  gear: z.array(z.string().min(1)).max(NPC_GEAR_MAX).default([]).describe("随身物品的稳定 id，来自已登记物品定义"),
+  cyberware: z.array(z.string().min(1)).max(NPC_CHROME_MAX).default([]),
+  symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
+}).superRefine((b, ctx) => {
+  if (new Set(b.gear).size !== b.gear.length) ctx.addIssue({ code: "custom", message: "装备栏里有重复物品" });
+  if (new Set(b.cyberware).size !== b.cyberware.length) ctx.addIssue({ code: "custom", message: "义体里有重复项" });
+});
 export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
@@ -383,47 +297,17 @@ const BaseNpcSchema = NpcCardSchema.extend({
    * 旧的在前，最多 TIES_KEPT 条；open 是外人看得出来的关系，暗地里的（私通、卧底、暗中勾结）是 false，只给模型看
    */
   ties: z.array(NpcTieSchema).default([]),
-  /**
-   * 会变的身体数值：生命值（hp 是 hpAt 那一刻的值，之后按时间惰性回复）、人性数值、具体伤势明细、最近一次受伤和被扫描的时间。
-   * 第一次受伤、治疗、换装备或装义体时按 body 补上；旧存档和没碰过的人是 null。人性数值只给叙事模型
-   */
-  vitals: z
-    .object({
-      hp: z.number().int().min(0),
-      hpAt: z.number().int(),
-      humanity: z.number().int().min(0).max(100),
-      hurtAt: z.number().int().nullable(),
-      scannedAt: z.number().int().nullable(),
-      injuries: z
-        .array(
-          z.object({
-            id: z.string().min(1),
-            part: BodyPartSchema.nullable().default(null),
-            tier: DamageTierSchema,
-            cause: z.string().min(1),
-            at: z.number().int(),
-            treated: z.boolean().default(false),
-          }),
-        )
-        .default([]),
-    })
-    .nullable()
-    .default(null),
+  /** 已经发生的身体与神经事实；可惰性计算已治疗创口的恢复。 */
+  vitals: z.object({
+    condition: ConditionSchema,
+    nextInjuryId: z.number().int().min(1).default(1),
+    hurtAt: z.number().int().nullable(),
+    scannedAt: z.number().int().nullable(),
+    injuries: z.array(InjurySchema.omit({ source: true })).default([]),
+    symptoms: z.array(NeuralSymptomSchema).default([]),
+  }).nullable().default(null),
 });
-
-/** 兼容历史存档：将旧版 190–550 区间的 NPC vitals.hp 按旧体型与档位折算为 0–100 */
-export const NpcSchema = z.preprocess((raw) => {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
-  const rec = raw as Record<string, unknown>;
-  const vitals = rec.vitals;
-  if (typeof vitals !== "object" || vitals === null || Array.isArray(vitals)) return raw;
-  const v = vitals as Record<string, unknown>;
-  if (typeof v.hp !== "number" || !Number.isFinite(v.hp)) return raw;
-  const injCount = Array.isArray(v.injuries) ? v.injuries.length : 0;
-  const nextHp = normalizeLegacyNpcHp(v.hp, rec.body, v.hurtAt ?? null, injCount);
-  if (nextHp === v.hp) return raw;
-  return { ...rec, vitals: { ...v, hp: nextHp } };
-}, BaseNpcSchema);
+export const NpcSchema = BaseNpcSchema;
 export type Npc = z.infer<typeof NpcSchema>;
 export type NpcVitals = NonNullable<Npc["vitals"]>;
 export type NpcInjury = NpcVitals["injuries"][number];
@@ -694,7 +578,7 @@ export const NpcHurtSchema = z
     reason: z.string().trim().min(1).max(80).describe("具体怎么伤的、用了什么家伙"),
   })
   .describe(
-    "有卡的人受了伤（打斗里中枪挨刀、出事故）：写明 part 部位、tier 档位和 reason 致伤经过；按档扣他的生命值并记入伤势明细，装着护甲义体降一档；打到 0 是倒下，不会自己好，死没死另写 npcDeath",
+    "有卡的人受了伤（打斗里中枪挨刀、出事故）：写明 part 部位、tier 档位和 reason 致伤经过；记入具体伤势明细；伤势已经综合装备防护与实际击中位置，不再重复减伤。致命伤需急救，死亡另写 npcDeath",
   );
 export type NpcHurt = z.infer<typeof NpcHurtSchema>;
 
@@ -707,7 +591,7 @@ export const NpcHealSchema = z
       .describe("rest 休整了一阵，maxdoc 用了治疗品，ripperdoc 找义体医生治好了"),
     reason: z.string().trim().min(1).max(80).optional(),
   })
-  .describe("有卡的人得到治疗；倒下（生命 0）的人只有 ripperdoc 能救起来");
+  .describe("有卡的人得到真实治疗：rest 仅休整不清空创口；maxdoc 缓解不适；ripperdoc 稳定伤势并开始恢复，重伤不会随切场自动好");
 export type NpcHeal = z.infer<typeof NpcHealSchema>;
 
 export const NpcGearSchema = z
@@ -730,23 +614,21 @@ export const NpcChromeSchema = z
     cyberware: z.string().min(1).describe("义体表里的 id"),
   })
   .describe(
-    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，每个部位按格数装（额叶皮质、神经系统、循环系统、皮肤、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件；网络接入仓、斯安威斯坦、狂暴都占操作系统，只能装一个），部位装满了再装会换下这个部位最早装的那件；装上会压低他的人性上限。玩家角色出钱装的，同时写 money 扣钱`,
+    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，每个部位按格数装（额叶皮质、神经系统、循环系统、皮肤、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件；网络接入仓、斯安威斯坦、狂暴都占操作系统，只能装一个），部位装满了再装会换下这个部位最早装的那件；安装本身不自动生成神经症状。玩家角色出钱装的，同时写 money 扣钱`,
   );
 export type NpcChrome = z.infer<typeof NpcChromeSchema>;
 
-export const NpcHumanitySchema = z
-  .object({
-    type: z.literal("npcHumanity"),
-    id: NpcIdSchema,
-    kind: z
-      .enum(["cruelty", "loss", "rest"])
-      .describe(
-        "cruelty 他做了残忍的事，loss 他失去了重要的人，rest 他好好休整、和在乎的人待了一阵",
-      ),
-    size: z.enum(["small", "medium", "large"]),
-    reason: z.string().trim().min(1).max(80),
-  })
-  .describe("有卡的人的人性变化：和玩家角色同一套档位，代码换算；数值只有叙事模型看得到");
+export const NpcHumanitySchema = z.object({
+  type: z.literal("npcHumanity"),
+  id: NpcIdSchema,
+  action: z.enum(["affect", "recover"]),
+  symptomId: z.string().min(1),
+  stage: z.enum(["detached", "unstable", "edge", "crisis"]).optional(),
+  symptom: z.string().min(1).optional(),
+  reason: z.string().trim().min(1).max(160),
+}).superRefine((c, ctx) => {
+  if (c.action === "affect" && (!c.stage || !c.symptom)) ctx.addIssue({ code: "custom", message: "affect 要写实际 symptom 和 stage" });
+}).describe("记录有卡人物实际的神经症状与诱因，或恢复已有症状；symptomId 稳定不变，不能按义体数量或道德行为扣分");
 export type NpcHumanity = z.infer<typeof NpcHumanitySchema>;
 
 export const NpcScanSchema = z

@@ -7,7 +7,6 @@ import {
   bodyProblems,
   EMPTY_NPC_BODY,
   filledBody,
-  npcHumanityCap,
   sanitizeNpcBody,
 } from "./body";
 import {
@@ -20,7 +19,6 @@ import {
   LEDGER_KIND_LABELS,
   MEMORY_KEPT,
   NO_FACTION,
-  NPC_HP_MAX,
   NPC_SAMPLES_MAX,
   type Npc,
   type NpcCommand,
@@ -311,6 +309,7 @@ export function applyNpc(
       notes: [`关于${npc.name}（${KNOWN_SOURCE_LABELS[command.source]}）：${command.text}`],
     };
   }
+  if (!npc.alive && command.type === "npcGear" && command.action === "remove") return applyNpcBody(npc, command, now, data);
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
   if (
     command.type === "npcHurt" ||
@@ -392,11 +391,7 @@ export function applyNpc(
             : undefined;
       if (nextBody !== undefined) {
         npc.body = nextBody;
-        if (npc.vitals !== null) {
-          const filled = filledBody(nextBody);
-          npc.vitals.humanity = Math.min(npc.vitals.humanity, npcHumanityCap(filled, data));
-          npc.vitals.hp = Math.min(npc.vitals.hp, NPC_HP_MAX);
-        }
+
         updated = true;
       }
       return updated

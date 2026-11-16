@@ -1,13 +1,12 @@
 import type { ApplyOutcome } from "../../kernel/system";
 import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from "../cyberware";
 import type { DamageTier } from "../dice";
-import { BODY_PART_LABELS, type BodyPart, DAMAGE_PERCENT } from "../health";
-import { HUMANITY_KINDS, humanityStage, STAGE_LABELS } from "../humanity";
+import { BODY_PART_LABELS, type BodyPart, INJURY_HEAL_MINUTES } from "../health";
+import { neuralDisplay, neuralStage, STAGE_LABELS } from "../humanity";
 import { itemCatalog } from "../inventory";
 import {
   NPC_CHROME_MAX,
   NPC_GEAR_MAX,
-  NPC_HP_MAX,
   type Npc,
   type NpcBodyCard,
   type NpcChrome,
@@ -18,36 +17,19 @@ import {
   type NpcInjury,
   type NpcScan,
   type NpcVitals,
-  normalizeLegacyNpcHp,
 } from "./schema";
 
 type Data = Readonly<Record<string, unknown>>;
-
-/** 没倒下的人每过这么多分钟回一次血（本作改编，暂定） */
-export const NPC_REGEN_MINUTES = 360;
-/** 每次回生命上限的百分之几 */
-export const NPC_REGEN_PERCENT = 10;
-/** 休整、用治疗品各回上限的百分之几；义体医生直接治满，也能把倒下的人救起来 */
-export const NPC_HEAL_PERCENT = { rest: 30, maxdoc: 40 } as const;
 
 export const NPC_DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
   graze: "擦伤",
   heavy: "重伤",
   lethal: "致命伤",
 };
-/** 每名 NPC 最多留这么多个伤势记录 */
-export const NPC_INJURY_KEPT = 8;
-
 const DAMAGE_ORDER: Readonly<Record<DamageTier, number>> = {
   lethal: 3,
   heavy: 2,
   graze: 1,
-};
-
-const LOWER_TIER: Readonly<Record<DamageTier, DamageTier>> = {
-  graze: "graze",
-  heavy: "graze",
-  lethal: "heavy",
 };
 
 const PART_HINTS: readonly (readonly [BodyPart, RegExp])[] = [
@@ -67,15 +49,6 @@ function inferBodyPart(reason: string): BodyPart | null {
     if (pattern.test(reason)) return part;
   }
   return null;
-}
-
-function nextInjuryId(injuries: readonly NpcInjury[]): string {
-  const used = new Set(injuries.map((i) => i.id));
-  for (let n = 1; n <= injuries.length + 1; n++) {
-    const id = `ni${n}`;
-    if (!used.has(id)) return id;
-  }
-  return `ni${Date.now()}`;
 }
 
 export const EMPTY_NPC_BODY: NpcBodyCard = { gear: [], cyberware: [] };
@@ -203,80 +176,34 @@ export function slotProblems(
   return problems;
 }
 
-/** 人性上限 = 100 − 装着的义体的人性消耗，不低于 0 */
-export function npcHumanityCap(body: FilledBody, data: Data): number {
-  if (body.cyberware.length === 0) return 100;
-  const chrome = cyberwareCatalog(data);
-  const cost = body.cyberware.reduce((s, id) => s + (chrome.get(id)?.humanityCost ?? 0), 0);
-  return Math.max(0, 100 - cost);
-}
-
-function hasArmor(body: FilledBody, data: Data): boolean {
-  if (body.cyberware.length === 0) return false;
-  const chrome = cyberwareCatalog(data);
-  return body.cyberware.some((id) => chrome.get(id)?.armor === true);
-}
-
-/**
- * 此刻的身体数值：没记过的按满血和开局人性算；hp 大于 0 时按时间惰性回血，到 0 不自己好。
- * 不改人物，只算
- */
+/** 根据实际创口和治疗期计算此刻状况；显示条不参与结算。 */
 export function currentVitals(
-  npc: Pick<Npc, "body" | "vitals">,
-  data: Data,
-  now: number,
-): NpcVitals & { readonly max: number } {
-  const body = filledBody(npc.body);
-  const max = NPC_HP_MAX;
-  const cap = npcHumanityCap(body, data);
-  const v = npc.vitals;
-  if (!v) {
-    return {
-      hp: max,
-      hpAt: now,
-      humanity: Math.min(cap, body.humanity ?? cap),
-      hurtAt: null,
-      scannedAt: null,
-      injuries: [],
-      max,
-    };
-  }
-  let hp =
-    v.hp > max
-      ? normalizeLegacyNpcHp(v.hp, npc.body, v.hurtAt, v.injuries?.length ?? 0)
-      : Math.max(0, v.hp);
-  let hpAt = v.hpAt;
-  if (hp > 0 && hp < max && now > hpAt) {
-    const ticks = Math.floor((now - hpAt) / NPC_REGEN_MINUTES);
-    if (ticks > 0) {
-      hp = Math.min(max, hp + ticks * Math.ceil((max * NPC_REGEN_PERCENT) / 100));
-      hpAt += ticks * NPC_REGEN_MINUTES;
-    }
-  }
-  if (hp >= max) hpAt = Math.max(hpAt, now);
-  const injuries = hp >= max ? [] : [...(v.injuries ?? [])];
-  return { ...v, hp, hpAt, humanity: Math.min(v.humanity, cap), injuries, max };
+  npc: Pick<Npc, "body" | "vitals"> & Partial<Pick<Npc, "alive">>, _data: Data, now: number,
+): NpcVitals & { readonly hp: number; readonly max: number; readonly humanity: number } {
+  const v: NpcVitals = npc.vitals ?? {
+    condition: "up", nextInjuryId: 1, hurtAt: null, scannedAt: null, injuries: [],
+    symptoms: (npc.body?.symptoms ?? []).map((s) => ({ ...s, at: now })),
+  };
+  const injuries = v.injuries.filter((i) => i.healsAt === null || now < i.healsAt);
+  const condition = npc.alive === false ? "dead" : v.condition;
+  const hp = condition !== "up" ? 0 : injuries.some((i) => i.tier === "lethal") ? 20
+    : injuries.some((i) => i.tier === "heavy") ? 50 : injuries.length ? 90 : 100;
+  return { ...v, condition, injuries, symptoms: [...v.symptoms], hp, max: 100, humanity: neuralDisplay(v) };
 }
-
-/** 伤势：满血没事，一半以上轻伤，还有血重伤，0 倒下 */
-export function woundLabel(hp: number, max: number): string {
-  if (hp >= max) return "没受伤";
-  if (hp * 2 >= max) return "轻伤";
-  if (hp > 0) return "重伤";
-  return "倒下";
+export function woundLabel(v: Pick<NpcVitals, "condition" | "injuries">): string {
+  if (v.condition === "dead") return "死亡";
+  if (v.condition === "dying") return "濒死，需急救";
+  if (v.condition === "down") return "倒下";
+  if (v.injuries.some((i) => i.tier === "lethal")) return "重创，恢复中";
+  if (v.injuries.some((i) => i.tier === "heavy")) return "重伤";
+  return v.injuries.length ? "擦伤" : "没受伤";
 }
-
-/** 写回人物：补齐身体，把此刻的数值记下来 */
-function settle(
-  npc: Npc,
-  data: Data,
-  now: number,
-): { body: FilledBody; v: NpcVitals; max: number } {
+function settle(npc: Npc, data: Data, now: number): { body: FilledBody; v: NpcVitals } {
   const body = filledBody(npc.body);
-  const { max, ...v } = currentVitals(npc, data, now);
+  const { hp: _hp, max: _max, humanity: _humanity, ...v } = currentVitals(npc, data, now);
   npc.body = body;
-  npc.vitals = { ...v, injuries: [...v.injuries] };
-  return { body, v: npc.vitals, max };
+  npc.vitals = v;
+  return { body, v };
 }
 
 export type NpcBodyCommand = NpcHurt | NpcHeal | NpcGear | NpcChrome | NpcHumanity | NpcScan;
@@ -289,53 +216,25 @@ export function applyNpcBody(
 ): ApplyOutcome {
   switch (command.type) {
     case "npcHurt": {
-      const { body, v, max } = settle(npc, data, now);
-      if (v.hp === 0) return { ok: false, reason: `${npc.name} 已经倒下了；死了写 npcDeath` };
-      const armored = hasArmor(body, data);
-      const tier = armored ? LOWER_TIER[command.tier] : command.tier;
-      const damage = Math.ceil((max * DAMAGE_PERCENT[tier]) / 100);
-      v.hp = Math.max(0, v.hp - damage);
-      v.hpAt = now;
-      v.hurtAt = now;
+      const { v } = settle(npc, data, now);
+      if (v.condition === "dead") return { ok: false, reason: `${npc.name} 已经死亡` };
       const part = command.part ?? inferBodyPart(command.reason);
-      const entry: NpcInjury = {
-        id: nextInjuryId(v.injuries),
-        part,
-        tier,
-        cause: command.reason,
-        at: now,
-        treated: false,
-      };
-      v.injuries = [...v.injuries, entry].slice(-NPC_INJURY_KEPT);
-      const partTag = part ? `${BODY_PART_LABELS[part]}·` : "";
-      const lowered = armored && tier !== command.tier ? "，护甲挡掉一档" : "";
-      const down = v.hp === 0 ? "，倒下了" : "";
-      return {
-        ok: true,
-        notes: [
-          `${npc.name} ${partTag}${NPC_DAMAGE_LABELS[tier]}（${command.reason}）${lowered}${down}`,
-        ],
-      };
+      v.injuries.push({ id: `ni${v.nextInjuryId++}`, part, tier: command.tier, cause: command.reason,
+        at: now, treated: false, healsAt: command.tier === "graze" ? now + INJURY_HEAL_MINUTES.graze : null });
+      v.hurtAt = now;
+      if (command.tier === "lethal") v.condition = "dying";
+      return { ok: true, notes: [`${npc.name} ${part ? BODY_PART_LABELS[part] : "身体"}${NPC_DAMAGE_LABELS[command.tier]}：${command.reason}`] };
     }
     case "npcHeal": {
-      const { v, max } = settle(npc, data, now);
-      if (v.hp === 0 && command.how !== "ripperdoc") {
-        return { ok: false, reason: `${npc.name} 倒下了，只有义体医生（ripperdoc）能救起来` };
+      const { v } = settle(npc, data, now);
+      if (v.condition === "dead") return { ok: false, reason: `${npc.name} 已经死亡` };
+      if (command.how !== "ripperdoc") return { ok: true, notes: [`${npc.name} ${command.how === "rest" ? "休整中" : "缓解疼痛"}，具体创口仍需恢复`] };
+      for (const injury of v.injuries) {
+        injury.treated = true;
+        injury.healsAt ??= now + INJURY_HEAL_MINUTES[injury.tier];
       }
-      if (v.hp >= max && v.injuries.length === 0) return { ok: true };
-      v.hp =
-        command.how === "ripperdoc"
-          ? max
-          : Math.min(max, v.hp + Math.ceil((max * NPC_HEAL_PERCENT[command.how]) / 100));
-      v.hpAt = now;
-      if (v.hp >= max || command.how === "ripperdoc") {
-        v.injuries = [];
-      } else {
-        v.injuries = v.injuries
-          .filter((inj) => inj.tier !== "graze")
-          .map((inj) => (command.how === "maxdoc" ? { ...inj, treated: true } : inj));
-      }
-      return { ok: true, notes: [`${npc.name} ${v.hp >= max ? "伤养好了" : "伤势好转"}`] };
+      v.condition = "up";
+      return { ok: true, notes: [`${npc.name} 已接受稳定与清创处理，具体伤处进入恢复期`] };
     }
     case "npcGear": {
       const def = itemCatalog(data).get(command.item);
@@ -382,20 +281,21 @@ export function applyNpcBody(
         if (!has) return { ok: false, reason: `${npc.name} 没装 ${def.name}` };
         npc.body = { ...body, cyberware: body.cyberware.filter((c) => c !== command.cyberware) };
       }
-      // 换了义体，上限可能变了：人性压到新上限以内，生命不超过新上限
-      const after = filledBody(npc.body);
-      const v = npc.vitals as NpcVitals;
-      v.humanity = Math.min(v.humanity, npcHumanityCap(after, data));
-      v.hp = Math.min(v.hp, NPC_HP_MAX);
       const verb = command.action === "install" ? "装上了" : "拆掉了";
       const swapNote = swapped === undefined ? "" : `，换下了 ${swapped}`;
       return { ok: true, notes: npc.met ? [`${npc.name} ${verb} ${def.name}${swapNote}`] : [] };
     }
     case "npcHumanity": {
-      const { body, v } = settle(npc, data, now);
-      const delta: number = HUMANITY_KINDS[command.kind].sizes[command.size];
-      v.humanity = Math.max(0, Math.min(npcHumanityCap(body, data), v.humanity + delta));
-      // 数值和阶段都不出提示条：玩家只从正文里的征兆看出来
+      const { v } = settle(npc, data, now);
+      const i = v.symptoms.findIndex((s) => s.id === command.symptomId);
+      if (command.action === "recover") {
+        if (i < 0) return { ok: false, reason: `没有症状 ${command.symptomId}` };
+        v.symptoms.splice(i, 1);
+      } else {
+        if (!command.stage || !command.symptom) return { ok: false, reason: "需要实际症状与阶段" };
+        const entry = { id: command.symptomId, stage: command.stage, description: command.symptom, cause: command.reason, at: now };
+        if (i < 0) v.symptoms.push(entry); else v.symptoms[i] = entry;
+      }
       return { ok: true };
     }
     case "npcScan": {
@@ -481,15 +381,15 @@ export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   const injuries = projectInjuries(v.injuries);
   const woundText =
     injuries.length > 0
-      ? `${woundLabel(v.hp, v.max)}（${injurySummaryText(injuries)}）`
-      : woundLabel(v.hp, v.max);
+      ? `${woundLabel(v)}（${injurySummaryText(injuries)}）`
+      : woundLabel(v);
   const gear = gearNames(body.gear, data);
   const chrome = chromeDetails(body.cyberware, data);
   return [
     `身体状态：${woundText}`,
     `装备：${gear.length ? gear.join("、") : "没有"}`,
     `义体：${chromeText(chrome)}`,
-    `人性状态：${STAGE_LABELS[humanityStage(v.humanity)]}`,
+    `人性状态：${STAGE_LABELS[neuralStage(v)]}`,
   ].join("；");
 }
 
@@ -501,13 +401,13 @@ export function woundNote(
 ): string | undefined {
   if (!npc.vitals) return undefined;
   const v = currentVitals(npc, data, now);
-  if (v.hp >= v.max) return undefined;
+  if (v.condition === "up" && v.injuries.length === 0) return undefined;
   const injuries = projectInjuries(v.injuries);
   const head = injuries[0];
   if (head) {
-    return `${woundLabel(v.hp, v.max)}（${head.partLabel}${head.tierLabel}：${head.cause}${injuries.length > 1 ? ` 等 ${injuries.length} 处` : ""}）`;
+    return `${woundLabel(v)}（${head.partLabel}${head.tierLabel}：${head.cause}${injuries.length > 1 ? ` 等 ${injuries.length} 处` : ""}）`;
   }
-  return woundLabel(v.hp, v.max);
+  return woundLabel(v);
 }
 
 /** 玩家视图里的身体：见过的人看伤势（含具体创口）、装备；扫描过的看实际义体配置与精神/人性稳定度，不展示游戏数值 */
@@ -526,7 +426,7 @@ export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const view: NpcBodyView = {
-    wound: woundLabel(v.hp, v.max),
+    wound: woundLabel(v),
     injuries: projectInjuries(v.injuries),
     gear: gearNames(body.gear, data),
     scan: null,
@@ -536,7 +436,7 @@ export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
     ...view,
     scan: {
       chrome: chromeDetails(body.cyberware, data),
-      humanityStage: STAGE_LABELS[humanityStage(v.humanity)],
+      humanityStage: STAGE_LABELS[neuralStage(v)],
       at: v.scannedAt,
     },
   };

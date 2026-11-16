@@ -1,7 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
-import { type Keeper, rarityLock } from "../economy";
+import type { Keeper } from "../economy";
 import {
   CyberwareCatalogSchema,
   type CyberwareCommand,
@@ -84,9 +84,7 @@ export function ripperdocShelf(
   return doc.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def) return [];
-    const locked = def.iconic
-      ? "不朽义体只从剧情获得"
-      : rarityLock(def.rarity, doc.credGates, streetCred, keeper);
+    const locked = null;
     // 部位装满了才会换下旧件，换下的是最早装的那件（和 install 一致，用户 2026-10-31 改成按原作格数装）
     const inSlot = installed.filter((c) => c.slot === def.slot && c.id !== id);
     const old = inSlot.length >= SLOT_CAPACITY[def.slot] ? inSlot[0] : undefined;
