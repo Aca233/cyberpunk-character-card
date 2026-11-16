@@ -32,6 +32,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 每轮都要有一条 world：activity 写这一轮主要做了什么；time 按正文交代的经过写这一轮结束时是几点（不能早于【当前状态】里的时间；正文没交代就按场面估，几句对话一两分钟；台词里约好的以后，例如“明天这个点来”，只是约定，时间并没有过去）；换了地点写 location。
 - 正文写明玩家角色非战斗情况下挨了打、受了伤，就写 damage，照实际挨的那一下定档（graze 擦伤、heavy 重击、lethal 致命），并用 part 标出受伤部位（head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一），reason 写明具体致伤经过（如「踩空从铁棚摔下扭伤左踝」「电弧灼伤右手」）；护甲、掩体等保护已在前置裁决里计入，damage 只记最终实际创口，不能再额外降档。仅当正文写明当场断了手脚、且现场存在刀刃/霰弹/爆炸/重机械致命重创时，才写 limb（left-arm、right-arm、left-leg、right-leg）。
 - id 用小写英文和连字符；已有物品、义体、地点、人物复用表里和【当前状态】里的 id；目录外新物件按 item 的 definition 和 origin 登记，之后保持同一身份。
+- 跨地点行动里的 tension 必须写 location 指向事发地点；在原地破坏后逃走，不能把损坏记到目的地。未写地点时沿用本次行动起点。
 - 场外提问的轮次不会交给你。
 
 【建议选项】

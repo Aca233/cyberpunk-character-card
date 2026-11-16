@@ -1040,6 +1040,7 @@ export async function runNarratorTurn(
   }
 
   const facts: Record<string, unknown> = {};
+  facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
   facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
   const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);

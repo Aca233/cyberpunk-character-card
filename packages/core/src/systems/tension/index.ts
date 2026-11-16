@@ -1,6 +1,6 @@
 import { defineSystem, type RuleModule } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { WorldClockStateSchema, type WorldClockState } from "../world/schema";
+import { WorldClockStateSchema, type WorldClockState, locationCatalog } from "../world/schema";
 import { advanceTension, tensionFacts } from "./apply";
 import { type TensionCommand, TensionCommandSchema, type TensionState, TensionStateSchema, TensionSiteSchema } from "./schema";
 
@@ -29,7 +29,15 @@ export const tension = defineSystem<TensionState, TensionCommand>({
   initial: () => TensionStateSchema.parse({}),
   commands: { tension: TensionCommandSchema },
   apply(draft, command, ctx) {
-    const key = siteKey(ctx.read<WorldClockState>("world").location);
+    const clock = ctx.read<WorldClockState>("world");
+    const origin = ctx.facts.actionStartLocation;
+    const fallback = typeof origin === "string" || origin === null ? origin : clock.location;
+    const location = command.location ?? fallback;
+    if (command.location !== undefined && location !== clock.location && location !== fallback &&
+      !draft.sites[command.location] && !locationCatalog(ctx.data).has(command.location)) {
+      return { ok: false, reason: "现场变化必须指向已知地点，先登记新地点" };
+    }
+    const key = siteKey(location);
     const site = draft.sites[key] ?? TensionSiteSchema.parse({});
     if (command.triggerBackupInMinutes !== undefined && !command.backupCause) {
       return { ok: false, reason: "增援需要已发生的呼叫、警报或巡逻依据" };

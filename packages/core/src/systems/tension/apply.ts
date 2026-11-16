@@ -25,7 +25,6 @@ export function advanceTension(
   let backupEta = state.backupEtaMinutes;
   if (update.triggerBackupInMinutes !== undefined && update.backupCause) {
     backupEta = update.triggerBackupInMinutes;
-
   }
   if (update.cancelBackupReason) backupEta = null;
   if (backupEta !== null && update.elapsedMinutes && update.elapsedMinutes > 0) {
@@ -64,10 +63,10 @@ export function advanceTension(
  * 提炼为干练、零八股套话的客观现场事实简报（供裁决与正文按真实因果吸收，绝不强塞模板形容）
  */
 export function tensionFacts(state: TensionSite): string | undefined {
-  if (!state.active && !state.disabledEnemyChrome.length && state.backupEtaMinutes === null) return undefined;
+  if (!state.active && !state.disabledEnemyChrome.length && state.backupEtaMinutes === null && !state.backupArrived) return undefined;
   const lines: string[] = [`现场处境：${EXPOSURE_LABELS[state.exposure]}`];
 
-  if (state.backupEtaMinutes !== null) {
+  if (state.backupArrived || state.backupEtaMinutes !== null) {
     lines.push(
       state.backupArrived
         ? "已确认增援到达"

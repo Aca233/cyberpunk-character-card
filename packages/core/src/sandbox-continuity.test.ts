@@ -56,6 +56,21 @@ describe("持续世界的因果与时间", () => {
     const cancelled = apply(at(later, "warehouse"), [{ type: "tension", cancelBackupReason: "队长确认误报，巡逻车取消任务" }]);
     expect(currentTension(cancelled).backupEtaMinutes).toBeNull();
   });
+  it("移动指令先结算也把原地损坏留在行动起点，允许明确指定目的地", () => {
+    const moved = at(start(), "apartment");
+    const context = { ...ctx, facts: { actionStartLocation: "warehouse" } };
+    const original = registry.applyCommands(moved, [{ type: "tension", disableChrome: "仓库摄像头" }], context);
+    expect(original.results[0]?.result.ok).toBe(true);
+    expect(currentTension(original.world).disabledEnemyChrome).toEqual([]);
+    expect(currentTension(at(original.world, "warehouse")).disabledEnemyChrome).toContain("仓库摄像头");
+    const destination = registry.applyCommands(original.world, [{ type: "tension", location: "apartment", exposeWeakpoint: "门锁线路松脱" }], context);
+    expect(currentTension(destination.world).exposedWeakpoints).toContain("门锁线路松脱");
+  });
+  it("直接观察到的增援抵达也能保存并交给后续叙事", () => {
+    const world = apply(start(), [{ type: "tension", backupArrived: true,
+      backupCause: "此前报警的巡逻车已沿北路抵达门口，车上警员下车" }]);
+    expect(tensionFacts(currentTension(world))).toContain("已确认增援到达");
+  });
   it("待在同一场景也会因经过半天而推演，短时间不重复调用", () => {
     const world = start();
     const later = registry.advanceTo(world, 1720, ctx).world;

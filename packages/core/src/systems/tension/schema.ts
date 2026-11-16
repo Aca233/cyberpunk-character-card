@@ -55,6 +55,7 @@ export type TensionState = z.infer<typeof TensionStateSchema>;
 export const TensionCommandSchema = z
   .object({
     type: z.literal("tension"),
+    location: z.string().trim().min(1).optional().describe("变化实际发生的已知地点 id；移动途中或离开后记录原现场时必须写明，不能把原处损坏记到目的地"),
     active: z
       .boolean()
       .optional()
