@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { type InventoryState, itemCatalog } from "../inventory";
 import { type TravelState, vehicleCatalog } from "../travel";
 import type { WorldClockState } from "../world";
@@ -68,12 +69,26 @@ export function applyStash(
 ): ApplyOutcome {
   const box = containerOf(draft, command.where, ctx);
   if (typeof box === "string") return fail(box);
-  const name = itemCatalog(ctx.data).get(command.item)?.name ?? command.item;
+  const physical = ctx.read<CyberwareState>("cyberware").parts[command.item];
+  const name =
+    (physical
+      ? cyberwareCatalog(ctx.data).get(physical.model)?.name
+      : itemCatalog(ctx.data).get(command.item)?.name) ?? command.item;
+  const location = ctx.read<WorldClockState>("world").location;
+  const move = (action: "store" | "take") =>
+    physical
+      ? { type: "cyberware.stash", part: command.item, action, where: box.id, location }
+      : { type: "inventory.stash", action: action === "store" ? "out" : "in", id: command.item };
   const items = draft.stash[box.id] ?? {};
   if (command.action === "store") {
     const inv = ctx.read<InventoryState>("inventory");
-    const carried =
-      (inv.backpack[command.item] ?? 0) + inv.weapons.filter((w) => w === command.item).length;
+    const carried = physical
+      ? Number(
+          physical.holder === "player" &&
+            physical.location === null &&
+            physical.condition !== "scrapped",
+        )
+      : (inv.backpack[command.item] ?? 0) + inv.weapons.filter((w) => w === command.item).length;
     if (carried < 1) return fail(`背包里没有${name}；穿着的衣服或快捷栏里的药/雷需要先脱下`);
     if (
       box.kind === "trunk" &&
@@ -86,7 +101,7 @@ export function applyStash(
     return {
       ok: true,
       notes: [`把${name}放进${box.name}（${command.reason}）`],
-      emit: [{ type: "inventory.stash", action: "out", id: command.item }],
+      emit: [move("store")],
     };
   }
   const count = items[command.item] ?? 0;
@@ -96,7 +111,7 @@ export function applyStash(
   return {
     ok: true,
     notes: [`从${box.name}拿出${name}（${command.reason}）`],
-    emit: [{ type: "inventory.stash", action: "in", id: command.item }],
+    emit: [move("take")],
   };
 }
 

@@ -1,4 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
+import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { itemCatalog } from "../inventory";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { apartmentList, apartmentLocked, trunks } from "./apply";
@@ -9,11 +10,17 @@ export function safehouseView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
   const names = itemCatalog(data);
+  const parts = CyberwareStateSchema.parse(world.slices.cyberware).parts;
+  const chrome = cyberwareCatalog(data);
   const places = locationCatalog(data);
   const list = (id: string) =>
     Object.entries(state.stash[id] ?? {}).map(([item, count]) => ({
       id: item,
-      name: names.get(item)?.name ?? item,
+      name:
+        names.get(item)?.name ??
+        (parts[item]
+          ? `${chrome.get(parts[item].model)?.name ?? parts[item].model}（未安装）`
+          : item),
       count,
     }));
   const travel = world.slices.travel as

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { seededRng } from "../kernel/rng";
 import type { Command } from "../kernel/system";
 import type { WorldState } from "../kernel/world";
+import { CyberwareStateSchema } from "../systems/cyberware/schema";
 import {
   type MemoryAnchorFields,
   MemoryStateSchema,
@@ -265,6 +266,62 @@ describe("摘要质量与恢复材料", () => {
 });
 
 describe("记忆所称事实与结算证据", () => {
+  it("未安装义体实物可验证交付承诺，已安装和寄存件不算随身取得", () => {
+    const before = start();
+    const after: WorldState = {
+      ...before,
+      slices: {
+        ...before.slices,
+        cyberware: {
+          ...CyberwareStateSchema.parse(before.slices.cyberware),
+          parts: {
+            "loose-eye": {
+              id: "loose-eye",
+              model: "eye",
+              holder: "player",
+              location: null,
+              condition: "intact",
+              source: "医生交付",
+              at: before.time,
+            },
+          },
+        },
+      },
+    };
+    const body = "医生把未安装的义眼交给你。";
+    const raw = {
+      text: body,
+      anchors: [
+        {
+          id: "received-eye",
+          kind: "fact",
+          text: body,
+          people: [],
+          keywords: ["义眼"],
+          evidence: { source: "narrative", quote: body },
+          settlement: [{ type: "item", id: "loose-eye", delta: 1 }],
+        },
+      ],
+      resolve: [],
+    };
+    expect(readSceneMemory(raw, before, after, { text: "买下但不安装" }, body).notes).toEqual([]);
+    for (const holder of ["installed", "stash:locker"]) {
+      const parts = CyberwareStateSchema.parse(after.slices.cyberware).parts;
+      const world = {
+        ...after,
+        slices: {
+          ...after.slices,
+          cyberware: {
+            ...CyberwareStateSchema.parse(after.slices.cyberware),
+            parts: { "loose-eye": { ...parts["loose-eye"], holder } },
+          },
+        },
+      };
+      expect(
+        readSceneMemory(raw, before, world, { text: "买下但不安装" }, body).command,
+      ).toBeUndefined();
+    }
+  });
   it("玩家说要买药不能凭同一引文升级为已买到；转述保留为未核实说法", () => {
     const before = start();
     const said = { text: "明天我想去诊所买药。" };

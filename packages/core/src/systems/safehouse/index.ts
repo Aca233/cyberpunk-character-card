@@ -17,7 +17,7 @@ import { safehouseView } from "./view";
 /** 安全屋：开局按出身给一处住所；存放箱与后备箱 */
 export const safehouse = defineSystem<SafehouseState, StashCommand, SafehouseInternal>({
   id: "safehouse",
-  dependsOn: ["world", "inventory", "travel"],
+  dependsOn: ["world", "inventory", "travel", "cyberware"],
   state: SafehouseStateSchema,
   initial: () => ({ homes: [], stash: {}, trophies: [] }),
   commands: { stash: StashCommandSchema },

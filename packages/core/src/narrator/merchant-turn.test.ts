@@ -24,6 +24,14 @@ const data = {
   ],
   shops: [
     {
+      id: "street-shop",
+      name: "街边店",
+      keeper: "店员",
+      location: "outside",
+      priceFactor: 1,
+      shelf: ["chip"],
+    },
+    {
       id: "first",
       name: "前柜台",
       keeper: "甲",
@@ -114,6 +122,27 @@ const trade = (item = "chip", offer?: string) => ({
 });
 
 describe("商店交易贯穿判断、正文和抽取", () => {
+  it("同轮多地点按先后抵达再交易，两家库存各扣一次", async () => {
+    const { result } = await run({
+      buy: [
+        { item: "chip", with: "actual" },
+        { item: "chip", with: "street-shop", destination: "outside" },
+      ],
+      changes: [
+        trade(),
+        { type: "world", location: "outside", activity: "travel", time: 1010 },
+        { ...trade(), with: "street-shop" },
+      ],
+    });
+    if (result.kind !== "done") throw new Error("未完成");
+    expect(result.turn.unsettled).toBeUndefined();
+    const inventory = InventoryStateSchema.parse(result.turn.world.slices.inventory);
+    expect(inventory.backpack.chip).toBe(2);
+    expect(inventory.merchants.actual?.stock.chip).toBe(2);
+    expect(inventory.merchants["street-shop"]?.stock.chip).toBe(2);
+    expect(EconomyStateSchema.parse(result.turn.world.slices.economy).eddies).toBe(9570);
+    expect(WorldClockStateSchema.parse(result.turn.world.slices.world).location).toBe("outside");
+  });
   it("同地点多店按实际对方报价，正文、按钮与文字成交同价同库存", async () => {
     const { result, requests, world } = await run({
       buy: { item: "chip", with: "actual" },
@@ -133,7 +162,7 @@ describe("商店交易贯穿判断、正文和抽取", () => {
     expect(result.turn.world.slices.inventory).toEqual(button.world.slices.inventory);
     expect(EconomyStateSchema.parse(result.turn.world.slices.economy).eddies).toBe(9820);
     expect(
-      InventoryStateSchema.parse(result.turn.world.slices.inventory).shopStock.first,
+      InventoryStateSchema.parse(result.turn.world.slices.inventory).merchants.first,
     ).toBeUndefined();
     const prompt =
       requests
@@ -265,8 +294,8 @@ describe("商店交易贯穿判断、正文和抽取", () => {
     expect(result.turn.unsettled).toBeUndefined();
     expect(EconomyStateSchema.parse(result.turn.world.slices.economy).eddies).toBe(9820);
     expect(
-      InventoryStateSchema.parse(result.turn.world.slices.inventory).shopStock.actual?.sold.chip,
-    ).toBe(1);
+      InventoryStateSchema.parse(result.turn.world.slices.inventory).merchants.actual?.stock.chip,
+    ).toBe(2);
   });
 
   it("身份或货源未确定不能以目录价格冒充可成交报价", () => {

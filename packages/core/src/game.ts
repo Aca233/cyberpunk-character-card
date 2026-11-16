@@ -10,6 +10,7 @@ import {
   voidedSeqs,
 } from "./kernel/turnlog";
 import type { WorldState } from "./kernel/world";
+import { looseCyberwareView } from "./loose-cyberware-view";
 import { currentOffers } from "./narrator/pending";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
@@ -22,6 +23,7 @@ import type { combatView } from "./systems/combat";
 import {
   type CyberwareDef,
   CyberwareStateSchema,
+  type cyberwarePartsView,
   type cyberwareView,
   type Ripperdoc,
   type ripperdocDebtsView,
@@ -653,6 +655,11 @@ export function projectState(
   const health = HealthStateSchema.parse(world.slices.health);
   const turns = effectiveTurns(records);
   const feed = registry.feed({ world, records, data });
+  const carried = looseCyberwareView(
+    views.inventory as ReturnType<typeof inventoryView>,
+    views.names as ReturnType<typeof namesView>,
+    views.cyberwareParts as ReturnType<typeof cyberwarePartsView>,
+  );
 
   return {
     version: logVersion(records),
@@ -677,11 +684,11 @@ export function projectState(
     weather: clockView.weather,
     location: clockView.location,
     /** 界面显示用的中文名，查不到时为 id 或 null */
-    names: views.names as ReturnType<typeof namesView>,
+    names: carried.names,
     scene: clockView.scene,
     health: views.health as ReturnType<typeof healthView>,
     humanity: views.humanity as ReturnType<typeof humanityView>,
-    inventory: views.inventory as ReturnType<typeof inventoryView>,
+    inventory: carried.inventory,
     /** 装着的义体，按装上的先后 */
     cyberware: views.cyberware as ReturnType<typeof cyberwareView>,
     /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */

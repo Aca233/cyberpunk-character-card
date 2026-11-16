@@ -1,7 +1,8 @@
 import type { WorldState } from "../kernel/world";
 import type { TurnInput } from "../schemas/turn";
+import { CyberwareStateSchema } from "../systems/cyberware/schema";
 import { EconomyStateSchema } from "../systems/economy/schema";
-import { type InventoryState, InventoryStateSchema } from "../systems/inventory/schema";
+import { InventoryStateSchema } from "../systems/inventory/schema";
 import {
   type MemoryAnchor,
   type MemorySceneCommand,
@@ -117,8 +118,11 @@ export interface SceneSummarySource {
   readonly narrative: string;
 }
 
-function itemCount(state: InventoryState, id: string): number {
+function itemCount(world: WorldState, id: string): number {
+  const state = InventoryStateSchema.parse(world.slices.inventory);
+  const part = CyberwareStateSchema.parse(world.slices.cyberware).parts[id];
   return (
+    Number(part?.holder === "player" && part.location === null && part.condition !== "scrapped") +
     (state.backpack[id] ?? 0) +
     state.weapons.filter((value) => value === id).length +
     Object.values(state.clothing).filter((value) => value === id).length +
@@ -189,8 +193,7 @@ export function readSceneMemory(
         claim.type === "money"
           ? EconomyStateSchema.parse(after.slices.economy).eddies -
             EconomyStateSchema.parse(before.slices.economy).eddies
-          : itemCount(InventoryStateSchema.parse(after.slices.inventory), claim.id) -
-            itemCount(InventoryStateSchema.parse(before.slices.inventory), claim.id);
+          : itemCount(after, claim.id) - itemCount(before, claim.id);
       if (actual !== claim.delta)
         errors.push(
           `锚点 ${entry.id} 声称的${claim.type === "money" ? "欧元" : claim.id}净变化 ${claim.delta} 与本轮实际结算 ${actual} 不符`,

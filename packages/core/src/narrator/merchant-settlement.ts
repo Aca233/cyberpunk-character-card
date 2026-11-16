@@ -3,7 +3,7 @@ import type { WorldState } from "../kernel/world";
 import { EconomyStateSchema, isBigSpend } from "../systems/economy/schema";
 import { registry } from "../systems/registry";
 import { autoMove, tripFact, tripWorldOf } from "../systems/travel";
-import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type BigSpend,
   type BuyProposal,
@@ -20,6 +20,30 @@ export interface PreparedPurchase {
 
 function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
   const reason = "已授权交易的只读核验";
+  if (p.serviceOrder && p.serviceAction)
+    return {
+      type: "cyberware.service",
+      action: p.serviceAction,
+      id: p.serviceOrder,
+      request:
+        p.serviceAction === "book"
+          ? {
+              action: p.operation ?? "install",
+              doc: p.with,
+              id: p.cyberware,
+              part: p.part,
+              replace: p.replace,
+              disposition: p.disposition,
+              tradeIn: p.tradeIn,
+              credit: p.credit,
+              offer: p.offer,
+            }
+          : undefined,
+      scheduledAt: p.scheduledAt,
+      startAt: p.startAt,
+      reason,
+      evidence: reason,
+    };
   if (p.cyberware !== undefined || p.operation === "repay")
     return {
       type: "cyberware",
@@ -30,6 +54,9 @@ function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
       tradeIn: p.tradeIn,
       credit: p.credit,
       offer: p.offer,
+      part: p.part,
+      disposition: p.disposition,
+      startAt: p.startAt,
       reason,
     };
   if (q.ok && !q.settlement) return { type: "vehicle", action: "buy", model: p.item, reason };
@@ -50,33 +77,63 @@ function atDestination(
   data: Readonly<Record<string, unknown>>,
   raw: string,
 ): WorldState {
-  const places = withSavedPlaces(data, world);
-  const catalog = locationCatalog(places);
-  const to = catalog.get(raw) ?? [...catalog.values()].find((p) => p.name === raw);
-  if (!to || WorldClockStateSchema.parse(world.slices.world).location === to.id) return world;
-  const move = autoMove(tripWorldOf(world), places, to.id);
-  const ctx: ApplyContext = { rng: { roll: () => 1 }, data: places };
-  if (move.kind === "trip")
+  return applyMovement(
+    world,
+    { type: "world", location: raw, activity: "travel" },
+    {
+      rng: { roll: () => 1 },
+      data,
+    },
+  ).world;
+}
+
+/** 按指令原有先后移动，不能把第二家店的出行挪到第一笔交易之前。 */
+function applyMovement(world: WorldState, command: Command, ctx: ApplyContext): ApplyBatchResult {
+  if (command.type !== "world" || typeof command.location !== "string")
+    return registry.applyCommands(world, [command], ctx);
+  // 首访 poi: 也先在临时状态解析地点；不能只认识已经存过档的地点。
+  const located = registry.applyCommands(world, [{ ...command, time: world.time }], ctx);
+  if (!located.results[0]?.result.ok) return located;
+  const target = WorldClockStateSchema.parse(located.world.slices.world).location;
+  if (!target) return registry.applyCommands(world, [command], ctx);
+  const data = withSavedPlaces(ctx.data ?? {}, located.world);
+  const move = autoMove(tripWorldOf(world), data, target);
+  if (move.kind === "none") return registry.applyCommands(world, [command], ctx);
+  const statedAt = typeof command.time === "number" ? command.time : world.time;
+  if (move.kind === "near")
     return registry.applyCommands(
       world,
-      [{ type: "travel", to: to.id, mode: move.trip.route.mode }],
-      {
-        ...ctx,
-        facts: { travel: tripFact(move.trip) },
-      },
-    ).world;
-  return registry.applyCommands(
+      [
+        {
+          ...command,
+          time: Math.max(statedAt, world.time + move.minutes),
+        },
+      ],
+      ctx,
+    );
+  const travel = registry.applyCommands(
     world,
-    [
-      {
-        type: "world",
-        location: to.id,
-        activity: "travel",
-        time: world.time + (move.kind === "near" ? move.minutes : 0),
-      },
-    ],
+    [{ type: "travel", to: target, mode: move.trip.route.mode }],
+    {
+      ...ctx,
+      data,
+      facts: { ...ctx.facts, travel: tripFact(move.trip) },
+    },
+  );
+  if (!travel.results[0]?.result.ok)
+    return { ...travel, results: travel.results.map((r) => ({ ...r, command })) };
+  // 用原始地点数据登记首访地点，再保留正文描述的额外经过时间。
+  const arrival = registry.applyCommands(
+    travel.world,
+    [{ ...command, time: Math.max(statedAt, travel.world.time) }],
     ctx,
-  ).world;
+  );
+  if (!arrival.results[0]?.result.ok) return { world, patches: [], results: arrival.results };
+  return {
+    world: arrival.world,
+    patches: [...travel.patches, ...arrival.patches],
+    results: [...travel.results, ...arrival.results],
+  };
 }
 
 /** 在临时状态里依次核对库存、钱包和义体槽；不会写日志、调用模型或消耗正式随机流。 */
@@ -100,6 +157,7 @@ export function preparePurchases(
       const trial = registry.applyCommands(preview, [purchaseCommand(proposal, quote)], {
         rng: { roll: () => 1 },
         data,
+        facts: { tradeNarrative: "已授权交易的只读核验", tradeQuote: quote.settlement },
       });
       const failure = trial.results.find((r) => !r.result.ok)?.result;
       if (failure && !failure.ok) quote = { ok: false, reason: failure.reason };
@@ -136,9 +194,23 @@ function commandProposal(command: Command): BuyProposal | undefined {
             cyberware: command.id,
             with: command.doc,
           }
-        : command.type === "vehicle" && command.action === "buy"
-          ? { item: command.model }
-          : undefined;
+        : command.type === "cyberware.service" && command.action !== "interrupt"
+          ? {
+              ...(typeof command.request === "object" && command.request !== null
+                ? command.request
+                : {}),
+              action: undefined,
+              operation: (command.request as Record<string, unknown> | undefined)?.action,
+              cyberware: (command.request as Record<string, unknown> | undefined)?.id,
+              with: (command.request as Record<string, unknown> | undefined)?.doc,
+              serviceOrder: command.id,
+              serviceAction: command.action,
+              scheduledAt: command.scheduledAt,
+              startAt: command.startAt,
+            }
+          : command.type === "vehicle" && command.action === "buy"
+            ? { item: command.model }
+            : undefined;
   if (!raw) return undefined;
   const parsed = BuyProposalSchema.safeParse(raw);
   return parsed.success ? parsed.data : undefined;
@@ -188,6 +260,7 @@ export function applyMerchantCommands(
   const results: ApplyBatchResult["results"][number][] = [];
   const remaining = [...purchases];
   for (const command of commands) {
+    let executable = command;
     let reason: string | undefined;
     let facts = ctx.facts ?? {};
     let authorized = -1;
@@ -201,9 +274,15 @@ export function applyMerchantCommands(
         const actual = purchaseQuote(current, ctx.data ?? {}, {
           ...proposal,
           destination: candidate.proposal.destination,
+          startAt: proposal.startAt ?? candidate.quote.settlement?.startsAt,
         });
         if (actual.ok && actual.quoteKey === candidate.quote.quoteKey) {
           authorized = i;
+          if (
+            (command.type === "cyberware" || command.type === "cyberware.service") &&
+            command.startAt === undefined
+          )
+            executable = { ...command, startAt: actual.settlement?.startsAt };
           break;
         }
       }
@@ -219,7 +298,7 @@ export function applyMerchantCommands(
       results.push({ command, result: { ok: false, reason } });
       continue;
     }
-    const applied = registry.applyCommands(current, [command], { ...ctx, facts });
+    const applied = applyMovement(current, executable, { ...ctx, facts });
     current = applied.world;
     patches.push(...applied.patches);
     results.push(...applied.results);

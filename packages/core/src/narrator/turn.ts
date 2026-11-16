@@ -34,14 +34,7 @@ import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { currentTension } from "../systems/tension";
-import {
-  autoMove,
-  type PlannedTrip,
-  planTrip,
-  tripFact,
-  tripText,
-  tripWorldOf,
-} from "../systems/travel";
+import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
 import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type Choice,
@@ -144,6 +137,13 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   money: "欧元",
   trade: "买卖",
   cyberware: "义体交易",
+  "cyberware.service": "义体服务",
+  "cyberware.part": "义体实物",
+  "cyberware.supply": "诊所供货",
+  "cyberware.clinic": "诊所经营",
+  shopOrder: "商店订货",
+  shopBusiness: "商店经营",
+  "logistics.route": "供货路况",
   vehicle: "车辆变更",
   "commerce.offer": "交易报价",
   "commerce.withdraw": "报价撤回",
@@ -1226,35 +1226,6 @@ export async function runNarratorTurn(
   }
   b.checkAborted();
 
-  // 模型直接在 world 里写了 location（用户定的"自动转"，2026-10-30）：500 米内按步行补上用时，
-  // 更远的转成一次出行，照路线表扣时间和路费；玩家在路线面板确认过出行的这一轮不管
-  if (!trip && !ooc && !inFlashback) {
-    const moveData = withSavedPlaces(deps.data ?? {}, world);
-    for (const [i, c] of commands.entries()) {
-      if (c.type !== "world") continue;
-      const loc = (c as { location?: unknown }).location;
-      if (typeof loc !== "string") continue;
-      const move = autoMove(tripWorldOf(world), moveData, loc);
-      if (move.kind === "near") {
-        const time = (c as { time?: unknown }).time;
-        const at = world.time + move.minutes;
-        if (typeof time !== "number" || time < at) {
-          commands[i] = { ...c, time: at } as Command;
-          b.notes.push(`就在附近，走过去 ${move.minutes} 分钟（代码按步行算）`);
-        }
-      } else if (move.kind === "trip") {
-        // 到达和时间由出行结算，world 里的 location 去掉，免得绕过路线
-        trip = move.trip;
-        const { location: _location, ...rest } = c as Command & { location?: unknown };
-        commands[i] = rest as Command;
-        b.notes.push(
-          `远处的地点自动转成出行：${move.trip.route.label}去${move.trip.to.name}，${move.trip.route.minutes} 分钟`,
-        );
-      }
-      break;
-    }
-  }
-
   // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
   if (settle && shape.sceneEnd === true) {
     if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
@@ -1277,7 +1248,10 @@ export async function runNarratorTurn(
   // 躲在自己的安全屋：heat 不能读安全屋（safehouse→travel→heat 会成环），这一轮没出门才算
   const here = (world.slices.world as { location?: unknown } | undefined)?.location;
   const homes = (world.slices.safehouse as { homes?: { location?: unknown }[] } | undefined)?.homes;
-  if (!trip && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
+  const leaves = commands.some(
+    (c) => c.type === "world" && c.location !== undefined && c.location !== here,
+  );
+  if (!trip && !leaves && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
     facts.hideout = true;
   }
   // 队员名单：npc 不能读小队（squad 读 npc），写 npcDeath 杀队员时按它走同一道保底

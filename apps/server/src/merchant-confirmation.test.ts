@@ -300,7 +300,7 @@ describe("服务器绑定具体交易的大额确认", () => {
     );
     const afterInventory = inventoryRules.InventoryStateSchema.parse(after.slices.inventory);
     expect(afterInventory.backpack.liberty ?? 0).toBe((beforeInventory.backpack.liberty ?? 0) + 1);
-    expect(afterInventory.shopStock.wilson?.sold.liberty).toBe(1);
+    expect(afterInventory.merchants.wilson?.stock.liberty).toBe(1);
     const repeated = await call(fixture.local, `/saves/${fixture.id}/turns`, {
       requestId: "purchase-confirmed",
       baseVersion: 0,
