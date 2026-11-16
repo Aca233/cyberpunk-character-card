@@ -189,6 +189,32 @@ describe("自由输入义体服务与原面板衔接", () => {
     expect(done.unsettled).toBeDefined();
     expect(cash(done.world)).toBe(10000);
     expect(chrome(done.world).installed).toEqual([]);
+    const base = initial();
+    const old: WorldState = {
+      ...base,
+      slices: {
+        ...base.slices,
+        cyberware: {
+          ...chrome(base),
+          installed: [{ id: "old-eye", slot: "eyes", installedAt: 0 }],
+        },
+      },
+    };
+    const changed = await turn(old, { ...proposal, replace: "old-eye", disposition: "keep" }, [
+      { ...command, replace: "old-eye", disposition: "sell" },
+    ]);
+    expect(changed.unsettled).toBeDefined();
+    expect(cash(changed.world)).toBe(10000);
+    expect(chrome(changed.world).installed[0]?.id).toBe("old-eye");
+  });
+
+  it("判断也不能把新手术倒填到本轮之前以跳过耗时", async () => {
+    const done = await turn(initial(), { ...proposal, startAt: 900 }, [
+      { ...command, startAt: 900 },
+    ]);
+    expect(done.unsettled).toBeDefined();
+    expect(cash(done.world)).toBe(10000);
+    expect(chrome(done.world).installed).toEqual([]);
   });
 
   it("预约、开工、完成贯穿判断与抽取，开工时只收一次钱", async () => {

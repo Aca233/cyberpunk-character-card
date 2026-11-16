@@ -3,7 +3,7 @@ import type { WorldState } from "../kernel/world";
 import { EconomyStateSchema, isBigSpend } from "../systems/economy/schema";
 import { registry } from "../systems/registry";
 import { autoMove, tripFact, tripWorldOf } from "../systems/travel";
-import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import { formatGameTime, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type BigSpend,
   type BuyProposal,
@@ -16,6 +16,7 @@ import {
 export interface PreparedPurchase {
   readonly proposal: BuyProposal;
   readonly quote: PurchaseQuote;
+  readonly journey?: string;
 }
 
 function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
@@ -150,9 +151,27 @@ export function preparePurchases(
   const purchases: PreparedPurchase[] = [];
   let eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
   for (const proposal of intent === undefined ? [] : Array.isArray(intent) ? intent : [intent]) {
-    if (proposal.destination) preview = atDestination(preview, data, proposal.destination);
+    let journey: string | undefined;
+    if (proposal.destination) {
+      const before = preview;
+      preview = atDestination(preview, data, proposal.destination);
+      if (
+        WorldClockStateSchema.parse(before.slices.world).location !==
+        WorldClockStateSchema.parse(preview.slices.world).location
+      ) {
+        const cost =
+          EconomyStateSchema.parse(before.slices.economy).eddies -
+          EconomyStateSchema.parse(preview.slices.economy).eddies;
+        journey = `先前往 ${proposal.destination}，出行耗时 ${preview.time - before.time} 分钟，路费 ${cost} 欧元，抵达 ${formatGameTime(preview.time)}。下列交易已按抵达后的余额核对；到达与路费由出行统一结算，不再另列扣款。`;
+      }
+    }
     if (purchases.length === 0) eddies = EconomyStateSchema.parse(preview.slices.economy).eddies;
-    let quote = purchaseQuote(preview, data, proposal);
+    let quote: PurchaseQuote =
+      proposal.startAt !== undefined &&
+      proposal.startAt < preview.time &&
+      (!proposal.serviceAction || ["book", "start", "resume"].includes(proposal.serviceAction))
+        ? { ok: false, reason: "开始时间不能早于本轮实际可开始时刻；过去的手术只能按已有订单完成" }
+        : purchaseQuote(preview, data, proposal);
     if (quote.ok) {
       const trial = registry.applyCommands(preview, [purchaseCommand(proposal, quote)], {
         rng: { roll: () => 1 },
@@ -163,7 +182,7 @@ export function preparePurchases(
       if (failure && !failure.ok) quote = { ok: false, reason: failure.reason };
       else preview = trial.world;
     }
-    purchases.push({ proposal, quote });
+    purchases.push({ proposal, quote, ...(journey ? { journey } : {}) });
   }
   const valid = purchases.flatMap(({ quote }) => (quote.ok ? [quote] : []));
   const price = valid.reduce((total, q) => total + q.price, 0);

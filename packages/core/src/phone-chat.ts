@@ -287,7 +287,7 @@ export function buildPhoneChatPrompt(
   const phoneStatus = evaluatePhoneAvailability(npc, world.time);
   const doc = ripperdocList(data).find((d) => d.keeperNpc === npc.id);
   const ownedShops = shopList(data).filter((s) => s.keeperNpc === npc.id);
-  const docDebt = doc ? debts.find((d) => d.doc === doc.id) : undefined;
+  const docDebts = doc ? debts.filter((d) => d.doc === doc.id) : [];
   const squadMember = squad.members.find((m) => m.npc === npc.id);
 
   const urgentLines: string[] = [];
@@ -335,7 +335,7 @@ export function buildPhoneChatPrompt(
     npc.secret ? `秘密（暗中把握，别直接抖露）：${npc.secret}` : "",
     npc.doing ? `眼下近况：${npc.doing.text}` : "",
     doc
-      ? `服务身份：义体医生（${doc.name}）${docDebt ? `，玩家尚欠 ${docDebt.amount} 欧元（期限 ${formatGameTime(docDebt.due)}）` : ""}`
+      ? `服务身份：义体医生（${doc.name}）${docDebts.length ? `，玩家欠款：${docDebts.map((d) => `${d.amount} 欧元（${d.due === null ? "未约定期限" : `期限 ${formatGameTime(d.due)}`}）`).join("；")}` : ""}`
       : "",
     ownedShops.length > 0
       ? `服务身份：经营店铺（${ownedShops.map((s) => s.name).join("、")}）`

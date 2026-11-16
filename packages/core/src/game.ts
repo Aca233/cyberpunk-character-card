@@ -727,7 +727,18 @@ export function projectState(
       return (views.npcs as ReturnType<typeof npcsView>).map((n) => {
         const doc = n.met ? docs.find((d) => d.keeperNpc === n.id) : undefined;
         const ownedShops = n.met ? stores.filter((s) => s.keeperNpc === n.id) : [];
-        const debt = doc ? debts.find((d) => d.doc === doc.id) : undefined;
+        const owed = doc ? debts.filter((d) => d.doc === doc.id) : [];
+        const debt =
+          owed.length > 0
+            ? {
+                amount: owed.reduce((sum, d) => sum + d.amount, 0),
+                due: [
+                  ...new Set(
+                    owed.map((d) => (d.due === null ? "未约定期限" : formatGameTime(d.due))),
+                  ),
+                ].join(" / "),
+              }
+            : null;
         const services =
           doc || ownedShops.length > 0
             ? {
@@ -739,7 +750,7 @@ export function projectState(
                       locationName: placeLabel(doc.location),
                       blackMarket: doc.blackMarket,
                       credit: doc.credit,
-                      debt: debt ? { amount: debt.amount, due: formatGameTime(debt.due) } : null,
+                      debt,
                     }
                   : null,
                 shops: ownedShops.map((s) => ({

@@ -776,7 +776,8 @@ export async function runNarratorTurn(
         !(plan.input.spendOk === true && deps.approvedSpend === confirmation.quoteKey)))
   )
     return { kind: "confirmSpend", ...confirmation };
-  for (const { proposal, quote } of prepared.purchases) {
+  for (const { proposal, quote, journey } of prepared.purchases) {
+    if (journey) decided.push(`【成交前出行】${journey}`);
     decided.push(
       quote.ok
         ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；只有玩家已接受并确实交付才成交，不得另改交易对象、价钱或旧件处理。`
