@@ -131,6 +131,12 @@ export const CityStateSchema = z.object({
   /** 上次场外推演时是第几场、游戏时间几点；还没推演过为 null */
   lastScene: z.number().int().nullable().default(null),
   lastAt: z.number().int().nullable().default(null),
+  /** 已成功推演到的回合序号；-1 表示尚未处理任何回合。 */
+  processedThrough: z.number().int().min(-1).default(-1),
+  /** 失败尝试独立记录，不覆盖最后成功的时刻。 */
+  lastAttemptAt: z.number().int().nullable().default(null),
+  retryAt: z.number().int().nullable().default(null),
+  failures: z.number().int().min(0).default(0),
   // 谁来联系玩家改由主持人定，不再记挑人的时间（用户 2026-11-01 定的「全改」第 4 步）
 });
 export type CityState = z.infer<typeof CityStateSchema>;
@@ -156,10 +162,15 @@ export type CityBulletinCommand = z.infer<typeof CityBulletinCommandSchema>;
 /** 只能由代码发出：记下这次场外推演的场次和时间 */
 export const CityRanSchema = z.object({
   type: z.literal("city.ran"),
+  through: z.number().int().min(-1),
 });
+
+/** 解析、业务校验或上游拒答失败：保留待推演事项，按游戏时间退避。 */
+export const CityFailedSchema = z.object({ type: z.literal("city.failed") });
 
 export type CityInternal =
   | CityEventCommand
   | CityRumorCommand
   | CityBulletinCommand
+  | z.infer<typeof CityFailedSchema>
   | z.infer<typeof CityRanSchema>;

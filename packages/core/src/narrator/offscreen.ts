@@ -3,6 +3,7 @@ import type { LlmMessage } from "../kernel/ports";
 import type { Command } from "../kernel/system";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
+import { TurnInputSchema } from "../schemas/turn";
 import { CRED_SIZES } from "../systems/character";
 import {
   BulletinFieldsSchema,
@@ -19,7 +20,7 @@ import {
   rumorSection,
 } from "../systems/city";
 import { agendaCatalog } from "../systems/factions";
-import { JobOfferSchema, JobsStateSchema, jobTemplateSection } from "../systems/jobs";
+import { JobOfferSchema, JobsStateSchema } from "../systems/jobs";
 import {
   attitudeLabel,
   NO_FACTION,
@@ -38,13 +39,13 @@ import {
 } from "../systems/phone";
 import { SquadStateSchema } from "../systems/squad";
 import {
+  THREAD_KIND_LABELS,
   THREADS_MAX,
   ThreadCloseSchema,
   ThreadDeferSchema,
   ThreadOpenSchema,
   ThreadStepCommandSchema,
   ThreadsStateSchema,
-  threadSection,
 } from "../systems/threads";
 import {
   formatGameTime,
@@ -61,11 +62,8 @@ import { BOOKKEEPING_BASE, userMessage } from "./prompts/layers";
 export const OFFSCREEN_TEMPERATURE = 0.6;
 /** 一次最多更新几个人的近况 */
 export const OFFSCREEN_NPCS = 4;
-/** 推演窗口：上次推演以来最多几轮正文、每轮最多几个字 */
-const WINDOW_TURNS = 8;
-const WINDOW_CHARS = 600;
-/** 最多带几张人物卡 */
-const MAX_CARDS = 12;
+/** 除本批因果链必需人物外，再补几名最近见过的人；必需人物不截断。 */
+const EXTRA_CARDS = 4;
 
 /**
  * 场外推演各项的条数只是建议，超了照收，到建议的这么多倍才截（用户 2026-11-01 定的「全改」第 2 步：
@@ -91,7 +89,7 @@ export function presentNpcs(before: WorldState, after: WorldState): Set<string> 
   );
 }
 
-/** 到期事件、经过的游戏时间或场景批次触发；每批更新 lastAt，避免同一到期事件反复调用。 */
+/** 到期事件、游戏时间或场景批次触发；成功才移动游标，失败按游戏时间退避。 */
 export function offscreenDue(
   before: WorldState,
   after: WorldState,
@@ -100,6 +98,7 @@ export function offscreenDue(
   const was = WorldClockStateSchema.parse(before.slices.world);
   const now = WorldClockStateSchema.parse(after.slices.world);
   const city = CityStateSchema.parse(after.slices.city ?? {});
+  if (city.retryAt !== null) return after.time >= city.retryAt;
   if (now.scene !== was.scene && now.scene - (city.lastScene ?? 0) >= every) return true;
   // 统一看新单子的期限，不再分别催势力和宿敌（用户 2026-11-01 定的"全改"第 4 步）
   // 同一个期限只触发一次额外推演；遗漏的留到正常推演再提醒，避免每轮反复调用
@@ -232,7 +231,9 @@ export function offscreenFixers(
  * 托的事也不一定是真心的（用户定的，2026-10-30："不一定是真的求助信息啊"）
  */
 const OFFSCREEN_STAGE = `【这一步：场外推演】
-玩家刚收了一场。你负责推演玩家没看着的地方：这段时间里，夜之城有什么在变？
+这一批推进到当前游戏时间。你负责推演玩家没看着的地方：这段时间里，夜之城有什么在变？
+- 【上次成功推演后的正文】是尚未处理的新事实，当前状态是本轮结算后的事实。沿着已有因果继续，已成功处理的事不重复制造；同一游戏分钟也可能发生多轮行动。
+- 【人物索引】列出所有人物的身份和边界；【人物】详卡是本批相关人物。只有索引、没有详卡的人也持续存在，但不能凭空补写其秘密、动机或玩家不曾建立的关系；只写已有事实支持的动作。幕后真相不直接变成玩家或 NPC 的共同知识。
 - 只推演已经具备条件的事：正文里提到、但没在玩家眼前发生的（有人说哪里打起来了、新闻里提到的、委托里的对手、玩家做完事留下的余波），帮派抢地盘、公司的动作、夜之城警察局和暴恐机动队的反应、中间人的生意。不凭空制造戏剧性；没有值得记的，events、npcs、messages 都输出空的（【城里在发酵的事】里已到点的，写一步或往后推）。
 - 和现有状态自洽：地点、势力、人物的生死和关系都不能矛盾；不写玩家角色做了什么、说了什么、想了什么。
 - 【城里的动静】里已有的照原 id 更新（升级、平息、结束），整条重写；新的事才起新 id。
@@ -256,7 +257,7 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 熟人托事：【能联系玩家的人】里标了「可以托事」的人，也可以发消息托玩家办件事，和中间人派单共用这一单的名额：jobs 里这一单不写 fixer，由他本人发的那条消息的 job 写这一单的 id。托的事不一定是真心的：可以是真的求救、谈一笔交易、递一个活，也可以是借口、圈套、拿玩家当枪使、把玩家引到某个地方（交恶怀恨、秘密里有图谋、近况里正走投无路的人更可能这样）。消息、title、client 都照他对玩家说的写（client 写他自称的雇主，一般就是他自己或他要护着的人），真相和他真正的打算写进 twist，只有你知道；真心的托事 twist 可以不写。要接着他的近况、心事、挂着的人情或仇、他的诉求和秘密写，说得过去才托；只是想闲聊的就发闲聊消息，不硬塞委托。`;
 
 const OFFSCREEN_OUTPUT = `【输出格式】
-只输出一个 JSON 对象，不要代码块：
+只输出一个 JSON 对象，不要代码块。events、npcs、messages 必须有数组，没有变化写 []；其他数组可省略，给出时也必须是数组：
 {"events": [{"id": "小写英文和连字符", "title": "24 字以内", "body": "160 字以内：发生了什么、谁在动、接下来可能怎样", "district": "城区，可省", "status": "brewing|heating|cooling|over", "weight": "minor|normal|major", "player": "可省：玩家角色是当事人时写 true", "cred": "可省：small|medium|large"}], "npcs": [{"id": "人物 id", "doing": "最近在做什么，一句话，80 字以内", "location": "可省：这段时间去了别处时写现在在的地点 id"}], "pasts": [{"id": "【该压成摘要的经历】里的人物 id", "text": "${PAST_MAX} 字以内的经历摘要"}], "ties": [{"a": "人物 id", "b": "另一个人物 id", "aToB": "a 眼里的 b 是他什么人，一句话", "bToA": "b 眼里的 a 是他什么人，一句话", "open": "可省：私下的、外人不该知道的写 false"}], "rumors": [{"event": "可省：说的是哪条动静的 id", "text": "街上传的原话，80 字以内", "truth": "true|exaggerated|garbled", "reach": "street|district|city", "district": "reach 不是 city 时写城区", "player": "说的是玩家角色时写 true，可省"}], "bulletin": {"kind": "news|radio", "title": "24 字以内", "text": "200 字以内的播报原文", "threads": ["可省：播了的【城里在发酵的事】事项 id"]}, "deaths": [{"id": "原作人物 id", "cause": "80 字以内：怎么死的、谁干的"}], "messages": [{"from": "人物或中间人 id", "text": "消息原文：短、口语", "job": "可省：派单消息写委托 id"}], "jobs": [{"id": "小写英文和连字符，不和已有委托重复", "title": "24 字以内", "kind": "可省：委托类型", "fixer": "中间人派单写【能派单的中间人】里的 id；熟人托事不写", "client": "真正的雇主", "location": "可省：地点 id 或中文地名", "risk": 1, "reward": 1500, "due": "可省：YYYY-MM-DD HH:mm", "conflict": "谁想要什么、谁会受害", "twist": "可省：只有你知道的转折"}], "threads": [{"type": "thread.step", "id": "【城里在发酵的事】里的事项 id", "text": "160 字以内：实际发生了什么，只给主持人看", "news": "80 字以内：传开后的公开说法，不泄露幕后秘密", "stage": "可省：80 字以内的当前阶段", "turf": null, "days": 3}]}
 status：brewing 在酝酿，heating 在升级，cooling 在平息，over 结束了。weight：minor 街角小事，normal 几个街区在传，major 上了 N54 头条、迟早找到玩家头上。
 threads：三类事情共用这个数组，每件一次只写一个操作；没有要处理的事就输出 []。操作格式：
@@ -267,7 +268,7 @@ threads：三类事情共用这个数组，每件一次只写一个操作；没�
 days 都按游戏日算，写 1–10 的整数，睡觉和等待也算时间。turf 不动地盘时写 null；确有变化时写 {"faction": "势力 id", "district": "一个城区", "change": "gain|lose"}。
 calls：重要的人确有需要当面通话的急事时，可以输出 [{"from": "人物或中间人 id", "about": "200 字以内的来意，仅给叙事模型"}]，否则输出 []。最多一通，和 messages 共用本轮 ${MESSAGES_PER_TURN} 条联系额度；同一件事不要既发消息又打电话。普通人物从【能联系玩家的人】里选，是否来电由你按局面决定，不凭数值凑数挑人；中间人必须已有记录，同样不能是已死、本场在场或在队里的人。只提议来电，不替玩家接听、拒接或回应；about 不得写成玩家已经听到的内容。
 messages：派单消息附上 job 字段，值为当前状态里已经挂出、尚未接下且未到期的委托 id，或者这次 jobs 里新派的那一单的 id；普通消息不写。不编造 id，不把已接下或已结束的委托当成可接的新单。
-jobs：没有【能派单的中间人】、也没有人标「可以托事」就输出空数组；有也大多空着，只在确实有生意、或这个人确实有事要托玩家（真心的、别有用心的都算）时写。熟人托事的单不写 fixer。due 晚于【当前状态】的时间。
+jobs：没有【能派单的中间人】、也没有人标「可以托事」就输出空数组；有也大多空着，只在确实有生意、或这个人确实有事要托玩家（真心的、别有用心的都算）时写。熟人托事的单不写 fixer。due 晚于【当前状态】的时间。kind 可选 escort 护送、assassinate 刺杀、abduct 绑人或救人、steal 偷东西、sabotage 破坏、investigate 调查、negotiate 谈判、deliver 运货；按已有利益冲突长出委托，不套固定剧情模板。
 
 例：{"events": [{"id": "tyger-claws-kabuki", "title": "虎爪帮在歌舞伎区收紧地盘", "body": "那间夜店被砸以后，虎爪帮把歌舞伎区几条街的保护费翻了倍，正在挨家打听是谁干的。", "district": "沃森", "status": "heating", "weight": "normal"}], "npcs": [], "messages": []}
 玩家只是在公寓睡了一觉、正文没提城里任何事、【城里在发酵的事】里也没有到点的时：{"events": [], "npcs": [], "pasts": [], "ties": [], "rumors": [], "bulletin": null, "deaths": [], "messages": [], "jobs": [], "threads": []}
@@ -293,11 +294,12 @@ function tiesPart(n: Npc, all: Readonly<Record<string, Npc>>): string | undefine
 function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>> = {}): string {
   const ties = tiesPart(n, all);
   const parts = [
-    `${n.id}｜${n.name}，${n.role}${n.canon ? "（原作人物）" : ""}`,
+    `${n.id}｜${n.name}，${n.role}${n.canon ? "（原作人物）" : ""}${n.alive ? "" : "（已死）"}`,
     // 所属势力（用户 2026-10-31："感觉是为了我才存在的"）：过自己的日子时照他是哪家的人写
     `势力：${n.faction === NO_FACTION ? NO_FACTION_LABEL : n.faction}`,
     `想要：${n.want}`,
     `底线：${n.limit}`,
+    `口吻：${n.voice}`,
   ];
   if (n.secret) parts.push(`秘密：${n.secret}`);
   parts.push(`当前地点：${n.location ?? "未知"}`);
@@ -316,7 +318,16 @@ function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>> = {}): s
   return `- ${parts.join("；")}`;
 }
 
-/** 场外推演的提示词：状态、活着的人、中间人、已有动静、上次推演以来的正文和刚收场的这一轮 */
+/** 只带尚未成功处理的正文；本批的因果材料不因场次、同分钟或固定字数而丢失。 */
+function pendingTurns(records: readonly LogRecord[], through: number) {
+  return effectiveTurns(records).filter((r) => {
+    if (r.seq <= through || r.ooc || r.unsettled) return false;
+    const input = TurnInputSchema.safeParse(r.input);
+    return !input.success || input.data.mode !== "ooc";
+  });
+}
+
+/** 场外推演：当前事实、相关详卡、完整身份索引和成功游标之后的增量。 */
 export function buildOffscreenPrompt(
   world: WorldState,
   records: readonly LogRecord[],
@@ -325,57 +336,132 @@ export function buildOffscreenPrompt(
   present: ReadonlySet<string> = new Set(),
 ): LlmMessage[] {
   const city = CityStateSchema.parse(world.slices.city ?? {});
+  const clock = WorldClockStateSchema.parse(world.slices.world);
   const lives = lifePicks(world, present);
-  const lifeIds = new Set(lives.map((n) => n.id));
   const roster = NpcStateSchema.parse(world.slices.npc).npcs;
-  // 该过自己日子的人一定带卡，其余按最近出场补满
+  const threads = ThreadsStateSchema.parse(world.slices.threads ?? {});
+  const pending = pendingTurns(records, city.processedThrough);
+  const jobs = JobsStateSchema.parse(world.slices.jobs).jobs.filter(
+    (j) =>
+      ["active", "offered", "expired"].includes(j.status) ||
+      (j.closedAt !== null && (city.lastAt === null || j.closedAt >= city.lastAt)),
+  );
+  const changes = [
+    narrative,
+    ...pending.map((r) => `${r.text}\n${JSON.stringify(r.commands)}`),
+    ...threads.threads.map(
+      (t) => `${t.owner} ${t.title} ${t.want} ${t.stage} ${t.steps.map((s) => s.text).join(" ")}`,
+    ),
+    ...jobs.map(
+      (j) =>
+        `${j.fixer ?? ""} ${j.asker ?? ""} ${j.client} ${j.conflict} ${j.twist ?? ""} ${j.notes.join(" ")}`,
+    ),
+    ...city.events.filter((e) => e.status !== "over").map((e) => `${e.title} ${e.body}`),
+  ].join("\n");
+  const required = new Set(lives.map((n) => n.id));
+  const mentionedIds = new Set(changes.match(/[a-zA-Z0-9][a-zA-Z0-9:_-]*/g) ?? []);
+  for (const n of Object.values(roster)) {
+    if (mentionedIds.has(n.id) || changes.includes(n.name)) required.add(n.id);
+  }
+  // 关系的另一端必须有足够背景才能写双向变化；只展开一跳，不递归扩成全城。
+  for (const id of [...required]) {
+    for (const tie of roster[id]?.ties ?? []) if (roster[tie.id]) required.add(tie.id);
+  }
   const npcs = [
-    ...lives,
+    ...Object.values(roster).filter((n) => required.has(n.id)),
     ...Object.values(roster)
-      .filter((n) => n.alive && !lifeIds.has(n.id))
+      .filter((n) => n.alive && n.met && !required.has(n.id))
       .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
-      .slice(0, Math.max(0, MAX_CARDS - lives.length)),
+      .slice(0, EXTRA_CARDS),
   ];
   const dispatch = offscreenFixers(world, present);
-  // 三类事情共用一张单子；期限只给主持人看，不进玩家视图（用户 2026-11-01 定的"全改"第 4 步）
-  const threads = ThreadsStateSchema.parse(world.slices.threads ?? {});
+  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   const due = [
     `当前 ${threads.threads.length}/${THREADS_MAX} 件；有空位且有前因才开新事，不必填满。`,
-    threadSection(threads),
     ...threads.threads.map(
       (t) =>
-        `- ${t.id}｜主人：${t.owner}｜种子：${t.seed ?? "无"}｜下次推进：${formatGameTime(t.dueAt)}（${t.dueAt <= world.time ? "已到点" : "还没到点"}${t.reminded ? "，上次推演未处理" : ""}）`,
+        `- ${t.id}｜${THREAD_KIND_LABELS[t.kind]}·${t.title}｜主人：${t.owner}｜种子：${t.seed ?? "无"}｜想要：${t.want}｜眼下：${t.stage}｜下次推进：${formatGameTime(t.dueAt)}（${t.dueAt <= world.time ? "已到点" : "还没到点"}${t.reminded ? "，上次推演未处理" : ""}）${
+          t.steps.length
+            ? `\n  最近：${t.steps
+                .slice(-2)
+                .map(
+                  (s) =>
+                    `${formatGameTime(s.at)} ${s.kind === "move" ? "" : "玩家插手："}${s.text}；公开说法：${s.news}（${s.told ? "玩家听说了" : "玩家还没听说"}）`,
+                )
+                .join("；")}`
+            : ""
+        }`,
     ),
-  ]
-    .filter((line): line is string => line !== undefined)
-    .join("\n");
+    ...threads.closed.slice(-3).map((t) => `- ${t.id}｜已收场·${t.title}：${t.end}`),
+  ].join("\n");
   const rumors = rumorSection(city);
   const canAsk = offscreenJobsOpen(world);
-  const templates =
-    dispatch.length > 0 || (canAsk && contactable(world, present).length > 0)
-      ? jobTemplateSection(extras.data ?? {})
-      : undefined;
+  const places = locationCatalog(withSavedPlaces(extras.data ?? {}, world));
+  const district = clock.location === null ? undefined : places.get(clock.location)?.district;
+  const factions = new Set(npcs.map((n) => n.faction));
+  for (const t of threads.threads) if (t.kind === "faction") factions.add(t.owner);
+  const seeds = [...agendaCatalog(extras.data ?? {}).values()];
+  const selectedSeeds = new Set(
+    seeds
+      .filter(
+        (s) =>
+          threads.threads.some((t) => t.seed === s.id) ||
+          factions.has(s.faction) ||
+          (district !== undefined && s.districts.includes(district)) ||
+          changes.includes(s.faction),
+      )
+      .map((s) => s.id),
+  );
+  const distantSeeds = seeds.filter((s) => !selectedSeeds.has(s.id));
+  if (distantSeeds.length > 0) {
+    // 保留远端素材轮换；同一批重试时仍取同一素材。
+    const offset = Math.max(0, city.processedThrough + 1) % distantSeeds.length;
+    for (let i = 0; i < Math.min(2, distantSeeds.length); i += 1) {
+      const seed = distantSeeds[(offset + i) % distantSeeds.length];
+      if (seed) selectedSeeds.add(seed.id);
+    }
+  }
   const squash = Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
     .filter((n) => n.alive && n.timeline.length >= TIMELINE_SQUASH)
     .slice(0, 3);
   const canon = canonSection(extras.data, extras.startTime, world.time);
-  const since = city.lastScene ?? 0;
-  const window = effectiveTurns(records)
-    .filter((r) => (r.scene ?? since) >= since)
-    .slice(-WINDOW_TURNS)
-    .map((r) => r.text.slice(0, WINDOW_CHARS));
   const content = userMessage({
     scene: [
       `【当前状态】\n${stateSummary(world, records, extras.data)}`,
+      `【本批范围】\n上次成功：${city.lastAt === null ? "尚未推演" : formatGameTime(city.lastAt)}；已处理到回合 ${city.processedThrough}；当前 ${formatGameTime(world.time)}。失败尝试未处理的事实仍在本批。`,
+      `【人物索引】（只供推演核对身份，不等于玩家知道这些人）\n${
+        Object.values(roster)
+          .map(
+            (n) =>
+              `- ${n.id}｜${n.name}｜${n.role}｜${n.faction}｜${n.location ?? "位置未知"}${n.alive ? "" : "｜已死"}${present.has(n.id) ? "｜本场在场" : ""}${squad.has(n.id) ? "｜玩家队伍" : ""}`,
+          )
+          .join("\n") || "（还没有）"
+      }`,
       `【人物】\n${npcs.length > 0 ? npcs.map((n) => card(n, present.has(n.id), roster)).join("\n") : "（还没有）"}`,
       // 中间人不再单列一节（用户 2026-11-02："都是npc"）：他们照普通人物进【人物】和【能联系玩家的人】，派单另看【能派单的中间人】
       ...(dispatch.length > 0
         ? [
             `【能派单的中间人】（这次最多派 ${OFFSCREEN_JOBS} 单）\n${dispatch.map((f) => `- ${f.id}｜${f.name}`).join("\n")}`,
-            ...(templates ? [templates] : []),
           ]
         : []),
       `【城里的动静】\n${citySection(city) ?? "（还没有记下的）"}`,
+      ...(jobs.length > 0
+        ? [
+            `【当前委托及近期收场】（只作因果背景，不在场外改已有委托账）\n${jobs.map((j) => `- ${j.id}｜${j.title}｜${j.status}｜派单：${j.fixer ?? j.asker ?? "无"}｜雇主：${j.client}｜地点：${j.location ?? "未知"}｜期限：${j.due === null ? "无" : formatGameTime(j.due)}｜冲突：${j.conflict}${j.twist ? `｜幕后：${j.twist}` : ""}${j.notes.length ? `｜进展：${j.notes.join("；")}` : ""}${j.summary ? `｜收场：${j.summary}` : ""}`).join("\n")}`,
+          ]
+        : []),
+      ...(clock.deadlines.some((d) => d.handledAt === null)
+        ? [
+            `【尚未回应的期限】\n${clock.deadlines
+              .filter((d) => d.handledAt === null)
+              .map(
+                (d) =>
+                  `- ${d.id}｜${d.label}｜${formatGameTime(d.due)}${d.due <= world.time ? "｜已到期" : ""}`,
+              )
+              .join("\n")}`,
+          ]
+        : []),
+      `【地点索引】（移动只用已有 id）\n${[...places.values()].map((p) => `${p.id}｜${p.name}｜${p.district}`).join("\n") || "（没有）"}`,
       ...(rumors ? [`【街头传闻】\n${rumors}`] : []),
       `【能联系玩家的人】（谁发、发不发由你看局面定）\n${
         contactable(world, present)
@@ -386,13 +472,7 @@ export function buildOffscreenPrompt(
       }`,
       ...(lives.length > 0
         ? [
-            `【该过自己日子的人】（这次每人写一句近况，写他自己的生活，不围着玩家转）\n${lives
-              .map((n) => {
-                // 过日子可以牵上认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）
-                const ties = tiesPart(n, roster);
-                return `- ${n.id}｜${n.name}：${n.doing ? `上一条近况：${n.doing.text}（${formatGameTime(n.doing.at)}）` : "还没写过近况"}${ties ? `；${ties}` : ""}`;
-              })
-              .join("\n")}`,
+            `【该过自己日子的人】（详卡见【人物】；建议各写一句自己的生活，不围着玩家转）\n${lives.map((n) => `- ${n.id}｜${n.name}`).join("\n")}`,
           ]
         : []),
       ...(squash.length > 0
@@ -407,18 +487,23 @@ export function buildOffscreenPrompt(
         : []),
       ...(canon ? [`【原剧时间线】（只是参考）\n${canon}`] : []),
       `【城里在发酵的事】\n${due}`,
-      // 旧种子保留为素材，不再让代码抽签决定谁动（用户 2026-11-01 定的"全改"第 4 步）
-      `【势力打算素材】（不是已经发生的事；有前因且单子有空位才考虑开新事）\n${
-        [...agendaCatalog(extras.data ?? {}).values()]
+      `【势力素材索引】（全城可用；素材不是已发生事实，没给详细法子的不要凭空当作既定计划）\n${seeds.map((s) => `- ${s.id}｜${s.faction}｜${s.title}｜${s.goal}`).join("\n") || "（没有）"}`,
+      `【势力打算素材】（本批相关与轮换素材；有前因且单子有空位才考虑开新事）\n${
+        seeds
+          .filter((s) => selectedSeeds.has(s.id))
           .map(
             (s) =>
               `- 种子：${s.id}｜主人：${s.faction}｜${s.title}｜想要：${s.goal}｜可能的法子：${s.means.join("；")}｜能争的城区：${s.districts.join("、") || "不争地盘"}｜对头：${s.rivals.join("、") || "无"}｜原作参考：${s.canon.join("；") || "无"}`,
           )
           .join("\n") || "（没有）"
       }`,
-      ...(window.length > 0 ? [`【上次推演以来的正文】\n${window.join("\n\n")}`] : []),
+      ...(pending.length > 0
+        ? [
+            `【上次成功推演后的正文】\n${pending.map((r) => `回合 ${r.seq}：\n${r.text}`).join("\n\n")}`,
+          ]
+        : []),
     ],
-    input: `【刚收场的这一轮正文】\n${narrative}`,
+    input: `【当前这一轮正文】\n${narrative}`,
     reminder: "（只输出一个 JSON 对象。）",
   });
   return [
@@ -468,6 +553,8 @@ const OffscreenDeathSchema = z.object({
 const OffscreenTieSchema = TieSchema.omit({ type: true });
 
 export interface OffscreenResult {
+  /** 完整解析才可整批结算；不能把部分丢失的回复记成成功。 */
+  readonly ok: boolean;
   readonly commands: Command[];
   /** 丢掉、降级的原因；只进剧透视图 */
   readonly notes: string[];
@@ -488,6 +575,11 @@ export function readOffscreen(
 ): OffscreenResult {
   const commands: Command[] = [];
   const notes: string[] = [];
+  let ok = true;
+  const reject = (note: string) => {
+    ok = false;
+    notes.push(note);
+  };
   const json = parseModelJson(text);
   if (
     !json.ok ||
@@ -495,10 +587,16 @@ export function readOffscreen(
     json.value === null ||
     Array.isArray(json.value)
   ) {
-    notes.push(`场外推演的结果读不了${json.ok ? "" : `：${json.error}`}，这次不推演`);
-    return { commands, notes };
+    reject(`场外推演的结果读不了${json.ok ? "" : `：${json.error}`}，这次不推演`);
+    return { ok, commands, notes };
   }
   const raw = json.value as Record<string, unknown>;
+  for (const key of ["events", "npcs", "messages"]) {
+    if (!Array.isArray(raw[key])) reject(`场外推演：${key} 必须明确给出数组，没有变化时写 []`);
+  }
+  for (const key of ["rumors", "pasts", "deaths", "ties", "jobs", "calls", "threads"]) {
+    if (raw[key] !== undefined && !Array.isArray(raw[key])) reject(`场外推演：${key} 必须是数组`);
+  }
   const list = (key: string): unknown[] => {
     const value = raw[key];
     return Array.isArray(value) ? value : [];
@@ -515,11 +613,11 @@ export function readOffscreen(
   for (const [i, item] of list("events").entries()) {
     const parsed = OffscreenEventSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：events[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：events[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     if (kept >= soft(OFFSCREEN_EVENTS)) {
-      notes.push(`场外推演：动静写了 ${soft(OFFSCREEN_EVENTS)} 条以上，后面的不收`);
+      reject(`场外推演：动静写了 ${soft(OFFSCREEN_EVENTS)} 条以上，后面的不收`);
       break;
     }
     kept += 1;
@@ -527,6 +625,10 @@ export function readOffscreen(
       notes.push(`场外推演：动静超过建议的 ${OFFSCREEN_EVENTS} 条，照收`);
     const { player, cred, ...fields } = parsed.data;
     let event = fields;
+    if (written.has(event.id)) {
+      reject(`场外推演：events[${i}] ${event.id} 重复，一件动静本批只写一次`);
+      continue;
+    }
     if (event.weight === "major") {
       majors += 1;
       if (majors > OFFSCREEN_MAJOR) {
@@ -554,30 +656,32 @@ export function readOffscreen(
   const places = locationCatalog(withSavedPlaces(opts.data ?? {}, world));
   const lives = new Map(lifePicks(world, opts.present).map((n) => [n.id, n]));
   const lived = new Set<string>();
+  const updatedIds = new Set<string>();
+  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   let updated = 0;
   for (const [i, item] of list("npcs").entries()) {
     const parsed = OffscreenNpcSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：npcs[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：npcs[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const npc = npcs[parsed.data.id];
     if (!npc?.alive) {
-      notes.push(`场外推演：npcs[${i}] ${parsed.data.id} ${npc ? "已经死了" : "不在人物卡里"}`);
+      reject(`场外推演：npcs[${i}] ${parsed.data.id} ${npc ? "已经死了" : "不在人物卡里"}`);
       continue;
     }
-    if (opts.present?.has(npc.id)) {
-      notes.push(`场外推演：${npc.name}本场在场，近况由正文写`);
+    if (opts.present?.has(npc.id) || squad.has(npc.id)) {
+      reject(`场外推演：${npc.name}本场在场或在玩家队里，近况由正文写`);
       continue;
     }
-    if (lived.has(npc.id)) {
-      notes.push(`场外推演：${npc.name}的近况一次只写一句，多的不要`);
+    if (updatedIds.has(npc.id)) {
+      reject(`场外推演：${npc.name}的近况一次只写一句，多的不要`);
       continue;
     }
     if (lives.has(npc.id)) {
       lived.add(npc.id);
     } else if (updated >= soft(OFFSCREEN_NPCS)) {
-      notes.push(`场外推演：人物近况写了 ${soft(OFFSCREEN_NPCS)} 个以上，后面的不收`);
+      reject(`场外推演：人物近况写了 ${soft(OFFSCREEN_NPCS)} 个以上，后面的不收`);
       continue;
     } else {
       updated += 1;
@@ -587,7 +691,7 @@ export function readOffscreen(
     // NPC 会移动（用户 2026-11-02："npc是能移动的"）：地点 id 在地点表里才挪，不在的只去掉地点，近况照收
     let location = parsed.data.location;
     if (location !== undefined && !places.has(location)) {
-      notes.push(`场外推演：${npc.name}去的 ${location} 不在地点表里，近况照收，位置不动`);
+      reject(`场外推演：${npc.name}去的 ${location} 不在地点表里，近况照收，位置不动`);
       location = undefined;
     }
     commands.push({
@@ -596,6 +700,7 @@ export function readOffscreen(
       text: parsed.data.doing,
       ...(location === undefined ? {} : { location }),
     });
+    updatedIds.add(npc.id);
   }
   // 【该过自己日子的人】只是建议（「全改」第 2 步），没写不算错，记一笔给剧透视图
   for (const n of lives.values()) {
@@ -607,7 +712,7 @@ export function readOffscreen(
   for (const [i, item] of list("rumors").entries()) {
     const parsed = RumorFieldsSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：rumors[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：rumors[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const rumor = parsed.data;
@@ -616,11 +721,11 @@ export function readOffscreen(
       !written.has(rumor.event) &&
       !city.events.some((e) => e.id === rumor.event)
     ) {
-      notes.push(`场外推演：传闻「${rumor.text}」说的 ${rumor.event} 不是记下的动静，去掉关联`);
+      reject(`场外推演：传闻「${rumor.text}」说的 ${rumor.event} 不是记下的动静，去掉关联`);
       delete rumor.event;
     }
     if (rumored >= soft(OFFSCREEN_RUMORS)) {
-      notes.push(`场外推演：传闻写了 ${soft(OFFSCREEN_RUMORS)} 条以上，后面的不收`);
+      reject(`场外推演：传闻写了 ${soft(OFFSCREEN_RUMORS)} 条以上，后面的不收`);
       break;
     }
     rumored += 1;
@@ -630,23 +735,22 @@ export function readOffscreen(
   for (const [i, item] of list("pasts").entries()) {
     const parsed = OffscreenPastSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：pasts[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：pasts[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const npc = npcs[parsed.data.id];
     if (!npc || npc.timeline.length < TIMELINE_SQUASH) {
-      notes.push(`场外推演：pasts[${i}] ${parsed.data.id} 不在【该压成摘要的经历】里`);
+      reject(`场外推演：pasts[${i}] ${parsed.data.id} 不在【该压成摘要的经历】里`);
       continue;
     }
     commands.push({ type: "npc.past", id: npc.id, text: parsed.data.text });
   }
 
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   const died = new Set<string>();
   for (const [i, item] of list("deaths").entries()) {
     const parsed = OffscreenDeathSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：deaths[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：deaths[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const npc = npcs[parsed.data.id];
@@ -662,11 +766,15 @@ export function readOffscreen(
               ? "在玩家队里"
               : undefined;
     if (problem || !npc) {
-      notes.push(`场外推演：deaths[${i}] ${parsed.data.id} ${problem ?? ""}，不能死在屏幕外`);
+      reject(`场外推演：deaths[${i}] ${parsed.data.id} ${problem ?? ""}，不能死在屏幕外`);
+      continue;
+    }
+    if (updatedIds.has(npc.id) || died.has(npc.id)) {
+      reject(`场外推演：deaths[${i}] ${npc.id} 本批已经写了近况或死亡，结果冲突`);
       continue;
     }
     if (died.size >= OFFSCREEN_DEATHS) {
-      notes.push(`场外推演：原作人物一次最多死 ${OFFSCREEN_DEATHS} 个，多的不要`);
+      reject(`场外推演：原作人物一次最多死 ${OFFSCREEN_DEATHS} 个，多的不要`);
       break;
     }
     died.add(npc.id);
@@ -680,7 +788,7 @@ export function readOffscreen(
   for (const [i, item] of list("ties").entries()) {
     const parsed = OffscreenTieSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：ties[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：ties[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const { a, b } = parsed.data;
@@ -698,11 +806,11 @@ export function readOffscreen(
               ? "同一对人一次只写一条"
               : undefined;
     if (problem) {
-      notes.push(`场外推演：ties[${i}] ${a}/${b} ${problem}，不要`);
+      reject(`场外推演：ties[${i}] ${a}/${b} ${problem}，不要`);
       continue;
     }
     if (pairs.size >= soft(OFFSCREEN_TIES)) {
-      notes.push(`场外推演：人物之间的关系写了 ${soft(OFFSCREEN_TIES)} 条以上，后面的不收`);
+      reject(`场外推演：人物之间的关系写了 ${soft(OFFSCREEN_TIES)} 条以上，后面的不收`);
       break;
     }
     pairs.add(pair);
@@ -722,7 +830,7 @@ export function readOffscreen(
   for (const [i, item] of list("jobs").entries()) {
     const parsed = JobOfferSchema.omit({ type: true }).safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：jobs[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：jobs[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     // 托事人只由代码按发消息的人填，模型写的不算（用户 2026-10-31 选的「托事影响好感」）
@@ -740,11 +848,11 @@ export function readOffscreen(
               ? "期限不晚于现在"
               : undefined;
     if (problem) {
-      notes.push(`场外推演：jobs[${i}]「${job.title}」${problem}，不要`);
+      reject(`场外推演：jobs[${i}]「${job.title}」${problem}，不要`);
       continue;
     }
     if (offers.size >= soft(OFFSCREEN_JOBS)) {
-      notes.push(`场外推演：派单和求助写了 ${soft(OFFSCREEN_JOBS)} 单以上，后面的不收`);
+      reject(`场外推演：派单和求助写了 ${soft(OFFSCREEN_JOBS)} 单以上，后面的不收`);
       break;
     }
     offers.set(job.id, {
@@ -764,7 +872,7 @@ export function readOffscreen(
   for (const [i, item] of list("messages").entries()) {
     const parsed = IncomingMessageSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：messages[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：messages[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const npc = npcs[parsed.data.from];
@@ -778,22 +886,22 @@ export function readOffscreen(
       opts.present?.has(from) ||
       squad.has(from)
     ) {
-      notes.push(`场外推演：messages[${i}] 的 ${from} 不符合主动联系条件`);
+      reject(`场外推演：messages[${i}] 的 ${from} 不符合主动联系条件`);
       continue;
     }
     if (sent >= budget) {
-      notes.push(`场外推演：消息连同本轮正文每轮最多 ${MESSAGES_PER_TURN} 条，多的不要`);
+      reject(`场外推演：消息连同本轮正文每轮最多 ${MESSAGES_PER_TURN} 条，多的不要`);
       break;
     }
     let job = parsed.data.job;
     const offer = job === undefined ? undefined : offers.get(job);
     // 熟人托事：不是中间人的人本人发；真心的、别有用心的都走这里。星级超了压到他的上限（「全改」第 2 步）
     if (offer && offer.fixer !== null && offer.fixer !== parsed.data.from) {
-      notes.push(`场外推演：新委托「${offer.title}」不是 ${parsed.data.from} 派的，消息去掉委托`);
+      reject(`场外推演：新委托「${offer.title}」不是 ${parsed.data.from} 派的，消息去掉委托`);
       job = undefined;
     } else if (offer && offer.fixer === null && fixer && !picked.has(parsed.data.from)) {
       // 中间人也是普通人物（用户 2026-11-02："都是npc"）：见过、在联系名单里的中间人可以本人托事；没见过的只能派单
-      notes.push(`场外推演：求助「${offer.title}」要由托事的人本人发，中间人不能带，消息去掉委托`);
+      reject(`场外推演：求助「${offer.title}」要由托事的人本人发，中间人不能带，消息去掉委托`);
       job = undefined;
     } else if (offer && job !== undefined) {
       delivered.add(job);
@@ -821,11 +929,11 @@ export function readOffscreen(
       continue;
     }
     if (offer.fixer === null) {
-      notes.push(`场外推演：求助「${offer.title}」没有托事的人发消息带上，不要`);
+      reject(`场外推演：求助「${offer.title}」没有托事的人发消息带上，不要`);
       continue;
     }
     if (sent >= budget) {
-      notes.push(`场外推演：新委托「${offer.title}」没有派单消息，这一轮的消息也满了，不要`);
+      reject(`场外推演：新委托「${offer.title}」没有派单消息，这一轮的消息也满了，不要`);
       continue;
     }
     sending.push(offer.command);
@@ -841,11 +949,15 @@ export function readOffscreen(
   commands.splice(offerAt, 0, ...sending);
 
   const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
+  let called = false;
   for (const [i, item] of list("calls").entries()) {
-    if (sent >= budget || phone.calls.some((c) => c.status === "ringing")) break;
+    if (sent >= budget || called || phone.calls.some((c) => c.status === "ringing")) {
+      reject(`场外推演：calls[${i}] 超过联系额度或已有来电，不能接收`);
+      continue;
+    }
     const parsed = OffscreenCallSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：calls[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：calls[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const { from } = parsed.data;
@@ -859,12 +971,12 @@ export function readOffscreen(
       opts.present?.has(from) ||
       squad.has(from)
     ) {
-      notes.push(`场外推演：calls[${i}] 来电者不符合主动联系条件`);
+      reject(`场外推演：calls[${i}] 来电者不符合主动联系条件`);
       continue;
     }
     commands.push({ type: "phone.call", ...parsed.data });
     sent += 1;
-    break;
+    called = true;
   }
 
   // 三类事情统一解析；限制操作总量，实际主人和状态由系统结算再次核对
@@ -876,16 +988,16 @@ export function readOffscreen(
   const wrote = new Set<string>();
   const operations = list("threads");
   const limit = THREADS_MAX * 3;
-  if (operations.length > limit) notes.push(`场外推演：事项操作超过 ${limit} 条，后面的不收`);
+  if (operations.length > limit) reject(`场外推演：事项操作超过 ${limit} 条，后面的不收`);
   for (const [i, item] of operations.slice(0, limit).entries()) {
     const parsed = OffscreenThreadSchema.safeParse(item);
     if (!parsed.success) {
-      notes.push(`场外推演：threads[${i}] 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：threads[${i}] 格式不对：${issue(parsed.error)}`);
       continue;
     }
     const op = parsed.data;
     if (wrote.has(op.id)) {
-      notes.push(`场外推演：threads[${i}] ${op.id} 一次只写一步，多的不要`);
+      reject(`场外推演：threads[${i}] ${op.id} 一次只写一步，多的不要`);
       continue;
     }
     if (op.type === "thread.open") {
@@ -897,7 +1009,7 @@ export function readOffscreen(
             ? "主人这次死了"
             : undefined;
       if (problem) {
-        notes.push(`场外推演：threads[${i}] 开 ${op.id} ${problem}，不要`);
+        reject(`场外推演：threads[${i}] 开 ${op.id} ${problem}，不要`);
         continue;
       }
       owners.set(op.id, { owner: op.owner, kind: op.kind });
@@ -907,11 +1019,11 @@ export function readOffscreen(
     }
     const target = owners.get(op.id);
     if (!target) {
-      notes.push(`场外推演：threads[${i}] ${op.id} 不在单子上，不要`);
+      reject(`场外推演：threads[${i}] ${op.id} 不在单子上，不要`);
       continue;
     }
     if (op.type === "thread.step" && target.kind !== "faction" && died.has(target.owner)) {
-      notes.push(`场外推演：threads[${i}] ${op.id} 的主人这次死了，不再往前推`);
+      reject(`场外推演：threads[${i}] ${op.id} 的主人这次死了，不再往前推`);
       continue;
     }
     wrote.add(op.id);
@@ -928,7 +1040,7 @@ export function readOffscreen(
   if (rawBulletin !== undefined && rawBulletin !== null) {
     const parsed = OffscreenBulletinSchema.safeParse(rawBulletin);
     if (!parsed.success) {
-      notes.push(`场外推演：bulletin 格式不对：${issue(parsed.error)}`);
+      reject(`场外推演：bulletin 格式不对：${issue(parsed.error)}`);
     } else {
       const { threads: aired, ...bulletin } = parsed.data;
       commands.push({ type: "city.bulletin", ...bulletin });
@@ -936,13 +1048,13 @@ export function readOffscreen(
       for (const id of new Set(aired ?? [])) {
         const t = known.find((x) => x.id === id);
         if (!t && !owners.has(id)) {
-          notes.push(`场外推演：快讯里的 ${id} 不在【城里在发酵的事】里`);
+          reject(`场外推演：快讯里的 ${id} 不在【城里在发酵的事】里`);
           continue;
         }
         // 这次刚写了一步，或者还有玩家没听说的几步，才算播了新东西
         const fresh = wrote.has(id) || (t?.steps.some((s) => !s.told) ?? false);
         if (!fresh) {
-          notes.push(`场外推演：快讯里的 ${id} 没有玩家还没听说的事`);
+          reject(`场外推演：快讯里的 ${id} 没有玩家还没听说的事`);
           continue;
         }
         commands.push({ type: "threadTold", id });
@@ -952,5 +1064,5 @@ export function readOffscreen(
     notes.push("场外推演：这次写了头条却没写新闻快讯");
   }
   commands.push(...credits);
-  return { commands, notes };
+  return { ok, commands, notes };
 }
