@@ -9,6 +9,7 @@ import {
   newGameWorld,
   npcRules,
   purchaseQuote,
+  registry,
   replay,
   type Snapshot,
   type TurnInput,
@@ -190,19 +191,41 @@ describe("服务器绑定具体交易的大额确认", () => {
   });
 
   it("同一商品金额改变后必须展示新金额，不能复用旧确认", async () => {
-    const fixture = await setup(15000);
-    // 车型仍使用独立折扣计价；两个判断只改变同一商品的实际应付金额。
-    const full = BuyProposalSchema.parse({ item: "makigai-maimai", discount: "none" });
-    const changed = BuyProposalSchema.parse({ item: "makigai-maimai", discount: "small" });
-    const requests = mockStages([full, changed]);
-    const input = { text: "按商谈的价格买这辆蜗牛 P126。" };
-    expect(await submit(fixture, "car-first-confirm", input)).toMatchObject({
+    const fixture = await setup(2000);
+    const requests = mockStages([normalBuy, normalBuy]);
+    const offer = (world: WorldState, id: string, price: number) => {
+      const evidence = `威尔逊说：这把自由手枪现在收你 ${price} 欧元。`;
+      const quoted = registry.applyCommands(
+        world,
+        [
+          {
+            type: "commerce.offer",
+            id,
+            seller: "wilson",
+            kind: "item",
+            action: "buy",
+            target: "liberty",
+            price,
+            evidence,
+          },
+        ],
+        { rng: { roll: () => 1 }, data: gameData, facts: { tradeNarrative: evidence } },
+      );
+      expect(quoted.results[0]?.result.ok).toBe(true);
+      return quoted.world;
+    };
+    const original = offer(fixture.initial.world, "original-liberty-price", 1200);
+    await fixture.saves.writeSnapshot(fixture.id, { nextSeq: 0, world: original });
+    expect(await submit(fixture, "price-first-confirm")).toMatchObject({
       type: "confirmSpend",
-      price: 12000,
+      price: 1200,
     });
-    expect(await submit(fixture, "car-price-confirm", { ...input, spendOk: true })).toMatchObject({
+    // 测试夹具固定版本，仅重算真实报价，隔离金额绑定；实际报价落盘的版本变化另有测试。
+    const revised = offer(original, "revised-liberty-price", 1400);
+    await fixture.saves.writeSnapshot(fixture.id, { nextSeq: 0, world: revised });
+    expect(await submit(fixture, "price-changed-confirm", { text, spendOk: true })).toMatchObject({
       type: "confirmSpend",
-      price: 9600,
+      price: 1400,
     });
     expect(requests).toEqual(["judge", "judge"]);
     expect((await fixture.saves.loadLog(fixture.id)).records).toEqual([]);
