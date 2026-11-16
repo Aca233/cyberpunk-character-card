@@ -206,6 +206,11 @@ function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined
  */
 export class GameService {
   private readonly locks = new KeyedMutex();
+  /** 确认绑定本次输入、存档版本和完整报价；重启或状态改变后需重新确认。 */
+  private readonly pendingSpends = new Map<
+    string,
+    { version: number; input: string; quoteKey: string }
+  >();
 
   constructor(private readonly deps: GameDeps) {}
 
@@ -1031,6 +1036,15 @@ export class GameService {
         return;
       }
       const aux = await this.deps.llm.resolve("aux");
+      const { spendOk: _spendOk, ...spendInput } = plan.input;
+      const inputKey = JSON.stringify(spendInput);
+      const pendingSpend = this.pendingSpends.get(run.saveId);
+      const approvedSpend =
+        plan.input.spendOk &&
+        pendingSpend?.version === run.baseVersion &&
+        pendingSpend.input === inputKey
+          ? pendingSpend.quoteKey
+          : undefined;
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
@@ -1038,6 +1052,7 @@ export class GameService {
           maxOutputTokens: resolved.profile.maxOutputTokens,
           auxContextWindow: aux.ok ? aux.profile.contextWindow : undefined,
           auxMaxOutputTokens: aux.ok ? aux.profile.maxOutputTokens : undefined,
+          approvedSpend,
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening, startLocation, openingContextOf(world, startTime)),
@@ -1061,6 +1076,11 @@ export class GameService {
       }
       if (result.kind === "confirmSpend") {
         const { label, price, eddies } = result;
+        this.pendingSpends.set(run.saveId, {
+          version: run.baseVersion,
+          input: inputKey,
+          quoteKey: result.quoteKey,
+        });
         hub.push(run, { type: "confirmSpend", label, price, eddies });
         return;
       }
@@ -1068,6 +1088,7 @@ export class GameService {
       const { turn } = result;
       const usage = addUsage(addUsage(turn.usage, turn.auxUsage), turn.repairUsage);
       const saved = await this.commit(run, plan, turn, usage);
+      this.pendingSpends.delete(run.saveId);
       if (turn.repairs > 0) {
         this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
       }

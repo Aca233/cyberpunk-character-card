@@ -23,10 +23,11 @@ import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
 import { rulingFactFrom } from "../systems/dice";
+import { EconomyStateSchema } from "../systems/economy/schema";
 import { falloutKinds } from "../systems/fallout";
 import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
-import { shopList, withWorldObjects } from "../systems/inventory/apply";
+import { withWorldObjects } from "../systems/inventory/apply";
 import { InventoryStateSchema } from "../systems/inventory/schema";
 import { memoryRecords } from "../systems/memory";
 import { NpcStateSchema } from "../systems/npc";
@@ -65,6 +66,7 @@ import {
 import { completeFinish } from "./completion";
 import { responseJsonSchema, schemaDoc } from "./doc";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
+import { applyMerchantCommands, preparePurchases } from "./merchant-settlement";
 import {
   OFFSCREEN_TEMPERATURE,
   offscreenDue,
@@ -91,8 +93,6 @@ import { readSceneMemory, summaryFromExtract } from "./scene-memory";
 import {
   accelerationRequested,
   type BigSpend,
-  BuyProposalSchema,
-  bigSpend,
   JudgeDocSchema,
   type JudgeRuling,
   JudgeRulingSchema,
@@ -101,6 +101,8 @@ import {
   type Memory,
   readJudgeShape,
   rulingText,
+  type TransactionIntent,
+  TransactionIntentSchema,
 } from "./stages";
 import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE, SummaryDocSchema } from "./summary";
 import {
@@ -141,6 +143,10 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   npcDeath: "人物死亡",
   money: "欧元",
   trade: "买卖",
+  cyberware: "义体交易",
+  vehicle: "车辆变更",
+  "commerce.offer": "交易报价",
+  "commerce.withdraw": "报价撤回",
   loot: "零钱",
   item: "物品",
   jobEnd: "委托结局",
@@ -282,6 +288,8 @@ export type NarratorResult =
   | ({ readonly kind: "confirmSpend" } & BigSpend);
 
 export interface NarratorDeps {
+  /** 服务端曾展示且玩家确认的具体报价；单独的 spendOk 不能授权不同交易。 */
+  readonly approvedSpend?: string | undefined;
   readonly llm: LlmClient;
   readonly rng: Rng;
   /** 静态数据表（content 包） */
@@ -663,8 +671,8 @@ export async function runNarratorTurn(
   if (!ooc && !inFlashback) {
     if (judge.ruling !== undefined && judge.ruling !== null)
       judgeEntries.push({ key: "ruling", raw: judge.ruling, schema: JudgeRulingSchema });
-    if (judge.buy !== undefined && judge.buy !== null && plan.input.spendOk !== true)
-      judgeEntries.push({ key: "buy", raw: judge.buy, schema: BuyProposalSchema });
+    if (judge.buy !== undefined && judge.buy !== null)
+      judgeEntries.push({ key: "buy", raw: judge.buy, schema: TransactionIntentSchema });
   }
   const judged = await b.validateBatch("judge", judgeEntries);
   if (judgeEntries.some((entry) => !judged.has(entry.key)))
@@ -681,20 +689,6 @@ export async function runNarratorTurn(
     } else {
       rulingSpec = judged.get("ruling") as JudgeRuling;
     }
-  }
-
-  // 提交前确认：一次花掉超过存款一半且超过 1,000 欧元时先停下来问；玩家确认过就不再问
-  if (
-    judge.buy !== undefined &&
-    judge.buy !== null &&
-    plan.kind === "action" &&
-    plan.input.spendOk !== true &&
-    !ooc &&
-    !inFlashback
-  ) {
-    const buy = judged.get("buy") as z.infer<typeof BuyProposalSchema> | undefined;
-    const spend = buy && bigSpend(world, deps.data ?? {}, buy);
-    if (spend) return { kind: "confirmSpend", ...spend };
   }
 
   // 旧记忆：只认候选里原样抄来的标题
@@ -754,6 +748,40 @@ export async function runNarratorTurn(
       trip = planned.trip;
       decided.push(tripText(planned.trip));
     } else b.notes.push(`出行没成：${planned.reason}`);
+  }
+  // 同轮先到店再交易时，按到达时间、地点及扣除路费后的余额询价；这里只读，不推进世界。
+  const quoteWorld: WorldState = trip
+    ? {
+        time: trip.arriveAt,
+        slices: {
+          ...world.slices,
+          world: { ...WorldClockStateSchema.parse(world.slices.world), location: trip.to.id },
+          economy: {
+            ...EconomyStateSchema.parse(world.slices.economy),
+            eddies: Math.max(
+              0,
+              EconomyStateSchema.parse(world.slices.economy).eddies - trip.route.cost,
+            ),
+          },
+        },
+      }
+    : world;
+  const buy = judged.get("buy") as TransactionIntent | undefined;
+  const prepared = preparePurchases(quoteWorld, deps.data ?? {}, buy);
+  const confirmation = prepared.confirmation;
+  if (
+    confirmation &&
+    ((deps.approvedSpend !== undefined && deps.approvedSpend !== confirmation.quoteKey) ||
+      (prepared.spend &&
+        !(plan.input.spendOk === true && deps.approvedSpend === confirmation.quoteKey)))
+  )
+    return { kind: "confirmSpend", ...confirmation };
+  for (const { proposal, quote } of prepared.purchases) {
+    decided.push(
+      quote.ok
+        ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；只有玩家已接受并确实交付才成交，不得另改交易对象、价钱或旧件处理。`
+        : `【本次交易尚不能成立】${quote.reason}。可以继续询价或商谈，不能先写成已付款、拿货或安装。`,
+    );
   }
   // 对手的打算：只给写正文的一步，正文照它写对手的行动
   const foes =
@@ -993,7 +1021,21 @@ export async function runNarratorTurn(
   let shape: ExtractShape = {};
   const settle = !ooc;
   if (settle) {
-    const extract = buildExtractPrompt(world, records, live, extras, narrative);
+    const extract = buildExtractPrompt(
+      world,
+      records,
+      live,
+      extras,
+      narrative,
+      prepared.purchases.length
+        ? prepared.purchases
+            .map(
+              ({ proposal, quote }) =>
+                `${JSON.stringify(proposal)}：${quote.ok ? quote.detail : `未获准成交：${quote.reason}`}`,
+            )
+            .join("\n")
+        : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。",
+    );
     const reply = await b.supplement({
       purpose: "aux",
       temperature: EXTRACT_TEMPERATURE,
@@ -1219,7 +1261,7 @@ export async function runNarratorTurn(
     else commands.push({ type: "world.endScene" });
   }
 
-  const facts: Record<string, unknown> = {};
+  const facts: Record<string, unknown> = { tradeNarrative: narrative };
   facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
   facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
@@ -1242,12 +1284,6 @@ export async function runNarratorTurn(
   const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
   const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
   if (squadIds.length > 0) facts.squad = squadIds;
-  // 人在店里：叙事模型写的 trade buy 买这家货架上的东西时，和界面买一样占库存；这一轮出了门不算
-  const shopHereNow =
-    trip || here === undefined
-      ? undefined
-      : shopList(deps.data ?? {}).find((s) => s.location === here);
-  if (shopHereNow) facts.shop = { id: shopHereNow.id, at: world.time };
   // 开了斯安威斯坦（前端开关、选项或判断阶段识别）：先扣人性再结算
   if (sandevistanBoosted) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
@@ -1278,7 +1314,7 @@ export async function runNarratorTurn(
     if (role) failed.add(role);
   }
   let pending = dropFollowers(b, commands, failed);
-  let applied = registry.applyCommands(world, pending, applyCtx);
+  let applied = applyMerchantCommands(world, pending, applyCtx, prepared.purchases);
   for (;;) {
     const fresh = applied.results
       .filter(({ result }) => !result.ok)
@@ -1287,7 +1323,7 @@ export async function runNarratorTurn(
     if (fresh.length === 0) break;
     for (const r of fresh) failed.add(r);
     pending = dropFollowers(b, pending, failed);
-    applied = registry.applyCommands(world, pending, applyCtx);
+    applied = applyMerchantCommands(world, pending, applyCtx, prepared.purchases);
   }
   const accepted: Command[] = [];
   for (const { command, result } of applied.results) {

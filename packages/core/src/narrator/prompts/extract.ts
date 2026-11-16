@@ -27,6 +27,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 【只抽已经发生的事】
 - 计划、打算、还没兑现的威胁不算；玩家角色的台词和决定只认玩家输入，正文里替玩家补写的不算。
 - 考虑过但没抽的写进 dropped，每条带原因（“只是打算，没发生”“玩家角色心里想的”）；dropped 必须写，没有就写 []。
+- 交易询价与成交分开：对方已认可的新价格保存 commerce.offer 并引用正文证据；只有玩家已接受且正文实际交付才发 trade/cyberware，沿用实际对方、报价和旧件条件。多件逐件按先后记账，不能额外发 item gain 或 money 重复结算；到店购买先记实际到达，转交刚买的东西再记其转交。报价清单是可成交条件，不代表正文已经交付。
 - 照正文写实，不夸大：子弹擦过或皮外磕碰是 graze，贯通中枪或重击是 heavy；正文只花了钱没拿到东西，就不写 item gain。
 - 唯有 npc / npcUpdate 建卡或定型人物时例外：长相、此刻穿着与正文说过的话照正文写实，而说话方式与台词样本、具体诉求底线、暗中秘密，以及契合身份斤两的 body（表内武器衣物与义体 id）必须顺着他的身份、所属势力与现场表现一并配齐，不能因为正文没报出具体武器型号或秘密，就把新人物留成空壳「普通人」。
 
@@ -92,6 +93,7 @@ export function buildExtractPrompt(
   plan: NarratorPlan,
   extras: PromptExtras,
   narrative: string,
+  tradePlans?: string,
 ): NarratorPrompt {
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
@@ -101,7 +103,11 @@ export function buildExtractPrompt(
   const content = userMessage({
     scene: situation(world, records, view, plan, extras),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
-    after: [details, `【本轮正文】\n${narrative}`],
+    after: [
+      details,
+      tradePlans ? `【本轮已核对的交易条件】\n${tradePlans}` : undefined,
+      `【本轮正文】\n${narrative}`,
+    ],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
   const rules = systemMessage("extract", [extractRules()], modules);

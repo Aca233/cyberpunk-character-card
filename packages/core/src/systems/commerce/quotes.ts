@@ -12,6 +12,46 @@ export interface QuoteSelector {
   readonly tradeIn?: boolean | undefined;
 }
 
+export interface NarratedPurchase {
+  readonly seller: string;
+  readonly kind: AgreedQuote["kind"];
+  readonly action: string;
+  readonly target: string;
+  readonly price: number;
+  readonly replace?: string | undefined;
+  readonly tradeIn?: boolean | undefined;
+  readonly cash?: number | undefined;
+  readonly credit?: number | undefined;
+  readonly creditAllowed?: boolean | undefined;
+}
+
+/** 正文开始前已给出的交易不能在抽取时换对象或改价；未形成报价时只能继续商谈。 */
+export function checkNarratedPurchase(
+  facts: Readonly<Record<string, unknown>>,
+  actual: NarratedPurchase,
+): string | undefined {
+  if (typeof facts.tradeQuoteError === "string") return facts.tradeQuoteError;
+  const expected = facts.tradeQuote as NarratedPurchase | undefined;
+  if (!expected)
+    return typeof facts.tradeNarrative === "string"
+      ? "本轮未确认成交意图，只能询价或商谈，不能扣款、借款或交付"
+      : undefined;
+  if (
+    expected.seller !== actual.seller ||
+    expected.kind !== actual.kind ||
+    expected.action !== actual.action ||
+    expected.target !== actual.target ||
+    expected.price !== actual.price ||
+    expected.replace !== actual.replace ||
+    (expected.tradeIn ?? false) !== (actual.tradeIn ?? false) ||
+    expected.cash !== actual.cash ||
+    expected.credit !== actual.credit ||
+    (expected.creditAllowed ?? false) !== (actual.creditAllowed ?? false)
+  )
+    return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";
+  return undefined;
+}
+
 export function sameQuoteTerms(a: QuoteSelector, b: QuoteSelector): boolean {
   return (
     a.seller === b.seller &&
@@ -91,16 +131,27 @@ export function priceMentioned(evidence: string, price: number): boolean {
     let total = 0;
     let section = 0;
     let digit = 0;
+    let lastUnit = 1;
+    let explicitZero = false;
     for (const c of raw) {
       if (c === "万") {
         total += (section + digit) * 10000;
         section = 0;
         digit = 0;
+        lastUnit = 10000;
+        explicitZero = false;
       } else if (units[c]) {
         section += (digit || 1) * units[c];
         digit = 0;
-      } else digit = digits[c] ?? 0;
+        lastUnit = units[c];
+        explicitZero = false;
+      } else {
+        digit = digits[c] ?? 0;
+        if (digit === 0) explicitZero = true;
+      }
     }
+    // 常见口语省略末位单位：“一千二”=1200，“一万二”=12000；写零则保持个位。
+    if (lastUnit >= 100 && !explicitZero) digit *= lastUnit / 10;
     if (total + section + digit === price) return true;
   }
   return false;
