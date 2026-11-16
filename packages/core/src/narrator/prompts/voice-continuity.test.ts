@@ -3,7 +3,7 @@ import { newGameWorld } from "../../game";
 import type { LogRecord } from "../../kernel/turnlog";
 import { ItemDefSchema } from "../../systems/inventory/schema";
 import { NpcSchema } from "../../systems/npc";
-import { buildNarratorPrompt, NARRATE_STAGE, proseHabits } from "./narrate";
+import { buildNarratorPrompt, coreRules, NARRATE_STAGE, proseHabits } from "./narrate";
 
 const texts = [
   "灯光一暗。她摆弄数据芯片，垂下眼帘。",
@@ -76,7 +76,91 @@ describe("正文维持人物口吻与物件身份", () => {
     const repeats = content.split("\n").find((line) => line.startsWith("可能重复的修辞"));
     expect(repeats).toContain("垂下眼帘");
     expect(repeats).not.toContain("数据芯片");
-    expect(NARRATE_STAGE).toContain("公司人员可以正式克制");
+    expect(NARRATE_STAGE).toContain("人物卡的说话方式、台词样本");
     expect(NARRATE_STAGE).not.toContain("把书面官腔彻底踢出去");
+  });
+
+  it("启用预设时不发送本作文风、重复修辞、示例或节奏指导，事实与人物身份仍保留", () => {
+    const initial = newGameWorld({ startTime: 1000 });
+    const npc = NpcSchema.parse({
+      id: "liaison",
+      name: "林澄",
+      pronoun: "她",
+      role: "公司顾问",
+      look: "穿正装",
+      voice: "完整句式，礼貌克制",
+      samples: ["请先确认授权范围。"],
+      want: "确认授权",
+      limit: "保守客户秘密",
+      secret: "客户是一位独立记者",
+      affinity: 0,
+      alive: true,
+      met: true,
+      location: "office",
+      lastSeenAt: 1000,
+      memories: [],
+    });
+    const world = { ...initial, slices: { ...initial.slices, npc: { npcs: { liaison: npc } } } };
+    const records: LogRecord[] = texts.map((text, seq) => ({
+      kind: "turn",
+      seq,
+      at: "2077-01-01T00:00:00Z",
+      requestId: `preset-${seq}`,
+      baseVersion: seq,
+      input: { text: "继续听" },
+      dice: [],
+      commands: [],
+      dropped: [],
+      text,
+      patches: [],
+    }));
+    const build = (hasPreset: boolean) =>
+      buildNarratorPrompt(
+        world,
+        records,
+        { kind: "action", input: { text: "继续听她说明" } },
+        { hasPreset, intensity: "climax", data: { items: [] } },
+      );
+    const without = build(false)
+      .messages.map((m) => m.content)
+      .join("\n");
+    const withPreset = build(true)
+      .messages.map((m) => m.content)
+      .join("\n");
+    expect(without).toContain("【默认正文表达】");
+    expect(without).toContain("用第二人称");
+    expect(without).toContain("【好坏示例】");
+    expect(without).toContain("【最近用过的写法】");
+    expect(without).toContain("节律建议");
+    for (const text of [
+      "【默认表达】",
+      "【默认正文表达】",
+      "【好坏示例】",
+      "【最近用过的写法】",
+      "节律建议",
+      "写作节奏：",
+      "约 450–850 字",
+      "三连形容词",
+      "用第二人称",
+    ])
+      expect(withPreset).not.toContain(text);
+    for (const text of [
+      npc.voice,
+      npc.samples[0],
+      npc.want,
+      npc.limit,
+      "不替他说台词",
+      "信息严格隔离",
+      "【物理与安防现状】",
+      "没有骰点",
+    ])
+      expect(withPreset).toContain(text);
+    expect(coreRules(true)).not.toContain("默认表达");
+    expect(coreRules(false)).toContain("默认表达");
+    expect(
+      build(false)
+        .messages.map((m) => m.content)
+        .join("\n"),
+    ).toBe(without);
   });
 });

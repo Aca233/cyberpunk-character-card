@@ -20,7 +20,13 @@ import {
   recapFor,
   situation,
 } from "./context";
-import { BASE_RULES, estimateTokens, systemMessage, userMessage } from "./layers";
+import {
+  BASE_CONSTRAINTS,
+  DEFAULT_WORLD_STYLE,
+  estimateTokens,
+  systemMessage,
+  userMessage,
+} from "./layers";
 
 /**
  * ③ 写正文：纯文本，边收边放。
@@ -28,45 +34,45 @@ import { BASE_RULES, estimateTokens, systemMessage, userMessage } from "./layers
  * - 系统层保持静态可缓存前缀，变动的节奏引导放在本轮用户输入尾端。
  */
 
-/** 兼容导出：未启用预设时的默认参考提示；实际节律由 resolveDynamicWordCountBudget 给出 */
-export const NARRATE_LENGTH =
-  "- 篇幅随场面自然伸缩：日常交谈重言外之意，街区踩点带出心理暗流与五感背景，高压冲突写透感官与物理碰撞；对话停在对方递话或局面悬着的瞬间。";
-
-export const NARRATE_LENGTH_PRESET =
-  "- 篇幅、段落、对话与描写的比例完全照前面导入的酒馆写作预设展开，不受固定字数限制。";
-
-/** L1：这一步做什么 */
+/** L1：正文阶段的事实、权限与协议要求，和文风预设职责分开。 */
 export const NARRATE_STAGE = `【这一步：写正文】
 定性物理裁决、安防约束、出行耗时和到达由代码与判断步先行锚定，状态记账在你写完正文后由代码抽取。【本轮已定的事】与【物理与安防现状】里的硬约束（余额不足、城区门禁、气隙隔离、伤势局限、物理阻断）必须严格落地；其余素材（对手打算、路上所见）按当前局面自然揉进叙事，必要时可顺应情境调整。
 
-【人物深度、五感与活态夜之城】
-- 写活有血肉的人：人物说话与行动有自己的顾虑、贪念、疲惫、体面与创伤记忆，对话停顿、视线偏移、手下动作都能透出弦外之音；熟人交情深时有温度、肯递台阶，但仍有自己的账要算，不是应声虫。
-- 按场面选一两处感官细节：雨后沥青、合成烟、门缝漏出的低音炮或街边广告声即可，不必每轮凑齐五感；简短交流可以只写台词和动作。
+【人物与事实】
+- 人物卡的说话方式、台词样本、经历、关系、诉求和底线属于这个人的身份与处境；文风偏好不能把不同人物改成同一性格，也不能改写玩家原话。
 - 只写确实发生的物理后果：受伤才写疼痛，设备受干扰才写异常，门禁确有条件才写阻拦。不把示例中的伤残、警报或敌意当作本轮事实。
-
-【彻底去 AI 味守则】
-- 避免空泛套话和重复修辞，例如反复写“空气仿佛凝固”“一丝不易察觉的”“嘴角勾起一抹弧度”、三连形容词或无意义的深呼吸。【最近用过的写法】只作修辞提醒；事实、玩家原话、人物惯用语和反复讨论的物件名称保持准确，不能为了换词而改动。
-- 严禁总结腔与升华说教：事件、动作或台词说完干脆收刀，绝不在段末来一句人生感悟或宏观叹息（严禁“这就是夜之城的生存法则”“在这座冰冷的城市里”“今晚没人能独善其身”）。
-- 人物口吻以卡上的说话方式、样本、经历、关系和当下目的为先：公司人员可以正式克制，医生可以直接解释，街头人物也可以耐心或沉默。短句、打断、黑话、冷哼只在符合这个人和此刻情境时使用，不给所有人套同一副腔调；文风偏好不覆盖人物身份与玩家原话。
 
 【玩家角色边界】
 - 玩家写了台词时，用引号一字不改、不润色地原话保留，再写别人听完怎么反应。
 - 绝不替玩家角色说话、做决定或编造内心独白；只写旁人和环境的反馈，以及身体受刺激的生理反应。
-- 括号或“我心想”里的念头 NPC 听不见；结尾绝不列编号选项，不问“你要怎么做？”，停在人物递话或等待反应的瞬间。
-- 【本轮已定的事】标明“场外提问”时，跳出角色一两句直白作答，不推进剧情、不写游戏数值。
+- 括号或“我心想”里的念头 NPC 听不见；正文不列编号选项或向玩家发出系统式行动询问。
+- 【本轮已定的事】标明“场外提问”时，客观回答问题，不推进剧情、不写游戏数值。
 
 【时间流逝】
-- 经过了多少时间在正文自然交代（“抽完这根烟的功夫”“二十分钟后”“第二天晌午”），尊重玩家选择的等待、睡眠和长途移动。约定、委托可以在其间自然逾期，不因任务节点强制停时；只有有前因且角色实际感知、确会中断行动的事件才中断，并说明发生了什么。`;
+- 经过的时间与实际行动一致，尊重玩家选择的等待、睡眠和长途移动。约定、委托可以在其间自然逾期，不因任务节点强制停时；只有有前因且角色实际感知、确会中断行动的事件才中断。`;
+
+/** 未启用写作预设时才添加；不把本作默认文风叠到用户预设上。 */
+export const DEFAULT_NARRATE_STYLE = `【默认正文表达】
+- 按场面需要选择感官细节，简短交流可以只写台词和动作。
+- 避免空泛套话、重复修辞和段末说教。【最近用过的写法】只作修辞参考；事实、玩家原话、人物惯用语与物件名称保持准确。`;
 
 /** L3：纯文本 */
 export const NARRATE_OUTPUT = "【输出】\n只输出正文本身：纯文本，不加标题、标签、JSON 和编号选项。";
 
-let narrateCore: string | undefined;
+const narrateCore = new Map<boolean, string>();
 
-/** ③ 写正文不变的几层：L0、L1、L3 和好坏示例 */
-export function coreRules(): string {
-  narrateCore ??= [BASE_RULES, NARRATE_STAGE, NARRATE_OUTPUT, examplesSection()].join("\n\n");
-  return narrateCore;
+/** 预设负责文笔；本作始终提供世界边界与输出协议，无预设时补默认表达和示例。 */
+export function coreRules(hasPreset = false): string {
+  const cached = narrateCore.get(hasPreset);
+  if (cached !== undefined) return cached;
+  const rules = [
+    BASE_CONSTRAINTS,
+    NARRATE_STAGE,
+    ...(!hasPreset ? [DEFAULT_WORLD_STYLE, DEFAULT_NARRATE_STYLE, examplesSection()] : []),
+    NARRATE_OUTPUT,
+  ].join("\n\n");
+  narrateCore.set(hasPreset, rules);
+  return rules;
 }
 
 /** 列开头的轮数、找重复词的轮数、至少几轮里出现才算重复、最多列几个、开头截多长 */
@@ -175,7 +181,7 @@ export function buildNarratorPrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
-  const rules = systemMessage("narrate", [coreRules()], modules);
+  const rules = systemMessage("narrate", [coreRules(extras.hasPreset)], modules);
   // 写正文不带对 id 用的表，只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"）
   const system = [rules, ...narrateTablesOf(view, extras)].join("\n\n");
   const messages: LlmMessage[] = [{ role: "system", content: system }];
@@ -210,7 +216,7 @@ export function buildNarratorPrompt(
   const scene = situation(world, records, view, plan, extras);
   const recall = recalledSection(extras.recalled);
   const pacingHint = extras.hasPreset
-    ? "写作节奏：篇幅、段落、对话与描写比例完全按前面导入的酒馆写作预设执行。"
+    ? ""
     : resolveDynamicWordCountBudget(extras.intensity ?? "dialogue").directive.replace(/^- /, "");
   const content = userMessage({
     recap,
@@ -218,10 +224,12 @@ export function buildNarratorPrompt(
     decided: extras.decided,
     recall,
     lore: extras.lore,
-    habits: proseHabits(
-      view.turns.map((t) => t.text),
-      names,
-    ),
+    habits: extras.hasPreset
+      ? undefined
+      : proseHabits(
+          view.turns.map((t) => t.text),
+          names,
+        ),
     input: formatInput(plan.input),
     after: [boostNote(view, plan, "narrate")],
     reminder: `（${pacingHint}只写正文，纯文本。）`,

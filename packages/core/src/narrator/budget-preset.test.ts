@@ -86,7 +86,8 @@ async function run(
 
 describe("最终正文请求的预设预算", () => {
   it("将前置和深度条目计入裁剪与统计，裁剪时不重复展开随机宏", async () => {
-    const baseline = await run();
+    // 预设路径不带本作文风示例，预算对照也从同一路径开始。
+    const baseline = await run(preset("简洁叙事"));
     expect(baseline.result.kind).toBe("done");
     if (baseline.result.kind !== "done") return;
     const room = baseline.result.turn.budget.limit - baseline.result.turn.budget.total;
@@ -141,5 +142,30 @@ describe("最终正文请求的预设预算", () => {
       expect(result.turn.budget.limit).toBe(31_500);
       expect(result.turn.budget.parts.find((p) => p.part === "reply")?.limit).toBe(500);
     }
+  });
+
+  it("实际正文请求只带预设文风，仍保留玩家权限与世界事实约束", async () => {
+    const style = "用简练的书信体，保留人物之间的疏离感。";
+    const { result, requests } = await run(preset(style), []);
+    expect(result.kind).toBe("done");
+    const sent =
+      requests
+        .find((r) => r.responseFormat === undefined)
+        ?.messages.map((m) => m.content)
+        .join("\n") ?? "";
+    expect(sent.split(style)).toHaveLength(2);
+    expect(sent).not.toContain("【默认正文表达】");
+    expect(sent).not.toContain("【好坏示例】");
+    expect(sent).not.toContain("【最近用过的写法】");
+    expect(sent).not.toContain("节律建议");
+    expect(sent).not.toContain("用第二人称");
+    expect(sent).toContain("信息严格隔离");
+    expect(sent).toContain("玩家角色归玩家");
+    expect(sent).toContain("账归代码");
+    const judge = requests.find((r) => r.responseFormat?.name === "judge");
+    expect(judge).toBeDefined();
+    const judgment = judge?.messages.map((m) => m.content).join("\n") ?? "";
+    expect(judgment).not.toContain("【默认表达】");
+    expect(judgment).not.toContain("用第二人称");
   });
 });
