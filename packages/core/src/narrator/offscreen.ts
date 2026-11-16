@@ -112,7 +112,7 @@ export function offscreenDue(
     (city.lastAt === null || job.due > city.lastAt))) return true;
   if (now.deadlines.some((deadline) => deadline.handledAt === null && deadline.due <= after.time &&
     (city.lastAt === null || deadline.due > city.lastAt))) return true;
-  const since = city.lastAt ?? was.sceneStartedAt;
+  const since = city.lastAt ?? (was.sceneStartedAt > 0 ? was.sceneStartedAt : before.time);
   return after.time > before.time && after.time - since >= OFFSCREEN_HOURS * 60;
 }
 

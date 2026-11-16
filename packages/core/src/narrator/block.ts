@@ -1,17 +1,9 @@
 import { z } from "zod";
-import { AttributeSchema, CheckSpecSchema } from "../systems/dice/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
 export const STATE_OPEN = "<state>";
 export const STATE_CLOSE = "</state>";
-
-/** 旧存档回放兼容用的门槛字段；运行期已废除门槛判定，仅用于解析历史记录 */
-export const GateSchema = z.object({
-  attribute: AttributeSchema,
-  value: z.number().int().min(1).max(20),
-});
-export type Gate = z.infer<typeof GateSchema>;
 
 const ChoiceBaseSchema = z.object({
   text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
@@ -23,17 +15,12 @@ const ChoiceBaseSchema = z.object({
     .optional()
     .describe("专属选项的来源，例如 过往：荒坂前员工、义体：螳螂刀；只有这条路是角色独有的才写"),
 });
-const oneOf = "一个选项只能有 gate 或 check 之一";
-
-/** 存档里的建议选项：兼容旧记录里的 gate / check 字段 */
-export const ChoiceSchema = ChoiceBaseSchema.extend({
-  gate: GateSchema.optional().describe("历史记录字段"),
-  check: CheckSpecSchema.optional().describe("历史记录字段"),
-}).refine((c) => !(c.gate && c.check), oneOf);
+/** 自由行动建议只记录内容与来源，不存骰点或属性门槛。 */
+export const ChoiceSchema = ChoiceBaseSchema.strict();
 export type Choice = z.infer<typeof ChoiceSchema>;
 
 /** 模型提出的建议选项：零掷骰、零属性门槛，只给行动本身与特长/义体来源 */
-export const ChoiceProposalSchema = ChoiceBaseSchema;
+export const ChoiceProposalSchema = ChoiceSchema;
 
 export const MAX_CHOICES = 5;
 
@@ -54,7 +41,7 @@ export const ExtractDocSchema = z.object({
   clutch: z
     .boolean()
     .optional()
-    .describe("正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；一场战斗最多一两次"),
+    .describe("正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；只在实际发生危机时标记，不限制次数"),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
   dropped: z

@@ -38,11 +38,10 @@ const reply = (value: Record<string, unknown>) =>
   JSON.stringify({ events: [], npcs: [], messages: [], jobs: [], ...value });
 
 describe("场外推演派单", () => {
-  it("列出登记过的中间人和他现在能派的星级", () => {
+  it("列出登记过的中间人，不附带声望星级门槛", () => {
     const fixers = offscreenFixers(start());
     expect(fixers.map((f) => f.id).sort()).toEqual(["regina", "wakako"]);
-    // 街头声望 1 级、好感 0：最多 2 星
-    expect(fixers.every((f) => f.max === 2)).toBe(true);
+    expect(fixers.every((f) => !("max" in f))).toBe(true);
   });
 
   it("新委托排在带它的派单消息前面，结算后委托挂出、消息带着这一单", () => {
@@ -92,7 +91,7 @@ describe("场外推演派单", () => {
     expect(messages.find((m) => m.from === "regina")?.job).toBe("scav-den");
   });
 
-  it("星级超了压到上限，没登记的中间人不要", () => {
+  it("风险按实际事件保留，没登记的中间人不要", () => {
     const got = readOffscreen(
       reply({
         jobs: [job({ risk: 3 }), job({ id: "ghost-job", fixer: "nobody" })],
@@ -101,8 +100,8 @@ describe("场外推演派单", () => {
       start(),
     );
     const offers = got.commands.filter((c) => c.type === "jobOffer");
-    expect(offers.map((c) => [c.id, c.risk])).toEqual([["scav-den", 2]]);
-    expect(got.notes.some((n) => n.includes("压到 2"))).toBe(true);
+    expect(offers.map((c) => [c.id, c.risk])).toEqual([["scav-den", 3]]);
+    expect(got.notes.some((n) => n.includes("压到"))).toBe(false);
     expect(got.notes.some((n) => n.includes("不在【能派单的中间人】里"))).toBe(true);
   });
 
@@ -230,7 +229,7 @@ describe("场外推演熟人求助", () => {
   });
 
   // 「全改」第 2 步（用户 2026-11-01）：求助星级超了压到他的上限，不整单作废
-  it("求助超过他的星级上限：压到上限，单照挂", () => {
+  it("熟人求助按实际风险登记，不按好感压低分量", () => {
     const world = withFriend();
     const got = readOffscreen(
       reply({
@@ -239,11 +238,11 @@ describe("场外推演熟人求助", () => {
       }),
       world,
     );
-    expect(got.commands.find((c) => c.type === "jobOffer")?.risk).toBe(2);
+    expect(got.commands.find((c) => c.type === "jobOffer")?.risk).toBe(3);
     expect(got.commands.find((c) => c.type === "phone.receive")?.job).toBe("misty-shop");
     const after = apply(world, got.commands);
     expect(after.results.map((r) => r.result.ok)).toEqual(after.results.map(() => true));
-    expect(got.notes.some((n) => n.includes("risk 2"))).toBe(true);
+    expect(got.notes.some((n) => n.includes("risk 2"))).toBe(false);
   });
 
   it("求助的单由中间人带不要；好感低的熟人也能发", () => {

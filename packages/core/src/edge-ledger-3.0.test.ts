@@ -9,7 +9,7 @@ import {
   recordSeedEncounter,
 } from "./npc";
 import { evaluatePhysicsBoundaries } from "./pipeline";
-import { advanceTension, type TensionState, tensionFacts } from "./tension";
+import { advanceTension, type TensionSite, tensionFacts } from "./tension";
 import { evaluateDistrictSecurityCheck, settleWeeklyLifestyleBill } from "./worldClock";
 
 describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
@@ -168,7 +168,6 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
       const intercepted = evaluateDistrictSecurityCheck({
         districtId: "city-center",
         weaponConcealment: "heavy",
-        styleTag: "neomilitarism",
       });
       expect(intercepted.passed).toBe(false);
 
@@ -176,17 +175,15 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
         districtId: "city-center",
         weaponConcealment: "heavy",
         storedInNomadSmugglingCompartment: true,
-        styleTag: "neomilitarism",
       });
       expect(smuggled.passed).toBe(true);
 
-      const dressDenied = evaluateDistrictSecurityCheck({
+      const concealedVisitor = evaluateDistrictSecurityCheck({
         districtId: "city-center",
         weaponConcealment: "pocket",
-        styleTag: "entropism",
         enteringHighEndVenue: true,
       });
-      expect(dressDenied.passed).toBe(false);
+      expect(concealedVisitor.passed).toBe(true);
     });
 
     it("locks apartment smartlock and cuts hot water when weekly rent is unpaid", () => {
@@ -199,11 +196,13 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
 
   describe("Non-Numeric Tension Facts & Qualitative Physics Boundaries", () => {
     it("tracks concrete hardware damage and exposed weakpoints without progress bars", () => {
-      const initial: TensionState = {
+      const initial: TensionSite = {
         active: true,
         mode: "stealth",
         exposure: "suspicious",
         backupEtaMinutes: 2,
+        backupCause: "已确认北门守卫呼叫邻街巡逻车",
+        backupArrived: false,
         exposedWeakpoints: ["机甲背部散热管"],
         scannedEnemyChrome: ["斯安威斯坦 Mk.4"],
         disabledEnemyChrome: [],
@@ -230,7 +229,6 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
         securityCheck: {
           districtId: "city-center",
           weaponConcealment: "open",
-          styleTag: "entropism",
         },
         hackCheck: {
           vector: "wireless",

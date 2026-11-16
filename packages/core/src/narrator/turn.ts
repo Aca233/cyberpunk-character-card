@@ -26,7 +26,8 @@ import { rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
 import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
-import { shopList } from "../systems/inventory/apply";
+import { shopList, withWorldObjects } from "../systems/inventory/apply";
+import { InventoryStateSchema } from "../systems/inventory/schema";
 import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
@@ -544,6 +545,7 @@ export async function runNarratorTurn(
   records: readonly LogRecord[],
   plan: NarratorPlan,
 ): Promise<NarratorResult> {
+  deps = { ...deps, data: withWorldObjects(deps.data ?? {}, InventoryStateSchema.parse(world.slices.inventory).objects) };
   const b = new TurnBuilder(deps);
   const extras: PromptExtras = {
     data: deps.data,

@@ -4,7 +4,7 @@ import { CharacterStateSchema, effectiveAttributes } from "./systems/character/s
 import { WeaponConcealmentSchema } from "./systems/dice/schema";
 import { woundSlotOf } from "./systems/health/apply";
 import { HealthStateSchema, WOUND_SLOT_LABELS, WoundSlotSchema } from "./systems/health/schema";
-import { humanityCap, isGlitchZone, isImmunosuppressed } from "./systems/humanity/apply";
+import { neuralDisplay, neuralStage, isImmunosuppressed } from "./systems/humanity/apply";
 import { HumanityStateSchema } from "./systems/humanity/schema";
 import { itemCatalog } from "./systems/inventory/apply";
 import {
@@ -103,10 +103,10 @@ export function extractEdgeLedgerState(
       concealment: loadout.concealment,
     },
     humanity: {
-      current: humanity.current,
-      cap: humanityCap(humanity),
+      current: neuralDisplay(humanity),
+      cap: 100,
       suppressed,
-      glitchZone: isGlitchZone(humanity.current, suppressed),
+      glitchZone: !suppressed && ["unstable", "edge", "crisis"].includes(neuralStage(humanity)),
     },
     fatigued: isFatigued(clock),
     blackLaceWithdrawal: isBlackLaceWithdrawal(clock, world.time),
