@@ -221,11 +221,13 @@ export function expandMacros(input: string, ctx: MacroContext, vars: Map<string,
   return out.replace(TRIM_EAT, "");
 }
 
+export interface ExpandedPreset {
+  readonly head: readonly LlmMessage[];
+  readonly inChat: readonly { readonly depth: number; readonly message: LlmMessage }[];
+}
+
 /** 一轮里展开好的条目：前置段的放在本作提示词前面，带深度的插进聊天记录 */
-export function presetMessages(
-  preset: TavernPreset,
-  ctx: MacroContext,
-): { readonly head: LlmMessage[]; readonly inChat: { depth: number; message: LlmMessage }[] } {
+export function presetMessages(preset: TavernPreset, ctx: MacroContext): ExpandedPreset {
   const vars = new Map<string, string>();
   const head: LlmMessage[] = [];
   const inChat: { depth: number; message: LlmMessage }[] = [];
@@ -249,7 +251,14 @@ export function applyPreset(
   preset: TavernPreset,
   ctx: MacroContext,
 ): LlmMessage[] {
-  const { head, inChat } = presetMessages(preset, ctx);
+  return applyExpandedPreset(messages, presetMessages(preset, ctx));
+}
+
+/** 预算裁剪会重建消息；复用同一次宏展开，不能重复抽取 random / roll。 */
+export function applyExpandedPreset(
+  messages: readonly LlmMessage[],
+  { head, inChat }: ExpandedPreset,
+): LlmMessage[] {
   if (head.length === 0 && inChat.length === 0) return [...messages];
   const bridge: LlmMessage = {
     role: "system",

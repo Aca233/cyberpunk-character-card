@@ -1,0 +1,129 @@
+import { describe, expect, it } from "vitest";
+import { newGameWorld } from "../game";
+import type { LlmClient, LlmRequest } from "../kernel/ports";
+import type { LogRecord } from "../kernel/turnlog";
+import { TurnInputSchema } from "../schemas/turn";
+import type { TavernPreset } from "./preset";
+import { estimateTokens } from "./prompts/layers";
+import { runNarratorTurn } from "./turn";
+
+const records: LogRecord[] = Array.from({ length: 8 }, (_, index) => ({
+  kind: "turn",
+  seq: index,
+  at: "2026-11-16T00:00:00Z",
+  requestId: `past-${index}`,
+  baseVersion: index,
+  input: { text: "继续听他说" },
+  dice: [],
+  commands: [],
+  dropped: [],
+  text: `旧事${index}：${"夜".repeat(500)}`,
+  patches: [],
+  scene: 0,
+}));
+
+function preset(head: string, inChat = "", maxOutputTokens = 65_535): TavernPreset {
+  return {
+    name: "预算验收",
+    entries: [
+      { id: "head", name: "前置", role: "system", content: head, enabled: true, depth: null },
+      { id: "chat", name: "深度", role: "user", content: inChat, enabled: true, depth: 0 },
+    ],
+    regex: [],
+    sampling: { maxOutputTokens },
+  };
+}
+
+async function run(style?: TavernPreset, history: readonly LogRecord[] = records) {
+  const requests: LlmRequest[] = [];
+  let rolls = 0;
+  const llm: LlmClient = {
+    async *stream(request) {
+      requests.push(request);
+      const text =
+        request.responseFormat?.name === "judge"
+          ? JSON.stringify({
+              read: "你想继续听对方说话",
+              ooc: false,
+              ruling: null,
+              buy: null,
+              foes: null,
+              recall: [],
+              sandevistan: false,
+            })
+          : request.purpose === "aux"
+            ? JSON.stringify({ changes: [], choices: [], dropped: [] })
+            : "杯底碰了一下桌面，对方继续说起刚才的事。";
+      yield { type: "text", text };
+      yield { type: "done", finishReason: "stop" };
+    },
+  };
+  const result = await runNarratorTurn(
+    {
+      llm,
+      rng: {
+        roll: () => {
+          rolls += 1;
+          return 3;
+        },
+      },
+      contextWindow: 32_000,
+      data: { items: [], cyberware: [] },
+      offscreen: null,
+      preset: style,
+    },
+    newGameWorld({ startTime: 1000 }),
+    history,
+    { kind: "action", input: TurnInputSchema.parse({ text: "继续听他说" }) },
+  );
+  return { result, requests, rolls };
+}
+
+describe("最终正文请求的预设预算", () => {
+  it("将前置和深度条目计入裁剪与统计，裁剪时不重复展开随机宏", async () => {
+    const baseline = await run();
+    expect(baseline.result.kind).toBe("done");
+    if (baseline.result.kind !== "done") return;
+    const room = baseline.result.turn.budget.limit - baseline.result.turn.budget.total;
+    const extra = room + 1000;
+    const style = preset(
+      "文".repeat(Math.ceil(extra / 2)),
+      `${"风".repeat(Math.floor(extra / 2))}{{roll:d6}}`,
+    );
+    const { result, requests, rolls } = await run(style);
+    expect(result.kind).toBe("done");
+    if (result.kind !== "done") return;
+    const request = requests.find((r) => r.responseFormat === undefined);
+    expect(request).toBeDefined();
+    if (!request) return;
+    const finalTokens = request.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+    expect(result.turn.budget.total).toBe(finalTokens);
+    expect(finalTokens).toBeLessThanOrEqual(result.turn.budget.limit);
+    expect(result.turn.budget.history).toBeLessThan(baseline.result.turn.budget.history);
+    expect(result.turn.budget.history).toBeGreaterThanOrEqual(3);
+    expect(result.turn.budget.parts.find((p) => p.part === "preset")?.tokens).toBeGreaterThan(
+      extra,
+    );
+    expect(request.messages.at(-2)?.content).toBe(`${"风".repeat(Math.floor(extra / 2))}3`);
+    expect(request.messages.at(-1)?.content).toContain("【玩家】继续听他说");
+    expect(rolls).toBe(1);
+    expect(request.maxOutputTokens).toBe(4000);
+  });
+
+  it("尊重预设更小的输出上限，并把相同额度留在窗口里", async () => {
+    const { result, requests } = await run(preset("短写", "", 600), []);
+    expect(result.kind).toBe("done");
+    if (result.kind !== "done") return;
+    expect(requests.find((r) => r.responseFormat === undefined)?.maxOutputTokens).toBe(600);
+    expect(result.turn.budget.limit).toBe(31_400);
+    expect(result.turn.budget.parts.find((p) => p.part === "reply")?.limit).toBe(600);
+  });
+
+  it("无法再裁剪时停止，不发送超过预算的正文请求", async () => {
+    const { result, requests } = await run(preset("长".repeat(40_000)), []);
+    expect(result.kind).toBe("blocked");
+    if (result.kind === "blocked") expect(result.reason).toContain("超过本次输入预算");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.responseFormat?.name).toBe("judge");
+  });
+});

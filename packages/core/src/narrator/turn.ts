@@ -71,7 +71,7 @@ import {
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
-import { applyPreset, applyPresetRegex, type TavernPreset } from "./preset";
+import { applyExpandedPreset, applyPresetRegex, presetMessages, type TavernPreset } from "./preset";
 import {
   buildExtractPrompt,
   buildJudgePrompt,
@@ -718,6 +718,23 @@ export async function runNarratorTurn(
     : lookupLore(deps.lore, world, records, plan.input.text, deps.data ?? {}, budget.parts.world);
   let loreSection = lore?.section;
   const preset = ooc ? undefined : deps.preset;
+  // 宏只展开一次，预设的前置、深度条目及衔接说明都计入最终请求预算。
+  const expandedPreset = preset
+    ? presetMessages(preset, {
+        user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
+        char: "叙事者",
+        lastUserMessage: plan.input.text,
+        roll: (sides) => deps.rng.roll(sides),
+      })
+    : undefined;
+  const presetTokens = expandedPreset
+    ? applyExpandedPreset([], expandedPreset).reduce((n, m) => n + estimateTokens(m.content), 0)
+    : 0;
+  const sampling = preset?.sampling ?? {};
+  const maxOutputTokens = Math.max(
+    1,
+    Math.floor(Math.min(budget.parts.reply, sampling.maxOutputTokens ?? budget.parts.reply)),
+  );
   const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
   const exposure = currentTension(world).exposure;
   const intensity: NarrativeIntensity =
@@ -743,9 +760,9 @@ export async function runNarratorTurn(
       recapTokens,
     });
   // 整份超出窗口（减去留给回复的）时从低优先级裁起：扩展层 → 【前情】 → 设定资料 → 原文（留 MIN_HISTORY 轮）
-  const limit = budget.window - budget.parts.reply;
+  const limit = budget.window - maxOutputTokens;
   const totalOf = (p: ReturnType<typeof build>) =>
-    p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+    presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
   let prompt = build();
   for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
     if (expanded.length > 0) {
@@ -761,8 +778,10 @@ export async function runNarratorTurn(
       hot -= 1;
       cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
     } else {
-      cuts.push(`必需的部分已经超出（约 ${total} / ${limit} token），没有能再裁的`);
-      break;
+      return {
+        kind: "blocked",
+        reason: `当前规则、人物状态、最低限度历史与写作预设合计约 ${total} token，超过本次输入预算 ${limit}。请缩短写作预设或提高模型上下文窗口后重试；本轮尚未写入。`,
+      };
     }
     prompt = build();
   }
@@ -778,8 +797,9 @@ export async function runNarratorTurn(
         tokens: used[part] ?? 0,
         limit: part === "hot" ? budget.parts.hot + budget.parts.character : budget.parts[part],
       })),
+      { part: "preset", label: "酒馆写作预设", tokens: presetTokens, limit: null },
       { part: "other", label: "输入和其余", tokens: used.other ?? 0, limit: null },
-      { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: budget.parts.reply },
+      { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: maxOutputTokens },
     ],
     total: totalOf(prompt),
     limit,
@@ -791,16 +811,9 @@ export async function runNarratorTurn(
       ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
       : lore?.trace;
   // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；节律提示由用户消息尾端自适应处理，不破坏系统前缀缓存
-  const narrateMessages = preset
-    ? applyPreset(prompt.messages, preset, {
-        // 酒馆预设的 {{user}} 使用当前存档角色名；旧存档没有名字时才回退为玩家。
-        user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
-        char: "叙事者",
-        lastUserMessage: plan.input.text,
-        roll: (sides) => deps.rng.roll(sides),
-      })
+  const narrateMessages = expandedPreset
+    ? applyExpandedPreset(prompt.messages, expandedPreset)
     : prompt.messages;
-  const sampling = preset?.sampling ?? {};
   if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
   const splitter = new StateSplitter();
   b.checkAborted();
@@ -811,9 +824,7 @@ export async function runNarratorTurn(
       ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
       ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
       ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
-      ...(sampling.maxOutputTokens !== undefined
-        ? { maxOutputTokens: sampling.maxOutputTokens }
-        : {}),
+      maxOutputTokens,
     },
     deps.signal,
   )) {
