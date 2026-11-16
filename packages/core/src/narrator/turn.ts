@@ -28,6 +28,7 @@ import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
 import { shopList, withWorldObjects } from "../systems/inventory/apply";
 import { InventoryStateSchema } from "../systems/inventory/schema";
+import { memoryRecords } from "../systems/memory";
 import { NpcStateSchema } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
@@ -64,10 +65,10 @@ import {
 import { responseJsonSchema, schemaDoc } from "./doc";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import {
-  buildOffscreenPrompt,
   OFFSCREEN_TEMPERATURE,
   offscreenDue,
   offscreenSkipReason,
+  prepareOffscreenBatch,
   presentNpcs,
   readOffscreen,
 } from "./offscreen";
@@ -301,6 +302,9 @@ export interface NarratorDeps {
   readonly contextWindow?: number | undefined;
   /** 正文连接本身的输出上限；预设不能把它扩大到窗口预算之外。 */
   readonly maxOutputTokens?: number | undefined;
+  /** 辅助连接的实际窗口和输出上限，场外批次按该连接单独预算。 */
+  readonly auxContextWindow?: number | undefined;
+  readonly auxMaxOutputTokens?: number | undefined;
   /**
    * 玩家导入并启用的酒馆预设（用户定的）：只给写正文那一步，条目叠在本作提示词前面、本作规则在后，
    * 采样参数和正则也只用在这一步；判断、抽取、核对、修复、场外推演、摘要都不套
@@ -316,6 +320,12 @@ export class NarratorEmptyReplyError extends Error {
 
 export class NarratorAbortedError extends Error {
   override name = "NarratorAbortedError";
+}
+
+class IncompleteReplyError extends Error {}
+
+function completeFinish(reason: string): boolean {
+  return reason === "stop" || reason === "STOP" || reason === "end_turn";
 }
 
 const REPAIR_SYSTEM =
@@ -368,12 +378,17 @@ class TurnBuilder {
     this.checkAborted();
     let text = "";
     let usage: LlmUsage | undefined;
+    let complete = false;
     for await (const event of this.deps.llm.stream(request, this.deps.signal)) {
       if (event.type === "text") text += event.text;
       else if (event.type === "blocked") return { blocked: event.reason };
-      else usage = event.usage;
+      else {
+        usage = event.usage;
+        complete = completeFinish(event.finishReason);
+      }
     }
     this.checkAborted();
+    if (!complete) throw new IncompleteReplyError("模型回复未正常结束，未采用不完整结果");
     return { text, usage };
   }
 
@@ -397,7 +412,7 @@ class TurnBuilder {
       return undefined;
     }
     this.repairs += 1;
-    const reply = await this.call({
+    const reply = await this.supplement({
       purpose: "aux",
       temperature: 0,
       maxOutputTokens: REPAIR_OUTPUT_TOKENS,
@@ -407,7 +422,7 @@ class TurnBuilder {
         { role: "user", content },
       ],
     });
-    if ("blocked" in reply) return undefined;
+    if ("blocked" in reply || "failed" in reply) return undefined;
     this.repairUsage = addUsage(this.repairUsage, reply.usage);
     const parsed = parseModelJson(reply.text);
     return parsed.ok && parsed.value !== null ? parsed.value : undefined;
@@ -600,11 +615,12 @@ export async function runNarratorTurn(
   let judge: JudgeShape = {};
   // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
   const budget = contextBudget(deps.contextWindow);
-  let hot = historyTurns(records, budget.parts.history, HISTORY_TURNS);
+  const promptRecords = memoryRecords(world, records);
+  let hot = historyTurns(promptRecords, budget.parts.history, HISTORY_TURNS);
   let recapTokens = budget.parts.recap;
   const pool =
     plan.kind === "action" && !legacyOoc ? memoryPool(world, records, hot, recapTokens) : [];
-  const lately = effectiveTurns(records)
+  const lately = effectiveTurns(promptRecords)
     .slice(-2)
     .map((t) => t.text)
     .join("\n");
@@ -866,26 +882,39 @@ export async function runNarratorTurn(
     : prompt.messages;
   if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
   const splitter = new StateSplitter();
+  let narrativeIssue: string | undefined;
+  let narrativeComplete = false;
+  let narrativeError: unknown;
   b.checkAborted();
-  for await (const event of deps.llm.stream(
-    {
-      purpose: "narrator",
-      messages: narrateMessages,
-      ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
-      ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
-      ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
-      maxOutputTokens,
-    },
-    deps.signal,
-  )) {
-    if (event.type === "text") {
-      const shown = splitter.push(event.text);
-      if (shown !== "") deps.onText?.(shown);
-    } else if (event.type === "blocked") {
-      return { kind: "blocked", reason: event.reason };
-    } else {
-      addNarrator(event.usage);
+  try {
+    for await (const event of deps.llm.stream(
+      {
+        purpose: "narrator",
+        messages: narrateMessages,
+        ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+        ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
+        ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
+        maxOutputTokens,
+      },
+      deps.signal,
+    )) {
+      if (event.type === "text") {
+        const shown = splitter.push(event.text);
+        if (shown !== "") deps.onText?.(shown);
+      } else if (event.type === "blocked") {
+        return { kind: "blocked", reason: event.reason };
+      } else {
+        addNarrator(event.usage);
+        narrativeComplete = completeFinish(event.finishReason);
+        if (!narrativeComplete)
+          narrativeIssue = "正文未完整生成，已保存草稿；本轮未推进世界，请重新生成。";
+      }
     }
+  } catch (error) {
+    b.checkAborted();
+    if (error instanceof NarratorAbortedError) throw error;
+    narrativeError = error;
+    narrativeIssue = "正文生成途中中断，已保存收到的草稿；本轮未推进世界，请重新生成。";
   }
   b.checkAborted();
   const split = splitter.finish();
@@ -899,25 +928,86 @@ export async function runNarratorTurn(
   if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
   else if (preset && narrative !== split.narrative.trim())
     b.notes.push("正文按预设正则清理过（思维链、标签等）");
-  if (narrative === "") throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
+  if (narrative === "") {
+    if (narrativeError) throw narrativeError;
+    throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
+  }
   if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
+
+  // 草稿与事实分开：保存可见文字，但没有任何状态补丁、内部自动行动或后续推演。
+  const draftOnly = (reason: string): NarratorResult => ({
+    kind: "done",
+    turn: {
+      text: narrative,
+      read,
+      choices: [],
+      check: undefined,
+      rolled: undefined,
+      gate: undefined,
+      commands: [],
+      dropped: b.dropped,
+      unsettled: reason,
+      considered: [reason],
+      ruling,
+      offscreen: undefined,
+      offscreenSkip: "正文尚未定稿，不推演",
+      summary: undefined,
+      notes: b.notes,
+      flags: b.flags,
+      world,
+      patches: [],
+      modules: prompt.modules,
+      pin: false,
+      clutch: false,
+      scene: WorldClockStateSchema.parse(world.slices.world).scene,
+      title: sceneTitle(world, deps.data ?? {}),
+      closeup: undefined,
+      ooc,
+      usage,
+      auxUsage: b.auxUsage,
+      repairs: b.repairs,
+      repairUsage: b.repairUsage,
+      messages: narrateMessages,
+      decided,
+      recalled,
+      expanded,
+      retrieval,
+      lore: loreTrace,
+      budget: budgetTrace,
+    },
+  });
+  if (!narrativeComplete || narrativeIssue) {
+    const reason = narrativeIssue ?? "正文没有正常结束，已保存草稿；本轮未推进世界，请重新生成。";
+    b.drop("正文", null, reason, "format");
+    return draftOnly(reason);
+  }
 
   // ④ 抽取：场外提问不抽，状态不变；其余常规与裁决回合都照常记账
   let shape: ExtractShape = {};
   const settle = !ooc;
   if (settle) {
     const extract = buildExtractPrompt(world, records, live, extras, narrative);
-    const reply = await b.call({
+    const reply = await b.supplement({
       purpose: "aux",
       temperature: EXTRACT_TEMPERATURE,
       responseFormat: responseJsonSchema("extract"),
       messages: extract.messages,
     });
-    if ("blocked" in reply) {
+    if ("failed" in reply) {
+      b.drop(
+        "抽取",
+        null,
+        "记账请求失败或回复未完整结束；已保存正文草稿，本轮未推进世界",
+        "format",
+      );
+    } else if ("blocked" in reply) {
       b.drop("抽取", null, `辅助模型拒答：${reply.blocked}；这一轮只保留正文`, "format");
     } else {
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
       shape = await b.readExtract(reply.text);
+    }
+    if (b.dropped.some((entry) => entry.where === "抽取")) {
+      return draftOnly("本轮记账未完成，正文已保存为草稿；世界状态未改变，请重新生成。");
     }
   }
   const considered: string[] = settle ? readConsidered(shape.dropped) : [];
@@ -1221,6 +1311,7 @@ export async function runNarratorTurn(
   const dead = HealthStateSchema.parse(settled.world.slices.health).condition === "dead";
   let final = settled;
   let offscreenTrace: { prompt: string; reply: string } | undefined;
+  let offscreenCapacityReason: string | undefined;
   const every = deps.offscreen === undefined ? OFFSCREEN_SCENES : deps.offscreen;
   if (
     settle &&
@@ -1231,96 +1322,117 @@ export async function runNarratorTurn(
     offscreenDue(world, settled.world, every)
   ) {
     const present = presentNpcs(world, settled.world);
-    const messages = buildOffscreenPrompt(settled.world, records, extras, narrative, present);
-    const reply = await b.supplement({
-      purpose: "aux",
-      temperature: OFFSCREEN_TEMPERATURE,
-      messages,
-      responseFormat: responseJsonSchema("offscreen"),
+    const batch = prepareOffscreenBatch(settled.world, records, extras, narrative, present, {
+      contextWindow: deps.auxContextWindow ?? 32_000,
+      ...(deps.auxMaxOutputTokens === undefined
+        ? {}
+        : { maxOutputTokens: deps.auxMaxOutputTokens }),
     });
-    offscreenTrace = {
-      prompt: messages[messages.length - 1]?.content ?? "",
-      reply:
-        "failed" in reply
-          ? "（辅助请求失败，未采用不完整回复）"
-          : "blocked" in reply
-            ? `（拒答：${reply.blocked}）`
-            : reply.text,
-    };
-    let offscreen: Command[] = [];
-    let offscreenComplete = false;
-    if ("failed" in reply) {
-      considered.push("场外推演请求失败，保留本轮正文与待处理事项");
-    } else if ("blocked" in reply) {
-      considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
+    if (batch.kind === "blocked") {
+      offscreenCapacityReason = batch.reason;
+      considered.push(batch.reason);
     } else {
-      b.auxUsage = addUsage(b.auxUsage, reply.usage);
-      const sent = accepted.filter((c) => c.type === "phone.receive").length;
-      const got = readOffscreen(reply.text, settled.world, {
-        present,
-        messages: MESSAGES_PER_TURN - sent,
-        data: extras.data ?? {},
+      const messages = batch.messages;
+      const reply = await b.supplement({
+        purpose: "aux",
+        temperature: OFFSCREEN_TEMPERATURE,
+        maxOutputTokens: batch.maxOutputTokens,
+        messages,
+        responseFormat: responseJsonSchema("offscreen"),
       });
-      considered.push(...got.notes);
-      offscreen = got.commands;
-      offscreenComplete = got.ok;
-    }
-    // 批次完整解析且全部结算成功才提交；失败不发送消息、不挪期限，也不推进成功游标。
-    if (offscreenComplete) {
-      const through = records.reduce((next, record) => Math.max(next, record.seq + 1), 0);
-      const trial = registry.applyCommands(
-        settled.world,
-        [...offscreen, { type: "thread.remind" }, { type: "city.ran", through }],
-        applyCtx,
-      );
-      const rejected = trial.results.filter(({ result }) => !result.ok);
-      if (rejected.length === 0) final = trial;
-      else {
-        offscreenComplete = false;
-        for (const { command, result } of rejected) {
-          if (!result.ok) considered.push(`场外推演批次未提交：${command.type} ${result.reason}`);
+      offscreenTrace = {
+        prompt: messages[messages.length - 1]?.content ?? "",
+        reply:
+          "failed" in reply
+            ? "（辅助请求失败，未采用不完整回复）"
+            : "blocked" in reply
+              ? `（拒答：${reply.blocked}）`
+              : reply.text,
+      };
+      let offscreen: Command[] = [];
+      let offscreenComplete = false;
+      if ("failed" in reply) {
+        considered.push("场外推演请求失败，保留本轮正文与待处理事项");
+      } else if ("blocked" in reply) {
+        considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
+      } else {
+        b.auxUsage = addUsage(b.auxUsage, reply.usage);
+        const sent = accepted.filter((c) => c.type === "phone.receive").length;
+        const got = readOffscreen(reply.text, settled.world, {
+          present,
+          messages: MESSAGES_PER_TURN - sent,
+          data: extras.data ?? {},
+        });
+        considered.push(...got.notes);
+        offscreen = got.commands;
+        offscreenComplete = got.ok;
+      }
+      // 批次完整解析且全部结算成功才提交；失败不发送消息、不挪期限，也不推进成功游标。
+      if (offscreenComplete) {
+        const trial = registry.applyCommands(
+          settled.world,
+          [
+            ...offscreen,
+            ...(batch.backlog ? [] : [{ type: "thread.remind" }]),
+            { type: "city.ran", through: batch.through, backlog: batch.backlog },
+          ],
+          applyCtx,
+        );
+        const rejected = trial.results.filter(({ result }) => !result.ok);
+        if (rejected.length === 0) {
+          final = trial;
+          if (batch.backlog)
+            considered.push(
+              `场外推演已处理至回合 ${batch.through}，剩余积压保留到后续批次，尚未推进全部时限`,
+            );
+        } else {
+          offscreenComplete = false;
+          for (const { command, result } of rejected) {
+            if (!result.ok) considered.push(`场外推演批次未提交：${command.type} ${result.reason}`);
+          }
         }
       }
-    }
-    if (!offscreenComplete) {
-      final = registry.applyCommands(settled.world, [{ type: "city.failed" }], applyCtx);
-      considered.push("场外推演未完整完成，保留待处理事项，经过重试间隔后再推演");
-    }
-    for (const { command, result } of final.results) {
-      if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
-      // 消息和头条带来的声望玩家看得到；其余只进剧透视图
-      else if (command.type === "phone.receive" || command.type === "streetCred") {
-        b.notes.push(...result.notes);
-      } else {
-        const c = command as {
-          type: string;
-          id?: string;
-          title?: string;
-          text?: string;
-          cause?: string;
-          npc?: string;
-          concern?: string;
-          resolve?: boolean;
-        };
-        if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
-        else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
-        else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
-        else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
-        else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
-        else if (c.type === "threadTold") considered.push(`场外推演：快讯播了事项 ${c.id}`);
-        else if (c.type === "jobOffer") considered.push(`场外推演：新委托 ${c.id}「${c.title}」`);
-        else if (c.type.startsWith("thread.") && c.id)
-          considered.push(`场外推演：事项 ${c.id}（${c.type}）${c.text ?? ""}`);
-        else if (c.type === "arc.offscreen")
-          considered.push(
-            `场外推演：${c.npc} 的心事 ${c.concern}${c.resolve ? "有了结果" : ""}：${c.text ?? ""}`,
-          );
-        considered.push(...result.notes.map((n) => `场外推演：${n}`));
+      if (!offscreenComplete) {
+        final = registry.applyCommands(settled.world, [{ type: "city.failed" }], applyCtx);
+        considered.push("场外推演未完整完成，保留待处理事项，经过重试间隔后再推演");
+      }
+      for (const { command, result } of final.results) {
+        if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
+        // 消息和头条带来的声望玩家看得到；其余只进剧透视图
+        else if (command.type === "phone.receive" || command.type === "streetCred") {
+          b.notes.push(...result.notes);
+        } else {
+          const c = command as {
+            type: string;
+            id?: string;
+            title?: string;
+            text?: string;
+            cause?: string;
+            npc?: string;
+            concern?: string;
+            resolve?: boolean;
+          };
+          if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
+          else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+          else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
+          else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
+          else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
+          else if (c.type === "threadTold") considered.push(`场外推演：快讯播了事项 ${c.id}`);
+          else if (c.type === "jobOffer") considered.push(`场外推演：新委托 ${c.id}「${c.title}」`);
+          else if (c.type.startsWith("thread.") && c.id)
+            considered.push(`场外推演：事项 ${c.id}（${c.type}）${c.text ?? ""}`);
+          else if (c.type === "arc.offscreen")
+            considered.push(
+              `场外推演：${c.npc} 的心事 ${c.concern}${c.resolve ? "有了结果" : ""}：${c.text ?? ""}`,
+            );
+          considered.push(...result.notes.map((n) => `场外推演：${n}`));
+        }
       }
     }
   }
   const offscreenSkip =
-    offscreenTrace === undefined
+    offscreenCapacityReason ??
+    (offscreenTrace === undefined
       ? offscreenSkipReason({
           closed: after.scene !== before.scene,
           flashback: inFlashback,
@@ -1328,7 +1440,7 @@ export async function runNarratorTurn(
           dead,
           every,
         })
-      : undefined;
+      : undefined);
 
   // ⑦ 记忆跟随真正结算的正文保存；承诺/计划是增量锚点，不因滚动提要重写而消失。
   let ended = final.world;
@@ -1343,7 +1455,7 @@ export async function runNarratorTurn(
     memoryPatches.push(...done.patches);
   };
   if (settle && !inFlashback && unsettled === undefined) {
-    const working = readSceneMemory(shape.sceneMemory, world, ended, plan.input, narrative);
+    const working = readSceneMemory(shape.sceneMemory, world, settled.world, plan.input, narrative);
     considered.push(...working.notes);
     if (working.command) saveMemory(working.command);
   }

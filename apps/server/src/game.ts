@@ -441,6 +441,9 @@ export class GameService {
       const result = applyPlayerAction(world, request.action, {
         rng: this.deps.rng,
         data: gameData,
+        facts: {
+          memorySourceThrough: records.reduce((last, record) => Math.max(last, record.seq), -1),
+        },
       });
       if (!result.ok) return { status: 409, body: { error: result.reason, version } };
       const record: ActionRecord = {
@@ -1022,11 +1025,14 @@ export class GameService {
         hub.push(run, { type: "error", message: redact(resolved.error), retryable: false });
         return;
       }
+      const aux = await this.deps.llm.resolve("aux");
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
           contextWindow: resolved.profile.contextWindow,
           maxOutputTokens: resolved.profile.maxOutputTokens,
+          auxContextWindow: aux.ok ? aux.profile.contextWindow : undefined,
+          auxMaxOutputTokens: aux.ok ? aux.profile.maxOutputTokens : undefined,
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening, startLocation, openingContextOf(world, startTime)),

@@ -249,6 +249,8 @@ async function main(): Promise<number> {
   const narratorConfig = await narratorRouter.resolve("narrator");
   if (!narratorConfig.ok) throw new Error(redact(narratorConfig.error));
   const auxName = await describe(narratorRouter, "aux");
+  const auxConfig = await narratorRouter.resolve("aux");
+  if (!auxConfig.ok) throw new Error(redact(auxConfig.error));
   let graderLlm: LlmClient | undefined;
   let graderName: string | null = null;
   if (args.grader) {
@@ -279,6 +281,8 @@ async function main(): Promise<number> {
           opening: scenario.opening,
           contextWindow: narratorConfig.profile.contextWindow,
           maxOutputTokens: narratorConfig.profile.maxOutputTokens,
+          auxContextWindow: auxConfig.profile.contextWindow,
+          auxMaxOutputTokens: auxConfig.profile.maxOutputTokens,
         },
         scenario.world,
         scenario.records,

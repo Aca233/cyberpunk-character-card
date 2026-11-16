@@ -114,7 +114,7 @@ describe("持续世界的因果与时间", () => {
     const world = start();
     const later = registry.advanceTo(world, 1720, ctx).world;
     expect(offscreenDue(world, later)).toBe(true);
-    const ran = apply(later, [{ type: "city.ran", through: -1 }]);
+    const ran = apply(later, [{ type: "city.ran", through: -1, backlog: false }]);
     expect(offscreenDue(ran, registry.advanceTo(ran, 1721, ctx).world)).toBe(false);
   });
   it("从第零分钟分段推进也累积世界时间", () => {
@@ -174,7 +174,7 @@ describe("持续世界的因果与时间", () => {
     expect(later.time).toBe(1300);
     expect(JobsStateSchema.parse(later.slices.jobs).jobs[0]?.overdue).toBe(true);
     expect(offscreenDue(world, later)).toBe(true);
-    const ran = apply(later, [{ type: "city.ran", through: -1 }]);
+    const ran = apply(later, [{ type: "city.ran", through: -1, backlog: false }]);
     expect(offscreenDue(ran, registry.advanceTo(ran, 1301, ctx).world)).toBe(false);
   });
   it("完成约定只记录真实到款，不按风险档发声望与好感", () => {
@@ -231,6 +231,7 @@ describe("动态物件穿过完整叙事流程", () => {
           const reply = replies.shift();
           if (reply === undefined) throw new Error("出现了意外的额外调用");
           yield { type: "text", text: reply };
+          yield { type: "done", finishReason: "stop" };
         },
       };
       const result = await runNarratorTurn(
