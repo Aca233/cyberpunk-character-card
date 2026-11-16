@@ -14,6 +14,7 @@ import { locations } from "./locations";
 import { DISTRICT_CENTERS, ROUTE_ALIASES } from "./map";
 // 经 mapShapes.ts 去掉了中间人一类图钉和服务点（用户 2026-11-02："地图上不要搞专门的中间人了，都是npc"）
 import { DISTRICT_SHAPES, MAP_POI_KINDS, SERVICE_POINTS, SUBDISTRICT_SHAPES } from "./mapShapes";
+import { merchantSites } from "./merchant-sites";
 import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
 import { openings } from "./openings";
@@ -48,6 +49,7 @@ export { DISTRICT_CENTERS, MAP_SPOTS } from "./map";
 // 原作世界地图服务点（含往日之影狗镇），id 与 MAP_POIS 相同；名字只取原作写明的关联，查不到为 null。见 docs/places-plan.md 第五节。
 // 中间人一类已去掉（用户 2026-11-02："地图上不要搞专门的中间人了，都是npc"）
 export { SERVICE_POINTS, type ServicePoint, type ServicePointKind } from "./mapShapes";
+export { merchantSites } from "./merchant-sites";
 export { boardModules } from "./modules";
 export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
@@ -83,6 +85,7 @@ const mapData = {
     kinds: MAP_POI_KINDS,
   },
   servicePoints: SERVICE_POINTS,
+  merchantSites,
 };
 
 /** 新存档放进世界的内容 */
@@ -91,6 +94,8 @@ export const gameContent: GameContent = {
   fixers,
   items,
   cyberware,
+  shops,
+  ripperdocs,
   locations,
   openings,
   loadouts,

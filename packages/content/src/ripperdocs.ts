@@ -1,10 +1,11 @@
 import { cyberwareRules } from "@cp/core";
 import { cyberware } from "./cyberware";
+import { poiRipperdocs } from "./merchant-sites";
 
 /**
  * 义体医生：维克多的货最全、价钱公道；歌舞伎市场的黑市医生便宜两成，但货来路不明。
- * 稀有以上的货要街头声望够了才肯卖；维克多肯赊账，黑市医生只收现钱。
- * 黑市医生是自创的人物，数值暂定，试玩后再调
+ * 维克多肯赊账，黑市医生只收现钱；实际货物与服务条件以持续保存的诊所状态为准。
+ * 针眼是本作自创人物；地图诊所的开局备货是本作设定，不是原作库存复刻。
  */
 export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
   {
@@ -14,7 +15,6 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
     location: "vik-clinic",
     note: "老派义体医生，手艺好、收价公道，不卖来路不明的货",
     shelf: cyberware.filter((c) => !c.iconic).map((c) => c.id),
-    credGates: { rare: 5, epic: 20, legendary: 35 },
     credit: 20000,
   },
   {
@@ -40,6 +40,6 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
       "mantis-blades",
       "monowire",
     ],
-    credGates: { rare: 10 },
   },
+  ...poiRipperdocs,
 ]);

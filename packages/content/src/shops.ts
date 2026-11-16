@@ -1,8 +1,9 @@
 import { inventoryRules } from "@cp/core";
+import { poiShops } from "./merchant-sites";
 
 /**
- * 商店：威尔逊的枪店货最正、按原价；歌舞伎市场的黑市贩子便宜三成、稀有货解锁得早，
- * 但来路不明；日本町商店街卖服装、药和吃的。阿涛是自创的人物，数值暂定，试玩后再调
+ * 商店开局条件：威尔逊按参考价；阿涛的摊子便宜三成、货源非正规渠道。
+ * 日本町商店街卖服装、药和吃的。阿涛为本作自创人物；标签不替代具体货况与交易事实。
  */
 export const shops = inventoryRules.ShopListSchema.parse([
   {
@@ -53,7 +54,12 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "kneel-mod",
       "parallax-mod",
     ],
-    credGates: { rare: 5, epic: 20, legendary: 35 },
+    supply: {
+      supplier: "wilson-distribution",
+      origin: "本作开局合同：歌舞伎市场的正规武器配送点供货，威尔逊验收后入库",
+      route: ["kabuki-market", "megabuilding-h10"],
+      leadMinutes: 720,
+    },
   },
   {
     id: "kabuki-arms",
@@ -87,7 +93,6 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "black-lace",
       "glitter",
     ],
-    credGates: { rare: 5, epic: 10 },
   },
   {
     id: "japantown-arcade",
@@ -110,6 +115,12 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "hawtdawg",
       "coffee",
     ],
+    supply: {
+      supplier: "japantown-retail-distribution",
+      origin: "本作开局合同：日本町商街共同采购的服装、药品和食品配送",
+      route: ["japantown"],
+      leadMinutes: 480,
+    },
   },
   // 本作改编：维克多是原作人物，药柜是本作加的
   {
@@ -121,4 +132,5 @@ export const shops = inventoryRules.ShopListSchema.parse([
     note: "诊所里上锁的药柜，压制剂只卖给他看过的病人，每次都要叮嘱一句别吃多",
     shelf: ["psycho-suppressant", "maxdoc", "bounce-back"],
   },
+  ...poiShops,
 ]);
