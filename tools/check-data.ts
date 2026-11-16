@@ -44,7 +44,6 @@ import {
   CanonTimelineSchema,
   CharacterCardSchema,
   ComboSchema,
-  characterRules,
   contentPriceIssues,
   cyberwareRules,
   EXTRACT_STAGE,
@@ -52,8 +51,6 @@ import {
   falloutRules,
   GlossarySchema,
   hackingRules,
-  healthRules,
-  humanityRules,
   inventoryRules,
   JUDGE_STAGE,
   jobsRules,
@@ -312,12 +309,8 @@ if (existsSync(TERMS)) {
   notes.push("本机没有官方译名表 data/lore/terms.json，跳过译名核对（需要时先跑 pnpm terms）");
 }
 
-// 档位换算：发给模型的说明里只出现定性档位，不出现换算表数字或属性加减公式
+// 因果规则：提示词不教模型按生命百分比、人性扣点或属性加减决定结果
 {
-  const { AFFINITY_SIZES } = npcRules;
-  const { HUMANITY_KINDS } = humanityRules;
-  const { DAMAGE_PERCENT } = healthRules;
-  const { CRED_SIZES } = characterRules;
   const texts: [string, string][] = [
     ["常驻守则", BASE_RULES],
     ["判断", JUDGE_STAGE],
@@ -335,19 +328,13 @@ if (existsSync(TERMS)) {
   ];
   for (const [where, text] of texts) {
     for (const m of text.matchAll(/(?<![\w\d])[+−](\d+)/g)) {
-      errors.push(`${where}：出现了「${m[0]}」，模型说明里不应出现加减数值，换算的数由代码查表`);
+      errors.push(`${where}：出现了「${m[0]}」，模型说明里不应以属性或点数加减代替实际条件`);
     }
     for (const m of text.matchAll(/\d+\s?%/g)) {
-      errors.push(`${where}：出现了「${m[0]}」，伤害按档位写，百分比由代码换算`);
+      errors.push(`${where}：出现了「${m[0]}」，伤害应记录具体损伤，不按固定生命百分比结算`);
     }
   }
-  const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`.replace("-", "−"));
-  const humanity = Object.values(HUMANITY_KINDS)
-    .map((k) => `${k.label} ${[...new Set(Object.values(k.sizes))].map(signed).join("/")}`)
-    .join("，");
-  notes.push(
-    `换算表：伤害 ${Object.values(DAMAGE_PERCENT).join("/")}%；好感 ±${Object.values(AFFINITY_SIZES).join("/")}；人性 ${humanity}；声望 ${Object.values(CRED_SIZES).join("/")} 级`,
-  );
+  notes.push("提示词检查：不包含固定伤害百分比或属性加减公式；不依赖废弃换算表");
 }
 
 // 地图和偶遇：地点都要有坐标，偶遇只能写地点表里有的城区
@@ -525,7 +512,6 @@ for (const o of openings) {
     newGameWorld(
       {
         startTime: Date.UTC(2077, 9, 1, 22) / 60000,
-        difficulty: "nightCity",
         opening: probe.id,
         loadouts: [DEFAULT_LOADOUT],
       },

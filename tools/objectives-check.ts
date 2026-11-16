@@ -22,7 +22,6 @@ const base: World = withAllSlices(
   newGameWorld(
     {
       startTime: Date.UTC(2077, 9, 1, 22) / 60000,
-      difficulty: "nightCity",
       opening: DEFAULT_OPENING,
       loadouts: [DEFAULT_LOADOUT],
     },
@@ -175,7 +174,10 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
     set(base, "jobs", { jobs: [{ ...first, twist: "隐藏的转折", ...j }] });
   const offered = view(withJob({ status: "offered", due: base.time + 600 }));
   const o = offered.objectives.find((x) => x.id === `jobs:${first.id}`);
-  expect("挂着的委托是 offered，期限 600 分钟", o?.status === "offered" && o?.dueIn === 600, o);
+  expect("未接下的请求不强行进入追踪板", o === undefined, o);
+  const accepted = view(withJob({ status: "active", due: base.time + 600 }));
+  const a = accepted.objectives.find((x) => x.id === `jobs:${first.id}`);
+  expect("答应的约定进入追踪板并保留期限", a?.status === "active" && a?.dueIn === 600, a);
   expect("委托转折不出现", !text(offered).includes("隐藏的转折"));
   const late = view(withJob({ status: "active", due: base.time - 10 }));
   const l = late.objectives.find((x) => x.id === `jobs:${first.id}`);
@@ -326,7 +328,7 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
   );
 }
 
-// 消息：警方频段只播实际涨了的星；传闻听说了才进街头；快讯进新闻，不带真假
+// 通缉变化用系统事件提示；传闻听说了才进街头；快讯进新闻，不带真假
 const ctx = { rng: { roll: () => 1 }, data: gameData };
 const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1]) => {
   const r = registry.applyCommands(world, commands, ctx);
@@ -337,8 +339,8 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
 {
   const kill = { type: "event", kind: "kill", witnesses: 5, public: true, reason: "街头枪战" };
   const once = run(base, [kill]);
-  const police = view(once, base).feed.filter((x) => x.channel === "police" && x.source === "heat");
-  expect("涨星进警方频段并提醒", police.length === 1 && police[0]?.notify === true, police);
+  const police = view(once, base).events.filter((x) => x.source === "heat");
+  expect("涨星出现通缉变化事件", police.length === 1 && police[0]?.tone === "bad", police);
   const top = run(set(base, "heat", { stars: 5 }), [kill]);
   expect("封顶不再播", !view(top).feed.some((x) => x.source === "heat"));
 
@@ -393,7 +395,7 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
   const kill = { type: "event", kind: "kill", witnesses: 5, public: true, reason: "枪战" };
   const twice = run(base, [kill, kill]);
   const p = view(twice, base).notifications.items.filter((x) => x.source === "heat");
-  expect("同一来源一天只提醒一条", p.length === 1, p);
+  expect("通缉变化不重复插入手机消息", p.length === 0, p);
 
   const aired = run(base, [{ type: "city.bulletin", kind: "news", title: "快讯", text: "原文" }]);
   const unread = view(aired).phone.feedUnread.news;

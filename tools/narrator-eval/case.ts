@@ -4,7 +4,6 @@ import { gameContent } from "@cp/content";
 import {
   type Command,
   characterRules,
-  diceRules,
   type LogRecord,
   LogRecordSchema,
   type NarratorPlan,
@@ -54,7 +53,6 @@ export const EvalCaseSchema = z
     tags: z.array(z.string().min(1)).min(1),
     setup: z
       .strictObject({
-        difficulty: diceRules.DifficultySchema.default("nightCity"),
         startTime: worldRules.GameTimeSchema.prefault("2077-01-01 22:00"),
         character: characterRules.SetCharacterSchema.omit({ type: true }).optional(),
         /** 开局前由代码执行的指令，内部指令也可以，例如人性、开战 */
@@ -169,10 +167,7 @@ function applyAll(
 export function buildScenario(c: EvalCase): Scenario {
   const { setup } = c;
   if (setup.snapshot) return fromSnapshot(c, setup.snapshot);
-  let world = newGameWorld(
-    { startTime: setup.startTime, difficulty: setup.difficulty },
-    gameContent,
-  );
+  let world = newGameWorld({ startTime: setup.startTime }, gameContent);
   const character = setup.character ?? EVAL_CHARACTER;
   world = applyAll(
     world,

@@ -1,33 +1,16 @@
 {
   "id": "modules-low-humanity",
-  "title": "人性低于 40 带赛博精神病模块",
+  "title": "已发生的神经失调症状触发精神状态模块",
   "tags": ["modules"],
   "setup": {
     "commands": [
       {
         "type": "humanity",
-        "delta": -15,
-        "reason": "测评开局：长期过载义体"
-      },
-      {
-        "type": "humanity",
-        "delta": -15,
-        "reason": "测评开局：长期过载义体"
-      },
-      {
-        "type": "humanity",
-        "delta": -15,
-        "reason": "测评开局：长期过载义体"
-      },
-      {
-        "type": "humanity",
-        "delta": -15,
-        "reason": "测评开局：长期过载义体"
-      },
-      {
-        "type": "humanity",
-        "delta": -15,
-        "reason": "测评开局：长期过载义体"
+        "action": "affect",
+        "id": "overload-hallucination",
+        "stage": "unstable",
+        "symptom": "环境声音偶尔失真，难以确认远处耳语是否真实",
+        "reason": "测评开局：长期神经过载后已经出现感知失真"
       }
     ],
     "history": [
