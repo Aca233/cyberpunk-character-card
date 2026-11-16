@@ -1,25 +1,31 @@
 import type { ViewContext } from "../../kernel/system";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
-import { formatGameTime, WorldClockStateSchema } from "../world";
+import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { clinicProvider, DoctorRosterSchema, quoteCyberware } from "./quote";
 import { CyberwareStateSchema, SLOT_LABELS } from "./schema";
+import { clinicState } from "./stock";
 import { bonusText } from "./view";
 
 /** 当前地点开着的义体医生；不在诊所时是 null */
 export function ripperdocView({ world, data }: ViewContext) {
+  const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   const location = WorldClockStateSchema.parse(world.slices.world).location;
   const doc =
-    location === null ? undefined : ripperdocList(data).find((d) => d.location === location);
+    location === null
+      ? undefined
+      : ripperdocList(data, state).find((d) => merchantAt(data, d.id, d.location, location));
   if (!doc) return null;
-  const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  const { installed, debts } = state;
+  const clinic = clinicState(state, doc, world.time);
   const broken = HealthStateSchema.parse(world.slices.health).brokenChrome;
   const npcs = DoctorRosterSchema.parse(world.slices.npc ?? {}).npcs;
   const parts = cyberwareCatalog(data);
-  const debt = debts.find((d) => d.doc === doc.id);
+  const owed = debts.filter((d) => d.doc === doc.id);
+  const due = owed.flatMap((d) => (d.due === null ? [] : [d.due])).sort((a, b) => a - b)[0];
   const keeper = keeperOf(doc.keeperNpc, npcs);
-  const provider = clinicProvider(doc, npcs);
+  const provider = clinicProvider(doc, npcs, clinic.staff, data);
   return {
     id: doc.id,
     name: doc.name,
@@ -30,7 +36,12 @@ export function ripperdocView({ world, data }: ViewContext) {
     /** 最多肯赊多少；0 是不赊账 */
     credit: doc.credit,
     /** 欠这位医生的钱 */
-    debt: debt ? { amount: debt.amount, due: formatGameTime(debt.due) } : null,
+    debt: owed.length
+      ? {
+          amount: owed.reduce((sum, d) => sum + d.amount, 0),
+          due: due === undefined ? "未约定期限" : formatGameTime(due),
+        }
+      : null,
     /** 卸下装着的义体时回收多少，按义体 id */
     buyback: Object.fromEntries(
       installed.map((c) => {
@@ -53,7 +64,22 @@ export function ripperdocView({ world, data }: ViewContext) {
         return [[c.id, quote.ok ? quote.quote.total : repairCost(def)]];
       }),
     ) as Readonly<Record<string, number>>,
-    shelf: ripperdocShelf(doc, parts, installed).map((item) => {
+    shelf: ripperdocShelf(
+      {
+        ...doc,
+        shelf: [
+          ...new Set([
+            ...doc.shelf,
+            ...Object.keys(clinic.stock),
+            ...Object.values(state.parts)
+              .filter((part) => part.holder === doc.id)
+              .map((part) => part.model),
+          ]),
+        ],
+      },
+      parts,
+      installed,
+    ).map((item) => {
       const result = item.installed
         ? undefined
         : quoteCyberware(world, data, {
@@ -84,7 +110,13 @@ export function ripperdocView({ world, data }: ViewContext) {
         accelerator: item.def.accelerator,
         programSlots: item.def.programSlots,
         ram: item.def.ram,
-        locked: !provider.ok ? provider.reason : result && !result.ok ? result.reason : item.locked,
+        locked: !clinic.open
+          ? clinic.reason
+          : !provider.ok
+            ? provider.reason
+            : result && !result.ok
+              ? result.reason
+              : item.locked,
         installed: item.installed,
         replaces: item.replaces?.name ?? null,
         replacesId: item.replaces?.id ?? null,
@@ -101,6 +133,6 @@ export function ripperdocDebtsView({ world }: ViewContext) {
   return debts.map((d) => ({
     docName: d.docName,
     amount: d.amount,
-    due: formatGameTime(d.due),
+    due: d.due === null ? "未约定期限" : formatGameTime(d.due),
   }));
 }

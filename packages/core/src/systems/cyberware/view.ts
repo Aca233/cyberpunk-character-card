@@ -4,6 +4,23 @@ import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
 import { type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./schema";
 
+export function cyberwarePartsView({ world, data }: ViewContext) {
+  const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  const catalog = cyberwareCatalog(data);
+  return Object.values(state.parts)
+    .filter((part) => part.holder === "player")
+    .map((part) => ({
+      id: part.id,
+      model: part.model,
+      name: catalog.get(part.model)?.name ?? part.model,
+      condition: part.condition,
+      source: part.source,
+      location: part.location,
+      rarity: catalog.get(part.model)?.rarity ?? null,
+      ability: catalog.get(part.model)?.ability ?? null,
+    }));
+}
+
 /** 义体的特殊机制效果，例如护甲或斯安威斯坦动作格；没有时是空字符串 */
 export function bonusText(def: CyberwareDef): string {
   return [

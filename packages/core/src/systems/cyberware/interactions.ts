@@ -1,13 +1,14 @@
 import type { Interaction, ViewContext } from "../../kernel/system";
-import { WorldClockStateSchema } from "../world";
+import { merchantAt, WorldClockStateSchema } from "../world";
 import { ripperdocList } from "./apply";
+import { CyberwareStateSchema } from "./schema";
 
 /** 当前地点的义体医生入口；安装、卸下和修理仍由各自操作校验 */
 export function cyberwareInteractions({ world, data }: ViewContext): readonly Interaction[] {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   if (location === null) return [];
-  return ripperdocList(data)
-    .filter((doc) => doc.location === location)
+  return ripperdocList(data, CyberwareStateSchema.parse(world.slices.cyberware))
+    .filter((doc) => merchantAt(data, doc.id, doc.location, location))
     .map((doc) => ({
       id: `cyberware:ripperdoc:${doc.id}`,
       source: "cyberware",

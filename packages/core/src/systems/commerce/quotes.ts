@@ -10,6 +10,8 @@ export interface QuoteSelector {
   readonly offer?: string | undefined;
   readonly replace?: string | undefined;
   readonly tradeIn?: boolean | undefined;
+  readonly part?: string | undefined;
+  readonly disposition?: "keep" | "sell" | "scrap" | undefined;
 }
 
 export interface NarratedPurchase {
@@ -23,6 +25,14 @@ export interface NarratedPurchase {
   readonly cash?: number | undefined;
   readonly credit?: number | undefined;
   readonly creditAllowed?: boolean | undefined;
+  readonly part?: string | undefined;
+  readonly disposition?: "keep" | "sell" | "scrap" | undefined;
+  readonly startsAt?: number | undefined;
+  readonly endsAt?: number | undefined;
+  readonly provider?: string | undefined;
+  readonly stockRevision?: number | undefined;
+  readonly serviceOrder?: string | undefined;
+  readonly debtDue?: number | null | undefined;
 }
 
 /** 正文开始前已给出的交易不能在抽取时换对象或改价；未形成报价时只能继续商谈。 */
@@ -46,7 +56,16 @@ export function checkNarratedPurchase(
     (expected.tradeIn ?? false) !== (actual.tradeIn ?? false) ||
     expected.cash !== actual.cash ||
     expected.credit !== actual.credit ||
-    (expected.creditAllowed ?? false) !== (actual.creditAllowed ?? false)
+    (expected.creditAllowed ?? false) !== (actual.creditAllowed ?? false) ||
+    expected.part !== actual.part ||
+    (expected.disposition ?? (expected.tradeIn ? "sell" : undefined)) !==
+      (actual.disposition ?? (actual.tradeIn ? "sell" : undefined)) ||
+    expected.startsAt !== actual.startsAt ||
+    expected.endsAt !== actual.endsAt ||
+    expected.provider !== actual.provider ||
+    expected.stockRevision !== actual.stockRevision ||
+    expected.serviceOrder !== actual.serviceOrder ||
+    expected.debtDue !== actual.debtDue
   )
     return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";
   return undefined;
@@ -59,7 +78,10 @@ export function sameQuoteTerms(a: QuoteSelector, b: QuoteSelector): boolean {
     a.action === b.action &&
     a.target === b.target &&
     a.replace === b.replace &&
-    (a.tradeIn ?? false) === (b.tradeIn ?? false)
+    (a.tradeIn ?? false) === (b.tradeIn ?? false) &&
+    a.part === b.part &&
+    (a.disposition ?? (a.tradeIn ? "sell" : undefined)) ===
+      (b.disposition ?? (b.tradeIn ? "sell" : undefined))
   );
 }
 

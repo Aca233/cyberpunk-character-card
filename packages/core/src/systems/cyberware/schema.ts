@@ -72,7 +72,7 @@ export const CyberwareDefSchema = z.object({
   ram: z.number().int().min(1).max(12).optional(),
   /** 加速义体（斯安威斯坦）：生死瞬间可以开，按现场时距和设备能力加速行动 */
   accelerator: z.boolean().default(false),
-  /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
+  /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */
   iconic: z.boolean().default(false),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
@@ -92,14 +92,24 @@ export const RipperdocSchema = z.object({
   note: z.string().max(120).default(""),
   /** 乘在义体表参考价上的系数 */
   priceFactor: z.number().min(0.5).max(2).default(1),
-  /** 黑市货：便宜，但可能有故障或追踪器，由叙事模型在剧情里兑现 */
+  /** 黑市来源标签；不自动推断故障、追踪器或惩罚 */
   blackMarket: z.boolean().default(false),
   /** 货架上的义体 id；标签不替代实际货源 */
   shelf: z.array(z.string().min(1)).min(1),
-  /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
-  credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
+  initialStock: z.record(z.string(), z.number().int().min(0)).optional(),
+  equipment: z.array(z.string().min(1)).default(["surgery"]),
+  serviceMinutes: z
+    .object({
+      install: z.number().int().min(1).default(60),
+      remove: z.number().int().min(1).default(30),
+      repair: z.number().int().min(1).default(30),
+    })
+    .default({ install: 60, remove: 30, repair: 30 }),
+  /** 目录价中安装服务的份额；自带件只支付这一部分 */
+  serviceRate: z.number().min(0).max(1).default(0.2),
   /** 最多肯赊多少欧元；0 是不赊账 */
   credit: z.number().int().min(0).max(100_000).default(0),
+  creditDays: z.number().int().min(1).nullable().default(null),
 });
 export type Ripperdoc = z.infer<typeof RipperdocSchema>;
 export const RipperdocListSchema = z.array(RipperdocSchema);
@@ -108,19 +118,100 @@ export const RipperdocListSchema = z.array(RipperdocSchema);
 export const TRADE_IN_RATE = 0.2;
 /** 修理打坏的义体按参考价的几成收钱 */
 export const REPAIR_RATE = 0.3;
-/** 赊账几天内还清 */
-export const DEBT_DAYS = 7;
-
-/** 欠义体医生的钱：一位医生同时只赊一笔，期限记在“期限与伏笔”里 */
+/** 每笔已发生的欠款；只有明确约定期限时才记对应期限事件。 */
 export const RipperdocDebtSchema = z.object({
   doc: z.string().min(1),
   docName: z.string().min(1),
   amount: z.number().int().min(1),
-  due: z.number().int(),
+  due: z.number().int().nullable(),
   /** 对应的期限 id */
-  deadline: z.string().min(1),
+  deadline: z.string().min(1).nullable(),
 });
 export type RipperdocDebt = z.infer<typeof RipperdocDebtSchema>;
+
+export const CyberwarePartSchema = z.object({
+  id: z.string().min(1),
+  model: z.string().min(1),
+  holder: z.string().min(1),
+  location: z.string().nullable(),
+  condition: z.enum(["intact", "damaged", "scrapped"]),
+  source: z.string().min(1),
+  at: z.number().int(),
+});
+export type CyberwarePart = z.infer<typeof CyberwarePartSchema>;
+
+export const ClinicStateSchema = z.object({
+  definition: RipperdocSchema,
+  stock: z.record(z.string(), z.number().int().min(0)),
+  initializedAt: z.number().int(),
+  revision: z.number().int().min(0),
+  open: z.boolean(),
+  reason: z.string(),
+  staff: z.array(z.string()),
+  equipment: z.array(z.string()),
+});
+export type ClinicState = z.infer<typeof ClinicStateSchema>;
+
+export const CyberwareTermsSchema = z.object({
+  action: z.enum(["buy", "install", "remove", "repair", "repay"]),
+  doc: z.string().min(1).max(100),
+  id: z.string().min(1).optional(),
+  part: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("自带的未安装实物 ID；不能把型号目录当成自己已持有的零件"),
+  replace: z.string().min(1).optional().describe("玩家选定换下的已装型号；满槽不能自行选择"),
+  disposition: z
+    .enum(["keep", "sell", "scrap"])
+    .optional()
+    .describe("旧件明确去向：保留、出售或报废；必须有玩家授权"),
+  tradeIn: z
+    .boolean()
+    .optional()
+    .describe("只有玩家同意出售旧件时为 true，与 disposition:sell 一致"),
+  credit: z.boolean().optional(),
+  offer: z.string().min(1).optional(),
+  startAt: z
+    .number()
+    .int()
+    .optional()
+    .describe("已经确认的服务开始游戏分钟；结束时刻由服务时长确定，不能重复增加耗时"),
+});
+export type CyberwareTerms = z.infer<typeof CyberwareTermsSchema>;
+
+export const CyberwareServiceSchema = z.object({
+  id: z.string().min(1),
+  terms: CyberwareTermsSchema,
+  provider: z.string().min(1),
+  providerName: z.string().min(1),
+  scheduledAt: z.number().int(),
+  startedAt: z.number().int().nullable(),
+  endsAt: z.number().int(),
+  remaining: z.number().int().min(0),
+  status: z.enum(["booked", "active", "interrupted", "cancelled", "completed"]),
+  price: z.number().int().min(0),
+  cash: z.number().int().min(0),
+  credit: z.number().int().min(0),
+  receive: z.number().int().min(0),
+  part: z.string().nullable(),
+  oldPart: z.string().nullable(),
+  reason: z.string(),
+});
+export type CyberwareService = z.infer<typeof CyberwareServiceSchema>;
+
+export const CyberwareSupplySchema = z.object({
+  id: z.string().min(1),
+  doc: z.string().min(1),
+  source: z.string().min(1),
+  stock: z.record(z.string(), z.number().int().min(1)),
+  route: z.array(z.string().min(1)),
+  due: z.number().int(),
+  remaining: z.number().int().min(0),
+  checkedAt: z.number().int(),
+  status: z.enum(["pending", "blocked", "arrived", "cancelled"]),
+  reason: z.string(),
+});
 
 export const CyberwareStateSchema = z.object({
   installed: z
@@ -136,6 +227,10 @@ export const CyberwareStateSchema = z.object({
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()).default([]),
   debts: z.array(RipperdocDebtSchema).default([]),
+  clinics: z.record(z.string(), ClinicStateSchema).default({}),
+  parts: z.record(z.string(), CyberwarePartSchema).default({}),
+  services: z.record(z.string(), CyberwareServiceSchema).default({}),
+  supplies: z.record(z.string(), CyberwareSupplySchema).default({}),
   /** 最近一次开加速义体：设备 id 与启动时间 */
   boost: z
     .object({ id: z.string().min(1), lastAt: z.number().int() })
@@ -145,29 +240,15 @@ export const CyberwareStateSchema = z.object({
 export type CyberwareState = z.infer<typeof CyberwareStateSchema>;
 
 /** 模型和按钮共用的义体交易；成交金额由当前医生报价决定。 */
-export const CyberwareCommandSchema = z
-  .strictObject({
-    type: z.literal("cyberware"),
-    action: z.enum(["install", "remove", "repair", "repay"]),
-    doc: z.string().min(1).describe("实际提供服务的诊所/医生 id，使用当前义体医生报价中的 id"),
-    id: z.string().min(1).optional().describe("安装、拆卸或维修的义体 id；repay 不填"),
-    replace: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("玩家明确选定要换下的已装义体 id；满槽不得自行选最早一件"),
-    tradeIn: z
-      .boolean()
-      .optional()
-      .describe("只有玩家同意出售旧件时写 true；拆卸回收或替换折抵必须明确授权"),
-    credit: z.boolean().optional().describe("只有玩家明确接受赊账时写 true；不自动借款"),
-    offer: z.string().min(1).optional().describe("已登记、已谈妥的报价 id；不直接填写任意价格"),
-    reason: z.string().min(1),
-    /** 事件 id；带上后同一事件只结算一次 */
-    event: z.string().min(1).optional(),
-  })
+export const CyberwareCommandSchema = CyberwareTermsSchema.extend({
+  type: z.literal("cyberware"),
+  reason: z.string().min(1),
+  /** 事件 id；带上后同一事件只结算一次 */
+  event: z.string().min(1).optional(),
+})
+  .strict()
   .describe(
-    "义体交易：install 购买并安装、remove 拆卸回收、repair 维修、repay 还清欠款。现场、医生、货架、报价、折抵、余额与债务由代码统一核验；满槽须有玩家指定的 replace 和同意出售旧件的 tradeIn:true，未授权不替换。赊账须 credit:true。报价与交易不是一回事，只有实际接受并完成才写；失败整笔不生效，不能另写 money/trade 重复记账。安装本身不扣人性。",
+    "义体交易：buy 只买下实物；install 购买并安装或以 part 指定自带件；remove 按 disposition 拆下保留/出售/报废；repair 维修；repay 还款。简单服务完成时按共同起止时刻推进时间；复杂手术走 cyberware.service。旧件处置必须明确，不自动出售；成交不另写 money/trade。",
   );
 export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 
@@ -188,6 +269,7 @@ export const RipperdocDebtCommandSchema = z.object({
   amount: z.number().int().min(1).optional(),
   /** add 时赊的是哪件义体的尾款 */
   item: z.string().min(1).optional(),
+  due: z.number().int().nullable().optional(),
 });
 export type RipperdocDebtCommand = z.infer<typeof RipperdocDebtCommandSchema>;
 

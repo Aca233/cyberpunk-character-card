@@ -4,11 +4,12 @@ import type { WorldState } from "../../kernel/world";
 import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./apply";
 import { quoteCyberware } from "./quote";
 import { type CyberwareCommand, CyberwareStateSchema } from "./schema";
+import { clinicState } from "./stock";
 
 /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
 export const BuyCyberwareActionSchema = z.strictObject({
   type: z.literal("buyCyberware"),
-  doc: z.string().min(1).max(40),
+  doc: z.string().min(1).max(100),
   id: z.string().min(1).max(64),
   credit: z.boolean().optional(),
 });
@@ -16,20 +17,20 @@ export const BuyCyberwareActionSchema = z.strictObject({
 /** 请义体医生卸下一件，医生折价回收 */
 export const RemoveCyberwareActionSchema = z.strictObject({
   type: z.literal("removeCyberware"),
-  doc: z.string().min(1).max(40),
+  doc: z.string().min(1).max(100),
   id: z.string().min(1).max(64),
 });
 
 /** 还清欠义体医生的钱 */
 export const RepayRipperdocActionSchema = z.strictObject({
   type: z.literal("repayRipperdoc"),
-  doc: z.string().min(1).max(40),
+  doc: z.string().min(1).max(100),
 });
 
 /** 请义体医生修好一件打坏的义体 */
 export const RepairCyberwareActionSchema = z.strictObject({
   type: z.literal("repairCyberware"),
-  doc: z.string().min(1).max(40),
+  doc: z.string().min(1).max(100),
   id: z.string().min(1).max(64),
 });
 
@@ -47,10 +48,21 @@ function ripperdocCommands(
 ): Command[] | string {
   let command: CyberwareCommand;
   if (action.type === "buyCyberware") {
-    const doc = ripperdocList(data).find((d) => d.id === action.doc);
+    const state = CyberwareStateSchema.parse(world.slices.cyberware);
+    const doc = ripperdocList(data, state).find((d) => d.id === action.doc);
     if (!doc) return `没有叫 ${action.doc} 的义体医生`;
-    const installed = CyberwareStateSchema.parse(world.slices.cyberware).installed;
-    const item = ripperdocShelf(doc, cyberwareCatalog(data), installed).find(
+    const installed = state.installed;
+    const stock = clinicState(state, doc, world.time).stock;
+    const shelf = [
+      ...new Set([
+        ...doc.shelf,
+        ...Object.keys(stock),
+        ...Object.values(state.parts)
+          .filter((part) => part.holder === doc.id)
+          .map((part) => part.model),
+      ]),
+    ];
+    const item = ripperdocShelf({ ...doc, shelf }, cyberwareCatalog(data), installed).find(
       (i) => i.def.id === action.id,
     );
     if (!item) return `${doc.name}的货架上没有这件`;

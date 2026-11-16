@@ -12,6 +12,8 @@ export const QuoteTermsSchema = z.object({
     .max(80)
     .describe("这一件商品、义体或服务的 id；一份报价对应一次单件交付"),
   replace: z.string().min(1).optional().describe("安装义体需要替换时，双方明确约定拆下的旧义体 id"),
+  part: z.string().min(1).optional().describe("自带义体实物 id；该报价不含另一件义体的购入"),
+  disposition: z.enum(["keep", "sell", "scrap"]).optional().describe("旧件明确去向"),
   tradeIn: z
     .boolean()
     .default(false)
@@ -73,10 +75,16 @@ export const OfferCommandSchema = QuoteTermsSchema.extend({
         ? ["buy", "sell"]
         : offer.kind === "service"
           ? ["service"]
-          : ["install", "remove", "repair"];
+          : ["buy", "install", "remove", "repair"];
     if (!valid.includes(offer.action))
       ctx.addIssue({ code: "custom", message: "报价种类与交易动作不一致" });
-    if (offer.kind !== "cyberware" && (offer.replace !== undefined || offer.tradeIn))
+    if (
+      offer.kind !== "cyberware" &&
+      (offer.replace !== undefined ||
+        offer.tradeIn ||
+        offer.part !== undefined ||
+        offer.disposition !== undefined)
+    )
       ctx.addIssue({ code: "custom", message: "只有义体报价可以约定旧件" });
   })
   .describe(

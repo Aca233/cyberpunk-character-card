@@ -18,6 +18,7 @@ import {
   CyberwareStateSchema,
   RipperdocSchema,
 } from "./schema";
+import { cyberwareSettlement } from "./service";
 
 const chrome = (id: string, slot: "arms" | "eyes", price: number) =>
   CyberwareDefSchema.parse({
@@ -44,6 +45,7 @@ const doc = RipperdocSchema.parse({
   priceFactor: 0.8,
   shelf: ["old-arm", "new-arm", "eye", "second-eye"],
   credit: 3000,
+  creditDays: 7,
   credGates: { legendary: 50 },
 });
 const data = { cyberware: parts, ripperdocs: [doc], items: [], quickhacks: [] };
@@ -123,8 +125,21 @@ function succeeded(state: WorldState, request: CyberwareQuoteRequest, event?: st
   return result.world;
 }
 function sameTransaction(a: WorldState, b: WorldState) {
-  for (const slice of ["economy", "cyberware", "health", "world", "commerce"])
+  for (const slice of ["economy", "health", "world", "commerce"])
     expect(a.slices[slice]).toEqual(b.slices[slice]);
+  const state = (world: WorldState) => {
+    const parsed = CyberwareStateSchema.parse(world.slices.cyberware);
+    return {
+      ...parsed,
+      services: Object.fromEntries(
+        Object.entries(parsed.services).map(([id, service]) => [
+          id,
+          { ...service, reason: "同一服务" },
+        ]),
+      ),
+    };
+  };
+  expect(state(a)).toEqual(state(b));
   expect(a.time).toBe(b.time);
 }
 
@@ -217,16 +232,9 @@ describe("义体按钮与正文共享交易事实", () => {
       id: "eye",
       reason: "已确认",
     });
-    const expected = {
-      seller: "needle",
-      kind: "cyberware",
-      action: "install",
-      target: "eye",
-      price: 1000,
-      cash: 1000,
-      credit: 0,
-      creditAllowed: false,
-    };
+    const quote = quoteCyberware(before, data, command);
+    if (!quote.ok) throw new Error(quote.reason);
+    const expected = cyberwareSettlement(quote.quote, command);
     for (const facts of [
       { tradeQuote: { ...expected, price: 800 } },
       { tradeQuote: { ...expected, seller: "someone-else" } },
@@ -371,18 +379,9 @@ describe("义体按钮与正文共享交易事实", () => {
       credit: true,
       reason: "接受安装",
     });
-    const expected = {
-      seller: "needle",
-      kind: "cyberware",
-      action: "install",
-      target: "new-arm",
-      price: 3800,
-      cash: 1000,
-      credit: 2800,
-      creditAllowed: true,
-      replace: "old-arm",
-      tradeIn: true,
-    };
+    const quote = quoteCyberware(before, data, command);
+    if (!quote.ok) throw new Error(quote.reason);
+    const expected = cyberwareSettlement(quote.quote, command);
     for (const unauthorized of [
       { ...expected, creditAllowed: false },
       { ...expected, cash: 3800, credit: 0 },

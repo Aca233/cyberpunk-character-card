@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { WorldState } from "../kernel/world";
 import type { NarratedPurchase } from "../systems/commerce/quotes";
 import { quoteCyberware } from "../systems/cyberware/quote";
+import { cyberwareSettlement, quoteCyberwareService } from "../systems/cyberware/service";
 import { EconomyStateSchema, isBigSpend, ServiceSchema } from "../systems/economy/schema";
 import { quoteTrade } from "../systems/inventory/trade";
 import { vehicleCatalog } from "../systems/travel/vehicles";
@@ -33,7 +34,24 @@ export const BuyProposalSchema = z
       .optional()
       .describe("仅玩家明确先前往某处再成交时写目标地点 id；不能为了交易擅自补出行"),
     offer: z.string().min(1).optional().describe("沿用已谈妥报价时写报价 id"),
-    operation: z.enum(["install", "remove", "repair", "repay"]).optional(),
+    operation: z.enum(["buy", "install", "remove", "repair", "repay"]).optional(),
+    part: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("已持有的未安装义体实物 ID，安装或维修自带件时填写"),
+    disposition: z
+      .enum(["keep", "sell", "scrap"])
+      .optional()
+      .describe("玩家授权的旧件去向：保留、出售、报废"),
+    startAt: z
+      .number()
+      .int()
+      .optional()
+      .describe("本轮已确认的开始游戏分钟，由共同报价供给正文与抽取"),
+    serviceOrder: z.string().min(1).optional().describe("义体服务订单 id；普通一次完成操作不填"),
+    serviceAction: z.enum(["book", "start", "complete", "resume", "cancel"]).optional(),
+    scheduledAt: z.number().int().optional().describe("预约开始游戏分钟，仅预约操作填写"),
     replace: z.string().min(1).optional().describe("玩家明确同意拆下的旧义体 id"),
     tradeIn: z.boolean().optional().describe("玩家明确同意出售旧件时才为 true"),
     credit: z.boolean().optional().describe("玩家明确申请赊账时才为 true"),
@@ -44,7 +62,7 @@ export const BuyProposalSchema = z
   .refine(
     (b) =>
       [b.item, b.service, b.cyberware].filter((v) => v !== undefined).length ===
-      (b.operation === "repay" ? 0 : 1),
+      (b.operation === "repay" || (b.serviceAction && b.serviceAction !== "book") ? 0 : 1),
     {
       message: "item、service、cyberware 写一个；还款只写 operation:repay 与 with",
     },
@@ -54,8 +72,11 @@ export const BuyProposalSchema = z
   })
   .refine(
     (b) => b.operation === undefined || b.operation === "repay" || b.cyberware !== undefined,
-    { message: "install、remove、repair 需要指定 cyberware" },
-  );
+    { message: "buy、install、remove、repair 需要指定 cyberware" },
+  )
+  .refine((b) => (b.serviceAction !== undefined) === (b.serviceOrder !== undefined), {
+    message: "服务订单操作必须同时给出 serviceOrder 与 serviceAction",
+  });
 export type BuyProposal = z.infer<typeof BuyProposalSchema>;
 
 /** 一项代表一次单件交易；多笔或多件按玩家授权的实际顺序逐项列出。 */
@@ -226,6 +247,38 @@ export function purchaseQuote(
   data: Readonly<Record<string, unknown>>,
   buy: BuyProposal,
 ): PurchaseQuote {
+  if (buy.serviceAction && buy.serviceOrder) {
+    const request =
+      buy.serviceAction === "book" && buy.with
+        ? {
+            action: buy.operation ?? "install",
+            doc: buy.with,
+            id: buy.cyberware,
+            part: buy.part,
+            replace: buy.replace,
+            disposition: buy.disposition,
+            tradeIn: buy.tradeIn,
+            credit: buy.credit,
+            offer: buy.offer,
+          }
+        : undefined;
+    const result = quoteCyberwareService(world, data, {
+      action: buy.serviceAction,
+      id: buy.serviceOrder,
+      request,
+      scheduledAt: buy.scheduledAt,
+      startAt: buy.startAt,
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      label: result.quote?.name ?? `义体服务 ${buy.serviceOrder}`,
+      price: result.price,
+      detail: result.detail,
+      settlement: result.settlement,
+      quoteKey: JSON.stringify(["cyberware.service", result.settlement, buy.destination]),
+    };
+  }
   if (buy.cyberware !== undefined || buy.operation === "repay") {
     if (!buy.with) return { ok: false, reason: "义体交易需要明确医生" };
     const result = quoteCyberware(world, data, {
@@ -236,6 +289,9 @@ export function purchaseQuote(
       tradeIn: buy.tradeIn,
       credit: buy.credit,
       offer: buy.offer,
+      part: buy.part,
+      disposition: buy.disposition,
+      startAt: buy.startAt,
     });
     if (!result.ok) return result;
     const q = result.quote;
@@ -260,20 +316,21 @@ export function purchaseQuote(
         buy.credit === true,
         q.offer,
         buy.destination,
+        q.part,
+        q.disposition,
+        q.providerId,
+        q.startsAt,
+        q.endsAt,
+        q.stockRevision,
+        q.debtDue,
       ]),
-      detail: `${q.docName} ${q.name}：${q.action === "remove" ? `经玩家明确授权拆卸回收，玩家所得 ${q.receive} 欧元` : `应付 ${q.total} 欧元，本次现金 ${q.cash}${q.credit ? `、赊欠 ${q.credit}` : ""}`}${q.replaces ? `；经玩家明确授权，回收 ${q.replaces.name}` : ""}${q.offer ? `；报价 ${q.offer}` : ""}`,
-      settlement: {
-        seller: q.doc,
-        kind: "cyberware",
+      detail: `${q.docName} ${q.name}：${q.action === "remove" && q.disposition === "sell" ? `经玩家明确授权拆卸回收，玩家所得 ${q.receive} 欧元` : `应付 ${q.total} 欧元，本次现金 ${q.cash}${q.credit ? `、赊欠 ${q.credit}` : ""}`}${q.replaces ? `；已授权旧件 ${q.replaces.name} 去向 ${q.disposition}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.offer ? `；报价 ${q.offer}` : ""}；服务人员 ${q.provider}；起止 ${q.startsAt}—${q.endsAt}，正文使用此时刻，不能再次累加耗时`,
+      settlement: cyberwareSettlement(q, {
         action: q.action,
-        target: q.id ?? "repay",
-        price: q.action === "remove" ? q.receive : q.total,
-        cash: q.cash,
-        credit: q.credit,
-        creditAllowed: buy.credit === true,
+        doc: q.doc,
         replace: buy.replace,
-        tradeIn: buy.tradeIn,
-      },
+        credit: buy.credit,
+      }),
     };
   }
   if (buy.item !== undefined && vehicleCatalog(data).has(buy.item)) {

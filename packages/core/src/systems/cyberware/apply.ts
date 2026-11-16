@@ -8,7 +8,6 @@ import {
   type CyberwareCommand,
   type CyberwareDef,
   type CyberwareState,
-  DEBT_DAYS,
   REPAIR_RATE,
   type Ripperdoc,
   type RipperdocDebtCommand,
@@ -17,6 +16,7 @@ import {
   SLOT_LABELS,
   TRADE_IN_RATE,
 } from "./schema";
+import { beginService, cyberwareSettlement, finishService, serviceWorld } from "./service";
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, CyberwareDef>>();
 
@@ -40,7 +40,16 @@ export function cyberwareCatalog(
 const doctorLists = new WeakMap<object, readonly Ripperdoc[]>();
 
 /** 读取并校验义体医生表；没有时是空表 */
-export function ripperdocList(data: Readonly<Record<string, unknown>>): readonly Ripperdoc[] {
+export function ripperdocList(
+  data: Readonly<Record<string, unknown>>,
+  state?: Pick<CyberwareState, "clinics">,
+): readonly Ripperdoc[] {
+  if (state) {
+    const rows = new Map(ripperdocList(data).map((doc) => [doc.id, doc]));
+    for (const clinic of Object.values(state.clinics))
+      rows.set(clinic.definition.id, clinic.definition);
+    return [...rows.values()];
+  }
   const raw = data.ripperdocs;
   if (typeof raw !== "object" || raw === null) return [];
   const cached = doctorLists.get(raw);
@@ -126,6 +135,7 @@ export interface Purchase {
   readonly eddies: number;
   readonly event?: string | undefined;
   readonly replace?: string | undefined;
+  readonly part?: string | undefined;
 }
 
 /** 装上一件义体；满位必须明确指定替换目标，结算层不得自行出售旧件。 */
@@ -160,11 +170,30 @@ export function install(
   if (old >= 0) {
     const [prev] = draft.installed.splice(old, 1);
     if (prev) {
+      for (const part of Object.values(draft.parts)) {
+        if (part.holder === "installed" && part.model === prev.id) part.holder = "player";
+      }
       notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
       emit.push({ type: "health.limb", action: "clear", id: prev.id });
     }
   }
   draft.installed.push({ id, slot: def.slot, installedAt: now });
+  const physical = purchase?.part ? draft.parts[purchase.part] : undefined;
+  if (physical) {
+    physical.holder = "installed";
+    physical.location = null;
+  } else {
+    const key = `body:${id}:${now}`;
+    draft.parts[key] = {
+      id: key,
+      model: id,
+      holder: "installed",
+      location: null,
+      condition: "intact",
+      source: "初始已安装义体",
+      at: now,
+    };
+  }
   notes.push(`${SLOT_LABELS[def.slot]}装上${def.name}`);
   if (def.slot === "arms" || def.slot === "legs") {
     emit.push({ type: "health.limb", action: "fit", slot: def.slot, name: def.name });
@@ -190,6 +219,9 @@ export function remove(
   const i = draft.installed.findIndex((c) => c.id === id);
   if (i < 0) return { ok: false, reason: `没有装着${name}` };
   draft.installed.splice(i, 1);
+  for (const part of Object.values(draft.parts)) {
+    if (part.holder === "installed" && part.model === id) part.holder = "player";
+  }
   return {
     ok: true,
     notes: [`卸下${name}`],
@@ -221,98 +253,40 @@ export function applyCyberware(
   command: CyberwareCommand,
   ctx: SystemContext,
 ): ApplyOutcome {
-  if (command.event !== undefined && draft.settled.includes(command.event)) {
-    return { ok: false, reason: `事件 ${command.event} 的义体已经结算过` };
-  }
-  const world = {
-    time: ctx.now,
-    slices: {
-      cyberware: draft,
-      economy: ctx.read("economy"),
-      health: ctx.read("health"),
-      world: ctx.read("world"),
-      npc: ctx.read("npc"),
-      commerce: ctx.read("commerce"),
-    },
-  };
-  const quoted = quoteCyberware(world, ctx.data, command);
-  if (!quoted.ok) return quoted;
-  const quote = quoted.quote;
-  if (quote.blocked) return { ok: false, reason: quote.blocked };
-  const changed = checkNarratedPurchase(ctx.facts, {
-    seller: quote.doc,
-    kind: "cyberware",
-    action: command.action,
-    target: quote.id ?? "repay",
-    price: command.action === "remove" ? quote.receive : quote.total,
-    cash: quote.cash,
-    credit: quote.credit,
-    creditAllowed: command.credit === true,
-    replace: command.replace,
-    tradeIn: command.tradeIn,
-  });
-  if (changed) return { ok: false, reason: changed };
-  const catalog = cyberwareCatalog(ctx.data);
-  let outcome: ApplyOutcome;
+  if (command.event !== undefined && draft.settled.includes(command.event))
+    return { ok: false, reason: "这个义体交易事件已经结算过" };
+  const result = quoteCyberware(serviceWorld(draft, ctx), ctx.data, command);
+  if (!result.ok) return result;
+  const q = result.quote;
+  if (q.blocked) return { ok: false, reason: q.blocked };
   if (command.action === "repay") {
-    outcome = applyDebt(
+    const changed = checkNarratedPurchase(ctx.facts, cyberwareSettlement(q, command));
+    if (changed) return { ok: false, reason: changed };
+    const paid = applyDebt(
       draft,
-      { type: "cyberware.debt", action: "repay", doc: quote.doc, docName: quote.docName },
+      { type: "cyberware.debt", action: "repay", doc: q.doc, docName: q.docName },
       ctx.now,
     );
-  } else if (command.action === "install") {
-    outcome = install(draft, quote.id as string, catalog, ctx.now, {
-      price: 0,
-      eddies: 0,
-      replace: quote.replaces?.id,
-    });
-  } else if (command.action === "remove") {
-    outcome = remove(draft, quote.id as string, catalog);
-  } else {
-    outcome = {
-      ok: true,
-      notes: [],
-      emit: [{ type: "health.limb", action: "repair", id: quote.id, name: quote.name }],
+    if (!paid.ok) return paid;
+    if (command.event) draft.settled.push(command.event);
+    return {
+      ...paid,
+      emit: [...(paid.emit ?? []), { type: "money", delta: -q.cash, reason: "还清义体欠款" }],
     };
   }
-  if (!outcome.ok) return outcome;
-  const notes = [...(outcome.notes ?? [])];
-  const emit: Command[] = [...(outcome.emit ?? [])];
-  if (quote.credit > 0) {
-    const debt = applyDebt(
-      draft,
-      {
-        type: "cyberware.debt",
-        action: "add",
-        doc: quote.doc,
-        docName: quote.docName,
-        amount: quote.credit,
-        item: quote.name,
-      },
-      ctx.now,
-    );
-    if (!debt.ok) return debt;
-    notes.push(...(debt.notes ?? []));
-    emit.push(...(debt.emit ?? []));
-  }
-  if (quote.cash > 0) {
-    emit.push({
-      type: "money",
-      delta: -quote.cash,
-      reason: `${quote.docName}：${quote.name}`,
-    });
-  }
-  if (quote.receive > 0) {
-    emit.push({
-      type: "money",
-      delta: quote.receive,
-      reason: `${quote.docName}回收${quote.name}`,
-    });
-  }
-  if (quote.offer) emit.push({ type: "commerce.used", id: quote.offer });
-  if (quote.replaces) notes.push(`${quote.replaces.name}按已确认条件交给${quote.docName}`);
-  if (command.event !== undefined) draft.settled.push(command.event);
-  return { ...outcome, notes, emit };
+  let sequence = 1;
+  while (draft.services[`service:${q.doc}:${sequence}`]) sequence += 1;
+  const id = `service:${q.doc}:${sequence}`;
+  const begun = beginService(draft, command, q, ctx, id);
+  if (!begun.ok) return begun;
+  const done = command.action === "buy" ? { ok: true as const } : finishService(draft, id, ctx);
+  if (!done.ok) return done;
+  if (command.event) draft.settled.push(command.event);
+  return {
+    ...done,
+    emit: [...(begun.emit ?? []), ...("emit" in done ? (done.emit ?? []) : [])],
+    notes: [...(begun.notes ?? []), ...("notes" in done ? (done.notes ?? []) : [])],
+  };
 }
 
 /** 赊账和还钱：赊账记一条期限，还清时把期限标成办完 */
@@ -321,21 +295,22 @@ export function applyDebt(
   command: RipperdocDebtCommand,
   now: number,
 ): ApplyOutcome {
-  const i = draft.debts.findIndex((d) => d.doc === command.doc);
   if (command.action === "repay") {
-    const debt = draft.debts[i];
-    if (!debt) return { ok: false, reason: `不欠${command.docName}的钱` };
-    draft.debts.splice(i, 1);
+    const debts = draft.debts.filter((d) => d.doc === command.doc);
+    if (!debts.length) return { ok: false, reason: `不欠${command.docName}的钱` };
+    draft.debts = draft.debts.filter((d) => d.doc !== command.doc);
     return {
       ok: true,
-      notes: [`还清欠${debt.docName}的 ${debt.amount} 欧元`],
-      emit: [{ type: "deadline", action: "handle", id: debt.deadline }],
+      notes: [`还清欠${command.docName}的 ${debts.reduce((sum, d) => sum + d.amount, 0)} 欧元`],
+      emit: debts.flatMap((debt) =>
+        debt.deadline ? [{ type: "deadline", action: "handle", id: debt.deadline }] : [],
+      ),
     };
   }
-  if (i >= 0) return { ok: false, reason: `还欠着${command.docName}的钱，先还清` };
   if (command.amount === undefined) return { ok: false, reason: "赊账要写金额" };
-  const due = now + DEBT_DAYS * 24 * 60;
-  const deadline = `ripperdoc-debt-${command.doc}-${now}`;
+  const due = command.due ?? null;
+  const deadline =
+    due === null ? null : `ripperdoc-debt-${command.doc}-${now}-${draft.debts.length + 1}`;
   draft.debts.push({
     doc: command.doc,
     docName: command.docName,
@@ -345,15 +320,20 @@ export function applyDebt(
   });
   return {
     ok: true,
-    notes: [`向${command.docName}赊了 ${command.amount} 欧元，${DEBT_DAYS} 天内还清`],
-    emit: [
-      {
-        type: "deadline",
-        action: "add",
-        id: deadline,
-        label: `还${command.docName} ${command.amount} 欧元${command.item ? `（${command.item}的尾款）` : ""}，到期不还他会找上门`,
-        due,
-      },
+    notes: [
+      `向${command.docName}赊了 ${command.amount} 欧元${due === null ? "，未约定还款期限" : `，于游戏分钟 ${due} 前归还`}`,
     ],
+    emit:
+      due === null
+        ? []
+        : [
+            {
+              type: "deadline",
+              action: "add",
+              id: deadline,
+              label: `还${command.docName} ${command.amount} 欧元${command.item ? `（${command.item}的尾款）` : ""}`,
+              due,
+            },
+          ],
   };
 }
