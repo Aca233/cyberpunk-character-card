@@ -3,6 +3,8 @@ import { fixedRng } from "../../kernel/rng";
 import type { SystemContext } from "../../kernel/system";
 import { applyDamage, applyHeal, applyHit, healthDisplay, recoverInjuries, revive } from "./apply";
 import { health } from "./index";
+import { registry } from "../registry";
+import { InventoryStateSchema } from "../inventory";
 
 const ctx = (now = 0, facts: Record<string, unknown> = {}): SystemContext => ({
   rng: fixedRng([]), facts, data: {}, now,
@@ -52,6 +54,20 @@ describe("伤势由身体事实驱动", () => {
     expect(state.painSuppressed).toBe(true);
     recoverInjuries(state, { from: 60, to: 125 });
     expect(state.painSuppressed).toBe(false);
+  });
+  it("快捷医疗包耗尽后仅使用真实备用包，不因空快捷栏拒绝现存补给", () => {
+    const context = { rng: fixedRng([]), data: { locations: [], items: [{ id: "needle", name: "医疗针", kind: "healing", charges: 1, healPercent: 30 }] } };
+    let world = registry.applyCommands(registry.initialWorld(0), [
+      { type: "damage", tier: "heavy", reason: "重伤" },
+      { type: "item", action: "gain", id: "needle", reason: "第一支" },
+      { type: "item", action: "gain", id: "needle", reason: "备用针" },
+      { type: "heal", source: "maxdoc" },
+    ], context).world;
+    world = registry.advanceTo(world, 121, context).world;
+    const next = registry.applyCommands(world, [{ type: "heal", source: "maxdoc" }], context);
+    expect(next.results[0]?.result.ok).toBe(true);
+    expect(InventoryStateSchema.parse(next.world.slices.inventory).backpack.needle).toBeUndefined();
+    expect(InventoryStateSchema.parse(next.world.slices.inventory).healing?.charges).toBe(0);
   });
   it("新伤保留已有断肢与设备损坏，重复战斗伤处不会重复登记", () => {
     const state = health.initial();

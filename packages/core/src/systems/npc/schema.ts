@@ -833,4 +833,9 @@ export const NpcOffscreenDeathSchema = z.object({
 });
 export type NpcOffscreenDeath = z.infer<typeof NpcOffscreenDeathSchema>;
 
-export type NpcInternal = SeedNpc | NpcMemoryEdit | NpcPast | NpcOffscreenDeath;
+export const NpcConditionSchema = z.object({
+  type: z.literal("npc.condition"), id: NpcIdSchema,
+  condition: z.enum(["up", "down"]), reason: z.string().min(1),
+});
+export type NpcCondition = z.infer<typeof NpcConditionSchema>;
+export type NpcInternal = SeedNpc | NpcMemoryEdit | NpcPast | NpcOffscreenDeath | NpcCondition;

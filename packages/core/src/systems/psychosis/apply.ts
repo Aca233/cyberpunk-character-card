@@ -136,8 +136,8 @@ export function closeBlackouts(draft: Draft<PsychosisState>, now: number): void 
 
 function isSevereEpisode(command: unknown): boolean {
   if (typeof command !== "object" || command === null) return false;
-  const c = command as { type?: unknown; severity?: unknown };
-  return c.type === "episode" && c.severity === "severe";
+  const c = command as { type?: unknown; severity?: unknown; action?: unknown };
+  return c.type === "episode" && c.action !== "end" && c.severity === "severe";
 }
 
 /** 哪几轮落在已经结束的记忆空白里：那个场景从严重发作那一轮起，到场景结束 */
@@ -167,7 +167,7 @@ export function episodeOf(
 ): { readonly severity: "mild" | "severe"; readonly trigger: string } | null {
   for (const c of commands) {
     const parsed = EpisodeCommandSchema.safeParse(c);
-    if (parsed.success) return { severity: parsed.data.severity, trigger: parsed.data.trigger };
+    if (parsed.success && parsed.data.action !== "end") return { severity: parsed.data.severity, trigger: parsed.data.trigger };
   }
   return null;
 }

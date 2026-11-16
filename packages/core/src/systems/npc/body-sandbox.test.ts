@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyNpc } from "./apply";
-import { applyNpcBody, currentVitals, bodyView } from "./body";
+import { applyNpcBody, applyNpcCondition, currentVitals, bodyView } from "./body";
 import { NpcSchema, type NpcState } from "./schema";
 import { ItemDefSchema } from "../inventory/schema";
 
@@ -27,6 +27,17 @@ describe("NPC 的身体与物件持续存在", () => {
     applyNpcBody(npc, { type: "npcHeal", id: npc.id, how: "ripperdoc", reason: "抢救与清创" }, 100, {});
     expect(currentVitals(npc, {}, 100)).toMatchObject({ condition: "up", injuries: [{ treated: true, healsAt: 100 + 7 * 1440 }] });
     expect(currentVitals(npc, {}, 100 + 7 * 1440).injuries).toEqual([]);
+  });
+  it("昏迷事实不伪造伤口，状态指令不能复活或绕过致命伤", () => {
+    const npc = person();
+    expect(applyNpcCondition(npc, { type: "npc.condition", id: npc.id, condition: "down", reason: "被击昏" }, 0, {}).ok).toBe(true);
+    expect(npc.vitals).toMatchObject({ condition: "down", injuries: [] });
+    applyNpcBody(npc, { type: "npcHurt", id: npc.id, tier: "lethal", reason: "胸口贯穿伤" }, 1, {});
+    applyNpcCondition(npc, { type: "npc.condition", id: npc.id, condition: "down", reason: "倒地" }, 2, {});
+    expect(npc.vitals?.condition).toBe("dying");
+    expect(applyNpcCondition(npc, { type: "npc.condition", id: npc.id, condition: "up", reason: "试图直接站起" }, 3, {}).ok).toBe(false);
+    npc.alive = false;
+    expect(applyNpcCondition(npc, { type: "npc.condition", id: npc.id, condition: "up", reason: "试图复活" }, 4, {}).ok).toBe(false);
   });
   it("实际神经症状有稳定身份，恢复仅处理指定症状", () => {
     const npc = person();

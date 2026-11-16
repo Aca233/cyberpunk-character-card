@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { applyNpcCondition } from "./body";
 import { npcActions } from "./actions";
 import { applyNpc, applyNpcPast, applyOffscreenDeath, editNpcMemory, seedNpc } from "./apply";
 import { perceivedView } from "./perceived";
@@ -15,6 +16,7 @@ import {
   MemorySchema,
   NewNpcSchema,
   NpcChromeSchema,
+  NpcConditionSchema,
   type NpcCommand,
   NpcDeathSchema,
   NpcGearSchema,
@@ -71,12 +73,17 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcUpdate: { schema: NpcUpdateSchema, legacy: normalizeNpcProposal },
   },
   internal: {
+    "npc.condition": NpcConditionSchema,
     "npc.seed": SeedNpcSchema,
     "npc.memoryEdit": NpcMemoryEditSchema,
     "npc.past": NpcPastSchema,
     "npc.offscreenDeath": NpcOffscreenDeathSchema,
   },
   apply(draft, command, ctx) {
+    if (command.type === "npc.condition") {
+      const person = draft.npcs[command.id];
+      return person ? applyNpcCondition(person, command, ctx.now, ctx.data) : { ok: false, reason: `没有人物 ${command.id}` };
+    }
     if (command.type === "npc.seed") return seedNpc(draft, command, ctx.data, ctx.now);
     if (command.type === "npc.memoryEdit") return editNpcMemory(draft, command);
     if (command.type === "npc.past") return applyNpcPast(draft, command, ctx.now);

@@ -10,6 +10,7 @@ import {
   type Npc,
   type NpcBodyCard,
   type NpcChrome,
+  type NpcCondition,
   type NpcGear,
   type NpcHeal,
   type NpcHumanity,
@@ -204,6 +205,17 @@ function settle(npc: Npc, data: Data, now: number): { body: FilledBody; v: NpcVi
   npc.body = body;
   npc.vitals = v;
   return { body, v };
+}
+
+/** 交战同步昏迷或苏醒事实，不臆造创口，也不覆盖尚未救治的濒死。 */
+export function applyNpcCondition(npc: Npc, command: NpcCondition, now: number, data: Data): ApplyOutcome {
+  if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死亡` };
+  const { v } = settle(npc, data, now);
+  if (command.condition === "up" && (v.condition === "dying" || v.injuries.some((i) => i.tier === "lethal" && !i.treated))) {
+    return { ok: false, reason: "致命伤尚未稳定，不能仅靠状态切换恢复行动" };
+  }
+  if (!(command.condition === "down" && v.condition === "dying")) v.condition = command.condition;
+  return { ok: true, notes: [`${npc.name}：${command.reason}`] };
 }
 
 export type NpcBodyCommand = NpcHurt | NpcHeal | NpcGear | NpcChrome | NpcHumanity | NpcScan;

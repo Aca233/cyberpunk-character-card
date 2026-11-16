@@ -114,8 +114,9 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
   if (command.source === "maxdoc") {
     if (draft.condition !== "up") return fail("角色无法自行用药，需要现场救援");
     if (!draft.injuries.length || draft.painSuppressed) return fail("当前没有需要再次镇痛的伤势");
-    const slot = ctx.read<InventoryState>("inventory").healing;
-    if (!slot || slot.charges < 1) return fail("没有可用医疗针，需要实际补给");
+    const inventory = ctx.read<InventoryState>("inventory");
+    const slot = inventory.healing;
+    if (!slot || (slot.charges < 1 && (inventory.backpack[slot.id] ?? 0) < 1)) return fail("没有可用医疗针，需要实际补给");
     draft.painSuppressed = true;
     draft.painSuppressedUntil = ctx.now + 120;
     return { ok: true, notes: ["医疗针暂时缓解疼痛，创口和损坏仍存在"], emit: [{ type: "inventory.spend", slot: "healing" }] };
