@@ -2,8 +2,9 @@ import { ConsequenceTableSchema, FALLOUT_KINDS, FALLOUT_LABELS, type FalloutStat
 
 const SHIFT: Readonly<Record<string, string>> = {
   streetLegend:
-    "当前难度是街头传说：后果整体轻一档，按低一档的那一行挑；第 1 档时只让局面变坏，不扣数值。",
-  deathCity: "当前难度是死亡之城：后果整体重一档，按高一档的那一行挑；第 5 档照旧。",
+    "当前难度是街头传说：参考低一档的例子；仍以既定因果和实际条件为准，不凭档位追加伤害。",
+  deathCity:
+    "当前难度是死亡之城：参考高一档的例子，第 5 档照旧；仍须有具体原因，不凭难度推翻已定结果。",
 };
 
 /** 给模型看的【后果参考表】：按局面与对手分量给例子 */
@@ -17,14 +18,14 @@ export function consequenceSection(
   );
   const lines = [
     "【后果参考表】",
-    "失败、冒险和坏选择要有真实的后果。按这单和对手的分量挑一两样（街头混混、帮派精锐、公司安保到强敌各不相同）；只是参考，按情境换成说得通的别的东西也行。伤害必须严格遵循前置物理裁决与当前伤势，也可以不扣数值、让局面变坏（对方有了防备、被跟上、丢了先机），但要真的落进后面的戏里。",
+    "仅在既有条件确实引出后果时参考，不是每轮挑选惩罚的清单。按实际行动、环境和对手能力判断；伤害遵循前置物理裁决与当前伤势，暴露、跟踪或失去先机也必须有具体原因。准备充分可以顺利成功，无事发生时不补后果；同一损伤或警戒持续存在，不重复制造一次新伤害。",
     ...(SHIFT[mode] ? [SHIFT[mode]] : []),
     ...table.map((t) => `- 第 ${t.risk} 档（${t.label}）：${t.examples.join("；")}`),
   ];
   return lines.join("\n");
 }
 
-/** 给模型看的【近期后果】：最近落下了什么、有没有连着重复、有没有失败却没落地的检定 */
+/** 给模型看的【近期后果】：延续已有后果，避免把持续状态当成每轮新增损伤 */
 export function falloutSection(state: FalloutState): string | undefined {
   const lines: string[] = [];
   const recent = state.recent.slice(-4);
@@ -40,12 +41,12 @@ export function falloutSection(state: FalloutState): string | undefined {
       (k) => FALLOUT_LABELS[k],
     );
     lines.push(
-      `- 已经连着两次是「${repeated.map((k) => FALLOUT_LABELS[k]).join("、")}」，下一次后果换个花样：${[...others, "局面变坏"].join("、")}`,
+      `- 连续两次记录了「${repeated.map((k) => FALLOUT_LABELS[k]).join("、")}」：先区分同一后果持续存在与新事件，不因重复而换花样或再次加重。有新的因果依据才参考其他后果（${[...others, "局面变坏"].join("、")}），没有就保持现状。`,
     );
   }
   if (state.owed)
     lines.push(
-      `- 检定 ${state.owed.id} 失败了，但还没落下实际的后果：这一轮让它在正文里落地，不超过当时说好的范围`,
+      `- 已记录的后果 ${state.owed.id} 尚未落地：只在其发生条件满足时写出实际影响，不超出已经确定的原因与范围，不另添惩罚。`,
     );
   return lines.length > 0 ? lines.join("\n") : undefined;
 }
