@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { DamageTier } from "../dice";
 
 /** 快速破解的类别，照原作 2.x：控制、隐蔽、伤害、终极 */
 export const QUICKHACK_CATEGORIES = ["control", "covert", "damage", "ultimate"] as const;
@@ -17,7 +16,7 @@ export const QuickhackDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(12),
   category: QuickhackCategorySchema,
-  /** 放一次扣几格 RAM（本作改编：原作的 RAM 数值要配合天赋和实时回复，这里按格子缩过） */
+  /** 单次程序所需的硬件容量；不累积为场景配额 */
   ram: z.number().int().min(1).max(8),
   /** 放出去会怎样；写给模型 */
   effect: z.string().min(1).max(80),
@@ -59,13 +58,6 @@ export const DIVE_LAYERS = [
   "黑墙边缘",
 ] as const;
 export const DIVE_MAX = DIVE_LAYERS.length;
-/** 潜到这一层的检定至少要事先写明多重的伤害（神经反噬）；没列的层不强制 */
-export const DIVE_DAMAGE: Readonly<Partial<Record<number, DamageTier>>> = {
-  3: "heavy",
-  4: "heavy",
-  5: "lethal",
-};
-
 export const DiveSchema = z.object({
   /** 第几层，从 1 起 */
   layer: z.number().int().min(1).max(DIVE_MAX),
@@ -80,8 +72,6 @@ export type Dive = z.infer<typeof DiveSchema>;
 export const HackingStateSchema = z.object({
   /** 装着的网络接入仓（义体 id）；由装着的义体推出来，没装是 null */
   deck: z.string().nullable().default(null),
-  /** 剩几格 RAM */
-  ram: z.number().int().min(0).default(0),
   /** RAM 上限：接入仓的底数加其他义体的加成 */
   ramMax: z.number().int().min(0).default(0),
   /** 装在接入仓里的快速破解程序 id；格数由接入仓定 */
@@ -90,14 +80,7 @@ export const HackingStateSchema = z.object({
   breachedNetworks: z.array(BreachedNetworkSchema).default([]),
   /** 正在潜网；没在潜是 null */
   dive: DiveSchema.nullable().default(null),
-  /**
-   * 有卡的人放快速破解用掉的 RAM（用户 2026-11-02 选的"代码结算"）：人物 id → 已用格数。
-   * 战斗收尾、场景结束、休整清空；旧存档没有
-   */
-  npcRamUsed: z.record(z.string(), z.number().int().min(0)).default({}),
-  /** 玩家装着的自我 ICE 这一场已经替他挡过一次快速破解；战斗收尾、场景结束、休整后恢复；旧存档没有 */
-  selfIceSpent: z.boolean().default(false),
-  /** 已结算的快速破解抵抗检定 id；包括 ICE 拦截和抵抗成功，恢复 RAM 时不清空 */
+  /** 已登记的快速破解事件 id；防止同一事件重复制造伤势 */
   resolvedNpcHacks: z.array(z.string().min(1)).default([]),
 });
 export type HackingState = z.infer<typeof HackingStateSchema>;
@@ -111,7 +94,7 @@ export const NpcHackCommandSchema = z
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），代码扣他的 RAM（上限是他义体的 RAM 加起来），不够时拦下；对玩家角色放时，玩家装着自我 ICE 每场先挡下一次。对玩家的伤害类、终极类要经前置因果裁决与事实绑定（turnId + id + program），代码统一结算防御、自我 ICE 和伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），按单次程序所需硬件容量核验，上传结束即释放，不积累使用次数；对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定，不按场次发放。对玩家的伤害类、终极类要经前置因果裁决与事实绑定（本轮事件 id），代码统一结算防御、自我 ICE 和伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
@@ -144,7 +127,7 @@ export const HackCommandSchema = z
     }
   })
   .describe(
-    "快速破解：use 放程序（扣 RAM；没装接入仓、没装这个程序或 RAM 不够时代码拦下；终极类代码自动按残忍行为扣人性），learn 装上新程序（买到、从芯片拷来），drop 删掉一个腾出程序格",
+    "快速破解：use 放程序（按接入仓硬件容量核验；终极类不自动扣人性），learn 装上新程序（买到、从芯片拷来），drop 删掉一个腾出程序格",
   );
 export type HackCommand = z.infer<typeof HackCommandSchema>;
 
@@ -191,6 +174,6 @@ export const DiveCommandSchema = z
     }
   })
   .describe(
-    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（需在前置潜网裁决中扛住当前层黑冰防御、未在强防下退却，越深神经反噬越致命），surface 退出回到肉身；场景结束自动退出",
+    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（需在前置潜网裁决中扛住当前层黑冰防御、未在强防下退却，越深神经反噬越致命），surface 退出回到肉身；切换场景不自动退出",
   );
 export type DiveCommand = z.infer<typeof DiveCommandSchema>;

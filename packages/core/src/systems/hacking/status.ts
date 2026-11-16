@@ -15,10 +15,10 @@ export const hackingStatus: readonly SystemStatus[] = [
       if (!h) return [];
       const lines: string[] = [];
       const programs = h.programs.map(
-        (p) => `${p.id}「${p.name}」（${p.categoryLabel}，${p.ram} 格：${p.effect}）`,
+        (p) => `${p.id}「${p.name}」（${p.categoryLabel}，运行需要 ${p.ram} 容量：${p.effect}）`,
       );
       lines.push(
-        `网络接入仓：${h.deckName}，RAM ${h.ram}/${h.ramMax} 格；已装程序 ${h.programs.length}/${h.slots}：${programs.length > 0 ? programs.join("；") : "一个都没装"}`,
+        `网络接入仓：${h.deckName}，硬件运行容量 ${h.ramMax}（单次上传后释放）；已装程序 ${h.programs.length}/${h.slots}：${programs.length > 0 ? programs.join("；") : "一个都没装"}`,
       );
       if (h.dive)
         lines.push(

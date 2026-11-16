@@ -125,9 +125,9 @@ describe("叙事战斗伤害去重", () => {
       {
         llm: fakeLlm([damage, attack, wound], {
           kind: "costly",
-          outcome: "敌方黑客强行上传过热程序",
-          harm: "heavy",
-          reason: "敌方黑客在场且接入仓就绪",
+          outcome: "自我 ICE 检出过热程序并切断上传",
+          harm: "none",
+          reason: "完好的自我 ICE 拦截了这次已识别的攻击",
         }),
         rng: { roll: () => 2 },
         offscreen: null,
@@ -141,20 +141,18 @@ describe("叙事战斗伤害去重", () => {
     if (result.kind !== "done") return;
     expect(result.turn.world.slices.health).toEqual(world.slices.health);
     expect(result.turn.world.slices.hacking).toMatchObject({
-      selfIceSpent: true,
-      npcRamUsed: { runner: 2 },
       resolvedNpcHacks: ["turn.0"],
     });
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
     expect(result.turn.commands).toContainEqual(attack);
   });
-  it("RAM 不足时独立伤害和伤口不能绕过破解校验", async () => {
+  it("接入仓容量不足时独立伤害和伤口不能绕过破解校验", async () => {
     const base = withRunner();
     const world: WorldState = {
       ...base,
       slices: {
         ...base.slices,
-        hacking: { ...HackingStateSchema.parse(base.slices.hacking), npcRamUsed: { runner: 8 } },
+        hacking: HackingStateSchema.parse(base.slices.hacking),
       },
     };
     const attack = { type: "npcHack", id: "runner", program: "overheat", target: "你" };
@@ -168,7 +166,7 @@ describe("叙事战斗伤害去重", () => {
         }),
         rng: { roll: () => 2 },
         offscreen: null,
-        data: hackData,
+        data: { ...hackData, cyberware: hackData.cyberware.map((c) => ({ ...c, ram: 1 })) },
       },
       world,
       [],
@@ -203,9 +201,9 @@ describe("叙事战斗伤害去重", () => {
     if (result.kind !== "done") return;
     expect(HealthStateSchema.parse(result.turn.world.slices.health).injuries).toHaveLength(1);
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
-    expect(HackingStateSchema.parse(result.turn.world.slices.hacking).npcRamUsed).toEqual({
-      runner: 2,
-    });
+    expect(HackingStateSchema.parse(result.turn.world.slices.hacking).resolvedNpcHacks).toEqual([
+      "turn.0",
+    ]);
     expect(result.turn.commands).toContainEqual(attack);
     expect(result.turn.dropped).toHaveLength(2);
   });

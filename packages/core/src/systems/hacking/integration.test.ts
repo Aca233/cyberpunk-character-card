@@ -90,14 +90,13 @@ const injuries = (world: import("../../kernel/world").WorldState) =>
   HealthStateSchema.parse(world.slices.health).injuries;
 
 describe("NPC 快速破解结算", () => {
-  it("原子登记具体神经损伤与消耗，同一事实不重复结算", () => {
+  it("原子登记具体神经损伤，同一事实不重复结算", () => {
     const first = registry.applyCommands(ready(), [attack], context());
     expect(first.results[0]?.result.ok).toBe(true);
     expect(injuries(first.world)).toMatchObject([
       { part: "head", tier: "heavy", treated: false, healsAt: null },
     ]);
     expect(first.world.slices.hacking).toMatchObject({
-      npcRamUsed: { runner: 2 },
       resolvedNpcHacks: ["attack-1"],
     });
     const again = registry.applyCommands(first.world, [attack], context());
@@ -115,7 +114,6 @@ describe("NPC 快速破解结算", () => {
     expect(result.results[0]?.result.ok).toBe(true);
     expect(injuries(result.world)).toEqual([]);
     expect(result.world.slices.hacking).toMatchObject({
-      npcRamUsed: { runner: 2 },
       resolvedNpcHacks: ["attack-1"],
     });
   });
@@ -139,50 +137,121 @@ describe("NPC 快速破解结算", () => {
     expect(result.patches).toEqual([]);
   });
 
-  it.each([false, true])("自我 ICE 拦截与设备损坏生效：%s", (broken) => {
+  it("自我 ICE 不提供每场一次的自动免伤，结果遵循事实", () => {
     const base = ready();
     const world = {
       ...base,
       slices: {
         ...base.slices,
-        health: { ...base.slices.health, brokenChrome: broken ? ["self-ice"] : [] },
         cyberware: { installed: [{ id: "self-ice", slot: "frontalCortex", installedAt: 0 }] },
       },
     };
-    const first = registry.applyCommands(world, [attack], context());
-    expect(first.results[0]?.result.ok).toBe(true);
-    expect(injuries(first.world)).toHaveLength(broken ? 1 : 0);
-    expect(first.world.slices.hacking).toMatchObject({
-      npcRamUsed: { runner: 2 },
-      selfIceSpent: !broken,
-    });
-    const second = registry.applyCommands(first.world, [attack], context({ id: "attack-2" }));
-    expect(second.results[0]?.result.ok).toBe(true);
-    expect(injuries(second.world)).toHaveLength(broken ? 2 : 1);
+    const hit = registry.applyCommands(
+      world,
+      [attack],
+      context({ reason: "对方的程序已突破自我 ICE" }),
+    );
+    expect(hit.results[0]?.result.ok).toBe(true);
+    expect(injuries(hit.world)).toHaveLength(1);
+    const defended = registry.applyCommands(
+      hit.world,
+      [attack],
+      context({ id: "attack-2", harm: "none", reason: "切断网络链路防住上传" }),
+    );
+    expect(defended.results[0]?.result.ok).toBe(true);
+    expect(injuries(defended.world)).toHaveLength(1);
+    expect(defended.world.slices.hacking).not.toHaveProperty("selfIceSpent");
   });
 
-  it("伤害连锁失败时消耗与处理记录一并回滚", () => {
+  it("伤害连锁失败时处理记录一并回滚", () => {
     const world = ready();
     world.slices.health.condition = "dead";
     const result = registry.applyCommands(world, [attack], context());
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toBe(world);
     expect(result.patches).toEqual([]);
-    expect(result.world.slices.hacking).toMatchObject({ npcRamUsed: {}, resolvedNpcHacks: [] });
+    expect(result.world.slices.hacking).toMatchObject({ resolvedNpcHacks: [] });
   });
 
-  it("设备运行条件不足时整条拒绝", () => {
+  it("单次程序超过设备容量时整条拒绝", () => {
+    const world = ready();
+    const result = registry.applyCommands(world, [attack], {
+      ...context(),
+      data: { ...data, cyberware: data.cyberware.map((c) => ({ ...c, ram: 1 })) },
+    });
+    expect(result.results[0]?.result.ok).toBe(false);
+    expect(result.world).toBe(world);
+  });
+
+  it("连续上传不积累每场消耗，NPC无需等切场补 RAM", () => {
+    let world: import("../../kernel/world").WorldState = ready();
+    for (let i = 0; i < 8; i += 1) {
+      const result = registry.applyCommands(
+        world,
+        [attack],
+        context({ id: `attack-${i}`, harm: "none" }),
+      );
+      expect(result.results[0]?.result.ok).toBe(true);
+      world = result.world;
+    }
+    expect(world.slices.hacking).not.toHaveProperty("npcRamUsed");
+  });
+
+  it("潜网与取得的网络访问权持续存在，切场/休息不触发退出", () => {
     const base = ready();
     const world = {
       ...base,
       slices: {
         ...base.slices,
-        hacking: { ...HackingStateSchema.parse(base.slices.hacking), npcRamUsed: { runner: 7 } },
+        cyberware: { installed: [{ id: "test-deck", slot: "os", installedAt: 0 }] },
       },
     };
-    const result = registry.applyCommands(world, [attack], context());
-    expect(result.results[0]?.result.ok).toBe(false);
-    expect(result.world).toBe(world);
+    const started = registry.applyCommands(
+      world,
+      [
+        { type: "dive", action: "start", chair: "公寓的冰浴缸", guard: "朋友" },
+        { type: "breach", network: "公寓子网", via: "已接好的连接线", gains: ["data"] },
+      ],
+      context({ harm: "none", kind: "possible" }),
+    );
+    expect(started.results.every((r) => r.result.ok)).toBe(true);
+    for (const signal of ["scene.end", "combat.end", "rest"]) {
+      const next = registry.signal(started.world, signal, context());
+      expect(next.world.slices.hacking).toEqual(started.world.slices.hacking);
+    }
+  });
+
+  it("玩家上传使用硬件容量，设备损坏或物理阻断时拒绝", () => {
+    const base = ready();
+    const world = {
+      ...base,
+      slices: {
+        ...base.slices,
+        cyberware: { installed: [{ id: "test-deck", slot: "os", installedAt: 0 }] },
+        hacking: { ...HackingStateSchema.parse(base.slices.hacking), programs: ["overheat"] },
+      },
+    };
+    const use = { type: "hack", action: "use", program: "overheat", target: "门锁" };
+    let current: import("../../kernel/world").WorldState = world;
+    for (let i = 0; i < 8; i += 1) {
+      const result = registry.applyCommands(
+        current,
+        [use],
+        context({ harm: "none", kind: "possible" }),
+      );
+      expect(result.results[0]?.result.ok).toBe(true);
+      current = result.world;
+    }
+    expect(current.slices.hacking).not.toHaveProperty("ram");
+    const broken = {
+      ...world,
+      slices: { ...world.slices, health: { ...base.slices.health, brokenChrome: ["test-deck"] } },
+    };
+    expect(registry.applyCommands(broken, [use], context()).results[0]?.result.ok).toBe(false);
+    expect(
+      registry.applyCommands(world, [use], context({ kind: "blocked", harm: "none" })).results[0]
+        ?.result.ok,
+    ).toBe(false);
   });
 
   it("旧智力门槛不限制有效接入，旧成功骰也不能越过物理气隙", () => {

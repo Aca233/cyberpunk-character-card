@@ -55,22 +55,17 @@ export function deckOf(
   };
 }
 
-/** 装卸义体以后同步接入仓和 RAM：换了接入仓按满格开机，上限变了按差值加减 */
+/** 只从完好的设备同步接入仓容量。 */
 export function syncDeck(draft: Hacking, ctx: SystemContext): number {
-  const found = deckOf(ctx.read<CyberwareState>("cyberware").installed, ctx.data);
+  const broken = ctx.read<HealthState>("health").brokenChrome;
+  const found = deckOf(
+    ctx.read<CyberwareState>("cyberware").installed.filter((c) => !broken.includes(c.id)),
+    ctx.data,
+  );
   if (!found) return 0;
-  if (draft.deck !== found.deck) draft.ram = found.ramMax;
-  else draft.ram = Math.max(0, Math.min(found.ramMax, draft.ram + found.ramMax - draft.ramMax));
   draft.deck = found.deck;
   draft.ramMax = found.ramMax;
   return found.slots;
-}
-
-/** 场景结束、战斗收尾、休整：RAM 回满；有卡的人的 RAM 也回满，自我 ICE 恢复 */
-export function refill(draft: Hacking): void {
-  draft.ram = draft.ramMax;
-  draft.npcRamUsed = {};
-  draft.selfIceSpent = false;
 }
 
 function findProgram(
@@ -112,15 +107,13 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
       `没装「${def.name}」，只能放已装的程序：${names.length > 0 ? names.join("、") : "（一个都没装）"}`,
     );
   }
-  if (draft.ram < def.ram) {
-    return fail(`RAM 不够：「${def.name}」要 ${def.ram} 格，只剩 ${draft.ram} 格`);
+  if (def.ram > draft.ramMax) {
+    return fail(`接入仓容量不足：「${def.name}」需要 ${def.ram} 格，设备只有 ${draft.ramMax} 格`);
   }
-  if (rulingFact(ctx.facts)?.kind === "blocked") {
-    return fail(rulingFact(ctx.facts)?.reason ?? "网络拓扑或硬条件阻断，这次快速破解没放出去");
-  }
-  draft.ram -= def.ram;
+  const ruling = rulingFact(ctx.facts);
+  if (ruling?.kind === "blocked") return fail(ruling.reason ?? "网络拓扑或实际条件阻断了上传");
   const notes = [
-    `快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target ?? ""}：RAM ${draft.ram}/${draft.ramMax}`,
+    `快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target ?? ""}：设备容量 ${draft.ramMax} 格`,
   ];
   return { ok: true, notes };
 }
@@ -204,14 +197,6 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
   };
 }
 
-/** 场景结束：还在潜的自动退出 */
-export function surfaceOnSceneEnd(draft: Hacking): void {
-  draft.dive = null;
-}
-
-/** 玩家角色的自我 ICE（义体 id）；装着时每场替他挡下一次有卡的人放的快速破解 */
-export const SELF_ICE = "self-ice";
-
 /** 有卡的人的接入仓和 RAM 上限：按他身上装着的义体算，和玩家同一套（接入仓给底数，其他义体再加） */
 export function npcDeckOf(
   cyberware: readonly string[],
@@ -226,7 +211,7 @@ export function npcDeckOf(
 
 /**
  * NPC 上传程序需有可用接入仓和实际运行条件。
- * 伤害来自本轮明确的神经损伤事实，与资源和去重标记原子提交；不会因程序类别自动扣人性。
+ * 伤害来自本轮明确的神经损伤事实，与去重标记原子提交；不会因程序类别自动扣人性。
  */
 export function applyNpcHack(
   draft: Hacking,
@@ -242,11 +227,10 @@ export function applyNpcHack(
   if (!def) return fail(`快速破解表里没有 ${command.program}`);
   const { deck, ramMax } = npcDeckOf(filledBody(npc.body).cyberware, ctx.data);
   if (!deck) return fail(`${npc.name} 没装网络接入仓，放不了快速破解：照他的装备和义体换个打法`);
-  const used = draft.npcRamUsed[command.id] ?? 0;
-  const left = Math.max(0, ramMax - used);
-  if (left < def.ram) {
-    return fail(`${npc.name} 的 RAM 不够：「${def.name}」要 ${def.ram} 格，他只剩 ${left} 格`);
-  }
+  if (def.ram > ramMax)
+    return fail(
+      `${npc.name} 的接入仓容量不足：「${def.name}」需要 ${def.ram} 格，设备只有 ${ramMax} 格`,
+    );
   const harmful =
     command.target === "你" && (def.category === "damage" || def.category === "ultimate");
   const ruling = harmful ? rulingFact(ctx.facts) : undefined;
@@ -257,22 +241,7 @@ export function applyNpcHack(
     }
     draft.resolvedNpcHacks.push(ruling.id);
   }
-  draft.npcRamUsed[command.id] = used + def.ram;
-  const ramNote = `${npc.name} 的 RAM ${left - def.ram}/${ramMax}`;
-  const atPlayer = command.target === "你";
-  const health = ctx.read<HealthState>("health");
-  const hasIce =
-    !health.brokenChrome.includes(SELF_ICE) &&
-    ctx.read<CyberwareState>("cyberware").installed.some((c) => c.id === SELF_ICE);
-  if (atPlayer && hasIce && !draft.selfIceSpent) {
-    draft.selfIceSpent = true;
-    return {
-      ok: true,
-      notes: [
-        `${npc.name} 对你放「${def.name}」，被你的自我 ICE 挡下了（这一场不再挡）：${ramNote}`,
-      ],
-    };
-  }
+  const ramNote = `${npc.name} 的接入仓容量 ${ramMax} 格`;
   const notes = [
     `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}：${ramNote}`,
   ];

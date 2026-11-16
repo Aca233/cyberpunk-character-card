@@ -95,8 +95,6 @@ export const ModifierSchema = z.object({
 });
 export type Modifier = z.infer<typeof ModifierSchema>;
 
-const PositiveModifier = ModifierSchema.extend({ value: z.number().int().min(1) });
-
 export const DiceStateSchema = z.object({
   mode: DifficultySchema,
 });

@@ -1,5 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
+import { HealthStateSchema } from "../health";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { deckOf, quickhackCatalog } from "./apply";
 import {
@@ -10,16 +11,20 @@ import {
   HackingStateSchema,
 } from "./schema";
 
-/** 接入仓按装着的义体现算（旧存档的骇入状态可能还没同步）；RAM 用状态里记的，换过接入仓按满格；没装接入仓是 null */
+/** 设备容量供现有界面显示；没有场景余额，损坏设备不提供运行容量。 */
 export function hackingView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const { installed } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
-  const found = deckOf(installed, data);
+  const broken = HealthStateSchema.parse(world.slices.health).brokenChrome;
+  const found = deckOf(
+    installed.filter((c) => !broken.includes(c.id)),
+    data,
+  );
   if (!found?.deck) return null;
   const state = HackingStateSchema.parse(world.slices.hacking ?? {});
   const parts = cyberwareCatalog(data);
   const programs = quickhackCatalog(data);
-  const ram = state.deck === found.deck ? Math.min(state.ram, found.ramMax) : found.ramMax;
+  const ram = found.ramMax;
   return {
     deck: found.deck,
     deckName: parts.get(found.deck)?.name ?? found.deck,

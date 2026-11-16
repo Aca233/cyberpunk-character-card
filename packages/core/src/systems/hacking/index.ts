@@ -1,13 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import {
-  applyBreach,
-  applyDive,
-  applyHack,
-  applyNpcHack,
-  refill,
-  surfaceOnSceneEnd,
-  syncDeck,
-} from "./apply";
+import { applyBreach, applyDive, applyHack, applyNpcHack, syncDeck } from "./apply";
 import { hackingRules } from "./prompt";
 import {
   type BreachCommand,
@@ -25,7 +17,7 @@ import { hackingStatus } from "./status";
 import { hackingView } from "./view";
 
 /**
- * 骇入：接入仓和 RAM 由装着的义体推出来；放快速破解扣 RAM，战斗收场、场景结束或休整时回满。
+ * 骇入：接入仓容量与程序来源由装着的义体推出来；一次程序的容量核验不转化为场景次数。
  * 有卡的人放快速破解（npcHack）也在这里结算：读 npc 拿他的义体，读 cyberware 看玩家的自我 ICE
  */
 export const hacking = defineSystem<
@@ -33,17 +25,14 @@ export const hacking = defineSystem<
   HackCommand | BreachCommand | DiveCommand | NpcHackCommand
 >({
   id: "hacking",
-  dependsOn: ["cyberware", "humanity", "combat", "world", "npc", "health"],
+  dependsOn: ["cyberware", "combat", "world", "npc", "health"],
   state: HackingStateSchema,
   initial: () => ({
     deck: null,
-    ram: 0,
     ramMax: 0,
     programs: [],
     breachedNetworks: [],
     dive: null,
-    npcRamUsed: {},
-    selfIceSpent: false,
     resolvedNpcHacks: [],
   }),
   commands: {
@@ -62,12 +51,6 @@ export const hacking = defineSystem<
     "cyberware.changed": (draft, ctx) => {
       syncDeck(draft, ctx);
     },
-    "combat.end": (draft) => refill(draft),
-    "scene.end": (draft) => {
-      refill(draft);
-      surfaceOnSceneEnd(draft);
-    },
-    rest: (draft) => refill(draft),
   },
   rules: [hackingRules],
   view: { key: "hacking", project: hackingView },
