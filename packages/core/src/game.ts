@@ -23,6 +23,7 @@ import {
   type CyberwareDef,
   CyberwareStateSchema,
   type cyberwareView,
+  type Ripperdoc,
   type ripperdocDebtsView,
   ripperdocList,
   type ripperdocView,
@@ -41,6 +42,7 @@ import {
   type ItemDef,
   type inventoryView,
   type namesView,
+  type Shop,
   shopList,
   type shopsView,
 } from "./systems/inventory";
@@ -85,6 +87,9 @@ export interface GameContent {
   readonly items?: readonly ItemDef[];
   /** 义体表；开局自带的义体要用它结算 */
   readonly cyberware?: readonly CyberwareDef[];
+  /** 商家初始条件；首次到访即把当时的身份与现货保存进世界。 */
+  readonly shops?: readonly Shop[];
+  readonly ripperdocs?: readonly Ripperdoc[];
   /** 快速破解表；开局自带的程序要用它结算 */
   readonly quickhacks?: readonly QuickhackDef[];
   /** 车型表；开局送车时要用 */
@@ -468,13 +473,12 @@ export function newGameWorld(
       ? [{ type: "world", activity: "travel", location: meta.startLocation }]
       : []),
   ];
-  if (commands.length === 0) return world;
   const parsed = commands.map((raw) => {
     const result = registry.parseInternal(raw);
     if (!result.ok) throw new Error(`开局内容不合格：${result.error}`);
     return result.command;
   });
-  const applied = registry.applyCommands(world, parsed, {
+  const setupContext = {
     rng: setupRng,
     data: {
       // 开局地点在地图上选择（用户定的，2026-10-30）：沿用 world 的地点解析，不另编坐标
@@ -482,14 +486,17 @@ export function newGameWorld(
       ...(content.locations ? { locations: content.locations } : {}),
       ...(content.items ? { items: content.items } : {}),
       ...(content.cyberware ? { cyberware: content.cyberware } : {}),
+      ...(content.shops ? { shops: content.shops } : {}),
+      ...(content.ripperdocs ? { ripperdocs: content.ripperdocs } : {}),
       ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),
       ...(content.vehicles ? { vehicles: content.vehicles } : {}),
     },
-  });
+  };
+  const applied = registry.applyCommands(world, parsed, setupContext);
   for (const { command, result } of applied.results) {
     if (!result.ok) throw new Error(`开局的 ${command.type} 没有生效：${result.reason}`);
   }
-  return applied.world;
+  return registry.signal(applied.world, "world.arrived", setupContext).world;
 }
 
 /** 按出身给开局住所；先精确匹配 origin 或 origins 列表，对不上时回退 default */
