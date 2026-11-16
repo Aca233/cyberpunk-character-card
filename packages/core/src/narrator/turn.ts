@@ -85,6 +85,7 @@ import {
 import { estimateTokens } from "./prompts/layers";
 import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
 import { sceneTitle } from "./scene";
+import { readSceneMemory, summaryFromExtract } from "./scene-memory";
 import {
   accelerationRequested,
   type BigSpend,
@@ -1231,6 +1232,7 @@ export async function runNarratorTurn(
       reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
     };
     let offscreen: Command[] = [];
+    let offscreenComplete = false;
     if ("blocked" in reply) {
       considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
     } else {
@@ -1243,14 +1245,29 @@ export async function runNarratorTurn(
       });
       considered.push(...got.notes);
       offscreen = got.commands;
+      offscreenComplete = got.ok;
     }
-    // 读不了也记下场次和时间，下一轮不马上重试；到点没写的事代码不替它编，只提醒一次再往后拨
-    // （用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）
-    final = registry.applyCommands(
-      settled.world,
-      [...offscreen, { type: "thread.remind" }, { type: "city.ran" }],
-      applyCtx,
-    );
+    // 批次完整解析且全部结算成功才提交；失败不发送消息、不挪期限，也不推进成功游标。
+    if (offscreenComplete) {
+      const through = records.reduce((next, record) => Math.max(next, record.seq + 1), 0);
+      const trial = registry.applyCommands(
+        settled.world,
+        [...offscreen, { type: "thread.remind" }, { type: "city.ran", through }],
+        applyCtx,
+      );
+      const rejected = trial.results.filter(({ result }) => !result.ok);
+      if (rejected.length === 0) final = trial;
+      else {
+        offscreenComplete = false;
+        for (const { command, result } of rejected) {
+          if (!result.ok) considered.push(`场外推演批次未提交：${command.type} ${result.reason}`);
+        }
+      }
+    }
+    if (!offscreenComplete) {
+      final = registry.applyCommands(settled.world, [{ type: "city.failed" }], applyCtx);
+      considered.push("场外推演未完整完成，保留待处理事项，经过重试间隔后再推演");
+    }
     for (const { command, result } of final.results) {
       if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
       // 消息和头条带来的声望玩家看得到；其余只进剧透视图
@@ -1295,38 +1312,56 @@ export async function runNarratorTurn(
         })
       : undefined;
 
-  // ⑦ 场景摘要：收了场就把这一场压成一条摘要，原文掉出窗口以后由【前情】接上；只进补丁，和本轮一起撤回
+  // ⑦ 记忆跟随真正结算的正文保存；承诺/计划是增量锚点，不因滚动提要重写而消失。
   let ended = final.world;
-  const summaryPatches: Patch[] = [];
+  const memoryPatches: Patch[] = [];
   let summaryTrace: { prompt: string; reply: string } | undefined;
+  const saveMemory = (command: Command): void => {
+    const done = registry.applyCommands(ended, [command], applyCtx);
+    for (const { result } of done.results) {
+      if (!result.ok) considered.push(`场景记忆没记上：${result.reason}`);
+    }
+    ended = done.world;
+    memoryPatches.push(...done.patches);
+  };
+  if (settle && !inFlashback && unsettled === undefined) {
+    const working = readSceneMemory(shape.sceneMemory, world, ended, plan.input, narrative);
+    considered.push(...working.notes);
+    if (working.command) saveMemory(working.command);
+  }
+  // 正常收场复用抽取中的摘要；不合格时仍单独整理，以记忆质量为先。
   if (settle && after.scene !== before.scene) {
     if (inFlashback) considered.push("场景摘要：闪回里不写");
     else if (unsettled !== undefined) considered.push("场景摘要：这一轮没结算干净，不写");
     else {
-      const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
-      const reply = await b.call({
-        purpose: "aux",
-        temperature: SUMMARY_TEMPERATURE,
-        messages,
-        responseFormat: responseJsonSchema("summary", SummaryDocSchema),
+      const merged = summaryFromExtract(shape.summary, ended, before.scene, before.location, {
+        input: plan.input,
+        narrative,
       });
-      summaryTrace = {
-        prompt: messages[messages.length - 1]?.content ?? "",
-        reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
-      };
-      if ("blocked" in reply) {
-        considered.push(`场景摘要被辅助模型拒答：${reply.blocked}`);
-      } else {
-        b.auxUsage = addUsage(b.auxUsage, reply.usage);
-        const got = readSummary(reply.text, ended, before.scene, before.location);
-        considered.push(...got.notes);
-        if (got.command) {
-          const done = registry.applyCommands(ended, [got.command], applyCtx);
-          for (const { result } of done.results) {
-            if (!result.ok) considered.push(`场景摘要没记上：${result.reason}`);
-          }
-          ended = done.world;
-          summaryPatches.push(...done.patches);
+      considered.push(...merged.notes);
+      if (merged.command) saveMemory(merged.command);
+      else {
+        const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
+        const reply = await b.call({
+          purpose: "aux",
+          temperature: SUMMARY_TEMPERATURE,
+          messages,
+          responseFormat: responseJsonSchema("summary", SummaryDocSchema),
+        });
+        summaryTrace = {
+          prompt: messages[messages.length - 1]?.content ?? "",
+          reply: "blocked" in reply ? `（拒答：${reply.blocked}）` : reply.text,
+        };
+        if ("blocked" in reply) {
+          considered.push(`场景摘要被辅助模型拒答：${reply.blocked}`);
+        } else {
+          b.auxUsage = addUsage(b.auxUsage, reply.usage);
+          const got = readSummary(reply.text, ended, before.scene, before.location, {
+            input: plan.input,
+            narrative,
+          });
+          considered.push(...got.notes);
+          if (got.command) saveMemory(got.command);
         }
       }
     }
@@ -1357,7 +1392,7 @@ export async function runNarratorTurn(
             ...applied.patches,
             ...settled.patches,
             ...(final === settled ? [] : final.patches),
-            ...summaryPatches,
+            ...memoryPatches,
           ],
       modules: prompt.modules,
       pin: settle && unsettled === undefined && shape.pin === true,
