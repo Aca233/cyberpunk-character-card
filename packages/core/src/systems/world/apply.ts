@@ -113,6 +113,7 @@ export function applyWorld(
   now: number,
   data: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
+  const beforeLocation = draft.location;
   const notes: string[] = [];
   let target = now;
   if (command.time !== undefined) {
@@ -164,6 +165,7 @@ export function applyWorld(
   }
   notes.push(...dueNotes(draft, now, target));
   const signals = command.activity === "rest" ? ["rest"] : [];
+  if (draft.location !== beforeLocation) signals.push("world.arrived");
   return target > now
     ? { ok: true, notes, advanceTo: target, signals }
     : { ok: true, notes, signals };

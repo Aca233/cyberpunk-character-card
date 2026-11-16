@@ -42,6 +42,7 @@ describe("world 的 location 写 {name, in}", () => {
       y: 15,
     });
     expect(clock.location).toBe("place:1");
+    expect(out.ok && out.signals).toContain("world.arrived");
   });
 
   it("note 记在地点上", () => {
@@ -81,5 +82,27 @@ describe("world 的 location 写 id", () => {
     expect(out.ok).toBe(true);
     expect(clock.location).toBe("vapt");
     expect(clock.places).toHaveLength(1);
+    expect(out.ok && out.signals).toContain("world.arrived");
+  });
+
+  it("原地停留不重复通知到达，换地点休息同时保留两个信号", () => {
+    const clock = fresh();
+    const same = applyWorld(clock, world("vapt"), 0, data);
+    expect(same.ok && same.signals).not.toContain("world.arrived");
+    const moved = applyWorld(
+      clock,
+      WorldCommandSchema.parse({
+        type: "world",
+        activity: "rest",
+        location: { name: "新旅馆", in: "沃森" },
+        time: 10,
+      }),
+      0,
+      data,
+    );
+    expect(moved.ok && moved.signals).toEqual(["rest", "world.arrived"]);
+    const invalid = applyWorld(clock, world("poi:missing"), 10, data);
+    expect(invalid.ok).toBe(false);
+    expect(clock.location).toBe("place:1");
   });
 });

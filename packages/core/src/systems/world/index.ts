@@ -58,6 +58,7 @@ export * from "./apply";
 export * from "./district";
 export * from "./events";
 export * from "./feed";
+export * from "./merchant-sites";
 export * from "./places";
 export * from "./radar";
 export * from "./schema";
