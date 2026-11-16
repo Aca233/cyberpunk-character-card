@@ -23,7 +23,7 @@ export const FALLOUT_LABELS: Readonly<Record<FalloutKind, string>> = {
   deadline: "期限压过来",
   relationship: "关系变坏",
   item: "丢东西",
-  humanity: "人性受损",
+  humanity: "神经症状",
   fight: "打起来",
   job: "委托黄了",
   alert: "被察觉",
@@ -35,14 +35,14 @@ export const FALLOUT_RECENT = 6;
 export const FalloutEntrySchema = z.object({
   at: z.number().int(),
   kinds: z.array(FalloutKindSchema),
-  /** 这一轮写的是一次失败的检定 */
+  /** 这一轮的行动因实际条件受阻 */
   failed: z.boolean(),
 });
 export type FalloutEntry = z.infer<typeof FalloutEntrySchema>;
 
 export const FalloutStateSchema = z.object({
   recent: z.array(FalloutEntrySchema).default([]),
-  /** 检定失败了还没落下实际后果；再过 left 轮没落地就不再提醒 */
+  /** 已确认的损伤尚未登记；提示预算用完后不再重复提醒 */
   owed: z
     .object({ id: z.string().min(1), left: z.number().int().min(0) })
     .nullable()

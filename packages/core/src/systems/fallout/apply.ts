@@ -43,7 +43,7 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
         if (c.action === "lose") kinds.add("item");
         break;
       case "humanity":
-        if (num(c.delta) < 0) kinds.add("humanity");
+        if (c.action === "affect") kinds.add("humanity");
         break;
       case "combat":
         if (c.action === "start") kinds.add("fight");
