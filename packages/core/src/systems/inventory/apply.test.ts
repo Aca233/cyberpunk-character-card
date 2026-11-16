@@ -39,8 +39,7 @@ function empty(): InventoryState {
     mods: {},
     parts: 0,
     tuned: {},
-    shopStock: {},
-    shopReturns: {},
+    merchants: {},
   };
 }
 

@@ -7,7 +7,6 @@ import { CommerceStateSchema } from "../commerce";
 import { EconomyStateSchema } from "../economy";
 import { NpcSchema, NpcStateSchema } from "../npc";
 import { registry } from "../registry";
-import { RESTOCK_MINUTES } from "./apply";
 import { InventoryStateSchema, type ItemDef } from "./schema";
 import { shopsView } from "./shops";
 import { quoteTrade } from "./trade";
@@ -167,8 +166,8 @@ describe("普通交易共用实际报价和货源", () => {
     const result = trade(base(), "shop-b");
     expect(result.results[0]?.result.ok).toBe(true);
     expect(money(result.world)).toBe(1670);
-    expect(inventory(result.world).shopStock["shop-b"]?.sold.gun).toBe(1);
-    expect(inventory(result.world).shopStock["shop-a"]).toBeUndefined();
+    expect(inventory(result.world).merchants["shop-b"]?.stock.gun).toBe(0);
+    expect(inventory(result.world).merchants["shop-a"]).toBeUndefined();
   });
   it.each(["far-shop", "不存在的卖家"])("拒绝无法交付的卖方 %s，钱货不变化", (seller) => {
     const world = base();
@@ -188,7 +187,7 @@ describe("普通交易共用实际报价和货源", () => {
     expect(trade(poor).world).toEqual(poor);
     expect(button(poor).ok).toBe(false);
   });
-  it("同轮连续买最后一件只成功一次，三日边界才补货", () => {
+  it("同轮连续买最后一件只成功一次，没有供货关系不会凭时间补满", () => {
     const world = base();
     const command: Command = {
       type: "trade",
@@ -199,12 +198,12 @@ describe("普通交易共用实际报价和货源", () => {
     };
     const result = registry.applyCommands(world, [command, command], { rng: fixedRng([]), data });
     expect(result.results.map((r) => r.result.ok)).toEqual([true, false]);
-    expect(
-      trade({ ...result.world, time: world.time + RESTOCK_MINUTES - 1 }).results[0]?.result.ok,
-    ).toBe(false);
-    expect(
-      trade({ ...result.world, time: world.time + RESTOCK_MINUTES }).results[0]?.result.ok,
-    ).toBe(true);
+    expect(trade({ ...result.world, time: world.time + 3 * 1440 - 1 }).results[0]?.result.ok).toBe(
+      false,
+    );
+    expect(trade({ ...result.world, time: world.time + 3 * 1440 }).results[0]?.result.ok).toBe(
+      false,
+    );
   });
   it("店主明确所属势力才影响报价和拒售，不由帮派城区推断", () => {
     const keeper = { ...person("keeper-a"), faction: "gang" };
@@ -284,7 +283,7 @@ describe("普通交易共用实际报价和货源", () => {
     const result = trade(world, "friend");
     expect(result.results[0]?.result.ok).toBe(true);
     expect(inventory(result.world).backpack.gun).toBe(1);
-    expect(inventory(result.world).shopStock).toEqual({});
+    expect(inventory(result.world).merchants).toEqual({});
     expect(NpcStateSchema.parse(result.world.slices.npc).npcs.friend?.body?.gear).toEqual([]);
     expect(trade(result.world, "friend").world).toEqual(result.world);
   });
@@ -352,7 +351,7 @@ describe("普通交易共用实际报价和货源", () => {
     const bought = trade(loaded, "shop-a", "buy", token.id);
     expect(bought.results[0]?.result.ok).toBe(true);
     expect(inventory(bought.world).objects.token?.holder).toBe("player");
-    expect(inventory(bought.world).shopReturns["shop-a"]?.token).toBeUndefined();
+    expect(inventory(bought.world).merchants["shop-a"]?.stock.token).toBe(0);
     expect(trade(bought.world, "shop-a", "buy", token.id).world).toEqual(bought.world);
   });
   it("报价不交付，保存后的谈妥价格由文字与按钮共用且只消费一次", () => {

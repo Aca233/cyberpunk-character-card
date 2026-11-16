@@ -5,17 +5,9 @@ import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce
 import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
 import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
-import type { WorldClockState } from "../world";
-import {
-  applyItem,
-  currentStock,
-  itemCatalog,
-  markSold,
-  sellValue,
-  shopList,
-  stockOf,
-  withWorldObjects,
-} from "./apply";
+import { merchantAt, merchantServices, type WorldClockState } from "../world";
+import { applyItem, itemCatalog, sellValue, shopList, withWorldObjects } from "./apply";
+import { ensureMerchant, merchantState, withMerchants } from "./merchants";
 import { moodLock, moodPrice, shopMood } from "./mood";
 import {
   carriedItemCounts,
@@ -50,13 +42,21 @@ export type TradeQuote =
   | { ok: false; reason: string; price?: number };
 
 /** 只有明确登记的店主或代班店员能接待；尚未记录位置不等于离场。 */
-function shopUnavailable(world: WorldState, shop: Shop): string | undefined {
+function shopUnavailable(
+  world: WorldState,
+  shop: Shop,
+  data: Readonly<Record<string, unknown>>,
+): string | undefined {
   const ids = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs];
   if (ids.length === 0) return undefined;
   const people = (world.slices.npc as NpcState).npcs;
   for (const id of ids) {
     const person = people[id];
-    if (!person || (person.alive && (person.location == null || person.location === shop.location)))
+    if (
+      !person ||
+      (person.alive &&
+        (person.location == null || merchantAt(data, shop.id, shop.location, person.location)))
+    )
       return undefined;
   }
   return `${shop.name}当前没有已登记的在场店主或代班店员，暂时不能交易`;
@@ -102,14 +102,27 @@ export function quoteTrade(
   request: TradeRequest,
   options: { checkFunds?: boolean } = {},
 ): TradeQuote {
+  const inventory = InventoryStateSchema.parse(world.slices.inventory);
+  data = withMerchants(data, inventory.merchants);
   const party = counterparty(world, data, request.with);
   if (typeof party === "string") return { ok: false, reason: party };
   const location = (world.slices.world as WorldClockState).location;
-  if (location === null || party.location !== location)
+  if (
+    location === null ||
+    (party.shop
+      ? !merchantAt(data, party.id, party.location as string, location)
+      : party.location !== location)
+  )
     return { ok: false, reason: `不在${party.name}的交易地点，不能隔空交付` };
   if (party.npc?.alive === false) return { ok: false, reason: `${party.name}已经死亡，无法交易` };
   const shop = party.shop;
-  const inventory = InventoryStateSchema.parse(world.slices.inventory);
+  const services = merchantServices(data, party.id);
+  if (
+    request.action === "service" &&
+    services !== undefined &&
+    !services.includes(request.service ?? "")
+  )
+    return { ok: false, reason: `${party.name}没有已登记的这项服务` };
   const catalog = itemCatalog(withWorldObjects(data, inventory.objects));
   const item =
     request.action === "service" || request.item === undefined
@@ -151,7 +164,9 @@ export function quoteTrade(
   const fail = (reason: string): TradeQuote => ({ ok: false, reason, price });
   if (price > MONEY_CAP) return fail("这笔报价超过当前单笔现金结算额度，尚不能交付");
   if (shop) {
-    const unavailable = shopUnavailable(world, shop);
+    const merchant = merchantState(inventory, shop, catalog, world.time);
+    if (!merchant.open) return fail(merchant.closureReason ?? `${shop.name}目前暂停营业`);
+    const unavailable = shopUnavailable(world, shop, data);
     if (unavailable) return fail(unavailable);
     const locked = moodLock(mood);
     if (locked) return fail(`${shop.name}拒绝交易：${locked}`);
@@ -173,14 +188,9 @@ export function quoteTrade(
       if (objectLocation !== null && objectLocation !== location)
         return fail(`${item.name}仍在别处，不能隔空取得`);
       if (shop) {
-        const returned = inventory.shopReturns[shop.id]?.[item.id] ?? 0;
-        const onShelf = shop.shelf.includes(item.id);
-        if (!onShelf && returned < 1) return fail(`${shop.name}没有这件货，不能凭物品目录生成商品`);
-        const stock = currentStock(inventory.shopStock[shop.id], world.time);
-        left = object
-          ? 1
-          : returned + (onShelf ? Math.max(0, stockOf(item) - (stock?.sold[item.id] ?? 0)) : 0);
-        if (left < 1) return fail(`${shop.name}的${item.name}这一批卖完了，等补货`);
+        const merchant = merchantState(inventory, shop, catalog, world.time);
+        left = merchant.stock[item.id] ?? 0;
+        if (left < 1) return fail(`${shop.name}的${item.name}现货售罄，需要等待真实供货`);
       } else if (party.npc) {
         if (!party.npc.body?.gear.includes(item.id))
           return fail(`${party.name}并未持有${item.name}`);
@@ -264,18 +274,14 @@ export function applyTrade(
         item: item.id,
       });
     if (quoted.shop) {
-      const shopId = quoted.shop.id;
-      if (command.action === "buy") {
-        const returned = draft.shopReturns[shopId]?.[item.id] ?? 0;
-        if (returned > 0) {
-          if (returned === 1) Reflect.deleteProperty(draft.shopReturns[shopId] as object, item.id);
-          else (draft.shopReturns[shopId] as Record<string, number>)[item.id] = returned - 1;
-        } else markSold(draft, shopId, item.id, world.time);
-      } else {
-        if (!draft.shopReturns[shopId]) draft.shopReturns[shopId] = {};
-        const returns = draft.shopReturns[shopId] as Record<string, number>;
-        returns[item.id] = (returns[item.id] ?? 0) + 1;
-      }
+      const merchant = ensureMerchant(
+        draft,
+        quoted.shop,
+        itemCatalog(withWorldObjects(data, draft.objects)),
+        world.time,
+      );
+      merchant.stock[item.id] =
+        (merchant.stock[item.id] ?? 0) + (command.action === "buy" ? -1 : 1);
     }
   }
   if (quoted.price > 0)

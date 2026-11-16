@@ -175,6 +175,64 @@ export type ItemDef = z.infer<typeof ItemDefSchema>;
 
 export const ItemCatalogSchema = z.array(ItemDefSchema);
 
+/** 商店：开在某个地点，有自己的货架和价格；身份与开局备货持久保存。数据在 content 包的 shops.ts */
+export const ShopSchema = z.object({
+  id: z.string().min(1).max(80),
+  /** 店名，例如“威尔逊的枪店” */
+  name: z.string().min(1).max(80),
+  /** 店主；给叙事模型写场面用 */
+  keeper: z.string().min(1).max(20),
+  /** 已登记店主的人物卡 id。 */
+  keeperNpc: z.string().min(1).optional(),
+  /** 可以代班经营的明确店员；无位置记录不等于已确认离场。 */
+  serviceNpcs: z.array(z.string().min(1)).max(12).default([]),
+  /** 地点表里的 id：玩家在这里时才能进店 */
+  location: z.string().min(1),
+  note: z.string().max(120).default(""),
+  /** 乘在物品表参考价上的系数 */
+  priceFactor: z.number().min(0.5).max(2).default(1),
+  /** 黑市货：便宜，但可能来路不明，由叙事模型在剧情里兑现 */
+  blackMarket: z.boolean().default(false),
+  /** 开局货架上的物品 id；后续以实际库存为准 */
+  shelf: z.array(z.string().min(1)).min(1),
+  initialStock: z.record(z.string(), z.number().int().min(0)).optional(),
+  supply: z
+    .object({
+      supplier: z.string().min(1).max(120),
+      origin: z.string().min(1).max(240),
+      route: z.array(z.string().min(1)).min(1).max(20),
+      leadMinutes: z.number().int().min(1),
+      items: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
+});
+export type Shop = z.infer<typeof ShopSchema>;
+export const ShopListSchema = z.array(ShopSchema);
+
+export const MerchantStateSchema = z.object({
+  definition: ShopSchema,
+  initializedAt: z.number().int(),
+  stock: z.record(z.string(), z.number().int().min(0)),
+  open: z.boolean(),
+  closureReason: z.string().nullable(),
+});
+export type MerchantState = z.infer<typeof MerchantStateSchema>;
+
+export const ShopBusinessCommandSchema = z.strictObject({
+  type: z.literal("shopBusiness"),
+  shop: z.string().min(1).max(80),
+  action: z.enum(["open", "close", "staff"]),
+  keeperNpc: z.string().min(1).optional(),
+  serviceNpcs: z.array(z.string().min(1)).max(12).optional(),
+  reason: z.string().min(1).max(240),
+  evidence: z
+    .string()
+    .min(2)
+    .max(500)
+    .describe("本轮正文中真实营业变化或人员接替的原话；不能凭空关闭所有同城区商店"),
+});
+export type ShopBusinessCommand = z.infer<typeof ShopBusinessCommandSchema>;
+
 /** 剧情中出现的独立物件；定义、来历和归属随存档保存，不受静态目录限制。 */
 export const WorldObjectSchema = z.object({
   definition: ItemDefSchema,
@@ -196,8 +254,7 @@ const QuickSlotSchema = z
 
 export const InventoryStateSchema = z.object({
   objects: z.record(z.string(), WorldObjectSchema).default({}),
-  /** 商家实际收回的物品，独立于定期补货批次。 */
-  shopReturns: z.record(z.string(), z.record(z.string(), z.number().int().min(1))).default({}),
+  merchants: z.record(z.string(), MerchantStateSchema).default({}),
   /** 3 个武器格，按 1/2/3 切换 */
   weapons: z.array(z.string().min(1).nullable()).length(3),
   /** 当前手持的武器格（从 0 起），空手时为 null */
@@ -218,16 +275,6 @@ export const InventoryStateSchema = z.object({
   parts: z.number().int().min(0).default(0),
   /** 升过稀有度的武器：武器 id → 现在的稀有度；同一种武器的几把共用一份 */
   tuned: z.record(z.string(), RaritySchema).default({}),
-  /** 各家店这一批卖掉了多少：店 id -> 这一批从什么时候算起、每件卖了几个；满 3 个游戏日补满 */
-  shopStock: z
-    .record(
-      z.string(),
-      z.object({
-        restockedAt: z.number().int(),
-        sold: z.record(z.string(), z.number().int().min(1)),
-      }),
-    )
-    .default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
@@ -327,32 +374,6 @@ export const InventoryInternalSchemas = {
 export type InventoryInternal = z.infer<
   (typeof InventoryInternalSchemas)[keyof typeof InventoryInternalSchemas]
 >;
-
-/** 商店：开在某个地点，有自己的货架和价格；高稀有度的货随街头声望解锁。数据在 content 包的 shops.ts */
-export const ShopSchema = z.object({
-  id: z.string().min(1).max(40),
-  /** 店名，例如“威尔逊的枪店” */
-  name: z.string().min(1).max(24),
-  /** 店主；给叙事模型写场面用 */
-  keeper: z.string().min(1).max(20),
-  /** 已登记店主的人物卡 id。 */
-  keeperNpc: z.string().min(1).optional(),
-  /** 可以代班经营的明确店员；无位置记录不等于已确认离场。 */
-  serviceNpcs: z.array(z.string().min(1)).max(12).default([]),
-  /** 地点表里的 id：玩家在这里时才能进店 */
-  location: z.string().min(1),
-  note: z.string().max(120).default(""),
-  /** 乘在物品表参考价上的系数 */
-  priceFactor: z.number().min(0.5).max(2).default(1),
-  /** 黑市货：便宜，但可能来路不明，由叙事模型在剧情里兑现 */
-  blackMarket: z.boolean().default(false),
-  /** 货架上的物品 id；不朽物品和没有标价的放上来也不卖 */
-  shelf: z.array(z.string().min(1)).min(1),
-  /** 各稀有度要多少级街头声望才肯卖；没写的稀有度不设门槛 */
-  credGates: z.partialRecord(RaritySchema, z.number().int().min(0).max(50)).default({}),
-});
-export type Shop = z.infer<typeof ShopSchema>;
-export const ShopListSchema = z.array(ShopSchema);
 
 /** 卖给商店的回收价：最多按参考价的两成（从店里买来的转卖上限），防低买高卖 */
 export const SELL_RATE = 0.2;

@@ -41,14 +41,14 @@ export const ModWeaponActionSchema = z.strictObject({
 /** 在商店买一件，放进背包 */
 export const BuyItemActionSchema = z.strictObject({
   type: z.literal("buyItem"),
-  shop: z.string().min(1).max(40),
+  shop: z.string().min(1).max(80),
   id: z.string().min(1).max(64),
 });
 
 /** 把背包里的一件卖给商店 */
 export const SellItemActionSchema = z.strictObject({
   type: z.literal("sellItem"),
-  shop: z.string().min(1).max(40),
+  shop: z.string().min(1).max(80),
   id: z.string().min(1).max(64),
 });
 

@@ -1,15 +1,9 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { keeperOf, RARITY_LABELS } from "../economy";
-import { formatGameTime, WorldClockStateSchema } from "../world";
-import {
-  currentStock,
-  itemCatalog,
-  restockDue,
-  shopList,
-  stockOf,
-  withWorldObjects,
-} from "./apply";
+import { merchantAt, WorldClockStateSchema } from "../world";
+import { itemCatalog, shopList, withWorldObjects } from "./apply";
+import { merchantState, withMerchants } from "./merchants";
 import {
   carriedItemCounts,
   InventoryStateSchema,
@@ -31,18 +25,14 @@ const KeeperCardsSchema = z.object({
     .default({}),
 });
 
-/** 这一批卖过货时，下次补满的时间写成文字 */
-function restockLabel(due: number | null): string | null {
-  return due === null ? null : formatGameTime(due);
-}
-
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
 export function shopsView({ world, data }: ViewContext) {
   const location = WorldClockStateSchema.parse(world.slices.world).location;
   if (location === null || data.items === undefined) return [];
-  const here = shopList(data).filter((s) => s.location === location);
-  if (here.length === 0) return [];
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
+  data = withMerchants(data, inventory.merchants);
+  const here = shopList(data).filter((s) => merchantAt(data, s.id, s.location, location));
+  if (here.length === 0) return [];
   const catalog = itemCatalog(withWorldObjects(data, inventory.objects));
   const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
   const now = world.time;
@@ -59,10 +49,8 @@ export function shopsView({ world, data }: ViewContext) {
       );
       return [{ id, name: def.name, count, value: quote.ok ? quote.price : 0 }];
     });
-    const stock = currentStock(inventory.shopStock[shop.id], now);
-    const shelfIds = [
-      ...new Set([...shop.shelf, ...Object.keys(inventory.shopReturns[shop.id] ?? {})]),
-    ];
+    const merchant = merchantState(inventory, shop, catalog, now);
+    const shelfIds = Object.keys(merchant.stock);
     return {
       id: shop.id,
       name: shop.name,
@@ -71,7 +59,7 @@ export function shopsView({ world, data }: ViewContext) {
       keeperAffinity: keeper?.affinity ?? null,
       note: shop.note,
       blackMarket: shop.blackMarket,
-      restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
+      restockAt: null as string | null,
       shelf: shelfIds.flatMap((id) => {
         const def = catalog.get(id);
         if (!def) return [];
@@ -81,18 +69,7 @@ export function shopsView({ world, data }: ViewContext) {
           { action: "buy", item: id, with: shop.id },
           { checkFunds: false },
         );
-        const object = inventory.objects[id];
-        const left = quote.ok
-          ? (quote.left ?? 0)
-          : object
-            ? object.holder === shop.id || object.holder === shop.keeperNpc
-              ? 1
-              : 0
-            : Math.max(
-                0,
-                (shop.shelf.includes(id) ? stockOf(def) - (stock?.sold[id] ?? 0) : 0) +
-                  (inventory.shopReturns[shop.id]?.[id] ?? 0),
-              );
+        const left = merchant.stock[id] ?? 0;
         return [
           {
             id: def.id,

@@ -14,6 +14,7 @@ import {
 } from "./apply";
 import { inventoryEvents } from "./events";
 import { inventoryInteractions } from "./interactions";
+import { applyShopBusiness, visitMerchants, withMerchants } from "./merchants";
 import { namesView } from "./names";
 import {
   type InventoryInternal,
@@ -24,6 +25,8 @@ import {
   ItemCommandSchema,
   type PartsCommand,
   PartsCommandSchema,
+  type ShopBusinessCommand,
+  ShopBusinessCommandSchema,
   type TradeCommand,
   TradeCommandSchema,
 } from "./schema";
@@ -34,7 +37,7 @@ import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
   InventoryState,
-  ItemCommand | TradeCommand,
+  ItemCommand | TradeCommand | ShopBusinessCommand,
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
@@ -53,14 +56,19 @@ export const inventory = defineSystem<
     mods: {},
     parts: 0,
     tuned: {},
-    shopStock: {},
-    shopReturns: {},
+    merchants: {},
   }),
-  commands: { item: ItemCommandSchema, trade: TradeCommandSchema },
+  commands: {
+    item: ItemCommandSchema,
+    trade: TradeCommandSchema,
+    shopBusiness: ShopBusinessCommandSchema,
+  },
   // 物品栏精简（用户定的方案 A）：零件规则不发给模型，parts 跟着从模型可用指令挪成内部指令；旧存档记录里的 parts 照旧能结算
   internal: { ...InventoryInternalSchemas, parts: PartsCommandSchema },
   apply(draft, command, ctx) {
     switch (command.type) {
+      case "shopBusiness":
+        return applyShopBusiness(draft, command, ctx);
       case "item":
         return applyItem(
           draft,
@@ -106,7 +114,9 @@ export const inventory = defineSystem<
         return applyParts(draft, command);
     }
   },
-  data: (state, data) => withWorldObjects(data, state.objects),
+  data: (state, data) => withWorldObjects(withMerchants(data, state.merchants), state.objects),
+  on: { "world.arrived": visitMerchants },
+  tick: (draft, _span, ctx) => visitMerchants(draft, ctx),
   sections: [
     {
       order: 76,
@@ -131,7 +141,17 @@ export const inventory = defineSystem<
     },
   ],
   // 物品栏精简（用户定的方案 A）：零件和升级不再出现，零件规则不发给模型；partsRules 留着，以后想加回来再挂上
-  rules: [],
+  rules: [
+    {
+      id: "merchant",
+      title: "商店经营",
+      commands: ["shopBusiness"],
+      when: (state, input) =>
+        Object.keys(state.merchants).length > 0 ||
+        /商店|店主|店员|开业|停业|关门|接替/.test(input.text),
+      text: "- 商店身份、库存与营业持续保存，重访不重置。实际停业/恢复或人员接替写 shopBusiness，并引用本轮正文证据；路过的人不自动成为店员。没有人员位置记录不代表已经离场，明确死亡或离场的人不能本人营业。",
+    },
+  ],
   actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
   views: [
@@ -147,6 +167,7 @@ export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./interactions";
+export * from "./merchants";
 export * from "./names";
 export * from "./prompt";
 export * from "./schema";
