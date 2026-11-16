@@ -92,7 +92,7 @@ describe("沙盘自由行动入口", () => {
     const state = await call(local, `/saves/${id}/state`);
     expect(state.status).toBe(200);
     expect(state.data.offers).toMatchObject({
-      choices: [{ text: "换条路线", gate: null, checkId: null }],
+      choices: [],
       checks: [],
       rolled: null,
     });

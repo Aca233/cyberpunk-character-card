@@ -13,7 +13,7 @@ import { runNarratorTurn } from "./turn";
 
 function ready() {
   const world = newGameWorld(
-    { startTime: 1000, difficulty: "nightCity", opening: "test-open" },
+    { startTime: 1000, opening: "test-open" },
     {
       locations: [{ id: "home-bar", name: "酒吧", district: "沃森", x: 20, y: 20 }],
       openings: [
@@ -32,7 +32,7 @@ function ready() {
     ...world,
     slices: {
       ...world.slices,
-      health: { ...HealthStateSchema.parse(world.slices.health), hp: 100, max: 100 },
+      health: HealthStateSchema.parse(world.slices.health),
     },
   };
 }
@@ -111,7 +111,7 @@ const wound: Command = {
 const damage: Command = { type: "damage", tier: "heavy", reason: "同一次霰弹命中" };
 
 describe("叙事战斗伤害去重", () => {
-  it("自我 ICE 拦截后不被附带伤害或伤口重复扣血", async () => {
+  it("自我 ICE 拦截后不被附带伤害或伤口重复登记伤势", async () => {
     const base = withRunner();
     const world: WorldState = {
       ...base,
@@ -181,7 +181,7 @@ describe("叙事战斗伤害去重", () => {
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
     expect(result.turn.commands).not.toContainEqual(attack);
   });
-  it("快速破解统一扣血，丢弃重复伤害和伤口", async () => {
+  it("快速破解统一登记伤势，丢弃重复伤害和伤口", async () => {
     const attack = { type: "npcHack", id: "runner", program: "overheat", target: "你" };
     const result = await runNarratorTurn(
       {
@@ -201,7 +201,7 @@ describe("叙事战斗伤害去重", () => {
     );
     expect(result.kind).toBe("done");
     if (result.kind !== "done") return;
-    expect(result.turn.world.slices.health).toMatchObject({ hp: 70 });
+    expect(HealthStateSchema.parse(result.turn.world.slices.health).injuries).toHaveLength(1);
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
     expect(HackingStateSchema.parse(result.turn.world.slices.hacking).npcRamUsed).toEqual({
       runner: 2,
@@ -213,7 +213,7 @@ describe("叙事战斗伤害去重", () => {
     [start, wound, damage],
     [damage, start, wound],
     [wound, damage, start],
-  ])("同批开战不因指令顺序重复扣血：%j", async (...changes) => {
+  ])("同批开战不因指令顺序重复登记伤势：%j", async (...changes) => {
     const result = await runNarratorTurn(
       {
         llm: fakeLlm(changes, {
@@ -232,7 +232,7 @@ describe("叙事战斗伤害去重", () => {
     );
     expect(result.kind).toBe("done");
     if (result.kind !== "done") return;
-    expect(result.turn.world.slices.health).toMatchObject({ hp: 70 });
+    expect(HealthStateSchema.parse(result.turn.world.slices.health).injuries).toHaveLength(1);
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toHaveLength(1);
     expect(result.turn.commands.some((c) => c.type === "damage")).toBe(false);
     expect(result.turn.dropped.some((d) => (d.raw as Command | null)?.type === "damage")).toBe(

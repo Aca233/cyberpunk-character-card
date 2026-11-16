@@ -69,10 +69,7 @@ const textOf = (request: LlmRequest) => request.messages.map((m) => m.content).j
 
 describe("零掷骰定性裁决与原生 JSON 约束", () => {
   it("判断输出定性裁决且不掷骰，写正文拿到客观后果并一次结算，不跑额外质检", async () => {
-    const world = newGameWorld(
-      { startTime: 1000, difficulty: "nightCity", opening: "test-open" },
-      content,
-    );
+    const world = newGameWorld({ startTime: 1000, opening: "test-open" }, content);
     const { llm, requests } = fakeLlm();
     const result = await runNarratorTurn(
       { llm, rng: { roll: () => 6 }, offscreen: null, data },

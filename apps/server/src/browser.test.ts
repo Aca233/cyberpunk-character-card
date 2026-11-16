@@ -69,7 +69,6 @@ describe("本地服务层（浏览器里直接跑 app.fetch）", () => {
     const created = await call(local, "POST", "/saves", {
       title: "本地存档",
       characterId: "sample-1",
-      difficulty: "nightCity",
     });
     expect(created.status).toBe(201);
     const id = String(created.data.id);
@@ -85,7 +84,6 @@ describe("本地服务层（浏览器里直接跑 app.fetch）", () => {
     const created = await call(from, "POST", "/saves", {
       title: "要搬走的存档",
       characterId: "sample-1",
-      difficulty: "nightCity",
     });
     const exported = await call(from, "GET", `/saves/${String(created.data.id)}/export`);
     expect(exported.status).toBe(200);

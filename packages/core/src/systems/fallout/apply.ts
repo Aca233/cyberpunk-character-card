@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
-import { checkFact, isSuccess } from "../dice";
+import { rulingFact } from "../dice";
 import { FALLOUT_RECENT, type FalloutKind, type FalloutRecord, type FalloutState } from "./schema";
 
 const NOTICED_EVENTS = new Set(["kill", "publicViolence", "theft", "vandalism", "publicHack"]);
@@ -59,22 +59,22 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
   return [...kinds];
 }
 
-/** 记下这一轮的后果；检定失败却什么都没发生时，下一轮提醒叙事模型补上 */
+/** 记录已发生的后果；只对已确认但尚未登记的损伤补记提醒，不为行动受阻强造惩罚。 */
 export function recordFallout(
   draft: Draft<FalloutState>,
   command: FalloutRecord,
   ctx: SystemContext,
 ): ApplyOutcome {
-  const check = checkFact(ctx.facts);
-  const failed = check !== undefined && !isSuccess(check.outcome);
+  const ruling = rulingFact(ctx.facts);
+  const failed = ruling?.kind === "blocked";
   const kinds = [...new Set(command.kinds)];
   if (kinds.length > 0) draft.owed = null;
-  else if (failed && check) draft.owed = { id: check.id, left: 1 };
+  else if (ruling && ruling.harm !== "none") draft.owed = { id: ruling.id, left: 1 };
   else if (draft.owed) {
     if (draft.owed.left <= 0) draft.owed = null;
     else draft.owed.left -= 1;
   }
-  // 失败却没落地的检定由 owed 提醒，不进近期列表
+  // 尚未登记的损伤由 owed 提醒；近期列表只记录已发生的后果
   if (kinds.length > 0) {
     draft.recent.push({ at: ctx.now, kinds, failed });
     if (draft.recent.length > FALLOUT_RECENT)

@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
-import { checkFact, rulingFact } from "../dice";
+import { rulingFact } from "../dice";
 import {
   type OwnedVehicle,
   REPAIR_SHARE,
@@ -63,15 +63,6 @@ function nextId(vehicles: readonly OwnedVehicle[], model: string): string {
   return `${model}-${n}`;
 }
 
-/** 本轮的门槛结果是不是这几项属性之一、有没有达标；没有门槛时是 undefined */
-function gateMet(facts: Readonly<Record<string, unknown>>, attributes: readonly string[]) {
-  const gate = facts.gate as { attribute?: unknown; met?: unknown } | undefined;
-  if (gate === undefined || !attributes.includes(String(gate.attribute))) return undefined;
-  return gate.met === true;
-}
-
-const failed = (outcome: string) => outcome === "failure" || outcome === "fumble";
-
 export function grantVehicle(
   draft: Draft<TravelState>,
   command: VehicleGrant,
@@ -121,15 +112,9 @@ export function applyVehicle(
         emit: [{ type: "money", delta: -def.price, reason: `买车：${def.name}` }],
       };
     }
-    const check = checkFact(ctx.facts);
-    const gate = gateMet(ctx.facts, ["tech", "body"]);
-    if (check !== undefined ? failed(check.outcome) : gate === false)
-      return fail("偷车没成：写车警报响、车主追来或者 NCPD 到场");
-    if (check === undefined && gate === undefined) {
-      const ruling = rulingFact(ctx.facts);
-      if (ruling?.kind === "blocked") {
-        return fail(ruling.reason ?? "车辆安防或现场条件阻断，没偷成");
-      }
+    const ruling = rulingFact(ctx.facts);
+    if (ruling?.kind === "blocked") {
+      return fail(ruling.reason ?? "车辆安防或现场条件阻断，没偷成");
     }
     draft.vehicles.push(owned);
     return {
@@ -188,40 +173,11 @@ export function applyVehicle(
     }
     case "chase": {
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，开不了`);
-      const check = checkFact(ctx.facts);
-      if (check === undefined) {
-        const ruling = rulingFact(ctx.facts);
-        if (ruling?.kind === "blocked") {
-          return fail(ruling.reason ?? "地形或对手堵死了路线，没能甩开");
-        }
-        return { ok: true, notes: [`开着${name(target)}甩开了：${command.reason}`] };
+      const ruling = rulingFact(ctx.facts);
+      if (ruling?.kind === "blocked") {
+        return fail(ruling.reason ?? "地形或对手堵死了路线，没能甩开");
       }
-      if (!failed(check.outcome))
-        return { ok: true, notes: [`开着${name(target)}甩开了：${command.reason}`] };
-      if (command.stake === "damage") {
-        target.condition = target.condition === "damaged" ? "wrecked" : "damaged";
-        return {
-          ok: true,
-          notes: [`追车失手，${name(target)}${VEHICLE_CONDITION_LABELS[target.condition]}`],
-        };
-      }
-      if (command.stake === "heat") {
-        return {
-          ok: true,
-          notes: ["追车失手，NCPD 盯上了"],
-          emit: [
-            {
-              type: "event",
-              kind: "publicViolence",
-              witnesses: 10,
-              public: true,
-              reportedTo: "ncpd",
-              reason: `追车：${command.reason}`,
-            },
-          ],
-        };
-      }
-      return { ok: true, notes: ["追车失手，被拦下了：写把车逼停的人"] };
+      return { ok: true, notes: [`开着${name(target)}甩开了：${command.reason}`] };
     }
   }
   return fail(`不认得的载具动作 ${command.action}`);

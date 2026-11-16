@@ -110,7 +110,6 @@ describe("建档带上旧识", () => {
     const world = newGameWorld(
       {
         startTime: 1000,
-        difficulty: "nightCity",
         opening: "test-open",
         ...(meta ? { board: meta } : {}),
       },

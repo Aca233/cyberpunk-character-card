@@ -11,7 +11,6 @@ const freshDb = () => openGameDb("test", new IDBFactory());
 const META: SaveMeta = {
   title: "测试存档",
   characterId: "unassigned",
-  difficulty: "nightCity",
   createdAt: "2026-01-01T00:00:00.000Z",
   startTime: 0,
 };

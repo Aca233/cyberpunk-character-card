@@ -51,7 +51,6 @@ function startAt(startLocation?: string) {
   const world = newGameWorld(
     {
       startTime: START,
-      difficulty: "nightCity",
       opening: "test-open",
       ...(startLocation === undefined ? {} : { startLocation }),
     },

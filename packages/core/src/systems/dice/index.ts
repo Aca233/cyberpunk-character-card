@@ -39,6 +39,5 @@ export const dice = defineSystem<DiceState, never, DiceInternal>({
   },
 });
 
-export * from "./apply";
 export * from "./facts";
 export * from "./schema";

@@ -30,7 +30,6 @@ import {
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
-import type { CappedTotal } from "./systems/dice/apply";
 import { type Attribute, type DamageTier, DiceStateSchema } from "./systems/dice/schema";
 import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
@@ -568,6 +567,12 @@ function turnInput(raw: unknown): TurnInput {
 }
 
 /** 保持现有界面的投影字段；沙盘不生成检定卡或属性门槛。 */
+interface CappedTotal {
+  readonly items: readonly { source: string; value: number; reason: string }[];
+  readonly raw: number;
+  readonly total: number;
+}
+
 interface CheckPanelProjection {
   readonly id: string;
   readonly label: string;
