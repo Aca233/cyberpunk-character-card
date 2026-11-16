@@ -19,6 +19,17 @@ describe("伤势由身体事实驱动", () => {
     expect(state.brokenChrome).toEqual([]);
     expect(healthDisplay(state)).toEqual({ hp: 90, max: 100 });
   });
+  it("伤口不得超出裁决范围，愈合后登记新伤使用新身份", () => {
+    const state = health.initial();
+    const facts = { ruling: { id: "one", kind: "costly", harm: "graze" } };
+    expect(applyDamage(state, { type: "damage", tier: "heavy", reason: "超范围" }, ctx(0, facts)).ok).toBe(false);
+    expect(state.injuries).toEqual([]);
+    applyDamage(state, { type: "damage", tier: "graze", reason: "擦伤" }, ctx());
+    const firstId = state.injuries[0]?.id;
+    recoverInjuries(state, { from: 0, to: 1440 });
+    applyDamage(state, { type: "damage", tier: "graze", reason: "另一处伤" }, ctx(1440));
+    expect(state.injuries[0]?.id).not.toBe(firstId);
+  });
   it("致命伤立即需要救援，未治疗不随等待消失", () => {
     const state = health.initial();
     applyHit(state, { type: "health.hit", tier: "lethal", part: "chest", injuryId: "shot-1", reason: "贯穿胸口" }, ctx());

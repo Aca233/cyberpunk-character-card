@@ -95,6 +95,7 @@ export const ChromeLimbsFactSchema = z.object({
 
 export const HealthStateSchema = z.object({
   condition: ConditionSchema,
+  nextInjuryId: z.number().int().min(1).default(1),
   /** 药物是否正在抑制疼痛；不代表创口愈合 */
   painSuppressed: z.boolean().default(false),
   painSuppressedUntil: z.number().int().nullable().default(null),

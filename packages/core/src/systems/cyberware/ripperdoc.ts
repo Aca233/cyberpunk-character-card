@@ -70,7 +70,7 @@ export function ripperdocView({ world, data }: ViewContext) {
       price: item.price,
       tradeIn: item.tradeIn,
       net: item.net,
-      humanityCost: item.def.humanityCost,
+      humanityCost: 0,
       ability: item.def.ability,
       bonusText: bonusText(item.def),
       attributes: item.def.attributes,
@@ -84,7 +84,7 @@ export function ripperdocView({ world, data }: ViewContext) {
       replaces: item.replaces?.name ?? null,
       replacesId: item.replaces?.id ?? null,
       replacesRarity: item.replaces?.rarity ?? null,
-      replacesHumanityCost: item.replaces?.humanityCost ?? 0,
+      replacesHumanityCost: 0,
     })),
   };
 }

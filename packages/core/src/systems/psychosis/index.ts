@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { type HumanityState, neuralStage } from "../humanity";
 import { WorldClockStateSchema } from "../world";
 import { psychosisActions } from "./actions";
 import {
@@ -53,7 +54,12 @@ export const psychosis = defineSystem<
     }
   },
   on: {
-    "scene.end": (draft, ctx) => closeBlackouts(draft, ctx.now),
+    "humanity.changed": (draft, ctx) => {
+      if (["stable", "detached"].includes(neuralStage(ctx.read<HumanityState>("humanity")))) {
+        closeBlackouts(draft, ctx.now);
+        draft.episodeScene = null;
+      }
+    },
   },
   rules: [suppressantRules],
   actions: psychosisActions,

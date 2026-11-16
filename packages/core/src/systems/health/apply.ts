@@ -44,7 +44,7 @@ function recordInjury(draft: Health, entry: {
   part: BodyPart | null; tier: DamageTier; cause: string; now: number;
   source?: "injury" | "combat"; id?: string;
 }): Injury {
-  const id = entry.id ?? `injury-${entry.now}-${draft.injuries.length + 1}`;
+  const id = entry.id ?? `injury-${draft.nextInjuryId++}`;
   const injury: Injury = { id, part: entry.part, tier: entry.tier, cause: entry.cause,
     at: entry.now, healsAt: entry.tier === "graze" ? entry.now + DAY : null,
     treated: false, source: entry.source ?? "injury" };
@@ -60,7 +60,8 @@ export function applyDamage(draft: Health, command: DamageCommand, ctx: SystemCo
   if (ruling) {
     if (ruling.harm === "none") return fail("现场裁决未确认受伤，不能登记伤势");
     if (draft.damagedBy === ruling.id) return fail("这一轮已经登记过伤害");
-    if (command.tier === "lethal" && ruling.harm !== "lethal") return fail("现场裁决未确认致命伤");
+    const rank = { graze: 0, heavy: 1, lethal: 2 };
+    if (rank[command.tier] > rank[ruling.harm]) return fail("伤势超出现场裁决确认的范围");
   }
   if (command.limb && (command.tier !== "lethal" || ruling?.limb !== true)) {
     return fail("断肢需要裁决已确认的直接断肢危险和致命损伤");

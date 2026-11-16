@@ -26,7 +26,7 @@ export const cyberwareStatus: readonly SystemStatus[] = [
     lines(ctx: StatusContext) {
       const s = ctx.views.sandevistan as SandevistanView;
       if (!s) return [];
-      return [`加速义体：${s.name}，斯安威斯坦时刻最多 ${s.slots} 个动作，再开一次人性 −${s.cost}`];
+      return [`加速义体：${s.name}；玩家主动使用时按真实距离、设备能力和当前损伤判断效果，无固定动作格`];
     },
   },
   {

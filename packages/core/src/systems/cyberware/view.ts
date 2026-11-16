@@ -2,13 +2,13 @@ import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
-import { BOOST_SLOTS, type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./schema";
+import { type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./schema";
 
 /** 义体的特殊机制效果，例如护甲或斯安威斯坦动作格；没有时是空字符串 */
 export function bonusText(def: CyberwareDef): string {
   return [
-    ...(def.armor ? ["受伤降一档"] : []),
-    ...(def.accelerator ? [`斯安威斯坦时刻 ${BOOST_SLOTS[def.rarity]} 个动作格`] : []),
+    ...(def.armor ? ["保护范围与承受能力按现场伤害判断"] : []),
+    ...(def.accelerator ? ["加速行动，受设备与现实空间条件约束"] : []),
   ].join("、");
 }
 
@@ -30,7 +30,7 @@ export function cyberwareView({ world, data }: ViewContext) {
       iconic: def?.iconic ?? false,
       ability: def?.ability ?? null,
       bonusText: def ? bonusText(def) : "",
-      humanityCost: def?.humanityCost ?? 0,
+      humanityCost: 0,
       attributes: def?.attributes ?? {},
       checks: def?.checks ?? [],
       armor: def?.armor ?? false,

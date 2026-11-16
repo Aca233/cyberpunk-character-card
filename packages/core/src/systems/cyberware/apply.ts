@@ -3,7 +3,6 @@ import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
 import { type Keeper, rarityLock } from "../economy";
 import {
-  BOOST_WINDOW,
   CyberwareCatalogSchema,
   type CyberwareCommand,
   type CyberwareDef,
@@ -108,16 +107,6 @@ export function ripperdocShelf(
   });
 }
 
-/** 装着的义体一共占掉多少人性上限 */
-function costCommand(
-  draft: Draft<CyberwareState>,
-  catalog: ReadonlyMap<string, CyberwareDef>,
-): Command {
-  const total = draft.installed.reduce((sum, c) => sum + (catalog.get(c.id)?.humanityCost ?? 0), 0);
-  // 传递原始合计，人性系统先按耐受折算，再限制到 100；提前截断会让高耐受少计费用。
-  return { type: "humanity.setCyberwareCost", total };
-}
-
 /** 装着的义体一共给哪些属性加多少 */
 function bonusCommand(
   draft: Draft<CyberwareState>,
@@ -187,7 +176,7 @@ export function install(
       ...(purchase.event ? { event: purchase.event } : {}),
     });
   }
-  emit.push(costCommand(draft, catalog), bonusCommand(draft, catalog));
+  emit.push(bonusCommand(draft, catalog));
   return { ok: true, notes, emit, signals: ["cyberware.changed"] };
 }
 
@@ -204,7 +193,6 @@ export function remove(
     ok: true,
     notes: [`卸下${name}`],
     emit: [
-      costCommand(draft, catalog),
       bonusCommand(draft, catalog),
       { type: "health.limb", action: "clear", id },
     ],
@@ -212,7 +200,7 @@ export function remove(
   };
 }
 
-/** 生死瞬间开加速义体：上一次开过后一小时内再开算连续使用，人性代价按连续次数递增 */
+/** 开启可用加速义体，只记录实际启动事件，不按使用次数收取资源 */
 export function applyBoost(
   draft: Draft<CyberwareState>,
   id: string,
@@ -225,14 +213,8 @@ export function applyBoost(
   if (!draft.installed.some((c) => c.id === id))
     return { ok: false, reason: `没有装着${def.name}` };
   if (broken.includes(id)) return { ok: false, reason: `${def.name}打坏了，修好前开不了` };
-  const last = draft.boost;
-  const count = last && now - last.lastAt <= BOOST_WINDOW ? last.count + 1 : 1;
-  draft.boost = { count, lastAt: now };
-  return {
-    ok: true,
-    notes: [`开了${def.name}${count > 1 ? `（连续第 ${count} 次）` : ""}`],
-    emit: [{ type: "humanity", delta: -count, reason: `开${def.name}` }],
-  };
+  draft.boost = { id, lastAt: now };
+  return { ok: true, notes: [`开启${def.name}；持续使用的实际反应按设备、身体状态与现场条件记录`] };
 }
 
 /** 模型的 cyberware 指令 */

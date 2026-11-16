@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
-import { type HumanityState, isImmunosuppressed, PSYCHOSIS_BELOW } from "../humanity";
+import { type HumanityState, isImmunosuppressed, neuralStage } from "../humanity";
 import type { InventoryState } from "../inventory";
 import { formatGameTime, type WorldClockState } from "../world";
 import {
@@ -77,29 +77,28 @@ export function takeSuppressant(
   };
 }
 
-/** 发作：人性低于 40 才成立；压制剂可压制常规发作，人性归零时只有重度创伤仍可能突破 */
+/** 发作需要已确认的神经症状与新诱因；不受场景配额控制。 */
 export function applyEpisode(
   draft: Draft<PsychosisState>,
   command: EpisodeCommand,
   ctx: SystemContext,
 ): ApplyOutcome {
   const humanityState = ctx.read<HumanityState>("humanity");
-  const humanity = humanityState.current;
-  if (humanity >= PSYCHOSIS_BELOW) {
-    return fail(`人性 ${humanity}，不低于 ${PSYCHOSIS_BELOW}，不会发作`);
+  if (command.action === "end") {
+    if (draft.episodeScene === null) return fail("没有正在持续的发作");
+    closeBlackouts(draft, ctx.now);
+    draft.episodeScene = null;
+    return { ok: true, notes: [`发作缓解：${command.trigger}`] };
   }
+  const stage = neuralStage(humanityState);
+  if (stage === "stable" || stage === "detached") return fail("尚无不稳定的神经症状，不能凭空发作");
   const suppressed =
     suppressantStatus(draft.doses, ctx.now).until !== null ||
     isImmunosuppressed(humanityState, ctx.now);
-  if (suppressed && (humanity > 0 || command.severity === "mild")) {
-    return fail(
-      humanity > 0
-        ? `压制剂仍在起效，压住了这次神经失控（当前人性 ${humanity}）`
-        : "压制剂仍在起效，暂时压住了轻微神经排异",
-    );
+  if (suppressed && (stage !== "crisis" || command.severity === "mild")) {
+    return fail("压制剂仍在起效，压住了这次神经失控");
   }
   const scene = ctx.read<WorldClockState>("world").scene;
-  if (draft.episodeScene === scene) return fail("这个场景已经发作过一次");
   if (command.event !== undefined && draft.events.includes(command.event)) {
     return fail(`「${command.event}」这件事已经发作过`);
   }
@@ -125,7 +124,7 @@ export function applyLostControl(
   ctx: SystemContext,
 ): ApplyOutcome {
   const scene = ctx.read<WorldClockState>("world").scene;
-  if (draft.episodeScene !== scene) return fail("这个场景没有发作，不会失控；先写 episode");
+  if (draft.episodeScene === null) return fail("没有正在持续的发作，不会失控；先写 episode");
   draft.lostControl += 1;
   return { ok: true, notes: [`[失控] 你想：${command.intent}；实际：${command.actual}`] };
 }
@@ -190,7 +189,7 @@ export function psychosisView(slice: unknown, now: number, scene: number | null 
   const s = suppressantStatus(state.doses, now);
   return {
     /** 这个场景已经发作过 */
-    episodeHere: scene !== null && state.episodeScene === scene,
+    episodeHere: state.episodeScene !== null,
     /** 严重发作还没过去 */
     blackoutOpen: state.blackouts.some((b) => b.to === null),
     /** 已经结束的记忆空白，最近 3 段 */

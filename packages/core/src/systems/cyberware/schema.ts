@@ -70,7 +70,7 @@ export const CyberwareDefSchema = z.object({
   programSlots: z.number().int().min(1).max(12).optional(),
   /** RAM 格：接入仓给底数，额叶皮质等义体再加（本作改编） */
   ram: z.number().int().min(1).max(12).optional(),
-  /** 加速义体（斯安威斯坦）：生死瞬间可以开，一段输入塞进几个动作 */
+  /** 加速义体（斯安威斯坦）：生死瞬间可以开，按现场时距和设备能力加速行动 */
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic；军用级、原型）：只从剧情获得，义体医生不卖 */
   iconic: z.boolean().default(false),
@@ -109,17 +109,6 @@ export const REPAIR_RATE = 0.3;
 /** 赊账几天内还清 */
 export const DEBT_DAYS = 7;
 
-/** 斯安威斯坦时刻一次能塞进几个动作，按义体稀有度 */
-export const BOOST_SLOTS: Readonly<Record<z.infer<typeof RaritySchema>, number>> = {
-  common: 2,
-  uncommon: 3,
-  rare: 3,
-  epic: 4,
-  legendary: 5,
-};
-/** 上一次开加速义体之后多少分钟内再开算连续使用，人性代价递增 */
-export const BOOST_WINDOW = 60;
-
 /** 欠义体医生的钱：一位医生同时只赊一笔，期限记在“期限与伏笔”里 */
 export const RipperdocDebtSchema = z.object({
   doc: z.string().min(1),
@@ -145,9 +134,9 @@ export const CyberwareStateSchema = z.object({
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()).default([]),
   debts: z.array(RipperdocDebtSchema).default([]),
-  /** 最近一次开加速义体：连续第几次、什么时候；旧存档没有 */
+  /** 最近一次开加速义体：设备 id 与启动时间 */
   boost: z
-    .object({ count: z.number().int().min(1), lastAt: z.number().int() })
+    .object({ id: z.string().min(1), lastAt: z.number().int() })
     .nullable()
     .default(null),
 });
@@ -166,7 +155,7 @@ export const CyberwareCommandSchema = z
     event: z.string().min(1).optional(),
   })
   .describe(
-    "义体医生装、卸义体：install 按义体表扣欧元（谈下来的价或白送时写 price，白送写 0），余额不够时整条不生效；每个部位按格数装（额皮质、神经系统、循环系统、表皮系统、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件），装满了再装会换下最早装的那件；remove 卸下。人性上限由代码算，不另写 humanity",
+    "义体医生装、卸义体：install 按义体表扣欧元（谈下来的价或白送时写 price，白送写 0），余额不够时整条不生效；每个部位按格数装（额皮质、神经系统、循环系统、表皮系统、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件），装满了再装会换下最早装的那件；remove 卸下。安装本身不自动扣人性；只在实际出现神经症状时记录 humanity",
   );
 export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 
@@ -190,7 +179,7 @@ export const RipperdocDebtCommandSchema = z.object({
 });
 export type RipperdocDebtCommand = z.infer<typeof RipperdocDebtCommandSchema>;
 
-/** 只能由代码发出：生死瞬间玩家开了加速义体，扣人性（连续使用递增） */
+/** 只能由代码发出：玩家主动开启已安装且可用的加速义体 */
 export const BoostCommandSchema = z.object({
   type: z.literal("cyberware.boost"),
   id: z.string().min(1),

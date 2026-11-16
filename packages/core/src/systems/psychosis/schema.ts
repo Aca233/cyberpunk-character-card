@@ -20,11 +20,11 @@ export const WITHDRAWAL_AFTER = DAY;
 export const PsychosisStateSchema = z.object({
   /** 最近 14 天吃压制剂的时间 */
   doses: z.array(z.number().int()).default([]),
-  /** 最近一次发作在第几个场景；一个场景最多一次 */
+  /** 最近一次发作在第几个场景；直到症状平复前持续存在 */
   episodeScene: z.number().int().nullable().default(null),
   /** 发作过的事件 id：同一件事只发作一次 */
   events: z.array(z.string()).default([]),
-  /** 严重发作留下的记忆空白：哪个场景、从几点起；场景结束时记下 to。只留最近 BLACKOUTS_KEPT 段 */
+  /** 严重发作留下的记忆空白：哪个场景、从几点起；实际平复时记下 to。只留最近 BLACKOUTS_KEPT 段 */
   blackouts: z
     .array(
       z.object({
@@ -52,6 +52,7 @@ export type SuppressantCommand = z.infer<typeof SuppressantCommandSchema>;
 export const EpisodeCommandSchema = z
   .object({
     type: z.literal("episode"),
+    action: z.enum(["start", "end"]).default("start"),
     trigger: z
       .string()
       .min(1)
@@ -64,7 +65,7 @@ export const EpisodeCommandSchema = z
     reason: z.string().min(1),
   })
   .describe(
-    "赛博精神病发作：只在人性低于 40、合乎情理的高压时刻写；每个场景最多一次，代码拒绝第二次",
+    "神经症状发作：需要已有不稳定症状和具体诱因；start 记本次发作，end 在确实平复时关闭。不是每场配额；同一 event 不重复发生",
   );
 export type EpisodeCommand = z.infer<typeof EpisodeCommandSchema>;
 

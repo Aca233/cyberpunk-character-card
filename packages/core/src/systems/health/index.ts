@@ -18,7 +18,7 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
   id: "health",
   dependsOn: ["inventory"],
   state: HealthStateSchema,
-  initial: () => ({ condition: "up", painSuppressed: false, painSuppressedUntil: null,
+  initial: () => ({ condition: "up", nextInjuryId: 1, painSuppressed: false, painSuppressedUntil: null,
     damagedBy: null, injuries: [], lostLimbs: [], brokenChrome: [] }),
   commands: { damage: DamageCommandSchema, heal: HealCommandSchema },
   internal: HealthInternalSchemas,
