@@ -71,6 +71,7 @@ import {
 } from "@cp/core";
 import type { z } from "zod";
 import { ROOT } from "./assets/manifest";
+import { merchantDataIssues } from "./merchant-data";
 
 /**
  * pnpm check-data：用 schema 检查 packages/content 的所有数据，再查跨表引用和重复 id。
@@ -213,14 +214,7 @@ unique(
 );
 
 // 3. 跨表引用
-for (const s of shops) {
-  refs(`商店 ${s.id}`, [s.location], locationIds, "地点");
-  refs(`商店 ${s.id}`, s.shelf, itemIds, "物品");
-}
-for (const d of ripperdocs) {
-  refs(`义体医生 ${d.id}`, [d.location], locationIds, "地点");
-  refs(`义体医生 ${d.id}`, d.shelf, chromeIds, "义体");
-}
+errors.push(...merchantDataIssues(gameData));
 for (const l of loadouts) {
   refs(
     `行装 ${l.id}`,
