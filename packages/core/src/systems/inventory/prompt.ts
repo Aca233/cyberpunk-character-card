@@ -11,7 +11,10 @@ import {
 
 /** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id。
  * 按类别分组，每行只写这件东西自己的特点，几十件也不太占篇幅 */
-export function catalogSection(data: Readonly<Record<string, unknown>>): string | undefined {
+export function catalogSection(
+  data: Readonly<Record<string, unknown>>,
+  includeAbilities = true,
+): string | undefined {
   if (data.items === undefined) return undefined;
   const groups = new Map<string, string[]>();
   for (const item of itemCatalog(data).values()) {
@@ -29,7 +32,7 @@ export function catalogSection(data: Readonly<Record<string, unknown>>): string 
       ...(item.rarity ? [RARITY_LABELS[item.rarity]] : []),
       ...(item.iconic ? ["不朽"] : item.price === undefined ? [] : [String(item.price)]),
     ];
-    const line = `- ${item.id} ${item.name}${notes.length > 0 ? `｜${notes.join("｜")}` : ""}${item.ability ? `：${item.ability}` : ""}`;
+    const line = `- ${item.id} ${item.name}${notes.length > 0 ? `｜${notes.join("｜")}` : ""}${includeAbilities && item.ability ? `：${item.ability}` : ""}`;
     groups.set(group, [...(groups.get(group) ?? []), line]);
   }
   const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
@@ -38,7 +41,7 @@ export function catalogSection(data: Readonly<Record<string, unknown>>): string 
 - 治疗品与手雷的 charges 是这份实物的余量；切场、休息和结束战斗均不补满。补充必须确实购买、制作或取得另一份物品。工具和信物使用后保留，只有 consumable 的 use 才消耗掉。
 - 独立物件交给已有卡的人时写 item lose，recipient 写人物 id；对方交还时写 item gain 同一物件 id，代码同步双方装备，不另发同一物件的 npcGear。
 - 所有武器拿到就放进背包（item gain），直接就能拔出使用，不用写 item equip；item equip / unequip 只用于穿着衣服或切换快捷治疗品/手雷。
-每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）：能力。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）；不朽的东西只从剧情获得，没人卖。
+每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）${includeAbilities ? "：能力" : "；本轮相关能力另列在用户消息里。完整索引始终保留，未展开能力不代表物件不存在，也不能据此重复新建同名物件"}。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）；不朽的东西只从剧情获得，没人卖。
 改装件只在装到武器上时才算数（【当前状态】随身武器括号里写着的），例如装了消音器才能安静开枪；装卸在界面上做，你不发指令。
 ${body}`;
 }

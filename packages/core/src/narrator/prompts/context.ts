@@ -121,15 +121,13 @@ export interface NarratorPrompt {
 /** 判断只看最近几轮的原文 */
 export const JUDGE_TURNS = 4;
 
-/** 物品、义体、地点等表：抽取步用来对 id */
+/** 抽取核对 ID 的完整简表；长能力说明按本轮相关性放入用户消息，创作参考不进记账。 */
 export function tablesOf(_view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
   return [
-    catalogSection(extras.data),
-    cyberwareSection(extras.data),
-    twistSection(extras.data),
+    catalogSection(extras.data, false),
+    cyberwareSection(extras.data, false),
     jobTemplateSection(extras.data),
-    consequenceSection(extras.data),
   ].filter((s): s is string => s !== undefined);
 }
 

@@ -4,6 +4,7 @@ import type { WorldState } from "../../kernel/world";
 import { registry } from "../../systems/registry";
 import { ExtractDocSchema } from "../block";
 import { commandDoc, schemaDoc } from "../doc";
+import { extractCatalogData, extractCatalogDetails } from "./catalogs";
 import {
   CORE_COMMANDS,
   formatInput,
@@ -83,18 +84,20 @@ export function buildExtractPrompt(
   narrative: string,
 ): NarratorPrompt {
   const view = projectState(world, records, extras.data);
+  const data = extractCatalogData(world, extras.data ?? {});
+  const details = extractCatalogDetails(world, view, data, `${plan.input.text}\n${narrative}`);
   const modules = registry.activeRules(world, plan.input);
   const content = userMessage({
     scene: situation(world, records, view, plan, extras),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
-    after: [`【本轮正文】\n${narrative}`],
+    after: [details, `【本轮正文】\n${narrative}`],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
   const rules = systemMessage("extract", [extractRules()], modules);
   return {
     rules: rules.length,
     messages: [
-      { role: "system", content: [rules, ...tablesOf(view, extras)].join("\n\n") },
+      { role: "system", content: [rules, ...tablesOf(view, { ...extras, data })].join("\n\n") },
       { role: "user", content },
     ],
     modules: modules.map((m) => m.id),

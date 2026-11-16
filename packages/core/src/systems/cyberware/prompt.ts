@@ -20,7 +20,10 @@ export const cyberwareRules: RuleModule<CyberwareState> = {
 };
 
 /** 义体表：和物品表一样放在系统提示词末尾，按部位分组 */
-export function cyberwareSection(data: Readonly<Record<string, unknown>>): string | undefined {
+export function cyberwareSection(
+  data: Readonly<Record<string, unknown>>,
+  includeAbilities = true,
+): string | undefined {
   const parts = [...cyberwareCatalog(data).values()];
   if (parts.length === 0) return undefined;
   const groups = new Map<string, string[]>();
@@ -29,12 +32,12 @@ export function cyberwareSection(data: Readonly<Record<string, unknown>>): strin
     const group = SLOT_LABELS[p.slot];
     groups.set(group, [
       ...(groups.get(group) ?? []),
-      `- ${p.id} ${p.name}｜${notes.join("｜")}：${p.ability}`,
+      `- ${p.id} ${p.name}｜${notes.join("｜")}${includeAbilities ? `：${p.ability}` : ""}`,
     ]);
   }
   const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
   return `【义体表】
 cyberware 指令的 id 只能用下面这些，正文里用名称。
-每行是：id 名称｜稀有度｜参考价（欧元）：能力。装在身上即按其硬件功能起效；不朽义体只从剧情获得，义体医生不卖。
+每行是：id 名称｜稀有度｜参考价（欧元）${includeAbilities ? "：能力" : "；本轮相关能力另列在用户消息里，未展开的义体仍可按索引引用"}。装在身上即按其硬件功能起效；不朽义体只从剧情获得，义体医生不卖。
 ${body}`;
 }
