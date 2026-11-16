@@ -5,6 +5,7 @@ import { character } from "./character";
 import { chronicle } from "./chronicle";
 import { city } from "./city";
 import { combat } from "./combat";
+import { commerce } from "./commerce";
 import { cyberware } from "./cyberware";
 import { economy } from "./economy";
 import { factions } from "./factions";
@@ -41,6 +42,7 @@ export const systems: readonly AnySystem[] = [
   character,
   world,
   combat,
+  commerce,
   npc,
   economy,
   jobs,
