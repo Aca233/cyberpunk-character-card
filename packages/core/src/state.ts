@@ -4,7 +4,7 @@ import { CharacterStateSchema, effectiveAttributes } from "./systems/character/s
 import { WeaponConcealmentSchema } from "./systems/dice/schema";
 import { woundSlotOf } from "./systems/health/apply";
 import { HealthStateSchema, WOUND_SLOT_LABELS, WoundSlotSchema } from "./systems/health/schema";
-import { neuralDisplay, neuralStage, isImmunosuppressed } from "./systems/humanity/apply";
+import { isImmunosuppressed, neuralDisplay, neuralStage } from "./systems/humanity/apply";
 import { HumanityStateSchema } from "./systems/humanity/schema";
 import { itemCatalog } from "./systems/inventory/apply";
 import {

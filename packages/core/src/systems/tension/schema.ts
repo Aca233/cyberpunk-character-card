@@ -49,13 +49,22 @@ export const TensionSiteSchema = z.object({
   disabledEnemyChrome: z.array(z.string()).default([]),
 });
 export type TensionSite = z.infer<typeof TensionSiteSchema>;
-export const TensionStateSchema = z.object({ sites: z.record(z.string(), TensionSiteSchema).default({}) });
+export const TensionStateSchema = z.object({
+  sites: z.record(z.string(), TensionSiteSchema).default({}),
+});
 export type TensionState = z.infer<typeof TensionStateSchema>;
 
 export const TensionCommandSchema = z
   .object({
     type: z.literal("tension"),
-    location: z.string().trim().min(1).optional().describe("变化实际发生的已知地点 id；移动途中或离开后记录原现场时必须写明，不能把原处损坏记到目的地"),
+    location: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        "变化实际发生的已知地点 id；移动途中或离开后记录原现场时必须写明，不能把原处损坏记到目的地",
+      ),
     active: z
       .boolean()
       .optional()
@@ -81,10 +90,31 @@ export const TensionCommandSchema = z
       .max(40)
       .optional()
       .describe("已被破坏、EMP 烧毁或切断失灵的敌方义体与安保硬件"),
-    repairChrome: z.string().trim().min(1).max(40).optional().describe("实际完成维修的硬件；仅离场或收场不算维修"),
-    backupCause: z.string().trim().min(1).max(200).optional().describe("已发生的呼叫/警报、响应者及可到达路线；没有前因不能启动增援"),
-    cancelBackupReason: z.string().trim().min(1).max(200).optional().describe("实际阻止或取消这次增援的事件"),
-    backupArrived: z.boolean().optional().describe("增援已经实际到达时才写 true，预计时间到零不等于到达"),
+    repairChrome: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .optional()
+      .describe("实际完成维修的硬件；仅离场或收场不算维修"),
+    backupCause: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("已发生的呼叫/警报、响应者及可到达路线；没有前因不能启动增援"),
+    cancelBackupReason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("实际阻止或取消这次增援的事件"),
+    backupArrived: z
+      .boolean()
+      .optional()
+      .describe("增援已经实际到达时才写 true，预计时间到零不等于到达"),
     triggerBackupInMinutes: z
       .number()
       .int()

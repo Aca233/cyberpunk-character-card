@@ -3,8 +3,7 @@ import type { Rng } from "../../kernel/ports";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { SERVICES } from "../economy";
 import { type InventoryState, type ItemDef, itemCatalog } from "../inventory";
-import type { NpcState } from "../npc";
-import { currentVitals } from "../npc/body";
+import { currentVitals, type NpcState } from "../npc";
 import { locationCatalog, type WorldClockState } from "../world";
 import { familyOf, pickName } from "./names";
 import {
@@ -108,7 +107,8 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
   if (npc !== null) {
     const card = ctx.read<NpcState>("npc").npcs[npc];
     if (!card?.body?.gear.includes(item)) return fail(`${name}已经不再带着 ${item}，不能重复取得`);
-    if (card.location !== null && card.location !== here) return fail(`${name}已经带着物件离开这里`);
+    if (card.location !== null && card.location !== here)
+      return fail(`${name}已经带着物件离开这里`);
   }
   const i = bag.indexOf(item);
   if (i < 0) return fail(`${name}身上没有 ${item}`);
@@ -118,7 +118,9 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
     ok: true,
     notes: [],
     emit: [
-      ...(npc === null || trackedObject ? [] : [{ type: "npcGear", id: npc, action: "remove", item }]),
+      ...(npc === null || trackedObject
+        ? []
+        : [{ type: "npcGear", id: npc, action: "remove", item }]),
       { type: "item", action: "gain", id: item, reason: `从${name}身上捡的` },
     ],
   };
@@ -155,7 +157,12 @@ export function startCombat(
     foes.push(foe);
   }
   if (foes.length === 0) return fail("开打要写 foes");
-  draft.active = { startedAt: ctx.now, district: districtHere(ctx), location: ctx.read<WorldClockState>("world").location, foes };
+  draft.active = {
+    startedAt: ctx.now,
+    district: districtHere(ctx),
+    location: ctx.read<WorldClockState>("world").location,
+    foes,
+  };
   const named = foes.map((f) => (f.gang ? `${f.gang}的${f.name}` : f.name));
   return ok(`动手了：${named.join("、")}`);
 }
@@ -188,21 +195,31 @@ export function setFoe(draft: Combat, command: CombatCommand, ctx: SystemContext
   if (!foe || command.state === undefined) return fail(`场上没有 ${command.target}`);
   if (foe.state === command.state || foe.state === "dead") return ok();
   foe.state = command.state;
-  if (command.state !== "dead") return {
-    ok: true,
-    notes: [`${foe.name}${FOE_STATE_LABELS[command.state]}`],
-    emit: command.state === "down" && foe.npc !== null
-      ? [{ type: "npc.condition", id: foe.npc, condition: "down", reason: "在已记录的冲突中倒下" }]
-      : [],
-  };
+  if (command.state !== "dead")
+    return {
+      ok: true,
+      notes: [`${foe.name}${FOE_STATE_LABELS[command.state]}`],
+      emit:
+        command.state === "down" && foe.npc !== null
+          ? [
+              {
+                type: "npc.condition",
+                id: foe.npc,
+                condition: "down",
+                reason: "在已记录的冲突中倒下",
+              },
+            ]
+          : [],
+    };
   const d = recordDead(draft, foe, ctx);
   const who = d.gang ? `${d.gang}的${d.name}` : d.name;
   return {
     ok: true,
     notes: [`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`],
-    emit: foe.npc !== null && ctx.read<NpcState>("npc").npcs[foe.npc]?.alive
-      ? [{ type: "npcDeath", id: foe.npc, reason: "在已记录的这次冲突中死亡" }]
-      : [],
+    emit:
+      foe.npc !== null && ctx.read<NpcState>("npc").npcs[foe.npc]?.alive
+        ? [{ type: "npcDeath", id: foe.npc, reason: "在已记录的这次冲突中死亡" }]
+        : [],
   };
 }
 
@@ -315,7 +332,16 @@ export function endCombat(draft: Combat, command: CombatCommand, ctx: SystemCont
   );
   const left = active.foes.flatMap((f) =>
     (f.state === "down" || f.state === "dead") && f.carry.length > 0
-      ? [{ from: f.id, name: f.name, npc: f.npc, location: active.location, leftAt: ctx.now, items: [...f.carry] }]
+      ? [
+          {
+            from: f.id,
+            name: f.name,
+            npc: f.npc,
+            location: active.location,
+            leftAt: ctx.now,
+            items: [...f.carry],
+          },
+        ]
       : [],
   );
   draft.groundLoot.push(...left);
@@ -412,7 +438,9 @@ function hop(r: Combat["rumors"][number], districts: readonly string[], at_: num
 /** 时间推进：伤长好（没治的重伤留疤）、死者那边掷找不找上门、流言往外传、录像到期出事 */
 export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): void {
   const now = span.to;
-  const injuries = ctx.read<{ injuries?: { id: string; healsAt: number | null; treated: boolean }[] }>("health").injuries;
+  const injuries = ctx.read<{
+    injuries?: { id: string; healsAt: number | null; treated: boolean }[];
+  }>("health").injuries;
   for (const w of [...draft.wounds]) {
     const injury = injuries?.find((i) => i.id === w.id);
     // health 先结算时间；一次跳过整个恢复期时，已愈合的镜像记录可能已被移除。
@@ -420,7 +448,10 @@ export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): v
       draft.wounds.splice(draft.wounds.indexOf(w), 1);
       continue;
     }
-    if (injury) { w.healsAt = injury.healsAt; w.treated = injury.treated; }
+    if (injury) {
+      w.healsAt = injury.healsAt;
+      w.treated = injury.treated;
+    }
     if (w.healsAt === null || w.healsAt > now) continue;
     if (!w.treated && SCARRING_TIERS.includes(w.tier)) {
       draft.scars.push({

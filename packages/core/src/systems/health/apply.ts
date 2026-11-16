@@ -3,32 +3,53 @@ import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system"
 import { type DamageTier, rulingFact } from "../dice";
 import type { InventoryState } from "../inventory";
 import {
-  BODY_PART_LABELS, type BodyPart, ChromeLimbsFactSchema, type Condition,
-  type DamageCommand, type HealCommand, type HealthInternal, type HealthState,
-  type Injury, LIMB_LABELS, type Limb, limbSlot, type WoundSlot,
+  BODY_PART_LABELS,
+  type BodyPart,
+  ChromeLimbsFactSchema,
+  type Condition,
+  type DamageCommand,
+  type HealCommand,
+  type HealthInternal,
+  type HealthState,
+  type Injury,
+  LIMB_LABELS,
+  type Limb,
+  limbSlot,
+  type WoundSlot,
 } from "./schema";
 
 type Health = Draft<HealthState>;
 const DAY = 1440;
 export const INJURY_HEAL_MINUTES: Readonly<Record<DamageTier, number>> = {
-  graze: DAY, heavy: 4 * DAY, lethal: 7 * DAY,
+  graze: DAY,
+  heavy: 4 * DAY,
+  lethal: 7 * DAY,
 };
 export const DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
-  graze: "擦伤", heavy: "重创", lethal: "致命伤",
+  graze: "擦伤",
+  heavy: "重创",
+  lethal: "致命伤",
 };
 export const CONDITION_LABELS: Readonly<Record<Condition, string>> = {
-  up: "正常", down: "倒下", dying: "濒死", dead: "死亡",
+  up: "正常",
+  down: "倒下",
+  dying: "濒死",
+  dead: "死亡",
 };
 export type WoundTag = "none" | "light" | "severe" | "zero";
 
 /** 展示阶段由实际创口和失能事实决定；它不参与伤害结算。 */
-export function woundSlotOf(state: Pick<HealthState, "condition" | "injuries" | "lostLimbs">): WoundSlot {
+export function woundSlotOf(
+  state: Pick<HealthState, "condition" | "injuries" | "lostLimbs">,
+): WoundSlot {
   if (state.condition !== "up") return 4;
   if (state.lostLimbs.length || state.injuries.some((i) => i.tier === "lethal")) return 3;
   if (state.injuries.some((i) => i.tier === "heavy")) return 2;
   return state.injuries.length ? 1 : 0;
 }
-export function woundTag(state: Pick<HealthState, "condition" | "injuries" | "lostLimbs">): WoundTag {
+export function woundTag(
+  state: Pick<HealthState, "condition" | "injuries" | "lostLimbs">,
+): WoundTag {
   const slot = woundSlotOf(state);
   return slot === 4 ? "zero" : slot === 3 ? "severe" : slot === 2 ? "light" : "none";
 }
@@ -40,21 +61,39 @@ export function healthDisplay(state: Pick<HealthState, "condition" | "injuries" 
 const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
-function recordInjury(draft: Health, entry: {
-  part: BodyPart | null; tier: DamageTier; cause: string; now: number;
-  source?: "injury" | "combat"; id?: string;
-}): Injury {
+function recordInjury(
+  draft: Health,
+  entry: {
+    part: BodyPart | null;
+    tier: DamageTier;
+    cause: string;
+    now: number;
+    source?: "injury" | "combat";
+    id?: string;
+  },
+): Injury {
   const id = entry.id ?? `injury-${draft.nextInjuryId++}`;
-  const injury: Injury = { id, part: entry.part, tier: entry.tier, cause: entry.cause,
-    at: entry.now, healsAt: entry.tier === "graze" ? entry.now + DAY : null,
-    treated: false, source: entry.source ?? "injury" };
+  const injury: Injury = {
+    id,
+    part: entry.part,
+    tier: entry.tier,
+    cause: entry.cause,
+    at: entry.now,
+    healsAt: entry.tier === "graze" ? entry.now + DAY : null,
+    treated: false,
+    source: entry.source ?? "injury",
+  };
   draft.injuries.push(injury);
   if (entry.tier === "lethal") draft.condition = "dying";
   return injury;
 }
 
 /** 伤害严重度已经过现场裁决；不再按护甲统一降档，也不扣抽象生命值。 */
-export function applyDamage(draft: Health, command: DamageCommand, ctx: SystemContext): ApplyOutcome {
+export function applyDamage(
+  draft: Health,
+  command: DamageCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
   if (draft.condition === "dead") return fail("角色已经死亡");
   const ruling = rulingFact(ctx.facts);
   if (ruling) {
@@ -69,7 +108,9 @@ export function applyDamage(draft: Health, command: DamageCommand, ctx: SystemCo
   const part = command.part ?? command.limb ?? null;
   recordInjury(draft, { part, tier: command.tier, cause: command.reason, now: ctx.now });
   if (ruling) draft.damagedBy = ruling.id;
-  const notes = [`${part ? BODY_PART_LABELS[part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`];
+  const notes = [
+    `${part ? BODY_PART_LABELS[part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
+  ];
   if (command.limb) notes.push(loseLimb(draft, command.limb, ctx));
   return ok(...notes);
 }
@@ -83,30 +124,51 @@ function loseLimb(draft: Health, limb: Limb, ctx: SystemContext): string {
   if (!draft.lostLimbs.includes(limb)) draft.lostLimbs.push(limb);
   return `失去${LIMB_LABELS[limb]}，对应抓握、支撑或移动能力受限，需救治并安装义肢`;
 }
-export function applyLimb(draft: Health, command: Extract<HealthInternal, { type: "health.limb" }>): ApplyOutcome {
+export function applyLimb(
+  draft: Health,
+  command: Extract<HealthInternal, { type: "health.limb" }>,
+): ApplyOutcome {
   if (command.action === "fit") {
     const fixed = draft.lostLimbs.filter((l) => limbSlot(l) === command.slot);
     draft.lostLimbs = draft.lostLimbs.filter((l) => limbSlot(l) !== command.slot);
-    return ok(...(fixed.length ? [`装上${command.name ?? "义肢"}，补上${fixed.map((l) => LIMB_LABELS[l]).join("、")}`] : []));
+    return ok(
+      ...(fixed.length
+        ? [`装上${command.name ?? "义肢"}，补上${fixed.map((l) => LIMB_LABELS[l]).join("、")}`]
+        : []),
+    );
   }
   const i = command.id === undefined ? -1 : draft.brokenChrome.indexOf(command.id);
   if (i < 0 && command.action === "repair") return fail(`${command.name ?? command.id}没坏`);
   if (i >= 0) draft.brokenChrome.splice(i, 1);
   return ok(...(command.action === "repair" ? [`${command.name ?? command.id}修好了`] : []));
 }
-export function applyHit(draft: Health, command: Extract<HealthInternal, { type: "health.hit" }>, ctx: SystemContext): ApplyOutcome {
+export function applyHit(
+  draft: Health,
+  command: Extract<HealthInternal, { type: "health.hit" }>,
+  ctx: SystemContext,
+): ApplyOutcome {
   if (draft.condition === "dead") return fail("角色已经死亡");
-  if (command.injuryId && draft.injuries.some((i) => i.id === command.injuryId)) return fail("这处伤已经登记");
-  recordInjury(draft, { part: command.part ?? null, tier: command.tier, cause: command.reason,
-    now: ctx.now, source: "combat", ...(command.injuryId ? { id: command.injuryId } : {}) });
-  return ok(`${command.part ? BODY_PART_LABELS[command.part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`);
+  if (command.injuryId && draft.injuries.some((i) => i.id === command.injuryId))
+    return fail("这处伤已经登记");
+  recordInjury(draft, {
+    part: command.part ?? null,
+    tier: command.tier,
+    cause: command.reason,
+    now: ctx.now,
+    source: "combat",
+    ...(command.injuryId ? { id: command.injuryId } : {}),
+  });
+  return ok(
+    `${command.part ? BODY_PART_LABELS[command.part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
+  );
 }
 export function treatInjury(draft: Health, id: string, now: number): ApplyOutcome {
   const injury = draft.injuries.find((i) => i.id === id);
   if (!injury) return fail(`找不到伤处 ${id}`);
   injury.treated = true;
   injury.healsAt ??= now + INJURY_HEAL_MINUTES[injury.tier];
-  if (draft.condition === "dying" && !draft.injuries.some((i) => i.tier === "lethal" && !i.treated)) draft.condition = "up";
+  if (draft.condition === "dying" && !draft.injuries.some((i) => i.tier === "lethal" && !i.treated))
+    draft.condition = "up";
   return ok(`已处理${injury.part ? BODY_PART_LABELS[injury.part] : "伤口"}，创口仍需恢复`);
 }
 export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContext): ApplyOutcome {
@@ -116,10 +178,15 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
     if (!draft.injuries.length || draft.painSuppressed) return fail("当前没有需要再次镇痛的伤势");
     const inventory = ctx.read<InventoryState>("inventory");
     const slot = inventory.healing;
-    if (!slot || (slot.charges < 1 && (inventory.backpack[slot.id] ?? 0) < 1)) return fail("没有可用医疗针，需要实际补给");
+    if (!slot || (slot.charges < 1 && (inventory.backpack[slot.id] ?? 0) < 1))
+      return fail("没有可用医疗针，需要实际补给");
     draft.painSuppressed = true;
     draft.painSuppressedUntil = ctx.now + 120;
-    return { ok: true, notes: ["医疗针暂时缓解疼痛，创口和损坏仍存在"], emit: [{ type: "inventory.spend", slot: "healing" }] };
+    return {
+      ok: true,
+      notes: ["医疗针暂时缓解疼痛，创口和损坏仍存在"],
+      emit: [{ type: "inventory.spend", slot: "healing" }],
+    };
   }
   if (command.source === "ripperdoc") {
     for (const injury of draft.injuries) treatInjury(draft, injury.id, ctx.now);
@@ -129,8 +196,10 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
   return ok("休整为恢复提供条件；现存伤口按恢复时间愈合，重伤仍需救治");
 }
 export function revive(draft: Health, now: number): ApplyOutcome {
-  if (draft.condition !== "dying" && draft.condition !== "down") return fail(`角色${CONDITION_LABELS[draft.condition]}，不需要救治`);
-  for (const injury of draft.injuries) if (injury.tier === "lethal") treatInjury(draft, injury.id, now);
+  if (draft.condition !== "dying" && draft.condition !== "down")
+    return fail(`角色${CONDITION_LABELS[draft.condition]}，不需要救治`);
+  for (const injury of draft.injuries)
+    if (injury.tier === "lethal") treatInjury(draft, injury.id, now);
   draft.condition = "up";
   return ok("救援稳定了生命体征，具体伤势仍在恢复中");
 }

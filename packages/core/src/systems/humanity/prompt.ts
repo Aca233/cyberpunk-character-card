@@ -1,8 +1,11 @@
 import type { RuleModule } from "../../kernel/system";
 import type { HumanityState } from "./schema";
 export const psychosisRules: RuleModule<HumanityState> = {
-  id: "cyberpsychosis", title: "神经症状与现实压力", commands: ["humanity", "episode", "lostControl"],
-  when: (state, input) => state.symptoms.length > 0 || /过载|耳鸣|幻听|失控|创伤|排异|神经|崩溃/.test(input.text),
+  id: "cyberpsychosis",
+  title: "神经症状与现实压力",
+  commands: ["humanity", "episode", "lostControl"],
+  when: (state, input) =>
+    state.symptoms.length > 0 || /过载|耳鸣|幻听|失控|创伤|排异|神经|崩溃/.test(input.text),
   judge: `- 神经症状来自实际过载、排异、受伤、创伤或刺激，不因义体数量、稀有度、使用次数或道德评价自动发生。
 - 对照已登记症状、正在起效的治疗和本轮诱因决定是否改变状态；没有新诱因，不重复发作。压制剂缓解症状，不清除病因。
 - 自救、离开刺激源、得到支持和治疗能改变局势。不得替玩家选择杀人或篡改核心意图。`,

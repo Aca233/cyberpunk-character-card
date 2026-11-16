@@ -25,10 +25,7 @@ export function cyberwareSection(data: Readonly<Record<string, unknown>>): strin
   if (parts.length === 0) return undefined;
   const groups = new Map<string, string[]>();
   for (const p of parts) {
-    const notes = [
-      RARITY_LABELS[p.rarity],
-      p.iconic ? "不朽" : String(p.price),
-    ];
+    const notes = [RARITY_LABELS[p.rarity], p.iconic ? "不朽" : String(p.price)];
     const group = SLOT_LABELS[p.slot];
     groups.set(group, [
       ...(groups.get(group) ?? []),

@@ -1,13 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { DISCOUNT_FACTORS, discounted, type EconomyState, type Rarity, SERVICES } from "../economy";
 import type { NpcState } from "../npc";
-import {
-  DISCOUNT_FACTORS,
-  discounted,
-  type EconomyState,
-  type Rarity,
-  SERVICES,
-} from "../economy";
 import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
@@ -56,11 +50,18 @@ export function withWorldObjects(
 ): Readonly<Record<string, unknown>> {
   if (Object.keys(objects).length === 0) return data;
   let cache = extendedCatalogs.get(objects);
-  if (!cache) { cache = new WeakMap(); extendedCatalogs.set(objects, cache); }
+  if (!cache) {
+    cache = new WeakMap();
+    extendedCatalogs.set(objects, cache);
+  }
   const cached = cache.get(data);
   if (cached) return cached;
   const base = Array.isArray(data.items) ? data.items.filter((item) => !objects[item.id]) : [];
-  const merged = { ...data, worldObjects: objects, items: [...base, ...Object.values(objects).map((o) => o.definition)] };
+  const merged = {
+    ...data,
+    worldObjects: objects,
+    items: [...base, ...Object.values(objects).map((o) => o.definition)],
+  };
   cache.set(data, merged);
   return merged;
 }
@@ -91,7 +92,13 @@ function put(draft: Inventory, id: string): void {
 }
 
 /** 存放箱和后备箱进出：只动背包，改装件跟着武器 id 留着 */
-export function stashMove(draft: Inventory, action: "out" | "in", id: string, now = 0, location: string | null = null): ApplyOutcome {
+export function stashMove(
+  draft: Inventory,
+  action: "out" | "in",
+  id: string,
+  now = 0,
+  location: string | null = null,
+): ApplyOutcome {
   if (action === "in") {
     if (draft.objects[id]?.holder === "player") return fail("这件物品已经随身携带");
     put(draft, id);
@@ -104,7 +111,14 @@ export function stashMove(draft: Inventory, action: "out" | "in", id: string, no
   return ok();
 }
 
-function moveObject(draft: Inventory, id: string, holder: string, location: string | null, now: number, reason: string): void {
+function moveObject(
+  draft: Inventory,
+  id: string,
+  holder: string,
+  location: string | null,
+  now: number,
+  reason: string,
+): void {
   const object = draft.objects[id];
   if (!object) return;
   if (object.holder === "consumed" && holder !== "consumed") return;
@@ -149,34 +163,58 @@ export function applyItem(
     if (!parsed.success) return fail("新物件定义不完整");
     def = parsed.data;
     draft.objects[def.id] = {
-      definition: def, origin: command.origin, holder: "world", location,
-      changedAt: now, lastChange: command.reason.slice(0, 240),
+      definition: def,
+      origin: command.origin,
+      holder: "world",
+      location,
+      changedAt: now,
+      lastChange: command.reason.slice(0, 240),
       remaining: def.charges ?? null,
     };
   }
   if (!def) return fail(`未登记物件 ${command.id}：首次取得需提供 definition 与 origin`);
   const object = draft.objects[def.id];
-  const fromNpc = object ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder) : undefined;
-  const toNpc = object && command.recipient ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient) : undefined;
+  const fromNpc = object
+    ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder)
+    : undefined;
+  const toNpc =
+    object && command.recipient
+      ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient)
+      : undefined;
   if (command.action === "gain" && object) {
     if (object.holder === "player") return fail("这件独立物件已经属于玩家，不能重复获得");
     if (object.holder === "consumed") return fail("这件物件已经耗尽，不能凭空重新获得");
     if (object.holder === "stash") return fail("物件在存放处，请通过取回操作转移");
     const sourceLocation = fromNpc?.location ?? object.location;
-    if (sourceLocation !== null && sourceLocation !== location) return fail("这件物件仍在别处，不能隔空取得");
-    if (fromNpc && !fromNpc.body?.gear.includes(def.id)) return fail("原持有人已不再带着这件物件，无法转交");
+    if (sourceLocation !== null && sourceLocation !== location)
+      return fail("这件物件仍在别处，不能隔空取得");
+    if (fromNpc && !fromNpc.body?.gear.includes(def.id))
+      return fail("原持有人已不再带着这件物件，无法转交");
   }
   switch (command.action) {
     case "gain":
       put(draft, def.id);
       autoQuick(draft, def);
       moveObject(draft, def.id, "player", null, now, command.reason);
-      return { ok: true, notes: [def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`],
-        emit: fromNpc ? [{ type: "npcGear", id: fromNpc.id, action: "remove", item: def.id }] : [] };
+      return {
+        ok: true,
+        notes: [def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`],
+        emit: fromNpc ? [{ type: "npcGear", id: fromNpc.id, action: "remove", item: def.id }] : [],
+      };
     case "lose": {
       const result = lose(draft, def);
-      if (result.ok) moveObject(draft, def.id, toNpc?.id ?? command.recipient ?? "world", location, now, command.reason);
-      return result.ok && toNpc ? { ...result, emit: [{ type: "npcGear", id: toNpc.id, action: "add", item: def.id }] } : result;
+      if (result.ok)
+        moveObject(
+          draft,
+          def.id,
+          toNpc?.id ?? command.recipient ?? "world",
+          location,
+          now,
+          command.reason,
+        );
+      return result.ok && toNpc
+        ? { ...result, emit: [{ type: "npcGear", id: toNpc.id, action: "add", item: def.id }] }
+        : result;
     }
     case "equip":
       return equip(draft, def);
@@ -184,7 +222,8 @@ export function applyItem(
       return unequip(draft, def);
     case "use": {
       const result = use(draft, def);
-      if (result.ok && def.kind === "consumable") moveObject(draft, def.id, "consumed", location, now, command.reason);
+      if (result.ok && def.kind === "consumable")
+        moveObject(draft, def.id, "consumed", location, now, command.reason);
       return result;
     }
   }
@@ -289,7 +328,9 @@ function use(draft: Inventory, def: ItemDef): ApplyOutcome {
     case "consumable":
       return take(draft, def.id) ? ok(`用掉 ${def.name}`) : fail(`背包里没有 ${def.name}`);
     case "misc":
-      return (draft.backpack[def.id] ?? 0) > 0 ? ok(`使用 ${def.name}`) : fail(`背包里没有 ${def.name}`);
+      return (draft.backpack[def.id] ?? 0) > 0
+        ? ok(`使用 ${def.name}`)
+        : fail(`背包里没有 ${def.name}`);
     case "weapon":
     case "clothing":
       return fail(`${def.name} 不是一次性物品`);
@@ -402,9 +443,7 @@ export function shopShelf(
     const def = catalog.get(id);
     if (!def || def.price === undefined) return [];
     const left = Math.max(0, stockOf(def) - (stock?.sold[id] ?? 0));
-    const locked = def.iconic
-      ? "不朽物品只从剧情获得"
-      : (left === 0 ? "这一批卖完了，等补货" : null);
+    const locked = def.iconic ? "不朽物品只从剧情获得" : left === 0 ? "这一批卖完了，等补货" : null;
     const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
     return [{ def, price, locked, left }];
   });
@@ -535,7 +574,11 @@ export function applyTrade(
   if (!def) return fail(`物品表里没有 ${id}`);
   if (command.action === "buy") {
     const object = draft.objects[def.id];
-    if (object && (object.holder === "player" || object.holder === "consumed" || object.holder === "stash")) return fail("这件独立物件并不在卖方手中");
+    if (
+      object &&
+      (object.holder === "player" || object.holder === "consumed" || object.holder === "stash")
+    )
+      return fail("这件独立物件并不在卖方手中");
     if (def.iconic) return fail(`${def.name}是不朽物品，只能从剧情获得，没人卖`);
     if (def.price === undefined) return fail(`${def.name}没有标价，不能买`);
     const price = discounted(def.price, command.discount);
@@ -550,12 +593,27 @@ export function applyTrade(
       }
       markSold(draft, shop.id, def.id, shop.at);
     }
-    const received = applyItem(draft, { type: "item", action: "gain", id: def.id, reason: `向${command.with}买下：${command.reason}` }, catalog, now, location, npcs);
+    const received = applyItem(
+      draft,
+      {
+        type: "item",
+        action: "gain",
+        id: def.id,
+        reason: `向${command.with}买下：${command.reason}`,
+      },
+      catalog,
+      now,
+      location,
+      npcs,
+    );
     if (!received.ok) return received;
     return {
       ok: true,
       notes: [`得到${def.name}（从${command.with}那里买的）`],
-      emit: [...(received.emit ?? []), { type: "money", delta: -price, reason: `向${command.with}买${def.name}` }],
+      emit: [
+        ...(received.emit ?? []),
+        { type: "money", delta: -price, reason: `向${command.with}买${def.name}` },
+      ],
     };
   }
   if (def.iconic) return fail(`${def.name}是不朽物品，不卖`);
@@ -569,7 +627,20 @@ export function applyTrade(
     Math.floor(((def.price ?? 0) * 0.3) / 10) * 10,
     Math.round((base * bonus) / 10) * 10,
   );
-  const delivered = applyItem(draft, { type: "item", action: "lose", id: def.id, recipient: command.with, reason: `卖给${command.with}：${command.reason}` }, catalog, now, location, npcs);
+  const delivered = applyItem(
+    draft,
+    {
+      type: "item",
+      action: "lose",
+      id: def.id,
+      recipient: command.with,
+      reason: `卖给${command.with}：${command.reason}`,
+    },
+    catalog,
+    now,
+    location,
+    npcs,
+  );
   if (!delivered.ok) return delivered;
   const left = draft.backpack[def.id] ?? 0;
   // 卖掉最后一把时升级记录跟着清掉，免得下次买到同款带着升过的稀有度
@@ -579,7 +650,10 @@ export function applyTrade(
   return {
     ok: true,
     notes: [`卖掉${def.name}（卖给${command.with}）`],
-    emit: [...(delivered.emit ?? []), { type: "money", delta: price, reason: `卖给${command.with}：${def.name}` }],
+    emit: [
+      ...(delivered.emit ?? []),
+      { type: "money", delta: price, reason: `卖给${command.with}：${def.name}` },
+    ],
   };
 }
 

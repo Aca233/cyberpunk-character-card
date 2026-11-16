@@ -71,7 +71,12 @@ export function filledBody(body: NpcBodyCard | undefined): FilledBody {
 }
 
 /** 运行期对模型写的 body 做温和解析与清理：支持按中文名回退、剔除表外或超格的项，不因单项笔误丢整张卡 */
-export function sanitizeNpcBody(body: NpcBodyCard, data: Data, notes: string[], npcId?: string): NpcBodyCard {
+export function sanitizeNpcBody(
+  body: NpcBodyCard,
+  data: Data,
+  notes: string[],
+  npcId?: string,
+): NpcBodyCard {
   const hasItemCatalog = Array.isArray(data.items);
   const items = hasItemCatalog ? itemCatalog(data) : null;
   const itemByName = items
@@ -154,7 +159,8 @@ export function bodyProblems(body: NpcBodyCard | undefined, data: Data, npcId?: 
     for (const id of body.gear) {
       if (!items.has(id)) problems.push(`物品表里没有「${id}」`);
       const holder = objectHolder(data, id);
-      if (holder !== undefined && holder !== npcId) problems.push(`独立物件 ${id} 属于 ${holder}，不能给人物重复配置`);
+      if (holder !== undefined && holder !== npcId)
+        problems.push(`独立物件 ${id} 属于 ${holder}，不能给人物重复配置`);
     }
   }
   if (body.cyberware.length > 0) {
@@ -193,17 +199,39 @@ export function slotProblems(
 
 /** 根据实际创口和治疗期计算此刻状况；显示条不参与结算。 */
 export function currentVitals(
-  npc: Pick<Npc, "body" | "vitals"> & Partial<Pick<Npc, "alive">>, _data: Data, now: number,
+  npc: Pick<Npc, "body" | "vitals"> & Partial<Pick<Npc, "alive">>,
+  _data: Data,
+  now: number,
 ): NpcVitals & { readonly hp: number; readonly max: number; readonly humanity: number } {
   const v: NpcVitals = npc.vitals ?? {
-    condition: "up", nextInjuryId: 1, hurtAt: null, scannedAt: null, injuries: [],
+    condition: "up",
+    nextInjuryId: 1,
+    hurtAt: null,
+    scannedAt: null,
+    injuries: [],
     symptoms: (npc.body?.symptoms ?? []).map((s) => ({ ...s, at: now })),
   };
   const injuries = v.injuries.filter((i) => i.healsAt === null || now < i.healsAt);
   const condition = npc.alive === false ? "dead" : v.condition;
-  const hp = condition !== "up" ? 0 : injuries.some((i) => i.tier === "lethal") ? 20
-    : injuries.some((i) => i.tier === "heavy") ? 50 : injuries.length ? 90 : 100;
-  return { ...v, condition, injuries, symptoms: [...v.symptoms], hp, max: 100, humanity: neuralDisplay(v) };
+  const hp =
+    condition !== "up"
+      ? 0
+      : injuries.some((i) => i.tier === "lethal")
+        ? 20
+        : injuries.some((i) => i.tier === "heavy")
+          ? 50
+          : injuries.length
+            ? 90
+            : 100;
+  return {
+    ...v,
+    condition,
+    injuries,
+    symptoms: [...v.symptoms],
+    hp,
+    max: 100,
+    humanity: neuralDisplay(v),
+  };
 }
 export function woundLabel(v: Pick<NpcVitals, "condition" | "injuries">): string {
   if (v.condition === "dead") return "死亡";
@@ -222,10 +250,18 @@ function settle(npc: Npc, data: Data, now: number): { body: FilledBody; v: NpcVi
 }
 
 /** 交战同步昏迷或苏醒事实，不臆造创口，也不覆盖尚未救治的濒死。 */
-export function applyNpcCondition(npc: Npc, command: NpcCondition, now: number, data: Data): ApplyOutcome {
+export function applyNpcCondition(
+  npc: Npc,
+  command: NpcCondition,
+  now: number,
+  data: Data,
+): ApplyOutcome {
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死亡` };
   const { v } = settle(npc, data, now);
-  if (command.condition === "up" && (v.condition === "dying" || v.injuries.some((i) => i.tier === "lethal" && !i.treated))) {
+  if (
+    command.condition === "up" &&
+    (v.condition === "dying" || v.injuries.some((i) => i.tier === "lethal" && !i.treated))
+  ) {
     return { ok: false, reason: "致命伤尚未稳定，不能仅靠状态切换恢复行动" };
   }
   if (!(command.condition === "down" && v.condition === "dying")) v.condition = command.condition;
@@ -245,16 +281,34 @@ export function applyNpcBody(
       const { v } = settle(npc, data, now);
       if (v.condition === "dead") return { ok: false, reason: `${npc.name} 已经死亡` };
       const part = command.part ?? inferBodyPart(command.reason);
-      v.injuries.push({ id: `ni${v.nextInjuryId++}`, part, tier: command.tier, cause: command.reason,
-        at: now, treated: false, healsAt: command.tier === "graze" ? now + INJURY_HEAL_MINUTES.graze : null });
+      v.injuries.push({
+        id: `ni${v.nextInjuryId++}`,
+        part,
+        tier: command.tier,
+        cause: command.reason,
+        at: now,
+        treated: false,
+        healsAt: command.tier === "graze" ? now + INJURY_HEAL_MINUTES.graze : null,
+      });
       v.hurtAt = now;
       if (command.tier === "lethal") v.condition = "dying";
-      return { ok: true, notes: [`${npc.name} ${part ? BODY_PART_LABELS[part] : "身体"}${NPC_DAMAGE_LABELS[command.tier]}：${command.reason}`] };
+      return {
+        ok: true,
+        notes: [
+          `${npc.name} ${part ? BODY_PART_LABELS[part] : "身体"}${NPC_DAMAGE_LABELS[command.tier]}：${command.reason}`,
+        ],
+      };
     }
     case "npcHeal": {
       const { v } = settle(npc, data, now);
       if (v.condition === "dead") return { ok: false, reason: `${npc.name} 已经死亡` };
-      if (command.how !== "ripperdoc") return { ok: true, notes: [`${npc.name} ${command.how === "rest" ? "休整中" : "缓解疼痛"}，具体创口仍需恢复`] };
+      if (command.how !== "ripperdoc")
+        return {
+          ok: true,
+          notes: [
+            `${npc.name} ${command.how === "rest" ? "休整中" : "缓解疼痛"}，具体创口仍需恢复`,
+          ],
+        };
       for (const injury of v.injuries) {
         injury.treated = true;
         injury.healsAt ??= now + INJURY_HEAL_MINUTES[injury.tier];
@@ -269,7 +323,11 @@ export function applyNpcBody(
       const has = body.gear.includes(command.item);
       if (command.action === "add") {
         const holder = objectHolder(data, command.item);
-        if (holder !== undefined && holder !== npc.id) return { ok: false, reason: `独立物件当前属于 ${holder}；先用 item lose recipient:${npc.id} 实际转交` };
+        if (holder !== undefined && holder !== npc.id)
+          return {
+            ok: false,
+            reason: `独立物件当前属于 ${holder}；先用 item lose recipient:${npc.id} 实际转交`,
+          };
         if (has) return { ok: true };
         if (body.gear.length >= NPC_GEAR_MAX) {
           return {
@@ -321,8 +379,15 @@ export function applyNpcBody(
         v.symptoms.splice(i, 1);
       } else {
         if (!command.stage || !command.symptom) return { ok: false, reason: "需要实际症状与阶段" };
-        const entry = { id: command.symptomId, stage: command.stage, description: command.symptom, cause: command.reason, at: now };
-        if (i < 0) v.symptoms.push(entry); else v.symptoms[i] = entry;
+        const entry = {
+          id: command.symptomId,
+          stage: command.stage,
+          description: command.symptom,
+          cause: command.reason,
+          at: now,
+        };
+        if (i < 0) v.symptoms.push(entry);
+        else v.symptoms[i] = entry;
       }
       return { ok: true };
     }
@@ -408,9 +473,7 @@ export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   const v = currentVitals(npc, data, now);
   const injuries = projectInjuries(v.injuries);
   const woundText =
-    injuries.length > 0
-      ? `${woundLabel(v)}（${injurySummaryText(injuries)}）`
-      : woundLabel(v);
+    injuries.length > 0 ? `${woundLabel(v)}（${injurySummaryText(injuries)}）` : woundLabel(v);
   const gear = gearNames(body.gear, data);
   const chrome = chromeDetails(body.cyberware, data);
   return [

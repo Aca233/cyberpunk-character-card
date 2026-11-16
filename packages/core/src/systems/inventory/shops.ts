@@ -57,23 +57,21 @@ export function shopsView({ world, data }: ViewContext) {
       note: shop.note,
       blackMarket: shop.blackMarket,
       restockAt: restockLabel(restockDue(inventory.shopStock[shop.id], now)),
-      shelf: shopShelf(
-        shop,
-        catalog,
-        currentStock(inventory.shopStock[shop.id], now),
-      ).map(({ def, price, locked, left }) => ({
-        id: def.id,
-        name: def.name,
-        group:
-          def.kind === "weapon" && def.category
-            ? WEAPON_CATEGORY_LABELS[def.category]
-            : ITEM_KIND_LABELS[def.kind],
-        rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
-        price: moodPrice(price, mood),
-        ability: def.ability ?? null,
-        locked: moodLocked ?? locked,
-        left,
-      })),
+      shelf: shopShelf(shop, catalog, currentStock(inventory.shopStock[shop.id], now)).map(
+        ({ def, price, locked, left }) => ({
+          id: def.id,
+          name: def.name,
+          group:
+            def.kind === "weapon" && def.category
+              ? WEAPON_CATEGORY_LABELS[def.category]
+              : ITEM_KIND_LABELS[def.kind],
+          rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
+          price: moodPrice(price, mood),
+          ability: def.ability ?? null,
+          locked: moodLocked ?? locked,
+          left,
+        }),
+      ),
       /** 背包里的东西卖给这家店给多少；0 是不收 */
       sell,
     };

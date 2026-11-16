@@ -81,7 +81,13 @@ function shopCommands(
     if (value <= 0)
       return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
     return [
-      { type: "item", action: "lose", id: def.id, recipient: shop.keeper, reason: `卖给${shop.name}` },
+      {
+        type: "item",
+        action: "lose",
+        id: def.id,
+        recipient: shop.keeper,
+        reason: `卖给${shop.name}`,
+      },
       { type: "money", delta: value, reason: `${shop.name}收购${def.name}` },
     ];
   }
@@ -122,10 +128,12 @@ export const inventoryActions = {
         return "背包里没有这件治疗品";
       }
       const charges = current ? held.charges : (inventory.depleted[action.id] ?? def.charges ?? 1);
-      if (charges < 1 && (inventory.backpack[action.id] ?? 0) < (current ? 1 : 2)) return "这份补给已经耗尽，需要实际取得补充品";
+      if (charges < 1 && (inventory.backpack[action.id] ?? 0) < (current ? 1 : 2))
+        return "这份补给已经耗尽，需要实际取得补充品";
       const health = HealthStateSchema.parse(world.slices.health);
       if (health.condition !== "up") return "当前无法自行治疗，需要别人救治";
-      if (health.injuries.length === 0 || health.painSuppressed) return "当前不需要再次使用急救药剂";
+      if (health.injuries.length === 0 || health.painSuppressed)
+        return "当前不需要再次使用急救药剂";
       const commands: Command[] = [];
       if (!current) {
         commands.push({

@@ -1,11 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import {
-  type CharacterState,
-  type SetBonuses,
-  type SetCharacter,
-  STREET_CRED_MAX,
-} from "./schema";
+import { type CharacterState, type SetBonuses, type SetCharacter, STREET_CRED_MAX } from "./schema";
 
 /** 传奇之路：声望到达里程碑时世界的反应；叙事模型据此写路人、帮派和中间人的态度 */
 export const CRED_TIERS = [
@@ -89,4 +84,3 @@ export function gainCred(
   else notes.push(`${reason}：名声又传开了一些`);
   return { ok: true, notes };
 }
-

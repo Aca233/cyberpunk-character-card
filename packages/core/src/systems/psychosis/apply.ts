@@ -165,7 +165,8 @@ export function episodeOf(
 ): { readonly severity: "mild" | "severe"; readonly trigger: string } | null {
   for (const c of commands) {
     const parsed = EpisodeCommandSchema.safeParse(c);
-    if (parsed.success && parsed.data.action !== "end") return { severity: parsed.data.severity, trigger: parsed.data.trigger };
+    if (parsed.success && parsed.data.action !== "end")
+      return { severity: parsed.data.severity, trigger: parsed.data.trigger };
   }
   return null;
 }

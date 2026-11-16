@@ -52,10 +52,21 @@ function injured(eddies: number) {
     slices: {
       ...world.slices,
       economy: { eddies, settled: [] },
-      health: { ...(world.slices.health as object), injuries: [{
-        id: "w1", part: "left-arm", tier: "heavy", cause: "枪手的霰弹枪", at: 0,
-        healsAt: null, treated: false, source: "combat",
-      }] },
+      health: {
+        ...(world.slices.health as object),
+        injuries: [
+          {
+            id: "w1",
+            part: "left-arm",
+            tier: "heavy",
+            cause: "枪手的霰弹枪",
+            at: 0,
+            healsAt: null,
+            treated: false,
+            source: "combat",
+          },
+        ],
+      },
       combat: CombatStateSchema.parse({
         active: null,
         last: null,
@@ -213,8 +224,13 @@ describe("治疗费用与身体事实连锁结算", () => {
     const first = registry.applyCommands(world, [care], context());
     expect(first.results[0]?.result.ok).toBe(true);
     expect(first.world.slices.economy).toMatchObject({ eddies: remaining });
-    expect(CombatStateSchema.parse(first.world.slices.combat).wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
-    expect(first.world.slices.health).toMatchObject({ injuries: [{ id: "w1", treated: true, healsAt: 4 * DAY }] });
+    expect(CombatStateSchema.parse(first.world.slices.combat).wounds[0]).toMatchObject({
+      treated: true,
+      healsAt: 4 * DAY,
+    });
+    expect(first.world.slices.health).toMatchObject({
+      injuries: [{ id: "w1", treated: true, healsAt: 4 * DAY }],
+    });
     const repeated = registry.applyCommands(first.world, [care], context());
     expect(repeated.results[0]?.result.ok).toBe(true);
     expect(repeated.world).toEqual(first.world);
@@ -240,10 +256,17 @@ describe("治疗费用与身体事实连锁结算", () => {
   });
   it("诊所统一治疗会同步战斗伤口的护理和恢复时间", () => {
     const world = injured(SERVICES.medical.price);
-    const result = registry.applyCommands(world, [{ type: "heal", source: "ripperdoc" }], context());
+    const result = registry.applyCommands(
+      world,
+      [{ type: "heal", source: "ripperdoc" }],
+      context(),
+    );
     expect(result.results[0]?.result.ok).toBe(true);
     const ticked = registry.advanceTo(result.world, 1, context()).world;
-    expect(CombatStateSchema.parse(ticked.slices.combat).wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
+    expect(CombatStateSchema.parse(ticked.slices.combat).wounds[0]).toMatchObject({
+      treated: true,
+      healsAt: 4 * DAY,
+    });
     const jumped = registry.advanceTo(result.world, 10 * DAY, context()).world;
     expect(CombatStateSchema.parse(jumped.slices.combat).wounds).toEqual([]);
     expect(jumped.slices.health).toMatchObject({ injuries: [] });

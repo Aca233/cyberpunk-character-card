@@ -236,9 +236,21 @@ export const ItemCommandSchema = z
     action: z.enum(["gain", "lose", "use", "equip", "unequip"]),
     id: z.string().min(1),
     reason: z.string().min(1),
-    definition: ItemDefSchema.optional().describe("首次获得目录外独立物件时写完整定义，definition.id 必须等于 id；不要重新定义已有物件"),
-    origin: z.string().min(1).max(240).optional().describe("首次出现的物件从哪里来、此前属于谁；必须依据已发生的事实"),
-    recipient: z.string().min(1).max(80).optional().describe("lose 转交物件时写接收者；没写表示留在当前地点"),
+    definition: ItemDefSchema.optional().describe(
+      "首次获得目录外独立物件时写完整定义，definition.id 必须等于 id；不要重新定义已有物件",
+    ),
+    origin: z
+      .string()
+      .min(1)
+      .max(240)
+      .optional()
+      .describe("首次出现的物件从哪里来、此前属于谁；必须依据已发生的事实"),
+    recipient: z
+      .string()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("lose 转交物件时写接收者；没写表示留在当前地点"),
     /** 历史存档兼容字段；所有武器统一放进背包，不再使用武器栏槽位 */
     slot: z.number().int().min(1).max(3).optional(),
   })

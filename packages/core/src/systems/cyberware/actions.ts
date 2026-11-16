@@ -93,11 +93,7 @@ function ripperdocCommands(
         : []),
     ];
   }
-  const item = ripperdocShelf(
-    doc,
-    catalog,
-    installed,
-  ).find((i) => i.def.id === action.id);
+  const item = ripperdocShelf(doc, catalog, installed).find((i) => i.def.id === action.id);
   if (!item) return `${doc.name}的货架上没有这件`;
   if (item.locked) return `${doc.name}不卖${item.def.name}：${item.locked}`;
   if (item.installed) return `${item.def.name}已经装着了`;

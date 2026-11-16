@@ -35,10 +35,9 @@ export const healthStatus: readonly SystemStatus[] = [
         const items = h.injuries.map((inj) => {
           const where = inj.partLabel ? `${inj.partLabel}` : "躯干";
           const eta = inj.healsAt === null ? "，尚未开始恢复" : `，预计还要 ${inj.daysLeft} 天`;
-          const care =
-            inj.treated
-              ? "已处理，恢复中"
-              : inj.tier === "graze"
+          const care = inj.treated
+            ? "已处理，恢复中"
+            : inj.tier === "graze"
               ? "浅伤恢复中"
               : h.painSuppressed
                 ? "医疗针暂抑痛感，仍需缝合"

@@ -6,7 +6,15 @@ export function humanityView({ world }: ViewContext) {
   const state = HumanityStateSchema.parse(world.slices.humanity);
   const stage = neuralStage(state);
   const suppressed = isImmunosuppressed(state, world.time);
-  return { current: neuralDisplay(state), cap: HUMANITY_MAX, max: HUMANITY_MAX,
-    tolerance: state.tolerance, stage, stageLabel: STAGE_LABELS[stage], suppressed,
-    symptoms: state.symptoms, glitchZone: !suppressed && ["unstable", "edge", "crisis"].includes(stage) };
+  return {
+    current: neuralDisplay(state),
+    cap: HUMANITY_MAX,
+    max: HUMANITY_MAX,
+    tolerance: state.tolerance,
+    stage,
+    stageLabel: STAGE_LABELS[stage],
+    suppressed,
+    symptoms: state.symptoms,
+    glitchZone: !suppressed && ["unstable", "edge", "crisis"].includes(stage),
+  };
 }

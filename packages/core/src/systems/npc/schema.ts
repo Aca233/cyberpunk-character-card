@@ -43,14 +43,22 @@ const NpcIdSchema = z
 export const NPC_GEAR_MAX = 6;
 export const NPC_CHROME_MAX = 8;
 /** 具体装备、义体与已确认的初始症状，不含阶层、HP 或人性点数。 */
-export const NpcBodyCardSchema = z.object({
-  gear: z.array(z.string().min(1)).max(NPC_GEAR_MAX).default([]).describe("随身物品的稳定 id，来自已登记物品定义"),
-  cyberware: z.array(z.string().min(1)).max(NPC_CHROME_MAX).default([]),
-  symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
-}).superRefine((b, ctx) => {
-  if (new Set(b.gear).size !== b.gear.length) ctx.addIssue({ code: "custom", message: "装备栏里有重复物品" });
-  if (new Set(b.cyberware).size !== b.cyberware.length) ctx.addIssue({ code: "custom", message: "义体里有重复项" });
-});
+export const NpcBodyCardSchema = z
+  .object({
+    gear: z
+      .array(z.string().min(1))
+      .max(NPC_GEAR_MAX)
+      .default([])
+      .describe("随身物品的稳定 id，来自已登记物品定义"),
+    cyberware: z.array(z.string().min(1)).max(NPC_CHROME_MAX).default([]),
+    symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
+  })
+  .superRefine((b, ctx) => {
+    if (new Set(b.gear).size !== b.gear.length)
+      ctx.addIssue({ code: "custom", message: "装备栏里有重复物品" });
+    if (new Set(b.cyberware).size !== b.cyberware.length)
+      ctx.addIssue({ code: "custom", message: "义体里有重复项" });
+  });
 export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
@@ -298,14 +306,17 @@ const BaseNpcSchema = NpcCardSchema.extend({
    */
   ties: z.array(NpcTieSchema).default([]),
   /** 已经发生的身体与神经事实；可惰性计算已治疗创口的恢复。 */
-  vitals: z.object({
-    condition: ConditionSchema,
-    nextInjuryId: z.number().int().min(1).default(1),
-    hurtAt: z.number().int().nullable(),
-    scannedAt: z.number().int().nullable(),
-    injuries: z.array(InjurySchema.omit({ source: true })).default([]),
-    symptoms: z.array(NeuralSymptomSchema).default([]),
-  }).nullable().default(null),
+  vitals: z
+    .object({
+      condition: ConditionSchema,
+      nextInjuryId: z.number().int().min(1).default(1),
+      hurtAt: z.number().int().nullable(),
+      scannedAt: z.number().int().nullable(),
+      injuries: z.array(InjurySchema.omit({ source: true })).default([]),
+      symptoms: z.array(NeuralSymptomSchema).default([]),
+    })
+    .nullable()
+    .default(null),
 });
 export const NpcSchema = BaseNpcSchema;
 export type Npc = z.infer<typeof NpcSchema>;
@@ -591,7 +602,9 @@ export const NpcHealSchema = z
       .describe("rest 休整了一阵，maxdoc 用了治疗品，ripperdoc 找义体医生治好了"),
     reason: z.string().trim().min(1).max(80).optional(),
   })
-  .describe("有卡的人得到真实治疗：rest 仅休整不清空创口；maxdoc 缓解不适；ripperdoc 稳定伤势并开始恢复，重伤不会随切场自动好");
+  .describe(
+    "有卡的人得到真实治疗：rest 仅休整不清空创口；maxdoc 缓解不适；ripperdoc 稳定伤势并开始恢复，重伤不会随切场自动好",
+  );
 export type NpcHeal = z.infer<typeof NpcHealSchema>;
 
 export const NpcGearSchema = z
@@ -618,17 +631,23 @@ export const NpcChromeSchema = z
   );
 export type NpcChrome = z.infer<typeof NpcChromeSchema>;
 
-export const NpcHumanitySchema = z.object({
-  type: z.literal("npcHumanity"),
-  id: NpcIdSchema,
-  action: z.enum(["affect", "recover"]),
-  symptomId: z.string().min(1),
-  stage: z.enum(["detached", "unstable", "edge", "crisis"]).optional(),
-  symptom: z.string().min(1).optional(),
-  reason: z.string().trim().min(1).max(160),
-}).superRefine((c, ctx) => {
-  if (c.action === "affect" && (!c.stage || !c.symptom)) ctx.addIssue({ code: "custom", message: "affect 要写实际 symptom 和 stage" });
-}).describe("记录有卡人物实际的神经症状与诱因，或恢复已有症状；symptomId 稳定不变，不能按义体数量或道德行为扣分");
+export const NpcHumanitySchema = z
+  .object({
+    type: z.literal("npcHumanity"),
+    id: NpcIdSchema,
+    action: z.enum(["affect", "recover"]),
+    symptomId: z.string().min(1),
+    stage: z.enum(["detached", "unstable", "edge", "crisis"]).optional(),
+    symptom: z.string().min(1).optional(),
+    reason: z.string().trim().min(1).max(160),
+  })
+  .superRefine((c, ctx) => {
+    if (c.action === "affect" && (!c.stage || !c.symptom))
+      ctx.addIssue({ code: "custom", message: "affect 要写实际 symptom 和 stage" });
+  })
+  .describe(
+    "记录有卡人物实际的神经症状与诱因，或恢复已有症状；symptomId 稳定不变，不能按义体数量或道德行为扣分",
+  );
 export type NpcHumanity = z.infer<typeof NpcHumanitySchema>;
 
 export const NpcScanSchema = z
@@ -834,8 +853,10 @@ export const NpcOffscreenDeathSchema = z.object({
 export type NpcOffscreenDeath = z.infer<typeof NpcOffscreenDeathSchema>;
 
 export const NpcConditionSchema = z.object({
-  type: z.literal("npc.condition"), id: NpcIdSchema,
-  condition: z.enum(["up", "down"]), reason: z.string().min(1),
+  type: z.literal("npc.condition"),
+  id: NpcIdSchema,
+  condition: z.enum(["up", "down"]),
+  reason: z.string().min(1),
 });
 export type NpcCondition = z.infer<typeof NpcConditionSchema>;
 export type NpcInternal = SeedNpc | NpcMemoryEdit | NpcPast | NpcOffscreenDeath | NpcCondition;

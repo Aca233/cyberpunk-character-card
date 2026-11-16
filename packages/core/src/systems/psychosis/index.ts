@@ -65,11 +65,7 @@ export const psychosis = defineSystem<
   events: psychosisEvents,
   view: {
     key: "psychosis",
-    project: ({ world }) =>
-      psychosisView(
-        world.slices.psychosis,
-        world.time,
-      ),
+    project: ({ world }) => psychosisView(world.slices.psychosis, world.time),
   },
   status: psychosisStatus,
 });

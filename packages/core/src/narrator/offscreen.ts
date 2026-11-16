@@ -107,11 +107,25 @@ export function offscreenDue(
   if (threads.some((t) => t.dueAt <= after.time && (city.lastAt === null || t.dueAt > city.lastAt)))
     return true;
   const jobs = JobsStateSchema.parse(after.slices.jobs).jobs;
-  if (jobs.some((job) => job.due !== null && job.due <= after.time &&
-    (job.status === "active" || job.status === "expired") &&
-    (city.lastAt === null || job.due > city.lastAt))) return true;
-  if (now.deadlines.some((deadline) => deadline.handledAt === null && deadline.due <= after.time &&
-    (city.lastAt === null || deadline.due > city.lastAt))) return true;
+  if (
+    jobs.some(
+      (job) =>
+        job.due !== null &&
+        job.due <= after.time &&
+        (job.status === "active" || job.status === "expired") &&
+        (city.lastAt === null || job.due > city.lastAt),
+    )
+  )
+    return true;
+  if (
+    now.deadlines.some(
+      (deadline) =>
+        deadline.handledAt === null &&
+        deadline.due <= after.time &&
+        (city.lastAt === null || deadline.due > city.lastAt),
+    )
+  )
+    return true;
   const since = city.lastAt ?? was.sceneStartedAt;
   return after.time > before.time && after.time - since >= OFFSCREEN_HOURS * 60;
 }

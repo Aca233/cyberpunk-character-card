@@ -41,7 +41,9 @@ export const ExtractDocSchema = z.object({
   clutch: z
     .boolean()
     .optional()
-    .describe("正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；只在实际发生危机时标记，不限制次数"),
+    .describe(
+      "正文停在生死瞬间时写 true：标记千钧一发的危机瞬间；只在实际发生危机时标记，不限制次数",
+    ),
   sceneEnd: z.boolean().optional().describe("一场戏收尾、换地点或跳过一段时间时写 true"),
   pin: z.boolean().optional().describe("这一轮很重要、以后要记住时写 true"),
   dropped: z

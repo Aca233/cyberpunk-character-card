@@ -127,11 +127,7 @@ function find(draft: Draft<JobsState>, id: string): Draft<Job> | undefined {
   return draft.jobs.find((j) => j.id === id);
 }
 
-export function acceptJob(
-  draft: Draft<JobsState>,
-  command: JobAccept,
-  now: number,
-): ApplyOutcome {
+export function acceptJob(draft: Draft<JobsState>, command: JobAccept, now: number): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
   if (job.status !== "offered") {

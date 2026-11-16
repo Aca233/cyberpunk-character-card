@@ -73,7 +73,14 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "reinforced-tendons",
           "kiroshi-mk2",
         ],
-        symptoms: [{ id: "military-chrome-rejection", stage: "edge", description: "频繁视野坏道与幻听", cause: "高强度军用义体排异，持续用药仍未处理根源" }],
+        symptoms: [
+          {
+            id: "military-chrome-rejection",
+            stage: "edge",
+            description: "频繁视野坏道与幻听",
+            cause: "高强度军用义体排异，持续用药仍未处理根源",
+          },
+        ],
       },
     },
     {
@@ -955,7 +962,14 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "kiroshi-mk2",
           "pain-editor",
         ],
-        symptoms: [{ id: "limbic-dissociation", stage: "detached", description: "长期情感抽离、对生命缺乏共情", cause: "既定边缘系统改造与长期人格改变" }],
+        symptoms: [
+          {
+            id: "limbic-dissociation",
+            stage: "detached",
+            description: "长期情感抽离、对生命缺乏共情",
+            cause: "既定边缘系统改造与长期人格改变",
+          },
+        ],
       },
     },
     // —— 阿德卡多 ——

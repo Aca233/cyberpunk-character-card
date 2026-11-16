@@ -205,12 +205,7 @@ export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
 export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
 export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
 
-export type CharacterInternal =
-  | SetCharacter
-  | GainCred
-  | SetBonuses
-  | HabitChange
-  | FlashbackTick;
+export type CharacterInternal = SetCharacter | GainCred | SetBonuses | HabitChange | FlashbackTick;
 
 /** 检定用的属性：自己的加上义体加成，最高 20 */
 export function effectiveAttribute(

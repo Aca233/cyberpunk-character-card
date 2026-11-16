@@ -23,15 +23,17 @@ export function healthView({ world }: ViewContext) {
     conditionLabel: CONDITION_LABELS[health.condition],
     wound: woundTag(health),
     /** 具体非战斗伤势记录（战斗伤口由 combat.wounds 提供） */
-    injuries: health.injuries.filter((inj) => inj.source !== "combat").map((inj) => ({
-      ...inj,
-      partLabel: inj.part ? BODY_PART_LABELS[inj.part] : null,
-      tierLabel: INJURY_TIER_LABELS[inj.tier],
-      daysLeft:
-        inj.healsAt === null
-          ? 0
-          : Math.max(0, Math.ceil((inj.healsAt - world.time) / MINUTES_PER_DAY)),
-    })),
+    injuries: health.injuries
+      .filter((inj) => inj.source !== "combat")
+      .map((inj) => ({
+        ...inj,
+        partLabel: inj.part ? BODY_PART_LABELS[inj.part] : null,
+        tierLabel: INJURY_TIER_LABELS[inj.tier],
+        daysLeft:
+          inj.healsAt === null
+            ? 0
+            : Math.max(0, Math.ceil((inj.healsAt - world.time) / MINUTES_PER_DAY)),
+      })),
     /** 断了还没装义肢的部位 */
     lostLimbs: health.lostLimbs.map((l) => ({ id: l, label: LIMB_LABELS[l] })),
   };

@@ -15,8 +15,7 @@ function fightLines(view: CombatView): string[] {
   const a = view.active;
   if (!a) {
     return view.loot.map(
-      (l) =>
-        `此地${l.name}（id ${l.from}）身上还剩：${goods(l.items)}；玩家搜身拿走发 combat loot`,
+      (l) => `此地${l.name}（id ${l.from}）身上还剩：${goods(l.items)}；玩家搜身拿走发 combat loot`,
     );
   }
   const foes = a.foes.map((f) => {

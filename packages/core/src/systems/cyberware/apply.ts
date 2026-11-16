@@ -186,10 +186,7 @@ export function remove(
   return {
     ok: true,
     notes: [`卸下${name}`],
-    emit: [
-      bonusCommand(draft, catalog),
-      { type: "health.limb", action: "clear", id },
-    ],
+    emit: [bonusCommand(draft, catalog), { type: "health.limb", action: "clear", id }],
     signals: ["cyberware.changed"],
   };
 }

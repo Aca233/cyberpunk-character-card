@@ -40,7 +40,7 @@ import {
   tripText,
   tripWorldOf,
 } from "../systems/travel";
-import { formatGameTime, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import {
   type Choice,
   ChoiceProposalSchema,
@@ -545,7 +545,13 @@ export async function runNarratorTurn(
   records: readonly LogRecord[],
   plan: NarratorPlan,
 ): Promise<NarratorResult> {
-  deps = { ...deps, data: withWorldObjects(deps.data ?? {}, InventoryStateSchema.parse(world.slices.inventory).objects) };
+  deps = {
+    ...deps,
+    data: withWorldObjects(
+      deps.data ?? {},
+      InventoryStateSchema.parse(world.slices.inventory).objects,
+    ),
+  };
   const b = new TurnBuilder(deps);
   const extras: PromptExtras = {
     data: deps.data,

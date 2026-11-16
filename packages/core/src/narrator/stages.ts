@@ -66,12 +66,20 @@ export const JudgeRulingSchema = z.object({
 export type JudgeRuling = z.infer<typeof JudgeRulingSchema>;
 
 /** 主动设备只响应玩家的明确使用意图；模型判断不能因危险擅自替玩家启动。 */
-export function accelerationRequested(input: { text: string; sandevistan?: boolean | undefined }, deviceName?: string): boolean {
+export function accelerationRequested(
+  input: { text: string; sandevistan?: boolean | undefined },
+  deviceName?: string,
+): boolean {
   if (input.sandevistan === true) return true;
   const named = /斯安.{0,2}斯坦|远地点|飞隼|沙坦|时间加速|子弹时间|神经超频|加速义体/;
   return input.text.split(/[，。；！\n]/).some((clause) => {
     if (!named.test(clause) && !(deviceName && clause.includes(deviceName))) return false;
-    if (/(?:不|别|没|未|不要|不用|无需|停止|关闭|关掉|取消|能否|是否|能不能|可以|如果|假如|曾经|上次|刚才)|[吗？?]/.test(clause)) return false;
+    if (
+      /(?:不|别|没|未|不要|不用|无需|停止|关闭|关掉|取消|能否|是否|能不能|可以|如果|假如|曾经|上次|刚才)|[吗？?]/.test(
+        clause,
+      )
+    )
+      return false;
     return /开|启动|发动|激活|使用|用|借助|超频/.test(clause);
   });
 }

@@ -51,8 +51,11 @@ export function advanceTension(
     mode,
     exposure,
     backupEtaMinutes: backupEta,
-    backupCause: update.cancelBackupReason ? null : update.backupCause ?? state.backupCause,
-    backupArrived: update.cancelBackupReason ? false : update.backupArrived ?? (update.triggerBackupInMinutes !== undefined ? false : state.backupArrived),
+    backupCause: update.cancelBackupReason ? null : (update.backupCause ?? state.backupCause),
+    backupArrived: update.cancelBackupReason
+      ? false
+      : (update.backupArrived ??
+        (update.triggerBackupInMinutes !== undefined ? false : state.backupArrived)),
     exposedWeakpoints,
     scannedEnemyChrome,
     disabledEnemyChrome: disabledEnemyChrome.filter((chrome) => chrome !== update.repairChrome),
@@ -63,7 +66,13 @@ export function advanceTension(
  * 提炼为干练、零八股套话的客观现场事实简报（供裁决与正文按真实因果吸收，绝不强塞模板形容）
  */
 export function tensionFacts(state: TensionSite): string | undefined {
-  if (!state.active && !state.disabledEnemyChrome.length && state.backupEtaMinutes === null && !state.backupArrived) return undefined;
+  if (
+    !state.active &&
+    !state.disabledEnemyChrome.length &&
+    state.backupEtaMinutes === null &&
+    !state.backupArrived
+  )
+    return undefined;
   const lines: string[] = [`现场处境：${EXPOSURE_LABELS[state.exposure]}`];
 
   if (state.backupArrived || state.backupEtaMinutes !== null) {
@@ -71,8 +80,8 @@ export function tensionFacts(state: TensionSite): string | undefined {
       state.backupArrived
         ? "已确认增援到达"
         : state.backupEtaMinutes === 0
-        ? "已到预计增援时间，尚未确认到达；根据通信、路线和实际发生的事件判断"
-        : `外部增援大约还差几分钟赶到（约 ${state.backupEtaMinutes} 分钟）`,
+          ? "已到预计增援时间，尚未确认到达；根据通信、路线和实际发生的事件判断"
+          : `外部增援大约还差几分钟赶到（约 ${state.backupEtaMinutes} 分钟）`,
     );
   }
 

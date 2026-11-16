@@ -18,7 +18,16 @@ const data = {
   ],
 };
 
-const injury = { id: "inj1", part: "left-arm", tier: "heavy", cause: "玻璃划伤", at: 0, healsAt: null, treated: false, source: "injury" };
+const injury = {
+  id: "inj1",
+  part: "left-arm",
+  tier: "heavy",
+  cause: "玻璃划伤",
+  at: 0,
+  healsAt: null,
+  treated: false,
+  source: "injury",
+};
 
 function commands(hurt: boolean, charges = 2, combat = false, suppressed = false) {
   const base = registry.initialWorld(0);
@@ -26,7 +35,11 @@ function commands(hurt: boolean, charges = 2, combat = false, suppressed = false
     ...base,
     slices: {
       ...base.slices,
-      health: { ...HealthStateSchema.parse(base.slices.health), injuries: hurt ? [injury] : [], painSuppressed: suppressed },
+      health: {
+        ...HealthStateSchema.parse(base.slices.health),
+        injuries: hurt ? [injury] : [],
+        painSuppressed: suppressed,
+      },
       inventory: {
         ...InventoryStateSchema.parse(base.slices.inventory),
         healing: { id: "maxdoc", charges, max: 3 },
@@ -95,7 +108,10 @@ describe("物品栏直接治疗", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.reason);
-    expect(HealthStateSchema.parse(result.world.slices.health)).toMatchObject({ painSuppressed: true, injuries: [injury] });
+    expect(HealthStateSchema.parse(result.world.slices.health)).toMatchObject({
+      painSuppressed: true,
+      injuries: [injury],
+    });
     const inventory = InventoryStateSchema.parse(result.world.slices.inventory);
     expect(inventory.healing).toEqual({ id: "maxdoc", charges: 1, max: 3 });
     expect(inventory.backpack.maxdoc).toBeUndefined();

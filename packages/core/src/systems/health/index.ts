@@ -1,5 +1,14 @@
 import { defineSystem } from "../../kernel/system";
-import { applyDamage, applyHeal, applyHit, applyLimb, recoverInjuries, die, revive, treatInjury } from "./apply";
+import {
+  applyDamage,
+  applyHeal,
+  applyHit,
+  applyLimb,
+  die,
+  recoverInjuries,
+  revive,
+  treatInjury,
+} from "./apply";
 import { healthEvents } from "./events";
 import {
   type DamageCommand,
@@ -18,8 +27,16 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
   id: "health",
   dependsOn: ["inventory"],
   state: HealthStateSchema,
-  initial: () => ({ condition: "up", nextInjuryId: 1, painSuppressed: false, painSuppressedUntil: null,
-    damagedBy: null, injuries: [], lostLimbs: [], brokenChrome: [] }),
+  initial: () => ({
+    condition: "up",
+    nextInjuryId: 1,
+    painSuppressed: false,
+    painSuppressedUntil: null,
+    damagedBy: null,
+    injuries: [],
+    lostLimbs: [],
+    brokenChrome: [],
+  }),
   commands: { damage: DamageCommandSchema, heal: HealCommandSchema },
   internal: HealthInternalSchemas,
   apply(draft, command, ctx) {

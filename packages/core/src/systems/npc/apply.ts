@@ -2,13 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
 import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
-import {
-  applyNpcBody,
-  bodyProblems,
-  EMPTY_NPC_BODY,
-  filledBody,
-  sanitizeNpcBody,
-} from "./body";
+import { applyNpcBody, bodyProblems, EMPTY_NPC_BODY, sanitizeNpcBody } from "./body";
 import {
   AFFINITY_MAX,
   AFFINITY_MIN,
@@ -309,7 +303,8 @@ export function applyNpc(
       notes: [`关于${npc.name}（${KNOWN_SOURCE_LABELS[command.source]}）：${command.text}`],
     };
   }
-  if (!npc.alive && command.type === "npcGear" && command.action === "remove") return applyNpcBody(npc, command, now, data);
+  if (!npc.alive && command.type === "npcGear" && command.action === "remove")
+    return applyNpcBody(npc, command, now, data);
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
   if (
     command.type === "npcHurt" ||

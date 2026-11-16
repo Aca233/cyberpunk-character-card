@@ -133,9 +133,26 @@ describe("伤口带着来历", () => {
   const hit = cmd("wound", { by: "foe1", weapon: "霰弹枪", part: "left-arm", tier: "heavy" });
   it("记录具体伤处；未经处理的深层创伤不会因时间或切场消失", () => {
     const state = begin();
-    expect(applyCombat(state, hit, ctxOf())).toMatchObject({ ok: true,
-      emit: [{ type: "health.hit", tier: "heavy", part: "left-arm", injuryId: "w1", reason: "虎爪帮的枪手的霰弹枪" }] });
-    expect(state.wounds[0]).toMatchObject({ by: "枪手", gang: "虎爪帮", part: "left-arm", district: "沃森", healsAt: null, treated: false });
+    expect(applyCombat(state, hit, ctxOf())).toMatchObject({
+      ok: true,
+      emit: [
+        {
+          type: "health.hit",
+          tier: "heavy",
+          part: "left-arm",
+          injuryId: "w1",
+          reason: "虎爪帮的枪手的霰弹枪",
+        },
+      ],
+    });
+    expect(state.wounds[0]).toMatchObject({
+      by: "枪手",
+      gang: "虎爪帮",
+      part: "left-arm",
+      district: "沃森",
+      healsAt: null,
+      treated: false,
+    });
     advance(state, 0, 20 * DAY);
     expect(state.wounds).toHaveLength(1);
     expect(state.scars).toEqual([]);
@@ -144,7 +161,10 @@ describe("伤口带着来历", () => {
     const state = begin();
     applyCombat(state, hit, ctxOf());
     const care = cmd("treat", { target: state.wounds[0]?.id });
-    expect(applyCombat(state, care, ctxOf())).toMatchObject({ok: true, emit: [{ type: "health.treat", id: "w1" }, {type: "money"}]});
+    expect(applyCombat(state, care, ctxOf())).toMatchObject({
+      ok: true,
+      emit: [{ type: "health.treat", id: "w1" }, { type: "money" }],
+    });
     expect(state.wounds[0]).toMatchObject({ treated: true, healsAt: 4 * DAY });
     expect(applyCombat(state, care, ctxOf([], DAY)).ok).toBe(true);
     expect(state.wounds[0]?.healsAt).toBe(4 * DAY);
@@ -157,7 +177,7 @@ describe("伤口带着来历", () => {
     for (let i = 0; i < 21; i++) applyCombat(state, { ...hit, weapon: `霰弹枪${i}` }, ctxOf());
     advance(state, 0, 20 * DAY);
     expect(state.wounds).toHaveLength(21);
-    expect(state.wounds[0]).toMatchObject({weapon: "霰弹枪0", healsAt: null});
+    expect(state.wounds[0]).toMatchObject({ weapon: "霰弹枪0", healsAt: null });
   });
   it("擦伤自然愈合", () => {
     const state = begin();
@@ -440,7 +460,9 @@ describe("从倒下的人身上捡东西", () => {
     const state = armed();
     applyCombat(state, cmd("foe", { target: "foe1", state: "down" }), ctxOf());
     expect(applyCombat(state, end, ctxOf()).ok).toBe(true);
-    expect(state.groundLoot).toMatchObject([{ from: "foe1", name: "枪手", location: "kabuki", items: ["unity", "maxdoc"] }]);
+    expect(state.groundLoot).toMatchObject([
+      { from: "foe1", name: "枪手", location: "kabuki", items: ["unity", "maxdoc"] },
+    ]);
     expect(applyCombat(state, take("maxdoc"), ctxOf())).toMatchObject({
       ok: true,
       emit: [{ type: "item", action: "gain", id: "maxdoc" }],
