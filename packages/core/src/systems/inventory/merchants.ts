@@ -1,5 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import type { WorldState } from "../../kernel/world";
+import type { CityState } from "../city";
 import { tradeEvidence } from "../commerce";
 import type { NpcState } from "../npc";
 import { merchantAt, type WorldClockState } from "../world";
@@ -81,7 +83,12 @@ export function applyShopBusiness(
   command: ShopBusinessCommand,
   ctx: SystemContext,
 ): ApplyOutcome {
-  if (!tradeEvidence(ctx.facts, command.evidence))
+  const event = command.sourceEvent
+    ? ctx.read<CityState>("city").events.find((e) => e.id === command.sourceEvent)
+    : undefined;
+  if (command.sourceEvent && !event) return { ok: false, reason: "经营变化引用的城市事件不存在" };
+  const facts = event ? { tradeNarrative: `${event.title}\n${event.body}` } : ctx.facts;
+  if (!tradeEvidence(facts, command.evidence))
     return { ok: false, reason: "营业变化缺少本轮实际证据" };
   const shop = shopList(ctx.data).find((s) => s.id === command.shop);
   if (!shop) return { ok: false, reason: "尚未登记这家经营场所" };
@@ -98,7 +105,11 @@ export function applyShopBusiness(
   }
   const merchant = ensureMerchant(draft, shop, itemCatalog(ctx.data), ctx.now);
   if (command.action === "staff") {
-    if (command.keeperNpc !== undefined) merchant.definition.keeperNpc = command.keeperNpc;
+    if (command.keeperNpc !== undefined) {
+      merchant.definition.keeperNpc = command.keeperNpc;
+      merchant.definition.keeper =
+        ctx.read<NpcState>("npc").npcs[command.keeperNpc]?.name ?? merchant.definition.keeper;
+    }
     if (command.serviceNpcs !== undefined)
       merchant.definition.serviceNpcs = [...command.serviceNpcs];
   } else {
@@ -106,4 +117,25 @@ export function applyShopBusiness(
     merchant.closureReason = merchant.open ? null : command.reason;
   }
   return { ok: true, notes: [`${shop.name}：${command.reason}`] };
+}
+
+/** 只有明确登记的店主或代班店员能接待；尚未记录位置不等于离场。 */
+export function shopUnavailable(
+  world: WorldState,
+  shop: Shop,
+  data: Readonly<Record<string, unknown>>,
+): string | undefined {
+  const ids = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs];
+  if (ids.length === 0) return undefined;
+  const people = (world.slices.npc as NpcState).npcs;
+  for (const id of ids) {
+    const person = people[id];
+    if (
+      !person ||
+      (person.alive &&
+        (person.location == null || merchantAt(data, shop.id, shop.location, person.location)))
+    )
+      return undefined;
+  }
+  return `${shop.name}当前没有已登记的在场店主或代班店员，暂时不能交易`;
 }

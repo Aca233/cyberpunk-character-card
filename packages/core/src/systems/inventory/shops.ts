@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { keeperOf, RARITY_LABELS } from "../economy";
-import { merchantAt, WorldClockStateSchema } from "../world";
+import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { itemCatalog, shopList, withWorldObjects } from "./apply";
 import { merchantState, withMerchants } from "./merchants";
 import {
@@ -51,6 +51,9 @@ export function shopsView({ world, data }: ViewContext) {
     });
     const merchant = merchantState(inventory, shop, catalog, now);
     const shelfIds = Object.keys(merchant.stock);
+    const delivery = Object.values(inventory.supplyOrders)
+      .filter((o) => o.shop === shop.id && (o.status === "pending" || o.status === "delayed"))
+      .sort((a, b) => a.dueAt - b.dueAt)[0];
     return {
       id: shop.id,
       name: shop.name,
@@ -59,7 +62,11 @@ export function shopsView({ world, data }: ViewContext) {
       keeperAffinity: keeper?.affinity ?? null,
       note: shop.note,
       blackMarket: shop.blackMarket,
-      restockAt: null as string | null,
+      restockAt: delivery
+        ? delivery.status === "delayed"
+          ? `运输受阻：${delivery.delayReason}`
+          : formatGameTime(delivery.dueAt)
+        : null,
       shelf: shelfIds.flatMap((id) => {
         const def = catalog.get(id);
         if (!def) return [];

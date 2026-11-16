@@ -3,11 +3,12 @@ import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
 import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
+import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
 import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
 import { merchantAt, merchantServices, type WorldClockState } from "../world";
 import { applyItem, itemCatalog, sellValue, shopList, withWorldObjects } from "./apply";
-import { ensureMerchant, merchantState, withMerchants } from "./merchants";
+import { ensureMerchant, merchantState, shopUnavailable, withMerchants } from "./merchants";
 import { moodLock, moodPrice, shopMood } from "./mood";
 import {
   carriedItemCounts,
@@ -17,6 +18,7 @@ import {
   type Shop,
   type TradeCommand,
 } from "./schema";
+import { collectOrderedItem, replenishAfterSale } from "./supply";
 
 export type TradeRequest = Pick<TradeCommand, "action" | "item" | "service" | "with" | "offer">;
 type SavedQuote = Extract<ReturnType<typeof agreedQuote>, { ok: true }>["quote"];
@@ -40,27 +42,6 @@ export type TradeQuote =
       quote: SavedQuote;
     }
   | { ok: false; reason: string; price?: number };
-
-/** 只有明确登记的店主或代班店员能接待；尚未记录位置不等于离场。 */
-function shopUnavailable(
-  world: WorldState,
-  shop: Shop,
-  data: Readonly<Record<string, unknown>>,
-): string | undefined {
-  const ids = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs];
-  if (ids.length === 0) return undefined;
-  const people = (world.slices.npc as NpcState).npcs;
-  for (const id of ids) {
-    const person = people[id];
-    if (
-      !person ||
-      (person.alive &&
-        (person.location == null || merchantAt(data, shop.id, shop.location, person.location)))
-    )
-      return undefined;
-  }
-  return `${shop.name}当前没有已登记的在场店主或代班店员，暂时不能交易`;
-}
 
 /** 稳定 ID 优先；名字只接受唯一匹配，绝不从玩家所在店铺猜交易对象。 */
 function counterparty(
@@ -282,6 +263,16 @@ export function applyTrade(
       );
       merchant.stock[item.id] =
         (merchant.stock[item.id] ?? 0) + (command.action === "buy" ? -1 : 1);
+      if (command.action === "buy") {
+        collectOrderedItem(draft, quoted.shop.id, item.id);
+        replenishAfterSale(
+          draft,
+          merchant.definition,
+          item,
+          world.time,
+          LogisticsStateSchema.parse(world.slices.logistics ?? {}),
+        );
+      }
     }
   }
   if (quoted.price > 0)

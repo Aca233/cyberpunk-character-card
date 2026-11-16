@@ -230,8 +230,49 @@ export const ShopBusinessCommandSchema = z.strictObject({
     .min(2)
     .max(500)
     .describe("本轮正文中真实营业变化或人员接替的原话；不能凭空关闭所有同城区商店"),
+  sourceEvent: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("来自城市事件时写已存在的事件 id，evidence 引用该事件事实"),
 });
 export type ShopBusinessCommand = z.infer<typeof ShopBusinessCommandSchema>;
+
+export const SupplyOrderSchema = z.object({
+  id: z.string().min(1),
+  shop: z.string().min(1),
+  item: z.string().min(1),
+  quantity: z.number().int().min(1),
+  supplier: z.string().min(1),
+  origin: z.string().min(1),
+  route: z.array(z.string().min(1)).min(1),
+  createdAt: z.number().int(),
+  dueAt: z.number().int(),
+  status: z.enum(["pending", "delayed", "delivered", "cancelled"]),
+  remainingMinutes: z.number().int().min(0),
+  delayReason: z.string().nullable(),
+  requestedBy: z.enum(["store", "player"]),
+  uncollected: z.number().int().min(0),
+  deliveredAt: z.number().int().nullable(),
+  cancelReason: z.string().nullable(),
+});
+export type SupplyOrder = z.infer<typeof SupplyOrderSchema>;
+export const ShopOrderCommandSchema = z.strictObject({
+  type: z.literal("shopOrder"),
+  action: z.enum(["place", "cancel"]),
+  id: z.string().min(1).max(160),
+  shop: z.string().min(1).max(80),
+  item: z.string().min(1).optional(),
+  quantity: z.number().int().min(1).max(50).optional(),
+  evidence: z
+    .string()
+    .min(2)
+    .max(500)
+    .describe(
+      "引用本轮正文中店方接受订货或同意取消的原话；单方面要求不算。到货付款，不预扣订金、不生成债务",
+    ),
+});
+export type ShopOrderCommand = z.infer<typeof ShopOrderCommandSchema>;
 
 /** 剧情中出现的独立物件；定义、来历和归属随存档保存，不受静态目录限制。 */
 export const WorldObjectSchema = z.object({
@@ -255,6 +296,8 @@ const QuickSlotSchema = z
 export const InventoryStateSchema = z.object({
   objects: z.record(z.string(), WorldObjectSchema).default({}),
   merchants: z.record(z.string(), MerchantStateSchema).default({}),
+  supplyOrders: z.record(z.string(), SupplyOrderSchema).default({}),
+  nextSupply: z.number().int().min(1).default(1),
   /** 3 个武器格，按 1/2/3 切换 */
   weapons: z.array(z.string().min(1).nullable()).length(3),
   /** 当前手持的武器格（从 0 起），空手时为 null */

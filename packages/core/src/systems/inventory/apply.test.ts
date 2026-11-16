@@ -40,6 +40,8 @@ function empty(): InventoryState {
     parts: 0,
     tuned: {},
     merchants: {},
+    supplyOrders: {},
+    nextSupply: 1,
   };
 }
 

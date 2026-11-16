@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { fixedRng } from "../../kernel/rng";
+import type { WorldState } from "../../kernel/world";
 import { registry } from "../registry";
 import { InventoryStateSchema } from "./schema";
 import { shopsView } from "./shops";
@@ -19,7 +20,7 @@ const data = {
   locations: [],
 };
 const context = { rng: fixedRng([]), data };
-function world() {
+function world(): WorldState {
   const base = registry.initialWorld(10);
   return {
     ...base,
