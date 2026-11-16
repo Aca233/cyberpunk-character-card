@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { CharacterStateSchema } from "../character";
 import { EconomyStateSchema } from "../economy";
 import { HealthStateSchema } from "../health";
 import { currentStock, itemCatalog, sellValue, shopList, shopShelf } from "./apply";
@@ -82,14 +81,13 @@ function shopCommands(
     if (value <= 0)
       return def.iconic ? `${def.name}是不朽物品，不卖` : `${shop.name}不收${def.name}`;
     return [
-      { type: "item", action: "lose", id: def.id, reason: `卖给${shop.name}` },
+      { type: "item", action: "lose", id: def.id, recipient: shop.keeper, reason: `卖给${shop.name}` },
       { type: "money", delta: value, reason: `${shop.name}收购${def.name}` },
     ];
   }
-  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
   const held = InventoryStateSchema.parse(world.slices.inventory);
   const stock = currentStock(held.shopStock[shop.id], world.time);
-  const item = shopShelf(shop, catalog, streetCred, stock).find((i) => i.def.id === action.id);
+  const item = shopShelf(shop, catalog, stock).find((i) => i.def.id === action.id);
   if (!item) return `${shop.name}的货架上没有这件`;
   // 势力态度影响店价（用户 2026-10-31 选的「势力进机制」）：和货架上显示的一样算
   const mood = shopMood(world, data, shop);
@@ -114,7 +112,7 @@ export const inventoryActions = {
   useHealing: defineAction({
     schema: UseHealingActionSchema,
     commands: (action, { world, data }) => {
-      if (inCombat(world)) return "战斗中治疗要花一个动作，在行动里使用";
+      if (inCombat(world)) return "交战中治疗需要结合掩护和当前处境，请在行动里描述";
       const def = itemCatalog(data).get(action.id);
       if (def?.kind !== "healing") return "这件物品不是治疗品";
       const inventory = InventoryStateSchema.parse(world.slices.inventory);
@@ -124,12 +122,10 @@ export const inventoryActions = {
         return "背包里没有这件治疗品";
       }
       const charges = current ? held.charges : (inventory.depleted[action.id] ?? def.charges ?? 1);
-      if (charges < 1) return "次数用完了，休整或场景结束后恢复";
+      if (charges < 1 && (inventory.backpack[action.id] ?? 0) < (current ? 1 : 2)) return "这份补给已经耗尽，需要实际取得补充品";
       const health = HealthStateSchema.parse(world.slices.health);
       if (health.condition !== "up") return "当前无法自行治疗，需要别人救治";
-      const ceiling =
-        health.hp * 100 < health.max * 30 ? Math.floor(health.max * 0.29) : health.max;
-      if (health.hp >= ceiling) return "已达到当前治疗上限，不消耗次数";
+      if (health.injuries.length === 0 || health.painSuppressed) return "当前不需要再次使用急救药剂";
       const commands: Command[] = [];
       if (!current) {
         commands.push({

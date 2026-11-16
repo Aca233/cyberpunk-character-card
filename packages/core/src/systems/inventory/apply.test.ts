@@ -27,6 +27,7 @@ const catalog = new Map([
 
 function empty(): InventoryState {
   return {
+    objects: {},
     weapons: [null, null, null],
     active: null,
     healing: null,

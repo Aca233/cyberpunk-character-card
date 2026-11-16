@@ -4,9 +4,7 @@ import {
   DISCOUNT_FACTORS,
   discounted,
   type EconomyState,
-  type Keeper,
   type Rarity,
-  rarityLock,
   SERVICES,
 } from "../economy";
 import {
@@ -16,6 +14,7 @@ import {
   ItemCatalogSchema,
   type ItemCommand,
   type ItemDef,
+  ItemDefSchema,
   type ItemKind,
   MOD_SLOT_LABELS,
   type PartsCommand,
@@ -47,6 +46,23 @@ function absorbLegacyWeapons(draft: Inventory): void {
 }
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, ItemDef>>();
+const extendedCatalogs = new WeakMap<object, WeakMap<object, Readonly<Record<string, unknown>>>>();
+
+/** 各系统使用同一份已保存的物件定义，读档后名称和能力不会丢失。 */
+export function withWorldObjects(
+  data: Readonly<Record<string, unknown>>,
+  objects: InventoryState["objects"],
+): Readonly<Record<string, unknown>> {
+  if (Object.keys(objects).length === 0) return data;
+  let cache = extendedCatalogs.get(objects);
+  if (!cache) { cache = new WeakMap(); extendedCatalogs.set(objects, cache); }
+  const cached = cache.get(data);
+  if (cached) return cached;
+  const base = Array.isArray(data.items) ? data.items.filter((item) => !objects[item.id]) : [];
+  const merged = { ...data, items: [...base, ...Object.values(objects).map((o) => o.definition)] };
+  cache.set(data, merged);
+  return merged;
+}
 
 /** 读取并校验物品表，同一份数据只校验一次；没有物品表时报错，不用空表代替 */
 export function itemCatalog(data: Readonly<Record<string, unknown>>): ReadonlyMap<string, ItemDef> {
@@ -74,13 +90,27 @@ function put(draft: Inventory, id: string): void {
 }
 
 /** 存放箱和后备箱进出：只动背包，改装件跟着武器 id 留着 */
-export function stashMove(draft: Inventory, action: "out" | "in", id: string): ApplyOutcome {
+export function stashMove(draft: Inventory, action: "out" | "in", id: string, now = 0, location: string | null = null): ApplyOutcome {
   if (action === "in") {
+    if (draft.objects[id]?.holder === "player") return fail("这件物品已经随身携带");
     put(draft, id);
+    moveObject(draft, id, "player", null, now, "从存放处取回");
     return { ok: true, notes: [] };
   }
   absorbLegacyWeapons(draft);
-  return take(draft, id) ? { ok: true, notes: [] } : { ok: false, reason: `背包里没有 ${id}` };
+  if (!take(draft, id)) return fail(`背包里没有 ${id}`);
+  moveObject(draft, id, "stash", location, now, "放入存放处");
+  return ok();
+}
+
+function moveObject(draft: Inventory, id: string, holder: string, location: string | null, now: number, reason: string): void {
+  const object = draft.objects[id];
+  if (!object) return;
+  if (object.holder === "consumed" && holder !== "consumed") return;
+  object.holder = holder;
+  object.location = location;
+  object.changedAt = now;
+  object.lastChange = reason.slice(0, 240);
 }
 
 function take(draft: Inventory, id: string): boolean {
@@ -104,22 +134,51 @@ export function applyItem(
   draft: Inventory,
   command: ItemCommand,
   catalog: ReadonlyMap<string, ItemDef>,
+  now = 0,
+  location: string | null = null,
 ): ApplyOutcome {
-  const def = catalog.get(command.id);
-  if (!def) return fail(`物品表里没有 ${command.id}`);
+  let def = catalog.get(command.id) ?? draft.objects[command.id]?.definition;
+  if (command.definition !== undefined) {
+    if (command.action !== "gain") return fail("只有首次获得物件时才能登记定义");
+    if (def || draft.objects[command.id]) return fail("已有物件不可重新定义，直接使用原 id");
+    if (command.definition.id !== command.id) return fail("物件定义的 id 必须与取得的 id 一致");
+    if (!command.origin) return fail("新物件必须说明真实来源 origin");
+    const parsed = ItemDefSchema.safeParse(command.definition);
+    if (!parsed.success) return fail("新物件定义不完整");
+    def = parsed.data;
+    draft.objects[def.id] = {
+      definition: def, origin: command.origin, holder: "world", location,
+      changedAt: now, lastChange: command.reason.slice(0, 240),
+    };
+  }
+  if (!def) return fail(`未登记物件 ${command.id}：首次取得需提供 definition 与 origin`);
+  const object = draft.objects[def.id];
+  if (command.action === "gain" && object) {
+    if (object.holder === "player") return fail("这件独立物件已经属于玩家，不能重复获得");
+    if (object.holder === "consumed") return fail("这件物件已经耗尽，不能凭空重新获得");
+    if (object.holder === "stash") return fail("物件在存放处，请通过取回操作转移");
+    if (object.location !== null && object.location !== location) return fail("这件物件仍在别处，不能隔空取得");
+  }
   switch (command.action) {
     case "gain":
       put(draft, def.id);
       autoQuick(draft, def);
+      moveObject(draft, def.id, "player", null, now, command.reason);
       return ok(def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`);
-    case "lose":
-      return lose(draft, def);
+    case "lose": {
+      const result = lose(draft, def);
+      if (result.ok) moveObject(draft, def.id, command.recipient ?? "world", location, now, command.reason);
+      return result;
+    }
     case "equip":
       return equip(draft, def);
     case "unequip":
       return unequip(draft, def);
-    case "use":
-      return use(draft, def);
+    case "use": {
+      const result = use(draft, def);
+      if (result.ok && def.kind === "consumable") moveObject(draft, def.id, "consumed", location, now, command.reason);
+      return result;
+    }
   }
 }
 
@@ -220,8 +279,9 @@ function use(draft: Inventory, def: ItemDef): ApplyOutcome {
     case "grenade":
       return spend(draft, "grenade", def.id);
     case "consumable":
-    case "misc":
       return take(draft, def.id) ? ok(`用掉 ${def.name}`) : fail(`背包里没有 ${def.name}`);
+    case "misc":
+      return (draft.backpack[def.id] ?? 0) > 0 ? ok(`使用 ${def.name}`) : fail(`背包里没有 ${def.name}`);
     case "weapon":
     case "clothing":
       return fail(`${def.name} 不是一次性物品`);
@@ -231,22 +291,16 @@ function use(draft: Inventory, def: ItemDef): ApplyOutcome {
 }
 
 /** 扣一次快捷栏次数；指定 id 时要求快捷栏里正好是这件 */
-export function spend(draft: Inventory, slot: QuickSlotName, id?: string): ApplyOutcome {
+export function spend(draft: Inventory, slot: QuickSlotName, id?: string, now = 0): ApplyOutcome {
   const held = draft[slot];
   if (!held || (id !== undefined && held.id !== id)) return fail("快捷栏里没有这件物品");
-  if (held.charges < 1) return fail("次数用完了，休整或场景结束后恢复");
-  held.charges -= 1;
-  return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`] };
-}
-
-/** 休整或场景结束：快捷栏次数回满 */
-export function recharge(draft: Inventory): ApplyOutcome {
-  for (const slot of ["healing", "grenade"] as const) {
-    const held = draft[slot];
-    if (held) held.charges = held.max;
+  if (held.charges < 1) {
+    if (!take(draft, held.id)) return fail("这份补给已经耗尽，需要实际取得补充品");
+    held.charges = held.max;
   }
-  draft.depleted = {};
-  return ok();
+  held.charges -= 1;
+  if (held.charges === 0) moveObject(draft, held.id, "consumed", null, now, "这份补给已经耗尽");
+  return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`] };
 }
 
 const shopLists = new WeakMap<object, readonly Shop[]>();
@@ -332,19 +386,15 @@ export function markSold(draft: Inventory, shop: string, item: string, at: numbe
 export function shopShelf(
   shop: Shop,
   catalog: ReadonlyMap<string, ItemDef>,
-  streetCred: number,
   stock?: ShopStock,
-  /** 店主有人物卡、见过面时传：好感够了，没到声望门槛的货也肯卖 */
-  keeper?: Keeper,
 ): ShopItem[] {
   return shop.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def || def.price === undefined) return [];
-    const gate = rarityLock(def.rarity, shop.credGates, streetCred, keeper);
     const left = Math.max(0, stockOf(def) - (stock?.sold[id] ?? 0));
     const locked = def.iconic
       ? "不朽物品只从剧情获得"
-      : (gate ?? (left === 0 ? "这一批卖完了，等补货" : null));
+      : (left === 0 ? "这一批卖完了，等补货" : null);
     const price = Math.max(10, Math.round((def.price * shop.priceFactor) / 10) * 10);
     return [{ def, price, locked, left }];
   });
@@ -451,6 +501,8 @@ export function applyTrade(
   catalog: ReadonlyMap<string, ItemDef>,
   economy: EconomyState,
   shop?: ShopHere,
+  now = 0,
+  location: string | null = null,
 ): ApplyOutcome {
   if (command.action === "service") {
     const service = command.service;
@@ -471,6 +523,9 @@ export function applyTrade(
   const def = catalog.get(id);
   if (!def) return fail(`物品表里没有 ${id}`);
   if (command.action === "buy") {
+    const object = draft.objects[def.id];
+    if (object && (object.holder === "player" || object.holder === "consumed" || object.holder === "stash")) return fail("这件独立物件并不在卖方手中");
+    if (object && object.location !== null && object.location !== location) return fail("这件物件仍在别处");
     if (def.iconic) return fail(`${def.name}是不朽物品，只能从剧情获得，没人卖`);
     if (def.price === undefined) return fail(`${def.name}没有标价，不能买`);
     const price = discounted(def.price, command.discount);
@@ -487,6 +542,7 @@ export function applyTrade(
     }
     draft.backpack[def.id] = (draft.backpack[def.id] ?? 0) + 1;
     autoQuick(draft, def);
+    moveObject(draft, def.id, "player", null, now, `向${command.with}买下：${command.reason}`);
     return {
       ok: true,
       notes: [`得到${def.name}（从${command.with}那里买的）`],
@@ -507,6 +563,7 @@ export function applyTrade(
   const left = (draft.backpack[def.id] ?? 0) - 1;
   if (left > 0) draft.backpack[def.id] = left;
   else delete draft.backpack[def.id];
+  moveObject(draft, def.id, command.with, location, now, `卖给${command.with}：${command.reason}`);
   // 卖掉最后一把时升级记录跟着清掉，免得下次买到同款带着升过的稀有度
   if (def.kind === "weapon" && left < 1) {
     Reflect.deleteProperty(draft.tuned, def.id);

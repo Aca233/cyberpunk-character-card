@@ -305,7 +305,6 @@ export function endCombat(draft: Combat, command: CombatCommand, ctx: SystemCont
   return {
     ok: true,
     notes,
-    emit: [{ type: "inventory.recharge" }],
     signals: ["combat.end"],
   };
 }

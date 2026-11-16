@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
-import { CharacterStateSchema } from "../character";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { currentStock, itemCatalog, restockDue, sellValue, shopList, shopShelf } from "./apply";
@@ -38,7 +37,6 @@ export function shopsView({ world, data }: ViewContext) {
   const here = shopList(data).filter((s) => s.location === location);
   if (here.length === 0) return [];
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
-  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
   const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
   const now = world.time;
   const sell = [...carriedItemCounts(inventory)].flatMap(([id, count]) => {
@@ -62,9 +60,7 @@ export function shopsView({ world, data }: ViewContext) {
       shelf: shopShelf(
         shop,
         catalog,
-        streetCred,
         currentStock(inventory.shopStock[shop.id], now),
-        keeper,
       ).map(({ def, price, locked, left }) => ({
         id: def.id,
         name: def.name,

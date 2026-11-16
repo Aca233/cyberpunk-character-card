@@ -34,7 +34,8 @@ export function catalogSection(data: Readonly<Record<string, unknown>>): string 
   }
   const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
   return `【物品表】
-item 指令的 id 只能用下面这些；【当前状态】里的随身武器、治疗品和背包写的也是这些 id，正文里用名称。表里没有的东西只在正文里写，不发 item 指令。
+下表是物品模板，不是存在资格白名单。已有物件使用其稳定 id，正文用名称。剧情实际取得目录外物件时，item gain 同时写 definition（id、name、kind、ability 等定义）和 origin（来源/此前归属）；普通工具、信物用 misc，消耗品用 consumable。新定义只登记一次，以后保持同一 id，禁止重复获得同一个独立物件。拿起环境物件同样可以登记，不受是否正在交战限制。
+- 治疗品与手雷的 charges 是这份实物的余量；切场、休息和结束战斗均不补满。补充必须确实购买、制作或取得另一份物品。工具和信物使用后保留，只有 consumable 的 use 才消耗掉。
 - 所有武器拿到就放进背包（item gain），直接就能拔出使用，不用写 item equip；item equip / unequip 只用于穿着衣服或切换快捷治疗品/手雷。
 每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）：能力。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）；不朽的东西只从剧情获得，没人卖。
 改装件只在装到武器上时才算数（【当前状态】随身武器括号里写着的），例如装了消音器才能安静开枪；装卸在界面上做，你不发指令。

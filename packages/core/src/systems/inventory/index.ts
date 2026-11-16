@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { EconomyState } from "../economy";
+import type { WorldClockState } from "../world/schema";
 import { inventoryActions } from "./actions";
 import {
   applyItem,
@@ -9,10 +10,10 @@ import {
   applyTrade,
   itemCatalog,
   markSold,
-  recharge,
   shopHere,
   spend,
   stashMove,
+  withWorldObjects,
 } from "./apply";
 import { inventoryEvents } from "./events";
 import { inventoryInteractions } from "./interactions";
@@ -39,9 +40,10 @@ export const inventory = defineSystem<
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
-  dependsOn: ["dice", "economy"],
+  dependsOn: ["dice", "economy", "world"],
   state: InventoryStateSchema,
   initial: () => ({
+    objects: {},
     weapons: [null, null, null],
     active: null,
     healing: null,
@@ -61,7 +63,7 @@ export const inventory = defineSystem<
   apply(draft, command, ctx) {
     switch (command.type) {
       case "item":
-        return applyItem(draft, command, itemCatalog(ctx.data));
+        return applyItem(draft, command, itemCatalog(ctx.data), ctx.now, ctx.read<WorldClockState>("world").location);
       case "trade":
         return applyTrade(
           draft,
@@ -69,31 +71,36 @@ export const inventory = defineSystem<
           itemCatalog(ctx.data),
           ctx.read<EconomyState>("economy"),
           shopHere(ctx.facts.shop, ctx.data),
+          ctx.now,
+          ctx.read<WorldClockState>("world").location,
         );
       case "inventory.spend":
-        return spend(draft, command.slot);
-      case "inventory.recharge":
-        return recharge(draft);
+        return spend(draft, command.slot, undefined, ctx.now);
       case "inventory.sold":
         return markSold(draft, command.shop, command.item, command.at);
       case "inventory.outfit":
         return applyOutfit(draft, command.action, itemCatalog(ctx.data));
       case "inventory.stash":
-        return stashMove(draft, command.action, command.id);
+        return stashMove(draft, command.action, command.id, ctx.now, ctx.read<WorldClockState>("world").location);
       case "inventory.mod":
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
       case "parts":
         return applyParts(draft, command);
     }
   },
-  on: {
-    "scene.end": (draft) => {
-      recharge(draft);
+  data: (state, data) => withWorldObjects(data, state.objects),
+  sections: [{
+    order: 76,
+    title: "持续物件",
+    render: ({ world, input }) => {
+      const objects = InventoryStateSchema.parse(world.slices.inventory).objects;
+      const here = (world.slices.world as WorldClockState).location;
+      const lines = Object.entries(objects)
+        .filter(([id, o]) => o.holder === "player" || o.location === here || input.text.includes(id) || input.text.includes(o.definition.name))
+        .map(([id, o]) => `${id} ${o.definition.name}：归属 ${o.holder}，位置 ${o.location ?? "随持有人"}；来源 ${o.origin}；最近变化 ${o.lastChange}${o.definition.ability ? `；用途 ${o.definition.ability}` : ""}`);
+      return lines.length ? lines.join("\n") : undefined;
     },
-    rest: (draft) => {
-      recharge(draft);
-    },
-  },
+  }],
   // 物品栏精简（用户定的方案 A）：零件和升级不再出现，零件规则不发给模型；partsRules 留着，以后想加回来再挂上
   rules: [],
   actions: inventoryActions,

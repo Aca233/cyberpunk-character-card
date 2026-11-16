@@ -175,6 +175,16 @@ export type ItemDef = z.infer<typeof ItemDefSchema>;
 
 export const ItemCatalogSchema = z.array(ItemDefSchema);
 
+/** 剧情中出现的独立物件；定义、来历和归属随存档保存，不受静态目录限制。 */
+export const WorldObjectSchema = z.object({
+  definition: ItemDefSchema,
+  origin: z.string().min(1).max(240),
+  holder: z.string().min(1),
+  location: z.string().nullable(),
+  changedAt: z.number().int(),
+  lastChange: z.string().min(1).max(240),
+});
+
 const QuickSlotSchema = z
   .object({
     id: z.string().min(1),
@@ -184,6 +194,7 @@ const QuickSlotSchema = z
   .nullable();
 
 export const InventoryStateSchema = z.object({
+  objects: z.record(z.string(), WorldObjectSchema).default({}),
   /** 3 个武器格，按 1/2/3 切换 */
   weapons: z.array(z.string().min(1).nullable()).length(3),
   /** 当前手持的武器格（从 0 起），空手时为 null */
@@ -224,11 +235,14 @@ export const ItemCommandSchema = z
     action: z.enum(["gain", "lose", "use", "equip", "unequip"]),
     id: z.string().min(1),
     reason: z.string().min(1),
+    definition: ItemDefSchema.optional().describe("首次获得目录外独立物件时写完整定义，definition.id 必须等于 id；不要重新定义已有物件"),
+    origin: z.string().min(1).max(240).optional().describe("首次出现的物件从哪里来、此前属于谁；必须依据已发生的事实"),
+    recipient: z.string().min(1).max(80).optional().describe("lose 转交物件时写接收者；没写表示留在当前地点"),
     /** 历史存档兼容字段；所有武器统一放进背包，不再使用武器栏槽位 */
     slot: z.number().int().min(1).max(3).optional(),
   })
   .describe(
-    "物品：gain 获得、lose 失去、use 使用、equip 穿上衣服/放入快捷药剂手雷、unequip 脱下；武器获得即放进背包可直接使用；id 必须是物品表或物品栏里有的",
+    "物品：gain 获得、lose 失去、use 使用、equip 穿戴、unequip 脱下。目录外物件首次 gain 写 definition 和 origin，此后始终复用同一 id。use 只消耗一次性物品；用钥匙、工具等不发 use。",
   );
 export type ItemCommand = z.infer<typeof ItemCommandSchema>;
 
@@ -258,10 +272,9 @@ export type TradeCommand = z.infer<typeof TradeCommandSchema>;
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);
 export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 
-/** 只能由代码发出：其他系统扣快捷栏次数、休整后恢复次数 */
+/** 只能由代码发出：其他系统消耗实际携带的补给 */
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
-  "inventory.recharge": z.object({ type: z.literal("inventory.recharge") }),
   /** 界面里在商店货架上买走一件：记进这一批的已卖数量 */
   "inventory.sold": z.object({
     type: z.literal("inventory.sold"),
