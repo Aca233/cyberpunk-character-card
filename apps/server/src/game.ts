@@ -201,7 +201,8 @@ function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined
 /**
  * 存档和回合：同一存档的读写都排在一把锁里。
  * 行动的顺序是 校验 → 登记进行中 → 调叙事模型（锁外） → 加锁追加回合日志；
- * 被拦截、停止或出错的轮次不写回合记录；重试由 requestId 和版本核对防止重复写入。
+ * 主动停止、无正文的失败或拦截不写回合；正文中断或整份抽取失败时保存零结算草稿。
+ * 重试由 requestId 和版本核对防止重复写入。
  */
 export class GameService {
   private readonly locks = new KeyedMutex();

@@ -79,7 +79,7 @@ export interface PromptExtras {
   readonly recapTokens?: number | undefined;
   /** 开场的游戏时间；按它算原剧时间线走到第几天，没给就不带 */
   readonly startTime?: number | undefined;
-  /** 本轮是否启用酒馆预设（影响节律引导方式，不污染系统提示前缀缓存） */
+  /** 本轮是否启用写作预设；启用时不叠加默认表达、示例、节律与修辞提醒。 */
   readonly hasPreset?: boolean | undefined;
   /** 未启用预设时的柔性场景烈度 */
   readonly intensity?: NarrativeIntensity | undefined;
