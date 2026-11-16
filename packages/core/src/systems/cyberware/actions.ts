@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { CharacterStateSchema } from "../character";
-import { EconomyStateSchema, type Keeper, keeperOf } from "../economy";
+import { EconomyStateSchema } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { CyberwareStateSchema } from "./schema";
@@ -40,12 +39,6 @@ type RipperdocAction =
   | z.infer<typeof RemoveCyberwareActionSchema>
   | z.infer<typeof RepayRipperdocActionSchema>
   | z.infer<typeof RepairCyberwareActionSchema>;
-
-/** 店主或义体医生的人物卡：见过面、还活着才算，好感够了没到声望门槛的货也肯卖 */
-function keeperIn(world: WorldState, npc: string | undefined): Keeper | undefined {
-  const npcs = (world.slices.npc as { npcs?: Parameters<typeof keeperOf>[1] } | undefined)?.npcs;
-  return keeperOf(npc, npcs ?? {});
-}
 
 /** 义体医生的操作：人要在诊所里，货要在货架上、肯卖 */
 function ripperdocCommands(
@@ -100,13 +93,10 @@ function ripperdocCommands(
         : []),
     ];
   }
-  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
   const item = ripperdocShelf(
     doc,
     catalog,
-    streetCred,
     installed,
-    keeperIn(world, doc.keeperNpc),
   ).find((i) => i.def.id === action.id);
   if (!item) return `${doc.name}的货架上没有这件`;
   if (item.locked) return `${doc.name}不卖${item.def.name}：${item.locked}`;

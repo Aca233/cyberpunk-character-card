@@ -1,5 +1,5 @@
 import type { RuleModule } from "../../kernel/system";
-import { type CharacterState } from "./schema";
+import type { CharacterState } from "./schema";
 
 export const streetCredRules: RuleModule<CharacterState> = {
   id: "streetCred",

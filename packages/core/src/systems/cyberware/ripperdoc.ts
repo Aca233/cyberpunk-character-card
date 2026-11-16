@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
-import { CharacterStateSchema } from "../character";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { formatGameTime, WorldClockStateSchema } from "../world";
@@ -29,7 +28,6 @@ export function ripperdocView({ world, data }: ViewContext) {
   if (!doc) return null;
   const { installed, debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   const broken = HealthStateSchema.parse(world.slices.health).brokenChrome;
-  const streetCred = CharacterStateSchema.parse(world.slices.character).streetCred;
   const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
   const parts = cyberwareCatalog(data);
   const debt = debts.find((d) => d.doc === doc.id);
@@ -59,7 +57,7 @@ export function ripperdocView({ world, data }: ViewContext) {
         return def && broken.includes(c.id) ? [[c.id, repairCost(def)]] : [];
       }),
     ) as Readonly<Record<string, number>>,
-    shelf: ripperdocShelf(doc, parts, streetCred, installed, keeper).map((item) => ({
+    shelf: ripperdocShelf(doc, parts, installed).map((item) => ({
       id: item.def.id,
       name: item.def.name,
       slot: item.def.slot,

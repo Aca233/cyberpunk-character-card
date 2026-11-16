@@ -1,8 +1,8 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import {
-  type CharacterState,
-  type FlashbackCommand,
+import type {
+  CharacterState,
+  FlashbackCommand,
 } from "./schema";
 
 /** 角色主板上的过往名字 */

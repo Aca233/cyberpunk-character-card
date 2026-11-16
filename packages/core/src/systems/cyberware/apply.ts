@@ -1,7 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { Attribute } from "../dice";
-import type { Keeper } from "../economy";
 import {
   CyberwareCatalogSchema,
   type CyberwareCommand,
@@ -76,10 +75,7 @@ export interface ShelfItem {
 export function ripperdocShelf(
   doc: Ripperdoc,
   catalog: ReadonlyMap<string, CyberwareDef>,
-  streetCred: number,
   installed: readonly { readonly id: string; readonly slot: string }[],
-  /** 医生有人物卡、见过面时传：好感够了，没到声望门槛的货也肯卖 */
-  keeper?: Keeper,
 ): ShelfItem[] {
   return doc.shelf.flatMap((id) => {
     const def = catalog.get(id);

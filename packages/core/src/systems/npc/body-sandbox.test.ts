@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyNpc } from "./apply";
 import { applyNpcBody, applyNpcCondition, sanitizeNpcBody, currentVitals, bodyView } from "./body";
 import { NpcSchema, type NpcState } from "./schema";
-import { ItemDefSchema } from "../inventory/schema";
+import { ItemDefSchema } from "../inventory";
 
 function person() {
   return NpcSchema.parse({ id: "resident", name: "阿黎", pronoun: "她", role: "修理工", look: "沾着机油", voice: "直说", want: "修好门", limit: "不拆他人义体", affinity: 0, alive: true, met: true, location: "garage", lastSeenAt: 0, memories: [], body: { gear: [], cyberware: [] } });

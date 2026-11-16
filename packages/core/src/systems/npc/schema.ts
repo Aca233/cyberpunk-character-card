@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DamageTierSchema } from "../dice";
-import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health/schema";
-import { NeuralSymptomSchema } from "../humanity/schema";
+import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health";
+import { NeuralSymptomSchema } from "../humanity";
 
 /** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
 export const NO_FACTION = "none";

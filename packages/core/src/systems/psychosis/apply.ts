@@ -121,9 +121,7 @@ export function applyEpisode(
 export function applyLostControl(
   draft: Draft<PsychosisState>,
   command: LostControlCommand,
-  ctx: SystemContext,
 ): ApplyOutcome {
-  const scene = ctx.read<WorldClockState>("world").scene;
   if (draft.episodeScene === null) return fail("没有正在持续的发作，不会失控；先写 episode");
   draft.lostControl += 1;
   return { ok: true, notes: [`[失控] 你想：${command.intent}；实际：${command.actual}`] };
@@ -184,7 +182,7 @@ export function lostControlOf(
 }
 
 /** 给界面和提示词的压制剂、发作与记忆空白情况 */
-export function psychosisView(slice: unknown, now: number, scene: number | null = null) {
+export function psychosisView(slice: unknown, now: number) {
   const state = PsychosisStateSchema.parse(slice ?? {});
   const s = suppressantStatus(state.doses, now);
   return {

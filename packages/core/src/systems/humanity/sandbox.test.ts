@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { applyHumanity, neuralStage } from "./apply";
 import { humanity } from "./index";
 import { HumanityCommandSchema } from "./schema";
-import { applyBoost, install } from "../cyberware/apply";
-import { cyberware } from "../cyberware/index";
-import { CyberwareDefSchema } from "../cyberware/schema";
-import { applyEpisode } from "../psychosis/apply";
-import { psychosis } from "../psychosis/index";
+import { applyBoost, install } from "../cyberware";
+import { cyberware } from "../cyberware";
+import { CyberwareDefSchema } from "../cyberware";
+import { applyEpisode } from "../psychosis";
+import { psychosis } from "../psychosis";
 import { fixedRng } from "../../kernel/rng";
 import type { SystemContext } from "../../kernel/system";
 

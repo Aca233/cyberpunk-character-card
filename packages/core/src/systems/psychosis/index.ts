@@ -1,6 +1,5 @@
 import { defineSystem } from "../../kernel/system";
 import { type HumanityState, neuralStage } from "../humanity";
-import { WorldClockStateSchema } from "../world";
 import { psychosisActions } from "./actions";
 import {
   applyEpisode,
@@ -50,7 +49,7 @@ export const psychosis = defineSystem<
       case "episode":
         return applyEpisode(draft, command, ctx);
       case "lostControl":
-        return applyLostControl(draft, command, ctx);
+        return applyLostControl(draft, command);
     }
   },
   on: {
@@ -70,7 +69,6 @@ export const psychosis = defineSystem<
       psychosisView(
         world.slices.psychosis,
         world.time,
-        WorldClockStateSchema.parse(world.slices.world).scene,
       ),
   },
   status: psychosisStatus,
