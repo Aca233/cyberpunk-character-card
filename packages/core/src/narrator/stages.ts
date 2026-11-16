@@ -1,14 +1,14 @@
 import { z } from "zod";
 import type { WorldState } from "../kernel/world";
+import type { NarratedPurchase } from "../systems/commerce/quotes";
+import { quoteCyberware } from "../systems/cyberware/quote";
 import {
   DiscountSchema,
-  discounted,
   EconomyStateSchema,
   isBigSpend,
-  SERVICES,
   ServiceSchema,
 } from "../systems/economy/schema";
-import { itemCatalog } from "../systems/inventory/apply";
+import { quoteTrade } from "../systems/inventory/trade";
 import { vehicleCatalog } from "../systems/travel/vehicles";
 
 /**
@@ -16,21 +16,62 @@ import { vehicleCatalog } from "../systems/travel/vehicles";
  * 这里放 ① 的 JSON 结构、大额消费确认；定性物理硬约束校验在 pipeline.ts
  */
 
-/** ① 判断里玩家这一轮要花的钱：只写买什么，价钱由代码查表 */
+/** 判断只识别玩家明确授权的交易，价格由共同报价函数计算。 */
 export const BuyProposalSchema = z
   .object({
-    item: z.string().min(1).optional().describe("买物品写物品表里的 id，买车写车型 id"),
+    item: z.string().min(1).optional().describe("买卖物品写物品表里的 id，买车写车型 id"),
+    action: z.enum(["buy", "sell"]).optional().describe("普通物品买入或卖出；不写时为 buy"),
+    cyberware: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("安装、拆卸或修理的义体 id；不与 item/service 同写"),
+    with: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("实际交易对方的商店/人物 id；义体服务写医生 id。不能因为在店里就猜第一家"),
+    destination: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("仅玩家明确先前往某处再成交时写目标地点 id；不能为了交易擅自补出行"),
+    offer: z.string().min(1).optional().describe("沿用已谈妥报价时写报价 id"),
+    operation: z.enum(["install", "remove", "repair", "repay"]).optional(),
+    replace: z.string().min(1).optional().describe("玩家明确同意拆下的旧义体 id"),
+    tradeIn: z.boolean().optional().describe("玩家明确同意出售旧件时才为 true"),
+    credit: z.boolean().optional().describe("玩家明确申请赊账时才为 true"),
     service: ServiceSchema.optional().describe(
       "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
     ),
     discount: DiscountSchema.default("none").describe(
-      "讲价讲下来多少：none 没有，small 小，large 大",
+      "此字段不产生实际优惠，写 none；普通物品/服务/义体议价使用已保存 offer，车辆按真实目录价",
     ),
   })
-  .refine((b) => (b.item === undefined) !== (b.service === undefined), {
-    message: "item 和 service 写一个",
-  });
+  .refine(
+    (b) =>
+      [b.item, b.service, b.cyberware].filter((v) => v !== undefined).length ===
+      (b.operation === "repay" ? 0 : 1),
+    {
+      message: "item、service、cyberware 写一个；还款只写 operation:repay 与 with",
+    },
+  )
+  .refine((b) => b.action !== "sell" || b.item !== undefined, {
+    message: "action:sell 仅用于普通物品；义体拆卸写 operation:remove",
+  })
+  .refine(
+    (b) => b.operation === undefined || b.operation === "repay" || b.cyberware !== undefined,
+    { message: "install、remove、repair 需要指定 cyberware" },
+  );
 export type BuyProposal = z.infer<typeof BuyProposalSchema>;
+
+/** 一项代表一次单件交易；多笔或多件按玩家授权的实际顺序逐项列出。 */
+export const TransactionIntentSchema = z.union([
+  BuyProposalSchema,
+  z.array(BuyProposalSchema).min(1),
+]);
+export type TransactionIntent = z.infer<typeof TransactionIntentSchema>;
 
 /** ① 判断里的定性物理与社会因果裁决；日常闲聊写 null */
 export const JudgeRulingSchema = z.object({
@@ -96,8 +137,8 @@ export const JudgeDocSchema = z.object({
   ruling: JudgeRulingSchema.nullable().describe(
     "平时日常对话、吃喝赶路、普通观察写 null；只有发生物理碰撞、潜入越界、黑客入侵、武装冲突或违背常识阻断时才给定性裁决",
   ),
-  buy: BuyProposalSchema.nullable().describe(
-    "玩家这一轮要掏钱买东西或买服务时写买什么，不写价钱；不花钱写 null",
+  buy: TransactionIntentSchema.nullable().describe(
+    "玩家明确授权买入、卖出、服务、安装、拆卸、维修或还款时填写；一笔写对象，多笔或多件按实际顺序逐件列数组，不写价钱。询价、砍价或未同意成交写 null",
   ),
   recall: z
     .array(z.string())
@@ -172,6 +213,122 @@ export interface BigSpend {
   readonly price: number;
   /** 身上现有的欧元 */
   readonly eddies: number;
+  /** 服务端绑定确认的具体交易与金额，不向界面新增字段。 */
+  readonly quoteKey: string;
+}
+
+export type PurchaseQuote =
+  | {
+      readonly ok: true;
+      readonly label: string;
+      readonly price: number;
+      readonly quoteKey: string;
+      readonly detail: string;
+      readonly settlement?: NarratedPurchase;
+    }
+  | { readonly ok: false; readonly reason: string };
+
+/** 与货架和成交共用报价；只读，不因查询价格而交付、扣款或消费报价。 */
+export function purchaseQuote(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  buy: BuyProposal,
+): PurchaseQuote {
+  if (buy.cyberware !== undefined || buy.operation === "repay") {
+    if (!buy.with) return { ok: false, reason: "义体交易需要明确医生" };
+    const result = quoteCyberware(world, data, {
+      action: buy.operation ?? "install",
+      doc: buy.with,
+      id: buy.cyberware,
+      replace: buy.replace,
+      tradeIn: buy.tradeIn,
+      credit: buy.credit,
+      offer: buy.offer,
+    });
+    if (!result.ok) return result;
+    const q = result.quote;
+    if (q.blocked) return { ok: false, reason: q.blocked };
+    return {
+      ok: true,
+      label: q.name,
+      price: q.cash,
+      quoteKey: JSON.stringify([
+        "cyberware",
+        q.doc,
+        q.action,
+        q.id,
+        q.price,
+        q.tradeIn,
+        q.total,
+        q.cash,
+        q.credit,
+        q.receive,
+        q.replaces?.id,
+        buy.tradeIn === true,
+        buy.credit === true,
+        q.offer,
+        buy.destination,
+      ]),
+      detail: `${q.docName} ${q.name}：${q.action === "remove" ? `经玩家明确授权拆卸回收，玩家所得 ${q.receive} 欧元` : `应付 ${q.total} 欧元，本次现金 ${q.cash}${q.credit ? `、赊欠 ${q.credit}` : ""}`}${q.replaces ? `；经玩家明确授权，回收 ${q.replaces.name}` : ""}${q.offer ? `；报价 ${q.offer}` : ""}`,
+      settlement: {
+        seller: q.doc,
+        kind: "cyberware",
+        action: q.action,
+        target: q.id ?? "repay",
+        price: q.action === "remove" ? q.receive : q.total,
+        cash: q.cash,
+        credit: q.credit,
+        creditAllowed: buy.credit === true,
+        replace: buy.replace,
+        tradeIn: buy.tradeIn,
+      },
+    };
+  }
+  if (buy.item !== undefined && vehicleCatalog(data).has(buy.item)) {
+    if (buy.action === "sell") return { ok: false, reason: "车辆出售尚未实现，不能按购车结算" };
+    const car = vehicleCatalog(data).get(buy.item) as { name: string; price: number };
+    const price = car.price;
+    return {
+      ok: true,
+      label: car.name,
+      price,
+      quoteKey: JSON.stringify(["vehicle", "buy", buy.item, price, buy.destination]),
+      detail: `${car.name}：${price} 欧元`,
+    };
+  }
+  if (!buy.with)
+    return { ok: false, reason: "交易对方尚未确定；先询价，不能直接付款或凭目录取得商品" };
+  const action = buy.service ? "service" : (buy.action ?? "buy");
+  const q = quoteTrade(world, data, {
+    action,
+    item: buy.item,
+    service: buy.service,
+    with: buy.with,
+    offer: buy.offer,
+  });
+  if (!q.ok) return q;
+  return {
+    ok: true,
+    label: q.label,
+    price: action === "sell" ? 0 : q.price,
+    quoteKey: JSON.stringify([
+      buy.service ? "service" : "item",
+      action,
+      q.counterparty,
+      buy.service ?? buy.item,
+      q.price,
+      q.quote?.id,
+      buy.destination,
+    ]),
+    detail: `${q.party.name} ${q.label}：${action === "sell" ? "卖出后玩家所得" : "最终对价"} ${q.price} 欧元${q.left !== undefined ? `；现货 ${q.left}` : ""}${q.quote ? `；报价 ${q.quote.id}` : ""}`,
+    settlement: {
+      seller: q.counterparty,
+      kind: buy.service ? "service" : "item",
+      action,
+      target: buy.service ?? buy.item ?? "",
+      price: q.price,
+    },
+  };
 }
 
 /** 一次花掉超过存款一半且超过 1,000 欧元时返回；查不到价钱、不卖的东西不拦，交给结算 */
@@ -181,26 +338,10 @@ export function bigSpend(
   buy: BuyProposal,
 ): BigSpend | undefined {
   const { eddies } = EconomyStateSchema.parse(world.slices.economy);
-  let label: string;
-  let base: number;
-  if (buy.service !== undefined) {
-    label = SERVICES[buy.service].label;
-    base = SERVICES[buy.service].price;
-  } else if (buy.item !== undefined && vehicleCatalog(data).has(buy.item)) {
-    const car = vehicleCatalog(data).get(buy.item) as { name: string; price: number };
-    label = car.name;
-    base = car.price;
-  } else {
-    const def =
-      data.items === undefined || buy.item === undefined
-        ? undefined
-        : itemCatalog(data).get(buy.item);
-    if (!def || def.iconic || def.price === undefined) return undefined;
-    label = def.name;
-    base = def.price;
-  }
-  const price = discounted(base, buy.discount);
-  return isBigSpend(price, eddies) ? { label, price, eddies } : undefined;
+  const quote = purchaseQuote(world, data, buy);
+  return quote.ok && isBigSpend(quote.price, eddies)
+    ? { label: quote.label, price: quote.price, eddies, quoteKey: quote.quoteKey }
+    : undefined;
 }
 
 /** 一条旧记忆：标题给判断原样抄，正文给写正文；候选池和扩展层检索在 retrieve.ts */
