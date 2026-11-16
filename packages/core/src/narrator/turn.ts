@@ -100,6 +100,13 @@ import {
   rulingText,
 } from "./stages";
 import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE, SummaryDocSchema } from "./summary";
+import {
+  REPAIR_OUTPUT_TOKENS,
+  RepairBudget,
+  type RepairStage,
+  type ValidationEntry,
+  validateEntries,
+} from "./validation";
 
 /**
  * 一轮四步：① 判断（叙事模型，JSON Schema：记忆调度与定性物理/社会因果裁决）→ ② 拼上下文
@@ -112,7 +119,7 @@ export interface Dropped {
   readonly where: string;
   readonly raw: unknown;
   readonly reason: string;
-  /** format：格式不合格，修过一次仍不行；verify：历史字段；rules：业务校验没通过 */
+  /** format：格式不合格且有限修复未能解决；verify：历史字段；rules：业务校验没通过 */
   readonly stage: "format" | "verify" | "rules";
 }
 
@@ -185,6 +192,8 @@ function dropFollowers(
 export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
   for (const d of dropped) {
     if (d.where === "抽取") return "这一轮的记账没抽出来，状态没有变";
+    if (d.stage === "format" && /^(changes|messages)\[/.test(d.where))
+      return `本轮事实尚未完整记账：${d.reason}`;
     const raw = d.raw;
     if (typeof raw !== "object" || raw === null) continue;
     const type = (raw as { type?: unknown }).type;
@@ -289,6 +298,8 @@ export interface NarratorDeps {
   readonly lore?: LoreSource | undefined;
   /** 叙事模型方案的上下文窗口（token）；按它分上下文预算，没给按 32K */
   readonly contextWindow?: number | undefined;
+  /** 正文连接本身的输出上限；预设不能把它扩大到窗口预算之外。 */
+  readonly maxOutputTokens?: number | undefined;
   /**
    * 玩家导入并启用的酒馆预设（用户定的）：只给写正文那一步，条目叠在本作提示词前面、本作规则在后，
    * 采样参数和正则也只用在这一步；判断、抽取、核对、修复、场外推演、摘要都不套
@@ -339,6 +350,7 @@ class TurnBuilder {
   repairs = 0;
   repairUsage: LlmUsage = ZERO;
   auxUsage: LlmUsage = ZERO;
+  private readonly repairBudget = new RepairBudget();
 
   constructor(private readonly deps: NarratorDeps) {}
 
@@ -364,16 +376,23 @@ class TurnBuilder {
     return { text, usage };
   }
 
-  /** 让辅助模型修一次；修不好返回 undefined */
-  async repair(task: string, raw: string): Promise<unknown> {
+  /** 顶层和条目修复共用阶段额度；不因错误数量增加调用次数。 */
+  async repair(stage: RepairStage, task: string, raw: string): Promise<unknown> {
+    const content = `${task}\n\n原文：\n${raw}`;
+    const denied = this.repairBudget.claim(stage, `${REPAIR_SYSTEM}\n${content}`);
+    if (denied) {
+      noteOnce(this.notes, `${stage === "judge" ? "判断" : "抽取"}：${denied}，未追加修复请求`);
+      return undefined;
+    }
     this.repairs += 1;
     const reply = await this.call({
       purpose: "aux",
       temperature: 0,
+      maxOutputTokens: REPAIR_OUTPUT_TOKENS,
       responseFormat: responseJsonSchema("repair"),
       messages: [
         { role: "system", content: REPAIR_SYSTEM },
-        { role: "user", content: `${task}\n\n原文：\n${raw}` },
+        { role: "user", content },
       ],
     });
     if ("blocked" in reply) return undefined;
@@ -382,24 +401,20 @@ class TurnBuilder {
     return parsed.ok && parsed.value !== null ? parsed.value : undefined;
   }
 
-  /** 按 schema 校验一条，不合格时修一次，仍不合格就丢掉 */
-  async validate<T>(where: string, raw: unknown, schema: z.ZodType<T>): Promise<T | undefined> {
+  /** 可选建议直接本地校验，不占用事实修复额度。 */
+  validate<T>(where: string, raw: unknown, schema: z.ZodType<T>): T | undefined {
     const first = schema.safeParse(raw);
     if (first.success) return first.data;
-    const reason = issueText(first.error);
-    const fixed = await this.repair(
-      `这一条（${where}）不符合格式：${reason}\n应当是：${schemaDoc(schema)}`,
-      JSON.stringify(raw),
-    );
-    if (fixed !== undefined) {
-      const second = schema.safeParse(fixed);
-      if (second.success) {
-        this.notes.push(`${where} 的格式已自动修正`);
-        return second.data;
-      }
-    }
-    this.drop(where, raw, reason, "format");
+    this.drop(where, raw, issueText(first.error), "format");
     return undefined;
+  }
+
+  async validateBatch(stage: RepairStage, entries: readonly ValidationEntry[]) {
+    const result = await validateEntries(entries, (task, raw) => this.repair(stage, task, raw));
+    for (const key of result.repaired) this.notes.push(`${key} 的格式已批量修正`);
+    for (const { entry, reason } of result.failures)
+      this.drop(entry.key, entry.raw, `${reason}；有限批量修复未解决`, "format");
+    return result.values;
   }
 
   /** ① 判断的顶层结构；解析不了修一次，仍不行按“不裁决、不调记忆”继续 */
@@ -409,6 +424,7 @@ class TurnBuilder {
     if (shape?.ok) return shape.judge;
     const reason = shape ? shape.error : json.ok ? "" : `不是合法的 JSON：${json.error}`;
     const fixed = await this.repair(
+      "judge",
       `下面的判断解析不了（${reason}）。修成一个 JSON 对象，格式：${schemaDoc(JudgeDocSchema)}`,
       text,
     );
@@ -417,8 +433,7 @@ class TurnBuilder {
       this.notes.push("判断的格式已自动修正");
       return second.judge;
     }
-    this.drop("判断", text, `${reason}；修过一次仍然不行，这一轮按不裁决、不调记忆继续`, "format");
-    this.notes.push("这一轮的判断没解析出来，按常规推演继续");
+    this.drop("判断", text, `${reason}；有限修复未解决，不能确认本轮行动条件`, "format");
     return {};
   }
 
@@ -429,6 +444,7 @@ class TurnBuilder {
     if (shape?.ok) return shape.extract;
     const reason = shape ? shape.error : json.ok ? "" : `不是合法的 JSON：${json.error}`;
     const fixed = await this.repair(
+      "extract",
       `下面的抽取结果解析不了（${reason}）。修成一个 JSON 对象，格式：${schemaDoc(ExtractDocSchema)}`,
       text,
     );
@@ -437,7 +453,7 @@ class TurnBuilder {
       this.notes.push("抽取的格式已自动修正");
       return second.extract;
     }
-    this.drop("抽取", text, `${reason}；修过一次仍然不行，这一轮只保留正文`, "format");
+    this.drop("抽取", text, `${reason}；有限修复未解决，这一轮只保留正文`, "format");
     return {};
   }
 }
@@ -595,6 +611,8 @@ export async function runNarratorTurn(
     if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
     addNarrator(reply.usage);
     judge = await b.readJudge(reply.text);
+    if (b.dropped.some((d) => d.where === "判断"))
+      return { kind: "blocked", reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。" };
   }
   const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
   const activeBoost = sandevistanOf(world, deps.data ?? {});
@@ -614,13 +632,27 @@ export async function runNarratorTurn(
       ? judge.read.trim()
       : undefined;
 
+  const judgeEntries: ValidationEntry[] = [];
+  if (!ooc && !inFlashback) {
+    if (judge.ruling !== undefined && judge.ruling !== null)
+      judgeEntries.push({ key: "ruling", raw: judge.ruling, schema: JudgeRulingSchema });
+    if (judge.buy !== undefined && judge.buy !== null && plan.input.spendOk !== true)
+      judgeEntries.push({ key: "buy", raw: judge.buy, schema: BuyProposalSchema });
+  }
+  const judged = await b.validateBatch("judge", judgeEntries);
+  if (judgeEntries.some((entry) => !judged.has(entry.key)))
+    return {
+      kind: "blocked",
+      reason: "本轮行动条件或交易信息仍有格式错误，尚未修改状态，请重试。",
+    };
+
   // 定性物理与社会因果裁决：日常对话写 null，冲突/受阻/险境才给出
   let rulingSpec: JudgeRuling | undefined;
   if (judge.ruling !== undefined && judge.ruling !== null) {
     if (ooc || inFlashback) {
       b.drop("ruling", judge.ruling, ooc ? oocReason : flashbackReason, "rules");
     } else {
-      rulingSpec = await b.validate("ruling", judge.ruling, JudgeRulingSchema);
+      rulingSpec = judged.get("ruling") as JudgeRuling;
     }
   }
 
@@ -633,7 +665,7 @@ export async function runNarratorTurn(
     !ooc &&
     !inFlashback
   ) {
-    const buy = await b.validate("buy", judge.buy, BuyProposalSchema);
+    const buy = judged.get("buy") as z.infer<typeof BuyProposalSchema> | undefined;
     const spend = buy && bigSpend(world, deps.data ?? {}, buy);
     if (spend) return { kind: "confirmSpend", ...spend };
   }
@@ -733,7 +765,13 @@ export async function runNarratorTurn(
   const sampling = preset?.sampling ?? {};
   const maxOutputTokens = Math.max(
     1,
-    Math.floor(Math.min(budget.parts.reply, sampling.maxOutputTokens ?? budget.parts.reply)),
+    Math.floor(
+      Math.min(
+        budget.parts.reply,
+        deps.maxOutputTokens ?? budget.parts.reply,
+        sampling.maxOutputTokens ?? budget.parts.reply,
+      ),
+    ),
   );
   const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
   const exposure = currentTension(world).exposure;
@@ -872,6 +910,37 @@ export async function runNarratorTurn(
   }
   const considered: string[] = settle ? readConsidered(shape.dropped) : [];
 
+  // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
+  const extractEntries: ValidationEntry[] = [];
+  for (const [i, item] of (shape.changes ?? []).entries()) {
+    const where = `changes[${i}]`;
+    const type =
+      typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
+    const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
+    if (!schema) {
+      b.drop(
+        where,
+        item,
+        typeof type === "string" ? `未知的指令类型：${type}` : "指令缺少 type",
+        "format",
+      );
+      continue;
+    }
+    const proposal = registry.normalizeProposal(item);
+    if (proposal.note !== undefined) noteOnce(b.notes, proposal.note);
+    extractEntries.push({
+      key: where,
+      raw: proposal.value,
+      schema,
+      priority: typeof type === "string" && (type === "world" || KEY_ITEMS[type]) ? 1 : 0,
+    });
+  }
+  if (!inFlashback) {
+    for (const [i, item] of (shape.messages ?? []).slice(0, MESSAGES_PER_TURN).entries())
+      extractEntries.push({ key: `messages[${i}]`, raw: item, schema: IncomingMessageSchema });
+  }
+  const extracted = await b.validateBatch("extract", extractEntries);
+
   // 装着的义体的名字：义体来源的专属选项要对得上
   const parts = cyberwareCatalog(deps.data ?? {});
   // 打坏的义体修好前失去能力：不算专属选项的来源、不挡伤害
@@ -887,31 +956,16 @@ export async function runNarratorTurn(
       b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
       continue;
     }
-    const choice = await b.validate(where, item, ChoiceProposalSchema);
+    const choice = b.validate(where, item, ChoiceProposalSchema);
     if (!choice) continue;
     choices.push(verifySource(choice, chrome, traits, b.notes));
   }
 
   // 代码校验第一步：白名单和逐条格式
   const proposals: Proposal[] = [];
-  for (const [i, item] of (shape.changes ?? []).entries()) {
+  for (const [i] of (shape.changes ?? []).entries()) {
     const where = `changes[${i}]`;
-    const type =
-      typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
-    const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
-    if (!schema) {
-      b.drop(
-        where,
-        item,
-        typeof type === "string" ? `未知的指令类型：${type}` : "指令缺少 type",
-        "format",
-      );
-      continue;
-    }
-    // 模型仍写数字时先换成档位；校验后得到结算用的指令，之后核对和结算都按结算格式读
-    const legacy = registry.normalizeProposal(item);
-    if (legacy.note !== undefined) noteOnce(b.notes, legacy.note);
-    const command = await b.validate(where, legacy.value, schema);
+    const command = extracted.get(where) as Command | undefined;
     if (!command) continue;
     proposals.push({
       where,
@@ -934,7 +988,7 @@ export async function runNarratorTurn(
       b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
       continue;
     }
-    const message = await b.validate(where, item, IncomingMessageSchema);
+    const message = extracted.get(where) as z.infer<typeof IncomingMessageSchema> | undefined;
     if (!message) continue;
     proposals.push({
       where,
