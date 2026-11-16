@@ -246,6 +246,8 @@ async function main(): Promise<number> {
     return `${resolved.profile.name}（${resolved.profile.model}）`;
   };
   const narratorName = await describe(narratorRouter, "narrator");
+  const narratorConfig = await narratorRouter.resolve("narrator");
+  if (!narratorConfig.ok) throw new Error(redact(narratorConfig.error));
   const auxName = await describe(narratorRouter, "aux");
   let graderLlm: LlmClient | undefined;
   let graderName: string | null = null;
@@ -270,7 +272,14 @@ async function main(): Promise<number> {
     let run: RunResult;
     try {
       const result = await runNarratorTurn(
-        { llm: scriptedNarrator(c, narratorLlm), rng, data: gameData, opening: scenario.opening },
+        {
+          llm: scriptedNarrator(c, narratorLlm),
+          rng,
+          data: gameData,
+          opening: scenario.opening,
+          contextWindow: narratorConfig.profile.contextWindow,
+          maxOutputTokens: narratorConfig.profile.maxOutputTokens,
+        },
         scenario.world,
         scenario.records,
         scenario.plan,

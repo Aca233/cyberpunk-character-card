@@ -1026,6 +1026,7 @@ export class GameService {
         {
           llm: this.deps.llm,
           contextWindow: resolved.profile.contextWindow,
+          maxOutputTokens: resolved.profile.maxOutputTokens,
           rng: this.deps.rng,
           data: gameData,
           opening: openingPremise(opening, startLocation, openingContextOf(world, startTime)),

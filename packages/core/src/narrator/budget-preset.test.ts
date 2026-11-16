@@ -34,7 +34,11 @@ function preset(head: string, inChat = "", maxOutputTokens = 65_535): TavernPres
   };
 }
 
-async function run(style?: TavernPreset, history: readonly LogRecord[] = records) {
+async function run(
+  style?: TavernPreset,
+  history: readonly LogRecord[] = records,
+  maxOutputTokens?: number,
+) {
   const requests: LlmRequest[] = [];
   let rolls = 0;
   const llm: LlmClient = {
@@ -68,6 +72,7 @@ async function run(style?: TavernPreset, history: readonly LogRecord[] = records
         },
       },
       contextWindow: 32_000,
+      maxOutputTokens,
       data: { items: [], cyberware: [] },
       offscreen: null,
       preset: style,
@@ -125,5 +130,16 @@ describe("最终正文请求的预设预算", () => {
     if (result.kind === "blocked") expect(result.reason).toContain("超过本次输入预算");
     expect(requests).toHaveLength(1);
     expect(requests[0]?.responseFormat?.name).toBe("judge");
+  });
+
+  it("连接设定的更小输出上限不会被预算或预设覆盖", async () => {
+    for (const style of [undefined, preset("简洁叙事")]) {
+      const { result, requests } = await run(style, [], 500);
+      expect(result.kind).toBe("done");
+      if (result.kind !== "done") continue;
+      expect(requests.find((r) => r.responseFormat === undefined)?.maxOutputTokens).toBe(500);
+      expect(result.turn.budget.limit).toBe(31_500);
+      expect(result.turn.budget.parts.find((p) => p.part === "reply")?.limit).toBe(500);
+    }
   });
 });
