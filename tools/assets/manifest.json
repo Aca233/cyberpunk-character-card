@@ -1839,6 +1839,78 @@
       { "id": "portrait.river", "atlas": "common/avatars1", "slot": "river" },
       { "id": "portrait.kerry", "atlas": "common/avatars1", "slot": "kerry" }
     ],
+    "vehicles": [
+      {
+        "id": "vehicleArt.makigaiMaimai",
+        "atlas": "common/vehicles_icons",
+        "slot": "makigai_maimai__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.thortonGalena",
+        "atlas": "common/vehicles_icons",
+        "slot": "thorton_galena__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.mahirSupron",
+        "atlas": "common/vehicles_icons",
+        "slot": "mahir_supron__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.villefortCortes",
+        "atlas": "common/vehicles_icons",
+        "slot": "villefort_cortes__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.chevalierEmperor",
+        "atlas": "common/vehicles_icons",
+        "slot": "chevalier_emperor__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.chevalierThrax",
+        "atlas": "common/vehicles_icons",
+        "slot": "chevalier_thrax__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.mizutaniShion",
+        "atlas": "common/vehicles_icons",
+        "slot": "mizutani_shion_mz1"
+      },
+      {
+        "id": "vehicleArt.quadraTurboR",
+        "atlas": "common/vehicles_icons",
+        "slot": "quadra_turbo_basic_player"
+      },
+      {
+        "id": "vehicleArt.quadraType66",
+        "atlas": "common/vehicles_icons",
+        "slot": "quadra_type66_640TS"
+      },
+      {
+        "id": "vehicleArt.rayfieldCaliburn",
+        "atlas": "common/vehicles_icons",
+        "slot": "rayfield_caliburn__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.thortonMackinaw",
+        "atlas": "common/vehicles_icons",
+        "slot": "thorton_mackinaw__basic_player_01"
+      },
+      {
+        "id": "vehicleArt.thortonColbyPickup",
+        "atlas": "common/vehicles_icons",
+        "slot": "thorton_colby_pickup_player_01"
+      },
+      {
+        "id": "vehicleArt.yaibaKusanagi",
+        "atlas": "common/vehicles_icons",
+        "slot": "yaiba_kusanagi_basic_player_01"
+      },
+      {
+        "id": "vehicleArt.archNazare",
+        "atlas": "common/vehicles_icons",
+        "slot": "arch_nemesis_basic_player_01"
+      }
+    ],
     "map": [
       {
         "id": "map.roads",
