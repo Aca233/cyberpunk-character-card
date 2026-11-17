@@ -241,7 +241,8 @@ export function applyVehicleStash(
 ): ApplyOutcome {
   const target = draft.vehicles.find((vehicle) => vehicle.id === command.vehicle);
   const here = currentLocation(ctx);
-  if (!target || target.location !== here) return fail("车辆不在当前位置，无法访问后备箱");
+  if (here === null || !target || target.location !== here)
+    return fail("车辆不在当前位置，无法访问后备箱");
   if (command.action === "store") {
     if (target.condition === "wrecked") return fail("车辆已经报废，只能取出后备箱物品");
     const cap = vehicleCatalog(ctx.data).get(target.model)?.trunk ?? 0;

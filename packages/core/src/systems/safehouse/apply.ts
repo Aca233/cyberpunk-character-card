@@ -52,6 +52,7 @@ function containerOf(
   ctx: SystemContext,
 ): Container | string {
   const location = ctx.read<WorldClockState>("world").location;
+  if (location === null) return "当前位置未知，无法访问存放箱或后备箱";
   if (where === undefined) {
     const home = state.homes.find((h) => h.location === location);
     if (home) return { kind: "home", id: home.id, name: `${home.name}的存放箱` };

@@ -36,7 +36,7 @@ export function safehouseView({ world, data }: ViewContext) {
       items: list(state.stash[h.id] ?? {}),
     })),
     trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data)
-      .filter((t) => t.kind === "trunk" && t.location === location)
+      .filter((t) => location !== null && t.kind === "trunk" && t.location === location)
       .map((t) => ({
         id: t.id,
         name: t.kind === "trunk" && t.wrecked ? `${t.name}（报废，仅可取出）` : t.name,
