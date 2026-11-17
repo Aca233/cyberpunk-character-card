@@ -869,7 +869,13 @@ export class GameService {
             stage(
               "extract",
               "④ 抽取",
-              buildExtractPrompt(world, before, livePlan, extras, record.text),
+              buildExtractPrompt(
+                world,
+                before,
+                livePlan,
+                { ...extras, decided: record.decided },
+                record.text,
+              ),
             ),
           );
         }
