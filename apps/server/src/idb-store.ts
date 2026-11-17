@@ -194,23 +194,29 @@ export class IdbSaveStore implements SaveStorage {
 
   /** 追加一整行；调用方负责持有存档锁 */
   appendLog(id: string, line: string): Promise<void> {
-    return this.append(id, line);
+    return this.append(id, [line]);
   }
 
   /** 写回前的快照核对：数条数和追加在同一个事务里，条数不对时抛 SaveMovedError、什么都不写 */
   appendAt(id: string, seq: number, line: string): Promise<void> {
-    return this.append(id, line, seq);
+    return this.append(id, [line], seq);
   }
 
-  private async append(id: string, line: string, expected?: number): Promise<void> {
+  appendManyAt(id: string, seq: number, lines: readonly string[]): Promise<void> {
+    return this.append(id, lines, seq);
+  }
+
+  private async append(id: string, lines: readonly string[], expected?: number): Promise<void> {
     checkSaveId(id);
-    checkLine(line);
+    for (const line of lines) checkLine(line);
     await inTx(this.db, [METAS, LOG], "readwrite", async (tx) => {
       await requireMeta(tx, id);
       const log = tx.objectStore(LOG);
       const count = await req(log.count(saveRange(id)));
       if (expected !== undefined && count !== expected) throw new SaveMovedError(expected, count);
-      await req(log.add(line, [id, count]));
+      for (const [offset, line] of lines.entries()) {
+        await req(log.add(line, [id, count + offset]));
+      }
     });
   }
 

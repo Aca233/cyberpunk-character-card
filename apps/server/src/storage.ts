@@ -105,6 +105,19 @@ export class SaveStore implements SaveStorage {
     await this.appendLog(id, line);
   }
 
+  /** 场景重来等多记录操作整份原子替换，避免断电或写入失败只作废半个场景。调用方持有存档锁。 */
+  async appendManyAt(id: string, seq: number, lines: readonly string[]): Promise<void> {
+    for (const line of lines) {
+      if (!line.endsWith("\n") || line.indexOf("\n") !== line.length - 1) {
+        throw new Error("每条记录必须是一行完整的记录");
+      }
+    }
+    const text = await this.readLog(id);
+    const parsed = parseLog(text);
+    if (parsed.records.length !== seq) throw new SaveMovedError(seq, parsed.records.length);
+    await atomicWrite(this.logPath(id), text.slice(0, parsed.cleanLength) + lines.join(""));
+  }
+
   /** 读取并解析日志；末尾有写到一半的行时，把文件截到最后一条完整记录 */
   async loadLog(id: string): Promise<ParsedLog> {
     const text = await this.readLog(id);

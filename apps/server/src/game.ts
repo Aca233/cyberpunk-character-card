@@ -462,7 +462,12 @@ export class GameService {
         notes: [...result.notes],
         patches: [...result.patches],
       };
-      await this.deps.saves.appendLog(id, serializeRecord(record));
+      try {
+        await this.deps.saves.appendAt(id, version, serializeRecord(record));
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
+      }
       await this.maybeSnapshot(id, version + 1);
       return { status: 200, body: { seq: version, version: version + 1, notes: result.notes } };
     });
@@ -601,20 +606,24 @@ export class GameService {
         (r) => r.seq >= start && r.kind !== "void" && !voided.has(r.seq),
       );
       const at = this.deps.clock.now().toISOString();
-      let seq = version;
-      for (const target of targets) {
+      const lines = targets.map((target, index) => {
         const record: VoidRecord = {
           kind: "void",
-          seq,
+          seq: version + index,
           at,
           target: target.seq,
           reason: "restart",
           scene: view.scene,
         };
-        await this.deps.saves.appendLog(id, serializeRecord(record));
-        seq += 1;
+        return serializeRecord(record);
+      });
+      try {
+        await this.deps.saves.appendManyAt(id, version, lines);
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      return { status: 200, body: { version: seq, voided: targets.length } };
+      return { status: 200, body: { version: version + targets.length, voided: targets.length } };
     });
   }
 
@@ -654,7 +663,12 @@ export class GameService {
         target: last.seq,
         reason: "regenerate",
       };
-      await this.deps.saves.appendLog(id, serializeRecord(record));
+      try {
+        await this.deps.saves.appendAt(id, version, serializeRecord(record));
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
+      }
       const pending = { kind: "input", input: input.data };
       return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
     });

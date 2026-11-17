@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import type { SaveMeta, Snapshot } from "@cp/core";
 import { IDBFactory } from "fake-indexeddb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
 import { SaveExistsError, SaveMovedError, SaveNotFoundError, SNAPSHOT_KEEP } from "./ports";
 
@@ -94,6 +94,41 @@ describe("IdbSaveStore", () => {
     expect(failed).toHaveLength(1);
     expect((failed[0] as PromiseRejectedResult).reason).toBeInstanceOf(SaveMovedError);
     expect((await saves.readLog("s-1")).split("\n").filter(Boolean)).toHaveLength(1);
+  });
+
+  it("批量追加在一个事务里核对版本，冲突时没有部分记录", async () => {
+    const saves = new IdbSaveStore(await freshDb());
+    await saves.create("s-1", META);
+    const results = await Promise.allSettled([
+      saves.appendManyAt("s-1", 0, ["a\n", "b\n"]),
+      saves.appendManyAt("s-1", 0, ["c\n", "d\n"]),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(["a\nb\n", "c\nd\n"]).toContain(await saves.readLog("s-1"));
+  });
+
+  it("批量追加中途失败会回滚已经写出的行", async () => {
+    const saves = new IdbSaveStore(await freshDb());
+    await saves.create("s-1", META);
+    await saves.appendAt("s-1", 0, "original\n");
+    const originalAdd = IDBObjectStore.prototype.add;
+    const add = vi.spyOn(IDBObjectStore.prototype, "add").mockImplementation(function (
+      this: IDBObjectStore,
+      value,
+      key,
+    ) {
+      if (value === "second\n") throw new DOMException("模拟空间不足", "QuotaExceededError");
+      return originalAdd.call(this, value, key);
+    });
+    try {
+      await expect(saves.appendManyAt("s-1", 1, ["first\n", "second\n"])).rejects.toThrow(
+        "模拟空间不足",
+      );
+      expect(await saves.readLog("s-1")).toBe("original\n");
+    } finally {
+      add.mockRestore();
+    }
   });
 
   it("导入整份日志后可以接着按条数追加", async () => {

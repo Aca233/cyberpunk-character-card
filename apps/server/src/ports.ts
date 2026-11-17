@@ -37,6 +37,8 @@ export interface SaveStorage extends Storage {
    * （IndexedDB 版在同一个事务里做）。条数不对时什么都不写，抛 SaveMovedError；不自动重试
    */
   appendAt(id: string, seq: number, line: string): Promise<void>;
+  /** 同一次操作的多条记录：核对版本后全部写入，失败时不留下部分结果。 */
+  appendManyAt(id: string, seq: number, lines: readonly string[]): Promise<void>;
 }
 
 const SAVE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
