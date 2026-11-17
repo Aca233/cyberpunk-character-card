@@ -727,7 +727,7 @@ export function StoryScreen() {
       </CornerSide>
       <CornerSide side="right">
         {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
-        <Zone view={view} onMap={openMap} />
+        <Zone view={view} onMap={openMap} onShop={setAtShop} onRipperdoc={() => setAtDoc(true)} />
         {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
         <Track view={view} peek={peek} full={trackFull}>
           {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}

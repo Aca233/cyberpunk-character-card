@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { AssetId } from "../../assets";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
+import { Button } from "../../ui/Button";
 import { Panel } from "../../ui/Panel";
 import { weaponHudIconOf } from "./art";
 import styles from "./corners.module.css";
@@ -1064,7 +1065,17 @@ const ZONE_THREAT_MAX = 3;
  * 不再悬停展开（用户定的，计划第十二节第 9 条）：威胁常态就列在框下面，没人盯上就不占地方；
  * 点地点框或按 Enter / 空格打开大地图，同 M 键。
  */
-export function Zone({ view, onMap }: { readonly view: View; readonly onMap: () => void }) {
+export function Zone({
+  view,
+  onMap,
+  onShop,
+  onRipperdoc,
+}: {
+  readonly view: View;
+  readonly onMap: () => void;
+  readonly onShop: (id: string) => void;
+  readonly onRipperdoc: () => void;
+}) {
   const { heat, stealth } = view;
   const bounty = heat.bounties.reduce((sum, b) => sum + b.reward, 0);
   const threats = [...view.threats].sort((a, b) => b.level - a.level);
@@ -1132,6 +1143,20 @@ export function Zone({ view, onMap }: { readonly view: View; readonly onMap: () 
           </div>
         )}
       </div>
+      {(view.shops.length > 0 || view.ripperdoc) && (
+        <section className={styles.zoneServices} aria-label="当前地点商家">
+          {view.shops.map((shop) => (
+            <Button key={shop.id} small onClick={() => onShop(shop.id)}>
+              商店 · {shop.name}
+            </Button>
+          ))}
+          {view.ripperdoc && (
+            <Button small onClick={onRipperdoc}>
+              义体诊所 · {view.ripperdoc.name}
+            </Button>
+          )}
+        </section>
+      )}
     </div>
   );
 }

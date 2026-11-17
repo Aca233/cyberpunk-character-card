@@ -1093,6 +1093,24 @@
   cursor: var(--cp-cursor-hand);
 }
 
+.zoneServices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 16px 0 28px;
+}
+
+.zoneServices > button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.zoneServices > button > span:last-child {
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 /* ———— C 追踪（右中，常态摘要最多 3 条；展开默认收束至 390px，切到有单可接的委托时加宽到 560px） ———— */
 
 .track {
