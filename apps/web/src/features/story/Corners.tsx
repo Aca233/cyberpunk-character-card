@@ -1332,12 +1332,19 @@ export function Weapon({
       data-open={p.open || undefined}
       data-pinned={p.pinned || undefined}
       data-wide={wideOn || undefined}
-      aria-label="武器与物品栏，点击固定展开，按 Esc 收起"
+      aria-label="武器、物品栏与车辆，点击固定展开，按 Esc 收起"
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
+        if (
+          p.pinned &&
+          event.target instanceof Element &&
+          event.target.closest(`.${styles.grow}`)
+        ) {
+          return;
+        }
         if (p.pinned) p.close();
         else peek.setExpand({ id: "weapon", pinned: true });
       }}
@@ -1358,7 +1365,7 @@ export function Weapon({
           slice={SLOT_SLICE}
         />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
-        <Grow open={p.open} title="装备 · 物品栏" hint="O" line="var(--cp-cyan)">
+        <Grow open={p.open} title="装备 · 物品栏与车辆" hint="O" line="var(--cp-cyan)">
           {full}
         </Grow>
         {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}

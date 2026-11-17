@@ -57,13 +57,13 @@ import { ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
+import { VehiclesPage } from "./VehiclesPage";
 import { diffViews, type Speaker, type Toast, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "shards";
-/** 不再开全屏神经界面（第十二节第 10 条）：物品栏进 H 武器块，义体与履历进 A 生物监测块；
- * 物品栏精简（用户定的方案 A）：制作页签去掉，武器块只剩物品栏 */
-type GearTab = "inventory";
+/** 物品栏和车辆沿用右下角装备块的展开区。 */
+type GearTab = "inventory" | "vehicles";
 type BioTab = "character" | "cyberware" | "chronicle";
 
 function isTyping(target: EventTarget | null): boolean {
@@ -254,7 +254,7 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // O 物品栏、K 制作：钉住 H 武器块并切到那个页签；同一页签已经钉着就收起（第十二节第 10 条）
+  // 钉住右下角装备块并切页签；同一页签已经钉着就收起。
   const showGear = useCallback(
     (tab: GearTab) => {
       setAtMap(false);
@@ -540,65 +540,76 @@ export function StoryScreen() {
       </div>
     </div>
   );
-  // 武器块只放物品栏，不再显示只有一个选项的重复页签。
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
-      <InventoryPage
-        view={view}
-        disabledReason={
-          view.death || view.ended
-            ? "这份存档已结束，只能查看物品"
-            : busy
-              ? "正在处理行动，请稍候"
-              : offers?.rolled
-                ? "请先完成当前检定的结算"
-                : undefined
-        }
-        onHeal={
-          busy || offers?.rolled || view.death || view.ended
-            ? undefined
-            : (id) => act({ type: "useHealing", id }, "healing", true)
-        }
-        onSuppressant={
-          busy || offers?.rolled || view.death || view.ended
-            ? undefined
-            : () => act({ type: "useSuppressant" }, "suppressant", true)
-        }
-        onUse={
-          busy || offers?.rolled || view.death || view.ended
-            ? undefined
-            : (id) => {
-                const name = view.names.items[id] ?? id;
-                const verb = view.inventory.details?.[id]?.kind === "grenade" ? "投掷" : "使用";
-                story.setDraft({
-                  text: `${story.draft.text}${story.draft.text ? "\n" : ""}${verb}${name}`,
-                });
-                closePinned();
-              }
-        }
-        onEquip={
-          busy || offers?.rolled || view.death || view.ended || view.combat.active
-            ? undefined
-            : (id) => void act({ type: "equipItem", id }, "gear")
-        }
-        onUnequip={
-          busy || offers?.rolled || view.death || view.ended || view.combat.active
-            ? undefined
-            : (id) => void act({ type: "unequipItem", id }, "gear")
-        }
-        onMod={
-          busy || offers?.rolled || view.death || view.ended || view.combat.active
-            ? undefined
-            : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
-        }
-        onStashMove={
-          busy || offers?.rolled || view.death || view.ended || view.combat.active
-            ? undefined
-            : (action, item, where) => void act({ type: "stash", action, item, where }, "gear")
-        }
-        onShop={setAtShop}
-        onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
-      />
+      {gearTab === "vehicles" ? (
+        <VehiclesPage
+          view={view}
+          onLocate={(location) => {
+            setExpand(null);
+            setMapFocus(location);
+            setAtMap(true);
+          }}
+        />
+      ) : (
+        <InventoryPage
+          view={view}
+          disabledReason={
+            view.death || view.ended
+              ? "这份存档已结束，只能查看物品"
+              : busy
+                ? "正在处理行动，请稍候"
+                : offers?.rolled
+                  ? "请先完成当前检定的结算"
+                  : undefined
+          }
+          onHeal={
+            busy || offers?.rolled || view.death || view.ended
+              ? undefined
+              : (id) => act({ type: "useHealing", id }, "healing", true)
+          }
+          onSuppressant={
+            busy || offers?.rolled || view.death || view.ended
+              ? undefined
+              : () => act({ type: "useSuppressant" }, "suppressant", true)
+          }
+          onUse={
+            busy || offers?.rolled || view.death || view.ended
+              ? undefined
+              : (id) => {
+                  const name = view.names.items[id] ?? id;
+                  const verb = view.inventory.details?.[id]?.kind === "grenade" ? "投掷" : "使用";
+                  story.setDraft({
+                    text: `${story.draft.text}${story.draft.text ? "\n" : ""}${verb}${name}`,
+                  });
+                  closePinned();
+                }
+          }
+          onEquip={
+            busy || offers?.rolled || view.death || view.ended || view.combat.active
+              ? undefined
+              : (id) => void act({ type: "equipItem", id }, "gear")
+          }
+          onUnequip={
+            busy || offers?.rolled || view.death || view.ended || view.combat.active
+              ? undefined
+              : (id) => void act({ type: "unequipItem", id }, "gear")
+          }
+          onMod={
+            busy || offers?.rolled || view.death || view.ended || view.combat.active
+              ? undefined
+              : (action, weapon, mod) =>
+                  void act({ type: "modWeapon", action, weapon, mod }, "gear")
+          }
+          onStashMove={
+            busy || offers?.rolled || view.death || view.ended || view.combat.active
+              ? undefined
+              : (action, item, where) => void act({ type: "stash", action, item, where }, "gear")
+          }
+          onShop={setAtShop}
+          onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
+        />
+      )}
     </div>
   );
   // 未读块往上长，页签放在底下挨着常态那一行，切频道或看芯片时手不用伸到块顶上（用户定的）
@@ -732,7 +743,21 @@ export function StoryScreen() {
         <Track view={view} peek={peek} full={trackFull}>
           {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
         </Track>
-        <Weapon view={view} peek={peek} full={gearFull} />
+        <Weapon
+          view={view}
+          peek={peek}
+          full={gearFull}
+          tabs={
+            <PinTabs<GearTab>
+              tabs={[
+                ["inventory", "物品栏", 0],
+                ["vehicles", "车辆", view.travel.vehicles.length],
+              ]}
+              value={gearTab}
+              onChange={setGearTab}
+            />
+          }
+        />
       </CornerSide>
       {view.hacking?.dive && (
         <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
