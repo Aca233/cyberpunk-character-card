@@ -545,6 +545,19 @@ export function StoryScreen() {
       {gearTab === "vehicles" ? (
         <VehiclesPage
           view={view}
+          disabledReason={
+            view.death || view.ended
+              ? "这份存档已结束，只能查看车辆"
+              : busy
+                ? "正在处理行动，请稍候"
+                : offers?.rolled
+                  ? "请先完成当前检定的结算"
+                  : view.combat.active
+                    ? "战斗中顾不上换车或翻后备箱"
+                    : undefined
+          }
+          onSelect={(id) => act({ type: "selectVehicle", id }, "vehicle")}
+          onMove={(action, item, where) => act({ type: "stash", action, item, where }, "gear")}
           onLocate={(location) => {
             setExpand(null);
             setMapFocus(location);

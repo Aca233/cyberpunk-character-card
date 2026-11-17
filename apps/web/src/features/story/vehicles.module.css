@@ -123,6 +123,12 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+}
+
+.trunk {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 
 @container pin (max-width: 420px) {

@@ -859,24 +859,6 @@ export function MapBody({
               {!onTravel && !dest.here && (
                 <p className={styles.dim}>这一轮还没写完，写完再出发。</p>
               )}
-              {view.travel.vehicles.length > 0 && (
-                <>
-                  <h4 className={styles.mapSubtitle}>名下的车</h4>
-                  <ul className={styles.routeList}>
-                    {view.travel.vehicles.map((v) => (
-                      <li key={v.id}>
-                        {v.name}
-                        <span className={styles.dim}>
-                          {" "}
-                          · {v.classLabel} · {v.conditionLabel}
-                          {v.stolen && " · 偷来的"}
-                          {` · 停在${v.locationName}${v.here ? " · 就在身边" : ""}${v.selected ? " · 当前选用" : ""}`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
             </div>
           </section>
         )}
