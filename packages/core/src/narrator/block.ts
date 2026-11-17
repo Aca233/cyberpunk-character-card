@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SceneMemoryUpdateSchema, SceneSummaryProposalSchema } from "../systems/memory/schema";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
+import { EventPlanSchema } from "./event-plan";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
 export const STATE_OPEN = "<state>";
@@ -25,11 +26,14 @@ export const ChoiceProposalSchema = ChoiceSchema;
 
 export const MAX_CHOICES = 5;
 
-/** ④ 抽取的整体格式，只用来生成说明；校验按条目分开做，一条不合格不连累其他条 */
+/** ④ 抽取格式；事件先定归属和依赖，业务字段逐条校验，整组结算。 */
 export const ExtractDocSchema = z.object({
   changes: z
     .array(z.object({ type: z.string() }))
     .describe("这一轮已经发生的状态变化，按发生顺序，见下方指令；每轮都有一条 world"),
+  events: z
+    .array(EventPlanSchema)
+    .describe("必填事件清单；覆盖全部 changes 与 messages，依赖事件在前；没有事实条目时写 []"),
   choices: z
     .array(ChoiceProposalSchema)
     .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
@@ -62,6 +66,7 @@ export const ExtractDocSchema = z.object({
 const ExtractShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
   changes: z.array(z.unknown()).optional(),
+  events: z.unknown().optional(),
   messages: z.array(z.unknown()).optional(),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
@@ -153,6 +158,9 @@ export function readExtractShape(value: unknown): ShapeResult {
   }
   if (!("changes" in value) || !Array.isArray(value.changes)) {
     return { ok: false, error: "抽取必须明确给出 changes 数组；无变化写 []，不能省略" };
+  }
+  if (!("events" in value)) {
+    return { ok: false, error: "抽取必须明确给出 events 事件清单；无事实条目写 []，不能猜测依赖" };
   }
   const parsed = ExtractShapeSchema.safeParse(value);
   return parsed.success

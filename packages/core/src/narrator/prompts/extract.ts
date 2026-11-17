@@ -39,6 +39,15 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 跨地点行动里的 tension 必须写 location 指向事发地点；在原地破坏后逃走，不能把损坏记到目的地。未写地点时沿用本次行动起点。
 - 场外提问的轮次不会交给你。
 
+【events：事实归属与因果】
+- events 必填，每组写 {"id":"本轮唯一小写英文数字连字符","requires":[],"entries":["changes[0]"]}。changes 和 messages 的每一条必须恰好归属一组；没有事实条目才写 events: []，不把建议选项或整场摘要放进 entries。
+- 同组条目全成或全撤，只把不能拆开的同一件事放在一起；独立事件分组。付款与交付属于同一组，trade 等已统一处理钱货的指令不要再拆出重复款项或物品。
+- requires 写成功前提，只能引用前面已经列出的事件 id 或保留值 "$action"；独立事件明确写 []。依赖失败，本事件也不发生。事件和组内 entries 按事实原先顺序列出，changes 的索引与 messages 的索引各自从 0 递增，不能交错分组后重排发生顺序。
+- 本轮主行动成功才会发生的事必须 requires: ["$action"]；即使没有单列 hack、breach 等指令，成功拿到的钱、物品、权限或其他成果仍须声明这个前提。后续成果还依赖某事件时也列该事件 id。例如接入 access 依赖 "$action"，从该网络转款 proceeds 依赖 ["$action","access"]。
+- 尝试失败仍实际发生的时间消耗、伤害、费用、报警或其他后果，不依赖行动成功；独立来款（如朋友偿还旧债）也不依赖 "$action"。依事实分组，不能为了保留成功收益把它伪装成独立事件，也不能把所有条目一律绑定主行动。
+- 事后确认消息跟随它所确认的事件：放在同组或另组并 requires 对应事件，避免事情没办成却收到完成通知。无关消息单独分组。
+- world 的纯时间推进可以独立成组；location 代表实际抵达，必须放在抵达事件中，或依赖已成功的抵达事件。若抵达取决于本轮主行动成功，还须声明 "$action"；不能把换地点混在独立计时组里绕过失败的出行。
+
 【场景记忆】
 - 每轮给 sceneMemory：text 是这一场至今的简短提要（最多 600 字），在【场景记忆与未完事项】基础上加入本轮确认事实，保留早期承诺、线索和关系变化；普通气氛不必反复记录。这里不代替 changes 的实际记账。
 - anchors 只增记本轮以后还重要的事实、承诺、计划或问题；引用本轮 input 或 narrative 的原文片段作 evidence.quote，source 标明出处。玩家行动和承诺只能据玩家输入，正文替玩家补写的不算。
@@ -58,7 +67,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 收场（sceneEnd 为 true）时，这一场里和玩家角色有过实质来往的有卡人物，每人写一条 memory：一句话记这一场你们之间发生了什么（帮了谁、欠了什么、闹翻了没有），只写正文里写了的；已经记过的同一件事不重复写。`;
 
 /** ④ 抽取的例子 */
-export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14", "location": "kabuki-market"}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
+export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
 let extractCore: string | undefined;
 
