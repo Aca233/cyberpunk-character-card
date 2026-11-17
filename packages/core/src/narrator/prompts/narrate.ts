@@ -10,6 +10,7 @@ import { registry } from "../../systems/registry";
 import { examplesSection } from "../examples";
 import type { Memory } from "../stages";
 import {
+  activeOpening,
   boostNote,
   formatInput,
   HISTORY_TURNS,
@@ -178,6 +179,7 @@ export function buildNarratorPrompt(
   plan: NarratorPlan,
   extras: PromptExtras = {},
 ): NarratorPrompt {
+  const opening = activeOpening(records, extras.opening);
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
@@ -213,7 +215,7 @@ export function buildNarratorPrompt(
     ),
   ].filter((n) => n !== "");
   const recap = recapFor(world, records, hot, extras.recapTokens);
-  const scene = situation(world, records, view, plan, extras);
+  const scene = situation(world, records, view, plan, { ...extras, opening });
   const recall = recalledSection(extras.recalled);
   const pacingHint = extras.hasPreset
     ? ""

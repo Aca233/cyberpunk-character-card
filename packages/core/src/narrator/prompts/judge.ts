@@ -6,6 +6,7 @@ import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
 import {
+  activeOpening,
   boostNote,
   formatInput,
   JUDGE_TURNS,
@@ -77,6 +78,7 @@ export function buildJudgePrompt(
   extras: PromptExtras,
   memories: readonly Memory[],
 ): NarratorPrompt {
+  const opening = activeOpening(records, extras.opening);
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = registry.activeRules(world, plan.input);
@@ -87,7 +89,7 @@ export function buildJudgePrompt(
   const content = userMessage({
     recap: recapFor(world, records, JUDGE_TURNS),
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
-    scene: situation(world, records, view, plan, extras),
+    scene: situation(world, records, view, plan, { ...extras, opening }),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
     input: formatInput(plan.input),
     after: [boostNote(view, plan, "judge")],

@@ -7,6 +7,7 @@ import { ExtractDocSchema } from "../block";
 import { commandDoc, schemaDoc } from "../doc";
 import { extractCatalogData, extractCatalogDetails } from "./catalogs";
 import {
+  activeOpening,
   CORE_COMMANDS,
   formatInput,
   type NarratorPlan,
@@ -105,13 +106,14 @@ export function buildExtractPrompt(
   narrative: string,
   tradePlans?: string,
 ): NarratorPrompt {
+  const opening = activeOpening(records, extras.opening);
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const data = extractCatalogData(world, extras.data ?? {});
   const details = extractCatalogDetails(world, view, data, `${plan.input.text}\n${narrative}`);
   const modules = registry.activeRules(world, plan.input);
   const content = userMessage({
-    scene: situation(world, records, view, plan, extras),
+    scene: situation(world, records, view, plan, { ...extras, opening }),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
       details,

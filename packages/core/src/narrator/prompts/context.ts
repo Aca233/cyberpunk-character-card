@@ -30,6 +30,14 @@ import type { Memory } from "../stages";
 /** 原文最多带这么多轮；实际带几轮由上下文预算定（至少 3 轮），没记预算的旧记录按这个数重建 */
 export const HISTORY_TURNS = 12;
 
+/** 开场只看是否已有有效回合，不能因未定稿原文被排除而重置已推进的故事。 */
+export function activeOpening(
+  records: readonly LogRecord[],
+  opening: string | undefined,
+): string | undefined {
+  return effectiveTurns(records).some((turn) => turn.draft !== true) ? undefined : opening;
+}
+
 /** 【前情】：已经收场、原文不在最近 hot 轮里的场景摘要；没有时为 undefined。maxTokens 是预算给的额度 */
 export function recapFor(
   world: WorldState,
