@@ -46,7 +46,7 @@ export const GigRecordSchema = z.object({
 export const SidegigsStateSchema = z.object({
   /** 正在比的一场 */
   active: z
-    .object({ gig: z.string().min(1), at: z.number().int() })
+    .object({ gig: z.string().min(1), at: z.number().int(), vehicle: z.string().min(1).optional() })
     .nullable()
     .default(null),
   /** 每场的战绩：gig id → 胜负 */
@@ -60,9 +60,11 @@ export const SidegigCommandSchema = z
     type: z.literal("sidegig"),
     action: z.enum(["enter", "win", "lose", "quit"]),
     id: z.string().min(1),
+    /** 赛车现场只有一辆可用车可省略；多辆时明确本场参赛车。 */
+    vehicle: z.string().min(1).optional(),
     reason: z.string().trim().min(1).max(80).optional(),
   })
   .describe(
-    "拳赛和赛车：enter 报名（代码扣押金，要人在那里；赛车还要有停在比赛地点并已选用的可用车辆）；按现场实力、状态与临场条件裁决胜负，赢了写 win（代码付奖金、加声望），输了写 lose；中途不比写 quit，押金不退",
+    "拳赛和赛车：enter 报名（代码扣押金，要人在那里；赛车要有未报废车辆在场，多辆时明确 vehicle）；按现场实力、状态与临场条件裁决胜负，赢了写 win（代码付奖金、加声望），输了写 lose；中途不比写 quit，押金不退",
   );
 export type SidegigCommand = z.infer<typeof SidegigCommandSchema>;

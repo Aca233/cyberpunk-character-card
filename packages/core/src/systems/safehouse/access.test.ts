@@ -9,11 +9,17 @@ import { WorldClockStateSchema } from "../world";
 import { safehouseView } from "./view";
 
 const locations = [{ id: "a", name: "甲地", district: "沃森", x: 10, y: 10 }];
+const extraItems = Array.from({ length: 5 }, (_, i) => ({
+  id: `token-${i}`,
+  name: `铜牌 ${i}`,
+  kind: "misc" as const,
+  iconic: false,
+}));
 const data = {
   locations,
-  items: [{ id: "token", name: "铜牌", kind: "misc", iconic: false }],
+  items: [{ id: "token", name: "铜牌", kind: "misc", iconic: false }, ...extraItems],
   vehicles: [
-    { id: "test-car", name: "测试车", class: "economy", speed: 3, seats: 4, trunk: 4, price: 1000 },
+    { id: "test-car", name: "测试车", class: "economy", speed: 3, seats: 4, price: 1000 },
   ],
 };
 const context = () => ({ data, rng: fixedRng([]) });
@@ -50,6 +56,28 @@ function locate(world: WorldState, player: string | null, vehicle: string | null
     },
   };
 }
+
+it("同一回合可以把多件物品记入现场车辆，不按数字格数限制", () => {
+  const before = setup(false);
+  const commands = [
+    ...extraItems.map(
+      ({ id }) => ({ type: "item" as const, action: "gain" as const, id, reason: "带在身上" }),
+    ),
+    ...extraItems.map(({ id }) => ({
+      type: "stash" as const,
+      action: "store" as const,
+      item: id,
+      where: vehicleId,
+      reason: "放进车里",
+    })),
+  ];
+  const result = registry.applyCommands(before, commands, context());
+
+  expect(result.results.every((entry) => entry.result.ok)).toBe(true);
+  expect(TravelStateSchema.parse(result.world.slices.travel).vehicles[0]?.cargo).toEqual(
+    Object.fromEntries(extraItems.map(({ id }) => [id, 1])),
+  );
+});
 
 describe("后备箱必须确认车辆与玩家处于同一已知地点", () => {
   for (const action of ["store", "take"] as const) {

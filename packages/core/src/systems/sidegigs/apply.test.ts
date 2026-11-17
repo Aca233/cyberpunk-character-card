@@ -35,7 +35,6 @@ const context = {
         class: "economy",
         speed: 3,
         seats: 4,
-        trunk: 4,
         price: 1000,
       },
     ],
@@ -73,7 +72,7 @@ describe("赛车报名与车辆位置", () => {
     expect(entered.results[0]?.result.ok).toBe(true);
   });
 
-  it("偷来的车在场且已选用时沿用原有参赛规则", () => {
+  it("偷来的车在场且唯一时可参赛", () => {
     const stolen = run(start("b"), {
       type: "vehicle",
       action: "steal",
@@ -85,5 +84,32 @@ describe("赛车报名与车辆位置", () => {
 
     const entered = run(stolen.world, { type: "sidegig", action: "enter", id: gig.id });
     expect(entered.results[0]?.result.ok).toBe(true);
+    expect((entered.world.slices.sidegigs as { active: { vehicle?: string } }).active.vehicle).toBe(
+      "test-car-1",
+    );
+  });
+
+  it("多辆车在场时拒绝猜参赛车；点名后登记本次车辆", () => {
+    let world = run(start("b"), {
+      type: "vehicle.grant",
+      model: "test-car",
+      reason: "第一辆",
+    }).world;
+    world = run(world, { type: "vehicle.grant", model: "test-car", reason: "第二辆" }).world;
+    const ambiguous = run(world, { type: "sidegig", action: "enter", id: gig.id });
+    expect(ambiguous.results[0]?.result).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("多辆可用车辆"),
+    });
+    const explicit = run(world, {
+      type: "sidegig",
+      action: "enter",
+      id: gig.id,
+      vehicle: "test-car-2",
+    });
+    expect(explicit.results[0]?.result.ok).toBe(true);
+    expect(
+      (explicit.world.slices.sidegigs as { active: { vehicle?: string } }).active.vehicle,
+    ).toBe("test-car-2");
   });
 });

@@ -5,7 +5,7 @@ import { locationCatalog, WorldClockStateSchema } from "../world";
 import { apartmentList, apartmentLocked, trunks } from "./apply";
 import { SafehouseStateSchema } from "./schema";
 
-/** 安全屋、存放箱、后备箱，和当前地点能买下的公寓 */
+/** 供叙事状态读取的住所、车内物品归属和当前地点可买的公寓 */
 export function safehouseView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
@@ -40,7 +40,6 @@ export function safehouseView({ world, data }: ViewContext) {
       .map((t) => ({
         id: t.id,
         name: t.kind === "trunk" && t.wrecked ? `${t.name}（报废，仅可取出）` : t.name,
-        cap: t.kind === "trunk" && !t.wrecked ? t.cap : 0,
         items: list(t.kind === "trunk" ? t.items : {}),
       })),
     /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */

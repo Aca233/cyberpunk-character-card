@@ -20,7 +20,6 @@ export type Container =
       readonly kind: "trunk";
       readonly id: string;
       readonly name: string;
-      readonly cap: number;
       readonly location: string | null;
       readonly wrecked: boolean;
       readonly items: Readonly<Record<string, number>>;
@@ -38,7 +37,6 @@ export function trunks(
       kind: "trunk",
       id: v.id,
       name: `${def?.name ?? v.model}的后备箱`,
-      cap: def?.trunk ?? 0,
       location: v.location,
       wrecked: v.condition === "wrecked",
       items: v.cargo,
@@ -111,12 +109,6 @@ export function applyStash(
         )
       : (inv.backpack[command.item] ?? 0) + inv.weapons.filter((w) => w === command.item).length;
     if (carried < 1) return fail(`背包里没有${name}；穿着的衣服或快捷栏里的药/雷需要先脱下`);
-    if (
-      box.kind === "trunk" &&
-      stored[command.item] === undefined &&
-      Object.keys(stored).length >= box.cap
-    )
-      return fail(`${box.name}满了（${box.cap} 格）`);
     if (box.kind === "home") {
       items[command.item] = (items[command.item] ?? 0) + 1;
       draft.stash[box.id] = items;

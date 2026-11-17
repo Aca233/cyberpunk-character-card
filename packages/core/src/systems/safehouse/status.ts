@@ -1,7 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { safehouseView } from "./view";
 
-/** 【当前状态】里安全屋的几行：住处和存放箱、后备箱、当前地点出售的公寓 */
+/** 【当前状态】里住所与车内的物品归属、当前地点出售的公寓 */
 
 type SafehouseView = ReturnType<typeof safehouseView>;
 
@@ -18,11 +18,11 @@ export const safehouseStatus: readonly SystemStatus[] = [
       const lines: string[] = [];
       for (const h of s.homes)
         lines.push(
-          `安全屋 ${h.id}：${h.name}（${h.locationName}${h.here ? "，你现在就在这里" : ""}）；存放箱：${itemList(h.items) || "空的"}（不在身上，拿出来才能用）`,
+          `住所 ${h.id}：${h.name}（${h.locationName}${h.here ? "，你现在就在这里" : ""}）；屋内物品：${itemList(h.items) || "无"}（不在身上，需要时可在剧情中取用）`,
         );
       for (const t of s.trunks)
         if (t.items.length > 0)
-          lines.push(`${t.name}（${t.id}）：${itemList(t.items)}（不在身上）`);
+          lines.push(`${t.name}（${t.id}）：${itemList(t.items)}（不在身上，需要时可在剧情中取用）`);
       const forSale = s.forSale.filter((a) => a.locked === null);
       if (forSale.length > 0)
         lines.push(

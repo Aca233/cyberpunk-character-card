@@ -31,7 +31,7 @@ import {
   type TravelState,
   TravelStateSchema,
 } from "./schema";
-import { activeVehicle, vehicleCatalog, vehicleFactor } from "./vehicles";
+import { resolveVehicleAt, vehicleCatalog, vehicleFactor } from "./vehicles";
 
 /**
  * 耗时 = 固定 + 每单位距离的分钟数；1 单位 100 米。两头都在路线表里时按路面距离（§七 简单版做法，步行和开车共用一张路面图，用户定的），
@@ -60,6 +60,8 @@ const MODES: readonly TravelMode[] = ["walk", "metro", "taxi", "car", "stolen"];
 
 export interface RouteOption {
   readonly mode: TravelMode;
+  /** 本次驾驶实际使用的车辆；非驾驶路线不写。 */
+  readonly vehicle?: string;
   readonly label: string;
   readonly minutes: number;
   readonly cost: number;
@@ -100,7 +102,6 @@ export function tripWorldOf(world: {
         encounterScene: null,
         encounter: null,
         vehicles: [],
-        activeVehicleId: null,
         nextVehicleId: 1,
       },
     ),
@@ -253,6 +254,7 @@ export function routeOptions(
   w: TripWorld,
   data: Readonly<Record<string, unknown>>,
   to: string,
+  vehicle?: string,
 ): RouteOption[] {
   // 原作店和地标第一次去也能预览路线；只查定义，不提前登记访问（places-plan 第二期）
   const here = w.location === null ? undefined : locationForTravel(data, w.location);
@@ -263,11 +265,12 @@ export function routeOptions(
   const cars = vehicleCatalog(data);
   return MODES.map((mode) => {
     const speed = TRAVEL_SPEEDS[mode];
-    // 开车：按当前选用且停在出发地点的车辆速度档和车况折算
-    const car =
+    // 每趟明确用哪辆车；现场唯一时自动确定，多辆不猜。
+    const resolved =
       mode === "car" || mode === "stolen"
-        ? activeVehicle(w.travel.vehicles, w.travel.activeVehicleId, w.location, mode === "stolen")
+        ? resolveVehicleAt(w.travel.vehicles, w.location, vehicle, mode === "stolen")
         : undefined;
+    const car = resolved?.ok ? resolved.vehicle : undefined;
     const carDef = car ? cars.get(car.model) : undefined;
     const factor = car ? vehicleFactor(car, carDef) : 1;
     const minutes =
@@ -277,13 +280,16 @@ export function routeOptions(
     const risk = riskOf(mode, period, w.heat);
     const base = {
       mode,
+      ...(car ? { vehicle: car.id } : {}),
       label: carDef ? `${TRAVEL_MODE_LABELS[mode]}（${carDef.name}）` : TRAVEL_MODE_LABELS[mode],
       minutes,
       cost,
       risk,
       riskLabel: RISK_LABELS[risk],
     };
-    const blocked = blockOf(w, mode, here, there, d, cost, car !== undefined);
+    const blocked =
+      blockOf(w, mode, here, there, d, cost) ??
+      (resolved && !resolved.ok ? resolved.reason : undefined);
     return blocked ? { ...base, blocked } : base;
   });
 }
@@ -295,7 +301,6 @@ function blockOf(
   there: LocationDef | undefined,
   d: number | undefined,
   cost: number,
-  hasCar: boolean,
 ): string | undefined {
   if (!there) return "这个地点不在地点表里";
   if (w.inCombat) return "战斗中走不开";
@@ -303,14 +308,6 @@ function blockOf(
   if (d === undefined)
     return spot(there) ? "现在的位置不在地图上，用自由输入写怎么去" : `${there.name}还没上地图`;
   if (mode === "metro" && !(here?.metro && there.metro)) return "两头不都有轻轨站";
-  if (mode === "car" && !hasCar)
-    return w.travel.vehicles.some((v) => !v.stolen && v.condition !== "wrecked")
-      ? "没有选中停在当前位置的自有车辆；到车旁后选择要开的车"
-      : "还没有能开的自有车辆";
-  if (mode === "stolen" && !hasCar)
-    return w.travel.vehicles.some((v) => v.stolen && v.condition !== "wrecked")
-      ? "没有选中停在当前位置的偷来车辆；到车旁后选择要开的车"
-      : "手上没有能开的偷来车辆：先在正文里偷一辆";
   if (cost > w.eddies) return `钱不够：要 ${cost}，只有 ${w.eddies}`;
   return undefined;
 }
@@ -364,7 +361,11 @@ export function planTrip(
   request: TravelRequest,
   roll?: EncounterRoll,
 ): TripPlan {
-  const route = routeOptions(w, data, request.to).find((r) => r.mode === request.mode);
+  if (request.vehicle !== undefined && request.mode !== "car" && request.mode !== "stolen")
+    return { ok: false, reason: "只有驾驶出行才能指定 vehicle" };
+  const route = routeOptions(w, data, request.to, request.vehicle).find(
+    (r) => r.mode === request.mode,
+  );
   if (!route) return { ok: false, reason: `没有这种出行方式：${request.mode}` };
   if (route.blocked) return { ok: false, reason: route.blocked };
   // 规划和路线预览用同一套地点查询，首次去原作地点也能结算（places-plan 第二期）
@@ -415,7 +416,12 @@ export function tripText(trip: PlannedTrip): string {
 }
 
 export function tripFact(trip: PlannedTrip) {
-  return { to: trip.to.id, mode: trip.route.mode, encounter: trip.encounter?.id ?? null };
+  return {
+    to: trip.to.id,
+    mode: trip.route.mode,
+    encounter: trip.encounter?.id ?? null,
+    ...(trip.route.vehicle ? { vehicle: trip.route.vehicle } : {}),
+  };
 }
 
 /** 多近算"就在附近"：走过去，不转出行（用户定的 500 米，2026-10-30） */
@@ -480,23 +486,46 @@ export function applyTravel(
     fact.success && fact.data.to === command.to && fact.data.mode === command.mode
       ? { fixed: fact.data.encounter }
       : { rng: ctx.rng, factor: 1 };
-  const planned = planTrip(w, ctx.data, command, fixed);
+  if (
+    fact.success &&
+    fact.data.to === command.to &&
+    fact.data.mode === command.mode &&
+    fact.data.vehicle !== undefined &&
+    command.vehicle !== undefined &&
+    fact.data.vehicle !== command.vehicle
+  )
+    return fail("本次出行车辆与已确认的驾驶车辆不一致");
+  const planned = planTrip(
+    w,
+    ctx.data,
+    {
+      ...command,
+      ...(fact.success &&
+      fact.data.to === command.to &&
+      fact.data.mode === command.mode &&
+      fact.data.vehicle
+        ? { vehicle: fact.data.vehicle }
+        : {}),
+    },
+    fixed,
+  );
   if (!planned.ok) return fail(planned.reason);
   const { from, to, route, arriveAt, encounter } = planned.trip;
   const driver =
     route.mode === "car" || route.mode === "stolen"
-      ? draft.vehicles.find((vehicle) => vehicle.id === draft.activeVehicleId)
+      ? draft.vehicles.find((vehicle) => vehicle.id === route.vehicle)
       : undefined;
   if (
     (route.mode === "car" || route.mode === "stolen") &&
     (!driver || driver.location !== from.id || driver.condition === "wrecked")
   )
-    return fail("所选车辆不在出发地点，无法开始这段驾驶");
+    return fail("本次车辆不在出发地点，无法开始这段驾驶");
   if (driver) driver.location = to.id;
   draft.trips.push({
     from: from.id,
     to: to.id,
     mode: route.mode,
+    ...(driver ? { vehicle: driver.id } : {}),
     minutes: route.minutes,
     cost: route.cost,
     at: ctx.now,

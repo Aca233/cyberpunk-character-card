@@ -35,7 +35,6 @@ const data = {
       class: "economy",
       speed: 3,
       seats: 4,
-      trunk: 4,
       price: 1000,
     }),
   ],
@@ -234,7 +233,6 @@ describe("开局赠车位置", () => {
     );
     expect(WorldClockStateSchema.parse(world.slices.world).location).toBe("b");
     expect(vehicle(world)).toMatchObject({ location: "b", cargo: {}, stolen: false });
-    expect(TravelStateSchema.parse(world.slices.travel).activeVehicleId).toBe(vehicle(world).id);
     expect(world.time).toBe(1000);
   });
 });

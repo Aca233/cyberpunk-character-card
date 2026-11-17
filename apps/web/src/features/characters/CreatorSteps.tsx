@@ -536,7 +536,7 @@ export function LoadoutPicker({ card, board, data, commit }: PickerProps) {
                       </span>
                     </span>
                     <span>
-                      {v.maker} · {v.seats} 座 · 后备箱 {v.trunk} 格{v.note ? ` · ${v.note}` : ""}
+                      {[`${v.maker} · ${v.seats} 座`, v.note].filter(Boolean).join(" · ")}
                     </span>
                   </button>
                 </li>

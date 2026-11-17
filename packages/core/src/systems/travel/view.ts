@@ -97,7 +97,6 @@ export function travelView({ world, data }: ViewContext) {
       classLabel: def ? VEHICLE_CLASS_LABELS[def.class] : "",
       speed: def?.speed ?? 0,
       seats: def?.seats ?? 0,
-      trunk: def?.trunk ?? 0,
       condition: v.condition,
       conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
       stolen: v.stolen,
@@ -107,7 +106,6 @@ export function travelView({ world, data }: ViewContext) {
           ? "未知地点"
           : (locationForTravel(data, v.location)?.name ?? v.location),
       here: v.location !== null && v.location === w.location,
-      selected: v.id === w.travel.activeVehicleId,
     };
   });
   return {

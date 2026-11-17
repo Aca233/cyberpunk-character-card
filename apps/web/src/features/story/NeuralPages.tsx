@@ -17,7 +17,6 @@ import neural from "./neural.module.css";
 import { Avatar, type PhoneActions, PhoneBody, UnreadBadge } from "./Phone";
 import { Profile } from "./Profile";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
-import { StashSection } from "./StashPanel";
 import styles from "./story.module.css";
 import { trackTelemetry, type View, woundTelemetry } from "./view";
 
@@ -261,15 +260,13 @@ function SubTabs<T extends string>({
 type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "misc";
 
 /**
- * 物品栏（O）：上方展示随身大件负担与当前穿着，中间单行筛选与左列表右详情浏览，
- * 底部折叠展开当前安全屋存放箱；无需在「已装备」和「背包」之间来回切页即可直接装配件、穿脱衣服或使用消耗品。
+ * 物品栏（O）：上方展示随身大件负担与当前穿着，中间单行筛选与左列表右详情浏览。
  */
 export function InventoryPage({
   view,
   onEquip,
   onUnequip,
   onMod,
-  onStashMove,
   onShop,
   onBuyHome,
   onHeal,
@@ -288,10 +285,6 @@ export function InventoryPage({
   readonly onUnequip?: ((id: string) => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
-  /** 当前安全屋存放箱存取 */
-  readonly onStashMove?:
-    | ((action: "store" | "take", item: string, where: string) => void)
-    | undefined;
   readonly onShop: (id: string) => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
   readonly onBuyHome?: ((id: string) => void) | undefined;
@@ -833,7 +826,6 @@ export function InventoryPage({
           </div>
         </section>
       )}
-      <StashSection view={view} onMove={onStashMove} />
     </div>
   );
 }

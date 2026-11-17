@@ -247,7 +247,6 @@ export interface StartVehicleOption {
   readonly maker: string;
   readonly class: string;
   readonly seats: number;
-  readonly trunk: number;
   readonly points: number;
   readonly note?: string;
 }

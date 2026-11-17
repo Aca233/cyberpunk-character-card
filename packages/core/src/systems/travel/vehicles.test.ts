@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PlayerActionSchema } from "../../actions";
 import { newGameWorld } from "../../game";
 import { fixedRng } from "../../kernel/rng";
 import type { Command } from "../../kernel/system";
@@ -7,7 +8,7 @@ import { InventoryStateSchema } from "../inventory";
 import { registry } from "../registry";
 import { WorldClockStateSchema } from "../world";
 import { routeOptions, tripWorldOf } from "./apply";
-import { TravelStateSchema } from "./schema";
+import { TravelStateSchema, VehicleCommandSchema } from "./schema";
 
 const locations = [
   { id: "a", name: "甲地", district: "沃森", x: 10, y: 10, metro: true },
@@ -27,7 +28,6 @@ const context = {
         class: "economy",
         speed: 3,
         seats: 4,
-        trunk: 4,
         price: 1000,
       },
     ],
@@ -50,11 +50,16 @@ function travel(
   world: WorldState,
   to: string,
   mode: "walk" | "car" | "taxi" | "metro",
+  vehicle?: string,
 ): WorldState {
-  const result = registry.applyCommands(world, [{ type: "travel", to, mode }], {
-    ...context,
-    facts: { travel: { to, mode, encounter: null } },
-  });
+  const result = registry.applyCommands(
+    world,
+    [{ type: "travel", to, mode, ...(vehicle ? { vehicle } : {}) }],
+    {
+      ...context,
+      facts: { travel: { to, mode, encounter: null, ...(vehicle ? { vehicle } : {}) } },
+    },
+  );
   expect(result.results[0]?.result).toMatchObject({ ok: true });
   return result.world;
 }
@@ -98,7 +103,7 @@ describe("车辆位置与使用", () => {
     expect(
       routeOptions(tripWorldOf(world), context.data, "a").find((route) => route.mode === "car")
         ?.blocked,
-    ).toContain("没有选中停在当前位置");
+    ).toContain("当前位置没有可驾驶车辆");
 
     const remoteTrunk = registry.applyCommands(
       world,
@@ -109,37 +114,123 @@ describe("车辆位置与使用", () => {
     expect(InventoryStateSchema.parse(remoteTrunk.world.slices.inventory).backpack).toEqual({});
   });
 
-  it("必须在身边选车；选中的车跟随驾驶", () => {
+  it("一辆车在场时自动驾驶；多辆时拒绝猜车，点名后只移动指定车辆", () => {
     let world = run(start(), { type: "vehicle.grant", model: "test-car", reason: "第一辆车" });
     const firstId = carId(world);
-    world = travel(world, "b", "walk");
-    world = run(world, { type: "vehicle.grant", model: "test-car", reason: "第二辆车" });
-    const travelState = TravelStateSchema.parse(world.slices.travel);
-    const secondId = travelState.vehicles[1]?.id;
+    world = travel(world, "b", "car");
+    expect(TravelStateSchema.parse(world.slices.travel).trips.at(-1)?.vehicle).toBe(firstId);
+    world = travel(world, "a", "car", firstId);
+    world = run(world, { type: "vehicle.grant", model: "test-car", reason: "备用车" });
+    const secondId = TravelStateSchema.parse(world.slices.travel).vehicles[1]?.id;
     expect(secondId).toBeDefined();
-    expect(travelState.activeVehicleId).toBe(firstId);
-
-    const farSelection = registry.applyCommands(
+    const preview = routeOptions(tripWorldOf(world), context.data, "c").find(
+      (route) => route.mode === "car",
+    );
+    expect(preview?.blocked).toContain("多辆可用车辆");
+    const ambiguous = registry.applyCommands(
       world,
-      [{ type: "vehicle", action: "select", vehicle: firstId, reason: "选择远处车辆" }],
+      [{ type: "travel", to: "c", mode: "car" }],
       context,
     );
-    expect(farSelection.results[0]?.result).toMatchObject({
-      ok: false,
-      reason: expect.stringContaining("不在身边"),
-    });
+    expect(ambiguous.results[0]?.result.ok).toBe(false);
+    expect(TravelStateSchema.parse(ambiguous.world.slices.travel).vehicles).toMatchObject([
+      { id: firstId, location: "a" },
+      { id: secondId, location: "a" },
+    ]);
 
-    world = run(world, {
-      type: "vehicle",
-      action: "select",
-      vehicle: secondId,
-      reason: "换成停在这里的车",
-    });
-    world = travel(world, "c", "car");
+    world = travel(world, "c", "car", secondId);
     expect(TravelStateSchema.parse(world.slices.travel).vehicles).toMatchObject([
       { id: firstId, location: "a" },
       { id: secondId, location: "c" },
     ]);
+  });
+
+  it.each([
+    { label: "异地", remote: true, wrecked: false },
+    { label: "报废", remote: false, wrecked: true },
+  ])("点名的车辆处于$label状态时不改动任何车辆", ({ remote, wrecked }) => {
+    let world = run(start(), { type: "vehicle.grant", model: "test-car", reason: "异地候选" });
+    const remoteVehicleId = carId(world);
+    world = run(world, { type: "vehicle.grant", model: "test-car", reason: "在场候选" });
+    const present = TravelStateSchema.parse(world.slices.travel).vehicles[1]?.id;
+    if (!present) throw new Error("第二辆车未创建");
+    if (wrecked) {
+      world = run(world, { type: "vehicle", action: "wreck", vehicle: present, reason: "报废" });
+    }
+    if (remote)
+      world = {
+        ...world,
+        slices: {
+          ...world.slices,
+          travel: {
+            ...TravelStateSchema.parse(world.slices.travel),
+            vehicles: TravelStateSchema.parse(world.slices.travel).vehicles.map((v) =>
+              v.id === remoteVehicleId ? { ...v, location: "b" } : v,
+            ),
+          },
+        },
+      };
+    const before = world;
+    const target = remote ? remoteVehicleId : present;
+    const result = registry.applyCommands(
+      world,
+      [{ type: "travel", to: "c", mode: "car", vehicle: target }],
+      context,
+    );
+    expect(result.results[0]?.result.ok).toBe(false);
+    expect(result.world).toBe(before);
+  });
+
+  it("同一现场多辆车辆的维修、损坏、追逐和弃车都要求点名", () => {
+    let world = run(start(), { type: "vehicle.grant", model: "test-car", reason: "第一辆" });
+    world = run(world, { type: "vehicle", action: "damage", reason: "弄坏第一辆" });
+    world = run(world, { type: "vehicle.grant", model: "test-car", reason: "第二辆" });
+    world = run(world, {
+      type: "vehicle",
+      action: "damage",
+      vehicle: "test-car-2",
+      reason: "弄坏第二辆",
+    });
+    for (const action of ["repair", "damage", "chase", "abandon"] as const) {
+      const result = registry.applyCommands(
+        world,
+        [
+          {
+            type: "vehicle",
+            action,
+            reason: "现场有多辆",
+            ...(action === "chase" ? { stake: "damage" } : {}),
+          },
+        ],
+        context,
+      );
+      expect(result.results[0]?.result).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining("多辆候选车辆"),
+      });
+      expect(result.world).toBe(world);
+    }
+  });
+
+  it("旧的强制选车接口已移除", () => {
+    expect(
+      VehicleCommandSchema.safeParse({
+        type: "vehicle",
+        action: "select",
+        vehicle: "test-car-1",
+        reason: "旧入口",
+      }).success,
+    ).toBe(false);
+    expect(PlayerActionSchema.safeParse({ type: "selectVehicle", id: "test-car-1" }).success).toBe(
+      false,
+    );
+  });
+
+  it("车辆数量没有任意上限", () => {
+    let world = start();
+    for (let i = 0; i < 7; i++)
+      world = run(world, { type: "vehicle.grant", model: "test-car", reason: `取得车辆 ${i + 1}` });
+    expect(TravelStateSchema.parse(world.slices.travel).vehicles).toHaveLength(7);
   });
 });
 
@@ -199,16 +290,6 @@ describe("车辆后备箱", () => {
       reason: "放入后备箱",
     });
     world = run(world, { type: "vehicle", action: "wreck", vehicle: id, reason: "事故" });
-
-    const selection = registry.applyCommands(
-      world,
-      [{ type: "vehicle", action: "select", vehicle: id, reason: "选择报废车" }],
-      context,
-    );
-    expect(selection.results[0]?.result).toMatchObject({
-      ok: false,
-      reason: expect.stringContaining("已经报废"),
-    });
 
     const store = registry.applyCommands(
       world,

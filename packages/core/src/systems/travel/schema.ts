@@ -55,6 +55,8 @@ export const TripSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
   mode: TravelModeSchema,
+  /** 这次驾驶实际使用的车辆；其他出行方式不写。 */
+  vehicle: z.string().min(1).optional(),
   minutes: z.number().int().min(1),
   cost: z.number().int().min(0),
   at: z.number().int(),
@@ -71,6 +73,7 @@ export const TravelCommandSchema = z
     type: z.literal("travel"),
     to: z.string().min(1),
     mode: TravelModeSchema,
+    vehicle: z.string().min(1).optional(),
   })
   .describe("按路线面板出行（只能由代码发出）：推进时间、扣路费、换地点、定路上的偶遇");
 export type TravelCommand = z.infer<typeof TravelCommandSchema>;
@@ -79,6 +82,7 @@ export type TravelCommand = z.infer<typeof TravelCommandSchema>;
 export const TravelRequestSchema = z.strictObject({
   to: z.string().min(1),
   mode: TravelModeSchema,
+  vehicle: z.string().min(1).optional(),
 });
 export type TravelRequest = z.infer<typeof TravelRequestSchema>;
 
@@ -86,6 +90,7 @@ export type TravelRequest = z.infer<typeof TravelRequestSchema>;
 export const TravelFactSchema = z.object({
   to: z.string().min(1),
   mode: TravelModeSchema,
+  vehicle: z.string().min(1).optional(),
   encounter: z.string().min(1).nullable(),
 });
 export type TravelFact = z.infer<typeof TravelFactSchema>;
@@ -129,8 +134,6 @@ export const VehicleDefSchema = z.object({
   /** 速度档 1–5：开车出行的耗时按它折算 */
   speed: z.number().int().min(1).max(5),
   seats: z.number().int().min(1).max(8),
-  /** 后备箱能放几格东西 */
-  trunk: z.number().int().min(0).max(30),
   price: z.number().int().min(1000).max(100_000),
   note: z.string().min(1).optional(),
 });
@@ -153,7 +156,7 @@ export const OwnedVehicleSchema = z.object({
   condition: VehicleConditionSchema,
   /** 车辆实际停放位置；驾驶出行时由代码同步到目的地。 */
   location: z.string().nullable(),
-  /** 后备箱物品按物品 id 计数；容量按不同物品种类占格。 */
+  /** 随车存放的物品按物品 id 计数；特殊大件是否装得下按车型与场景判断。 */
   cargo: z.record(z.string(), z.number().int().min(1)),
   /** 偷来的：开着它风险高，迟早要扔 */
   stolen: z.boolean(),
@@ -161,8 +164,6 @@ export const OwnedVehicleSchema = z.object({
 });
 export type OwnedVehicle = z.infer<typeof OwnedVehicleSchema>;
 
-/** 最多同时有几辆车（含偷来的） */
-export const VEHICLES_MAX = 6;
 /** 修车按车价的这个比例收钱（本作改编） */
 export const REPAIR_SHARE = 0.1;
 
@@ -170,10 +171,10 @@ export const REPAIR_SHARE = 0.1;
 export const VehicleCommandSchema = z
   .object({
     type: z.literal("vehicle"),
-    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase", "select"]),
+    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase"]),
     /** buy、steal 写车型 id */
     model: z.string().min(1).optional(),
-    /** 对哪辆车；不写时指当前选用车辆 */
+    /** 对哪辆车；相关现场只有一辆候选车时可以省略，多辆须明确。 */
     vehicle: z.string().min(1).optional(),
     /** damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车、弃车或追逐。 */
     location: z.string().min(1).optional(),
@@ -192,15 +193,9 @@ export const VehicleCommandSchema = z
       });
     if (c.action === "chase" && c.stake === undefined)
       ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
-    if (c.action === "select" && c.vehicle === undefined)
-      ctx.addIssue({
-        code: "custom",
-        path: ["vehicle"],
-        message: "select 要写 vehicle（车辆 id）",
-      });
   })
   .describe(
-    "载具：buy 买车；steal 偷车；select 选择当前使用的车辆（只能选择身边可用车辆）；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、abandon、chase 只能操作身边车辆；有后备箱物品时必须先取空才能弃车",
+    "载具：buy 买车；steal 偷车；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、abandon、chase 只能操作身边车辆；同一现场多辆候选车必须明确 vehicle；有随车物品时必须先取空才能弃车",
   );
 export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
 
@@ -227,8 +222,6 @@ export const TravelStateSchema = z.object({
   encounter: EncounterSchema.nullable(),
   /** 名下的车 */
   vehicles: z.array(OwnedVehicleSchema),
-  /** 当前选用的车辆；只有与玩家同地点时才能驾驶。 */
-  activeVehicleId: z.string().nullable(),
   /** 单调递增的实车编号；弃车后不复用后备箱身份。 */
   nextVehicleId: z.number().int().min(1),
 });

@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { TravelState } from "../travel";
+import { resolveVehicleAt } from "../travel";
 import { formatGameTime, type WorldClockState } from "../world";
 import {
   GIG_KIND_LABELS,
@@ -57,13 +58,14 @@ export function applySidegig(
     if (ctx.read<WorldClockState>("world").location !== gig.location) {
       return fail(`${label}不在这里，要去 ${gig.location}`);
     }
+    let vehicle: string | undefined;
     if (gig.kind === "race") {
       const travel = ctx.read<TravelState>("travel");
-      const car = travel.vehicles.find((v) => v.id === travel.activeVehicleId);
-      if (!car || car.location !== gig.location || car.condition === "wrecked")
-        return fail("赛车要有车在场：先把一辆未报废车辆开到比赛地点并选用");
+      const car = resolveVehicleAt(travel.vehicles, gig.location, command.vehicle);
+      if (!car.ok) return fail(`赛车要有车在场：${car.reason}`);
+      vehicle = car.vehicle.id;
     }
-    draft.active = { gig: gig.id, at: ctx.now };
+    draft.active = { gig: gig.id, at: ctx.now, ...(vehicle ? { vehicle } : {}) };
     const emit: Command[] =
       gig.stake > 0
         ? [

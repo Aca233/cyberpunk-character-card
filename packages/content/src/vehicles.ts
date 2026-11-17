@@ -3,7 +3,7 @@ import { travelRules } from "@cp/core";
 /**
  * 车型表。
  * 名字：原作依据 2.x，取自本机文本库 onscreens（Gameplay-Vehicles-DisplayNames-*），厂牌取自同库里的全称（例如"霆威加利纳"）。
- * 分类照原作载具分类；速度档、座位、后备箱格数和价钱是本作改编（策划书：约 1 万到 10 万欧元）。
+ * 分类照原作载具分类；速度档、座位和价钱是本作改编（策划书：约 1 万到 10 万欧元）。
  */
 export const vehicles = travelRules.VehicleCatalogSchema.parse([
   {
@@ -13,7 +13,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "economy",
     speed: 1,
     seats: 2,
-    trunk: 4,
     price: 12_000,
     note: "小得能停进任何缝里",
   },
@@ -24,7 +23,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "economy",
     speed: 2,
     seats: 4,
-    trunk: 8,
     price: 15_000,
     note: "街上最常见的老车，修起来便宜",
   },
@@ -35,7 +33,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "economy",
     speed: 2,
     seats: 6,
-    trunk: 12,
     price: 14_000,
     note: "能拉一家子的厢式车",
   },
@@ -46,7 +43,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "executive",
     speed: 3,
     seats: 4,
-    trunk: 10,
     price: 38_000,
   },
   {
@@ -56,7 +52,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "executive",
     speed: 2,
     seats: 6,
-    trunk: 14,
     price: 42_000,
     note: "又大又重的老派豪车",
   },
@@ -67,7 +62,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "executive",
     speed: 3,
     seats: 4,
-    trunk: 10,
     price: 55_000,
   },
   {
@@ -77,7 +71,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "sport",
     speed: 4,
     seats: 2,
-    trunk: 4,
     price: 68_000,
   },
   {
@@ -87,7 +80,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "sport",
     speed: 4,
     seats: 2,
-    trunk: 4,
     price: 75_000,
   },
   {
@@ -97,7 +89,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "sport",
     speed: 4,
     seats: 2,
-    trunk: 6,
     price: 60_000,
     note: "肌肉车，吵得整条街都听见",
   },
@@ -108,7 +99,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "hyper",
     speed: 5,
     seats: 2,
-    trunk: 2,
     price: 100_000,
   },
   {
@@ -118,7 +108,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "offroad",
     speed: 2,
     seats: 4,
-    trunk: 12,
     price: 30_000,
     note: "恶土上跑得动的皮卡",
   },
@@ -129,7 +118,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "offroad",
     speed: 2,
     seats: 2,
-    trunk: 16,
     price: 28_000,
     note: "流浪者常开的皮卡",
   },
@@ -140,7 +128,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "moto",
     speed: 5,
     seats: 2,
-    trunk: 1,
     price: 45_000,
   },
   {
@@ -150,7 +137,6 @@ export const vehicles = travelRules.VehicleCatalogSchema.parse([
     class: "moto",
     speed: 5,
     seats: 2,
-    trunk: 0,
     price: 55_000,
   },
 ]);

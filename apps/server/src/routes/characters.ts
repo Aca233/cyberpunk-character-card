@@ -148,7 +148,6 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
         maker: v.maker,
         class: v.class,
         seats: v.seats,
-        trunk: v.trunk,
         points:
           v.class === "economy"
             ? 1

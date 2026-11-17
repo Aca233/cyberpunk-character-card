@@ -30,9 +30,11 @@
 }
 
 .list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .vehicle {
@@ -40,10 +42,11 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 14px;
+  gap: 10px;
+  min-height: 66px;
+  padding: 7px 10px;
 }
 
 .art {
@@ -51,13 +54,13 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
-  min-height: 120px;
+  height: 48px;
 }
 
 .image {
   display: block;
   width: 100%;
-  height: 140px;
+  height: 48px;
   object-fit: contain;
 }
 
@@ -66,8 +69,8 @@
 }
 
 .info h3 {
-  margin: 6px 0 4px;
-  font-size: 16px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -76,72 +79,46 @@
   margin: 0;
 }
 
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.location,
+.status {
   font-size: 11px;
-  color: var(--cp-text-dim);
-}
-
-.selected {
-  color: var(--cp-cyan);
-}
-
-.stolen,
-.tags [data-condition="wrecked"] {
-  color: var(--cp-danger);
-}
-
-.tags [data-condition="damaged"] {
-  color: var(--cp-yellow);
-}
-
-.info > .parking {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 12px 0;
-}
-
-.parking small {
-  font-size: 11px;
-  color: var(--cp-text-dim);
-}
-
-.parking strong {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--cp-yellow);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
-.parking[data-here] strong {
+.location {
+  color: var(--cp-text-dim);
+}
+
+.location[data-here] {
   color: var(--cp-cyan);
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.status {
+  color: var(--cp-danger);
 }
 
-.trunk {
-  grid-column: 1 / -1;
-  min-width: 0;
+.status[data-damaged] {
+  color: var(--cp-yellow);
+}
+
+.info > .location,
+.info > .status {
+  margin-top: 2px;
 }
 
 @container pin (max-width: 420px) {
   .vehicle {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    gap: 7px;
+    padding-inline: 6px;
   }
 
   .art {
-    min-height: 90px;
+    height: 42px;
   }
 
   .image {
-    height: 110px;
+    height: 42px;
   }
 }
