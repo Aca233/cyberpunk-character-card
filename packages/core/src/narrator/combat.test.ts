@@ -230,12 +230,16 @@ describe("叙事战斗伤害去重", () => {
   ])("同批开战不因指令顺序重复登记伤势：%j", async (...changes) => {
     const result = await runNarratorTurn(
       {
-        llm: fakeLlm(changes, {
-          kind: "costly",
-          outcome: "近距霰弹枪口炸响，左臂中弹",
-          harm: "heavy",
-          reason: "近距离交火没有足够掩体",
-        }),
+        llm: fakeLlm(
+          changes,
+          {
+            kind: "costly",
+            outcome: "近距霰弹枪口炸响，左臂中弹",
+            harm: "heavy",
+            reason: "近距离交火没有足够掩体",
+          },
+          [{ id: "shot", requires: [], entries: changes.map((_, i) => `changes[${i}]`) }],
+        ),
         rng: { roll: () => 2 },
         offscreen: null,
         data: { items: [] },

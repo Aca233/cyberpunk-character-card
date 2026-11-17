@@ -57,8 +57,10 @@ import {
 } from "./budget";
 import { completeFinish } from "./completion";
 import { responseJsonSchema, schemaDoc } from "./doc";
+import { readEventPlan } from "./event-plan";
+import { applyEventCommands, type SettlementEvent } from "./event-settlement";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
-import { applyMerchantCommands, preparePurchases } from "./merchant-settlement";
+import { preparePurchases } from "./merchant-settlement";
 import {
   OFFSCREEN_TEMPERATURE,
   offscreenDue,
@@ -155,62 +157,6 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   "phone.receive": "收到的消息",
   "phone.reply": "回复的消息",
 };
-
-/** 互相关联的条目：一种没生效，跟着它的也不生效（付钱和拿货互相跟，受伤跟着开战） */
-type Role = "pay" | "goods" | "fightStart" | "hit";
-
-const ROLE_LABELS: Readonly<Record<Role, string>> = {
-  pay: "付钱",
-  goods: "拿货",
-  fightStart: "开战",
-  hit: "受伤",
-};
-
-const FOLLOWERS: Readonly<Record<Role, readonly Role[]>> = {
-  pay: ["goods"],
-  goods: ["pay"],
-  fightStart: ["hit"],
-  hit: [],
-};
-
-function roleOf(raw: unknown): Role | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
-  const c = raw as { type?: unknown; delta?: unknown; action?: unknown };
-  if (c.type === "money" && typeof c.delta === "number" && c.delta < 0) return "pay";
-  // 买东西一条里同时付钱和拿货，不用跟别的条目配对；买服务、交罚款算付钱
-  if (c.type === "trade" && c.action === "service") return "pay";
-  if (c.type === "item" && c.action === "gain") return "goods";
-  if (c.type === "combat" && c.action === "start") return "fightStart";
-  if (c.type === "damage" || (c.type === "combat" && c.action === "wound")) return "hit";
-  return undefined;
-}
-
-function materialGain(command: Command): boolean {
-  return (
-    command.type === "loot" ||
-    (command.type === "money" && typeof command.delta === "number" && command.delta > 0) ||
-    (command.type === "item" && command.action === "gain") ||
-    (command.type === "combat" && command.action === "loot") ||
-    (command.type === "trade" && (command.action === "buy" || command.action === "sell")) ||
-    (command.type === "cyberware" && command.action === "buy")
-  );
-}
-
-/** 去掉跟着没生效条目的那些，记进 dropped */
-function dropFollowers(
-  b: TurnBuilder,
-  commands: readonly Command[],
-  failed: ReadonlySet<Role>,
-): Command[] {
-  return commands.filter((command) => {
-    const role = roleOf(command);
-    if (!role) return true;
-    const cause = [...failed].find((r) => FOLLOWERS[r].includes(role));
-    if (!cause) return true;
-    b.drop(command.type, command, `同一轮的${ROLE_LABELS[cause]}没生效，这一条跟着不算`, "rules");
-    return false;
-  });
-}
 
 /** 正文和账目对不上的原因；没有关键条目出问题时为 undefined */
 export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
@@ -1068,6 +1014,16 @@ export async function runNarratorTurn(
     }
   }
   const considered: string[] = settle ? readConsidered(shape.dropped) : [];
+  const eventPlan = readEventPlan(
+    settle ? shape.events : [],
+    shape.changes?.length ?? 0,
+    shape.messages?.length ?? 0,
+  );
+  if (!eventPlan.ok) {
+    b.drop("events", shape.events, eventPlan.error, "format");
+    return draftOnly(`本轮事件因果不完整：${eventPlan.error}；世界状态未改变，请重新生成。`);
+  }
+  const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
 
   // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
   const extractEntries: ValidationEntry[] = [];
@@ -1172,31 +1128,42 @@ export async function runNarratorTurn(
 
   // 代码校验第二步：业务规则（闪回、战斗、快速破解去重）
   const commands: Command[] = [];
+  const entryCommands = new Map<string, Command>();
+  const redundant = new Set<string>();
+  const addCommand = (proposal: Proposal, command: Command): void => {
+    commands.push(command);
+    entryCommands.set(proposal.where, command);
+  };
   const quickhacks = quickhackCatalog(deps.data ?? {});
-  const hasHarmfulNpcHack = verified.some((proposal) => {
-    const cmd = proposal.parse(proposal.value);
-    if (cmd?.type !== "npcHack") return false;
-    const c = cmd as { target?: unknown; program?: unknown };
-    if (c.target !== "你" || typeof c.program !== "string") return false;
-    const def =
-      quickhacks.get(c.program) ?? [...quickhacks.values()].find((q) => q.name === c.program);
-    return def?.category === "damage" || def?.category === "ultimate";
-  });
-  // 同批开打或收场仍属于这场交战，不能靠条目顺序绕过伤害和战利品过滤
-  const fight =
-    CombatStateSchema.parse(world.slices.combat).active !== null ||
-    (!inFlashback &&
-      verified.some((proposal) => {
-        const command = proposal.parse(proposal.value);
-        return (
-          command?.type === "combat" && (command.action === "start" || command.action === "end")
-        );
-      }));
+  const harmfulHackEvents = new Set(
+    verified.flatMap((proposal) => {
+      const cmd = proposal.parse(proposal.value);
+      if (cmd?.type !== "npcHack") return [];
+      const c = cmd as { target?: unknown; program?: unknown };
+      if (c.target !== "你" || typeof c.program !== "string") return [];
+      const def =
+        quickhacks.get(c.program) ?? [...quickhacks.values()].find((q) => q.name === c.program);
+      const id = owner.get(proposal.where);
+      return id && (def?.category === "damage" || def?.category === "ultimate") ? [id] : [];
+    }),
+  );
+  // 同一交战事件里的重复创口不因条目顺序多记；失败交战不能误删另一事件的真实伤害。
+  const combatEvents = new Set<string>();
+  const woundEvents = new Set<string>();
+  for (const proposal of verified) {
+    const command = proposal.parse(proposal.value);
+    const id = owner.get(proposal.where);
+    if (id && command?.type === "combat") {
+      combatEvents.add(id);
+      if (command.action === "wound") woundEvents.add(id);
+    }
+  }
+  const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
   for (const proposal of verified) {
     const command = proposal.parse(proposal.value);
     if (!command) continue;
     if (proposal.kind === "message") {
-      commands.push(command);
+      addCommand(proposal, command);
       continue;
     }
     const { where } = proposal;
@@ -1205,7 +1172,7 @@ export async function runNarratorTurn(
       continue;
     }
     if (
-      fight &&
+      (alreadyFighting || combatEvents.has(owner.get(where) ?? "")) &&
       command.type === "flashback" &&
       (command as { action?: unknown }).action !== "end"
     ) {
@@ -1214,7 +1181,7 @@ export async function runNarratorTurn(
     }
     // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
     if (
-      hasHarmfulNpcHack &&
+      harmfulHackEvents.has(owner.get(where) ?? "") &&
       (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
     ) {
       b.drop(
@@ -1223,22 +1190,22 @@ export async function runNarratorTurn(
         "本次快速破解由 npcHack 统一结算，不另记 damage 或 combat wound",
         "rules",
       );
+      redundant.add(where);
       continue;
     }
     // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；模型另写的 damage 不算，免得扣两次
-    if (fight && command.type === "damage") {
+    if (combatEvents.has(owner.get(where) ?? "") && command.type === "damage") {
       b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
+      if (woundEvents.has(owner.get(where) ?? "")) redundant.add(where);
       continue;
     }
-    commands.push(command);
+    addCommand(proposal, command);
   }
   b.checkAborted();
 
   // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
-  if (settle && shape.sceneEnd === true) {
-    if (inFlashback) b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
-    else commands.push({ type: "world.endScene" });
-  }
+  if (settle && shape.sceneEnd === true && inFlashback)
+    b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
 
   const facts: Record<string, unknown> = { tradeNarrative: narrative };
   facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
@@ -1266,19 +1233,23 @@ export async function runNarratorTurn(
   const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
   const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
   if (squadIds.length > 0) facts.squad = squadIds;
+  const setup: SettlementEvent[] = [];
+  const prependSetup = (id: string, command: Command): void => {
+    setup.unshift({ id, requires: [], commands: [command] });
+  };
   // 开了斯安威斯坦（前端开关、选项或判断阶段识别）：先扣人性再结算
   if (sandevistanBoosted) {
     const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
-    if (boost) commands.unshift({ type: "cyberware.boost", id: boost.id });
+    if (boost) prependSetup("$boost", { type: "cyberware.boost", id: boost.id });
   }
   // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
   if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {
-    commands.unshift({ type: "braindance.conclude", option: plan.input.braindance });
+    prependSetup("$braindance", { type: "braindance.conclude", option: plan.input.braindance });
   }
   // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
   if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
     const said = plan.input.text.trim().slice(0, 300);
-    commands.unshift({
+    prependSetup("$reply", {
       type: "phone.reply",
       id: plan.input.replyTo,
       ...(said === "" ? {} : { text: said }),
@@ -1286,42 +1257,60 @@ export async function runNarratorTurn(
   }
   if (trip) {
     facts.travel = tripFact(trip);
-    commands.unshift({ type: "travel", to: trip.to.id, mode: trip.route.mode });
+    prependSetup("$travel", { type: "travel", to: trip.to.id, mode: trip.route.mode });
   }
   const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
-  // 成组生效：之前被丢的、结算时被拒的，跟着它的条目一起不生效，剩下的重新结算
-  const failed = new Set<Role>();
-  for (const d of b.dropped) {
-    const role = roleOf(d.raw);
-    if (role) failed.add(role);
-  }
-  let pending = dropFollowers(b, commands, failed);
-  let applied = applyMerchantCommands(world, pending, applyCtx, prepared.purchases);
-  for (;;) {
-    const fresh = applied.results
-      .filter(({ result }) => !result.ok)
-      .map(({ command }) => roleOf(command))
-      .filter((r): r is Role => r !== undefined && !failed.has(r) && FOLLOWERS[r].length > 0);
-    if (fresh.length === 0) break;
-    for (const r of fresh) failed.add(r);
-    pending = dropFollowers(b, pending, failed);
-    applied = applyMerchantCommands(world, pending, applyCtx, prepared.purchases);
-  }
-  const rejectedAccess = applied.results.some(
-    ({ command, result }) =>
-      !result.ok &&
-      (command.type === "hack" || command.type === "breach" || command.type === "dive"),
+  const events: SettlementEvent[] = [
+    ...setup,
+    ...eventPlan.events.map((event): SettlementEvent => {
+      const missing = event.entries.find(
+        (entry) => !entryCommands.has(entry) && !redundant.has(entry),
+      );
+      const invalid = missing
+        ? (b.dropped.find((d) => d.where === missing)?.reason ?? `${missing} 未通过事实校验`)
+        : undefined;
+      const eventCommands = event.entries.flatMap((entry) => {
+        const command = entryCommands.get(entry);
+        return command ? [command] : [];
+      });
+      const requires = new Set(event.requires);
+      if (requires.has("$action")) for (const e of setup) requires.add(e.id);
+      if (
+        trip &&
+        eventCommands.some(
+          (c) =>
+            (c.type === "world" && c.location !== undefined) ||
+            c.type === "trade" ||
+            c.type === "cyberware" ||
+            c.type === "cyberware.service",
+        )
+      )
+        requires.add("$travel");
+      return {
+        id: event.id,
+        requires: [...requires],
+        commands: eventCommands,
+        ...(invalid ? { invalid } : {}),
+      };
+    }),
+  ];
+  // 收场不能绕过抵达、付款或其他未成立事件；它也受同一事务机制保护。
+  if (settle && shape.sceneEnd === true && !inFlashback)
+    events.push({
+      id: "$scene-end",
+      requires: events.map((event) => event.id),
+      commands: [{ type: "world.endScene" }],
+    });
+  const applied = applyEventCommands(
+    world,
+    events,
+    applyCtx,
+    prepared.purchases,
+    rulingSpec?.kind === "blocked" ? rulingSpec.reason : undefined,
   );
-  if (
-    rejectedAccess &&
-    applied.results.some(({ command, result }) => result.ok && materialGain(command))
-  ) {
-    for (const { command, result } of applied.results)
-      if (!result.ok) b.drop(command.type, command, result.reason, "rules");
-    // 暂无逐条因果关联，不能判断收益是否依赖已被否决的行动；试算不落地。
-    return draftOnly(
-      "本轮行动被规则否决，但抽取仍含收益，无法确认因果；正文已保存为草稿，世界状态未改变，请重新生成。",
-    );
+  for (const event of applied.events) {
+    if (event.status === "applied") continue;
+    b.drop(`events.${event.id}`, { event: event.id }, event.reason ?? "事件未生效", "rules");
   }
   const accepted: Command[] = [];
   for (const { command, result } of applied.results) {
@@ -1332,6 +1321,9 @@ export async function runNarratorTurn(
       b.drop(command.type, command, result.reason, "rules");
     }
   }
+  const failedEvent = applied.events.find((event) => event.status !== "applied");
+  if (failedEvent && accepted.length === 0 && applied.patches.length === 0)
+    return draftOnly(`本轮事件未能结算：${failedEvent.reason}；世界状态未改变，请重新生成。`);
   // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
   const settled =
     ooc || inFlashback
@@ -1346,7 +1338,11 @@ export async function runNarratorTurn(
   const before = WorldClockStateSchema.parse(world.slices.world);
   const after = WorldClockStateSchema.parse(settled.world.slices.world);
   const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
-  const unsettled = settle ? unsettledReason(b.dropped) : undefined;
+  const unsettled = settle
+    ? failedEvent
+      ? `事件 ${failedEvent.id} 未生效：${failedEvent.reason}；独立事件已保留，可按账目改写正文`
+      : unsettledReason(b.dropped)
+    : undefined;
 
   // ⑥ 按游戏时间、到期事件和收场批次推演；结果与本次行动一起落盘撤回
   const dead = HealthStateSchema.parse(settled.world.slices.health).condition === "dead";
@@ -1550,7 +1546,7 @@ export async function runNarratorTurn(
     turn: {
       text: narrative,
       read,
-      choices,
+      choices: unsettled === undefined ? choices : [],
       check: undefined,
       rolled: undefined,
       gate: undefined,
@@ -1575,7 +1571,7 @@ export async function runNarratorTurn(
           ],
       modules: prompt.modules,
       pin: settle && unsettled === undefined && shape.pin === true,
-      clutch: settle && shape.clutch === true,
+      clutch: settle && unsettled === undefined && shape.clutch === true,
       scene: before.scene,
       title,
       closeup: undefined,
