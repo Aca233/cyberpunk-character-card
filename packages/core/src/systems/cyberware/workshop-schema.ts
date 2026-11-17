@@ -25,7 +25,7 @@ export const PartCommandSchema = z
     evidence: z.string().min(1),
   })
   .describe(
-    "登记实际找到、赠与、转交或检测过的未安装义体实物；必须记录来源与正文证据，不用物品目录生成免费装备。已安装或进行中手术的实物不能直接转交。",
+    "登记实际找到、赠与、转交或检测过的未安装义体实物；必须记录来源与正文证据，不用物品目录生成免费装备。已安装或进行中手术的实物不能直接转交；存放箱或后备箱中的实物使用 stash 存取，不直接改 stash: 归属。",
   );
 export const SupplyCommandSchema = z
   .strictObject({

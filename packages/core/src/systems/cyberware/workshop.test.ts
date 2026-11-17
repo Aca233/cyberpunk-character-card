@@ -5,6 +5,7 @@ import type { Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { EconomyStateSchema } from "../economy";
 import { registry } from "../registry";
+import { SafehouseStateSchema } from "../safehouse";
 import { tradeInValue } from "./apply";
 import { quoteCyberware } from "./quote";
 import { CyberwareDefSchema, CyberwareStateSchema, RipperdocSchema } from "./schema";
@@ -343,6 +344,87 @@ describe("持久义体库存与真实手术阶段", () => {
     };
     expect(quoteCyberware(alias, shopData, surgery).ok).toBe(false);
     expect(Object.keys(state(alias).parts)).toEqual([part?.id]);
+  });
+
+  it("存放的义体不能绕过存取指令转交，避免箱内留下幽灵物品", () => {
+    let world = run(setup(), {
+      type: "cyberware",
+      action: "buy",
+      doc: "clinic-a",
+      id: "field-eye",
+      reason: "买下实物",
+    });
+    const part = Object.values(state(world).parts)[0]?.id;
+    world = run(world, { type: "safehouse.seed", id: "locker", name: "住处", location: "clinic" });
+    world = run(world, {
+      type: "stash",
+      action: "store",
+      item: part,
+      where: "locker",
+      reason: "存放",
+    });
+    const transfer = registry.applyCommands(
+      world,
+      [
+        {
+          type: "cyberware.part",
+          action: "transfer",
+          part,
+          from: "stash:locker",
+          holder: "player",
+          source: "取出义眼",
+          evidence: "你从存放箱取出义眼",
+        },
+      ],
+      ctx({ tradeNarrative: "你从存放箱取出义眼" }),
+    );
+    expect(transfer.results[0]?.result.ok).toBe(false);
+    expect(transfer.world).toEqual(world);
+    world = run(world, {
+      type: "stash",
+      action: "take",
+      item: part,
+      where: "locker",
+      reason: "取回",
+    });
+    expect(state(world).parts[part ?? ""]?.holder).toBe("player");
+    expect(SafehouseStateSchema.parse(world.slices.safehouse).stash.locker).toEqual({});
+  });
+
+  it.each(["record", "takeStock", "transfer"])("%s 不能伪造未登记的存放箱归属", (action) => {
+    let world = setup();
+    if (action === "transfer")
+      world = run(
+        world,
+        {
+          type: "cyberware.part",
+          action: "record",
+          part: "loose-eye",
+          model: "field-eye",
+          holder: "player",
+          source: "交付实物",
+          evidence: "你拿到了义眼",
+        },
+        { tradeNarrative: "你拿到了义眼" },
+      );
+    const result = registry.applyCommands(
+      world,
+      [
+        {
+          type: "cyberware.part",
+          action,
+          part: "loose-eye",
+          model: "field-eye",
+          from: action === "takeStock" ? "clinic-a" : "player",
+          holder: "stash:missing",
+          source: "存放义眼",
+          evidence: "你放下了义眼",
+        },
+      ],
+      ctx({ tradeNarrative: "你放下了义眼" }),
+    );
+    expect(result.results[0]?.result.ok).toBe(false);
+    expect(result.world).toEqual(world);
   });
 
   it("首次展开后诊所身份与服务设置存入世界，改初始表再载入不替换它", () => {

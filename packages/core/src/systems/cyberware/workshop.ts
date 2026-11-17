@@ -71,6 +71,8 @@ export function applyWorkshop(
   }
   if (command.type === "cyberware.part") {
     const part = draft.parts[command.part];
+    if (part?.holder.startsWith("stash:") || command.holder?.startsWith("stash:"))
+      return { ok: false, reason: "存放义体须使用 stash 存取指令，同步实际容器和实物归属" };
     if (command.action === "takeStock") {
       const doc = ripperdocList(ctx.data).find((d) => d.id === command.from);
       if (
