@@ -1536,7 +1536,7 @@ export async function runNarratorTurn(
         ? applied.patches
         : [
             ...applied.patches,
-            ...settled.patches,
+            ...(settled === applied ? [] : settled.patches),
             ...(final === settled ? [] : final.patches),
             ...memoryPatches,
           ],

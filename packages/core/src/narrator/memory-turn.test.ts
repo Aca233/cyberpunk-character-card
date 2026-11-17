@@ -195,6 +195,37 @@ describe("正文优先的场景记忆回合", () => {
     expect(next.turn.considered.some((n) => n.includes("保留此前记忆"))).toBe(true);
   });
 
+  it("结束闪回的过往事实只保存一次，读档重放和撤回与本轮状态一致", async () => {
+    const initial = newGameWorld({ startTime: 1000 });
+    const world = {
+      ...initial,
+      slices: {
+        ...initial.slices,
+        character: {
+          ...(initial.slices.character as object),
+          flashback: { past: "旧事", startedAt: initial.time, turns: 2 },
+        },
+      },
+    };
+    const { turn } = await run(world, {
+      extract: {
+        changes: [{ type: "flashback", action: "end", fact: "那把钥匙是老朋友交给你的。" }],
+      },
+    });
+    const entry = record(turn, 0);
+    expect(turn.world.slices.character).toMatchObject({
+      flashback: null,
+      pastFacts: [{ past: "旧事", text: "那把钥匙是老朋友交给你的。" }],
+    });
+    expect(replay({ nextSeq: 0, world }, [entry])).toEqual(turn.world);
+    expect(
+      replay({ nextSeq: 0, world }, [
+        entry,
+        { kind: "void", seq: 1, at: entry.at, target: 0, reason: "undo" },
+      ]),
+    ).toEqual(world);
+  });
+
   it("两份收场摘要都失败仍保留完整提要，下一场更新后旧提要仍可检索", async () => {
     const { turn } = await run(undefined, {
       extract: { changes: [], sceneEnd: true, sceneMemory: working },
