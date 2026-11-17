@@ -20,7 +20,13 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
   id: "travel",
   dependsOn: ["world", "economy", "heat", "character", "combat"],
   state: TravelStateSchema,
-  initial: () => ({ trips: [], encounterScene: null, encounter: null, vehicles: [] }),
+  initial: () => ({
+    trips: [],
+    encounterScene: null,
+    encounter: null,
+    vehicles: [],
+    nextVehicleId: 1,
+  }),
   commands: { vehicle: VehicleCommandSchema },
   internal: { travel: TravelCommandSchema, "vehicle.grant": VehicleGrantSchema },
   apply(draft, command, ctx) {

@@ -57,10 +57,8 @@ export function vehicleFactor(vehicle: OwnedVehicle, def: VehicleDef | undefined
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
-function nextId(vehicles: readonly OwnedVehicle[], model: string): string {
-  let n = 1;
-  while (vehicles.some((v) => v.id === `${model}-${n}`)) n += 1;
-  return `${model}-${n}`;
+function nextId(draft: Draft<TravelState>, model: string): string {
+  return `${model}-${draft.nextVehicleId++}`;
 }
 
 export function grantVehicle(
@@ -71,7 +69,7 @@ export function grantVehicle(
   const def = vehicleCatalog(ctx.data).get(command.model);
   if (!def) return fail(`车型表里没有 ${command.model}`);
   draft.vehicles.push({
-    id: nextId(draft.vehicles, def.id),
+    id: nextId(draft, def.id),
     model: def.id,
     condition: "intact",
     stolen: false,
@@ -98,7 +96,7 @@ export function applyVehicle(
     if (draft.vehicles.length >= VEHICLES_MAX)
       return fail(`名下最多 ${VEHICLES_MAX} 辆车，先 abandon 一辆`);
     const owned = {
-      id: nextId(draft.vehicles, def.id),
+      id: nextId(draft, def.id),
       model: def.id,
       condition: "intact" as const,
       stolen: command.action === "steal",

@@ -205,7 +205,9 @@ export const TravelStateSchema = z.object({
   /** 上一次偶遇在第几个场景；一个场景最多一次 */
   encounterScene: z.number().int().nullable(),
   encounter: EncounterSchema.nullable(),
-  /** 名下的车；旧存档没有 */
-  vehicles: z.array(OwnedVehicleSchema).default([]),
+  /** 名下的车 */
+  vehicles: z.array(OwnedVehicleSchema),
+  /** 单调递增的实车编号；弃车后不复用后备箱身份。 */
+  nextVehicleId: z.number().int().min(1),
 });
 export type TravelState = z.infer<typeof TravelStateSchema>;

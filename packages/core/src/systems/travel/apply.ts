@@ -95,7 +95,13 @@ export function tripWorldOf(world: {
     eddies: EconomyStateSchema.parse(world.slices.economy).eddies,
     inCombat: CombatStateSchema.parse(world.slices.combat).active !== null,
     travel: TravelStateSchema.parse(
-      world.slices.travel ?? { trips: [], encounterScene: null, encounter: null, vehicles: [] },
+      world.slices.travel ?? {
+        trips: [],
+        encounterScene: null,
+        encounter: null,
+        vehicles: [],
+        nextVehicleId: 1,
+      },
     ),
   };
 }
