@@ -3,7 +3,6 @@ import type { ViewContext } from "../../kernel/system";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
 import { currentOutfit, deathKnown } from "./apply";
 import { bodyView } from "./body";
-import { onStage } from "./prompt";
 import {
   KNOWN_SOURCE_LABELS,
   LEDGER_KIND_LABELS,
@@ -48,7 +47,6 @@ export function npcsView({ world, data }: ViewContext) {
   // 旧存档没有宿敌系统
   const rivals = NemesisIdsSchema.parse(world.slices.nemesis ?? {});
   const clock = WorldClockStateSchema.parse(world.slices.world);
-  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   const places = locationCatalog(data);
   /** 地点 id 换成中文名；表外的地点只有本身是中文时才当名字，同 inventory 的 namesView */
   const placeName = (id: string | null | undefined) =>
@@ -88,19 +86,24 @@ export function npcsView({ world, data }: ViewContext) {
       affinity: n.affinity,
       /** 玩家知道的生死：屏幕外死的，听说以前照旧显示活着 */
       alive: !deathKnown(n),
-      here: onStage(n, stage),
+      here:
+        n.met &&
+        !deathKnown(n) &&
+        n.lastSeenAt !== null &&
+        n.lastSeenAt >= clock.sceneStartedAt &&
+        (n.lastKnownLocation === null || n.lastKnownLocation === clock.location),
       /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
       lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
       /** 最后出现的地点和常在的地点（中文名），人物档案信息栏用；没见过面的人不给 */
-      lastPlace: n.met ? placeName(n.location) : null,
+      lastPlace: n.met ? placeName(n.lastKnownLocation) : null,
       homePlace: n.met ? placeName(n.home) : null,
       /**
-       * 现在所在地点的 id（用户 2026-11-02："npc是能移动的"，地图上画见过的人，中间人也一样）：
-       * 没记下位置的按常在的地点；没见过面、或玩家知道已经死了的人不给
+       * 玩家最后确认的地点 id；场外移动不会自动刷新地图。
+       * 没见过面、位置未知或玩家知道已经死了的人不给。
        */
-      placeId: n.met && !deathKnown(n) ? (n.location ?? n.home ?? null) : null,
+      placeId: n.met && !deathKnown(n) ? n.lastKnownLocation : null,
       relation: n.relation?.text ?? null,
-      doing: n.met ? (n.doing?.text ?? null) : null,
+      doing: n.met ? (n.knownDoing?.text ?? null) : null,
       /**
        * 认识的人（用户 2026-10-31："npc也有自己的生活，也有认识的npc"）：只给公开的、两边玩家都见过的；
        * 私下的关系只给模型看。生死照玩家知道的显示，新的在前

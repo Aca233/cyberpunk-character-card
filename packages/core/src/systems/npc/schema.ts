@@ -263,14 +263,21 @@ const BaseNpcSchema = NpcCardSchema.extend({
   alive: z.boolean(),
   /** 玩家角色见过没有；原作人物开局就有卡，但还没见过 */
   met: z.boolean(),
-  /** 最后出现的地点 id */
+  /** 世界中的实际地点；场外移动也会更新，不能直接作为玩家已知位置。 */
   location: z.string().min(1).nullable(),
+  /** 玩家最后确认的地点；只有正式见面或公开近况提供地点时更新。 */
+  lastKnownLocation: z.string().min(1).nullable().default(null),
   /** 最后一次出场的游戏时间（分钟） */
   lastSeenAt: z.number().int().nullable(),
   /** 和玩家角色的共同记忆，旧的在前 */
   memories: z.array(z.string()),
   /** 最近在做什么（只给模型看）：一句话和记下的游戏时间；旧存档没有 */
   doing: z
+    .object({ text: z.string().min(1), at: z.number().int() })
+    .nullable()
+    .default(null),
+  /** 正文或消息中已经透露给玩家的近况，独立于幕后行动。 */
+  knownDoing: z
     .object({ text: z.string().min(1), at: z.number().int() })
     .nullable()
     .default(null),
@@ -486,6 +493,12 @@ export const DoingSchema = z
     "这个人最近在做什么（换了活、搬去哪、在忙什么、和谁走得近）；一句话，只写正文里透出来的（本人说的、新闻、传闻、消息），会替换掉旧的；人换了地方时写 location",
   );
 export type Doing = z.infer<typeof DoingSchema>;
+
+/** 场外推演的真实行动：只更新世界状态，不向玩家公开位置或近况。 */
+export const NpcOffscreenDoingSchema = DoingSchema.extend({
+  type: z.literal("npc.offscreenDoing"),
+});
+export type NpcOffscreenDoing = z.infer<typeof NpcOffscreenDoingSchema>;
 
 export const RelationSchema = z
   .object({
@@ -850,4 +863,10 @@ export const NpcConditionSchema = z.object({
   reason: z.string().min(1),
 });
 export type NpcCondition = z.infer<typeof NpcConditionSchema>;
-export type NpcInternal = SeedNpc | NpcMemoryEdit | NpcPast | NpcOffscreenDeath | NpcCondition;
+export type NpcInternal =
+  | SeedNpc
+  | NpcMemoryEdit
+  | NpcPast
+  | NpcOffscreenDeath
+  | NpcOffscreenDoing
+  | NpcCondition;

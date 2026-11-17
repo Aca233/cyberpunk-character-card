@@ -1,6 +1,13 @@
 import { defineSystem } from "../../kernel/system";
 import { npcActions } from "./actions";
-import { applyNpc, applyNpcPast, applyOffscreenDeath, editNpcMemory, seedNpc } from "./apply";
+import {
+  applyNpc,
+  applyNpcPast,
+  applyOffscreenDeath,
+  applyOffscreenDoing,
+  editNpcMemory,
+  seedNpc,
+} from "./apply";
 import { applyNpcCondition } from "./body";
 import { perceivedView } from "./perceived";
 import { npcRules } from "./prompt";
@@ -26,6 +33,7 @@ import {
   type NpcInternal,
   NpcMemoryEditSchema,
   NpcOffscreenDeathSchema,
+  NpcOffscreenDoingSchema,
   NpcOutfitSchema,
   NpcPastSchema,
   NpcScanSchema,
@@ -78,6 +86,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     "npc.memoryEdit": NpcMemoryEditSchema,
     "npc.past": NpcPastSchema,
     "npc.offscreenDeath": NpcOffscreenDeathSchema,
+    "npc.offscreenDoing": NpcOffscreenDoingSchema,
   },
   apply(draft, command, ctx) {
     if (command.type === "npc.condition") {
@@ -91,6 +100,9 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     if (command.type === "npc.past") return applyNpcPast(draft, command, ctx.now);
     if (command.type === "npc.offscreenDeath") {
       return applyOffscreenDeath(draft, command, ctx.now, ctx.facts);
+    }
+    if (command.type === "npc.offscreenDoing") {
+      return applyOffscreenDoing(draft, command, ctx.now);
     }
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
   },

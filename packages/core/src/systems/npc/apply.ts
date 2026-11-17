@@ -7,6 +7,7 @@ import {
   AFFINITY_MAX,
   AFFINITY_MIN,
   AFFINITY_STEP_CAP,
+  type Doing,
   KNOWN_KEPT,
   KNOWN_SOURCE_LABELS,
   LEDGER_KEPT,
@@ -18,6 +19,7 @@ import {
   type NpcCommand,
   type NpcMemoryEdit,
   type NpcOffscreenDeath,
+  type NpcOffscreenDoing,
   type NpcPast,
   type NpcState,
   type SeedNpc,
@@ -126,9 +128,11 @@ export function seedNpc(
     alive: true,
     met,
     location: card.home ?? null,
+    lastKnownLocation: met ? (card.home ?? null) : null,
     lastSeenAt: null,
     memories: [],
     doing: null,
+    knownDoing: null,
     timeline: [],
     past: null,
     offscreenDeath: null,
@@ -192,6 +196,32 @@ export function applyOffscreenDeath(
   npc.alive = false;
   npc.offscreenDeath = { cause: command.cause, at: now };
   return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`] };
+}
+
+function updateDoing(
+  npc: Draft<Npc>,
+  command: Pick<Doing, "text" | "location">,
+  now: number,
+): ApplyOutcome {
+  if (command.location !== undefined) npc.location = command.location;
+  if (npc.doing?.text === command.text) return { ok: true };
+  npc.doing = { text: command.text, at: now };
+  npc.timeline.push({ text: command.text, at: now });
+  if (npc.timeline.length > TIMELINE_KEPT) {
+    npc.timeline.splice(0, npc.timeline.length - TIMELINE_KEPT);
+  }
+  return { ok: true };
+}
+
+export function applyOffscreenDoing(
+  draft: Draft<NpcState>,
+  command: NpcOffscreenDoing,
+  now: number,
+): ApplyOutcome {
+  const npc = draft.npcs[command.id];
+  if (!npc) return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡` };
+  if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能继续行动` };
+  return updateDoing(npc, command, now);
 }
 
 /** 在一个人的卡上记下认识的人：替换和同一个人的旧关系，满了删最早的 */
@@ -272,9 +302,11 @@ export function applyNpc(
       alive: true,
       met: true,
       location: resolvedLocation ?? resolvedHome ?? null,
+      lastKnownLocation: resolvedLocation ?? resolvedHome ?? null,
       lastSeenAt: now,
       memories: [],
       doing: null,
+      knownDoing: null,
       timeline: [],
       past: null,
       offscreenDeath: null,
@@ -398,6 +430,7 @@ export function applyNpc(
       npc.met = true;
       npc.lastSeenAt = now;
       if (command.location !== undefined) npc.location = command.location;
+      npc.lastKnownLocation = npc.location;
       return { ok: true, notes };
     }
     case "affinity": {
@@ -425,17 +458,10 @@ export function applyNpc(
       return { ok: true };
     }
     case "doing": {
-      // NPC 会移动（用户 2026-11-02："npc是能移动的"）：近况带了地点就挪过去；地点 id 由调用方核对
-      const moved = command.location !== undefined && command.location !== npc.location;
-      if (moved) npc.location = command.location ?? null;
-      if (npc.doing?.text === command.text) return { ok: true };
-      npc.doing = { text: command.text, at: now };
-      npc.timeline.push({ text: command.text, at: now });
-      // 兜底：场外推演一直没压摘要时直接删最早的
-      if (npc.timeline.length > TIMELINE_KEPT) {
-        npc.timeline.splice(0, npc.timeline.length - TIMELINE_KEPT);
-      }
-      return { ok: true };
+      // 公开近况与实际行动分开记录；只听说做什么，不代表知道其当前真实地点。
+      npc.knownDoing = { text: command.text, at: now };
+      if (command.location !== undefined) npc.lastKnownLocation = command.location;
+      return updateDoing(npc, command, now);
     }
     case "relation": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
