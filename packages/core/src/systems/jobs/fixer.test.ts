@@ -64,6 +64,17 @@ describe("offerJob 登记中间人", () => {
     if (result.ok) expect(result.notes?.some((n) => n.startsWith("登记中间人"))).toBe(false);
   });
 
+  it("登记过的中间人死亡后不能继续发出新委托", () => {
+    const state = empty();
+    expect(offerJob(state, offer("rogue"), 0, cardOf).ok).toBe(true);
+    const before = JSON.stringify(state);
+    const result = offerJob(state, offer("rogue", 2), 100, (id) =>
+      id === "rogue" ? { name: "罗格", alive: false, affinity: 50 } : cardOf(id),
+    );
+    expect(result).toMatchObject({ ok: false, reason: expect.stringContaining("已经死了") });
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
   it("不写 fixer 的熟人求助照旧", () => {
     const state = empty();
     expect(offerJob(state, offer(undefined, 5), 0, cardOf).ok).toBe(true);

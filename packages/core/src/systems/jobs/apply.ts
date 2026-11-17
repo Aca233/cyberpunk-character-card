@@ -86,6 +86,7 @@ export function offerJob(
   }
   if (fixer) {
     const card = cardOf(fixer.id);
+    if (card && !card.alive) return fail(`${card.name}已经死了，不能派单`);
     const side = card?.faction;
     if (side !== undefined && fixerBlocked(side.attitude)) {
       return fail(`${fixer.name}是${side.name}的人，${side.name}现在和玩家结了仇，不会给玩家派单`);
