@@ -90,11 +90,19 @@ function finish(category: EndCategory, message?: string): void {
 const EMPTY_DRAFT: TurnInput = { text: "" };
 
 export const useStory = create<StoryState>()((set, get) => {
-  const follow = (saveId: string, turnId: string, refresh: () => Promise<unknown>) => {
+  let generation = 0;
+  const follow = (
+    saveId: string,
+    turnId: string,
+    refresh: () => Promise<unknown>,
+    current: () => boolean,
+    submittedDraft: TurnInput | null,
+  ) => {
     unsubscribe?.();
     set({ phase: "streaming", turnId });
     unsubscribe = followTurn(saveId, turnId, {
       onEvent: (event) => {
+        if (!current()) return;
         switch (event.type) {
           case "started":
             return;
@@ -108,8 +116,8 @@ export const useStory = create<StoryState>()((set, get) => {
             set((s) => ({ text: s.text + event.text }));
             return;
           case "done": {
-            const wasInput = get().pending?.kind === "input";
-            void refresh().finally(() => {
+            const complete = () => {
+              if (!current()) return;
               set((s) => ({
                 phase: "idle",
                 turnId: null,
@@ -117,10 +125,11 @@ export const useStory = create<StoryState>()((set, get) => {
                 rolled: null,
                 boost: null,
                 pending: null,
-                draft: wasInput ? EMPTY_DRAFT : s.draft,
+                draft: s.draft === submittedDraft ? EMPTY_DRAFT : s.draft,
               }));
               finish("ok");
-            });
+            };
+            void refresh().then(complete, complete);
             return;
           }
           case "confirmSpend": {
@@ -179,6 +188,7 @@ export const useStory = create<StoryState>()((set, get) => {
         }
       },
       onLost: (reason) => {
+        if (!current()) return;
         finish("lost", reason);
         set({
           phase: "idle",
@@ -207,6 +217,7 @@ export const useStory = create<StoryState>()((set, get) => {
     cancelSpend: () => set({ spend: null }),
     enter: (saveId) => {
       if (get().saveId === saveId) return;
+      generation += 1;
       unsubscribe?.();
       unsubscribe = null;
       // 换了存档：上一个存档没收尾的这一轮算被顶掉
@@ -225,7 +236,17 @@ export const useStory = create<StoryState>()((set, get) => {
       });
     },
     async submit(saveId, baseVersion, pending, refresh) {
-      if (get().phase !== "idle") return;
+      if (get().phase !== "idle" || get().saveId !== saveId) return;
+      const activeGeneration = ++generation;
+      const current = () => generation === activeGeneration && get().saveId === saveId;
+      // 只清理本次实际发送且此后未编辑的草稿；选项、重连和下一步草稿都应保留。
+      const draft = get().draft;
+      const submittedDraft =
+        pending.kind === "input" &&
+        pending.input.text === draft.text.trim() &&
+        pending.input.replyTo === draft.replyTo
+          ? draft
+          : null;
       set({
         phase: "submitting",
         pending,
@@ -252,21 +273,25 @@ export const useStory = create<StoryState>()((set, get) => {
             };
       try {
         const result = await api.submit(saveId, body);
+        if (!current()) return;
         if (result.kind === "started") {
-          follow(saveId, result.turnId, refresh);
+          follow(saveId, result.turnId, refresh, current, submittedDraft);
           return;
         }
         await refresh();
+        if (!current()) return;
         set({ phase: "idle", pending: null });
         finish("ok");
       } catch (error) {
+        if (!current()) return;
         if (
           error instanceof ApiError &&
           error.status === 409 &&
           typeof error.body.turnId === "string"
         ) {
           // 上一轮还在生成（例如刷新了页面）：接着收它的事件
-          follow(saveId, error.body.turnId, refresh);
+          set({ pending: null });
+          follow(saveId, error.body.turnId, refresh, current, null);
           return;
         }
         const message = error instanceof Error ? error.message : String(error);
@@ -284,9 +309,11 @@ export const useStory = create<StoryState>()((set, get) => {
     async stop() {
       const { saveId, turnId } = get();
       if (!saveId || !turnId) return;
+      const activeGeneration = generation;
       try {
         await api.stop(saveId, turnId);
       } catch (error) {
+        if (generation !== activeGeneration || get().turnId !== turnId) return;
         set({
           failure: {
             kind: "error",
