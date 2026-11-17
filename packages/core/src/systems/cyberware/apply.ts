@@ -2,6 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import { checkNarratedPurchase } from "../commerce";
 import type { Attribute } from "../dice";
+import type { WorldClockState } from "../world";
 import { quoteCyberware } from "./quote";
 import {
   CyberwareCatalogSchema,
@@ -264,7 +265,7 @@ export function applyCyberware(
     const paid = applyDebt(
       draft,
       { type: "cyberware.debt", action: "repay", doc: q.doc, docName: q.docName },
-      ctx.now,
+      ctx,
     );
     if (!paid.ok) return paid;
     if (command.event) draft.settled.push(command.event);
@@ -292,8 +293,9 @@ export function applyCyberware(
 export function applyDebt(
   draft: Draft<CyberwareState>,
   command: RipperdocDebtCommand,
-  now: number,
+  ctx: SystemContext,
 ): ApplyOutcome {
+  const now = ctx.now;
   if (command.action === "repay") {
     const debts = draft.debts.filter((d) => d.doc === command.doc);
     if (!debts.length) return { ok: false, reason: `不欠${command.docName}的钱` };
@@ -301,9 +303,14 @@ export function applyDebt(
     return {
       ok: true,
       notes: [`还清欠${command.docName}的 ${debts.reduce((sum, d) => sum + d.amount, 0)} 欧元`],
-      emit: debts.flatMap((debt) =>
-        debt.deadline ? [{ type: "deadline", action: "handle", id: debt.deadline }] : [],
-      ),
+      emit: debts.flatMap((debt) => {
+        const deadline = ctx
+          .read<WorldClockState>("world")
+          .deadlines.find((d) => d.id === debt.deadline);
+        return deadline?.handledAt === null
+          ? [{ type: "deadline", action: "handle", id: deadline.id }]
+          : [];
+      }),
     };
   }
   if (command.amount === undefined) return { ok: false, reason: "赊账要写金额" };

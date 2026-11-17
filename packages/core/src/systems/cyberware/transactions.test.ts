@@ -367,6 +367,37 @@ describe("义体按钮与正文共享交易事实", () => {
     expect(WorldClockStateSchema.parse(paid.slices.world).deadlines[0]?.handledAt).toBe(paid.time);
   });
 
+  it("逾期事件已回应后仍能偿还真实欠款，不会因期限重复完成而卡住还款", () => {
+    let onCredit = succeeded(world({ cash: 0 }), {
+      action: "buy",
+      doc: "needle",
+      id: "eye",
+      credit: true,
+    });
+    const debt = CyberwareStateSchema.parse(onCredit.slices.cyberware).debts[0];
+    if (!debt?.deadline || debt.due === null) throw new Error("应有实际借款期限");
+    onCredit = registry.advanceTo(onCredit, debt.due + 1, context()).world;
+    const handled = registry.applyCommands(
+      onCredit,
+      [{ type: "deadline", action: "handle", id: debt.deadline }],
+      context(),
+    );
+    expect(handled.results[0]?.result.ok).toBe(true);
+    const funded: WorldState = {
+      ...handled.world,
+      slices: { ...handled.world.slices, economy: { eddies: debt.amount + 100, settled: [] } },
+    };
+    const paid = button(funded, { type: "repayRipperdoc", doc: "needle" });
+    expect(EconomyStateSchema.parse(paid.slices.economy).eddies).toBe(100);
+    expect(CyberwareStateSchema.parse(paid.slices.cyberware).debts).toEqual([]);
+    expect(WorldClockStateSchema.parse(paid.slices.world).deadlines).toEqual(
+      WorldClockStateSchema.parse(funded.slices.world).deadlines,
+    );
+    expect(applyPlayerAction(paid, { type: "repayRipperdoc", doc: "needle" }, context()).ok).toBe(
+      false,
+    );
+  });
+
   it("正文前没有授权的借款不能由抽取临时补上，现金和借款额也必须一致", () => {
     const before = world({ old: true, cash: 1000 });
     const command = CyberwareCommandSchema.parse({

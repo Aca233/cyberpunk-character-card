@@ -165,7 +165,7 @@ export function beginService(
         item: q.name,
         due: q.debtDue,
       },
-      ctx.now,
+      ctx,
     );
     if (!outcome.ok) return outcome;
     emit.push(...(outcome.emit ?? []));

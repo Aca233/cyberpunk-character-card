@@ -96,7 +96,7 @@ export const cyberware = defineSystem<
       return { ok: true };
     }
     const catalog = cyberwareCatalog(ctx.data);
-    if (command.type === "cyberware.debt") return applyDebt(draft, command, ctx.now);
+    if (command.type === "cyberware.debt") return applyDebt(draft, command, ctx);
     if (command.type === "cyberware.boost") {
       const broken = ctx.read<HealthState>("health").brokenChrome;
       return applyBoost(draft, command.id, catalog, ctx.now, broken);
