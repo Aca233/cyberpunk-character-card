@@ -65,15 +65,24 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
   apply(draft, command, ctx) {
     switch (command.type) {
       case "phone.call": {
+        const caller = ctx.read<NpcState>("npc").npcs[command.from];
+        if (caller?.alive === false) return { ok: false, reason: "对方已无法发起全息通话" };
         const name =
-          ctx.read<NpcState>("npc").npcs[command.from]?.name ??
-          ctx.read<JobsState>("jobs").fixers[command.from]?.name ??
-          command.from;
+          caller?.name ?? ctx.read<JobsState>("jobs").fixers[command.from]?.name ?? command.from;
         return receiveCall(draft, command.from, name, command.about, ctx.now);
       }
-      case "phone.answer":
+      case "phone.answer": {
+        const call = draft.calls.find((entry) => entry.id === command.id);
+        if (command.answer && call && ctx.read<NpcState>("npc").npcs[call.from]?.alive === false) {
+          return { ok: false, reason: "通讯已中断，对面没有回应" };
+        }
         return answerCall(draft, command.id, command.answer, ctx.now);
+      }
       case "phone.receive": {
+        const npcs = ctx.read<NpcState>("npc");
+        if (npcs.npcs[command.from]?.alive === false) {
+          return { ok: false, reason: "对方已无法发送新消息" };
+        }
         const jobs = ctx.read<JobsState>("jobs");
         if (command.job !== undefined) {
           const job = jobs.jobs.find((j) => j.id === command.job);
@@ -84,7 +93,6 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
             };
           }
         }
-        const npcs = ctx.read<NpcState>("npc");
         return receiveMessage(
           draft,
           command.from,
