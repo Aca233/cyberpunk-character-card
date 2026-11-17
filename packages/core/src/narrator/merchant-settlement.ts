@@ -235,7 +235,7 @@ function commandProposal(command: Command): BuyProposal | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-/** 交易自己交付钱货；同轮单列同物件或同金额的条目不能再执行一次。 */
+/** 交易自己交付钱货；同事件单列同物件或同金额的条目不能再执行一次。 */
 function duplicateSettlement(
   command: Command,
   purchases: readonly PreparedPurchase[],
@@ -267,29 +267,55 @@ function duplicateSettlement(
   );
 }
 
-/** 授权只供一次成功成交消费；重算/回滚从头配对，不在共享 facts 上保存可变计数。 */
+export interface MerchantBatchResult extends ApplyBatchResult {
+  readonly remaining: readonly number[];
+  readonly failure?: string;
+}
+
+/** 单事件试算：首失败整组撤销；授权游标由调用方仅在提交事件时接收。 */
 export function applyMerchantCommands(
   world: WorldState,
   commands: readonly Command[],
   ctx: ApplyContext,
   purchases: readonly PreparedPurchase[],
-): ApplyBatchResult {
+  available: readonly number[] = purchases.map((_, index) => index),
+): MerchantBatchResult {
   let current = world;
   const patches: ApplyBatchResult["patches"][number][] = [];
   const results: ApplyBatchResult["results"][number][] = [];
-  const remaining = [...purchases];
-  for (const command of commands) {
+  const remaining = [...available];
+  const paired: PreparedPurchase[] = [];
+  const rollback = (failedAt: number, reason: string): MerchantBatchResult => ({
+    world,
+    patches: [],
+    remaining: available,
+    failure: reason,
+    results: commands.map((command, index) => ({
+      command,
+      result: {
+        ok: false,
+        reason:
+          index === failedAt
+            ? reason
+            : index < failedAt
+              ? `同一事件结算失败，已撤销本条：${reason}`
+              : `同一事件前置步骤失败，本条未执行：${reason}`,
+      },
+    })),
+  });
+  for (const [commandIndex, command] of commands.entries()) {
     let executable = command;
     let reason: string | undefined;
     let facts = ctx.facts ?? {};
     let authorized = -1;
     const proposal = commandProposal(command);
-    if (duplicateSettlement(command, purchases, commands)) {
+    if (duplicateSettlement(command, paired, commands)) {
       reason = "交易已统一处理钱货，不能另列相同物件或金额重复结算";
     } else if (proposal) {
       // 在真实执行位置重报价，不能因预看了目的地就隔空拿货，也不能临时换价或借款。
-      for (const [i, candidate] of remaining.entries()) {
-        if (!candidate.quote.ok) continue;
+      for (const [i, purchaseIndex] of remaining.entries()) {
+        const candidate = purchases[purchaseIndex];
+        if (!candidate?.quote.ok) continue;
         const actual = purchaseQuote(current, ctx.data ?? {}, {
           ...proposal,
           destination: candidate.proposal.destination,
@@ -305,7 +331,8 @@ export function applyMerchantCommands(
           break;
         }
       }
-      const chosen = remaining[authorized]?.quote;
+      const chosenIndex = remaining[authorized];
+      const chosen = chosenIndex === undefined ? undefined : purchases[chosenIndex]?.quote;
       if (!chosen?.ok) {
         const actual = purchaseQuote(current, ctx.data ?? {}, proposal);
         reason = !actual.ok
@@ -314,14 +341,23 @@ export function applyMerchantCommands(
       } else facts = { ...ctx.facts, tradeQuote: chosen.settlement };
     }
     if (reason) {
-      results.push({ command, result: { ok: false, reason } });
-      continue;
+      return rollback(commandIndex, reason);
     }
     const applied = applyMovement(current, executable, { ...ctx, facts });
+    const failure = applied.results.find(({ result }) => !result.ok)?.result;
+    if (failure && !failure.ok) return rollback(commandIndex, failure.reason);
     current = applied.world;
     patches.push(...applied.patches);
     results.push(...applied.results);
-    if (authorized >= 0 && applied.results[0]?.result.ok) remaining.splice(authorized, 1);
+    if (authorized >= 0 && applied.results[0]?.result.ok) {
+      const used = remaining.splice(authorized, 1)[0];
+      const purchase = used === undefined ? undefined : purchases[used];
+      if (purchase) paired.push(purchase);
+    }
   }
-  return { world: current, patches, results };
+  // 显式重复扣款也可能写在成交之前；仅核对本事件真正配对的授权，不跨事件按金额猜因果。
+  const duplicate = commands.findIndex((command) => duplicateSettlement(command, paired, commands));
+  if (duplicate >= 0)
+    return rollback(duplicate, "交易已统一处理钱货，不能另列相同物件或金额重复结算");
+  return { world: current, patches, results, remaining };
 }
