@@ -30,6 +30,84 @@ const gain = {
   origin: "安娜随身佩戴，交给我作为引荐",
 } as const;
 const ctx = { rng: fixedRng([]), data: { items: [packet], locations: [] } };
+const spareGun: ItemDef = {
+  id: "spare-gun",
+  name: "备用手枪",
+  kind: "weapon",
+  category: "pistol",
+  attribute: "cool",
+  iconic: false,
+};
+function recipient(location = "workshop", gear: string[] = []) {
+  return NpcSchema.parse({
+    id: "guard",
+    name: "护卫",
+    pronoun: "他",
+    role: "护卫",
+    look: "夹克",
+    voice: "低沉",
+    want: "看守",
+    limit: "背叛",
+    affinity: 0,
+    alive: true,
+    met: true,
+    location,
+    lastSeenAt: 0,
+    memories: [],
+    body: { gear, cyberware: [] },
+  });
+}
+
+describe("赠予物品的实际交付", () => {
+  const giftContext = { ...ctx, data: { ...ctx.data, items: [packet, spareGun] } };
+  function setup(location = "workshop", gear: string[] = []) {
+    const base = registry.initialWorld(10);
+    return registry.applyCommands(
+      {
+        ...base,
+        slices: {
+          ...base.slices,
+          npc: { npcs: { guard: recipient(location, gear) } },
+          world: { ...(base.slices.world as object), location: "workshop" },
+        },
+      },
+      [gain, { type: "item", action: "gain", id: spareGun.id, reason: "原有备用枪" }],
+      giftContext,
+    ).world;
+  }
+  const give = (id: string) => ({
+    type: "item",
+    action: "lose",
+    id,
+    recipient: "guard",
+    reason: "亲手赠给护卫",
+  });
+
+  it("目录物品赠予时也同步人物装备，不会只扣除玩家物品", () => {
+    const result = registry.applyCommands(setup(), [give(spareGun.id)], giftContext);
+    expect(result.results[0]?.result.ok).toBe(true);
+    expect(
+      InventoryStateSchema.parse(result.world.slices.inventory).backpack[spareGun.id],
+    ).toBeUndefined();
+    expect(NpcStateSchema.parse(result.world.slices.npc).npcs.guard?.body?.gear).toEqual([
+      spareGun.id,
+    ]);
+  });
+
+  it.each([token.id, spareGun.id])("%s 不可隔空交给明确在别处的人物", (id) => {
+    const world = setup("other-district");
+    const result = registry.applyCommands(world, [give(id)], giftContext);
+    expect(result.results[0]?.result.ok).toBe(false);
+    expect(result.world).toEqual(world);
+  });
+
+  it("人物持有记录不能容纳第二件同型号时，不静默吞掉赠予物品", () => {
+    const world = setup("workshop", [spareGun.id]);
+    const result = registry.applyCommands(world, [give(spareGun.id)], giftContext);
+    expect(result.results[0]?.result.ok).toBe(false);
+    expect(result.world).toEqual(world);
+  });
+});
 
 describe("持续物件", () => {
   it("独立物件赠予和归还在一次事务内同步人物财物，不能复制双重归属", () => {

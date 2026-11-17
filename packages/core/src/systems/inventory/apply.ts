@@ -176,10 +176,15 @@ export function applyItem(
   const fromNpc = object
     ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder)
     : undefined;
-  const toNpc =
-    object && command.recipient
-      ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient)
-      : undefined;
+  const toNpc = command.recipient
+    ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient)
+    : undefined;
+  if (command.action === "lose" && toNpc) {
+    if (toNpc.location !== null && toNpc.location !== location)
+      return fail(`${toNpc.name}不在这里，不能隔空交付物品`);
+    if (toNpc.body?.gear.includes(def.id))
+      return fail(`${toNpc.name}已经持有同款物品，不能把另一件合并丢失`);
+  }
   if (command.action === "gain" && object) {
     if (object.holder === "player") return fail("这件独立物件已经属于玩家，不能重复获得");
     if (object.holder === "consumed") return fail("这件物件已经耗尽，不能凭空重新获得");

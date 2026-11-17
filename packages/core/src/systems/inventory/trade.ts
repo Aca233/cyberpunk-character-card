@@ -290,11 +290,11 @@ export function applyTrade(
     );
     if (!result.ok) return result;
     emitted.push(...(result.emit ?? []));
-    if (!object && quoted.party.npc)
+    if (!object && quoted.party.npc && command.action === "buy")
       emitted.push({
         type: "npcGear",
         id: quoted.party.npc.id,
-        action: command.action === "buy" ? "remove" : "add",
+        action: "remove",
         item: item.id,
       });
     if (quoted.shop) {
