@@ -1,4 +1,4 @@
-import type { TurnEvent, TurnInput } from "@cp/core";
+import { type TurnEvent, type TurnInput, TurnInputSchema } from "@cp/core";
 import { create } from "zustand";
 import { ApiError, api, newRequestId } from "../../api/client";
 import { followTurn } from "../../api/events";
@@ -289,8 +289,24 @@ export const useStory = create<StoryState>()((set, get) => {
           error.status === 409 &&
           typeof error.body.turnId === "string"
         ) {
-          // 上一轮还在生成（例如刷新了页面）：接着收它的事件
-          set({ pending: null });
+          // 接管旧回合必须恢复它自己的输入；当前草稿尚未提交，不能用于旧回合的重试或花费确认。
+          const original = TurnInputSchema.safeParse(error.body.input);
+          if (!original.success) {
+            finish("rejected", "未能恢复上一轮的输入");
+            set({
+              phase: "idle",
+              pending: null,
+              boost: null,
+              failure: {
+                kind: "rejected",
+                message: "未能恢复上一轮的输入，请等待该轮结束后刷新。当前草稿已保留。",
+                retryable: false,
+              },
+            });
+            await refresh();
+            return;
+          }
+          set({ pending: { kind: "input", input: original.data }, boost: null });
           follow(saveId, error.body.turnId, refresh, current, null);
           return;
         }

@@ -125,10 +125,42 @@ describe("剧情请求与当前存档隔离", () => {
   });
 
   it("恢复后端旧回合时，不把刚输入的内容当成旧回合输入", async () => {
-    mocks.submit.mockRejectedValueOnce(new ApiError("正在生成", 409, { turnId: "old" }));
+    mocks.submit.mockRejectedValueOnce(
+      new ApiError("正在生成", 409, { turnId: "old", input: { text: "旧行动" } }),
+    );
     await useStory.getState().submit("save-a", 0, pending, refresh);
     handlers().onEvent(done);
     await vi.waitFor(() => expect(useStory.getState().phase).toBe("idle"));
+    expect(useStory.getState().draft.text).toBe(pending.input.text);
+  });
+
+  it("接管旧回合后失败重试仍使用旧输入，保留未提交的新草稿", async () => {
+    const input = { text: "询问维克多的报价" };
+    mocks.submit.mockRejectedValueOnce(new ApiError("正在生成", 409, { turnId: "old", input }));
+    await useStory.getState().submit("save-a", 0, pending, refresh);
+    handlers().onEvent({ type: "stopped" });
+    const retry = useStory.getState().pending;
+    expect(retry).toEqual({ kind: "input", input });
+    expect(useStory.getState().draft.text).toBe(pending.input.text);
+    if (!retry) throw new Error("没有恢复可重试的输入");
+    await useStory.getState().submit("save-a", 0, retry, refresh);
+    expect(mocks.submit.mock.calls.at(-1)?.[1].input).toEqual(input);
+  });
+
+  it("接管旧回合的大额确认绑定原行动，不绑定新草稿", async () => {
+    const input = { text: "买下那把枪" };
+    mocks.submit.mockRejectedValueOnce(new ApiError("正在生成", 409, { turnId: "old", input }));
+    await useStory.getState().submit("save-a", 0, pending, refresh);
+    handlers().onEvent({ type: "confirmSpend", label: "武器", price: 3000, eddies: 5000 });
+    expect(useStory.getState().spend).toMatchObject({ input });
+    expect(useStory.getState().draft.text).toBe(pending.input.text);
+  });
+
+  it("接管响应缺少合法原输入时明确拒绝，不混用当前草稿", async () => {
+    mocks.submit.mockRejectedValueOnce(new ApiError("正在生成", 409, { turnId: "old" }));
+    await useStory.getState().submit("save-a", 0, pending, refresh);
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(useStory.getState().failure).toMatchObject({ kind: "rejected", retryable: false });
     expect(useStory.getState().draft.text).toBe(pending.input.text);
   });
 });
