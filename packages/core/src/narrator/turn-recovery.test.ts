@@ -6,6 +6,7 @@ import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
 import { ThreadsStateSchema } from "../systems/threads";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { estimateTokens } from "./prompts/layers";
 import { buildNarratorPrompt } from "./prompts/narrate";
 import { NarratorAbortedError, type NarratorTurn, runNarratorTurn } from "./turn";
@@ -56,7 +57,10 @@ async function run(
                 ? { events: [], npcs: [], messages: [] }
                 : { fixes: [] };
       if (!(options.empty && stage === "narrate"))
-        yield { type: "text", text: typeof value === "string" ? value : JSON.stringify(value) };
+        yield {
+          type: "text",
+          text: typeof value === "string" ? value : JSON.stringify(withIndependentEvents(value)),
+        };
       if (stage === options.disconnect) {
         signal.aborted = options.cancel ?? false;
         throw new Error("上游连接中断");

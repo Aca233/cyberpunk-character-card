@@ -43,6 +43,7 @@ const JUDGE_REPLY = JSON.stringify({
 
 const AUX_REPLY = JSON.stringify({
   changes: [{ type: "damage", tier: "graze", reason: "墙头铁皮划伤掌心" }],
+  events: [{ id: "climb-injury", requires: ["$action"], entries: ["changes[0]"] }],
   choices: [],
   dropped: [],
 });

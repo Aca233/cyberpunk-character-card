@@ -56,7 +56,7 @@ async function run(
               sandevistan: false,
             })
           : request.purpose === "aux"
-            ? JSON.stringify({ changes: [], choices: [], dropped: [] })
+            ? JSON.stringify({ changes: [], events: [], choices: [], dropped: [] })
             : "杯底碰了一下桌面，对方继续说起刚才的事。";
       yield { type: "text", text };
       yield { type: "done", finishReason: "stop" };

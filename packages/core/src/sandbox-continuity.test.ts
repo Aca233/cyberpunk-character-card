@@ -3,6 +3,7 @@ import type { LlmClient, LlmRequest } from "./kernel/ports";
 import { seededRng } from "./kernel/rng";
 import type { Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
+import { withIndependentEvents } from "./narrator/extract-test-fixture";
 import { offscreenDue, presentNpcs } from "./narrator/offscreen";
 import { accelerationRequested } from "./narrator/stages";
 import { runNarratorTurn } from "./narrator/turn";
@@ -223,7 +224,9 @@ describe("动态物件穿过完整叙事流程", () => {
           foes: null,
         }),
         text,
-        JSON.stringify({ changes, choices: [], dropped: [], sceneEnd: false }),
+        JSON.stringify(
+          withIndependentEvents({ changes, choices: [], dropped: [], sceneEnd: false }),
+        ),
       ];
       const llm: LlmClient = {
         async *stream(request) {

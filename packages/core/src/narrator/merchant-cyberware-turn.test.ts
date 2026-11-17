@@ -7,6 +7,7 @@ import { TurnInputSchema } from "../schemas/turn";
 import { CyberwareDefSchema, CyberwareStateSchema, RipperdocSchema } from "../systems/cyberware";
 import { EconomyStateSchema } from "../systems/economy";
 import { SafehouseStateSchema } from "../systems/safehouse/schema";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { runNarratorTurn } from "./turn";
 
 const eye = CyberwareDefSchema.parse({
@@ -63,7 +64,10 @@ async function turn(world: WorldState, buy: unknown, changes: unknown[]) {
             : stage === "repair_batch"
               ? { fixes: [] }
               : evidence;
-      yield { type: "text", text: typeof value === "string" ? value : JSON.stringify(value) };
+      yield {
+        type: "text",
+        text: typeof value === "string" ? value : JSON.stringify(withIndependentEvents(value)),
+      };
       yield { type: "done", finishReason: "stop" };
     },
   };
@@ -242,6 +246,7 @@ describe("自由输入义体服务与原面板衔接", () => {
     const completed = await turn(
       started.world,
       { serviceOrder: "appointment", serviceAction: "complete" },
+      // 首次完成与错误重复抽取保持独立，第二笔失败不撤销已经完成的真实手术。
       [service("complete"), service("complete")],
     );
     expect(completed.world.time).toBe(1060);

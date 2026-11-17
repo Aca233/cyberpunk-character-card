@@ -8,6 +8,7 @@ import { CombatStateSchema } from "../systems/combat/schema";
 import { HackingStateSchema } from "../systems/hacking/schema";
 import { HealthStateSchema } from "../systems/health/schema";
 import { NpcSchema } from "../systems/npc/schema";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { JUDGE_TEMPERATURE } from "./prompts";
 import { runNarratorTurn } from "./turn";
 
@@ -123,12 +124,16 @@ describe("叙事战斗伤害去重", () => {
     const attack = { type: "npcHack", id: "runner", program: "overheat", target: "你" };
     const result = await runNarratorTurn(
       {
-        llm: fakeLlm([damage, attack, wound], {
-          kind: "costly",
-          outcome: "自我 ICE 检出过热程序并切断上传",
-          harm: "none",
-          reason: "完好的自我 ICE 拦截了这次已识别的攻击",
-        }),
+        llm: fakeLlm(
+          [damage, attack, wound],
+          {
+            kind: "costly",
+            outcome: "自我 ICE 检出过热程序并切断上传",
+            harm: "none",
+            reason: "完好的自我 ICE 拦截了这次已识别的攻击",
+          },
+          [{ id: "hack", requires: [], entries: ["changes[0]", "changes[1]", "changes[2]"] }],
+        ),
         rng: { roll: () => 2 },
         offscreen: null,
         data: hackData,
@@ -158,12 +163,16 @@ describe("叙事战斗伤害去重", () => {
     const attack = { type: "npcHack", id: "runner", program: "overheat", target: "你" };
     const result = await runNarratorTurn(
       {
-        llm: fakeLlm([damage, attack, wound], {
-          kind: "costly",
-          outcome: "黑客试图继续上传过热程序",
-          harm: "heavy",
-          reason: "敌方尝试侵入你的神经链",
-        }),
+        llm: fakeLlm(
+          [damage, attack, wound],
+          {
+            kind: "costly",
+            outcome: "黑客试图继续上传过热程序",
+            harm: "heavy",
+            reason: "敌方尝试侵入你的神经链",
+          },
+          [{ id: "hack", requires: [], entries: ["changes[0]", "changes[1]", "changes[2]"] }],
+        ),
         rng: { roll: () => 2 },
         offscreen: null,
         data: { ...hackData, cyberware: hackData.cyberware.map((c) => ({ ...c, ram: 1 })) },
@@ -183,12 +192,19 @@ describe("叙事战斗伤害去重", () => {
     const attack = { type: "npcHack", id: "runner", program: "overheat", target: "你" };
     const result = await runNarratorTurn(
       {
-        llm: fakeLlm([start, damage, attack, wound], {
-          kind: "costly",
-          outcome: "过热程序击穿防护引发灼伤",
-          harm: "heavy",
-          reason: "敌方网络黑客近距离直接上传攻击程序",
-        }),
+        llm: fakeLlm(
+          [start, damage, attack, wound],
+          {
+            kind: "costly",
+            outcome: "过热程序击穿防护引发灼伤",
+            harm: "heavy",
+            reason: "敌方网络黑客近距离直接上传攻击程序",
+          },
+          [
+            { id: "combat-start", requires: [], entries: ["changes[0]"] },
+            { id: "hack", requires: [], entries: ["changes[1]", "changes[2]", "changes[3]"] },
+          ],
+        ),
         rng: { roll: () => 2 },
         offscreen: null,
         data: hackData,
@@ -239,12 +255,24 @@ describe("叙事战斗伤害去重", () => {
   });
 });
 
-function fakeLlm(changes: Command[], ruling: unknown = null): LlmClient {
+function fakeLlm(
+  changes: Command[],
+  ruling: unknown = null,
+  events?: { id: string; requires: string[]; entries: string[] }[],
+): LlmClient {
+  // 破解的附带 damage/wound 与攻击同组，表达同一伤害的冗余事实。
   return {
     async *stream(request) {
       const text =
         request.purpose === "aux"
-          ? JSON.stringify({ changes, choices: [], dropped: [] })
+          ? JSON.stringify(
+              withIndependentEvents({
+                changes,
+                choices: [],
+                dropped: [],
+                ...(events === undefined ? {} : { events }),
+              }),
+            )
           : request.temperature === JUDGE_TEMPERATURE
             ? JSON.stringify({
                 read: "测试战斗判定",

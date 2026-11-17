@@ -266,6 +266,10 @@ describe("地图商家与供货集成", () => {
                       reason: "向店员付钱买下咖啡",
                     },
                   ],
+                  events: [
+                    { id: "arrival", requires: ["$action"], entries: ["changes[0]"] },
+                    { id: "coffee", requires: ["arrival"], entries: ["changes[1]"] },
+                  ],
                   choices: [],
                   dropped: [],
                 }

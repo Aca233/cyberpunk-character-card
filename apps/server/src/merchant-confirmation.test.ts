@@ -110,6 +110,10 @@ function mockStages(buys: readonly BuyProposal[], allowPurchase = false) {
               reason: "已确认购买并收到手枪",
             },
           ],
+          events: [
+            { id: "conversation", requires: [], entries: ["changes[0]"] },
+            { id: "purchase", requires: ["$action"], entries: ["changes[1]"] },
+          ],
           choices: [],
           dropped: [],
           sceneMemory: { text: prose, anchors: [], resolve: [] },

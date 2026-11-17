@@ -3,6 +3,7 @@ import { newGameWorld } from "../game";
 import type { LlmClient, LlmRequest } from "../kernel/ports";
 import { TurnInputSchema } from "../schemas/turn";
 import { HealthStateSchema } from "../systems/health";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { runNarratorTurn } from "./turn";
 
 const judge = {
@@ -41,7 +42,8 @@ async function run(replies: {
               : "门框划破左手，你花了两分钟看清锁舌的形状。";
       yield {
         type: "text",
-        text: typeof value === "string" ? value : JSON.stringify(value ?? null),
+        text:
+          typeof value === "string" ? value : JSON.stringify(withIndependentEvents(value ?? null)),
       };
       yield { type: "done", finishReason: "stop" };
     },

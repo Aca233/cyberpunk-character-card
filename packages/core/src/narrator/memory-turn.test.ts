@@ -6,6 +6,7 @@ import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
 import { MemoryStateSchema } from "../systems/memory";
 import { ThreadsStateSchema } from "../systems/threads";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { memoryPool } from "./retrieve";
 import { NarratorAbortedError, type NarratorTurn, runNarratorTurn } from "./turn";
 
@@ -82,7 +83,10 @@ async function run(
                 : stage === "repair"
                   ? { fixes: [] }
                   : narrative;
-      yield { type: "text", text: typeof value === "string" ? value : JSON.stringify(value) };
+      yield {
+        type: "text",
+        text: typeof value === "string" ? value : JSON.stringify(withIndependentEvents(value)),
+      };
       yield { type: "done", finishReason: "stop" };
     },
   };

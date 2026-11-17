@@ -9,6 +9,7 @@ import { EconomyStateSchema } from "../systems/economy";
 import { InventoryStateSchema, ItemDefSchema, ShopSchema } from "../systems/inventory";
 import { TravelStateSchema } from "../systems/travel/schema";
 import { WorldClockStateSchema } from "../systems/world";
+import { withIndependentEvents } from "./extract-test-fixture";
 import { BuyProposalSchema, purchaseQuote } from "./stages";
 import { runNarratorTurn } from "./turn";
 
@@ -70,6 +71,7 @@ async function run(
     buy?: unknown;
     narrative?: string;
     changes?: unknown[];
+    events?: { id: string; requires: string[]; entries: string[] }[];
     approvedSpend?: string;
     spendOk?: boolean;
     data?: Readonly<Record<string, unknown>>;
@@ -86,11 +88,19 @@ async function run(
         stage === "judge"
           ? { read: "回应交易", ooc: false, ruling: null, buy: options.buy ?? null, recall: [] }
           : stage === "extract"
-            ? { changes: options.changes ?? [], choices: [], dropped: [] }
+            ? {
+                changes: options.changes ?? [],
+                choices: [],
+                dropped: [],
+                ...(options.events === undefined ? {} : { events: options.events }),
+              }
             : stage === "repair_batch"
               ? { fixes: [] }
               : (options.narrative ?? "阿涛把数据芯片递到柜台上，收下了约定的欧元。");
-      yield { type: "text", text: typeof value === "string" ? value : JSON.stringify(value) };
+      yield {
+        type: "text",
+        text: typeof value === "string" ? value : JSON.stringify(withIndependentEvents(value)),
+      };
       yield { type: "done", finishReason: "stop" };
     },
   };
@@ -214,6 +224,11 @@ describe("商店交易贯穿判断、正文和抽取", () => {
         trade(),
         { type: "world", location: "outside", activity: "travel", time: 1010 },
         { ...trade(), with: "street-shop" },
+      ],
+      events: [
+        { id: "first-purchase", requires: ["$action"], entries: ["changes[0]"] },
+        { id: "arrival", requires: ["$action"], entries: ["changes[1]"] },
+        { id: "second-purchase", requires: ["arrival"], entries: ["changes[2]"] },
       ],
     });
     if (result.kind !== "done") throw new Error("未完成");
@@ -370,6 +385,10 @@ describe("商店交易贯穿判断、正文和抽取", () => {
       text: "我走进旁边的市场，在阿涛那里买数据芯片",
       buy: { item: "chip", with: "actual", destination: "market" },
       changes: [{ type: "world", activity: "travel", location: "market", time: 1001 }, trade()],
+      events: [
+        { id: "arrival", requires: ["$action"], entries: ["changes[0]"] },
+        { id: "purchase", requires: ["arrival"], entries: ["changes[1]"] },
+      ],
     });
     expect(result.kind).toBe("done");
     if (result.kind !== "done") throw new Error("未成交");
@@ -402,6 +421,7 @@ describe("商店交易贯穿判断、正文和抽取", () => {
   });
 
   it("单笔授权不能被重复成交或额外物品/扣款消费", async () => {
+    // 故意把错误重复抽取作为独立事件：首笔授权有效，后续逐笔拒绝，不能抹掉真实首笔。
     const { result } = await run({
       buy: { item: "chip", with: "actual" },
       changes: [
@@ -418,6 +438,7 @@ describe("商店交易贯穿判断、正文和抽取", () => {
   });
 
   it("明确买两件可成交两次，第三条重复抽取不再交付", async () => {
+    // 两次实际购买是独立事件，第三个事件是错误重复记录。
     const { result } = await run({
       text: "向阿涛买两枚数据芯片",
       buy: [
@@ -435,6 +456,10 @@ describe("商店交易贯穿判断、正文和抽取", () => {
     const { result } = await run({
       buy: { item: "chip", with: "actual" },
       changes: [trade(), { type: "item", action: "lose", id: "chip", reason: "交给同行朋友" }],
+      events: [
+        { id: "purchase", requires: ["$action"], entries: ["changes[0]"] },
+        { id: "handover", requires: ["purchase"], entries: ["changes[1]"] },
+      ],
     });
     if (result.kind !== "done") throw new Error("未完成");
     expect(
