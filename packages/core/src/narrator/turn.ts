@@ -128,6 +128,9 @@ function noteOnce(notes: string[], note: string): void {
 /** 关键条目：被拒、被丢或规则拦截时，这一轮正文标为未定稿 */
 const KEY_ITEMS: Readonly<Record<string, string>> = {
   combat: "战斗后果",
+  hack: "快速破解",
+  breach: "入侵协议",
+  dive: "潜网行动",
   npcHack: "快速破解",
   damage: "伤害",
   "health.limb": "断肢",
@@ -180,6 +183,17 @@ function roleOf(raw: unknown): Role | undefined {
   if (c.type === "combat" && c.action === "start") return "fightStart";
   if (c.type === "damage" || (c.type === "combat" && c.action === "wound")) return "hit";
   return undefined;
+}
+
+function materialGain(command: Command): boolean {
+  return (
+    command.type === "loot" ||
+    (command.type === "money" && typeof command.delta === "number" && command.delta > 0) ||
+    (command.type === "item" && command.action === "gain") ||
+    (command.type === "combat" && command.action === "loot") ||
+    (command.type === "trade" && (command.action === "buy" || command.action === "sell")) ||
+    (command.type === "cyberware" && command.action === "buy")
+  );
 }
 
 /** 去掉跟着没生效条目的那些，记进 dropped */
@@ -1292,6 +1306,22 @@ export async function runNarratorTurn(
     for (const r of fresh) failed.add(r);
     pending = dropFollowers(b, pending, failed);
     applied = applyMerchantCommands(world, pending, applyCtx, prepared.purchases);
+  }
+  const rejectedAccess = applied.results.some(
+    ({ command, result }) =>
+      !result.ok &&
+      (command.type === "hack" || command.type === "breach" || command.type === "dive"),
+  );
+  if (
+    rejectedAccess &&
+    applied.results.some(({ command, result }) => result.ok && materialGain(command))
+  ) {
+    for (const { command, result } of applied.results)
+      if (!result.ok) b.drop(command.type, command, result.reason, "rules");
+    // 暂无逐条因果关联，不能判断收益是否依赖已被否决的行动；试算不落地。
+    return draftOnly(
+      "本轮行动被规则否决，但抽取仍含收益，无法确认因果；正文已保存为草稿，世界状态未改变，请重新生成。",
+    );
   }
   const accepted: Command[] = [];
   for (const { command, result } of applied.results) {
