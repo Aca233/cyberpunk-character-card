@@ -262,7 +262,7 @@ type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "misc"
 
 /**
  * 物品栏（O）：上方展示随身大件负担与当前穿着，中间单行筛选与左列表右详情浏览，
- * 底部折叠展开安全屋存放箱与车辆后备箱；无需在「已装备」和「背包」之间来回切页即可直接装配件、穿脱衣服或使用消耗品。
+ * 底部折叠展开当前安全屋存放箱；无需在「已装备」和「背包」之间来回切页即可直接装配件、穿脱衣服或使用消耗品。
  */
 export function InventoryPage({
   view,
@@ -288,7 +288,7 @@ export function InventoryPage({
   readonly onUnequip?: ((id: string) => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
-  /** 存放箱与车辆后备箱存取 */
+  /** 当前安全屋存放箱存取 */
   readonly onStashMove?:
     | ((action: "store" | "take", item: string, where: string) => void)
     | undefined;
