@@ -1,6 +1,5 @@
 import { defineSystem } from "../../kernel/system";
 import { type CombatState, EVIDENCE_STARS } from "../combat";
-import { ALERT_HEAT_LEVEL, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
 import {
   applyBounty,
@@ -42,7 +41,7 @@ function districtOf(
 export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyCommand, HeatRelief>(
   {
     id: "heat",
-    dependsOn: ["world", "economy", "stealth", "combat"],
+    dependsOn: ["world", "economy", "combat"],
     state: HeatStateSchema,
     initial: () => ({
       stars: 0,
@@ -94,19 +93,6 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
         noticeRise(draft, before, shownStars(draft.stars), at);
       }
       tickHeat(draft, span, district, ctx.facts.hideout === true);
-    },
-    on: {
-      // 潜入收尾：刚结束的场景警戒到过搜索档，有人看清了你，热度加一星
-      "scene.end": (draft, ctx) => {
-        const alert = ctx.read<StealthState>("stealth");
-        const ended = ctx.read<WorldClockState>("world").scene - 1;
-        if (alert.scene === ended && alert.peak >= ALERT_HEAT_LEVEL) {
-          const before = shownStars(draft.stars);
-          draft.stars = Math.min(HEAT_MAX, draft.stars + 1);
-          draft.lastSeenAt = ctx.now;
-          noticeRise(draft, before, shownStars(draft.stars), ctx.now);
-        }
-      },
     },
     rules: [eventRules, heatRules],
     threats: heatThreats,

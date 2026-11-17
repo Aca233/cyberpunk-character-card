@@ -1,40 +1,39 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { ALERT_LABELS, ALERT_MAX, type AlertCommand, type StealthState } from "./schema";
+import {
+  ALERT_LABELS,
+  ALERT_MAX,
+  type AlertCommand,
+  type AlertSite,
+  type StealthState,
+} from "./schema";
 
 type Stealth = Draft<StealthState>;
 
-/** 当前场景的警戒度；记的是别的场景时按 0 算 */
-export function currentAlert(state: StealthState, scene: number): StealthState {
-  return state.scene === scene ? state : { scene, level: 0, peak: 0, lowered: false };
+const siteKey = (location: string | null) => location ?? "unlocated";
+
+/** 只显示当前地点；离开的现场仍独立保留。 */
+export function currentAlert(state: StealthState, location: string | null): AlertSite {
+  return state.sites[siteKey(location)] ?? { level: 0, peak: 0 };
 }
 
-export function applyAlert(draft: Stealth, command: AlertCommand, scene: number): ApplyOutcome {
-  if (draft.scene !== scene) {
-    draft.scene = scene;
-    draft.level = 0;
-    draft.peak = 0;
-    draft.lowered = false;
-  }
-  const from = draft.level;
+export function applyAlert(
+  draft: Stealth,
+  command: AlertCommand,
+  location: string | null,
+): ApplyOutcome {
+  const key = siteKey(location);
+  const site = draft.sites[key] ?? { level: 0, peak: 0 };
+  const from = site.level;
   if (command.delta < 0) {
     if (from === 0) return { ok: false, reason: "警戒度已经是 0，没得降" };
-    if (from >= ALERT_MAX) return { ok: false, reason: "已经交战，只能打或撤，不能再降警戒" };
-    if (draft.lowered) return { ok: false, reason: "这个场景已经降过一档警戒" };
-    draft.level = from - 1;
-    draft.lowered = true;
+    site.level = Math.max(0, from + command.delta);
   } else {
     if (from >= ALERT_MAX) return { ok: false, reason: "已经是交战档" };
-    draft.level = Math.min(ALERT_MAX, from + command.delta);
-    draft.peak = Math.max(draft.peak, draft.level);
+    site.level = Math.min(ALERT_MAX, from + command.delta);
+    site.peak = Math.max(site.peak, site.level);
   }
-  const notes = [
-    `警戒 ${from} → ${draft.level}（${ALERT_LABELS[draft.level]}）：${command.reason}`,
-  ];
-  if (draft.level === ALERT_MAX && from < ALERT_MAX) {
-    notes.push(
-      "交战：尚未登记交战时发 combat start；守卫已经发现你，按现场位置、掩体和退路写局面，不预定谁先命中",
-    );
-  }
+  draft.sites[key] = site;
+  const notes = [`警戒 ${from} → ${site.level}（${ALERT_LABELS[site.level]}）：${command.reason}`];
   return { ok: true, notes };
 }
