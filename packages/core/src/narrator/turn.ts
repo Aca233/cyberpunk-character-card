@@ -1424,7 +1424,8 @@ export async function runNarratorTurn(
             resolve?: boolean;
           };
           if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
-          else if (c.type === "doing") considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+          else if (c.type === "npc.offscreenDoing")
+            considered.push(`场外推演：${c.id} 最近 ${c.text}`);
           else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
           else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
           else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);

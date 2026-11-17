@@ -843,7 +843,7 @@ export function readOffscreen(
       location = undefined;
     }
     commands.push({
-      type: "doing",
+      type: "npc.offscreenDoing",
       id: npc.id,
       text: parsed.data.doing,
       ...(location === undefined ? {} : { location }),

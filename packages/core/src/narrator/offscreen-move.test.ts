@@ -3,6 +3,7 @@ import { seededRng } from "../kernel/rng";
 import type { Command } from "../kernel/system";
 import type { WorldState } from "../kernel/world";
 import { NpcStateSchema } from "../systems/npc";
+import { npcsView } from "../systems/npc/view";
 import { registry } from "../systems/registry";
 import { readOffscreen } from "./offscreen";
 
@@ -54,7 +55,7 @@ describe("场外推演里人物移动", () => {
       { data },
     );
     expect(got.commands).toContainEqual({
-      type: "doing",
+      type: "npc.offscreenDoing",
       id: "regina",
       text: "去来生酒吧见一个老客户",
       location: "afterlife",
@@ -62,6 +63,11 @@ describe("场外推演里人物移动", () => {
     const after = apply(world, got.commands);
     expect(after.results.every((r) => r.result.ok)).toBe(true);
     expect(where(after.world)).toBe("afterlife");
+    expect(npcsView({ world: after.world, data, records: [] })[0]).toMatchObject({
+      placeId: "regina-office",
+      lastPlace: "瑞吉娜的办公室",
+      doing: null,
+    });
   });
 
   it("地点不在地点表里：近况照收，位置不动", () => {
@@ -71,8 +77,8 @@ describe("场外推演里人物移动", () => {
       world,
       { data },
     );
-    const doing = got.commands.find((c) => c.type === "doing");
-    expect(doing).toEqual({ type: "doing", id: "regina", text: "出城办事" });
+    const doing = got.commands.find((c) => c.type === "npc.offscreenDoing");
+    expect(doing).toEqual({ type: "npc.offscreenDoing", id: "regina", text: "出城办事" });
     expect(got.notes.some((n) => n.includes("不在地点表里"))).toBe(true);
     const after = apply(world, got.commands);
     expect(where(after.world)).toBe("regina-office");
