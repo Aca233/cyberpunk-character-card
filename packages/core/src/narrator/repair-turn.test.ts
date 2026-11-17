@@ -113,6 +113,28 @@ describe("回合修复请求有界且账目可核对", () => {
     expect(result.turn.choices).toEqual([]);
   });
 
+  it.each([{ from: "judy", text: "钥匙在柜台下面。" }, "消息格式损坏", null])(
+    "消息列表格式错误且无法修复时，不能静默丢信后把本轮定稿：%j",
+    async (messages) => {
+      const { result, requests, world } = await run({
+        extract: {
+          changes: [{ type: "world", activity: "observe", time: 1002 }],
+          messages,
+        },
+        repair: () => null,
+      });
+      expect(result.kind).toBe("done");
+      if (result.kind !== "done") return;
+      expect(result.turn.draft).toBe(true);
+      expect(result.turn.unsettled).toBeDefined();
+      expect(result.turn.world).toEqual(world);
+      expect(result.turn.patches).toEqual([]);
+      const repairs = requests.filter((r) => r.responseFormat?.name === "repair");
+      expect(repairs).toHaveLength(1);
+      expect(repairs[0]?.messages.at(-1)?.content).toContain("messages");
+    },
+  );
+
   it("合法抽取不含额外修复调用", async () => {
     const { result, requests } = await run({
       extract: { changes: [injury], choices: [{ text: "" }], dropped: [] },

@@ -62,7 +62,7 @@ export const ExtractDocSchema = z.object({
 const ExtractShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
   changes: z.array(z.unknown()).optional(),
-  messages: z.array(z.unknown()).optional().catch(undefined),
+  messages: z.array(z.unknown()).optional(),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   sceneMemory: z.unknown().optional(),
@@ -157,7 +157,7 @@ export function readExtractShape(value: unknown): ShapeResult {
   const parsed = ExtractShapeSchema.safeParse(value);
   return parsed.success
     ? { ok: true, extract: parsed.data }
-    : { ok: false, error: `changes 不是数组：${parsed.error.message}` };
+    : { ok: false, error: `抽取字段格式不正确：${issueText(parsed.error)}` };
 }
 
 /** Zod 报错压成一行，给修复提示词和被丢弃的指令记录用 */
