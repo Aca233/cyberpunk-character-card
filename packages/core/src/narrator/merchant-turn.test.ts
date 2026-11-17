@@ -421,7 +421,7 @@ describe("商店交易贯穿判断、正文和抽取", () => {
   });
 
   it("单笔授权不能被重复成交或额外物品/扣款消费", async () => {
-    // 故意把错误重复抽取作为独立事件：首笔授权有效，后续逐笔拒绝，不能抹掉真实首笔。
+    // 首笔购买独立有效；错误重复购买及其附带钱货属于另一个失败事件。
     const { result } = await run({
       buy: { item: "chip", with: "actual" },
       changes: [
@@ -429,6 +429,14 @@ describe("商店交易贯穿判断、正文和抽取", () => {
         trade(),
         { type: "item", action: "gain", id: "chip", reason: "买到芯片" },
         { type: "money", delta: -180, reason: "买芯片" },
+      ],
+      events: [
+        { id: "purchase", requires: ["$action"], entries: ["changes[0]"] },
+        {
+          id: "duplicate-purchase",
+          requires: ["$action"],
+          entries: ["changes[1]", "changes[2]", "changes[3]"],
+        },
       ],
     });
     if (result.kind !== "done") throw new Error("未完成");
