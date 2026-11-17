@@ -41,6 +41,47 @@ const prose = "门后响起一阵脚步，柜台上的蓝色钥匙还在原处�
 afterEach(() => vi.restoreAllMocks());
 
 describe("未结算正文的真实存档流程", () => {
+  it.each([true, false])(
+    "回合后有界面操作时，仅零结算草稿可安全重新生成（draft=%s）",
+    async (draft) => {
+      const { local, id, saves } = await setup();
+      await saves.appendLog(
+        id,
+        serializeRecord({
+          kind: "turn",
+          seq: 0,
+          at: "2026-11-17T00:00:00Z",
+          requestId: "recover-after-action",
+          baseVersion: 0,
+          input: { text: "观察柜台" },
+          dice: [],
+          commands: [],
+          dropped: [],
+          text: prose,
+          patches: [],
+          ...(draft ? { draft: true as const, unsettled: "抽取断线，尚未记账" } : {}),
+        }),
+      );
+      const action = await call(local, `/saves/${id}/actions`, {
+        requestId: "habit-after-draft",
+        baseVersion: 1,
+        action: { type: "habit", action: "add", text: "进门先看出口" },
+      });
+      expect(action.status).toBe(200);
+      const regenerate = await call(local, `/saves/${id}/regenerate`, { baseVersion: 2 });
+      expect(regenerate.status).toBe(draft ? 200 : 409);
+      const records = (await saves.loadLog(id)).records;
+      expect(records).toHaveLength(draft ? 3 : 2);
+      if (draft) {
+        expect(records.at(-1)).toMatchObject({ kind: "void", target: 0 });
+        expect(regenerate.data.pending).toEqual({ kind: "input", input: { text: "观察柜台" } });
+      }
+      const state = await call(local, `/saves/${id}/state`);
+      expect(state.status).toBe(200);
+      expect(state.data.character).toMatchObject({ habits: ["进门先看出口"] });
+    },
+  );
+
   it.each(["narration-length", "extract-disconnect"])(
     "%s 保存草稿并拒绝误用按账目改写，允许重新生成",
     async (mode) => {

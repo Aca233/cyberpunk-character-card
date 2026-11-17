@@ -650,7 +650,13 @@ export class GameService {
         return { status: 409, body: { error: "角色已经死了，不能重新生成", version } };
       }
       const voided = voidedSeqs(records);
-      const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
+      let last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
+      if (last?.kind !== "turn") {
+        const latestTurn = effectiveTurns(records).at(-1);
+        // 零结算草稿没有改变世界，撤掉它不会影响此后的读消息、装备或习惯等操作。
+        // 已结算回合仍要求位于最后一步，避免其后的操作依赖被撤掉的状态。
+        if (latestTurn?.draft === true && latestTurn.patches.length === 0) last = latestTurn;
+      }
       if (last?.kind !== "turn") {
         return {
           status: 409,
