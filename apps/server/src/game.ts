@@ -1219,11 +1219,18 @@ export class GameService {
     });
   }
 
-  /** 调用方持有这个存档的锁 */
+  /** 快照只是缓存：失败不能把已经落盘的操作误报为失败。调用方持有这个存档的锁。 */
   private async maybeSnapshot(id: string, version: number): Promise<void> {
     if (version % SNAPSHOT_EVERY !== 0) return;
-    const { world } = await this.load(id);
-    await this.deps.saves.writeSnapshot(id, { nextSeq: version, world });
+    try {
+      // 另一页可能在日志落盘后又提交了一步，快照版本必须与实际重建的状态一致。
+      const { world, records } = await this.load(id);
+      await this.deps.saves.writeSnapshot(id, { nextSeq: logVersion(records), world });
+    } catch (error) {
+      this.deps.log(
+        `存档 ${id} 的回合已保存，但自动快照创建失败：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** 从适用于这段日志的快照重建世界；调用方持有这个存档的锁 */

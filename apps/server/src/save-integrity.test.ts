@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { serializeRecord, type TurnRecord } from "@cp/core";
 import { IDBFactory } from "fake-indexeddb";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLocalBackend, LOCAL_ORIGIN, type LocalBackend } from "./browser";
 import { IdbSaveStore, openGameDb } from "./idb-store";
 
@@ -41,6 +41,17 @@ const seedTurn: TurnRecord = {
   dropped: [],
   patches: [],
 };
+
+afterEach(() => vi.restoreAllMocks());
+
+async function seedBeforeSnapshot(saves: IdbSaveStore, id: string) {
+  for (let seq = 0; seq < 9; seq++) {
+    await saves.appendLog(
+      id,
+      serializeRecord({ ...seedTurn, seq, baseVersion: seq, requestId: `seed-turn-${seq}` }),
+    );
+  }
+}
 
 describe("多个页面共享存档", () => {
   it("同时提交界面操作时只接受一次，日志仍能读取且可以继续操作", async () => {
@@ -105,5 +116,60 @@ describe("多个页面共享存档", () => {
       action: { type: "habit", action: "add", text: "习惯先观察出口" },
     });
     expect(next.status).toBe(200);
+  });
+});
+
+describe("自动快照不影响已提交的日志", () => {
+  it("快照写入失败时仍返回操作成功，重新读取保留已保存的修改", async () => {
+    const { first, id, saves } = await setup();
+    await seedBeforeSnapshot(saves, id);
+    vi.spyOn(IdbSaveStore.prototype, "writeSnapshot").mockRejectedValueOnce(
+      new Error("模拟快照空间不足"),
+    );
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const result = await call(first, `/saves/${id}/actions`, {
+      requestId: "snapshot-failure-habit",
+      baseVersion: 9,
+      action: { type: "habit", action: "add", text: "习惯先观察出口" },
+    });
+    expect(result.status).toBe(200);
+    expect((await saves.loadLog(id)).records).toHaveLength(10);
+    const state = await call(first, `/saves/${id}/state`);
+    expect(state.status).toBe(200);
+    expect(state.data.character).toMatchObject({ habits: ["习惯先观察出口"] });
+  });
+
+  it("创建快照前另一页已提交新操作，快照仍标记其真正包含的日志版本", async () => {
+    const { first, second, id, saves } = await setup();
+    await seedBeforeSnapshot(saves, id);
+    const originalAppend = IdbSaveStore.prototype.appendAt;
+    vi.spyOn(IdbSaveStore.prototype, "appendAt").mockImplementation(async function (
+      this: IdbSaveStore,
+      saveId,
+      seq,
+      line,
+    ) {
+      await originalAppend.call(this, saveId, seq, line);
+      if (seq === 9) {
+        const next = await call(second, `/saves/${id}/actions`, {
+          requestId: "before-snapshot-second",
+          baseVersion: 10,
+          action: { type: "habit", action: "add", text: "习惯记住商家的名字" },
+        });
+        expect(next.status).toBe(200);
+      }
+    });
+    const result = await call(first, `/saves/${id}/actions`, {
+      requestId: "before-snapshot-first",
+      baseVersion: 9,
+      action: { type: "habit", action: "add", text: "习惯先观察出口" },
+    });
+    expect(result.status).toBe(200);
+    const state = await call(first, `/saves/${id}/state`);
+    expect(state.status).toBe(200);
+    expect(state.data.character).toMatchObject({
+      habits: ["习惯先观察出口", "习惯记住商家的名字"],
+    });
+    expect((await saves.readSnapshots(id)).map((snapshot) => snapshot.nextSeq)).toEqual([11]);
   });
 });
