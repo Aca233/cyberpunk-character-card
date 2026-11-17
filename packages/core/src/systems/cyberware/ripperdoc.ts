@@ -35,6 +35,7 @@ export function ripperdocView({ world, data }: ViewContext) {
     blackMarket: doc.blackMarket,
     /** 最多肯赊多少；0 是不赊账 */
     credit: doc.credit,
+    creditDays: doc.creditDays,
     /** 欠这位医生的钱 */
     debt: owed.length
       ? {

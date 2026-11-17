@@ -96,8 +96,10 @@ export function Ripperdoc({
   const brokenCount = view.cyberware.filter((c) => c.broken).length;
   const tolerance = view.humanity.tolerance ?? "normal";
 
+  const availableCredit = Math.max(0, doc.credit - (doc.debt?.amount ?? 0));
   const creditable = (item: ShelfItem) =>
-    doc.credit > 0 && doc.debt === null && item.net - eddies <= doc.credit;
+    availableCredit > 0 && item.net - eddies <= availableCredit;
+  const shortReason = doc.credit > 0 ? "欧元和剩余可赊额度不足" : "欧元不够";
   const owed = confirming ? Math.max(0, confirming.net - eddies) : 0;
 
   useLayer(onClose, !confirming);
@@ -267,14 +269,7 @@ export function Ripperdoc({
               <Button
                 primary
                 disabled={!onBuy || working || item.locked !== null || (short && !credit)}
-                reason={
-                  item.locked ??
-                  (short && !credit
-                    ? doc.debt
-                      ? "欧元不够，旧账没还清不再赊"
-                      : "欧元不够"
-                    : undefined)
-                }
+                reason={item.locked ?? (short && !credit ? shortReason : undefined)}
                 onClick={() => setConfirming(item)}
               >
                 {credit ? "赊账安装此义体" : "预约安装手术"}
@@ -394,7 +389,7 @@ export function Ripperdoc({
                   <p className={rip.docMetaLine} data-warn={doc.blackMarket || undefined}>
                     {[
                       doc.blackMarket ? "黑市货源 · −20%（无保修）" : "认证诊所",
-                      doc.credit > 0 && !doc.debt ? `可赊账 ${money(doc.credit)} 欧元` : null,
+                      doc.credit > 0 ? `剩余可赊 ${money(availableCredit)} 欧元` : null,
                       doc.affinity !== null ? `好感 ${doc.affinity}` : null,
                     ]
                       .filter(Boolean)
@@ -423,8 +418,10 @@ export function Ripperdoc({
                 <CellFrame />
                 <Asset id="notify.warning" height={18} tint="var(--cp-red)" />
                 <span className={rip.debtText}>
-                  欠 {doc.name} <b>{money(doc.debt.amount)}</b> 欧元，需在 {doc.debt.due}{" "}
-                  前还清（清账前无法再赊账）
+                  欠 {doc.name} <b>{money(doc.debt.amount)}</b> 欧元，
+                  {doc.debt.due === "未约定期限"
+                    ? "未约定还款期限"
+                    : `最早还款期限：${doc.debt.due}`}
                 </span>
                 <Button
                   small
@@ -690,12 +687,7 @@ export function Ripperdoc({
                                         (short && !credit)
                                       }
                                       reason={
-                                        item.locked ??
-                                        (short && !credit
-                                          ? doc.debt
-                                            ? "欧元不够，旧账没还清不再赊"
-                                            : "欧元不够"
-                                          : undefined)
+                                        item.locked ?? (short && !credit ? shortReason : undefined)
                                       }
                                       onClick={() => setConfirming(item)}
                                     >
@@ -729,7 +721,12 @@ export function Ripperdoc({
             <>
               <Button
                 primary
-                disabled={working || !onBuy}
+                disabled={
+                  working ||
+                  !onBuy ||
+                  confirming.locked !== null ||
+                  (owed > 0 && !creditable(confirming))
+                }
                 onClick={() => onBuy && void run(() => onBuy(confirming.id, owed > 0))}
               >
                 {working
@@ -757,8 +754,10 @@ export function Ripperdoc({
           <p>{confirming.ability}</p>
           {owed > 0 && (
             <p className={rip.lockNote}>
-              身上的 {money(eddies)} 欧元全付掉，剩下 {money(owed)} 欧元赊着，7 天内还清；到期不还
-              {doc.name}会找上门。
+              身上的 {money(eddies)} 欧元全付掉，剩下 {money(owed)} 欧元赊着。
+              {doc.creditDays === null
+                ? "这笔欠款未约定还款期限。"
+                : `这笔欠款需在 ${doc.creditDays} 天内还清。`}
             </p>
           )}
         </Dialog>
