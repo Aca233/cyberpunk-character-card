@@ -15,7 +15,7 @@ import {
   worldRules,
 } from "@cp/core";
 import { describe, expect, it } from "vitest";
-import { gameContent, gameData, shops } from "./index";
+import { gameContent, gameData, ripperdocs, shops } from "./index";
 
 const context = { data: gameData, rng: { roll: () => 1 } };
 const inventory = (world: WorldState) =>
@@ -218,6 +218,22 @@ describe("地图商家与供货集成", () => {
     });
     expect(treated.results.every((r) => r.result.ok)).toBe(true);
     expect(cash(treated.world)).toBe(cash(start) - economyRules.SERVICES.medical.price);
+    const loaded: WorldState = JSON.parse(JSON.stringify(start));
+    const changedData = {
+      ...gameData,
+      ripperdocs: ripperdocs.map((d) =>
+        d.id === "r-wat-nid-ripperdoc-01"
+          ? { ...d, name: "改写医生", location: "badlands", priceFactor: 2 }
+          : d,
+      ),
+    };
+    const quote = inventoryRules.quoteTrade(loaded, changedData, {
+      action: "service",
+      service: "medical",
+      with: "r-wat-nid-ripperdoc-01",
+    });
+    expect(quote.ok).toBe(true);
+    if (quote.ok) expect(quote.party.name).not.toBe("改写医生");
   });
 
   it("自由文字先到首次访问的 POI 再购物，正文报价与实际扣款一致", async () => {

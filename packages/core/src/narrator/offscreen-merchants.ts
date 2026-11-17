@@ -43,7 +43,7 @@ export function offscreenMerchantContext(world: WorldState, data: Data): string[
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const cyberware = CyberwareStateSchema.parse(world.slices.cyberware);
   const logistics = LogisticsStateSchema.parse(world.slices.logistics);
-  const docs = new Map(ripperdocList(data).map((doc) => [doc.id, doc]));
+  const docs = new Map(ripperdocList(data, cyberware).map((doc) => [doc.id, doc]));
   const lines: string[] = [];
   const routes = new Set<string>();
   for (const [id, merchant] of Object.entries(inventory.merchants)) {

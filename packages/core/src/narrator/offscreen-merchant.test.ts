@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fixedRng } from "../kernel/rng";
 import type { Command } from "../kernel/system";
 import type { WorldState } from "../kernel/world";
-import { CyberwareStateSchema } from "../systems/cyberware";
+import { CyberwareStateSchema, RipperdocSchema } from "../systems/cyberware";
 import { EconomyStateSchema } from "../systems/economy";
 import { InventoryStateSchema } from "../systems/inventory";
 import { LogisticsStateSchema } from "../systems/logistics";
@@ -58,6 +58,7 @@ function base(): WorldState {
           ...cyber(world),
           clinics: {
             doc: {
+              definition: RipperdocSchema.parse(data.ripperdocs[0]),
               stock: { model: 1 },
               initializedAt: 1000,
               revision: 0,
@@ -220,6 +221,16 @@ describe("场外推演的经营事实", () => {
 });
 
 describe("场外商家材料按已激活状态组装", () => {
+  it("载入后诊所身份读取已保存定义，不被改写后的初始表替换", () => {
+    const world: WorldState = JSON.parse(JSON.stringify(base()));
+    const changed = {
+      ...data,
+      ripperdocs: data.ripperdocs.map((d) => ({ ...d, name: "改写的医生", location: "far" })),
+    };
+    const context = offscreenMerchantContext(world, changed).join("\n");
+    expect(context).toContain("诊所 doc｜本地医生｜地点 corner");
+    expect(context).not.toContain("改写的医生");
+  });
   it("保留未完订单、服务与有关路线，不发送全城商家货架或无关封锁", () => {
     const bought = apply(base(), [
       { type: "trade", action: "buy", with: "store", item: "tool", reason: "实际购买" },

@@ -59,7 +59,9 @@ function counterparty(
   service: boolean,
 ): Counterparty | string {
   const shops = shopList(data);
-  const clinics = service ? ripperdocList(data) : [];
+  const clinics = service
+    ? ripperdocList(data, CyberwareStateSchema.parse(world.slices.cyberware ?? {}))
+    : [];
   const npcs = Object.values((world.slices.npc as NpcState).npcs);
   const shop = shops.find((s) => s.id === id);
   const npc = npcs.find((n) => n.id === id);

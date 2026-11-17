@@ -23,7 +23,6 @@ import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
 import { rulingFactFrom } from "../systems/dice";
-import { EconomyStateSchema } from "../systems/economy/schema";
 import { falloutKinds } from "../systems/fallout";
 import { quickhackCatalog } from "../systems/hacking";
 import { HealthStateSchema } from "../systems/health";
@@ -749,22 +748,14 @@ export async function runNarratorTurn(
       decided.push(tripText(planned.trip));
     } else b.notes.push(`出行没成：${planned.reason}`);
   }
-  // 同轮先到店再交易时，按到达时间、地点及扣除路费后的余额询价；这里只读，不推进世界。
+  // 在临时世界走同一条已规划路线，让途中到货、到达初始化和实际路费参与报价。
+  // 偶遇已经由 trip 确定；临时预览不消费正式随机流，不写入正式世界。
   const quoteWorld: WorldState = trip
-    ? {
-        time: trip.arriveAt,
-        slices: {
-          ...world.slices,
-          world: { ...WorldClockStateSchema.parse(world.slices.world), location: trip.to.id },
-          economy: {
-            ...EconomyStateSchema.parse(world.slices.economy),
-            eddies: Math.max(
-              0,
-              EconomyStateSchema.parse(world.slices.economy).eddies - trip.route.cost,
-            ),
-          },
-        },
-      }
+    ? registry.applyCommands(world, [{ type: "travel", to: trip.to.id, mode: trip.route.mode }], {
+        rng: { roll: () => 1 },
+        data: withSavedPlaces(deps.data ?? {}, world),
+        facts: { travel: tripFact(trip) },
+      }).world
     : world;
   const buy = judged.get("buy") as TransactionIntent | undefined;
   const prepared = preparePurchases(quoteWorld, deps.data ?? {}, buy);

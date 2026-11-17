@@ -6,7 +6,8 @@ import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CommerceStateSchema } from "../systems/commerce";
 import { EconomyStateSchema } from "../systems/economy";
-import { InventoryStateSchema, ItemDefSchema } from "../systems/inventory";
+import { InventoryStateSchema, ItemDefSchema, ShopSchema } from "../systems/inventory";
+import { TravelStateSchema } from "../systems/travel/schema";
 import { WorldClockStateSchema } from "../systems/world";
 import { BuyProposalSchema, purchaseQuote } from "./stages";
 import { runNarratorTurn } from "./turn";
@@ -71,6 +72,8 @@ async function run(
     changes?: unknown[];
     approvedSpend?: string;
     spendOk?: boolean;
+    data?: Readonly<Record<string, unknown>>;
+    travel?: { to: string; mode: "taxi" };
   } = {},
 ) {
   const world = options.world ?? initial();
@@ -95,7 +98,7 @@ async function run(
     {
       llm,
       rng: { roll: () => 1 },
-      data,
+      data: options.data ?? data,
       offscreen: null,
       contextWindow: 64000,
       approvedSpend: options.approvedSpend,
@@ -107,6 +110,7 @@ async function run(
       input: TurnInputSchema.parse({
         text: options.text ?? "向阿涛买下数据芯片",
         spendOk: options.spendOk,
+        travel: options.travel,
       }),
     },
   );
@@ -122,6 +126,84 @@ const trade = (item = "chip", offer?: string) => ({
 });
 
 describe("商店交易贯穿判断、正文和抽取", () => {
+  it("路线面板途中到货参与抵达报价，临时预览不提前改存档或重复收路费", async () => {
+    const base = initial();
+    const shop = ShopSchema.parse(data.shops.find((s) => s.id === "actual"));
+    const state = InventoryStateSchema.parse(base.slices.inventory);
+    const world: WorldState = {
+      ...base,
+      slices: {
+        ...base.slices,
+        world: { ...WorldClockStateSchema.parse(base.slices.world), location: "outside" },
+        inventory: {
+          ...state,
+          merchants: {
+            actual: {
+              definition: shop,
+              initializedAt: 900,
+              stock: { chip: 0 },
+              open: true,
+              closureReason: null,
+            },
+          },
+          supplyOrders: {
+            inbound: {
+              id: "inbound",
+              shop: "actual",
+              item: "chip",
+              quantity: 1,
+              supplier: "depot",
+              origin: "已确认供应",
+              route: ["outside", "market"],
+              createdAt: 999,
+              dueAt: 1001,
+              status: "pending",
+              remainingMinutes: 1,
+              delayReason: null,
+              requestedBy: "store",
+              uncollected: 0,
+              deliveredAt: null,
+              cancelReason: null,
+            },
+          },
+        },
+      },
+    };
+    const snapshot = JSON.stringify(world);
+    const { result, requests } = await run({
+      world,
+      data: {
+        ...data,
+        locations: [
+          { id: "market", name: "市场", district: "沃森", x: 15, y: 10 },
+          { id: "outside", name: "出发地", district: "沃森", x: 10, y: 10 },
+        ],
+      },
+      text: "坐出租车到市场买下芯片",
+      travel: { to: "market", mode: "taxi" },
+      buy: { item: "chip", with: "actual" },
+      changes: [trade()],
+    });
+    expect(JSON.stringify(world)).toBe(snapshot);
+    if (result.kind !== "done") throw new Error("未成交");
+    expect(result.turn.unsettled).toBeUndefined();
+    const inventory = InventoryStateSchema.parse(result.turn.world.slices.inventory);
+    expect(inventory.backpack.chip).toBe(1);
+    expect(inventory.merchants.actual?.stock.chip).toBe(0);
+    expect(inventory.supplyOrders.inbound?.status).toBe("delivered");
+    const trips = TravelStateSchema.parse(result.turn.world.slices.travel).trips;
+    expect(trips).toHaveLength(1);
+    expect(trips[0]?.cost).toBeGreaterThan(0);
+    expect(EconomyStateSchema.parse(result.turn.world.slices.economy).eddies).toBe(
+      10000 - 180 - (trips[0]?.cost ?? 0),
+    );
+    expect(
+      requests
+        .find((r) => !r.responseFormat)
+        ?.messages.map((m) => m.content)
+        .join("\n"),
+    ).toContain("最终对价 180 欧元");
+  });
   it("同轮多地点按先后抵达再交易，两家库存各扣一次", async () => {
     const { result } = await run({
       buy: [
