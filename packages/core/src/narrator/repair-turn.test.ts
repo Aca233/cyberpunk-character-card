@@ -143,6 +143,25 @@ describe("回合修复请求有界且账目可核对", () => {
     expect(requests).toHaveLength(3);
   });
 
+  it("派单消息没有成功入账时保留未定稿标记，不写入本场记忆", async () => {
+    const { result, world } = await run({
+      extract: {
+        changes: [{ type: "world", activity: "observe", time: 1002 }],
+        messages: [{ from: "中间人", text: "我有个活交给你。", job: "missing-job" }],
+        sceneMemory: { text: "中间人发来了一份新委托。", anchors: [], resolve: [] },
+      },
+    });
+    expect(result.kind).toBe("done");
+    if (result.kind !== "done") return;
+    expect(result.turn.dropped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ where: "phone.receive", stage: "rules" })]),
+    );
+    expect(result.turn.world.slices.phone).toEqual(world.slices.phone);
+    expect(result.turn.world.time).toBe(1002);
+    expect(result.turn.unsettled).toContain("消息");
+    expect(result.turn.world.slices.memory).toEqual(world.slices.memory);
+  });
+
   it("顶层修复耗尽本阶段额度后，不为每条坏账再次调用，标为未完整结算", async () => {
     const { result, requests, world } = await run({
       extract: "无法解析的抽取",

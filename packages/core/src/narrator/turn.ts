@@ -149,6 +149,8 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   loot: "零钱",
   item: "物品",
   jobEnd: "委托结局",
+  "phone.receive": "收到的消息",
+  "phone.reply": "回复的消息",
 };
 
 /** 互相关联的条目：一种没生效，跟着它的也不生效（付钱和拿货互相跟，受伤跟着开战） */
