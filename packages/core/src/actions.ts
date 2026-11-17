@@ -29,6 +29,7 @@ import { registry } from "./systems/registry";
 import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
+import { SelectVehicleActionSchema } from "./systems/travel";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
@@ -49,6 +50,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   UnequipItemActionSchema,
   /** 存放箱和后备箱：store 从背包放进去，take 拿回背包；where 写安全屋 id 或车的 id */
   StashActionSchema,
+  /** 选用停在身边的可用车辆；战斗中换车通过行动描述。 */
+  SelectVehicleActionSchema,
   /** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
   OutfitActionSchema,
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */

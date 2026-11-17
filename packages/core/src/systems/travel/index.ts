@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { travelActions } from "./actions";
 import { applyTravel, clearEncounter } from "./apply";
 import { travelRules } from "./prompt";
 import {
@@ -56,10 +57,12 @@ export const travel = defineSystem<
     "scene.end": (draft) => clearEncounter(draft),
   },
   rules: [travelRules],
+  actions: travelActions,
   view: { key: "travel", project: travelView },
   status: travelStatus,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

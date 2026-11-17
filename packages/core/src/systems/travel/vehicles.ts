@@ -48,7 +48,8 @@ export function activeVehicle(
   stolen?: boolean,
 ): OwnedVehicle | undefined {
   const selected = vehicles.find((v) => v.id === activeId);
-  return selected &&
+  return location !== null &&
+    selected &&
     selected.condition !== "wrecked" &&
     selected.location === location &&
     (stolen === undefined || selected.stolen === stolen)
@@ -171,6 +172,8 @@ export function applyVehicle(
 
   switch (command.action) {
     case "select": {
+      if (target.location === null || here === null)
+        return fail("车辆或当前位置未知，无法确认车辆就在身边");
       if (target.location !== here)
         return fail(`${name(target)}停在${locationName(ctx, target.location)}，不在身边`);
       if (target.condition === "wrecked") return fail(`${name(target)}已经报废，不能驾驶`);

@@ -106,7 +106,7 @@ export function travelView({ world, data }: ViewContext) {
         v.location === null
           ? "未知地点"
           : (locationForTravel(data, v.location)?.name ?? v.location),
-      here: v.location === w.location,
+      here: v.location !== null && v.location === w.location,
       selected: v.id === w.travel.activeVehicleId,
     };
   });
