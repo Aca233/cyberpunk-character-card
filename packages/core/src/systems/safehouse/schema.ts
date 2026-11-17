@@ -50,7 +50,7 @@ export type Trophy = z.infer<typeof TrophySchema>;
 
 export const SafehouseStateSchema = z.object({
   homes: z.array(HomeSchema).default([]),
-  /** 存放的东西：安全屋 id 或车的 id → 物品 id → 数量 */
+  /** 安全屋存放箱：安全屋 id → 物品 id → 数量；后备箱由车辆 cargo 保存。 */
   stash: z.record(z.string(), z.record(z.string(), z.number().int().min(1))).default({}),
   /** 历史存档兼容字段；战利品墙已下线 */
   trophies: z.array(TrophySchema).default([]),

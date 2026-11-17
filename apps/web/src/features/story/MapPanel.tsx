@@ -870,6 +870,7 @@ export function MapBody({
                           {" "}
                           · {v.classLabel} · {v.conditionLabel}
                           {v.stolen && " · 偷来的"}
+                          {` · 停在${v.locationName}${v.here ? " · 就在身边" : ""}${v.selected ? " · 当前选用" : ""}`}
                         </span>
                       </li>
                     ))}

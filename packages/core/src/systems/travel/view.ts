@@ -101,6 +101,13 @@ export function travelView({ world, data }: ViewContext) {
       condition: v.condition,
       conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
       stolen: v.stolen,
+      location: v.location,
+      locationName:
+        v.location === null
+          ? "未知地点"
+          : (locationForTravel(data, v.location)?.name ?? v.location),
+      here: v.location === w.location,
+      selected: v.id === w.travel.activeVehicleId,
     };
   });
   return {

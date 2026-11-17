@@ -406,6 +406,12 @@ export const InventoryInternalSchemas = {
     action: z.enum(["out", "in"]),
     id: z.string().min(1),
   }),
+  /** 车辆系统发出：已存放的独立物件随车移到新停车地点。 */
+  "inventory.relocateStash": z.strictObject({
+    type: z.literal("inventory.relocateStash"),
+    items: z.array(z.string().min(1)),
+    location: z.string().min(1),
+  }),
   /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */
   "inventory.mod": z.object({
     type: z.literal("inventory.mod"),

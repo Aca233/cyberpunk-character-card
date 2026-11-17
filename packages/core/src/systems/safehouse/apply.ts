@@ -16,25 +16,34 @@ const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
 export type Container =
   | { readonly kind: "home"; readonly id: string; readonly name: string }
-  | { readonly kind: "trunk"; readonly id: string; readonly name: string; readonly cap: number };
+  | {
+      readonly kind: "trunk";
+      readonly id: string;
+      readonly name: string;
+      readonly cap: number;
+      readonly location: string | null;
+      readonly wrecked: boolean;
+      readonly items: Readonly<Record<string, number>>;
+    };
 
-/** 车的后备箱：名下、没报废的车 */
+/** 车辆本身保存后备箱内容；报废车仍允许在现场取出物品。 */
 export function trunks(
   travel: Pick<TravelState, "vehicles">,
   data: Readonly<Record<string, unknown>>,
 ): Container[] {
   const models = vehicleCatalog(data);
-  return (travel.vehicles ?? [])
-    .filter((v) => v.condition !== "wrecked")
-    .map((v) => {
-      const def = models.get(v.model);
-      return {
-        kind: "trunk",
-        id: v.id,
-        name: `${def?.name ?? v.model}的后备箱`,
-        cap: def?.trunk ?? 0,
-      };
-    });
+  return (travel.vehicles ?? []).map((v) => {
+    const def = models.get(v.model);
+    return {
+      kind: "trunk",
+      id: v.id,
+      name: `${def?.name ?? v.model}的后备箱`,
+      cap: def?.trunk ?? 0,
+      location: v.location,
+      wrecked: v.condition === "wrecked",
+      items: v.cargo,
+    };
+  });
 }
 
 function containerOf(
@@ -54,7 +63,10 @@ function containerOf(
     return { kind: "home", id: home.id, name: `${home.name}的存放箱` };
   }
   const trunk = trunks(ctx.read<TravelState>("travel"), ctx.data).find((t) => t.id === where);
-  if (trunk) return trunk;
+  if (trunk && trunk.kind === "trunk") {
+    if (trunk.location !== location) return "车辆不在当前位置，无法访问后备箱";
+    return trunk;
+  }
   const known = [
     ...state.homes.map((h) => h.id),
     ...trunks(ctx.read<TravelState>("travel"), ctx.data).map((t) => t.id),
@@ -80,7 +92,15 @@ export function applyStash(
       ? { type: "cyberware.stash", part: command.item, action, where: box.id, location }
       : { type: "inventory.stash", action: action === "store" ? "out" : "in", id: command.item };
   const items = draft.stash[box.id] ?? {};
+  const stored = box.kind === "trunk" ? box.items : items;
+  const cargo = {
+    type: "vehicle.stash",
+    action: command.action,
+    vehicle: box.id,
+    item: command.item,
+  };
   if (command.action === "store") {
+    if (box.kind === "trunk" && box.wrecked) return fail("车辆已经报废，只能取出后备箱物品");
     const inv = ctx.read<InventoryState>("inventory");
     const carried = physical
       ? Number(
@@ -92,26 +112,30 @@ export function applyStash(
     if (carried < 1) return fail(`背包里没有${name}；穿着的衣服或快捷栏里的药/雷需要先脱下`);
     if (
       box.kind === "trunk" &&
-      items[command.item] === undefined &&
-      Object.keys(items).length >= box.cap
+      stored[command.item] === undefined &&
+      Object.keys(stored).length >= box.cap
     )
       return fail(`${box.name}满了（${box.cap} 格）`);
-    items[command.item] = (items[command.item] ?? 0) + 1;
-    draft.stash[box.id] = items;
+    if (box.kind === "home") {
+      items[command.item] = (items[command.item] ?? 0) + 1;
+      draft.stash[box.id] = items;
+    }
     return {
       ok: true,
       notes: [`把${name}放进${box.name}（${command.reason}）`],
-      emit: [move("store")],
+      emit: [...(box.kind === "trunk" ? [cargo] : []), move("store")],
     };
   }
-  const count = items[command.item] ?? 0;
+  const count = stored[command.item] ?? 0;
   if (count < 1) return fail(`${box.name}里没有${name}`);
-  if (count === 1) Reflect.deleteProperty(items, command.item);
-  else items[command.item] = count - 1;
+  if (box.kind === "home") {
+    if (count === 1) Reflect.deleteProperty(items, command.item);
+    else items[command.item] = count - 1;
+  }
   return {
     ok: true,
     notes: [`从${box.name}拿出${name}（${command.reason}）`],
-    emit: [move("take")],
+    emit: [...(box.kind === "trunk" ? [cargo] : []), move("take")],
   };
 }
 

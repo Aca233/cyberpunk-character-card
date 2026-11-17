@@ -376,7 +376,6 @@ function openingCommands(opening: GameOpening, start: number, kit: Kit = opening
     ...(kit.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
     ...(kit.programs ?? []).map((id) => ({ type: "hack", action: "learn", program: id, reason })),
     ...(kit.eddies ? [{ type: "money", delta: kit.eddies, reason }] : []),
-    ...(kit.vehicles ?? []).map((model) => ({ type: "vehicle.grant", model, reason })),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
       { type: "jobAccept", id: job.id },
@@ -474,6 +473,12 @@ export function newGameWorld(
     ...(meta.startLocation !== undefined
       ? [{ type: "world", activity: "travel", location: meta.startLocation }]
       : []),
+    // 先确定最终开局地点，再把车辆停在玩家身边。
+    ...(kit?.vehicles ?? []).map((model) => ({
+      type: "vehicle.grant",
+      model,
+      reason: `开局：${opening?.title ?? "行装"}`,
+    })),
   ];
   const parsed = commands.map((raw) => {
     const result = registry.parseInternal(raw);

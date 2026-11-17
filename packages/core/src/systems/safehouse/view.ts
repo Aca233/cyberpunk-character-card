@@ -13,8 +13,8 @@ export function safehouseView({ world, data }: ViewContext) {
   const parts = CyberwareStateSchema.parse(world.slices.cyberware).parts;
   const chrome = cyberwareCatalog(data);
   const places = locationCatalog(data);
-  const list = (id: string) =>
-    Object.entries(state.stash[id] ?? {}).map(([item, count]) => ({
+  const list = (items: Readonly<Record<string, number>>) =>
+    Object.entries(items).map(([item, count]) => ({
       id: item,
       name:
         names.get(item)?.name ??
@@ -33,14 +33,16 @@ export function safehouseView({ world, data }: ViewContext) {
       location: h.location,
       locationName: places.get(h.location)?.name ?? h.location,
       here: h.location === location,
-      items: list(h.id),
+      items: list(state.stash[h.id] ?? {}),
     })),
-    trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data).map((t) => ({
-      id: t.id,
-      name: t.name,
-      cap: t.kind === "trunk" ? t.cap : 0,
-      items: list(t.id),
-    })),
+    trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data)
+      .filter((t) => t.kind === "trunk" && t.location === location)
+      .map((t) => ({
+        id: t.id,
+        name: t.kind === "trunk" && t.wrecked ? `${t.name}（报废，仅可取出）` : t.name,
+        cap: t.kind === "trunk" && !t.wrecked ? t.cap : 0,
+        items: list(t.kind === "trunk" ? t.items : {}),
+      })),
     /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */
     forSale: apartmentList(data)
       .filter((a) => a.location === location)

@@ -119,6 +119,12 @@ export const inventory = defineSystem<
           ctx.now,
           ctx.read<WorldClockState>("world").location,
         );
+      case "inventory.relocateStash":
+        for (const id of command.items) {
+          const object = draft.objects[id];
+          if (object?.holder === "stash") object.location = command.location;
+        }
+        return { ok: true };
       case "inventory.mod":
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
       case "parts":

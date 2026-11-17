@@ -151,6 +151,10 @@ export const OwnedVehicleSchema = z.object({
   id: z.string().min(1),
   model: z.string().min(1),
   condition: VehicleConditionSchema,
+  /** 车辆实际停放位置；驾驶出行时由代码同步到目的地。 */
+  location: z.string().nullable(),
+  /** 后备箱物品按物品 id 计数；容量按不同物品种类占格。 */
+  cargo: z.record(z.string(), z.number().int().min(1)),
   /** 偷来的：开着它风险高，迟早要扔 */
   stolen: z.boolean(),
   since: z.number().int(),
@@ -166,11 +170,13 @@ export const REPAIR_SHARE = 0.1;
 export const VehicleCommandSchema = z
   .object({
     type: z.literal("vehicle"),
-    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase"]),
+    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase", "select"]),
     /** buy、steal 写车型 id */
     model: z.string().min(1).optional(),
-    /** 对哪辆车；不写是正在开的那辆（最近一辆没报废的） */
+    /** 对哪辆车；不写时指当前选用车辆 */
     vehicle: z.string().min(1).optional(),
+    /** damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车、弃车或追逐。 */
+    location: z.string().min(1).optional(),
     /** steal：看见的人数 */
     witnesses: z.number().int().min(0).max(1000).optional(),
     /** chase：事先说好的失败代价——damage 车受损，stopped 被拦下，heat 通缉星涨 */
@@ -186,9 +192,15 @@ export const VehicleCommandSchema = z
       });
     if (c.action === "chase" && c.stake === undefined)
       ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
+    if (c.action === "select" && c.vehicle === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["vehicle"],
+        message: "select 要写 vehicle（车辆 id）",
+      });
   })
   .describe(
-    "载具：buy 买车（代码按车价扣钱）；steal 偷车（需突破防盗/物理阻拦成功，写 witnesses）；damage 车受损一档；wreck 报废；repair 修好受损的车（代码按车价一成收钱）；abandon 扔掉；chase 追车或被追（需有惊险追逐因果且写清 stake 代价）",
+    "载具：buy 买车；steal 偷车；select 选择当前使用的车辆（只能选择身边可用车辆）；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、abandon、chase 只能操作身边车辆；有后备箱物品时必须先取空才能弃车",
   );
 export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
 
@@ -200,6 +212,14 @@ export const VehicleGrantSchema = z.object({
 });
 export type VehicleGrant = z.infer<typeof VehicleGrantSchema>;
 
+export const VehicleStashSchema = z.strictObject({
+  type: z.literal("vehicle.stash"),
+  action: z.enum(["store", "take"]),
+  vehicle: z.string().min(1),
+  item: z.string().min(1),
+});
+export type VehicleStash = z.infer<typeof VehicleStashSchema>;
+
 export const TravelStateSchema = z.object({
   trips: z.array(TripSchema),
   /** 上一次偶遇在第几个场景；一个场景最多一次 */
@@ -207,6 +227,8 @@ export const TravelStateSchema = z.object({
   encounter: EncounterSchema.nullable(),
   /** 名下的车 */
   vehicles: z.array(OwnedVehicleSchema),
+  /** 当前选用的车辆；只有与玩家同地点时才能驾驶。 */
+  activeVehicleId: z.string().nullable(),
   /** 单调递增的实车编号；弃车后不复用后备箱身份。 */
   nextVehicleId: z.number().int().min(1),
 });

@@ -15,7 +15,7 @@ export const travelStatus: readonly SystemStatus[] = [
       const lines: string[] = [];
       if (t.vehicles.length > 0)
         lines.push(
-          `名下的车：${t.vehicles.map((v) => `${v.id}「${v.name}」（${v.classLabel}，速度 ${v.speed} 档，${v.seats} 座，${v.conditionLabel}${v.stolen ? "，偷来的" : ""}）`).join("；")}`,
+          `名下的车：${t.vehicles.map((v) => `${v.id}「${v.name}」（${v.classLabel}，速度 ${v.speed} 档，${v.seats} 座，${v.conditionLabel}${v.stolen ? "，偷来的" : ""}；停在${v.locationName}${v.here ? "，就在身边" : ""}${v.selected ? "，当前选用" : ""}）`).join("；")}`,
         );
       if (t.encounter)
         lines.push(

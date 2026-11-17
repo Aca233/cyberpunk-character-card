@@ -100,6 +100,7 @@ export function tripWorldOf(world: {
         encounterScene: null,
         encounter: null,
         vehicles: [],
+        activeVehicleId: null,
         nextVehicleId: 1,
       },
     ),
@@ -262,10 +263,10 @@ export function routeOptions(
   const cars = vehicleCatalog(data);
   return MODES.map((mode) => {
     const speed = TRAVEL_SPEEDS[mode];
-    // 开车：按正在开的那辆的速度档和车况折算
+    // 开车：按当前选用且停在出发地点的车辆速度档和车况折算
     const car =
       mode === "car" || mode === "stolen"
-        ? activeVehicle(w.travel.vehicles, mode === "stolen")
+        ? activeVehicle(w.travel.vehicles, w.travel.activeVehicleId, w.location, mode === "stolen")
         : undefined;
     const carDef = car ? cars.get(car.model) : undefined;
     const factor = car ? vehicleFactor(car, carDef) : 1;
@@ -303,8 +304,13 @@ function blockOf(
     return spot(there) ? "现在的位置不在地图上，用自由输入写怎么去" : `${there.name}还没上地图`;
   if (mode === "metro" && !(here?.metro && there.metro)) return "两头不都有轻轨站";
   if (mode === "car" && !hasCar)
-    return w.travel.vehicles.some((v) => !v.stolen) ? "自己的车都报废了" : "还没有自己的车";
-  if (mode === "stolen" && !hasCar) return "手上没有偷来的车：先在正文里偷一辆";
+    return w.travel.vehicles.some((v) => !v.stolen && v.condition !== "wrecked")
+      ? "没有选中停在当前位置的自有车辆；到车旁后选择要开的车"
+      : "还没有能开的自有车辆";
+  if (mode === "stolen" && !hasCar)
+    return w.travel.vehicles.some((v) => v.stolen && v.condition !== "wrecked")
+      ? "没有选中停在当前位置的偷来车辆；到车旁后选择要开的车"
+      : "手上没有能开的偷来车辆：先在正文里偷一辆";
   if (cost > w.eddies) return `钱不够：要 ${cost}，只有 ${w.eddies}`;
   return undefined;
 }
@@ -477,6 +483,16 @@ export function applyTravel(
   const planned = planTrip(w, ctx.data, command, fixed);
   if (!planned.ok) return fail(planned.reason);
   const { from, to, route, arriveAt, encounter } = planned.trip;
+  const driver =
+    route.mode === "car" || route.mode === "stolen"
+      ? draft.vehicles.find((vehicle) => vehicle.id === draft.activeVehicleId)
+      : undefined;
+  if (
+    (route.mode === "car" || route.mode === "stolen") &&
+    (!driver || driver.location !== from.id || driver.condition === "wrecked")
+  )
+    return fail("所选车辆不在出发地点，无法开始这段驾驶");
+  if (driver) driver.location = to.id;
   draft.trips.push({
     from: from.id,
     to: to.id,
@@ -504,6 +520,17 @@ export function applyTravel(
     notes,
     emit: [
       { type: "world", activity: "travel", time: arriveAt, location: to.id },
+      ...(driver && Object.keys(driver.cargo).length > 0
+        ? [
+            { type: "inventory.relocateStash", items: Object.keys(driver.cargo), location: to.id },
+            {
+              type: "cyberware.relocateStash",
+              items: Object.keys(driver.cargo),
+              where: driver.id,
+              location: to.id,
+            },
+          ]
+        : []),
       ...(route.cost > 0
         ? [{ type: "money", delta: -route.cost, reason: `${route.label}去${to.name}` }]
         : []),

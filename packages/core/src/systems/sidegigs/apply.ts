@@ -58,10 +58,10 @@ export function applySidegig(
       return fail(`${label}不在这里，要去 ${gig.location}`);
     }
     if (gig.kind === "race") {
-      const cars = (ctx.read<TravelState>("travel").vehicles ?? []).filter(
-        (v) => v.condition !== "wrecked",
-      );
-      if (cars.length === 0) return fail("赛车要开自己的车：名下没有能开的车");
+      const travel = ctx.read<TravelState>("travel");
+      const car = travel.vehicles.find((v) => v.id === travel.activeVehicleId);
+      if (!car || car.location !== gig.location || car.condition === "wrecked")
+        return fail("赛车要有车在场：先把一辆未报废车辆开到比赛地点并选用");
     }
     draft.active = { gig: gig.id, at: ctx.now };
     const emit: Command[] =

@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { rulingFact } from "../dice";
+import { locationCatalog, WorldClockStateSchema } from "../world";
 import {
   type OwnedVehicle,
   REPAIR_SHARE,
@@ -39,14 +40,20 @@ export const SPEED_FACTORS: Readonly<Record<number, number>> = {
 /** 受损的车开得慢一些 */
 export const DAMAGED_FACTOR = 1.25;
 
-/** 正在开的那辆：最近一辆没报废的；stolen 给了时只看偷来的或只看自己的 */
+/** 当前选用且停在玩家身边的车辆；stolen 给了时只看偷来的或只看自己的。 */
 export function activeVehicle(
   vehicles: readonly OwnedVehicle[],
+  activeId: string | null,
+  location: string | null,
   stolen?: boolean,
 ): OwnedVehicle | undefined {
-  return [...vehicles]
-    .reverse()
-    .find((v) => v.condition !== "wrecked" && (stolen === undefined || v.stolen === stolen));
+  const selected = vehicles.find((v) => v.id === activeId);
+  return selected &&
+    selected.condition !== "wrecked" &&
+    selected.location === location &&
+    (stolen === undefined || selected.stolen === stolen)
+    ? selected
+    : undefined;
 }
 
 /** 开这辆车时耗时乘的倍数 */
@@ -61,6 +68,20 @@ function nextId(draft: Draft<TravelState>, model: string): string {
   return `${model}-${draft.nextVehicleId++}`;
 }
 
+function currentLocation(ctx: SystemContext): string | null {
+  return WorldClockStateSchema.parse(ctx.read("world")).location;
+}
+
+function locationName(ctx: SystemContext, id: string | null): string {
+  if (id === null) return "未知地点";
+  return locationCatalog(ctx.data).get(id)?.name ?? id;
+}
+
+function addVehicle(draft: Draft<TravelState>, vehicle: OwnedVehicle): void {
+  draft.vehicles.push(vehicle);
+  draft.activeVehicleId ??= vehicle.id;
+}
+
 export function grantVehicle(
   draft: Draft<TravelState>,
   command: VehicleGrant,
@@ -68,12 +89,15 @@ export function grantVehicle(
 ): ApplyOutcome {
   const def = vehicleCatalog(ctx.data).get(command.model);
   if (!def) return fail(`车型表里没有 ${command.model}`);
-  draft.vehicles.push({
-    id: nextId(draft, def.id),
+  const id = nextId(draft, def.id);
+  addVehicle(draft, {
+    id,
     model: def.id,
     condition: "intact",
     stolen: false,
     since: ctx.now,
+    location: currentLocation(ctx),
+    cargo: {},
   });
   return { ok: true, notes: [`有了一辆${def.name}（${command.reason}）`] };
 }
@@ -101,9 +125,11 @@ export function applyVehicle(
       condition: "intact" as const,
       stolen: command.action === "steal",
       since: ctx.now,
+      location: currentLocation(ctx),
+      cargo: {},
     };
     if (command.action === "buy") {
-      draft.vehicles.push(owned);
+      addVehicle(draft, owned);
       return {
         ok: true,
         notes: [`买下${def.name}（${def.price} 欧元）`],
@@ -114,7 +140,7 @@ export function applyVehicle(
     if (ruling?.kind === "blocked") {
       return fail(ruling.reason ?? "车辆安防或现场条件阻断，没偷成");
     }
-    draft.vehicles.push(owned);
+    addVehicle(draft, owned);
     return {
       ok: true,
       notes: [`偷到一辆${def.name}`],
@@ -130,10 +156,11 @@ export function applyVehicle(
     };
   }
 
+  const here = currentLocation(ctx);
   const target =
     command.vehicle !== undefined
       ? draft.vehicles.find((v) => v.id === command.vehicle)
-      : activeVehicle(draft.vehicles);
+      : draft.vehicles.find((v) => v.id === draft.activeVehicleId);
   if (!target) {
     return fail(
       command.vehicle !== undefined
@@ -143,9 +170,21 @@ export function applyVehicle(
   }
 
   switch (command.action) {
+    case "select": {
+      if (target.location !== here)
+        return fail(`${name(target)}停在${locationName(ctx, target.location)}，不在身边`);
+      if (target.condition === "wrecked") return fail(`${name(target)}已经报废，不能驾驶`);
+      draft.activeVehicleId = target.id;
+      return { ok: true, notes: [`当前使用车辆：${name(target)}`] };
+    }
     case "damage":
     case "wreck": {
       if (target.condition === "wrecked") return fail(`${name(target)}已经报废了`);
+      const incidentAt = command.location ?? here;
+      if (incidentAt !== target.location)
+        return fail(
+          `${name(target)}停在${locationName(ctx, target.location)}，损坏地点与车辆位置不符`,
+        );
       target.condition =
         command.action === "wreck" || target.condition === "damaged" ? "wrecked" : "damaged";
       return {
@@ -154,6 +193,8 @@ export function applyVehicle(
       };
     }
     case "repair": {
+      if (target.location !== here)
+        return fail(`${name(target)}停在${locationName(ctx, target.location)}，要修车得先到车旁`);
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，修不了`);
       if (target.condition === "intact") return fail(`${name(target)}没坏`);
       const price = catalog.get(target.model)?.price ?? 10_000;
@@ -166,10 +207,19 @@ export function applyVehicle(
       };
     }
     case "abandon": {
+      if (target.location !== here)
+        return fail(`${name(target)}停在${locationName(ctx, target.location)}，要弃车得先到车旁`);
+      if (Object.keys(target.cargo).length > 0)
+        return fail(`${name(target)}后备箱还有物品，先取空再弃车`);
       draft.vehicles.splice(draft.vehicles.indexOf(target), 1);
+      if (draft.activeVehicleId === target.id)
+        draft.activeVehicleId =
+          draft.vehicles.find((v) => v.location === here && v.condition !== "wrecked")?.id ?? null;
       return { ok: true, notes: [`扔下${name(target)}：${command.reason}`] };
     }
     case "chase": {
+      if (target.location !== here)
+        return fail(`${name(target)}停在${locationName(ctx, target.location)}，不在身边`);
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，开不了`);
       const ruling = rulingFact(ctx.facts);
       if (ruling?.kind === "blocked") {
@@ -179,4 +229,27 @@ export function applyVehicle(
     }
   }
   return fail(`不认得的载具动作 ${command.action}`);
+}
+
+export function applyVehicleStash(
+  draft: Draft<TravelState>,
+  command: import("./schema").VehicleStash,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const target = draft.vehicles.find((vehicle) => vehicle.id === command.vehicle);
+  const here = currentLocation(ctx);
+  if (!target || target.location !== here) return fail("车辆不在当前位置，无法访问后备箱");
+  if (command.action === "store") {
+    if (target.condition === "wrecked") return fail("车辆已经报废，只能取出后备箱物品");
+    const cap = vehicleCatalog(ctx.data).get(target.model)?.trunk ?? 0;
+    if (target.cargo[command.item] === undefined && Object.keys(target.cargo).length >= cap)
+      return fail(`后备箱满了（${cap} 格）`);
+    target.cargo[command.item] = (target.cargo[command.item] ?? 0) + 1;
+    return { ok: true };
+  }
+  const count = target.cargo[command.item] ?? 0;
+  if (count < 1) return fail("后备箱里没有这件物品");
+  if (count === 1) Reflect.deleteProperty(target.cargo, command.item);
+  else target.cargo[command.item] = count - 1;
+  return { ok: true };
 }

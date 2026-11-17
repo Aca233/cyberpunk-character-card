@@ -29,6 +29,7 @@ function world(eddies: number, location: string | null = "a"): TripWorld {
       encounterScene: null,
       encounter: null,
       vehicles: [],
+      activeVehicleId: null,
       nextVehicleId: 1,
     }),
   };

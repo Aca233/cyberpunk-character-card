@@ -70,3 +70,12 @@ export const CyberwareStashSchema = z.strictObject({
   location: z.string().min(1).nullable(),
 });
 export type CyberwareStashCommand = z.infer<typeof CyberwareStashSchema>;
+
+/** 车辆系统发出：后备箱义体实物随车更新位置。 */
+export const CyberwareRelocateStashSchema = z.strictObject({
+  type: z.literal("cyberware.relocateStash"),
+  items: z.array(z.string().min(1)),
+  where: z.string().min(1),
+  location: z.string().min(1),
+});
+export type CyberwareRelocateStashCommand = z.infer<typeof CyberwareRelocateStashSchema>;

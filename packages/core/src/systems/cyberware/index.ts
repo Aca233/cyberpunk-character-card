@@ -25,6 +25,8 @@ import { cyberwarePartsView, cyberwareView } from "./view";
 import { advanceSupplies, applyWorkshop, tickWorkshop } from "./workshop";
 import {
   ClinicCommandSchema,
+  type CyberwareRelocateStashCommand,
+  CyberwareRelocateStashSchema,
   type CyberwareStashCommand,
   CyberwareStashSchema,
   PartCommandSchema,
@@ -37,7 +39,11 @@ import {
 export const cyberware = defineSystem<
   CyberwareState,
   CyberwareCommand | WorkshopCommand,
-  InstallCyberware | RipperdocDebtCommand | BoostCommand | CyberwareStashCommand
+  | InstallCyberware
+  | RipperdocDebtCommand
+  | BoostCommand
+  | CyberwareStashCommand
+  | CyberwareRelocateStashCommand
 >({
   id: "cyberware",
   dependsOn: [
@@ -75,8 +81,16 @@ export const cyberware = defineSystem<
     "cyberware.debt": RipperdocDebtCommandSchema,
     "cyberware.boost": BoostCommandSchema,
     "cyberware.stash": CyberwareStashSchema,
+    "cyberware.relocateStash": CyberwareRelocateStashSchema,
   },
   apply(draft, command, ctx) {
+    if (command.type === "cyberware.relocateStash") {
+      for (const id of command.items) {
+        const part = draft.parts[id];
+        if (part?.holder === `stash:${command.where}`) part.location = command.location;
+      }
+      return { ok: true };
+    }
     if (command.type === "cyberware.stash") {
       const part = draft.parts[command.part];
       const at = ctx.read<{ location: string | null }>("world").location;
