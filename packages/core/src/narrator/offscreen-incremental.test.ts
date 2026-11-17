@@ -66,6 +66,41 @@ function prompt(world: WorldState, records: TurnRecord[] = [], text = "这轮没
 }
 
 describe("场外推演成功游标和失败退避", () => {
+  it.each([T0, T0 + 10])("同一分钟刚推动的事项也触发推演，旧期限 %i", (dueAt) => {
+    const initial = start();
+    const seeded: WorldState = {
+      ...initial,
+      slices: {
+        ...initial.slices,
+        threads: {
+          closed: [],
+          threads: [
+            {
+              id: "delivery",
+              kind: "faction",
+              owner: "crew",
+              seed: null,
+              title: "送货",
+              want: "把货交到仓库",
+              stage: "等待放行",
+              openedAt: T0 - 10,
+              dueAt,
+              reminded: false,
+              steps: [],
+            },
+          ],
+        },
+      },
+    };
+    const before = apply(seeded, [{ type: "city.ran", through: 5, backlog: false }]).world;
+    const pushed = apply(before, [
+      { type: "thread", id: "delivery", move: "push", reason: "玩家替货车打开闸门" },
+    ]).world;
+    expect(offscreenDue(before, pushed)).toBe(true);
+    const processed = apply(pushed, [{ type: "city.ran", through: 6, backlog: false }]).world;
+    expect(offscreenDue(processed, processed)).toBe(false);
+  });
+
   it("失败不覆盖成功范围，退避期间即使有期限到期也不重试", () => {
     const previous = apply(start(), [{ type: "city.ran", through: 5, backlog: false }]).world;
     const later = registry.advanceTo(previous, T0 + 10, ctx).world;

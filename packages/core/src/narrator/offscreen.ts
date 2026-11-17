@@ -111,7 +111,24 @@ export function offscreenDue(
   // 统一看新单子的期限，不再分别催势力和宿敌（用户 2026-11-01 定的"全改"第 4 步）
   // 同一个期限只触发一次额外推演；遗漏的留到正常推演再提醒，避免每轮反复调用
   const threads = ThreadsStateSchema.parse(after.slices.threads ?? {}).threads;
-  if (threads.some((t) => t.dueAt <= after.time && (city.lastAt === null || t.dueAt > city.lastAt)))
+  const priorThreads = new Map(
+    ThreadsStateSchema.parse(before.slices.threads ?? {}).threads.map((t) => [t.id, t]),
+  );
+  if (
+    threads.some((t) => {
+      if (t.dueAt > after.time) return false;
+      if (city.lastAt === null || t.dueAt > city.lastAt) return true;
+      const previous = priorThreads.get(t.id);
+      if (previous?.dueAt !== t.dueAt) return true;
+      // 同一分钟刚插手的事不能被上次推演的时间游标吞掉。
+      const step = t.steps.at(-1);
+      const priorStep = previous.steps.at(-1);
+      return (
+        step?.kind === "push" &&
+        (priorStep?.kind !== "push" || priorStep.at !== step.at || priorStep.text !== step.text)
+      );
+    })
+  )
     return true;
   const jobs = JobsStateSchema.parse(after.slices.jobs).jobs;
   if (
