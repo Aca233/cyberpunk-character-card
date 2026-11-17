@@ -14,7 +14,7 @@ import {
 const MINUTES_PER_DAY = 1440;
 /** 1 个相位标准时长：6 小时 = 360 分钟 */
 export const MINUTES_PER_PHASE = 360;
-/** 连续多少个相位不睡觉触发【疲劳（全属性 -1）】 */
+/** 连续多少个相位不睡觉时提示疲劳；不扣属性点。 */
 export const FATIGUE_PHASE_THRESHOLD = 4;
 
 export type Period = "dawn" | "day" | "dusk" | "night";
@@ -76,12 +76,12 @@ export function phaseClockOf(
   };
 }
 
-/** 是否处于疲劳状态（连续 4 相位未睡，全属性 -1） */
+/** 是否连续多个时段未睡，供叙事描述实际身体疲劳。 */
 export function isFatigued(state: Pick<WorldClockState, "phasesAwake">): boolean {
   return (state.phasesAwake ?? 0) >= FATIGUE_PHASE_THRESHOLD;
 }
 
-/** 是否染上黑蕾丝毒瘾（7 天内服用 ≥ 3 次）且当前处于停药戒断期（反应 -1，镇定 -2） */
+/** 是否频繁使用黑蕾丝后处于停药戒断期；供叙事描述症状，不扣属性点。 */
 export function isBlackLaceWithdrawal(
   state: Pick<WorldClockState, "blackLaceDoses" | "blackLaceActiveUntil">,
   now: number,
@@ -153,7 +153,7 @@ export function applyWorld(
     const beforeFatigued = isFatigued(draft);
     draft.phasesAwake = (draft.phasesAwake ?? 0) + crossedPhases;
     if (!beforeFatigued && isFatigued(draft)) {
-      notes.push("连续 4 相位未睡眠，进入【疲劳】状态（全属性 −1）");
+      notes.push("连续多个时段未睡眠，身体疲劳：眼皮发沉、发力与反应发滞");
     }
   }
 

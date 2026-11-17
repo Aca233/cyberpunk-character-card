@@ -105,7 +105,7 @@ export const WorldClockStateSchema = z.object({
   sceneStartedAt: z.number().int(),
   /** 存档记下的地点，并进地点表；旧存档没有这个字段，当空表 */
   places: z.array(SavedPlaceSchema).default([]),
-  /** 3.0 连续未睡眠的相位数（连续 ≥ 4 相位不睡挂疲劳：全属性 -1） */
+  /** 连续未睡眠的时段数，用于提示身体疲劳，不扣属性点。 */
   phasesAwake: z.number().int().min(0).default(0),
   /** 3.0 最近 7 天服用黑蕾丝（Black Lace）的时间点（分钟） */
   blackLaceDoses: z.array(z.number().int()).default([]),
