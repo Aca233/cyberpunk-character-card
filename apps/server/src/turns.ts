@@ -1,4 +1,4 @@
-import { isTerminalEvent, type TurnEvent } from "@cp/core";
+import { isTerminalEvent, type TurnEvent, type TurnInput } from "@cp/core";
 import { randomId } from "./random";
 
 /** 结束的轮次在内存里留 10 分钟，网页断线重连还能补收终止事件 */
@@ -9,6 +9,7 @@ export interface TurnRun {
   readonly saveId: string;
   readonly requestId: string;
   readonly baseVersion: number;
+  readonly input: TurnInput;
   readonly controller: AbortController;
   /** 下标就是 SSE 的事件 id */
   readonly events: TurnEvent[];
@@ -25,13 +26,14 @@ export class TurnHub {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  start(saveId: string, requestId: string, baseVersion: number): TurnRun {
+  start(saveId: string, requestId: string, baseVersion: number, input: TurnInput): TurnRun {
     this.sweep();
     const run: TurnRun = {
       turnId: randomId(),
       saveId,
       requestId,
       baseVersion,
+      input,
       controller: new AbortController(),
       events: [],
       finishedAt: null,

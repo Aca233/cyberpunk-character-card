@@ -54,6 +54,21 @@ async function seedBeforeSnapshot(saves: IdbSaveStore, id: string) {
 }
 
 describe("多个页面共享存档", () => {
+  it("新输入遇到正在生成的回合，返回旧回合原始输入用于恢复重试或付款确认", async () => {
+    const { first, id, saves } = await setup();
+    const original = { text: "向武器商人购买这把枪", spendOk: true };
+    const run = first.hub.start(id, "running-purchase", 0, original);
+    const reply = await call(first, `/saves/${id}/turns`, {
+      requestId: "new-unrelated-input",
+      baseVersion: 0,
+      input: { text: "离开商店，去见杰克" },
+    });
+    expect(reply.status).toBe(409);
+    expect(reply.data).toMatchObject({ turnId: run.turnId, version: 0, input: original });
+    expect(first.hub.running(id)).toBe(run);
+    expect((await saves.loadLog(id)).records).toEqual([]);
+  });
+
   it("同时提交界面操作时只接受一次，日志仍能读取且可以继续操作", async () => {
     const { first, second, id, saves } = await setup();
     const replies = await Promise.all(

@@ -387,7 +387,12 @@ export class GameService {
       if (busy)
         return {
           status: 409,
-          body: { error: "上一轮还在生成，先等它结束或停止", turnId: busy.turnId, version },
+          body: {
+            error: "上一轮还在生成，先等它结束或停止",
+            turnId: busy.turnId,
+            input: busy.input,
+            version,
+          },
         };
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
@@ -413,7 +418,7 @@ export class GameService {
       }
       const unavailable = await this.llmUnavailable();
       if (unavailable) return unavailable;
-      const run = hub.start(id, request.requestId, version);
+      const run = hub.start(id, request.requestId, version, request.input);
       void this.execute(
         run,
         world,
