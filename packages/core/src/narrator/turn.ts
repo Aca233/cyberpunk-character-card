@@ -1019,7 +1019,7 @@ export async function runNarratorTurn(
       world,
       records,
       live,
-      extras,
+      { ...extras, decided },
       narrative,
       prepared.purchases.length
         ? prepared.purchases

@@ -71,6 +71,25 @@ describe("回合修复请求有界且账目可核对", () => {
     expect(requests).toHaveLength(3);
   });
 
+  it("抽取收到前置裁决的具体阻碍，不只看到正文中可能偏离的描述", async () => {
+    const { requests } = await run({
+      judge: {
+        ...judge,
+        ruling: {
+          kind: "blocked",
+          outcome: "离线的门锁没有无线接收器，无法远程打开。",
+          reason: "没有接入物理接口，目标与外部网络隔离。",
+          harm: "none",
+        },
+      },
+    });
+    const extract = requests.find((request) => request.responseFormat?.name === "extract");
+    const content = extract?.messages.map((message) => message.content).join("\n");
+    expect(content).toContain("【本轮已定的事】");
+    expect(content).toContain("离线的门锁没有无线接收器，无法远程打开。");
+    expect(content).toContain("没有接入物理接口，目标与外部网络隔离。");
+  });
+
   it.each([{}, { fixes: [] }, "无效抽取"])(
     "抽取缺少changes且修复为空时，保留未结算标记：%j",
     async (invalid) => {

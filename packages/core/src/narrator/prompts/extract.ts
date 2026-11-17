@@ -26,6 +26,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 
 【只抽已经发生的事】
 - 计划、打算、还没兑现的威胁不算；玩家角色的台词和决定只认玩家输入，正文里替玩家补写的不算。
+- 【本轮已定的事】中的客观阻碍、伤害上限和出行条件仍然有效；正文若与它冲突，不把被阻断行动的成功或依赖其成功的收益记账，冲突及原因写进 dropped。同轮独立发生、符合条件的其他事实仍照常记录。
 - 考虑过但没抽的写进 dropped，每条带原因（“只是打算，没发生”“玩家角色心里想的”）；dropped 必须写，没有就写 []。
 - 交易询价与成交分开：对方已认可的新价格保存 commerce.offer 并引用正文证据；只有玩家已接受且正文实际交付才发 trade/cyberware，沿用实际对方、报价和旧件条件。多件逐件按先后记账，不能额外发 item gain 或 money 重复结算；到店购买先记实际到达，转交刚买的东西再记其转交。报价清单是可成交条件，不代表正文已经交付。
 - 照正文写实，不夸大：子弹擦过或皮外磕碰是 graze，贯通中枪或重击是 heavy；正文只花了钱没拿到东西，就不写 item gain。
@@ -105,6 +106,7 @@ export function buildExtractPrompt(
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
       details,
+      extras.decided?.length ? `【本轮已定的事】\n${extras.decided.join("\n")}` : undefined,
       tradePlans ? `【本轮已核对的交易条件】\n${tradePlans}` : undefined,
       `【本轮正文】\n${narrative}`,
     ],
