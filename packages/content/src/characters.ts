@@ -15,7 +15,6 @@ const loBoard = BoardSchema.parse({
       id: "custom-lo-garage",
       slot: "past",
       label: "改装车行学徒",
-      points: 1,
       tags: ["车", "技术"],
       ability:
         "在沃森区的地下改装车行摸爬滚打数年：精通引擎爆改、调校与线路隐藏，熟络夜之城的车贩子与地下收赃渠道",
@@ -34,7 +33,6 @@ const loBoard = BoardSchema.parse({
       id: "custom-lo-debt",
       slot: "flaw",
       label: "漩涡帮高利贷",
-      points: 2,
       tags: ["债务", "帮派"],
       ability: "欠下漩涡帮高利贷三千欧元，日计滞纳金正在疯狂跳动",
       hook: "清算死线迫在眉睫，还不上钱，漩涡帮的改装狂人就会拆下你的器官抵账",

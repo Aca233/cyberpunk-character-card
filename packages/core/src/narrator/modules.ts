@@ -28,9 +28,9 @@ export interface ModuleRequest {
   readonly slot: BoardSlot;
   /** 玩家写的设定 */
   readonly text: string;
-  /** 主板上已经插着的模块，让模型别重复、能对上联动 */
+  /** 主板上已经插着的模块，让模型别重复 */
   readonly board?: Board | undefined;
-  /** 模块库里用过的标签：尽量沿用，联动才对得上 */
+  /** 模块库里用过的标签：尽量沿用，方便分类筛选与检定判断 */
   readonly knownTags?: readonly string[];
 }
 
@@ -110,7 +110,6 @@ export function parseModuleReply(
     id,
     slot,
     label,
-    points: 0,
     tags,
     ability: cut(raw.ability, 200),
     hook: cut(raw.hook, 200),

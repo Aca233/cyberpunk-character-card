@@ -7,7 +7,6 @@ import {
   boardModules,
   braindances,
   canonTimeline,
-  combos,
   consequences,
   cyberware,
   DEFAULT_LOADOUT,
@@ -43,7 +42,6 @@ import {
   braindanceRules,
   CanonTimelineSchema,
   CharacterCardSchema,
-  ComboSchema,
   contentPriceIssues,
   cyberwareRules,
   EXTRACT_STAGE,
@@ -130,7 +128,6 @@ schema("转折素材 twists", TwistCatalogSchema, twists);
 schema("后果参考表 consequences", falloutRules.ConsequenceTableSchema, consequences);
 schema("委托模板 jobTemplates", jobsRules.JobTemplateCatalogSchema, jobTemplates);
 schema("主板模块 boardModules", BoardModuleSchema.array(), boardModules);
-schema("联动 combos", ComboSchema.array(), combos);
 schema("生命路径 lifepath", LifepathEntrySchema.array(), lifepath);
 schema("示例角色 characters", CharacterCardSchema.array(), sampleCharacters);
 schema("黑话 glossary", GlossarySchema, glossary);
@@ -208,10 +205,6 @@ unique(
   "委托模板",
   jobTemplates.map((t) => t.kind),
 );
-unique(
-  "联动",
-  combos.map((c) => c.id),
-);
 
 // 3. 跨表引用
 errors.push(...merchantDataIssues(gameData));
@@ -268,9 +261,6 @@ refs(
   moduleIds,
   "主板模块",
 );
-// 联动的每一项对上一块模块的 id、名字或标签就算数
-const moduleKeys = new Set(boardModules.flatMap((m) => [m.id, m.label, ...(m.tags ?? [])]));
-for (const c of combos) refs(`联动 ${c.id}`, c.requires, moduleKeys, "模块 id、名字或标签");
 refs("默认行装 DEFAULT_LOADOUT", [DEFAULT_LOADOUT], loadoutIds, "行装");
 refs("默认开场 DEFAULT_OPENING", [DEFAULT_OPENING], openingIds, "开场");
 

@@ -18,7 +18,7 @@ export function characterView({ world }: ViewContext) {
     /** 攒着半级声望，再得半级就升级 */
     credHalf: character.credHalf,
     attributePoints: character.attributePoints,
-    /** 主板上的模块和联动；没用主板的角色是空的 */
+    /** 主板上的模块；没用主板的角色是空的 */
     traits: character.traits,
     /** 习惯栏，和叙事模型提议、等玩家确认的习惯 */
     habits: character.habits,

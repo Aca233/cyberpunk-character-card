@@ -16,13 +16,9 @@ import type { LedgerKind } from "../systems/npc/schema";
 
 /**
  * 角色主板：出身、过往、本事三类插槽各插几块模块，再加负面经历、开局义体、开局行装和义体耐受。
- * 模块自由组合，只保留各类插槽数量与义体部位容量约束；点价字段仅供旧内容解析。
+ * 模块自由组合，只保留各类插槽数量与义体部位容量约束。
  */
 
-/** 背景点（旧版默认基准，兼容保留） */
-export const BACKGROUND_POINTS = 12;
-/** 负面经历合计最多返还这么多 */
-export const REFUND_MAX = 10;
 export const PAST_MIN = 0;
 export const PAST_MAX = 5;
 export const SKILL_MIN = 0;
@@ -45,14 +41,6 @@ export const BOARD_SLOT_LABELS: Readonly<Record<BoardSlot, string>> = {
   flaw: "负面缺陷",
 };
 
-/** 每类模块的预设权重参考范围（已取消捏人点数预算上限，自定义模块默认为 0） */
-export const MODULE_POINTS: Readonly<Record<BoardSlot, readonly [number, number]>> = {
-  origin: [0, 2],
-  past: [0, 4],
-  skill: [0, 4],
-  flaw: [0, 4],
-};
-
 const line = (max: number) => z.string().trim().max(max);
 
 /** 模块带出的人物：开档后自动生成人物卡 */
@@ -66,8 +54,6 @@ export const BoardModuleSchema = z.object({
   id: z.string().trim().min(1).max(60),
   slot: BoardSlotSchema,
   label: z.string().trim().min(1, "模块要有名字").max(24),
-  /** 已取消点数上限（内容库兼容保留字段，默认 0） */
-  points: z.number().default(0),
   /** 标签：分类筛选和检定加成按标签判断 */
   tags: z.array(z.string().trim().min(1).max(12)).max(6).default([]),
   /** 这块模块让角色能做到什么；叙事模型据此判断行动是否可行 */
@@ -90,8 +76,6 @@ export type BoardModule = z.infer<typeof BoardModuleSchema>;
 export const StartCyberwareSchema = z.object({
   id: z.string().min(1).max(60),
   name: z.string().min(1).max(40),
-  // 内容库兼容保留字段，捏人界面已取消点数上限
-  points: z.number().default(0),
   humanityCost: z.number().int().min(0).max(20),
   /** 创意工坊/自定义义体自包含快照字段 */
   slot: CyberwareSlotSchema.optional(),
@@ -111,7 +95,6 @@ export const CASH_TIER_INFO: Readonly<
     CashTier,
     {
       readonly label: string;
-      readonly points: number;
       readonly eddiesDelta: number;
       readonly desc: string;
     }
@@ -119,25 +102,21 @@ export const CASH_TIER_INFO: Readonly<
 > = {
   broke: {
     label: "一贫如洗",
-    points: -1,
     eddiesDelta: 0,
     desc: "开局账户归零，从身无分文开始",
   },
   standard: {
     label: "出身标配",
-    points: 0,
     eddiesDelta: 0,
     desc: "按所选出身背景发放标准启动资金",
   },
   stash: {
     label: "私房金库",
-    points: 2,
     eddiesDelta: 2500,
     desc: "额外携带 2,500 欧元私房钱",
   },
   windfall: {
     label: "巨额黑金",
-    points: 4,
     eddiesDelta: 6000,
     desc: "额外携带 6,000 欧元黑金",
   },
@@ -150,20 +129,6 @@ export const StartKitSchema = z.object({
   vehicle: z.string().trim().min(1).max(60).nullable().default(null),
 });
 export type StartKit = z.infer<typeof StartKitSchema>;
-
-/** 联动（向后兼容保留导出；新角色创建不再生成或展示联动） */
-export const ComboSchema = z.object({
-  id: z.string().trim().min(1).max(40),
-  label: z.string().trim().min(1).max(24),
-  /** 每一项要有一块模块的 id 或标签对上；至少要两块不同的模块参与 */
-  requires: z.array(z.string().trim().min(1)).min(2).max(4),
-  ability: line(200),
-  hook: line(200).default(""),
-});
-export type Combo = z.infer<typeof ComboSchema>;
-
-export const BoardComboSchema = ComboSchema.omit({ requires: true });
-export type BoardCombo = z.infer<typeof BoardComboSchema>;
 
 /** 生命路径表的一条：过往模块 id 和按出身的权重，没写的出身按 1 */
 export const LifepathEntrySchema = z.object({
@@ -181,8 +146,6 @@ export interface RelationInfo {
   readonly label: string;
   /** 开局好感 */
   readonly affinity: number;
-  /** 花多少背景点 */
-  readonly points: number;
   /** 开局记一条人情或仇 */
   readonly ledger?: LedgerKind;
   /** 开局写一句关系笔记 */
@@ -190,12 +153,12 @@ export interface RelationInfo {
 }
 
 export const RELATION_INFO: Readonly<Record<RelationKind, RelationInfo>> = {
-  nod: { label: "点头之交", affinity: 5, points: 0, note: false },
-  friend: { label: "老朋友", affinity: 30, points: 2, note: true },
-  owesYou: { label: "他欠你人情", affinity: 15, points: 2, ledger: "owesYou", note: false },
-  youOwe: { label: "你欠他人情", affinity: 10, points: 0, ledger: "youOwe", note: false },
-  ex: { label: "前任", affinity: 10, points: 0, note: true },
-  grudge: { label: "旧仇", affinity: -30, points: 0, ledger: "grudge", note: false },
+  nod: { label: "点头之交", affinity: 5, note: false },
+  friend: { label: "老朋友", affinity: 30, note: true },
+  owesYou: { label: "他欠你人情", affinity: 15, ledger: "owesYou", note: false },
+  youOwe: { label: "你欠他人情", affinity: 10, ledger: "youOwe", note: false },
+  ex: { label: "前任", affinity: 10, note: true },
+  grudge: { label: "旧仇", affinity: -30, ledger: "grudge", note: false },
 };
 
 export const ACQUAINTANCE_MAX = 100;
@@ -237,7 +200,6 @@ export const BoardSchema = z.object({
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
   cyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   tolerance: ToleranceSchema.default("normal"),
-  combos: z.array(BoardComboSchema).max(6).default([]),
   acquaintances: z.array(AcquaintanceSchema).max(ACQUAINTANCE_MAX).default([]),
   /** 开局行装定制：资金档位、额外随身武器与专属载具 */
   kit: StartKitSchema.default({ cashTier: "standard", weapons: [], vehicle: null }),
@@ -246,72 +208,33 @@ export const BoardSchema = z.object({
 });
 export type Board = z.infer<typeof BoardSchema>;
 
-/** 义体耐受档位：影响人性消耗倍率和剧情钩子；points 仅为旧内容兼容字段 */
+/** 义体耐受档位：影响人性消耗倍率和剧情钩子 */
 export const TOLERANCE_LEVELS: Readonly<
-  Record<Tolerance, { readonly label: string; readonly points: number; readonly hook: string }>
+  Record<Tolerance, { readonly label: string; readonly hook: string }>
 > = {
   low: {
     label: "低耐受",
-    points: -2,
     hook: "身体排斥义体：装一件就要难受好几天，义体医生看了你的病历都皱眉",
   },
-  normal: { label: "普通", points: 0, hook: "" },
+  normal: { label: "普通", hook: "" },
   high: {
     label: "高耐受",
-    points: 3,
     hook: "身体对义体来者不拒，有公司的研究员很想知道为什么",
   },
 };
 
-/**
- * 开局义体的点数：普通 1、罕见 2、稀有 3、史诗 4、传说 5；标志性的仍要进剧情后找义体医生
- * （原来只放普通和罕见，用户 2026-10-31 嫌"怎么只有这么少义体"，选了"全部放开"）
- */
-export const START_CYBERWARE_POINTS: Readonly<Record<string, number>> = {
-  common: 1,
-  uncommon: 2,
-  rare: 3,
-  epic: 4,
-  legendary: 5,
-};
+/** 创建时允许选取的官方义体稀有度；标志性的仍要进剧情后找义体医生 */
+export const START_CYBERWARE_RARITIES: ReadonlySet<string> = new Set([
+  "common",
+  "uncommon",
+  "rare",
+  "epic",
+  "legendary",
+]);
 
 /** 插在主板上的全部模块，按插槽顺序 */
 export function boardModules(board: Board): BoardModule[] {
   return [...(board.origin ? [board.origin] : []), ...board.pasts, ...board.skills, ...board.flaws];
-}
-
-export interface BoardBudget {
-  readonly total: number;
-  /** 模块、开局义体和高耐受花掉的 */
-  readonly spent: number;
-  /** 负面经历（截到上限）和低耐受返还的 */
-  readonly refund: number;
-  /** 负面经历超出返还上限、没算进来的点数 */
-  readonly wasted: number;
-  readonly remaining: number;
-}
-
-/** 旧版预算统计，兼容外部调用；不参与创角、导入或保存校验。 */
-export function boardBudget(board: Board): BoardBudget {
-  const tolerance = TOLERANCE_LEVELS[board.tolerance].points;
-  const cashPoints = CASH_TIER_INFO[board.kit?.cashTier ?? "standard"].points;
-  const modules = [...(board.origin ? [board.origin] : []), ...board.pasts, ...board.skills];
-  const spent =
-    modules.reduce((sum, m) => sum + m.points, 0) +
-    board.cyberware.reduce((sum, c) => sum + c.points, 0) +
-    Math.max(0, tolerance) +
-    Math.max(0, cashPoints) +
-    // 旧识：老朋友、他欠你人情各花 2 点，负面关系不返（用户定的关系表，2026-10-30）
-    board.acquaintances.reduce((sum, a) => sum + RELATION_INFO[a.relation].points, 0);
-  const flaws = board.flaws.reduce((sum, m) => sum + m.points, 0);
-  const refund = Math.min(REFUND_MAX, flaws) + Math.max(0, -tolerance) + Math.max(0, -cashPoints);
-  return {
-    total: BACKGROUND_POINTS,
-    spent,
-    refund,
-    wasted: Math.max(0, flaws - REFUND_MAX),
-    remaining: BACKGROUND_POINTS - spent + refund,
-  };
 }
 
 /** 开局义体占掉的人性上限，按耐受档位折算 */
@@ -353,20 +276,6 @@ export function boardIssues(board: Board): string[] {
     known.add(a.id);
   }
   return issues;
-}
-
-/** 主板触发了哪些联动（向后兼容保留导出） */
-export function boardCombos(board: Board, combos: readonly Combo[]): Combo[] {
-  const modules = boardModules(board);
-  return combos.filter((combo) => {
-    const used = new Set<string>();
-    for (const need of combo.requires) {
-      const hits = modules.filter((m) => m.id === need || m.tags.includes(need));
-      if (hits.length === 0) return false;
-      for (const m of hits) used.add(m.id);
-    }
-    return used.size >= 2;
-  });
 }
 
 /** 生命路径掷一段过往：按出身加权，已经插着的不再出 */
@@ -436,12 +345,10 @@ export function lifepathCosts(
 
 export interface BoardTables {
   readonly cyberware: readonly CyberwareDef[];
-  readonly combos: readonly Combo[];
 }
 
 /**
- * 存角色卡前在服务端调一次：按义体表重算开局义体的快照（自定义/工坊义体支持自包含快照兜底）；
- * 移除联动自动写入（combos 置为空数组）
+ * 存角色卡前在服务端调一次：按义体表重算开局义体的快照（自定义/工坊义体支持自包含快照兜底）
  */
 export function normalizeBoard(
   board: Board,
@@ -468,8 +375,7 @@ export function normalizeBoard(
       }
       return { ok: false, error: `义体表里没有 ${item.id}` };
     }
-    const points = START_CYBERWARE_POINTS[def.rarity];
-    if (def.iconic || points === undefined) {
+    if (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)) {
       return { ok: false, error: `${def.name}不能在创建时装，进剧情后找义体医生` };
     }
     const taken = (slots.get(def.slot) ?? 0) + 1;
@@ -483,12 +389,11 @@ export function normalizeBoard(
     cyberware.push({
       id: def.id,
       name: def.name,
-      points,
       humanityCost: def.humanityCost,
       slot: def.slot,
     });
   }
-  return { ok: true, board: { ...board, cyberware, combos: [] } };
+  return { ok: true, board: { ...board, cyberware } };
 }
 
 function moduleLine(m: BoardModule): string {
@@ -502,7 +407,7 @@ function moduleLine(m: BoardModule): string {
   return `- ${parts.filter((p) => p !== "").join("；")}`;
 }
 
-/** 给模型看的主板：每块模块一行（不再输出联动） */
+/** 给模型看的主板：每块模块一行 */
 export function boardBrief(board: Board): string {
   const lines = [...boardModules(board).map(moduleLine)];
   const tolerance = TOLERANCE_LEVELS[board.tolerance];

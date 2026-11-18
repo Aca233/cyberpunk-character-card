@@ -78,8 +78,8 @@ describe("义体按部位格数装", () => {
 });
 
 describe("开局主板的义体", () => {
-  const snap = (id: string) => ({ id, name: id, points: 1, humanityCost: 2 });
-  const tables = { cyberware: parts, combos: [] };
+  const snap = (id: string) => ({ id, name: id, humanityCost: 2 });
+  const tables = { cyberware: parts };
 
   it("同一部位没超过格数就收", () => {
     const board = BoardSchema.parse({

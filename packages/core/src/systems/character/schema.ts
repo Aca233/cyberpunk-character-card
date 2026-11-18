@@ -6,8 +6,8 @@ export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
 
 export const STREET_CRED_MAX = 50;
 
-/** 角色主板上的一块：出身、过往、本事、负面经历或联动；专属选项的来源按它核对，侧栏也显示 */
-export const TRAIT_SLOTS = ["origin", "past", "skill", "flaw", "combo"] as const;
+/** 角色主板上的一块：出身、过往、特长或负面经历；专属选项的来源按它核对，侧栏也显示 */
+export const TRAIT_SLOTS = ["origin", "past", "skill", "flaw"] as const;
 export const TraitSlotSchema = z.enum(TRAIT_SLOTS);
 export type TraitSlot = z.infer<typeof TraitSlotSchema>;
 export const TRAIT_LABELS: Readonly<Record<TraitSlot, string>> = {
@@ -15,7 +15,6 @@ export const TRAIT_LABELS: Readonly<Record<TraitSlot, string>> = {
   past: "过往",
   skill: "特长",
   flaw: "负面经历",
-  combo: "联动",
 };
 export const TraitSchema = z.object({
   slot: TraitSlotSchema,

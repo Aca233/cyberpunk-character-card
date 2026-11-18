@@ -31,7 +31,6 @@ export { agendas } from "./agendas";
 export { arcs } from "./arcs";
 export { braindances } from "./braindance";
 export { sampleCharacters } from "./characters";
-export { combos } from "./combos";
 export { cyberware } from "./cyberware";
 export { encounters } from "./encounters";
 export { factions } from "./factions";

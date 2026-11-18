@@ -460,12 +460,11 @@ const SOURCE_SLOTS: Readonly<Record<string, readonly TraitSlot[]>> = {
   本事: ["skill"],
   特长: ["skill"],
   负面经历: ["flaw"],
-  联动: ["combo"],
 };
 
 /**
- * 专属选项的来源要对得上：义体来源必须是身上装着的义体；角色有主板时，出身、过往、本事、
- * 联动来源必须是主板上的模块（名字互相包含就算）。对不上时去掉来源，选项留着
+ * 专属选项的来源要对得上：义体来源必须是身上装着的义体；角色有主板时，出身、过往、本事
+ * 来源必须是主板上的模块（名字互相包含就算）。对不上时去掉来源，选项留着
  */
 function verifySource(
   choice: Choice,

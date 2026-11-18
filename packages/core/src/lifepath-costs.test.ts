@@ -8,8 +8,7 @@ import {
 
 /** 第 2 步的代价（docs/creator-plan.md："给出 1–2 个跟这段经历沾边的代价"）：按生命路径表从插着的过往取 */
 
-const mod = (id: string, slot: "past" | "flaw") =>
-  BoardModuleSchema.parse({ id, slot, label: id, points: slot === "past" ? 2 : 1 });
+const mod = (id: string, slot: "past" | "flaw") => BoardModuleSchema.parse({ id, slot, label: id });
 
 const modules = [
   mod("merc", "past"),

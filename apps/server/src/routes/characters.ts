@@ -1,6 +1,5 @@
 import {
   boardModules,
-  combos,
   cyberware,
   items,
   lifepath,
@@ -24,7 +23,7 @@ import {
   ProseRequestSchema,
   pruneAcquaintances,
   readTavernCard,
-  START_CYBERWARE_POINTS,
+  START_CYBERWARE_RARITIES,
   streamDraft,
   streamProse,
   tavernToCard,
@@ -49,7 +48,7 @@ async function readCard(c: Context) {
     // 按内容表重算开局义体快照并校验部位容量，再检查角色卡结构。
     // 旧识只认原作人物表和模块带出的人，对不上的去掉（用户定的，2026-10-30：15 个原作人物全部能选）
     const board = pruneAcquaintances(parsed.data.board, npcs);
-    const fixed = normalizeBoard(board, { cyberware, combos });
+    const fixed = normalizeBoard(board, { cyberware });
     if (!fixed.ok) return { ok: false as const, error: fixed.error };
     return readCardAgain({ ...parsed.data, board: fixed.board });
   }
@@ -76,18 +75,19 @@ const InterpretSchema = z.object({
   board: BoardSchema.optional(),
 });
 
-/** 模块库里用过的标签：解读时让模型尽量沿用，联动才对得上 */
+/** 模块库里用过的标签：解读时让模型尽量沿用，方便分类筛选与检定判断 */
 const KNOWN_TAGS = [...new Set(boardModules.flatMap((m) => m.tags))];
+
+const START_WEAPON_RARITIES: ReadonlySet<string> = new Set(["common", "uncommon", "rare"]);
 
 /** /api/characters：角色卡的列表、新建、修改、删除；示例角色只读 */
 export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmClient): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ characters: await store.list() }));
-  // 主板要用的表：模块库、联动、生命路径、创建时能装的义体与开局武器/载具；要放在 /:id 前面
+  // 主板要用的表：模块库、生命路径、创建时能装的义体与开局武器/载具；要放在 /:id 前面
   app.get("/board", (c) =>
     c.json({
       modules: boardModules,
-      combos,
       lifepath,
       // 捏人能选的原作人物：只给名片上公开的几项，秘密和身体不下发
       npcs: npcs.map((n) => ({
@@ -97,9 +97,8 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
         role: n.role,
         look: n.look,
       })),
-      cyberware: cyberware.flatMap((def) => {
-        const points = START_CYBERWARE_POINTS[def.rarity];
-        return def.iconic || points === undefined
+      cyberware: cyberware.flatMap((def) =>
+        def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)
           ? []
           : [
               {
@@ -108,7 +107,6 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 slot: def.slot,
                 slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
                 rarity: def.rarity,
-                points,
                 humanityCost: def.humanityCost,
                 ...(def.programSlots !== undefined ? { programSlots: def.programSlots } : {}),
                 ...(def.ram !== undefined ? { ram: def.ram } : {}),
@@ -118,26 +116,23 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 ...(Object.keys(def.attributes).length > 0 ? { attributes: def.attributes } : {}),
                 ability: def.ability,
               },
-            ];
-      }),
+            ],
+      ),
       weapons: items.flatMap((def) => {
-        if (def.kind !== "weapon" || def.iconic) return [];
-        const points =
-          def.rarity === "common"
-            ? 1
-            : def.rarity === "uncommon"
-              ? 2
-              : def.rarity === "rare"
-                ? 3
-                : undefined;
-        if (points === undefined) return [];
+        if (
+          def.kind !== "weapon" ||
+          def.iconic ||
+          def.rarity === undefined ||
+          !START_WEAPON_RARITIES.has(def.rarity)
+        ) {
+          return [];
+        }
         return [
           {
             id: def.id,
             name: def.name,
             ...(def.category ? { category: def.category } : {}),
             rarity: def.rarity,
-            points,
             ability: def.ability,
           },
         ];
@@ -148,14 +143,6 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
         maker: v.maker,
         class: v.class,
         seats: v.seats,
-        points:
-          v.class === "economy"
-            ? 1
-            : v.class === "offroad" || v.class === "executive" || v.class === "moto"
-              ? 2
-              : v.class === "sport"
-                ? 3
-                : 4,
         ...(v.note ? { note: v.note } : {}),
       })),
       // 出身自带的开局行装（和建档时 pickLoadouts 用的同一张表），建卡界面据此透明展示家底和自带义体
@@ -215,11 +202,11 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
       if (!result.ok) return c.json({ error: result.error }, 502);
       const { card, warnings } = result;
       if (!card.board) return c.json({ card, warnings, own });
-      // 联动和开局义体按内容表重算；义体表里对不上的义体整组去掉，回主板重选
-      const fixed = normalizeBoard(card.board, { cyberware, combos });
+      // 开局义体按内容表重算；义体表里对不上的义体整组去掉，回主板重选
+      const fixed = normalizeBoard(card.board, { cyberware });
       if (fixed.ok) return c.json({ card: { ...card, board: fixed.board }, warnings, own });
       const board = { ...card.board, cyberware: [] };
-      const again = normalizeBoard(board, { cyberware, combos });
+      const again = normalizeBoard(board, { cyberware });
       return c.json({
         card: { ...card, board: again.ok ? again.board : board },
         warnings: [...warnings, `${fixed.error}；开局义体已清空`],

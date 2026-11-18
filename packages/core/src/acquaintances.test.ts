@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type GameContent, newGameWorld } from "./game";
-import { BoardModuleSchema, BoardSchema, boardBudget, boardIssues } from "./schemas/board";
+import { BoardModuleSchema, BoardSchema, boardIssues } from "./schemas/board";
 import { acquaintanceSeed, boardStart, CharacterCardSchema } from "./schemas/character";
 import { NpcStateSchema } from "./systems/npc/schema";
 
@@ -40,7 +40,7 @@ const content: GameContent = {
 };
 
 const mod = (id: string, slot: "origin" | "past" | "skill", people: { name: string }[] = []) =>
-  BoardModuleSchema.parse({ id, slot, label: id, points: slot === "origin" ? 0 : 1, people });
+  BoardModuleSchema.parse({ id, slot, label: id, people });
 
 const board = (acquaintances: unknown[]) =>
   BoardSchema.parse({
@@ -82,19 +82,7 @@ describe("acquaintanceSeed", () => {
   });
 });
 
-describe("旧识的背景点", () => {
-  it("老朋友、他欠你人情各花 2 点；负面关系不花也不返", () => {
-    const base = boardBudget(board([])).spent;
-    const b = board([
-      { id: "judy", name: "朱迪", relation: "friend" },
-      { id: "rogue", name: "罗格", relation: "owesYou" },
-      { id: "a", name: "甲", relation: "grudge" },
-      { id: "b", name: "乙", relation: "youOwe" },
-    ]);
-    expect(boardBudget(b).spent).toBe(base + 4);
-    expect(boardBudget(b).refund).toBe(boardBudget(board([])).refund);
-  });
-
+describe("旧识校验", () => {
   it("同一个人选两次报错", () => {
     const b = board([
       { id: "judy", name: "朱迪", relation: "friend" },

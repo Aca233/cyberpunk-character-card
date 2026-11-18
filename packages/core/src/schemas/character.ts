@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Trait } from "../systems/character/schema";
-import { ATTRIBUTE_LABELS, type Attribute, AttributeSchema } from "../systems/dice/schema";
+import { AttributeSchema } from "../systems/dice/schema";
 import { NO_FACTION, NPC_UNDECIDED_PREFIX } from "../systems/npc/schema";
 import {
   type Acquaintance,
@@ -24,8 +24,6 @@ export const DEFAULT_CARD_ATTRIBUTES = {
 } as const;
 /** 创建时各项属性从这个值起步（历史兼容，UI 与叙事不再使用属性点） */
 export const ATTRIBUTE_BASE = 2;
-/** 创建时可以额外分配的属性点（历史兼容导出） */
-export const ATTRIBUTE_POINTS = 5;
 /** 创建时单项最高（历史兼容导出） */
 export const ATTRIBUTE_CREATE_MAX = 5;
 
@@ -107,13 +105,6 @@ export const StoredCharacterSchema = z.object({
   card: CharacterCardSchema,
 });
 export type StoredCharacter = z.infer<typeof StoredCharacterSchema>;
-
-export function pointsSpent(attributes: Readonly<Partial<Record<Attribute, number>>>): number {
-  return (Object.keys(ATTRIBUTE_LABELS) as Attribute[]).reduce(
-    (sum, a) => sum + (attributes[a] ?? ATTRIBUTE_BASE) - ATTRIBUTE_BASE,
-    0,
-  );
-}
 
 /** 把角色卡整理成给模型看的简介 */
 export function characterBrief(card: CharacterCard): string {
@@ -299,7 +290,7 @@ export function pruneAcquaintances(
   return { ...board, acquaintances };
 }
 
-/** 主板上的模块，记进角色状态：专属选项的来源按它核对（不再输出联动） */
+/** 主板上的模块，记进角色状态：专属选项的来源按它核对 */
 export function boardTraits(board: Board): Trait[] {
   return boardModules(board).map((m) => ({ slot: m.slot, label: m.label, ability: m.ability }));
 }
