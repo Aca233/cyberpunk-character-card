@@ -14,6 +14,7 @@ import {
   type NarratorPrompt,
   type PromptExtras,
   situation,
+  stageModules,
   tablesOf,
 } from "./context";
 import { BOOKKEEPING_BASE, systemMessage, userMessage } from "./layers";
@@ -110,8 +111,14 @@ export function buildExtractPrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const data = extractCatalogData(world, extras.data ?? {});
-  const details = extractCatalogDetails(world, view, data, `${plan.input.text}\n${narrative}`);
-  const modules = registry.activeRules(world, plan.input);
+  const modules = stageModules(world, plan.input, extras, narrative);
+  const details = extractCatalogDetails(
+    world,
+    view,
+    data,
+    `${plan.input.text}\n${narrative}`,
+    modules.some((m) => m.id === "hacking"),
+  );
   const content = userMessage({
     scene: situation(world, records, view, plan, { ...extras, opening }),
     input: `【玩家输入】\n${formatInput(plan.input)}`,

@@ -11,7 +11,6 @@
 黑客在赛博朋克世界里是**依赖硬件、物理链路与现场情报的固件入侵和网络攻防**，不是“凑槽位、算 RAM 格子、按技能表放法术、挂 2 分钟 debuff、玩 5×5 破冰小游戏”。
 
 对照《物品、车辆与住所收敛设计方案》，当前代码（`packages/core/src/systems/hacking/`、`apps/web/`）与旧版方案存在三层核心错位：
-
 1. **把黑客做成了跑团/RPG 的“法术槽与数值门槛”**：
    - `applyHack` 与 `applyNpcHack`（`packages/core/src/systems/hacking/apply.ts`）强制校验 `def.ram > draft.ramMax`、`draft.programs.length >= slots`、`!draft.programs.includes(def.id)`，把 12 个 `quickhacks` 当成“必须先装进 3 个槽位才能用的法术白名单”；
    - 接入仓与脑部辅助义体的差异被简化成“几格 RAM、几个槽（`programSlots`）”，而荒坂隐蔽仓、渡鸦群控仓、四相强攻仓、军用科技黑墙仓的真实硬件特化只停留在纯文本；
@@ -28,8 +27,8 @@
 ## 二、五条原则的对照与落地设计
 
 ### 原则 1：黑客动作合并自然结算，取消程序槽位与白名单手续
-> 玩家只要装有完好的网络接入仓，任何符合现场硬件与链路逻辑的黑客动作（关监控、锁义眼、卡武器、黑门禁、伪造通讯、拷数据）都能一次行动自然结算，无需在面板里倒腾“装载/卸载程序”。
 
+> 玩家只要装有完好的网络接入仓，任何符合现场硬件与链路逻辑的黑客动作（关监控、锁义眼、卡武器、黑门禁、伪造通讯、拷数据）都能一次行动自然结算，无需在面板里倒腾“装载/卸载程序”。
 - **现状卡点**：
   - `applyHack` 要求 `command.program` 必须先通过 `hack learn` 装进 `draft.programs`（受 `slots` 限制），满了还要 `hack drop` 腾格子；不在 `draft.programs` 里的手段直接报错拦截。
   - 创角（`creator.ts` / `CreatorSteps.tsx`）和义体面板（`NeuralPages.tsx`）把 `programs` 当作类似技能槽的配置项。
@@ -38,8 +37,8 @@
   - **12 个 `quickhacks` 退回“常见黑客手段词典/参考”**：保留 `packages/content/src/hacking.ts` 作为赛博朋克典型黑客手段的定性效果参考（如义眼重启、武器故障、短路、过热、定位、记忆擦除、系统崩溃等），同时允许 `hack` / `breach` 直接结算任何符合现场电子设备与义体逻辑的入侵行动，一次输入内完成“切入子网→关监控→锁死守卫义眼”的连贯动作。
 
 ### 原则 2：不做倒计时 Buff 表，只记跨回合留存的持久事实
-> 瞬时干扰直接在当轮正文中演出并结算结果；后台只安静记录真正跨回合留存的世界事实。
 
+> 瞬时干扰直接在当轮正文中演出并结算结果；后台只安静记录真正跨回合留存的世界事实。
 - **现状卡点**：
   - 若为致盲、定身、卡壳、反追踪进度条专门增设带分钟倒计时的 `activeEffects` 或 `traces` 进度槽，会把沙盘重新拉回回合制 RPG 的状态栏管理。
 - **收敛方案**：
@@ -51,8 +50,8 @@
     4. **入侵引发的真实后果**：暴露行踪触发的现场警戒（`tension.alert` / 增援）、公开骇入留下的追查线索（`heat`），以及敌方黑客顺链路反击或深潜黑冰反噬造成的头部/神经伤势（`health.injuries`）与神经症状。
 
 ### 原则 3：平时安静，相关时才注入提示词与状态
-> 装了接入仓不代表每轮都在黑客攻防；平时安静记录，只有处于潜网、当前地点有已破内网或本轮涉及黑客与电子设备攻防时才进入上下文。
 
+> 装了接入仓不代表每轮都在黑客攻防；平时安静记录，只有处于潜网、当前地点有已破内网或本轮涉及黑客与电子设备攻防时才进入上下文。
 - **现状卡点**：
   - `hackingRules.when` 因 `state.deck !== null` 在所有回合常驻注入 2.3k 字符；
   - `hackingStatus` 每轮输出冗长的 `已装程序 x/y：...（运行需要 N 容量：...）`；
@@ -69,8 +68,8 @@
     - 精简 `hackingRules.narrate`，严格遵守 `AGENTS.md`“文笔交给预设”，只保留世界事实、物理拓扑约束与知情边界。
 
 ### 原则 4：取消 RAM 数值门槛，用“硬件档次、特化方向与物理链路”决定成败与后果
-> 不算 RAM 格子比大小；拿街头廉价仓去撞公司数据堡垒或军用黑冰会被挡回、触发警报或反噬烧脑；断网主机必须走过去插个人连接线或先黑进局域网跳板。
 
+> 不算 RAM 格子比大小；拿街头廉价仓去撞公司数据堡垒或军用黑冰会被挡回、触发警报或反噬烧脑；断网主机必须走过去插个人连接线或先黑进局域网跳板。
 - **现状卡点**：
   - `applyHack` 和 `applyNpcHack` 靠 `if (def.ram > draft.ramMax) return fail(...)` 做硬性数值拦截；
   - `cyberware.ts` 中 7 款接入仓与脑部黑客义体的档次和特化没有结构化定性摘要；
@@ -86,8 +85,7 @@
       - **四相强攻仓**（`tetratronic-rippler`）：高功率神经冲击与义体烧毁，正面压制力强；
       - **网监防护仓**（`netwatch-netdriver`）：深厚防火墙与反黑客溯源能力；
       - **军用科技黑墙仓**（`militech-canto`）：搭载黑墙边缘异质协议，破坏力极端但伴随着极高的神经灼烧与失控风险；
-      - **关键防护与脑机配件**：是否装有完好 `self-ice`（自我 ICE）、`ex-disk` / `memory-boost` / `camillo-ram-manager` 等脑部散热与缓冲组件。
-    - `Judge` 结合双方硬件档次、特化方向与现场防线直接给出 `possible | costly | blocked` 因果裁决：拿街头仓硬黑军用黑冰不会弹出“RAM 差 2 格”的系统提示，而是真实演变为“破冰失败惊动敌方网络黑客，顺着链路反向烧灼你的视神经”。
+      - **关键防护与脑机配件**：是否装有完好 `self-ice`（自我 ICE）、`ex-disk` / `memory-boost` / `camillo-ram-manager` 等脑部散热与缓冲组件。 - `Judge` 结合双方硬件档次、特化方向与现场防线直接给出 `possible | costly | blocked` 因果裁决：拿街头仓硬黑军用黑冰不会弹出“RAM 差 2 格”的系统提示，而是真实演变为“破冰失败惊动敌方网络黑客，顺着链路反向烧灼你的视神经”。
   - **物理链路校验真实接通（`narrator/prompts/context.ts` `physicsSection`）**：
     - 使用 `deckOf(installed.filter(c => !broken.includes(c.id)), safeData)` 判定 `hasCyberdeck`，接入仓在 `health.brokenChrome` 中受损时无法无线脑机入侵；
     - 从当前场景/地点事实与在场目标义体状态提取 `targetAirGapped`（物理断网/气隙隔离）、`requiredSubnet`（尚未 `breach` 的封闭局域子网）、`targetUnchromed`（纯肉体无联网义体目标）、`hardenedIce`（公司数据堡垒/军用级黑冰），真实传入 `evaluatePhysicsBoundaries({ hackCheck })`；
@@ -97,8 +95,8 @@
     - `turn.ts` 将其写入独立的 `facts.npcHackRuling`，`applyNpcHack` 优先读取 `npcHackRulingFact(ctx.facts)`，使玩家主行动（如开枪、翻窗、撬锁）与敌方黑客反击各自按真实攻防独立结算，互不覆盖。
 
 ### 原则 5：黑客设备、地点与界面的价值来自故事中的用途
-> 激活地图上已有的 7 个 `netrunner` 服务点买卖实物硬件与情报芯片，不做“法术技能书商店”或“程序槽管理面板”，彻底清理破冰矩阵小游戏残留。
 
+> 激活地图上已有的 7 个 `netrunner` 服务点买卖实物硬件与情报芯片，不做“法术技能书商店”或“程序槽管理面板”，彻底清理破冰矩阵小游戏残留。
 - **现状卡点**：
   - `servicePoints.gen.ts` 已有 7 个 `kind: "netrunner"` 服务点，但 `MerchantSiteSchema`、`merchant-sites.ts` 与 `Shop.tsx` 均未接通 `"netrunner"`；
   - `BreachMatrix.tsx` 与 `Pending.matrix` 仍残留在代码库中；
@@ -120,14 +118,14 @@
 
 ## 三、清理与改造清单对照
 
-| 维度 | 彻底清理的跑团/RPG残留 | 保留并补齐的因果沙盘机制 |
-|---|---|---|
-| **容量与门槛** | 删去 `def.ram > draft.ramMax` 数字比大小报错；不在状态与 UI 强调“几格 RAM” | 用接入仓定性档次、硬件特化方向（隐蔽/群控/强攻/网监/黑墙）与完好 `self-ice` 参与 `Judge` 因果裁决 |
-| **程序与槽位** | 删去 `programs` 槽位上限拦截、`!programs.includes` 白名单阻断、`hack learn/drop` 腾槽手续；不做 `library` 装卸面板 | 装有完好接入仓即可按现场条件执行黑客动作；12 个 `quickhacks` 作为常见黑客手段词典供模型归类参考 |
-| **小游戏与旧检定** | 删除 `BreachMatrix.tsx` 5×5 小游戏；清理 `Pending.matrix` 及请求层 `matrix` 分支 | 入侵协议（`breach`）直接按现场接入条件（直插终端、接入点、摄像头跳板）与防线强度在故事中自然结算 |
-| **状态持久化** | 不建 `activeEffects` 倒计时 Buff/Debuff 表；不做 `traces` 进度条 | 只记跨回合持久事实：`breachedNetworks`（已破内网权限）、`disabledEnemyChrome`/`brokenChrome`（瘫痪硬件）、`dive`（深潜状态）、`alert`/`injuries`（警戒与神经伤势） |
-| **物理拓扑与裁决** | 改变 `physicsSection` 盲目传 `deck !== null` 且漏传拓扑参数的现状 | `deckOf` 过滤损坏义体；接通气隙隔离 `targetAirGapped`、子网 `requiredSubnet`、纯肉体 `targetUnchromed`、硬化黑冰 `hardenedIce`；新增 `counterHack` 解耦敌我裁决 |
-| **提示词与商店** | 取消 `state.deck !== null` 每轮常驻 2.3k 规则；不做“买芯片写进法术书” | `hackingRules` 仅在潜网或本轮涉及黑客攻防时激活；`hackingStatus` 极简一行；激活 7 个 `netrunner` 服务点买卖实物装备与数据芯片 |
+| 维度               | 彻底清理的跑团/RPG残留                                                                                             | 保留并补齐的因果沙盘机制                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **容量与门槛**     | 删去 `def.ram > draft.ramMax` 数字比大小报错；不在状态与 UI 强调“几格 RAM”                                         | 用接入仓定性档次、硬件特化方向（隐蔽/群控/强攻/网监/黑墙）与完好 `self-ice` 参与 `Judge` 因果裁决                                                                  |
+| **程序与槽位**     | 删去 `programs` 槽位上限拦截、`!programs.includes` 白名单阻断、`hack learn/drop` 腾槽手续；不做 `library` 装卸面板 | 装有完好接入仓即可按现场条件执行黑客动作；12 个 `quickhacks` 作为常见黑客手段词典供模型归类参考                                                                    |
+| **小游戏与旧检定** | 删除 `BreachMatrix.tsx` 5×5 小游戏；清理 `Pending.matrix` 及请求层 `matrix` 分支                                   | 入侵协议（`breach`）直接按现场接入条件（直插终端、接入点、摄像头跳板）与防线强度在故事中自然结算                                                                   |
+| **状态持久化**     | 不建 `activeEffects` 倒计时 Buff/Debuff 表；不做 `traces` 进度条                                                   | 只记跨回合持久事实：`breachedNetworks`（已破内网权限）、`disabledEnemyChrome`/`brokenChrome`（瘫痪硬件）、`dive`（深潜状态）、`alert`/`injuries`（警戒与神经伤势） |
+| **物理拓扑与裁决** | 改变 `physicsSection` 盲目传 `deck !== null` 且漏传拓扑参数的现状                                                  | `deckOf` 过滤损坏义体；接通气隙隔离 `targetAirGapped`、子网 `requiredSubnet`、纯肉体 `targetUnchromed`、硬化黑冰 `hardenedIce`；新增 `counterHack` 解耦敌我裁决    |
+| **提示词与商店**   | 取消 `state.deck !== null` 每轮常驻 2.3k 规则；不做“买芯片写进法术书”                                              | `hackingRules` 仅在潜网或本轮涉及黑客攻防时激活；`hackingStatus` 极简一行；激活 7 个 `netrunner` 服务点买卖实物装备与数据芯片                                      |
 
 ---
 

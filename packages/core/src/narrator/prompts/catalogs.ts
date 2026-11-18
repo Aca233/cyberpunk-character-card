@@ -36,6 +36,7 @@ export function extractCatalogDetails(
   view: PlayerView,
   data: Readonly<Record<string, unknown>>,
   text: string,
+  hackingActive = false,
 ): string | undefined {
   const query = normalize(text);
   const itemIds = new Set(Object.keys(view.inventory.details));
@@ -69,7 +70,8 @@ export function extractCatalogDetails(
   const sections: string[] = [];
   if (details.length > 0) sections.push(`【本轮相关物件能力】\n${details.join("\n")}`);
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
-  const hackRelevant = (hacking.success && hacking.data.dive !== null) || mentionsHacking(text);
+  const hackRelevant =
+    hackingActive || (hacking.success && hacking.data.dive !== null) || mentionsHacking(text);
   if (hackRelevant) {
     const qLines = [...quickhackCatalog(data).values()].map(
       (q) => `- ${q.id} ${q.name}（${CATEGORY_LABELS[q.category]}）：${q.effect}`,

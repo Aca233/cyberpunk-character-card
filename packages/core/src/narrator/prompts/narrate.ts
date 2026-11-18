@@ -6,7 +6,6 @@ import { resolveDynamicWordCountBudget } from "../../physics";
 import { InventoryStateSchema } from "../../systems/inventory/schema";
 import { memoryRecords } from "../../systems/memory";
 import { NpcStateSchema } from "../../systems/npc/schema";
-import { registry } from "../../systems/registry";
 import { examplesSection } from "../examples";
 import type { Memory } from "../stages";
 import {
@@ -20,6 +19,7 @@ import {
   type PromptExtras,
   recapFor,
   situation,
+  stageModules,
 } from "./context";
 import {
   BASE_CONSTRAINTS,
@@ -182,7 +182,7 @@ export function buildNarratorPrompt(
   const opening = activeOpening(records, extras.opening);
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
+  const modules = stageModules(world, plan.input, extras);
   const rules = systemMessage("narrate", [coreRules(extras.hasPreset)], modules);
   // 写正文不带对 id 用的表，只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"）
   const system = [rules, ...narrateTablesOf(view, extras)].join("\n\n");

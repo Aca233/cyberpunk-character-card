@@ -1,5 +1,6 @@
 import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
+import type { RuleModule } from "../../kernel/system";
 import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
@@ -353,4 +354,20 @@ export function boostNote(
   if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
   const { name } = view.sandevistan;
   return `【斯安威斯坦时刻】\n玩家要求开启${name}。根据实际距离、身体动作、设备状态和对手反应判断能完成什么，不设固定动作格；快速破解的上传、装填和物体运动各有实际耗时。${stage === "narrate" ? "写出加速感知和动作的可见结果；只有实际出现的过热、神经症状或损伤才记后果，不按使用次数扣人性。" : "在 ruling 中说明具体可行条件与阻碍，不替玩家追加动作。"}`;
+}
+
+/** 写正文与抽取阶段的模块激活：除玩家输入外，敌方黑客反制裁决或正文涉及黑客攻防时补齐 hackingRules。 */
+export function stageModules(
+  world: WorldState,
+  input: TurnInput,
+  extras: PromptExtras,
+  narrative?: string,
+): readonly RuleModule[] {
+  const base = registry.activeRules(world, input);
+  if (input.mode === "ooc" || base.some((m) => m.id === "hacking")) return base;
+  const hasCounterHack =
+    extras.decided?.some((line) => line.startsWith("【敌方黑客反制】")) ?? false;
+  const narrativeHack = narrative !== undefined && mentionsHacking(narrative);
+  if (!hasCounterHack && !narrativeHack) return base;
+  return registry.rules.filter((m) => m.id === "hacking" || base.includes(m));
 }
