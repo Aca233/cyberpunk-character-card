@@ -85,16 +85,14 @@ type ChromeKitTab = "chrome" | "kit";
 function DossierBlock({
   title,
   onEdit,
-  wide = false,
   children,
 }: {
   readonly title: string;
   readonly onEdit: () => void;
-  readonly wide?: boolean;
   readonly children: ReactNode;
 }) {
   return (
-    <section className={wb.dossierBlock} data-wide={wide || undefined}>
+    <section className={wb.dossierBlock}>
       <CellFrame />
       <header className={wb.dossierHead}>
         <h3 className={wb.dossierHeading}>{title}</h3>
@@ -336,24 +334,28 @@ export function CharacterCreator({
   };
   const tabLineMask = cssUrl("tab.line");
   const displaySaveError = saveError ?? localSaveError;
+  const isReview = activeStep === "review";
 
   return (
     <div className={wb.bench}>
       {/* —————— 顶部五步导航栏 —————— */}
       <div className={wb.railBar} inert={busy}>
         <nav className={wb.stepRail} aria-label="创角流程步骤">
+          <CellFrame />
           {CREATOR_STEPS.map((step) => {
             const item = progress[step.id];
             const active = activeStep === step.id;
+            const statusIcon = item.issueCount > 0 ? "⚠ " : item.ready && item.filled ? "✓ " : "";
             return (
               <button
                 key={step.id}
                 type="button"
                 className={wb.stepBtn}
                 aria-current={active ? "step" : undefined}
+                data-warn={item.issueCount > 0 ? "" : undefined}
+                data-ready={item.ready && item.filled ? "" : undefined}
                 onClick={() => goToStep(step.id)}
               >
-                <CellFrame />
                 <span className={wb.stepBtnTop}>
                   <span className={wb.stepCode}>STEP {step.code}</span>
                   <span
@@ -361,6 +363,7 @@ export function CharacterCreator({
                     data-warn={item.issueCount > 0 ? "" : undefined}
                     data-ready={item.ready && item.filled ? "" : undefined}
                   >
+                    {statusIcon}
                     {item.badge}
                   </span>
                 </span>
@@ -370,375 +373,393 @@ export function CharacterCreator({
           })}
         </nav>
 
-        <div className={wb.mobileSummaryToggle}>
-          <span className={wb.note}>
-            {card.name.trim() || "未命名角色"} · 人性 {humanityNow}/100 ·{" "}
-            {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
-          </span>
-          <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
-            {sidebarOpen ? "收起摘要" : "实时档案"}
-          </Button>
-        </div>
+        {!isReview && (
+          <div className={wb.mobileSummaryToggle}>
+            <span className={wb.note}>
+              {card.name.trim() || "未命名角色"} · 人性 {humanityNow}/100 ·{" "}
+              {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
+            </span>
+            <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
+              {sidebarOpen ? "收起摘要" : "实时档案"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* —————— 中央双栏：当前步骤主舞台 + 右侧常驻实时档案栏 —————— */}
-      <div className={wb.mainSplit} inert={busy}>
-        <section
-          ref={stageRef}
-          className={wb.stage}
-          aria-label={`第 ${currentStep.index} 步：${currentStep.title}`}
-        >
-          <header className={wb.stageHeader}>
-            <div className={wb.stageTitleRow}>
-              <h2 className={wb.stageTitle}>{currentStep.title}</h2>
-              <span className={wb.stageEyebrow}>
-                STEP {currentStep.code} / 0{CREATOR_STEPS.length}
-              </span>
-            </div>
-            <p className={wb.stageLead}>{currentStep.lead}</p>
-            <span
-              className={wb.hairline}
-              style={{ maskImage: tabLineMask, WebkitMaskImage: tabLineMask }}
-              aria-hidden="true"
-            />
-          </header>
+      {/* —————— 中央双栏：当前步骤主舞台 + 右侧常驻实时档案栏（Step 05 全宽单栏） —————— */}
+      <div className={wb.mainSplit} data-review={isReview || undefined} inert={busy}>
+        <div className={wb.stageShell}>
+          <NineSlice
+            id="notify.itemCellBg"
+            tint="rgb(8 8 14 / 82%)"
+            slice={30}
+            className={wb.panelLayer}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            tint="var(--cp-cyan-dim)"
+            slice={30}
+            className={wb.panelLayer}
+          />
+          <section
+            ref={stageRef}
+            className={wb.stage}
+            aria-label={`第 ${currentStep.index} 步：${currentStep.title}`}
+          >
+            <header className={wb.stageHeader}>
+              <div className={wb.stageTitleRow}>
+                <h2 className={wb.stageTitle}>{currentStep.title}</h2>
+                <span className={wb.stageEyebrow}>
+                  STEP {currentStep.code} / 0{CREATOR_STEPS.length}
+                </span>
+              </div>
+              <p className={wb.stageLead}>{currentStep.lead}</p>
+              <span
+                className={wb.hairline}
+                style={{ maskImage: tabLineMask, WebkitMaskImage: tabLineMask }}
+                aria-hidden="true"
+              />
+            </header>
 
-          <div className={wb.stageBody}>
-            {activeStep === "identity" && (
-              <>
-                <div className={wb.identityTop}>
-                  <section className={wb.sectionBox} aria-label="角色身份铭牌">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>身份铭牌 · NC CITIZEN ID</h3>
-                      {isSample && <span className={wb.sampleBadge}>官方预设</span>}
-                    </header>
-                    <div className={wb.idStack}>
-                      <label className={wb.fieldLabel}>
-                        <span>角色姓名 *</span>
-                        <FrameBox className={wb.compactBox}>
-                          <input
-                            ref={nameInputRef}
-                            maxLength={20}
-                            value={card.name}
-                            placeholder="例如：V、露西、大卫"
-                            onChange={(e) => change({ name: e.target.value })}
-                          />
-                        </FrameBox>
-                      </label>
-                      <div className={wb.idSplit}>
+            <div className={wb.stageBody}>
+              {activeStep === "identity" && (
+                <>
+                  <div className={wb.identityTop}>
+                    <section className={wb.sectionBox} aria-label="角色身份铭牌">
+                      <CellFrame />
+                      <header className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>身份铭牌 · NC CITIZEN ID</h3>
+                        {isSample && <span className={wb.sampleBadge}>官方预设</span>}
+                      </header>
+                      <div className={wb.idStack}>
                         <label className={wb.fieldLabel}>
-                          <span>街头外号（可选）</span>
+                          <span>角色姓名 *</span>
                           <FrameBox className={wb.compactBox}>
                             <input
+                              ref={nameInputRef}
                               maxLength={20}
-                              value={card.alias}
-                              placeholder="夜之城通行代号"
-                              onChange={(e) => change({ alias: e.target.value })}
+                              value={card.name}
+                              placeholder="例如：V、露西、大卫"
+                              onChange={(e) => change({ name: e.target.value })}
                             />
                           </FrameBox>
                         </label>
-                        <label className={wb.fieldLabel}>
-                          <span>人称代词 *</span>
-                          <FrameBox className={wb.compactBox}>
-                            <input
-                              maxLength={4}
-                              value={card.pronoun}
-                              placeholder="他 / 她 / TA"
-                              onChange={(e) => change({ pronoun: e.target.value })}
-                            />
-                          </FrameBox>
-                        </label>
-                      </div>
-                      <fieldset className={wb.pronounRow} aria-label="快捷代词">
-                        <span className={wb.sectionBoxSub}>快捷代词</span>
-                        <div className={wb.pronounPills}>
-                          {PRONOUN_PRESETS.map((p) => (
-                            <Button
-                              key={p}
-                              small
-                              pressed={card.pronoun === p}
-                              onClick={() => change({ pronoun: p })}
-                            >
-                              {p}
-                            </Button>
-                          ))}
+                        <div className={wb.idSplit}>
+                          <label className={wb.fieldLabel}>
+                            <span>街头外号（可选）</span>
+                            <FrameBox className={wb.compactBox}>
+                              <input
+                                maxLength={20}
+                                value={card.alias}
+                                placeholder="夜之城通行代号"
+                                onChange={(e) => change({ alias: e.target.value })}
+                              />
+                            </FrameBox>
+                          </label>
+                          <label className={wb.fieldLabel}>
+                            <span>人称代词 *</span>
+                            <FrameBox className={wb.compactBox}>
+                              <input
+                                maxLength={4}
+                                value={card.pronoun}
+                                placeholder="他 / 她 / TA"
+                                onChange={(e) => change({ pronoun: e.target.value })}
+                              />
+                            </FrameBox>
+                          </label>
                         </div>
-                      </fieldset>
-                    </div>
-                  </section>
+                        <fieldset className={wb.pronounRow} aria-label="快捷代词">
+                          <span className={wb.sectionBoxSub}>快捷代词</span>
+                          <div className={wb.pronounPills}>
+                            {PRONOUN_PRESETS.map((p) => (
+                              <Button
+                                key={p}
+                                small
+                                pressed={card.pronoun === p}
+                                onClick={() => change({ pronoun: p })}
+                              >
+                                {p}
+                              </Button>
+                            ))}
+                          </div>
+                        </fieldset>
+                      </div>
+                    </section>
 
-                  <section className={wb.sectionBox} aria-label="出身默认开局资助">
+                    <section className={wb.sectionBox} aria-label="出身默认开局资助">
+                      <CellFrame />
+                      <header className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>出身默认开局资助</h3>
+                        <span className={wb.sectionBoxSub}>
+                          {board.origin
+                            ? ORIGIN_ECOSYSTEM_LABELS[originEcosystem(board.origin)]
+                            : "尚未选定出身"}
+                        </span>
+                      </header>
+                      <p className={wb.originSummaryTitle}>
+                        {board.origin?.label ?? "请在下方挑选或自创出身背景"}
+                      </p>
+                      <p className={wb.note}>
+                        {board.origin?.ability ||
+                          board.origin?.hook ||
+                          "出身将决定你的起始欧元、基础装备、自带义体与默认落脚点。"}
+                      </p>
+                      <div className={wb.loadoutFacts}>
+                        <p className={wb.factLine}>
+                          <span className={wb.factKey}>起始资金：</span>
+                          <span>
+                            基准 {loadoutSummary.baseEddies} €（当前档位进场{" "}
+                            <b>{loadoutSummary.finalEddies} €</b>）
+                          </span>
+                        </p>
+                        <p className={wb.factLine}>
+                          <span className={wb.factKey}>基础装备：</span>
+                          <span>
+                            {loadoutSummary.gearNames.length > 0
+                              ? loadoutSummary.gearNames.join("、")
+                              : "无额外默认装备"}
+                          </span>
+                        </p>
+                        <p className={wb.factLine}>
+                          <span className={wb.factKey}>自带义体：</span>
+                          <span>
+                            {inherent.length > 0
+                              ? inherent
+                                  .map((i) => `${i.name}${i.replaced ? "（已被替换）" : ""}`)
+                                  .join("、")
+                              : "无标配义体"}
+                          </span>
+                        </p>
+                        <p className={wb.factLine}>
+                          <span className={wb.factKey}>默认落脚点：</span>
+                          <span>{fallbackAnchor ? anchorLabel(fallbackAnchor) : fallbackLoc}</span>
+                        </p>
+                      </div>
+                    </section>
+                  </div>
+
+                  <section className={wb.sectionBox} aria-label="挑选出身背景">
                     <CellFrame />
                     <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>出身默认开局资助</h3>
-                      <span className={wb.sectionBoxSub}>
-                        {board.origin
-                          ? ORIGIN_ECOSYSTEM_LABELS[originEcosystem(board.origin)]
-                          : "尚未选定出身"}
-                      </span>
+                      <h3 className={wb.sectionBoxTitle}>选择或自创出身背景</h3>
+                      <span className={wb.sectionBoxSub}>点击卡片即选中，可按生态检索</span>
                     </header>
-                    <p className={wb.originSummaryTitle}>
-                      {board.origin?.label ?? "请在下方挑选或自创出身背景"}
-                    </p>
-                    <p className={wb.note}>
-                      {board.origin?.ability ||
-                        board.origin?.hook ||
-                        "出身将决定你的起始欧元、基础装备、自带义体与默认落脚点。"}
-                    </p>
-                    <div className={wb.loadoutFacts}>
-                      <p className={wb.factLine}>
-                        <span className={wb.factKey}>起始资金：</span>
-                        <span>
-                          基准 {loadoutSummary.baseEddies} €（当前档位进场{" "}
-                          <b>{loadoutSummary.finalEddies} €</b>）
-                        </span>
-                      </p>
-                      <p className={wb.factLine}>
-                        <span className={wb.factKey}>基础装备：</span>
-                        <span>
-                          {loadoutSummary.gearNames.length > 0
-                            ? loadoutSummary.gearNames.join("、")
-                            : "无额外默认装备"}
-                        </span>
-                      </p>
-                      <p className={wb.factLine}>
-                        <span className={wb.factKey}>自带义体：</span>
-                        <span>
-                          {inherent.length > 0
-                            ? inherent
-                                .map((i) => `${i.name}${i.replaced ? "（已被替换）" : ""}`)
-                                .join("、")
-                            : "无标配义体"}
-                        </span>
-                      </p>
-                      <p className={wb.factLine}>
-                        <span className={wb.factKey}>默认落脚点：</span>
-                        <span>{fallbackAnchor ? anchorLabel(fallbackAnchor) : fallbackLoc}</span>
-                      </p>
-                    </div>
+                    {pickerProps ? (
+                      <OriginPicker {...pickerProps} />
+                    ) : (
+                      <p className={wb.note}>正在加载夜之城出身目录…</p>
+                    )}
                   </section>
-                </div>
+                </>
+              )}
 
-                <section className={wb.sectionBox} aria-label="挑选出身背景">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>选择或自创出身背景</h3>
-                    <span className={wb.sectionBoxSub}>点击卡片即选中，可按生态检索</span>
-                  </header>
-                  {pickerProps ? (
-                    <OriginPicker {...pickerProps} />
-                  ) : (
-                    <p className={wb.note}>正在加载夜之城出身目录…</p>
-                  )}
-                </section>
-              </>
-            )}
-
-            {activeStep === "traits" && (
-              <>
-                <section className={wb.sectionBox} aria-label="当前特质与快速随机">
-                  <CellFrame />
-                  <div className={wb.traitsBar}>
-                    <div className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>已装配模块与生命路径掷骰</h3>
-                      <span className={wb.sectionBoxSub}>
-                        过往 {board.pasts.length}/{PAST_MAX} · 特质 {board.skills.length}/
-                        {SKILL_MAX} · 缺陷 {board.flaws.length}/{FLAW_MAX}
-                      </span>
+              {activeStep === "traits" && (
+                <>
+                  <section className={wb.sectionBox} aria-label="当前特质与快速随机">
+                    <CellFrame />
+                    <div className={wb.traitsBar}>
+                      <div className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>已装配模块与生命路径掷骰</h3>
+                        <span className={wb.sectionBoxSub}>
+                          过往 {board.pasts.length}/{PAST_MAX} · 特质 {board.skills.length}/
+                          {SKILL_MAX} · 缺陷 {board.flaws.length}/{FLAW_MAX}
+                        </span>
+                      </div>
+                      <div className={wb.slotTools}>
+                        <Button
+                          small
+                          disabled={!data || board.pasts.length >= PAST_MAX}
+                          onClick={rollPast}
+                        >
+                          🎲 掷一段生命路径
+                        </Button>
+                        <Button
+                          small
+                          disabled={!data || board.skills.length >= SKILL_MAX}
+                          onClick={() =>
+                            data && commit(rollTraits(board, data.modules, Math.random, 3))
+                          }
+                        >
+                          🎲 随机补齐特质
+                        </Button>
+                      </div>
                     </div>
-                    <div className={wb.slotTools}>
-                      <Button
-                        small
-                        disabled={!data || board.pasts.length >= PAST_MAX}
-                        onClick={rollPast}
-                      >
-                        🎲 掷一段生命路径
-                      </Button>
-                      <Button
-                        small
-                        disabled={!data || board.skills.length >= SKILL_MAX}
-                        onClick={() =>
-                          data && commit(rollTraits(board, data.modules, Math.random, 3))
-                        }
-                      >
-                        🎲 随机补齐特质
-                      </Button>
-                    </div>
-                  </div>
-                  <div className={wb.selectedGrid}>
-                    <div className={wb.selectedCol}>
-                      <h4 className={wb.selectedColTitle}>
-                        过往经历 ({board.pasts.length}/{PAST_MAX})
-                      </h4>
-                      {board.pasts.length === 0 ? (
-                        <p className={wb.note}>尚未选择，可点击右侧掷骰或下方挑选。</p>
-                      ) : (
-                        <ul className={wb.chips}>
-                          {board.pasts.map((m: BoardModule) => (
-                            <li key={m.id} className={wb.chip} title={m.hook || m.ability}>
-                              <CellFrame />
-                              <span>{m.label}</span>
-                              <ActionButton
-                                label={`移除${m.label}`}
-                                onClick={() =>
-                                  commit({
-                                    ...board,
-                                    pasts: board.pasts.filter((x) => x.id !== m.id),
-                                  })
-                                }
-                              >
-                                ×
-                              </ActionButton>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    <div className={wb.selectedCol}>
-                      <h4 className={wb.selectedColTitle}>
-                        核心特质 ({board.skills.length}/{SKILL_MAX})
-                      </h4>
-                      {board.skills.length === 0 ? (
-                        <p className={wb.note}>尚未选择，可点击随机补齐或下方挑选。</p>
-                      ) : (
-                        <ul className={wb.chips}>
-                          {board.skills.map((m: BoardModule) => (
-                            <li key={m.id} className={wb.chip} title={m.ability}>
-                              <CellFrame />
-                              <span>{m.label}</span>
-                              <ActionButton
-                                label={`移除${m.label}`}
-                                onClick={() =>
-                                  commit({
-                                    ...board,
-                                    skills: board.skills.filter((x) => x.id !== m.id),
-                                  })
-                                }
-                              >
-                                ×
-                              </ActionButton>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    <div className={wb.selectedCol}>
-                      <h4 className={wb.selectedColTitle} data-warn="">
-                        负面缺陷 ({board.flaws.length}/{FLAW_MAX})
-                      </h4>
-                      {board.flaws.length === 0 ? (
-                        <p className={wb.note}>未挂载缺陷，可按需要引入宿敌或债务钩子。</p>
-                      ) : (
-                        <ul className={wb.chips}>
-                          {board.flaws.map((m: BoardModule) => (
-                            <li
-                              key={m.id}
-                              className={wb.chip}
-                              data-flaw=""
-                              title={m.hook || m.ability}
-                            >
-                              <CellFrame />
-                              <span>{m.label}</span>
-                              <ActionButton
-                                label={`移除${m.label}`}
-                                onClick={() =>
-                                  commit({
-                                    ...board,
-                                    flaws: board.flaws.filter((x) => x.id !== m.id),
-                                  })
-                                }
-                              >
-                                ×
-                              </ActionButton>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                <section className={wb.sectionBox} aria-label="过往经历与核心特质目录">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>过往经历与核心特质</h3>
-                    <span className={wb.sectionBoxSub}>带出身倾向角标，支持自创</span>
-                  </header>
-                  {data ? (
-                    <TraitPicker board={board} data={data} commit={commit} />
-                  ) : (
-                    <p className={wb.note}>正在加载特质目录…</p>
-                  )}
-                </section>
-
-                <section className={wb.sectionBox} aria-label="负面缺陷目录">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>负面缺陷</h3>
-                    <span className={wb.sectionBoxSub}>可选挂载：关联生命路径代价或自定义冲突</span>
-                  </header>
-                  {data ? (
-                    <FlawPicker board={board} data={data} commit={commit} />
-                  ) : (
-                    <p className={wb.note}>正在加载缺陷目录…</p>
-                  )}
-                </section>
-              </>
-            )}
-
-            {activeStep === "chrome_kit" && (
-              <>
-                <div className={wb.subTabBar} role="tablist" aria-label="义体与开局态势子页签">
-                  <Button
-                    small
-                    primary={chromeKitTab === "chrome"}
-                    pressed={chromeKitTab === "chrome"}
-                    onClick={() => setChromeKitTab("chrome")}
-                  >
-                    义体拓扑与货架 ({board.cyberware.length + activeInherentCount})
-                  </Button>
-                  <Button
-                    small
-                    primary={chromeKitTab === "kit"}
-                    pressed={chromeKitTab === "kit"}
-                    onClick={() => setChromeKitTab("kit")}
-                  >
-                    行装、座驾与落脚点 ({loadoutSummary.finalEddies} €)
-                  </Button>
-                </div>
-
-                {chromeKitTab === "chrome" ? (
-                  <div className={wb.chromeLayout}>
-                    <div className={wb.chromeLeft}>
-                      <div className={wb.dollFrame}>
-                        <CyberDoll
-                          parts={dollParts}
-                          selected={activeSlot}
-                          onCell={handleDollCell}
-                          humanity={{
-                            current: humanityNow,
-                            cap: 100,
-                            stageLabel: stageInfo.label,
-                          }}
-                        />
+                    <div className={wb.selectedGrid}>
+                      <div className={wb.selectedCol}>
+                        <h4 className={wb.selectedColTitle}>
+                          过往经历 ({board.pasts.length}/{PAST_MAX})
+                        </h4>
+                        {board.pasts.length === 0 ? (
+                          <p className={wb.note}>尚未选择，可点击右侧掷骰或下方挑选。</p>
+                        ) : (
+                          <ul className={wb.chips}>
+                            {board.pasts.map((m: BoardModule) => (
+                              <li key={m.id} className={wb.chip} title={m.hook || m.ability}>
+                                <CellFrame />
+                                <span>{m.label}</span>
+                                <ActionButton
+                                  label={`移除${m.label}`}
+                                  onClick={() =>
+                                    commit({
+                                      ...board,
+                                      pasts: board.pasts.filter((x) => x.id !== m.id),
+                                    })
+                                  }
+                                >
+                                  ×
+                                </ActionButton>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
 
-                      <section
-                        className={wb.humanityConsole}
-                        data-tone={stageInfo.tone}
-                        aria-label="生理耐受与术后人性控制台"
-                      >
-                        <CellFrame />
-                        <div className={wb.humanityRow}>
-                          <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
-                            {stageInfo.label}
-                          </span>
-                          <span className={wb.humanityNums}>
-                            人性 <b>{humanityNow}</b> / 100
-                          </span>
+                      <div className={wb.selectedCol}>
+                        <h4 className={wb.selectedColTitle}>
+                          核心特质 ({board.skills.length}/{SKILL_MAX})
+                        </h4>
+                        {board.skills.length === 0 ? (
+                          <p className={wb.note}>尚未选择，可点击随机补齐或下方挑选。</p>
+                        ) : (
+                          <ul className={wb.chips}>
+                            {board.skills.map((m: BoardModule) => (
+                              <li key={m.id} className={wb.chip} title={m.ability}>
+                                <CellFrame />
+                                <span>{m.label}</span>
+                                <ActionButton
+                                  label={`移除${m.label}`}
+                                  onClick={() =>
+                                    commit({
+                                      ...board,
+                                      skills: board.skills.filter((x) => x.id !== m.id),
+                                    })
+                                  }
+                                >
+                                  ×
+                                </ActionButton>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className={wb.selectedCol}>
+                        <h4 className={wb.selectedColTitle} data-warn="">
+                          负面缺陷 ({board.flaws.length}/{FLAW_MAX})
+                        </h4>
+                        {board.flaws.length === 0 ? (
+                          <p className={wb.note}>未挂载缺陷，可按需要引入宿敌或债务钩子。</p>
+                        ) : (
+                          <ul className={wb.chips}>
+                            {board.flaws.map((m: BoardModule) => (
+                              <li
+                                key={m.id}
+                                className={wb.chip}
+                                data-flaw=""
+                                title={m.hook || m.ability}
+                              >
+                                <CellFrame />
+                                <span>{m.label}</span>
+                                <ActionButton
+                                  label={`移除${m.label}`}
+                                  onClick={() =>
+                                    commit({
+                                      ...board,
+                                      flaws: board.flaws.filter((x) => x.id !== m.id),
+                                    })
+                                  }
+                                >
+                                  ×
+                                </ActionButton>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className={wb.sectionBox} aria-label="过往经历与核心特质目录">
+                    <CellFrame />
+                    <header className={wb.sectionBoxHead}>
+                      <h3 className={wb.sectionBoxTitle}>过往经历与核心特质</h3>
+                      <span className={wb.sectionBoxSub}>带出身倾向角标，支持自创</span>
+                    </header>
+                    {data ? (
+                      <TraitPicker board={board} data={data} commit={commit} />
+                    ) : (
+                      <p className={wb.note}>正在加载特质目录…</p>
+                    )}
+                  </section>
+
+                  <section className={wb.sectionBox} aria-label="负面缺陷目录">
+                    <CellFrame />
+                    <header className={wb.sectionBoxHead}>
+                      <h3 className={wb.sectionBoxTitle}>负面缺陷</h3>
+                      <span className={wb.sectionBoxSub}>
+                        可选挂载：关联生命路径代价或自定义冲突
+                      </span>
+                    </header>
+                    {data ? (
+                      <FlawPicker board={board} data={data} commit={commit} />
+                    ) : (
+                      <p className={wb.note}>正在加载缺陷目录…</p>
+                    )}
+                  </section>
+                </>
+              )}
+
+              {activeStep === "chrome_kit" && (
+                <>
+                  <div className={wb.subTabBar} role="tablist" aria-label="义体与开局态势子页签">
+                    <Button
+                      small
+                      primary={chromeKitTab === "chrome"}
+                      pressed={chromeKitTab === "chrome"}
+                      onClick={() => setChromeKitTab("chrome")}
+                    >
+                      义体拓扑与货架 ({board.cyberware.length + activeInherentCount})
+                    </Button>
+                    <Button
+                      small
+                      primary={chromeKitTab === "kit"}
+                      pressed={chromeKitTab === "kit"}
+                      onClick={() => setChromeKitTab("kit")}
+                    >
+                      行装、座驾与落脚点 ({loadoutSummary.finalEddies} €)
+                    </Button>
+                  </div>
+
+                  {chromeKitTab === "chrome" ? (
+                    <div className={wb.chromeLayout}>
+                      <div className={wb.chromeLeft}>
+                        <div className={wb.dollFrame}>
+                          <CyberDoll
+                            parts={dollParts}
+                            selected={activeSlot}
+                            onCell={handleDollCell}
+                            humanity={{
+                              current: humanityNow,
+                              cap: 100,
+                              stageLabel: stageInfo.label,
+                            }}
+                          />
+                        </div>
+
+                        <section
+                          className={wb.humanityConsole}
+                          data-tone={stageInfo.tone}
+                          aria-label="生理耐受与术后人性控制台"
+                        >
+                          <CellFrame />
+                          <div className={wb.humanityRow}>
+                            <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
+                              {stageInfo.label}
+                            </span>
+                            <span className={wb.humanityNums}>
+                              人性 <b>{humanityNow}</b> / 100
+                            </span>
+                          </div>
                           <div className={wb.humanityTrack} aria-hidden="true">
                             <span
                               className={wb.humanityFill}
@@ -746,194 +767,491 @@ export function CharacterCreator({
                               style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
                             />
                           </div>
-                        </div>
-                        <fieldset className={wb.tolBar} aria-label="义体生理耐受档位">
-                          {TOLERANCES.map((t) => {
-                            const level = TOLERANCE_LEVELS[t];
-                            const active = board.tolerance === t;
+                          <fieldset className={wb.tolBar} aria-label="义体生理耐受档位">
+                            {TOLERANCES.map((t) => {
+                              const level = TOLERANCE_LEVELS[t];
+                              const active = board.tolerance === t;
+                              return (
+                                <Button
+                                  key={t}
+                                  small
+                                  primary={active}
+                                  pressed={active}
+                                  onClick={() => commit({ ...board, tolerance: t })}
+                                >
+                                  {level.label} ×{TOLERANCE_FACTOR[t]}
+                                </Button>
+                              );
+                            })}
+                          </fieldset>
+                          <p className={wb.humanityNote}>
+                            {stageInfo.note}
+                            {TOLERANCE_LEVELS[board.tolerance].hook
+                              ? ` · ${TOLERANCE_LEVELS[board.tolerance].hook}`
+                              : ""}
+                          </p>
+
+                          <div className={wb.inherentBox}>
+                            <span className={wb.inherentTitle}>
+                              出身 / 黑客标配免费义体（{inherent.length} 项）
+                            </span>
+                            {inherent.length === 0 ? (
+                              <p className={wb.note}>当前出身无额外自带义体。</p>
+                            ) : (
+                              <ul className={wb.inherentList}>
+                                {inherent.map((item) => (
+                                  <li
+                                    key={item.id}
+                                    className={wb.inherentItem}
+                                    data-replaced={item.replaced || undefined}
+                                  >
+                                    <span>
+                                      {item.name} · {item.source}（−{item.humanityCost} 人性）
+                                    </span>
+                                    <span className={wb.inherentStatus}>
+                                      {item.replaced
+                                        ? "已被同部位自选义体替换"
+                                        : "免费标配 · 已装配"}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </section>
+                      </div>
+
+                      <section className={wb.sectionBox} aria-label="部位切换与义体货架">
+                        <CellFrame />
+                        <header className={wb.sectionBoxHead}>
+                          <h3 className={wb.sectionBoxTitle}>
+                            部位货架 · {CYBER_LABELS[activeSlot]}
+                          </h3>
+                          <span className={wb.sectionBoxSub}>
+                            点左侧人体槽位仅切换部位，装卸在下方完成
+                          </span>
+                        </header>
+                        <fieldset className={wb.slotRibbon} aria-label="十部位切换条">
+                          {CYBER_SLOT_LIST.map((s) => {
+                            const count = (dollParts.get(s) ?? []).length;
+                            const cap = cyberwareRules.SLOT_CAPACITY[s];
                             return (
                               <Button
-                                key={t}
+                                key={s}
                                 small
-                                primary={active}
-                                pressed={active}
-                                onClick={() => commit({ ...board, tolerance: t })}
+                                pressed={activeSlot === s}
+                                onClick={() => setActiveSlot(s)}
                               >
-                                {level.label} ×{TOLERANCE_FACTOR[t]}
+                                {CYBER_LABELS[s]} {count}/{cap}
                               </Button>
                             );
                           })}
                         </fieldset>
-                        <p className={wb.humanityNote}>
-                          {stageInfo.note}
-                          {TOLERANCE_LEVELS[board.tolerance].hook
-                            ? ` · ${TOLERANCE_LEVELS[board.tolerance].hook}`
-                            : ""}
-                        </p>
-
-                        <div className={wb.inherentBox}>
-                          <span className={wb.inherentTitle}>
-                            出身 / 黑客标配免费义体（{inherent.length} 项）
-                          </span>
-                          {inherent.length === 0 ? (
-                            <p className={wb.note}>当前出身无额外自带义体。</p>
-                          ) : (
-                            <ul className={wb.inherentList}>
-                              {inherent.map((item) => (
-                                <li
-                                  key={item.id}
-                                  className={wb.inherentItem}
-                                  data-replaced={item.replaced || undefined}
-                                >
-                                  <span>
-                                    {item.name} · {item.source}（−{item.humanityCost} 人性）
-                                  </span>
-                                  <span className={wb.inherentStatus}>
-                                    {item.replaced ? "已被同部位自选义体替换" : "免费标配 · 已装配"}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
+                        {pickerProps ? (
+                          <CyberwareShelf {...pickerProps} slot={activeSlot} />
+                        ) : (
+                          <p className={wb.note}>正在加载义体货架…</p>
+                        )}
                       </section>
                     </div>
-
-                    <section className={wb.sectionBox} aria-label="部位切换与义体货架">
-                      <CellFrame />
-                      <header className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>
-                          部位货架 · {CYBER_LABELS[activeSlot]}
-                        </h3>
-                        <span className={wb.sectionBoxSub}>
-                          点左侧人体槽位仅切换部位，装卸在下方完成
-                        </span>
-                      </header>
-                      <fieldset className={wb.slotRibbon} aria-label="十部位切换条">
-                        {CYBER_SLOT_LIST.map((s) => {
-                          const count = (dollParts.get(s) ?? []).length;
-                          const cap = cyberwareRules.SLOT_CAPACITY[s];
-                          return (
-                            <Button
-                              key={s}
-                              small
-                              pressed={activeSlot === s}
-                              onClick={() => setActiveSlot(s)}
-                            >
-                              {CYBER_LABELS[s]} {count}/{cap}
-                            </Button>
-                          );
-                        })}
-                      </fieldset>
-                      {pickerProps ? (
-                        <CyberwareShelf {...pickerProps} slot={activeSlot} />
-                      ) : (
-                        <p className={wb.note}>正在加载义体货架…</p>
-                      )}
-                    </section>
-                  </div>
-                ) : (
-                  <div className={wb.kitLayout}>
-                    <section className={wb.sectionBox} aria-label="开局行装与座驾">
-                      <CellFrame />
-                      <header className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
-                        <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
-                      </header>
-                      {pickerProps ? (
-                        <LoadoutPicker {...pickerProps} />
-                      ) : (
-                        <p className={wb.note}>正在加载开局行装目录…</p>
-                      )}
-                    </section>
-
-                    <section className={wb.sectionBox} aria-label="开局出生落脚点">
-                      <CellFrame />
-                      <header className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>
-                        <span className={wb.sectionBoxSub}>
-                          {anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
-                        </span>
-                      </header>
-                      <StartMapPicker
-                        value={startLoc}
-                        defaultStart={fallbackLoc}
-                        automatic={!board.startLocation}
-                        onChange={setLoc}
-                      />
-                    </section>
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeStep === "people_prose" && (
-              <>
-                <section className={wb.sectionBox} aria-label="夜之城人脉网络">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>夜之城人脉网络</h3>
-                    <span className={wb.sectionBoxSub}>
-                      已建立 {board.acquaintances.length} 位旧识交集
-                    </span>
-                  </header>
-                  {data ? (
-                    <PeoplePicker board={board} data={data} commit={commit} />
                   ) : (
-                    <p className={wb.note}>正在加载夜之城人物档案…</p>
+                    <div className={wb.kitLayout}>
+                      <section className={wb.sectionBox} aria-label="开局行装与座驾">
+                        <CellFrame />
+                        <header className={wb.sectionBoxHead}>
+                          <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
+                          <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
+                        </header>
+                        {pickerProps ? (
+                          <LoadoutPicker {...pickerProps} />
+                        ) : (
+                          <p className={wb.note}>正在加载开局行装目录…</p>
+                        )}
+                      </section>
+
+                      <section className={wb.sectionBox} aria-label="开局出生落脚点">
+                        <CellFrame />
+                        <header className={wb.sectionBoxHead}>
+                          <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>
+                          <span className={wb.sectionBoxSub}>
+                            {anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
+                          </span>
+                        </header>
+                        <StartMapPicker
+                          value={startLoc}
+                          defaultStart={fallbackLoc}
+                          automatic={!board.startLocation}
+                          onChange={setLoc}
+                        />
+                      </section>
+                    </div>
                   )}
-                </section>
+                </>
+              )}
 
-                <section className={wb.sectionBox} aria-label="AI 撰稿工坊与核心人设小传">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>AI 撰稿工坊与核心人设小传</h3>
-                    <span className={wb.sectionBoxSub}>
-                      以下 4 项正剧区块将注入开局 AI 叙事上下文
-                    </span>
-                  </header>
-                  <DraftAll card={card} onChange={change} />
-                  <div className={wb.proseList}>
-                    {CORE_PROSE_BLOCKS.map((b) => (
-                      <ProseField key={b} block={b} card={card} onChange={change} />
-                    ))}
-                  </div>
-                </section>
+              {activeStep === "people_prose" && (
+                <>
+                  <section className={wb.sectionBox} aria-label="夜之城人脉网络">
+                    <CellFrame />
+                    <header className={wb.sectionBoxHead}>
+                      <h3 className={wb.sectionBoxTitle}>夜之城人脉网络</h3>
+                      <span className={wb.sectionBoxSub}>
+                        已建立 {board.acquaintances.length} 位旧识交集
+                      </span>
+                    </header>
+                    {data ? (
+                      <PeoplePicker board={board} data={data} commit={commit} />
+                    ) : (
+                      <p className={wb.note}>正在加载夜之城人物档案…</p>
+                    )}
+                  </section>
 
-                <section className={wb.sectionBox} aria-label="角色卡与酒馆导出字段">
-                  <CellFrame />
-                  <header className={wb.sectionBoxHead}>
-                    <h3 className={wb.sectionBoxTitle}>角色卡演出与酒馆导出字段</h3>
-                    <span className={wb.cardOnlyBadge}>仅随角色卡/酒馆导出，不占正剧上下文</span>
-                  </header>
-                  <p className={wb.note}>
-                    开场场景、开场白与对话示例仅在导出为 SillyTavern /
-                    角色卡分享时使用，正剧开启后不会强行塞入开局叙事，避免模型越权替玩家说话。
-                  </p>
-                  <div className={wb.proseList}>
-                    {EXTRA_PROSE_BLOCKS.map((b) => (
-                      <ProseField key={b} block={b} card={card} onChange={change} />
-                    ))}
+                  <section className={wb.sectionBox} aria-label="AI 撰稿工坊与核心人设小传">
+                    <CellFrame />
+                    <header className={wb.sectionBoxHead}>
+                      <h3 className={wb.sectionBoxTitle}>AI 撰稿工坊与核心人设小传</h3>
+                      <span className={wb.sectionBoxSub}>
+                        以下 4 项正剧区块将注入开局 AI 叙事上下文
+                      </span>
+                    </header>
+                    <DraftAll card={card} onChange={change} />
+                    <div className={wb.proseList}>
+                      {CORE_PROSE_BLOCKS.map((b) => (
+                        <ProseField key={b} block={b} card={card} onChange={change} />
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className={wb.sectionBox} aria-label="角色卡与酒馆导出字段">
+                    <CellFrame />
+                    <header className={wb.sectionBoxHead}>
+                      <h3 className={wb.sectionBoxTitle}>角色卡演出与酒馆导出字段</h3>
+                      <span className={wb.cardOnlyBadge}>仅随角色卡/酒馆导出，不占正剧上下文</span>
+                    </header>
+                    <p className={wb.note}>
+                      开场场景、开场白与对话示例仅在导出为 SillyTavern /
+                      角色卡分享时使用，正剧开启后不会强行塞入开局叙事，避免模型越权替玩家说话。
+                    </p>
+                    <div className={wb.proseList}>
+                      {EXTRA_PROSE_BLOCKS.map((b) => (
+                        <ProseField key={b} block={b} card={card} onChange={change} />
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {activeStep === "review" && (
+                <>
+                  <div
+                    className={wb.reviewBanner}
+                    data-ready={checks.length === 0 ? "" : undefined}
+                    role="status"
+                  >
+                    <CellFrame />
+                    <p className={wb.reviewBannerText}>
+                      {checks.length === 0
+                        ? "✓ 档案所有必选项已就绪，可以直接保存并接入夜之城。"
+                        : `尚有 ${checks.length} 项待完善，点击右侧任意条目可直达对应步骤修改：`}
+                    </p>
+                    {checks.length > 0 && (
+                      <ul className={wb.checksList}>
+                        {checks.map((c) => (
+                          <li key={c.text}>
+                            <ActionButton onClick={() => jumpToCheck(c.target)}>
+                              ⚠ {c.text} ▸
+                            </ActionButton>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                </section>
-              </>
+
+                  <div className={wb.reviewColumns}>
+                    <div className={wb.reviewLeft}>
+                      <DossierBlock
+                        title="义体拓扑只读快照与术后人性"
+                        onEdit={() => goToStep("chrome_kit", "chrome")}
+                      >
+                        <div className={wb.reviewDollFrame}>
+                          <CyberDoll
+                            parts={dollParts}
+                            humanity={{
+                              current: humanityNow,
+                              cap: 100,
+                              stageLabel: stageInfo.label,
+                            }}
+                          />
+                        </div>
+                        <strong className={wb.dossierBig} data-tone={stageInfo.tone}>
+                          人性 {humanityNow}
+                          <small>
+                            {" "}
+                            / 100 · {stageInfo.label} · {TOLERANCE_LEVELS[board.tolerance].label} ×
+                            {TOLERANCE_FACTOR[board.tolerance]}
+                          </small>
+                        </strong>
+                        <ChipList
+                          empty="无义体改造"
+                          items={[
+                            ...inherent
+                              .filter((i) => !i.replaced)
+                              .map((i) => ({ k: i.id, t: `${i.name}（标配）` })),
+                            ...board.cyberware.map((c) => ({ k: c.id, t: c.name })),
+                          ]}
+                        />
+                      </DossierBlock>
+
+                      <DossierBlock
+                        title="行装、座驾与落脚点"
+                        onEdit={() => goToStep("chrome_kit", "kit")}
+                      >
+                        <strong className={wb.dossierBig}>
+                          {loadoutSummary.finalEddies} €
+                          <small> · {CASH_TIER_INFO[board.kit.cashTier].label}</small>
+                        </strong>
+                        <p className={wb.dossierDim}>
+                          落脚点：{anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
+                        </p>
+                        <ChipList
+                          empty="无额外随身装备"
+                          items={[...loadoutSummary.gearNames, ...weaponNames, ...allVehicles].map(
+                            (t) => ({ k: t, t }),
+                          )}
+                        />
+                      </DossierBlock>
+                    </div>
+
+                    <div className={wb.reviewRight}>
+                      <DossierBlock title="身份铭牌与出身背景" onEdit={() => goToStep("identity")}>
+                        <strong className={wb.dossierBig}>
+                          {card.name.trim() || "未命名角色"}
+                          {card.alias.trim() && <small> 「{card.alias.trim()}」</small>}
+                        </strong>
+                        <p className={wb.dossierDim}>
+                          代词：{card.pronoun.trim() || "未设定"} · 出身：
+                          {board.origin?.label ?? "尚未选择"}
+                        </p>
+                        <p className={wb.dossierText}>
+                          {board.origin?.ability || "决定初始家底、自带义体与街头人脉"}
+                        </p>
+                        {board.origin?.hook && (
+                          <p className={wb.dossierDim}>身世钩子：{board.origin.hook}</p>
+                        )}
+                      </DossierBlock>
+
+                      <DossierBlock title="过往、特质与缺陷" onEdit={() => goToStep("traits")}>
+                        <div className={wb.dossierTraitsGrid}>
+                          <div className={wb.dossierTraitCol}>
+                            <p className={wb.dossierLabel}>
+                              核心特质 {board.skills.length}/{SKILL_MAX}
+                            </p>
+                            <ChipList
+                              empty="未选"
+                              items={board.skills.map((m) => ({
+                                k: m.id,
+                                t: m.label,
+                                tip: m.ability,
+                              }))}
+                            />
+                          </div>
+                          <div className={wb.dossierTraitCol}>
+                            <p className={wb.dossierLabel}>
+                              过往经历 {board.pasts.length}/{PAST_MAX}
+                            </p>
+                            <ChipList
+                              empty="未选"
+                              items={board.pasts.map((m) => ({
+                                k: m.id,
+                                t: m.label,
+                                tip: m.hook || m.ability,
+                              }))}
+                            />
+                          </div>
+                          <div className={wb.dossierTraitCol}>
+                            <p className={wb.dossierLabel}>
+                              负面缺陷 {board.flaws.length}/{FLAW_MAX}
+                            </p>
+                            <ChipList
+                              warn
+                              empty="无"
+                              items={board.flaws.map((m) => ({
+                                k: m.id,
+                                t: m.label,
+                                tip: m.hook || m.ability,
+                              }))}
+                            />
+                          </div>
+                        </div>
+                      </DossierBlock>
+
+                      <DossierBlock
+                        title={`夜之城人脉 (${board.acquaintances.length})`}
+                        onEdit={() => goToStep("people_prose")}
+                      >
+                        <ChipList
+                          empty="暂无自选旧识"
+                          items={board.acquaintances.map((a) => ({
+                            k: a.id,
+                            t: `${a.name} · ${RELATION_INFO[a.relation].label}`,
+                            tip: a.note,
+                          }))}
+                        />
+                      </DossierBlock>
+
+                      <DossierBlock
+                        title={`人设小传 (${filledProseCount}/7)`}
+                        onEdit={() => goToStep("people_prose")}
+                      >
+                        {filledProseCount === 0 ? (
+                          <p className={wb.dossierDim}>
+                            尚未撰写小传，可回到第 4 步手写或使用 AI 一键成稿。
+                          </p>
+                        ) : (
+                          <div className={wb.dossierProseList}>
+                            {PROSE_BLOCKS.filter((b) => card[b].trim() !== "").map((b) => (
+                              <div key={b} className={wb.dossierProseItem}>
+                                <span className={wb.dossierProseKey}>
+                                  {PROSE_BLOCK_INFO[b].label}
+                                  {EXTRA_PROSE_BLOCKS.includes(b) ? "（仅随角色卡/酒馆导出）" : ""}
+                                </span>
+                                <p className={wb.dossierProseVal}>{card[b]}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </DossierBlock>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* —————— 右侧常驻实时档案摘要栏（Step 05 隐藏避免重复；< 1180px 切换为抽屉） —————— */}
+        {!isReview && (
+          <>
+            {sidebarOpen && (
+              <button
+                type="button"
+                aria-label="收起实时档案摘要"
+                className={wb.sidebarBackdrop}
+                data-open=""
+                onClick={() => setSidebarOpen(false)}
+              />
             )}
+            <aside
+              className={wb.sidebar}
+              data-open={sidebarOpen || undefined}
+              aria-label="实时档案摘要"
+            >
+              <NineSlice
+                id="notify.itemCellBg"
+                tint="rgb(8 8 14 / 92%)"
+                slice={30}
+                className={wb.panelLayer}
+              />
+              <NineSlice
+                id="notify.itemCellFg"
+                tint="var(--cp-red-dim)"
+                slice={30}
+                className={wb.panelLayer}
+              />
 
-            {activeStep === "review" && (
-              <>
-                <div
-                  className={wb.reviewBanner}
-                  data-ready={checks.length === 0 ? "" : undefined}
-                  role="status"
+              <div className={wb.sidebarScroll}>
+                <div className={wb.sidebarHeadMobile}>
+                  <span className={wb.sidebarEyebrow}>LIVE DOSSIER · 实时档案</span>
+                  <Button small onClick={() => setSidebarOpen(false)}>
+                    收起
+                  </Button>
+                </div>
+
+                <header className={wb.sidebarHero}>
+                  <div className={wb.sidebarTitleRow}>
+                    <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
+                    {isSample && <span className={wb.sampleBadge}>官方预设</span>}
+                  </div>
+                  <h2 className={wb.heroName}>
+                    {card.name.trim() || "未命名角色"}
+                    {card.alias.trim() && (
+                      <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
+                    )}
+                  </h2>
+                  <p className={wb.heroMeta}>
+                    {[
+                      card.pronoun.trim() || "未设代词",
+                      board.origin?.label ?? "未选出身",
+                      anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
+                    ].join(" · ")}
+                  </p>
+                </header>
+
+                <section
+                  className={wb.humanityConsole}
+                  data-tone={stageInfo.tone}
+                  aria-label="术后人性摘要"
                 >
                   <CellFrame />
-                  <p className={wb.reviewBannerText}>
-                    {checks.length === 0
-                      ? "✓ 档案所有必选项已就绪，可以直接保存并接入夜之城。"
-                      : `尚有 ${checks.length} 项待完善，点击右侧任意条目可直达对应步骤修改：`}
+                  <div className={wb.humanityRow}>
+                    <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
+                      {stageInfo.label}
+                    </span>
+                    <span className={wb.humanityNums}>
+                      <b>{humanityNow}</b> / 100
+                    </span>
+                  </div>
+                  <div className={wb.humanityTrack} aria-hidden="true">
+                    <span
+                      className={wb.humanityFill}
+                      data-tone={stageInfo.tone}
+                      style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
+                    />
+                  </div>
+                  <p className={wb.humanityNote}>
+                    {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
                   </p>
-                  {checks.length > 0 && (
-                    <ul className={wb.checksList}>
+                </section>
+
+                <div className={wb.sidebarStats}>
+                  <div className={wb.sidebarStat}>
+                    <span className={wb.sidebarStatKey}>过往 / 特质 / 缺陷</span>
+                    <span className={wb.sidebarStatVal}>
+                      {board.pasts.length} / {board.skills.length} / {board.flaws.length}
+                    </span>
+                  </div>
+                  <div className={wb.sidebarStat}>
+                    <span className={wb.sidebarStatKey}>开局义体</span>
+                    <span className={wb.sidebarStatVal}>
+                      {board.cyberware.length + activeInherentCount} 件
+                    </span>
+                  </div>
+                  <div className={wb.sidebarStat}>
+                    <span className={wb.sidebarStatKey}>启动资金</span>
+                    <span className={wb.sidebarStatVal}>{loadoutSummary.finalEddies} €</span>
+                  </div>
+                  <div className={wb.sidebarStat}>
+                    <span className={wb.sidebarStatKey}>人脉 / 小传</span>
+                    <span className={wb.sidebarStatVal}>
+                      {board.acquaintances.length} 人 · {filledProseCount}/7
+                    </span>
+                  </div>
+                </div>
+
+                <section className={wb.sidebarChecks} aria-label="档案就绪检查">
+                  <div className={wb.telemetryHead}>
+                    <span className={wb.telemetryTitle}>档案就绪状态</span>
+                    <span
+                      className={wb.readyBadge}
+                      data-ready={checks.length === 0 ? "" : undefined}
+                    >
+                      {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
+                    </span>
+                  </div>
+                  {checks.length === 0 ? (
+                    <p className={wb.note}>必选项已完成，可前往第 5 步总览或直接开局。</p>
+                  ) : (
+                    <ul className={wb.checksList} aria-label="待完善项">
                       {checks.map((c) => (
                         <li key={c.text}>
                           <ActionButton onClick={() => jumpToCheck(c.target)}>
@@ -943,283 +1261,16 @@ export function CharacterCreator({
                       ))}
                     </ul>
                   )}
-                </div>
-
-                <div className={wb.dossierGrid}>
-                  <DossierBlock title="身份铭牌与出身背景" onEdit={() => goToStep("identity")}>
-                    <strong className={wb.dossierBig}>
-                      {card.name.trim() || "未命名角色"}
-                      {card.alias.trim() && <small> 「{card.alias.trim()}」</small>}
-                    </strong>
-                    <p className={wb.dossierDim}>
-                      代词：{card.pronoun.trim() || "未设定"} · 出身：
-                      {board.origin?.label ?? "尚未选择"}
-                    </p>
-                    <p className={wb.dossierText}>
-                      {board.origin?.ability || "决定初始家底、自带义体与街头人脉"}
-                    </p>
-                    {board.origin?.hook && (
-                      <p className={wb.dossierDim}>身世钩子：{board.origin.hook}</p>
-                    )}
-                  </DossierBlock>
-
-                  <DossierBlock title="过往、特质与缺陷" onEdit={() => goToStep("traits")}>
-                    <p className={wb.dossierLabel}>
-                      核心特质 {board.skills.length}/{SKILL_MAX}
-                    </p>
-                    <ChipList
-                      empty="尚未选择核心特质"
-                      items={board.skills.map((m) => ({ k: m.id, t: m.label, tip: m.ability }))}
-                    />
-                    <p className={wb.dossierLabel}>
-                      过往经历 {board.pasts.length}/{PAST_MAX}
-                    </p>
-                    <ChipList
-                      empty="无过往经历"
-                      items={board.pasts.map((m) => ({
-                        k: m.id,
-                        t: m.label,
-                        tip: m.hook || m.ability,
-                      }))}
-                    />
-                    <p className={wb.dossierLabel}>
-                      负面缺陷 {board.flaws.length}/{FLAW_MAX}
-                    </p>
-                    <ChipList
-                      warn
-                      empty="无负面缺陷"
-                      items={board.flaws.map((m) => ({
-                        k: m.id,
-                        t: m.label,
-                        tip: m.hook || m.ability,
-                      }))}
-                    />
-                  </DossierBlock>
-
-                  <DossierBlock
-                    wide
-                    title="义体拓扑只读快照与术后人性"
-                    onEdit={() => goToStep("chrome_kit", "chrome")}
-                  >
-                    <div className={wb.reviewDollFrame}>
-                      <CyberDoll
-                        parts={dollParts}
-                        humanity={{
-                          current: humanityNow,
-                          cap: 100,
-                          stageLabel: stageInfo.label,
-                        }}
-                      />
-                    </div>
-                    <strong className={wb.dossierBig} data-tone={stageInfo.tone}>
-                      人性 {humanityNow}
-                      <small>
-                        {" "}
-                        / 100 · {stageInfo.label} · {TOLERANCE_LEVELS[board.tolerance].label} ×
-                        {TOLERANCE_FACTOR[board.tolerance]}
-                      </small>
-                    </strong>
-                    <ChipList
-                      empty="无义体改造"
-                      items={[
-                        ...inherent
-                          .filter((i) => !i.replaced)
-                          .map((i) => ({ k: i.id, t: `${i.name}（标配）` })),
-                        ...board.cyberware.map((c) => ({ k: c.id, t: c.name })),
-                      ]}
-                    />
-                  </DossierBlock>
-
-                  <DossierBlock
-                    title="行装、座驾与落脚点"
-                    onEdit={() => goToStep("chrome_kit", "kit")}
-                  >
-                    <strong className={wb.dossierBig}>
-                      {loadoutSummary.finalEddies} €
-                      <small> · {CASH_TIER_INFO[board.kit.cashTier].label}</small>
-                    </strong>
-                    <p className={wb.dossierDim}>
-                      落脚点：{anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
-                    </p>
-                    <ChipList
-                      empty="无额外随身装备"
-                      items={[...loadoutSummary.gearNames, ...weaponNames, ...allVehicles].map(
-                        (t) => ({ k: t, t }),
-                      )}
-                    />
-                  </DossierBlock>
-
-                  <DossierBlock
-                    title={`夜之城人脉 (${board.acquaintances.length})`}
-                    onEdit={() => goToStep("people_prose")}
-                  >
-                    <ChipList
-                      empty="暂无自选旧识"
-                      items={board.acquaintances.map((a) => ({
-                        k: a.id,
-                        t: `${a.name} · ${RELATION_INFO[a.relation].label}`,
-                        tip: a.note,
-                      }))}
-                    />
-                  </DossierBlock>
-
-                  <DossierBlock
-                    wide
-                    title={`人设小传 (${filledProseCount}/7)`}
-                    onEdit={() => goToStep("people_prose")}
-                  >
-                    {filledProseCount === 0 ? (
-                      <p className={wb.dossierDim}>
-                        尚未撰写小传，可回到第 4 步手写或使用 AI 一键成稿。
-                      </p>
-                    ) : (
-                      <div className={wb.dossierProseList}>
-                        {PROSE_BLOCKS.filter((b) => card[b].trim() !== "").map((b) => (
-                          <div key={b} className={wb.dossierProseItem}>
-                            <span className={wb.dossierProseKey}>
-                              {PROSE_BLOCK_INFO[b].label}
-                              {EXTRA_PROSE_BLOCKS.includes(b) ? "（仅随角色卡/酒馆导出）" : ""}
-                            </span>
-                            <p className={wb.dossierProseVal}>{card[b]}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </DossierBlock>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* —————— 右侧常驻实时档案摘要栏（< 1180px 切换为抽屉） —————— */}
-        {sidebarOpen && (
-          <button
-            type="button"
-            aria-label="收起实时档案摘要"
-            className={wb.sidebarBackdrop}
-            data-open=""
-            onClick={() => setSidebarOpen(false)}
-          />
+                </section>
+              </div>
+            </aside>
+          </>
         )}
-        <aside
-          className={wb.sidebar}
-          data-open={sidebarOpen || undefined}
-          aria-label="实时档案摘要"
-        >
-          <NineSlice
-            id="map.panelBg"
-            tint="rgb(5 5 10 / 94%)"
-            slice={[110, 85, 75, 85]}
-            className={wb.sidebarLayer}
-          />
-          <NineSlice
-            id="map.panelFg"
-            tint="var(--cp-red)"
-            slice={[110, 85, 75, 85]}
-            className={wb.sidebarLayer}
-          />
-
-          <div className={wb.sidebarHeadMobile}>
-            <span className={wb.sidebarEyebrow}>LIVE DOSSIER · 实时档案</span>
-            <Button small onClick={() => setSidebarOpen(false)}>
-              收起
-            </Button>
-          </div>
-
-          <header className={wb.sidebarHero}>
-            <div className={wb.sidebarTitleRow}>
-              <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
-              {isSample && <span className={wb.sampleBadge}>官方预设</span>}
-            </div>
-            <h2 className={wb.heroName}>
-              {card.name.trim() || "未命名角色"}
-              {card.alias.trim() && <span className={wb.heroAlias}>「{card.alias.trim()}」</span>}
-            </h2>
-            <p className={wb.heroMeta}>
-              {[
-                card.pronoun.trim() || "未设代词",
-                board.origin?.label ?? "未选出身",
-                anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
-              ].join(" · ")}
-            </p>
-          </header>
-
-          <section
-            className={wb.humanityConsole}
-            data-tone={stageInfo.tone}
-            aria-label="术后人性摘要"
-          >
-            <CellFrame />
-            <div className={wb.humanityRow}>
-              <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
-                {stageInfo.label}
-              </span>
-              <span className={wb.humanityNums}>
-                <b>{humanityNow}</b> / 100
-              </span>
-            </div>
-            <div className={wb.humanityTrack} aria-hidden="true">
-              <span
-                className={wb.humanityFill}
-                data-tone={stageInfo.tone}
-                style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
-              />
-            </div>
-            <p className={wb.humanityNote}>
-              {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
-            </p>
-          </section>
-
-          <div className={wb.sidebarStats}>
-            <div className={wb.sidebarStat}>
-              <span className={wb.sidebarStatKey}>过往 / 特质 / 缺陷</span>
-              <span className={wb.sidebarStatVal}>
-                {board.pasts.length} / {board.skills.length} / {board.flaws.length}
-              </span>
-            </div>
-            <div className={wb.sidebarStat}>
-              <span className={wb.sidebarStatKey}>开局义体</span>
-              <span className={wb.sidebarStatVal}>
-                {board.cyberware.length + activeInherentCount} 件
-              </span>
-            </div>
-            <div className={wb.sidebarStat}>
-              <span className={wb.sidebarStatKey}>启动资金</span>
-              <span className={wb.sidebarStatVal}>{loadoutSummary.finalEddies} €</span>
-            </div>
-            <div className={wb.sidebarStat}>
-              <span className={wb.sidebarStatKey}>人脉 / 小传</span>
-              <span className={wb.sidebarStatVal}>
-                {board.acquaintances.length} 人 · {filledProseCount}/7
-              </span>
-            </div>
-          </div>
-
-          <section className={wb.sidebarChecks} aria-label="档案就绪检查">
-            <div className={wb.telemetryHead}>
-              <span className={wb.telemetryTitle}>档案就绪状态</span>
-              <span className={wb.readyBadge} data-ready={checks.length === 0 ? "" : undefined}>
-                {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
-              </span>
-            </div>
-            {checks.length === 0 ? (
-              <p className={wb.note}>必选项已完成，可前往第 5 步总览或直接开局。</p>
-            ) : (
-              <ul className={wb.checksList} aria-label="待完善项">
-                {checks.map((c) => (
-                  <li key={c.text}>
-                    <ActionButton onClick={() => jumpToCheck(c.target)}>⚠ {c.text} ▸</ActionButton>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </aside>
       </div>
 
       {/* —————— 底部常驻操作条 —————— */}
       <footer className={wb.bar}>
+        <CellFrame />
         <div className={wb.barActions}>
           <Button
             small

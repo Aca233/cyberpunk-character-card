@@ -281,7 +281,7 @@ export function CharactersScreen() {
             <aside className={wb.libraryDrawer} aria-label="角色库">
               <NineSlice
                 id="notify.itemCellBg"
-                tint="rgb(8 8 14 / 98%)"
+                tint="rgb(8 8 14 / 97%)"
                 slice={30}
                 className={wb.drawerLayer}
               />
@@ -291,70 +291,72 @@ export function CharactersScreen() {
                 slice={30}
                 className={wb.drawerLayer}
               />
-              <div className={wb.topBar}>
-                <strong className={wb.drawerTitle}>夜之城角色库</strong>
-                <span className={wb.headSpacer} />
-                <Button small onClick={() => setShowLibrary(false)}>
-                  收起
-                </Button>
-              </div>
-              <div className={wb.importBox}>
-                <Button small disabled={busy} onClick={() => fileInput.current?.click()}>
-                  {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
-                </Button>
-                <label className={wb.importOption}>
-                  <input
-                    type="checkbox"
-                    className={wb.importCheck}
-                    checked={useModel}
-                    disabled={busy}
-                    onChange={(event) => setUseModel(event.target.checked)}
-                  />
-                  <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
-                </label>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  hidden
-                  accept=".json,.png,application/json,image/png"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (file) importCard.mutate({ file, model: useModel });
-                  }}
-                />
-                {importCard.isError && (
-                  <p className={wb.error} role="alert">
-                    {importCard.error.message}
-                  </p>
-                )}
-              </div>
-              {characters.isPending && <p role="status">正在读取角色库…</p>}
-              {characters.isError && (
-                <div role="alert">
-                  <p className={wb.error}>{characters.error.message}</p>
-                  <Button small onClick={() => void characters.refetch()}>
-                    重新读取
+              <div className={wb.drawerScroll}>
+                <div className={wb.topBar}>
+                  <strong className={wb.drawerTitle}>夜之城角色库</strong>
+                  <span className={wb.headSpacer} />
+                  <Button small onClick={() => setShowLibrary(false)}>
+                    收起
                   </Button>
                 </div>
-              )}
-              {characters.isSuccess && allCharacters.length === 0 && (
-                <p className={wb.note}>还没有角色。</p>
-              )}
-              {customCharacters.length > 0 && (
-                <section className={wb.libraryGroup} aria-label="自建角色">
-                  <h2 className={wb.libraryGroupTitle}>自建角色（{customCharacters.length}）</h2>
-                  <ul className={wb.cards}>{customCharacters.map(renderEntryCard)}</ul>
-                </section>
-              )}
-              {sampleCharacters.length > 0 && (
-                <section className={wb.libraryGroup} aria-label="官方预设模板">
-                  <h2 className={wb.libraryGroupTitle}>
-                    官方预设模板（{sampleCharacters.length}）
-                  </h2>
-                  <ul className={wb.cards}>{sampleCharacters.map(renderEntryCard)}</ul>
-                </section>
-              )}
+                <div className={wb.importBox}>
+                  <Button small disabled={busy} onClick={() => fileInput.current?.click()}>
+                    {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
+                  </Button>
+                  <label className={wb.importOption}>
+                    <input
+                      type="checkbox"
+                      className={wb.importCheck}
+                      checked={useModel}
+                      disabled={busy}
+                      onChange={(event) => setUseModel(event.target.checked)}
+                    />
+                    <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
+                  </label>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    hidden
+                    accept=".json,.png,application/json,image/png"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) importCard.mutate({ file, model: useModel });
+                    }}
+                  />
+                  {importCard.isError && (
+                    <p className={wb.error} role="alert">
+                      {importCard.error.message}
+                    </p>
+                  )}
+                </div>
+                {characters.isPending && <p role="status">正在读取角色库…</p>}
+                {characters.isError && (
+                  <div role="alert">
+                    <p className={wb.error}>{characters.error.message}</p>
+                    <Button small onClick={() => void characters.refetch()}>
+                      重新读取
+                    </Button>
+                  </div>
+                )}
+                {characters.isSuccess && allCharacters.length === 0 && (
+                  <p className={wb.note}>还没有角色。</p>
+                )}
+                {customCharacters.length > 0 && (
+                  <section className={wb.libraryGroup} aria-label="自建角色">
+                    <h2 className={wb.libraryGroupTitle}>自建角色（{customCharacters.length}）</h2>
+                    <ul className={wb.cards}>{customCharacters.map(renderEntryCard)}</ul>
+                  </section>
+                )}
+                {sampleCharacters.length > 0 && (
+                  <section className={wb.libraryGroup} aria-label="官方预设模板">
+                    <h2 className={wb.libraryGroupTitle}>
+                      官方预设模板（{sampleCharacters.length}）
+                    </h2>
+                    <ul className={wb.cards}>{sampleCharacters.map(renderEntryCard)}</ul>
+                  </section>
+                )}
+              </div>
             </aside>
           </>
         )}
