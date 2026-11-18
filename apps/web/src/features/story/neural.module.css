@@ -716,7 +716,7 @@
  */
 @container pin (width >= 480px) {
   .cyberScreen {
-    --stage: clamp(260px, min(58cqw, 60cqw - 64px, calc(100dvh - 400px)), 520px);
+    --stage: var(--doll-stage, clamp(260px, min(58cqw, 60cqw - 64px, calc(100dvh - 400px)), 520px));
     --cell: calc(var(--stage) * 0.115);
     min-width: 0;
   }

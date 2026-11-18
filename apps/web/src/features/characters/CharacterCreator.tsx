@@ -166,7 +166,7 @@ export function CharacterCreator({
   const board = card.board ?? emptyBoard();
   const [activeStep, setActiveStep] = useState<CreatorStepId>("identity");
   const [traitsTab, setTraitsTab] = useState<TraitsTab>("build");
-  const [activeSlot, setActiveSlot] = useState<CyberSlot>("os");
+  const [activeSlot, setActiveSlot] = useState<CyberSlot | "all">("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [localSaveError, setLocalSaveError] = useState<string | null>(null);
@@ -590,7 +590,7 @@ export function CharacterCreator({
                     <div className={wb.dollFrame}>
                       <CyberDoll
                         parts={dollParts}
-                        selected={activeSlot}
+                        selected={activeSlot === "all" ? null : activeSlot}
                         onCell={handleDollCell}
                         humanity={{
                           current: humanityNow,
@@ -663,12 +663,21 @@ export function CharacterCreator({
                     <CellFrame />
                     <header className={wb.sectionBoxHead}>
                       <h3 className={wb.sectionBoxTitle}>
-                        {CYBER_LABELS[activeSlot]} · {(dollParts.get(activeSlot) ?? []).length}/
-                        {cyberwareRules.SLOT_CAPACITY[activeSlot]}
+                        {activeSlot === "all"
+                          ? `全部义体 · 已装 ${board.cyberware.length + activeInherentCount} 件`
+                          : `${CYBER_LABELS[activeSlot]} · ${(dollParts.get(activeSlot) ?? []).length}/${cyberwareRules.SLOT_CAPACITY[activeSlot]}`}
                       </h3>
                       <span className={wb.sectionBoxSub}>点卡片直接装上、卸下或替换</span>
                     </header>
                     <fieldset className={wb.slotRibbon} aria-label="部位快速切换">
+                      <button
+                        type="button"
+                        className={wb.slotTab}
+                        aria-pressed={activeSlot === "all"}
+                        onClick={() => setActiveSlot("all")}
+                      >
+                        全部 ({data?.cyberware.length ?? 0})
+                      </button>
                       {CYBER_SLOT_LIST.map((s) => {
                         const count = (dollParts.get(s) ?? []).length;
                         const cap = cyberwareRules.SLOT_CAPACITY[s];
