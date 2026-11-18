@@ -56,6 +56,11 @@ function money(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+function sellPriceLabel(item: { readonly value: number; readonly locked: string | null }): string {
+  if (item.value > 0) return `+${money(item.value)} 欧元`;
+  return item.locked !== null ? "暂不可售" : "不收";
+}
+
 function matchesRarity(
   item: { readonly rarity: string | null; readonly iconic: boolean },
   filter: string,
@@ -500,7 +505,7 @@ export function Shop({
     const rows: InspectorMetaRow[] = [
       {
         label: "回收报价",
-        value: item.value > 0 ? `+${money(item.value)} 欧元` : "不收",
+        value: sellPriceLabel(item),
         tone: unavailable ? "bad" : "cyan",
       },
       { label: "背包已有", value: `${owned} 件`, tone: "cyan" },
@@ -816,7 +821,7 @@ export function Shop({
                                   <span className={shopCss.ownedPill}>×{s.count}</span>
                                 ) : undefined
                               }
-                              priceText={s.value > 0 ? `+${money(s.value)} 欧元` : "不收"}
+                              priceText={sellPriceLabel(s)}
                               priceTone={unavailable ? "bad" : "sell"}
                               actionLabel="卖"
                               actionDisabled={!onSell || working || unavailable}
