@@ -1064,9 +1064,9 @@ export class GameService {
       const auxModel = aux.ok ? aux.profile.model : narratorModel;
       const stageModel = (stage: TurnStage): string | undefined => {
         switch (stage) {
-          case "judge":
           case "narrate":
             return narratorModel;
+          case "judge":
           case "extract":
           case "repair":
           case "offscreen":

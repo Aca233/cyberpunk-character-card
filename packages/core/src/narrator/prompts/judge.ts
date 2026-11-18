@@ -18,7 +18,7 @@ import {
 } from "./context";
 import { BASE_RULES, systemMessage, userMessage } from "./layers";
 
-/** ① 判断：叙事模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
+/** ① 判断：辅助模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
 export const JUDGE_TEMPERATURE = 0.3;
 
 /** L1 */

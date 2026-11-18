@@ -17,16 +17,19 @@ export function scriptedNarrator(c: EvalCase, aux: LlmClient): LlmClient {
     foes: null,
     ...c.judged,
   });
-  let narratorCalls = 0;
   return {
     async *stream(request: LlmRequest, signal?: AbortSignalLike): AsyncIterable<LlmEvent> {
+      if (request.responseFormat?.name === "judge") {
+        yield { type: "text", text: judged };
+        yield { type: "done", finishReason: "stop" };
+        return;
+      }
       if (request.purpose === "aux") {
         yield* aux.stream(request, signal);
         return;
       }
-      // 叙事模型第一次是判断，第二次是写正文
-      narratorCalls += 1;
-      yield { type: "text", text: narratorCalls === 1 ? judged : narrative };
+      // 叙事模型仅在写正文时调用一次
+      yield { type: "text", text: narrative };
       yield { type: "done", finishReason: "stop" };
     },
   };

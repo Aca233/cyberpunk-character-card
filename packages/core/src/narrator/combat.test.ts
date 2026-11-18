@@ -277,24 +277,24 @@ function fakeLlm(
   return {
     async *stream(request) {
       const text =
-        request.purpose === "aux"
-          ? JSON.stringify(
-              withIndependentEvents({
-                changes,
-                choices: [],
-                dropped: [],
-                ...(events === undefined ? {} : { events }),
-              }),
-            )
-          : request.temperature === JUDGE_TEMPERATURE
-            ? JSON.stringify({
-                read: "测试战斗判定",
-                ooc: false,
-                ruling,
-                buy: null,
-                foes: null,
-                recall: [],
-              })
+        request.responseFormat?.name === "judge" || request.temperature === JUDGE_TEMPERATURE
+          ? JSON.stringify({
+              read: "测试战斗判定",
+              ooc: false,
+              ruling,
+              buy: null,
+              foes: null,
+              recall: [],
+            })
+          : request.purpose === "aux"
+            ? JSON.stringify(
+                withIndependentEvents({
+                  changes,
+                  choices: [],
+                  dropped: [],
+                  ...(events === undefined ? {} : { events }),
+                }),
+              )
             : "枪手开火，你的左臂被霰弹擦过，留下了一处伤口。";
       yield { type: "text", text };
       yield { type: "done", finishReason: "stop" };

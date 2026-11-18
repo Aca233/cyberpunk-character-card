@@ -112,7 +112,7 @@ import {
 } from "./validation";
 
 /**
- * 一轮四步：① 判断（叙事模型，JSON Schema：记忆调度与定性物理/社会因果裁决）→ ② 拼上下文
+ * 一轮四步：① 判断（辅助模型，JSON Schema：记忆调度与定性物理/社会因果裁决）→ ② 拼上下文
  * → ③ 写正文（叙事模型，纯文本，边收边放）→ ④ 抽取（辅助模型，JSON）+ 确定性规则核验与记账。
  * 只算出结果，不写日志：写日志、加锁和版本核对由调用方负责
  */
@@ -226,9 +226,9 @@ export interface NarratorTurn {
   readonly closeup: undefined;
   /** 判断认为这次是场外提问：不改状态，也不顶掉上一轮的选项 */
   readonly ooc: boolean;
-  /** 叙事模型的用量（判断和写正文） */
+  /** 叙事模型的用量（写正文） */
   readonly usage: LlmUsage | undefined;
-  /** 辅助模型抽取和核对的用量 */
+  /** 辅助模型的用量（判断、抽取、场外推演和场景摘要） */
   readonly auxUsage: LlmUsage;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
@@ -623,13 +623,13 @@ export async function runNarratorTurn(
     });
     const prompt = buildJudgePrompt(world, records, plan, extras, memories);
     const reply = await b.call({
-      purpose: "narrator",
+      purpose: "aux",
       temperature: JUDGE_TEMPERATURE,
       responseFormat: responseJsonSchema("judge", JudgeDocSchema),
       messages: prompt.messages,
     });
     if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
-    addNarrator(reply.usage);
+    b.auxUsage = addUsage(b.auxUsage, reply.usage);
     judge = await b.readJudge(reply.text);
     if (b.dropped.some((d) => d.where === "判断"))
       return { kind: "blocked", reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。" };
