@@ -14,6 +14,7 @@ import {
   withWorldObjects,
 } from "./apply";
 import { inventoryEvents } from "./events";
+import { applyGunsmith, type GunsmithCommand, GunsmithCommandSchema } from "./gunsmith";
 import { inventoryInteractions } from "./interactions";
 import { applyShopBusiness, visitMerchants, withMerchants } from "./merchants";
 import { namesView } from "./names";
@@ -41,7 +42,7 @@ import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
   InventoryState,
-  ItemCommand | TradeCommand | ShopBusinessCommand | ShopOrderCommand,
+  ItemCommand | TradeCommand | GunsmithCommand | ShopBusinessCommand | ShopOrderCommand,
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
@@ -64,6 +65,7 @@ export const inventory = defineSystem<
   commands: {
     item: ItemCommandSchema,
     trade: TradeCommandSchema,
+    gunsmith: GunsmithCommandSchema,
     shopBusiness: ShopBusinessCommandSchema,
     shopOrder: ShopOrderCommandSchema,
   },
@@ -99,6 +101,25 @@ export const inventory = defineSystem<
               commerce: ctx.read("commerce"),
               logistics: ctx.read("logistics"),
               cyberware: ctx.data.clinicOperations,
+            },
+          },
+          ctx.data,
+          ctx.facts,
+        );
+      case "gunsmith":
+        return applyGunsmith(
+          draft,
+          command,
+          {
+            time: ctx.now,
+            slices: {
+              inventory: draft,
+              economy: ctx.read("economy"),
+              world: ctx.read("world"),
+              npc: ctx.read("npc"),
+              factions: ctx.read("factions"),
+              commerce: ctx.read("commerce"),
+              logistics: ctx.read("logistics"),
             },
           },
           ctx.data,
@@ -176,6 +197,21 @@ export const inventory = defineSystem<
         /商店|店主|店员|开业|停业|关门|接替/.test(input.text),
       text: "- 商店身份、库存与营业持续保存，重访不重置。实际停业/恢复或人员接替写 shopBusiness，并引用本轮正文证据；路过的人不自动成为店员。没有人员位置记录不代表已经离场，明确死亡或离场的人不能本人营业。订货和取消需店方实际同意后写shopOrder，引用正文证据；本批订货均为到货后付款，不预扣订金、不生成债务。正常到货只由保存的供货单推进，不凭时间补满。",
     },
+    {
+      id: "gunsmith",
+      title: "枪匠工坊",
+      commands: ["gunsmith"],
+      when: (state, input) =>
+        Object.values(state.objects).some((o) => o.kind === "customized") ||
+        /枪匠|工坊|改装|加装|拆下|解锁|精调|升阶|强化武器|智能连接|智能握把|固锁|威尔逊|阿涛/.test(
+          input.text,
+        ),
+      judge:
+        "- 常规未锁定的瞄准镜、枪口和插件在界面上自行免费装卸，不走枪匠交易；只有从商店货架直接购买并安装、拆改已锁定槽位、武器精调升阶，或加装智能靶向联锁/精工固锁改造时，才写 gunsmith 交易。",
+      narrate:
+        "- 枪匠改装与精调按给定报价与现货写入正文；询价、砍价或未接受的条件不能写成已经改装或扣款。",
+      text: "- gunsmith：与商店枪匠完成的定制服务（install 从货架或背包安装改装件，detach 拆除已锁定改装件并解锁槽位，tune 付费精调提升武器品质一档，convert 为智能武器加装智能靶向联锁模块或精工固锁已装槽位）。shop 与各项参数须与本轮共同报价一致，不得自填金额，不另发 money、item 或 trade 重复扣款。",
+    },
   ],
   actions: inventoryActions,
   view: { key: "inventory", project: inventoryView },
@@ -191,6 +227,7 @@ export const inventory = defineSystem<
 export * from "./actions";
 export * from "./apply";
 export * from "./events";
+export * from "./gunsmith";
 export * from "./interactions";
 export * from "./merchants";
 export * from "./names";

@@ -40,26 +40,28 @@ function nextWeaponInstanceId(draft: Inventory, baseId: string): string {
   return candidate;
 }
 
-function isCleanWeaponState(
-  ws: Pick<WeaponInstanceState, "mods" | "lockedSlots" | "tunedRarity">,
+export function isCleanWeaponState(
+  ws: Pick<WeaponInstanceState, "mods" | "lockedSlots" | "tunedRarity" | "smartLink">,
 ): boolean {
   return (
     Object.values(ws.mods).every((v) => v === undefined) &&
     ws.lockedSlots.length === 0 &&
-    ws.tunedRarity === undefined
+    ws.tunedRarity === undefined &&
+    !ws.smartLink
   );
 }
 
-function cloneWeaponState(ws: WeaponInstanceState): WeaponInstanceState {
+export function cloneWeaponState(ws: WeaponInstanceState): WeaponInstanceState {
   return {
     baseId: ws.baseId,
     mods: { ...ws.mods },
     lockedSlots: [...ws.lockedSlots],
     ...(ws.tunedRarity !== undefined ? { tunedRarity: ws.tunedRarity } : {}),
+    ...(ws.smartLink ? { smartLink: true } : {}),
   };
 }
 
-function defaultInstanceStateFromDef(def: ItemDef): WeaponInstanceState | undefined {
+export function defaultInstanceStateFromDef(def: ItemDef): WeaponInstanceState | undefined {
   if (def.kind !== "weapon") return undefined;
   const hasPre =
     def.preInstalledMods !== undefined && Object.values(def.preInstalledMods).some(Boolean);
@@ -80,6 +82,9 @@ function validateWeaponState(
 ): string | null {
   if (weaponDef.kind !== "weapon" || weaponDef.category === undefined) {
     return "只有武器才能附带改装状态";
+  }
+  if (ws.smartLink && weaponDef.weaponType !== "smart") {
+    return `${weaponDef.name} 不是智能武器，不能附带智能靶向联锁改造`;
   }
   if (requireExactBase && ws.baseId !== weaponDef.id) {
     return `weaponState.baseId "${ws.baseId}" 必须与模板武器 "${weaponDef.id}" 一致`;
@@ -106,7 +111,7 @@ function validateWeaponState(
   return null;
 }
 
-function materializeWeapon(
+export function materializeWeapon(
   draft: Inventory,
   def: ItemDef,
   ws: WeaponInstanceState,
@@ -129,9 +134,16 @@ function materializeWeapon(
   return instanceId;
 }
 
-function foldBackWeapon(draft: Inventory, instanceId: string): boolean {
+export function foldBackWeapon(draft: Inventory, instanceId: string): boolean {
   const obj = draft.objects[instanceId];
   if (obj?.kind !== "customized" || obj.holder !== "player" || !obj.weaponState) {
+    return false;
+  }
+  if (
+    obj.definition.iconic ||
+    obj.definition.preInstalledMods !== undefined ||
+    obj.definition.lockedModSlots !== undefined
+  ) {
     return false;
   }
   if (!isCleanWeaponState(obj.weaponState)) return false;
@@ -188,9 +200,10 @@ export function quickSlotFor(kind: ItemKind): QuickSlotName | undefined {
   return kind === "healing" || kind === "grenade" ? kind : undefined;
 }
 
-function put(draft: Inventory, id: string): void {
+export function putToBackpack(draft: Inventory, id: string): void {
   draft.backpack[id] = (draft.backpack[id] ?? 0) + 1;
 }
+const put = putToBackpack;
 
 export function placedHolderTag(kind: PlacedKind, target: string): string {
   return kind === "npc" ? target : `${kind}:${target}`;
@@ -362,13 +375,14 @@ function moveObject(
   object.lastChange = reason.slice(0, 240);
 }
 
-function take(draft: Inventory, id: string): boolean {
+export function takeFromBackpack(draft: Inventory, id: string): boolean {
   const count = draft.backpack[id] ?? 0;
   if (count < 1) return false;
   if (count === 1) Reflect.deleteProperty(draft.backpack, id);
   else draft.backpack[id] = count - 1;
   return true;
 }
+const take = takeFromBackpack;
 
 /** 快捷栏的东西放回背包，没恢复的次数记下来 */
 function stow(draft: Inventory, slot: QuickSlotName): void {

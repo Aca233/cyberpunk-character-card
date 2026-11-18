@@ -33,6 +33,13 @@ export interface NarratedPurchase {
   readonly stockRevision?: number | undefined;
   readonly serviceOrder?: string | undefined;
   readonly debtDue?: number | null | undefined;
+  readonly weapon?: string | undefined;
+  readonly mod?: string | undefined;
+  readonly source?: "shelf" | "backpack" | undefined;
+  readonly slot?: string | undefined;
+  readonly conversion?: "smart-link" | "precision-lock" | undefined;
+  readonly tunedRarity?: string | undefined;
+  readonly lock?: boolean | undefined;
 }
 
 /** 正文开始前已给出的交易不能在抽取时换对象或改价；未形成报价时只能继续商谈。 */
@@ -65,7 +72,14 @@ export function checkNarratedPurchase(
     expected.provider !== actual.provider ||
     expected.stockRevision !== actual.stockRevision ||
     expected.serviceOrder !== actual.serviceOrder ||
-    expected.debtDue !== actual.debtDue
+    expected.debtDue !== actual.debtDue ||
+    expected.weapon !== actual.weapon ||
+    expected.mod !== actual.mod ||
+    expected.source !== actual.source ||
+    expected.slot !== actual.slot ||
+    expected.conversion !== actual.conversion ||
+    expected.tunedRarity !== actual.tunedRarity ||
+    (expected.lock ?? false) !== (actual.lock ?? false)
   )
     return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";
   return undefined;

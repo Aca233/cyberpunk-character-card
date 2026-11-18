@@ -26,6 +26,7 @@ export function looseCyberwareView(
       bulky: false,
       concealment: null,
       noise: null,
+      grantsSmartLink: false,
       modSlots: [],
       weaponState: null,
       ability: [part.ability, `来源：${part.source}`, "可携带、存放或交给医生检查安装。"]

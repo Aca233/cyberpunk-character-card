@@ -143,6 +143,7 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   npcDeath: "人物死亡",
   money: "欧元",
   trade: "买卖",
+  gunsmith: "枪匠改装",
   cyberware: "义体交易",
   "cyberware.service": "义体服务",
   "cyberware.part": "义体实物",

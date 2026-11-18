@@ -15,6 +15,7 @@ import {
 import {
   BuyItemActionSchema,
   EquipItemActionSchema,
+  GunsmithActionSchema,
   ModWeaponActionSchema,
   SellItemActionSchema,
   UnequipItemActionSchema,
@@ -54,6 +55,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   BuyItemActionSchema,
   /** 把背包里的一件卖给商店 */
   SellItemActionSchema,
+  /** 枪匠工坊：商店直装改装件、拆改锁定槽位、武器精调升阶或智能/固锁改造 */
+  GunsmithActionSchema,
   /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
   BuyHomeActionSchema,
   /** 打开消息：没给 feed 时把人发来的消息都标成已读；给了只标这几条 */

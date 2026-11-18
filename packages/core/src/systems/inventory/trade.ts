@@ -9,12 +9,12 @@ import {
   type Ripperdoc,
   ripperdocList,
 } from "../cyberware";
-import { type EconomyState, MONEY_CAP, SERVICES } from "../economy";
+import { type EconomyState, MONEY_CAP, type Rarity, SERVICES } from "../economy";
 import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
 import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
 import { merchantAt, merchantServices, type WorldClockState } from "../world";
-import { applyItem, itemCatalog, sellValue, shopList, withWorldObjects } from "./apply";
+import { applyItem, itemCatalog, shopList, withWorldObjects } from "./apply";
 import { ensureMerchant, merchantState, shopUnavailable, withMerchants } from "./merchants";
 import { moodLock, moodPrice, shopMood } from "./mood";
 import {
@@ -22,10 +22,101 @@ import {
   type InventoryState,
   InventoryStateSchema,
   type ItemDef,
+  SELL_RATE,
   type Shop,
   type TradeCommand,
+  type WeaponInstanceState,
 } from "./schema";
 import { collectOrderedItem, replenishAfterSale } from "./supply";
+
+export const RARITY_ORDER: readonly Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+
+const RARITY_RANK: Readonly<Record<Rarity, number>> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  epic: 3,
+  legendary: 4,
+};
+
+/** 精调升到对应档位的参考附加价值与基准阶梯费 */
+export const TUNE_STEP_VALUE: Readonly<Record<Rarity, number>> = {
+  common: 0,
+  uncommon: 800,
+  rare: 2400,
+  epic: 7000,
+  legendary: 18000,
+};
+
+const DEFAULT_RARITY_BASE: Readonly<Record<Rarity, number>> = {
+  common: 500,
+  uncommon: 2500,
+  rare: 7000,
+  epic: 20000,
+  legendary: 45000,
+};
+
+export const SMART_LINK_CONVERT_PARTS = 1600;
+export const SMART_LINK_CONVERT_VALUE = 2000;
+
+export function nextRarity(current: Rarity): Rarity | null {
+  const idx = RARITY_ORDER.indexOf(current);
+  if (idx < 0 || idx >= RARITY_ORDER.length - 1) return null;
+  return RARITY_ORDER[idx + 1] ?? null;
+}
+
+export function tuneStepRawFee(item: Pick<ItemDef, "price" | "rarity">, current: Rarity): number {
+  const next = nextRarity(current);
+  if (!next) return 0;
+  const basePrice = item.price ?? DEFAULT_RARITY_BASE[item.rarity ?? "common"];
+  return TUNE_STEP_VALUE[next] + Math.round((basePrice * 0.2) / 10) * 10;
+}
+
+export function weaponModValue(
+  weaponState: WeaponInstanceState | undefined,
+  catalog: ReadonlyMap<string, ItemDef>,
+): number {
+  if (!weaponState) return 0;
+  let sum = 0;
+  for (const modId of Object.values(weaponState.mods)) {
+    if (!modId) continue;
+    const mod = catalog.get(modId);
+    if (mod?.price !== undefined) sum += mod.price;
+  }
+  return sum;
+}
+
+export function weaponTuningValue(
+  item: Pick<ItemDef, "rarity">,
+  weaponState: WeaponInstanceState | undefined,
+): number {
+  const tuned = weaponState?.tunedRarity;
+  if (!tuned) return 0;
+  const baseRank = RARITY_RANK[item.rarity ?? "common"];
+  const tunedRank = RARITY_RANK[tuned];
+  if (tunedRank <= baseRank) return 0;
+  let sum = 0;
+  for (let i = baseRank + 1; i <= tunedRank; i += 1) {
+    const r = RARITY_ORDER[i];
+    if (r) sum += TUNE_STEP_VALUE[r];
+  }
+  return sum;
+}
+
+export function itemReferencePrice(
+  item: Pick<ItemDef, "price" | "rarity" | "grantsSmartLink">,
+  weaponState: WeaponInstanceState | undefined,
+  catalog: ReadonlyMap<string, ItemDef>,
+): number | undefined {
+  const baseDef = weaponState ? catalog.get(weaponState.baseId) : undefined;
+  const hasIntrinsicSmartLink = baseDef?.grantsSmartLink ?? item.grantsSmartLink;
+  const extra =
+    weaponModValue(weaponState, catalog) +
+    weaponTuningValue(item, weaponState) +
+    (weaponState?.smartLink && !hasIntrinsicSmartLink ? SMART_LINK_CONVERT_VALUE : 0);
+  if (item.price !== undefined) return item.price + extra;
+  return extra > 0 ? extra : undefined;
+}
 
 export type TradeRequest = Pick<TradeCommand, "action" | "item" | "service" | "with" | "offer">;
 type SavedQuote = Extract<ReturnType<typeof agreedQuote>, { ok: true }>["quote"];
@@ -145,16 +236,20 @@ export function quoteTrade(
   });
   if (!match.ok) return match;
   const mood = shop ? shopMood(world, data, shop) : undefined;
+  const itemObject = item ? inventory.objects[item.id] : undefined;
+  const refPrice = item ? itemReferencePrice(item, itemObject?.weaponState, catalog) : undefined;
   const base =
     request.action === "service"
       ? service?.price
       : request.action === "sell"
-        ? item && sellValue(item)
-        : item?.price === undefined
+        ? refPrice === undefined
+          ? undefined
+          : Math.floor((refPrice * SELL_RATE) / 10) * 10
+        : refPrice === undefined
           ? undefined
           : shop
-            ? moodPrice(Math.max(10, Math.round((item.price * shop.priceFactor) / 10) * 10), mood)
-            : item.price;
+            ? moodPrice(Math.max(10, Math.round((refPrice * shop.priceFactor) / 10) * 10), mood)
+            : refPrice;
   const price = match.quote?.price ?? base;
   if (
     price === undefined ||
@@ -209,7 +304,12 @@ export function quoteTrade(
       if (holder && !holder.body?.gear.includes(item.id))
         return fail(`${holder.name}已经不再带着${item.name}，现有归属记录不能证明能够交付`);
       const objectLocation = object ? (holder?.location ?? object.location) : null;
-      if (objectLocation !== null && objectLocation !== location)
+      if (
+        objectLocation !== null &&
+        !(party.shop
+          ? merchantAt(data, party.id, objectLocation, location)
+          : objectLocation === location)
+      )
         return fail(`${item.name}仍在别处，不能隔空取得`);
       if (shop) {
         const merchant = merchantState(inventory, shop, catalog, world.time);
@@ -224,11 +324,6 @@ export function quoteTrade(
       const carried = carriedItemCounts(inventory).get(item.id) ?? 0;
       if (carried < 1 || (object && object.holder !== "player"))
         return fail(`背包里没有${item.name}；穿着的衣服或快捷栏里的药/雷先脱下`);
-      if (
-        carried === 1 &&
-        Object.values(object?.weaponState?.mods ?? {}).some((m) => m !== undefined)
-      )
-        return fail(`${item.name}上还装着改装件，先拆下来再卖`);
       if (party.npc?.body?.gear.includes(item.id))
         return fail(`${party.name}已有同款装备，目前无法将另一件合并到其持有记录`);
       if (party.npc && (party.npc.body?.gear.length ?? 0) >= NPC_GEAR_MAX)
@@ -277,6 +372,16 @@ export function applyTrade(
     const npcs = (world.slices.npc as NpcState).npcs;
     const location = (world.slices.world as WorldClockState).location;
     const object = draft.objects[item.id];
+    if (
+      command.action === "buy" &&
+      quoted.shop &&
+      object &&
+      object.holder === quoted.shop.id &&
+      object.location !== null &&
+      merchantAt(data, quoted.shop.id, object.location, location)
+    ) {
+      object.location = null;
+    }
     const result = applyItem(
       draft,
       {
@@ -292,6 +397,10 @@ export function applyTrade(
       npcs,
     );
     if (!result.ok) return result;
+    if (command.action === "sell" && quoted.shop) {
+      const soldObj = draft.objects[item.id];
+      if (soldObj) soldObj.location = null;
+    }
     emitted.push(...(result.emit ?? []));
     if (!object && quoted.party.npc && command.action === "buy")
       emitted.push({

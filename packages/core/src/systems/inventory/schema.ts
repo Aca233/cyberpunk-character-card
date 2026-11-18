@@ -330,6 +330,8 @@ export const WeaponInstanceStateSchema = z.object({
   lockedSlots: z.array(ModSlotSchema).default([]),
   /** 枪匠精调后的稀有度档位（高于模板默认 rarity） */
   tunedRarity: RaritySchema.optional(),
+  /** 枪匠加装的内置智能靶向联锁握把/模组 */
+  smartLink: z.boolean().optional(),
 });
 export type WeaponInstanceState = z.infer<typeof WeaponInstanceStateSchema>;
 
@@ -338,6 +340,7 @@ export interface WeaponStateView {
   readonly mods: Readonly<Partial<Record<ModSlot, string>>>;
   readonly lockedSlots: readonly ModSlot[];
   readonly tunedRarity: Rarity | null;
+  readonly smartLink: boolean;
 }
 
 /** 将内部武器实例状态投影为视图层的只读结构 */
@@ -348,6 +351,7 @@ export function projectWeaponState(ws: WeaponInstanceState | undefined): WeaponS
     mods: ws.mods,
     lockedSlots: ws.lockedSlots,
     tunedRarity: ws.tunedRarity ?? null,
+    smartLink: ws.smartLink ?? false,
   };
 }
 
@@ -783,6 +787,20 @@ export function effectiveWeaponNoise(
     return "silent";
   }
   return "loud";
+}
+
+/** 判断武器自身或已装改装件/枪匠联锁改造是否自带智能靶向联锁能力 */
+export function weaponGrantsSmartLink(
+  def: Pick<ItemDef, "grantsSmartLink">,
+  weaponState: Pick<WeaponInstanceState, "mods" | "smartLink"> | undefined,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "grantsSmartLink">>,
+): boolean {
+  if (def.grantsSmartLink || weaponState?.smartLink) return true;
+  if (!weaponState) return false;
+  for (const modId of Object.values(weaponState.mods)) {
+    if (modId && catalog.get(modId)?.grantsSmartLink) return true;
+  }
+  return false;
 }
 
 /** 计算随身携带隐蔽度与大件软超重状态 */

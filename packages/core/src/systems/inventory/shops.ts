@@ -1,24 +1,44 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
+import type { WorldState } from "../../kernel/world";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { formatGameTime, merchantAt, merchantSites, WorldClockStateSchema } from "../world";
-import { itemCatalog, rarityOf, shopList, withWorldObjects } from "./apply";
+import {
+  defaultInstanceStateFromDef,
+  itemCatalog,
+  rarityOf,
+  shopList,
+  withWorldObjects,
+} from "./apply";
+import {
+  GUNSMITH_SERVICE_RATE,
+  gunsmithAvailability,
+  isGunsmithShop,
+  quoteGunsmith,
+} from "./gunsmith";
 import { merchantState, withMerchants } from "./merchants";
 import { weaponDisplayNames } from "./names";
 import {
   CLOTHING_SLOT_LABELS,
+  canAttachMod,
   carriedItemCounts,
+  carriedWeaponIds,
+  defaultWeaponSlots,
+  effectiveConcealment,
+  effectiveWeaponNoise,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
   isBulkyItem,
   MOD_SLOT_LABELS,
   projectWeaponState,
+  type Shop,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   type WeaponInstanceState,
+  weaponGrantsSmartLink,
 } from "./schema";
-import { quoteTrade } from "./trade";
+import { nextRarity, quoteTrade } from "./trade";
 
 function itemGroup(def: ItemDef): string {
   return def.kind === "weapon" && def.category
@@ -73,6 +93,222 @@ const KeeperCardsSchema = z.object({
     )
     .default({}),
 });
+
+function projectGunsmithShop(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>>,
+  inventory: ReturnType<typeof InventoryStateSchema.parse>,
+  shop: Shop,
+  catalog: ReadonlyMap<string, ItemDef>,
+  shelfIds: readonly string[],
+  stock: Readonly<Record<string, number>>,
+  sellCounts: ReadonlyMap<string, number>,
+  sellNames: ReadonlyMap<string, string>,
+) {
+  if (!isGunsmithShop(shop, data)) return null;
+  const available = gunsmithAvailability(world, shop, data);
+  const weaponIds = carriedWeaponIds(inventory, catalog);
+  const shelfMods = shelfIds.flatMap((id) => {
+    const def = catalog.get(id);
+    return def?.kind === "mod" ? [def] : [];
+  });
+  const backpackMods = [...sellCounts.keys()].flatMap((id) => {
+    const def = catalog.get(id);
+    return def?.kind === "mod" ? [def] : [];
+  });
+
+  return {
+    serviceRate: GUNSMITH_SERVICE_RATE,
+    available,
+    weapons: weaponIds.flatMap((weaponId) => {
+      const obj = inventory.objects[weaponId];
+      const def = catalog.get(weaponId) ?? obj?.definition;
+      if (def?.kind !== "weapon" || def.category === undefined) return [];
+      const ws = obj?.weaponState ?? defaultInstanceStateFromDef(def);
+      const baseId = ws?.baseId ?? def.id;
+      const rar = rarityOf(def, ws);
+      const nextRar = nextRarity(rar);
+      const tuneRes = quoteGunsmith(
+        world,
+        data,
+        { shop: shop.id, action: "tune", weapon: weaponId },
+        { checkFunds: false },
+      );
+      const smartEligible = def.weaponType === "smart";
+      const smartInstalled = weaponGrantsSmartLink(def, ws, catalog);
+      const smartRes =
+        smartEligible && !smartInstalled
+          ? quoteGunsmith(
+              world,
+              data,
+              { shop: shop.id, action: "convert", conversion: "smart-link", weapon: weaponId },
+              { checkFunds: false },
+            )
+          : null;
+      const isMelee = def.category === "blade" || def.category === "blunt";
+
+      return [
+        {
+          id: weaponId,
+          baseId,
+          name: sellNames.get(weaponId) ?? def.name,
+          subLabel: itemSubLabel(def),
+          rarity: rar,
+          rarityLabel: def.iconic ? "不朽" : RARITY_LABELS[rar],
+          iconic: def.iconic ?? false,
+          concealment: effectiveConcealment(def, ws, catalog),
+          noise: effectiveWeaponNoise(def, ws, catalog),
+          grantsSmartLink: smartInstalled,
+          weaponState: projectWeaponState(ws),
+          tune: {
+            nextRarity: nextRar,
+            nextRarityLabel: nextRar ? RARITY_LABELS[nextRar] : null,
+            price: tuneRes.ok ? tuneRes.quote.total : null,
+            locked: tuneRes.ok ? tuneRes.quote.blocked : tuneRes.reason,
+          },
+          smartLinkConvert: {
+            eligible: smartEligible,
+            installed: smartInstalled,
+            partsFee: smartRes?.ok ? smartRes.quote.partsFee : null,
+            serviceFee: smartRes?.ok ? smartRes.quote.serviceFee : null,
+            total: smartRes?.ok ? smartRes.quote.total : null,
+            locked: smartRes ? (smartRes.ok ? smartRes.quote.blocked : smartRes.reason) : null,
+          },
+          slots: defaultWeaponSlots(def).map((slot) => {
+            const installedId = ws?.mods[slot];
+            const installedDef = installedId ? catalog.get(installedId) : undefined;
+            const lockedSlot = ws?.lockedSlots.includes(slot) ?? false;
+            const detachRes =
+              installedId && lockedSlot
+                ? quoteGunsmith(
+                    world,
+                    data,
+                    { shop: shop.id, action: "detach", weapon: weaponId, mod: installedId },
+                    { checkFunds: false },
+                  )
+                : null;
+            const lockRes =
+              installedId && !lockedSlot && !isMelee
+                ? quoteGunsmith(
+                    world,
+                    data,
+                    {
+                      shop: shop.id,
+                      action: "convert",
+                      conversion: "precision-lock",
+                      weapon: weaponId,
+                      slot,
+                    },
+                    { checkFunds: false },
+                  )
+                : null;
+
+            const options = [
+              ...shelfMods
+                .filter(
+                  (modDef) =>
+                    modDef.modSlot === slot &&
+                    modDef.id !== installedId &&
+                    canAttachMod(def, modDef, ws, { ignoreLock: true }).ok,
+                )
+                .map((modDef) => {
+                  const res = quoteGunsmith(
+                    world,
+                    data,
+                    {
+                      shop: shop.id,
+                      action: "install",
+                      weapon: weaponId,
+                      mod: modDef.id,
+                      source: "shelf",
+                    },
+                    { checkFunds: false },
+                  );
+                  return {
+                    id: modDef.id,
+                    name: modDef.name,
+                    source: "shelf" as const,
+                    rarity: modDef.rarity ?? null,
+                    rarityLabel: modDef.rarity ? RARITY_LABELS[modDef.rarity] : null,
+                    ability: modDef.ability ?? null,
+                    partsFee: res.ok ? res.quote.partsFee : null,
+                    serviceFee: res.ok ? res.quote.serviceFee : null,
+                    total: res.ok ? res.quote.total : null,
+                    left: stock[modDef.id] ?? 0,
+                    locked: res.ok ? res.quote.blocked : res.reason,
+                  };
+                }),
+              ...(lockedSlot
+                ? backpackMods
+                    .filter(
+                      (modDef) =>
+                        modDef.modSlot === slot &&
+                        modDef.id !== installedId &&
+                        canAttachMod(def, modDef, ws, { ignoreLock: true }).ok,
+                    )
+                    .map((modDef) => {
+                      const res = quoteGunsmith(
+                        world,
+                        data,
+                        {
+                          shop: shop.id,
+                          action: "install",
+                          weapon: weaponId,
+                          mod: modDef.id,
+                          source: "backpack",
+                        },
+                        { checkFunds: false },
+                      );
+                      return {
+                        id: modDef.id,
+                        name: modDef.name,
+                        source: "backpack" as const,
+                        rarity: modDef.rarity ?? null,
+                        rarityLabel: modDef.rarity ? RARITY_LABELS[modDef.rarity] : null,
+                        ability: modDef.ability ?? null,
+                        partsFee: res.ok ? res.quote.partsFee : null,
+                        serviceFee: res.ok ? res.quote.serviceFee : null,
+                        total: res.ok ? res.quote.total : null,
+                        left: sellCounts.get(modDef.id) ?? 0,
+                        locked: res.ok ? res.quote.blocked : res.reason,
+                      };
+                    })
+                : []),
+            ];
+
+            return {
+              slot,
+              label: MOD_SLOT_LABELS[slot],
+              lockedSlot,
+              installed: installedId
+                ? {
+                    id: installedId,
+                    name: installedDef?.name ?? installedId,
+                    rarity: installedDef?.rarity ?? null,
+                    rarityLabel: installedDef?.rarity ? RARITY_LABELS[installedDef.rarity] : null,
+                    ability: installedDef?.ability ?? null,
+                    detachFee: detachRes?.ok ? detachRes.quote.total : null,
+                    detachLocked: detachRes
+                      ? detachRes.ok
+                        ? detachRes.quote.blocked
+                        : detachRes.reason
+                      : null,
+                    lockFee: lockRes?.ok ? lockRes.quote.total : null,
+                    lockLocked: lockRes
+                      ? lockRes.ok
+                        ? lockRes.quote.blocked
+                        : lockRes.reason
+                      : null,
+                  }
+                : null,
+              options,
+            };
+          }),
+        },
+      ];
+    }),
+  };
+}
 
 /** 当前地点开着的商店：货架按武器类别或物品种类分组；背包里的东西标出回收价 */
 export function shopsView({ world, data }: ViewContext) {
@@ -158,6 +394,18 @@ export function shopsView({ world, data }: ViewContext) {
       }),
       /** 背包里的东西卖给这家店给多少；0 是不收 */
       sell,
+      /** 枪匠工坊资格、工时费率与逐把武器单源报价 */
+      gunsmith: projectGunsmithShop(
+        world,
+        data,
+        inventory,
+        shop,
+        catalog,
+        shelfIds,
+        merchant.stock,
+        sellCounts,
+        sellNames,
+      ),
     };
   });
 }

@@ -60,6 +60,21 @@ function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
       startAt: p.startAt,
       reason,
     };
+  if (p.gunsmith !== undefined)
+    return {
+      type: "gunsmith",
+      shop: p.with,
+      action: p.gunsmith,
+      weapon: p.weapon,
+      mod: p.mod,
+      slot: p.slot,
+      source: p.source,
+      replace: p.replace,
+      lock: p.lock,
+      conversion: p.conversion,
+      offer: p.offer,
+      reason,
+    };
   if (q.ok && !q.settlement) return { type: "vehicle", action: "buy", model: p.item, reason };
   return {
     type: "trade",
@@ -227,9 +242,16 @@ function commandProposal(command: Command): BuyProposal | undefined {
               scheduledAt: command.scheduledAt,
               startAt: command.startAt,
             }
-          : command.type === "vehicle" && command.action === "buy"
-            ? { item: command.model }
-            : undefined;
+          : command.type === "gunsmith"
+            ? {
+                ...command,
+                action: undefined,
+                gunsmith: command.action,
+                with: command.shop,
+              }
+            : command.type === "vehicle" && command.action === "buy"
+              ? { item: command.model }
+              : undefined;
   if (!raw) return undefined;
   const parsed = BuyProposalSchema.safeParse(raw);
   return parsed.success ? parsed.data : undefined;
@@ -242,13 +264,26 @@ function duplicateSettlement(
   commands: readonly Command[],
 ): boolean {
   const targets = new Set(
-    purchases.flatMap(({ proposal }) =>
-      proposal.item ? [`${proposal.action === "sell" ? "lose" : "gain"}:${proposal.item}`] : [],
-    ),
+    purchases.flatMap(({ proposal }) => [
+      ...(proposal.item
+        ? [`${proposal.action === "sell" ? "lose" : "gain"}:${proposal.item}`]
+        : []),
+      ...(proposal.gunsmith === "install" && proposal.mod && proposal.source !== "backpack"
+        ? [`gain:${proposal.mod}`]
+        : []),
+    ]),
   );
-  for (const c of commands)
+  for (const c of commands) {
     if (c.type === "trade" && typeof c.item === "string")
       targets.add(`${c.action === "sell" ? "lose" : "gain"}:${c.item}`);
+    if (
+      c.type === "gunsmith" &&
+      c.action === "install" &&
+      typeof c.mod === "string" &&
+      c.source !== "backpack"
+    )
+      targets.add(`gain:${c.mod}`);
+  }
   if (command.type === "item" && (command.action === "gain" || command.action === "lose"))
     return typeof command.id === "string" && targets.has(`${command.action}:${command.id}`);
   if (command.type !== "money" || typeof command.delta !== "number") return false;

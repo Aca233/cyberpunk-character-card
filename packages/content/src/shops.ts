@@ -53,6 +53,8 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "big-mag",
       "kneel-mod",
       "parallax-mod",
+      "smart-target-mod",
+      "smart-link-module",
     ],
     supply: {
       supplier: "wilson-distribution",
@@ -82,6 +84,9 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "kanabo",
       "sledgehammer",
       "bleedout-mod",
+      "kinetic-weight-mod",
+      "arc-coil-mod",
+      "smart-target-mod",
       "strix-silencer",
       "lexington",
       "saratoga",

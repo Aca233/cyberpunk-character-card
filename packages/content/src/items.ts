@@ -1454,6 +1454,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "muzzle",
     modFits: ["pistol", "smg"],
+    modTypes: ["power"],
+    concealmentShift: 1,
     rarity: "common",
     price: 400,
     ability:
@@ -1466,6 +1468,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "muzzle",
     modFits: ["pistol", "revolver", "smg"],
+    modTypes: ["power"],
+    concealmentShift: 1,
     rarity: "uncommon",
     price: 1800,
     ability:
@@ -1478,6 +1482,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "scope",
     modFits: ["pistol", "revolver", "smg", "assaultRifle", "shotgun"],
+    modTypes: ["power", "tech"],
+    concealmentShift: 0,
     rarity: "common",
     price: 350,
     ability:
@@ -1490,6 +1496,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "scope",
     modFits: ["assaultRifle", "precisionRifle", "sniperRifle"],
+    modTypes: ["power", "tech"],
+    concealmentShift: 1,
     rarity: "uncommon",
     price: 1600,
     ability:
@@ -1502,6 +1510,8 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "scope",
     modFits: ["precisionRifle", "sniperRifle"],
+    modTypes: ["power", "tech"],
+    concealmentShift: 1,
     rarity: "rare",
     price: 6000,
     ability:
@@ -1514,6 +1524,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "plugin",
     modFits: ["assaultRifle", "smg", "lmg"],
+    concealmentShift: 0,
     rarity: "rare",
     price: 5500,
     ability:
@@ -1525,6 +1536,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "plugin",
     modFits: ["shotgun"],
+    modTypes: ["power", "tech"],
     rarity: "common",
     price: 500,
     ability:
@@ -1547,10 +1559,58 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     kind: "mod",
     modSlot: "plugin",
     modFits: ["pistol", "revolver"],
+    modTypes: ["power", "tech"],
     rarity: "common",
     price: 600,
     ability:
       "弹道视差微处理器。配合手枪准星自动微调准心轴线，大幅提升短枪快速拔枪瞄准头部时的首发命中精准度。",
+  },
+  {
+    id: "smart-target-mod",
+    name: "弹道锁敌芯片",
+    kind: "mod",
+    modSlot: "plugin",
+    modFits: ["pistol", "smg", "assaultRifle", "shotgun", "sniperRifle"],
+    modTypes: ["smart"],
+    rarity: "uncommon",
+    price: 2200,
+    ability:
+      "智能武器火控加速插件。优化微陀螺弹道预测算法与多目标雷达锁定刷新率，在连续机动或高速闪避交火中大幅缩短锁定延迟。",
+  },
+  {
+    id: "smart-link-module",
+    name: "外置智能校准握把",
+    kind: "mod",
+    modSlot: "plugin",
+    modFits: ["pistol", "smg", "assaultRifle", "shotgun", "sniperRifle"],
+    modTypes: ["smart"],
+    grantsSmartLink: true,
+    rarity: "rare",
+    price: 5500,
+    ability:
+      "独立外置智能瞄准与握把联锁模组。即便射手手部未植入智能连接义体或手部义体受损停机，也能代为建立微陀螺弹头自导数据链。",
+  },
+  {
+    id: "kinetic-weight-mod",
+    name: "配重冲击模块",
+    kind: "mod",
+    modSlot: "plugin",
+    modFits: ["blunt"],
+    rarity: "common",
+    price: 550,
+    ability:
+      "高密度钨钢配重与减震握套套件。挥击末端动能更沉，砸中护甲、外骨骼关节或盾牌时传递剧烈钝击震荡，更容易震脱对手平衡。",
+  },
+  {
+    id: "arc-coil-mod",
+    name: "高压电弧线圈",
+    kind: "mod",
+    modSlot: "plugin",
+    modFits: ["blunt"],
+    rarity: "uncommon",
+    price: 1800,
+    ability:
+      "紧凑型电容与电弧放电触头插件。重击命中瞬间释放高压脉冲电流，对义体改造人、机械单位与防暴装备造成神经痉挛和电路干扰。",
   },
   // 本作改编：原作没有这种药，是本作的虚构药物；效果写在这里，由代码结算
   {

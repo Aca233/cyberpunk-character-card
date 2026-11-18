@@ -4,6 +4,7 @@ import type { NarratedPurchase } from "../systems/commerce/quotes";
 import { quoteCyberware } from "../systems/cyberware/quote";
 import { cyberwareSettlement, quoteCyberwareService } from "../systems/cyberware/service";
 import { EconomyStateSchema, isBigSpend, ServiceSchema } from "../systems/economy/schema";
+import { gunsmithSettlement, quoteGunsmith } from "../systems/inventory/gunsmith";
 import { quoteTrade } from "../systems/inventory/trade";
 import { vehicleCatalog } from "../systems/travel/vehicles";
 
@@ -58,13 +59,29 @@ export const BuyProposalSchema = z
     service: ServiceSchema.optional().describe(
       "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
     ),
+    gunsmith: z
+      .enum(["install", "detach", "tune", "convert"])
+      .optional()
+      .describe("枪匠工坊服务类型；不与 item/service/cyberware 同写"),
+    weapon: z.string().min(1).optional().describe("枪匠工坊改装或精调的随身武器 id"),
+    mod: z.string().min(1).optional().describe("枪匠工坊安装或拆除的改装件 id"),
+    slot: z.enum(["muzzle", "scope", "plugin"]).optional().describe("枪匠工坊拆除或精工固锁的槽位"),
+    source: z
+      .enum(["shelf", "backpack"])
+      .optional()
+      .describe("枪匠安装改装件的来源：shelf 商店货架购买，backpack 玩家背包自带件"),
+    lock: z.boolean().optional().describe("是否在安装时顺带由枪匠精工固锁该槽位"),
+    conversion: z
+      .enum(["smart-link", "precision-lock"])
+      .optional()
+      .describe("枪匠结构改造类型：smart-link 智能靶向联锁，precision-lock 槽位精工固锁"),
   })
   .refine(
     (b) =>
-      [b.item, b.service, b.cyberware].filter((v) => v !== undefined).length ===
+      [b.item, b.service, b.cyberware, b.gunsmith].filter((v) => v !== undefined).length ===
       (b.operation === "repay" || (b.serviceAction && b.serviceAction !== "book") ? 0 : 1),
     {
-      message: "item、service、cyberware 写一个；还款只写 operation:repay 与 with",
+      message: "item、service、cyberware、gunsmith 写一个；还款只写 operation:repay 与 with",
     },
   )
   .refine((b) => b.action !== "sell" || b.item !== undefined, {
@@ -74,6 +91,9 @@ export const BuyProposalSchema = z
     (b) => b.operation === undefined || b.operation === "repay" || b.cyberware !== undefined,
     { message: "buy、install、remove、repair 需要指定 cyberware" },
   )
+  .refine((b) => b.gunsmith === undefined || b.weapon !== undefined, {
+    message: "枪匠工坊服务需要指定随身武器 weapon",
+  })
   .refine((b) => (b.serviceAction !== undefined) === (b.serviceOrder !== undefined), {
     message: "服务订单操作必须同时给出 serviceOrder 与 serviceAction",
   });
@@ -365,6 +385,48 @@ export function purchaseQuote(
         replace: buy.replace,
         credit: buy.credit,
       }),
+    };
+  }
+  if (buy.gunsmith !== undefined) {
+    if (!buy.with) return { ok: false, reason: "枪匠服务需要明确商店" };
+    if (!buy.weapon) return { ok: false, reason: "枪匠服务需要明确随身武器" };
+    const result = quoteGunsmith(world, data, {
+      shop: buy.with,
+      action: buy.gunsmith,
+      weapon: buy.weapon,
+      mod: buy.mod,
+      slot: buy.slot,
+      source: buy.source,
+      replace: buy.replace,
+      lock: buy.lock,
+      conversion: buy.conversion,
+      offer: buy.offer,
+    });
+    if (!result.ok) return result;
+    const q = result.quote;
+    if (q.blocked) return { ok: false, reason: q.blocked };
+    return {
+      ok: true,
+      label: q.label,
+      price: q.total,
+      quoteKey: JSON.stringify([
+        "gunsmith",
+        q.shop,
+        q.action,
+        q.weapon,
+        q.mod,
+        q.slot,
+        q.source,
+        q.replaces?.id,
+        q.lock,
+        q.conversion,
+        q.tunedRarity,
+        q.total,
+        q.offer,
+        buy.destination,
+      ]),
+      detail: `${q.shopName} ${q.label}：应付 ${q.total} 欧元（配件费 ${q.partsFee}，工时费 ${q.serviceFee}）${q.replaces ? `；换下 ${q.replaces.name} 退回背包` : ""}${q.offer ? `；报价 ${q.offer}` : ""}`,
+      settlement: gunsmithSettlement(q),
     };
   }
   if (buy.item !== undefined && vehicleCatalog(data).has(buy.item)) {

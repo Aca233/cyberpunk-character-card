@@ -22,6 +22,7 @@ import {
   projectWeaponState,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
+  weaponGrantsSmartLink,
 } from "./schema";
 
 const CLOTHING_SLOTS = ClothingSlotSchema.options;
@@ -90,6 +91,7 @@ export function inventoryView({ world, data }: ViewContext) {
         bulky: isBulkyItem(def, baseId),
         concealment: def ? effectiveConcealment(def, ws, items) : ("pocket" as const),
         noise: def ? effectiveWeaponNoise(def, ws, items) : ("loud" as const),
+        grantsSmartLink: def ? weaponGrantsSmartLink(def, ws, items) : false,
         weaponState: projectWeaponState(ws),
       };
     }),
@@ -129,6 +131,8 @@ export function inventoryView({ world, data }: ViewContext) {
               bulky: isBulkyItem(def, baseId),
               concealment: def.kind === "weapon" ? effectiveConcealment(def, ws, items) : null,
               noise: def.kind === "weapon" ? effectiveWeaponNoise(def, ws, items) : null,
+              grantsSmartLink:
+                def.kind === "weapon" ? weaponGrantsSmartLink(def, ws, items) : false,
               modSlots:
                 def.kind === "weapon" ? defaultWeaponSlots(def) : ([] as readonly ModSlot[]),
               weaponState: projectWeaponState(ws),

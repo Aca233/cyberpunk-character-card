@@ -312,13 +312,46 @@ describe("普通交易共用实际报价和货源", () => {
     expect(real.results[0]?.result.ok).toBe(true);
     expect(inventory(real.world).objects.token?.holder).toBe("player");
   });
-  it("带配件的定制武器在当前阶段暂不可直接卖出，两把时可卖未改装的一把", () => {
+  it("定制武器按基础价、配件价与精调升阶对称估值，并支持多地点商店跨入口回购", () => {
+    const scopeDef: ItemDef = {
+      id: "scope",
+      name: "测试瞄准镜",
+      kind: "mod",
+      modSlot: "scope",
+      modFits: ["pistol"],
+      iconic: false,
+      price: 500,
+      rarity: "common",
+    };
+    const iconicGun: ItemDef = {
+      id: "iconic-gun",
+      name: "无价不朽手枪",
+      kind: "weapon",
+      category: "pistol",
+      attribute: "cool",
+      iconic: true,
+      rarity: "rare",
+    };
+    const multiData = {
+      ...data,
+      items: [gun, token, scopeDef, iconicGun],
+      merchantSites: [
+        {
+          merchant: "shop-a",
+          kind: "gun",
+          locations: ["market", "market-side"],
+          services: [],
+          source: "测试多入口枪店",
+        },
+      ],
+    };
     const modWeaponId = "wpn:gun:1";
+    const iconicModId = "wpn:iconic-gun:2";
     const world = alter(base(), {
       inventory: {
         ...inventory(base()),
-        nextWeaponSeq: 2,
-        backpack: { [modWeaponId]: 1 },
+        nextWeaponSeq: 3,
+        backpack: { [modWeaponId]: 1, [iconicModId]: 1 },
         objects: {
           [modWeaponId]: {
             kind: "customized",
@@ -329,23 +362,69 @@ describe("普通交易共用实际报价和货源", () => {
             changedAt: 0,
             lastChange: "加装瞄准镜",
             remaining: null,
-            weaponState: { baseId: gun.id, mods: { scope: "scope" }, lockedSlots: [] },
+            weaponState: {
+              baseId: gun.id,
+              mods: { scope: scopeDef.id },
+              lockedSlots: [],
+              tunedRarity: "epic",
+            },
+          },
+          [iconicModId]: {
+            kind: "customized",
+            definition: { ...iconicGun, id: iconicModId },
+            origin: "不朽手枪加装瞄准镜",
+            holder: "player",
+            location: null,
+            changedAt: 0,
+            lastChange: "加装瞄准镜",
+            remaining: null,
+            weaponState: { baseId: iconicGun.id, mods: { scope: scopeDef.id }, lockedSlots: [] },
           },
         },
       },
     });
-    expect(button(world, "sellItem", "shop-a", modWeaponId).ok).toBe(false);
-    expect(trade(world, "shop-a", "sell", modWeaponId).world).toEqual(world);
-    const two = alter(world, {
-      inventory: { ...inventory(world), backpack: { [modWeaponId]: 1, [gun.id]: 1 } },
-    });
-    const sold = trade(two, "shop-a", "sell", gun.id);
+    const sellQuoted = quoteTrade(
+      world,
+      multiData,
+      { action: "sell", item: modWeaponId, with: "shop-a" },
+      { checkFunds: false },
+    );
+    expect(sellQuoted.ok).toBe(true);
+    // gun(250) + scope(500) + tune epic(7000) = 7750; sell = floor(7750 * 0.2 / 10) * 10 = 1550
+    if (sellQuoted.ok) expect(sellQuoted.price).toBe(1550);
+
+    const iconicQuoted = quoteTrade(
+      world,
+      multiData,
+      { action: "sell", item: iconicModId, with: "shop-a" },
+      { checkFunds: false },
+    );
+    expect(iconicQuoted.ok).toBe(true);
+    if (iconicQuoted.ok) expect(iconicQuoted.price).toBe(100);
+
+    const sold = registry.applyCommands(
+      world,
+      [{ type: "trade", action: "sell", item: modWeaponId, with: "shop-a", reason: "卖出改枪" }],
+      { rng: fixedRng([]), data: multiData },
+    );
     expect(sold.results[0]?.result.ok).toBe(true);
-    expect(inventory(sold.world).objects[modWeaponId]?.weaponState?.mods).toEqual({
-      scope: "scope",
+    const atSide = alter(sold.world, {
+      world: { ...(sold.world.slices.world as object), location: "market-side" },
+      economy: { eddies: 20000, settled: [] },
     });
-    expect(inventory(sold.world).backpack[gun.id]).toBeUndefined();
-    expect(inventory(sold.world).backpack[modWeaponId]).toBe(1);
+    const buybackQuote = quoteTrade(atSide, multiData, {
+      action: "buy",
+      item: modWeaponId,
+      with: "shop-a",
+    });
+    expect(buybackQuote.ok).toBe(true);
+    const boughtBack = registry.applyCommands(
+      atSide,
+      [{ type: "trade", action: "buy", item: modWeaponId, with: "shop-a", reason: "跨入口回购" }],
+      { rng: fixedRng([]), data: multiData },
+    );
+    expect(boughtBack.results[0]?.result.ok).toBe(true);
+    expect(inventory(boughtBack.world).objects[modWeaponId]?.holder).toBe("player");
   });
   it("出售所得实物留在商家，可重新购买，读档后仍保持归属", () => {
     const world = alter(base(), {

@@ -3,6 +3,7 @@ import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { HealthStateSchema } from "../health";
 import { itemCatalog } from "./apply";
+import { GunsmithActionSchema, type GunsmithCommand, quoteGunsmith } from "./gunsmith";
 import { InventoryStateSchema } from "./schema";
 import { quoteTrade } from "./trade";
 
@@ -145,5 +146,19 @@ export const inventoryActions = {
   sellItem: defineAction({
     schema: SellItemActionSchema,
     commands: (action, { world, data }) => shopCommands(world, action, data),
+  }),
+  gunsmith: defineAction({
+    schema: GunsmithActionSchema,
+    commands: (action, { world, data }) => {
+      if (inCombat(world)) return "战斗中无法进行枪匠工坊改装";
+      const command: GunsmithCommand = {
+        ...action,
+        reason: "通过枪匠工坊完成定制服务",
+      };
+      const quoted = quoteGunsmith(world, data, command);
+      if (!quoted.ok) return quoted.reason;
+      if (quoted.quote.blocked) return quoted.quote.blocked;
+      return [command];
+    },
   }),
 };
