@@ -142,7 +142,7 @@
 .tagWarn {
   border-color: rgb(255 0 60 / 62%);
   background: rgb(255 0 60 / 14%);
-  color: var(--cp-danger);
+  color: var(--cp-red);
 }
 
 .headActions {
@@ -407,15 +407,6 @@
 
 .cardList {
   display: grid;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.cardGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 7px;
   margin: 0;
   padding: 0;
