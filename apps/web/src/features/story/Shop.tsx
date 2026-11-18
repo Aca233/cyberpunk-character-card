@@ -1,3 +1,4 @@
+import type { inventoryRules } from "@cp/core";
 import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 import type { AssetId } from "../../assets";
 import { Asset, cssUrl } from "../../ui/Asset";
@@ -6,15 +7,94 @@ import { Dialog } from "../../ui/Dialog";
 import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
-import { itemArtOf, portraitOf, shopPoiIconOf } from "./art";
+import { baseWeaponIdOf, itemArtOf, portraitOf, shopPoiIconOf, weaponHudIconOf } from "./art";
 import { RARITY_ORDER, rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import shopCss from "./shop.module.css";
-import type { View } from "./view";
+import {
+  CONCEALMENT_LABELS,
+  NOISE_LABELS,
+  summarizeWeaponState,
+  type View,
+  type WeaponConcealment,
+  type WeaponNoise,
+  type WeaponStateSummary,
+} from "./view";
 
 type ShopView = View["shops"][number];
 type ShelfItem = ShopView["shelf"][number];
 type SaleItem = ShopView["sell"][number];
-type ShopMode = "buy" | "sell";
+type GunsmithView = NonNullable<ShopView["gunsmith"]>;
+type GunsmithWeapon = GunsmithView["weapons"][number];
+type GunsmithPayload = Omit<inventoryRules.GunsmithAction, "type" | "shop">;
+type ShopMode = "buy" | "sell" | "gunsmith";
+
+interface GunsmithPreview {
+  readonly concealment: WeaponConcealment;
+  readonly noise: WeaponNoise;
+  readonly smartLink: boolean;
+  readonly rarityLabel: string | null;
+}
+
+interface GunsmithConfirm {
+  readonly kind: "gunsmith";
+  readonly weapon: GunsmithWeapon;
+  readonly title: string;
+  readonly description: string;
+  readonly payload: GunsmithPayload;
+  readonly partsFee: number;
+  readonly serviceFee: number;
+  readonly total: number;
+  readonly preview: GunsmithPreview;
+}
+
+const CONCEAL_ORDER: readonly WeaponConcealment[] = ["pocket", "coat", "open", "heavy"];
+
+function modConcealmentShift(modId: string, slot: inventoryRules.ModSlot): number {
+  if (slot === "muzzle") return 1;
+  if (modId === "saika-scope" || modId === "gaki-scope") return 1;
+  return 0;
+}
+
+function previewGunsmithImpact(
+  weapon: GunsmithWeapon,
+  payload: GunsmithPayload,
+  slot?: inventoryRules.ModSlot,
+): GunsmithPreview {
+  const currentRank = CONCEAL_ORDER.indexOf(weapon.concealment);
+  let nextConceal = weapon.concealment;
+  let nextNoise = weapon.noise;
+  let nextSmartLink = weapon.grantsSmartLink;
+  let nextRarityLabel: string | null = null;
+
+  if (payload.action === "install" && payload.mod && slot) {
+    const oldMod = weapon.weaponState?.mods[slot];
+    const delta =
+      modConcealmentShift(payload.mod, slot) - (oldMod ? modConcealmentShift(oldMod, slot) : 0);
+    const nextRank = currentRank === 3 ? 3 : Math.max(0, Math.min(2, currentRank + delta));
+    nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
+    if (slot === "muzzle") nextNoise = "silent";
+    if (payload.mod === "smart-link-module") nextSmartLink = true;
+  } else if (payload.action === "detach" && payload.mod && slot) {
+    const delta = modConcealmentShift(payload.mod, slot);
+    const nextRank = currentRank === 3 ? 3 : Math.max(0, Math.min(2, currentRank - delta));
+    nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
+    if (slot === "muzzle") nextNoise = "loud";
+    if (payload.mod === "smart-link-module" && !weapon.weaponState?.smartLink) {
+      nextSmartLink = false;
+    }
+  } else if (payload.action === "tune") {
+    nextRarityLabel = weapon.tune.nextRarityLabel;
+  } else if (payload.action === "convert" && payload.conversion === "smart-link") {
+    nextSmartLink = true;
+  }
+
+  return {
+    concealment: nextConceal,
+    noise: nextNoise,
+    smartLink: nextSmartLink,
+    rarityLabel: nextRarityLabel,
+  };
+}
 
 const CARD_FOCUS_BTN_STYLE: CSSProperties = {
   display: "flex",
@@ -78,6 +158,7 @@ function matchesQuery(
 
 function ShopCatalogCard({
   id,
+  baseId,
   name,
   group,
   subLabel,
@@ -88,6 +169,7 @@ function ShopCatalogCard({
   selected,
   locked,
   statusText,
+  weaponSummary,
   pills,
   priceText,
   priceTone,
@@ -98,6 +180,7 @@ function ShopCatalogCard({
   onAction,
 }: {
   readonly id: string;
+  readonly baseId?: string | undefined;
   readonly name: string;
   readonly group: string;
   readonly subLabel: string;
@@ -108,6 +191,7 @@ function ShopCatalogCard({
   readonly selected: boolean;
   readonly locked: boolean;
   readonly statusText?: string | null;
+  readonly weaponSummary?: WeaponStateSummary | null | undefined;
   readonly pills?: ReactNode;
   readonly priceText: string;
   readonly priceTone?: "short" | "sell" | "bad";
@@ -119,7 +203,7 @@ function ShopCatalogCard({
 }) {
   const rarityTint = rarityTintOf(rarity, iconic);
   const rarityText = rarityLabelOf(rarity, iconic) ?? rarityLabel;
-  const art = itemArtOf(id);
+  const art = itemArtOf(baseId ?? id);
   const metaText = [
     rarityText,
     subLabel && subLabel !== group ? subLabel : null,
@@ -150,8 +234,18 @@ function ShopCatalogCard({
           <span className={shopCss.itemTitleRow}>
             <strong className={shopCss.itemName}>{name}</strong>
             {pills}
+            {weaponSummary && weaponSummary.mods.length > 0 && (
+              <span className={shopCss.ownedPill}>已装 {weaponSummary.mods.length} 改</span>
+            )}
+            {weaponSummary?.tunedLabel && (
+              <span className={shopCss.stockPill}>精调{weaponSummary.tunedLabel}</span>
+            )}
+            {weaponSummary?.smartLink && <span className={shopCss.ownedPill}>智能联锁</span>}
           </span>
           {metaText && <span className={shopCss.itemMeta}>{metaText}</span>}
+          {weaponSummary?.inlineText && (
+            <span className={shopCss.itemModLine}>{weaponSummary.inlineText}</span>
+          )}
         </span>
       </button>
 
@@ -180,6 +274,7 @@ interface InspectorMetaRow {
 
 function ShopInspector({
   id,
+  baseId,
   name,
   group,
   subLabel,
@@ -190,6 +285,7 @@ function ShopInspector({
   chargesText,
   healPercent,
   ability,
+  weaponSummary,
   fallbackIcon,
   rows,
   alert,
@@ -199,6 +295,7 @@ function ShopInspector({
   onAction,
 }: {
   readonly id: string;
+  readonly baseId?: string | undefined;
   readonly name: string;
   readonly group: string;
   readonly subLabel: string;
@@ -209,6 +306,7 @@ function ShopInspector({
   readonly chargesText: string | null;
   readonly healPercent: number | null;
   readonly ability: string | null;
+  readonly weaponSummary?: WeaponStateSummary | null | undefined;
   readonly fallbackIcon: AssetId;
   readonly rows: readonly InspectorMetaRow[];
   readonly alert: string | null;
@@ -217,7 +315,7 @@ function ShopInspector({
   readonly actionReason?: string | undefined;
   readonly onAction: () => void;
 }) {
-  const art = itemArtOf(id);
+  const art = itemArtOf(baseId ?? id);
   const rarityTint = rarityTintOf(rarity, iconic);
   const rarityText = rarityLabelOf(rarity, iconic) ?? rarityLabel;
 
@@ -272,6 +370,32 @@ function ShopInspector({
 
       {ability && <p className={shopCss.inspectAbility}>{ability}</p>}
 
+      {weaponSummary && (
+        <div className={shopCss.inspectWeaponState}>
+          {weaponSummary.tunedLabel && (
+            <div className={shopCss.inspectMetaRow}>
+              <span>精调品质</span>
+              <strong data-tone="yellow">{weaponSummary.tunedLabel}</strong>
+            </div>
+          )}
+          {weaponSummary.smartLink && (
+            <div className={shopCss.inspectMetaRow}>
+              <span>结构改造</span>
+              <strong data-tone="cyan">智能靶向联锁</strong>
+            </div>
+          )}
+          {weaponSummary.mods.map((m) => (
+            <div key={m.slot} className={shopCss.inspectMetaRow}>
+              <span>{m.slotLabel}改装</span>
+              <strong>
+                {m.modName}
+                {m.locked ? "（固锁）" : ""}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className={shopCss.inspectMetaGrid}>
         {rows.map((row) => (
           <div key={row.label} className={shopCss.inspectMetaRow}>
@@ -292,12 +416,479 @@ function ShopInspector({
   );
 }
 
+function GunsmithInspector({
+  weapon,
+  eddies,
+  working,
+  blocked,
+  onConfirm,
+}: {
+  readonly weapon: GunsmithWeapon;
+  readonly eddies: number;
+  readonly working: boolean;
+  readonly blocked: string | null;
+  readonly onConfirm: (confirm: GunsmithConfirm) => void;
+}) {
+  const [hoveredPreview, setHoveredPreview] = useState<GunsmithPreview | null>(null);
+  const art = itemArtOf(weapon.baseId ?? weapon.id);
+  const hudIcon = weaponHudIconOf(weapon.baseId ?? weapon.id, weapon.subLabel);
+  const rarityTint = rarityTintOf(weapon.rarity, weapon.iconic);
+  const rarityText = rarityLabelOf(weapon.rarity, weapon.iconic) ?? weapon.rarityLabel;
+  const isMelee = weapon.subLabel.includes("刀剑") || weapon.subLabel.includes("钝器");
+
+  const activePreview = hoveredPreview;
+  const concealChanged = Boolean(activePreview && activePreview.concealment !== weapon.concealment);
+  const noiseChanged = Boolean(activePreview && activePreview.noise !== weapon.noise);
+  const smartChanged = Boolean(activePreview && activePreview.smartLink !== weapon.grantsSmartLink);
+  const rarityChanged = Boolean(activePreview?.rarityLabel);
+
+  const previewBind = (preview: GunsmithPreview) => ({
+    onMouseEnter: () => setHoveredPreview(preview),
+    onMouseLeave: () => setHoveredPreview(null),
+    onFocus: () => setHoveredPreview(preview),
+    onBlur: () => setHoveredPreview(null),
+  });
+
+  const tunePrice = weapon.tune.price;
+  const tuneShort = tunePrice !== null && tunePrice > eddies;
+  const tuneDisabled =
+    working ||
+    Boolean(blocked) ||
+    !weapon.tune.nextRarity ||
+    tunePrice === null ||
+    Boolean(weapon.tune.locked) ||
+    tuneShort;
+  const tuneReason = blocked ?? weapon.tune.locked ?? (tuneShort ? "欧元不够" : undefined);
+
+  const smartTotal = weapon.smartLinkConvert.total;
+  const smartShort = smartTotal !== null && smartTotal > eddies;
+  const smartDisabled =
+    working ||
+    Boolean(blocked) ||
+    !weapon.smartLinkConvert.eligible ||
+    weapon.smartLinkConvert.installed ||
+    smartTotal === null ||
+    Boolean(weapon.smartLinkConvert.locked) ||
+    smartShort;
+  const smartReason =
+    blocked ?? weapon.smartLinkConvert.locked ?? (smartShort ? "欧元不够" : undefined);
+
+  return (
+    <aside
+      className={shopCss.inspector}
+      aria-label="枪匠工坊检视台"
+      style={{ "--item-tint": rarityTint } as CSSProperties}
+    >
+      <CellFrame />
+      <div className={shopCss.inspectShowcase}>
+        <CellFrame />
+        <span
+          className={shopCss.inspectGrid}
+          style={{ backgroundImage: cssUrl("fx.grid") }}
+          aria-hidden
+        />
+        {art ? (
+          <Asset id={art} alt={weapon.name} className={shopCss.inspectArt} />
+        ) : (
+          <Asset id={hudIcon} height={48} tint={rarityTint} className={shopCss.inspectArt} />
+        )}
+      </div>
+
+      <div className={shopCss.inspectHeader}>
+        <h3>{weapon.name}</h3>
+        <p>{weapon.subLabel}</p>
+      </div>
+
+      <div className={shopCss.inspectTags}>
+        <span className={shopCss.inspectTag}>{weapon.subLabel}</span>
+        {rarityText && (
+          <span className={shopCss.inspectTag} data-rarity={weapon.rarity} data-tone="rarity">
+            {rarityText}
+          </span>
+        )}
+        {weapon.weaponState?.tunedRarity && (
+          <span className={shopCss.inspectTag} data-tone="yellow">
+            已精调
+          </span>
+        )}
+        <span className={shopCss.inspectTag}>{CONCEALMENT_LABELS[weapon.concealment]}</span>
+        {!isMelee && (
+          <span
+            className={shopCss.inspectTag}
+            data-tone={weapon.noise === "silent" ? "yellow" : undefined}
+          >
+            {NOISE_LABELS[weapon.noise]}
+          </span>
+        )}
+        {weapon.grantsSmartLink && (
+          <span className={shopCss.inspectTag} data-tone="yellow">
+            智能自导联锁
+          </span>
+        )}
+      </div>
+
+      <div className={shopCss.gsPreviewBox}>
+        <div className={shopCss.inspectMetaRow}>
+          <span>隐蔽携行</span>
+          <strong data-tone={concealChanged ? "yellow" : "cyan"}>
+            {CONCEALMENT_LABELS[weapon.concealment]}
+            {concealChanged && activePreview
+              ? ` → ${CONCEALMENT_LABELS[activePreview.concealment]}`
+              : ""}
+          </strong>
+        </div>
+        {!isMelee && (
+          <div className={shopCss.inspectMetaRow}>
+            <span>声学特征</span>
+            <strong
+              data-tone={noiseChanged ? "yellow" : weapon.noise === "silent" ? "cyan" : undefined}
+            >
+              {NOISE_LABELS[weapon.noise]}
+              {noiseChanged && activePreview ? ` → ${NOISE_LABELS[activePreview.noise]}` : ""}
+            </strong>
+          </div>
+        )}
+        {rarityChanged && activePreview?.rarityLabel && (
+          <div className={shopCss.inspectMetaRow}>
+            <span>品质预览</span>
+            <strong data-tone="yellow">
+              {weapon.rarityLabel} → {activePreview.rarityLabel}
+            </strong>
+          </div>
+        )}
+        {smartChanged && activePreview && (
+          <div className={shopCss.inspectMetaRow}>
+            <span>智能联锁</span>
+            <strong data-tone="yellow">
+              {weapon.grantsSmartLink ? "已激活" : "未激活"} →{" "}
+              {activePreview.smartLink ? "已激活" : "未激活"}
+            </strong>
+          </div>
+        )}
+      </div>
+
+      {blocked && <p className={shopCss.inspectAlert}>{blocked}</p>}
+
+      <section className={shopCss.gsSection} aria-label="精调与结构改造">
+        <h4 className={shopCss.gsSectionTitle}>精调与结构改造</h4>
+        <div className={shopCss.gsServiceCard}>
+          <div className={shopCss.gsServiceInfo}>
+            <strong>
+              武器精调升阶
+              {weapon.tune.nextRarityLabel ? ` → ${weapon.tune.nextRarityLabel}` : ""}
+            </strong>
+            <small>
+              {weapon.tune.nextRarity && tunePrice !== null
+                ? `工时 ${money(tunePrice)} 欧元 · 改后余 ${
+                    tuneShort ? `差 ${money(tunePrice - eddies)}` : money(eddies - tunePrice)
+                  } 欧元`
+                : (weapon.tune.locked ?? "已达传说品质")}
+            </small>
+          </div>
+          {weapon.tune.nextRarity && tunePrice !== null && (
+            <div
+              className={shopCss.gsActionWrap}
+              {...previewBind(previewGunsmithImpact(weapon, { action: "tune", weapon: weapon.id }))}
+            >
+              <Button
+                small
+                primary={!tuneDisabled}
+                disabled={tuneDisabled}
+                reason={tuneReason}
+                onClick={() => {
+                  const payload: GunsmithPayload = { action: "tune", weapon: weapon.id };
+                  onConfirm({
+                    kind: "gunsmith",
+                    weapon,
+                    title: `精调 ${weapon.name}`,
+                    description: `由枪匠精调打磨机构，将品质从${weapon.rarityLabel}提升至${weapon.tune.nextRarityLabel}。`,
+                    payload,
+                    partsFee: 0,
+                    serviceFee: tunePrice,
+                    total: tunePrice,
+                    preview: previewGunsmithImpact(weapon, payload),
+                  });
+                }}
+              >
+                {`精调 ${money(tunePrice)}€`}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {weapon.smartLinkConvert.eligible && (
+          <div className={shopCss.gsServiceCard}>
+            <div className={shopCss.gsServiceInfo}>
+              <strong>智能靶向联锁模块</strong>
+              <small>
+                {weapon.smartLinkConvert.installed
+                  ? "当前武器已具备自主智能自导联锁"
+                  : smartTotal !== null
+                    ? `配件 ${money(weapon.smartLinkConvert.partsFee ?? 0)} + 工时 ${money(weapon.smartLinkConvert.serviceFee ?? 0)} = ${money(smartTotal)} 欧元`
+                    : (weapon.smartLinkConvert.locked ?? "暂不可改造")}
+              </small>
+            </div>
+            {!weapon.smartLinkConvert.installed && smartTotal !== null && (
+              <div
+                className={shopCss.gsActionWrap}
+                {...previewBind(
+                  previewGunsmithImpact(weapon, {
+                    action: "convert",
+                    conversion: "smart-link",
+                    weapon: weapon.id,
+                  }),
+                )}
+              >
+                <Button
+                  small
+                  primary={!smartDisabled}
+                  disabled={smartDisabled}
+                  reason={smartReason}
+                  onClick={() => {
+                    const payload: GunsmithPayload = {
+                      action: "convert",
+                      conversion: "smart-link",
+                      weapon: weapon.id,
+                    };
+                    onConfirm({
+                      kind: "gunsmith",
+                      weapon,
+                      title: `加装智能靶向联锁`,
+                      description: `为 ${weapon.name} 加装独立智能校准联锁模块，无需手部智能连接义体亦可激活自导锁定。`,
+                      payload,
+                      partsFee: weapon.smartLinkConvert.partsFee ?? 0,
+                      serviceFee: weapon.smartLinkConvert.serviceFee ?? 0,
+                      total: smartTotal,
+                      preview: previewGunsmithImpact(weapon, payload),
+                    });
+                  }}
+                >
+                  {`加装 ${money(smartTotal)}€`}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section className={shopCss.gsSection} aria-label="改装槽位与货架直装">
+        <h4 className={shopCss.gsSectionTitle}>槽位深改与货架直装</h4>
+        {weapon.slots.map((slotEntry) => {
+          const installed = slotEntry.installed;
+          const detachFee = installed?.detachFee ?? null;
+          const detachShort = detachFee !== null && detachFee > eddies;
+          const detachDisabled =
+            working ||
+            Boolean(blocked) ||
+            detachFee === null ||
+            Boolean(installed?.detachLocked) ||
+            detachShort;
+          const lockFee = installed?.lockFee ?? null;
+          const lockShort = lockFee !== null && lockFee > eddies;
+          const lockDisabled =
+            working ||
+            Boolean(blocked) ||
+            lockFee === null ||
+            Boolean(installed?.lockLocked) ||
+            lockShort;
+
+          return (
+            <div key={slotEntry.slot} className={shopCss.gsSlotCard}>
+              <div className={shopCss.gsSlotHead}>
+                <strong>{slotEntry.label}</strong>
+                <span className={slotEntry.lockedSlot ? shopCss.ownedPill : shopCss.stockPill}>
+                  {slotEntry.lockedSlot ? "已固锁" : "常规槽位"}
+                </span>
+              </div>
+
+              {installed ? (
+                <div className={shopCss.gsInstalledRow}>
+                  <div className={shopCss.gsInstalledCopy}>
+                    <b>{installed.name}</b>
+                    {installed.ability && <small>{installed.ability}</small>}
+                  </div>
+                  <div className={shopCss.gsInstalledBtns}>
+                    {slotEntry.lockedSlot && detachFee !== null && (
+                      <div
+                        className={shopCss.gsActionWrap}
+                        {...previewBind(
+                          previewGunsmithImpact(
+                            weapon,
+                            {
+                              action: "detach",
+                              weapon: weapon.id,
+                              mod: installed.id,
+                              slot: slotEntry.slot,
+                            },
+                            slotEntry.slot,
+                          ),
+                        )}
+                      >
+                        <Button
+                          small
+                          disabled={detachDisabled}
+                          reason={
+                            blocked ??
+                            installed.detachLocked ??
+                            (detachShort ? "欧元不够" : undefined)
+                          }
+                          onClick={() => {
+                            const payload: GunsmithPayload = {
+                              action: "detach",
+                              weapon: weapon.id,
+                              mod: installed.id,
+                              slot: slotEntry.slot,
+                            };
+                            onConfirm({
+                              kind: "gunsmith",
+                              weapon,
+                              title: `解锁并拆下 ${installed.name}`,
+                              description: `由枪匠解除 ${weapon.name} 的${slotEntry.label}固锁并将 ${installed.name} 完整拆下退回背包。`,
+                              payload,
+                              partsFee: 0,
+                              serviceFee: detachFee,
+                              total: detachFee,
+                              preview: previewGunsmithImpact(weapon, payload, slotEntry.slot),
+                            });
+                          }}
+                        >
+                          {`解锁拆下 ${money(detachFee)}€`}
+                        </Button>
+                      </div>
+                    )}
+                    {!slotEntry.lockedSlot && lockFee !== null && (
+                      <Button
+                        small
+                        disabled={lockDisabled}
+                        reason={
+                          blocked ?? installed.lockLocked ?? (lockShort ? "欧元不够" : undefined)
+                        }
+                        onClick={() => {
+                          const payload: GunsmithPayload = {
+                            action: "convert",
+                            conversion: "precision-lock",
+                            weapon: weapon.id,
+                            slot: slotEntry.slot,
+                          };
+                          onConfirm({
+                            kind: "gunsmith",
+                            weapon,
+                            title: `精工固锁 ${slotEntry.label}`,
+                            description: `将当前安装在${slotEntry.label}的 ${installed.name} 进行精工校准固锁，避免松动偏移。`,
+                            payload,
+                            partsFee: 0,
+                            serviceFee: lockFee,
+                            total: lockFee,
+                            preview: previewGunsmithImpact(weapon, payload, slotEntry.slot),
+                          });
+                        }}
+                      >
+                        {`固锁 ${money(lockFee)}€`}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className={shopCss.gsEmptySlot}>该槽位当前空置</p>
+              )}
+
+              {slotEntry.options.length > 0 ? (
+                <ul className={shopCss.gsOptList}>
+                  {slotEntry.options.map((opt) => {
+                    const total = opt.total;
+                    const optShort = total !== null && total > eddies;
+                    const optDisabled =
+                      working ||
+                      Boolean(blocked) ||
+                      total === null ||
+                      Boolean(opt.locked) ||
+                      optShort;
+                    const optReason = blocked ?? opt.locked ?? (optShort ? "欧元不够" : undefined);
+                    const optArt = itemArtOf(opt.id);
+                    const payload: GunsmithPayload = {
+                      action: "install",
+                      weapon: weapon.id,
+                      mod: opt.id,
+                      source: opt.source,
+                      ...(installed ? { replace: installed.id } : {}),
+                    };
+
+                    return (
+                      <li
+                        key={`${opt.source}:${opt.id}`}
+                        className={shopCss.gsOptItem}
+                        style={{ "--item-tint": rarityTintOf(opt.rarity) } as CSSProperties}
+                        {...previewBind(previewGunsmithImpact(weapon, payload, slotEntry.slot))}
+                      >
+                        {optArt && <Asset id={optArt} className={shopCss.gsOptArt} />}
+                        <div className={shopCss.gsOptCopy}>
+                          <div className={shopCss.gsOptTop}>
+                            <b>{opt.name}</b>
+                            <span className={shopCss.stockPill}>
+                              {opt.source === "shelf"
+                                ? `货架 · 剩 ${opt.left}`
+                                : `背包自带 · ×${opt.left}`}
+                            </span>
+                          </div>
+                          {opt.ability && <small>{opt.ability}</small>}
+                          {total !== null && (
+                            <span className={shopCss.gsOptPrice}>
+                              {opt.partsFee
+                                ? `配件 ${money(opt.partsFee)} + 工时 ${money(opt.serviceFee ?? 0)} = ${money(total)} 欧元`
+                                : `工时 ${money(total)} 欧元`}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          small
+                          disabled={optDisabled}
+                          reason={optReason}
+                          onClick={() => {
+                            if (total === null) return;
+                            onConfirm({
+                              kind: "gunsmith",
+                              weapon,
+                              title: `${installed ? "换装" : "安装"} ${opt.name}`,
+                              description: `${
+                                opt.source === "shelf"
+                                  ? "从本店货架购入并由枪匠"
+                                  : "使用背包自带配件并由枪匠"
+                              }为 ${weapon.name} 的${slotEntry.label}${
+                                installed ? `换装（替换下的 ${installed.name} 退回背包）` : "加装"
+                              }。`,
+                              payload,
+                              partsFee: opt.partsFee ?? 0,
+                              serviceFee: opt.serviceFee ?? 0,
+                              total,
+                              preview: previewGunsmithImpact(weapon, payload, slotEntry.slot),
+                            });
+                          }}
+                        >
+                          {installed ? "换装" : "安装"}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className={shopCss.gsEmptySlot}>本店货架与背包暂无可装配件</p>
+              )}
+            </div>
+          );
+        })}
+      </section>
+    </aside>
+  );
+}
+
 /** 商店终端：左栏货架/回收筛选列表，右栏粘性检视台；不调用模型，按投影报价即时结算 */
 export function Shop({
   view,
   shop,
   onBuy,
   onSell,
+  onGunsmith,
+  gunsmithDisabledReason,
   onClose,
 }: {
   readonly view: View;
@@ -305,6 +896,8 @@ export function Shop({
   /** 正在生成时不传，按钮不能点 */
   readonly onBuy?: ((id: string) => Promise<void>) | undefined;
   readonly onSell?: ((id: string) => Promise<void>) | undefined;
+  readonly onGunsmith?: ((action: GunsmithPayload) => Promise<void>) | undefined;
+  readonly gunsmithDisabledReason?: string | undefined;
   readonly onClose: () => void;
 }) {
   const [mode, setMode] = useState<ShopMode>("buy");
@@ -320,7 +913,7 @@ export function Shop({
         : null,
   );
   const [confirming, setConfirming] = useState<
-    { kind: "buy"; item: ShelfItem } | { kind: "sell"; item: SaleItem } | null
+    { kind: "buy"; item: ShelfItem } | { kind: "sell"; item: SaleItem } | GunsmithConfirm | null
   >(null);
   const [working, setWorking] = useState(false);
 
@@ -328,6 +921,28 @@ export function Shop({
   const backpack = view.inventory.backpack;
   const keeperPortrait = portraitOf(shop.keeperNpc);
   const poiIcon: AssetId = shopPoiIconOf(shop.kind);
+  const hasGunsmith = shop.gunsmith !== null;
+  const effectiveMode: ShopMode = mode === "gunsmith" && !hasGunsmith ? "buy" : mode;
+  const gunsmithBlocked =
+    gunsmithDisabledReason ??
+    shop.gunsmith?.available ??
+    (!onGunsmith ? "当前无法进行枪匠工坊改装" : null);
+
+  const modNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [id, name] of Object.entries(view.names.items)) map.set(id, name);
+    for (const s of shop.shelf) map.set(s.id, s.name);
+    for (const s of shop.sell) map.set(s.id, s.name);
+    for (const w of shop.gunsmith?.weapons ?? []) {
+      for (const slot of w.slots) {
+        if (slot.installed) map.set(slot.installed.id, slot.installed.name);
+        for (const opt of slot.options) map.set(opt.id, opt.name);
+      }
+    }
+    return map;
+  }, [view.names.items, shop.shelf, shop.sell, shop.gunsmith]);
+
+  const resolveModName = (id: string) => modNameMap.get(id) ?? id;
 
   // 确认框开着时 Esc 只关确认框
   useLayer(onClose, !confirming);
@@ -345,7 +960,7 @@ export function Shop({
   };
 
   const switchMode = (next: ShopMode) => {
-    if (next === mode) return;
+    if (next === effectiveMode) return;
     setMode(next);
     setCategory("all");
   };
@@ -353,7 +968,8 @@ export function Shop({
   const normalizedQuery = query.trim().toLowerCase();
 
   const categories = useMemo(() => {
-    const source = mode === "buy" ? shop.shelf : shop.sell;
+    if (effectiveMode === "gunsmith") return [];
+    const source = effectiveMode === "buy" ? shop.shelf : shop.sell;
     const seen = new Set<string>();
     const list: string[] = [];
     for (const item of source) {
@@ -363,14 +979,15 @@ export function Shop({
       }
     }
     return list;
-  }, [mode, shop.shelf, shop.sell]);
+  }, [effectiveMode, shop.shelf, shop.sell]);
 
   const effectiveCategory = category !== "all" && categories.includes(category) ? category : "all";
 
   const hasIconic = useMemo(() => {
-    const source = mode === "buy" ? shop.shelf : shop.sell;
+    if (effectiveMode === "gunsmith") return false;
+    const source = effectiveMode === "buy" ? shop.shelf : shop.sell;
     return source.some((item) => item.iconic);
-  }, [mode, shop.shelf, shop.sell]);
+  }, [effectiveMode, shop.shelf, shop.sell]);
 
   const effectiveRarity = rarityFilter === "iconic" && !hasIconic ? "all" : rarityFilter;
 
@@ -398,17 +1015,46 @@ export function Shop({
   const groupedSell = useMemo(() => byGroup(filteredSell), [filteredSell]);
 
   const inspectedBuy =
-    mode === "buy"
+    effectiveMode === "buy"
       ? (filteredShelf.find((i) => focus?.mode === "buy" && i.id === focus.id) ?? filteredShelf[0])
       : undefined;
 
   const inspectedSell =
-    mode === "sell"
+    effectiveMode === "sell"
       ? (filteredSell.find((i) => focus?.mode === "sell" && i.id === focus.id) ?? filteredSell[0])
       : undefined;
 
+  const inspectedGunsmith =
+    effectiveMode === "gunsmith" && shop.gunsmith
+      ? (shop.gunsmith.weapons.find((w) => focus?.mode === "gunsmith" && w.id === focus.id) ??
+        shop.gunsmith.weapons.find(
+          (w) => focus?.mode === "gunsmith" && w.baseId === baseWeaponIdOf(focus.id),
+        ) ??
+        shop.gunsmith.weapons[0])
+      : undefined;
+
   const renderInspector = () => {
-    if (mode === "buy") {
+    if (effectiveMode === "gunsmith") {
+      if (!inspectedGunsmith) {
+        return (
+          <aside aria-label="枪匠工坊检视台">
+            <div className={shopCss.emptyState}>随身背包里没有可改装的武器。</div>
+          </aside>
+        );
+      }
+      return (
+        <GunsmithInspector
+          key={inspectedGunsmith.id}
+          weapon={inspectedGunsmith}
+          eddies={eddies}
+          working={working}
+          blocked={gunsmithBlocked}
+          onConfirm={(nextConfirm) => setConfirming(nextConfirm)}
+        />
+      );
+    }
+
+    if (effectiveMode === "buy") {
       if (!inspectedBuy) {
         return (
           <aside aria-label="商品详情检视">
@@ -424,10 +1070,12 @@ export function Shop({
       const item = inspectedBuy;
       const short = item.price > eddies;
       const owned = backpack[item.id] ?? 0;
+      const weaponSummary = summarizeWeaponState(item.weaponState, resolveModName);
 
       return (
         <ShopInspector
           id={item.id}
+          baseId={item.baseId}
           name={item.name}
           group={item.group}
           subLabel={item.subLabel}
@@ -438,6 +1086,7 @@ export function Shop({
           chargesText={item.charges !== null ? `可用 ${item.charges} 次` : null}
           healPercent={item.healPercent}
           ability={item.ability}
+          weaponSummary={weaponSummary}
           fallbackIcon={poiIcon}
           rows={[
             {
@@ -491,6 +1140,7 @@ export function Shop({
     const detail = view.inventory.details?.[item.id];
     const owned = backpack[item.id] ?? item.count;
     const unavailable = item.locked !== null || item.value <= 0;
+    const weaponSummary = summarizeWeaponState(item.weaponState, resolveModName);
     const rows: InspectorMetaRow[] = [
       {
         label: "回收报价",
@@ -512,6 +1162,7 @@ export function Shop({
     return (
       <ShopInspector
         id={item.id}
+        baseId={item.baseId}
         name={item.name}
         group={item.group}
         subLabel={item.subLabel}
@@ -526,6 +1177,7 @@ export function Shop({
         }
         healPercent={detail?.healPercent ?? null}
         ability={item.ability}
+        weaponSummary={weaponSummary}
         fallbackIcon="notify.inventory"
         rows={rows}
         alert={item.locked ?? (item.value <= 0 ? "这家店不收购此类物品。" : null)}
@@ -536,6 +1188,11 @@ export function Shop({
       />
     );
   };
+
+  const confirmingWeaponSummary =
+    confirming && confirming.kind !== "gunsmith"
+      ? summarizeWeaponState(confirming.item.weaponState, resolveModName)
+      : null;
 
   return (
     <div className={shopCss.backdrop}>
@@ -609,7 +1266,7 @@ export function Shop({
                   type="button"
                   role="tab"
                   className={shopCss.modeTab}
-                  aria-selected={mode === "buy"}
+                  aria-selected={effectiveMode === "buy"}
                   onClick={() => switchMode("buy")}
                 >
                   买进货架（{shop.shelf.length}）
@@ -618,14 +1275,25 @@ export function Shop({
                   type="button"
                   role="tab"
                   className={shopCss.modeTab}
-                  aria-selected={mode === "sell"}
+                  aria-selected={effectiveMode === "sell"}
                   onClick={() => switchMode("sell")}
                 >
                   出手回收（{shop.sell.length}）
                 </button>
+                {hasGunsmith && (
+                  <button
+                    type="button"
+                    role="tab"
+                    className={shopCss.modeTab}
+                    aria-selected={effectiveMode === "gunsmith"}
+                    onClick={() => switchMode("gunsmith")}
+                  >
+                    武器工坊（{shop.gunsmith?.weapons.length ?? 0}）
+                  </button>
+                )}
               </div>
 
-              {categories.length > 0 && (
+              {effectiveMode !== "gunsmith" && categories.length > 0 && (
                 <div className={shopCss.catTabs}>
                   <button
                     type="button"
@@ -649,73 +1317,183 @@ export function Shop({
                 </div>
               )}
 
-              <div className={shopCss.filterRow}>
-                <div className={shopCss.rarityChips}>
-                  <button
-                    type="button"
-                    className={shopCss.rarityChip}
-                    aria-pressed={effectiveRarity === "all"}
-                    onClick={() => setRarityFilter("all")}
-                  >
-                    全稀有度
-                  </button>
-                  {RARITY_ORDER.map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      className={shopCss.rarityChip}
-                      data-rarity={r}
-                      aria-pressed={effectiveRarity === r}
-                      onClick={() => setRarityFilter((cur) => (cur === r ? "all" : r))}
-                    >
-                      {rarityLabelOf(r)}
-                    </button>
-                  ))}
-                  {hasIconic && (
+              {effectiveMode !== "gunsmith" && (
+                <div className={shopCss.filterRow}>
+                  <div className={shopCss.rarityChips}>
                     <button
                       type="button"
                       className={shopCss.rarityChip}
-                      data-rarity="iconic"
-                      aria-pressed={effectiveRarity === "iconic"}
-                      onClick={() =>
-                        setRarityFilter((cur) => (cur === "iconic" ? "all" : "iconic"))
-                      }
+                      aria-pressed={effectiveRarity === "all"}
+                      onClick={() => setRarityFilter("all")}
                     >
-                      不朽
+                      全稀有度
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className={shopCss.toggleChip}
-                    aria-pressed={onlyAvailable}
-                    onClick={() => setOnlyAvailable((v) => !v)}
-                  >
-                    {mode === "buy" ? "仅看可买" : "仅看可收"}
-                  </button>
-                </div>
+                    {RARITY_ORDER.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        className={shopCss.rarityChip}
+                        data-rarity={r}
+                        aria-pressed={effectiveRarity === r}
+                        onClick={() => setRarityFilter((cur) => (cur === r ? "all" : r))}
+                      >
+                        {rarityLabelOf(r)}
+                      </button>
+                    ))}
+                    {hasIconic && (
+                      <button
+                        type="button"
+                        className={shopCss.rarityChip}
+                        data-rarity="iconic"
+                        aria-pressed={effectiveRarity === "iconic"}
+                        onClick={() =>
+                          setRarityFilter((cur) => (cur === "iconic" ? "all" : "iconic"))
+                        }
+                      >
+                        不朽
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={shopCss.toggleChip}
+                      aria-pressed={onlyAvailable}
+                      onClick={() => setOnlyAvailable((v) => !v)}
+                    >
+                      {effectiveMode === "buy" ? "仅看可买" : "仅看可收"}
+                    </button>
+                  </div>
 
-                <div className={shopCss.searchCell}>
-                  <CellFrame />
-                  <input
-                    type="search"
-                    className={shopCss.searchInput}
-                    aria-label={
-                      mode === "buy" ? "检索商品名称、品类或效果" : "检索背包物品名称、品类或效果"
-                    }
-                    placeholder={
-                      mode === "buy" ? "检索商品名 / 品类 / 效果…" : "检索背包物品 / 品类 / 效果…"
-                    }
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
+                  <div className={shopCss.searchCell}>
+                    <CellFrame />
+                    <input
+                      type="search"
+                      className={shopCss.searchInput}
+                      aria-label={
+                        effectiveMode === "buy"
+                          ? "检索商品名称、品类或效果"
+                          : "检索背包物品名称、品类或效果"
+                      }
+                      placeholder={
+                        effectiveMode === "buy"
+                          ? "检索商品名 / 品类 / 效果…"
+                          : "检索背包物品 / 品类 / 效果…"
+                      }
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </nav>
 
-            {/* 双栏主体：左货架/回收，右粘性检视台 */}
+            {/* 双栏主体：左货架/回收/工坊武器，右粘性检视台 */}
             <div className={shopCss.body}>
               <div className={shopCss.catalog}>
-                {mode === "buy" ? (
+                {effectiveMode === "gunsmith" && shop.gunsmith ? (
+                  <>
+                    {gunsmithBlocked && (
+                      <p role="status" className={shopCss.inspectAlert}>
+                        {gunsmithBlocked}
+                      </p>
+                    )}
+                    {shop.gunsmith.weapons.length === 0 ? (
+                      <div className={shopCss.emptyState}>
+                        随身背包里没有可改装的武器，先去买把家伙或者从安全屋取出。
+                      </div>
+                    ) : (
+                      <section className={shopCss.groupSection}>
+                        <h3 className={shopCss.groupHead}>
+                          <span>随身武器工坊</span>
+                          <span>{shop.gunsmith.weapons.length}</span>
+                        </h3>
+                        <ul className={shopCss.cardList}>
+                          {shop.gunsmith.weapons.map((w) => {
+                            const art = itemArtOf(w.baseId ?? w.id);
+                            const hudIcon = weaponHudIconOf(w.baseId ?? w.id, w.subLabel);
+                            const installedCount = w.slots.filter(
+                              (s) => s.installed !== null,
+                            ).length;
+                            const lockedCount = w.slots.filter((s) => s.lockedSlot).length;
+                            const isMelee =
+                              w.subLabel.includes("刀剑") || w.subLabel.includes("钝器");
+                            const summary = summarizeWeaponState(w.weaponState, resolveModName);
+                            const rarityTint = rarityTintOf(w.rarity, w.iconic);
+
+                            return (
+                              <li
+                                key={w.id}
+                                className={shopCss.itemCard}
+                                data-selected={inspectedGunsmith?.id === w.id || undefined}
+                                style={{ "--item-tint": rarityTint } as CSSProperties}
+                              >
+                                <CellFrame />
+                                <button
+                                  type="button"
+                                  style={CARD_FOCUS_BTN_STYLE}
+                                  onClick={() => setFocus({ mode: "gunsmith", id: w.id })}
+                                >
+                                  <span className={shopCss.thumbBox} aria-hidden>
+                                    {art ? (
+                                      <Asset id={art} alt={w.name} className={shopCss.thumbImg} />
+                                    ) : (
+                                      <Asset
+                                        id={hudIcon}
+                                        height={24}
+                                        tint={rarityTint}
+                                        className={shopCss.thumbImg}
+                                      />
+                                    )}
+                                  </span>
+                                  <span className={shopCss.itemBody}>
+                                    <span className={shopCss.itemTitleRow}>
+                                      <strong className={shopCss.itemName}>{w.name}</strong>
+                                      {w.weaponState?.tunedRarity && (
+                                        <span className={shopCss.stockPill}>精调</span>
+                                      )}
+                                      {w.grantsSmartLink && (
+                                        <span className={shopCss.ownedPill}>智能联锁</span>
+                                      )}
+                                      {!isMelee && w.noise === "silent" && (
+                                        <span className={shopCss.ownedPill}>已消音</span>
+                                      )}
+                                      {lockedCount > 0 && (
+                                        <span className={shopCss.stockPill}>
+                                          固锁×{lockedCount}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className={shopCss.itemMeta}>
+                                      {[
+                                        w.rarityLabel,
+                                        w.subLabel,
+                                        CONCEALMENT_LABELS[w.concealment],
+                                      ].join(" · ")}
+                                    </span>
+                                    {summary?.inlineText && (
+                                      <span className={shopCss.itemModLine}>
+                                        {summary.inlineText}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+                                <div className={shopCss.itemAside}>
+                                  <span className={shopCss.ownedPill}>
+                                    槽位 {installedCount}/{w.slots.length}
+                                  </span>
+                                  {w.tune.nextRarityLabel && w.tune.price !== null && (
+                                    <span className={shopCss.priceTag}>
+                                      精调 {money(w.tune.price)}€
+                                    </span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </section>
+                    )}
+                  </>
+                ) : effectiveMode === "buy" ? (
                   groupedShelf.length === 0 ? (
                     <div className={shopCss.emptyState}>
                       {shop.shelf.length === 0
@@ -733,10 +1511,15 @@ export function Shop({
                           {items.map((item) => {
                             const short = item.price > eddies;
                             const owned = backpack[item.id] ?? 0;
+                            const weaponSummary = summarizeWeaponState(
+                              item.weaponState,
+                              resolveModName,
+                            );
                             return (
                               <ShopCatalogCard
                                 key={item.id}
                                 id={item.id}
+                                baseId={item.baseId}
                                 name={item.name}
                                 group={item.group}
                                 subLabel={item.subLabel}
@@ -747,6 +1530,7 @@ export function Shop({
                                 selected={inspectedBuy?.id === item.id}
                                 locked={item.locked !== null}
                                 statusText={item.locked ? "不可买" : null}
+                                weaponSummary={weaponSummary}
                                 pills={
                                   <>
                                     {owned > 0 && (
@@ -791,10 +1575,12 @@ export function Shop({
                       <ul className={shopCss.cardList}>
                         {items.map((s) => {
                           const unavailable = s.locked !== null || s.value <= 0;
+                          const weaponSummary = summarizeWeaponState(s.weaponState, resolveModName);
                           return (
                             <ShopCatalogCard
                               key={s.id}
                               id={s.id}
+                              baseId={s.baseId}
                               name={s.name}
                               group={s.group}
                               subLabel={s.subLabel}
@@ -805,6 +1591,7 @@ export function Shop({
                               selected={inspectedSell?.id === s.id}
                               locked={unavailable}
                               statusText={s.locked ? "不可出售" : null}
+                              weaponSummary={weaponSummary}
                               pills={
                                 s.count > 1 ? (
                                   <span className={shopCss.ownedPill}>×{s.count}</span>
@@ -835,9 +1622,11 @@ export function Shop({
       {confirming && (
         <Dialog
           title={
-            confirming.kind === "buy"
-              ? `买下${confirming.item.name}？`
-              : `把${confirming.item.name}卖给${shop.keeper}？`
+            confirming.kind === "gunsmith"
+              ? `${confirming.title}？`
+              : confirming.kind === "buy"
+                ? `买下${confirming.item.name}？`
+                : `把${confirming.item.name}卖给${shop.keeper}？`
           }
           tone="info"
           onClose={() => setConfirming(null)}
@@ -845,24 +1634,91 @@ export function Shop({
             <>
               <Button
                 primary
-                disabled={working || !(confirming.kind === "buy" ? onBuy : onSell)}
+                disabled={
+                  working ||
+                  !(confirming.kind === "gunsmith"
+                    ? onGunsmith
+                    : confirming.kind === "buy"
+                      ? onBuy
+                      : onSell)
+                }
                 onClick={() => {
-                  const id = confirming.item.id;
-                  const task = confirming.kind === "buy" ? onBuy : onSell;
-                  if (task) void run(() => task(id));
+                  if (confirming.kind === "gunsmith") {
+                    if (onGunsmith) void run(() => onGunsmith(confirming.payload));
+                  } else {
+                    const id = confirming.item.id;
+                    const task = confirming.kind === "buy" ? onBuy : onSell;
+                    if (task) void run(() => task(id));
+                  }
                 }}
               >
                 {working
-                  ? "交易中…"
-                  : confirming.kind === "buy"
-                    ? `付 ${money(confirming.item.price)} 欧元`
-                    : `收 ${money(confirming.item.value)} 欧元`}
+                  ? "结算中…"
+                  : confirming.kind === "gunsmith"
+                    ? `支付 ${money(confirming.total)} 欧元并改装`
+                    : confirming.kind === "buy"
+                      ? `付 ${money(confirming.item.price)} 欧元`
+                      : `收 ${money(confirming.item.value)} 欧元`}
               </Button>
               <Button onClick={() => setConfirming(null)}>再想想</Button>
             </>
           }
         >
-          {confirming.kind === "buy" ? (
+          {confirming.kind === "gunsmith" ? (
+            <>
+              <p className={shopCss.dialogSummary}>{confirming.description}</p>
+              <div className={shopCss.dialogMeta}>
+                {confirming.partsFee > 0 && (
+                  <span>
+                    配件费用：<strong>{money(confirming.partsFee)} 欧元</strong>
+                  </span>
+                )}
+                <span>
+                  工匠工时：<strong>{money(confirming.serviceFee)} 欧元</strong>
+                </span>
+                <span>
+                  合计应付：<strong>{money(confirming.total)} 欧元</strong>
+                </span>
+                <span>
+                  改后余额：
+                  <strong data-tone={eddies - confirming.total < 0 ? "bad" : undefined}>
+                    {money(eddies - confirming.total)} 欧元
+                  </strong>
+                </span>
+                {confirming.preview.concealment !== confirming.weapon.concealment && (
+                  <span>
+                    隐蔽变化：
+                    <strong>
+                      {CONCEALMENT_LABELS[confirming.weapon.concealment]} →{" "}
+                      {CONCEALMENT_LABELS[confirming.preview.concealment]}
+                    </strong>
+                  </span>
+                )}
+                {confirming.preview.noise !== confirming.weapon.noise && (
+                  <span>
+                    声学变化：
+                    <strong>
+                      {NOISE_LABELS[confirming.weapon.noise]} →{" "}
+                      {NOISE_LABELS[confirming.preview.noise]}
+                    </strong>
+                  </span>
+                )}
+                {confirming.preview.rarityLabel && (
+                  <span>
+                    品质升阶：
+                    <strong>
+                      {confirming.weapon.rarityLabel} → {confirming.preview.rarityLabel}
+                    </strong>
+                  </span>
+                )}
+                {confirming.preview.smartLink !== confirming.weapon.grantsSmartLink && (
+                  <span>
+                    智能联锁：<strong>未激活 → 已激活</strong>
+                  </span>
+                )}
+              </div>
+            </>
+          ) : confirming.kind === "buy" ? (
             <>
               <p className={shopCss.dialogSummary}>
                 {[
@@ -879,6 +1735,11 @@ export function Shop({
               </p>
               {confirming.item.ability && (
                 <p className={shopCss.dialogSummary}>{confirming.item.ability}</p>
+              )}
+              {confirmingWeaponSummary?.inlineText && (
+                <p className={shopCss.dialogSummary}>
+                  随枪配置：{confirmingWeaponSummary.inlineText}
+                </p>
               )}
               <div className={shopCss.dialogMeta}>
                 <span>
@@ -906,6 +1767,11 @@ export function Shop({
               </p>
               {confirming.item.ability && (
                 <p className={shopCss.dialogSummary}>{confirming.item.ability}</p>
+              )}
+              {confirmingWeaponSummary?.inlineText && (
+                <p className={shopCss.dialogSummary}>
+                  随枪配置：{confirmingWeaponSummary.inlineText}
+                </p>
               )}
               <div className={shopCss.dialogMeta}>
                 <span>

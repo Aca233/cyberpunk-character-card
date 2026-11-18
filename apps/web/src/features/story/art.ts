@@ -59,6 +59,10 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "kneel-mod": "itemArt.mod",
   "bleedout-mod": "itemArt.mod",
   "parallax-mod": "itemArt.mod",
+  "smart-target-mod": "itemArt.mod",
+  "smart-link-module": "itemArt.mod",
+  "kinetic-weight-mod": "itemArt.mod",
+  "arc-coil-mod": "itemArt.mod",
   // 通用保安制服借用军用科技制服，工牌借用原作通行卡作为示意图。
   "security-uniform": "itemArt.securityUniform",
   "corpo-badge": "itemArt.corpoBadge",
@@ -287,13 +291,20 @@ export function portraitOf(npc: string | null | undefined): AssetId | undefined 
   return npc ? PORTRAITS[npc] : undefined;
 }
 
+/** 从物化武器实例 ID（wpn:<baseId>:<seq>）提取基础模板 ID */
+export function baseWeaponIdOf(id: string): string {
+  const match = /^wpn:([^:]+):\d+$/.exec(id);
+  return match?.[1] ?? id;
+}
+
 export function itemArtOf(item: string | null | undefined): AssetId | undefined {
-  return item ? ITEM_ART[item] : undefined;
+  if (!item) return undefined;
+  return ITEM_ART[item] ?? ITEM_ART[baseWeaponIdOf(item)];
 }
 
 /** 武器 ID 与副标题 → 右下角 HUD 用的高对比 2077 单色武器轮廓剪影 */
 export function weaponHudIconOf(id: string, subLabel?: string): AssetId {
-  const low = id.toLowerCase();
+  const low = baseWeaponIdOf(id).toLowerCase();
   if (
     low.includes("knife") ||
     low.includes("cleaver") ||

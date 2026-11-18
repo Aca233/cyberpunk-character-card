@@ -797,6 +797,200 @@
   border-top: 1px solid rgb(94 246 255 / 16%);
 }
 
+.itemModLine {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--cp-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.inspectWeaponState {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 6%);
+}
+
+.gsPreviewBox {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(8 11 20 / 72%);
+}
+
+.gsSection {
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.gsSectionTitle {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-yellow);
+}
+
+.gsServiceCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgb(252 238 10 / 26%);
+  background: rgb(252 238 10 / 6%);
+}
+
+.gsServiceInfo {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+
+.gsServiceInfo > strong {
+  font-size: 13px;
+  color: var(--cp-text);
+}
+
+.gsServiceInfo > small {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--cp-text-dim);
+}
+
+.gsActionWrap {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.gsSlotCard {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgb(94 246 255 / 20%);
+  background: rgb(10 13 22 / 78%);
+}
+
+.gsSlotHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gsSlotHead > strong {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--cp-cyan);
+}
+
+.gsInstalledRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 6%);
+}
+
+.gsInstalledCopy {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.gsInstalledCopy > b {
+  font-size: 12px;
+  color: var(--cp-yellow);
+}
+
+.gsInstalledCopy > small {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cp-text-dim);
+}
+
+.gsInstalledBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gsEmptySlot {
+  margin: 0;
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.gsOptList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.gsOptItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--item-tint, var(--cp-cyan)) 28%, transparent);
+  border-left: 3px solid var(--item-tint, var(--cp-cyan));
+  background: rgb(14 17 28 / 86%);
+}
+
+.gsOptArt {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.gsOptCopy {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gsOptTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.gsOptTop > b {
+  font-size: 12px;
+  color: var(--cp-text);
+}
+
+.gsOptCopy > small {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cp-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.gsOptPrice {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cp-yellow);
+}
+
 /* 交易确认弹窗辅助样式 */
 .dialogSummary {
   margin: 0 0 8px;

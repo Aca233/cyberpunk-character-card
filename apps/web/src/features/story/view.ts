@@ -1,5 +1,6 @@
-import type { PlayerView, TurnInput } from "@cp/core";
+import { economyRules, inventoryRules, type PlayerView, type TurnInput } from "@cp/core";
 import type { AssetId } from "../../assets";
+import { baseWeaponIdOf } from "./art";
 
 /** 剧情界面用到的纯函数：不碰 React，也不发请求 */
 
@@ -1430,4 +1431,90 @@ export function urgentChatDeadline(
     }
   }
   return tightest;
+}
+
+export type WeaponConcealment = View["inventory"]["carriedWeapons"][number]["concealment"];
+export type WeaponNoise = View["inventory"]["carriedWeapons"][number]["noise"];
+export type WeaponStateProjection = NonNullable<
+  View["inventory"]["carriedWeapons"][number]["weaponState"]
+>;
+
+export const CONCEALMENT_LABELS: Readonly<Record<WeaponConcealment, string>> = {
+  pocket: "贴身可藏",
+  coat: "风衣可遮",
+  open: "显眼长械",
+  heavy: "重型军火",
+};
+
+export const NOISE_LABELS: Readonly<Record<WeaponNoise, string>> = {
+  silent: "已消音",
+  loud: "有枪声",
+  explosive: "爆破巨响",
+};
+
+/** 解析展示用物品名，绝不向界面泄漏 wpn:<baseId>:<seq> 原始实例 ID */
+export function displayItemName(
+  names: Readonly<Record<string, string>>,
+  id: string,
+  baseId?: string | null,
+): string {
+  const direct = names[id];
+  if (direct && !direct.startsWith("wpn:")) return direct;
+  const resolvedBase = baseId ?? baseWeaponIdOf(id);
+  const baseName = names[resolvedBase];
+  if (baseName && !baseName.startsWith("wpn:")) return baseName;
+  return resolvedBase;
+}
+
+export interface WeaponStateModSummary {
+  readonly slot: inventoryRules.ModSlot;
+  readonly slotLabel: string;
+  readonly modId: string;
+  readonly modName: string;
+  readonly locked: boolean;
+}
+
+export interface WeaponStateSummary {
+  readonly mods: readonly WeaponStateModSummary[];
+  readonly tunedLabel: string | null;
+  readonly smartLink: boolean;
+  readonly inlineText: string | null;
+}
+
+/** 汇总定制武器实例状态（已装配件、精调档位与智能靶向联锁），供商店与物品栏共用 */
+export function summarizeWeaponState(
+  ws: WeaponStateProjection | null | undefined,
+  resolveName: (id: string) => string,
+): WeaponStateSummary | null {
+  if (!ws) return null;
+  const mods: WeaponStateModSummary[] = [];
+  for (const slot of inventoryRules.ModSlotSchema.options) {
+    const modId = ws.mods[slot];
+    if (!modId) continue;
+    mods.push({
+      slot,
+      slotLabel: inventoryRules.MOD_SLOT_LABELS[slot],
+      modId,
+      modName: resolveName(modId),
+      locked: ws.lockedSlots.includes(slot),
+    });
+  }
+  const tunedLabel = ws.tunedRarity ? economyRules.RARITY_LABELS[ws.tunedRarity] : null;
+  const smartLink = ws.smartLink;
+  if (mods.length === 0 && !tunedLabel && !smartLink) return null;
+
+  const parts: string[] = [];
+  if (tunedLabel) parts.push(`精调${tunedLabel}`);
+  if (smartLink) parts.push("智能联锁");
+  if (mods.length > 0) {
+    parts.push(
+      mods.map((m) => `[${m.slotLabel}] ${m.modName}${m.locked ? "（固锁）" : ""}`).join(" · "),
+    );
+  }
+  return {
+    mods,
+    tunedLabel,
+    smartLink,
+    inlineText: parts.join(" · "),
+  };
 }

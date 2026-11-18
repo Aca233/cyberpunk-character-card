@@ -975,6 +975,22 @@ export function StoryScreen() {
                     ? undefined
                     : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
                 }
+                onGunsmith={
+                  busy || offers?.rolled || view.death || view.ended || view.combat.active
+                    ? undefined
+                    : (action) => act({ ...action, type: "gunsmith", shop: shop.id }, "shop", true)
+                }
+                gunsmithDisabledReason={
+                  view.death || view.ended
+                    ? "这份存档已结束，无法进行枪匠改装"
+                    : view.combat.active
+                      ? "战斗中无法进行枪匠工坊改装"
+                      : offers?.rolled
+                        ? "请先完成当前检定的结算"
+                        : busy
+                          ? "正在处理行动，请稍候"
+                          : undefined
+                }
                 onClose={() => setAtShop(null)}
               />
             )

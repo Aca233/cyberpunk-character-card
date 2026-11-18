@@ -1,11 +1,11 @@
-import { characterRules } from "@cp/core";
-import { type ReactNode, useState } from "react";
+import { characterRules, inventoryRules } from "@cp/core";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
-import { itemArtOf } from "./art";
+import { baseWeaponIdOf, itemArtOf } from "./art";
 import { BiomonitorPanel } from "./BiomonitorPanel";
 import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
 import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
@@ -18,7 +18,14 @@ import { Avatar, type PhoneActions, PhoneBody, UnreadBadge } from "./Phone";
 import { Profile } from "./Profile";
 import { type SquadAction, SquadPanel } from "./SquadPanel";
 import styles from "./story.module.css";
-import { trackTelemetry, type View, woundTelemetry } from "./view";
+import {
+  CONCEALMENT_LABELS,
+  displayItemName,
+  NOISE_LABELS,
+  trackTelemetry,
+  type View,
+  woundTelemetry,
+} from "./view";
 
 /**
  * 神经界面里由旧左侧栏拆出来的几页（2077-interface-plan.md 第五节第 4 条）：
@@ -250,6 +257,264 @@ function SubTabs<T extends string>({
 }
 
 type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "misc";
+type ItemDetailsMap = NonNullable<View["inventory"]["details"]>;
+type ItemDetail = ItemDetailsMap[string];
+
+function unsupportedSlotReason(subLabel: string, slot: inventoryRules.ModSlot): string {
+  const slotLabel = inventoryRules.MOD_SLOT_LABELS[slot];
+  if (subLabel.includes("刀剑") || subLabel.includes("钝器")) {
+    return `近战武器没有${slotLabel}槽位`;
+  }
+  if (subLabel.includes("技术") && slot === "muzzle") {
+    return "技术电磁武器不支持机械消音器";
+  }
+  if (subLabel.includes("智能")) {
+    return slot === "muzzle" ? "智能制导武器不支持机械消音器" : "智能武器无传统光学瞄具导轨";
+  }
+  return `当前枪型未开放${slotLabel}槽位`;
+}
+
+/** 武器中心化槽位检视器：逐槽展示已装配件、可装背包配件与不支持原因 */
+function WeaponSlotInspector({
+  weaponId,
+  detail,
+  installedList,
+  allCarried,
+  details,
+  modTargets,
+  shopModMeta,
+  itemName,
+  onMod,
+  openSlot,
+  onToggleSlot,
+}: {
+  readonly weaponId: string;
+  readonly detail: ItemDetail;
+  readonly installedList: View["inventory"]["mods"][string] | undefined;
+  readonly allCarried: readonly (readonly [string, number])[];
+  readonly details: View["inventory"]["details"];
+  readonly modTargets: View["inventory"]["modTargets"];
+  readonly shopModMeta: ReadonlyMap<
+    string,
+    {
+      readonly rarity: string | null;
+      readonly rarityLabel: string | null;
+      readonly ability: string | null;
+    }
+  >;
+  readonly itemName: (id: string) => string;
+  readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
+  readonly openSlot: inventoryRules.ModSlot | null;
+  readonly onToggleSlot: (slot: inventoryRules.ModSlot | null) => void;
+}) {
+  return (
+    <section className={styles.slotInspector} aria-label="武器改装槽位">
+      <header className={styles.slotInspectorHead}>
+        <span>改装槽位</span>
+        {detail.weaponState?.smartLink && (
+          <span className={styles.slotInspectorBadge}>智能联锁</span>
+        )}
+      </header>
+      <ul className={styles.slotList}>
+        {inventoryRules.ModSlotSchema.options.map((slot) => {
+          const slotLabel = inventoryRules.MOD_SLOT_LABELS[slot];
+          const isAllowed = detail.modSlots.includes(slot);
+          const installedEntry = installedList?.find((m) => m.slot === slot);
+          const installedId = detail.weaponState?.mods[slot] ?? installedEntry?.id;
+          const isLocked =
+            detail.weaponState?.lockedSlots.includes(slot) ?? installedEntry?.locked ?? false;
+
+          if (!isAllowed) {
+            return (
+              <li key={slot} className={styles.slotCard} data-state="unsupported">
+                <div className={styles.slotTop}>
+                  <strong className={styles.slotLabel}>{slotLabel}</strong>
+                  <span className={styles.slotStatusTag}>不支持</span>
+                </div>
+                <p className={styles.slotMutedNote}>
+                  {unsupportedSlotReason(detail.subLabel, slot)}
+                </p>
+              </li>
+            );
+          }
+
+          const compatibleMods = allCarried
+            .filter(([modId]) => {
+              if (modId === installedId) return false;
+              const modDetail = details?.[modId];
+              return (
+                modDetail?.kind === "mod" &&
+                modDetail.subLabel === `改装 · ${slotLabel}` &&
+                (modTargets[modId] ?? []).includes(weaponId)
+              );
+            })
+            .map(([modId, count]) => {
+              const modDetail = details?.[modId];
+              return {
+                id: modId,
+                count,
+                name: itemName(modId),
+                rarity: modDetail?.rarity ?? null,
+                rarityLabel: modDetail?.rarityLabel ?? null,
+                ability: modDetail?.ability ?? "",
+                art: itemArtOf(modId),
+              };
+            });
+
+          const pickerOpen = openSlot === slot;
+
+          if (installedId) {
+            const modDetail = details?.[installedId];
+            const shopMeta = shopModMeta.get(installedId);
+            const modRarity = modDetail?.rarity ?? shopMeta?.rarity ?? null;
+            const modRarityLabel =
+              modDetail?.rarityLabel ?? shopMeta?.rarityLabel ?? rarityLabelOf(modRarity);
+            const modAbility = modDetail?.ability || shopMeta?.ability || "";
+            const modArt = itemArtOf(installedId);
+            const modName = itemName(installedId);
+
+            return (
+              <li
+                key={slot}
+                className={styles.slotCard}
+                data-state="occupied"
+                data-locked={isLocked || undefined}
+                data-rarity={modRarity ?? undefined}
+                style={{ "--slot-rar": rarityTintOf(modRarity) } as CSSProperties}
+              >
+                <span className={styles.slotRarBar} aria-hidden />
+                <div className={styles.slotTop}>
+                  <strong className={styles.slotLabel}>{slotLabel}</strong>
+                  <div className={styles.slotStatusGroup}>
+                    {modRarityLabel && <span className={styles.slotRarText}>{modRarityLabel}</span>}
+                    {isLocked && <span className={styles.slotLockTag}>已固锁</span>}
+                  </div>
+                </div>
+                <div className={styles.slotBody}>
+                  {modArt && (
+                    <span className={styles.slotThumb} aria-hidden>
+                      <Asset id={modArt} className={styles.slotArt} />
+                    </span>
+                  )}
+                  <div className={styles.slotCopy}>
+                    <b className={styles.slotModName}>{modName}</b>
+                    {modAbility && <p className={styles.slotAbility}>{modAbility}</p>}
+                  </div>
+                </div>
+                {isLocked ? (
+                  <p className={styles.slotLockNote}>已锁定 · 需前往枪匠工坊改动</p>
+                ) : (
+                  onMod && (
+                    <div className={styles.slotActions}>
+                      <ActionButton
+                        onClick={() => {
+                          onToggleSlot(null);
+                          onMod("detach", weaponId, installedId);
+                        }}
+                      >
+                        拆下
+                      </ActionButton>
+                      {compatibleMods.length > 0 && (
+                        <ActionButton onClick={() => onToggleSlot(pickerOpen ? null : slot)}>
+                          {pickerOpen ? "收起" : `更换 (${compatibleMods.length})`}
+                        </ActionButton>
+                      )}
+                    </div>
+                  )
+                )}
+                {pickerOpen && !isLocked && compatibleMods.length > 0 && (
+                  <ul className={styles.slotPicker} aria-label={`更换${slotLabel}配件`}>
+                    {compatibleMods.map((mod) => (
+                      <li
+                        key={mod.id}
+                        className={styles.slotPickItem}
+                        style={{ "--slot-rar": rarityTintOf(mod.rarity) } as CSSProperties}
+                      >
+                        <span className={styles.slotPickBar} aria-hidden />
+                        {mod.art && <Asset id={mod.art} className={styles.slotPickArt} />}
+                        <div className={styles.slotPickCopy}>
+                          <b>
+                            {mod.name}
+                            {mod.count > 1 ? ` ×${mod.count}` : ""}
+                          </b>
+                          {mod.ability && <small>{mod.ability}</small>}
+                        </div>
+                        {onMod && (
+                          <ActionButton
+                            onClick={() => {
+                              onToggleSlot(null);
+                              onMod("attach", weaponId, mod.id);
+                            }}
+                          >
+                            换上
+                          </ActionButton>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          }
+
+          return (
+            <li key={slot} className={styles.slotCard} data-state="empty">
+              <div className={styles.slotTop}>
+                <strong className={styles.slotLabel}>{slotLabel}</strong>
+                <span className={styles.slotStatusTag}>空余</span>
+              </div>
+              {isLocked ? (
+                <p className={styles.slotLockNote}>已锁定 · 需前往枪匠工坊改动</p>
+              ) : compatibleMods.length === 0 ? (
+                <p className={styles.slotEmptyNote}>背包暂无可用{slotLabel}配件</p>
+              ) : (
+                <>
+                  <div className={styles.slotActions}>
+                    <ActionButton onClick={() => onToggleSlot(pickerOpen ? null : slot)}>
+                      {pickerOpen ? "收起配件" : `加装${slotLabel} (${compatibleMods.length})`}
+                    </ActionButton>
+                    {!onMod && <small className={styles.slotMutedNote}>当前不可拆装</small>}
+                  </div>
+                  {pickerOpen && (
+                    <ul className={styles.slotPicker} aria-label={`加装${slotLabel}配件`}>
+                      {compatibleMods.map((mod) => (
+                        <li
+                          key={mod.id}
+                          className={styles.slotPickItem}
+                          style={{ "--slot-rar": rarityTintOf(mod.rarity) } as CSSProperties}
+                        >
+                          <span className={styles.slotPickBar} aria-hidden />
+                          {mod.art && <Asset id={mod.art} className={styles.slotPickArt} />}
+                          <div className={styles.slotPickCopy}>
+                            <b>
+                              {mod.name}
+                              {mod.count > 1 ? ` ×${mod.count}` : ""}
+                            </b>
+                            {mod.ability && <small>{mod.ability}</small>}
+                          </div>
+                          {onMod && (
+                            <ActionButton
+                              onClick={() => {
+                                onToggleSlot(null);
+                                onMod("attach", weaponId, mod.id);
+                              }}
+                            >
+                              装上
+                            </ActionButton>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 /**
  * 物品栏（O）：上方展示随身大件负担与当前穿着，中间单行筛选与左列表右详情浏览。
@@ -289,6 +554,10 @@ export function InventoryPage({
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [search, setSearch] = useState("");
   const [pickedItem, setPickedItem] = useState<{ id: string; worn?: boolean } | null>(null);
+  const [openSlotPicker, setOpenSlotPicker] = useState<{
+    weaponId: string;
+    slot: inventoryRules.ModSlot;
+  } | null>(null);
   const [usingItem, setUsingItem] = useState(false);
   const [useError, setUseError] = useState("");
 
@@ -302,8 +571,42 @@ export function InventoryPage({
     );
   };
 
-  const itemName = (id: string) => view.names.items[id] ?? id;
+  const itemName = (id: string) =>
+    displayItemName(view.names.items, id, inventory.details?.[id]?.baseId);
   const allCarried = Object.entries(carried).filter(([, count]) => count > 0);
+  const shopModMeta = new Map<
+    string,
+    {
+      readonly rarity: string | null;
+      readonly rarityLabel: string | null;
+      readonly ability: string | null;
+    }
+  >();
+  for (const shop of view.shops) {
+    for (const s of shop.shelf) {
+      if (s.kind === "mod") {
+        shopModMeta.set(s.id, { rarity: s.rarity, rarityLabel: s.rarityLabel, ability: s.ability });
+      }
+    }
+    for (const w of shop.gunsmith?.weapons ?? []) {
+      for (const slot of w.slots) {
+        if (slot.installed) {
+          shopModMeta.set(slot.installed.id, {
+            rarity: slot.installed.rarity,
+            rarityLabel: slot.installed.rarityLabel,
+            ability: slot.installed.ability,
+          });
+        }
+        for (const opt of slot.options) {
+          shopModMeta.set(opt.id, {
+            rarity: opt.rarity,
+            rarityLabel: opt.rarityLabel,
+            ability: opt.ability,
+          });
+        }
+      }
+    }
+  }
   const backpack = allCarried.filter(([id]) => {
     const kind = inventory.details?.[id]?.kind;
     const matches = filter === "all" || (filter === "usable" ? isUsable(id) : kind === filter);
@@ -314,7 +617,12 @@ export function InventoryPage({
     : undefined;
   const packMatch =
     !wornMatch && !pickedItem?.worn && pickedItem?.id
-      ? backpack.find(([id]) => id === pickedItem.id)
+      ? (backpack.find(([id]) => id === pickedItem.id) ??
+        backpack.find(
+          ([id]) =>
+            inventory.details?.[id]?.kind === "weapon" &&
+            inventory.details?.[id]?.baseId === baseWeaponIdOf(pickedItem.id),
+        ))
       : undefined;
   const selectedEntry = wornMatch
     ? ([wornMatch.id, 1] as const)
@@ -324,6 +632,7 @@ export function InventoryPage({
 
   const selectItem = (id: string, worn = false) => {
     setPickedItem({ id, worn });
+    setOpenSlotPicker(null);
     setUseError("");
   };
 
@@ -465,8 +774,8 @@ export function InventoryPage({
               <ul className={styles.inventoryGrid} aria-label="选择背包物品">
                 {backpack.map(([id, count]) => {
                   const quick = quickItems.find((item) => item.id === id);
-                  const art = itemArtOf(id);
                   const detail = inventory.details?.[id];
+                  const art = itemArtOf(detail?.baseId ?? id);
                   const rarity = detail?.rarity ?? inventory.rarity[id];
                   const isSelected = !selectedIsWorn && selectedId === id;
                   return (
@@ -529,11 +838,17 @@ export function InventoryPage({
               (() => {
                 const [id, count] = selectedEntry;
                 const to = selectedIsWorn ? undefined : inventory.equipTo[id];
-                const art = itemArtOf(id);
                 const detail = inventory.details?.[id];
+                const art = itemArtOf(detail?.baseId ?? id);
                 const rarity = detail?.rarity ?? inventory.rarity[id];
                 const quick = selectedIsWorn ? undefined : quickItems.find((q) => q.id === id);
                 const kind = detail?.kind;
+                const modSlot =
+                  kind === "mod"
+                    ? inventoryRules.ModSlotSchema.options.find(
+                        (s) => detail?.subLabel === `改装 · ${inventoryRules.MOD_SLOT_LABELS[s]}`,
+                      )
+                    : undefined;
                 const usable =
                   !selectedIsWorn &&
                   (kind === "healing" || kind === "grenade" || kind === "consumable");
@@ -628,6 +943,47 @@ export function InventoryPage({
                             <span className={styles.pillText}>大件装备</span>
                           </span>
                         )}
+                        {kind === "weapon" && detail?.concealment && (
+                          <span className={styles.detailTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(94 246 255 / 12%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>
+                              {CONCEALMENT_LABELS[detail.concealment]}
+                            </span>
+                          </span>
+                        )}
+                        {kind === "weapon" &&
+                          detail?.noise === "silent" &&
+                          !detail.subLabel.includes("刀剑") &&
+                          !detail.subLabel.includes("钝器") && (
+                            <span className={styles.detailTag}>
+                              <NineSlice
+                                id="cyber.gaugeLabel"
+                                tint="rgb(94 246 255 / 22%)"
+                                slice={4}
+                              />
+                              <span className={styles.pillText}>{NOISE_LABELS[detail.noise]}</span>
+                            </span>
+                          )}
+                        {kind === "weapon" && detail?.grantsSmartLink && (
+                          <span className={styles.detailTag}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(252 238 10 / 20%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>智能联锁</span>
+                          </span>
+                        )}
+                        {kind === "weapon" && detail?.weaponState?.tunedRarity && (
+                          <span className={styles.detailTagActive}>
+                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                            <span className={styles.pillText}>已精调</span>
+                          </span>
+                        )}
                         {selectedIsWorn && (
                           <span className={styles.detailTagActive}>
                             <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
@@ -680,30 +1036,22 @@ export function InventoryPage({
                       </div>
                     )}
 
-                    {kind === "weapon" && (inventory.mods[id]?.length ?? 0) > 0 && (
-                      <div className={styles.gearMods}>
-                        {(inventory.mods[id] ?? []).map((m) => (
-                          <span key={m.slot} className={styles.gearModTag}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(94 246 255 / 14%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>{itemName(m.id)}</span>
-                            {onMod && (
-                              <button
-                                type="button"
-                                className={styles.modDetach}
-                                aria-label={`从${itemName(id)}上拆下${itemName(m.id)}`}
-                                title={`拆下${itemName(m.id)}`}
-                                onClick={() => onMod("detach", id, m.id)}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                      </div>
+                    {kind === "weapon" && detail && (
+                      <WeaponSlotInspector
+                        weaponId={id}
+                        detail={detail}
+                        installedList={inventory.mods[id]}
+                        allCarried={allCarried}
+                        details={inventory.details}
+                        modTargets={inventory.modTargets}
+                        shopModMeta={shopModMeta}
+                        itemName={itemName}
+                        onMod={onMod}
+                        openSlot={openSlotPicker?.weaponId === id ? openSlotPicker.slot : null}
+                        onToggleSlot={(slot) =>
+                          setOpenSlotPicker(slot ? { weaponId: id, slot } : null)
+                        }
+                      />
                     )}
 
                     <div className={styles.detailActions}>
@@ -776,11 +1124,26 @@ export function InventoryPage({
 
                       {onMod && modTargets.length > 0 && (
                         <div className={styles.modTargetList}>
-                          {modTargets.map((w) => (
-                            <ActionButton key={w} onClick={() => onMod("attach", w, id)}>
-                              装到{itemName(w)}
-                            </ActionButton>
-                          ))}
+                          {modTargets.map((w) => {
+                            const existingId = modSlot
+                              ? inventory.details?.[w]?.weaponState?.mods[modSlot]
+                              : undefined;
+                            const alreadyFitted = existingId === id;
+                            const label = alreadyFitted
+                              ? `已在 ${itemName(w)} 上`
+                              : existingId
+                                ? `替换 ${itemName(w)} 的${itemName(existingId)}`
+                                : `装到 ${itemName(w)}`;
+                            return (
+                              <ActionButton
+                                key={w}
+                                disabled={alreadyFitted}
+                                onClick={() => onMod("attach", w, id)}
+                              >
+                                {label}
+                              </ActionButton>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

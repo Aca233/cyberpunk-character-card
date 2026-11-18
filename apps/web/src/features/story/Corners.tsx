@@ -27,6 +27,7 @@ import {
 import { type Expand, type SetExpand, usePeek } from "./peek";
 import story from "./story.module.css";
 import {
+  displayItemName,
   districtIcon,
   locationLabel,
   neuroTelemetry,
@@ -1364,14 +1365,29 @@ export function Weapon({
   const shownWeapons = weapons.slice(0, MAX_HUD_WEAPONS);
   const extraWeapons = weapons.slice(MAX_HUD_WEAPONS);
   const weaponMeta = (w: (typeof weapons)[number]) => {
-    const name = view.names.items[w.id] ?? w.id;
     const detail = inventory.details?.[w.id];
+    const baseId = w.baseId ?? detail?.baseId ?? w.id;
+    const name = displayItemName(view.names.items, w.id, baseId);
+    const modCount = Object.values(w.weaponState?.mods ?? {}).filter(Boolean).length;
     return {
       name,
       subLabel: detail?.subLabel,
       rarity: detail?.rarity ?? inventory.rarity[w.id],
-      icon: weaponHudIconOf(w.id, detail?.subLabel),
-      tip: [name, detail?.subLabel, w.bulky ? "大件" : null].filter(Boolean).join(" · "),
+      icon: weaponHudIconOf(baseId, detail?.subLabel),
+      tip: [
+        name,
+        detail?.subLabel,
+        detail?.rarityLabel,
+        modCount > 0 ? `已装 ${modCount} 件改装` : null,
+        w.noise === "silent" &&
+        !detail?.subLabel?.includes("刀剑") &&
+        !detail?.subLabel?.includes("钝器")
+          ? "已消音"
+          : null,
+        w.bulky ? "大件" : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
     };
   };
   return (
@@ -1487,7 +1503,9 @@ export function Weapon({
                   {extraWeapons.length > 0 && (
                     <li
                       className={styles.slotWeaponMore}
-                      title={extraWeapons.map((w) => view.names.items[w.id] ?? w.id).join("、")}
+                      title={extraWeapons
+                        .map((w) => displayItemName(view.names.items, w.id, w.baseId))
+                        .join("、")}
                     >
                       +{extraWeapons.length}
                     </li>

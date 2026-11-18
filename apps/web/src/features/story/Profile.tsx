@@ -1,7 +1,7 @@
 import { worldRules } from "@cp/core";
 import { type CSSProperties, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
-import { itemArtOf, portraitOf } from "./art";
+import { baseWeaponIdOf, itemArtOf, portraitOf } from "./art";
 import neural from "./neural.module.css";
 import styles from "./profile.module.css";
 import { npcWoundSummary, type View } from "./view";
@@ -549,11 +549,16 @@ function BodySection({
             {body.gear.length > 0 ? (
               <ul className={styles.gearList} aria-label="随身装备清单">
                 {body.gear.map((item) => {
-                  const art = itemArtOf(item.id);
+                  const baseId =
+                    "baseId" in item && typeof item.baseId === "string" ? item.baseId : item.id;
+                  const art = itemArtOf(baseId);
+                  const label = item.name.startsWith("wpn:")
+                    ? baseWeaponIdOf(item.name)
+                    : item.name;
                   return (
                     <li key={item.id} className={styles.gearItem}>
-                      {art && <Asset id={art} alt={item.name} className={styles.gearArt} />}
-                      <span>{item.name}</span>
+                      {art && <Asset id={art} alt={label} className={styles.gearArt} />}
+                      <span>{label}</span>
                     </li>
                   );
                 })}

@@ -1438,39 +1438,246 @@
   --rarity: var(--rar-legendary, rgb(255 160 30));
 }
 
-/* 武器详情里的已装改装件标签（沿用原有胶囊视觉与拆下按钮） */
-.gearMods {
+/* 武器详情里的结构化改装槽位检视器 */
+.slotInspector {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.slotInspectorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+}
+
+.slotInspectorBadge {
+  padding: 0.06rem 0.4rem;
+  border: 1px solid rgb(252 238 10 / 48%);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+}
+
+.slotList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.slotCard {
+  position: relative;
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.42rem 0.55rem 0.44rem 0.72rem;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(8 11 20 / 76%);
+}
+
+.slotCard[data-state="occupied"] {
+  border-color: color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 42%, transparent);
+}
+
+.slotCard[data-state="empty"] {
+  border-style: dashed;
+  border-color: rgb(94 246 255 / 22%);
+  background: rgb(8 10 18 / 55%);
+}
+
+.slotCard[data-state="unsupported"] {
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(8 10 16 / 42%);
+  opacity: 0.62;
+}
+
+.slotCard[data-locked] {
+  border-color: rgb(252 238 10 / 38%);
+}
+
+.slotRarBar {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 3px;
+  background: var(--slot-rar, var(--cp-cyan));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 45%, transparent);
+}
+
+.slotTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.slotLabel {
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-text);
+}
+
+.slotStatusGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.slotStatusTag,
+.slotRarText,
+.slotLockTag {
+  padding: 0.04rem 0.36rem;
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.slotStatusTag {
+  border: 1px solid rgb(255 255 255 / 14%);
+  color: var(--cp-text-dim);
+}
+
+.slotRarText {
+  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 55%, transparent);
+  background: color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 14%, transparent);
+  color: var(--slot-rar, var(--cp-cyan));
+  font-weight: 600;
+}
+
+.slotLockTag {
+  border: 1px solid rgb(252 238 10 / 55%);
+  background: rgb(252 238 10 / 12%);
+  color: var(--cp-yellow);
+  font-weight: 600;
+}
+
+.slotBody {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.slotThumb {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: rgb(6 8 15 / 88%);
+  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 30%, transparent);
+}
+
+.slotArt {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.slotCopy {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.slotModName {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--cp-yellow);
+  overflow-wrap: anywhere;
+}
+
+.slotAbility {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--cp-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.slotLockNote,
+.slotEmptyNote,
+.slotMutedNote {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--cp-text-dim);
+}
+
+.slotLockNote {
+  color: var(--cp-yellow);
+}
+
+.slotActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.gearModTag {
-  position: relative;
-  isolation: isolate;
-  display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.08rem 0.4rem;
-  color: var(--cp-cyan);
-  font-size: 0.68rem;
-  line-height: 1.3;
+  gap: 0.35rem;
 }
 
-.modDetach {
+.slotPicker {
+  list-style: none;
+  margin: 0.15rem 0 0;
+  padding: 0.35rem 0 0;
+  border-top: 1px solid rgb(94 246 255 / 16%);
+  display: grid;
+  gap: 0.28rem;
+}
+
+.slotPickItem {
   position: relative;
-  padding: 0 0.15rem;
-  border: 0;
-  background: transparent;
-  color: var(--cp-text-dim);
-  font: inherit;
-  font-size: 0.78rem;
-  line-height: 1;
-  cursor: var(--cp-cursor-hand);
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.28rem 0.38rem 0.28rem 0.56rem;
+  background: rgb(14 17 28 / 86%);
+  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 28%, transparent);
 }
 
-.modDetach:hover {
-  color: var(--cp-danger);
+.slotPickBar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 2px;
+  width: 2px;
+  background: var(--slot-rar, var(--cp-cyan));
+}
+
+.slotPickArt {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.slotPickCopy {
+  display: grid;
+  gap: 0.08rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.slotPickCopy > b {
+  font-size: 0.74rem;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.slotPickCopy > small {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--cp-text-dim);
+  overflow-wrap: anywhere;
 }
 
 .clothingRow {
