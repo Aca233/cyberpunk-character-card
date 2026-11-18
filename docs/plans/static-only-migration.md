@@ -1,6 +1,6 @@
 # 彻底转向纯静态前端与 Cloudflare Pages 部署计划
 
-状态：进行中（2026-11-18）
+状态：已完成（2026-11-18）
 
 ## 目标与确认决策
 
@@ -36,7 +36,7 @@
 - `tools/assets/check.ts`：移除 `process.env.VITE_CP_BACKEND === "local"` 条件，统一按静态公开部署规则检查（`demo` 档素材仅提醒）。
 - `README.md`：更新为纯静态架构说明、开发/构建/Cloudflare Pages 部署及 CLI 测评工具说明。
 
-### 步骤 4：静态检查、构建与 Cloudflare Pages 部署
-- 依仓库约定不主动运行单元测试/集成测试，仅执行静态检查与构建：`pnpm typecheck`、`pnpm lint`、`pnpm check-data`、`pnpm build`。
-- 执行 `wrangler pages deploy apps/web/dist --project-name cyberpunk` 部署至 Cloudflare Pages（`https://cyberpunk-am6.pages.dev`）。
-- 同步更新本计划文件状态为已完成并提交 Git 记录。
+### 步骤 4：静态检查、构建与 Cloudflare Pages 部署（已完成）
+- 已完成全仓 `tsc` 类型检查、`biome lint .`（686 个文件零错误）、`tools/check-data.ts`、`tools/assets/check.ts`（594 张素材通过，demo 档提示正常）与 `apps/web` Vite 静态构建（`apps/web/dist`，2089 个文件）。
+- 已执行 `wrangler pages deploy apps/web/dist --project-name cyberpunk --branch main --commit-dirty=true` 完成部署（预览地址 `https://0e3c9afb.cyberpunk-am6.pages.dev`，主域名 `https://cyberpunk-am6.pages.dev`）。
+- 注：本机 `pnpm` 12.14.0 corepack shim 缺少对应工具缓存，静态检查与构建已直接通过工作区 `./node_modules/.bin/*` 与 `npm exec --yes wrangler` 验证通过。
