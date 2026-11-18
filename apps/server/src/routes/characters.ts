@@ -6,18 +6,14 @@ import {
   type Clock,
   cyberwareRules,
   DraftRequestSchema,
-  ImportRequestSchema,
   interpretModule,
-  interpretTavernCard,
   type LlmClient,
   normalizeBoard,
   ProseRequestSchema,
   pruneAcquaintances,
-  readTavernCard,
   START_CYBERWARE_RARITIES,
   streamDraft,
   streamProse,
-  tavernToCard,
 } from "@cp/core";
 import { type Context, Hono } from "hono";
 import { stream } from "hono/streaming";
@@ -176,44 +172,6 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
       return result.ok ? c.json(result.reading) : c.json({ error: result.error }, 502);
     } catch (error) {
       if (error instanceof AbortedError) return c.json({ error: "已停止解读" }, 400);
-      if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
-      throw error;
-    }
-  });
-  // 导入 Character Card V2：本作导出的原样还原，别处的交给辅助模型插主板、分属性；
-  // 返回的卡还没保存，玩家在编辑页确认后再存
-  app.post("/import", async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: "请求体不是合法的 JSON" }, 400);
-    }
-    const input = ImportRequestSchema.safeParse(body);
-    if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
-    const read = readTavernCard(input.data.raw);
-    if (!read.ok) return c.json({ error: read.error }, 400);
-    const own = Boolean(read.card.own);
-    try {
-      const result =
-        input.data.useModel && !own
-          ? await interpretTavernCard(llm, read.card, boardModules, c.req.raw.signal)
-          : { ok: true as const, ...tavernToCard(read.card) };
-      if (!result.ok) return c.json({ error: result.error }, 502);
-      const { card, warnings } = result;
-      if (!card.board) return c.json({ card, warnings, own });
-      // 开局义体按内容表重算；义体表里对不上的义体整组去掉，回主板重选
-      const fixed = normalizeBoard(card.board, { cyberware });
-      if (fixed.ok) return c.json({ card: { ...card, board: fixed.board }, warnings, own });
-      const board = { ...card.board, cyberware: [] };
-      const again = normalizeBoard(board, { cyberware });
-      return c.json({
-        card: { ...card, board: again.ok ? again.board : board },
-        warnings: [...warnings, `${fixed.error}；开局义体已清空`],
-        own,
-      });
-    } catch (error) {
-      if (error instanceof AbortedError) return c.json({ error: "已停止导入" }, 400);
       if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
       throw error;
     }

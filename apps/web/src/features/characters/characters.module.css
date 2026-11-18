@@ -1118,50 +1118,6 @@
   pointer-events: none;
 }
 
-/* 第 4 步酒馆导出折叠区 */
-.exportFold {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.exportFoldSummary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px 10px;
-  color: var(--cp-text);
-  font-size: var(--fs-ui);
-  font-weight: 600;
-  cursor: var(--cp-cursor-hand);
-  list-style: none;
-}
-
-.exportFoldSummary > :last-child {
-  margin-left: auto;
-}
-
-.exportFoldSummary::-webkit-details-marker {
-  display: none;
-}
-
-.exportFoldSummary::before {
-  content: "▸";
-  color: var(--cp-cyan);
-}
-
-.exportFold[open] > .exportFoldSummary::before {
-  content: "▾";
-}
-
-.exportFoldBody {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 8px;
-}
-
 @media (max-width: 900px) {
   .people {
     grid-template-columns: minmax(0, 1fr);

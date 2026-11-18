@@ -40,9 +40,6 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
     personality: "",
     voice: "",
     skills: "",
-    scene: "",
-    greeting: "",
-    examples: "",
     locked: [],
     attributes: { body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 },
     board: emptyBoard(),
@@ -90,7 +87,7 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
     expect(readyProg.people_prose).toMatchObject({
       ready: true,
       filled: true,
-      badge: "1人 · 1/7段",
+      badge: "1人 · 1/4段",
     });
     expect(readyProg.review).toMatchObject({ ready: true, issueCount: 0, badge: "可开局" });
   });
@@ -107,9 +104,6 @@ describe("creatorChecks", () => {
     personality: "",
     voice: "",
     skills: "",
-    scene: "",
-    greeting: "",
-    examples: "",
     locked: [],
     attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
     board: BoardSchema.parse({}),

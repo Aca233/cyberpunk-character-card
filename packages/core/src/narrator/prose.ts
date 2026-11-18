@@ -16,8 +16,8 @@ import {
 import { AttributeSchema } from "../systems/dice/schema";
 
 /**
- * 角色正文：按名片、主板、本事和别的区块，让辅助模型写外貌、背景故事、性格、说话方式、
- * 场景、开场白和对话示例。四种写法：生成（不看原文）、重写（换个写法）、续写（接着原文往下写）、
+ * 角色正文：按名片、主板、本事和别的区块，让辅助模型写外貌、背景故事、性格、说话方式。
+ * 四种写法：生成（不看原文）、重写（换个写法）、续写（接着原文往下写）、
  * 润色（不改内容只改文字）。锁定的区块不能写，写别的区块时当作定稿。流式返回，不进回合日志。
  * 另有一键成稿（第三期，用户定的 2026-10-30："保留逐块重写、续写、润色、锁定，加一键成稿"）：
  * 一次写外貌、背景故事、性格、说话方式四块，顺带补旧识"是什么事"
@@ -49,9 +49,6 @@ export const ProseCardSchema = z.object({
   past: text(PROSE_BLOCK_INFO.past.max),
   personality: text(PROSE_BLOCK_INFO.personality.max),
   voice: text(PROSE_BLOCK_INFO.voice.max),
-  scene: text(PROSE_BLOCK_INFO.scene.max),
-  greeting: text(PROSE_BLOCK_INFO.greeting.max),
-  examples: text(PROSE_BLOCK_INFO.examples.max),
   locked: z.array(ProseBlockSchema).default([]),
 });
 export type ProseCard = z.infer<typeof ProseCardSchema>;
@@ -95,11 +92,6 @@ const BLOCK_GUIDE: Readonly<Record<ProseBlock, string>> = {
   personality:
     "写这个人的价值信条、行事底线、极度在乎或无法容忍的事物、高压下的应激反应；拒绝空洞罗列形容词",
   voice: "写言谈风格：语速节奏、口头禅、惯用黑话行话、对不同阶层时的语态反差；附带一两句地道短例",
-  scene: "第三人称描写故事揭幕时角色身处夜之城何处、手头正在进行的事务与眼下严峻的处境",
-  greeting:
-    "第三人称写角色初次登场的特写画面（动作、肢体语言、环境氛围），自然带出一句角色本人的现场台词；不越俎代庖替玩家决定反应",
-  examples:
-    "提供 3–5 句角色最真实的实战或生活台词，每句一行，每行开头不加序号；切合言谈风格，展现不同情绪张力",
 };
 
 /**
@@ -222,7 +214,7 @@ export async function* streamProse(
 
 // ———— 一键成稿 ————
 
-/** 一键成稿写的四块；用户定了不做开场正文，场景、开场白、对话示例不在里面 */
+/** 一键成稿写的四块，也就是全部正文区块 */
 export const DRAFT_BLOCKS = ["look", "past", "personality", "voice"] as const;
 export type DraftBlock = (typeof DRAFT_BLOCKS)[number];
 
@@ -278,7 +270,7 @@ export function buildDraftPrompt(request: DraftRequest): LlmMessage[] {
     "按下面的顺序输出，每块用【】标记开头，标记单独占一行；除了这些标记和正文，不要输出别的标题、说明、引号或代码块：",
     ...format,
     "这几块写的是同一个人：外貌里的伤疤、义体、衣着要能在背景故事里找到来历；性格是这些经历留下的；说话方式贴着出身和性格。背景故事把主板上的出身、过往、负面经历、本事和旧识串成因果：因为什么，发生了什么，所以现在是这样，最后留下没了结的线头。",
-    "标了（定稿）的区块是硬约束：不能和它矛盾，也不要再输出它。不写场景、开场白和对话示例。",
+    "标了（定稿）的区块是硬约束：不能和它矛盾，也不要再输出它。",
     ...STYLE,
   ].join("\n");
   const others = PROSE_BLOCKS.filter((b) => card[b] !== "").map((b) => {

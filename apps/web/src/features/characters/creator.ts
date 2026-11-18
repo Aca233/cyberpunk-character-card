@@ -455,9 +455,6 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
       personality: text("personality"),
       voice: text("voice"),
       skills: text("skills"),
-      scene: text("scene"),
-      greeting: text("greeting"),
-      examples: text("examples"),
       locked,
       attributes: {
         body: attr("body"),
@@ -520,9 +517,6 @@ const FIELD_TARGET: Partial<Record<keyof CharacterCard, CheckTarget>> = {
   personality: "person",
   voice: "person",
   skills: "person",
-  scene: "person",
-  greeting: "person",
-  examples: "person",
 };
 
 export function creatorChecks(card: CharacterCard): Check[] {
@@ -712,7 +706,9 @@ export function stepProgress(
       id: "people_prose",
       ready: issueCounts.people_prose === 0,
       filled: peopleProseFilled,
-      badge: peopleProseFilled ? `${peopleCount}人 · ${proseCount}/7段` : "可选",
+      badge: peopleProseFilled
+        ? `${peopleCount}人 · ${proseCount}/${PROSE_BLOCKS.length}段`
+        : "可选",
       issueCount: issueCounts.people_prose,
     },
     review: {

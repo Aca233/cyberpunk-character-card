@@ -155,29 +155,6 @@
   letter-spacing: 0.08em;
 }
 
-.importBox {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgb(255 255 255 / 3%);
-}
-
-.importOption {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.45;
-  cursor: var(--cp-cursor-hand);
-}
-
-.importCheck {
-  margin-top: 2px;
-  accent-color: var(--cp-cyan);
-}
-
 .libraryGroup {
   display: flex;
   flex-direction: column;
@@ -265,26 +242,6 @@
 .benchHost {
   flex: 1;
   min-height: 0;
-}
-
-.notice {
-  padding: 10px 14px;
-  border-left: 2px solid var(--cp-yellow);
-  background: rgb(252 238 10 / 6%);
-  font-size: var(--fs-label);
-  line-height: 1.55;
-}
-
-.notice p {
-  margin: 0;
-}
-
-.warnings {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  color: var(--cp-yellow);
-  font-size: var(--fs-label);
-  line-height: 1.55;
 }
 
 .note {
@@ -1000,14 +957,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-
-.cardOnlyBadge {
-  padding: 2px 8px;
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 12%);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
 }
 
 /* ———— Step 5: 档案总览与开局 ———— */

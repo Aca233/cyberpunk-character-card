@@ -577,13 +577,6 @@ export const api = {
   streamProse,
   /** 一键成稿：一次写外貌、背景故事、性格、说话方式并补旧识，流式；会花一次模型调用 */
   draftCharacter: streamDraft,
-  /** 导入 Character Card；useModel 时花一次模型调用插主板、分属性。结果不保存，由玩家确认 */
-  importCharacter: (input: { raw: unknown; useModel: boolean }) =>
-    request<{ card: CharacterCard; warnings: string[]; own: boolean }>(
-      "POST",
-      "/characters/import",
-      input,
-    ),
   saves: () => request<{ saves: SaveSummary[] }>("GET", "/saves").then((r) => r.saves),
   /** 传说名册：死了不能重来、或者收了尾的角色，最近的在前 */
   legends: () =>

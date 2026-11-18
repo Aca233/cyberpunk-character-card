@@ -33,7 +33,6 @@ import {
   type PickerProps,
   TraitPicker,
 } from "./CreatorSteps";
-import styles from "./characters.module.css";
 import {
   type CheckTarget,
   CREATOR_STEPS,
@@ -56,7 +55,6 @@ import {
 import { DraftAll } from "./DraftAll";
 import { ProseField } from "./ProseField";
 import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
-import { downloadCard } from "./tavernFile";
 import wb from "./workbench.module.css";
 
 const { TOLERANCE_FACTOR } = humanityRules;
@@ -64,8 +62,7 @@ type Tolerance = Board["tolerance"];
 const TOLERANCES: readonly Tolerance[] = ["low", "normal", "high"];
 const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 
-const CORE_PROSE_BLOCKS: readonly ProseBlock[] = ["look", "past", "personality", "voice"];
-const EXTRA_PROSE_BLOCKS: readonly ProseBlock[] = ["scene", "greeting", "examples"];
+const CORE_PROSE_BLOCKS: readonly ProseBlock[] = PROSE_BLOCKS;
 
 const CYBER_SLOT_LIST: readonly CyberSlot[] = [
   "frontalCortex",
@@ -129,7 +126,7 @@ function ChipList({
  * - 顶部五步导航栏（identity / traits / chrome_kit / people_prose / review）
  * - 主编辑舞台（所有选择器直接内嵌在当前步骤，无全屏弹窗）
  * - 右侧常驻实时档案摘要栏（< 1180px 自动收拢为顶部摘要条 + 可切换抽屉）
- * - 底部常驻操作条（保存/导出/删除 · 上一步/下一步/战局接入）
+ * - 底部常驻操作条（保存/删除 · 上一步/下一步/战局接入）
  */
 export function CharacterCreator({
   card,
@@ -832,29 +829,6 @@ export function CharacterCreator({
                       ))}
                     </div>
                   </section>
-
-                  <section className={wb.sectionBox} aria-label="角色卡与酒馆导出字段">
-                    <CellFrame />
-                    <details className={styles.exportFold}>
-                      <summary className={styles.exportFoldSummary}>
-                        <span>角色卡演出与酒馆导出字段（可选）</span>
-                        <span className={wb.cardOnlyBadge}>
-                          仅随角色卡/酒馆导出，不占正剧上下文
-                        </span>
-                      </summary>
-                      <div className={styles.exportFoldBody}>
-                        <p className={wb.note}>
-                          开场场景、开场白与对话示例仅在导出为 SillyTavern /
-                          角色卡分享时使用，正剧开启后不会强行塞入开局叙事。
-                        </p>
-                        <div className={wb.proseList}>
-                          {EXTRA_PROSE_BLOCKS.map((b) => (
-                            <ProseField key={b} block={b} card={card} onChange={change} />
-                          ))}
-                        </div>
-                      </div>
-                    </details>
-                  </section>
                 </>
               )}
 
@@ -1033,7 +1007,7 @@ export function CharacterCreator({
                       </DossierBlock>
 
                       <DossierBlock
-                        title={`人设小传 (${filledProseCount}/7)`}
+                        title={`人设小传 (${filledProseCount}/${PROSE_BLOCKS.length})`}
                         onEdit={() => goToStep("people_prose")}
                       >
                         {filledProseCount === 0 ? (
@@ -1046,7 +1020,6 @@ export function CharacterCreator({
                               <div key={b} className={wb.dossierProseItem}>
                                 <span className={wb.dossierProseKey}>
                                   {PROSE_BLOCK_INFO[b].label}
-                                  {EXTRA_PROSE_BLOCKS.includes(b) ? "（仅随角色卡/酒馆导出）" : ""}
                                 </span>
                                 <p className={wb.dossierProseVal}>{card[b]}</p>
                               </div>
@@ -1186,7 +1159,7 @@ export function CharacterCreator({
                     <div className={wb.sidebarStat}>
                       <span className={wb.sidebarStatKey}>人脉 / 小传</span>
                       <span className={wb.sidebarStatVal}>
-                        {board.acquaintances.length} 人 · {filledProseCount}/7
+                        {board.acquaintances.length} 人 · {filledProseCount}/{PROSE_BLOCKS.length}
                       </span>
                     </div>
                   </div>
@@ -1273,9 +1246,6 @@ export function CharacterCreator({
             onClick={() => void handleSave()}
           >
             {busy ? "保存中…" : isSample ? "另存为自定义角色" : "保存角色"}
-          </Button>
-          <Button small onClick={() => downloadCard(card)}>
-            导出角色卡
           </Button>
           {canDelete && (
             <Button small disabled={busy} onClick={onDelete}>

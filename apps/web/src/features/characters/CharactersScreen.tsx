@@ -1,6 +1,6 @@
 import { type CharacterCard, CharacterCardSchema, DEFAULT_CARD_ATTRIBUTES } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -10,7 +10,6 @@ import { CellFrame } from "../../ui/FrameBox";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { CharacterCreator } from "./CharacterCreator";
 import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
-import { readCardFile } from "./tavernFile";
 import wb from "./workbench.module.css";
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切（同设置页） */
@@ -23,8 +22,6 @@ interface Editor {
   readonly original: string;
   /** 切换角色才换会话，保存拿到 id 时不换，避免打断建档 */
   readonly session: string;
-  /** 刚导入、还没保存的卡：导入时的提示 */
-  readonly imported?: { readonly warnings: readonly string[]; readonly own: boolean };
 }
 
 type Destination = { readonly editor: Editor } | { readonly back: true };
@@ -41,9 +38,6 @@ function blankCard(): CharacterCard {
     personality: "",
     voice: "",
     skills: "",
-    scene: "",
-    greeting: "",
-    examples: "",
     locked: [],
     attributes: { ...DEFAULT_CARD_ATTRIBUTES },
     board: emptyBoard(),
@@ -115,14 +109,13 @@ export function CharactersScreen() {
     onSuccess: (entry, submitted) => {
       setEditor((old) => {
         if (old.session !== submitted.session) return old;
-        const { imported: _, ...current } = old;
         const copy: CharacterCard = {
           ...entry.card,
           attributes: { ...entry.card.attributes },
           board: entry.card.board ?? emptyBoard(),
         };
         return {
-          ...current,
+          ...old,
           id: entry.id,
           sample: false,
           card: JSON.stringify(old.card) === JSON.stringify(submitted.card) ? copy : old.card,
@@ -142,24 +135,7 @@ export function CharactersScreen() {
     },
   });
 
-  const [useModel, setUseModel] = useState(true);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const importCard = useMutation({
-    mutationFn: async ({ file, model }: { file: File; model: boolean }) =>
-      api.importCharacter({ raw: await readCardFile(file), useModel: model }),
-    onSuccess: ({ card, warnings, own }) => {
-      const next: Destination = {
-        editor: {
-          ...editorFor(card),
-          original: "",
-          imported: { warnings, own },
-        },
-      };
-      if (dirty) setDestination(next);
-      else go(next);
-    },
-  });
-  const busy = save.isPending || remove.isPending || importCard.isPending || launching;
+  const busy = save.isPending || remove.isPending || launching;
 
   useEffect(() => {
     if (!dirty) {
@@ -313,37 +289,6 @@ export function CharactersScreen() {
                     收起
                   </Button>
                 </div>
-                <div className={wb.importBox}>
-                  <Button small disabled={busy} onClick={() => fileInput.current?.click()}>
-                    {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
-                  </Button>
-                  <label className={wb.importOption}>
-                    <input
-                      type="checkbox"
-                      className={wb.importCheck}
-                      checked={useModel}
-                      disabled={busy}
-                      onChange={(event) => setUseModel(event.target.checked)}
-                    />
-                    <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
-                  </label>
-                  <input
-                    ref={fileInput}
-                    type="file"
-                    hidden
-                    accept=".json,.png,application/json,image/png"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) importCard.mutate({ file, model: useModel });
-                    }}
-                  />
-                  {importCard.isError && (
-                    <p className={wb.error} role="alert">
-                      {importCard.error.message}
-                    </p>
-                  )}
-                </div>
                 {characters.isPending && <p role="status">正在读取角色库…</p>}
                 {characters.isError && (
                   <div role="alert">
@@ -376,23 +321,6 @@ export function CharactersScreen() {
         )}
 
         <section className={wb.editorWrap} aria-label="角色设计工作台">
-          {editor.imported && (
-            <div className={wb.notice} role="status">
-              <p>
-                {editor.imported.own
-                  ? "这是本作导出的角色卡，已经原样还原。"
-                  : "从角色卡导入：文本已填入对应区块，主板模块与属性已由 AI 匹配。"}
-                检查一遍再保存，保存后才进角色库。
-              </p>
-              {editor.imported.warnings.length > 0 && (
-                <ul className={wb.warnings}>
-                  {editor.imported.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
           {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
           {boardData.isError && (
             <div role="alert">
