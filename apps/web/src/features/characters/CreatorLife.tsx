@@ -1,9 +1,10 @@
 import { type Board, boardPeople, RELATION_INFO, RELATIONS, type RelationKind } from "@cp/core";
 import { useState } from "react";
 import type { BoardData } from "../../api/client";
+import { ActionButton } from "../../ui/ActionButton";
 import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
-import { CellFrame } from "../../ui/FrameBox";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { portraitOf } from "../story/art";
 import styles from "./characters.module.css";
 
@@ -149,36 +150,48 @@ export function PeoplePicker({
         <ul>{own.map(contact)}</ul>
         {adding ? (
           <div className={styles.customForm}>
+            <CellFrame />
             <label className={styles.field}>
               <span>名字</span>
-              <input
-                maxLength={20}
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-              />
+              <FrameBox className={styles.compactBox}>
+                <input
+                  maxLength={20}
+                  value={draftName}
+                  placeholder="例如：老维、莎拉"
+                  onChange={(e) => setDraftName(e.target.value)}
+                />
+              </FrameBox>
             </label>
             <label className={styles.field}>
               <span>身份</span>
-              <input
-                maxLength={80}
-                value={draftRole}
-                placeholder="例如：沃森区的黑市药贩"
-                onChange={(e) => setDraftRole(e.target.value)}
-              />
+              <FrameBox className={styles.compactBox}>
+                <input
+                  maxLength={80}
+                  value={draftRole}
+                  placeholder="例如：沃森区的黑市药贩"
+                  onChange={(e) => setDraftRole(e.target.value)}
+                />
+              </FrameBox>
             </label>
             <div className={styles.slotTools}>
-              <Button small disabled={draftName.trim() === ""} onClick={addOwn}>
+              <Button
+                small
+                primary
+                disabled={draftName.trim() === ""}
+                reason="请先填写旧识的名字"
+                onClick={addOwn}
+              >
                 加入旧识
               </Button>
-              <Button small onClick={() => setAdding(false)}>
-                取消
-              </Button>
+              <ActionButton onClick={() => setAdding(false)}>取消</ActionButton>
             </div>
           </div>
         ) : (
-          <Button small onClick={() => setAdding(true)}>
-            ＋ 新建自定义旧识
-          </Button>
+          <div>
+            <Button small onClick={() => setAdding(true)}>
+              ＋ 新建自定义旧识
+            </Button>
+          </div>
         )}
         <h3 className={styles.peopleGroup}>
           夜之城人脉网络<small className={styles.peopleCount}>已建立联系 {chosen} 人</small>
@@ -208,6 +221,7 @@ export function PeoplePicker({
               aria-pressed={!a}
               onClick={() => (isOwn ? dropOwn(current.id) : setRelation(current, ""))}
             >
+              <CellFrame />
               <b className={styles.relationLabel}>
                 {isOwn ? "移除这位旧识" : current.fromModule ? "沿用默认关系" : "暂无交集"}
               </b>
@@ -221,20 +235,28 @@ export function PeoplePicker({
                 data-tone={RELATION_INFO[r].affinity < 0 ? "bad" : undefined}
                 onClick={() => setRelation(current, r)}
               >
+                <CellFrame />
                 <b className={styles.relationLabel}>{RELATION_INFO[r].label}</b>
                 <small className={styles.relationNote}>{relationNote(r)}</small>
               </button>
             ))}
           </fieldset>
           {a && (
-            <input
-              className={styles.startInput}
-              maxLength={60}
-              value={a.note}
-              aria-label={`和${current.name}是什么事`}
-              placeholder="过往过节或交情（留空则由 AI 自由推演）"
-              onChange={(e) => setNote(current.id, e.target.value)}
-            />
+            <label className={styles.field}>
+              <span>
+                过往交集或恩怨
+                <small>{a.note.length} / 60</small>
+              </span>
+              <FrameBox className={styles.compactBox}>
+                <input
+                  maxLength={60}
+                  value={a.note}
+                  aria-label={`和${current.name}是什么事`}
+                  placeholder="过往过节或交情（留空则由 AI 自由推演）"
+                  onChange={(e) => setNote(current.id, e.target.value)}
+                />
+              </FrameBox>
+            </label>
           )}
         </section>
       )}

@@ -9,7 +9,9 @@ import {
 } from "@cp/core";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api/client";
-import { CellFrame } from "../../ui/FrameBox";
+import { ActionButton } from "../../ui/ActionButton";
+import { Button } from "../../ui/Button";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import styles from "./characters.module.css";
 
 const CORE_DRAFT_BLOCKS: readonly DraftBlock[] = ["look", "past", "personality", "voice"];
@@ -161,70 +163,44 @@ export function DraftAll({
           <strong className={styles.draftAllTitle}>AI 角色小传协同成稿</strong>
           <p className={styles.note}>
             {noName
-              ? "请先在左栏填写角色姓名，再调用 AI 成稿"
+              ? "请先在「身份与出身」填写角色姓名，再调用 AI 成稿"
               : `待生成范围：${scope || "所有核心区块与旧识交集均已定稿"}`}
           </p>
         </div>
         <div className={styles.slotTools}>
           {busy ? (
-            <button
-              type="button"
-              className={styles.toolButton}
-              onClick={() => abort.current?.abort()}
-            >
+            <Button small onClick={() => abort.current?.abort()}>
               停止生成
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              className={styles.toolButton}
-              data-primary=""
+            <Button
+              small
+              primary
               disabled={noName || nothing}
-              title={
-                noName
-                  ? "请先给角色起个名字"
-                  : nothing
-                    ? "生平区块均已锁定，旧识恩怨也已补齐"
-                    : "根据出身、特质、义体与旧识一键撰写未锁定的人设正文"
-              }
+              reason={noName ? "请先给角色起个名字" : "生平区块均已锁定，旧识恩怨也已补齐"}
               onClick={() => void run()}
             >
               ✦ 一键生成生平
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={asking}
-            disabled={busy}
-            onClick={() => setAsking((a) => !a)}
-          >
+          <Button small pressed={asking} disabled={busy} onClick={() => setAsking((a) => !a)}>
             文风与要求
-          </button>
+          </Button>
           {unlockedFilledBlocks.length > 0 && !busy && (
-            <button
-              type="button"
-              className={styles.toolButton}
+            <ActionButton
               title="将目前已填写的区块全部锁定，AI 仅补写空白区块"
               onClick={lockFilled}
             >
               仅补空白项
-            </button>
+            </ActionButton>
           )}
           {card.locked.length > 0 && !busy && (
-            <button
-              type="button"
-              className={styles.toolButton}
-              title="解除所有区块的锁定状态"
-              onClick={unlockAll}
-            >
+            <ActionButton title="解除所有区块的锁定状态" onClick={unlockAll}>
               全部解锁 ({card.locked.length})
-            </button>
+            </ActionButton>
           )}
           {previous !== null && !busy && (
-            <button
-              type="button"
-              className={styles.toolButton}
+            <ActionButton
               onClick={() => {
                 onChange(previous);
                 setPrevious(null);
@@ -232,7 +208,7 @@ export function DraftAll({
               }}
             >
               撤销成稿
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>
@@ -241,15 +217,14 @@ export function DraftAll({
         <div className={styles.draftAllAsk}>
           <div className={styles.tonePills}>
             {TONE_PRESETS.map((tone) => (
-              <button
+              <Button
                 key={tone}
-                type="button"
-                className={styles.tonePill}
-                aria-pressed={instruction.includes(tone)}
+                small
+                pressed={instruction.includes(tone)}
                 onClick={() => toggleTone(tone)}
               >
                 {tone}
-              </button>
+              </Button>
             ))}
           </div>
           <label className={styles.field}>
@@ -257,12 +232,14 @@ export function DraftAll({
               生成要求 / 补充设定
               <small>{instruction.length} / 200</small>
             </span>
-            <input
-              maxLength={200}
-              value={instruction}
-              placeholder="例如：整体冷一点；背景故事少写打斗；突出在荒坂反情报部的旧伤"
-              onChange={(event) => setInstruction(event.target.value)}
-            />
+            <FrameBox className={styles.compactBox}>
+              <input
+                maxLength={200}
+                value={instruction}
+                placeholder="例如：整体冷一点；背景故事少写打斗；突出在荒坂反情报部的旧伤"
+                onChange={(event) => setInstruction(event.target.value)}
+              />
+            </FrameBox>
           </label>
         </div>
       )}
@@ -273,7 +250,9 @@ export function DraftAll({
             正在流式撰写生平…
             <small>{streaming.length} 字</small>
           </span>
-          <textarea rows={7} readOnly aria-busy value={streaming} />
+          <FrameBox className={styles.inputBox}>
+            <textarea rows={7} readOnly aria-busy value={streaming} />
+          </FrameBox>
         </label>
       )}
       {note && (

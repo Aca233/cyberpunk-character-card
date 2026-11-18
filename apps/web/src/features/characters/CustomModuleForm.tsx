@@ -8,6 +8,9 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
+import { ActionButton } from "../../ui/ActionButton";
+import { Button } from "../../ui/Button";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import styles from "./characters.module.css";
 import { saveLocalCustomModule } from "./creator";
 
@@ -16,7 +19,6 @@ function blankModule(slot: BoardSlot): BoardModule {
     id: `custom-${Date.now().toString(36)}`,
     slot,
     label: "未命名",
-    points: 0,
     custom: true,
   });
 }
@@ -55,7 +57,7 @@ export function CustomModuleForm({
   const interpret = useMutation({
     mutationFn: () => api.interpretModule({ slot, text, board }),
     onSuccess: (reading) => {
-      setDraft({ ...reading.module, points: 0 });
+      setDraft(reading.module);
       setWarnings(reading.warnings);
     },
   });
@@ -65,43 +67,43 @@ export function CustomModuleForm({
 
   return (
     <div className={styles.customForm}>
+      <CellFrame />
       <label className={styles.field}>
         <span>
           自定义{label}
           <small>{text.length} / 600</small>
         </span>
-        <textarea
-          rows={3}
-          maxLength={600}
-          value={text}
-          placeholder={slotPlaceholder(slot)}
-          onChange={(event) => setText(event.target.value)}
-        />
+        <FrameBox className={styles.inputBox}>
+          <textarea
+            rows={3}
+            maxLength={600}
+            value={text}
+            placeholder={slotPlaceholder(slot)}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </FrameBox>
       </label>
       <div className={styles.slotTools}>
-        <button
-          type="button"
-          className={styles.toolButton}
+        <Button
+          small
+          primary
           disabled={interpret.isPending || text.trim().length < 4}
-          title="让 AI 提取标签、能力效果与剧情钩子"
+          reason="请先输入至少 4 个字的设定再让 AI 解析"
           onClick={() => interpret.mutate()}
         >
           {interpret.isPending ? "解析中…" : draft ? "重新解析" : "AI 解析模块"}
-        </button>
+        </Button>
         {!draft && (
-          <button
-            type="button"
-            className={styles.toolButton}
+          <ActionButton
+            title="跳过 AI 解析，直接手动填写模块名与效果"
             onClick={() =>
               setDraft({ ...blankModule(slot), label: text.trim().slice(0, 24) || "未命名" })
             }
           >
             直接手写
-          </button>
+          </ActionButton>
         )}
-        <button type="button" className={styles.toolButton} onClick={onCancel}>
-          取消
-        </button>
+        <ActionButton onClick={onCancel}>取消</ActionButton>
       </div>
       {interpret.isError && (
         <p className={styles.error} role="alert">
@@ -119,29 +121,35 @@ export function CustomModuleForm({
         <div className={styles.customDraft}>
           <label className={styles.field}>
             <span>模块名</span>
-            <input
-              maxLength={24}
-              value={draft.label}
-              onChange={(event) => patch({ label: event.target.value })}
-            />
+            <FrameBox className={styles.compactBox}>
+              <input
+                maxLength={24}
+                value={draft.label}
+                onChange={(event) => patch({ label: event.target.value })}
+              />
+            </FrameBox>
           </label>
           <label className={styles.field}>
             <span>{slot === "flaw" ? "处境 / 负面效应" : "专长能力"}</span>
-            <textarea
-              rows={2}
-              maxLength={200}
-              value={draft.ability}
-              onChange={(event) => patch({ ability: event.target.value })}
-            />
+            <FrameBox className={styles.inputBox}>
+              <textarea
+                rows={2}
+                maxLength={200}
+                value={draft.ability}
+                onChange={(event) => patch({ ability: event.target.value })}
+              />
+            </FrameBox>
           </label>
           <label className={styles.field}>
             <span>剧情钩子</span>
-            <textarea
-              rows={2}
-              maxLength={200}
-              value={draft.hook}
-              onChange={(event) => patch({ hook: event.target.value })}
-            />
+            <FrameBox className={styles.inputBox}>
+              <textarea
+                rows={2}
+                maxLength={200}
+                value={draft.hook}
+                onChange={(event) => patch({ hook: event.target.value })}
+              />
+            </FrameBox>
           </label>
           {draft.tags.length > 0 && <p className={styles.moduleTags}>{draft.tags.join(" · ")}</p>}
           {draft.people.length > 0 && (
@@ -151,14 +159,14 @@ export function CustomModuleForm({
             </p>
           )}
           <div className={styles.slotTools}>
-            <button
-              type="button"
-              className={styles.toolButton}
+            <Button
+              small
+              primary
               disabled={!valid}
+              reason="请确保模块名已填写且内容合规"
               onClick={() => {
                 const mod: BoardModule = {
                   ...draft,
-                  points: 0,
                   label: draft.label.trim(),
                   custom: true,
                   packId: draft.packId ?? "local",
@@ -168,7 +176,7 @@ export function CustomModuleForm({
               }}
             >
               加入角色并存入创意库
-            </button>
+            </Button>
           </div>
         </div>
       )}

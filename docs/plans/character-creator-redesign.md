@@ -1,6 +1,6 @@
 # 人物创建流程与界面重做设计方案
 
-- **状态**: 进行中（2026-11-18）
+- **状态**: 已完成（2026-11-18）
 - **目标**: 将原本割裂的「三栏工作台 + 全屏弹窗 + 孤立按钮样式」重做为统一风格的**单页五步引导工作台（Step-Guided Workbench）**，修复义体/地图/样本保存等交互问题，并按项目约定彻底清理历史遗留死代码与冗余兼容字段。
 
 ---
@@ -94,7 +94,7 @@
 
 - [x] 现状调研（`web-scout`、`core-scout`）
 - [x] 设计方案定稿与计划留存（`docs/plans/character-creator-redesign.md`）
-- [ ] 核心/后端历史兼容清理（`core-cleaner`）
-- [ ] 前端状态逻辑与目录清理（`web-logic`）
-- [ ] 五步引导工作台与 NineSlice 界面重写（`web-ui`）
-- [ ] 静态类型与规范检查（`verifier`：`pnpm typecheck`、`pnpm lint`）
+- [x] 核心/后端历史兼容清理（`core-cleaner`）
+- [x] 前端状态逻辑与目录清理（`web-logic`）
+- [x] 五步引导工作台与 NineSlice 界面重写（`ui-panels`、`ui-shell`）
+- [x] 静态类型与规范检查（`verifier`：`tsc`、`biome`，待用户自行验收实机测试）

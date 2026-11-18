@@ -1,714 +1,76 @@
 /*
- * 角色档案（用户 2026-10-30 反馈"这UI好丑而且完全没有排版"，改成和设置页、神经界面同一套外框）：
- * 夜之城远景压暗 + 扫描线 + 原作 panel.frame 红框，顶部 menu.header 垫标题；
- * 去掉原先手画的分隔线，左角色库、右编辑区都铺满框里，不再在宽屏中间挤一条 760 宽的窄栏。
- * 只用原作素材，不画 CSS 边框、不用渐变和 backdrop-filter
+ * 创角工作台嵌入式步骤面板样式（仅供 CreatorSteps / CreatorLife / StartMapPicker / CustomModuleForm / DraftAll / ProseField 使用）：
+ * 统一采用原作 NineSlice 控件体系（CellFrame / FrameBox / Button / ActionButton），
+ * 不画渐变与 backdrop-filter，遵守 prefers-reduced-motion。
  */
-.screen {
-  position: relative;
-  display: grid;
-  grid-template-rows: 56px minmax(0, 1fr);
-  height: 100dvh;
-  overflow: hidden;
-  padding: 0 28px 10px;
-  box-sizing: border-box;
-  color: var(--cp-text);
-  background: var(--cp-bg);
-  font-family: var(--font-ui);
-}
 
-/* 内容压在背景层上面；背景层和外框绝对定位，不进网格 */
-.screen > :where(header, div) {
-  position: relative;
-  z-index: 1;
-}
-
-.bg {
-  position: absolute;
-  inset: 0;
-  background-position: center 40%;
-  background-size: cover;
-  background-repeat: no-repeat;
-  animation: bgIn 600ms ease-out both;
-}
-
-/* 编辑区文字多，压暗比设置页再重一点（72%）；纯色，不用渐变 */
-.shade {
-  position: absolute;
-  inset: 0;
-  background: rgb(5 5 10 / 72%);
-}
-
-.scan {
-  position: absolute;
-  inset: 0;
-  background-repeat: repeat;
-  opacity: 0.1;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  animation: sweep 300ms ease-out both;
-}
-
-/* 用 .screen > 盖过 .nineSlice 的 inset: 0 */
-.screen > .frame {
-  inset: 6px 20px 4px;
-  opacity: 0.7;
-}
-
-/* ———— 顶部 72 高：menu.header 垫底的「身份档案」，右边返回 ———— */
-
-.head {
+.pickerBody {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 6px 0 28px;
-}
-
-.headBg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  opacity: 0.85;
-  pointer-events: none;
-}
-
-.head > :not(.headBg) {
-  position: relative;
-}
-
-.head h1 {
-  margin: 0;
-  color: var(--cp-red);
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-shadow:
-    0 0 3px rgb(5 5 10),
-    0 0 8px rgb(5 5 10);
-}
-
-.headSpacer {
-  flex: 1;
-}
-
-.eyebrow {
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  letter-spacing: 0.12em;
-}
-
-/* 左角色库 260、右编辑区最宽 1180，两栏之间 28 的空当，整体居中 */
-.workspace {
-  display: grid;
-  min-height: 0;
-  margin-top: 18px;
-  grid-template-columns: 260px minmax(0, 1180px);
-  justify-content: center;
-  gap: 28px;
-  overflow: hidden;
-}
-
-.library,
-.editor {
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--cp-red-dim) transparent;
-  scrollbar-width: thin;
 }
 
-.library {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 4px 6px 2rem 2px;
-}
-
-.note {
-  margin: 0.65rem 0;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.65;
-}
-
-.cards {
-  display: grid;
-  gap: 0.7rem;
-  margin: 1.4rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* 角色卡套原作 map.filterCell 框（CellFrame），框色走 --box-line，悬停变红、选中变青；不画 CSS 边框 */
-.card {
-  --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 78%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 14px 18px 14px 16px;
-  border: 0;
-  color: var(--cp-text-dim);
-  background: none;
-  text-align: left;
-  font: inherit;
-  font-size: var(--fs-label);
-  cursor: var(--cp-cursor-hand);
-}
-
-/* CellFrame 自带 z-index: -1，父级 isolation 已保证框在内容下方，不依赖其他 CSS 模块的类名 */
-.card strong {
-  color: var(--cp-text);
-  font-size: 1.05rem;
-  overflow-wrap: anywhere;
-}
-
-.cardKind {
-  color: var(--cp-text-dim);
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-}
-
-.card:hover:not(:disabled) {
-  --box-line: var(--cp-red);
-  --box-fill: rgb(24 18 26 / 92%);
-}
-
-.card[aria-pressed="true"] {
-  --box-line: var(--cp-cyan);
-  --box-fill: rgb(15 34 39 / 94%);
-}
-
-.card[aria-pressed="true"] :where(strong) {
-  color: var(--cp-cyan);
-}
-
-.card:focus-visible,
-.stepper button:focus-visible {
-  outline: 2px solid var(--cp-cyan);
-  outline-offset: 3px;
-}
-
-.card:disabled {
-  cursor: wait;
-}
-
-/*
- * 编辑区去掉左右重复缩进，把宽度留给正文。下内边距归零：底部吸底的上一步/下一步栏不用再往下伸 3rem 盖缝，
- * 用户 2026-10-31 截图里底部那块 114 高的空黑块就是这样来的
- */
-.editor {
-  padding: 4px 16px 0;
-  /* 2026-10-31 对照用户截图：H10 大楼的"10"从正文后面透出来，压住出身卡的说明；编辑区垫一层近乎不透的纯色底 */
-  background: rgb(5 5 10 / 88%);
-}
-
-/* 身份和管理操作收成紧凑工具栏，降低层级，让当前步骤和出身选择成为主体 */
-.editorHead {
+.slotTools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px 24px;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: rgb(5 5 10 / 82%);
+  gap: 8px;
 }
 
-.editorHead h2 {
-  margin: 4px 0 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
+.searchBox {
+  flex: 1 1 13rem;
 }
 
-.editorHead > .note {
-  flex-shrink: 0;
-}
-
-.notice {
-  margin-bottom: 1.5rem;
-  padding: 0.9rem 1rem;
-  border-left: 2px solid var(--cp-yellow);
-  background: rgb(252 238 10 / 5%);
+.searchBox input,
+.compactBox input {
+  min-height: 34px;
+  padding: 5px 12px 6px 10px;
   font-size: var(--fs-label);
-  line-height: 1.65;
 }
 
-.notice p {
-  margin: 0 0 0.7rem;
-}
-
-.fields {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.sectionTitle {
-  margin: 1.8rem 0 1rem;
-  padding: 0;
-  color: var(--cp-red);
+.inputBox textarea {
+  min-height: 4.5rem;
+  padding: 8px 14px 10px 12px;
   font-size: var(--fs-ui);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-}
-
-legend.sectionTitle {
-  margin-top: 0;
-}
-
-.identity,
-.background {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.background > :nth-child(2),
-.background > :last-child {
-  grid-column: 1 / -1;
+  line-height: 1.6;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 0.5rem;
+  gap: 5px;
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
 }
 
 .field > span {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .field small {
+  color: var(--cp-text-dim);
   font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
 }
 
-.field input,
-.field textarea {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--cp-red-dim);
-  border-radius: 0;
-  color: var(--cp-text);
-  background: rgb(0 0 0 / 35%);
-  font: inherit;
-  font-size: var(--fs-ui);
-  line-height: 1.65;
-}
-
-.field textarea {
-  min-height: 6rem;
-  resize: vertical;
-}
-
-.field input::placeholder,
-.field textarea::placeholder {
+.note {
+  margin: 0;
   color: var(--cp-text-dim);
-  opacity: 0.8;
-}
-
-.field input:focus,
-.field textarea:focus {
-  border-color: var(--cp-cyan);
-  outline: 1px solid var(--cp-cyan-dim);
-  outline-offset: 1px;
-}
-
-.fields:disabled input,
-.fields:disabled textarea {
-  opacity: 1;
-  color: var(--cp-text-dim);
-  -webkit-text-fill-color: var(--cp-text-dim);
-}
-
-.sectionHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.sectionHead .sectionTitle {
-  margin-bottom: 0;
-}
-
-.points {
-  color: var(--cp-yellow);
-  font-size: var(--fs-label);
-  font-variant-numeric: tabular-nums;
-}
-
-.attributes {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin-top: 1rem;
-}
-
-.attribute {
-  min-width: 0;
-  padding: 0.7rem 0.35rem;
-  border-top: 1px solid var(--cp-cyan-dim);
-  background: rgb(94 246 255 / 3%);
-  text-align: center;
-}
-
-.attribute > label {
-  display: block;
-  margin-bottom: 0.65rem;
-  color: var(--cp-cyan);
-  font-size: var(--fs-label);
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.stepper button {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 1.7rem;
-  height: 2rem;
-  padding: 0;
-  border: 1px solid var(--cp-cyan-dim);
-  color: var(--cp-cyan);
-  background: transparent;
-  font: inherit;
-  cursor: var(--cp-cursor-hand);
-}
-
-.stepper button:hover:not(:disabled) {
-  background: rgb(94 246 255 / 12%);
-}
-
-.stepper button:disabled {
-  opacity: 0.35;
-  cursor: var(--cp-cursor);
-}
-
-.stepper output {
-  min-width: 1.2rem;
-  font-size: 1.25rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.actions {
-  margin-top: 1.8rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--cp-red-dim);
-}
-
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.error,
-.success {
   font-size: var(--fs-label);
   line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 
 .error {
+  margin: 0;
   color: var(--cp-danger);
-}
-
-.success {
-  color: var(--cp-success);
-}
-
-@media (max-width: 1280px) {
-  .screen {
-    padding: 0 28px 16px;
-  }
-}
-
-@media (max-width: 1150px) {
-  .workspace {
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 20px;
-  }
-}
-
-@media (max-width: 760px) {
-  .screen {
-    grid-template-rows: auto minmax(0, 1fr);
-    padding: 0 16px 12px;
-  }
-
-  .head {
-    flex-wrap: wrap;
-    gap: 6px 10px;
-    min-height: 56px;
-    padding: 8px 4px 10px 12px;
-  }
-
-  .head h1 {
-    font-size: 19px;
-  }
-
-  .head > .headSpacer {
-    flex-basis: 100%;
-  }
-
-  .workspace {
-    display: block;
-    overflow: visible;
-  }
-
-  .library,
-  .editor {
-    overflow: visible;
-    padding: 12px 0;
-  }
-
-  .cards {
-    display: flex;
-    overflow-x: auto;
-    padding: 0.25rem 0.25rem 0.75rem;
-    margin-top: 0.75rem;
-  }
-
-  .cards li {
-    flex: 0 0 180px;
-  }
-
-  .editorHead {
-    flex-wrap: wrap;
-  }
-
-  .attributes {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .identity,
-  .background {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .background > :nth-child(2),
-  .background > :last-child {
-    grid-column: auto;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card {
-    transition: none;
-  }
-}
-
-/* 角色主板：插槽一组一组往下排，模块是带左边线的小卡片 */
-.board {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
-}
-
-.budget {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.4rem;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid rgb(252 238 10 / 30%);
-  background: var(--cp-bg);
-  color: var(--cp-text-dim);
   font-size: var(--fs-label);
-  font-variant-numeric: tabular-nums;
-}
-
-.budget b {
-  color: var(--cp-yellow);
-  font-size: 1.1rem;
-}
-
-.budget [data-tone="bad"],
-.budget [data-tone="bad"] b {
-  color: var(--cp-danger);
-}
-
-.slotGroup h4 {
-  margin: 0 0 0.6rem;
-  color: var(--cp-cyan);
-  font-size: var(--fs-ui);
-  font-weight: 500;
-}
-
-.slotGroup h4 small {
-  margin-left: 0.4rem;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  font-weight: 400;
-}
-
-.modules {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.6rem;
-  margin: 0 0 0.6rem;
-  padding: 0;
-  list-style: none;
-}
-
-.module {
-  padding: 0.6rem 0.75rem;
-  border-left: 2px solid var(--cp-cyan);
-  background: rgb(94 246 255 / 4%);
-  font-size: var(--fs-label);
-  line-height: 1.55;
-}
-
-.module[data-flaw] {
-  border-left-color: var(--cp-red);
-  background: rgb(255 97 88 / 5%);
-}
-
-.module[data-combo] {
-  border-left-color: var(--cp-yellow);
-  background: rgb(252 238 10 / 5%);
-}
-
-.module p {
-  margin: 0.3rem 0 0;
-}
-
-.moduleHead {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.moduleHead strong {
-  flex: 1;
-  color: var(--cp-text);
-  font-size: var(--fs-ui);
-  font-weight: 500;
-}
-
-.moduleHead button {
-  padding: 0 0.3rem;
-  border: 0;
-  color: var(--cp-text-dim);
-  background: transparent;
-  font: inherit;
-  cursor: var(--cp-cursor-hand);
-}
-
-.moduleHead button:hover {
-  color: var(--cp-danger);
-}
-
-.modulePoints {
-  color: var(--cp-yellow);
-  font-variant-numeric: tabular-nums;
-}
-
-.moduleTags {
-  color: var(--cp-cyan);
-}
-
-.moduleHook {
-  color: var(--cp-text-dim);
-}
-
-.slotTools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.picker,
-.toolButton {
-  padding: 0.45rem 0.7rem;
-  border: 1px solid var(--cp-cyan-dim);
-  color: var(--cp-cyan);
-  background: var(--cp-bg);
-  font: inherit;
-  font-size: var(--fs-label);
-  cursor: var(--cp-cursor-hand);
-}
-
-.toolButton:hover:not(:disabled),
-.picker:hover:not(:disabled) {
-  background: rgb(94 246 255 / 10%);
-}
-
-.toolButton:disabled,
-.picker:disabled {
-  opacity: 0.4;
-  cursor: var(--cp-cursor);
-}
-
-.tolerance {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-
-.tolerance button {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.6rem;
-  border: 1px solid var(--cp-cyan-dim);
-  color: var(--cp-text-dim);
-  background: transparent;
-  font: inherit;
-  font-size: var(--fs-label);
-  cursor: var(--cp-cursor-hand);
-}
-
-.tolerance button strong {
-  color: var(--cp-text);
-  font-weight: 500;
-}
-
-.tolerance button[aria-pressed="true"] {
-  border-color: var(--cp-cyan);
-  background: rgb(94 246 255 / 10%);
-}
-
-/* 自己写模块：写设定、解读、改完再插上 */
-.customForm {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 0.7rem;
-  padding: 0.8rem 0.9rem;
-  border: 1px dashed var(--cp-cyan-dim);
-}
-
-.customDraft {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--cp-cyan-dim);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .warnings {
@@ -719,682 +81,23 @@ legend.sectionTitle {
   line-height: 1.6;
 }
 
-.proseBlocks {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.draftAllBox {
-  --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(10 22 28 / 76%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 13px 11px;
-}
-
-.draftAllHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-}
-
-.draftAllTitle {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--cp-cyan);
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-.draftAllAsk {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tonePills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.tonePill {
-  padding: 3px 9px;
-  border: 0;
-  color: var(--cp-text-dim);
-  background: rgb(255 255 255 / 6%);
-  font: inherit;
-  font-size: 0.7rem;
-  cursor: var(--cp-cursor-hand);
-}
-
-.tonePill:hover {
-  color: var(--cp-text);
-  background: rgb(255 255 255 / 12%);
-}
-
-.tonePill[aria-pressed="true"] {
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 18%);
-}
-
-.toolButton[data-primary] {
-  border-color: var(--cp-cyan);
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 14%);
-  font-weight: 600;
-}
-
-.prose {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 8px 10px;
-  background: rgb(14 14 23 / 58%);
-}
-
-.prose[data-locked] {
-  background: rgb(13 32 37 / 44%);
-}
-
-.proseHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 10px;
-}
-
-.proseTitleWrap {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.proseTitle {
-  color: var(--cp-text);
-  font-size: var(--fs-label);
-  font-weight: 600;
-}
-
-.proseLockBadge {
-  padding: 1px 6px;
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 14%);
-  font-size: 0.66rem;
-}
-
-.proseCount {
-  color: var(--cp-text-dim);
-  font-size: 0.68rem;
-  font-variant-numeric: tabular-nums;
-}
-
 .subTitle {
-  margin: 0.55rem 0 0.3rem;
-  color: var(--cp-text);
-  font-size: var(--fs-label);
-}
-
-.subNote {
-  margin-left: 0.5rem;
-  color: var(--cp-text-dim);
-  font-weight: normal;
-}
-
-.importBox {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.importOption {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.5;
-  cursor: var(--cp-cursor-hand);
-}
-
-.importCheck {
-  margin-top: 0.25rem;
-  accent-color: var(--cp-cyan);
-}
-
-.headTools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-/*
- * 第 7 步选开局地点的地图（用户定的"在地图上选择"，2026-10-30）：底图、图钉、图标借剧情地图的类，
- * 不借 mapScreen / mapTop（铺满页面、带下边框和渐变）；项目约束：不新加边框、渐变、backdrop-filter
- */
-.startPicker {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.startSearch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-}
-
-/* 搜索框单独一个类：用后代选择器会和上面 .fields:disabled input 起特异性冲突（biome noDescendingSpecificity） */
-.startInput {
-  flex: 1 1 14rem;
-  min-width: 0;
-  padding: 0.5rem 0.7rem;
-  border: 0;
-  border-radius: 0;
-  color: var(--cp-text);
-  background: rgb(0 0 0 / 35%);
-  font: inherit;
+  margin: 6px 0 0;
+  color: var(--cp-cyan);
   font-size: var(--fs-ui);
-}
-
-.startInput::placeholder {
-  color: var(--cp-text-dim);
-  opacity: 0.8;
-}
-
-.startInput:focus-visible {
-  outline: 1px solid var(--cp-cyan);
-  outline-offset: 1px;
-}
-
-.startResults {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.startMap {
-  /* 图钉和图标的配色：照抄剧情地图 .mapScreen 上的变量（原作 world_map/mappins 的 MainColors，截到 sRGB） */
-  --filter-on: #5ef6ff;
-  --filter-on-frame: #349197;
-  --filter-hover-bg: #172c2e;
-  --filter-bg: #0e0e17;
-  --filter-off: var(--cp-red);
-  --filter-off-frame: var(--cp-red-dim);
-  --pin-yellow: var(--cp-yellow);
-  --pin-green: #29ffb9;
-  --pin-ring: #1ded83;
-  --pin-gold: #ffd741;
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  height: clamp(22rem, 58vh, 34rem);
-  overflow: hidden;
-  color: var(--cp-text);
-  background: #04070d;
-  font-family: var(--font-ui);
-}
-
-.startMapTop {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 1rem;
-  padding: 0.5rem 0.9rem;
-  background: rgb(0 0 0 / 45%);
-}
-
-@media (max-width: 760px) {
-  .startMap {
-    height: 22rem;
-  }
-}
-
-/*
- * 分步捏人（docs/creator-plan.md "界面形式"，用户定的 2026-10-30："重做捏人系统吧"）：
- * 左边进度栏、底部固定上一步/下一步。项目约束：不新加边框、渐变、backdrop-filter，
- * 选中、可点的状态靠底色和字色区分；遵守 reduced-motion
- */
-/* 用户反馈排版拥挤（2026-10-30）：角色库之外不再套第二条侧栏，步骤横排，正文独占编辑区宽度 */
-.creator {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.rail {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  padding: 8px 0;
-  background: var(--cp-bg);
-}
-
-.rail ol {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* 外形、底框、选中变青都由神经界面的 .tab 管，这里只收紧尺寸、处理没走到的步 */
-.railStep {
-  padding: 8px 16px;
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.railStep:disabled {
-  opacity: 0.35;
-  cursor: var(--cp-cursor);
-}
-
-.railStep:disabled:hover {
-  color: var(--cp-red);
-}
-
-.railStep:focus-visible,
-.pick:focus-visible,
-.linkButton:focus-visible {
-  outline: 2px solid var(--cp-cyan);
-  outline-offset: 2px;
-}
-
-.railNum {
-  color: var(--cp-red);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-}
-
-.stepBody {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-}
-
-/* 排版反馈后的层级调整：步骤标题突出，说明按正文阅读，不再用 12px 标签字号铺成一条长线 */
-.stepHeading {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  margin: 0;
-  color: var(--cp-text);
-  font-size: 24px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
-.stepLead {
-  max-width: 48em;
-  margin: 0 0 24px;
-  color: rgb(190 185 181);
-  font-size: 14px;
-  line-height: 1.75;
-}
-
-.stepTitle {
-  margin: 1.6rem 0 0.7rem;
-  color: var(--cp-red);
-  font-size: var(--fs-ui);
-  font-weight: 500;
-  letter-spacing: 0.1em;
-}
-
-/* 小标题后面的说明单独一个类：用 .stepTitle small 会和上面 .slotGroup h4 small 起特异性冲突（biome noDescendingSpecificity） */
 .stepNote {
-  margin-left: 0.4rem;
+  margin-left: 0.45rem;
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
   font-weight: 400;
   letter-spacing: 0;
 }
 
-/*
- * 操作栏直接贴住编辑区底边；编辑区已取消下内边距，不再用负偏移和额外填充补缝。
- * 2026-10-31 对照用户截图：去掉按钮下方多出的 48px 黑块，保留纯色底遮住滚动内容
- */
-.stepNav {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  margin-top: 1rem;
-  margin-bottom: 0;
-  padding: 0.8rem 0;
-  background: var(--cp-bg);
-}
-
-/* 右栏选择器容器与出身默认行装卡 */
-.pickerBody {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.loadoutBase {
-  --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(14 14 23 / 86%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 18px 16px 16px;
-}
-
-/* 可选的卡：出身大卡、特质/行装卡片墙（在右栏抽屉里自适应单列，避免窄卡片折行） */
-.originGrid,
-.skillWall {
-  display: grid;
-  gap: 0.7rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.originGrid {
-  grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
-}
-
-.skillWall {
-  grid-template-columns: repeat(auto-fill, minmax(min(13.5rem, 100%), 1fr));
-}
-
-.originGrid > li,
-.skillWall > li {
-  display: flex;
-}
-
-/* 可选卡套原作 map.filterCell 框（CellFrame）：平时暗红框，悬停亮红，选中青框青底，"自己写"黄框；不画 CSS 边框 */
-.pick {
-  --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 82%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 11px 14px 12px 13px;
-  border: 0;
-  color: rgb(205 200 196);
-  background: none;
-  font: inherit;
-  font-size: 13.5px;
-  line-height: 1.5;
-  text-align: left;
-  cursor: var(--cp-cursor-hand);
-}
-
-.pick[data-big] {
-  padding: 20px 24px 22px 22px;
-}
-
-.pick:hover:not(:disabled) {
-  --box-line: var(--cp-red);
-}
-
-.pick[aria-pressed="true"],
-.pick[data-on] {
-  --box-line: var(--cp-cyan);
-  --box-fill: rgb(13 32 37 / 92%);
-  color: var(--cp-text);
-}
-
-.pick[data-blank] {
-  --box-line: rgb(252 238 10 / 55%);
-}
-
-.pick:disabled {
-  opacity: 0.4;
-  cursor: var(--cp-cursor);
-}
-
-.pickHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.pickName {
-  color: var(--cp-text);
-  font-size: var(--fs-ui);
-  font-weight: 500;
-}
-
-.pick[aria-pressed="true"] .pickName,
-.pick[data-on] .pickName {
-  color: var(--cp-cyan);
-}
-
-.pickLine {
-  display: grid;
-  grid-template-columns: 4.6rem minmax(0, 1fr);
-  gap: 0.5rem;
-}
-
-.pickKey {
-  color: var(--cp-text-dim);
-  font-weight: 400;
-  opacity: 0.8;
-}
-
-.pickTools {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: auto;
-}
-
-/* 差一块就能凑成的联动 */
-.hints {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0 0 0.8rem;
-  padding: 0.6rem 0.8rem 0.6rem 1.8rem;
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 5%);
-  font-size: var(--fs-label);
-  line-height: 1.6;
-}
-
-.stepTip {
-  margin: 0 0 1rem;
-  padding: 0.6rem 0.9rem;
-  color: var(--cp-text-dim);
-  background: rgb(94 246 255 / 4%);
-  border-left: 2px solid var(--cp-cyan-dim);
-  font-size: var(--fs-label);
-  line-height: 1.5;
-}
-
-.presetBox {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: rgb(0 255 240 / 5%);
-  border: 1px dashed var(--cp-cyan-dim);
-  font-size: var(--fs-label);
-}
-
-.presetTitle {
-  color: var(--cp-cyan);
-  font-weight: 500;
-}
-
-.presetStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.presetActive {
-  color: var(--cp-success);
-  font-weight: 500;
-}
-
-.quickStartBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 1.5rem;
-  padding: 1rem 1.2rem;
-  background: rgb(0 255 240 / 4%);
-  border: 1px solid var(--cp-cyan-dim);
-}
-
-.quickStartInfo {
-  flex: 1;
-  min-width: 260px;
-}
-
-.quickStartInfo p {
-  margin: 4px 0 0;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.5;
-}
-
-.quickReadyBadge {
-  color: var(--cp-cyan);
-  font-size: 14px;
-  letter-spacing: 0.05em;
-}
-
-.quickStartActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-/*
- * 义体详情框里的候选，照原作义体医生的货架一行一件（用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）：
- * 左边原作格子放义体图，中间名字、点数和能力，右边装上/卸下；装着的那行名字亮成原作选中的黄。不画边框、渐变
- */
-.cyberOptions {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--fs-label);
-  line-height: 1.5;
-}
-
-.cyberOptions > li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.cyberOptionText {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cyberOptionText p {
-  margin: 2px 0 0;
-  color: var(--cp-text-dim);
-}
-
-.cyberOptions > li[data-on] .pickName {
-  color: var(--cp-yellow);
-}
-
-/*
- * 人体图外面套一层 pin 容器：neural.module.css 里人体图按 @container pin 缩放（剧情页加宽块的排法），
- * 捏人这一栏只有 500 多像素宽，不套的话按全屏尺寸排，右半边被裁掉（2026-10-30 浏览器走查发现）
- */
-.dollFrame {
-  container: pin / inline-size;
-  min-width: 0;
-}
-
-/* 第 5 步：左边人体图，右边整栏列当前部位能装的义体（用户 2026-10-31："改成右侧整栏列表"） */
-.cyberStep {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
-  gap: 24px;
-  align-items: start;
-}
-
-/*
- * 用户 2026-10-31："义体UI的操作逻辑还是太烂了 怎么能有两个滚动条"、"这套创建角色UIUX还是太难看太难用了"，
- * 选了「照原作义体医生重做」：右栏是原作义体医生的图标货架，不自己滚，整页只有编辑区一条滚动条；
- * 选中和悬停靠底色区分，不加边框、渐变
- */
-.shelf {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-}
-
-.shelfHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px 16px;
-}
-
-.shelfTitle {
-  margin: 0;
-  color: var(--cp-red);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-.shelfStats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 数字单独一个类：用 .shelfStats b 会和上面 .budget [data-tone="bad"] b 起特异性冲突（biome noDescendingSpecificity） */
-.shelfNum {
-  color: var(--cp-yellow);
-  font-size: 1.05rem;
-}
-
-/* 筛选和耐受是 fieldset（biome useSemanticElements），去掉浏览器默认的边框和内边距 */
+/* 筛选条（fieldset 去默认边框） */
 .shelfFilter {
   display: flex;
   flex-wrap: wrap;
@@ -1406,48 +109,263 @@ legend.sectionTitle {
   border: 0;
 }
 
-.shelfChip {
-  padding: 4px 12px;
+/* ———— 出身、特质、缺陷、载具可选卡（NineSlice CellFrame） ———— */
+.originGrid,
+.skillWall {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.originGrid {
+  grid-template-columns: repeat(auto-fill, minmax(min(17.5rem, 100%), 1fr));
+}
+
+.skillWall {
+  grid-template-columns: repeat(auto-fill, minmax(min(14.5rem, 100%), 1fr));
+}
+
+.originGrid > li,
+.skillWall > li {
+  display: flex;
+}
+
+.pick {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 82%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 15px 13px 14px;
   border: 0;
-  color: var(--cp-text-dim);
-  background: rgb(255 255 255 / 5%);
+  color: rgb(205 200 196);
+  background: none;
   font: inherit;
-  font-size: var(--fs-label);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: left;
   cursor: var(--cp-cursor-hand);
 }
 
-.shelfChip:hover {
-  background: rgb(255 255 255 / 10%);
+.pick:hover:not(:disabled) {
+  --box-line: var(--cp-red);
 }
 
-.shelfChip[aria-pressed="true"] {
+.pick[data-suggested] {
+  --box-line: rgb(252 238 10 / 62%);
+}
+
+.pick[aria-pressed="true"],
+.pick[data-on] {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(13 32 37 / 92%);
+  color: var(--cp-text);
+}
+
+.pick:disabled {
+  opacity: 0.4;
+  cursor: var(--cp-cursor);
+}
+
+.pick:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 2px;
+}
+
+.pickHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pickName {
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.pick[aria-pressed="true"] .pickName,
+.pick[data-on] .pickName {
+  color: var(--cp-cyan);
+}
+
+.moduleBadges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.moduleBadge {
+  padding: 1px 6px;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.moduleBadge[data-tone="active"],
+.moduleBadge[data-tone="lean"] {
   color: var(--cp-cyan);
   background: rgb(94 246 255 / 14%);
 }
 
-.shelfChip[data-rarity="common"],
-.shelfRarity[data-rarity="common"] {
-  color: var(--rar-common);
+.moduleBadge[data-tone="never"] {
+  color: var(--cp-red);
+  background: rgb(255 97 88 / 14%);
 }
 
-.shelfChip[data-rarity="uncommon"],
-.shelfRarity[data-rarity="uncommon"] {
-  color: var(--rar-uncommon);
+.moduleBadge[data-tone="suggested"] {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
 }
 
-.shelfChip[data-rarity="rare"],
-.shelfRarity[data-rarity="rare"] {
-  color: var(--rar-rare);
+.pickLine {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  gap: 8px;
 }
 
-.shelfChip[data-rarity="epic"],
-.shelfRarity[data-rarity="epic"] {
-  color: var(--rar-epic);
+.pickKey {
+  color: var(--cp-text-dim);
+  font-weight: 400;
+  opacity: 0.82;
 }
 
-.shelfChip[data-rarity="legendary"],
-.shelfRarity[data-rarity="legendary"] {
-  color: var(--rar-legendary);
+.moduleTags {
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+}
+
+.moduleHook {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+/* 生命路径关联缺陷提示条 */
+.suggestedBanner {
+  --box-line: rgb(252 238 10 / 55%);
+  --box-fill: rgb(252 238 10 / 6%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px 11px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.55;
+}
+
+.suggestedTitle {
+  color: var(--cp-yellow);
+  font-weight: 600;
+}
+
+/* ———— 自定义模块工坊（NineSlice 内嵌表单） ———— */
+.customForm {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(12 18 26 / 86%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 15px 13px;
+}
+
+.customDraft {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(94 246 255 / 22%);
+}
+
+/* ———— 开局行装 & 武器网格 ———— */
+.loadoutBase {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(14 14 23 / 86%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 16px 14px;
+}
+
+.weaponGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weaponTile {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 74%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 7px 6px 8px;
+  border: 0;
+  color: var(--cp-text);
+  background: transparent;
+  font: inherit;
+  cursor: var(--cp-cursor-hand);
+}
+
+.weaponTile:hover:not(:disabled) {
+  --box-line: var(--cp-cyan);
+}
+
+.weaponTile[aria-pressed="true"] {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(13 32 37 / 88%);
+}
+
+.weaponTile:disabled {
+  opacity: 0.45;
+  cursor: var(--cp-cursor);
+}
+
+.weaponImg {
+  max-width: 100%;
+  max-height: 44px;
+  object-fit: contain;
+}
+
+.weaponName {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.7rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ———— 义体货架（嵌入式列表 + 吸底预览详情） ———— */
+.shelfHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
 }
 
 .shelfGrid {
@@ -1458,19 +376,26 @@ legend.sectionTitle {
   list-style: none;
 }
 
-.shelfItem {
+.shelfRow {
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+
+.shelfItem {
+  display: flex;
+  flex: 1;
+  align-items: center;
   gap: 10px;
-  width: 100%;
+  min-width: 0;
   padding: 5px 10px;
   border: 0;
-  background: rgb(14 14 23 / 52%);
+  background: rgb(14 14 23 / 58%);
   color: var(--cp-text);
   font: inherit;
   text-align: left;
   cursor: var(--cp-cursor-hand);
-  transition: background 140ms ease-out;
+  transition: background var(--dur-flash) ease-out;
 }
 
 .shelfItem:hover {
@@ -1478,7 +403,7 @@ legend.sectionTitle {
 }
 
 .shelfItem[data-installed] {
-  background: rgb(94 246 255 / 9%);
+  background: rgb(94 246 255 / 10%);
 }
 
 .shelfItem[aria-pressed="true"] {
@@ -1524,22 +449,23 @@ legend.sectionTitle {
   color: var(--cp-cyan);
 }
 
-.shelfTilePts {
+.shelfTileCost {
   color: var(--cp-yellow);
 }
 
-/* 详情套原作 map.filterCell 框（CellFrame） */
 .shelfDetail {
   --box-line: var(--cp-yellow);
-  --box-fill: rgb(14 14 23 / 92%);
-  position: relative;
+  --box-fill: rgb(8 10 16 / 96%);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   isolation: isolate;
   display: grid;
-  gap: 10px;
-  padding: 14px 18px 16px 16px;
+  gap: 9px;
+  padding: 13px 16px 14px;
   color: rgb(205 200 196);
   font-size: 13.5px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .shelfDetail p {
@@ -1568,6 +494,26 @@ legend.sectionTitle {
   font-size: var(--fs-label);
 }
 
+.shelfRarity[data-rarity="common"] {
+  color: var(--rar-common);
+}
+
+.shelfRarity[data-rarity="uncommon"] {
+  color: var(--rar-uncommon);
+}
+
+.shelfRarity[data-rarity="rare"] {
+  color: var(--rar-rare);
+}
+
+.shelfRarity[data-rarity="epic"] {
+  color: var(--rar-epic);
+}
+
+.shelfRarity[data-rarity="legendary"] {
+  color: var(--rar-legendary);
+}
+
 .shelfDelta {
   display: flex;
   flex-wrap: wrap;
@@ -1577,59 +523,40 @@ legend.sectionTitle {
   font-variant-numeric: tabular-nums;
 }
 
-.shelfNote {
-  margin: 0;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.6;
+.shelfNum {
+  color: var(--cp-yellow);
+  font-size: 1.05rem;
 }
 
-@media (max-width: 1150px) {
-  .cyberStep {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shelfItem,
-  .shelfChip {
-    transition: none;
-  }
-}
-
-/*
- * 第 3 步旧识（用户 2026-10-31："旧识界面也不太好"，嫌下拉框难用、卡片太多太长、认不出人，选了「照原作联系人改」）：
- * 左边照原作手机联系人，一行一个人，头像加名字，排成几列一屏放下；右边钉住选中那个人的卡，关系是一排按钮。
- * 不自己滚（用户 2026-10-31 嫌两条滚动条），不画 CSS 边框、渐变，选中靠底色和左边的色条
- */
+/* ———— 夜之城人脉网络（双栏：联系人网格 + 关系卡） ———— */
 .people {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(17.5rem, 0.85fr);
+  gap: 16px;
   align-items: start;
 }
 
 .peopleList {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .peopleList > ul {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  gap: 4px 8px;
-  margin: 0 0 10px;
+  gap: 5px 8px;
+  margin: 0 0 8px;
   padding: 0;
   list-style: none;
 }
 
 .peopleGroup {
-  margin: 0;
+  margin: 4px 0 0;
   color: var(--cp-red);
   font-size: var(--fs-ui);
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .peopleCount {
@@ -1659,7 +586,6 @@ legend.sectionTitle {
   background: rgb(255 255 255 / 7%);
 }
 
-/* 定了关系的人左边一道青条，正在看的人底色变青 */
 .peopleRow[data-on] {
   box-shadow: inset 2px 0 0 var(--cp-cyan);
 }
@@ -1674,7 +600,6 @@ legend.sectionTitle {
   outline-offset: 1px;
 }
 
-/* 头像：有原作头像（avatars 图集）就铺满，没有就写名字的第一个字 */
 .peopleFace {
   display: grid;
   flex: none;
@@ -1688,9 +613,9 @@ legend.sectionTitle {
 }
 
 .peopleFace[data-big] {
-  width: 72px;
-  height: 72px;
-  font-size: 28px;
+  width: 68px;
+  height: 68px;
+  font-size: 26px;
 }
 
 .peopleFaceArt {
@@ -1726,15 +651,15 @@ legend.sectionTitle {
   text-overflow: ellipsis;
 }
 
-/* 选中那个人：套原作 map.filterCell 框（CellFrame），紧跟在列表下方 */
 .peopleCard {
   --box-line: var(--cp-cyan);
   --box-fill: rgb(14 14 23 / 92%);
-  position: relative;
+  position: sticky;
+  top: 8px;
   isolation: isolate;
   display: grid;
-  gap: 14px;
-  padding: 18px 20px 20px 18px;
+  gap: 12px;
+  padding: 16px 18px 18px;
 }
 
 .peopleHead {
@@ -1763,43 +688,44 @@ legend.sectionTitle {
 }
 
 .relation {
+  --box-line: rgb(255 255 255 / 14%);
+  --box-fill: rgb(255 255 255 / 4%);
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
+  padding: 8px 11px;
   border: 0;
   color: var(--cp-text);
-  background: rgb(255 255 255 / 5%);
+  background: transparent;
   font: inherit;
   text-align: left;
   cursor: var(--cp-cursor-hand);
 }
 
-/* "不认识"那一格占一整行 */
 .relation:first-child {
   grid-column: 1 / -1;
 }
 
 .relation:hover:not(:disabled) {
-  background: rgb(255 255 255 / 10%);
+  --box-line: var(--cp-red);
+  --box-fill: rgb(255 255 255 / 8%);
 }
 
 .relation[aria-pressed="true"] {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(94 246 255 / 14%);
   color: var(--cp-cyan);
-  background: rgb(94 246 255 / 16%);
 }
 
 .relation[data-tone="bad"][aria-pressed="true"] {
+  --box-line: var(--cp-red);
+  --box-fill: rgb(255 97 88 / 14%);
   color: var(--cp-red);
-  background: rgb(255 97 88 / 14%);
-}
-
-.relation:disabled {
-  opacity: 0.35;
-  cursor: var(--cp-cursor);
 }
 
 .relationLabel {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
 }
 
@@ -1809,202 +735,172 @@ legend.sectionTitle {
   font-variant-numeric: tabular-nums;
 }
 
+/* ———— AI 撰稿与小传工作台 ———— */
+.draftAllBox {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(10 22 28 / 78%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 15px 13px;
+}
+
+.draftAllHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.draftAllTitle {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--cp-cyan);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.draftAllAsk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tonePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prose {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 68%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+}
+
+.prose[data-locked] {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(13 32 37 / 48%);
+}
+
+.proseHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.proseTitleWrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.proseTitle {
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.proseLockBadge {
+  padding: 1px 6px;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+  font-size: 0.68rem;
+}
+
+.proseCount {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ———— 开局地点地图选择器（嵌入式） ———— */
+.startPicker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.startSearch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.startResults {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startMap {
+  --filter-on: #5ef6ff;
+  --filter-on-frame: #349197;
+  --filter-hover-bg: #172c2e;
+  --filter-bg: #0e0e17;
+  --filter-off: var(--cp-red);
+  --filter-off-frame: var(--cp-red-dim);
+  --pin-yellow: var(--cp-yellow);
+  --pin-green: #29ffb9;
+  --pin-ring: #1ded83;
+  --pin-gold: #ffd741;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: clamp(20rem, 48vh, 30rem);
+  overflow: hidden;
+  color: var(--cp-text);
+  background: #04070d;
+  font-family: var(--font-ui);
+}
+
+.startMapTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 12px;
+  background: rgb(0 0 0 / 50%);
+}
+
+@media (max-width: 900px) {
+  .people {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .peopleCard {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .startMap {
+    height: 20rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .shelfItem,
   .peopleRow,
   .relation {
     transition: none;
   }
-}
-
-/* 第 7 步：身份档案 */
-.dossier {
-  display: grid;
-  gap: 0.9rem;
-  padding: 1.1rem 1.2rem;
-  background: rgb(255 255 255 / 3%);
-}
-
-.dossierHead h3 {
-  margin: 0.3rem 0 0.2rem;
-  color: var(--cp-text);
-  font-size: 1.5rem;
-  font-weight: 500;
-}
-
-.dossierAttrs {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.dossierAttrs > div {
-  padding: 0.45rem 0.3rem;
-  background: rgb(94 246 255 / 5%);
-  text-align: center;
-}
-
-.dossierAttrs dt {
-  color: var(--cp-cyan);
-  font-size: 0.75rem;
-}
-
-.dossierAttrs dd {
-  margin: 0.2rem 0 0;
-  font-size: 1.2rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.dossierRow {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
-  gap: 0.6rem;
-  font-size: var(--fs-label);
-  line-height: 1.6;
-}
-
-.dossierRow h4 {
-  margin: 0;
-  color: var(--cp-text-dim);
-  font-weight: 400;
-}
-
-.dossierRow p {
-  margin: 0;
-  color: var(--cp-text);
-}
-
-.linkButton {
-  padding: 0;
-  border: 0;
-  color: var(--cp-cyan);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: var(--cp-cursor-hand);
-}
-
-.checks {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding-left: 1.2rem;
-  color: var(--cp-danger);
-  font-size: var(--fs-label);
-  line-height: 1.6;
-}
-
-.checks li[data-soft] {
-  color: var(--cp-yellow);
-}
-
-.tavern {
-  margin-top: 1.4rem;
-  padding: 0.7rem 0.9rem;
-  background: rgb(255 255 255 / 3%);
-}
-
-.tavern > summary {
-  color: var(--cp-text);
-  font-size: var(--fs-ui);
-  cursor: var(--cp-cursor-hand);
-}
-
-.tavern[open] > summary {
-  margin-bottom: 0.6rem;
-}
-
-@media (max-width: 760px) {
-  .creator {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rail {
-    position: static;
-  }
-
-  .rail ol {
-    display: flex;
-    overflow-x: auto;
-  }
-
-  .railStep {
-    white-space: nowrap;
-  }
-
-  .dossierAttrs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .dossierRow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* 窄屏整页滚动、.editor 下内边距只有 1.2rem，不用往下多伸 3rem 去盖缝（2026-10-30 浏览器走查：700 宽时伸出视口 48px） */
-  .stepNav {
-    bottom: 0;
-    margin-bottom: 0;
-    padding: 0.8rem 0;
-  }
-}
-
-/* 沿用设置页的背景落定和扫描线动效；减少动态效果时直接显示 */
-@keyframes bgIn {
-  from {
-    opacity: 0;
-    transform: scale(1.04);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes sweep {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-/* 第 2 步掷生命路径：新掷到的那张卡翻过来（只动 transform 和透明度，不加边框、渐变） */
-.flip {
-  animation: flipIn 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  transform-origin: 50% 50%;
-}
-
-@keyframes flipIn {
-  from {
-    opacity: 0;
-    transform: perspective(40rem) rotateY(90deg);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bg,
-  .scan,
-  .flip {
-    animation: none;
-  }
-
-  .railStep,
-  .pick {
-    transition: none;
-  }
-}
-
-/* 义体详情卡吸底：选中后「装上」始终在视口里 */
-.shelfDetail {
-  --box-fill: rgb(8 8 14);
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
 }

@@ -9,6 +9,7 @@ import { type CSSProperties, useId, useMemo, useState } from "react";
 import { asset } from "../../assets";
 import { cssUrl, MissingAsset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { FrameBox } from "../../ui/FrameBox";
 import { MapShapes } from "../story/MapPanel";
 import {
   iconStyle,
@@ -97,12 +98,11 @@ export function StartMapPicker({
   const info = asset(MAP);
 
   const results = useMemo(() => {
-    const q = query.trim();
+    const q = query.trim().toLowerCase();
     if (q === "") return [];
-    return RADAR_ANCHORS.filter((a) => a.name.includes(q) || (a.kind ?? "").includes(q)).slice(
-      0,
-      8,
-    );
+    return RADAR_ANCHORS.filter(
+      (a) => a.name.toLowerCase().includes(q) || (a.kind ?? "").toLowerCase().includes(q),
+    ).slice(0, 8);
   }, [query]);
 
   const choose = (a: RadarAnchor, focus: boolean) => {
@@ -187,14 +187,15 @@ export function StartMapPicker({
     <div className={styles.startPicker}>
       <div className={styles.startSearch}>
         <label htmlFor={searchId}>搜地点</label>
-        <input
-          id={searchId}
-          className={styles.startInput}
-          type="search"
-          value={query}
-          placeholder="名字或类别，比如：义体医生、地铁站"
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <FrameBox className={styles.searchBox}>
+          <input
+            id={searchId}
+            type="search"
+            value={query}
+            placeholder="名字或类别，比如：义体医生、地铁站"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </FrameBox>
         <Button
           small
           disabled={!resetAnchor || automatic}

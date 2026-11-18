@@ -7,10 +7,8 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame } from "../../ui/FrameBox";
-import { emptyBoard } from "./BoardEditor";
 import { CharacterCreator } from "./CharacterCreator";
-import styles from "./characters.module.css";
-import { clearDraft, loadDraft, saveDraft } from "./creator";
+import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
 import { readCardFile } from "./tavernFile";
 import wb from "./workbench.module.css";
 
@@ -207,33 +205,54 @@ export function CharactersScreen() {
 
   const handleCardChange = (next: CharacterCard | ((current: CharacterCard) => CharacterCard)) => {
     setEditor((old) => ({ ...old, card: typeof next === "function" ? next(old.card) : next }));
-    if (!save.isPending) save.reset();
+    if (!save.isPending && save.isError) save.reset();
+  };
+
+  const allCharacters = characters.data ?? [];
+  const customCharacters = allCharacters.filter((entry) => !entry.sample);
+  const sampleCharacters = allCharacters.filter((entry) => entry.sample);
+
+  const renderEntryCard = (entry: CharacterEntry) => {
+    const b = entry.card.board;
+    const traitCount = (b?.skills.length ?? 0) + (b?.pasts.length ?? 0);
+    const cyberCount = b?.cyberware.length ?? 0;
+    return (
+      <li key={entry.id}>
+        <button
+          type="button"
+          className={wb.card}
+          aria-pressed={editor.id === entry.id}
+          disabled={busy}
+          onClick={() => requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })}
+        >
+          <CellFrame />
+          <span className={wb.cardKind}>
+            {entry.sample ? "官方预设 · 可直接开局或另存" : "自建角色"}
+          </span>
+          <strong>
+            {entry.card.name}
+            {entry.card.alias ? `「${entry.card.alias}」` : ""}
+          </strong>
+          <span>
+            {entry.card.origin || b?.origin?.label || "未知出身"}
+            {b ? ` · 特质 ${traitCount} · 义体 ${cyberCount}` : ""}
+          </span>
+        </button>
+      </li>
+    );
   };
 
   return (
-    <main className={styles.screen}>
-      <span
-        className={styles.bg}
-        style={{ backgroundImage: cssUrl("menu.nightCity") }}
-        aria-hidden
-      />
-      <span className={styles.shade} aria-hidden />
-      <span
-        className={styles.scan}
-        style={{ backgroundImage: cssUrl("fx.scanlines") }}
-        aria-hidden
-      />
-      <NineSlice
-        id="panel.frame"
-        tint="var(--cp-red)"
-        slice={FRAME_SLICE}
-        className={styles.frame}
-      />
-      <header className={styles.head}>
-        <Asset id="menu.header" tint="var(--cp-red)" height={56} className={styles.headBg} />
+    <main className={wb.screen}>
+      <span className={wb.bg} style={{ backgroundImage: cssUrl("menu.nightCity") }} aria-hidden />
+      <span className={wb.shade} aria-hidden />
+      <span className={wb.scan} style={{ backgroundImage: cssUrl("fx.scanlines") }} aria-hidden />
+      <NineSlice id="panel.frame" tint="var(--cp-red)" slice={FRAME_SLICE} className={wb.frame} />
+      <header className={wb.head}>
+        <Asset id="menu.header" tint="var(--cp-red)" height={56} className={wb.headBg} />
         <h1>身份档案</h1>
         <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
-        <span className={styles.headSpacer} />
+        <span className={wb.headSpacer} />
         <Button small disabled={busy} onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
           ＋ 新建空白档案
         </Button>
@@ -252,105 +271,97 @@ export function CharactersScreen() {
 
       <div className={wb.workspace}>
         {showLibrary && (
-          <aside className={wb.libraryDrawer} aria-label="角色库">
-            <div className={wb.topBar}>
-              <strong>夜之城角色库</strong>
-              <span className={styles.headSpacer} />
-              <button
-                type="button"
-                className={styles.toolButton}
-                onClick={() => setShowLibrary(false)}
-              >
-                收起
-              </button>
-            </div>
-            <Button
-              primary
-              disabled={busy}
-              onClick={() => requestGo({ editor: editorFor(blankCard()) })}
-            >
-              ＋ 新建角色
-            </Button>
-            <div className={styles.importBox}>
-              <Button disabled={busy} onClick={() => fileInput.current?.click()}>
-                {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
-              </Button>
-              <label className={styles.importOption}>
-                <input
-                  type="checkbox"
-                  className={styles.importCheck}
-                  checked={useModel}
-                  disabled={busy}
-                  onChange={(event) => setUseModel(event.target.checked)}
-                />
-                <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
-              </label>
-              <input
-                ref={fileInput}
-                type="file"
-                hidden
-                accept=".json,.png,application/json,image/png"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) importCard.mutate({ file, model: useModel });
-                }}
+          <>
+            <button
+              type="button"
+              aria-label="收起角色库"
+              className={wb.libraryBackdrop}
+              onClick={() => setShowLibrary(false)}
+            />
+            <aside className={wb.libraryDrawer} aria-label="角色库">
+              <NineSlice
+                id="notify.itemCellBg"
+                tint="rgb(8 8 14 / 98%)"
+                slice={30}
+                className={wb.drawerLayer}
               />
-              {importCard.isError && (
-                <p className={styles.error} role="alert">
-                  {importCard.error.message}
-                </p>
-              )}
-            </div>
-            {characters.isPending && <p role="status">正在读取角色库…</p>}
-            {characters.isError && (
-              <div role="alert">
-                <p className={styles.error}>{characters.error.message}</p>
-                <Button onClick={() => void characters.refetch()}>重新读取</Button>
+              <NineSlice
+                id="notify.itemCellFg"
+                tint="var(--cp-red)"
+                slice={30}
+                className={wb.drawerLayer}
+              />
+              <div className={wb.topBar}>
+                <strong className={wb.drawerTitle}>夜之城角色库</strong>
+                <span className={wb.headSpacer} />
+                <Button small onClick={() => setShowLibrary(false)}>
+                  收起
+                </Button>
               </div>
-            )}
-            {characters.isSuccess && characters.data.length === 0 && (
-              <p className={styles.note}>还没有角色。</p>
-            )}
-            <ul className={styles.cards}>
-              {(characters.data ?? []).map((entry) => {
-                const b = entry.card.board;
-                const traitCount = (b?.skills.length ?? 0) + (b?.pasts.length ?? 0);
-                const cyberCount = b?.cyberware.length ?? 0;
-                return (
-                  <li key={entry.id}>
-                    <button
-                      type="button"
-                      className={styles.card}
-                      aria-pressed={editor.id === entry.id}
-                      disabled={busy}
-                      onClick={() =>
-                        requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })
-                      }
-                    >
-                      <CellFrame />
-                      <span className={styles.cardKind}>
-                        {entry.sample ? "官方预设 · 可直接开局或另存" : "自建角色"}
-                      </span>
-                      <strong>
-                        {entry.card.name}
-                        {entry.card.alias ? `「${entry.card.alias}」` : ""}
-                      </strong>
-                      <span>
-                        {entry.card.origin || b?.origin?.label || "未知出身"}
-                        {b ? ` · 特质 ${traitCount} · 义体 ${cyberCount}` : ""}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </aside>
+              <div className={wb.importBox}>
+                <Button small disabled={busy} onClick={() => fileInput.current?.click()}>
+                  {importCard.isPending ? "正在导入…" : "导入角色卡 (JSON / PNG)"}
+                </Button>
+                <label className={wb.importOption}>
+                  <input
+                    type="checkbox"
+                    className={wb.importCheck}
+                    checked={useModel}
+                    disabled={busy}
+                    onChange={(event) => setUseModel(event.target.checked)}
+                  />
+                  <span>由 AI 自动配置特质模块与属性（导入本作导出的角色卡除外）</span>
+                </label>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  hidden
+                  accept=".json,.png,application/json,image/png"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) importCard.mutate({ file, model: useModel });
+                  }}
+                />
+                {importCard.isError && (
+                  <p className={wb.error} role="alert">
+                    {importCard.error.message}
+                  </p>
+                )}
+              </div>
+              {characters.isPending && <p role="status">正在读取角色库…</p>}
+              {characters.isError && (
+                <div role="alert">
+                  <p className={wb.error}>{characters.error.message}</p>
+                  <Button small onClick={() => void characters.refetch()}>
+                    重新读取
+                  </Button>
+                </div>
+              )}
+              {characters.isSuccess && allCharacters.length === 0 && (
+                <p className={wb.note}>还没有角色。</p>
+              )}
+              {customCharacters.length > 0 && (
+                <section className={wb.libraryGroup} aria-label="自建角色">
+                  <h2 className={wb.libraryGroupTitle}>自建角色（{customCharacters.length}）</h2>
+                  <ul className={wb.cards}>{customCharacters.map(renderEntryCard)}</ul>
+                </section>
+              )}
+              {sampleCharacters.length > 0 && (
+                <section className={wb.libraryGroup} aria-label="官方预设模板">
+                  <h2 className={wb.libraryGroupTitle}>
+                    官方预设模板（{sampleCharacters.length}）
+                  </h2>
+                  <ul className={wb.cards}>{sampleCharacters.map(renderEntryCard)}</ul>
+                </section>
+              )}
+            </aside>
+          </>
         )}
 
         <section className={wb.editorWrap} aria-label="角色设计工作台">
           {editor.imported && (
-            <div className={styles.notice} role="status">
+            <div className={wb.notice} role="status">
               <p>
                 {editor.imported.own
                   ? "这是本作导出的角色卡，已经原样还原。"
@@ -358,7 +369,7 @@ export function CharactersScreen() {
                 检查一遍再保存，保存后才进角色库。
               </p>
               {editor.imported.warnings.length > 0 && (
-                <ul className={styles.warnings}>
+                <ul className={wb.warnings}>
                   {editor.imported.warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -369,8 +380,10 @@ export function CharactersScreen() {
           {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
           {boardData.isError && (
             <div role="alert">
-              <p className={styles.error}>{boardData.error.message}</p>
-              <Button onClick={() => void boardData.refetch()}>重新读取创角目录</Button>
+              <p className={wb.error}>{boardData.error.message}</p>
+              <Button small onClick={() => void boardData.refetch()}>
+                重新读取创角目录
+              </Button>
             </div>
           )}
           <div className={wb.benchHost}>
@@ -381,7 +394,8 @@ export function CharactersScreen() {
               busy={busy}
               canSave={parsed.success}
               canDelete={editor.id !== null && !editor.sample}
-              isSample={editor.sample && !modified}
+              isSample={editor.sample}
+              dirty={modified}
               characterId={editor.id}
               saveError={save.isError ? save.error.message : null}
               saved={editor.id !== null && !editor.sample && !dirty}
@@ -451,7 +465,7 @@ export function CharactersScreen() {
         >
           <p>角色卡会从本地角色库删除，未保存的修改会丢弃。已有存档不受影响。</p>
           {remove.isError && (
-            <p className={styles.error} role="alert">
+            <p className={wb.error} role="alert">
               {remove.error.message}
             </p>
           )}

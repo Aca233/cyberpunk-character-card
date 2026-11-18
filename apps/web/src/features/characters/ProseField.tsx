@@ -7,6 +7,9 @@ import {
 } from "@cp/core";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api/client";
+import { ActionButton } from "../../ui/ActionButton";
+import { Button } from "../../ui/Button";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import styles from "./characters.module.css";
 
 /**
@@ -83,6 +86,7 @@ export function ProseField({
       data-locked={locked || undefined}
       data-filled={!empty || undefined}
     >
+      <CellFrame />
       <div className={styles.proseHead}>
         <span className={styles.proseTitleWrap}>
           <strong className={styles.proseTitle}>{label}</strong>
@@ -93,46 +97,33 @@ export function ProseField({
         </span>
         <div className={styles.slotTools}>
           {busy ? (
-            <button
-              type="button"
-              className={styles.toolButton}
-              onClick={() => abort.current?.abort()}
-            >
+            <Button small onClick={() => abort.current?.abort()}>
               停止
-            </button>
+            </Button>
           ) : (
             modes.map((mode) => (
-              <button
-                type="button"
+              <Button
                 key={mode}
-                className={styles.toolButton}
+                small
                 disabled={locked || card.name.trim() === ""}
-                title={
-                  locked
-                    ? "已锁定定稿，模型不会改动此区块"
-                    : card.name.trim() === ""
-                      ? "请先给角色起个名字"
-                      : "调用辅助模型撰写此区块"
-                }
+                reason={locked ? "已锁定定稿，模型不会改动此区块" : "请先给角色起个名字"}
                 onClick={() => void run(mode)}
               >
                 {PROSE_MODE_LABELS[mode]}
-              </button>
+              </Button>
             ))
           )}
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={asking}
+          <Button
+            small
+            pressed={asking}
             disabled={busy || locked}
+            reason={locked ? "解锁后可调整 AI 生成要求" : undefined}
             onClick={() => setAsking((a) => !a)}
           >
             要求
-          </button>
+          </Button>
           {previous !== null && !busy && (
-            <button
-              type="button"
-              className={styles.toolButton}
+            <ActionButton
               onClick={() => {
                 onChange({ [block]: previous });
                 setPrevious(null);
@@ -140,14 +131,12 @@ export function ProseField({
               }}
             >
               撤销
-            </button>
+            </ActionButton>
           )}
-          <button
-            type="button"
-            className={styles.toolButton}
-            aria-pressed={locked}
+          <Button
+            small
+            pressed={locked}
             disabled={busy}
-            title="锁定后 AI 不会改动此区块，写其他区块时作为参考基准；仍可手动修改"
             onClick={() =>
               onChange({
                 locked: locked ? card.locked.filter((b) => b !== block) : [...card.locked, block],
@@ -155,7 +144,7 @@ export function ProseField({
             }
           >
             {locked ? "解锁" : "锁定"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -165,29 +154,33 @@ export function ProseField({
             生成要求 / 补充设定
             <small>{instruction.length} / 200</small>
           </span>
-          <input
-            maxLength={200}
-            value={instruction}
-            placeholder="例如：更冷一点；提到她妹妹；少写打斗"
-            onChange={(event) => setInstruction(event.target.value)}
-          />
+          <FrameBox className={styles.compactBox}>
+            <input
+              maxLength={200}
+              value={instruction}
+              placeholder="例如：更冷一点；提到她妹妹；少写打斗"
+              onChange={(event) => setInstruction(event.target.value)}
+            />
+          </FrameBox>
         </label>
       )}
 
       <label className={styles.field}>
-        <textarea
-          rows={block === "past" || block === "examples" ? 4 : 3}
-          maxLength={max}
-          value={shown}
-          readOnly={busy}
-          aria-busy={busy}
-          aria-label={label}
-          placeholder={hint}
-          onChange={(event) => {
-            setPrevious(null);
-            onChange({ [block]: event.target.value });
-          }}
-        />
+        <FrameBox className={styles.inputBox}>
+          <textarea
+            rows={block === "past" || block === "examples" ? 4 : 3}
+            maxLength={max}
+            value={shown}
+            readOnly={busy}
+            aria-busy={busy}
+            aria-label={label}
+            placeholder={hint}
+            onChange={(event) => {
+              setPrevious(null);
+              onChange({ [block]: event.target.value });
+            }}
+          />
+        </FrameBox>
       </label>
 
       {note && (
