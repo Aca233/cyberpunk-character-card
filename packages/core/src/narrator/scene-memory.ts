@@ -121,16 +121,27 @@ export interface SceneSummarySource {
 function itemCount(world: WorldState, id: string): number {
   const state = InventoryStateSchema.parse(world.slices.inventory);
   const part = CyberwareStateSchema.parse(world.slices.cyberware).parts[id];
+  let customizedCount = 0;
+  let attachedModCount = 0;
+  for (const [carriedId, count] of Object.entries(state.backpack)) {
+    if (count < 1) continue;
+    const obj = state.objects[carriedId];
+    if (!obj?.weaponState) continue;
+    if (obj.kind === "customized" && obj.weaponState.baseId === id) {
+      customizedCount += count;
+    }
+    for (const modId of Object.values(obj.weaponState.mods)) {
+      if (modId === id) attachedModCount += count;
+    }
+  }
   return (
     Number(part?.holder === "player" && part.location === null && part.condition !== "scrapped") +
     (state.backpack[id] ?? 0) +
-    state.weapons.filter((value) => value === id).length +
+    customizedCount +
     Object.values(state.clothing).filter((value) => value === id).length +
     Number(state.healing?.id === id) +
     Number(state.grenade?.id === id) +
-    Object.values(state.mods)
-      .flatMap(Object.values)
-      .filter((value) => value === id).length
+    attachedModCount
   );
 }
 

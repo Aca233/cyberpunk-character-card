@@ -58,9 +58,8 @@ const fight = (world: World): World => set(world, "combat", { active: { current:
 
 const inventory = slice(base, "inventory");
 const backpack = Object.keys((inventory.backpack ?? {}) as Record<string, number>);
-const weapons = ((inventory.weapons ?? []) as (string | null)[]).filter(
-  (w): w is string => w !== null,
-);
+const weaponIds = new Set(items.filter((i) => i.kind === "weapon").map((i) => i.id));
+const weapons = backpack.filter((id) => weaponIds.has(id));
 const installed = ((slice(base, "cyberware").installed ?? []) as { id: string }[]).map((c) => c.id);
 const rawJobs = slice(base, "jobs").jobs ?? [];
 const jobIds = (Array.isArray(rawJobs) ? rawJobs : Object.values(rawJobs as object)).map(

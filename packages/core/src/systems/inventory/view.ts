@@ -1,19 +1,25 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS, type Rarity } from "../economy";
-import { itemCatalog, rarityOf } from "./apply";
+import { itemCatalog, rarityOf, withWorldObjects } from "./apply";
 import {
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
+  canAttachMod,
   carriedItemCounts,
   carriedWeaponIds,
+  defaultWeaponSlots,
+  effectiveConcealment,
+  effectiveWeaponNoise,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
   isBulkyItem,
   loadoutSummary,
   MOD_SLOT_LABELS,
+  type ModSlot,
   ModSlotSchema,
+  projectWeaponState,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
 } from "./schema";
@@ -53,7 +59,10 @@ function itemSubLabel(def: ItemDef): string {
 /** 玩家看到的背包：统一随身背包与武器、快捷栏、服装、改装件及随身大件统计 */
 export function inventoryView({ world, data }: ViewContext) {
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
-  const items = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
+  const items =
+    data.items === undefined
+      ? new Map<string, ItemDef>()
+      : itemCatalog(withWorldObjects(data, inventory.objects));
   const counts = carriedItemCounts(inventory);
   const weaponIds = carriedWeaponIds(inventory, items);
   const cyber = InstalledChromeSliceSchema.parse(world.slices.cyberware ?? {});
@@ -66,14 +75,24 @@ export function inventoryView({ world, data }: ViewContext) {
   return {
     healing: inventory.healing,
     grenade: inventory.grenade,
-    /** 统一后的随身背包（自动合并历史存档武器槽条目），数量均在此展示 */
+    /** 统一后的随身背包，数量均在此展示 */
     backpack: Object.fromEntries(counts) as Readonly<Record<string, number>>,
-    /** 随身携带的武器列表（保留兼容顺序），用于 HUD 展示与模型状态 */
-    carriedWeapons: weaponIds.map((id) => ({
-      id,
-      count: counts.get(id) ?? 1,
-      bulky: isBulkyItem(items.get(id)),
-    })),
+    /** 随身携带的武器列表（含基础模板 ID、改装态、有效隐蔽度与声学标签），用于 HUD 展示与模型状态 */
+    carriedWeapons: weaponIds.map((id) => {
+      const obj = inventory.objects[id];
+      const def = items.get(id) ?? obj?.definition;
+      const baseId = obj?.weaponState?.baseId ?? id;
+      const ws = obj?.weaponState;
+      return {
+        id,
+        baseId,
+        count: counts.get(id) ?? 1,
+        bulky: isBulkyItem(def, baseId),
+        concealment: def ? effectiveConcealment(def, ws, items) : ("pocket" as const),
+        noise: def ? effectiveWeaponNoise(def, ws, items) : ("loud" as const),
+        weaponState: projectWeaponState(ws),
+      };
+    }),
     /** 随身大件负荷（2 起步，承重骨骼 +1，超出时软超重） */
     bulky: {
       count: loadout.bulkyCount,
@@ -91,19 +110,28 @@ export function inventoryView({ world, data }: ViewContext) {
           ...[inventory.healing, inventory.grenade].flatMap((slot) => (slot ? [slot.id] : [])),
         ]),
       ].flatMap((id) => {
-        const def = items.get(id);
+        const obj = inventory.objects[id];
+        const def = items.get(id) ?? obj?.definition;
         if (!def) return [];
-        const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, inventory.tuned) : null;
+        const ws = obj?.weaponState;
+        const baseId = ws?.baseId ?? id;
+        const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, ws) : null;
         return [
           [
             id,
             {
+              baseId,
               kind: def.kind,
               subLabel: itemSubLabel(def),
               rarity: rar,
               rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
               iconic: Boolean(def.iconic),
-              bulky: isBulkyItem(def),
+              bulky: isBulkyItem(def, baseId),
+              concealment: def.kind === "weapon" ? effectiveConcealment(def, ws, items) : null,
+              noise: def.kind === "weapon" ? effectiveWeaponNoise(def, ws, items) : null,
+              modSlots:
+                def.kind === "weapon" ? defaultWeaponSlots(def) : ([] as readonly ModSlot[]),
+              weaponState: projectWeaponState(ws),
               ability: def.ability ?? "",
               healPercent: def.healPercent ?? null,
               charges: def.charges ?? null,
@@ -113,15 +141,12 @@ export function inventoryView({ world, data }: ViewContext) {
         ];
       }),
     ),
-    /** 升过稀有度的武器（历史存档保留）：id → 稀有度名 */
-    tuned: Object.fromEntries(
-      Object.entries(inventory.tuned).map(([id, r]) => [id, RARITY_LABELS[r]]),
-    ) as Readonly<Record<string, string>>,
-    /** 身上武器现在的稀有度键，含升过的档；界面按它染原作稀有度色条 */
+    /** 身上武器现在的稀有度键，含精调升阶后的档；界面按它染原作稀有度色条 */
     rarity: Object.fromEntries(
       weaponIds.flatMap((id) => {
-        const def = items.get(id);
-        return def?.kind === "weapon" ? [[id, rarityOf(def, inventory.tuned)]] : [];
+        const obj = inventory.objects[id];
+        const def = items.get(id) ?? obj?.definition;
+        return def?.kind === "weapon" ? [[id, rarityOf(def, obj?.weaponState)]] : [];
       }),
     ) as Readonly<Record<string, Rarity>>,
     /** 穿着的服装，按格子顺序；没穿的格子不列 */
@@ -144,22 +169,36 @@ export function inventoryView({ world, data }: ViewContext) {
     ) as Readonly<Record<string, "quick" | "clothing">>,
     /** 武器上装着的改装件：武器 id → 按位置顺序；没装的武器不列 */
     mods: Object.fromEntries(
-      Object.entries(inventory.mods).map(([weapon, fitted]) => [
-        weapon,
-        MOD_SLOTS.flatMap((slot) => {
-          const id = fitted[slot];
-          return id === undefined ? [] : [{ slot, label: MOD_SLOT_LABELS[slot], id }];
-        }),
-      ]),
-    ) as Readonly<Record<string, readonly { slot: string; label: string; id: string }[]>>,
+      weaponIds.flatMap((weaponId) => {
+        const ws = inventory.objects[weaponId]?.weaponState;
+        if (!ws) return [];
+        const entries = MOD_SLOTS.flatMap((slot) => {
+          const id = ws.mods[slot];
+          return id === undefined
+            ? []
+            : [
+                {
+                  slot,
+                  label: MOD_SLOT_LABELS[slot],
+                  id,
+                  locked: ws.lockedSlots.includes(slot),
+                },
+              ];
+        });
+        return entries.length > 0 ? [[weaponId, entries]] : [];
+      }),
+    ) as Readonly<
+      Record<string, readonly { slot: string; label: string; id: string; locked: boolean }[]>
+    >,
     /** 背包里的改装件能装到哪几把随身武器上 */
     modTargets: Object.fromEntries(
       [...counts.keys()].flatMap((id) => {
-        const fits = items.get(id)?.modFits;
-        if (fits === undefined) return [];
+        const modDef = items.get(id);
+        if (modDef?.kind !== "mod") return [];
         const targets = weaponIds.filter((w) => {
-          const category = items.get(w)?.category;
-          return category !== undefined && fits.includes(category);
+          const obj = inventory.objects[w];
+          const weaponDef = items.get(w) ?? obj?.definition;
+          return weaponDef !== undefined && canAttachMod(weaponDef, modDef, obj?.weaponState).ok;
         });
         return targets.length > 0 ? [[id, targets]] : [];
       }),

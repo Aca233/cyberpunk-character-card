@@ -18,6 +18,7 @@ export function catalogSection(
   if (data.items === undefined) return undefined;
   const groups = new Map<string, string[]>();
   for (const item of itemCatalog(data).values()) {
+    if (item.id.startsWith("wpn:")) continue;
     const group =
       item.category === undefined
         ? ITEM_KIND_LABELS[item.kind]

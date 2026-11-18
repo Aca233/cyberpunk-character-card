@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { type Attribute, AttributeSchema } from "../dice";
-import { RaritySchema, ServiceSchema } from "../economy";
+import { type Attribute, AttributeSchema, type WeaponConcealment, type WeaponNoise } from "../dice";
+import { type Rarity, RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -127,12 +127,24 @@ export const ItemDefSchema = z
     category: WeaponCategorySchema.optional(),
     /** 远程武器的类型；近战武器不写 */
     weaponType: WeaponTypeSchema.optional(),
+    /** 显式覆盖该武器开放的改装槽位；未填写时由 defaultWeaponSlots 按类别与体系推导 */
+    modSlots: z.array(ModSlotSchema).optional(),
+    /** 出厂或剧情自带的预装改装件：槽位 -> 改装件 id */
+    preInstalledMods: z.partialRecord(ModSlotSchema, z.string().min(1)).optional(),
+    /** 自带且不可随手拆下的锁定改装槽位 */
+    lockedModSlots: z.array(ModSlotSchema).optional(),
     /** 服装穿在哪一格；服装必须写 */
     clothingSlot: ClothingSlotSchema.optional(),
     /** 改装件装在武器的哪个位置；改装件必须写 */
     modSlot: ModSlotSchema.optional(),
     /** 改装件能装到哪些类别的武器上；改装件必须写 */
     modFits: z.array(WeaponCategorySchema).min(1).optional(),
+    /** 改装件适用的武器技术体系（威能/技术/智能）；不写表示兼容该类别的全部远程体系 */
+    modTypes: z.array(WeaponTypeSchema).min(1).optional(),
+    /** 改装件或特殊武器对隐蔽度档位的修正（如长消音器或大型狙击镜 +1） */
+    concealmentShift: z.number().int().min(-3).max(3).optional(),
+    /** 是否内置或加装了自主智能靶向握把/校准模块（可替代手部智能连接义体） */
+    grantsSmartLink: z.boolean().optional(),
     /** 拿着它角色真的能做到什么；写给模型 */
     ability: z.string().min(1).optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
@@ -151,8 +163,37 @@ export const ItemDefSchema = z
       } else if (item.attribute !== weaponAttribute(item.category, item.weaponType)) {
         report(`按类别和类型应该用${weaponAttribute(item.category, item.weaponType)}检定`);
       }
-    } else if (item.category !== undefined || item.weaponType !== undefined) {
-      report("只有武器才写类别和类型");
+      if (item.category !== undefined) {
+        const allowedSlots = defaultWeaponSlots(item);
+        if (MELEE.has(item.category) && item.modSlots?.some((s) => s !== "plugin")) {
+          report("近战武器只能开放 plugin 槽位");
+        }
+        if (item.preInstalledMods !== undefined) {
+          for (const [slot, modId] of Object.entries(item.preInstalledMods)) {
+            if (modId !== undefined && !allowedSlots.includes(slot as ModSlot)) {
+              report(`预装改装件的槽位 ${slot} 未对该武器开放`);
+            }
+          }
+        }
+        if (item.lockedModSlots !== undefined) {
+          for (const slot of item.lockedModSlots) {
+            if (!allowedSlots.includes(slot)) {
+              report(`锁定槽位 ${slot} 未对该武器开放`);
+            }
+          }
+        }
+      }
+    } else {
+      if (item.category !== undefined || item.weaponType !== undefined) {
+        report("只有武器才写类别和类型");
+      }
+      if (
+        item.modSlots !== undefined ||
+        item.preInstalledMods !== undefined ||
+        item.lockedModSlots !== undefined
+      ) {
+        report("只有武器才写改装槽位、预装或锁定改装");
+      }
     }
     if (item.kind === "clothing" && item.clothingSlot === undefined)
       report("服装必须写明穿在哪一格");
@@ -163,8 +204,13 @@ export const ItemDefSchema = z
       } else if (item.modSlot !== "plugin" && item.modFits.some((c) => MELEE.has(c))) {
         report("近战武器只能装插件，没有枪口和瞄准镜");
       }
-    } else if (item.modSlot !== undefined || item.modFits !== undefined) {
-      report("只有改装件才写位置和适用武器");
+    } else {
+      if (item.modSlot !== undefined || item.modFits !== undefined) {
+        report("只有改装件才写位置和适用武器");
+      }
+      if (item.modTypes !== undefined) {
+        report("只有改装件才写适用武器类型");
+      }
     }
     if ((item.kind === "healing" || item.kind === "grenade") && item.charges === undefined) {
       report("治疗品和手雷必须写明使用次数");
@@ -274,8 +320,43 @@ export const ShopOrderCommandSchema = z.strictObject({
 });
 export type ShopOrderCommand = z.infer<typeof ShopOrderCommandSchema>;
 
-/** 剧情中出现的独立物件；定义、来历和归属随存档保存，不受静态目录限制。 */
+/** 单把定制武器的实例状态：挂载在 WorldObject.weaponState 上 */
+export const WeaponInstanceStateSchema = z.object({
+  /** 目录模板 ID（如 "liberty"）；用于图标映射 itemArtOf(baseId)、商店识别与拆光还原 */
+  baseId: z.string().min(1),
+  /** 已安装的改装件：槽位 -> 改装件目录 ID */
+  mods: z.partialRecord(ModSlotSchema, z.string().min(1)).default({}),
+  /** 无法在战外随手拆下的槽位（如枪匠焊死/定制组件、不朽武器固有改装） */
+  lockedSlots: z.array(ModSlotSchema).default([]),
+  /** 枪匠精调后的稀有度档位（高于模板默认 rarity） */
+  tunedRarity: RaritySchema.optional(),
+});
+export type WeaponInstanceState = z.infer<typeof WeaponInstanceStateSchema>;
+
+export interface WeaponStateView {
+  readonly baseId: string;
+  readonly mods: Readonly<Partial<Record<ModSlot, string>>>;
+  readonly lockedSlots: readonly ModSlot[];
+  readonly tunedRarity: Rarity | null;
+}
+
+/** 将内部武器实例状态投影为视图层的只读结构 */
+export function projectWeaponState(ws: WeaponInstanceState | undefined): WeaponStateView | null {
+  if (!ws) return null;
+  return {
+    baseId: ws.baseId,
+    mods: ws.mods,
+    lockedSlots: ws.lockedSlots,
+    tunedRarity: ws.tunedRarity ?? null,
+  };
+}
+
+export const WorldObjectKindSchema = z.enum(["story", "customized"]);
+export type WorldObjectKind = z.infer<typeof WorldObjectKindSchema>;
+
+/** 剧情中出现的独立物件或由目录武器拆出改装的定制实物；定义、来历和归属随存档保存，不受静态目录限制。 */
 export const WorldObjectSchema = z.object({
+  kind: WorldObjectKindSchema.default("story"),
   definition: ItemDefSchema,
   origin: z.string().min(1).max(240),
   holder: z.string().min(1),
@@ -283,7 +364,9 @@ export const WorldObjectSchema = z.object({
   changedAt: z.number().int(),
   lastChange: z.string().min(1).max(240),
   remaining: z.number().int().min(0).nullable(),
+  weaponState: WeaponInstanceStateSchema.optional(),
 });
+export type WorldObject = z.infer<typeof WorldObjectSchema>;
 
 const QuickSlotSchema = z
   .object({
@@ -315,10 +398,8 @@ export const InventoryStateSchema = z.object({
   merchants: z.record(z.string(), MerchantStateSchema).default({}),
   supplyOrders: z.record(z.string(), SupplyOrderSchema).default({}),
   nextSupply: z.number().int().min(1).default(1),
-  /** 3 个武器格，按 1/2/3 切换 */
-  weapons: z.array(z.string().min(1).nullable()).length(3),
-  /** 当前手持的武器格（从 0 起），空手时为 null */
-  active: z.number().int().min(0).max(2).nullable(),
+  /** 确定性定制武器实例序号（wpn:<baseId>:<seq>） */
+  nextWeaponSeq: z.number().int().min(1).default(1),
   healing: QuickSlotSchema,
   grenade: QuickSlotSchema,
   /** 背包：物品 id → 数量 */
@@ -327,12 +408,8 @@ export const InventoryStateSchema = z.object({
   depleted: z.record(z.string(), z.number().int().min(0)),
   /** 身上穿着的服装：格子 → 物品 id */
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
-  /** 武器上装着的改装件：武器 id → 位置 → 改装件 id；同一种武器的几把共用一份 */
-  mods: z.record(z.string(), z.partialRecord(ModSlotSchema, z.string().min(1))).default({}),
-  /** 拆解得来的零件，用来给武器升稀有度；旧存档默认 0 */
+  /** 拆解得来的零件（保留作可选扩展，默认 0） */
   parts: z.number().int().min(0).default(0),
-  /** 升过稀有度的武器：武器 id → 现在的稀有度；同一种武器的几把共用一份 */
-  tuned: z.record(z.string(), RaritySchema).default({}),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 
@@ -352,13 +429,16 @@ export const ItemCommandSchema = z
       .max(240)
       .optional()
       .describe("首次出现的物件从哪里来、此前属于谁；必须依据已发生的事实"),
+    weaponState: WeaponInstanceStateSchema.optional().describe(
+      "获得带预装改装或精调的武器时可附带其改装与精调状态；改装件 id 必须真实存在且兼容该武器",
+    ),
     recipient: z
       .string()
       .min(1)
       .max(80)
       .optional()
       .describe("lose 转交物件时写接收者；没写表示留在当前地点"),
-    /** 历史存档兼容字段；所有武器统一放进背包，不再使用武器栏槽位 */
+    /** 所有武器统一放进背包；保留可选槽位参数以免开局数据调用出错 */
     slot: z.number().int().min(1).max(3).optional(),
   })
   .describe(
@@ -516,10 +596,103 @@ export function weaponConcealment(
   }
 }
 
+/** 按武器类别、技术体系和显式覆盖推导允许安装的改装槽位列表 */
+export function defaultWeaponSlots(
+  def: Pick<ItemDef, "kind" | "category" | "weaponType" | "modSlots">,
+): readonly ModSlot[] {
+  if (def.kind !== "weapon" || def.category === undefined) return [];
+  if (def.modSlots !== undefined) return [...def.modSlots];
+  if (MELEE.has(def.category)) return ["plugin"];
+  if (def.weaponType === "smart") return ["plugin"];
+  if (def.weaponType === "tech") return ["scope", "plugin"];
+  switch (def.category) {
+    case "pistol":
+    case "revolver":
+    case "smg":
+    case "assaultRifle":
+    case "precisionRifle":
+      return ["muzzle", "scope", "plugin"];
+    case "shotgun":
+    case "lmg":
+    case "sniperRifle":
+      return ["scope", "plugin"];
+    case "blade":
+    case "blunt":
+      return ["plugin"];
+  }
+}
+
+export type ModAttachCheck =
+  | { readonly ok: true; readonly slot: ModSlot }
+  | { readonly ok: false; readonly reason: string };
+
+/** 唯一校验真源：判断改装件能否装入指定武器及实例当前状态 */
+export function canAttachMod(
+  weaponDef: Pick<ItemDef, "id" | "name" | "kind" | "category" | "weaponType" | "modSlots">,
+  modDef: Pick<ItemDef, "id" | "name" | "kind" | "modSlot" | "modFits" | "modTypes">,
+  weaponState?: Pick<WeaponInstanceState, "lockedSlots">,
+  options?: { readonly ignoreLock?: boolean },
+): ModAttachCheck {
+  if (weaponDef.kind !== "weapon" || weaponDef.category === undefined) {
+    return { ok: false, reason: `${weaponDef.name} 不是武器` };
+  }
+  if (modDef.kind !== "mod" || modDef.modSlot === undefined) {
+    return { ok: false, reason: `${modDef.name} 不是改装件` };
+  }
+  const slot = modDef.modSlot;
+  const allowedSlots = defaultWeaponSlots(weaponDef);
+  if (!allowedSlots.includes(slot)) {
+    if (MELEE.has(weaponDef.category)) {
+      return {
+        ok: false,
+        reason: `${weaponDef.name} 是近战武器，没有${MOD_SLOT_LABELS[slot]}槽位`,
+      };
+    }
+    if (weaponDef.weaponType === "tech" && slot === "muzzle") {
+      return {
+        ok: false,
+        reason: `${weaponDef.name} 是技术电磁武器，不支持常规枪口消音器`,
+      };
+    }
+    if (weaponDef.weaponType === "smart") {
+      return {
+        ok: false,
+        reason: `${weaponDef.name} 是智能制导武器，没有${MOD_SLOT_LABELS[slot]}槽位`,
+      };
+    }
+    return { ok: false, reason: `${weaponDef.name} 没有${MOD_SLOT_LABELS[slot]}槽位` };
+  }
+  if (!modDef.modFits?.includes(weaponDef.category)) {
+    return {
+      ok: false,
+      reason: `${modDef.name} 装不到${WEAPON_CATEGORY_LABELS[weaponDef.category]}上`,
+    };
+  }
+  if (
+    modDef.modTypes !== undefined &&
+    (weaponDef.weaponType === undefined || !modDef.modTypes.includes(weaponDef.weaponType))
+  ) {
+    return {
+      ok: false,
+      reason: `${modDef.name} 不兼容${weaponDef.weaponType ? WEAPON_TYPE_LABELS[weaponDef.weaponType] : "该"}武器体系`,
+    };
+  }
+  if (!options?.ignoreLock && weaponState?.lockedSlots.includes(slot)) {
+    return {
+      ok: false,
+      reason: `${weaponDef.name} 的${MOD_SLOT_LABELS[slot]}已锁定，需前往枪匠工坊改动`,
+    };
+  }
+  return { ok: true, slot };
+}
+
 /** 是否属于沉重显眼的大件装备（长枪、重武器、大号砍刀/战斧/长钝器） */
-export function isBulkyItem(def: Pick<ItemDef, "id" | "kind" | "category"> | undefined): boolean {
+export function isBulkyItem(
+  def: Pick<ItemDef, "id" | "kind" | "category"> | undefined,
+  baseId?: string,
+): boolean {
   if (def?.kind !== "weapon") return false;
-  const c = weaponConcealment(def.category, def.id);
+  const c = weaponConcealment(def.category, baseId ?? def.id);
   return c === "open" || c === "heavy";
 }
 
@@ -541,46 +714,80 @@ export function bulkyLimit(cyberware?: {
   return BASE_BULKY_LIMIT + bonus;
 }
 
-/** 合并背包与旧存档武器槽里的随身物品数量（旧武器槽条目排在前面） */
-export function carriedItemCounts(
-  state: Pick<InventoryState, "backpack" | "weapons">,
-): Map<string, number> {
+/** 随身背包内的物品数量映射 */
+export function carriedItemCounts(state: Pick<InventoryState, "backpack">): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const w of state.weapons) {
-    if (w !== null) counts.set(w, (counts.get(w) ?? 0) + 1);
-  }
   for (const [id, count] of Object.entries(state.backpack)) {
-    if (count > 0) counts.set(id, (counts.get(id) ?? 0) + count);
+    if (count > 0) counts.set(id, count);
   }
   return counts;
 }
 
-/** 身上所有随身武器的去重 id 列表（兼容旧存档武器槽 + 当前背包） */
+/** 身上所有随身武器的去重 id 列表（含未改装模板 id 与已物化定制实例 id） */
 export function carriedWeaponIds(
-  state: Pick<InventoryState, "backpack" | "weapons">,
+  state: Pick<InventoryState, "backpack">,
   catalog: ReadonlyMap<string, ItemDef>,
 ): string[] {
-  const seen = new Set<string>();
   const out: string[] = [];
   for (const id of carriedItemCounts(state).keys()) {
-    if (!seen.has(id) && catalog.get(id)?.kind === "weapon") {
-      seen.add(id);
+    if (catalog.get(id)?.kind === "weapon") {
       out.push(id);
     }
   }
   return out;
 }
 
-const CONCEALMENT_RANK: Readonly<Record<"pocket" | "coat" | "open" | "heavy", number>> = {
+const CONCEALMENT_ORDER: readonly WeaponConcealment[] = ["pocket", "coat", "open", "heavy"];
+const CONCEALMENT_RANK: Readonly<Record<WeaponConcealment, number>> = {
   pocket: 0,
   coat: 1,
   open: 2,
   heavy: 3,
 };
 
+/** 计算考虑改装件体积修正后的有效隐蔽度 */
+export function effectiveConcealment(
+  def: Pick<ItemDef, "id" | "kind" | "category" | "concealmentShift">,
+  weaponState: Pick<WeaponInstanceState, "baseId" | "mods"> | undefined,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "id" | "concealmentShift">>,
+): WeaponConcealment {
+  const base = weaponConcealment(def.category, weaponState?.baseId ?? def.id);
+  if (def.kind !== "weapon") return base;
+  let shift = def.concealmentShift ?? 0;
+  if (weaponState) {
+    for (const [slot, modId] of Object.entries(weaponState.mods)) {
+      if (!modId) continue;
+      const modDef = catalog.get(modId);
+      const modShift =
+        modDef?.concealmentShift ??
+        (slot === "muzzle" || modId === "saika-scope" || modId === "gaki-scope" ? 1 : 0);
+      shift += modShift;
+    }
+  }
+  const baseRank = CONCEALMENT_RANK[base];
+  const maxRank = base === "heavy" ? 3 : 2;
+  const rank = Math.max(0, Math.min(maxRank, baseRank + shift));
+  return CONCEALMENT_ORDER[rank] ?? base;
+}
+
+/** 计算武器当前声学特征：近战与装配消音枪口改装件的兼容武器为 silent，其余枪械为 loud */
+export function effectiveWeaponNoise(
+  def: Pick<ItemDef, "kind" | "category">,
+  weaponState: Pick<WeaponInstanceState, "mods"> | undefined,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "modSlot">>,
+): WeaponNoise {
+  if (def.kind !== "weapon" || def.category === undefined) return "loud";
+  if (MELEE.has(def.category)) return "silent";
+  const muzzleId = weaponState?.mods.muzzle;
+  if (muzzleId !== undefined && catalog.get(muzzleId)?.modSlot === "muzzle") {
+    return "silent";
+  }
+  return "loud";
+}
+
 /** 计算随身携带隐蔽度与大件软超重状态 */
 export function loadoutSummary(
-  state: Pick<InventoryState, "weapons" | "backpack">,
+  state: Pick<InventoryState, "backpack" | "objects">,
   catalog: ReadonlyMap<string, ItemDef>,
   cyberware?: {
     readonly installed?: readonly { readonly id: string }[];
@@ -590,16 +797,17 @@ export function loadoutSummary(
   let bulkyCount = 0;
   const bulkyItems: string[] = [];
   let hasHeavy = false;
-  let profile: "pocket" | "coat" | "open" | "heavy" = "pocket";
+  let profile: WeaponConcealment = "pocket";
   for (const [weaponId, count] of carriedItemCounts(state)) {
-    const def = catalog.get(weaponId);
+    const obj = state.objects[weaponId];
+    const def = obj?.definition ?? catalog.get(weaponId);
     if (def?.kind !== "weapon") continue;
-    const conc = weaponConcealment(def.category, def.id);
+    const conc = effectiveConcealment(def, obj?.weaponState, catalog);
     if (conc === "heavy") hasHeavy = true;
     if (CONCEALMENT_RANK[conc] > CONCEALMENT_RANK[profile]) {
       profile = conc;
     }
-    if (isBulkyItem(def)) {
+    if (isBulkyItem(def, obj?.weaponState?.baseId)) {
       bulkyCount += count;
       bulkyItems.push(count > 1 ? `${def.name}×${count}` : def.name);
     }

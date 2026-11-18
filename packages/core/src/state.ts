@@ -6,7 +6,7 @@ import { woundSlotOf } from "./systems/health/apply";
 import { HealthStateSchema, WOUND_SLOT_LABELS, WoundSlotSchema } from "./systems/health/schema";
 import { isImmunosuppressed, neuralDisplay, neuralStage } from "./systems/humanity/apply";
 import { HumanityStateSchema } from "./systems/humanity/schema";
-import { itemCatalog } from "./systems/inventory/apply";
+import { itemCatalog, withWorldObjects } from "./systems/inventory/apply";
 import {
   InventoryStateSchema,
   type ItemDef,
@@ -85,8 +85,14 @@ export function extractEdgeLedgerState(
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const career = CareerStateSchema.parse(world.slices.career ?? {});
 
-  const catalog = data.items === undefined ? new Map<string, ItemDef>() : itemCatalog(data);
-  const loadout = loadoutSummary(inventory, catalog);
+  const catalog =
+    data.items === undefined
+      ? new Map<string, ItemDef>()
+      : itemCatalog(withWorldObjects(data, inventory.objects));
+  const loadout = loadoutSummary(
+    { backpack: inventory.backpack, objects: inventory.objects },
+    catalog,
+  );
   const wounds = woundSlotOf(health);
   const phase = phaseClockOf(world.time, clock.sceneStartedAt);
   const suppressed = isImmunosuppressed(humanity, world.time);

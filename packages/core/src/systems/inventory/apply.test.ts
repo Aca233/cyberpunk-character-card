@@ -29,19 +29,16 @@ function empty(): InventoryState {
   return {
     objects: {},
     placed: [],
-    weapons: [null, null, null],
-    active: null,
     healing: null,
     grenade: null,
     backpack: {},
     depleted: {},
     clothing: {},
-    mods: {},
     parts: 0,
-    tuned: {},
     merchants: {},
     supplyOrders: {},
     nextSupply: 1,
+    nextWeaponSeq: 1,
   };
 }
 

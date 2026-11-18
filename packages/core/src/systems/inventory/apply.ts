@@ -5,6 +5,8 @@ import type { NpcState } from "../npc";
 import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
+  canAttachMod,
+  defaultWeaponSlots,
   type InventoryInternal,
   type InventoryState,
   ItemCatalogSchema,
@@ -13,13 +15,14 @@ import {
   ItemDefSchema,
   type ItemKind,
   MOD_SLOT_LABELS,
+  type ModSlot,
   type PartsCommand,
   type PlacedKind,
   type QuickSlotName,
   SELL_RATE,
   type Shop,
   ShopListSchema,
-  WEAPON_CATEGORY_LABELS,
+  type WeaponInstanceState,
 } from "./schema";
 
 type Inventory = Draft<InventoryState>;
@@ -27,18 +30,115 @@ type Inventory = Draft<InventoryState>;
 const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
-/** 将旧存档武器槽里的武器统一并入背包并清空历史槽位指针 */
-function absorbLegacyWeapons(draft: Inventory): void {
-  let changed = draft.active !== null;
-  for (let i = 0; i < draft.weapons.length; i++) {
-    const w = draft.weapons[i];
-    if (w !== null && w !== undefined) {
-      put(draft, w);
-      draft.weapons[i] = null;
-      changed = true;
+function nextWeaponInstanceId(draft: Inventory, baseId: string): string {
+  let candidate = `wpn:${baseId}:${draft.nextWeaponSeq}`;
+  draft.nextWeaponSeq += 1;
+  while (draft.objects[candidate] !== undefined) {
+    candidate = `wpn:${baseId}:${draft.nextWeaponSeq}`;
+    draft.nextWeaponSeq += 1;
+  }
+  return candidate;
+}
+
+function isCleanWeaponState(
+  ws: Pick<WeaponInstanceState, "mods" | "lockedSlots" | "tunedRarity">,
+): boolean {
+  return (
+    Object.values(ws.mods).every((v) => v === undefined) &&
+    ws.lockedSlots.length === 0 &&
+    ws.tunedRarity === undefined
+  );
+}
+
+function cloneWeaponState(ws: WeaponInstanceState): WeaponInstanceState {
+  return {
+    baseId: ws.baseId,
+    mods: { ...ws.mods },
+    lockedSlots: [...ws.lockedSlots],
+    ...(ws.tunedRarity !== undefined ? { tunedRarity: ws.tunedRarity } : {}),
+  };
+}
+
+function defaultInstanceStateFromDef(def: ItemDef): WeaponInstanceState | undefined {
+  if (def.kind !== "weapon") return undefined;
+  const hasPre =
+    def.preInstalledMods !== undefined && Object.values(def.preInstalledMods).some(Boolean);
+  const hasLocked = def.lockedModSlots !== undefined && def.lockedModSlots.length > 0;
+  if (!hasPre && !hasLocked) return undefined;
+  return {
+    baseId: def.id,
+    mods: { ...(def.preInstalledMods ?? {}) },
+    lockedSlots: [...(def.lockedModSlots ?? [])],
+  };
+}
+
+function validateWeaponState(
+  weaponDef: ItemDef,
+  ws: WeaponInstanceState,
+  catalog: ReadonlyMap<string, ItemDef>,
+  requireExactBase = false,
+): string | null {
+  if (weaponDef.kind !== "weapon" || weaponDef.category === undefined) {
+    return "只有武器才能附带改装状态";
+  }
+  if (requireExactBase && ws.baseId !== weaponDef.id) {
+    return `weaponState.baseId "${ws.baseId}" 必须与模板武器 "${weaponDef.id}" 一致`;
+  }
+  if (ws.baseId !== weaponDef.id && catalog.get(ws.baseId)?.kind !== "weapon") {
+    return `weaponState.baseId "${ws.baseId}" 不是有效的武器模板`;
+  }
+  const allowedSlots = defaultWeaponSlots(weaponDef);
+  for (const slot of ws.lockedSlots) {
+    if (!allowedSlots.includes(slot)) {
+      return `${weaponDef.name} 没有${MOD_SLOT_LABELS[slot]}槽位`;
     }
   }
-  if (changed) draft.active = null;
+  for (const [slot, modId] of Object.entries(ws.mods)) {
+    if (modId === undefined) continue;
+    const modDef = catalog.get(modId);
+    if (!modDef) return `改装件 ${modId} 不存在`;
+    const check = canAttachMod(weaponDef, modDef, ws, { ignoreLock: true });
+    if (!check.ok) return check.reason;
+    if (check.slot !== slot) {
+      return `${modDef.name} 只能装到${MOD_SLOT_LABELS[check.slot]}，不能装到${MOD_SLOT_LABELS[slot as ModSlot]}`;
+    }
+  }
+  return null;
+}
+
+function materializeWeapon(
+  draft: Inventory,
+  def: ItemDef,
+  ws: WeaponInstanceState,
+  origin: string,
+  lastChange: string,
+  now: number,
+): string {
+  const instanceId = nextWeaponInstanceId(draft, ws.baseId);
+  draft.objects[instanceId] = {
+    kind: "customized",
+    definition: { ...def, id: instanceId },
+    origin: origin.slice(0, 240),
+    holder: "player",
+    location: null,
+    changedAt: now,
+    lastChange: lastChange.slice(0, 240),
+    remaining: null,
+    weaponState: cloneWeaponState(ws),
+  };
+  return instanceId;
+}
+
+function foldBackWeapon(draft: Inventory, instanceId: string): boolean {
+  const obj = draft.objects[instanceId];
+  if (obj?.kind !== "customized" || obj.holder !== "player" || !obj.weaponState) {
+    return false;
+  }
+  if (!isCleanWeaponState(obj.weaponState)) return false;
+  if (!take(draft, instanceId)) return false;
+  put(draft, obj.weaponState.baseId);
+  Reflect.deleteProperty(draft.objects, instanceId);
+  return true;
 }
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, ItemDef>>();
@@ -97,7 +197,6 @@ export function placedHolderTag(kind: PlacedKind, target: string): string {
 }
 
 function takeFromPlayer(draft: Inventory, id: string, count: number): boolean {
-  absorbLegacyWeapons(draft);
   let available = draft.backpack[id] ?? 0;
   for (const slot of Object.keys(draft.clothing) as ClothingSlot[]) {
     if (draft.clothing[slot] === id) available += 1;
@@ -180,7 +279,13 @@ export function applyPlaceItem(
       const parsed = ItemDefSchema.safeParse(command.definition);
       if (!parsed.success) return fail("新物件定义不完整");
       const def = parsed.data;
+      const initialWs = defaultInstanceStateFromDef(def);
+      if (initialWs) {
+        const wsError = validateWeaponState(def, initialWs, catalog);
+        if (wsError) return fail(wsError);
+      }
       draft.objects[id] = {
+        kind: "story",
         definition: def,
         origin: command.origin ?? summary,
         holder,
@@ -188,6 +293,7 @@ export function applyPlaceItem(
         changedAt: now,
         lastChange: summary,
         remaining: def.charges ?? null,
+        ...(initialWs ? { weaponState: initialWs } : {}),
       };
       mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
       return ok();
@@ -195,6 +301,7 @@ export function applyPlaceItem(
     const def = catalog.get(id) ?? draft.objects[id]?.definition;
     if (!def) return fail(`未登记物件 ${id}：首次留置需提供 definition 与 origin`);
     const object = draft.objects[id];
+    if (object && count > 1) return fail("独立物件每次只能留置 1 件");
     if (object && object.holder !== "player") {
       if (object.holder === "consumed") return fail("这件物件已经耗尽");
       if (object.holder === holder) return fail("这件物件已经留在那里了");
@@ -281,6 +388,9 @@ export function applyItem(
   npcs: NpcState["npcs"] = {},
 ): ApplyOutcome {
   let def = catalog.get(command.id) ?? draft.objects[command.id]?.definition;
+  if (command.weaponState !== undefined && command.action !== "gain") {
+    return fail("只有获得物品时才能指定 weaponState");
+  }
   if (command.definition !== undefined) {
     if (command.action !== "gain") return fail("只有首次获得物件时才能登记定义");
     if (def || draft.objects[command.id]) return fail("已有物件不可重新定义，直接使用原 id");
@@ -289,7 +399,13 @@ export function applyItem(
     const parsed = ItemDefSchema.safeParse(command.definition);
     if (!parsed.success) return fail("新物件定义不完整");
     def = parsed.data;
+    const initialWs = command.weaponState ?? defaultInstanceStateFromDef(def);
+    if (initialWs) {
+      const wsError = validateWeaponState(def, initialWs, catalog);
+      if (wsError) return fail(wsError);
+    }
     draft.objects[def.id] = {
+      kind: "story",
       definition: def,
       origin: command.origin,
       holder: "world",
@@ -297,10 +413,39 @@ export function applyItem(
       changedAt: now,
       lastChange: command.reason.slice(0, 240),
       remaining: def.charges ?? null,
+      ...(initialWs ? { weaponState: cloneWeaponState(initialWs) } : {}),
     };
   }
   if (!def) return fail(`未登记物件 ${command.id}：首次取得需提供 definition 与 origin`);
   const object = draft.objects[def.id];
+  if (command.action === "gain" && command.definition === undefined) {
+    if (object && command.weaponState !== undefined) {
+      return fail("已有独立物件不能重新指定 weaponState");
+    }
+    if (!object) {
+      const initialWs = command.weaponState ?? defaultInstanceStateFromDef(def);
+      if (initialWs) {
+        const wsError = validateWeaponState(def, initialWs, catalog, true);
+        if (wsError) return fail(wsError);
+        if (!isCleanWeaponState(initialWs)) {
+          const instanceId = materializeWeapon(
+            draft,
+            def,
+            initialWs,
+            command.origin ?? command.reason,
+            command.reason,
+            now,
+          );
+          put(draft, instanceId);
+          return {
+            ok: true,
+            notes: [def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`],
+            emit: [],
+          };
+        }
+      }
+    }
+  }
   const fromNpc = object
     ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder)
     : undefined;
@@ -367,15 +512,15 @@ export function applyItem(
   }
 }
 
-/** 丢了最后一把武器时，装在上面的改装件跟着没了 */
+/** 失去整件武器（含其已安装改装件） */
 function lose(draft: Inventory, def: ItemDef): ApplyOutcome {
-  absorbLegacyWeapons(draft);
+  const ws = draft.objects[def.id]?.weaponState;
+  const hadMods = ws !== undefined && Object.values(ws.mods).some((m) => m !== undefined);
   const outcome = loseOne(draft, def);
-  const gone = outcome.ok && def.kind === "weapon" && (draft.backpack[def.id] ?? 0) < 1;
-  if (gone) Reflect.deleteProperty(draft.tuned, def.id);
-  if (!gone || draft.mods[def.id] === undefined) return outcome;
-  Reflect.deleteProperty(draft.mods, def.id);
-  return ok(`失去 ${def.name}，装在上面的改装件一起没了`);
+  if (outcome.ok && hadMods) {
+    return ok(`失去 ${def.name}（连同所装改装件）`);
+  }
+  return outcome;
 }
 
 function loseOne(draft: Inventory, def: ItemDef): ApplyOutcome {
@@ -392,14 +537,22 @@ function loseOne(draft: Inventory, def: ItemDef): ApplyOutcome {
   return fail(`身上没有 ${def.name}`);
 }
 
+function hasCarriedWeapon(draft: Inventory, weaponId: string): boolean {
+  if ((draft.backpack[weaponId] ?? 0) >= 1) return true;
+  return Object.entries(draft.backpack).some(
+    ([id, count]) =>
+      count >= 1 &&
+      draft.objects[id]?.kind === "customized" &&
+      draft.objects[id]?.weaponState?.baseId === weaponId,
+  );
+}
+
 function equip(draft: Inventory, def: ItemDef): ApplyOutcome {
   const quick = quickSlotFor(def.kind);
   if (quick) return equipQuick(draft, def, quick);
   if (def.clothingSlot) return wear(draft, def, def.clothingSlot);
   if (def.kind !== "weapon") return fail(`${def.name} 不能装到装备栏`);
-  // 武器放进背包直接可用；兼容旧存档和开局先 gain 再 equip 的流水
-  absorbLegacyWeapons(draft);
-  if ((draft.backpack[def.id] ?? 0) < 1) return fail(`背包里没有 ${def.name}`);
+  if (!hasCarriedWeapon(draft, def.id)) return fail(`背包里没有 ${def.name}`);
   return ok();
 }
 
@@ -440,8 +593,7 @@ export function autoQuick(draft: Inventory, def: ItemDef): void {
 
 function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
   if (def.kind === "weapon") {
-    absorbLegacyWeapons(draft);
-    if ((draft.backpack[def.id] ?? 0) >= 1) return ok();
+    if (hasCarriedWeapon(draft, def.id)) return ok();
     return fail(`没有带着 ${def.name}`);
   }
   const quick = quickSlotFor(def.kind);
@@ -519,50 +671,93 @@ export function sellValue(def: ItemDef): number {
   return Math.floor((def.price * SELL_RATE) / 10) * 10;
 }
 
-/** 改装件：attach 从背包装到一把武器上，同位置的旧件放回背包；detach 拆下放回背包。
- * 武器要在武器格或背包里 */
+/** 改装件：attach 从背包装到武器上（必要时按需物化为独立实例），同位置的旧件放回背包；detach 拆下放回背包并在空净时折叠还原 */
 export function applyMod(
   draft: Inventory,
   action: "attach" | "detach",
   weaponId: string,
   modId: string,
   catalog: ReadonlyMap<string, ItemDef>,
+  now = 0,
 ): ApplyOutcome {
-  const weapon = catalog.get(weaponId);
+  const obj = draft.objects[weaponId];
+  const weapon = obj?.definition ?? catalog.get(weaponId);
   const mod = catalog.get(modId);
   if (weapon?.kind !== "weapon" || weapon.category === undefined) {
     return fail(`物品表里没有武器 ${weaponId}`);
   }
-  if (mod?.kind !== "mod" || mod.modSlot === undefined) return fail(`物品表里没有改装件 ${modId}`);
-  absorbLegacyWeapons(draft);
-  if ((draft.backpack[weaponId] ?? 0) < 1) {
+  if (mod?.kind !== "mod" || mod.modSlot === undefined) {
+    return fail(`物品表里没有改装件 ${modId}`);
+  }
+  if ((draft.backpack[weaponId] ?? 0) < 1 || (obj && obj.holder !== "player")) {
     return fail(`身上没有 ${weapon.name}`);
   }
   const slot = mod.modSlot;
-  const fitted = draft.mods[weaponId];
   if (action === "detach") {
-    if (fitted?.[slot] !== modId) return fail(`${weapon.name} 上没装 ${mod.name}`);
-    Reflect.deleteProperty(fitted, slot);
-    if (Object.keys(fitted).length === 0) Reflect.deleteProperty(draft.mods, weaponId);
+    const fitted = obj?.weaponState?.mods;
+    if (!obj?.weaponState || fitted?.[slot] !== modId) {
+      return fail(`${weapon.name} 上没装 ${mod.name}`);
+    }
+    if (obj.weaponState.lockedSlots.includes(slot)) {
+      return fail(`${weapon.name} 的${MOD_SLOT_LABELS[slot]}已锁定，需前往枪匠工坊改动`);
+    }
+    Reflect.deleteProperty(obj.weaponState.mods, slot);
     put(draft, modId);
+    obj.changedAt = now;
+    obj.lastChange = `拆下 ${mod.name}`;
+    foldBackWeapon(draft, weaponId);
     return ok(`从 ${weapon.name} 上拆下 ${mod.name}，放回背包`);
   }
-  if (!mod.modFits?.includes(weapon.category)) {
-    return fail(`${mod.name} 装不到${WEAPON_CATEGORY_LABELS[weapon.category]}上`);
+  const check = canAttachMod(weapon, mod, obj?.weaponState);
+  if (!check.ok) return fail(check.reason);
+  if (obj?.weaponState?.mods[slot] === modId) {
+    return fail(`${weapon.name} 上已经装着 ${mod.name}`);
   }
-  if (fitted?.[slot] === modId) return fail(`${weapon.name} 上已经装着 ${mod.name}`);
   if (!take(draft, modId)) return fail(`背包里没有 ${mod.name}`);
-  const old = fitted?.[slot];
-  if (old !== undefined) put(draft, old);
-  draft.mods[weaponId] = { ...fitted, [slot]: modId };
-  return ok(
-    `${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}${old === undefined ? "" : "，换下的放回背包"}`,
+  if (obj) {
+    if (!obj.weaponState) {
+      obj.weaponState = {
+        baseId: weapon.id,
+        mods: { ...(weapon.preInstalledMods ?? {}) },
+        lockedSlots: [...(weapon.lockedModSlots ?? [])],
+      };
+    }
+    const old = obj.weaponState.mods[slot];
+    if (old !== undefined) put(draft, old);
+    obj.weaponState.mods[slot] = modId;
+    obj.changedAt = now;
+    obj.lastChange = `加装 ${mod.name}`;
+    return ok(
+      `${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}${old === undefined ? "" : "，换下的放回背包"}`,
+    );
+  }
+  if (!take(draft, weaponId)) {
+    put(draft, modId);
+    return fail(`身上没有 ${weapon.name}`);
+  }
+  const initialWs: WeaponInstanceState = {
+    baseId: weapon.id,
+    mods: { ...(weapon.preInstalledMods ?? {}), [slot]: modId },
+    lockedSlots: [...(weapon.lockedModSlots ?? [])],
+  };
+  const instanceId = materializeWeapon(
+    draft,
+    weapon,
+    initialWs,
+    `由${weapon.name}加装改装件定制`,
+    `加装 ${mod.name}`,
+    now,
   );
+  put(draft, instanceId);
+  return ok(`${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}`);
 }
 
-/** 物品现在的稀有度：升过的按升过的，没写稀有度的按普通 */
-export function rarityOf(def: ItemDef, tuned: Readonly<Record<string, Rarity>>): Rarity {
-  return tuned[def.id] ?? def.rarity ?? "common";
+/** 物品现在的稀有度：精调过的按精调档位，没写稀有度的按普通 */
+export function rarityOf(
+  def: ItemDef,
+  weaponState?: Pick<WeaponInstanceState, "tunedRarity">,
+): Rarity {
+  return weaponState?.tunedRarity ?? def.rarity ?? "common";
 }
 
 export function applyParts(draft: Inventory, command: PartsCommand): ApplyOutcome {

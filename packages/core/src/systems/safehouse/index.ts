@@ -1,6 +1,7 @@
 import { defineSystem } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
-import { InventoryStateSchema, itemCatalog } from "../inventory";
+import { RARITY_LABELS } from "../economy";
+import { InventoryStateSchema, itemCatalog, MOD_SLOT_LABELS, type ModSlot } from "../inventory";
 import { NpcStateSchema } from "../npc";
 import { TravelStateSchema, vehicleCatalog } from "../travel";
 import { locationCatalog, WorldClockStateSchema } from "../world";
@@ -113,12 +114,30 @@ export const safehouse = defineSystem<
         };
 
         for (const p of inv.placed) {
-          const name = items.get(p.item)?.name ?? inv.objects[p.item]?.definition.name ?? p.item;
-          if (!isRelevantPlace(p.kind, p.target, p.location, p.item, name, p.note)) continue;
+          const obj = inv.objects[p.item];
+          const name = items.get(p.item)?.name ?? obj?.definition.name ?? p.item;
+          const baseId = obj?.weaponState?.baseId;
+          if (
+            !isRelevantPlace(p.kind, p.target, p.location, p.item, name, p.note) &&
+            !(baseId && text.includes(baseId))
+          )
+            continue;
           const qty = p.count > 1 ? `×${p.count}` : "";
+          const ws = obj?.weaponState;
+          const wsParts: string[] = [];
+          if (ws?.tunedRarity) wsParts.push(`精调至${RARITY_LABELS[ws.tunedRarity]}`);
+          if (ws) {
+            const fitted = Object.entries(ws.mods).flatMap(([slot, modId]) => {
+              if (!modId) return [];
+              const modName = items.get(modId)?.name ?? modId;
+              return [`[${MOD_SLOT_LABELS[slot as ModSlot]}] ${modName}`];
+            });
+            if (fitted.length > 0) wsParts.push(`已装 ${fitted.join("、")}`);
+          }
+          const wsText = wsParts.length > 0 ? `（${wsParts.join("；")}）` : "";
           const noteText = p.note ? `；${p.note}` : "";
           lines.push(
-            `- ${p.item} ${name}${qty}：留在 ${whereLabel(p.kind, p.target, p.location)}（不在身上${noteText}）`,
+            `- ${p.item} ${name}${qty}${wsText}：留在 ${whereLabel(p.kind, p.target, p.location)}（不在身上${noteText}）`,
           );
         }
 

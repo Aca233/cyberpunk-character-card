@@ -2,8 +2,9 @@ import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import { keeperOf, RARITY_LABELS } from "../economy";
 import { formatGameTime, merchantAt, merchantSites, WorldClockStateSchema } from "../world";
-import { itemCatalog, shopList, withWorldObjects } from "./apply";
+import { itemCatalog, rarityOf, shopList, withWorldObjects } from "./apply";
 import { merchantState, withMerchants } from "./merchants";
+import { weaponDisplayNames } from "./names";
 import {
   CLOTHING_SLOT_LABELS,
   carriedItemCounts,
@@ -12,8 +13,10 @@ import {
   type ItemDef,
   isBulkyItem,
   MOD_SLOT_LABELS,
+  projectWeaponState,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
+  type WeaponInstanceState,
 } from "./schema";
 import { quoteTrade } from "./trade";
 
@@ -41,16 +44,20 @@ function itemSubLabel(def: ItemDef): string {
   return ITEM_KIND_LABELS[def.kind];
 }
 
-function itemMeta(def: ItemDef) {
+function itemMeta(def: ItemDef, ws: WeaponInstanceState | undefined) {
+  const baseId = ws?.baseId ?? def.id;
+  const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, ws) : null;
   return {
+    baseId,
     group: itemGroup(def),
     kind: def.kind,
     subLabel: itemSubLabel(def),
-    rarity: def.rarity ?? null,
-    rarityLabel: def.rarity ? RARITY_LABELS[def.rarity] : null,
+    rarity: rar,
+    rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
     iconic: def.iconic ?? false,
     ability: def.ability ?? null,
-    bulky: isBulkyItem(def),
+    bulky: isBulkyItem(def, baseId),
+    weaponState: projectWeaponState(ws),
   };
 }
 
@@ -78,11 +85,14 @@ export function shopsView({ world, data }: ViewContext) {
   const catalog = itemCatalog(withWorldObjects(data, inventory.objects));
   const sites = merchantSites(data);
   const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
+  const sellCounts = carriedItemCounts(inventory);
+  const sellNames = weaponDisplayNames(sellCounts.keys(), inventory.objects, catalog);
   const now = world.time;
   return here.map((shop) => {
     const keeper = keeperOf(shop.keeperNpc, npcs);
-    const sell = [...carriedItemCounts(inventory)].flatMap(([id, count]) => {
-      const def = catalog.get(id);
+    const sell = [...sellCounts].flatMap(([id, count]) => {
+      const obj = inventory.objects[id];
+      const def = catalog.get(id) ?? obj?.definition;
       if (!def) return [];
       const quote = quoteTrade(
         world,
@@ -93,16 +103,17 @@ export function shopsView({ world, data }: ViewContext) {
       return [
         {
           id,
-          name: def.name,
+          name: sellNames.get(id) ?? def.name,
           count,
           value: quote.ok ? quote.price : 0,
-          ...itemMeta(def),
+          ...itemMeta(def, obj?.weaponState),
           locked: quote.ok ? null : quote.reason,
         },
       ];
     });
     const merchant = merchantState(inventory, shop, catalog, now);
     const shelfIds = Object.keys(merchant.stock);
+    const shelfNames = weaponDisplayNames(shelfIds, inventory.objects, catalog);
     const delivery = Object.values(inventory.supplyOrders)
       .filter((o) => o.shop === shop.id && (o.status === "pending" || o.status === "delayed"))
       .sort((a, b) => a.dueAt - b.dueAt)[0];
@@ -122,7 +133,8 @@ export function shopsView({ world, data }: ViewContext) {
           : formatGameTime(delivery.dueAt)
         : null,
       shelf: shelfIds.flatMap((id) => {
-        const def = catalog.get(id);
+        const obj = inventory.objects[id];
+        const def = catalog.get(id) ?? obj?.definition;
         if (!def) return [];
         const quote = quoteTrade(
           world,
@@ -134,8 +146,8 @@ export function shopsView({ world, data }: ViewContext) {
         return [
           {
             id: def.id,
-            name: def.name,
-            ...itemMeta(def),
+            name: shelfNames.get(id) ?? def.name,
+            ...itemMeta(def, obj?.weaponState),
             charges: def.charges ?? null,
             healPercent: def.healPercent ?? null,
             price: quote.price ?? 0,

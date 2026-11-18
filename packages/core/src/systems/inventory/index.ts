@@ -50,19 +50,16 @@ export const inventory = defineSystem<
   initial: () => ({
     objects: {},
     placed: [],
-    weapons: [null, null, null],
-    active: null,
     healing: null,
     grenade: null,
     backpack: {},
     depleted: {},
     clothing: {},
-    mods: {},
     parts: 0,
-    tuned: {},
     merchants: {},
     supplyOrders: {},
     nextSupply: 1,
+    nextWeaponSeq: 1,
   }),
   commands: {
     item: ItemCommandSchema,
@@ -115,7 +112,14 @@ export const inventory = defineSystem<
         relocateVehiclePlaced(draft, command.vehicle, command.location);
         return { ok: true };
       case "inventory.mod":
-        return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));
+        return applyMod(
+          draft,
+          command.action,
+          command.weapon,
+          command.mod,
+          itemCatalog(withWorldObjects(ctx.data, draft.objects)),
+          ctx.now,
+        );
       case "parts":
         return applyParts(draft, command);
     }
@@ -148,9 +152,10 @@ export const inventory = defineSystem<
         const lines = Object.entries(objects)
           .filter(
             ([id, o]) =>
-              (o.holder !== "consumed" && (o.holder === "player" || o.location === here)) ||
-              input.text.includes(id) ||
-              input.text.includes(o.definition.name),
+              o.kind !== "customized" &&
+              ((o.holder !== "consumed" && (o.holder === "player" || o.location === here)) ||
+                input.text.includes(id) ||
+                input.text.includes(o.definition.name)),
           )
           .map(
             ([id, o]) =>

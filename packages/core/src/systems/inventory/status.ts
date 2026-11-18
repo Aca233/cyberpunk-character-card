@@ -1,4 +1,5 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
+import { RARITY_LABELS } from "../economy";
 import type { shopsView } from "./shops";
 import type { inventoryView } from "./view";
 
@@ -22,16 +23,12 @@ export const inventoryStatus: readonly SystemStatus[] = [
     lines(ctx: StatusContext) {
       const inv = ctx.views.inventory as InventoryView;
       const lines: string[] = [];
-      const withMods = (w: {
-        readonly id: string;
-        readonly count: number;
-        readonly bulky: boolean;
-      }) => {
+      const withMods = (w: InventoryView["carriedWeapons"][number]) => {
         const fitted = inv.mods[w.id] ?? [];
-        const tuned = inv.tuned[w.id];
+        const tuned = w.weaponState?.tunedRarity;
         const extra = [
           ...(w.bulky ? ["大件"] : []),
-          ...(tuned ? [`升到${tuned}`] : []),
+          ...(tuned ? [`升到${RARITY_LABELS[tuned]}`] : []),
           ...(fitted.length > 0 ? [`装着 ${fitted.map((m) => m.id).join("、")}`] : []),
         ];
         const qty = w.count > 1 ? `×${w.count}` : "";

@@ -224,7 +224,10 @@ export function quoteTrade(
       const carried = carriedItemCounts(inventory).get(item.id) ?? 0;
       if (carried < 1 || (object && object.holder !== "player"))
         return fail(`背包里没有${item.name}；穿着的衣服或快捷栏里的药/雷先脱下`);
-      if (carried === 1 && Object.values(inventory.mods[item.id] ?? {}).length > 0)
+      if (
+        carried === 1 &&
+        Object.values(object?.weaponState?.mods ?? {}).some((m) => m !== undefined)
+      )
         return fail(`${item.name}上还装着改装件，先拆下来再卖`);
       if (party.npc?.body?.gear.includes(item.id))
         return fail(`${party.name}已有同款装备，目前无法将另一件合并到其持有记录`);

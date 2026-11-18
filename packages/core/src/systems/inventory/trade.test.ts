@@ -312,17 +312,40 @@ describe("普通交易共用实际报价和货源", () => {
     expect(real.results[0]?.result.ok).toBe(true);
     expect(inventory(real.world).objects.token?.holder).toBe("player");
   });
-  it("最后一把带配件的武器不能由任一入口卖出，两把时只卖一把", () => {
+  it("带配件的定制武器在当前阶段暂不可直接卖出，两把时可卖未改装的一把", () => {
+    const modWeaponId = "wpn:gun:1";
     const world = alter(base(), {
-      inventory: { ...inventory(base()), backpack: { gun: 1 }, mods: { gun: { scope: "scope" } } },
+      inventory: {
+        ...inventory(base()),
+        nextWeaponSeq: 2,
+        backpack: { [modWeaponId]: 1 },
+        objects: {
+          [modWeaponId]: {
+            kind: "customized",
+            definition: { ...gun, id: modWeaponId },
+            origin: "由测试手枪加装改装件定制",
+            holder: "player",
+            location: null,
+            changedAt: 0,
+            lastChange: "加装瞄准镜",
+            remaining: null,
+            weaponState: { baseId: gun.id, mods: { scope: "scope" }, lockedSlots: [] },
+          },
+        },
+      },
     });
-    expect(button(world, "sellItem").ok).toBe(false);
-    expect(trade(world, "shop-a", "sell").world).toEqual(world);
-    const two = alter(world, { inventory: { ...inventory(world), backpack: { gun: 2 } } });
-    const sold = trade(two, "shop-a", "sell");
+    expect(button(world, "sellItem", "shop-a", modWeaponId).ok).toBe(false);
+    expect(trade(world, "shop-a", "sell", modWeaponId).world).toEqual(world);
+    const two = alter(world, {
+      inventory: { ...inventory(world), backpack: { [modWeaponId]: 1, [gun.id]: 1 } },
+    });
+    const sold = trade(two, "shop-a", "sell", gun.id);
     expect(sold.results[0]?.result.ok).toBe(true);
-    expect(inventory(sold.world).mods.gun).toEqual({ scope: "scope" });
-    expect(inventory(sold.world).backpack.gun).toBe(1);
+    expect(inventory(sold.world).objects[modWeaponId]?.weaponState?.mods).toEqual({
+      scope: "scope",
+    });
+    expect(inventory(sold.world).backpack[gun.id]).toBeUndefined();
+    expect(inventory(sold.world).backpack[modWeaponId]).toBe(1);
   });
   it("出售所得实物留在商家，可重新购买，读档后仍保持归属", () => {
     const world = alter(base(), {

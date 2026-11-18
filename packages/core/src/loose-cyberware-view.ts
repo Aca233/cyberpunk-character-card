@@ -17,12 +17,17 @@ export function looseCyberwareView(
     backpack[part.id] = 1;
     itemNames[part.id] = `${part.name}（未安装${part.condition === "damaged" ? "·损坏" : ""}）`;
     details[part.id] = {
+      baseId: part.id,
       kind: "misc",
       subLabel: "义体实物",
       rarity: part.rarity,
       rarityLabel: part.rarity ? RARITY_LABELS[part.rarity] : null,
       iconic: false,
       bulky: false,
+      concealment: null,
+      noise: null,
+      modSlots: [],
+      weaponState: null,
       ability: [part.ability, `来源：${part.source}`, "可携带、存放或交给医生检查安装。"]
         .filter(Boolean)
         .join("\n"),
