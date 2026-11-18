@@ -935,6 +935,14 @@ export function Unread({
   readonly wide?: boolean;
 }) {
   const p = usePeek("unread", peek.expand, peek.setExpand);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (p.open) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && rootRef.current?.contains(active)) {
+      active.blur();
+    }
+  }, [p.open]);
   // 私信/芯片加宽：整块收起时等对话收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡（计划第十二节第 12 条）
   const lingered = useLinger(wide && p.open);
   const wideOn = p.open ? wide : lingered;
@@ -957,6 +965,7 @@ export function Unread({
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
     <div
+      ref={rootRef}
       className={`${styles.block} ${styles.unread}`}
       data-layer="os"
       data-open={p.open || undefined}
@@ -969,12 +978,8 @@ export function Unread({
       aria-expanded={p.open}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
-        // 已经钉住时点击展开正文区（复制消息、漏点输入框边缘）不顺手关掉整块，点外框或底栏再收起
-        if (
-          p.pinned &&
-          event.target instanceof Element &&
-          event.target.closest(`.${styles.grow}`)
-        ) {
+        // 点击展开正文区（选联系人、复制消息、漏点按钮或输入框边缘）不顺手固定或关闭，保留鼠标移走收起；点外框或底栏再切换固定
+        if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) {
           return;
         }
         togglePin();
@@ -983,12 +988,6 @@ export function Unread({
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           togglePin();
-        }
-      }}
-      onFocusCapture={(event) => {
-        // 悬停展开后点进输入框或联系人列表立即钉住，避免鼠标微移离开 300ms 后面板自动收起
-        if (p.open && !p.pinned && event.target !== event.currentTarget) {
-          peek.setExpand({ id: "unread", pinned: true });
         }
       }}
       {...p.bind}
@@ -1001,7 +1000,7 @@ export function Unread({
           open={p.open}
           head={wide ? null : undefined}
           title="消息 · 芯片"
-          hint="T"
+          hint={p.pinned ? "ESC" : "T"}
           line="var(--cp-red)"
         >
           {full}
@@ -1011,7 +1010,7 @@ export function Unread({
             {tabs}
             <span className={styles.unreadTabMeta}>
               <span>{totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}</span>
-              {wide && <kbd className={styles.unreadKey}>T</kbd>}
+              {wide && <kbd className={styles.unreadKey}>{p.pinned ? "ESC" : "T"}</kbd>}
             </span>
           </div>
         ) : (
