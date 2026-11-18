@@ -393,6 +393,7 @@ export function CharacterCreator({
           <section
             ref={stageRef}
             className={wb.stage}
+            data-split={activeStep === "chrome_kit" && chromeKitTab === "kit" ? "kit" : undefined}
             aria-label={`第 ${currentStep.index} 步：${currentStep.title}`}
           >
             <header className={wb.stageHeader}>
@@ -717,20 +718,28 @@ export function CharacterCreator({
                   </div>
                 ) : (
                   <div className={wb.kitLayout}>
-                    <section className={wb.sectionBox} aria-label="开局行装与座驾">
+                    <section
+                      className={`${wb.sectionBox} ${wb.kitLeftPane}`}
+                      aria-label="开局行装与座驾"
+                    >
                       <CellFrame />
                       <header className={wb.sectionBoxHead}>
                         <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
                         <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
                       </header>
-                      {pickerProps ? (
-                        <LoadoutPicker {...pickerProps} />
-                      ) : (
-                        <p className={wb.note}>正在加载开局行装目录…</p>
-                      )}
+                      <div className={wb.kitLeftScroll}>
+                        {pickerProps ? (
+                          <LoadoutPicker {...pickerProps} />
+                        ) : (
+                          <p className={wb.note}>正在加载开局行装目录…</p>
+                        )}
+                      </div>
                     </section>
 
-                    <section className={wb.sectionBox} aria-label="开局出生落脚点">
+                    <section
+                      className={`${wb.sectionBox} ${wb.kitRightPane}`}
+                      aria-label="开局出生落脚点"
+                    >
                       <CellFrame />
                       <header className={wb.sectionBoxHead}>
                         <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>

@@ -69,7 +69,13 @@ const InterpretSchema = z.object({
 /** 模块库里用过的标签：解读时让模型尽量沿用，方便分类筛选与检定判断 */
 const KNOWN_TAGS = [...new Set(boardModules.flatMap((m) => m.tags))];
 
-const START_WEAPON_RARITIES: ReadonlySet<string> = new Set(["common", "uncommon", "rare"]);
+const START_WEAPON_RARITIES: ReadonlySet<string> = new Set([
+  "common",
+  "uncommon",
+  "rare",
+  "epic",
+  "legendary",
+]);
 
 /** /api/characters：角色卡的列表、新建、修改、删除；示例角色只读 */
 export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmClient): Hono {

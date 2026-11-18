@@ -8,6 +8,7 @@ import {
   type CharacterCard,
   cyberwareRules,
   FLAW_MAX,
+  inventoryRules,
   PAST_MAX,
   SKILL_MAX,
 } from "@cp/core";
@@ -21,6 +22,7 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
 import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { CYBER_SLOT_ICON } from "../story/cyberwareMeta";
+import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
 import {
@@ -452,10 +454,21 @@ const CASH_TIER_DELTA: Readonly<Record<CashTier, string>> = {
 };
 
 export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps) {
+  const [hoverWeaponId, setHoverWeaponId] = useState<string | null>(null);
   const base = originDefaultLoadout(card, data);
   const kit = board.kit;
   const ownedGear = new Set(pickedLoadouts(card, data).flatMap((l) => l.gear.map((g) => g.id)));
   const setKit = (patch: Partial<Board["kit"]>) => commit({ ...board, kit: { ...kit, ...patch } });
+  const previewWeapon =
+    data.weapons?.find((w) => w.id === hoverWeaponId) ??
+    data.weapons?.find((w) => kit.weapons.includes(w.id)) ??
+    null;
+  const previewCategory =
+    previewWeapon?.category && previewWeapon.category in inventoryRules.WEAPON_CATEGORY_LABELS
+      ? inventoryRules.WEAPON_CATEGORY_LABELS[
+          previewWeapon.category as keyof typeof inventoryRules.WEAPON_CATEGORY_LABELS
+        ]
+      : undefined;
 
   return (
     <div className={styles.pickerBody}>
@@ -494,15 +507,50 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
       {data.weapons && data.weapons.length > 0 && (
         <>
           <h4 className={styles.subTitle}>
-            额外随身武器 <small className={styles.stepNote}>{kit.weapons.length} / 2</small>
+            额外随身武器{" "}
+            <small className={styles.stepNote}>
+              {kit.weapons.length} / 2 · 共 {data.weapons.length} 款
+            </small>
           </h4>
+          <div className={styles.weaponPreview} aria-live="polite">
+            <CellFrame />
+            {previewWeapon ? (
+              <>
+                <div className={styles.weaponPreviewHead}>
+                  <span className={styles.weaponPreviewMeta}>
+                    <strong className={styles.pickName}>{previewWeapon.name}</strong>
+                    <span className={styles.shelfRarity} data-rarity={previewWeapon.rarity}>
+                      · {RARITY_LABELS[previewWeapon.rarity] ?? previewWeapon.rarity}
+                    </span>
+                    {previewCategory && (
+                      <span className={styles.shelfMeta}>· {previewCategory}</span>
+                    )}
+                  </span>
+                  {(ownedGear.has(previewWeapon.id) || kit.weapons.includes(previewWeapon.id)) && (
+                    <span className={styles.moduleBadge} data-tone="active">
+                      {ownedGear.has(previewWeapon.id) ? "出身自带" : "已选配"}
+                    </span>
+                  )}
+                </div>
+                <p className={styles.weaponPreviewDesc}>{previewWeapon.ability}</p>
+              </>
+            ) : (
+              <p className={styles.weaponPreviewDesc}>
+                把鼠标悬停在任意武器上即可查看详细说明，点击选配（最多 2 把）。
+              </p>
+            )}
+          </div>
           <ul className={styles.weaponGrid}>
             {data.weapons.map((w) => {
               const on = kit.weapons.includes(w.id);
               const owned = ownedGear.has(w.id);
               const full = !on && kit.weapons.length >= 2;
               return (
-                <li key={w.id}>
+                <li
+                  key={w.id}
+                  onMouseEnter={() => setHoverWeaponId(w.id)}
+                  onFocus={() => setHoverWeaponId(w.id)}
+                >
                   <button
                     type="button"
                     className={styles.weaponTile}
@@ -532,29 +580,41 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
 
       {data.vehicles && data.vehicles.length > 0 && (
         <>
-          <h4 className={styles.subTitle}>专属载具</h4>
-          <ul className={styles.skillWall}>
+          <h4 className={styles.subTitle}>
+            专属载具 <small className={styles.stepNote}>共 {data.vehicles.length} 款</small>
+          </h4>
+          <ul className={styles.vehicleGrid}>
             {data.vehicles.map((v) => {
               const free = base.freeVehicleIds.includes(v.id);
               const on = free || kit.vehicle === v.id;
+              const art = vehicleArtOf(v.id);
               return (
                 <li key={v.id}>
                   <button
                     type="button"
-                    className={styles.pick}
+                    className={`${styles.pick} ${styles.vehiclePick}`}
                     aria-pressed={on}
                     disabled={free && kit.vehicle !== v.id}
                     onClick={() => setKit({ vehicle: kit.vehicle === v.id ? null : v.id })}
                   >
                     <CellFrame />
-                    <span className={styles.pickHead}>
-                      <strong className={styles.pickName}>{v.name}</strong>
-                      <span className={styles.moduleBadge} data-tone={on ? "active" : undefined}>
-                        {free ? "出身自带" : (CLASS_LABELS[v.class] ?? v.class)}
-                      </span>
+                    <span className={styles.vehicleArt}>
+                      {art ? (
+                        <Asset id={art} alt={v.name} className={styles.vehicleImg} />
+                      ) : (
+                        <span className={styles.shelfMeta}>无图</span>
+                      )}
                     </span>
-                    <span>
-                      {[`${v.maker} · ${v.seats} 座`, v.note].filter(Boolean).join(" · ")}
+                    <span className={styles.vehicleInfo}>
+                      <span className={styles.pickHead}>
+                        <strong className={styles.pickName}>{v.name}</strong>
+                        <span className={styles.moduleBadge} data-tone={on ? "active" : undefined}>
+                          {free ? "出身自带" : (CLASS_LABELS[v.class] ?? v.class)}
+                        </span>
+                      </span>
+                      <span>
+                        {[`${v.maker} · ${v.seats} 座`, v.note].filter(Boolean).join(" · ")}
+                      </span>
                     </span>
                   </button>
                 </li>

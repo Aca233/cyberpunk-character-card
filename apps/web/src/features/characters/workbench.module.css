@@ -307,7 +307,7 @@
 .bench {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   height: 100%;
   min-height: 0;
   color: var(--cp-text);
@@ -338,10 +338,12 @@
 .stepBtn {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  padding: 6px 12px 7px;
+  min-height: 32px;
+  padding: 5px 10px;
   border: 0;
   color: var(--cp-text-dim);
   background: transparent;
@@ -356,9 +358,9 @@
 .stepBtn:not(:last-child)::after {
   content: "";
   position: absolute;
-  top: 7px;
+  top: 6px;
   right: 0;
-  bottom: 7px;
+  bottom: 6px;
   width: 1px;
   background: rgb(255 97 88 / 26%);
   pointer-events: none;
@@ -386,18 +388,13 @@
   background: rgb(94 246 255 / 35%);
 }
 
-.stepBtnTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
 .stepCode {
+  flex: none;
   color: var(--cp-red);
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
 .stepBtn[aria-current="step"] .stepCode {
@@ -405,6 +402,7 @@
 }
 
 .stepBadge {
+  flex: 0 1 auto;
   font-size: 0.68rem;
   color: var(--cp-text-dim);
   overflow: hidden;
@@ -421,8 +419,10 @@
 }
 
 .stepLabel {
+  flex: 1;
+  min-width: 0;
   color: var(--cp-text);
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -473,26 +473,37 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 14px 18px;
+  padding: 12px 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--cp-red-dim) transparent;
   scrollbar-width: thin;
 }
 
+.stage[data-split="kit"] {
+  overflow: hidden;
+}
+
 .stageHeader {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 14px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .stageTitleRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
+  gap: 8px 12px;
+}
+
+.stageHeaderRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 
 .stageEyebrow {
@@ -500,21 +511,15 @@
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
 }
 
 .stageTitle {
   margin: 0;
   color: var(--cp-cyan);
-  font-size: 1.15rem;
+  font-size: 1.08rem;
   font-weight: 600;
   letter-spacing: 0.06em;
-}
-
-.stageLead {
-  margin: 0;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.55;
 }
 
 .hairline {
@@ -522,7 +527,7 @@
   flex: none;
   width: 100%;
   height: 2px;
-  margin-top: 6px;
+  margin-top: 2px;
   background: var(--cp-red-dim);
   mask-size: 100% 100%;
   opacity: 0.6;
@@ -530,9 +535,15 @@
 
 .stageBody {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
+}
+
+.stage[data-split="kit"] > .stageBody {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 /* ———— 通用区块卡片 ———— */
@@ -728,14 +739,16 @@
 
 .chromeLayout {
   display: grid;
+  flex: 1 0 auto;
   grid-template-columns: minmax(480px, 560px) minmax(340px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .chromeLeft {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 12px;
   min-width: 0;
 }
@@ -743,9 +756,17 @@
 /* 禁止 zoom hack，让 @container pin 自然响应式计算尺寸且命中精确 */
 .dollFrame {
   container: pin / inline-size;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   max-width: 560px;
   min-width: 0;
+}
+
+.dollFrame > * {
+  width: 100%;
 }
 
 .humanityConsole {
@@ -913,9 +934,27 @@
 
 .kitLayout {
   display: grid;
+  flex: 1 1 0;
   grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.1fr);
   gap: 14px;
-  align-items: start;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.kitLeftPane,
+.kitRightPane {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kitLeftScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
 }
 
 /* ———— Step 4: 人脉与人设小传 ———— */
@@ -1132,12 +1171,68 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 14px;
   padding: 16px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--cp-red-dim) transparent;
   scrollbar-width: thin;
+}
+
+.sidebarTop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebarBottom {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.sidebarBuild {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 11px;
+  background: rgb(255 255 255 / 3%);
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.sidebarBuildCount {
+  color: var(--cp-cyan);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.buildList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.buildRow {
+  display: grid;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  font-size: var(--fs-label);
+  line-height: 1.4;
+}
+
+.buildRow dt {
+  color: var(--cp-text-dim);
+}
+
+.buildRow dd {
+  margin: 0;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
 }
 
 .sidebarHeadMobile {
@@ -1272,15 +1367,15 @@
 
 .bar {
   --box-line: var(--cp-red-dim);
-  --box-fill: rgb(8 8 14 / 90%);
+  --box-fill: rgb(14 8 16 / 94%);
   position: relative;
   isolation: isolate;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding: 8px 16px 10px;
+  gap: 10px 18px;
+  padding: 11px 18px;
 }
 
 .barActions,
@@ -1331,6 +1426,28 @@
   .identityTop,
   .kitLayout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stage[data-split="kit"] {
+    overflow-y: auto;
+  }
+
+  .stage[data-split="kit"] > .stageBody {
+    flex: 1 0 auto;
+    min-height: auto;
+  }
+
+  .kitLayout {
+    flex: 0 0 auto;
+    min-height: auto;
+  }
+
+  .kitLeftPane,
+  .kitRightPane,
+  .kitLeftScroll {
+    min-height: auto;
+    overflow: visible;
+    padding-right: 0;
   }
 }
 
