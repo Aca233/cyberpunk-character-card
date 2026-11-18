@@ -55,33 +55,55 @@ function modConcealmentShift(modId: string, slot: inventoryRules.ModSlot): numbe
   return 0;
 }
 
+function baseConcealmentRank(weapon: GunsmithWeapon, currentRank: number): number {
+  const { subLabel } = weapon;
+  if (subLabel.includes("狙击步枪") || subLabel.includes("轻机枪")) return 3;
+  if (
+    subLabel.includes("突击步枪") ||
+    subLabel.includes("霰弹枪") ||
+    subLabel.includes("精准步枪")
+  ) {
+    return 2;
+  }
+  if (subLabel.includes("左轮手枪") || subLabel.includes("冲锋枪")) return 1;
+  if (subLabel.includes("手枪")) return 0;
+  return currentRank;
+}
+
 function previewGunsmithImpact(
   weapon: GunsmithWeapon,
   payload: GunsmithPayload,
   slot?: inventoryRules.ModSlot,
 ): GunsmithPreview {
   const currentRank = CONCEAL_ORDER.indexOf(weapon.concealment);
+  const baseRank = baseConcealmentRank(weapon, currentRank);
+  const maxRank = baseRank === 3 ? 3 : 2;
   let nextConceal = weapon.concealment;
   let nextNoise = weapon.noise;
   let nextSmartLink = weapon.grantsSmartLink;
   let nextRarityLabel: string | null = null;
 
-  if (payload.action === "install" && payload.mod && slot) {
-    const oldMod = weapon.weaponState?.mods[slot];
-    const delta =
-      modConcealmentShift(payload.mod, slot) - (oldMod ? modConcealmentShift(oldMod, slot) : 0);
-    const nextRank = currentRank === 3 ? 3 : Math.max(0, Math.min(2, currentRank + delta));
-    nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
-    if (slot === "muzzle") nextNoise = "silent";
-    if (payload.mod === "smart-link-module") nextSmartLink = true;
-  } else if (payload.action === "detach" && payload.mod && slot) {
-    const delta = modConcealmentShift(payload.mod, slot);
-    const nextRank = currentRank === 3 ? 3 : Math.max(0, Math.min(2, currentRank - delta));
-    nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
-    if (slot === "muzzle") nextNoise = "loud";
-    if (payload.mod === "smart-link-module" && !weapon.weaponState?.smartLink) {
-      nextSmartLink = false;
+  if ((payload.action === "install" || payload.action === "detach") && payload.mod && slot) {
+    const afterMods: Partial<Record<inventoryRules.ModSlot, string>> = {
+      ...(weapon.weaponState?.mods ?? {}),
+    };
+    if (payload.action === "install") {
+      afterMods[slot] = payload.mod;
+      if (slot === "muzzle") nextNoise = "silent";
+      if (payload.mod === "smart-link-module") nextSmartLink = true;
+    } else {
+      Reflect.deleteProperty(afterMods, slot);
+      if (slot === "muzzle") nextNoise = "loud";
+      if (payload.mod === "smart-link-module" && !weapon.weaponState?.smartLink) {
+        nextSmartLink = false;
+      }
     }
+    let totalShift = 0;
+    for (const [s, modId] of Object.entries(afterMods)) {
+      if (modId) totalShift += modConcealmentShift(modId, s as inventoryRules.ModSlot);
+    }
+    const nextRank = Math.max(baseRank, Math.min(maxRank, baseRank + totalShift));
+    nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
   } else if (payload.action === "tune") {
     nextRarityLabel = weapon.tune.nextRarityLabel;
   } else if (payload.action === "convert" && payload.conversion === "smart-link") {
