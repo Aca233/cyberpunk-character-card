@@ -5205,3 +5205,104 @@ ul.mapLegend > li {
     width: auto;
   }
 }
+
+/* ———— 文生图：主角立绘、回合场景插图 ———— */
+
+.playerPortraitStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: rgb(10 14 22 / 78%);
+  border-left: 2px solid var(--cp-cyan);
+}
+
+.playerPortraitThumb {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(8 10 18 / 88%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  width: 60px;
+  height: 80px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: var(--cp-cursor-hand);
+  overflow: hidden;
+}
+
+.playerPortraitImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.playerPortraitInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.playerPortraitActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.turnIllustration {
+  margin: 10px 0 6px;
+  padding: 6px;
+  background: rgb(8 10 18 / 82%);
+  border-left: 2px solid var(--cp-cyan);
+}
+
+.turnIllusButton {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: var(--cp-cursor-hand);
+  overflow: hidden;
+}
+
+.turnIllusImg {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+}
+
+.turnIllusFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+}
+
+.turnIllusActions {
+  display: flex;
+  gap: 8px;
+}
+
+.turnIllusPending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0 4px;
+  padding: 6px 10px;
+  background: rgb(14 18 28 / 78%);
+  border-left: 2px solid var(--cp-yellow);
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
+}

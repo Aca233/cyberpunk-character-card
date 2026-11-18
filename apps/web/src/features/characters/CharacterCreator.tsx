@@ -5,6 +5,7 @@ import {
   cyberwareRules,
   FLAW_MAX,
   humanityRules,
+  type ImagePromptRequest,
   PAST_MAX,
   PROSE_BLOCK_INFO,
   PROSE_BLOCKS,
@@ -20,6 +21,8 @@ import { ActionButton } from "../../ui/ActionButton";
 import { cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { GeneratedImage, ImageLightbox } from "../images/GeneratedImage";
+import { ImageGenModal } from "../images/ImageGenModal";
 import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
 import { PeoplePicker } from "./CreatorLife";
 import {
@@ -170,6 +173,8 @@ export function CharacterCreator({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [localSaveError, setLocalSaveError] = useState<string | null>(null);
+  const [portraitModalOpen, setPortraitModalOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const queryClient = useQueryClient();
@@ -292,6 +297,26 @@ export function CharacterCreator({
     ...board.skills.map((m) => m.label),
   ];
   const filledProseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
+  const characterPromptRequest: ImagePromptRequest = {
+    kind: "character",
+    name: card.name.trim() || "Merc",
+    alias: card.alias.trim(),
+    pronoun: card.pronoun.trim() || "TA",
+    origin: board.origin?.label ?? card.origin.trim(),
+    look: card.look.trim(),
+    personality: card.personality.trim(),
+    skills: card.skills.trim(),
+    cyberware: mountedChromeNames,
+    gear: [...weaponNames, ...allVehicles],
+    instruction: "",
+  };
+  const clearPortrait = () => {
+    setLocalSaveError(null);
+    onChange((current) => {
+      const { portrait: _, ...rest } = current;
+      return rest;
+    });
+  };
 
   const handleSave = async () => {
     setLocalSaveError(null);
@@ -485,6 +510,40 @@ export function CharacterCreator({
                             ))}
                           </div>
                         </fieldset>
+                        <div className={wb.portraitRow}>
+                          <button
+                            type="button"
+                            className={wb.portraitFrame}
+                            data-empty={!card.portrait || undefined}
+                            disabled={!card.portrait}
+                            title={card.portrait ? "点击查看大图" : "尚未生成角色立绘"}
+                            onClick={() => setLightboxOpen(true)}
+                          >
+                            <CellFrame />
+                            <GeneratedImage
+                              imageId={card.portrait}
+                              alt={`${card.name.trim() || "角色"}立绘`}
+                              className={wb.portraitImg}
+                              fallback={<span className={wb.portraitEmpty}>NO PORTRAIT</span>}
+                            />
+                          </button>
+                          <div className={wb.portraitTools}>
+                            <span className={wb.portraitLabel}>角色肖像 · 文生图</span>
+                            <p className={wb.note}>
+                              依据外貌描写、出身与已装义体生成赛博朋克角色立绘，可随时重绘。
+                            </p>
+                            <div className={wb.portraitBtns}>
+                              <Button small onClick={() => setPortraitModalOpen(true)}>
+                                {card.portrait ? "AI 重绘立绘" : "AI 生成立绘"}
+                              </Button>
+                              {card.portrait && (
+                                <Button small onClick={clearPortrait}>
+                                  清除
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </section>
 
@@ -879,20 +938,39 @@ export function CharacterCreator({
 
                     <div className={wb.reviewRight}>
                       <DossierBlock title="身份铭牌与出身背景" onEdit={() => goToStep("identity")}>
-                        <strong className={wb.dossierBig}>
-                          {card.name.trim() || "未命名角色"}
-                          {card.alias.trim() && <small> 「{card.alias.trim()}」</small>}
-                        </strong>
-                        <p className={wb.dossierDim}>
-                          代词：{card.pronoun.trim() || "未设定"} · 出身：
-                          {board.origin?.label ?? "尚未选择"}
-                        </p>
-                        <p className={wb.dossierText}>
-                          {board.origin?.ability || "决定初始家底、自带义体与街头人脉"}
-                        </p>
-                        {board.origin?.hook && (
-                          <p className={wb.dossierDim}>身世钩子：{board.origin.hook}</p>
-                        )}
+                        <div className={wb.reviewIdentityRow}>
+                          {card.portrait && (
+                            <button
+                              type="button"
+                              className={wb.portraitFrame}
+                              title="点击查看大图"
+                              onClick={() => setLightboxOpen(true)}
+                            >
+                              <CellFrame />
+                              <GeneratedImage
+                                imageId={card.portrait}
+                                alt={`${card.name.trim() || "角色"}立绘`}
+                                className={wb.portraitImg}
+                              />
+                            </button>
+                          )}
+                          <div>
+                            <strong className={wb.dossierBig}>
+                              {card.name.trim() || "未命名角色"}
+                              {card.alias.trim() && <small> 「{card.alias.trim()}」</small>}
+                            </strong>
+                            <p className={wb.dossierDim}>
+                              代词：{card.pronoun.trim() || "未设定"} · 出身：
+                              {board.origin?.label ?? "尚未选择"}
+                            </p>
+                            <p className={wb.dossierText}>
+                              {board.origin?.ability || "决定初始家底、自带义体与街头人脉"}
+                            </p>
+                            {board.origin?.hook && (
+                              <p className={wb.dossierDim}>身世钩子：{board.origin.hook}</p>
+                            )}
+                          </div>
+                        </div>
                       </DossierBlock>
 
                       <DossierBlock title="过往、特质与缺陷" onEdit={() => goToStep("traits")}>
@@ -1028,19 +1106,38 @@ export function CharacterCreator({
                       <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
                       {isSample && <span className={wb.sampleBadge}>官方预设</span>}
                     </div>
-                    <h2 className={wb.heroName}>
-                      {card.name.trim() || "未命名角色"}
-                      {card.alias.trim() && (
-                        <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
+                    <div className={wb.sidebarHeroTop}>
+                      {card.portrait && (
+                        <button
+                          type="button"
+                          className={wb.heroAvatar}
+                          title="查看大图"
+                          onClick={() => setLightboxOpen(true)}
+                        >
+                          <CellFrame />
+                          <GeneratedImage
+                            imageId={card.portrait}
+                            alt={`${card.name.trim() || "角色"}肖像`}
+                            className={wb.portraitImg}
+                          />
+                        </button>
                       )}
-                    </h2>
-                    <p className={wb.heroMeta}>
-                      {[
-                        card.pronoun.trim() || "未设代词",
-                        board.origin?.label ?? "未选出身",
-                        anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
-                      ].join(" · ")}
-                    </p>
+                      <div className={wb.sidebarHeroMeta}>
+                        <h2 className={wb.heroName}>
+                          {card.name.trim() || "未命名角色"}
+                          {card.alias.trim() && (
+                            <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
+                          )}
+                        </h2>
+                        <p className={wb.heroMeta}>
+                          {[
+                            card.pronoun.trim() || "未设代词",
+                            board.origin?.label ?? "未选出身",
+                            anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
+                          ].join(" · ")}
+                        </p>
+                      </div>
+                    </div>
                   </header>
 
                   <section
@@ -1256,6 +1353,20 @@ export function CharacterCreator({
           </Button>
         </div>
       </footer>
+      <ImageGenModal
+        open={portraitModalOpen}
+        title="AI 生成角色立绘"
+        subtitle={card.name.trim() || "新建夜之城佣兵"}
+        promptRequest={characterPromptRequest}
+        defaultAspectRatio="3:4"
+        onClose={() => setPortraitModalOpen(false)}
+        onApplied={(image) => change({ portrait: image.id })}
+      />
+      <ImageLightbox
+        imageId={lightboxOpen && card.portrait ? card.portrait : null}
+        title={`${card.name.trim() || "角色"} · 人物立绘`}
+        onClose={() => setLightboxOpen(false)}
+      />
     </div>
   );
 }

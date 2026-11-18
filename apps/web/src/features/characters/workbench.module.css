@@ -1597,3 +1597,131 @@
     transition: none;
   }
 }
+
+/* ———— 角色肖像与文生图槽位 ———— */
+
+.portraitRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.portraitFrame {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(10 12 20 / 88%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  width: 84px;
+  height: 112px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--cp-text-dim);
+  cursor: var(--cp-cursor-hand);
+  overflow: hidden;
+}
+
+.portraitFrame[data-empty] {
+  cursor: default;
+}
+
+.portraitFrame:hover:not(:disabled) {
+  --box-line: var(--cp-cyan);
+}
+
+.portraitImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.portraitEmpty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.portraitTools {
+  display: grid;
+  gap: 5px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.portraitLabel {
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.portraitBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sidebarHeroTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heroAvatar {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(10 12 20 / 88%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  width: 52px;
+  height: 68px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: var(--cp-cursor-hand);
+  overflow: hidden;
+}
+
+.sidebarHeroMeta {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.reviewIdentityRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cardThumb {
+  flex: none;
+  width: 40px;
+  height: 52px;
+  border: 1px solid var(--cp-cyan-dim);
+  overflow: hidden;
+  background: rgb(8 10 18 / 80%);
+}
+
+.cardMetaCol {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}

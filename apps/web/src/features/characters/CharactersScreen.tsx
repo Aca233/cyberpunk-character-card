@@ -7,6 +7,7 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame } from "../../ui/FrameBox";
+import { GeneratedImage } from "../images/GeneratedImage";
 import { CharacterCreator } from "./CharacterCreator";
 import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
 import { readCardFile } from "./tavernFile";
@@ -226,17 +227,30 @@ export function CharactersScreen() {
           onClick={() => requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })}
         >
           <CellFrame />
-          <span className={wb.cardKind}>
-            {entry.sample ? "官方预设 · 可直接开局或另存" : "自建角色"}
-          </span>
-          <strong>
-            {entry.card.name}
-            {entry.card.alias ? `「${entry.card.alias}」` : ""}
-          </strong>
-          <span>
-            {entry.card.origin || b?.origin?.label || "未知出身"}
-            {b ? ` · 特质 ${traitCount} · 义体 ${cyberCount}` : ""}
-          </span>
+          <div className={wb.cardRow}>
+            {entry.card.portrait && (
+              <span className={wb.cardThumb}>
+                <GeneratedImage
+                  imageId={entry.card.portrait}
+                  alt={entry.card.name}
+                  className={wb.portraitImg}
+                />
+              </span>
+            )}
+            <div className={wb.cardMetaCol}>
+              <span className={wb.cardKind}>
+                {entry.sample ? "官方预设 · 可直接开局或另存" : "自建角色"}
+              </span>
+              <strong>
+                {entry.card.name}
+                {entry.card.alias ? `「${entry.card.alias}」` : ""}
+              </strong>
+              <span>
+                {entry.card.origin || b?.origin?.label || "未知出身"}
+                {b ? ` · 特质 ${traitCount} · 义体 ${cyberCount}` : ""}
+              </span>
+            </div>
+          </div>
         </button>
       </li>
     );

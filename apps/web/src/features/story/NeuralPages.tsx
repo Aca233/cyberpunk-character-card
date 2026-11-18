@@ -5,6 +5,8 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
+import { GeneratedImage } from "../images/GeneratedImage";
+import { useSaveImages } from "../images/SaveImagesContext";
 import { baseWeaponIdOf, itemArtOf } from "./art";
 import { BiomonitorPanel } from "./BiomonitorPanel";
 import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
@@ -45,6 +47,8 @@ export function CharacterPage({
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
 }) {
   const { character } = view;
+  const saveImages = useSaveImages();
+  const portraitId = saveImages?.bindings.playerPortrait ?? character.portrait ?? null;
   const firstWithAbility = character.traits.find((t) => Boolean(t.ability));
   const [activeTraitKey, setActiveTraitKey] = useState<string | null>(
     firstWithAbility ? `${firstWithAbility.slot}-${firstWithAbility.label}` : null,
@@ -77,6 +81,68 @@ export function CharacterPage({
     <div className={styles.characterRoot}>
       {character.name === null && (
         <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
+      )}
+      {character.name !== null && (portraitId || saveImages) && (
+        <div className={styles.playerPortraitStrip}>
+          {portraitId && (
+            <button
+              type="button"
+              className={styles.playerPortraitThumb}
+              title="点击查看大图"
+              onClick={() =>
+                saveImages?.openLightbox(portraitId, `${character.name ?? "主角"} · 人物立绘`)
+              }
+            >
+              <CellFrame />
+              <GeneratedImage
+                imageId={portraitId}
+                alt={`${character.name}立绘`}
+                className={styles.playerPortraitImg}
+              />
+            </button>
+          )}
+          <div className={styles.playerPortraitInfo}>
+            <strong>{character.name}</strong>
+            <span className={styles.dim}>{character.credTier} · 夜之城佣兵</span>
+            {saveImages && (
+              <div className={styles.playerPortraitActions}>
+                <Button
+                  small
+                  onClick={() =>
+                    saveImages.openImageModal({
+                      title: "AI 生成主角立绘",
+                      ...(character.name ? { subtitle: character.name } : {}),
+                      defaultAspectRatio: "3:4",
+                      bind: { kind: "character" },
+                      promptRequest: {
+                        kind: "character",
+                        name: character.name ?? "Merc",
+                        alias: "",
+                        pronoun: "TA",
+                        origin: origins[0]?.label ?? "",
+                        look: character.brief.slice(0, 480),
+                        personality: "",
+                        skills: modules.map((m) => m.label).join("、"),
+                        cyberware: view.cyberware.map((c) => c.name),
+                        gear: view.inventory.carriedWeapons
+                          .map((w) => displayItemName(view.names.items, w.id))
+                          .slice(0, 6),
+                        instruction: "",
+                      },
+                    })
+                  }
+                >
+                  {portraitId ? "AI 重绘立绘" : "AI 生成立绘"}
+                </Button>
+                {saveImages.bindings.playerPortrait && (
+                  <Button small onClick={() => void saveImages.unbindImage({ kind: "character" })}>
+                    恢复建档立绘
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
       <BiomonitorPanel view={view} />
 
