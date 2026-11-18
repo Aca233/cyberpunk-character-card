@@ -1,13 +1,23 @@
-import type { PlayerAction, TurnInput } from "@cp/core";
+import type { ImagePromptRequest, PlayerAction, TurnInput } from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ApiError, api, newRequestId } from "../../api/client";
+import {
+  ApiError,
+  type AspectRatio,
+  api,
+  newRequestId,
+  type SaveImageBindings,
+} from "../../api/client";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { layerOpen, useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
+import { ImageLightbox } from "../images/GeneratedImage";
+import { ImageGenModal } from "../images/ImageGenModal";
+import { type SaveImagesController, SaveImagesProvider } from "../images/SaveImagesContext";
+import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
@@ -52,7 +62,7 @@ import {
   SettlementCard,
 } from "./Settlement";
 import { Shop } from "./Shop";
-import { ChoiceList, StoryLog } from "./StoryLog";
+import { buildTurnPromptRequest, ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
@@ -92,6 +102,51 @@ export function StoryScreen() {
   const { enter } = story;
 
   useEffect(() => enter(saveId), [enter, saveId]);
+
+  const prefs = useNarrativePrefs();
+  const healthQuery = useQuery({
+    queryKey: ["health"],
+    queryFn: api.health,
+    staleTime: 10_000,
+  });
+  const saveImagesQuery = useQuery({
+    queryKey: ["saveImages", saveId],
+    queryFn: () => api.saveImages(saveId),
+    enabled: saveId !== "",
+  });
+  const bindings: SaveImageBindings = saveImagesQuery.data ?? { turns: {}, npcs: {} };
+
+  const [imageModal, setImageModal] = useState<{
+    readonly title: string;
+    readonly subtitle?: string | undefined;
+    readonly promptRequest: ImagePromptRequest;
+    readonly defaultAspectRatio: AspectRatio;
+    readonly bind:
+      | { readonly kind: "turn"; readonly seq: number }
+      | { readonly kind: "npc"; readonly npcId: string }
+      | { readonly kind: "character" };
+  } | null>(null);
+  const [lightbox, setLightbox] = useState<{ readonly id: string; readonly title: string } | null>(
+    null,
+  );
+  const [pendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
+  const autoAbortRef = useRef<Map<number, AbortController>>(new Map());
+  const baselineSeqRef = useRef<number | null>(null);
+  const autoAttemptedRef = useRef<Set<number>>(new Set());
+  const prevSaveIdRef = useRef<string>(saveId);
+
+  if (prevSaveIdRef.current !== saveId) {
+    prevSaveIdRef.current = saveId;
+    baselineSeqRef.current = null;
+    autoAttemptedRef.current.clear();
+  }
+
+  useEffect(() => {
+    return () => {
+      for (const ctrl of autoAbortRef.current.values()) ctrl.abort();
+      autoAbortRef.current.clear();
+    };
+  }, []);
 
   const query = useQuery({
     queryKey: ["state", saveId],
@@ -207,6 +262,122 @@ export function StoryScreen() {
     const toast: Toast = { key: `${key}-${Date.now()}`, icon: "notify.warning", text, tone: "bad" };
     setToasts((t) => [...t, toast].slice(-6));
   }, []);
+
+  const unbindImage = useCallback(
+    async (
+      target:
+        | { readonly kind: "turn"; readonly seq: number }
+        | { readonly kind: "npc"; readonly npcId: string }
+        | { readonly kind: "character" },
+    ) => {
+      try {
+        const next = await api.unbindSaveImage(saveId, target);
+        client.setQueryData(["saveImages", saveId], next);
+      } catch (error) {
+        warn("image-unbind", error);
+      }
+    },
+    [saveId, client, warn],
+  );
+
+  const cancelTurnAutoImage = useCallback((seq: number) => {
+    autoAbortRef.current.get(seq)?.abort();
+    autoAbortRef.current.delete(seq);
+    setPendingTurnSeqs((prev) => {
+      if (!prev.has(seq)) return prev;
+      const next = new Set(prev);
+      next.delete(seq);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!view || !saveId) return;
+    const latest = view.turns.at(-1);
+    if (baselineSeqRef.current === null) {
+      baselineSeqRef.current = latest?.seq ?? -1;
+      return;
+    }
+    if (
+      !prefs.autoTurnImage ||
+      busy ||
+      !latest ||
+      latest.seq <= baselineSeqRef.current ||
+      autoAttemptedRef.current.has(latest.seq) ||
+      bindings.turns[String(latest.seq)] !== undefined ||
+      !healthQuery.data?.models?.image?.ready
+    ) {
+      return;
+    }
+    const seq = latest.seq;
+    autoAttemptedRef.current.add(seq);
+    const controller = new AbortController();
+    autoAbortRef.current.set(seq, controller);
+    setPendingTurnSeqs((prev) => new Set(prev).add(seq));
+
+    void (async () => {
+      try {
+        const promptRes = await api.draftImagePrompt(
+          {
+            request: buildTurnPromptRequest(latest, view),
+            useAux: prefs.autoImageUseAux,
+            style: imageStyleConfig(),
+          },
+          controller.signal,
+        );
+        const generated = await api.generateImage(
+          {
+            prompt: promptRes.prompt,
+            negativePrompt: promptRes.negativePrompt,
+            aspectRatio: "16:9",
+            bind: { saveId, target: { kind: "turn", seq } },
+          },
+          controller.signal,
+        );
+        client.setQueryData(["image", generated.image.id], generated.image);
+        if (generated.bindings) {
+          client.setQueryData(["saveImages", saveId], generated.bindings);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          warn("auto-turn-image", error);
+        }
+      } finally {
+        if (autoAbortRef.current.get(seq) === controller) {
+          autoAbortRef.current.delete(seq);
+        }
+        setPendingTurnSeqs((prev) => {
+          if (!prev.has(seq)) return prev;
+          const next = new Set(prev);
+          next.delete(seq);
+          return next;
+        });
+      }
+    })();
+  }, [
+    view,
+    saveId,
+    busy,
+    prefs.autoTurnImage,
+    prefs.autoImageUseAux,
+    bindings.turns,
+    healthQuery.data?.models?.image?.ready,
+    client,
+    warn,
+  ]);
+
+  const saveImagesController = useMemo<SaveImagesController>(
+    () => ({
+      saveId,
+      bindings,
+      pendingTurnSeqs,
+      openImageModal: (options) => setImageModal(options),
+      unbindImage,
+      openLightbox: (id, title) => setLightbox({ id, title }),
+      cancelTurnAutoImage,
+    }),
+    [saveId, bindings, pendingTurnSeqs, unbindImage, cancelTurnAutoImage],
+  );
 
   // 界面操作统一走这里：不调用模型，失败时用提示条说明原因，之后刷新状态。
   // rethrow 时刷新后把错误抛回去，让确认框或表单留着
@@ -685,515 +856,535 @@ export function StoryScreen() {
   const currentDistrict =
     view.names.district ?? view.travel.destinations.find((d) => d.here)?.district ?? null;
   return (
-    <div
-      className={styles.screen}
-      data-stage={view.humanity.stage}
-      data-glitch={glitch || undefined}
-      data-boost={screenBoost || undefined}
-    >
-      <CityBackdrop
-        location={view.location}
-        locationName={view.names.location}
-        district={currentDistrict}
-        period={view.time.period}
-      />
-      {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
-      {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
-      <CornerSide side="left">
-        <BioMonitor
-          view={view}
-          peek={peek}
-          tabs={characterTabs}
-          full={characterFull}
-          wide={bioTab === "cyberware"}
-          diag={bioTab === "character" || bioTab === "chronicle"}
+    <SaveImagesProvider value={saveImagesController}>
+      <div
+        className={styles.screen}
+        data-stage={view.humanity.stage}
+        data-glitch={glitch || undefined}
+        data-boost={screenBoost || undefined}
+      >
+        <CityBackdrop
+          location={view.location}
+          locationName={view.names.location}
+          district={currentDistrict}
+          period={view.time.period}
         />
-        <HoloCall
-          view={view}
-          onOpenPhone={() => {
-            setUnreadTab("messages");
-            pinBlock("unread");
-          }}
-        />
-        {/* 档案里的「扫描」：点一下立刻扫，不调模型；回合进行中不让点（用户定的，计划第十二节第 14 条） */}
-        <Present
-          view={view}
-          scan={scan}
-          peek={peek}
-          onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
-        />
-        <Unread
-          view={view}
-          peek={peek}
-          full={unreadFull}
-          tabs={unreadTabs}
-          wide={unreadTab === "messages" || unreadTab === "shards"}
-        />
-      </CornerSide>
-      <CornerSide side="right">
-        {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
-        <Zone view={view} onMap={openMap} onShop={setAtShop} onRipperdoc={() => setAtDoc(true)} />
-        {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
-        <Track view={view} peek={peek} full={trackFull}>
-          {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
-        </Track>
-        <Weapon
-          view={view}
-          peek={peek}
-          full={gearFull}
-          tabs={
-            <PinTabs<GearTab>
-              tabs={[
-                ["inventory", "物品栏", 0],
-                ["vehicles", "车辆", view.travel.vehicles.length],
-              ]}
-              value={gearTab}
-              onChange={setGearTab}
-            />
-          }
-        />
-      </CornerSide>
-      {view.hacking?.dive && (
-        <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
-      )}
-      {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
-      {atMap && (
-        <MapLayer onClose={closeMap}>
-          <MapBody
+        {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
+        {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
+        <CornerSide side="left">
+          <BioMonitor
             view={view}
-            onClose={closeMap}
-            focus={mapFocus}
-            onTravel={
-              busy || offers?.rolled
+            peek={peek}
+            tabs={characterTabs}
+            full={characterFull}
+            wide={bioTab === "cyberware"}
+            diag={bioTab === "character" || bioTab === "chronicle"}
+          />
+          <HoloCall
+            view={view}
+            onOpenPhone={() => {
+              setUnreadTab("messages");
+              pinBlock("unread");
+            }}
+          />
+          {/* 档案里的「扫描」：点一下立刻扫，不调模型；回合进行中不让点（用户定的，计划第十二节第 14 条） */}
+          <Present
+            view={view}
+            scan={scan}
+            peek={peek}
+            onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+          />
+          <Unread
+            view={view}
+            peek={peek}
+            full={unreadFull}
+            tabs={unreadTabs}
+            wide={unreadTab === "messages" || unreadTab === "shards"}
+          />
+        </CornerSide>
+        <CornerSide side="right">
+          {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
+          <Zone view={view} onMap={openMap} onShop={setAtShop} onRipperdoc={() => setAtDoc(true)} />
+          {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
+          <Track view={view} peek={peek} full={trackFull}>
+            {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
+          </Track>
+          <Weapon
+            view={view}
+            peek={peek}
+            full={gearFull}
+            tabs={
+              <PinTabs<GearTab>
+                tabs={[
+                  ["inventory", "物品栏", 0],
+                  ["vehicles", "车辆", view.travel.vehicles.length],
+                ]}
+                value={gearTab}
+                onChange={setGearTab}
+              />
+            }
+          />
+        </CornerSide>
+        {view.hacking?.dive && (
+          <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
+        )}
+        {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
+        {atMap && (
+          <MapLayer onClose={closeMap}>
+            <MapBody
+              view={view}
+              onClose={closeMap}
+              focus={mapFocus}
+              onTravel={
+                busy || offers?.rolled
+                  ? undefined
+                  : (dest, route) => {
+                      setAtMap(false);
+                      send({
+                        text: `${route.label}去${dest.name}`,
+                        travel: {
+                          to: dest.id,
+                          mode: route.mode,
+                          ...(route.vehicle ? { vehicle: route.vehicle } : {}),
+                        },
+                      });
+                    }
+              }
+            />
+          </MapLayer>
+        )}
+
+        <main className={styles.column}>
+          {/* 横幅：交战、对峙、潜网、闪回，同时只出一个 */}
+          <Banner view={view} />
+          <StoryLog
+            view={view}
+            saveId={saveId}
+            live={story}
+            onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
+            onRewrite={view.death || view.ended ? undefined : rewrite}
+            onMark={onMark}
+          />
+
+          {failure &&
+            (failure.kind === "stopped" ||
+              failure.kind === "rejected" ||
+              failure.kind === "lost") && (
+              <div className={styles.notice} data-kind={failure.kind} role="status">
+                <span>{failure.message}</span>
+                {failure.retryable && <Button onClick={retry}>重试</Button>}
+                <Button onClick={story.dismiss}>知道了</Button>
+              </div>
+            )}
+
+          <div className={styles.dock}>
+            {openCheck ? (
+              <CheckBar
+                key={openCheck.id}
+                check={openCheck}
+                busy={busy}
+                closable={!offers?.rolled && openCheck.id === pickedId}
+                onConfirm={() => confirm(openCheck.id, openCheck.label)}
+                onRewrite={() => draftFromCheck(openCheck.label)}
+                onClose={() => setPicked(null)}
+              />
+            ) : (
+              view.offers.choices.length > 0 &&
+              !busy && (
+                <ChoiceList
+                  choices={view.offers.choices}
+                  locked={offers?.rolled != null}
+                  onChoose={choose}
+                />
+              )
+            )}
+            {view.death && (
+              <div className={styles.notice} data-kind="dead" role="alert">
+                <span>
+                  {view.death.canRestart
+                    ? "你死了。可以从这个场景开头重来一次：这个场景发生的事全部作废，所有抉择从这一刻重新推演，履历里记一笔“重来过”。"
+                    : "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"}
+                </span>
+                {view.death.canRestart && (
+                  <Button onClick={() => void restart()} disabled={busy}>
+                    从场景开头重来
+                  </Button>
+                )}
+              </div>
+            )}
+            {view.ended && !view.death && (
+              <div className={styles.notice} data-kind="dead" role="status">
+                <span>
+                  {view.ended.how === "retired"
+                    ? "你离开了这一行，活着走出了夜之城。"
+                    : "故事停在这里。"}
+                  {view.ended.epitaph && `「${view.ended.epitaph}」`}
+                  这份存档只能回看，角色已经进了主菜单的传说名册。
+                </span>
+                <Button
+                  onClick={() => {
+                    setBioTab("chronicle");
+                    setExpand({ id: "bio", pinned: true });
+                  }}
+                >
+                  看履历
+                </Button>
+              </div>
+            )}
+            <InputBar
+              busy={busy}
+              streaming={story.phase === "streaming"}
+              disabled={offers?.rolled != null || view.death !== null || view.ended !== null}
+              reason={
+                view.death !== null
+                  ? "角色已经死亡"
+                  : view.ended !== null
+                    ? "这个角色的故事已经结束"
+                    : offers?.rolled != null
+                      ? "上一次检定已经掷过骰，先继续结算"
+                      : undefined
+              }
+              draft={story.draft}
+              onDraft={story.setDraft}
+              reply={
+                story.draft.replyTo === undefined
+                  ? undefined
+                  : view.phone.messages.find((m) => m.id === story.draft.replyTo)
+              }
+              onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
+              onSend={send}
+              onStop={() => void story.stop()}
+            />
+            {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
+            <KeyBar>
+              <KeyHint keyId="key.p" label="人物" onClick={() => pinBlock("bio")} />
+              <KeyHint keyId="key.o" label="物品栏" onClick={() => showGear("inventory")} />
+              <KeyHint keyId="key.j" label="日志" onClick={() => pinBlock("track")} />
+              <KeyHint keyId="key.m" label="地图" onClick={openMap} />
+              <KeyHint keyId="key.t" label="消息" onClick={() => pinBlock("unread")} />
+              <KeyHint keyId="key.tab" label="扫描（长按）" />
+              <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
+            </KeyBar>
+          </div>
+        </main>
+
+        {atEsc && (
+          <EscMenu
+            onResume={() => setAtEsc(false)}
+            onMemory={() => {
+              setAtEsc(false);
+              setAtMemory(true);
+            }}
+            canEndStory={!view.death && !view.ended}
+            onEndStory={
+              busy
                 ? undefined
-                : (dest, route) => {
-                    setAtMap(false);
-                    send({
-                      text: `${route.label}去${dest.name}`,
-                      travel: {
-                        to: dest.id,
-                        mode: route.mode,
-                        ...(route.vehicle ? { vehicle: route.vehicle } : {}),
-                      },
-                    });
+                : () => {
+                    setAtEsc(false);
+                    setAtEndStory(true);
                   }
             }
-          />
-        </MapLayer>
-      )}
-
-      <main className={styles.column}>
-        {/* 横幅：交战、对峙、潜网、闪回，同时只出一个 */}
-        <Banner view={view} />
-        <StoryLog
-          view={view}
-          saveId={saveId}
-          live={story}
-          onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
-          onRewrite={view.death || view.ended ? undefined : rewrite}
-          onMark={onMark}
-        />
-
-        {failure &&
-          (failure.kind === "stopped" ||
-            failure.kind === "rejected" ||
-            failure.kind === "lost") && (
-            <div className={styles.notice} data-kind={failure.kind} role="status">
-              <span>{failure.message}</span>
-              {failure.retryable && <Button onClick={retry}>重试</Button>}
-              <Button onClick={story.dismiss}>知道了</Button>
-            </div>
-          )}
-
-        <div className={styles.dock}>
-          {openCheck ? (
-            <CheckBar
-              key={openCheck.id}
-              check={openCheck}
-              busy={busy}
-              closable={!offers?.rolled && openCheck.id === pickedId}
-              onConfirm={() => confirm(openCheck.id, openCheck.label)}
-              onRewrite={() => draftFromCheck(openCheck.label)}
-              onClose={() => setPicked(null)}
-            />
-          ) : (
-            view.offers.choices.length > 0 &&
-            !busy && (
-              <ChoiceList
-                choices={view.offers.choices}
-                locked={offers?.rolled != null}
-                onChoose={choose}
-              />
-            )
-          )}
-          {view.death && (
-            <div className={styles.notice} data-kind="dead" role="alert">
-              <span>
-                {view.death.canRestart
-                  ? "你死了。可以从这个场景开头重来一次：这个场景发生的事全部作废，所有抉择从这一刻重新推演，履历里记一笔“重来过”。"
-                  : "你死了。这个场景已经重来过一次，这一次是真的死了；存档到此为止，只能回看。"}
-              </span>
-              {view.death.canRestart && (
-                <Button onClick={() => void restart()} disabled={busy}>
-                  从场景开头重来
-                </Button>
-              )}
-            </div>
-          )}
-          {view.ended && !view.death && (
-            <div className={styles.notice} data-kind="dead" role="status">
-              <span>
-                {view.ended.how === "retired"
-                  ? "你离开了这一行，活着走出了夜之城。"
-                  : "故事停在这里。"}
-                {view.ended.epitaph && `「${view.ended.epitaph}」`}
-                这份存档只能回看，角色已经进了主菜单的传说名册。
-              </span>
-              <Button
-                onClick={() => {
-                  setBioTab("chronicle");
-                  setExpand({ id: "bio", pinned: true });
-                }}
-              >
-                看履历
-              </Button>
-            </div>
-          )}
-          <InputBar
-            busy={busy}
-            streaming={story.phase === "streaming"}
-            disabled={offers?.rolled != null || view.death !== null || view.ended !== null}
-            reason={
-              view.death !== null
-                ? "角色已经死亡"
-                : view.ended !== null
-                  ? "这个角色的故事已经结束"
-                  : offers?.rolled != null
-                    ? "上一次检定已经掷过骰，先继续结算"
-                    : undefined
+            onSettings={() =>
+              navigate(`/settings?tab=context&save=${encodeURIComponent(saveId)}`, {
+                state: { from: `/play/${encodeURIComponent(saveId)}` },
+              })
             }
-            draft={story.draft}
-            onDraft={story.setDraft}
-            reply={
-              story.draft.replyTo === undefined
+            onQuit={busy ? undefined : () => navigate("/menu")}
+          />
+        )}
+
+        {atMemory && (
+          <MemoryModal
+            view={view}
+            onEdit={
+              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
+            }
+            onClose={() => setAtMemory(false)}
+          />
+        )}
+
+        {atEndStory && !view.death && !view.ended && (
+          <EndStoryModal
+            onEnd={(how, epitaph) =>
+              act({ type: "endStory", how, ...(epitaph ? { epitaph } : {}) }, "chronicle", true)
+            }
+            onClose={() => setAtEndStory(false)}
+          />
+        )}
+
+        {failure?.kind === "unavailable" && (
+          <Dialog
+            title="模型没有配好"
+            tone="warning"
+            onClose={story.dismiss}
+            actions={
+              <>
+                <Button
+                  primary
+                  onClick={() =>
+                    navigate("/settings", {
+                      state: { from: `/play/${encodeURIComponent(saveId)}` },
+                    })
+                  }
+                >
+                  去设置
+                </Button>
+                <Button onClick={story.dismiss}>关闭</Button>
+              </>
+            }
+          >
+            <p>{failure.message}</p>
+            <p>你的输入还留在输入框里，配好以后可以直接重发。</p>
+          </Dialog>
+        )}
+        {atShop &&
+          (() => {
+            const shop = view.shops.find((s) => s.id === atShop);
+            return (
+              shop && (
+                <Shop
+                  view={view}
+                  shop={shop}
+                  onBuy={
+                    busy
+                      ? undefined
+                      : (id) => act({ type: "buyItem", shop: shop.id, id }, "shop", true)
+                  }
+                  onSell={
+                    busy
+                      ? undefined
+                      : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
+                  }
+                  onGunsmith={
+                    busy || offers?.rolled || view.death || view.ended || view.combat.active
+                      ? undefined
+                      : (action) =>
+                          act({ ...action, type: "gunsmith", shop: shop.id }, "shop", true)
+                  }
+                  gunsmithDisabledReason={
+                    view.death || view.ended
+                      ? "这份存档已结束，无法进行枪匠改装"
+                      : view.combat.active
+                        ? "战斗中无法进行枪匠工坊改装"
+                        : offers?.rolled
+                          ? "请先完成当前检定的结算"
+                          : busy
+                            ? "正在处理行动，请稍候"
+                            : undefined
+                  }
+                  onClose={() => setAtShop(null)}
+                />
+              )
+            );
+          })()}
+        {atDoc && view.ripperdoc && (
+          <Ripperdoc
+            view={view}
+            doc={view.ripperdoc}
+            onBuy={
+              busy
                 ? undefined
-                : view.phone.messages.find((m) => m.id === story.draft.replyTo)
+                : async (id, credit) => {
+                    const doc = view.ripperdoc;
+                    if (!doc) return;
+                    await act({ type: "buyCyberware", id, credit, doc: doc.id }, "ripperdoc", true);
+                  }
             }
-            onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
-            onSend={send}
-            onStop={() => void story.stop()}
+            onRemove={
+              busy
+                ? undefined
+                : async (id) => {
+                    const doc = view.ripperdoc;
+                    if (!doc) return;
+                    await act({ type: "removeCyberware", id, doc: doc.id }, "ripperdoc", true);
+                  }
+            }
+            onRepay={
+              busy
+                ? undefined
+                : async () => {
+                    const doc = view.ripperdoc;
+                    if (!doc) return;
+                    await act({ type: "repayRipperdoc", doc: doc.id }, "ripperdoc", true);
+                  }
+            }
+            onRepair={
+              busy
+                ? undefined
+                : async (id) => {
+                    const doc = view.ripperdoc;
+                    if (!doc) return;
+                    await act({ type: "repairCyberware", id, doc: doc.id }, "ripperdoc", true);
+                  }
+            }
+            onClose={() => setAtDoc(false)}
           />
-          {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
-          <KeyBar>
-            <KeyHint keyId="key.p" label="人物" onClick={() => pinBlock("bio")} />
-            <KeyHint keyId="key.o" label="物品栏" onClick={() => showGear("inventory")} />
-            <KeyHint keyId="key.j" label="日志" onClick={() => pinBlock("track")} />
-            <KeyHint keyId="key.m" label="地图" onClick={openMap} />
-            <KeyHint keyId="key.t" label="消息" onClick={() => pinBlock("unread")} />
-            <KeyHint keyId="key.tab" label="扫描（长按）" />
-            <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
-          </KeyBar>
-        </div>
-      </main>
-
-      {atEsc && (
-        <EscMenu
-          onResume={() => setAtEsc(false)}
-          onMemory={() => {
-            setAtEsc(false);
-            setAtMemory(true);
-          }}
-          canEndStory={!view.death && !view.ended}
-          onEndStory={
-            busy
-              ? undefined
-              : () => {
-                  setAtEsc(false);
-                  setAtEndStory(true);
-                }
-          }
-          onSettings={() =>
-            navigate(`/settings?tab=context&save=${encodeURIComponent(saveId)}`, {
-              state: { from: `/play/${encodeURIComponent(saveId)}` },
-            })
-          }
-          onQuit={busy ? undefined : () => navigate("/menu")}
-        />
-      )}
-
-      {atMemory && (
-        <MemoryModal
-          view={view}
-          onEdit={busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)}
-          onClose={() => setAtMemory(false)}
-        />
-      )}
-
-      {atEndStory && !view.death && !view.ended && (
-        <EndStoryModal
-          onEnd={(how, epitaph) =>
-            act({ type: "endStory", how, ...(epitaph ? { epitaph } : {}) }, "chronicle", true)
-          }
-          onClose={() => setAtEndStory(false)}
-        />
-      )}
-
-      {failure?.kind === "unavailable" && (
-        <Dialog
-          title="模型没有配好"
-          tone="warning"
-          onClose={story.dismiss}
-          actions={
-            <>
-              <Button
-                primary
-                onClick={() =>
-                  navigate("/settings", {
-                    state: { from: `/play/${encodeURIComponent(saveId)}` },
-                  })
-                }
-              >
-                去设置
-              </Button>
-              <Button onClick={story.dismiss}>关闭</Button>
-            </>
-          }
-        >
-          <p>{failure.message}</p>
-          <p>你的输入还留在输入框里，配好以后可以直接重发。</p>
-        </Dialog>
-      )}
-      {atShop &&
-        (() => {
-          const shop = view.shops.find((s) => s.id === atShop);
-          return (
-            shop && (
-              <Shop
-                view={view}
-                shop={shop}
-                onBuy={
-                  busy
-                    ? undefined
-                    : (id) => act({ type: "buyItem", shop: shop.id, id }, "shop", true)
-                }
-                onSell={
-                  busy
-                    ? undefined
-                    : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
-                }
-                onGunsmith={
-                  busy || offers?.rolled || view.death || view.ended || view.combat.active
-                    ? undefined
-                    : (action) => act({ ...action, type: "gunsmith", shop: shop.id }, "shop", true)
-                }
-                gunsmithDisabledReason={
-                  view.death || view.ended
-                    ? "这份存档已结束，无法进行枪匠改装"
-                    : view.combat.active
-                      ? "战斗中无法进行枪匠工坊改装"
-                      : offers?.rolled
-                        ? "请先完成当前检定的结算"
-                        : busy
-                          ? "正在处理行动，请稍候"
-                          : undefined
-                }
-                onClose={() => setAtShop(null)}
-              />
-            )
-          );
-        })()}
-      {atDoc && view.ripperdoc && (
-        <Ripperdoc
-          view={view}
-          doc={view.ripperdoc}
-          onBuy={
-            busy
-              ? undefined
-              : async (id, credit) => {
-                  const doc = view.ripperdoc;
-                  if (!doc) return;
-                  await act({ type: "buyCyberware", id, credit, doc: doc.id }, "ripperdoc", true);
-                }
-          }
-          onRemove={
-            busy
-              ? undefined
-              : async (id) => {
-                  const doc = view.ripperdoc;
-                  if (!doc) return;
-                  await act({ type: "removeCyberware", id, doc: doc.id }, "ripperdoc", true);
-                }
-          }
-          onRepay={
-            busy
-              ? undefined
-              : async () => {
-                  const doc = view.ripperdoc;
-                  if (!doc) return;
-                  await act({ type: "repayRipperdoc", doc: doc.id }, "ripperdoc", true);
-                }
-          }
-          onRepair={
-            busy
-              ? undefined
-              : async (id) => {
-                  const doc = view.ripperdoc;
-                  if (!doc) return;
-                  await act({ type: "repairCyberware", id, doc: doc.id }, "ripperdoc", true);
-                }
-          }
-          onClose={() => setAtDoc(false)}
-        />
-      )}
-      {buyingHome &&
-        (() => {
-          const home = view.safehouse.forSale.find((h) => h.id === buyingHome);
-          return (
-            home && (
-              <Dialog
-                title={`买下${home.name}`}
-                tone="info"
-                onClose={() => setBuyingHome(null)}
-                actions={
-                  <>
-                    <Button primary disabled={busy} onClick={() => void homeAction(home.id)}>
-                      一次付清
-                    </Button>
-                    <Button onClick={() => setBuyingHome(null)}>再想想</Button>
-                  </>
-                }
-              >
-                <p>{home.note}</p>
-                <p>
-                  要 {home.price.toLocaleString("en-US")} 欧元，身上有{" "}
-                  {view.money.eddies.toLocaleString("en-US")} 欧元，付完剩{" "}
-                  {(view.money.eddies - home.price).toLocaleString("en-US")}
-                  。不收房租，买下后是个能休息落脚的安全屋，躲在里面热度降得快。
-                </p>
-              </Dialog>
-            )
-          );
-        })()}
-      {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
-      {person &&
-        (() => {
-          // 正文里点了人名（第 3 条）：弹这个人的档案；扫描照档案里的按钮，回合进行中不让点
-          const npc = view.npcs.find((n) => n.id === person);
-          return (
-            npc && (
-              <PersonModal
-                npc={npc}
-                fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
-                squad={view.squad.members.find((m) => m.npc === npc.id)}
-                foe={view.combat.active?.foes.find(
-                  (f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name,
-                )}
-                onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
-                onClose={() => setPerson(null)}
-              />
-            )
-          );
-        })()}
-      {atBraindance && view.braindance.active && (
-        <BraindanceEditor
-          view={view}
-          onMark={
-            busy
-              ? undefined
-              : (point) => void act({ type: "braindance", action: "mark", point }, "braindance")
-          }
-          onConclude={
-            busy || offers?.rolled
-              ? undefined
-              : (id, text) => {
-                  setAtBraindance(false);
-                  send({ text: `超梦里的结论：${text}`, braindance: id });
-                }
-          }
-          onAbandon={
-            busy || offers?.rolled
-              ? undefined
-              : () => {
-                  setAtBraindance(false);
-                  send({ text: "退出超梦，不查了", braindance: "abandon" });
-                }
-          }
-          onClose={() => setAtBraindance(false)}
-        />
-      )}
-      {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
-      {!settled[0] && rivalsDone[0] && (
-        <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />
-      )}
-      {story.spend && (
-        <Dialog
-          title={`花一大笔钱：${story.spend.label}`}
-          tone="info"
-          onClose={story.cancelSpend}
-          actions={
-            <>
-              <Button
-                primary
-                onClick={() => {
-                  const spend = story.spend;
-                  if (spend) send({ ...spend.input, spendOk: true });
-                }}
-              >
-                花这笔钱
-              </Button>
-              <Button onClick={story.cancelSpend}>再想想</Button>
-            </>
-          }
-        >
-          <p>
-            要花 {story.spend.price.toLocaleString("en-US")} 欧元，身上有{" "}
-            {story.spend.eddies.toLocaleString("en-US")} 欧元，花完剩{" "}
-            {(story.spend.eddies - story.spend.price).toLocaleString("en-US")}。
-          </p>
-          <p>取消不算一轮，输入还留在输入框里。</p>
-        </Dialog>
-      )}
-      {failure?.kind === "blocked" && (
-        <Dialog
-          title="这一轮被安全过滤拦下了"
-          tone="danger"
-          onClose={story.dismiss}
-          actions={
-            <>
-              <Button primary onClick={retry}>
-                原样重试
-              </Button>
-              <Button onClick={story.dismiss}>改一改再发</Button>
-            </>
-          }
-        >
-          <p>{failure.message}</p>
-          <p>这一轮没有写进存档。可以换个说法，或者到设置里检查这个方案的安全选项。</p>
-        </Dialog>
-      )}
-      {failure?.kind === "error" && (
-        <Dialog
-          title="生成出错"
-          tone="danger"
-          onClose={story.dismiss}
-          actions={
-            <>
-              {failure.retryable && (
-                <Button primary onClick={retry}>
-                  重试
+        )}
+        {buyingHome &&
+          (() => {
+            const home = view.safehouse.forSale.find((h) => h.id === buyingHome);
+            return (
+              home && (
+                <Dialog
+                  title={`买下${home.name}`}
+                  tone="info"
+                  onClose={() => setBuyingHome(null)}
+                  actions={
+                    <>
+                      <Button primary disabled={busy} onClick={() => void homeAction(home.id)}>
+                        一次付清
+                      </Button>
+                      <Button onClick={() => setBuyingHome(null)}>再想想</Button>
+                    </>
+                  }
+                >
+                  <p>{home.note}</p>
+                  <p>
+                    要 {home.price.toLocaleString("en-US")} 欧元，身上有{" "}
+                    {view.money.eddies.toLocaleString("en-US")} 欧元，付完剩{" "}
+                    {(view.money.eddies - home.price).toLocaleString("en-US")}
+                    。不收房租，买下后是个能休息落脚的安全屋，躲在里面热度降得快。
+                  </p>
+                </Dialog>
+              )
+            );
+          })()}
+        {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
+        {person &&
+          (() => {
+            // 正文里点了人名（第 3 条）：弹这个人的档案；扫描照档案里的按钮，回合进行中不让点
+            const npc = view.npcs.find((n) => n.id === person);
+            return (
+              npc && (
+                <PersonModal
+                  npc={npc}
+                  fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
+                  squad={view.squad.members.find((m) => m.npc === npc.id)}
+                  foe={view.combat.active?.foes.find(
+                    (f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name,
+                  )}
+                  onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+                  onClose={() => setPerson(null)}
+                />
+              )
+            );
+          })()}
+        {atBraindance && view.braindance.active && (
+          <BraindanceEditor
+            view={view}
+            onMark={
+              busy
+                ? undefined
+                : (point) => void act({ type: "braindance", action: "mark", point }, "braindance")
+            }
+            onConclude={
+              busy || offers?.rolled
+                ? undefined
+                : (id, text) => {
+                    setAtBraindance(false);
+                    send({ text: `超梦里的结论：${text}`, braindance: id });
+                  }
+            }
+            onAbandon={
+              busy || offers?.rolled
+                ? undefined
+                : () => {
+                    setAtBraindance(false);
+                    send({ text: "退出超梦，不查了", braindance: "abandon" });
+                  }
+            }
+            onClose={() => setAtBraindance(false)}
+          />
+        )}
+        {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
+        {!settled[0] && rivalsDone[0] && (
+          <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />
+        )}
+        {story.spend && (
+          <Dialog
+            title={`花一大笔钱：${story.spend.label}`}
+            tone="info"
+            onClose={story.cancelSpend}
+            actions={
+              <>
+                <Button
+                  primary
+                  onClick={() => {
+                    const spend = story.spend;
+                    if (spend) send({ ...spend.input, spendOk: true });
+                  }}
+                >
+                  花这笔钱
                 </Button>
-              )}
-              <Button onClick={story.dismiss}>关闭</Button>
-            </>
-          }
-        >
-          <p>{failure.message}</p>
-          {!failure.retryable && (
-            <p>这个错误重试也不会好，先看看设置；详细原因在浏览器的开发者工具控制台里。</p>
-          )}
-        </Dialog>
-      )}
-    </div>
+                <Button onClick={story.cancelSpend}>再想想</Button>
+              </>
+            }
+          >
+            <p>
+              要花 {story.spend.price.toLocaleString("en-US")} 欧元，身上有{" "}
+              {story.spend.eddies.toLocaleString("en-US")} 欧元，花完剩{" "}
+              {(story.spend.eddies - story.spend.price).toLocaleString("en-US")}。
+            </p>
+            <p>取消不算一轮，输入还留在输入框里。</p>
+          </Dialog>
+        )}
+        {failure?.kind === "blocked" && (
+          <Dialog
+            title="这一轮被安全过滤拦下了"
+            tone="danger"
+            onClose={story.dismiss}
+            actions={
+              <>
+                <Button primary onClick={retry}>
+                  原样重试
+                </Button>
+                <Button onClick={story.dismiss}>改一改再发</Button>
+              </>
+            }
+          >
+            <p>{failure.message}</p>
+            <p>这一轮没有写进存档。可以换个说法，或者到设置里检查这个方案的安全选项。</p>
+          </Dialog>
+        )}
+        {failure?.kind === "error" && (
+          <Dialog
+            title="生成出错"
+            tone="danger"
+            onClose={story.dismiss}
+            actions={
+              <>
+                {failure.retryable && (
+                  <Button primary onClick={retry}>
+                    重试
+                  </Button>
+                )}
+                <Button onClick={story.dismiss}>关闭</Button>
+              </>
+            }
+          >
+            <p>{failure.message}</p>
+            {!failure.retryable && (
+              <p>这个错误重试也不会好，先看看设置；详细原因在浏览器的开发者工具控制台里。</p>
+            )}
+          </Dialog>
+        )}
+        <ImageGenModal
+          open={imageModal !== null}
+          title={imageModal?.title ?? "文生图"}
+          subtitle={imageModal?.subtitle}
+          promptRequest={imageModal?.promptRequest ?? null}
+          defaultAspectRatio={imageModal?.defaultAspectRatio ?? "3:4"}
+          bind={imageModal ? { saveId, target: imageModal.bind } : undefined}
+          onClose={() => setImageModal(null)}
+          onApplied={() => {}}
+        />
+        <ImageLightbox
+          imageId={lightbox?.id ?? null}
+          title={lightbox?.title ?? "图片预览"}
+          onClose={() => setLightbox(null)}
+        />
+      </div>
+    </SaveImagesProvider>
   );
 }
 

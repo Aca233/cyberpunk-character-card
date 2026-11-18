@@ -1,6 +1,9 @@
 import { worldRules } from "@cp/core";
 import { type CSSProperties, useState } from "react";
+import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
+import { GeneratedImage } from "../images/GeneratedImage";
+import { useSaveImages } from "../images/SaveImagesContext";
 import { baseWeaponIdOf, itemArtOf, portraitOf } from "./art";
 import neural from "./neural.module.css";
 import styles from "./profile.module.css";
@@ -103,11 +106,28 @@ export function NpcPortrait({
   readonly line?: string;
   readonly tint?: string;
 }) {
+  const saveImages = useSaveImages();
+  const customId = saveImages?.bindings.npcs[npc.id] ?? null;
   const portrait = portraitOf(npc.id);
   return (
     <span className={className} data-dead={!npc.alive || undefined} aria-hidden>
       <NineSlice id="map.filterCellBg" tint={tint} slice={CELL_SLICE} />
-      {portrait ? (
+      {customId ? (
+        <GeneratedImage
+          imageId={customId}
+          alt={npc.name}
+          className={artClassName}
+          fallback={
+            portrait ? (
+              <Asset id={portrait} className={artClassName} />
+            ) : !npc.met ? (
+              <Asset id="portrait.unknown" className={artClassName} />
+            ) : (
+              <b className={artClassName}>{[...npc.name][0] ?? "?"}</b>
+            )
+          }
+        />
+      ) : portrait ? (
         <Asset id={portrait} className={artClassName} />
       ) : !npc.met ? (
         <Asset id="portrait.unknown" className={artClassName} />
@@ -174,6 +194,9 @@ export function ProfileHead({
     ...(showBlocked && fixer?.blockReason ? ([["中间人渠道", fixer.blockReason]] as const) : []),
   ];
   const hasAppearance = npc.met && Boolean(npc.look || npc.outfit);
+  const saveImages = useSaveImages();
+  const customPortraitId = saveImages?.bindings.npcs[npc.id] ?? null;
+  const hasBuiltinPortrait = Boolean(portraitOf(npc.id));
 
   return (
     <header
@@ -256,6 +279,50 @@ export function ProfileHead({
               </Tag>
             )}
           </ul>
+          {saveImages && npc.met && (
+            <div className={styles.portraitTools}>
+              <ActionButton
+                onClick={() =>
+                  saveImages.openImageModal({
+                    title: customPortraitId ? `重绘 ${npc.name} 肖像` : `AI 生成 ${npc.name} 肖像`,
+                    subtitle: [npc.role, npc.faction && npc.faction !== "无" ? npc.faction : ""]
+                      .filter(Boolean)
+                      .join(" · "),
+                    defaultAspectRatio: "3:4",
+                    bind: { kind: "npc", npcId: npc.id },
+                    promptRequest: {
+                      kind: "npc",
+                      name: npc.name,
+                      alias: npc.alias,
+                      pronoun: npc.pronoun,
+                      role: npc.role,
+                      faction: npc.faction,
+                      look: npc.look,
+                      outfit: npc.outfit,
+                      wounds: wound.detail,
+                      instruction: "",
+                    },
+                  })
+                }
+              >
+                {customPortraitId ? "重绘肖像" : hasBuiltinPortrait ? "AI 定制肖像" : "AI 生成肖像"}
+              </ActionButton>
+              {customPortraitId && (
+                <>
+                  <ActionButton
+                    onClick={() => saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`)}
+                  >
+                    查看大图
+                  </ActionButton>
+                  <ActionButton
+                    onClick={() => void saveImages.unbindImage({ kind: "npc", npcId: npc.id })}
+                  >
+                    恢复默认
+                  </ActionButton>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

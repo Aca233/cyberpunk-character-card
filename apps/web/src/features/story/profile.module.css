@@ -151,6 +151,13 @@
   font-family: var(--font-ui);
 }
 
+.portraitTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
 .name {
   display: flex;
   flex-wrap: wrap;

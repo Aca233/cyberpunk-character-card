@@ -3,6 +3,8 @@ import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
+import { GeneratedImage } from "../images/GeneratedImage";
+import { useSaveImages } from "../images/SaveImagesContext";
 import { portraitOf } from "./art";
 import { ProfileHead } from "./Profile";
 import styles from "./story.module.css";
@@ -41,12 +43,14 @@ export function Avatar({
   /** 人物 id；不传或没有原作头像时退回名字的第一个字 */
   readonly npc?: string | undefined;
 }) {
+  const saveImages = useSaveImages();
+  const customId = npc ? (saveImages?.bindings.npcs[npc] ?? null) : null;
   const portrait = portraitOf(npc);
   return (
     <span
       className={styles.avatar}
       data-dead={dead || undefined}
-      data-portrait={portrait ? true : undefined}
+      data-portrait={customId || portrait ? true : undefined}
       aria-hidden="true"
     >
       <NineSlice
@@ -54,7 +58,20 @@ export function Avatar({
         tint="var(--box-fill, rgb(14 14 23 / 78%))"
         slice={CELL_SLICE}
       />
-      {portrait ? (
+      {customId ? (
+        <GeneratedImage
+          imageId={customId}
+          alt={name}
+          className={styles.avatarArt}
+          fallback={
+            portrait ? (
+              <Asset id={portrait} className={styles.avatarArt} />
+            ) : (
+              <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>
+            )
+          }
+        />
+      ) : portrait ? (
         <Asset id={portrait} className={styles.avatarArt} />
       ) : (
         <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>

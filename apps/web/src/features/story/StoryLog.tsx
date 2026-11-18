@@ -1,9 +1,12 @@
+import type { TurnImagePromptInput } from "@cp/core";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset, NineSlice } from "../../ui/Asset";
+import { GeneratedImage } from "../images/GeneratedImage";
+import { useSaveImages } from "../images/SaveImagesContext";
 import { useNarrativePrefs } from "../settings/prefs";
 import { useSpoilerView } from "../settings/SpoilerBadge";
 import type { CompletedStage, LiveStage, useStory } from "./store";
@@ -159,8 +162,29 @@ function Paragraph({
   );
 }
 
+/** 从单轮叙事与当前世界视图提炼场景插图请求 */
+export function buildTurnPromptRequest(turn: Turn, view: View): TurnImagePromptInput {
+  const presentNpcs = view.npcs
+    .filter((n) => n.here)
+    .slice(0, 6)
+    .map((n) => [n.name, n.role, n.outfit ?? n.look].filter(Boolean).join(" · "));
+  const selfDesc = view.character.name ? `${view.character.name} (protagonist)` : "";
+  return {
+    kind: "turn",
+    sceneText: turn.text.slice(0, 3200),
+    actionText: turn.input.text.trim().slice(0, 300),
+    location: view.names.location ?? view.location ?? "",
+    district: view.names.district ?? "",
+    timeText: `${view.time.text} (${view.time.period})`,
+    weather: view.weather.label,
+    characters: [selfDesc, ...presentNpcs].filter(Boolean),
+    instruction: "",
+  };
+}
+
 function TurnBlock({
   turn,
+  view,
   saveId,
   speakers,
   onRegenerate,
@@ -168,6 +192,7 @@ function TurnBlock({
   onMark,
 }: {
   readonly turn: Turn;
+  readonly view: View;
   readonly saveId: string;
   readonly speakers: readonly Speaker[];
   /** 只有最后一轮、没在生成时才有 */
@@ -179,6 +204,19 @@ function TurnBlock({
 }) {
   const prefs = useNarrativePrefs();
   const [rewriting, setRewriting] = useState(false);
+  const saveImages = useSaveImages();
+  const imageId = saveImages?.bindings.turns[String(turn.seq)] ?? null;
+  const autoPending = saveImages?.pendingTurnSeqs.has(turn.seq) ?? false;
+  const openIllustration = () => {
+    if (!saveImages) return;
+    saveImages.openImageModal({
+      title: imageId ? `重绘 #${turn.seq + 1} 场景插图` : `为 #${turn.seq + 1} 生成场景插图`,
+      subtitle: turn.sceneTitle ?? view.names.location ?? undefined,
+      defaultAspectRatio: "16:9",
+      bind: { kind: "turn", seq: turn.seq },
+      promptRequest: buildTurnPromptRequest(turn, view),
+    });
+  };
   return (
     <article className={styles.turn} data-boost={turn.sandevistan || undefined}>
       {prefs.sceneTitles && turn.sceneTitle && (
@@ -232,6 +270,50 @@ function TurnBlock({
           <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
         ))
       )}
+      {imageId ? (
+        <figure className={styles.turnIllustration}>
+          <button
+            type="button"
+            className={styles.turnIllusButton}
+            title="点击查看大图"
+            onClick={() => saveImages?.openLightbox(imageId, `#${turn.seq + 1} 场景插图`)}
+          >
+            <GeneratedImage
+              imageId={imageId}
+              alt={`第 ${turn.seq + 1} 轮场景插图`}
+              className={styles.turnIllusImg}
+            />
+          </button>
+          <figcaption className={styles.turnIllusFoot}>
+            <span>场景插图</span>
+            <span className={styles.turnIllusActions}>
+              <button type="button" className={styles.regenerate} onClick={openIllustration}>
+                重绘
+              </button>
+              <button
+                type="button"
+                className={styles.regenerate}
+                onClick={() => void saveImages?.unbindImage({ kind: "turn", seq: turn.seq })}
+              >
+                移除
+              </button>
+            </span>
+          </figcaption>
+        </figure>
+      ) : (
+        autoPending && (
+          <div className={styles.turnIllusPending} role="status">
+            <span>正在自动绘制本回合场景插图…</span>
+            <button
+              type="button"
+              className={styles.regenerate}
+              onClick={() => saveImages?.cancelTurnAutoImage(turn.seq)}
+            >
+              取消
+            </button>
+          </div>
+        )
+      )}
       <footer className={styles.turnMeta}>
         {turn.unsettled && (
           <span className={styles.unsettled} title={turn.unsettled}>
@@ -264,6 +346,16 @@ function TurnBlock({
             title="作废这一轮，用同样的输入重写；掷过的骰子不重掷"
           >
             重新生成
+          </button>
+        )}
+        {saveImages && !imageId && !autoPending && (
+          <button
+            type="button"
+            className={styles.regenerate}
+            onClick={openIllustration}
+            title="由文生图模型为这一轮剧情绘制场景插图"
+          >
+            生成插图
           </button>
         )}
         {turn.dropped > 0 && !turn.unsettled && (
@@ -339,6 +431,7 @@ export function StoryLog({
           <TurnBlock
             key={t.seq}
             turn={t}
+            view={view}
             saveId={saveId}
             speakers={speakers}
             onRegenerate={
