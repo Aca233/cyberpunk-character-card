@@ -86,7 +86,8 @@ async function locate(
   }
   const name = spec.atlas.split("/").at(-1) as string;
   const base = join(root, "export", "ui_sprites", spec.atlas, `${name}.inkatlas`);
-  for (const [res, scale] of RESOLUTIONS) {
+  const start = spec.maxRes ? RESOLUTIONS.findIndex(([res]) => res === spec.maxRes) : 0;
+  for (const [res, scale] of RESOLUTIONS.slice(Math.max(start, 0))) {
     const file = join(base, res, `${spec.slot}.png`);
     if (await exists(file)) return { file, scale };
   }
@@ -131,7 +132,8 @@ async function main(): Promise<number> {
       written.add(resolve(out));
       await mkdir(dirname(out), { recursive: true });
       if (ext === "webp") {
-        await sharp(found.file).webp({ quality: 90, alphaQuality: 100, effort: 5 }).toFile(out);
+        const quality = spec.group === "backdrop" ? 82 : 90;
+        await sharp(found.file).webp({ quality, alphaQuality: 100, effort: 5 }).toFile(out);
         webp += 1;
       } else {
         await copyFile(found.file, out);

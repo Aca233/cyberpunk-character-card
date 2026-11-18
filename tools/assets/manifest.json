@@ -2019,8 +2019,13 @@
         "atlas": "common/assets_fullscreen28",
         "slot": "l_grand_imperial_mall_full"
       },
-      { "id": "backdrop.dogtown", "atlas": "fullscreen/bg_dt", "slot": "bg_dt" },
-      { "id": "backdrop.dogtownStatue", "atlas": "ep1_gui/static_ls_01", "slot": "whole" },
+      { "id": "backdrop.dogtown", "atlas": "fullscreen/bg_dt", "slot": "bg_dt", "maxRes": "1080p" },
+      {
+        "id": "backdrop.dogtownStatue",
+        "atlas": "ep1_gui/static_ls_01",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
       {
         "id": "backdrop.wakakoPachinko",
         "atlas": "common/assets_fullscreen26",
@@ -2058,14 +2063,54 @@
         "atlas": "common/assets_fullscreen31",
         "slot": "l_santo_domingo_full"
       },
-      { "id": "backdrop.watKabDay", "atlas": "fullscreen/wat_kab_dc_4k", "slot": "whole" },
-      { "id": "backdrop.watKabNight", "atlas": "fullscreen/wat_kab_nc_4k", "slot": "whole" },
-      { "id": "backdrop.watLchDay", "atlas": "fullscreen/wat_lch_dc_4k", "slot": "whole" },
-      { "id": "backdrop.watLchNight", "atlas": "fullscreen/wat_lch_nc_4k", "slot": "whole" },
-      { "id": "backdrop.watNidDay", "atlas": "fullscreen/wat_nid_dc_4k", "slot": "whole" },
-      { "id": "backdrop.watNidNight", "atlas": "fullscreen/wat_nid_nc_4k", "slot": "whole" },
-      { "id": "backdrop.watAwfDay", "atlas": "fullscreen/wat_awf_dc_4k", "slot": "whole" },
-      { "id": "backdrop.watAwfNight", "atlas": "fullscreen/wat_awf_nc_4k", "slot": "whole" },
+      {
+        "id": "backdrop.watKabDay",
+        "atlas": "fullscreen/wat_kab_dc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watKabNight",
+        "atlas": "fullscreen/wat_kab_nc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watLchDay",
+        "atlas": "fullscreen/wat_lch_dc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watLchNight",
+        "atlas": "fullscreen/wat_lch_nc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watNidDay",
+        "atlas": "fullscreen/wat_nid_dc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watNidNight",
+        "atlas": "fullscreen/wat_nid_nc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watAwfDay",
+        "atlas": "fullscreen/wat_awf_dc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
+      {
+        "id": "backdrop.watAwfNight",
+        "atlas": "fullscreen/wat_awf_nc_4k",
+        "slot": "whole",
+        "maxRes": "1080p"
+      },
       {
         "id": "backdrop.jigJigStreet",
         "atlas": "common/assets_fullscreen29",

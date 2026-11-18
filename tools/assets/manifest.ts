@@ -15,6 +15,9 @@ export const IDS_MODULE = join(ROOT, "apps", "web", "src", "assets", "ids.gen.ts
 
 const ID = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/;
 
+const RES = z.enum(["2160p", "1080p", "720p"]);
+export type AssetRes = z.infer<typeof RES>;
+
 const EntrySchema = z
   .strictObject({
     id: z.string().regex(ID, "id 用点分隔的小驼峰，例如 hud.healthbar"),
@@ -28,6 +31,8 @@ const EntrySchema = z
       .string()
       .regex(/^[a-z0-9_]+\/[A-Za-z0-9_.-]+\.png$/, "file 写成 目录/文件名.png")
       .optional(),
+    /** 最高取用的分辨率档位，避免大背景图取到 4K（2160p） */
+    maxRes: RES.optional(),
     frames: z
       .strictObject({
         from: z.number().int().min(0),
@@ -62,6 +67,7 @@ export interface AssetSpec {
   readonly slot: string;
   /** 整张图：相对 export/ 的路径 */
   readonly file?: string;
+  readonly maxRes?: AssetRes;
 }
 
 /** index.json 里的一条：path 相对网页根目录；显示尺寸是 width / scale */
@@ -91,18 +97,19 @@ export async function loadManifest(): Promise<AssetSpec[]> {
     out.push(spec);
   };
   for (const [group, entries] of Object.entries(parsed.data.groups)) {
-    for (const { id, atlas = "", slot = "", file, frames } of entries) {
+    for (const { id, atlas = "", slot = "", file, maxRes, frames } of entries) {
+      const opt = maxRes ? { maxRes } : {};
       if (file !== undefined) {
-        add({ id, group, atlas, slot, file });
+        add({ id, group, atlas, slot, file, ...opt });
         continue;
       }
       if (!frames) {
-        add({ id, group, atlas, slot });
+        add({ id, group, atlas, slot, ...opt });
         continue;
       }
       for (let n = frames.from; n <= frames.to; n += 1) {
         if (frames.missing.includes(n)) continue;
-        add({ id: `${id}.${n}`, group, atlas, slot: slot.replace("{n}", String(n)) });
+        add({ id: `${id}.${n}`, group, atlas, slot: slot.replace("{n}", String(n)), ...opt });
       }
     }
   }

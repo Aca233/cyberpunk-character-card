@@ -6,7 +6,7 @@
 ## 方案
 
 ### 步骤 1：补充地点与城区素材清单
-- 在 [tools/assets/manifest.json](file:///c:/cyberpunk-character-card/tools/assets/manifest.json) 新增 `backdrop` 分组，纳入本地解包目录中的原作地点图与 4K 街景图（涵盖 15 个固定地点、夜之城 8 大城区及主要街区/地标，并在沃森主要片区区分昼夜 `dc`/`nc`）。
+- 在 [tools/assets/manifest.json](file:///c:/cyberpunk-character-card/tools/assets/manifest.json) 新增 `backdrop` 分组，纳入本地解包目录中的原作地点图与街景图（涵盖 15 个固定地点、夜之城 8 大城区及主要街区/地标，并在沃森主要片区区分昼夜 `dc`/`nc`）。全屏场景统一通过 `maxRes: "1080p"` 限制在 1080p（≤1920px）档位，不对背景使用 4K 素材，同时在 [pick.ts](file:///c:/cyberpunk-character-card/tools/assets/pick.ts) 对 `backdrop` 分组采用 WebP 82 质量压缩以控制体积（6.66 MB）。
 - 运行 `pnpm pick-assets --source "C:\Cyberpunk 2077\_unpack"` 重新生成 `public/assets/local/ui/` 与 [ids.gen.ts](file:///c:/cyberpunk-character-card/apps/web/src/assets/ids.gen.ts)，并用 `pnpm check-assets` 校验素材完整性。
 
 ### 步骤 2：实现地点 → 背景图解析与平滑切换
