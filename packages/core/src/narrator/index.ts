@@ -2,6 +2,7 @@ export * from "./block";
 export * from "./budget";
 export * from "./doc";
 export * from "./examples";
+export * from "./imagePrompt";
 export * from "./lore";
 export * from "./modules";
 export * from "./offscreen";

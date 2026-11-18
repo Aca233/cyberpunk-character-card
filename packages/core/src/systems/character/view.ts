@@ -35,5 +35,7 @@ export function characterView({ world }: ViewContext) {
     },
     /** 闪回里确认的事 */
     pastFacts: character.pastFacts,
+    /** 建档时的角色立绘 ID */
+    portrait: character.portrait ?? null,
   };
 }

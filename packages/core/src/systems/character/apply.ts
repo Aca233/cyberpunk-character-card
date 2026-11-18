@@ -45,6 +45,8 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.flashbackUsed = [];
   draft.flashback = null;
   draft.pastFacts = [];
+  if (command.portrait) draft.portrait = command.portrait;
+  else delete draft.portrait;
   return { ok: true };
 }
 

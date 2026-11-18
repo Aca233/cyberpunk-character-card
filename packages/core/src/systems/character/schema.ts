@@ -76,6 +76,8 @@ export const CharacterStateSchema = z.object({
   flashback: ActiveFlashbackSchema.nullable().default(null),
   /** 闪回里确认的事：已确定的事实 */
   pastFacts: z.array(PastFactSchema).default([]),
+  /** 角色立绘图片 ID（本地 ImageStore） */
+  portrait: z.string().min(1).max(120).optional(),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -88,6 +90,7 @@ export const SetCharacterSchema = z.object({
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
   /** 旧存档的角色快照没有 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).optional(),
+  portrait: z.string().min(1).max(120).optional(),
 });
 export type SetCharacter = z.infer<typeof SetCharacterSchema>;
 

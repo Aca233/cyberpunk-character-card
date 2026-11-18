@@ -90,6 +90,8 @@ export const CharacterCardSchema = z
       .default({ body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 }),
     /** 角色主板；只写了文字的旧卡没有 */
     board: BoardSchema.optional(),
+    /** 本地生成的角色立绘 ID（存在浏览器 ImageStore） */
+    portrait: z.string().trim().min(1).max(120).optional(),
   })
   .superRefine((card, ctx) => {
     for (const message of card.board ? boardIssues(card.board) : []) {
@@ -303,5 +305,6 @@ export function saveCharacter(card: CharacterCard): SaveCharacter {
     attributes: { ...card.attributes },
     streetCred: 1,
     ...(card.board ? { traits: boardTraits(card.board) } : {}),
+    ...(card.portrait ? { portrait: card.portrait } : {}),
   };
 }
