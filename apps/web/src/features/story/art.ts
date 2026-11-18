@@ -267,6 +267,21 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "rara-avis": "cyberArt.paraBellum",
 };
 
+const SHOP_POI_ICONS: Readonly<Record<string, AssetId>> = {
+  gun: "map.poi.gun",
+  melee: "map.poi.melee",
+  clothes: "map.poi.clothes",
+  meds: "map.poi.meds",
+  food: "map.poi.food",
+  bar: "map.poi.bar",
+  ripperdoc: "map.poi.ripperdoc",
+};
+
+/** 商店 / 诊所类型 → 原作地图 POI 图标，未知类型回落到通用商贩 */
+export function shopPoiIconOf(kind: string | null | undefined): AssetId {
+  return (kind ? SHOP_POI_ICONS[kind] : undefined) ?? "interaction.vendor";
+}
+
 export function portraitOf(npc: string | null | undefined): AssetId | undefined {
   return npc ? PORTRAITS[npc] : undefined;
 }

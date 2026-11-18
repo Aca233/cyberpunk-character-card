@@ -8,9 +8,9 @@ import {
 } from "react";
 import type { AssetId } from "../../assets";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
-import { Button } from "../../ui/Button";
+import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
-import { weaponHudIconOf } from "./art";
+import { shopPoiIconOf, weaponHudIconOf } from "./art";
 import styles from "./corners.module.css";
 import neural from "./neural.module.css";
 import {
@@ -1060,6 +1060,44 @@ export function Unread({
 /** 地点块下面常态最多列几条威胁，再多的写「还有几个」，去地图里看 */
 const ZONE_THREAT_MAX = 3;
 
+/** 地点服务条：NineSlice CellFrame + 左侧状态竖条 + POI 图标 + 店名 + 业态标签 */
+function ZoneServiceBar({
+  icon,
+  name,
+  tag,
+  blackMarket,
+  onClick,
+}: {
+  readonly icon: AssetId;
+  readonly name: string;
+  readonly tag: string;
+  readonly blackMarket?: boolean;
+  readonly onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.zoneService}
+      data-black-market={blackMarket || undefined}
+      onClick={onClick}
+    >
+      <CellFrame />
+      <NineSlice
+        id="cyber.cellRarity"
+        tint="var(--service-rail, var(--cp-cyan))"
+        slice={0}
+        className={styles.zoneServiceRail}
+      />
+      <Asset id={icon} height={15} tint="currentColor" className={styles.zoneServiceIcon} />
+      <span className={styles.zoneServiceName}>{name}</span>
+      <span className={styles.zoneServiceTag}>{tag}</span>
+      <span className={styles.zoneServiceGo} aria-hidden>
+        ▸
+      </span>
+    </button>
+  );
+}
+
 /**
  * B 地点、时间、热度：义眼叠加层，原作 zone_update 的框。
  * 不再悬停展开（用户定的，计划第十二节第 9 条）：威胁常态就列在框下面，没人盯上就不占地方；
@@ -1146,14 +1184,23 @@ export function Zone({
       {(view.shops.length > 0 || view.ripperdoc) && (
         <section className={styles.zoneServices} aria-label="当前地点商家">
           {view.shops.map((shop) => (
-            <Button key={shop.id} small onClick={() => onShop(shop.id)}>
-              商店 · {shop.name}
-            </Button>
+            <ZoneServiceBar
+              key={shop.id}
+              icon={shopPoiIconOf(shop.kind)}
+              name={shop.name}
+              tag={shop.blackMarket ? "黑市" : "商店"}
+              blackMarket={shop.blackMarket}
+              onClick={() => onShop(shop.id)}
+            />
           ))}
           {view.ripperdoc && (
-            <Button small onClick={onRipperdoc}>
-              义体诊所 · {view.ripperdoc.name}
-            </Button>
+            <ZoneServiceBar
+              icon="map.poi.ripperdoc"
+              name={view.ripperdoc.name}
+              tag={view.ripperdoc.blackMarket ? "黑市" : "义体诊所"}
+              blackMarket={view.ripperdoc.blackMarket}
+              onClick={onRipperdoc}
+            />
           )}
         </section>
       )}

@@ -1094,21 +1094,108 @@
 }
 
 .zoneServices {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 6px 0 0;
+}
+
+.zoneService {
+  --box-fill: rgb(10 18 26 / 80%);
+  --box-line: rgb(94 246 255 / 38%);
+  --service-rail: var(--cp-cyan);
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 4px 16px 0 28px;
-}
-
-.zoneServices > button {
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
+  min-height: 30px;
+  padding: 4px 12px 4px 14px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--cp-cyan);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    --box-fill var(--dur-flash),
+    --box-line var(--dur-flash),
+    color var(--dur-flash);
 }
 
-.zoneServices > button > span:last-child {
-  white-space: normal;
-  text-align: left;
-  overflow-wrap: anywhere;
+.zoneService:where([data-black-market]) {
+  --service-rail: var(--cp-yellow);
+}
+
+.zoneService:where(:hover, :focus-visible) {
+  --box-fill: rgb(14 30 42 / 92%);
+  --box-line: var(--cp-cyan);
+}
+
+.zoneServiceRail {
+  position: absolute;
+  inset: 3px auto 3px 0;
+  width: 3px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.zoneServiceIcon,
+.zoneServiceName,
+.zoneServiceTag,
+.zoneServiceGo {
+  position: relative;
+  z-index: 1;
+}
+
+.zoneServiceIcon {
+  flex: none;
+  opacity: 0.9;
+}
+
+.zoneServiceName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--cp-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoneServiceTag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgb(94 246 255 / 72%);
+}
+
+.zoneService:where([data-black-market]) .zoneServiceTag {
+  color: var(--cp-yellow);
+}
+
+.zoneServiceGo {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--cp-cyan);
+  opacity: 0.78;
+  transition:
+    transform 140ms ease-out,
+    opacity 140ms ease-out;
+}
+
+.zoneService:where(:hover, :focus-visible) .zoneServiceGo {
+  opacity: 1;
+  transform: translateX(2px);
 }
 
 /* ———— C 追踪（右中，常态摘要最多 3 条；展开默认收束至 390px，切到有单可接的委托时加宽到 560px） ———— */

@@ -6,7 +6,7 @@ import { Dialog } from "../../ui/Dialog";
 import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
-import { itemArtOf, portraitOf } from "./art";
+import { itemArtOf, portraitOf, shopPoiIconOf } from "./art";
 import { RARITY_ORDER, rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import shopCss from "./shop.module.css";
 import type { View } from "./view";
@@ -15,16 +15,6 @@ type ShopView = View["shops"][number];
 type ShelfItem = ShopView["shelf"][number];
 type SaleItem = ShopView["sell"][number];
 type ShopMode = "buy" | "sell";
-
-const SHOP_POI_ICON: Readonly<Partial<Record<NonNullable<ShopView["kind"]>, AssetId>>> = {
-  gun: "map.poi.gun",
-  melee: "map.poi.melee",
-  clothes: "map.poi.clothes",
-  meds: "map.poi.meds",
-  food: "map.poi.food",
-  bar: "map.poi.bar",
-  ripperdoc: "map.poi.ripperdoc",
-};
 
 const CARD_FOCUS_BTN_STYLE: CSSProperties = {
   display: "flex",
@@ -337,8 +327,7 @@ export function Shop({
   const eddies = view.money.eddies;
   const backpack = view.inventory.backpack;
   const keeperPortrait = portraitOf(shop.keeperNpc);
-  const poiIcon: AssetId =
-    (shop.kind ? SHOP_POI_ICON[shop.kind] : undefined) ?? "interaction.vendor";
+  const poiIcon: AssetId = shopPoiIconOf(shop.kind);
 
   // 确认框开着时 Esc 只关确认框
   useLayer(onClose, !confirming);
