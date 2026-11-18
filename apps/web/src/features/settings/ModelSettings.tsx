@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { api, type ConnectionTest, type ProfilePatch, type PublicProfile } from "../../api/client";
-import { LOCAL_MODE } from "../../api/transport";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
@@ -131,14 +130,14 @@ export function ModelSettings({
             <span className={styles.kicker}>MODEL CONNECTION</span>
             <h2>先连接一个模型</h2>
             <Button primary disabled={init.isPending} onClick={() => init.mutate()}>
-              {init.isPending ? "创建中…" : "创建本机配置"}
+              {init.isPending ? "创建中…" : "初始化浏览器配置"}
             </Button>
             {init.isError && (
               <p className={styles.error} role="alert">
                 {init.error.message}
               </p>
             )}
-            <p className={styles.help}>仅本地文件，不发请求</p>
+            <p className={styles.help}>仅存于浏览器本地存储，不发请求</p>
           </div>
         </Panel>
       </section>
@@ -149,9 +148,7 @@ export function ModelSettings({
         <section className={styles.notice} role="alert">
           <h2>配置文件有错误，暂时不能安全修改</h2>
           <p>
-            {LOCAL_MODE
-              ? "不会覆盖现有配置或密钥。配置保存在这个浏览器里，不能直接改文件；出现这个错误通常是版本不兼容，请带上下面的具体错误反馈。"
-              : "不会覆盖现有文件或密钥。请按下面的具体错误修正 config.json。"}
+            不会覆盖现有配置或密钥。配置保存在这个浏览器里，不能直接改文件；出现这个错误通常是版本不兼容，请带上下面的具体错误反馈。
           </p>
           <ul>
             {data.errors.map((e) => (
@@ -438,9 +435,8 @@ export function ModelSettings({
       </div>
 
       <p className={styles.privacy}>
-        {LOCAL_MODE
-          ? "密钥只存在这个浏览器里（IndexedDB），由浏览器直接发给模型服务商，不经过本站服务器；公用电脑上用完请清除密钥。服务商需允许网页跨域访问（CORS），本地 Ollama 要设置 OLLAMA_ORIGINS。"
-          : "密钥仅存本机 config.json，勿分享或提交。"}
+        密钥只存在这个浏览器里（IndexedDB），由浏览器直接发给模型服务商，不经过本站服务器；公用电脑上用完请清除密钥。服务商需允许网页跨域访问（CORS），本地
+        Ollama 要设置 OLLAMA_ORIGINS。
       </p>
 
       {leaving !== null && (
@@ -868,11 +864,9 @@ function ConnectionForm({
               />
             </FrameBox>
             <small>
-              {profile?.keySource === "env"
-                ? `当前使用环境变量 ${profile.apiKeyEnv ?? ""}。这里填写会保存一个本机配置密钥。`
-                : profile?.type === "ollama" || (!profile && preset === "ollama")
-                  ? "本地 Ollama 通常不需要密钥。"
-                  : "没有密钥也可以先保存连接，但不能用于剧情。"}
+              {profile?.type === "ollama" || (!profile && preset === "ollama")
+                ? "本地 Ollama 通常不需要密钥。"
+                : "没有密钥也可以先保存连接，但不能用于剧情。"}
             </small>
           </label>
         </div>
@@ -1072,10 +1066,8 @@ function ConnectionActions({
             {dialog === "test"
               ? `向「${profile.name}」的 ${profile.model} 发送一条短请求，可能按服务商价格计费。`
               : dialog === "delete"
-                ? `删除「${profile.name}」及其本机密钥，之后需要重新添加。`
-                : LOCAL_MODE
-                  ? "只删除这个浏览器里保存的密钥，连接的其他设置保留；之后要重新填写密钥才能用于剧情。"
-                  : "只删除 config.json 中的密钥。若配置了环境变量密钥，仍可能继续使用环境变量。"}
+                ? `删除「${profile.name}」及其本地密钥，之后需要重新添加。`
+                : "只删除这个浏览器里保存的密钥，连接的其他设置保留；之后要重新填写密钥才能用于剧情。"}
           </p>
         </Dialog>
       )}

@@ -1,17 +1,5 @@
 import type { TurnEvent } from "@cp/core";
-import { followLocalTurn, LOCAL_MODE } from "./transport";
-
-const NAMES = [
-  "started",
-  "rolled",
-  "boost",
-  "text",
-  "done",
-  "blocked",
-  "confirmSpend",
-  "stopped",
-  "error",
-] as const;
+import { followLocalTurn } from "./transport";
 
 const TERMINAL: ReadonlySet<string> = new Set([
   "done",
@@ -24,43 +12,14 @@ const isTerminal = (event: TurnEvent) => TERMINAL.has(event.type);
 
 export interface FollowHandlers {
   readonly onEvent: (event: TurnEvent) => void;
-  /** 这一轮在后端找不到了（过期或后端重启），或者连接彻底断开；调用方刷新存档状态 */
+  /** 这一轮在本地运行状态里找不到了（页面刷新过或已过期）；调用方刷新存档状态 */
   readonly onLost: (reason: string) => void;
 }
 
 /**
- * 订阅一轮的事件流。EventSource 断线后自己带 Last-Event-ID 重连，后端从下一个事件续发；
- * 收到终止事件后关闭。返回取消订阅的函数
+ * 订阅一轮的事件流：直接订阅内存里的 TurnHub，从第一个事件开始补收到终止事件。
+ * 返回取消订阅的函数
  */
 export function followTurn(saveId: string, turnId: string, handlers: FollowHandlers): () => void {
-  // 本地模式（静态网站）：游戏在浏览器里跑，直接跟内存里的 TurnHub，不走 EventSource
-  if (LOCAL_MODE) return followLocalTurn(saveId, turnId, isTerminal, handlers);
-  const source = new EventSource(`/api/saves/${saveId}/turns/${turnId}/events`);
-  let finished = false;
-  const close = () => {
-    finished = true;
-    source.close();
-  };
-  for (const name of NAMES) {
-    source.addEventListener(name, (raw) => {
-      // 后端的 error 事件带 data；EventSource 自己的连接错误也叫 error，但没有 data
-      if (!(raw instanceof MessageEvent) || typeof raw.data !== "string") {
-        if (name === "error" && !finished && source.readyState === EventSource.CLOSED) {
-          close();
-          handlers.onLost("和后端的事件流断开了，这一轮可能已经过期");
-        }
-        return;
-      }
-      let event: TurnEvent;
-      try {
-        event = JSON.parse(raw.data) as TurnEvent;
-      } catch {
-        return;
-      }
-      if (finished) return;
-      handlers.onEvent(event);
-      if (isTerminal(event)) close();
-    });
-  }
-  return close;
+  return followLocalTurn(saveId, turnId, isTerminal, handlers);
 }

@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
-import { LOCAL_MODE } from "../../api/transport";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -290,7 +289,7 @@ export function MainMenu() {
           />
           <div className={styles.statusTop}>
             <span className={styles.statusHead}>终端状态</span>
-            <span className={styles.statusMode}>{LOCAL_MODE ? "浏览器本地" : "本机服务"}</span>
+            <span className={styles.statusMode}>浏览器本地</span>
           </div>
           <dl className={styles.status}>
             <dt>模型</dt>
@@ -412,9 +411,7 @@ export function MainMenu() {
                 <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
               </div>
               <p className={styles.note}>
-                {LOCAL_MODE
-                  ? "存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份。本机服务器版导出的文件也能在这里导入，建成新存档；导出的文件含剧透。"
-                  : "导入完整导出的文件会建成一个新存档；导出文件含剧透信息，请妥善保管。"}
+                存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份；导入的存档文件会建成新存档，文件内含剧透，请妥善保管。
               </p>
               {sorted.length === 0 ? (
                 <EmptyState

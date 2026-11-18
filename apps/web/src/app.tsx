@@ -1,5 +1,4 @@
-import { createBrowserRouter, createHashRouter, Outlet } from "react-router";
-import { LOCAL_MODE } from "./api/transport";
+import { createHashRouter, Outlet } from "react-router";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { Calibrate } from "./features/dev/Calibrate";
 import { NeuralMock } from "./features/dev/NeuralMock";
@@ -48,12 +47,5 @@ const routes = [
   },
 ];
 
-/**
- * 纯前端版用 hash 路由（#/menu）：静态托管刷新子页面时只认根目录的 index.html，用 hash 就不会 404；
- * 服务器版照旧用普通路由，basename 跟着构建的 base 走
- */
-export const router = LOCAL_MODE
-  ? createHashRouter(routes)
-  : createBrowserRouter(routes, {
-      basename: import.meta.env.BASE_URL.replace(/\/$/, "") || "/",
-    });
+/** 纯静态网站使用 hash 路由（#/menu）：静态托管刷新任意子路径都不会 404 */
+export const router = createHashRouter(routes);

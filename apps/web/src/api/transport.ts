@@ -2,11 +2,9 @@ import type { TurnEvent } from "@cp/core";
 import type { LocalBackend } from "@cp/server/browser";
 
 /**
- * 构建开关：VITE_CP_BACKEND=local 时整个游戏在浏览器里跑（静态网站），存档存在 IndexedDB，
- * 网页拿玩家自己的密钥直接调模型；不设时照旧走同源的 /api，由本机服务器处理（开发模式）。
- * 本地服务层按需动态加载，连服务器的构建里不会带上它
+ * 纯前端静态运行层：整个游戏在浏览器里运行，存档与密钥存在 IndexedDB，
+ * 网页拿玩家自己的密钥直接调模型，事件流直接订阅内存里的 TurnHub。
  */
-export const LOCAL_MODE = import.meta.env.VITE_CP_BACKEND === "local";
 
 /**
  * 多标签页：本地服务层的回合和锁都在页面内存里，两个标签页同时写同一份存档会互相顶掉。
@@ -62,7 +60,7 @@ function waitForLock() {
 }
 
 function claimTab() {
-  if (claimed || !LOCAL_MODE) return;
+  if (claimed) return;
   claimed = true;
   if (typeof navigator === "undefined" || !("locks" in navigator)) {
     setTab("owner");
@@ -109,7 +107,6 @@ class TabTakenError extends Error {
 
 /** 和 fetch 一样用；path 不带 /api 前缀。另一个标签页在用时会等到这里拿到锁 */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  if (!LOCAL_MODE) return fetch(`/api${path}`, init);
   if (tab === "taken") throw new TabTakenError();
   const local = await localBackend();
   // 等锁期间可能被接管；await 之后重新读一次，不沿用前面的类型收窄

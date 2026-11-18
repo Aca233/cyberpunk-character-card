@@ -1,6 +1,6 @@
 import { type ReactNode, useSyncExternalStore } from "react";
 import { isRouteErrorResponse, useNavigate, useRouteError } from "react-router";
-import { LOCAL_MODE, subscribeTab, tabState, takeOverTab } from "../../api/transport";
+import { subscribeTab, tabState, takeOverTab } from "../../api/transport";
 import { assetTier, useMissingAssets } from "../../assets";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
@@ -36,7 +36,6 @@ export function FanNotice() {
  */
 export function TabNotice() {
   const state = useSyncExternalStore(subscribeTab, tabState);
-  if (!LOCAL_MODE) return null;
   if (state === "elsewhere") {
     return (
       <Dialog
