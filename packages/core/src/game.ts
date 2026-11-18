@@ -166,8 +166,6 @@ export interface Loadout {
   readonly gear: GameOpening["gear"];
   readonly eddies?: number;
   readonly cyberware?: readonly string[];
-  /** 装进接入仓的快速破解程序 id；要同时带接入仓 */
-  readonly programs?: readonly string[];
   /** 开局名下的车（车型 id） */
   readonly vehicles?: readonly string[];
 }
@@ -249,7 +247,6 @@ interface Kit {
   readonly gear: GameOpening["gear"];
   readonly eddies?: number | undefined;
   readonly cyberware?: readonly string[] | undefined;
-  readonly programs?: readonly string[] | undefined;
   readonly vehicles?: readonly string[] | undefined;
 }
 
@@ -278,12 +275,11 @@ function mergeKits(loadouts: readonly Loadout[]): Kit {
     gear: [...gearById.values()],
     eddies: loadouts.reduce((sum, l) => sum + (l.eddies ?? 0), 0),
     cyberware: [...new Set(loadouts.flatMap((l) => l.cyberware ?? []))],
-    programs: [...new Set(loadouts.flatMap((l) => l.programs ?? []))],
     vehicles: [...new Set(loadouts.flatMap((l) => l.vehicles ?? []))],
   };
 }
 
-/** 结合玩家自选义体结算行装自带义体和快速破解：操作系统被斯安威斯坦/狂暴顶掉时不发废程序 */
+/** 结合玩家自选义体结算行装自带义体：避免同部位满槽冲突 */
 function resolveStartKit(
   kit: Kit,
   boardCyberware: readonly string[],
@@ -310,12 +306,7 @@ function resolveStartKit(
     usedSlots.set(def.slot, used + 1);
     cyberware.push(id);
   }
-  const finalOs = [...cyberware, ...boardCyberware]
-    .map((id) => byId.get(id))
-    .filter((def): def is CyberwareDef => def?.slot === "os");
-  const deckSlots = finalOs.reduce((max, def) => Math.max(max, def.programSlots ?? 0), 0);
-  const programs = deckSlots > 0 ? (kit.programs ?? []).slice(0, deckSlots) : [];
-  return { ...kit, cyberware, programs };
+  return { ...kit, cyberware };
 }
 
 function applyBoardKit(
@@ -374,7 +365,6 @@ function openingCommands(opening: GameOpening, start: number, kit: Kit = opening
         ...(g.slot === undefined ? {} : { slot: g.slot }),
       })),
     ...(kit.cyberware ?? []).map((id) => ({ type: "cyberware.install", id })),
-    ...(kit.programs ?? []).map((id) => ({ type: "hack", action: "learn", program: id, reason })),
     ...(kit.eddies ? [{ type: "money", delta: kit.eddies, reason }] : []),
     ...(opening.jobs ?? []).flatMap(({ afterMinutes, ...job }) => [
       { type: "jobOffer", ...job, due: formatGameTime(start + afterMinutes) },
@@ -696,7 +686,7 @@ export function projectState(
     inventory: carried.inventory,
     /** 装着的义体，按装上的先后 */
     cyberware: views.cyberware as ReturnType<typeof cyberwareView>,
-    /** 网络接入仓、RAM 和装着的快速破解；没装接入仓是 null */
+    /** 网络接入仓定性信息、潜网和当前地点已攻破内网；没装接入仓是 null */
     hacking: views.hacking as ReturnType<typeof hackingView>,
     /** 地图上的地点和到每个地点的路线；路线面板照这里显示，结算用同一套算法 */
     travel: views.travel as ReturnType<typeof travelView>,

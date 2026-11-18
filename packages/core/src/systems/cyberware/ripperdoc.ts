@@ -4,7 +4,7 @@ import { HealthStateSchema } from "../health";
 import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { clinicProvider, DoctorRosterSchema, quoteCyberware } from "./quote";
-import { CyberwareStateSchema, SLOT_LABELS } from "./schema";
+import { CyberwareStateSchema, DECK_TRAIT_LABELS, SLOT_LABELS } from "./schema";
 import { clinicState } from "./stock";
 import { bonusText } from "./view";
 
@@ -109,8 +109,8 @@ export function ripperdocView({ world, data }: ViewContext) {
         checks: item.def.checks,
         armor: item.def.armor,
         accelerator: item.def.accelerator,
-        programSlots: item.def.programSlots,
-        ram: item.def.ram,
+        deckProfile: item.def.deckProfile,
+        deckTraits: item.def.deckTraits?.map((t) => DECK_TRAIT_LABELS[t]),
         locked: !clinic.open
           ? clinic.reason
           : !provider.ok

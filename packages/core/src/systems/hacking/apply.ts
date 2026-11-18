@@ -1,7 +1,12 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { CombatState } from "../combat";
-import { type CyberwareState, cyberwareCatalog } from "../cyberware";
+import {
+  type CyberwareDef,
+  type CyberwareState,
+  cyberwareCatalog,
+  type DeckTrait,
+} from "../cyberware";
 import { rulingFact } from "../dice";
 import type { HealthState } from "../health";
 import { currentVitals, filledBody, type NpcState } from "../npc";
@@ -38,34 +43,52 @@ export function quickhackCatalog(
   return catalog;
 }
 
-/** 按装着的义体算接入仓、RAM 上限和程序格数；没有义体表时返回 undefined */
-export function deckOf(
-  installed: CyberwareState["installed"],
-  data: Readonly<Record<string, unknown>>,
-): { readonly deck: string | null; readonly ramMax: number; readonly slots: number } | undefined {
-  const catalog = cyberwareCatalog(data);
-  if (catalog.size === 0) return undefined;
-  const defs = installed.flatMap((c) => catalog.get(c.id) ?? []);
-  const deck = defs.find((d) => d.programSlots !== undefined);
-  if (!deck) return { deck: null, ramMax: 0, slots: 0 };
+/** 接入仓的定性摘要：哪一款、什么定位、特化方向和有没有完好的自我 ICE；不含容量或槽位数字 */
+export interface DeckInfo {
+  readonly deck: string | null;
+  readonly deckName: string | null;
+  readonly profile: string | null;
+  readonly traits: readonly DeckTrait[];
+  readonly selfIce: boolean;
+}
+
+const NO_DECK: DeckInfo = { deck: null, deckName: null, profile: null, traits: [], selfIce: false };
+const SELF_ICE = "self-ice";
+
+function deckFrom(defs: readonly CyberwareDef[]): DeckInfo {
+  const selfIce = defs.some((d) => d.id === SELF_ICE);
+  const deck = defs.find((d) => d.slot === "os" && d.deckTraits !== undefined);
+  if (!deck) return { ...NO_DECK, selfIce };
   return {
     deck: deck.id,
-    ramMax: defs.reduce((sum, d) => sum + (d.ram ?? 0), 0),
-    slots: deck.programSlots ?? 0,
+    deckName: deck.name,
+    profile: deck.deckProfile ?? null,
+    traits: [...new Set(defs.flatMap((d) => d.deckTraits ?? []))],
+    selfIce,
   };
 }
 
-/** 只从完好的设备同步接入仓容量。 */
-export function syncDeck(draft: Hacking, ctx: SystemContext): number {
-  const broken = ctx.read<HealthState>("health").brokenChrome;
-  const found = deckOf(
-    ctx.read<CyberwareState>("cyberware").installed.filter((c) => !broken.includes(c.id)),
-    ctx.data,
+/** 按装着且没被打坏的义体认接入仓和特化；没有义体表时返回 undefined */
+export function deckOf(
+  installed: CyberwareState["installed"],
+  data: Readonly<Record<string, unknown>>,
+  broken: readonly string[] = [],
+): DeckInfo | undefined {
+  const catalog = cyberwareCatalog(data);
+  if (catalog.size === 0) return undefined;
+  return deckFrom(
+    installed.filter((c) => !broken.includes(c.id)).flatMap((c) => catalog.get(c.id) ?? []),
   );
-  if (!found) return 0;
-  draft.deck = found.deck;
-  draft.ramMax = found.ramMax;
-  return found.slots;
+}
+
+/** 只从完好的设备同步接入仓；没有义体表时不改 */
+export function syncDeck(draft: Hacking, ctx: SystemContext): void {
+  const found = deckOf(
+    ctx.read<CyberwareState>("cyberware").installed,
+    ctx.data,
+    ctx.read<HealthState>("health").brokenChrome,
+  );
+  if (found) draft.deck = found.deck;
 }
 
 function findProgram(
@@ -75,49 +98,18 @@ function findProgram(
   return catalog.get(key) ?? [...catalog.values()].find((q) => q.name === key);
 }
 
+/** 快速破解一次行动内自然结算：只要有完好的接入仓，且前置物理与潜网裁决没有阻断；不装卸程序，也不比容量 */
 export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemContext): ApplyOutcome {
-  const slots = syncDeck(draft, ctx);
-  const catalog = quickhackCatalog(ctx.data);
-  const def = findProgram(catalog, command.program);
-  if (!def) return fail(`快速破解表里没有 ${command.program}`);
-  if (!draft.deck) return fail("没装网络接入仓，放不了也装不了快速破解");
-  const reason = command.reason ?? "";
-
-  if (command.action === "learn") {
-    if (draft.programs.includes(def.id)) return fail(`「${def.name}」已经装着了`);
-    if (draft.programs.length >= slots) {
-      return fail(`接入仓的程序格满了（${slots} 格），先 drop 一个`);
-    }
-    draft.programs.push(def.id);
-    return {
-      ok: true,
-      notes: [`装上快速破解「${def.name}」：${reason}（程序格 ${draft.programs.length}/${slots}）`],
-    };
-  }
-  if (command.action === "drop") {
-    const i = draft.programs.indexOf(def.id);
-    if (i < 0) return fail(`没装「${def.name}」`);
-    draft.programs.splice(i, 1);
-    return { ok: true, notes: [`删掉快速破解「${def.name}」：${reason}`] };
-  }
-
-  if (!draft.programs.includes(def.id)) {
-    const names = draft.programs.map((id) => catalog.get(id)?.name ?? id);
-    return fail(
-      `没装「${def.name}」，只能放已装的程序：${names.length > 0 ? names.join("、") : "（一个都没装）"}`,
-    );
-  }
-  if (def.ram > draft.ramMax) {
-    return fail(`接入仓容量不足：「${def.name}」需要 ${def.ram} 格，设备只有 ${draft.ramMax} 格`);
-  }
+  syncDeck(draft, ctx);
+  if (!draft.deck) return fail("没装完好的网络接入仓，放不了快速破解");
   const ruling = rulingFact(ctx.facts);
   if (ruling?.kind === "blocked") return fail(ruling.reason ?? "网络拓扑或实际条件阻断了上传");
-  const notes = [
-    `快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target ?? ""}：设备容量 ${draft.ramMax} 格`,
-  ];
-  return { ok: true, notes };
+  const def = findProgram(quickhackCatalog(ctx.data), command.program);
+  const label = def
+    ? `「${def.name}」（${CATEGORY_LABELS[def.category]}）`
+    : `「${command.program}」`;
+  return { ok: true, notes: [`快速破解${label} → ${command.target}`] };
 }
-
 /** 入侵协议按已确认的接入路径结算；同一地点的既有网络授权持续存在。 */
 export function applyBreach(
   draft: Hacking,
@@ -197,16 +189,18 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
   };
 }
 
-/** 有卡的人的接入仓和 RAM 上限：按他身上装着的义体算，和玩家同一套（接入仓给底数，其他义体再加） */
+/** 有卡的人的接入仓与特化：按他身上完好的义体算，和玩家同一套定性摘要 */
 export function npcDeckOf(
   cyberware: readonly string[],
   data: Readonly<Record<string, unknown>>,
-): { readonly deck: string | null; readonly ramMax: number } {
+  broken: readonly string[] = [],
+): DeckInfo {
   const catalog = cyberwareCatalog(data);
-  const defs = cyberware.flatMap((id) => catalog.get(id) ?? []);
-  const deck = defs.find((d) => d.programSlots !== undefined);
-  if (!deck) return { deck: null, ramMax: 0 };
-  return { deck: deck.name, ramMax: defs.reduce((sum, d) => sum + (d.ram ?? 0), 0) };
+  if (catalog.size === 0) return NO_DECK;
+  const defs = cyberware
+    .filter((id) => !broken.includes(id))
+    .flatMap((id) => catalog.get(id) ?? []);
+  return deckFrom(defs);
 }
 
 /**
@@ -225,12 +219,8 @@ export function applyNpcHack(
     return fail(`${npc.name} 倒下了，放不了快速破解`);
   const def = findProgram(quickhackCatalog(ctx.data), command.program);
   if (!def) return fail(`快速破解表里没有 ${command.program}`);
-  const { deck, ramMax } = npcDeckOf(filledBody(npc.body).cyberware, ctx.data);
+  const { deck } = npcDeckOf(filledBody(npc.body).cyberware, ctx.data);
   if (!deck) return fail(`${npc.name} 没装网络接入仓，放不了快速破解：照他的装备和义体换个打法`);
-  if (def.ram > ramMax)
-    return fail(
-      `${npc.name} 的接入仓容量不足：「${def.name}」需要 ${def.ram} 格，设备只有 ${ramMax} 格`,
-    );
   const harmful =
     command.target === "你" && (def.category === "damage" || def.category === "ultimate");
   const ruling = harmful ? rulingFact(ctx.facts) : undefined;
@@ -241,9 +231,8 @@ export function applyNpcHack(
     }
     draft.resolvedNpcHacks.push(ruling.id);
   }
-  const ramNote = `${npc.name} 的接入仓容量 ${ramMax} 格`;
   const notes = [
-    `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}：${ramNote}`,
+    `${npc.name} 放快速破解「${def.name}」（${CATEGORY_LABELS[def.category]}）→ ${command.target}`,
   ];
   if (harmful) {
     notes.push("本次快速破解统一登记已确认的神经损伤，不另记 damage 或 combat wound");

@@ -49,8 +49,8 @@ const hackData = {
       price: 0,
       humanityCost: 0,
       ability: "上传快速破解",
-      programSlots: 4,
-      ram: 8,
+      deckTraits: [],
+      deckProfile: "测试接入仓",
     },
   ],
   quickhacks: [
@@ -58,7 +58,6 @@ const hackData = {
       id: "overheat",
       name: "过热",
       category: "damage",
-      ram: 2,
       effect: "义体过热",
       source: "测试",
     },
@@ -151,12 +150,22 @@ describe("叙事战斗伤害去重", () => {
     expect(CombatStateSchema.parse(result.turn.world.slices.combat).wounds).toEqual([]);
     expect(result.turn.commands).toContainEqual(attack);
   });
-  it("接入仓容量不足时独立伤害和伤口不能绕过破解校验", async () => {
+  it("没有完好接入仓时独立伤害和伤口不能绕过破解校验", async () => {
     const base = withRunner();
     const world: WorldState = {
       ...base,
       slices: {
         ...base.slices,
+        npc: {
+          npcs: {
+            runner: {
+              ...NpcSchema.parse(
+                (base.slices.npc as { npcs: Record<string, unknown> }).npcs.runner,
+              ),
+              body: { tier: "mook", gear: [], cyberware: [] },
+            },
+          },
+        },
         hacking: HackingStateSchema.parse(base.slices.hacking),
       },
     };
@@ -175,7 +184,7 @@ describe("叙事战斗伤害去重", () => {
         ),
         rng: { roll: () => 2 },
         offscreen: null,
-        data: { ...hackData, cyberware: hackData.cyberware.map((c) => ({ ...c, ram: 1 })) },
+        data: hackData,
       },
       world,
       [],

@@ -10,7 +10,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   // 额叶皮质
   {
     id: "ram-upgrade",
-    ram: 1,
+    deckTraits: ["recovery"],
+    deckProfile: "入门级脑部缓存，连续上传时散热更稳",
     name: "RAM 升级",
     slot: "frontalCortex",
     rarity: "common",
@@ -58,7 +59,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "ex-disk",
-    ram: 1,
+    deckTraits: ["recovery"],
+    deckProfile: "神经协处理器扩展盘，让接入仓上传更快、更不易过载",
     name: "外接盘",
     slot: "frontalCortex",
     rarity: "rare",
@@ -70,6 +72,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "memory-boost",
+    deckTraits: ["recovery"],
+    deckProfile: "回收敌方神经余波，长战里接入仓缓冲更足",
     name: "内存加强",
     slot: "frontalCortex",
     rarity: "legendary",
@@ -81,6 +85,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "camillo-ram-manager",
+    deckTraits: ["recovery"],
+    deckProfile: "过载应急旁路，接入仓濒临烧毁时紧急补足缓冲",
     name: "卡米略 RAM 管理器",
     slot: "frontalCortex",
     rarity: "legendary",
@@ -92,6 +98,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "self-ice",
+    deckTraits: ["antiIce"],
+    deckProfile: "脑内硬化防黑矩阵，完好时能拦下对自身的入侵",
     name: "自我 ICE",
     slot: "frontalCortex",
     rarity: "legendary",
@@ -351,8 +359,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
   {
     id: "militech-paraline",
-    ram: 4,
-    programSlots: 4,
+    deckTraits: [],
+    deckProfile: "街头入门仓：应付摄像头、门锁和普通帮派义体绰绰有余，硬闯公司或军用黑冰容易被挡回",
     name: "军用科技平行线 1 型",
     slot: "os",
     rarity: "common",
@@ -364,8 +372,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "biotech-sigma",
-    ram: 5,
-    programSlots: 5,
+    deckTraits: ["stealth"],
+    deckProfile: "街头入门仓：神经伪装协议让上传更难被溯源，但扛不住公司或军用级黑冰",
     name: "生物技术 Σ 1 型",
     slot: "os",
     rarity: "uncommon",
@@ -377,8 +385,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "raven-microcyber",
-    ram: 6,
-    programSlots: 6,
+    deckTraits: ["spread"],
+    deckProfile: "渡鸦群控仓：擅长局域网群发，多节点同步压制，单点深度渗透不是长处",
     name: "乌鸦微控 3 型",
     slot: "os",
     rarity: "rare",
@@ -425,8 +433,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "arasaka-deck",
-    ram: 4,
-    programSlots: 4,
+    deckTraits: ["stealth"],
+    deckProfile: "荒坂隐蔽仓：擅长潜行渗透与抹除痕迹，低噪控制，不易触发内网警报",
     name: "荒坂 1 型",
     slot: "os",
     rarity: "common",
@@ -438,8 +446,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "tetratronic-rippler",
-    ram: 4,
-    programSlots: 4,
+    deckTraits: ["combat"],
+    deckProfile: "四相强攻仓：高功率神经冲击与义体烧毁，正面压制力强，动静也大",
     name: "四相传电涟漪 1 型",
     slot: "os",
     rarity: "common",
@@ -451,8 +459,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "militech-canto",
-    ram: 8,
-    programSlots: 8,
+    deckTraits: ["blackwall", "combat", "spread"],
+    deckProfile: "军用科技黑墙仓：搭载黑墙边缘异质协议，破坏力极端，神经灼烧与失控风险同样极高",
     name: "军用科技篇章 6 型",
     slot: "os",
     rarity: "legendary",
@@ -1138,8 +1146,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "netwatch-netdriver",
-    ram: 8,
-    programSlots: 8,
+    deckTraits: ["netwatch", "antiIce", "combat"],
+    deckProfile: "网监防护仓：深厚防火墙与反黑客溯源能力；在公开网络连线会被网监猎犬循味而来",
     name: "网络监察网驱 5 型",
     slot: "os",
     rarity: "legendary",
@@ -1237,6 +1245,8 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   },
   {
     id: "ram-reallocator",
+    deckTraits: ["recovery"],
+    deckProfile: "神经运算总线应急重置，接入仓缓冲见底时可强制回稳",
     name: "RAM 配平",
     slot: "frontalCortex",
     rarity: "legendary",

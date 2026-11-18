@@ -5,7 +5,7 @@ export const DEFAULT_LOADOUT = "street-kid";
 
 /**
  * 开局行装：覆盖全量 17 种出身，含随身着装（equip: true）、兵器、急救品、欧元与对应默认出生点；
- * 带黑客履历或潜网出身者由 background 档补充潜网服、接入仓与初始快速破解程序。
+ * 带黑客履历或潜网出身者由 background 档补充潜网服与网络接入仓。
  * 装备里最后装上的武器拿在手里，主武器放在副武器后面。
  */
 export const loadouts: readonly Loadout[] = [
@@ -286,6 +286,5 @@ export const loadouts: readonly Loadout[] = [
     keywords: ["黑客", "潜网", "网络行者", "netrunner", "入侵协议", "快速破解"],
     gear: [{ id: "netrunner-suit", equip: true }],
     cyberware: ["militech-paraline"],
-    programs: ["ping", "reboot-optics", "short-circuit"],
   },
 ];

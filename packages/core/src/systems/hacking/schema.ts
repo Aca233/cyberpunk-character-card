@@ -11,13 +11,11 @@ export const CATEGORY_LABELS: Readonly<Record<QuickhackCategory, string>> = {
   ultimate: "终极",
 };
 
-/** 快速破解表的一条；数据在 content 包的 hacking.ts */
+/** 常见黑客手段词典的一条，照原作 2.x 的类别归类；数据在 content 包的 hacking.ts。不是需要装载的程序，也没有容量门槛 */
 export const QuickhackDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(12),
   category: QuickhackCategorySchema,
-  /** 单次程序所需的硬件容量；不累积为场景配额 */
-  ram: z.number().int().min(1).max(8),
   /** 放出去会怎样；写给模型 */
   effect: z.string().min(1).max(80),
   /** 出处：原作依据（版本）或本作改编 */
@@ -70,12 +68,8 @@ export const DiveSchema = z.object({
 export type Dive = z.infer<typeof DiveSchema>;
 
 export const HackingStateSchema = z.object({
-  /** 装着的网络接入仓（义体 id）；由装着的义体推出来，没装是 null */
+  /** 装着且完好的网络接入仓（义体 id）；由装着的义体推出来，没装或损坏是 null */
   deck: z.string().nullable().default(null),
-  /** RAM 上限：接入仓的底数加其他义体的加成 */
-  ramMax: z.number().int().min(0).default(0),
-  /** 装在接入仓里的快速破解程序 id；格数由接入仓定 */
-  programs: z.array(z.string()).default([]),
   /** 入侵协议拿下的网络，最近的在后，最多留 BREACH_KEEP 条 */
   breachedNetworks: z.array(BreachedNetworkSchema).default([]),
   /** 正在潜网；没在潜是 null */
@@ -90,11 +84,11 @@ export const NpcHackCommandSchema = z
   .object({
     type: z.literal("npcHack"),
     id: z.string().min(1).describe("放快速破解的人的卡 id"),
-    program: z.string().min(1).describe("程序 id（快速破解表里的）"),
+    program: z.string().min(1).describe("手段 id（快速破解参考表里的，用来归类效果）"),
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他要装着网络接入仓（义体带程序格的操作系统），按单次程序所需硬件容量核验，上传结束即释放，不积累使用次数；对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定，不按场次发放。对玩家的伤害类、终极类要经前置因果裁决与事实绑定（本轮事件 id），代码统一结算防御、自我 ICE 和伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他身上要装着完好的网络接入仓；上传结束即释放，不积累使用次数。对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定。对玩家的伤害类、终极类要经敌方黑客独立裁决 counterHack 与事实绑定（本轮事件 id），代码统一结算伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
@@ -102,35 +96,23 @@ export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 export const HackCommandSchema = z
   .object({
     type: z.literal("hack"),
-    action: z.enum(["use", "learn", "drop"]).default("use"),
-    program: z.string().min(1).describe("程序 id（见【当前状态】的已装程序）"),
-    target: z.string().trim().min(1).max(40).optional().describe("use 要写：对谁或什么放"),
+    program: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .describe("手段：快速破解参考表里的 id 或名字；表外的写简短的中文说明"),
+    target: z.string().trim().min(1).max(40).describe("对谁或什么放"),
     npc: z
       .string()
       .min(1)
       .optional()
       .describe("目标有人物卡时写卡的 id；对有卡的人要先经前置潜网对抗裁决"),
-    reason: z
-      .string()
-      .trim()
-      .min(1)
-      .max(80)
-      .optional()
-      .describe("learn、drop 要写：程序是哪来的、为什么删"),
-  })
-  .superRefine((c, ctx) => {
-    if (c.action === "use" && c.target === undefined) {
-      ctx.addIssue({ code: "custom", message: "放快速破解要写 target", path: ["target"] });
-    }
-    if (c.action !== "use" && c.reason === undefined) {
-      ctx.addIssue({ code: "custom", message: "learn 和 drop 要写 reason", path: ["reason"] });
-    }
   })
   .describe(
-    "快速破解：use 放程序（按接入仓硬件容量核验；终极类不自动扣人性），learn 装上新程序（买到、从芯片拷来），drop 删掉一个腾出程序格",
+    "快速破解：装着完好网络接入仓的人，一次行动内对符合现场电子设备与义体逻辑的目标放出入侵手段，无需装载、卸载程序，也没有容量门槛；是否成立看前置的物理与潜网裁决，终极类不自动扣人性",
   );
 export type HackCommand = z.infer<typeof HackCommandSchema>;
-
 /** 模型使用：{"type": "breach", "network": "漩涡帮仓库的内网", "via": "卸货口旁的接入点", "gains": ["cameras", "doors"]} */
 export const BreachCommandSchema = z
   .object({

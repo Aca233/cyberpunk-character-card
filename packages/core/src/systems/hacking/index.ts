@@ -17,7 +17,7 @@ import { hackingStatus } from "./status";
 import { hackingView } from "./view";
 
 /**
- * 骇入：接入仓容量与程序来源由装着的义体推出来；一次程序的容量核验不转化为场景次数。
+ * 骇入：由装着且完好的网络接入仓决定可用性；没有程序槽位或 RAM 门槛。
  * 有卡的人放快速破解（npcHack）也在这里结算：读 npc 拿他的义体，读 cyberware 看玩家的自我 ICE
  */
 export const hacking = defineSystem<
@@ -29,8 +29,6 @@ export const hacking = defineSystem<
   state: HackingStateSchema,
   initial: () => ({
     deck: null,
-    ramMax: 0,
-    programs: [],
     breachedNetworks: [],
     dive: null,
     resolvedNpcHacks: [],

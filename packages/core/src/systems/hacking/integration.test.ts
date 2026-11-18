@@ -3,7 +3,6 @@ import { fixedRng } from "../../kernel/rng";
 import { HealthStateSchema } from "../health";
 import { NpcSchema } from "../npc";
 import { registry } from "../registry";
-import { HackingStateSchema } from "./schema";
 
 const attack = {
   type: "npcHack",
@@ -23,8 +22,8 @@ const data = {
       price: 0,
       humanityCost: 0,
       ability: "上传快速破解",
-      programSlots: 4,
-      ram: 8,
+      deckTraits: [],
+      deckProfile: "测试接入仓",
     },
   ],
   quickhacks: [
@@ -32,7 +31,6 @@ const data = {
       id: "overheat",
       name: "过热",
       category: "damage",
-      ram: 2,
       effect: "义体过热",
       source: "测试",
     },
@@ -173,12 +171,25 @@ describe("NPC 快速破解结算", () => {
     expect(result.world.slices.hacking).toMatchObject({ resolvedNpcHacks: [] });
   });
 
-  it("单次程序超过设备容量时整条拒绝", () => {
-    const world = ready();
-    const result = registry.applyCommands(world, [attack], {
-      ...context(),
-      data: { ...data, cyberware: data.cyberware.map((c) => ({ ...c, ram: 1 })) },
-    });
+  it("NPC 没装网络接入仓时整条拒绝", () => {
+    const base = ready();
+    const world = {
+      ...base,
+      slices: {
+        ...base.slices,
+        npc: {
+          npcs: {
+            runner: {
+              ...NpcSchema.parse(
+                (base.slices.npc as { npcs: Record<string, unknown> }).npcs.runner,
+              ),
+              body: { tier: "mook", gear: [], cyberware: [] },
+            },
+          },
+        },
+      },
+    };
+    const result = registry.applyCommands(world, [attack], context());
     expect(result.results[0]?.result.ok).toBe(false);
     expect(result.world).toBe(world);
   });
@@ -221,17 +232,16 @@ describe("NPC 快速破解结算", () => {
     }
   });
 
-  it("玩家上传使用硬件容量，设备损坏或物理阻断时拒绝", () => {
+  it("玩家上传无需预先装载程序，设备损坏或物理阻断时拒绝", () => {
     const base = ready();
     const world = {
       ...base,
       slices: {
         ...base.slices,
         cyberware: { installed: [{ id: "test-deck", slot: "os", installedAt: 0 }] },
-        hacking: { ...HackingStateSchema.parse(base.slices.hacking), programs: ["overheat"] },
       },
     };
-    const use = { type: "hack", action: "use", program: "overheat", target: "门锁" };
+    const use = { type: "hack", program: "overheat", target: "门锁" };
     let current: import("../../kernel/world").WorldState = world;
     for (let i = 0; i < 8; i += 1) {
       const result = registry.applyCommands(
@@ -243,6 +253,7 @@ describe("NPC 快速破解结算", () => {
       current = result.world;
     }
     expect(current.slices.hacking).not.toHaveProperty("ram");
+    expect(current.slices.hacking).not.toHaveProperty("programs");
     const broken = {
       ...world,
       slices: { ...world.slices, health: { ...base.slices.health, brokenChrome: ["test-deck"] } },

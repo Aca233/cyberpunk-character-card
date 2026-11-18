@@ -142,15 +142,15 @@ const chromeIds = unique(
   "义体表",
   cyberware.map((c) => c.id),
 );
-const quickhackIds = unique(
+unique(
   "快速破解",
   quickhacks.map((q) => q.id),
 );
 for (const c of cyberware) {
-  if (c.programSlots !== undefined && c.slot !== "os")
-    errors.push(`义体 ${c.id}：只有操作系统义体能当网络接入仓（programSlots）`);
-  if (c.programSlots !== undefined && c.ram === undefined)
-    errors.push(`义体 ${c.id}：网络接入仓要写 RAM 格数`);
+  if (c.deckTraits !== undefined && c.slot !== "os" && c.slot !== "frontalCortex")
+    errors.push(`义体 ${c.id}：只有操作系统或额叶皮质义体能带黑客硬件特化（deckTraits）`);
+  if (c.deckTraits !== undefined && c.deckProfile === undefined)
+    errors.push(`义体 ${c.id}：带 deckTraits 的黑客义体要写定性定位 deckProfile`);
 }
 const locationIds = unique(
   "地点",
@@ -217,13 +217,6 @@ for (const l of loadouts) {
   );
   refs(`行装 ${l.id}`, l.cyberware ?? [], chromeIds, "义体");
   refs(`行装 ${l.id}`, l.vehicles ?? [], vehicleIds, "车型");
-  refs(`行装 ${l.id}`, l.programs ?? [], quickhackIds, "快速破解");
-  if ((l.programs ?? []).length > 0) {
-    const deck = cyberware.find((c) => (l.cyberware ?? []).includes(c.id) && c.programSlots);
-    if (!deck) errors.push(`行装 ${l.id}：带了快速破解却没带网络接入仓`);
-    else if ((l.programs ?? []).length > (deck.programSlots ?? 0))
-      errors.push(`行装 ${l.id}：快速破解比 ${deck.name} 的程序格多`);
-  }
   if (l.keywords.length === 0) errors.push(`行装 ${l.id}：没有关键词，永远选不中`);
 }
 for (const o of openings) {

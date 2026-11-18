@@ -14,19 +14,16 @@ export const hackingStatus: readonly SystemStatus[] = [
       const h = hackingOf(ctx);
       if (!h) return [];
       const lines: string[] = [];
-      const programs = h.programs.map(
-        (p) => `${p.id}「${p.name}」（${p.categoryLabel}，运行需要 ${p.ram} 容量：${p.effect}）`,
-      );
-      lines.push(
-        `网络接入仓：${h.deckName}，硬件运行容量 ${h.ramMax}（单次上传后释放）；已装程序 ${h.programs.length}/${h.slots}：${programs.length > 0 ? programs.join("；") : "一个都没装"}`,
-      );
+      const parts = [...h.traitLabels, ...(h.selfIce ? ["配完好自我 ICE"] : [])];
+      const suffix = parts.length > 0 ? `（${parts.join("，")}）` : "";
+      lines.push(`网络接入仓：${h.deckName}${suffix}`);
       if (h.dive)
         lines.push(
           `潜网中：第 ${h.dive.layer}/${h.dive.layers} 层（${h.dive.label}），肉身躺在${h.dive.chair}，${h.dive.guard}守着`,
         );
       if (h.breaches.length > 0)
         lines.push(
-          `这里入侵过的网络：${h.breaches.map((n) => `${n.name}（${n.at}，拿下${n.gains.join("、")}）`).join("；")}`,
+          `这里已控制的网络：${h.breaches.map((n) => `${n.name}（${n.at}，拿下${n.gains.join("、")}）`).join("；")}`,
         );
       return lines;
     },

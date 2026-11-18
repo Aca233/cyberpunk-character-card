@@ -48,6 +48,29 @@ export const SLOT_CAPACITY: Readonly<Record<CyberwareSlot, number>> = {
   legs: 1,
 };
 
+/** 黑客硬件的定性特化：隐蔽、群控扩散、强攻烧毁、黑墙、网监溯源、防黑冰、散热回复 */
+export const DECK_TRAITS = [
+  "stealth",
+  "spread",
+  "combat",
+  "blackwall",
+  "netwatch",
+  "antiIce",
+  "recovery",
+] as const;
+export const DeckTraitSchema = z.enum(DECK_TRAITS);
+export type DeckTrait = z.infer<typeof DeckTraitSchema>;
+
+export const DECK_TRAIT_LABELS: Readonly<Record<DeckTrait, string>> = {
+  stealth: "隐蔽渗透",
+  spread: "群控扩散",
+  combat: "强攻烧毁",
+  blackwall: "黑墙异质协议",
+  netwatch: "网监溯源",
+  antiIce: "防黑冰",
+  recovery: "散热缓冲",
+};
+
 /** 义体表的一条；数据在 content 包的 cyberware.ts */
 export const CyberwareDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
@@ -66,10 +89,13 @@ export const CyberwareDefSchema = z.object({
   attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
   /** 护甲义体：受到的伤害降一档；装着几件护甲也只降一档 */
   armor: z.boolean().default(false),
-  /** 网络接入仓：能装几个快速破解程序；有这一项的操作系统义体才算接入仓 */
-  programSlots: z.number().int().min(1).max(12).optional(),
-  /** RAM 格：接入仓给底数，额叶皮质等义体再加（本作改编） */
-  ram: z.number().int().min(1).max(12).optional(),
+  /**
+   * 黑客硬件的定性特化方向；操作系统义体写了这一项才算网络接入仓，
+   * 额叶皮质等义体写了则作为脑部黑客配件并入接入仓的特化。没有槽位或 RAM 数字门槛。
+   */
+  deckTraits: z.array(DeckTraitSchema).optional(),
+  /** 接入仓或黑客配件的档次与定位，一句话；写给模型，也显示在侧栏 */
+  deckProfile: z.string().min(1).max(60).optional(),
   /** 加速义体（斯安威斯坦）：生死瞬间可以开，按现场时距和设备能力加速行动 */
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */

@@ -24,8 +24,8 @@ const data = {
       price: 0,
       humanityCost: 0,
       ability: "上传快速破解",
-      programSlots: 4,
-      ram: 8,
+      deckTraits: [],
+      deckProfile: "测试接入仓",
     },
   ],
 };

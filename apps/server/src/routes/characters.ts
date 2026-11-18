@@ -108,8 +108,12 @@ export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmCli
                 slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
                 rarity: def.rarity,
                 humanityCost: def.humanityCost,
-                ...(def.programSlots !== undefined ? { programSlots: def.programSlots } : {}),
-                ...(def.ram !== undefined ? { ram: def.ram } : {}),
+                ...(def.deckProfile !== undefined ? { deckProfile: def.deckProfile } : {}),
+                ...(def.deckTraits !== undefined
+                  ? {
+                      deckTraits: def.deckTraits.map((t) => cyberwareRules.DECK_TRAIT_LABELS[t]),
+                    }
+                  : {}),
                 ...(def.armor ? { armor: true } : {}),
                 ...(def.accelerator ? { accelerator: true } : {}),
                 ...(def.checks.length > 0 ? { checks: def.checks } : {}),

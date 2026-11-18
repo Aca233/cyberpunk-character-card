@@ -2,7 +2,7 @@ import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
-import { type CyberwareDef, CyberwareStateSchema, SLOT_LABELS } from "./schema";
+import { type CyberwareDef, CyberwareStateSchema, DECK_TRAIT_LABELS, SLOT_LABELS } from "./schema";
 
 export function cyberwarePartsView({ world, data }: ViewContext) {
   const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
@@ -52,8 +52,8 @@ export function cyberwareView({ world, data }: ViewContext) {
       checks: def?.checks ?? [],
       armor: def?.armor ?? false,
       accelerator: def?.accelerator ?? false,
-      programSlots: def?.programSlots,
-      ram: def?.ram,
+      deckProfile: def?.deckProfile,
+      deckTraits: def?.deckTraits?.map((t) => DECK_TRAIT_LABELS[t]),
       /** 被打坏了：修好前失去能力 */
       broken: health.brokenChrome.includes(c.id),
     };
