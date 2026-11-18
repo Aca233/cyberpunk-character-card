@@ -169,13 +169,18 @@ export function StoryScreen() {
     window.addEventListener("beforeunload", warnLeave);
     return () => window.removeEventListener("beforeunload", warnLeave);
   }, [busy]);
-  // 物品栏、制作、义体不再开全屏（第十二节第 10 条），各自停在块里的哪个页签；收起后再钉住还是那个
+  // 物品栏、车辆页签；收起后复位回物品栏，避免悬停误弹出车辆页
   const [gearTab, setGearTab] = useState<GearTab>("inventory");
   const [bioTab, setBioTab] = useState<BioTab>("character");
   // 视野里就地展开（第十二节第 7 条）：四角的块、在场的人，同一时间只展开一处；
   // 钉住（点块或按 P/J/T）时块里放完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
+  useEffect(() => {
+    if (expand?.id !== "weapon" && gearTab !== "inventory") {
+      setGearTab("inventory");
+    }
+  }, [expand?.id, gearTab]);
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
   // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点（第 3 条），按 M 打开时不选
@@ -185,7 +190,7 @@ export function StoryScreen() {
   const closePinned = useCallback(() => setExpand(null), []);
   // 正文里点了人名：弹出这个人的档案（第 3 条）
   const [person, setPerson] = useState<string | null>(null);
-  // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）；存放不再弹窗，进右上角地点块（用户定的）
+  // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
   const [atBraindance, setAtBraindance] = useState(false);
@@ -543,14 +548,7 @@ export function StoryScreen() {
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
       {gearTab === "vehicles" ? (
-        <VehiclesPage
-          view={view}
-          onLocate={(location) => {
-            setExpand(null);
-            setMapFocus(location);
-            setAtMap(true);
-          }}
-        />
+        <VehiclesPage view={view} />
       ) : (
         <InventoryPage
           view={view}
@@ -1054,7 +1052,7 @@ export function StoryScreen() {
                   要 {home.price.toLocaleString("en-US")} 欧元，身上有{" "}
                   {view.money.eddies.toLocaleString("en-US")} 欧元，付完剩{" "}
                   {(view.money.eddies - home.price).toLocaleString("en-US")}
-                  。不收房租，买下后有床、存放箱和衣柜，躲在里面热度降得快。
+                  。不收房租，买下后是个能休息落脚的安全屋，躲在里面热度降得快。
                 </p>
               </Dialog>
             )

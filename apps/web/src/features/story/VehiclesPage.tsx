@@ -1,19 +1,12 @@
 import { Asset } from "../../ui/Asset";
-import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
 import { vehicleArtOf } from "./vehicle-art";
 import styles from "./vehicles.module.css";
 import type { View } from "./view";
 
-/** 车辆页用于查看名下车辆、停车地点与异常状况。 */
-export function VehiclesPage({
-  view,
-  onLocate,
-}: {
-  readonly view: View;
-  readonly onLocate: (location: string) => void;
-}) {
-  const { vehicles, destinations } = view.travel;
+/** 车辆页只在主动展开并切到车辆页签时显示，只提供图片、名称、位置与异常状况。 */
+export function VehiclesPage({ view }: { readonly view: View }) {
+  const { vehicles } = view.travel;
 
   return (
     <section className={styles.page} aria-label="名下车辆">
@@ -27,9 +20,6 @@ export function VehiclesPage({
         <ul className={styles.list}>
           {vehicles.map((vehicle) => {
             const art = vehicleArtOf(vehicle.model);
-            const location = destinations.find(
-              (destination) => destination.id === vehicle.location,
-            );
             const abnormal = [
               vehicle.stolen ? "赃车" : null,
               vehicle.condition === "damaged" ? "受损" : null,
@@ -64,15 +54,6 @@ export function VehiclesPage({
                     </p>
                   )}
                 </div>
-                {location && !vehicle.here && (
-                  <Button
-                    small
-                    label={`在地图查看${vehicle.name}的停车位置`}
-                    onClick={() => onLocate(location.id)}
-                  >
-                    地图
-                  </Button>
-                )}
               </li>
             );
           })}
