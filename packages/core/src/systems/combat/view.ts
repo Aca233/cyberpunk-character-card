@@ -50,9 +50,7 @@ export function combatView({ world, data }: ViewContext) {
         obj?.weaponState ??
         (def ? defaultInstanceStateFromDef(def) : undefined);
       const baseName = def?.name ?? (ws ? catalog?.get(ws.baseId)?.name : undefined) ?? id;
-      const name = ws
-        ? formatWeaponWithMods(baseName, ws, catalog ?? new Map(), { defaultRarity: def?.rarity })
-        : baseName;
+      const name = ws ? formatWeaponWithMods(baseName, ws, catalog ?? new Map()) : baseName;
       const baseId = ws?.baseId;
       return {
         id,

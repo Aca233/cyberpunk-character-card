@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote, checkNarratedPurchase, type NarratedPurchase } from "../commerce";
-import { EconomyStateSchema, MONEY_CAP, RARITY_LABELS, type Rarity } from "../economy";
+import { EconomyStateSchema, MONEY_CAP } from "../economy";
 import { LogisticsStateSchema } from "../logistics";
 import { merchantAt, merchantSites, type WorldClockState } from "../world";
 import {
@@ -12,7 +12,6 @@ import {
   itemCatalog,
   materializeWeapon,
   putToBackpack,
-  rarityOf,
   shopList,
   takeFromBackpack,
   withWorldObjects,
@@ -33,7 +32,7 @@ import {
   weaponGrantsSmartLink,
 } from "./schema";
 import { collectOrderedItem, replenishAfterSale } from "./supply";
-import { nextRarity, SMART_LINK_CONVERT_PARTS, tuneStepRawFee } from "./trade";
+import { SMART_LINK_CONVERT_PARTS } from "./trade";
 
 export const GUNSMITH_SERVICE_RATE = 0.2;
 const MELEE_CATEGORIES = new Set(["blade", "blunt"]);
@@ -41,7 +40,7 @@ const MELEE_CATEGORIES = new Set(["blade", "blunt"]);
 export const GunsmithActionSchema = z.strictObject({
   type: z.literal("gunsmith"),
   shop: z.string().min(1).max(80),
-  action: z.enum(["install", "detach", "tune", "convert"]),
+  action: z.enum(["install", "detach", "convert"]),
   weapon: z.string().min(1).max(64),
   mod: z.string().min(1).max(64).optional(),
   slot: ModSlotSchema.optional(),
@@ -57,9 +56,9 @@ export const GunsmithCommandSchema = z
     type: z.literal("gunsmith"),
     shop: z.string().min(1).max(80).describe("提供枪匠工坊服务的商店稳定 id"),
     action: z
-      .enum(["install", "detach", "tune", "convert"])
+      .enum(["install", "detach", "convert"])
       .describe(
-        "install 从货架购买或用自带件安装/替换改装件；detach 拆除已锁定改装件并解锁槽位；tune 付费精调提升武器品质一档；convert 为智能武器加装智能靶向联锁或精工固锁已有改装槽位",
+        "install 从货架购买或用自带件安装/替换改装件；detach 拆除已锁定改装件并解锁槽位；convert 为智能武器加装智能靶向联锁或精工固锁已有改装槽位",
       ),
     weapon: z.string().min(1).max(64).describe("随身携带的武器 id（模板 id 或定制实例 id）"),
     mod: z.string().min(1).max(64).optional().describe("install/detach 对应的改装件 id"),
@@ -98,7 +97,6 @@ export interface GunsmithQuote {
   readonly replaces: { readonly id: string; readonly name: string } | null;
   readonly lock: boolean;
   readonly conversion: "smart-link" | "precision-lock" | null;
-  readonly tunedRarity: Rarity | null;
   readonly quoteTarget: string;
   readonly label: string;
   readonly partsFee: number;
@@ -204,7 +202,6 @@ export function quoteGunsmith(
   let replaces: GunsmithQuote["replaces"] = null;
   let lock = false;
   let conversion: GunsmithQuote["conversion"] = null;
-  let tunedRarity: Rarity | null = null;
   let quoteTarget = request.weapon;
   let label = weaponDef.name;
   let partsFee: number | undefined = 0;
@@ -298,26 +295,6 @@ export function quoteGunsmith(
     partsFee = 0;
     serviceFee = laborFee(modDef?.price ?? 500, shop, mood);
     label = `${weaponDef.name} 拆下并解锁 ${modName}`;
-  } else if (request.action === "tune") {
-    if (
-      request.mod ||
-      request.slot ||
-      request.source ||
-      request.replace ||
-      request.lock ||
-      request.conversion
-    ) {
-      return { ok: false, reason: "精调升阶只指定武器，不接受配件或槽位参数" };
-    }
-    const currentRarity = rarityOf(weaponDef, ws);
-    const next = nextRarity(currentRarity);
-    if (!next) {
-      return { ok: false, reason: `${weaponDef.name}已经达到传说级，无法继续精调升阶` };
-    }
-    tunedRarity = next;
-    partsFee = 0;
-    serviceFee = shopAdjustedPrice(tuneStepRawFee(weaponDef, currentRarity), shop, mood);
-    label = `${weaponDef.name} 精调至${RARITY_LABELS[next]}`;
   } else {
     if (request.mod || request.source || request.replace || request.lock) {
       return { ok: false, reason: "枪匠结构改造不接受改装件来源或替换参数" };
@@ -378,7 +355,7 @@ export function quoteGunsmith(
   if (
     !agreement.quote &&
     request.offer === undefined &&
-    (request.action === "tune" || request.action === "convert") &&
+    request.action === "convert" &&
     baseId !== request.weapon
   ) {
     const fallback = agreedQuote(world, {
@@ -439,7 +416,6 @@ export function quoteGunsmith(
       replaces,
       lock,
       conversion,
-      tunedRarity,
       quoteTarget,
       label,
       partsFee: resolvedPartsFee,
@@ -465,7 +441,6 @@ export function gunsmithSettlement(q: GunsmithQuote): NarratedPurchase {
     ...(q.slot ? { slot: q.slot } : {}),
     ...(q.replaces ? { replace: q.replaces.id } : {}),
     ...(q.conversion ? { conversion: q.conversion } : {}),
-    ...(q.tunedRarity ? { tunedRarity: q.tunedRarity } : {}),
     ...(q.lock ? { lock: true } : {}),
   };
 }
@@ -565,11 +540,6 @@ export function applyGunsmith(
     obj.changedAt = world.time;
     obj.lastChange = `${q.shopName}：拆除并解锁 ${q.modName ?? q.mod}`;
     foldBackWeapon(draft, targetId);
-  } else if (q.action === "tune") {
-    if (!q.tunedRarity) return { ok: false, reason: "精调指令缺少目标品质" };
-    ws.tunedRarity = q.tunedRarity;
-    obj.changedAt = world.time;
-    obj.lastChange = `${q.shopName}：精调至${RARITY_LABELS[q.tunedRarity]}`;
   } else {
     if (q.conversion === "smart-link") {
       ws.smartLink = true;

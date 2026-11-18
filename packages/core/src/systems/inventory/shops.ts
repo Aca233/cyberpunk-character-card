@@ -38,7 +38,7 @@ import {
   type WeaponInstanceState,
   weaponGrantsSmartLink,
 } from "./schema";
-import { nextRarity, quoteTrade } from "./trade";
+import { quoteTrade } from "./trade";
 
 function itemGroup(def: ItemDef): string {
   return def.kind === "weapon" && def.category
@@ -66,7 +66,7 @@ function itemSubLabel(def: ItemDef): string {
 
 function itemMeta(def: ItemDef, ws: WeaponInstanceState | undefined) {
   const baseId = ws?.baseId ?? def.id;
-  const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, ws) : null;
+  const rar = def.rarity || def.kind === "weapon" ? rarityOf(def) : null;
   return {
     baseId,
     group: itemGroup(def),
@@ -126,14 +126,7 @@ function projectGunsmithShop(
       if (def?.kind !== "weapon" || def.category === undefined) return [];
       const ws = obj?.weaponState ?? defaultInstanceStateFromDef(def);
       const baseId = ws?.baseId ?? def.id;
-      const rar = rarityOf(def, ws);
-      const nextRar = nextRarity(rar);
-      const tuneRes = quoteGunsmith(
-        world,
-        data,
-        { shop: shop.id, action: "tune", weapon: weaponId },
-        { checkFunds: false },
-      );
+      const rar = rarityOf(def);
       const smartEligible = def.weaponType === "smart";
       const smartInstalled = weaponGrantsSmartLink(def, ws, catalog);
       const smartRes =
@@ -160,12 +153,6 @@ function projectGunsmithShop(
           noise: effectiveWeaponNoise(def, ws, catalog),
           grantsSmartLink: smartInstalled,
           weaponState: projectWeaponState(ws),
-          tune: {
-            nextRarity: nextRar,
-            nextRarityLabel: nextRar ? RARITY_LABELS[nextRar] : null,
-            price: tuneRes.ok ? tuneRes.quote.total : null,
-            locked: tuneRes.ok ? tuneRes.quote.blocked : tuneRes.reason,
-          },
           smartLinkConvert: {
             eligible: smartEligible,
             installed: smartInstalled,

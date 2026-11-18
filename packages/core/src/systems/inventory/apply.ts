@@ -41,12 +41,11 @@ function nextWeaponInstanceId(draft: Inventory, baseId: string): string {
 }
 
 export function isCleanWeaponState(
-  ws: Pick<WeaponInstanceState, "mods" | "lockedSlots" | "tunedRarity" | "smartLink">,
+  ws: Pick<WeaponInstanceState, "mods" | "lockedSlots" | "smartLink">,
 ): boolean {
   return (
     Object.values(ws.mods).every((v) => v === undefined) &&
     ws.lockedSlots.length === 0 &&
-    ws.tunedRarity === undefined &&
     !ws.smartLink
   );
 }
@@ -56,7 +55,6 @@ export function cloneWeaponState(ws: WeaponInstanceState): WeaponInstanceState {
     baseId: ws.baseId,
     mods: { ...ws.mods },
     lockedSlots: [...ws.lockedSlots],
-    ...(ws.tunedRarity !== undefined ? { tunedRarity: ws.tunedRarity } : {}),
     ...(ws.smartLink ? { smartLink: true } : {}),
   };
 }
@@ -766,12 +764,9 @@ export function applyMod(
   return ok(`${mod.name} 装到 ${weapon.name} 的${MOD_SLOT_LABELS[slot]}`);
 }
 
-/** 物品现在的稀有度：精调过的按精调档位，没写稀有度的按普通 */
-export function rarityOf(
-  def: ItemDef,
-  weaponState?: Pick<WeaponInstanceState, "tunedRarity">,
-): Rarity {
-  return weaponState?.tunedRarity ?? def.rarity ?? "common";
+/** 物品的稀有度；没写稀有度的按普通 */
+export function rarityOf(def: ItemDef): Rarity {
+  return def.rarity ?? "common";
 }
 
 export function applyParts(draft: Inventory, command: PartsCommand): ApplyOutcome {

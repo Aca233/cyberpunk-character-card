@@ -1,7 +1,6 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { cyberwareView } from "../cyberware";
 import type { WeaponConcealment } from "../dice";
-import { RARITY_LABELS } from "../economy";
 import { type namesView, summarizeAbility } from "./names";
 import type { shopsView } from "./shops";
 import type { inventoryView } from "./view";
@@ -44,7 +43,6 @@ export const inventoryStatus: readonly SystemStatus[] = [
         const displayName = names[w.id] ?? w.id;
         const detail = inv.details[w.id];
         const fitted = inv.mods[w.id] ?? [];
-        const tuned = w.weaponState?.tunedRarity;
         const concealmentNote = CONCEALMENT_STATUS_NOTES[w.concealment];
         const smartLinkNote =
           w.weaponType !== "smart"
@@ -64,7 +62,6 @@ export const inventoryStatus: readonly SystemStatus[] = [
         const extra = [
           ...(displayName !== w.id ? [w.id] : []),
           ...(detail?.subLabel ? [detail.subLabel] : []),
-          ...(tuned ? [`精调至${RARITY_LABELS[tuned]}`] : []),
           ...(concealmentNote ? [concealmentNote] : []),
           ...(w.isRanged && w.noise === "silent" ? ["已消音"] : []),
           ...(smartLinkNote ? [smartLinkNote] : []),

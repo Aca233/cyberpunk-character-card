@@ -978,12 +978,6 @@ export function InventoryPage({
                             <span className={styles.pillText}>智能联锁</span>
                           </span>
                         )}
-                        {kind === "weapon" && detail?.weaponState?.tunedRarity && (
-                          <span className={styles.detailTagActive}>
-                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                            <span className={styles.pillText}>已精调</span>
-                          </span>
-                        )}
                         {selectedIsWorn && (
                           <span className={styles.detailTagActive}>
                             <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />

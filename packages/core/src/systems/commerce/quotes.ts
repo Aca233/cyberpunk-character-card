@@ -38,7 +38,6 @@ export interface NarratedPurchase {
   readonly source?: "shelf" | "backpack" | undefined;
   readonly slot?: string | undefined;
   readonly conversion?: "smart-link" | "precision-lock" | undefined;
-  readonly tunedRarity?: string | undefined;
   readonly lock?: boolean | undefined;
 }
 
@@ -78,7 +77,6 @@ export function checkNarratedPurchase(
     expected.source !== actual.source ||
     expected.slot !== actual.slot ||
     expected.conversion !== actual.conversion ||
-    expected.tunedRarity !== actual.tunedRarity ||
     (expected.lock ?? false) !== (actual.lock ?? false)
   )
     return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";

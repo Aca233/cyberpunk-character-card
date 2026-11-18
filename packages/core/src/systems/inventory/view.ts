@@ -123,7 +123,7 @@ export function inventoryView({ world, data }: ViewContext) {
         if (!def) return [];
         const ws = obj?.weaponState;
         const baseId = ws?.baseId ?? id;
-        const rar = def.rarity || def.kind === "weapon" ? rarityOf(def, ws) : null;
+        const rar = def.rarity || def.kind === "weapon" ? rarityOf(def) : null;
         return [
           [
             id,
@@ -151,12 +151,12 @@ export function inventoryView({ world, data }: ViewContext) {
         ];
       }),
     ),
-    /** 身上武器现在的稀有度键，含精调升阶后的档；界面按它染原作稀有度色条 */
+    /** 身上武器现在的稀有度键；界面按它染原作稀有度色条 */
     rarity: Object.fromEntries(
       weaponIds.flatMap((id) => {
         const obj = inventory.objects[id];
         const def = items.get(id) ?? obj?.definition;
-        return def?.kind === "weapon" ? [[id, rarityOf(def, obj?.weaponState)]] : [];
+        return def?.kind === "weapon" ? [[id, rarityOf(def)]] : [];
       }),
     ) as Readonly<Record<string, Rarity>>,
     /** 穿着的服装，按格子顺序；没穿的格子不列 */

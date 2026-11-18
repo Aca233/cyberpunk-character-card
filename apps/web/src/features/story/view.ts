@@ -1,4 +1,4 @@
-import { economyRules, inventoryRules, type PlayerView, type TurnInput } from "@cp/core";
+import { inventoryRules, type PlayerView, type TurnInput } from "@cp/core";
 import type { AssetId } from "../../assets";
 import { baseWeaponIdOf } from "./art";
 
@@ -1476,12 +1476,11 @@ export interface WeaponStateModSummary {
 
 export interface WeaponStateSummary {
   readonly mods: readonly WeaponStateModSummary[];
-  readonly tunedLabel: string | null;
   readonly smartLink: boolean;
   readonly inlineText: string | null;
 }
 
-/** 汇总定制武器实例状态（已装配件、精调档位与智能靶向联锁），供商店与物品栏共用 */
+/** 汇总定制武器实例状态（已装配件与智能靶向联锁），供商店与物品栏共用 */
 export function summarizeWeaponState(
   ws: WeaponStateProjection | null | undefined,
   resolveName: (id: string) => string,
@@ -1499,12 +1498,10 @@ export function summarizeWeaponState(
       locked: ws.lockedSlots.includes(slot),
     });
   }
-  const tunedLabel = ws.tunedRarity ? economyRules.RARITY_LABELS[ws.tunedRarity] : null;
   const smartLink = ws.smartLink;
-  if (mods.length === 0 && !tunedLabel && !smartLink) return null;
+  if (mods.length === 0 && !smartLink) return null;
 
   const parts: string[] = [];
-  if (tunedLabel) parts.push(`精调${tunedLabel}`);
   if (smartLink) parts.push("智能联锁");
   if (mods.length > 0) {
     parts.push(
@@ -1513,7 +1510,6 @@ export function summarizeWeaponState(
   }
   return {
     mods,
-    tunedLabel,
     smartLink,
     inlineText: parts.join(" · "),
   };

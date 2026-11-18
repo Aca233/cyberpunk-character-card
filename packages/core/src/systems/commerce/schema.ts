@@ -4,17 +4,7 @@ import { GameTimeSchema } from "../world";
 export const QuoteTermsSchema = z.object({
   seller: z.string().trim().min(1).max(80).describe("交易对方的商店、医生或人物稳定 id，不写玩家"),
   kind: z.enum(["item", "service", "cyberware", "gunsmith"]),
-  action: z.enum([
-    "buy",
-    "sell",
-    "service",
-    "install",
-    "remove",
-    "repair",
-    "detach",
-    "tune",
-    "convert",
-  ]),
+  action: z.enum(["buy", "sell", "service", "install", "remove", "repair", "detach", "convert"]),
   target: z
     .string()
     .trim()
@@ -86,7 +76,7 @@ export const OfferCommandSchema = QuoteTermsSchema.extend({
         : offer.kind === "service"
           ? ["service"]
           : offer.kind === "gunsmith"
-            ? ["install", "detach", "tune", "convert"]
+            ? ["install", "detach", "convert"]
             : ["buy", "install", "remove", "repair"];
     if (!valid.includes(offer.action))
       ctx.addIssue({ code: "custom", message: "报价种类与交易动作不一致" });

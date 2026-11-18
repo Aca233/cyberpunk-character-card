@@ -32,7 +32,6 @@ interface GunsmithPreview {
   readonly concealment: WeaponConcealment;
   readonly noise: WeaponNoise;
   readonly smartLink: boolean;
-  readonly rarityLabel: string | null;
 }
 
 interface GunsmithConfirm {
@@ -81,7 +80,6 @@ function previewGunsmithImpact(
   let nextConceal = weapon.concealment;
   let nextNoise = weapon.noise;
   let nextSmartLink = weapon.grantsSmartLink;
-  let nextRarityLabel: string | null = null;
 
   if ((payload.action === "install" || payload.action === "detach") && payload.mod && slot) {
     const afterMods: Partial<Record<inventoryRules.ModSlot, string>> = {
@@ -104,8 +102,6 @@ function previewGunsmithImpact(
     }
     const nextRank = Math.max(baseRank, Math.min(maxRank, baseRank + totalShift));
     nextConceal = CONCEAL_ORDER[nextRank] ?? weapon.concealment;
-  } else if (payload.action === "tune") {
-    nextRarityLabel = weapon.tune.nextRarityLabel;
   } else if (payload.action === "convert" && payload.conversion === "smart-link") {
     nextSmartLink = true;
   }
@@ -114,7 +110,6 @@ function previewGunsmithImpact(
     concealment: nextConceal,
     noise: nextNoise,
     smartLink: nextSmartLink,
-    rarityLabel: nextRarityLabel,
   };
 }
 
@@ -259,9 +254,6 @@ function ShopCatalogCard({
             {weaponSummary && weaponSummary.mods.length > 0 && (
               <span className={shopCss.ownedPill}>已装 {weaponSummary.mods.length} 改</span>
             )}
-            {weaponSummary?.tunedLabel && (
-              <span className={shopCss.stockPill}>精调{weaponSummary.tunedLabel}</span>
-            )}
             {weaponSummary?.smartLink && <span className={shopCss.ownedPill}>智能联锁</span>}
           </span>
           {metaText && <span className={shopCss.itemMeta}>{metaText}</span>}
@@ -394,12 +386,6 @@ function ShopInspector({
 
       {weaponSummary && (
         <div className={shopCss.inspectWeaponState}>
-          {weaponSummary.tunedLabel && (
-            <div className={shopCss.inspectMetaRow}>
-              <span>精调品质</span>
-              <strong data-tone="yellow">{weaponSummary.tunedLabel}</strong>
-            </div>
-          )}
           {weaponSummary.smartLink && (
             <div className={shopCss.inspectMetaRow}>
               <span>结构改造</span>
@@ -462,7 +448,6 @@ function GunsmithInspector({
   const concealChanged = Boolean(activePreview && activePreview.concealment !== weapon.concealment);
   const noiseChanged = Boolean(activePreview && activePreview.noise !== weapon.noise);
   const smartChanged = Boolean(activePreview && activePreview.smartLink !== weapon.grantsSmartLink);
-  const rarityChanged = Boolean(activePreview?.rarityLabel);
 
   const previewBind = (preview: GunsmithPreview) => ({
     onMouseEnter: () => setHoveredPreview(preview),
@@ -470,17 +455,6 @@ function GunsmithInspector({
     onFocus: () => setHoveredPreview(preview),
     onBlur: () => setHoveredPreview(null),
   });
-
-  const tunePrice = weapon.tune.price;
-  const tuneShort = tunePrice !== null && tunePrice > eddies;
-  const tuneDisabled =
-    working ||
-    Boolean(blocked) ||
-    !weapon.tune.nextRarity ||
-    tunePrice === null ||
-    Boolean(weapon.tune.locked) ||
-    tuneShort;
-  const tuneReason = blocked ?? weapon.tune.locked ?? (tuneShort ? "欧元不够" : undefined);
 
   const smartTotal = weapon.smartLinkConvert.total;
   const smartShort = smartTotal !== null && smartTotal > eddies;
@@ -528,11 +502,6 @@ function GunsmithInspector({
             {rarityText}
           </span>
         )}
-        {weapon.weaponState?.tunedRarity && (
-          <span className={shopCss.inspectTag} data-tone="yellow">
-            已精调
-          </span>
-        )}
         <span className={shopCss.inspectTag}>{CONCEALMENT_LABELS[weapon.concealment]}</span>
         {!isMelee && (
           <span
@@ -570,14 +539,6 @@ function GunsmithInspector({
             </strong>
           </div>
         )}
-        {rarityChanged && activePreview?.rarityLabel && (
-          <div className={shopCss.inspectMetaRow}>
-            <span>品质预览</span>
-            <strong data-tone="yellow">
-              {weapon.rarityLabel} → {activePreview.rarityLabel}
-            </strong>
-          </div>
-        )}
         {smartChanged && activePreview && (
           <div className={shopCss.inspectMetaRow}>
             <span>智能联锁</span>
@@ -591,54 +552,9 @@ function GunsmithInspector({
 
       {blocked && <p className={shopCss.inspectAlert}>{blocked}</p>}
 
-      <section className={shopCss.gsSection} aria-label="精调与结构改造">
-        <h4 className={shopCss.gsSectionTitle}>精调与结构改造</h4>
-        <div className={shopCss.gsServiceCard}>
-          <div className={shopCss.gsServiceInfo}>
-            <strong>
-              武器精调升阶
-              {weapon.tune.nextRarityLabel ? ` → ${weapon.tune.nextRarityLabel}` : ""}
-            </strong>
-            <small>
-              {weapon.tune.nextRarity && tunePrice !== null
-                ? `工时 ${money(tunePrice)} 欧元 · 改后余 ${
-                    tuneShort ? `差 ${money(tunePrice - eddies)}` : money(eddies - tunePrice)
-                  } 欧元`
-                : (weapon.tune.locked ?? "已达传说品质")}
-            </small>
-          </div>
-          {weapon.tune.nextRarity && tunePrice !== null && (
-            <div
-              className={shopCss.gsActionWrap}
-              {...previewBind(previewGunsmithImpact(weapon, { action: "tune", weapon: weapon.id }))}
-            >
-              <Button
-                small
-                primary={!tuneDisabled}
-                disabled={tuneDisabled}
-                reason={tuneReason}
-                onClick={() => {
-                  const payload: GunsmithPayload = { action: "tune", weapon: weapon.id };
-                  onConfirm({
-                    kind: "gunsmith",
-                    weapon,
-                    title: `精调 ${weapon.name}`,
-                    description: `由枪匠精调打磨机构，将品质从${weapon.rarityLabel}提升至${weapon.tune.nextRarityLabel}。`,
-                    payload,
-                    partsFee: 0,
-                    serviceFee: tunePrice,
-                    total: tunePrice,
-                    preview: previewGunsmithImpact(weapon, payload),
-                  });
-                }}
-              >
-                {`精调 ${money(tunePrice)}€`}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {weapon.smartLinkConvert.eligible && (
+      {weapon.smartLinkConvert.eligible && (
+        <section className={shopCss.gsSection} aria-label="结构改造">
+          <h4 className={shopCss.gsSectionTitle}>结构改造</h4>
           <div className={shopCss.gsServiceCard}>
             <div className={shopCss.gsServiceInfo}>
               <strong>智能靶向联锁模块</strong>
@@ -675,7 +591,7 @@ function GunsmithInspector({
                     onConfirm({
                       kind: "gunsmith",
                       weapon,
-                      title: `加装智能靶向联锁`,
+                      title: "加装智能靶向联锁",
                       description: `为 ${weapon.name} 加装独立智能校准联锁模块，无需手部智能连接义体亦可激活自导锁定。`,
                       payload,
                       partsFee: weapon.smartLinkConvert.partsFee ?? 0,
@@ -690,8 +606,8 @@ function GunsmithInspector({
               </div>
             )}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       <section className={shopCss.gsSection} aria-label="改装槽位与货架直装">
         <h4 className={shopCss.gsSectionTitle}>槽位深改与货架直装</h4>
@@ -1469,9 +1385,6 @@ export function Shop({
                                   <span className={shopCss.itemBody}>
                                     <span className={shopCss.itemTitleRow}>
                                       <strong className={shopCss.itemName}>{w.name}</strong>
-                                      {w.weaponState?.tunedRarity && (
-                                        <span className={shopCss.stockPill}>精调</span>
-                                      )}
                                       {w.grantsSmartLink && (
                                         <span className={shopCss.ownedPill}>智能联锁</span>
                                       )}
@@ -1502,11 +1415,6 @@ export function Shop({
                                   <span className={shopCss.ownedPill}>
                                     槽位 {installedCount}/{w.slots.length}
                                   </span>
-                                  {w.tune.nextRarityLabel && w.tune.price !== null && (
-                                    <span className={shopCss.priceTag}>
-                                      精调 {money(w.tune.price)}€
-                                    </span>
-                                  )}
                                 </div>
                               </li>
                             );
@@ -1722,14 +1630,6 @@ export function Shop({
                     <strong>
                       {NOISE_LABELS[confirming.weapon.noise]} →{" "}
                       {NOISE_LABELS[confirming.preview.noise]}
-                    </strong>
-                  </span>
-                )}
-                {confirming.preview.rarityLabel && (
-                  <span>
-                    品质升阶：
-                    <strong>
-                      {confirming.weapon.rarityLabel} → {confirming.preview.rarityLabel}
                     </strong>
                   </span>
                 )}

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type Attribute, AttributeSchema, type WeaponConcealment, type WeaponNoise } from "../dice";
-import { type Rarity, RaritySchema, ServiceSchema } from "../economy";
+import { RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -328,8 +328,6 @@ export const WeaponInstanceStateSchema = z.object({
   mods: z.partialRecord(ModSlotSchema, z.string().min(1)).default({}),
   /** 无法在战外随手拆下的槽位（如枪匠焊死/定制组件、不朽武器固有改装） */
   lockedSlots: z.array(ModSlotSchema).default([]),
-  /** 枪匠精调后的稀有度档位（高于模板默认 rarity） */
-  tunedRarity: RaritySchema.optional(),
   /** 枪匠加装的内置智能靶向联锁握把/模组 */
   smartLink: z.boolean().optional(),
 });
@@ -339,7 +337,6 @@ export interface WeaponStateView {
   readonly baseId: string;
   readonly mods: Readonly<Partial<Record<ModSlot, string>>>;
   readonly lockedSlots: readonly ModSlot[];
-  readonly tunedRarity: Rarity | null;
   readonly smartLink: boolean;
 }
 
@@ -350,7 +347,6 @@ export function projectWeaponState(ws: WeaponInstanceState | undefined): WeaponS
     baseId: ws.baseId,
     mods: ws.mods,
     lockedSlots: ws.lockedSlots,
-    tunedRarity: ws.tunedRarity ?? null,
     smartLink: ws.smartLink ?? false,
   };
 }
@@ -434,7 +430,7 @@ export const ItemCommandSchema = z
       .optional()
       .describe("首次出现的物件从哪里来、此前属于谁；必须依据已发生的事实"),
     weaponState: WeaponInstanceStateSchema.optional().describe(
-      "获得带预装改装或精调的武器时可附带其改装与精调状态；改装件 id 必须真实存在且兼容该武器",
+      "获得带预装改装的武器时可附带其改装状态；改装件 id 必须真实存在且兼容该武器",
     ),
     recipient: z
       .string()

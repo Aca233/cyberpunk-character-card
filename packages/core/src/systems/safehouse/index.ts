@@ -1,6 +1,5 @@
 import { defineSystem } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
-import { RARITY_LABELS } from "../economy";
 import { InventoryStateSchema, itemCatalog, MOD_SLOT_LABELS, type ModSlot } from "../inventory";
 import { NpcStateSchema } from "../npc";
 import { TravelStateSchema, vehicleCatalog } from "../travel";
@@ -125,7 +124,7 @@ export const safehouse = defineSystem<
           const qty = p.count > 1 ? `×${p.count}` : "";
           const ws = obj?.weaponState;
           const wsParts: string[] = [];
-          if (ws?.tunedRarity) wsParts.push(`精调至${RARITY_LABELS[ws.tunedRarity]}`);
+          if (ws?.smartLink) wsParts.push("智能联锁");
           if (ws) {
             const fitted = Object.entries(ws.mods).flatMap(([slot, modId]) => {
               if (!modId) return [];

@@ -60,10 +60,10 @@ export const BuyProposalSchema = z
       "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
     ),
     gunsmith: z
-      .enum(["install", "detach", "tune", "convert"])
+      .enum(["install", "detach", "convert"])
       .optional()
       .describe("枪匠工坊服务类型；不与 item/service/cyberware 同写"),
-    weapon: z.string().min(1).optional().describe("枪匠工坊改装或精调的随身武器 id"),
+    weapon: z.string().min(1).optional().describe("枪匠工坊改装的随身武器 id"),
     mod: z.string().min(1).optional().describe("枪匠工坊安装或拆除的改装件 id"),
     slot: z.enum(["muzzle", "scope", "plugin"]).optional().describe("枪匠工坊拆除或精工固锁的槽位"),
     source: z
@@ -420,7 +420,6 @@ export function purchaseQuote(
         q.replaces?.id,
         q.lock,
         q.conversion,
-        q.tunedRarity,
         q.total,
         q.offer,
         buy.destination,

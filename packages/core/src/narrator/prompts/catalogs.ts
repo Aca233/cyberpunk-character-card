@@ -130,11 +130,7 @@ export function extractCatalogDetails(
   for (const item of catalog.values()) {
     const obj = inventory.objects[item.id];
     const ws = obj?.weaponState;
-    const displayName = ws
-      ? formatWeaponWithMods(item.name, ws, catalog, {
-          defaultRarity: catalog.get(ws.baseId)?.rarity ?? item.rarity,
-        })
-      : item.name;
+    const displayName = ws ? formatWeaponWithMods(item.name, ws, catalog) : item.name;
     const isRelevant = itemIds.has(item.id) || mentioned(query, item.id, item.name);
     if (!isRelevant) continue;
     if (obj?.kind === "customized" && ws) {

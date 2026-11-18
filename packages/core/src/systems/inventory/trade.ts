@@ -31,46 +31,8 @@ import { collectOrderedItem, replenishAfterSale } from "./supply";
 
 export const RARITY_ORDER: readonly Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 
-const RARITY_RANK: Readonly<Record<Rarity, number>> = {
-  common: 0,
-  uncommon: 1,
-  rare: 2,
-  epic: 3,
-  legendary: 4,
-};
-
-/** 精调升到对应档位的参考附加价值与基准阶梯费 */
-export const TUNE_STEP_VALUE: Readonly<Record<Rarity, number>> = {
-  common: 0,
-  uncommon: 800,
-  rare: 2400,
-  epic: 7000,
-  legendary: 18000,
-};
-
-const DEFAULT_RARITY_BASE: Readonly<Record<Rarity, number>> = {
-  common: 500,
-  uncommon: 2500,
-  rare: 7000,
-  epic: 20000,
-  legendary: 45000,
-};
-
 export const SMART_LINK_CONVERT_PARTS = 1600;
 export const SMART_LINK_CONVERT_VALUE = 2000;
-
-export function nextRarity(current: Rarity): Rarity | null {
-  const idx = RARITY_ORDER.indexOf(current);
-  if (idx < 0 || idx >= RARITY_ORDER.length - 1) return null;
-  return RARITY_ORDER[idx + 1] ?? null;
-}
-
-export function tuneStepRawFee(item: Pick<ItemDef, "price" | "rarity">, current: Rarity): number {
-  const next = nextRarity(current);
-  if (!next) return 0;
-  const basePrice = item.price ?? DEFAULT_RARITY_BASE[item.rarity ?? "common"];
-  return TUNE_STEP_VALUE[next] + Math.round((basePrice * 0.2) / 10) * 10;
-}
 
 export function weaponModValue(
   weaponState: WeaponInstanceState | undefined,
@@ -86,23 +48,6 @@ export function weaponModValue(
   return sum;
 }
 
-export function weaponTuningValue(
-  item: Pick<ItemDef, "rarity">,
-  weaponState: WeaponInstanceState | undefined,
-): number {
-  const tuned = weaponState?.tunedRarity;
-  if (!tuned) return 0;
-  const baseRank = RARITY_RANK[item.rarity ?? "common"];
-  const tunedRank = RARITY_RANK[tuned];
-  if (tunedRank <= baseRank) return 0;
-  let sum = 0;
-  for (let i = baseRank + 1; i <= tunedRank; i += 1) {
-    const r = RARITY_ORDER[i];
-    if (r) sum += TUNE_STEP_VALUE[r];
-  }
-  return sum;
-}
-
 export function itemReferencePrice(
   item: Pick<ItemDef, "price" | "rarity" | "grantsSmartLink">,
   weaponState: WeaponInstanceState | undefined,
@@ -112,7 +57,6 @@ export function itemReferencePrice(
   const hasIntrinsicSmartLink = baseDef?.grantsSmartLink ?? item.grantsSmartLink;
   const extra =
     weaponModValue(weaponState, catalog) +
-    weaponTuningValue(item, weaponState) +
     (weaponState?.smartLink && !hasIntrinsicSmartLink ? SMART_LINK_CONVERT_VALUE : 0);
   if (item.price !== undefined) return item.price + extra;
   return extra > 0 ? extra : undefined;

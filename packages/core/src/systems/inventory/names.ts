@@ -1,5 +1,4 @@
 import type { ViewContext } from "../../kernel/system";
-import { RARITY_LABELS, type Rarity } from "../economy";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { itemCatalog, withWorldObjects } from "./apply";
 import {
@@ -33,18 +32,14 @@ export function summarizeAbility(ability: string | undefined, maxChars = 56): st
   return `${clean.slice(0, maxChars - 1)}…`;
 }
 
-/** 将基础武器名称与改装件/精调/智能联锁状态拼成可读展示名 */
+/** 将基础武器名称与改装件/智能联锁状态拼成可读展示名 */
 export function formatWeaponWithMods(
   baseName: string,
-  weaponState: Pick<WeaponInstanceState, "mods" | "tunedRarity" | "smartLink"> | undefined,
+  weaponState: Pick<WeaponInstanceState, "mods" | "smartLink"> | undefined,
   catalog: ReadonlyMap<string, Pick<ItemDef, "name">>,
-  options?: { readonly defaultRarity?: Rarity | undefined },
 ): string {
   if (!weaponState) return baseName;
   const tags: string[] = [];
-  if (weaponState.tunedRarity && weaponState.tunedRarity !== options?.defaultRarity) {
-    tags.push(`精调${RARITY_LABELS[weaponState.tunedRarity]}`);
-  }
   for (const slot of MOD_SLOTS) {
     const modId = weaponState.mods[slot];
     if (modId) tags.push(catalog.get(modId)?.name ?? modId);

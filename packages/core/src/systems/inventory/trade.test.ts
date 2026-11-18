@@ -312,7 +312,7 @@ describe("普通交易共用实际报价和货源", () => {
     expect(real.results[0]?.result.ok).toBe(true);
     expect(inventory(real.world).objects.token?.holder).toBe("player");
   });
-  it("定制武器按基础价、配件价与精调升阶对称估值，并支持多地点商店跨入口回购", () => {
+  it("定制武器按基础价与配件价对称估值，并支持多地点商店跨入口回购", () => {
     const scopeDef: ItemDef = {
       id: "scope",
       name: "测试瞄准镜",
@@ -366,7 +366,6 @@ describe("普通交易共用实际报价和货源", () => {
               baseId: gun.id,
               mods: { scope: scopeDef.id },
               lockedSlots: [],
-              tunedRarity: "epic",
             },
           },
           [iconicModId]: {
@@ -390,8 +389,8 @@ describe("普通交易共用实际报价和货源", () => {
       { checkFunds: false },
     );
     expect(sellQuoted.ok).toBe(true);
-    // gun(250) + scope(500) + tune epic(7000) = 7750; sell = floor(7750 * 0.2 / 10) * 10 = 1550
-    if (sellQuoted.ok) expect(sellQuoted.price).toBe(1550);
+    // gun(250) + scope(500) = 750; sell = floor(750 * 0.2 / 10) * 10 = 150
+    if (sellQuoted.ok) expect(sellQuoted.price).toBe(150);
 
     const iconicQuoted = quoteTrade(
       world,

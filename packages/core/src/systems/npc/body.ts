@@ -333,9 +333,7 @@ export function applyNpcBody(
       const def = items.get(command.item);
       if (!def) return { ok: false, reason: `物品表里没有「${command.item}」` };
       const ws = worldObjectWeaponState(data, command.item) ?? defaultInstanceStateFromDef(def);
-      const displayName = ws
-        ? formatWeaponWithMods(def.name, ws, items, { defaultRarity: def.rarity })
-        : def.name;
+      const displayName = ws ? formatWeaponWithMods(def.name, ws, items) : def.name;
       const { body } = settle(npc, data, now);
       const has = body.gear.includes(command.item);
       if (command.action === "add") {
@@ -430,9 +428,7 @@ function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
     const ws =
       worldObjectWeaponState(data, id) ?? (def ? defaultInstanceStateFromDef(def) : undefined);
     const baseName = def?.name ?? (ws ? items.get(ws.baseId)?.name : undefined) ?? id;
-    const name = ws
-      ? formatWeaponWithMods(baseName, ws, items, { defaultRarity: def?.rarity })
-      : baseName;
+    const name = ws ? formatWeaponWithMods(baseName, ws, items) : baseName;
     return {
       id,
       ...(ws && ws.baseId !== id ? { baseId: ws.baseId } : {}),
