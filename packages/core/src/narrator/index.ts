@@ -1,5 +1,6 @@
 export * from "./block";
 export * from "./budget";
+export * from "./checkpoint";
 export * from "./doc";
 export * from "./examples";
 export * from "./imagePrompt";

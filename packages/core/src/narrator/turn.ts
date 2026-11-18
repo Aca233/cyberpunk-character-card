@@ -8,7 +8,7 @@ import type {
   LlmUsage,
   Rng,
 } from "../kernel/ports";
-import type { Command } from "../kernel/system";
+import type { AppliedCommand, Command } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
@@ -56,6 +56,15 @@ import {
   MIN_HISTORY,
   memoryTokens,
 } from "./budget";
+import {
+  type ExtractedCheckpointData,
+  type NarratedCheckpointData,
+  NarratorStageError,
+  type PreparedCheckpointData,
+  type TurnCheckpoint,
+  type TurnCheckpointStage,
+  turnInputKey,
+} from "./checkpoint";
 import { completeFinish } from "./completion";
 import { responseJsonSchema, schemaDoc } from "./doc";
 import { readEventPlan } from "./event-plan";
@@ -299,6 +308,12 @@ export interface NarratorDeps {
   readonly preset?: TavernPreset | undefined;
   /** 预设宏里 {{user}} 换成什么：玩家角色名 */
   readonly userName?: string | undefined;
+  /** 可选阶段断点：跳过已完成的大模型调用，从断点继续 */
+  readonly checkpoint?: TurnCheckpoint | undefined;
+  /** 每走完一次核心阶段即回调保存断点 */
+  readonly onCheckpoint?: ((checkpoint: TurnCheckpoint) => Promise<void> | void) | undefined;
+  readonly saveId?: string | undefined;
+  readonly baseVersion?: number | undefined;
 }
 
 export class NarratorEmptyReplyError extends Error {
@@ -597,385 +612,435 @@ export async function runNarratorTurn(
   const flashbackReason = "闪回里不推进时间、不记账";
   const oocReason = "场外提问不改状态";
   const legacyOoc = plan.kind === "action" && plan.input.mode === "ooc";
+  const saveCheckpoint = async (
+    stage: TurnCheckpointStage,
+    prepared: PreparedCheckpointData,
+    narrated?: NarratedCheckpointData,
+    extracted?: ExtractedCheckpointData,
+  ): Promise<void> => {
+    if (!deps.onCheckpoint || deps.saveId === undefined || deps.baseVersion === undefined) return;
+    if (plan.kind !== "action") return;
+    await deps.onCheckpoint({
+      saveId: deps.saveId,
+      baseVersion: deps.baseVersion,
+      input: plan.input,
+      inputKey: turnInputKey(plan.input),
+      stage,
+      updatedAt: new Date().toISOString(),
+      prepared,
+      ...(narrated ? { narrated } : {}),
+      ...(extracted ? { extracted } : {}),
+    });
+  };
 
-  // ① 判断：用原生 JSON Schema 获取意图、物理/社会因果定性裁决和记忆调度；旧存档选了出戏也跳过
-  let judge: JudgeShape = {};
-  // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
-  const budget = contextBudget(deps.contextWindow);
-  const promptRecords = memoryRecords(world, records);
-  let hot = historyTurns(promptRecords, budget.parts.history, HISTORY_TURNS);
-  let recapTokens = budget.parts.recap;
-  const pool =
-    plan.kind === "action" && !legacyOoc ? memoryPool(world, records, hot, recapTokens) : [];
-  const lately = effectiveTurns(promptRecords)
-    .slice(-2)
-    .map((t) => t.text)
-    .join("\n");
-  const memories: Memory[] =
-    plan.kind === "action"
-      ? judgeCandidates(pool, world, { input: plan.input.text, context: lately })
-      : [];
-  if (plan.kind === "action" && !legacyOoc) {
+  let preparedData: PreparedCheckpointData;
+  if (deps.checkpoint) {
+    const cp = deps.checkpoint.prepared;
+    preparedData = cp;
+    b.auxUsage = cp.auxUsage;
+    b.repairs = cp.repairs;
+    b.repairUsage = cp.repairUsage;
+    b.notes.push(...cp.notes);
+    b.dropped.push(...cp.dropped);
+    b.flags.push(...cp.flags);
+    if (
+      cp.confirmation &&
+      ((deps.approvedSpend !== undefined && deps.approvedSpend !== cp.confirmation.quoteKey) ||
+        !(plan.kind === "action" && plan.input.spendOk === true && deps.approvedSpend === cp.confirmation.quoteKey))
+    ) {
+      return { kind: "confirmSpend", ...cp.confirmation };
+    }
     deps.onStage?.({
-      stage: "judge",
-      label: "① 意图判断与因果裁决",
-      detail: "调度记忆并核对物理与局势条件",
+      stage: "prepare",
+      label: "从断点恢复",
+      detail: "已跳过第 ① 步意图判断与上下文拼装",
     });
-    const prompt = buildJudgePrompt(world, records, plan, extras, memories);
-    const reply = await b.call({
-      purpose: "aux",
-      temperature: JUDGE_TEMPERATURE,
-      responseFormat: responseJsonSchema("judge", JudgeDocSchema),
-      messages: prompt.messages,
+  } else {
+    // ① 判断：用原生 JSON Schema 获取意图、物理/社会因果定性裁决和记忆调度；旧存档选了出戏也跳过
+    let judge: JudgeShape = {};
+    // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
+    const budget = contextBudget(deps.contextWindow);
+    const promptRecords = memoryRecords(world, records);
+    let hot = historyTurns(promptRecords, budget.parts.history, HISTORY_TURNS);
+    let recapTokens = budget.parts.recap;
+    const pool =
+      plan.kind === "action" && !legacyOoc ? memoryPool(world, records, hot, recapTokens) : [];
+    const lately = effectiveTurns(promptRecords)
+      .slice(-2)
+      .map((t) => t.text)
+      .join("\n");
+    const memories: Memory[] =
+      plan.kind === "action"
+        ? judgeCandidates(pool, world, { input: plan.input.text, context: lately })
+        : [];
+    if (plan.kind === "action" && !legacyOoc) {
+      deps.onStage?.({
+        stage: "judge",
+        label: "① 意图判断与因果裁决",
+        detail: "调度记忆并核对物理与局势条件",
+      });
+      const prompt = buildJudgePrompt(world, records, plan, extras, memories);
+      const reply = await b.call({
+        purpose: "aux",
+        temperature: JUDGE_TEMPERATURE,
+        responseFormat: responseJsonSchema("judge", JudgeDocSchema),
+        messages: prompt.messages,
+      });
+      if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
+      b.auxUsage = addUsage(b.auxUsage, reply.usage);
+      judge = await b.readJudge(reply.text);
+      if (b.dropped.some((d) => d.where === "判断"))
+        return { kind: "blocked", reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。" };
+    }
+    const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
+    const activeBoost = sandevistanOf(world, deps.data ?? {});
+    const sandevistanBoosted =
+      plan.kind === "action" &&
+      !ooc &&
+      !inFlashback &&
+      activeBoost !== null &&
+      (plan.input.sandevistan === true ||
+        (judge.sandevistan === true && accelerationRequested(plan.input, activeBoost.name)));
+    const live: NarratorPlan =
+      sandevistanBoosted && plan.kind === "action" && plan.input.sandevistan !== true
+        ? { ...plan, input: { ...plan.input, sandevistan: true } }
+        : plan;
+    const read =
+      !ooc && typeof judge.read === "string" && judge.read.trim() !== ""
+        ? judge.read.trim()
+        : undefined;
+
+    const judgeEntries: ValidationEntry[] = [];
+    if (!ooc && !inFlashback) {
+      if (judge.ruling !== undefined && judge.ruling !== null)
+        judgeEntries.push({ key: "ruling", raw: judge.ruling, schema: JudgeRulingSchema });
+      if (judge.counterHack !== undefined && judge.counterHack !== null)
+        judgeEntries.push({
+          key: "counterHack",
+          raw: judge.counterHack,
+          schema: CounterHackRulingSchema,
+        });
+      if (judge.buy !== undefined && judge.buy !== null)
+        judgeEntries.push({ key: "buy", raw: judge.buy, schema: TransactionIntentSchema });
+    }
+    const judged = await b.validateBatch("judge", judgeEntries);
+    if (judgeEntries.some((entry) => !judged.has(entry.key)))
+      return {
+        kind: "blocked",
+        reason: "本轮行动条件或交易信息仍有格式错误，尚未修改状态，请重试。",
+      };
+
+    // 定性物理与社会因果裁决：日常对话写 null，冲突/受阻/险境才给出
+    let rulingSpec: JudgeRuling | undefined;
+    if (judge.ruling !== undefined && judge.ruling !== null) {
+      if (ooc || inFlashback) {
+        b.drop("ruling", judge.ruling, ooc ? oocReason : flashbackReason, "rules");
+      } else {
+        rulingSpec = judged.get("ruling") as JudgeRuling;
+      }
+    }
+    let counterHackSpec: CounterHackRuling | undefined;
+    if (judge.counterHack !== undefined && judge.counterHack !== null) {
+      if (ooc || inFlashback) {
+        b.drop("counterHack", judge.counterHack, ooc ? oocReason : flashbackReason, "rules");
+      } else {
+        counterHackSpec = judged.get("counterHack") as CounterHackRuling;
+      }
+    }
+
+    // 旧记忆：只认候选里原样抄来的标题
+    const recalled: Memory[] = [];
+    if (!ooc) {
+      for (const [i, raw] of (judge.recall ?? []).entries()) {
+        const where = `recall[${i}]`;
+        const hit =
+          typeof raw === "string" ? memories.find((m) => m.title === raw.trim()) : undefined;
+        if (!hit) b.drop(where, raw, "不在可调的旧记忆里", "rules");
+        else if (recalled.length >= MAX_RECALL)
+          b.drop(where, raw, `一轮最多调 ${MAX_RECALL} 条旧记忆`, "rules");
+        else if (!recalled.includes(hit)) recalled.push(hit);
+      }
+    }
+    // 扩展层：覆盖不够时按分数补几条旧记忆，判断调过的不重复；检索用玩家输入加判断的理解
+    const retrieval =
+      plan.kind === "action" && !ooc
+        ? expandMemories(
+            pool,
+            world,
+            promptRecords,
+            hot,
+            { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
+            recalled,
+            deps.data ?? {},
+          )
+        : undefined;
+    const cuts: string[] = [];
+    // 扩展层额度：判断调的先占，补进来的按分数从高到低留到额度用完
+    const recalledTokens = recalled.reduce((n, m) => n + memoryTokens(m), 0);
+    const fitted = fitMemories(
+      (retrieval?.picked ?? []).map((m) => ({ title: m.title, text: m.text })),
+      Math.max(0, budget.parts.expanded - recalledTokens),
+    );
+    let expanded: Memory[] = fitted.kept;
+    if (fitted.dropped > 0) cuts.push(`扩展层超额，少补 ${fitted.dropped} 条`);
+
+    // ② 拼上下文：写正文之前代码已经定下的事
+    const decided: string[] = [];
+    if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
+    if (rulingSpec) decided.push(rulingText(rulingSpec));
+    if (counterHackSpec) decided.push(counterHackText(counterHackSpec));
+    // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
+    let trip: PlannedTrip | undefined;
+    if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
+      // 存档记下的地点并进地点表：place:、poi:、ft: 也能当出行的目的地，和 travelBlock 一致
+      const planned = planTrip(
+        tripWorldOf(world),
+        withSavedPlaces(deps.data ?? {}, world),
+        plan.input.travel,
+        {
+          rng: deps.rng,
+          factor: deps.encounters ?? 1,
+        },
+      );
+      if (planned.ok) {
+        trip = planned.trip;
+        decided.push(tripText(planned.trip));
+      } else b.notes.push(`出行没成：${planned.reason}`);
+    }
+    // 在临时世界走同一条已规划路线，让途中到货、到达初始化和实际路费参与报价。
+    // 偶遇已经由 trip 确定；临时预览不消费正式随机流，不写入正式世界。
+    const quoteWorld: WorldState = trip
+      ? registry.applyCommands(world, [{ type: "travel", to: trip.to.id, mode: trip.route.mode }], {
+          rng: { roll: () => 1 },
+          data: withSavedPlaces(deps.data ?? {}, world),
+          facts: { travel: tripFact(trip) },
+        }).world
+      : world;
+    const buy = judged.get("buy") as TransactionIntent | undefined;
+    deps.onStage?.({
+      stage: "prepare",
+      label: "② 核验条件与拼装上下文",
+      detail: buy ? "核对交易报价与库存" : "裁剪记忆、规则与设定资料",
     });
-    if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
-    b.auxUsage = addUsage(b.auxUsage, reply.usage);
-    judge = await b.readJudge(reply.text);
-    if (b.dropped.some((d) => d.where === "判断"))
-      return { kind: "blocked", reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。" };
-  }
-  const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
-  const activeBoost = sandevistanOf(world, deps.data ?? {});
-  const sandevistanBoosted =
-    plan.kind === "action" &&
-    !ooc &&
-    !inFlashback &&
-    activeBoost !== null &&
-    (plan.input.sandevistan === true ||
-      (judge.sandevistan === true && accelerationRequested(plan.input, activeBoost.name)));
-  const live: NarratorPlan =
-    sandevistanBoosted && plan.kind === "action" && plan.input.sandevistan !== true
-      ? { ...plan, input: { ...plan.input, sandevistan: true } }
-      : plan;
-  const read =
-    !ooc && typeof judge.read === "string" && judge.read.trim() !== ""
-      ? judge.read.trim()
+    const prepared = preparePurchases(quoteWorld, deps.data ?? {}, buy);
+    const confirmation = prepared.confirmation;
+    if (
+      confirmation &&
+      ((deps.approvedSpend !== undefined && deps.approvedSpend !== confirmation.quoteKey) ||
+        (prepared.spend &&
+          !(plan.input.spendOk === true && deps.approvedSpend === confirmation.quoteKey)))
+    )
+      return { kind: "confirmSpend", ...confirmation };
+    for (const { proposal, quote, journey } of prepared.purchases) {
+      if (journey) decided.push(`【成交前出行】${journey}`);
+      decided.push(
+        quote.ok
+          ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；只有玩家已接受并确实交付才成交，不得另改交易对象、价钱或旧件处理。`
+          : `【本次交易尚不能成立】${quote.reason}。可以继续询价或商谈，不能先写成已付款、拿货或安装。`,
+      );
+    }
+    // 对手的打算：只给写正文的一步，正文照它写对手的行动
+    const foes =
+      !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
+        ? judge.foes.trim().slice(0, FOES_CHARS)
+        : undefined;
+    if (foes)
+      decided.push(`对手这一轮的打算（对手不会只等着挨打；按局面写进对手的行动，可以改）：${foes}`);
+    // 裁决理由：仅留档在剧透视图里查看，不进游戏正文
+    const ruling = rulingSpec
+      ? `${rulingSpec.outcome}（${rulingSpec.reason}）`.slice(0, RULING_CHARS)
       : undefined;
 
-  const judgeEntries: ValidationEntry[] = [];
-  if (!ooc && !inFlashback) {
-    if (judge.ruling !== undefined && judge.ruling !== null)
-      judgeEntries.push({ key: "ruling", raw: judge.ruling, schema: JudgeRulingSchema });
-    if (judge.counterHack !== undefined && judge.counterHack !== null)
-      judgeEntries.push({
-        key: "counterHack",
-        raw: judge.counterHack,
-        schema: CounterHackRulingSchema,
-      });
-    if (judge.buy !== undefined && judge.buy !== null)
-      judgeEntries.push({ key: "buy", raw: judge.buy, schema: TransactionIntentSchema });
-  }
-  const judged = await b.validateBatch("judge", judgeEntries);
-  if (judgeEntries.some((entry) => !judged.has(entry.key)))
-    return {
-      kind: "blocked",
-      reason: "本轮行动条件或交易信息仍有格式错误，尚未修改状态，请重试。",
-    };
-
-  // 定性物理与社会因果裁决：日常对话写 null，冲突/受阻/险境才给出
-  let rulingSpec: JudgeRuling | undefined;
-  if (judge.ruling !== undefined && judge.ruling !== null) {
-    if (ooc || inFlashback) {
-      b.drop("ruling", judge.ruling, ooc ? oocReason : flashbackReason, "rules");
-    } else {
-      rulingSpec = judged.get("ruling") as JudgeRuling;
-    }
-  }
-  let counterHackSpec: CounterHackRuling | undefined;
-  if (judge.counterHack !== undefined && judge.counterHack !== null) {
-    if (ooc || inFlashback) {
-      b.drop("counterHack", judge.counterHack, ooc ? oocReason : flashbackReason, "rules");
-    } else {
-      counterHackSpec = judged.get("counterHack") as CounterHackRuling;
-    }
-  }
-
-  // 旧记忆：只认候选里原样抄来的标题
-  const recalled: Memory[] = [];
-  if (!ooc) {
-    for (const [i, raw] of (judge.recall ?? []).entries()) {
-      const where = `recall[${i}]`;
-      const hit =
-        typeof raw === "string" ? memories.find((m) => m.title === raw.trim()) : undefined;
-      if (!hit) b.drop(where, raw, "不在可调的旧记忆里", "rules");
-      else if (recalled.length >= MAX_RECALL)
-        b.drop(where, raw, `一轮最多调 ${MAX_RECALL} 条旧记忆`, "rules");
-      else if (!recalled.includes(hit)) recalled.push(hit);
-    }
-  }
-  // 扩展层：覆盖不够时按分数补几条旧记忆，判断调过的不重复；检索用玩家输入加判断的理解
-  const retrieval =
-    plan.kind === "action" && !ooc
-      ? expandMemories(
-          pool,
+    // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
+    // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
+    const lore = ooc
+      ? undefined
+      : lookupLore(
+          deps.lore,
           world,
           promptRecords,
-          hot,
-          { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
-          recalled,
+          plan.input.text,
           deps.data ?? {},
-        )
+          budget.parts.world,
+        );
+    let loreSection = lore?.section;
+    const preset = ooc ? undefined : deps.preset;
+    // 宏只展开一次，预设的前置、深度条目及衔接说明都计入最终请求预算。
+    const expandedPreset = preset
+      ? presetMessages(preset, {
+          user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
+          char: "叙事者",
+          lastUserMessage: plan.input.text,
+          roll: (sides) => deps.rng.roll(sides),
+        })
       : undefined;
-  const cuts: string[] = [];
-  // 扩展层额度：判断调的先占，补进来的按分数从高到低留到额度用完
-  const recalledTokens = recalled.reduce((n, m) => n + memoryTokens(m), 0);
-  const fitted = fitMemories(
-    (retrieval?.picked ?? []).map((m) => ({ title: m.title, text: m.text })),
-    Math.max(0, budget.parts.expanded - recalledTokens),
-  );
-  let expanded: Memory[] = fitted.kept;
-  if (fitted.dropped > 0) cuts.push(`扩展层超额，少补 ${fitted.dropped} 条`);
+    const presetTokens = expandedPreset
+      ? applyExpandedPreset([], expandedPreset).reduce((n, m) => n + estimateTokens(m.content), 0)
+      : 0;
+    const sampling = preset?.sampling ?? {};
+    const maxOutputTokens = Math.max(
+      1,
+      Math.floor(
+        Math.min(
+          budget.parts.reply,
+          deps.maxOutputTokens ?? budget.parts.reply,
+          sampling.maxOutputTokens ?? budget.parts.reply,
+        ),
+      ),
+    );
+    const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
+    const exposure = currentTension(world).exposure;
+    const intensity: NarrativeIntensity =
+      inCombatNow ||
+      rulingSpec?.harm === "heavy" ||
+      rulingSpec?.harm === "lethal" ||
+      rulingSpec?.kind === "costly" ||
+      exposure === "openConflict" ||
+      exposure === "compromised"
+        ? "climax"
+        : trip !== undefined || rulingSpec !== undefined || exposure === "suspicious"
+          ? "exploration"
+          : "dialogue";
+    const build = () =>
+      buildNarratorPrompt(world, records, live, {
+        ...extras,
+        hasPreset: preset !== undefined,
+        intensity,
+        decided,
+        recalled: [...recalled, ...expanded],
+        lore: loreSection,
+        history: hot,
+        recapTokens,
+      });
+    // 整份超出窗口（减去留给回复的）时从低优先级裁起：扩展层 → 【前情】 → 设定资料 → 原文（留 MIN_HISTORY 轮）
+    const limit = budget.window - maxOutputTokens;
+    const totalOf = (p: ReturnType<typeof build>) =>
+      presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+    let prompt = build();
+    for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
+      if (expanded.length > 0) {
+        expanded = expanded.slice(0, -1);
+        cuts.push("整份超出，扩展层少补一条");
+      } else if (recapTokens > 0 && (prompt.parts?.recap ?? 0) > 0) {
+        recapTokens = recapTokens >= 400 ? Math.floor(recapTokens / 2) : 0;
+        cuts.push(`整份超出，【前情】额度降到 ${recapTokens}`);
+      } else if (loreSection !== undefined) {
+        loreSection = undefined;
+        cuts.push("整份超出，不带设定资料");
+      } else if (hot > MIN_HISTORY) {
+        hot -= 1;
+        cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
+      } else {
+        return {
+          kind: "blocked",
+          reason: `当前规则、人物状态、最低限度历史与写作预设合计约 ${total} token，超过本次输入预算 ${limit}。请缩短写作预设或提高模型上下文窗口后重试；本轮尚未写入。`,
+        };
+      }
+      prompt = build();
+    }
+    const used = prompt.parts ?? {};
+    const budgetTrace: BudgetTrace = {
+      window: budget.window,
+      history: hot,
+      recapTokens,
+      parts: [
+        ...(["rules", "hot", "history", "recap", "expanded", "world"] as const).map((part) => ({
+          part,
+          label: BUDGET_LABELS[part],
+          tokens: used[part] ?? 0,
+          limit: part === "hot" ? budget.parts.hot + budget.parts.character : budget.parts[part],
+        })),
+        { part: "preset", label: "酒馆写作预设", tokens: presetTokens, limit: null },
+        { part: "other", label: "输入和其余", tokens: used.other ?? 0, limit: null },
+        { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: maxOutputTokens },
+      ],
+      total: totalOf(prompt),
+      limit,
+      cuts,
+    };
+    // 设定资料被整份裁掉时，日志里也不记那块
+    const loreTrace =
+      lore && loreSection === undefined && lore.section !== undefined
+        ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
+        : lore?.trace;
+    // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；节律提示由用户消息尾端自适应处理，不破坏系统前缀缓存
+    const narrateMessages = expandedPreset
+      ? applyExpandedPreset(prompt.messages, expandedPreset)
+      : prompt.messages;
+    if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
 
-  // ② 拼上下文：写正文之前代码已经定下的事
-  const decided: string[] = [];
-  if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
-  if (rulingSpec) decided.push(rulingText(rulingSpec));
-  if (counterHackSpec) decided.push(counterHackText(counterHackSpec));
-  // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
-  let trip: PlannedTrip | undefined;
-  if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
-    // 存档记下的地点并进地点表：place:、poi:、ft: 也能当出行的目的地，和 travelBlock 一致
-    const planned = planTrip(
-      tripWorldOf(world),
-      withSavedPlaces(deps.data ?? {}, world),
-      plan.input.travel,
-      {
-        rng: deps.rng,
-        factor: deps.encounters ?? 1,
+    preparedData = {
+      liveInput: live.input,
+      ooc,
+      read,
+      rulingSpec,
+      counterHackSpec,
+      ruling,
+      sandevistanBoosted,
+      activeBoost: activeBoost ? { id: activeBoost.id, name: activeBoost.name } : undefined,
+      recalled,
+      expanded,
+      retrieval,
+      trip,
+      purchases: prepared.purchases,
+      confirmation,
+      decided,
+      loreTrace,
+      loreSection,
+      budgetTrace,
+      promptModules: prompt.modules,
+      narrateMessages,
+      maxOutputTokens,
+      sampling: {
+        ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+        ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
+        ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
       },
-    );
-    if (planned.ok) {
-      trip = planned.trip;
-      decided.push(tripText(planned.trip));
-    } else b.notes.push(`出行没成：${planned.reason}`);
+      presetName: preset?.name,
+      auxUsage: b.auxUsage,
+      repairs: b.repairs,
+      repairUsage: b.repairUsage,
+      notes: [...b.notes],
+      dropped: [...b.dropped],
+      flags: [...b.flags],
+    };
+    await saveCheckpoint("prepared", preparedData);
   }
-  // 在临时世界走同一条已规划路线，让途中到货、到达初始化和实际路费参与报价。
-  // 偶遇已经由 trip 确定；临时预览不消费正式随机流，不写入正式世界。
-  const quoteWorld: WorldState = trip
-    ? registry.applyCommands(world, [{ type: "travel", to: trip.to.id, mode: trip.route.mode }], {
-        rng: { roll: () => 1 },
-        data: withSavedPlaces(deps.data ?? {}, world),
-        facts: { travel: tripFact(trip) },
-      }).world
-    : world;
-  const buy = judged.get("buy") as TransactionIntent | undefined;
-  deps.onStage?.({
-    stage: "prepare",
-    label: "② 核验条件与拼装上下文",
-    detail: buy ? "核对交易报价与库存" : "裁剪记忆、规则与设定资料",
-  });
-  const prepared = preparePurchases(quoteWorld, deps.data ?? {}, buy);
-  const confirmation = prepared.confirmation;
-  if (
-    confirmation &&
-    ((deps.approvedSpend !== undefined && deps.approvedSpend !== confirmation.quoteKey) ||
-      (prepared.spend &&
-        !(plan.input.spendOk === true && deps.approvedSpend === confirmation.quoteKey)))
-  )
-    return { kind: "confirmSpend", ...confirmation };
-  for (const { proposal, quote, journey } of prepared.purchases) {
-    if (journey) decided.push(`【成交前出行】${journey}`);
-    decided.push(
-      quote.ok
-        ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；只有玩家已接受并确实交付才成交，不得另改交易对象、价钱或旧件处理。`
-        : `【本次交易尚不能成立】${quote.reason}。可以继续询价或商谈，不能先写成已付款、拿货或安装。`,
-    );
-  }
-  // 对手的打算：只给写正文的一步，正文照它写对手的行动
-  const foes =
-    !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
-      ? judge.foes.trim().slice(0, FOES_CHARS)
-      : undefined;
-  if (foes)
-    decided.push(`对手这一轮的打算（对手不会只等着挨打；按局面写进对手的行动，可以改）：${foes}`);
-  // 裁决理由：仅留档在剧透视图里查看，不进游戏正文
-  const ruling = rulingSpec
-    ? `${rulingSpec.outcome}（${rulingSpec.reason}）`.slice(0, RULING_CHARS)
-    : undefined;
+
+  const {
+    ooc,
+    read,
+    rulingSpec,
+    counterHackSpec,
+    ruling,
+    sandevistanBoosted,
+    activeBoost,
+    recalled,
+    expanded,
+    retrieval,
+    trip,
+    purchases: preparedPurchases,
+    decided,
+    loreTrace,
+    budgetTrace,
+    promptModules,
+    narrateMessages,
+    maxOutputTokens,
+    sampling,
+    presetName,
+  } = preparedData;
+  const live: NarratorPlan = { kind: "action", input: preparedData.liveInput };
+  const preset = ooc ? undefined : deps.preset;
 
   if (sandevistanBoosted && activeBoost) {
     deps.onBoost?.({ id: activeBoost.id, name: activeBoost.name });
   }
-  // ③ 写正文：边收边放；模型偶尔仍附上旧的 <state> 块，拆分器把它拿掉
-  // 设定库：按地点、在场人物和输入里的专有名词查原作资料，单独一块给写正文；场外提问不查
-  const lore = ooc
-    ? undefined
-    : lookupLore(
-        deps.lore,
-        world,
-        promptRecords,
-        plan.input.text,
-        deps.data ?? {},
-        budget.parts.world,
-      );
-  let loreSection = lore?.section;
-  const preset = ooc ? undefined : deps.preset;
-  // 宏只展开一次，预设的前置、深度条目及衔接说明都计入最终请求预算。
-  const expandedPreset = preset
-    ? presetMessages(preset, {
-        user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
-        char: "叙事者",
-        lastUserMessage: plan.input.text,
-        roll: (sides) => deps.rng.roll(sides),
-      })
-    : undefined;
-  const presetTokens = expandedPreset
-    ? applyExpandedPreset([], expandedPreset).reduce((n, m) => n + estimateTokens(m.content), 0)
-    : 0;
-  const sampling = preset?.sampling ?? {};
-  const maxOutputTokens = Math.max(
-    1,
-    Math.floor(
-      Math.min(
-        budget.parts.reply,
-        deps.maxOutputTokens ?? budget.parts.reply,
-        sampling.maxOutputTokens ?? budget.parts.reply,
-      ),
-    ),
-  );
-  const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
-  const exposure = currentTension(world).exposure;
-  const intensity: NarrativeIntensity =
-    inCombatNow ||
-    rulingSpec?.harm === "heavy" ||
-    rulingSpec?.harm === "lethal" ||
-    rulingSpec?.kind === "costly" ||
-    exposure === "openConflict" ||
-    exposure === "compromised"
-      ? "climax"
-      : trip !== undefined || rulingSpec !== undefined || exposure === "suspicious"
-        ? "exploration"
-        : "dialogue";
-  const build = () =>
-    buildNarratorPrompt(world, records, live, {
-      ...extras,
-      hasPreset: preset !== undefined,
-      intensity,
-      decided,
-      recalled: [...recalled, ...expanded],
-      lore: loreSection,
-      history: hot,
-      recapTokens,
-    });
-  // 整份超出窗口（减去留给回复的）时从低优先级裁起：扩展层 → 【前情】 → 设定资料 → 原文（留 MIN_HISTORY 轮）
-  const limit = budget.window - maxOutputTokens;
-  const totalOf = (p: ReturnType<typeof build>) =>
-    presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
-  let prompt = build();
-  for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
-    if (expanded.length > 0) {
-      expanded = expanded.slice(0, -1);
-      cuts.push("整份超出，扩展层少补一条");
-    } else if (recapTokens > 0 && (prompt.parts?.recap ?? 0) > 0) {
-      recapTokens = recapTokens >= 400 ? Math.floor(recapTokens / 2) : 0;
-      cuts.push(`整份超出，【前情】额度降到 ${recapTokens}`);
-    } else if (loreSection !== undefined) {
-      loreSection = undefined;
-      cuts.push("整份超出，不带设定资料");
-    } else if (hot > MIN_HISTORY) {
-      hot -= 1;
-      cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
-    } else {
-      return {
-        kind: "blocked",
-        reason: `当前规则、人物状态、最低限度历史与写作预设合计约 ${total} token，超过本次输入预算 ${limit}。请缩短写作预设或提高模型上下文窗口后重试；本轮尚未写入。`,
-      };
-    }
-    prompt = build();
-  }
-  const used = prompt.parts ?? {};
-  const budgetTrace: BudgetTrace = {
-    window: budget.window,
-    history: hot,
-    recapTokens,
-    parts: [
-      ...(["rules", "hot", "history", "recap", "expanded", "world"] as const).map((part) => ({
-        part,
-        label: BUDGET_LABELS[part],
-        tokens: used[part] ?? 0,
-        limit: part === "hot" ? budget.parts.hot + budget.parts.character : budget.parts[part],
-      })),
-      { part: "preset", label: "酒馆写作预设", tokens: presetTokens, limit: null },
-      { part: "other", label: "输入和其余", tokens: used.other ?? 0, limit: null },
-      { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: maxOutputTokens },
-    ],
-    total: totalOf(prompt),
-    limit,
-    cuts,
-  };
-  // 设定资料被整份裁掉时，日志里也不记那块
-  const loreTrace =
-    lore && loreSection === undefined && lore.section !== undefined
-      ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
-      : lore?.trace;
-  // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；节律提示由用户消息尾端自适应处理，不破坏系统前缀缓存
-  const narrateMessages = expandedPreset
-    ? applyExpandedPreset(prompt.messages, expandedPreset)
-    : prompt.messages;
-  if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
-  const splitter = new StateSplitter();
-  let narrativeIssue: string | undefined;
-  let narrativeComplete = false;
-  let narrativeError: unknown;
-  b.checkAborted();
-  deps.onStage?.({
-    stage: "narrate",
-    label: "③ 正在写正文",
-    detail: preset ? `流式生成（预设「${preset.name}」）` : "流式生成剧情",
-  });
-  try {
-    for await (const event of deps.llm.stream(
-      {
-        purpose: "narrator",
-        messages: narrateMessages,
-        ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
-        ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
-        ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
-        maxOutputTokens,
-      },
-      deps.signal,
-    )) {
-      if (event.type === "text") {
-        const shown = splitter.push(event.text);
-        if (shown !== "") deps.onText?.(shown);
-      } else if (event.type === "blocked") {
-        return { kind: "blocked", reason: event.reason };
-      } else {
-        addNarrator(event.usage);
-        narrativeComplete = completeFinish(event.finishReason);
-        if (!narrativeComplete)
-          narrativeIssue = "正文未完整生成，已保存草稿；本轮未推进世界，请重新生成。";
-      }
-    }
-  } catch (error) {
-    b.checkAborted();
-    if (error instanceof NarratorAbortedError) throw error;
-    narrativeError = error;
-    narrativeIssue = "正文生成途中中断，已保存收到的草稿；本轮未推进世界，请重新生成。";
-  }
-  b.checkAborted();
-  const split = splitter.finish();
-  const { rest, block } = split;
-  if (rest !== "") deps.onText?.(rest);
-  // 预设正则改存下来的正文（思维链、八股词之类）；边收边放的那份不改，存档和抽取按改过的
-  const cleaned = preset ? applyPresetRegex(split.narrative, preset).trim() : split.narrative;
-  // 正则把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
-  const wiped = preset !== undefined && cleaned === "" && split.narrative.trim() !== "";
-  const narrative = wiped ? split.narrative : cleaned;
-  if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
-  else if (preset && narrative !== split.narrative.trim())
-    b.notes.push("正文按预设正则清理过（思维链、标签等）");
-  if (narrative === "") {
-    if (narrativeError) throw narrativeError;
-    throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
-  }
-  if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
-
-  // 草稿与事实分开：保存可见文字，但没有任何状态补丁、内部自动行动或后续推演。
-  const draftOnly = (reason: string): NarratorResult => ({
+  let narrative: string;
+  let narratedData: NarratedCheckpointData;
+  const draftOnly = (text: string, reason: string): NarratorResult => ({
     kind: "done",
     turn: {
-      text: narrative,
+      text,
       read,
       choices: [],
       check: undefined,
@@ -994,7 +1059,7 @@ export async function runNarratorTurn(
       flags: b.flags,
       world,
       patches: [],
-      modules: prompt.modules,
+      modules: promptModules,
       pin: false,
       clutch: false,
       scene: WorldClockStateSchema.parse(world.slices.world).scene,
@@ -1014,69 +1079,185 @@ export async function runNarratorTurn(
       budget: budgetTrace,
     },
   });
-  if (!narrativeComplete || narrativeIssue) {
-    const reason = narrativeIssue ?? "正文没有正常结束，已保存草稿；本轮未推进世界，请重新生成。";
-    b.drop("正文", null, reason, "format");
-    return draftOnly(reason);
+
+  if (deps.checkpoint?.narrated) {
+    narratedData = deps.checkpoint.narrated;
+    narrative = narratedData.narrative;
+    usage = narratedData.usage;
+    b.notes.splice(0, b.notes.length, ...narratedData.notes);
+    b.dropped.splice(0, b.dropped.length, ...narratedData.dropped);
+    deps.onStage?.({
+      stage: "narrate",
+      label: "已恢复第 ③ 步正文",
+      detail: "跳过重新生成，直接继续记账",
+    });
+    deps.onText?.(narrative);
+  } else {
+    const splitter = new StateSplitter();
+    let narrativeIssue: string | undefined;
+    let narrativeComplete = false;
+    let narrativeError: unknown;
+    b.checkAborted();
+    deps.onStage?.({
+      stage: "narrate",
+      label: "③ 正在写正文",
+      detail: presetName ? `流式生成（预设「${presetName}」）` : "流式生成剧情",
+    });
+    try {
+      for await (const event of deps.llm.stream(
+        {
+          purpose: "narrator",
+          messages: narrateMessages,
+          ...(sampling.temperature !== undefined ? { temperature: sampling.temperature } : {}),
+          ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
+          ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
+          maxOutputTokens,
+        },
+        deps.signal,
+      )) {
+        if (event.type === "text") {
+          const shown = splitter.push(event.text);
+          if (shown !== "") deps.onText?.(shown);
+        } else if (event.type === "blocked") {
+          return { kind: "blocked", reason: event.reason };
+        } else {
+          addNarrator(event.usage);
+          narrativeComplete = completeFinish(event.finishReason);
+          if (!narrativeComplete)
+            narrativeIssue = "正文未完整生成，已保存草稿；本轮未推进世界，请重新生成。";
+        }
+      }
+    } catch (error) {
+      b.checkAborted();
+      if (error instanceof NarratorAbortedError) throw error;
+      narrativeError = error;
+    }
+    b.checkAborted();
+    if (narrativeError) throw narrativeError;
+    const split = splitter.finish();
+    const { rest, block } = split;
+    if (rest !== "") deps.onText?.(rest);
+    // 预设正则改存下来的正文（思维链、八股词之类）；边收边放的那份不改，存档和抽取按改过的
+    const cleaned = preset ? applyPresetRegex(split.narrative, preset).trim() : split.narrative;
+    // 正则把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
+    const wiped = preset !== undefined && cleaned === "" && split.narrative.trim() !== "";
+    narrative = wiped ? split.narrative : cleaned;
+    if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
+    else if (preset && narrative !== split.narrative.trim())
+      b.notes.push("正文按预设正则清理过（思维链、标签等）");
+    if (narrative === "") {
+      throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
+    }
+    if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
+
+    if (!narrativeComplete || narrativeIssue) {
+      const reason = narrativeIssue ?? "正文没有正常结束，已保存草稿；本轮未推进世界，请重新生成。";
+      b.drop("正文", null, reason, "format");
+      return draftOnly(narrative, reason);
+    }
+
+    narratedData = {
+      narrative,
+      usage,
+      notes: [...b.notes],
+      dropped: [...b.dropped],
+    };
+    await saveCheckpoint("narrated", preparedData, narratedData);
   }
 
   // ④ 抽取：场外提问不抽，状态不变；其余常规与裁决回合都照常记账
-  let shape: ExtractShape = {};
   const settle = !ooc;
-  if (settle) {
+  let extractedData: ExtractedCheckpointData;
+  if (deps.checkpoint?.extracted) {
+    extractedData = deps.checkpoint.extracted;
+    b.auxUsage = extractedData.auxUsage;
+    b.repairs = extractedData.repairs;
+    b.repairUsage = extractedData.repairUsage;
+    b.notes.splice(0, b.notes.length, ...extractedData.notes);
+    b.dropped.splice(0, b.dropped.length, ...extractedData.dropped);
     deps.onStage?.({
       stage: "extract",
-      label: "④ 抽取状态与记账",
-      detail: "识别事件、交易、物件与关系变化",
+      label: "已恢复第 ④ 步记账",
+      detail: "跳过重新抽取，继续推演与保存",
     });
-    const extract = buildExtractPrompt(
-      world,
-      records,
-      live,
-      { ...extras, decided },
-      narrative,
-      prepared.purchases.length
-        ? prepared.purchases
-            .map(
-              ({ proposal, quote }) =>
-                `${JSON.stringify(proposal)}：${quote.ok ? quote.detail : `未获准成交：${quote.reason}`}`,
-            )
-            .join("\n")
-        : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。",
-    );
-    const reply = await b.supplement({
-      purpose: "aux",
-      temperature: EXTRACT_TEMPERATURE,
-      responseFormat: responseJsonSchema("extract"),
-      messages: extract.messages,
-    });
-    if ("failed" in reply) {
-      b.drop(
-        "抽取",
-        null,
-        "记账请求失败或回复未完整结束；已保存正文草稿，本轮未推进世界",
-        "format",
+  } else {
+    let shape: ExtractShape = {};
+    if (settle) {
+      deps.onStage?.({
+        stage: "extract",
+        label: "④ 抽取状态与记账",
+        detail: "识别事件、交易、物件与关系变化",
+      });
+      const extract = buildExtractPrompt(
+        world,
+        records,
+        live,
+        { ...extras, decided },
+        narrative,
+        preparedPurchases.length
+          ? preparedPurchases
+              .map(
+                ({ proposal, quote }) =>
+                  `${JSON.stringify(proposal)}：${quote.ok ? quote.detail : `未获准成交：${quote.reason}`}`,
+              )
+              .join("\n")
+          : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。",
       );
-    } else if ("blocked" in reply) {
-      b.drop("抽取", null, `辅助模型拒答：${reply.blocked}；这一轮只保留正文`, "format");
-    } else {
+      let reply: Reply;
+      try {
+        reply = await b.call({
+          purpose: "aux",
+          temperature: EXTRACT_TEMPERATURE,
+          responseFormat: responseJsonSchema("extract"),
+          messages: extract.messages,
+        });
+      } catch (error) {
+        b.checkAborted();
+        if (error instanceof NarratorAbortedError) throw error;
+        if (error instanceof IncompleteReplyError) {
+          throw new NarratorStageError(
+            "extract",
+            "④ 抽取记账回复未完整结束（已保存判断与正文，点重试将直接继续记账）",
+            true,
+            "narrated",
+          );
+        }
+        throw error;
+      }
+      if ("blocked" in reply) {
+        throw new NarratorStageError(
+          "extract",
+          `④ 抽取被辅助模型拦截：${reply.blocked}（已保存判断与正文）`,
+          true,
+          "narrated",
+        );
+      }
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
       shape = await b.readExtract(reply.text);
+      const extractDrop = b.dropped.find((entry) => entry.where === "抽取");
+      if (extractDrop) {
+        throw new NarratorStageError(
+          "extract",
+          `④ 抽取格式无法修复（${extractDrop.reason}；已保存判断与正文，点重试将直接继续记账）`,
+          true,
+          "narrated",
+        );
+      }
     }
-    if (b.dropped.some((entry) => entry.where === "抽取")) {
-      return draftOnly("本轮记账未完成，正文已保存为草稿；世界状态未改变，请重新生成。");
+    const considered: string[] = settle ? readConsidered(shape.dropped) : [];
+    const eventPlan = readEventPlan(
+      settle ? shape.events : [],
+      shape.changes?.length ?? 0,
+      shape.messages?.length ?? 0,
+    );
+    if (!eventPlan.ok) {
+      throw new NarratorStageError(
+        "extract",
+        `④ 事件因果不完整：${eventPlan.error}（已保存判断与正文，点重试将直接继续记账）`,
+        true,
+        "narrated",
+      );
     }
-  }
-  const considered: string[] = settle ? readConsidered(shape.dropped) : [];
-  const eventPlan = readEventPlan(
-    settle ? shape.events : [],
-    shape.changes?.length ?? 0,
-    shape.messages?.length ?? 0,
-  );
-  if (!eventPlan.ok) {
-    b.drop("events", shape.events, eventPlan.error, "format");
-    return draftOnly(`本轮事件因果不完整：${eventPlan.error}；世界状态未改变，请重新生成。`);
-  }
   const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
 
   // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
@@ -1366,7 +1547,7 @@ export async function runNarratorTurn(
     world,
     events,
     applyCtx,
-    prepared.purchases,
+    preparedPurchases,
     rulingSpec?.kind === "blocked" ? rulingSpec.reason : undefined,
   );
   for (const event of applied.events) {
@@ -1383,8 +1564,14 @@ export async function runNarratorTurn(
     }
   }
   const failedEvent = applied.events.find((event) => event.status !== "applied");
-  if (failedEvent && accepted.length === 0 && applied.patches.length === 0)
-    return draftOnly(`本轮事件未能结算：${failedEvent.reason}；世界状态未改变，请重新生成。`);
+  if (failedEvent && accepted.length === 0 && applied.patches.length === 0) {
+    throw new NarratorStageError(
+      "extract",
+      `④ 本轮事件未能结算：${failedEvent.reason}（已保存判断与正文，点重试将直接继续记账）`,
+      true,
+      "narrated",
+    );
+  }
   // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
   const settled =
     ooc || inFlashback
@@ -1396,18 +1583,59 @@ export async function runNarratorTurn(
         );
 
   // 场景标题：这一轮收了场就按收场前的地点和时间
-  const before = WorldClockStateSchema.parse(world.slices.world);
-  const after = WorldClockStateSchema.parse(settled.world.slices.world);
-  const title = sceneTitle(after.scene === before.scene ? settled.world : world, deps.data ?? {});
-  const unsettled = settle
+  const beforeWorld = WorldClockStateSchema.parse(world.slices.world);
+  const afterWorld = WorldClockStateSchema.parse(settled.world.slices.world);
+  const computedTitle = sceneTitle(
+    afterWorld.scene === beforeWorld.scene ? settled.world : world,
+    deps.data ?? {},
+  );
+  const computedUnsettled = settle
     ? failedEvent
       ? `事件 ${failedEvent.id} 未生效：${failedEvent.reason}；独立事件已保留，可按账目改写正文`
       : unsettledReason(b.dropped)
     : undefined;
+  const settledPatches: Patch[] = ooc
+    ? [...applied.patches]
+    : [...applied.patches, ...(settled === applied ? [] : settled.patches)];
+
+  extractedData = {
+    shape,
+    choices,
+    accepted,
+    considered,
+    settledWorld: settled.world,
+    settledPatches,
+    facts,
+    title: computedTitle,
+    unsettled: computedUnsettled,
+    auxUsage: b.auxUsage,
+    repairs: b.repairs,
+    repairUsage: b.repairUsage,
+    notes: [...b.notes],
+    dropped: [...b.dropped],
+  };
+  await saveCheckpoint("extracted", preparedData, narratedData, extractedData);
+  }
+
+  const {
+    shape,
+    choices,
+    accepted,
+    settledWorld,
+    settledPatches,
+    facts: savedFacts,
+    title,
+    unsettled,
+  } = extractedData;
+  const considered = [...extractedData.considered];
+  const applyCtx = { rng: deps.rng, facts: { ...savedFacts }, ...(deps.data ? { data: deps.data } : {}) };
+  const before = WorldClockStateSchema.parse(world.slices.world);
+  const after = WorldClockStateSchema.parse(settledWorld.slices.world);
 
   // ⑥ 按游戏时间、到期事件和收场批次推演；结果与本次行动一起落盘撤回
-  const dead = HealthStateSchema.parse(settled.world.slices.health).condition === "dead";
-  let final = settled;
+  const dead = HealthStateSchema.parse(settledWorld.slices.health).condition === "dead";
+  let currentWorld = settledWorld;
+  let offscreenPatches: Patch[] = [];
   let offscreenTrace: { prompt: string; reply: string } | undefined;
   let offscreenCapacityReason: string | undefined;
   const every = deps.offscreen === undefined ? OFFSCREEN_SCENES : deps.offscreen;
@@ -1417,10 +1645,10 @@ export async function runNarratorTurn(
     !dead &&
     unsettled === undefined &&
     every !== null &&
-    offscreenDue(world, settled.world, every)
+    offscreenDue(world, settledWorld, every)
   ) {
-    const present = presentNpcs(world, settled.world);
-    const batch = prepareOffscreenBatch(settled.world, records, extras, narrative, present, {
+    const present = presentNpcs(world, settledWorld);
+    const batch = prepareOffscreenBatch(settledWorld, records, extras, narrative, present, {
       contextWindow: deps.auxContextWindow ?? 32_000,
       ...(deps.auxMaxOutputTokens === undefined
         ? {}
@@ -1454,6 +1682,7 @@ export async function runNarratorTurn(
       };
       let offscreen: Command[] = [];
       let offscreenComplete = false;
+      let offscreenResults: readonly AppliedCommand[] = [];
       if ("failed" in reply) {
         considered.push("场外推演请求失败，保留本轮正文与待处理事项");
       } else if ("blocked" in reply) {
@@ -1461,7 +1690,7 @@ export async function runNarratorTurn(
       } else {
         b.auxUsage = addUsage(b.auxUsage, reply.usage);
         const sent = accepted.filter((c) => c.type === "phone.receive").length;
-        const got = readOffscreen(reply.text, settled.world, {
+        const got = readOffscreen(reply.text, settledWorld, {
           present,
           messages: MESSAGES_PER_TURN - sent,
           data: extras.data ?? {},
@@ -1473,7 +1702,7 @@ export async function runNarratorTurn(
       // 批次完整解析且全部结算成功才提交；失败不发送消息、不挪期限，也不推进成功游标。
       if (offscreenComplete) {
         const trial = registry.applyCommands(
-          settled.world,
+          settledWorld,
           [
             ...offscreen,
             ...(batch.backlog ? [] : [{ type: "thread.remind" }]),
@@ -1483,7 +1712,9 @@ export async function runNarratorTurn(
         );
         const rejected = trial.results.filter(({ result }) => !result.ok);
         if (rejected.length === 0) {
-          final = trial;
+          currentWorld = trial.world;
+          offscreenPatches = [...trial.patches];
+          offscreenResults = trial.results;
           if (batch.backlog)
             considered.push(
               `场外推演已处理至回合 ${batch.through}，剩余积压保留到后续批次，尚未推进全部时限`,
@@ -1496,10 +1727,13 @@ export async function runNarratorTurn(
         }
       }
       if (!offscreenComplete) {
-        final = registry.applyCommands(settled.world, [{ type: "city.failed" }], applyCtx);
+        const failedApply = registry.applyCommands(settledWorld, [{ type: "city.failed" }], applyCtx);
+        currentWorld = failedApply.world;
+        offscreenPatches = [...failedApply.patches];
+        offscreenResults = failedApply.results;
         considered.push("场外推演未完整完成，保留待处理事项，经过重试间隔后再推演");
       }
-      for (const { command, result } of final.results) {
+      for (const { command, result } of offscreenResults) {
         if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
         // 消息和头条带来的声望玩家看得到；其余只进剧透视图
         else if (command.type === "phone.receive" || command.type === "streetCred") {
@@ -1547,7 +1781,7 @@ export async function runNarratorTurn(
       : undefined);
 
   // ⑦ 记忆跟随真正结算的正文保存；承诺/计划是增量锚点，不因滚动提要重写而消失。
-  let ended = final.world;
+  let ended = currentWorld;
   const memoryPatches: Patch[] = [];
   let summaryTrace: { prompt: string; reply: string } | undefined;
   const saveMemory = (command: Command): void => {
@@ -1559,7 +1793,7 @@ export async function runNarratorTurn(
     memoryPatches.push(...done.patches);
   };
   if (settle && !inFlashback && unsettled === undefined) {
-    const working = readSceneMemory(shape.sceneMemory, world, settled.world, plan.input, narrative);
+    const working = readSceneMemory(shape.sceneMemory, world, settledWorld, plan.input, narrative);
     considered.push(...working.notes);
     if (working.command) saveMemory(working.command);
   }
@@ -1632,15 +1866,8 @@ export async function runNarratorTurn(
       notes: b.notes,
       flags: b.flags,
       world: ended,
-      patches: ooc
-        ? applied.patches
-        : [
-            ...applied.patches,
-            ...(settled === applied ? [] : settled.patches),
-            ...(final === settled ? [] : final.patches),
-            ...memoryPatches,
-          ],
-      modules: prompt.modules,
+      patches: ooc ? [...settledPatches] : [...settledPatches, ...offscreenPatches, ...memoryPatches],
+      modules: promptModules,
       pin: settle && unsettled === undefined && shape.pin === true,
       clutch: settle && unsettled === undefined && shape.clutch === true,
       scene: before.scene,
