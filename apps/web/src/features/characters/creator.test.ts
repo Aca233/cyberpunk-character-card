@@ -2,7 +2,6 @@ import {
   BoardModuleSchema,
   BoardSchema,
   type CharacterCard,
-  LifepathEntrySchema,
   type Loadout,
   WorkshopPackSchema,
 } from "@cp/core";
@@ -15,11 +14,8 @@ import {
   humanityStageInfo,
   inherentCyberware,
   mergeCreatorCatalog,
-  originAffinity,
   originDefaultLoadout,
   originEcosystem,
-  originLean,
-  originNever,
   pruneKitForOrigin,
   rollTraits,
   stepForCheckTarget,
@@ -32,36 +28,6 @@ import {
 
 const mod = (id: string, slot: "origin" | "past" | "skill" | "flaw", tags: string[] = []) =>
   BoardModuleSchema.parse({ id, slot, label: id, tags });
-
-describe("originLean / originNever / originAffinity", () => {
-  const modules = [mod("a", "past"), mod("b", "past"), mod("c", "past"), mod("s", "skill")];
-  const lifepath = LifepathEntrySchema.array().parse([
-    { id: "a", weights: { street: 2 } },
-    { id: "b", weights: { street: 3 } },
-    { id: "c", weights: { street: 0 } },
-    { id: "s", weights: { street: 5 } },
-  ]);
-
-  it("只列权重大于 1 的过往，权重高的在前，不混进别的插槽", () => {
-    expect(originLean("street", lifepath, modules).map((m) => m.id)).toEqual(["b", "a"]);
-  });
-
-  it("没写这个出身的按 1，不算更容易", () => {
-    expect(originLean("corpo", lifepath, modules)).toEqual([]);
-  });
-
-  it("权重 0 是掷不到", () => {
-    expect(originNever("street", lifepath, modules).map((m) => m.id)).toEqual(["c"]);
-  });
-
-  it("originAffinity 返回 lean / never / null", () => {
-    expect(originAffinity("street", "a", lifepath)).toBe("lean");
-    expect(originAffinity("street", "c", lifepath)).toBe("never");
-    expect(originAffinity("corpo", "a", lifepath)).toBeNull();
-    expect(originAffinity(undefined, "a", lifepath)).toBeNull();
-    expect(originAffinity("street", "unknown", lifepath)).toBeNull();
-  });
-});
 
 describe("emptyBoard / 五步引导工作台辅助函数", () => {
   const blank = {
@@ -426,7 +392,6 @@ describe("分类、随机特质与工坊合并", () => {
   it("mergeCreatorCatalog 按 id 去重合并官方目录、本地自定义模块与工坊扩展包", () => {
     const base = {
       modules: [mod("core-1", "skill")],
-      lifepath: [],
       cyberware: [],
       npcs: [],
     } as unknown as BoardData;

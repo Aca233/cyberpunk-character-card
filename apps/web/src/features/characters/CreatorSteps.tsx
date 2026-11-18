@@ -8,9 +8,7 @@ import {
   type CharacterCard,
   cyberwareRules,
   FLAW_MAX,
-  lifepathCosts,
   PAST_MAX,
-  rollLifepath,
   SKILL_MAX,
 } from "@cp/core";
 import { type ReactNode, useEffect, useState } from "react";
@@ -21,7 +19,7 @@ import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
-import { CYBER_LABELS, CyberItemCell, type CyberSlot } from "../story/CyberDoll";
+import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { CYBER_SLOT_ICON } from "../story/cyberwareMeta";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
@@ -29,7 +27,6 @@ import {
   inherentCyberware,
   ORIGIN_ECOSYSTEM_LABELS,
   type OriginEcosystem,
-  originAffinity,
   originDefaultLoadout,
   originEcosystem,
   pickedLoadouts,
@@ -238,11 +235,6 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
     );
   };
 
-  const rollPast = () => {
-    const rolled = rollLifepath(board, data.lifepath, data.modules, Math.random);
-    if (rolled) commit({ ...board, pasts: [...board.pasts, rolled] });
-  };
-
   return (
     <div className={styles.pickerBody}>
       <div className={styles.slotTools}>
@@ -289,14 +281,6 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
         </span>
         <Button
           small
-          disabled={pastFull}
-          reason={`过往履历最多选 ${PAST_MAX} 项`}
-          onClick={rollPast}
-        >
-          🎲 掷一段生命路径
-        </Button>
-        <Button
-          small
           disabled={skillFull}
           reason={`核心特质最多选 ${SKILL_MAX} 项`}
           onClick={() => commit(rollTraits(board, data.modules, Math.random, 3))}
@@ -322,7 +306,6 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
           const pressed = onIds.has(m.id);
           const full = m.slot === "past" ? pastFull : skillFull;
           const catLabel = TRAIT_FILTER_LABELS[traitCategory(m)];
-          const affinity = originAffinity(board.origin?.id, m.id, data.lifepath);
           return (
             <li key={m.id}>
               <button
@@ -337,16 +320,6 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
                 <span className={styles.pickHead}>
                   <strong className={styles.pickName}>{m.label}</strong>
                   <span className={styles.moduleBadges}>
-                    {affinity === "lean" && (
-                      <span className={styles.moduleBadge} data-tone="lean">
-                        契合出身
-                      </span>
-                    )}
-                    {affinity === "never" && (
-                      <span className={styles.moduleBadge} data-tone="never">
-                        出身冲突
-                      </span>
-                    )}
                     <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
                       {pressed ? "已装备" : catLabel}
                     </span>
@@ -377,8 +350,6 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
   const own = board.flaws.filter((m) => !library.some((l) => l.id === m.id));
   const full = board.flaws.length >= FLAW_MAX;
   const shown = [...library, ...own].filter((m) => matchesModuleQuery(m, query));
-  const costs = lifepathCosts(board, data.lifepath, data.modules);
-  const costFromById = new Map(costs.map((c) => [c.module.id, c.from]));
 
   return (
     <div className={styles.pickerBody}>
@@ -406,18 +377,6 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
       <p className={styles.note}>
         已挂载 {board.flaws.length} / {FLAW_MAX} 项 · 负面缺陷会向战局注入债主、通缉、宿敌或生理隐患
       </p>
-      {costs.length > 0 && (
-        <div className={styles.suggestedBanner} role="status">
-          <CellFrame />
-          <span className={styles.suggestedTitle}>生命路径推荐关联缺陷</span>
-          <span>
-            基于已选过往经历，建议可考虑：
-            {costs
-              .map((c) => `「${c.module.label}」（源自 ${c.from.map((p) => p.label).join("、")}）`)
-              .join("；")}
-          </span>
-        </div>
-      )}
       {writing && (
         <CustomModuleForm
           slot="flaw"
@@ -433,15 +392,12 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
       <ul className={styles.skillWall}>
         {shown.map((m) => {
           const pressed = on.has(m.id);
-          const fromPasts = costFromById.get(m.id);
-          const suggested = Boolean(fromPasts && fromPasts.length > 0);
           return (
             <li key={m.id}>
               <button
                 type="button"
                 className={styles.pick}
                 aria-pressed={pressed}
-                data-suggested={suggested || undefined}
                 disabled={!pressed && full}
                 onClick={() =>
                   commit({
@@ -454,11 +410,6 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
                 <span className={styles.pickHead}>
                   <strong className={styles.pickName}>{m.label}</strong>
                   <span className={styles.moduleBadges}>
-                    {fromPasts && fromPasts.length > 0 && (
-                      <span className={styles.moduleBadge} data-tone="suggested">
-                        源自 {fromPasts.map((p) => p.label).join("·")}
-                      </span>
-                    )}
                     <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
                       {pressed ? "已挂载" : (m.tags[0] ?? "负面钩子")}
                     </span>
@@ -695,13 +646,21 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
   return (
     <div className={styles.pickerBody}>
       <div className={styles.shelfHead}>
-        <h4 className={styles.subTitle}>
-          {CYBER_LABELS[slot]}{" "}
-          <small className={styles.stepNote}>
-            已装 {mounted.length} / {cap}
-          </small>
-        </h4>
-        <span className={styles.note}>单击预览详情 · 双击或点右侧按钮装卸</span>
+        <span className={styles.shelfMeta}>
+          可选义体 {shown.length} 款 · 已装 {mounted.length}/{cap} · 单击预览 / 双击装卸
+        </span>
+        {rarities.length > 1 && (
+          <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
+            <Button small pressed={rarity === null} onClick={() => setRarity(null)}>
+              全部
+            </Button>
+            {rarities.map((r) => (
+              <Button key={r} small pressed={rarity === r} onClick={() => setRarity(r)}>
+                {RARITY_LABELS[r]}
+              </Button>
+            ))}
+          </fieldset>
+        )}
       </div>
       {inherentInSlot.length > 0 && (
         <p className={styles.note}>
@@ -710,18 +669,6 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
             .map((i) => `${i.name}（${i.source}${i.replaced ? "，已被自选件顶替" : "，免费预装"}）`)
             .join("、")}
         </p>
-      )}
-      {rarities.length > 1 && (
-        <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
-          <Button small pressed={rarity === null} onClick={() => setRarity(null)}>
-            全部
-          </Button>
-          {rarities.map((r) => (
-            <Button key={r} small pressed={rarity === r} onClick={() => setRarity(r)}>
-              {RARITY_LABELS[r]}
-            </Button>
-          ))}
-        </fieldset>
       )}
       {options.length === 0 ? (
         <p className={styles.note}>开局没有能装在这个部位的义体。</p>

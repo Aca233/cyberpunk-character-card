@@ -21,7 +21,6 @@ import {
   homes,
   items,
   jobTemplates,
-  lifepath,
   loadouts,
   locations,
   ncpdAlerts,
@@ -52,7 +51,6 @@ import {
   inventoryRules,
   JUDGE_STAGE,
   jobsRules,
-  LifepathEntrySchema,
   NARRATE_STAGE,
   ncpdRules,
   newGameWorld,
@@ -128,7 +126,6 @@ schema("转折素材 twists", TwistCatalogSchema, twists);
 schema("后果参考表 consequences", falloutRules.ConsequenceTableSchema, consequences);
 schema("委托模板 jobTemplates", jobsRules.JobTemplateCatalogSchema, jobTemplates);
 schema("主板模块 boardModules", BoardModuleSchema.array(), boardModules);
-schema("生命路径 lifepath", LifepathEntrySchema.array(), lifepath);
 schema("示例角色 characters", CharacterCardSchema.array(), sampleCharacters);
 schema("黑话 glossary", GlossarySchema, glossary);
 schema("原剧时间线 canonTimeline", CanonTimelineSchema, canonTimeline);
@@ -168,7 +165,7 @@ const twistIds = unique(
   "转折素材",
   twists.map((t) => t.id),
 );
-const moduleIds = unique(
+unique(
   "主板模块",
   boardModules.map((m) => m.id),
 );
@@ -248,12 +245,6 @@ for (const o of openings) {
 }
 refs("defaultCast", gameContent.defaultCast ?? [], castIds, "人物卡或中间人");
 for (const t of jobTemplates) refs(`委托模板 ${t.kind}`, t.twists, twistIds, "转折");
-refs(
-  "生命路径",
-  lifepath.map((e) => e.id),
-  moduleIds,
-  "主板模块",
-);
 refs("默认行装 DEFAULT_LOADOUT", [DEFAULT_LOADOUT], loadoutIds, "行装");
 refs("默认开场 DEFAULT_OPENING", [DEFAULT_OPENING], openingIds, "开场");
 

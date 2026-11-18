@@ -130,14 +130,6 @@ export const StartKitSchema = z.object({
 });
 export type StartKit = z.infer<typeof StartKitSchema>;
 
-/** 生命路径表的一条：过往模块 id 和按出身的权重，没写的出身按 1 */
-export const LifepathEntrySchema = z.object({
-  id: z.string().min(1),
-  weights: z.record(z.string(), z.number().min(0)).default({}),
-  costs: z.array(z.string().min(1)).max(2).default([]),
-});
-export type LifepathEntry = z.infer<typeof LifepathEntrySchema>;
-
 export const RELATIONS = ["nod", "friend", "owesYou", "youOwe", "ex", "grudge"] as const;
 export const RelationKindSchema = z.enum(RELATIONS);
 export type RelationKind = z.infer<typeof RelationKindSchema>;
@@ -276,71 +268,6 @@ export function boardIssues(board: Board): string[] {
     known.add(a.id);
   }
   return issues;
-}
-
-/** 生命路径掷一段过往：按出身加权，已经插着的不再出 */
-export function rollLifepath(
-  board: Board,
-  table: readonly LifepathEntry[],
-  modules: readonly BoardModule[],
-  random: () => number,
-): BoardModule | null {
-  const taken = new Set(board.pasts.map((m) => m.id));
-  const origin = board.origin?.id ?? "";
-  const pool = table.flatMap((entry) => {
-    const module = modules.find((m) => m.id === entry.id && m.slot === "past");
-    const weight = entry.weights[origin] ?? 1;
-    return module && weight > 0 && !taken.has(module.id) ? [{ module, weight }] : [];
-  });
-  const total = pool.reduce((sum, p) => sum + p.weight, 0);
-  let roll = random() * total;
-  for (const p of pool) {
-    roll -= p.weight;
-    if (roll < 0) return p.module;
-  }
-  return pool.at(-1)?.module ?? null;
-}
-
-/** 随机插满：默认补满 3 段阅历 */
-export function fillPasts(
-  board: Board,
-  table: readonly LifepathEntry[],
-  modules: readonly BoardModule[],
-  random: () => number,
-  target = 3,
-): Board {
-  let next = board;
-  while (next.pasts.length < target) {
-    const rolled = rollLifepath(next, table, modules, random);
-    if (!rolled) break;
-    next = { ...next, pasts: [...next.pasts, rolled] };
-  }
-  return next;
-}
-
-/** 一条代价：哪块负面经历，因为哪几段过往沾边 */
-export interface LifepathCost {
-  readonly module: BoardModule;
-  readonly from: readonly BoardModule[];
-}
-
-export function lifepathCosts(
-  board: Board,
-  table: readonly LifepathEntry[],
-  modules: readonly BoardModule[],
-): LifepathCost[] {
-  const costs = new Map<string, { module: BoardModule; from: BoardModule[] }>();
-  for (const past of board.pasts) {
-    const entry = table.find((e) => e.id === past.id);
-    for (const id of entry?.costs ?? []) {
-      const module = modules.find((m) => m.id === id && m.slot === "flaw");
-      if (!module) continue;
-      const had = costs.get(id);
-      if (had) had.from.push(past);
-      else costs.set(id, { module, from: [past] });
-    }
-  }
-  return [...costs.values()];
 }
 
 export interface BoardTables {

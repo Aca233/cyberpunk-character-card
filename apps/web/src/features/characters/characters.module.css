@@ -6,6 +6,7 @@
 
 .pickerBody {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
@@ -157,10 +158,6 @@
   --box-line: var(--cp-red);
 }
 
-.pick[data-suggested] {
-  --box-line: rgb(252 238 10 / 62%);
-}
-
 .pick[aria-pressed="true"],
 .pick[data-on] {
   --box-line: var(--cp-cyan);
@@ -212,20 +209,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.moduleBadge[data-tone="active"],
-.moduleBadge[data-tone="lean"] {
+.moduleBadge[data-tone="active"] {
   color: var(--cp-cyan);
   background: rgb(94 246 255 / 14%);
-}
-
-.moduleBadge[data-tone="never"] {
-  color: var(--cp-red);
-  background: rgb(255 97 88 / 14%);
-}
-
-.moduleBadge[data-tone="suggested"] {
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 16%);
 }
 
 .pickLine {
@@ -249,26 +235,6 @@
   margin: 0;
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
-}
-
-/* 生命路径关联缺陷提示条 */
-.suggestedBanner {
-  --box-line: rgb(252 238 10 / 55%);
-  --box-fill: rgb(252 238 10 / 6%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px 11px;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  line-height: 1.55;
-}
-
-.suggestedTitle {
-  color: var(--cp-yellow);
-  font-weight: 600;
 }
 
 /* ———— 自定义模块工坊（NineSlice 内嵌表单） ———— */
@@ -363,9 +329,14 @@
 .shelfHead {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 6px 12px;
+  gap: 6px 10px;
+}
+
+.shelfMeta {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
 }
 
 .shelfGrid {
@@ -462,6 +433,7 @@
   isolation: isolate;
   display: grid;
   gap: 9px;
+  margin-top: auto;
   padding: 13px 16px 14px;
   color: rgb(205 200 196);
   font-size: 13.5px;

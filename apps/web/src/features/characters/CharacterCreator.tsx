@@ -11,7 +11,6 @@ import {
   PROSE_BLOCKS,
   type ProseBlock,
   RELATION_INFO,
-  rollLifepath,
   SKILL_MAX,
   TOLERANCE_LEVELS,
 } from "@cp/core";
@@ -305,13 +304,15 @@ export function CharacterCreator({
     ...loadoutSummary.freeVehicleNames,
     ...(customVehicleName ? [customVehicleName] : []),
   ];
+  const mountedChromeNames = [
+    ...inherent.filter((i) => !i.replaced).map((i) => i.name),
+    ...board.cyberware.map((c) => c.name),
+  ];
+  const selectedTraitNames = [
+    ...board.pasts.map((m) => m.label),
+    ...board.skills.map((m) => m.label),
+  ];
   const filledProseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
-
-  const rollPast = () => {
-    if (!data) return;
-    const rolled = rollLifepath(board, data.lifepath, data.modules, Math.random);
-    if (rolled) commit({ ...board, pasts: [...board.pasts, rolled] });
-  };
 
   const handleSave = async () => {
     setLocalSaveError(null);
@@ -356,18 +357,16 @@ export function CharacterCreator({
                 data-ready={item.ready && item.filled ? "" : undefined}
                 onClick={() => goToStep(step.id)}
               >
-                <span className={wb.stepBtnTop}>
-                  <span className={wb.stepCode}>STEP {step.code}</span>
-                  <span
-                    className={wb.stepBadge}
-                    data-warn={item.issueCount > 0 ? "" : undefined}
-                    data-ready={item.ready && item.filled ? "" : undefined}
-                  >
-                    {statusIcon}
-                    {item.badge}
-                  </span>
-                </span>
+                <span className={wb.stepCode}>{step.code}</span>
                 <span className={wb.stepLabel}>{step.label}</span>
+                <span
+                  className={wb.stepBadge}
+                  data-warn={item.issueCount > 0 ? "" : undefined}
+                  data-ready={item.ready && item.filled ? "" : undefined}
+                >
+                  {statusIcon}
+                  {item.badge}
+                </span>
               </button>
             );
           })}
@@ -408,12 +407,35 @@ export function CharacterCreator({
           >
             <header className={wb.stageHeader}>
               <div className={wb.stageTitleRow}>
-                <h2 className={wb.stageTitle}>{currentStep.title}</h2>
-                <span className={wb.stageEyebrow}>
-                  STEP {currentStep.code} / 0{CREATOR_STEPS.length}
-                </span>
+                <h2 className={wb.stageTitle} title={currentStep.lead}>
+                  {currentStep.title}
+                </h2>
+                <div className={wb.stageHeaderRight}>
+                  {activeStep === "chrome_kit" && (
+                    <div className={wb.subTabBar} role="tablist" aria-label="义体与开局态势子页签">
+                      <Button
+                        small
+                        primary={chromeKitTab === "chrome"}
+                        pressed={chromeKitTab === "chrome"}
+                        onClick={() => setChromeKitTab("chrome")}
+                      >
+                        义体拓扑与货架 ({board.cyberware.length + activeInherentCount})
+                      </Button>
+                      <Button
+                        small
+                        primary={chromeKitTab === "kit"}
+                        pressed={chromeKitTab === "kit"}
+                        onClick={() => setChromeKitTab("kit")}
+                      >
+                        行装、座驾与落脚点 ({loadoutSummary.finalEddies} €)
+                      </Button>
+                    </div>
+                  )}
+                  <span className={wb.stageEyebrow}>
+                    {currentStep.code} / 0{CREATOR_STEPS.length}
+                  </span>
+                </div>
               </div>
-              <p className={wb.stageLead}>{currentStep.lead}</p>
               <span
                 className={wb.hairline}
                 style={{ maskImage: tabLineMask, WebkitMaskImage: tabLineMask }}
@@ -559,20 +581,13 @@ export function CharacterCreator({
                     <CellFrame />
                     <div className={wb.traitsBar}>
                       <div className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>已装配模块与生命路径掷骰</h3>
+                        <h3 className={wb.sectionBoxTitle}>已装配模块与快速随机</h3>
                         <span className={wb.sectionBoxSub}>
                           过往 {board.pasts.length}/{PAST_MAX} · 特质 {board.skills.length}/
                           {SKILL_MAX} · 缺陷 {board.flaws.length}/{FLAW_MAX}
                         </span>
                       </div>
                       <div className={wb.slotTools}>
-                        <Button
-                          small
-                          disabled={!data || board.pasts.length >= PAST_MAX}
-                          onClick={rollPast}
-                        >
-                          🎲 掷一段生命路径
-                        </Button>
                         <Button
                           small
                           disabled={!data || board.skills.length >= SKILL_MAX}
@@ -590,7 +605,7 @@ export function CharacterCreator({
                           过往经历 ({board.pasts.length}/{PAST_MAX})
                         </h4>
                         {board.pasts.length === 0 ? (
-                          <p className={wb.note}>尚未选择，可点击右侧掷骰或下方挑选。</p>
+                          <p className={wb.note}>尚未选择，可在下方挑选或自创经历。</p>
                         ) : (
                           <ul className={wb.chips}>
                             {board.pasts.map((m: BoardModule) => (
@@ -683,7 +698,7 @@ export function CharacterCreator({
                     <CellFrame />
                     <header className={wb.sectionBoxHead}>
                       <h3 className={wb.sectionBoxTitle}>过往经历与核心特质</h3>
-                      <span className={wb.sectionBoxSub}>带出身倾向角标，支持自创</span>
+                      <span className={wb.sectionBoxSub}>支持按分类筛选、搜索或自创</span>
                     </header>
                     {data ? (
                       <TraitPicker board={board} data={data} commit={commit} />
@@ -696,9 +711,7 @@ export function CharacterCreator({
                     <CellFrame />
                     <header className={wb.sectionBoxHead}>
                       <h3 className={wb.sectionBoxTitle}>负面缺陷</h3>
-                      <span className={wb.sectionBoxSub}>
-                        可选挂载：关联生命路径代价或自定义冲突
-                      </span>
+                      <span className={wb.sectionBoxSub}>可选挂载：引入债主、宿敌或自定义冲突</span>
                     </header>
                     {data ? (
                       <FlawPicker board={board} data={data} commit={commit} />
@@ -709,185 +722,157 @@ export function CharacterCreator({
                 </>
               )}
 
-              {activeStep === "chrome_kit" && (
-                <>
-                  <div className={wb.subTabBar} role="tablist" aria-label="义体与开局态势子页签">
-                    <Button
-                      small
-                      primary={chromeKitTab === "chrome"}
-                      pressed={chromeKitTab === "chrome"}
-                      onClick={() => setChromeKitTab("chrome")}
-                    >
-                      义体拓扑与货架 ({board.cyberware.length + activeInherentCount})
-                    </Button>
-                    <Button
-                      small
-                      primary={chromeKitTab === "kit"}
-                      pressed={chromeKitTab === "kit"}
-                      onClick={() => setChromeKitTab("kit")}
-                    >
-                      行装、座驾与落脚点 ({loadoutSummary.finalEddies} €)
-                    </Button>
-                  </div>
-
-                  {chromeKitTab === "chrome" ? (
-                    <div className={wb.chromeLayout}>
-                      <div className={wb.chromeLeft}>
-                        <div className={wb.dollFrame}>
-                          <CyberDoll
-                            parts={dollParts}
-                            selected={activeSlot}
-                            onCell={handleDollCell}
-                            humanity={{
-                              current: humanityNow,
-                              cap: 100,
-                              stageLabel: stageInfo.label,
-                            }}
-                          />
-                        </div>
-
-                        <section
-                          className={wb.humanityConsole}
-                          data-tone={stageInfo.tone}
-                          aria-label="生理耐受与术后人性控制台"
-                        >
-                          <CellFrame />
-                          <div className={wb.humanityRow}>
-                            <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
-                              {stageInfo.label}
-                            </span>
-                            <span className={wb.humanityNums}>
-                              人性 <b>{humanityNow}</b> / 100
-                            </span>
-                          </div>
-                          <div className={wb.humanityTrack} aria-hidden="true">
-                            <span
-                              className={wb.humanityFill}
-                              data-tone={stageInfo.tone}
-                              style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
-                            />
-                          </div>
-                          <fieldset className={wb.tolBar} aria-label="义体生理耐受档位">
-                            {TOLERANCES.map((t) => {
-                              const level = TOLERANCE_LEVELS[t];
-                              const active = board.tolerance === t;
-                              return (
-                                <Button
-                                  key={t}
-                                  small
-                                  primary={active}
-                                  pressed={active}
-                                  onClick={() => commit({ ...board, tolerance: t })}
-                                >
-                                  {level.label} ×{TOLERANCE_FACTOR[t]}
-                                </Button>
-                              );
-                            })}
-                          </fieldset>
-                          <p className={wb.humanityNote}>
-                            {stageInfo.note}
-                            {TOLERANCE_LEVELS[board.tolerance].hook
-                              ? ` · ${TOLERANCE_LEVELS[board.tolerance].hook}`
-                              : ""}
-                          </p>
-
-                          <div className={wb.inherentBox}>
-                            <span className={wb.inherentTitle}>
-                              出身 / 黑客标配免费义体（{inherent.length} 项）
-                            </span>
-                            {inherent.length === 0 ? (
-                              <p className={wb.note}>当前出身无额外自带义体。</p>
-                            ) : (
-                              <ul className={wb.inherentList}>
-                                {inherent.map((item) => (
-                                  <li
-                                    key={item.id}
-                                    className={wb.inherentItem}
-                                    data-replaced={item.replaced || undefined}
-                                  >
-                                    <span>
-                                      {item.name} · {item.source}（−{item.humanityCost} 人性）
-                                    </span>
-                                    <span className={wb.inherentStatus}>
-                                      {item.replaced
-                                        ? "已被同部位自选义体替换"
-                                        : "免费标配 · 已装配"}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </section>
+              {activeStep === "chrome_kit" &&
+                (chromeKitTab === "chrome" ? (
+                  <div className={wb.chromeLayout}>
+                    <div className={wb.chromeLeft}>
+                      <div className={wb.dollFrame}>
+                        <CyberDoll
+                          parts={dollParts}
+                          selected={activeSlot}
+                          onCell={handleDollCell}
+                          humanity={{
+                            current: humanityNow,
+                            cap: 100,
+                            stageLabel: stageInfo.label,
+                          }}
+                        />
                       </div>
 
-                      <section className={wb.sectionBox} aria-label="部位切换与义体货架">
+                      <section
+                        className={wb.humanityConsole}
+                        data-tone={stageInfo.tone}
+                        aria-label="生理耐受与术后人性控制台"
+                      >
                         <CellFrame />
-                        <header className={wb.sectionBoxHead}>
-                          <h3 className={wb.sectionBoxTitle}>
-                            部位货架 · {CYBER_LABELS[activeSlot]}
-                          </h3>
-                          <span className={wb.sectionBoxSub}>
-                            点左侧人体槽位仅切换部位，装卸在下方完成
+                        <div className={wb.humanityRow}>
+                          <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
+                            {stageInfo.label}
                           </span>
-                        </header>
-                        <fieldset className={wb.slotRibbon} aria-label="十部位切换条">
-                          {CYBER_SLOT_LIST.map((s) => {
-                            const count = (dollParts.get(s) ?? []).length;
-                            const cap = cyberwareRules.SLOT_CAPACITY[s];
+                          <span className={wb.humanityNums}>
+                            人性 <b>{humanityNow}</b> / 100
+                          </span>
+                        </div>
+                        <div className={wb.humanityTrack} aria-hidden="true">
+                          <span
+                            className={wb.humanityFill}
+                            data-tone={stageInfo.tone}
+                            style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
+                          />
+                        </div>
+                        <fieldset className={wb.tolBar} aria-label="义体生理耐受档位">
+                          {TOLERANCES.map((t) => {
+                            const level = TOLERANCE_LEVELS[t];
+                            const active = board.tolerance === t;
                             return (
                               <Button
-                                key={s}
+                                key={t}
                                 small
-                                pressed={activeSlot === s}
-                                onClick={() => setActiveSlot(s)}
+                                primary={active}
+                                pressed={active}
+                                onClick={() => commit({ ...board, tolerance: t })}
                               >
-                                {CYBER_LABELS[s]} {count}/{cap}
+                                {level.label} ×{TOLERANCE_FACTOR[t]}
                               </Button>
                             );
                           })}
                         </fieldset>
-                        {pickerProps ? (
-                          <CyberwareShelf {...pickerProps} slot={activeSlot} />
-                        ) : (
-                          <p className={wb.note}>正在加载义体货架…</p>
-                        )}
-                      </section>
-                    </div>
-                  ) : (
-                    <div className={wb.kitLayout}>
-                      <section className={wb.sectionBox} aria-label="开局行装与座驾">
-                        <CellFrame />
-                        <header className={wb.sectionBoxHead}>
-                          <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
-                          <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
-                        </header>
-                        {pickerProps ? (
-                          <LoadoutPicker {...pickerProps} />
-                        ) : (
-                          <p className={wb.note}>正在加载开局行装目录…</p>
-                        )}
-                      </section>
+                        <p className={wb.humanityNote}>
+                          {stageInfo.note}
+                          {TOLERANCE_LEVELS[board.tolerance].hook
+                            ? ` · ${TOLERANCE_LEVELS[board.tolerance].hook}`
+                            : ""}
+                        </p>
 
-                      <section className={wb.sectionBox} aria-label="开局出生落脚点">
-                        <CellFrame />
-                        <header className={wb.sectionBoxHead}>
-                          <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>
-                          <span className={wb.sectionBoxSub}>
-                            {anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
+                        <div className={wb.inherentBox}>
+                          <span className={wb.inherentTitle}>
+                            出身 / 黑客标配免费义体（{inherent.length} 项）
                           </span>
-                        </header>
-                        <StartMapPicker
-                          value={startLoc}
-                          defaultStart={fallbackLoc}
-                          automatic={!board.startLocation}
-                          onChange={setLoc}
-                        />
+                          {inherent.length === 0 ? (
+                            <p className={wb.note}>当前出身无额外自带义体。</p>
+                          ) : (
+                            <ul className={wb.inherentList}>
+                              {inherent.map((item) => (
+                                <li
+                                  key={item.id}
+                                  className={wb.inherentItem}
+                                  data-replaced={item.replaced || undefined}
+                                >
+                                  <span>
+                                    {item.name} · {item.source}（−{item.humanityCost} 人性）
+                                  </span>
+                                  <span className={wb.inherentStatus}>
+                                    {item.replaced ? "已被同部位自选义体替换" : "免费标配 · 已装配"}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </section>
                     </div>
-                  )}
-                </>
-              )}
+
+                    <section className={wb.sectionBox} aria-label="部位切换与义体货架">
+                      <CellFrame />
+                      <header className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>义体部位与货架</h3>
+                        <span className={wb.sectionBoxSub}>点击左侧人体或下方槽位切换部位</span>
+                      </header>
+                      <fieldset className={wb.slotRibbon} aria-label="十部位切换条">
+                        {CYBER_SLOT_LIST.map((s) => {
+                          const count = (dollParts.get(s) ?? []).length;
+                          const cap = cyberwareRules.SLOT_CAPACITY[s];
+                          return (
+                            <Button
+                              key={s}
+                              small
+                              pressed={activeSlot === s}
+                              onClick={() => setActiveSlot(s)}
+                            >
+                              {CYBER_LABELS[s]} {count}/{cap}
+                            </Button>
+                          );
+                        })}
+                      </fieldset>
+                      {pickerProps ? (
+                        <CyberwareShelf {...pickerProps} slot={activeSlot} />
+                      ) : (
+                        <p className={wb.note}>正在加载义体货架…</p>
+                      )}
+                    </section>
+                  </div>
+                ) : (
+                  <div className={wb.kitLayout}>
+                    <section className={wb.sectionBox} aria-label="开局行装与座驾">
+                      <CellFrame />
+                      <header className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
+                        <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
+                      </header>
+                      {pickerProps ? (
+                        <LoadoutPicker {...pickerProps} />
+                      ) : (
+                        <p className={wb.note}>正在加载开局行装目录…</p>
+                      )}
+                    </section>
+
+                    <section className={wb.sectionBox} aria-label="开局出生落脚点">
+                      <CellFrame />
+                      <header className={wb.sectionBoxHead}>
+                        <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>
+                        <span className={wb.sectionBoxSub}>
+                          {anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
+                        </span>
+                      </header>
+                      <StartMapPicker
+                        value={startLoc}
+                        defaultStart={fallbackLoc}
+                        automatic={!board.startLocation}
+                        onChange={setLoc}
+                      />
+                    </section>
+                  </div>
+                ))}
 
               {activeStep === "people_prose" && (
                 <>
@@ -1160,108 +1145,151 @@ export function CharacterCreator({
               />
 
               <div className={wb.sidebarScroll}>
-                <div className={wb.sidebarHeadMobile}>
-                  <span className={wb.sidebarEyebrow}>LIVE DOSSIER · 实时档案</span>
-                  <Button small onClick={() => setSidebarOpen(false)}>
-                    收起
-                  </Button>
+                <div className={wb.sidebarTop}>
+                  <div className={wb.sidebarHeadMobile}>
+                    <span className={wb.sidebarEyebrow}>LIVE DOSSIER · 实时档案</span>
+                    <Button small onClick={() => setSidebarOpen(false)}>
+                      收起
+                    </Button>
+                  </div>
+
+                  <header className={wb.sidebarHero}>
+                    <div className={wb.sidebarTitleRow}>
+                      <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
+                      {isSample && <span className={wb.sampleBadge}>官方预设</span>}
+                    </div>
+                    <h2 className={wb.heroName}>
+                      {card.name.trim() || "未命名角色"}
+                      {card.alias.trim() && (
+                        <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
+                      )}
+                    </h2>
+                    <p className={wb.heroMeta}>
+                      {[
+                        card.pronoun.trim() || "未设代词",
+                        board.origin?.label ?? "未选出身",
+                        anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
+                      ].join(" · ")}
+                    </p>
+                  </header>
+
+                  <section
+                    className={wb.humanityConsole}
+                    data-tone={stageInfo.tone}
+                    aria-label="术后人性摘要"
+                  >
+                    <CellFrame />
+                    <div className={wb.humanityRow}>
+                      <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
+                        {stageInfo.label}
+                      </span>
+                      <span className={wb.humanityNums}>
+                        <b>{humanityNow}</b> / 100
+                      </span>
+                    </div>
+                    <div className={wb.humanityTrack} aria-hidden="true">
+                      <span
+                        className={wb.humanityFill}
+                        data-tone={stageInfo.tone}
+                        style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
+                      />
+                    </div>
+                    <p className={wb.humanityNote}>
+                      {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
+                    </p>
+                  </section>
+
+                  <div className={wb.sidebarStats}>
+                    <div className={wb.sidebarStat}>
+                      <span className={wb.sidebarStatKey}>过往 / 特质 / 缺陷</span>
+                      <span className={wb.sidebarStatVal}>
+                        {board.pasts.length} / {board.skills.length} / {board.flaws.length}
+                      </span>
+                    </div>
+                    <div className={wb.sidebarStat}>
+                      <span className={wb.sidebarStatKey}>开局义体</span>
+                      <span className={wb.sidebarStatVal}>
+                        {board.cyberware.length + activeInherentCount} 件
+                      </span>
+                    </div>
+                    <div className={wb.sidebarStat}>
+                      <span className={wb.sidebarStatKey}>启动资金</span>
+                      <span className={wb.sidebarStatVal}>{loadoutSummary.finalEddies} €</span>
+                    </div>
+                    <div className={wb.sidebarStat}>
+                      <span className={wb.sidebarStatKey}>人脉 / 小传</span>
+                      <span className={wb.sidebarStatVal}>
+                        {board.acquaintances.length} 人 · {filledProseCount}/7
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <header className={wb.sidebarHero}>
-                  <div className={wb.sidebarTitleRow}>
-                    <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
-                    {isSample && <span className={wb.sampleBadge}>官方预设</span>}
-                  </div>
-                  <h2 className={wb.heroName}>
-                    {card.name.trim() || "未命名角色"}
-                    {card.alias.trim() && (
-                      <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
+                <div className={wb.sidebarBottom}>
+                  <section className={wb.sidebarBuild} aria-label="当前构筑摘要">
+                    <div className={wb.telemetryHead}>
+                      <span className={wb.telemetryTitle}>当前构筑摘要</span>
+                      <span className={wb.sidebarBuildCount}>
+                        {board.origin?.label ?? "未选出身"}
+                      </span>
+                    </div>
+                    <dl className={wb.buildList}>
+                      <div className={wb.buildRow}>
+                        <dt>落脚点</dt>
+                        <dd>{anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}</dd>
+                      </div>
+                      <div className={wb.buildRow}>
+                        <dt>已装义体</dt>
+                        <dd>
+                          {mountedChromeNames.length > 0
+                            ? mountedChromeNames.join(" · ")
+                            : "暂无自选义体"}
+                        </dd>
+                      </div>
+                      <div className={wb.buildRow}>
+                        <dt>特质履历</dt>
+                        <dd>
+                          {selectedTraitNames.length > 0
+                            ? selectedTraitNames.join(" · ")
+                            : "待补充"}
+                        </dd>
+                      </div>
+                      <div className={wb.buildRow}>
+                        <dt>武器载具</dt>
+                        <dd>
+                          {[...weaponNames, ...allVehicles].length > 0
+                            ? [...weaponNames, ...allVehicles].join(" · ")
+                            : "仅默认随身配置"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section className={wb.sidebarChecks} aria-label="档案就绪检查">
+                    <div className={wb.telemetryHead}>
+                      <span className={wb.telemetryTitle}>档案就绪状态</span>
+                      <span
+                        className={wb.readyBadge}
+                        data-ready={checks.length === 0 ? "" : undefined}
+                      >
+                        {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
+                      </span>
+                    </div>
+                    {checks.length === 0 ? (
+                      <p className={wb.note}>必选项已完成，可前往第 5 步总览或直接开局。</p>
+                    ) : (
+                      <ul className={wb.checksList} aria-label="待完善项">
+                        {checks.map((c) => (
+                          <li key={c.text}>
+                            <ActionButton onClick={() => jumpToCheck(c.target)}>
+                              ⚠ {c.text} ▸
+                            </ActionButton>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </h2>
-                  <p className={wb.heroMeta}>
-                    {[
-                      card.pronoun.trim() || "未设代词",
-                      board.origin?.label ?? "未选出身",
-                      anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
-                    ].join(" · ")}
-                  </p>
-                </header>
-
-                <section
-                  className={wb.humanityConsole}
-                  data-tone={stageInfo.tone}
-                  aria-label="术后人性摘要"
-                >
-                  <CellFrame />
-                  <div className={wb.humanityRow}>
-                    <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
-                      {stageInfo.label}
-                    </span>
-                    <span className={wb.humanityNums}>
-                      <b>{humanityNow}</b> / 100
-                    </span>
-                  </div>
-                  <div className={wb.humanityTrack} aria-hidden="true">
-                    <span
-                      className={wb.humanityFill}
-                      data-tone={stageInfo.tone}
-                      style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
-                    />
-                  </div>
-                  <p className={wb.humanityNote}>
-                    {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
-                  </p>
-                </section>
-
-                <div className={wb.sidebarStats}>
-                  <div className={wb.sidebarStat}>
-                    <span className={wb.sidebarStatKey}>过往 / 特质 / 缺陷</span>
-                    <span className={wb.sidebarStatVal}>
-                      {board.pasts.length} / {board.skills.length} / {board.flaws.length}
-                    </span>
-                  </div>
-                  <div className={wb.sidebarStat}>
-                    <span className={wb.sidebarStatKey}>开局义体</span>
-                    <span className={wb.sidebarStatVal}>
-                      {board.cyberware.length + activeInherentCount} 件
-                    </span>
-                  </div>
-                  <div className={wb.sidebarStat}>
-                    <span className={wb.sidebarStatKey}>启动资金</span>
-                    <span className={wb.sidebarStatVal}>{loadoutSummary.finalEddies} €</span>
-                  </div>
-                  <div className={wb.sidebarStat}>
-                    <span className={wb.sidebarStatKey}>人脉 / 小传</span>
-                    <span className={wb.sidebarStatVal}>
-                      {board.acquaintances.length} 人 · {filledProseCount}/7
-                    </span>
-                  </div>
+                  </section>
                 </div>
-
-                <section className={wb.sidebarChecks} aria-label="档案就绪检查">
-                  <div className={wb.telemetryHead}>
-                    <span className={wb.telemetryTitle}>档案就绪状态</span>
-                    <span
-                      className={wb.readyBadge}
-                      data-ready={checks.length === 0 ? "" : undefined}
-                    >
-                      {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
-                    </span>
-                  </div>
-                  {checks.length === 0 ? (
-                    <p className={wb.note}>必选项已完成，可前往第 5 步总览或直接开局。</p>
-                  ) : (
-                    <ul className={wb.checksList} aria-label="待完善项">
-                      {checks.map((c) => (
-                        <li key={c.text}>
-                          <ActionButton onClick={() => jumpToCheck(c.target)}>
-                            ⚠ {c.text} ▸
-                          </ActionButton>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
               </div>
             </aside>
           </>
@@ -1273,7 +1301,6 @@ export function CharacterCreator({
         <CellFrame />
         <div className={wb.barActions}>
           <Button
-            small
             disabled={!canSave || busy}
             reason={checks[0]?.text}
             onClick={() => void handleSave()}
@@ -1319,7 +1346,6 @@ export function CharacterCreator({
             </span>
           )}
           <Button
-            small
             disabled={busy || currentStepIndex <= 0}
             onClick={() => {
               const prev = CREATOR_STEPS[currentStepIndex - 1];
@@ -1330,7 +1356,6 @@ export function CharacterCreator({
           </Button>
           {currentStepIndex < CREATOR_STEPS.length - 1 && (
             <Button
-              small
               disabled={busy}
               onClick={() => {
                 const next = CREATOR_STEPS[currentStepIndex + 1];

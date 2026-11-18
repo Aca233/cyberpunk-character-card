@@ -5,7 +5,6 @@ import type {
   BoardSlot,
   CharacterCard,
   Legend,
-  LifepathEntry,
   Loadout,
   PhoneChatRequest,
   PlayerView,
@@ -193,10 +192,9 @@ export interface CharacterEntry {
   readonly sample: boolean;
 }
 
-/** 主板要用的表：模块库、生命路径和创建时能装的义体 */
+/** 主板要用的表：模块库和创建时能装的义体 */
 export interface BoardData {
   readonly modules: readonly BoardModule[];
-  readonly lifepath: readonly LifepathEntry[];
   readonly cyberware: readonly {
     readonly id: string;
     readonly name: string;

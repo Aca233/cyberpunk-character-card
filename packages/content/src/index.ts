@@ -40,7 +40,6 @@ export { fixers } from "./fixers";
 export { quickhacks } from "./hacking";
 export { items } from "./items";
 export { consequences, jobTemplates, twists } from "./jobs";
-export { lifepath } from "./lifepath";
 export { DEFAULT_LOADOUT, loadouts } from "./loadouts";
 export { locations } from "./locations";
 export { canonTimeline, glossary } from "./lore";

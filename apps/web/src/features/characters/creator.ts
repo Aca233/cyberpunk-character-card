@@ -10,7 +10,6 @@ import {
   CharacterCardSchema,
   cyberwareRules,
   humanityRules,
-  type LifepathEntry,
   type Loadout,
   loadoutText,
   PROSE_BLOCKS,
@@ -583,8 +582,8 @@ export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
     index: 2,
     code: "02",
     label: "过往、特质与缺陷",
-    title: "生命路径、核心特质与负面缺陷",
-    lead: "掷一段契合出身的生命路径，挑选专长与身心禀赋，或挂载债主与宿敌等剧情钩子。",
+    title: "过往经历、核心特质与负面缺陷",
+    lead: "挑选过往履历、专长与身心禀赋，或挂载债主与宿敌等剧情钩子。",
   },
   {
     id: "chrome_kit",
@@ -709,47 +708,4 @@ export function stepProgress(
       issueCount: checks.length,
     },
   };
-}
-
-// ———— 出身倾向与生命路径契合度辅助函数 ————
-
-export type OriginAffinity = "lean" | "never" | null;
-
-export function originLean(
-  originId: string,
-  lifepath: readonly LifepathEntry[],
-  modules: readonly BoardModule[],
-  limit = 3,
-): BoardModule[] {
-  return lifepath
-    .filter((e) => (e.weights[originId] ?? 1) > 1)
-    .sort((a, b) => (b.weights[originId] ?? 1) - (a.weights[originId] ?? 1))
-    .flatMap((e) => modules.filter((m) => m.id === e.id && m.slot === "past"))
-    .slice(0, limit);
-}
-
-export function originNever(
-  originId: string,
-  lifepath: readonly LifepathEntry[],
-  modules: readonly BoardModule[],
-): BoardModule[] {
-  return lifepath
-    .filter((e) => e.weights[originId] === 0)
-    .flatMap((e) => modules.filter((m) => m.id === e.id && m.slot === "past"));
-}
-
-/** 查询模块在指定出身的生命路径中的契合度（权重 >1 为契合，=0 为冲突，其余为 null） */
-export function originAffinity(
-  originId: string | undefined,
-  moduleId: string,
-  lifepath: readonly LifepathEntry[],
-): OriginAffinity {
-  if (!originId) return null;
-  const entry = lifepath.find((e) => e.id === moduleId);
-  if (!entry) return null;
-  const weight = entry.weights[originId];
-  if (weight === undefined) return null;
-  if (weight === 0) return "never";
-  if (weight > 1) return "lean";
-  return null;
 }

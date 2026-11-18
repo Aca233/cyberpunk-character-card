@@ -1,13 +1,4 @@
-import {
-  boardModules,
-  cyberware,
-  items,
-  lifepath,
-  loadouts,
-  npcs,
-  quickhacks,
-  vehicles,
-} from "@cp/content";
+import { boardModules, cyberware, items, loadouts, npcs, quickhacks, vehicles } from "@cp/content";
 import {
   BoardSchema,
   BoardSlotSchema,
@@ -84,11 +75,10 @@ const START_WEAPON_RARITIES: ReadonlySet<string> = new Set(["common", "uncommon"
 export function characterRoutes(store: CharacterStore, clock: Clock, llm: LlmClient): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ characters: await store.list() }));
-  // 主板要用的表：模块库、生命路径、创建时能装的义体与开局武器/载具；要放在 /:id 前面
+  // 主板要用的表：模块库、创建时能装的义体与开局武器/载具；要放在 /:id 前面
   app.get("/board", (c) =>
     c.json({
       modules: boardModules,
-      lifepath,
       // 捏人能选的原作人物：只给名片上公开的几项，秘密和身体不下发
       npcs: npcs.map((n) => ({
         id: n.id,
