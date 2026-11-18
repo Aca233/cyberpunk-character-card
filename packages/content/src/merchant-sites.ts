@@ -1,7 +1,7 @@
 import { cyberwareRules, inventoryRules, worldRules } from "@cp/core";
 import { SERVICE_POINTS, type ServicePoint } from "./mapShapes";
 
-type ShopKind = "gun" | "melee" | "clothes" | "meds" | "food" | "bar";
+type ShopKind = "gun" | "melee" | "clothes" | "meds" | "food" | "bar" | "netrunner";
 
 /** 原作地点/店名来自生成表；货架、数量与供货合同是本作的确定性开局条件。 */
 const SHOP_SEEDS: Record<
@@ -55,6 +55,19 @@ const SHOP_SEEDS: Record<
     stock: { nicola: 12, coffee: 8 },
     services: ["meal", "drink"],
     leadMinutes: 360,
+  },
+  netrunner: {
+    name: "黑客商店",
+    keeper: "黑客商贩",
+    stock: {
+      "netrunner-suit": 2,
+      "emp-grenade": 3,
+      "recon-grenade": 3,
+      shard: 4,
+      glitter: 2,
+    },
+    services: [],
+    leadMinutes: 720,
   },
 };
 

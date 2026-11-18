@@ -170,28 +170,13 @@ export function originDefaultLoadout(
       return [name(g.id)];
     }),
   );
-  // 若玩家在 OS 槽自选了义体（例如斯安威斯坦），检查开局是否仍有可用接入仓；无接入仓时不展示废程序
-  const rawPrograms = [...new Set(picked.flatMap((l) => l.programs ?? []))];
-  const catalog = data?.cyberware ?? [];
-  const chosenOs = (card.board?.cyberware ?? []).filter((c) => {
-    const def = catalog.find((x) => x.id === c.id);
-    return (def?.slot ?? c.slot) === "os";
-  });
-  let freePrograms = rawPrograms;
-  if (chosenOs.length > 0 && catalog.length > 0) {
-    const maxSlots = chosenOs.reduce(
-      (max, c) => Math.max(max, catalog.find((x) => x.id === c.id)?.programSlots ?? 0),
-      0,
-    );
-    freePrograms = maxSlots > 0 ? rawPrograms.slice(0, maxSlots) : [];
-  }
   return {
     baseEddies,
     finalEddies,
     gearNames,
     freeVehicleIds: vehicles,
     freeVehicleNames: vehicles.map(name),
-    freePrograms: freePrograms.map(name),
+    freePrograms: [],
     labels: picked.map((l) => l.label),
   };
 }

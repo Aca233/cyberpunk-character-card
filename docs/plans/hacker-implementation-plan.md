@@ -1,6 +1,6 @@
 # 黑客（潜网行者 / Netrunner）系统去跑团化与因果沙盘收敛方案
 
-状态：**规划中（待确认后执行）**  
+状态：**已完成**  
 日期：2026-11-18  
 基准：严格对齐 [无跑团沙盘方向·一致性审查](../sandbox-design-conflict-audit.md) 与 [物品、车辆与住所收敛设计方案](inventory-vehicle-safehouse-simplification.md) 的五条原则
 

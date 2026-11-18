@@ -3,7 +3,17 @@ import { z } from "zod";
 /** 经营身份与地图入口的核对表；同名或坐标接近不构成同一家店的证据。 */
 export const MerchantSiteSchema = z.object({
   merchant: z.string().min(1),
-  kind: z.enum(["gun", "melee", "clothes", "meds", "food", "bar", "ripperdoc", "mixed"]),
+  kind: z.enum([
+    "gun",
+    "melee",
+    "clothes",
+    "meds",
+    "food",
+    "bar",
+    "ripperdoc",
+    "netrunner",
+    "mixed",
+  ]),
   locations: z.array(z.string().min(1)).min(1),
   services: z.array(z.string().min(1)).default([]),
   source: z.string().min(1),

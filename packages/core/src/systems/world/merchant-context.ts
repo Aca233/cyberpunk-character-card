@@ -15,6 +15,7 @@ const KIND_LABELS: Record<MerchantSite["kind"], string> = {
   food: "食品店",
   bar: "酒吧",
   ripperdoc: "义体医生",
+  netrunner: "黑客商店",
   mixed: "综合商店",
 };
 const KIND_WORDS: Record<MerchantSite["kind"], RegExp> = {
@@ -25,6 +26,7 @@ const KIND_WORDS: Record<MerchantSite["kind"], RegExp> = {
   food: /食品|饭店|餐厅|吃饭|咖啡/,
   bar: /酒吧|喝酒/,
   ripperdoc: /义体|诊所|医生/,
+  netrunner: /黑客|潜网|网络行者|黑客商店|EMP|芯片/,
   mixed: /商店|商街/,
 };
 const tradeInput =

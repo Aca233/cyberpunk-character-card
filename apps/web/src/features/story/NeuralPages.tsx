@@ -180,18 +180,10 @@ export function CyberwarePage({
             .join(" · ")}
         </p>
         {part.ability && <p className={styles.cyberAbility}>{part.ability}</p>}
-        {slot === "os" && view.hacking && view.hacking.programs.length > 0 && (
-          <div className={styles.deckPrograms}>
-            <small className={styles.dim}>已载入快速破解</small>
-            <ul className={styles.deckProgramList}>
-              {view.hacking.programs.map((prog) => (
-                <li key={prog.id} title={`${prog.categoryLabel}：${prog.effect}`}>
-                  <span>{prog.name}</span>
-                  <small className={styles.dim}>{prog.categoryLabel}</small>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {!part.broken && (part.deckProfile || (part.deckTraits && part.deckTraits.length > 0)) && (
+          <p className={styles.dim}>
+            {[part.deckTraits?.join(" · "), part.deckProfile].filter(Boolean).join(" — ")}
+          </p>
         )}
       </>
     );

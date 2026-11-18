@@ -392,36 +392,16 @@ export function BioMonitor({
                     <>
                       <span
                         className={styles.bioMiniGauge}
-                        title={`${hacking.deckName ?? "网络接入仓"} · ${
-                          hacking.ram <= 0
-                            ? "算力耗尽"
-                            : hacking.ram < hacking.ramMax
-                              ? "算力消耗中"
-                              : "算力就绪"
-                        }`}
+                        title={`${hacking.deckName}${hacking.profile ? ` · ${hacking.profile}` : ""}`}
                       >
                         <span
                           className={styles.bioMiniFill}
                           data-hw="ram"
-                          data-tone={hacking.ram <= 0 ? "bad" : undefined}
-                          style={{
-                            width: `${
-                              hacking.ramMax > 0
-                                ? Math.max(
-                                    0,
-                                    Math.min(100, Math.round((hacking.ram / hacking.ramMax) * 100)),
-                                  )
-                                : 0
-                            }%`,
-                          }}
+                          style={{ width: "100%" }}
                         />
                       </span>
                       <span className={styles.bioHwText}>
-                        {hacking.ram <= 0
-                          ? "算力耗尽"
-                          : hacking.ram < hacking.ramMax
-                            ? "算力消耗"
-                            : "算力就绪"}
+                        {`DECK · ${[hacking.traitLabels[0] ?? "在线", hacking.selfIce ? "ICE" : null].filter(Boolean).join(" · ")}`}
                       </span>
                     </>
                   ) : sandevistan ? (
@@ -543,6 +523,13 @@ function personBadges(
   }
   if (fixer) {
     badges.push({ label: "中间人", tint: "var(--cp-yellow)" });
+  }
+  const scanChrome = person.body?.scan?.chrome ?? [];
+  if (scanChrome.some((c) => c.netTag === "deck")) {
+    badges.push({ label: "接入仓", tint: "var(--cp-cyan)" });
+  }
+  if (scanChrome.some((c) => c.netTag === "selfIce")) {
+    badges.push({ label: "自我 ICE", tint: "var(--cp-yellow)" });
   }
   // 具象创口在 .personWound 单独一行展示部位与原因；仅当只有模糊等级时兜底用小牌提示
   const hasDetailedWounds = (person.body?.injuries?.length ?? 0) > 0;
@@ -1177,6 +1164,21 @@ export function Zone({
                   还有 {threats.length - ZONE_THREAT_MAX} 个，点开地图看
                 </li>
               )}
+            </ul>
+          </div>
+        )}
+        {(view.hacking?.breaches.length ?? 0) > 0 && (
+          <div className={styles.zoneThreats}>
+            <ul className={styles.zoneThreatList} aria-label="已控内网">
+              {view.hacking?.breaches.map((b) => (
+                <li
+                  key={`${b.name}-${b.at}`}
+                  title={`已攻破内网（${b.at}）：${b.gains.join("、")}`}
+                >
+                  <b>{b.name}</b>
+                  <small>{b.gains.join("/")}</small>
+                </li>
+              ))}
             </ul>
           </div>
         )}

@@ -382,13 +382,8 @@ export function StoryScreen() {
     [story, saveId, version, view, refresh],
   );
   const confirm = useCallback(
-    (checkId: string, label: string, matrix?: number) => {
-      void story.submit(
-        saveId,
-        version,
-        { kind: "confirm", checkId, label, ...(matrix === undefined ? {} : { matrix }) },
-        refresh,
-      );
+    (checkId: string, label: string) => {
+      void story.submit(saveId, version, { kind: "confirm", checkId, label }, refresh);
     },
     [story, saveId, version, refresh],
   );
@@ -809,10 +804,9 @@ export function StoryScreen() {
             <CheckBar
               key={openCheck.id}
               check={openCheck}
-              matrix={false}
               busy={busy}
               closable={!offers?.rolled && openCheck.id === pickedId}
-              onConfirm={(matrix) => confirm(openCheck.id, openCheck.label, matrix)}
+              onConfirm={() => confirm(openCheck.id, openCheck.label)}
               onRewrite={() => draftFromCheck(openCheck.label)}
               onClose={() => setPicked(null)}
             />

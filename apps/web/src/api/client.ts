@@ -209,6 +209,8 @@ export interface BoardData {
     /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
     readonly rarity?: string;
     readonly humanityCost: number;
+    readonly deckProfile?: string;
+    readonly deckTraits?: readonly string[];
     readonly programSlots?: number;
     readonly ram?: number;
     readonly armor?: boolean;
@@ -480,7 +482,7 @@ export interface CityEventView {
 
 export type TurnBody = { requestId: string; baseVersion: number } & (
   | { input: TurnInput }
-  | { confirm: string; matrix?: number }
+  | { confirm: string }
 );
 
 export const api = {

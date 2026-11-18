@@ -275,6 +275,7 @@ const SHOP_POI_ICONS: Readonly<Record<string, AssetId>> = {
   food: "map.poi.food",
   bar: "map.poi.bar",
   ripperdoc: "map.poi.ripperdoc",
+  netrunner: "map.poi.netrunner",
 };
 
 /** 商店 / 诊所类型 → 原作地图 POI 图标，未知类型回落到通用商贩 */

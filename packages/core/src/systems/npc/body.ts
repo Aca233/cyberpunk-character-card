@@ -416,6 +416,7 @@ export interface ChromeDetail {
   readonly name: string;
   readonly slot: string;
   readonly ability: string;
+  readonly netTag?: "deck" | "selfIce";
 }
 
 /**
@@ -427,9 +428,20 @@ export function chromeDetails(ids: readonly string[], data: Data): ChromeDetail[
   const catalog = cyberwareCatalog(data);
   return ids.map((id) => {
     const def = catalog.get(id);
-    return def
-      ? { id, name: def.name, slot: SLOT_LABELS[def.slot], ability: def.ability }
-      : { id, name: id, slot: "", ability: "" };
+    if (!def) return { id, name: id, slot: "", ability: "" };
+    const netTag =
+      def.id === "self-ice"
+        ? ("selfIce" as const)
+        : def.slot === "os" && def.deckTraits !== undefined
+          ? ("deck" as const)
+          : undefined;
+    return {
+      id,
+      name: def.name,
+      slot: SLOT_LABELS[def.slot],
+      ability: def.ability,
+      ...(netTag ? { netTag } : {}),
+    };
   });
 }
 

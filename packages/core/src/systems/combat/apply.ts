@@ -60,7 +60,15 @@ function districtHere(ctx: SystemContext): string | null {
   return here === null ? null : (locationCatalog(ctx.data).get(here)?.district ?? null);
 }
 
-/** 开打时按路数和档位抽这人身上带的：一把武器，一半机会再带一件治疗品或手雷；不朽的不掉 */
+const NETRUNNER_LOOT_IDS = new Set([
+  "emp-grenade",
+  "recon-grenade",
+  "shard",
+  "glitter",
+  "netrunner-suit",
+]);
+
+/** 开打时按路数和档位抽这人身上带的：一把武器，一半机会再带一件治疗品/手雷或黑客电子物件；不朽的不掉 */
 export function drawLoot(
   foe: Pick<ActiveFoe, "archetype" | "tier">,
   data: Readonly<Record<string, unknown>>,
@@ -77,7 +85,15 @@ export function drawLoot(
   };
   const weapons: readonly string[] = LOOT_WEAPONS[foe.archetype];
   const carry = pick((d) => d.kind === "weapon" && weapons.includes(d.category ?? ""));
-  if (rng.roll(2) === 2) carry.push(...pick((d) => LOOT_EXTRA_KINDS.includes(d.kind)));
+  if (rng.roll(2) === 2) {
+    const netrunnerPick =
+      foe.archetype === "netrunner" ? pick((d) => NETRUNNER_LOOT_IDS.has(d.id)) : [];
+    carry.push(
+      ...(netrunnerPick.length > 0
+        ? netrunnerPick
+        : pick((d) => LOOT_EXTRA_KINDS.includes(d.kind))),
+    );
+  }
   return carry;
 }
 

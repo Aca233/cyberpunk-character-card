@@ -735,44 +735,6 @@
   color: var(--cp-cyan);
 }
 
-.deckMeterWrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  justify-content: flex-end;
-}
-
-.deckMeterTrack {
-  width: 68px;
-  height: 5px;
-  background: rgb(94 246 255 / 14%);
-  overflow: hidden;
-  flex: none;
-}
-
-.deckMeterFill {
-  display: block;
-  height: 100%;
-  background: var(--cp-ram);
-  transition: width 220ms ease-out;
-}
-
-.deckMeterFill:where([data-low]) {
-  background: var(--cp-hp-low);
-}
-
-.deckState {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--cp-cyan);
-  text-align: right;
-}
-
-.deckState:where([data-low]) {
-  color: var(--cp-hp-low);
-}
-
 /* 仅当角色手写了外貌/过往等额外档案时显示的精简注记（不含模型主板提示词） */
 .dossierBox {
   display: flex;

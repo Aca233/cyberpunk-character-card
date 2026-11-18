@@ -1432,7 +1432,14 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
       "连锁私人安保公司的正规巡逻制服。搭配伪造工牌足以应付前台与普通门禁，但极易被同公司的熟面孔当面识破。",
   },
   // 杂物
-  { id: "shard", name: "数据芯片", kind: "misc" },
+  {
+    id: "shard",
+    name: "数据芯片",
+    kind: "misc",
+    rarity: "common",
+    price: 150,
+    ability: "空白或加密数据载体芯片，可用于离网拷贝机密档案、转存潜网情报或线人交割。",
+  },
   {
     id: "corpo-badge",
     name: "公司工牌",

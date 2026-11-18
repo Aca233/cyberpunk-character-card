@@ -240,6 +240,12 @@ export function ProfileHead({
               </Tag>
             )}
             {fixer && <Tag tint="var(--cp-yellow)">中间人</Tag>}
+            {npc.body?.scan?.chrome.some((c) => c.netTag === "deck") && (
+              <Tag tint="var(--cp-cyan)">接入仓</Tag>
+            )}
+            {npc.body?.scan?.chrome.some((c) => c.netTag === "selfIce") && (
+              <Tag tint="var(--cp-yellow)">自我 ICE</Tag>
+            )}
             {wound.badge && (
               <Tag
                 tint={wound.threat === "high" ? "var(--cp-danger)" : "var(--cp-yellow)"}
@@ -612,6 +618,10 @@ function BodySection({
                     <div className={styles.chromeHead}>
                       <b>{c.name}</b>
                       {c.slot && <span className={styles.chromeSlot}>{c.slot}</span>}
+                      {c.netTag === "deck" && <span className={styles.chromeSlot}>接入仓</span>}
+                      {c.netTag === "selfIce" && (
+                        <span className={styles.chromeSlot}>自我 ICE</span>
+                      )}
                     </div>
                     {c.ability && <p className={styles.chromeDesc}>{c.ability}</p>}
                   </div>

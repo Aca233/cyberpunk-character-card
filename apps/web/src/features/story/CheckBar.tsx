@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { HoldButton } from "../../ui/HoldButton";
-import { BreachMatrix } from "./BreachMatrix";
 import styles from "./story.module.css";
 import { type CheckOffer, DAMAGE, signed } from "./view";
 
@@ -42,7 +40,6 @@ export function CheckBar({
   check,
   busy,
   closable,
-  matrix = false,
   onConfirm,
   onRewrite,
   onClose,
@@ -50,14 +47,10 @@ export function CheckBar({
   readonly check: CheckOffer;
   readonly busy: boolean;
   readonly closable: boolean;
-  /** 设置里开了矩阵小游戏、装着接入仓、又是智力检定时为 true */
-  readonly matrix?: boolean;
-  /** 玩过矩阵小游戏时带上解开了几段 */
-  readonly onConfirm: (matrix?: number) => void;
+  readonly onConfirm: () => void;
   readonly onRewrite: () => void;
   readonly onClose: () => void;
 }) {
-  const [solved, setSolved] = useState<number | null>(null);
   const damage = check.damage ? DAMAGE[check.damage] : null;
   const dvParts = [
     `基础 ${check.baseDv}`,
@@ -99,8 +92,6 @@ export function CheckBar({
       <Sources title="减值" total={check.penalties} sign={-1} />
       <Sources title="难度修正" total={check.dvMods} sign={1} />
 
-      {matrix && !check.rolled && <BreachMatrix onDone={setSolved} />}
-
       <div className={styles.stakes}>
         <p data-tone="good">
           <small>成功</small>
@@ -123,7 +114,7 @@ export function CheckBar({
           rolled={check.rolled}
           disabled={busy}
           {...(busy ? { reason: "正在生成" } : {})}
-          onConfirm={() => onConfirm(solved ?? undefined)}
+          onConfirm={() => onConfirm()}
         />
         {!check.rolled && (
           <Button onClick={onRewrite} disabled={busy}>

@@ -136,11 +136,6 @@ function buildNeuroCells(humanity: View["humanity"]): readonly NeuroCell[] {
   });
 }
 
-function deckFillPct(ram: number, ramMax: number): string {
-  if (ramMax <= 0) return "0%";
-  return `${Math.max(0, Math.min(100, Math.round((ram / ramMax) * 100)))}%`;
-}
-
 /**
  * 3.0 生物检测核心终端面板：
  * 左栏叠加全息生理图层与街头名声；右栏呈现创伤监测、20 格神经稳态阵列、外设与代谢调度
@@ -507,41 +502,12 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
             </div>
             <div className={styles.subRows}>
               {hacking && (
-                <div className={styles.subRow}>
-                  <span className={styles.subKey}>{hacking.deckName ?? "网络接入仓"}</span>
-                  <span className={styles.deckMeterWrap}>
-                    <span
-                      className={styles.deckMeterTrack}
-                      role="img"
-                      aria-label={
-                        hacking.ram <= 0
-                          ? "接入仓算力耗尽"
-                          : hacking.ram < hacking.ramMax
-                            ? "接入仓算力消耗中"
-                            : "接入仓算力充沛"
-                      }
-                    >
-                      <span
-                        className={styles.deckMeterFill}
-                        data-low={hacking.ram <= 0 || undefined}
-                        style={{ width: deckFillPct(hacking.ram, hacking.ramMax) }}
-                      />
-                    </span>
-                    <span className={styles.deckState} data-low={hacking.ram <= 0 || undefined}>
-                      {hacking.ram <= 0
-                        ? "算力耗尽 · 暂不可破解"
-                        : hacking.ram < hacking.ramMax
-                          ? "算力消耗中 · 休整恢复"
-                          : "算力充沛 · 待命"}
-                    </span>
-                  </span>
-                </div>
-              )}
-              {hacking && hacking.programs.length > 0 && (
-                <div className={styles.subRow}>
-                  <span className={styles.subKey}>已载入破解</span>
+                <div className={styles.subRow} title={hacking.profile ?? undefined}>
+                  <span className={styles.subKey}>{hacking.deckName}</span>
                   <span className={styles.subVal} data-tone="cyan">
-                    {hacking.programs.map((p) => p.name).join(" · ")}
+                    {[...hacking.traitLabels, hacking.selfIce ? "自我 ICE" : null]
+                      .filter(Boolean)
+                      .join(" · ") || "硬件在线"}
                   </span>
                 </div>
               )}

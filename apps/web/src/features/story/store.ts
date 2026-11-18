@@ -15,8 +15,6 @@ export type Pending =
       readonly kind: "confirm";
       readonly checkId: string;
       readonly label: string;
-      /** 掷骰前玩了矩阵小游戏：解开了几段 */
-      readonly matrix?: number;
     };
 
 export type FailureKind =
@@ -269,7 +267,6 @@ export const useStory = create<StoryState>()((set, get) => {
               requestId: newRequestId(),
               baseVersion,
               confirm: pending.checkId,
-              ...(pending.matrix === undefined ? {} : { matrix: pending.matrix }),
             };
       try {
         const result = await api.submit(saveId, body);
