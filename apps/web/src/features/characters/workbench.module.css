@@ -313,7 +313,7 @@
   color: var(--cp-text);
 }
 
-/* ———— 顶部五步导航栏 ———— */
+/* ———— 顶部六步导航栏 ———— */
 
 .railBar {
   display: flex;
@@ -329,7 +329,7 @@
   isolation: isolate;
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
   min-width: 0;
   padding: 2px;
@@ -480,7 +480,7 @@
   scrollbar-width: thin;
 }
 
-.stage[data-split="kit"] {
+.stage[data-split="split"] {
   overflow: hidden;
 }
 
@@ -541,7 +541,7 @@
   min-width: 0;
 }
 
-.stage[data-split="kit"] > .stageBody {
+.stage[data-split="split"] > .stageBody {
   flex: 1 1 0;
   min-height: 0;
 }
@@ -739,29 +739,34 @@
 
 .chromeLayout {
   display: grid;
-  flex: 1 0 auto;
-  grid-template-columns: minmax(480px, 560px) minmax(340px, 1fr);
-  gap: 16px;
+  flex: 1 1 0;
+  grid-template-columns: minmax(420px, 470px) minmax(360px, 1fr);
+  gap: 14px;
+  min-height: 0;
   align-items: stretch;
 }
 
 .chromeLeft {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 10px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  scrollbar-width: thin;
 }
 
 /* 禁止 zoom hack，让 @container pin 自然响应式计算尺寸且命中精确 */
 .dollFrame {
   container: pin / inline-size;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 560px;
+  max-width: 470px;
   min-width: 0;
 }
 
@@ -1428,20 +1433,22 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .stage[data-split="kit"] {
+  .stage[data-split="split"] {
     overflow-y: auto;
   }
 
-  .stage[data-split="kit"] > .stageBody {
+  .stage[data-split="split"] > .stageBody {
     flex: 1 0 auto;
     min-height: auto;
   }
 
+  .chromeLayout,
   .kitLayout {
     flex: 0 0 auto;
     min-height: auto;
   }
 
+  .chromeLeft,
   .kitLeftPane,
   .kitRightPane,
   .kitLeftScroll {
@@ -1459,7 +1466,7 @@
   .stepRail {
     flex: 0 0 auto;
     width: 100%;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .mobileSummaryToggle {

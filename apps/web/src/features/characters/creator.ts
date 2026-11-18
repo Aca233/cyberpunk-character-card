@@ -557,7 +557,7 @@ export function creatorChecks(card: CharacterCard): Check[] {
   return checks;
 }
 
-export type CreatorStepId = "identity" | "traits" | "chrome_kit" | "people_prose" | "review";
+export type CreatorStepId = "identity" | "traits" | "cyberware" | "kit" | "people_prose" | "review";
 
 export interface CreatorStepMeta {
   readonly id: CreatorStepId;
@@ -581,31 +581,39 @@ export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
     id: "traits",
     index: 2,
     code: "02",
-    label: "过往、特质与缺陷",
+    label: "过往与特质",
     title: "过往经历、核心特质与负面缺陷",
     lead: "挑选过往履历、专长与身心禀赋，或挂载债主与宿敌等剧情钩子。",
   },
   {
-    id: "chrome_kit",
+    id: "cyberware",
     index: 3,
     code: "03",
-    label: "义体与开局态势",
-    title: "义体装配、行装定制与开局锚点",
-    lead: "在十个身体部位装配开局义体并调控生理耐受，配置启动资金、武器座驾与出生位置。",
+    label: "义体装配",
+    title: "义体拓扑装配与生理耐受",
+    lead: "在十个身体部位装配开局义体并调控生理耐受，实时平衡战力与人性值。",
+  },
+  {
+    id: "kit",
+    index: 4,
+    code: "04",
+    label: "行装与落脚点",
+    title: "启动资金、武器座驾与开局落脚点",
+    lead: "定制启动资金档位、额外随身武器、专属载具，并在夜之城地图上选定开局落脚点。",
   },
   {
     id: "people_prose",
-    index: 4,
-    code: "04",
-    label: "人脉与人设小传",
+    index: 5,
+    code: "05",
+    label: "人脉与小传",
     title: "夜之城人脉网络与人设小传",
     lead: "结识原作人物或自创旧识，并手写或交由 AI 协同生成角色外貌、背景、性格与口吻。",
   },
   {
     id: "review",
-    index: 5,
-    code: "05",
-    label: "档案总览与开局",
+    index: 6,
+    code: "06",
+    label: "档案总览",
     title: "完整档案核验与战局接入",
     lead: "总览角色全部构筑、行装、人脉与小传，确认就绪后即可保存并直接接入夜之城。",
   },
@@ -615,13 +623,13 @@ const TARGET_STEP_MAP: Readonly<Record<CheckTarget, CreatorStepId>> = {
   identity: "identity",
   origin: "identity",
   build: "traits",
-  cyber: "chrome_kit",
-  kit: "chrome_kit",
+  cyber: "cyberware",
+  kit: "kit",
   people: "people_prose",
   person: "people_prose",
 };
 
-/** 将核验问题目标映射到五步引导工作台对应步骤 */
+/** 将核验问题目标映射到六步引导工作台对应步骤 */
 export function stepForCheckTarget(target: CheckTarget): CreatorStepId {
   return TARGET_STEP_MAP[target];
 }
@@ -636,7 +644,7 @@ export interface StepProgressItem {
 
 export type StepProgressMap = Readonly<Record<CreatorStepId, StepProgressItem>>;
 
-/** 计算五步引导工作台每一步的完成态、阻塞项与摘要计数 */
+/** 计算六步引导工作台每一步的完成态、阻塞项与摘要计数 */
 export function stepProgress(
   card: CharacterCard,
   data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
@@ -645,7 +653,8 @@ export function stepProgress(
   const issueCounts: Record<CreatorStepId, number> = {
     identity: 0,
     traits: 0,
-    chrome_kit: 0,
+    cyberware: 0,
+    kit: 0,
     people_prose: 0,
     review: checks.length,
   };
@@ -660,8 +669,7 @@ export function stepProgress(
   const inherentCount = inherentCyberware(card, data).filter((c) => !c.replaced).length;
   const chromeCount = board.cyberware.length + inherentCount;
   const humanityNow = Math.max(0, HUMANITY_MAX - totalStartHumanityCost(card, data));
-  const chromeKitFilled =
-    board.cyberware.length > 0 ||
+  const kitFilled =
     board.kit.cashTier !== "standard" ||
     board.kit.weapons.length > 0 ||
     board.kit.vehicle !== null ||
@@ -686,12 +694,19 @@ export function stepProgress(
       badge: traitsCount > 0 ? `${traitsCount} 项` : "可选",
       issueCount: issueCounts.traits,
     },
-    chrome_kit: {
-      id: "chrome_kit",
-      ready: issueCounts.chrome_kit === 0,
-      filled: chromeKitFilled,
+    cyberware: {
+      id: "cyberware",
+      ready: issueCounts.cyberware === 0,
+      filled: board.cyberware.length > 0 || board.tolerance !== "normal",
       badge: `人性 ${humanityNow}${chromeCount > 0 ? ` · ${chromeCount}件` : ""}`,
-      issueCount: issueCounts.chrome_kit,
+      issueCount: issueCounts.cyberware,
+    },
+    kit: {
+      id: "kit",
+      ready: issueCounts.kit === 0,
+      filled: kitFilled,
+      badge: kitFilled ? "已定制" : "默认",
+      issueCount: issueCounts.kit,
     },
     people_prose: {
       id: "people_prose",

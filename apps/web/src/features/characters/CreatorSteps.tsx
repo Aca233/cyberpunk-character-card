@@ -15,7 +15,6 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import type { BoardData } from "../../api/client";
 import type { AssetId } from "../../assets";
-import { ActionButton } from "../../ui/ActionButton";
 import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
@@ -705,7 +704,7 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
   );
 }
 
-// ———— 义体货架：嵌入式预览与装配（支持单击预览、按钮装卸/替换、双击快速装卸） ————
+// ———— 义体货架：悬停即时预览、单击直接装卸/替换 ————
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"] as const;
 
@@ -714,14 +713,14 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
   const [shelfState, setShelfState] = useState<{
     readonly slot: CyberSlot;
     readonly rarity: string | null;
-    readonly picked: string | null;
-  }>({ slot, rarity: null, picked: null });
+    readonly hover: string | null;
+  }>({ slot, rarity: null, hover: null });
   const rarity = shelfState.slot === slot ? shelfState.rarity : null;
-  const picked = shelfState.slot === slot ? shelfState.picked : null;
+  const hover = shelfState.slot === slot ? shelfState.hover : null;
   const setRarity = (next: string | null) =>
-    setShelfState((s) => ({ slot, rarity: next, picked: s.slot === slot ? s.picked : null }));
-  const setPicked = (next: string | null) =>
-    setShelfState((s) => ({ slot, rarity: s.slot === slot ? s.rarity : null, picked: next }));
+    setShelfState((s) => ({ slot, rarity: next, hover: s.slot === slot ? s.hover : null }));
+  const setHover = (next: string | null) =>
+    setShelfState((s) => ({ slot, rarity: s.slot === slot ? s.rarity : null, hover: next }));
 
   const options = data.cyberware.filter((o) => o.slot === slot);
   const rarities = RARITY_ORDER.filter((r) => options.some((o) => o.rarity === r));
@@ -735,7 +734,8 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
   const canSwap = cap === 1 && slotFull;
   const blocked = (o: Offer) => !isOn(o) && slotFull && !canSwap;
 
-  const actionLabel = (o: Offer) => (isOn(o) ? "卸下" : canSwap ? "替换装上" : "装上");
+  const actionLabel = (o: Offer) =>
+    isOn(o) ? "已装 · 点击卸下" : canSwap ? "点击替换" : blocked(o) ? "槽位已满" : "点击装上";
 
   const nextCyberware = (o: Offer): Board["cyberware"] => {
     if (isOn(o)) return board.cyberware.filter((c) => c.id !== o.id);
@@ -759,7 +759,7 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
   };
 
   const item =
-    options.find((o) => o.id === picked) ??
+    options.find((o) => o.id === hover) ??
     mounted.map((c) => options.find((o) => o.id === c.id)).find(Boolean) ??
     shown[0];
   const itemOn = item ? isOn(item) : false;
@@ -784,7 +784,7 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
     <div className={styles.pickerBody}>
       <div className={styles.shelfHead}>
         <span className={styles.shelfMeta}>
-          可选义体 {shown.length} 款 · 已装 {mounted.length}/{cap} · 单击预览 / 双击装卸
+          可选 {shown.length} 款 · 已装 {mounted.length}/{cap} · 悬停预览，单击直接装卸
         </span>
         {rarities.length > 1 && (
           <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
@@ -807,95 +807,82 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
             .join("、")}
         </p>
       )}
+      {item && (
+        <article className={styles.weaponPreview} aria-live="polite">
+          <CellFrame />
+          <div className={styles.shelfDetailHero}>
+            {itemArt ? (
+              <Asset id={itemArt} alt={item.name} className={styles.shelfArtImg} />
+            ) : (
+              <Asset id={CYBER_SLOT_ICON[slot]} height={32} tint="var(--cp-cyan)" />
+            )}
+            <div className={styles.shelfDetailTitleWrap}>
+              <div className={styles.weaponPreviewHead}>
+                <span className={styles.weaponPreviewMeta}>
+                  <strong className={styles.pickName}>{item.name}</strong>
+                  {item.rarity && (
+                    <span className={styles.shelfRarity} data-rarity={item.rarity}>
+                      · {RARITY_LABELS[item.rarity]}
+                    </span>
+                  )}
+                </span>
+                <span className={styles.moduleBadge} data-tone={itemOn ? "active" : undefined}>
+                  {actionLabel(item)}
+                </span>
+              </div>
+              <span className={styles.shelfDelta}>
+                <span>神经占用：人性 −{item.humanityCost}</span>
+                <span>
+                  术后人性：{humanityNow} → <b className={styles.shelfNum}>{humanityNext}</b>
+                </span>
+                {hwSpecs.length > 0 && <span>{hwSpecs.join(" · ")}</span>}
+              </span>
+            </div>
+          </div>
+          <p className={styles.weaponPreviewDesc}>{item.ability}</p>
+        </article>
+      )}
       {options.length === 0 ? (
         <p className={styles.note}>开局没有能装在这个部位的义体。</p>
       ) : (
-        <ul className={styles.shelfGrid}>
+        <ul className={styles.cyberGrid}>
           {shown.map((o) => {
             const on = isOn(o);
             const isBlocked = blocked(o);
             return (
-              <li key={o.id} className={styles.shelfRow}>
+              <li key={o.id} onMouseEnter={() => setHover(o.id)} onFocus={() => setHover(o.id)}>
                 <button
                   type="button"
-                  className={styles.shelfItem}
-                  aria-pressed={o.id === item?.id}
-                  aria-label={`${o.name}${on ? "（已装）" : ""}`}
-                  data-installed={on || undefined}
-                  data-short={isBlocked || undefined}
-                  title="单击预览详情，双击快速装卸"
-                  onClick={() => setPicked(o.id)}
-                  onDoubleClick={() => toggle(o)}
+                  className={styles.cyberTile}
+                  data-rarity={o.rarity}
+                  aria-pressed={on}
+                  disabled={isBlocked}
+                  title={isBlocked ? `这个部位最多装 ${cap} 件，先卸一件` : actionLabel(o)}
+                  onClick={() => toggle(o)}
                 >
+                  <CellFrame />
                   <CyberItemCell
                     id={o.id}
                     name={o.name}
                     slot={o.slot as CyberSlot}
                     on={on}
                     rarity={o.rarity}
-                    size={38}
+                    size={40}
                   />
-                  <span className={styles.shelfTileName}>{o.name}</span>
-                  <span className={styles.shelfTileRight}>
-                    {on && <span className={styles.shelfTileOn}>已装</span>}
-                    <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
+                  <span className={styles.cyberTileBody}>
+                    <span className={styles.cyberTileName} data-rarity={o.rarity}>
+                      {o.name}
+                    </span>
+                    <span className={styles.cyberTileMeta}>
+                      <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
+                      {on && <span className={styles.shelfTileOn}>已装</span>}
+                    </span>
                   </span>
                 </button>
-                <ActionButton
-                  disabled={isBlocked}
-                  title={isBlocked ? `这个部位最多装 ${cap} 件，先卸一件` : actionLabel(o)}
-                  onClick={() => toggle(o)}
-                >
-                  {actionLabel(o)}
-                </ActionButton>
               </li>
             );
           })}
         </ul>
-      )}
-      {item && (
-        <article className={styles.shelfDetail}>
-          <CellFrame />
-          <div className={styles.shelfDetailHero}>
-            {itemArt ? (
-              <Asset id={itemArt} alt={item.name} className={styles.shelfArtImg} />
-            ) : (
-              <Asset id={CYBER_SLOT_ICON[slot]} height={34} tint="var(--cp-cyan)" />
-            )}
-            <div className={styles.shelfDetailTitleWrap}>
-              <span className={styles.pickHead}>
-                <span>
-                  <strong className={styles.pickName}>{item.name}</strong>
-                  {item.rarity && (
-                    <span className={styles.shelfRarity} data-rarity={item.rarity}>
-                      {" "}
-                      · {RARITY_LABELS[item.rarity]}
-                    </span>
-                  )}
-                </span>
-                <Button
-                  small
-                  primary={!itemOn}
-                  disabled={blocked(item)}
-                  reason={`这个部位最多装 ${cap} 件，先卸一件`}
-                  onClick={() => toggle(item)}
-                >
-                  {actionLabel(item)}
-                </Button>
-              </span>
-            </div>
-          </div>
-          <p>{item.ability}</p>
-          {hwSpecs.length > 0 && (
-            <p className={styles.moduleTags}>硬件参数：{hwSpecs.join(" · ")}</p>
-          )}
-          <span className={styles.shelfDelta}>
-            <span>神经占用：人性 −{item.humanityCost}</span>
-            <span>
-              术后人性：{humanityNow} → <b className={styles.shelfNum}>{humanityNext}</b>
-            </span>
-          </span>
-        </article>
       )}
     </div>
   );

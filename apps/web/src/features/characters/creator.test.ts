@@ -48,19 +48,20 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
     board: emptyBoard(),
   } as unknown as CharacterCard;
 
-  it("CREATOR_STEPS 按 5 步顺序定义且映射全部 CheckTarget", () => {
+  it("CREATOR_STEPS 按 6 步顺序定义且映射全部 CheckTarget", () => {
     expect(CREATOR_STEPS.map((s) => s.id)).toEqual([
       "identity",
       "traits",
-      "chrome_kit",
+      "cyberware",
+      "kit",
       "people_prose",
       "review",
     ]);
     expect(stepForCheckTarget("identity")).toBe("identity");
     expect(stepForCheckTarget("origin")).toBe("identity");
     expect(stepForCheckTarget("build")).toBe("traits");
-    expect(stepForCheckTarget("cyber")).toBe("chrome_kit");
-    expect(stepForCheckTarget("kit")).toBe("chrome_kit");
+    expect(stepForCheckTarget("cyber")).toBe("cyberware");
+    expect(stepForCheckTarget("kit")).toBe("kit");
     expect(stepForCheckTarget("people")).toBe("people_prose");
     expect(stepForCheckTarget("person")).toBe("people_prose");
   });
