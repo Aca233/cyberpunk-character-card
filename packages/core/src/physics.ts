@@ -20,6 +20,8 @@ export interface PhysicsLockInput {
   };
   /** 当尝试轻武器正面硬撼重甲/机甲时，给出定性物理反馈 */
   readonly ballisticMismatch?: string;
+  /** 武器声学、智能联锁与改装能力等非阻塞客观物理参考（不触发 blocked） */
+  readonly weaponAdvisories?: readonly string[];
 }
 
 export interface PhysicsLockResult {
@@ -72,6 +74,12 @@ export function evaluatePhysicsBoundaries(input: PhysicsLockInput): PhysicsLockR
     directives.push(
       `随身大件超重（带着 ${input.bulkyOverload.count}/${input.bulkyOverload.max} 件显眼大件${list}）：身上鼓囊沉重、重心受阻，翻墙、钻缝、潜行、近身闪避与高速追逐动作均吃物理劣势`,
     );
+  }
+
+  if (input.weaponAdvisories) {
+    for (const note of input.weaponAdvisories) {
+      if (note) directives.push(note);
+    }
   }
 
   return {

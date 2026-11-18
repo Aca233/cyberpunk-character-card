@@ -4,6 +4,7 @@ export const FoeTierSchema = z.enum(["street", "veteran", "elite", "legend"]);
 export type FoeTier = z.infer<typeof FoeTierSchema>;
 
 import { BODY_PART_LABELS, type BodyPart, BodyPartSchema } from "../health";
+import { ItemDefSchema, WeaponInstanceStateSchema } from "../inventory";
 
 /**
  * 战斗（用户 2026-11-03 定的"重新构建战斗体系"）：打斗过程全交给叙事，代码只记后果。
@@ -24,6 +25,14 @@ export const FOE_STATE_LABELS: Readonly<Record<FoeState, string>> = {
   fled: "跑了",
 };
 
+/** 未物化的战利品定制规格：仅在 loot() 实际拾取时随 item gain 写入 InventoryState.objects */
+export const LootItemSpecSchema = z.object({
+  definition: ItemDefSchema.optional(),
+  weaponState: WeaponInstanceStateSchema.optional(),
+  origin: z.string().min(1).max(240).optional(),
+});
+export type LootItemSpec = z.infer<typeof LootItemSpecSchema>;
+
 /** 场上的一个人（有卡的，或一伙杂兵合成一个） */
 export const ActiveFoeSchema = z.object({
   /** 有卡的写人物卡 id，杂兵由代码编 foe1、foe2 */
@@ -39,6 +48,8 @@ export const ActiveFoeSchema = z.object({
   state: FoeStateSchema,
   /** 身上带着的东西（物品表 id）；倒下或死了能捡，跑了就带走 */
   carry: z.array(z.string().min(1)).default([]),
+  /** 待物化定制战利品规格（item id -> 定义/改装状态/来源） */
+  carrySpecs: z.record(z.string(), LootItemSpecSchema).default({}),
 });
 export type ActiveFoe = z.infer<typeof ActiveFoeSchema>;
 
@@ -50,6 +61,7 @@ export const LeftLootSchema = z.object({
   location: z.string().nullable(),
   leftAt: z.number().int(),
   items: z.array(z.string().min(1)),
+  itemSpecs: z.record(z.string(), LootItemSpecSchema).default({}),
 });
 
 /** 等死者回家的那个人跟他是什么关系；找上门的就是这个人或他叫来的 */

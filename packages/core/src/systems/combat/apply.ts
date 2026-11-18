@@ -2,7 +2,14 @@ import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { SERVICES } from "../economy";
-import { type InventoryState, type ItemDef, itemCatalog } from "../inventory";
+import {
+  canAttachMod,
+  defaultInstanceStateFromDef,
+  type InventoryState,
+  type ItemDef,
+  itemCatalog,
+  type ModSlot,
+} from "../inventory";
 import { currentVitals, type NpcState } from "../npc";
 import { locationCatalog, type WorldClockState } from "../world";
 import { familyOf, pickName } from "./names";
@@ -25,6 +32,7 @@ import {
   LOOT_EXTRA_KINDS,
   LOOT_RARITY,
   LOOT_WEAPONS,
+  type LootItemSpec,
   MOURNER_LABELS,
   MournerSchema,
   RECKON_MINUTES,
@@ -68,23 +76,28 @@ const NETRUNNER_LOOT_IDS = new Set([
   "netrunner-suit",
 ]);
 
-/** 开打时按路数和档位抽这人身上带的：一把武器，一半机会再带一件治疗品/手雷或黑客电子物件；不朽的不掉 */
-export function drawLoot(
-  foe: Pick<ActiveFoe, "archetype" | "tier">,
+/** 开打时按路数和档位抽这人身上带的：一把武器（高阶对手可能带改装配件，暂存于战利品规格中），一半机会再带一件治疗品/手雷或黑客电子物件；不朽的不掉 */
+export function drawFoeLoot(
+  foe: Pick<ActiveFoe, "archetype" | "tier"> & Partial<Pick<ActiveFoe, "name" | "gang">>,
   data: Readonly<Record<string, unknown>>,
   rng: Rng,
-): string[] {
-  if (data.items === undefined) return [];
+): { readonly carry: string[]; readonly carrySpecs: Record<string, LootItemSpec> } {
+  if (data.items === undefined) return { carry: [], carrySpecs: {} };
   const all = [...itemCatalog(data).values()].filter((d) => !d.iconic);
-  if (all.length === 0) return [];
+  if (all.length === 0) return { carry: [], carrySpecs: {} };
   const rarities: readonly string[] = LOOT_RARITY[foe.tier];
-  const pick = (fits: (d: ItemDef) => boolean): string[] => {
+  const pickDef = (fits: (d: ItemDef) => boolean): ItemDef | undefined => {
     let pool = all.filter((d) => fits(d) && rarities.includes(d.rarity ?? "common"));
     if (pool.length === 0) pool = all.filter((d) => fits(d) && (d.rarity ?? "common") === "common");
-    return pool.length === 0 ? [] : [at(pool, rng).id];
+    return pool.length === 0 ? undefined : at(pool, rng);
+  };
+  const pick = (fits: (d: ItemDef) => boolean): string[] => {
+    const def = pickDef(fits);
+    return def ? [def.id] : [];
   };
   const weapons: readonly string[] = LOOT_WEAPONS[foe.archetype];
-  const carry = pick((d) => d.kind === "weapon" && weapons.includes(d.category ?? ""));
+  const weaponDef = pickDef((d) => d.kind === "weapon" && weapons.includes(d.category ?? ""));
+  const carry: string[] = weaponDef ? [weaponDef.id] : [];
   if (rng.roll(2) === 2) {
     const netrunnerPick =
       foe.archetype === "netrunner" ? pick((d) => NETRUNNER_LOOT_IDS.has(d.id)) : [];
@@ -94,7 +107,46 @@ export function drawLoot(
         : pick((d) => LOOT_EXTRA_KINDS.includes(d.kind))),
     );
   }
-  return carry;
+  const carrySpecs: Record<string, LootItemSpec> = {};
+  if (weaponDef && foe.tier !== "street") {
+    const baseWs = defaultInstanceStateFromDef(weaponDef);
+    const compatibleMods = all.filter(
+      (d) => d.kind === "mod" && canAttachMod(weaponDef, d, baseWs).ok,
+    );
+    if (compatibleMods.length > 0) {
+      const wantMod = foe.tier === "veteran" ? rng.roll(2) === 2 : true;
+      if (wantMod) {
+        const first = at(compatibleMods, rng);
+        const mods: Partial<Record<ModSlot, string>> = { ...(baseWs?.mods ?? {}) };
+        if (first.modSlot) mods[first.modSlot] = first.id;
+        if (foe.tier === "legend") {
+          const secondPool = compatibleMods.filter((m) => m.modSlot !== first.modSlot);
+          if (secondPool.length > 0) {
+            const second = at(secondPool, rng);
+            if (second.modSlot) mods[second.modSlot] = second.id;
+          }
+        }
+        const who = foe.gang ? `${foe.gang}的${foe.name ?? "枪手"}` : (foe.name ?? "对手");
+        carrySpecs[weaponDef.id] = {
+          weaponState: {
+            baseId: weaponDef.id,
+            mods,
+            lockedSlots: [...(baseWs?.lockedSlots ?? [])],
+          },
+          origin: `从${who}身上缴获`,
+        };
+      }
+    }
+  }
+  return { carry, carrySpecs };
+}
+
+export function drawLoot(
+  foe: Pick<ActiveFoe, "archetype" | "tier">,
+  data: Readonly<Record<string, unknown>>,
+  rng: Rng,
+): string[] {
+  return drawFoeLoot(foe, data, rng).carry;
 }
 
 /** 从倒下或死了的人身上捡一件，直接进物品栏；打完了从剩下的里捡 */
@@ -102,6 +154,7 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
   const { target, item } = command;
   if (target === undefined || item === undefined) return fail("loot 要写 target 和 item");
   let bag: string[];
+  let bagSpecs: Record<string, LootItemSpec>;
   let name: string;
   let npc: string | null;
   const here = ctx.read<WorldClockState>("world").location;
@@ -111,12 +164,14 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
     if (foe.state === "fled") return fail(`${foe.name}跑了，东西也带走了`);
     if (foe.state === "up") return fail(`${foe.name}还站着，捡不了他身上的东西`);
     bag = foe.carry;
+    bagSpecs = foe.carrySpecs;
     name = foe.name;
     npc = foe.npc;
   } else {
     const left = draft.groundLoot.find((l) => l.from === target && l.location === here);
     if (!left) return fail(`${target}身上没有剩下的东西`);
     bag = left.items;
+    bagSpecs = left.itemSpecs;
     name = left.name;
     npc = left.npc;
   }
@@ -129,7 +184,20 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
   const i = bag.indexOf(item);
   if (i < 0) return fail(`${name}身上没有 ${item}`);
   bag.splice(i, 1);
+  const spec = bagSpecs[item];
+  Reflect.deleteProperty(bagSpecs, item);
   const trackedObject = ctx.read<InventoryState>("inventory")?.objects[item];
+  const inCatalog = ctx.data.items !== undefined && itemCatalog(ctx.data).has(item);
+  const specGain =
+    !trackedObject && spec
+      ? {
+          ...(!inCatalog && spec.definition ? { definition: spec.definition } : {}),
+          ...(spec.weaponState ? { weaponState: spec.weaponState } : {}),
+          ...((!inCatalog && spec.definition) || spec.weaponState
+            ? { origin: spec.origin ?? `从${name}身上缴获` }
+            : {}),
+        }
+      : {};
   return {
     ok: true,
     notes: [],
@@ -137,7 +205,7 @@ export function loot(draft: Combat, command: CombatCommand, ctx: SystemContext):
       ...(npc === null || trackedObject
         ? []
         : [{ type: "npcGear", id: npc, action: "remove", item }]),
-      { type: "item", action: "gain", id: item, reason: `从${name}身上捡的` },
+      { type: "item", action: "gain", id: item, reason: `从${name}身上捡的`, ...specGain },
     ],
   };
 }
@@ -166,9 +234,16 @@ export function startCombat(
       tier: f.tier,
       state: card && currentVitals(card, ctx.data, ctx.now).condition !== "up" ? "down" : "up",
       carry: [],
+      carrySpecs: {},
     };
     // 已有卡的人带着已记录的物品；空装备也是事实，不能因开战重新抽奖。
-    foe.carry = card ? [...(card.body?.gear ?? [])] : drawLoot(foe, ctx.data, ctx.rng);
+    if (card) {
+      foe.carry = [...(card.body?.gear ?? [])];
+    } else {
+      const drawn = drawFoeLoot(foe, ctx.data, ctx.rng);
+      foe.carry = drawn.carry;
+      foe.carrySpecs = drawn.carrySpecs;
+    }
     if (card) draft.groundLoot = draft.groundLoot.filter((l) => l.npc !== f.npc);
     foes.push(foe);
   }
@@ -346,20 +421,25 @@ export function endCombat(draft: Combat, command: CombatCommand, ctx: SystemCont
   const foes = active.foes.flatMap((f) =>
     f.npc === null ? [] : [{ npc: f.npc, name: f.name, state: f.state }],
   );
-  const left = active.foes.flatMap((f) =>
-    (f.state === "down" || f.state === "dead") && f.carry.length > 0
-      ? [
-          {
-            from: f.id,
-            name: f.name,
-            npc: f.npc,
-            location: active.location,
-            leftAt: ctx.now,
-            items: [...f.carry],
-          },
-        ]
-      : [],
-  );
+  const left = active.foes.flatMap((f) => {
+    if ((f.state !== "down" && f.state !== "dead") || f.carry.length === 0) return [];
+    const itemSpecs: Record<string, LootItemSpec> = {};
+    for (const id of f.carry) {
+      const spec = f.carrySpecs[id];
+      if (spec) itemSpecs[id] = spec;
+    }
+    return [
+      {
+        from: f.id,
+        name: f.name,
+        npc: f.npc,
+        location: active.location,
+        leftAt: ctx.now,
+        items: [...f.carry],
+        itemSpecs,
+      },
+    ];
+  });
   draft.groundLoot.push(...left);
   draft.last = { endedAt: ctx.now, foes };
   draft.active = null;

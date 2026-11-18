@@ -11,8 +11,24 @@ import { consequenceSection } from "../../systems/fallout";
 import { deckOf, mentionsHacking, npcDeckOf } from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
 import { HealthStateSchema } from "../../systems/health";
-import { catalogSection, itemCatalog } from "../../systems/inventory";
-import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
+import {
+  catalogSection,
+  itemCatalog,
+  summarizeAbility,
+  weaponDisplayNames,
+  withWorldObjects,
+} from "../../systems/inventory";
+import {
+  carriedWeaponIds,
+  effectiveWeaponNoise,
+  InventoryStateSchema,
+  type ItemDef,
+  loadoutSummary,
+  MOD_SLOT_LABELS,
+  ModSlotSchema,
+  type WeaponType,
+  weaponGrantsSmartLink,
+} from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, memoryRecords, recapSection } from "../../systems/memory";
 import { NpcStateSchema, onStage } from "../../systems/npc";
@@ -177,6 +193,114 @@ const SUBNET_GATE = /(?:隔离|封闭|必须先渗入|局域网|本地子网)/;
 const HIGH_END_VENUE =
   /(?:进门|大门|过安检|走进|进入|混进).*?(?:大厦|塔|会所|俱乐部|vip|顶层|余烬|绀碧|酒店)/i;
 
+const MOD_SLOTS = ModSlotSchema.options;
+
+const WEAPON_TYPE_TACTICS: Readonly<Record<WeaponType, string>> = {
+  power: "威能（跳弹打击；常规轻口径正面难穿重型战术甲，须瞄准弱点、侧翼绕射或近距压制）",
+  tech: "技术（电磁蓄力可穿透轻薄掩体与中轻护甲；不支持常规机械消音）",
+  smart: "智能（联锁就绪时微陀螺弹头可绕半身掩体追踪；强电磁干扰与实心厚墙会阻断弹道）",
+};
+
+function buildWeaponAdvisories(
+  inv: ReturnType<typeof InventoryStateSchema.parse>,
+  items: ReadonlyMap<string, ItemDef>,
+  installed: readonly { readonly id: string }[],
+  brokenChrome: readonly string[],
+): string[] {
+  const weaponIds = carriedWeaponIds(inv, items);
+  if (weaponIds.length === 0) return [];
+
+  const displayNames = weaponDisplayNames(weaponIds, inv.objects, items);
+  const brokenSet = new Set(brokenChrome);
+  const hasHandSmartLink = installed.some((c) => c.id === "smart-link" && !brokenSet.has(c.id));
+  const brokenHandSmartLink =
+    !hasHandSmartLink && installed.some((c) => c.id === "smart-link" && brokenSet.has(c.id));
+
+  const silencedGuns: string[] = [];
+  const loudGuns: string[] = [];
+  const meleeWeapons: string[] = [];
+  const smartMissing: string[] = [];
+  const smartReady: string[] = [];
+  const typeNotes = new Set<string>();
+  const modNotes: string[] = [];
+
+  for (const id of weaponIds) {
+    const obj = inv.objects[id];
+    const def = items.get(id) ?? obj?.definition;
+    if (def?.kind !== "weapon" || def.category === undefined) continue;
+    const ws = obj?.weaponState;
+    const name = displayNames.get(id) ?? def.name;
+    const isMelee = def.category === "blade" || def.category === "blunt";
+    const noise = effectiveWeaponNoise(def, ws, items);
+
+    if (isMelee) {
+      meleeWeapons.push(name);
+      typeNotes.add("近战（贴身破防与无声压制受距离与身法约束）");
+    } else {
+      if (noise === "silent") silencedGuns.push(name);
+      else loudGuns.push(name);
+      if (def.weaponType) typeNotes.add(WEAPON_TYPE_TACTICS[def.weaponType]);
+    }
+
+    if (def.weaponType === "smart") {
+      if (hasHandSmartLink || weaponGrantsSmartLink(def, ws, items)) {
+        smartReady.push(name);
+      } else {
+        smartMissing.push(name);
+      }
+    }
+
+    if (ws) {
+      for (const slot of MOD_SLOTS) {
+        const modId = ws.mods[slot];
+        if (!modId) continue;
+        const modDef = items.get(modId);
+        const summary = summarizeAbility(modDef?.ability, 44);
+        modNotes.push(
+          `${name} [${MOD_SLOT_LABELS[slot]}] ${modDef?.name ?? modId}${summary ? `：${summary}` : ""}`,
+        );
+      }
+    }
+  }
+
+  const advisories: string[] = [];
+  if (silencedGuns.length > 0 && loudGuns.length > 0) {
+    advisories.push(
+      `随身武器声学：已消音枪械（${silencedGuns.join("、")}）压低枪口爆鸣，远距不易触发枪声警报（近距机械声、倒地动静、视线与监控仍可暴露）；未消音枪械（${loudGuns.join("、")}）开火会传出明显枪声惊动附近守卫与目击者`,
+    );
+  } else if (silencedGuns.length > 0) {
+    advisories.push(
+      `随身武器声学：当前枪械（${silencedGuns.join("、")}）已消音，开火不产生远距爆鸣声，但近距动静、倒地、视线与监控仍受现场约束`,
+    );
+  } else if (loudGuns.length > 0) {
+    advisories.push(
+      `随身武器声学：当前枪械（${loudGuns.join("、")}）均未消音，开火会立即传出清晰枪声，极易惊动附近守卫与目击者`,
+    );
+  } else if (meleeWeapons.length > 0) {
+    advisories.push(
+      `随身武器声学：仅携带近战武器（${meleeWeapons.join("、")}），无枪声暴露风险（仍受视线、搏斗声与监控约束）`,
+    );
+  }
+
+  if (smartMissing.length > 0) {
+    advisories.push(
+      `智能武器联锁缺失（${smartMissing.join("、")}）：${brokenHandSmartLink ? "手部智能连接义体已损坏停机" : "未植入有效手部智能连接义体"}且武器未装自主智能校准模组，微陀螺弹头无法激活电子自导，只能作普通低精度直瞄使用（不硬性阻断开火）`,
+    );
+  }
+  if (smartReady.length > 0) {
+    advisories.push(
+      `智能武器联锁就绪（${smartReady.join("、")}）：${hasHandSmartLink ? "手部智能连接" : "武器内置/外置智能校准模组"}已建立自导数据链，可锁定目标发射微陀螺追踪弹头`,
+    );
+  }
+  if (typeNotes.size > 0) {
+    advisories.push(`武器体系参考：${[...typeNotes].join("；")}`);
+  }
+  if (modNotes.length > 0) {
+    advisories.push(`已装改装能力：${modNotes.join("；")}`);
+  }
+  return advisories;
+}
+
 /** 计算当前局面客观触发的物理与安防约束（余额、高安区明火武器/高档场所门禁、无接入仓与物理网络拓扑） */
 export function physicsSection(
   world: WorldState,
@@ -191,7 +315,9 @@ export function physicsSection(
   const districtId = place ? (DISTRICT_ID_MAP[place.district] ?? place.district) : undefined;
 
   const inv = InventoryStateSchema.safeParse(world.slices.inventory);
-  const items = safeData.items ? itemCatalog(safeData) : new Map();
+  const items = safeData.items
+    ? itemCatalog(withWorldObjects(safeData, inv.success ? inv.data.objects : {}))
+    : new Map<string, ItemDef>();
   const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
   const health = HealthStateSchema.safeParse(world.slices.health ?? {});
   const installed = cyber.success ? cyber.data.installed : [];
@@ -199,6 +325,9 @@ export function physicsSection(
   const loadout = inv.success
     ? loadoutSummary(inv.data, items, { installed, brokenChrome })
     : undefined;
+  const weaponAdvisories = inv.success
+    ? buildWeaponAdvisories(inv.data, items, installed, brokenChrome)
+    : [];
 
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
   const safehouse = SafehouseStateSchema.safeParse(world.slices.safehouse ?? {});
@@ -311,6 +440,7 @@ export function physicsSection(
         }
       : {}),
     ...(hackCheck ? { hackCheck } : {}),
+    ...(weaponAdvisories.length > 0 ? { weaponAdvisories } : {}),
   });
 
   if (result.directives.length === 0) return undefined;

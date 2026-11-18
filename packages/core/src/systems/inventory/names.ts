@@ -1,4 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
+import { RARITY_LABELS, type Rarity } from "../economy";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { itemCatalog, withWorldObjects } from "./apply";
 import {
@@ -6,7 +7,52 @@ import {
   type InventoryState,
   InventoryStateSchema,
   type ItemDef,
+  ModSlotSchema,
+  type WeaponInstanceState,
 } from "./schema";
+
+const MOD_SLOTS = ModSlotSchema.options;
+
+/** 提炼一段适合状态与提示词展示的简明能力摘要 */
+export function summarizeAbility(ability: string | undefined, maxChars = 56): string {
+  const clean = (ability ?? "").trim().replace(/。$/, "");
+  if (!clean) return "";
+  if (clean.length <= maxChars) return clean;
+  const sentences = clean
+    .split("。")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (sentences.length > 1) {
+    let acc = sentences[0] ?? "";
+    for (const next of sentences.slice(1)) {
+      if (acc.length + 1 + next.length <= maxChars) acc = `${acc}。${next}`;
+      else break;
+    }
+    if (acc.length <= maxChars) return acc;
+  }
+  return `${clean.slice(0, maxChars - 1)}…`;
+}
+
+/** 将基础武器名称与改装件/精调/智能联锁状态拼成可读展示名 */
+export function formatWeaponWithMods(
+  baseName: string,
+  weaponState: Pick<WeaponInstanceState, "mods" | "tunedRarity" | "smartLink"> | undefined,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "name">>,
+  options?: { readonly defaultRarity?: Rarity | undefined },
+): string {
+  if (!weaponState) return baseName;
+  const tags: string[] = [];
+  if (weaponState.tunedRarity && weaponState.tunedRarity !== options?.defaultRarity) {
+    tags.push(`精调${RARITY_LABELS[weaponState.tunedRarity]}`);
+  }
+  for (const slot of MOD_SLOTS) {
+    const modId = weaponState.mods[slot];
+    if (modId) tags.push(catalog.get(modId)?.name ?? modId);
+  }
+  if (weaponState.smartLink) tags.push("智能联锁");
+  if (tags.length === 0) return baseName;
+  return `${baseName}（${tags.join("·")}）`;
+}
 
 const CJK = /[㐀-鿿]/;
 

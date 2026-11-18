@@ -1,9 +1,15 @@
 import type { PlayerView } from "../../game";
 import type { WorldState } from "../../kernel/world";
+import { CombatStateSchema } from "../../systems/combat";
 import { cyberwareCatalog } from "../../systems/cyberware";
 import { CATEGORY_LABELS, mentionsHacking, quickhackCatalog } from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
-import { InventoryStateSchema, itemCatalog, withWorldObjects } from "../../systems/inventory";
+import {
+  formatWeaponWithMods,
+  InventoryStateSchema,
+  itemCatalog,
+  withWorldObjects,
+} from "../../systems/inventory";
 import { NpcStateSchema, onStage } from "../../systems/npc";
 import { WorldClockStateSchema } from "../../systems/world";
 
@@ -39,7 +45,11 @@ export function extractCatalogDetails(
   hackingActive = false,
 ): string | undefined {
   const query = normalize(text);
+  const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const itemIds = new Set(Object.keys(view.inventory.details));
+  for (const detail of Object.values(view.inventory.details)) {
+    if (detail.baseId) itemIds.add(detail.baseId);
+  }
   for (const mods of Object.values(view.inventory.mods)) {
     for (const mod of mods) itemIds.add(mod.id);
   }
@@ -52,14 +62,90 @@ export function extractCatalogDetails(
     for (const id of npc.body?.cyberware ?? []) chromeIds.add(id);
   }
   for (const shop of view.shops) {
-    for (const item of shop.shelf) itemIds.add(item.id);
+    for (const item of shop.shelf) {
+      itemIds.add(item.id);
+      if (item.baseId) itemIds.add(item.baseId);
+      for (const modId of Object.values(item.weaponState?.mods ?? {})) {
+        if (modId) itemIds.add(modId);
+      }
+    }
   }
   for (const part of view.ripperdoc?.shelf ?? []) chromeIds.add(part.id);
 
+  const combat = CombatStateSchema.safeParse(world.slices.combat);
+  if (combat.success) {
+    const collectLoot = (
+      ids: readonly string[],
+      specs: Readonly<
+        Record<
+          string,
+          {
+            readonly weaponState?:
+              | {
+                  readonly baseId: string;
+                  readonly mods: Readonly<Record<string, string | undefined>>;
+                }
+              | undefined;
+          }
+        >
+      >,
+    ) => {
+      for (const id of ids) {
+        itemIds.add(id);
+        const ws = specs[id]?.weaponState;
+        if (ws) {
+          itemIds.add(ws.baseId);
+          for (const modId of Object.values(ws.mods)) {
+            if (modId) itemIds.add(modId);
+          }
+        }
+      }
+    };
+    for (const foe of combat.data.active?.foes ?? []) {
+      collectLoot(foe.carry, foe.carrySpecs);
+    }
+    for (const left of combat.data.groundLoot) {
+      if (left.location === clock.location) collectLoot(left.items, left.itemSpecs);
+    }
+  }
+
+  const catalog = itemCatalog(data);
+  for (const id of [...itemIds]) {
+    const ws = inventory.objects[id]?.weaponState;
+    if (ws) {
+      itemIds.add(ws.baseId);
+      for (const modId of Object.values(ws.mods)) {
+        if (modId) itemIds.add(modId);
+      }
+    }
+    const def = catalog.get(id);
+    if (def?.preInstalledMods) {
+      for (const modId of Object.values(def.preInstalledMods)) {
+        if (modId) itemIds.add(modId);
+      }
+    }
+  }
+
   const details: string[] = [];
-  for (const item of itemCatalog(data).values()) {
-    if (item.ability && (itemIds.has(item.id) || mentioned(query, item.id, item.name))) {
-      details.push(`- ${item.id} ${item.name}：${item.ability}`);
+  for (const item of catalog.values()) {
+    const obj = inventory.objects[item.id];
+    const ws = obj?.weaponState;
+    const displayName = ws
+      ? formatWeaponWithMods(item.name, ws, catalog, {
+          defaultRarity: catalog.get(ws.baseId)?.rarity ?? item.rarity,
+        })
+      : item.name;
+    const isRelevant = itemIds.has(item.id) || mentioned(query, item.id, item.name);
+    if (!isRelevant) continue;
+    if (obj?.kind === "customized" && ws) {
+      const baseDef = catalog.get(ws.baseId);
+      if (baseDef && item.ability === baseDef.ability && itemIds.has(ws.baseId)) {
+        details.push(`- ${item.id} ${displayName}（基于 ${ws.baseId}）`);
+        continue;
+      }
+    }
+    if (item.ability) {
+      details.push(`- ${item.id} ${displayName}：${item.ability}`);
     }
   }
   for (const part of cyberwareCatalog(data).values()) {

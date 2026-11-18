@@ -1,5 +1,11 @@
 import type { ViewContext } from "../../kernel/system";
-import { itemCatalog } from "../inventory";
+import {
+  defaultInstanceStateFromDef,
+  formatWeaponWithMods,
+  InventoryStateSchema,
+  itemCatalog,
+  withWorldObjects,
+} from "../inventory";
 import type { NpcState } from "../npc";
 import {
   BODY_PART_LABELS,
@@ -7,6 +13,7 @@ import {
   DRIFT_LABELS,
   FOE_STATE_LABELS,
   HOLDER_LABELS,
+  type LootItemSpec,
   MOURNER_LABELS,
 } from "./schema";
 
@@ -23,9 +30,36 @@ export function combatView({ world, data }: ViewContext) {
     if (!card || (card.location !== null && card.location !== here)) return [];
     return ids.filter((id) => card.body?.gear.includes(id));
   };
-  const catalog = data.items === undefined ? undefined : itemCatalog(data);
-  const named = (ids: readonly string[]) =>
-    ids.map((id) => ({ id, name: catalog?.get(id)?.name ?? id }));
+  const invParsed =
+    world.slices.inventory !== undefined
+      ? InventoryStateSchema.safeParse(world.slices.inventory)
+      : undefined;
+  const objects = invParsed?.success ? invParsed.data.objects : {};
+  const effectiveData =
+    data.items !== undefined && Object.keys(objects).length > 0
+      ? withWorldObjects(data, objects)
+      : data;
+  const catalog = effectiveData.items === undefined ? undefined : itemCatalog(effectiveData);
+  const named = (ids: readonly string[], specs: Readonly<Record<string, LootItemSpec>> = {}) =>
+    ids.map((id) => {
+      const spec = specs[id];
+      const obj = objects[id];
+      const def = spec?.definition ?? catalog?.get(id) ?? obj?.definition;
+      const ws =
+        spec?.weaponState ??
+        obj?.weaponState ??
+        (def ? defaultInstanceStateFromDef(def) : undefined);
+      const baseName = def?.name ?? (ws ? catalog?.get(ws.baseId)?.name : undefined) ?? id;
+      const name = ws
+        ? formatWeaponWithMods(baseName, ws, catalog ?? new Map(), { defaultRarity: def?.rarity })
+        : baseName;
+      const baseId = ws?.baseId;
+      return {
+        id,
+        ...(baseId && baseId !== id ? { baseId } : {}),
+        name,
+      };
+    });
   const lootable = (state: string) => state === "down" || state === "dead";
   return {
     active: active && {
@@ -37,12 +71,16 @@ export function combatView({ world, data }: ViewContext) {
         gang: f.gang,
         state: f.state,
         stateLabel: FOE_STATE_LABELS[f.state],
-        carry: lootable(f.state) ? named(stillCarried(f.npc, f.carry)) : [],
+        carry: lootable(f.state) ? named(stillCarried(f.npc, f.carry), f.carrySpecs) : [],
       })),
     },
     loot: combat.groundLoot
       .filter((l) => l.location === here && l.items.length > 0)
-      .map((l) => ({ from: l.from, name: l.name, items: named(stillCarried(l.npc, l.items)) }))
+      .map((l) => ({
+        from: l.from,
+        name: l.name,
+        items: named(stillCarried(l.npc, l.items), l.itemSpecs),
+      }))
       .filter((l) => l.items.length > 0),
     dead: combat.dead.map((d) => ({
       ...d,

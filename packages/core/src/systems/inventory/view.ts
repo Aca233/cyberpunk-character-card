@@ -88,6 +88,12 @@ export function inventoryView({ world, data }: ViewContext) {
         id,
         baseId,
         count: counts.get(id) ?? 1,
+        weaponType: def?.weaponType ?? null,
+        isRanged:
+          def?.kind === "weapon" &&
+          def.category !== undefined &&
+          def.category !== "blade" &&
+          def.category !== "blunt",
         bulky: isBulkyItem(def, baseId),
         concealment: def ? effectiveConcealment(def, ws, items) : ("pocket" as const),
         noise: def ? effectiveWeaponNoise(def, ws, items) : ("loud" as const),
@@ -178,21 +184,33 @@ export function inventoryView({ world, data }: ViewContext) {
         if (!ws) return [];
         const entries = MOD_SLOTS.flatMap((slot) => {
           const id = ws.mods[slot];
-          return id === undefined
-            ? []
-            : [
-                {
-                  slot,
-                  label: MOD_SLOT_LABELS[slot],
-                  id,
-                  locked: ws.lockedSlots.includes(slot),
-                },
-              ];
+          if (id === undefined) return [];
+          const modDef = items.get(id);
+          return [
+            {
+              slot,
+              label: MOD_SLOT_LABELS[slot],
+              id,
+              name: modDef?.name ?? id,
+              ability: modDef?.ability ?? "",
+              locked: ws.lockedSlots.includes(slot),
+            },
+          ];
         });
         return entries.length > 0 ? [[weaponId, entries]] : [];
       }),
     ) as Readonly<
-      Record<string, readonly { slot: string; label: string; id: string; locked: boolean }[]>
+      Record<
+        string,
+        readonly {
+          slot: string;
+          label: string;
+          id: string;
+          name: string;
+          ability: string;
+          locked: boolean;
+        }[]
+      >
     >,
     /** 背包里的改装件能装到哪几把随身武器上 */
     modTargets: Object.fromEntries(

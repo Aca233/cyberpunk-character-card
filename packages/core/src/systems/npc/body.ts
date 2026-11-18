@@ -3,7 +3,13 @@ import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from
 import type { DamageTier } from "../dice";
 import { BODY_PART_LABELS, type BodyPart, INJURY_HEAL_MINUTES } from "../health";
 import { neuralDisplay, neuralStage, STAGE_LABELS } from "../humanity";
-import { itemCatalog } from "../inventory";
+import {
+  defaultInstanceStateFromDef,
+  formatWeaponWithMods,
+  itemCatalog,
+  type WeaponInstanceState,
+  WeaponInstanceStateSchema,
+} from "../inventory";
 import {
   NPC_CHROME_MAX,
   NPC_GEAR_MAX,
@@ -25,6 +31,12 @@ function objectHolder(data: Data, id: string): string | undefined {
   const objects = data.worldObjects as Record<string, { holder?: unknown }> | undefined;
   const holder = objects?.[id]?.holder;
   return typeof holder === "string" ? holder : undefined;
+}
+
+function worldObjectWeaponState(data: Data, id: string): WeaponInstanceState | undefined {
+  const objects = data.worldObjects as Record<string, { weaponState?: unknown }> | undefined;
+  const parsed = WeaponInstanceStateSchema.safeParse(objects?.[id]?.weaponState);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export const NPC_DAMAGE_LABELS: Readonly<Record<DamageTier, string>> = {
@@ -317,8 +329,13 @@ export function applyNpcBody(
       return { ok: true, notes: [`${npc.name} 已接受稳定与清创处理，具体伤处进入恢复期`] };
     }
     case "npcGear": {
-      const def = itemCatalog(data).get(command.item);
+      const items = itemCatalog(data);
+      const def = items.get(command.item);
       if (!def) return { ok: false, reason: `物品表里没有「${command.item}」` };
+      const ws = worldObjectWeaponState(data, command.item) ?? defaultInstanceStateFromDef(def);
+      const displayName = ws
+        ? formatWeaponWithMods(def.name, ws, items, { defaultRarity: def.rarity })
+        : def.name;
       const { body } = settle(npc, data, now);
       const has = body.gear.includes(command.item);
       if (command.action === "add") {
@@ -336,11 +353,11 @@ export function applyNpcBody(
           };
         }
         npc.body = { ...body, gear: [...body.gear, command.item] };
-        return { ok: true, notes: npc.met ? [`${npc.name} 拿上了 ${def.name}`] : [] };
+        return { ok: true, notes: npc.met ? [`${npc.name} 拿上了 ${displayName}`] : [] };
       }
-      if (!has) return { ok: false, reason: `${npc.name} 的装备栏里没有 ${def.name}` };
+      if (!has) return { ok: false, reason: `${npc.name} 的装备栏里没有 ${displayName}` };
       npc.body = { ...body, gear: body.gear.filter((g) => g !== command.item) };
-      return { ok: true, notes: npc.met ? [`${npc.name} 不再带着 ${def.name}`] : [] };
+      return { ok: true, notes: npc.met ? [`${npc.name} 不再带着 ${displayName}`] : [] };
     }
     case "npcChrome": {
       const catalog = cyberwareCatalog(data);
@@ -401,13 +418,27 @@ export function applyNpcBody(
 
 interface GearDetail {
   readonly id: string;
+  readonly baseId?: string;
   readonly name: string;
 }
 
 function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
   if (ids.length === 0) return [];
   const items = itemCatalog(data);
-  return ids.map((id) => ({ id, name: items.get(id)?.name ?? id }));
+  return ids.map((id) => {
+    const def = items.get(id);
+    const ws =
+      worldObjectWeaponState(data, id) ?? (def ? defaultInstanceStateFromDef(def) : undefined);
+    const baseName = def?.name ?? (ws ? items.get(ws.baseId)?.name : undefined) ?? id;
+    const name = ws
+      ? formatWeaponWithMods(baseName, ws, items, { defaultRarity: def?.rarity })
+      : baseName;
+    return {
+      id,
+      ...(ws && ws.baseId !== id ? { baseId: ws.baseId } : {}),
+      name,
+    };
+  });
 }
 
 /** 一件义体的稳定标识、名字、部位和效果说明（义体表的 ability） */

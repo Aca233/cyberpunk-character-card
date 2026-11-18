@@ -1,12 +1,23 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
+import type { cyberwareView } from "../cyberware";
+import type { WeaponConcealment } from "../dice";
 import { RARITY_LABELS } from "../economy";
+import { type namesView, summarizeAbility } from "./names";
 import type { shopsView } from "./shops";
 import type { inventoryView } from "./view";
 
 /** 【当前状态】里物品的几组行：当前地点的商店；随身武器、大件超重、穿着、治疗品、背包 */
 
 type InventoryView = ReturnType<typeof inventoryView>;
+type NamesView = ReturnType<typeof namesView>;
 type ShopsView = ReturnType<typeof shopsView>;
+type CyberwareView = ReturnType<typeof cyberwareView>;
+
+const CONCEALMENT_STATUS_NOTES: Readonly<Partial<Record<WeaponConcealment, string>>> = {
+  coat: "需风衣遮掩",
+  open: "大件显眼",
+  heavy: "重型大件显眼",
+};
 
 export const inventoryStatus: readonly SystemStatus[] = [
   {
@@ -22,20 +33,48 @@ export const inventoryStatus: readonly SystemStatus[] = [
     order: 270,
     lines(ctx: StatusContext) {
       const inv = ctx.views.inventory as InventoryView;
+      const names = (ctx.views.names as NamesView | undefined)?.items ?? {};
+      const cyber = (ctx.views.cyberware as CyberwareView | undefined) ?? [];
+      const hasHandSmartLink = cyber.some((c) => c.id === "smart-link" && !c.broken);
+      const brokenHandSmartLink =
+        !hasHandSmartLink && cyber.some((c) => c.id === "smart-link" && c.broken);
+
       const lines: string[] = [];
-      const withMods = (w: InventoryView["carriedWeapons"][number]) => {
+      const formatWeapon = (w: InventoryView["carriedWeapons"][number]) => {
+        const displayName = names[w.id] ?? w.id;
+        const detail = inv.details[w.id];
         const fitted = inv.mods[w.id] ?? [];
         const tuned = w.weaponState?.tunedRarity;
+        const concealmentNote = CONCEALMENT_STATUS_NOTES[w.concealment];
+        const smartLinkNote =
+          w.weaponType !== "smart"
+            ? undefined
+            : w.grantsSmartLink
+              ? "内置/外置智能联锁就绪"
+              : hasHandSmartLink
+                ? "手部智能联锁就绪"
+                : brokenHandSmartLink
+                  ? "手部智能连接已损坏，暂退化为普通直瞄"
+                  : "缺智能连接，暂退化为普通直瞄";
+        const modSummaries = fitted.map((m) => {
+          const summary = summarizeAbility(m.ability, 48);
+          const tagParts = [summary, ...(m.locked ? ["固锁"] : [])].filter(Boolean);
+          return `[${m.label}] ${m.name}${tagParts.length > 0 ? `（${tagParts.join("；")}）` : ""}`;
+        });
         const extra = [
-          ...(w.bulky ? ["大件"] : []),
-          ...(tuned ? [`升到${RARITY_LABELS[tuned]}`] : []),
-          ...(fitted.length > 0 ? [`装着 ${fitted.map((m) => m.id).join("、")}`] : []),
+          ...(displayName !== w.id ? [w.id] : []),
+          ...(detail?.subLabel ? [detail.subLabel] : []),
+          ...(tuned ? [`精调至${RARITY_LABELS[tuned]}`] : []),
+          ...(concealmentNote ? [concealmentNote] : []),
+          ...(w.isRanged && w.noise === "silent" ? ["已消音"] : []),
+          ...(smartLinkNote ? [smartLinkNote] : []),
+          ...modSummaries,
         ];
         const qty = w.count > 1 ? `×${w.count}` : "";
-        return `${w.id}${qty}${extra.length > 0 ? `（${extra.join("；")}）` : ""}`;
+        return `${displayName}${qty}${extra.length > 0 ? `（${extra.join("；")}）` : ""}`;
       };
       lines.push(
-        `随身武器：${inv.carriedWeapons.length > 0 ? inv.carriedWeapons.map(withMods).join("、") : "空手"}`,
+        `随身武器：${inv.carriedWeapons.length > 0 ? inv.carriedWeapons.map(formatWeapon).join("、") : "空手"}`,
       );
       if (inv.bulky.overloaded)
         lines.push(
