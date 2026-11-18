@@ -1,6 +1,7 @@
 import exampleConfig from "../../../config.example.json";
 import { createApp } from "./app";
 import { CharacterStore } from "./characters";
+import { TurnCheckpointStore } from "./checkpoints";
 import { ConfigService } from "./config";
 import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
 import { ImageStore } from "./images";
@@ -42,6 +43,7 @@ export async function createLocalBackend(
     characters: new CharacterStore(docs),
     presets: new PresetStore(docs),
     images: new ImageStore(docs),
+    checkpoints: new TurnCheckpointStore(docs),
     hub,
     log: (message) => console.warn(message),
   });

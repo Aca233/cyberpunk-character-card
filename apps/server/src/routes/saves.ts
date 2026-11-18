@@ -82,6 +82,8 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
 
   app.get("/:id/state", async (c) => c.json(await game.state(c.req.param("id"))));
 
+  app.delete("/:id/checkpoint", async (c) => reply(c, await game.clearCheckpoint(c.req.param("id"))));
+
   app.post("/:id/turns", async (c) => {
     const parsed = await body(c, TurnRequestSchema);
     if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);

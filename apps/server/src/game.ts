@@ -19,6 +19,7 @@ import {
   buildNarratorPrompt,
   type Clock,
   characterRules,
+  checkpointSummaryOf,
   cityRules,
   effectiveTurns,
   HISTORY_TURNS,
@@ -35,6 +36,7 @@ import {
   NarratorAbortedError,
   NarratorEmptyReplyError,
   type NarratorPlan,
+  NarratorStageError,
   type NarratorTurn,
   newGameWorld,
   npcRules,
@@ -62,6 +64,8 @@ import {
   saveCharacter,
   sceneStartSeq,
   serializeRecord,
+  type TurnCheckpoint,
+  type TurnCheckpointSummary,
   TurnInputSchema,
   type TurnRecord,
   type TurnRequest,
@@ -69,6 +73,7 @@ import {
   type TurnUsage,
   travelBlock,
   travelRules,
+  turnInputKey,
   type VoidRecord,
   validatePhoneChatTarget,
   voidedSeqs,
@@ -78,6 +83,7 @@ import {
 } from "@cp/core";
 import { z } from "zod";
 import type { CharacterStore } from "./characters";
+import type { TurnCheckpointStore } from "./checkpoints";
 import type { ConfigService } from "./config";
 import { KeyedMutex } from "./mutex";
 import { SaveMovedError, type SaveStorage } from "./ports";
@@ -171,6 +177,8 @@ export interface GameDeps {
   readonly log: (message: string) => void;
   /** 玩家导入的酒馆预设（用户定的）：每轮开始时读当前启用的那一份，只给写正文 */
   readonly presets?: PresetStore | undefined;
+  /** 回合阶段断点存储：每步调用完成后落盘，防止报错重头再来 */
+  readonly checkpoints?: TurnCheckpointStore | undefined;
 }
 
 interface Loaded {
@@ -358,13 +366,30 @@ export class GameService {
     return { status: 201, body: { id, ...meta.data, notes } };
   }
 
-  async state(id: string): Promise<PlayerView> {
+  async state(id: string): Promise<PlayerView & { readonly checkpoint?: TurnCheckpointSummary }> {
     return this.locks.run(id, async () => {
       const { meta, world, records } = await this.load(id);
       // 最后一条记录之前的世界：系统通知比的是这一步前后的变化
       const before =
         records.length > 0 ? await this.worldAt(id, meta, records.slice(0, -1)) : undefined;
-      return projectState(world, records, gameData, before);
+      const view = projectState(world, records, gameData, before);
+      const version = logVersion(records);
+      const cp = await this.deps.checkpoints?.get(id);
+      if (cp && cp.baseVersion === version) {
+        return { ...view, checkpoint: checkpointSummaryOf(cp) };
+      }
+      return view;
+    });
+  }
+
+  /** 主动放弃当前存档尚未完成的回合断点，下一次提交将从第 ① 步重新开始 */
+  clearCheckpoint(id: string): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      if (this.deps.hub.running(id)) {
+        return { status: 409, body: { error: "这一轮还在生成，等它结束再操作" } };
+      }
+      const cleared = (await this.deps.checkpoints?.clear(id)) ?? false;
+      return { status: 200, body: { cleared } };
     });
   }
 
@@ -414,6 +439,14 @@ export class GameService {
       }
       const unavailable = await this.llmUnavailable();
       if (unavailable) return unavailable;
+      const storedCheckpoint = await this.deps.checkpoints?.get(id);
+      const inputKey = turnInputKey(request.input);
+      const checkpoint =
+        storedCheckpoint &&
+        storedCheckpoint.baseVersion === version &&
+        storedCheckpoint.inputKey === inputKey
+          ? storedCheckpoint
+          : undefined;
       const run = hub.start(id, request.requestId, version, request.input);
       void this.execute(
         run,
@@ -425,6 +458,7 @@ export class GameService {
         request.offscreen,
         request.encounters,
         meta.startLocation,
+        checkpoint,
       );
       return { status: 202, body: { turnId: run.turnId, replayed: false } };
     });
@@ -469,6 +503,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
+      await this.deps.checkpoints?.clear(id);
       await this.maybeSnapshot(id, version + 1);
       return { status: 200, body: { seq: version, version: version + 1, notes: result.notes } };
     });
@@ -562,6 +597,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
+      await this.deps.checkpoints?.clear(id);
       await this.maybeSnapshot(id, version + 1);
       return {
         status: 200,
@@ -624,6 +660,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
+      await this.deps.checkpoints?.clear(id);
       return { status: 200, body: { version: version + targets.length, voided: targets.length } };
     });
   }
@@ -676,6 +713,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
+      await this.deps.checkpoints?.clear(id);
       const pending = { kind: "input", input: input.data };
       return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
     });
@@ -759,6 +797,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
+      await this.deps.checkpoints?.clear(id);
       return { status: 200, body: { version: version + 1, replaced: last.seq } };
     });
   }
@@ -1049,10 +1088,12 @@ export class GameService {
     offscreen: OffscreenPace | undefined,
     encounters?: travelRules.EncounterPace,
     startLocation?: string | undefined,
+    checkpoint?: TurnCheckpoint | undefined,
   ): Promise<void> {
     const { hub } = this.deps;
     const redact = await this.deps.config.redactor();
     const signal = run.controller.signal;
+    let latestCheckpoint = checkpoint;
     try {
       const resolved = await this.deps.llm.resolve("narrator");
       if (!resolved.ok) {
@@ -1077,15 +1118,16 @@ export class GameService {
             return undefined;
         }
       };
-      const { spendOk: _spendOk, ...spendInput } = plan.input;
-      const inputKey = JSON.stringify(spendInput);
+      const inputKey = turnInputKey(plan.input);
       const pendingSpend = this.pendingSpends.get(run.saveId);
       const approvedSpend =
         plan.input.spendOk &&
         pendingSpend?.version === run.baseVersion &&
         pendingSpend.input === inputKey
           ? pendingSpend.quoteKey
-          : undefined;
+          : plan.input.spendOk
+            ? checkpoint?.prepared.confirmation?.quoteKey
+            : undefined;
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
@@ -1103,6 +1145,13 @@ export class GameService {
           // 本轮开始前读取一次预设；生成途中切换开关，不改变这一轮已经选定的内容。
           preset: await this.deps.presets?.active(),
           signal,
+          saveId: run.saveId,
+          baseVersion: run.baseVersion,
+          checkpoint,
+          onCheckpoint: async (cp) => {
+            latestCheckpoint = cp;
+            await this.deps.checkpoints?.save(run.saveId, cp);
+          },
           onText: (text) => hub.push(run, { type: "text", text }),
           onStage: (info) => {
             const model = stageModel(info.stage);
@@ -1144,18 +1193,31 @@ export class GameService {
       }
       hub.push(run, { type: "done", ...saved, ...(usage ? { usage } : {}) });
     } catch (error) {
+      const savedHint = latestCheckpoint
+        ? "（已完成的前置步骤已保存，点重试可直接从断点继续）"
+        : "";
       if (
         error instanceof NarratorAbortedError ||
         error instanceof AbortedError ||
         signal.aborted
       ) {
         hub.push(run, { type: "stopped" });
-      } else if (error instanceof NarratorEmptyReplyError) {
-        hub.push(run, { type: "error", message: "模型没有返回正文，可以重试", retryable: true });
-      } else if (error instanceof UpstreamError) {
+      } else if (error instanceof NarratorStageError) {
         hub.push(run, {
           type: "error",
           message: redact(error.message),
+          retryable: error.retryable,
+        });
+      } else if (error instanceof NarratorEmptyReplyError) {
+        hub.push(run, {
+          type: "error",
+          message: `模型没有返回正文，可以重试${savedHint}`,
+          retryable: true,
+        });
+      } else if (error instanceof UpstreamError) {
+        hub.push(run, {
+          type: "error",
+          message: `${redact(error.message)}${savedHint}`,
           retryable: error.retryable,
         });
       } else if (error instanceof VersionMovedError || error instanceof SaveMovedError) {
@@ -1165,7 +1227,11 @@ export class GameService {
         this.deps.log(
           `回合出错：${redact(error instanceof Error ? (error.stack ?? error.message) : String(error))}`,
         );
-        hub.push(run, { type: "error", message: "生成时出错，详情见后端日志", retryable: false });
+        hub.push(run, {
+          type: "error",
+          message: `生成时出错，详情见后端日志${savedHint}`,
+          retryable: latestCheckpoint !== undefined,
+        });
       }
     }
   }
@@ -1249,6 +1315,7 @@ export class GameService {
         ...(usage ? { usage } : {}),
       };
       await saves.appendAt(run.saveId, seq, serializeRecord(record));
+      await this.deps.checkpoints?.clear(run.saveId);
       const version = seq + 1;
       await this.maybeSnapshot(run.saveId, version);
       return { seq, version };

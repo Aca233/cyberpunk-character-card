@@ -2,6 +2,7 @@ import { glossary } from "@cp/content";
 import type { Clock, Rng } from "@cp/core";
 import { Hono } from "hono";
 import type { CharacterStore } from "./characters";
+import { TurnCheckpointStore } from "./checkpoints";
 import type { ConfigService } from "./config";
 import { GameService } from "./game";
 import type { ImageStore } from "./images";
@@ -31,6 +32,8 @@ export interface AppDeps {
   readonly presets?: PresetStore | undefined;
   /** 文生图存储；传了才开放 /api/images 与存档图片绑定 */
   readonly images?: ImageStore | undefined;
+  /** 回合阶段断点存储；传了可跨刷新保存中间阶段结果 */
+  readonly checkpoints?: TurnCheckpointStore | undefined;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -38,6 +41,7 @@ export function createApp(deps: AppDeps): Hono {
   const clock = deps.clock ?? { now: () => new Date() };
   const llm = new LlmRouter(deps.config);
   const imageRouter = new ImageRouter(deps.config);
+  const checkpoints = deps.checkpoints ?? new TurnCheckpointStore();
   const game = new GameService({
     saves: deps.saves,
     characters: deps.characters,
@@ -48,6 +52,7 @@ export function createApp(deps: AppDeps): Hono {
     rng: deps.rng ?? cryptoRng,
     log: deps.log,
     presets: deps.presets,
+    checkpoints,
   });
   const app = new Hono();
   app.onError(async (error, c) => {
