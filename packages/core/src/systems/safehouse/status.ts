@@ -1,7 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { safehouseView } from "./view";
 
-/** 【当前状态】里安全屋与当前地点出售的公寓 */
+/** 【当前状态】只带当前所在住处和本地待售公寓；不住在这里时不每轮占篇幅 */
 
 type SafehouseView = ReturnType<typeof safehouseView>;
 

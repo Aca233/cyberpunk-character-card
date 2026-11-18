@@ -148,8 +148,7 @@ export const inventory = defineSystem<
         const lines = Object.entries(objects)
           .filter(
             ([id, o]) =>
-              o.holder === "player" ||
-              o.location === here ||
+              (o.holder !== "consumed" && (o.holder === "player" || o.location === here)) ||
               input.text.includes(id) ||
               input.text.includes(o.definition.name),
           )

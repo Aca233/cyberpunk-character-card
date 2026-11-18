@@ -70,7 +70,7 @@ export function evaluatePhysicsBoundaries(input: PhysicsLockInput): PhysicsLockR
     const list =
       input.bulkyOverload.items.length > 0 ? `（${input.bulkyOverload.items.join("、")}）` : "";
     directives.push(
-      `随身大件超重（带着 ${input.bulkyOverload.count}/${input.bulkyOverload.max} 件显眼大件${list}）：身上鼓囊沉重、重心受阻，翻墙、钻缝、潜行、近身闪避与高速追逐动作均吃物理劣势（可将多余长件寄存在安全屋存放箱或车辆后备箱）`,
+      `随身大件超重（带着 ${input.bulkyOverload.count}/${input.bulkyOverload.max} 件显眼大件${list}）：身上鼓囊沉重、重心受阻，翻墙、钻缝、潜行、近身闪避与高速追逐动作均吃物理劣势`,
     );
   }
 

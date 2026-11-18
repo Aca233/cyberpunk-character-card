@@ -20,6 +20,7 @@ import {
   rumorSection,
 } from "../systems/city";
 import { agendaCatalog } from "../systems/factions";
+import { InventoryStateSchema, itemCatalog } from "../systems/inventory";
 import { JobOfferSchema, JobsStateSchema } from "../systems/jobs";
 import { memoryRecords } from "../systems/memory";
 import {
@@ -48,6 +49,7 @@ import {
   ThreadStepCommandSchema,
   ThreadsStateSchema,
 } from "../systems/threads";
+import { TravelStateSchema, vehicleCatalog } from "../systems/travel";
 import {
   formatGameTime,
   locationCatalog,
@@ -468,9 +470,40 @@ export function buildOffscreenPrompt(
   const canon = scope?.backlog
     ? undefined
     : canonSection(extras.data, extras.startTime, world.time);
+  const footprintLines: string[] = [];
+  const travel = TravelStateSchema.parse(world.slices.travel);
+  const inv = InventoryStateSchema.parse(world.slices.inventory);
+  const cars = vehicleCatalog(extras.data ?? {});
+  const items = extras.data?.items !== undefined ? itemCatalog(extras.data) : new Map();
+  for (const v of travel.vehicles) {
+    if (!v.abandoned && !v.stolen && v.condition === "intact") continue;
+    const vname = cars.get(v.model)?.name ?? v.model;
+    const loc = v.location ? (places.get(v.location)?.name ?? v.location) : "位置未知";
+    const tags = [
+      v.abandoned ? "已弃置" : null,
+      v.stolen ? "偷来的" : null,
+      v.condition !== "intact" ? v.condition : null,
+    ]
+      .filter((x): x is string => x !== null)
+      .join("、");
+    footprintLines.push(`- 车辆 ${v.id}「${vname}」（${tags}）：停在 ${loc}`);
+  }
+  for (const p of inv.placed) {
+    if (p.kind === "home") continue;
+    const iname = items.get(p.item)?.name ?? inv.objects[p.item]?.definition.name ?? p.item;
+    const loc = p.location ? (places.get(p.location)?.name ?? p.location) : "位置未知";
+    footprintLines.push(
+      `- 留置 ${iname}${p.count > 1 ? `×${p.count}` : ""}：${p.kind}:${p.target}（${loc}${p.note ? `；${p.note}` : ""}）`,
+    );
+  }
   const content = userMessage({
     scene: [
       `【当前状态】\n${stateSummary(world, records, extras.data)}`,
+      ...(footprintLines.length > 0
+        ? [
+            `【留置隐患与遗弃车辆】（世界可按情理拖走、搜刮、追查或发酵）\n${footprintLines.join("\n")}`,
+          ]
+        : []),
       `【本批范围】\n上次成功：${city.lastAt === null ? "尚未推演" : formatGameTime(city.lastAt)}；已处理到回合 ${city.processedThrough}；当前 ${formatGameTime(world.time)}。失败尝试未处理的事实仍在本批。`,
       ...(scope?.backlog
         ? [

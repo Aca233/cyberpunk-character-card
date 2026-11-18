@@ -1,7 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { travelView } from "./view";
 
-/** 【当前状态】里出行的几行：名下的车、这一场代码定下的路上偶遇；附近的地方在世界系统的【地点】里 */
+/** 【当前状态】里只保留就在身边的车与路上偶遇；远处停放的车辆不每轮刷存在感，需要时由情境节按需带出 */
 
 type TravelView = ReturnType<typeof travelView>;
 
@@ -13,15 +13,26 @@ export const travelStatus: readonly SystemStatus[] = [
     lines(ctx) {
       const t = travelOf(ctx);
       const lines: string[] = [];
-      if (t.vehicles.length > 0)
+      const nearby = t.vehicles.filter((v) => v.here);
+      if (nearby.length > 0) {
         lines.push(
-          `名下的车：${t.vehicles.map((v) => `${v.id}「${v.name}」（${v.classLabel}，${v.conditionLabel}${v.stolen ? "，偷来的" : ""}；停在${v.locationName}${v.here ? "，就在身边" : ""}）`).join("；")}`,
+          `身边的车：${nearby
+            .map((v) => {
+              const flags = [
+                v.classLabel,
+                v.condition !== "intact" ? v.conditionLabel : null,
+                v.stolen ? "偷来的" : null,
+              ].filter((x): x is string => x !== null);
+              return `${v.id}「${v.name}」（${flags.join("，")}）`;
+            })
+            .join("；")}`,
         );
-      if (t.encounter)
+      }
+      if (t.encounter) {
         lines.push(
-          // 偶遇是素材，合适才写（用户 2026-11-01 定的「全改」第 3 步）
           `路上偶遇（代码抽的素材，合适就写，玩家可以不理）：${t.encounter.label}——${t.encounter.note}`,
         );
+      }
       return lines;
     },
   },
