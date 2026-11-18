@@ -1,6 +1,6 @@
 # 商店页面 UI 重做计划
 
-> 状态：进行中（2026-11-18）
+> 状态：已完成（2026-11-18）
 > 目标：将现有简陋文本列表式 `Shop` 弹窗重做为与《赛博朋克 2077》夜之城终端风格一致、与 `Ripperdoc` / `InventoryPage` 视觉体系对齐的商店终端界面。
 
 ## 1. 现状与痛点
@@ -36,9 +36,9 @@
 
 ## 3. 实施拆解（Swarm 分工）
 
-1. **Step 1（协调者）**：建立本计划文件 `docs/plans/shop-ui-redesign.md` 并提交 git。
+1. **Step 1（协调者）**：建立本计划文件 `docs/plans/shop-ui-redesign.md` 并提交 git（已完成）。
 2. **Step 2（并行：`core-shop` + `shop-styles`）**：
-   - `core-shop`：修改 `packages/core/src/systems/inventory/shops.ts`，补全 `shopsView` 投影字段。
-   - `shop-styles`：新建 `apps/web/src/features/story/shop.module.css`。
-3. **Step 3（`shop-ui`）**：基于最新 `shopsView` 类型与 `shop.module.css` 重写 `apps/web/src/features/story/Shop.tsx`，并在确认无其他引用后清理 `story.module.css` 中的废弃 `.shopBody` / `.shopBag`。
-4. **Step 4（`verifier`）**：代码审查与静态检查（`pnpm typecheck`、`pnpm lint`），按项目约定不运行测试，交由用户最终验收。
+   - `core-shop`：修改 `packages/core/src/systems/inventory/shops.ts`，补全 `shopsView` 投影字段（已完成）。
+   - `shop-styles`：新建 `apps/web/src/features/story/shop.module.css`（已完成）。
+3. **Step 3（`shop-ui`）**：基于最新 `shopsView` 类型与 `shop.module.css` 重写 `apps/web/src/features/story/Shop.tsx`，并清理 `story.module.css` 中不再使用的 `.shopBody` / `.shopBag`（已完成）。
+4. **Step 4（`verifier` + 协调者收口）**：代码审查与静态检查（`tsc`、`biome`）通过，已同步更新 `.tagWarn` 对比度与出售锁定文案，按项目约定不运行测试，交由用户最终验收（已完成）。
