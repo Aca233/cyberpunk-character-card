@@ -151,7 +151,6 @@ export function CustomModuleForm({
               />
             </FrameBox>
           </label>
-          {draft.tags.length > 0 && <p className={styles.moduleTags}>{draft.tags.join(" · ")}</p>}
           {draft.people.length > 0 && (
             <p className={styles.moduleHook}>
               人物：

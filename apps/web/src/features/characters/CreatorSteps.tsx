@@ -328,9 +328,6 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
                 {m.ability && <span>{m.ability}</span>}
                 {m.hook && <Line k="经历钩子">{m.hook}</Line>}
                 {m.people.length > 0 && <Line k="带出故人">{people(m)}</Line>}
-                {m.tags.length > 0 && (
-                  <span className={styles.moduleTags}>{m.tags.join(" · ")}</span>
-                )}
               </button>
             </li>
           );
@@ -375,7 +372,7 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
         )}
       </div>
       <p className={styles.note}>
-        已挂载 {board.flaws.length} / {FLAW_MAX} 项 · 负面缺陷会向战局注入债主、通缉、宿敌或生理隐患
+        已挂载 {board.flaws.length} / {FLAW_MAX} 项
       </p>
       {writing && (
         <CustomModuleForm
@@ -409,11 +406,13 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
                 <CellFrame />
                 <span className={styles.pickHead}>
                   <strong className={styles.pickName}>{m.label}</strong>
-                  <span className={styles.moduleBadges}>
-                    <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
-                      {pressed ? "已挂载" : (m.tags[0] ?? "负面钩子")}
+                  {pressed && (
+                    <span className={styles.moduleBadges}>
+                      <span className={styles.moduleBadge} data-tone="active">
+                        已挂载
+                      </span>
                     </span>
-                  </span>
+                  )}
                 </span>
                 {m.ability && <Line k="处境">{m.ability}</Line>}
                 {m.hook && <Line k="钩子">{m.hook}</Line>}
