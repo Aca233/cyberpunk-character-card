@@ -682,6 +682,8 @@ export function StoryScreen() {
     story.phase !== "idle" &&
     (story.boost !== null ||
       (story.pending?.kind === "input" && story.pending.input.sandevistan === true));
+  const currentDistrict =
+    view.names.district ?? view.travel.destinations.find((d) => d.here)?.district ?? null;
   return (
     <div
       className={styles.screen}
@@ -689,7 +691,12 @@ export function StoryScreen() {
       data-glitch={glitch || undefined}
       data-boost={screenBoost || undefined}
     >
-      <CityBackdrop />
+      <CityBackdrop
+        location={view.location}
+        locationName={view.names.location}
+        district={currentDistrict}
+        period={view.time.period}
+      />
       {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
       {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
       <CornerSide side="left">

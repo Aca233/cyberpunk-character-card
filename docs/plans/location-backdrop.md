@@ -25,6 +25,6 @@
 
 ## 状态
 - [x] 步骤 0：制定并保存计划文档
-- [ ] 步骤 1：更新素材清单并执行 `pick-assets` / `check-assets`
-- [ ] 步骤 2：实现 `backdropOf` 与 `CityBackdrop` 地点切换
-- [ ] 步骤 3：静态类型与代码规范检查
+- [x] 步骤 1：更新素材清单并执行 `pick-assets` / `check-assets`（已提交：`f5d0194`）
+- [x] 步骤 2：实现 `backdropOf` 与 `CityBackdrop` 地点切换
+- [x] 步骤 3：静态类型与代码规范检查（`tsc`、`biome`、`assets/check.ts` 均通过，按项目约定测试由用户自行执行）

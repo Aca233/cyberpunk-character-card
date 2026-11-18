@@ -44,6 +44,21 @@
   animation: cityDrift 120s ease-in-out infinite alternate;
 }
 
+.cityImageEnter {
+  animation:
+    cityDrift 120s ease-in-out infinite alternate,
+    cityFadeIn 0.9s ease both;
+}
+
+@keyframes cityFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .city::after {
   content: "";
   position: absolute;
@@ -66,7 +81,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cityImage {
+  .cityImage,
+  .cityImageEnter {
     animation: none;
   }
 }

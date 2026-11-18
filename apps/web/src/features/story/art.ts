@@ -357,3 +357,130 @@ export function weaponHudIconOf(id: string, subLabel?: string): AssetId {
   }
   return "weapon.pistol";
 }
+
+export interface BackdropQuery {
+  readonly location: string | null | undefined;
+  readonly locationName?: string | null | undefined;
+  readonly district?: string | null | undefined;
+  readonly period?: "dawn" | "day" | "dusk" | "night" | undefined;
+}
+
+const LOCATION_BACKDROPS: Readonly<Record<string, AssetId>> = {
+  "lizzies-bar": "backdrop.lizziesBar",
+  afterlife: "backdrop.afterlife",
+  "megabuilding-h10": "backdrop.megabuildingH10",
+  "tom-diner": "backdrop.littleChina",
+  japantown: "backdrop.japantown",
+  "coyote-cojo": "backdrop.coyoteCojo",
+  "corpo-plaza": "backdrop.corpoPlaza",
+  "grand-imperial-mall": "backdrop.grandImperialMall",
+  dogtown: "backdrop.dogtown",
+  "regina-office": "backdrop.kabuki",
+  "wakako-pachinko": "backdrop.wakakoPachinko",
+  "kerry-estate": "backdrop.kerryEstate",
+  badlands: "backdrop.badlands",
+};
+
+const KEYWORD_BACKDROPS: readonly (readonly [readonly string[], AssetId])[] = [
+  [["丽姿", "lizzie"], "backdrop.lizziesBar"],
+  [["来生", "afterlife"], "backdrop.afterlife"],
+  [["h10", "超级摩天楼", "megabuilding"], "backdrop.megabuildingH10"],
+  [["野狼", "coyote"], "backdrop.coyoteCojo"],
+  [["和歌子", "柏青哥", "wakako", "pachinko"], "backdrop.wakakoPachinko"],
+  [["克里", "别墅", "kerry"], "backdrop.kerryEstate"],
+  [["荒坂塔", "arasaka tower", "arasaka_tower"], "backdrop.arasakaTower"],
+  [["绀碧", "konpeki"], "backdrop.konpekiPlaza"],
+  [["全食品", "all foods", "all_foods"], "backdrop.allFoods"],
+  [["大帝国", "grand imperial"], "backdrop.grandImperialMall"],
+  [["太平洲教堂", "巫毒", "chapel", "voodoo"], "backdrop.pacificaChapel"],
+  [["达科塔", "dakota"], "backdrop.dakotaWorkshop"],
+  [["船长", "capitan"], "backdrop.elCapitan"],
+  [["神父", "padre"], "backdrop.padresDen"],
+  [["扭扭街", "jig-jig", "jigjig", "jig_jig"], "backdrop.jigJigStreet"],
+  [["油田", "oil field", "oil_field"], "backdrop.oilFields"],
+  [["流浪者营地", "营地", "nomad camp", "nomads_camp"], "backdrop.nomadCamp"],
+  [["日本街", "japantown", "japan_town"], "backdrop.japantown"],
+  [["宪章山", "charter hill", "charter_hill"], "backdrop.charterHill"],
+  [["北橡", "north oak", "north_oak"], "backdrop.northOak"],
+  [["公司广场", "corpo plaza", "corpo_plaza"], "backdrop.corpoPlaza"],
+  [["市中心", "downtown"], "backdrop.downtown"],
+  [["谷地", "glen"], "backdrop.glen"],
+  [["美泉", "wellspring"], "backdrop.wellsprings"],
+  [["丽景", "vista del rey", "vista_del_rey"], "backdrop.vistaDelRey"],
+  [["河谷", "阿罗约", "arroyo"], "backdrop.arroyo"],
+  [["科罗纳多", "rancho coronado", "rancho_coronado"], "backdrop.ranchoCoronado"],
+  [["海景", "coastview"], "backdrop.coastview"],
+  [["西风庄园", "west wind", "west_wind"], "backdrop.westWind"],
+  [["地铁", "ncart", "metro"], "backdrop.ncart"],
+];
+
+const DISTRICT_BACKDROPS: Readonly<Record<string, AssetId>> = {
+  狗镇: "backdrop.dogtown",
+  dogtown: "backdrop.dogtown",
+  沃森: "backdrop.watson",
+  watson: "backdrop.watson",
+  威斯特布鲁克: "backdrop.westbrook",
+  威斯布鲁克: "backdrop.westbrook",
+  westbrook: "backdrop.westbrook",
+  海伍德: "backdrop.heywood",
+  heywood: "backdrop.heywood",
+  市政中心: "backdrop.cityCenter",
+  市中心: "backdrop.cityCenter",
+  city_center: "backdrop.cityCenter",
+  太平洲: "backdrop.pacifica",
+  pacifica: "backdrop.pacifica",
+  圣多明戈: "backdrop.santoDomingo",
+  santo_domingo: "backdrop.santoDomingo",
+  恶土: "backdrop.badlands",
+  badlands: "backdrop.badlands",
+};
+
+/** 当前地点与时段 → 正文背景图；按固定地点 → 街区/地标关键词 → 城区 → 夜之城全景逐级匹配 */
+export function backdropOf({ location, locationName, district, period }: BackdropQuery): AssetId {
+  const isDay = period === "day" || period === "dawn";
+  if (location === "kabuki-market") {
+    return isDay ? "backdrop.watKabDay" : "backdrop.watKabNight";
+  }
+  if (location === "vik-clinic") {
+    return isDay ? "backdrop.watLchDay" : "backdrop.watLchNight";
+  }
+  if (location) {
+    const hit = LOCATION_BACKDROPS[location];
+    if (hit) return hit;
+  }
+
+  const probe = `${location ?? ""} ${locationName ?? ""}`.toLowerCase();
+  if (probe.trim()) {
+    if (probe.includes("歌舞伎") || probe.includes("kabuki")) {
+      return isDay ? "backdrop.watKabDay" : "backdrop.watKabNight";
+    }
+    if (
+      probe.includes("小唐人街") ||
+      probe.includes("little china") ||
+      probe.includes("little_china")
+    ) {
+      return isDay ? "backdrop.watLchDay" : "backdrop.watLchNight";
+    }
+    if (probe.includes("北区") || probe.includes("northside")) {
+      return isDay ? "backdrop.watNidDay" : "backdrop.watNidNight";
+    }
+    if (probe.includes("荒坂海滨") || probe.includes("waterfront")) {
+      return isDay ? "backdrop.watAwfDay" : "backdrop.watAwfNight";
+    }
+    for (const [words, id] of KEYWORD_BACKDROPS) {
+      if (words.some((w) => probe.includes(w))) return id;
+    }
+  }
+
+  if (district) {
+    const trimmed = district.trim();
+    const byKey = DISTRICT_BACKDROPS[trimmed.toLowerCase()] ?? DISTRICT_BACKDROPS[trimmed];
+    if (byKey) return byKey;
+  }
+
+  for (const [key, id] of Object.entries(DISTRICT_BACKDROPS)) {
+    if (probe.includes(key)) return id;
+  }
+
+  return "menu.nightCity";
+}
