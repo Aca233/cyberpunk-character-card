@@ -10,14 +10,12 @@ import styles from "./story.module.css";
  */
 export function EscMenu({
   onResume,
-  onMemory,
   canEndStory = false,
   onEndStory,
   onSettings,
   onQuit,
 }: {
   readonly onResume: () => void;
-  readonly onMemory?: (() => void) | undefined;
   /** 活着的未收尾存档显示「结束故事」，生成中保持灰显并说明原因 */
   readonly canEndStory?: boolean;
   readonly onEndStory?: (() => void) | undefined;
@@ -32,7 +30,6 @@ export function EscMenu({
         <Panel as="div" line="var(--cp-red)">
           <nav className={styles.escList}>
             <MenuItem label="继续" onSelect={onResume} />
-            {onMemory && <MenuItem label="记忆管理" onSelect={onMemory} />}
             {canEndStory && (
               <MenuItem
                 label="结束故事"

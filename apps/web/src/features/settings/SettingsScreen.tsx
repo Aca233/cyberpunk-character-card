@@ -1,7 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { api, type TurnContext } from "../../api/client";
+import { api, newRequestId, type TurnContext } from "../../api/client";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -9,6 +9,7 @@ import { Dialog } from "../../ui/Dialog";
 import { FrameBox } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
+import { MemoryBody, type MemoryEdit } from "../story/MemoryPanel";
 import neural from "../story/neural.module.css";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
@@ -205,6 +206,7 @@ export function SettingsScreen() {
 
 function ContextViewer() {
   const { open } = useSpoilerView();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
@@ -225,7 +227,26 @@ function ContextViewer() {
     enabled: open && saveId !== "" && seq !== null,
   });
 
-  const update = (key: "save" | "seq", value: string) =>
+  const editMemory = useMutation({
+    mutationFn: async (edit: MemoryEdit) => {
+      const current = state.data;
+      if (!current) throw new Error("存档状态还没加载好");
+      await api.action(saveId, {
+        requestId: newRequestId(),
+        baseVersion: current.version,
+        action: { type: "editMemory", ...edit },
+      });
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["state", saveId] }),
+        queryClient.invalidateQueries({ queryKey: ["context", saveId] }),
+      ]);
+    },
+  });
+
+  const update = (key: "save" | "seq", value: string) => {
+    if (key === "save") editMemory.reset();
     setParams(
       (p) => {
         const next = new URLSearchParams(p);
@@ -236,48 +257,57 @@ function ContextViewer() {
       },
       { replace: true, state: location.state },
     );
+  };
 
-  if (!open) {
-    return (
-      <Panel line="var(--cp-yellow)" className={styles.gateCard}>
-        <div className={styles.gateBody}>
-          <div className={styles.gateHead}>
-            <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
-            <h2>剧透调试视图</h2>
-          </div>
-          <p>
-            这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
-          </p>
-          <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
-          <div>
-            <Button primary onClick={() => setNarrativePref("spoilers", true)}>
-              显示剧透
-            </Button>
-          </div>
+  const spoilerGate = (
+    <Panel line="var(--cp-yellow)" className={styles.gateCard}>
+      <div className={styles.gateBody}>
+        <div className={styles.gateHead}>
+          <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
+          <h2>剧透调试视图</h2>
         </div>
-      </Panel>
-    );
-  }
+        <p>
+          这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
+        </p>
+        <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
+        <div>
+          <Button primary onClick={() => setNarrativePref("spoilers", true)}>
+            显示剧透
+          </Button>
+        </div>
+      </div>
+    </Panel>
+  );
+
   if (saves.isPending)
     return (
-      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
-        <p className={styles.dim}>正在读取存档…</p>
-      </Panel>
+      <div className={styles.context}>
+        <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+          <p className={styles.dim}>正在读取存档…</p>
+        </Panel>
+        {!open && spoilerGate}
+      </div>
     );
   if (saves.isError)
     return (
-      <Panel line="var(--cp-danger)" className={styles.gateCard}>
-        <EmptyState
-          text={`读取存档失败：${saves.error.message}`}
-          action={<Button onClick={() => void saves.refetch()}>重试</Button>}
-        />
-      </Panel>
+      <div className={styles.context}>
+        <Panel line="var(--cp-danger)" className={styles.gateCard}>
+          <EmptyState
+            text={`读取存档失败：${saves.error.message}`}
+            action={<Button onClick={() => void saves.refetch()}>重试</Button>}
+          />
+        </Panel>
+        {!open && spoilerGate}
+      </div>
     );
   if (saves.data.length === 0)
     return (
-      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
-        <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容" />
-      </Panel>
+      <div className={styles.context}>
+        <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+          <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容和记忆" />
+        </Panel>
+        {!open && spoilerGate}
+      </div>
     );
 
   return (
@@ -295,39 +325,69 @@ function ContextViewer() {
             </select>
           </FrameBox>
         </label>
-        <label>
-          <span>轮次</span>
-          <FrameBox>
-            <select
-              value={seq ?? ""}
-              onChange={(e) => update("seq", e.target.value)}
-              disabled={turns.length === 0}
-            >
-              {turns.map((t) => (
-                <option key={t.seq} value={t.seq}>
-                  #{t.seq} {t.input.text.slice(0, 24)}
-                </option>
-              ))}
-            </select>
-          </FrameBox>
-        </label>
+        {open && (
+          <label>
+            <span>轮次</span>
+            <FrameBox>
+              <select
+                value={seq ?? ""}
+                onChange={(e) => update("seq", e.target.value)}
+                disabled={turns.length === 0}
+              >
+                {turns.map((t) => (
+                  <option key={t.seq} value={t.seq}>
+                    #{t.seq} {t.input.text.slice(0, 24)}
+                  </option>
+                ))}
+              </select>
+            </FrameBox>
+          </label>
+        )}
       </div>
 
-      {turns.length === 0 && state.isSuccess && (
-        <Panel line="var(--cp-red-dim)">
-          <EmptyState text="这个存档还没有写进任何一轮" />
-        </Panel>
-      )}
-      {context.isPending && seq !== null && <p className={styles.dim}>正在重建这一轮的上下文…</p>}
-      {context.isError && (
-        <Panel line="var(--cp-danger)">
+      <Section title="记忆管理">
+        {state.isPending && <p className={styles.dim}>正在读取存档记忆…</p>}
+        {state.isError && (
           <EmptyState
-            text={`读取失败：${context.error.message}`}
-            action={<Button onClick={() => void context.refetch()}>重试</Button>}
+            text={`读取记忆失败：${state.error.message}`}
+            action={<Button onClick={() => void state.refetch()}>重试</Button>}
           />
-        </Panel>
+        )}
+        {editMemory.isError && <p className={styles.error}>{editMemory.error.message}</p>}
+        {state.data && (
+          <MemoryBody
+            key={saveId}
+            view={state.data}
+            onEdit={async (edit) => {
+              await editMemory.mutateAsync(edit);
+            }}
+          />
+        )}
+      </Section>
+
+      {!open ? (
+        spoilerGate
+      ) : (
+        <>
+          {turns.length === 0 && state.isSuccess && (
+            <Panel line="var(--cp-red-dim)">
+              <EmptyState text="这个存档还没有写进任何一轮" />
+            </Panel>
+          )}
+          {context.isPending && seq !== null && (
+            <p className={styles.dim}>正在重建这一轮的上下文…</p>
+          )}
+          {context.isError && (
+            <Panel line="var(--cp-danger)">
+              <EmptyState
+                text={`读取失败：${context.error.message}`}
+                action={<Button onClick={() => void context.refetch()}>重试</Button>}
+              />
+            </Panel>
+          )}
+          {context.data && <ContextDetail ctx={context.data} saveId={saveId} />}
+        </>
       )}
-      {context.data && <ContextDetail ctx={context.data} saveId={saveId} />}
     </div>
   );
 }
