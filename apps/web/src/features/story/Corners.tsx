@@ -1306,7 +1306,8 @@ export function Weapon({
   /** 展开区底部的页签 */
   readonly tabs?: ReactNode;
 }) {
-  const { inventory } = view;
+  const { inventory, money } = view;
+  const eddiesText = money.eddies.toLocaleString("en-US");
   const p = usePeek("weapon", peek.expand, peek.setExpand);
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
@@ -1465,7 +1466,14 @@ export function Weapon({
                   </span>
                 )}
               </small>
-              <kbd className={styles.slotHint}>{p.pinned ? "ESC" : "O"}</kbd>
+              <span className={styles.slotFootMeta}>
+                <span className={styles.slotCash} title={`随身欧元：${eddiesText} 欧元`}>
+                  <Asset id="notify.cash" tint="var(--cp-yellow)" height={11} />
+                  <strong>{eddiesText}</strong>
+                  <small className={styles.slotCashUnit}>欧元</small>
+                </span>
+                <kbd className={styles.slotHint}>{p.pinned ? "ESC" : "O"}</kbd>
+              </span>
             </span>
           </span>
         </div>

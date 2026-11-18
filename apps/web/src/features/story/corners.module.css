@@ -1372,9 +1372,38 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
+}
+
+.slotFootMeta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.slotCash {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.slotCash strong {
+  font-weight: 700;
+}
+
+.slotCashUnit {
+  font-size: 11px;
+  color: rgb(252 238 10 / 78%);
 }
 
 .slotHead {
@@ -1516,7 +1545,6 @@
 /* 与左下角 Unread 的 T 保持一致：克制暗字，不画刺眼青块以免 O 看成 0 */
 .slotHint {
   flex: none;
-  margin-left: auto;
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 700;
@@ -1914,6 +1942,14 @@
 
   .zoneText b {
     font-size: 17px;
+  }
+
+  .weapon:not([data-open]) .slot {
+    padding: 12px 18px 16px;
+  }
+
+  .weapon:not([data-open]) .slotLine {
+    white-space: normal;
   }
 }
 
