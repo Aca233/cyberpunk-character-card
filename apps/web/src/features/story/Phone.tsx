@@ -115,7 +115,7 @@ export type PhoneSendResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: string };
 
-/** 联系人公共操作回调：手机窗口内直聊、标已读、回复进主线、地图定位、直开诊所/商店 */
+/** 联系人公共操作回调：手机窗口内直聊、标已读、回复进主线、地图定位、直开诊所 */
 export interface PhoneActions {
   /** 回复一条（填入下方行动输入框）；正在生成或已结束时不传，按钮不显示 */
   readonly onReply?: ((id: number) => void) | undefined;
@@ -135,8 +135,6 @@ export interface PhoneActions {
   readonly onLocatePlace?: ((placeId: string) => void) | undefined;
   /** 就在对方诊所时直接打开义体诊所界面 */
   readonly onOpenRipperdoc?: (() => void) | undefined;
-  /** 就在对方摊位/店面时直接打开商店界面 */
-  readonly onOpenShop?: ((shopId: string) => void) | undefined;
 }
 
 function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | undefined {
@@ -277,10 +275,6 @@ function ThreadHead({
   const canOpenDoc = Boolean(
     docService && view.ripperdoc?.id === docService.id && actions.onOpenRipperdoc,
   );
-  const openShops =
-    alive && actions.onOpenShop
-      ? (npc?.services?.shops ?? []).filter((s) => view.shops.some((vs) => vs.id === s.id))
-      : [];
 
   const lockReason = inlineChatLockReason(contact, view, actions);
   const latestMsg = thread[thread.length - 1];
@@ -302,7 +296,7 @@ function ThreadHead({
   const locateId = contact.locatePlaceId;
   const locateName = contact.locatePlaceName;
   const hasLocate = Boolean(locateId && locateName && actions.onLocatePlace);
-  const hasActions = Boolean(commAction || hasLocate || canOpenDoc || openShops.length > 0);
+  const hasActions = Boolean(commAction || hasLocate || canOpenDoc);
   const highlightTone = contact.badges[0]?.tone === "danger" ? "danger" : undefined;
   const primaryBadge = contact.badges[0];
 
@@ -414,11 +408,6 @@ function ThreadHead({
             {canOpenDoc && actions.onOpenRipperdoc && (
               <ActionButton onClick={actions.onOpenRipperdoc}>进诊所</ActionButton>
             )}
-            {openShops.map((shop) => (
-              <ActionButton key={shop.id} onClick={() => actions.onOpenShop?.(shop.id)}>
-                {shop.name}
-              </ActionButton>
-            ))}
           </div>
         )}
       </div>
@@ -448,7 +437,6 @@ export function PhoneBody({
   busy,
   onLocatePlace,
   onOpenRipperdoc,
-  onOpenShop,
 }: { readonly view: View } & PhoneActions) {
   const contacts = contactDirectory(view);
   const { counts, tabs } = computeFilterTabs(contacts);
@@ -528,7 +516,6 @@ export function PhoneBody({
     busy,
     onLocatePlace,
     onOpenRipperdoc,
-    onOpenShop,
   };
   const lockReason = inlineChatLockReason(current, view, actions);
   const sendingAny = Boolean(chatSending || pendingChat);

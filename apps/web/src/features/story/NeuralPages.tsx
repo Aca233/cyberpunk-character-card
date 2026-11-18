@@ -524,7 +524,6 @@ export function InventoryPage({
   onEquip,
   onUnequip,
   onMod,
-  onShop,
   onBuyHome,
   onHeal,
   onSuppressant,
@@ -542,7 +541,6 @@ export function InventoryPage({
   readonly onUnequip?: ((id: string) => void) | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
-  readonly onShop: (id: string) => void;
   /** 买下当前地点的一处公寓；正在生成时不传，按钮不显示 */
   readonly onBuyHome?: ((id: string) => void) | undefined;
 }) {
@@ -649,7 +647,7 @@ export function InventoryPage({
     }
   };
 
-  const places = view.shops.length > 0 || view.safehouse.forSale.length > 0;
+  const places = view.safehouse.forSale.length > 0;
   const { bulky } = inventory;
 
   return (
@@ -1153,11 +1151,6 @@ export function InventoryPage({
           <CellFrame />
           <span className={styles.placesLabel}>当前地点</span>
           <div className={styles.placesActions}>
-            {view.shops.map((shop) => (
-              <Button key={shop.id} small onClick={() => onShop(shop.id)}>
-                进{shop.name}
-              </Button>
-            ))}
             {view.safehouse.forSale.map((home) => (
               <div className={styles.docLink} key={home.id}>
                 <small className={styles.dim}>{home.locked ?? home.note}</small>
@@ -1344,7 +1337,6 @@ export function MessagesPage({
   busy,
   onLocatePlace,
   onOpenRipperdoc,
-  onOpenShop,
   onNews,
   initialTab = "dm",
   hideTabs = false,
@@ -1367,7 +1359,6 @@ export function MessagesPage({
     busy,
     onLocatePlace,
     onOpenRipperdoc,
-    onOpenShop,
   };
   return (
     <>

@@ -779,7 +779,6 @@ export function StoryScreen() {
               : (action, weapon, mod) =>
                   void act({ type: "modWeapon", action, weapon, mod }, "gear")
           }
-          onShop={setAtShop}
           onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
         />
       )}
@@ -846,10 +845,6 @@ export function StoryScreen() {
           onOpenRipperdoc={() => {
             closePinned();
             setAtDoc(true);
-          }}
-          onOpenShop={(shopId) => {
-            closePinned();
-            setAtShop(shopId);
           }}
         />
       )}
