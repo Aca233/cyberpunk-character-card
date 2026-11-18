@@ -8,12 +8,12 @@ import {
   boardIssues,
   type CharacterCard,
   CharacterCardSchema,
-  type Combo,
   cyberwareRules,
   humanityRules,
   type LifepathEntry,
   type Loadout,
   loadoutText,
+  PROSE_BLOCKS,
   ProseBlockSchema,
   pickLoadouts,
   pickStartLocation,
@@ -29,6 +29,11 @@ const { HUMANITY_MAX, STAGE_LABELS, TOLERANCE_FACTOR, humanityStage, isGlitchZon
  * 2077 赛博档案工作台核心纯逻辑 + 创意工坊底座（Workshop-Ready Foundation）
  * 无点数上限束缚，仅受槽位容量与义体神经负荷（人性值 × 耐受档位）约束。
  */
+
+/** 创建空白角色主板 */
+export function emptyBoard(): Board {
+  return BoardSchema.parse({});
+}
 
 /** 建档时 pickLoadouts 会给这张卡发哪几套行装（和服务端同一个函数、同一张表，建卡界面看到的就是开局拿到的） */
 export function pickedLoadouts(card: CharacterCard, data?: Pick<BoardData, "loadouts">): Loadout[] {
@@ -389,6 +394,13 @@ export function exportLocalWorkshopPack(
 // ———— 本地草稿 ————
 
 const DRAFT_KEY = "cp.creatorDraft";
+export const CHARACTER_DRAFT_EVENT = "cp.creatorDraft";
+
+function emitDraftEvent(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(CHARACTER_DRAFT_EVENT));
+  }
+}
 
 export interface CreatorDraft {
   readonly card: CharacterCard;
@@ -405,6 +417,7 @@ export function saveDraft(draft: Omit<CreatorDraft, "savedAt">): boolean {
       DRAFT_KEY,
       JSON.stringify({ ...draft, savedAt: new Date().toISOString() }),
     );
+    emitDraftEvent();
     return true;
   } catch {
     return false;
@@ -414,6 +427,7 @@ export function saveDraft(draft: Omit<CreatorDraft, "savedAt">): boolean {
 export function clearDraft(): void {
   try {
     localStorage.removeItem(DRAFT_KEY);
+    emitDraftEvent();
   } catch {
     // ignore
   }
@@ -484,19 +498,30 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
   }
 }
 
-// ———— 档案就绪检查（仅拦截缺姓名、代词、出身或重复模块） ————
+// ———— 档案就绪检查与五步引导工作台状态 ————
 
-export type CheckTarget = "identity" | "origin" | "build" | "cyber" | "people" | "person";
+export type CheckTarget = "identity" | "origin" | "build" | "cyber" | "people" | "kit" | "person";
 
 export interface Check {
   readonly target: CheckTarget;
   readonly text: string;
 }
 
+export type CreatorCheck = Check;
+
 function issueTarget(text: string): CheckTarget {
   if (text.includes("出身")) return "origin";
   if (text.includes("旧识")) return "people";
   if (text.includes("义体")) return "cyber";
+  if (
+    text.includes("行装") ||
+    text.includes("武器") ||
+    text.includes("载具") ||
+    text.includes("落脚") ||
+    text.includes("地点")
+  ) {
+    return "kit";
+  }
   return "build";
 }
 
@@ -548,7 +573,162 @@ export function creatorChecks(card: CharacterCard): Check[] {
   return checks;
 }
 
-// ———— 出身倾向与联动提示辅助函数 ————
+export type CreatorStepId = "identity" | "traits" | "chrome_kit" | "people_prose" | "review";
+
+export interface CreatorStepMeta {
+  readonly id: CreatorStepId;
+  readonly index: number;
+  readonly code: string;
+  readonly label: string;
+  readonly title: string;
+  readonly lead: string;
+}
+
+export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
+  {
+    id: "identity",
+    index: 1,
+    code: "01",
+    label: "身份与出身",
+    title: "身份铭牌与出身背景",
+    lead: "确立夜之城档案的基本称谓，并挑选或自创出身背景，决定初始家底、自带义体与默认落脚点。",
+  },
+  {
+    id: "traits",
+    index: 2,
+    code: "02",
+    label: "过往、特质与缺陷",
+    title: "生命路径、核心特质与负面缺陷",
+    lead: "掷一段契合出身的生命路径，挑选专长与身心禀赋，或挂载债主与宿敌等剧情钩子。",
+  },
+  {
+    id: "chrome_kit",
+    index: 3,
+    code: "03",
+    label: "义体与开局态势",
+    title: "义体装配、行装定制与开局锚点",
+    lead: "在十个身体部位装配开局义体并调控生理耐受，配置启动资金、武器座驾与出生位置。",
+  },
+  {
+    id: "people_prose",
+    index: 4,
+    code: "04",
+    label: "人脉与人设小传",
+    title: "夜之城人脉网络与人设小传",
+    lead: "结识原作人物或自创旧识，并手写或交由 AI 协同生成角色外貌、背景、性格与口吻。",
+  },
+  {
+    id: "review",
+    index: 5,
+    code: "05",
+    label: "档案总览与开局",
+    title: "完整档案核验与战局接入",
+    lead: "总览角色全部构筑、行装、人脉与小传，确认就绪后即可保存并直接接入夜之城。",
+  },
+];
+
+const TARGET_STEP_MAP: Readonly<Record<CheckTarget, CreatorStepId>> = {
+  identity: "identity",
+  origin: "identity",
+  build: "traits",
+  cyber: "chrome_kit",
+  kit: "chrome_kit",
+  people: "people_prose",
+  person: "people_prose",
+};
+
+/** 将核验问题目标映射到五步引导工作台对应步骤 */
+export function stepForCheckTarget(target: CheckTarget): CreatorStepId {
+  return TARGET_STEP_MAP[target];
+}
+
+export interface StepProgressItem {
+  readonly id: CreatorStepId;
+  readonly ready: boolean;
+  readonly filled: boolean;
+  readonly badge: string;
+  readonly issueCount: number;
+}
+
+export type StepProgressMap = Readonly<Record<CreatorStepId, StepProgressItem>>;
+
+/** 计算五步引导工作台每一步的完成态、阻塞项与摘要计数 */
+export function stepProgress(
+  card: CharacterCard,
+  data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
+): StepProgressMap {
+  const checks = creatorChecks(card);
+  const issueCounts: Record<CreatorStepId, number> = {
+    identity: 0,
+    traits: 0,
+    chrome_kit: 0,
+    people_prose: 0,
+    review: checks.length,
+  };
+  for (const c of checks) {
+    issueCounts[stepForCheckTarget(c.target)] += 1;
+  }
+
+  const board = card.board ?? emptyBoard();
+  const identityReady = issueCounts.identity === 0;
+  const traitsCount = board.pasts.length + board.skills.length + board.flaws.length;
+
+  const inherentCount = inherentCyberware(card, data).filter((c) => !c.replaced).length;
+  const chromeCount = board.cyberware.length + inherentCount;
+  const humanityNow = Math.max(0, HUMANITY_MAX - totalStartHumanityCost(card, data));
+  const chromeKitFilled =
+    board.cyberware.length > 0 ||
+    board.kit.cashTier !== "standard" ||
+    board.kit.weapons.length > 0 ||
+    board.kit.vehicle !== null ||
+    Boolean(board.startLocation);
+
+  const proseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
+  const peopleCount = board.acquaintances.length;
+  const peopleProseFilled = proseCount > 0 || peopleCount > 0;
+
+  return {
+    identity: {
+      id: "identity",
+      ready: identityReady,
+      filled: identityReady,
+      badge: identityReady ? (board.origin?.label ?? "已填") : `待填 ${issueCounts.identity} 项`,
+      issueCount: issueCounts.identity,
+    },
+    traits: {
+      id: "traits",
+      ready: issueCounts.traits === 0,
+      filled: traitsCount > 0,
+      badge: traitsCount > 0 ? `${traitsCount} 项` : "可选",
+      issueCount: issueCounts.traits,
+    },
+    chrome_kit: {
+      id: "chrome_kit",
+      ready: issueCounts.chrome_kit === 0,
+      filled: chromeKitFilled,
+      badge: `人性 ${humanityNow}${chromeCount > 0 ? ` · ${chromeCount}件` : ""}`,
+      issueCount: issueCounts.chrome_kit,
+    },
+    people_prose: {
+      id: "people_prose",
+      ready: issueCounts.people_prose === 0,
+      filled: peopleProseFilled,
+      badge: peopleProseFilled ? `${peopleCount}人 · ${proseCount}/7段` : "可选",
+      issueCount: issueCounts.people_prose,
+    },
+    review: {
+      id: "review",
+      ready: checks.length === 0,
+      filled: checks.length === 0,
+      badge: checks.length === 0 ? "可开局" : `待完善 ${checks.length} 项`,
+      issueCount: checks.length,
+    },
+  };
+}
+
+// ———— 出身倾向与生命路径契合度辅助函数 ————
+
+export type OriginAffinity = "lean" | "never" | null;
 
 export function originLean(
   originId: string,
@@ -573,41 +753,18 @@ export function originNever(
     .flatMap((e) => modules.filter((m) => m.id === e.id && m.slot === "past"));
 }
 
-function placed(board: Board): BoardModule[] {
-  return [...(board.origin ? [board.origin] : []), ...board.pasts, ...board.skills, ...board.flaws];
-}
-
-export interface ComboHint {
-  readonly combo: Combo;
-  readonly need: string;
-  readonly candidates: readonly BoardModule[];
-}
-
-export function comboHints(
-  board: Board,
-  combos: readonly Combo[],
-  modules: readonly BoardModule[],
-): ComboHint[] {
-  const have = placed(board);
-  const plugged = new Set(have.map((m) => m.id));
-  const free =
-    board.skills.length < SKILL_MAX
-      ? modules.filter((m) => m.slot === "skill" && !plugged.has(m.id))
-      : [];
-  const hits = (need: string, list: readonly BoardModule[]) =>
-    list.filter((m) => m.id === need || m.tags.includes(need));
-  const out: ComboHint[] = [];
-  for (const combo of combos) {
-    const missing = combo.requires.filter((need) => hits(need, have).length === 0);
-    if (missing.length !== 1) continue;
-    const need = missing[0];
-    if (need === undefined) continue;
-    const candidates = hits(need, free).filter((c) => {
-      const used = new Set<string>([c.id]);
-      for (const n of combo.requires) for (const m of hits(n, have)) used.add(m.id);
-      return used.size >= 2;
-    });
-    if (candidates.length > 0) out.push({ combo, need, candidates });
-  }
-  return out;
+/** 查询模块在指定出身的生命路径中的契合度（权重 >1 为契合，=0 为冲突，其余为 null） */
+export function originAffinity(
+  originId: string | undefined,
+  moduleId: string,
+  lifepath: readonly LifepathEntry[],
+): OriginAffinity {
+  if (!originId) return null;
+  const entry = lifepath.find((e) => e.id === moduleId);
+  if (!entry) return null;
+  const weight = entry.weights[originId];
+  if (weight === undefined) return null;
+  if (weight === 0) return "never";
+  if (weight > 1) return "lean";
+  return null;
 }

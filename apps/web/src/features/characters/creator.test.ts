@@ -2,26 +2,28 @@ import {
   BoardModuleSchema,
   BoardSchema,
   type CharacterCard,
-  ComboSchema,
   LifepathEntrySchema,
   type Loadout,
-  SKILL_MAX,
   WorkshopPackSchema,
 } from "@cp/core";
 import { describe, expect, it } from "vitest";
 import type { BoardData } from "../../api/client";
 import {
-  comboHints,
+  CREATOR_STEPS,
   creatorChecks,
+  emptyBoard,
   humanityStageInfo,
   inherentCyberware,
   mergeCreatorCatalog,
+  originAffinity,
   originDefaultLoadout,
   originEcosystem,
   originLean,
   originNever,
   pruneKitForOrigin,
   rollTraits,
+  stepForCheckTarget,
+  stepProgress,
   totalStartHumanityCost,
   traitCategory,
 } from "./creator";
@@ -29,9 +31,9 @@ import {
 /** 2077 赛博档案工作台纯逻辑测试：无点数上限束缚，仅受槽位容量与人性耐受约束 */
 
 const mod = (id: string, slot: "origin" | "past" | "skill" | "flaw", tags: string[] = []) =>
-  BoardModuleSchema.parse({ id, slot, label: id, points: 0, tags });
+  BoardModuleSchema.parse({ id, slot, label: id, tags });
 
-describe("originLean / originNever", () => {
+describe("originLean / originNever / originAffinity", () => {
   const modules = [mod("a", "past"), mod("b", "past"), mod("c", "past"), mod("s", "skill")];
   const lifepath = LifepathEntrySchema.array().parse([
     { id: "a", weights: { street: 2 } },
@@ -51,34 +53,79 @@ describe("originLean / originNever", () => {
   it("权重 0 是掷不到", () => {
     expect(originNever("street", lifepath, modules).map((m) => m.id)).toEqual(["c"]);
   });
+
+  it("originAffinity 返回 lean / never / null", () => {
+    expect(originAffinity("street", "a", lifepath)).toBe("lean");
+    expect(originAffinity("street", "c", lifepath)).toBe("never");
+    expect(originAffinity("corpo", "a", lifepath)).toBeNull();
+    expect(originAffinity(undefined, "a", lifepath)).toBeNull();
+    expect(originAffinity("street", "unknown", lifepath)).toBeNull();
+  });
 });
 
-describe("comboHints", () => {
-  const combo = ComboSchema.parse({
-    id: "x",
-    label: "X",
-    requires: ["gun", "fast"],
-    ability: "能",
-  });
-  const gun = mod("gun-1", "skill", ["gun"]);
-  const fast = mod("fast-1", "skill", ["fast"]);
+describe("emptyBoard / 五步引导工作台辅助函数", () => {
+  const blank = {
+    name: "",
+    alias: "",
+    pronoun: "TA",
+    origin: "",
+    look: "",
+    past: "",
+    personality: "",
+    voice: "",
+    skills: "",
+    scene: "",
+    greeting: "",
+    examples: "",
+    locked: [],
+    attributes: { body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 },
+    board: emptyBoard(),
+  } as unknown as CharacterCard;
 
-  it("差一项时列出能补上的本事", () => {
-    const board = BoardSchema.parse({ skills: [gun] });
-    const hints = comboHints(board, [combo], [gun, fast]);
-    expect(hints.map((h) => h.candidates.map((c) => c.id))).toEqual([["fast-1"]]);
+  it("CREATOR_STEPS 按 5 步顺序定义且映射全部 CheckTarget", () => {
+    expect(CREATOR_STEPS.map((s) => s.id)).toEqual([
+      "identity",
+      "traits",
+      "chrome_kit",
+      "people_prose",
+      "review",
+    ]);
+    expect(stepForCheckTarget("identity")).toBe("identity");
+    expect(stepForCheckTarget("origin")).toBe("identity");
+    expect(stepForCheckTarget("build")).toBe("traits");
+    expect(stepForCheckTarget("cyber")).toBe("chrome_kit");
+    expect(stepForCheckTarget("kit")).toBe("chrome_kit");
+    expect(stepForCheckTarget("people")).toBe("people_prose");
+    expect(stepForCheckTarget("person")).toBe("people_prose");
   });
 
-  it("一块模块同时满足两项不算（至少两块不同的模块）", () => {
-    const both = mod("both", "skill", ["gun", "fast"]);
-    const board = BoardSchema.parse({});
-    expect(comboHints(board, [combo], [both])).toEqual([]);
-  });
+  it("stepProgress 正确统计各步就绪态与摘要计数", () => {
+    const emptyProg = stepProgress(blank);
+    expect(emptyProg.identity.ready).toBe(false);
+    expect(emptyProg.identity.issueCount).toBe(2); // 缺姓名和出身
+    expect(emptyProg.review.ready).toBe(false);
 
-  it("本事插满了就没有候选", () => {
-    const filler = Array.from({ length: SKILL_MAX }, (_, i) => mod(`f${i}`, "skill"));
-    const board = BoardSchema.parse({ skills: [...filler.slice(1), gun] });
-    expect(comboHints(board, [combo], [fast])).toEqual([]);
+    const readyCard = {
+      ...blank,
+      name: "V",
+      origin: "街头小子",
+      look: "义眼泛着冷光",
+      board: BoardSchema.parse({
+        origin: mod("street-kid", "origin"),
+        skills: [mod("s1", "skill")],
+        pasts: [mod("p1", "past")],
+        acquaintances: [{ id: "jackie", name: "杰克", relation: "friend", note: "" }],
+      }),
+    } as CharacterCard;
+    const readyProg = stepProgress(readyCard);
+    expect(readyProg.identity).toMatchObject({ ready: true, filled: true, badge: "street-kid" });
+    expect(readyProg.traits).toMatchObject({ ready: true, filled: true, badge: "2 项" });
+    expect(readyProg.people_prose).toMatchObject({
+      ready: true,
+      filled: true,
+      badge: "1人 · 1/7段",
+    });
+    expect(readyProg.review).toMatchObject({ ready: true, issueCount: 0, badge: "可开局" });
   });
 });
 
@@ -207,7 +254,6 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
         name: "Kiroshi Mk.1",
         slot: "eyes",
         rarity: "common",
-        points: 1,
         humanityCost: 2,
         ability: "扫描",
       },
@@ -216,7 +262,6 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
         name: "Kiroshi Mk.2",
         slot: "eyes",
         rarity: "uncommon",
-        points: 2,
         humanityCost: 4,
         ability: "增强",
       },
@@ -225,7 +270,6 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
         name: "Paraline",
         slot: "os",
         rarity: "common",
-        points: 2,
         humanityCost: 6,
         ability: "入侵",
       },
@@ -234,7 +278,6 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
         name: "斯安威斯坦",
         slot: "os",
         rarity: "rare",
-        points: 3,
         humanityCost: 12,
         ability: "子弹时间",
       },
@@ -383,7 +426,6 @@ describe("分类、随机特质与工坊合并", () => {
   it("mergeCreatorCatalog 按 id 去重合并官方目录、本地自定义模块与工坊扩展包", () => {
     const base = {
       modules: [mod("core-1", "skill")],
-      combos: [],
       lifepath: [],
       cyberware: [],
       npcs: [],

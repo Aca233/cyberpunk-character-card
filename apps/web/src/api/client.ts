@@ -4,7 +4,6 @@ import type {
   BoardModule,
   BoardSlot,
   CharacterCard,
-  Combo,
   Legend,
   LifepathEntry,
   Loadout,
@@ -198,10 +197,9 @@ export interface CharacterEntry {
   readonly sample: boolean;
 }
 
-/** 主板要用的表：模块库、联动、生命路径和创建时能装的义体 */
+/** 主板要用的表：模块库、生命路径和创建时能装的义体 */
 export interface BoardData {
   readonly modules: readonly BoardModule[];
-  readonly combos: readonly Combo[];
   readonly lifepath: readonly LifepathEntry[];
   readonly cyberware: readonly {
     readonly id: string;
@@ -210,7 +208,6 @@ export interface BoardData {
     readonly slotLabel: string;
     /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
     readonly rarity?: string;
-    readonly points: number;
     readonly humanityCost: number;
     readonly programSlots?: number;
     readonly ram?: number;
@@ -237,7 +234,6 @@ export interface StartWeaponOption {
   readonly name: string;
   readonly category?: string;
   readonly rarity: string;
-  readonly points: number;
   readonly ability: string;
 }
 
@@ -247,7 +243,6 @@ export interface StartVehicleOption {
   readonly maker: string;
   readonly class: string;
   readonly seats: number;
-  readonly points: number;
   readonly note?: string;
 }
 
