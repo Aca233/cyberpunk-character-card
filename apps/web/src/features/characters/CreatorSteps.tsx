@@ -19,7 +19,7 @@ import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
-import { CYBER_LABELS, CyberItemCell, type CyberSlot } from "../story/CyberDoll";
+import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
@@ -61,7 +61,7 @@ type FlawPickerProps = Omit<PickerProps, "card" | "change"> &
 type LoadoutPickerProps = Omit<PickerProps, "change"> & Partial<Pick<PickerProps, "change">>;
 type CyberwareShelfProps = Omit<PickerProps, "change"> &
   Partial<Pick<PickerProps, "change">> & {
-    readonly slot: CyberSlot | "all";
+    readonly slot: CyberSlot;
   };
 
 const people = (m: BoardModule) =>
@@ -705,48 +705,36 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
 // ———— 义体货架：信息直出卡片，单击直接装卸/替换 ————
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"] as const;
-const SLOT_ORDER = Object.keys(CYBER_LABELS) as CyberSlot[];
 
 export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShelfProps) {
   type Offer = BoardData["cyberware"][number];
   const [shelfState, setShelfState] = useState<{
-    readonly slot: CyberSlot | "all";
+    readonly slot: CyberSlot;
     readonly rarity: string | null;
   }>({ slot, rarity: null });
   const rarity = shelfState.slot === slot ? shelfState.rarity : null;
   const setRarity = (next: string | null) => setShelfState({ slot, rarity: next });
 
-  const options = slot === "all" ? data.cyberware : data.cyberware.filter((o) => o.slot === slot);
+  const options = data.cyberware.filter((o) => o.slot === slot);
   const rarities = RARITY_ORDER.filter((r) => options.some((o) => o.rarity === r));
   const shown = rarity ? options.filter((o) => o.rarity === rarity) : options;
   const slotOf = new Map(data.cyberware.map((o) => [o.id, o.slot]));
-  const inherentAll = inherentCyberware(card, data);
-  const mountedBySlot = (s: CyberSlot) =>
-    board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) === s);
-  const isOn = (o: Offer) => board.cyberware.some((p) => p.id === o.id);
-  const slotCap = (s: CyberSlot) => cyberwareRules.SLOT_CAPACITY[s];
-  const canSwapFor = (o: Offer) => {
-    const s = o.slot as CyberSlot;
-    const mounted = mountedBySlot(s);
-    return slotCap(s) === 1 && mounted.length >= 1;
-  };
-  const blocked = (o: Offer) => {
-    if (isOn(o)) return false;
-    const s = o.slot as CyberSlot;
-    const mounted = mountedBySlot(s);
-    const cap = slotCap(s);
-    return mounted.length >= cap && !(cap === 1 && mounted.length >= 1);
-  };
+  const mounted = board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) === slot);
+  const inherentInSlot = inherentCyberware(card, data).filter((i) => i.slot === slot);
+  const cap = cyberwareRules.SLOT_CAPACITY[slot];
+  const slotFull = mounted.length >= cap;
+  const isOn = (o: Offer) => mounted.some((p) => p.id === o.id);
+  const canSwap = cap === 1 && slotFull;
+  const blocked = (o: Offer) => !isOn(o) && slotFull && !canSwap;
 
   const actionLabel = (o: Offer) =>
-    isOn(o) ? "已装 · 点击卸下" : canSwapFor(o) ? "点击替换" : blocked(o) ? "槽位已满" : "点击装上";
+    isOn(o) ? "已装 · 点击卸下" : canSwap ? "点击替换" : blocked(o) ? "槽位已满" : "点击装上";
 
   const nextCyberware = (o: Offer): Board["cyberware"] => {
     if (isOn(o)) return board.cyberware.filter((c) => c.id !== o.id);
     if (blocked(o)) return board.cyberware;
-    const s = o.slot as CyberSlot;
-    const base = canSwapFor(o)
-      ? board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) !== s)
+    const base = canSwap
+      ? board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) !== slot)
       : board.cyberware;
     return [
       ...base,
@@ -754,7 +742,7 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         id: o.id,
         name: o.name,
         humanityCost: o.humanityCost,
-        slot: s,
+        slot: o.slot as CyberSlot,
       },
     ];
   };
@@ -763,67 +751,11 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
     if (!blocked(o)) commit({ ...board, cyberware: nextCyberware(o) });
   };
 
-  const visibleSlots = slot === "all" ? SLOT_ORDER : [slot];
-  const singleMountedCount = slot === "all" ? board.cyberware.length : mountedBySlot(slot).length;
-  const singleCap = slot === "all" ? null : slotCap(slot);
-
-  const renderCard = (o: Offer) => {
-    const on = isOn(o);
-    const isBlocked = blocked(o);
-    const s = o.slot as CyberSlot;
-    const swap = !on && canSwapFor(o);
-    const hwSpecs = [
-      o.ram ? `RAM +${o.ram}` : "",
-      o.programSlots ? `程序槽 ${o.programSlots} 格` : "",
-      o.armor ? "护甲增强" : "",
-      o.accelerator ? "神经反应加速" : "",
-    ].filter(Boolean);
-    return (
-      <li key={o.id}>
-        <button
-          type="button"
-          className={styles.cyberTile}
-          data-rarity={o.rarity}
-          aria-pressed={on}
-          disabled={isBlocked}
-          title={isBlocked ? `这个部位最多装 ${slotCap(s)} 件，先卸一件` : actionLabel(o)}
-          onClick={() => toggle(o)}
-        >
-          <CellFrame />
-          <div className={styles.cyberTileTop}>
-            <CyberItemCell id={o.id} name={o.name} slot={s} on={on} rarity={o.rarity} size={42} />
-            <div className={styles.cyberTileBody}>
-              <div className={styles.cyberTileHead}>
-                <span className={styles.cyberTileName} data-rarity={o.rarity}>
-                  {o.name}
-                </span>
-                <span className={styles.moduleBadge} data-tone={on ? "active" : undefined}>
-                  {on ? "已装" : swap ? "点击替换" : "点击装上"}
-                </span>
-              </div>
-              <div className={styles.cyberTileMeta}>
-                {o.rarity && (
-                  <span className={styles.shelfRarity} data-rarity={o.rarity}>
-                    {RARITY_LABELS[o.rarity]}
-                  </span>
-                )}
-                <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
-              </div>
-            </div>
-          </div>
-          <p className={styles.cyberTileAbility}>{o.ability}</p>
-          {hwSpecs.length > 0 && <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>}
-        </button>
-      </li>
-    );
-  };
-
   return (
     <div className={styles.pickerBody}>
       <div className={styles.shelfHead}>
         <span className={styles.shelfMeta}>
-          可选 {shown.length} 款 · 已装 {singleMountedCount}
-          {singleCap !== null ? `/${singleCap}` : " 件"}
+          可选 {shown.length} 款 · 已装 {mounted.length}/{cap}
         </span>
         {rarities.length > 1 && (
           <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
@@ -838,53 +770,76 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
           </fieldset>
         )}
       </div>
+      {inherentInSlot.length > 0 && (
+        <p className={styles.note}>
+          自带标配：
+          {inherentInSlot
+            .map((i) => `${i.name}（${i.source}${i.replaced ? "，已被自选件顶替" : "，免费预装"}）`)
+            .join("、")}
+        </p>
+      )}
       {shown.length === 0 ? (
         <p className={styles.note}>当前筛选下没有可用义体。</p>
-      ) : slot === "all" ? (
-        visibleSlots.map((s) => {
-          const items = shown.filter((o) => o.slot === s);
-          if (items.length === 0) return null;
-          const mountedCount = mountedBySlot(s).length;
-          const inherentInSlot = inherentAll.filter((i) => i.slot === s);
-          return (
-            <section key={s} aria-label={CYBER_LABELS[s]}>
-              <h4 className={styles.subTitle}>
-                {CYBER_LABELS[s]}{" "}
-                <small className={styles.stepNote}>
-                  已装 {mountedCount}/{slotCap(s)}
-                </small>
-              </h4>
-              {inherentInSlot.length > 0 && (
-                <p className={styles.note}>
-                  自带标配：
-                  {inherentInSlot
-                    .map(
-                      (i) =>
-                        `${i.name}（${i.source}${i.replaced ? "，已被自选件顶替" : "，免费预装"}）`,
-                    )
-                    .join("、")}
-                </p>
-              )}
-              <ul className={styles.cyberGrid}>{items.map(renderCard)}</ul>
-            </section>
-          );
-        })
       ) : (
-        <>
-          {inherentAll.filter((i) => i.slot === slot).length > 0 && (
-            <p className={styles.note}>
-              自带标配：
-              {inherentAll
-                .filter((i) => i.slot === slot)
-                .map(
-                  (i) =>
-                    `${i.name}（${i.source}${i.replaced ? "，已被自选件顶替" : "，免费预装"}）`,
-                )
-                .join("、")}
-            </p>
-          )}
-          <ul className={styles.cyberGrid}>{shown.map(renderCard)}</ul>
-        </>
+        <ul className={styles.cyberGrid}>
+          {shown.map((o) => {
+            const on = isOn(o);
+            const isBlocked = blocked(o);
+            const hwSpecs = [
+              o.ram ? `RAM +${o.ram}` : "",
+              o.programSlots ? `程序槽 ${o.programSlots} 格` : "",
+              o.armor ? "护甲增强" : "",
+              o.accelerator ? "神经反应加速" : "",
+            ].filter(Boolean);
+            return (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  className={styles.cyberTile}
+                  data-rarity={o.rarity}
+                  aria-pressed={on}
+                  disabled={isBlocked}
+                  title={isBlocked ? `这个部位最多装 ${cap} 件，先卸一件` : actionLabel(o)}
+                  onClick={() => toggle(o)}
+                >
+                  <CellFrame />
+                  <div className={styles.cyberTileTop}>
+                    <CyberItemCell
+                      id={o.id}
+                      name={o.name}
+                      slot={o.slot as CyberSlot}
+                      on={on}
+                      rarity={o.rarity}
+                      size={42}
+                    />
+                    <div className={styles.cyberTileBody}>
+                      <div className={styles.cyberTileHead}>
+                        <span className={styles.cyberTileName} data-rarity={o.rarity}>
+                          {o.name}
+                        </span>
+                        <span className={styles.moduleBadge} data-tone={on ? "active" : undefined}>
+                          {on ? "已装" : canSwap ? "点击替换" : "点击装上"}
+                        </span>
+                      </div>
+                      <div className={styles.cyberTileMeta}>
+                        {o.rarity && (
+                          <span className={styles.shelfRarity} data-rarity={o.rarity}>
+                            {RARITY_LABELS[o.rarity]}
+                          </span>
+                        )}
+                        <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className={styles.cyberTileAbility}>{o.ability}</p>
+                  {hwSpecs.length > 0 && (
+                    <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
