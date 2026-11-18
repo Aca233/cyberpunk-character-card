@@ -1,3 +1,4 @@
+import type { PlayerView } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -7,9 +8,9 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { FrameBox } from "../../ui/FrameBox";
+import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
-import { MemoryBody, type MemoryEdit } from "../story/MemoryPanel";
 import neural from "../story/neural.module.css";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
@@ -204,6 +205,26 @@ export function SettingsScreen() {
 
 /* ———— 上下文 ———— */
 
+type SceneSummaryItem = PlayerView["memory"]["scenes"][number];
+type SceneImportance = SceneSummaryItem["importance"];
+
+const SCENE_IMPORTANCE: readonly [SceneImportance, string][] = [
+  ["minor", "小事"],
+  ["normal", "普通"],
+  ["key", "关键"],
+];
+const SCENE_TITLE_CHARS = 24;
+const SCENE_TEXT_CHARS = 200;
+
+interface SceneEditInput {
+  readonly action: "edit" | "remove";
+  readonly scene: number;
+  readonly before: string;
+  readonly title?: string;
+  readonly text?: string;
+  readonly importance?: SceneImportance;
+}
+
 function ContextViewer() {
   const { open } = useSpoilerView();
   const queryClient = useQueryClient();
@@ -227,14 +248,14 @@ function ContextViewer() {
     enabled: open && saveId !== "" && seq !== null,
   });
 
-  const editMemory = useMutation({
-    mutationFn: async (edit: MemoryEdit) => {
+  const editScene = useMutation({
+    mutationFn: async (edit: SceneEditInput) => {
       const current = state.data;
       if (!current) throw new Error("存档状态还没加载好");
       await api.action(saveId, {
         requestId: newRequestId(),
         baseVersion: current.version,
-        action: { type: "editMemory", ...edit },
+        action: { type: "editMemory", what: "scene", ...edit },
       });
     },
     onSuccess: async () => {
@@ -246,7 +267,7 @@ function ContextViewer() {
   });
 
   const update = (key: "save" | "seq", value: string) => {
-    if (key === "save") editMemory.reset();
+    if (key === "save") editScene.reset();
     setParams(
       (p) => {
         const next = new URLSearchParams(p);
@@ -259,55 +280,47 @@ function ContextViewer() {
     );
   };
 
-  const spoilerGate = (
-    <Panel line="var(--cp-yellow)" className={styles.gateCard}>
-      <div className={styles.gateBody}>
-        <div className={styles.gateHead}>
-          <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
-          <h2>剧透调试视图</h2>
+  if (!open) {
+    return (
+      <Panel line="var(--cp-yellow)" className={styles.gateCard}>
+        <div className={styles.gateBody}>
+          <div className={styles.gateHead}>
+            <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
+            <h2>剧透调试视图</h2>
+          </div>
+          <p>
+            这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
+          </p>
+          <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
+          <div>
+            <Button primary onClick={() => setNarrativePref("spoilers", true)}>
+              显示剧透
+            </Button>
+          </div>
         </div>
-        <p>
-          这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
-        </p>
-        <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
-        <div>
-          <Button primary onClick={() => setNarrativePref("spoilers", true)}>
-            显示剧透
-          </Button>
-        </div>
-      </div>
-    </Panel>
-  );
-
+      </Panel>
+    );
+  }
   if (saves.isPending)
     return (
-      <div className={styles.context}>
-        <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
-          <p className={styles.dim}>正在读取存档…</p>
-        </Panel>
-        {!open && spoilerGate}
-      </div>
+      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+        <p className={styles.dim}>正在读取存档…</p>
+      </Panel>
     );
   if (saves.isError)
     return (
-      <div className={styles.context}>
-        <Panel line="var(--cp-danger)" className={styles.gateCard}>
-          <EmptyState
-            text={`读取存档失败：${saves.error.message}`}
-            action={<Button onClick={() => void saves.refetch()}>重试</Button>}
-          />
-        </Panel>
-        {!open && spoilerGate}
-      </div>
+      <Panel line="var(--cp-danger)" className={styles.gateCard}>
+        <EmptyState
+          text={`读取存档失败：${saves.error.message}`}
+          action={<Button onClick={() => void saves.refetch()}>重试</Button>}
+        />
+      </Panel>
     );
   if (saves.data.length === 0)
     return (
-      <div className={styles.context}>
-        <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
-          <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容和记忆" />
-        </Panel>
-        {!open && spoilerGate}
-      </div>
+      <Panel line="var(--cp-red-dim)" className={styles.gateCard}>
+        <EmptyState text="还没有存档，玩过一轮以后这里能看到发给模型的内容" />
+      </Panel>
     );
 
   return (
@@ -325,68 +338,52 @@ function ContextViewer() {
             </select>
           </FrameBox>
         </label>
-        {open && (
-          <label>
-            <span>轮次</span>
-            <FrameBox>
-              <select
-                value={seq ?? ""}
-                onChange={(e) => update("seq", e.target.value)}
-                disabled={turns.length === 0}
-              >
-                {turns.map((t) => (
-                  <option key={t.seq} value={t.seq}>
-                    #{t.seq} {t.input.text.slice(0, 24)}
-                  </option>
-                ))}
-              </select>
-            </FrameBox>
-          </label>
-        )}
+        <label>
+          <span>轮次</span>
+          <FrameBox>
+            <select
+              value={seq ?? ""}
+              onChange={(e) => update("seq", e.target.value)}
+              disabled={turns.length === 0}
+            >
+              {turns.map((t) => (
+                <option key={t.seq} value={t.seq}>
+                  #{t.seq} {t.input.text.slice(0, 24)}
+                </option>
+              ))}
+            </select>
+          </FrameBox>
+        </label>
       </div>
 
-      <Section title="记忆管理">
-        {state.isPending && <p className={styles.dim}>正在读取存档记忆…</p>}
-        {state.isError && (
+      {turns.length === 0 && state.isSuccess && (
+        <Panel line="var(--cp-red-dim)">
+          <EmptyState text="这个存档还没有写进任何一轮" />
+        </Panel>
+      )}
+      {context.isPending && seq !== null && <p className={styles.dim}>正在重建这一轮的上下文…</p>}
+      {context.isError && (
+        <Panel line="var(--cp-danger)">
           <EmptyState
-            text={`读取记忆失败：${state.error.message}`}
-            action={<Button onClick={() => void state.refetch()}>重试</Button>}
+            text={`读取失败：${context.error.message}`}
+            action={<Button onClick={() => void context.refetch()}>重试</Button>}
           />
-        )}
-        {editMemory.isError && <p className={styles.error}>{editMemory.error.message}</p>}
-        {state.data && (
-          <MemoryBody
-            key={saveId}
-            view={state.data}
-            onEdit={async (edit) => {
-              await editMemory.mutateAsync(edit);
-            }}
-          />
-        )}
-      </Section>
-
-      {!open ? (
-        spoilerGate
-      ) : (
-        <>
-          {turns.length === 0 && state.isSuccess && (
-            <Panel line="var(--cp-red-dim)">
-              <EmptyState text="这个存档还没有写进任何一轮" />
-            </Panel>
-          )}
-          {context.isPending && seq !== null && (
-            <p className={styles.dim}>正在重建这一轮的上下文…</p>
-          )}
-          {context.isError && (
-            <Panel line="var(--cp-danger)">
-              <EmptyState
-                text={`读取失败：${context.error.message}`}
-                action={<Button onClick={() => void context.refetch()}>重试</Button>}
-              />
-            </Panel>
-          )}
-          {context.data && <ContextDetail ctx={context.data} saveId={saveId} />}
-        </>
+        </Panel>
+      )}
+      {context.data && (
+        <ContextDetail
+          ctx={context.data}
+          saveId={saveId}
+          scenes={state.data?.memory.scenes ?? []}
+          sceneError={editScene.isError ? editScene.error.message : null}
+          onEditScene={
+            state.data
+              ? async (edit) => {
+                  await editScene.mutateAsync(edit);
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );
@@ -425,7 +422,188 @@ function SaveAsCase({ saveId, seq }: { readonly saveId: string; readonly seq: nu
   );
 }
 
-function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly saveId: string }) {
+function SceneSummariesSection({
+  scenes,
+  error,
+  onEdit,
+}: {
+  readonly scenes: readonly SceneSummaryItem[];
+  readonly error: string | null;
+  readonly onEdit?: ((edit: SceneEditInput) => Promise<void>) | undefined;
+}) {
+  const [draft, setDraft] = useState<{
+    readonly scene: number;
+    readonly title: string;
+    readonly text: string;
+    readonly importance: SceneImportance;
+  } | null>(null);
+  const [confirming, setConfirming] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useLayer(
+    () => {
+      setDraft(null);
+      setConfirming(null);
+    },
+    draft !== null || confirming !== null,
+  );
+
+  const run = async (edit: SceneEditInput) => {
+    if (!onEdit) return;
+    setSaving(true);
+    try {
+      await onEdit(edit);
+      setDraft(null);
+      setConfirming(null);
+    } catch {
+      // 失败原因由外层 error 提示
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title={scenes.length > 0 ? `场景摘要（${scenes.length}）` : "场景摘要"}>
+      {error && <p className={styles.error}>{error}</p>}
+      {scenes.length === 0 ? (
+        <p className={styles.dim}>还没有场景摘要。</p>
+      ) : (
+        <ul className={styles.sceneList}>
+          {scenes.map((s) => (
+            <li key={s.scene} className={styles.sceneCard}>
+              <div className={styles.sceneHead}>
+                <strong>
+                  第 {s.scene} 场 · {s.title}
+                </strong>
+                <span className={styles.dim}>{s.at}</span>
+                <span className={styles.sceneTag} data-importance={s.importance}>
+                  {s.importanceLabel}
+                </span>
+                {s.edited && <span className={styles.dim}>改过</span>}
+              </div>
+              {draft?.scene === s.scene ? (
+                <div className={styles.sceneForm}>
+                  <div className={styles.sceneFormRow}>
+                    <input
+                      className={styles.sceneInput}
+                      aria-label="标题"
+                      value={draft.title}
+                      maxLength={SCENE_TITLE_CHARS}
+                      onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                    />
+                    <select
+                      className={styles.sceneSelect}
+                      aria-label="分量"
+                      value={draft.importance}
+                      onChange={(e) =>
+                        setDraft({ ...draft, importance: e.target.value as SceneImportance })
+                      }
+                    >
+                      {SCENE_IMPORTANCE.map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <textarea
+                    className={styles.sceneTextarea}
+                    aria-label="内容"
+                    rows={3}
+                    value={draft.text}
+                    maxLength={SCENE_TEXT_CHARS}
+                    onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+                  />
+                  <div className={styles.sceneActions}>
+                    <Button
+                      primary
+                      disabled={saving || draft.title.trim() === "" || draft.text.trim() === ""}
+                      onClick={() =>
+                        void run({
+                          action: "edit",
+                          scene: s.scene,
+                          before: s.text,
+                          title: draft.title.trim(),
+                          text: draft.text.trim(),
+                          importance: draft.importance,
+                        })
+                      }
+                    >
+                      保存
+                    </Button>
+                    <Button onClick={() => setDraft(null)}>取消</Button>
+                  </div>
+                </div>
+              ) : (
+                <p>{s.text}</p>
+              )}
+              {s.people.length > 0 && <p className={styles.dim}>在场：{s.people.join("、")}</p>}
+              {onEdit && draft?.scene !== s.scene && (
+                <div className={styles.sceneActions}>
+                  {confirming === s.scene ? (
+                    <>
+                      <span className={styles.dim}>删掉以后 AI 就不记得这条了。</span>
+                      <Button
+                        primary
+                        disabled={saving}
+                        onClick={() =>
+                          void run({ action: "remove", scene: s.scene, before: s.text })
+                        }
+                      >
+                        删掉
+                      </Button>
+                      <Button onClick={() => setConfirming(null)}>留着</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        disabled={saving}
+                        onClick={() => {
+                          setConfirming(null);
+                          setDraft({
+                            scene: s.scene,
+                            title: s.title,
+                            text: s.text,
+                            importance: s.importance,
+                          });
+                        }}
+                      >
+                        改
+                      </Button>
+                      <Button
+                        disabled={saving}
+                        onClick={() => {
+                          setDraft(null);
+                          setConfirming(s.scene);
+                        }}
+                      >
+                        删
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+function ContextDetail({
+  ctx,
+  saveId,
+  scenes,
+  sceneError,
+  onEditScene,
+}: {
+  readonly ctx: TurnContext;
+  readonly saveId: string;
+  readonly scenes: readonly SceneSummaryItem[];
+  readonly sceneError: string | null;
+  readonly onEditScene?: ((edit: SceneEditInput) => Promise<void>) | undefined;
+}) {
   return (
     <div className={styles.detail}>
       <SaveAsCase key={`${saveId}-${ctx.seq}`} saveId={saveId} seq={ctx.seq} />
@@ -589,6 +767,7 @@ function ContextDetail({ ctx, saveId }: { readonly ctx: TurnContext; readonly sa
           )}
         </Section>
       )}
+      <SceneSummariesSection key={saveId} scenes={scenes} error={sceneError} onEdit={onEditScene} />
       {ctx.lore && (
         <Section title={`设定库（原作资料，${ctx.lore.picked.length} 段）`}>
           <p>

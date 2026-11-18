@@ -377,6 +377,94 @@
   gap: 12px;
 }
 
+.sceneList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sceneCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgb(14 14 23 / 72%);
+  border-left: 2px solid var(--cp-cyan-dim);
+}
+
+.sceneHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-label);
+}
+
+.sceneTag {
+  padding: 0 6px;
+  border: 1px solid var(--cp-cyan-dim);
+  font-size: 11px;
+}
+
+.sceneTag[data-importance="key"] {
+  border-color: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+.sceneTag[data-importance="minor"] {
+  opacity: 0.65;
+}
+
+.sceneForm {
+  display: grid;
+  gap: 8px;
+}
+
+.sceneFormRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sceneInput {
+  flex: 1;
+  min-width: 12rem;
+  padding: 4px 8px;
+  border: 1px solid var(--cp-cyan-dim);
+  background: rgb(0 0 0 / 45%);
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+}
+
+.sceneSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--cp-cyan-dim);
+  background: rgb(12 10 18 / 90%);
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+}
+
+.sceneTextarea {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 6px 8px;
+  resize: vertical;
+  border: 1px solid var(--cp-cyan-dim);
+  background: rgb(0 0 0 / 45%);
+  color: var(--cp-text);
+  font-family: inherit;
+  font-size: var(--fs-label);
+  line-height: 1.5;
+}
+
+.sceneActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ———— 叙事偏好 ———— */
 
 .prefsRoot {
