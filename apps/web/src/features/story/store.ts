@@ -39,6 +39,15 @@ export interface Failure {
 
 export type Rolled = Extract<TurnEvent, { type: "rolled" }>;
 export type LiveBoost = Extract<TurnEvent, { type: "boost" }>;
+export type LiveStage = Extract<TurnEvent, { type: "stage" }> & {
+  readonly startedAt: number;
+  readonly local?: true;
+};
+
+export interface CompletedStage {
+  readonly label: string;
+  readonly ms: number;
+}
 
 /** 提交前确认：这一轮要一次花掉一大笔钱；确认后带 spendOk 原样重发 */
 export interface Spend {
@@ -56,6 +65,8 @@ interface StoryState {
   readonly text: string;
   readonly rolled: Rolled | null;
   readonly boost: LiveBoost | null;
+  readonly stage: LiveStage | null;
+  readonly stageTrace: readonly CompletedStage[];
   readonly pending: Pending | null;
   readonly failure: Failure | null;
   readonly spend: Spend | null;
@@ -104,6 +115,18 @@ export const useStory = create<StoryState>()((set, get) => {
         switch (event.type) {
           case "started":
             return;
+          case "stage": {
+            const now = Date.now();
+            set((s) => {
+              const prev = s.stage;
+              const trace =
+                prev && !prev.local
+                  ? [...s.stageTrace, { label: prev.label, ms: Math.max(0, now - prev.startedAt) }]
+                  : s.stageTrace;
+              return { stage: { ...event, startedAt: now }, stageTrace: trace };
+            });
+            return;
+          }
           case "rolled":
             set({ rolled: event });
             return;
@@ -122,6 +145,8 @@ export const useStory = create<StoryState>()((set, get) => {
                 text: "",
                 rolled: null,
                 boost: null,
+                stage: null,
+                stageTrace: [],
                 pending: null,
                 draft: s.draft === submittedDraft ? EMPTY_DRAFT : s.draft,
               }));
@@ -138,6 +163,8 @@ export const useStory = create<StoryState>()((set, get) => {
               turnId: null,
               text: "",
               boost: null,
+              stage: null,
+              stageTrace: [],
               pending: null,
               spend:
                 pending?.kind === "input"
@@ -157,6 +184,8 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               turnId: null,
               boost: null,
+              stage: null,
+              stageTrace: [],
               failure: { kind: "blocked", message: event.reason, retryable: true },
             });
             return;
@@ -166,6 +195,8 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               turnId: null,
               boost: null,
+              stage: null,
+              stageTrace: [],
               failure: {
                 kind: "stopped",
                 message: "已停止生成，这一轮没有写进存档",
@@ -179,6 +210,8 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               turnId: null,
               boost: null,
+              stage: null,
+              stageTrace: [],
               failure: { kind: "error", message: event.message, retryable: event.retryable },
             });
             void refresh();
@@ -192,6 +225,8 @@ export const useStory = create<StoryState>()((set, get) => {
           phase: "idle",
           turnId: null,
           boost: null,
+          stage: null,
+          stageTrace: [],
           failure: { kind: "lost", message: reason, retryable: true },
         });
         void refresh();
@@ -206,6 +241,8 @@ export const useStory = create<StoryState>()((set, get) => {
     text: "",
     rolled: null,
     boost: null,
+    stage: null,
+    stageTrace: [],
     pending: null,
     failure: null,
     spend: null,
@@ -227,6 +264,8 @@ export const useStory = create<StoryState>()((set, get) => {
         text: "",
         rolled: null,
         boost: null,
+        stage: null,
+        stageTrace: [],
         pending: null,
         failure: null,
         spend: null,
@@ -252,6 +291,15 @@ export const useStory = create<StoryState>()((set, get) => {
         spend: null,
         text: "",
         rolled: null,
+        stage: {
+          type: "stage",
+          stage: "judge",
+          label: "提交行动",
+          detail: "等待后端建立回合",
+          startedAt: Date.now(),
+          local: true,
+        },
+        stageTrace: [],
         boost:
           pending.kind === "input" && pending.input.sandevistan === true
             ? { type: "boost", id: "pending", name: "斯安威斯坦" }
@@ -277,7 +325,7 @@ export const useStory = create<StoryState>()((set, get) => {
         }
         await refresh();
         if (!current()) return;
-        set({ phase: "idle", pending: null });
+        set({ phase: "idle", pending: null, stage: null, stageTrace: [] });
         finish("ok");
       } catch (error) {
         if (!current()) return;
@@ -294,6 +342,8 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               pending: null,
               boost: null,
+              stage: null,
+              stageTrace: [],
               failure: {
                 kind: "rejected",
                 message: "未能恢复上一轮的输入，请等待该轮结束后刷新。当前草稿已保留。",
@@ -315,7 +365,12 @@ export const useStory = create<StoryState>()((set, get) => {
               ? "rejected"
               : "error";
         finish(kind, message);
-        set({ phase: "idle", failure: { kind, message, retryable: kind === "error" } });
+        set({
+          phase: "idle",
+          stage: null,
+          stageTrace: [],
+          failure: { kind, message, retryable: kind === "error" },
+        });
         if (kind === "rejected") await refresh();
       }
     },

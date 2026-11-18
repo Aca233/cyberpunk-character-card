@@ -6,7 +6,7 @@ import type { AssetId } from "../../assets";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { useNarrativePrefs } from "../settings/prefs";
 import { useSpoilerView } from "../settings/SpoilerBadge";
-import type { useStory } from "./store";
+import type { CompletedStage, LiveStage, useStory } from "./store";
 import styles from "./story.module.css";
 import {
   type Choice,
@@ -25,8 +25,56 @@ import {
 
 type Live = Pick<
   ReturnType<typeof useStory.getState>,
-  "phase" | "text" | "rolled" | "boost" | "pending"
+  "phase" | "text" | "rolled" | "boost" | "pending" | "stage" | "stageTrace"
 >;
+
+function formatElapsed(ms: number): string {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+/** 实时显示本轮当前正在跑的调用阶段、对应模型与已耗时，避免出字前和出字后干等 */
+function LiveStageBar({
+  stage,
+  trace,
+}: {
+  readonly stage: LiveStage | null;
+  readonly trace: readonly CompletedStage[];
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!stage) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [stage]);
+
+  if (!stage && trace.length === 0) return null;
+  const visibleTrace = trace.filter((t) => t.ms >= 150);
+
+  return (
+    <div className={styles.liveStage} aria-live="polite">
+      {visibleTrace.length > 0 && (
+        <div className={styles.liveStageTrace}>
+          {visibleTrace.map((item, idx) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 已完成阶段按推进顺序追加
+            <span key={`${item.label}-${idx}`} className={styles.liveStageDone}>
+              ✓ {item.label} {formatElapsed(item.ms)}
+            </span>
+          ))}
+        </div>
+      )}
+      {stage && (
+        <div className={styles.liveStageNow}>
+          <span className={styles.liveStageDot} aria-hidden />
+          <strong className={styles.liveStageLabel}>{stage.label}</strong>
+          {stage.model && <code className={styles.liveStageModel}>{stage.model}</code>}
+          {stage.detail && <span className={styles.liveStageDetail}>{stage.detail}</span>}
+          <span className={styles.liveStageTimer}>{formatElapsed(now - stage.startedAt)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function paragraphs(text: string): string[] {
   return text
@@ -338,6 +386,7 @@ export function StoryLog({
               <Paragraph key={i} text={p} speakers={speakers} />
             ))}
             <span className={styles.caret} aria-hidden />
+            <LiveStageBar stage={live.stage} trace={live.stageTrace} />
           </article>
         )}
       </div>

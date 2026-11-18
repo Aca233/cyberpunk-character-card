@@ -60,6 +60,16 @@ export interface TurnUsage {
   readonly outputTokens: number;
 }
 
+export type TurnStage =
+  | "judge"
+  | "prepare"
+  | "narrate"
+  | "extract"
+  | "repair"
+  | "offscreen"
+  | "summary"
+  | "commit";
+
 /** 一轮生成过程中推给网页的事件；SSE 的事件名就是 type，事件 id 是它在这一轮里的序号 */
 export type TurnEvent =
   | {
@@ -67,6 +77,14 @@ export type TurnEvent =
       readonly turnId: string;
       readonly requestId: string;
       readonly baseVersion: number;
+    }
+  /** 正在执行的后端阶段/模型调用提示，让玩家不必看着空白或停住的正文干等；不是终止事件 */
+  | {
+      readonly type: "stage";
+      readonly stage: TurnStage;
+      readonly label: string;
+      readonly model?: string;
+      readonly detail?: string;
     }
   /** 确认检定后先掷骰并写进日志，再请叙事模型写结果；不是终止事件 */
   | {
@@ -106,6 +124,7 @@ export type TerminalTurnEvent = Extract<
 export function isTerminalEvent(event: TurnEvent): event is TerminalTurnEvent {
   return (
     event.type !== "started" &&
+    event.type !== "stage" &&
     event.type !== "rolled" &&
     event.type !== "boost" &&
     event.type !== "text"

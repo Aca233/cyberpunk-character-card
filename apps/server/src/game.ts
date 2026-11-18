@@ -65,6 +65,7 @@ import {
   TurnInputSchema,
   type TurnRecord,
   type TurnRequest,
+  type TurnStage,
   type TurnUsage,
   travelBlock,
   travelRules,
@@ -1059,6 +1060,23 @@ export class GameService {
         return;
       }
       const aux = await this.deps.llm.resolve("aux");
+      const narratorModel = resolved.profile.model;
+      const auxModel = aux.ok ? aux.profile.model : narratorModel;
+      const stageModel = (stage: TurnStage): string | undefined => {
+        switch (stage) {
+          case "judge":
+          case "narrate":
+            return narratorModel;
+          case "extract":
+          case "repair":
+          case "offscreen":
+          case "summary":
+            return auxModel;
+          case "prepare":
+          case "commit":
+            return undefined;
+        }
+      };
       const { spendOk: _spendOk, ...spendInput } = plan.input;
       const inputKey = JSON.stringify(spendInput);
       const pendingSpend = this.pendingSpends.get(run.saveId);
@@ -1086,6 +1104,10 @@ export class GameService {
           preset: await this.deps.presets?.active(),
           signal,
           onText: (text) => hub.push(run, { type: "text", text }),
+          onStage: (info) => {
+            const model = stageModel(info.stage);
+            hub.push(run, { type: "stage", ...info, ...(model ? { model } : {}) });
+          },
           onBoost: (boost) => hub.push(run, { type: "boost", ...boost }),
         },
         world,
@@ -1109,6 +1131,12 @@ export class GameService {
       if (signal.aborted) throw new NarratorAbortedError("已停止");
       const { turn } = result;
       const usage = addUsage(addUsage(turn.usage, turn.auxUsage), turn.repairUsage);
+      hub.push(run, {
+        type: "stage",
+        stage: "commit",
+        label: "⑤ 写入回合日志",
+        detail: "保存世界状态与快照",
+      });
       const saved = await this.commit(run, plan, turn, usage);
       this.pendingSpends.delete(run.saveId);
       if (turn.repairs > 0) {

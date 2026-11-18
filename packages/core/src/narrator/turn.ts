@@ -13,6 +13,7 @@ import type { LogRecord } from "../kernel/turnlog";
 import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { NarrativeIntensity } from "../physics";
+import type { TurnStage } from "../schemas/turn";
 import {
   CharacterStateSchema,
   TRAIT_LABELS,
@@ -254,6 +255,12 @@ export type NarratorResult =
   /** 提交前确认：这一轮要一次花掉一大笔钱，先问玩家；什么都没写，取消不算一轮 */
   | ({ readonly kind: "confirmSpend" } & BigSpend);
 
+export interface TurnStageInfo {
+  readonly stage: TurnStage;
+  readonly label: string;
+  readonly detail?: string;
+}
+
 export interface NarratorDeps {
   /** 服务端曾展示且玩家确认的具体报价；单独的 spendOk 不能授权不同交易。 */
   readonly approvedSpend?: string | undefined;
@@ -268,6 +275,8 @@ export interface NarratorDeps {
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
+  /** 每次进入主要生成阶段或模型调用前通知，让界面展示实时进度 */
+  readonly onStage?: (stage: TurnStageInfo) => void;
   /** 判断或前端触发了斯安威斯坦时，在正文流式输出前通知前端激活超频特效 */
   readonly onBoost?: (boost: { readonly id: string; readonly name: string }) => void;
   /** 场外推演隔几场跑一次；null 是关掉，没写按默认 3 场 */
@@ -386,6 +395,11 @@ class TurnBuilder {
       return undefined;
     }
     this.repairs += 1;
+    this.deps.onStage?.({
+      stage: "repair",
+      label: `格式修复（${stage === "judge" ? "判断" : "抽取"}）`,
+      detail: "修正结构化 JSON 输出",
+    });
     const reply = await this.supplement({
       purpose: "aux",
       temperature: 0,
@@ -602,6 +616,11 @@ export async function runNarratorTurn(
       ? judgeCandidates(pool, world, { input: plan.input.text, context: lately })
       : [];
   if (plan.kind === "action" && !legacyOoc) {
+    deps.onStage?.({
+      stage: "judge",
+      label: "① 意图判断与因果裁决",
+      detail: "调度记忆并核对物理与局势条件",
+    });
     const prompt = buildJudgePrompt(world, records, plan, extras, memories);
     const reply = await b.call({
       purpose: "narrator",
@@ -740,6 +759,11 @@ export async function runNarratorTurn(
       }).world
     : world;
   const buy = judged.get("buy") as TransactionIntent | undefined;
+  deps.onStage?.({
+    stage: "prepare",
+    label: "② 核验条件与拼装上下文",
+    detail: buy ? "核对交易报价与库存" : "裁剪记忆、规则与设定资料",
+  });
   const prepared = preparePurchases(quoteWorld, deps.data ?? {}, buy);
   const confirmation = prepared.confirmation;
   if (
@@ -894,6 +918,11 @@ export async function runNarratorTurn(
   let narrativeComplete = false;
   let narrativeError: unknown;
   b.checkAborted();
+  deps.onStage?.({
+    stage: "narrate",
+    label: "③ 正在写正文",
+    detail: preset ? `流式生成（预设「${preset.name}」）` : "流式生成剧情",
+  });
   try {
     for await (const event of deps.llm.stream(
       {
@@ -995,6 +1024,11 @@ export async function runNarratorTurn(
   let shape: ExtractShape = {};
   const settle = !ooc;
   if (settle) {
+    deps.onStage?.({
+      stage: "extract",
+      label: "④ 抽取状态与记账",
+      detail: "识别事件、交易、物件与关系变化",
+    });
     const extract = buildExtractPrompt(
       world,
       records,
@@ -1396,6 +1430,11 @@ export async function runNarratorTurn(
       offscreenCapacityReason = batch.reason;
       considered.push(batch.reason);
     } else {
+      deps.onStage?.({
+        stage: "offscreen",
+        label: "⑥ 场外世界推演",
+        detail: "推进城市动静、传闻与私信",
+      });
       const messages = batch.messages;
       const reply = await b.supplement({
         purpose: "aux",
@@ -1536,6 +1575,11 @@ export async function runNarratorTurn(
       considered.push(...merged.notes);
       if (merged.command) saveMemory(merged.command);
       else {
+        deps.onStage?.({
+          stage: "summary",
+          label: "⑦ 整理场景摘要",
+          detail: "归档本场记忆与锚点",
+        });
         const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
         const reply = await b.supplement({
           purpose: "aux",

@@ -838,6 +838,70 @@
   animation: blink 0.9s steps(2) infinite;
 }
 
+.liveStage {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid var(--cp-cyan);
+  background: linear-gradient(90deg, rgb(0 240 255 / 7%), rgb(0 240 255 / 1%));
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.liveStageTrace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  color: var(--cp-muted);
+  font-size: 0.78em;
+}
+
+.liveStageDone {
+  white-space: nowrap;
+}
+
+.liveStageNow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  color: var(--cp-cyan);
+}
+
+.liveStageDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--cp-yellow);
+  box-shadow: 0 0 8px var(--cp-yellow);
+  animation: blink 1s steps(2) infinite;
+  flex-shrink: 0;
+}
+
+.liveStageLabel {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.liveStageModel {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--cp-cyan-dim);
+  color: var(--cp-yellow);
+  font-size: 0.85em;
+  background: rgb(10 14 20 / 60%);
+}
+
+.liveStageDetail {
+  color: var(--cp-muted);
+}
+
+.liveStageTimer {
+  margin-left: auto;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes blink {
   50% {
     opacity: 0;
