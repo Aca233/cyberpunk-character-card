@@ -11,6 +11,7 @@
   place-items: center;
   padding: 20px;
   background: rgb(4 4 9 / 78%);
+  animation: imgBackdropIn 160ms ease-out both;
 }
 
 .backdropDismiss {
@@ -26,6 +27,7 @@
 .lightbox {
   position: relative;
   z-index: 1;
+  animation: imgModalIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .modal {
@@ -252,5 +254,26 @@
 @media (width < 720px) {
   .rowSplit {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@keyframes imgBackdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes imgModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .modal,
+  .lightbox {
+    animation: none;
   }
 }

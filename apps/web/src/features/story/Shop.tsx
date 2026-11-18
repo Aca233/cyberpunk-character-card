@@ -1012,6 +1012,7 @@ export function Shop({
 
       return (
         <ShopInspector
+          key={`buy-${item.id}`}
           id={item.id}
           baseId={item.baseId}
           name={item.name}
@@ -1099,6 +1100,7 @@ export function Shop({
 
     return (
       <ShopInspector
+        key={`sell-${item.id}`}
         id={item.id}
         baseId={item.baseId}
         name={item.name}
@@ -1325,7 +1327,7 @@ export function Shop({
             </nav>
 
             {/* 双栏主体：左货架/回收/工坊武器，右粘性检视台 */}
-            <div className={shopCss.body}>
+            <div key={effectiveMode} className={shopCss.body}>
               <div className={shopCss.catalog}>
                 {effectiveMode === "gunsmith" && shop.gunsmith ? (
                   <>

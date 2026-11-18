@@ -4,6 +4,7 @@
   width: min(1160px, calc(100vw - 32px));
   max-height: calc(100vh - 36px);
   display: grid;
+  animation: clinicIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .clinicShell {
@@ -448,6 +449,7 @@
   padding: 14px;
   --box-fill: rgb(10 13 22 / 92%);
   --box-line: color-mix(in srgb, var(--rarity, var(--cp-cyan)) 48%, transparent);
+  animation: clinicInspectIn 160ms var(--ease-cyber) both;
 }
 
 .showcaseFlat {
@@ -557,7 +559,26 @@
   }
 }
 
+@keyframes clinicIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@keyframes clinicInspectIn {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .clinicModal,
+  .inspector {
+    animation: none;
+  }
+
   .slotBtn {
     transition: none;
   }

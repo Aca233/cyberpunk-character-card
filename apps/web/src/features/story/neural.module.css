@@ -906,7 +906,7 @@
   isolation: isolate;
   font-family: var(--font-ui);
   color: var(--cp-text);
-  animation: fadeIn 200ms ease-out both;
+  animation: mapLayerIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .mapInner {
@@ -937,6 +937,13 @@
 @keyframes fadeIn {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes mapLayerIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
   }
 }
 

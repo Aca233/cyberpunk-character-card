@@ -864,6 +864,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  animation: rise var(--dur-slide) var(--ease-cyber) both;
 }
 
 .liveStageTrace {
@@ -876,6 +877,7 @@
 
 .liveStageDone {
   white-space: nowrap;
+  animation: traceIn 180ms var(--ease-cyber) both;
 }
 
 .liveStageNow {
@@ -936,6 +938,7 @@
   font-size: var(--fs-label);
   border: 1px solid var(--cp-yellow-dim);
   color: var(--cp-yellow);
+  animation: rise 180ms var(--ease-cyber) both;
 }
 
 .notice > span {
@@ -954,6 +957,7 @@
 .escMenu {
   width: min(360px, calc(100vw - 2rem));
   margin: auto;
+  animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .escList {
@@ -1013,6 +1017,11 @@
   padding: 0;
   display: grid;
   gap: 0.3rem;
+}
+
+.choices > li {
+  animation: choiceIn 200ms var(--ease-cyber) both;
+  animation-delay: calc(var(--i, 0) * 32ms);
 }
 
 /* 剧情选项：照原作 dialog.inkwidget 的 DialogChoiceLogicController。
@@ -1337,6 +1346,10 @@
   animation: slide-in var(--dur-slide) ease-out both;
 }
 
+.toast[data-leaving] {
+  animation: slide-out 200ms ease-in forwards;
+}
+
 .toast[data-tone="good"] {
   --toast-tint: var(--cp-success);
 }
@@ -1359,6 +1372,40 @@
   from {
     opacity: 0;
     transform: translateX(24px);
+  }
+}
+
+@keyframes slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+@keyframes choiceIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes traceIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modalSnapIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
   }
 }
 
@@ -2373,18 +2420,21 @@
   display: grid;
   place-items: center;
   background: rgb(0 0 0 / 70%);
+  animation: backdropIn 160ms ease-out both;
 }
 
 .journal {
   width: min(960px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
+  animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .dossierDialog {
   width: min(740px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
+  animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
 }
 
 /* 追踪块：轻量化层级、细左竖线与紧凑节奏，不套多层厚边灰盒子 */
@@ -3788,6 +3838,7 @@
   padding-left: 0.5rem;
   border-left: 2px solid var(--cp-yellow-dim);
   font-size: var(--fs-label);
+  animation: rise 160ms var(--ease-cyber) both;
 }
 
 .replyText {
@@ -5150,6 +5201,7 @@ ul.mapLegend > li {
   border: 1px solid var(--cp-cyan);
   background: rgb(4 8 14 / 92%);
   color: var(--cp-cyan);
+  animation: diveIn 220ms var(--ease-snap) both;
 }
 
 .diveTitle {
@@ -5169,6 +5221,10 @@ ul.mapLegend > li {
   padding: 3px 6px;
   border-left: 2px solid rgb(0 240 255 / 30%);
   opacity: 0.55;
+  transition:
+    opacity var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash);
 }
 
 .diveLayer[data-past] {
@@ -5183,6 +5239,7 @@ ul.mapLegend > li {
   border-left-color: var(--cp-cyan);
   background: rgb(0 240 255 / 12%);
   opacity: 1;
+  animation: diveHerePulse 1.6s ease-in-out infinite;
 }
 
 .diveLayer[data-wall] {
@@ -5213,6 +5270,7 @@ ul.mapLegend > li {
   padding: 6px;
   background: rgb(8 10 18 / 82%);
   border-left: 2px solid var(--cp-cyan);
+  animation: cityFadeIn 280ms ease-out both;
 }
 
 .turnIllusButton {
@@ -5259,4 +5317,40 @@ ul.mapLegend > li {
   border-left: 2px solid var(--cp-yellow);
   color: var(--cp-yellow);
   font-size: var(--fs-label);
+}
+
+@keyframes diveIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes diveHerePulse {
+  50% {
+    background: rgb(0 240 255 / 20%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveStage,
+  .liveStageDone,
+  .notice,
+  .escMenu,
+  .choices > li,
+  .toast,
+  .toast[data-leaving],
+  .journalBackdrop,
+  .journal,
+  .dossierDialog,
+  .replyChip,
+  .divePanel,
+  .diveLayer[data-here],
+  .turnIllustration {
+    animation: none;
+  }
+
+  .diveLayer {
+    transition: none;
+  }
 }

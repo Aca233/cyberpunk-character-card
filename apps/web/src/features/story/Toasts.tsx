@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Asset, NineSlice } from "../../ui/Asset";
 import styles from "./story.module.css";
 import type { Toast } from "./view";
 
 const SHOW_MS = 4500;
+const LEAVE_MS = 200;
 
 function ToastItem({
   toast,
@@ -12,9 +13,18 @@ function ToastItem({
   readonly toast: Toast;
   readonly onDone: (key: string) => void;
 }) {
+  const [leaving, setLeaving] = useState(false);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => onDone(toast.key), SHOW_MS);
-    return () => window.clearTimeout(timer);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const leaveTimer = reduce
+      ? null
+      : window.setTimeout(() => setLeaving(true), Math.max(0, SHOW_MS - LEAVE_MS));
+    const doneTimer = window.setTimeout(() => onDone(toast.key), SHOW_MS);
+    return () => {
+      if (leaveTimer !== null) window.clearTimeout(leaveTimer);
+      window.clearTimeout(doneTimer);
+    };
   }, [toast.key, onDone]);
   const tint =
     toast.tone === "good"
@@ -23,7 +33,7 @@ function ToastItem({
         ? "var(--cp-danger)"
         : "var(--cp-yellow)";
   return (
-    <li className={styles.toast} data-tone={toast.tone}>
+    <li className={styles.toast} data-tone={toast.tone} data-leaving={leaving || undefined}>
       {/* 底和托架都是原作素材（用户定的换框对照表，计划第十二节第 9 条）；托架上下各留 12 原图像素不拉伸 */}
       <NineSlice
         id="notify.itemCellBg"

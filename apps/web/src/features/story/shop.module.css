@@ -8,12 +8,14 @@
   place-items: center;
   padding: 16px;
   background: rgb(0 0 0 / 72%);
+  animation: shopBackdropIn 160ms ease-out both;
 }
 
 .modal {
   width: min(1160px, calc(100vw - 32px));
   max-height: calc(100vh - 36px);
   display: grid;
+  animation: shopModalIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .shell {
@@ -372,6 +374,7 @@
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
   gap: 14px;
   min-height: 0;
+  animation: shopBodyIn 160ms var(--ease-cyber) both;
 }
 
 .catalog {
@@ -628,6 +631,7 @@
   gap: 12px;
   max-height: 100%;
   overflow: auto;
+  animation: shopInspectIn 160ms var(--ease-cyber) both;
   scrollbar-gutter: stable;
   padding: 14px 16px;
 }
@@ -1042,7 +1046,40 @@
   }
 }
 
+@keyframes shopBackdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shopModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@keyframes shopBodyIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes shopInspectIn {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .modal,
+  .body,
+  .inspector {
+    animation: none;
+  }
+
   .modeTab,
   .catTab,
   .rarityChip,

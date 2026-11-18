@@ -9,6 +9,7 @@
   padding: 20px 28px;
   background: radial-gradient(ellipse at center, rgb(10 30 40 / 92%), rgb(0 0 0 / 96%));
   color: var(--cp-text);
+  animation: bdIn 220ms var(--ease-snap) both;
 }
 
 .head {
@@ -94,6 +95,7 @@
   padding: 28px 32px;
   border: 1px solid rgb(90 220 230 / 35%);
   background: rgb(0 0 0 / 35%);
+  animation: bdLayerIn 180ms var(--ease-cyber) both;
 }
 
 .viewport[data-layer="audio"] {
@@ -140,6 +142,14 @@
   background: rgb(0 0 0 / 40%);
   color: var(--cp-yellow);
   cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash),
+    transform 100ms ease-out;
+}
+
+.hotspot:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .hotspot[data-marked="true"] {
@@ -159,6 +169,7 @@
   border-left: 2px solid var(--cp-cyan);
   background: rgb(0 0 0 / 45%);
   max-width: 60ch;
+  animation: bdLayerIn 180ms var(--ease-cyber) both;
 }
 
 .scan dl {
@@ -284,4 +295,34 @@
 
 .facts {
   display: contents;
+}
+
+@keyframes bdIn {
+  from {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+
+@keyframes bdLayerIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .viewport,
+  .scan {
+    animation: none;
+  }
+
+  .hotspot {
+    transition: none;
+  }
+
+  .hotspot:hover:not(:disabled) {
+    transform: none;
+  }
 }

@@ -1,6 +1,6 @@
 import type { TurnImagePromptInput } from "@cp/core";
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
@@ -522,7 +522,7 @@ export function ChoiceList({
         const key = KEYS[i];
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: 选项的位置对应数字键，位置就是身份
-          <li key={`${i}-${c.text}`}>
+          <li key={`${i}-${c.text}`} style={{ "--i": i } as CSSProperties}>
             <button
               type="button"
               className={styles.choice}

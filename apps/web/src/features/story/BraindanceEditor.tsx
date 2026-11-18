@@ -128,7 +128,7 @@ export function BraindanceEditor({
               </button>
             ))}
           </div>
-          <div className={styles.viewport} data-layer={layer}>
+          <div key={`${layer}-${segment}`} className={styles.viewport} data-layer={layer}>
             <Asset
               id="braindance.frame"
               tint="var(--cp-cyan)"

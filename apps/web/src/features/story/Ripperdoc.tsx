@@ -187,7 +187,11 @@ export function Ripperdoc({
         !view.humanity.suppressed && view.humanity.current >= 40 && estCurrent < 40;
 
       return (
-        <div className={rip.inspector} style={{ "--rarity": rarityTint } as CSSProperties}>
+        <div
+          key={`shelf-${item.id}`}
+          className={rip.inspector}
+          style={{ "--rarity": rarityTint } as CSSProperties}
+        >
           <CellFrame />
           <div className={rip.showcaseFlat}>
             {art ? (
@@ -290,7 +294,11 @@ export function Ripperdoc({
       const buyback = doc.buyback[part.id] ?? 0;
 
       return (
-        <div className={rip.inspector} style={{ "--rarity": rarityTint } as CSSProperties}>
+        <div
+          key={`inst-${part.id}`}
+          className={rip.inspector}
+          style={{ "--rarity": rarityTint } as CSSProperties}
+        >
           <CellFrame />
           <div className={rip.showcaseFlat}>
             {art ? (
