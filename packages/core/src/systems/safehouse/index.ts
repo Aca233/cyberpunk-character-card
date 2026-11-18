@@ -48,7 +48,7 @@ export const safehouse = defineSystem<
   rules: [safehouseRules],
   sections: [
     {
-      order: 75,
+      order: 73,
       title: "住处与留置物品",
       render: ({ world, data, input }) => {
         const safeData = data ?? {};
