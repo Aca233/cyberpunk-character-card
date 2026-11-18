@@ -296,6 +296,26 @@
   cursor: var(--cp-cursor-hand);
 }
 
+.weaponTile[data-rarity="common"] {
+  --box-line: rgb(168 168 168 / 52%);
+}
+
+.weaponTile[data-rarity="uncommon"] {
+  --box-line: rgb(79 209 122 / 64%);
+}
+
+.weaponTile[data-rarity="rare"] {
+  --box-line: rgb(63 169 255 / 72%);
+}
+
+.weaponTile[data-rarity="epic"] {
+  --box-line: rgb(180 92 255 / 80%);
+}
+
+.weaponTile[data-rarity="legendary"] {
+  --box-line: rgb(255 161 37 / 86%);
+}
+
 .weaponTile:hover:not(:disabled) {
   --box-line: var(--cp-cyan);
 }
@@ -325,9 +345,29 @@
   white-space: nowrap;
 }
 
+.weaponName[data-rarity="common"] {
+  color: var(--rar-common);
+}
+
+.weaponName[data-rarity="uncommon"] {
+  color: var(--rar-uncommon);
+}
+
+.weaponName[data-rarity="rare"] {
+  color: var(--rar-rare);
+}
+
+.weaponName[data-rarity="epic"] {
+  color: var(--rar-epic);
+}
+
+.weaponName[data-rarity="legendary"] {
+  color: var(--rar-legendary);
+}
+
 .weaponPreview {
   --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(8 10 16 / 96%);
+  --box-fill: rgb(8 10 16 / 98%);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -336,6 +376,7 @@
   gap: 5px;
   padding: 9px 12px 10px;
   color: rgb(205 200 196);
+  background: #080a10;
   font-size: var(--fs-label);
   line-height: 1.55;
 }
@@ -926,6 +967,20 @@
   gap: 6px 14px;
   padding: 6px 12px;
   background: rgb(0 0 0 / 50%);
+}
+
+.mapPoiTip {
+  position: absolute;
+  z-index: 5;
+  padding: 2px 7px;
+  border: 1px solid var(--cp-cyan-dim);
+  background: rgb(8 10 16 / 94%);
+  color: var(--cp-cyan);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  transform: translate(12px, -50%);
+  pointer-events: none;
 }
 
 /* 第 4 步酒馆导出折叠区 */

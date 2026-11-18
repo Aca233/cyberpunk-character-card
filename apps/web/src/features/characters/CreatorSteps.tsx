@@ -453,15 +453,55 @@ const CASH_TIER_DELTA: Readonly<Record<CashTier, string>> = {
   windfall: "+6,000 €",
 };
 
+type WeaponGroup = "all" | "pistol" | "smg" | "rifle" | "shotgun" | "sniper" | "melee";
+const WEAPON_GROUPS: readonly {
+  readonly id: WeaponGroup;
+  readonly label: string;
+  readonly cats?: readonly string[];
+}[] = [
+  { id: "all", label: "全部" },
+  { id: "pistol", label: "手枪/左轮", cats: ["pistol", "revolver"] },
+  { id: "smg", label: "冲锋枪", cats: ["smg"] },
+  { id: "rifle", label: "步枪/机枪", cats: ["assaultRifle", "lmg"] },
+  { id: "shotgun", label: "霰弹枪", cats: ["shotgun"] },
+  { id: "sniper", label: "狙击/精准", cats: ["sniperRifle", "precisionRifle"] },
+  { id: "melee", label: "近战", cats: ["blade", "blunt"] },
+];
+
+type VehicleGroup = "all" | "daily" | "sport" | "offroad" | "moto";
+const VEHICLE_GROUPS: readonly {
+  readonly id: VehicleGroup;
+  readonly label: string;
+  readonly classes?: readonly string[];
+}[] = [
+  { id: "all", label: "全部" },
+  { id: "daily", label: "经济/行政", classes: ["economy", "executive"] },
+  { id: "sport", label: "跑车/超跑", classes: ["sport", "hyper"] },
+  { id: "offroad", label: "越野", classes: ["offroad"] },
+  { id: "moto", label: "摩托", classes: ["moto"] },
+];
+
 export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps) {
   const [hoverWeaponId, setHoverWeaponId] = useState<string | null>(null);
+  const [weaponGroup, setWeaponGroup] = useState<WeaponGroup>("all");
+  const [vehicleGroup, setVehicleGroup] = useState<VehicleGroup>("all");
   const base = originDefaultLoadout(card, data);
   const kit = board.kit;
   const ownedGear = new Set(pickedLoadouts(card, data).flatMap((l) => l.gear.map((g) => g.id)));
   const setKit = (patch: Partial<Board["kit"]>) => commit({ ...board, kit: { ...kit, ...patch } });
+  const weapons = data.weapons ?? [];
+  const activeWeaponCats = WEAPON_GROUPS.find((g) => g.id === weaponGroup)?.cats;
+  const shownWeapons = activeWeaponCats
+    ? weapons.filter((w) => w.category !== undefined && activeWeaponCats.includes(w.category))
+    : weapons;
+  const vehicles = data.vehicles ?? [];
+  const activeVehicleClasses = VEHICLE_GROUPS.find((g) => g.id === vehicleGroup)?.classes;
+  const shownVehicles = activeVehicleClasses
+    ? vehicles.filter((v) => activeVehicleClasses.includes(v.class))
+    : vehicles;
   const previewWeapon =
-    data.weapons?.find((w) => w.id === hoverWeaponId) ??
-    data.weapons?.find((w) => kit.weapons.includes(w.id)) ??
+    weapons.find((w) => w.id === hoverWeaponId) ??
+    weapons.find((w) => kit.weapons.includes(w.id)) ??
     null;
   const previewCategory =
     previewWeapon?.category && previewWeapon.category in inventoryRules.WEAPON_CATEGORY_LABELS
@@ -504,14 +544,32 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
       </fieldset>
       <p className={styles.note}>{CASH_TIER_INFO[kit.cashTier].desc}</p>
 
-      {data.weapons && data.weapons.length > 0 && (
+      {weapons.length > 0 && (
         <>
           <h4 className={styles.subTitle}>
             额外随身武器{" "}
             <small className={styles.stepNote}>
-              {kit.weapons.length} / 2 · 共 {data.weapons.length} 款
+              {kit.weapons.length} / 2 · 共 {weapons.length} 款
             </small>
           </h4>
+          <fieldset className={styles.shelfFilter} aria-label="按武器类别筛选">
+            {WEAPON_GROUPS.map((g) => {
+              const count = g.cats
+                ? weapons.filter((w) => w.category !== undefined && g.cats?.includes(w.category))
+                    .length
+                : weapons.length;
+              return (
+                <Button
+                  key={g.id}
+                  small
+                  pressed={weaponGroup === g.id}
+                  onClick={() => setWeaponGroup(g.id)}
+                >
+                  {g.label} ({count})
+                </Button>
+              );
+            })}
+          </fieldset>
           <div className={styles.weaponPreview} aria-live="polite">
             <CellFrame />
             {previewWeapon ? (
@@ -541,7 +599,7 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
             )}
           </div>
           <ul className={styles.weaponGrid}>
-            {data.weapons.map((w) => {
+            {shownWeapons.map((w) => {
               const on = kit.weapons.includes(w.id);
               const owned = ownedGear.has(w.id);
               const full = !on && kit.weapons.length >= 2;
@@ -554,6 +612,7 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
                   <button
                     type="button"
                     className={styles.weaponTile}
+                    data-rarity={w.rarity}
                     aria-pressed={on}
                     disabled={!on && (owned || full)}
                     title={`${w.name}（${owned ? "出身自带" : (RARITY_LABELS[w.rarity] ?? w.rarity)}）：${w.ability}`}
@@ -569,7 +628,9 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
                     {itemArtOf(w.id) ? (
                       <Asset id={itemArtOf(w.id) as AssetId} className={styles.weaponImg} />
                     ) : null}
-                    <span className={styles.weaponName}>{w.name}</span>
+                    <span className={styles.weaponName} data-rarity={w.rarity}>
+                      {w.name}
+                    </span>
                   </button>
                 </li>
               );
@@ -578,13 +639,30 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
         </>
       )}
 
-      {data.vehicles && data.vehicles.length > 0 && (
+      {vehicles.length > 0 && (
         <>
           <h4 className={styles.subTitle}>
-            专属载具 <small className={styles.stepNote}>共 {data.vehicles.length} 款</small>
+            专属载具 <small className={styles.stepNote}>共 {vehicles.length} 款</small>
           </h4>
+          <fieldset className={styles.shelfFilter} aria-label="按载具类别筛选">
+            {VEHICLE_GROUPS.map((g) => {
+              const count = g.classes
+                ? vehicles.filter((v) => g.classes?.includes(v.class)).length
+                : vehicles.length;
+              return (
+                <Button
+                  key={g.id}
+                  small
+                  pressed={vehicleGroup === g.id}
+                  onClick={() => setVehicleGroup(g.id)}
+                >
+                  {g.label} ({count})
+                </Button>
+              );
+            })}
+          </fieldset>
           <ul className={styles.vehicleGrid}>
-            {data.vehicles.map((v) => {
+            {shownVehicles.map((v) => {
               const free = base.freeVehicleIds.includes(v.id);
               const on = free || kit.vehicle === v.id;
               const art = vehicleArtOf(v.id);

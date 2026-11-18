@@ -92,8 +92,10 @@ export function StartMapPicker({
     keyPan,
   } = useMapCamera();
   const [query, setQuery] = useState("");
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const searchId = useId();
   const picked = ANCHOR.get(value);
+  const hovered = hoveredId ? ANCHOR.get(hoveredId) : undefined;
   const resetAnchor = ANCHOR.get(defaultStart) ?? ANCHOR.get(DEFAULT_START);
   const info = asset(MAP);
 
@@ -110,34 +112,54 @@ export function StartMapPicker({
     if (focus) lookAt(a.x, a.y, POI_ZOOM);
   };
 
-  // 原作固定地点一直画；地铁站和地标放大到能看街区名时画；服务点放大到能看店时画，挤在一起的只留一个
+  // 原作固定地点一直画；地标/地铁站与服务点也按屏幕格子抽稀直接展示，放大后再铺开更密的点
   const pins: RadarAnchor[] = [];
   const pois: { readonly a: RadarAnchor; readonly style: CSSProperties }[] = [];
   if (size.w > 0) {
-    const taken = new Set<string>();
+    const pinStep = zoom >= SUB_ZOOM ? 20 : 34;
+    const poiStep = zoom >= POI_ZOOM ? 22 : 34;
+    const pinCells = new Set<string>();
+    const poiCells = new Set<string>();
+
+    // 先把固定地点占格记下来，避免低倍率下地标和服务点叠到主地点上面
     for (const a of RADAR_ANCHORS) {
-      if (a.id === value) continue;
+      if (a.kind !== null && a.id !== value) continue;
+      const at = toScreen(a.x, a.y);
+      if (!onScreen(at)) continue;
+      pinCells.add(`${Math.round(at.left / pinStep)}:${Math.round(at.top / pinStep)}`);
+      poiCells.add(`${Math.round(at.left / poiStep)}:${Math.round(at.top / poiStep)}`);
+      if (a.id !== value) pins.push(a);
+    }
+
+    for (const a of RADAR_ANCHORS) {
+      if (a.id === value || a.kind === null) continue;
       const at = toScreen(a.x, a.y);
       if (!onScreen(at)) continue;
       const kind = POI_KIND.get(a.id);
       if (kind) {
-        if (zoom < POI_ZOOM) continue;
-        const cell = `${Math.round(at.left / 24)}:${Math.round(at.top / 24)}`;
+        const cell = `${Math.round(at.left / poiStep)}:${Math.round(at.top / poiStep)}`;
         const style = iconStyle(poiIcon(kind), at);
-        if (taken.has(cell) || !style) continue;
-        taken.add(cell);
+        if (poiCells.has(cell) || !style) continue;
+        poiCells.add(cell);
         pois.push({ a, style });
-      } else if (a.kind === null || zoom >= SUB_ZOOM) {
+      } else {
+        const cell = `${Math.round(at.left / pinStep)}:${Math.round(at.top / pinStep)}`;
+        if (zoom < SUB_ZOOM && pinCells.has(cell)) continue;
+        pinCells.add(cell);
         pins.push(a);
       }
     }
   }
 
-  // 名字：选中的先摆，原作固定地点其次；右边放不下放左边，再放不下只在悬停时显示
+  // 名字：选中的先摆，原作固定地点其次，剩余空位再摆地标/地铁站名；放不下时悬停显示
   const sides = new Map<string, "right" | "left" | "hidden">();
   {
     const boxes: Box[] = [];
-    const order = [...(picked ? [picked] : []), ...pins.filter((a) => a.kind === null)];
+    const order = [
+      ...(picked ? [picked] : []),
+      ...pins.filter((a) => a.kind === null),
+      ...pins.filter((a) => a.kind !== null),
+    ];
     for (const a of order) {
       const at = toScreen(a.x, a.y);
       const w = a.name.length * 13 + 12;
@@ -174,6 +196,10 @@ export function StartMapPicker({
           title={anchorLabel(a)}
           aria-label={`开局地点：${anchorLabel(a)}`}
           aria-pressed={here}
+          onMouseEnter={() => setHoveredId(a.id)}
+          onMouseLeave={() => setHoveredId((cur) => (cur === a.id ? null : cur))}
+          onFocus={() => setHoveredId(a.id)}
+          onBlur={() => setHoveredId((cur) => (cur === a.id ? null : cur))}
           onClick={() => choose(a, false)}
         />
         <span className={story.mapDestLabel} data-side={sides.get(a.id) ?? "hidden"}>
@@ -227,7 +253,11 @@ export function StartMapPicker({
         <header className={styles.startMapTop}>
           <h3 className={story.mapTopTitle}>夜之城</h3>
           <span className={story.dim}>
-            {picked ? `开局地点：${anchorLabel(picked)}` : "还没选开局地点"}
+            {hovered
+              ? `悬停：${anchorLabel(hovered)}`
+              : picked
+                ? `开局地点：${anchorLabel(picked)}`
+                : "还没选开局地点"}
           </span>
           <div className={story.mapTools}>
             <span className={story.mapZoom}>
@@ -336,15 +366,25 @@ export function StartMapPicker({
                   title={anchorLabel(a)}
                   aria-label={`开局地点：${anchorLabel(a)}`}
                   aria-pressed={false}
+                  onMouseEnter={() => setHoveredId(a.id)}
+                  onMouseLeave={() => setHoveredId((cur) => (cur === a.id ? null : cur))}
+                  onFocus={() => setHoveredId(a.id)}
+                  onBlur={() => setHoveredId((cur) => (cur === a.id ? null : cur))}
                   onClick={() => choose(a, false)}
                 />
               ))}
               {pins.map(pin)}
               {picked && pin(picked)}
+              {hovered && POI_KIND.has(hovered.id) && hovered.id !== value && (
+                <span className={styles.mapPoiTip} style={toScreen(hovered.x, hovered.y)}>
+                  {anchorLabel(hovered)}
+                </span>
+              )}
             </>
           )}
           <p className={story.mapHint}>
-            {zoom < POI_ZOOM ? "放大能看到更多店和地铁站 · " : ""}底图和图标取自原作
+            {zoom < POI_ZOOM ? "滚轮或放大可展开更密集的店面与地铁站 · " : ""}
+            悬停查看点名 · 底图和图标取自原作
           </p>
         </div>
       </section>
