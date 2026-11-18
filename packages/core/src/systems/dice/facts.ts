@@ -36,6 +36,16 @@ export function rulingFact(facts: Readonly<Record<string, unknown>>): RulingFact
   return parsed.success ? parsed.data : undefined;
 }
 
+/** 读取本轮敌方黑客反制的独立裁决；未单独给出时回退到 ruling */
+export function npcHackRulingFact(
+  facts: Readonly<Record<string, unknown>>,
+): RulingFact | undefined {
+  const raw = facts.npcHackRuling ?? facts.ruling;
+  if (raw === undefined) return undefined;
+  const parsed = RulingFactSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** 队员死亡必须有已确认的致命危机，旧检定字段不能替代现实依据。 */
 export function memberDeathBlocked(
   facts: Readonly<Record<string, unknown>>,

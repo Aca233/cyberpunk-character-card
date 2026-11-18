@@ -119,6 +119,26 @@ export const JudgeRulingSchema = z.object({
 });
 export type JudgeRuling = z.infer<typeof JudgeRulingSchema>;
 
+/** 敌方网络黑客对玩家反制破解的独立裁决；没有敌方黑客反制时写 null */
+export const CounterHackRulingSchema = z.object({
+  outcome: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("敌方黑客这次反制或快速破解的结果：穿过防线、被自我 ICE 挡下还是被切断链路"),
+  harm: z
+    .enum(["none", "graze", "heavy", "lethal"])
+    .describe("敌方这次快速破解对玩家造成的真实神经伤害档位；被挡下或未受伤写 none"),
+  reason: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("基于双方接入仓档次、完好自我 ICE、链路距离与现场干扰的定性依据"),
+});
+export type CounterHackRuling = z.infer<typeof CounterHackRulingSchema>;
+
 /** 主动设备只响应玩家的明确使用意图；模型判断不能因危险擅自替玩家启动。 */
 export function accelerationRequested(
   input: { text: string; sandevistan?: boolean | undefined },
@@ -150,6 +170,11 @@ export const JudgeDocSchema = z.object({
   ruling: JudgeRulingSchema.nullable().describe(
     "平时日常对话、吃喝赶路、普通观察写 null；只有发生物理碰撞、潜入越界、黑客入侵、武装冲突或违背常识阻断时才给定性裁决",
   ),
+  counterHack: CounterHackRulingSchema.nullable()
+    .optional()
+    .describe(
+      "仅当在场敌方网络黑客本轮对玩家发起攻击或控制破解时填写（独立裁决是否穿过自我 ICE 与造成的真实神经伤害）；没有敌方黑客反制时写 null",
+    ),
   buy: TransactionIntentSchema.nullable().describe(
     "玩家明确授权买入、卖出、服务、安装、拆卸、维修或还款时填写；一笔写对象，多笔或多件按实际顺序逐件列数组，不写价钱。询价、砍价或未同意成交写 null",
   ),
@@ -174,6 +199,7 @@ const JudgeShapeSchema = z.object({
   read: z.string().nullable().optional().catch(undefined),
   ooc: z.boolean().optional().catch(undefined),
   ruling: z.unknown().optional(),
+  counterHack: z.unknown().optional(),
   buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
   foes: z.string().nullable().optional().catch(undefined),
@@ -218,6 +244,14 @@ export function rulingText(ruling: JudgeRuling): string {
       ? "（无身体创伤）"
       : `（可能身体受损档位：${ruling.harm}${ruling.limb ? "，存在断肢风险" : ""}）`;
   return `${lead}${harm}：${ruling.outcome}（依据：${ruling.reason}）。按现实因果照写，不提数值和规则词。`;
+}
+
+export function counterHackText(counterHack: CounterHackRuling): string {
+  const harm =
+    counterHack.harm === "none"
+      ? "（未造成神经损伤）"
+      : `（真实神经伤害档位：${counterHack.harm}）`;
+  return `【敌方黑客反制】${harm}：${counterHack.outcome}（依据：${counterHack.reason}）。按此独立裁决写入正文与 npcHack，不改写玩家主行动裁决。`;
 }
 
 /** 要玩家先确认的大额花费 */

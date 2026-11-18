@@ -60,7 +60,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - recall：只能从【可调的旧记忆】里原样抄标题，最多 3 条；没有列出或用不上写 []。`;
 
 /** ① 判断的例子 */
-export const JUDGE_EXAMPLE = `{"read": "你想翻上铁皮棚顶借着夜色偷听中间人接头", "ooc": false, "ruling": {"kind": "costly", "outcome": "铁皮能踩上去看清下面的接头人，但年久失修的波纹板会嘎吱作响、震落铁锈惊动放风的人", "harm": "graze", "reason": "棚顶铁皮松动且下面有人把风，你穿的普通皮夹克能兜住刮擦但掩护不了声音"}, "buy": null, "recall": [], "foes": "中间人旁边那个嚼口香糖的保镖一直盯着二楼窗台和棚顶，听到响动会第一时间拔枪照手电", "sandevistan": false}`;
+export const JUDGE_EXAMPLE = `{"read": "你想翻上铁皮棚顶借着夜色偷听中间人接头", "ooc": false, "ruling": {"kind": "costly", "outcome": "铁皮能踩上去看清下面的接头人，但年久失修的波纹板会嘎吱作响、震落铁锈惊动放风的人", "harm": "graze", "reason": "棚顶铁皮松动且下面有人把风，你穿的普通皮夹克能兜住刮擦但掩护不了声音"}, "counterHack": null, "buy": null, "recall": [], "foes": "中间人旁边那个嚼口香糖的保镖一直盯着二楼窗台和棚顶，听到响动会第一时间拔枪照手电", "sandevistan": false}`;
 
 let output: string | undefined;
 

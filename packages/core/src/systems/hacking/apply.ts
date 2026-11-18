@@ -7,7 +7,7 @@ import {
   cyberwareCatalog,
   type DeckTrait,
 } from "../cyberware";
-import { rulingFact } from "../dice";
+import { npcHackRulingFact, rulingFact } from "../dice";
 import type { HealthState } from "../health";
 import { currentVitals, filledBody, type NpcState } from "../npc";
 import type { WorldClockState } from "../world";
@@ -223,7 +223,7 @@ export function applyNpcHack(
   if (!deck) return fail(`${npc.name} 没装网络接入仓，放不了快速破解：照他的装备和义体换个打法`);
   const harmful =
     command.target === "你" && (def.category === "damage" || def.category === "ultimate");
-  const ruling = harmful ? rulingFact(ctx.facts) : undefined;
+  const ruling = harmful ? npcHackRulingFact(ctx.facts) : undefined;
   if (harmful) {
     if (!ruling) return fail("缺少本轮神经对抗结果，不能凭程序类别登记伤害");
     if (draft.resolvedNpcHacks.includes(ruling.id)) {

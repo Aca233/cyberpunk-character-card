@@ -87,6 +87,9 @@ import { readSceneMemory, summaryFromExtract } from "./scene-memory";
 import {
   accelerationRequested,
   type BigSpend,
+  type CounterHackRuling,
+  CounterHackRulingSchema,
+  counterHackText,
   JudgeDocSchema,
   type JudgeRuling,
   JudgeRulingSchema,
@@ -633,6 +636,12 @@ export async function runNarratorTurn(
   if (!ooc && !inFlashback) {
     if (judge.ruling !== undefined && judge.ruling !== null)
       judgeEntries.push({ key: "ruling", raw: judge.ruling, schema: JudgeRulingSchema });
+    if (judge.counterHack !== undefined && judge.counterHack !== null)
+      judgeEntries.push({
+        key: "counterHack",
+        raw: judge.counterHack,
+        schema: CounterHackRulingSchema,
+      });
     if (judge.buy !== undefined && judge.buy !== null)
       judgeEntries.push({ key: "buy", raw: judge.buy, schema: TransactionIntentSchema });
   }
@@ -650,6 +659,14 @@ export async function runNarratorTurn(
       b.drop("ruling", judge.ruling, ooc ? oocReason : flashbackReason, "rules");
     } else {
       rulingSpec = judged.get("ruling") as JudgeRuling;
+    }
+  }
+  let counterHackSpec: CounterHackRuling | undefined;
+  if (judge.counterHack !== undefined && judge.counterHack !== null) {
+    if (ooc || inFlashback) {
+      b.drop("counterHack", judge.counterHack, ooc ? oocReason : flashbackReason, "rules");
+    } else {
+      counterHackSpec = judged.get("counterHack") as CounterHackRuling;
     }
   }
 
@@ -693,6 +710,7 @@ export async function runNarratorTurn(
   const decided: string[] = [];
   if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
   if (rulingSpec) decided.push(rulingText(rulingSpec));
+  if (counterHackSpec) decided.push(counterHackText(counterHackSpec));
   // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
   let trip: PlannedTrip | undefined;
   if (plan.kind === "action" && plan.input.travel !== undefined && !ooc && !inFlashback) {
@@ -1211,6 +1229,13 @@ export async function runNarratorTurn(
   const facts: Record<string, unknown> = { tradeNarrative: narrative };
   facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
   facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
+  if (counterHackSpec) {
+    facts.npcHackRuling = rulingFactFrom(`turn.${records.length}.npcHack`, {
+      kind: counterHackSpec.harm === "none" ? "possible" : "costly",
+      harm: counterHackSpec.harm,
+      reason: counterHackSpec.reason,
+    });
+  }
   // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
   const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
   if (armor) facts.armor = armor.name;

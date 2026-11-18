@@ -1,6 +1,8 @@
 import type { PlayerView } from "../../game";
 import type { WorldState } from "../../kernel/world";
 import { cyberwareCatalog } from "../../systems/cyberware";
+import { CATEGORY_LABELS, mentionsHacking, quickhackCatalog } from "../../systems/hacking";
+import { HackingStateSchema } from "../../systems/hacking/schema";
 import { InventoryStateSchema, itemCatalog, withWorldObjects } from "../../systems/inventory";
 import { NpcStateSchema, onStage } from "../../systems/npc";
 import { WorldClockStateSchema } from "../../systems/world";
@@ -64,5 +66,17 @@ export function extractCatalogDetails(
       details.push(`- ${part.id} ${part.name}：${part.ability}`);
     }
   }
-  return details.length > 0 ? `【本轮相关物件能力】\n${details.join("\n")}` : undefined;
+  const sections: string[] = [];
+  if (details.length > 0) sections.push(`【本轮相关物件能力】\n${details.join("\n")}`);
+  const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
+  const hackRelevant = (hacking.success && hacking.data.dive !== null) || mentionsHacking(text);
+  if (hackRelevant) {
+    const qLines = [...quickhackCatalog(data).values()].map(
+      (q) => `- ${q.id} ${q.name}（${CATEGORY_LABELS[q.category]}）：${q.effect}`,
+    );
+    if (qLines.length > 0) {
+      sections.push(`【常见快速破解手段参考（供 hack / npcHack 归类）】\n${qLines.join("\n")}`);
+    }
+  }
+  return sections.length > 0 ? sections.join("\n\n") : undefined;
 }

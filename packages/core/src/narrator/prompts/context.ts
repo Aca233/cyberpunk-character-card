@@ -7,14 +7,17 @@ import type { TurnInput } from "../../schemas/turn";
 import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
+import { deckOf, mentionsHacking, npcDeckOf } from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
 import { HealthStateSchema } from "../../systems/health";
 import { catalogSection, itemCatalog } from "../../systems/inventory";
 import { InventoryStateSchema, loadoutSummary } from "../../systems/inventory/schema";
 import { jobTemplateSection } from "../../systems/jobs";
 import { MemoryStateSchema, memoryRecords, recapSection } from "../../systems/memory";
+import { NpcStateSchema, onStage } from "../../systems/npc";
 import { registry } from "../../systems/registry";
 import { SafehouseStateSchema } from "../../systems/safehouse/schema";
+import { currentTension } from "../../systems/tension";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
@@ -163,12 +166,17 @@ const DISTRICT_ID_MAP: Readonly<Record<string, string>> = {
   太平洲: "pacifica",
 };
 
-const HACK_ATTEMPT = /(?:快速破解|骇入|入侵|潜网|接入点|子网|断网|直插|终端|摄像头|防火墙)/;
 const DIRECT_LINK = /(?:个人连接线|直插|数据线|插孔)/;
+const AIR_GAP_HINT = /(?:气隙|离线隔离|物理断网|air[- ]?gapped)/i;
+const UNCHROMED_HINT = /(?:纯肉体|没装义体|无义体|纯机械)/;
+const HARDENED_ICE_HINT =
+  /(?:公司数据堡垒|军用黑冰|硬化黑冰|自卫黑冰|自我\s*ICE|网络黑客|网监|军用防火墙)/i;
+const SUBNET_MENTION = /([\u4e00-\u9fa5A-Za-z0-9·-]{2,14}(?:内网|子网))/;
+const SUBNET_GATE = /(?:隔离|封闭|必须先渗入|局域网|本地子网)/;
 const HIGH_END_VENUE =
   /(?:进门|大门|过安检|走进|进入|混进).*?(?:大厦|塔|会所|俱乐部|vip|顶层|余烬|绀碧|酒店)/i;
 
-/** 计算当前局面客观触发的物理与安防约束（余额、高安区明火武器/高档场所门禁、无接入仓骇入） */
+/** 计算当前局面客观触发的物理与安防约束（余额、高安区明火武器/高档场所门禁、无接入仓与物理网络拓扑） */
 export function physicsSection(
   world: WorldState,
   data: Readonly<Record<string, unknown>> | undefined,
@@ -185,11 +193,10 @@ export function physicsSection(
   const items = safeData.items ? itemCatalog(safeData) : new Map();
   const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
   const health = HealthStateSchema.safeParse(world.slices.health ?? {});
+  const installed = cyber.success ? cyber.data.installed : [];
+  const brokenChrome = health.success ? health.data.brokenChrome : [];
   const loadout = inv.success
-    ? loadoutSummary(inv.data, items, {
-        installed: cyber.success ? cyber.data.installed : [],
-        brokenChrome: health.success ? health.data.brokenChrome : [],
-      })
+    ? loadoutSummary(inv.data, items, { installed, brokenChrome })
     : undefined;
 
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
@@ -199,8 +206,88 @@ export function physicsSection(
     safehouse.success &&
     safehouse.data.homes.some((h) => h.location === clock.location);
 
-  const wantHack = HACK_ATTEMPT.test(inputText);
-  const vector = DIRECT_LINK.test(inputText) ? "directLink" : "wireless";
+  const deckInfo = deckOf(installed, safeData, brokenChrome);
+  const hasCyberdeck = deckInfo
+    ? deckInfo.deck !== null
+    : hacking.success && hacking.data.deck !== null && !brokenChrome.includes(hacking.data.deck);
+
+  const wantHack = mentionsHacking(inputText) || (hacking.success && hacking.data.dive !== null);
+  let hackCheck: Parameters<typeof evaluatePhysicsBoundaries>[0]["hackCheck"];
+  if (wantHack && hacking.success) {
+    const breachedHere = hacking.data.breachedNetworks
+      .filter((b) => b.location === clock.location || b.location === null)
+      .map((b) => b.name);
+    const tension = currentTension(world);
+    const activeEnemyChrome = tension.scannedEnemyChrome.filter(
+      (c) => !tension.disabledEnemyChrome.includes(c),
+    );
+    const activeSceneText =
+      MemoryStateSchema.safeParse(world.slices.memory ?? {}).data?.active?.text ?? "";
+    const sceneContext = [
+      place?.note ?? "",
+      activeSceneText,
+      ...tension.exposedWeakpoints,
+      ...activeEnemyChrome,
+      inputText,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const npcs = NpcStateSchema.safeParse(world.slices.npc ?? {});
+    const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+    const targetedNpcs = npcs.success
+      ? Object.values(npcs.data.npcs).filter(
+          (n) =>
+            onStage(n, stage) &&
+            (inputText.includes(n.name) ||
+              (n.alias !== undefined && n.alias !== "" && inputText.includes(n.alias)) ||
+              inputText.includes(n.id)),
+        )
+      : [];
+
+    const targetAirGapped = AIR_GAP_HINT.test(sceneContext);
+    const targetUnchromed =
+      UNCHROMED_HINT.test(inputText) ||
+      (targetedNpcs.length > 0 &&
+        targetedNpcs.every((n) => n.body !== undefined && n.body.cyberware.length === 0));
+
+    const vector = DIRECT_LINK.test(inputText)
+      ? "directLink"
+      : breachedHere.length > 0 && /(?:子网|内网|摄像头|门禁|炮塔|终端|本地)/.test(inputText)
+        ? "localSubnet"
+        : "wireless";
+
+    const subnetCandidate =
+      SUBNET_GATE.test(sceneContext) ||
+      SUBNET_MENTION.test(activeSceneText) ||
+      SUBNET_MENTION.test(place?.note ?? "")
+        ? SUBNET_MENTION.exec(sceneContext)?.[1]
+        : undefined;
+    const requiredSubnet = vector === "localSubnet" ? breachedHere[0] : subnetCandidate;
+
+    const npcHasHardenedChrome = targetedNpcs.some((n) => {
+      if (!n.body) return false;
+      const info = npcDeckOf(n.body.cyberware, safeData);
+      return info.deck !== null || info.selfIce;
+    });
+    const hardenedIce =
+      npcHasHardenedChrome ||
+      (hacking.data.dive !== null && hacking.data.dive.layer >= 3) ||
+      place?.district === "市政中心" ||
+      place?.district === "公司广场" ||
+      HARDENED_ICE_HINT.test(sceneContext);
+
+    hackCheck = {
+      vector,
+      hasCyberdeck,
+      breachedSubnets: breachedHere,
+      ...(targetAirGapped ? { targetAirGapped: true } : {}),
+      ...(requiredSubnet ? { requiredSubnet } : {}),
+      ...(targetUnchromed ? { targetUnchromed: true } : {}),
+      ...(hardenedIce ? { hardenedIce: true } : {}),
+    };
+  }
+
   const result = evaluatePhysicsBoundaries({
     currentEddies: economy.eddies,
     ...(districtId && loadout
@@ -222,15 +309,7 @@ export function physicsSection(
           },
         }
       : {}),
-    ...(wantHack && hacking.success
-      ? {
-          hackCheck: {
-            vector,
-            hasCyberdeck: hacking.data.deck !== null,
-            breachedSubnets: hacking.data.breachedNetworks.map((b) => b.name),
-          },
-        }
-      : {}),
+    ...(hackCheck ? { hackCheck } : {}),
   });
 
   if (result.directives.length === 0) return undefined;
