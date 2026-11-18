@@ -586,7 +586,11 @@ export function CharacterCreator({
 
               {activeStep === "cyberware" && (
                 <div className={wb.chromeLayout}>
-                  <div className={wb.chromeLeft}>
+                  <section
+                    className={`${wb.sectionBox} ${wb.chromeLeft}`}
+                    aria-label="人体义体拓扑与生理耐受"
+                  >
+                    <CellFrame />
                     <div className={wb.dollFrame}>
                       <CyberDoll
                         parts={dollParts}
@@ -654,7 +658,7 @@ export function CharacterCreator({
                         </div>
                       )}
                     </section>
-                  </div>
+                  </section>
 
                   <section
                     className={`${wb.sectionBox} ${wb.kitLeftPane}`}

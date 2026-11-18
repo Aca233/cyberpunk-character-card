@@ -750,8 +750,8 @@
 .chromeLeft {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -761,9 +761,9 @@
 
 /* 禁止 zoom hack，让 @container pin 自然响应式计算尺寸且命中精确（需 >= 480px 才不塌成竖列表） */
 .dollFrame {
-  --doll-stage: clamp(340px, min(66cqw, calc(100dvh - 300px)), 640px);
+  --doll-stage: clamp(340px, min(68cqw, calc(100dvh - 300px)), 640px);
   container: pin / inline-size;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
