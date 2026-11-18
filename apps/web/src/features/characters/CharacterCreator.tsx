@@ -64,6 +64,19 @@ const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 const CORE_PROSE_BLOCKS: readonly ProseBlock[] = ["look", "past", "personality", "voice"];
 const EXTRA_PROSE_BLOCKS: readonly ProseBlock[] = ["scene", "greeting", "examples"];
 
+const CYBER_SLOT_LIST: readonly CyberSlot[] = [
+  "frontalCortex",
+  "eyes",
+  "nervous",
+  "os",
+  "circulatory",
+  "integumentary",
+  "skeleton",
+  "hands",
+  "arms",
+  "legs",
+];
+
 type TraitsTab = "build" | "flaw";
 
 function DossierBlock({
@@ -653,10 +666,25 @@ export function CharacterCreator({
                         {CYBER_LABELS[activeSlot]} · {(dollParts.get(activeSlot) ?? []).length}/
                         {cyberwareRules.SLOT_CAPACITY[activeSlot]}
                       </h3>
-                      <span className={wb.sectionBoxSub}>
-                        点左侧人体切换部位 · 悬停预览 · 单击直接装卸
-                      </span>
+                      <span className={wb.sectionBoxSub}>点卡片直接装上、卸下或替换</span>
                     </header>
+                    <fieldset className={wb.slotRibbon} aria-label="部位快速切换">
+                      {CYBER_SLOT_LIST.map((s) => {
+                        const count = (dollParts.get(s) ?? []).length;
+                        const cap = cyberwareRules.SLOT_CAPACITY[s];
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            className={wb.slotTab}
+                            aria-pressed={activeSlot === s}
+                            onClick={() => setActiveSlot(s)}
+                          >
+                            {CYBER_LABELS[s]} {count}/{cap}
+                          </button>
+                        );
+                      })}
+                    </fieldset>
                     <div className={wb.kitLeftScroll}>
                       {pickerProps ? (
                         <CyberwareShelf {...pickerProps} slot={activeSlot} />

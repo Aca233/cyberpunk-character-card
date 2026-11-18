@@ -740,7 +740,7 @@
 .chromeLayout {
   display: grid;
   flex: 1 1 0;
-  grid-template-columns: minmax(420px, 470px) minmax(360px, 1fr);
+  grid-template-columns: minmax(520px, 580px) minmax(360px, 1fr);
   gap: 14px;
   min-height: 0;
   align-items: stretch;
@@ -758,7 +758,7 @@
   scrollbar-width: thin;
 }
 
-/* 禁止 zoom hack，让 @container pin 自然响应式计算尺寸且命中精确 */
+/* 禁止 zoom hack，让 @container pin 自然响应式计算尺寸且命中精确（需 >= 480px 才不塌成竖列表） */
 .dollFrame {
   container: pin / inline-size;
   flex: 0 0 auto;
@@ -766,7 +766,7 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 470px;
+  max-width: 580px;
   min-width: 0;
 }
 
@@ -931,10 +931,34 @@
 .slotRibbon {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.slotTab {
+  padding: 4px 9px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(14 16 26 / 75%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: var(--cp-cursor-hand);
+}
+
+.slotTab:hover {
+  border-color: rgb(94 246 255 / 45%);
+  color: var(--cp-text);
+  background: rgb(94 246 255 / 8%);
+}
+
+.slotTab[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
 }
 
 .kitLayout {

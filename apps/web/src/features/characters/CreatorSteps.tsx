@@ -20,7 +20,6 @@ import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
 import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
-import { CYBER_SLOT_ICON } from "../story/cyberwareMeta";
 import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
@@ -35,7 +34,6 @@ import {
   rollTraits,
   TRAIT_FILTER_LABELS,
   type TraitFilter,
-  totalStartHumanityCost,
   traitCategory,
 } from "./creator";
 
@@ -704,7 +702,7 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
   );
 }
 
-// ———— 义体货架：悬停即时预览、单击直接装卸/替换 ————
+// ———— 义体货架：信息直出卡片，单击直接装卸/替换 ————
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"] as const;
 
@@ -713,14 +711,9 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
   const [shelfState, setShelfState] = useState<{
     readonly slot: CyberSlot;
     readonly rarity: string | null;
-    readonly hover: string | null;
-  }>({ slot, rarity: null, hover: null });
+  }>({ slot, rarity: null });
   const rarity = shelfState.slot === slot ? shelfState.rarity : null;
-  const hover = shelfState.slot === slot ? shelfState.hover : null;
-  const setRarity = (next: string | null) =>
-    setShelfState((s) => ({ slot, rarity: next, hover: s.slot === slot ? s.hover : null }));
-  const setHover = (next: string | null) =>
-    setShelfState((s) => ({ slot, rarity: s.slot === slot ? s.rarity : null, hover: next }));
+  const setRarity = (next: string | null) => setShelfState({ slot, rarity: next });
 
   const options = data.cyberware.filter((o) => o.slot === slot);
   const rarities = RARITY_ORDER.filter((r) => options.some((o) => o.rarity === r));
@@ -758,33 +751,11 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
     if (!blocked(o)) commit({ ...board, cyberware: nextCyberware(o) });
   };
 
-  const item =
-    options.find((o) => o.id === hover) ??
-    mounted.map((c) => options.find((o) => o.id === c.id)).find(Boolean) ??
-    shown[0];
-  const itemOn = item ? isOn(item) : false;
-  const humanityNow = Math.max(0, 100 - totalStartHumanityCost(card, data));
-  const toggled = item ? nextCyberware(item) : board.cyberware;
-  const humanityNext = Math.max(
-    0,
-    100 - totalStartHumanityCost({ ...card, board: { ...board, cyberware: toggled } }, data),
-  );
-  const itemArt = item ? itemArtOf(item.id) : null;
-
-  const hwSpecs = item
-    ? [
-        item.ram ? `RAM +${item.ram}` : "",
-        item.programSlots ? `程序槽 ${item.programSlots} 格` : "",
-        item.armor ? "护甲增强" : "",
-        item.accelerator ? "神经反应加速" : "",
-      ].filter(Boolean)
-    : [];
-
   return (
     <div className={styles.pickerBody}>
       <div className={styles.shelfHead}>
         <span className={styles.shelfMeta}>
-          可选 {shown.length} 款 · 已装 {mounted.length}/{cap} · 悬停预览，单击直接装卸
+          可选 {shown.length} 款 · 已装 {mounted.length}/{cap}
         </span>
         {rarities.length > 1 && (
           <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
@@ -807,41 +778,6 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
             .join("、")}
         </p>
       )}
-      {item && (
-        <article className={styles.weaponPreview} aria-live="polite">
-          <CellFrame />
-          <div className={styles.shelfDetailHero}>
-            {itemArt ? (
-              <Asset id={itemArt} alt={item.name} className={styles.shelfArtImg} />
-            ) : (
-              <Asset id={CYBER_SLOT_ICON[slot]} height={32} tint="var(--cp-cyan)" />
-            )}
-            <div className={styles.shelfDetailTitleWrap}>
-              <div className={styles.weaponPreviewHead}>
-                <span className={styles.weaponPreviewMeta}>
-                  <strong className={styles.pickName}>{item.name}</strong>
-                  {item.rarity && (
-                    <span className={styles.shelfRarity} data-rarity={item.rarity}>
-                      · {RARITY_LABELS[item.rarity]}
-                    </span>
-                  )}
-                </span>
-                <span className={styles.moduleBadge} data-tone={itemOn ? "active" : undefined}>
-                  {actionLabel(item)}
-                </span>
-              </div>
-              <span className={styles.shelfDelta}>
-                <span>神经占用：人性 −{item.humanityCost}</span>
-                <span>
-                  术后人性：{humanityNow} → <b className={styles.shelfNum}>{humanityNext}</b>
-                </span>
-                {hwSpecs.length > 0 && <span>{hwSpecs.join(" · ")}</span>}
-              </span>
-            </div>
-          </div>
-          <p className={styles.weaponPreviewDesc}>{item.ability}</p>
-        </article>
-      )}
       {options.length === 0 ? (
         <p className={styles.note}>开局没有能装在这个部位的义体。</p>
       ) : (
@@ -849,8 +785,14 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
           {shown.map((o) => {
             const on = isOn(o);
             const isBlocked = blocked(o);
+            const hwSpecs = [
+              o.ram ? `RAM +${o.ram}` : "",
+              o.programSlots ? `程序槽 ${o.programSlots} 格` : "",
+              o.armor ? "护甲增强" : "",
+              o.accelerator ? "神经反应加速" : "",
+            ].filter(Boolean);
             return (
-              <li key={o.id} onMouseEnter={() => setHover(o.id)} onFocus={() => setHover(o.id)}>
+              <li key={o.id}>
                 <button
                   type="button"
                   className={styles.cyberTile}
@@ -861,23 +803,38 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
                   onClick={() => toggle(o)}
                 >
                   <CellFrame />
-                  <CyberItemCell
-                    id={o.id}
-                    name={o.name}
-                    slot={o.slot as CyberSlot}
-                    on={on}
-                    rarity={o.rarity}
-                    size={40}
-                  />
-                  <span className={styles.cyberTileBody}>
-                    <span className={styles.cyberTileName} data-rarity={o.rarity}>
-                      {o.name}
-                    </span>
-                    <span className={styles.cyberTileMeta}>
-                      <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
-                      {on && <span className={styles.shelfTileOn}>已装</span>}
-                    </span>
-                  </span>
+                  <div className={styles.cyberTileTop}>
+                    <CyberItemCell
+                      id={o.id}
+                      name={o.name}
+                      slot={o.slot as CyberSlot}
+                      on={on}
+                      rarity={o.rarity}
+                      size={42}
+                    />
+                    <div className={styles.cyberTileBody}>
+                      <div className={styles.cyberTileHead}>
+                        <span className={styles.cyberTileName} data-rarity={o.rarity}>
+                          {o.name}
+                        </span>
+                        <span className={styles.moduleBadge} data-tone={on ? "active" : undefined}>
+                          {on ? "已装" : canSwap ? "点击替换" : "点击装上"}
+                        </span>
+                      </div>
+                      <div className={styles.cyberTileMeta}>
+                        {o.rarity && (
+                          <span className={styles.shelfRarity} data-rarity={o.rarity}>
+                            {RARITY_LABELS[o.rarity]}
+                          </span>
+                        )}
+                        <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className={styles.cyberTileAbility}>{o.ability}</p>
+                  {hwSpecs.length > 0 && (
+                    <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>
+                  )}
                 </button>
               </li>
             );
