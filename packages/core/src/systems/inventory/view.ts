@@ -129,11 +129,6 @@ export function inventoryView({ world, data }: ViewContext) {
       const id = inventory.clothing[slot];
       return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
     }),
-    /** 存下的整套外观，按格子顺序；没存过时为空 */
-    outfit: CLOTHING_SLOTS.flatMap((slot) => {
-      const id = inventory.outfit[slot];
-      return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
-    }),
     /** 背包里每件东西能装到哪：quick 快捷栏、clothing 服装格；武器直接放背包使用不再单装 */
     equipTo: Object.fromEntries(
       [...counts.keys()].flatMap((id) => {

@@ -28,6 +28,7 @@ const catalog = new Map([
 function empty(): InventoryState {
   return {
     objects: {},
+    placed: [],
     weapons: [null, null, null],
     active: null,
     healing: null,
@@ -35,7 +36,6 @@ function empty(): InventoryState {
     backpack: {},
     depleted: {},
     clothing: {},
-    outfit: {},
     mods: {},
     parts: 0,
     tuned: {},

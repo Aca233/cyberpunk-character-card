@@ -16,7 +16,6 @@ import {
   BuyItemActionSchema,
   EquipItemActionSchema,
   ModWeaponActionSchema,
-  OutfitActionSchema,
   SellItemActionSchema,
   UnequipItemActionSchema,
   UseHealingActionSchema,
@@ -26,7 +25,7 @@ import { ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
-import { BuyHomeActionSchema, StashActionSchema } from "./systems/safehouse";
+import { BuyHomeActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
 
@@ -47,10 +46,6 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   UseSuppressantActionSchema,
   /** 把装备栏里穿着的一件脱下放回背包 */
   UnequipItemActionSchema,
-  /** 存放箱和后备箱：store 从背包放进去，take 拿回背包；where 写安全屋 id 或车的 id */
-  StashActionSchema,
-  /** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
-  OutfitActionSchema,
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   ModWeaponActionSchema,
   /** 小队面板：accept、decline 回应入队请求，dismiss 请队员离开，pay 发雇佣型队员的薪水 */

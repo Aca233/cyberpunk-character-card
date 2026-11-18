@@ -6,11 +6,11 @@ import { inventoryActions } from "./actions";
 import {
   applyItem,
   applyMod,
-  applyOutfit,
   applyParts,
+  applyPlaceItem,
   itemCatalog,
+  relocateVehiclePlaced,
   spend,
-  stashMove,
   withWorldObjects,
 } from "./apply";
 import { inventoryEvents } from "./events";
@@ -49,6 +49,7 @@ export const inventory = defineSystem<
   state: InventoryStateSchema,
   initial: () => ({
     objects: {},
+    placed: [],
     weapons: [null, null, null],
     active: null,
     healing: null,
@@ -56,7 +57,6 @@ export const inventory = defineSystem<
     backpack: {},
     depleted: {},
     clothing: {},
-    outfit: {},
     mods: {},
     parts: 0,
     tuned: {},
@@ -109,21 +109,10 @@ export const inventory = defineSystem<
         );
       case "inventory.spend":
         return spend(draft, command.slot, undefined, ctx.now);
-      case "inventory.outfit":
-        return applyOutfit(draft, command.action, itemCatalog(ctx.data));
-      case "inventory.stash":
-        return stashMove(
-          draft,
-          command.action,
-          command.id,
-          ctx.now,
-          ctx.read<WorldClockState>("world").location,
-        );
-      case "inventory.relocateStash":
-        for (const id of command.items) {
-          const object = draft.objects[id];
-          if (object?.holder === "stash") object.location = command.location;
-        }
+      case "inventory.place":
+        return applyPlaceItem(draft, command, itemCatalog(ctx.data), ctx.now);
+      case "inventory.relocateVehicle":
+        relocateVehiclePlaced(draft, command.vehicle, command.location);
         return { ok: true };
       case "inventory.mod":
         return applyMod(draft, command.action, command.weapon, command.mod, itemCatalog(ctx.data));

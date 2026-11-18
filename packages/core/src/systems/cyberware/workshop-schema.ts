@@ -25,7 +25,7 @@ export const PartCommandSchema = z
     evidence: z.string().min(1),
   })
   .describe(
-    "登记实际找到、赠与、转交或检测过的未安装义体实物；必须记录来源与正文证据，不用物品目录生成免费装备。已安装或进行中手术的实物不能直接转交；存放箱或后备箱中的实物使用 stash 存取，不直接改 stash: 归属。",
+    "登记实际找到、赠与、转交或检测过的未安装义体实物；必须记录来源与正文证据，不用物品目录生成免费装备。已安装或进行中手术的实物不能直接转交；留置在住所、车辆或某处的实物使用 itemPlace 取回或留置，不直接改归属。",
   );
 export const SupplyCommandSchema = z
   .strictObject({
@@ -62,20 +62,19 @@ export type SupplyCommand = z.infer<typeof SupplyCommandSchema>;
 export type ServiceCommand = z.infer<typeof ServiceCommandSchema>;
 export type WorkshopCommand = ClinicCommand | PartCommand | SupplyCommand | ServiceCommand;
 
-export const CyberwareStashSchema = z.strictObject({
-  type: z.literal("cyberware.stash"),
+export const CyberwarePlaceSchema = z.strictObject({
+  type: z.literal("cyberware.place"),
   part: z.string().min(1),
-  action: z.enum(["store", "take"]),
-  where: z.string().min(1),
+  action: z.enum(["leave", "take"]),
+  holder: z.string().min(1),
   location: z.string().min(1).nullable(),
 });
-export type CyberwareStashCommand = z.infer<typeof CyberwareStashSchema>;
+export type CyberwarePlaceCommand = z.infer<typeof CyberwarePlaceSchema>;
 
-/** 车辆系统发出：后备箱义体实物随车更新位置。 */
-export const CyberwareRelocateStashSchema = z.strictObject({
-  type: z.literal("cyberware.relocateStash"),
-  items: z.array(z.string().min(1)),
-  where: z.string().min(1),
+/** 车辆系统发出：车内留置义体实物随车更新位置。 */
+export const CyberwareRelocateVehicleSchema = z.strictObject({
+  type: z.literal("cyberware.relocateVehicle"),
+  vehicle: z.string().min(1),
   location: z.string().min(1),
 });
-export type CyberwareRelocateStashCommand = z.infer<typeof CyberwareRelocateStashSchema>;
+export type CyberwareRelocateVehicleCommand = z.infer<typeof CyberwareRelocateVehicleSchema>;

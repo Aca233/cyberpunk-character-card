@@ -66,7 +66,6 @@ const rawJobs = slice(base, "jobs").jobs ?? [];
 const jobIds = (Array.isArray(rawJobs) ? rawJobs : Object.values(rawJobs as object)).map(
   (j) => (j as { id: string }).id,
 );
-const homeIds = ((slice(base, "safehouse").homes ?? []) as { id: string }[]).map((h) => h.id);
 const npcIds = Object.keys((slice(base, "npc").npcs ?? {}) as Record<string, unknown>);
 const modIds = items.filter((i) => i.modFits !== undefined).map((i) => i.id);
 
@@ -149,23 +148,6 @@ for (const id of weapons) {
   add("equipItem 换格", base, { type: "equipItem", id, slot: 2 });
   add("unequipItem", base, { type: "unequipItem", id });
   add("unequipItem 打斗中", fight(base), { type: "unequipItem", id });
-}
-// 存放箱
-for (const where of [...homeIds, "no-such-place"]) {
-  for (const action of ["store", "take"]) {
-    add("stash", base, { type: "stash", action, item: backpack[0] ?? "x", where });
-  }
-}
-add("stash 打斗中", fight(base), {
-  type: "stash",
-  action: "store",
-  item: backpack[0] ?? "x",
-  where: homeIds[0] ?? "x",
-});
-// 外观
-for (const action of ["save", "wear"]) {
-  add("outfit", base, { type: "outfit", action });
-  add("outfit 打斗中", fight(base), { type: "outfit", action });
 }
 // 改装件
 for (const mod of modIds.slice(0, 4)) {
@@ -285,24 +267,6 @@ const offeredJobs = set(base, "jobs", {
   jobs: ((slice(base, "jobs").jobs ?? []) as Slice[]).map((j) => ({ ...j, status: "offered" })),
 });
 for (const id of jobIds) add("acceptJob 挂着的", offeredJobs, { type: "acceptJob", id });
-for (const home of (slice(base, "safehouse").homes ?? []) as { id: string; location: string }[]) {
-  add("stash 在家", at(base, home.location), {
-    type: "stash",
-    action: "store",
-    item: backpack[0] ?? "x",
-    where: home.id,
-  });
-}
-const coat = items.find((i) => i.kind === "clothing" && i.clothingSlot !== undefined);
-if (coat?.clothingSlot) {
-  const worn = set(base, "inventory", { clothing: { [coat.clothingSlot]: coat.id }, backpack: {} });
-  add("outfit save 穿着", worn, { type: "outfit", action: "save" });
-  const saved = set(base, "inventory", {
-    outfit: { [coat.clothingSlot]: coat.id },
-    backpack: { [coat.id]: 1 },
-  });
-  add("outfit wear 存过", saved, { type: "outfit", action: "wear" });
-}
 const mate = npcIds[0];
 if (mate !== undefined) {
   const name =

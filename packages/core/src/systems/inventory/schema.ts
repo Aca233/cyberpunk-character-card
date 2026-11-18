@@ -293,8 +293,25 @@ const QuickSlotSchema = z
   })
   .nullable();
 
+export const PlacedKindSchema = z.enum(["home", "vehicle", "place", "npc"]);
+export type PlacedKind = z.infer<typeof PlacedKindSchema>;
+
+/** 玩家明确留在某处或托人保管的物品/物件记录 */
+export const PlacedItemSchema = z.object({
+  item: z.string().min(1),
+  count: z.number().int().min(1).default(1),
+  kind: PlacedKindSchema,
+  target: z.string().min(1),
+  location: z.string().nullable().default(null),
+  note: z.string().min(1).max(120).optional(),
+  since: z.number().int(),
+});
+export type PlacedItem = z.infer<typeof PlacedItemSchema>;
+
 export const InventoryStateSchema = z.object({
   objects: z.record(z.string(), WorldObjectSchema).default({}),
+  /** 明确留在家中、车里、现场或交由他人保管的物品 */
+  placed: z.array(PlacedItemSchema).default([]),
   merchants: z.record(z.string(), MerchantStateSchema).default({}),
   supplyOrders: z.record(z.string(), SupplyOrderSchema).default({}),
   nextSupply: z.number().int().min(1).default(1),
@@ -310,8 +327,6 @@ export const InventoryStateSchema = z.object({
   depleted: z.record(z.string(), z.number().int().min(0)),
   /** 身上穿着的服装：格子 → 物品 id */
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
-  /** 存下的整套外观：格子 → 物品 id；没存过时为空 */
-  outfit: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 武器上装着的改装件：武器 id → 位置 → 改装件 id；同一种武器的几把共用一份 */
   mods: z.record(z.string(), z.partialRecord(ModSlotSchema, z.string().min(1))).default({}),
   /** 拆解得来的零件，用来给武器升稀有度；旧存档默认 0 */
@@ -392,24 +407,27 @@ export type TradeCommand = z.infer<typeof TradeCommandSchema>;
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);
 export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 
-/** 只能由代码发出：其他系统消耗实际携带的补给 */
+/** 只能由代码发出：其他系统消耗实际携带的补给、留置与车辆同步 */
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
-  /** 界面动作：save 把身上穿着的存成整套外观，wear 照存下的一次换好 */
-  "inventory.outfit": z.object({
-    type: z.literal("inventory.outfit"),
-    action: z.enum(["save", "wear"]),
+  /** 安全屋/留置系统发出：把随身物品（或现场物体）留在指定位置，或从该位置拿回随身 */
+  "inventory.place": z.strictObject({
+    type: z.literal("inventory.place"),
+    action: z.enum(["leave", "take"]),
+    item: z.string().min(1),
+    count: z.number().int().min(1).default(1),
+    kind: PlacedKindSchema,
+    target: z.string().min(1),
+    location: z.string().nullable(),
+    note: z.string().min(1).max(120).optional(),
+    reason: z.string().min(1).optional(),
+    definition: ItemDefSchema.optional(),
+    origin: z.string().min(1).max(240).optional(),
   }),
-  /** 安全屋系统发出：out 从背包拿走一件放进存放箱或后备箱，in 拿回背包；武器的改装件留着 */
-  "inventory.stash": z.object({
-    type: z.literal("inventory.stash"),
-    action: z.enum(["out", "in"]),
-    id: z.string().min(1),
-  }),
-  /** 车辆系统发出：已存放的独立物件随车移到新停车地点。 */
-  "inventory.relocateStash": z.strictObject({
-    type: z.literal("inventory.relocateStash"),
-    items: z.array(z.string().min(1)),
+  /** 车辆系统发出：随车留置的物品和独立物件随车更新所在地点 */
+  "inventory.relocateVehicle": z.strictObject({
+    type: z.literal("inventory.relocateVehicle"),
+    vehicle: z.string().min(1),
     location: z.string().min(1),
   }),
   /** 界面动作：把背包里的改装件装到武器上，或拆下放回背包 */

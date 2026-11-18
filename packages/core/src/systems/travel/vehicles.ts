@@ -1,6 +1,8 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { rulingFact } from "../dice";
+import { InventoryStateSchema, itemCatalog } from "../inventory";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import {
   type OwnedVehicle,
@@ -50,6 +52,7 @@ export function resolveVehicleAt<T extends OwnedVehicle>(
   if (vehicle !== undefined) {
     const target = vehicles.find((v) => v.id === vehicle);
     if (!target) return { ok: false, reason: `名下没有 ${vehicle}` };
+    if (target.abandoned) return { ok: false, reason: "指定车辆已经丢弃" };
     if (target.location !== location) return { ok: false, reason: "指定车辆不在当前位置" };
     if (target.condition === "wrecked") return { ok: false, reason: "指定车辆已经报废，不能驾驶" };
     if (stolen !== undefined && target.stolen !== stolen)
@@ -61,6 +64,7 @@ export function resolveVehicleAt<T extends OwnedVehicle>(
   }
   const candidates = vehicles.filter(
     (v) =>
+      !v.abandoned &&
       v.location === location &&
       v.condition !== "wrecked" &&
       (stolen === undefined || v.stolen === stolen),
@@ -97,6 +101,25 @@ function locationName(ctx: SystemContext, id: string | null): string {
   return locationCatalog(ctx.data).get(id)?.name ?? id;
 }
 
+function vehicleLeftovers(vehicleId: string, ctx: SystemContext): string[] {
+  const names: string[] = [];
+  const items = ctx.data.items !== undefined ? itemCatalog(ctx.data) : new Map();
+  const inv = InventoryStateSchema.parse(ctx.read("inventory"));
+  for (const p of inv.placed) {
+    if (p.kind !== "vehicle" || p.target !== vehicleId) continue;
+    const label = items.get(p.item)?.name ?? inv.objects[p.item]?.definition.name ?? p.item;
+    names.push(p.count > 1 ? `${label}×${p.count}` : label);
+  }
+  const cyber = CyberwareStateSchema.parse(ctx.read("cyberware"));
+  const chrome = ctx.data.cyberware !== undefined ? cyberwareCatalog(ctx.data) : new Map();
+  const tag = `vehicle:${vehicleId}`;
+  for (const part of Object.values(cyber.parts)) {
+    if (part.holder !== tag) continue;
+    names.push(chrome.get(part.model)?.name ?? part.model);
+  }
+  return names;
+}
+
 export function grantVehicle(
   draft: Draft<TravelState>,
   command: VehicleGrant,
@@ -110,9 +133,9 @@ export function grantVehicle(
     model: def.id,
     condition: "intact",
     stolen: false,
+    abandoned: false,
     since: ctx.now,
     location: currentLocation(ctx),
-    cargo: {},
   });
   return { ok: true, notes: [`有了一辆${def.name}（${command.reason}）`] };
 }
@@ -137,9 +160,9 @@ export function applyVehicle(
       model: def.id,
       condition: "intact" as const,
       stolen: command.action === "steal",
+      abandoned: false,
       since: ctx.now,
       location: currentLocation(ctx),
-      cargo: {},
     };
     if (command.action === "buy") {
       draft.vehicles.push(owned);
@@ -170,14 +193,21 @@ export function applyVehicle(
   }
 
   const here = currentLocation(ctx);
+  const active = draft.vehicles.filter((v) => !v.abandoned);
   const relevantLocation =
     command.action === "damage" || command.action === "wreck" ? (command.location ?? here) : here;
-  const candidates = draft.vehicles.filter((v) => {
-    if (relevantLocation === null || v.location !== relevantLocation) return false;
-    if (command.action === "repair") return v.condition === "damaged";
-    if (command.action === "abandon") return true;
-    return v.condition !== "wrecked";
-  });
+  const candidates =
+    command.action === "abandon"
+      ? (() => {
+          const local =
+            relevantLocation === null ? [] : active.filter((v) => v.location === relevantLocation);
+          return local.length > 0 ? local : active;
+        })()
+      : active.filter((v) => {
+          if (relevantLocation === null || v.location !== relevantLocation) return false;
+          if (command.action === "repair") return v.condition === "damaged";
+          return v.condition !== "wrecked";
+        });
   if (command.vehicle === undefined && candidates.length > 1)
     return fail("相关地点有多辆候选车辆，请明确 vehicle，不会替你选另一辆");
   const target =
@@ -187,7 +217,7 @@ export function applyVehicle(
   if (!target) {
     return fail(
       command.vehicle !== undefined
-        ? `名下没有 ${command.vehicle}；现有：${draft.vehicles.map((v) => v.id).join("、") || "没有车"}`
+        ? `名下没有 ${command.vehicle}；现有：${active.map((v) => v.id).join("、") || "没有车"}`
         : "相关地点没有可操作的车辆",
     );
   }
@@ -209,6 +239,7 @@ export function applyVehicle(
       };
     }
     case "repair": {
+      if (target.abandoned) return fail(`${name(target)}已经弃置了`);
       if (here === null || target.location !== here)
         return fail(`${name(target)}停在${locationName(ctx, target.location)}，要修车得先到车旁`);
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，修不了`);
@@ -223,14 +254,17 @@ export function applyVehicle(
       };
     }
     case "abandon": {
-      if (here === null || target.location !== here)
-        return fail(`${name(target)}停在${locationName(ctx, target.location)}，要弃车得先到车旁`);
-      if (Object.keys(target.cargo).length > 0)
-        return fail(`${name(target)}后备箱还有物品，先取空再弃车`);
-      draft.vehicles.splice(draft.vehicles.indexOf(target), 1);
-      return { ok: true, notes: [`扔下${name(target)}：${command.reason}`] };
+      if (target.abandoned) return fail(`${name(target)}已经扔掉了`);
+      target.abandoned = true;
+      const leftovers = vehicleLeftovers(target.id, ctx);
+      const leftNote = leftovers.length > 0 ? `（车内留有：${leftovers.join("、")}）` : "";
+      return {
+        ok: true,
+        notes: [`扔下${name(target)}${leftNote}：${command.reason}`],
+      };
     }
     case "chase": {
+      if (target.abandoned) return fail(`${name(target)}已经弃置了`);
       if (here === null || target.location !== here)
         return fail(`${name(target)}停在${locationName(ctx, target.location)}，不在身边`);
       if (target.condition === "wrecked") return fail(`${name(target)}报废了，开不了`);
@@ -242,25 +276,4 @@ export function applyVehicle(
     }
   }
   return fail(`不认得的载具动作 ${command.action}`);
-}
-
-export function applyVehicleStash(
-  draft: Draft<TravelState>,
-  command: import("./schema").VehicleStash,
-  ctx: SystemContext,
-): ApplyOutcome {
-  const target = draft.vehicles.find((vehicle) => vehicle.id === command.vehicle);
-  const here = currentLocation(ctx);
-  if (here === null || !target || target.location !== here)
-    return fail("车辆不在当前位置，无法访问后备箱");
-  if (command.action === "store") {
-    if (target.condition === "wrecked") return fail("车辆已经报废，只能取出后备箱物品");
-    target.cargo[command.item] = (target.cargo[command.item] ?? 0) + 1;
-    return { ok: true };
-  }
-  const count = target.cargo[command.item] ?? 0;
-  if (count < 1) return fail("后备箱里没有这件物品");
-  if (count === 1) Reflect.deleteProperty(target.cargo, command.item);
-  else target.cargo[command.item] = count - 1;
-  return { ok: true };
 }

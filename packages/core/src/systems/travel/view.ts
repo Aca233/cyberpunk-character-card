@@ -87,27 +87,29 @@ export function travelView({ world, data }: ViewContext) {
   }
   const { encounter } = w.travel;
   const cars = vehicleCatalog(data);
-  const vehicles = w.travel.vehicles.map((v) => {
-    const def = cars.get(v.model);
-    return {
-      id: v.id,
-      model: v.model,
-      name: def?.name ?? v.model,
-      maker: def?.maker ?? null,
-      classLabel: def ? VEHICLE_CLASS_LABELS[def.class] : "",
-      speed: def?.speed ?? 0,
-      seats: def?.seats ?? 0,
-      condition: v.condition,
-      conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
-      stolen: v.stolen,
-      location: v.location,
-      locationName:
-        v.location === null
-          ? "未知地点"
-          : (locationForTravel(data, v.location)?.name ?? v.location),
-      here: v.location !== null && v.location === w.location,
-    };
-  });
+  const vehicles = w.travel.vehicles
+    .filter((v) => !v.abandoned)
+    .map((v) => {
+      const def = cars.get(v.model);
+      return {
+        id: v.id,
+        model: v.model,
+        name: def?.name ?? v.model,
+        maker: def?.maker ?? null,
+        classLabel: def ? VEHICLE_CLASS_LABELS[def.class] : "",
+        speed: def?.speed ?? 0,
+        seats: def?.seats ?? 0,
+        condition: v.condition,
+        conditionLabel: VEHICLE_CONDITION_LABELS[v.condition],
+        stolen: v.stolen,
+        location: v.location,
+        locationName:
+          v.location === null
+            ? "未知地点"
+            : (locationForTravel(data, v.location)?.name ?? v.location),
+        here: v.location !== null && v.location === w.location,
+      };
+    });
   return {
     destinations,
     vehicles,

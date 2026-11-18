@@ -1,31 +1,13 @@
 import type { ViewContext } from "../../kernel/system";
-import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
-import { itemCatalog } from "../inventory";
 import { locationCatalog, WorldClockStateSchema } from "../world";
-import { apartmentList, apartmentLocked, trunks } from "./apply";
+import { apartmentList, apartmentLocked } from "./apply";
 import { SafehouseStateSchema } from "./schema";
 
-/** 供叙事状态读取的住所、车内物品归属和当前地点可买的公寓 */
+/** 供叙事状态和界面读取的住所与当前地点可买的公寓 */
 export function safehouseView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const state = SafehouseStateSchema.parse(world.slices.safehouse ?? {});
-  const names = itemCatalog(data);
-  const parts = CyberwareStateSchema.parse(world.slices.cyberware).parts;
-  const chrome = cyberwareCatalog(data);
   const places = locationCatalog(data);
-  const list = (items: Readonly<Record<string, number>>) =>
-    Object.entries(items).map(([item, count]) => ({
-      id: item,
-      name:
-        names.get(item)?.name ??
-        (parts[item]
-          ? `${chrome.get(parts[item].model)?.name ?? parts[item].model}（未安装）`
-          : item),
-      count,
-    }));
-  const travel = world.slices.travel as
-    | { vehicles?: Parameters<typeof trunks>[0]["vehicles"] }
-    | undefined;
   return {
     homes: state.homes.map((h) => ({
       id: h.id,
@@ -33,15 +15,7 @@ export function safehouseView({ world, data }: ViewContext) {
       location: h.location,
       locationName: places.get(h.location)?.name ?? h.location,
       here: h.location === location,
-      items: list(state.stash[h.id] ?? {}),
     })),
-    trunks: trunks({ vehicles: travel?.vehicles ?? [] }, data)
-      .filter((t) => location !== null && t.kind === "trunk" && t.location === location)
-      .map((t) => ({
-        id: t.id,
-        name: t.kind === "trunk" && t.wrecked ? `${t.name}（报废，仅可取出）` : t.name,
-        items: list(t.kind === "trunk" ? t.items : {}),
-      })),
     /** 当前地点能买下的公寓；locked 是买不了的原因（已经有住处），钱够不够由界面比 */
     forSale: apartmentList(data)
       .filter((a) => a.location === location)

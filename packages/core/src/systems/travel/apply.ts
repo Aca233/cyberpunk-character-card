@@ -517,7 +517,7 @@ export function applyTravel(
       : undefined;
   if (
     (route.mode === "car" || route.mode === "stolen") &&
-    (!driver || driver.location !== from.id || driver.condition === "wrecked")
+    (!driver || driver.abandoned || driver.location !== from.id || driver.condition === "wrecked")
   )
     return fail("本次车辆不在出发地点，无法开始这段驾驶");
   if (driver) driver.location = to.id;
@@ -549,15 +549,10 @@ export function applyTravel(
     notes,
     emit: [
       { type: "world", activity: "travel", time: arriveAt, location: to.id },
-      ...(driver && Object.keys(driver.cargo).length > 0
+      ...(driver
         ? [
-            { type: "inventory.relocateStash", items: Object.keys(driver.cargo), location: to.id },
-            {
-              type: "cyberware.relocateStash",
-              items: Object.keys(driver.cargo),
-              where: driver.id,
-              location: to.id,
-            },
+            { type: "inventory.relocateVehicle", vehicle: driver.id, location: to.id },
+            { type: "cyberware.relocateVehicle", vehicle: driver.id, location: to.id },
           ]
         : []),
       ...(route.cost > 0

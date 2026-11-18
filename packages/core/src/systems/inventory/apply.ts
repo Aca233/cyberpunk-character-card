@@ -5,6 +5,7 @@ import type { NpcState } from "../npc";
 import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
+  type InventoryInternal,
   type InventoryState,
   ItemCatalogSchema,
   type ItemCommand,
@@ -13,6 +14,7 @@ import {
   type ItemKind,
   MOD_SLOT_LABELS,
   type PartsCommand,
+  type PlacedKind,
   type QuickSlotName,
   SELL_RATE,
   type Shop,
@@ -90,24 +92,150 @@ function put(draft: Inventory, id: string): void {
   draft.backpack[id] = (draft.backpack[id] ?? 0) + 1;
 }
 
-/** 存放箱和后备箱进出：只动背包，改装件跟着武器 id 留着 */
-export function stashMove(
-  draft: Inventory,
-  action: "out" | "in",
-  id: string,
-  now = 0,
-  location: string | null = null,
-): ApplyOutcome {
-  if (action === "in") {
-    if (draft.objects[id]?.holder === "player") return fail("这件物品已经随身携带");
-    put(draft, id);
-    moveObject(draft, id, "player", null, now, "从存放处取回");
-    return { ok: true, notes: [] };
-  }
+export function placedHolderTag(kind: PlacedKind, target: string): string {
+  return kind === "npc" ? target : `${kind}:${target}`;
+}
+
+function takeFromPlayer(draft: Inventory, id: string, count: number): boolean {
   absorbLegacyWeapons(draft);
-  if (!take(draft, id)) return fail(`背包里没有 ${id}`);
-  moveObject(draft, id, "stash", location, now, "放入存放处");
+  let available = draft.backpack[id] ?? 0;
+  for (const slot of Object.keys(draft.clothing) as ClothingSlot[]) {
+    if (draft.clothing[slot] === id) available += 1;
+  }
+  for (const slot of ["healing", "grenade"] as const) {
+    if (draft[slot]?.id === id) available += 1;
+  }
+  if (available < count) return false;
+  let left = count;
+  while (left > 0 && take(draft, id)) left -= 1;
+  for (const slot of Object.keys(draft.clothing) as ClothingSlot[]) {
+    if (left <= 0) break;
+    if (draft.clothing[slot] === id) {
+      Reflect.deleteProperty(draft.clothing, slot);
+      left -= 1;
+    }
+  }
+  for (const slot of ["healing", "grenade"] as const) {
+    if (left <= 0) break;
+    const held = draft[slot];
+    if (held?.id === id) {
+      if (held.charges < held.max) draft.depleted[id] = held.charges;
+      const obj = draft.objects[id];
+      if (obj) obj.remaining = held.charges;
+      draft[slot] = null;
+      left -= 1;
+    }
+  }
+  return left === 0;
+}
+
+function mergePlaced(
+  draft: Inventory,
+  entry: {
+    readonly item: string;
+    readonly count: number;
+    readonly kind: PlacedKind;
+    readonly target: string;
+    readonly location: string | null;
+    readonly note?: string | undefined;
+    readonly since: number;
+  },
+): void {
+  const existing = draft.placed.find(
+    (p) => p.item === entry.item && p.kind === entry.kind && p.target === entry.target,
+  );
+  if (existing) {
+    existing.count += entry.count;
+    existing.location = entry.location;
+    if (entry.note !== undefined) existing.note = entry.note;
+    existing.since = entry.since;
+    return;
+  }
+  draft.placed.push({
+    item: entry.item,
+    count: entry.count,
+    kind: entry.kind,
+    target: entry.target,
+    location: entry.location,
+    ...(entry.note !== undefined ? { note: entry.note } : {}),
+    since: entry.since,
+  });
+}
+
+/** 留置或取回：支持从背包/穿戴/快捷栏直接留下，或把现场物体直接放进车/家/某人处。 */
+export function applyPlaceItem(
+  draft: Inventory,
+  command: Extract<InventoryInternal, { type: "inventory.place" }>,
+  catalog: ReadonlyMap<string, ItemDef>,
+  now = 0,
+): ApplyOutcome {
+  const { action, item: id, count, kind, target, location, note, reason } = command;
+  const holder = placedHolderTag(kind, target);
+  const summary = (note ?? reason ?? (action === "leave" ? "留在别处" : "取回随身")).slice(0, 240);
+
+  if (action === "leave") {
+    if (command.definition !== undefined) {
+      if (catalog.has(id) || draft.objects[id]) return fail("已有物件不可重新定义，直接使用原 id");
+      if (command.definition.id !== id) return fail("物件定义的 id 必须与物品 id 一致");
+      const parsed = ItemDefSchema.safeParse(command.definition);
+      if (!parsed.success) return fail("新物件定义不完整");
+      const def = parsed.data;
+      draft.objects[id] = {
+        definition: def,
+        origin: command.origin ?? summary,
+        holder,
+        location,
+        changedAt: now,
+        lastChange: summary,
+        remaining: def.charges ?? null,
+      };
+      mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
+      return ok();
+    }
+    const def = catalog.get(id) ?? draft.objects[id]?.definition;
+    if (!def) return fail(`未登记物件 ${id}：首次留置需提供 definition 与 origin`);
+    const object = draft.objects[id];
+    if (object && object.holder !== "player") {
+      if (object.holder === "consumed") return fail("这件物件已经耗尽");
+      if (object.holder === holder) return fail("这件物件已经留在那里了");
+      if (
+        object.holder === "world" &&
+        (object.location === null || location === null || object.location === location)
+      ) {
+        moveObject(draft, id, holder, location, now, summary);
+        mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
+        return ok();
+      }
+      return fail("玩家没有随身携带这件物件");
+    }
+    if (!takeFromPlayer(draft, id, count)) return fail(`身上没有足够的${def.name}`);
+    moveObject(draft, id, holder, location, now, summary);
+    mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
+    return ok();
+  }
+
+  const index = draft.placed.findIndex(
+    (p) => p.item === id && p.kind === kind && p.target === target,
+  );
+  const entry = index >= 0 ? draft.placed[index] : undefined;
+  if (!entry || entry.count < count) return fail(`指定位置没有足够的 ${id}`);
+  if (entry.count === count) draft.placed.splice(index, 1);
+  else entry.count -= count;
+  const def = catalog.get(id) ?? draft.objects[id]?.definition;
+  for (let i = 0; i < count; i += 1) put(draft, id);
+  if (def) autoQuick(draft, def);
+  moveObject(draft, id, "player", null, now, summary);
   return ok();
+}
+
+export function relocateVehiclePlaced(draft: Inventory, vehicle: string, location: string): void {
+  for (const entry of draft.placed) {
+    if (entry.kind === "vehicle" && entry.target === vehicle) entry.location = location;
+  }
+  const tag = `vehicle:${vehicle}`;
+  for (const object of Object.values(draft.objects)) {
+    if (object.holder === tag) object.location = location;
+  }
 }
 
 function moveObject(
@@ -188,7 +316,13 @@ export function applyItem(
   if (command.action === "gain" && object) {
     if (object.holder === "player") return fail("这件独立物件已经属于玩家，不能重复获得");
     if (object.holder === "consumed") return fail("这件物件已经耗尽，不能凭空重新获得");
-    if (object.holder === "stash") return fail("物件在存放处，请通过取回操作转移");
+    if (
+      object.holder.startsWith("home:") ||
+      object.holder.startsWith("vehicle:") ||
+      object.holder.startsWith("place:")
+    ) {
+      return fail("这件物件留在了别处，在现场用 itemPlace take 取回");
+    }
     const sourceLocation = fromNpc?.location ?? object.location;
     if (sourceLocation !== null && sourceLocation !== location)
       return fail("这件物件仍在别处，不能隔空取得");
@@ -383,50 +517,6 @@ export function stockOf(def: ItemDef): number {
 export function sellValue(def: ItemDef): number {
   if (def.price === undefined) return 0;
   return Math.floor((def.price * SELL_RATE) / 10) * 10;
-}
-
-/** 整套外观：save 记下身上穿着的；wear 照记下的换好，外观里没有的格子脱下放回背包。
- * 缺的件既没穿着也不在背包里时整套不换，免得换到一半 */
-export function applyOutfit(
-  draft: Inventory,
-  action: "save" | "wear",
-  catalog: ReadonlyMap<string, ItemDef>,
-): ApplyOutcome {
-  const name = (id: string) => catalog.get(id)?.name ?? id;
-  const slots = Object.keys(CLOTHING_SLOT_LABELS) as ClothingSlot[];
-  const pieces = (from: Partial<Record<ClothingSlot, string>>) =>
-    slots.flatMap((slot) => {
-      const id = from[slot];
-      return id === undefined ? [] : [{ slot, id }];
-    });
-  if (action === "save") {
-    const worn = pieces(draft.clothing);
-    if (worn.length === 0) return fail("身上没穿衣服，没有能存的外观");
-    draft.outfit = {};
-    for (const { slot, id } of worn) draft.outfit[slot] = id;
-    return ok(`存下整套外观：${worn.map((p) => name(p.id)).join("、")}`);
-  }
-  const wanted = pieces(draft.outfit);
-  if (wanted.length === 0) return fail("还没存过整套外观");
-  const missing = wanted.filter(
-    (p) => draft.clothing[p.slot] !== p.id && (draft.backpack[p.id] ?? 0) < 1,
-  );
-  if (missing.length > 0) {
-    return fail(`整套外观缺 ${missing.map((p) => name(p.id)).join("、")}：没穿着，背包里也没有`);
-  }
-  for (const slot of slots) {
-    const current = draft.clothing[slot];
-    if (current !== undefined && current !== draft.outfit[slot]) {
-      Reflect.deleteProperty(draft.clothing, slot);
-      put(draft, current);
-    }
-  }
-  for (const { slot, id } of wanted) {
-    if (draft.clothing[slot] === id) continue;
-    take(draft, id);
-    draft.clothing[slot] = id;
-  }
-  return ok(`换上整套外观：${wanted.map((p) => name(p.id)).join("、")}`);
 }
 
 /** 改装件：attach 从背包装到一把武器上，同位置的旧件放回背包；detach 拆下放回背包。

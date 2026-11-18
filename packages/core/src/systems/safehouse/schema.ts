@@ -1,7 +1,5 @@
 import { z } from "zod";
-
-/** 战利品墙最多挂几件 */
-export const TROPHIES_MAX = 24;
+import { ItemDefSchema } from "../inventory";
 
 /** 开局住所表的一条：按出身模块 id 给；origin 写 default 的是没对上时用的。数据在 content 包的 safehouses.ts */
 export const HomeDefSchema = z.object({
@@ -40,47 +38,47 @@ export const HomeSchema = z.object({
 });
 export type Home = z.infer<typeof HomeSchema>;
 
-/** @deprecated 仅作历史存档反序列化兼容；战利品墙展示与 trophy 指令已下线 */
-export const TrophySchema = z.object({
-  label: z.string().min(1).max(20),
-  note: z.string().min(1).max(120),
-  at: z.number().int(),
-});
-export type Trophy = z.infer<typeof TrophySchema>;
-
 export const SafehouseStateSchema = z.object({
   homes: z.array(HomeSchema).default([]),
-  /** 安全屋存放箱：安全屋 id → 物品 id → 数量；后备箱由车辆 cargo 保存。 */
-  stash: z.record(z.string(), z.record(z.string(), z.number().int().min(1))).default({}),
-  /** 历史存档兼容字段；战利品墙已下线 */
-  trophies: z.array(TrophySchema).default([]),
 });
 export type SafehouseState = z.infer<typeof SafehouseStateSchema>;
 
-/** 模型使用：{"type": "stash", "action": "store", "item": "...", "reason": "..."} */
-export const StashCommandSchema = z
+/** 模型使用：{"type": "itemPlace", "action": "leave", "item": "...", "where": "...", "reason": "..."} */
+export const ItemPlaceCommandSchema = z
   .object({
-    type: z.literal("stash"),
-    action: z.enum(["store", "take"]),
+    type: z.literal("itemPlace"),
+    action: z.enum(["leave", "take"]),
     item: z.string().min(1),
-    /** 放在哪：安全屋 id 或车的 id；人在安全屋里可以不写 */
+    count: z.number().int().min(1).max(99).optional(),
+    /** 放在/取自哪里：安全屋 id、车辆 id、地点 id 或人物 id；在安全屋或当前地点时可省略 */
     where: z.string().min(1).optional(),
+    /** 首次把现场物品/尸体直接放进车里或留在某处时提供 */
+    definition: ItemDefSchema.optional(),
+    origin: z.string().min(1).max(240).optional(),
+    note: z.string().trim().min(1).max(120).optional(),
     reason: z.string().trim().min(1).max(80),
   })
   .describe(
-    "存放：store 把背包里的东西放进安全屋存放箱或后备箱，take 拿出来放回背包；where 写安全屋 id 或车的 id，人在安全屋里可以不写",
+    "留置与取回：只有玩家明确把东西留在家、放进车里、留在某处或暂交某人，或从这些地方拿回随身时才写；普通杂物不建档。回家换装拿物再出门在同一轮里一起完成，穿戴中或快捷栏的物品留下时自动脱下。",
   );
-export type StashCommand = z.infer<typeof StashCommandSchema>;
+export type ItemPlaceCommand = z.infer<typeof ItemPlaceCommandSchema>;
 
-/** @deprecated 战利品墙指令已下线 */
-export const TrophyCommandSchema = z.object({
-  type: z.literal("trophy"),
-  label: z.string().trim().min(1).max(20),
-  note: z.string().trim().min(1).max(120),
-});
-export type TrophyCommand = z.infer<typeof TrophyCommandSchema>;
+/** 剧情中获得、借住或失去住所 */
+export const HomeCommandSchema = z
+  .object({
+    type: z.literal("home"),
+    action: z.enum(["gain", "lose"]),
+    id: z.string().min(1),
+    name: z.string().min(1).max(24).optional(),
+    location: z.string().min(1).optional(),
+    reason: z.string().trim().min(1).max(80),
+  })
+  .describe(
+    "住所变化：剧情里新得/借住落脚点写 gain（写 id、name、location），抄家暴露或退掉写 lose",
+  );
+export type HomeCommand = z.infer<typeof HomeCommandSchema>;
 
-/** 只能由代码发出：建档时给开局住所 */
+/** 只能由代码发出：建档时给开局住所或界面买房 */
 export const SafehouseInternalSchemas = {
   "safehouse.seed": z.object({
     type: z.literal("safehouse.seed"),

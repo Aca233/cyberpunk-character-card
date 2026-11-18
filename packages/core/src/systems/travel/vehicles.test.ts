@@ -79,24 +79,26 @@ describe("车辆位置与使用", () => {
     expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]?.location).toBe("a");
   });
 
-  it("驾车后车辆随行；步行后车辆留在原地且不能远程驾驶或访问后备箱", () => {
+  it("驾车后车辆随行；步行后车辆留在原地且不能远程驾驶或取放", () => {
     let world = run(start(), { type: "vehicle.grant", model: "test-car", reason: "测试" });
     const id = carId(world);
     world = run(world, { type: "item", action: "gain", id: "keepsake", reason: "测试物品" });
     world = run(world, {
-      type: "stash",
-      action: "store",
+      type: "itemPlace",
+      action: "leave",
       item: "keepsake",
       where: id,
-      reason: "放进后备箱",
+      reason: "放进车里",
     });
 
     world = travel(world, "b", "car");
     expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]).toMatchObject({
       id,
       location: "b",
-      cargo: { keepsake: 1 },
     });
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toMatchObject([
+      { item: "keepsake", kind: "vehicle", target: id, location: "b", count: 1 },
+    ]);
     world = travel(world, "c", "walk");
     expect(WorldClockStateSchema.parse(world.slices.world).location).toBe("c");
     expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]?.location).toBe("b");
@@ -107,7 +109,7 @@ describe("车辆位置与使用", () => {
 
     const remoteTrunk = registry.applyCommands(
       world,
-      [{ type: "stash", action: "take", item: "keepsake", where: id, reason: "取出" }],
+      [{ type: "itemPlace", action: "take", item: "keepsake", where: id, reason: "取出" }],
       context,
     );
     expect(remoteTrunk.results[0]?.result.ok).toBe(false);
@@ -234,48 +236,39 @@ describe("车辆位置与使用", () => {
   });
 });
 
-describe("车辆后备箱", () => {
-  it("有货物时不能弃车；取空后才能弃车，同款新车不继承旧货物", () => {
+describe("车辆留置与弃车", () => {
+  it("允许连车带物直接弃车，车和车内留置物品继续留在世界里（且不进新车）", () => {
     let world = run(start(), { type: "vehicle.grant", model: "test-car", reason: "原车" });
     const oldId = carId(world);
     world = run(world, { type: "item", action: "gain", id: "keepsake", reason: "随身物品" });
     world = run(world, {
-      type: "stash",
-      action: "store",
+      type: "itemPlace",
+      action: "leave",
       item: "keepsake",
       where: oldId,
-      reason: "放入旧车",
+      reason: "放进旧车",
     });
 
-    const blocked = registry.applyCommands(
-      world,
-      [{ type: "vehicle", action: "abandon", vehicle: oldId, reason: "弃车" }],
-      context,
-    );
-    expect(blocked.results[0]?.result.ok).toBe(false);
-    expect(blocked.world).toEqual(world);
+    world = run(world, { type: "vehicle", action: "abandon", vehicle: oldId, reason: "甩掉热车" });
+    expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]?.abandoned).toBe(true);
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toMatchObject([
+      { item: "keepsake", kind: "vehicle", target: oldId, location: "a", count: 1 },
+    ]);
 
-    world = run(world, {
-      type: "stash",
-      action: "take",
-      item: "keepsake",
-      where: oldId,
-      reason: "取回",
-    });
-    expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]?.cargo).toEqual({});
-    expect(InventoryStateSchema.parse(world.slices.inventory).backpack.keepsake).toBe(1);
-    world = run(world, { type: "vehicle", action: "abandon", vehicle: oldId, reason: "弃车" });
     world = run(world, { type: "vehicle.grant", model: "test-car", reason: "同款新车" });
-    const newId = carId(world);
+    const newId = TravelStateSchema.parse(world.slices.travel).vehicles[1]?.id;
+    expect(newId).toBeDefined();
     expect(newId).not.toBe(oldId);
 
     const take = registry.applyCommands(
       world,
-      [{ type: "stash", action: "take", item: "keepsake", where: newId, reason: "查看新车" }],
+      [{ type: "itemPlace", action: "take", item: "keepsake", where: newId, reason: "查看新车" }],
       context,
     );
     expect(take.results[0]?.result.ok).toBe(false);
-    expect(InventoryStateSchema.parse(take.world.slices.inventory).backpack.keepsake).toBe(1);
+    expect(
+      InventoryStateSchema.parse(take.world.slices.inventory).backpack.keepsake,
+    ).toBeUndefined();
   });
 
   it("报废车只能在现场取物，不能继续存入", () => {
@@ -283,28 +276,36 @@ describe("车辆后备箱", () => {
     const id = carId(world);
     world = run(world, { type: "item", action: "gain", id: "keepsake", reason: "测试物品" });
     world = run(world, {
-      type: "stash",
-      action: "store",
+      type: "itemPlace",
+      action: "leave",
       item: "keepsake",
       where: id,
-      reason: "放入后备箱",
+      reason: "放进车里",
     });
     world = run(world, { type: "vehicle", action: "wreck", vehicle: id, reason: "事故" });
 
     const store = registry.applyCommands(
       world,
-      [{ type: "stash", action: "store", item: "keepsake", where: id, reason: "再存入" }],
+      [
+        {
+          type: "itemPlace",
+          action: "leave",
+          item: "keepsake",
+          where: id,
+          reason: "再存入",
+        },
+      ],
       context,
     );
     expect(store.results[0]?.result.ok).toBe(false);
     world = run(world, {
-      type: "stash",
+      type: "itemPlace",
       action: "take",
       item: "keepsake",
       where: id,
       reason: "事故后取出",
     });
     expect(InventoryStateSchema.parse(world.slices.inventory).backpack.keepsake).toBe(1);
-    expect(TravelStateSchema.parse(world.slices.travel).vehicles[0]?.cargo).toEqual({});
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toEqual([]);
   });
 });

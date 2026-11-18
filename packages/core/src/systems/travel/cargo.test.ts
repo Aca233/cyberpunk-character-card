@@ -72,43 +72,45 @@ function vehicle(world: WorldState) {
   return car;
 }
 
-function stash(world: WorldState, action: "store" | "take", item: string): Command {
-  return { type: "stash", action, item, where: vehicle(world).id, reason: "后备箱存取" };
+function stash(world: WorldState, action: "leave" | "take", item: string): Command {
+  return { type: "itemPlace", action, item, where: vehicle(world).id, reason: "车内留置或取回" };
 }
 
-describe("后备箱与随身物品一致性", () => {
-  it("普通物品按数量往返，货物只存在车辆本身，不镜像到安全屋库存", () => {
+describe("车内留置与随身物品一致性", () => {
+  it("普通物品按数量往返，留置只记在 inventory.placed 上，不镜像到安全屋", () => {
     let world = setup();
     world = run(world, { type: "item", action: "gain", id: "keepsake", reason: "第二件" });
-    world = run(world, stash(world, "store", "keepsake"));
-    world = run(world, stash(world, "store", "keepsake"));
-    expect(vehicle(world).cargo).toEqual({ keepsake: 2 });
+    world = run(world, stash(world, "leave", "keepsake"));
+    world = run(world, stash(world, "leave", "keepsake"));
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toMatchObject([
+      { item: "keepsake", count: 2, kind: "vehicle", target: vehicle(world).id, location: "a" },
+    ]);
     expect(InventoryStateSchema.parse(world.slices.inventory).backpack.keepsake).toBeUndefined();
-    expect(SafehouseStateSchema.parse(world.slices.safehouse).stash).toEqual({});
+    expect(SafehouseStateSchema.parse(world.slices.safehouse).homes).toEqual([]);
 
     world = run(world, stash(world, "take", "keepsake"));
-    expect(vehicle(world).cargo).toEqual({ keepsake: 1 });
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toMatchObject([
+      { item: "keepsake", count: 1, kind: "vehicle", target: vehicle(world).id, location: "a" },
+    ]);
     expect(InventoryStateSchema.parse(world.slices.inventory).backpack.keepsake).toBe(1);
     world = run(world, stash(world, "take", "keepsake"));
-    expect(vehicle(world).cargo).toEqual({});
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toEqual([]);
     expect(InventoryStateSchema.parse(world.slices.inventory).backpack.keepsake).toBe(2);
   });
 
-  it("实体义体保留独立身份，存入后随车抵达，取出后恢复随身归属", () => {
+  it("实体义体保留独立身份，留进车内后随车抵达，取出后恢复随身归属", () => {
     let world = setup();
     const carId = vehicle(world).id;
-    world = run(world, stash(world, "store", partId));
-    expect(vehicle(world).cargo).toEqual({ [partId]: 1 });
+    world = run(world, stash(world, "leave", partId));
     expect(CyberwareStateSchema.parse(world.slices.cyberware).parts[partId]).toMatchObject({
       id: partId,
-      holder: `stash:${carId}`,
+      holder: `vehicle:${carId}`,
       location: "a",
     });
     world = run(world, { type: "travel", to: "b", mode: "car" });
     expect(vehicle(world).location).toBe("b");
     expect(CyberwareStateSchema.parse(world.slices.cyberware).parts[partId]?.location).toBe("b");
     world = run(world, stash(world, "take", partId));
-    expect(vehicle(world).cargo).toEqual({});
     expect(CyberwareStateSchema.parse(world.slices.cyberware).parts[partId]).toMatchObject({
       id: partId,
       model: "field-eye",
@@ -124,7 +126,7 @@ describe("后备箱与随身物品一致性", () => {
       type: "item",
       action: "gain",
       id: "unique-token",
-      reason: "撿起有名字的铜牌",
+      reason: "捡起有名字的铜牌",
       definition: {
         id: "unique-token",
         name: "安娜刻字的铜牌",
@@ -134,11 +136,11 @@ describe("后备箱与随身物品一致性", () => {
       origin: "在甲地从安娜手中接过",
     });
     const carId = vehicle(world).id;
-    world = run(world, stash(world, "store", "unique-token"));
+    world = run(world, stash(world, "leave", "unique-token"));
     expect(
       InventoryStateSchema.parse(world.slices.inventory).objects["unique-token"],
     ).toMatchObject({
-      holder: "stash",
+      holder: `vehicle:${carId}`,
       location: "a",
       origin: "在甲地从安娜手中接过",
     });
@@ -147,14 +149,16 @@ describe("后备箱与随身物品一致性", () => {
     expect(vehicle(world)).toMatchObject({
       id: carId,
       location: "b",
-      cargo: { "unique-token": 1 },
     });
     expect(
       InventoryStateSchema.parse(world.slices.inventory).objects["unique-token"],
     ).toMatchObject({
-      holder: "stash",
+      holder: `vehicle:${carId}`,
       location: "b",
     });
+    expect(InventoryStateSchema.parse(world.slices.inventory).placed).toMatchObject([
+      { item: "unique-token", kind: "vehicle", target: carId, location: "b", count: 1 },
+    ]);
 
     world = run(world, { type: "travel", to: "a", mode: "walk" });
     expect(WorldClockStateSchema.parse(world.slices.world).location).toBe("a");
@@ -169,19 +173,19 @@ describe("后备箱与随身物品一致性", () => {
     expect(
       InventoryStateSchema.parse(claim.world.slices.inventory).objects["unique-token"],
     ).toMatchObject({
-      holder: "stash",
+      holder: `vehicle:${carId}`,
       location: "b",
     });
   });
 
   it.each([
-    ["inventory", "store", "keepsake"],
+    ["inventory", "leave", "keepsake"],
     ["inventory", "take", "keepsake"],
-    ["cyberware", "store", partId],
+    ["cyberware", "leave", partId],
     ["cyberware", "take", partId],
-  ] as const)("%s 的 %s 后续结算失败时，车辆货物和实物状态一起回滚", (systemId, action, item) => {
+  ] as const)("%s 的 %s 后续结算失败时，留置与实物状态一起回滚", (systemId, action, item) => {
     let before = setup();
-    if (action === "take") before = run(before, stash(before, "store", item));
+    if (action === "take") before = run(before, stash(before, "leave", item));
     const failing = createRegistry(
       systems.map((system) =>
         system.id === systemId
@@ -232,7 +236,7 @@ describe("开局赠车位置", () => {
       content,
     );
     expect(WorldClockStateSchema.parse(world.slices.world).location).toBe("b");
-    expect(vehicle(world)).toMatchObject({ location: "b", cargo: {}, stolen: false });
+    expect(vehicle(world)).toMatchObject({ location: "b", abandoned: false, stolen: false });
     expect(world.time).toBe(1000);
   });
 });

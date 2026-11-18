@@ -24,12 +24,6 @@ export const UnequipItemActionSchema = z.strictObject({
   id: z.string().min(1).max(64),
 });
 
-/** 整套外观：save 存下身上穿着的，wear 照存下的一次换好 */
-export const OutfitActionSchema = z.strictObject({
-  type: z.literal("outfit"),
-  action: z.enum(["save", "wear"]),
-});
-
 /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
 export const ModWeaponActionSchema = z.strictObject({
   type: z.literal("modWeapon"),
@@ -133,13 +127,6 @@ export const inventoryActions = {
       const def = itemCatalog(data).get(action.id);
       if (def?.kind === "weapon") return "武器已在随身背包里，无需单独收起";
       return [{ type: "item", action: "unequip", id: action.id, reason: "在装备栏里换" }];
-    },
-  }),
-  outfit: defineAction({
-    schema: OutfitActionSchema,
-    commands: (action, { world }) => {
-      if (inCombat(world)) return "战斗中换装备要花一个动作，在行动里写";
-      return [{ type: "inventory.outfit", action: action.action }];
     },
   }),
   modWeapon: defineAction({

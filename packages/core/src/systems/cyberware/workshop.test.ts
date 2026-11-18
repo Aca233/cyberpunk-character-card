@@ -313,7 +313,7 @@ describe("持久义体库存与真实手术阶段", () => {
     expect(state(world).clinics["clinic-a"]?.stock["field-eye"]).toBe(0);
   });
 
-  it("已核对的地图入口共用库存，存取义体保持唯一实物身份", () => {
+  it("已核对的地图入口共用库存，留置与取回义体保持唯一实物身份", () => {
     let world = run(setup(), {
       type: "cyberware",
       action: "buy",
@@ -323,18 +323,18 @@ describe("持久义体库存与真实手术阶段", () => {
     });
     const part = Object.values(state(world).parts)[0];
     world = run(world, {
-      type: "cyberware.stash",
-      action: "store",
+      type: "cyberware.place",
+      action: "leave",
       part: part?.id,
-      where: "locker",
+      holder: "home:locker",
       location: "clinic",
     });
-    expect(state(world).parts[part?.id ?? ""]?.holder).toBe("stash:locker");
+    expect(state(world).parts[part?.id ?? ""]?.holder).toBe("home:locker");
     world = run(world, {
-      type: "cyberware.stash",
+      type: "cyberware.place",
       action: "take",
       part: part?.id,
-      where: "locker",
+      holder: "home:locker",
       location: "clinic",
     });
     expect(state(world).parts[part?.id ?? ""]?.holder).toBe("player");
@@ -346,7 +346,7 @@ describe("持久义体库存与真实手术阶段", () => {
     expect(Object.keys(state(alias).parts)).toEqual([part?.id]);
   });
 
-  it("存放的义体不能绕过存取指令转交，避免箱内留下幽灵物品", () => {
+  it("留置在别处的义体不能绕过 itemPlace 转交", () => {
     let world = run(setup(), {
       type: "cyberware",
       action: "buy",
@@ -357,11 +357,11 @@ describe("持久义体库存与真实手术阶段", () => {
     const part = Object.values(state(world).parts)[0]?.id;
     world = run(world, { type: "safehouse.seed", id: "locker", name: "住处", location: "clinic" });
     world = run(world, {
-      type: "stash",
-      action: "store",
+      type: "itemPlace",
+      action: "leave",
       item: part,
       where: "locker",
-      reason: "存放",
+      reason: "留在家里",
     });
     const transfer = registry.applyCommands(
       world,
@@ -370,28 +370,28 @@ describe("持久义体库存与真实手术阶段", () => {
           type: "cyberware.part",
           action: "transfer",
           part,
-          from: "stash:locker",
+          from: "home:locker",
           holder: "player",
           source: "取出义眼",
-          evidence: "你从存放箱取出义眼",
+          evidence: "你从家里拿回义眼",
         },
       ],
-      ctx({ tradeNarrative: "你从存放箱取出义眼" }),
+      ctx({ tradeNarrative: "你从家里拿回义眼" }),
     );
     expect(transfer.results[0]?.result.ok).toBe(false);
     expect(transfer.world).toEqual(world);
     world = run(world, {
-      type: "stash",
+      type: "itemPlace",
       action: "take",
       item: part,
       where: "locker",
       reason: "取回",
     });
     expect(state(world).parts[part ?? ""]?.holder).toBe("player");
-    expect(SafehouseStateSchema.parse(world.slices.safehouse).stash.locker).toEqual({});
+    expect(SafehouseStateSchema.parse(world.slices.safehouse).homes).toHaveLength(1);
   });
 
-  it.each(["record", "takeStock", "transfer"])("%s 不能伪造未登记的存放箱归属", (action) => {
+  it.each(["record", "takeStock", "transfer"])("%s 不能伪造未登记的住处或车辆归属", (action) => {
     let world = setup();
     if (action === "transfer")
       world = run(
@@ -416,8 +416,8 @@ describe("持久义体库存与真实手术阶段", () => {
           part: "loose-eye",
           model: "field-eye",
           from: action === "takeStock" ? "clinic-a" : "player",
-          holder: "stash:missing",
-          source: "存放义眼",
+          holder: "home:missing",
+          source: "留置义眼",
           evidence: "你放下了义眼",
         },
       ],

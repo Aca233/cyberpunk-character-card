@@ -149,6 +149,8 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   shopBusiness: "商店经营",
   "logistics.route": "供货路况",
   vehicle: "车辆变更",
+  itemPlace: "物品留置",
+  home: "住所变更",
   "commerce.offer": "交易报价",
   "commerce.withdraw": "报价撤回",
   loot: "零钱",

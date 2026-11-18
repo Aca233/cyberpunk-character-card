@@ -10,19 +10,13 @@ import {
   VehicleCommandSchema,
   type VehicleGrant,
   VehicleGrantSchema,
-  type VehicleStash,
-  VehicleStashSchema,
 } from "./schema";
 import { travelStatus } from "./status";
-import { applyVehicle, applyVehicleStash, grantVehicle } from "./vehicles";
+import { applyVehicle, grantVehicle } from "./vehicles";
 import { travelView } from "./view";
 
 /** 出行和载具：路线面板确认的移动按路线表推进时间、扣路费、换地点，换城区时按几率定路上的偶遇；名下的车、偷车、追车 */
-export const travel = defineSystem<
-  TravelState,
-  VehicleCommand,
-  TravelCommand | VehicleGrant | VehicleStash
->({
+export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | VehicleGrant>({
   id: "travel",
   dependsOn: ["world", "economy", "heat", "character", "combat", "inventory", "cyberware"],
   state: TravelStateSchema,
@@ -37,7 +31,6 @@ export const travel = defineSystem<
   internal: {
     travel: TravelCommandSchema,
     "vehicle.grant": VehicleGrantSchema,
-    "vehicle.stash": VehicleStashSchema,
   },
   apply(draft, command, ctx) {
     switch (command.type) {
@@ -45,8 +38,6 @@ export const travel = defineSystem<
         return applyTravel(draft, command, ctx);
       case "vehicle.grant":
         return grantVehicle(draft, command, ctx);
-      case "vehicle.stash":
-        return applyVehicleStash(draft, command, ctx);
       case "vehicle":
         return applyVehicle(draft, command, ctx);
     }

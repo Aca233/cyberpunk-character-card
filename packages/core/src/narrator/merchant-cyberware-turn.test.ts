@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyPlayerAction } from "../actions";
 import { newGameWorld, projectState } from "../game";
 import type { LlmClient } from "../kernel/ports";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CyberwareDefSchema, CyberwareStateSchema, RipperdocSchema } from "../systems/cyberware";
 import { EconomyStateSchema } from "../systems/economy";
+import { registry } from "../systems/registry";
 import { SafehouseStateSchema } from "../systems/safehouse/schema";
 import { withIndependentEvents } from "./extract-test-fixture";
 import { runNarratorTurn } from "./turn";
@@ -118,22 +118,20 @@ describe("自由输入义体服务与原面板衔接", () => {
       },
     };
     const ctx = { data, rng: { roll: () => 1 } };
-    const stored = applyPlayerAction(
+    const stored = registry.applyCommands(
       home,
-      { type: "stash", action: "store", item: part.id, where: "home" },
+      [{ type: "itemPlace", action: "leave", item: part.id, where: "home", reason: "留在家里" }],
       ctx,
     );
-    if (!stored.ok) throw new Error(stored.reason);
+    expect(stored.results[0]?.result.ok).toBe(true);
     expect(projectState(stored.world, [], data).inventory.backpack[part.id]).toBeUndefined();
-    expect(projectState(stored.world, [], data).safehouse.homes[0]?.items).toEqual([
-      { id: part.id, name: "义眼（未安装）", count: 1 },
-    ]);
+    expect(chrome(stored.world).parts[part.id]?.holder).toBe("home:home");
     expect(
-      applyPlayerAction(
+      registry.applyCommands(
         stored.world,
-        { type: "stash", action: "store", item: part.id, where: "home" },
+        [{ type: "itemPlace", action: "leave", item: part.id, where: "home", reason: "再放" }],
         ctx,
-      ).ok,
+      ).results[0]?.result.ok,
     ).toBe(false);
     const away: WorldState = {
       ...stored.world,
@@ -143,15 +141,18 @@ describe("自由输入义体服务与原面板衔接", () => {
       },
     };
     expect(
-      applyPlayerAction(away, { type: "stash", action: "take", item: part.id, where: "home" }, ctx)
-        .ok,
+      registry.applyCommands(
+        away,
+        [{ type: "itemPlace", action: "take", item: part.id, where: "home", reason: "隔空取" }],
+        ctx,
+      ).results[0]?.result.ok,
     ).toBe(false);
-    const taken = applyPlayerAction(
+    const taken = registry.applyCommands(
       JSON.parse(JSON.stringify(stored.world)),
-      { type: "stash", action: "take", item: part.id, where: "home" },
+      [{ type: "itemPlace", action: "take", item: part.id, where: "home", reason: "取回" }],
       ctx,
     );
-    if (!taken.ok) throw new Error(taken.reason);
+    expect(taken.results[0]?.result.ok).toBe(true);
     expect(Object.keys(chrome(taken.world).parts)).toEqual([part.id]);
     expect(chrome(taken.world).parts[part.id]?.holder).toBe("player");
     const installed = await turn(taken.world, { ...proposal, part: part.id }, [

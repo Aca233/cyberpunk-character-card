@@ -156,10 +156,10 @@ export const OwnedVehicleSchema = z.object({
   condition: VehicleConditionSchema,
   /** 车辆实际停放位置；驾驶出行时由代码同步到目的地。 */
   location: z.string().nullable(),
-  /** 随车存放的物品按物品 id 计数；特殊大件是否装得下按车型与场景判断。 */
-  cargo: z.record(z.string(), z.number().int().min(1)),
   /** 偷来的：开着它风险高，迟早要扔 */
   stolen: z.boolean(),
+  /** 已弃车：不再作为日常座驾，但留在世界原处（含车内留置物品）供后续世界演化 */
+  abandoned: z.boolean().default(false),
   since: z.number().int(),
 });
 export type OwnedVehicle = z.infer<typeof OwnedVehicleSchema>;
@@ -176,7 +176,7 @@ export const VehicleCommandSchema = z
     model: z.string().min(1).optional(),
     /** 对哪辆车；相关现场只有一辆候选车时可以省略，多辆须明确。 */
     vehicle: z.string().min(1).optional(),
-    /** damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车、弃车或追逐。 */
+    /** damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车或追逐。 */
     location: z.string().min(1).optional(),
     /** steal：看见的人数 */
     witnesses: z.number().int().min(0).max(1000).optional(),
@@ -195,7 +195,7 @@ export const VehicleCommandSchema = z
       ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
   })
   .describe(
-    "载具：buy 买车；steal 偷车；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、abandon、chase 只能操作身边车辆；同一现场多辆候选车必须明确 vehicle；有随车物品时必须先取空才能弃车",
+    "载具：buy 买车；steal 偷车；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、chase 只能操作身边车辆；abandon 可随时丢下车辆（车内留有物品或证据时连车带物留下并继续承受后果）；同一现场多辆候选车必须明确 vehicle",
   );
 export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
 
@@ -207,14 +207,6 @@ export const VehicleGrantSchema = z.object({
 });
 export type VehicleGrant = z.infer<typeof VehicleGrantSchema>;
 
-export const VehicleStashSchema = z.strictObject({
-  type: z.literal("vehicle.stash"),
-  action: z.enum(["store", "take"]),
-  vehicle: z.string().min(1),
-  item: z.string().min(1),
-});
-export type VehicleStash = z.infer<typeof VehicleStashSchema>;
-
 export const TravelStateSchema = z.object({
   trips: z.array(TripSchema),
   /** 上一次偶遇在第几个场景；一个场景最多一次 */
@@ -222,7 +214,7 @@ export const TravelStateSchema = z.object({
   encounter: EncounterSchema.nullable(),
   /** 名下的车 */
   vehicles: z.array(OwnedVehicleSchema),
-  /** 单调递增的实车编号；弃车后不复用后备箱身份。 */
+  /** 单调递增的实车编号。 */
   nextVehicleId: z.number().int().min(1),
 });
 export type TravelState = z.infer<typeof TravelStateSchema>;

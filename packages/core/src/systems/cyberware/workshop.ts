@@ -71,8 +71,14 @@ export function applyWorkshop(
   }
   if (command.type === "cyberware.part") {
     const part = draft.parts[command.part];
-    if (part?.holder.startsWith("stash:") || command.holder?.startsWith("stash:"))
-      return { ok: false, reason: "存放义体须使用 stash 存取指令，同步实际容器和实物归属" };
+    const isPlaced = (holder?: string) =>
+      holder !== undefined &&
+      (holder.startsWith("home:") || holder.startsWith("vehicle:") || holder.startsWith("place:"));
+    if (isPlaced(part?.holder) || isPlaced(command.holder))
+      return {
+        ok: false,
+        reason: "留置在别处的义体须使用 itemPlace 留置或取回，同步实际位置与归属",
+      };
     if (command.action === "takeStock") {
       const doc = ripperdocList(ctx.data).find((d) => d.id === command.from);
       if (
