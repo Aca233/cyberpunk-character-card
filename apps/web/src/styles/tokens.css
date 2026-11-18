@@ -76,11 +76,15 @@
 
   --dur-flash: 150ms;
   --dur-slide: 250ms;
+  --dur-modal: 200ms;
+  --ease-cyber: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-flash: 0ms;
     --dur-slide: 0ms;
+    --dur-modal: 0ms;
   }
 }

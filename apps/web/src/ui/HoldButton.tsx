@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ASSET_IDS } from "../assets/ids.gen";
 import { Asset } from "./Asset";
 import { Button } from "./Button";
+import styles from "./holdbutton.module.css";
 
 /** 帧号按数值排序；原图集没有第 3 帧，不补画，也不请求不存在的素材 */
 const HOLD_FRAMES = ASSET_IDS.filter((id) => id.startsWith("check.hold.")).sort(
@@ -144,20 +145,12 @@ export function HoldButton({
       <button
         ref={button}
         type="button"
+        className={styles.holdBtn}
+        data-holding={holding || undefined}
         disabled={disabled}
         title={disabled ? reason : "按住鼠标、触屏或 F 0.8 秒；松开取消"}
         aria-label={`长按${label}`}
         aria-describedby={hintId}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          minHeight: 44,
-          padding: "4px 12px",
-          color: disabled ? "var(--cp-text-dim)" : holding ? "var(--cp-cyan)" : "var(--cp-yellow)",
-          touchAction: "none",
-          userSelect: "none",
-        }}
         onPointerDown={(event) => {
           if (!event.isPrimary || event.button !== 0 || disabled || active.current !== null) return;
           event.preventDefault();
@@ -186,15 +179,7 @@ export function HoldButton({
         onContextMenu={(event) => event.preventDefault()}
         onClick={(event) => event.preventDefault()}
       >
-        <span
-          style={{
-            position: "relative",
-            display: "inline-grid",
-            placeItems: "center",
-            width: 36,
-            height: 36,
-          }}
-        >
+        <span className={styles.ring}>
           <Asset id="key.fHold" height={24} tint="currentColor" />
           {ring && (
             <Asset

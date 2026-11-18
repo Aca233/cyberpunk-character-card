@@ -5,10 +5,12 @@
   display: grid;
   place-items: center;
   background: rgb(0 0 0 / 60%);
+  animation: dialogBackdropIn 160ms ease-out both;
 }
 
 .dialog {
   width: min(560px, calc(100vw - 32px));
+  animation: dialogSnapIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .layout {
@@ -42,4 +44,24 @@
   gap: 12px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+@keyframes dialogBackdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogSnapIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    animation: none;
+  }
 }

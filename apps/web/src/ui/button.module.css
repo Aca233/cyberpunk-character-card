@@ -7,7 +7,9 @@
   padding: 4px 18px;
   color: var(--cp-red);
   isolation: isolate;
-  transition: color var(--dur-flash);
+  transition:
+    color var(--dur-flash),
+    transform 90ms ease-out;
 }
 
 .bg {
@@ -54,6 +56,21 @@
   opacity: 0.28;
 }
 
+.button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
 .button:disabled {
   color: var(--cp-text-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .bg {
+    transition: none;
+  }
+
+  .button:active:not(:disabled) {
+    transform: none;
+  }
 }

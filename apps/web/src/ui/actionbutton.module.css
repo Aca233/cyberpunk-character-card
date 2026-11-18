@@ -10,7 +10,9 @@
   font-size: 0.7rem;
   isolation: isolate;
   cursor: var(--cp-cursor-hand);
-  transition: color var(--dur-flash);
+  transition:
+    color var(--dur-flash),
+    transform 90ms ease-out;
 }
 
 .bg {
@@ -30,9 +32,17 @@
   opacity: 0.32;
 }
 
+.action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .action,
   .bg {
     transition: none;
+  }
+
+  .action:active:not(:disabled) {
+    transform: none;
   }
 }

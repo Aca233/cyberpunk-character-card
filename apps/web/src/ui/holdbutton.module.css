@@ -1,0 +1,65 @@
+.holdBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 12px;
+  color: var(--cp-yellow);
+  touch-action: none;
+  user-select: none;
+  transition:
+    color var(--dur-flash),
+    transform 120ms ease-out;
+}
+
+.holdBtn:hover:not(:disabled) {
+  color: var(--cp-cyan);
+}
+
+.holdBtn:disabled {
+  color: var(--cp-text-dim);
+}
+
+.holdBtn[data-holding] {
+  color: var(--cp-cyan);
+  transform: scale(0.98);
+}
+
+.ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  transition: transform 140ms var(--ease-cyber);
+}
+
+.holdBtn[data-holding] .ring {
+  animation: holdRingPulse 520ms ease-in-out infinite alternate;
+}
+
+@keyframes holdRingPulse {
+  from {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px rgb(94 246 255 / 35%));
+  }
+  to {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 8px rgb(94 246 255 / 75%));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holdBtn,
+  .ring {
+    transition: none;
+  }
+
+  .holdBtn[data-holding] {
+    transform: none;
+  }
+
+  .holdBtn[data-holding] .ring {
+    animation: none;
+  }
+}
