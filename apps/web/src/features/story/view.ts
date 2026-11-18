@@ -1,10 +1,15 @@
-import { inventoryRules, type PlayerView, type TurnInput } from "@cp/core";
+import {
+  inventoryRules,
+  type PlayerView,
+  type TurnCheckpointSummary,
+  type TurnInput,
+} from "@cp/core";
 import type { AssetId } from "../../assets";
 import { baseWeaponIdOf } from "./art";
 
 /** 剧情界面用到的纯函数：不碰 React，也不发请求 */
 
-export type View = PlayerView;
+export type View = PlayerView & { readonly checkpoint?: TurnCheckpointSummary };
 export type Turn = View["turns"][number];
 export type CheckOffer = View["offers"]["checks"][number];
 export type Choice = View["offers"]["choices"][number];

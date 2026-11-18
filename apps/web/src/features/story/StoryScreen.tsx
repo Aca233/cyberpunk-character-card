@@ -40,7 +40,6 @@ import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { InputBar } from "./InputBar";
 import { MapBody } from "./MapPanel";
-import { MemoryModal } from "./MemoryPanel";
 import {
   CharacterPage,
   CyberwarePage,
@@ -250,11 +249,10 @@ export function StoryScreen() {
   const [atBraindance, setAtBraindance] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
-  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单及其记忆管理弹窗
+  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
   const [scan, setScan] = useState(false);
   const [atNotes, setAtNotes] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
-  const [atMemory, setAtMemory] = useState(false);
   const [atEndStory, setAtEndStory] = useState(false);
 
   const warn = useCallback((key: string, error: unknown) => {
@@ -558,8 +556,23 @@ export function StoryScreen() {
     [story, saveId, version, refresh],
   );
   const retry = useCallback(() => {
+    const pending =
+      story.pending ??
+      (view?.checkpoint && view.checkpoint.baseVersion === version
+        ? ({ kind: "input", input: view.checkpoint.input } as const)
+        : null);
+    story.dismiss();
+    if (pending) void story.submit(saveId, version, pending, refresh);
+  }, [story, saveId, version, refresh, view?.checkpoint]);
+  const clearCheckpoint = useCallback(async () => {
+    await api.clearCheckpoint(saveId);
+    await refresh();
+  }, [saveId, refresh]);
+  const discardAndRetry = useCallback(async () => {
     const pending = story.pending;
     story.dismiss();
+    await api.clearCheckpoint(saveId);
+    await refresh();
     if (pending) void story.submit(saveId, version, pending, refresh);
   }, [story, saveId, version, refresh]);
 
@@ -672,6 +685,8 @@ export function StoryScreen() {
   }
 
   const failure = story.failure;
+  const activeCheckpoint =
+    view.checkpoint && view.checkpoint.baseVersion === version ? view.checkpoint : undefined;
   const draftFromCheck = (label: string) => {
     story.setDraft({ text: label });
     setPicked(null);
@@ -971,11 +986,47 @@ export function StoryScreen() {
               failure.kind === "rejected" ||
               failure.kind === "lost") && (
               <div className={styles.notice} data-kind={failure.kind} role="status">
-                <span>{failure.message}</span>
-                {failure.retryable && <Button onClick={retry}>重试</Button>}
+                <span>
+                  {failure.message}
+                  {activeCheckpoint
+                    ? `（已保存：${activeCheckpoint.completedLabels.join("、")}）`
+                    : ""}
+                </span>
+                {failure.retryable && (
+                  <Button onClick={retry}>{activeCheckpoint ? "从断点重试" : "重试"}</Button>
+                )}
+                {activeCheckpoint && (
+                  <Button onClick={() => void clearCheckpoint()}>丢弃断点</Button>
+                )}
                 <Button onClick={story.dismiss}>知道了</Button>
               </div>
             )}
+
+          {!busy && !failure && activeCheckpoint && (
+            <div className={styles.notice} data-kind="stopped" role="status">
+              <span>
+                检测到未完成回合（已保存：{activeCheckpoint.completedLabels.join("、")}）·「
+                {activeCheckpoint.input.text.length > 36
+                  ? `${activeCheckpoint.input.text.slice(0, 36)}…`
+                  : activeCheckpoint.input.text}
+                」
+              </span>
+              <Button
+                primary
+                onClick={() =>
+                  void story.submit(
+                    saveId,
+                    version,
+                    { kind: "input", input: activeCheckpoint.input },
+                    refresh,
+                  )
+                }
+              >
+                从断点继续
+              </Button>
+              <Button onClick={() => void clearCheckpoint()}>丢弃断点</Button>
+            </div>
+          )}
 
           <div className={styles.dock}>
             {openCheck ? (
@@ -1071,10 +1122,6 @@ export function StoryScreen() {
         {atEsc && (
           <EscMenu
             onResume={() => setAtEsc(false)}
-            onMemory={() => {
-              setAtEsc(false);
-              setAtMemory(true);
-            }}
             canEndStory={!view.death && !view.ended}
             onEndStory={
               busy
@@ -1090,16 +1137,6 @@ export function StoryScreen() {
               })
             }
             onQuit={busy ? undefined : () => navigate("/menu")}
-          />
-        )}
-
-        {atMemory && (
-          <MemoryModal
-            view={view}
-            onEdit={
-              busy ? undefined : (edit) => act({ type: "editMemory", ...edit }, "memory", true)
-            }
-            onClose={() => setAtMemory(false)}
           />
         )}
 
@@ -1336,13 +1373,19 @@ export function StoryScreen() {
             actions={
               <>
                 <Button primary onClick={retry}>
-                  原样重试
+                  {activeCheckpoint ? "从断点重试" : "原样重试"}
                 </Button>
+                {activeCheckpoint && (
+                  <Button onClick={() => void discardAndRetry()}>清除断点重头生成</Button>
+                )}
                 <Button onClick={story.dismiss}>改一改再发</Button>
               </>
             }
           >
             <p>{failure.message}</p>
+            {activeCheckpoint && (
+              <p>已保存前面阶段：{activeCheckpoint.completedLabels.join("、")}。重试将跳过已完成步骤。</p>
+            )}
             <p>这一轮没有写进存档。可以换个说法，或者到设置里检查这个方案的安全选项。</p>
           </Dialog>
         )}
@@ -1355,14 +1398,20 @@ export function StoryScreen() {
               <>
                 {failure.retryable && (
                   <Button primary onClick={retry}>
-                    重试
+                    {activeCheckpoint ? "从断点重试" : "重试"}
                   </Button>
+                )}
+                {activeCheckpoint && (
+                  <Button onClick={() => void discardAndRetry()}>清除断点重头生成</Button>
                 )}
                 <Button onClick={story.dismiss}>关闭</Button>
               </>
             }
           >
             <p>{failure.message}</p>
+            {activeCheckpoint && (
+              <p>已保存进度：{activeCheckpoint.completedLabels.join("、")}，不会从头重跑。</p>
+            )}
             {!failure.retryable && (
               <p>这个错误重试也不会好，先看看设置；详细原因在浏览器的开发者工具控制台里。</p>
             )}

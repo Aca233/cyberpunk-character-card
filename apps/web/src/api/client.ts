@@ -13,6 +13,7 @@ import type {
   PlayerView,
   ProseBlock,
   ProseMode,
+  TurnCheckpointSummary,
   TurnInput,
   TurnUsage,
 } from "@cp/core";
@@ -594,7 +595,13 @@ export const api = {
     startLocation?: string;
   }) => request<SaveSummary>("POST", "/saves", input),
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
-  state: (saveId: string) => request<PlayerView>("GET", `/saves/${saveId}/state`),
+  state: (saveId: string) =>
+    request<PlayerView & { readonly checkpoint?: TurnCheckpointSummary }>(
+      "GET",
+      `/saves/${saveId}/state`,
+    ),
+  clearCheckpoint: (saveId: string) =>
+    request<{ cleared: boolean }>("DELETE", `/saves/${saveId}/checkpoint`),
   async submit(saveId: string, body: TurnBody): Promise<SubmitResult> {
     const r = await request<Record<string, unknown>>("POST", `/saves/${saveId}/turns`, {
       ...body,

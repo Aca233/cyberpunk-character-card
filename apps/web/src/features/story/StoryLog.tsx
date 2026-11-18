@@ -446,6 +446,21 @@ export function StoryLog({
 
         {!generating && view.offers.read && <p className={styles.read}>{view.offers.read}</p>}
 
+        {!generating && view.checkpoint?.narrativePreview && (
+          <article className={styles.turn} data-live>
+            <p className={styles.input} data-mode={view.checkpoint.input.mode}>
+              {formatInput(view.checkpoint.input)}
+            </p>
+            {paragraphs(view.checkpoint.narrativePreview).map((p, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 断点预览正文按段落顺序展示
+              <Paragraph key={`cp-${i}`} text={p} speakers={speakers} />
+            ))}
+            <p className={styles.dim}>
+              [断点已保存 · {view.checkpoint.completedLabels.join(" / ")}，等待继续完成剩余步骤]
+            </p>
+          </article>
+        )}
+
         {generating && (
           <article className={styles.turn} data-live data-boost={liveBoosting || undefined}>
             {live.pending?.kind === "input" && (

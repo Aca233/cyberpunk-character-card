@@ -188,6 +188,7 @@ export const useStory = create<StoryState>()((set, get) => {
               stageTrace: [],
               failure: { kind: "blocked", message: event.reason, retryable: true },
             });
+            void refresh();
             return;
           case "stopped":
             finish("stopped");
@@ -203,6 +204,7 @@ export const useStory = create<StoryState>()((set, get) => {
                 retryable: true,
               },
             });
+            void refresh();
             return;
           case "error":
             finish("error", event.message);
