@@ -5,8 +5,7 @@
 ### 核心特性
 
 - **叙事导向的自由行动**：没有死板的轮次与技能槽限制。打斗、交涉、潜入或逃亡完全依据叙事推进，底层代码负责结算检定、伤口留疤、战利品与人际影响（死者亲属结仇、黑客反噬、流言扩散）。
-- **纯前端静态运行**：整个游戏可以直接托管在静态网页上运行。存档、模型连接配置与密钥全部保存在浏览器本地 IndexedDB 中，前端直接请求模型 API，隐私安全且零后端成本。
-- **混合开发模式**：同时支持单机静态运行与本地 Hono 开发服务器模式。
+- **纯前端静态运行**：整个游戏完全作为静态网页运行。存档、角色卡、酒馆预设、模型连接配置与密钥全部保存在浏览器本地 IndexedDB 中，前端直接请求模型 API，隐私安全且零后端成本。
 
 ---
 
@@ -14,21 +13,22 @@
 
 ```bash
 pnpm install
-pnpm check   # 类型检查 + Biome + Vitest
+pnpm dev     # 启动纯静态前端开发服务器（http://127.0.0.1:5177）
+pnpm check   # 类型检查 + Biome + Vitest + 数据校验
 ```
 
 - **环境要求**：Node 24+，pnpm 12。
-- **模型配置**：本地新建 `config.json`（参考 `config.example.json`），包含 API Key 等配置，默认不进入版本库。
 - **游戏素材**：原作解包素材放置于 `apps/web/public/assets/local/`（仅供个人本地使用，不随仓库分发）。
+- **CLI 测评配置（可选）**：仅命令行测评工具 `pnpm eval` 需要在本地新建 `config.json`（参考 `config.example.json`），默认不进入版本库。
 
-## 纯前端静态部署
+## 静态构建与部署
 
-静态版无需自建服务器，所有数据（存档、角色卡、模型密钥）均由浏览器 IndexedDB 本地管理，页面直接通过 CORS 调用模型服务商。
+所有玩家数据（存档、角色卡、预设、模型密钥）均由浏览器 IndexedDB 本地管理，页面直接通过 CORS 调用模型服务商。
 
 ```bash
-pnpm --filter @cp/web dev:local      # 本地预览纯前端版
-pnpm --filter @cp/web build:static   # 构建静态产物至 apps/web/dist
-CP_BASE=/仓库名/ pnpm --filter @cp/web build:static   # GitHub Pages 项目子路径站点构建
+pnpm dev                                    # 本地开发预览
+pnpm build                                  # 构建静态产物至 apps/web/dist
+CP_BASE=/仓库名/ pnpm --filter @cp/web build # GitHub Pages 项目子路径站点构建
 ```
 
 - **路由与刷新**：使用 Hash 路由（`#/menu`），静态托管任意子路径刷新均不会 404，无需配置服务端重定向。
@@ -38,17 +38,16 @@ CP_BASE=/仓库名/ pnpm --filter @cp/web build:static   # GitHub Pages 项目�
 
 ### 部署到 Cloudflare Pages
 
-通过命令行直接上传构建产物（`apps/web/wrangler.toml` 项目名为 `cyberpunk`）：
+通过 Wrangler 直接上传构建产物（`apps/web/wrangler.toml` 项目名为 `cyberpunk`，对应域名 `https://cyberpunk-am6.pages.dev`）：
 
 ```bash
-npx wrangler login                 # 首次使用需登录
-pnpm --filter @cp/web build:static # 构建产物
-npx wrangler pages deploy apps/web/dist --project-name cyberpunk
+npx wrangler login                          # 首次使用需登录
+pnpm deploy                                 # 构建并部署 apps/web/dist 到 Cloudflare Pages
 ```
 
-> **Windows PowerShell 构建提示**：PowerShell 不支持 `VAR=val cmd` 行内环境变量写法，可在 `apps/web` 目录下执行：  
-> `$env:VITE_CP_BACKEND='local'; $env:CP_BASE='/'; ..\..\node_modules\.bin\vite.CMD build`。
-- 线上体验示例：https://cyberpunk-am6.pages.dev
+> **Windows PowerShell 子路径构建提示**：PowerShell 不支持 `VAR=val cmd` 行内环境变量写法，如需指定 `CP_BASE` 可执行：  
+> `$env:CP_BASE='/仓库名/'; pnpm build`。
+- 线上地址：https://cyberpunk-am6.pages.dev
 - 首次进入时系统会依据 `config.example.json` 自动初始化本地配置，初次使用请在设置中添加自己的模型连接。
 
 

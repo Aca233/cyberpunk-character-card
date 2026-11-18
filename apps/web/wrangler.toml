@@ -1,5 +1,6 @@
 # Cloudflare Pages（直接上传 dist，不做 CI 构建；素材不进版本库，只能本机构建后上传）
-# 部署：npx wrangler pages deploy dist --project-name cyberpunk
+# 线上地址：https://cyberpunk-am6.pages.dev
+# 部署：wrangler pages deploy dist --project-name cyberpunk（在 apps/web 目录下）或根目录 pnpm deploy
 name = "cyberpunk"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-11-04"
