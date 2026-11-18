@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
-import { api, type ConnectionTest, type ProfilePatch, type PublicProfile } from "../../api/client";
+import {
+  api,
+  type ConnectionTest,
+  type ImageProtocol,
+  type ProfilePatch,
+  type PublicProfile,
+} from "../../api/client";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
@@ -10,7 +16,7 @@ import { Panel } from "../../ui/Panel";
 import styles from "./model-settings.module.css";
 import shared from "./settings.module.css";
 
-type Preset = "gemini" | "relay" | "openai" | "ollama";
+type Preset = "gemini" | "relay" | "openai" | "ollama" | "sdwebui" | "comfyui";
 const PRESETS: Record<
   Preset,
   {
@@ -44,13 +50,43 @@ const PRESETS: Record<
     type: "ollama",
     baseUrl: "",
   },
+  sdwebui: {
+    title: "SD WebUI 本地（文生图）",
+    hint: "启动需带 --api --cors-allow-origins=*",
+    type: "sdwebui",
+    baseUrl: "http://127.0.0.1:7860",
+  },
+  comfyui: {
+    title: "ComfyUI 本地（文生图）",
+    hint: "启动需带 --enable-cors-header",
+    type: "comfyui",
+    baseUrl: "http://127.0.0.1:8188",
+  },
 };
+
+const IMAGE_PROTOCOLS: readonly { readonly id: ImageProtocol; readonly label: string }[] = [
+  { id: "auto", label: "自动识别（推荐）" },
+  { id: "openai-images", label: "OpenAI Images (/images/generations)" },
+  { id: "openai-chat", label: "OpenAI Chat 模态 (/chat/completions)" },
+  { id: "gemini-native", label: "Gemini 原生图像 (generateContent)" },
+  { id: "gemini-imagen", label: "Gemini Imagen (:predict)" },
+  { id: "sdwebui", label: "Stable Diffusion WebUI (/sdapi/v1/txt2img)" },
+  { id: "comfyui", label: "ComfyUI (/prompt)" },
+];
 
 function problems(profile: PublicProfile | undefined): string[] {
   if (!profile) return ["还没有选择模型连接"];
   const out: string[] = [];
   if (profile.type === "anthropic") out.push("anthropic 原生接口暂未实现，请另建 OpenAI 兼容连接");
   if (profile.keyStatus === "missing") out.push("还没有填写 API 密钥");
+  return out;
+}
+
+function textRoleProblems(profile: PublicProfile | undefined): string[] {
+  const out = problems(profile);
+  if (profile && (profile.type === "sdwebui" || profile.type === "comfyui")) {
+    out.push(`${profile.type} 仅用于文生图模型`);
+  }
   return out;
 }
 
@@ -162,10 +198,10 @@ export function ModelSettings({
 
   const narrator = data.profiles.find((p) => p.name === data.narrator);
   const aux = data.profiles.find((p) => p.name === data.aux);
-  const narratorProblems = problems(narrator);
-  const auxProblems = problems(aux);
+  const narratorProblems = textRoleProblems(narrator);
+  const auxProblems = textRoleProblems(aux);
   const ready = narratorProblems.length === 0 && auxProblems.length === 0;
-  const candidate = data.profiles.find((p) => problems(p).length === 0);
+  const candidate = data.profiles.find((p) => textRoleProblems(p).length === 0);
   const requested = params.get("profile");
   const adding = requested === "@new" || data.profiles.length === 0;
   const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
@@ -231,6 +267,20 @@ export function ModelSettings({
                 }}
               >
                 {data.aux ?? "未选择"}
+              </button>
+            </span>
+            <span className={styles.rolePair}>
+              文生图模型：
+              <button
+                type="button"
+                className={styles.roleChip}
+                disabled={!data.image}
+                onClick={() => {
+                  if (!data.image || (!adding && selected?.name === data.image)) return;
+                  requestSelect(data.image);
+                }}
+              >
+                {data.image ?? "未选择（可选）"}
               </button>
             </span>
             {!ready && (
@@ -299,6 +349,7 @@ export function ModelSettings({
                 const issues = problems(profile);
                 const isNarrator = data.narrator === profile.name;
                 const isAux = data.aux === profile.name;
+                const isImage = data.image === profile.name;
                 return (
                   <li key={profile.name}>
                     <button
@@ -321,7 +372,7 @@ export function ModelSettings({
                         </span>
                       </div>
                       <span className={styles.modelName}>{profile.model || "未填模型名"}</span>
-                      {(isNarrator || isAux) && (
+                      {(isNarrator || isAux || isImage) && (
                         <div className={styles.roles}>
                           {isNarrator && (
                             <span className={styles.rolePill} data-role="narrator">
@@ -329,6 +380,11 @@ export function ModelSettings({
                             </span>
                           )}
                           {isAux && <span className={styles.rolePill}>辅助模型</span>}
+                          {isImage && (
+                            <span className={styles.rolePill} data-role="image">
+                              文生图
+                            </span>
+                          )}
                         </div>
                       )}
                     </button>
@@ -390,11 +446,13 @@ export function ModelSettings({
                     disabled={
                       dirty ||
                       assign.isPending ||
-                      problems(selected).length > 0 ||
+                      textRoleProblems(selected).length > 0 ||
                       data.narrator === selected.name
                     }
                     reason={
-                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是叙事模型"
+                      dirty
+                        ? "请先保存连接"
+                        : textRoleProblems(selected).join("；") || "已经是叙事模型"
                     }
                     onClick={() => assign.mutate({ narrator: selected.name })}
                   >
@@ -405,15 +463,32 @@ export function ModelSettings({
                     disabled={
                       dirty ||
                       assign.isPending ||
-                      problems(selected).length > 0 ||
+                      textRoleProblems(selected).length > 0 ||
                       data.aux === selected.name
                     }
                     reason={
-                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是辅助模型"
+                      dirty
+                        ? "请先保存连接"
+                        : textRoleProblems(selected).join("；") || "已经是辅助模型"
                     }
                     onClick={() => assign.mutate({ aux: selected.name })}
                   >
                     {data.aux === selected.name ? "辅助模型使用中" : "设为辅助模型"}
+                  </Button>
+                  <Button
+                    primary
+                    disabled={
+                      dirty ||
+                      assign.isPending ||
+                      problems(selected).length > 0 ||
+                      data.image === selected.name
+                    }
+                    reason={
+                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是文生图模型"
+                    }
+                    onClick={() => assign.mutate({ image: selected.name })}
+                  >
+                    {data.image === selected.name ? "文生图模型使用中" : "设为文生图模型"}
                   </Button>
                 </div>
               </section>
@@ -426,7 +501,11 @@ export function ModelSettings({
                 configVersion={overview.dataUpdatedAt}
                 profile={selected}
                 dirty={dirty}
-                inUse={data.narrator === selected.name || data.aux === selected.name}
+                inUse={
+                  data.narrator === selected.name ||
+                  data.aux === selected.name ||
+                  data.image === selected.name
+                }
                 onDeleted={() => select("@new")}
               />
             </div>
@@ -491,6 +570,10 @@ function ConnectionForm({
   const [contextWindow, setContextWindow] = useState(String(profile?.contextWindow ?? 128000));
   const [temperature, setTemperature] = useState(profile?.temperature?.toString() ?? "");
   const [maxOutput, setMaxOutput] = useState(profile?.maxOutputTokens?.toString() ?? "");
+  const [imageProtocol, setImageProtocol] = useState<ImageProtocol>(
+    profile?.imageProtocol ?? "auto",
+  );
+  const [comfyWorkflow, setComfyWorkflow] = useState(profile?.comfyWorkflow ?? "");
   const [stage, setStage] = useState("");
   const [saved, setSaved] = useState("");
   const [modelList, setModelList] = useState<readonly string[] | null>(null);
@@ -498,14 +581,26 @@ function ConnectionForm({
   const [modelError, setModelError] = useState("");
   // 创建成功后保留名字；后续步骤失败时重试更新，不重复创建。
   const persisted = useRef<string | null>(profile?.name ?? null);
+  const currentType = profile?.type ?? PRESETS[preset].type;
+  const isLocalNoKey =
+    currentType === "ollama" || currentType === "sdwebui" || currentType === "comfyui";
+  const isComfy = currentType === "comfyui" || imageProtocol === "comfyui";
   const baseDefault = PRESETS[preset].baseUrl;
   const edited = !profile
-    ? Boolean(model.trim() || key || (baseUrl.trim() !== "" && baseUrl !== baseDefault))
+    ? Boolean(
+        model.trim() ||
+          key ||
+          (baseUrl.trim() !== "" && baseUrl !== baseDefault) ||
+          imageProtocol !== "auto" ||
+          comfyWorkflow.trim() !== "",
+      )
     : model !== profile.model ||
       baseUrl !== (profile.baseUrl ?? "") ||
       contextWindow !== String(profile.contextWindow) ||
       temperature !== (profile.temperature?.toString() ?? "") ||
       maxOutput !== (profile.maxOutputTokens?.toString() ?? "") ||
+      imageProtocol !== (profile.imageProtocol ?? "auto") ||
+      comfyWorkflow !== (profile.comfyWorkflow ?? "") ||
       key !== "";
 
   const save = useMutation({
@@ -544,7 +639,14 @@ function ConnectionForm({
         throw new Error("请填写中转站提供的接口地址，例如其 /v1 地址。");
       if (profile?.baseUrl && !url)
         throw new Error("当前接口暂不支持清空已保存的地址，请填写要使用的地址。");
-      const patch: ProfilePatch = { model: modelName, contextWindow: size };
+      const patch: ProfilePatch = {
+        model: modelName,
+        contextWindow: size,
+        imageProtocol,
+      };
+      if (comfyWorkflow.trim()) {
+        patch.comfyWorkflow = comfyWorkflow.trim();
+      }
       if (url) patch.baseUrl = url;
       if (temperature.trim()) {
         const value = Number(temperature);
@@ -657,6 +759,8 @@ function ConnectionForm({
     setContextWindow(String(profile?.contextWindow ?? 128000));
     setTemperature(profile?.temperature?.toString() ?? "");
     setMaxOutput(profile?.maxOutputTokens?.toString() ?? "");
+    setImageProtocol(profile?.imageProtocol ?? "auto");
+    setComfyWorkflow(profile?.comfyWorkflow ?? "");
     setKey("");
     setSaved("");
     setStage("");
@@ -696,6 +800,14 @@ function ConnectionForm({
                     const next = event.target.value as Preset;
                     setPreset(next);
                     setBaseUrl(PRESETS[next].baseUrl);
+                    if (next === "sdwebui") {
+                      setImageProtocol("sdwebui");
+                      if (!model.trim()) setModel("default");
+                    } else if (next === "comfyui") {
+                      setImageProtocol("comfyui");
+                    } else {
+                      setImageProtocol("auto");
+                    }
                   }}
                 >
                   {Object.entries(PRESETS).map(([id, value]) => (
@@ -740,7 +852,13 @@ function ConnectionForm({
                 placeholder="例如 https://服务商地址/v1"
               />
             </FrameBox>
-            <small>OpenAI 兼容填 /v1 根地址，不要填 /chat/completions。</small>
+            <small>
+              {currentType === "sdwebui"
+                ? "SD WebUI 根地址（默认 http://127.0.0.1:7860），不要带 /sdapi/v1。"
+                : currentType === "comfyui"
+                  ? "ComfyUI 根地址（默认 http://127.0.0.1:8188）。"
+                  : "OpenAI 兼容填 /v1 根地址，不要填 /chat/completions 或 /images/generations。"}
+            </small>
           </label>
           <div className={styles.field}>
             <div className={styles.fieldHead}>
@@ -864,11 +982,41 @@ function ConnectionForm({
               />
             </FrameBox>
             <small>
-              {profile?.type === "ollama" || (!profile && preset === "ollama")
-                ? "本地 Ollama 通常不需要密钥。"
-                : "没有密钥也可以先保存连接，但不能用于剧情。"}
+              {isLocalNoKey
+                ? `本地 ${currentType} 通常不需要密钥。`
+                : "没有密钥也可以先保存连接，但不能用于剧情或文生图。"}
             </small>
           </label>
+          <label className={styles.field}>
+            <span>文生图协议（用于「设为文生图模型」时）</span>
+            <FrameBox>
+              <select
+                value={imageProtocol}
+                onChange={(e) => setImageProtocol(e.target.value as ImageProtocol)}
+              >
+                {IMAGE_PROTOCOLS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </FrameBox>
+            <small>中转站若把图像模型挂在对话接口上，请选「OpenAI Chat 模态」。</small>
+          </label>
+          {isComfy && (
+            <label className={`${styles.field} ${styles.span2}`}>
+              <span>ComfyUI API 工作流 JSON（可选，留空用内置文生图流程）</span>
+              <FrameBox>
+                <textarea
+                  rows={4}
+                  value={comfyWorkflow}
+                  onChange={(e) => setComfyWorkflow(e.target.value)}
+                  spellCheck={false}
+                  placeholder="粘贴 ComfyUI「导出 (API 格式)」JSON；支持 {{prompt}}、{{negative_prompt}}、{{width}}、{{height}}、{{seed}}、{{steps}}、{{cfg}}、{{model}} 占位符"
+                />
+              </FrameBox>
+            </label>
+          )}
         </div>
 
         <details className={styles.advanced}>

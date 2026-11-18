@@ -1,11 +1,15 @@
 import type { OffscreenPace } from "@cp/core";
 import type { ReactNode } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
+import { Button } from "../../ui/Button";
 import { FrameBox } from "../../ui/FrameBox";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import {
+  type ImagePromptField,
   type NarrativeToggle,
+  resetImagePromptFields,
+  setImagePromptField,
   setNarrativePref,
   setOffscreenPace,
   useNarrativePrefs,
@@ -22,6 +26,53 @@ const PACES: readonly [OffscreenPace, string][] = [
 /** 开关分两组：剧情里看得到的呈现，和只给调试用的剧透 */
 const SHOW: readonly [NarrativeToggle, string, string][] = [
   ["sceneTitles", "场景标题卡", "城区 · 地点 · 时间 · 天气"],
+  [
+    "autoTurnImage",
+    "回合自动配图",
+    "每轮叙事完成后自动生成场景插图（需在「模型连接」中设定文生图模型）",
+  ],
+  [
+    "autoImageUseAux",
+    "辅助模型提炼生图提示词",
+    "生成肖像或插图时由辅助模型提炼英文提示词；关闭则直接拼接设定文本",
+  ],
+];
+
+const IMAGE_PROMPT_FIELDS: readonly {
+  readonly key: ImagePromptField;
+  readonly label: string;
+  readonly hint: string;
+  readonly placeholder: string;
+  readonly rows: number;
+}[] = [
+  {
+    key: "imagePortraitPrompt",
+    label: "角色 / NPC 肖像画风提示词",
+    hint: "附加到角色立绘与 NPC 肖像的基准风格描述（建议英文）",
+    placeholder: "Cyberpunk 2077 aesthetic, Night City neo-noir character portrait...",
+    rows: 2,
+  },
+  {
+    key: "imageScenePrompt",
+    label: "回合场景插图画风提示词",
+    hint: "附加到剧情回合插图的基准风格、光影与构图描述（建议英文）",
+    placeholder: "Cyberpunk 2077 aesthetic, Night City cinematic scene illustration...",
+    rows: 2,
+  },
+  {
+    key: "imageNegativePrompt",
+    label: "默认反向提示词（Negative Prompt）",
+    hint: "告知生图模型尽量避开的元素，例如水印、文字框、崩坏手部等",
+    placeholder: "lowres, blurry, watermark, text...",
+    rows: 2,
+  },
+  {
+    key: "imageAuxInstruction",
+    label: "辅助模型提炼额外指令（可选）",
+    hint: "例如指定二次元赛璐璐、胶片颗粒、写实摄影或固定色调，提炼英文提示词时将一并遵循",
+    placeholder: "例如：采用《边缘行者》动画赛璐璐质感，偏冷青与洋红霓虹光影",
+    rows: 2,
+  },
 ];
 
 const DEBUG: readonly [NarrativeToggle, string, string][] = [
@@ -112,6 +163,55 @@ export function NarrativeSettings() {
         </Row>
       </section>
 
+      <section className={styles.prefGroup} aria-label="文生图提示词设置">
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="rgb(12 10 18 / 84%)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint="var(--cp-red-dim)"
+          className={styles.slice}
+        />
+        <div className={styles.groupHeader}>
+          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+          <span className={ms.kicker}>03 / 文生图提示词</span>
+          <div className={styles.groupAction}>
+            <Button small onClick={() => resetImagePromptFields()}>
+              恢复默认提示词
+            </Button>
+          </div>
+        </div>
+        <span
+          className={styles.thinLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
+        <div className={styles.promptGrid}>
+          {IMAGE_PROMPT_FIELDS.map((field) => (
+            <label key={field.key} className={styles.promptField} htmlFor={`pref-${field.key}`}>
+              <div className={styles.prefText}>
+                <strong>{field.label}</strong>
+                <small>{field.hint}</small>
+              </div>
+              <FrameBox>
+                <textarea
+                  id={`pref-${field.key}`}
+                  rows={field.rows}
+                  maxLength={800}
+                  value={prefs[field.key]}
+                  placeholder={field.placeholder}
+                  onChange={(e) => setImagePromptField(field.key, e.target.value)}
+                />
+              </FrameBox>
+            </label>
+          ))}
+        </div>
+      </section>
+
       <section className={styles.prefGroup} aria-label="调试">
         <NineSlice
           id="notify.itemCellBg"
@@ -127,7 +227,7 @@ export function NarrativeSettings() {
         />
         <div className={styles.groupHeader}>
           <Asset id="panel.glowLeft" height={18} tint="var(--cp-yellow)" />
-          <span className={ms.kicker}>03 / 调试</span>
+          <span className={ms.kicker}>04 / 调试</span>
         </div>
         <span
           className={styles.thinLine}

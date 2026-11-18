@@ -4,6 +4,9 @@ import type {
   BoardModule,
   BoardSlot,
   CharacterCard,
+  ImagePromptRequest,
+  ImagePromptResult,
+  ImageStyleConfig,
   Legend,
   Loadout,
   PhoneChatRequest,
@@ -169,6 +172,7 @@ export interface Health {
     readonly ready: boolean;
     readonly narrator: { readonly ready: boolean; readonly error: string | null };
     readonly aux: { readonly ready: boolean; readonly error: string | null };
+    readonly image?: { readonly ready: boolean; readonly error: string | null };
   };
 }
 
@@ -252,10 +256,40 @@ export interface CanonNpcBrief {
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
 
+export type ProviderType = "gemini" | "anthropic" | "openai" | "ollama" | "sdwebui" | "comfyui";
+
+export type ImageProtocol =
+  | "auto"
+  | "openai-images"
+  | "openai-chat"
+  | "gemini-native"
+  | "gemini-imagen"
+  | "sdwebui"
+  | "comfyui";
+
+export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
+
+export interface StoredImage {
+  readonly id: string;
+  readonly dataUrl: string;
+  readonly mimeType: string;
+  readonly prompt: string;
+  readonly negativePrompt?: string;
+  readonly revisedPrompt?: string;
+  readonly aspectRatio?: string;
+  readonly createdAt: string;
+}
+
+export interface SaveImageBindings {
+  readonly turns: Readonly<Record<string, string>>;
+  readonly npcs: Readonly<Record<string, string>>;
+  readonly playerPortrait?: string;
+}
+
 /** 后端返回的方案：不含密钥，只说配没配 */
 export interface PublicProfile {
   readonly name: string;
-  readonly type: "gemini" | "anthropic" | "openai" | "ollama";
+  readonly type: ProviderType;
   readonly baseUrl?: string;
   readonly model: string;
   readonly temperature?: number;
@@ -264,6 +298,8 @@ export interface PublicProfile {
   readonly thinkingLevel?: "low" | "medium" | "high";
   readonly safety?: "off" | "blockNone";
   readonly embeddingModel?: string;
+  readonly imageProtocol?: ImageProtocol;
+  readonly comfyWorkflow?: string;
   readonly keyStatus: KeyStatus;
   /** 密钥来源：browser config 或尚未填写 */
   readonly keySource: "config" | "env" | null;
@@ -310,6 +346,7 @@ export interface ProfilesOverview {
   readonly errors: readonly string[];
   readonly narrator?: string;
   readonly aux?: string;
+  readonly image?: string;
   readonly profiles: readonly PublicProfile[];
 }
 
@@ -319,6 +356,8 @@ export interface ProfilePatch {
   temperature?: number;
   maxOutputTokens?: number;
   contextWindow?: number;
+  imageProtocol?: ImageProtocol;
+  comfyWorkflow?: string;
 }
 
 /** 新建方案；密钥另外用 setKey 存 */
@@ -508,8 +547,8 @@ export const api = {
     request<ModelsResult>("POST", "/profiles/-/models", input),
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
-  setRoles: (roles: { narrator?: string; aux?: string }) =>
-    request<{ narrator?: string; aux?: string }>("PUT", "/profiles/-/roles", roles),
+  setRoles: (roles: { narrator?: string; aux?: string; image?: string }) =>
+    request<{ narrator?: string; aux?: string; image?: string }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),
   deleteProfile: (name: string) =>
@@ -615,6 +654,101 @@ export const api = {
       undefined,
       spoilerHeader(),
     ),
+  /** 提炼文生图英文提示词（可关闭辅助模型直接用本地拼接） */
+  draftImagePrompt: (
+    input: {
+      readonly request: ImagePromptRequest;
+      readonly useAux: boolean;
+      readonly style?: ImageStyleConfig;
+    },
+    signal?: AbortSignal,
+  ) =>
+    apiFetch("/images/prompt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    }).then(async (res) => {
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : `提示词提炼失败（${res.status}）`,
+          res.status,
+          data,
+        );
+      }
+      return data as unknown as ImagePromptResult;
+    }),
+  /** 调用已配置的文生图模型生图，并可选直接绑定到存档回合 / NPC / 角色 */
+  generateImage: (
+    input: {
+      readonly prompt: string;
+      readonly negativePrompt?: string;
+      readonly aspectRatio?: AspectRatio;
+      readonly steps?: number;
+      readonly cfgScale?: number;
+      readonly seed?: number;
+      readonly bind?: {
+        readonly saveId: string;
+        readonly target:
+          | { readonly kind: "turn"; readonly seq: number }
+          | { readonly kind: "npc"; readonly npcId: string }
+          | { readonly kind: "character" };
+      };
+    },
+    signal?: AbortSignal,
+  ) =>
+    apiFetch("/images/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    }).then(async (res) => {
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : `文生图失败（${res.status}）`,
+          res.status,
+          data,
+        );
+      }
+      return data as { readonly image: StoredImage; readonly bindings?: SaveImageBindings };
+    }),
+  getImage: (id: string) =>
+    request<{ readonly image: StoredImage }>("GET", `/images/${encodeURIComponent(id)}`).then(
+      (r) => r.image,
+    ),
+  deleteImage: (id: string) =>
+    request<{ readonly ok: boolean }>("DELETE", `/images/${encodeURIComponent(id)}`),
+  saveImages: (saveId: string) =>
+    request<{ readonly bindings: SaveImageBindings }>(
+      "GET",
+      `/saves/${encodeURIComponent(saveId)}/images`,
+    ).then((r) => r.bindings),
+  bindSaveImage: (
+    saveId: string,
+    target:
+      | { readonly kind: "turn"; readonly seq: number; readonly imageId: string }
+      | { readonly kind: "npc"; readonly npcId: string; readonly imageId: string }
+      | { readonly kind: "character"; readonly imageId: string },
+  ) =>
+    request<{ readonly bindings: SaveImageBindings }>(
+      "PUT",
+      `/saves/${encodeURIComponent(saveId)}/images`,
+      target,
+    ).then((r) => r.bindings),
+  unbindSaveImage: (
+    saveId: string,
+    target:
+      | { readonly kind: "turn"; readonly seq: number }
+      | { readonly kind: "npc"; readonly npcId: string }
+      | { readonly kind: "character" },
+  ) =>
+    request<{ readonly bindings: SaveImageBindings }>(
+      "DELETE",
+      `/saves/${encodeURIComponent(saveId)}/images`,
+      target,
+    ).then((r) => r.bindings),
 };
 
 /** 每次提交生成一个新的请求 id；同一次提交重发时沿用，后端只执行一次 */

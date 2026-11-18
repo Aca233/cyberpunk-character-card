@@ -403,6 +403,28 @@
   gap: 8px;
 }
 
+.groupAction {
+  margin-left: auto;
+}
+
+.promptGrid {
+  display: grid;
+  gap: 12px;
+  padding: 6px 0 4px;
+}
+
+.promptField {
+  display: grid;
+  gap: 6px;
+}
+
+.promptField textarea {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .prefRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
