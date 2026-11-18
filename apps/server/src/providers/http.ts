@@ -24,10 +24,7 @@ export class AbortedError extends Error {
 export function statusError(provider: string, status: number, detail: string): UpstreamError {
   const tail = detail ? `：${detail.slice(0, 300)}` : "";
   if (status === 401 || status === 403)
-    return new UpstreamError(
-      `${provider} 拒绝了密钥，请检查 config.json 里的密钥或环境变量${tail}`,
-      status,
-    );
+    return new UpstreamError(`${provider} 拒绝了密钥，请检查设置中的 API 密钥${tail}`, status);
   if (status === 404)
     return new UpstreamError(
       `${provider} 找不到这个接口或模型，请检查 baseUrl 和 model${tail}`,

@@ -7,14 +7,11 @@
     "./browser": "./src/browser.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "dev": "tsx watch src/main.ts --dev",
-    "start": "tsx src/main.ts"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@cp/content": "workspace:*",
     "@cp/core": "workspace:*",
-    "@hono/node-server": "^2.1.5",
     "hono": "^4.13.13",
     "zod": "^4.6.7"
   },

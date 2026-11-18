@@ -40,7 +40,6 @@ export async function createLocalBackend(
     saves: new IdbSaveStore(db),
     characters: new CharacterStore(docs),
     presets: new PresetStore(docs),
-    dev: false,
     hub,
     log: (message) => console.warn(message),
   });

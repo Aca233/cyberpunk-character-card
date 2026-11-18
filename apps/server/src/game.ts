@@ -27,7 +27,6 @@ import {
   type Legend,
   type LlmMessage,
   type LogRecord,
-  type LoreSource,
   legendNotes,
   legendOf,
   loadoutText,
@@ -80,7 +79,7 @@ import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { ConfigService } from "./config";
 import { KeyedMutex } from "./mutex";
-import { type DocStore, SaveMovedError, type SaveStorage } from "./ports";
+import { SaveMovedError, type SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
 import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
@@ -169,10 +168,6 @@ export interface GameDeps {
   /** 初始细节与世界事件抽样，不结算玩家行动成败 */
   readonly rng: Rng;
   readonly log: (message: string) => void;
-  /** 「存为评测用例」写草稿的地方（服务器上是 tools/evals/drafts/）；不给时不能存 */
-  readonly evalDrafts?: DocStore | undefined;
-  /** 设定库：本机官方文本库的只读检索；没有文本库时不给，写正文就不带原作资料 */
-  readonly lore?: LoreSource | undefined;
   /** 玩家导入的酒馆预设（用户定的）：每轮开始时读当前启用的那一份，只给写正文 */
   readonly presets?: PresetStore | undefined;
 }
@@ -992,12 +987,10 @@ export class GameService {
 
   /**
    * 上下文查看器的「存为评测用例」：截出第 seq 轮之前的世界和回合日志、这一轮的输入，
-   * 连同当时的回复写成用例草稿；补上期望后移到 tools/evals/ 才进测评
+   * 连同当时的回复构建成用例草稿 JSON 返回给网页下载；补上期望后可放进 tools/evals/ 进测评
    */
   evalDraft(id: string, seq: number): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
-      const dir = this.deps.evalDrafts;
-      if (!dir) return { status: 404, body: { error: "后端没有配置评测用例草稿目录" } };
       const meta = await this.deps.saves.readMeta(id);
       const { records } = await this.deps.saves.loadLog(id);
       const record = records[seq];
@@ -1033,8 +1026,7 @@ export class GameService {
           choices: record.choices ?? [],
         },
       };
-      await dir.write(`${caseId}.json`, `${JSON.stringify(draft, null, 2)}\n`);
-      return { status: 201, body: { id: caseId, file: `tools/evals/drafts/${caseId}.json` } };
+      return { status: 200, body: { id: caseId, fileName: `${caseId}.json`, draft } };
     });
   }
 
@@ -1090,7 +1082,6 @@ export class GameService {
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
-          lore: this.deps.lore,
           // 本轮开始前读取一次预设；生成途中切换开关，不改变这一轮已经选定的内容。
           preset: await this.deps.presets?.active(),
           signal,

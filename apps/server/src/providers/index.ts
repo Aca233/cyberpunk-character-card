@@ -22,7 +22,7 @@ export class LlmRouter implements LlmClient {
   async resolve(purpose: LlmRequest["purpose"]): Promise<Resolved> {
     const state = await this.config.load();
     if (state.status !== "ok")
-      return { ok: false, error: `config.json 还不能用：${state.errors.join("；")}` };
+      return { ok: false, error: `模型配置还不能用：${state.errors.join("；")}` };
     const name = this.pick[purpose] ?? state.config[purpose];
     const profile = state.config.profiles.find((p) => p.name === name);
     const role = purpose === "narrator" ? "叙事模型" : "辅助模型";
@@ -55,7 +55,7 @@ export class LlmRouter implements LlmClient {
       case "anthropic":
         return {
           ok: false,
-          error: `${role}方案「${profile.name}」是 anthropic 类型，原生接入还没做好；先把 config.json 里的 ${purpose} 指向 OpenAI 兼容的方案（例如 relay）`,
+          error: `${role}方案「${profile.name}」是 anthropic 类型，原生接入还没做好；先把${role}指向 OpenAI 兼容的方案（例如 relay）`,
         };
     }
   }

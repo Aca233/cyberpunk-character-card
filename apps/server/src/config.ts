@@ -193,7 +193,7 @@ export class ConfigService {
     if (text === undefined) {
       return {
         status: "missing",
-        errors: ["还没有 config.json：在设置页点「创建本机配置」"],
+        errors: ["还没有模型配置：在设置页点「初始化浏览器配置」"],
       };
     }
     let raw: unknown;

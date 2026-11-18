@@ -165,8 +165,7 @@ async function streamEvents(
 export interface Health {
   readonly ok: boolean;
   readonly config: "ok" | "missing" | "invalid";
-  readonly dev: boolean;
-  /** 仅检查本机配置，不代表已经连通过服务商。兼容旧后端。 */
+  /** 仅检查本地配置，不代表已经连通过服务商 */
   readonly models?: {
     readonly ready: boolean;
     readonly narrator: { readonly ready: boolean; readonly error: string | null };
@@ -610,9 +609,9 @@ export const api = {
       undefined,
       spoilerHeader(),
     ),
-  /** 把这一轮存成评测用例草稿，返回草稿在仓库里的路径 */
+  /** 把这一轮生成成评测用例草稿 JSON 供浏览器下载 */
   evalCase: (saveId: string, seq: number) =>
-    request<{ id: string; file: string }>(
+    request<{ id: string; fileName: string; draft: Record<string, unknown> }>(
       "POST",
       `/saves/${saveId}/turns/${seq}/eval-case`,
       undefined,

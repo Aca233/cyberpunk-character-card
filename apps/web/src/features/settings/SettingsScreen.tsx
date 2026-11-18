@@ -332,20 +332,35 @@ function ContextViewer() {
   );
 }
 
-/** 把出问题的这一轮截成评测用例草稿；补上期望后移进 tools/evals/ */
+function downloadJson(data: unknown, name: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name.replace(/[\\/:*?"<>|]/g, "_");
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** 把出问题的这一轮截成评测用例草稿并下载；补上期望后可放进 tools/evals/ */
 function SaveAsCase({ saveId, seq }: { readonly saveId: string; readonly seq: number }) {
-  const save = useMutation({ mutationFn: () => api.evalCase(saveId, seq) });
+  const save = useMutation({
+    mutationFn: () => api.evalCase(saveId, seq),
+    onSuccess: (res) => {
+      downloadJson(res.draft, res.fileName);
+    },
+  });
   return (
     <div className={styles.caseRow}>
       <Button onClick={() => save.mutate()} disabled={save.isPending}>
-        存为评测用例
+        导出评测用例
       </Button>
       {save.isSuccess && (
         <p className={styles.dim}>
-          已写入 {save.data.file}：补上 expect 和 rubric，移到 tools/evals/ 就会进测评
+          已下载 {save.data.fileName}：补上 expect 和 rubric，放进 tools/evals/ 即可进测评
         </p>
       )}
-      {save.isError && <p className={styles.error}>没存上：{save.error.message}</p>}
+      {save.isError && <p className={styles.error}>没导成：{save.error.message}</p>}
     </div>
   );
 }
