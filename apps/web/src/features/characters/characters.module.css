@@ -1129,13 +1129,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
+  justify-content: flex-start;
+  gap: 8px 10px;
   color: var(--cp-text);
   font-size: var(--fs-ui);
   font-weight: 600;
   cursor: var(--cp-cursor-hand);
   list-style: none;
+}
+
+.exportFoldSummary > :last-child {
+  margin-left: auto;
 }
 
 .exportFoldSummary::-webkit-details-marker {
@@ -1144,7 +1148,6 @@
 
 .exportFoldSummary::before {
   content: "▸";
-  margin-right: 6px;
   color: var(--cp-cyan);
 }
 

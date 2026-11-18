@@ -997,8 +997,8 @@
 /* ———— Step 4: 人脉与人设小传 ———— */
 
 .proseList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1549,7 +1549,8 @@
 }
 
 @media (max-width: 1120px) {
-  .reviewColumns {
+  .reviewColumns,
+  .proseList {
     grid-template-columns: minmax(0, 1fr);
   }
 }

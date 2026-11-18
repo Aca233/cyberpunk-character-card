@@ -168,7 +168,7 @@ export function ProseField({
       <label className={styles.field}>
         <FrameBox className={styles.inputBox}>
           <textarea
-            rows={block === "past" || block === "examples" ? 4 : 3}
+            rows={4}
             maxLength={max}
             value={shown}
             readOnly={busy}
