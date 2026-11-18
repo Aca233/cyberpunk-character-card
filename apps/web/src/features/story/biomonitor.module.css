@@ -142,7 +142,7 @@
   color: var(--cp-yellow);
 }
 
-/* 主工作区：左体征解剖 + 右三组诊断 */
+/* 主工作区：左宿主肖像+体征解剖 + 右三组诊断 */
 .workspace {
   display: flex;
   flex-wrap: wrap;
@@ -150,12 +150,153 @@
   gap: 9px;
 }
 
+.leftCol {
+  flex: 0 0 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 168px;
+}
+
+.portraitCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 8px;
+  isolation: isolate;
+  --box-fill: rgb(9 12 20 / 94%);
+  --box-line: var(--cp-red-dim);
+}
+
+.portraitHead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  color: var(--cp-text-dim);
+}
+
+.portraitStatus {
+  color: var(--cp-text-dim);
+}
+
+.portraitStatus:where([data-linked]) {
+  color: var(--cp-cyan);
+}
+
+.portraitStage {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+}
+
+.portraitStage > :first-child {
+  z-index: 0;
+}
+
+.portraitStage > :last-child {
+  z-index: 3;
+}
+
+.portraitStageGrid {
+  position: absolute;
+  inset: 4px;
+  z-index: 1;
+  opacity: 0.16;
+  background-repeat: repeat;
+  pointer-events: none;
+}
+
+.portraitStageBtn {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: var(--cp-cursor-hand);
+}
+
+.portraitStageBtn:disabled {
+  cursor: default;
+}
+
+.portraitStageImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.portraitUnknown {
+  width: 64%;
+  height: 64%;
+  object-fit: contain;
+  opacity: 0.72;
+}
+
+.portraitEmptyHint {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-red);
+  opacity: 0.85;
+}
+
+.portraitZoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+  background: rgb(8 10 18 / 84%);
+  border: 1px solid rgb(94 246 255 / 45%);
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  pointer-events: none;
+}
+
+.portraitStageBtn:is(:hover:not(:disabled), :focus-visible) .portraitZoom {
+  opacity: 1;
+}
+
+.portraitActions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.portraitActions > * {
+  flex: 1 1 auto;
+}
+
 /* 左栏：全息躯体扫描区 */
 .scanCol {
   position: relative;
-  flex: 1 1 146px;
-  max-width: 170px;
-  min-width: 136px;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: space-between;

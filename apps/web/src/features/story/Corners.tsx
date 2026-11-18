@@ -10,6 +10,8 @@ import type { AssetId } from "../../assets";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
+import { GeneratedImage } from "../images/GeneratedImage";
+import { useSaveImages } from "../images/SaveImagesContext";
 import { shopPoiIconOf, weaponHudIconOf } from "./art";
 import styles from "./corners.module.css";
 import neural from "./neural.module.css";
@@ -298,6 +300,8 @@ export function BioMonitor({
   const wound = woundTelemetry(health, combat, cyberware);
   const low = wound.tone === "bad" || wound.tone === "dead" || health.condition !== "up";
   const neuro = neuroTelemetry(humanity, psychosis);
+  const saveImages = useSaveImages();
+  const portraitId = saveImages?.bindings.playerPortrait ?? character.portrait ?? null;
   const p = usePeek("bio", peek.expand, peek.setExpand);
   // 整块收起时等内容收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡
   const lingeredWide = useLinger(wide && p.open);
@@ -331,16 +335,32 @@ export function BioMonitor({
           <div className={styles.bioSummaryInner}>
             <div className={styles.bioRow}>
               <span
-                className={styles.level}
-                title={`街头名声 · ${character.credTier}：${character.credWorld}`}
+                className={styles.bioAvatar}
+                data-portrait={portraitId ? true : undefined}
+                title={`${character.name ?? "宿主"} · 街头名声 ${character.credTier}：${character.credWorld}`}
               >
-                <Asset id="hud.levelFrame" tint="var(--cp-red)" height={44} />
-                <Asset
-                  id="notify.streetCred"
-                  tint="var(--cp-red)"
-                  height={20}
-                  className={styles.levelIcon}
-                />
+                <NineSlice id="map.filterCellBg" tint="rgb(14 10 16 / 86%)" slice={CELL_SLICE} />
+                {portraitId ? (
+                  <GeneratedImage
+                    imageId={portraitId}
+                    alt={character.name ?? "主角头像"}
+                    className={styles.bioAvatarArt}
+                    fallback={
+                      <Asset
+                        id="portrait.unknown"
+                        tint="var(--cp-red)"
+                        className={styles.bioAvatarUnknown}
+                      />
+                    }
+                  />
+                ) : (
+                  <Asset
+                    id="portrait.unknown"
+                    tint="var(--cp-red)"
+                    className={styles.bioAvatarUnknown}
+                  />
+                )}
+                <NineSlice id="map.filterCellFg" tint="var(--cp-red)" slice={CELL_SLICE} />
               </span>
               <div className={styles.trauma}>
                 <div className={styles.woundHead}>

@@ -646,7 +646,11 @@ export async function runNarratorTurn(
     if (
       cp.confirmation &&
       ((deps.approvedSpend !== undefined && deps.approvedSpend !== cp.confirmation.quoteKey) ||
-        !(plan.kind === "action" && plan.input.spendOk === true && deps.approvedSpend === cp.confirmation.quoteKey))
+        !(
+          plan.kind === "action" &&
+          plan.input.spendOk === true &&
+          deps.approvedSpend === cp.confirmation.quoteKey
+        ))
     ) {
       return { kind: "confirmSpend", ...cp.confirmation };
     }
@@ -690,7 +694,10 @@ export async function runNarratorTurn(
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
       judge = await b.readJudge(reply.text);
       if (b.dropped.some((d) => d.where === "判断"))
-        return { kind: "blocked", reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。" };
+        return {
+          kind: "blocked",
+          reason: "本轮判断格式无法修复，尚未推进剧情或修改状态，请重试。",
+        };
     }
     const ooc = legacyOoc || (plan.kind === "action" && judge.ooc === true);
     const activeBoost = sandevistanOf(world, deps.data ?? {});
@@ -1258,363 +1265,364 @@ export async function runNarratorTurn(
         "narrated",
       );
     }
-  const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
+    const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
 
-  // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
-  const extractEntries: ValidationEntry[] = [];
-  for (const [i, item] of (shape.changes ?? []).entries()) {
-    const where = `changes[${i}]`;
-    const type =
-      typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
-    const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
-    if (!schema) {
-      b.drop(
-        where,
-        item,
-        typeof type === "string" ? `未知的指令类型：${type}` : "指令缺少 type",
-        "format",
-      );
-      continue;
-    }
-    const proposal = registry.normalizeProposal(item);
-    if (proposal.note !== undefined) noteOnce(b.notes, proposal.note);
-    extractEntries.push({
-      key: where,
-      raw: proposal.value,
-      schema,
-      priority: typeof type === "string" && (type === "world" || KEY_ITEMS[type]) ? 1 : 0,
-    });
-  }
-  if (!inFlashback) {
-    for (const [i, item] of (shape.messages ?? []).slice(0, MESSAGES_PER_TURN).entries())
-      extractEntries.push({ key: `messages[${i}]`, raw: item, schema: IncomingMessageSchema });
-  }
-  const extracted = await b.validateBatch("extract", extractEntries);
-
-  // 装着的义体的名字：义体来源的专属选项要对得上
-  const parts = cyberwareCatalog(deps.data ?? {});
-  // 打坏的义体修好前失去能力：不算专属选项的来源、不挡伤害
-  const installedChrome = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
-  const broken = new Set(HealthStateSchema.parse(world.slices.health).brokenChrome);
-  const working = installedChrome.filter((c) => !broken.has(c.id));
-  const chrome = new Set(working.map((c) => parts.get(c.id)?.name ?? c.id));
-  const traits = CharacterStateSchema.parse(world.slices.character).traits;
-  const choices: Choice[] = [];
-  for (const [i, item] of (shape.choices ?? []).entries()) {
-    const where = `choices[${i}]`;
-    if (i >= MAX_CHOICES) {
-      b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
-      continue;
-    }
-    const choice = b.validate(where, item, ChoiceProposalSchema);
-    if (!choice) continue;
-    choices.push(verifySource(choice, chrome, traits, b.notes));
-  }
-
-  // 代码校验第一步：白名单和逐条格式
-  const proposals: Proposal[] = [];
-  for (const [i] of (shape.changes ?? []).entries()) {
-    const where = `changes[${i}]`;
-    const command = extracted.get(where) as Command | undefined;
-    if (!command) continue;
-    proposals.push({
-      where,
-      kind: "change",
-      value: command as Record<string, unknown>,
-      parse: (v) => {
-        const parsed = registry.parseCommand(v);
-        return parsed.ok ? parsed.command : undefined;
-      },
-    });
-  }
-  // 消息：每轮最多两条；闪回里不收
-  for (const [i, item] of (shape.messages ?? []).entries()) {
-    const where = `messages[${i}]`;
-    if (inFlashback) {
-      b.drop(where, item, flashbackReason, "rules");
-      continue;
-    }
-    if (i >= MESSAGES_PER_TURN) {
-      b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
-      continue;
-    }
-    const message = extracted.get(where) as z.infer<typeof IncomingMessageSchema> | undefined;
-    if (!message) continue;
-    proposals.push({
-      where,
-      kind: "message",
-      value: { ...message },
-      parse: (v) => {
-        const parsed = IncomingMessageSchema.safeParse(v);
-        return parsed.success
-          ? {
-              type: "phone.receive",
-              from: parsed.data.from,
-              text: parsed.data.text,
-              ...(parsed.data.job === undefined ? {} : { job: parsed.data.job }),
-            }
-          : undefined;
-      },
-    });
-  }
-
-  // 确定性规则核验（退休辅助模型质检）：拦掉死人行动等硬错误
-  const verified = sanityGuard(b, world, proposals);
-
-  // 代码校验第二步：业务规则（闪回、战斗、快速破解去重）
-  const commands: Command[] = [];
-  const entryCommands = new Map<string, Command>();
-  const redundant = new Set<string>();
-  const addCommand = (proposal: Proposal, command: Command): void => {
-    commands.push(command);
-    entryCommands.set(proposal.where, command);
-  };
-  const quickhacks = quickhackCatalog(deps.data ?? {});
-  const harmfulHackEvents = new Set(
-    verified.flatMap((proposal) => {
-      const cmd = proposal.parse(proposal.value);
-      if (cmd?.type !== "npcHack") return [];
-      const c = cmd as { target?: unknown; program?: unknown };
-      if (c.target !== "你" || typeof c.program !== "string") return [];
-      const def =
-        quickhacks.get(c.program) ?? [...quickhacks.values()].find((q) => q.name === c.program);
-      const id = owner.get(proposal.where);
-      return id && (def?.category === "damage" || def?.category === "ultimate") ? [id] : [];
-    }),
-  );
-  // 同一交战事件里的重复创口不因条目顺序多记；失败交战不能误删另一事件的真实伤害。
-  const combatEvents = new Set<string>();
-  const woundEvents = new Set<string>();
-  for (const proposal of verified) {
-    const command = proposal.parse(proposal.value);
-    const id = owner.get(proposal.where);
-    if (id && command?.type === "combat") {
-      combatEvents.add(id);
-      if (command.action === "wound") woundEvents.add(id);
-    }
-  }
-  const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
-  for (const proposal of verified) {
-    const command = proposal.parse(proposal.value);
-    if (!command) continue;
-    if (proposal.kind === "message") {
-      addCommand(proposal, command);
-      continue;
-    }
-    const { where } = proposal;
-    if (inFlashback && command.type !== "flashback") {
-      b.drop(where, command, flashbackReason, "rules");
-      continue;
-    }
-    if (
-      (alreadyFighting || combatEvents.has(owner.get(where) ?? "")) &&
-      command.type === "flashback" &&
-      (command as { action?: unknown }).action !== "end"
-    ) {
-      b.drop(where, command, "战斗中不能闪回", "rules");
-      continue;
-    }
-    // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
-    if (
-      harmfulHackEvents.has(owner.get(where) ?? "") &&
-      (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
-    ) {
-      b.drop(
-        where,
-        command,
-        "本次快速破解由 npcHack 统一结算，不另记 damage 或 combat wound",
-        "rules",
-      );
-      redundant.add(where);
-      continue;
-    }
-    // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；模型另写的 damage 不算，免得扣两次
-    if (combatEvents.has(owner.get(where) ?? "") && command.type === "damage") {
-      b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
-      if (woundEvents.has(owner.get(where) ?? "")) redundant.add(where);
-      continue;
-    }
-    addCommand(proposal, command);
-  }
-  b.checkAborted();
-
-  // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
-  if (settle && shape.sceneEnd === true && inFlashback)
-    b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
-
-  const facts: Record<string, unknown> = { tradeNarrative: narrative };
-  facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
-  facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
-  if (counterHackSpec) {
-    facts.npcHackRuling = rulingFactFrom(`turn.${records.length}.npcHack`, {
-      kind: counterHackSpec.harm === "none" ? "possible" : "costly",
-      harm: counterHackSpec.harm,
-      reason: counterHackSpec.reason,
-    });
-  }
-  // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
-  const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
-  if (armor) facts.armor = armor.name;
-  // 断肢打在义肢上改记为义体损坏：坏着的也要放进来，不然会当成血肉再断一次
-  const limbChrome = Object.fromEntries(
-    installedChrome
-      .filter((c) => c.slot === "arms" || c.slot === "legs")
-      .map((c) => [c.slot, { id: c.id, name: parts.get(c.id)?.name ?? c.id }]),
-  );
-  if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
-  // 躲在自己的安全屋：heat 不能读安全屋（safehouse→travel→heat 会成环），这一轮没出门才算
-  const here = (world.slices.world as { location?: unknown } | undefined)?.location;
-  const homes = (world.slices.safehouse as { homes?: { location?: unknown }[] } | undefined)?.homes;
-  const leaves = commands.some(
-    (c) => c.type === "world" && c.location !== undefined && c.location !== here,
-  );
-  if (!trip && !leaves && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
-    facts.hideout = true;
-  }
-  // 队员名单：npc 不能读小队（squad 读 npc），写 npcDeath 杀队员时按它走同一道保底
-  const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
-  const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
-  if (squadIds.length > 0) facts.squad = squadIds;
-  const setup: SettlementEvent[] = [];
-  const prependSetup = (id: string, command: Command): void => {
-    setup.unshift({ id, requires: [], commands: [command] });
-  };
-  // 开了斯安威斯坦（前端开关、选项或判断阶段识别）：先扣人性再结算
-  if (sandevistanBoosted) {
-    const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
-    if (boost) prependSetup("$boost", { type: "cyberware.boost", id: boost.id });
-  }
-  // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
-  if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {
-    prependSetup("$braindance", { type: "braindance.conclude", option: plan.input.braindance });
-  }
-  // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
-  if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
-    const said = plan.input.text.trim().slice(0, 300);
-    prependSetup("$reply", {
-      type: "phone.reply",
-      id: plan.input.replyTo,
-      ...(said === "" ? {} : { text: said }),
-    });
-  }
-  if (trip) {
-    facts.travel = tripFact(trip);
-    prependSetup("$travel", { type: "travel", to: trip.to.id, mode: trip.route.mode });
-  }
-  const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
-  const events: SettlementEvent[] = [
-    ...setup,
-    ...eventPlan.events.map((event): SettlementEvent => {
-      const missing = event.entries.find(
-        (entry) => !entryCommands.has(entry) && !redundant.has(entry),
-      );
-      const invalid = missing
-        ? (b.dropped.find((d) => d.where === missing)?.reason ?? `${missing} 未通过事实校验`)
-        : undefined;
-      const eventCommands = event.entries.flatMap((entry) => {
-        const command = entryCommands.get(entry);
-        return command ? [command] : [];
-      });
-      const requires = new Set(event.requires);
-      if (requires.has("$action")) for (const e of setup) requires.add(e.id);
-      if (
-        trip &&
-        eventCommands.some(
-          (c) =>
-            (c.type === "world" && c.location !== undefined) ||
-            c.type === "trade" ||
-            c.type === "cyberware" ||
-            c.type === "cyberware.service",
-        )
-      )
-        requires.add("$travel");
-      return {
-        id: event.id,
-        requires: [...requires],
-        commands: eventCommands,
-        ...(invalid ? { invalid } : {}),
-      };
-    }),
-  ];
-  // 收场不能绕过抵达、付款或其他未成立事件；它也受同一事务机制保护。
-  if (settle && shape.sceneEnd === true && !inFlashback)
-    events.push({
-      id: "$scene-end",
-      requires: events.map((event) => event.id),
-      commands: [{ type: "world.endScene" }],
-    });
-  const applied = applyEventCommands(
-    world,
-    events,
-    applyCtx,
-    preparedPurchases,
-    rulingSpec?.kind === "blocked" ? rulingSpec.reason : undefined,
-  );
-  for (const event of applied.events) {
-    if (event.status === "applied") continue;
-    b.drop(`events.${event.id}`, { event: event.id }, event.reason ?? "事件未生效", "rules");
-  }
-  const accepted: Command[] = [];
-  for (const { command, result } of applied.results) {
-    if (result.ok) {
-      accepted.push(command);
-      b.notes.push(...result.notes);
-    } else {
-      b.drop(command.type, command, result.reason, "rules");
-    }
-  }
-  const failedEvent = applied.events.find((event) => event.status !== "applied");
-  if (failedEvent && accepted.length === 0 && applied.patches.length === 0) {
-    throw new NarratorStageError(
-      "extract",
-      `④ 本轮事件未能结算：${failedEvent.reason}（已保存判断与正文，点重试将直接继续记账）`,
-      true,
-      "narrated",
-    );
-  }
-  // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
-  const settled =
-    ooc || inFlashback
-      ? applied
-      : registry.applyCommands(
-          applied.world,
-          [{ type: "fallout.record", kinds: falloutKinds(accepted, false) }],
-          applyCtx,
+    // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
+    const extractEntries: ValidationEntry[] = [];
+    for (const [i, item] of (shape.changes ?? []).entries()) {
+      const where = `changes[${i}]`;
+      const type =
+        typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
+      const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
+      if (!schema) {
+        b.drop(
+          where,
+          item,
+          typeof type === "string" ? `未知的指令类型：${type}` : "指令缺少 type",
+          "format",
         );
+        continue;
+      }
+      const proposal = registry.normalizeProposal(item);
+      if (proposal.note !== undefined) noteOnce(b.notes, proposal.note);
+      extractEntries.push({
+        key: where,
+        raw: proposal.value,
+        schema,
+        priority: typeof type === "string" && (type === "world" || KEY_ITEMS[type]) ? 1 : 0,
+      });
+    }
+    if (!inFlashback) {
+      for (const [i, item] of (shape.messages ?? []).slice(0, MESSAGES_PER_TURN).entries())
+        extractEntries.push({ key: `messages[${i}]`, raw: item, schema: IncomingMessageSchema });
+    }
+    const extracted = await b.validateBatch("extract", extractEntries);
 
-  // 场景标题：这一轮收了场就按收场前的地点和时间
-  const beforeWorld = WorldClockStateSchema.parse(world.slices.world);
-  const afterWorld = WorldClockStateSchema.parse(settled.world.slices.world);
-  const computedTitle = sceneTitle(
-    afterWorld.scene === beforeWorld.scene ? settled.world : world,
-    deps.data ?? {},
-  );
-  const computedUnsettled = settle
-    ? failedEvent
-      ? `事件 ${failedEvent.id} 未生效：${failedEvent.reason}；独立事件已保留，可按账目改写正文`
-      : unsettledReason(b.dropped)
-    : undefined;
-  const settledPatches: Patch[] = ooc
-    ? [...applied.patches]
-    : [...applied.patches, ...(settled === applied ? [] : settled.patches)];
+    // 装着的义体的名字：义体来源的专属选项要对得上
+    const parts = cyberwareCatalog(deps.data ?? {});
+    // 打坏的义体修好前失去能力：不算专属选项的来源、不挡伤害
+    const installedChrome = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).installed;
+    const broken = new Set(HealthStateSchema.parse(world.slices.health).brokenChrome);
+    const working = installedChrome.filter((c) => !broken.has(c.id));
+    const chrome = new Set(working.map((c) => parts.get(c.id)?.name ?? c.id));
+    const traits = CharacterStateSchema.parse(world.slices.character).traits;
+    const choices: Choice[] = [];
+    for (const [i, item] of (shape.choices ?? []).entries()) {
+      const where = `choices[${i}]`;
+      if (i >= MAX_CHOICES) {
+        b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
+        continue;
+      }
+      const choice = b.validate(where, item, ChoiceProposalSchema);
+      if (!choice) continue;
+      choices.push(verifySource(choice, chrome, traits, b.notes));
+    }
 
-  extractedData = {
-    shape,
-    choices,
-    accepted,
-    considered,
-    settledWorld: settled.world,
-    settledPatches,
-    facts,
-    title: computedTitle,
-    unsettled: computedUnsettled,
-    auxUsage: b.auxUsage,
-    repairs: b.repairs,
-    repairUsage: b.repairUsage,
-    notes: [...b.notes],
-    dropped: [...b.dropped],
-  };
-  await saveCheckpoint("extracted", preparedData, narratedData, extractedData);
+    // 代码校验第一步：白名单和逐条格式
+    const proposals: Proposal[] = [];
+    for (const [i] of (shape.changes ?? []).entries()) {
+      const where = `changes[${i}]`;
+      const command = extracted.get(where) as Command | undefined;
+      if (!command) continue;
+      proposals.push({
+        where,
+        kind: "change",
+        value: command as Record<string, unknown>,
+        parse: (v) => {
+          const parsed = registry.parseCommand(v);
+          return parsed.ok ? parsed.command : undefined;
+        },
+      });
+    }
+    // 消息：每轮最多两条；闪回里不收
+    for (const [i, item] of (shape.messages ?? []).entries()) {
+      const where = `messages[${i}]`;
+      if (inFlashback) {
+        b.drop(where, item, flashbackReason, "rules");
+        continue;
+      }
+      if (i >= MESSAGES_PER_TURN) {
+        b.drop(where, item, `消息每轮最多 ${MESSAGES_PER_TURN} 条`, "rules");
+        continue;
+      }
+      const message = extracted.get(where) as z.infer<typeof IncomingMessageSchema> | undefined;
+      if (!message) continue;
+      proposals.push({
+        where,
+        kind: "message",
+        value: { ...message },
+        parse: (v) => {
+          const parsed = IncomingMessageSchema.safeParse(v);
+          return parsed.success
+            ? {
+                type: "phone.receive",
+                from: parsed.data.from,
+                text: parsed.data.text,
+                ...(parsed.data.job === undefined ? {} : { job: parsed.data.job }),
+              }
+            : undefined;
+        },
+      });
+    }
+
+    // 确定性规则核验（退休辅助模型质检）：拦掉死人行动等硬错误
+    const verified = sanityGuard(b, world, proposals);
+
+    // 代码校验第二步：业务规则（闪回、战斗、快速破解去重）
+    const commands: Command[] = [];
+    const entryCommands = new Map<string, Command>();
+    const redundant = new Set<string>();
+    const addCommand = (proposal: Proposal, command: Command): void => {
+      commands.push(command);
+      entryCommands.set(proposal.where, command);
+    };
+    const quickhacks = quickhackCatalog(deps.data ?? {});
+    const harmfulHackEvents = new Set(
+      verified.flatMap((proposal) => {
+        const cmd = proposal.parse(proposal.value);
+        if (cmd?.type !== "npcHack") return [];
+        const c = cmd as { target?: unknown; program?: unknown };
+        if (c.target !== "你" || typeof c.program !== "string") return [];
+        const def =
+          quickhacks.get(c.program) ?? [...quickhacks.values()].find((q) => q.name === c.program);
+        const id = owner.get(proposal.where);
+        return id && (def?.category === "damage" || def?.category === "ultimate") ? [id] : [];
+      }),
+    );
+    // 同一交战事件里的重复创口不因条目顺序多记；失败交战不能误删另一事件的真实伤害。
+    const combatEvents = new Set<string>();
+    const woundEvents = new Set<string>();
+    for (const proposal of verified) {
+      const command = proposal.parse(proposal.value);
+      const id = owner.get(proposal.where);
+      if (id && command?.type === "combat") {
+        combatEvents.add(id);
+        if (command.action === "wound") woundEvents.add(id);
+      }
+    }
+    const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
+    for (const proposal of verified) {
+      const command = proposal.parse(proposal.value);
+      if (!command) continue;
+      if (proposal.kind === "message") {
+        addCommand(proposal, command);
+        continue;
+      }
+      const { where } = proposal;
+      if (inFlashback && command.type !== "flashback") {
+        b.drop(where, command, flashbackReason, "rules");
+        continue;
+      }
+      if (
+        (alreadyFighting || combatEvents.has(owner.get(where) ?? "")) &&
+        command.type === "flashback" &&
+        (command as { action?: unknown }).action !== "end"
+      ) {
+        b.drop(where, command, "战斗中不能闪回", "rules");
+        continue;
+      }
+      // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
+      if (
+        harmfulHackEvents.has(owner.get(where) ?? "") &&
+        (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
+      ) {
+        b.drop(
+          where,
+          command,
+          "本次快速破解由 npcHack 统一结算，不另记 damage 或 combat wound",
+          "rules",
+        );
+        redundant.add(where);
+        continue;
+      }
+      // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；模型另写的 damage 不算，免得扣两次
+      if (combatEvents.has(owner.get(where) ?? "") && command.type === "damage") {
+        b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
+        if (woundEvents.has(owner.get(where) ?? "")) redundant.add(where);
+        continue;
+      }
+      addCommand(proposal, command);
+    }
+    b.checkAborted();
+
+    // 时间由抽取按正文写在 world 里；没写就是时间没动，代码不补保底
+    if (settle && shape.sceneEnd === true && inFlashback)
+      b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
+
+    const facts: Record<string, unknown> = { tradeNarrative: narrative };
+    facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
+    facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
+    if (counterHackSpec) {
+      facts.npcHackRuling = rulingFactFrom(`turn.${records.length}.npcHack`, {
+        kind: counterHackSpec.harm === "none" ? "possible" : "costly",
+        harm: counterHackSpec.harm,
+        reason: counterHackSpec.reason,
+      });
+    }
+    // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
+    const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
+    if (armor) facts.armor = armor.name;
+    // 断肢打在义肢上改记为义体损坏：坏着的也要放进来，不然会当成血肉再断一次
+    const limbChrome = Object.fromEntries(
+      installedChrome
+        .filter((c) => c.slot === "arms" || c.slot === "legs")
+        .map((c) => [c.slot, { id: c.id, name: parts.get(c.id)?.name ?? c.id }]),
+    );
+    if (Object.keys(limbChrome).length > 0) facts.chrome = limbChrome;
+    // 躲在自己的安全屋：heat 不能读安全屋（safehouse→travel→heat 会成环），这一轮没出门才算
+    const here = (world.slices.world as { location?: unknown } | undefined)?.location;
+    const homes = (world.slices.safehouse as { homes?: { location?: unknown }[] } | undefined)
+      ?.homes;
+    const leaves = commands.some(
+      (c) => c.type === "world" && c.location !== undefined && c.location !== here,
+    );
+    if (!trip && !leaves && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
+      facts.hideout = true;
+    }
+    // 队员名单：npc 不能读小队（squad 读 npc），写 npcDeath 杀队员时按它走同一道保底
+    const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
+    const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
+    if (squadIds.length > 0) facts.squad = squadIds;
+    const setup: SettlementEvent[] = [];
+    const prependSetup = (id: string, command: Command): void => {
+      setup.unshift({ id, requires: [], commands: [command] });
+    };
+    // 开了斯安威斯坦（前端开关、选项或判断阶段识别）：先扣人性再结算
+    if (sandevistanBoosted) {
+      const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
+      if (boost) prependSetup("$boost", { type: "cyberware.boost", id: boost.id });
+    }
+    // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
+    if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {
+      prependSetup("$braindance", { type: "braindance.conclude", option: plan.input.braindance });
+    }
+    // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
+    if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {
+      const said = plan.input.text.trim().slice(0, 300);
+      prependSetup("$reply", {
+        type: "phone.reply",
+        id: plan.input.replyTo,
+        ...(said === "" ? {} : { text: said }),
+      });
+    }
+    if (trip) {
+      facts.travel = tripFact(trip);
+      prependSetup("$travel", { type: "travel", to: trip.to.id, mode: trip.route.mode });
+    }
+    const applyCtx = { rng: deps.rng, facts, ...(deps.data ? { data: deps.data } : {}) };
+    const events: SettlementEvent[] = [
+      ...setup,
+      ...eventPlan.events.map((event): SettlementEvent => {
+        const missing = event.entries.find(
+          (entry) => !entryCommands.has(entry) && !redundant.has(entry),
+        );
+        const invalid = missing
+          ? (b.dropped.find((d) => d.where === missing)?.reason ?? `${missing} 未通过事实校验`)
+          : undefined;
+        const eventCommands = event.entries.flatMap((entry) => {
+          const command = entryCommands.get(entry);
+          return command ? [command] : [];
+        });
+        const requires = new Set(event.requires);
+        if (requires.has("$action")) for (const e of setup) requires.add(e.id);
+        if (
+          trip &&
+          eventCommands.some(
+            (c) =>
+              (c.type === "world" && c.location !== undefined) ||
+              c.type === "trade" ||
+              c.type === "cyberware" ||
+              c.type === "cyberware.service",
+          )
+        )
+          requires.add("$travel");
+        return {
+          id: event.id,
+          requires: [...requires],
+          commands: eventCommands,
+          ...(invalid ? { invalid } : {}),
+        };
+      }),
+    ];
+    // 收场不能绕过抵达、付款或其他未成立事件；它也受同一事务机制保护。
+    if (settle && shape.sceneEnd === true && !inFlashback)
+      events.push({
+        id: "$scene-end",
+        requires: events.map((event) => event.id),
+        commands: [{ type: "world.endScene" }],
+      });
+    const applied = applyEventCommands(
+      world,
+      events,
+      applyCtx,
+      preparedPurchases,
+      rulingSpec?.kind === "blocked" ? rulingSpec.reason : undefined,
+    );
+    for (const event of applied.events) {
+      if (event.status === "applied") continue;
+      b.drop(`events.${event.id}`, { event: event.id }, event.reason ?? "事件未生效", "rules");
+    }
+    const accepted: Command[] = [];
+    for (const { command, result } of applied.results) {
+      if (result.ok) {
+        accepted.push(command);
+        b.notes.push(...result.notes);
+      } else {
+        b.drop(command.type, command, result.reason, "rules");
+      }
+    }
+    const failedEvent = applied.events.find((event) => event.status !== "applied");
+    if (failedEvent && accepted.length === 0 && applied.patches.length === 0) {
+      throw new NarratorStageError(
+        "extract",
+        `④ 本轮事件未能结算：${failedEvent.reason}（已保存判断与正文，点重试将直接继续记账）`,
+        true,
+        "narrated",
+      );
+    }
+    // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
+    const settled =
+      ooc || inFlashback
+        ? applied
+        : registry.applyCommands(
+            applied.world,
+            [{ type: "fallout.record", kinds: falloutKinds(accepted, false) }],
+            applyCtx,
+          );
+
+    // 场景标题：这一轮收了场就按收场前的地点和时间
+    const beforeWorld = WorldClockStateSchema.parse(world.slices.world);
+    const afterWorld = WorldClockStateSchema.parse(settled.world.slices.world);
+    const computedTitle = sceneTitle(
+      afterWorld.scene === beforeWorld.scene ? settled.world : world,
+      deps.data ?? {},
+    );
+    const computedUnsettled = settle
+      ? failedEvent
+        ? `事件 ${failedEvent.id} 未生效：${failedEvent.reason}；独立事件已保留，可按账目改写正文`
+        : unsettledReason(b.dropped)
+      : undefined;
+    const settledPatches: Patch[] = ooc
+      ? [...applied.patches]
+      : [...applied.patches, ...(settled === applied ? [] : settled.patches)];
+
+    extractedData = {
+      shape,
+      choices,
+      accepted,
+      considered,
+      settledWorld: settled.world,
+      settledPatches,
+      facts,
+      title: computedTitle,
+      unsettled: computedUnsettled,
+      auxUsage: b.auxUsage,
+      repairs: b.repairs,
+      repairUsage: b.repairUsage,
+      notes: [...b.notes],
+      dropped: [...b.dropped],
+    };
+    await saveCheckpoint("extracted", preparedData, narratedData, extractedData);
   }
 
   const {
@@ -1628,7 +1636,11 @@ export async function runNarratorTurn(
     unsettled,
   } = extractedData;
   const considered = [...extractedData.considered];
-  const applyCtx = { rng: deps.rng, facts: { ...savedFacts }, ...(deps.data ? { data: deps.data } : {}) };
+  const applyCtx = {
+    rng: deps.rng,
+    facts: { ...savedFacts },
+    ...(deps.data ? { data: deps.data } : {}),
+  };
   const before = WorldClockStateSchema.parse(world.slices.world);
   const after = WorldClockStateSchema.parse(settledWorld.slices.world);
 
@@ -1727,7 +1739,11 @@ export async function runNarratorTurn(
         }
       }
       if (!offscreenComplete) {
-        const failedApply = registry.applyCommands(settledWorld, [{ type: "city.failed" }], applyCtx);
+        const failedApply = registry.applyCommands(
+          settledWorld,
+          [{ type: "city.failed" }],
+          applyCtx,
+        );
         currentWorld = failedApply.world;
         offscreenPatches = [...failedApply.patches];
         offscreenResults = failedApply.results;
@@ -1866,7 +1882,9 @@ export async function runNarratorTurn(
       notes: b.notes,
       flags: b.flags,
       world: ended,
-      patches: ooc ? [...settledPatches] : [...settledPatches, ...offscreenPatches, ...memoryPatches],
+      patches: ooc
+        ? [...settledPatches]
+        : [...settledPatches, ...offscreenPatches, ...memoryPatches],
       modules: promptModules,
       pin: settle && unsettled === undefined && shape.pin === true,
       clutch: settle && unsettled === undefined && shape.clutch === true,

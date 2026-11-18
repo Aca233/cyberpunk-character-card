@@ -1384,7 +1384,10 @@ export function StoryScreen() {
           >
             <p>{failure.message}</p>
             {activeCheckpoint && (
-              <p>已保存前面阶段：{activeCheckpoint.completedLabels.join("、")}。重试将跳过已完成步骤。</p>
+              <p>
+                已保存前面阶段：{activeCheckpoint.completedLabels.join("、")}
+                。重试将跳过已完成步骤。
+              </p>
             )}
             <p>这一轮没有写进存档。可以换个说法，或者到设置里检查这个方案的安全选项。</p>
           </Dialog>
