@@ -4,8 +4,26 @@ import type { DocStore } from "./ports";
 
 z.config(z.locales.zhCN());
 
-export const ProviderTypeSchema = z.enum(["gemini", "anthropic", "openai", "ollama"]);
+export const ProviderTypeSchema = z.enum([
+  "gemini",
+  "anthropic",
+  "openai",
+  "ollama",
+  "sdwebui",
+  "comfyui",
+]);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
+
+export const ImageProtocolSchema = z.enum([
+  "auto",
+  "openai-images",
+  "openai-chat",
+  "gemini-native",
+  "gemini-imagen",
+  "sdwebui",
+  "comfyui",
+]);
+export type ImageProtocol = z.infer<typeof ImageProtocolSchema>;
 
 /** 设置页可以修改的字段；名称和类型建好以后不改，密钥走单独的接口 */
 const tunables = {
@@ -20,6 +38,10 @@ const tunables = {
   /** off：不传安全设置（3.x 默认即关闭）；blockNone：不拦截但返回评分 */
   safety: z.enum(["off", "blockNone"]).optional(),
   embeddingModel: z.string().min(1).optional(),
+  /** 文生图协议（设为文生图模型时生效）；auto 按提供方与模型名自动识别 */
+  imageProtocol: ImageProtocolSchema.optional(),
+  /** ComfyUI 自定义 API 工作流模板 JSON（可选，留空用内置文生图工作流） */
+  comfyWorkflow: z.string().max(100_000).optional(),
 };
 
 const ProfileBase = z.strictObject({
@@ -54,6 +76,7 @@ export const NewProfileSchema = ProfileBase.omit({ apiKey: true, apiKeyEnv: true
 const RolesSchema = z.strictObject({
   narrator: z.string().min(1).optional(),
   aux: z.string().min(1).optional(),
+  image: z.string().min(1).optional(),
 });
 
 /** 旧版 config.json 用 gm 记叙事模型的方案：读的时候当成 narrator，下次保存就写成新键 */
@@ -73,6 +96,8 @@ export const ConfigSchema = z.preprocess(
       narrator: z.string().min(1).optional(),
       /** 辅助模型（摘要、格式修复、模块解读）用哪个方案 */
       aux: z.string().min(1).optional(),
+      /** 文生图模型（角色立绘、NPC 肖像、回合场景插图）用哪个方案 */
+      image: z.string().min(1).optional(),
     })
     .superRefine((config, ctx) => {
       const names = new Set<string>();
@@ -86,7 +111,7 @@ export const ConfigSchema = z.preprocess(
         }
         names.add(profile.name);
       }
-      for (const role of ["narrator", "aux"] as const) {
+      for (const role of ["narrator", "aux", "image"] as const) {
         const name = config[role];
         if (name !== undefined && !names.has(name)) {
           ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${name} 的方案` });
@@ -223,8 +248,10 @@ export class ConfigService {
   publicProfile(profile: Profile): PublicProfile {
     const { apiKey: _hidden, ...rest } = profile;
     const key = this.keyFor(profile);
+    const localNoKey =
+      profile.type === "ollama" || profile.type === "sdwebui" || profile.type === "comfyui";
     const keyStatus: KeyStatus =
-      key !== undefined ? "configured" : profile.type === "ollama" ? "notNeeded" : "missing";
+      key !== undefined ? "configured" : localNoKey ? "notNeeded" : "missing";
     const keySource: KeySource =
       key === undefined ? null : profile.apiKey !== undefined ? "config" : "env";
     return { ...rest, keyStatus, keySource };
@@ -253,6 +280,7 @@ export class ConfigService {
       errors: state.errors,
       narrator: config.narrator,
       aux: config.aux,
+      image: config.image,
       profiles: config.profiles.map((p) => this.publicProfile(p)),
     };
   }
@@ -341,6 +369,7 @@ export class ConfigService {
         const roles = [
           config.narrator === name ? "叙事模型" : null,
           config.aux === name ? "辅助" : null,
+          config.image === name ? "文生图" : null,
         ]
           .filter((r) => r !== null)
           .join("和");
@@ -351,8 +380,8 @@ export class ConfigService {
     );
   }
 
-  /** 换角色 / 辅助用的方案 */
-  setRoles(body: unknown): Promise<Result<{ narrator?: string; aux?: string }>> {
+  /** 换角色 / 辅助 / 文生图用的方案 */
+  setRoles(body: unknown): Promise<Result<{ narrator?: string; aux?: string; image?: string }>> {
     const parsed = RolesSchema.safeParse(body);
     if (!parsed.success) {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
@@ -362,6 +391,7 @@ export class ConfigService {
       (config) => ({
         ...(config.narrator === undefined ? {} : { narrator: config.narrator }),
         ...(config.aux === undefined ? {} : { aux: config.aux }),
+        ...(config.image === undefined ? {} : { image: config.image }),
       }),
     );
   }

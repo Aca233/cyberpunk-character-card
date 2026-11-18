@@ -12,6 +12,8 @@ const LABELS: Record<ProviderType, string> = {
   gemini: "Gemini",
   ollama: "Ollama",
   anthropic: "Anthropic",
+  sdwebui: "Stable Diffusion WebUI",
+  comfyui: "ComfyUI",
 };
 
 const DEFAULT_BASE: Record<ProviderType, string> = {
@@ -19,6 +21,8 @@ const DEFAULT_BASE: Record<ProviderType, string> = {
   gemini: "https://generativelanguage.googleapis.com/v1beta",
   ollama: "http://127.0.0.1:11434/v1",
   anthropic: "https://api.anthropic.com/v1",
+  sdwebui: "http://127.0.0.1:7860",
+  comfyui: "http://127.0.0.1:8188",
 };
 
 const MAX_GEMINI_PAGES = 4;
@@ -145,7 +149,10 @@ async function fetchGeminiModels(
       if (!id) continue;
       fallback.push(id);
       const methods = entry?.supportedGenerationMethods;
-      if (Array.isArray(methods) && methods.includes("generateContent")) {
+      if (
+        Array.isArray(methods) &&
+        (methods.includes("generateContent") || methods.includes("predict"))
+      ) {
         preferred.push(id);
       }
     }
@@ -182,6 +189,41 @@ export async function fetchProviderModels(
       signal,
     );
     return extractModelIds(json);
+  }
+
+  if (input.type === "sdwebui") {
+    const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
+    const json = await requestJson(label, `${base}/sdapi/v1/sd-models`, headers, signal);
+    const items = Array.isArray(json) ? json : [];
+    const ids: string[] = [];
+    for (const item of items) {
+      const rec = asRecord(item);
+      const id =
+        typeof rec?.title === "string"
+          ? rec.title
+          : typeof rec?.model_name === "string"
+            ? rec.model_name
+            : "";
+      if (id) ids.push(id);
+    }
+    return uniqueSorted(ids);
+  }
+
+  if (input.type === "comfyui") {
+    const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
+    const json = await requestJson(
+      label,
+      `${base}/object_info/CheckpointLoaderSimple`,
+      headers,
+      signal,
+    );
+    const root = asRecord(json);
+    const loader = asRecord(root?.CheckpointLoaderSimple);
+    const inputDef = asRecord(loader?.input);
+    const required = asRecord(inputDef?.required);
+    const ckpt = required?.ckpt_name;
+    const list = Array.isArray(ckpt) && Array.isArray(ckpt[0]) ? ckpt[0] : [];
+    return uniqueSorted(list.filter((item): item is string => typeof item === "string"));
   }
 
   if (input.type === "openai" && base === DEFAULT_BASE.openai && !apiKey) {

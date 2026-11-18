@@ -3,11 +3,13 @@ import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { type ConfigService, ProviderTypeSchema, type Result, redact } from "../config";
 import { AbortedError } from "../providers/http";
+import { ImageRouter } from "../providers/image";
 import { LlmRouter } from "../providers/index";
 import { fetchProviderModels } from "../providers/models";
 
 /** 测试连接最多等这么久 */
 const TEST_TIMEOUT_MS = 30_000;
+const IMAGE_TEST_TIMEOUT_MS = 60_000;
 const MODELS_TIMEOUT_MS = 15_000;
 
 const FetchModelsBodySchema = z.object({
@@ -117,6 +119,66 @@ export function profileRoutes(config: ConfigService): Hono {
   routes.post("/:name/test", async (c) => {
     const name = c.req.param("name");
     const redact = await config.redactor();
+    const overview = await config.load();
+    const profile =
+      overview.status === "ok" ? overview.config.profiles.find((p) => p.name === name) : undefined;
+    if (profile && (profile.type === "sdwebui" || profile.type === "comfyui")) {
+      const started = Date.now();
+      try {
+        const models = await fetchProviderModels(
+          {
+            type: profile.type,
+            ...(profile.baseUrl !== undefined ? { baseUrl: profile.baseUrl } : {}),
+            apiKey: config.keyFor(profile),
+          },
+          AbortSignal.timeout(MODELS_TIMEOUT_MS),
+        );
+        return c.json({
+          ok: true,
+          model: profile.model,
+          ms: Date.now() - started,
+          reply: `连通成功，检测到 ${models.length} 个可用模型`,
+        });
+      } catch (error) {
+        return c.json({
+          ok: false,
+          error: redact(error instanceof Error ? error.message : String(error)),
+          ms: Date.now() - started,
+        });
+      }
+    }
+    const imageOnly =
+      overview.status === "ok" &&
+      profile !== undefined &&
+      ((profile.imageProtocol !== undefined && profile.imageProtocol !== "auto") ||
+        (overview.config.image === name &&
+          overview.config.narrator !== name &&
+          overview.config.aux !== name));
+    if (imageOnly) {
+      const started = Date.now();
+      try {
+        const result = await new ImageRouter(config).generate(
+          {
+            prompt: "minimalist cyberpunk neon triangle emblem on dark background",
+            aspectRatio: "1:1",
+          },
+          AbortSignal.timeout(IMAGE_TEST_TIMEOUT_MS),
+          name,
+        );
+        return c.json({
+          ok: true,
+          model: profile.model,
+          ms: Date.now() - started,
+          reply: `生图测试成功（${result.mimeType}）`,
+        });
+      } catch (error) {
+        return c.json({
+          ok: false,
+          error: redact(error instanceof Error ? error.message : String(error)),
+          ms: Date.now() - started,
+        });
+      }
+    }
     const resolved = await new LlmRouter(config, { narrator: name }).resolve("narrator");
     if (!resolved.ok) return c.json({ ok: false, error: redact(resolved.error) });
     const started = Date.now();

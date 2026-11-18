@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { CharacterStore } from "./characters";
 import { ConfigService } from "./config";
 import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
+import { ImageStore } from "./images";
 import { PresetStore } from "./presets";
 import { TurnHub } from "./turns";
 
@@ -40,6 +41,7 @@ export async function createLocalBackend(
     saves: new IdbSaveStore(db),
     characters: new CharacterStore(docs),
     presets: new PresetStore(docs),
+    images: new ImageStore(docs),
     hub,
     log: (message) => console.warn(message),
   });

@@ -57,6 +57,12 @@ export class LlmRouter implements LlmClient {
           ok: false,
           error: `${role}方案「${profile.name}」是 anthropic 类型，原生接入还没做好；先把${role}指向 OpenAI 兼容的方案（例如 relay）`,
         };
+      case "sdwebui":
+      case "comfyui":
+        return {
+          ok: false,
+          error: `${role}方案「${profile.name}」是 ${profile.type} 文生图服务，只能用于「文生图模型」，不能当${role}`,
+        };
     }
   }
 
