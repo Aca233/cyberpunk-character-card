@@ -345,22 +345,12 @@ export function BioMonitor({
                     imageId={portraitId}
                     alt={character.name ?? "主角头像"}
                     className={styles.bioAvatarArt}
-                    fallback={
-                      <Asset
-                        id="portrait.unknown"
-                        tint="var(--cp-red)"
-                        className={styles.bioAvatarUnknown}
-                      />
-                    }
+                    fallback={<Asset id="portrait.unknown" className={styles.bioAvatarUnknown} />}
                   />
                 ) : (
-                  <Asset
-                    id="portrait.unknown"
-                    tint="var(--cp-red)"
-                    className={styles.bioAvatarUnknown}
-                  />
+                  <Asset id="portrait.unknown" className={styles.bioAvatarUnknown} />
                 )}
-                <NineSlice id="map.filterCellFg" tint="var(--cp-red)" slice={CELL_SLICE} />
+                <NineSlice id="map.filterCellFg" tint="var(--cp-red-dim)" slice={CELL_SLICE} />
               </span>
               <div className={styles.trauma}>
                 <div className={styles.woundHead}>

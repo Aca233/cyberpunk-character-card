@@ -50,11 +50,11 @@
 
 ### 步骤 4：左上角常态头像与展开后生物监测融合立绘（`apps/web`）
 - 修改 `apps/web/src/features/story/Corners.tsx` 与 `corners.module.css`：
-  - `BioMonitor` 常态 `.bioRow` 左侧改为切角头像框（`map.filterCellBg` + `map.filterCellFg` 红色框线，约 `48×58px`），优先渲染主角立绘 `GeneratedImage`，未绑定时渲染 `portrait.unknown` 全息轮廓，保留街头名声提示。
-  - 适度拓宽 `.bio[data-diag]` 展开宽度（如 `min(680px, ...)`）以容纳左侧立绘+人体扫描双模块列与右侧三张遥测卡。
+  - `BioMonitor` 常态 `.bioRow` 左侧改为切角头像框（`map.filterCellBg` + `map.filterCellFg` 暗红框线，约 `46×56px`），优先渲染主角立绘 `GeneratedImage`，未绑定时渲染无红色染色遮罩的 `portrait.unknown` 原色全息轮廓，保留街头名声提示。
+  - 维持 `.bio[data-diag]` 为 `min(620px, ...)` 原有紧凑宽度。
 - 修改 `apps/web/src/features/story/BiomonitorPanel.tsx`、`biomonitor.module.css`、`NeuralPages.tsx`、`story.module.css`：
   - 移除 `NeuralPages.tsx` 中突兀的 `.playerPortraitStrip`（以及 `story.module.css` 中对应样式）。
-  - 在 `BiomonitorPanel` 左侧列（`.leftCol`）顶部融入「SUBJECT // 宿主肖像」Kiroshi 框体卡片，提供 `3:4` 大尺寸立绘展示（约 `168×224px`），点击可灯箱查看大图，未生成时显示 `portrait.unknown` 全息轮廓与状态标牌；按钮紧凑放置在框底（「AI 生成立绘 / AI 重绘」与「恢复建档」），与下方 `VITAL-MAP` 共享同一套红色赛博监测语言。
+  - 保留原有 `.workspace`（左侧 `VITAL-MAP` + 右侧三张遥测卡）平衡排版，将主角头像（`72×90px` 切角头像格，点击灯箱查看大图或触发生成；未绑定时显示原色 `portrait.unknown` 全息轮廓）与操作按钮（「AI 生成立绘 / AI 重绘」「恢复建档」）自然融入 `BiomonitorPanel` 顶部 `.banner` 身份横条。
 
 ### 步骤 5：静态类型与代码规范检查及 Git 提交
 - 运行 `tsc` 与 `biome` 检查确保零类型和 lint 错误。

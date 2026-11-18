@@ -209,28 +209,75 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
 
   return (
     <section className={styles.root} aria-label="生物检测">
-      {/* 顶部总控状态条 */}
+      {/* 顶部总控状态条：头像 + 身份信息 + 立绘操作 + 创伤/救援状态 */}
       <header className={styles.banner} data-tone={wound.tone}>
         <CellFrame />
         <div className={styles.bannerBrand}>
-          <span
-            className={styles.bannerCrest}
-            title={`街头名声 · ${character.credTier}：${character.credWorld}`}
-          >
-            <Asset id="hud.levelFrame" tint="var(--cp-red)" height={34} />
-            <Asset
-              id="notify.streetCred"
-              tint="var(--cp-red)"
-              height={16}
-              className={styles.bannerCrestIcon}
-            />
-          </span>
+          {character.name !== null && (portraitId || saveImages) ? (
+            <button
+              type="button"
+              className={styles.bannerAvatar}
+              disabled={!portraitId && !saveImages}
+              title={
+                portraitId
+                  ? "点击查看大图"
+                  : saveImages
+                    ? "点击生成角色立绘"
+                    : `街头名声 · ${character.credTier}：${character.credWorld}`
+              }
+              onClick={() => {
+                if (portraitId) {
+                  saveImages?.openLightbox(portraitId, `${character.name ?? "主角"} · 人物立绘`);
+                } else {
+                  openPortraitModal();
+                }
+              }}
+            >
+              <NineSlice id="map.filterCellBg" tint="rgb(10 12 20 / 92%)" slice={CELL_SLICE} />
+              {portraitId ? (
+                <GeneratedImage
+                  imageId={portraitId}
+                  alt={`${character.name}立绘`}
+                  className={styles.bannerAvatarImg}
+                  fallback={<Asset id="portrait.unknown" className={styles.bannerAvatarImg} />}
+                />
+              ) : (
+                <Asset id="portrait.unknown" className={styles.bannerAvatarImg} />
+              )}
+              <NineSlice id="map.filterCellFg" tint="var(--cp-red-dim)" slice={CELL_SLICE} />
+            </button>
+          ) : (
+            <span
+              className={styles.bannerCrest}
+              title={`街头名声 · ${character.credTier}：${character.credWorld}`}
+            >
+              <Asset id="hud.levelFrame" tint="var(--cp-red)" height={34} />
+              <Asset
+                id="notify.streetCred"
+                tint="var(--cp-red)"
+                height={16}
+                className={styles.bannerCrestIcon}
+              />
+            </span>
+          )}
           <div className={styles.bannerTitle}>
             <span className={styles.bannerCode}>KIROSHI OPTICS {"//"} BIOMONITOR</span>
             <div className={styles.bannerHostRow}>
               <strong className={styles.bannerName}>{character.name ?? "未建档宿主"}</strong>
               {dossier.subtitle && <span className={styles.bannerSub}>{dossier.subtitle}</span>}
             </div>
+            {character.name !== null && saveImages && (
+              <div className={styles.bannerActions}>
+                <Button small onClick={openPortraitModal}>
+                  {portraitId ? "AI 重绘" : "AI 生成立绘"}
+                </Button>
+                {saveImages.bindings.playerPortrait && (
+                  <Button small onClick={() => void saveImages.unbindImage({ kind: "character" })}>
+                    恢复建档
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className={styles.bannerPills}>
@@ -272,206 +319,127 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
         </div>
       </header>
 
-      {/* 主体：左宿主肖像+生理解剖扫描列 + 右三组遥测诊断 */}
+      {/* 主体：左生理解剖扫描图 + 右三组遥测诊断 */}
       <div className={styles.workspace}>
-        <div className={styles.leftCol}>
-          {character.name !== null && (portraitId || saveImages) && (
-            <section className={styles.portraitCard} aria-label="宿主肖像">
-              <CellFrame />
-              <div className={styles.portraitHead}>
-                <span>SUBJECT {"//"} 宿主肖像</span>
-                <span
-                  className={styles.portraitStatus}
-                  data-linked={Boolean(portraitId) || undefined}
-                >
-                  {portraitId ? "LINKED" : "STANDBY"}
-                </span>
-              </div>
-              <div className={styles.portraitStage}>
-                <NineSlice id="map.filterCellBg" tint="rgb(10 12 20 / 92%)" slice={CELL_SLICE} />
-                <span
-                  className={styles.portraitStageGrid}
-                  style={{ backgroundImage: cssUrl("fx.grid") }}
-                  aria-hidden
-                />
-                {portraitId ? (
-                  <button
-                    type="button"
-                    className={styles.portraitStageBtn}
-                    title="点击查看大图"
-                    onClick={() =>
-                      saveImages?.openLightbox(portraitId, `${character.name ?? "主角"} · 人物立绘`)
-                    }
-                  >
-                    <GeneratedImage
-                      imageId={portraitId}
-                      alt={`${character.name}立绘`}
-                      className={styles.portraitStageImg}
-                      fallback={
-                        <Asset
-                          id="portrait.unknown"
-                          tint="var(--cp-red)"
-                          className={styles.portraitUnknown}
-                        />
-                      }
-                    />
-                    <span className={styles.portraitZoom}>查看大图</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.portraitStageBtn}
-                    disabled={!saveImages}
-                    title={saveImages ? "点击生成角色立绘" : "尚未生成角色立绘"}
-                    onClick={openPortraitModal}
-                  >
-                    <Asset
-                      id="portrait.unknown"
-                      tint="var(--cp-red)"
-                      className={styles.portraitUnknown}
-                    />
-                    <span className={styles.portraitEmptyHint}>NO PORTRAIT</span>
-                  </button>
-                )}
-                <NineSlice id="map.filterCellFg" tint="var(--cp-red-dim)" slice={CELL_SLICE} />
-              </div>
-              {saveImages && (
-                <div className={styles.portraitActions}>
-                  <Button small onClick={openPortraitModal}>
-                    {portraitId ? "AI 重绘" : "AI 生成立绘"}
-                  </Button>
-                  {saveImages.bindings.playerPortrait && (
-                    <Button
-                      small
-                      onClick={() => void saveImages.unbindImage({ kind: "character" })}
-                    >
-                      恢复建档
-                    </Button>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
-          <aside className={styles.scanCol} data-tone={wound.tone}>
-            <CellFrame />
-            <span
-              className={styles.scanGridBg}
-              style={{ backgroundImage: cssUrl("fx.grid") }}
-              aria-hidden
+        <aside className={styles.scanCol} data-tone={wound.tone}>
+          <CellFrame />
+          <span
+            className={styles.scanGridBg}
+            style={{ backgroundImage: cssUrl("fx.grid") }}
+            aria-hidden
+          />
+          <div className={styles.scanHead}>
+            <span>VITAL-MAP</span>
+            <span className={styles.scanLive} data-alert={layers.scanAlert}>
+              <i aria-hidden />
+              {layers.scanAlert === "bad"
+                ? "ALERT"
+                : layers.scanAlert === "warn"
+                  ? "STRAIN"
+                  : "SCAN OK"}
+            </span>
+          </div>
+
+          <div className={styles.bodyStage} aria-hidden>
+            <span className={styles.bodyReticle} />
+            {(wound.tone === "bad" || wound.tone === "dead" || layers.nervousAlert === "bad") && (
+              <Asset
+                id="hud.damageGlow"
+                tint="var(--cp-danger)"
+                height={116}
+                className={styles.bodyGlow}
+              />
+            )}
+            <Asset
+              id="cyber.bodySkin"
+              height={104}
+              className={styles.bodyLayer}
+              style={{ opacity: layers.skinOpacity }}
             />
-            <div className={styles.scanHead}>
-              <span>VITAL-MAP</span>
-              <span className={styles.scanLive} data-alert={layers.scanAlert}>
-                <i aria-hidden />
-                {layers.scanAlert === "bad"
-                  ? "ALERT"
-                  : layers.scanAlert === "warn"
-                    ? "STRAIN"
-                    : "SCAN OK"}
-              </span>
-            </div>
-
-            <div className={styles.bodyStage} aria-hidden>
-              <span className={styles.bodyReticle} />
-              {(wound.tone === "bad" || wound.tone === "dead" || layers.nervousAlert === "bad") && (
-                <Asset
-                  id="hud.damageGlow"
-                  tint="var(--cp-danger)"
-                  height={116}
-                  className={styles.bodyGlow}
-                />
-              )}
-              <Asset
-                id="cyber.bodySkin"
-                height={104}
-                className={styles.bodyLayer}
-                style={{ opacity: layers.skinOpacity }}
-              />
-              <Asset
-                id="cyber.bodyImmune"
-                height={104}
-                className={styles.bodyLayer}
-                style={{ opacity: layers.immuneOpacity }}
-              />
-              <Asset
-                id="cyber.bodySkeleton"
-                height={104}
-                className={styles.bodyLayer}
-                style={{ opacity: layers.skeletonOpacity }}
-              />
-              <Asset
-                id="cyber.bodyNervous"
-                height={104}
-                className={styles.bodyLayer}
-                style={{
-                  opacity: layers.nervousOpacity,
-                  filter:
-                    layers.nervousAlert === "bad"
-                      ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
-                      : layers.nervousAlert === "warn"
-                        ? "drop-shadow(0 0 4px rgb(252 238 10 / 60%))"
-                        : undefined,
-                }}
-              />
-              <Asset
-                id="cyber.bodyCirculatory"
-                height={104}
-                className={styles.bodyLayer}
-                style={{
-                  opacity: layers.circulatoryOpacity,
-                  filter:
-                    layers.vascularAlert === "bad"
-                      ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
+            <Asset
+              id="cyber.bodyImmune"
+              height={104}
+              className={styles.bodyLayer}
+              style={{ opacity: layers.immuneOpacity }}
+            />
+            <Asset
+              id="cyber.bodySkeleton"
+              height={104}
+              className={styles.bodyLayer}
+              style={{ opacity: layers.skeletonOpacity }}
+            />
+            <Asset
+              id="cyber.bodyNervous"
+              height={104}
+              className={styles.bodyLayer}
+              style={{
+                opacity: layers.nervousOpacity,
+                filter:
+                  layers.nervousAlert === "bad"
+                    ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
+                    : layers.nervousAlert === "warn"
+                      ? "drop-shadow(0 0 4px rgb(252 238 10 / 60%))"
                       : undefined,
-                }}
-              />
-              {scarPins.map((part) => {
-                const pos = BODY_ZONES[part];
-                return (
-                  <span
-                    key={`scar-${part}`}
-                    className={styles.scarPin}
-                    style={{ top: pos.top, left: pos.left }}
-                    title={`${pos.label} · 永久留疤`}
-                  />
-                );
-              })}
-              {[...activePins.entries()].map(([part, info]) => {
-                const pos = BODY_ZONES[part];
-                return (
-                  <span
-                    key={`pin-${part}`}
-                    className={styles.zonePin}
-                    data-tone={info.tone}
-                    style={{ top: pos.top, left: pos.left }}
-                    title={`${pos.label}：${info.labels.join("；")}`}
-                  />
-                );
-              })}
-              <span className={styles.scanBeam} />
-            </div>
+              }}
+            />
+            <Asset
+              id="cyber.bodyCirculatory"
+              height={104}
+              className={styles.bodyLayer}
+              style={{
+                opacity: layers.circulatoryOpacity,
+                filter:
+                  layers.vascularAlert === "bad"
+                    ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
+                    : undefined,
+              }}
+            />
+            {scarPins.map((part) => {
+              const pos = BODY_ZONES[part];
+              return (
+                <span
+                  key={`scar-${part}`}
+                  className={styles.scarPin}
+                  style={{ top: pos.top, left: pos.left }}
+                  title={`${pos.label} · 永久留疤`}
+                />
+              );
+            })}
+            {[...activePins.entries()].map(([part, info]) => {
+              const pos = BODY_ZONES[part];
+              return (
+                <span
+                  key={`pin-${part}`}
+                  className={styles.zonePin}
+                  data-tone={info.tone}
+                  style={{ top: pos.top, left: pos.left }}
+                  title={`${pos.label}：${info.labels.join("；")}`}
+                />
+              );
+            })}
+            <span className={styles.scanBeam} />
+          </div>
 
-            <div className={styles.systemLegend}>
-              <span className={styles.sysDot} data-alert={layers.vascularAlert}>
-                循环/体征
-              </span>
-              <span className={styles.sysDot} data-alert={layers.nervousAlert}>
-                中枢神经
-              </span>
-              <span className={styles.sysDot} data-alert={layers.skeletalAlert}>
-                骨骼/义肢
-              </span>
-              <span className={styles.sysDot} data-alert={layers.immuneAlert}>
-                免疫代谢
-              </span>
-            </div>
+          <div className={styles.systemLegend}>
+            <span className={styles.sysDot} data-alert={layers.vascularAlert}>
+              循环/体征
+            </span>
+            <span className={styles.sysDot} data-alert={layers.nervousAlert}>
+              中枢神经
+            </span>
+            <span className={styles.sysDot} data-alert={layers.skeletalAlert}>
+              骨骼/义肢
+            </span>
+            <span className={styles.sysDot} data-alert={layers.immuneAlert}>
+              免疫代谢
+            </span>
+          </div>
 
-            <div className={styles.credLine} title={character.credWorld}>
-              <small>街头名声</small>
-              <span>{character.credTier}</span>
-            </div>
-          </aside>
-        </div>
+          <div className={styles.credLine} title={character.credWorld}>
+            <small>街头名声</small>
+            <span>{character.credTier}</span>
+          </div>
+        </aside>
 
         <div className={styles.telemetryCol}>
           {/* 卡 1：具体创伤档案 */}
