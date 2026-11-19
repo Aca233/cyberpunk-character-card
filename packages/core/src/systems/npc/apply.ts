@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { applyBehaviorChip, cyberwareCatalog } from "../cyberware";
 import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
 import { applyNpcBody, bodyProblems, EMPTY_NPC_BODY, sanitizeNpcBody } from "./body";
@@ -338,6 +339,19 @@ export function applyNpc(
   if (!npc.alive && command.type === "npcGear" && command.action === "remove")
     return applyNpcBody(npc, command, now, data);
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
+  if (command.type === "npcBehavior") {
+    const states = npc.behaviorChips ?? {};
+    const result = applyBehaviorChip(
+      states,
+      npc.body?.cyberware ?? [],
+      command,
+      cyberwareCatalog(data),
+      now,
+      facts,
+    );
+    if (result.ok) npc.behaviorChips = states;
+    return result;
+  }
   if (
     command.type === "npcHurt" ||
     command.type === "npcHeal" ||
@@ -370,6 +384,18 @@ export function applyNpc(
           return { ok: false, reason: `外号「${command.alias}」与已有角色 ${collide.name} 重复` };
         }
         npc.alias = command.alias;
+        updated = true;
+      }
+      if (command.age !== undefined && command.age !== npc.age) {
+        npc.age = command.age;
+        updated = true;
+      }
+      if (command.adult !== undefined && command.adult !== npc.adult) {
+        npc.adult = command.adult;
+        updated = true;
+      }
+      if (command.entity !== undefined && command.entity !== npc.entity) {
+        npc.entity = command.entity;
         updated = true;
       }
       for (const field of ["role", "look", "voice", "want", "limit", "secret"] as const) {
@@ -418,7 +444,13 @@ export function applyNpc(
             : undefined;
       if (nextBody !== undefined) {
         npc.body = nextBody;
-
+        for (const [device, state] of Object.entries(npc.behaviorChips ?? {})) {
+          if (!nextBody.cyberware.includes(device) && state.mode === "chip") {
+            state.mode = "personal";
+            state.since = now;
+            if (state.lastControl) state.lastControl.to = now;
+          }
+        }
         updated = true;
       }
       return updated
@@ -450,8 +482,31 @@ export function applyNpc(
     }
     case "memory": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
-      if (npc.memories.includes(command.text)) return { ok: true };
-      npc.memories.push(command.text);
+      const active = Object.entries(npc.behaviorChips ?? {}).find(
+        ([, state]) => state.mode === "chip",
+      );
+      const profile = active ? cyberwareCatalog(data).get(active[0])?.behaviorChip : undefined;
+      if (profile && (profile.awareness === "absent" || profile.recall === "none"))
+        return {
+          ok: false,
+          reason: `${npc.name} 当前接管状态不能形成此段本人共同记忆；设备摘要须另记，恢复后实际告知或查阅才是本人所知`,
+        };
+      if (command.source === "log") {
+        const entry =
+          command.device && command.log
+            ? npc.behaviorChips?.[command.device]?.logs.find((log) => log.id === command.log)
+            : undefined;
+        if (!entry || entry.reviewedAt === null)
+          return { ok: false, reason: "这段摘要不存在或本人没有查阅，不能写成本人已经知道" };
+      }
+      const text =
+        command.source === "log"
+          ? `从本人查阅的设备摘要得知：${command.text}`
+          : command.source === "told"
+            ? `后来被告知：${command.text}`
+            : command.text;
+      if (npc.memories.includes(text)) return { ok: true };
+      npc.memories.push(text);
       if (npc.memories.length > MEMORY_KEPT) {
         npc.memories.splice(0, npc.memories.length - MEMORY_KEPT);
       }

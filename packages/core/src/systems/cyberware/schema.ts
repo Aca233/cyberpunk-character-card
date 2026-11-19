@@ -71,6 +71,60 @@ export const DECK_TRAIT_LABELS: Readonly<Record<DeckTrait, string>> = {
   recovery: "散热缓冲",
 };
 
+/** 设备本身的固定行为与记忆条件；职业称呼不等于实际安装。 */
+export const BehaviorChipProfileSchema = z.object({
+  purpose: z.string().trim().min(1).max(160),
+  awareness: z.enum(["present", "absent"]),
+  recall: z.enum(["retained", "none"]),
+  logging: z.enum(["none", "local-summary"]),
+});
+export type BehaviorChipProfile = z.infer<typeof BehaviorChipProfileSchema>;
+
+export const BehaviorChipStateSchema = z.object({
+  mode: z.enum(["personal", "chip"]),
+  since: z.number().int(),
+  lastControl: z.object({ from: z.number().int(), to: z.number().int().nullable() }).optional(),
+  /** 日志是设备摘要，不是超梦、亲历记忆或全知客户档案。 */
+  logs: z.array(
+    z.object({
+      id: z.string().min(1),
+      text: z.string().trim().min(1).max(240),
+      at: z.number().int(),
+      reviewedAt: z.number().int().nullable(),
+    }),
+  ),
+});
+export type BehaviorChipState = z.infer<typeof BehaviorChipStateSchema>;
+
+export const BehaviorChipTermsSchema = z.object({
+  device: z.string().min(1).describe("本人实际已安装的行为芯片型号 id"),
+  action: z.enum(["mode", "log", "review"]),
+  mode: z.enum(["personal", "chip"]).optional(),
+  log: z.string().min(1).optional().describe("一段实际设备摘要的稳定 id；重复记录不改原文"),
+  text: z.string().trim().min(1).max(240).optional().describe("实际记录到的摘要，不写未取得的想法"),
+  evidence: z
+    .string()
+    .trim()
+    .min(2)
+    .max(500)
+    .describe("逐字引用本轮正文中实际启停、记录或本人查阅的依据"),
+  consent: z
+    .string()
+    .trim()
+    .min(2)
+    .max(500)
+    .optional()
+    .describe("启用接管时，本人在接管前明确同意本次范围的原话；付款或芯片迎合不能代替"),
+});
+export type BehaviorChipTerms = z.infer<typeof BehaviorChipTermsSchema>;
+
+export const BehaviorChipCommandSchema = BehaviorChipTermsSchema.extend({
+  type: z.literal("cyberware.behavior"),
+}).describe(
+  "玩家本人行为芯片的实际模式变化与日志；不安装新设备，不替玩家选择感情、台词或行动意图。mode:chip 必须本人明确授权。日志查阅不会恢复亲历记忆，也不自动共享。只有真实发生变化才写。",
+);
+export type BehaviorChipCommand = z.infer<typeof BehaviorChipCommandSchema>;
+
 /** 义体表的一条；数据在 content 包的 cyberware.ts */
 export const CyberwareDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
@@ -100,6 +154,7 @@ export const CyberwareDefSchema = z.object({
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */
   iconic: z.boolean().default(false),
+  behaviorChip: BehaviorChipProfileSchema.optional(),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
 
@@ -240,6 +295,7 @@ export const CyberwareSupplySchema = z.object({
 });
 
 export const CyberwareStateSchema = z.object({
+  behaviorChips: z.record(z.string(), BehaviorChipStateSchema).optional(),
   installed: z
     .array(
       z.object({

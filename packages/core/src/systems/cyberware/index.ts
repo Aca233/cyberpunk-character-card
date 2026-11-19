@@ -2,12 +2,15 @@ import { defineSystem } from "../../kernel/system";
 import type { HealthState } from "../health";
 import { cyberwareActions } from "./actions";
 import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
+import { applyBehaviorChip, behaviorChipLines } from "./behavior";
 import { cyberwareEvents } from "./events";
 import { cyberwareInteractions } from "./interactions";
 import { cyberwareRules } from "./prompt";
 import { ripperdocDebtsView, ripperdocView } from "./ripperdoc";
 import { sandevistanView } from "./sandevistan";
 import {
+  type BehaviorChipCommand,
+  BehaviorChipCommandSchema,
   type BoostCommand,
   BoostCommandSchema,
   type CyberwareCommand,
@@ -38,7 +41,7 @@ import {
 /** 义体：共同交易入口核对诊所和授权，原子更新义体、款项与债务。 */
 export const cyberware = defineSystem<
   CyberwareState,
-  CyberwareCommand | WorkshopCommand,
+  CyberwareCommand | WorkshopCommand | BehaviorChipCommand,
   | InstallCyberware
   | RipperdocDebtCommand
   | BoostCommand
@@ -75,6 +78,7 @@ export const cyberware = defineSystem<
     "cyberware.part": PartCommandSchema,
     "cyberware.service": ServiceCommandSchema,
     "cyberware.supply": SupplyCommandSchema,
+    "cyberware.behavior": BehaviorChipCommandSchema,
   },
   internal: {
     "cyberware.install": InstallCyberwareSchema,
@@ -108,6 +112,20 @@ export const cyberware = defineSystem<
     }
     const ctx = _ctx;
     const catalog = cyberwareCatalog(ctx.data);
+    if (command.type === "cyberware.behavior") {
+      const states = draft.behaviorChips ?? {};
+      const result = applyBehaviorChip(
+        states,
+        draft.installed.map((entry) => entry.id),
+        command,
+        catalog,
+        ctx.now,
+        ctx.facts,
+        ctx.read<HealthState>("health").brokenChrome,
+      );
+      if (result.ok) draft.behaviorChips = states;
+      return result;
+    }
     if (command.type === "cyberware.debt") return applyDebt(draft, command, ctx);
     if (command.type === "cyberware.boost") {
       const broken = ctx.read<HealthState>("health").brokenChrome;
@@ -141,6 +159,11 @@ export const cyberware = defineSystem<
           (s) => !["completed", "cancelled"].includes(s.status),
         );
         const lines = [
+          ...behaviorChipLines(
+            state.installed.map((entry) => entry.id),
+            state.behaviorChips,
+            catalog,
+          ),
           ...parts.map(
             (p) =>
               `未安装义体 ${p.id}：${catalog.get(p.model)?.name ?? p.model}（型号 ${p.model}），货况 ${p.condition}，来源 ${p.source}；不是已安装能力`,
@@ -167,6 +190,7 @@ export const cyberware = defineSystem<
 
 export * from "./actions";
 export * from "./apply";
+export * from "./behavior";
 export * from "./events";
 export * from "./interactions";
 export * from "./prompt";

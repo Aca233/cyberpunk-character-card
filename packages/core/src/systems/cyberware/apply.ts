@@ -174,6 +174,12 @@ export function install(
         if (part.holder === "installed" && part.model === prev.id) part.holder = "player";
       }
       notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
+      const control = draft.behaviorChips?.[prev.id];
+      if (control?.mode === "chip") {
+        control.mode = "personal";
+        control.since = now;
+        if (control.lastControl) control.lastControl.to = now;
+      }
       emit.push({ type: "health.limb", action: "clear", id: prev.id });
     }
   }
@@ -214,11 +220,18 @@ export function remove(
   draft: Draft<CyberwareState>,
   id: string,
   catalog: ReadonlyMap<string, CyberwareDef>,
+  now: number,
 ): ApplyOutcome {
   const name = catalog.get(id)?.name ?? id;
   const i = draft.installed.findIndex((c) => c.id === id);
   if (i < 0) return { ok: false, reason: `没有装着${name}` };
   draft.installed.splice(i, 1);
+  const control = draft.behaviorChips?.[id];
+  if (control?.mode === "chip") {
+    control.mode = "personal";
+    control.since = now;
+    if (control.lastControl) control.lastControl.to = now;
+  }
   for (const part of Object.values(draft.parts)) {
     if (part.holder === "installed" && part.model === id) part.holder = "player";
   }

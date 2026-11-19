@@ -383,6 +383,13 @@ export function applyNpcBody(
         npc.body = { ...body, cyberware: body.cyberware.filter((c) => c !== command.cyberware) };
       }
       const verb = command.action === "install" ? "装上了" : "拆掉了";
+      for (const [device, state] of Object.entries(npc.behaviorChips ?? {})) {
+        if (!npc.body?.cyberware.includes(device) && state.mode === "chip") {
+          state.mode = "personal";
+          state.since = now;
+          if (state.lastControl) state.lastControl.to = now;
+        }
+      }
       const swapNote = swapped === undefined ? "" : `，换下了 ${swapped}`;
       return { ok: true, notes: npc.met ? [`${npc.name} ${verb} ${def.name}${swapNote}`] : [] };
     }

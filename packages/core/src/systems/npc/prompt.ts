@@ -1,4 +1,5 @@
 import type { RuleModule } from "../../kernel/system";
+import { behaviorChipLines, cyberwareCatalog } from "../cyberware";
 import { currentOutfit } from "./apply";
 import { bodyLine, woundNote } from "./body";
 import {
@@ -89,6 +90,29 @@ export const npcRules: RuleModule<NpcState> = {
 - 有卡的人实际出现神经症状时写 npcHumanity affect（symptomId、symptom、stage、reason），真实缓解写 recover 引用 symptomId；经历和义体本身不自动扣分。玩家只知道已经观察到的表现。`,
 };
 
+export const adultServicesRules: RuleModule<NpcState> = {
+  id: "adult-services",
+  title: "成人服务与行为芯片",
+  commands: ["npcBehavior"],
+  when: (state, input) =>
+    /性偶|玩偶|成人|性工作|接客|芯片接管|亲密|约会|扭扭街|诺亚|预约|\bR18\b/i.test(input.text) ||
+    Object.values(state.npcs).some(
+      (person) =>
+        person.met &&
+        (/性工作|玩偶|成人服务/.test(person.role) || person.behaviorChips !== undefined),
+    ),
+  judge: `- 成人服务只发生在已明确成年的参与者之间，未知年龄或成年情况先确认，不由职业、外貌或付费推断。真人从业者、已装行为芯片的真人玩偶和明确设定的合成人/机器人按各自身份与能力处理。
+- 先明确提供者、范围、时长、价格、记录许可和提前结束条件，双方实际接受才开始。付款、设备权限、工作中的配合、本人持续意愿、私人信任与感情彼此独立；本人拒绝或中止须按实际发生处理，不能凭付款或设备迎合推翻。
+- 行为芯片只利用实际取得的客户资料与现场输入，不读取玩家心声；安装、启用、当时意识、事后亲历和查阅日志是不同事实。没有装设备的人不会因为职业而被接管。`,
+  narrate: `- 相处沿正文和自由输入继续、暂停、略写或结束；普通聊天、购买、熟客来往和私人亲密都可平静收场，不强加危机、秘密、任务或好感奖励。
+- 回访沿用同一人、工作地点与实际说过的小事。人物可以忙、休息、改约、拒绝，也有同事和普通生活。经营者只知道亲眼见过或实际收到的资料；本人断片期间的事不自动成为其回忆。
+- 明确区分本人主导与芯片接管；依固定条件呈现当时意识和事后记忆。本人看过日志只知道日志写了什么，不等于恢复当时的感受。设备摘要不自动产生超梦、录音或分享许可。玩家自身设备不能替玩家决定感情、台词或行动意图。`,
+  text: `- 收费服务沿 commerce.offer（kind:service、target:adult-service、session 约定完整）与引用报价的 trade 成交，不用 favor 或 money 绕开授权。询价不扣款，接受商业服务不自动开启芯片；进度沿 commerce.service 的累计实际分钟结算，略写正常完成仍经过剩余时长，中止按已经明确的条件，不另加一次 time。
+- 真实芯片操作写 npcBehavior：mode 指定 personal/chip；进入 chip 必须在接管前引用本人同意范围的 consent 与实际启动 evidence。退出可由本人或真实中断触发，不把返回本人主导写成自动获知过程。不要因玩家出资替其他人安装、启动或编辑人格。
+- 有记录能力且接管中真实留下摘要时才 log，使用稳定 log id 与固定 text；不把所有接待自动写成日志。本人恢复后实际查阅才 review。设备日志不是当事人的共同亲历，不自动送进记忆或共享给前台。
+- 记本人真实知情时，memory 的 source 以 experienced（本人实际能保留的亲历）、told（后来实际被告知）、log（本人已 review，须 device/log）分别记录。断片后的本人不能复述没有获知的过程，尤其不能把芯片迎合、付款或日志摘要当作私人情感。前台、同行者与本人分别记录各自真正知情的内容。`,
+};
+
 export interface Stage {
   /** 玩家角色所在的地点 id */
   readonly location: string | null;
@@ -176,6 +200,11 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
     lines.push(`  样本：${npc.samples.map((s) => `「${s}」`).join(" ")}`);
   }
   lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
+  if (npc.age !== undefined || npc.adult !== undefined || npc.entity !== undefined) {
+    lines.push(
+      `  已定身份事实：${npc.age !== undefined ? `${npc.age} 岁；` : ""}${npc.adult === true ? "已确认成年；" : npc.adult === false ? "未成年；" : ""}${npc.entity === "human" ? "真人" : npc.entity === "synthetic" ? "合成人" : npc.entity === "robot" ? "机器人" : "实体身份未补定"}。这些事实不代表玩家已全部获知。`,
+    );
+  }
   if (npc.secret) {
     lines.push(`  幕后秘密（不等于玩家或其他 NPC 已知）：${npc.secret}`);
     lines.push(
@@ -184,6 +213,13 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   }
   if (stage.data !== undefined && stage.now !== undefined) {
     lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
+    lines.push(
+      ...behaviorChipLines(
+        npc.body?.cyberware ?? [],
+        npc.behaviorChips,
+        cyberwareCatalog(stage.data),
+      ).map((line) => `  ${line}`),
+    );
   }
   if (npc.relation) lines.push(`  关系：${npc.relation.text}`);
   const ties = tiesNote(npc, npcs);

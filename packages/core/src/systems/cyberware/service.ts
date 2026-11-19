@@ -137,7 +137,7 @@ export function beginService(
     if (!model) return { ok: false, reason: "缺少实际拆卸型号" };
     const old = bodyPart(draft, model, ctx);
     oldPart = old.id;
-    const result = remove(draft, model, cyberwareCatalog(ctx.data));
+    const result = remove(draft, model, cyberwareCatalog(ctx.data), ctx.now);
     if (!result.ok) return result;
     emit.push(...(result.emit ?? []));
     notes.push(...(result.notes ?? []));

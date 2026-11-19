@@ -1,4 +1,6 @@
 import { z } from "zod";
+// biome-ignore lint/style/noRestrictedImports: cyberware 入口经 health/inventory 反向加载人物 schema，固定设备结构需避开入口初始化循环。
+import { BehaviorChipStateSchema, BehaviorChipTermsSchema } from "../cyberware/schema";
 import { DamageTierSchema } from "../dice";
 // biome-ignore lint/style/noRestrictedImports: health 入口经 inventory 反向加载本文件；定义结构时只读取独立 schema，避免初始化循环。
 import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health/schema";
@@ -69,6 +71,12 @@ export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
 export const NpcCardSchema = z.object({
   id: NpcIdSchema,
+  age: z.number().int().min(0).max(150).optional().describe("已经确立的年龄，不明时不猜"),
+  adult: z.boolean().optional().describe("已经确认成年与否；成人服务前必须确立，不由职业推断"),
+  entity: z
+    .enum(["human", "synthetic", "robot"])
+    .optional()
+    .describe("真实身份；真人、合成人与机器人不因同叫性偶而混同"),
   name: z.string().trim().min(1).max(NAME_CHARS),
   alias: z
     .string()
@@ -259,6 +267,7 @@ export const SeedTagSchema = z.object({
 export type SeedTag = z.infer<typeof SeedTagSchema>;
 
 const BaseNpcSchema = NpcCardSchema.extend({
+  behaviorChips: z.record(z.string(), BehaviorChipStateSchema).optional(),
   affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   /** 历史存档兼容字段 */
   vectors: NpcVectorsSchema.optional(),
@@ -360,6 +369,9 @@ export const NpcUpdateSchema = z
   .object({
     type: z.literal("npcUpdate"),
     id: NpcIdSchema,
+    age: NpcCardSchema.shape.age,
+    adult: NpcCardSchema.shape.adult,
+    entity: NpcCardSchema.shape.entity,
     alias: NpcCardSchema.shape.alias,
     role: NpcCardSchema.shape.role.optional(),
     faction: z
@@ -468,6 +480,12 @@ export const MemorySchema = z
     type: z.literal("memory"),
     id: NpcIdSchema,
     text: z.string().trim().min(1).max(120),
+    source: z
+      .enum(["experienced", "told", "log"])
+      .optional()
+      .describe("亲历、实际被告知或本人查过的设备日志；行为芯片断片不能冒充亲历"),
+    device: z.string().min(1).optional(),
+    log: z.string().min(1).optional().describe("source:log 引用本人已查阅的稳定日志 id"),
   })
   .describe("记下这个人和玩家角色之间值得记住的事：承诺、人情、冲突、秘密被说破；一句话");
 export type Memory = z.infer<typeof MemorySchema>;
@@ -669,7 +687,16 @@ export const NpcScanSchema = z
   );
 export type NpcScan = z.infer<typeof NpcScanSchema>;
 
+export const NpcBehaviorSchema = BehaviorChipTermsSchema.extend({
+  type: z.literal("npcBehavior"),
+  id: NpcIdSchema,
+}).describe(
+  "已装行为芯片人物的实际启停、设备摘要或本人查阅；mode:chip 须本人接管前同意的 consent 原文。普通从业者不自动拥有芯片，清醒意愿、接管反应、日志所知和本人亲历分别处理，不因付款切换模式。",
+);
+export type NpcBehavior = z.infer<typeof NpcBehaviorSchema>;
+
 export type NpcCommand =
+  | NpcBehavior
   | NpcHurt
   | NpcHeal
   | NpcGear

@@ -10,7 +10,7 @@ import {
 } from "./apply";
 import { applyNpcCondition } from "./body";
 import { perceivedView } from "./perceived";
-import { npcRules } from "./prompt";
+import { adultServicesRules, npcRules } from "./prompt";
 import {
   AffinityProposalSchema,
   AffinitySchema,
@@ -22,6 +22,7 @@ import {
   MeetSchema,
   MemorySchema,
   NewNpcSchema,
+  NpcBehaviorSchema,
   NpcChromeSchema,
   type NpcCommand,
   NpcConditionSchema,
@@ -74,6 +75,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcChrome: NpcChromeSchema,
     npcHumanity: NpcHumanitySchema,
     npcScan: NpcScanSchema,
+    npcBehavior: NpcBehaviorSchema,
   },
   proposals: {
     affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity },
@@ -106,7 +108,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     }
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
   },
-  rules: [npcRules],
+  rules: [npcRules, adultServicesRules],
   // 名字格和档案里的「扫描」按钮（计划第十二节第 14 条）
   actions: npcActions,
   sections: npcSections,
