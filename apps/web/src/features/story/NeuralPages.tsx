@@ -933,6 +933,15 @@ export function InventoryPage({
                   !selectedIsWorn &&
                   (kind === "healing" || kind === "grenade" || kind === "consumable");
                 const remaining = quick?.charges ?? detail?.remaining;
+                const useSpare = Boolean(
+                  quick &&
+                    remaining === 0 &&
+                    (kind === "healing"
+                      ? inventory.quickSupplyAvailable.healing
+                      : kind === "grenade"
+                        ? inventory.quickSupplyAvailable.grenade
+                        : false),
+                );
                 const ceiling =
                   view.health.wound === "severe"
                     ? Math.floor(view.health.max * 0.29)
@@ -946,7 +955,7 @@ export function InventoryPage({
                     ? "正在使用物品…"
                     : view.health.condition !== "up"
                       ? "当前无法自行使用物品"
-                      : (kind === "healing" || kind === "grenade") && remaining === 0
+                      : (kind === "healing" || kind === "grenade") && remaining === 0 && !useSpare
                         ? "这份补给已耗尽，需要取得另一份补给"
                         : kind === "healing" && view.health.hp >= ceiling
                           ? "已达到当前治疗上限"
@@ -1200,6 +1209,10 @@ export function InventoryPage({
                           </Button>
                           {useBlocked ? (
                             <small className={styles.detailHint}>{useBlocked}</small>
+                          ) : useSpare ? (
+                            <small className={styles.detailHint}>
+                              将取用随身携带的同款备用补给。
+                            </small>
                           ) : (
                             !directHeal &&
                             !directSuppressant && (
