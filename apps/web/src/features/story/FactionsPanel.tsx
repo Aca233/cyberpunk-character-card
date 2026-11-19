@@ -1,3 +1,5 @@
+import type { AssetId } from "../../assets";
+import { Asset } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -10,6 +12,52 @@ const GROUPS: readonly [Faction["kind"], string][] = [
   ["law", "执法"],
   ["service", "服务"],
 ];
+
+const FACTION_ASSETS: Readonly<Record<string, AssetId>> = {
+  maelstrom: "gang.maelstrom",
+  "tyger-claws": "gang.tygerClaws",
+  valentinos: "gang.valentinos",
+  "sixth-street": "gang.sixthStreet",
+  animals: "gang.animals",
+  "voodoo-boys": "gang.voodooBoys",
+  mox: "gang.mox",
+  scavengers: "gang.scavengers",
+  wraiths: "gang.wraiths",
+  aldecaldos: "gang.aldecaldos",
+  barghest: "gang.barghest",
+  ncpd: "map.poi.police",
+  maxtac: "map.poi.police",
+  netwatch: "interaction.netrunner",
+  "trauma-team": "brand.traumaTeam",
+};
+
+const FACTION_MONOGRAMS: Readonly<Record<string, string>> = {
+  arasaka: "荒",
+  militech: "米",
+  "kang-tao": "康",
+  biotechnica: "生",
+  petrochem: "沛",
+};
+
+function FactionMark({ faction }: { readonly faction: Faction }) {
+  const asset = FACTION_ASSETS[faction.id];
+  return (
+    <span className={styles.factionIcon} style={{ color: faction.color }}>
+      {asset ? (
+        <Asset id={asset} height={34} width={34} alt={`${faction.name}标志`} />
+      ) : (
+        <span
+          className={styles.factionMonogram}
+          style={{ borderColor: faction.color }}
+          role="img"
+          aria-label={`${faction.name}标志`}
+        >
+          {FACTION_MONOGRAMS[faction.id] ?? faction.name.slice(0, 1)}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /** 势力页：按帮派、公司、执法、服务分组；每张卡写态度标签和一句理由、地盘和关系。不调用模型 */
 export function FactionsBody({ view }: { readonly view: View }) {
@@ -40,14 +88,11 @@ export function FactionsBody({ view }: { readonly view: View }) {
                     data-here={f.here || undefined}
                   >
                     <CellFrame />
-                    <header className={styles.feedHead}>
-                      <span className={styles.feedSource}>
-                        <i
-                          className={styles.factionMarker}
-                          style={{ backgroundColor: f.color }}
-                          aria-hidden="true"
-                        />
-                        {f.en}
+                    <header className={styles.factionHead}>
+                      <FactionMark faction={f} />
+                      <span className={styles.factionName}>
+                        <b>{f.name}</b>
+                        <small>{f.en}</small>
                       </span>
                       <span
                         className={styles.contactBadge}
@@ -62,7 +107,6 @@ export function FactionsBody({ view }: { readonly view: View }) {
                         {f.attitudeLabel}
                       </span>
                     </header>
-                    <b className={styles.feedTitle}>{f.name}</b>
                     {f.reason && (
                       <p className={styles.feedNote}>
                         {f.reason}

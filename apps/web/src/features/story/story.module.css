@@ -4847,11 +4847,56 @@ ul.mapLegend > li {
   min-width: 0;
 }
 
-.factionMarker {
+.factionHead {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.factionIcon {
   flex: none;
-  width: 7px;
-  height: 7px;
-  transform: rotate(45deg);
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+}
+
+.factionIcon img {
+  object-fit: contain;
+}
+
+.factionMonogram {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid currentColor;
+  background: rgb(9 12 18 / 88%);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.factionName {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.factionName > b {
+  font-size: var(--fs-ui);
+  line-height: 1.35;
+  color: var(--cp-yellow);
+}
+
+.factionName > small {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--cp-text-dim);
 }
 
 [data-factions] .feedCard[data-here] {
