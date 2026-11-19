@@ -14,18 +14,32 @@ import {
   UsedOfferSchema,
   WithdrawOfferSchema,
 } from "./schema";
-import { applyPaidService, applyService, serviceSessionText, syncServiceProgress } from "./services";
+import {
+  applyPaidService,
+  applyService,
+  serviceSessionText,
+  syncServiceProgress,
+} from "./services";
 
 export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInternal>({
   id: "commerce",
   dependsOn: ["world", "npc"],
   state: CommerceStateSchema,
   initial: () => ({ quotes: {}, parties: {}, sessions: {} }),
-  commands: { "commerce.offer": OfferCommandSchema, "commerce.withdraw": WithdrawOfferSchema, "commerce.service": ServiceCommandSchema },
-  internal: { "commerce.used": UsedOfferSchema, "commerce.servicePaid": PaidServiceSchema, "commerce.sessionProgress": SessionProgressSchema },
+  commands: {
+    "commerce.offer": OfferCommandSchema,
+    "commerce.withdraw": WithdrawOfferSchema,
+    "commerce.service": ServiceCommandSchema,
+  },
+  internal: {
+    "commerce.used": UsedOfferSchema,
+    "commerce.servicePaid": PaidServiceSchema,
+    "commerce.sessionProgress": SessionProgressSchema,
+  },
   apply(draft, command, ctx) {
     if (command.type === "commerce.servicePaid") return applyPaidService(draft, command.id, ctx);
-    if (command.type === "commerce.sessionProgress") return syncServiceProgress(draft, command.id, command.elapsed, command.status);
+    if (command.type === "commerce.sessionProgress")
+      return syncServiceProgress(draft, command.id, command.elapsed, command.status);
     if (command.type === "commerce.service") return applyService(draft, command, ctx);
     if (command.type !== "commerce.offer") {
       const quote = draft.quotes[command.id];
@@ -81,7 +95,9 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
       when: (state, input) =>
         Object.values(state.quotes).some((q) => q.status === "offered") ||
         Object.values(state.sessions).some((s) => ["active", "paused"].includes(s.status)) ||
-        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|服务/.test(input.text),
+        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|服务/.test(
+          input.text,
+        ),
       judge:
         "- 询价、讨价还价和提出条件不等于购买。花钱意图须指明实际交易对方和物件；已谈妥条件引用报价 id，不另猜折扣。",
       narrate:
@@ -130,7 +146,13 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
               `报价 ${q.id}：${q.seller} ${q.action} ${q.target}，最终对价 ${q.price} 欧元${q.replace ? `；拆下 ${q.replace}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.disposition ? `；旧件去向 ${q.disposition}` : q.tradeIn ? "；出售旧件" : ""}${q.session ? `；主体 ${q.session.subject}；范围 ${q.session.scope}；${q.session.duration} 分钟；允许记录 ${q.session.recording ? "是" : "否"}；中止 ${q.session.earlyExit}` : ""}；尚未成交；来源：${q.evidence}`,
           ),
           ...Object.values(state.sessions)
-            .filter((s) => ["active", "paused"].includes(s.status) || localSellers.has(s.seller) || input.text.includes(s.id) || input.text.includes(s.terms.subject))
+            .filter(
+              (s) =>
+                ["active", "paused"].includes(s.status) ||
+                localSellers.has(s.seller) ||
+                input.text.includes(s.id) ||
+                input.text.includes(s.terms.subject),
+            )
             .sort((a, b) => b.paidAt - a.paidAt)
             .slice(0, 8)
             .map(serviceSessionText),

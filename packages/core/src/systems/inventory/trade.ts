@@ -1,7 +1,12 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { agreedQuote, checkNarratedPurchase, CommerceStateSchema, registeredParty } from "../commerce";
+import {
+  agreedQuote,
+  CommerceStateSchema,
+  checkNarratedPurchase,
+  registeredParty,
+} from "../commerce";
 import {
   CyberwareStateSchema,
   clinicProvider,
@@ -179,17 +184,27 @@ export function quoteTrade(
     ...(request.offer ? { offer: request.offer } : {}),
   });
   if (!match.ok) return match;
-  if (request.action === "service" && ["bd-session", "adult-service"].includes(request.service ?? "")) {
+  if (
+    request.action === "service" &&
+    ["bd-session", "adult-service"].includes(request.service ?? "")
+  ) {
     if (!request.offer || !match.quote?.session)
       return { ok: false, reason: "先明确本次主体、范围、价格、时长与中止条件，再接受指定报价" };
-    if (Object.values(CommerceStateSchema.parse(world.slices.commerce ?? {}).sessions).some((s) => ["active", "paused"].includes(s.status)))
+    if (
+      Object.values(CommerceStateSchema.parse(world.slices.commerce ?? {}).sessions).some((s) =>
+        ["active", "paused"].includes(s.status),
+      )
+    )
       return { ok: false, reason: "当前体验尚未结束；先继续或明确中止，再接受新体验" };
     const terms = match.quote.session;
     if (request.service === "adult-service") {
       const subject = (world.slices.npc as NpcState).npcs[terms.subject];
-      if (!subject || !subject.alive || subject.location !== location)
+      if (!subject?.alive || subject.location !== location)
         return { ok: false, reason: "本次服务者必须已确立身份、在场且能够提供服务" };
-      if ((subject.age !== undefined && subject.age < 18) || !(subject.adult === true || (subject.age !== undefined && subject.age >= 18)))
+      if (
+        (subject.age !== undefined && subject.age < 18) ||
+        !(subject.adult === true || (subject.age !== undefined && subject.age >= 18))
+      )
         return { ok: false, reason: "只有已明确确认成年的服务者才能接受成人服务约定" };
     }
   }

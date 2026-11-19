@@ -7,7 +7,12 @@ export const ServiceTermsSchema = z.object({
   scope: z.string().trim().min(1).max(600).describe("双方已经接受的实际服务范围与底线"),
   duration: z.number().int().min(1).max(1440).describe("本次约定的总游戏分钟"),
   recording: z.boolean().describe("是否明确允许记录；允许不代表已经录制或同意传播"),
-  earlyExit: z.string().trim().min(1).max(300).describe("已说明的中止条件；不临时追加费用或自动退款"),
+  earlyExit: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .describe("已说明的中止条件；不临时追加费用或自动退款"),
 });
 export type ServiceTerms = z.infer<typeof ServiceTermsSchema>;
 
@@ -113,9 +118,13 @@ export const OfferCommandSchema = QuoteTermsSchema.extend({
         offer.disposition !== undefined)
     )
       ctx.addIssue({ code: "custom", message: "只有义体报价可以约定旧件" });
-    const experiential = offer.kind === "service" && ["bd-session", "adult-service"].includes(offer.target);
+    const experiential =
+      offer.kind === "service" && ["bd-session", "adult-service"].includes(offer.target);
     if (experiential !== (offer.session !== undefined))
-      ctx.addIssue({ code: "custom", message: "超梦按次与成人服务必须给出本次完整条件；其他交易不填写 session" });
+      ctx.addIssue({
+        code: "custom",
+        message: "超梦按次与成人服务必须给出本次完整条件；其他交易不填写 session",
+      });
   })
   .describe(
     "保存对方已认可的报价，不扣款、不交货、不代表玩家接受。后续成交引用 offer id；未成交的报价会持续保留。",
@@ -146,17 +155,34 @@ export const SessionProgressSchema = z.object({
   status: z.enum(["active", "paused", "finished", "exited"]),
 });
 
-export const ServiceCommandSchema = z.object({
-  type: z.literal("commerce.service"),
-  id: z.string().min(1).describe("已经实际成交的成人服务报价 id"),
-  action: z.enum(["progress", "pause", "resume", "finish", "exit"]),
-  elapsed: z.number().int().min(0).optional().describe("实际累计服务分钟，不是本轮增量；finish 省略时补足剩余约定时长"),
-  evidence: z.string().trim().min(2).max(600).describe("本轮正文里真实继续、暂停、结束或中止的原文"),
-}).describe("已经接受的成人服务正文进度，不重新扣款；略写正常结束仍经过剩余约定分钟。超梦进度使用 braindance 指令。");
+export const ServiceCommandSchema = z
+  .object({
+    type: z.literal("commerce.service"),
+    id: z.string().min(1).describe("已经实际成交的成人服务报价 id"),
+    action: z.enum(["progress", "pause", "resume", "finish", "exit"]),
+    elapsed: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe("实际累计服务分钟，不是本轮增量；finish 省略时补足剩余约定时长"),
+    evidence: z
+      .string()
+      .trim()
+      .min(2)
+      .max(600)
+      .describe("本轮正文里真实继续、暂停、结束或中止的原文"),
+  })
+  .describe(
+    "已经接受的成人服务正文进度，不重新扣款；略写正常结束仍经过剩余约定分钟。超梦进度使用 braindance 指令。",
+  );
 export type ServiceCommand = z.infer<typeof ServiceCommandSchema>;
 
 export type CommerceCommand =
   | z.infer<typeof OfferCommandSchema>
   | z.infer<typeof WithdrawOfferSchema>
   | ServiceCommand;
-export type CommerceInternal = z.infer<typeof UsedOfferSchema> | z.infer<typeof PaidServiceSchema> | z.infer<typeof SessionProgressSchema>;
+export type CommerceInternal =
+  | z.infer<typeof UsedOfferSchema>
+  | z.infer<typeof PaidServiceSchema>
+  | z.infer<typeof SessionProgressSchema>;

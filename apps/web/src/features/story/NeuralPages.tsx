@@ -1325,15 +1325,8 @@ export function InventoryPage({
 
 // 物品栏精简（用户定的方案 A）：制作页（拆解、升级）去掉；后台的 craft 动作和零件规则留着，以后想加回来再接界面
 
-/** 追踪（J）：只列眼下揽在手里的单子、正在查的超梦与期限约定；点开看笔记详情 */
-export function JournalPage({
-  view,
-  onBraindance,
-}: {
-  readonly view: View;
-  /** 打开超梦体验编辑器；有在查的超梦时才有按钮 */
-  readonly onBraindance: () => void;
-}) {
+/** 追踪（J）：只列眼下揽在手里的单子与期限约定；日常超梦不自动生成待办。 */
+export function JournalPage({ view }: { readonly view: View }) {
   const track = trackTelemetry(view);
   const placeNames = new Map((view.travel?.destinations ?? []).map((d) => [d.id, d.name]));
   const activeJobs = [...view.jobs.list.filter((j) => j.status === "active")].sort((a, b) => {
@@ -1343,33 +1336,11 @@ export function JournalPage({
     if (b.dueIn !== null) return 1;
     return 0;
   });
-  const otherActive = track.active.filter(
-    (item) => item.kind !== "braindance" && item.source !== "jobs",
-  );
-  const nothingActive =
-    !view.braindance.active && activeJobs.length === 0 && otherActive.length === 0;
+  const otherActive = track.active.filter((item) => item.source !== "jobs");
+  const nothingActive = activeJobs.length === 0 && otherActive.length === 0;
 
   return (
     <div className={styles.trackPane}>
-      {view.braindance.active && (
-        <div className={styles.trackBdCard}>
-          <div className={styles.trackBdInfo}>
-            <span className={styles.trackBdTag}>超梦调查中</span>
-            <strong>
-              {view.braindance.active.title}（{view.braindance.active.recorder}的录像）
-            </strong>
-            <small className={styles.dim}>
-              {view.braindance.active.ready
-                ? "关键线索找全了，可以下结论"
-                : `关键线索找到 ${view.braindance.active.keys.found}/${view.braindance.active.keys.total} 条`}
-            </small>
-          </div>
-          <Button small onClick={onBraindance}>
-            打开超梦编辑器
-          </Button>
-        </div>
-      )}
-
       {nothingActive && (
         <p className={styles.trackQuietNote}>
           手头眼下没有在办单子或约定；街头走动、回消息时谈妥的事会记到这里。
@@ -1614,17 +1585,22 @@ export function ContactsPage({
   );
 }
 
-/** 芯片阅读器：放入左下未读终端，左侧列表点开即标已读，右侧显示原文 */
+/** 已读资料档案：界面打开只标记已浏览，不替角色读取尚未接触的芯片。 */
 export function ShardsPanel({
   view,
   onReadShard,
 }: {
   readonly view: View;
-  /** 打开一张没读过的芯片：记成已读 */
+  /** 打开已归档原文：仅标记界面已浏览 */
   readonly onReadShard: (id: number) => void;
 }) {
   const shards = view.shards.list;
   const [picked, setPicked] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 40;
+  const pageCount = Math.max(1, Math.ceil(shards.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = shards.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const current = shards.find((s) => s.id === picked) ?? null;
 
   const open = (id: number, read: boolean) => {
@@ -1635,7 +1611,7 @@ export function ShardsPanel({
   if (shards.length === 0) {
     return (
       <div className={styles.phoneEmpty}>
-        <p className={styles.dim}>还没拾获过数据芯片。</p>
+        <p className={styles.dim}>还没有实际读过的资料。拿到芯片后，可以在正文中用可用设备读取。</p>
       </div>
     );
   }
@@ -1643,7 +1619,7 @@ export function ShardsPanel({
   return (
     <div className={styles.dbSplit}>
       <ul className={`${styles.contactList} ${styles.dbList}`} aria-label="芯片">
-        {shards.map((s) => (
+        {visible.map((s) => (
           <li key={s.id}>
             <button
               type="button"
@@ -1670,12 +1646,38 @@ export function ShardsPanel({
               {current.kindLabel}
               {current.from && ` · ${current.from}`} · {current.at}
             </p>
+            <p className={styles.dim}>
+              {current.contentId} · {current.partId}
+              {current.carrier && ` · 来源载体 ${current.carrier}`}
+            </p>
             <p className={styles.factionReason}>{current.text}</p>
           </>
         ) : (
           <p className={styles.dim}>从左侧选择一张芯片阅读原文。</p>
         )}
       </article>
+      {pageCount > 1 && (
+        <div aria-label="资料分页">
+          <button
+            type="button"
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            上一页
+          </button>
+          <span className={styles.dim}>
+            {" "}
+            {currentPage + 1} / {pageCount} · 共 {shards.length} 段原文{" "}
+          </span>
+          <button
+            type="button"
+            disabled={currentPage + 1 === pageCount}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            下一页
+          </button>
+        </div>
+      )}
     </div>
   );
 }

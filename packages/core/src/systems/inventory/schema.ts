@@ -149,6 +149,12 @@ export const ItemDefSchema = z
     grantsSmartLink: z.boolean().optional(),
     /** 拿着它角色真的能做到什么；写给模型 */
     ability: z.string().min(1).optional(),
+    /** 固定内容关联；取得载体不等于已经阅读。 */
+    chipContentId: z.string().min(1).optional(),
+    /** 具有实际读写能力的设备。 */
+    chipDevice: z.enum(["reader", "reader-writer"]).optional(),
+    /** 可以接收副本的真实存储载体。 */
+    chipStorage: z.boolean().optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
     source: z
       .string()
@@ -369,6 +375,8 @@ export const WorldObjectSchema = z.object({
   lastChange: z.string().min(1).max(240),
   remaining: z.number().int().min(0).nullable(),
   weaponState: WeaponInstanceStateSchema.optional(),
+  /** 实际复制来源；副本仍引用同一内容身份。 */
+  copiedFrom: z.string().min(1).optional(),
 });
 export type WorldObject = z.infer<typeof WorldObjectSchema>;
 
@@ -470,10 +478,10 @@ export const TradeCommandSchema = z
     type: z.literal("trade"),
     action: z
       .enum(["buy", "sell", "service"])
-      .describe("buy 买物品，sell 卖物品，service 买服务（吃住、打车、情报、看伤、罚款、打点）"),
+      .describe("buy 买物品，sell 卖物品，service 买服务（含超梦按次与成年从业者服务）"),
     item: z.string().min(1).optional().describe("buy 和 sell 写物品表里的 id"),
     service: ServiceSchema.optional().describe(
-      "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点、请人帮个小忙",
+      "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点，bd-session 店内超梦，adult-service 成年从业者服务；后两项必须引用完整条件的 offer",
     ),
     offer: z
       .string()
@@ -529,6 +537,14 @@ export function availableQuickSupply(
 
 /** 只能由代码发出：其他系统消耗实际携带的补给、留置与车辆同步 */
 export const InventoryInternalSchemas = {
+  /** 资料系统：向真实空白载体写入固定内容，不新增物品或复制其他资产。 */
+  "inventory.chipWrite": z.strictObject({
+    type: z.literal("inventory.chipWrite"),
+    destination: z.string().min(1),
+    contentId: z.string().min(1),
+    source: z.string().min(1).optional(),
+    reason: z.string().min(1).max(240),
+  }),
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
   /** 安全屋/留置系统发出：把随身物品（或现场物体）留在指定位置，或从该位置拿回随身 */
   "inventory.place": z.strictObject({
