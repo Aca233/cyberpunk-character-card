@@ -11,6 +11,7 @@ export type PlaceInventoryItem = (
   action: "leave" | "take",
   item: string,
   where: string,
+  source?: "backpack" | "worn" | "quick",
 ) => Promise<void>;
 
 type StorageGroup = View["safehouse"]["storage"][number];
@@ -131,6 +132,9 @@ export function InventoryStorage({
                       <small className={story.gridSub}>
                         {entry.subLabel}
                         {entry.rarityLabel ? ` · ${entry.rarityLabel}` : ""}
+                        {entry.remaining !== null && entry.charges !== null
+                          ? ` · ${entry.remaining}/${entry.charges} 次`
+                          : ""}
                       </small>
                     </span>
                     {entry.count > 1 && <b className={story.gridCount}>×{entry.count}</b>}
@@ -156,6 +160,9 @@ export function InventoryStorage({
               <small className={styles.storageHelp}>
                 {item.subLabel} · 存放 {item.count} 件
                 {item.rarityLabel ? ` · ${item.rarityLabel}` : ""}
+                {item.remaining !== null && item.charges !== null
+                  ? ` · 剩余 ${item.remaining}/${item.charges} 次`
+                  : ""}
               </small>
             </header>
             {art && (

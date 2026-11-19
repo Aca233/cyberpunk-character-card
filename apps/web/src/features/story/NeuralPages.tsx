@@ -632,8 +632,8 @@ export function InventoryPage({
       ? (backpack.find(([id]) => id === pickedItem.id) ??
         backpack.find(
           ([id]) =>
-            inventory.details?.[id]?.kind === "weapon" &&
-            inventory.details?.[id]?.baseId === baseWeaponIdOf(pickedItem.id),
+            inventory.details?.[id]?.baseId ===
+            (inventory.details?.[pickedItem.id]?.baseId ?? baseWeaponIdOf(pickedItem.id)),
         ))
       : undefined;
   const selectedEntry = wornMatch
@@ -1159,7 +1159,14 @@ export function InventoryPage({
                           reason={storeBlocked}
                           onClick={() => {
                             if (!storeBlocked && storeTarget && onPlaceItem) {
-                              void runDirectUse(() => onPlaceItem("leave", id, storeTarget.target));
+                              void runDirectUse(() =>
+                                onPlaceItem(
+                                  "leave",
+                                  id,
+                                  storeTarget.target,
+                                  selectedIsWorn ? "worn" : quick ? "quick" : "backpack",
+                                ),
+                              );
                             }
                           }}
                         >

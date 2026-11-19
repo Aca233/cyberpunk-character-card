@@ -778,8 +778,12 @@ export function StoryScreen() {
           onPlaceItem={
             busy || offers?.rolled || view.death || view.ended
               ? undefined
-              : (action, item, where) =>
-                  act({ type: "placeItem", action, item, where }, "storage", true)
+              : (action, item, where, source) =>
+                  act(
+                    { type: "placeItem", action, item, where, ...(source ? { source } : {}) },
+                    "storage",
+                    true,
+                  )
           }
           onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
         />
