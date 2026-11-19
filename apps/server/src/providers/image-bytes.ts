@@ -3,6 +3,7 @@ import { AbortedError, UpstreamError } from "./http";
 export const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const MAX_IMAGE_EDGE = 8192;
 const MAX_IMAGE_PIXELS = 32 * 1024 * 1024;
+const IMAGE_DECODE_TIMEOUT_MS = 60_000;
 
 export interface ValidatedImageAsset {
   readonly dataUrl: string;
@@ -218,6 +219,63 @@ export async function readImageResponseBytes(
   return bytes;
 }
 
+/** Native decoders cannot be interrupted; stop awaiting them and release any late result. */
+function awaitImageDecode<T>(
+  decode: () => Promise<T>,
+  signal?: AbortSignal,
+  releaseLate?: (value: T) => void,
+): Promise<T> {
+  active(signal);
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const cancel = () => fail(new AbortedError());
+    const timer = setTimeout(
+      () => fail(new UpstreamError("生成图片校验失败：图片解码等待超时，请检查浏览器状态")),
+      IMAGE_DECODE_TIMEOUT_MS,
+    );
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) {
+      cancel();
+      return;
+    }
+    let pending: Promise<T>;
+    try {
+      pending = decode();
+    } catch {
+      fail(new UpstreamError("生成图片校验失败：图片字节无法解码，可能已经损坏"));
+      return;
+    }
+    void pending.then(
+      (value) => {
+        if (settled) {
+          releaseLate?.(value);
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(value);
+      },
+      () => {
+        fail(
+          signal?.aborted
+            ? new AbortedError()
+            : new UpstreamError("生成图片校验失败：图片字节无法解码，可能已经损坏"),
+        );
+      },
+    );
+  });
+}
+
 async function decodeImage(
   bytes: Uint8Array,
   mimeType: string,
@@ -226,13 +284,11 @@ async function decodeImage(
   active(signal);
   const blob = new Blob([bytes.slice().buffer], { type: mimeType });
   if (typeof createImageBitmap === "function") {
-    let bitmap: ImageBitmap;
-    try {
-      bitmap = await createImageBitmap(blob);
-    } catch {
-      active(signal);
-      return invalid("图片字节无法解码，可能已经损坏");
-    }
+    const bitmap = await awaitImageDecode(
+      () => createImageBitmap(blob),
+      signal,
+      (lateBitmap) => lateBitmap.close(),
+    );
     try {
       active(signal);
       return dimensions(bitmap.width, bitmap.height);
@@ -243,14 +299,15 @@ async function decodeImage(
   if (typeof Image === "undefined" || typeof URL.createObjectURL !== "function") {
     return invalid("当前环境缺少图片解码能力，请在支持图片解码的浏览器中生成");
   }
+  const img = new Image();
   const url = URL.createObjectURL(blob);
   try {
-    const img = new Image();
     img.src = url;
-    await img.decode().catch(() => invalid("图片字节无法解码，可能已经损坏"));
+    await awaitImageDecode(() => img.decode(), signal);
     active(signal);
     return dimensions(img.naturalWidth, img.naturalHeight);
   } finally {
+    img.removeAttribute("src");
     URL.revokeObjectURL(url);
   }
 }
