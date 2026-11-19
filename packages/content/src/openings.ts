@@ -14,6 +14,9 @@ export const openings: readonly GameOpening[] = [
     title: "夜之城自由沙盘",
     location: "megabuilding-h10",
     cast: [
+      "qiao-night",
+      "noah-night",
+      "sleeve-shop-keeper",
       "judy",
       "regina",
       "viktor",

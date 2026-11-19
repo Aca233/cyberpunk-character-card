@@ -7,6 +7,32 @@ import { cyberwareRules } from "@cp/core";
  * 史诗 35,000–70,000，传说 70,000 以上；不朽义体（原作的 Iconic）只从剧情获得。数值暂定，试玩后再调
  */
 export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
+  {
+    id: "doll-behavior-chip",
+    name: "玩偶行为芯片",
+    slot: "frontalCortex",
+    rarity: "uncommon",
+    price: 6000,
+    humanityCost: 0,
+    ability:
+      "仅在真实安装并由本人就本次范围授权启动后接管已约定的互动。只用已取得资料与现场输入，不读心；本型号接管时本人无当时意识，事后不保留亲历记忆。可按实际发生记录本地操作摘要，须本人后来查阅才属于其所知；不是超梦录制器，付款不构成接管或传播许可。",
+    behaviorChip: {
+      purpose: "按本人事先接受的范围辅助接待；清醒意愿与工作模式反应分开。",
+      awareness: "absent",
+      recall: "none",
+      logging: "local-summary",
+    },
+  },
+  {
+    id: "braindance-recorder",
+    name: "超梦录制植入体",
+    slot: "nervous",
+    rarity: "rare",
+    price: 18000,
+    humanityCost: 0,
+    ability:
+      "配合实际可用的存储介质记录本人当时获得的感官与情绪信号。必须真的启动并发生录制才有作品，不能倒录从未记录的过去，不能取得别人的内心或未进入传感范围的细节。接受服务不代替录制与传播的另行许可；设备存在不使记录自动传给他人。",
+  },
   // 额叶皮质
   {
     id: "ram-upgrade",

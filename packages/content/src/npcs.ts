@@ -1,4 +1,5 @@
 import { npcRules } from "@cp/core";
+import { everydayPeople } from "./everydayLife";
 
 /**
  * 原作人物卡。说话样本用自己的话写，不照搬原台词。
@@ -21,6 +22,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
 })
   .array()
   .parse([
+    ...everydayPeople,
     {
       id: "rebecca",
       name: "丽贝卡",
@@ -544,8 +546,10 @@ export const npcs = npcRules.NpcCardSchema.extend({
       },
     },
     {
-      // 来源：https://cyberpunk.fandom.com/wiki/Evelyn_Parker（2026-11-02 查）；玩偶芯片、超梦植入体表里没有，没配
+      // 既有原作身份的设备以本作定性资料补齐；芯片条件不代表玩家已获知。
       id: "evelyn",
+      adult: true,
+      entity: "human",
       name: "艾芙琳·帕克",
       alias: "艾芙琳",
       pronoun: "她",
@@ -566,7 +570,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "doll-behavior-chip", "braindance-recorder"],
       },
     },
     {

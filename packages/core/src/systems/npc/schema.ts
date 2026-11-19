@@ -351,6 +351,28 @@ export const NpcStateSchema = z.object({
 });
 export type NpcState = z.infer<typeof NpcStateSchema>;
 
+/** 几处可重复到访的生活场景，不是任务、排班或新的经营系统。 */
+export const EverydayLifeSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    location: z.string().min(1),
+    people: z.array(z.string().min(1)),
+    note: z.string().min(1),
+    services: z.array(
+      z.object({
+        seller: z.string().min(1),
+        subject: z.string().min(1),
+        service: z.literal("adult-service"),
+        scope: z.string().min(1),
+        duration: z.number().int().min(1),
+        price: z.number().int().min(0),
+        recording: z.boolean(),
+        earlyExit: z.string().min(1),
+      }),
+    ),
+  }),
+);
+
 const LocationSchema = z.string().min(1).describe("地点 id，和 world 指令用的一致");
 
 /** 模型使用：剧情里新认识、有实质互动或推动剧情的人，当场建卡；没名字先用称呼（用户定的 2026-10-30：在场块一直只有朱迪） */

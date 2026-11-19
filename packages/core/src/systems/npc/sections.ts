@@ -1,7 +1,7 @@
 import type { SystemSection } from "../../kernel/system";
 import { districtResolver, WorldClockStateSchema } from "../world";
 import { castSection } from "./prompt";
-import { NpcStateSchema } from "./schema";
+import { EverydayLifeSchema, NpcCardSchema, NpcStateSchema } from "./schema";
 
 type Raw = Readonly<Record<string, unknown>>;
 const isRaw = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -48,6 +48,56 @@ export const npcSections: readonly SystemSection[] = [
         data,
         now: world.time,
       });
+    },
+  },
+  {
+    order: 11,
+    title: "街坊与日常来往",
+    render: ({ world, data, input }) => {
+      const rows = EverydayLifeSchema.safeParse(data?.everydayLife);
+      if (!rows.success) return undefined;
+      const clock = WorldClockStateSchema.parse(world.slices.world);
+      const state = NpcStateSchema.parse(world.slices.npc);
+      const people = NpcCardSchema.array().safeParse(data?.everydayPeople);
+      const cards = people.success ? people.data : [];
+      const relevant = rows.data.filter(
+        (row) =>
+          row.location === clock.location ||
+          row.people.some(
+            (id) =>
+              input.text.includes(id) ||
+              (cards.find((card) => card.id === id)?.name !== undefined &&
+                input.text.includes(cards.find((card) => card.id === id)?.name ?? "\u0000")),
+          ),
+      );
+      if (!relevant.length) return undefined;
+      return relevant
+        .map((row) => {
+          const lines = [`场所 ${row.id}［${row.location}］：${row.note}`];
+          for (const id of row.people) {
+            const person = state.npcs[id];
+            if (person) {
+              lines.push(
+                `沿用人物 ${id}（${person.name}）；实际位置、近况、身体与共同记忆以人物卡为准，不因重访刷新人和关系。`,
+              );
+            } else {
+              const card = cards.find((entry) => entry.id === id);
+              if (card)
+                lines.push(
+                  `固定街坊资料（尚未正式接触，不代表玩家已经知道）：${JSON.stringify(card)}。实际发生实质来往时沿用此 id 与已定资料用 npc 建卡，不重抽陌生人。`,
+                );
+            }
+          }
+          for (const service of row.services)
+            lines.push(
+              `已定日常服务参考 ${JSON.stringify(service)}；这些是店内参考条件，实际本人是否有空、是否接受及本次最终条件由对话确认。先 commerce.offer，再由玩家接受 trade；不是已经消费、启用设备或同意记录。`,
+            );
+          lines.push(
+            "可以只问候、聊天、买东西或离开；接上已经发生的小事，不强塞委托、危险、关系奖励或私人感情。价格和服务只说明商业来往。",
+          );
+          return lines.join("\n");
+        })
+        .join("\n");
     },
   },
 ];
