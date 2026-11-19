@@ -1585,6 +1585,23 @@
   color: var(--cp-cyan);
 }
 
+.slotInspectorMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.slotInspectorNote {
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 .slotInspectorBadge {
   padding: 0.06rem 0.4rem;
   border: 1px solid rgb(252 238 10 / 48%);
@@ -1599,14 +1616,16 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0.3rem;
 }
 
 .slotCard {
   position: relative;
   display: grid;
-  gap: 0.32rem;
-  padding: 0.42rem 0.55rem 0.44rem 0.72rem;
+  gap: 0.24rem;
+  padding: 0.32rem 0.42rem 0.34rem 0.62rem;
   border: 1px solid rgb(94 246 255 / 22%);
   background: rgb(8 11 20 / 76%);
 }
@@ -2275,6 +2294,12 @@
 
   .inventoryDetail {
     min-height: 0;
+  }
+}
+
+@container pin (width < 380px) {
+  .slotList {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -317,13 +317,30 @@ function WeaponSlotInspector({
   readonly openSlot: inventoryRules.ModSlot | null;
   readonly onToggleSlot: (slot: inventoryRules.ModSlot | null) => void;
 }) {
+  const unsupportedSlots = inventoryRules.ModSlotSchema.options
+    .filter((slot) => !detail.modSlots.includes(slot))
+    .map((slot) => ({
+      label: inventoryRules.MOD_SLOT_LABELS[slot],
+      reason: unsupportedSlotReason(detail.subLabel, slot),
+    }));
+
   return (
     <section className={styles.slotInspector} aria-label="武器改装槽位">
       <header className={styles.slotInspectorHead}>
         <span>改装槽位</span>
-        {detail.weaponState?.smartLink && (
-          <span className={styles.slotInspectorBadge}>智能联锁</span>
-        )}
+        <div className={styles.slotInspectorMeta}>
+          {unsupportedSlots.length > 0 && (
+            <span
+              className={styles.slotInspectorNote}
+              title={unsupportedSlots.map(({ label, reason }) => `${label}：${reason}`).join(" · ")}
+            >
+              未开放：{unsupportedSlots.map(({ label }) => label).join("、")}
+            </span>
+          )}
+          {detail.weaponState?.smartLink && (
+            <span className={styles.slotInspectorBadge}>智能联锁</span>
+          )}
+        </div>
       </header>
       <ul className={styles.slotList}>
         {inventoryRules.ModSlotSchema.options.map((slot) => {
@@ -334,19 +351,7 @@ function WeaponSlotInspector({
           const isLocked =
             detail.weaponState?.lockedSlots.includes(slot) ?? installedEntry?.locked ?? false;
 
-          if (!isAllowed) {
-            return (
-              <li key={slot} className={styles.slotCard} data-state="unsupported">
-                <div className={styles.slotTop}>
-                  <strong className={styles.slotLabel}>{slotLabel}</strong>
-                  <span className={styles.slotStatusTag}>不支持</span>
-                </div>
-                <p className={styles.slotMutedNote}>
-                  {unsupportedSlotReason(detail.subLabel, slot)}
-                </p>
-              </li>
-            );
-          }
+          if (!isAllowed) return null;
 
           const compatibleMods = allCarried
             .filter(([modId]) => {
