@@ -2677,6 +2677,10 @@
   margin: 0;
 }
 
+.docNote[data-factions-note] {
+  flex: 0 0 auto;
+}
+
 .docDebt {
   display: flex;
   flex-wrap: wrap;

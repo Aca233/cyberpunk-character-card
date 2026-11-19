@@ -16,7 +16,7 @@ export function FactionsBody({ view }: { readonly view: View }) {
 
   return (
     <>
-      <p className={`${styles.dim} ${styles.docNote}`}>
+      <p className={`${styles.dim} ${styles.docNote}`} data-factions-note>
         {here.length > 0
           ? `这里（${view.factions.district}）是${here.map((f) => f.name).join("、")}的地盘。`
           : "这里不是哪个帮派的地盘。"}
