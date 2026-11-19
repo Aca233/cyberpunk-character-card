@@ -6,6 +6,7 @@ import {
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
   canAttachMod,
+  carriedHeldWeaponIds,
   carriedItemCounts,
   carriedWeaponIds,
   defaultWeaponSlots,
@@ -78,6 +79,7 @@ export function inventoryView({ world, data }: ViewContext) {
     grenade: inventory.grenade,
     /** 统一后的随身背包，数量均在此展示 */
     backpack: Object.fromEntries(counts) as Readonly<Record<string, number>>,
+    heldWeapons: carriedHeldWeaponIds(inventory, items),
     /** 随身携带的武器列表（含基础模板 ID、改装态、有效隐蔽度与声学标签），用于 HUD 展示与模型状态 */
     carriedWeapons: weaponIds.map((id) => {
       const obj = inventory.objects[id];
@@ -88,6 +90,9 @@ export function inventoryView({ world, data }: ViewContext) {
         id,
         baseId,
         count: counts.get(id) ?? 1,
+        category: def?.category ?? null,
+        rarity: def ? rarityOf(def) : null,
+        iconic: Boolean(def?.iconic),
         weaponType: def?.weaponType ?? null,
         isRanged:
           def?.kind === "weapon" &&

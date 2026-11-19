@@ -32,6 +32,7 @@ function empty(): InventoryState {
     healing: null,
     grenade: null,
     backpack: {},
+    heldWeapons: null,
     depleted: {},
     clothing: {},
     parts: 0,

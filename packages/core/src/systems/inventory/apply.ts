@@ -6,6 +6,7 @@ import {
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
   canAttachMod,
+  carriedHeldWeaponIds,
   defaultWeaponSlots,
   type InventoryInternal,
   type InventoryState,
@@ -22,7 +23,9 @@ import {
   SELL_RATE,
   type Shop,
   ShopListSchema,
+  type WeaponHoldCommand,
   type WeaponInstanceState,
+  weaponHands,
 } from "./schema";
 
 type Inventory = Draft<InventoryState>;
@@ -129,6 +132,12 @@ export function materializeWeapon(
     remaining: null,
     weaponState: cloneWeaponState(ws),
   };
+  // 只有原模板已被移出背包且确实占着持用位置时，才把那一件映射成新实例。
+  const heldCount = draft.heldWeapons?.filter((id) => id === def.id).length ?? 0;
+  if (draft.heldWeapons && heldCount > (draft.backpack[def.id] ?? 0)) {
+    const index = draft.heldWeapons.indexOf(def.id);
+    if (index >= 0) draft.heldWeapons[index] = instanceId;
+  }
   return instanceId;
 }
 
@@ -147,6 +156,11 @@ export function foldBackWeapon(draft: Inventory, instanceId: string): boolean {
   if (!isCleanWeaponState(obj.weaponState)) return false;
   if (!take(draft, instanceId)) return false;
   put(draft, obj.weaponState.baseId);
+  if (draft.heldWeapons) {
+    draft.heldWeapons = draft.heldWeapons.map((id) =>
+      id === instanceId ? (obj.weaponState?.baseId ?? id) : id,
+    );
+  }
   Reflect.deleteProperty(draft.objects, instanceId);
   return true;
 }
@@ -381,6 +395,40 @@ export function takeFromBackpack(draft: Inventory, id: string): boolean {
   return true;
 }
 const take = takeFromBackpack;
+
+/** 每次库存结算后收拢失效持用引用；同模板双持也按剩余实物数量裁剪。 */
+export function reconcileHeldWeapons(
+  draft: Inventory,
+  catalog: ReadonlyMap<string, ItemDef>,
+): void {
+  draft.heldWeapons = carriedHeldWeaponIds(draft, catalog);
+}
+
+/** 记录已发生的持用事实；不是拿到武器后自动装备，也不替玩家切换战术。 */
+export function applyWeaponHold(
+  draft: Inventory,
+  command: WeaponHoldCommand,
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  const used = new Map<string, number>();
+  let hands = 0;
+  const names: string[] = [];
+  for (const id of command.weapons) {
+    const obj = draft.objects[id];
+    const def = catalog.get(id) ?? obj?.definition;
+    if (def?.kind !== "weapon") return fail(`${id} 不是已登记武器`);
+    const count = (used.get(id) ?? 0) + 1;
+    if (count > (draft.backpack[id] ?? 0) || (obj && obj.holder !== "player")) {
+      return fail(`随身没有足够的${def.name}，不能记录为正在持用`);
+    }
+    used.set(id, count);
+    hands += weaponHands(def, obj?.weaponState?.baseId);
+    names.push(def.name);
+  }
+  if (hands > 2) return fail("这些武器无法同时正常持握，请按正文记录最终实际持用的武器");
+  draft.heldWeapons = [...command.weapons];
+  return ok(names.length > 0 ? `当前持用：${names.join("、")}` : "已收起手中武器");
+}
 
 /** 快捷栏的东西放回背包，没恢复的次数记下来 */
 function stow(draft: Inventory, slot: QuickSlotName): void {

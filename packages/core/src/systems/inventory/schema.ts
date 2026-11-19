@@ -123,6 +123,8 @@ export const ItemDefSchema = z
     iconic: z.boolean().default(false),
     price: z.number().int().min(0).optional(),
     rarity: RaritySchema.optional(),
+    /** 非武器大件的粗略携带负担，不是公斤；普通小物不填，首次登记时定下。 */
+    carryUnits: z.number().int().min(0).max(40).optional(),
     /** 武器类别；武器必须写 */
     category: WeaponCategorySchema.optional(),
     /** 远程武器的类型；近战武器不写 */
@@ -404,6 +406,8 @@ export const InventoryStateSchema = z.object({
   grenade: QuickSlotSchema,
   /** 背包：物品 id → 数量 */
   backpack: z.record(z.string(), z.number().int().min(1)),
+  /** 最近明确的持用事实：null 未明确，空数组已收起；不另设武器装备槽。 */
+  heldWeapons: z.array(z.string().min(1)).max(2).nullable().default(null),
   /** 从快捷栏卸下时还没恢复的次数，防止换装刷次数 */
   depleted: z.record(z.string(), z.number().int().min(0)),
   /** 身上穿着的服装：格子 → 物品 id */
@@ -412,6 +416,18 @@ export const InventoryStateSchema = z.object({
   parts: z.number().int().min(0).default(0),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
+
+/** 只记录正文已经发生的拔出、换用或收起，不替玩家选择武器。 */
+export const WeaponHoldCommandSchema = z
+  .object({
+    type: z.literal("weaponHold"),
+    weapons: z.array(z.string().min(1)).max(2),
+    reason: z.string().min(1).max(160),
+  })
+  .describe(
+    "正文明确改变玩家持用武器时记录最终仍在手中的全部武器 id；已明确收起全部写空数组，未发生变化不发。只能引用随身武器，不把攻击意图当成已经拔出，不因停火或切场自动清空。",
+  );
+export type WeaponHoldCommand = z.infer<typeof WeaponHoldCommandSchema>;
 
 /** 模型使用：{"type": "item", "action": "gain", "id": "...", "reason": "..."} */
 export const ItemCommandSchema = z
@@ -737,6 +753,43 @@ export function carriedWeaponIds(
   return out;
 }
 
+/** 持用引用只保留实际随身数量；物品离身后不会被下一轮继续使用。 */
+export function carriedHeldWeaponIds(
+  state: Pick<InventoryState, "backpack" | "objects" | "heldWeapons">,
+  catalog: ReadonlyMap<string, ItemDef>,
+): string[] | null {
+  if (state.heldWeapons === null) return null;
+  const used = new Map<string, number>();
+  return state.heldWeapons.filter((id) => {
+    const def = catalog.get(id) ?? state.objects[id]?.definition;
+    const count = (used.get(id) ?? 0) + 1;
+    if (def?.kind !== "weapon" || count > (state.backpack[id] ?? 0)) return false;
+    if (state.objects[id] && state.objects[id]?.holder !== "player") return false;
+    used.set(id, count);
+    return true;
+  });
+}
+
+/** 普通持握条件：长枪与大号近战武器占双手；具体伤势仍由当前物理约束裁定。 */
+export function weaponHands(def: ItemDef, baseId = def.id): 1 | 2 {
+  if (def.kind !== "weapon") return 1;
+  if (def.category === "pistol" || def.category === "revolver") return 1;
+  if (def.category === "blade" || def.category === "blunt") {
+    return isBulkyItem(def, baseId) ? 2 : 1;
+  }
+  return 2;
+}
+
+/** 用固定粗单位描述体积与负担；不把证件、信物和普通穿着逐件称重。 */
+export function itemCarryUnits(def: ItemDef, baseId = def.id): number {
+  if (def.kind !== "weapon") return def.carryUnits ?? 0;
+  if (isBulkyItem(def, baseId)) return 4;
+  return (def.category === "blade" || def.category === "blunt") &&
+    weaponConcealment(def.category, baseId) === "pocket"
+    ? 1
+    : 2;
+}
+
 const CONCEALMENT_ORDER: readonly WeaponConcealment[] = ["pocket", "coat", "open", "heavy"];
 const CONCEALMENT_RANK: Readonly<Record<WeaponConcealment, number>> = {
   pocket: 0,
@@ -812,10 +865,16 @@ export function loadoutSummary(
   const bulkyItems: string[] = [];
   let hasHeavy = false;
   let profile: WeaponConcealment = "pocket";
+  let carryUnits = 0;
+  const carryItems: string[] = [];
   for (const [weaponId, count] of carriedItemCounts(state)) {
     const obj = state.objects[weaponId];
     const def = obj?.definition ?? catalog.get(weaponId);
-    if (def?.kind !== "weapon") continue;
+    if (!def) continue;
+    const units = itemCarryUnits(def, obj?.weaponState?.baseId);
+    carryUnits += units * count;
+    if (units > 0) carryItems.push(count > 1 ? `${def.name}×${count}` : def.name);
+    if (def.kind !== "weapon") continue;
     const conc = effectiveConcealment(def, obj?.weaponState, catalog);
     if (conc === "heavy") hasHeavy = true;
     if (CONCEALMENT_RANK[conc] > CONCEALMENT_RANK[profile]) {
@@ -827,6 +886,13 @@ export function loadoutSummary(
     }
   }
   const bulkyMax = bulkyLimit(cyberware);
+  const carryMax = bulkyMax * 4 + 2;
+  const carryLevel =
+    carryUnits > carryMax + 4
+      ? ("overloaded" as const)
+      : carryUnits > carryMax
+        ? ("burdened" as const)
+        : ("light" as const);
   return {
     bulkyCount,
     bulkyMax,
@@ -834,5 +900,11 @@ export function loadoutSummary(
     bulkyItems,
     hasHeavyWeapon: hasHeavy,
     concealment: profile,
+    carryUnits,
+    carryMax,
+    carryLevel,
+    carryLabel:
+      carryLevel === "overloaded" ? "严重超载" : carryLevel === "burdened" ? "有负担" : "轻装",
+    carryItems,
   };
 }

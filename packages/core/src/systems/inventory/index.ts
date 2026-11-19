@@ -1,4 +1,4 @@
-import { defineSystem } from "../../kernel/system";
+import { type ApplyOutcome, defineSystem } from "../../kernel/system";
 import type { LogisticsState } from "../logistics";
 import type { NpcState } from "../npc";
 import type { WorldClockState } from "../world";
@@ -8,7 +8,9 @@ import {
   applyMod,
   applyParts,
   applyPlaceItem,
+  applyWeaponHold,
   itemCatalog,
+  reconcileHeldWeapons,
   relocateVehiclePlaced,
   spend,
   withWorldObjects,
@@ -33,6 +35,8 @@ import {
   ShopOrderCommandSchema,
   type TradeCommand,
   TradeCommandSchema,
+  type WeaponHoldCommand,
+  WeaponHoldCommandSchema,
 } from "./schema";
 import { shopsView } from "./shops";
 import { inventoryStatus } from "./status";
@@ -42,7 +46,12 @@ import { inventoryView } from "./view";
 
 export const inventory = defineSystem<
   InventoryState,
-  ItemCommand | TradeCommand | GunsmithCommand | ShopBusinessCommand | ShopOrderCommand,
+  | ItemCommand
+  | TradeCommand
+  | GunsmithCommand
+  | ShopBusinessCommand
+  | ShopOrderCommand
+  | WeaponHoldCommand,
   InventoryInternal | PartsCommand
 >({
   id: "inventory",
@@ -54,6 +63,7 @@ export const inventory = defineSystem<
     healing: null,
     grenade: null,
     backpack: {},
+    heldWeapons: null,
     depleted: {},
     clothing: {},
     parts: 0,
@@ -64,6 +74,7 @@ export const inventory = defineSystem<
   }),
   commands: {
     item: ItemCommandSchema,
+    weaponHold: WeaponHoldCommandSchema,
     trade: TradeCommandSchema,
     gunsmith: GunsmithCommandSchema,
     shopBusiness: ShopBusinessCommandSchema,
@@ -72,78 +83,95 @@ export const inventory = defineSystem<
   // 物品栏精简（用户定的方案 A）：零件规则不发给模型，parts 跟着从模型可用指令挪成内部指令；旧存档记录里的 parts 照旧能结算
   internal: { ...InventoryInternalSchemas, parts: PartsCommandSchema },
   apply(draft, command, ctx) {
-    switch (command.type) {
-      case "shopOrder":
-        return applyShopOrder(draft, command, ctx);
-      case "shopBusiness":
-        return applyShopBusiness(draft, command, ctx);
-      case "item":
-        return applyItem(
-          draft,
-          command,
-          itemCatalog(ctx.data),
-          ctx.now,
-          ctx.read<WorldClockState>("world").location,
-          ctx.read<NpcState>("npc").npcs,
-        );
-      case "trade":
-        return applyTrade(
-          draft,
-          command,
-          {
-            time: ctx.now,
-            slices: {
-              inventory: draft,
-              economy: ctx.read("economy"),
-              world: ctx.read("world"),
-              npc: ctx.read("npc"),
-              factions: ctx.read("factions"),
-              commerce: ctx.read("commerce"),
-              logistics: ctx.read("logistics"),
-              cyberware: ctx.data.clinicOperations,
+    const execute = (): ApplyOutcome => {
+      switch (command.type) {
+        case "weaponHold":
+          return applyWeaponHold(
+            draft,
+            command,
+            itemCatalog(withWorldObjects(ctx.data, draft.objects)),
+          );
+        case "shopOrder":
+          return applyShopOrder(draft, command, ctx);
+        case "shopBusiness":
+          return applyShopBusiness(draft, command, ctx);
+        case "item":
+          return applyItem(
+            draft,
+            command,
+            itemCatalog(ctx.data),
+            ctx.now,
+            ctx.read<WorldClockState>("world").location,
+            ctx.read<NpcState>("npc").npcs,
+          );
+        case "trade":
+          return applyTrade(
+            draft,
+            command,
+            {
+              time: ctx.now,
+              slices: {
+                inventory: draft,
+                economy: ctx.read("economy"),
+                world: ctx.read("world"),
+                npc: ctx.read("npc"),
+                factions: ctx.read("factions"),
+                commerce: ctx.read("commerce"),
+                logistics: ctx.read("logistics"),
+                cyberware: ctx.data.clinicOperations,
+              },
             },
-          },
-          ctx.data,
-          ctx.facts,
-        );
-      case "gunsmith":
-        return applyGunsmith(
-          draft,
-          command,
-          {
-            time: ctx.now,
-            slices: {
-              inventory: draft,
-              economy: ctx.read("economy"),
-              world: ctx.read("world"),
-              npc: ctx.read("npc"),
-              factions: ctx.read("factions"),
-              commerce: ctx.read("commerce"),
-              logistics: ctx.read("logistics"),
+            ctx.data,
+            ctx.facts,
+          );
+        case "gunsmith":
+          return applyGunsmith(
+            draft,
+            command,
+            {
+              time: ctx.now,
+              slices: {
+                inventory: draft,
+                economy: ctx.read("economy"),
+                world: ctx.read("world"),
+                npc: ctx.read("npc"),
+                factions: ctx.read("factions"),
+                commerce: ctx.read("commerce"),
+                logistics: ctx.read("logistics"),
+              },
             },
-          },
-          ctx.data,
-          ctx.facts,
-        );
-      case "inventory.spend":
-        return spend(draft, command.slot, undefined, ctx.now);
-      case "inventory.place":
-        return applyPlaceItem(draft, command, itemCatalog(ctx.data), ctx.now);
-      case "inventory.relocateVehicle":
-        relocateVehiclePlaced(draft, command.vehicle, command.location);
-        return { ok: true };
-      case "inventory.mod":
-        return applyMod(
-          draft,
-          command.action,
-          command.weapon,
-          command.mod,
-          itemCatalog(withWorldObjects(ctx.data, draft.objects)),
-          ctx.now,
-        );
-      case "parts":
-        return applyParts(draft, command);
+            ctx.data,
+            ctx.facts,
+          );
+        case "inventory.spend":
+          return spend(draft, command.slot, undefined, ctx.now);
+        case "inventory.place":
+          return applyPlaceItem(draft, command, itemCatalog(ctx.data), ctx.now);
+        case "inventory.relocateVehicle":
+          relocateVehiclePlaced(draft, command.vehicle, command.location);
+          return { ok: true };
+        case "inventory.mod":
+          return applyMod(
+            draft,
+            command.action,
+            command.weapon,
+            command.mod,
+            itemCatalog(withWorldObjects(ctx.data, draft.objects)),
+            ctx.now,
+          );
+        case "parts":
+          return applyParts(draft, command);
+      }
+    };
+    const outcome = execute();
+    if (outcome.ok && draft.heldWeapons?.length) {
+      const catalog =
+        ctx.data.items === undefined
+          ? new Map()
+          : itemCatalog(withWorldObjects(ctx.data, draft.objects));
+      reconcileHeldWeapons(draft, catalog);
     }
+    return outcome;
   },
   data: (state, data) => withWorldObjects(withMerchants(data, state.merchants), state.objects),
   on: {

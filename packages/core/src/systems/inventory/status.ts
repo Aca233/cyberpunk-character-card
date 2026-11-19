@@ -73,10 +73,10 @@ export const inventoryStatus: readonly SystemStatus[] = [
       lines.push(
         `随身武器：${inv.carriedWeapons.length > 0 ? inv.carriedWeapons.map(formatWeapon).join("、") : "空手"}`,
       );
-      if (inv.bulky.overloaded)
-        lines.push(
-          `随身大件：${inv.bulky.count}/${inv.bulky.max} 件（超重，长件在身且显眼，做翻墙、潜行、近身闪避与追逐动作吃物理劣势）`,
-        );
+      lines.push(
+        `当前持用：${inv.heldWeapons === null ? "尚未明确；按玩家实际动作承接，不自动挑选最强武器" : inv.heldWeapons.length > 0 ? inv.heldWeapons.map((id) => names[id] ?? id).join("、") : "已明确收起武器"}`,
+        `携带负担：${inv.loadout.carryLabel}（${inv.loadout.carryUnits}/${inv.loadout.carryMax} 携带单位；单位是体积与负担的粗分，不是公斤）${inv.loadout.carryLevel === "light" ? "；负担本身不额外限制日常动作，长枪显眼仍单独判断" : inv.loadout.carryLevel === "burdened" ? "；只在疾跑、攀爬、潜行、闪避、狭窄处取用等确受负担影响的动作中体现，不因此自动失败或受伤" : "；持续疾跑、攀爬和敏捷转身明显受累，按现场条件减速、寻找支撑或建议放下大件，不自动丢弃、扣钱或制造伤势"}`,
+      );
       if (inv.clothing.length > 0)
         lines.push(
           `穿着（只影响身份和伪装，没有护甲）：${inv.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,
