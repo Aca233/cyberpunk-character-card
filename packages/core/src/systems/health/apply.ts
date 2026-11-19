@@ -1,7 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { type DamageTier, rulingFact } from "../dice";
-import type { InventoryState } from "../inventory";
+import { availableQuickSupply, type InventoryState } from "../inventory";
 import {
   BODY_PART_LABELS,
   type BodyPart,
@@ -177,9 +177,7 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
     if (draft.condition !== "up") return fail("角色无法自行用药，需要现场救援");
     if (!draft.injuries.length || draft.painSuppressed) return fail("当前没有需要再次镇痛的伤势");
     const inventory = ctx.read<InventoryState>("inventory");
-    const slot = inventory.healing;
-    if (!slot || (slot.charges < 1 && (inventory.backpack[slot.id] ?? 0) < 1))
-      return fail("没有可用医疗针，需要实际补给");
+    if (!availableQuickSupply(inventory, "healing")) return fail("没有可用医疗针，需要实际补给");
     draft.painSuppressed = true;
     draft.painSuppressedUntil = ctx.now + 120;
     return {

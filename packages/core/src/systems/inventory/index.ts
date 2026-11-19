@@ -64,13 +64,13 @@ export const inventory = defineSystem<
     grenade: null,
     backpack: {},
     heldWeapons: null,
-    depleted: {},
     clothing: {},
     parts: 0,
     merchants: {},
     supplyOrders: {},
     nextSupply: 1,
     nextWeaponSeq: 1,
+    nextSupplyInstanceSeq: 1,
   }),
   commands: {
     item: ItemCommandSchema,
@@ -144,7 +144,7 @@ export const inventory = defineSystem<
             ctx.facts,
           );
         case "inventory.spend":
-          return spend(draft, command.slot, undefined, ctx.now);
+          return spend(draft, command.slot, itemCatalog(ctx.data), undefined, ctx.now);
         case "inventory.place":
           return applyPlaceItem(draft, command, itemCatalog(ctx.data), ctx.now);
         case "inventory.relocateVehicle":

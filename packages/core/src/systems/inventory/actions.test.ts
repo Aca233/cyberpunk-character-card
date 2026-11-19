@@ -17,6 +17,18 @@ const data = {
     },
   ],
 };
+const partialId = "supply:maxdoc:1";
+const partialSupply = (remaining: number) => ({
+  kind: "supply",
+  definition: { ...data.items[0], id: partialId },
+  baseId: "maxdoc",
+  origin: "拆封后保留的补给",
+  holder: remaining > 0 ? "player" : "consumed",
+  location: null,
+  changedAt: 0,
+  lastChange: "使用补给",
+  remaining,
+});
 
 const injury = {
   id: "inj1",
@@ -74,16 +86,23 @@ describe("物品栏直接治疗", () => {
       { type: "heal", source: "maxdoc" },
     ]);
     expect(
-      typeof registry.actionCommands(action, {
-        world: {
-          ...world,
-          slices: {
-            ...world.slices,
-            inventory: { ...inventory, depleted: { maxdoc: 0 } },
+      typeof registry.actionCommands(
+        { ...action, id: partialId },
+        {
+          world: {
+            ...world,
+            slices: {
+              ...world.slices,
+              inventory: {
+                ...inventory,
+                backpack: { [partialId]: 1 },
+                objects: { [partialId]: partialSupply(0) },
+              },
+            },
           },
+          data,
         },
-        data,
-      }),
+      ),
     ).toBe("string");
   });
   it("备用治疗品镇痛并消耗实物余量，不修改输入世界", () => {
@@ -95,15 +114,15 @@ describe("物品栏直接治疗", () => {
         health: { ...HealthStateSchema.parse(base.slices.health), injuries: [injury] },
         inventory: {
           ...InventoryStateSchema.parse(base.slices.inventory),
-          backpack: { maxdoc: 1 },
-          depleted: { maxdoc: 2 },
+          backpack: { [partialId]: 1 },
+          objects: { [partialId]: partialSupply(2) },
         },
       },
     };
     const before = JSON.parse(JSON.stringify(world));
     const result = applyPlayerAction(
       world,
-      { type: "useHealing", id: "maxdoc" },
+      { type: "useHealing", id: partialId },
       { rng: fixedRng([]), data },
     );
     expect(result.ok).toBe(true);
@@ -113,9 +132,9 @@ describe("物品栏直接治疗", () => {
       injuries: [injury],
     });
     const inventory = InventoryStateSchema.parse(result.world.slices.inventory);
-    expect(inventory.healing).toEqual({ id: "maxdoc", charges: 1, max: 3 });
-    expect(inventory.backpack.maxdoc).toBeUndefined();
-    expect(inventory.depleted.maxdoc).toBeUndefined();
+    expect(inventory.healing).toEqual({ id: partialId, charges: 1, max: 3 });
+    expect(inventory.backpack[partialId]).toBeUndefined();
+    expect(inventory.objects[partialId]?.remaining).toBe(1);
     expect(world).toEqual(before);
   });
   it("无伤或已有镇痛效果时不重复消耗", () => {

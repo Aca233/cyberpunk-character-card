@@ -4,7 +4,7 @@ import type { WorldState } from "../../kernel/world";
 import { HealthStateSchema } from "../health";
 import { itemCatalog } from "./apply";
 import { GunsmithActionSchema, type GunsmithCommand, quoteGunsmith } from "./gunsmith";
-import { InventoryStateSchema } from "./schema";
+import { availableQuickSupply, InventoryStateSchema } from "./schema";
 import { quoteTrade } from "./trade";
 
 /** 从背包装上一件：治疗品和手雷进快捷栏，服装穿到对应的格子；武器进背包即可直接使用 */
@@ -76,17 +76,18 @@ export const inventoryActions = {
     schema: UseHealingActionSchema,
     commands: (action, { world, data }) => {
       if (inCombat(world)) return "交战中治疗需要结合掩护和当前处境，请在行动里描述";
-      const def = itemCatalog(data).get(action.id);
-      if (def?.kind !== "healing") return "这件物品不是治疗品";
       const inventory = InventoryStateSchema.parse(world.slices.inventory);
+      const def = inventory.objects[action.id]?.definition ?? itemCatalog(data).get(action.id);
+      if (def?.kind !== "healing") return "这件物品不是治疗品";
       const held = inventory.healing;
       const current = held?.id === action.id;
       if (!current && (inventory.backpack[action.id] ?? 0) < 1) {
         return "背包里没有这件治疗品";
       }
-      const charges = current ? held.charges : (inventory.depleted[action.id] ?? def.charges ?? 1);
-      if (charges < 1 && (inventory.backpack[action.id] ?? 0) < (current ? 1 : 2))
-        return "这份补给已经耗尽，需要实际取得补充品";
+      const available = current
+        ? availableQuickSupply(inventory, "healing")
+        : (inventory.objects[action.id]?.remaining ?? def.charges ?? 1) > 0;
+      if (!available) return "这份补给已经耗尽，需要实际取得补充品";
       const health = HealthStateSchema.parse(world.slices.health);
       if (health.condition !== "up") return "当前无法自行治疗，需要别人救治";
       if (health.injuries.length === 0 || health.painSuppressed)

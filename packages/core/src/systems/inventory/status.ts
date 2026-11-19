@@ -81,7 +81,14 @@ export const inventoryStatus: readonly SystemStatus[] = [
         lines.push(
           `穿着（只影响身份和伪装，没有护甲）：${inv.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,
         );
-      if (inv.healing) lines.push(`治疗品：${inv.healing.id}，剩 ${inv.healing.charges} 次`);
+      if (inv.healing)
+        lines.push(
+          `治疗品：${names[inv.healing.id] ?? inv.healing.id}（${inv.healing.id}），剩 ${inv.healing.charges} 次`,
+        );
+      if (inv.grenade)
+        lines.push(
+          `手雷：${names[inv.grenade.id] ?? inv.grenade.id}（${inv.grenade.id}），剩 ${inv.grenade.charges} 次`,
+        );
       const backpack = Object.entries(inv.backpack).filter(
         ([id]) => inv.details[id]?.kind !== "weapon",
       );

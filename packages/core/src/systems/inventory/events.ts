@@ -6,7 +6,9 @@ import { type InventoryState, InventoryStateSchema, type ItemDef } from "./schem
 function carriedCounts(state: InventoryState): Map<string, number> {
   const counts = new Map<string, number>();
   const add = (id: string | null | undefined, qty = 1) => {
-    if (id != null && qty > 0) counts.set(id, (counts.get(id) ?? 0) + qty);
+    if (id == null || qty <= 0) return;
+    const baseId = state.objects[id]?.baseId ?? id;
+    counts.set(baseId, (counts.get(baseId) ?? 0) + qty);
   };
   for (const [id, count] of Object.entries(state.backpack)) {
     if (count < 1) continue;
@@ -25,8 +27,8 @@ function carriedCounts(state: InventoryState): Map<string, number> {
       }
     }
   }
-  add(state.healing?.id);
-  add(state.grenade?.id);
+  if (state.healing && state.healing.charges > 0) add(state.healing.id);
+  if (state.grenade && state.grenade.charges > 0) add(state.grenade.id);
   for (const id of Object.values(state.clothing)) add(id);
   return counts;
 }

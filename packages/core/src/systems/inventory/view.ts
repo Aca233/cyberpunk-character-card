@@ -3,6 +3,7 @@ import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS, type Rarity } from "../economy";
 import { itemCatalog, rarityOf, withWorldObjects } from "./apply";
 import {
+  availableQuickSupply,
   CLOTHING_SLOT_LABELS,
   ClothingSlotSchema,
   canAttachMod,
@@ -77,6 +78,10 @@ export function inventoryView({ world, data }: ViewContext) {
   return {
     healing: inventory.healing,
     grenade: inventory.grenade,
+    quickSupplyAvailable: {
+      healing: availableQuickSupply(inventory, "healing") !== null,
+      grenade: availableQuickSupply(inventory, "grenade") !== null,
+    },
     /** 统一后的随身背包，数量均在此展示 */
     backpack: Object.fromEntries(counts) as Readonly<Record<string, number>>,
     heldWeapons: carriedHeldWeaponIds(inventory, items),
@@ -127,7 +132,7 @@ export function inventoryView({ world, data }: ViewContext) {
         const def = items.get(id) ?? obj?.definition;
         if (!def) return [];
         const ws = obj?.weaponState;
-        const baseId = ws?.baseId ?? id;
+        const baseId = ws?.baseId ?? obj?.baseId ?? id;
         const rar = def.rarity || def.kind === "weapon" ? rarityOf(def) : null;
         return [
           [
@@ -150,7 +155,7 @@ export function inventoryView({ world, data }: ViewContext) {
               ability: def.ability ?? "",
               healPercent: def.healPercent ?? null,
               charges: def.charges ?? null,
-              remaining: inventory.depleted[id] ?? def.charges ?? null,
+              remaining: obj?.remaining ?? def.charges ?? null,
             },
           ],
         ];

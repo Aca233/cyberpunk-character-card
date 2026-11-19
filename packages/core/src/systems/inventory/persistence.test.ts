@@ -270,7 +270,7 @@ describe("补给来自实物", () => {
         "street",
       ).ok,
     ).toBe(true);
-    expect(spend(inv, "grenade").ok).toBe(true);
+    expect(spend(inv, "grenade", itemCatalog(ctx.data)).ok).toBe(true);
     const catalog = itemCatalog(withWorldObjects({ items: [] }, inv.objects));
     expect(
       applyItem(
@@ -291,7 +291,7 @@ describe("补给来自实物", () => {
       ).ok,
     ).toBe(true);
     expect(inv.grenade?.charges).toBe(1);
-    expect(spend(inv, "grenade").ok).toBe(true);
+    expect(spend(inv, "grenade", itemCatalog(ctx.data)).ok).toBe(true);
     expect(inv.objects[unique.id]?.holder).toBe("consumed");
     applyItem(
       inv,
@@ -324,7 +324,7 @@ describe("补给来自实物", () => {
     world = registry.signal(world, "rest", ctx).world;
     const inv = InventoryStateSchema.parse(world.slices.inventory);
     expect(inv.grenade?.charges).toBe(0);
-    expect(spend(inv, "grenade").ok).toBe(false);
+    expect(spend(inv, "grenade", itemCatalog(ctx.data)).ok).toBe(false);
     expect(
       applyItem(
         inv,
@@ -332,7 +332,7 @@ describe("补给来自实物", () => {
         itemCatalog(ctx.data),
       ).ok,
     ).toBe(true);
-    expect(spend(inv, "grenade").ok).toBe(true);
+    expect(spend(inv, "grenade", itemCatalog(ctx.data)).ok).toBe(true);
     expect(inv.grenade?.charges).toBe(1);
     expect(inv.backpack[packet.id]).toBeUndefined();
     expect(registry.parseInternal({ type: "inventory.recharge" }).ok).toBe(false);

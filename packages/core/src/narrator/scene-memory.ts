@@ -122,10 +122,12 @@ function itemCount(world: WorldState, id: string): number {
   const state = InventoryStateSchema.parse(world.slices.inventory);
   const part = CyberwareStateSchema.parse(world.slices.cyberware).parts[id];
   let customizedCount = 0;
+  let supplyCount = 0;
   let attachedModCount = 0;
   for (const [carriedId, count] of Object.entries(state.backpack)) {
     if (count < 1) continue;
     const obj = state.objects[carriedId];
+    if (obj?.baseId === id) supplyCount += count;
     if (!obj?.weaponState) continue;
     if (obj.kind === "customized" && obj.weaponState.baseId === id) {
       customizedCount += count;
@@ -138,9 +140,12 @@ function itemCount(world: WorldState, id: string): number {
     Number(part?.holder === "player" && part.location === null && part.condition !== "scrapped") +
     (state.backpack[id] ?? 0) +
     customizedCount +
+    supplyCount +
     Object.values(state.clothing).filter((value) => value === id).length +
-    Number(state.healing?.id === id) +
-    Number(state.grenade?.id === id) +
+    [state.healing, state.grenade].filter(
+      (slot) =>
+        slot && slot.charges > 0 && (slot.id === id || state.objects[slot.id]?.baseId === id),
+    ).length +
     attachedModCount
   );
 }

@@ -353,13 +353,15 @@ export function projectWeaponState(ws: WeaponInstanceState | undefined): WeaponS
   };
 }
 
-export const WorldObjectKindSchema = z.enum(["story", "customized"]);
+export const WorldObjectKindSchema = z.enum(["story", "customized", "supply"]);
 export type WorldObjectKind = z.infer<typeof WorldObjectKindSchema>;
 
-/** 剧情中出现的独立物件或由目录武器拆出改装的定制实物；定义、来历和归属随存档保存，不受静态目录限制。 */
+/** 剧情物件、定制武器或已拆封补给；定义、来历、归属与余量随实物保存。 */
 export const WorldObjectSchema = z.object({
   kind: WorldObjectKindSchema.default("story"),
   definition: ItemDefSchema,
+  /** 已拆封补给等目录物件的模板身份；剩余用量始终属于当前独立实物。 */
+  baseId: z.string().min(1).optional(),
   origin: z.string().min(1).max(240),
   holder: z.string().min(1),
   location: z.string().nullable(),
@@ -402,14 +404,14 @@ export const InventoryStateSchema = z.object({
   nextSupply: z.number().int().min(1).default(1),
   /** 确定性定制武器实例序号（wpn:<baseId>:<seq>） */
   nextWeaponSeq: z.number().int().min(1).default(1),
+  /** 已拆封补给的独立实物序号（supply:<baseId>:<seq>）。 */
+  nextSupplyInstanceSeq: z.number().int().min(1).default(1),
   healing: QuickSlotSchema,
   grenade: QuickSlotSchema,
   /** 背包：物品 id → 数量 */
   backpack: z.record(z.string(), z.number().int().min(1)),
   /** 最近明确的持用事实：null 未明确，空数组已收起；不另设武器装备槽。 */
   heldWeapons: z.array(z.string().min(1)).max(2).nullable().default(null),
-  /** 从快捷栏卸下时还没恢复的次数，防止换装刷次数 */
-  depleted: z.record(z.string(), z.number().int().min(0)),
   /** 身上穿着的服装：格子 → 物品 id */
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 拆解得来的零件（保留作可选扩展，默认 0） */
@@ -503,6 +505,28 @@ export type TradeCommand = z.infer<typeof TradeCommandSchema>;
 export const QuickSlotNameSchema = z.enum(["healing", "grenade"]);
 export type QuickSlotName = z.infer<typeof QuickSlotNameSchema>;
 
+/** 当前补给可用时保留当前实物；耗尽后只查找同模板的实际随身备用包。 */
+export function availableQuickSupply(
+  state: Pick<InventoryState, "healing" | "grenade" | "backpack" | "objects">,
+  slot: QuickSlotName,
+): NonNullable<InventoryState[QuickSlotName]> | null {
+  const held = state[slot];
+  if (!held) return null;
+  const object = state.objects[held.id];
+  if (held.charges > 0 && (!object || object.holder === "player")) return held;
+  const baseId = object?.baseId ?? held.id;
+  for (const [id, count] of Object.entries(state.backpack)) {
+    if (count < 1) continue;
+    const candidate = state.objects[id];
+    if ((candidate?.baseId ?? id) !== baseId) continue;
+    if (candidate && candidate.holder !== "player") continue;
+    const max = candidate?.definition.charges ?? held.max;
+    const charges = candidate?.remaining ?? max;
+    if (charges > 0) return { id, charges, max };
+  }
+  return null;
+}
+
 /** 只能由代码发出：其他系统消耗实际携带的补给、留置与车辆同步 */
 export const InventoryInternalSchemas = {
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
@@ -512,6 +536,7 @@ export const InventoryInternalSchemas = {
     action: z.enum(["leave", "take"]),
     item: z.string().min(1),
     count: z.number().int().min(1).default(1),
+    source: z.enum(["backpack", "worn", "quick"]).optional(),
     kind: PlacedKindSchema,
     target: z.string().min(1),
     location: z.string().nullable(),

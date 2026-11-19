@@ -3,6 +3,7 @@ import type { ApplyOutcome } from "../../kernel/system";
 import type { Rarity } from "../economy";
 import type { NpcState } from "../npc";
 import {
+  availableQuickSupply,
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
   canAttachMod,
@@ -221,20 +222,30 @@ export function placedHolderTag(kind: PlacedKind, target: string): string {
   return kind === "npc" ? target : `${kind}:${target}`;
 }
 
-function takeFromPlayer(draft: Inventory, id: string, count: number): boolean {
-  let available = draft.backpack[id] ?? 0;
+function takeFromPlayer(
+  draft: Inventory,
+  id: string,
+  count: number,
+  source?: "backpack" | "worn" | "quick",
+): boolean {
+  if (source !== undefined && source !== "backpack" && count !== 1) return false;
+  let available = source === undefined || source === "backpack" ? (draft.backpack[id] ?? 0) : 0;
   for (const slot of Object.keys(draft.clothing) as ClothingSlot[]) {
-    if (draft.clothing[slot] === id) available += 1;
+    if ((source === undefined || source === "worn") && draft.clothing[slot] === id) available += 1;
   }
   for (const slot of ["healing", "grenade"] as const) {
-    if (draft[slot]?.id === id) available += 1;
+    const held = draft[slot];
+    if ((source === undefined || source === "quick") && held?.id === id && held.charges > 0)
+      available += 1;
   }
   if (available < count) return false;
   let left = count;
-  while (left > 0 && take(draft, id)) left -= 1;
+  if (source === undefined || source === "backpack") {
+    while (left > 0 && take(draft, id)) left -= 1;
+  }
   for (const slot of Object.keys(draft.clothing) as ClothingSlot[]) {
     if (left <= 0) break;
-    if (draft.clothing[slot] === id) {
+    if ((source === undefined || source === "worn") && draft.clothing[slot] === id) {
       Reflect.deleteProperty(draft.clothing, slot);
       left -= 1;
     }
@@ -242,8 +253,7 @@ function takeFromPlayer(draft: Inventory, id: string, count: number): boolean {
   for (const slot of ["healing", "grenade"] as const) {
     if (left <= 0) break;
     const held = draft[slot];
-    if (held?.id === id) {
-      if (held.charges < held.max) draft.depleted[id] = held.charges;
+    if ((source === undefined || source === "quick") && held?.id === id && held.charges > 0) {
       const obj = draft.objects[id];
       if (obj) obj.remaining = held.charges;
       draft[slot] = null;
@@ -299,6 +309,7 @@ export function applyPlaceItem(
 
   if (action === "leave") {
     if (command.definition !== undefined) {
+      if (command.source !== undefined) return fail("随身来源只能引用已有物品");
       if (catalog.has(id) || draft.objects[id]) return fail("已有物件不可重新定义，直接使用原 id");
       if (command.definition.id !== id) return fail("物件定义的 id 必须与物品 id 一致");
       const parsed = ItemDefSchema.safeParse(command.definition);
@@ -328,6 +339,7 @@ export function applyPlaceItem(
     const object = draft.objects[id];
     if (object && count > 1) return fail("独立物件每次只能留置 1 件");
     if (object && object.holder !== "player") {
+      if (command.source !== undefined) return fail("玩家没有随身携带这件物件");
       if (object.holder === "consumed") return fail("这件物件已经耗尽");
       if (object.holder === holder) return fail("这件物件已经留在那里了");
       if (
@@ -340,12 +352,14 @@ export function applyPlaceItem(
       }
       return fail("玩家没有随身携带这件物件");
     }
-    if (!takeFromPlayer(draft, id, count)) return fail(`身上没有足够的${def.name}`);
+    if (!takeFromPlayer(draft, id, count, command.source))
+      return fail(`指定来源没有足够的${def.name}`);
     moveObject(draft, id, holder, location, now, summary);
     mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
     return ok();
   }
 
+  if (command.source !== undefined) return fail("取回物品不指定随身来源");
   const index = draft.placed.findIndex(
     (p) => p.item === id && p.kind === kind && p.target === target,
   );
@@ -355,8 +369,8 @@ export function applyPlaceItem(
   else entry.count -= count;
   const def = catalog.get(id) ?? draft.objects[id]?.definition;
   for (let i = 0; i < count; i += 1) put(draft, id);
-  if (def) autoQuick(draft, def);
   moveObject(draft, id, "player", null, now, summary);
+  if (def) autoQuick(draft, def);
   return ok();
 }
 
@@ -430,12 +444,15 @@ export function applyWeaponHold(
   return ok(names.length > 0 ? `当前持用：${names.join("、")}` : "已收起手中武器");
 }
 
-/** 快捷栏的东西放回背包，没恢复的次数记下来 */
+/** 快捷栏实物放回背包；已耗尽的空包不能变成一份备用补给。 */
 function stow(draft: Inventory, slot: QuickSlotName): void {
   const held = draft[slot];
   if (!held) return;
-  put(draft, held.id);
-  if (held.charges < held.max) draft.depleted[held.id] = held.charges;
+  if (held.charges > 0) {
+    put(draft, held.id);
+    const object = draft.objects[held.id];
+    if (object) object.remaining = held.charges;
+  }
   draft[slot] = null;
 }
 
@@ -537,8 +554,8 @@ export function applyItem(
   switch (command.action) {
     case "gain":
       put(draft, def.id);
-      autoQuick(draft, def);
       moveObject(draft, def.id, "player", null, now, command.reason);
+      autoQuick(draft, def);
       return {
         ok: true,
         notes: [def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`],
@@ -564,7 +581,7 @@ export function applyItem(
     case "unequip":
       return unequip(draft, def);
     case "use": {
-      const result = use(draft, def);
+      const result = use(draft, def, catalog, now);
       if (result.ok && def.kind === "consumable")
         moveObject(draft, def.id, "consumed", location, now, command.reason);
       return result;
@@ -631,11 +648,11 @@ function wear(draft: Inventory, def: ItemDef, slot: ClothingSlot): ApplyOutcome 
 function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyOutcome {
   // 物品栏精简（用户定的方案 A）：拿到时已自动放进快捷栏，开局随后的 equip 不再算失败，否则旧存档重放开局会读档失败
   if (draft[slot]?.id === def.id) return ok(`${def.name} 已经在快捷栏`);
+  const max = def.charges ?? 1;
+  const charges = draft.objects[def.id]?.remaining ?? max;
+  if (charges < 1) return fail("这份补给已经耗尽");
   if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
   stow(draft, slot);
-  const max = def.charges ?? 1;
-  const charges = draft.objects[def.id]?.remaining ?? draft.depleted[def.id] ?? max;
-  Reflect.deleteProperty(draft.depleted, def.id);
   draft[slot] = { id: def.id, charges, max };
   return ok(`${def.name} 放进快捷栏，剩 ${charges} / ${max} 次`);
 }
@@ -643,11 +660,12 @@ function equipQuick(draft: Inventory, def: ItemDef, slot: QuickSlotName): ApplyO
 /** 物品栏精简（用户定的方案 A）：快捷栏不再让玩家手动摆，拿到治疗品或手雷时对应的格空着就自动放进去 */
 export function autoQuick(draft: Inventory, def: ItemDef): void {
   const slot = quickSlotFor(def.kind);
-  if (!slot || draft[slot] !== null) return;
-  if (!take(draft, def.id)) return;
+  if (!slot || (draft[slot]?.charges ?? 0) > 0) return;
+  const object = draft.objects[def.id];
+  if (object && object.holder !== "player") return;
   const max = def.charges ?? 1;
-  const charges = draft.objects[def.id]?.remaining ?? draft.depleted[def.id] ?? max;
-  Reflect.deleteProperty(draft.depleted, def.id);
+  const charges = object?.remaining ?? max;
+  if (charges < 1 || !take(draft, def.id)) return;
   draft[slot] = { id: def.id, charges, max };
 }
 
@@ -669,12 +687,17 @@ function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
   return fail(`没有装备 ${def.name}`);
 }
 
-function use(draft: Inventory, def: ItemDef): ApplyOutcome {
+function use(
+  draft: Inventory,
+  def: ItemDef,
+  catalog: ReadonlyMap<string, ItemDef>,
+  now: number,
+): ApplyOutcome {
   switch (def.kind) {
     case "healing":
       return fail("治疗品用 heal 指令（source: maxdoc）结算");
     case "grenade":
-      return spend(draft, "grenade", def.id);
+      return spend(draft, "grenade", catalog, def.id, now);
     case "consumable":
       return take(draft, def.id) ? ok(`用掉 ${def.name}`) : fail(`背包里没有 ${def.name}`);
     case "misc":
@@ -689,17 +712,54 @@ function use(draft: Inventory, def: ItemDef): ApplyOutcome {
   }
 }
 
-/** 扣一次快捷栏次数；指定 id 时要求快捷栏里正好是这件 */
-export function spend(draft: Inventory, slot: QuickSlotName, id?: string, now = 0): ApplyOutcome {
-  const held = draft[slot];
+/** 拆封后以独立实物保存余量；全新模板补给仍可堆叠。 */
+function materializeSupply(draft: Inventory, def: ItemDef, charges: number, now: number): string {
+  let instanceId: string;
+  do {
+    instanceId = `supply:${def.id}:${draft.nextSupplyInstanceSeq}`;
+    draft.nextSupplyInstanceSeq += 1;
+  } while (draft.objects[instanceId] !== undefined);
+  draft.objects[instanceId] = {
+    kind: "supply",
+    definition: { ...def, id: instanceId },
+    baseId: def.id,
+    origin: `${def.name}拆封后独立记录的随身补给`.slice(0, 240),
+    holder: "player",
+    location: null,
+    changedAt: now,
+    lastChange: "拆封并使用补给",
+    remaining: charges,
+  };
+  return instanceId;
+}
+
+/** 扣一次快捷栏实物次数；耗尽时只从背包取得同模板备用补给。 */
+export function spend(
+  draft: Inventory,
+  slot: QuickSlotName,
+  catalog: ReadonlyMap<string, ItemDef>,
+  id?: string,
+  now = 0,
+): ApplyOutcome {
+  let held = draft[slot];
   if (!held || (id !== undefined && held.id !== id)) return fail("快捷栏里没有这件物品");
-  if (held.charges < 1) {
-    if (!take(draft, held.id)) return fail("这份补给已经耗尽，需要实际取得补充品");
-    held.charges = held.max;
+  const available = availableQuickSupply(draft, slot);
+  if (!available) return fail("这份补给已经耗尽，需要实际取得补充品");
+  const def = draft.objects[available.id]?.definition ?? catalog.get(available.id);
+  if (!def || def.kind !== slot) return fail("快捷栏补给没有有效定义");
+  if (held.charges < 1 || available.id !== held.id) {
+    if (!take(draft, available.id)) return fail("没有可用的备用补给");
+    held = { ...available };
+    draft[slot] = held;
   }
+  if (!draft.objects[held.id]) held.id = materializeSupply(draft, def, held.charges, now);
   held.charges -= 1;
   const object = draft.objects[held.id];
-  if (object) object.remaining = held.charges;
+  if (object) {
+    object.remaining = held.charges;
+    object.changedAt = now;
+    object.lastChange = `使用补给，剩 ${held.charges} / ${held.max} 次`;
+  }
   if (held.charges === 0) moveObject(draft, held.id, "consumed", null, now, "这份补给已经耗尽");
   return { ok: true, notes: [`剩 ${held.charges} / ${held.max} 次`] };
 }

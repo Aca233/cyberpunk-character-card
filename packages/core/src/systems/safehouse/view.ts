@@ -1,17 +1,20 @@
 import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS, type Rarity } from "../economy";
-import { itemCatalog, rarityOf, withWorldObjects } from "../inventory/apply";
-import { formatWeaponWithMods, weaponDisplayNames } from "../inventory/names";
 import {
   CLOTHING_SLOT_LABELS,
+  formatWeaponWithMods,
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   type ItemDef,
   type ItemKind,
+  itemCatalog,
   MOD_SLOT_LABELS,
+  rarityOf,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
-} from "../inventory/schema";
+  weaponDisplayNames,
+  withWorldObjects,
+} from "../inventory";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { apartmentList, apartmentLocked } from "./apply";
 import { SafehouseStateSchema } from "./schema";
@@ -28,6 +31,8 @@ export interface StoredItem {
   readonly rarityLabel: string | null;
   readonly iconic: boolean;
   readonly ability: string | null;
+  readonly remaining: number | null;
+  readonly charges: number | null;
 }
 
 export interface StorageGroup extends StorageTarget {
@@ -69,9 +74,7 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
     let group = groups.get(key);
     if (!group) {
       const locationName =
-        entry.location === null
-          ? "位置未知"
-          : (places.get(entry.location)?.name ?? entry.location);
+        entry.location === null ? "位置未知" : (places.get(entry.location)?.name ?? entry.location);
       group = {
         key,
         kind: entry.kind,
@@ -108,7 +111,7 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
         object?.weaponState,
         items,
       ),
-      baseId: object?.weaponState?.baseId ?? def?.id ?? null,
+      baseId: object?.weaponState?.baseId ?? object?.baseId ?? def?.id ?? null,
       count: entry.count,
       kind: def?.kind ?? "misc",
       subLabel: subLabelOf(def),
@@ -116,6 +119,8 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
       rarityLabel: def?.iconic ? "不朽" : rarity ? RARITY_LABELS[rarity] : null,
       iconic: Boolean(def?.iconic),
       ability: def?.ability ?? null,
+      remaining: object?.remaining ?? def?.charges ?? null,
+      charges: def?.charges ?? null,
     });
   }
   return [...groups.values()];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyItem } from "./apply";
+import { applyItem, spend } from "./apply";
 import type { InventoryState, ItemDef } from "./schema";
 
 /** 物品栏精简（用户定的方案 A）：快捷栏不让玩家手动摆，拿到治疗品时格子空着就自动放进去 */
@@ -33,13 +33,13 @@ function empty(): InventoryState {
     grenade: null,
     backpack: {},
     heldWeapons: null,
-    depleted: {},
     clothing: {},
     parts: 0,
     merchants: {},
     supplyOrders: {},
     nextSupply: 1,
     nextWeaponSeq: 1,
+    nextSupplyInstanceSeq: 1,
   };
 }
 
@@ -62,12 +62,24 @@ describe("拿到治疗品自动进快捷栏", () => {
     expect(inv.backpack).toEqual({ bounceback: 1 });
   });
 
-  it("之前卸下时没恢复的次数照旧算", () => {
+  it("拆封补给独立保存余量，新补给不继承旧包次数", () => {
     const inv = empty();
-    inv.depleted = { maxdoc: 1 };
     applyItem(inv, gain("maxdoc"), catalog);
-    expect(inv.healing).toEqual({ id: "maxdoc", charges: 1, max: 3 });
-    expect(inv.depleted).toEqual({});
+    spend(inv, "healing", catalog);
+    const partialId = inv.healing?.id;
+    expect(partialId).toBe("supply:maxdoc:1");
+    if (!partialId) throw new Error("没有拆封补给");
+    applyItem(
+      inv,
+      { type: "item", action: "unequip", id: partialId, reason: "收回半包补给" },
+      catalog,
+    );
+    applyItem(inv, gain("maxdoc"), catalog);
+    expect(inv.healing).toEqual({ id: "maxdoc", charges: 3, max: 3 });
+    expect(inv.objects[partialId]?.remaining).toBe(2);
+    applyItem(inv, equip(partialId), catalog);
+    expect(inv.healing).toEqual({ id: partialId, charges: 2, max: 3 });
+    expect(inv.backpack.maxdoc).toBe(1);
   });
 
   it("开局先 gain 再 equip 不算失败（旧存档重放开局）", () => {
