@@ -25,6 +25,7 @@ import {
   useMapTiles,
 } from "./mapCamera";
 import styles from "./story.module.css";
+import { vehicleArtOf } from "./vehicle-art";
 import { districtIcon, type View } from "./view";
 
 export type MapDestination = View["travel"]["destinations"][number];
@@ -824,36 +825,44 @@ export function MapBody({
                 </ul>
               )}
               <ul className={styles.routeList}>
-                {dest.routes.map((r) => (
-                  <li key={r.vehicle ? `${r.mode}:${r.vehicle}` : r.mode}>
-                    <button
-                      type="button"
-                      className={styles.routeOption}
-                      disabled={!onTravel || r.blocked !== undefined}
-                      onClick={() => onTravel?.(dest, r)}
-                    >
-                      {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
-                      <NineSlice
-                        id="map.filterCellBg"
-                        tint="var(--f-bg)"
-                        slice={CELL_SLICE}
-                        className={styles.mapFilterLayer}
-                      />
-                      <NineSlice
-                        id="map.filterCellFg"
-                        tint="var(--f-frame)"
-                        slice={CELL_SLICE}
-                        className={styles.mapFilterLayer}
-                      />
-                      <b>{r.label}</b>
-                      <span>
-                        {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
-                        {r.riskLabel}
-                      </span>
-                      {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
-                    </button>
-                  </li>
-                ))}
+                {dest.routes.map((r) => {
+                  const vehicle = view.travel.vehicles.find((v) => v.id === r.vehicle);
+                  const art = vehicleArtOf(vehicle?.model);
+                  return (
+                    <li key={r.vehicle ? `${r.mode}:${r.vehicle}` : r.mode}>
+                      <button
+                        type="button"
+                        className={styles.routeOption}
+                        data-vehicle-art={art ? true : undefined}
+                        disabled={!onTravel || r.blocked !== undefined}
+                        onClick={() => onTravel?.(dest, r)}
+                      >
+                        {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
+                        <NineSlice
+                          id="map.filterCellBg"
+                          tint="var(--f-bg)"
+                          slice={CELL_SLICE}
+                          className={styles.mapFilterLayer}
+                        />
+                        <NineSlice
+                          id="map.filterCellFg"
+                          tint="var(--f-frame)"
+                          slice={CELL_SLICE}
+                          className={styles.mapFilterLayer}
+                        />
+                        <span className={styles.routeOptionDetails}>
+                          <b>{r.label}</b>
+                          <span>
+                            {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
+                            {r.riskLabel}
+                          </span>
+                          {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
+                        </span>
+                        {art && <Asset id={art} className={styles.routeVehicleArt} />}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
               {dest.here && <p className={styles.dim}>你就在这里。</p>}
               {!onTravel && !dest.here && (

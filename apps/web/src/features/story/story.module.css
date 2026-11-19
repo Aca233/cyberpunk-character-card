@@ -3979,7 +3979,6 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  gap: 0.15rem;
   width: 100%;
   /* 右下是斜切角，右边和底边多留一点 */
   padding: 0.5rem 1.1rem 0.6rem 0.7rem;
@@ -3992,9 +3991,27 @@
   transition: color var(--dur-flash);
 }
 
-.routeOption > b {
+.routeOption[data-vehicle-art] {
+  grid-template-columns: minmax(0, 1fr) 5rem;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.routeOptionDetails {
+  display: grid;
+  gap: 0.15rem;
+  overflow-wrap: anywhere;
+}
+
+.routeOptionDetails > b {
   color: var(--f-label, var(--filter-off));
   transition: color var(--dur-flash);
+}
+
+.routeVehicleArt {
+  width: 100%;
+  height: 3rem;
+  object-fit: contain;
 }
 
 .routeOption:hover:not(:disabled),
