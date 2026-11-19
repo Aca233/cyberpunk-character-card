@@ -16,6 +16,12 @@ import { layerOpen, useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import { ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
+import {
+  cancelImageJob,
+  imageTargetKey,
+  isImageJobPending,
+  useImageJobs,
+} from "../images/image-jobs";
 import { type SaveImagesController, SaveImagesProvider } from "../images/SaveImagesContext";
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
@@ -135,7 +141,39 @@ export function StoryScreen() {
   const [lightbox, setLightbox] = useState<{ readonly id: string; readonly title: string } | null>(
     null,
   );
-  const [pendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
+  const [autoPendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
+  const imageJobs = useImageJobs();
+  const manualPendingTurnSeqs = useMemo(
+    () =>
+      new Set(
+        imageJobs.flatMap((job) =>
+          isImageJobPending(job) &&
+          job.binding?.saveId === saveId &&
+          job.binding.target.kind === "turn"
+            ? [job.binding.target.seq]
+            : [],
+        ),
+      ),
+    [imageJobs, saveId],
+  );
+  const pendingTurnSeqs = useMemo(
+    () => new Set([...autoPendingTurnSeqs, ...manualPendingTurnSeqs]),
+    [autoPendingTurnSeqs, manualPendingTurnSeqs],
+  );
+  const turnImageErrors = useMemo(
+    () =>
+      Object.fromEntries(
+        imageJobs.flatMap((job) =>
+          job.status === "error" &&
+          job.error &&
+          job.binding?.saveId === saveId &&
+          job.binding.target.kind === "turn"
+            ? [[job.binding.target.seq, job.error]]
+            : [],
+        ),
+      ),
+    [imageJobs, saveId],
+  );
   const autoAbortRef = useRef<Map<number, AutoImageTask>>(new Map());
   const baselineSeqRef = useRef<number | null>(null);
   const autoAttemptedRef = useRef<Set<number>>(new Set());
@@ -302,6 +340,7 @@ export function StoryScreen() {
         | { readonly kind: "npc"; readonly npcId: string }
         | { readonly kind: "character" },
     ) => {
+      cancelImageJob(imageTargetKey({ saveId, target }));
       if (target.kind === "turn") {
         autoAbortRef.current.get(target.seq)?.controller.abort();
         autoAbortRef.current.delete(target.seq);
@@ -335,7 +374,8 @@ export function StoryScreen() {
 
   useEffect(() => {
     for (const [seq, task] of autoAbortRef.current) {
-      if (!isAutoImageCurrent(seq, task)) cancelTurnAutoImage(seq);
+      if (manualPendingTurnSeqs.has(seq) || !isAutoImageCurrent(seq, task))
+        cancelTurnAutoImage(seq);
     }
     if (!view || !saveId) return;
     const latest = view.turns.at(-1);
@@ -351,6 +391,7 @@ export function StoryScreen() {
       latest.unsettled !== null ||
       latest.seq <= baselineSeqRef.current ||
       autoAttemptedRef.current.has(latest.seq) ||
+      manualPendingTurnSeqs.has(latest.seq) ||
       bindings.turns[String(latest.seq)] !== undefined ||
       !healthQuery.data?.models?.image?.ready
     ) {
@@ -424,6 +465,7 @@ export function StoryScreen() {
     prefs.autoTurnImage,
     prefs.autoImageUseAux,
     bindings.turns,
+    manualPendingTurnSeqs,
     healthQuery.data?.models?.image?.ready,
     client,
     warn,
@@ -436,15 +478,31 @@ export function StoryScreen() {
       saveId,
       bindings,
       pendingTurnSeqs,
+      manualPendingTurnSeqs,
+      turnImageErrors,
       openImageModal: (options) => {
-        if (options.bind.kind === "turn") cancelTurnAutoImage(options.bind.seq);
+        if (options.bind.kind === "turn") {
+          autoAttemptedRef.current.add(options.bind.seq);
+          cancelTurnAutoImage(options.bind.seq);
+        }
         setImageModal({ ...structuredClone(options), saveId });
       },
       unbindImage,
       openLightbox: (id, title) => setLightbox({ id, title }),
-      cancelTurnAutoImage,
+      cancelTurnAutoImage: (seq) => {
+        cancelTurnAutoImage(seq);
+        cancelImageJob(imageTargetKey({ saveId, target: { kind: "turn", seq } }));
+      },
     }),
-    [saveId, bindings, pendingTurnSeqs, unbindImage, cancelTurnAutoImage],
+    [
+      saveId,
+      bindings,
+      pendingTurnSeqs,
+      manualPendingTurnSeqs,
+      turnImageErrors,
+      unbindImage,
+      cancelTurnAutoImage,
+    ],
   );
 
   // 界面操作统一走这里：不调用模型，失败时用提示条说明原因，之后刷新状态。

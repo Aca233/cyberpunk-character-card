@@ -9,6 +9,21 @@ import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { downloadStoredImage } from "./GeneratedImage";
+import {
+  imagePromptSourceKey,
+  readImageDraft,
+  type SavedImageDraft,
+  writeImageDraft,
+} from "./image-drafts";
+import {
+  boundImage,
+  cancelImageJob,
+  type ImageJobBinding,
+  imageTargetKey,
+  isImageJobPending,
+  startImageJob,
+  useImageJob,
+} from "./image-jobs";
 import styles from "./images.module.css";
 
 const RATIOS: readonly { readonly id: AspectRatio; readonly label: string }[] = [
@@ -25,17 +40,14 @@ export interface ImageGenModalProps {
   readonly subtitle?: string | undefined;
   readonly promptRequest: ImagePromptRequest | null;
   readonly defaultAspectRatio: AspectRatio;
-  readonly bind?:
-    | {
-        readonly saveId: string;
-        readonly target:
-          | { readonly kind: "turn"; readonly seq: number }
-          | { readonly kind: "npc"; readonly npcId: string }
-          | { readonly kind: "character" };
-      }
-    | undefined;
+  readonly draftKey?: string;
+  readonly bind?: ImageJobBinding | undefined;
   readonly onClose: () => void;
   readonly onApplied: (image: StoredImage, bindings?: SaveImageBindings) => void;
+}
+
+interface ModalDraft extends SavedImageDraft {
+  readonly sessionKey: string;
 }
 
 export function ImageGenModal({
@@ -44,243 +56,294 @@ export function ImageGenModal({
   subtitle,
   promptRequest,
   defaultAspectRatio,
+  draftKey,
   bind,
   onClose,
   onApplied,
 }: ImageGenModalProps) {
   const queryClient = useQueryClient();
   const prefs = useNarrativePrefs();
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
+  const model = useQuery({
+    queryKey: ["imageCapabilities"],
+    queryFn: () => api.imageCapabilities(),
     enabled: open,
-    staleTime: 5000,
+    staleTime: 0,
   });
-
-  const [useAux, setUseAux] = useState(prefs.autoImageUseAux);
-  const [instruction, setInstruction] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [negativePrompt, setNegativePrompt] = useState(prefs.imageNegativePrompt);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(defaultAspectRatio);
+  const bindingState = useQuery({
+    queryKey: ["saveImages", bind?.saveId ?? ""],
+    queryFn: () => api.saveImages(bind?.saveId ?? ""),
+    enabled: open && Boolean(bind),
+  });
+  const sourceKey = promptRequest ? imagePromptSourceKey(promptRequest) : "";
+  const key = bind ? imageTargetKey(bind) : (draftKey ?? `image:${sourceKey}`);
+  const sessionKey =
+    open && promptRequest ? JSON.stringify([key, sourceKey, defaultAspectRatio]) : "";
+  const [draft, setDraft] = useState<ModalDraft>({
+    sessionKey: "",
+    sourceKey: "",
+    prompt: "",
+    negativePrompt: "",
+    instruction: "",
+    useAux: true,
+    aspectRatio: defaultAspectRatio,
+    profileName: null,
+    capabilities: null,
+  });
+  const { useAux, instruction, prompt, negativePrompt, aspectRatio } = draft;
+  const updateDraft = (patch: Partial<SavedImageDraft>) =>
+    setDraft((previous) => ({ ...previous, ...patch }));
   const [drafting, setDrafting] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [applying, setApplying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{
-    readonly image: StoredImage;
-    readonly sessionKey: string;
-  } | null>(null);
-
+  const [localError, setError] = useState<string | null>(null);
+  const job = useImageJob(key);
+  const generating = isImageJobPending(job);
+  const preview =
+    job?.sourceKey === sourceKey && job.image ? { image: job.image, sessionKey } : null;
   const abortRef = useRef<AbortController | null>(null);
-  const promptProfileRef = useRef<string | undefined>(undefined);
-  const sessionKey =
-    open && promptRequest ? JSON.stringify([bind, promptRequest, defaultAspectRatio]) : "";
   const liveKeyRef = useRef(sessionKey);
   liveKeyRef.current = sessionKey;
-  const initialRef = useRef({ promptRequest, bind, defaultAspectRatio, prefs });
-  initialRef.current = { promptRequest, bind, defaultAspectRatio, prefs };
+  const initialRef = useRef({ promptRequest, bind, defaultAspectRatio, prefs, key, sourceKey });
+  initialRef.current = { promptRequest, bind, defaultAspectRatio, prefs, key, sourceKey };
   const sessionRef = useRef<{
     readonly key: string;
     readonly request: ImagePromptRequest;
     readonly bind: ImageGenModalProps["bind"];
   } | null>(null);
-
   const isCurrent = useCallback(
-    (controller: AbortController, key: string) =>
+    (controller: AbortController, currentKey: string) =>
       !controller.signal.aborted &&
       abortRef.current === controller &&
-      liveKeyRef.current === key &&
-      sessionRef.current?.key === key,
+      liveKeyRef.current === currentKey &&
+      sessionRef.current?.key === currentKey,
     [],
   );
-
-  const cancelOperation = useCallback(() => {
+  const cancelLocal = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     setDrafting(false);
-    setGenerating(false);
     setApplying(false);
   }, []);
-
   const closeModal = useCallback(() => {
     liveKeyRef.current = "";
     sessionRef.current = null;
-    cancelOperation();
+    cancelLocal();
     onClose();
-  }, [cancelOperation, onClose]);
+  }, [cancelLocal, onClose]);
   useLayer(closeModal, open);
 
-  const runDraft = useCallback(
-    async (req: ImagePromptRequest, extraInstruction: string, withAux: boolean) => {
-      const session = sessionRef.current;
-      if (!session || liveKeyRef.current !== session.key) return;
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setDrafting(true);
-      setGenerating(false);
-      setApplying(false);
-      setError(null);
-      setNotice(null);
-      const enriched: ImagePromptRequest = {
-        ...structuredClone(req),
-        instruction: [req.instruction.trim(), extraInstruction.trim()].filter(Boolean).join("\n"),
-      };
-      const style = imageStyleConfig();
-      try {
-        const profiles = await api.profiles();
-        if (!isCurrent(controller, session.key)) return;
-        const res = await api.draftImagePrompt(
-          {
-            request: enriched,
-            useAux: withAux,
-            style,
-            ...(profiles.image ? { profileName: profiles.image } : {}),
-          },
-          controller.signal,
-        );
-        if (!isCurrent(controller, session.key)) return;
-        promptProfileRef.current = profiles.image ?? undefined;
-        setPrompt(res.prompt);
-        setNegativePrompt(res.negativePrompt);
-        if (res.fallbackReason) {
-          setNotice(`提示词改用本地拼接（${res.fallbackReason}），你仍可自由修改下方提示词。`);
-        }
-      } catch (caught) {
-        if (isCurrent(controller, session.key)) {
-          setError(caught instanceof Error ? caught.message : "提示词提炼失败");
-        }
-      } finally {
-        if (isCurrent(controller, session.key)) {
-          abortRef.current = null;
-          setDrafting(false);
-        }
-      }
-    },
-    [isCurrent],
-  );
-
   useEffect(() => {
-    cancelOperation();
+    cancelLocal();
     const initial = initialRef.current;
     if (!sessionKey || !initial.promptRequest) {
       sessionRef.current = null;
       return;
     }
-    const req = structuredClone(initial.promptRequest);
-    sessionRef.current = { key: sessionKey, request: req, bind: structuredClone(initial.bind) };
-    promptProfileRef.current = undefined;
-    setUseAux(initial.prefs.autoImageUseAux);
-    setInstruction("");
-    setPrompt("");
-    setNegativePrompt(initial.prefs.imageNegativePrompt);
-    setAspectRatio(initial.defaultAspectRatio);
-    setPreview(null);
+    const saved = readImageDraft(initial.key);
+    sessionRef.current = {
+      key: sessionKey,
+      request: structuredClone(initial.promptRequest),
+      bind: structuredClone(initial.bind),
+    };
+    setDraft({
+      ...(saved ?? {
+        sourceKey: initial.sourceKey,
+        prompt: "",
+        negativePrompt: initial.prefs.imageNegativePrompt,
+        instruction: "",
+        useAux: initial.prefs.autoImageUseAux,
+        aspectRatio: initial.defaultAspectRatio,
+        profileName: null,
+        capabilities: null,
+      }),
+      sessionKey,
+    });
     setError(null);
-    setNotice(null);
-    void runDraft(req, "", initial.prefs.autoImageUseAux);
+    setNotice(
+      saved?.prompt
+        ? saved.sourceKey === initial.sourceKey
+          ? "已恢复上次编辑的提示词，可直接复用。"
+          : "人物或场景资料已变化，已保留上次提示词；点击重新提炼可更新资料。"
+        : "填写提示词，或点击「提炼提示词」。打开面板不会调用辅助模型。",
+    );
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
       sessionRef.current = null;
     };
-  }, [sessionKey, cancelOperation, runDraft]);
+  }, [sessionKey, cancelLocal]);
 
-  if (!open || !promptRequest) return null;
+  useEffect(() => {
+    if (!sessionKey || draft.sessionKey !== sessionKey) return;
+    const { sessionKey: _sessionKey, ...saved } = draft;
+    writeImageDraft(key, saved);
+  }, [key, sessionKey, draft]);
 
-  const imageModelReady = health.data?.models?.image?.ready ?? true;
-  const imageModelError = health.data?.models?.image?.error;
-
-  const handleGenerate = async () => {
+  const runDraft = async () => {
     const session = sessionRef.current;
     if (!session || liveKeyRef.current !== session.key) return;
-    const cleanPrompt = prompt.trim();
-    if (!cleanPrompt) {
-      setError("请先填写生图提示词");
-      return;
-    }
-    abortRef.current?.abort();
+    cancelLocal();
     const controller = new AbortController();
     abortRef.current = controller;
-    const request = {
-      prompt: cleanPrompt,
-      ...(negativePrompt.trim() ? { negativePrompt: negativePrompt.trim() } : {}),
-      aspectRatio,
-    };
-    setGenerating(true);
-    setDrafting(false);
-    setApplying(false);
+    setDrafting(true);
     setError(null);
     setNotice(null);
+    const request: ImagePromptRequest = {
+      ...structuredClone(session.request),
+      instruction: [session.request.instruction.trim(), instruction.trim()]
+        .filter(Boolean)
+        .join("\n"),
+    };
+    const style = imageStyleConfig();
     try {
-      const profileName = promptProfileRef.current ?? (await api.profiles()).image;
+      const selected = await api.imageCapabilities(undefined, controller.signal);
       if (!isCurrent(controller, session.key)) return;
-      if (!profileName) throw new Error("尚未设置文生图模型");
-      const res = await api.generateImage({ ...request, profileName }, controller.signal);
+      queryClient.setQueryData(["imageCapabilities"], selected);
+      const result = await api.draftImagePrompt(
+        {
+          request,
+          useAux,
+          style,
+          ...(selected.profileName ? { profileName: selected.profileName } : {}),
+        },
+        controller.signal,
+      );
       if (!isCurrent(controller, session.key)) return;
-      queryClient.setQueryData(["image", res.image.id], res.image);
-      setPreview({ ...res, sessionKey: session.key });
-      if (res.image.metadata.warnings?.length) {
-        setNotice(res.image.metadata.warnings.join("；"));
-      }
+      updateDraft({
+        sourceKey,
+        prompt: result.prompt,
+        negativePrompt: result.negativePrompt,
+        profileName: result.profileName,
+        capabilities: result.capabilities,
+      });
+      if (result.fallbackReason)
+        setNotice(`提示词改用本地拼接（${result.fallbackReason}），仍可自由修改。`);
     } catch (caught) {
-      if (isCurrent(controller, session.key)) {
-        setError(caught instanceof Error ? caught.message : "文生图失败，请重试");
-      }
+      if (isCurrent(controller, session.key))
+        setError(caught instanceof Error ? caught.message : "提示词提炼失败");
     } finally {
       if (isCurrent(controller, session.key)) {
         abortRef.current = null;
-        setGenerating(false);
+        setDrafting(false);
       }
     }
   };
 
-  const handleCancel = () => {
-    const wasGenerating = generating;
-    cancelOperation();
-    setNotice(
-      wasGenerating ? "已取消本地等待；已经发送的生图任务可能仍在服务端继续。" : "已取消本次请求。",
-    );
-  };
-
-  const handleApply = async () => {
-    const session = sessionRef.current;
+  const imageModelReady = model.data?.ready === true;
+  const imageModelError =
+    model.data?.error ?? (model.error instanceof Error ? model.error.message : undefined);
+  const independentNegative = model.data?.capabilities?.negativePrompt === true;
+  const normalizedForRef = useRef("");
+  useEffect(() => {
     if (
-      !preview ||
-      !session ||
-      preview.sessionKey !== session.key ||
-      liveKeyRef.current !== session.key
+      !sessionKey ||
+      draft.sessionKey !== sessionKey ||
+      model.isFetching ||
+      !model.data?.ready ||
+      independentNegative
     )
       return;
+    const normalizationKey = JSON.stringify([sessionKey, model.data.profileName]);
+    if (normalizedForRef.current === normalizationKey) return;
+    normalizedForRef.current = normalizationKey;
+    if (!prompt.trim() || !negativePrompt.trim()) return;
+    const finalPrompt = `${prompt.trim()}\nUser-requested exclusions (render the image without these): ${negativePrompt.trim()}`;
+    if (finalPrompt.length > IMAGE_PROMPT_MAX_LENGTH) return;
+    setDraft((previous) => ({ ...previous, prompt: finalPrompt, negativePrompt: "" }));
+  }, [
+    sessionKey,
+    draft.sessionKey,
+    model.isFetching,
+    model.data?.ready,
+    model.data?.profileName,
+    independentNegative,
+    negativePrompt,
+    prompt,
+  ]);
+  const handleGenerate = () => {
+    const session = sessionRef.current;
+    if (
+      !session ||
+      liveKeyRef.current !== session.key ||
+      !model.data?.ready ||
+      !model.data.profileName
+    )
+      return;
+    let finalPrompt = prompt.trim();
+    if (!finalPrompt) {
+      setError("请先填写或提炼提示词");
+      return;
+    }
+    if (!independentNegative && negativePrompt.trim()) {
+      finalPrompt += `\nUser-requested exclusions (render the image without these): ${negativePrompt.trim()}`;
+    }
+    if (finalPrompt.length > IMAGE_PROMPT_MAX_LENGTH) {
+      setError(`提示词与排除要求合计不能超过 ${IMAGE_PROMPT_MAX_LENGTH} 字符，请精简后重试`);
+      return;
+    }
+    cancelLocal();
+    setError(null);
+    setNotice(null);
+    updateDraft({
+      sourceKey,
+      prompt: finalPrompt,
+      negativePrompt: independentNegative ? negativePrompt : "",
+      profileName: model.data.profileName,
+      capabilities: model.data.capabilities,
+    });
+    startImageJob({
+      key,
+      sourceKey,
+      client: queryClient,
+      ...(session.bind ? { binding: session.bind } : {}),
+      request: {
+        prompt: finalPrompt,
+        aspectRatio,
+        profileName: model.data.profileName,
+        ...(independentNegative && negativePrompt.trim()
+          ? { negativePrompt: negativePrompt.trim() }
+          : {}),
+      },
+    });
+  };
+  const handleCancel = () => {
+    cancelLocal();
+    if (generating) cancelImageJob(key);
+    setNotice(
+      generating
+        ? "已取消等待；已经发送的任务可能仍在服务端继续，不会自动采用迟到结果。"
+        : "已取消本次请求。",
+    );
+  };
+  const handleApply = async () => {
+    const session = sessionRef.current;
+    if (!preview || !session || liveKeyRef.current !== session.key) return;
     if (!session.bind) {
       onApplied(preview.image);
       closeModal();
       return;
     }
-    const target = session.bind;
-    abortRef.current?.abort();
+    cancelLocal();
     const controller = new AbortController();
     abortRef.current = controller;
     setApplying(true);
     setError(null);
     try {
       const bindings = await api.bindSaveImage(
-        target.saveId,
+        session.bind.saveId,
         {
-          ...target.target,
+          ...session.bind.target,
           imageId: preview.image.id,
-        } as Parameters<typeof api.bindSaveImage>[1],
+        },
         controller.signal,
       );
       if (!isCurrent(controller, session.key)) return;
-      queryClient.setQueryData(["saveImages", target.saveId], bindings);
+      queryClient.setQueryData(["saveImages", session.bind.saveId], bindings);
       onApplied(preview.image, bindings);
       closeModal();
     } catch (caught) {
-      if (isCurrent(controller, session.key)) {
+      if (isCurrent(controller, session.key))
         setError(caught instanceof Error ? caught.message : "应用图片失败");
-      }
     } finally {
       if (isCurrent(controller, session.key)) {
         abortRef.current = null;
@@ -288,8 +351,36 @@ export function ImageGenModal({
       }
     }
   };
-
   const busy = drafting || generating || applying;
+  const applied = Boolean(
+    bind &&
+      preview &&
+      bindingState.data &&
+      boundImage(bindingState.data, bind.target) === preview.image.id,
+  );
+  const error = localError ?? (!applied && job?.sourceKey === sourceKey ? job.error : null);
+  const displayNotice = [
+    notice,
+    generating
+      ? bind
+        ? "可以关闭面板继续后台生成，完成后会自动显示在原目标。"
+        : "可以关闭面板继续后台生成，完成后重新打开即可预览和采用。"
+      : null,
+    applied
+      ? bind?.target.kind === "turn"
+        ? "图片已显示在对应回合正文。"
+        : "图片已自动采用。"
+      : null,
+    model.data?.ready && !independentNegative
+      ? negativePrompt.trim()
+        ? "当前模型使用单条提示词，已保存的排除要求会合入正向提示词，不发送独立负面字段。"
+        : "当前模型使用单条提示词，请将排除要求写在正向提示词中。"
+      : null,
+    ...(preview?.image.metadata.warnings ?? []),
+  ]
+    .filter(Boolean)
+    .join("；");
+  if (!open || !promptRequest) return null;
 
   return (
     <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label={title}>
@@ -297,7 +388,6 @@ export function ImageGenModal({
         type="button"
         aria-label="关闭弹窗"
         className={styles.backdropDismiss}
-        disabled={busy}
         onClick={closeModal}
       />
       <div className={styles.modal}>
@@ -307,8 +397,8 @@ export function ImageGenModal({
               <h2 className={styles.modalTitle}>{title}</h2>
               {subtitle && <span className={styles.modalSub}>{subtitle}</span>}
             </div>
-            <Button small keyId="key.esc" disabled={busy} onClick={closeModal}>
-              关闭
+            <Button small keyId="key.esc" onClick={closeModal}>
+              {generating ? "关闭面板" : "关闭"}
             </Button>
           </div>
 
@@ -320,9 +410,9 @@ export function ImageGenModal({
               </div>
             )}
 
-            {notice && (
+            {displayNotice && (
               <div className={styles.notice} role="status">
-                <span>{notice}</span>
+                <span>{displayNotice}</span>
               </div>
             )}
 
@@ -343,7 +433,7 @@ export function ImageGenModal({
                     disabled={busy}
                     value={instruction}
                     placeholder="例如：霓虹雨夜侧脸、红黑公司西装、手持武士刀"
-                    onChange={(e) => setInstruction(e.target.value)}
+                    onChange={(e) => updateDraft({ instruction: e.target.value })}
                   />
                 </FrameBox>
               </label>
@@ -354,18 +444,12 @@ export function ImageGenModal({
                     type="checkbox"
                     disabled={busy}
                     checked={useAux}
-                    onChange={(e) => setUseAux(e.target.checked)}
+                    onChange={(e) => updateDraft({ useAux: e.target.checked })}
                   />
                   <span>辅助模型提炼</span>
                 </label>
-                <Button
-                  small
-                  disabled={busy}
-                  onClick={() =>
-                    void runDraft(sessionRef.current?.request ?? promptRequest, instruction, useAux)
-                  }
-                >
-                  {drafting ? "提炼中…" : "重新提炼提示词"}
+                <Button small disabled={busy} onClick={() => void runDraft()}>
+                  {drafting ? "提炼中…" : prompt.trim() ? "重新提炼提示词" : "提炼提示词"}
                 </Button>
               </div>
             </div>
@@ -383,7 +467,7 @@ export function ImageGenModal({
                     disabled={busy}
                     value={prompt}
                     placeholder="Cyberpunk 2077 character portrait..."
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => updateDraft({ prompt: e.target.value })}
                   />
                 </FrameBox>
               </label>
@@ -396,7 +480,7 @@ export function ImageGenModal({
                   <select
                     disabled={busy}
                     value={aspectRatio}
-                    onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
+                    onChange={(e) => updateDraft({ aspectRatio: e.target.value as AspectRatio })}
                   >
                     {RATIOS.map((r) => (
                       <option key={r.id} value={r.id}>
@@ -408,20 +492,22 @@ export function ImageGenModal({
               </label>
             </div>
 
-            <details className={styles.negFold}>
-              <summary>反向提示词（Negative Prompt）</summary>
-              <label className={styles.field}>
-                <FrameBox>
-                  <textarea
-                    rows={2}
-                    maxLength={2000}
-                    disabled={busy}
-                    value={negativePrompt}
-                    onChange={(e) => setNegativePrompt(e.target.value)}
-                  />
-                </FrameBox>
-              </label>
-            </details>
+            {independentNegative && (
+              <details className={styles.negFold}>
+                <summary>反向提示词（Negative Prompt）</summary>
+                <label className={styles.field}>
+                  <FrameBox>
+                    <textarea
+                      rows={2}
+                      maxLength={2000}
+                      disabled={busy}
+                      value={negativePrompt}
+                      onChange={(e) => updateDraft({ negativePrompt: e.target.value })}
+                    />
+                  </FrameBox>
+                </label>
+              </details>
+            )}
 
             {(generating || drafting || preview) && (
               <div className={styles.previewBox}>
@@ -451,18 +537,21 @@ export function ImageGenModal({
               )}
             </div>
             {busy ? (
-              <Button onClick={handleCancel}>取消</Button>
+              <>
+                <Button onClick={closeModal}>{generating ? "关闭面板，后台继续" : "关闭"}</Button>
+                <Button onClick={handleCancel}>{generating ? "取消任务" : "取消"}</Button>
+              </>
             ) : (
               <>
                 <Button onClick={closeModal}>关闭</Button>
                 <Button
                   primary={!preview}
-                  disabled={!prompt.trim() || !imageModelReady}
+                  disabled={!prompt.trim() || !imageModelReady || model.isFetching}
                   onClick={() => void handleGenerate()}
                 >
                   {preview ? "重新生成" : "开始生成"}
                 </Button>
-                {preview && (
+                {preview && !applied && (
                   <Button primary onClick={() => void handleApply()}>
                     采用此图
                   </Button>

@@ -1328,6 +1328,7 @@ export function CharacterCreator({
         title="AI 生成角色立绘"
         subtitle={card.name.trim() || "新建夜之城佣兵"}
         promptRequest={characterPromptRequest}
+        draftKey={`character:${characterId ?? "new"}`}
         defaultAspectRatio="3:4"
         onClose={() => setPortraitModalOpen(false)}
         onApplied={(image) => change({ portrait: image.id })}

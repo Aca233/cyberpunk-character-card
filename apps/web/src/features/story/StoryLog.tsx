@@ -176,6 +176,7 @@ function TurnBlock({
   const saveImages = useSaveImages();
   const imageId = saveImages?.bindings.turns[String(turn.seq)] ?? null;
   const autoPending = saveImages?.pendingTurnSeqs.has(turn.seq) ?? false;
+  const imageError = saveImages?.turnImageErrors[turn.seq];
   const attachedMedia = turn.media?.map((group) => (
     <section className={mediaStyles.group} key={group.id} aria-label={group.title}>
       <h3 className={mediaStyles.groupTitle}>
@@ -281,19 +282,31 @@ function TurnBlock({
             </span>
           </figcaption>
         </figure>
-      ) : (
-        autoPending && (
-          <div className={styles.turnIllusPending} role="status">
-            <span>正在自动绘制本回合场景插图…</span>
-            <button
-              type="button"
-              className={styles.regenerate}
-              onClick={() => saveImages?.cancelTurnAutoImage(turn.seq)}
-            >
-              取消
+      ) : null}
+      {autoPending && (
+        <div className={styles.turnIllusPending} role="status">
+          <span>正在后台绘制本回合场景插图…</span>
+          {saveImages?.manualPendingTurnSeqs.has(turn.seq) && (
+            <button type="button" className={styles.regenerate} onClick={openIllustration}>
+              查看进度
             </button>
-          </div>
-        )
+          )}
+          <button
+            type="button"
+            className={styles.regenerate}
+            onClick={() => saveImages?.cancelTurnAutoImage(turn.seq)}
+          >
+            取消
+          </button>
+        </div>
+      )}
+      {!autoPending && imageError && (
+        <div className={styles.turnIllusPending} role="status">
+          <span>插图未能采用：{imageError}</span>
+          <button type="button" className={styles.regenerate} onClick={openIllustration}>
+            查看详情
+          </button>
+        </div>
       )}
       <footer className={styles.turnMeta}>
         {turn.unsettled && (

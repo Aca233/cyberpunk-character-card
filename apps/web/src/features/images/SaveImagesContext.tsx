@@ -6,6 +6,8 @@ export interface SaveImagesController {
   readonly saveId: string;
   readonly bindings: SaveImageBindings;
   readonly pendingTurnSeqs: ReadonlySet<number>;
+  readonly manualPendingTurnSeqs: ReadonlySet<number>;
+  readonly turnImageErrors: Readonly<Record<number, string>>;
   readonly openImageModal: (options: {
     readonly title: string;
     readonly subtitle?: string | undefined;
