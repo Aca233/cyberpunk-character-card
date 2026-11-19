@@ -17,17 +17,20 @@ export function FactionsBody({ view }: { readonly view: View }) {
   return (
     <>
       <p className={`${styles.dim} ${styles.docNote}`} data-factions-note>
-        {here.length > 0
-          ? `这里（${view.factions.district}）是${here.map((f) => f.name).join("、")}的地盘。`
-          : "这里不是哪个帮派的地盘。"}
+        <span>{view.factions.district ? `当前位置 · ${view.factions.district}` : "当前位置"}</span>
+        <b>{here.length > 0 ? here.map((f) => f.name).join("、") : "无帮派控制"}</b>
+        <span>{view.factions.list.length} 个组织</span>
       </p>
       <div className={styles.docBody} data-factions>
         {GROUPS.map(([kind, label]) => {
           const list = view.factions.list.filter((f) => f.kind === kind);
           if (list.length === 0) return null;
           return (
-            <section key={kind}>
-              <h3 className={styles.mapTitle}>{label}</h3>
+            <section key={kind} className={styles.factionGroup}>
+              <h3 className={`${styles.mapTitle} ${styles.factionGroupTitle}`}>
+                <span>{label}</span>
+                <small>{String(list.length).padStart(2, "0")}</small>
+              </h3>
               <ul className={styles.factionList}>
                 {list.map((f) => (
                   <li
@@ -37,8 +40,10 @@ export function FactionsBody({ view }: { readonly view: View }) {
                     data-here={f.here || undefined}
                   >
                     <div className={styles.factionHead}>
-                      <b>{f.name}</b>
-                      <span className={styles.dim}>{f.en}</span>
+                      <span className={styles.factionIdentity}>
+                        <b>{f.name}</b>
+                        <small>{f.en}</small>
+                      </span>
                       <span className={styles.factionAttitude} data-attitude={f.attitude}>
                         {f.attitudeLabel}
                       </span>
@@ -78,10 +83,10 @@ export function FactionsBody({ view }: { readonly view: View }) {
                       ))}
                     <p className={styles.factionLine}>
                       {f.turf.length > 0
-                        ? `地盘：${f.turf.join("、")}${f.turfNote ? `（${f.turfNote}）` : ""}`
-                        : "没有固定地盘"}
-                      {f.allies.length > 0 && ` · 盟友：${f.allies.join("、")}`}
-                      {f.enemies.length > 0 && ` · 仇敌：${f.enemies.join("、")}`}
+                        ? `地盘  ${f.turf.join("、")}${f.turfNote ? ` · ${f.turfNote}` : ""}`
+                        : "暂无固定地盘"}
+                      {f.allies.length > 0 && `　盟友  ${f.allies.join("、")}`}
+                      {f.enemies.length > 0 && `　敌对  ${f.enemies.join("、")}`}
                       {f.turf.join("、") !== f.baseTurf.join("、") &&
                         ` · 原来的地盘：${f.baseTurf.length > 0 ? f.baseTurf.join("、") : "没有"}`}
                     </p>

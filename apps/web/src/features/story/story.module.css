@@ -2679,6 +2679,20 @@
 
 .docNote[data-factions-note] {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgb(255 220 0 / 24%);
+  background: rgb(255 220 0 / 5%);
+}
+
+[data-factions-note] > b {
+  color: var(--cp-yellow);
+}
+
+.docNote[data-factions-note] > span:last-child {
+  margin-left: auto;
 }
 
 .docDebt {
@@ -4822,27 +4836,78 @@ ul.mapLegend > li {
   gap: 0.6rem;
 }
 
+[data-factions] .factionList {
+  margin: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+.factionGroup {
+  min-width: 0;
+}
+
+.factionGroupTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgb(255 220 0 / 24%);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+}
+
+.factionGroupTitle small {
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: normal;
+}
+
 .factionCard {
-  padding: 0.5rem 0.7rem;
-  border-left: 4px solid var(--cp-yellow-dim);
-  background: rgb(255 255 255 / 0.03);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-left: 3px solid var(--cp-yellow-dim);
+  background: rgb(9 12 18 / 88%);
 }
 
 .factionCard[data-here] {
-  background: rgb(255 255 255 / 0.08);
+  background: rgb(255 220 0 / 8%);
+  border-color: rgb(255 220 0 / 24%);
 }
 
 .factionHead {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.factionIdentity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.factionIdentity > b {
+  color: var(--cp-text);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.factionIdentity > small {
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
 }
 
 .factionAttitude {
   margin-left: auto;
-  padding: 0 0.4rem;
+  padding: 0.15rem 0.45rem;
   border: 1px solid currentColor;
   color: var(--cp-text-faint);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -4857,13 +4922,22 @@ ul.mapLegend > li {
 }
 
 .factionReason {
-  margin: 0.25rem 0;
+  margin: 0.55rem 0 0;
   color: var(--cp-yellow);
+  font-size: 0.8rem;
 }
 
 .factionLine {
-  margin: 0.2rem 0 0;
-  color: var(--cp-text-faint);
+  margin: 0.4rem 0 0;
+  color: var(--cp-text-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.docBody[data-factions] {
+  align-content: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
 }
 
 /* 赛博精神病：发作提示、失控标记和记忆空白 */
