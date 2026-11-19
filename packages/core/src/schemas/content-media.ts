@@ -9,6 +9,16 @@ export function isSafeContentMediaUrl(value: string): boolean {
     const code = character.charCodeAt(0);
     if (code <= 32 || (code >= 127 && code <= 159) || /\s/u.test(character)) return false;
   }
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded.includes("\\")) return false;
+    for (const character of decoded) {
+      const code = character.charCodeAt(0);
+      if (code <= 31 || (code >= 127 && code <= 159)) return false;
+    }
+  } catch {
+    return false;
+  }
   const rootPath = value.startsWith("/") && !value.startsWith("//");
   if (!rootPath && !/^https?:\/\//i.test(value)) return false;
   const absolute = rootPath ? `https://content.invalid${value}` : value;
