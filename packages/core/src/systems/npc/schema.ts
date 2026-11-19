@@ -508,6 +508,13 @@ export const MemorySchema = z
       .describe("亲历、实际被告知或本人查过的设备日志；行为芯片断片不能冒充亲历"),
     device: z.string().min(1).optional(),
     log: z.string().min(1).optional().describe("source:log 引用本人已查阅的稳定日志 id"),
+    evidence: z
+      .string()
+      .trim()
+      .min(2)
+      .max(500)
+      .optional()
+      .describe("source:told 时引用本轮真正把消息告诉本人的正文；不以经营者知情代替本人听到"),
   })
   .describe("记下这个人和玩家角色之间值得记住的事：承诺、人情、冲突、秘密被说破；一句话");
 export type Memory = z.infer<typeof MemorySchema>;

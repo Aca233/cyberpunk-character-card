@@ -108,9 +108,9 @@ export const adultServicesRules: RuleModule<NpcState> = {
 - 回访沿用同一人、工作地点与实际说过的小事。人物可以忙、休息、改约、拒绝，也有同事和普通生活。经营者只知道亲眼见过或实际收到的资料；本人断片期间的事不自动成为其回忆。
 - 明确区分本人主导与芯片接管；依固定条件呈现当时意识和事后记忆。本人看过日志只知道日志写了什么，不等于恢复当时的感受。设备摘要不自动产生超梦、录音或分享许可。玩家自身设备不能替玩家决定感情、台词或行动意图。`,
   text: `- 收费服务沿 commerce.offer（kind:service、target:adult-service、session 约定完整）与引用报价的 trade 成交，不用 favor 或 money 绕开授权。询价不扣款，接受商业服务不自动开启芯片；进度沿 commerce.service 的累计实际分钟结算，略写正常完成仍经过剩余时长，中止按已经明确的条件，不另加一次 time。
-- 真实芯片操作写 npcBehavior：mode 指定 personal/chip；进入 chip 必须在接管前引用本人同意范围的 consent 与实际启动 evidence。退出可由本人或真实中断触发，不把返回本人主导写成自动获知过程。不要因玩家出资替其他人安装、启动或编辑人格。
+- 真实芯片操作写 npcBehavior：mode 指定 personal/chip；进入 chip 必须在接管前引用本人同意范围的 consent 与实际启动 evidence。退出可由本人或真实中断触发；服务 finish/exit 时若正文实际结束接管，同轮另记 mode:personal，不把恢复主导写成自动获知过程。不要因玩家出资替其他人安装、启动或编辑人格。
 - 有记录能力且接管中真实留下摘要时才 log，使用稳定 log id 与固定 text；不把所有接待自动写成日志。本人恢复后实际查阅才 review。设备日志不是当事人的共同亲历，不自动送进记忆或共享给前台。
-- 记本人真实知情时，memory 的 source 以 experienced（本人实际能保留的亲历）、told（后来实际被告知）、log（本人已 review，须 device/log）分别记录。断片后的本人不能复述没有获知的过程，尤其不能把芯片迎合、付款或日志摘要当作私人情感。前台、同行者与本人分别记录各自真正知情的内容。`,
+- 记本人真实知情时，有芯片运行经历必须明确 memory 的 source：experienced（本人实际能保留的亲历）、told（后来实际被告知，须 evidence 引用消息到达本人）、log（本人已 review，须 device/log，代码引用原摘要）分别记录。断片后的本人不能复述没有获知的过程，尤其不能把芯片迎合、付款或日志摘要当作私人情感。前台、同行者与本人分别记录各自真正知情的内容。`,
 };
 
 export interface Stage {
@@ -123,6 +123,7 @@ export interface Stage {
   /** 内容数据（物品表、义体表）和此刻的游戏时间；都传了才写「身体」和伤势 */
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   readonly now?: number | undefined;
+  readonly input?: string | undefined;
   /**
    * 势力 id 换成「名字，对玩家什么态度」（用户 2026-10-31："势力还是感觉好没存在感"）：
    * 由组合层按势力表和势力态度给，人物系统不引势力系统；不传只写 id
@@ -218,6 +219,7 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
         npc.body?.cyberware ?? [],
         npc.behaviorChips,
         cyberwareCatalog(stage.data),
+        stage.input,
       ).map((line) => `  ${line}`),
     );
   }

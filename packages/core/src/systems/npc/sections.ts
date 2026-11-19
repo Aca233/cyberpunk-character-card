@@ -38,7 +38,7 @@ export const npcSections: readonly SystemSection[] = [
   {
     order: 10,
     title: "人物",
-    render: ({ world, data }) => {
+    render: ({ world, data, input }) => {
       const clock = WorldClockStateSchema.parse(world.slices.world);
       return castSection(NpcStateSchema.parse(world.slices.npc), {
         location: clock.location,
@@ -47,6 +47,7 @@ export const npcSections: readonly SystemSection[] = [
         factionOf: factionResolver(data, world.slices.factions),
         data,
         now: world.time,
+        input: input.text,
       });
     },
   },
@@ -60,15 +61,14 @@ export const npcSections: readonly SystemSection[] = [
       const state = NpcStateSchema.parse(world.slices.npc);
       const people = NpcCardSchema.array().safeParse(data?.everydayPeople);
       const cards = people.success ? people.data : [];
+      const cardById = new Map(cards.map((card) => [card.id, card]));
       const relevant = rows.data.filter(
         (row) =>
           row.location === clock.location ||
-          row.people.some(
-            (id) =>
-              input.text.includes(id) ||
-              (cards.find((card) => card.id === id)?.name !== undefined &&
-                input.text.includes(cards.find((card) => card.id === id)?.name ?? "\u0000")),
-          ),
+          row.people.some((id) => {
+            const name = cardById.get(id)?.name;
+            return input.text.includes(id) || (name !== undefined && input.text.includes(name));
+          }),
       );
       if (!relevant.length) return undefined;
       return relevant
@@ -81,7 +81,7 @@ export const npcSections: readonly SystemSection[] = [
                 `沿用人物 ${id}（${person.name}）；实际位置、近况、身体与共同记忆以人物卡为准，不因重访刷新人和关系。`,
               );
             } else {
-              const card = cards.find((entry) => entry.id === id);
+              const card = cardById.get(id);
               if (card)
                 lines.push(
                   `固定街坊资料（尚未正式接触，不代表玩家已经知道）：${JSON.stringify(card)}。实际发生实质来往时沿用此 id 与已定资料用 npc 建卡，不重抽陌生人。`,

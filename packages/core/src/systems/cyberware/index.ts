@@ -151,7 +151,7 @@ export const cyberware = defineSystem<
     {
       order: 79,
       title: "义体实物与服务",
-      render: ({ world, data }) => {
+      render: ({ world, data, input }) => {
         const state = CyberwareStateSchema.parse(world.slices.cyberware);
         const catalog = cyberwareCatalog(data ?? {});
         const parts = Object.values(state.parts).filter((p) => p.holder === "player");
@@ -163,6 +163,7 @@ export const cyberware = defineSystem<
             state.installed.map((entry) => entry.id),
             state.behaviorChips,
             catalog,
+            input.text,
           ),
           ...parts.map(
             (p) =>

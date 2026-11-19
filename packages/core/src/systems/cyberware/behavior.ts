@@ -76,6 +76,7 @@ export function behaviorChipLines(
   installed: readonly string[],
   states: Readonly<Record<string, BehaviorChipState>> | undefined,
   catalog: ReadonlyMap<string, CyberwareDef>,
+  query = "",
 ): string[] {
   return installed.flatMap((device) => {
     const def = catalog.get(device);
@@ -83,12 +84,42 @@ export function behaviorChipLines(
     if (!profile) return [];
     const state = states?.[device];
     const last = state?.lastControl;
+    const logs = state?.logs ?? [];
+    const terms = query.match(/[\p{Script=Han}]{2,}|[a-zA-Z0-9-]{3,}/gu) ?? [];
+    const ranked = logs.map((entry, index) => ({
+      entry,
+      index,
+      score:
+        (query.includes(entry.id) ? 100 : 0) +
+        terms.reduce((score, term) => {
+          if (entry.text.includes(term)) return score + 10;
+          for (let i = 0; i + 2 <= term.length; i += 2)
+            if (entry.text.includes(term.slice(i, i + 2))) score += 1;
+          return score;
+        }, 0),
+    }));
+    const selected = new Set(
+      ranked
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || b.index - a.index)
+        .slice(0, 5)
+        .map((entry) => entry.index),
+    );
+    for (let index = Math.max(0, logs.length - 3); index < logs.length; index++)
+      selected.add(index);
     return [
       `行为芯片 ${device}（${def.name}）：${profile.purpose}；当前${state?.mode === "chip" ? "芯片按已约定范围接管" : "本人主导"}；接管时本人${profile.awareness === "present" ? "有意识" : "无当时意识"}；事后${profile.recall === "retained" ? "保留亲历记忆" : "不保留亲历记忆"}；${profile.logging === "none" ? "无本地摘要日志" : "仅实际记录才有本地摘要，不是超梦或内心读取"}${last ? `；最近接管区间 ${last.from}—${last.to ?? "仍在接管"}` : ""}。`,
-      ...(state?.logs.map(
-        (entry) =>
-          `设备摘要 ${device}/${entry.id}：${entry.text}；记录于 ${entry.at}；${entry.reviewedAt === null ? "本人未查阅，不属于本人所知" : `本人于 ${entry.reviewedAt} 查阅，仅从日志得知，不是亲历`}；不向其他人自动共享。`,
-      ) ?? []),
+      ...(logs.length > selected.size
+        ? [
+            `设备共保留 ${logs.length} 段真实摘要，以下是最近与本轮相关部分；其他原文仍持久保存，可按日志 id 或内容提起。`,
+          ]
+        : []),
+      ...ranked
+        .filter(({ index }) => selected.has(index))
+        .map(
+          ({ entry }) =>
+            `设备摘要 ${device}/${entry.id}：${entry.text}；记录于 ${entry.at}；${entry.reviewedAt === null ? "本人未查阅，不属于本人所知" : `本人于 ${entry.reviewedAt} 查阅，仅从日志得知，不是亲历`}；不向其他人自动共享。`,
+        ),
     ];
   });
 }

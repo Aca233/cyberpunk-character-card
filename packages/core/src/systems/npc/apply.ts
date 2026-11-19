@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
+import { tradeEvidence } from "../commerce";
 import { applyBehaviorChip, cyberwareCatalog } from "../cyberware";
 import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
@@ -482,6 +483,11 @@ export function applyNpc(
     }
     case "memory": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      if (Object.keys(npc.behaviorChips ?? {}).length > 0 && command.source === undefined)
+        return {
+          ok: false,
+          reason: "有行为芯片经历的人物须明确 memory source，不能把设备过程默认写成共同亲历",
+        };
       const active = Object.entries(npc.behaviorChips ?? {}).find(
         ([, state]) => state.mode === "chip",
       );
@@ -491,6 +497,7 @@ export function applyNpc(
           ok: false,
           reason: `${npc.name} 当前接管状态不能形成此段本人共同记忆；设备摘要须另记，恢复后实际告知或查阅才是本人所知`,
         };
+      let text = command.text;
       if (command.source === "log") {
         const entry =
           command.device && command.log
@@ -498,13 +505,12 @@ export function applyNpc(
             : undefined;
         if (!entry || entry.reviewedAt === null)
           return { ok: false, reason: "这段摘要不存在或本人没有查阅，不能写成本人已经知道" };
+        text = `从本人查阅的设备摘要得知：${entry.text}`;
+      } else if (command.source === "told") {
+        if (!command.evidence || !tradeEvidence(facts, command.evidence))
+          return { ok: false, reason: "后来获知的记忆需要消息确实到达本人，缺少本轮告知依据" };
+        text = `后来被告知：${command.text}`;
       }
-      const text =
-        command.source === "log"
-          ? `从本人查阅的设备摘要得知：${command.text}`
-          : command.source === "told"
-            ? `后来被告知：${command.text}`
-            : command.text;
       if (npc.memories.includes(text)) return { ok: true };
       npc.memories.push(text);
       if (npc.memories.length > MEMORY_KEPT) {
