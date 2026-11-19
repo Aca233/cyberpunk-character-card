@@ -41,6 +41,17 @@ export const SPEED_FACTORS: Readonly<Record<number, number>> = {
 /** 受损的车开得慢一些 */
 export const DAMAGED_FACTOR = 1.25;
 
+/** 当前地点能开的车；弃车和报废车辆不算。 */
+export function drivableVehiclesAt<T extends OwnedVehicle>(
+  vehicles: readonly T[],
+  location: string | null,
+): T[] {
+  if (location === null) return [];
+  return vehicles.filter(
+    (v) => !v.abandoned && v.location === location && v.condition !== "wrecked",
+  );
+}
+
 /** 本次实际驾驶的车：明确点名，或现场同类可用车辆只有一辆时自动确定。 */
 export function resolveVehicleAt<T extends OwnedVehicle>(
   vehicles: readonly T[],
@@ -62,12 +73,8 @@ export function resolveVehicleAt<T extends OwnedVehicle>(
       };
     return { ok: true, vehicle: target };
   }
-  const candidates = vehicles.filter(
-    (v) =>
-      !v.abandoned &&
-      v.location === location &&
-      v.condition !== "wrecked" &&
-      (stolen === undefined || v.stolen === stolen),
+  const candidates = drivableVehiclesAt(vehicles, location).filter(
+    (v) => stolen === undefined || v.stolen === stolen,
   );
   const only = candidates[0];
   if (candidates.length === 1 && only) return { ok: true, vehicle: only };

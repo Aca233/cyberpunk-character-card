@@ -31,7 +31,7 @@ import {
   type TravelState,
   TravelStateSchema,
 } from "./schema";
-import { resolveVehicleAt, vehicleCatalog, vehicleFactor } from "./vehicles";
+import { drivableVehiclesAt, resolveVehicleAt, vehicleCatalog, vehicleFactor } from "./vehicles";
 
 /**
  * 耗时 = 固定 + 每单位距离的分钟数；1 单位 100 米。两头都在路线表里时按路面距离（§七 简单版做法，步行和开车共用一张路面图，用户定的），
@@ -254,7 +254,7 @@ export function routeOptions(
   w: TripWorld,
   data: Readonly<Record<string, unknown>>,
   to: string,
-  vehicle?: string,
+  selection: { readonly vehicle?: string | undefined } | { readonly listVehicles: true } = {},
 ): RouteOption[] {
   // 原作店和地标第一次去也能预览路线；只查定义，不提前登记访问（places-plan 第二期）
   const here = w.location === null ? undefined : locationForTravel(data, w.location);
@@ -263,7 +263,7 @@ export function routeOptions(
   const d = trip?.d;
   const period = periodOf(w.now);
   const cars = vehicleCatalog(data);
-  return MODES.map((mode) => {
+  const optionFor = (mode: TravelMode, vehicle?: string): RouteOption => {
     const speed = TRAVEL_SPEEDS[mode];
     // 每趟明确用哪辆车；现场唯一时自动确定，多辆不猜。
     const resolved =
@@ -272,6 +272,7 @@ export function routeOptions(
         : undefined;
     const car = resolved?.ok ? resolved.vehicle : undefined;
     const carDef = car ? cars.get(car.model) : undefined;
+    const carName = carDef?.name ?? car?.model;
     const factor = car ? vehicleFactor(car, carDef) : 1;
     const minutes =
       d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit * factor));
@@ -281,7 +282,7 @@ export function routeOptions(
     const base = {
       mode,
       ...(car ? { vehicle: car.id } : {}),
-      label: carDef ? `${TRAVEL_MODE_LABELS[mode]}（${carDef.name}）` : TRAVEL_MODE_LABELS[mode],
+      label: carName ? `${TRAVEL_MODE_LABELS[mode]}（${carName}）` : TRAVEL_MODE_LABELS[mode],
       minutes,
       cost,
       risk,
@@ -291,6 +292,24 @@ export function routeOptions(
       blockOf(w, mode, here, there, d, cost) ??
       (resolved && !resolved.ok ? resolved.reason : undefined);
     return blocked ? { ...base, blocked } : base;
+  };
+
+  if (!("listVehicles" in selection))
+    return MODES.map((mode) => optionFor(mode, selection.vehicle));
+
+  const vehicles = drivableVehiclesAt(w.travel.vehicles, w.location);
+  return MODES.flatMap((mode) => {
+    if (mode !== "car" && mode !== "stolen") return [optionFor(mode)];
+    const choices = vehicles.filter((v) => v.stolen === (mode === "stolen"));
+    if (choices.length === 0) return [optionFor(mode)];
+    const routes = choices.map((v) => ({ car: v, route: optionFor(mode, v.id) }));
+    return routes.map(({ car, route }) => {
+      if (!routes.some((other) => other.car.id !== car.id && other.route.label === route.label))
+        return route;
+      const prefix = `${car.model}-`;
+      const number = car.id.startsWith(prefix) ? car.id.slice(prefix.length) : car.id;
+      return { ...route, label: `${route.label} · #${number}` };
+    });
   });
 }
 
@@ -363,7 +382,7 @@ export function planTrip(
 ): TripPlan {
   if (request.vehicle !== undefined && request.mode !== "car" && request.mode !== "stolen")
     return { ok: false, reason: "只有驾驶出行才能指定 vehicle" };
-  const route = routeOptions(w, data, request.to, request.vehicle).find(
+  const route = routeOptions(w, data, request.to, { vehicle: request.vehicle }).find(
     (r) => r.mode === request.mode,
   );
   if (!route) return { ok: false, reason: `没有这种出行方式：${request.mode}` };

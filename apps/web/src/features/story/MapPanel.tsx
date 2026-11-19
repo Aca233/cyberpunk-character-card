@@ -825,7 +825,7 @@ export function MapBody({
               )}
               <ul className={styles.routeList}>
                 {dest.routes.map((r) => (
-                  <li key={r.mode}>
+                  <li key={r.vehicle ? `${r.mode}:${r.vehicle}` : r.mode}>
                     <button
                       type="button"
                       className={styles.routeOption}

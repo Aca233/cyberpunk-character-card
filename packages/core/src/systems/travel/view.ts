@@ -13,6 +13,7 @@ import { vehicleCatalog } from "./vehicles";
 /** 地图上的地点和到每个地点的路线、名下的车和这一场的路上偶遇；路线面板照这里显示，结算用同一套算法 */
 export function travelView({ world, data }: ViewContext) {
   const w = tripWorldOf(world);
+  const mapRoutes = (to: string) => routeOptions(w, data, to, { listVehicles: true });
   const book = new Map(
     WorldClockStateSchema.parse(world.slices.world).places.map((p) => [p.id, p]),
   );
@@ -41,7 +42,7 @@ export function travelView({ world, data }: ViewContext) {
         here,
         /** 原作服务点还没去过：地图上只在原作图标那一层显示，点了照常出行 */
         firstVisit: false,
-        routes: here ? [] : routeOptions(w, data, p.id),
+        routes: here ? [] : mapRoutes(p.id),
       },
     ];
   });
@@ -62,7 +63,7 @@ export function travelView({ world, data }: ViewContext) {
       kind: anchor.kind,
       here: false,
       firstVisit: true,
-      routes: routeOptions(w, data, def.id),
+      routes: mapRoutes(def.id),
     });
     known.add(def.id);
   }
@@ -82,7 +83,7 @@ export function travelView({ world, data }: ViewContext) {
       kind: null,
       here: false,
       firstVisit: true,
-      routes: routeOptions(w, data, def.id),
+      routes: mapRoutes(def.id),
     });
   }
   const { encounter } = w.travel;
