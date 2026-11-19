@@ -42,7 +42,6 @@ import { InputBar } from "./InputBar";
 import { MapBody } from "./MapPanel";
 import {
   CharacterPage,
-  ContactsPage,
   CyberwarePage,
   InventoryPage,
   JournalPage,
@@ -69,8 +68,8 @@ import { Toasts } from "./Toasts";
 import { VehiclesPage } from "./VehiclesPage";
 import { diffViews, type Speaker, type Toast, type View } from "./view";
 
-/** 钉住的消息面板、生物监测块里的页签 */
-type UnreadTab = "messages" | "news" | "contacts" | "shards";
+/** 钉住的未读块、生物监测块里的页签 */
+type UnreadTab = "messages" | "news" | "shards";
 /** 物品栏和车辆沿用右下角装备块的展开区。 */
 type GearTab = "inventory" | "vehicles";
 type BioTab = "character" | "cyberware" | "chronicle";
@@ -797,7 +796,6 @@ export function StoryScreen() {
       tabs={[
         ["messages", "消息", view.phone.unread],
         ["news", "新闻", view.phone.feedUnread.news.length + view.phone.feedUnread.street.length],
-        ["contacts", "联系人", 0],
         ["shards", "芯片", view.shards.unread],
       ]}
       value={unreadTab}
@@ -814,8 +812,6 @@ export function StoryScreen() {
           view={view}
           onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
         />
-      ) : unreadTab === "contacts" ? (
-        <ContactsPage view={view} />
       ) : (
         <MessagesPage
           key={unreadTab}
@@ -919,7 +915,7 @@ export function StoryScreen() {
             peek={peek}
             full={unreadFull}
             tabs={unreadTabs}
-            wide={unreadTab === "messages" || unreadTab === "contacts" || unreadTab === "shards"}
+            wide={unreadTab === "messages" || unreadTab === "shards"}
           />
         </CornerSide>
         <CornerSide side="right">
