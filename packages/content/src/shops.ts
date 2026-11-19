@@ -1,4 +1,5 @@
 import { inventoryRules } from "@cp/core";
+import { chipRetailShops } from "./chip-retail";
 import { poiShops } from "./merchant-sites";
 
 /** 阿岚只选市场日常与熟悉的发行；其他街区的专门货不在这里自动齐货。 */
@@ -175,5 +176,6 @@ export const shops = inventoryRules.ShopListSchema.parse([
     note: "诊所里上锁的药柜，压制剂只卖给他看过的病人，每次都要叮嘱一句别吃多",
     shelf: ["psycho-suppressant", "maxdoc", "bounce-back"],
   },
+  ...chipRetailShops,
   ...poiShops,
 ]);

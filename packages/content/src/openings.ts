@@ -1,4 +1,5 @@
 import type { GameOpening } from "@cp/core";
+import { everydayPeople } from "./everydayLife";
 import { locations } from "./locations";
 import { DISTRICT_SHAPES } from "./mapShapes.gen";
 import { RADAR_ANCHORS } from "./radar";
@@ -14,9 +15,7 @@ export const openings: readonly GameOpening[] = [
     title: "夜之城自由沙盘",
     location: "megabuilding-h10",
     cast: [
-      "qiao-night",
-      "noah-night",
-      "sleeve-shop-keeper",
+      ...everydayPeople.map((person) => person.id),
       "judy",
       "regina",
       "viktor",

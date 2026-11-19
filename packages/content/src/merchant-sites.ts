@@ -1,4 +1,5 @@
 import { cyberwareRules, inventoryRules, worldRules } from "@cp/core";
+import { chipRetailSites } from "./chip-retail";
 import { SERVICE_POINTS, type ServicePoint } from "./mapShapes";
 
 type ShopKind = "gun" | "melee" | "clothes" | "meds" | "food" | "bar" | "netrunner";
@@ -317,6 +318,7 @@ export const merchantSites = [
     services: ["medical"],
     source: "本作自创针眼诊所；未与原作 POI 合并",
   },
+  ...chipRetailSites,
   ...SERVICE_POINTS.flatMap((point) => {
     if (KNOWN_POIS[point.id] || (!shopKind(point.kind) && point.kind !== "ripperdoc")) return [];
     return [

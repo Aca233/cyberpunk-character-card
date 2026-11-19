@@ -1,7 +1,9 @@
 import { npcRules } from "@cp/core";
+import { chipRetailLife, chipRetailPeople } from "./chip-retail";
 
 /** 本作原创的普通街坊；固定身份先于一次接待，不自带秘密或救援委托。 */
 export const everydayPeople = npcRules.NpcCardSchema.array().parse([
+  ...chipRetailPeople,
   {
     id: "qiao-night",
     name: "乔",
@@ -73,6 +75,7 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
 ]);
 
 export const everydayLife = npcRules.EverydayLifeSchema.parse([
+  ...chipRetailLife,
   {
     id: "japantown-familiar-evening",
     location: "japantown",
