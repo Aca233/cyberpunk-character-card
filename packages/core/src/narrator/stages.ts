@@ -331,8 +331,6 @@ export function purchaseQuote(
         buy.trauma,
         quote.tier,
         quote.price,
-        state.tier,
-        state.paidUntil,
         buy.destination,
       ]),
       detail: `${quote.label}：应付 ${quote.price} 欧元；${buy.trauma === "upgrade" ? "按剩余保障期补差价，每 30 天 4,000 欧元，不足一期按一期，保留现有到期日" : buy.trauma === "renew" ? "从现有到期日顺延 30 天" : "成交后保障 30 天"}，预计到期 ${formatGameTime(quote.paidUntil)}；扣款和会籍由同一笔创伤小组指令结算，不另记 money 或 medical 服务`,
