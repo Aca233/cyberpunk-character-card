@@ -83,19 +83,6 @@
   margin-bottom: 32px;
 }
 
-.subtitleRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.subtitle {
-  color: var(--cp-red);
-  font-size: var(--fs-ui);
-  font-weight: 600;
-  letter-spacing: 0.28em;
-}
-
 .brandLine {
   display: block;
   width: 100%;
@@ -398,14 +385,6 @@
   --box-fill: rgb(18 36 44 / 84%);
   outline: none;
   color: var(--cp-cyan);
-}
-
-.saveGlow {
-  position: absolute;
-  top: 50%;
-  left: 6px;
-  transform: translateY(-50%);
-  pointer-events: none;
 }
 
 .saveIcon {

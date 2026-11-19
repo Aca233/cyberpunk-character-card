@@ -223,10 +223,6 @@ export function MainMenu() {
       <aside className={styles.side}>
         <header className={styles.brand}>
           <Asset id="splash.logo" height={78} alt="赛博朋克 2077" />
-          <div className={styles.subtitleRow}>
-            <Asset id="panel.glowLeft" height={16} tint="var(--cp-cyan)" />
-            <span className={styles.subtitle}>夜之城角色卡</span>
-          </div>
           <span
             className={styles.brandLine}
             style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
@@ -620,14 +616,6 @@ function SaveCard({
       onClick={onOpen}
     >
       <CellFrame />
-      {featured && (
-        <Asset
-          id="panel.glowLeft"
-          height={54}
-          tint="var(--cp-yellow)"
-          className={styles.saveGlow}
-        />
-      )}
       <Asset
         id="menu.saveSlot"
         height={compact ? 24 : 40}
