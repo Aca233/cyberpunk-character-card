@@ -211,8 +211,11 @@ export function quoteTrade(
       const work = saved[terms.subject] ?? fixed.find((row) => row.id === terms.subject);
       if (!work || !Number.isInteger(work.durationMinutes) || work.durationMinutes < 1)
         return { ok: false, reason: "这部作品尚未确立，先选定实际目录再确认体验" };
-      if (!merchantSites(data).get(party.id)?.braindanceDevice?.playback)
+      const site = merchantSites(data).get(party.id);
+      if (!site?.braindanceDevice?.playback)
         return { ok: false, reason: "提供者没有已确立的现场超梦设备，不能先收取播放费用" };
+      if (!site.braindanceWorks.includes(terms.subject))
+        return { ok: false, reason: "提供者没有登记这部作品的店内播放来源，不能收取体验费用" };
     }
     if (request.service === "adult-service") {
       const subject = (world.slices.npc as NpcState).npcs[terms.subject];

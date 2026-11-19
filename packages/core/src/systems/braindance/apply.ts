@@ -81,12 +81,14 @@ export function braindanceSources(
   const contents = chipContentCatalog(data, ShardsStateSchema.parse(slices.shards));
   const result: { source: BdExperience["source"]; analysis: readonly BdMethod[] }[] = [];
   for (const service of Object.values(CommerceStateSchema.parse(slices.commerce).sessions)) {
-    const device = merchantSites(data).get(service.seller)?.braindanceDevice;
+    const site = merchantSites(data).get(service.seller);
+    const device = site?.braindanceDevice;
     if (
       service.service === "bd-session" &&
       service.terms.subject === work.id &&
       service.location === here &&
       ["active", "paused"].includes(service.status) &&
+      site?.braindanceWorks.includes(work.id) &&
       device?.playback
     )
       result.push({ source: { kind: "service", id: service.id }, analysis: device.analysis });

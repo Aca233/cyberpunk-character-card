@@ -83,6 +83,7 @@ export function braindanceSection(
               q.session?.subject === work.id &&
               (q.expiresAt === null || q.expiresAt > world.time) &&
               merchantSites(data).get(q.seller)?.braindanceDevice?.playback &&
+              merchantSites(data).get(q.seller)?.braindanceWorks.includes(work.id) &&
               merchantSites(data)
                 .get(q.seller)
                 ?.locations.some((loc) => merchantAt(data, q.seller, loc, here)),

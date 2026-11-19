@@ -7,6 +7,7 @@ import type { WorldClockState } from "./schema";
 const NamesSchema = z.array(
   z.object({ id: z.string(), name: z.string(), keeper: z.string().optional() }),
 );
+const WorkLabelSchema = z.object({ id: z.string(), title: z.string() });
 const KIND_LABELS: Record<MerchantSite["kind"], string> = {
   gun: "武器店",
   melee: "近战武器店",
@@ -51,6 +52,12 @@ export function merchantEntranceText(
     ),
   );
   const query = normalize(input);
+  const workLabels = new Map(
+    [
+      ...z.array(WorkLabelSchema).parse(data.braindances ?? []),
+      ...Object.values(z.record(z.string(), WorkLabelSchema).parse(data.braindanceWorks ?? {})),
+    ].map((work) => [work.id, work.title]),
+  );
   const mentioned = (name: string | undefined) => {
     const key = name ? normalize(name) : "";
     return key.length >= 2 && query.includes(key);
@@ -94,7 +101,13 @@ export function merchantEntranceText(
       const place = locationForTravel(data, id);
       return `${id}${place ? ` ${place.name}（${place.district}）` : ""}`;
     });
-    return `- ${site.merchant} ${names.get(site.merchant)?.name ?? "已登记经营者"}（${KIND_LABELS[site.kind]}）；地点 ${places.join(" / ")}；服务 ${site.services.join("、") || "无通用付费服务"}`;
+    const works = site.braindanceWorks.map((id) =>
+      workLabels.has(id) ? `${id}「${workLabels.get(id)}」` : id,
+    );
+    const playback = site.services.includes("bd-session")
+      ? `；店内固定片单 ${works.join("、") || "尚无已登记作品"}；片单来源 ${site.source}`
+      : "";
+    return `- ${site.merchant} ${names.get(site.merchant)?.name ?? "已登记经营者"}（${KIND_LABELS[site.kind]}）；地点 ${places.join(" / ")}；服务 ${site.services.join("、") || "无通用付费服务"}${playback}`;
   });
   return `${lines.join("\n")}\n交易 with 写经营身份，出行 destination/world.location 写地点；同名且地点仍不明确时先确认，不能猜一家。这里是经营索引，不保证现货、营业或接单；实际报价与交付另行核验。`;
 }

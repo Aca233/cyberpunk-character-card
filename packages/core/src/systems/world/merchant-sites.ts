@@ -16,6 +16,8 @@ export const MerchantSiteSchema = z.object({
   ]),
   locations: z.array(z.string().min(1)).min(1),
   services: z.array(z.string().min(1)).default([]),
+  /** 店内持有播放来源的固定片单；不随出售观看副本而减少。 */
+  braindanceWorks: z.array(z.string().min(1)).default([]),
   braindanceDevice: z
     .object({
       playback: z.boolean(),
@@ -42,6 +44,8 @@ export function merchantSites(data: Data): ReadonlyMap<string, MerchantSite> {
     if (indexed.has(row.merchant)) throw new Error(`经营场所关联重复：${row.merchant}`);
     if (new Set(row.locations).size !== row.locations.length)
       throw new Error(`经营场所地点重复：${row.merchant}`);
+    if (new Set(row.braindanceWorks).size !== row.braindanceWorks.length)
+      throw new Error(`经营场所超梦片单重复：${row.merchant}`);
     indexed.set(row.merchant, row);
   }
   if (typeof raw === "object" && raw !== null) cache.set(raw, indexed);
