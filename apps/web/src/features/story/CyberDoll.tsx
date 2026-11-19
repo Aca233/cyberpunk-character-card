@@ -3,12 +3,7 @@ import type { AssetId } from "../../assets";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Panel } from "../../ui/Panel";
 import { itemArtOf } from "./art";
-import {
-  type BodyLayerId,
-  CYBER_SLOT_ICON,
-  humanityToneOf,
-  SLOT_BODY_LAYERS,
-} from "./cyberwareMeta";
+import { CYBER_BODY_ART, CYBER_BODY_FRAME, CYBER_SLOT_ICON, humanityToneOf } from "./cyberwareMeta";
 import neural from "./neural.module.css";
 import type { View } from "./view";
 
@@ -58,14 +53,11 @@ const CYBER_SIDES: readonly (readonly (readonly [CyberSlot, number, number])[])[
   ],
 ];
 
-/** 中间人体是原作 man_body 图集里同尺寸的几张分层图：皮肤打底、免疫脉络微亮，悬停/选中哪个部位就点亮对应生理图层 */
-const BODY_LAYER_ASSETS: readonly { readonly key: BodyLayerId; readonly id: AssetId }[] = [
-  { key: "skin", id: "cyber.bodySkin" },
-  { key: "immune", id: "cyber.bodyImmune" },
-  { key: "skeleton", id: "cyber.bodySkeleton" },
-  { key: "nervous", id: "cyber.bodyNervous" },
-  { key: "circulatory", id: "cyber.bodyCirculatory" },
-];
+/** 全图与局部图都预先挂载；切换时只显示当前视图，避免重新取图或多张完整人体混叠。 */
+const BODY_BASE_ASSETS = [...new Set(Object.values(CYBER_BODY_ART).map(({ base }) => base))];
+const BODY_DETAILS = Object.entries(CYBER_BODY_ART).flatMap(([slot, { detail }]) =>
+  detail ? [{ slot, ...detail }] : [],
+);
 
 /** 一格的底子：原作切角底、金色电路纹、外框和稀有度竖条，颜色由 CSS 变量给 */
 function CyberCellFace() {
@@ -263,25 +255,12 @@ export function CyberDoll({
   if (bodyView.selected !== selected) setBodyView({ selected, slot: selected });
   const bodySlot = bodyView.selected === selected ? bodyView.slot : selected;
   const shown = hovered ?? focused ?? pinned;
-  const activeLayers = bodySlot ? SLOT_BODY_LAYERS[bodySlot] : null;
+  const bodyBase = bodySlot ? CYBER_BODY_ART[bodySlot].base : "cyber.bodySkin";
 
   const previewBody = (slot: CyberSlot) => setBodyView({ selected, slot });
   const previewCell = (slot: CyberSlot, index: number) => {
     setHovered({ slot, index });
     previewBody(slot);
-  };
-
-  /** 计算每层解剖图透明度：未选中部位时皮肤常亮、免疫脉络幽微发光；聚焦时对应系统亮起 */
-  const layerOpacity = (key: BodyLayerId): number => {
-    if (!activeLayers) {
-      if (key === "skin") return 0.92;
-      if (key === "immune") return 0.22;
-      return 0;
-    }
-    if (activeLayers.includes(key)) return 1;
-    if (key === "skin") return 0.44;
-    if (key === "immune") return 0.14;
-    return 0;
   };
 
   /** 一个部位组：部位名下面一排格子；装着的义体依次放在前面几格，后面留空 */
@@ -379,13 +358,28 @@ export function CyberDoll({
         {CYBER_SIDES[0]?.map(group)}
       </ul>
       <div className={neural.cyberBody} aria-hidden>
-        {BODY_LAYER_ASSETS.map(({ key, id }) => (
+        {BODY_BASE_ASSETS.map((id) => (
           <Asset
             key={id}
             id={id}
             className={neural.cyberBodyLayer}
-            style={{ opacity: layerOpacity(key) }}
+            style={{ visibility: bodyBase === id ? "visible" : "hidden" }}
           />
+        ))}
+        {BODY_DETAILS.map(({ slot, id, left, top, width, height }) => (
+          <span
+            key={id}
+            className={neural.cyberBodyDetail}
+            data-active={bodySlot === slot || undefined}
+            style={{
+              left: `${(left / CYBER_BODY_FRAME.width) * 100}%`,
+              top: `${(top / CYBER_BODY_FRAME.height) * 100}%`,
+              width: `${(width / CYBER_BODY_FRAME.width) * 100}%`,
+              height: `${(height / CYBER_BODY_FRAME.height) * 100}%`,
+            }}
+          >
+            <Asset id={id} className={neural.cyberBodyDetailArt} />
+          </span>
         ))}
       </div>
       <ul className={neural.cyberSide} data-side="right" aria-label="操作系统和四肢">

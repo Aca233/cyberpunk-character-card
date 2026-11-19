@@ -680,22 +680,41 @@
   right: 3px;
 }
 
-/* 中间人体：照原作放大居中；几层官方图交叠平滑点亮 */
+/* 中间人体：完整系统视图互斥显示，局部图按原作坐标对齐，不能把全图当透明解剖层混叠。 */
 .cyberBody {
   position: absolute;
   top: 0;
-  bottom: 0;
   left: 50%;
-  display: grid;
+  width: calc(var(--stage) * 1089 / 1861);
+  height: var(--stage);
   transform: translateX(-50%);
   pointer-events: none;
 }
 
 .cyberBodyLayer {
-  grid-area: 1 / 1;
-  width: auto;
-  height: var(--stage);
-  transition: opacity 240ms ease-out;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cyberBodyDetail {
+  position: absolute;
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* 只让新局部淡入，旧局部立即隐藏；皮肤底图常在，快速切换也不混图或闪成空白。 */
+.cyberBodyDetail[data-active] {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 160ms ease-out;
+}
+
+.cyberBodyDetailArt {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .cyberName {
@@ -786,20 +805,16 @@
   }
 
   .cyberScreen .cyberBody {
-    position: static;
+    position: relative;
+    inset: auto;
     grid-column: 2;
     grid-row: 1;
     justify-self: center;
     align-self: center;
     min-width: 0;
-    transform: none;
-  }
-
-  .cyberScreen .cyberBodyLayer {
-    width: auto;
+    width: calc(144px * 1089 / 1861);
     height: 144px;
-    max-width: 100%;
-    object-fit: contain;
+    transform: none;
   }
 
   .cyberScreen .cyberSide {
@@ -858,7 +873,7 @@
   .cyberCell,
   .cyberLabel,
   .cyberArt,
-  .cyberBodyLayer {
+  .cyberBodyDetail[data-active] {
     transition: none;
   }
 
