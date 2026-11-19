@@ -1,8 +1,9 @@
 import type { PlayerAction } from "@cp/core";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Asset, NineSlice } from "../../ui/Asset";
+import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./trauma-membership.module.css";
@@ -21,13 +22,13 @@ interface Receipt {
 }
 
 const money = (amount: number) => amount.toLocaleString("en-US");
-const PLAN_COPY = {
-  silver: "交火结束后，救援倒地失能的会员。",
-  platinum: "交火中也可介入，提供倒地救援与濒死抢救。",
+const PLAN_DETAILS = {
+  silver: { code: "SILVER", condition: "倒地失能", dispatch: "交火结束后出勤" },
+  platinum: { code: "PLATINUM", condition: "倒地失能 / 濒死", dispatch: "可介入交火现场" },
 } as const;
 
 function purchaseLabel(offer: TraumaOffer): string {
-  if (offer.action === "renew") return `${offer.tierLabel}续期 30 天`;
+  if (offer.action === "renew") return `续期${offer.tierLabel}`;
   if (offer.action === "upgrade") return "升级为白金卡";
   return `开通${offer.tierLabel}`;
 }
@@ -140,6 +141,7 @@ export function TraumaMembership({
         ? `余额不足，还差 €$ ${money(shortfall)}。`
         : offer.reason;
   const paymentLabel = purchaseLabel(offer);
+  const hasQuote = offer.quoteValid && !downgrade;
 
   const perform = async (action: TraumaAction, nextReceipt: Receipt) => {
     if (!onTrauma || busy || running.current) return;
@@ -209,8 +211,8 @@ export function TraumaMembership({
             <header className={styles.header}>
               <div className={styles.brand}>
                 <Asset
-                  id="map.poi.meds"
-                  height={34}
+                  id="brand.traumaTeam"
+                  height={36}
                   tint="var(--cp-red)"
                   className={styles.brandIcon}
                 />
@@ -218,6 +220,7 @@ export function TraumaMembership({
                   <span className={styles.eyebrow}>TRAUMA TEAM INTERNATIONAL</span>
                   <h2 id={titleId} className={styles.title}>
                     创伤小组
+                    <span>会员服务</span>
                   </h2>
                 </div>
               </div>
@@ -269,16 +272,26 @@ export function TraumaMembership({
                 </section>
               ) : (
                 <>
-                  <div className={styles.statusLine}>
-                    <span className={styles.statusBadge}>
-                      {trauma.active ? `${trauma.tierLabel}会员` : "尚未开通会籍"}
-                    </span>
-                    {trauma.active && trauma.until ? (
-                      <time>有效至 {trauma.until}</time>
-                    ) : trauma.lapsed ? (
-                      <span>上期已于 {trauma.lapsed} 到期</span>
-                    ) : (
-                      <span>选择适合你的救援保障</span>
+                  <div className={styles.account}>
+                    <div className={styles.accountInfo}>
+                      <span className={styles.metaLabel}>当前会籍</span>
+                      <strong className={styles.accountTier}>
+                        {trauma.active ? trauma.tierLabel : trauma.lapsed ? "已到期" : "未开通"}
+                      </strong>
+                      {trauma.active && trauma.until ? (
+                        <time className={styles.accountTerm}>有效至 {trauma.until}</time>
+                      ) : trauma.lapsed ? (
+                        <span className={styles.accountTerm}>{trauma.lapsed} 到期</span>
+                      ) : null}
+                    </div>
+                    {trauma.active && (
+                      <span
+                        className={styles.coverage}
+                        data-blocked={!trauma.coverage.ok || undefined}
+                        title={trauma.coverage.why}
+                      >
+                        {trauma.coverage.ok ? "保障待命" : "当前救援受限"}
+                      </span>
                     )}
                   </div>
 
@@ -306,74 +319,85 @@ export function TraumaMembership({
                     </div>
                   )}
 
-                  <fieldset className={styles.tabs} aria-label="选择会员方案">
-                    {trauma.offers.map((plan) => (
-                      <button
-                        key={plan.tier}
-                        type="button"
-                        className={styles.tab}
-                        aria-pressed={selectedTier === plan.tier}
-                        disabled={pending !== null}
-                        onClick={() => {
-                          setSelectedTier(plan.tier);
-                          setError(null);
-                        }}
-                      >
-                        <NineSlice
-                          id="tab.bg"
-                          tint="currentColor"
-                          slice={14}
-                          className={styles.tabBg}
-                        />
-                        <span className={styles.tabName}>
-                          {plan.tierLabel}
-                          {trauma.active && trauma.tier === plan.tier ? " · 当前" : ""}
-                        </span>
-                        <span className={styles.tabRate}>
-                          €$ {money(trauma.prices[plan.tier])} / 30 天
-                        </span>
-                      </button>
-                    ))}
+                  <fieldset className={styles.plans}>
+                    <legend className={styles.plansLegend}>选择保障方案</legend>
+                    <div className={styles.planGrid}>
+                      {trauma.offers.map((plan) => (
+                        <button
+                          key={plan.tier}
+                          type="button"
+                          className={styles.planCard}
+                          data-tier={plan.tier}
+                          aria-pressed={selectedTier === plan.tier}
+                          disabled={pending !== null}
+                          onClick={() => {
+                            setSelectedTier(plan.tier);
+                            setError(null);
+                          }}
+                        >
+                          <CellFrame />
+                          <span className={styles.planTop}>
+                            <span className={styles.planCode}>{PLAN_DETAILS[plan.tier].code}</span>
+                            <span className={styles.planSelection}>
+                              {selectedTier === plan.tier ? "已选中" : "选择"}
+                            </span>
+                          </span>
+                          <span className={styles.planHeading}>
+                            <span className={styles.planName}>{plan.tierLabel}</span>
+                            {trauma.active && trauma.tier === plan.tier && (
+                              <span className={styles.currentPlan}>当前会籍</span>
+                            )}
+                          </span>
+                          <span className={styles.planRate}>
+                            <span className={styles.currency}>€$</span>
+                            <strong>{money(trauma.prices[plan.tier])}</strong>
+                            <span className={styles.period}>/ 30 天</span>
+                          </span>
+                          <span className={styles.planFeatures}>
+                            <span className={styles.feature}>
+                              <span>救治范围</span>
+                              <strong>{PLAN_DETAILS[plan.tier].condition}</strong>
+                            </span>
+                            <span className={styles.feature}>
+                              <span>出勤条件</span>
+                              <strong>{PLAN_DETAILS[plan.tier].dispatch}</strong>
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </fieldset>
 
-                  <section className={styles.plan} aria-label={`${offer.tierLabel}保障与报价`}>
-                    <p className={styles.description}>{PLAN_COPY[selectedTier]}</p>
-                    {offer.quoteValid && !downgrade && (
+                  <div className={styles.contract}>
+                    {hasQuote && (
                       <>
-                        <dl className={styles.quote}>
-                          <div className={styles.quoteRow}>
-                            <dt className={styles.quoteLabel}>
-                              {offer.action === "upgrade" ? "升级补差" : "本次费用"}
-                            </dt>
-                            <dd className={styles.quoteValue} data-money>
-                              €$ {money(offer.price)}
-                            </dd>
-                          </div>
-                          <div className={styles.quoteRow}>
-                            <dt className={styles.quoteLabel}>
-                              {offer.action === "upgrade" ? "保留到期日" : "保障至"}
-                            </dt>
-                            <dd className={styles.quoteValue}>{offer.until}</dd>
-                          </div>
-                        </dl>
+                        <p className={styles.contractDate}>
+                          <span>
+                            {offer.action === "upgrade" ? "保留到期日" : "本次办理后有效至"}
+                          </span>
+                          <time>{offer.until}</time>
+                        </p>
                         <p className={styles.termNote}>
                           {offer.action === "upgrade"
-                            ? "按剩余每 30 天补差价，不足一期按一期；不延长到期日。"
+                            ? "按剩余每 30 天补差，不足一期按一期；不延长有效期。"
                             : offer.action === "renew"
-                              ? "在当前到期日后追加 30 天，剩余有效期保留。"
-                              : "支付后立即生效，有效期 30 个游戏日。"}
+                              ? "在当前到期日后顺延 30 天，剩余有效期保留。"
+                              : "支付后立即生效 · 有效期按游戏时间计算 · 不自动续费"}
                         </p>
                       </>
                     )}
                     {pending === null && unavailableReason && (
-                      <p className={styles.notice} data-tone="bad">
+                      <p className={styles.notice} data-tone="bad" role="status">
                         {unavailableReason}
                       </p>
                     )}
-                  </section>
+                  </div>
 
                   <details className={styles.details}>
-                    <summary>保障条款与救援记录</summary>
+                    <summary>
+                      保障须知
+                      <span>服务限制、救援记录与退会</span>
+                    </summary>
                     <div className={styles.detailsBody}>
                       <p>
                         恶土、狗镇与暴恐机动队出动期间不提供救援；银卡不承保濒死。救援仅稳定生命体征，伤口、断肢和损坏义体仍需后续处理。
@@ -416,10 +440,21 @@ export function TraumaMembership({
             </div>
 
             <footer className={styles.footer}>
-              <div className={styles.wallet}>
-                <span>可用余额</span>
-                <strong className={styles.walletValue}>€$ {money(wallet.eddies)}</strong>
-              </div>
+              {screen === "plans" ? (
+                <div className={styles.checkout}>
+                  <div className={styles.total}>
+                    <span className={styles.metaLabel}>
+                      {offer.action === "upgrade" ? "本次升级补差" : "本次应付"}
+                    </span>
+                    <strong className={styles.totalValue}>
+                      {hasQuote ? `€$ ${money(offer.price)}` : "—"}
+                    </strong>
+                  </div>
+                  <span className={styles.balance}>余额 €$ {money(wallet.eddies)}</span>
+                </div>
+              ) : (
+                <span className={styles.balance}>余额 €$ {money(wallet.eddies)}</span>
+              )}
               <div className={styles.footerActions}>
                 {screen === "receipt" ? (
                   <>
@@ -452,21 +487,18 @@ export function TraumaMembership({
                     </Button>
                   </>
                 ) : (
-                  <>
-                    <span className={styles.footerHint}>确认支付即办理 · 不自动续费</span>
-                    <Button
-                      primary
-                      disabled={locked || !offer.quoteValid || !offer.available || downgrade}
-                      reason={unavailableReason ?? undefined}
-                      onClick={pay}
-                    >
-                      {pending && pending !== "rescue"
-                        ? "正在办理…"
-                        : !offer.quoteValid
-                          ? "当前不可办理"
-                          : `${paymentLabel} · 支付 €$ ${money(offer.price)}`}
-                    </Button>
-                  </>
+                  <Button
+                    primary
+                    disabled={locked || !hasQuote || !offer.available}
+                    reason={unavailableReason ?? undefined}
+                    onClick={pay}
+                  >
+                    {pending && pending !== "rescue"
+                      ? "正在办理…"
+                      : !hasQuote
+                        ? "当前不可办理"
+                        : `确认${paymentLabel}`}
+                  </Button>
                 )}
               </div>
             </footer>

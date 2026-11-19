@@ -182,9 +182,9 @@
 
 .subRow.ttManage {
   width: 100%;
-  min-height: 42px;
+  min-height: 32px;
   margin: 0;
-  padding: 7px 0;
+  padding: 4px 0;
   border: 0;
   background: none;
   color: inherit;
@@ -196,12 +196,12 @@
 .ttAction {
   flex: none;
   padding: 4px 0 4px 8px;
-  color: var(--cp-cyan);
-  font-size: 13px;
+  color: var(--cp-red);
+  font-size: 12px;
 }
 
 .ttManage:hover:not(:disabled) {
-  background: rgb(94 246 255 / 5%);
+  background: rgb(255 97 88 / 5%);
 }
 
 .ttManage:focus-visible {
@@ -822,7 +822,7 @@
 }
 
 .ttManage .subKey {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ttManage .subVal {

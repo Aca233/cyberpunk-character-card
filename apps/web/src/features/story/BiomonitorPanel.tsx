@@ -663,7 +663,7 @@ export function BiomonitorPanel({
                       ? "会籍已到期"
                       : "未开通"}
                 </span>
-                <span className={styles.ttAction}>会籍服务</span>
+                <span className={styles.ttAction}>{trauma.active ? "管理会籍" : "查看方案"}</span>
               </button>
               <div className={styles.subRow}>
                 <span className={styles.subKey}>生理负荷</span>
