@@ -1,5 +1,6 @@
 export * from "./actions";
 export * from "./authoring";
+export * from "./content-media-presentation";
 export * from "./dice";
 export * from "./game";
 export * from "./image-context";
@@ -39,8 +40,10 @@ export {
 } from "./pipeline";
 export * from "./schemas/board";
 export * from "./schemas/character";
+export * from "./schemas/content-media";
 export * from "./schemas/image";
 export * from "./schemas/lore";
+export * from "./schemas/presented-content-media";
 export * from "./schemas/save";
 export * from "./schemas/turn";
 export * from "./state";

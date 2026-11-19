@@ -21,6 +21,7 @@ import {
   characterRules,
   checkpointSummaryOf,
   cityRules,
+  collectPresentedContentMedia,
   effectiveTurns,
   HISTORY_TURNS,
   isSnapshotValid,
@@ -1179,7 +1180,7 @@ export class GameService {
         label: "⑤ 写入回合日志",
         detail: "保存世界状态与快照",
       });
-      const saved = await this.commit(run, plan, turn, usage);
+      const saved = await this.commit(run, plan, turn, usage, world);
       this.pendingSpends.delete(run.saveId);
       if (turn.repairs > 0) {
         this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
@@ -1234,6 +1235,7 @@ export class GameService {
     plan: NarratorPlan,
     turn: NarratorTurn,
     usage: TurnUsage | undefined,
+    before: WorldState,
   ): Promise<{ seq: number; version: number }> {
     const { saves } = this.deps;
     return this.locks.run(run.saveId, async () => {
@@ -1244,6 +1246,9 @@ export class GameService {
       }
       // 记录条数的核对和追加由 appendAt 一起做，条数不对时抛 SaveMovedError、什么都不写
       const seq = run.baseVersion;
+      const media = turn.draft
+        ? []
+        : collectPresentedContentMedia(before, turn.world, turn.commands, gameData);
       let imageContext: ReturnType<typeof buildImageSceneContext> | undefined;
       try {
         imageContext = buildImageSceneContext(turn.world, [], gameData, turn.text);
@@ -1263,6 +1268,7 @@ export class GameService {
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,
+        ...(media.length ? { media } : {}),
         ...(imageContext ? { imageContext } : {}),
         patches: [...turn.patches],
         ...(turn.read !== undefined ? { read: turn.read } : {}),

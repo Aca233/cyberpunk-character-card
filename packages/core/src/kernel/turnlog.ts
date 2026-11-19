@@ -1,6 +1,7 @@
 import { applyPatches, enablePatches } from "immer";
 import { z } from "zod";
 import { ImageSceneContextSchema } from "../schemas/image";
+import { PresentedContentMediaSchema } from "../schemas/presented-content-media";
 import type { Snapshot, WorldState } from "./world";
 
 enablePatches();
@@ -42,6 +43,8 @@ const TurnRecordSchema = z.object({
   /** 没通过校验、被丢弃的指令，只供调试 */
   dropped: z.array(z.unknown()),
   text: z.string(),
+  /** 本轮实际读取或看片时展示的附件；只回看此快照，不展开未来材料。 */
+  media: z.array(PresentedContentMediaSchema).optional(),
   /** 没有视觉资料时只按本轮正文配图，禁止借用当前世界状态。 */
   imageContext: ImageSceneContextSchema.optional(),
   patches: z.array(PatchSchema),
