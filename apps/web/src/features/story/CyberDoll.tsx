@@ -257,9 +257,17 @@ export function CyberDoll({
 }) {
   const [hovered, setHovered] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const [pinned, setPinned] = useState<{ slot: CyberSlot; index: number } | null>(null);
+  const [lastViewedSlot, setLastViewedSlot] = useState<CyberSlot | null>(null);
   const shown = hovered ?? pinned;
   const focus = hovered?.slot ?? selected ?? pinned?.slot ?? null;
-  const activeLayers = focus ? SLOT_BODY_LAYERS[focus] : null;
+  // 详情收起时保留最后查看的人体图层；明确选中或固定的部位仍优先。
+  const bodySlot = focus ?? lastViewedSlot;
+  const activeLayers = bodySlot ? SLOT_BODY_LAYERS[bodySlot] : null;
+
+  const previewCell = (slot: CyberSlot, index: number) => {
+    setHovered({ slot, index });
+    setLastViewedSlot(slot);
+  };
 
   /** 计算每层解剖图透明度：未选中部位时皮肤常亮、免疫脉络幽微发光；聚焦时对应系统亮起 */
   const layerOpacity = (key: BodyLayerId): number => {
@@ -314,17 +322,18 @@ export function CyberDoll({
                 data-broken={part?.broken || undefined}
                 data-rarity={part?.rarity}
                 data-iconic={part?.iconic || undefined}
-                onMouseEnter={() => setHovered({ slot, index: i })}
+                onMouseEnter={() => previewCell(slot, i)}
                 onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered({ slot, index: i })}
+                onFocus={() => previewCell(slot, i)}
                 onBlur={() => setHovered(null)}
-                onClick={() =>
-                  onCell
-                    ? onCell(slot, part)
-                    : setPinned((p) =>
-                        p?.slot === slot && p.index === i ? null : { slot, index: i },
-                      )
-                }
+                onClick={() => {
+                  setLastViewedSlot(slot);
+                  if (onCell) onCell(slot, part);
+                  else
+                    setPinned((p) =>
+                      p?.slot === slot && p.index === i ? null : { slot, index: i },
+                    );
+                }}
               >
                 <CyberCellFace />
                 {part &&
