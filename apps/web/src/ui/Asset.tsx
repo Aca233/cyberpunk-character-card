@@ -22,9 +22,19 @@ interface AssetProps {
   readonly alt?: string;
   readonly className?: string | undefined;
   readonly style?: CSSProperties;
+  readonly "data-active"?: boolean | undefined;
 }
 
-export function Asset({ id, tint, height, width, alt, className, style }: AssetProps) {
+export function Asset({
+  id,
+  tint,
+  height,
+  width,
+  alt,
+  className,
+  style,
+  "data-active": active,
+}: AssetProps) {
   const info = asset(id);
   if (!info) return <MissingAsset id={id} />;
   const ratio = info.width / info.height;
@@ -40,6 +50,7 @@ export function Asset({ id, tint, height, width, alt, className, style }: AssetP
         alt={alt ?? ""}
         className={className}
         style={style}
+        data-active={active || undefined}
         draggable={false}
       />
     );
@@ -47,6 +58,7 @@ export function Asset({ id, tint, height, width, alt, className, style }: AssetP
   return (
     <span
       {...label}
+      data-active={active || undefined}
       className={[styles.masked, className].filter(Boolean).join(" ")}
       style={{
         ...style,

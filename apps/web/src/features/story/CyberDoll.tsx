@@ -363,7 +363,7 @@ export function CyberDoll({
             key={id}
             id={id}
             className={neural.cyberBodyLayer}
-            style={{ visibility: bodyBase === id ? "visible" : "hidden" }}
+            data-active={bodyBase === id || undefined}
           />
         ))}
         {BODY_DETAILS.map(({ slot, id, left, top, width, height }) => (
