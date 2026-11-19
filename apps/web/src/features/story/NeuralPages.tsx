@@ -7,7 +7,9 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { baseWeaponIdOf, itemArtOf } from "./art";
 import { BiomonitorPanel } from "./BiomonitorPanel";
+import { ContentMediaList, InlineContentText } from "./ContentMedia";
 import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
+import mediaStyles from "./content-media.module.css";
 import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import { FactionsBody } from "./FactionsPanel";
 import { type HabitAction, Habits } from "./Habits";
@@ -1594,6 +1596,35 @@ export function ShardsPanel({
   /** 打开已归档原文：仅标记界面已浏览 */
   readonly onReadShard: (id: number) => void;
 }) {
+  const [tab, setTab] = useState<"chips" | "braindance">("chips");
+  const viewedPassages = view.braindance.works.reduce((sum, work) => sum + work.passages.length, 0);
+  return (
+    <div className={mediaStyles.archive}>
+      <nav className={mediaStyles.tabs} aria-label="已读内容">
+        <Button small pressed={tab === "chips"} onClick={() => setTab("chips")}>
+          芯片原文 · {view.shards.list.length}
+        </Button>
+        <Button small pressed={tab === "braindance"} onClick={() => setTab("braindance")}>
+          超梦回看 · {viewedPassages}
+        </Button>
+      </nav>
+      {tab === "chips" ? (
+        <ChipArchive view={view} onReadShard={onReadShard} />
+      ) : (
+        <BraindanceArchive view={view} />
+      )}
+    </div>
+  );
+}
+
+/** 翻看已读原文不调用模型、不推进时间，也不读取尚未接触的载体。 */
+function ChipArchive({
+  view,
+  onReadShard,
+}: {
+  readonly view: View;
+  readonly onReadShard: (id: number) => void;
+}) {
   const shards = view.shards.list;
   const [picked, setPicked] = useState<number | null>(null);
   const [page, setPage] = useState(0);
@@ -1674,11 +1705,66 @@ export function ShardsPanel({
               {current.contentId} · {current.partId}
               {current.carrier && ` · 来源载体 ${current.carrier}`}
             </p>
-            <p className={styles.factionReason}>{current.text}</p>
+            <p className={styles.factionReason}>
+              <InlineContentText text={current.text} />
+            </p>
+            <ContentMediaList media={current.media ?? []} />
           </>
         ) : (
           <p className={styles.dim}>从左侧选择一张芯片阅读原文。</p>
         )}
+      </article>
+    </div>
+  );
+}
+
+/** 回看界面仅展示服务端已投影的定稿片段，浏览器播放附件不构成游戏内再次观看。 */
+function BraindanceArchive({ view }: { readonly view: View }) {
+  const passages = view.braindance.works.flatMap((work) =>
+    work.passages.map((passage) => ({
+      ...passage,
+      key: `${work.id}/${passage.id}`,
+      title: work.title,
+      recorder: work.recorder,
+    })),
+  );
+  const [picked, setPicked] = useState<string | null>(null);
+  const current = passages.find((passage) => passage.key === picked) ?? passages[0];
+  if (!current) {
+    return (
+      <div className={styles.phoneEmpty}>
+        <p className={styles.dim}>还没有已呈现的超梦片段。实际体验后的定稿原文和媒体会留在这里。</p>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.dbSplit}>
+      <ul className={`${styles.contactList} ${styles.dbList}`} aria-label="已呈现超梦片段">
+        {passages.map((passage) => (
+          <li key={passage.key}>
+            <button
+              type="button"
+              className={styles.contact}
+              aria-pressed={passage.key === current.key}
+              onClick={() => setPicked(passage.key)}
+            >
+              <span className={styles.contactName}>
+                <b>{passage.title}</b>
+                <small className={styles.dim}>{passage.label ?? passage.id}</small>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <article className={styles.dbReader} key={current.key}>
+        <h3 className={styles.dbReaderTitle}>{current.title}</h3>
+        <p className={styles.dim}>
+          {current.label ?? current.id} · 录制者：{current.recorder}
+        </p>
+        <p className={styles.factionReason}>
+          <InlineContentText text={current.text} />
+        </p>
+        <ContentMediaList media={current.media ?? []} />
       </article>
     </div>
   );

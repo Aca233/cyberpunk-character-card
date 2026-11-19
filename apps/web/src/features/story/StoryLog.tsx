@@ -9,6 +9,8 @@ import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { useNarrativePrefs } from "../settings/prefs";
 import { useSpoilerView } from "../settings/SpoilerBadge";
+import { ContentMediaList } from "./ContentMedia";
+import mediaStyles from "./content-media.module.css";
 import { LiveStageBar } from "./LiveStageBar";
 import type { useStory } from "./store";
 import styles from "./story.module.css";
@@ -155,6 +157,14 @@ function TurnBlock({
   const saveImages = useSaveImages();
   const imageId = saveImages?.bindings.turns[String(turn.seq)] ?? null;
   const autoPending = saveImages?.pendingTurnSeqs.has(turn.seq) ?? false;
+  const attachedMedia = turn.media?.map((group) => (
+    <section className={mediaStyles.group} key={group.id} aria-label={group.title}>
+      <h3 className={mediaStyles.groupTitle}>
+        {group.source === "chip" ? "芯片" : "超梦"} · {group.title}
+      </h3>
+      <ContentMediaList media={group.media} />
+    </section>
+  ));
   const openIllustration = () => {
     if (!saveImages) return;
     saveImages.openImageModal({
@@ -211,12 +221,16 @@ function TurnBlock({
             // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
             <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
           ))}
+          {attachedMedia}
         </details>
       ) : (
-        paragraphs(turn.text).map((p, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-          <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
-        ))
+        <>
+          {paragraphs(turn.text).map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
+            <Paragraph key={`${turn.seq}-${i}`} text={p} speakers={speakers} onMark={onMark} />
+          ))}
+          {attachedMedia}
+        </>
       )}
       {imageId ? (
         <figure className={styles.turnIllustration}>
