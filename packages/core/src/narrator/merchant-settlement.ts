@@ -21,6 +21,7 @@ export interface PreparedPurchase {
 
 function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
   const reason = "已授权交易的只读核验";
+  if (p.trauma !== undefined) return { type: "trauma", action: p.trauma, tier: p.tier, reason };
   if (p.serviceOrder && p.serviceAction)
     return {
       type: "cyberware.service",
@@ -217,6 +218,13 @@ export function preparePurchases(
 }
 
 function commandProposal(command: Command): BuyProposal | undefined {
+  if (
+    command.type === "trauma" &&
+    (command.action === "join" || command.action === "renew" || command.action === "upgrade")
+  ) {
+    const parsed = BuyProposalSchema.safeParse({ trauma: command.action, tier: command.tier });
+    return parsed.success ? parsed.data : undefined;
+  }
   const raw =
     command.type === "trade"
       ? { ...command, action: command.action === "service" ? undefined : command.action }

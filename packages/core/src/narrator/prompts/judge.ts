@@ -56,6 +56,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 枪匠工坊写 gunsmith（install 从货架直装或用自带件改锁定槽、detach 拆锁定件解锁、convert 智能靶向联锁或精工固锁）、商店 with 与随身武器 weapon；install/detach 写 mod（自带件写 source:backpack），精工固锁写 slot 与 conversion:precision-lock，智能改造写 conversion:smart-link。普通未锁定配件的日常战外装卸在界面上免费做，不填 buy。
 - 义体写 cyberware、医生 with 与 operation（buy 只买下、install 安装、remove 拆卸、repair 维修、repay 还款）；还款不写 cyberware。自带实物写 part；替换写 replace；旧件明确去向写 disposition:keep/sell/scrap，出售也可 tradeIn:true。赊账只认 credit:true 的明确授权。
 - 义体预约和分阶段手术写 serviceOrder 与 serviceAction：book 另写型号/医生/手术条件与 scheduledAt；start、complete、resume、cancel 只引用现有订单。book 不付款，start 才交接与付款，complete 完成原订单，不重复收费或重算一段手术时间。取消不代表已经拆下的东西自动装回。只有玩家授权当前服务动作才填写，询问预约或询问术后状态仍写 null。
+- 创伤小组会籍写 trauma:join/renew/upgrade，新办必须写 tier:silver/platinum；续期沿用现有档位，升级只指银卡升白金。仅明确同意办理、续费或升级时填写，询问价格、比较保障、假设、拒绝或尚未同意的推荐写 null。退会和呼叫救援不是购买，buy 写 null；价格与期限由代码核对，不能另写 medical 服务或额外扣款，也不能因角色危险或倒下擅自购买。
 - 仅玩家明确要先到店再交易时，destination 写对应目标地点 id；只是提到异地商店或询价不等于授权出行。已有路线面板出行按当前出行信息理解，不另猜目的地。
 
 【旧记忆】

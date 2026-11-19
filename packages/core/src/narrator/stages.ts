@@ -6,7 +6,9 @@ import { cyberwareSettlement, quoteCyberwareService } from "../systems/cyberware
 import { EconomyStateSchema, isBigSpend, ServiceSchema } from "../systems/economy/schema";
 import { gunsmithSettlement, quoteGunsmith } from "../systems/inventory/gunsmith";
 import { quoteTrade } from "../systems/inventory/trade";
+import { quoteTraumaMembership, TraumaStateSchema } from "../systems/trauma";
 import { vehicleCatalog } from "../systems/travel/vehicles";
+import { formatGameTime } from "../systems/world";
 
 /**
  * 一轮核心流程：① 判断（记忆调度与定性物理/社会裁决）→ ② 拼上下文 → ③ 写正文 → ④ 抽取。
@@ -63,6 +65,13 @@ export const BuyProposalSchema = z
       .enum(["install", "detach", "convert"])
       .optional()
       .describe("枪匠工坊服务类型；不与 item/service/cyberware 同写"),
+    trauma: z
+      .enum(["join", "renew", "upgrade"])
+      .optional()
+      .describe(
+        "创伤小组会籍：join 新办，renew 续期，upgrade 银卡升白金；询价、退会和救援不填 buy",
+      ),
+    tier: z.enum(["silver", "platinum"]).optional().describe("创伤小组会籍档位；新办时必填"),
     weapon: z.string().min(1).optional().describe("枪匠工坊改装的随身武器 id"),
     mod: z.string().min(1).optional().describe("枪匠工坊安装或拆除的改装件 id"),
     slot: z.enum(["muzzle", "scope", "plugin"]).optional().describe("枪匠工坊拆除或精工固锁的槽位"),
@@ -78,10 +87,12 @@ export const BuyProposalSchema = z
   })
   .refine(
     (b) =>
-      [b.item, b.service, b.cyberware, b.gunsmith].filter((v) => v !== undefined).length ===
+      [b.item, b.service, b.cyberware, b.gunsmith, b.trauma].filter((v) => v !== undefined)
+        .length ===
       (b.operation === "repay" || (b.serviceAction && b.serviceAction !== "book") ? 0 : 1),
     {
-      message: "item、service、cyberware、gunsmith 写一个；还款只写 operation:repay 与 with",
+      message:
+        "item、service、cyberware、gunsmith、trauma 写一个；还款只写 operation:repay 与 with",
     },
   )
   .refine((b) => b.action !== "sell" || b.item !== undefined, {
@@ -96,6 +107,12 @@ export const BuyProposalSchema = z
   })
   .refine((b) => (b.serviceAction !== undefined) === (b.serviceOrder !== undefined), {
     message: "服务订单操作必须同时给出 serviceOrder 与 serviceAction",
+  })
+  .refine((b) => b.trauma !== "join" || b.tier !== undefined, {
+    message: "新办创伤小组会籍必须指定 tier（silver 或 platinum）",
+  })
+  .refine((b) => b.tier === undefined || b.trauma !== undefined, {
+    message: "tier 仅用于创伤小组会籍",
   });
 export type BuyProposal = z.infer<typeof BuyProposalSchema>;
 
@@ -301,6 +318,26 @@ export function purchaseQuote(
   data: Readonly<Record<string, unknown>>,
   buy: BuyProposal,
 ): PurchaseQuote {
+  if (buy.trauma !== undefined) {
+    const state = TraumaStateSchema.parse(world.slices.trauma ?? {});
+    const quote = quoteTraumaMembership(state, buy.trauma, buy.tier, world.time);
+    if (!quote.ok) return quote;
+    return {
+      ok: true,
+      label: quote.label,
+      price: quote.price,
+      quoteKey: JSON.stringify([
+        "trauma",
+        buy.trauma,
+        quote.tier,
+        quote.price,
+        state.tier,
+        state.paidUntil,
+        buy.destination,
+      ]),
+      detail: `${quote.label}：应付 ${quote.price} 欧元；${buy.trauma === "upgrade" ? "按剩余保障期补差价，每 30 天 4,000 欧元，不足一期按一期，保留现有到期日" : buy.trauma === "renew" ? "从现有到期日顺延 30 天" : "成交后保障 30 天"}，预计到期 ${formatGameTime(quote.paidUntil)}；扣款和会籍由同一笔创伤小组指令结算，不另记 money 或 medical 服务`,
+    };
+  }
   if (buy.serviceAction && buy.serviceOrder) {
     const request =
       buy.serviceAction === "book" && buy.with
