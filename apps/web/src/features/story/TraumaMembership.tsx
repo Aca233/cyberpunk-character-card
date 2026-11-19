@@ -23,8 +23,8 @@ interface Receipt {
 
 const money = (amount: number) => amount.toLocaleString("en-US");
 const PLAN_DETAILS = {
-  silver: { code: "SILVER", condition: "倒地失能", dispatch: "交火结束后出勤" },
-  platinum: { code: "PLATINUM", condition: "倒地失能 / 濒死", dispatch: "可介入交火现场" },
+  silver: { code: "SILVER", dispatch: "交火结束后出勤", dying: "不含濒死救援" },
+  platinum: { code: "PLATINUM", dispatch: "交火期间可出勤", dying: "包含濒死抢救" },
 } as const;
 
 function purchaseLabel(offer: TraumaOffer): string {
@@ -142,6 +142,8 @@ export function TraumaMembership({
         : offer.reason;
   const paymentLabel = purchaseLabel(offer);
   const hasQuote = offer.quoteValid && !downgrade;
+  const insufficientFunds =
+    hasQuote && shortfall > 0 && offer.reason?.startsWith("余额不足") === true;
 
   const perform = async (action: TraumaAction, nextReceipt: Receipt) => {
     if (!onTrauma || busy || running.current) return;
@@ -206,7 +208,7 @@ export function TraumaMembership({
         className={styles.dialog}
         onKeyDown={keepFocus}
       >
-        <Panel as="div" frame className={styles.frame}>
+        <Panel as="div" line="var(--cp-red-dim)" className={styles.frame}>
           <div className={styles.shell}>
             <header className={styles.header}>
               <div className={styles.brand}>
@@ -220,7 +222,6 @@ export function TraumaMembership({
                   <span className={styles.eyebrow}>TRAUMA TEAM INTERNATIONAL</span>
                   <h2 id={titleId} className={styles.title}>
                     创伤小组
-                    <span>会员服务</span>
                   </h2>
                 </div>
               </div>
@@ -339,7 +340,7 @@ export function TraumaMembership({
                           <span className={styles.planTop}>
                             <span className={styles.planCode}>{PLAN_DETAILS[plan.tier].code}</span>
                             <span className={styles.planSelection}>
-                              {selectedTier === plan.tier ? "已选中" : "选择"}
+                              {selectedTier === plan.tier ? "✓ 已选" : ""}
                             </span>
                           </span>
                           <span className={styles.planHeading}>
@@ -355,12 +356,12 @@ export function TraumaMembership({
                           </span>
                           <span className={styles.planFeatures}>
                             <span className={styles.feature}>
-                              <span>救治范围</span>
-                              <strong>{PLAN_DETAILS[plan.tier].condition}</strong>
+                              <span>出勤</span>
+                              <strong>{PLAN_DETAILS[plan.tier].dispatch}</strong>
                             </span>
                             <span className={styles.feature}>
-                              <span>出勤条件</span>
-                              <strong>{PLAN_DETAILS[plan.tier].dispatch}</strong>
+                              <span>濒死救援</span>
+                              <strong>{PLAN_DETAILS[plan.tier].dying}</strong>
                             </span>
                           </span>
                         </button>
@@ -386,7 +387,7 @@ export function TraumaMembership({
                         </p>
                       </>
                     )}
-                    {pending === null && unavailableReason && (
+                    {pending === null && unavailableReason && !insufficientFunds && (
                       <p className={styles.notice} data-tone="bad" role="status">
                         {unavailableReason}
                       </p>
@@ -450,7 +451,12 @@ export function TraumaMembership({
                       {hasQuote ? `€$ ${money(offer.price)}` : "—"}
                     </strong>
                   </div>
-                  <span className={styles.balance}>余额 €$ {money(wallet.eddies)}</span>
+                  <span className={styles.balance}>
+                    余额 €$ {money(wallet.eddies)}
+                    {insufficientFunds && (
+                      <strong className={styles.shortfall}>还差 €$ {money(shortfall)}</strong>
+                    )}
+                  </span>
                 </div>
               ) : (
                 <span className={styles.balance}>余额 €$ {money(wallet.eddies)}</span>
@@ -497,7 +503,11 @@ export function TraumaMembership({
                       ? "正在办理…"
                       : !hasQuote
                         ? "当前不可办理"
-                        : `确认${paymentLabel}`}
+                        : insufficientFunds
+                          ? "余额不足"
+                          : !offer.available
+                            ? "当前不可办理"
+                            : `确认${paymentLabel}`}
                   </Button>
                 )}
               </div>

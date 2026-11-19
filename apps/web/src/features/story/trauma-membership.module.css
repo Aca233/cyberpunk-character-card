@@ -40,12 +40,12 @@
   outline: none;
 }
 
-.frame[data-frame] {
+div.frame {
   --cp-panel: var(--cp-panel-strong);
   display: grid;
   min-height: 0;
   max-height: inherit;
-  padding: 32px 34px;
+  padding: 22px 26px;
 }
 
 .frame > div:last-child {
@@ -65,7 +65,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 16px;
+  padding-bottom: 13px;
   border-bottom: 1px solid var(--cp-red-dim);
 }
 
@@ -100,12 +100,6 @@
   font-size: 24px;
   font-weight: 500;
   line-height: 1.2;
-}
-
-.title > span {
-  color: var(--cp-text-dim);
-  font-size: 12px;
-  font-weight: 400;
 }
 
 .closeButton {
@@ -162,7 +156,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 7px 14px;
-  margin-bottom: 22px;
+  margin-bottom: 13px;
   font-size: 12px;
 }
 
@@ -218,7 +212,7 @@
 }
 
 .plansLegend {
-  margin-bottom: 10px;
+  margin-bottom: 7px;
   padding: 0;
   color: var(--cp-text-dim);
   font-size: 12px;
@@ -227,19 +221,19 @@
 .planGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 9px;
 }
 
 .planCard {
-  --box-fill: rgb(19 13 19 / 92%);
+  --box-fill: rgb(15 11 15 / 94%);
   --box-line: var(--cp-red-dim);
   position: relative;
   isolation: isolate;
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
-  padding: 14px 16px 16px;
+  padding: 12px 14px 13px;
   color: var(--cp-text);
   font: inherit;
   text-align: left;
@@ -247,12 +241,12 @@
 
 .planCard:hover:not(:disabled) {
   --box-line: var(--cp-red);
-  --box-fill: rgb(36 15 22 / 94%);
+  --box-fill: rgb(23 14 17 / 96%);
 }
 
 .planCard[aria-pressed="true"] {
   --box-line: var(--cp-red);
-  --box-fill: rgb(46 16 23 / 94%);
+  --box-fill: rgb(26 14 17 / 96%);
 }
 
 .planCard:disabled {
@@ -264,7 +258,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 20px;
+  min-height: 16px;
 }
 
 .planCode {
@@ -282,8 +276,7 @@
 }
 
 .planCard[aria-pressed="true"] .planSelection {
-  background: var(--cp-red);
-  color: var(--cp-bg);
+  color: var(--cp-red);
 }
 
 .planHeading {
@@ -316,7 +309,7 @@
 }
 
 .planRate > strong {
-  font-size: 36px;
+  font-size: 33px;
   font-weight: 500;
 }
 
@@ -332,9 +325,9 @@
 
 .planFeatures {
   display: grid;
-  gap: 8px;
-  margin-top: 5px;
-  padding-top: 12px;
+  gap: 6px;
+  margin-top: 3px;
+  padding-top: 9px;
   border-top: 1px solid rgb(143 53 48 / 45%);
 }
 
@@ -355,7 +348,7 @@
 }
 
 .contract {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .contractDate {
@@ -519,9 +512,18 @@
 }
 
 .balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
   color: var(--cp-text-dim);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+.shortfall {
+  color: var(--cp-red);
+  font-weight: 500;
 }
 
 .footerActions {
@@ -535,6 +537,11 @@
 .footerActions > button {
   --fs-ui: 14px;
   min-height: 40px;
+}
+
+.footerActions > button:disabled {
+  color: var(--cp-text-dim);
+  opacity: 0.78;
 }
 
 @keyframes terminalIn {
@@ -553,7 +560,7 @@
     max-height: calc(100dvh - 16px);
   }
 
-  .frame[data-frame] {
+  div.frame {
     padding: 28px 26px;
   }
 
@@ -580,10 +587,6 @@
     font-size: 20px;
   }
 
-  .title > span {
-    font-size: 10px;
-  }
-
   .closeButton {
     padding-left: 0;
     font-size: 11px;
@@ -598,12 +601,12 @@
   }
 
   .planGrid {
-    gap: 8px;
+    gap: 7px;
   }
 
   .planCard {
     gap: 6px;
-    padding: 12px;
+    padding: 11px 10px 12px;
   }
 
   .planCode {
@@ -666,6 +669,17 @@
   .footerActions > button {
     flex: 1;
     justify-content: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .planGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .feature {
+    flex-direction: row;
+    gap: 4px 10px;
   }
 }
 
