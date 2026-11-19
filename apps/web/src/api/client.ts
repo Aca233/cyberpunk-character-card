@@ -52,6 +52,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   headers: Readonly<Record<string, string>> = {},
+  signal?: AbortSignal,
 ): Promise<T> {
   let response: Response;
   try {
@@ -62,8 +63,10 @@ async function request<T>(
         ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(signal ? { signal } : {}),
     });
   } catch (error) {
+    if (signal?.aborted) throw error;
     throw new ApiError(unreachable(error), 0);
   }
   let data: Record<string, unknown> = {};
@@ -270,6 +273,24 @@ export interface StoredImage {
   readonly id: string;
   readonly dataUrl: string;
   readonly mimeType: string;
+  readonly width: number;
+  readonly height: number;
+  readonly byteLength: number;
+  readonly metadata: {
+    readonly profileName: string;
+    readonly model: string;
+    readonly protocol: Exclude<ImageProtocol, "auto">;
+    readonly requestedPrompt: string;
+    readonly sentPrompt: string;
+    readonly requestedAspectRatio?: AspectRatio;
+    readonly requestedSize?: string;
+    readonly sentSize?: string;
+    readonly negativePrompt?: string;
+    readonly steps?: number;
+    readonly cfgScale?: number;
+    readonly seed?: number;
+    readonly warnings?: readonly string[];
+  };
   readonly prompt: string;
   readonly negativePrompt?: string;
   readonly revisedPrompt?: string;
@@ -653,6 +674,7 @@ export const api = {
       readonly request: ImagePromptRequest;
       readonly useAux: boolean;
       readonly style?: ImageStyleConfig;
+      readonly profileName?: string;
     },
     signal?: AbortSignal,
   ) =>
@@ -672,7 +694,7 @@ export const api = {
       }
       return data as unknown as ImagePromptResult;
     }),
-  /** 调用已配置的文生图模型生图，并可选直接绑定到存档回合 / NPC / 角色 */
+  /** 生成并保存图片；采用图片通过独立的原子绑定接口完成。 */
   generateImage: (
     input: {
       readonly prompt: string;
@@ -681,13 +703,8 @@ export const api = {
       readonly steps?: number;
       readonly cfgScale?: number;
       readonly seed?: number;
-      readonly bind?: {
-        readonly saveId: string;
-        readonly target:
-          | { readonly kind: "turn"; readonly seq: number }
-          | { readonly kind: "npc"; readonly npcId: string }
-          | { readonly kind: "character" };
-      };
+      readonly size?: string;
+      readonly profileName?: string;
     },
     signal?: AbortSignal,
   ) =>
@@ -705,7 +722,7 @@ export const api = {
           data,
         );
       }
-      return data as { readonly image: StoredImage; readonly bindings?: SaveImageBindings };
+      return data as { readonly image: StoredImage };
     }),
   getImage: (id: string) =>
     request<{ readonly image: StoredImage }>("GET", `/images/${encodeURIComponent(id)}`).then(
@@ -720,15 +737,19 @@ export const api = {
     ).then((r) => r.bindings),
   bindSaveImage: (
     saveId: string,
-    target:
+    target: (
       | { readonly kind: "turn"; readonly seq: number; readonly imageId: string }
       | { readonly kind: "npc"; readonly npcId: string; readonly imageId: string }
-      | { readonly kind: "character"; readonly imageId: string },
+      | { readonly kind: "character"; readonly imageId: string }
+    ) & { readonly expectedImageId?: string | null },
+    signal?: AbortSignal,
   ) =>
     request<{ readonly bindings: SaveImageBindings }>(
       "PUT",
       `/saves/${encodeURIComponent(saveId)}/images`,
       target,
+      {},
+      signal,
     ).then((r) => r.bindings),
   unbindSaveImage: (
     saveId: string,

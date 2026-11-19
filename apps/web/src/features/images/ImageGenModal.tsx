@@ -69,11 +69,11 @@ export function ImageGenModal({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     readonly image: StoredImage;
-    readonly bindings?: SaveImageBindings;
     readonly sessionKey: string;
   } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const promptProfileRef = useRef<string | undefined>(undefined);
   const sessionKey =
     open && promptRequest ? JSON.stringify([bind, promptRequest, defaultAspectRatio]) : "";
   const liveKeyRef = useRef(sessionKey);
@@ -129,15 +129,19 @@ export function ImageGenModal({
       };
       const style = imageStyleConfig();
       try {
+        const profiles = await api.profiles();
+        if (!isCurrent(controller, session.key)) return;
         const res = await api.draftImagePrompt(
           {
             request: enriched,
             useAux: withAux,
             style,
+            ...(profiles.image ? { profileName: profiles.image } : {}),
           },
           controller.signal,
         );
         if (!isCurrent(controller, session.key)) return;
+        promptProfileRef.current = profiles.image ?? undefined;
         setPrompt(res.prompt);
         setNegativePrompt(res.negativePrompt);
         if (res.fallbackReason) {
@@ -166,6 +170,7 @@ export function ImageGenModal({
     }
     const req = structuredClone(initial.promptRequest);
     sessionRef.current = { key: sessionKey, request: req, bind: structuredClone(initial.bind) };
+    promptProfileRef.current = undefined;
     setUseAux(initial.prefs.autoImageUseAux);
     setInstruction("");
     setPrompt("");
@@ -209,13 +214,10 @@ export function ImageGenModal({
     setError(null);
     setNotice(null);
     try {
-      const profiles = await api.profiles();
+      const profileName = promptProfileRef.current ?? (await api.profiles()).image;
       if (!isCurrent(controller, session.key)) return;
-      if (!profiles.image) throw new Error("尚未设置文生图模型");
-      const res = await api.generateImage(
-        { ...request, profileName: profiles.image },
-        controller.signal,
-      );
+      if (!profileName) throw new Error("尚未设置文生图模型");
+      const res = await api.generateImage({ ...request, profileName }, controller.signal);
       if (!isCurrent(controller, session.key)) return;
       queryClient.setQueryData(["image", res.image.id], res.image);
       setPreview({ ...res, sessionKey: session.key });

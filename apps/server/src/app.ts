@@ -8,7 +8,7 @@ import { GameService } from "./game";
 import type { ImageStore } from "./images";
 import type { SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
-import { ImageRouter } from "./providers/image";
+import { ImageRouter, imageProtocolCapabilities } from "./providers/image";
 import { LlmRouter } from "./providers/index";
 import { cryptoRng } from "./random";
 import { characterRoutes } from "./routes/characters";
@@ -76,7 +76,11 @@ export function createApp(deps: AppDeps): Hono {
         ready: narrator.ok && aux.ok,
         narrator: { ready: narrator.ok, error: narrator.ok ? null : redact(narrator.error) },
         aux: { ready: aux.ok, error: aux.ok ? null : redact(aux.error) },
-        image: { ready: image.ok, error: image.ok ? null : redact(image.error) },
+        image: {
+          ready: image.ok,
+          error: image.ok ? null : redact(image.error),
+          capabilities: image.ok ? imageProtocolCapabilities(image.protocol) : null,
+        },
       },
     });
   });

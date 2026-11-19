@@ -376,6 +376,7 @@ export function StoryScreen() {
             request,
             useAux,
             style,
+            profileName: profiles.image,
           },
           controller.signal,
         );

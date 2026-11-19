@@ -1,16 +1,17 @@
 import {
   type Clock,
   draftImagePrompt,
+  IMAGE_PROMPT_MAX_LENGTH,
   ImagePromptRequestSchema,
   ImageStyleConfigSchema,
 } from "@cp/core";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { ConfigService } from "../config";
-import type { ImageStore } from "../images";
+import { ImageBindingError, type ImageStore } from "../images";
 import { isSaveId } from "../ports";
 import { AbortedError, UpstreamError } from "../providers/http";
-import type { ImageRouter } from "../providers/image";
+import { type ImageRouter, imageProtocolCapabilities } from "../providers/image";
 import type { LlmRouter } from "../providers/index";
 
 const AspectRatioSchema = z.enum(["1:1", "3:4", "4:3", "16:9", "9:16"]);
@@ -19,24 +20,27 @@ const PromptBodySchema = z.object({
   request: ImagePromptRequestSchema,
   useAux: z.boolean().default(true),
   style: ImageStyleConfigSchema.optional(),
+  profileName: z.string().trim().min(1).optional(),
 });
 
-const BindTargetSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("turn"),
-    seq: z.number().int().min(0),
-    imageId: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal("npc"),
-    npcId: z.string().trim().min(1).max(120),
-    imageId: z.string().min(1),
-  }),
-  z.object({
-    kind: z.literal("character"),
-    imageId: z.string().min(1),
-  }),
-]);
+const BindTargetSchema = z
+  .discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("turn"),
+      seq: z.number().int().min(0),
+      imageId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("npc"),
+      npcId: z.string().trim().min(1).max(120),
+      imageId: z.string().min(1),
+    }),
+    z.object({
+      kind: z.literal("character"),
+      imageId: z.string().min(1),
+    }),
+  ])
+  .and(z.object({ expectedImageId: z.string().min(1).nullable().optional() }));
 
 const UnbindTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("turn"), seq: z.number().int().min(0) }),
@@ -44,8 +48,8 @@ const UnbindTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("character") }),
 ]);
 
-const GenerateBodySchema = z.object({
-  prompt: z.string().trim().min(1, "提示词不能为空").max(4000),
+const GenerateBodySchema = z.strictObject({
+  prompt: z.string().trim().min(1, "提示词不能为空").max(IMAGE_PROMPT_MAX_LENGTH),
   negativePrompt: z.string().trim().max(2000).optional(),
   aspectRatio: AspectRatioSchema.optional(),
   size: z.string().trim().max(32).optional(),
@@ -53,17 +57,14 @@ const GenerateBodySchema = z.object({
   cfgScale: z.number().min(1).max(30).optional(),
   seed: z.number().int().optional(),
   profileName: z.string().trim().min(1).optional(),
-  bind: z
-    .object({
-      saveId: z.string().min(1),
-      target: z.discriminatedUnion("kind", [
-        z.object({ kind: z.literal("turn"), seq: z.number().int().min(0) }),
-        z.object({ kind: z.literal("npc"), npcId: z.string().trim().min(1).max(120) }),
-        z.object({ kind: z.literal("character") }),
-      ]),
-    })
-    .optional(),
 });
+
+function actualAspectRatio(width: number, height: number): string {
+  let left = width;
+  let right = height;
+  while (right) [left, right] = [right, left % right];
+  return `${width / left}:${height / left}`;
+}
 
 export function imageRoutes(
   store: ImageStore,
@@ -89,11 +90,16 @@ export function imageRoutes(
       );
     }
     const auxResolved = parsed.data.useAux ? await llm.resolve("aux") : null;
+    const imageResolved = await images.resolve(parsed.data.profileName);
     const redact = await config.redactor();
     try {
       const result = await draftImagePrompt(auxResolved?.ok ? llm : null, parsed.data.request, {
         useAux: parsed.data.useAux && Boolean(auxResolved?.ok),
         ...(parsed.data.style ? { style: parsed.data.style } : {}),
+        negativePromptMode:
+          imageResolved.ok && !imageProtocolCapabilities(imageResolved.protocol).negativePrompt
+            ? "in-prompt"
+            : "independent",
         signal: c.req.raw.signal,
       });
       if (parsed.data.useAux && auxResolved && !auxResolved.ok && !result.fallbackReason) {
@@ -130,9 +136,6 @@ export function imageRoutes(
       );
     }
     const data = parsed.data;
-    if (data.bind && !isSaveId(data.bind.saveId)) {
-      return c.json({ error: "存档 id 不合法" }, 400);
-    }
     const redact = await config.redactor();
     try {
       const generated = await images.generate(
@@ -148,34 +151,25 @@ export function imageRoutes(
         c.req.raw.signal,
         data.profileName,
       );
+      if (c.req.raw.signal.aborted) throw new AbortedError();
       const saved = await store.save(
         {
           dataUrl: generated.dataUrl,
           mimeType: generated.mimeType,
+          width: generated.width,
+          height: generated.height,
+          byteLength: generated.byteLength,
+          metadata: generated.metadata,
           prompt: data.prompt,
           negativePrompt: data.negativePrompt,
           revisedPrompt: generated.revisedPrompt,
-          aspectRatio: data.aspectRatio,
+          aspectRatio: actualAspectRatio(generated.width, generated.height),
         },
         clock.now(),
       );
-      let bindings: Awaited<ReturnType<ImageStore["getBindings"]>> | undefined;
-      if (data.bind) {
-        const { saveId, target } = data.bind;
-        if (target.kind === "turn") {
-          bindings = await store.bind(saveId, { kind: "turn", seq: target.seq, imageId: saved.id });
-        } else if (target.kind === "npc") {
-          bindings = await store.bind(saveId, {
-            kind: "npc",
-            npcId: target.npcId,
-            imageId: saved.id,
-          });
-        } else {
-          bindings = await store.bind(saveId, { kind: "character", imageId: saved.id });
-        }
-      }
-      return c.json({ image: saved, ...(bindings ? { bindings } : {}) });
+      return c.json({ image: saved });
     } catch (error) {
+      if (error instanceof ImageBindingError) return c.json({ error: error.message }, error.status);
       if (error instanceof AbortedError || c.req.raw.signal.aborted) {
         return c.json({ error: "已取消生成" }, 400);
       }
@@ -205,7 +199,12 @@ export function saveImageRoutes(store: ImageStore): Hono {
   app.get("/:id/images", async (c) => {
     const saveId = c.req.param("id");
     if (!isSaveId(saveId)) return c.json({ error: "存档 id 不合法" }, 400);
-    return c.json({ bindings: await store.getBindings(saveId) });
+    try {
+      return c.json({ bindings: await store.getBindings(saveId) });
+    } catch (error) {
+      if (error instanceof ImageBindingError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
   });
 
   app.put("/:id/images", async (c) => {
@@ -221,8 +220,17 @@ export function saveImageRoutes(store: ImageStore): Hono {
     if (!parsed.success) {
       return c.json({ error: "绑定目标格式不对" }, 400);
     }
-    const bindings = await store.bind(saveId, parsed.data);
-    return c.json({ bindings });
+    try {
+      const bindings = await store.bind(saveId, parsed.data, {
+        signal: c.req.raw.signal,
+      });
+      return c.json({ bindings });
+    } catch (error) {
+      if (error instanceof ImageBindingError) return c.json({ error: error.message }, error.status);
+      if (error instanceof AbortedError || c.req.raw.signal.aborted)
+        return c.json({ error: "已取消应用图片" }, 400);
+      throw error;
+    }
   });
 
   app.delete("/:id/images", async (c) => {
@@ -238,8 +246,13 @@ export function saveImageRoutes(store: ImageStore): Hono {
     if (!parsed.success) {
       return c.json({ error: "解绑目标格式不对" }, 400);
     }
-    const bindings = await store.unbind(saveId, parsed.data);
-    return c.json({ bindings });
+    try {
+      const bindings = await store.unbind(saveId, parsed.data);
+      return c.json({ bindings });
+    } catch (error) {
+      if (error instanceof ImageBindingError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
   });
 
   return app;
