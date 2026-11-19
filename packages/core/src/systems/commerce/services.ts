@@ -34,7 +34,7 @@ export function applyPaidService(
     elapsed: 0,
     status: "active",
   };
-  return { ok: true, notes: ["已按本次约定支付并开始服务；后续进度不再次扣款"] };
+  return { ok: true, notes: ["已按本次约定支付；实际播放或相处进度另记，后续不再次扣款"] };
 }
 
 export function syncServiceProgress(
@@ -63,10 +63,25 @@ export function applyService(
   ctx: SystemContext,
 ): ApplyOutcome {
   const session = draft.sessions[command.id];
-  if (session?.service !== "adult-service")
-    return { ok: false, reason: "需要实际成交的成人服务；超梦使用正文体验指令" };
+  if (!session) return { ok: false, reason: "需要这一次已经实际成交的服务" };
   if (!tradeEvidence(ctx.facts, command.evidence))
     return { ok: false, reason: "服务进展缺少本轮正文依据" };
+  if (session.service === "bd-session") {
+    if (command.action !== "exit")
+      return { ok: false, reason: "超梦体验进度由 braindance 处理；未接入的已付款服务可单独 exit" };
+    const active = ctx.data.braindanceActivity as
+      | { source: { kind: string; id: string } }
+      | null
+      | undefined;
+    if (active?.source.kind === "service" && active.source.id === session.id)
+      return { ok: false, reason: "当前正在接入这次超梦，请用 braindance exit 一起保存观看位置" };
+    if (command.elapsed !== undefined && command.elapsed !== session.elapsed)
+      return { ok: false, reason: "取消尚未接入的超梦服务不虚构观看时间" };
+    const result = syncServiceProgress(draft, session.id, session.elapsed, "exited");
+    return result.ok
+      ? { ok: true, notes: ["已结束这次未接入的按次服务；不伪造播放、重复收费或自动退款"] }
+      : result;
+  }
   const elapsed =
     command.elapsed ?? (command.action === "finish" ? session.terms.duration : session.elapsed);
   const status =
@@ -77,6 +92,8 @@ export function applyService(
         : command.action === "pause"
           ? "paused"
           : "active";
+  if (["finished", "exited"].includes(session.status))
+    return syncServiceProgress(draft, session.id, elapsed, status);
   if (command.action === "finish" && elapsed !== session.terms.duration)
     return { ok: false, reason: "正常完成需经过约定时长；提前结束请记录 exit 和实际分钟" };
   if (command.action === "resume" && (session.status !== "paused" || elapsed !== session.elapsed))
@@ -85,7 +102,7 @@ export function applyService(
     return { ok: false, reason: "服务已暂停，先恢复或明确中止" };
   if (session.status === "paused" && elapsed !== session.elapsed)
     return { ok: false, reason: "暂停期间不补算服务分钟；需要先恢复" };
-  if (command.action !== "exit") {
+  if (command.action !== "exit" || elapsed > session.elapsed) {
     const here = ctx.read<WorldClockState>("world").location;
     if (here !== session.location) return { ok: false, reason: "已离开本次服务地点，不能隔空继续" };
     const people = ctx.read<NpcState>("npc").npcs;

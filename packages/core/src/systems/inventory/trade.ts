@@ -18,7 +18,7 @@ import { type EconomyState, MONEY_CAP, type Rarity, SERVICES } from "../economy"
 import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
 import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
-import { merchantAt, merchantServices, type WorldClockState } from "../world";
+import { merchantAt, merchantServices, merchantSites, type WorldClockState } from "../world";
 import { applyItem, itemCatalog, shopList, withWorldObjects } from "./apply";
 import { ensureMerchant, merchantState, shopUnavailable, withMerchants } from "./merchants";
 import { moodLock, moodPrice, shopMood } from "./mood";
@@ -197,6 +197,23 @@ export function quoteTrade(
     )
       return { ok: false, reason: "当前体验尚未结束；先继续或明确中止，再接受新体验" };
     const terms = match.quote.session;
+    if (request.service === "bd-session") {
+      const snapshot = world.slices.braindance as
+        | { works?: Record<string, { id: string; durationMinutes: number }> }
+        | undefined;
+      const saved = (data.braindanceWorks ?? snapshot?.works ?? {}) as Record<
+        string,
+        { id: string; durationMinutes: number }
+      >;
+      const fixed = Array.isArray(data.braindances)
+        ? (data.braindances as { id: string; durationMinutes: number }[])
+        : [];
+      const work = saved[terms.subject] ?? fixed.find((row) => row.id === terms.subject);
+      if (!work || !Number.isInteger(work.durationMinutes) || work.durationMinutes < 1)
+        return { ok: false, reason: "这部作品尚未确立，先选定实际目录再确认体验" };
+      if (!merchantSites(data).get(party.id)?.braindanceDevice?.playback)
+        return { ok: false, reason: "提供者没有已确立的现场超梦设备，不能先收取播放费用" };
+    }
     if (request.service === "adult-service") {
       const subject = (world.slices.npc as NpcState).npcs[terms.subject];
       if (!subject?.alive || subject.location !== location)

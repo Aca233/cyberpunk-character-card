@@ -1637,6 +1637,30 @@ export function ShardsPanel({
             </button>
           </li>
         ))}
+        {pageCount > 1 && (
+          <li>
+            <nav aria-label="资料分页">
+              <button
+                type="button"
+                disabled={currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                上一页
+              </button>
+              <span className={styles.dim}>
+                {" "}
+                {currentPage + 1} / {pageCount} · 共 {shards.length} 段原文{" "}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage + 1 === pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                下一页
+              </button>
+            </nav>
+          </li>
+        )}
       </ul>
       <article className={styles.dbReader}>
         {current ? (
@@ -1656,28 +1680,6 @@ export function ShardsPanel({
           <p className={styles.dim}>从左侧选择一张芯片阅读原文。</p>
         )}
       </article>
-      {pageCount > 1 && (
-        <nav aria-label="资料分页">
-          <button
-            type="button"
-            disabled={currentPage === 0}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            上一页
-          </button>
-          <span className={styles.dim}>
-            {" "}
-            {currentPage + 1} / {pageCount} · 共 {shards.length} 段原文{" "}
-          </span>
-          <button
-            type="button"
-            disabled={currentPage + 1 === pageCount}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            下一页
-          </button>
-        </nav>
-      )}
     </div>
   );
 }

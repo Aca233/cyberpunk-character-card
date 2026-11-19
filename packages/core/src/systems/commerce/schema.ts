@@ -158,7 +158,7 @@ export const SessionProgressSchema = z.object({
 export const ServiceCommandSchema = z
   .object({
     type: z.literal("commerce.service"),
-    id: z.string().min(1).describe("已经实际成交的成人服务报价 id"),
+    id: z.string().min(1).describe("已经实际成交的服务报价 id；超梦仅支持未接入时 exit"),
     action: z.enum(["progress", "pause", "resume", "finish", "exit"]),
     elapsed: z
       .number()
@@ -174,7 +174,7 @@ export const ServiceCommandSchema = z
       .describe("本轮正文里真实继续、暂停、结束或中止的原文"),
   })
   .describe(
-    "已经接受的成人服务正文进度，不重新扣款；略写正常结束仍经过剩余约定分钟。超梦进度使用 braindance 指令。",
+    "已经接受的成人服务正文进度，不重新扣款；略写正常结束仍经过剩余约定分钟。超梦进度使用 braindance 指令；已付款但尚未接入的超梦可用 exit 结束本次服务。",
   );
 export type ServiceCommand = z.infer<typeof ServiceCommandSchema>;
 
