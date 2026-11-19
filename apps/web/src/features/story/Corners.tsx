@@ -956,9 +956,10 @@ export function Unread({
   const wideOn = p.open || lingered;
   const resizing = useResizing(wideOn, p.open);
   const feed = view.phone.feedUnread;
+  const unreadCalls = feed.messages.filter((id) => id.startsWith("phone:call:")).length;
   const newsCount = feed.news.length + feed.street.length;
   const items: readonly { readonly label: string; readonly icon: AssetId; readonly n: number }[] = [
-    { label: "消息", icon: "notify.attention", n: view.phone.unread },
+    { label: "消息", icon: "notify.attention", n: view.phone.unread + unreadCalls },
     { label: "新闻", icon: "notify.journal", n: newsCount },
     { label: "芯片", icon: "interaction.jackIn", n: view.shards.unread },
   ];

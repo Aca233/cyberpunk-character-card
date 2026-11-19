@@ -18,6 +18,7 @@ import {
 } from "./view";
 
 type PhoneMessage = View["phone"]["messages"][number];
+type CallHistoryItem = NonNullable<View["calls"]>["history"][number];
 
 const CELL_SLICE = [20, 30, 30, 20] as const;
 
@@ -125,6 +126,8 @@ export interface PhoneActions {
   readonly onSendChat?: ((contact: string, text: string) => Promise<PhoneSendResult>) | undefined;
   /** 切到某个联系人且其有未读短信时，只把该联系人名下的未读消息标已读 */
   readonly onReadThread?: ((unreadIds: readonly number[]) => void) | undefined;
+  /** 查看一条未接来电时，只把这条来电提醒标已读 */
+  readonly onReadCall?: ((id: number) => void) | undefined;
   /** 正在等待哪位联系人的手机直聊回复 */
   readonly chatSending?: string | null | undefined;
   /** 本地乐观展示的发送中消息 */
@@ -143,6 +146,35 @@ function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | un
     if (msg && msg.sender !== "player" && !msg.read) return msg;
   }
   return undefined;
+}
+
+function MissedCalls({
+  calls,
+  onReadCall,
+}: {
+  readonly calls: readonly CallHistoryItem[];
+  readonly onReadCall?: ((id: number) => void) | undefined;
+}) {
+  if (calls.length === 0) return null;
+  return (
+    <section className={styles.phoneMissedCalls} aria-label="未接全息电话">
+      <h3 className={styles.phoneMissedCallsTitle}>未接全息电话</h3>
+      <ul className={styles.phoneMissedCallList}>
+        {calls.map((call) => (
+          <li key={call.id} className={styles.phoneMissedCall}>
+            <span className={styles.phoneMissedCallDetails}>
+              <span className={styles.phoneMissedCallMeta}>
+                <b>{call.name}</b>
+                <time className={styles.phoneMissedCallTime}>{call.at}</time>
+              </span>
+              <span className={styles.phoneMissedCallText}>全息电话没接</span>
+            </span>
+            <ActionButton onClick={() => onReadCall?.(call.id)}>查看并标已读</ActionButton>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 /** 结构性禁用直聊的原因（不包含短暂等待发送，避免发送期间卸载输入框丢焦点） */
@@ -492,6 +524,7 @@ export function PhoneBody({
   onMessageNpc,
   onSendChat,
   onReadThread,
+  onReadCall,
   chatSending,
   pendingChat,
   busy,
@@ -515,6 +548,12 @@ export function PhoneBody({
   const pendingForCurrent =
     current && pendingChat?.contact === current.key ? pendingChat.text : null;
   const bubbles = buildChatBubbles(thread, pendingForCurrent);
+  const unreadCallIds = new Set(
+    view.phone.feedUnread.messages.filter((id) => id.startsWith("phone:call:")),
+  );
+  const missedCalls = (view.calls?.history ?? []).filter(
+    (call) => call.status === "missed" && unreadCallIds.has(`phone:call:${call.id}`),
+  );
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [chatErrors, setChatErrors] = useState<Record<string, string>>({});
@@ -553,15 +592,18 @@ export function PhoneBody({
 
   if (contacts.length === 0 || !current) {
     return (
-      <div className={styles.phoneEmpty}>
-        <div className={styles.phoneEmptyCard}>
-          <CellFrame />
-          <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={24} />
-          <b className={styles.phoneEmptyTitle}>还没有联系人</b>
-          <p className={styles.phoneEmptyText}>
-            在夜之城结识新人物或收到加密简讯后，频道会在此出现。
-          </p>
+      <div className={styles.phoneNoContacts}>
+        <div className={styles.phoneEmpty}>
+          <div className={styles.phoneEmptyCard}>
+            <CellFrame />
+            <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={24} />
+            <b className={styles.phoneEmptyTitle}>还没有联系人</b>
+            <p className={styles.phoneEmptyText}>
+              在夜之城结识新人物或收到加密简讯后，频道会在此出现。
+            </p>
+          </div>
         </div>
+        <MissedCalls calls={missedCalls} onReadCall={onReadCall} />
       </div>
     );
   }
@@ -571,6 +613,7 @@ export function PhoneBody({
     onMessageNpc,
     onSendChat,
     onReadThread,
+    onReadCall,
     chatSending,
     pendingChat,
     busy,
@@ -639,6 +682,7 @@ export function PhoneBody({
         </ul>
       </aside>
       <section className={styles.threadPane} aria-label={`和${current.name}的消息`}>
+        <MissedCalls calls={missedCalls} onReadCall={onReadCall} />
         <ThreadHead
           key={current.key}
           contact={current}

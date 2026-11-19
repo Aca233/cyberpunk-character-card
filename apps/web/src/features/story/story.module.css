@@ -2944,6 +2944,93 @@
   border-right: 1px solid rgb(94 246 255 / 18%);
 }
 
+.phoneMissedCalls {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  max-height: min(11rem, 34%);
+  margin: 0 0 0.45rem;
+  padding: 0 0 0.5rem;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(94 246 255 / 18%);
+}
+
+.phoneMissedCallsTitle {
+  flex: none;
+  margin: 0;
+  color: var(--cp-yellow);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+}
+
+.phoneMissedCallList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0.15rem 0 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-cyan-dim) transparent;
+}
+
+.phoneMissedCall {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.35rem 0.4rem;
+  background: rgb(30 14 20 / 52%);
+  border-left: 2px solid var(--cp-red);
+}
+
+.phoneMissedCallDetails {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.phoneMissedCallMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: var(--fs-label);
+}
+
+.phoneMissedCallMeta b {
+  overflow: hidden;
+  color: var(--cp-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneMissedCallTime,
+.phoneMissedCallText {
+  flex: none;
+  color: var(--cp-text-dim);
+  font-size: 10px;
+}
+
+.phoneMissedCallText {
+  color: var(--cp-red);
+}
+
+.phoneNoContacts {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .phoneFilters {
   display: flex;
   flex: none;

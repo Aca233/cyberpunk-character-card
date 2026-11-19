@@ -532,19 +532,23 @@ export function StoryScreen() {
   }, []);
   // 只在具体某个会话被打开时按联系人粒度标已读；不再在切页签时把全部联系人的未读角标一次清光
   const readingPromise = useRef<Promise<void> | null>(null);
-  const unreadCallFeeds = (view?.phone.feedUnread.messages ?? []).filter((id) =>
-    id.startsWith("phone:call:"),
-  );
-  const readThread = useCallback(
-    (unreadIds: readonly number[]) => {
-      const feed = [...unreadIds.map((id) => `phone:message:${id}`), ...unreadCallFeeds];
+  const readPhoneFeed = useCallback(
+    (feed: readonly string[]) => {
       if (feed.length === 0 || readingPromise.current !== null) return;
-      const pending = act({ type: "readMessages", feed }, "phone").finally(() => {
+      const pending = act({ type: "readMessages", feed: [...feed] }, "phone").finally(() => {
         if (readingPromise.current === pending) readingPromise.current = null;
       });
       readingPromise.current = pending;
     },
-    [act, unreadCallFeeds],
+    [act],
+  );
+  const readThread = useCallback(
+    (unreadIds: readonly number[]) => readPhoneFeed(unreadIds.map((id) => `phone:message:${id}`)),
+    [readPhoneFeed],
+  );
+  const readCall = useCallback(
+    (id: number) => readPhoneFeed([`phone:call:${id}`]),
+    [readPhoneFeed],
   );
   // 手机窗口内轻量直聊：先等已读版本落库再取最新 version，失败时吐司提示并就地回显原因与还原草稿
   const [pendingChat, setPendingChat] = useState<{
@@ -864,7 +868,12 @@ export function StoryScreen() {
   const unreadTabs = (
     <PinTabs<UnreadTab>
       tabs={[
-        ["messages", "消息", view.phone.unread],
+        [
+          "messages",
+          "消息",
+          view.phone.unread +
+            view.phone.feedUnread.messages.filter((id) => id.startsWith("phone:call:")).length,
+        ],
         ["news", "新闻", view.phone.feedUnread.news.length + view.phone.feedUnread.street.length],
         ["factions", "势力", 0],
         ["shards", "芯片", view.shards.unread],
@@ -894,6 +903,7 @@ export function StoryScreen() {
           onNews={() => void readNews()}
           onSendChat={sendPhoneChat}
           onReadThread={readThread}
+          onReadCall={readCall}
           chatSending={chatSending}
           pendingChat={pendingChat}
           busy={busy}
