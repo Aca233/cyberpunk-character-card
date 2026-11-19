@@ -26,7 +26,11 @@ export const PlaceItemActionSchema = z
       ctx.addIssue({ code: "custom", path: ["source"], message: "只有存放时才指定物品来源" });
     }
     if ((action.source === "worn" || action.source === "quick") && (action.count ?? 1) !== 1) {
-      ctx.addIssue({ code: "custom", path: ["count"], message: "穿着或快捷栏的物品每次只能存放一件" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["count"],
+        message: "穿着或快捷栏的物品每次只能存放一件",
+      });
     }
   });
 

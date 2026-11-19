@@ -65,7 +65,11 @@ export const ItemPlaceCommandSchema = z
       ctx.addIssue({ code: "custom", path: ["source"], message: "取回物品时不能指定随身来源" });
     }
     if ((command.source === "worn" || command.source === "quick") && (command.count ?? 1) !== 1) {
-      ctx.addIssue({ code: "custom", path: ["count"], message: "穿着或快捷栏的物品每次只能存放一件" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["count"],
+        message: "穿着或快捷栏的物品每次只能存放一件",
+      });
     }
   })
   .describe(

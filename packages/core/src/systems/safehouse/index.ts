@@ -30,7 +30,7 @@ export const safehouse = defineSystem<
   SafehouseInternal
 >({
   id: "safehouse",
-  dependsOn: ["world", "inventory", "travel", "cyberware", "npc"],
+  dependsOn: ["world", "inventory", "travel", "cyberware", "npc", "health", "combat"],
   state: SafehouseStateSchema,
   initial: () => ({ homes: [] }),
   commands: { itemPlace: ItemPlaceCommandSchema, home: HomeCommandSchema },

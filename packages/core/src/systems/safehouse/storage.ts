@@ -1,8 +1,7 @@
 import type { WorldState } from "../../kernel/world";
-import { HealthStateSchema } from "../health/schema";
-import type { PlacedKind } from "../inventory/schema";
-import { TravelStateSchema } from "../travel/schema";
-import { vehicleCatalog } from "../travel/vehicles";
+import { HealthStateSchema } from "../health";
+import type { PlacedKind } from "../inventory";
+import { TravelStateSchema, vehicleCatalog } from "../travel";
 import { locationCatalog, WorldClockStateSchema } from "../world";
 import { SafehouseStateSchema } from "./schema";
 
