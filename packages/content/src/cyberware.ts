@@ -827,7 +827,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 7000,
     humanityCost: 3,
     ability:
-      "高强度航空钛合金置换全身负重骨架，骨骼抗压与承重极限翻倍提升，让你负重疾驰、搬运战术物资或背负伤员撤离时健步如飞。",
+      "高强度航空钛合金置换全身负重骨架，提高骨骼抗压与承重能力，在负重移动、搬运战术物资或背负伤员撤离时提供更稳固的支撑。承重增强已计入【当前状态】的舒适携带容量，超过该容量仍需体现实际携带负担，不代表可以无限携带或免除负担。",
     checks: ["body"],
     attributes: { body: 1 },
   },
