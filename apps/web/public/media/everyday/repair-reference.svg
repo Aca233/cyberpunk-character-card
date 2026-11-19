@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">夜班维修便笺：检查顺序示意</title>
+  <desc id="desc">三步流程图：断开上游电源，使用实际仪表核验，核对型号、接口和读数。它只是一张顺序提示图，不提供具体接线或现场测量。</desc>
+  <rect width="1200" height="675" fill="#10262b"/>
+  <defs>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="#224047" stroke-width="1"/></pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#80c6bc"/></marker>
+  </defs>
+  <rect width="1200" height="675" fill="url(#grid)"/>
+  <path d="M58 65H1142M58 573H1142" stroke="#79b3ae"/>
+  <g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+    <text x="64" y="119" fill="#a5ded0" font-size="21" letter-spacing="3">歌舞伎互助维修摊 / 夜班便笺 01</text>
+    <text x="64" y="193" fill="#e1f2d9" font-size="52" font-weight="700">先断电，再核对</text>
+    <text x="64" y="238" fill="#90b5ad" font-size="23">灯亮不等于可靠，标签也可能贴错。</text>
+  </g>
+  <g fill="#173a3e" stroke="#71b9b0" stroke-width="2">
+    <rect x="64" y="301" width="306" height="162" rx="3"/>
+    <rect x="447" y="301" width="306" height="162" rx="3"/>
+    <rect x="830" y="301" width="306" height="162" rx="3"/>
+  </g>
+  <g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d8ecd7">
+    <text x="86" y="340" fill="#e3be69" font-size="22">01 / 断开</text>
+    <text x="86" y="390" font-size="27">上游电源</text>
+    <text x="86" y="431" fill="#90b5ad" font-size="19">不凭指示灯判断</text>
+    <text x="469" y="340" fill="#e3be69" font-size="22">02 / 核验</text>
+    <text x="469" y="390" font-size="27">实际仪表</text>
+    <text x="469" y="431" fill="#90b5ad" font-size="19">没有读数就留空</text>
+    <text x="852" y="340" fill="#e3be69" font-size="22">03 / 对照</text>
+    <text x="852" y="390" font-size="27">型号与接口</text>
+    <text x="852" y="431" fill="#90b5ad" font-size="19">记录已经确认的事</text>
+    <text x="64" y="526" fill="#bdd5c8" font-size="23">工具箱里的表，第二天开工前记得还回来。</text>
+    <text x="64" y="619" fill="#84a89f" font-size="19">本作原创示意图 · 不是具体接线图 · 不替代现场操作、工具与专业判断</text>
+  </g>
+  <path d="M382 382H429M765 382H812" stroke="#80c6bc" stroke-width="3" marker-end="url(#arrow)"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">返场第三首：随片节目单</title>
+  <desc id="desc">米白纸面上的原创演出节目单，列出试音五分钟、返场十四分钟、散场五分钟；不是现实演出公告。</desc>
+  <rect width="1200" height="800" fill="#171e25"/>
+  <path d="M70 40H1130V760H70Z" fill="#e9dfca"/>
+  <path d="M70 170H1130M70 654H1130" stroke="#26373a" stroke-width="2"/>
+  <rect x="99" y="70" width="161" height="57" fill="#bd5e48"/>
+  <g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+    <text x="119" y="109" fill="#fff0db" font-size="28" font-weight="700">落针唱片</text>
+    <text x="1096" y="105" fill="#49615f" font-size="20" text-anchor="end" letter-spacing="3">AUTHORIZED LIVE RECORDING / 024</text>
+    <text x="112" y="256" fill="#243235" font-size="65" font-weight="700" letter-spacing="8">返场第三首</text>
+    <text x="116" y="299" fill="#596c67" font-size="22">键盘手咪娜的二十四分钟 · 随片节目单</text>
+    <text x="117" y="381" fill="#bd5e48" font-size="23">01</text>
+    <text x="192" y="381" fill="#243235" font-size="29">试音</text>
+    <text x="1069" y="381" fill="#49615f" font-size="24" text-anchor="end">05 MIN</text>
+    <text x="194" y="417" fill="#667771" font-size="20">递来的温水 / 左侧监听 / 返场曲目</text>
+    <text x="117" y="479" fill="#bd5e48" font-size="23">02</text>
+    <text x="192" y="479" fill="#243235" font-size="29">返场</text>
+    <text x="1069" y="479" fill="#49615f" font-size="24" text-anchor="end">14 MIN</text>
+    <text x="194" y="515" fill="#667771" font-size="20">晚了半拍的和弦 / 没有停下来的跟唱</text>
+    <text x="117" y="577" fill="#bd5e48" font-size="23">03</text>
+    <text x="192" y="577" fill="#243235" font-size="29">散场</text>
+    <text x="1069" y="577" fill="#49615f" font-size="24" text-anchor="end">05 MIN</text>
+    <text x="194" y="613" fill="#667771" font-size="20">收线 / 归还租用设备 / 留下的围巾</text>
+    <text x="116" y="701" fill="#49615f" font-size="20">林穗选片：这一版保留换弦声和现场失误。</text>
+    <text x="116" y="734" fill="#69766e" font-size="17">本作原创资料页 · 非现实演出公告 · 购买本片不包含见面或演出预约</text>
+  </g>
+  <path d="M190 438H1076M190 536H1076" stroke="#c0c5b4"/>
+</svg>

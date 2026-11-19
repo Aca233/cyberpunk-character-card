@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">摊灯熄灭以前：原创平面封套</title>
+  <desc id="desc">深蓝底色上是暖黄色夜市棚灯的几何图形，标明十八分钟、阿娴授权发行。此图是本作原创封套，不是超梦录制画面。</desc>
+  <rect width="1200" height="675" fill="#101b24"/>
+  <path d="M0 98H1200M0 551H1200" stroke="#3b5057"/>
+  <path d="M55 133H1145V596H55Z" fill="none" stroke="#40545a"/>
+  <path d="M55 133H1145L1111 197H89Z" fill="#263c44"/>
+  <path d="M55 133H1145M180 133L196 197M305 133L317 197M430 133L438 197M555 133L559 197M680 133L676 197M805 133L793 197M930 133L914 197M1055 133L1031 197" stroke="#72928a" stroke-width="3"/>
+  <g fill="#e9b75e">
+    <rect x="127" y="211" width="106" height="8" rx="4"/>
+    <rect x="357" y="211" width="106" height="8" rx="4"/>
+    <rect x="587" y="211" width="106" height="8" rx="4"/>
+    <rect x="817" y="211" width="106" height="8" rx="4"/>
+  </g>
+  <g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif">
+    <text x="58" y="61" fill="#94b9b2" font-size="21" letter-spacing="4">片角发行 / NEIGHBORHOOD EDITIONS</text>
+    <text x="1138" y="61" fill="#e9b75e" font-size="21" text-anchor="end">BD · 018</text>
+    <text x="97" y="337" fill="#f3dfac" font-size="70" font-weight="700" letter-spacing="4">摊灯熄灭以前</text>
+    <text x="101" y="389" fill="#abc1be" font-size="24" letter-spacing="3">收摊 / 夜宵 / 明天还要用的热水壶</text>
+    <text x="101" y="480" fill="#f3dfac" font-size="27">阿娴授权发行</text>
+    <text x="101" y="519" fill="#91aaa8" font-size="21">十八分钟的普通一晚 · 体验须使用超梦设备</text>
+    <text x="58" y="641" fill="#8ba2a4" font-size="18">本作原创平面封套 · 不含隐藏委托 · 非录制画面</text>
+  </g>
+  <g stroke="#e9b75e" stroke-width="3">
+    <path d="M1004 295V510M1015 295V510M1034 295V510M1040 295V510M1057 295V510M1073 295V510M1083 295V510M1103 295V510"/>
+  </g>
+  <path d="M991 532H1121" stroke="#72928a"/>
+</svg>
