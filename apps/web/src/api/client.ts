@@ -167,6 +167,25 @@ async function streamEvents(
   throw new ApiError("连接中途断开了，可以重试", 0);
 }
 
+export interface ImageCapabilities {
+  readonly negativePrompt: boolean;
+  readonly aspectRatio: boolean;
+  readonly size: boolean;
+  readonly sampling: boolean;
+}
+
+export interface ImagePromptDraftResult extends ImagePromptResult {
+  readonly profileName: string | null;
+  readonly capabilities: ImageCapabilities | null;
+}
+
+export interface ImageModelCapabilities {
+  readonly ready: boolean;
+  readonly error: string | null;
+  readonly profileName: string | null;
+  readonly capabilities: ImageCapabilities | null;
+}
+
 export interface Health {
   readonly ok: boolean;
   readonly config: "ok" | "missing" | "invalid";
@@ -175,7 +194,11 @@ export interface Health {
     readonly ready: boolean;
     readonly narrator: { readonly ready: boolean; readonly error: string | null };
     readonly aux: { readonly ready: boolean; readonly error: string | null };
-    readonly image?: { readonly ready: boolean; readonly error: string | null };
+    readonly image?: {
+      readonly ready: boolean;
+      readonly error: string | null;
+      readonly capabilities: ImageCapabilities | null;
+    };
   };
 }
 
@@ -675,6 +698,15 @@ export const api = {
       undefined,
       spoilerHeader(),
     ),
+  /** 仅解析所选生图模型的配置与能力，不调用模型。 */
+  imageCapabilities: (profileName?: string, signal?: AbortSignal) =>
+    request<ImageModelCapabilities>(
+      "GET",
+      `/images/capabilities${profileName ? `?profileName=${encodeURIComponent(profileName)}` : ""}`,
+      undefined,
+      {},
+      signal,
+    ),
   /** 提炼文生图英文提示词（可关闭辅助模型直接用本地拼接） */
   draftImagePrompt: (
     input: {
@@ -699,7 +731,7 @@ export const api = {
           data,
         );
       }
-      return data as unknown as ImagePromptResult;
+      return data as unknown as ImagePromptDraftResult;
     }),
   /** 生成并保存图片；采用图片通过独立的原子绑定接口完成。 */
   generateImage: (

@@ -873,6 +873,14 @@ export function generateImageWithProfile(
   const original = Object.freeze({ ...request });
   const protocol = resolveImageProtocol(snapshot);
   const capabilities = imageProtocolCapabilities(protocol);
+  if (original.negativePrompt?.trim() && !capabilities.negativePrompt) {
+    return Promise.reject(
+      new UpstreamError(
+        "当前模型不支持独立负面提示词；请重新提炼提示词，或将排除要求写入正向提示词并清空负面提示词后再生成。",
+        400,
+      ),
+    );
+  }
   const sampling = capabilities.sampling
     ? {
         steps: original.steps ?? 24,
@@ -888,11 +896,6 @@ export function generateImageWithProfile(
     () =>
       withImageDeadline(async (requestSignal) => {
         const warnings: string[] = [];
-        if (original.negativePrompt?.trim() && !capabilities.negativePrompt) {
-          warnings.push(
-            "当前协议不发送独立反向提示词；本次已保留正向提示词原文。如需排除某些内容，请写入正向提示词。",
-          );
-        }
         if (original.aspectRatio && !capabilities.aspectRatio && !capabilities.size) {
           warnings.push(
             "当前对话生图协议没有独立画幅参数，本次未向提示词追加隐藏的比例要求；实际尺寸以返回图片为准。",

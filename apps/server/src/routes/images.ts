@@ -91,25 +91,32 @@ export function imageRoutes(
     }
     const auxResolved = parsed.data.useAux ? await llm.resolve("aux") : null;
     const imageResolved = await images.resolve(parsed.data.profileName);
+    const capabilities = imageResolved.ok
+      ? imageProtocolCapabilities(imageResolved.protocol)
+      : null;
+    const imageModel = {
+      profileName: imageResolved.ok ? imageResolved.profile.name : null,
+      capabilities,
+    };
     const redact = await config.redactor();
     try {
       const result = await draftImagePrompt(auxResolved?.ok ? llm : null, parsed.data.request, {
         useAux: parsed.data.useAux && Boolean(auxResolved?.ok),
         ...(parsed.data.style ? { style: parsed.data.style } : {}),
         negativePromptMode:
-          imageResolved.ok && !imageProtocolCapabilities(imageResolved.protocol).negativePrompt
-            ? "in-prompt"
-            : "independent",
+          capabilities && !capabilities.negativePrompt ? "in-prompt" : "independent",
         signal: c.req.raw.signal,
       });
       if (parsed.data.useAux && auxResolved && !auxResolved.ok && !result.fallbackReason) {
         return c.json({
           ...result,
+          ...imageModel,
           fallbackReason: redact(auxResolved.error),
         });
       }
       return c.json({
         ...result,
+        ...imageModel,
         ...(result.fallbackReason ? { fallbackReason: redact(result.fallbackReason) } : {}),
       });
     } catch (error) {
@@ -175,8 +182,31 @@ export function imageRoutes(
       }
       const message =
         error instanceof UpstreamError || error instanceof Error ? error.message : String(error);
-      return c.json({ error: redact(message) }, 502);
+      return c.json(
+        { error: redact(message) },
+        error instanceof UpstreamError && error.status === 400 ? 400 : 502,
+      );
     }
+  });
+
+  app.get("/capabilities", async (c) => {
+    const profileName = c.req.query("profileName")?.trim() || undefined;
+    const resolved = await images.resolve(profileName);
+    if (!resolved.ok) {
+      const redact = await config.redactor();
+      return c.json({
+        ready: false,
+        error: redact(resolved.error),
+        profileName: null,
+        capabilities: null,
+      });
+    }
+    return c.json({
+      ready: true,
+      error: null,
+      profileName: resolved.profile.name,
+      capabilities: imageProtocolCapabilities(resolved.protocol),
+    });
   });
 
   app.get("/:id", async (c) => {
