@@ -1,5 +1,6 @@
 import type { RuleModule } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
+import type { ContentMedia } from "../../schemas/content-media";
 import { CommerceStateSchema } from "../commerce";
 import { formatGameTime, merchantAt, merchantSites, WorldClockStateSchema } from "../world";
 import { braindanceCatalog, braindanceSources, braindanceWork } from "./apply";
@@ -23,6 +24,7 @@ export const braindanceRules: RuleModule<BraindanceState> = {
 - 使用已有作品 id；正文中新确立作品先 define 固定录制者、简介、各片段梗概、时长和材料中实际可查细节，不能随着玩家猜测改内容。不要照着玩家猜的幕后因果补证据，也不创建标准答案。
 - 询价、简介和讨论不扣款。店内先由 commerce.offer 明确 bd-session、作品、范围、总时长和提前结束条件；玩家接受后 trade 成交，再 start 引用该 offer 形成的服务 id。自有载体播放引用实际 carrier 对象及手边的超梦设备；重看不重复购片。
 - start 只接入；progress 按下一片段写实际体验，初次 text 必须引用本轮正文中作品自身的定稿原文，重播已有定稿省略 text。continue 用下一次 progress，finish 是略写看完剩余内容，exit 仅记录已发生体验。暂停交流用 pause，回来用 resume。已结束后要在实际来源上接着查证或续看，可用新 start 并填 from=原体验 id；自有作品不再买片，已结束的按次服务不能复用。重看定稿不能改录制事件，现场朋友的插话不进入作品原文。
+- 片段可有 media 附件（link/image/video/audio，url、label，可选 caption；video 可有 poster、captionsUrl），只引用已经确立可用的本地资源、用户提供链接或素材库地址，不编造网址。媒体随片段定稿，由界面显示，正文可简短提标签，不写 HTML。链接与说明不证明资源内容或世界事实；界面加载不代表角色已经联网、看完未呈现片段或推进游戏时间。
 - progress/finish/replay/inspect 的游戏分钟由代码结算；不要为同一段观看或分析另发 world.time/phases。略写只省略文字，不免去剩余时间；此前略写的片段后来首次重播展开时，replay.text 仍须保存这次的实际定稿原文。查阅已经写出的文字不等于实际重播，不发 replay。
 - 记录里的人只能按原记录行动，不会回应观看者或因为被观看成为现实熟人。录制者的情绪只是感知输入，不替玩家决定喜好、感情、台词或动作。
 - 查证在正文中响应玩家实际追问、请人分析或回放；只可使用本轮提供的可查材料和已知发现。没有录到、设备不支持或无法辨认时保留不确定性，不能临时补真相。观察、文件说法、人物推断分别表达；没有证据也能行动、继续调查或改判断，不自动判任务失败。
@@ -31,6 +33,8 @@ export const braindanceRules: RuleModule<BraindanceState> = {
 
 const publicWork = (work: BdWork) =>
   `${work.id}「${work.title}」；录制者：${work.recorder}；${work.durationMinutes} 分钟；简介：${work.synopsis}`;
+const fixedMedia = (media: readonly ContentMedia[] | undefined): string =>
+  media?.length ? `；同段固定媒体元数据：${JSON.stringify(media)}（不据链接补出未知内容）` : "";
 
 export function braindanceSection(
   state: BraindanceState,
@@ -107,7 +111,7 @@ export function braindanceSection(
         const first = work.passages[0];
         if (first && (sources.length || pending.length))
           lines.push(
-            `  - 从头开始时的首片段 ${first.id}「${first.label}」${first.minutes} 分钟：${state.passages[work.id]?.[first.id] ?? first.outline}。必须先 start，再记录 progress；仅询价不能演成已经观看。`,
+            `  - 从头开始时的首片段 ${first.id}「${first.label}」${first.minutes} 分钟：${state.passages[work.id]?.[first.id] ?? first.outline}${fixedMedia(first.media)}。必须先 start，再记录 progress；仅询价不能演成已经观看。`,
           );
         const watched = previous?.position ?? 0;
         for (const passage of work.passages.slice(0, watched)) {
@@ -116,7 +120,7 @@ export function braindanceSection(
             (input.text.includes(passage.label) || passage === work.passages[watched - 1])
           )
             lines.push(
-              `  - 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟：${state.passages[work.id]?.[passage.id] ?? passage.outline}`,
+              `  - 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟：${state.passages[work.id]?.[passage.id] ?? passage.outline}${fixedMedia(passage.media)}`,
             );
         }
         for (const detail of work.details.filter(
@@ -141,14 +145,14 @@ export function braindanceSection(
     if (next) {
       const fixed = state.passages[work.id]?.[next.id];
       lines.push(
-        `- 下一片段 ${next.id}「${next.label}」，${next.minutes} 分钟；${fixed ? `已有定稿原文（保持一致）：${fixed}` : `仅可据此展开，不能改主要事件：${next.outline}`}`,
+        `- 下一片段 ${next.id}「${next.label}」，${next.minutes} 分钟；${fixed ? `已有定稿原文（保持一致）：${fixed}` : `仅可据此展开，不能改主要事件：${next.outline}`}${fixedMedia(next.media)}`,
       );
     } else lines.push("- 全部片段已经实际看过；可以交流、追问、回放或 finish 正常结束。");
     const replay = /回放|重播|重看|再看|刚才|前一段/.test(input.text);
     for (const passage of work.passages.slice(0, active.position)) {
       const fixed = state.passages[work.id]?.[passage.id];
       lines.push(
-        `- 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟${replay && (input.text.includes(passage.label) || input.text.includes(passage.id) || passage === work.passages[active.position - 1]) ? `；固定内容：${fixed ?? passage.outline}` : ""}`,
+        `- 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟${replay && (input.text.includes(passage.label) || input.text.includes(passage.id) || passage === work.passages[active.position - 1]) ? `；固定内容：${fixed ?? passage.outline}${fixedMedia(passage.media)}` : ""}`,
       );
     }
     const seen = new Set(work.passages.slice(0, active.position).map((p) => p.id));

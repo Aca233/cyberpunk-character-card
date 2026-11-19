@@ -15,6 +15,7 @@ export const shardsRules: RuleModule<ShardsState> = {
 - 新资料先固定内容和来源，目录外真实载体用 item gain 的 definition.chipContentId 关联，chip define 登记一次，以后复用。普通邮件、日记、录音实际读到时才写 shard，固定 contentId + partId；后续分段不能覆盖原文，未解开、未读到的内容不进入知识。read 标记仅表示玩家界面是否点开，不代表角色未读。
 - 复制用 chip copy，必须有实际来源、可用读写器和不同的空白载体 destination；副本引用同一内容，不复制钱、技能或其他资产。赠送与交付用 item lose + recipient；借出还需把真实返还约定写入已有承诺/人物记忆，交出原件不清除已读知识。给别人看或转述只按真实到达的信息更新其记忆，不把持有当阅读或让所有人同步得知。
 - 功能辅助仅 chip use，本次能力受真实硬件、接口和固定功能限制，不变成永久技能、属性或装载槽。行为芯片只能经实际义体安装与本人运行状态启用，读说明不等于芯片接管；超梦媒体接正文体验，不把芯片 read 当作看完整部。
+- 分段可有 media 附件（link/image/video/audio，url、label，可选 caption；video 可有 poster、captionsUrl），只引用已经确立可用的本地资源、用户提供链接或素材库地址，不编造网址。附件随原文定稿；正文可引用标签，不写 HTML。链接、标签和说明不证明远端内容或世界事实，界面加载也不代表角色已经联网、读取未解密部分或消耗游戏时间。
 - 原文是文件的说法，可以有错、被剪辑或撒谎，不等于证实世界真相。调查通过正文追问与已有设备规则承接。重读保持固定内容；普通教程、音乐、私人便条与成年作品可平静结束，不强加阴谋、伤害、任务或关系奖励。文风和篇幅由写作预设负责。`,
 };
 
@@ -81,8 +82,13 @@ function carrierLines(
       lines.push(
         `  段落 ${part.id} ${part.label}：${readable ? "可读取" : `受保护，网络 ${part.protectionNetwork}`}`,
       );
-      if (reading && selected && readable)
+      if (reading && selected && readable) {
         lines.push(`  【仅供本轮实际读取的固定材料；未执行读取前不算角色已知】${part.text}`);
+        if (part.media?.length)
+          lines.push(
+            `  同段固定媒体附件（按原元数据呈现，不推断资源内未知内容）：${JSON.stringify(part.media)}`,
+          );
+      }
     }
   }
   return lines;
@@ -115,6 +121,8 @@ export function shardsSection(state: ShardsState, context?: SectionContext): str
     lines.push(
       `- #${shard.id} ${shard.contentId}/${shard.partId}［${SHARD_KIND_LABELS[shard.kind]}］${shard.title}${shard.from ? `（${shard.from}）` : ""}｜${formatGameTime(shard.at)}${shard.carrier ? `｜来自载体 ${shard.carrier}` : ""}：${shard.text}`,
     );
+    if (shard.media?.length)
+      lines.push(`  已归档媒体元数据：${JSON.stringify(shard.media)}；不据链接补出未知内容。`);
   }
   if (state.shards.length > selected.size)
     lines.push(

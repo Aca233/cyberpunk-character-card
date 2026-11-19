@@ -24,7 +24,11 @@ export function braindanceView(state: BraindanceState) {
       recorder: w.recorder,
       synopsis: w.synopsis,
       durationMinutes: w.durationMinutes,
-      passages: Object.entries(state.passages[w.id] ?? {}).map(([id, text]) => ({ id, text })),
+      passages: Object.entries(state.passages[w.id] ?? {}).map(([id, text]) => ({
+        id,
+        text,
+        media: w.passages.find((passage) => passage.id === id)?.media ?? [],
+      })),
     })),
     discoveries: state.discoveries.map((d) => ({ ...d, at: formatGameTime(d.at) })),
     history: state.history.map((h) => ({

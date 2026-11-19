@@ -15,6 +15,7 @@ export function shardsView({ world }: ViewContext) {
     title: s.title,
     from: s.from,
     text: s.text,
+    media: s.media ?? [],
     at: formatGameTime(s.at),
     read: s.read,
   }));

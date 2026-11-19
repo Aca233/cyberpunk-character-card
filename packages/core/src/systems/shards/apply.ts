@@ -85,9 +85,10 @@ export function applyShard(
     return existing.text === command.text &&
       existing.title === command.title &&
       existing.kind === command.kind &&
-      existing.from === (command.from ?? null)
+      existing.from === (command.from ?? null) &&
+      JSON.stringify(existing.media ?? []) === JSON.stringify(command.media ?? [])
       ? { ok: true }
-      : { ok: false, reason: "该资料片段已经定稿，重读不能改写原文、来源或标题" };
+      : { ok: false, reason: "该资料片段已经定稿，重读不能改写原文、媒体、来源或标题" };
   const previous = draft.shards.find((s) => s.contentId === command.contentId);
   if (
     previous &&
@@ -105,6 +106,7 @@ export function applyShard(
     title: command.title,
     from: command.from ?? null,
     text: command.text,
+    ...(command.media ? { media: command.media } : {}),
     at: now,
     location,
     related: [...command.related],
@@ -239,6 +241,7 @@ export function applyChip(
         title: content.title,
         ...(content.from ? { from: content.from } : {}),
         text: part.text,
+        ...(part.media ? { media: part.media } : {}),
         related: content.related,
       },
       ctx.now,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ContentMediaListSchema } from "../../schemas/content-media";
 
 export const SHARD_TITLE_CHARS = 80;
 export const SHARD_FROM_CHARS = 120;
@@ -19,6 +20,7 @@ export const ChipPartSchema = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(80),
   text: z.string().min(1).max(SHARD_PART_CHARS),
+  media: ContentMediaListSchema.optional(),
   protectionNetwork: z.string().min(1).max(30).optional(),
 });
 export const ChipContentSchema = z
@@ -51,6 +53,7 @@ export const ShardSchema = z.object({
   title: z.string().min(1).max(SHARD_TITLE_CHARS),
   from: z.string().min(1).max(SHARD_FROM_CHARS).nullable(),
   text: z.string().min(1),
+  media: ContentMediaListSchema.optional(),
   at: z.number().int(),
   location: z.string().nullable(),
   related: z.array(z.string()).default([]),
@@ -86,6 +89,7 @@ export const ShardCommandSchema = z
       .min(1)
       .max(SHARD_PART_CHARS)
       .describe("角色已经实际读到的原文；不能覆盖定稿或录入未解开部分"),
+    media: ContentMediaListSchema.optional(),
     related: z
       .array(z.string().min(1))
       .max(20)

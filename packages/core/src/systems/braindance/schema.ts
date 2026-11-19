@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ContentMediaListSchema } from "../../schemas/content-media";
 
 const Id = z.string().trim().min(1).max(100);
 const Text = z.string().trim().min(1);
@@ -23,6 +24,7 @@ export const BdPassageSchema = z.object({
   label: Text.max(80),
   minutes: z.number().int().min(1).max(1440),
   outline: Text.max(2000),
+  media: ContentMediaListSchema.optional(),
 });
 export const BdDetailSchema = z.object({
   id: Id,
