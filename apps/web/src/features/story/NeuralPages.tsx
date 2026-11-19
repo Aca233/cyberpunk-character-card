@@ -1,5 +1,5 @@
 import { characterRules, inventoryRules, type PlayerAction } from "@cp/core";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -11,6 +11,8 @@ import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
 import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import { FactionsBody } from "./FactionsPanel";
 import { type HabitAction, Habits } from "./Habits";
+import { InventoryStorage, type PlaceInventoryItem } from "./InventoryStorage";
+import storageStyles from "./inventory-storage.module.css";
 import { countdown } from "./Journal";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
@@ -534,6 +536,7 @@ export function InventoryPage({
   onHeal,
   onSuppressant,
   onUse,
+  onPlaceItem,
   disabledReason,
 }: {
   readonly view: View;
@@ -541,6 +544,8 @@ export function InventoryPage({
   readonly onHeal?: ((id: string) => Promise<void>) | undefined;
   readonly onSuppressant?: (() => Promise<void>) | undefined;
   readonly onUse?: ((id: string) => void) | undefined;
+  /** 在当前地点的自有住所或车辆中，每次存入或取回一件物品。 */
+  readonly onPlaceItem?: PlaceInventoryItem | undefined;
   readonly disabledReason?: string | undefined;
   /** 换服装或快捷药剂/手雷；正在生成时不传，按钮不显示 */
   readonly onEquip?: ((id: string) => void) | undefined;
@@ -556,6 +561,8 @@ export function InventoryPage({
   for (const item of quickItems) carried[item.id] = (carried[item.id] ?? 0) + 1;
 
   const [filter, setFilter] = useState<InventoryFilter>("all");
+  const [inventoryTab, setInventoryTab] = useState<"carried" | "stored">("carried");
+  const [storageKey, setStorageKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [pickedItem, setPickedItem] = useState<{ id: string; worn?: boolean } | null>(null);
   const [openSlotPicker, setOpenSlotPicker] = useState<{
@@ -563,6 +570,7 @@ export function InventoryPage({
     slot: inventoryRules.ModSlot;
   } | null>(null);
   const [usingItem, setUsingItem] = useState(false);
+  const actionPending = useRef(false);
   const [useError, setUseError] = useState("");
 
   const isUsable = (id: string) => {
@@ -641,35 +649,109 @@ export function InventoryPage({
   };
 
   const runDirectUse = async (task: () => Promise<void>) => {
-    if (usingItem || disabledReason) return;
+    if (actionPending.current || disabledReason) return;
+    actionPending.current = true;
     setUsingItem(true);
     setUseError("");
     try {
       await task();
     } catch (error) {
-      setUseError(error instanceof Error ? error.message : "使用失败，请重试");
+      setUseError(error instanceof Error ? error.message : "操作失败，请重试");
     } finally {
+      actionPending.current = false;
       setUsingItem(false);
     }
   };
 
   const places = view.safehouse.forSale.length > 0;
-  const { bulky } = inventory;
+  const load = inventory.loadout;
+  const storage = view.safehouse.storage;
+  const storeTargets = storage.filter((group) => group.canStore);
+  const storeTarget = storeTargets.find((group) => group.key === storageKey) ?? storeTargets[0];
+  const storeBlocked =
+    disabledReason ||
+    (usingItem
+      ? "正在处理物品，请稍候"
+      : view.combat.active
+        ? "交战中存取物品需要在行动里描述"
+        : view.health.condition !== "up"
+          ? "当前无法自行存取物品"
+          : !storeTarget
+            ? "到自有住处或车辆所在地点后可存放"
+            : !onPlaceItem
+              ? "当前无法存放物品"
+              : undefined);
+  const navigation = (
+    <SubTabs<"carried" | "stored">
+      tabs={[
+        ["carried", "随身"],
+        ["stored", "存放"],
+      ]}
+      value={inventoryTab}
+      onChange={(next) => {
+        setInventoryTab(next);
+        setUseError("");
+      }}
+    />
+  );
+  const feedback = (
+    <>
+      {disabledReason && (
+        <p role="status" className={styles.inventoryNotice}>
+          {disabledReason}
+        </p>
+      )}
+      {useError && (
+        <p role="alert" className={styles.warn}>
+          {useError}
+        </p>
+      )}
+    </>
+  );
+
+  if (inventoryTab === "stored") {
+    return (
+      <div className={styles.inventoryRoot}>
+        {navigation}
+        {feedback}
+        <InventoryStorage
+          groups={storage}
+          selectedKey={storageKey}
+          onSelect={(key) => {
+            setStorageKey(key);
+            setUseError("");
+          }}
+          busy={usingItem}
+          disabledReason={disabledReason}
+          onTake={
+            onPlaceItem
+              ? (id, where) => void runDirectUse(() => onPlaceItem("take", id, where))
+              : undefined
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.inventoryRoot}>
-      {(inventory.clothing.length > 0 || bulky.count > 0 || bulky.overloaded) && (
+      {navigation}
+      {feedback}
+      {(inventory.clothing.length > 0 || load.carryUnits > 0) && (
         <section className={styles.loadoutSection} aria-label="随身行装">
           <header className={styles.loadoutBar}>
             <span className={styles.loadoutTitle}>随身行装</span>
-            {(bulky.count > 0 || bulky.overloaded) && (
+            {load.carryUnits > 0 && (
               <span className={styles.loadoutMeta}>
-                <span className={styles.loadoutMeter} data-over={bulky.overloaded || undefined}>
-                  <span>随身大件</span>
+                <span
+                  className={styles.loadoutMeter}
+                  data-over={load.carryLevel !== "light" || undefined}
+                  title="携带分值综合重量、体积和取用负担，不是公斤；小武器 1、中短武器 2、大件武器 4。"
+                >
+                  <span>{load.carryLabel}</span>
                   <b className={styles.loadoutCount}>
-                    {bulky.count}/{bulky.max}
+                    {load.carryUnits}/{load.carryMax}
                   </b>
-                  {bulky.overloaded && <span>沉重显眼</span>}
                 </span>
               </span>
             )}
@@ -710,7 +792,12 @@ export function InventoryPage({
                         </span>
                       </button>
                       {onUnequip && (
-                        <ActionButton onClick={() => onUnequip(c.id)}>脱下</ActionButton>
+                        <ActionButton
+                          disabled={usingItem || Boolean(disabledReason)}
+                          onClick={() => onUnequip(c.id)}
+                        >
+                          脱下
+                        </ActionButton>
                       )}
                     </li>
                   );
@@ -750,17 +837,6 @@ export function InventoryPage({
             />
           </FrameBox>
         </div>
-
-        {disabledReason && (
-          <p role="status" className={styles.inventoryNotice}>
-            {disabledReason}
-          </p>
-        )}
-        {useError && (
-          <p role="alert" className={styles.warn}>
-            {useError}
-          </p>
-        )}
 
         {backpack.length === 0 && !selectedIsWorn ? (
           <div className={styles.inventoryEmpty}>
@@ -871,7 +947,7 @@ export function InventoryPage({
                     : view.health.condition !== "up"
                       ? "当前无法自行使用物品"
                       : (kind === "healing" || kind === "grenade") && remaining === 0
-                        ? "次数已用完，休整或场景结束后恢复"
+                        ? "这份补给已耗尽，需要取得另一份补给"
                         : kind === "healing" && view.health.hp >= ceiling
                           ? "已达到当前治疗上限"
                           : directSuppressant && suppressantUntil
@@ -988,6 +1064,12 @@ export function InventoryPage({
                             <span className={styles.pillText}>当前穿着</span>
                           </span>
                         )}
+                        {kind === "weapon" && inventory.heldWeapons?.includes(id) && (
+                          <span className={styles.detailTagActive}>
+                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                            <span className={styles.pillText}>当前持用</span>
+                          </span>
+                        )}
                         {quick ? (
                           <span className={styles.detailTagActive}>
                             <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
@@ -1044,7 +1126,7 @@ export function InventoryPage({
                         modTargets={inventory.modTargets}
                         shopModMeta={shopModMeta}
                         itemName={itemName}
-                        onMod={onMod}
+                        onMod={usingItem ? undefined : onMod}
                         openSlot={openSlotPicker?.weaponId === id ? openSlotPicker.slot : null}
                         onToggleSlot={(slot) =>
                           setOpenSlotPicker(slot ? { weaponId: id, slot } : null)
@@ -1053,6 +1135,40 @@ export function InventoryPage({
                     )}
 
                     <div className={styles.detailActions}>
+                      <div className={styles.detailActionGroup}>
+                        {storeTargets.length > 1 && storeTarget && (
+                          <label className={storageStyles.storagePicker}>
+                            <span>存入</span>
+                            <select
+                              className={storageStyles.storageSelect}
+                              value={storeTarget.key}
+                              disabled={usingItem}
+                              onChange={(event) => setStorageKey(event.target.value)}
+                            >
+                              {storeTargets.map((group) => (
+                                <option key={group.key} value={group.key}>
+                                  {group.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <Button
+                          small
+                          disabled={Boolean(storeBlocked)}
+                          reason={storeBlocked}
+                          onClick={() => {
+                            if (!storeBlocked && storeTarget && onPlaceItem) {
+                              void runDirectUse(() => onPlaceItem("leave", id, storeTarget.target));
+                            }
+                          }}
+                        >
+                          {usingItem ? "正在处理…" : count > 1 ? "存放 1 件" : "存放"}
+                        </Button>
+                        <small className={styles.detailHint}>
+                          {storeBlocked ?? `存入${storeTarget?.name}，从随身物品移出。`}
+                        </small>
+                      </div>
                       {usable && (
                         <div className={styles.detailActionGroup}>
                           <Button
@@ -1109,13 +1225,22 @@ export function InventoryPage({
                       )}
 
                       {selectedIsWorn && onUnequip && (
-                        <Button small onClick={() => onUnequip(id)}>
+                        <Button
+                          small
+                          disabled={usingItem || Boolean(disabledReason)}
+                          onClick={() => onUnequip(id)}
+                        >
                           脱下
                         </Button>
                       )}
 
                       {to === "clothing" && onEquip && (
-                        <Button small primary onClick={() => onEquip(id)}>
+                        <Button
+                          small
+                          primary
+                          disabled={usingItem || Boolean(disabledReason)}
+                          onClick={() => onEquip(id)}
+                        >
                           穿上
                         </Button>
                       )}

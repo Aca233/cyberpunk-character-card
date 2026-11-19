@@ -775,6 +775,12 @@ export function StoryScreen() {
               : (action, weapon, mod) =>
                   void act({ type: "modWeapon", action, weapon, mod }, "gear")
           }
+          onPlaceItem={
+            busy || offers?.rolled || view.death || view.ended
+              ? undefined
+              : (action, item, where) =>
+                  act({ type: "placeItem", action, item, where }, "storage", true)
+          }
           onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
         />
       )}

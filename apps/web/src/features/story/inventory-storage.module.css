@@ -1,0 +1,37 @@
+.storageRoot {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.storagePicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-xs);
+}
+
+.storageSelect {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid rgb(94 246 255 / 30%);
+  background: rgb(10 12 20);
+  color: var(--cp-text);
+  font: inherit;
+}
+
+.storageSelect:focus-visible {
+  outline: 1px solid var(--cp-cyan);
+  outline-offset: 2px;
+}
+
+.storageHelp {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
