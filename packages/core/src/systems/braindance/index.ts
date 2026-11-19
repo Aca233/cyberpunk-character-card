@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyBraindance } from "./apply";
+import { applyBraindance, withBraindanceData } from "./apply";
 import { braindanceEvents } from "./events";
 import { braindanceRules, braindanceSection } from "./prompt";
 import {
@@ -18,6 +18,7 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand>({
   initial: () => BraindanceStateSchema.parse({}),
   commands: { braindance: BraindanceCommandSchema },
   apply: applyBraindance,
+  data: withBraindanceData,
   rules: [braindanceRules],
   sections: [
     {

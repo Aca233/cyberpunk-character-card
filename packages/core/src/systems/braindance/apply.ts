@@ -28,6 +28,30 @@ export function braindanceWork(state: BraindanceState, data: Data, id: string): 
   return state.works[id] ?? braindanceCatalog(data).find((w) => w.id === id);
 }
 
+const projectedData = new WeakMap<BraindanceState, WeakMap<object, Data>>();
+/** 供交易核验的最小资料；不把片段梗概或未发现细节交给其他系统。 */
+export function withBraindanceData(state: BraindanceState, data: Data): Data {
+  let byBase = projectedData.get(state);
+  if (!byBase) {
+    byBase = new WeakMap();
+    projectedData.set(state, byBase);
+  }
+  const previous = byBase.get(data);
+  if (previous) return previous;
+  const merged = {
+    ...data,
+    braindanceWorks: Object.fromEntries(
+      Object.values(state.works).map((work) => [
+        work.id,
+        { id: work.id, title: work.title, durationMinutes: work.durationMinutes },
+      ]),
+    ),
+    braindanceActivity: state.active,
+  };
+  byBase.set(data, merged);
+  return merged;
+}
+
 type BdMethod = "observe" | "audio" | "thermal";
 export function braindanceSources(
   work: BdWork,
@@ -106,12 +130,28 @@ export function applyBraindance(
   command: BraindanceCommand,
   ctx: SystemContext,
 ): ApplyOutcome {
-  if (draft.settled.includes(command.event)) return { ok: true, notes: ["本次超梦操作已经结算"] };
+  const target =
+    command.action === "progress" || command.action === "replay"
+      ? command.passage
+      : command.action === "inspect"
+        ? command.detail
+        : command.action === "start"
+          ? command.id
+          : command.action === "define"
+            ? command.work.id
+            : "";
+  const settlementKey = JSON.stringify([
+    ctx.facts.braindanceTurn ?? "direct",
+    command.action,
+    command.event,
+    target,
+  ]);
+  if (draft.settled.includes(settlementKey)) return { ok: true, notes: ["本次超梦操作已经结算"] };
   if (command.action === "define") {
     if (braindanceWork(draft, ctx.data, command.work.id))
       return fail("作品已确立，不能覆盖原记录；不同剪辑请用清楚区分的新作品身份");
     draft.works[command.work.id] = command.work;
-    draft.settled.push(command.event);
+    draft.settled.push(settlementKey);
     return { ok: true, notes: [`记下作品：${command.work.title}`] };
   }
   if (command.action === "start") {
@@ -138,7 +178,7 @@ export function applyBraindance(
     if (block) return fail(block);
     draft.works[work.id] = work;
     draft.active = active;
-    draft.settled.push(command.event);
+    draft.settled.push(settlementKey);
     return { ok: true, notes: [`接上超梦：${work.title}；后续通过正文继续、略写看完、暂停或退出`] };
   }
   const active = draft.active;
@@ -184,6 +224,13 @@ export function applyBraindance(
       const index = work.passages.findIndex((p) => p.id === command.passage);
       const passage = work.passages[index];
       if (!passage || index >= active.position) return fail("先实际看到该片段，再要求重播");
+      const fixed = draft.passages[work.id]?.[passage.id];
+      if (fixed && command.text && fixed !== command.text) return fail("重播不能改写已有定稿");
+      if (!fixed && (!command.text || !tradeEvidence(ctx.facts, command.text)))
+        return fail("此前略写的片段首次展开时，须保存本轮实际呈现原文");
+      draft.passages[work.id] ??= {};
+      (draft.passages[work.id] as Record<string, string>)[passage.id] =
+        fixed ?? (command.text as string);
       minutes = passage.minutes;
       notes.push(`重播「${passage.label}」：${minutes} 分钟；作品进度保持不变`);
       break;
@@ -247,6 +294,6 @@ export function applyBraindance(
     draft.history.push({ ...active, outcome: status, at: ctx.now + minutes });
     draft.active = null;
   }
-  draft.settled.push(command.event);
+  draft.settled.push(settlementKey);
   return { ok: true, notes, emit, ...(minutes > 0 ? { advanceTo: ctx.now + minutes } : {}) };
 }

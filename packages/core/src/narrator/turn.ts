@@ -1527,6 +1527,7 @@ export async function runNarratorTurn(
     const facts: Record<string, unknown> = {
       tradeNarrative: narrative,
       braindanceInput: plan.kind === "action" ? plan.input.text : "",
+      braindanceTurn: records.length,
     };
     facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
     facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);

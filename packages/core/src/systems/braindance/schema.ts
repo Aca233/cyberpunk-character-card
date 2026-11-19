@@ -100,7 +100,7 @@ export const BraindanceStateSchema = z.object({
   discoveries: z
     .array(z.object({ work: Id, detail: Id, finding: Text, at: z.number().int() }))
     .default([]),
-  settled: z.array(Id).default([]),
+  settled: z.array(z.string().min(1)).default([]),
 });
 export type BraindanceState = z.infer<typeof BraindanceStateSchema>;
 
@@ -130,7 +130,14 @@ export const BraindanceCommandSchema = z
       ),
     }),
     z.object({ ...Event, action: z.enum(["finish", "pause", "resume", "exit"]) }),
-    z.object({ ...Event, action: z.literal("replay"), passage: Id }),
+    z.object({
+      ...Event,
+      action: z.literal("replay"),
+      passage: Id,
+      text: Text.optional().describe(
+        "若该片段此前只有略写、尚无定稿，本次首次展开时写本轮实际呈现原文；已有定稿则省略，不改旧文",
+      ),
+    }),
     z.object({
       ...Event,
       action: z.literal("inspect"),
