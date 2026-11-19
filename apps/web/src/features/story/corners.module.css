@@ -2200,6 +2200,11 @@
   min-height: 0;
 }
 
+/* 势力列表放在固定高度的消息面板里时，允许它在可用高度内独立滚动 */
+.unread[data-wide] .growBody [data-factions] {
+  overflow-y: auto;
+}
+
 /*
  * 块开着时切到宽度不同的页签（义体→人物、私信→新闻，用户嫌过渡垃圾，计划第十二节第 11、12 条）：
  * Corners.tsx 的 useResizing 在宽度过渡那 260ms 里挂 data-resizing，长出来的内容先 80ms 淡出，

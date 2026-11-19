@@ -10,7 +10,7 @@ const GROUPS: readonly [Faction["kind"], string][] = [
   ["service", "服务"],
 ];
 
-/** 联系人页的势力栏：按帮派、公司、执法、服务分组；每张卡写态度标签和一句理由、地盘和关系。不调用模型 */
+/** 势力页：按帮派、公司、执法、服务分组；每张卡写态度标签和一句理由、地盘和关系。不调用模型 */
 export function FactionsBody({ view }: { readonly view: View }) {
   const here = view.factions.list.filter((f) => f.here);
 
@@ -21,7 +21,7 @@ export function FactionsBody({ view }: { readonly view: View }) {
           ? `这里（${view.factions.district}）是${here.map((f) => f.name).join("、")}的地盘。`
           : "这里不是哪个帮派的地盘。"}
       </p>
-      <div className={styles.docBody}>
+      <div className={styles.docBody} data-factions>
         {GROUPS.map(([kind, label]) => {
           const list = view.factions.list.filter((f) => f.kind === kind);
           if (list.length === 0) return null;
