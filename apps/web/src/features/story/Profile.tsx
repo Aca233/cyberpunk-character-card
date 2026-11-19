@@ -174,12 +174,14 @@ export function ProfileHead({
   squad,
   foe,
   embedded = false,
+  showPortraitTools = true,
 }: {
   readonly npc: Npc;
   readonly fixer?: Fixer | undefined;
   readonly squad?: SquadMember | undefined;
   readonly foe?: CombatFoe | undefined;
   readonly embedded?: boolean | undefined;
+  readonly showPortraitTools?: boolean | undefined;
 }) {
   const tone = profileTone(npc, squad, foe);
   const wound = npcWoundSummary(npc.body);
@@ -279,7 +281,7 @@ export function ProfileHead({
               </Tag>
             )}
           </ul>
-          {saveImages && npc.met && (
+          {showPortraitTools && saveImages && npc.met && (
             <div className={styles.portraitTools}>
               <ActionButton
                 onClick={() =>
@@ -746,6 +748,7 @@ export function Profile({
   squad,
   foe,
   onScan,
+  showPortraitTools = true,
 }: {
   readonly npc: Npc;
   /** 这个人是中间人时传委托系统算的派单信息（用户定的，2026-11-02：中间人并进人物档案） */
@@ -754,6 +757,7 @@ export function Profile({
   readonly foe?: CombatFoe | undefined;
   /** 有就在身体栏里出「扫描」按钮：点一下立刻用义眼扫，不调模型（用户定的，计划第十二节第 14 条） */
   readonly onScan?: ((id: string) => void) | undefined;
+  readonly showPortraitTools?: boolean | undefined;
 }) {
   const tabs = profileTabs(npc);
   const [picked, setPicked] = useState<TabId | null>(null);
@@ -765,7 +769,14 @@ export function Profile({
   return (
     <article className={styles.profile} aria-label={`${npc.name}的档案`}>
       <div className={styles.profileGrid}>
-        <ProfileHead npc={npc} fixer={fixer} squad={squad} foe={foe} embedded />
+        <ProfileHead
+          npc={npc}
+          fixer={fixer}
+          squad={squad}
+          foe={foe}
+          embedded
+          showPortraitTools={showPortraitTools}
+        />
         <div className={styles.workspace}>
           <nav className={styles.tabs} aria-label="档案分栏">
             {tabs.map(([id, name, count]) => (

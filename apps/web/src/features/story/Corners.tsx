@@ -934,7 +934,6 @@ export function Unread({
   peek,
   full,
   tabs,
-  wide = false,
 }: {
   readonly view: View;
   readonly peek: PeekState;
@@ -942,8 +941,6 @@ export function Unread({
   readonly full: ReactNode;
   /** 消息、新闻、芯片页签：块往上长，页签放在底下挨着常态那一行，不跟内容一起滚走（用户定的） */
   readonly tabs?: ReactNode;
-  /** 私信或芯片页签：展开时朝中列加宽，左侧列表、右侧正文，不上下挤成一条（第十二节第 12 条） */
-  readonly wide?: boolean;
 }) {
   const p = usePeek("unread", peek.expand, peek.setExpand);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -954,9 +951,9 @@ export function Unread({
       active.blur();
     }
   }, [p.open]);
-  // 私信/芯片加宽：整块收起时等对话收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡（计划第十二节第 12 条）
-  const lingered = useLinger(wide && p.open);
-  const wideOn = p.open ? wide : lingered;
+  // 未读面板展开时总是加宽；整块收起时等内容收完再变回原宽
+  const lingered = useLinger(p.open);
+  const wideOn = p.open || lingered;
   const resizing = useResizing(wideOn, p.open);
   const feed = view.phone.feedUnread;
   const newsCount = feed.news.length + feed.street.length;
@@ -1009,7 +1006,7 @@ export function Unread({
       <div className={`${styles.inner} ${styles.unreadInner}`}>
         <Grow
           open={p.open}
-          head={wide ? null : undefined}
+          head={null}
           title="消息 · 芯片"
           hint={p.pinned ? "ESC" : "T"}
           line="var(--cp-red)"
@@ -1021,7 +1018,7 @@ export function Unread({
             {tabs}
             <span className={styles.unreadTabMeta}>
               <span>{totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}</span>
-              {wide && <kbd className={styles.unreadKey}>{p.pinned ? "ESC" : "T"}</kbd>}
+              <kbd className={styles.unreadKey}>{p.pinned ? "ESC" : "T"}</kbd>
             </span>
           </div>
         ) : (

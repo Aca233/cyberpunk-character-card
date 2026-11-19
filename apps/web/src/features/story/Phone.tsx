@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
@@ -6,7 +6,7 @@ import { useLayer } from "../../ui/layers";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { portraitOf } from "./art";
-import { ProfileHead } from "./Profile";
+import { Profile } from "./Profile";
 import styles from "./story.module.css";
 import {
   buildChatBubbles,
@@ -251,9 +251,40 @@ function ThreadHead({
   readonly actions: PhoneActions;
 }) {
   const { npc } = contact;
-  const [open, setOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const hovering = useRef(false);
+  const peekRef = useRef<HTMLSpanElement>(null);
+  const open = hoverOpen || pinned;
+
+  const clearCloseTimer = useCallback(() => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = undefined;
+  }, []);
+  const closeCard = useCallback(() => {
+    clearCloseTimer();
+    setPinned(false);
+    setHoverOpen(false);
+  }, [clearCloseTimer]);
+  const scheduleClose = useCallback(() => {
+    clearCloseTimer();
+    if (pinned) return;
+    closeTimer.current = window.setTimeout(() => setHoverOpen(false), 350);
+  }, [clearCloseTimer, pinned]);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    if (!pinned) return;
+    const onOutsidePointerDown = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !peekRef.current?.contains(event.target)) closeCard();
+    };
+    document.addEventListener("pointerdown", onOutsidePointerDown, true);
+    return () => document.removeEventListener("pointerdown", onOutsidePointerDown, true);
+  }, [closeCard, pinned]);
+
   // 浮层开着时 Esc 先收浮层，没开时交给神经界面关闭
-  useLayer(() => setOpen(false), open);
+  useLayer(closeCard, open);
 
   const metaParts: string[] = [];
   if (!npc) {
@@ -306,26 +337,43 @@ function ThreadHead({
         {npc ? (
           // biome-ignore lint/a11y/noStaticElementInteractions: 外层只管悬停和焦点进出，鼠标从头像移到浮层不断开；能点、能聚焦的是里面的头像按钮
           <span
+            ref={peekRef}
             className={styles.threadPeek}
             onPointerEnter={(e) => {
               // 触屏没有悬停，靠点按钮开关
-              if (e.pointerType !== "touch") setOpen(true);
+              if (e.pointerType !== "touch") {
+                hovering.current = true;
+                clearCloseTimer();
+                setHoverOpen(true);
+              }
             }}
             onPointerLeave={(e) => {
-              if (e.pointerType !== "touch") setOpen(false);
+              if (e.pointerType !== "touch") {
+                hovering.current = false;
+                scheduleClose();
+              }
             }}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              clearCloseTimer();
+              setHoverOpen(true);
+            }}
             onBlur={(e) => {
               const next = e.relatedTarget;
-              if (!(next instanceof Node && e.currentTarget.contains(next))) setOpen(false);
+              if (!(next instanceof Node && e.currentTarget.contains(next))) scheduleClose();
             }}
           >
             <button
               type="button"
               className={styles.threadAvatar}
               aria-expanded={open}
+              aria-pressed={pinned}
               aria-label={`${contact.name}的档案`}
-              onClick={() => setOpen((o) => !o)}
+              onClick={() => {
+                clearCloseTimer();
+                const next = !pinned;
+                setPinned(next);
+                setHoverOpen(next || hovering.current);
+              }}
             >
               <Avatar npc={npc.id} name={contact.name} dead={!npc.alive} />
             </button>
@@ -350,11 +398,23 @@ function ThreadHead({
                   className={styles.threadCardLayer}
                 />
                 <div className={styles.threadCardBody}>
-                  <ProfileHead
+                  <div className={styles.threadCardToolbar}>
+                    <span>人物档案 · 点击头像可固定</span>
+                    <button
+                      type="button"
+                      className={styles.threadCardClose}
+                      aria-label="关闭人物档案"
+                      onClick={closeCard}
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  <Profile
                     npc={npc}
                     fixer={contact.fixer}
                     squad={contact.squad}
                     foe={contact.foe}
+                    showPortraitTools={false}
                   />
                 </div>
               </div>

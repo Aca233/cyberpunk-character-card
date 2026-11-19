@@ -983,13 +983,7 @@ export function StoryScreen() {
             peek={peek}
             onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
           />
-          <Unread
-            view={view}
-            peek={peek}
-            full={unreadFull}
-            tabs={unreadTabs}
-            wide={unreadTab === "messages" || unreadTab === "factions" || unreadTab === "shards"}
-          />
+          <Unread view={view} peek={peek} full={unreadFull} tabs={unreadTabs} />
         </CornerSide>
         <CornerSide side="right">
           {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
