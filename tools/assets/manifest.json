@@ -826,6 +826,16 @@
       { "id": "cyber.bodyNervous", "atlas": "fullscreen/man_body", "slot": "ma_nervous" },
       { "id": "cyber.bodyCirculatory", "atlas": "fullscreen/man_body", "slot": "ma_circular" },
       { "id": "cyber.bodyImmune", "atlas": "fullscreen/man_body", "slot": "ma_immune" },
+      {
+        "id": "cyber.bodyFrontalCortex",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_pfrontal_cortex"
+      },
+      { "id": "cyber.bodyEyes", "atlas": "fullscreen/man_body", "slot": "ma_ocular" },
+      { "id": "cyber.bodyOs", "atlas": "fullscreen/man_body", "slot": "ma_operating_system" },
+      { "id": "cyber.bodyArms", "atlas": "fullscreen/man_body", "slot": "ma_arms" },
+      { "id": "cyber.bodyHands", "atlas": "fullscreen/man_body", "slot": "ma_hands" },
+      { "id": "cyber.bodyLegs", "atlas": "fullscreen/man_body", "slot": "ma_legs" },
       { "id": "cyber.cellShape", "atlas": "fullscreen/inventory4_atlas", "slot": "item_shape" },
       { "id": "cyber.cellFrame", "atlas": "fullscreen/inventory4_atlas", "slot": "item_frame" },
       { "id": "cyber.cellLeft", "atlas": "fullscreen/inventory4_atlas", "slot": "item_left_frame" },
