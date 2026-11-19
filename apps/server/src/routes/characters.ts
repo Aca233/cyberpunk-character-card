@@ -39,14 +39,7 @@ async function readCard(c: Context, workshop?: WorkshopStore) {
     const runtime = workshopRuntime(packs);
     // 按内容表重算开局义体快照并校验部位容量，再检查角色卡结构。
     // 旧识只认原作人物表和模块带出的人，对不上的去掉（用户定的，2026-10-30：15 个原作人物全部能选）
-    const knownNpcIds = new Set((runtime.content.npcs ?? npcs).map((npc) => npc.id));
-    const withKnownNpcMarkers = {
-      ...parsed.data.board,
-      acquaintances: parsed.data.board.acquaintances.map((entry) =>
-        entry.catalogNpc && !knownNpcIds.has(entry.id) ? { ...entry, catalogNpc: false } : entry,
-      ),
-    };
-    const board = pruneAcquaintances(withKnownNpcMarkers, runtime.content.npcs ?? npcs);
+    const board = pruneAcquaintances(parsed.data.board, runtime.content.npcs ?? npcs);
     const fixed = normalizeBoard(board, { cyberware: runtime.content.cyberware ?? cyberware });
     if (!fixed.ok) return { ok: false as const, error: fixed.error };
     return readCardAgain({ ...parsed.data, board: fixed.board });
