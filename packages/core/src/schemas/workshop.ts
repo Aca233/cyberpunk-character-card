@@ -12,13 +12,13 @@ const PackIdSchema = z
   .trim()
   .min(1)
   .max(22)
-  .regex(/^[a-z0-9][a-z0-9-]*$/, "内容包 id 只用小写英文、数字和连字符");
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "内容包 id 只用小写英文、数字和单个连字符");
 const EntryIdSchema = z
   .string()
   .trim()
   .min(1)
   .max(33)
-  .regex(/^[a-z0-9][a-z0-9-]*$/, "条目 id 只用小写英文、数字和连字符");
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "条目 id 只用小写英文、数字和单个连字符");
 
 export const WorkshopShopListingSchema = z.object({
   shop: z.string().trim().min(1).max(80),
@@ -245,7 +245,11 @@ export function workshopPackIssues(pack: WorkshopPack, catalog: WorkshopCatalogI
 }
 
 export function workshopEntityId(packId: string, localId: string): string {
-  return `wk-${packId}-${localId}`;
+  return `wk-${packId}--${localId}`;
+}
+
+export function workshopEntityPackId(entityId: string): string | undefined {
+  return /^wk-([a-z0-9]+(?:-[a-z0-9]+)*)--[a-z0-9]/.exec(entityId)?.[1];
 }
 
 /** 复制并为运行时条目加包级命名空间，同时改写包内引用。 */
