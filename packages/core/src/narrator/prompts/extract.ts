@@ -18,6 +18,7 @@ import {
   tablesOf,
 } from "./context";
 import { BOOKKEEPING_BASE, systemMessage, userMessage } from "./layers";
+import { npcEquipmentReference } from "./npc-equipment";
 
 /** ④ 抽取：辅助模型，低温，只输出 JSON */
 export const EXTRACT_TEMPERATURE = 0.2;
@@ -123,6 +124,7 @@ export function buildExtractPrompt(
     scene: situation(world, records, view, plan, { ...extras, opening }),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
+      npcEquipmentReference(world, extras.data, true),
       details,
       extras.decided?.length ? `【本轮已定的事】\n${extras.decided.join("\n")}` : undefined,
       tradePlans ? `【本轮已核对的交易条件】\n${tradePlans}` : undefined,

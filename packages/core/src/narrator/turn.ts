@@ -908,9 +908,11 @@ export async function runNarratorTurn(
         : trip !== undefined || rulingSpec !== undefined || exposure === "suspicious"
           ? "exploration"
           : "dialogue";
+    let includeNpcEquipment = extras.data !== undefined && live.input.mode !== "ooc";
     const build = () =>
       buildNarratorPrompt(world, records, live, {
         ...extras,
+        includeNpcEquipment,
         hasPreset: preset !== undefined,
         intensity,
         decided,
@@ -919,13 +921,16 @@ export async function runNarratorTurn(
         history: hot,
         recapTokens,
       });
-    // 整份超出窗口（减去留给回复的）时从低优先级裁起：扩展层 → 【前情】 → 设定资料 → 原文（留 MIN_HISTORY 轮）
+    // 整份超出窗口时先撤可选装备参考，再按原顺序裁记忆材料；原文保留 MIN_HISTORY 轮。
     const limit = budget.window - maxOutputTokens;
     const totalOf = (p: ReturnType<typeof build>) =>
       presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
     let prompt = build();
     for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
-      if (expanded.length > 0) {
+      if (includeNpcEquipment) {
+        includeNpcEquipment = false;
+        cuts.push("整份超出，先撤下新人物装备选型参考，保留记忆与历史");
+      } else if (expanded.length > 0) {
         expanded = expanded.slice(0, -1);
         cuts.push("整份超出，扩展层少补一条");
       } else if (recapTokens > 0 && (prompt.parts?.recap ?? 0) > 0) {

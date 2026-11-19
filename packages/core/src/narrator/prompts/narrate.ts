@@ -28,6 +28,7 @@ import {
   systemMessage,
   userMessage,
 } from "./layers";
+import { npcEquipmentReference } from "./npc-equipment";
 
 /**
  * ③ 写正文：纯文本，边收边放。
@@ -184,7 +185,7 @@ export function buildNarratorPrompt(
   const view = projectState(world, records, extras.data);
   const modules = stageModules(world, plan.input, extras);
   const rules = systemMessage("narrate", [coreRules(extras.hasPreset)], modules);
-  // 写正文不带对 id 用的表，只带剧情素材（用户 2026-10-31："越来越像游戏而不是角色扮演了"）
+  // 系统层不带完整 ID 查阅表；本轮用户消息补充真实装备的创作参考。
   const system = [rules, ...narrateTablesOf(view, extras)].join("\n\n");
   const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
@@ -220,6 +221,10 @@ export function buildNarratorPrompt(
   const pacingHint = extras.hasPreset
     ? ""
     : resolveDynamicWordCountBudget(extras.intensity ?? "dialogue").directive.replace(/^- /, "");
+  const equipment =
+    extras.includeNpcEquipment === false || plan.input.mode === "ooc"
+      ? undefined
+      : npcEquipmentReference(world, extras.data);
   const content = userMessage({
     recap,
     scene,
@@ -233,7 +238,7 @@ export function buildNarratorPrompt(
           names,
         ),
     input: formatInput(plan.input),
-    after: [boostNote(view, plan, "narrate")],
+    after: [equipment, boostNote(view, plan, "narrate")],
     reminder: `（${pacingHint}只写正文，纯文本。）`,
   });
   messages.push({ role: "user", content });

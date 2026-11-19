@@ -49,8 +49,12 @@ export const NpcBodyCardSchema = z
       .array(z.string().min(1))
       .max(NPC_GEAR_MAX)
       .default([])
-      .describe("随身物品的稳定 id，来自已登记物品定义"),
-    cyberware: z.array(z.string().min(1)).max(NPC_CHROME_MAX).default([]),
+      .describe("实际随身衣物与武器的稳定 id；按用途、财力和已定事实选型，来自已登记物品定义"),
+    cyberware: z
+      .array(z.string().min(1))
+      .max(NPC_CHROME_MAX)
+      .default([])
+      .describe("按职业用途、来源与部位容量选择的表内义体 id；可无植入，不默认只填基础义眼"),
     symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
   })
   .superRefine((b, ctx) => {

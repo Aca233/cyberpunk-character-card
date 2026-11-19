@@ -112,6 +112,8 @@ export interface PromptExtras {
   readonly hasPreset?: boolean | undefined;
   /** 未启用预设时的柔性场景烈度 */
   readonly intensity?: NarrativeIntensity | undefined;
+  /** 可选的新人物装备参考；超出正文输入预算时先撤下，不挤占记忆与历史。 */
+  readonly includeNpcEquipment?: boolean | undefined;
 }
 
 export function stateSummary(
