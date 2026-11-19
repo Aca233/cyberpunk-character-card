@@ -24,11 +24,10 @@ export function braindanceView(state: BraindanceState) {
       recorder: w.recorder,
       synopsis: w.synopsis,
       durationMinutes: w.durationMinutes,
-      passages: Object.entries(state.passages[w.id] ?? {}).map(([id, text]) => ({
-        id,
-        text,
-        media: w.passages.find((passage) => passage.id === id)?.media ?? [],
-      })),
+      passages: Object.entries(state.passages[w.id] ?? {}).map(([id, text]) => {
+        const passage = w.passages.find((candidate) => candidate.id === id);
+        return { id, label: passage?.label ?? id, text, media: passage?.media ?? [] };
+      }),
     })),
     discoveries: state.discoveries.map((d) => ({ ...d, at: formatGameTime(d.at) })),
     history: state.history.map((h) => ({
