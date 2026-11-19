@@ -250,23 +250,25 @@ export function CyberDoll({
   readonly tipLine?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => string;
   /** 右下角的东西：已装几件、断肢、义体医生入口、点数 */
   readonly corner?: ReactNode;
-  /** 调用方正在看的部位，那组格子亮着 */
+  /** 调用方明确选择的部位；值改变时同步切换人体 */
   readonly selected?: CyberSlot | null;
-  /** 点格子交给调用方（捏人时空格选部位、装着的格直接卸下，用户 2026-10-31："格子不能直接装卸"）；不传就是钉住单个格子的详情 */
+  /** 点格子交给调用方切换部位；不传就是钉住单个格子的详情 */
   readonly onCell?: (slot: CyberSlot, part: DollPart | undefined) => void;
 }) {
   const [hovered, setHovered] = useState<{ slot: CyberSlot; index: number } | null>(null);
+  const [focused, setFocused] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const [pinned, setPinned] = useState<{ slot: CyberSlot; index: number } | null>(null);
-  const [lastViewedSlot, setLastViewedSlot] = useState<CyberSlot | null>(null);
-  const shown = hovered ?? pinned;
-  const focus = hovered?.slot ?? selected ?? pinned?.slot ?? null;
-  // 详情收起时保留最后查看的人体图层；明确选中或固定的部位仍优先。
-  const bodySlot = focus ?? lastViewedSlot;
+  const [bodyView, setBodyView] = useState({ selected, slot: selected });
+  // 人体只跟随查看动作或调用方的新选择，详情收起、失焦和固定状态不能把它切回去。
+  if (bodyView.selected !== selected) setBodyView({ selected, slot: selected });
+  const bodySlot = bodyView.selected === selected ? bodyView.slot : selected;
+  const shown = hovered ?? focused ?? pinned;
   const activeLayers = bodySlot ? SLOT_BODY_LAYERS[bodySlot] : null;
 
+  const previewBody = (slot: CyberSlot) => setBodyView({ selected, slot });
   const previewCell = (slot: CyberSlot, index: number) => {
     setHovered({ slot, index });
-    setLastViewedSlot(slot);
+    previewBody(slot);
   };
 
   /** 计算每层解剖图透明度：未选中部位时皮肤常亮、免疫脉络幽微发光；聚焦时对应系统亮起 */
@@ -288,7 +290,7 @@ export function CyberDoll({
     const label = CYBER_LABELS[slot];
     const shownCell = shown?.slot === slot ? shown.index : null;
     const cellPart = shownCell !== null ? list[shownCell] : undefined;
-    const isPinnedTip = !hovered && pinned?.slot === slot && pinned.index === shownCell;
+    const isPinnedTip = pinned?.slot === slot && pinned.index === shownCell;
     const line =
       shownCell !== null
         ? (tipLine?.(slot, list, shownCell) ??
@@ -300,7 +302,7 @@ export function CyberDoll({
       <li
         key={slot}
         className={neural.cyberGroup}
-        data-focus={focus === slot || undefined}
+        data-focus={bodySlot === slot || undefined}
         style={{ "--shift": shift } as CSSProperties}
       >
         <span className={neural.cyberLabel}>{label}</span>
@@ -324,10 +326,13 @@ export function CyberDoll({
                 data-iconic={part?.iconic || undefined}
                 onMouseEnter={() => previewCell(slot, i)}
                 onMouseLeave={() => setHovered(null)}
-                onFocus={() => previewCell(slot, i)}
-                onBlur={() => setHovered(null)}
+                onFocus={(event) => {
+                  previewBody(slot);
+                  if (event.currentTarget.matches(":focus-visible")) setFocused({ slot, index: i });
+                }}
+                onBlur={() => setFocused(null)}
                 onClick={() => {
-                  setLastViewedSlot(slot);
+                  previewBody(slot);
                   if (onCell) onCell(slot, part);
                   else
                     setPinned((p) =>
