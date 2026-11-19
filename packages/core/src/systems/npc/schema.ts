@@ -57,7 +57,9 @@ export const NpcBodyCardSchema = z
       .array(z.string().min(1))
       .max(NPC_CHROME_MAX)
       .default([])
-      .describe("按职业用途、来源与部位容量选择的表内义体 id；可无植入，不默认只填基础义眼"),
+      .describe(
+        "根据人物工作、行动、风险和可负担来源推演后选择的义体表 id；工作确实依赖增强且有合理型号时选匹配部位，没有需求才留空；义眼只用于有实际视觉强化需求的人",
+      ),
     symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
   })
   .superRefine((b, ctx) => {
