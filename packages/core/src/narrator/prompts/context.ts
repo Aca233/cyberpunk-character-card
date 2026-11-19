@@ -76,7 +76,15 @@ export function recapFor(
 }
 
 /** 常驻核心负责说明的指令；其余指令由各系统的规则模块说明 */
-export const CORE_COMMANDS = ["world", "humanity", "item", "damage", "heal", "deadline"] as const;
+export const CORE_COMMANDS = [
+  "world",
+  "humanity",
+  "item",
+  "weaponHold",
+  "damage",
+  "heal",
+  "deadline",
+] as const;
 
 export type NarratorPlan = { readonly kind: "action"; readonly input: TurnInput };
 
@@ -265,22 +273,24 @@ function buildWeaponAdvisories(
     }
   }
 
-  const advisories: string[] = [];
+  const advisories: string[] = [
+    "以下武器参考分别归属于所列实物，只有实际取用时才生效；随身携带不代表当前持用、已经开火或多件能力同时生效。",
+  ];
   if (silencedGuns.length > 0 && loudGuns.length > 0) {
     advisories.push(
-      `随身武器声学：已消音枪械（${silencedGuns.join("、")}）压低枪口爆鸣，远距不易触发枪声警报（近距机械声、倒地动静、视线与监控仍可暴露）；未消音枪械（${loudGuns.join("、")}）开火会传出明显枪声惊动附近守卫与目击者`,
+      `随身武器声学：使用已消音枪械（${silencedGuns.join("、")}）射击时压低枪口爆鸣，远距不易触发枪声警报（近距机械声、倒地动静、视线与监控仍可暴露）；使用未消音枪械（${loudGuns.join("、")}）开火才会传出明显枪声惊动附近守卫与目击者`,
     );
   } else if (silencedGuns.length > 0) {
     advisories.push(
-      `随身武器声学：当前枪械（${silencedGuns.join("、")}）已消音，开火不产生远距爆鸣声，但近距动静、倒地、视线与监控仍受现场约束`,
+      `随身武器声学：枪械（${silencedGuns.join("、")}）已消音，使用它们开火时压低枪口爆鸣，近距动静、倒地、视线与监控仍受现场约束；仅携带不产生枪声`,
     );
   } else if (loudGuns.length > 0) {
     advisories.push(
-      `随身武器声学：当前枪械（${loudGuns.join("、")}）均未消音，开火会立即传出清晰枪声，极易惊动附近守卫与目击者`,
+      `随身武器声学：枪械（${loudGuns.join("、")}）均未消音，使用它们开火会传出清晰枪声，可能惊动附近守卫与目击者；仅携带不产生枪声`,
     );
   } else if (meleeWeapons.length > 0) {
     advisories.push(
-      `随身武器声学：仅携带近战武器（${meleeWeapons.join("、")}），无枪声暴露风险（仍受视线、搏斗声与监控约束）`,
+      `随身武器声学：近战武器（${meleeWeapons.join("、")}）自身没有枪口爆鸣，实际搏斗仍受距离、视线、动静与监控约束`,
     );
   }
 
@@ -298,7 +308,7 @@ function buildWeaponAdvisories(
     advisories.push(`武器体系参考：${[...typeNotes].join("；")}`);
   }
   if (modNotes.length > 0) {
-    advisories.push(`已装改装能力：${modNotes.join("；")}`);
+    advisories.push(`已装改装能力（只对所列那把武器生效）：${modNotes.join("；")}`);
   }
   return advisories;
 }
@@ -330,6 +340,13 @@ export function physicsSection(
   const weaponAdvisories = inv.success
     ? buildWeaponAdvisories(inv.data, items, installed, brokenChrome)
     : [];
+  if (loadout && loadout.carryLevel !== "light") {
+    weaponAdvisories.push(
+      loadout.carryLevel === "overloaded"
+        ? "携带负担：严重超载。携带物明显占据空间、妨碍重心和快速取用；攀爬、钻缝、闪避与追逐须结合实际携带方式和现场条件判断，不能只凭此档位自动受伤、失败或丢弃物品。"
+        : "携带负担：有负担。携带物增加相关机动和取用动作的负担，按实际场景判断便利性与耗时；普通交谈、休息与平静生活不额外受罚。",
+    );
+  }
 
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
   const safehouse = SafehouseStateSchema.safeParse(world.slices.safehouse ?? {});
@@ -429,15 +446,6 @@ export function physicsSection(
             weaponConcealment: loadout.concealment,
             ...(inSafehouse ? { inSafehouse: true } : {}),
             ...(HIGH_END_VENUE.test(inputText) ? { enteringHighEndVenue: true } : {}),
-          },
-        }
-      : {}),
-    ...(loadout?.bulkyOverloaded
-      ? {
-          bulkyOverload: {
-            count: loadout.bulkyCount,
-            max: loadout.bulkyMax,
-            items: loadout.bulkyItems,
           },
         }
       : {}),

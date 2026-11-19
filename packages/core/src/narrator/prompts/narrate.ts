@@ -3,6 +3,7 @@ import type { LlmMessage } from "../../kernel/ports";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { resolveDynamicWordCountBudget } from "../../physics";
+import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { InventoryStateSchema } from "../../systems/inventory/schema";
 import { memoryRecords } from "../../systems/memory";
 import { NpcStateSchema } from "../../systems/npc/schema";
@@ -70,6 +71,7 @@ export function coreRules(hasPreset = false): string {
   const rules = [
     BASE_CONSTRAINTS,
     NARRATE_STAGE,
+    CARRY_AND_WEAPON_RULES,
     ...(!hasPreset ? [DEFAULT_WORLD_STYLE, DEFAULT_NARRATE_STYLE, examplesSection()] : []),
     NARRATE_OUTPUT,
   ].join("\n\n");

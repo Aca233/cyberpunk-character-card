@@ -1,6 +1,7 @@
 import { projectState } from "../../game";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
+import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
@@ -96,7 +97,11 @@ export function buildJudgePrompt(
     after: [boostNote(view, plan, "judge")],
     reminder: "（只输出判断的 JSON 对象。）",
   });
-  const system = systemMessage("judge", [BASE_RULES, JUDGE_STAGE, judgeOutput()], modules);
+  const system = systemMessage(
+    "judge",
+    [BASE_RULES, JUDGE_STAGE, CARRY_AND_WEAPON_RULES, judgeOutput()],
+    modules,
+  );
   return {
     rules: system.length,
     messages: [
