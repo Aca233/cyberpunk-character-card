@@ -463,13 +463,13 @@ export function BioMonitor({
                 <span className={styles.bioWarn}>熬夜疲劳</span>
               ) : trauma.active ? (
                 <span
-                  className={trauma.dispatch.ok ? styles.bioGood : styles.bioWarn}
+                  className={trauma.coverage.ok ? styles.bioGood : styles.bioWarn}
                   title={
-                    trauma.dispatch.ok ? "创伤小组信号实时可达" : `受阻：${trauma.dispatch.why}`
+                    trauma.coverage.ok ? "创伤小组救援保障待命" : `受阻：${trauma.coverage.why}`
                   }
                 >
                   TT {trauma.tierLabel}
-                  {trauma.dispatch.ok ? "" : " · 受阻"}
+                  {trauma.coverage.ok ? "" : " · 受阻"}
                 </span>
               ) : hacking ? (
                 <span title={hacking.deckName ?? undefined}>{hacking.deckName ?? "接入仓"}</span>

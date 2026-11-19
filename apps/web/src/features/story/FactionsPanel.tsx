@@ -60,7 +60,7 @@ export function FactionsBody({ view }: { readonly view: View }) {
                     {f.id === "trauma-team" && (
                       <p className={view.trauma.active ? styles.factionReason : styles.factionLine}>
                         {view.trauma.active
-                          ? `会籍：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.dispatch.ok ? "现在倒下会来" : `现在不会来（${view.trauma.dispatch.why}）`}`
+                          ? `会籍：${view.trauma.tierLabel}，到 ${view.trauma.until}；${view.trauma.coverage.ok ? "救援保障待命" : `现在不会来（${view.trauma.coverage.why}）`}`
                           : `没有会籍${view.trauma.lapsed ? `（${view.trauma.lapsed} 过期了）` : ""}：银卡 ${view.trauma.prices.silver.toLocaleString("en-US")}、白金卡 ${view.trauma.prices.platinum.toLocaleString("en-US")} 欧元一期 30 天。银卡交火结束后来、只救倒下；白金卡交火中也来、能救濒死；恶土、狗镇不进`}
                         {view.trauma.rescues > 0 && ` · 救过你 ${view.trauma.rescues} 次`}
                       </p>
