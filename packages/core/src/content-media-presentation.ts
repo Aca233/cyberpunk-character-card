@@ -13,12 +13,24 @@ export function collectPresentedContentMedia(
   commands: readonly Command[],
   data: Readonly<Record<string, unknown>>,
 ): PresentedContentMedia[] {
+  if (
+    !commands.some(
+      (command) =>
+        command.type === "shard" ||
+        (command.type === "chip" && command.action === "read") ||
+        (command.type === "braindance" &&
+          (command.action === "progress" || command.action === "replay")),
+    )
+  )
+    return [];
   const shards = ShardsStateSchema.parse(after.slices.shards ?? {});
   const braindance = BraindanceStateSchema.parse(after.slices.braindance ?? {});
   const inventory = InventoryStateSchema.parse(after.slices.inventory ?? {});
   const catalog = itemCatalog(data);
   const result = new Map<string, PresentedContentMedia>();
-  let activeWork = BraindanceStateSchema.parse(before.slices.braindance ?? {}).active?.work;
+  const previous = BraindanceStateSchema.parse(before.slices.braindance ?? {});
+  const settled = new Set(previous.settled);
+  let activeWork = previous.active?.work;
   const add = (group: PresentedContentMedia) => {
     if (group.media.length) result.set(group.id, group);
   };
@@ -49,6 +61,9 @@ export function collectPresentedContentMedia(
       const parsed = BraindanceCommandSchema.safeParse(command);
       if (!parsed.success) continue;
       const event = parsed.data;
+      // 已结算事件是幂等空操作，不能用旧 start/exit 改变本轮实际播放源。
+      if (settled.has(event.event)) continue;
+      settled.add(event.event);
       if (event.action === "start") activeWork = event.work;
       else if (event.action === "exit" || event.action === "finish") activeWork = undefined;
       else if (event.action === "progress" || event.action === "replay") {
