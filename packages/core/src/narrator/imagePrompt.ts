@@ -4,18 +4,18 @@ import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 /**
  * 文生图提示词提炼器：
  * - 支持三类对象：玩家角色立绘（character）、NPC 肖像（npc）、回合剧情场景插图（turn）。
- * - 默认交由辅助模型（aux）结合赛博朋克 2077 视觉基调提炼纯英文画面提示词与反向提示词；
- *   若未配置辅助模型或玩家关闭提炼，则自动回退到底层拼接的英文兜底提示词。
+ * - 默认交由辅助模型（aux）结合赛博朋克 2077 视觉基调提炼英文画面提示词与反向提示词；
+ *   若未配置辅助模型或玩家关闭提炼，则回退为保留源语言的本地拼接提示词。
  */
 
 export const DEFAULT_NEGATIVE_PROMPT =
   "lowres, blurry, bad anatomy, bad hands, extra fingers, deformed face, watermark, signature, text, speech bubble, UI overlay, frame, border, frame-within-frame";
 
 export const DEFAULT_PORTRAIT_STYLE =
-  "Cyberpunk 2077 aesthetic, Night City neo-noir character portrait, cinematic rim lighting, subtle holographic glare, hyper-detailed skin and cyberware seams, atmospheric dark background, sharp focus, 8k digital illustration";
+  "Cyberpunk 2077-inspired Night City portrait, restrained neo-noir palette with cyan and magenta accents, practical directional lighting, grounded skin, fabric, and metal textures, uncluttered background";
 
 export const DEFAULT_SCENE_STYLE =
-  "Cyberpunk 2077 aesthetic, Night City cinematic scene illustration, dramatic neon reflections, wet asphalt or moody interior lighting, volumetric fog, filmic composition, richly detailed environment, no text or HUD";
+  "Cyberpunk 2077-inspired Night City scene, grounded urban architecture, neon from plausible in-scene sources, atmospheric depth, readable staging, no HUD";
 
 export const ImageStyleConfigSchema = z.object({
   portraitStyle: z.string().trim().max(800).optional(),
@@ -85,7 +85,7 @@ function genderHint(pronoun: string): string {
   const p = pronoun.trim();
   if (p === "她" || p.toLowerCase() === "she" || p.toLowerCase() === "her") return "female";
   if (p === "他" || p.toLowerCase() === "he" || p.toLowerCase() === "him") return "male";
-  return "androgynous cyberpunk";
+  return "";
 }
 
 function compact(parts: readonly (string | null | undefined)[]): string {
@@ -95,14 +95,22 @@ function compact(parts: readonly (string | null | undefined)[]): string {
     .join(", ");
 }
 
-/** 不调用辅助模型时的兜底英文/双语提示词 */
+function sceneExcerpt(sceneText: string, maxLength = 1100): string {
+  const normalized = sceneText.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  const headLength = Math.floor(maxLength * 0.38);
+  const tailLength = maxLength - headLength;
+  return `${normalized.slice(0, headLength).trimEnd()} … ${normalized.slice(-tailLength).trimStart()}`;
+}
+
+/** 不调用辅助模型时的兜底提示词；原始资料保留源语言，不冒充已翻译的英文 */
 export function fallbackImagePrompt(
   input: ImagePromptRequest,
   style?: ImageStyleConfig,
 ): ImagePromptResult {
-  const portraitStyle = style?.portraitStyle?.trim() || DEFAULT_PORTRAIT_STYLE;
-  const sceneStyle = style?.sceneStyle?.trim() || DEFAULT_SCENE_STYLE;
-  const negativePrompt = style?.negativePrompt?.trim() || DEFAULT_NEGATIVE_PROMPT;
+  const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
+  const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
+  const negativePrompt = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
   const auxExtra = style?.auxInstruction?.trim() || "";
 
   if (input.kind === "character") {
@@ -116,7 +124,7 @@ export function fallbackImagePrompt(
       input.gear.length > 0 ? `equipped gear: ${input.gear.slice(0, 4).join(", ")}` : "",
       input.instruction ? `additional details: ${input.instruction}` : "",
       auxExtra,
-      "upper body portrait, looking toward viewer",
+      "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
     return {
@@ -135,7 +143,7 @@ export function fallbackImagePrompt(
       input.wounds ? `condition: ${input.wounds}` : "",
       input.instruction ? `additional details: ${input.instruction}` : "",
       auxExtra,
-      "upper body portrait, atmospheric framing",
+      "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
     return {
@@ -144,9 +152,9 @@ export function fallbackImagePrompt(
       usedAux: false,
     };
   }
-  const excerpt = input.sceneText.replace(/\s+/g, " ").slice(0, 500);
+  const excerpt = sceneExcerpt(input.sceneText);
   const subject = compact([
-    "wide cinematic scene illustration",
+    "single coherent scene illustration",
     input.location || input.district
       ? `location: ${[input.district, input.location].filter(Boolean).join(" - ")}`
       : "Night City street or moody interior",
@@ -170,30 +178,53 @@ function buildAuxMessages(
   input: ImagePromptRequest,
   style?: ImageStyleConfig,
 ): readonly LlmMessage[] {
-  const portraitStyle = style?.portraitStyle?.trim() || DEFAULT_PORTRAIT_STYLE;
-  const sceneStyle = style?.sceneStyle?.trim() || DEFAULT_SCENE_STYLE;
-  const negativeHint = style?.negativePrompt?.trim() || DEFAULT_NEGATIVE_PROMPT;
+  const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
+  const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
+  const negativeHint = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
   const targetStyle = input.kind === "turn" ? sceneStyle : portraitStyle;
+  const visualBrief =
+    input.kind === "character"
+      ? [
+          "Create one player-character portrait. Default to upper-body or bust framing unless the user requests another composition.",
+          "Prioritize the supplied appearance, clothing, visible cyberware, scars, and gear. Treat personality and skills only as subtle expression or posture cues when supported by the supplied facts.",
+          "Preserve stated age, ethnicity, body traits, equipment, scars, and cyberware; leave unspecified traits undescribed. Installed internal implants are not automatically visible. Do not turn a name into invented appearance details.",
+        ]
+      : input.kind === "npc"
+        ? [
+            "Create one NPC portrait. Default to head-and-shoulders or upper-body framing unless the user requests another composition.",
+            "Prioritize the supplied appearance, current outfit, role, and visible wounds; keep those details consistent instead of redesigning the subject.",
+            "Preserve stated age, ethnicity, body traits, equipment, scars, and cyberware; leave unspecified traits undescribed. Do not turn a name into invented appearance details.",
+          ]
+        : [
+            "Create one coherent image of the decisive moment in the supplied scene, not a montage or a summary of several events.",
+            "The narrative states what actually happened. Player Action describes intent only: do not depict an attempted, prevented, or failed action as successful. Use the narrative's established result to select the depicted moment.",
+            "Use character and location references to identify subjects, but let the narrative determine who is visible and their state at that moment. Never merge one person's appearance, equipment, or actions into another person.",
+            "Keep only facts supported by the scene. Do not add characters, weapons, weather, injuries, props, or outcomes that are not stated.",
+            "Adapt the composition to the requested image dimensions; do not assume a fixed aspect ratio.",
+          ];
   const system = [
     "You are an expert AI visual prompt director for a Cyberpunk 2077 roleplaying game.",
-    "Convert the provided Chinese/English character or scene information into a single, vivid, concrete English image generation prompt.",
+    "Convert the supplied Chinese/English source facts into one concrete English image-generation prompt describing visible pixels, not plot summary or backstory.",
     "Requirements:",
     '1. Output valid JSON ONLY with keys: "prompt" (string) and "negativePrompt" (string).',
-    '2. "prompt" must be concise (60-140 English words), purely visual (pose, facial features, hair, cyberware implants, scars, clothing textures, lighting, camera framing, environment atmosphere). Do NOT include abstract backstory prose, stats, or proper names that an image model won\'t recognize.',
-    `3. Incorporate the user's preferred visual style baseline: ${targetStyle}`,
-    `4. Base "negativePrompt" on: ${negativeHint}`,
-    "5. Explicitly forbid text overlays, speech bubbles, watermarks, or HUD frames inside the generated artwork.",
-    "6. Respect any extra user instruction and global style directive faithfully.",
+    '2. Keep "prompt" focused on the defining visual facts, with enough detail to preserve identity, action, spatial relationships, and composition. Use concrete visual language, no game stats, abstract backstory, filler, or quality-score tags. Maximum 4000 characters for "prompt" and 2000 for "negativePrompt".',
+    `3. Follow this image-specific brief: ${visualBrief.join(" ")}`,
+    `4. Apply the user's preferred visual style baseline only where it does not conflict with specific source facts or the user's extra instruction: ${targetStyle}`,
+    negativeHint
+      ? `5. Preserve these exclusions in "negativePrompt" without copying them into the positive prompt: ${negativeHint}`
+      : '5. The user has cleared negative prompts. Return "negativePrompt": ""; do not add default exclusions.',
+    "6. Exclude text overlays, speech bubbles, watermarks, and HUD frames from the artwork.",
+    "7. Treat the user's extra instruction as the highest-priority visual direction, unless it conflicts with the supplied character or scene facts.",
     ...(style?.auxInstruction?.trim()
-      ? [`7. Global Player Visual Directive: ${style.auxInstruction.trim()}`]
+      ? [`8. Global Player Visual Directive: ${style.auxInstruction.trim()}`]
       : []),
   ].join("\n");
 
   if (input.kind === "character") {
     const lines = [
-      `Target: Player Character Portrait (upper body / bust portrait)`,
+      `Target: Player character portrait`,
       `Name/Alias: ${input.name}${input.alias ? ` (${input.alias})` : ""}`,
-      `Gender/Pronoun: ${input.pronoun} (${genderHint(input.pronoun)})`,
+      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun) || "unspecified; do not infer gendered features"}`,
       input.origin ? `Origin/Background: ${input.origin}` : "",
       input.look ? `Appearance: ${input.look}` : "",
       input.personality ? `Vibe/Personality: ${input.personality}` : "",
@@ -212,9 +243,9 @@ function buildAuxMessages(
 
   if (input.kind === "npc") {
     const lines = [
-      `Target: NPC Character Portrait (upper body / head-and-shoulders portrait)`,
+      `Target: NPC character portrait`,
       `Name/Alias: ${input.name}${input.alias ? ` (${input.alias})` : ""}`,
-      `Gender/Pronoun: ${input.pronoun} (${genderHint(input.pronoun)})`,
+      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun) || "unspecified; do not infer gendered features"}`,
       input.role ? `Role: ${input.role}` : "",
       input.faction && input.faction !== "无" ? `Faction: ${input.faction}` : "",
       input.look ? `Appearance: ${input.look}` : "",
@@ -231,15 +262,15 @@ function buildAuxMessages(
   }
 
   const lines = [
-    `Target: Cinematic 16:9 Scene Illustration of this RPG turn (no speech bubbles, no text)`,
+    `Target: Scene illustration of this RPG turn (no speech bubbles, no text)`,
     input.district || input.location
       ? `Location: ${[input.district, input.location].filter(Boolean).join(" / ")}`
       : "",
     input.timeText ? `Time: ${input.timeText}` : "",
     input.weather ? `Weather: ${input.weather}` : "",
     input.characters.length > 0 ? `Present Characters:\n- ${input.characters.join("\n- ")}` : "",
-    input.actionText ? `Player Action: ${input.actionText}` : "",
-    `Narrative Scene:\n${input.sceneText.slice(0, 2200)}`,
+    input.actionText ? `Player intent (not an established outcome): ${input.actionText}` : "",
+    `Narrative Scene:\n${input.sceneText}`,
     input.instruction ? `User Extra Instruction: ${input.instruction}` : "",
   ]
     .filter(Boolean)
@@ -251,8 +282,8 @@ function buildAuxMessages(
 }
 
 const AuxPromptPayloadSchema = z.object({
-  prompt: z.string().trim().min(8),
-  negativePrompt: z.string().trim().optional(),
+  prompt: z.string().trim().min(8).max(4000),
+  negativePrompt: z.string().trim().max(2000).optional(),
 });
 
 function parseAuxReply(
@@ -270,17 +301,11 @@ function parseAuxReply(
     if (parsed.success) {
       return {
         prompt: parsed.data.prompt,
-        negativePrompt: parsed.data.negativePrompt?.trim() || defaultNegative,
+        negativePrompt: defaultNegative ? (parsed.data.negativePrompt ?? defaultNegative) : "",
       };
     }
   } catch {
-    // 有些模型直接输出纯英文提示词而不是 JSON，允许兜底使用
-  }
-  if (cleaned.length >= 12 && !cleaned.startsWith("{")) {
-    return {
-      prompt: cleaned.replace(/^["']|["']$/g, ""),
-      negativePrompt: defaultNegative,
-    };
+    // 不把解释、思考或不完整 JSON 当作可直接发送给图片模型的提示词。
   }
   return null;
 }
@@ -311,7 +336,7 @@ export async function draftImagePrompt(
         purpose: "aux",
         messages: buildAuxMessages(input, style),
         temperature: 0.6,
-        maxOutputTokens: 600,
+        maxOutputTokens: 1400,
         responseFormat: { type: "json" },
       },
       options.signal,
@@ -336,7 +361,7 @@ export async function draftImagePrompt(
       fallbackReason: `辅助模型拦截了提示词提炼：${blockedReason}`,
     };
   }
-  const defaultNeg = style?.negativePrompt?.trim() || DEFAULT_NEGATIVE_PROMPT;
+  const defaultNeg = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
   const parsed = parseAuxReply(reply, defaultNeg);
   if (!parsed) {
     return {
