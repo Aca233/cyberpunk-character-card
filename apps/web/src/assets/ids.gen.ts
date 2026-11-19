@@ -68,6 +68,7 @@ export const ASSET_IDS = [
   "braindance.timeline",
   "braindance.visual",
   "braindance.visualOn",
+  "brand.traumaTeam",
   "breach.bufferEmpty",
   "breach.bufferOn",
   "breach.frameBg",

@@ -3,6 +3,11 @@
   "groups": {
     "common": [
       {
+        "id": "brand.traumaTeam",
+        "atlas": "common/gang_logos",
+        "slot": "logo_traumateam"
+      },
+      {
         "id": "panel.frame",
         "atlas": "fullscreen/thin_red_frame01",
         "slot": "frame"
