@@ -6,7 +6,7 @@ import { useLayer } from "../../ui/layers";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { portraitOf } from "./art";
-import { Profile } from "./Profile";
+import { ProfileHead } from "./Profile";
 import styles from "./story.module.css";
 import {
   buildChatBubbles,
@@ -430,23 +430,11 @@ function ThreadHead({
                   className={styles.threadCardLayer}
                 />
                 <div className={styles.threadCardBody}>
-                  <div className={styles.threadCardToolbar}>
-                    <span>人物档案 · 点击头像可固定</span>
-                    <button
-                      type="button"
-                      className={styles.threadCardClose}
-                      aria-label="关闭人物档案"
-                      onClick={closeCard}
-                    >
-                      关闭
-                    </button>
-                  </div>
-                  <Profile
+                  <ProfileHead
                     npc={npc}
                     fixer={contact.fixer}
                     squad={contact.squad}
                     foe={contact.foe}
-                    showPortraitTools={false}
                   />
                 </div>
               </div>
