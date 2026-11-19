@@ -2,6 +2,7 @@ export * from "./actions";
 export * from "./authoring";
 export * from "./dice";
 export * from "./game";
+export * from "./image-context";
 export * from "./kernel/ports";
 export * from "./kernel/rng";
 export * from "./kernel/system";
@@ -38,6 +39,7 @@ export {
 } from "./pipeline";
 export * from "./schemas/board";
 export * from "./schemas/character";
+export * from "./schemas/image";
 export * from "./schemas/lore";
 export * from "./schemas/save";
 export * from "./schemas/turn";

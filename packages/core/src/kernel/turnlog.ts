@@ -1,5 +1,6 @@
 import { applyPatches, enablePatches } from "immer";
 import { z } from "zod";
+import { ImageSceneContextSchema } from "../schemas/image";
 import type { Snapshot, WorldState } from "./world";
 
 enablePatches();
@@ -41,6 +42,8 @@ const TurnRecordSchema = z.object({
   /** 没通过校验、被丢弃的指令，只供调试 */
   dropped: z.array(z.unknown()),
   text: z.string(),
+  /** 没有视觉资料时只按本轮正文配图，禁止借用当前世界状态。 */
+  imageContext: ImageSceneContextSchema.optional(),
   patches: z.array(PatchSchema),
   /** 以下字段在切片 4 加入，旧存档没有 */
   /** 叙事模型对玩家意图的一句理解 */

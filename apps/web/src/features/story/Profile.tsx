@@ -300,6 +300,8 @@ export function ProfileHead({
                       look: npc.look,
                       outfit: npc.outfit,
                       wounds: wound.detail,
+                      cyberware: npc.body?.scan?.chrome.map((item) => item.name) ?? [],
+                      gear: npc.body?.gear.map((item) => item.name) ?? [],
                       instruction: "",
                     },
                   })

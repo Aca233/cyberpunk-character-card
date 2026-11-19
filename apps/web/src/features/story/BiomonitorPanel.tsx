@@ -205,10 +205,20 @@ export function BiomonitorPanel({
       promptRequest: {
         kind: "character",
         name: character.name ?? "Merc",
-        alias: "",
-        pronoun: "TA",
+        alias: character.visual?.alias ?? "",
+        pronoun: character.visual?.pronoun ?? "TA",
         origin: origins[0]?.label ?? "",
-        look: character.brief.slice(0, 480),
+        look: character.visual?.look ?? "",
+        outfit: inventory.clothing
+          .map((item) => displayItemName(view.names.items, item.id))
+          .join("、"),
+        wounds: [
+          health.wound,
+          ...health.injuries.map((injury) => `${injury.partLabel ?? ""} ${injury.cause}`),
+        ]
+          .filter(Boolean)
+          .join("；")
+          .slice(0, 2000),
         personality: "",
         skills: modules.map((m) => m.label).join("、"),
         cyberware: view.cyberware.map((c) => c.name),

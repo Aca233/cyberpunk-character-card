@@ -1,5 +1,12 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
+import {
+  IMAGE_INSTRUCTION_MAX_LENGTH,
+  IMAGE_PROMPT_MAX_LENGTH,
+  IMAGE_SCENE_MAX_LENGTH,
+  type ImageCharacterReference,
+  ImageCharacterReferenceSchema,
+} from "../schemas/image";
 
 /**
  * 文生图提示词提炼器：
@@ -34,9 +41,11 @@ export const CharacterImagePromptInputSchema = z.object({
   look: z.string().trim().max(500).default(""),
   personality: z.string().trim().max(400).default(""),
   skills: z.string().trim().max(400).default(""),
-  cyberware: z.array(z.string().trim().max(60)).max(24).default([]),
-  gear: z.array(z.string().trim().max(60)).max(16).default([]),
-  instruction: z.string().trim().max(300).default(""),
+  cyberware: z.array(z.string().trim().max(240)).max(32).default([]),
+  gear: z.array(z.string().trim().max(240)).max(32).default([]),
+  outfit: z.string().trim().max(2000).optional(),
+  wounds: z.string().trim().max(2000).optional(),
+  instruction: z.string().trim().max(IMAGE_INSTRUCTION_MAX_LENGTH).default(""),
 });
 export type CharacterImagePromptInput = z.infer<typeof CharacterImagePromptInputSchema>;
 
@@ -48,22 +57,24 @@ export const NpcImagePromptInputSchema = z.object({
   role: z.string().trim().max(120).default(""),
   faction: z.string().trim().max(80).nullable().optional(),
   look: z.string().trim().max(500).default(""),
-  outfit: z.string().trim().max(300).nullable().optional(),
-  wounds: z.string().trim().max(200).nullable().optional(),
-  instruction: z.string().trim().max(300).default(""),
+  outfit: z.string().trim().max(2000).nullable().optional(),
+  wounds: z.string().trim().max(2000).nullable().optional(),
+  cyberware: z.array(z.string().trim().max(240)).max(32).optional(),
+  gear: z.array(z.string().trim().max(240)).max(32).optional(),
+  instruction: z.string().trim().max(IMAGE_INSTRUCTION_MAX_LENGTH).default(""),
 });
 export type NpcImagePromptInput = z.infer<typeof NpcImagePromptInputSchema>;
 
 export const TurnImagePromptInputSchema = z.object({
   kind: z.literal("turn"),
-  sceneText: z.string().trim().min(1).max(3500),
-  actionText: z.string().trim().max(400).default(""),
-  location: z.string().trim().max(120).default(""),
-  district: z.string().trim().max(80).default(""),
-  timeText: z.string().trim().max(80).default(""),
-  weather: z.string().trim().max(80).default(""),
-  characters: z.array(z.string().trim().max(160)).max(10).default([]),
-  instruction: z.string().trim().max(300).default(""),
+  sceneText: z.string().trim().min(1).max(IMAGE_SCENE_MAX_LENGTH),
+  actionText: z.string().trim().max(2000).default(""),
+  location: z.string().trim().max(300).default(""),
+  district: z.string().trim().max(160).default(""),
+  timeText: z.string().trim().max(160).default(""),
+  weather: z.string().trim().max(160).default(""),
+  characters: z.array(ImageCharacterReferenceSchema).max(32).default([]),
+  instruction: z.string().trim().max(IMAGE_INSTRUCTION_MAX_LENGTH).default(""),
 });
 export type TurnImagePromptInput = z.infer<typeof TurnImagePromptInputSchema>;
 
@@ -81,6 +92,8 @@ export interface ImagePromptResult {
   readonly fallbackReason?: string;
 }
 
+export type ImageNegativePromptMode = "independent" | "in-prompt";
+
 function genderHint(pronoun: string): string {
   const p = pronoun.trim();
   if (p === "她" || p.toLowerCase() === "she" || p.toLowerCase() === "her") return "female";
@@ -95,43 +108,73 @@ function compact(parts: readonly (string | null | undefined)[]): string {
     .join(", ");
 }
 
-function sceneExcerpt(sceneText: string, maxLength = 1100): string {
+function sceneExcerpt(sceneText: string, maxLength: number): string {
   const normalized = sceneText.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
-  const headLength = Math.floor(maxLength * 0.38);
-  const tailLength = maxLength - headLength;
-  return `${normalized.slice(0, headLength).trimEnd()} … ${normalized.slice(-tailLength).trimStart()}`;
+  const headLength = Math.floor((maxLength - 80) * 0.25);
+  const tailLength = maxLength - headLength - 80;
+  return `Earlier context: ${normalized.slice(0, headLength).trimEnd()} … Scene ending: ${normalized.slice(-tailLength).trimStart()}`;
+}
+
+function characterReferenceText(character: ImageCharacterReference, concise = false): string {
+  const limit = (text: string, length: number) => (concise ? text.slice(0, length) : text);
+  return [
+    `[${character.id}] ${character.name}${character.alias ? ` (${character.alias})` : ""}`,
+    character.pronoun ? `pronoun: ${character.pronoun}` : "",
+    character.role ? `role: ${limit(character.role, 80)}` : "",
+    character.look ? `fixed appearance: ${limit(character.look, 240)}` : "",
+    character.outfit ? `current outfit: ${limit(character.outfit, 160)}` : "",
+    character.wounds ? `known condition: ${limit(character.wounds, 120)}` : "",
+    character.cyberware.length
+      ? `installed implants (not all visible): ${(concise ? character.cyberware.slice(0, 4) : character.cyberware).join(", ")}`
+      : "",
+    character.gear.length
+      ? `carried gear (not necessarily held): ${(concise ? character.gear.slice(0, 3) : character.gear).join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
 }
 
 /** 不调用辅助模型时的兜底提示词；原始资料保留源语言，不冒充已翻译的英文 */
 export function fallbackImagePrompt(
   input: ImagePromptRequest,
   style?: ImageStyleConfig,
+  negativePromptMode: ImageNegativePromptMode = "independent",
 ): ImagePromptResult {
   const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
   const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
   const negativePrompt = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
   const auxExtra = style?.auxInstruction?.trim() || "";
+  const exclusions =
+    negativePromptMode === "in-prompt" && negativePrompt
+      ? `\nUser-requested exclusions (render the image without these): ${negativePrompt}`
+      : "";
+  const finish = (prompt: string): ImagePromptResult => ({
+    prompt: `${prompt}${exclusions}`,
+    negativePrompt: negativePromptMode === "in-prompt" ? "" : negativePrompt,
+    usedAux: false,
+  });
 
   if (input.kind === "character") {
     const subject = compact([
       `${genderHint(input.pronoun)} mercenary portrait`,
       input.origin ? `background: ${input.origin}` : "",
       input.look ? `appearance: ${input.look}` : "",
+      input.outfit ? `current outfit: ${input.outfit}` : "",
+      input.wounds ? `known condition: ${input.wounds}` : "",
       input.cyberware.length > 0
-        ? `visible cyberware: ${input.cyberware.slice(0, 6).join(", ")}`
+        ? `installed cyberware (only depict explicitly visible parts): ${input.cyberware.slice(0, 6).join(", ")}`
         : "",
-      input.gear.length > 0 ? `equipped gear: ${input.gear.slice(0, 4).join(", ")}` : "",
+      input.gear.length > 0
+        ? `carried gear (not necessarily held): ${input.gear.slice(0, 4).join(", ")}`
+        : "",
       input.instruction ? `additional details: ${input.instruction}` : "",
       auxExtra,
       "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
-    return {
-      prompt: subject,
-      negativePrompt,
-      usedAux: false,
-    };
+    return finish(subject);
   }
   if (input.kind === "npc") {
     const subject = compact([
@@ -141,42 +184,48 @@ export function fallbackImagePrompt(
       input.look ? `appearance: ${input.look}` : "",
       input.outfit ? `wearing: ${input.outfit}` : "",
       input.wounds ? `condition: ${input.wounds}` : "",
+      input.cyberware?.length
+        ? `installed implants (not all visible): ${input.cyberware.slice(0, 6).join(", ")}`
+        : "",
+      input.gear?.length
+        ? `carried gear (not necessarily held): ${input.gear.slice(0, 4).join(", ")}`
+        : "",
       input.instruction ? `additional details: ${input.instruction}` : "",
       auxExtra,
       "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
-    return {
-      prompt: subject,
-      negativePrompt,
-      usedAux: false,
-    };
+    return finish(subject);
   }
-  const excerpt = sceneExcerpt(input.sceneText);
-  const subject = compact([
+  const references = input.characters
+    .slice(0, 8)
+    .map((character) => characterReferenceText(character, true))
+    .join("\n")
+    .slice(0, 4000);
+  const framing = compact([
     "single coherent scene illustration",
+    "Depict one moment established in the narrative, preserving its outcome; do not turn attempted or failed actions into successes. Character references do not imply that everyone is on screen. Internal implants and carried gear are not automatically visible",
     input.location || input.district
       ? `location: ${[input.district, input.location].filter(Boolean).join(" - ")}`
       : "Night City street or moody interior",
     input.timeText ? `time: ${input.timeText}` : "",
     input.weather ? `weather: ${input.weather}` : "",
-    input.characters.length > 0 ? `characters in scene: ${input.characters.join("; ")}` : "",
-    input.actionText ? `action moment: ${input.actionText}` : "",
-    `scene description: ${excerpt}`,
     input.instruction ? `style/focus: ${input.instruction}` : "",
     auxExtra,
     sceneStyle,
   ]);
-  return {
-    prompt: subject,
-    negativePrompt,
-    usedAux: false,
-  };
+  const fixed = `${framing}\nCharacter references:\n${references}\nNarrative source:\n`;
+  const excerpt = sceneExcerpt(
+    input.sceneText,
+    Math.max(300, IMAGE_PROMPT_MAX_LENGTH - fixed.length - exclusions.length),
+  );
+  return finish(`${fixed}${excerpt}`);
 }
 
 function buildAuxMessages(
   input: ImagePromptRequest,
   style?: ImageStyleConfig,
+  negativePromptMode: ImageNegativePromptMode = "independent",
 ): readonly LlmMessage[] {
   const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
   const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
@@ -211,7 +260,9 @@ function buildAuxMessages(
     `3. Follow this image-specific brief: ${visualBrief.join(" ")}`,
     `4. Apply the user's preferred visual style baseline only where it does not conflict with specific source facts or the user's extra instruction: ${targetStyle}`,
     negativeHint
-      ? `5. Preserve these exclusions in "negativePrompt" without copying them into the positive prompt: ${negativeHint}`
+      ? negativePromptMode === "in-prompt"
+        ? `5. The target image model uses one natural-language prompt. Express all of these user-requested exclusions as concise natural-language constraints inside "prompt", translated faithfully if needed; return "negativePrompt": "". Exclusions: ${negativeHint}`
+        : `5. Preserve these exclusions in "negativePrompt" without copying them into the positive prompt: ${negativeHint}`
       : '5. The user has cleared negative prompts. Return "negativePrompt": ""; do not add default exclusions.',
     "6. Exclude text overlays, speech bubbles, watermarks, and HUD frames from the artwork.",
     "7. Treat the user's extra instruction as the highest-priority visual direction, unless it conflicts with the supplied character or scene facts.",
@@ -227,6 +278,8 @@ function buildAuxMessages(
       `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun) || "unspecified; do not infer gendered features"}`,
       input.origin ? `Origin/Background: ${input.origin}` : "",
       input.look ? `Appearance: ${input.look}` : "",
+      input.outfit ? `Current outfit: ${input.outfit}` : "",
+      input.wounds ? `Known condition: ${input.wounds}` : "",
       input.personality ? `Vibe/Personality: ${input.personality}` : "",
       input.skills ? `Specialty: ${input.skills}` : "",
       input.cyberware.length > 0 ? `Installed Cyberware: ${input.cyberware.join(", ")}` : "",
@@ -251,6 +304,10 @@ function buildAuxMessages(
       input.look ? `Appearance: ${input.look}` : "",
       input.outfit ? `Current Outfit: ${input.outfit}` : "",
       input.wounds ? `Visible Condition/Wounds: ${input.wounds}` : "",
+      input.cyberware?.length
+        ? `Installed cyberware (not all visible): ${input.cyberware.join(", ")}`
+        : "",
+      input.gear?.length ? `Carried gear (not necessarily held): ${input.gear.join(", ")}` : "",
       input.instruction ? `User Extra Instruction: ${input.instruction}` : "",
     ]
       .filter(Boolean)
@@ -268,7 +325,9 @@ function buildAuxMessages(
       : "",
     input.timeText ? `Time: ${input.timeText}` : "",
     input.weather ? `Weather: ${input.weather}` : "",
-    input.characters.length > 0 ? `Present Characters:\n- ${input.characters.join("\n- ")}` : "",
+    input.characters.length > 0
+      ? `Character references at this turn (the narrative determines who is on screen):\n${input.characters.map((character) => characterReferenceText(character)).join("\n")}`
+      : "",
     input.actionText ? `Player intent (not an established outcome): ${input.actionText}` : "",
     `Narrative Scene:\n${input.sceneText}`,
     input.instruction ? `User Extra Instruction: ${input.instruction}` : "",
@@ -282,7 +341,7 @@ function buildAuxMessages(
 }
 
 const AuxPromptPayloadSchema = z.object({
-  prompt: z.string().trim().min(8).max(4000),
+  prompt: z.string().trim().min(8).max(IMAGE_PROMPT_MAX_LENGTH),
   negativePrompt: z.string().trim().max(2000).optional(),
 });
 
@@ -320,13 +379,15 @@ export async function draftImagePrompt(
   options: {
     readonly useAux?: boolean;
     readonly style?: ImageStyleConfig;
+    readonly negativePromptMode?: ImageNegativePromptMode;
     readonly signal?: AbortSignalLike;
   } = {},
 ): Promise<ImagePromptResult> {
   const useAux = options.useAux ?? true;
   const style = options.style;
+  const negativePromptMode = options.negativePromptMode ?? "independent";
   if (!useAux || !llm) {
-    return fallbackImagePrompt(input, style);
+    return fallbackImagePrompt(input, style, negativePromptMode);
   }
   let reply = "";
   let blockedReason: string | null = null;
@@ -334,7 +395,7 @@ export async function draftImagePrompt(
     for await (const event of llm.stream(
       {
         purpose: "aux",
-        messages: buildAuxMessages(input, style),
+        messages: buildAuxMessages(input, style, negativePromptMode),
         temperature: 0.6,
         maxOutputTokens: 1400,
         responseFormat: { type: "json" },
@@ -351,13 +412,13 @@ export async function draftImagePrompt(
     if (options.signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : String(error);
     return {
-      ...fallbackImagePrompt(input, style),
+      ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: message,
     };
   }
   if (blockedReason) {
     return {
-      ...fallbackImagePrompt(input, style),
+      ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: `辅助模型拦截了提示词提炼：${blockedReason}`,
     };
   }
@@ -365,13 +426,13 @@ export async function draftImagePrompt(
   const parsed = parseAuxReply(reply, defaultNeg);
   if (!parsed) {
     return {
-      ...fallbackImagePrompt(input, style),
+      ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: "辅助模型返回内容格式异常，已回退本地拼接提示词",
     };
   }
   return {
     prompt: parsed.prompt,
-    negativePrompt: parsed.negativePrompt,
+    negativePrompt: negativePromptMode === "in-prompt" ? "" : parsed.negativePrompt,
     usedAux: true,
   };
 }

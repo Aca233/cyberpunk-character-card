@@ -847,6 +847,8 @@ export function projectState(
         /** 这一轮是否真正开启了斯安威斯坦（含界面开关、选项或判断阶段识别） */
         sandevistan: input.sandevistan === true || boosted,
         text: t.text,
+        imageContext: t.imageContext ?? null,
+        draft: t.draft === true,
         dice: t.dice,
         /** 被丢弃的指令条数；大于 0 时界面提示“本轮有数值没结算” */
         dropped: t.dropped.length,

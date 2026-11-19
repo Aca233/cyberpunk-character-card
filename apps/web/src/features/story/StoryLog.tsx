@@ -115,22 +115,17 @@ function Paragraph({
   );
 }
 
-/** 从单轮叙事与当前世界视图提炼场景插图请求 */
-export function buildTurnPromptRequest(turn: Turn, view: View): TurnImagePromptInput {
-  const presentNpcs = view.npcs
-    .filter((n) => n.here)
-    .slice(0, 6)
-    .map((n) => [n.name, n.role, n.outfit ?? n.look].filter(Boolean).join(" · "));
-  const selfDesc = view.character.name ? `${view.character.name} (protagonist)` : "";
+/** 只读该轮正文与结算时保存的视觉资料，重绘时不借用当前世界。 */
+export function buildTurnPromptRequest(turn: Turn): TurnImagePromptInput {
   return {
     kind: "turn",
-    sceneText: turn.text.slice(0, 3200),
-    actionText: turn.input.text.trim().slice(0, 300),
-    location: view.names.location ?? view.location ?? "",
-    district: view.names.district ?? "",
-    timeText: `${view.time.text} (${view.time.period})`,
-    weather: view.weather.label,
-    characters: [selfDesc, ...presentNpcs].filter(Boolean),
+    sceneText: turn.text,
+    actionText: turn.input.text.trim(),
+    location: turn.imageContext?.location ?? "",
+    district: turn.imageContext?.district ?? "",
+    timeText: turn.imageContext?.timeText ?? "",
+    weather: turn.imageContext?.weather ?? "",
+    characters: turn.imageContext?.characters ?? [],
     instruction: "",
   };
 }
@@ -167,7 +162,7 @@ function TurnBlock({
       subtitle: turn.sceneTitle ?? view.names.location ?? undefined,
       defaultAspectRatio: "16:9",
       bind: { kind: "turn", seq: turn.seq },
-      promptRequest: buildTurnPromptRequest(turn, view),
+      promptRequest: buildTurnPromptRequest(turn),
     });
   };
   return (
