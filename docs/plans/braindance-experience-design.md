@@ -4,6 +4,8 @@
 
 日期：2026-11-19
 
+关联：[性偶、玩偶与成人服务](doll-and-adult-services-design.md) · [芯片日常使用](chip-everyday-use-design.md)
+
 ## 一、核心定位
 
 **把超梦做成有固定内容、能够正常消费的叙事场景。**
