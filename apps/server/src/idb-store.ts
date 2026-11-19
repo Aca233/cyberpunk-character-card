@@ -1,4 +1,12 @@
-import { type ParsedLog, parseLog, type SaveMeta, SaveMetaSchema, type Snapshot } from "@cp/core";
+import {
+  effectiveTurns,
+  type ParsedLog,
+  parseLog,
+  type SaveMeta,
+  SaveMetaSchema,
+  type Snapshot,
+} from "@cp/core";
+import { ImageBindingError, StoredImageSchema } from "./images";
 import {
   type DocStore,
   isSaveId,
@@ -9,6 +17,7 @@ import {
   SNAPSHOT_KEEP,
   SnapshotFileSchema,
 } from "./ports";
+import { AbortedError } from "./providers/http";
 
 /**
  * IndexedDB 版存储：纯前端（静态网站）用，角色卡、预设、模型配置和存档都存在浏览器里。
@@ -137,6 +146,88 @@ export class IdbDocStore implements DocStore {
     await inTx(this.db, [DOCS], "readwrite", async (tx) => {
       await req(tx.objectStore(DOCS).put(text, path));
     });
+  }
+
+  /** 校验目标和比较绑定共用一个事务，防止其他标签页在读写之间覆盖选择。 */
+  async updateImageBindings(
+    saveId: string,
+    update: (current: string | undefined) => string,
+    options: {
+      readonly imageId?: string;
+      readonly turnSeq?: number;
+      readonly signal?: AbortSignal;
+    } = {},
+  ): Promise<string> {
+    if (!isSaveId(saveId)) throw new ImageBindingError("存档 id 不合法", 404);
+    const { imageId, turnSeq, signal } = options;
+    if (signal?.aborted) throw new AbortedError();
+
+    let committed = false;
+    let abort: (() => void) | undefined;
+    const ensureActive = () => {
+      if (signal?.aborted) throw new AbortedError();
+    };
+    try {
+      return await inTx(this.db, [DOCS, METAS, LOG], "readwrite", async (tx) => {
+        tx.addEventListener(
+          "complete",
+          () => {
+            committed = true;
+          },
+          { once: true },
+        );
+        abort = () => {
+          try {
+            tx.abort();
+          } catch {
+            // 已提交的事务无法再取消；complete 是绑定写入的成功点。
+          }
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+        ensureActive();
+
+        if ((await req(tx.objectStore(METAS).count(saveId))) === 0) {
+          throw new ImageBindingError("存档不存在，未绑定图片", 404);
+        }
+        ensureActive();
+        const docs = tx.objectStore(DOCS);
+        if (imageId !== undefined) {
+          const imageText: unknown = await req(docs.get(`images/items/${imageId}.json`));
+          ensureActive();
+          let valid = false;
+          if (typeof imageText === "string") {
+            try {
+              const parsed = StoredImageSchema.safeParse(JSON.parse(imageText));
+              valid = parsed.success && parsed.data.id === imageId;
+            } catch {
+              // 不存在或损坏的图片不可成为新的绑定目标。
+            }
+          }
+          if (!valid) throw new ImageBindingError("图片不存在或已损坏，未绑定图片", 404);
+        }
+        if (turnSeq !== undefined) {
+          const rows = await req(tx.objectStore(LOG).getAll(saveRange(saveId)));
+          ensureActive();
+          const { records } = parseLog(rows.map(String).join(""));
+          if (!effectiveTurns(records).some((turn) => turn.seq === turnSeq)) {
+            throw new ImageBindingError("回合不存在或已作废，未绑定图片", 409);
+          }
+        }
+
+        const path = `images/bindings/${saveId}.json`;
+        const current: unknown = await req(docs.get(path));
+        ensureActive();
+        const next = update(typeof current === "string" ? current : undefined);
+        ensureActive();
+        await req(docs.put(next, path));
+        return next;
+      });
+    } catch (error) {
+      if (!committed && signal?.aborted) throw new AbortedError();
+      throw error;
+    } finally {
+      if (abort) signal?.removeEventListener("abort", abort);
+    }
   }
 
   async remove(path: string): Promise<boolean> {
