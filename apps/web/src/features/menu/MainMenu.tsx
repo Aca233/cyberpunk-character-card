@@ -13,24 +13,21 @@ import { Panel } from "../../ui/Panel";
 import { defaultStartLocationFor } from "../characters/creator";
 import { anchorLabel, startAnchor } from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
-import { LegendsPanel } from "./LegendsPanel";
 import styles from "./menu.module.css";
 
-type Item = "continue" | "new" | "load" | "legends" | "characters" | "settings";
+type Item = "continue" | "new" | "load" | "characters" | "settings";
 
 /** 右侧舞台的标题，跟着左边选中的菜单项走 */
 const STAGE_TITLES: Partial<Record<Item, string>> = {
   continue: "继续",
   new: "新建存档",
   load: "读取存档",
-  legends: "传说名册",
 };
 
 const STAGE_CODES: Partial<Record<Item, string>> = {
   continue: "01 // RESUME",
   new: "02 // NEW_RUN",
   load: "03 // ARCHIVE",
-  legends: "04 // LEGENDS",
 };
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
@@ -107,7 +104,6 @@ export function MainMenu() {
     disabled?: boolean;
     reason?: string;
   }[] = [
-    { id: "legends", label: "传说名册" },
     {
       id: "settings",
       label: "设置",
@@ -388,7 +384,6 @@ export function MainMenu() {
           )}
 
           {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
-          {focus === "legends" && <LegendsPanel onOpen={(id) => navigate(`/play/${id}`)} />}
 
           {focus === "load" && (
             <div className={styles.load}>
