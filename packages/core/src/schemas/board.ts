@@ -171,20 +171,6 @@ export const AcquaintanceSchema = z.object({
 });
 export type Acquaintance = z.infer<typeof AcquaintanceSchema>;
 
-/** 创意工坊模组包标准协议（Workshop-Ready Foundation） */
-export const WorkshopPackSchema = z.object({
-  format: z.literal("cp2077-workshop-pack").default("cp2077-workshop-pack"),
-  version: z.literal(1).default(1),
-  id: z.string().trim().min(1).max(60),
-  title: z.string().trim().min(1).max(40),
-  author: z.string().trim().max(40).default(""),
-  description: line(300).default(""),
-  modules: z.array(BoardModuleSchema).max(200).default([]),
-  cyberware: z.array(StartCyberwareSchema).max(100).default([]),
-  acquaintances: z.array(AcquaintanceSchema).max(100).default([]),
-});
-export type WorkshopPack = z.infer<typeof WorkshopPackSchema>;
-
 export const BoardSchema = z.object({
   origin: BoardModuleSchema.nullable().default(null),
   pasts: z.array(BoardModuleSchema).max(PAST_MAX).default([]),

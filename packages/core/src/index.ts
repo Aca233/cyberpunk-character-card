@@ -46,6 +46,7 @@ export * from "./schemas/lore";
 export * from "./schemas/presented-content-media";
 export * from "./schemas/save";
 export * from "./schemas/turn";
+export * from "./schemas/workshop";
 export * from "./state";
 export * as arcRules from "./systems/arcs";
 export * as braindanceRules from "./systems/braindance";
