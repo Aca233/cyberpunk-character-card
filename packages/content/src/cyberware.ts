@@ -486,14 +486,31 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "militech-canto",
     deckTraits: ["blackwall", "combat", "spread"],
-    deckProfile: "军用科技黑墙仓：搭载黑墙边缘异质协议，破坏力极端，神经灼烧与失控风险同样极高",
+    deckProfile: "赛诺苏尔原型接入仓：可上传黑墙网关，接触流窜 AI 的神经侵蚀风险极高",
     name: "军用科技篇章 6 型",
     slot: "os",
     rarity: "legendary",
     price: 98000,
     humanityCost: 11,
+    iconic: true,
     ability:
-      "封印着黑墙恶魔代码的原型接入仓。释放冷酷无情的黑墙网关快速破解，在敌群神经系统间链式跳跃吞噬其义体与大脑，在 RAM 枯竭时甚至会直接抽取你的生命力作为燃料。",
+      "依赛诺苏尔原型蓝图与回收的关键组件制作的特殊网络接入仓，能够上传黑墙网关并向相邻连网目标扩散致命攻击。接触被黑墙隔离的流窜 AI 会威胁使用者的神经与身体状态。需要真实取得蓝图、组件并完成制作，不是普通诊所的量产零售设备。",
+    checks: ["intelligence"],
+  },
+  // 本作将百灵鸟原作独有的军用神经与潜网改造记录为专属 OS，名称不是官方商品型号。
+  // 它不是 Canto，也不是量产零售件；两个 0 表示不设售价或固定人性扣点，不宣称官方参数。
+  {
+    id: "songbird-military-netrunning",
+    name: "百灵鸟的军用潜网改造",
+    slot: "os",
+    rarity: "legendary",
+    price: 0,
+    humanityCost: 0,
+    iconic: true,
+    deckTraits: ["blackwall"],
+    deckProfile: "百灵鸟在联情局接受的专属军用神经改造，能够在实际接入条件下接触黑墙",
+    ability:
+      "百灵鸟在联情局服役期间接受的军用神经与潜网改造，与她的身体深度结合。她能够按实际接入条件和已发生的剧情接触黑墙；持续接触被隔离的流窜 AI 会侵蚀她的身体、记忆与人格。能力取决于她当时的身体状态、控制情况和实际网络连接。这是百灵鸟自身改造的记录，不作为可购买的独立商品。",
     checks: ["intelligence"],
   },
   {
@@ -1173,7 +1190,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "netwatch-netdriver",
     deckTraits: ["netwatch", "antiIce", "combat"],
-    deckProfile: "网监防护仓：深厚防火墙与反黑客溯源能力；在公开网络连线会被网监猎犬循味而来",
+    deckProfile: "网络监察高端接入仓：擅长设备入侵与通过摄像头等网络节点实施快速破解",
     name: "网络监察网驱 5 型",
     slot: "os",
     rarity: "legendary",
@@ -1181,7 +1198,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 10,
     iconic: true,
     ability:
-      "网络监察特工的标准顶配网络接入仓。搭载至高权限的防御与穿透矩阵，算力深不可测；但只要你敢在公开网络连线，网监的猎犬随时会闻味而来。",
+      "以网络监察技术打造的高端网络接入仓，针对设备控制和经网络节点发起的快速破解做了优化。设备提供运算与防护能力，使用者仍须取得实际接入路径与目标权限；网络监察的追查取决于实际行动留下的证据与入侵目标。",
     checks: ["intelligence"],
   },
   {

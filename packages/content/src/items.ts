@@ -102,12 +102,12 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     name: "HA-4 硬骨头",
     kind: "weapon",
     category: "pistol",
-    weaponType: "tech",
-    attribute: "tech",
+    weaponType: "power",
+    attribute: "cool",
     rarity: "uncommon",
     price: 2600,
     ability:
-      "高科军工出品的平民防卫级全自动技术手枪。内部加装低功耗磁轨线圈，扣住扳机即可连贯倾泻微型电磁穿甲弹，以密集弹道强行穿透轻质掩体。",
+      "面向平民防卫市场的全自动威能手枪。结构紧凑，近距离能迅速倾泻弹药；持续射击时需要控制后坐与弹药消耗，适合近身自卫和压制。",
     source: `${W}Ranged-DisplayName-Base_Grit`,
   },
   {
@@ -202,12 +202,12 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     name: "暴风雪",
     kind: "weapon",
     category: "revolver",
-    weaponType: "tech",
-    attribute: "tech",
+    weaponType: "power",
+    attribute: "cool",
     rarity: "rare",
     price: 7200,
     ability:
-      "高科军工研发的重型折开式技术左轮手枪。击发不需要手动预热蓄能，每次扣动扳机都伴随着高压电磁激芒与巨大轰鸣，直接以纯粹动能洞穿掩体后的人体与设备。",
+      "高科军工研发的大口径威能左轮手枪，使用爆炸弹药。命中处的爆炸能威胁紧邻的目标，猛烈后坐与有限弹量要求射手谨慎选择开火时机。",
     source: `${W}Ranged-DisplayName-Base_Metel`,
   },
   // 冲锋枪（反应）
@@ -308,7 +308,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6800,
     ability:
-      "荒坂精工制造的高频技术冲锋枪。三连发点射散布极小，蓄能后可发射高穿透电磁弹丸，直接贯穿掩体打击目标。",
+      "海啸防务制造的紧凑型技术冲锋枪。可用短点射控制弹道，也可蓄能发射高穿透弹丸，对可穿透的掩体后目标形成威胁。",
     source: `${W}Ranged-DisplayName-Base_Senkoh`,
   },
   // 突击步枪（反应）
@@ -371,7 +371,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2300,
     ability:
-      "午夜军工研制的全自动战术突击步枪。人体工学握把配无托布局，全自动扫射时枪口极为听话，在中远距离压制火力与室内破门近战中自由切换。",
+      "达拉理工研制的平价全自动突击步枪。以低廉成本提供持续火力，适合中近距离交火；粗糙做工与射击时的散布需要使用者靠点射和距离控制弥补。",
     source: `${W}Ranged-DisplayName-Base_Umbra`,
   },
   {
@@ -416,13 +416,13 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     id: "osprey",
     name: "NDI 鱼鹰",
     kind: "weapon",
-    category: "assaultRifle",
-    weaponType: "tech",
-    attribute: "tech",
-    rarity: "rare",
-    price: 8000,
+    category: "sniperRifle",
+    weaponType: "power",
+    attribute: "cool",
+    rarity: "legendary",
+    iconic: true,
     ability:
-      "诺科他重工业出品的技术连发狙击步枪。搭载重型电磁感应加速轨，蓄满电能后轰出的穿甲重弹能洞穿装甲掩体与车身钢板，在远距离将墙后的受害者连人带掩体一同轰碎。",
+      "可在联情局安全屋取得的诺科他特制威能狙击步枪，发射爆炸弹药。瞄准时以短连发实施精确压制，腰射时可全自动开火；连发后坐和爆炸波及范围需要实际控制。",
     source: `${W}Ranged-Base_Osprey`,
   },
   // 霰弹枪（肉体）
@@ -443,12 +443,12 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     name: "DB-2 萨达拉",
     kind: "weapon",
     category: "shotgun",
-    weaponType: "power",
-    attribute: "body",
+    weaponType: "tech",
+    attribute: "tech",
     rarity: "common",
     price: 700,
     ability:
-      "罗斯托维奇研制的双管技术霰弹枪。手工焊制的硬派外观下包裹着高压充能电容，双发齐射的电磁高爆破片能在瞬间将轻型掩体与人体撕成碎片。虽然两发即空，但在破门近身的瞬间毫无生还余地。",
+      "罗斯托维奇研制的双管技术霰弹枪。蓄能后以电磁加速发射弹丸，可穿透部分掩体打击后方目标；近距离散射猛烈，两发后的换弹空当需要掩护。穿透效果取决于掩体材质与厚度。",
   },
   {
     id: "igla",
@@ -516,13 +516,13 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     id: "kolac",
     name: "尖桩",
     kind: "weapon",
-    category: "precisionRifle",
-    weaponType: "tech",
-    attribute: "tech",
+    category: "sniperRifle",
+    weaponType: "power",
+    attribute: "cool",
     rarity: "uncommon",
     price: 4200,
     ability:
-      "高科军工生产的大口径技术精准步枪。电磁加速轨道驱动重型合金飞镖弹，蓄力瞬间以超音速呼啸贯穿厚重防弹掩体，将远距离的目标直接钉死在背后的水泥墙上。",
+      "高科军工生产的大口径威能狙击步枪。以重型弹丸提供远距离杀伤，射击后的后坐与重新瞄准需要稳定支撑，适合从有掩护的阵位控制长射界。",
     source: `${W}Ranged-DisplayName-Base_Kolac`,
   },
   {
@@ -530,12 +530,12 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     name: "海啸阿修罗",
     kind: "weapon",
     category: "sniperRifle",
-    weaponType: "power",
-    attribute: "cool",
+    weaponType: "smart",
+    attribute: "intelligence",
     rarity: "uncommon",
     price: 4500,
     ability:
-      "海啸防务制造的单发智能重型狙击枪。每次拉栓推入一枚带有独立推进器的火箭破甲弹，锁定后弹丸可在数百米外掠过障碍自拐弯洞穿目标颅骨，是远距离处决目标的终极刺杀工具。",
+      "海啸防务制造的单发智能狙击步枪。通过智能连接锁定目标后发射自导弹药，能修正弹道追踪移动目标；每发之间需要重新装填，遮挡、干扰和目标锁定条件仍会影响命中。",
   },
   {
     id: "grad",
@@ -571,7 +571,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 9800,
     ability:
-      "海啸防务制造的军用级电磁狙击步枪。搭载尖端穿甲磁轨，超高速充能弹丸能击穿连续多道装甲混凝土工事，并在命中后产生微型引力折射撕裂后方连带目标。",
+      "海啸防务制造的军用级技术狙击步枪。充能弹丸可穿透目标，并在命中后修正轨迹打击后方敌人。射界、目标排列与障碍物决定能否连续命中，穿透效果受掩体材质与厚度限制。",
     source: `${W}Ranged-DisplayName-Base_Tech_Sniper_Rifle`,
   },
   // 轻机枪（肉体）
@@ -1031,7 +1031,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "漩涡帮狂热分子祭坛上的萨拉托加冲锋枪。射出的威能弹丸附带高热燃烧涂层，击中敌人有极高概率瞬间点燃目标并引发网络过热瘫痪。",
+      "漩涡帮窝点中存放的改装萨拉托加冲锋枪。射击可造成电击并诱发义体故障，适合压制依赖义体的敌人。",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Maelstrom`,
   },
   {
@@ -1122,7 +1122,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "强尼·银手的半自动定制重型手炮。专为义肢后坐设计的巨型枪机，子弹能穿透掩体和敌人躯体后引燃烈火；枪口甩转间，依稀可见当年银手向荒坂大厦开火的狂傲冷笑。",
+      "强尼·银手使用的定制大口径半自动手枪，按他的义肢承受能力设计。重型枪弹具备强劲杀伤，特殊近战攻击可从枪口喷出火焰；其性能与来历属于这把独立武器。",
     source: `${W}Ranged-Preset_Silverhand_3516`,
   },
   {
@@ -1147,8 +1147,9 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
+    grantsSmartLink: true,
     ability:
-      "拥有独立人格的实验型智能手枪。手部接入智能链接后，内置 AI 会用欢快话痨的口吻对你的战术评头论足，并能自主选择锁头爆头或截肢弹道。",
+      "带有会说话的 AI 与内置智能追踪系统的特殊智能手枪，无需手部智能连接义体也能锁定目标。提供瞄准头部或四肢的射击模式，AI 会依内置规则切换模式并评论使用者的行为。",
     source: `${W}Ranged-Preset_Yukimura_Skippy`,
   },
   {
@@ -1185,7 +1186,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "竹村五郎贴身佩戴的精工武士刀。在光学迷彩或克伦齐科夫生效状态下出鞘斩击，暴击率大幅跃升，出刀极快且招招直奔要害。",
+      "小田三太夫使用的精工武士刀，可在击败小田后取得。光学迷彩激活时斩击更容易命中要害，连斩末段的攻击尤其凶狠。",
     source: `${W}Melee-DisplayName-Preset_Katana_Takemura`,
   },
   {
@@ -1197,7 +1198,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "冈田和歌子赠予的家传单分子武士刀。刀身注入微型动能弹簧，挥刀重击时能跨越数米距离直接向远处的敌人执行瞬身飞跃斩杀。",
+      "冈田和歌子交付的精工武士刀。适合迅速突进到敌人近前斩击，击倒敌人后可继续展开更快的连斩；突进仍须有可通行的接近路线。",
     source: `${W}Melee-DisplayName-Preset_Katana_Wakako`,
   },
   {
@@ -1222,7 +1223,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "legendary",
     iconic: true,
     ability:
-      "帕南·帕尔默亲手校准的改装冰暴狙击枪。搭载独家定制重型消音器与战术高倍镜，数公里外无声扣动扳机，大口径穿甲弹便能在静默中撕裂敌方首领的装甲。",
+      "帕南·帕尔默交付的改装冰暴狙击枪。定制消音器压低枪口爆声，高倍镜便于隐蔽阵位上的远距离瞄准；弹道、射界与目标防护仍决定实际杀伤。",
     source: `${W}Ranged-Preset_Grad_Panam`,
   },
   {

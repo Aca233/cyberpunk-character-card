@@ -128,7 +128,6 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "lexington",
       "saratoga",
       "dian",
-      "osprey",
       "zhuo",
       "nekomata",
       "frag-grenade",
