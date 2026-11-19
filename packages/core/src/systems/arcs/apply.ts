@@ -10,6 +10,7 @@ import {
   type ArcOffscreenCommand,
   type ArcProgress,
   type ArcSeed,
+  type ArcStartCommand,
   type ArcsState,
   type ConcernBy,
   type ConcernProgress,
@@ -38,7 +39,13 @@ const EMPTY_ARC: ArcProgress = {
   concerns: {},
   doneAt: null,
 };
-const EMPTY_CONCERN: ConcernProgress = { status: null, toldAt: null, notes: [], outcome: null };
+const EMPTY_CONCERN: ConcernProgress = {
+  onset: null,
+  status: null,
+  toldAt: null,
+  notes: [],
+  outcome: null,
+};
 
 export function arcOf(state: ArcsState, npc: string): ArcProgress {
   return state.arcs[npc] ?? EMPTY_ARC;
@@ -81,7 +88,7 @@ function slot(draft: State, npc: string): Draft<ArcProgress> {
 function concernSlot(arc: Draft<ArcProgress>, id: string): Draft<ConcernProgress> {
   const existing = arc.concerns[id];
   if (existing) return existing;
-  arc.concerns[id] = { status: null, toldAt: null, notes: [], outcome: null };
+  arc.concerns[id] = { onset: null, status: null, toldAt: null, notes: [], outcome: null };
   return arc.concerns[id] as Draft<ConcernProgress>;
 }
 
@@ -117,12 +124,23 @@ function resolve(npc: string, concernId: string, ctx: SystemContext): Resolved |
 }
 
 export function applyArc(draft: State, command: ArcCommand, ctx: SystemContext): ApplyOutcome {
+  if (command.action === "start") {
+    return applyArcStart(
+      draft,
+      { type: "arc.start", npc: command.npc, concern: command.concern, text: command.text ?? "" },
+      ctx,
+      "scene",
+    );
+  }
   const found = resolve(command.npc, command.concern, ctx);
   if (typeof found === "string") return fail(found);
   const { seed, concern, card, name } = found;
   const now = ctx.now;
   const current = concernOf(arcOf(draft, seed.npc), concern.id);
   const title = concern.title;
+  if (current.onset === null) {
+    return fail(`「${title}」的前因尚未成立：${concern.trigger}；不能仅凭好感或原作剧情启动`);
+  }
 
   switch (command.action) {
     case "tell": {
@@ -208,6 +226,25 @@ export function applyArc(draft: State, command: ArcCommand, ctx: SystemContext):
   }
 }
 
+/** 记录实际前因，先于说出口或场外推进；重复登记不覆盖最初事实。 */
+export function applyArcStart(
+  draft: State,
+  command: ArcStartCommand,
+  ctx: SystemContext,
+  by: ConcernBy = "offscreen",
+): ApplyOutcome {
+  const found = resolve(command.npc, command.concern, ctx);
+  if (typeof found === "string") return fail(found);
+  const { seed, concern, card, name } = found;
+  if (!card?.alive) return fail(`${name}没有卡或已经死了，不能新开个人线`);
+  if (!command.text.trim()) return fail("启动心事必须记录已在本存档成立的具体前因");
+  const current = concernOf(arcOf(draft, seed.npc), concern.id);
+  if (current.onset !== null) return { ok: true, notes: [] };
+  const p = concernSlot(slot(draft, seed.npc), concern.id);
+  p.onset = { text: command.text.trim(), at: ctx.now, by };
+  return { ok: true, notes: [] };
+}
+
 /**
  * 【城里在发酵的事】里一件心事在场外走了一步或收场：由那边发来，这里只记进展和结果。
  * 不再卡间隔、不再拦玩家在管的事；已经有结果的不改，也不算失败，免得那边的一步跟着作废
@@ -223,6 +260,7 @@ export function applyArcOffscreen(
   const { seed, concern, name } = found;
   const now = ctx.now;
   const current = concernOf(arcOf(draft, seed.npc), concern.id);
+  if (current.onset === null) return fail(`「${concern.title}」尚无已成立的前因，不能场外推进`);
   if (current.status === "resolved") return { ok: true, notes: [] };
   const arc = slot(draft, seed.npc);
   const p = concernSlot(arc, concern.id);

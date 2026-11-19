@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 个人线（心事）：原作人物自己身上压着的几件事。种子只写这个人碰上了什么、想要什么、可能的走向和原作里怎么落地；
+ * 个人线（心事）：种子是潜在情境，只有前因在本存档实际成立后，才成为人物当下的心事。
  * 玩家角色不是 V，不写玩家该做什么，没有固定步骤和顺序。玩家不插手的事由场外推演往前推。
  */
 
@@ -21,13 +21,15 @@ export const ArcConcernSeedSchema = z.object({
   id: SlugSchema,
   /** 他说出口以后玩家看得到的一句：他跟你说起了什么事 */
   title: z.string().trim().min(1).max(ARC_TITLE_MAX),
-  /** 只给模型：这件事眼下是什么情况 */
+  /** 只给模型：必须在本存档已成立的前因；不是待自动兑现的剧情 */
+  trigger: z.string().trim().min(1).max(200),
+  /** 只给模型：条件情境参考，前因成立不代表其中所有细节都已发生 */
   situation: z.string().trim().min(1).max(200),
   /** 只给模型：他希望事情怎样 */
   hope: z.string().trim().min(1).max(100),
   /** 只给模型：可能的走向；是这件事自己会怎么走，不是玩家要做的步骤 */
   turns: z.array(z.string().trim().min(1).max(100)).min(2).max(4),
-  /** 只给模型：原作里这件事落在他身上的结局，没人插手时场外推演的参考；原作没有的写「本作改编」 */
+  /** 只给模型：原作分支的结果参考，不预定本存档命运；原作没有的写「本作改编」 */
   canon: z.string().trim().min(1).max(160),
 });
 export type ArcConcernSeed = z.infer<typeof ArcConcernSeedSchema>;
@@ -90,6 +92,8 @@ export const ConcernNoteSchema = z.object({
 });
 
 export const ConcernProgressSchema = z.object({
+  /** 实际前因，只给主持人；好感解锁不自动填入，也不向玩家泄露场外事件 */
+  onset: ConcernNoteSchema.nullable().default(null),
   status: ConcernStatusSchema.nullable().default(null),
   toldAt: z.number().int().nullable().default(null),
   notes: z.array(ConcernNoteSchema).default([]),
@@ -126,15 +130,15 @@ export type ArcsState = z.infer<typeof ArcsStateSchema>;
 /**
  * 模型使用：
  * {"type": "arc", "action": "tell", "npc": "judy", "concern": "judy-evelyn"}
- * action：tell 他自己提起这件事，join 玩家答应插手，decline 玩家不管，note 插手以后的实质进展，resolve 有了结果，hear 玩家听说了场外的结果
+ * action：start 记录已实际成立的前因，tell 他自己提起这件事，join 玩家答应插手，decline 玩家不管，note 插手以后的实质进展，resolve 有了结果，hear 玩家听说了场外的结果
  */
 export const ArcCommandSchema = z
   .object({
     type: z.literal("arc"),
-    action: z.enum(["tell", "join", "decline", "note", "resolve", "hear"]),
+    action: z.enum(["start", "tell", "join", "decline", "note", "resolve", "hear"]),
     npc: z.string().trim().min(1).describe("人物卡 id"),
     concern: z.string().trim().min(1).describe("【心事】里的心事 id"),
-    /** note、resolve：发生了什么 */
+    /** start 写已经成立的实际前因；note、resolve 写发生了什么 */
     text: z.string().trim().min(1).max(ARC_TEXT_MAX).optional(),
     /** resolve：和原作结局比 */
     fate: ConcernFateSchema.optional(),
@@ -142,7 +146,7 @@ export const ArcCommandSchema = z
     bond: z.string().trim().min(1).max(ARC_BOND_MAX).optional(),
   })
   .superRefine((c, ctx) => {
-    if ((c.action === "note" || c.action === "resolve") && c.text === undefined) {
+    if (["start", "note", "resolve"].includes(c.action) && c.text === undefined) {
       ctx.addIssue({ code: "custom", message: `${c.action} 要写 text` });
     }
     if (c.action === "resolve" && c.fate === undefined) {
@@ -153,7 +157,7 @@ export const ArcCommandSchema = z
     }
   })
   .describe(
-    "心事（原作人物的个人线）：tell 他自己向玩家提起【心事】里的一件事，join 玩家答应插手，decline 玩家明说不管，note 插手以后的实质进展（写 text），resolve 这件事有了结果（text 写结果，fate 写 better、canon 或 worse 和原作结局比，关系真的变了时 bond 写一句新的关系笔记），hear 玩家听说或撞见了场外推演写下的结果",
+    "心事（原作人物的个人线）：start 只记录本轮正文或本存档记录中已经成立的前因（text 写具体事实，不能仅凭好感、原作剧情或种子补发生）；前因成立后 tell 他自己向玩家提起，join 玩家答应插手，decline 玩家明说不管，note 写实质进展，resolve 写结果和 fate，hear 玩家听说或撞见场外结果",
   );
 export type ArcCommand = z.infer<typeof ArcCommandSchema>;
 
@@ -168,4 +172,13 @@ export const ArcOffscreenCommandSchema = z.object({
 });
 export type ArcOffscreenCommand = z.infer<typeof ArcOffscreenCommandSchema>;
 
-export type ArcsInternal = ArcOffscreenCommand;
+/** 由场外事项开立时登记实际前因，不能凭解锁或时间自动启动原作剧情 */
+export const ArcStartCommandSchema = z.object({
+  type: z.literal("arc.start"),
+  npc: z.string().min(1),
+  concern: z.string().min(1),
+  text: z.string().trim().min(1).max(ARC_TEXT_MAX),
+});
+export type ArcStartCommand = z.infer<typeof ArcStartCommandSchema>;
+
+export type ArcsInternal = ArcOffscreenCommand | ArcStartCommand;

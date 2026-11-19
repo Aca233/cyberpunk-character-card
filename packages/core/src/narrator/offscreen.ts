@@ -4,6 +4,7 @@ import type { Command } from "../kernel/system";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
+import { ArcsStateSchema, arcOffscreenSection } from "../systems/arcs";
 import { CRED_SIZES } from "../systems/character";
 import {
   BulletinFieldsSchema,
@@ -279,7 +280,7 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 头条和声望：major 的动静如果玩家角色是当事人（做下这件事的就是玩家，街上也知道是他），写 player: true，可以再写 cred（small、medium、large，默认 medium）；代码会让街头声望按这个涨一次。不是玩家做的不要标。
 - 原作人物：【人物】里标了「原作人物」的人可以死在屏幕外，写进 deaths（一次最多 ${OFFSCREEN_DEATHS} 个）：只在局面真的走到那一步时写（原作里这个人这段时间的命运、城里的动静或势力动向牵连到他、他自己的近况把他推到那里）；【原剧时间线】只是参考，玩家插过手的照玩家改过的走。大多数时候 deaths 是空的。写了死，最好再写一条能让玩家以后听说的动静或传闻；他死了就不要再给他写近况和消息。标了「本场在场」、在玩家队里的人不能写。
 - 城里在发酵的事：【城里在发酵的事】是一张单子，势力的打算、宿敌的报复、人物的心事都在上面，每件带一个下次推进的时间。标「已到点」的，这次在 threads 里写一条 thread.step（这一步实际发生了什么、传开后怎么说、days 写下次几天后再推，1–10）；局面不合适就写 thread.defer（days 和一句 why）；事情走到头了写 thread.close（end 写怎么收场，心事收场再写 fate：better、canon、worse，和原作结局比）。没到点的也可以提前推一步。每件一次只写一条。
-- 开新事：单子有空位、又有前因时才写 thread.open：kind 写 faction（owner 写势力 id，seed 可以写【势力打算素材】里的种子 id）、nemesis（owner 写宿敌的人物 id）或 concern（owner 写人物 id，seed 写他的心事 id）；want 写他想要什么，stage 写眼下走到哪，days 写第一次几天后推。宿敌刚冒出来时代码会自己开一件，不用再开。
+- 开新事：单子有空位、又有前因时才写 thread.open：kind 写 faction（owner 写势力 id，seed 可以写【势力打算素材】里的种子 id）、nemesis（owner 写宿敌的人物 id）或 concern（owner 写人物 id，seed 写他的心事 id）；want 写他想要什么，stage 写眼下走到哪，days 写第一次几天后推。心事素材是条件情境，不是已发生事实：必须由本批正文或已记录动静支持其触发前因，stage 写已经成立的具体前因，代码会登记后再准许推进；不能仅凭好感、到期或原作结局补写绑架、死亡、坦克入手等事件。宿敌刚冒出来时代码会自己开一件，不用再开。
 - 素材只是素材：手段可以从「可能的法子」里挑，也可以按局面换、半路改主意、被对头或别的势力截胡；接着上一步写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。宿敌的一步只写他在屏幕外做了什么（打听玩家下落、找玩家在乎的人麻烦、截玩家的单子），不让他亲自和玩家见面；心事的原作结局只是没人插手时的参考，玩家不是 V。
 - 地盘：只有势力的事能动地盘，一步最多一个城区（照种子开的只在「能争的城区」里），改的是这个势力或它的对头；不动地盘最常见，真打下来、真丢了才写 turf，不动写 null。
 - 中间人派单：【能派单的中间人】里的人这段时间可以主动找玩家派活，一般一次 ${OFFSCREEN_JOBS} 单。活要从已有的东西里长出来：城里的动静、势力动向、委托里的对手、玩家做完事留下的余波、这个中间人自己的近况；没有说得过去的生意就不派。派的话在 jobs 里写这一单，同时在 messages 里由同一个中间人发一条派单消息、job 写这一单的 id（忘了写消息代码会补一条干巴巴的，最好自己写）。按中间人的口风、和玩家的交情与当前局面定这一单的分量（risk 1–5 仅给后台参考，不按声望设星级卡死）；期限晚于现在；location 写【当前状态】【地点】里已有的地点 id，没有就写中文地名或不写，不新建地点；client 是真正的雇主，中间人不肯说就写「身份不明」；twist 约三成不写。没有【能派单的中间人】、也没有人标「可以托事」时 jobs 写空数组。
@@ -421,6 +422,11 @@ export function buildOffscreenPrompt(
   ];
   const dispatch = scope?.backlog ? [] : offscreenFixers(world, present);
   const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
+  const concerns = arcOffscreenSection(
+    ArcsStateSchema.parse(world.slices.arcs ?? {}),
+    extras.data ?? {},
+    new Set(npcs.filter((n) => n.alive).map((n) => n.id)),
+  );
   const due = [
     `当前 ${threads.threads.length}/${THREADS_MAX} 件；有空位且有前因才开新事，不必填满。`,
     ...threads.threads.map(
@@ -521,6 +527,7 @@ export function buildOffscreenPrompt(
           .join("\n") || "（还没有）"
       }`,
       `【人物】\n${npcs.length > 0 ? npcs.map((n) => card(n, present.has(n.id), roster)).join("\n") : "（还没有）"}`,
+      ...(concerns ? [`【心事前因与素材】（未发生的素材不能当现状或命运）\n${concerns}`] : []),
       // 中间人不再单列一节（用户 2026-11-02："都是npc"）：他们照普通人物进【人物】和【能联系玩家的人】，派单另看【能派单的中间人】
       ...(dispatch.length > 0
         ? [

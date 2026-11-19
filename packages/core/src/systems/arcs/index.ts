@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyArc, applyArcOffscreen, unlockArcs } from "./apply";
+import { applyArc, applyArcOffscreen, applyArcStart, unlockArcs } from "./apply";
 import { arcsEvents } from "./events";
 import { arcsFeed } from "./feed";
 import { arcsObjectives } from "./objectives";
@@ -8,6 +8,7 @@ import {
   type ArcCommand,
   ArcCommandSchema,
   ArcOffscreenCommandSchema,
+  ArcStartCommandSchema,
   type ArcsInternal,
   type ArcsState,
   ArcsStateSchema,
@@ -22,13 +23,15 @@ export const arcs = defineSystem<ArcsState, ArcCommand, ArcsInternal>({
   state: ArcsStateSchema,
   initial: () => ({ arcs: {} }),
   commands: { arc: ArcCommandSchema },
-  internal: { "arc.offscreen": ArcOffscreenCommandSchema },
+  internal: { "arc.offscreen": ArcOffscreenCommandSchema, "arc.start": ArcStartCommandSchema },
   apply(draft, command, ctx) {
     switch (command.type) {
       case "arc":
         return applyArc(draft, command, ctx);
       case "arc.offscreen":
         return applyArcOffscreen(draft, command, ctx);
+      case "arc.start":
+        return applyArcStart(draft, command, ctx);
     }
   },
   tick(draft, span, ctx) {

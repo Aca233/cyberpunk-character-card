@@ -97,7 +97,14 @@ function applyOpen(draft: State, command: ThreadOpen, ctx: SystemContext): Apply
     reminded: false,
     steps: [],
   });
-  return { ok: true, notes: [`城里有件事开始发酵：${command.title}`] };
+  return {
+    ok: true,
+    notes: [`城里有件事开始发酵：${command.title}`],
+    emit:
+      command.kind === "concern" && command.seed !== null
+        ? [{ type: "arc.start", npc: command.owner, concern: command.seed, text: command.stage }]
+        : [],
+  };
 }
 
 /**
