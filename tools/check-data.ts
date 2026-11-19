@@ -389,15 +389,8 @@ for (const a of arcs) {
   }
 }
 
-// 超梦示例录像：规格要 3 段；格式（层、段、关键线索、结论）由 schema 查，来源要标原作或本作改编
-schema("超梦示例 braindances", braindanceRules.BdExampleListSchema, braindances);
-if (braindances.length < 3) errors.push(`超梦示例录像只有 ${braindances.length} 段，规格要 3 段`);
-for (const b of braindances) {
-  if (b.refs.length === 0) errors.push(`超梦示例 ${b.id}：没写参考的原作文本`);
-  if (!/原作|本作改编/.test(b.source))
-    errors.push(`超梦示例 ${b.id}：来源要写依据的原作或标本作改编`);
-  if (b.recording.job !== undefined) errors.push(`超梦示例 ${b.id}：示例不能挂具体的委托 id`);
-}
+// 固定作品目录；片段时长与材料引用在 schema 中校验，不再要求小游戏答案。
+schema("超梦作品 braindances", braindanceRules.BdWorkListSchema, braindances);
 
 // NCPD 警情：只能写 NCPD 管得到的城区
 unique(

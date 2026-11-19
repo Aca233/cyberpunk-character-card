@@ -2,8 +2,10 @@ import type { GameContent } from "@cp/core";
 import { agendas } from "./agendas";
 import { arcs } from "./arcs";
 import { braindances } from "./braindance";
+import { chipContents } from "./chips";
 import { cyberware } from "./cyberware";
 import { encounters } from "./encounters";
+import { everydayLife, everydayPeople } from "./everydayLife";
 import { factions } from "./factions";
 import { fixers } from "./fixers";
 import { quickhacks } from "./hacking";
@@ -31,8 +33,10 @@ export { agendas } from "./agendas";
 export { arcs } from "./arcs";
 export { braindances } from "./braindance";
 export { sampleCharacters } from "./characters";
+export { chipContents } from "./chips";
 export { cyberware } from "./cyberware";
 export { encounters } from "./encounters";
+export { everydayLife, everydayPeople } from "./everydayLife";
 export { factions } from "./factions";
 // 原作 171 个快速移动点（数据终端 + 地铁站）的名字与所属街区：129 个有场景节点坐标，42 个为 null；只当地标，不传送（用户定的：不要快速移动）。见 docs/places-plan.md 第三、七节
 export { FAST_TRAVEL_POINTS, type FastTravelPoint } from "./fastTravel.gen";
@@ -118,6 +122,9 @@ export const gameData: Readonly<Record<string, unknown>> = {
   agendas,
   arcs,
   braindances,
+  chipContents,
+  everydayLife,
+  everydayPeople,
   ncpdAlerts,
   twists,
   consequences,

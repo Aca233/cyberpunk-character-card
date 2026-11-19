@@ -155,6 +155,13 @@ export const ItemDefSchema = z
     chipDevice: z.enum(["reader", "reader-writer"]).optional(),
     /** 可以接收副本的真实存储载体。 */
     chipStorage: z.boolean().optional(),
+    /** 实际超梦设备能力；不能从商品名称或宣传文案推断分析层。 */
+    braindanceDevice: z
+      .object({
+        playback: z.boolean(),
+        analysis: z.array(z.enum(["observe", "audio", "thermal"])),
+      })
+      .optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
     source: z
       .string()

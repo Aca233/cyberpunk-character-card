@@ -1,0 +1,228 @@
+import { inventoryRules, shardsRules } from "@cp/core";
+
+/** 本作原创的小规模常备目录；标签可见，原文只有实际读取后才进入角色档案。 */
+export const chipContents = [
+  {
+    id: "chip-bd-night-market",
+    title: "摊灯熄灭以前",
+    kind: "data",
+    from: "阿娴授权／阿岚代售",
+    purpose: "media",
+    summary: "十八分钟夜市生活超梦，按同一份录制内容重播。",
+    braindance: "bd-night-market",
+    parts: [
+      {
+        id: "sleeve",
+        label: "封套与播放说明",
+        text: "《摊灯熄灭以前》，十八分钟。录制：阿娴。收摊、夜宵和明天还要用的热水壶。此卡是经录制者同意出售的观看副本；普通芯片阅读器只能看封套，体验需使用超梦设备。片中没有观众互动。",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper", "bd-night-market"],
+  },
+  {
+    id: "chip-bd-rain-rooftop",
+    title: "雨停后的屋顶",
+    kind: "data",
+    from: "洛蕾授权／阿岚代售",
+    purpose: "media",
+    summary: "十五分钟屋顶生活超梦，包含花箱、雨后的楼道与咖啡。",
+    braindance: "bd-rain-rooftop",
+    parts: [
+      {
+        id: "sleeve",
+        label: "封套与播放说明",
+        text: "《雨停后的屋顶》，十五分钟。录制：洛蕾。屋顶花箱有人照顾，楼下洗衣房仍在转。公开观看版已获录制者许可；记录里没打开的消息没有附录。需要超梦设备播放。",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper", "bd-rain-rooftop"],
+  },
+  {
+    id: "chip-bd-small-stage",
+    title: "返场第三首",
+    kind: "recording",
+    from: "咪娜授权／阿岚代售",
+    purpose: "media",
+    summary: "二十四分钟小场地演出超梦，含试音与散场。",
+    braindance: "bd-small-stage",
+    parts: [
+      {
+        id: "sleeve",
+        label: "演出封套",
+        text: "《返场第三首》，二十四分钟。键盘手：咪娜；经场地方和出镜乐手许可的发行版。音频保留了现场失误与监听底噪，没有另做修音。可以只听演出音轨，完整录制体验需要超梦设备。",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper", "bd-small-stage"],
+  },
+  {
+    id: "chip-repair-notes",
+    title: "夜班电器维修便笺",
+    kind: "data",
+    from: "歌舞伎互助维修摊",
+    purpose: "data",
+    summary: "常见插头、冷柜与旧咖啡机的维护记录，不替代现场操作。",
+    parts: [
+      {
+        id: "power",
+        label: "先断电再拆",
+        text: "旧型号接地指示灯坏了也可能照常亮着。先在上游断开电源，再用实际可用的仪表确认。不要凭壳上贴纸判断插头脚位；收摊后借走的表，第二天开工前还回来。",
+      },
+      {
+        id: "freezer",
+        label: "冷柜的两件小事",
+        text: "门封条松动时先清掉槽里的糖浆；压缩机连续响也未必是报废，检查散热网是不是堵着纸。工具箱第二层有上次留下的扎带，补货前别整包拿走。",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper"],
+  },
+  {
+    id: "chip-stall-note",
+    title: "给隔壁摊的便条",
+    kind: "diary",
+    from: "夜市摊主阿娴",
+    purpose: "data",
+    summary: "互助摊位同意随维修合集赠阅的一张日常便条。",
+    parts: [
+      {
+        id: "note",
+        label: "明天带壶",
+        text: "明天我带热水壶。你的折叠凳已经放回卷帘门里面，螺丝拧紧了，别再用胶带缠。上回那碗钱不用补，等你收摊有空，给我留双厚鞋垫就行。——阿娴",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper"],
+  },
+  {
+    id: "chip-night-magazine",
+    title: "夜班以后·成人生活刊",
+    kind: "data",
+    from: "独立成年作者合作刊",
+    purpose: "media",
+    summary: "由成年作者和成年出镜者授权的生活与亲密关系杂志；非服务预约。",
+    parts: [
+      {
+        id: "editorial",
+        label: "编辑来信",
+        text: "本期刊登了三位夜班人的居家访谈、一组经成年出镜者同意发表的亲密主题摄影，以及一篇讨论商业陪伴与私人关系的专栏。购买本刊不包含见面服务，也不授予转发私人素材的许可。",
+      },
+      {
+        id: "column",
+        label: "下班后的约定",
+        text: "她愿意记住客人喝什么，不表示她愿意在休息日接电话。专栏作者把这句话写在稿子末尾，又加了一句：当然也可能真的成为朋友，那得由两个人在工作之外慢慢决定。",
+      },
+    ],
+    requirements: [],
+    related: ["kabuki-market", "sleeve-shop-keeper", "qiao-night", "noah-night"],
+  },
+  {
+    id: "chip-service-assist",
+    title: "街用电器检修辅助芯片",
+    kind: "data",
+    from: "独立维修工具商",
+    purpose: "function",
+    summary: "在兼容读写器上提供接线表检索与故障码对照，不能授予神经技能。",
+    parts: [
+      {
+        id: "manual",
+        label: "功能说明",
+        text: "将本组件接入兼容读写器，可按实际输入的型号与故障码查阅内置接线图。只覆盖常见街用冷柜、灯箱与咖啡机。未连接目标设备时不能读取它的状态；说明不构成实际检修经验，不修改使用者能力数值。",
+      },
+    ],
+    requirements: ["chip-reader-writer"],
+    ability:
+      "在兼容读写器上实际调用固定接线图和故障码对照，辅助对常见街用电器进行现场排查；需要具体型号与真实读数，不自动破解或修好机器，不提升永久技能。",
+    related: ["kabuki-market", "sleeve-shop-keeper"],
+  },
+].map((content) => shardsRules.ChipContentSchema.parse(content));
+
+export const everydayChipItems = inventoryRules.ItemCatalogSchema.parse([
+  {
+    id: "chip-reader-writer",
+    name: "便携芯片读写器",
+    kind: "misc",
+    price: 120,
+    rarity: "common",
+    chipDevice: "reader-writer",
+    ability:
+      "随身电池供电的资料芯片读写器，可以读取普通原文、复制已有可读资料到真实空白载体、调用兼容检修辅助组件；不能提供超梦沉浸播放或自动破解保护。",
+  },
+  {
+    id: "bd-portable-player",
+    name: "便携超梦头戴机",
+    kind: "misc",
+    price: 350,
+    rarity: "common",
+    chipDevice: "reader",
+    braindanceDevice: { playback: true, analysis: ["observe", "audio"] },
+    ability:
+      "可以在安全停留处播放实际持有作品的超梦设备，也能读取封套资料；支持该作品录制中真实存在的视听输入，不凭空生成热成像或记录观看者，使用期间不能同时外出办事。",
+  },
+  {
+    id: "blank-shard",
+    name: "空白资料芯片",
+    kind: "misc",
+    price: 10,
+    rarity: "common",
+    chipStorage: true,
+    ability: "一份空白存储载体；使用实际读写设备复制后承载固定内容，空白本身不包含任何知识。",
+  },
+  {
+    id: "shard-night-market",
+    name: "超梦芯片·摊灯熄灭以前",
+    kind: "misc",
+    price: 80,
+    rarity: "common",
+    chipContentId: "chip-bd-night-market",
+  },
+  {
+    id: "shard-rain-rooftop",
+    name: "超梦芯片·雨停后的屋顶",
+    kind: "misc",
+    price: 70,
+    rarity: "common",
+    chipContentId: "chip-bd-rain-rooftop",
+  },
+  {
+    id: "shard-small-stage",
+    name: "超梦芯片·返场第三首",
+    kind: "misc",
+    price: 90,
+    rarity: "common",
+    chipContentId: "chip-bd-small-stage",
+  },
+  {
+    id: "shard-repair-notes",
+    name: "资料芯片·夜班维修便笺",
+    kind: "misc",
+    price: 20,
+    rarity: "common",
+    chipContentId: "chip-repair-notes",
+  },
+  {
+    id: "shard-stall-note",
+    name: "资料芯片·给隔壁摊的便条",
+    kind: "misc",
+    price: 10,
+    rarity: "common",
+    chipContentId: "chip-stall-note",
+  },
+  {
+    id: "shard-night-magazine",
+    name: "媒体芯片·夜班以后",
+    kind: "misc",
+    price: 30,
+    rarity: "common",
+    chipContentId: "chip-night-magazine",
+  },
+  {
+    id: "shard-service-assist",
+    name: "街用电器检修辅助芯片",
+    kind: "misc",
+    price: 160,
+    rarity: "common",
+    chipContentId: "chip-service-assist",
+  },
+]);

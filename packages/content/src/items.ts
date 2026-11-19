@@ -1,4 +1,5 @@
 import { inventoryRules } from "@cp/core";
+import { everydayChipItems } from "./chips";
 
 /**
  * 物品表：名字用官方中文（pnpm terms 从本机文本库核对）：武器照原作写成“型号 名字”，
@@ -9,6 +10,7 @@ import { inventoryRules } from "@cp/core";
 const W = "text:Gameplay-Weapons-";
 
 export const items = inventoryRules.ItemCatalogSchema.parse([
+  ...everydayChipItems,
   // 手枪（镇定；技术用技术，智能用智能）
   {
     id: "unity",

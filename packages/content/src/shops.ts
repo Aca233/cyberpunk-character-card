@@ -1,4 +1,5 @@
 import { inventoryRules } from "@cp/core";
+import { everydayChipItems } from "./chips";
 import { poiShops } from "./merchant-sites";
 
 /**
@@ -6,6 +7,18 @@ import { poiShops } from "./merchant-sites";
  * 日本町商店街卖服装、药和吃的。阿涛为本作自创人物；标签不替代具体货况与交易事实。
  */
 export const shops = inventoryRules.ShopListSchema.parse([
+  {
+    id: "sleeve-corner",
+    name: "阿岚的芯片小铺",
+    keeper: "阿岚",
+    keeperNpc: "sleeve-shop-keeper",
+    location: "kabuki-market",
+    note: "本作原创：卖生活录制、演出、维修资料与成年作者刊物的小铺。有店内超梦设备；询价不自动开机或成交。",
+    shelf: everydayChipItems.map((item) => item.id),
+    initialStock: Object.fromEntries(
+      everydayChipItems.map((item) => [item.id, item.id === "blank-shard" ? 10 : 3]),
+    ),
+  },
   {
     id: "wilson",
     name: "威尔逊的枪店",

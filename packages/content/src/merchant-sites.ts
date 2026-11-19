@@ -179,6 +179,14 @@ export const poiRipperdocs = cyberwareRules.RipperdocListSchema.parse(
 /** 经营身份和所有已核对入口；同址不同经营项目仍有各自库存。 */
 export const merchantSites = [
   {
+    merchant: "sleeve-corner",
+    kind: "netrunner",
+    locations: ["kabuki-market"],
+    services: ["bd-session"],
+    braindanceDevice: { playback: true, analysis: ["observe", "audio"] },
+    source: "本作原创阿岚芯片小铺；与歌舞伎市场其他摊位分开库存，店内有普通超梦播放设备",
+  },
+  {
     merchant: "wilson",
     kind: "gun",
     locations: ["megabuilding-h10", "poi:wat_lch_gunsmith_01"],

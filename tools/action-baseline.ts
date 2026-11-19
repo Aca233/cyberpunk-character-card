@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import {
   apartments,
-  braindances,
   cyberware,
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
@@ -258,9 +257,6 @@ for (const how of chronicleRules.StoryEndSchema.options) {
   add("endStory 墓志铭", base, { type: "endStory", how, epitaph: "活过，烧过" });
   add("endStory 打斗中", fight(base), { type: "endStory", how });
 }
-// 超梦
-add("braindance mark", base, { type: "braindance", action: "mark", point: "clue-1" });
-add("braindance 点名不合法", base, { type: "braindance", action: "mark", point: "Bad Point" });
 // 补成功覆盖：把世界摆成操作能成立的样子
 const offeredJobs = set(base, "jobs", {
   jobs: ((slice(base, "jobs").jobs ?? []) as Slice[]).map((j) => ({ ...j, status: "offered" })),
@@ -318,27 +314,6 @@ for (const action of ["edit", "remove"]) {
     scene: 0,
     before: "原文",
     ...(action === "edit" ? { text: "改过的摘要" } : {}),
-  });
-}
-const sample = braindances[0];
-if (sample) {
-  const diving = (marked: readonly string[]) =>
-    set(base, "braindance", {
-      active: { recording: sample.recording, startedAt: base.time, marked },
-    });
-  for (const p of sample.recording.points) {
-    add("braindance mark 在查", diving([]), { type: "braindance", action: "mark", point: p.id });
-  }
-  add("braindance mark 没这个点", diving([]), {
-    type: "braindance",
-    action: "mark",
-    point: "no-such-point",
-  });
-  const first = sample.recording.points[0]?.id ?? "x";
-  add("braindance mark 标过了", diving([first]), {
-    type: "braindance",
-    action: "mark",
-    point: first,
   });
 }
 // schema 不过的

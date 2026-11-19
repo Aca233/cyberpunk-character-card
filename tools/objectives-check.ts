@@ -4,7 +4,6 @@
  * 暗中的变化也不触发通知。不调用模型，不读写存档。用法：tsx objectives-check.ts
  */
 import {
-  braindances,
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
   gameContent,
@@ -239,33 +238,6 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
       card(told),
       card(hidden),
     ]);
-  }
-}
-
-// 待办：超梦；答案和真相不进来
-{
-  const sample = braindances[0];
-  expect("内容包有超梦录像可以测", sample !== undefined);
-  if (sample) {
-    const idle = view(base);
-    expect("没在查超梦时没有超梦待办", !idle.objectives.some((x) => x.source === "braindance"));
-    const diving = view(
-      set(base, "braindance", {
-        active: { recording: sample.recording, startedAt: base.time, marked: [] },
-      }),
-    );
-    const bd = diving.objectives.filter((x) => x.source === "braindance");
-    expect("在查的超梦一条，状态 active", bd.length === 1 && bd[0]?.status === "active", bd);
-    const secrets = [
-      JSON.stringify(sample.recording.answer),
-      JSON.stringify(sample.recording.truth),
-    ].filter((s) => s.length > 6);
-    const shown = JSON.stringify(bd);
-    expect(
-      "超梦答案和真相不出现",
-      secrets.every((s) => !shown.includes(s.slice(1, -1))),
-      bd,
-    );
   }
 }
 

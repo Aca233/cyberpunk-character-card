@@ -16,6 +16,12 @@ export const MerchantSiteSchema = z.object({
   ]),
   locations: z.array(z.string().min(1)).min(1),
   services: z.array(z.string().min(1)).default([]),
+  braindanceDevice: z
+    .object({
+      playback: z.boolean(),
+      analysis: z.array(z.enum(["observe", "audio", "thermal"])),
+    })
+    .optional(),
   source: z.string().min(1),
 });
 export type MerchantSite = z.infer<typeof MerchantSiteSchema>;

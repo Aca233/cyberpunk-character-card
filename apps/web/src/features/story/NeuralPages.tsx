@@ -1657,7 +1657,7 @@ export function ShardsPanel({
         )}
       </article>
       {pageCount > 1 && (
-        <div aria-label="资料分页">
+        <nav aria-label="资料分页">
           <button
             type="button"
             disabled={currentPage === 0}
@@ -1676,7 +1676,7 @@ export function ShardsPanel({
           >
             下一页
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );
