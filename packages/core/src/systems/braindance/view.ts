@@ -28,6 +28,7 @@ export function braindanceView(state: BraindanceState) {
     })),
     discoveries: state.discoveries.map((d) => ({ ...d, at: formatGameTime(d.at) })),
     history: state.history.map((h) => ({
+      id: h.id,
       work: h.work,
       title: state.works[h.work]?.title ?? h.work,
       watchedMinutes: h.watchedMinutes,

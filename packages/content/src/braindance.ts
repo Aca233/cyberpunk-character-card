@@ -96,7 +96,7 @@ export const braindances = braindanceRules.BdWorkListSchema.parse([
       {
         id: "monitor-noise",
         passage: "soundcheck",
-        cues: ["监听", "低噪", "音箱", "杂音"],
+        cues: ["监听", "低噪", "音箱", "接触不良"],
         method: "audio",
         finding:
           "低噪只出现在左侧监听，随录制者按住接口消失；录音支持接触不良这一解释，不能据此证明有人破坏设备。",
@@ -135,7 +135,7 @@ export const braindances = braindanceRules.BdWorkListSchema.parse([
       {
         id: "panel-label",
         passage: "corridor-entry",
-        cues: ["标识", "标签", "配电箱", "C-17", "哪里"],
+        cues: ["配电箱", "C-17", "箱上标签", "走廊标识"],
         method: "observe",
         finding:
           "配电箱标签能辨出 C-17，下面的楼层编号被磨损，无法从记录确认酒店名称或具体楼层；需要另外查证。",
@@ -143,7 +143,7 @@ export const braindances = braindanceRules.BdWorkListSchema.parse([
       {
         id: "door-tone",
         passage: "lock-tone",
-        cues: ["门禁", "门锁", "声音", "刷卡", "单独听"],
+        cues: ["门禁", "门锁", "刷卡", "确认音"],
         method: "audio",
         finding:
           "门禁发出一次短促确认音；录音没有报读卡号、持卡人或权限类别，不能据此认定某个人刷卡。",

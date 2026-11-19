@@ -14,6 +14,7 @@ import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { NarrativeIntensity } from "../physics";
 import type { TurnStage } from "../schemas/turn";
+import { BraindanceStateSchema, braindanceWork } from "../systems/braindance";
 import {
   CharacterStateSchema,
   TRAIT_LABELS,
@@ -22,6 +23,7 @@ import {
 } from "../systems/character";
 import { OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
+import { CommerceStateSchema } from "../systems/commerce";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
 import { rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
@@ -1407,26 +1409,69 @@ export async function runNarratorTurn(
       }
     }
     const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
-    // 体验指令自己结算实际分钟；同一事件的 world 仅保留地点/活动，不能重复加时。
+    // 只有实际增加分钟的活动拥有时间；纯暂停/恢复仍可保留现场交谈的世界时间。
+    const bdState = BraindanceStateSchema.parse(world.slices.braindance);
+    const commerceState = CommerceStateSchema.parse(world.slices.commerce);
+    const parsedActivities = verified.map((proposal) => ({
+      command: proposal.parse(proposal.value),
+      event: owner.get(proposal.where),
+    }));
     const timedActivityEvents = new Set(
-      verified.flatMap((proposal) => {
-        const cmd = proposal.parse(proposal.value);
-        const id = owner.get(proposal.where);
-        const ownsTime =
-          cmd &&
-          ((cmd.type === "braindance" &&
-            ["progress", "finish", "replay", "inspect"].includes(String(cmd.action))) ||
-            cmd.type === "commerce.service");
+      parsedActivities.flatMap(({ command: cmd, event: id }) => {
+        let ownsTime = false;
+        if (cmd?.type === "braindance") {
+          ownsTime = ["progress", "replay", "inspect"].includes(String(cmd.action));
+          if (cmd.action === "finish") {
+            const start = parsedActivities.find(
+              (p) =>
+                p.event === id && p.command?.type === "braindance" && p.command.action === "start",
+            )?.command;
+            const previous =
+              typeof start?.from === "string"
+                ? bdState.history.find((h) => h.id === start.from)
+                : undefined;
+            const workId = typeof start?.work === "string" ? start.work : bdState.active?.work;
+            const work = workId ? braindanceWork(bdState, deps.data ?? {}, workId) : undefined;
+            ownsTime =
+              !!work &&
+              work.durationMinutes >
+                (start ? (previous?.watchedMinutes ?? 0) : (bdState.active?.watchedMinutes ?? 0));
+          }
+        } else if (
+          cmd?.type === "commerce.service" &&
+          cmd.action !== "resume" &&
+          typeof cmd.id === "string"
+        ) {
+          const session = commerceState.sessions[cmd.id];
+          const duration =
+            session?.terms.duration ?? commerceState.quotes[cmd.id]?.session?.duration;
+          const elapsed =
+            typeof cmd.elapsed === "number"
+              ? cmd.elapsed
+              : cmd.action === "finish"
+                ? duration
+                : session?.elapsed;
+          ownsTime = typeof elapsed === "number" && elapsed > (session?.elapsed ?? 0);
+        }
         return id && ownsTime ? [id] : [];
       }),
     );
+    const deferredWorldClocks = new Map<string, Command[]>();
     for (const proposal of verified) {
       let command = proposal.parse(proposal.value);
       if (!command) continue;
       if (command.type === "world" && timedActivityEvents.has(owner.get(proposal.where) ?? "")) {
-        const { time: _time, phases: _phases, ...withoutElapsed } = command;
-        if (_time !== undefined || _phases !== undefined) {
-          b.notes.push("同一体验事件的时间由体验指令结算，已去除重复世界时间");
+        const { time, phases, ...withoutElapsed } = command;
+        if (time !== undefined || phases !== undefined) {
+          // world.time 是回合结束的绝对时刻：在本事件活动之后核对，保留真实聊天等余下时间。
+          // 相对 phases 不能再次叠加同一段体验；其他活动应由独立事件的绝对时间承接。
+          const id = owner.get(proposal.where) as string;
+          if (typeof time === "number") {
+            const clocks = deferredWorldClocks.get(id) ?? [];
+            clocks.push({ type: "world", activity: command.activity, time });
+            deferredWorldClocks.set(id, clocks);
+          }
+          b.notes.push("体验分钟先按实际活动结算，再核对同事件的世界结束时刻，不重复叠加");
           if (Object.keys(withoutElapsed).length === 1) {
             redundant.add(proposal.where);
             continue;
@@ -1552,6 +1597,7 @@ export async function runNarratorTurn(
           const command = entryCommands.get(entry);
           return command ? [command] : [];
         });
+        eventCommands.push(...(deferredWorldClocks.get(event.id) ?? []));
         const requires = new Set(event.requires);
         if (requires.has("$action")) for (const e of setup) requires.add(e.id);
         if (

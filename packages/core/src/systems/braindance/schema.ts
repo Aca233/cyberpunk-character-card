@@ -2,6 +2,20 @@ import { z } from "zod";
 
 const Id = z.string().trim().min(1).max(100);
 const Text = z.string().trim().min(1);
+const GENERIC_CUES = new Set([
+  "是谁",
+  "哪里",
+  "什么",
+  "声音",
+  "热源",
+  "观察",
+  "查看",
+  "调查",
+  "细节",
+  "分析",
+  "回放",
+  "重播",
+]);
 
 /** 先固定作品与可查材料；定稿正文按需保存，不保存答案或线索完成度。 */
 export const BdPassageSchema = z.object({
@@ -13,7 +27,17 @@ export const BdPassageSchema = z.object({
 export const BdDetailSchema = z.object({
   id: Id,
   passage: Id,
-  cues: z.array(Text.max(80)).min(1).max(12),
+  cues: z
+    .array(
+      Text.min(2)
+        .max(80)
+        .refine(
+          (cue) => !GENERIC_CUES.has(cue),
+          "查证触发词须指向具体材料，不能仅用声音、哪里或分析等泛词",
+        ),
+    )
+    .min(1)
+    .max(12),
   method: z.enum(["observe", "audio", "thermal"]),
   finding: Text.max(3000),
 });
@@ -87,12 +111,23 @@ const Event = {
 export const BraindanceCommandSchema = z
   .discriminatedUnion("action", [
     z.object({ ...Event, action: z.literal("define"), work: BdWorkSchema }),
-    z.object({ ...Event, action: z.literal("start"), id: Id, work: Id, source: BdSourceSchema }),
+    z.object({
+      ...Event,
+      action: z.literal("start"),
+      id: Id,
+      work: Id,
+      source: BdSourceSchema,
+      from: Id.optional().describe(
+        "从已保存的某次体验位置重新接入；引用 history.id。已结束的收费服务不能复用，需新的实际来源；省略表示从头重看",
+      ),
+    }),
     z.object({
       ...Event,
       action: z.literal("progress"),
       passage: Id,
-      text: Text.describe("该作品片段本次实际呈现的定稿原文，不含现场交谈；重播已有定稿不得改写"),
+      text: Text.optional().describe(
+        "初次呈现须写本轮正文中作品片段的定稿原文，不含现场交谈；已有定稿的重播省略 text，直接复用原记录",
+      ),
     }),
     z.object({ ...Event, action: z.enum(["finish", "pause", "resume", "exit"]) }),
     z.object({ ...Event, action: z.literal("replay"), passage: Id }),
