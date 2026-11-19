@@ -5,6 +5,7 @@ import { applyBehaviorChip, cyberwareCatalog } from "../cyberware";
 import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
 import { applyNpcBody, bodyProblems, EMPTY_NPC_BODY, sanitizeNpcBody } from "./body";
+import { completeNpcChrome } from "./chrome-profiles";
 import {
   AFFINITY_MAX,
   AFFINITY_MIN,
@@ -17,6 +18,7 @@ import {
   MEMORY_KEPT,
   NO_FACTION,
   NPC_SAMPLES_MAX,
+  NPC_UNDECIDED_PREFIX,
   type Npc,
   type NpcCommand,
   type NpcMemoryEdit,
@@ -276,7 +278,15 @@ export function applyNpc(
   data: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
   if (command.type === "npc") {
-    const { type: _type, location, home, body, faction, ...card } = command;
+    const {
+      type: _type,
+      location,
+      home,
+      body,
+      faction,
+      cyberwareCompleteEvidence,
+      ...card
+    } = command;
     if (draft.npcs[card.id]) {
       return { ok: false, reason: `已经有 id 为 ${card.id} 的人物卡，见到这个人用 meet` };
     }
@@ -291,7 +301,15 @@ export function applyNpc(
     const resolvedFaction = resolveFaction(faction, data, notes);
     const resolvedHome = home === undefined ? undefined : resolvePlace(home, data);
     const resolvedLocation = location === undefined ? null : resolvePlace(location, data);
-    const resolvedBody = body ? sanitizeNpcBody(body, data, notes, card.id) : EMPTY_NPC_BODY;
+    const resolvedBody = completeNpcChrome(
+      { ...card, faction: resolvedFaction },
+      body ? sanitizeNpcBody(body, data, notes, card.id) : EMPTY_NPC_BODY,
+      draft.npcs,
+      data,
+      typeof facts.tradeNarrative === "string" ? facts.tradeNarrative : "",
+      cyberwareCompleteEvidence,
+      notes,
+    );
     draft.npcs[card.id] = {
       ...card,
       faction: resolvedFaction,
@@ -373,6 +391,11 @@ export function applyNpc(
         };
       }
       const notes: string[] = [];
+      const unfinalized =
+        npc.look.startsWith(NPC_UNDECIDED_PREFIX) || npc.voice.startsWith(NPC_UNDECIDED_PREFIX);
+      if (command.body !== undefined && !unfinalized) {
+        notes.push(`保留了 ${npc.name} 已确立的装备与义体；实际变化请用 npcGear / npcChrome`);
+      }
       let updated = false;
       if (command.alias !== undefined && command.alias !== npc.alias) {
         const collide = Object.values(draft.npcs).find(
@@ -437,12 +460,17 @@ export function applyNpc(
           updated = true;
         }
       }
-      const nextBody =
-        command.body !== undefined
-          ? sanitizeNpcBody(command.body, data, notes, npc.id)
-          : npc.body === undefined
-            ? EMPTY_NPC_BODY
-            : undefined;
+      const nextBody = unfinalized
+        ? completeNpcChrome(
+            npc,
+            command.body ? sanitizeNpcBody(command.body, data, notes, npc.id) : EMPTY_NPC_BODY,
+            draft.npcs,
+            data,
+            typeof facts.tradeNarrative === "string" ? facts.tradeNarrative : "",
+            command.cyberwareCompleteEvidence,
+            notes,
+          )
+        : undefined;
       if (nextBody !== undefined) {
         npc.body = nextBody;
         for (const [device, state] of Object.entries(npc.behaviorChips ?? {})) {

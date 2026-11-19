@@ -375,11 +375,22 @@ export const EverydayLifeSchema = z.array(
 
 const LocationSchema = z.string().min(1).describe("地点 id，和 world 指令用的一致");
 
+const CyberwareCompleteEvidenceSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(160)
+  .optional()
+  .describe(
+    "只有本轮正文明确证实此人无任何植入或列出了此人全部植入时才填原文；只看见一枚义眼不算完整配置",
+  );
+
 /** 模型使用：剧情里新认识、有实质互动或推动剧情的人，当场建卡；没名字先用称呼（用户定的 2026-10-30：在场块一直只有朱迪） */
 export const NewNpcSchema = NpcCardSchema.omit({ canon: true })
   .extend({
     type: z.literal("npc"),
     location: LocationSchema.optional(),
+    cyberwareCompleteEvidence: CyberwareCompleteEvidenceSchema,
   })
   .describe(
     "新人物建卡：和玩家角色有了实质互动（交谈、交易、冲突、人情）或推动剧情（递货、接头、对暗号、要玩家角色跟着走、开口谈条件）就建；正文没给名字时 name 用正文里的称呼（例如「兜帽男」）。擦肩路人不建。look、outfit、voice、samples、want、limit、secret 与 body 要趁这一笔立完整，别建成空壳「普通人」",
@@ -414,10 +425,11 @@ export const NpcUpdateSchema = z
     limit: NpcCardSchema.shape.limit.optional(),
     secret: NpcCardSchema.shape.secret,
     home: NpcCardSchema.shape.home,
-    body: NpcBodyCardSchema.optional(),
+    body: NpcBodyCardSchema.optional().describe("仅供还没定型的旧识首次初始化身体"),
+    cyberwareCompleteEvidence: CyberwareCompleteEvidenceSchema,
   })
   .describe(
-    "补全或定型非原作人物卡：用于「还没定」的旧识首次正式出场，或给先前建得很简略的非原作人物补写长相、现在穿、说话方式与样本、诉求底线秘密、常驻地与体格装备义体；原作人物核心卡面固定，不用这条",
+    "补全或定型非原作人物卡：用于「还没定」的旧识首次正式出场，或给先前建得简略的非原作人物补写人物资料；body 只用于首次定型。定型后有真实装备变化才用 npcGear / npcChrome。原作人物不用这条",
   );
 export type NpcUpdate = z.infer<typeof NpcUpdateSchema>;
 
