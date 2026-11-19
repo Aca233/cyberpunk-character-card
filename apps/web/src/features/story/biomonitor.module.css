@@ -173,37 +173,45 @@
   align-items: center;
   gap: 5px;
   padding: 2px 9px;
-  border: 0;
-  background: none;
   isolation: isolate;
-  font-family: inherit;
   font-size: 11px;
-  line-height: inherit;
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--cp-text-dim);
+}
+
+.subRow.ttManage {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: var(--cp-cursor-hand);
 }
 
-.ttPill:focus-visible {
+.ttAction {
+  flex: none;
+  padding: 4px 0 4px 8px;
+  color: var(--cp-cyan);
+  font-size: 13px;
+}
+
+.ttManage:hover:not(:disabled) {
+  background: rgb(94 246 255 / 5%);
+}
+
+.ttManage:focus-visible {
   outline: 1px solid var(--cp-cyan);
   outline-offset: 3px;
 }
 
-.ttPill:disabled {
-  cursor: default;
-}
-
-.ttManage {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--cp-cyan);
-  font: inherit;
-  font-size: 10px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: var(--cp-cursor-hand);
+.ttManage:disabled {
+  opacity: 0.55;
+  cursor: var(--cp-cursor-invalid);
 }
 
 .rescueError {
@@ -811,6 +819,14 @@
 
 .subVal:where([data-tone="cyan"]) {
   color: var(--cp-cyan);
+}
+
+.ttManage .subKey {
+  font-size: 13px;
+}
+
+.ttManage .subVal {
+  flex: 1;
 }
 
 /* 仅当角色手写了外貌/过往等额外档案时显示的精简注记（不含模型主板提示词） */

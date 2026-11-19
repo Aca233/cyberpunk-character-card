@@ -50,6 +50,7 @@ export function traumaView({ world, data }: ViewContext) {
       tierLabel: TRAUMA_TIER_LABELS[tier],
       action,
       label: quote.ok ? quote.label : `开通${TRAUMA_TIER_LABELS[tier]} 30 天`,
+      quoteValid: quote.ok,
       price,
       until: formatGameTime(quote.ok ? quote.paidUntil : now + TRAUMA_PERIOD),
       available: reason === null,

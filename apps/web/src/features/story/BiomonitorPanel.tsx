@@ -323,33 +323,18 @@ export function BiomonitorPanel({
             />
             {wound.code}
           </span>
-          <button
-            type="button"
-            className={styles.ttPill}
-            aria-label="打开创伤小组会员服务"
-            aria-haspopup="dialog"
-            aria-expanded={membershipOpen}
-            disabled={rescuePending}
-            onClick={() => setMembershipOpen(true)}
-            data-ok={(trauma.active && trauma.coverage.ok) || undefined}
-            data-blocked={(trauma.active && !trauma.coverage.ok) || undefined}
-            title={`${
-              trauma.active
-                ? trauma.coverage.ok
-                  ? `创伤小组 ${trauma.tierLabel} 信号实时可达`
-                  : `当前无法出动：${trauma.coverage.why}`
-                : "未开通创伤小组救援保障"
-            } · 点击管理会籍`}
-          >
-            <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
-            {trauma.active
-              ? trauma.coverage.ok
-                ? `TT ${trauma.tierLabel} · 在线`
-                : `TT 信号受阻`
-              : trauma.lapsed
-                ? "TT 已过期"
-                : "TT 未参保"}
-          </button>
+          {trauma.active && (
+            <span
+              className={styles.ttPill}
+              data-ok={trauma.coverage.ok || undefined}
+              data-blocked={!trauma.coverage.ok || undefined}
+              title={trauma.coverage.ok ? "创伤小组救援保障待命" : trauma.coverage.why}
+            >
+              <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
+              TT {trauma.tierLabel}
+              {trauma.coverage.ok ? "" : " · 受限"}
+            </span>
+          )}
           {trauma.rescue.ok && (
             <Button
               small
@@ -650,20 +635,16 @@ export function BiomonitorPanel({
                   </span>
                 </div>
               )}
-              <div className={styles.subRow}>
-                <span className={styles.subKey}>
-                  创伤小组{" "}
-                  <button
-                    type="button"
-                    className={styles.ttManage}
-                    aria-haspopup="dialog"
-                    aria-expanded={membershipOpen}
-                    disabled={rescuePending}
-                    onClick={() => setMembershipOpen(true)}
-                  >
-                    会员服务
-                  </button>
-                </span>
+              <button
+                type="button"
+                className={`${styles.subRow} ${styles.ttManage}`}
+                aria-haspopup="dialog"
+                aria-expanded={membershipOpen}
+                aria-label="创伤小组会籍服务"
+                disabled={rescuePending}
+                onClick={() => setMembershipOpen(true)}
+              >
+                <span className={styles.subKey}>创伤小组</span>
                 <span
                   className={styles.subVal}
                   data-tone={
@@ -677,14 +658,13 @@ export function BiomonitorPanel({
                   }
                 >
                   {trauma.active
-                    ? `${trauma.tierLabel}（至 ${trauma.until}）· ${
-                        trauma.coverage.ok ? "救援保障待命" : `受阻：${trauma.coverage.why}`
-                      }`
+                    ? `${trauma.tierLabel} · ${trauma.coverage.ok ? "保障有效" : "当前受限"}`
                     : trauma.lapsed
-                      ? `会籍已于 ${trauma.lapsed} 过期`
-                      : "未开通救援保险"}
+                      ? "会籍已到期"
+                      : "未开通"}
                 </span>
-              </div>
+                <span className={styles.ttAction}>会籍服务</span>
+              </button>
               <div className={styles.subRow}>
                 <span className={styles.subKey}>生理负荷</span>
                 <span className={styles.subVal} data-tone={hasStress ? "warn" : undefined}>

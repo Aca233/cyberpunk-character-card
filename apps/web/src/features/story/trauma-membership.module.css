@@ -111,8 +111,12 @@
   cursor: var(--cp-cursor-hand);
 }
 
-.closeButton small {
+.closeButton kbd {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--cp-red);
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
 }
@@ -173,7 +177,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 24px;
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
 }
 
 .tab {
@@ -234,25 +241,11 @@
   min-width: 0;
 }
 
-.planHeading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-bottom: 9px;
-}
-
 .planName {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
   line-height: 1.25;
-}
-
-.planTag {
-  color: var(--cp-yellow);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .description {
@@ -320,6 +313,19 @@
 
 .notice[data-tone="good"] {
   color: var(--cp-success);
+}
+
+.emergency {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-inline-start: 2px solid var(--cp-danger);
+  background: rgb(255 0 60 / 6%);
+  color: var(--cp-red);
 }
 
 .receipt {
