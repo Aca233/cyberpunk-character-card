@@ -1244,6 +1244,14 @@ export class GameService {
       }
       // 记录条数的核对和追加由 appendAt 一起做，条数不对时抛 SaveMovedError、什么都不写
       const seq = run.baseVersion;
+      let imageContext: ReturnType<typeof buildImageSceneContext> | undefined;
+      try {
+        imageContext = buildImageSceneContext(turn.world, [], gameData, turn.text);
+      } catch (error) {
+        this.deps.log(
+          `存档 ${run.saveId} 第 ${seq} 轮的配图场景记录失败，配图将仅依据正文：${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       const record: TurnRecord = {
         kind: "turn",
         seq,
@@ -1255,7 +1263,7 @@ export class GameService {
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,
-        imageContext: buildImageSceneContext(turn.world, [], gameData, turn.text),
+        ...(imageContext ? { imageContext } : {}),
         patches: [...turn.patches],
         ...(turn.read !== undefined ? { read: turn.read } : {}),
         ...(turn.choices.length > 0 ? { choices: [...turn.choices] } : {}),

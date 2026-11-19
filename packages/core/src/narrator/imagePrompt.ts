@@ -256,7 +256,7 @@ function buildAuxMessages(
     "Convert the supplied Chinese/English source facts into one concrete English image-generation prompt describing visible pixels, not plot summary or backstory.",
     "Requirements:",
     '1. Output valid JSON ONLY with keys: "prompt" (string) and "negativePrompt" (string).',
-    '2. Keep "prompt" focused on the defining visual facts, with enough detail to preserve identity, action, spatial relationships, and composition. Use concrete visual language, no game stats, abstract backstory, filler, or quality-score tags. Maximum 4000 characters for "prompt" and 2000 for "negativePrompt".',
+    `2. Keep "prompt" focused on the defining visual facts, with enough detail to preserve identity, action, spatial relationships, and composition. Use concrete visual language, no game stats, abstract backstory, filler, or quality-score tags. Maximum ${IMAGE_PROMPT_MAX_LENGTH} characters for "prompt" and 2000 for "negativePrompt".`,
     `3. Follow this image-specific brief: ${visualBrief.join(" ")}`,
     `4. Apply the user's preferred visual style baseline only where it does not conflict with specific source facts or the user's extra instruction: ${targetStyle}`,
     negativeHint
