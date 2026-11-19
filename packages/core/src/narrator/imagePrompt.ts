@@ -444,7 +444,6 @@ const AuxPromptPayloadSchema = z.object({
 function parseAuxReply(
   raw: string,
   defaultNegative: string,
-  negativePromptMode: ImageNegativePromptMode,
 ): { prompt: string; negativePrompt: string } | null {
   const cleaned = raw
     .trim()
@@ -457,10 +456,7 @@ function parseAuxReply(
     if (parsed.success) {
       return {
         prompt: parsed.data.prompt,
-        negativePrompt:
-          defaultNegative || negativePromptMode === "in-prompt"
-            ? (parsed.data.negativePrompt ?? defaultNegative)
-            : "",
+        negativePrompt: defaultNegative ? (parsed.data.negativePrompt ?? defaultNegative) : "",
       };
     }
   } catch {
@@ -532,7 +528,7 @@ export async function draftImagePrompt(
     };
   }
   const defaultNeg = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
-  const parsed = parseAuxReply(reply, defaultNeg, negativePromptMode);
+  const parsed = parseAuxReply(reply, defaultNeg);
   if (!parsed) {
     return {
       ...fallbackImagePrompt(input, style, negativePromptMode),
