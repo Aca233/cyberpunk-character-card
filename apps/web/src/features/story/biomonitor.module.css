@@ -173,11 +173,43 @@
   align-items: center;
   gap: 5px;
   padding: 2px 9px;
+  border: 0;
+  background: none;
   isolation: isolate;
+  font-family: inherit;
   font-size: 11px;
+  line-height: inherit;
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--cp-text-dim);
+  cursor: var(--cp-cursor-hand);
+}
+
+.ttPill:focus-visible {
+  outline: 1px solid var(--cp-cyan);
+  outline-offset: 3px;
+}
+
+.ttPill:disabled {
+  cursor: default;
+}
+
+.ttManage {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cp-cyan);
+  font: inherit;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: var(--cp-cursor-hand);
+}
+
+.rescueError {
+  margin: 0;
+  color: var(--cp-hp-low);
+  font-size: 11px;
 }
 
 .ttPill:where([data-ok]) {

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
@@ -167,6 +168,24 @@ export function BiomonitorPanel({
     time,
     inventory,
   } = view;
+  const [membershipOpen, setMembershipOpen] = useState(false);
+  const [rescuePending, setRescuePending] = useState(false);
+  const [rescueError, setRescueError] = useState<string | null>(null);
+  const rescueRunning = useRef(false);
+  const callRescue = async () => {
+    if (!onTrauma || busy || rescueRunning.current || !trauma.rescue.ok) return;
+    rescueRunning.current = true;
+    setRescuePending(true);
+    setRescueError(null);
+    try {
+      await onTrauma({ type: "trauma", action: "rescue" });
+    } catch (cause) {
+      setRescueError(cause instanceof Error ? cause.message : "救援呼叫未完成，请稍后重试");
+    } finally {
+      rescueRunning.current = false;
+      setRescuePending(false);
+    }
+  };
   const wound = woundTelemetry(health, combat, view.cyberware);
   const neuro = neuroTelemetry(humanity, psychosis);
   const layers = bodyLayers(view, wound);
@@ -304,17 +323,23 @@ export function BiomonitorPanel({
             />
             {wound.code}
           </span>
-          <span
+          <button
+            type="button"
             className={styles.ttPill}
+            aria-label="打开创伤小组会员服务"
+            aria-haspopup="dialog"
+            aria-expanded={membershipOpen}
+            disabled={rescuePending}
+            onClick={() => setMembershipOpen(true)}
             data-ok={(trauma.active && trauma.coverage.ok) || undefined}
             data-blocked={(trauma.active && !trauma.coverage.ok) || undefined}
-            title={
+            title={`${
               trauma.active
                 ? trauma.coverage.ok
                   ? `创伤小组 ${trauma.tierLabel} 信号实时可达`
-                  : `无法自动出动：${trauma.coverage.why}`
+                  : `当前无法出动：${trauma.coverage.why}`
                 : "未开通创伤小组救援保障"
-            }
+            } · 点击管理会籍`}
           >
             <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
             {trauma.active
@@ -324,9 +349,26 @@ export function BiomonitorPanel({
               : trauma.lapsed
                 ? "TT 已过期"
                 : "TT 未参保"}
-          </span>
+          </button>
+          {trauma.rescue.ok && (
+            <Button
+              small
+              primary
+              disabled={busy || rescuePending || !onTrauma}
+              reason="正在处理行动，请稍候"
+              onClick={() => void callRescue()}
+            >
+              {rescuePending ? "救援呼叫中…" : "呼叫紧急救援"}
+            </Button>
+          )}
         </div>
       </header>
+
+      {rescueError && (
+        <p className={styles.rescueError} role="alert">
+          {rescueError}
+        </p>
+      )}
 
       {/* 主体：左生理解剖扫描图 + 右三组遥测诊断 */}
       <div className={styles.workspace}>
@@ -609,7 +651,19 @@ export function BiomonitorPanel({
                 </div>
               )}
               <div className={styles.subRow}>
-                <span className={styles.subKey}>创伤小组</span>
+                <span className={styles.subKey}>
+                  创伤小组{" "}
+                  <button
+                    type="button"
+                    className={styles.ttManage}
+                    aria-haspopup="dialog"
+                    aria-expanded={membershipOpen}
+                    disabled={rescuePending}
+                    onClick={() => setMembershipOpen(true)}
+                  >
+                    会员服务
+                  </button>
+                </span>
                 <span
                   className={styles.subVal}
                   data-tone={
@@ -652,7 +706,14 @@ export function BiomonitorPanel({
         </div>
       </div>
 
-      <TraumaMembership view={view} onTrauma={onTrauma} busy={busy} />
+      {membershipOpen && (
+        <TraumaMembership
+          view={view}
+          onTrauma={onTrauma}
+          busy={busy || rescuePending}
+          onClose={() => setMembershipOpen(false)}
+        />
+      )}
 
       {dossier.notes.length > 0 && (
         <div className={styles.dossierBox}>
