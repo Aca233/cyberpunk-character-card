@@ -500,6 +500,24 @@ export function applyItem(
       return fail("已有独立物件不能重新指定 weaponState");
     }
     if (!object) {
+      if (def.chipContentId || def.chipStorage) {
+        let seq = 1;
+        while (draft.objects[`chip:${def.id}:${seq}`]) seq += 1;
+        const id = `chip:${def.id}:${seq}`;
+        draft.objects[id] = {
+          kind: "story",
+          definition: { ...def, id },
+          baseId: def.id,
+          origin: command.origin ?? command.reason,
+          holder: "player",
+          location: null,
+          changedAt: now,
+          lastChange: command.reason.slice(0, 240),
+          remaining: null,
+        };
+        put(draft, id);
+        return { ok: true, notes: [`获得 ${def.name}（载体 ${id}）；尚未读取`] };
+      }
       const initialWs = command.weaponState ?? defaultInstanceStateFromDef(def);
       if (initialWs) {
         const wsError = validateWeaponState(def, initialWs, catalog, true);
@@ -587,6 +605,39 @@ export function applyItem(
       return result;
     }
   }
+}
+
+/** 只有芯片资料系统能写入；物品数量和已存在的载体身份均保持不变。 */
+export function applyChipWrite(
+  draft: Inventory,
+  command: Extract<InventoryInternal, { type: "inventory.chipWrite" }>,
+  now: number,
+): ApplyOutcome {
+  const destination = draft.objects[command.destination];
+  if (destination?.holder !== "player" || !draft.backpack[command.destination])
+    return fail("写入目标不是实际随身携带的独立载体");
+  if (!destination.definition.chipStorage) return fail("目标物件没有芯片存储能力");
+  if (destination.definition.chipContentId) {
+    if (
+      destination.definition.chipContentId === command.contentId &&
+      destination.copiedFrom === command.source
+    )
+      return ok();
+    return fail("目标已有内容，不能把另一次写入或复制悄悄覆盖上去");
+  }
+  if (command.source) {
+    if (command.source === command.destination) return fail("复制来源与去向不能相同");
+    const source = draft.objects[command.source];
+    if (source?.holder !== "player" || !draft.backpack[command.source])
+      return fail("复制来源已经不在随身物品中");
+    if (source.definition.chipContentId !== command.contentId)
+      return fail("复制内容与原载体不一致");
+    destination.copiedFrom = command.source;
+  }
+  destination.definition.chipContentId = command.contentId;
+  destination.changedAt = now;
+  destination.lastChange = command.reason;
+  return ok("内容已经写入实际载体；写入不等于角色已经阅读");
 }
 
 /** 失去整件武器（含其已安装改装件） */

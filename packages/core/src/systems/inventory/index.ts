@@ -4,6 +4,7 @@ import type { NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import { inventoryActions } from "./actions";
 import {
+  applyChipWrite,
   applyItem,
   applyMod,
   applyParts,
@@ -85,6 +86,8 @@ export const inventory = defineSystem<
   apply(draft, command, ctx) {
     const execute = (): ApplyOutcome => {
       switch (command.type) {
+        case "inventory.chipWrite":
+          return applyChipWrite(draft, command, ctx.now);
         case "weaponHold":
           return applyWeaponHold(
             draft,
