@@ -29,6 +29,11 @@ const FACTION_ASSETS: Readonly<Record<string, AssetId>> = {
   maxtac: "map.poi.police",
   netwatch: "interaction.netrunner",
   "trauma-team": "brand.traumaTeam",
+  arasaka: "brand.arasaka",
+  militech: "brand.militech",
+  "kang-tao": "brand.kangTao",
+  biotechnica: "brand.biotechnica",
+  petrochem: "brand.petrochem",
 };
 
 const FACTION_MONOGRAMS: Readonly<Record<string, string>> = {
@@ -41,10 +46,23 @@ const FACTION_MONOGRAMS: Readonly<Record<string, string>> = {
 
 function FactionMark({ faction }: { readonly faction: Faction }) {
   const asset = FACTION_ASSETS[faction.id];
+  const corporate = faction.kind === "corp";
   return (
-    <span className={styles.factionIcon} style={{ color: faction.color }}>
+    <span
+      className={styles.factionIcon}
+      style={{
+        color: faction.color,
+        width: corporate ? 82 : undefined,
+        height: corporate ? 42 : undefined,
+      }}
+    >
       {asset ? (
-        <Asset id={asset} height={34} width={34} alt={`${faction.name}标志`} />
+        <Asset
+          id={asset}
+          height={corporate ? 42 : 34}
+          width={corporate ? 82 : 34}
+          alt={`${faction.name}标志`}
+        />
       ) : (
         <span
           className={styles.factionMonogram}

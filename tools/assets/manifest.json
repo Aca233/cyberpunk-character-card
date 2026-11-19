@@ -8,6 +8,31 @@
         "slot": "logo_traumateam"
       },
       {
+        "id": "brand.arasaka",
+        "atlas": "quests/q115_lockdown",
+        "slot": "Arasaka_Logo"
+      },
+      {
+        "id": "brand.militech",
+        "atlas": "quests/q003_maelstrom",
+        "slot": "MILITECH_logo"
+      },
+      {
+        "id": "brand.kangTao",
+        "atlas": "quests/q000_jenkins_brief",
+        "slot": "KangTaoLogo"
+      },
+      {
+        "id": "brand.biotechnica",
+        "atlas": "common/assets_preview3",
+        "slot": "lore_biotechnica"
+      },
+      {
+        "id": "brand.petrochem",
+        "atlas": "common/assets_preview2",
+        "slot": "lore_petrochem"
+      },
+      {
         "id": "panel.frame",
         "atlas": "fullscreen/thin_red_frame01",
         "slot": "frame"
