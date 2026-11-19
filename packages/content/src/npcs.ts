@@ -2,13 +2,14 @@ import { npcRules } from "@cp/core";
 import { everydayPeople } from "./everydayLife";
 
 /**
- * 原作人物卡。说话样本用自己的话写，不照搬原台词。
- * - 丽贝卡、曼因、法拉第：处境照《边缘行者》第一季开头，给旧存档和以后的 2075 剧本用；三人在原剧第 6、10 集已经死了，2077 开局不种
- * - 朱迪、瑞吉娜、维克多：2077 开局的引导委托用（开场 lizzies-2077 的 cast）。原作依据《赛博朋克 2077》（2.x），2026-10-25 查
+ * 原作人物卡。canon 只标识原作人物身份；说话样本用自己的话写，不照搬原台词。
+ * - 隐情只保留原作已有的动机与经历，不为填满 secret 发明伤病、犯罪、资产、亲属或机密项目。
+ *   没有依据的隐情留空；后续变化以本局实际发生的事为准，不把原作后续结局提前当成开局事实。
+ * - 丽贝卡、曼因、法拉第：处境照《边缘行者》第一季开头，给以后的 2075 剧本用；三人在原剧第 6、10 集已经死了，2077 开局不种
+ * - 朱迪、瑞吉娜、维克多：2077 自由沙盘的原作人物。原作依据《赛博朋克 2077》（2.x），2026-10-25 查
  *   cyberpunk.fandom.com 的 Judy_Álvarez、Regina_Jones、Viktor_Vektor；译名照本机文本库（朱迪·阿尔瓦雷兹、瑞吉娜·琼斯、维克多·维克托）。
  *   外貌和口吻的细节、维克多的诉求底线是本作改编
- * - body 的随身武装、义体与开局人性是本作改编：参照各人在原作里的身份和打法估的，没核对原作数值。
- *   曼因的人性压得很低是照他瞒着的发病征兆写的
+ * - body 的随身武装与义体配置包含本作改编：参照各人在原作里的身份和打法选取目录内设备，没核对原作数值。
  * - 装备和义体（用户定的补卡，2026-10-29 查 cyberpunk.fandom.com 各人词条，只有这一个来源，按单一来源对待）：
  *   武器照词条里的型号对到物品表（罗格的 Pride 是 Liberty 改的、瑞弗的 Crash 和克里的 Archangel 是 Overture 改的、
  *   德克斯特的 Plan B 是 Liberty 改的，表里没有这几把不朽武器，用原型）；曼因的弹射系统、皮下护甲照词条，
@@ -39,7 +40,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "找乐子、拿钱，和团伙一起活得痛快；被当成真正的自己人",
       limit: "有人伤害她哥哥皮拉尔或团伙里的人；被当成小孩看",
-      secret: "床垫底下塞满了重型军规穿甲弹和高爆手雷，总害怕皮拉尔哪天发疯横死在路边",
       home: "lizzies-bar",
       canon: true,
       body: {
@@ -62,8 +62,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让团伙活下去、接到大单，在夜之城闯出名号",
       limit: "出卖团伙的人；拿同伴的命去换钱",
-      secret:
-        "高强度军用义体排异反应加剧，视野频繁出现坏道与幻听；他私下大剂量注射免疫抑制剂，只被朵里欧撞见过一次",
       home: "lizzies-bar",
       canon: true,
       body: {
@@ -74,14 +72,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "titanium-bones",
           "reinforced-tendons",
           "kiroshi-mk2",
-        ],
-        symptoms: [
-          {
-            id: "military-chrome-rejection",
-            stage: "edge",
-            description: "频繁视野坏道与幻听",
-            cause: "高强度军用义体排异，持续用药仍未处理根源",
-          },
         ],
       },
     },
@@ -100,8 +90,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "找到能干又好打发的雇佣兵，替他和背后的大客户办脏活",
       limit: "坏他的生意、泄露客户；当面威胁他",
-      secret:
-        "私下与军用科技签署活体实验对赌协议，拿底层佣兵当高危义体测试小白鼠；一旦出事会直接格式化所有联络记录灭口",
+      // 《边缘行者》：替军用科技接活、想跻身公司阶层。
+      secret: "替军用科技办事，却更在意借公司生意爬上去；不会把背后客户与自己的盘算向佣兵交底",
       canon: true,
       body: {
         gear: ["omaha", "shingen", "corpo-suit"],
@@ -126,8 +116,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "靠自己的手艺活着，不给公司卖命；护着丽姿酒吧和莫克斯帮护着的那些姑娘",
       limit: "欺负、利用玩偶和莫克斯帮护着的人；拿她的作品去卖给公司",
-      secret:
-        "艾芙琳在云顶的危险野心让她夜不能寐，正偷偷写脚本试图抹除艾芙琳在莫克斯网络里留下的所有未授权访问日志",
       home: "lizzies-bar",
       canon: true,
       body: {
@@ -151,7 +139,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "找到治赛博精神病的办法，发病的人能活捉就活捉；在沃森把生意做稳",
       limit: "滥杀发病的人；对她撒谎、拿假消息糊弄她",
-      secret: "当年做深度调查时导致前线线人全家被清道夫灭口，至今每月匿名向对方留在沃森的孤儿转账",
       home: "regina-office",
       canon: true,
       body: {
@@ -175,8 +162,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把活儿做好，让找他的人活着回来；安安稳稳守着这间诊所",
       limit: "装来路不明的货；拿义体糟践自己身体的人，他会当面训",
-      secret:
-        "诊所保险柜夹层里放着当年沃森重量级拳赛的沾血金腰带，以及因拒绝打假拳被荒坂打手敲碎的右掌骨片",
       home: "vik-clinic",
       canon: true,
       body: {
@@ -199,7 +184,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "在来生酒吧闯出名号，成为夜之城的传奇；照顾好妈妈和米丝蒂",
       limit: "出卖朋友和家人；对他妈妈和米丝蒂不敬",
-      secret: "夹克内衬缝着当年从暴虐父亲手里抢下的铜皮带扣，每次去搏命前都会下意识用拇指摩挲",
+      // 《再见杰克》中的家庭经历。
+      secret: "童年经历过父亲的家庭暴力，对母亲的安危尤其在意；不愿再让她被同样的人伤害",
       home: "coyote-cojo",
       canon: true,
       body: {
@@ -222,8 +208,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让来生和她的生意稳稳当当；只接赚得到钱、又查不到她头上的活",
       limit: "把麻烦带进来生、让人顺着线索查到她；欠账不还",
-      secret:
-        "保险箱里存着一份 2023 年荒坂塔撤离行动的脱机原始录音，那是她与荒坂情报层维持数十年默契的底牌",
       home: "afterlife",
       canon: true,
       body: {
@@ -249,8 +233,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把威斯特布鲁克的生意握在手里；管住虎爪帮里那几个儿子，别让他们给她惹事",
       limit: "坏了规矩还想讨价还价；在她的地盘上替荒坂办事",
-      secret:
-        "前五任丈夫全在她的利益算计中因各种‘意外’横死；在虎爪帮内线之外，暗中建立了一套谁也不知道的私人刺客名单",
       home: "wakako-pachinko",
       canon: true,
       body: {
@@ -273,8 +255,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守着小店，让来的人心里静一点；和杰克好好过下去",
       limit: "嘲弄她的信仰；伤害杰克和维克多",
-      secret:
-        "私下给杰克排过十几次大阿卡那，抽出的无一例外全是‘倒吊人’与‘死神’，她不敢把结果告诉任何人",
       home: "vik-clinic",
       canon: true,
       body: {
@@ -297,8 +277,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "回到夜之城，接一单让他重新站上顶端的大活",
       limit: "当面让他丢脸；坏了他的大买卖",
-      secret:
-        "两年前在太平洲被巫毒帮洗劫一空狼狈出逃，如今的豪车保镖全靠高利贷撑场面，后路只留了一张不记名穿梭艇票",
       canon: true,
       body: {
         gear: ["liberty", "corpo-suit"],
@@ -322,8 +300,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守住海伍德的平衡，别让帮派之间的血流到街坊身上",
       limit: "伤及无辜、坏了他定下的规矩；在海伍德背后捅瓦伦蒂诺帮一刀",
-      secret:
-        "曾亲手对沾染毒品并出卖教区兄弟的亲侄子执行家法，念珠十字架里藏着当年那颗取出的 9mm 弹头",
       canon: true,
       body: {
         gear: [],
@@ -347,8 +323,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让阿德卡多在恶土活下去，不被公司和乱刀会吞掉；证明自己的路是对的",
       limit: "背叛家人和族人；把游牧民当畜生看的城里人和公司",
-      secret:
-        "独自驾车驶入恶土深处时总会反复校对家族长波频道，副驾储物箱里压着早年与索尔、米契的泛黄全息合照",
       home: "badlands",
       canon: true,
       body: {
@@ -371,10 +345,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "我是警察，但我不瞎。警徽后面的那些破事我管不了，可这桩案子，谁也别想压下去。",
         "这回算我欠你的。在夜之城，一个不收黑钱的巡警的人情，可能比你想象的值钱。",
       ],
-      want: "把被压下去的案子查到底；照顾好妹妹乔斯一家",
+      // 《爱似河》：乔斯与孩子住在城外拖车住宅区，埃奇伍德农场是另一处案件地点。
+      want: "把被压下去的案子查到底；照顾住在城外拖车住宅区的妹妹乔斯一家",
       limit: "拿孩子当筹码；警察收钱办事、对受害者装看不见",
-      secret:
-        "私下备份了内务部与多起市议员命案的压案卷宗，藏在妹妹家农场的废弃发电机组里，随时做好了被踢出警局的准备",
       canon: true,
       body: {
         gear: ["overture", "flashbang", "street-jacket"],
@@ -397,8 +370,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "重新写出自己真想写的歌，不再给唱片公司当摇钱树",
       limit: "被当成过气的商品摆弄；有人拿老乐队和死去的朋友开涮",
-      secret:
-        "北橡区豪宅地下室锁着一台老式磁带录音机，里面录着二十多首未完成的废稿，他暗自害怕自己已经写不出任何像样的新曲子",
       home: "kerry-estate",
       canon: true,
       body: {
@@ -429,8 +400,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把市中心的生意越做越大，挤进公司广场那些大人物的圈子",
       limit: "砸他的场子、赖他的账；在他的地盘上动他的客人",
-      secret:
-        "早年被漩涡帮追杀时，用前女友的义体走私路线当买命钱换得活路，至今不敢踏入沃森食品厂半步",
       home: "corpo-plaza",
       canon: true,
       body: {
@@ -454,8 +423,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把圣多明戈的权力还给住在这儿的人，不让公司和帮派说了算",
       limit: "帮派往他的地盘里伸手；替公司欺负街坊",
-      secret:
-        "之所以能源源不断截获军规车辆与货运情报，是因为他在荒坂物流调配中心安插了自己的亲生私生子",
       canon: true,
       body: {
         gear: ["liberty", "corpo-suit"],
@@ -480,9 +447,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守着修车厂，替恶土上的人和城里的客人牵线，把日子过安稳",
       limit: "在她背后耍花样；欺负恶土上讨生活的人",
-      // 本作改编：不再上路的原因原作没写
-      secret:
-        "呼吸面罩下的肺部重度纤维化已到极限，随身氧气瓶其实混入了违禁神经镇痛气雾，每次剧烈咳嗽都在咳血",
       home: "badlands",
       canon: true,
       body: {
@@ -496,19 +460,19 @@ export const npcs = npcRules.NpcCardSchema.extend({
       id: "mr-hands",
       name: "汉兹先生",
       pronoun: "他",
-      role: "太平洲的中间人，只用全息通话见人；最近在狗镇的一间俱乐部落脚",
-      look: "全息影像里只露出一双手，戴着戒指；偶尔一笑，露出一口金牙。",
+      role: "太平洲和狗镇的中间人，在重石俱乐部会见少数可信的合作者",
+      look: "头发向后梳，留着修整齐的浓密胡须；仪容考究，神情沉稳，举止克制。",
       outfit: "考究的西装，袖口露出袖扣。",
       voice:
         "温和克制的声音，语调平缓沉稳，像个正派的资深咨询顾问；不论委托有多脏，措辞总是体面又滴水不漏。",
       samples: [
-        "不必在意全息投影只照出双手。在狗镇，少露一张脸，大家都能少惹不少麻烦。",
-        "报酬已经打到离岸账户了。我对你的效率很满意，V——只要你能一直把麻烦处理得这么干净，我们会有很多事情可以做。",
+        "会面的事需要些信任。在狗镇，替合作伙伴守住隐私，也是在保护自己的生意。",
+        "报酬已经打到约定的账户了。我对你的效率很满意——只要你能一直把麻烦处理得这么干净，我们会有很多事情可以做。",
       ],
       want: "在太平洲和狗镇织一张谁也绕不开的网；有一天在狗镇说了算",
       limit: "打听他的真面目；拿他的家人做文章",
-      secret:
-        "真名韦德·布利克，曾是柏特罗化工顶层情报总监；伪造空难假死后，将妻女秘密安置在西欧安全港，狗镇赚的所有黑金全转入了瑞士账户",
+      // 《往日之影》人物档案：前沛卓石化公司高管，隐藏真实身份和家庭信息。
+      secret: "曾是沛卓石化的公司高管，另有家庭；经营中间人生意时刻意保护真实身份与家人的信息",
       home: "dogtown",
       canon: true,
       body: {
@@ -537,8 +501,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "护着三郎大人周全，不辜负他当年把自己从贫民窟里提拔出来的恩情",
       limit: "对三郎大人不敬；背弃誓言、拿荣誉做交易",
-      secret:
-        "出身千叶 11 区赤贫贫民窟，幼年靠从垃圾堆翻烂菜叶为生；深知荒坂繁荣背后的累累白骨，却选择将盲目效忠作为自己唯一的信仰支柱",
+      // 《危险游戏》中的贫民区经历。
+      secret: "出身千叶的贫民区，荒坂给了他离开贫困的道路；对三郎和公司的忠诚与这段经历紧密相连",
       canon: true,
       body: {
         gear: ["kenshin", "shingen", "flashbang", "corpo-suit"],
@@ -564,8 +528,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "从玩偶的身份里爬出去，当上演员，过上不用看人脸色的日子",
       limit: "被人当成用完就丢的玩偶；有人伤害朱迪",
-      secret:
-        "在高级玩偶俱乐部‘云顶’靠偷录顶级客户的越界私密超梦勒索原始资本，此次谋划盗取赖宣的 Relic 芯片是她彻底翻盘的唯一豪赌",
+      // 《情报》中的脱离玩偶生活的动机。
+      secret: "不甘心一直在云顶做玩偶，想靠一笔足够大的买卖脱身；对合作者也会保留自己的打算",
       home: "japantown",
       canon: true,
       body: {
@@ -589,10 +553,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "荒坂的航船历经百年风浪，绝不会因几个狂妄之徒的骚动而偏离航向。请坐下，听我把话说完。",
         "赖宣心中的怒火被毒草蒙蔽了双眼。但他依旧流淌着荒坂的血脉，家族的事，终究由家族内部解决。",
       ],
-      want: "替父亲守住荒坂，也想把弟弟赖宣拉回这个家",
+      want: "替父亲守住荒坂，也想把哥哥赖宣拉回这个家",
       limit: "有人对父亲和家族不敬；把她当成摆设",
-      secret:
-        "深知父亲三郎准备在寿终前夺舍赖宣肉身的‘守护神’计划，表面顺从父亲，暗中却在推演一旦家族内讧爆发时的独立避险矩阵",
       canon: true,
       body: {
         gear: ["corpo-suit"],
@@ -617,9 +579,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "派对很热闹？瞧瞧周围这些盛装出席的行尸走肉，他们不过是我父亲陈列室里明码标价的藏品罢了。",
       ],
       want: "从里面把荒坂拆掉，让父亲亲眼看着他的帝国塌下去",
-      limit: "被当成父亲的影子或继承人；被拿来和哥哥姐姐比",
-      secret:
-        "年轻时创立‘钢铁之龙’暴走族反抗荒坂失败后，意识到外部无法撼动巨兽，潜伏回家族只为等待亲手从内部将荒坂帝国点燃殉葬的时机",
+      limit: "被当成父亲的影子，或只能服从家族安排的继承人",
+      // 《恶魔》中说明的真实目的。
+      secret: "重返家族并不表示认同父亲与公司的道路；他认为外部难以击倒荒坂，想从内部瓦解它",
       canon: true,
       body: {
         gear: ["kenshin"],
@@ -643,8 +605,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让荒坂和日本永远站在世界顶端；找到活得比死亡更久的办法",
       limit: "背叛家族和公司；在他面前失礼",
-      secret:
-        "早已将自己的数字化意识（神舆）上传至全球三个脱机冷库节点，视血肉之躯为随时可替换的旧衣服，连亲生儿女都只是他意识降临的候选容器",
+      // 《偷货》资料与《恶魔》中的长生研究。
+      secret: "秘密推进以 Relic 技术延续自身生命与权力的研究，不会轻易向家族外的人交代其真正用途",
       canon: true,
       body: {
         gear: ["satori"],
@@ -669,8 +631,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "保住自己的名声和研究；不管替谁工作，都要站在最前沿",
       limit: "被当成随时能换掉的人；有人质疑他的研究",
-      secret:
-        "私自复制了 Relic 核心架构的代码签名秘钥，早已暗中与康陶中层建立安全信道，一旦荒坂问责便立刻携核心技术叛逃",
       canon: true,
       body: {
         gear: ["corpo-suit"],
@@ -694,8 +654,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "攒够钱退休，然后永远离开这座破城",
       limit: "被逼着接送死的活；有人拿搭档的命去冒险",
-      secret:
-        "曾在一次旧网深潜事故中目睹过黑墙外游荡的流窜 AI，后颈接缝至今留有神经灼伤暗斑，因此对任何涉及黑墙的委托避之不及",
+      // 《偷货》对话：攒够钱后到克里特岛独居的退隐打算。
+      secret: "想赚够钱后离开夜之城，到克里特岛独居，摆脱这里的人际往来与佣兵生意",
       canon: true,
       body: {
         gear: ["unity", "netrunner-suit"],
@@ -720,8 +680,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "替罗伊斯把买卖谈成，让帮里少死几个人",
       limit: "有人在谈判桌上对罗伊斯动手；拿了货不给钱",
-      secret:
-        "全脸重度义体化导致面部痛觉神经永久坏死，必须每隔六小时吸食一剂高纯度黑蕾丝来压制脑干的剧烈痉挛",
       canon: true,
       body: {
         gear: ["nova", "black-lace", "street-jacket"],
@@ -746,8 +704,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把漩涡帮攥在手里，抢更多的公司货，让沃森的人都怕他",
       limit: "有人在他面前耍花样；跟公司或警察勾搭",
-      secret:
-        "将前任老大布里克用高爆炸弹项圈锁死在食品厂深处的禁闭室，每晚嗑药后都要亲自去羞辱前任以排解篡位后的被害妄想",
+      // 《拿货》中的首领更迭与布里克处境。
+      secret: "夺走了布里克的首领位置，把前任关在食品厂；不愿让前任的支持者重新威胁自己的控制",
       canon: true,
       body: {
         gear: ["lexington", "street-jacket"],
@@ -770,8 +728,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "护住太平洲的海地人，揭开旧网的秘密",
       limit: "外人插手巫毒帮的事；对布丽奇特不敬",
+      // 《勇往直前》中对外来佣兵的态度。
       secret:
-        "在给外来佣兵植入的个人链接引导程序里暗藏了一键烧毁脑神经的后门木马，从一开始就没打算让任何知情者活着走出太平洲",
+        "把外来佣兵视为可牺牲的工具，对他们隐瞒巫毒帮的真正网络目标；不会因一次合作就将对方当成自己人",
       canon: true,
       body: {
         gear: ["tactician", "machete", "emp-grenade"],
@@ -796,8 +755,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "在黑墙倒塌之前，替巫毒帮和墙那边的东西搭上线",
       limit: "伤害她的族人；网络监察的人碰巫毒帮的网",
+      // 《电波》中寻求与奥特联系的目的。
       secret:
-        "为了撕开黑墙接触奥特·坎宁安的遗留数据意识，已经暗中牺牲了两个完整编制的海地黑客小组，并将事故伪装成网络监察的外部清洗",
+        "想越过黑墙接触奥特·坎宁安，为巫毒帮在可能到来的网络冲突中寻找活路；不会向外人坦白全部计划",
       canon: true,
       body: {
         gear: ["netrunner-suit"],
@@ -822,8 +782,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让杰克平平安安，别再跟帮派搅在一起；守着酒吧和海伍德的街坊",
       limit: "有人害她的孩子；在她的店里闹事",
-      secret:
-        "后厨酒桶下压着一把多年前打死前夫同伙的老式左轮，对米丝蒂的占卜通灵充满迷信般的排斥，总觉得这女孩身上带着招惹早夭的煞气",
       home: "coyote-cojo",
       canon: true,
       body: {
@@ -849,8 +807,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把被劫的货和公司里的内鬼一起揪出来，借这件事往上爬",
       limit: "被人当傻子耍；失去对局面的控制",
-      secret:
-        "车队泄密直接牵扯到她竞争副总裁的死对头吉尔克里斯特，她不惜动用黑账雇佣法外狂徒截杀同僚以换取自保",
       canon: true,
       body: {
         gear: ["ajax", "corpo-suit"],
@@ -874,8 +830,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守着吧台和修车厂；开着自己改的车在街头赛里赢下最后一场",
       limit: "有人在来生里闹事；拿她的身份开涮",
+      // 《心中困兽》：她的复仇动机与她对事故的指控应分别看待。
       secret:
-        "来生吧台下暗格里藏着一把专为去年赛道撞死丈夫的辛普森定制的穿甲手枪，她参赛的唯一目的就是亲手在终点前射穿对方的喉咙",
+        "丈夫迪恩在比赛中身亡，她认定车手桑普森应为此负责，想借赛事复仇；她的指控不等于已经查清的事故真相",
       home: "afterlife",
       canon: true,
       body: {
@@ -894,13 +851,11 @@ export const npcs = npcRules.NpcCardSchema.extend({
       voice:
         "沙哑、懒散，带着长期高负荷深潜黑客的厌世感；在满地线缆的黑屋里吞吐尼古丁，只对旧网遗失的史前协议与禁断代码感兴趣。",
       samples: [
-        "市面上那些所谓的军规冰锥，不过是给三流小贼用的玩具。真正能掀翻荒坂子网的玩意儿，早在 2020 年就随着网监筑墙埋进地底了。",
+        "旧网的东西不是因为旧就安全。你以为捡的是资料，后头可能还跟着一层黑冰。别在我接线的时候乱碰。",
         "开价太低了，choom。这枚数据芯片带强酸自毁引信，稍微手抖一下我的神经接口就成焦炭了。加两千欧，少一个子儿免谈。",
       ],
       want: "在罗格那儿站稳脚跟；收集旧网时代传奇黑客留下的技术",
       limit: "被人在买卖上一再逼价；有人打听他的过去",
-      secret:
-        "曾是第四次企业战争时期荒坂‘神舆’项目外围筑网师，因私自解密了某份企业高层数字幽灵被全网追杀，靠罗格庇护才得以隐姓埋名于来生暗室",
       home: "afterlife",
       canon: true,
       body: {
@@ -925,8 +880,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "做出下一件让全世界都谈论的作品；最近迷上了超梦",
       limit: "被当成商品摆弄；有人背着她打她的主意",
-      secret:
-        "全身义体置换导致神经递质代谢彻底失调，已经滑向赛博精神病早期，日常完全依赖特调的情感阻断剂维持表面理智",
       canon: true,
       body: {
         gear: [],
@@ -935,7 +888,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
     },
     {
       // 来源：https://cyberpunk.fandom.com/wiki/Adam_Smasher（2026-11-02 查）；扫描数据写他 96% 是义体。
-      // 原作的 Mk.31 重机枪、导弹发射器表里没有，用防御者和射弹发射系统代替；人性压低是照原作“高功能赛博精神病”写的
+      // 原作的 Mk.31 重机枪、导弹发射器表里没有，用防御者和射弹发射系统代替。
       id: "smasher",
       name: "亚当·重锤",
       alias: "重锤",
@@ -952,8 +905,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "替荒坂碾碎挡路的人；证明金属比血肉强",
       limit: "被人当成可以讨价还价的对手；有人在他面前耍小聪明",
-      secret:
-        "早在半个世纪前就将自己最后的人性底线连同大脑边缘系统一并切除，荒坂给他的每一个杀戮指令都被他当作检验新型军规武器极限的游乐场",
       canon: true,
       body: {
         gear: ["defender"],
@@ -965,14 +916,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "prosthetic-legs",
           "kiroshi-mk2",
           "pain-editor",
-        ],
-        symptoms: [
-          {
-            id: "limbic-dissociation",
-            stage: "detached",
-            description: "长期情感抽离、对生命缺乏共情",
-            cause: "既定边缘系统改造与长期人格改变",
-          },
         ],
       },
     },
@@ -995,8 +938,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "让族人熬过这段苦日子，有一份稳定的进项，不再四处挨饿",
       limit: "有人背着他拿全族冒险；外人对家族指手画脚",
-      secret:
-        "为了换取生化科技的定期口粮配额，瞒着全族在阿德卡多主运货车底部暗装了公司的环境探测信标，深知自己正一步步把家族带向慢性吞并",
       home: "badlands",
       canon: true,
       body: {
@@ -1018,12 +959,10 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "沉稳宽厚，夹杂着重型履带机修工的油渍笑骂与老兵的苍凉；对帕南宠溺中透着担忧，绝口不提战壕旧事。",
       samples: [
         "帕南这丫头脾气随她那辆皮卡，点火就炸。但只要她认准你，刀山火海她都真敢替你挡。多担待着点，兄弟。",
-        "这辆魔蝎坦克的火控模块早在统战时期就被流弹打烂了。别碰那根保险丝——我好不容易用嚼过的泡泡糖黏住的。",
+        "先把火控线路断开，再碰那根保险丝。会换零件不等于会修战车，我可不想从沙子里捡你的手指头。",
       ],
       want: "护着帕南和族里的朋友；让家族别被公司合同绑死",
       limit: "出卖朋友；把族人当成能牺牲的数字",
-      secret:
-        "在统一战争开山犬装甲车时遭神经生化毒气创伤，脑桥植入体持续渗出金属神经毒素，夜间需靠大剂量工业乙醇强行麻痹剧痛",
       home: "badlands",
       canon: true,
       body: {
@@ -1049,8 +988,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守住这个自己选的家，让族人有饭吃、有路走",
       limit: "公司拿钱来挖她；有人拿族人的命冒险",
-      secret:
-        "曾利用恶土中转基站偷偷截留了一段军用科技绝密战略运输加密频段，打算在家族真正走投无路时作为最后的保命筹码抛售",
       home: "badlands",
       canon: true,
       body: {
@@ -1063,7 +1000,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
     // 里德、亚历克斯、汉森此时已经在夜之城。FIA 和新美国没有对应的势力条目，faction 空着
     {
       // 来源：https://cyberpunk.fandom.com/wiki/Song_So_Mi（2026-11-02 查）；原名宋素美没查到官方译名，用代号。
-      // 幸村、潜网服照词条；军用科技 5 型潜网义体用表里的篇章 6 型代替
+      // 幸村、潜网服照词条；专属军用潜网条目是本作对其联情局神经改造与黑墙能力的建模。
+      // 该条目不声称是官方商品型号，也不把她的改造等同于篇章 6 型。
       id: "songbird",
       name: "百灵鸟",
       pronoun: "她",
@@ -1078,12 +1016,13 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "活下去，摆脱总统和情报局，再也不当谁的工具",
       limit: "被当成可以随手牺牲的资产；有人锁住她的自由",
+      // 《往日之影》中的跨越黑墙后果与求生动机。
       secret:
-        "神经系统已被深网流窜 AI 侵蚀超过 70%，为求生暗中策划了总统专机坠毁事件，利用矩阵核心与矩阵网络欺骗所有试图‘拯救’她的人",
+        "反复跨越黑墙的任务正在损害她的身体与记忆，她想逃离联情局的控制并寻找治疗；不会轻易把自己的全部处境交代给别人",
       canon: true,
       body: {
         gear: ["yukimura", "netrunner-suit"],
-        cyberware: ["militech-canto", "kiroshi-mk2", "smart-link", "self-ice"],
+        cyberware: ["songbird-military-netrunning", "kiroshi-mk2", "smart-link", "self-ice"],
       },
     },
     {
@@ -1104,8 +1043,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "完成国家交给他的任务，哪怕没有人记得他",
       limit: "背叛国家；拿无辜的人当筹码",
+      // 《往日之影》官方电影预告与人物经历：2070 年列车遇袭后幸存。
       secret:
-        "当年在列车遇袭前其实已截获了刺杀预警，但在迈尔斯以国家最高利益下达绝对服从指令后，平静地选择走进必死埋伏以成全棋局",
+        "2070 年撤离时在列车上遇袭后幸存，以平民身份留在夜之城；即使遭到抛弃，也没有放下对国家的忠诚",
       canon: true,
       body: {
         gear: ["lexington", "ashura", "flashbang", "street-jacket"],
@@ -1129,8 +1069,9 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "把夜之城和其他自由州重新收进新美国，争取第四个任期",
       limit: "有人当面挑战她的权威；被当成可以利用的弱者",
+      // 《往日之影》中越过黑墙的命令及其政治风险。
       secret:
-        "私自签署了跨越黑墙捕获自主战斗 AI 的非法‘百灵鸟工程’，一旦此等反人类行径曝光将直接引发第五次全境企业世界大战并导致新美国政权解体",
+        "命令百灵鸟越过黑墙执行任务，把她的能力视为新美国的战略资产；这些行动一旦曝光会带来严重的政治风险",
       canon: true,
       body: {
         gear: ["liberty", "corpo-suit"],
@@ -1156,8 +1097,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "守住狗镇这块不归任何人管的地方，让黑市的钱源源不断",
       limit: "有人在狗镇坏他的规矩；华盛顿或公司把手伸过墙来",
-      secret:
-        "手里扣留着当年统一战争时期新美国军方下令屠杀平民与跨国走私生化武器的绝密档案箱，这是军用科技与迈尔斯始终不敢强攻狗镇的免死金牌",
       home: "dogtown",
       canon: true,
       body: {
@@ -1189,8 +1128,6 @@ export const npcs = npcRules.NpcCardSchema.extend({
       ],
       want: "熬到任务结束，离开狗镇，去一个有阳光的地方退休",
       limit: "暴露她的身份；伤害她在乎的老战友",
-      secret:
-        "随身化妆镜夹层里藏着一张早已注销的超梦演艺学院录取通知书，暗地里用假身份在摩纳哥买下了一间带果园的小木屋，最大的愿望只是活着看一次没辐射的日落",
       home: "dogtown",
       canon: true,
       body: {
