@@ -1,7 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
+import { agreedQuote, checkNarratedPurchase, CommerceStateSchema, registeredParty } from "../commerce";
 import {
   CyberwareStateSchema,
   clinicProvider,
@@ -179,6 +179,20 @@ export function quoteTrade(
     ...(request.offer ? { offer: request.offer } : {}),
   });
   if (!match.ok) return match;
+  if (request.action === "service" && ["bd-session", "adult-service"].includes(request.service ?? "")) {
+    if (!request.offer || !match.quote?.session)
+      return { ok: false, reason: "先明确本次主体、范围、价格、时长与中止条件，再接受指定报价" };
+    if (Object.values(CommerceStateSchema.parse(world.slices.commerce ?? {}).sessions).some((s) => ["active", "paused"].includes(s.status)))
+      return { ok: false, reason: "当前体验尚未结束；先继续或明确中止，再接受新体验" };
+    const terms = match.quote.session;
+    if (request.service === "adult-service") {
+      const subject = (world.slices.npc as NpcState).npcs[terms.subject];
+      if (!subject || !subject.alive || subject.location !== location)
+        return { ok: false, reason: "本次服务者必须已确立身份、在场且能够提供服务" };
+      if ((subject.age !== undefined && subject.age < 18) || !(subject.adult === true || (subject.age !== undefined && subject.age >= 18)))
+        return { ok: false, reason: "只有已明确确认成年的服务者才能接受成人服务约定" };
+    }
+  }
   const mood = shop ? shopMood(world, data, shop) : undefined;
   const itemObject = item ? inventory.objects[item.id] : undefined;
   const refPrice = item ? itemReferencePrice(item, itemObject?.weaponState, catalog) : undefined;
@@ -308,6 +322,7 @@ export function applyTrade(
     action: command.action,
     target: quoted.item?.id ?? (command.service as string),
     price: quoted.price,
+    ...(quoted.quote?.session ? { sessionOffer: quoted.quote.id } : {}),
   });
   if (changed) return { ok: false, reason: changed };
   const emitted: Command[] = [];
@@ -380,6 +395,7 @@ export function applyTrade(
       delta: command.action === "sell" ? quoted.price : -quoted.price,
       reason: `${quoted.party.name}：${quoted.label}，${command.reason}`,
     });
+  if (quoted.quote?.session) emitted.push({ type: "commerce.servicePaid", id: quoted.quote.id });
   if (quoted.quote) emitted.push({ type: "commerce.used", id: quoted.quote.id });
   return {
     ok: true,

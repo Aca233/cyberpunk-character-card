@@ -39,6 +39,7 @@ export interface NarratedPurchase {
   readonly slot?: string | undefined;
   readonly conversion?: "smart-link" | "precision-lock" | undefined;
   readonly lock?: boolean | undefined;
+  readonly sessionOffer?: string | undefined;
 }
 
 /** 正文开始前已给出的交易不能在抽取时换对象或改价；未形成报价时只能继续商谈。 */
@@ -77,7 +78,8 @@ export function checkNarratedPurchase(
     expected.source !== actual.source ||
     expected.slot !== actual.slot ||
     expected.conversion !== actual.conversion ||
-    (expected.lock ?? false) !== (actual.lock ?? false)
+    (expected.lock ?? false) !== (actual.lock ?? false) ||
+    expected.sessionOffer !== actual.sessionOffer
   )
     return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";
   return undefined;

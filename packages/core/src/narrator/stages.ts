@@ -59,7 +59,7 @@ export const BuyProposalSchema = z
     tradeIn: z.boolean().optional().describe("玩家明确同意出售旧件时才为 true"),
     credit: z.boolean().optional().describe("玩家明确申请赊账时才为 true"),
     service: ServiceSchema.optional().describe(
-      "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 街头诊所看伤，fine 交罚款，favor 打点",
+      "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点，bd-session 店内超梦，adult-service 成年从业者服务（后两项必须引用完整条件的 offer）",
     ),
     gunsmith: z
       .enum(["install", "detach", "convert"])
@@ -491,6 +491,7 @@ export function purchaseQuote(
       buy.service ?? buy.item,
       q.price,
       q.quote?.id,
+      q.quote?.session,
       buy.destination,
     ]),
     detail: `${q.party.name} ${q.label}：${action === "sell" ? "卖出后玩家所得" : "最终对价"} ${q.price} 欧元${q.left !== undefined ? `；现货 ${q.left}` : ""}${q.quote ? `；报价 ${q.quote.id}` : ""}`,
@@ -500,6 +501,7 @@ export function purchaseQuote(
       action,
       target: buy.service ?? buy.item ?? "",
       price: q.price,
+      ...(q.quote?.session ? { sessionOffer: q.quote.id } : {}),
     },
   };
 }
