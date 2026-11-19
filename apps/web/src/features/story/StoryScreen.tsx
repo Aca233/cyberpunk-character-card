@@ -74,6 +74,12 @@ type UnreadTab = "messages" | "news" | "factions" | "shards";
 type GearTab = "inventory" | "vehicles";
 type BioTab = "character" | "cyberware" | "chronicle";
 
+interface AutoImageTask {
+  readonly controller: AbortController;
+  readonly saveId: string;
+  readonly promptKey: string;
+}
+
 function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -116,6 +122,7 @@ export function StoryScreen() {
   const bindings: SaveImageBindings = saveImagesQuery.data ?? { turns: {}, npcs: {} };
 
   const [imageModal, setImageModal] = useState<{
+    readonly saveId: string;
     readonly title: string;
     readonly subtitle?: string | undefined;
     readonly promptRequest: ImagePromptRequest;
@@ -129,7 +136,7 @@ export function StoryScreen() {
     null,
   );
   const [pendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
-  const autoAbortRef = useRef<Map<number, AbortController>>(new Map());
+  const autoAbortRef = useRef<Map<number, AutoImageTask>>(new Map());
   const baselineSeqRef = useRef<number | null>(null);
   const autoAttemptedRef = useRef<Set<number>>(new Set());
   const prevSaveIdRef = useRef<string>(saveId);
@@ -141,11 +148,17 @@ export function StoryScreen() {
   }
 
   useEffect(() => {
+    setPendingTurnSeqs(new Set());
+    setImageModal(null);
+    setLightbox(null);
     return () => {
-      for (const ctrl of autoAbortRef.current.values()) ctrl.abort();
-      autoAbortRef.current.clear();
+      for (const [seq, task] of autoAbortRef.current) {
+        if (task.saveId !== saveId) continue;
+        task.controller.abort();
+        autoAbortRef.current.delete(seq);
+      }
     };
-  }, []);
+  }, [saveId]);
 
   const query = useQuery({
     queryKey: ["state", saveId],
@@ -154,6 +167,38 @@ export function StoryScreen() {
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
   });
   const view = query.data;
+  const imageModalTarget = imageModal?.bind;
+  const modalTurn =
+    imageModalTarget?.kind === "turn"
+      ? view?.turns.find((turn) => turn.seq === imageModalTarget.seq)
+      : undefined;
+  const imageModalVisible =
+    imageModal?.saveId === saveId &&
+    (imageModalTarget?.kind !== "turn" ||
+      (modalTurn !== undefined &&
+        JSON.stringify(buildTurnPromptRequest(modalTurn)) ===
+          JSON.stringify(imageModal.promptRequest)));
+  const imageContextRef = useRef({ saveId, view, enabled: prefs.autoTurnImage, bindings });
+  imageContextRef.current = { saveId, view, enabled: prefs.autoTurnImage, bindings };
+
+  const isAutoImageCurrent = useCallback((seq: number, task: AutoImageTask) => {
+    const current = imageContextRef.current;
+    if (
+      task.controller.signal.aborted ||
+      autoAbortRef.current.get(seq) !== task ||
+      current.saveId !== task.saveId ||
+      !current.enabled ||
+      current.bindings.turns[String(seq)] !== undefined
+    )
+      return false;
+    const turn = current.view?.turns.find((candidate) => candidate.seq === seq);
+    return (
+      turn !== undefined &&
+      !turn.draft &&
+      turn.unsettled === null &&
+      JSON.stringify(buildTurnPromptRequest(turn)) === task.promptKey
+    );
+  }, []);
 
   const refresh = useCallback(
     () => client.refetchQueries({ queryKey: ["state", saveId], exact: true }),
@@ -257,6 +302,16 @@ export function StoryScreen() {
         | { readonly kind: "npc"; readonly npcId: string }
         | { readonly kind: "character" },
     ) => {
+      if (target.kind === "turn") {
+        autoAbortRef.current.get(target.seq)?.controller.abort();
+        autoAbortRef.current.delete(target.seq);
+        setPendingTurnSeqs((prev) => {
+          if (!prev.has(target.seq)) return prev;
+          const next = new Set(prev);
+          next.delete(target.seq);
+          return next;
+        });
+      }
       try {
         const next = await api.unbindSaveImage(saveId, target);
         client.setQueryData(["saveImages", saveId], next);
@@ -268,7 +323,7 @@ export function StoryScreen() {
   );
 
   const cancelTurnAutoImage = useCallback((seq: number) => {
-    autoAbortRef.current.get(seq)?.abort();
+    autoAbortRef.current.get(seq)?.controller.abort();
     autoAbortRef.current.delete(seq);
     setPendingTurnSeqs((prev) => {
       if (!prev.has(seq)) return prev;
@@ -279,6 +334,9 @@ export function StoryScreen() {
   }, []);
 
   useEffect(() => {
+    for (const [seq, task] of autoAbortRef.current) {
+      if (!isAutoImageCurrent(seq, task)) cancelTurnAutoImage(seq);
+    }
     if (!view || !saveId) return;
     const latest = view.turns.at(-1);
     if (baselineSeqRef.current === null) {
@@ -289,6 +347,8 @@ export function StoryScreen() {
       !prefs.autoTurnImage ||
       busy ||
       !latest ||
+      latest.draft ||
+      latest.unsettled !== null ||
       latest.seq <= baselineSeqRef.current ||
       autoAttemptedRef.current.has(latest.seq) ||
       bindings.turns[String(latest.seq)] !== undefined ||
@@ -299,46 +359,61 @@ export function StoryScreen() {
     const seq = latest.seq;
     autoAttemptedRef.current.add(seq);
     const controller = new AbortController();
-    autoAbortRef.current.set(seq, controller);
+    const request = structuredClone(buildTurnPromptRequest(latest));
+    const style = imageStyleConfig();
+    const useAux = prefs.autoImageUseAux;
+    const task: AutoImageTask = { controller, saveId, promptKey: JSON.stringify(request) };
+    autoAbortRef.current.set(seq, task);
     setPendingTurnSeqs((prev) => new Set(prev).add(seq));
 
     void (async () => {
       try {
+        const profiles = await api.profiles();
+        if (!isAutoImageCurrent(seq, task)) return;
+        if (!profiles.image) throw new Error("尚未设置文生图模型");
         const promptRes = await api.draftImagePrompt(
           {
-            request: buildTurnPromptRequest(latest, view),
-            useAux: prefs.autoImageUseAux,
-            style: imageStyleConfig(),
+            request,
+            useAux,
+            style,
           },
           controller.signal,
         );
+        if (!isAutoImageCurrent(seq, task)) return;
         const generated = await api.generateImage(
           {
             prompt: promptRes.prompt,
             negativePrompt: promptRes.negativePrompt,
             aspectRatio: "16:9",
-            bind: { saveId, target: { kind: "turn", seq } },
+            profileName: profiles.image,
           },
           controller.signal,
         );
+        if (!isAutoImageCurrent(seq, task)) return;
         client.setQueryData(["image", generated.image.id], generated.image);
-        if (generated.bindings) {
-          client.setQueryData(["saveImages", saveId], generated.bindings);
-        }
+        const nextBindings = await api.bindSaveImage(
+          saveId,
+          { kind: "turn", seq, imageId: generated.image.id, expectedImageId: null },
+          controller.signal,
+        );
+        if (!isAutoImageCurrent(seq, task)) return;
+        client.setQueryData(["saveImages", saveId], nextBindings);
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (isAutoImageCurrent(seq, task)) {
           warn("auto-turn-image", error);
         }
       } finally {
-        if (autoAbortRef.current.get(seq) === controller) {
+        if (autoAbortRef.current.get(seq) === task) {
           autoAbortRef.current.delete(seq);
+          if (imageContextRef.current.saveId === saveId) {
+            setPendingTurnSeqs((prev) => {
+              if (!prev.has(seq)) return prev;
+              const next = new Set(prev);
+              next.delete(seq);
+              return next;
+            });
+          }
         }
-        setPendingTurnSeqs((prev) => {
-          if (!prev.has(seq)) return prev;
-          const next = new Set(prev);
-          next.delete(seq);
-          return next;
-        });
       }
     })();
   }, [
@@ -351,6 +426,8 @@ export function StoryScreen() {
     healthQuery.data?.models?.image?.ready,
     client,
     warn,
+    isAutoImageCurrent,
+    cancelTurnAutoImage,
   ]);
 
   const saveImagesController = useMemo<SaveImagesController>(
@@ -358,7 +435,10 @@ export function StoryScreen() {
       saveId,
       bindings,
       pendingTurnSeqs,
-      openImageModal: (options) => setImageModal(options),
+      openImageModal: (options) => {
+        if (options.bind.kind === "turn") cancelTurnAutoImage(options.bind.seq);
+        setImageModal({ ...structuredClone(options), saveId });
+      },
       unbindImage,
       openLightbox: (id, title) => setLightbox({ id, title }),
       cancelTurnAutoImage,
@@ -1387,12 +1467,12 @@ export function StoryScreen() {
           </Dialog>
         )}
         <ImageGenModal
-          open={imageModal !== null}
+          open={imageModalVisible}
           title={imageModal?.title ?? "文生图"}
           subtitle={imageModal?.subtitle}
           promptRequest={imageModal?.promptRequest ?? null}
           defaultAspectRatio={imageModal?.defaultAspectRatio ?? "3:4"}
-          bind={imageModal ? { saveId, target: imageModal.bind } : undefined}
+          bind={imageModal ? { saveId: imageModal.saveId, target: imageModal.bind } : undefined}
           onClose={() => setImageModal(null)}
           onApplied={() => {}}
         />
