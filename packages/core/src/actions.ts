@@ -3,7 +3,6 @@ import type { Patch } from "immer";
 import { z } from "zod";
 import type { ApplyContext, Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
-import { BraindanceActionSchema } from "./systems/braindance";
 import { HabitActionSchema } from "./systems/character";
 import { EndStoryActionSchema } from "./systems/chronicle";
 import {
@@ -77,8 +76,6 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   EditMemoryActionSchema,
   /** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读，角色进传说名册 */
   EndStoryActionSchema,
-  /** 超梦体验编辑器：标出一个线索点，看它的扫描结果；下结论走回合（input.braindance） */
-  BraindanceActionSchema,
   /** 数据库页：打开芯片，只标这几块已读 */
   ReadShardsActionSchema,
   /** 在场的人：点「扫描」立刻用义眼扫一下，不调用模型、不花时间；要人在场、义眼装着没坏（计划第十二节第 14 条） */

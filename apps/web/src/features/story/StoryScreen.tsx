@@ -19,7 +19,6 @@ import { ImageGenModal } from "../images/ImageGenModal";
 import { type SaveImagesController, SaveImagesProvider } from "../images/SaveImagesContext";
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
-import { BraindanceEditor } from "./BraindanceEditor";
 import { CheckBar } from "./CheckBar";
 import { ChronicleBody, EndStoryModal } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
@@ -237,7 +236,6 @@ export function StoryScreen() {
   // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
-  const [atBraindance, setAtBraindance] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
@@ -514,16 +512,6 @@ export function StoryScreen() {
     if (ids.length === 0) return;
     await act({ type: "readMessages", feed: ids }, "news");
   }, [act, unreadNews, unreadStreet]);
-  // 新接上一段超梦就打开编辑器；同一段关掉以后不再自己弹出来
-  const bdKey = view?.braindance.active
-    ? `${view.braindance.active.title}@${view.braindance.active.startedAt}`
-    : null;
-  const bdSeen = useRef<string | null>(null);
-  useEffect(() => {
-    if (bdKey === null || bdKey === bdSeen.current) return;
-    bdSeen.current = bdKey;
-    setAtBraindance(true);
-  }, [bdKey]);
   // 买公寓：先关闭确认框，再提交操作；失败时提示原因
   const homeAction = useCallback(
     async (id: string) => {
@@ -863,7 +851,7 @@ export function StoryScreen() {
   const trackFull = (
     <div className={neuralStyles.pinBody}>
       <div className={neuralStyles.pinPane}>
-        <JournalPage view={view} onBraindance={() => setAtBraindance(true)} />
+        <JournalPage view={view} />
       </div>
     </div>
   );
@@ -1311,33 +1299,6 @@ export function StoryScreen() {
               )
             );
           })()}
-        {atBraindance && view.braindance.active && (
-          <BraindanceEditor
-            view={view}
-            onMark={
-              busy
-                ? undefined
-                : (point) => void act({ type: "braindance", action: "mark", point }, "braindance")
-            }
-            onConclude={
-              busy || offers?.rolled
-                ? undefined
-                : (id, text) => {
-                    setAtBraindance(false);
-                    send({ text: `超梦里的结论：${text}`, braindance: id });
-                  }
-            }
-            onAbandon={
-              busy || offers?.rolled
-                ? undefined
-                : () => {
-                    setAtBraindance(false);
-                    send({ text: "退出超梦，不查了", braindance: "abandon" });
-                  }
-            }
-            onClose={() => setAtBraindance(false)}
-          />
-        )}
         {settled[0] && <SettlementCard job={settled[0]} onClose={closeSettlement} />}
         {!settled[0] && rivalsDone[0] && (
           <NemesisSettlementCard nemesis={rivalsDone[0]} onClose={closeRival} />

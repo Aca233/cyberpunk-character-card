@@ -1,56 +1,38 @@
 import { formatGameTime } from "../world";
-import { canConclude, keyProgress } from "./apply";
-import { BD_ABANDON, BD_LAYER_LABELS, type BraindanceState } from "./schema";
+import type { BraindanceState } from "./schema";
 
-/**
- * 玩家看得到的超梦：录像各段各层的描写、线索点的名字，标出来的才带扫描结果；
- * 哪条是关键线索、正确结论、真相和推没推对都不给，只给关键线索找到了几条
- */
+/** 只投影简介、已呈现片段、实际体验和已查明材料，不投影未发现细节。 */
 export function braindanceView(state: BraindanceState) {
-  const inv = state.active;
+  const work = state.active ? state.works[state.active.work] : undefined;
   return {
-    active: inv && {
-      title: inv.recording.title,
-      recorder: inv.recording.recorder,
-      startedAt: formatGameTime(inv.startedAt),
-      segments: inv.recording.segments.map((s) => ({
-        time: s.time,
-        label: s.label,
-        visual: s.visual,
-        audio: s.audio,
-        thermal: s.thermal,
-      })),
-      points: inv.recording.points.map((p) => {
-        const marked = inv.marked.includes(p.id);
-        return {
-          id: p.id,
-          segment: p.segment,
-          layer: p.layer,
-          layerLabel: BD_LAYER_LABELS[p.layer],
-          label: p.label,
-          marked,
-          scan: marked
-            ? {
-                facts: p.scan.facts.map((f) => ({ name: f.name, value: f.value })),
-                conclusion: p.scan.conclusion,
-              }
-            : null,
-        };
-      }),
-      /** 关键线索找到了几条、一共几条 */
-      keys: keyProgress(inv),
-      /** 关键线索都找到了：可以下结论 */
-      ready: canConclude(inv),
-      /** 找全关键线索以后才给 */
-      conclusions: canConclude(inv)
-        ? inv.recording.conclusions.map((o) => ({ id: o.id, text: o.text }))
-        : [],
-    },
-    /** 查完的几次：只有玩家自己选的结论，对错由正文透出来 */
+    active:
+      state.active && work
+        ? {
+            id: state.active.id,
+            work: work.id,
+            title: work.title,
+            recorder: work.recorder,
+            startedAt: formatGameTime(state.active.startedAt),
+            status: state.active.status,
+            watchedMinutes: state.active.watchedMinutes,
+            durationMinutes: work.durationMinutes,
+          }
+        : null,
+    works: Object.values(state.works).map((w) => ({
+      id: w.id,
+      title: w.title,
+      recorder: w.recorder,
+      synopsis: w.synopsis,
+      durationMinutes: w.durationMinutes,
+      passages: Object.entries(state.passages[w.id] ?? {}).map(([id, text]) => ({ id, text })),
+    })),
+    discoveries: state.discoveries.map((d) => ({ ...d, at: formatGameTime(d.at) })),
     history: state.history.map((h) => ({
-      title: h.title,
-      recorder: h.recorder,
-      conclusion: h.option === BD_ABANDON ? null : h.optionText,
+      work: h.work,
+      title: state.works[h.work]?.title ?? h.work,
+      watchedMinutes: h.watchedMinutes,
+      elapsed: h.elapsed,
+      outcome: h.outcome,
       startedAt: formatGameTime(h.startedAt),
       at: formatGameTime(h.at),
     })),

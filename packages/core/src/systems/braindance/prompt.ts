@@ -1,95 +1,111 @@
 import type { RuleModule } from "../../kernel/system";
-import { formatGameTime } from "../world";
-import { braindanceExamples, canConclude, keyProgress } from "./apply";
-import {
-  BD_ABANDON,
-  BD_KEYS_MAX,
-  BD_KEYS_MIN,
-  BD_LAYER_LABELS,
-  type BdInvestigation,
-  type BraindanceState,
-} from "./schema";
+import type { WorldState } from "../../kernel/world";
+import { formatGameTime, WorldClockStateSchema } from "../world";
+import { braindanceCatalog, braindanceWork } from "./apply";
+import type { BdWork, BraindanceState } from "./schema";
 
-type Data = Readonly<Record<string, unknown>>;
-
-const WORDS = /超梦|braindance|BD/i;
-
+const WORDS = /超梦|braindance|BD|选片|看一部|挑片/i;
 export const braindanceRules: RuleModule<BraindanceState> = {
   id: "braindance",
-  title: "超梦调查",
+  title: "超梦体验与正文查证",
   commands: ["braindance"],
-  when: (state, input) => input.mode !== "ooc" && (state.active !== null || WORDS.test(input.text)),
-  text: `- 玩家拿到一段要查的超梦（委托给的、找超梦编辑借来或请人剪的、正文里捡到的芯片）并真的接上时，写 braindance start，把整段录像一次写好；录像写定以后不能改，你之后说的也要和它一致。
-- 超梦里只有录制者当时感知到的东西：录制者没看见、没听见的不会在录像里。视频层写画面，音频层写声音（能分辨远近、方向），红外层写热源、体温、刚开过火的枪管。
-- 线索点要分散在不同段、不同层里，关键线索 ${BD_KEYS_MIN}–${BD_KEYS_MAX} 条且至少分在两层，再放几条看着可疑、其实无关的；扫描结果照原作写成「类型：」「状态：」这种名目加一句结论。结论选项里要有看着说得通的错误答案，正确答案只有找全关键线索才推得出来。
-- 玩家在超梦体验编辑器里自己切编码层、拖时间轴、标线索，不经过你，也不掷骰；你不要替玩家说出线索或答案。玩家在正文里说看到了什么，以【超梦】里的录像为准，录像里没有的就是没有。
-- 玩家下结论（或退出）的那一轮，【超梦】会写明推对还是推错：照这个往下写，推错了就让错误的判断产生后果；为委托查的，委托照这个结局收场（推错了一般是 failed 或 flawed，写 jobEnd）。不要在正文里直接宣布「你推错了」，让局面说话。`,
+  when: (state, input) =>
+    input.mode !== "ooc" &&
+    (state.active !== null ||
+      WORDS.test(input.text) ||
+      Object.values(state.works).some((w) => input.text.includes(w.title))),
+  judge:
+    "- 超梦选择、正常体验和正文查证不需要小游戏。按实际来源与设备判断能做什么；追问、猜测不是已经查明的事实。",
+  text: `- 超梦是日常娱乐，也可以是资料；没有任务仍可选片、正常消费、重看、与朋友交流并离开。不强加危险、奖励或片后委托。
+- 使用已有作品 id；正文中新确立作品先 define 固定录制者、简介、各片段梗概、时长和材料中实际可查细节，不能随着玩家猜测改内容。不要照着玩家猜的幕后因果补证据，也不创建标准答案。
+- 询价、简介和讨论不扣款。店内先由 commerce.offer 明确 bd-session、作品、范围、总时长和提前结束条件；玩家接受后 trade 成交，再 start 引用该 offer 形成的服务 id。自有载体播放引用实际 carrier 对象及手边的超梦设备；重看不重复购片。
+- start 只接入；progress 按下一片段写实际体验，保存作品自身的定稿正文。continue 用下一次 progress，finish 是略写看完剩余内容，exit 仅记录已发生体验。暂停交流用 pause，回来用 resume。重看定稿不能改录制事件，现场朋友的插话不进入作品原文。
+- progress/finish/replay/inspect 的游戏分钟由代码结算；不要为同一段观看或分析另发 world.time/phases。略写只省略文字，不免去剩余时间。查阅已经写出的文字不等于实际重播，不发 replay。
+- 记录里的人只能按原记录行动，不会回应观看者或因为被观看成为现实熟人。录制者的情绪只是感知输入，不替玩家决定喜好、感情、台词或动作。
+- 查证在正文中响应玩家实际追问、请人分析或回放；只可使用本轮提供的可查材料和已知发现。没有录到、设备不支持或无法辨认时保留不确定性，不能临时补真相。观察、文件说法、人物推断分别表达；没有证据也能行动、继续调查或改判断，不自动判任务失败。
+- 谁在场、同看过什么、摘设备后听到什么、明确说出的评价，沿用 NPC 与共同记忆规则分别记录。店员不知道私人体验；付款不证明偏好、信任或恋爱。`,
 };
 
-function investigationLines(inv: BdInvestigation): string[] {
-  const r = inv.recording;
-  const { found, total } = keyProgress(inv);
-  const lines = [
-    `- 正在查：「${r.title}」，${r.recorder}录制${r.job ? `，为委托 ${r.job} 查的` : ""}，${formatGameTime(inv.startedAt)}接上；关键线索找到 ${found}/${total}${canConclude(inv) ? "，玩家可以下结论了" : ""}`,
-  ];
-  r.segments.forEach((s, i) => {
-    lines.push(
-      `  - 第 ${i} 段 ${s.time}「${s.label}」视频：${s.visual}｜音频：${s.audio}｜红外：${s.thermal}`,
-    );
-  });
-  for (const p of r.points) {
-    const facts = p.scan.facts.map((f) => `${f.name}${f.value}`).join("，");
-    lines.push(
-      `  - 线索点 ${p.id}：第 ${p.segment} 段${BD_LAYER_LABELS[p.layer]}层「${p.label}」${p.key ? "【关键】" : ""}${inv.marked.includes(p.id) ? "，玩家标出来了" : ""}；扫描：${facts}；${p.scan.conclusion}`,
-    );
-  }
-  lines.push(
-    `  - 结论选项：${r.conclusions.map((o) => `${o.id}「${o.text}」${o.id === r.answer ? "（正确）" : ""}`).join("；")}`,
-  );
-  lines.push(`  - 真相（只给你）：${r.truth}`);
-  return lines;
-}
+const publicWork = (work: BdWork) =>
+  `${work.id}「${work.title}」；录制者：${work.recorder}；${work.durationMinutes} 分钟；简介：${work.synopsis}`;
 
-/**
- * 给叙事模型的【超梦】：正在查的录像全文（含关键线索、答案、真相）、玩家这一轮下的结论和对错、
- * 最近查完的两次；没在查、玩家又提到超梦时附一段示例录像照着写
- */
 export function braindanceSection(
   state: BraindanceState,
-  data: Data,
-  input: { readonly text: string; readonly braindance?: string | undefined },
+  data: Readonly<Record<string, unknown>>,
+  input: { readonly text: string },
+  world?: WorldState,
 ): string {
+  const all = [
+    ...braindanceCatalog(data),
+    ...Object.values(state.works).filter(
+      (w) => !braindanceCatalog(data).some((a) => a.id === w.id),
+    ),
+  ];
+  const here = world ? WorldClockStateSchema.parse(world.slices.world).location : null;
+  const active = state.active;
   const lines: string[] = [];
-  const inv = state.active;
-  if (inv) {
-    lines.push(...investigationLines(inv));
-    const chosen = input.braindance;
-    if (chosen === BD_ABANDON) {
-      lines.push("- 这一轮玩家没下结论，退出了超梦：录像里看到的照常记得，只是没推出结论");
-    } else if (chosen !== undefined) {
-      const option = inv.recording.conclusions.find((o) => o.id === chosen);
-      if (option && canConclude(inv)) {
-        const right = chosen === inv.recording.answer;
-        lines.push(
-          `- 这一轮玩家下了结论：「${option.text}」——${right ? "推对了" : "推错了"}。${right ? "照真相往下写，玩家可以据此行动" : "玩家会照这个错误的判断行动；照真相写后果，不要直接点破"}`,
-        );
-      }
-    }
-  }
-  for (const h of state.history.slice(-2)) {
-    const verdict = h.correct === null ? "没下结论就退出了" : h.correct ? "推对了" : "推错了";
-    lines.push(
-      `- 查过：「${h.title}」${formatGameTime(h.at)}，${h.optionText ? `结论「${h.optionText}」，` : ""}${verdict}；真相：${h.truth}`,
+  if (WORDS.test(input.text) || active || all.some((w) => input.text.includes(w.title))) {
+    const selected = all.filter(
+      (w) =>
+        w.location === here ||
+        input.text.includes(w.title) ||
+        input.text.includes(w.id) ||
+        active?.work === w.id ||
+        (w.location === undefined && WORDS.test(input.text)),
     );
+    for (const work of selected) lines.push(`- 固定作品：${publicWork(work)}`);
   }
-  if (!inv && WORDS.test(input.text)) {
-    const list = braindanceExamples(data);
-    const example = list.length > 0 ? list[state.history.length % list.length] : undefined;
-    if (example) {
+  if (active) {
+    const work = braindanceWork(state, data, active.work);
+    if (!work) return lines.join("\n");
+    lines.push(
+      `- 当前体验 ${active.id}：${work.id}；${active.status === "paused" ? "已暂停" : "播放中"}；下一片段序号 ${active.position}；已看 ${active.watchedMinutes}/${work.durationMinutes} 分钟；含重播分析实际消耗 ${active.elapsed} 分钟；来源 ${JSON.stringify(active.source)}`,
+    );
+    const next = work.passages[active.position];
+    if (next) {
+      const fixed = state.passages[work.id]?.[next.id];
       lines.push(
-        `- 示例录像（${example.when}；照这个格式按眼下的局面写，不要照搬）：${JSON.stringify(example.recording)}`,
+        `- 下一片段 ${next.id}「${next.label}」，${next.minutes} 分钟；${fixed ? `已有定稿原文（保持一致）：${fixed}` : `仅可据此展开，不能改主要事件：${next.outline}`}`,
+      );
+    } else lines.push("- 全部片段已经实际看过；可以交流、追问、回放或 finish 正常结束。");
+    const replay = /回放|重播|重看|再看|刚才|前一段/.test(input.text);
+    for (const passage of work.passages.slice(0, active.position)) {
+      const fixed = state.passages[work.id]?.[passage.id];
+      lines.push(
+        `- 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟${replay && (input.text.includes(passage.label) || input.text.includes(passage.id) || passage === work.passages[active.position - 1]) ? `；固定内容：${fixed ?? passage.outline}` : ""}`,
       );
     }
+    const seen = new Set(work.passages.slice(0, active.position).map((p) => p.id));
+    const requested = work.details.filter(
+      (d) => seen.has(d.passage) && d.cues.some((cue) => input.text.includes(cue)),
+    );
+    for (const detail of requested)
+      lines.push(
+        `- 本轮主动查证可揭示（原材料内已有，不是结论）：${detail.id}；片段 ${detail.passage}；方法 ${detail.method}；${detail.finding}。实际分析后 inspect 记录，所需分钟按活动判断。`,
+      );
+    if (/查|分析|辨认|声音|热源|红外|是谁|哪里/.test(input.text) && requested.length === 0)
+      lines.push(
+        "- 本轮没有匹配到更多可查原材料；可据已经呈现内容讨论或保留不确定性，不能补出未提供的证据。",
+      );
   }
+  const relevant = new Set(
+    all
+      .filter(
+        (w) =>
+          w.id === active?.work ||
+          input.text.includes(w.id) ||
+          input.text.includes(w.title) ||
+          (WORDS.test(input.text) && w.location === here),
+      )
+      .map((w) => w.id),
+  );
+  for (const d of state.discoveries.filter((d) => relevant.has(d.work)))
+    lines.push(
+      `- 已发现材料 ${d.work}/${d.detail}：${d.finding}；来源时间 ${formatGameTime(d.at)}。材料说法不等于幕后因果已证实。`,
+    );
+  for (const h of state.history.filter((h) => relevant.has(h.work)).slice(-4))
+    lines.push(
+      `- 实际经历：${h.work}，${formatGameTime(h.at)} ${h.outcome === "finished" ? "看完" : "中途退出"}；已看 ${h.watchedMinutes} 分钟。未说出口的评价不在此推断。`,
+    );
   return lines.join("\n");
 }

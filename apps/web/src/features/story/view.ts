@@ -691,7 +691,7 @@ export function neuroTelemetry(
 
 export interface TrackItem {
   readonly id: string;
-  readonly kind: "objective" | "deadline" | "braindance";
+  readonly kind: "objective" | "deadline";
   readonly source: string;
   readonly sourceLabel: string;
   readonly title: string;
@@ -704,7 +704,7 @@ export interface TrackItem {
 }
 
 export interface TrackTelemetry {
-  /** 正在推进中的事项：超期 / 期限约定 / 超梦 / 在办待办 */
+  /** 正在推进中的事项：超期 / 期限约定 / 在办待办 */
   readonly active: readonly TrackItem[];
   readonly overdueCount: number;
   readonly activeCount: number;
@@ -750,34 +750,13 @@ export function trackTelemetry(view: View): TrackTelemetry {
     });
   }
 
-  const hasBdObjective = view.objectives.some((o) => o.source === "braindance");
-  if (view.braindance?.active && !hasBdObjective) {
-    const bd = view.braindance.active;
-    active.push({
-      id: "bd:active",
-      kind: "braindance",
-      source: "braindance",
-      sourceLabel: "超梦",
-      title: `${bd.title}（${bd.recorder}的录像）`,
-      location: null,
-      dueLabel: null,
-      dueIn: null,
-      progress: bd.ready
-        ? "关键线索找全了，可以下结论"
-        : `关键线索找到 ${bd.keys.found}/${bd.keys.total} 条`,
-      status: "active",
-      icon: "braindance.clue",
-    });
-  }
-
   for (const o of view.objectives) {
     if (o.status === "offered") continue;
     const place = placeOf(o.location);
     const overdue = o.status === "overdue";
-    const isBd = o.source === "braindance";
     active.push({
       id: o.id,
-      kind: isBd ? "braindance" : "objective",
+      kind: "objective",
       source: o.source,
       sourceLabel: o.sourceLabel,
       title: o.title,
@@ -786,7 +765,7 @@ export function trackTelemetry(view: View): TrackTelemetry {
       dueIn: o.dueIn,
       progress: o.progress,
       status: overdue ? "overdue" : "active",
-      icon: isBd ? "braindance.clue" : overdue ? "notify.warning" : "notify.questUpdate",
+      icon: overdue ? "notify.warning" : "notify.questUpdate",
     });
   }
 

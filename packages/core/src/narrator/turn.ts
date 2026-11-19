@@ -1407,9 +1407,33 @@ export async function runNarratorTurn(
       }
     }
     const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
+    // 体验指令自己结算实际分钟；同一事件的 world 仅保留地点/活动，不能重复加时。
+    const timedActivityEvents = new Set(
+      verified.flatMap((proposal) => {
+        const cmd = proposal.parse(proposal.value);
+        const id = owner.get(proposal.where);
+        const ownsTime =
+          cmd &&
+          ((cmd.type === "braindance" &&
+            ["progress", "finish", "replay", "inspect"].includes(String(cmd.action))) ||
+            cmd.type === "commerce.service");
+        return id && ownsTime ? [id] : [];
+      }),
+    );
     for (const proposal of verified) {
-      const command = proposal.parse(proposal.value);
+      let command = proposal.parse(proposal.value);
       if (!command) continue;
+      if (command.type === "world" && timedActivityEvents.has(owner.get(proposal.where) ?? "")) {
+        const { time: _time, phases: _phases, ...withoutElapsed } = command;
+        if (_time !== undefined || _phases !== undefined) {
+          b.notes.push("同一体验事件的时间由体验指令结算，已去除重复世界时间");
+          if (Object.keys(withoutElapsed).length === 1) {
+            redundant.add(proposal.where);
+            continue;
+          }
+          command = withoutElapsed;
+        }
+      }
       if (proposal.kind === "message") {
         addCommand(proposal, command);
         continue;
@@ -1455,7 +1479,10 @@ export async function runNarratorTurn(
     if (settle && shape.sceneEnd === true && inFlashback)
       b.notes.push("闪回里不收场，回到现在后再写 sceneEnd");
 
-    const facts: Record<string, unknown> = { tradeNarrative: narrative };
+    const facts: Record<string, unknown> = {
+      tradeNarrative: narrative,
+      braindanceInput: plan.kind === "action" ? plan.input.text : "",
+    };
     facts.actionStartLocation = WorldClockStateSchema.parse(world.slices.world).location;
     facts.ruling = rulingFactFrom(`turn.${records.length}`, rulingSpec);
     if (counterHackSpec) {
@@ -1497,10 +1524,6 @@ export async function runNarratorTurn(
     if (sandevistanBoosted) {
       const boost = working.map((c) => parts.get(c.id)).find((d) => d?.accelerator === true);
       if (boost) prependSetup("$boost", { type: "cyberware.boost", id: boost.id });
-    }
-    // 超梦编辑器里下的结论：对错由代码按冻结的答案判断，情境里已经告诉叙事模型；能不能下由后端在调模型前拦下
-    if (plan.kind === "action" && plan.input.braindance !== undefined && !ooc) {
-      prependSetup("$braindance", { type: "braindance.conclude", option: plan.input.braindance });
     }
     // 回复消息：先记下回的是哪一条、回了什么（消息窗口里显示成一来一回）
     if (plan.kind === "action" && plan.input.replyTo !== undefined && !ooc) {

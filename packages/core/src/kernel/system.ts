@@ -234,7 +234,7 @@ export interface Threat {
 export interface SectionContext {
   readonly world: WorldState;
   readonly data: Readonly<Record<string, unknown>> | undefined;
-  readonly input: { readonly text: string; readonly braindance?: string | undefined };
+  readonly input: { readonly text: string };
 }
 
 /** 一节情境：拼成「【title】」加正文；render 返回 undefined 时这一轮不带这一节 */

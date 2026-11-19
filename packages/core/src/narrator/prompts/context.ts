@@ -137,15 +137,9 @@ export function stateSummary(
 export function formatInput(input: TurnInput): string {
   const boost = input.sandevistan ? "【开斯安威斯坦】" : "";
   const reply = input.replyTo !== undefined ? `【回复消息 #${input.replyTo}】` : "";
-  const bd =
-    input.braindance === undefined
-      ? ""
-      : input.braindance === "abandon"
-        ? "【退出超梦，没下结论】"
-        : "【超梦下结论，对错见【超梦】】";
   return input.mode
-    ? `【${MODE_LABELS[input.mode]}】${boost}${bd}${reply}${input.text}`
-    : `【玩家】${boost}${bd}${reply}${input.text}`;
+    ? `【${MODE_LABELS[input.mode]}】${boost}${reply}${input.text}`
+    : `【玩家】${boost}${reply}${input.text}`;
 }
 
 export interface NarratorPrompt {
@@ -465,10 +459,7 @@ export function situation(
   plan: NarratorPlan,
   extras: PromptExtras,
 ): string[] {
-  const input =
-    plan.kind === "action"
-      ? { text: plan.input.text, braindance: plan.input.braindance }
-      : { text: "" };
+  const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
   const parts = [
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
     ...registry.sections({ world, data: extras.data, input }),
