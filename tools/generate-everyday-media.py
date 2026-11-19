@@ -1,4 +1,4 @@
-"""Create the original six-second animated chip sleeve without remote assets."""
+"""Create the original six-second MP4 and GIF chip sleeve without remote assets."""
 
 from __future__ import annotations
 
@@ -11,24 +11,58 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 
+def write_gif(ffmpeg: str, movie: Path) -> Path:
+    if not movie.is_file():
+        raise SystemExit("The local MP4 sleeve is missing; generate it before using --gif-only.")
+    gif = movie.with_suffix(".gif")
+    subprocess.run(
+        [
+            ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(movie),
+            "-filter_complex",
+            "fps=10,scale=640:-1:flags=lanczos,split[frames][colors];"
+            "[colors]palettegen=max_colors=96:stats_mode=diff[palette];"
+            "[frames][palette]paletteuse=dither=bayer:bayer_scale=3",
+            "-loop", "0", str(gif),
+        ],
+        check=True,
+    )
+    with Image.open(gif) as image:
+        frames = getattr(image, "n_frames", 1)
+        duration = 0
+        for frame in range(frames):
+            image.seek(frame)
+            duration += image.info.get("duration", 0)
+        if image.format != "GIF" or frames <= 1:
+            raise SystemExit("The output must be a real animated GIF.")
+        print(
+            f"Created {gif.name}: {image.width}x{image.height}, "
+            f"{frames} frames, {duration / 1000:g}s, {gif.stat().st_size:,} bytes"
+        )
+    return gif
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--font", type=Path, default=Path("C:/Windows/Fonts/msyh.ttc"))
+    parser.add_argument("--gif-only", action="store_true", help="Convert the existing local MP4 to GIF.")
     args = parser.parse_args()
-    if not args.font.is_file():
-        raise SystemExit("A Chinese font is required; pass its path with --font.")
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise SystemExit("FFmpeg must be available on PATH.")
 
     destination = Path(__file__).resolve().parents[1] / "apps/web/public/media/everyday"
     destination.mkdir(parents=True, exist_ok=True)
+    movie = destination / "night-market-sleeve.mp4"
+    if args.gif_only:
+        write_gif(ffmpeg, movie)
+        return
+    if not args.font.is_file():
+        raise SystemExit("A Chinese font is required; pass its path with --font.")
     width, height, fps, seconds = 960, 540, 24, 6
     fonts = {
         size: ImageFont.truetype(str(args.font), size)
         for size in (14, 17, 19, 22, 27, 56)
     }
-    movie = destination / "night-market-sleeve.mp4"
     command = [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
         "-f", "rawvideo", "-pixel_format", "rgb24",
@@ -79,6 +113,7 @@ def main() -> None:
         process.wait()
         raise
     print(f"Created {movie.name}: {width}x{height}, {seconds}s, {movie.stat().st_size:,} bytes")
+    write_gif(ffmpeg, movie)
 
 
 if __name__ == "__main__":
