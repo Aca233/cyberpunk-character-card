@@ -1,4 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
+import { HealthStateSchema } from "../health";
 import {
   defaultInstanceStateFromDef,
   formatWeaponWithMods,
@@ -20,6 +21,9 @@ import {
 /** 玩家可见的战斗：谁在场、倒下的人身上有什么；案底里的死者、伤、疤、流言、录像 */
 export function combatView({ world, data }: ViewContext) {
   const combat = CombatStateSchema.parse(world.slices.combat);
+  const health =
+    world.slices.health === undefined ? undefined : HealthStateSchema.parse(world.slices.health);
+  const injuries = new Map(health?.injuries.map((injury) => [injury.id, injury]) ?? []);
   const active = combat.active;
   const now = world.time;
   const here = (world.slices.world as { location?: string | null } | undefined)?.location ?? null;
@@ -84,12 +88,18 @@ export function combatView({ world, data }: ViewContext) {
       ...d,
       mournerLabel: MOURNER_LABELS[d.mourner],
     })),
-    wounds: combat.wounds.map((w) => ({
-      ...w,
-      partLabel: BODY_PART_LABELS[w.part],
-      /** 还要几天长好，向上取整 */
-      daysLeft: w.healsAt === null ? 0 : Math.max(0, Math.ceil((w.healsAt - now) / 1440)),
-    })),
+    wounds: combat.wounds.map((w) => {
+      const injury = injuries.get(w.id);
+      const healsAt = injury ? injury.healsAt : w.healsAt;
+      return {
+        ...w,
+        treated: injury?.treated ?? w.treated,
+        healsAt,
+        partLabel: BODY_PART_LABELS[w.part],
+        /** 还要几天长好，向上取整 */
+        daysLeft: healsAt === null ? 0 : Math.max(0, Math.ceil((healsAt - now) / 1440)),
+      };
+    }),
     scars: combat.scars.map((s) => ({ ...s, partLabel: BODY_PART_LABELS[s.part] })),
     rumors: combat.rumors.map((r) => {
       const latest = r.hops[r.hops.length - 1];

@@ -373,10 +373,16 @@ export function woundTelemetry(
   for (const inj of health.injuries ?? []) {
     const partLabel = inj.partLabel ?? "躯干";
     const daysText = inj.daysLeft > 0 ? `约 ${inj.daysLeft} 天恢复` : "即将恢复";
-    const careTag =
-      inj.tier === "graze" ? "休整可消" : health.painSuppressed ? "镇痛压制" : "待缝合";
-    const careNote =
-      inj.tier === "graze"
+    const careTag = inj.treated
+      ? "已处理"
+      : inj.tier === "graze"
+        ? "休整可消"
+        : health.painSuppressed
+          ? "镇痛压制"
+          : "待缝合";
+    const careNote = inj.treated
+      ? `${daysText} · 已完成处理，创口仍在恢复中`
+      : inj.tier === "graze"
         ? `${daysText} · 休整或静养即可消退`
         : health.painSuppressed
           ? `痛觉暂被压制 · ${daysText}，仍须找义体医生缝合`
