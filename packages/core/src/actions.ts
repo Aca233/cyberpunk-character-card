@@ -26,7 +26,7 @@ import { ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
-import { BuyHomeActionSchema } from "./systems/safehouse";
+import { BuyHomeActionSchema, PlaceItemActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
 import { TraumaActionSchema } from "./systems/trauma";
@@ -60,6 +60,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   GunsmithActionSchema,
   /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
   BuyHomeActionSchema,
+  /** 物品栏存取：只操作身边的自有住所或车辆 */
+  PlaceItemActionSchema,
   /** 创伤小组：办理、续期、升级或退会，以及按当前会籍请求紧急救援 */
   TraumaActionSchema,
   /** 打开消息：没给 feed 时把人发来的消息都标成已读；给了只标这几条 */
