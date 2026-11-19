@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createHashRouter, Outlet } from "react-router";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { Calibrate } from "./features/dev/Calibrate";
@@ -13,8 +14,21 @@ import {
   TabNotice,
 } from "./features/status/StatusParts";
 import { StoryScreen } from "./features/story/StoryScreen";
+import { useStory } from "./features/story/store";
 
 function Shell() {
+  const busy = useStory((s) => s.phase !== "idle");
+  // 回合在内存中继续运行，切到设置后刷新或关闭页面也需要提醒。
+  useEffect(() => {
+    if (!busy) return;
+    const warnLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnLeave);
+    return () => window.removeEventListener("beforeunload", warnLeave);
+  }, [busy]);
+
   return (
     <>
       <Outlet />

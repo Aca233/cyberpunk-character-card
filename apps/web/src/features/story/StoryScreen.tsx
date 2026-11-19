@@ -212,16 +212,6 @@ export function StoryScreen() {
   const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
-  // 这一轮只在当前页面内存里跑，刷新或关掉就没了；生成中离开先提醒
-  useEffect(() => {
-    if (!busy) return;
-    const warnLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warnLeave);
-    return () => window.removeEventListener("beforeunload", warnLeave);
-  }, [busy]);
   // 物品栏、车辆页签；收起后复位回物品栏，避免悬停误弹出车辆页
   const [gearTab, setGearTab] = useState<GearTab>("inventory");
   const [bioTab, setBioTab] = useState<BioTab>("character");

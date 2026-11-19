@@ -11,7 +11,9 @@ import { FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
+import { LiveStageBar } from "../story/LiveStageBar";
 import neural from "../story/neural.module.css";
+import { useStory } from "../story/store";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
 import { PresetSettings } from "./PresetSettings";
@@ -51,12 +53,15 @@ export function SettingsScreen() {
   const [params, setParams] = useSearchParams();
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Destination | null>(null);
+  const activeSaveId = useStory((s) => (s.phase !== "idle" ? s.saveId : null));
   const tabParam = params.get("tab");
   const tab: Tab =
     tabParam === "context" || tabParam === "narrative" || tabParam === "presets"
       ? tabParam
       : "profiles";
-  const backTarget = safeBackTarget(location.state, params.get("from"));
+  const backTarget = activeSaveId
+    ? `/play/${activeSaveId}`
+    : safeBackTarget(location.state, params.get("from"));
   const canReturnBack = backTarget !== null && backTarget !== "/menu";
   const escTarget: "back" | "menu" = canReturnBack ? "back" : "menu";
   const backLabel = backTarget?.startsWith("/play/") ? "返回游戏" : "返回上一页";
@@ -168,6 +173,7 @@ export function SettingsScreen() {
         )}
       </main>
       <footer className={styles.foot}>
+        <SettingsTurnProgress />
         {canReturnBack ? (
           <>
             <Button small keyId="key.esc" onClick={() => requestGo("back")}>
@@ -199,6 +205,19 @@ export function SettingsScreen() {
           <p>输入中的设置和密钥还没有保存。已经保存成功的步骤不会撤回。</p>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+/** 放在分页内容外，切换设置分页和滚动工作台时仍能看见当前调用。 */
+function SettingsTurnProgress() {
+  const busy = useStory((s) => s.phase !== "idle");
+  const stage = useStory((s) => s.stage);
+  const trace = useStory((s) => s.stageTrace);
+  if (!busy) return null;
+  return (
+    <div className={styles.turnProgress}>
+      <LiveStageBar stage={stage} trace={trace} />
     </div>
   );
 }

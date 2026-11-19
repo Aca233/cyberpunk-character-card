@@ -140,6 +140,18 @@
   margin-top: 12px;
 }
 
+.turnProgress {
+  flex: 1 1 24rem;
+  min-width: 0;
+  max-height: 25dvh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.turnProgress > div {
+  margin-top: 0;
+}
+
 .dim {
   margin: 0;
   color: var(--cp-text-dim);
