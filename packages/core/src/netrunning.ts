@@ -90,7 +90,7 @@ export function evaluateHackTopology(input: HackTopologyCheckInput): HackTopolog
   return {
     allowed: true,
     summary: input.hardenedIce
-      ? `${route}；对面有硬化冰墙或驻守黑客警戒，一旦强攻会立刻触发反追踪与神经反馈冲击`
+      ? `${route}；对面有硬化冰墙或驻守黑客警戒，强攻可能触发反追踪与神经反馈，是否生效及伤势取决于实际防线、设备和现场反制`
       : `${route}，链路物理可达`,
   };
 }

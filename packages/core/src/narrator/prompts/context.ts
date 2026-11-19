@@ -413,12 +413,7 @@ export function physicsSection(
       const info = npcDeckOf(n.body.cyberware, safeData);
       return info.deck !== null || info.selfIce;
     });
-    const hardenedIce =
-      npcHasHardenedChrome ||
-      (hacking.data.dive !== null && hacking.data.dive.layer >= 3) ||
-      place?.district === "市政中心" ||
-      place?.district === "公司广场" ||
-      HARDENED_ICE_HINT.test(sceneContext);
+    const hardenedIce = npcHasHardenedChrome || HARDENED_ICE_HINT.test(sceneContext);
 
     hackCheck = {
       vector,

@@ -47,17 +47,17 @@ export const BreachedNetworkSchema = z.object({
 });
 export type BreachedNetwork = z.infer<typeof BreachedNetworkSchema>;
 
-/** 潜网的层（本作改编，取自《边缘行者》的潜网和原作的黑墙）：越往下越危险，最底下是黑墙边缘 */
+/** 本次目标内部接入深入程度的五档显示；不代表全网地理、固定防线或自动取得的权限。 */
 export const DIVE_LAYERS = [
-  "本地子网",
-  "城区网络",
-  "公司数据堡垒",
-  "网络监察巡查带",
-  "黑墙边缘",
+  "入口接入",
+  "外围访问",
+  "内部访问",
+  "核心访问",
+  "目标范围边界",
 ] as const;
 export const DIVE_MAX = DIVE_LAYERS.length;
 export const DiveSchema = z.object({
-  /** 第几层，从 1 起 */
+  /** 当前目标内部的接入深入档位，从 1 起；风险与权限由实际网络事实决定。 */
   layer: z.number().int().min(1).max(DIVE_MAX),
   startedAt: z.number().int(),
   /** 潜网椅在哪 */
@@ -88,7 +88,7 @@ export const NpcHackCommandSchema = z
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他身上要装着完好的网络接入仓；上传结束即释放，不积累使用次数。对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定。对玩家的伤害类、终极类要经敌方黑客独立裁决 counterHack 与事实绑定（本轮事件 id），代码统一结算伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他身上要装着完好的网络接入仓；黑墙攻击还须实际完好的黑墙原型接入仓，通用入侵能力不能替代。上传结束即释放，不积累使用次数。对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定。对玩家的伤害类、终极类要经敌方黑客独立裁决 counterHack 与事实绑定（本轮事件 id），代码统一结算伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
@@ -110,7 +110,7 @@ export const HackCommandSchema = z
       .describe("目标有人物卡时写卡的 id；对有卡的人要先经前置潜网对抗裁决"),
   })
   .describe(
-    "快速破解：装着完好网络接入仓的人，一次行动内对符合现场电子设备与义体逻辑的目标放出入侵手段，无需装载、卸载程序，也没有容量门槛；是否成立看前置的物理与潜网裁决，终极类不自动扣人性",
+    "快速破解：装着完好网络接入仓的人，一次行动内对符合现场电子设备与义体逻辑的目标放出入侵手段，无需装载、卸载程序，也没有容量门槛；黑墙攻击还须实际完好的黑墙原型接入仓，通用入侵能力不能替代。是否成立看前置的物理与潜网裁决，终极类不自动扣人性",
   );
 export type HackCommand = z.infer<typeof HackCommandSchema>;
 /** 模型使用：{"type": "breach", "network": "漩涡帮仓库的内网", "via": "卸货口旁的接入点", "gains": ["cameras", "doors"]} */
@@ -156,6 +156,6 @@ export const DiveCommandSchema = z
     }
   })
   .describe(
-    "潜网：start 躺上潜网椅接进网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 往下潜一层（需在前置潜网裁决中扛住当前层黑冰防御、未在强防下退却，越深神经反噬越致命），surface 退出回到肉身；切换场景不自动退出",
+    "潜网：start 躺上潜网椅接入本次目标网络（要接入仓、潜网椅和守着肉身的人，战斗中不行），deeper 记录在该目标内部实际完成的进一步接入，需通过现场链路、权限与防线裁决；五档只是深入程度，不凭档位增加风险、取得权限或进入其他网络。surface 退出回到肉身；切换场景不自动退出",
   );
 export type DiveCommand = z.infer<typeof DiveCommandSchema>;

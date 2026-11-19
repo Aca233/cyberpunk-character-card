@@ -19,7 +19,7 @@ export const hackingStatus: readonly SystemStatus[] = [
       lines.push(`网络接入仓：${h.deckName}${suffix}`);
       if (h.dive)
         lines.push(
-          `潜网中：第 ${h.dive.layer}/${h.dive.layers} 层（${h.dive.label}），肉身躺在${h.dive.chair}，${h.dive.guard}守着`,
+          `潜网中：当前目标接入深入程度 ${h.dive.layer}/${h.dive.layers}（${h.dive.label}），肉身躺在${h.dive.chair}，${h.dive.guard}守着`,
         );
       if (h.breaches.length > 0)
         lines.push(

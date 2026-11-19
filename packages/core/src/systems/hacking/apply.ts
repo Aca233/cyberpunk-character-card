@@ -98,6 +98,21 @@ function findProgram(
   return catalog.get(key) ?? [...catalog.values()].find((q) => q.name === key);
 }
 
+/** 黑墙攻击依赖接入仓本体的原型协议；普通配件的定性加成不能补出这项能力。 */
+function blackwallAttackBlocked(
+  deck: string,
+  program: string,
+  def: QuickhackDef | undefined,
+  data: Readonly<Record<string, unknown>>,
+): string | undefined {
+  if (!/(?:black[\s_-]*wall|黑墙)/i.test([program, def?.name, def?.effect].join(" ")))
+    return undefined;
+  const hardware = cyberwareCatalog(data).get(deck);
+  return hardware?.slot === "os" && hardware.deckTraits?.includes("blackwall")
+    ? undefined
+    : "黑墙攻击需要实际装有完好的黑墙原型接入仓，普通入侵能力不能替代";
+}
+
 /** 快速破解一次行动内自然结算：只要有完好的接入仓，且前置物理与潜网裁决没有阻断；不装卸程序，也不比容量 */
 export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemContext): ApplyOutcome {
   syncDeck(draft, ctx);
@@ -105,6 +120,8 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
   const ruling = rulingFact(ctx.facts);
   if (ruling?.kind === "blocked") return fail(ruling.reason ?? "网络拓扑或实际条件阻断了上传");
   const def = findProgram(quickhackCatalog(ctx.data), command.program);
+  const blocked = blackwallAttackBlocked(draft.deck, command.program, def, ctx.data);
+  if (blocked) return fail(blocked);
   const label = def
     ? `「${def.name}」（${CATEGORY_LABELS[def.category]}）`
     : `「${command.program}」`;
@@ -144,7 +161,7 @@ export function applyBreach(
   };
 }
 
-/** 潜网：开始、往下潜一层、退出 */
+/** 潜网：开始、记录本次目标内部的进一步接入、退出；档位不生成网络防线或权限。 */
 export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemContext): ApplyOutcome {
   syncDeck(draft, ctx);
   if (command.action === "surface") {
@@ -173,18 +190,18 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
   const dive = draft.dive;
   if (!dive) return fail("没在潜网，先 start");
   if (dive.layer >= DIVE_MAX) {
-    return fail("已经到黑墙边缘，再往里是黑墙，过不去；后面是流窜 AI");
+    return fail("已到本次目标的接入范围边界；访问其他网络须另行确认实际链路与接入条件");
   }
   const ruling = rulingFact(ctx.facts);
   if (ruling?.kind === "blocked") {
-    return fail(ruling.reason ?? "深层冰墙阻断了通道，没能继续往下潜");
+    return fail(ruling.reason ?? "当前目标的链路、权限或防线阻断了进一步接入");
   }
   const target = dive.layer + 1;
   dive.layer = target;
   return {
     ok: true,
     notes: [
-      `往下潜到第 ${target}/${DIVE_MAX} 层（${DIVE_LAYERS[target - 1]}）${target === DIVE_MAX ? "：再往里就是黑墙" : ""}`,
+      `当前目标接入深入程度：${target}/${DIVE_MAX}（${DIVE_LAYERS[target - 1]}）${target === DIVE_MAX ? "：已到本次目标范围边界" : ""}`,
     ],
   };
 }
@@ -221,6 +238,8 @@ export function applyNpcHack(
   if (!def) return fail(`快速破解表里没有 ${command.program}`);
   const { deck } = npcDeckOf(filledBody(npc.body).cyberware, ctx.data);
   if (!deck) return fail(`${npc.name} 没装网络接入仓，放不了快速破解：照他的装备和义体换个打法`);
+  const blocked = blackwallAttackBlocked(deck, command.program, def, ctx.data);
+  if (blocked) return fail(`${npc.name}：${blocked}`);
   const harmful =
     command.target === "你" && (def.category === "damage" || def.category === "ultimate");
   const ruling = harmful ? npcHackRulingFact(ctx.facts) : undefined;

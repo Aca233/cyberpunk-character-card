@@ -20,11 +20,11 @@ export function hackingView({ world, data }: ViewContext) {
     traits: found.traits,
     traitLabels: found.traits.map((t) => DECK_TRAIT_LABELS[t]),
     selfIce: found.selfIce,
-    /** 正在潜网：第几层、这一层叫什么、谁守着肉身；没在潜是 null */
+    /** 正在潜网：本次目标内的接入深入档位与肉身看护；没在潜是 null。 */
     dive: state.dive && {
       layer: state.dive.layer,
       layers: DIVE_MAX,
-      /** 每一层的名字，从浅到深 */
+      /** 当前目标内部接入深入程度的五档显示，不代表全网物理层。 */
       layerLabels: DIVE_LAYERS,
       label: DIVE_LAYERS[state.dive.layer - 1] ?? "",
       chair: state.dive.chair,
