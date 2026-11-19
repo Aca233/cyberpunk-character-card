@@ -1447,6 +1447,15 @@
   color: var(--cp-success);
 }
 
+/* 台词用柔和暖金色，与旁白区分；名字与术语仍可交互，句内保持统一字色。 */
+.dialogue {
+  color: #e6c78d;
+}
+
+.dialogue .speaker {
+  color: inherit;
+}
+
 /*
  * 能点的人名和地名（第 3 条，用户定的"本地匹配"）：去掉按钮自带的底、框和内边距，
  * 字体跟正文走；平时只上色，悬停和键盘聚焦时出下划线，人物开档案、地点开地图
@@ -2408,6 +2417,10 @@
   text-decoration: underline dotted var(--cp-cyan);
   text-underline-offset: 3px;
   cursor: help;
+}
+
+.dialogue .slang {
+  text-decoration-color: currentColor;
 }
 
 .cyberList {

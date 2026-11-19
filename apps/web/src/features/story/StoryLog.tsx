@@ -11,6 +11,7 @@ import { useNarrativePrefs } from "../settings/prefs";
 import { useSpoilerView } from "../settings/SpoilerBadge";
 import { ContentMediaList } from "./ContentMedia";
 import mediaStyles from "./content-media.module.css";
+import { type DialoguePart, dialogueParagraphs as paragraphs } from "./dialogue";
 import { LiveStageBar } from "./LiveStageBar";
 import type { useStory } from "./store";
 import styles from "./story.module.css";
@@ -18,6 +19,7 @@ import {
   type Choice,
   formatDice,
   formatInput,
+  type GlossMatcher,
   glossMatcher,
   isSuccess,
   OUTCOME_LABELS,
@@ -34,13 +36,6 @@ type Live = Pick<
   "phase" | "text" | "rolled" | "boost" | "pending" | "stage" | "stageTrace"
 >;
 
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n{2,}|\n/)
-    .map((p) => p.trim())
-    .filter((p) => p !== "");
-}
-
 /** 黑话术语表只取一次；select 是模块级函数，react-query 会缓存编好的正则 */
 function useGlossary() {
   return useQuery({
@@ -55,21 +50,22 @@ function useGlossary() {
 export type OnMark = (mark: Speaker) => void;
 
 /**
- * 一段正文；名字上色：自己用黄色，别人用青色，地点另一种颜色；黑话加虚线，悬停看释义。
+ * 正文行内标记；名字上色：自己用黄色，别人用青色，地点另一种颜色；黑话加虚线，悬停看释义。
  * 人物和地点在给了 onMark 时可以点，正文原样不改
  */
-function Paragraph({
+function InlineText({
   text,
   speakers,
   onMark,
+  glossary,
 }: {
   readonly text: string;
   readonly speakers: readonly Speaker[];
   readonly onMark?: OnMark | undefined;
+  readonly glossary: GlossMatcher | null | undefined;
 }) {
-  const glossary = useGlossary();
   return (
-    <p>
+    <>
       {splitSpeakers(text, speakers).map((part, i) => {
         const s = part.speaker;
         if (s && onMark && (s.npc !== undefined || s.place !== undefined)) {
@@ -113,6 +109,29 @@ function Paragraph({
           </Fragment>
         );
       })}
+    </>
+  );
+}
+
+/** 台词统一上色，行内的人物、地点与术语保留原有交互。 */
+function Paragraph({
+  text,
+  speakers,
+  onMark,
+}: {
+  readonly text: readonly DialoguePart[];
+  readonly speakers: readonly Speaker[];
+  readonly onMark?: OnMark | undefined;
+}) {
+  const glossary = useGlossary();
+  return (
+    <p>
+      {text.map((part, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: 正文片段按原文顺序展示，不会重排
+        <span key={i} className={part.dialogue ? styles.dialogue : undefined}>
+          <InlineText text={part.text} speakers={speakers} onMark={onMark} glossary={glossary} />
+        </span>
+      ))}
     </p>
   );
 }
