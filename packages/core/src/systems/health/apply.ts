@@ -1,7 +1,8 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { type DamageTier, rulingFact } from "../dice";
-import { availableQuickSupply, type InventoryState } from "../inventory";
+// biome-ignore lint/style/noRestrictedImports: inventory 入口会反向初始化 NPC 与 health；医疗补给只依赖独立 schema。
+import { availableQuickSupply, type InventoryState } from "../inventory/schema";
 import {
   BODY_PART_LABELS,
   type BodyPart,

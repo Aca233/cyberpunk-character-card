@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DamageTierSchema } from "../dice";
-import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health";
+// biome-ignore lint/style/noRestrictedImports: health 入口经 inventory 反向加载本文件；定义结构时只读取独立 schema，避免初始化循环。
+import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health/schema";
 import { NeuralSymptomSchema } from "../humanity";
 
 /** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
