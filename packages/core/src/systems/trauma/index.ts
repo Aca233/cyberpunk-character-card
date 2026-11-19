@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { traumaActions } from "./actions";
 import { applyTrauma, tickTrauma } from "./apply";
 import { traumaEvents } from "./events";
 import { traumaRules } from "./prompt";
@@ -16,7 +17,7 @@ export const trauma = defineSystem<TraumaState, TraumaCommand>({
   id: "trauma",
   dependsOn: ["world", "economy", "health", "combat", "heat"],
   state: TraumaStateSchema,
-  initial: () => ({ tier: "none", paidUntil: null, lapsedAt: null, rescues: 0 }),
+  initial: () => ({ tier: "none", paidUntil: null, lapsedAt: null, rescues: 0, lastRescue: null }),
   commands: { trauma: TraumaCommandSchema },
   apply: (draft, command, ctx) => applyTrauma(draft, command, ctx),
   tick: (draft, span) => tickTrauma(draft, span),
@@ -24,8 +25,10 @@ export const trauma = defineSystem<TraumaState, TraumaCommand>({
   view: { key: "trauma", project: traumaView },
   status: traumaStatus,
   events: traumaEvents,
+  actions: traumaActions,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./prompt";
