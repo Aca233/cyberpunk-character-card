@@ -4,6 +4,7 @@ import { CellFrame } from "../../ui/FrameBox";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import styles from "./biomonitor.module.css";
+import { type TraumaAction, TraumaMembership } from "./TraumaMembership";
 import {
   type BodyPart,
   displayItemName,
@@ -145,7 +146,15 @@ function buildNeuroCells(humanity: View["humanity"]): readonly NeuroCell[] {
  * 3.0 生物检测核心终端面板：
  * 左栏叠加全息生理图层与街头名声；右栏呈现创伤监测、20 格神经稳态阵列、外设与代谢调度
  */
-export function BiomonitorPanel({ view }: { readonly view: View }) {
+export function BiomonitorPanel({
+  view,
+  onTrauma,
+  busy,
+}: {
+  readonly view: View;
+  readonly onTrauma?: ((action: TraumaAction) => Promise<void>) | undefined;
+  readonly busy?: boolean | undefined;
+}) {
   const {
     health,
     combat,
@@ -297,19 +306,19 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
           </span>
           <span
             className={styles.ttPill}
-            data-ok={(trauma.active && trauma.dispatch.ok) || undefined}
-            data-blocked={(trauma.active && !trauma.dispatch.ok) || undefined}
+            data-ok={(trauma.active && trauma.coverage.ok) || undefined}
+            data-blocked={(trauma.active && !trauma.coverage.ok) || undefined}
             title={
               trauma.active
-                ? trauma.dispatch.ok
+                ? trauma.coverage.ok
                   ? `创伤小组 ${trauma.tierLabel} 信号实时可达`
-                  : `无法自动出动：${trauma.dispatch.why}`
+                  : `无法自动出动：${trauma.coverage.why}`
                 : "未开通创伤小组救援保障"
             }
           >
             <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
             {trauma.active
-              ? trauma.dispatch.ok
+              ? trauma.coverage.ok
                 ? `TT ${trauma.tierLabel} · 在线`
                 : `TT 信号受阻`
               : trauma.lapsed
@@ -605,7 +614,7 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
                   className={styles.subVal}
                   data-tone={
                     trauma.active
-                      ? trauma.dispatch.ok
+                      ? trauma.coverage.ok
                         ? "ok"
                         : "warn"
                       : trauma.lapsed
@@ -615,7 +624,7 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
                 >
                   {trauma.active
                     ? `${trauma.tierLabel}（至 ${trauma.until}）· ${
-                        trauma.dispatch.ok ? "自动救援待命" : `受阻：${trauma.dispatch.why}`
+                        trauma.coverage.ok ? "救援保障待命" : `受阻：${trauma.coverage.why}`
                       }`
                     : trauma.lapsed
                       ? `会籍已于 ${trauma.lapsed} 过期`
@@ -642,6 +651,8 @@ export function BiomonitorPanel({ view }: { readonly view: View }) {
           </article>
         </div>
       </div>
+
+      <TraumaMembership view={view} onTrauma={onTrauma} busy={busy} />
 
       {dossier.notes.length > 0 && (
         <div className={styles.dossierBox}>
