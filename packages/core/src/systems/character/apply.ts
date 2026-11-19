@@ -37,6 +37,8 @@ export function credGateLabel(threshold: number): string {
 export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter): ApplyOutcome {
   draft.name = command.name;
   draft.brief = command.brief;
+  if (command.visual !== undefined) draft.visual = { ...command.visual };
+  else delete draft.visual;
   draft.attributes = { ...command.attributes };
   draft.streetCred = command.streetCred;
   draft.credHalf = false;

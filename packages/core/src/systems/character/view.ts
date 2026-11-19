@@ -8,6 +8,8 @@ export function characterView({ world }: ViewContext) {
   return {
     name: character.name,
     brief: character.brief,
+    /** 角色卡提供的称谓与外貌；没有提供时不从简介补猜。 */
+    visual: character.visual ? { ...character.visual } : null,
     /** 检定用的属性，已经算上义体加成 */
     attributes: effectiveAttributes(character),
     /** 义体加成：侧栏标出来 */

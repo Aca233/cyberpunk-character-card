@@ -48,11 +48,21 @@ export const PastFactSchema = z.object({
 });
 export type PastFact = z.infer<typeof PastFactSchema>;
 
+/** 独立的人物视觉资料：只保存角色卡原文，不从经历或称谓推断外貌。 */
+export const CharacterVisualSchema = z.object({
+  alias: z.string().max(40),
+  pronoun: z.string().max(10),
+  look: z.string().max(500),
+});
+export type CharacterVisual = z.infer<typeof CharacterVisualSchema>;
+
 export const CharacterStateSchema = z.object({
   /** 建档前为 null */
   name: z.string().min(1).nullable(),
   /** 给叙事模型看的一段简介：出身、外貌、性格、会什么 */
   brief: z.string(),
+  /** 配图只读取这份明确的视觉资料，不拆解混合简介。 */
+  visual: CharacterVisualSchema.optional(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
   /** 街头声望等级 */
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX),
@@ -86,6 +96,7 @@ export const SetCharacterSchema = z.object({
   type: z.literal("character.set"),
   name: z.string().min(1),
   brief: z.string(),
+  visual: CharacterVisualSchema.optional(),
   attributes: z.record(AttributeSchema, AttributeValueSchema),
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
   /** 旧存档的角色快照没有 */

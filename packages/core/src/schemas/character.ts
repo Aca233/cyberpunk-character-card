@@ -279,6 +279,7 @@ export function saveCharacter(card: CharacterCard): SaveCharacter {
   return {
     name: card.name,
     brief: characterBrief(card),
+    visual: { alias: card.alias, pronoun: card.pronoun, look: card.look },
     attributes: { ...card.attributes },
     streetCred: 1,
     ...(card.board ? { traits: boardTraits(card.board) } : {}),
