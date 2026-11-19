@@ -92,7 +92,11 @@ export function MainMenu() {
       label: "读取存档",
       hint: saves.isSuccess ? `${sorted.length} 份` : undefined,
     },
-    { id: "legends", label: "传说名册" },
+    {
+      id: "characters",
+      label: "角色",
+      hint: characters.data ? `${characters.data.length}` : undefined,
+    },
   ];
 
   const utilityItems: {
@@ -103,11 +107,7 @@ export function MainMenu() {
     disabled?: boolean;
     reason?: string;
   }[] = [
-    {
-      id: "characters",
-      label: "角色",
-      hint: characters.data ? `${characters.data.length}` : undefined,
-    },
+    { id: "legends", label: "传说名册" },
     {
       id: "settings",
       label: "设置",
