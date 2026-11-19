@@ -705,6 +705,12 @@ export function StoryScreen() {
         ) : (
           <CharacterPage
             view={view}
+            busy={busy}
+            onTrauma={
+              busy || offers?.rolled || view.death || view.ended
+                ? undefined
+                : (action) => act(action, "trauma", true)
+            }
             onHabit={
               busy
                 ? undefined

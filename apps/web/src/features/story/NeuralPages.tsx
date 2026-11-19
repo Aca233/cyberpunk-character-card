@@ -1,4 +1,4 @@
-import { characterRules, inventoryRules } from "@cp/core";
+import { characterRules, inventoryRules, type PlayerAction } from "@cp/core";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -40,9 +40,15 @@ const CELL_SLICE = [20, 30, 30, 20] as const;
 export function CharacterPage({
   view,
   onHabit,
+  onTrauma,
+  busy,
 }: {
   readonly view: View;
   readonly onHabit?: ((action: HabitAction, text: string) => void) | undefined;
+  readonly onTrauma?:
+    | ((action: Extract<PlayerAction, { type: "trauma" }>) => Promise<void>)
+    | undefined;
+  readonly busy?: boolean | undefined;
 }) {
   const { character } = view;
   const firstWithAbility = character.traits.find((t) => Boolean(t.ability));
@@ -78,7 +84,7 @@ export function CharacterPage({
       {character.name === null && (
         <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
       )}
-      <BiomonitorPanel view={view} />
+      <BiomonitorPanel view={view} onTrauma={onTrauma} busy={busy} />
 
       {character.traits.length > 0 && (
         <section className={styles.traitSection} aria-label="角色主板">

@@ -150,6 +150,7 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   damage: "伤害",
   "health.limb": "断肢",
   "health.die": "死亡",
+  trauma: "创伤小组服务",
   npcDeath: "人物死亡",
   money: "欧元",
   trade: "买卖",

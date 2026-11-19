@@ -29,6 +29,7 @@ import { registry } from "./systems/registry";
 import { BuyHomeActionSchema } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
+import { TraumaActionSchema } from "./systems/trauma";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
@@ -59,6 +60,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   GunsmithActionSchema,
   /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
   BuyHomeActionSchema,
+  /** 创伤小组：办理、续期、升级或退会，以及按当前会籍请求紧急救援 */
+  TraumaActionSchema,
   /** 打开消息：没给 feed 时把人发来的消息都标成已读；给了只标这几条 */
   ReadMessagesActionSchema,
   /** 全息电话来电：接起或拒接正在响的那通 */
