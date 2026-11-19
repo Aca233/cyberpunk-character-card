@@ -168,6 +168,8 @@ export const AcquaintanceSchema = z.object({
   role: line(80).optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
+  /** 工坊人物卡目录中的人物；按 NPC 卡片载入，不生成通用自定义旧识快照。 */
+  catalogNpc: z.boolean().optional(),
 });
 export type Acquaintance = z.infer<typeof AcquaintanceSchema>;
 
@@ -304,6 +306,7 @@ export function normalizeBoard(
       name: def.name,
       humanityCost: def.humanityCost,
       slot: def.slot,
+      ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
     });
   }
   return { ok: true, board: { ...board, cyberware } };

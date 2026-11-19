@@ -135,7 +135,9 @@ function safeNpcId(raw: string, used: ReadonlySet<string>): string {
 }
 
 function isCustomAcquaintance(a: Acquaintance): boolean {
-  return Boolean(a.custom) || a.id.startsWith("custom-") || a.id.startsWith("wk-");
+  return (
+    !a.catalogNpc && (Boolean(a.custom) || a.id.startsWith("custom-") || a.id.startsWith("wk-"))
+  );
 }
 
 /** 主板模块带出的人物：过去就认识，外貌和口吻留给第一次出场时定；负面经历带出的人开局有敌意 */

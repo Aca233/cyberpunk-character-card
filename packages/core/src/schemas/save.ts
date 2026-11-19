@@ -56,6 +56,6 @@ export const SaveMetaSchema = z.object({
   /** 建档时传说名册里的前人，开局写进履历系统给叙事模型看；旧存档和名册空着时没有 */
   legends: z.array(LegendNoteSchema).max(LEGENDS_SEEDED).optional(),
   /** 建档时启用的内容包快照；后续停用或删除工坊包不会改变这份存档 */
-  workshopPacks: z.array(WorkshopPackSchema).max(40).default([]),
+  workshopPacks: z.array(WorkshopPackSchema).max(40).optional(),
 });
 export type SaveMeta = z.infer<typeof SaveMetaSchema>;

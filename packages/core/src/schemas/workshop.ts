@@ -66,11 +66,11 @@ export const WorkshopPackSchema = z
       const seen = new Set<string>();
       entries.forEach((entry, index) => {
         const id = EntryIdSchema.safeParse(entry.id);
-        if (!id.success) {
+        if (!id.success || id.data !== entry.id) {
           ctx.addIssue({
             code: "custom",
             path: [field, index, "id"],
-            message: "条目 id 最多 33 位，只用小写英文、数字和连字符",
+            message: "条目 id 最多 33 位，只用小写英文、数字和连字符，不能有首尾空格",
           });
         }
         if (seen.has(entry.id)) {
@@ -114,6 +114,25 @@ export const WorkshopPackSchema = z
       clinicListings.add(key);
     }
     const localNpcIds = new Set(pack.npcs.map((entry) => entry.id));
+    const acquaintanceIds = new Set<string>();
+    for (const [index, entry] of pack.acquaintances.entries()) {
+      const id = EntryIdSchema.safeParse(entry.id);
+      if (!id.success || id.data !== entry.id) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["acquaintances", index, "id"],
+          message: "人脉 id 最多 33 位，只用小写英文、数字和连字符，不能有首尾空格",
+        });
+      }
+      if (acquaintanceIds.has(entry.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["acquaintances", index, "id"],
+          message: "人脉 id 重复",
+        });
+      }
+      acquaintanceIds.add(entry.id);
+    }
     for (const [index, id] of pack.seedNpcs.entries()) {
       if (!localNpcIds.has(id)) {
         ctx.addIssue({
@@ -157,6 +176,7 @@ export function workshopPackIssues(pack: WorkshopPack, catalog: WorkshopCatalogI
     ...catalog.cyberware.map((item) => item.id),
     ...pack.cyberware.map((item) => item.id),
   ]);
+  const equipmentIds = new Set([...itemIds, ...cyberwareIds]);
   const npcIds = new Set([
     ...catalog.npcs.map((item) => item.id),
     ...pack.npcs.map((item) => item.id),
@@ -198,7 +218,7 @@ export function workshopPackIssues(pack: WorkshopPack, catalog: WorkshopCatalogI
     }
   }
   for (const content of pack.chipContents) {
-    checkRefs(content.requirements, itemIds, "设备或物品", content.title);
+    checkRefs(content.requirements, equipmentIds, "设备或物品", content.title);
     if (content.braindance && !workIds.has(content.braindance)) {
       issues.push(`${content.title} 引用了不存在的超梦作品：${content.braindance}`);
     }
@@ -242,8 +262,17 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
   const npcId = (id: string) => (npcIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const workId = (id: string) => (workIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const chipId = (id: string) => (contentIds.has(id) ? workshopEntityId(pack.id, id) : id);
+  const requirementId = (id: string) => (cyberwareIds.has(id) ? chromeId(id) : itemId(id));
+  const acquaintanceIsCatalogNpc = (entry: WorkshopPack["acquaintances"][number]) =>
+    npcIds.has(entry.id) ||
+    (!entry.custom && !entry.id.startsWith("custom-") && !entry.id.startsWith("wk-"));
+  const acquaintanceId = (entry: WorkshopPack["acquaintances"][number]) =>
+    acquaintanceIsCatalogNpc(entry) ? npcId(entry.id) : workshopEntityId(pack.id, entry.id);
   const allLocalIds = new Set([
     ...pack.modules.map((item) => item.id),
+    ...pack.acquaintances
+      .filter((entry) => !acquaintanceIsCatalogNpc(entry))
+      .map((entry) => entry.id),
     ...pack.npcs.map((item) => item.id),
     ...pack.items.map((item) => item.id),
     ...pack.cyberware.map((item) => item.id),
@@ -262,9 +291,10 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
     })),
     acquaintances: pack.acquaintances.map((entry) => ({
       ...entry,
-      id: npcId(entry.id),
-      custom: true,
+      id: acquaintanceId(entry),
+      custom: !acquaintanceIsCatalogNpc(entry),
       packId: pack.id,
+      catalogNpc: acquaintanceIsCatalogNpc(entry),
     })),
     npcs: pack.npcs.map((entry) => ({
       ...entry,
@@ -305,7 +335,7 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
       ...entry,
       id: workshopEntityId(pack.id, entry.id),
       ...(entry.braindance ? { braindance: workId(entry.braindance) } : {}),
-      requirements: entry.requirements.map(itemId),
+      requirements: entry.requirements.map(requirementId),
       related: entry.related.map(relatedId),
     })),
     shopListings: pack.shopListings.map((entry) => ({
