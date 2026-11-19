@@ -5,9 +5,22 @@ import { type RadarAnchor, radarAround } from "./radar";
 import type { WorldClockState } from "./schema";
 
 const NamesSchema = z.array(
-  z.object({ id: z.string(), name: z.string(), keeper: z.string().optional() }),
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    keeper: z.string().optional(),
+    shelf: z.array(z.string()).optional(),
+  }),
 );
 const WorkLabelSchema = z.object({ id: z.string(), title: z.string() });
+const MediaItemSchema = z.object({
+  id: z.string(),
+  chipContentId: z.string().optional(),
+  chipDevice: z.string().optional(),
+  chipStorage: z.boolean().optional(),
+  braindanceDevice: z.object({ playback: z.boolean() }).optional(),
+});
+const mediaInput = /芯片|超梦|唱片|媒体|资料亭|读写器|阅读器/;
 const KIND_LABELS: Record<MerchantSite["kind"], string> = {
   gun: "武器店",
   melee: "近战武器店",
@@ -31,7 +44,7 @@ const KIND_WORDS: Record<MerchantSite["kind"], RegExp> = {
   mixed: /商店|商街/,
 };
 const tradeInput =
-  /买|卖|交易|商店|店主|店员|商贩|店铺|订货|取货|供货|到货|饭店|餐厅|酒吧|诊所|医生|义体/;
+  /买|卖|交易|商店|店主|店员|商贩|店铺|订货|取货|供货|到货|饭店|餐厅|酒吧|诊所|医生|义体|芯片|超梦|唱片|媒体|资料亭|读写器|阅读器/;
 const normalize = (text: string) =>
   text
     .normalize("NFKC")
@@ -65,11 +78,39 @@ export function merchantEntranceText(
   const requestedKinds = new Set(
     sites.filter((site) => KIND_WORDS[site.kind].test(input)).map((site) => site.kind),
   );
+  const mediaItems = new Set(
+    (mediaInput.test(input) ? z.array(MediaItemSchema).parse(data.items ?? []) : [])
+      .filter(
+        (item) =>
+          item.chipContentId ||
+          item.chipDevice ||
+          item.chipStorage ||
+          item.braindanceDevice?.playback,
+      )
+      .map((item) => item.id),
+  );
+  const mediaRetailers = new Set(
+    mediaInput.test(input)
+      ? sites
+          .filter(
+            (site) =>
+              site.services.includes("bd-session") ||
+              names.get(site.merchant)?.shelf?.some((id) => mediaItems.has(id)),
+          )
+          .map((site) => site.merchant)
+      : [],
+  );
   const nearbyIds = new Set<string>();
   if (tradeInput.test(input) && clock.location) {
     const candidates = new Set(
       sites
-        .filter((site) => requestedKinds.size === 0 || requestedKinds.has(site.kind))
+        .filter((site) =>
+          mediaInput.test(input) && requestedKinds.size === 0
+            ? mediaRetailers.has(site.merchant)
+            : requestedKinds.size === 0 ||
+              requestedKinds.has(site.kind) ||
+              mediaRetailers.has(site.merchant),
+        )
         .flatMap((site) => site.locations),
     );
     const radar = Array.isArray(data.radar) ? (data.radar as RadarAnchor[]) : [];
