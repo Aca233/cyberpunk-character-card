@@ -136,6 +136,102 @@ function characterReferenceText(character: ImageCharacterReference, concise = fa
     .join("; ");
 }
 
+const AUX_CHARACTER_REFERENCES_MAX_LENGTH = 24000;
+
+function fairTextBudgets(
+  parts: readonly { readonly length: number; readonly weight: number }[],
+  maxLength: number,
+): number[] {
+  const allocations = parts.map((part) => ({ ...part, budget: 0 }));
+  let remaining = Math.max(0, maxLength);
+  let active = allocations.filter((part) => part.length > 0);
+  while (remaining > 0 && active.length > 0) {
+    const totalWeight = active.reduce((sum, part) => sum + part.weight, 0);
+    const available = remaining;
+    for (const part of active) {
+      const share = Math.max(1, Math.floor((available * part.weight) / totalWeight));
+      const allocated = Math.min(part.length - part.budget, share, remaining);
+      part.budget += allocated;
+      remaining -= allocated;
+    }
+    active = active.filter((part) => part.budget < part.length);
+  }
+  return allocations.map(({ budget }) => budget);
+}
+
+/** 只压缩超大角色参考资料；保留每位角色身份与各类视觉事实，不挤占剧情正文。 */
+function auxCharacterReferences(input: TurnImagePromptInput): string {
+  const narrative = input.sceneText.toLowerCase();
+  const references = input.characters
+    .map((character) => ({
+      character,
+      text: characterReferenceText(character),
+      weight:
+        character.id === "player"
+          ? 3
+          : [character.name, character.alias].some(
+                (name) => name.trim() && narrative.includes(name.trim().toLowerCase()),
+              )
+            ? 2
+            : 1,
+    }))
+    .sort((a, b) => b.weight - a.weight);
+  const complete = references.map(({ text }) => text).join("\n");
+  if (complete.length <= AUX_CHARACTER_REFERENCES_MAX_LENGTH) return complete;
+
+  const structured = references.map(({ character, weight }) => {
+    const identity = [
+      `[${character.id}] ${character.name}${character.alias ? ` (${character.alias})` : ""}`,
+      character.pronoun ? `pronoun: ${character.pronoun}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    const fields = [
+      { label: "role", value: character.role },
+      { label: "fixed appearance", value: character.look },
+      { label: "current outfit", value: character.outfit },
+      { label: "known condition", value: character.wounds },
+      { label: "installed implants (not all visible)", value: character.cyberware.join(", ") },
+      { label: "carried gear (not necessarily held)", value: character.gear.join(", ") },
+    ].filter(({ value }) => value.length > 0);
+    return { identity, fields, weight };
+  });
+  const fixedLength =
+    structured.length -
+    1 +
+    structured.reduce(
+      (sum, { identity, fields }) =>
+        sum + identity.length + fields.reduce((length, { label }) => length + label.length + 4, 0),
+      0,
+    );
+  const characterBudgets = fairTextBudgets(
+    structured.map(({ fields, weight }) => ({
+      length: fields.reduce((sum, { value }) => sum + value.length, 0),
+      weight,
+    })),
+    AUX_CHARACTER_REFERENCES_MAX_LENGTH - fixedLength,
+  );
+  return structured
+    .map(({ identity, fields }, index) => {
+      const fieldBudgets = fairTextBudgets(
+        fields.map(({ value }) => ({ length: value.length, weight: 1 })),
+        characterBudgets[index] ?? 0,
+      );
+      return [
+        identity,
+        ...fields.map(({ label, value }, fieldIndex) => {
+          const budget = fieldBudgets[fieldIndex] ?? 0;
+          const shortened =
+            value.length <= budget
+              ? value
+              : `${value.slice(0, Math.max(0, budget - 1))}…`.slice(0, budget);
+          return `${label}: ${shortened}`;
+        }),
+      ].join("; ");
+    })
+    .join("\n");
+}
+
 /** 不调用辅助模型时的兜底提示词；原始资料保留源语言，不冒充已翻译的英文 */
 export function fallbackImagePrompt(
   input: ImagePromptRequest,
@@ -326,7 +422,7 @@ function buildAuxMessages(
     input.timeText ? `Time: ${input.timeText}` : "",
     input.weather ? `Weather: ${input.weather}` : "",
     input.characters.length > 0
-      ? `Character references at this turn (the narrative determines who is on screen):\n${input.characters.map((character) => characterReferenceText(character)).join("\n")}`
+      ? `Character references at this turn (the narrative determines who is on screen):\n${auxCharacterReferences(input)}`
       : "",
     input.actionText ? `Player intent (not an established outcome): ${input.actionText}` : "",
     `Narrative Scene:\n${input.sceneText}`,
@@ -348,6 +444,7 @@ const AuxPromptPayloadSchema = z.object({
 function parseAuxReply(
   raw: string,
   defaultNegative: string,
+  negativePromptMode: ImageNegativePromptMode,
 ): { prompt: string; negativePrompt: string } | null {
   const cleaned = raw
     .trim()
@@ -360,7 +457,10 @@ function parseAuxReply(
     if (parsed.success) {
       return {
         prompt: parsed.data.prompt,
-        negativePrompt: defaultNegative ? (parsed.data.negativePrompt ?? defaultNegative) : "",
+        negativePrompt:
+          defaultNegative || negativePromptMode === "in-prompt"
+            ? (parsed.data.negativePrompt ?? defaultNegative)
+            : "",
       };
     }
   } catch {
@@ -391,13 +491,14 @@ export async function draftImagePrompt(
   }
   let reply = "";
   let blockedReason: string | null = null;
+  let finishReason: string | null = null;
   try {
     for await (const event of llm.stream(
       {
         purpose: "aux",
         messages: buildAuxMessages(input, style, negativePromptMode),
         temperature: 0.6,
-        maxOutputTokens: 1400,
+        maxOutputTokens: input.kind === "turn" ? 6144 : 4096,
         responseFormat: { type: "json" },
       },
       options.signal,
@@ -406,6 +507,8 @@ export async function draftImagePrompt(
       else if (event.type === "blocked") {
         blockedReason = event.reason;
         break;
+      } else if (event.type === "done") {
+        finishReason = event.finishReason;
       }
     }
   } catch (error) {
@@ -422,16 +525,32 @@ export async function draftImagePrompt(
       fallbackReason: `辅助模型拦截了提示词提炼：${blockedReason}`,
     };
   }
+  if (["length", "max_tokens"].includes(finishReason?.trim().toLowerCase() ?? "")) {
+    return {
+      ...fallbackImagePrompt(input, style, negativePromptMode),
+      fallbackReason: `辅助模型输出达到长度上限（${finishReason}），已回退本地拼接提示词`,
+    };
+  }
   const defaultNeg = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
-  const parsed = parseAuxReply(reply, defaultNeg);
+  const parsed = parseAuxReply(reply, defaultNeg, negativePromptMode);
   if (!parsed) {
     return {
       ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: "辅助模型返回内容格式异常，已回退本地拼接提示词",
     };
   }
+  const prompt =
+    negativePromptMode === "in-prompt" && parsed.negativePrompt
+      ? `${parsed.prompt}\nUser-requested exclusions (render the image without these): ${parsed.negativePrompt}`
+      : parsed.prompt;
+  if (prompt.length > IMAGE_PROMPT_MAX_LENGTH) {
+    return {
+      ...fallbackImagePrompt(input, style, negativePromptMode),
+      fallbackReason: `辅助模型提示词与排除项合计超过 ${IMAGE_PROMPT_MAX_LENGTH} 字符，已回退本地拼接提示词`,
+    };
+  }
   return {
-    prompt: parsed.prompt,
+    prompt,
     negativePrompt: negativePromptMode === "in-prompt" ? "" : parsed.negativePrompt,
     usedAux: true,
   };
