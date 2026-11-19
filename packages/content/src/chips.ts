@@ -1,7 +1,9 @@
 import { inventoryRules, shardsRules } from "@cp/core";
+import { expandedChipContents, expandedChipItems } from "./chip-library";
 
-/** 本作原创的小规模常备目录；标签可见，原文只有实际读取后才进入角色档案。 */
+/** 本作原创的常备目录；标签可见，原文只有实际读取后才进入角色档案。 */
 export const chipContents = [
+  ...expandedChipContents,
   {
     id: "chip-bd-night-market",
     title: "摊灯熄灭以前",
@@ -139,6 +141,7 @@ export const chipContents = [
 ].map((content) => shardsRules.ChipContentSchema.parse(content));
 
 export const everydayChipItems = inventoryRules.ItemCatalogSchema.parse([
+  ...expandedChipItems,
   {
     id: "chip-reader-writer",
     name: "便携芯片读写器",

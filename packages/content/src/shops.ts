@@ -1,6 +1,24 @@
 import { inventoryRules } from "@cp/core";
-import { everydayChipItems } from "./chips";
 import { poiShops } from "./merchant-sites";
+
+/** 阿岚只选市场日常与熟悉的发行；其他街区的专门货不在这里自动齐货。 */
+const sleeveStock: Record<string, number> = {
+  "chip-reader-writer": 2,
+  "bd-portable-player": 2,
+  "blank-shard": 10,
+  "shard-night-market": 3,
+  "shard-rain-rooftop": 2,
+  "shard-small-stage": 2,
+  "shard-repair-notes": 4,
+  "shard-stall-note": 4,
+  "shard-night-magazine": 2,
+  "shard-service-assist": 2,
+  "shard-kabuki-morning-radio": 4,
+  "shard-stall-supper-cookbook": 3,
+  "shard-stall-account-book": 3,
+  "shard-pantry-scale-assist": 1,
+  "shard-counter-phrase-assist": 1,
+};
 
 /**
  * 商店开局条件：威尔逊按参考价；阿涛的摊子便宜三成、货源非正规渠道。
@@ -14,10 +32,15 @@ export const shops = inventoryRules.ShopListSchema.parse([
     keeperNpc: "sleeve-shop-keeper",
     location: "kabuki-market",
     note: "本作原创：卖生活录制、演出、维修资料与成年作者刊物的小铺。有店内超梦设备；询价不自动开机或成交。",
-    shelf: everydayChipItems.map((item) => item.id),
-    initialStock: Object.fromEntries(
-      everydayChipItems.map((item) => [item.id, item.id === "blank-shard" ? 10 : 3]),
-    ),
+    shelf: Object.keys(sleeveStock),
+    initialStock: sleeveStock,
+    supply: {
+      supplier: "kabuki-independent-chip-coop",
+      origin:
+        "本作开局合同：市场作者授权副本由歌舞伎独立发行合作点供货；读写器与空白载体走配件批发，阿岚核对封套后入柜。",
+      route: ["kabuki-market"],
+      leadMinutes: 480,
+    },
   },
   {
     id: "wilson",
@@ -132,6 +155,8 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "nicola",
       "hawtdawg",
       "coffee",
+      "shard-stage-wardrobe-guide",
+      "shard-counter-phrase-assist",
     ],
     supply: {
       supplier: "japantown-retail-distribution",

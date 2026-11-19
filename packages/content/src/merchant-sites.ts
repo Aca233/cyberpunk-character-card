@@ -116,24 +116,111 @@ const SUPPLY_HUBS: Readonly<Record<string, string>> = {
   dogtown: "dogtown",
 };
 
+/** 本作改编的少量授权寄售，不声称是原作商贩的精确货架。 */
+const CHIP_CONSIGNMENTS: Readonly<Record<string, Record<string, number>>> = {
+  wat_lch_foodshop_02: {
+    "shard-h10-laundry-book": 3,
+    "shard-h10-balcony-garden": 2,
+    "shard-h10-rental-checklist": 3,
+  },
+  wat_kab_foodshop_01: {
+    "shard-stall-supper-cookbook": 3,
+    "shard-stall-account-book": 2,
+  },
+  wat_kab_foodshop_02: {
+    "shard-stage-wardrobe-guide": 3,
+    "shard-afterhours-adult-review": 2,
+    "shard-night-magazine": 2,
+  },
+  wat_nid_foodshop_02: {
+    "shard-japantown-b-side": 2,
+    "shard-small-stage": 2,
+  },
+  hey_gle_food_02: {
+    "shard-cojo-open-mic": 3,
+    "shard-second-shift-letters": 2,
+  },
+  std_arr_food_01: {
+    "shard-second-shift-letters": 3,
+    "shard-stall-account-book": 2,
+  },
+  cct_cpz_foodstore_02: {
+    "shard-counter-paperwork-guide": 3,
+    "shard-office-exit-zine": 2,
+  },
+  pac_cvi_food_01: {
+    "shard-coast-screening-notes": 3,
+    "shard-umbrella-repair-book": 3,
+  },
+  bls_ina_se1_foodshop_01: {
+    "shard-route-packing-book": 3,
+    "shard-used-car-check-assist": 1,
+  },
+};
+
+const NETRUNNER_CHIPS: Readonly<Record<string, Record<string, number>>> = {
+  watson: {
+    "shard-service-assist": 2,
+    "shard-stall-account-book": 2,
+    "shard-counter-phrase-assist": 1,
+  },
+  westbrook: {
+    "shard-counter-phrase-assist": 2,
+    "shard-stage-wardrobe-guide": 2,
+  },
+  heywood: {
+    "shard-pantry-scale-assist": 1,
+    "shard-courtyard-recipes": 2,
+    "shard-counter-phrase-assist": 1,
+  },
+  pacifica: {
+    "shard-water-pump-assist": 1,
+    "shard-umbrella-repair-book": 3,
+    "shard-coast-screening-notes": 2,
+  },
+  dogtown: {
+    "shard-water-pump-assist": 2,
+    "shard-reuse-parts-catalog": 3,
+    "shard-route-packing-book": 2,
+  },
+  badlands: {
+    "shard-used-car-check-assist": 2,
+    "shard-water-pump-assist": 1,
+    "shard-route-packing-book": 3,
+  },
+};
+
+function regionalChipStock(point: ServicePoint): Record<string, number> {
+  if (point.kind !== "netrunner") return CHIP_CONSIGNMENTS[point.id] ?? {};
+  return {
+    "chip-reader-writer": 2,
+    "blank-shard": 6,
+    "shard-repair-notes": 2,
+    ...(NETRUNNER_CHIPS[point.district ?? "badlands"] ?? {}),
+    ...(point.id === "wbr_jpn_netrun_02" ? { "shard-umbrella-repair-book": 2 } : {}),
+  };
+}
+
 export const poiShops = inventoryRules.ShopListSchema.parse(
   SERVICE_POINTS.flatMap((point) => {
     if (!shopKind(point.kind) || KNOWN_POIS[point.id]) return [];
     const seed = SHOP_SEEDS[point.kind];
     const location = `poi:${point.id}`;
     const hub = SUPPLY_HUBS[point.district ?? ""] ?? "badlands";
+    const chipStock = regionalChipStock(point);
+    const stock = { ...seed.stock, ...chipStock };
     return [
       {
         id: merchantId(point),
         name: point.name ?? seed.name,
         keeper: seed.keeper,
         location,
-        note: "地点与店名依据原作服务点；开局备货和区域供货合同为本作设定，成交与运输会改变库存。",
-        shelf: Object.keys(seed.stock),
-        initialStock: { ...seed.stock },
+        note: `地点与店名依据原作服务点；开局备货和区域供货合同为本作设定，成交与运输会改变库存。${Object.keys(chipStock).length ? "本店另有少量本作原创芯片寄售，各片按封套的授权发行来源供货；可只问价或看标签，购买不自动阅读播放。" : ""}`,
+        shelf: Object.keys(stock),
+        initialStock: stock,
         supply: {
           supplier: `supply-${point.district ?? "badlands"}-${point.kind}`,
-          origin: `本作开局合同：${hub} 的${seed.name}补给配送点；只按已登记订单发货`,
+          origin: `本作开局合同：${hub} 的${seed.name}补给配送点${Object.keys(chipStock).length ? "和本区作者授权芯片寄售发行点" : ""}；只按已登记订单发货`,
           route: [hub, location],
           leadMinutes: seed.leadMinutes,
         },
@@ -184,7 +271,9 @@ export const merchantSites = [
     locations: ["kabuki-market"],
     services: ["bd-session"],
     braindanceDevice: { playback: true, analysis: ["observe", "audio"] },
-    source: "本作原创阿岚芯片小铺；与歌舞伎市场其他摊位分开库存，店内有普通超梦播放设备",
+    braindanceWorks: ["bd-night-market", "bd-rain-rooftop", "bd-small-stage"],
+    source:
+      "本作原创阿岚芯片小铺；与市场其他摊位分开库存，店内有普通超梦播放设备，开局持有这三部作品的授权店内放映副本，与出售的载体库存独立",
   },
   {
     merchant: "wilson",
