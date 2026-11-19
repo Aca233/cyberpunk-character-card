@@ -46,6 +46,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 
 【events：事实归属与因果】
 - events 必填，每组写 {"id":"本轮唯一小写英文数字连字符","requires":[],"entries":["changes[0]"]}。changes 和 messages 的每一条必须恰好归属一组；没有事实条目才写 events: []，不把建议选项或整场摘要放进 entries。
+- 先写完 changes 和 messages，再按数组索引逐项分配：changes 从 changes[0] 开始，messages 从 messages[0] 开始；当前索引必须先归属，才能写下一个索引。比如 changes 有 5 条，events 中必须依次覆盖 changes[0]、changes[1]、changes[2]、changes[3]、changes[4]；不能先写 changes[4] 再回头补 changes[3]。同一事件连续包含多条时按索引递增写在同一组；属于不同事件时先声明较小索引所属事件。
 - 同组条目全成或全撤，只把不能拆开的同一件事放在一起；独立事件分组。付款与交付属于同一组，trade 等已统一处理钱货的指令不要再拆出重复款项或物品。
 - requires 写成功前提，只能引用前面已经列出的事件 id 或保留值 "$action"；独立事件明确写 []。依赖失败，本事件也不发生。事件和组内 entries 按事实原先顺序列出，changes 的索引与 messages 的索引各自从 0 递增，不能交错分组后重排发生顺序。
 - 本轮主行动成功才会发生的事必须 requires: ["$action"]；即使没有单列 hack、breach 等指令，成功拿到的钱、物品、权限或其他成果仍须声明这个前提。后续成果还依赖某事件时也列该事件 id。例如接入 access 依赖 "$action"，从该网络转款 proceeds 依赖 ["$action","access"]。
