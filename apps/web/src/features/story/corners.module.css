@@ -899,11 +899,6 @@
   padding: 12px 18px 14px;
 }
 
-/* 私信加宽时同侧的生物监测、在场两块先收起，把高度让给对话（计划第十二节第 12 条，做法同第 11 条） */
-.side:has(> .unread[data-wide]) > :not(.unread) {
-  display: none;
-}
-
 /* 里层占满块宽：长出来的消息页按块宽排，不按内容宽缩 */
 .unread .unreadInner {
   display: grid;
@@ -2171,13 +2166,13 @@
 }
 
 /*
- * 私信页签定高但不浪费同侧已清空的空间（生物监测与在场已隐藏）：高上限提至 min(620px, 72dvh)，
- * Grow 行内的 maxHeight 仍负责保底不超出侧栏；标题头与左栏定住，中间消息流舒展滚动。
+ * 消息面板定高并给同侧左栏留出空间；Grow 行内的 maxHeight 再按剩余空间收紧，
+ * 中间消息流在面板内部滚动，不隐藏左上角的生物监测与全息来电。
  */
 .unread[data-wide] .growBody {
   display: flex;
   flex-direction: column;
-  height: min(620px, 72dvh);
+  height: min(460px, 56dvh);
   overflow: hidden;
   padding: 0 0 6px;
 }
