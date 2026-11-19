@@ -12,13 +12,23 @@ export const BuyHomeActionSchema = z.strictObject({
 });
 
 /** 物品栏直接存取：只到身边的自有住所或车辆，不通过按钮远程交接。 */
-export const PlaceItemActionSchema = z.strictObject({
-  type: z.literal("placeItem"),
-  action: z.enum(["leave", "take"]),
-  item: z.string().min(1).max(120),
-  where: z.string().min(1).max(120),
-  count: z.number().int().min(1).max(99).optional(),
-});
+export const PlaceItemActionSchema = z
+  .strictObject({
+    type: z.literal("placeItem"),
+    action: z.enum(["leave", "take"]),
+    item: z.string().min(1).max(120),
+    where: z.string().min(1).max(120),
+    count: z.number().int().min(1).max(99).optional(),
+    source: z.enum(["backpack", "worn", "quick"]).optional(),
+  })
+  .superRefine((action, ctx) => {
+    if (action.source !== undefined && action.action !== "leave") {
+      ctx.addIssue({ code: "custom", path: ["source"], message: "只有存放时才指定物品来源" });
+    }
+    if ((action.source === "worn" || action.source === "quick") && (action.count ?? 1) !== 1) {
+      ctx.addIssue({ code: "custom", path: ["count"], message: "穿着或快捷栏的物品每次只能存放一件" });
+    }
+  });
 
 /** 一条 money 指令最多动多少欧元；更贵的分几笔付 */
 const MONEY_STEP = 100_000;
@@ -39,6 +49,7 @@ export const safehouseActions = {
           item: action.item,
           count: action.count ?? 1,
           where: target.target,
+          ...(action.source !== undefined ? { source: action.source } : {}),
           reason: action.action === "leave" ? "在物品栏存放物品" : "在物品栏取回物品",
         },
       ];

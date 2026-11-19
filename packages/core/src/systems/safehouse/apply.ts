@@ -195,6 +195,9 @@ export function applyItemPlace(
     command.item;
 
   if (physical) {
+    if (command.source === "worn" || command.source === "quick") {
+      return fail("未安装义体不在穿着或快捷栏中，无法从该来源存放");
+    }
     return {
       ok: true,
       notes: [
@@ -232,6 +235,7 @@ export function applyItemPlace(
         kind: resolved.kind,
         target: resolved.target,
         location: resolved.location,
+        ...(command.source !== undefined ? { source: command.source } : {}),
         ...(command.note !== undefined ? { note: command.note } : {}),
         reason: command.reason,
         ...(command.definition !== undefined ? { definition: command.definition } : {}),

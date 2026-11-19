@@ -50,6 +50,8 @@ export const ItemPlaceCommandSchema = z
     action: z.enum(["leave", "take"]),
     item: z.string().min(1),
     count: z.number().int().min(1).max(99).optional(),
+    /** 仅 leave：明确从背包、当前穿着或快捷栏取出；省略时按实际随身状态取。 */
+    source: z.enum(["backpack", "worn", "quick"]).optional(),
     /** 放在/取自哪里：安全屋 id、车辆 id、地点 id 或人物 id；在安全屋或当前地点时可省略 */
     where: z.string().min(1).optional(),
     /** 首次把现场物品/尸体直接放进车里或留在某处时提供 */
@@ -57,6 +59,14 @@ export const ItemPlaceCommandSchema = z
     origin: z.string().min(1).max(240).optional(),
     note: z.string().trim().min(1).max(120).optional(),
     reason: z.string().trim().min(1).max(80),
+  })
+  .superRefine((command, ctx) => {
+    if (command.source !== undefined && command.action !== "leave") {
+      ctx.addIssue({ code: "custom", path: ["source"], message: "取回物品时不能指定随身来源" });
+    }
+    if ((command.source === "worn" || command.source === "quick") && (command.count ?? 1) !== 1) {
+      ctx.addIssue({ code: "custom", path: ["count"], message: "穿着或快捷栏的物品每次只能存放一件" });
+    }
   })
   .describe(
     "留置与取回：只有玩家明确把东西留在家、放进车里、留在某处或暂交某人，或从这些地方拿回随身时才写；普通杂物不建档。回家换装拿物再出门在同一轮里一起完成，穿戴中或快捷栏的物品留下时自动脱下。",
