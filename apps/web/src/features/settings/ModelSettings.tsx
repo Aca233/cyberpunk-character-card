@@ -128,6 +128,19 @@ export function ModelSettings({
       (p) => {
         const next = new URLSearchParams(p);
         next.set("profile", id);
+        next.delete("copy");
+        return next;
+      },
+      { replace: true, state: location.state },
+    );
+  };
+  const duplicate = (profile: PublicProfile) => {
+    setDirty(false);
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.set("profile", "@new");
+        next.set("copy", profile.name);
         return next;
       },
       { replace: true, state: location.state },
@@ -204,6 +217,9 @@ export function ModelSettings({
   const candidate = data.profiles.find((p) => textRoleProblems(p).length === 0);
   const requested = params.get("profile");
   const adding = requested === "@new" || data.profiles.length === 0;
+  const copyFrom = adding
+    ? data.profiles.find((profile) => profile.name === params.get("copy"))
+    : undefined;
   const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
 
   return (
@@ -410,7 +426,8 @@ export function ModelSettings({
           />
           {adding ? (
             <ConnectionForm
-              key="new"
+              key={`new-${copyFrom?.name ?? ""}`}
+              {...(copyFrom ? { copyFrom } : {})}
               names={data.profiles.map((p) => p.name)}
               onDirty={setDirty}
               onSaved={(name) => {
@@ -506,6 +523,7 @@ export function ModelSettings({
                   data.aux === selected.name ||
                   data.image === selected.name
                 }
+                onDuplicate={() => duplicate(selected)}
                 onDeleted={() => select("@new")}
               />
             </div>
@@ -547,11 +565,13 @@ export function ModelSettings({
 
 function ConnectionForm({
   profile,
+  copyFrom,
   names,
   onDirty,
   onSaved,
 }: {
   readonly profile?: PublicProfile;
+  readonly copyFrom?: PublicProfile;
   readonly names: readonly string[];
   readonly onDirty: (dirty: boolean) => void;
   readonly onSaved: (name: string) => void;
@@ -562,18 +582,32 @@ function ConnectionForm({
     while (names.includes(`connection-${n}`)) n += 1;
     return `connection-${n}`;
   };
+  const copyName = (sourceName: string) => {
+    const base = `${sourceName.slice(0, 35)}-copy`;
+    if (!names.includes(base)) return base;
+    let n = 2;
+    for (;;) {
+      const suffix = `-${n}`;
+      const candidate = `${sourceName.slice(0, 40 - 5 - suffix.length)}-copy${suffix}`;
+      if (!names.includes(candidate)) return candidate;
+      n += 1;
+    }
+  };
+  const source = profile ?? copyFrom;
   const [preset, setPreset] = useState<Preset>("relay");
-  const [name, setName] = useState(profile?.name ?? firstName);
-  const [model, setModel] = useState(profile?.model ?? "");
-  const [baseUrl, setBaseUrl] = useState(profile?.baseUrl ?? "");
-  const [key, setKey] = useState("");
-  const [contextWindow, setContextWindow] = useState(String(profile?.contextWindow ?? 128000));
-  const [temperature, setTemperature] = useState(profile?.temperature?.toString() ?? "");
-  const [maxOutput, setMaxOutput] = useState(profile?.maxOutputTokens?.toString() ?? "");
-  const [imageProtocol, setImageProtocol] = useState<ImageProtocol>(
-    profile?.imageProtocol ?? "auto",
+  const [name, setName] = useState(
+    copyFrom ? copyName(copyFrom.name) : (profile?.name ?? firstName),
   );
-  const [comfyWorkflow, setComfyWorkflow] = useState(profile?.comfyWorkflow ?? "");
+  const [model, setModel] = useState(source?.model ?? "");
+  const [baseUrl, setBaseUrl] = useState(source?.baseUrl ?? "");
+  const [key, setKey] = useState("");
+  const [contextWindow, setContextWindow] = useState(String(source?.contextWindow ?? 128000));
+  const [temperature, setTemperature] = useState(source?.temperature?.toString() ?? "");
+  const [maxOutput, setMaxOutput] = useState(source?.maxOutputTokens?.toString() ?? "");
+  const [imageProtocol, setImageProtocol] = useState<ImageProtocol>(
+    source?.imageProtocol ?? "auto",
+  );
+  const [comfyWorkflow, setComfyWorkflow] = useState(source?.comfyWorkflow ?? "");
   const [stage, setStage] = useState("");
   const [saved, setSaved] = useState("");
   const [modelList, setModelList] = useState<readonly string[] | null>(null);
@@ -581,7 +615,7 @@ function ConnectionForm({
   const [modelError, setModelError] = useState("");
   // 创建成功后保留名字；后续步骤失败时重试更新，不重复创建。
   const persisted = useRef<string | null>(profile?.name ?? null);
-  const currentType = profile?.type ?? PRESETS[preset].type;
+  const currentType = profile?.type ?? copyFrom?.type ?? PRESETS[preset].type;
   const isLocalNoKey =
     currentType === "ollama" || currentType === "sdwebui" || currentType === "comfyui";
   const isComfy = currentType === "comfyui" || imageProtocol === "comfyui";
@@ -635,7 +669,7 @@ function ConnectionForm({
             "接口地址只能使用 HTTP/HTTPS，不能带用户名、密码、查询参数或片段。密钥填在单独的密钥栏。",
           );
       }
-      if (!profile && preset === "relay" && !url)
+      if (!profile && !copyFrom && preset === "relay" && !url)
         throw new Error("请填写中转站提供的接口地址，例如其 /v1 地址。");
       if (profile?.baseUrl && !url)
         throw new Error("当前接口暂不支持清空已保存的地址，请填写要使用的地址。");
@@ -668,10 +702,27 @@ function ConnectionForm({
         setStage("正在创建连接…");
         await api.createProfile({
           name: connectionName,
-          type: PRESETS[preset].type,
+          type: copyFrom?.type ?? PRESETS[preset].type,
           model: modelName,
           contextWindow: size,
           ...(url ? { baseUrl: url } : {}),
+          ...(copyFrom?.temperature !== undefined ? { temperature: copyFrom.temperature } : {}),
+          ...(copyFrom?.maxOutputTokens !== undefined
+            ? { maxOutputTokens: copyFrom.maxOutputTokens }
+            : {}),
+          ...(copyFrom?.thinkingLevel !== undefined
+            ? { thinkingLevel: copyFrom.thinkingLevel }
+            : {}),
+          ...(copyFrom?.safety !== undefined ? { safety: copyFrom.safety } : {}),
+          ...(copyFrom?.embeddingModel !== undefined
+            ? { embeddingModel: copyFrom.embeddingModel }
+            : {}),
+          ...(copyFrom?.imageProtocol !== undefined
+            ? { imageProtocol: copyFrom.imageProtocol }
+            : {}),
+          ...(copyFrom?.comfyWorkflow !== undefined
+            ? { comfyWorkflow: copyFrom.comfyWorkflow }
+            : {}),
         });
         persisted.current = connectionName;
       }
@@ -713,7 +764,7 @@ function ConnectionForm({
     mutationFn: async () => {
       const trimmedBase = baseUrl.trim();
       const profileName = persisted.current;
-      const type = profile ? profile.type : PRESETS[preset].type;
+      const type = profile?.type ?? copyFrom?.type ?? PRESETS[preset].type;
       return api.fetchModels({
         ...(profileName ? { profileName } : {}),
         type,
@@ -737,7 +788,7 @@ function ConnectionForm({
 
   const handleFetchModels = () => {
     const trimmedBase = baseUrl.trim();
-    if (!profile && preset === "relay" && !trimmedBase) {
+    if (!profile && !copyFrom && preset === "relay" && !trimmedBase) {
       setModelError("请先填写兼容接口地址（例如 https://服务商地址/v1）再获取模型列表");
       return;
     }
@@ -776,10 +827,19 @@ function ConnectionForm({
       <div className={styles.editorHead}>
         <div>
           <span className={styles.kicker}>01 / 连接资料</span>
-          <h3>{profile ? profile.name : "添加一个模型连接"}</h3>
+          <h3>
+            {profile ? profile.name : copyFrom ? `复制「${copyFrom.name}」` : "添加一个模型连接"}
+          </h3>
         </div>
-        {profile && <span className={styles.typePill}>接口：{profile.type}</span>}
+        {(profile ?? copyFrom) && (
+          <span className={styles.typePill}>接口：{(profile ?? copyFrom)?.type}</span>
+        )}
       </div>
+      {copyFrom && (
+        <div className={styles.notice}>
+          <p>已复制连接参数，API 密钥需要重新填写。</p>
+        </div>
+      )}
       {profile && problems(profile).length > 0 && (
         <div className={styles.notice}>
           {problems(profile).map((p) => (
@@ -789,7 +849,7 @@ function ConnectionForm({
       )}
       <fieldset disabled={save.isPending}>
         <div className={styles.formGrid}>
-          {!profile && (
+          {!profile && !copyFrom && (
             <label className={styles.field}>
               <span>接入方式</span>
               <FrameBox>
@@ -1102,12 +1162,14 @@ function ConnectionActions({
   profile,
   inUse,
   dirty,
+  onDuplicate,
   onDeleted,
 }: {
   readonly configVersion: number;
   readonly profile: PublicProfile;
   readonly inUse: boolean;
   readonly dirty: boolean;
+  readonly onDuplicate: () => void;
   readonly onDeleted: () => void;
 }) {
   const refresh = useRefresh();
@@ -1141,6 +1203,13 @@ function ConnectionActions({
         <span className={styles.help}>测试连接会发出真实请求，可能产生费用</span>
       </div>
       <div className={styles.actions}>
+        <Button
+          disabled={busy || dirty}
+          reason={dirty ? "先保存或撤销修改" : "正在处理连接"}
+          onClick={onDuplicate}
+        >
+          复制连接
+        </Button>
         <Button
           disabled={busy || dirty || problems(profile).length > 0}
           reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}

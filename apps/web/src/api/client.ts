@@ -385,6 +385,13 @@ export interface NewProfile {
   model: string;
   baseUrl?: string;
   contextWindow: number;
+  temperature?: number;
+  maxOutputTokens?: number;
+  thinkingLevel?: PublicProfile["thinkingLevel"];
+  safety?: PublicProfile["safety"];
+  embeddingModel?: string;
+  imageProtocol?: ImageProtocol;
+  comfyWorkflow?: string;
 }
 
 export type ConnectionTest =
