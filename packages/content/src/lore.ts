@@ -45,7 +45,7 @@ export const glossary: readonly Slang[] = [
   {
     term: "cyberpsycho",
     aliases: ["cyberpsychos", "cyberpsychosis"],
-    meaning: "赛博精神病，义体装得太多、人性崩溃后失控的人",
+    meaning: "赛博精神病，与义体负荷、心理创伤和社会压力等因素相关的严重精神失调，不能仅凭义体数量判断",
   },
   { term: "BD", aliases: ["braindance"], meaning: "超梦，录下别人的感官和情绪供人体验" },
   { term: "ICE", meaning: "入侵对抗电子程序，保护系统的防火墙" },

@@ -15,7 +15,7 @@ export const CRED_TIERS = [
   {
     from: 50,
     label: "传奇",
-    world: "你是夜之城的传说：来生酒吧有以你命名的调酒，人人都想和你扯上关系",
+    world: "你的事迹已传遍夜之城，来生的佣兵和中间人把你当作传奇，也有人想借你的名声获利；是否有以你命名的调酒，须由实际发生的纪念事件决定",
   },
 ] as const;
 export type CredTier = (typeof CRED_TIERS)[number];

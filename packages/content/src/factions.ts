@@ -237,7 +237,7 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "MaxTac",
     kind: "law",
     turf: [],
-    style: "专门对付赛博精神病的特警，出手不留活口",
+    style: "应对赛博精神病等极高危威胁的精锐特警，常以压倒性武力迅速制止威胁；不代表必然处决已被制伏的人",
     color: "#1c3d6e",
     allies: ["ncpd"],
     enemies: [],
