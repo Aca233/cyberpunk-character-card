@@ -743,6 +743,8 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         name: o.name,
         humanityCost: o.humanityCost,
         slot: o.slot as CyberSlot,
+        ...(o.custom ? { custom: true } : {}),
+        ...(o.packId ? { packId: o.packId } : {}),
       },
     ];
   };

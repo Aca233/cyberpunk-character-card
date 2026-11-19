@@ -1,6 +1,11 @@
-import { type CharacterCard, CharacterCardSchema, DEFAULT_CARD_ATTRIBUTES } from "@cp/core";
+import {
+  type CharacterCard,
+  CharacterCardSchema,
+  DEFAULT_CARD_ATTRIBUTES,
+  WorkshopCharacterExportSchema,
+} from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -24,7 +29,10 @@ interface Editor {
   readonly session: string;
 }
 
-type Destination = { readonly editor: Editor } | { readonly back: true };
+type Destination =
+  | { readonly editor: Editor }
+  | { readonly back: true }
+  | { readonly workshop: true };
 
 /** 新角色默认带空白主板 */
 function blankCard(): CharacterCard {
@@ -63,6 +71,22 @@ function editorFor(card: CharacterCard, id: string | null = null, sample = false
   };
 }
 
+function downloadCharacter(card: CharacterCard) {
+  const { portrait: _portrait, ...shareable } = card;
+  const payload = WorkshopCharacterExportSchema.parse({
+    format: "cp2077-character",
+    version: 1,
+    character: shareable,
+  });
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `角色-${card.name || "未命名"}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 /** 恢复未保存的修改，同时保留原角色 id，避免刷新后再保存生成重复角色。 */
 function initialEditor(): Editor {
   const draft = loadDraft(blankCard());
@@ -86,6 +110,7 @@ function initialEditor(): Editor {
 export function CharactersScreen() {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const importRef = useRef<HTMLInputElement>(null);
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
   const boardData = useQuery({
     queryKey: ["characterBoard"],
@@ -93,8 +118,11 @@ export function CharactersScreen() {
     staleTime: Number.POSITIVE_INFINITY,
   });
   const [editor, setEditor] = useState<Editor>(initialEditor);
+  const currentEditor = useRef(editor);
+  currentEditor.current = editor;
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [draftSaved, setDraftSaved] = useState(true);
@@ -135,7 +163,32 @@ export function CharactersScreen() {
     },
   });
 
-  const busy = save.isPending || remove.isPending || launching;
+  const importCard = useMutation({
+    mutationFn: async (file: File) => {
+      const raw: unknown = JSON.parse(await file.text());
+      const parsed = WorkshopCharacterExportSchema.safeParse(raw);
+      if (!parsed.success) throw new Error("文件不是本作导出的角色卡");
+      const card = CharacterCardSchema.parse(parsed.data.character);
+      return api.createCharacter(card);
+    },
+    onSuccess: async (entry) => {
+      await client.invalidateQueries({ queryKey: ["characters"] });
+      const next = { editor: editorFor(entry.card, entry.id) };
+      const current = currentEditor.current;
+      if (JSON.stringify(current.card) !== current.original) setDestination(next);
+      else go(next);
+      setShareError(null);
+    },
+    onError: (error) => setShareError(error.message),
+  });
+
+  const busy = save.isPending || remove.isPending || launching || importCard.isPending;
+
+  const importCharacter = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file && !busy) importCard.mutate(file);
+  };
 
   useEffect(() => {
     if (!dirty) {
@@ -166,6 +219,7 @@ export function CharactersScreen() {
   const go = (next: Destination) => {
     clearDraft();
     if ("back" in next) navigate("/menu");
+    else if ("workshop" in next) navigate("/workshop");
     else {
       setEditor(next.editor);
       setShowLibrary(false);
@@ -243,6 +297,26 @@ export function CharactersScreen() {
         <h1>身份档案</h1>
         <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
         <span className={wb.headSpacer} />
+        <input
+          ref={importRef}
+          hidden
+          type="file"
+          accept=".json,application/json"
+          onChange={importCharacter}
+        />
+        <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+          {importCard.isPending ? "导入中…" : "导入角色 JSON"}
+        </Button>
+        <Button
+          small
+          disabled={!parsed.success || busy}
+          onClick={() => downloadCharacter(editor.card)}
+        >
+          导出当前角色
+        </Button>
+        <Button small disabled={busy} onClick={() => requestGo({ workshop: true })}>
+          创意工坊
+        </Button>
         <Button small disabled={busy} onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
           ＋ 新建空白档案
         </Button>
@@ -321,6 +395,11 @@ export function CharactersScreen() {
         )}
 
         <section className={wb.editorWrap} aria-label="角色设计工作台">
+          {shareError && (
+            <p className={wb.error} role="alert">
+              角色卡导入失败：{shareError}
+            </p>
+          )}
           {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
           {boardData.isError && (
             <div role="alert">

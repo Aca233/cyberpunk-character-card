@@ -1,4 +1,11 @@
-import { type Board, boardPeople, RELATION_INFO, RELATIONS, type RelationKind } from "@cp/core";
+import {
+  type Acquaintance,
+  type Board,
+  boardPeople,
+  RELATION_INFO,
+  RELATIONS,
+  type RelationKind,
+} from "@cp/core";
 import { useState } from "react";
 import type { BoardData } from "../../api/client";
 import { ActionButton } from "../../ui/ActionButton";
@@ -26,6 +33,9 @@ interface Person {
   /** 原作人物的 id，有原作头像就画头像 */
   readonly npc?: string;
   readonly fromModule: boolean;
+  readonly catalogNpc?: boolean;
+  readonly preset?: Acquaintance;
+  readonly packId?: string;
 }
 
 const customId = () => `custom-${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
@@ -49,26 +59,57 @@ export function PeoplePicker({
   const own: Person[] = board.acquaintances
     .filter((a) => a.custom)
     .map((a) => ({ id: a.id, name: a.name, role: a.role || "自定义旧识", fromModule: false }));
-  const canon: Person[] = data.npcs.map((n) => ({
-    id: n.id,
-    name: n.alias ? `${n.name}（${n.alias}）` : n.name,
-    role: n.role,
-    npc: n.id,
-    fromModule: false,
-  }));
+  const canon: Person[] = data.npcs.map((n) => {
+    const preset = data.acquaintances?.find((entry) => entry.id === n.id);
+    return {
+      id: n.id,
+      name: n.alias ? `${n.name}（${n.alias}）` : n.name,
+      role: n.role,
+      npc: n.id,
+      fromModule: false,
+      ...(n.packId || preset?.catalogNpc ? { catalogNpc: true } : {}),
+      ...(n.packId ? { packId: n.packId } : {}),
+      ...(preset ? { preset } : {}),
+    };
+  });
+  const catalogIds = new Set(data.npcs.map((npc) => npc.id));
+  const workshopPresets: Person[] = (data.acquaintances ?? [])
+    .filter((preset) => !catalogIds.has(preset.id))
+    .map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      role: preset.role || "工坊旧识",
+      fromModule: false,
+      preset,
+      ...(preset.packId ? { packId: preset.packId } : {}),
+    }));
   const byId = new Map(board.acquaintances.map((a) => [a.id, a]));
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftRole, setDraftRole] = useState("");
-  const current = [...modulePeople, ...own, ...canon].find((p) => p.id === picked) ?? canon[0];
+  const current =
+    [...modulePeople, ...own, ...canon, ...workshopPresets].find((p) => p.id === picked) ??
+    canon[0];
 
   const setRelation = (p: Person, relation: RelationKind | "") => {
     const had = byId.get(p.id);
     const next = relation
       ? had
         ? board.acquaintances.map((a) => (a.id === p.id ? { ...a, relation } : a))
-        : [...board.acquaintances, { id: p.id, name: p.name.slice(0, 20), relation, note: "" }]
+        : [
+            ...board.acquaintances,
+            {
+              id: p.id,
+              name: p.name.slice(0, 20),
+              relation,
+              note: p.preset?.note ?? "",
+              ...(p.catalogNpc ? { catalogNpc: true } : {}),
+              ...(p.packId ? { packId: p.packId } : {}),
+              ...(p.preset?.role ? { role: p.preset.role } : {}),
+              ...(!p.catalogNpc && p.preset ? { custom: true } : {}),
+            },
+          ]
       : board.acquaintances.filter((a) => a.id !== p.id);
     commit({ ...board, acquaintances: next });
   };
@@ -116,7 +157,10 @@ export function PeoplePicker({
           className={styles.peopleRow}
           aria-pressed={p.id === current?.id}
           data-on={a ? "" : undefined}
-          onClick={() => setPicked(p.id)}
+          onClick={() => {
+            setPicked(p.id);
+            if (p.preset && !byId.has(p.id)) setRelation(p, p.preset.relation);
+          }}
         >
           <span className={styles.peopleFace} aria-hidden="true">
             {face ? <Asset id={face} className={styles.peopleFaceArt} /> : ([...p.name][0] ?? "?")}
@@ -136,6 +180,7 @@ export function PeoplePicker({
   const face = portraitOf(current?.npc);
   const chosen = board.acquaintances.filter((x) => data.npcs.some((n) => n.id === x.id)).length;
   const isOwn = current ? own.some((p) => p.id === current.id) : false;
+  const availableWorkshopPresets = workshopPresets.filter((p) => !byId.has(p.id));
 
   return (
     <div className={styles.people}>
@@ -197,6 +242,12 @@ export function PeoplePicker({
           夜之城人脉网络<small className={styles.peopleCount}>已建立联系 {chosen} 人</small>
         </h3>
         <ul>{canon.map(contact)}</ul>
+        {availableWorkshopPresets.length > 0 && (
+          <>
+            <h3 className={styles.peopleGroup}>工坊人脉预设</h3>
+            <ul>{availableWorkshopPresets.map(contact)}</ul>
+          </>
+        )}
       </nav>
       {current && (
         <section className={styles.peopleCard} aria-label={current.name}>

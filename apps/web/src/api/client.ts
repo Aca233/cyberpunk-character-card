@@ -1,4 +1,5 @@
 import type {
+  Acquaintance,
   ActionRequest,
   Board,
   BoardModule,
@@ -7,6 +8,7 @@ import type {
   ImagePromptRequest,
   ImagePromptResult,
   ImageStyleConfig,
+  InstalledWorkshopPack,
   Loadout,
   PhoneChatRequest,
   PlayerView,
@@ -15,6 +17,7 @@ import type {
   TurnCheckpointSummary,
   TurnInput,
   TurnUsage,
+  WorkshopPack,
 } from "@cp/core";
 
 import { offscreenPace, spoilersOn } from "../features/settings/prefs";
@@ -222,6 +225,7 @@ export interface CharacterEntry {
 /** 主板要用的表：模块库和创建时能装的义体 */
 export interface BoardData {
   readonly modules: readonly BoardModule[];
+  readonly acquaintances?: readonly Acquaintance[];
   readonly cyberware: readonly {
     readonly id: string;
     readonly name: string;
@@ -236,6 +240,8 @@ export interface BoardData {
     readonly ram?: number;
     readonly armor?: boolean;
     readonly accelerator?: boolean;
+    readonly custom?: boolean;
+    readonly packId?: string;
     readonly checks?: readonly string[];
     readonly attributes?: Readonly<Record<string, number>>;
     readonly ability: string;
@@ -275,6 +281,7 @@ export interface CanonNpcBrief {
   readonly alias?: string;
   readonly role: string;
   readonly look: string;
+  readonly packId?: string;
 }
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
@@ -618,6 +625,22 @@ export const api = {
     ),
   deleteCharacter: (id: string) => request<{ ok: true }>("DELETE", `/characters/${id}`),
   characterBoard: () => request<BoardData>("GET", "/characters/board"),
+  workshopPackages: () =>
+    request<{ packages: InstalledWorkshopPack[] }>("GET", "/workshop").then((r) => r.packages),
+  validateWorkshopPack: (pack: unknown) =>
+    request<{
+      valid: boolean;
+      issues: readonly string[];
+      summary?: Readonly<Record<string, number>>;
+    }>("POST", "/workshop/validate", pack),
+  installWorkshopPack: (pack: WorkshopPack) =>
+    request<{ package: InstalledWorkshopPack }>("POST", "/workshop", pack),
+  setWorkshopEnabled: (id: string, enabled: boolean) =>
+    request<{ package: InstalledWorkshopPack }>("PATCH", `/workshop/${encodeURIComponent(id)}`, {
+      enabled,
+    }),
+  removeWorkshopPack: (id: string) =>
+    request<{ ok: true }>("DELETE", `/workshop/${encodeURIComponent(id)}`),
   /** 自写模块交给辅助模型解读；会花一次模型调用 */
   interpretModule: (input: { slot: BoardSlot; text: string; board: Board }) =>
     request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),

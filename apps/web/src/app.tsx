@@ -15,6 +15,7 @@ import {
 } from "./features/status/StatusParts";
 import { StoryScreen } from "./features/story/StoryScreen";
 import { useStory } from "./features/story/store";
+import { WorkshopScreen } from "./features/workshop/WorkshopScreen";
 
 function Shell() {
   const busy = useStory((s) => s.phase !== "idle");
@@ -50,6 +51,7 @@ const routes = [
       { path: "/characters", element: <CharactersScreen /> },
       { path: "/play/:saveId", element: <StoryScreen /> },
       { path: "/settings", element: <SettingsScreen /> },
+      { path: "/workshop", element: <WorkshopScreen /> },
       // 开发用的页：地图校准、U0 神经界面视觉稿，只在 pnpm dev 下有
       ...(import.meta.env.DEV
         ? [

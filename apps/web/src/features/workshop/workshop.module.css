@@ -1,0 +1,246 @@
+.screen {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(56px, auto) minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+  padding: 0 48px 28px;
+  box-sizing: border-box;
+  color: var(--cp-text);
+  background: var(--cp-bg);
+  font-family: var(--font-ui);
+}
+
+.screen > :where(header, div) {
+  position: relative;
+  z-index: 1;
+}
+.bg,
+.shade,
+.scan {
+  position: absolute;
+  inset: 0;
+}
+.bg {
+  background-position: center 40%;
+  background-size: cover;
+}
+.shade {
+  background: rgb(5 5 10 / 76%);
+}
+.scan {
+  background-repeat: repeat;
+  opacity: 0.1;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.screen > .frame {
+  inset: 6px 20px 4px;
+  opacity: 0.72;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 28px;
+}
+.headBg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.head > :not(.headBg) {
+  position: relative;
+}
+.head h1 {
+  margin: 0;
+  color: var(--cp-red);
+  font-size: 21px;
+  font-weight: 700;
+}
+.spacer {
+  flex: 1;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  margin-top: 8px;
+  padding: 4px 8px 12px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+}
+.importArea {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 14px 18px;
+  background: rgb(9 10 15 / 78%);
+}
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--cp-cyan);
+}
+.sectionHead h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.sectionHead span,
+.note,
+.description,
+.counts {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.6;
+}
+.description,
+.counts {
+  overflow-wrap: anywhere;
+}
+.preview {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.6;
+}
+.preview summary {
+  color: var(--cp-cyan);
+  cursor: pointer;
+}
+.preview ul {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  margin: 8px 0 0;
+  padding-left: 1.2rem;
+  overflow-y: auto;
+}
+.preview li > :where(strong, span) {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.validation {
+  display: grid;
+  gap: 4px;
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
+}
+.validation[data-valid] {
+  color: var(--cp-cyan);
+}
+.validation ul {
+  max-height: 140px;
+  margin: 0;
+  padding-left: 1.2rem;
+  overflow: auto;
+  color: var(--cp-danger);
+}
+.actions,
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.error {
+  margin: 0;
+  color: var(--cp-danger);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+.packages {
+  display: grid;
+  gap: 8px;
+}
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgb(12 13 19 / 84%);
+}
+.packInfo {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.packTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+.packTitle strong {
+  color: var(--cp-text);
+  font-size: var(--fs-body);
+}
+.packTitle code {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+}
+.packInfo p,
+.packInfo small {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.enabled {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+.rowActions {
+  grid-column: 2 / -1;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .screen {
+    padding: 0 14px 18px;
+  }
+  .head {
+    padding: 10px 4px 8px;
+  }
+  .head h1 {
+    margin-right: auto;
+  }
+  .spacer {
+    display: none;
+  }
+  .body {
+    padding-inline: 2px;
+  }
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .enabled {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .rowActions {
+    grid-column: 1 / -1;
+  }
+}
