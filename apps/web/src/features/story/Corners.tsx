@@ -38,6 +38,7 @@ import {
   type View,
   woundTelemetry,
 } from "./view";
+import { weaponPreview } from "./weaponPreview";
 
 /**
  * 四角（2077-interface-plan.md 第九节）：A 生物监测左上、S 在场的人左中、G 未读左下、
@@ -1371,8 +1372,7 @@ export function Weapon({
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
   const soleWeapon = weapons.length === 1 ? weapons[0] : undefined;
-  const shownWeapons = weapons.slice(0, MAX_HUD_WEAPONS);
-  const extraWeapons = weapons.slice(MAX_HUD_WEAPONS);
+  const { shown: shownWeapons, extra: extraWeapons } = weaponPreview(inventory, MAX_HUD_WEAPONS);
   const weaponMeta = (w: (typeof weapons)[number]) => {
     const detail = inventory.details?.[w.id];
     const baseId = w.baseId ?? detail?.baseId ?? w.id;
@@ -1385,6 +1385,7 @@ export function Weapon({
       icon: weaponHudIconOf(baseId, detail?.subLabel),
       tip: [
         name,
+        inventory.heldWeapons?.includes(w.id) ? "当前持用" : null,
         detail?.subLabel,
         detail?.rarityLabel,
         modCount > 0 ? `已装 ${modCount} 件改装` : null,
@@ -1536,9 +1537,10 @@ export function Weapon({
                 {inventory.grenade
                   ? `手雷 ${inventory.grenade.charges}/${inventory.grenade.max}`
                   : "无手雷"}
-                {inventory.bulky.overloaded && (
+                {inventory.loadout.carryLevel !== "light" && (
                   <span className={styles.slotOverload}>
-                    {" · "}沉重 {inventory.bulky.count}/{inventory.bulky.max}
+                    {" · "}
+                    {inventory.loadout.carryLabel}
                   </span>
                 )}
               </small>
