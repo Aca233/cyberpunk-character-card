@@ -25,6 +25,12 @@ export const chipContents = [
             caption: "片角发行的本作原创封套，不是超梦录制画面。",
           },
           {
+            kind: "image",
+            url: "/media/everyday/night-market-sleeve.gif",
+            label: "六秒动态封套·GIF",
+            caption: "本作原创循环动图，直接随封套显示；不计入超梦体验时长。",
+          },
+          {
             kind: "video",
             url: "/media/everyday/night-market-sleeve.mp4",
             label: "六秒动态封套",
