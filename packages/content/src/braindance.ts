@@ -76,6 +76,20 @@ export const braindances = braindanceRules.BdWorkListSchema.parse([
         minutes: 5,
         outline:
           "录制者在狭窄后台调试键盘，与鼓手确认返场曲目。工作人员递温水，左侧监听音箱偶尔有低噪。",
+        media: [
+          {
+            kind: "image",
+            url: "/media/everyday/needle-drop-program.svg",
+            label: "《返场第三首》随片节目单",
+            caption:
+              "本作原创的发行资料，列出试音、返场与散场顺序；不是现实演出公告，也不包含未发现的分析材料。",
+          },
+          {
+            kind: "link",
+            url: "/media/everyday/needle-drop-program.svg",
+            label: "查看节目单原件",
+          },
+        ],
       },
       {
         id: "encore",

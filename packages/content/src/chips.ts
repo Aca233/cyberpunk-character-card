@@ -17,6 +17,29 @@ export const chipContents = [
         id: "sleeve",
         label: "封套与播放说明",
         text: "《摊灯熄灭以前》，十八分钟。录制：阿娴。收摊、夜宵和明天还要用的热水壶。此卡是经录制者同意出售的观看副本；普通芯片阅读器只能看封套，体验需使用超梦设备。片中没有观众互动。",
+        media: [
+          {
+            kind: "image",
+            url: "/media/everyday/night-market-sleeve.svg",
+            label: "《摊灯熄灭以前》平面封套",
+            caption: "片角发行的本作原创封套，不是超梦录制画面。",
+          },
+          {
+            kind: "video",
+            url: "/media/everyday/night-market-sleeve.mp4",
+            label: "六秒动态封套",
+            caption:
+              "本作原创静音宣传动画；不是十八分钟的超梦本体，播放此附件不代表已完成作品体验。",
+            poster: "/media/everyday/night-market-sleeve-poster.jpg",
+            captionsUrl: "/media/everyday/night-market-sleeve.vtt",
+          },
+          {
+            kind: "link",
+            url: "/media/everyday/night-market-sleeve.svg",
+            label: "打开封套原图",
+            caption: "查看这份随片宣传资料的原始图像文件。",
+          },
+        ],
       },
     ],
     requirements: [],
@@ -70,6 +93,14 @@ export const chipContents = [
         id: "power",
         label: "先断电再拆",
         text: "旧型号接地指示灯坏了也可能照常亮着。先在上游断开电源，再用实际可用的仪表确认。不要凭壳上贴纸判断插头脚位；收摊后借走的表，第二天开工前还回来。",
+        media: [
+          {
+            kind: "image",
+            url: "/media/everyday/repair-reference.svg",
+            label: "夜班维修检查顺序示意",
+            caption: "互助维修摊的原创提示图；没有具体接线信息，不能替代现场工具、读数与操作。",
+          },
+        ],
       },
       {
         id: "freezer",
