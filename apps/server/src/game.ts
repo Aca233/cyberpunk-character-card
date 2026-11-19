@@ -1,8 +1,6 @@
 import {
   DEFAULT_LOADOUT,
   DEFAULT_OPENING,
-  gameContent,
-  gameData,
   type OpeningContext,
   openingPremise,
   RADAR_ANCHORS,
@@ -93,6 +91,8 @@ import { AbortedError, UpstreamError } from "./providers/http";
 import type { LlmRouter } from "./providers/index";
 import { randomHex } from "./random";
 import type { TurnHub, TurnRun } from "./turns";
+import type { WorkshopStore } from "./workshop";
+import { requiredPackIds, workshopRuntime } from "./workshop-content";
 
 /** 每追加这么多条记录写一次快照 */
 export const SNAPSHOT_EVERY = 10;
@@ -180,6 +180,7 @@ export interface GameDeps {
   readonly presets?: PresetStore | undefined;
   /** 回合阶段断点存储：每步调用完成后落盘，防止报错重头再来 */
   readonly checkpoints?: TurnCheckpointStore | undefined;
+  readonly workshop?: WorkshopStore | undefined;
 }
 
 interface Loaded {
@@ -219,6 +220,10 @@ export class GameService {
 
   constructor(private readonly deps: GameDeps) {}
 
+  private runtime(meta: SaveMeta) {
+    return workshopRuntime(meta.workshopPacks ?? []);
+  }
+
   async list(): Promise<Record<string, unknown>[]> {
     const out: Record<string, unknown>[] = [];
     for (const id of await this.deps.saves.list()) {
@@ -244,7 +249,7 @@ export class GameService {
       try {
         const legend = await this.locks.run(id, async (): Promise<SavedLegend | null> => {
           const { meta, world, records } = await this.load(id);
-          const view = projectState(world, records, gameData);
+          const view = projectState(world, records, this.runtime(meta).data);
           const found = legendOf(view, world.time, meta.startTime);
           return found && { ...found, saveId: id, title: meta.title };
         });
@@ -269,13 +274,33 @@ export class GameService {
     const id = newSaveId();
     const entry = await this.deps.characters.get(input.characterId);
     if (!entry) return { status: 400, body: { error: "没有这个角色，先在角色页建一个" } };
+    const installed = (await this.deps.workshop?.list()) ?? [];
+    const required = requiredPackIds(entry.card.board);
+    const missing = [...required].filter(
+      (packId) => !installed.some((item) => item.pack.id === packId),
+    );
+    if (missing.length > 0) {
+      return {
+        status: 400,
+        body: {
+          error: `角色使用的内容包尚未安装：${missing.join("、")}。请先重新安装，或从角色卡移除相关内容。`,
+        },
+      };
+    }
+    const workshopPacks = installed
+      .filter((item) => item.enabled || required.has(item.pack.id))
+      .map((item) => item.pack);
+    if (workshopPacks.length > 40) {
+      return { status: 400, body: { error: "每份存档最多使用 40 个内容包，请先停用部分包。" } };
+    }
+    const runtime = workshopRuntime(workshopPacks);
     const matchInput = loadoutText(entry.card);
     const cardStart = entry.card.board?.startLocation;
     const startLocation =
       input.startLocation ??
       (cardStart && RADAR_ANCHORS.some((anchor) => anchor.id === cardStart)
         ? cardStart
-        : pickStartLocation(matchInput, gameContent.loadouts ?? []));
+        : pickStartLocation(matchInput, runtime.content.loadouts ?? []));
     const start = boardStart(entry.card);
     // 名册摘要在建档时冻结进 meta：之后名册再变，这份存档重放出来的提示词也不变
     const legends = legendNotes(await this.legends());
@@ -285,12 +310,13 @@ export class GameService {
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),
       opening: DEFAULT_OPENING,
-      loadouts: pickLoadouts(matchInput, gameContent.loadouts ?? [], DEFAULT_LOADOUT),
+      loadouts: pickLoadouts(matchInput, runtime.content.loadouts ?? [], DEFAULT_LOADOUT),
+      workshopPacks,
       ...(start ? { board: start } : {}),
       ...(legends.length > 0 ? { legends } : {}),
     };
     try {
-      newGameWorld(meta, gameContent);
+      newGameWorld(meta, runtime.content);
     } catch (error) {
       return {
         status: 400,
@@ -335,9 +361,10 @@ export class GameService {
       };
     }
     let world: WorldState;
+    const runtime = this.runtime(meta.data);
     try {
       world = replay(
-        { nextSeq: 0, world: withAllSlices(newGameWorld(meta.data, gameContent)) },
+        { nextSeq: 0, world: withAllSlices(newGameWorld(meta.data, runtime.content)) },
         records,
       );
     } catch (error) {
@@ -373,7 +400,7 @@ export class GameService {
       // 最后一条记录之前的世界：系统通知比的是这一步前后的变化
       const before =
         records.length > 0 ? await this.worldAt(id, meta, records.slice(0, -1)) : undefined;
-      const view = projectState(world, records, gameData, before);
+      const view = projectState(world, records, this.runtime(meta).data, before);
       const version = logVersion(records);
       const cp = await this.deps.checkpoints?.get(id);
       if (cp && cp.baseVersion === version) {
@@ -398,10 +425,11 @@ export class GameService {
     const { hub } = this.deps;
     return this.locks.run(id, async (): Promise<Reply> => {
       const { meta, world, records } = await this.load(id);
+      const runtime = this.runtime(meta);
       const version = logVersion(records);
       const done = records.find((r) => r.kind === "turn" && r.requestId === request.requestId);
       if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
-      const dead = deathBlock(world, records, version);
+      const dead = deathBlock(world, records, version, runtime.data);
       if (dead) return dead;
       const same = hub.byRequest(id, request.requestId);
       if (same) return { status: 202, body: { turnId: same.turnId, replayed: true } };
@@ -420,11 +448,11 @@ export class GameService {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再提交", version } };
       }
       if (request.input.sandevistan) {
-        const blocked = sandevistanBlock(world, records, gameData);
+        const blocked = sandevistanBlock(world, records, runtime.data);
         if (blocked) return { status: 409, body: { error: blocked, version } };
       }
       if (request.input.travel !== undefined) {
-        const blocked = travelBlock(world, gameData, request.input.travel);
+        const blocked = travelBlock(world, runtime.data, request.input.travel);
         if (blocked) return { status: 409, body: { error: blocked, version } };
       }
       if (request.input.replyTo !== undefined) {
@@ -446,6 +474,7 @@ export class GameService {
         run,
         world,
         records,
+        runtime.data,
         { kind: "action", input: request.input },
         meta.opening,
         meta.startTime,
@@ -461,11 +490,12 @@ export class GameService {
   /** 界面操作（装备、交易、读消息等）：不调用模型，结算后写一条 action 记录 */
   action(id: string, request: ActionRequest): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
-      const { world, records } = await this.load(id);
+      const { meta, world, records } = await this.load(id);
+      const runtime = this.runtime(meta);
       const version = logVersion(records);
       const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
       if (done) return { status: 200, body: { duplicate: true, seq: done.seq, version } };
-      const dead = deathBlock(world, records, version);
+      const dead = deathBlock(world, records, version, runtime.data);
       if (dead) return dead;
       if (this.deps.hub.running(id)) {
         return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
@@ -475,7 +505,7 @@ export class GameService {
       }
       const result = applyPlayerAction(world, request.action, {
         rng: this.deps.rng,
-        data: gameData,
+        data: runtime.data,
         facts: {
           memorySourceThrough: records.reduce((last, record) => Math.max(last, record.seq), -1),
         },
@@ -507,14 +537,18 @@ export class GameService {
   async phoneChat(id: string, request: PhoneChatRequest): Promise<Reply> {
     const checked = await this.locks.run(
       id,
-      async (): Promise<{ reply: Reply } | { world: WorldState; version: number }> => {
-        const { world, records } = await this.load(id);
+      async (): Promise<
+        | { reply: Reply }
+        | { world: WorldState; version: number; data: ReturnType<GameService["runtime"]>["data"] }
+      > => {
+        const { meta, world, records } = await this.load(id);
+        const runtime = this.runtime(meta);
         const version = logVersion(records);
         const done = records.find((r) => r.kind === "action" && r.requestId === request.requestId);
         if (done) {
           return { reply: { status: 200, body: { duplicate: true, seq: done.seq, version } } };
         }
-        const dead = deathBlock(world, records, version);
+        const dead = deathBlock(world, records, version, runtime.data);
         if (dead) return { reply: dead };
         const refuse = (error: string): { reply: Reply } => ({
           reply: { status: 409, body: { error, version } },
@@ -523,11 +557,11 @@ export class GameService {
         if (request.baseVersion !== version) return refuse("存档已经更新过，请刷新后再发");
         const target = validatePhoneChatTarget(world, request.contact);
         if (!target.ok) return refuse(target.reason);
-        return { world, version };
+        return { world, version, data: runtime.data };
       },
     );
     if ("reply" in checked) return checked.reply;
-    const { world, version } = checked;
+    const { world, version, data } = checked;
 
     const redact = await this.deps.config.redactor();
     const aux = await this.deps.llm.resolve("aux");
@@ -548,7 +582,7 @@ export class GameService {
         {
           llm: this.deps.llm,
           rng: this.deps.rng,
-          data: gameData,
+          data,
           purpose,
           signal: AbortSignal.timeout(PHONE_CHAT_TIMEOUT_MS),
         },
@@ -613,6 +647,7 @@ export class GameService {
   restart(id: string, request: z.output<typeof RestartRequestSchema>): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
       const { meta, world, records } = await this.load(id);
+      const runtime = this.runtime(meta);
       const version = logVersion(records);
       if (this.deps.hub.running(id)) {
         return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
@@ -620,7 +655,7 @@ export class GameService {
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
       }
-      const view = projectState(world, records, gameData);
+      const view = projectState(world, records, runtime.data);
       if (!view.death) return { status: 409, body: { error: "角色还活着，不用重来", version } };
       if (!view.death.canRestart) {
         return {
@@ -631,7 +666,7 @@ export class GameService {
           },
         };
       }
-      const start = sceneStartSeq(newGameWorld(meta, gameContent), records);
+      const start = sceneStartSeq(newGameWorld(meta, runtime.content), records);
       const voided = voidedSeqs(records);
       const targets = records.filter(
         (r) => r.seq >= start && r.kind !== "void" && !voided.has(r.seq),
@@ -665,7 +700,8 @@ export class GameService {
    */
   regenerate(id: string, request: z.output<typeof RegenerateRequestSchema>): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
-      const { world, records } = await this.load(id);
+      const { meta, world, records } = await this.load(id);
+      const runtime = this.runtime(meta);
       const version = logVersion(records);
       if (this.deps.hub.running(id)) {
         return { status: 409, body: { error: "这一轮还在生成，等它结束再操作", version } };
@@ -673,7 +709,7 @@ export class GameService {
       if (request.baseVersion !== version) {
         return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
       }
-      if (projectState(world, records, gameData).death) {
+      if (projectState(world, records, runtime.data).death) {
         return { status: 409, body: { error: "角色已经死了，不能重新生成", version } };
       }
       const voided = voidedSeqs(records);
@@ -722,14 +758,16 @@ export class GameService {
     const checked = await this.locks.run(
       id,
       async (): Promise<{ reply: Reply } | { last: TurnRecord; version: number }> => {
-        const { world, records } = await this.load(id);
+        const { meta, world, records } = await this.load(id);
+        const runtime = this.runtime(meta);
         const version = logVersion(records);
         const refuse = (error: string): { reply: Reply } => ({
           reply: { status: 409, body: { error, version } },
         });
         if (this.deps.hub.running(id)) return refuse("这一轮还在生成，等它结束再操作");
         if (request.baseVersion !== version) return refuse("存档已经更新过，请刷新后再操作");
-        if (projectState(world, records, gameData).death) return refuse("角色已经死了，不能改写");
+        if (projectState(world, records, runtime.data).death)
+          return refuse("角色已经死了，不能改写");
         const voided = voidedSeqs(records);
         const last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
         if (last?.kind !== "turn") {
@@ -813,13 +851,14 @@ export class GameService {
   context(id: string, seq: number): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
       const meta = await this.deps.saves.readMeta(id);
+      const runtime = this.runtime(meta);
       const { records } = await this.deps.saves.loadLog(id);
       const record = records[seq];
       if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
         return { status: 404, body: { error: `没有第 ${seq} 轮` } };
       }
       const before = records.slice(0, seq);
-      const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
+      const world = replay({ nextSeq: 0, world: newGameWorld(meta, runtime.content) }, before);
       const input = TurnInputSchema.safeParse(record.input);
       let prompts: StagePrompt[] = [];
       let rebuildError: string | null = null;
@@ -827,7 +866,7 @@ export class GameService {
         if (!input.success) throw new Error("这一轮的玩家输入格式不对");
         const plan: NarratorPlan = { kind: "action", input: input.data };
         const extras = {
-          data: gameData,
+          data: runtime.data,
           opening: openingPremise(
             meta.opening,
             meta.startLocation,
@@ -986,7 +1025,7 @@ export class GameService {
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
             replay(
-              { nextSeq: 0, world: newGameWorld(meta, gameContent) },
+              { nextSeq: 0, world: newGameWorld(meta, runtime.content) },
               records.slice(0, seq + 1),
             ).slices.city ?? {},
           ).events.map((e) => ({
@@ -1001,7 +1040,7 @@ export class GameService {
           })),
           // 账目对账：最近 10 轮各改了哪些硬数值，和当时生效的指令
           ledger: buildLedger(
-            { nextSeq: 0, world: newGameWorld(meta, gameContent) },
+            { nextSeq: 0, world: newGameWorld(meta, runtime.content) },
             records.slice(0, seq + 1),
           ),
           unsettled: record.unsettled ?? null,
@@ -1026,6 +1065,7 @@ export class GameService {
   evalDraft(id: string, seq: number): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
       const meta = await this.deps.saves.readMeta(id);
+      const runtime = this.runtime(meta);
       const { records } = await this.deps.saves.loadLog(id);
       const record = records[seq];
       if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
@@ -1035,7 +1075,7 @@ export class GameService {
       if (!input.success) return { status: 400, body: { error: "这一轮的玩家输入格式不对" } };
       const before = records.slice(0, seq);
       const ask = { input: input.data };
-      const world = replay({ nextSeq: 0, world: newGameWorld(meta, gameContent) }, before);
+      const world = replay({ nextSeq: 0, world: newGameWorld(meta, runtime.content) }, before);
       const opening = openingPremise(
         meta.opening,
         meta.startLocation,
@@ -1076,6 +1116,7 @@ export class GameService {
     run: TurnRun,
     world: WorldState,
     records: readonly LogRecord[],
+    data: Readonly<Record<string, unknown>>,
     plan: NarratorPlan,
     opening: string | undefined,
     startTime: number,
@@ -1131,7 +1172,7 @@ export class GameService {
           auxMaxOutputTokens: aux.ok ? aux.profile.maxOutputTokens : undefined,
           approvedSpend,
           rng: this.deps.rng,
-          data: gameData,
+          data,
           opening: openingPremise(opening, startLocation, openingContextOf(world, startTime)),
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
@@ -1180,7 +1221,7 @@ export class GameService {
         label: "⑤ 写入回合日志",
         detail: "保存世界状态与快照",
       });
-      const saved = await this.commit(run, plan, turn, usage, world);
+      const saved = await this.commit(run, plan, turn, usage, world, data);
       this.pendingSpends.delete(run.saveId);
       if (turn.repairs > 0) {
         this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
@@ -1236,6 +1277,7 @@ export class GameService {
     turn: NarratorTurn,
     usage: TurnUsage | undefined,
     before: WorldState,
+    data: Readonly<Record<string, unknown>>,
   ): Promise<{ seq: number; version: number }> {
     const { saves } = this.deps;
     return this.locks.run(run.saveId, async () => {
@@ -1248,10 +1290,10 @@ export class GameService {
       const seq = run.baseVersion;
       const media = turn.draft
         ? []
-        : collectPresentedContentMedia(before, turn.world, turn.commands, gameData);
+        : collectPresentedContentMedia(before, turn.world, turn.commands, data);
       let imageContext: ReturnType<typeof buildImageSceneContext> | undefined;
       try {
-        imageContext = buildImageSceneContext(turn.world, [], gameData, turn.text);
+        imageContext = buildImageSceneContext(turn.world, [], data, turn.text);
       } catch (error) {
         this.deps.log(
           `存档 ${run.saveId} 第 ${seq} 轮的配图场景记录失败，配图将仅依据正文：${error instanceof Error ? error.message : String(error)}`,
@@ -1350,9 +1392,10 @@ export class GameService {
     meta: SaveMeta,
     records: readonly LogRecord[],
   ): Promise<WorldState> {
+    const runtime = this.runtime(meta);
     const snapshot = pickSnapshot(await this.deps.saves.readSnapshots(id), records) ?? {
       nextSeq: 0,
-      world: newGameWorld(meta, gameContent),
+      world: newGameWorld(meta, runtime.content),
     };
     return replay({ ...snapshot, world: withAllSlices(snapshot.world) }, records);
   }
@@ -1361,11 +1404,12 @@ export class GameService {
   private async load(id: string): Promise<Loaded> {
     const { saves } = this.deps;
     const meta = await saves.readMeta(id);
+    const runtime = this.runtime(meta);
     const log = await saves.loadLog(id);
     if (log.droppedPartialTail) this.deps.log(`存档 ${id} 的回合日志末尾有半行，已经截掉`);
     const snapshot = pickSnapshot(await saves.readSnapshots(id), log.records) ?? {
       nextSeq: 0,
-      world: newGameWorld(meta, gameContent),
+      world: newGameWorld(meta, runtime.content),
     };
     return {
       meta,
@@ -1400,8 +1444,9 @@ function deathBlock(
   world: WorldState,
   records: readonly LogRecord[],
   version: number,
+  data: Readonly<Record<string, unknown>>,
 ): Reply | undefined {
-  const { death, ended } = projectState(world, records, gameData);
+  const { death, ended } = projectState(world, records, data);
   if (ended && !death) {
     return {
       status: 409,

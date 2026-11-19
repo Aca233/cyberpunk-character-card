@@ -16,7 +16,9 @@ import { imageRoutes, saveImageRoutes } from "./routes/images";
 import { presetRoutes } from "./routes/presets";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
+import { workshopRoutes } from "./routes/workshop";
 import { TurnHub } from "./turns";
+import type { WorkshopStore } from "./workshop";
 
 export interface AppDeps {
   readonly config: ConfigService;
@@ -34,6 +36,7 @@ export interface AppDeps {
   readonly images?: ImageStore | undefined;
   /** 回合阶段断点存储；传了可跨刷新保存中间阶段结果 */
   readonly checkpoints?: TurnCheckpointStore | undefined;
+  readonly workshop?: WorkshopStore | undefined;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -53,6 +56,7 @@ export function createApp(deps: AppDeps): Hono {
     log: deps.log,
     presets: deps.presets,
     checkpoints,
+    workshop: deps.workshop,
   });
   const app = new Hono();
   app.onError(async (error, c) => {
@@ -91,7 +95,8 @@ export function createApp(deps: AppDeps): Hono {
     app.route("/api/images", imageRoutes(deps.images, imageRouter, llm, deps.config, clock));
     app.route("/api/saves", saveImageRoutes(deps.images));
   }
-  app.route("/api/characters", characterRoutes(deps.characters, clock, llm));
+  app.route("/api/characters", characterRoutes(deps.characters, clock, llm, deps.workshop));
+  if (deps.workshop) app.route("/api/workshop", workshopRoutes(deps.workshop, clock));
   app.route("/api/saves", saveRoutes(game, hub));
   return app;
 }
