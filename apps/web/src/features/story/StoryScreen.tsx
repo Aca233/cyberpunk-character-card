@@ -70,14 +70,13 @@ import { buildTurnPromptRequest, ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
-import { VehiclesPage } from "./VehiclesPage";
 import { diffViews, type Speaker, type Toast, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "factions" | "shards";
-/** 随身物品、存放位置与车辆统一作为右下角装备块的一级页签。 */
-type GearTab = "carried" | "stored" | "vehicles";
-const GEAR_TABS: readonly GearTab[] = ["carried", "stored", "vehicles"];
+/** 随身物品（含名下车辆）与存放位置作为右下角装备块的一级页签。 */
+type GearTab = "carried" | "stored";
+const GEAR_TABS: readonly GearTab[] = ["carried", "stored"];
 type BioTab = "character" | "cyberware" | "chronicle";
 
 interface AutoImageTask {
@@ -279,7 +278,7 @@ export function StoryScreen() {
   const offers = view?.offers;
 
   const busy = story.phase !== "idle";
-  // 装备块一级页签（随身 / 存放 / 车辆）与当前选中的存放点；收起后复位回随身页，避免悬停误弹
+  // 装备块一级页签（随身 / 存放）与当前选中的存放点；收起后复位回随身页，避免悬停误弹
   const [gearTab, setGearTab] = useState<GearTab>("carried");
   const [inventoryFocus, setInventoryFocus] = useState<{
     readonly filter?: InventoryFilter;
@@ -861,6 +860,7 @@ export function StoryScreen() {
         : undefined;
   const carriedUniqueCount =
     view.inventory.clothing.length +
+    view.travel.vehicles.length +
     new Set([
       ...Object.entries(view.inventory.backpack)
         .filter(([, n]) => n > 0)
@@ -874,17 +874,13 @@ export function StoryScreen() {
     0,
   );
   const hasReachableStorage = view.safehouse.storage.some((g) => g.canStore || g.canTake);
+  const openStorageTarget = (key: string) => {
+    setStorageKey(key);
+    setGearTab("stored");
+  };
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
-      {gearTab === "vehicles" ? (
-        <VehiclesPage
-          view={view}
-          onOpenStorage={(key) => {
-            setStorageKey(key);
-            setGearTab("stored");
-          }}
-        />
-      ) : gearTab === "stored" ? (
+      {gearTab === "stored" ? (
         <InventoryStorage
           groups={view.safehouse.storage}
           selectedKey={storageKey}
@@ -909,6 +905,7 @@ export function StoryScreen() {
           view={view}
           storageKey={storageKey}
           onSelectStorage={setStorageKey}
+          onOpenStorage={openStorageTarget}
           initialFocus={inventoryFocus}
           disabledReason={gearDisabledReason}
           onHeal={
@@ -1122,7 +1119,6 @@ export function StoryScreen() {
                 tabs={[
                   ["carried", "随身", carriedUniqueCount],
                   ["stored", "存放", storedTotalCount, hasReachableStorage],
-                  ["vehicles", "车辆", view.travel.vehicles.length],
                 ]}
                 value={gearTab}
                 onChange={setGearTab}

@@ -1477,7 +1477,7 @@ export function Weapon({
   readonly peek: PeekState;
   /** 展开区里的完整物品栏 */
   readonly full: ReactNode;
-  /** 展开区顶栏页签（随身 / 存放 / 车辆） */
+  /** 展开区顶栏页签（随身 / 存放） */
   readonly tabs?: ReactNode;
 }) {
   const { inventory, money } = view;

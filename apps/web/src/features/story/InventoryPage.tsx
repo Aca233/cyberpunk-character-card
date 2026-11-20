@@ -10,6 +10,7 @@ import mediaStyles from "./content-media.module.css";
 import type { PlaceInventoryItem } from "./InventoryStorage";
 import styles from "./inventory.module.css";
 import { UnreadBadge } from "./Phone";
+import { vehicleArtOf } from "./vehicle-art";
 import {
   CONCEALMENT_LABELS,
   displayItemName,
@@ -22,7 +23,15 @@ import { type ShopModMeta, WeaponSlotInspector } from "./WeaponSlotInspector";
 /** 物品格九宫格切法，同四角在场的人用的 map.filterCell* */
 const CELL_SLICE = [20, 30, 30, 20] as const;
 
-export type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "neural" | "misc";
+export type InventoryFilter =
+  | "all"
+  | "usable"
+  | "weapon"
+  | "clothing"
+  | "mod"
+  | "neural"
+  | "vehicle"
+  | "misc";
 
 type InventorySort = "default" | "rarity" | "kind" | "carry";
 
@@ -51,15 +60,26 @@ const KIND_RANK: Readonly<Record<string, number>> = {
   clothing: 5,
   mod: 6,
   misc: 7,
+  vehicle: 8,
 };
 
-interface InventoryEntry {
-  readonly key: string;
-  readonly id: string;
-  readonly count: number;
-  readonly worn: boolean;
-  readonly slot?: inventoryRules.ClothingSlot | undefined;
-}
+type VehicleView = View["travel"]["vehicles"][number];
+
+type InventoryEntry =
+  | {
+      readonly entryType: "item";
+      readonly key: string;
+      readonly id: string;
+      readonly count: number;
+      readonly worn: boolean;
+      readonly slot?: inventoryRules.ClothingSlot | undefined;
+    }
+  | {
+      readonly entryType: "vehicle";
+      readonly key: string;
+      readonly id: string;
+      readonly vehicle: VehicleView;
+    };
 
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
@@ -70,13 +90,15 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 /**
  * 随身物品栏（O）：计数筛选/排序/搜索 + 全高双栏独立滚动 + 键盘快操。
- * 已穿服装直接置顶合入随身列表并标注「已穿」；个人神经芯片槽统一展示在展开的生物检测面板顶部；
- * 一级页签（随身 / 存放 / 车辆）与携带负担刻度由外层 Weapon 展开顶栏统一承载。
+ * 已穿服装置顶并标注「已穿」；名下车辆并入条目与「车辆」筛选并支持直达后备箱；
+ * 个人神经芯片槽统一展示在展开的生物检测面板顶部；
+ * 一级页签（随身 / 存放）与携带负担刻度由外层 Weapon 展开顶栏统一承载。
  */
 export function InventoryPage({
   view,
   storageKey,
   onSelectStorage,
+  onOpenStorage,
   initialFocus,
   onEquip,
   onUnequip,
@@ -92,6 +114,8 @@ export function InventoryPage({
   readonly view: View;
   readonly storageKey: string | null;
   readonly onSelectStorage: (key: string) => void;
+  /** 从车辆条目直达对应后备箱的存放视图 */
+  readonly onOpenStorage?: ((storageKey: string) => void) | undefined;
   /** 从其他面板（如生物检测的神经芯片槽）跳入时的预设筛选与定位物品 */
   readonly initialFocus?:
     | { readonly filter?: InventoryFilter; readonly itemId?: string; readonly nonce: number }
@@ -129,6 +153,10 @@ export function InventoryPage({
     () => new Map(view.shards.carried.map((chip) => [chip.carrier, chip])),
     [view.shards.carried],
   );
+  const storageByKey = useMemo(
+    () => new Map(view.safehouse.storage.map((group) => [group.key, group])),
+    [view.safehouse.storage],
+  );
 
   const [filter, setFilter] = useState<InventoryFilter>(() => initialFocus?.filter ?? "all");
   const [sort, setSort] = useState<InventorySort>("default");
@@ -137,14 +165,17 @@ export function InventoryPage({
   const [pickedItem, setPickedItem] = useState<{
     id: string;
     worn?: boolean;
+    entryType?: "item" | "vehicle";
     fallbackIndex?: number;
-  } | null>(() => (initialFocus?.itemId ? { id: initialFocus.itemId, worn: false } : null));
+  } | null>(() =>
+    initialFocus?.itemId ? { id: initialFocus.itemId, worn: false, entryType: "item" } : null,
+  );
 
   useEffect(() => {
     if (!initialFocus) return;
     if (initialFocus.filter) setFilter(initialFocus.filter);
     if (initialFocus.itemId) {
-      setPickedItem({ id: initialFocus.itemId, worn: false });
+      setPickedItem({ id: initialFocus.itemId, worn: false, entryType: "item" });
       setSearch("");
     }
   }, [initialFocus]);
@@ -203,9 +234,10 @@ export function InventoryPage({
     [carried],
   );
 
-  // 统一随身条目：已穿服装置顶，后接随身背包与快捷补给
+  // 统一随身条目：已穿服装置顶 → 随身背包与快捷补给 → 名下车辆置底（不挤占日常随身物品）
   const allEntries = useMemo<readonly InventoryEntry[]>(() => {
     const wornEntries: InventoryEntry[] = inventory.clothing.map((entry) => ({
+      entryType: "item",
       key: `worn:${entry.slot}:${entry.id}`,
       id: entry.id,
       count: 1,
@@ -213,13 +245,20 @@ export function InventoryPage({
       slot: entry.slot,
     }));
     const bagEntries: InventoryEntry[] = allCarried.map(([id, count]) => ({
+      entryType: "item",
       key: id,
       id,
       count,
       worn: false,
     }));
-    return [...wornEntries, ...bagEntries];
-  }, [allCarried, inventory.clothing]);
+    const vehicleEntries: InventoryEntry[] = view.travel.vehicles.map((vehicle) => ({
+      entryType: "vehicle",
+      key: `vehicle:${vehicle.id}`,
+      id: vehicle.id,
+      vehicle,
+    }));
+    return [...wornEntries, ...bagEntries, ...vehicleEntries];
+  }, [allCarried, inventory.clothing, view.travel.vehicles]);
 
   const shopModMeta = useMemo(() => {
     const map = new Map<string, ShopModMeta>();
@@ -251,7 +290,7 @@ export function InventoryPage({
     return map;
   }, [view.shops]);
 
-  // 各类目数量统计（含已穿服装）
+  // 各类目数量统计（含已穿服装与名下车辆）
   const filterCounts = useMemo(() => {
     const counts: Record<InventoryFilter, number> = {
       all: allEntries.length,
@@ -260,9 +299,14 @@ export function InventoryPage({
       clothing: 0,
       mod: 0,
       neural: 0,
+      vehicle: 0,
       misc: 0,
     };
     for (const entry of allEntries) {
+      if (entry.entryType === "vehicle") {
+        counts.vehicle += 1;
+        continue;
+      }
       if (entry.worn) {
         counts.clothing += 1;
         continue;
@@ -284,6 +328,25 @@ export function InventoryPage({
   const visibleEntries = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     const filtered = allEntries.filter((entry) => {
+      if (entry.entryType === "vehicle") {
+        if (filter !== "all" && filter !== "vehicle") return false;
+        if (!query) return true;
+        const { vehicle } = entry;
+        const haystack = [
+          vehicle.name,
+          vehicle.maker ?? "",
+          vehicle.classLabel,
+          vehicle.locationName,
+          vehicle.conditionLabel,
+          vehicle.here ? "在身边 当前地点" : "",
+          vehicle.stolen ? "赃车" : "",
+          "车辆 载具 后备箱",
+        ]
+          .join(" ")
+          .toLocaleLowerCase();
+        return haystack.includes(query);
+      }
+
       const detail = inventory.details?.[entry.id];
       const kind = entry.worn ? "clothing" : detail?.kind;
       const isNeural = !entry.worn && Boolean(detail?.neuralGroup);
@@ -318,25 +381,32 @@ export function InventoryPage({
     if (sort === "default") return filtered;
 
     return [...filtered].sort((a, b) => {
-      const dA = inventory.details?.[a.id];
-      const dB = inventory.details?.[b.id];
+      const aVehicle = a.entryType === "vehicle";
+      const bVehicle = b.entryType === "vehicle";
+      const dA = aVehicle ? undefined : inventory.details?.[a.id];
+      const dB = bVehicle ? undefined : inventory.details?.[b.id];
       if (sort === "rarity") {
         const iconicDiff = Number(Boolean(dB?.iconic)) - Number(Boolean(dA?.iconic));
         if (iconicDiff !== 0) return iconicDiff;
-        const rA = RARITY_RANK[dA?.rarity ?? inventory.rarity[a.id] ?? ""] ?? 0;
-        const rB = RARITY_RANK[dB?.rarity ?? inventory.rarity[b.id] ?? ""] ?? 0;
+        const rA = aVehicle ? 0 : (RARITY_RANK[dA?.rarity ?? inventory.rarity[a.id] ?? ""] ?? 0);
+        const rB = bVehicle ? 0 : (RARITY_RANK[dB?.rarity ?? inventory.rarity[b.id] ?? ""] ?? 0);
         if (rB !== rA) return rB - rA;
       } else if (sort === "kind") {
-        const kA = KIND_RANK[a.worn ? "clothing" : (dA?.kind ?? "misc")] ?? 9;
-        const kB = KIND_RANK[b.worn ? "clothing" : (dB?.kind ?? "misc")] ?? 9;
+        const kA =
+          KIND_RANK[aVehicle ? "vehicle" : a.worn ? "clothing" : (dA?.kind ?? "misc")] ?? 9;
+        const kB =
+          KIND_RANK[bVehicle ? "vehicle" : b.worn ? "clothing" : (dB?.kind ?? "misc")] ?? 9;
         if (kA !== kB) return kA - kB;
       } else if (sort === "carry") {
-        const cA = a.worn ? 0 : (dA?.carryUnits ?? 0);
-        const cB = b.worn ? 0 : (dB?.carryUnits ?? 0);
+        const cA = aVehicle || a.worn ? 0 : (dA?.carryUnits ?? 0);
+        const cB = bVehicle || b.worn ? 0 : (dB?.carryUnits ?? 0);
         if (cB !== cA) return cB - cA;
       }
-      if (a.worn !== b.worn) return a.worn ? -1 : 1;
-      return itemName(a.id).localeCompare(itemName(b.id), "zh-Hans-CN");
+      if (aVehicle !== bVehicle) return aVehicle ? 1 : -1;
+      if (!aVehicle && !bVehicle && a.worn !== b.worn) return a.worn ? -1 : 1;
+      const nameA = aVehicle ? a.vehicle.name : itemName(a.id);
+      const nameB = bVehicle ? b.vehicle.name : itemName(b.id);
+      return nameA.localeCompare(nameB, "zh-Hans-CN");
     });
   }, [
     allEntries,
@@ -350,14 +420,17 @@ export function InventoryPage({
     sort,
   ]);
 
-  // 智能焦点保持：支持穿脱切换、武器改装物化 ID 变化追踪与耗尽/存入后就近邻项补位
+  // 智能焦点保持：支持穿脱切换、车辆条目、武器改装物化 ID 变化追踪与耗尽/存入后就近邻项补位
   const matchedEntry = pickedItem?.id
-    ? (visibleEntries.find(
-        (entry) => entry.id === pickedItem.id && entry.worn === Boolean(pickedItem.worn),
-      ) ??
-      visibleEntries.find((entry) => entry.id === pickedItem.id) ??
+    ? (visibleEntries.find((entry) => {
+        if (pickedItem.entryType && entry.entryType !== pickedItem.entryType) return false;
+        if (entry.entryType === "vehicle") return entry.id === pickedItem.id;
+        return entry.id === pickedItem.id && entry.worn === Boolean(pickedItem.worn);
+      }) ??
+      visibleEntries.find((entry) => entry.entryType === "item" && entry.id === pickedItem.id) ??
       visibleEntries.find(
         (entry) =>
+          entry.entryType === "item" &&
           !entry.worn &&
           inventory.details?.[entry.id]?.baseId ===
             (inventory.details?.[pickedItem.id]?.baseId ?? baseWeaponIdOf(pickedItem.id)),
@@ -368,13 +441,18 @@ export function InventoryPage({
       ? visibleEntries[Math.min(pickedItem.fallbackIndex, visibleEntries.length - 1)]
       : visibleEntries[0];
   const selectedEntry = matchedEntry ?? fallbackEntry ?? null;
-  const selectedIsWorn = Boolean(selectedEntry?.worn);
+  const selectedIsWorn = selectedEntry?.entryType === "item" && selectedEntry.worn;
   const selectedIndex = selectedEntry
     ? visibleEntries.findIndex((entry) => entry.key === selectedEntry.key)
     : -1;
 
-  const selectItem = useCallback((id: string, worn = false, fallbackIndex?: number) => {
-    setPickedItem(fallbackIndex === undefined ? { id, worn } : { id, worn, fallbackIndex });
+  const selectEntry = useCallback((entry: InventoryEntry, fallbackIndex?: number) => {
+    setPickedItem({
+      id: entry.id,
+      entryType: entry.entryType,
+      ...(entry.entryType === "item" ? { worn: entry.worn } : {}),
+      ...(fallbackIndex !== undefined ? { fallbackIndex } : {}),
+    });
     setOpenSlotPicker(null);
     setUseError("");
   }, []);
@@ -400,7 +478,7 @@ export function InventoryPage({
 
   // 选中物品的派生操作状态（提取到顶层以便键盘 Enter 和双击动作复用）
   const selectedCtx = useMemo(() => {
-    if (!selectedEntry) return null;
+    if (selectedEntry?.entryType !== "item") return null;
     const { id, count, worn } = selectedEntry;
     const to = worn ? undefined : inventory.equipTo[id];
     const detail = inventory.details?.[id];
@@ -481,10 +559,10 @@ export function InventoryPage({
     (id: string, kind: string | undefined) => {
       if (!onEquip || usingItem || disabledReason) return;
       if (kind === "clothing") {
-        setPickedItem({ id, worn: true });
+        setPickedItem({ id, worn: true, entryType: "item" });
         showReceipt(`已穿上「${itemName(id)}」`, id);
       } else {
-        setPickedItem({ id, worn: false });
+        setPickedItem({ id, worn: false, entryType: "item" });
         showReceipt(
           kind === "healing"
             ? `已将「${itemName(id)}」设为当前治疗品`
@@ -500,7 +578,7 @@ export function InventoryPage({
   const triggerUnequip = useCallback(
     (id: string) => {
       if (!onUnequip || usingItem || disabledReason) return;
-      setPickedItem({ id, worn: false });
+      setPickedItem({ id, worn: false, entryType: "item" });
       showReceipt(`已脱下「${itemName(id)}」并放回随身背包`, id);
       onUnequip(id);
     },
@@ -521,9 +599,15 @@ export function InventoryPage({
     [disabledReason, itemName, onMod, showReceipt, usingItem],
   );
 
-  // 安全快操：双击列表项或按 Enter 时执行“穿上 / 脱下 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
+  // 安全快操：双击列表项或按 Enter 时执行“打开后备箱 / 穿上 / 脱下 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
   const triggerSafePrimary = useCallback(
     (entry: InventoryEntry) => {
+      if (entry.entryType === "vehicle") {
+        if (storageByKey.has(entry.key) && onOpenStorage) {
+          onOpenStorage(entry.key);
+        }
+        return;
+      }
       if (disabledReason || usingItem) return;
       if (entry.worn) {
         if (onUnequip) triggerUnequip(entry.id);
@@ -577,11 +661,13 @@ export function InventoryPage({
       itemName,
       onEquip,
       onHeal,
+      onOpenStorage,
       onSuppressant,
       onUnequip,
       quickItems,
       runDirectUse,
       selectedCtx,
+      storageByKey,
       triggerEquip,
       triggerUnequip,
       usingItem,
@@ -625,7 +711,7 @@ export function InventoryPage({
         const nextIdx = (cur + delta + visibleEntries.length) % visibleEntries.length;
         const nextEntry = visibleEntries[nextIdx];
         if (nextEntry) {
-          selectItem(nextEntry.id, nextEntry.worn, nextIdx);
+          selectEntry(nextEntry, nextIdx);
           const row = listRef.current?.querySelector<HTMLElement>(`[data-item-index="${nextIdx}"]`);
           row?.scrollIntoView({ block: "nearest" });
         }
@@ -650,7 +736,7 @@ export function InventoryPage({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [selectItem, selectedEntry, selectedIndex, triggerSafePrimary, visibleEntries]);
+  }, [selectEntry, selectedEntry, selectedIndex, triggerSafePrimary, visibleEntries]);
 
   const places = view.safehouse.forSale.length > 0;
   const storage = view.safehouse.storage;
@@ -677,6 +763,7 @@ export function InventoryPage({
     ["clothing", "服装", filterCounts.clothing],
     ["mod", "改装件", filterCounts.mod],
     ["neural", "芯片/超梦", filterCounts.neural],
+    ["vehicle", "车辆", filterCounts.vehicle],
     ["misc", "杂物", filterCounts.misc],
   ];
 
@@ -801,13 +888,110 @@ export function InventoryPage({
           <div className={styles.browser}>
             <ul ref={listRef} className={styles.itemList} aria-label="选择随身物品">
               {visibleEntries.map((entry, index) => {
+                const isSelected = selectedEntry?.key === entry.key;
+
+                if (entry.entryType === "vehicle") {
+                  const { vehicle } = entry;
+                  const art = vehicleArtOf(vehicle.model);
+                  const trunk = storageByKey.get(entry.key);
+                  const trunkCount = trunk
+                    ? trunk.items.reduce((sum, row) => sum + row.count, 0)
+                    : 0;
+                  const locationSummary =
+                    vehicle.location === null
+                      ? "位置未知"
+                      : vehicle.here
+                        ? `停在当前地点 · ${vehicle.locationName}`
+                        : `停在 ${vehicle.locationName}`;
+
+                  return (
+                    <li key={entry.key}>
+                      <button
+                        type="button"
+                        data-item-index={index}
+                        className={styles.itemRow}
+                        aria-pressed={isSelected}
+                        data-vehicle-here={vehicle.here || undefined}
+                        onClick={() => selectEntry(entry, index)}
+                        onDoubleClick={() => {
+                          selectEntry(entry, index);
+                          triggerSafePrimary(entry);
+                        }}
+                      >
+                        <NineSlice
+                          id="map.filterCellBg"
+                          tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                          slice={CELL_SLICE}
+                        />
+                        <NineSlice
+                          id="map.filterCellFg"
+                          tint="var(--item-line)"
+                          slice={CELL_SLICE}
+                        />
+
+                        <span className={styles.itemThumb} aria-hidden>
+                          <span
+                            className={styles.itemThumbGrid}
+                            style={{ backgroundImage: cssUrl("fx.grid") }}
+                          />
+                          {art ? (
+                            <Asset id={art} className={styles.itemArt} />
+                          ) : (
+                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                          )}
+                        </span>
+
+                        <span className={styles.itemInfo}>
+                          <span className={styles.itemTopLine}>
+                            <strong className={styles.itemName}>{vehicle.name}</strong>
+                            {vehicle.here && (
+                              <span className={styles.miniTag} data-tone="green">
+                                在身边
+                              </span>
+                            )}
+                            {vehicle.condition === "wrecked" && (
+                              <span className={styles.miniTag} data-tone="danger">
+                                报废
+                              </span>
+                            )}
+                            {vehicle.condition === "damaged" && (
+                              <span className={styles.miniTag} data-tone="yellow">
+                                受损
+                              </span>
+                            )}
+                            {vehicle.stolen && (
+                              <span className={styles.miniTag} data-tone="yellow">
+                                赃车
+                              </span>
+                            )}
+                          </span>
+
+                          <span className={styles.itemSubLine}>
+                            <span className={styles.itemSubText}>
+                              {vehicle.classLabel ? `${vehicle.classLabel} · ` : ""}
+                              {locationSummary}
+                            </span>
+                          </span>
+                        </span>
+
+                        <span className={styles.itemMeta}>
+                          {trunk && (
+                            <span className={styles.itemCarryTag}>
+                              {trunkCount > 0 ? `后备箱 ${trunkCount}` : "后备箱空"}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                }
+
                 const { id, count, worn } = entry;
                 const quick = worn ? undefined : quickItems.find((item) => item.id === id);
                 const detail = inventory.details?.[id];
                 const chip = worn ? undefined : carriedChipById.get(id);
                 const art = itemArtOf(detail?.baseId ?? id);
                 const rarity = detail?.rarity ?? inventory.rarity[id];
-                const isSelected = selectedEntry?.key === entry.key;
                 const isHeld =
                   !worn &&
                   detail?.kind === "weapon" &&
@@ -849,9 +1033,9 @@ export function InventoryPage({
                       data-rarity={rarity ?? undefined}
                       data-iconic={detail?.iconic || undefined}
                       data-flash={flashId === id || undefined}
-                      onClick={() => selectItem(id, worn, index)}
+                      onClick={() => selectEntry(entry, index)}
                       onDoubleClick={() => {
-                        selectItem(id, worn, index);
+                        selectEntry(entry, index);
                         triggerSafePrimary(entry);
                       }}
                     >
@@ -968,6 +1152,147 @@ export function InventoryPage({
                 );
               })}
             </ul>
+
+            {selectedEntry?.entryType === "vehicle" &&
+              (() => {
+                const { vehicle } = selectedEntry;
+                const art = vehicleArtOf(vehicle.model);
+                const trunk = storageByKey.get(selectedEntry.key);
+                const trunkCount = trunk ? trunk.items.reduce((sum, row) => sum + row.count, 0) : 0;
+                const trunkReachable = Boolean(trunk && (trunk.canTake || trunk.canStore));
+                const locationText =
+                  vehicle.location === null
+                    ? "位置未知"
+                    : vehicle.here
+                      ? `停在当前地点 · ${vehicle.locationName}`
+                      : `停在 ${vehicle.locationName}`;
+
+                return (
+                  <article
+                    key={selectedEntry.key}
+                    className={styles.detailCard}
+                    aria-label="选中车辆详情"
+                  >
+                    <CellFrame />
+                    <span
+                      className={styles.detailGrid}
+                      style={{ backgroundImage: cssUrl("fx.grid") }}
+                      aria-hidden
+                    />
+
+                    <header className={styles.detailHead}>
+                      <div className={styles.detailTitleRow}>
+                        <strong className={styles.detailTitle}>{vehicle.name}</strong>
+                        {vehicle.maker && (
+                          <span className={styles.itemCarryTag}>{vehicle.maker}</span>
+                        )}
+                      </div>
+                      <div className={styles.detailTags}>
+                        <span className={styles.pill}>
+                          <NineSlice id="cyber.gaugeLabel" tint="rgb(94 246 255 / 16%)" slice={4} />
+                          <span className={styles.pillText}>{vehicle.classLabel || "载具"}</span>
+                        </span>
+                        {vehicle.here && (
+                          <span className={styles.pillActive}>
+                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
+                            <span className={styles.pillText}>在身边</span>
+                          </span>
+                        )}
+                        <span className={styles.pill}>
+                          <NineSlice
+                            id="cyber.gaugeLabel"
+                            tint={
+                              vehicle.condition === "wrecked"
+                                ? "rgb(255 68 68 / 28%)"
+                                : vehicle.condition === "damaged"
+                                  ? "rgb(252 238 10 / 22%)"
+                                  : "rgb(74 222 128 / 18%)"
+                            }
+                            slice={4}
+                          />
+                          <span className={styles.pillText}>车况：{vehicle.conditionLabel}</span>
+                        </span>
+                        {vehicle.stolen && (
+                          <span className={styles.pill}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(252 238 10 / 22%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>赃车</span>
+                          </span>
+                        )}
+                        {vehicle.seats > 0 && (
+                          <span className={styles.pill}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(148 163 184 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>{vehicle.seats} 座</span>
+                          </span>
+                        )}
+                      </div>
+                    </header>
+
+                    <div className={styles.detailScroll}>
+                      {art && (
+                        <div className={styles.showcase} aria-hidden>
+                          <CellFrame />
+                          <span
+                            className={styles.showcaseGrid}
+                            style={{ backgroundImage: cssUrl("fx.grid") }}
+                          />
+                          {vehicle.classLabel && (
+                            <span className={styles.showcaseCornerLeft}>{vehicle.classLabel}</span>
+                          )}
+                          {vehicle.speed > 0 && (
+                            <span className={styles.showcaseCornerRight}>极速 {vehicle.speed}</span>
+                          )}
+                          <Asset id={art} className={styles.showcaseArt} />
+                        </div>
+                      )}
+
+                      <div className={styles.detailCopy}>
+                        <p className={styles.detailDesc}>{locationText}</p>
+                        <p className={styles.detailStat}>
+                          {trunk
+                            ? trunkCount > 0
+                              ? `后备箱内存放 ${trunkCount} 件物品${trunkReachable ? "（当前就在现场，可直接存取）" : "（远端只读）"}`
+                              : `后备箱为空${trunkReachable ? "（当前就在现场，可将随身物品存入）" : ""}`
+                            : "该车辆暂无可用储物空间"}
+                        </p>
+                        {trunk?.blockedReason && (
+                          <p className={styles.actionHint}>{trunk.blockedReason}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <footer className={styles.detailFooter}>
+                      {trunk && onOpenStorage ? (
+                        <div className={styles.actionRow}>
+                          <Button
+                            small
+                            primary={trunkReachable}
+                            onClick={() => onOpenStorage(selectedEntry.key)}
+                          >
+                            {trunkReachable
+                              ? trunkCount > 0
+                                ? `管理后备箱（${trunkCount} 件）→`
+                                : "打开后备箱 →"
+                              : `查看后备箱（${trunkCount} 件）→`}
+                          </Button>
+                        </div>
+                      ) : null}
+                      <p className={styles.actionHint}>
+                        {trunkReachable
+                          ? "双击车辆条目或按 Enter 可直接进入后备箱存取物品。"
+                          : "开往或返回车辆停放地点后即可在现场存取后备箱物品。"}
+                      </p>
+                    </footer>
+                  </article>
+                );
+              })()}
 
             {selectedCtx &&
               (() => {
@@ -1481,6 +1806,7 @@ export function InventoryPage({
                               if (count <= 1) {
                                 setPickedItem({
                                   id,
+                                  entryType: "item",
                                   worn: selectedIsWorn,
                                   fallbackIndex: nextFallback,
                                 });
