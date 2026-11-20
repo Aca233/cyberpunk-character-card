@@ -1,6 +1,6 @@
 import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
-import type { RuleModule } from "../../kernel/system";
+import type { RuleModule, SectionStage } from "../../kernel/system";
 import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
@@ -446,28 +446,36 @@ export function physicsSection(
   return result.directives.map((d) => `- ${d}`).join("\n");
 }
 
-/** 各步共用的局面：状态、人物、委托、物理约束、近期后果、到期事件、开场 */
+/** 按阶段拼局面：状态、阶段可见的情境节、商品报价、场景记忆、物理约束、原剧时间线与开场 */
 export function situation(
   world: WorldState,
   records: readonly LogRecord[],
   view: PlayerView,
   plan: NarratorPlan,
   extras: PromptExtras,
+  stage: SectionStage = "narrate",
 ): string[] {
   const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
   const parts = [
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
-    ...registry.sections({ world, data: extras.data, input }),
+    ...registry.sections({ world, data: extras.data, input, stage }),
   ];
   const sceneMemory = sceneMemorySection(world, input.text);
   const market = merchantContext(view, input.text);
   if (market) parts.push(market);
   if (sceneMemory) parts.push(sceneMemory);
-  const physics = physicsSection(world, extras.data, input.text);
-  if (physics) parts.push(`【物理与安防现状】\n${physics}`);
-  const canon = canonSection(extras.data, extras.startTime, world.time);
-  if (canon) parts.push(`【原剧时间线】\n${canon}`);
-  if (extras.opening && view.totalTurns === 0) parts.push(`【开场】\n${extras.opening}`);
+  // 物理与安防约束给判断和正文落地；抽取以【本轮已定的事】与定稿正文为准，不重复带长段武器战术建议
+  if (stage !== "extract") {
+    const physics = physicsSection(world, extras.data, input.text);
+    if (physics) parts.push(`【物理与安防现状】\n${physics}`);
+  }
+  // 原剧时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的原作节点误记为本轮事实
+  if (stage !== "extract") {
+    const canon = canonSection(extras.data, extras.startTime, world.time);
+    if (canon) parts.push(`【原剧时间线】\n${canon}`);
+  }
+  if (stage !== "extract" && extras.opening && view.totalTurns === 0)
+    parts.push(`【开场】\n${extras.opening}`);
   return parts;
 }
 

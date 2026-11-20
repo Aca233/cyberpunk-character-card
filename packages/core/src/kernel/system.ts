@@ -58,14 +58,17 @@ export interface RuleInput {
   readonly text: string;
 }
 
+/** 提示词三阶段：判断、写正文、抽取；用于按阶段裁剪规则与情境节，避免指令语法污染正文或未发生素材混入记账 */
+export type SectionStage = "judge" | "narrate" | "extract";
+
 /** 规则模块：叙事模型提示词里的一段规则，代码每轮按状态决定带不带 */
 export interface RuleModule<S = unknown> {
   readonly id: string;
   readonly title: string;
   readonly text: string;
-  /** 判断用的一半：什么时候检定、档位怎么选；没写时判断拿 text */
+  /** 判断用的一半：什么时候阻断、代价怎么判；写空串 "" 表示判断阶段不需要本模块；没写时判断拿 text */
   readonly judge?: string;
-  /** 写正文用的一半：常见的转折、对手会怎么做、什么后果合适；没写时写正文拿 text */
+  /** 写正文用的一半：世界表现、人物反应与知情边界；写空串 "" 表示正文阶段不需要本模块；没写时写正文拿 text */
   readonly narrate?: string;
   /** 这一段负责说明的指令类型；格式说明由这些指令的 schema 生成 */
   readonly commands?: readonly string[];
@@ -230,17 +233,19 @@ export interface Threat {
   readonly reason: string;
 }
 
-/** 拼情境时系统看到的环境：只读；data 没给时为 undefined，input 是这一轮玩家的输入 */
+/** 拼情境时系统看到的环境：只读；data 没给时为 undefined，input 是这一轮玩家的输入，stage 是当前阶段 */
 export interface SectionContext {
   readonly world: WorldState;
   readonly data: Readonly<Record<string, unknown>> | undefined;
   readonly input: { readonly text: string };
+  readonly stage?: SectionStage | undefined;
 }
 
-/** 一节情境：拼成「【title】」加正文；render 返回 undefined 时这一轮不带这一节 */
+/** 一节情境：拼成「【title】」加正文；render 返回 undefined 时这一轮不带这一节；stages 省略时三阶段都带 */
 export interface SystemSection {
   readonly order: number;
   readonly title: string;
+  readonly stages?: readonly SectionStage[];
   render(ctx: SectionContext): string | undefined;
 }
 
@@ -629,6 +634,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       const ctx =
         raw.data === undefined ? raw : { ...raw, data: dataFor(raw.world.slices, raw.data) };
       return sectionList.flatMap(({ section }) => {
+        if (ctx.stage && section.stages && !section.stages.includes(ctx.stage)) return [];
         const body = section.render(ctx);
         return body === undefined ? [] : [`【${section.title}】\n${body}`];
       });

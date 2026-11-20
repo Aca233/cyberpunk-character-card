@@ -18,9 +18,9 @@ export const cityRules: RuleModule<CityState> = {
   title: "城里的动静",
   commands: ["rumorHeard"],
   when: (state) => state.events.some((e) => e.status !== "over") || state.rumors.length > 0,
+  judge: "",
   narrate: NARRATE,
-  text: `${NARRATE}
-- 正文里有人把【街头传闻】里带编号的某一条说给玩家听了（原话或差不多的意思），抽取写 {"type": "rumorHeard", "id": 编号}；只是你知道、正文没让玩家听到的不写，玩家已经听说过的不再写。`,
+  text: `- 正文里有人把【街头传闻】里带编号的某一条说给玩家听了（原话或差不多的意思），写 {"type": "rumorHeard", "id": 编号}；只是幕后存在、正文没让玩家听到的不写，玩家已经听说过的不再写。`,
 };
 
 /** 给模型看的【街头传闻】：新的在前；说的是玩家的标出来 */

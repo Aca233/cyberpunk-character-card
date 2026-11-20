@@ -39,6 +39,7 @@ export const chronicle = defineSystem<ChronicleState, ChronicleCommand, Chronicl
     {
       order: 40,
       title: "履历",
+      stages: ["extract"],
       render: ({ world }) =>
         chronicleSection(ChronicleStateSchema.parse(world.slices.chronicle ?? {})) || undefined,
     },

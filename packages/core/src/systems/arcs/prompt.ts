@@ -21,6 +21,10 @@ export const arcRules: RuleModule<ArcsState> = {
   commands: ["arc"],
   // 首次前因可以在普通行动中自然出现，不能等已有心事或玩家说出关键词才提供抽取指令。
   when: (_state, input) => input.mode !== "ooc",
+  judge: `- 原作人物的个人线素材不是已经发生的事实；只有已成立前因或本轮行动直接牵涉相关人物处境时才按现实因果裁决，不以原作结局强推剧情。`,
+  narrate: `- 【心事】区分「潜在素材，前因未成立」和本存档已经发生的事。种子与原作结局不是当前事实；好感只决定对方愿不愿意向你吐露，不会让绑架、死亡或变故凭空发生。玩家角色不是 V，不套用 V 的行动或强制复现原作流程。
+- 前因已成立且标「可以说起」的人物，在独处、共患难或主动找上门等合适时机由他自然提起；一次只说他愿意透露的部分，不要一口气把幕后内情倒空。
+- 原作结局只是没人插手时的参考；玩家插手之后怎么发展全看局面与双方选择。还没熟到交心时，这些事只能借传闻、旁人口风和近况隐约透出。`,
   text: `- 【心事】区分「潜在素材，前因未成立」和本存档已经发生的事。种子和原作结局不是当前事实；好感只决定愿不愿意倾诉，不让绑架、死亡、偷车或公司交易自动发生。玩家角色不是 V，不套用 V 的行动或强制复现原作流程。
 - 只有本轮正文或本存档既有记录明确支持触发前因，才写 arc start，text 写实际发生的具体事实；不能照抄种子来补发生。前因未成立时不写 tell、不泄露未来结局。前因成立也不等于整段情境成立：未被本存档事实支持的受害者、动机、症状和幕后关系仍只是可能性；原作某个分支发生过，不代表本存档必须走到那里。
 - 前因已成立且标「可以说起」的人，时机合适（独处、刚一起扛过事、他主动来找玩家）时由他自己提起，写 arc tell；一个人同时最多 ${ARC_OPEN_MAX} 件说出口没了的事。正文里他只说愿意说的部分，【心事】里的情况不要一口气倒出来。
@@ -50,6 +54,7 @@ export function arcSection(
   data: Data,
   npcs: Readonly<Record<string, Npc>>,
   present: ReadonlySet<string>,
+  stage?: "judge" | "narrate" | "extract",
 ): string {
   const lines: string[] = [];
   for (const seed of arcCatalog(data).values()) {
@@ -69,7 +74,9 @@ export function arcSection(
       if (p.onset === null) {
         if (here && card.alive) {
           lines.push(
-            `  - ${c.id}：潜在素材，前因未成立；只有实际发生「${c.trigger}」后才可 start。`,
+            stage === "narrate"
+              ? `  - ${c.id}：潜在素材，前因未成立；只有剧情自然出现「${c.trigger}」后才算发生。`
+              : `  - ${c.id}：潜在素材，前因未成立；只有实际发生「${c.trigger}」后才可 start。`,
           );
         }
         continue;

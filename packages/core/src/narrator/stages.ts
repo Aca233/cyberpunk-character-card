@@ -288,7 +288,7 @@ export function counterHackText(counterHack: CounterHackRuling): string {
     counterHack.harm === "none"
       ? "（未造成神经损伤）"
       : `（真实神经伤害档位：${counterHack.harm}）`;
-  return `【敌方黑客反制】${harm}：${counterHack.outcome}（依据：${counterHack.reason}）。按此独立裁决写入正文与 npcHack，不改写玩家主行动裁决。`;
+  return `【敌方黑客反制】${harm}：${counterHack.outcome}（依据：${counterHack.reason}）。按此独立裁决落笔，不改写玩家主行动裁决。`;
 }
 
 /** 要玩家先确认的大额花费 */

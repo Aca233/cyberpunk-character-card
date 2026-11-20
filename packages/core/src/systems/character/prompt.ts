@@ -33,7 +33,7 @@ export const flashbackRules: RuleModule<CharacterState> = {
   title: "过往闪回",
   commands: ["flashback"],
   when: (state) => state.flashback !== null || state.traits.some((t) => t.slot === "past"),
-  judge: `- 闪回里不结算当前战斗或现实伤害（harm 写 none，outcome 写 clean 顺延当年的抉择）：只看玩家在当年那一幕里怎么选。
+  judge: `- 闪回里不结算当前战斗或现实伤害（harm 写 none，outcome 写 success 顺延当年的抉择）：只看玩家在当年那一幕里怎么选。
 - 战斗中不开闪回，一般也不在紧要关头开。`,
   narrate: `- 遇到和某段过往有关的人、地点或物品时，可以插一段闪回；只能回忆状态里的过往，可以重访同一段内容。
 - 闪回由内容自然结束或玩家主动结束，没有输入次数配额：正文写当年的那一幕，让玩家在闪回里做选择，用来补全这段过往；不推进现在的时间，不动现在的账。

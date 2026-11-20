@@ -107,31 +107,28 @@ export function resolveDynamicWordCountBudget(
       ? {
           minChars: 450,
           maxChars: 850,
-          label:
-            "高压冲突、枪战或情绪撕裂场景可充分铺开（约 450–850 字），写透物理碰撞、感官震颤与局面转换",
+          label: "高压冲突、枪战或情绪拐点可充分展开（约 450–850 字），写清局势推演与后果",
         }
       : intensity === "exploration"
         ? {
             minChars: 250,
             maxChars: 550,
-            label:
-              "街区穿行、踩点或暗涌试探（约 250–550 字），留出心理暗流、五感气味与夜之城背景动静",
+            label: "穿行、踩点或试探（约 250–550 字），按场面需要带出环境与人物暗流",
           }
         : {
             minChars: 150,
             maxChars: 380,
-            label:
-              "日常闲谈与贴身交锋（约 150–380 字），写清言外之意、动作微表情后自然留给对方接话",
+            label: "日常交谈与近身互动（约 150–380 字），写清言外之意与动作反应后自然留白",
           };
 
   const scaleNote =
     contentMode === "uncensoredSensory"
-      ? "伤痛、血肉撞击与感官刺激冷峻直写，不做刻意美化。"
+      ? "伤痛与冲突按物理现实冷峻落笔，不做刻意美化。"
       : "极度血腥与亲密场面保留电影化克制镜头与留白过渡。";
 
   return {
     minChars: range.minChars,
     maxChars: range.maxChars,
-    directive: `- 节律建议：${range.label}。${scaleNote}`,
+    directive: `- 节律参考：${range.label}。${scaleNote}`,
   };
 }

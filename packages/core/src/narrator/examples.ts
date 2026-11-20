@@ -104,5 +104,5 @@ export function twistSection(data: Readonly<Record<string, unknown>>): string | 
   const lines = twists.map(
     (t) => `- ${t.id}（${t.kind === "twist" ? "转折" : "两难"}）：${t.text}`,
   );
-  return `【转折和两难素材】\n挂委托写 twist、或者剧情需要一个没有标准答案的选择时，可以取用、改写或组合；不强制套用，同一条别在一个存档里反复用。\n${lines.join("\n")}`;
+  return `【转折和两难素材】\n新委托需要埋转折、或者剧情需要一个没有标准答案的抉择时，可以取用、改写或组合；不强制套用，同一条别在一个存档里反复用。\n${lines.join("\n")}`;
 }

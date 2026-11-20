@@ -36,7 +36,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 唯有 npc 建卡或用 npcUpdate 首次定型「还没定」旧识时，按身份、所属势力、财力和现场表现补齐真实 body：gear 包含实际穿着的衣物、随身武器与药剂/工具/日常物件（普通人也应有合身衣物与随身小物）。义体由你推演：从人物的工作和本轮行动判断实际增强需求，再按财力、来源与目录能力选择匹配部位；工作确实依赖身体或神经增强且有合理可得型号时写入配置，没有植入需求才留空。义眼只用于有视觉强化需求的人，不作默认填空。正文明确无植入、或给出扫描所得的完整植入清单时照事实保留；npcUpdate 不得覆盖已定型人物的 body，实际变化用 npcChrome / npcGear。不得因模型没写具体武器型号或秘密把新人物留成空壳。
 
 【changes】
-- 每轮都要有一条 world：activity 写这一轮主要做了什么；time 按正文交代的经过写这一轮结束时是几点（不能早于【当前状态】里的时间；正文没交代就按场面估，几句对话一两分钟；台词里约好的以后，例如“明天这个点来”，只是约定，时间并没有过去）；换了地点写 location。超梦 progress/finish/replay/inspect 和成人 commerce.service 已按实际进度结算分钟，同事件不能再用 phases 相对加时；若保留 world.time，它是活动全部完成后的绝对时刻，不是再加一次体验时长。先看片、暂停后聊天、再继续属于不同事实，应按真实先后拆成不同事件，分别记录各自的实际分钟；纯暂停/恢复与翻阅旧文字本身不算又看了一遍。
+- 每轮都要有一条 world：activity 写这一轮主要做了什么；time 按正文交代的经过写这一轮结束时是几点（不能早于【当前状态】里的时间；正文没交代就按场面估，几句对话一两分钟；台词里约好的以后，例如“明天这个点来”，只是约定，时间并没有过去）；换了地点写 location。超梦 progress/scan/stop(finished) 和 commerce.service 已按实际进度结算分钟，同事件不能再用 phases 相对加时；若保留 world.time，它是活动全部完成后的绝对时刻，不是再加一次体验时长。先看片、暂停后聊天、再继续属于不同事实，应按真实先后拆成不同事件，分别记录各自的实际分钟；纯暂停/恢复与翻阅旧文字本身不算又看了一遍。
 - 正文写明玩家角色非战斗情况下挨了打、受了伤，就写 damage，照实际挨的那一下定档（graze 擦伤、heavy 重击、lethal 致命），并用 part 标出受伤部位（head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一），reason 写明具体致伤经过（如「踩空从铁棚摔下扭伤左踝」「电弧灼伤右手」）；护甲、掩体等保护已在前置裁决里计入，damage 只记最终实际创口，不能再额外降档。仅当正文写明当场断了手脚、且现场存在刀刃/霰弹/爆炸/重机械致命重创时，才写 limb（left-arm、right-arm、left-leg、right-leg）。
 - id 用小写英文和连字符；已有物品、义体、地点、人物复用表里和【当前状态】里的 id；目录外新物件按 item 的 definition 和 origin 登记，之后保持同一身份。
 - weaponHold 只记录正文已经确定发生的持用变化：拔出、换持、明确用某把武器攻击后建立首次持用，或收起、放下、失去握持。weapons 写本轮结束时仍实际持用的完整武器 id 列表（最多两件，双持同款且确有两把时可重复同一 id），明确收起全部写 []；信息未明、持用未变、只在询问/回忆/假设或尚未完成换枪时不发，不因每次开火重复记账。正文擅自替玩家换枪的不记。
@@ -124,7 +124,7 @@ export function buildExtractPrompt(
     modules.some((m) => m.id === "hacking"),
   );
   const content = userMessage({
-    scene: situation(world, records, view, plan, { ...extras, opening }),
+    scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
       npcEquipmentReference(world, extras.data, true),

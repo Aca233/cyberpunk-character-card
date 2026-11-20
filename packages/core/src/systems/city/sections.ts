@@ -7,6 +7,7 @@ export const citySections: readonly SystemSection[] = [
   {
     order: 80,
     title: "城里的动静",
+    stages: ["judge", "narrate"],
     render: ({ world }) => citySection(CityStateSchema.parse(world.slices.city ?? {})) || undefined,
   },
   {
@@ -18,6 +19,7 @@ export const citySections: readonly SystemSection[] = [
   {
     order: 100,
     title: "传闻里的你",
+    stages: ["judge", "narrate"],
     render: ({ world }) => {
       const heard = playerRumorLine(CityStateSchema.parse(world.slices.city ?? {}));
       if (!heard) return undefined;

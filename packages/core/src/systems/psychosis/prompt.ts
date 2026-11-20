@@ -9,7 +9,7 @@ export const suppressantRules: RuleModule<PsychosisState> = {
   commands: ["suppressant"],
   when: (state, input) =>
     input.mode !== "ooc" && (state.doses.length > 0 || WORDS.test(input.text)),
-  judge: `- 角色当场吞服或注射神经压制剂时写 suppressant（需确认背包里确实有货，没有就写没摸到）。
+  judge: `- 角色当场吞服或注射神经压制剂时，需先确认背包里确实有货，没有就裁定没摸到。
 - 若【当前状态】写明压制剂正在起效：感官失真与手抖已被暂时摁住，普通发作被压住；已确认处于临界状态的人遭遇严重新刺激时仍可能突破。
 - 若处于戒断期：冷汗、指尖颤抖、干渴与暴躁会实质拖累精细操作与耐心，直至补一针或硬熬过去。`,
   narrate: `- 压制剂只暂时缓解已有神经症状，绝不能写成“喝完/打完恢复了人性”；背包里没有就不能用药，也不产生药效。

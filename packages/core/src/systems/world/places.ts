@@ -619,6 +619,7 @@ function placeLine(id: string, name: string, tags: readonly (string | undefined)
 export function placesText(
   clock: Pick<WorldClockState, "location" | "places">,
   data: Data | undefined,
+  stage?: "judge" | "narrate" | "extract",
 ): string | undefined {
   if (!data) return undefined;
   const areas = areasOf(data);
@@ -659,20 +660,27 @@ export function placesText(
   const rest = recent.filter((p) => !seen.has(p.id)).length;
   if (rest > 0) lines.push(`- 另有 ${rest} 处以前去过的地方没列出来，地图和出行照常能去`);
   const loc = clock.location;
-  if (loc !== null && !locationCatalog(data).has(loc) && !saved.has(loc)) {
+  if (stage === "extract" && loc !== null && !locationCatalog(data).has(loc) && !saved.has(loc)) {
     lines.push(
       `现在的位置「${loc}」不在【地点】里：这一轮 world 的 location 写成 {"name": "${loc}", "in": "城区"}（in 必填），代码会记下来。`,
     );
   }
   if (lines.length === 0) return undefined;
-  return `能去的地方（代码记的）；id 写进 world 的 location、meet 的 location：\n${lines.join("\n")}`;
+  const header =
+    stage === "narrate"
+      ? "夜之城已知及周边地点（要找某类店铺优先从表里挑，不要凭空编店名）："
+      : stage === "judge"
+        ? "已知及周边地点（出行目的地或交易前到店填对应 id）："
+        : "能去的地方（代码记的）；id 写进 world 的 location、meet 的 location：";
+  return `${header}\n${lines.join("\n")}`;
 }
 
 export const placeSections: readonly SystemSection[] = [
   {
     order: 75,
     title: "地点",
-    render: ({ world, data }) => placesText(WorldClockStateSchema.parse(world.slices.world), data),
+    render: ({ world, data, stage }) =>
+      placesText(WorldClockStateSchema.parse(world.slices.world), data, stage),
   },
 ];
 
@@ -682,7 +690,8 @@ export const placeRules: RuleModule<WorldClockState> = {
   commands: ["world"],
   // 什么时候会到新地方说不准，宁可多带（RuleModule 的约定）
   when: () => true,
-  // 用户定的"统一为地点"（2026-11-02）：location 只有两种写法，店从【地点】里挑
+  judge: `- 判断目的地与店铺位置以【地点】为准；要去某类店优先对应【地点】里已有的店，涉及跨区或进高安区场所时按实际城区与门禁裁决。`,
+  narrate: `- 要去或提起某类店铺（武器店、义体医生、酒吧等），优先从【地点】里已有地点中选取，不凭空编造重复门店；新进入表外小场所时，自然交代其所在城区与街区。`,
   text: `- 去【地点】里有的地方：world 的 location 写它的 id。要找某一类店（武器店、义体医生、酒吧……），从【地点】里按括号里的类别挑，不要自己编店。
 - 【地点】里没有的新地方：location 写 {"name": "中文名", "in": "城区", "sub": "街区（可选）"}，in 必填（沃森、威斯特布鲁克、市政中心、海伍德、圣多明戈、太平洲、狗镇、恶土），跨街区或明确街区时写 sub（如 北区、歌舞伎、小唐人街、日本街、谷地），可加 note；不写坐标，代码定位置，同名的用原来那一条。`,
 };

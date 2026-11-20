@@ -20,6 +20,7 @@ export const fallout = defineSystem<FalloutState, never, FalloutRecord>({
     {
       order: 60,
       title: "近期后果",
+      stages: ["judge", "narrate"],
       render: ({ world }) =>
         falloutSection(FalloutStateSchema.parse(world.slices.fallout ?? {})) || undefined,
     },

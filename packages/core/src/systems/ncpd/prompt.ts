@@ -8,6 +8,7 @@ export const ncpdRules: RuleModule<NcpdState> = {
   title: "NCPD 警情",
   commands: ["ncpd"],
   when: (state, input) => input.mode !== "ooc" && state.alerts.length > 0 && WORDS.test(input.text),
+  judge: `- 扫描器上的 NCPD 警情是真实街头案发现场，涉案帮派、劫匪和人质按实际火力、人数与位置裁决；公开开火与杀人照常受目击与通缉因果约束。`,
   narrate: `- 警情是扫描器上挂着的街头案子：到了现场照现场的情况写，帮派、劫匪、人质都有自己的打算；NCPD 往往来得晚，来了也可能嫌你多事。`,
   text: `- 【当前状态】里的「NCPD 警情」是代码挂出来的街头案子，玩家可以去处理，也可以不管（过一天自己撤掉）。
 - 玩家到了现场把事彻底摆平（交火解围或控场妥善解决）写 ncpd clear，id 写警情 id：代码发赏金、警方追查压力随之缓和，你不写 trade 也不写 heat。搞砸了或者放弃了写 ncpd drop。

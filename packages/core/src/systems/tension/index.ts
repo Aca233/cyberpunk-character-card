@@ -26,6 +26,7 @@ export const tensionRules: RuleModule<TensionState> = {
   when: (state, input) =>
     Object.values(state.sites).some((site) => site.active) || TENSION_HINT.test(input.text),
   judge: `- 按当前位置的已知条件裁决。已瘫痪硬件不会因收场或离开自动修好。增援需要已发生的呼叫、警报或巡逻依据；冲突本身不自动生成警察。预计抵达时间不等于已抵达。`,
+  narrate: `- 现场已损坏的设备、门禁、义体与尚未抵达的增援都是持续物理事实，不会因切场自动恢复；不同地点的损坏与增援各自独立，未抵达的增援不提前入场。`,
   text: `- tension 记录当前位置的真实变化。危局解除写 active:false，记录仍保留。新增援同时写 triggerBackupInMinutes 和 backupCause，交代实际呼叫、响应者及路线；取消写 cancelBackupReason，实际到达写 backupArrived:true。维修确已发生才写 repairChrome。不同地点的损坏和增援各自保存，不随玩家移动。`,
 };
 

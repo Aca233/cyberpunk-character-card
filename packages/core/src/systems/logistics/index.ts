@@ -70,6 +70,10 @@ export const logistics = defineSystem<LogisticsState, RouteCommand>({
       when: (state, input) =>
         Object.values(state.routes).some((r) => r.blocked) ||
         /封锁|封路|解封|通行|供货|补货|订货|运货/.test(input.text),
+      judge:
+        "- 供货封锁只影响经过对应具体地点的订单，不因全城新闻自动涨价，也不为平稳经营强造麻烦。",
+      narrate:
+        "- 封路或解封只按已发生的现场或新闻事实影响对应地点的供货与通行；平稳营业时不必平白生事。",
       text: "- 真实封路或恢复通行写 logistics.route，location 必须指向具体地点，并引用实际证据；只影响经过该地点的订单。不由全城新闻自动涨价，不为平稳经营强造麻烦。正常到货由已保存供货单随时间自动结算，不额外发加库存。",
     },
   ],

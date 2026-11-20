@@ -218,7 +218,7 @@ export function buildNarratorPrompt(
     ),
   ].filter((n) => n !== "");
   const recap = recapFor(world, records, hot, extras.recapTokens);
-  const scene = situation(world, records, view, plan, { ...extras, opening });
+  const scene = situation(world, records, view, plan, { ...extras, opening }, "narrate");
   const recall = recalledSection(extras.recalled);
   const pacingHint = extras.hasPreset
     ? ""
@@ -241,7 +241,7 @@ export function buildNarratorPrompt(
         ),
     input: formatInput(plan.input),
     after: [equipment, boostNote(view, plan, "narrate")],
-    reminder: `（${pacingHint}只写正文，纯文本。）`,
+    reminder: pacingHint ? `（${pacingHint}只写正文，纯文本。）` : "（只写正文，纯文本。）",
   });
   messages.push({ role: "user", content });
   const tokens = (s: string | undefined) => (s === undefined ? 0 : estimateTokens(s));

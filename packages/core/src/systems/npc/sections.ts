@@ -33,12 +33,55 @@ function factionResolver(
   };
 }
 
+/** 把固定街坊资料渲染成自然语言（供 judge/narrate 使用，不灌原始 JSON） */
+function formatEverydayCard(card: {
+  readonly id: string;
+  readonly name: string;
+  readonly alias?: string | undefined;
+  readonly pronoun: string;
+  readonly role: string;
+  readonly faction: string;
+  readonly age?: number | undefined;
+  readonly adult?: boolean | undefined;
+  readonly entity?: string | undefined;
+  readonly look: string;
+  readonly outfit?: string | undefined;
+  readonly voice: string;
+  readonly samples?: readonly string[] | undefined;
+  readonly want: string;
+  readonly limit: string;
+  readonly secret?: string | undefined;
+}): string {
+  const identity = [
+    card.age !== undefined ? `${card.age}岁` : undefined,
+    card.adult === true ? "已确认成年" : card.adult === false ? "未成年" : undefined,
+    card.entity === "human"
+      ? "真人"
+      : card.entity === "synthetic"
+        ? "合成人"
+        : card.entity === "robot"
+          ? "机器人"
+          : undefined,
+  ].filter(Boolean);
+  const parts = [
+    `${card.name}${card.alias ? `（外号${card.alias}）` : ""}［${card.id}，${card.pronoun}，${card.role}${card.faction && card.faction !== "none" ? `，势力 ${card.faction}` : ""}］`,
+    identity.length > 0 ? `身份：${identity.join("、")}` : undefined,
+    `长相：${card.look}`,
+    card.outfit ? `穿着：${card.outfit}` : undefined,
+    `说话：${card.voice}`,
+    card.samples?.length ? `样本：${card.samples.map((s) => `「${s}」`).join(" ")}` : undefined,
+    `诉求：${card.want}；底线：${card.limit}`,
+    card.secret ? `幕后秘密：${card.secret}` : undefined,
+  ].filter(Boolean);
+  return parts.join("；");
+}
+
 /** 给叙事模型的情境节：【人物】每轮都带，在【当前状态】之后 */
 export const npcSections: readonly SystemSection[] = [
   {
     order: 10,
     title: "人物",
-    render: ({ world, data, input }) => {
+    render: ({ world, data, input, stage }) => {
       const clock = WorldClockStateSchema.parse(world.slices.world);
       return castSection(NpcStateSchema.parse(world.slices.npc), {
         location: clock.location,
@@ -48,13 +91,14 @@ export const npcSections: readonly SystemSection[] = [
         data,
         now: world.time,
         input: input.text,
+        stage,
       });
     },
   },
   {
     order: 11,
     title: "街坊与日常来往",
-    render: ({ world, data, input }) => {
+    render: ({ world, data, input, stage }) => {
       const rows = EverydayLifeSchema.safeParse(data?.everydayLife);
       if (!rows.success) return undefined;
       const clock = WorldClockStateSchema.parse(world.slices.world);
@@ -82,16 +126,22 @@ export const npcSections: readonly SystemSection[] = [
               );
             } else {
               const card = cardById.get(id);
-              if (card)
+              if (card) {
                 lines.push(
-                  `固定街坊资料（尚未正式接触，不代表玩家已经知道）：${JSON.stringify(card)}。实际发生实质来往时沿用此 id 与已定资料用 npc 建卡，不重抽陌生人。`,
+                  stage === "extract"
+                    ? `固定街坊资料（尚未正式接触，不代表玩家已经知道）：${JSON.stringify(card)}。实际发生实质来往时沿用此 id 与已定资料用 npc 建卡，不重抽陌生人。`
+                    : `固定街坊资料（尚未正式接触，不代表玩家已经知道）：${formatEverydayCard(card)}。`,
                 );
+              }
             }
           }
-          for (const service of row.services)
+          for (const service of row.services) {
             lines.push(
-              `已定日常服务参考 ${JSON.stringify(service)}；这些是店内参考条件，实际本人是否有空、是否接受及本次最终条件由对话确认。先 commerce.offer，再由玩家接受 trade；不是已经消费、启用设备或同意记录。`,
+              stage === "extract"
+                ? `参考服务 ${JSON.stringify(service)}；价格与项目随现场对话确认，谈妥后走 trade，不自动扣款或开启行为芯片。`
+                : `参考服务：${service.subject}（${service.scope}，参考价 ${service.price} 欧元，卖方 ${service.seller}）；价格与项目随现场对话确认，不自动成交或开启行为芯片。`,
             );
+          }
           lines.push(
             "可以只问候、聊天、买东西或离开；接上已经发生的小事，不强塞委托、危险、关系奖励或私人感情。价格和服务只说明商业来往。",
           );

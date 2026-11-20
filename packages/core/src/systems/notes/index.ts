@@ -28,6 +28,7 @@ export const notes = defineSystem<NotesState, NoteCommand | NoteDone>({
     {
       order: 30,
       title: "备忘",
+      stages: ["narrate", "extract"],
       render: ({ world }) => notesSection(NotesStateSchema.parse(world.slices.notes ?? {})),
     },
   ],

@@ -40,18 +40,19 @@ export const BOOKKEEPING_BASE = `你在帮一个《赛博朋克 2077》夜之城
 - 你知道的不等于角色知道：人物卡里的秘密、别处发生的事，角色没亲眼见到、没人告诉他之前，不算他知道。
 - 玩家角色是玩家的：他的台词、决定和动作意图只认玩家输入与本轮物理定性裁决；正文里尚未发生的威胁、打算或替玩家补写的心思不算事实。`;
 
-/** 判断和写正文时，规则模块里提到的指令由后面的抽取负责 */
+/** 判断和写正文时，按当前状态激活的场景规则引言 */
 export const MODULE_NOTE =
-  "下面的规则说明这些场面怎么处理；里面提到的指令由代码在正文之后另行抽取，这一步不写指令。";
+  "下面的场景规则随当前状态激活，用以约束对应局面的事实、因果与人物表现；状态记账由后续步骤独立完成。";
 
-/** 规则模块按阶段取一半：判断拿 judge，写正文拿 narrate，还没拆的给全文；抽取拿全文和指令说明 */
-export function moduleSection(module: RuleModule, stage: PromptStage): string {
+/** 规则模块按阶段取一半：判断拿 judge，写正文拿 narrate，显式写空串 "" 时本阶段省略；还没拆的给全文；抽取拿全文和指令说明 */
+export function moduleSection(module: RuleModule, stage: PromptStage): string | undefined {
   const text =
     stage === "judge"
       ? (module.judge ?? module.text)
       : stage === "narrate"
         ? (module.narrate ?? module.text)
         : module.text;
+  if (text.trim() === "") return undefined;
   const commands =
     stage === "extract"
       ? (module.commands ?? []).map((type) =>
@@ -75,10 +76,11 @@ export function systemMessage(
   modules: readonly RuleModule[] = [],
   tables: readonly string[] = [],
 ): string {
-  const note = modules.length > 0 && stage !== "extract" ? [MODULE_NOTE] : [];
-  return [...fixed, ...note, ...modules.map((m) => moduleSection(m, stage)), ...tables].join(
-    "\n\n",
-  );
+  const rendered = modules
+    .map((m) => moduleSection(m, stage))
+    .filter((s): s is string => s !== undefined);
+  const note = rendered.length > 0 && stage !== "extract" ? [MODULE_NOTE] : [];
+  return [...fixed, ...note, ...rendered, ...tables].join("\n\n");
 }
 
 /** 规则层预算：32K 上下文的模型约 4K token（规格“上下文预算”） */

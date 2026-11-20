@@ -9,13 +9,13 @@ export const arcsSections: readonly SystemSection[] = [
   {
     order: 130,
     title: "心事",
-    render: ({ world, data }) => {
+    render: ({ world, data, stage }) => {
       const clock = WorldClockStateSchema.parse(world.slices.world);
       const npcs = NpcStateSchema.parse(world.slices.npc);
-      const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+      const stageInfo = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
       const present = new Set(
         Object.values(npcs.npcs)
-          .filter((n) => onStage(n, stage))
+          .filter((n) => onStage(n, stageInfo))
           .map((n) => n.id),
       );
       return (
@@ -24,6 +24,7 @@ export const arcsSections: readonly SystemSection[] = [
           data ?? {},
           npcs.npcs,
           present,
+          stage,
         ) || undefined
       );
     },

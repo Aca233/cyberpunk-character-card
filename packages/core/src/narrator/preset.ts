@@ -263,7 +263,7 @@ export function applyExpandedPreset(
   const bridge: LlmMessage = {
     role: "system",
     content:
-      "以上是玩家导入的写作预设，只管文风和写法。下面是本游戏的规则、世界状态和输出格式；两边冲突时以下面为准，状态格式和结算一律照下面做。",
+      "以上是玩家导入的写作预设，负责文风、修辞、节奏与篇幅。下面是本游戏的世界事实、人物知情边界、本轮已定裁决与纯文本输出协议；文风归预设，世界事实、玩家边界、已定结果与纯文本输出以下面为准。",
   };
   const out: LlmMessage[] = [...head, ...(head.length > 0 ? [bridge] : []), ...messages];
   for (const { depth, message } of [...inChat].sort((a, b) => b.depth - a.depth)) {

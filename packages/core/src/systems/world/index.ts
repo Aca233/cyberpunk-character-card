@@ -53,11 +53,12 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
     {
       order: 75.5,
       title: "相关经营入口",
-      render: ({ world, data, input }) =>
+      render: ({ world, data, input, stage }) =>
         merchantEntranceText(
           WorldClockStateSchema.parse(world.slices.world),
           data ?? {},
           input.text,
+          stage,
         ),
     },
   ],

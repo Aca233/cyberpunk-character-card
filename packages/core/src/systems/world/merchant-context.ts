@@ -56,6 +56,7 @@ export function merchantEntranceText(
   clock: Pick<WorldClockState, "location" | "places">,
   data: Readonly<Record<string, unknown>>,
   input: string,
+  stage?: "judge" | "narrate" | "extract",
 ): string | undefined {
   const sites = [...merchantSites(data).values()];
   if (sites.length === 0) return undefined;
@@ -150,5 +151,9 @@ export function merchantEntranceText(
       : "";
     return `- ${site.merchant} ${names.get(site.merchant)?.name ?? "已登记经营者"}（${KIND_LABELS[site.kind]}）；地点 ${places.join(" / ")}；服务 ${site.services.join("、") || "无通用付费服务"}${playback}`;
   });
-  return `${lines.join("\n")}\n交易 with 写经营身份，出行 destination/world.location 写地点；同名且地点仍不明确时先确认，不能猜一家。这里是经营索引，不保证现货、营业或接单；实际报价与交付另行核验。`;
+  const tail =
+    stage === "narrate"
+      ? "以上为当前或附近门店与服务范围索引，不代表必然有货、营业或接单；名称相近且地点未明时先让对话确认，实际价格与交付以【本轮已定的事】和现场为准。"
+      : "交易 with 写经营身份，出行 destination/world.location 写地点；同名且地点仍不明确时先确认，不能猜一家。这里是经营索引，不保证现货、营业或接单；实际报价与交付另行核验。";
+  return `${lines.join("\n")}\n${tail}`;
 }

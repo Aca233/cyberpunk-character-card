@@ -7,6 +7,7 @@ export const phoneSections: readonly SystemSection[] = [
   {
     order: 150,
     title: "全息电话",
+    stages: ["judge", "narrate"],
     render: ({ world }) => {
       const { calls } = PhoneStateSchema.parse(world.slices.phone ?? {});
       if (calls.length === 0) return undefined;
@@ -18,7 +19,7 @@ export const phoneSections: readonly SystemSection[] = [
             return `${line}。只写来电提示，不替玩家接听或拒接，不透露通话内容。`;
           }
           if (call.status === "answered") {
-            return `${line}。来意（仅供叙事模型）：${call.about}。按已有正文接着写；已经说过的不重播，不替玩家回应。`;
+            return `${line}。来意（仅供幕后参考）：${call.about}。按已有正文接着写；已经说过的不重播，不替玩家回应。`;
           }
           return `${line}。没有接通，不写对方说出了来意。`;
         })
