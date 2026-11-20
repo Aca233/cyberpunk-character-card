@@ -6,7 +6,7 @@ import {
   type MapPoiKind,
   SUBDISTRICT_SHAPES,
 } from "@cp/content/mapShapes";
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type AssetId, asset } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -16,6 +16,7 @@ import {
   iconStyle,
   MAP,
   onOverlay,
+  POI_ZOOM,
   pinVars,
   poiIcon,
   SUB_ZOOM,
@@ -147,16 +148,30 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
 
 /** 委托地点用原作地图上的任务标记（mappin_icons 的 quest，同类图标已在图集里，用户同意的 2026-10-30） */
 const JOB_ICON: AssetId = "map.poi.quest";
+/** 住处与停放载具复用原作图集图标 */
+const HOME_ICON: AssetId = "map.poi.apartment";
+const VEHICLE_ICON: AssetId = "map.poi.autofixer";
 
 /**
- * 图例每一项都能开关：当前位置、地点、委托、人物、NCPD 警情和每类服务点。
- * 地点统一一个开关，不按来源或是否去过分类；服务点分类不动（用户 2026-11-02："只把地点图钉统一"）。
+ * 图例每一项都能开关：当前位置、地点、数据终端（未去过的非地铁 ft:）、住处、载具、委托、人物、NCPD 警情和每类服务点。
  * 见过的人按现在在的地点画，中间人也一样
  */
-type LegendKey = "here" | "dest" | "jobs" | "npcs" | "police" | MapPoiKind;
+type LegendKey =
+  | "here"
+  | "dest"
+  | "terminals"
+  | "homes"
+  | "vehicles"
+  | "jobs"
+  | "npcs"
+  | "police"
+  | MapPoiKind;
 const LEGEND_KEYS = new Set<string>([
   "here",
   "dest",
+  "terminals",
+  "homes",
+  "vehicles",
   "jobs",
   "npcs",
   "police",
@@ -164,6 +179,11 @@ const LEGEND_KEYS = new Set<string>([
 ]);
 /** 关掉的图例项记在浏览器里，下次打开地图照旧 */
 const HIDDEN_STORE = "cp.mapHidden";
+
+/** 未访问过的非地铁站快速移动终端：低缩放时不铺满全图，放大或搜索时再显示 */
+function isUnvisitedTerminal(d: MapDestination): boolean {
+  return d.firstVisit && d.layer === "ft" && !d.metro;
+}
 
 function isLegendKey(v: unknown): v is LegendKey {
   return typeof v === "string" && LEGEND_KEYS.has(v);
@@ -199,9 +219,10 @@ const TEXT_SHADOW_SLICE = [18, 28, 16, 28] as const;
 /** 原作 atlas_shapes_sync 的 cell_flip_bg / cell_flip_fg（左下斜角）切线：2160p 左/上/右/下 30/20/20/30，这里是 CSS 顺序 */
 const PANEL_SLICE = [20, 20, 30, 30] as const;
 
-/** 地点图钉的悬停说明：名字、城区，当前位置再标一下；不再按来源区分（用户 2026-11-02："只把地点图钉统一"） */
+/** 地点图钉的悬停说明：名字、城区/街区，当前位置再标一下 */
 function destTitle(d: MapDestination): string {
-  return `${d.name} · ${d.district}${d.here ? "（当前位置）" : ""}`;
+  const area = d.sub ? `${d.district} · ${d.sub}` : d.district;
+  return `${d.name} · ${area}${d.metro ? " · NCART 地铁站" : ""}${d.here ? "（当前位置）" : ""}`;
 }
 
 interface Box {
@@ -233,6 +254,8 @@ export function MapBody({
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(() =>
     focus !== undefined && view.travel.destinations.some((d) => d.id === focus && !d.here)
       ? focus
@@ -240,13 +263,14 @@ export function MapBody({
   );
   const tiles = useMapTiles();
   const destinations = view.travel.destinations;
+  const destById = useMemo(() => new Map(destinations.map((d) => [d.id, d])), [destinations]);
   const here = destinations.find((d) => d.here);
-  const dest = destinations.find((d) => d.id === picked);
+  const dest = picked !== null ? destById.get(picked) : undefined;
   // 委托地点：只标手头已经接下的委托，免得未接的对话传闻像预设任务点那样挂在地图上
   const openJobs = view.jobs.list.filter((j) => j.status === "active" && j.location !== null);
   const jobsAt = new Map<string, (typeof openJobs)[number][]>();
   for (const j of openJobs) {
-    const exact = destinations.find((x) => x.id === j.location);
+    const exact = j.location !== null ? destById.get(j.location) : undefined;
     // 旧委托可能写的是名字；同名地点不止一个时不随便挑，避免把委托标到别处
     const named = exact ? [] : destinations.filter((x) => x.name === j.location);
     const d = exact ?? (named.length === 1 ? named[0] : undefined);
@@ -258,14 +282,55 @@ export function MapBody({
   const npcsAt = new Map<string, View["npcs"][number][]>();
   for (const n of view.npcs) {
     if (!n.alive || n.placeId === null) continue;
-    const d = destinations.find((x) => x.id === n.placeId);
+    const d = destById.get(n.placeId);
     if (d) npcsAt.set(d.id, [...(npcsAt.get(d.id) ?? []), n]);
   }
   const destNpcs = dest ? (npcsAt.get(dest.id) ?? []) : [];
+  // 住处 / 安全屋：按地点合并，标在地图上并在路线卡里提示
+  const homesAt = new Map<string, View["safehouse"]["homes"][number][]>();
+  for (const h of view.safehouse.homes) {
+    const d = destById.get(h.location);
+    if (d) homesAt.set(d.id, [...(homesAt.get(d.id) ?? []), h]);
+  }
+  const destHomes = dest ? (homesAt.get(dest.id) ?? []) : [];
+  // 停放载具：按当前停放地点合并，玩家一眼能看到车停在哪
+  const vehiclesAt = new Map<string, View["travel"]["vehicles"][number][]>();
+  for (const v of view.travel.vehicles) {
+    if (!v.location) continue;
+    const d = destById.get(v.location);
+    if (d) vehiclesAt.set(d.id, [...(vehiclesAt.get(d.id) ?? []), v]);
+  }
+  const destVehicles = dest ? (vehiclesAt.get(dest.id) ?? []) : [];
   const destAlerts = dest ? view.ncpd.alerts.filter((a) => a.location === dest.id) : [];
   const destGigs = dest ? view.sidegigs.list.filter((g) => g.location === dest.id) : [];
   const info = asset(MAP);
   const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
+
+  // 搜索匹配：按地名、城区、街区、服务类别过滤，当前去过的核心地点和名称前缀匹配优先
+  const trimmedQuery = query.trim().toLowerCase();
+  const searchResults = useMemo(() => {
+    if (!trimmedQuery) return [];
+    const scored: { readonly dest: MapDestination; readonly score: number }[] = [];
+    for (const d of destinations) {
+      const name = d.name.toLowerCase();
+      const district = d.district.toLowerCase();
+      const sub = (d.sub ?? "").toLowerCase();
+      const kind = (d.kind ? (KIND_NAME.get(d.kind as MapPoiKind) ?? d.kind) : "").toLowerCase();
+      let score = 0;
+      if (name === trimmedQuery) score = 100;
+      else if (name.startsWith(trimmedQuery)) score = 80;
+      else if (name.includes(trimmedQuery)) score = 60;
+      else if (sub.includes(trimmedQuery)) score = 40;
+      else if (district.includes(trimmedQuery)) score = 30;
+      else if (kind.includes(trimmedQuery)) score = 20;
+      else continue;
+      if (!d.firstVisit) score += 10;
+      if (d.metro) score += 5;
+      scored.push({ dest: d, score });
+    }
+    scored.sort((a, b) => b.score - a.score || a.dest.name.localeCompare(b.dest.name, "zh-CN"));
+    return scored.slice(0, 12).map((s) => s.dest);
+  }, [destinations, trimmedQuery]);
 
   useEffect(() => {
     try {
@@ -292,6 +357,7 @@ export function MapBody({
     dragging,
     zoomBy,
     reset,
+    lookAt,
     toScreen,
     onScreen,
     pointAt,
@@ -301,25 +367,55 @@ export function MapBody({
     keyPan,
   } = useMapCamera();
 
-  // 选中地点时 Esc 先取消选中；没选中时交给神经界面关闭
-  useLayer(() => setPicked(null), picked !== null);
+  // 打开地图带 focus 时，视口量出尺寸后自动聚焦到对应地点
+  const focusedRef = useRef<string | undefined>(undefined);
+  const lookAtRef = useRef(lookAt);
+  lookAtRef.current = lookAt;
+  useEffect(() => {
+    if (!focus || size.w === 0 || focusedRef.current === focus) return;
+    const target = destById.get(focus);
+    if (!target) return;
+    focusedRef.current = focus;
+    if (!target.here) setPicked(target.id);
+    lookAtRef.current(target.x, target.y, POI_ZOOM);
+  }, [focus, size.w, destById]);
+
+  const selectDestination = (target: MapDestination) => {
+    setPicked(target.here ? null : target.id);
+    lookAt(target.x, target.y, Math.max(zoom, POI_ZOOM));
+    setSearchOpen(false);
+    setQuery("");
+  };
+
+  // 搜索框打开时 Esc 先收起下拉，再取消选中地点，最后交给神经界面关闭
+  useLayer(() => setSearchOpen(false), searchOpen);
+  useLayer(() => setPicked(null), !searchOpen && picked !== null);
 
   // 瓦片和边界 SVG 的视野（共用 mapCamera.ts，算法照旧）
   const tileImgs = tileImages(tiles, cam, size, toScreen(0, 0));
   const shapesBox = shapesViewBox(cam, size);
 
   // 图例里关掉的地点不画；选中的那个照样画，免得路线卡指着一个看不见的点。
-  // 第一次去的原作店不画图钉，留在原作图标那一层点（places-plan 第二期，用户定的 2026-10-30）；
-  // 没去过的原作地标（数据终端、地铁站）当普通地点画，不再另设缩放门槛（用户 2026-11-02 选的"当普通地点"），
-  // 点了照常出行、不传送；和其他地点共用「地点」开关
-  const visibleDests = destinations.filter(
-    (d) =>
-      d.id === picked ||
-      (d.firstVisit
-        ? d.layer === "ft" && !hidden.has("dest")
-        : !hidden.has(d.here ? "here" : "dest")),
-  );
+  // 信噪比分级：未访问过的非地铁站 ft: 数据终端归入「数据终端」开关，且放大到 POI_ZOOM 以上才铺出来；
+  // 核心地点、已去过的地点、NCART 地铁站和当前选中目标常驻「地点」层，保持低倍全城总览清爽。
+  const visibleDests = destinations.filter((d) => {
+    if (d.id === picked) return true;
+    if (d.here) return !hidden.has("here");
+    if (d.firstVisit) {
+      if (d.layer !== "ft") return false;
+      if (d.metro) return !hidden.has("dest");
+      return !hidden.has("terminals") && zoom >= POI_ZOOM;
+    }
+    return !hidden.has("dest");
+  });
   const firstVisits = new Map(destinations.filter((d) => d.firstVisit).map((d) => [d.id, d]));
+  const terminalCount = destinations.filter((d) => isUnvisitedTerminal(d)).length;
+
+  // 路线连线：选中非当前位置的目标且当前位置在地图上时，在底图与图钉之间画一条战术虚线
+  const routeLine =
+    size.w > 0 && here && dest && !dest.here
+      ? { from: toScreen(here.x, here.y), to: toScreen(dest.x, dest.y) }
+      : null;
 
   // 地点名字：当前位置和选中的先摆，右边放不下放左边，再放不下就只在悬停时显示
   const sides = new Map<string, "right" | "left" | "hidden">();
@@ -369,6 +465,8 @@ export function MapBody({
   }
 
   const policeLegend = iconStyle(POLICE_ICON);
+  const homeLegend = iconStyle(HOME_ICON);
+  const vehicleLegend = iconStyle(VEHICLE_ICON);
 
   // 图例即筛选：每项一个开关，后面标地图上有几个
   const legend: {
@@ -382,9 +480,36 @@ export function MapBody({
       key: "dest",
       name: "地点",
       icon: <i className={styles.legendDest} />,
-      count: destinations.filter((d) => !d.here && (!d.firstVisit || d.layer === "ft")).length,
+      count: destinations.filter((d) => !d.here && (!d.firstVisit || (d.layer === "ft" && d.metro)))
+        .length,
+    },
+    {
+      key: "terminals",
+      name: "数据终端",
+      icon: <i className={styles.legendTerminal} />,
+      count: terminalCount,
     },
   ];
+  if (homeLegend) {
+    legend.push({
+      key: "homes",
+      name: "住处",
+      icon: (
+        <span className={styles.mapPoi} data-kind="apartment" data-legend="" style={homeLegend} />
+      ),
+      count: [...homesAt.values()].reduce((n, list) => n + list.length, 0),
+    });
+  }
+  if (vehicleLegend) {
+    legend.push({
+      key: "vehicles",
+      name: "停放载具",
+      icon: (
+        <span className={styles.mapPoi} data-kind="vehicle" data-legend="" style={vehicleLegend} />
+      ),
+      count: [...vehiclesAt.values()].reduce((n, list) => n + list.length, 0),
+    });
+  }
   const jobLegend = iconStyle(JOB_ICON);
   if (jobLegend) {
     legend.push({
@@ -430,9 +555,77 @@ export function MapBody({
       <header className={styles.mapTop}>
         <h2 className={styles.mapTopTitle}>夜之城</h2>
         <span className={styles.dim}>
-          {here ? `当前位置：${here.name} · ${here.district}` : "现在的位置不在地图上"}
+          {here
+            ? `当前位置：${here.name} · ${here.sub ? `${here.district} · ${here.sub}` : here.district}`
+            : "现在的位置不在地图上"}
         </span>
+        <form
+          className={styles.mapSearch}
+          data-overlay=""
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (searchResults[0]) selectDestination(searchResults[0]);
+          }}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget)) setSearchOpen(false);
+          }}
+        >
+          <input
+            type="search"
+            className={styles.mapSearchInput}
+            value={query}
+            placeholder="搜索地名 / 街区 / 城区…"
+            aria-label="搜索地图地点"
+            onFocus={() => setSearchOpen(true)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSearchOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                setSearchOpen(false);
+              }
+            }}
+          />
+          {searchOpen && trimmedQuery.length > 0 && (
+            <ul className={styles.mapSearchResults} aria-label="搜索结果">
+              {searchResults.length > 0 ? (
+                searchResults.map((d) => (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      className={styles.mapSearchItem}
+                      onClick={() => selectDestination(d)}
+                    >
+                      <b>
+                        {d.name}
+                        {d.here ? "（当前）" : ""}
+                      </b>
+                      <small className={styles.dim}>
+                        {d.sub ? `${d.district} · ${d.sub}` : d.district}
+                        {d.metro ? " · 地铁站" : ""}
+                        {d.firstVisit ? " · 未到访" : ""}
+                      </small>
+                    </button>
+                  </li>
+                ))
+              ) : (
+                <li className={styles.mapSearchEmpty}>没有找到匹配的地点</li>
+              )}
+            </ul>
+          )}
+        </form>
         <div className={styles.mapTools}>
+          {here && (
+            <Button
+              small
+              label="定位到当前位置"
+              onClick={() => lookAt(here.x, here.y, Math.max(zoom, SUB_ZOOM))}
+            >
+              当前位置
+            </Button>
+          )}
           <Button small pressed={shapes} onClick={() => setShapes((s) => !s)}>
             城区边界
           </Button>
@@ -575,6 +768,30 @@ export function MapBody({
               );
             })}
 
+            {routeLine && (
+              <svg
+                className={styles.mapRouteLineSvg}
+                width={size.w}
+                height={size.h}
+                aria-hidden="true"
+              >
+                <line
+                  x1={routeLine.from.left}
+                  y1={routeLine.from.top}
+                  x2={routeLine.to.left}
+                  y2={routeLine.to.top}
+                  className={styles.mapRouteLineGlow}
+                />
+                <line
+                  x1={routeLine.from.left}
+                  y1={routeLine.from.top}
+                  x2={routeLine.to.left}
+                  y2={routeLine.to.top}
+                  className={styles.mapRouteLine}
+                />
+              </svg>
+            )}
+
             {visibleDests.map((d) => (
               <div
                 key={d.id}
@@ -582,6 +799,8 @@ export function MapBody({
                 data-here={d.here || undefined}
                 data-picked={d.id === picked || undefined}
                 data-layer={d.layer}
+                data-terminal={isUnvisitedTerminal(d) || undefined}
+                data-metro={d.metro || undefined}
                 style={toScreen(d.x, d.y)}
               >
                 {d.here && <span className={styles.mapHereTag}>当前位置</span>}
@@ -604,6 +823,62 @@ export function MapBody({
             ))}
           </>
         )}
+
+        {/* 住处 / 安全屋标记：放在地点图钉左上方，点开直接拉出路线卡 */}
+        {size.w > 0 &&
+          !hidden.has("homes") &&
+          [...homesAt.entries()].map(([id, list]) => {
+            const d = destById.get(id);
+            if (!d) return null;
+            const at = toScreen(d.x, d.y);
+            if (!onScreen(at)) return null;
+            const style = iconStyle(HOME_ICON);
+            if (!style) return null;
+            const title = `住处：${list.map((h) => h.name).join("、")} · ${destTitle(d)}`;
+            return (
+              <div key={`home-${id}`} className={styles.mapHome} style={at}>
+                <i className={styles.mapPoliceShadow} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.mapHomePin}
+                  style={style}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={picked === id}
+                  onClick={() => setPicked(d.here ? null : id)}
+                />
+              </div>
+            );
+          })}
+
+        {/* 停放载具标记：放在地点图钉正上方偏左，显示玩家名下停在这里的车 */}
+        {size.w > 0 &&
+          !hidden.has("vehicles") &&
+          [...vehiclesAt.entries()].map(([id, list]) => {
+            const d = destById.get(id);
+            if (!d) return null;
+            const at = toScreen(d.x, d.y);
+            if (!onScreen(at)) return null;
+            const style = iconStyle(VEHICLE_ICON);
+            if (!style) return null;
+            const title = `停放载具：${list
+              .map((v) => `${v.name}（${v.conditionLabel}${v.stolen ? "·赃车" : ""}）`)
+              .join("；")} · ${destTitle(d)}`;
+            return (
+              <div key={`vehicle-${id}`} className={styles.mapVehicle} style={at}>
+                <i className={styles.mapPoliceShadow} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.mapVehiclePin}
+                  style={style}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={picked === id}
+                  onClick={() => setPicked(d.here ? null : id)}
+                />
+              </div>
+            );
+          })}
 
         {/* 委托按地点合并为一个标记；点开仍走普通出行，不直接接单或传送 */}
         {size.w > 0 &&
@@ -766,7 +1041,7 @@ export function MapBody({
                 <div>
                   <h3 className={`${styles.mapTitle} ${styles.mapTipTitle}`}>{dest.name}</h3>
                   <span className={styles.dim}>
-                    {dest.district}
+                    {dest.sub ? `${dest.district} · ${dest.sub}` : dest.district}
                     {dest.metro && " · 有 NCART 站台"}
                   </span>
                 </div>
@@ -774,6 +1049,26 @@ export function MapBody({
                   ✕
                 </Button>
               </div>
+              {destHomes.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destHomes.map((h) => (
+                    <li key={h.id}>
+                      <strong>{h.name}</strong>
+                      <span>住处 · 可休息与存取储物箱</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {destVehicles.length > 0 && (
+                <ul className={styles.jobs}>
+                  {destVehicles.map((v) => (
+                    <li key={v.id}>
+                      <strong>{v.name}</strong>
+                      <span>{`停放载具 · ${v.conditionLabel}${v.stolen ? " · 赃车" : ""}`}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {/* 这里进行中的委托：只列名字、状态和报酬，不在地图上预设任务 */}
               {destJobs.length > 0 && (
                 <ul className={styles.jobs}>
@@ -856,6 +1151,15 @@ export function MapBody({
                             {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
                             {r.riskLabel}
                           </span>
+                          {r.warnings && r.warnings.length > 0 && (
+                            <span className={styles.routeWarnings}>
+                              {r.warnings.map((w) => (
+                                <small key={w} className={styles.routeWarning}>
+                                  ⚠ {w}
+                                </small>
+                              ))}
+                            </span>
+                          )}
                           {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
                         </span>
                         {art && <Asset id={art} className={styles.routeVehicleArt} />}
@@ -915,7 +1219,15 @@ export function MapBody({
                       type="button"
                       className={styles.mapFilter}
                       aria-pressed={on}
-                      title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
+                      title={
+                        l.key === "terminals"
+                          ? on
+                            ? `在地图上隐藏${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
+                            : `在地图上显示${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
+                          : on
+                            ? `在地图上隐藏${l.name}`
+                            : `在地图上显示${l.name}`
+                      }
                       onClick={() => toggleLegend(l.key)}
                     >
                       {/* 原作 FiltersListItem：cell_bg 底、cell_fg 框；方框是 color_bg 底、color_fg 框、color_bg 填色 */}
