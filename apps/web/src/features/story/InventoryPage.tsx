@@ -7,7 +7,6 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { baseWeaponIdOf, itemArtOf } from "./art";
 import mediaStyles from "./content-media.module.css";
-import type { PlaceInventoryItem } from "./InventoryStorage";
 import styles from "./inventory.module.css";
 import { UnreadBadge } from "./Phone";
 import { vehicleArtOf } from "./vehicle-art";
@@ -22,6 +21,56 @@ import { type ShopModMeta, WeaponSlotInspector } from "./WeaponSlotInspector";
 
 /** 物品格九宫格切法，同四角在场的人用的 map.filterCell* */
 const CELL_SLICE = [20, 30, 30, 20] as const;
+
+export type PlaceInventoryItem = (
+  action: "leave" | "take",
+  item: string,
+  where: string,
+  source?: "backpack" | "worn" | "quick",
+  count?: number,
+) => Promise<void>;
+
+export type TransferInventoryItem = (
+  item: string,
+  from: string,
+  to: string,
+  count?: number,
+) => Promise<void>;
+
+/** 物品栏一级位置视图：carried 为随身，elsewhere 为剧情留置汇总，其余为自有容器 key（home:id / vehicle:id） */
+export type InventoryViewKey = "carried" | "elsewhere" | string;
+
+export type StorageGroup = View["safehouse"]["storage"][number];
+type StoredItem = StorageGroup["items"][number];
+
+const STORAGE_KIND_LABELS: Readonly<Record<StorageGroup["kind"], string>> = {
+  home: "住处",
+  vehicle: "后备箱",
+  npc: "保管",
+  place: "场景",
+};
+
+/** 区分玩家的自有容器（住处/名下未弃置车辆）与剧情留置（NPC 保管、场景、原住处/原车辆/弃车） */
+export function partitionStorageGroups(view: View): {
+  readonly own: readonly StorageGroup[];
+  readonly elsewhere: readonly StorageGroup[];
+} {
+  const homeKeys = new Set(view.safehouse.homes.map((h) => `home:${h.id}`));
+  const activeVehicleKeys = new Set(view.travel.vehicles.map((v) => `vehicle:${v.id}`));
+  const own: StorageGroup[] = [];
+  const elsewhere: StorageGroup[] = [];
+  for (const group of view.safehouse.storage) {
+    if (
+      (group.kind === "home" && homeKeys.has(group.key)) ||
+      (group.kind === "vehicle" && activeVehicleKeys.has(group.key))
+    ) {
+      own.push(group);
+    } else if (group.items.length > 0) {
+      elsewhere.push(group);
+    }
+  }
+  return { own, elsewhere };
+}
 
 export type InventoryFilter =
   | "all"
@@ -79,6 +128,13 @@ type InventoryEntry =
       readonly key: string;
       readonly id: string;
       readonly vehicle: VehicleView;
+    }
+  | {
+      readonly entryType: "stored";
+      readonly key: string;
+      readonly id: string;
+      readonly item: StoredItem;
+      readonly group: StorageGroup;
     };
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -89,16 +145,14 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * 随身物品栏（O）：计数筛选/排序/搜索 + 全高双栏独立滚动 + 键盘快操。
- * 已穿服装置顶并标注「已穿」；名下车辆并入条目与「车辆」筛选并支持直达后备箱；
- * 个人神经芯片槽统一展示在展开的生物检测面板顶部；
- * 一级页签（随身 / 存放）与携带负担刻度由外层 Weapon 展开顶栏统一承载。
+ * 统一物品面板（O）：单套「左列表 + 右详情卡」覆盖随身行装、自有住处/后备箱与别处留置。
+ * 顶栏由外层 Weapon 统一承载位置切换（[随身] [公寓 ●] [车辆 ●] [别处]）与随身负担刻度；
+ * 看随身时可穿用、改装、或一键存入身边的住处/车辆；看容器时可取回随身或在同地点容器间直转。
  */
 export function InventoryPage({
   view,
-  storageKey,
-  onSelectStorage,
-  onOpenStorage,
+  activeView,
+  onSelectView,
   initialFocus,
   onEquip,
   onUnequip,
@@ -109,13 +163,14 @@ export function InventoryPage({
   onUse,
   onActionDraft,
   onPlaceItem,
+  onTransferItem,
   disabledReason,
 }: {
   readonly view: View;
-  readonly storageKey: string | null;
-  readonly onSelectStorage: (key: string) => void;
-  /** 从车辆条目直达对应后备箱的存放视图 */
-  readonly onOpenStorage?: ((storageKey: string) => void) | undefined;
+  /** 当前所在位置视图："carried" | "elsewhere" | "home:xxx" | "vehicle:xxx" */
+  readonly activeView: InventoryViewKey;
+  /** 切换位置视图（例如从车辆条目直达该车后备箱） */
+  readonly onSelectView: (viewKey: InventoryViewKey) => void;
   /** 从其他面板（如生物检测的神经芯片槽）跳入时的预设筛选与定位物品 */
   readonly initialFocus?:
     | { readonly filter?: InventoryFilter; readonly itemId?: string; readonly nonce: number }
@@ -127,8 +182,10 @@ export function InventoryPage({
   readonly onUse?: ((id: string) => void) | undefined;
   /** 将芯片/超梦等自由行动填入行动输入框，由玩家确认后提交。 */
   readonly onActionDraft?: ((text: string) => void) | undefined;
-  /** 在当前地点的自有住所或车辆中，每次存入或取回一件物品。 */
+  /** 在当前地点的自有住所或车辆中存取物品（支持批量） */
   readonly onPlaceItem?: PlaceInventoryItem | undefined;
+  /** 在当前地点的两个自有容器之间直转物品（如住处 ↔ 后备箱） */
+  readonly onTransferItem?: TransferInventoryItem | undefined;
   readonly disabledReason?: string | undefined;
   /** 换服装或快捷药剂/手雷；正在生成或战斗中时不传 */
   readonly onEquip?: ((id: string) => void) | undefined;
@@ -157,6 +214,17 @@ export function InventoryPage({
     () => new Map(view.safehouse.storage.map((group) => [group.key, group])),
     [view.safehouse.storage],
   );
+  const { own: ownGroups, elsewhere: elsewhereGroups } = useMemo(
+    () => partitionStorageGroups(view),
+    [view],
+  );
+  const isCarriedView = activeView === "carried";
+  const isElsewhereView = activeView === "elsewhere";
+  const activeGroup = useMemo(
+    () => (isCarriedView || isElsewhereView ? null : (storageByKey.get(activeView) ?? null)),
+    [activeView, isCarriedView, isElsewhereView, storageByKey],
+  );
+  const [preferredStoreKey, setPreferredStoreKey] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<InventoryFilter>(() => initialFocus?.filter ?? "all");
   const [sort, setSort] = useState<InventorySort>("default");
@@ -165,11 +233,25 @@ export function InventoryPage({
   const [pickedItem, setPickedItem] = useState<{
     id: string;
     worn?: boolean;
-    entryType?: "item" | "vehicle";
+    entryType?: "item" | "vehicle" | "stored";
+    groupKey?: string;
     fallbackIndex?: number;
   } | null>(() =>
     initialFocus?.itemId ? { id: initialFocus.itemId, worn: false, entryType: "item" } : null,
   );
+
+  // 切换容器位置时重置当前选中与不适用于非随身的筛选
+  const prevViewRef = useRef(activeView);
+  useEffect(() => {
+    if (prevViewRef.current === activeView) return;
+    prevViewRef.current = activeView;
+    setPickedItem(null);
+    setOpenSlotPicker(null);
+    setUseError("");
+    if (activeView !== "carried" && (filter === "vehicle" || filter === "neural")) {
+      setFilter("all");
+    }
+  }, [activeView, filter]);
 
   useEffect(() => {
     if (!initialFocus) return;
@@ -234,31 +316,64 @@ export function InventoryPage({
     [carried],
   );
 
-  // 统一随身条目：已穿服装置顶 → 随身背包与快捷补给 → 名下车辆置底（不挤占日常随身物品）
+  // 当前视图条目：随身（已穿服装 + 随身物品 + 名下车辆）/ 指定自有容器 / 别处留置汇总
   const allEntries = useMemo<readonly InventoryEntry[]>(() => {
-    const wornEntries: InventoryEntry[] = inventory.clothing.map((entry) => ({
-      entryType: "item",
-      key: `worn:${entry.slot}:${entry.id}`,
-      id: entry.id,
-      count: 1,
-      worn: true,
-      slot: entry.slot,
-    }));
-    const bagEntries: InventoryEntry[] = allCarried.map(([id, count]) => ({
-      entryType: "item",
-      key: id,
-      id,
-      count,
-      worn: false,
-    }));
-    const vehicleEntries: InventoryEntry[] = view.travel.vehicles.map((vehicle) => ({
-      entryType: "vehicle",
-      key: `vehicle:${vehicle.id}`,
-      id: vehicle.id,
-      vehicle,
-    }));
-    return [...wornEntries, ...bagEntries, ...vehicleEntries];
-  }, [allCarried, inventory.clothing, view.travel.vehicles]);
+    if (isCarriedView) {
+      const wornEntries: InventoryEntry[] = inventory.clothing.map((entry) => ({
+        entryType: "item",
+        key: `worn:${entry.slot}:${entry.id}`,
+        id: entry.id,
+        count: 1,
+        worn: true,
+        slot: entry.slot,
+      }));
+      const bagEntries: InventoryEntry[] = allCarried.map(([id, count]) => ({
+        entryType: "item",
+        key: id,
+        id,
+        count,
+        worn: false,
+      }));
+      const vehicleEntries: InventoryEntry[] = view.travel.vehicles.map((vehicle) => ({
+        entryType: "vehicle",
+        key: `vehicle:${vehicle.id}`,
+        id: vehicle.id,
+        vehicle,
+      }));
+      return [...wornEntries, ...bagEntries, ...vehicleEntries];
+    }
+    if (isElsewhereView) {
+      return elsewhereGroups.flatMap((group) =>
+        group.items.map(
+          (item): InventoryEntry => ({
+            entryType: "stored",
+            key: `${group.key}::${item.id}`,
+            id: item.id,
+            item,
+            group,
+          }),
+        ),
+      );
+    }
+    if (!activeGroup) return [];
+    return activeGroup.items.map(
+      (item): InventoryEntry => ({
+        entryType: "stored",
+        key: `${activeGroup.key}::${item.id}`,
+        id: item.id,
+        item,
+        group: activeGroup,
+      }),
+    );
+  }, [
+    activeGroup,
+    allCarried,
+    elsewhereGroups,
+    inventory.clothing,
+    isCarriedView,
+    isElsewhereView,
+    view.travel.vehicles,
+  ]);
 
   const shopModMeta = useMemo(() => {
     const map = new Map<string, ShopModMeta>();
@@ -290,7 +405,7 @@ export function InventoryPage({
     return map;
   }, [view.shops]);
 
-  // 各类目数量统计（含已穿服装与名下车辆）
+  // 各类目数量统计（按当前所在位置视图统计）
   const filterCounts = useMemo(() => {
     const counts: Record<InventoryFilter, number> = {
       all: allEntries.length,
@@ -305,6 +420,15 @@ export function InventoryPage({
     for (const entry of allEntries) {
       if (entry.entryType === "vehicle") {
         counts.vehicle += 1;
+        continue;
+      }
+      if (entry.entryType === "stored") {
+        const { kind } = entry.item;
+        if (kind === "healing" || kind === "grenade" || kind === "consumable") counts.usable += 1;
+        if (kind === "weapon") counts.weapon += 1;
+        if (kind === "clothing") counts.clothing += 1;
+        if (kind === "mod") counts.mod += 1;
+        if (kind === "misc") counts.misc += 1;
         continue;
       }
       if (entry.worn) {
@@ -347,6 +471,28 @@ export function InventoryPage({
         return haystack.includes(query);
       }
 
+      if (entry.entryType === "stored") {
+        const { item, group } = entry;
+        const matchesFilter =
+          filter === "all" ||
+          (filter === "usable"
+            ? item.kind === "healing" || item.kind === "grenade" || item.kind === "consumable"
+            : item.kind === filter);
+        if (!matchesFilter) return false;
+        if (!query) return true;
+        const haystack = [
+          item.name,
+          item.subLabel,
+          item.rarityLabel ?? "",
+          item.ability ?? "",
+          group.name,
+          group.locationName,
+        ]
+          .join(" ")
+          .toLocaleLowerCase();
+        return haystack.includes(query);
+      }
+
       const detail = inventory.details?.[entry.id];
       const kind = entry.worn ? "clothing" : detail?.kind;
       const isNeural = !entry.worn && Boolean(detail?.neuralGroup);
@@ -380,33 +526,61 @@ export function InventoryPage({
 
     if (sort === "default") return filtered;
 
+    const entryIconic = (entry: InventoryEntry) =>
+      entry.entryType === "stored"
+        ? entry.item.iconic
+        : entry.entryType === "item"
+          ? Boolean(inventory.details?.[entry.id]?.iconic)
+          : false;
+    const entryRarity = (entry: InventoryEntry) =>
+      entry.entryType === "stored"
+        ? (RARITY_RANK[entry.item.rarity ?? ""] ?? 0)
+        : entry.entryType === "item"
+          ? (RARITY_RANK[
+              inventory.details?.[entry.id]?.rarity ?? inventory.rarity[entry.id] ?? ""
+            ] ?? 0)
+          : 0;
+    const entryKind = (entry: InventoryEntry) =>
+      entry.entryType === "vehicle"
+        ? "vehicle"
+        : entry.entryType === "stored"
+          ? entry.item.kind
+          : entry.worn
+            ? "clothing"
+            : (inventory.details?.[entry.id]?.kind ?? "misc");
+    const entryCarry = (entry: InventoryEntry) =>
+      entry.entryType === "stored"
+        ? entry.item.carryUnits
+        : entry.entryType === "item" && !entry.worn
+          ? (inventory.details?.[entry.id]?.carryUnits ?? 0)
+          : 0;
+    const entryName = (entry: InventoryEntry) =>
+      entry.entryType === "vehicle"
+        ? entry.vehicle.name
+        : entry.entryType === "stored"
+          ? entry.item.name
+          : itemName(entry.id);
+
     return [...filtered].sort((a, b) => {
+      if (sort === "rarity") {
+        const iconicDiff = Number(entryIconic(b)) - Number(entryIconic(a));
+        if (iconicDiff !== 0) return iconicDiff;
+        const rDiff = entryRarity(b) - entryRarity(a);
+        if (rDiff !== 0) return rDiff;
+      } else if (sort === "kind") {
+        const kDiff = (KIND_RANK[entryKind(a)] ?? 9) - (KIND_RANK[entryKind(b)] ?? 9);
+        if (kDiff !== 0) return kDiff;
+      } else if (sort === "carry") {
+        const cDiff = entryCarry(b) - entryCarry(a);
+        if (cDiff !== 0) return cDiff;
+      }
       const aVehicle = a.entryType === "vehicle";
       const bVehicle = b.entryType === "vehicle";
-      const dA = aVehicle ? undefined : inventory.details?.[a.id];
-      const dB = bVehicle ? undefined : inventory.details?.[b.id];
-      if (sort === "rarity") {
-        const iconicDiff = Number(Boolean(dB?.iconic)) - Number(Boolean(dA?.iconic));
-        if (iconicDiff !== 0) return iconicDiff;
-        const rA = aVehicle ? 0 : (RARITY_RANK[dA?.rarity ?? inventory.rarity[a.id] ?? ""] ?? 0);
-        const rB = bVehicle ? 0 : (RARITY_RANK[dB?.rarity ?? inventory.rarity[b.id] ?? ""] ?? 0);
-        if (rB !== rA) return rB - rA;
-      } else if (sort === "kind") {
-        const kA =
-          KIND_RANK[aVehicle ? "vehicle" : a.worn ? "clothing" : (dA?.kind ?? "misc")] ?? 9;
-        const kB =
-          KIND_RANK[bVehicle ? "vehicle" : b.worn ? "clothing" : (dB?.kind ?? "misc")] ?? 9;
-        if (kA !== kB) return kA - kB;
-      } else if (sort === "carry") {
-        const cA = aVehicle || a.worn ? 0 : (dA?.carryUnits ?? 0);
-        const cB = bVehicle || b.worn ? 0 : (dB?.carryUnits ?? 0);
-        if (cB !== cA) return cB - cA;
-      }
       if (aVehicle !== bVehicle) return aVehicle ? 1 : -1;
-      if (!aVehicle && !bVehicle && a.worn !== b.worn) return a.worn ? -1 : 1;
-      const nameA = aVehicle ? a.vehicle.name : itemName(a.id);
-      const nameB = bVehicle ? b.vehicle.name : itemName(b.id);
-      return nameA.localeCompare(nameB, "zh-Hans-CN");
+      if (a.entryType === "item" && b.entryType === "item" && a.worn !== b.worn) {
+        return a.worn ? -1 : 1;
+      }
+      return entryName(a).localeCompare(entryName(b), "zh-Hans-CN");
     });
   }, [
     allEntries,
@@ -420,11 +594,17 @@ export function InventoryPage({
     sort,
   ]);
 
-  // 智能焦点保持：支持穿脱切换、车辆条目、武器改装物化 ID 变化追踪与耗尽/存入后就近邻项补位
+  // 智能焦点保持：支持穿脱切换、车辆条目、容器条目、武器改装物化 ID 变化追踪与耗尽/存入后就近邻项补位
   const matchedEntry = pickedItem?.id
     ? (visibleEntries.find((entry) => {
         if (pickedItem.entryType && entry.entryType !== pickedItem.entryType) return false;
         if (entry.entryType === "vehicle") return entry.id === pickedItem.id;
+        if (entry.entryType === "stored") {
+          return (
+            entry.id === pickedItem.id &&
+            (!pickedItem.groupKey || entry.group.key === pickedItem.groupKey)
+          );
+        }
         return entry.id === pickedItem.id && entry.worn === Boolean(pickedItem.worn);
       }) ??
       visibleEntries.find((entry) => entry.entryType === "item" && entry.id === pickedItem.id) ??
@@ -451,6 +631,7 @@ export function InventoryPage({
       id: entry.id,
       entryType: entry.entryType,
       ...(entry.entryType === "item" ? { worn: entry.worn } : {}),
+      ...(entry.entryType === "stored" ? { groupKey: entry.group.key } : {}),
       ...(fallbackIndex !== undefined ? { fallbackIndex } : {}),
     });
     setOpenSlotPicker(null);
@@ -599,16 +780,41 @@ export function InventoryPage({
     [disabledReason, itemName, onMod, showReceipt, usingItem],
   );
 
-  // 安全快操：双击列表项或按 Enter 时执行“打开后备箱 / 穿上 / 脱下 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
+  // 安全快操：双击列表项或按 Enter 时执行“切至后备箱 / 取回容器物品 / 穿上 / 脱下 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
   const triggerSafePrimary = useCallback(
     (entry: InventoryEntry) => {
       if (entry.entryType === "vehicle") {
-        if (storageByKey.has(entry.key) && onOpenStorage) {
-          onOpenStorage(entry.key);
+        if (storageByKey.has(entry.key)) {
+          onSelectView(entry.key);
         }
         return;
       }
       if (disabledReason || usingItem) return;
+      if (entry.entryType === "stored") {
+        if (
+          !entry.group.canTake ||
+          !onPlaceItem ||
+          view.combat.active ||
+          view.health.condition !== "up"
+        ) {
+          return;
+        }
+        const nextFallback = Math.max(selectedIndex, 0);
+        if (entry.item.count <= 1) {
+          setPickedItem({
+            id: entry.item.id,
+            entryType: "stored",
+            groupKey: entry.group.key,
+            fallbackIndex: nextFallback,
+          });
+        }
+        void runDirectUse(
+          () => onPlaceItem("take", entry.item.id, entry.group.target, undefined, 1),
+          `已从${entry.group.name}取回「${entry.item.name}」`,
+          entry.item.id,
+        );
+        return;
+      }
       if (entry.worn) {
         if (onUnequip) triggerUnequip(entry.id);
         return;
@@ -661,17 +867,20 @@ export function InventoryPage({
       itemName,
       onEquip,
       onHeal,
-      onOpenStorage,
+      onPlaceItem,
+      onSelectView,
       onSuppressant,
       onUnequip,
       quickItems,
       runDirectUse,
       selectedCtx,
+      selectedIndex,
       storageByKey,
       triggerEquip,
       triggerUnequip,
       usingItem,
       view.combat.active,
+      view.health.condition,
     ],
   );
 
@@ -739,39 +948,55 @@ export function InventoryPage({
   }, [selectEntry, selectedEntry, selectedIndex, triggerSafePrimary, visibleEntries]);
 
   const places = view.safehouse.forSale.length > 0;
-  const storage = view.safehouse.storage;
-  const storeTargets = storage.filter((group) => group.canStore);
-  const storeTarget = storeTargets.find((group) => group.key === storageKey) ?? storeTargets[0];
-  const storeBlocked =
-    disabledReason ||
-    (usingItem
-      ? "正在处理物品，请稍候"
-      : view.combat.active
-        ? "交战中存取物品需要在行动里描述"
-        : view.health.condition !== "up"
-          ? "当前无法自行存取物品"
-          : !storeTarget
-            ? "到达自有住处或车辆所在地点后可存放"
-            : !onPlaceItem
-              ? "当前无法存放物品"
-              : undefined);
+  const storeTargets = ownGroups.filter((group) => group.canStore);
+  const storeTarget =
+    storeTargets.find((group) => group.key === preferredStoreKey) ?? storeTargets[0];
+  const canDirectStoreNow = Boolean(
+    storeTarget &&
+      onPlaceItem &&
+      !disabledReason &&
+      !view.combat.active &&
+      view.health.condition === "up",
+  );
 
-  const filterTabs: readonly (readonly [InventoryFilter, string, number])[] = [
-    ["all", "全部", filterCounts.all],
-    ["usable", "可用", filterCounts.usable],
-    ["weapon", "武器", filterCounts.weapon],
-    ["clothing", "服装", filterCounts.clothing],
-    ["mod", "改装件", filterCounts.mod],
-    ["neural", "芯片/超梦", filterCounts.neural],
-    ["vehicle", "车辆", filterCounts.vehicle],
-    ["misc", "杂物", filterCounts.misc],
-  ];
+  const filterTabs: readonly (readonly [InventoryFilter, string, number])[] = isCarriedView
+    ? [
+        ["all", "全部", filterCounts.all],
+        ["usable", "可用", filterCounts.usable],
+        ["weapon", "武器", filterCounts.weapon],
+        ["clothing", "服装", filterCounts.clothing],
+        ["mod", "改装件", filterCounts.mod],
+        ["neural", "芯片/超梦", filterCounts.neural],
+        ["vehicle", "车辆", filterCounts.vehicle],
+        ["misc", "杂物", filterCounts.misc],
+      ]
+    : [
+        ["all", "全部", filterCounts.all],
+        ["usable", "可用", filterCounts.usable],
+        ["weapon", "武器", filterCounts.weapon],
+        ["clothing", "服装", filterCounts.clothing],
+        ["mod", "改装件", filterCounts.mod],
+        ["misc", "杂物", filterCounts.misc],
+      ];
 
   const cycleSort = () => {
     const idx = SORT_CYCLE.indexOf(sort);
     const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length] ?? "default";
     setSort(next);
   };
+
+  const activeGroupTotalCount = activeGroup
+    ? activeGroup.items.reduce((sum, item) => sum + item.count, 0)
+    : 0;
+  const activeGroupReachable = Boolean(
+    activeGroup && (activeGroup.canTake || activeGroup.canStore),
+  );
+  const elsewhereTotalCount = isElsewhereView
+    ? elsewhereGroups.reduce(
+        (sum, group) => sum + group.items.reduce((itemSum, item) => itemSum + item.count, 0),
+        0,
+      )
+    : 0;
 
   return (
     <div className={styles.inventoryRoot}>
@@ -800,8 +1025,49 @@ export function InventoryPage({
         </div>
       )}
 
-      {/* 背包主区：筛选 + 排序 + 搜索 + 全高双栏独立滚动 */}
-      <section className={styles.packSection} aria-label="随身行装与背包">
+      {/* 物品主区：容器状态条（非随身） + 筛选 + 排序 + 搜索 + 全高双栏独立滚动 */}
+      <section
+        className={styles.packSection}
+        aria-label={
+          isCarriedView
+            ? "随身行装与背包"
+            : isElsewhereView
+              ? "别处留置物品"
+              : activeGroup
+                ? `${activeGroup.name}储物清单`
+                : "储物清单"
+        }
+      >
+        {!isCarriedView && activeGroup && (
+          <div className={styles.containerBar} data-locked={!activeGroupReachable || undefined}>
+            <div className={styles.containerBarMain}>
+              <span className={styles.containerKind}>{STORAGE_KIND_LABELS[activeGroup.kind]}</span>
+              <strong className={styles.containerName}>{activeGroup.name}</strong>
+              <span className={styles.containerMeta}>
+                {activeGroup.locationName} ·{" "}
+                {activeGroupTotalCount > 0 ? `共 ${activeGroupTotalCount} 件` : "当前为空"}
+              </span>
+            </div>
+            <span className={styles.containerStatus}>
+              {activeGroupReachable
+                ? "当前就在现场 · 可直接取回或转运"
+                : (activeGroup.blockedReason ?? "远端只读")}
+            </span>
+          </div>
+        )}
+        {isElsewhereView && (
+          <div className={styles.containerBar} data-locked="">
+            <div className={styles.containerBarMain}>
+              <span className={styles.containerKind}>留置</span>
+              <strong className={styles.containerName}>别处留置物品</strong>
+              <span className={styles.containerMeta}>
+                {elsewhereGroups.length} 处 · 共 {elsewhereTotalCount} 件
+              </span>
+            </div>
+            <span className={styles.containerStatus}>只读 · 需在行动中说明交接与取回</span>
+          </div>
+        )}
+
         <div className={styles.toolbar}>
           <nav className={styles.filterRow} aria-label="物品分类筛选">
             {filterTabs.map(([key, label, count]) => (
@@ -868,12 +1134,18 @@ export function InventoryPage({
             <CellFrame />
             <span>
               {allEntries.length === 0
-                ? "随身物品栏是空的。"
+                ? isCarriedView
+                  ? "随身物品栏是空的。"
+                  : activeGroup
+                    ? activeGroup.canStore
+                      ? `${activeGroup.name}里还没有存放物品，可切回「随身」将物品存入。`
+                      : `${activeGroup.name}里没有存放物品。`
+                    : "目前没有留在别处的物品。"
                 : search || filter !== "all"
                   ? "没有符合当前筛选条件的物品。"
-                  : "随身物品栏是空的。"}
+                  : "当前列表为空。"}
             </span>
-            {(search || filter !== "all") && (
+            {search || filter !== "all" ? (
               <ActionButton
                 onClick={() => {
                   setFilter("all");
@@ -882,11 +1154,22 @@ export function InventoryPage({
               >
                 重置全部筛选
               </ActionButton>
+            ) : (
+              !isCarriedView &&
+              activeGroup?.canStore && (
+                <ActionButton onClick={() => onSelectView("carried")}>
+                  切回随身存放物品
+                </ActionButton>
+              )
             )}
           </div>
         ) : (
           <div className={styles.browser}>
-            <ul ref={listRef} className={styles.itemList} aria-label="选择随身物品">
+            <ul
+              ref={listRef}
+              className={styles.itemList}
+              aria-label={isCarriedView ? "选择随身物品" : "选择存放物品"}
+            >
               {visibleEntries.map((entry, index) => {
                 const isSelected = selectedEntry?.key === entry.key;
 
@@ -980,6 +1263,97 @@ export function InventoryPage({
                               {trunkCount > 0 ? `后备箱 ${trunkCount}` : "后备箱空"}
                             </span>
                           )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                }
+
+                if (entry.entryType === "stored") {
+                  const { item, group } = entry;
+                  const art = itemArtOf(item.baseId ?? item.id);
+                  return (
+                    <li key={entry.key}>
+                      <button
+                        type="button"
+                        data-item-index={index}
+                        className={styles.itemRow}
+                        aria-pressed={isSelected}
+                        data-rarity={item.rarity ?? undefined}
+                        data-iconic={item.iconic || undefined}
+                        data-flash={flashId === item.id || undefined}
+                        onClick={() => selectEntry(entry, index)}
+                        onDoubleClick={() => {
+                          selectEntry(entry, index);
+                          triggerSafePrimary(entry);
+                        }}
+                      >
+                        <NineSlice
+                          id="map.filterCellBg"
+                          tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                          slice={CELL_SLICE}
+                        />
+                        <NineSlice
+                          id="map.filterCellFg"
+                          tint="var(--item-line)"
+                          slice={CELL_SLICE}
+                        />
+                        {item.rarity && (
+                          <NineSlice
+                            id="cyber.cellRarity"
+                            tint="var(--rarity)"
+                            slice={0}
+                            className={styles.itemRarityBar}
+                          />
+                        )}
+
+                        <span className={styles.itemThumb} aria-hidden>
+                          <span
+                            className={styles.itemThumbGrid}
+                            style={{ backgroundImage: cssUrl("fx.grid") }}
+                          />
+                          {art ? (
+                            <Asset id={art} className={styles.itemArt} />
+                          ) : (
+                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                          )}
+                        </span>
+
+                        <span className={styles.itemInfo}>
+                          <span className={styles.itemTopLine}>
+                            <strong className={styles.itemName}>{item.name}</strong>
+                            {isElsewhereView && (
+                              <span className={styles.miniTag}>{group.name}</span>
+                            )}
+                          </span>
+                          <span className={styles.itemSubLine}>
+                            <span className={styles.itemSubText}>
+                              {item.subLabel}
+                              {item.rarityLabel && (
+                                <>
+                                  {" · "}
+                                  <span className={styles.itemRarityWord}>{item.rarityLabel}</span>
+                                </>
+                              )}
+                              {isElsewhereView && ` · ${group.locationName}`}
+                            </span>
+                          </span>
+                        </span>
+
+                        <span className={styles.itemMeta}>
+                          {item.count > 1 && <b className={styles.itemCount}>×{item.count}</b>}
+                          {item.remaining !== null && item.charges ? (
+                            <span className={styles.itemCarryTag}>
+                              {item.remaining}/{item.charges}
+                            </span>
+                          ) : item.carryUnits > 0 ? (
+                            <span
+                              className={styles.itemCarryTag}
+                              title={`单件携带负担 ${item.carryUnits} 分`}
+                            >
+                              负担 {item.carryUnits}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     </li>
@@ -1269,16 +1643,16 @@ export function InventoryPage({
                     </div>
 
                     <footer className={styles.detailFooter}>
-                      {trunk && onOpenStorage ? (
+                      {trunk ? (
                         <div className={styles.actionRow}>
                           <Button
                             small
                             primary={trunkReachable}
-                            onClick={() => onOpenStorage(selectedEntry.key)}
+                            onClick={() => onSelectView(selectedEntry.key)}
                           >
                             {trunkReachable
                               ? trunkCount > 0
-                                ? `管理后备箱（${trunkCount} 件）→`
+                                ? `打开后备箱（${trunkCount} 件）→`
                                 : "打开后备箱 →"
                               : `查看后备箱（${trunkCount} 件）→`}
                           </Button>
@@ -1286,9 +1660,265 @@ export function InventoryPage({
                       ) : null}
                       <p className={styles.actionHint}>
                         {trunkReachable
-                          ? "双击车辆条目或按 Enter 可直接进入后备箱存取物品。"
+                          ? "双击车辆条目或按 Enter 可直接切到后备箱。"
                           : "开往或返回车辆停放地点后即可在现场存取后备箱物品。"}
                       </p>
+                    </footer>
+                  </article>
+                );
+              })()}
+
+            {selectedEntry?.entryType === "stored" &&
+              (() => {
+                const { item, group } = selectedEntry;
+                const art = itemArtOf(item.baseId ?? item.id);
+                const canOperate = Boolean(
+                  !disabledReason && !view.combat.active && view.health.condition === "up",
+                );
+                const canTakeHere = Boolean(group.canTake && onPlaceItem && canOperate);
+                const batchTakeCount = item.count > 1 ? Math.min(item.count, 99) : 0;
+                const transferTargets =
+                  canTakeHere && onTransferItem
+                    ? ownGroups.filter((other) => other.key !== group.key && other.canStore)
+                    : [];
+
+                return (
+                  <article
+                    key={selectedEntry.key}
+                    className={styles.detailCard}
+                    data-rarity={item.rarity ?? undefined}
+                    data-iconic={item.iconic || undefined}
+                    aria-label="选中存放物品详情"
+                  >
+                    <CellFrame />
+                    <span
+                      className={styles.detailGrid}
+                      style={{ backgroundImage: cssUrl("fx.grid") }}
+                      aria-hidden
+                    />
+                    {item.rarity && (
+                      <NineSlice
+                        id="cyber.cellRarity"
+                        tint="var(--rarity)"
+                        slice={0}
+                        className={styles.detailRarityBar}
+                      />
+                    )}
+
+                    <header className={styles.detailHead}>
+                      <div className={styles.detailTitleRow}>
+                        <strong className={styles.detailTitle}>{item.name}</strong>
+                        {item.count > 1 && <b className={styles.detailCount}>×{item.count}</b>}
+                      </div>
+                      <div className={styles.detailTags}>
+                        {item.rarityLabel && (
+                          <span className={styles.pillRarity}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="var(--rarity, var(--cp-cyan))"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>{item.rarityLabel}</span>
+                          </span>
+                        )}
+                        <span className={styles.pill}>
+                          <NineSlice id="cyber.gaugeLabel" tint="rgb(94 246 255 / 16%)" slice={4} />
+                          <span className={styles.pillText}>{item.subLabel}</span>
+                        </span>
+                        <span className={styles.pill}>
+                          <NineSlice
+                            id="cyber.gaugeLabel"
+                            tint={
+                              group.canTake ? "rgb(74 222 128 / 18%)" : "rgb(148 163 184 / 16%)"
+                            }
+                            slice={4}
+                          />
+                          <span className={styles.pillText}>
+                            {group.name} · {group.locationName}
+                          </span>
+                        </span>
+                        {item.carryUnits > 0 && (
+                          <span className={styles.pill}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(148 163 184 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>负担 {item.carryUnits}</span>
+                          </span>
+                        )}
+                        {item.remaining !== null && item.charges && (
+                          <span className={styles.pill}>
+                            <NineSlice
+                              id="cyber.gaugeLabel"
+                              tint="rgb(94 246 255 / 16%)"
+                              slice={4}
+                            />
+                            <span className={styles.pillText}>
+                              剩余 {item.remaining}/{item.charges} 次
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    </header>
+
+                    <div className={styles.detailScroll}>
+                      {art && (
+                        <div className={styles.showcase} aria-hidden>
+                          <CellFrame />
+                          <span
+                            className={styles.showcaseGrid}
+                            style={{ backgroundImage: cssUrl("fx.grid") }}
+                          />
+                          {item.rarityLabel && (
+                            <span className={styles.showcaseCornerLeft}>{item.rarityLabel}</span>
+                          )}
+                          {item.carryUnits > 0 && (
+                            <span className={styles.showcaseCornerRight}>
+                              负担 {item.carryUnits}
+                            </span>
+                          )}
+                          <Asset id={art} className={styles.showcaseArt} />
+                        </div>
+                      )}
+
+                      {item.ability && (
+                        <div className={styles.detailCopy}>
+                          <p className={styles.detailDesc}>{item.ability}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <footer className={styles.detailFooter}>
+                      {canTakeHere && onPlaceItem ? (
+                        <>
+                          <div className={styles.actionRow}>
+                            <Button
+                              small
+                              primary
+                              disabled={usingItem}
+                              onClick={() => {
+                                const nextFallback = Math.max(selectedIndex, 0);
+                                if (item.count <= 1) {
+                                  setPickedItem({
+                                    id: item.id,
+                                    entryType: "stored",
+                                    groupKey: group.key,
+                                    fallbackIndex: nextFallback,
+                                  });
+                                }
+                                void runDirectUse(
+                                  () => onPlaceItem("take", item.id, group.target, undefined, 1),
+                                  `已从${group.name}取回「${item.name}」`,
+                                  item.id,
+                                );
+                              }}
+                            >
+                              {usingItem ? "正在处理…" : item.count > 1 ? "取回 1 件" : "取回随身"}
+                            </Button>
+                            {batchTakeCount > 1 && (
+                              <Button
+                                small
+                                disabled={usingItem}
+                                onClick={() => {
+                                  const nextFallback = Math.max(selectedIndex, 0);
+                                  setPickedItem({
+                                    id: item.id,
+                                    entryType: "stored",
+                                    groupKey: group.key,
+                                    fallbackIndex: nextFallback,
+                                  });
+                                  void runDirectUse(
+                                    () =>
+                                      onPlaceItem(
+                                        "take",
+                                        item.id,
+                                        group.target,
+                                        undefined,
+                                        batchTakeCount,
+                                      ),
+                                    `已从${group.name}取回「${item.name}」×${batchTakeCount}`,
+                                    item.id,
+                                  );
+                                }}
+                              >
+                                全部取回 ({batchTakeCount})
+                              </Button>
+                            )}
+                          </div>
+
+                          {transferTargets.length > 0 && onTransferItem && (
+                            <div className={styles.storeBar}>
+                              <div className={styles.storeActions}>
+                                {transferTargets.map((dest) => (
+                                  <Button
+                                    key={dest.key}
+                                    small
+                                    disabled={usingItem}
+                                    onClick={() => {
+                                      const nextFallback = Math.max(selectedIndex, 0);
+                                      if (item.count <= 1) {
+                                        setPickedItem({
+                                          id: item.id,
+                                          entryType: "stored",
+                                          groupKey: group.key,
+                                          fallbackIndex: nextFallback,
+                                        });
+                                      }
+                                      void runDirectUse(
+                                        () => onTransferItem(item.id, group.target, dest.target, 1),
+                                        `已将「${item.name}」转至${dest.name}`,
+                                        item.id,
+                                      );
+                                    }}
+                                  >
+                                    {item.count > 1 ? `转 1 件到${dest.name}` : `转到${dest.name}`}
+                                  </Button>
+                                ))}
+                                {batchTakeCount > 1 &&
+                                  transferTargets.map((dest) => (
+                                    <Button
+                                      key={`${dest.key}:all`}
+                                      small
+                                      disabled={usingItem}
+                                      onClick={() => {
+                                        const nextFallback = Math.max(selectedIndex, 0);
+                                        setPickedItem({
+                                          id: item.id,
+                                          entryType: "stored",
+                                          groupKey: group.key,
+                                          fallbackIndex: nextFallback,
+                                        });
+                                        void runDirectUse(
+                                          () =>
+                                            onTransferItem(
+                                              item.id,
+                                              group.target,
+                                              dest.target,
+                                              batchTakeCount,
+                                            ),
+                                          `已将「${item.name}」×${batchTakeCount} 转至${dest.name}`,
+                                          item.id,
+                                        );
+                                      }}
+                                    >
+                                      全部转到{dest.name} ({batchTakeCount})
+                                    </Button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className={styles.actionHint}>
+                          {disabledReason ||
+                            (view.combat.active
+                              ? "交战中存取物品需要在行动里描述"
+                              : view.health.condition !== "up"
+                                ? "当前无法自行存取物品"
+                                : (group.blockedReason ?? "当前位置只读"))}
+                        </p>
+                      )}
                     </footer>
                   </article>
                 );
@@ -1314,9 +1944,6 @@ export function InventoryPage({
                 } = selectedCtx;
                 const art = itemArtOf(detail?.baseId ?? id);
                 const rarity = detail?.rarity ?? inventory.rarity[id];
-                const itemStoreBlocked = chip?.slotted
-                  ? "请先从个人神经芯片槽拔下后再存放"
-                  : storeBlocked;
                 const modSlot =
                   kind === "mod"
                     ? inventoryRules.ModSlotSchema.options.find(
@@ -1777,21 +2404,27 @@ export function InventoryPage({
                         </>
                       )}
 
-                      {/* 存放区块：可达时展示目标切换、单件/批量存放与跳转存放工作台；不可达时降级为低饱和状态条 */}
-                      {!itemStoreBlocked && storeTarget && onPlaceItem ? (
-                        (() => {
-                          const backpackCount = selectedIsWorn ? 0 : (inventory.backpack[id] ?? 0);
-                          const batchStoreCount =
-                            !selectedIsWorn && backpackCount > 1 ? Math.min(backpackCount, 99) : 0;
-                          const singleSource: "backpack" | "worn" | "quick" = selectedIsWorn
-                            ? "worn"
-                            : backpackCount > 0
-                              ? "backpack"
-                              : "quick";
-                          return (
-                            <div className={styles.storeBar}>
-                              <div className={styles.storeHeader}>
-                                {storeTargets.length > 1 ? (
+                      {/* 存放区块：仅当身边存在可达容器时出现；无可达容器时保持详情底栏干净 */}
+                      {canDirectStoreNow && storeTarget && onPlaceItem ? (
+                        chip?.slotted ? (
+                          <p className={styles.actionHint}>请先从个人神经芯片槽拔下后再存放</p>
+                        ) : (
+                          (() => {
+                            const backpackCount = selectedIsWorn
+                              ? 0
+                              : (inventory.backpack[id] ?? 0);
+                            const batchStoreCount =
+                              !selectedIsWorn && backpackCount > 1
+                                ? Math.min(backpackCount, 99)
+                                : 0;
+                            const singleSource: "backpack" | "worn" | "quick" = selectedIsWorn
+                              ? "worn"
+                              : backpackCount > 0
+                                ? "backpack"
+                                : "quick";
+                            return (
+                              <div className={styles.storeBar}>
+                                {storeTargets.length > 1 && (
                                   <fieldset
                                     className={styles.storeTargetPills}
                                     aria-label="选择存放点"
@@ -1803,73 +2436,24 @@ export function InventoryPage({
                                         className={styles.storeTargetChip}
                                         aria-pressed={group.key === storeTarget.key}
                                         disabled={usingItem}
-                                        onClick={() => onSelectStorage(group.key)}
+                                        onClick={() => setPreferredStoreKey(group.key)}
                                       >
                                         {group.name}
                                       </button>
                                     ))}
                                   </fieldset>
-                                ) : (
-                                  <span className={styles.actionHint}>
-                                    存入目标：{storeTarget.name}
-                                  </span>
                                 )}
-                                {onOpenStorage && (
-                                  <button
-                                    type="button"
-                                    className={styles.storeOpenLink}
-                                    disabled={usingItem}
-                                    onClick={() => onOpenStorage(storeTarget.key)}
-                                  >
-                                    打开工作台 →
-                                  </button>
-                                )}
-                              </div>
-                              <div className={styles.storeActions}>
-                                <Button
-                                  small
-                                  disabled={usingItem}
-                                  onClick={() => {
-                                    const nextFallback = Math.max(selectedIndex, 0);
-                                    if (count <= 1) {
-                                      setPickedItem({
-                                        id,
-                                        entryType: "item",
-                                        worn: selectedIsWorn,
-                                        fallbackIndex: nextFallback,
-                                      });
-                                    }
-                                    void runDirectUse(
-                                      () =>
-                                        onPlaceItem(
-                                          "leave",
-                                          id,
-                                          storeTarget.target,
-                                          singleSource,
-                                          1,
-                                        ),
-                                      `已将「${itemName(id)}」存入${storeTarget.name}`,
-                                      id,
-                                    );
-                                  }}
-                                >
-                                  {usingItem
-                                    ? "正在处理…"
-                                    : count > 1
-                                      ? `存放 1 件到${storeTarget.name}`
-                                      : `存放到${storeTarget.name}`}
-                                </Button>
-                                {batchStoreCount > 1 && (
+                                <div className={styles.storeActions}>
                                   <Button
                                     small
                                     disabled={usingItem}
                                     onClick={() => {
                                       const nextFallback = Math.max(selectedIndex, 0);
-                                      if (batchStoreCount >= count) {
+                                      if (count <= 1) {
                                         setPickedItem({
                                           id,
                                           entryType: "item",
-                                          worn: false,
+                                          worn: selectedIsWorn,
                                           fallbackIndex: nextFallback,
                                         });
                                       }
@@ -1879,37 +2463,59 @@ export function InventoryPage({
                                             "leave",
                                             id,
                                             storeTarget.target,
-                                            "backpack",
-                                            batchStoreCount,
+                                            singleSource,
+                                            1,
                                           ),
-                                        `已将「${itemName(id)}」×${batchStoreCount} 存入${storeTarget.name}`,
+                                        `已将「${itemName(id)}」存入${storeTarget.name}`,
                                         id,
                                       );
                                     }}
                                   >
-                                    {quick
-                                      ? `存备用 (${batchStoreCount})`
-                                      : `全部存入 (${batchStoreCount})`}
+                                    {usingItem
+                                      ? "正在处理…"
+                                      : count > 1
+                                        ? `存放 1 件到${storeTarget.name}`
+                                        : `存放到${storeTarget.name}`}
                                   </Button>
-                                )}
+                                  {batchStoreCount > 1 && (
+                                    <Button
+                                      small
+                                      disabled={usingItem}
+                                      onClick={() => {
+                                        const nextFallback = Math.max(selectedIndex, 0);
+                                        if (batchStoreCount >= count) {
+                                          setPickedItem({
+                                            id,
+                                            entryType: "item",
+                                            worn: false,
+                                            fallbackIndex: nextFallback,
+                                          });
+                                        }
+                                        void runDirectUse(
+                                          () =>
+                                            onPlaceItem(
+                                              "leave",
+                                              id,
+                                              storeTarget.target,
+                                              "backpack",
+                                              batchStoreCount,
+                                            ),
+                                          `已将「${itemName(id)}」×${batchStoreCount} 存入${storeTarget.name}`,
+                                          id,
+                                        );
+                                      }}
+                                    >
+                                      {quick
+                                        ? `存备用 (${batchStoreCount})`
+                                        : `全部存入 (${batchStoreCount})`}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        <div className={styles.storeMutedStrip}>
-                          <span>{itemStoreBlocked ?? "当前不可存放"}</span>
-                          {onOpenStorage && storage.length > 0 && (
-                            <button
-                              type="button"
-                              className={styles.storeOpenLink}
-                              onClick={() => onOpenStorage(storage[0]?.key ?? "")}
-                            >
-                              查看存放清单 →
-                            </button>
-                          )}
-                        </div>
-                      )}
+                            );
+                          })()
+                        )
+                      ) : null}
                     </footer>
                   </article>
                 );

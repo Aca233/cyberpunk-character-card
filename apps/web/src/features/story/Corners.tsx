@@ -1477,7 +1477,7 @@ export function Weapon({
   readonly peek: PeekState;
   /** 展开区里的完整物品栏 */
   readonly full: ReactNode;
-  /** 展开区顶栏页签（随身 / 存放） */
+  /** 展开区顶栏位置切换（随身 / 住所 / 车辆 / 别处） */
   readonly tabs?: ReactNode;
 }) {
   const { inventory, money } = view;
@@ -1580,7 +1580,7 @@ export function Weapon({
                   level={load.carryLevel}
                   label={load.carryLabel}
                 />
-                <kbd title="快捷键 O 开关，Q/E 切换页签">O</kbd>
+                <kbd title="快捷键 O 开关，Q/E 切换位置">O</kbd>
               </span>
             </header>
           }

@@ -34,6 +34,20 @@ export const PlaceItemActionSchema = z
     }
   });
 
+/** 同地点两个自有容器之间直转（如公寓 ↔ 后备箱）；底层仍走原子 take + leave，任一步失败整体回滚。 */
+export const TransferItemActionSchema = z
+  .strictObject({
+    type: z.literal("transferItem"),
+    item: z.string().min(1).max(120),
+    from: z.string().min(1).max(120),
+    to: z.string().min(1).max(120),
+    count: z.number().int().min(1).max(99).optional(),
+  })
+  .refine((action) => action.from !== action.to, {
+    message: "转出与转入位置不能相同",
+    path: ["to"],
+  });
+
 /** 一条 money 指令最多动多少欧元；更贵的分几笔付 */
 const MONEY_STEP = 100_000;
 
@@ -55,6 +69,42 @@ export const safehouseActions = {
           where: target.target,
           ...(action.source !== undefined ? { source: action.source } : {}),
           reason: action.action === "leave" ? "在物品栏存放物品" : "在物品栏取回物品",
+        },
+      ];
+    },
+  }),
+  transferItem: defineAction({
+    schema: TransferItemActionSchema,
+    commands: (action, { world, data }) => {
+      const targets = ownStorageTargets(world, data);
+      const fromTarget = targets.find((entry) => entry.target === action.from);
+      const toTarget = targets.find((entry) => entry.target === action.to);
+      if (!fromTarget || !toTarget) {
+        return "只能直接在自己身边的住所与车辆之间转运物品";
+      }
+      if (!fromTarget.canTake) {
+        return fromTarget.blockedReason ?? `现在无法从${fromTarget.name}取出物品`;
+      }
+      if (!toTarget.canStore) {
+        return toTarget.blockedReason ?? `现在无法将物品存入${toTarget.name}`;
+      }
+      const count = action.count ?? 1;
+      return [
+        {
+          type: "itemPlace",
+          action: "take",
+          item: action.item,
+          count,
+          where: fromTarget.target,
+          reason: `从${fromTarget.name}转运至${toTarget.name}`,
+        },
+        {
+          type: "itemPlace",
+          action: "leave",
+          item: action.item,
+          count,
+          where: toTarget.target,
+          reason: `从${fromTarget.name}转运至${toTarget.name}`,
         },
       ];
     },

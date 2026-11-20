@@ -1,4 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
+import { type CyberwareDef, CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { RARITY_LABELS, type Rarity } from "../economy";
 import {
   CLOTHING_SLOT_LABELS,
@@ -61,6 +62,9 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
   const extended = withWorldObjects(data, inventory.objects);
   const items = Array.isArray(extended.items) ? itemCatalog(extended) : new Map<string, ItemDef>();
   const places = locationCatalog(data);
+  const cyber = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  const chrome =
+    data.cyberware !== undefined ? cyberwareCatalog(data) : new Map<string, CyberwareDef>();
   const npcs = (world.slices.npc as { npcs?: Record<string, { name: string }> } | undefined)?.npcs;
   const groups = new Map<string, StorageGroup>(
     ownStorageTargets(world, data).map((target) => [target.key, { ...target, items: [] }]),
@@ -71,24 +75,24 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
     items,
   );
 
-  for (const entry of inventory.placed) {
-    const key = `${entry.kind}:${entry.target}`;
+  const ensureGroup = (kind: StorageGroup["kind"], target: string, location: string | null) => {
+    const key = `${kind}:${target}`;
     let group = groups.get(key);
     if (!group) {
       const locationName =
-        entry.location === null ? "位置未知" : (places.get(entry.location)?.name ?? entry.location);
+        location === null ? "位置未知" : (places.get(location)?.name ?? location);
       group = {
         key,
-        kind: entry.kind,
-        target: entry.target,
+        kind,
+        target,
         name:
-          entry.kind === "npc"
-            ? `${npcs?.[entry.target]?.name ?? "他人"}保管`
-            : entry.kind === "home"
+          kind === "npc"
+            ? `${npcs?.[target]?.name ?? "他人"}保管`
+            : kind === "home"
               ? "原住处留存"
-              : entry.kind === "vehicle"
+              : kind === "vehicle"
                 ? "原车辆留存"
-                : (places.get(entry.target)?.name ?? locationName),
+                : (places.get(target)?.name ?? locationName),
         locationName,
         canStore: false,
         canTake: false,
@@ -97,6 +101,11 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
       };
       groups.set(key, group);
     }
+    return group;
+  };
+
+  for (const entry of inventory.placed) {
+    const group = ensureGroup(entry.kind, entry.target, entry.location);
     const existing = group.items.find((item) => item.id === entry.item);
     if (existing) {
       const index = group.items.indexOf(existing);
@@ -125,6 +134,36 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
       ability: def?.ability ?? null,
       remaining: object?.remaining ?? def?.charges ?? null,
       charges: def?.charges ?? null,
+    });
+  }
+
+  for (const part of Object.values(cyber.parts)) {
+    if (part.condition === "scrapped") continue;
+    const colon = part.holder.indexOf(":");
+    if (colon < 0) continue;
+    const kind = part.holder.slice(0, colon);
+    if (kind !== "home" && kind !== "vehicle" && kind !== "place") continue;
+    const target = part.holder.slice(colon + 1);
+    const group = ensureGroup(kind, target, part.location);
+    if (group.items.some((item) => item.id === part.id)) continue;
+    const def = chrome.get(part.model);
+    const rarity = def?.rarity ?? null;
+    group.items.push({
+      id: part.id,
+      name: `${def?.name ?? part.model}（未安装${part.condition === "damaged" ? "·损坏" : ""}）`,
+      baseId: part.id,
+      count: 1,
+      kind: "misc",
+      subLabel: "义体实物",
+      rarity,
+      rarityLabel: rarity ? RARITY_LABELS[rarity] : null,
+      iconic: Boolean(def?.iconic),
+      carryUnits: 0,
+      ability: [def?.ability, `来源：${part.source}`, "取回后可携带或交给医生检查安装。"]
+        .filter(Boolean)
+        .join("\n"),
+      remaining: null,
+      charges: null,
     });
   }
   return [...groups.values()];

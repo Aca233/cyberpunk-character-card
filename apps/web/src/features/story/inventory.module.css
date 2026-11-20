@@ -66,6 +66,64 @@
   }
 }
 
+/* ———— 非随身容器单行状态条 ———— */
+
+.containerBar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.28rem 0.56rem;
+  padding: 0.28rem 0.56rem;
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(9 14 24 / 76%);
+  font-size: 0.71rem;
+}
+
+.containerBar[data-locked] {
+  border-left-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 7%);
+}
+
+.containerBarMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.24rem 0.46rem;
+  min-width: 0;
+}
+
+.containerKind {
+  padding: 0.02rem 0.28rem;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.containerName {
+  color: var(--cp-text);
+  font-weight: 700;
+}
+
+.containerMeta {
+  color: var(--cp-text-dim);
+  font-size: 0.67rem;
+}
+
+.containerStatus {
+  font-size: 0.66rem;
+  color: var(--cp-success);
+  white-space: nowrap;
+}
+
+.containerBar[data-locked] .containerStatus {
+  color: var(--cp-yellow);
+  white-space: normal;
+}
+
 /* ———— 背包主区域（占满全部剩余高度） ———— */
 
 .packSection {
@@ -1105,41 +1163,11 @@
   border-top: 1px dashed rgb(94 246 255 / 14%);
 }
 
-.storeHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.24rem 0.48rem;
-}
-
 .storeActions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.32rem;
-}
-
-.storeOpenLink {
-  padding: 0.1rem 0.34rem;
-  border: 1px solid rgb(94 246 255 / 26%);
-  background: rgb(94 246 255 / 8%);
-  color: var(--cp-cyan);
-  font-family: var(--font-ui);
-  font-size: 0.65rem;
-  cursor: var(--cp-cursor-hand);
-  transition:
-    border-color var(--dur-flash),
-    background-color var(--dur-flash),
-    color var(--dur-flash);
-}
-
-.storeOpenLink:hover:not(:disabled),
-.storeOpenLink:focus-visible:not(:disabled) {
-  border-color: var(--cp-yellow);
-  background: rgb(252 238 10 / 12%);
-  color: var(--cp-yellow);
-  outline: none;
 }
 
 .storeTargetPills {
@@ -1168,15 +1196,6 @@
   background: rgb(94 246 255 / 15%);
   color: var(--cp-cyan);
   font-weight: 700;
-}
-
-.storeMutedStrip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  font-size: 0.67rem;
-  color: var(--cp-text-faint);
 }
 
 /* ———— 当前地点购房条 ———— */

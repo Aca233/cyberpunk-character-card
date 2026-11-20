@@ -25,7 +25,11 @@ import { ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
-import { BuyHomeActionSchema, PlaceItemActionSchema } from "./systems/safehouse";
+import {
+  BuyHomeActionSchema,
+  PlaceItemActionSchema,
+  TransferItemActionSchema,
+} from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
 import { SquadActionSchema } from "./systems/squad";
 import { TraumaActionSchema } from "./systems/trauma";
@@ -61,6 +65,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   BuyHomeActionSchema,
   /** 物品栏存取：只操作身边的自有住所或车辆 */
   PlaceItemActionSchema,
+  /** 同地点两个自有容器之间直转（如公寓 ↔ 后备箱） */
+  TransferItemActionSchema,
   /** 创伤小组：办理、续期、升级或退会，以及按当前会籍请求紧急救援 */
   TraumaActionSchema,
   /** 打开消息：没给 feed 时把人发来的消息都标成已读；给了只标这几条 */
@@ -74,7 +80,7 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
    * before 是玩家看到的原文，对不上就不改；每次修改都记进修改记录
    */
   EditMemoryActionSchema,
-  /** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读，角色进传说名册 */
+  /** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读 */
   EndStoryActionSchema,
   /** 数据库页：打开芯片，只标这几块已读 */
   ReadShardsActionSchema,

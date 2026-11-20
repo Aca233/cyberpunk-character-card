@@ -44,8 +44,12 @@ import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { FactionsBody } from "./FactionsPanel";
 import { InputBar } from "./InputBar";
-import { type InventoryFilter, InventoryPage } from "./InventoryPage";
-import { InventoryStorage } from "./InventoryStorage";
+import {
+  type InventoryFilter,
+  InventoryPage,
+  type InventoryViewKey,
+  partitionStorageGroups,
+} from "./InventoryPage";
 import { MapBody } from "./MapPanel";
 import {
   CharacterPage,
@@ -74,9 +78,6 @@ import { diffViews, type Speaker, type Toast, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "factions" | "shards";
-/** 随身物品（含名下车辆）与存放位置作为右下角装备块的一级页签。 */
-type GearTab = "carried" | "stored";
-const GEAR_TABS: readonly GearTab[] = ["carried", "stored"];
 type BioTab = "character" | "cyberware" | "chronicle";
 
 interface AutoImageTask {
@@ -278,15 +279,13 @@ export function StoryScreen() {
   const offers = view?.offers;
 
   const busy = story.phase !== "idle";
-  // 装备块一级页签（随身 / 存放）与当前选中的存放点；收起后复位回随身页，避免悬停误弹
-  const [gearTab, setGearTab] = useState<GearTab>("carried");
+  // 装备块当前查看的位置（随身 / 某个自有住处或车辆 / 别处留置）；收起后复位回随身，避免悬停误弹
+  const [inventoryView, setInventoryView] = useState<InventoryViewKey>("carried");
   const [inventoryFocus, setInventoryFocus] = useState<{
     readonly filter?: InventoryFilter;
     readonly itemId?: string;
     readonly nonce: number;
   } | null>(null);
-  const [storageKey, setStorageKey] = useState<string | null>(null);
-  const [storageBusy, setStorageBusy] = useState(false);
   const [bioTab, setBioTab] = useState<BioTab>("character");
   // 视野里就地展开：四角的块、在场的人，同一时间只展开一处；
   // 钉住（点块或按 P/J/T）时块里放完整内容
@@ -294,10 +293,22 @@ export function StoryScreen() {
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
   useEffect(() => {
     if (expand?.id !== "weapon") {
-      if (gearTab !== "carried") setGearTab("carried");
+      if (inventoryView !== "carried") setInventoryView("carried");
       if (inventoryFocus !== null) setInventoryFocus(null);
     }
-  }, [expand?.id, gearTab, inventoryFocus]);
+  }, [expand?.id, inventoryView, inventoryFocus]);
+  const storagePartition = useMemo(
+    () => (view ? partitionStorageGroups(view) : { own: [], elsewhere: [] }),
+    [view],
+  );
+  const inventoryViewKeys = useMemo<readonly InventoryViewKey[]>(() => {
+    const keys: InventoryViewKey[] = ["carried", ...storagePartition.own.map((g) => g.key)];
+    if (storagePartition.elsewhere.length > 0) keys.push("elsewhere");
+    return keys;
+  }, [storagePartition]);
+  const effectiveInventoryView: InventoryViewKey = inventoryViewKeys.includes(inventoryView)
+    ? inventoryView
+    : "carried";
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
   // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点，按 M 打开时不选
@@ -548,23 +559,23 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 钉住右下角装备块并切页签；同一页签已经钉着就收起。
+  // 钉住右下角装备块；再次按 O 或点击时若已在随身视图就收起，否则切回随身。
   const showGear = useCallback(
-    (tab: GearTab) => {
+    (target: InventoryViewKey = "carried") => {
       setAtMap(false);
-      setGearTab(tab);
+      setInventoryView(target);
       setExpand((cur) =>
-        cur?.id === "weapon" && cur.pinned && gearTab === tab
+        cur?.id === "weapon" && cur.pinned && effectiveInventoryView === target
           ? null
           : { id: "weapon", pinned: true },
       );
     },
-    [gearTab],
+    [effectiveInventoryView],
   );
   // 从生物检测的个人神经芯片槽直接跳到随身物品栏的芯片/超梦分类并定位对应芯片
   const openNeuralInventory = useCallback((itemId?: string) => {
     setAtMap(false);
-    setGearTab("carried");
+    setInventoryView("carried");
     setInventoryFocus((prev) => ({
       filter: "neural",
       ...(itemId ? { itemId } : {}),
@@ -734,11 +745,14 @@ export function StoryScreen() {
         e.preventDefault();
         showGear("carried");
       } else if ((k === "q" || k === "e") && expand?.id === "weapon") {
+        if (inventoryViewKeys.length <= 1) return;
         e.preventDefault();
-        setGearTab((cur) => {
-          const i = GEAR_TABS.indexOf(cur);
-          const next = (i + (k === "e" ? 1 : -1) + GEAR_TABS.length) % GEAR_TABS.length;
-          return GEAR_TABS[next] ?? "carried";
+        setInventoryView((cur) => {
+          const i = inventoryViewKeys.indexOf(cur);
+          const curIdx = Math.max(i, 0);
+          const next =
+            (curIdx + (k === "e" ? 1 : -1) + inventoryViewKeys.length) % inventoryViewKeys.length;
+          return inventoryViewKeys[next] ?? "carried";
         });
       } else if (k === "p") {
         e.preventDefault();
@@ -775,7 +789,17 @@ export function StoryScreen() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [choose, expand?.id, scanPinned, story.failure, story.spend, showGear, pinBlock, openMap]);
+  }, [
+    choose,
+    expand?.id,
+    inventoryViewKeys,
+    scanPinned,
+    story.failure,
+    story.spend,
+    showGear,
+    pinBlock,
+    openMap,
+  ]);
 
   if (query.isPending) {
     return (
@@ -869,15 +893,6 @@ export function StoryScreen() {
         slot ? [slot.id] : [],
       ),
     ]).size;
-  const storedTotalCount = view.safehouse.storage.reduce(
-    (sum, g) => sum + g.items.reduce((s, item) => s + item.count, 0),
-    0,
-  );
-  const hasReachableStorage = view.safehouse.storage.some((g) => g.canStore || g.canTake);
-  const openStorageTarget = (key: string) => {
-    setStorageKey(key);
-    setGearTab("stored");
-  };
   const placeItemAction =
     busy || view.death || view.ended
       ? undefined
@@ -888,87 +903,104 @@ export function StoryScreen() {
           source?: "backpack" | "worn" | "quick",
           count?: number,
         ) => {
-          setStorageBusy(true);
-          try {
-            await act(
-              {
-                type: "placeItem",
-                action,
-                item,
-                where,
-                ...(source ? { source } : {}),
-                ...(count && count > 1 ? { count } : {}),
-              },
-              "storage",
-              true,
-            );
-          } finally {
-            setStorageBusy(false);
-          }
+          await act(
+            {
+              type: "placeItem",
+              action,
+              item,
+              where,
+              ...(source ? { source } : {}),
+              ...(count && count > 1 ? { count } : {}),
+            },
+            "storage",
+            true,
+          );
         };
+  const transferItemAction =
+    busy || view.death || view.ended
+      ? undefined
+      : async (item: string, from: string, to: string, count?: number) => {
+          await act(
+            {
+              type: "transferItem",
+              item,
+              from,
+              to,
+              ...(count && count > 1 ? { count } : {}),
+            },
+            "storage",
+            true,
+          );
+        };
+  const elsewhereTotalCount = storagePartition.elsewhere.reduce(
+    (sum, group) => sum + group.items.reduce((s, item) => s + item.count, 0),
+    0,
+  );
+  const gearTabItems: readonly (
+    | readonly [InventoryViewKey, string, number]
+    | readonly [InventoryViewKey, string, number, boolean]
+  )[] = [
+    ["carried", "随身", carriedUniqueCount],
+    ...storagePartition.own.map((group): readonly [InventoryViewKey, string, number, boolean] => [
+      group.key,
+      group.name,
+      group.items.reduce((sum, item) => sum + item.count, 0),
+      group.canStore || group.canTake,
+    ]),
+    ...(storagePartition.elsewhere.length > 0
+      ? ([["elsewhere", "别处", elsewhereTotalCount]] as const)
+      : []),
+  ];
   const gearFull = (
-    <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
-      {gearTab === "stored" ? (
-        <InventoryStorage
-          view={view}
-          groups={view.safehouse.storage}
-          selectedKey={storageKey}
-          onSelect={setStorageKey}
-          busy={storageBusy}
-          disabledReason={gearDisabledReason}
-          onPlaceItem={placeItemAction}
-        />
-      ) : (
-        <InventoryPage
-          view={view}
-          storageKey={storageKey}
-          onSelectStorage={setStorageKey}
-          onOpenStorage={openStorageTarget}
-          initialFocus={inventoryFocus}
-          disabledReason={gearDisabledReason}
-          onHeal={
-            busy || view.death || view.ended
-              ? undefined
-              : (id) => act({ type: "useHealing", id }, "healing", true)
-          }
-          onSuppressant={
-            busy || view.death || view.ended
-              ? undefined
-              : () => act({ type: "useSuppressant" }, "suppressant", true)
-          }
-          onUse={
-            busy || view.death || view.ended
-              ? undefined
-              : (id) => {
-                  const name = view.names.items[id] ?? id;
-                  const verb = view.inventory.details?.[id]?.kind === "grenade" ? "投掷" : "使用";
-                  story.setDraft({
-                    text: `${story.draft.text}${story.draft.text ? "\n" : ""}${verb}${name}`,
-                  });
-                  closePinned();
-                }
-          }
-          onActionDraft={draftAction}
-          onEquip={
-            busy || view.death || view.ended || view.combat.active
-              ? undefined
-              : (id) => void act({ type: "equipItem", id }, "gear")
-          }
-          onUnequip={
-            busy || view.death || view.ended || view.combat.active
-              ? undefined
-              : (id) => void act({ type: "unequipItem", id }, "gear")
-          }
-          onMod={
-            busy || view.death || view.ended || view.combat.active
-              ? undefined
-              : (action, weapon, mod) =>
-                  void act({ type: "modWeapon", action, weapon, mod }, "gear")
-          }
-          onPlaceItem={placeItemAction}
-          onBuyHome={busy ? undefined : setBuyingHome}
-        />
-      )}
+    <div className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
+      <InventoryPage
+        view={view}
+        activeView={effectiveInventoryView}
+        onSelectView={setInventoryView}
+        initialFocus={inventoryFocus}
+        disabledReason={gearDisabledReason}
+        onHeal={
+          busy || view.death || view.ended
+            ? undefined
+            : (id) => act({ type: "useHealing", id }, "healing", true)
+        }
+        onSuppressant={
+          busy || view.death || view.ended
+            ? undefined
+            : () => act({ type: "useSuppressant" }, "suppressant", true)
+        }
+        onUse={
+          busy || view.death || view.ended
+            ? undefined
+            : (id) => {
+                const name = view.names.items[id] ?? id;
+                const verb = view.inventory.details?.[id]?.kind === "grenade" ? "投掷" : "使用";
+                story.setDraft({
+                  text: `${story.draft.text}${story.draft.text ? "\n" : ""}${verb}${name}`,
+                });
+                closePinned();
+              }
+        }
+        onActionDraft={draftAction}
+        onEquip={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => void act({ type: "equipItem", id }, "gear")
+        }
+        onUnequip={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => void act({ type: "unequipItem", id }, "gear")
+        }
+        onMod={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (action, weapon, mod) => void act({ type: "modWeapon", action, weapon, mod }, "gear")
+        }
+        onPlaceItem={placeItemAction}
+        onTransferItem={transferItemAction}
+        onBuyHome={busy ? undefined : setBuyingHome}
+      />
     </div>
   );
   // 未读块往上长，页签放在底下挨着常态那一行，切频道或看芯片时手不用伸到块顶上（用户定的）
@@ -1124,13 +1156,10 @@ export function StoryScreen() {
             peek={peek}
             full={gearFull}
             tabs={
-              <PinTabs<GearTab>
-                tabs={[
-                  ["carried", "随身", carriedUniqueCount],
-                  ["stored", "存放", storedTotalCount, hasReachableStorage],
-                ]}
-                value={gearTab}
-                onChange={setGearTab}
+              <PinTabs<InventoryViewKey>
+                tabs={gearTabItems}
+                value={effectiveInventoryView}
+                onChange={setInventoryView}
               />
             }
           />
