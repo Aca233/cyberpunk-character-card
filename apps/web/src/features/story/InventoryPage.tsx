@@ -1777,63 +1777,137 @@ export function InventoryPage({
                         </>
                       )}
 
-                      {/* 存放区块：可达时展示存放按钮与目标切换芯片；不可达时降级为低饱和状态条 */}
+                      {/* 存放区块：可达时展示目标切换、单件/批量存放与跳转存放工作台；不可达时降级为低饱和状态条 */}
                       {!itemStoreBlocked && storeTarget && onPlaceItem ? (
-                        <div className={styles.storeBar}>
-                          {storeTargets.length > 1 ? (
-                            <fieldset className={styles.storeTargetPills} aria-label="选择存放点">
-                              {storeTargets.map((group) => (
-                                <button
-                                  key={group.key}
-                                  type="button"
-                                  className={styles.storeTargetChip}
-                                  aria-pressed={group.key === storeTarget.key}
+                        (() => {
+                          const backpackCount = selectedIsWorn ? 0 : (inventory.backpack[id] ?? 0);
+                          const batchStoreCount =
+                            !selectedIsWorn && backpackCount > 1 ? Math.min(backpackCount, 99) : 0;
+                          const singleSource: "backpack" | "worn" | "quick" = selectedIsWorn
+                            ? "worn"
+                            : backpackCount > 0
+                              ? "backpack"
+                              : "quick";
+                          return (
+                            <div className={styles.storeBar}>
+                              <div className={styles.storeHeader}>
+                                {storeTargets.length > 1 ? (
+                                  <fieldset
+                                    className={styles.storeTargetPills}
+                                    aria-label="选择存放点"
+                                  >
+                                    {storeTargets.map((group) => (
+                                      <button
+                                        key={group.key}
+                                        type="button"
+                                        className={styles.storeTargetChip}
+                                        aria-pressed={group.key === storeTarget.key}
+                                        disabled={usingItem}
+                                        onClick={() => onSelectStorage(group.key)}
+                                      >
+                                        {group.name}
+                                      </button>
+                                    ))}
+                                  </fieldset>
+                                ) : (
+                                  <span className={styles.actionHint}>
+                                    存入目标：{storeTarget.name}
+                                  </span>
+                                )}
+                                {onOpenStorage && (
+                                  <button
+                                    type="button"
+                                    className={styles.storeOpenLink}
+                                    disabled={usingItem}
+                                    onClick={() => onOpenStorage(storeTarget.key)}
+                                  >
+                                    打开工作台 →
+                                  </button>
+                                )}
+                              </div>
+                              <div className={styles.storeActions}>
+                                <Button
+                                  small
                                   disabled={usingItem}
-                                  onClick={() => onSelectStorage(group.key)}
+                                  onClick={() => {
+                                    const nextFallback = Math.max(selectedIndex, 0);
+                                    if (count <= 1) {
+                                      setPickedItem({
+                                        id,
+                                        entryType: "item",
+                                        worn: selectedIsWorn,
+                                        fallbackIndex: nextFallback,
+                                      });
+                                    }
+                                    void runDirectUse(
+                                      () =>
+                                        onPlaceItem(
+                                          "leave",
+                                          id,
+                                          storeTarget.target,
+                                          singleSource,
+                                          1,
+                                        ),
+                                      `已将「${itemName(id)}」存入${storeTarget.name}`,
+                                      id,
+                                    );
+                                  }}
                                 >
-                                  {group.name}
-                                </button>
-                              ))}
-                            </fieldset>
-                          ) : (
-                            <span className={styles.actionHint}>存入：{storeTarget.name}</span>
-                          )}
-                          <Button
-                            small
-                            disabled={usingItem}
-                            onClick={() => {
-                              const nextFallback = Math.max(selectedIndex, 0);
-                              if (count <= 1) {
-                                setPickedItem({
-                                  id,
-                                  entryType: "item",
-                                  worn: selectedIsWorn,
-                                  fallbackIndex: nextFallback,
-                                });
-                              }
-                              void runDirectUse(
-                                () =>
-                                  onPlaceItem(
-                                    "leave",
-                                    id,
-                                    storeTarget.target,
-                                    selectedIsWorn ? "worn" : quick ? "quick" : "backpack",
-                                  ),
-                                `已将「${itemName(id)}」存入${storeTarget.name}`,
-                                id,
-                              );
-                            }}
-                          >
-                            {usingItem
-                              ? "正在处理…"
-                              : count > 1
-                                ? `存放 1 件到${storeTarget.name}`
-                                : `存放到${storeTarget.name}`}
-                          </Button>
-                        </div>
+                                  {usingItem
+                                    ? "正在处理…"
+                                    : count > 1
+                                      ? `存放 1 件到${storeTarget.name}`
+                                      : `存放到${storeTarget.name}`}
+                                </Button>
+                                {batchStoreCount > 1 && (
+                                  <Button
+                                    small
+                                    disabled={usingItem}
+                                    onClick={() => {
+                                      const nextFallback = Math.max(selectedIndex, 0);
+                                      if (batchStoreCount >= count) {
+                                        setPickedItem({
+                                          id,
+                                          entryType: "item",
+                                          worn: false,
+                                          fallbackIndex: nextFallback,
+                                        });
+                                      }
+                                      void runDirectUse(
+                                        () =>
+                                          onPlaceItem(
+                                            "leave",
+                                            id,
+                                            storeTarget.target,
+                                            "backpack",
+                                            batchStoreCount,
+                                          ),
+                                        `已将「${itemName(id)}」×${batchStoreCount} 存入${storeTarget.name}`,
+                                        id,
+                                      );
+                                    }}
+                                  >
+                                    {quick
+                                      ? `存备用 (${batchStoreCount})`
+                                      : `全部存入 (${batchStoreCount})`}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <div className={styles.storeMutedStrip}>
                           <span>{itemStoreBlocked ?? "当前不可存放"}</span>
+                          {onOpenStorage && storage.length > 0 && (
+                            <button
+                              type="button"
+                              className={styles.storeOpenLink}
+                              onClick={() => onOpenStorage(storage[0]?.key ?? "")}
+                            >
+                              查看存放清单 →
+                            </button>
+                          )}
                         </div>
                       )}
                     </footer>

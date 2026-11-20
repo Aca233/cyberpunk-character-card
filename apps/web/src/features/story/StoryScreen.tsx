@@ -878,27 +878,45 @@ export function StoryScreen() {
     setStorageKey(key);
     setGearTab("stored");
   };
+  const placeItemAction =
+    busy || view.death || view.ended
+      ? undefined
+      : async (
+          action: "leave" | "take",
+          item: string,
+          where: string,
+          source?: "backpack" | "worn" | "quick",
+          count?: number,
+        ) => {
+          setStorageBusy(true);
+          try {
+            await act(
+              {
+                type: "placeItem",
+                action,
+                item,
+                where,
+                ...(source ? { source } : {}),
+                ...(count && count > 1 ? { count } : {}),
+              },
+              "storage",
+              true,
+            );
+          } finally {
+            setStorageBusy(false);
+          }
+        };
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
       {gearTab === "stored" ? (
         <InventoryStorage
+          view={view}
           groups={view.safehouse.storage}
           selectedKey={storageKey}
           onSelect={setStorageKey}
           busy={storageBusy}
           disabledReason={gearDisabledReason}
-          onTake={
-            busy || view.death || view.ended
-              ? undefined
-              : async (item, where) => {
-                  setStorageBusy(true);
-                  try {
-                    await act({ type: "placeItem", action: "take", item, where }, "storage", true);
-                  } finally {
-                    setStorageBusy(false);
-                  }
-                }
-          }
+          onPlaceItem={placeItemAction}
         />
       ) : (
         <InventoryPage
@@ -947,16 +965,7 @@ export function StoryScreen() {
               : (action, weapon, mod) =>
                   void act({ type: "modWeapon", action, weapon, mod }, "gear")
           }
-          onPlaceItem={
-            busy || view.death || view.ended
-              ? undefined
-              : (action, item, where, source) =>
-                  act(
-                    { type: "placeItem", action, item, where, ...(source ? { source } : {}) },
-                    "storage",
-                    true,
-                  )
-          }
+          onPlaceItem={placeItemAction}
           onBuyHome={busy ? undefined : setBuyingHome}
         />
       )}
