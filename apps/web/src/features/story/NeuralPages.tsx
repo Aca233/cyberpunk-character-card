@@ -532,7 +532,7 @@ export function ContactsPage({
   );
 }
 
-/** 资料与超梦回看档案：专管已读芯片原文（实体片转交后仍保留）与超梦三层轨道线索；随身实体芯片与 2 个神经插槽归属物品栏。 */
+/** 资料与超梦回看档案：只保留「情报」与「超梦」两栏；随身实体芯片与 2 个神经插槽归属物品栏。 */
 export function ShardsPanel({
   view,
   onReadShard,
@@ -546,13 +546,13 @@ export function ShardsPanel({
   const bdCount = view.braindance.works.length;
   return (
     <div className={mediaStyles.archive}>
-      <nav className={mediaStyles.tabs} aria-label="已读资料与超梦回看">
+      <nav className={mediaStyles.tabs} aria-label="资料分区">
         <Button small pressed={tab === "archive"} onClick={() => setTab("archive")}>
-          已读资料 · {archiveCount}
+          情报 · {archiveCount}
           {view.shards.unread > 0 ? `（${view.shards.unread} 新）` : ""}
         </Button>
         <Button small pressed={tab === "braindance"} onClick={() => setTab("braindance")}>
-          超梦回看 · {bdCount}
+          超梦 · {bdCount}
           {view.braindance.active ? " · 进行中" : ""}
         </Button>
       </nav>
@@ -565,18 +565,9 @@ export function ShardsPanel({
   );
 }
 
-type ChipCategoryFilter = "all" | "intel" | "daemon" | "skill" | "braindance" | "behavior";
+const ARCHIVE_SEARCH_THRESHOLD = 6;
 
-const CHIP_CATEGORY_TABS: readonly (readonly [ChipCategoryFilter, string])[] = [
-  ["all", "全部"],
-  ["intel", "情报"],
-  ["daemon", "加密与陷阱"],
-  ["skill", "技能协议"],
-  ["braindance", "超梦载体"],
-  ["behavior", "行为协议"],
-];
-
-/** 已读芯片原文归档：仅保留读过的长文与多媒体，避免与物品栏里的实体芯片重复。 */
+/** 情报归档：保留读过的芯片原文与多媒体，条目达到阈值后显示轻量筛选框。 */
 function ChipArchive({
   view,
   onReadShard,
@@ -585,10 +576,18 @@ function ChipArchive({
   readonly onReadShard: (id: number) => void;
 }) {
   const shards = view.shards.list;
-  const [category, setCategory] = useState<ChipCategoryFilter>("all");
+  const [query, setQuery] = useState("");
   const [pickedId, setPickedId] = useState<number | null>(null);
 
-  const filteredShards = shards.filter((s) => category === "all" || s.category === category);
+  const showSearch = shards.length >= ARCHIVE_SEARCH_THRESHOLD;
+  const keyword = showSearch ? query.trim().toLocaleLowerCase() : "";
+  const filteredShards = keyword
+    ? shards.filter((s) =>
+        `${s.title}\n${s.from ?? ""}\n${s.kindLabel}\n${s.text}`
+          .toLocaleLowerCase()
+          .includes(keyword),
+      )
+    : shards;
   const selectedShard =
     (pickedId !== null ? filteredShards.find((s) => s.id === pickedId) : undefined) ??
     filteredShards[0] ??
@@ -599,81 +598,99 @@ function ChipArchive({
     if (!read) onReadShard(id);
   };
 
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto minmax(0, 1fr)",
-        minHeight: 0,
-        height: "100%",
-      }}
-    >
-      <nav className={mediaStyles.tabs} aria-label="资料分类筛选">
-        {CHIP_CATEGORY_TABS.map(([id, label]) => (
-          <Button
-            key={id}
-            small
-            pressed={category === id}
-            onClick={() => {
-              setCategory(id);
-              setPickedId(null);
-            }}
-          >
-            {label}
-          </Button>
-        ))}
-      </nav>
+  if (shards.length === 0) {
+    return (
+      <div className={styles.phoneEmpty}>
+        <p className={styles.dim}>
+          还没有已读情报。随身实体芯片与神经插槽请在「物品栏」查看；读过的芯片原文会永久留档在这里，哪怕把实体芯片交给别人也能回看。
+        </p>
+      </div>
+    );
+  }
 
-      {filteredShards.length === 0 ? (
-        <div className={styles.phoneEmpty}>
-          <p className={styles.dim}>
-            {shards.length === 0
-              ? "还没有已读归档资料。随身实体芯片与 2 个神经插槽请在右下角「物品栏 → 芯片与超梦」查看；读过的芯片正文会永久留档在这里，哪怕把实体芯片交给别人也能回看。"
-              : "当前分类下暂无已读资料。"}
-          </p>
+  const listItems = (
+    <ul className={`${styles.contactList} ${styles.dbList}`} aria-label="情报目录">
+      {filteredShards.map((s) => (
+        <li key={s.id}>
+          <button
+            type="button"
+            className={styles.contact}
+            aria-pressed={selectedShard?.id === s.id}
+            onClick={() => openShard(s.id, s.read)}
+          >
+            <span className={styles.contactName}>
+              <b>{s.title}</b>
+              <small className={styles.dim}>
+                {s.kindLabel}
+                {s.from ? ` · ${s.from}` : ` · ${s.at}`}
+              </small>
+            </span>
+            {!s.read && <UnreadBadge>新</UnreadBadge>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  return (
+    <div className={styles.dbSplit}>
+      {showSearch ? (
+        <div className={mediaStyles.archiveSide}>
+          <div className={mediaStyles.archiveSearch}>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPickedId(null);
+              }}
+              placeholder="筛选标题、来源或正文…"
+              aria-label="筛选情报"
+              className={mediaStyles.archiveSearchInput}
+            />
+            {query && (
+              <button
+                type="button"
+                className={mediaStyles.archiveSearchClear}
+                aria-label="清空筛选"
+                onClick={() => {
+                  setQuery("");
+                  setPickedId(null);
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {filteredShards.length > 0 ? (
+            listItems
+          ) : (
+            <p className={mediaStyles.archiveNoMatch}>没有匹配「{query.trim()}」的情报。</p>
+          )}
         </div>
       ) : (
-        <div className={styles.dbSplit}>
-          <ul className={`${styles.contactList} ${styles.dbList}`} aria-label="已读资料目录">
-            {filteredShards.map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  className={styles.contact}
-                  aria-pressed={selectedShard?.id === s.id}
-                  onClick={() => openShard(s.id, s.read)}
-                >
-                  <span className={styles.contactName}>
-                    <b>{s.title}</b>
-                    <small className={styles.dim}>
-                      {s.categoryLabel} · {s.at}
-                    </small>
-                  </span>
-                  {!s.read && <UnreadBadge>新</UnreadBadge>}
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <article className={styles.dbReader}>
-            {selectedShard ? (
-              <>
-                <h3 className={styles.dbReaderTitle}>{selectedShard.title}</h3>
-                <p className={styles.dim}>
-                  {selectedShard.categoryLabel} · {selectedShard.kindLabel}
-                  {selectedShard.from && ` · 来源：${selectedShard.from}`} · {selectedShard.at}
-                </p>
-                <p className={styles.factionReason}>
-                  <InlineContentText text={selectedShard.text} />
-                </p>
-                <ContentMediaList media={selectedShard.media ?? []} />
-              </>
-            ) : (
-              <p className={styles.dim}>从左侧选择一份已读资料查看原文。</p>
-            )}
-          </article>
-        </div>
+        listItems
       )}
+
+      <article className={styles.dbReader}>
+        {selectedShard ? (
+          <>
+            <h3 className={styles.dbReaderTitle}>{selectedShard.title}</h3>
+            <p className={styles.dim}>
+              {selectedShard.kindLabel}
+              {selectedShard.from && ` · 来源：${selectedShard.from}`} · {selectedShard.at}
+            </p>
+            <p className={styles.factionReason}>
+              <InlineContentText text={selectedShard.text} />
+            </p>
+            <ContentMediaList media={selectedShard.media ?? []} />
+          </>
+        ) : (
+          <p className={styles.dim}>
+            {keyword ? "没有匹配当前关键词的情报。" : "从左侧选择一条情报查看原文。"}
+          </p>
+        )}
+      </article>
     </div>
   );
 }

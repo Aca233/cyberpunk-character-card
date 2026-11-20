@@ -100,3 +100,80 @@
   font-size: 14px;
   font-weight: 500;
 }
+
+/* 资料页轻量筛选栏（条目较多时出现） */
+.archiveSide {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: 0.2rem 0.55rem 0.2rem 0;
+  border-right: 1px solid rgb(94 246 255 / 22%);
+}
+
+.archiveSide > ul {
+  padding: 0;
+  border-right: 0;
+}
+
+.archiveSearch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  border: 1px solid rgb(94 246 255 / 28%);
+  background: rgb(10 13 22 / 86%);
+}
+
+.archiveSearch:focus-within {
+  border-color: var(--cp-yellow);
+}
+
+.archiveSearchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+}
+
+.archiveSearchInput::placeholder {
+  color: var(--cp-text-dim);
+  opacity: 0.72;
+}
+
+.archiveSearchClear {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.archiveSearchClear:hover,
+.archiveSearchClear:focus-visible {
+  color: var(--cp-yellow);
+  outline: none;
+}
+
+.archiveNoMatch {
+  padding: 12px 6px;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+@container pin (width < 480px) {
+  .archiveSide {
+    max-height: 13.5rem;
+    padding: 0 0 0.5rem;
+    border-right: 0;
+    border-bottom: 1px solid rgb(94 246 255 / 22%);
+  }
+}
