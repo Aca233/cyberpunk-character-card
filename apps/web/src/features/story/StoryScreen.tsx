@@ -25,7 +25,6 @@ import {
 import { type SaveImagesController, SaveImagesProvider } from "../images/SaveImagesContext";
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
-import { CheckBar } from "./CheckBar";
 import { ChronicleBody, EndStoryModal } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
 import {
@@ -45,16 +44,16 @@ import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { FactionsBody } from "./FactionsPanel";
 import { InputBar } from "./InputBar";
+import { InventoryPage } from "./InventoryPage";
+import { InventoryStorage } from "./InventoryStorage";
 import { MapBody } from "./MapPanel";
 import {
   CharacterPage,
   CyberwarePage,
-  InventoryPage,
   JournalPage,
   MessagesPage,
   ShardsPanel,
 } from "./NeuralPages";
-import { type NoteEntry, NotesPanel } from "./NotesPanel";
 import neuralStyles from "./neural.module.css";
 import type { PhoneSendResult } from "./Phone";
 import { Profile } from "./Profile";
@@ -76,8 +75,9 @@ import { diffViews, type Speaker, type Toast, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "factions" | "shards";
-/** 物品栏和车辆沿用右下角装备块的展开区。 */
-type GearTab = "inventory" | "vehicles";
+/** 随身物品、存放位置与车辆统一作为右下角装备块的一级页签。 */
+type GearTab = "carried" | "stored" | "vehicles";
+const GEAR_TABS: readonly GearTab[] = ["carried", "stored", "vehicles"];
 type BioTab = "character" | "cyberware" | "chronicle";
 
 interface AutoImageTask {
@@ -104,7 +104,7 @@ function glitchLevel(view: View): 0 | 1 | 2 | 3 {
   return 0;
 }
 
-/** 剧情主界面：顶部 HUD、左侧角色栏、中间正文、底部选项 / 检定确认 / 输入框 */
+/** 剧情主界面：左右夜之城角块 HUD、中列连续叙事流、底部选项与神经输入终端 */
 export function StoryScreen() {
   const { saveId = "" } = useParams();
   const navigate = useNavigate();
@@ -243,10 +243,8 @@ export function StoryScreen() {
     [client, saveId],
   );
 
-  // 新的一轮写进存档后，和上一次看到的状态比，弹出变化提示
+  // 新的一轮写进存档后，和上一次看到的状态比，在右侧常驻列出变化通知，点一下即收起
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
-  // Z 键的通知记录：弹过的系统通知都记一份，只在网页里，不写存档
-  const [notes, setNotes] = useState<readonly NoteEntry[]>([]);
   const previous = useRef<View | null>(null);
   // 委托结束后排队弹出的结算卡
   const [settled, setSettled] = useState<readonly SettledJob[]>([]);
@@ -262,8 +260,6 @@ export function StoryScreen() {
     const fresh = diffViews(prev, view);
     if (fresh.length > 0) {
       setToasts((t) => [...t, ...fresh].slice(-6));
-      const at = view.time.text;
-      setNotes((n) => [...n, ...fresh.map((f) => ({ ...f, at }))].slice(-100));
     }
     const wasOpen = new Set(prev.jobs.list.filter((j) => j.open).map((j) => j.id));
     const closed = view.jobs.list.filter(
@@ -279,51 +275,43 @@ export function StoryScreen() {
     [],
   );
 
-  // 当前打开的检定：已掷过骰的那个优先；其次是叙事模型这轮直接要求的检定（不挂在选项上）
   const version = view?.version ?? 0;
-  const [picked, setPicked] = useState<{ readonly id: string; readonly version: number } | null>(
-    null,
-  );
-  const pickedId = picked?.version === version ? picked.id : null;
   const offers = view?.offers;
-  const choiceChecks = useMemo(
-    () => new Set(offers?.choices.flatMap((c) => (c.checkId ? [c.checkId] : [])) ?? []),
-    [offers],
-  );
-  const mainCheck = offers?.checks.find((c) => !choiceChecks.has(c.id)) ?? null;
-  const openId = offers?.rolled ?? pickedId ?? mainCheck?.id ?? null;
-  const openCheck = offers?.checks.find((c) => c.id === openId) ?? null;
 
   const busy = story.phase !== "idle";
-  // 物品栏、车辆页签；收起后复位回物品栏，避免悬停误弹出车辆页
-  const [gearTab, setGearTab] = useState<GearTab>("inventory");
+  // 装备块一级页签（随身 / 存放 / 车辆）与当前选中的存放点；收起后复位回随身页，避免悬停误弹
+  const [gearTab, setGearTab] = useState<GearTab>("carried");
+  const [storageKey, setStorageKey] = useState<string | null>(null);
+  const [storageBusy, setStorageBusy] = useState(false);
   const [bioTab, setBioTab] = useState<BioTab>("character");
-  // 视野里就地展开（第十二节第 7 条）：四角的块、在场的人，同一时间只展开一处；
+  // 视野里就地展开：四角的块、在场的人，同一时间只展开一处；
   // 钉住（点块或按 P/J/T）时块里放完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
   useEffect(() => {
-    if (expand?.id !== "weapon" && gearTab !== "inventory") {
-      setGearTab("inventory");
+    if (expand?.id !== "weapon" && gearTab !== "carried") {
+      setGearTab("carried");
     }
   }, [expand?.id, gearTab]);
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
-  // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点（第 3 条），按 M 打开时不选
+  // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点，按 M 打开时不选
   const [atMap, setAtMap] = useState(false);
   const [mapFocus, setMapFocus] = useState<string | undefined>(undefined);
   const closeMap = useCallback(() => setAtMap(false), []);
   const closePinned = useCallback(() => setExpand(null), []);
-  // 正文里点了人名：弹出这个人的档案（第 3 条）
+  // 正文里点了人名：弹出这个人的档案
   const [person, setPerson] = useState<string | null>(null);
-  // 商店、义体医生、超梦叠在神经界面上面（U3 商店等改走 F 交互）
+  // 商店、义体医生叠在界面上面
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
-  // 按住 Tab 扫描；Z 通知记录；什么都没开时按 Esc 弹出的小菜单
-  const [scan, setScan] = useState(false);
-  const [atNotes, setAtNotes] = useState(false);
+  // 按住 Tab 或点击按钮切换扫描；H 沉浸模式柔隐两侧角块；Esc 菜单
+  const [scanHold, setScanHold] = useState(false);
+  const [scanPinned, setScanPinned] = useState(false);
+  const scan = scanHold || scanPinned;
+  const [focusMode, setFocusMode] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
   const [atEndStory, setAtEndStory] = useState(false);
 
@@ -533,7 +521,7 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 重新生成最后一轮：后端作废它，再用当时的输入或检定按原流程提交；骰子不重掷
+  // 重新生成最后一轮：后端作废它，再用当时的输入按原流程重推
   const regenerate = useCallback(async () => {
     try {
       const r = await api.regenerate(saveId, version);
@@ -545,7 +533,7 @@ export function StoryScreen() {
     }
   }, [saveId, version, refresh, warn, story]);
 
-  // 按账目改写最后一轮：只换正文，不重掷、不改状态
+  // 按账目改写最后一轮：只换正文，不改状态
   const rewrite = useCallback(async () => {
     try {
       await api.rewrite(saveId, version);
@@ -671,12 +659,6 @@ export function StoryScreen() {
     },
     [story, saveId, version, view, refresh],
   );
-  const confirm = useCallback(
-    (checkId: string, label: string) => {
-      void story.submit(saveId, version, { kind: "confirm", checkId, label }, refresh);
-    },
-    [story, saveId, version, refresh],
-  );
   const retry = useCallback(() => {
     const pending =
       story.pending ??
@@ -701,12 +683,7 @@ export function StoryScreen() {
   const choose = useCallback(
     (index: number) => {
       const choice = offers?.choices[index];
-      if (!choice || busy || offers?.rolled) return;
-      if (choice.gate && !choice.gate.met) return;
-      if (choice.checkId) {
-        setPicked({ id: choice.checkId, version });
-        return;
-      }
+      if (!choice || busy || view?.death || view?.ended) return;
       const choiceBoost =
         view?.sandevistan != null && Boolean(choice.source?.includes(view.sandevistan.name));
       send({
@@ -714,12 +691,10 @@ export function StoryScreen() {
         ...(choiceBoost ? { sandevistan: true } : {}),
       });
     },
-    [offers, busy, send, version, view?.sandevistan],
+    [offers, busy, send, view?.sandevistan, view?.death, view?.ended],
   );
 
-  // 剧情页的键（计划第七节第 2 条）：1–5 选选项，P/O/K/J/T 钉住对应的四角块，M 地图，
-  // Z 通知记录，按住 Tab 扫描。有面板开着时一律不响应，Esc 由面板栈交给最上面那层；
-  // 全屏神经界面和 I 键已去掉（第十二节第 10 条）
+  // 剧情页快捷键：1–5 选选项，P/O/J/T 钉住对应角块，M 地图，H 沉浸模式，按住 Tab 扫描
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
@@ -733,17 +708,22 @@ export function StoryScreen() {
         ) {
           return;
         }
-        // 没有展开面板时，按住扫描，松开收起。
         e.preventDefault();
-        if (!e.repeat) setScan(true);
+        if (!e.repeat) setScanHold(true);
         return;
       }
       if (e.repeat) return;
       const k = e.key.toLowerCase();
-      // 不再有全屏神经界面（第十二节第 10 条）：O 物品栏钉在 H 武器块里；K 制作随制作页签去掉（物品栏精简，方案 A）
       if (k === "o") {
         e.preventDefault();
-        showGear("inventory");
+        showGear("carried");
+      } else if ((k === "q" || k === "e") && expand?.id === "weapon") {
+        e.preventDefault();
+        setGearTab((cur) => {
+          const i = GEAR_TABS.indexOf(cur);
+          const next = (i + (k === "e" ? 1 : -1) + GEAR_TABS.length) % GEAR_TABS.length;
+          return GEAR_TABS[next] ?? "carried";
+        });
       } else if (k === "p") {
         e.preventDefault();
         pinBlock("bio");
@@ -756,23 +736,21 @@ export function StoryScreen() {
       } else if (k === "m") {
         e.preventDefault();
         openMap();
-      } else if (k === "z") {
+      } else if (k === "h") {
         e.preventDefault();
-        setAtNotes(true);
+        setFocusMode((v) => !v);
       } else if (/^[1-5]$/.test(e.key)) {
         e.preventDefault();
         choose(Number(e.key) - 1);
       } else if (e.key === "Escape" && !story.failure) {
-        // 先收起检定（已掷过骰的不能收起），什么都没开时弹 Esc 菜单，不再直接回主菜单
-        if (pickedId && !offers?.rolled) setPicked(null);
-        else if (!pickedId) setAtEsc(true);
+        if (scanPinned) setScanPinned(false);
+        else setAtEsc(true);
       }
     };
     const onUp = (e: KeyboardEvent) => {
-      if (e.key === "Tab") setScan(false);
+      if (e.key === "Tab") setScanHold(false);
     };
-    // 按着 Tab 切走窗口收不到 keyup，失焦时也收起
-    const onBlur = () => setScan(false);
+    const onBlur = () => setScanHold(false);
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", onBlur);
@@ -781,7 +759,7 @@ export function StoryScreen() {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [choose, pickedId, offers?.rolled, story.failure, story.spend, showGear, pinBlock, openMap]);
+  }, [choose, expand?.id, scanPinned, story.failure, story.spend, showGear, pinBlock, openMap]);
 
   if (query.isPending) {
     return (
@@ -809,12 +787,8 @@ export function StoryScreen() {
   const failure = story.failure;
   const activeCheckpoint =
     view.checkpoint && view.checkpoint.baseVersion === version ? view.checkpoint : undefined;
-  const draftFromCheck = (label: string) => {
-    story.setDraft({ text: label });
-    setPicked(null);
-  };
 
-  // 钉住块时块里放的完整内容（第十二节第 7 条）：页签放进 BioMonitor 展开顶栏，不再上下叠两道标题
+  // 钉住块时块里放的完整内容：页签放进 BioMonitor 展开顶栏，不再上下叠两道标题
   const characterTabs = (
     <PinTabs<BioTab>
       tabs={[
@@ -828,7 +802,7 @@ export function StoryScreen() {
   );
   const characterFull = (
     <div className={neuralStyles.pinBody}>
-      {/* 按页签重新挂载，切页签时新内容淡入（第十二节第 13 条） */}
+      {/* 按页签重新挂载，切页签时新内容淡入 */}
       <div key={bioTab} className={neuralStyles.pinPane}>
         {bioTab === "cyberware" ? (
           <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
@@ -839,9 +813,7 @@ export function StoryScreen() {
             view={view}
             busy={busy}
             onTrauma={
-              busy || offers?.rolled || view.death || view.ended
-                ? undefined
-                : (action) => act(action, "trauma", true)
+              busy || view.death || view.ended ? undefined : (action) => act(action, "trauma", true)
             }
             onHabit={
               busy
@@ -853,34 +825,71 @@ export function StoryScreen() {
       </div>
     </div>
   );
+  const gearDisabledReason =
+    view.death || view.ended
+      ? "这份存档已结束，只能查看物品"
+      : busy
+        ? "正在处理行动，请稍候"
+        : undefined;
+  const carriedUniqueCount = new Set([
+    ...Object.entries(view.inventory.backpack)
+      .filter(([, n]) => n > 0)
+      .map(([id]) => id),
+    ...[view.inventory.healing, view.inventory.grenade].flatMap((slot) => (slot ? [slot.id] : [])),
+  ]).size;
+  const storedTotalCount = view.safehouse.storage.reduce(
+    (sum, g) => sum + g.items.reduce((s, item) => s + item.count, 0),
+    0,
+  );
+  const hasReachableStorage = view.safehouse.storage.some((g) => g.canStore || g.canTake);
   const gearFull = (
     <div key={gearTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
       {gearTab === "vehicles" ? (
-        <VehiclesPage view={view} />
+        <VehiclesPage
+          view={view}
+          onOpenStorage={(key) => {
+            setStorageKey(key);
+            setGearTab("stored");
+          }}
+        />
+      ) : gearTab === "stored" ? (
+        <InventoryStorage
+          groups={view.safehouse.storage}
+          selectedKey={storageKey}
+          onSelect={setStorageKey}
+          busy={storageBusy}
+          disabledReason={gearDisabledReason}
+          onTake={
+            busy || view.death || view.ended
+              ? undefined
+              : async (item, where) => {
+                  setStorageBusy(true);
+                  try {
+                    await act({ type: "placeItem", action: "take", item, where }, "storage", true);
+                  } finally {
+                    setStorageBusy(false);
+                  }
+                }
+          }
+        />
       ) : (
         <InventoryPage
           view={view}
-          disabledReason={
-            view.death || view.ended
-              ? "这份存档已结束，只能查看物品"
-              : busy
-                ? "正在处理行动，请稍候"
-                : offers?.rolled
-                  ? "请先完成当前检定的结算"
-                  : undefined
-          }
+          storageKey={storageKey}
+          onSelectStorage={setStorageKey}
+          disabledReason={gearDisabledReason}
           onHeal={
-            busy || offers?.rolled || view.death || view.ended
+            busy || view.death || view.ended
               ? undefined
               : (id) => act({ type: "useHealing", id }, "healing", true)
           }
           onSuppressant={
-            busy || offers?.rolled || view.death || view.ended
+            busy || view.death || view.ended
               ? undefined
               : () => act({ type: "useSuppressant" }, "suppressant", true)
           }
           onUse={
-            busy || offers?.rolled || view.death || view.ended
+            busy || view.death || view.ended
               ? undefined
               : (id) => {
                   const name = view.names.items[id] ?? id;
@@ -891,24 +900,34 @@ export function StoryScreen() {
                   closePinned();
                 }
           }
+          onActionDraft={
+            busy || view.death || view.ended
+              ? undefined
+              : (text) => {
+                  story.setDraft({
+                    text: `${story.draft.text}${story.draft.text ? "\n" : ""}${text}`,
+                  });
+                  closePinned();
+                }
+          }
           onEquip={
-            busy || offers?.rolled || view.death || view.ended || view.combat.active
+            busy || view.death || view.ended || view.combat.active
               ? undefined
               : (id) => void act({ type: "equipItem", id }, "gear")
           }
           onUnequip={
-            busy || offers?.rolled || view.death || view.ended || view.combat.active
+            busy || view.death || view.ended || view.combat.active
               ? undefined
               : (id) => void act({ type: "unequipItem", id }, "gear")
           }
           onMod={
-            busy || offers?.rolled || view.death || view.ended || view.combat.active
+            busy || view.death || view.ended || view.combat.active
               ? undefined
               : (action, weapon, mod) =>
                   void act({ type: "modWeapon", action, weapon, mod }, "gear")
           }
           onPlaceItem={
-            busy || offers?.rolled || view.death || view.ended
+            busy || view.death || view.ended
               ? undefined
               : (action, item, where, source) =>
                   act(
@@ -917,7 +936,7 @@ export function StoryScreen() {
                     true,
                   )
           }
-          onBuyHome={busy || offers?.rolled ? undefined : setBuyingHome}
+          onBuyHome={busy ? undefined : setBuyingHome}
         />
       )}
     </div>
@@ -934,7 +953,7 @@ export function StoryScreen() {
         ],
         ["news", "新闻", view.phone.feedUnread.news.length + view.phone.feedUnread.street.length],
         ["factions", "势力", 0],
-        ["shards", "芯片", view.shards.unread],
+        ["shards", "资料", view.shards.unread],
       ]}
       value={unreadTab}
       onChange={(t) => {
@@ -1012,6 +1031,14 @@ export function StoryScreen() {
       (story.pending?.kind === "input" && story.pending.input.sandevistan === true));
   const currentDistrict =
     view.names.district ?? view.travel.destinations.find((d) => d.here)?.district ?? null;
+  const unreadBadgeCount =
+    view.phone.unread +
+    view.phone.feedUnread.messages.filter((id) => id.startsWith("phone:call:")).length +
+    view.phone.feedUnread.news.length +
+    view.phone.feedUnread.street.length +
+    view.shards.unread;
+  const activeTrackCount = view.jobs.list.filter((j) => j.open).length + view.deadlines.length;
+  const currentLocationName = view.names.location ?? view.location ?? "夜之城";
   return (
     <SaveImagesProvider value={saveImagesController}>
       <div
@@ -1019,6 +1046,7 @@ export function StoryScreen() {
         data-stage={view.humanity.stage}
         data-glitch={glitch || undefined}
         data-boost={screenBoost || undefined}
+        data-focus={focusMode || undefined}
       >
         <CityBackdrop
           location={view.location}
@@ -1026,9 +1054,8 @@ export function StoryScreen() {
           district={currentDistrict}
           period={view.time.period}
         />
-        {/* 四角（计划第九节）：A 左上、S 左中、G 左下、B 右上、C 右中、H 右下 */}
-        {/* 每侧三块排成一列：一块长高时把同侧别的块推开、缩成一行，不盖住（第十二节第 9 条） */}
-        <CornerSide side="left">
+        {/* 左侧角块：生物监测 / 全息来电 / 在场目标 / 通讯未读 */}
+        <CornerSide side="left" quiet={focusMode}>
           <BioMonitor
             view={view}
             peek={peek}
@@ -1044,19 +1071,21 @@ export function StoryScreen() {
               pinBlock("unread");
             }}
           />
-          {/* 档案里的「扫描」：点一下立刻扫，不调模型；回合进行中不让点（用户定的，计划第十二节第 14 条） */}
           <Present
             view={view}
             scan={scan}
             peek={peek}
             onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+            onToggleScan={() => setScanPinned((v) => !v)}
           />
           <Unread view={view} peek={peek} full={unreadFull} tabs={unreadTabs} />
         </CornerSide>
-        <CornerSide side="right">
-          {/* 地点块不再悬停展开，威胁常态就列；点整块打开地图，同 M（用户定的） */}
+        {/* 右侧角块：地点 / 潜网深度（潜网时融入列流，不遮挡追踪与武器） / 追踪+系统通知 / 武器装备 */}
+        <CornerSide side="right" quiet={focusMode}>
           <Zone view={view} onMap={openMap} onShop={setAtShop} onRipperdoc={() => setAtDoc(true)} />
-          {/* D 系统通知紧贴在 C 追踪下面，追踪多高都跟着走 */}
+          {view.hacking?.dive && (
+            <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
+          )}
           <Track view={view} peek={peek} full={trackFull}>
             {toasts.length > 0 && <Toasts toasts={toasts} onDone={dropToast} />}
           </Track>
@@ -1067,7 +1096,8 @@ export function StoryScreen() {
             tabs={
               <PinTabs<GearTab>
                 tabs={[
-                  ["inventory", "物品栏", 0],
+                  ["carried", "随身", carriedUniqueCount],
+                  ["stored", "存放", storedTotalCount, hasReachableStorage],
                   ["vehicles", "车辆", view.travel.vehicles.length],
                 ]}
                 value={gearTab}
@@ -1076,9 +1106,6 @@ export function StoryScreen() {
             }
           />
         </CornerSide>
-        {view.hacking?.dive && (
-          <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
-        )}
         {/* 地图浮层（M）：盖在中列和右边四角上，选好路线就收起出发 */}
         {atMap && (
           <MapLayer onClose={closeMap}>
@@ -1087,7 +1114,7 @@ export function StoryScreen() {
               onClose={closeMap}
               focus={mapFocus}
               onTravel={
-                busy || offers?.rolled
+                busy
                   ? undefined
                   : (dest, route) => {
                       setAtMap(false);
@@ -1165,25 +1192,8 @@ export function StoryScreen() {
           )}
 
           <div className={styles.dock}>
-            {openCheck ? (
-              <CheckBar
-                key={openCheck.id}
-                check={openCheck}
-                busy={busy}
-                closable={!offers?.rolled && openCheck.id === pickedId}
-                onConfirm={() => confirm(openCheck.id, openCheck.label)}
-                onRewrite={() => draftFromCheck(openCheck.label)}
-                onClose={() => setPicked(null)}
-              />
-            ) : (
-              view.offers.choices.length > 0 &&
-              !busy && (
-                <ChoiceList
-                  choices={view.offers.choices}
-                  locked={offers?.rolled != null}
-                  onChoose={choose}
-                />
-              )
+            {view.offers.choices.length > 0 && !busy && !view.death && !view.ended && (
+              <ChoiceList choices={view.offers.choices} locked={false} onChoose={choose} />
             )}
             {view.death && (
               <div className={styles.notice} data-kind="dead" role="alert">
@@ -1206,7 +1216,7 @@ export function StoryScreen() {
                     ? "你离开了这一行，活着走出了夜之城。"
                     : "故事停在这里。"}
                   {view.ended.epitaph && `「${view.ended.epitaph}」`}
-                  这份存档只能回看，角色已经进了主菜单的传说名册。
+                  这份存档已封存，只能留作回看。
                 </span>
                 <Button
                   onClick={() => {
@@ -1221,15 +1231,13 @@ export function StoryScreen() {
             <InputBar
               busy={busy}
               streaming={story.phase === "streaming"}
-              disabled={offers?.rolled != null || view.death !== null || view.ended !== null}
+              disabled={view.death !== null || view.ended !== null}
               reason={
                 view.death !== null
                   ? "角色已经死亡"
                   : view.ended !== null
                     ? "这个角色的故事已经结束"
-                    : offers?.rolled != null
-                      ? "上一次检定已经掷过骰，先继续结算"
-                      : undefined
+                    : undefined
               }
               draft={story.draft}
               onDraft={story.setDraft}
@@ -1242,21 +1250,61 @@ export function StoryScreen() {
               onSend={send}
               onStop={() => void story.stop()}
             />
-            {/* 键位图标是原作 icons_keyboard；原作图集里没有 Z，通知记录的键照样能用，只是这里不列 */}
             <KeyBar>
-              <KeyHint keyId="key.p" label="人物" onClick={() => pinBlock("bio")} />
-              <KeyHint keyId="key.o" label="物品栏" onClick={() => showGear("inventory")} />
-              <KeyHint keyId="key.j" label="日志" onClick={() => pinBlock("track")} />
-              <KeyHint keyId="key.m" label="地图" onClick={openMap} />
-              <KeyHint keyId="key.t" label="消息" onClick={() => pinBlock("unread")} />
-              <KeyHint keyId="key.tab" label="扫描（长按）" />
-              <KeyHint keyId="key.esc" label="菜单" onClick={() => setAtEsc(true)} />
+              <KeyHint
+                keyId="key.p"
+                label="人物"
+                active={expand?.id === "bio"}
+                onClick={() => pinBlock("bio")}
+              />
+              <KeyHint
+                keyId="key.o"
+                label="装备"
+                active={expand?.id === "weapon"}
+                onClick={() => showGear("carried")}
+              />
+              <KeyHint
+                keyId="key.j"
+                label="追踪"
+                active={expand?.id === "track"}
+                badge={activeTrackCount}
+                onClick={() => pinBlock("track")}
+              />
+              <KeyHint keyId="key.m" label="地图" active={atMap} onClick={openMap} />
+              <KeyHint
+                keyId="key.t"
+                label="消息"
+                active={expand?.id === "unread"}
+                badge={unreadBadgeCount}
+                onClick={() => pinBlock("unread")}
+              />
+              <KeyHint
+                keyId="key.tab"
+                label="扫描"
+                active={scan}
+                title="按住 Tab 或点击切换 Kiroshi 义眼扫描"
+                onClick={() => setScanPinned((v) => !v)}
+              />
+              <KeyHint
+                keyText="H"
+                label={focusMode ? "还原 HUD" : "沉浸"}
+                active={focusMode}
+                title="柔和隐去两侧 HUD 卡片，专注阅读剧情"
+                onClick={() => setFocusMode((v) => !v)}
+              />
+              <KeyHint keyId="key.esc" label="菜单" active={atEsc} onClick={() => setAtEsc(true)} />
             </KeyBar>
           </div>
         </main>
 
         {atEsc && (
           <EscMenu
+            context={{
+              name: view.character.name ?? "无名雇佣兵",
+              location: currentLocationName,
+              time: `${view.time.text} · ${view.time.periodLabel}`,
+              turns: view.totalTurns,
+            }}
             onResume={() => setAtEsc(false)}
             canEndStory={!view.death && !view.ended}
             onEndStory={
@@ -1329,7 +1377,7 @@ export function StoryScreen() {
                       : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
                   }
                   onGunsmith={
-                    busy || offers?.rolled || view.death || view.ended || view.combat.active
+                    busy || view.death || view.ended || view.combat.active
                       ? undefined
                       : (action) =>
                           act({ ...action, type: "gunsmith", shop: shop.id }, "shop", true)
@@ -1339,11 +1387,9 @@ export function StoryScreen() {
                       ? "这份存档已结束，无法进行枪匠改装"
                       : view.combat.active
                         ? "战斗中无法进行枪匠工坊改装"
-                        : offers?.rolled
-                          ? "请先完成当前检定的结算"
-                          : busy
-                            ? "正在处理行动，请稍候"
-                            : undefined
+                        : busy
+                          ? "正在处理行动，请稍候"
+                          : undefined
                   }
                   onClose={() => setAtShop(null)}
                 />
@@ -1422,7 +1468,6 @@ export function StoryScreen() {
               )
             );
           })()}
-        {atNotes && <NotesPanel notes={notes} onClose={() => setAtNotes(false)} />}
         {person &&
           (() => {
             // 正文里点了人名（第 3 条）：弹这个人的档案；扫描照档案里的按钮，回合进行中不让点
@@ -1567,7 +1612,14 @@ function PersonModal({
 }) {
   useLayer(onClose);
   return (
-    <div className={styles.journalBackdrop}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: 点击半透明遮罩关闭弹窗，键盘 Esc 由 useLayer 负责
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Esc 已由 useLayer 注册
+    <div
+      className={styles.journalBackdrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div role="dialog" aria-label={npc.name} className={styles.dossierDialog}>
         <Panel as="div" title="人物档案" line="var(--cp-cyan)" frame>
           <Profile npc={npc} fixer={fixer} squad={squad} foe={foe} onScan={onScan} />

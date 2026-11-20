@@ -17,6 +17,7 @@ import {
   ITEM_KIND_LABELS,
   type ItemDef,
   isBulkyItem,
+  itemCarryUnits,
   loadoutSummary,
   MOD_SLOT_LABELS,
   type ModSlot,
@@ -41,7 +42,44 @@ const BrokenChromeSliceSchema = z
   .object({ brokenChrome: z.array(z.string()).default([]) })
   .catch({ brokenChrome: [] });
 
-function itemSubLabel(def: ItemDef): string {
+const ChipCategoryIndexSchema = z
+  .array(
+    z.object({
+      id: z.string(),
+      category: z.string().optional(),
+      braindance: z.string().optional(),
+    }),
+  )
+  .catch([]);
+
+function buildChipBraindanceIds(
+  world: ViewContext["world"],
+  data: ViewContext["data"],
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const row of ChipCategoryIndexSchema.parse(data.chipContents ?? [])) {
+    if (row.category === "braindance" || row.braindance) ids.add(row.id);
+  }
+  const slice = world.slices.shards as
+    | { contents?: Record<string, { id?: string; category?: string; braindance?: string }> }
+    | undefined;
+  for (const row of Object.values(slice?.contents ?? {})) {
+    if (row?.id && (row.category === "braindance" || row.braindance)) ids.add(row.id);
+  }
+  return ids;
+}
+
+type NeuralGroup = "bd-device" | "chip-device" | "bd-carrier" | "chip" | null;
+
+function neuralGroupOf(def: ItemDef, bdChipIds: ReadonlySet<string>): NeuralGroup {
+  if (def.braindanceDevice?.playback) return "bd-device";
+  if (def.chipDevice) return "chip-device";
+  if (def.chipContentId && bdChipIds.has(def.chipContentId)) return "bd-carrier";
+  if (def.chipContentId || def.chipStorage) return "chip";
+  return null;
+}
+
+function itemSubLabel(def: ItemDef, neuralGroup: NeuralGroup): string {
   if (def.kind === "weapon") {
     return [
       def.weaponType ? WEAPON_TYPE_LABELS[def.weaponType] : null,
@@ -56,6 +94,14 @@ function itemSubLabel(def: ItemDef): string {
   if (def.kind === "mod" && def.modSlot) {
     return `改装 · ${MOD_SLOT_LABELS[def.modSlot]}`;
   }
+  if (neuralGroup === "bd-device") {
+    return (def.braindanceDevice?.analysis.length ?? 0) > 0 ? "超梦编辑头环" : "超梦花环";
+  }
+  if (neuralGroup === "chip-device") {
+    return def.chipDevice === "reader-writer" ? "隔离读写器" : "芯片阅读器";
+  }
+  if (neuralGroup === "bd-carrier") return "超梦卷轴";
+  if (neuralGroup === "chip") return def.chipContentId ? "神经芯片" : "空白存储芯片";
   return ITEM_KIND_LABELS[def.kind];
 }
 
@@ -74,6 +120,7 @@ export function inventoryView({ world, data }: ViewContext) {
     installed: cyber.installed,
     brokenChrome: health.brokenChrome,
   });
+  const bdChipIds = buildChipBraindanceIds(world, data);
 
   return {
     healing: inventory.healing,
@@ -134,17 +181,25 @@ export function inventoryView({ world, data }: ViewContext) {
         const ws = obj?.weaponState;
         const baseId = ws?.baseId ?? obj?.baseId ?? id;
         const rar = def.rarity || def.kind === "weapon" ? rarityOf(def) : null;
+        const neuralGroup = neuralGroupOf(def, bdChipIds);
         return [
           [
             id,
             {
               baseId,
               kind: def.kind,
-              subLabel: itemSubLabel(def),
+              clothingSlot: def.kind === "clothing" ? (def.clothingSlot ?? null) : null,
+              subLabel: itemSubLabel(def, neuralGroup),
+              neuralGroup,
+              chipContentId: def.chipContentId ?? null,
+              chipDevice: def.chipDevice ?? null,
+              chipStorage: Boolean(def.chipStorage),
+              braindanceDevice: def.braindanceDevice ?? null,
               rarity: rar,
               rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
               iconic: Boolean(def.iconic),
               bulky: isBulkyItem(def, baseId),
+              carryUnits: itemCarryUnits(def, baseId),
               concealment: def.kind === "weapon" ? effectiveConcealment(def, ws, items) : null,
               noise: def.kind === "weapon" ? effectiveWeaponNoise(def, ws, items) : null,
               grantsSmartLink:

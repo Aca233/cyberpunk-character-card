@@ -167,6 +167,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+.tabDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--cp-success);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cp-success) 75%, transparent);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
 .tabLine {
   display: block;
   height: 2px;
@@ -754,16 +763,58 @@
     min-width: 0;
   }
 
+  .cyberScreen .cyberBody {
+    left: var(--doll-center, 50%);
+  }
+
   .cyberScreen .gauge {
-    left: max(44px, calc(50% - var(--cell) * 7.2));
+    left: max(40px, calc(var(--doll-center, 50%) - var(--cell) * 6.08));
+    grid-template-rows: auto calc(var(--stage) * 0.58);
+    gap: 24px;
   }
 
   .cyberScreen .gaugeTop {
-    width: calc(100% + 24px);
+    top: -4px;
+    left: 50%;
+    width: auto;
+    margin-left: 0;
+    transform: translate(-50%, -100%);
+  }
+
+  .cyberScreen .gaugeFan {
+    display: none;
+  }
+
+  .cyberScreen .gaugeLevel {
+    left: -8px;
+    right: -4px;
+  }
+
+  .cyberScreen .gaugeTag,
+  .cyberScreen .gaugeNow {
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+
+  .cyberScreen .cyberSide[data-side="left"] {
+    right: calc(100% - var(--doll-center, 50%) + var(--cell) * 0.72);
+  }
+
+  .cyberScreen .cyberSide[data-side="right"] {
+    left: calc(var(--doll-center, 50%) + var(--cell) * 1.05);
+  }
+
+  .cyberScreen .cyberGroup {
+    margin-right: calc(var(--shift) * var(--cell) * 0.36);
+  }
+
+  .cyberScreen .cyberSide[data-side="right"] .cyberGroup {
+    margin-right: 0;
+    margin-left: calc(var(--shift) * var(--cell) * 0.36);
   }
 
   .cyberScreen .cyberLabel {
-    font-size: clamp(13px, calc(var(--cell) * 0.3), 18px);
+    font-size: clamp(12px, calc(var(--cell) * 0.28), 16px);
   }
 
   .cyberScreen .cyberTip {

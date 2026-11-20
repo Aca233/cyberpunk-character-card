@@ -87,14 +87,14 @@ export function PinTabs<T extends string>({
   value,
   onChange,
 }: {
-  /** id、名字、角标数 */
-  readonly tabs: readonly (readonly [T, string, number])[];
+  /** id、名字、角标数、可选激活圆点（如当前有可达存放点） */
+  readonly tabs: readonly (readonly [T, string, number] | readonly [T, string, number, boolean])[];
   readonly value: T;
   readonly onChange: (id: T) => void;
 }) {
   return (
     <nav className={neural.pinTabs}>
-      {tabs.map(([id, name, badge]) => (
+      {tabs.map(([id, name, badge, dot]) => (
         <button
           key={id}
           type="button"
@@ -104,6 +104,7 @@ export function PinTabs<T extends string>({
         >
           <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
           <span className={neural.inner}>
+            {dot && <i className={neural.tabDot} aria-hidden />}
             {name}
             {badge > 0 && <b className={neural.badge}>{badge}</b>}
           </span>
@@ -114,18 +115,20 @@ export function PinTabs<T extends string>({
 }
 
 /**
- * 一侧的三块排成一列（第十二节第 9 条）：一块长高时把同侧别的块推开，不盖住；
- * 别的块缩成一行读数，留在原位
+ * 一侧的角块排成一列：一块长高时把同侧别的块推开，不盖住；
+ * quiet（沉浸模式）下非展开角块柔和退隐，悬停或钉住时立刻恢复清晰
  */
 export function CornerSide({
   side,
+  quiet = false,
   children,
 }: {
   readonly side: "left" | "right";
+  readonly quiet?: boolean;
   readonly children: ReactNode;
 }) {
   return (
-    <div className={styles.side} data-side={side}>
+    <div className={styles.side} data-side={side} data-quiet={quiet || undefined}>
       {children}
     </div>
   );
@@ -312,6 +315,10 @@ export function BioMonitor({
   const resizing = useResizing(wideOn || diagOn, p.open);
 
   const humanityPct = `${Math.max(0, Math.min(100, humanity.current))}%`;
+  const togglePin = () => {
+    if (p.pinned) p.close();
+    else peek.setExpand({ id: "bio", pinned: true });
+  };
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着面板和按钮，不能整个换成 button
@@ -327,13 +334,34 @@ export function BioMonitor({
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
+      aria-label={`生物监测，点击${p.pinned ? "取消固定" : "固定展开"}，按 P 或 Esc 收起`}
+      onClick={(event) => {
+        if (isNestedInteractive(event.target, event.currentTarget)) return;
+        if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) return;
+        togglePin();
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          togglePin();
+        }
+      }}
       {...p.bind}
     >
       <BlockShadow />
-      <Panel as="section" title="生物监测" line="var(--cp-red)">
+      <Panel as="section" line="var(--cp-red)">
         {/* 常态摘要包一层折叠容器：展开人物/义体时同步收起，避免顶栏被拉成超长横条并消除上下重复读数 */}
         <div className={styles.bioSummary}>
           <div className={styles.bioSummaryInner}>
+            <div className={styles.bioTopHead}>
+              <span className={styles.bioIdentity}>
+                <b className={styles.bioCallsign}>{character.name ?? "宿主"}</b>
+                <em className={styles.bioCred} title={character.credWorld}>
+                  {character.credTier}
+                </em>
+              </span>
+              <kbd className={styles.bioKeyHint}>{p.pinned ? "ESC" : "P"}</kbd>
+            </div>
             <div className={styles.bioRow}>
               <span
                 className={styles.bioAvatar}
@@ -382,7 +410,7 @@ export function BioMonitor({
                       ))}
                       {wound.items.length > 2 && (
                         <span className={styles.woundMore}>
-                          +{wound.items.length - 2} 处伤势，点开生物监测查看
+                          +{wound.items.length - 2} 处伤势 · 点开查看
                         </span>
                       )}
                     </>
@@ -392,72 +420,67 @@ export function BioMonitor({
                       data-scar
                       title={wound.scars.map((s) => s.summary).join("；")}
                     >
-                      无新伤 · 留疤：{wound.scars[0]?.partLabel}
+                      机能完好 · 旧疤：{wound.scars[0]?.partLabel}
                       {wound.scars.length > 1 ? ` 等 ${wound.scars.length} 处` : ""}
                     </p>
                   ) : (
-                    <p className={styles.woundNominal}>无外伤记录 · 各部位机能正常</p>
+                    <p className={styles.woundNominal}>机能完好 · 全身无创口</p>
                   )}
                 </div>
                 <div className={styles.bioHwBar}>
-                  {hacking ? (
-                    <>
-                      <span
-                        className={styles.bioMiniGauge}
-                        title={`${hacking.deckName}${hacking.profile ? ` · ${hacking.profile}` : ""}`}
-                      >
-                        <span
-                          className={styles.bioMiniFill}
-                          data-hw="ram"
-                          style={{ width: "100%" }}
-                        />
-                      </span>
-                      <span className={styles.bioHwText}>
-                        {`DECK · ${[hacking.traitLabels[0] ?? "在线", hacking.selfIce ? "ICE" : null].filter(Boolean).join(" · ")}`}
-                      </span>
-                    </>
-                  ) : sandevistan ? (
-                    <span className={styles.bioSandy}>SNV · {sandevistan.name} · 就绪</span>
-                  ) : (
-                    <>
-                      <span className={styles.bioMiniGauge} title={`神经稳态 · ${neuro.summary}`}>
-                        <span
-                          className={styles.bioMiniFill}
-                          data-tone={neuro.tone}
-                          style={{ width: humanityPct }}
-                        />
-                      </span>
-                      <span className={styles.bioHwText}>SYNC · {humanity.stageLabel}</span>
-                    </>
-                  )}
+                  <span
+                    className={styles.bioMiniGauge}
+                    title={`神经稳态 ${humanity.current}/100 · ${neuro.summary}`}
+                  >
+                    <span
+                      className={styles.bioMiniFill}
+                      data-tone={neuro.tone}
+                      style={{ width: humanityPct }}
+                    />
+                  </span>
+                  <span
+                    className={styles.bioHwText}
+                    data-tone={neuro.tone}
+                    title={
+                      psychosis.suppressant.until
+                        ? `免疫抑剂药效至 ${psychosis.suppressant.until}`
+                        : psychosis.suppressant.withdrawal
+                          ? "停药戒断反应：手抖、冷汗与焦躁"
+                          : neuro.summary
+                    }
+                  >
+                    {humanity.stageLabel}
+                    {psychosis.blackoutOpen
+                      ? " · 盲区"
+                      : psychosis.suppressant.until
+                        ? " · 阻断"
+                        : psychosis.suppressant.withdrawal
+                          ? " · 戒断"
+                          : ""}
+                  </span>
                 </div>
               </div>
             </div>
             <p className={styles.bioLine}>
-              <span
-                data-stage={humanity.stage}
-                data-tone={neuro.tone}
-                title={
-                  psychosis.suppressant.until
-                    ? `免疫抑剂药效至 ${psychosis.suppressant.until}`
-                    : psychosis.suppressant.withdrawal
-                      ? "停药戒断反应：手抖、冷汗与焦躁"
-                      : neuro.summary
-                }
-              >
-                神经 · {humanity.stageLabel}
-                {psychosis.blackoutOpen
-                  ? " · 记忆盲区"
-                  : psychosis.suppressant.until
-                    ? " · 阻断"
-                    : psychosis.suppressant.withdrawal
-                      ? " · 戒断"
-                      : ""}
-              </span>
+              {hacking ? (
+                <span
+                  className={styles.bioOsTag}
+                  data-os="deck"
+                  title={`${hacking.deckName}${hacking.profile ? ` · ${hacking.profile}` : ""}`}
+                >
+                  {`DECK · ${[hacking.traitLabels[0] ?? hacking.deckName ?? "在线", hacking.selfIce ? "ICE" : null].filter(Boolean).join(" · ")}`}
+                </span>
+              ) : sandevistan ? (
+                <span className={styles.bioOsTag} data-os="sandy">
+                  {`SNV · ${sandevistan.name}`}
+                </span>
+              ) : (
+                <span className={styles.bioOsTag}>神经链路正常</span>
+              )}
               {health.lostLimbs.length > 0 ? (
                 <span className={styles.bioAlert}>肢体缺损</span>
               ) : brokenCount > 0 ? (
-                <span className={styles.bioAlert}>义体损毁</span>
+                <span className={styles.bioAlert}>义体损毁 ×{brokenCount}</span>
               ) : time.blackLaceWithdrawal ? (
                 <span className={styles.bioAlert}>黑蕾丝戒断</span>
               ) : time.fatigued ? (
@@ -472,10 +495,8 @@ export function BioMonitor({
                   TT {trauma.tierLabel}
                   {trauma.coverage.ok ? "" : " · 受阻"}
                 </span>
-              ) : hacking ? (
-                <span title={hacking.deckName ?? undefined}>{hacking.deckName ?? "接入仓"}</span>
               ) : (
-                <span title={character.credWorld}>{character.credTier}</span>
+                <span className={styles.bioHintCopy}>点按或按 P 展开</span>
               )}
             </p>
           </div>
@@ -858,18 +879,21 @@ function PresentFoe({ foe, index }: { readonly foe: CombatFoe; readonly index: n
   );
 }
 
-/** S 在场的人：义眼叠加层。整合在场人物卡与交战敌手，按住 Tab 展开扫描卡；高度跟人数走 */
+/** S 在场的人：义眼叠加层。整合在场人物卡与交战敌手，按住 Tab 或点击顶栏切换扫描卡 */
 export function Present({
   view,
   scan,
   peek,
   onScan,
+  onToggleScan,
 }: {
   readonly view: View;
   readonly scan: boolean;
   readonly peek: PeekState;
-  /** 档案里的「扫描」按钮：点一下立刻用义眼扫，不调模型（用户定的，计划第十二节第 14 条） */
+  /** 档案里的「扫描」按钮：点一下立刻用义眼扫，不调模型 */
   readonly onScan?: ((id: string) => void) | undefined;
+  /** 点击顶栏 TAB 按钮切换扫描视图 */
+  readonly onToggleScan?: (() => void) | undefined;
 }) {
   const herePeople = view.npcs.filter((n) => n.here && n.alive);
   const foes = view.combat.active?.foes ?? [];
@@ -892,7 +916,7 @@ export function Present({
     >
       <header className={styles.label}>
         <Asset id="interaction.scan" tint="currentColor" height={18} />
-        <span>{scan ? "Kiroshi · 正在扫描" : "在场"}</span>
+        <span>{scan ? "KIROSHI · 扫描中" : "在场目标"}</span>
         <em className={styles.presentCount}>
           {overflow > 0 ? `${people.length + shownExtraFoes.length}/${totalCount}` : totalCount}
         </em>
@@ -901,7 +925,20 @@ export function Present({
           style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
           aria-hidden
         />
-        <kbd className={styles.labelHint}>{scan ? "SCAN" : open ? "ESC" : "TAB"}</kbd>
+        {onToggleScan && !open ? (
+          <button
+            type="button"
+            className={styles.labelScanBtn}
+            data-active={scan || undefined}
+            aria-pressed={scan}
+            title="点击或按住 Tab 扫描在场人物"
+            onClick={onToggleScan}
+          >
+            {scan ? "SCAN ●" : "TAB"}
+          </button>
+        ) : (
+          <kbd className={styles.labelHint}>{scan ? "SCAN" : open ? "ESC" : "TAB"}</kbd>
+        )}
       </header>
       <ul>
         {people.map((n, i) => (
@@ -961,7 +998,7 @@ export function Unread({
   const items: readonly { readonly label: string; readonly icon: AssetId; readonly n: number }[] = [
     { label: "消息", icon: "notify.attention", n: view.phone.unread + unreadCalls },
     { label: "新闻", icon: "notify.journal", n: newsCount },
-    { label: "芯片", icon: "interaction.jackIn", n: view.shards.unread },
+    { label: "资料", icon: "interaction.jackIn", n: view.shards.unread },
   ];
   const shown = items.filter((i) => i.n > 0);
   // 一直显示：这里就是消息与芯片的入口，读完了也要找得到
@@ -1008,7 +1045,7 @@ export function Unread({
         <Grow
           open={p.open}
           head={null}
-          title="消息 · 芯片"
+          title="消息 · 资料"
           hint={p.pinned ? "ESC" : "T"}
           line="var(--cp-red)"
         >
@@ -1027,14 +1064,15 @@ export function Unread({
             <div className={styles.unreadCounts}>
               {shown.length === 0 ? (
                 <span className={styles.unreadIdle}>
-                  <Asset id="notify.attention" tint="var(--cp-red-dim)" height={16} />
-                  没有未读消息
+                  <Asset id="notify.attention" tint="var(--cp-red-dim)" height={15} />
+                  <span>通讯终端 · 无未读</span>
                 </span>
               ) : (
                 shown.map((i) => (
-                  <span key={i.label}>
-                    <Asset id={i.icon} tint="var(--cp-red)" height={18} />
-                    {i.label} <b>{i.n}</b>
+                  <span key={i.label} className={styles.unreadChip}>
+                    <Asset id={i.icon} tint="var(--cp-red)" height={16} />
+                    <span>{i.label}</span>
+                    <b>{i.n}</b>
                   </span>
                 ))
               )}
@@ -1139,16 +1177,21 @@ export function Zone({
             className={styles.zoneFrame}
           />
           <div className={styles.zoneText}>
-            <b>{view.names.location ?? locationLabel(view.location)}</b>
-            <span>
-              {view.time.text} · {view.time.periodLabel} ·{" "}
-              {/* 天气说明不再另占一块，放进天气名的悬停提示 */}
+            <div className={styles.zoneTitleRow}>
+              <b>{view.names.location ?? locationLabel(view.location)}</b>
+              <kbd className={styles.zoneKeyHint}>M</kbd>
+            </div>
+            <span className={styles.zoneMeta}>
+              <time>{view.time.text}</time>
+              <span aria-hidden>·</span>
+              <span>{view.time.periodLabel}</span>
+              <span aria-hidden>·</span>
               <span title={view.weather.note}>{view.weather.label}</span>
             </span>
             <span className={styles.heat}>
               {"★".repeat(heat.stars)}
               <span className={styles.starsEmpty}>{"★".repeat(5 - heat.stars)}</span>
-              {bounty > 0 && <small>{` 悬赏 ${bounty.toLocaleString("en-US")} 欧元`}</small>}
+              {bounty > 0 && <small>{` 悬赏 ${bounty.toLocaleString("en-US")} €$`}</small>}
               {stealth.level > 0 && (
                 <small data-alert={stealth.level}>{` ◆ ${stealth.label}`}</small>
               )}
@@ -1348,9 +1391,82 @@ export function Track({
  * H 武器和快速破解：武器格同原 Hud（hud.slot*），快速破解用现有轮盘。
  * 悬停或按 O 钉住时，框朝中列平滑加宽、往上长出完整物品栏，常驻武器读数稳在底部。
  */
+function ChargePips({
+  label,
+  charges,
+  max,
+  tone,
+}: {
+  readonly label: string;
+  readonly charges: number;
+  readonly max: number;
+  readonly tone: "heal" | "nade";
+}) {
+  const cappedMax = Math.min(Math.max(max, 1), 6);
+  return (
+    <span className={styles.slotCharge} data-tone={tone} title={`${label} ${charges}/${max}`}>
+      <em className={styles.slotChargeLabel}>{label}</em>
+      <span className={styles.slotPips} aria-hidden>
+        {Array.from({ length: cappedMax }, (_, i) => (
+          <i
+            // biome-ignore lint/suspicious/noArrayIndexKey: 充能格按序号排布
+            key={i}
+            className={styles.slotPip}
+            data-filled={i < charges || undefined}
+          />
+        ))}
+      </span>
+      <b className={styles.slotChargeNum}>
+        {charges}/{max}
+      </b>
+    </span>
+  );
+}
+
 const MAX_HUD_WEAPONS = 3;
 
-/** H 随身武器与物品栏：平权并排显示随身武器缩略格，治疗与手雷（含超重提醒）稳在底行；hover 预览、点一下钉住 */
+/** 装备面板顶栏携带负担刻度条（按 carryUnits / carryMax 分段显示，支持超重告警） */
+function LoadMeter({
+  units,
+  max,
+  level,
+  label,
+}: {
+  readonly units: number;
+  readonly max: number;
+  readonly level: "light" | "burdened" | "overloaded";
+  readonly label: string;
+}) {
+  const segCount = Math.max(1, Math.min(12, max));
+  const filled =
+    units <= 0
+      ? 0
+      : Math.min(segCount, Math.max(1, Math.round((units / Math.max(1, max)) * segCount)));
+  return (
+    <span
+      className={styles.weaponLoad}
+      data-level={level}
+      title={`随身负担：${label}（${units}/${max} 分值；小武器 1、中短武器 2、大件武器 4）`}
+    >
+      <span className={styles.weaponLoadLabel}>{label}</span>
+      <span className={styles.weaponLoadTrack} aria-hidden>
+        {Array.from({ length: segCount }, (_, i) => (
+          <i
+            // biome-ignore lint/suspicious/noArrayIndexKey: 固定格数进度刻度
+            key={i}
+            className={styles.weaponLoadSeg}
+            data-on={i < filled || undefined}
+          />
+        ))}
+      </span>
+      <b className={styles.weaponLoadNum}>
+        {units}/{max}
+      </b>
+    </span>
+  );
+}
+
+/** H 随身武器与物品栏：平权并排显示随身武器缩略格，底行展示治疗/手雷充能格与欧元；hover 预览、点一下钉住 */
 export function Weapon({
   view,
   peek,
@@ -1361,7 +1477,7 @@ export function Weapon({
   readonly peek: PeekState;
   /** 展开区里的完整物品栏 */
   readonly full: ReactNode;
-  /** 展开区底部的页签 */
+  /** 展开区顶栏页签（随身 / 存放 / 车辆） */
   readonly tabs?: ReactNode;
 }) {
   const { inventory, money } = view;
@@ -1371,6 +1487,7 @@ export function Weapon({
   const weapons = inventory.carriedWeapons;
   const soleWeapon = weapons.length === 1 ? weapons[0] : undefined;
   const { shown: shownWeapons, extra: extraWeapons } = weaponPreview(inventory, MAX_HUD_WEAPONS);
+  const load = inventory.loadout;
   const weaponMeta = (w: (typeof weapons)[number]) => {
     const detail = inventory.details?.[w.id];
     const baseId = w.baseId ?? detail?.baseId ?? w.id;
@@ -1410,6 +1527,17 @@ export function Weapon({
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
+      onPointerDownCapture={(event) => {
+        // 悬停预览态下只要在展开区内部点按交互控件，立刻升级为钉住，避免滑出失焦误关
+        if (
+          p.open &&
+          !p.pinned &&
+          event.target instanceof Element &&
+          event.target.closest(`.${styles.grow}`)
+        ) {
+          peek.setExpand({ id: "weapon", pinned: true });
+        }
+      }}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
         if (
@@ -1439,10 +1567,26 @@ export function Weapon({
           slice={SLOT_SLICE}
         />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
-        <Grow open={p.open} title="装备 · 物品栏与车辆" hint="O" line="var(--cp-cyan)">
+        <Grow
+          open={p.open}
+          line="var(--cp-cyan)"
+          head={
+            <header className={styles.weaponDrawerHead}>
+              {tabs ?? <span className={styles.weaponDrawerTitle}>装备 · 物品栏与车辆</span>}
+              <span className={styles.weaponDrawerMeta}>
+                <LoadMeter
+                  units={load.carryUnits}
+                  max={load.carryMax}
+                  level={load.carryLevel}
+                  label={load.carryLabel}
+                />
+                <kbd title="快捷键 O 开关，Q/E 切换页签">O</kbd>
+              </span>
+            </header>
+          }
+        >
           {full}
         </Grow>
-        {p.open && tabs && <div className={styles.unreadTabs}>{tabs}</div>}
         <div className={styles.inner}>
           <span className={styles.slotMain}>
             {!p.open &&
@@ -1521,32 +1665,40 @@ export function Weapon({
                 </ul>
               ))}
             <span className={styles.slotFoot}>
-              <small className={styles.slotLine}>
+              <span className={styles.slotCharges}>
                 {p.open && (
-                  <>
-                    {weapons.length > 0 ? `随身武器 ${weapons.length} 把` : "徒手"}
-                    {" · "}
-                  </>
+                  <small className={styles.slotLine}>
+                    {weapons.length > 0 ? `${weapons.length} 把武器` : "徒手"}
+                  </small>
                 )}
-                {inventory.healing
-                  ? `治疗 ${inventory.healing.charges}/${inventory.healing.max}`
-                  : "无治疗品"}
-                {" · "}
-                {inventory.grenade
-                  ? `手雷 ${inventory.grenade.charges}/${inventory.grenade.max}`
-                  : "无手雷"}
+                {inventory.healing ? (
+                  <ChargePips
+                    label="治疗"
+                    charges={inventory.healing.charges}
+                    max={inventory.healing.max}
+                    tone="heal"
+                  />
+                ) : (
+                  <small className={styles.slotEmptyCharge}>无治疗</small>
+                )}
+                {inventory.grenade ? (
+                  <ChargePips
+                    label="手雷"
+                    charges={inventory.grenade.charges}
+                    max={inventory.grenade.max}
+                    tone="nade"
+                  />
+                ) : (
+                  <small className={styles.slotEmptyCharge}>无手雷</small>
+                )}
                 {inventory.loadout.carryLevel !== "light" && (
-                  <span className={styles.slotOverload}>
-                    {" · "}
-                    {inventory.loadout.carryLabel}
-                  </span>
+                  <span className={styles.slotOverload}>{inventory.loadout.carryLabel}</span>
                 )}
-              </small>
+              </span>
               <span className={styles.slotFootMeta}>
                 <span className={styles.slotCash} title={`随身欧元：${eddiesText} 欧元`}>
                   <Asset id="notify.cash" tint="var(--cp-yellow)" height={11} />
                   <strong>{eddiesText}</strong>
-                  <small className={styles.slotCashUnit}>欧元</small>
                 </span>
                 <kbd className={styles.slotHint}>{p.pinned ? "ESC" : "O"}</kbd>
               </span>
@@ -1633,21 +1785,35 @@ export function Banner({ view }: { readonly view: View }) {
   const dive = view.hacking?.dive ?? null;
   if (combat.active) {
     const a = combat.active;
+    const aliveCount = a.foes.filter((f) => f.state !== "dead" && f.state !== "fled").length;
     return (
       <Panel as="section" line="var(--cp-red)" className={styles.banner}>
         <div className={styles.bannerRow} role="status">
-          <Asset id="notify.warning" tint="var(--cp-red)" height={26} />
-          <b>交战</b>
+          <Asset id="notify.warning" tint="var(--cp-red)" height={24} />
+          <b>交战中</b>
           {a.district && <span className={story.combatTitle}>{a.district}</span>}
+          <small className={styles.bannerStat}>
+            活跃敌手 {aliveCount}/{a.foes.length}
+          </small>
         </div>
-        <div className={styles.bannerLines}>
+        <ul className={styles.bannerFoes} aria-label="交战目标">
           {a.foes.map((f) => (
-            <span key={f.id}>
-              {f.name}（{f.stateLabel}）{f.gang && ` · ${f.gang}`}
-              {f.carry.length > 0 && ` · 可拾取：${f.carry.map((i) => i.name).join("、")}`}
-            </span>
+            <li
+              key={f.id}
+              className={styles.bannerFoe}
+              data-down={f.state === "dead" || f.state === "fled" || undefined}
+            >
+              <b>{f.name}</b>
+              <em className={styles.bannerFoeState}>{f.stateLabel}</em>
+              {f.gang && <small>{f.gang}</small>}
+              {f.carry.length > 0 && (
+                <small className={styles.bannerLoot}>
+                  可拾取：{f.carry.map((i) => i.name).join("、")}
+                </small>
+              )}
+            </li>
           ))}
-        </div>
+        </ul>
       </Panel>
     );
   }

@@ -31,6 +31,17 @@
   gap: 16px;
   width: var(--corner-w);
   pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+/* 沉浸聚焦（H）：四周角块收淡让位，悬停或展开任意角块时自动恢复清晰 */
+.side[data-quiet]:not(:hover):not(:has(> [data-open])) {
+  opacity: 0.14;
+}
+
+.side[data-quiet]:hover,
+.side[data-quiet]:has(> [data-open]) {
+  opacity: 1;
 }
 
 .side:where([data-side="left"]) {
@@ -142,6 +153,54 @@
 .bioSummaryInner {
   min-height: 0;
   overflow: hidden;
+}
+
+.bioTopHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgb(255 64 64 / 22%);
+}
+
+.bioIdentity {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.bioCallsign {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bioCred {
+  flex: none;
+  padding: 0 5px;
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border: 1px solid rgb(252 238 10 / 28%);
+}
+
+.bioKeyHint {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
 }
 
 .bio:where([data-open]) .bioSummary {
@@ -380,11 +439,53 @@
 
 .bioLine {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--cp-text-dim);
+}
+
+.bioOsTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 5%);
+  border-left: 2px solid var(--cp-text-faint);
+  white-space: nowrap;
+}
+
+.bioOsTag[data-os="deck"] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 8%);
+  border-left-color: var(--cp-cyan);
+}
+
+.bioOsTag[data-os="sandy"] {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 8%);
+  border-left-color: var(--cp-yellow);
+}
+
+.bioOsTag[data-tone="warn"] {
+  color: var(--cp-yellow);
+  border-left-color: var(--cp-yellow);
+}
+
+.bioOsTag[data-tone="bad"] {
+  color: var(--cp-danger);
+  background: rgb(255 46 66 / 10%);
+  border-left-color: var(--cp-danger);
+}
+
+.bioHintCopy {
+  font-size: 11px;
+  color: var(--cp-text-faint);
+  white-space: nowrap;
 }
 
 .bioLine :where([data-tone="bad"], [data-stage="edge"], [data-stage="crisis"]),
@@ -469,6 +570,37 @@
   background: currentColor;
   opacity: 0.35;
   mask-size: 100% 100%;
+}
+
+.labelScanBtn {
+  flex: none;
+  padding: 1px 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+  background: rgb(94 246 255 / 6%);
+  border: 1px solid rgb(94 246 255 / 28%);
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash);
+}
+
+.labelScanBtn:hover,
+.labelScanBtn:focus-visible {
+  outline: none;
+  color: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+}
+
+.labelScanBtn[aria-pressed="true"] {
+  color: #05080f;
+  background: var(--cp-cyan);
+  border-color: var(--cp-cyan);
 }
 
 .labelHint {
@@ -934,12 +1066,28 @@
 
 .unreadCounts {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 8px 12px;
   width: 100%;
 }
 
+.unreadChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  font-size: 12.5px;
+  color: var(--cp-text-dim);
+  background: rgb(255 64 64 / 8%);
+  border-left: 2px solid rgb(255 64 64 / 55%);
+}
+
 .unreadIdle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
   color: var(--cp-text-dim);
 }
 
@@ -1076,11 +1224,36 @@
   display: grid;
   gap: 2px;
   min-width: 0;
+  flex: 1;
+}
+
+.zoneTitleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.zoneKeyHint {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.zoneMeta {
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--cp-text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zoneText b {
   overflow: hidden;
-  font-size: 20px;
+  font-size: 19px;
   letter-spacing: 0.06em;
   color: var(--cp-yellow);
   text-overflow: ellipsis;
@@ -1427,12 +1600,103 @@
   width: var(--corner-w);
 }
 
-/* 展开物品栏时朝中列平滑加宽（同左下私信页签），留出左侧列与间隔 */
+/* 展开物品栏时朝中列平滑加宽（820px 给双栏列表+武器改装槽位更从容的呼吸空间），留出左侧列与间隔 */
 .weapon:where([data-wide]) {
   width: min(
-    680px,
+    820px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
+}
+
+/* 装备面板顶栏：左一级页签（随身/存放/车辆），右携带负担刻度与快捷键提示 */
+.weaponDrawerHead {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 8px;
+}
+
+.weaponDrawerHead > nav {
+  margin: 0;
+}
+
+.weaponDrawerTitle {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.weaponDrawerMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--cp-text-dim);
+}
+
+.weaponDrawerMeta > kbd {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cp-text-dim);
+}
+
+.weaponLoad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: rgb(8 12 22 / 78%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.weaponLoad[data-level="burdened"] {
+  border-color: rgb(252 238 10 / 48%);
+  background: rgb(252 238 10 / 8%);
+  color: var(--cp-yellow);
+}
+
+.weaponLoad[data-level="overloaded"] {
+  border-color: rgb(255 68 68 / 60%);
+  background: rgb(255 68 68 / 12%);
+  color: var(--cp-danger);
+}
+
+.weaponLoadLabel {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.weaponLoadTrack {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.weaponLoadSeg {
+  width: 5px;
+  height: 8px;
+  background: rgb(255 255 255 / 14%);
+  clip-path: polygon(0 0, 100% 0, 100% 75%, 65% 100%, 0 100%);
+  transition: background-color 160ms ease-out;
+}
+
+.weaponLoadSeg[data-on] {
+  background: currentColor;
+}
+
+.weaponLoadNum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* 物品栏加宽时同侧的地点、追踪两块先收起，把高度让给随身行装和背包（同左下 .unread[data-wide]） */
@@ -1485,6 +1749,66 @@
   gap: 8px;
   min-width: 0;
   width: 100%;
+}
+
+.slotCharges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.slotCharge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+}
+
+.slotChargeLabel {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--cp-text-dim);
+}
+
+.slotPips {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.slotPip {
+  width: 7px;
+  height: 7px;
+  background: rgb(255 255 255 / 14%);
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 70% 100%, 0 100%);
+  transition: background-color 160ms ease-out;
+}
+
+.slotCharge[data-tone="heal"] .slotPip[data-on] {
+  background: var(--cp-success);
+}
+
+.slotCharge[data-tone="nade"] .slotPip[data-on] {
+  background: var(--cp-yellow);
+}
+
+.slotCharge > .slotChargeNum {
+  display: inline;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.slotEmptyCharge {
+  font-size: 11px;
+  color: var(--cp-text-faint);
 }
 
 .slotFootMeta {
@@ -1703,6 +2027,67 @@
   color: var(--cp-text-dim);
 }
 
+.bannerStat {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border: 1px solid rgb(252 238 10 / 30%);
+  font-variant-numeric: tabular-nums;
+}
+
+.bannerFoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+}
+
+.bannerFoe {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  color: var(--cp-text);
+  background: rgb(255 46 66 / 10%);
+  border-left: 2px solid var(--cp-danger);
+}
+
+.bannerFoe[data-down] {
+  opacity: 0.48;
+  border-left-color: var(--cp-text-faint);
+  text-decoration: line-through;
+}
+
+.bannerFoe b {
+  font-weight: 700;
+}
+
+.bannerFoeState {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cp-danger);
+}
+
+.bannerFoe[data-down] .bannerFoeState {
+  color: var(--cp-text-dim);
+}
+
+.bannerFoe small {
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.bannerFoe .bannerLoot {
+  color: var(--cp-yellow);
+}
+
 /* ———— 就地展开：原作九宫格作底，朝视野中间展开，不挤动正文 ———— */
 
 .block:where([data-open]) {
@@ -1832,6 +2217,22 @@
   scrollbar-color: rgb(94 246 255 / 32%) transparent;
 }
 
+/* 物品栏展开区：撑满可用高度并把内部列表/详情滚动交给子区，消除底部空黑区与 295px 硬裁切 */
+.weapon[data-wide] .growBody {
+  display: flex;
+  flex-direction: column;
+  height: min(620px, calc(100dvh - 170px));
+  overflow: hidden;
+  padding: 0 0 6px;
+}
+
+.weapon[data-wide] .growBody > div {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* 标题一行：左边写这块装的是什么，右边写对应的键 */
 .peekHead {
   display: flex;
@@ -1885,6 +2286,11 @@
 .track :where(.peekLine) {
   margin-bottom: 10px;
   opacity: 0.45;
+}
+
+.weapon:where([data-wide]) .peekLine {
+  margin-bottom: 6px;
+  opacity: 0.6;
 }
 
 .peekScroll {
@@ -2060,6 +2466,29 @@
 
   .weapon:not([data-open]) .slotLine {
     white-space: normal;
+  }
+}
+
+/* 窄屏（< 960px）：四周常驻角块在未展开时退到后台，避免压住正文；通过底部 KeyBar 快捷键或点击即可按需唤出 */
+@media (width < 960px) {
+  .side {
+    width: min(360px, calc(100vw - 24px));
+  }
+
+  .side:where([data-side="left"]) {
+    left: 12px;
+  }
+
+  .side:where([data-side="right"]) {
+    right: 12px;
+  }
+
+  .side:not(:has(> [data-open])) {
+    pointer-events: none;
+  }
+
+  .side > .block:not([data-open]) {
+    display: none;
   }
 }
 

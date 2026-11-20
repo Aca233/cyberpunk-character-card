@@ -1,0 +1,1477 @@
+/* 物品栏独立样式模块：遵循 2077 原作角块与材质语言，支持双栏全高独立滚动 */
+
+.inventoryRoot {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+/* 顶部的战斗锁定、禁用提示与操作回执条 */
+.bannerStack {
+  display: grid;
+  flex: none;
+  gap: 0.3rem;
+}
+
+.noticeBanner,
+.combatBanner,
+.errorBanner,
+.receiptBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.3rem 0.58rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.noticeBanner {
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-text);
+}
+
+.combatBanner {
+  border-left: 2px solid var(--cp-danger);
+  background: rgb(255 68 68 / 12%);
+  color: #ffb8b8;
+}
+
+.errorBanner {
+  border-left: 2px solid var(--cp-danger);
+  background: rgb(255 68 68 / 16%);
+  color: var(--cp-danger);
+}
+
+.receiptBanner {
+  border-left: 2px solid var(--cp-success);
+  background: rgb(74 222 128 / 12%);
+  color: #b7f7ce;
+  animation: receiptIn 180ms ease-out both;
+}
+
+@keyframes receiptIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ———— 紧凑 6 格混合着装条 ———— */
+
+.clothingBar {
+  flex: none;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.clothingGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clothingCell {
+  --box-fill: rgb(12 15 24 / 82%);
+  --box-line: rgb(94 246 255 / 26%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 2.3rem;
+  transition: opacity var(--dur-flash);
+}
+
+.clothingCell[data-empty] {
+  --box-fill: rgb(9 12 20 / 50%);
+  --box-line: rgb(94 246 255 / 16%);
+}
+
+.clothingCell[data-empty][data-has-match] {
+  --box-line: rgb(94 246 255 / 32%);
+}
+
+.clothingCell[data-active] {
+  --box-fill: rgb(252 238 10 / 12%);
+  --box-line: var(--cp-yellow);
+}
+
+.clothingCell[data-filtering] {
+  --box-fill: rgb(94 246 255 / 14%);
+  --box-line: var(--cp-cyan);
+}
+
+.clothingCellBtn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+  padding: 0.24rem 0.38rem;
+  border: 0;
+  background: none;
+  color: var(--cp-text);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+}
+
+.clothingCellBtn:focus-visible {
+  outline: 1px solid var(--cp-yellow);
+  outline-offset: -1px;
+}
+
+.clothingThumb {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 1px solid rgb(94 246 255 / 18%);
+  background: rgb(6 8 14 / 88%);
+}
+
+.clothingThumbArt {
+  width: 1.35rem;
+  height: 1.35rem;
+  object-fit: contain;
+}
+
+.clothingCopy {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.04rem;
+  min-width: 0;
+}
+
+.clothingSlotLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.2rem;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  color: var(--cp-text-dim);
+}
+
+.clothingMatchPill {
+  padding: 0 0.22rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+}
+
+.clothingName {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--cp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clothingCell[data-active] .clothingName {
+  color: var(--cp-yellow);
+}
+
+.clothingEmptyLabel {
+  font-size: 0.66rem;
+  line-height: 1.2;
+  color: var(--cp-text-faint);
+}
+
+.clothingUnequip {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  border: 0;
+  border-left: 1px solid rgb(94 246 255 / 16%);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-flash),
+    color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.clothingCell:hover .clothingUnequip,
+.clothingCell:focus-within .clothingUnequip,
+.clothingCell[data-active] .clothingUnequip {
+  opacity: 1;
+}
+
+.clothingUnequip:hover,
+.clothingUnequip:focus-visible {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+  outline: none;
+}
+
+.clothingUnequip:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* ———— 个人神经芯片槽（统一 CellFrame 材质） ———— */
+
+.neuralStrip {
+  --box-fill: rgb(9 14 24 / 78%);
+  --box-line: rgb(94 246 255 / 28%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.42rem 0.58rem;
+}
+
+.neuralHead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+}
+
+.neuralTitle {
+  color: var(--cp-cyan);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.neuralMeta {
+  color: var(--cp-text-dim);
+  font-size: 0.66rem;
+}
+
+.neuralGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.32rem;
+}
+
+.neuralSlot {
+  display: grid;
+  gap: 0.14rem;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid rgb(252 238 10 / 28%);
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 7%);
+  color: var(--cp-text);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  transition: background-color var(--dur-flash);
+}
+
+.neuralSlot:hover,
+.neuralSlot:focus-visible {
+  background: rgb(252 238 10 / 14%);
+  outline: none;
+}
+
+.neuralSlot[data-active] {
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
+}
+
+.neuralSlotEmpty {
+  border-color: rgb(94 246 255 / 16%);
+  border-left-color: rgb(94 246 255 / 32%);
+  border-style: dashed;
+  background: rgb(12 16 26 / 44%);
+  color: var(--cp-text-dim);
+  cursor: default;
+}
+
+.neuralSlotSub {
+  font-size: 0.64rem;
+  color: var(--cp-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ———— 背包主区域（占满全部剩余高度） ———— */
+
+.packSection {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+/* 筛选 + 排序 + 搜索 单行工具栏 */
+.toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.5rem;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.24rem;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(10 14 22 / 78%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.filterChip:hover,
+.filterChip:focus-visible {
+  color: var(--cp-yellow);
+  border-color: rgb(252 238 10 / 50%);
+  outline: none;
+}
+
+.filterChip[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.filterChip[data-zero] {
+  opacity: 0.48;
+}
+
+.filterChipCount {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.sortBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.26rem;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid rgb(94 246 255 / 24%);
+  background: rgb(10 14 22 / 82%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash);
+}
+
+.sortBtn:hover,
+.sortBtn:focus-visible {
+  color: var(--cp-yellow);
+  border-color: var(--cp-yellow);
+  outline: none;
+}
+
+.sortBtn > b {
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.searchBox {
+  --box-fill: rgb(9 12 20 / 88%);
+  --box-line: rgb(94 246 255 / 32%);
+  flex: 0 1 10.5rem;
+  min-width: 7.5rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.35rem 0 0.55rem;
+}
+
+.searchBox:focus-within {
+  --box-line: var(--cp-yellow);
+}
+
+.searchInput {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding: 0.24rem 0.2rem 0.26rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--cp-text-faint);
+}
+
+.searchKey {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 0.04rem 0.28rem;
+  border: 1px solid rgb(94 246 255 / 26%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+.searchClear {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.searchClear:hover,
+.searchClear:focus-visible {
+  color: var(--cp-yellow);
+  outline: none;
+}
+
+.slotFilterBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgb(94 246 255 / 32%);
+  background: rgb(94 246 255 / 9%);
+  font-size: 0.72rem;
+  color: var(--cp-cyan);
+}
+
+.slotFilterClear {
+  border: 0;
+  background: transparent;
+  color: var(--cp-yellow);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: var(--cp-cursor-hand);
+}
+
+.slotFilterClear:hover,
+.slotFilterClear:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+/* ———— 双栏全高浏览器（独立内部滚动） ———— */
+
+.browser {
+  display: grid;
+  flex: 1 1 0%;
+  min-height: 0;
+  grid-template-columns: minmax(248px, 0.94fr) minmax(0, 1.26fr);
+  gap: 0.6rem;
+  align-items: stretch;
+}
+
+.emptyBox {
+  --box-fill: rgb(11 13 22 / 72%);
+  --box-line: rgb(94 246 255 / 20%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  padding: 1.2rem 1rem;
+  text-align: center;
+  color: var(--cp-text-dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.itemList {
+  list-style: none;
+  margin: 0;
+  padding: 0 3px 0 0;
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(94 246 255 / 35%) transparent;
+}
+
+/* 稀有度自定义属性 */
+:where([data-rarity="common"]) {
+  --rarity: var(--rar-common, rgb(160 160 160));
+}
+
+:where([data-rarity="uncommon"]) {
+  --rarity: var(--rar-uncommon, rgb(60 220 110));
+}
+
+:where([data-rarity="rare"]) {
+  --rarity: var(--rar-rare, rgb(60 150 255));
+}
+
+:where([data-rarity="epic"]) {
+  --rarity: var(--rar-epic, rgb(190 80 255));
+}
+
+:where([data-rarity="legendary"]) {
+  --rarity: var(--rar-legendary, rgb(255 160 30));
+}
+
+.itemRow {
+  --item-fill: rgb(13 15 24 / 82%);
+  --item-line: rgb(94 246 255 / 26%);
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 2.95rem;
+  padding: 0.36rem 0.56rem 0.38rem 0.68rem;
+  border: 0;
+  background: none;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  display: grid;
+  grid-template-columns: 2.65rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.52rem;
+  transition: transform 90ms ease-out;
+}
+
+.itemRow:hover,
+.itemRow:focus-visible {
+  --item-fill: rgb(18 24 38 / 92%);
+  --item-line: rgb(94 246 255 / 60%);
+  outline: none;
+}
+
+.itemRow[aria-pressed="true"] {
+  --item-fill: rgb(252 238 10 / 12%);
+  --item-line: var(--cp-yellow);
+}
+
+.itemRow[data-iconic] {
+  --item-line: color-mix(in srgb, var(--cp-yellow) 62%, transparent);
+}
+
+.itemRow[data-flash] {
+  animation: itemFlash 380ms ease-out;
+}
+
+@keyframes itemFlash {
+  0% {
+    filter: brightness(1.45);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.itemRarityBar {
+  top: 0.32rem;
+  right: auto;
+  bottom: 0.32rem;
+  left: 0.24rem;
+  width: 3px;
+}
+
+.itemThumb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.65rem;
+  height: 2rem;
+  border: 1px solid color-mix(in srgb, var(--rarity, rgb(94 246 255 / 45%)) 34%, transparent);
+  background: rgb(6 9 16 / 90%);
+  overflow: hidden;
+}
+
+.itemThumbGrid {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-size: 80px 75px;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.itemArt {
+  position: relative;
+  z-index: 1;
+  max-width: 2.35rem;
+  max-height: 1.7rem;
+  object-fit: contain;
+}
+
+.itemInfo {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+.itemTopLine {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.itemName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--cp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemRow[aria-pressed="true"] .itemName {
+  color: var(--cp-yellow);
+}
+
+.miniTag {
+  flex: none;
+  padding: 0 0.28rem;
+  border: 1px solid rgb(94 246 255 / 38%);
+  background: rgb(94 246 255 / 12%);
+  color: var(--cp-cyan);
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+
+.miniTag[data-tone="yellow"] {
+  border-color: rgb(252 238 10 / 48%);
+  background: rgb(252 238 10 / 14%);
+  color: var(--cp-yellow);
+}
+
+.miniTag[data-tone="green"] {
+  border-color: rgb(74 222 128 / 48%);
+  background: rgb(74 222 128 / 12%);
+  color: #8bf7b8;
+}
+
+.itemSubLine {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.67rem;
+  line-height: 1.2;
+}
+
+.itemSubText {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemRarityWord {
+  color: var(--rarity, var(--cp-text-dim));
+}
+
+.modPips {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.modPip {
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgb(94 246 255 / 42%);
+  background: transparent;
+}
+
+.modPip[data-state="filled"] {
+  border-color: var(--cp-cyan);
+  background: var(--cp-cyan);
+}
+
+.modPip[data-state="locked"] {
+  border-color: var(--cp-yellow);
+  background: var(--cp-yellow);
+}
+
+.itemMeta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.14rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.itemCount {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.itemCarryTag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--cp-text-faint);
+  white-space: nowrap;
+}
+
+.itemCarryTag[data-bulky] {
+  color: var(--cp-yellow);
+}
+
+/* ———— 右侧详情卡（头尾固定、中间可滚动） ———— */
+
+.detailCard {
+  --detail-line: var(--rarity, rgb(94 246 255 / 48%));
+  --box-fill: rgb(11 13 22 / 94%);
+  --box-line: var(--detail-line);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.75rem 0.85rem 0.7rem 0.98rem;
+  gap: 0.5rem;
+}
+
+.detailCard[data-iconic] {
+  --detail-line: var(--cp-yellow);
+}
+
+.detailGrid {
+  position: absolute;
+  inset: 8px 10px;
+  background-repeat: repeat;
+  background-size: 220px 205px;
+  opacity: 0.13;
+  pointer-events: none;
+}
+
+.detailRarityBar {
+  top: 0.6rem;
+  right: auto;
+  bottom: 0.75rem;
+  left: 0.36rem;
+  width: 3px;
+}
+
+.detailHead {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  gap: 0.32rem;
+  padding-bottom: 0.42rem;
+  border-bottom: 1px solid rgb(94 246 255 / 16%);
+}
+
+.detailTitleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.detailTitle {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--cp-yellow);
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.detailCount {
+  flex: none;
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.26rem;
+}
+
+.pill,
+.pillRarity,
+.pillActive {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.44rem;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.pillText {
+  position: relative;
+}
+
+.pillRarity {
+  color: var(--rarity, var(--cp-cyan));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pillRarity > :first-child {
+  opacity: 0.22;
+}
+
+.pill {
+  color: var(--cp-text);
+}
+
+.pillActive {
+  color: rgb(10 10 18);
+  font-weight: 700;
+}
+
+/* 中间滚动正文 */
+.detailScroll {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.58rem;
+  padding-right: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(94 246 255 / 32%) transparent;
+}
+
+/* 增强展示台 */
+.showcase {
+  --box-fill: rgb(7 9 16 / 90%);
+  --box-line: color-mix(in srgb, var(--rarity, var(--cp-cyan)) 44%, transparent);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: 5.8rem;
+  padding: 0.5rem 0.9rem;
+  box-shadow: inset 0 0 28px color-mix(in srgb, var(--rarity, var(--cp-cyan)) 14%, transparent);
+}
+
+.showcaseGrid {
+  position: absolute;
+  inset: 4px 6px;
+  z-index: -1;
+  background-repeat: repeat;
+  background-size: 160px 150px;
+  opacity: 0.24;
+  pointer-events: none;
+}
+
+.showcaseArt {
+  max-width: 100%;
+  max-height: 4.5rem;
+  object-fit: contain;
+}
+
+.showcaseCornerLeft,
+.showcaseCornerRight {
+  position: absolute;
+  top: 0.32rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+  pointer-events: none;
+}
+
+.showcaseCornerLeft {
+  left: 0.5rem;
+  color: var(--rarity, var(--cp-cyan));
+  font-weight: 700;
+}
+
+.showcaseCornerRight {
+  right: 0.5rem;
+}
+
+.detailCopy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.detailDesc {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 0.77rem;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+
+.detailStat {
+  margin: 0;
+  color: var(--cp-cyan);
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+
+/* ———— 武器改装槽位检视器（单列全宽） ———— */
+
+.slotInspector {
+  display: grid;
+  gap: 0.36rem;
+}
+
+.slotInspectorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+}
+
+.slotInspectorBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.slotInspectorCount {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--cp-text-dim);
+}
+
+.slotInspectorBadge {
+  padding: 0.06rem 0.38rem;
+  border: 1px solid rgb(252 238 10 / 48%);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.slotList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.32rem;
+}
+
+.slotCard {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.42rem 0.55rem 0.44rem 0.7rem;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(8 11 20 / 80%);
+}
+
+.slotCard[data-state="occupied"] {
+  border-color: color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 44%, transparent);
+}
+
+.slotCard[data-state="empty"] {
+  border-style: dashed;
+  border-color: rgb(94 246 255 / 22%);
+  background: rgb(8 10 18 / 55%);
+}
+
+.slotCard[data-locked] {
+  border-color: rgb(252 238 10 / 42%);
+}
+
+.slotRarBar {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 3px;
+  background: var(--slot-rar, var(--cp-cyan));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 45%, transparent);
+}
+
+.slotHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.slotLabelGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.slotLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-cyan);
+}
+
+.slotRarText {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--slot-rar, var(--cp-text-dim));
+}
+
+.slotLockTag {
+  padding: 0.04rem 0.3rem;
+  border: 1px solid rgb(252 238 10 / 48%);
+  background: rgb(252 238 10 / 12%);
+  color: var(--cp-yellow);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.slotEmptyTag {
+  font-size: 0.64rem;
+  color: var(--cp-text-faint);
+}
+
+.slotInlineActions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.slotBody {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.slotThumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 35%, transparent);
+  background: rgb(5 7 14 / 88%);
+}
+
+.slotArt {
+  max-width: 1.75rem;
+  max-height: 1.75rem;
+  object-fit: contain;
+}
+
+.slotCopy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.slotModName {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cp-text);
+  line-height: 1.25;
+}
+
+.slotAbility {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--cp-text-dim);
+  line-height: 1.4;
+}
+
+.slotNote {
+  margin: 0;
+  font-size: 0.67rem;
+  color: var(--cp-text-dim);
+  line-height: 1.35;
+}
+
+.slotLockNote {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--cp-yellow);
+  opacity: 0.88;
+}
+
+/* 槽位内联选择抽屉 */
+.slotPickerWrap {
+  display: grid;
+  gap: 0.28rem;
+  padding-top: 0.34rem;
+  border-top: 1px solid rgb(94 246 255 / 16%);
+}
+
+.slotPickerHint {
+  margin: 0;
+  font-size: 0.65rem;
+  color: var(--cp-text-dim);
+}
+
+.slotPicker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.26rem;
+}
+
+.slotPickItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.42rem 0.3rem 0.56rem;
+  border: 1px solid rgb(94 246 255 / 20%);
+  background: rgb(11 15 26 / 90%);
+}
+
+.slotPickItem:hover {
+  border-color: rgb(252 238 10 / 48%);
+}
+
+.slotPickBar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 2px;
+  width: 2.5px;
+  background: var(--slot-rar, var(--cp-cyan));
+}
+
+.slotPickArt {
+  width: 1.55rem;
+  height: 1.55rem;
+  object-fit: contain;
+}
+
+.slotPickCopy {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.slotPickCopy > b {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.slotPickCopy > small {
+  font-size: 0.65rem;
+  color: var(--cp-text-dim);
+  line-height: 1.35;
+}
+
+.unsupportedFoot {
+  margin: 0;
+  font-size: 0.64rem;
+  color: var(--cp-text-faint);
+  line-height: 1.4;
+}
+
+/* ———— 改装件反向装配：目标武器卡片 ———— */
+
+.modTargetsSection {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.modTargetsHead {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+}
+
+.modTargetsGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.modTargetCard {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.34rem 0.48rem;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(9 13 22 / 82%);
+}
+
+.modTargetThumb {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 1.6rem;
+  background: rgb(5 7 14 / 88%);
+  border: 1px solid rgb(94 246 255 / 16%);
+}
+
+.modTargetArt {
+  max-width: 2.1rem;
+  max-height: 1.35rem;
+  object-fit: contain;
+}
+
+.modTargetCopy {
+  display: grid;
+  gap: 0.06rem;
+  min-width: 0;
+}
+
+.modTargetCopy > b {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cp-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modTargetCopy > small {
+  font-size: 0.64rem;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ———— 底部固定操作栏 ———— */
+
+.detailFooter {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.48rem;
+  border-top: 1px solid rgb(94 246 255 / 18%);
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.actionHint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--cp-text-dim);
+  line-height: 1.38;
+}
+
+.storeBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.36rem 0.5rem;
+  padding-top: 0.34rem;
+  border-top: 1px dashed rgb(94 246 255 / 14%);
+}
+
+.storeTargetPills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.24rem;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.storeTargetChip {
+  padding: 0.14rem 0.42rem;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: rgb(10 14 22 / 78%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.storeTargetChip[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 15%);
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.storeMutedStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.67rem;
+  color: var(--cp-text-faint);
+}
+
+/* ———— 当前地点购房条 ———— */
+
+.placesBar {
+  --box-fill: rgb(14 16 26 / 78%);
+  --box-line: rgb(255 68 68 / 30%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.65rem;
+  padding: 0.38rem 0.62rem 0.4rem;
+}
+
+.placesLabel {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-red);
+}
+
+.placesActions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.placeItem {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--cp-text-dim);
+}
+
+/* ———— 窄容器响应式降级 ———— */
+
+@container pin (width < 580px) {
+  .clothingGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container pin (width < 520px) {
+  .browser {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(140px, 0.9fr) minmax(0, 1.3fr);
+  }
+}

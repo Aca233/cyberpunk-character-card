@@ -7,6 +7,7 @@ import {
   ITEM_KIND_LABELS,
   type ItemDef,
   type ItemKind,
+  itemCarryUnits,
   itemCatalog,
   MOD_SLOT_LABELS,
   rarityOf,
@@ -30,6 +31,7 @@ export interface StoredItem {
   readonly rarity: Rarity | null;
   readonly rarityLabel: string | null;
   readonly iconic: boolean;
+  readonly carryUnits: number;
   readonly ability: string | null;
   readonly remaining: number | null;
   readonly charges: number | null;
@@ -104,6 +106,7 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
     const object = inventory.objects[entry.item];
     const def = items.get(entry.item) ?? object?.definition;
     const rarity = def && (def.rarity || def.kind === "weapon") ? rarityOf(def) : null;
+    const baseId = object?.weaponState?.baseId ?? object?.baseId ?? def?.id ?? null;
     group.items.push({
       id: entry.item,
       name: formatWeaponWithMods(
@@ -111,13 +114,14 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
         object?.weaponState,
         items,
       ),
-      baseId: object?.weaponState?.baseId ?? object?.baseId ?? def?.id ?? null,
+      baseId,
       count: entry.count,
       kind: def?.kind ?? "misc",
       subLabel: subLabelOf(def),
       rarity,
       rarityLabel: def?.iconic ? "不朽" : rarity ? RARITY_LABELS[rarity] : null,
       iconic: Boolean(def?.iconic),
+      carryUnits: def ? itemCarryUnits(def, baseId ?? def.id) : 0,
       ability: def?.ability ?? null,
       remaining: object?.remaining ?? def?.charges ?? null,
       charges: def?.charges ?? null,

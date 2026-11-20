@@ -19,6 +19,7 @@
   isolation: isolate;
   background: var(--cp-bg);
   color: var(--cp-text);
+  transition: grid-template-columns 220ms var(--ease-cyber);
 }
 
 /*
@@ -189,10 +190,6 @@
 .dying {
   grid-column: 1 / -1;
   font-size: var(--fs-label);
-  color: var(--cp-text-dim);
-}
-
-.dying {
   color: var(--cp-danger);
   font-weight: 700;
 }
@@ -696,6 +693,19 @@
   padding: 1.5rem 1.2rem 0;
 }
 
+/* 沉浸聚焦（H）：中列微微扩宽，让读者把目光留在叙事文本上 */
+.screen[data-focus] .column {
+  --story-width: 960px;
+}
+
+.logShell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .log {
   flex: 1;
   min-height: 0;
@@ -712,6 +722,112 @@
   font-family: var(--font-body);
   font-size: var(--story-size);
   line-height: var(--story-leading);
+}
+
+.earlier {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 1.4rem;
+  padding: 0.4rem 0.75rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  color: var(--cp-text-dim);
+  background: linear-gradient(90deg, rgb(255 64 64 / 7%), transparent);
+  border-left: 2px solid var(--cp-red-line);
+}
+
+.earlier > span {
+  padding: 0.05rem 0.35rem;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-red);
+  border: 1px solid var(--cp-red-line);
+}
+
+.emptyBrief {
+  margin: 2.2rem 0 1.2rem;
+  padding: 1.15rem 1.35rem;
+  background: linear-gradient(135deg, rgb(14 18 28 / 78%), rgb(10 12 20 / 55%));
+  border-left: 3px solid var(--cp-cyan);
+  border-top: 1px solid rgb(94 246 255 / 22%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+  animation: rise var(--dur-slide) var(--ease-cyber) both;
+}
+
+.emptyHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  letter-spacing: 0.12em;
+  color: var(--cp-cyan);
+}
+
+.emptyHead b {
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: var(--cp-yellow);
+}
+
+.emptyCopy {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.98em;
+  line-height: 1.85;
+  color: var(--cp-text);
+}
+
+.scrollBottomBtn {
+  position: absolute;
+  right: max(0.5rem, calc((100% - var(--story-width)) / 2 + 0.5rem));
+  bottom: 0.7rem;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.78rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+  background: rgb(8 14 24 / 92%);
+  border: 1px solid rgb(94 246 255 / 55%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  cursor: var(--cp-cursor-hand);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 55%);
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash),
+    transform var(--dur-flash);
+  animation: rise 160ms var(--ease-cyber) both;
+}
+
+.scrollBottomBtn[data-live] {
+  color: var(--cp-yellow);
+  border-color: rgb(252 238 10 / 65%);
+}
+
+.scrollBottomBtn:hover,
+.scrollBottomBtn:focus-visible {
+  outline: none;
+  color: #05080f;
+  background: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+  transform: translateY(-1px);
+}
+
+.scrollBottomBtn[data-live]:hover,
+.scrollBottomBtn[data-live]:focus-visible {
+  background: var(--cp-yellow);
+  border-color: var(--cp-yellow);
 }
 
 .turn {
@@ -751,54 +867,12 @@
   font-family: var(--font-ui);
 }
 
-.turn p.diceLine {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  text-indent: 0;
-  font-family: var(--font-ui);
-  font-size: var(--fs-label);
-  color: var(--cp-cyan);
-  letter-spacing: 0.05em;
-}
-
-.turn p.rolled {
-  display: flex;
-  align-items: baseline;
-  gap: 0.8rem;
-  text-indent: 0;
-  padding: 0.4rem 0.8rem;
-  font-family: var(--font-ui);
-  border: 1px solid var(--cp-danger);
-  color: var(--cp-danger);
-  animation: flash var(--dur-flash) ease-out;
-}
-
-.rolled[data-success] {
-  border-color: var(--cp-success);
-  color: var(--cp-success);
-}
-
-.rolled b {
-  font-size: 1.2em;
-  letter-spacing: 0.15em;
-}
-
-.rolled span {
-  font-size: var(--fs-label);
-  color: var(--cp-text-dim);
-}
-
-@keyframes flash {
-  from {
-    background: currentColor;
-  }
-}
-
 .turnMeta {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 1rem;
+  gap: 0.85rem;
   font-family: var(--font-ui);
   font-size: 0.75rem;
 }
@@ -835,14 +909,51 @@
   color: var(--cp-cyan);
 }
 
+.regenConfirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.1rem 0.5rem;
+  background: rgb(255 46 66 / 10%);
+  border: 1px solid rgb(255 46 66 / 45%);
+}
+
+.regenDanger {
+  font-weight: 700;
+  color: var(--cp-danger);
+}
+
+.regenDanger:hover,
+.regenDanger:focus-visible {
+  color: #fff;
+}
+
 .read {
-  margin: 0 0 1rem;
-  padding: 0.6rem 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+  margin: 0 0 1.15rem;
+  padding: 0.65rem 0.95rem;
   font-family: var(--font-ui);
-  font-size: var(--fs-label);
   color: var(--cp-cyan);
-  background: linear-gradient(90deg, rgb(0 240 255 / 8%), transparent);
+  background: linear-gradient(90deg, rgb(94 246 255 / 10%), rgb(94 246 255 / 2%) 75%, transparent);
   border-left: 2px solid var(--cp-cyan);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  animation: rise var(--dur-slide) var(--ease-cyber) both;
+}
+
+.readTag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgb(94 246 255 / 72%);
+}
+
+.readText {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--cp-text);
 }
 
 .caret {
@@ -871,7 +982,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.75rem;
-  color: var(--cp-muted);
+  color: var(--cp-text-dim);
   font-size: 0.78em;
 }
 
@@ -911,7 +1022,7 @@
 }
 
 .liveStageDetail {
-  color: var(--cp-muted);
+  color: var(--cp-text-dim);
 }
 
 .liveStageTimer {
@@ -955,9 +1066,45 @@
 /* ———— Esc 菜单：游戏外面的东西，用主菜单的 MenuItem，这里只管宽度和间距 ———— */
 
 .escMenu {
-  width: min(360px, calc(100vw - 2rem));
+  width: min(380px, calc(100vw - 2rem));
   margin: auto;
   animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
+}
+
+.escContext {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  font-family: var(--font-ui);
+  background: linear-gradient(90deg, rgb(255 64 64 / 10%), transparent);
+  border-left: 2px solid var(--cp-red);
+}
+
+.escNameRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.escName {
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  color: var(--cp-yellow);
+}
+
+.escTurns {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--cp-cyan);
+}
+
+.escSub {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--cp-text-dim);
 }
 
 .escList {
@@ -966,23 +1113,13 @@
   padding: 0.4rem 0;
 }
 
-/* ———— 通知记录（Z）：图标、正文、游戏时间一行 ———— */
-
-.noteRow {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: var(--fs-label);
-}
-
-/* ———— 底部：选项 / 检定 / 输入 ———— */
+/* ———— 底部：选项 / 输入 ———— */
 
 .dock {
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.65rem;
   max-width: calc(var(--story-width) + 4rem);
   width: 100%;
   /* 操作区最高 296，高度跟内容走（计划第九节）；选项多时在这里面滚，不压正文 */
@@ -1016,7 +1153,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.32rem;
 }
 
 .choices > li {
@@ -1025,9 +1162,7 @@
 }
 
 /* 剧情选项：照原作 dialog.inkwidget 的 DialogChoiceLogicController。
-   字色 dialogchoicesstyle Choice/Default = MainColors.Blue，门槛不够 Choice/Inactive = MainColors.MildRed；
-   选中底 selectedBg 是 fullscreen_shapes 的矢量形状 dialogItem（88×88，右下斜切 24，九宫格右 25、下 25，4K），
-   染 Choice.fontColor、实心，LinearWipe 从左往右擦入；底上的字按 Choice/Black 用黑色 */
+   平时半透明深青底条配左竖线，悬停或聚焦时青色斜切擦入并反转为黑字，干净直觉无冗余检定标 */
 .choice {
   position: relative;
   isolation: isolate;
@@ -1035,15 +1170,18 @@
   align-items: center;
   gap: 0.7rem;
   width: 100%;
-  padding: 0.45rem 0.8rem;
+  padding: 0.48rem 0.85rem;
   font: inherit;
   font-family: var(--font-body);
   text-align: left;
   color: var(--cp-cyan);
-  background: transparent;
+  background: linear-gradient(90deg, rgb(94 246 255 / 6%), rgb(94 246 255 / 1%) 75%, transparent);
   border: 0;
+  border-left: 2px solid rgb(94 246 255 / 32%);
   cursor: var(--cp-cursor-hand);
-  transition: color var(--dur-flash);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash);
 }
 
 .choice::before {
@@ -1059,27 +1197,19 @@
 .choice:disabled {
   cursor: var(--cp-cursor-invalid);
   color: var(--cp-text-faint);
-}
-
-.choice[data-short] {
-  color: #ae3b36;
+  border-left-color: rgb(255 255 255 / 10%);
 }
 
 .choice:hover:not(:disabled),
 .choice:focus-visible {
   outline: none;
   color: #000;
+  border-left-color: var(--cp-cyan);
 }
 
 .choice:hover:not(:disabled)::before,
 .choice:focus-visible::before {
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
-}
-
-.choice[data-check] .choiceText::after {
-  content: " ◆";
-  color: var(--cp-red);
-  font-size: 0.7em;
 }
 
 .num {
@@ -1091,176 +1221,43 @@
 
 .source {
   flex: none;
-  font-size: var(--fs-label);
+  padding: 0.04rem 0.42rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border: 1px solid rgb(252 238 10 / 30%);
   white-space: nowrap;
 }
 
-.choice:focus-visible :is(.num, .source),
-.choice:hover:not(:disabled) :is(.num, .source) {
+.choice:focus-visible :is(.num, .source, .choiceArrow),
+.choice:hover:not(:disabled) :is(.num, .source, .choiceArrow) {
   color: inherit;
+}
+
+.choice:focus-visible .source,
+.choice:hover:not(:disabled) .source {
+  background: rgb(0 0 0 / 16%);
+  border-color: rgb(0 0 0 / 35%);
 }
 
 .choiceText {
   flex: 1;
 }
 
-/* 选项的门槛和检定标签：原作 CaptionImageIcons 的 skill_select 实心底。
-   不满足染 MainColors.CombatRed（HDR 1.57/0.24/0.20，截到 sRGB），满足染 MainColors.Green；
-   实心底上的字按 Choice/Black 状态用黑色 */
-.tag {
-  --tag-tint: #ff3e34;
-  position: relative;
-  isolation: isolate;
+.choiceArrow {
+  flex: none;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.1rem 0.5rem 0.1rem 0.6rem;
-  color: #000;
-  white-space: nowrap;
+  font-size: 0.85rem;
+  color: rgb(94 246 255 / 45%);
+  transition: transform var(--dur-flash);
 }
 
-.tag[data-met] {
-  --tag-tint: #1ded83;
-}
-
-.tag > [aria-hidden] {
-  z-index: -1;
-}
-
-/* 检定确认栏 */
-/* 原作没有掷骰前的确认栏；底和框借本作 Panel 的原作物品格 notify.itemCellBg / itemCellFg（切线 30，右下斜切） */
-.check {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  gap: 0.6rem;
-  padding: 0.9rem 1.1rem;
-  font-family: var(--font-ui);
-  animation: rise var(--dur-slide) ease-out both;
-}
-
-.check > [aria-hidden] {
-  z-index: -1;
-}
-
-.checkHead {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.checkHead h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 1.1rem;
-  letter-spacing: 0.06em;
-  color: var(--cp-yellow);
-}
-
-.chance {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--cp-cyan);
-}
-
-.checkNumbers {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 1rem;
-}
-
-.checkNumbers > div:not(.vs) {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
-  gap: 0 0.6rem;
-}
-
-.checkNumbers small {
-  grid-column: 1 / -1;
-  color: var(--cp-text-dim);
-  letter-spacing: 0.15em;
-}
-
-.checkNumbers b {
-  font-size: 2rem;
-  line-height: 1;
-}
-
-.checkNumbers span {
-  font-size: var(--fs-label);
-  color: var(--cp-text-dim);
-}
-
-.vs {
-  color: var(--cp-red);
-  letter-spacing: 0.2em;
-}
-
-.sources {
-  font-size: var(--fs-label);
-}
-
-.sourcesTitle {
-  color: var(--cp-text-dim);
-}
-
-.capped {
-  margin-left: 0.5rem;
-  font-style: normal;
-  color: var(--cp-yellow);
-}
-
-.sources ul {
-  margin: 0.15rem 0 0;
-  padding-left: 1rem;
-}
-
-.sources b {
-  color: var(--cp-cyan);
-}
-
-.stakes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.8rem;
-}
-
-.stakes p {
-  margin: 0;
-  padding-left: 0.6rem;
-  font-family: var(--font-body);
-  font-size: 0.92rem;
-  border-left: 2px solid var(--cp-success);
-}
-
-.stakes p[data-tone="bad"] {
-  border-color: var(--cp-danger);
-}
-
-.stakes small {
-  display: block;
-  font-family: var(--font-ui);
-  color: var(--cp-text-dim);
-  letter-spacing: 0.15em;
-}
-
-.damage {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-left: 0.5rem;
-  font-family: var(--font-ui);
-  font-size: var(--fs-label);
-  color: var(--cp-danger);
-}
-
-.checkActions {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
+.choice:focus-visible .choiceArrow,
+.choice:hover:not(:disabled) .choiceArrow {
+  transform: translateX(3px);
 }
 
 /* 输入框 */
@@ -1268,6 +1265,10 @@
   display: grid;
   gap: 0.35rem;
   --mode-color: var(--cp-yellow);
+}
+
+.inputBar[data-busy] {
+  --mode-color: var(--cp-cyan);
 }
 
 .hint {
@@ -1282,30 +1283,62 @@
   gap: 0.6rem;
 }
 
+.inputBox {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
 .textarea {
   flex: 1;
   resize: none;
   min-height: 3.2rem;
   max-height: 10rem;
-  padding: 0.55rem 0.8rem;
+  padding: 0.55rem 0.85rem;
   font-family: var(--font-body);
   font-size: 0.98rem;
   line-height: 1.6;
   color: var(--cp-text);
-  background: rgb(0 0 0 / 45%);
+  background: rgb(4 7 14 / 62%);
   border: 1px solid var(--cp-red-line);
   border-left: 2px solid var(--mode-color);
   field-sizing: content;
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.inputBox[data-invalid] .textarea {
+  border-color: var(--cp-danger);
+  border-left-color: var(--cp-danger);
 }
 
 .textarea:focus {
   outline: none;
+  background: rgb(6 10 18 / 80%);
   border-color: var(--mode-color);
   box-shadow: 0 0 0 1px var(--mode-color) inset;
 }
 
 .textarea:disabled {
   opacity: 0.5;
+}
+
+.charCount {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cp-yellow);
+  pointer-events: none;
+}
+
+.charCount[data-over] {
+  color: var(--cp-danger);
+  font-weight: 700;
 }
 
 .warn {
@@ -1331,23 +1364,20 @@
 /*
  * 通知条（用户定的换框对照表，计划第十二节第 9 条）：底是原作物品格 notify.itemCellBg，
  * 右边贴原作通知托架 notify.bracketBg（30×80，1080p 下宽 15），按 tone 染色；
- * 原先的 CSS 黑底和 3px 右边框是手画的，去掉。两层素材见 Toasts.tsx，isolation 让它们沉到字下面
+ * 常态显示在右侧，点击即消失
  */
 .toast {
-  --toast-tint: var(--cp-yellow);
+  --toast-tint: var(--cp-cyan);
   position: relative;
   isolation: isolate;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
   min-width: 14rem;
-  padding: 0.4rem calc(15px + 0.6rem) 0.4rem 0.8rem;
+  max-width: var(--corner-w);
+  padding: 0;
   font-size: var(--fs-label);
+  pointer-events: auto;
   animation: slide-in var(--dur-slide) ease-out both;
-}
-
-.toast[data-leaving] {
-  animation: slide-out 200ms ease-in forwards;
 }
 
 .toast[data-tone="good"] {
@@ -1356,6 +1386,39 @@
 
 .toast[data-tone="bad"] {
   --toast-tint: var(--cp-danger);
+}
+
+.toast[data-tone="info"] {
+  --toast-tint: var(--cp-cyan);
+}
+
+.toastBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.45rem calc(15px + 0.65rem) 0.45rem 0.85rem;
+  font: inherit;
+  text-align: left;
+  color: var(--cp-text);
+  background: transparent;
+  border: 0;
+  cursor: var(--cp-cursor-hand);
+  transition: background-color 140ms ease-out;
+}
+
+.toastBtn:hover {
+  background: rgb(255 255 255 / 6%);
+}
+
+.toastBtn:focus-visible {
+  outline: 1px solid var(--toast-tint);
+  outline-offset: -2px;
+}
+
+.toastText {
+  min-width: 0;
+  line-height: 1.35;
 }
 
 .toast > :is(.toastBg, .toastBracket) {
@@ -1372,13 +1435,6 @@
   from {
     opacity: 0;
     transform: translateX(24px);
-  }
-}
-
-@keyframes slide-out {
-  to {
-    opacity: 0;
-    transform: translateX(20px);
   }
 }
 
@@ -1409,26 +1465,26 @@
   }
 }
 
-/* ———— 窄屏：正文和检定布局 ———— */
+/* ———— 窄屏：正文布局 ———— */
 
 @media (width < 960px) {
   .screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas: none;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "main";
   }
 
   .column {
-    grid-area: auto;
+    grid-area: main;
+    padding: 0.9rem 0.85rem 0;
   }
 
   .zone {
     justify-self: start;
   }
 
-  .stakes,
-  .checkNumbers {
-    grid-template-columns: 1fr;
+  .divePanel {
+    display: none;
   }
 }
 
@@ -1481,78 +1537,8 @@
   text-decoration-color: currentColor;
   text-decoration-style: solid;
 }
-.inventoryRoot {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.loadoutSection,
-.packSection {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.loadoutBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem 0.75rem;
-  padding: 0.05rem 0.15rem 0.35rem;
-  border-bottom: 1px solid rgb(94 246 255 / 18%);
-}
-
-.loadoutTitle {
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cp-cyan);
-}
-
-.loadoutMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: var(--fs-xs);
-}
-
-.pillText {
-  position: relative;
-}
-
-.loadoutMeter {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--cp-text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.loadoutCount {
-  color: var(--cp-cyan);
-  font-weight: 700;
-}
-
-.loadoutMeter:where([data-over]),
-.loadoutMeter:where([data-over]) .loadoutCount {
-  color: var(--cp-danger);
-}
-
-/* 武器原作图（计划第八节第 1 条）：保持原色和比例，装备格与背包共用，不拉伸枪身 */
-.weaponArt {
-  display: inline-block;
-  max-width: 100%;
-  margin-right: 0.5rem;
-  object-fit: contain;
-  vertical-align: middle;
-}
-
 /*
- * 稀有度色条：原作 inventory4_atlas 的 item_left_rarity 竖条，颜色照原作五档稀有度；
- * 武器格、背包列表卡与右侧详情卡共用
+ * 稀有度色条变量：全局按 data-rarity 提供五档稀有度，供右下角武器槽与各列表/详情共用
  */
 :where([data-rarity="common"]) {
   --rarity: var(--rar-common, rgb(160 160 160));
@@ -1572,772 +1558,6 @@
 
 :where([data-rarity="legendary"]) {
   --rarity: var(--rar-legendary, rgb(255 160 30));
-}
-
-/* 武器详情里的结构化改装槽位检视器 */
-.slotInspector {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 0.4rem;
-}
-
-.slotInspectorHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--cp-cyan);
-}
-
-.slotInspectorMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.slotInspectorNote {
-  color: var(--cp-text-dim);
-  font-family: var(--font-ui);
-  font-size: 0.64rem;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-
-.slotInspectorBadge {
-  padding: 0.06rem 0.4rem;
-  border: 1px solid rgb(252 238 10 / 48%);
-  background: rgb(252 238 10 / 10%);
-  color: var(--cp-yellow);
-  font-size: 0.65rem;
-  letter-spacing: 0.04em;
-}
-
-.slotList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 0.3rem;
-}
-
-.slotCard {
-  position: relative;
-  display: grid;
-  gap: 0.24rem;
-  padding: 0.32rem 0.42rem 0.34rem 0.62rem;
-  border: 1px solid rgb(94 246 255 / 22%);
-  background: rgb(8 11 20 / 76%);
-}
-
-.slotCard[data-state="occupied"] {
-  border-color: color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 42%, transparent);
-}
-
-.slotCard[data-state="empty"] {
-  border-style: dashed;
-  border-color: rgb(94 246 255 / 22%);
-  background: rgb(8 10 18 / 55%);
-}
-
-.slotCard[data-state="unsupported"] {
-  border-color: rgb(255 255 255 / 10%);
-  background: rgb(8 10 16 / 42%);
-  opacity: 0.62;
-}
-
-.slotCard[data-locked] {
-  border-color: rgb(252 238 10 / 38%);
-}
-
-.slotRarBar {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 3px;
-  width: 3px;
-  background: var(--slot-rar, var(--cp-cyan));
-  box-shadow: 0 0 6px color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 45%, transparent);
-}
-
-.slotTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-}
-
-.slotLabel {
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--cp-text);
-}
-
-.slotStatusGroup {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.slotStatusTag,
-.slotRarText,
-.slotLockTag {
-  padding: 0.04rem 0.36rem;
-  font-size: 0.65rem;
-  line-height: 1.35;
-}
-
-.slotStatusTag {
-  border: 1px solid rgb(255 255 255 / 14%);
-  color: var(--cp-text-dim);
-}
-
-.slotRarText {
-  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 55%, transparent);
-  background: color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 14%, transparent);
-  color: var(--slot-rar, var(--cp-cyan));
-  font-weight: 600;
-}
-
-.slotLockTag {
-  border: 1px solid rgb(252 238 10 / 55%);
-  background: rgb(252 238 10 / 12%);
-  color: var(--cp-yellow);
-  font-weight: 600;
-}
-
-.slotBody {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-}
-
-.slotThumb {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  background: rgb(6 8 15 / 88%);
-  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 30%, transparent);
-}
-
-.slotArt {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-}
-
-.slotCopy {
-  display: grid;
-  gap: 0.14rem;
-  min-width: 0;
-}
-
-.slotModName {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--cp-yellow);
-  overflow-wrap: anywhere;
-}
-
-.slotAbility {
-  margin: 0;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--cp-text-dim);
-  overflow-wrap: anywhere;
-}
-
-.slotLockNote,
-.slotEmptyNote,
-.slotMutedNote {
-  margin: 0;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--cp-text-dim);
-}
-
-.slotLockNote {
-  color: var(--cp-yellow);
-}
-
-.slotActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.slotPicker {
-  list-style: none;
-  margin: 0.15rem 0 0;
-  padding: 0.35rem 0 0;
-  border-top: 1px solid rgb(94 246 255 / 16%);
-  display: grid;
-  gap: 0.28rem;
-}
-
-.slotPickItem {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.42rem;
-  padding: 0.28rem 0.38rem 0.28rem 0.56rem;
-  background: rgb(14 17 28 / 86%);
-  border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 28%, transparent);
-}
-
-.slotPickBar {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 2px;
-  width: 2px;
-  background: var(--slot-rar, var(--cp-cyan));
-}
-
-.slotPickArt {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  object-fit: contain;
-}
-
-.slotPickCopy {
-  display: grid;
-  gap: 0.08rem;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.slotPickCopy > b {
-  font-size: 0.74rem;
-  color: var(--cp-text);
-  overflow-wrap: anywhere;
-}
-
-.slotPickCopy > small {
-  font-size: 0.68rem;
-  line-height: 1.35;
-  color: var(--cp-text-dim);
-  overflow-wrap: anywhere;
-}
-
-.clothingRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.55rem;
-}
-
-.clothingLabel {
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--cp-text-dim);
-  white-space: nowrap;
-}
-
-.clothingStrip {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.clothingChip {
-  --box-fill: rgb(14 16 26 / 84%);
-  --box-line: rgb(94 246 255 / 28%);
-  position: relative;
-  isolation: isolate;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.3rem 0.55rem 0.3rem 0.34rem;
-  font-size: var(--fs-xs);
-  transition: --box-line var(--dur-flash);
-}
-
-.clothingChip:hover {
-  --box-line: rgb(94 246 255 / 60%);
-}
-
-.clothingChip:where([data-active]) {
-  --box-fill: rgb(40 34 10 / 48%);
-  --box-line: var(--cp-yellow);
-}
-
-.clothingPick {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: var(--cp-cursor-hand);
-}
-
-.clothingThumb {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex: none;
-  background: rgb(20 26 40 / 92%);
-  box-shadow: inset 0 0 0 1px rgb(94 246 255 / 16%);
-}
-
-.clothingThumbGrid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.28;
-  background-size: 16px;
-}
-
-.clothingArt {
-  position: relative;
-  z-index: 1;
-  width: 2.15rem;
-  height: 2.15rem;
-  object-fit: contain;
-  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 55%));
-}
-
-.clothingMeta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.08rem;
-  line-height: 1.2;
-}
-
-.clothingName {
-  color: var(--cp-text);
-  font-weight: 600;
-}
-
-.clothingChip:where([data-active]) .clothingName {
-  color: var(--cp-yellow);
-}
-
-.inventoryToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem 0.6rem;
-}
-
-.inventorySearchBox {
-  --box-fill: rgb(10 12 20 / 88%);
-  --box-line: rgb(94 246 255 / 32%);
-  flex: 0 1 165px;
-  min-width: 120px;
-}
-
-.inventorySearchBox > input.inventorySearch {
-  min-height: 32px;
-  padding: 4px 12px 6px 10px;
-  font-family: var(--font-body);
-  font-size: var(--fs-xs);
-}
-
-.inventorySearchBox > input.inventorySearch::placeholder {
-  color: var(--cp-text-dim);
-}
-
-.inventoryNotice {
-  margin: 0;
-  padding: 0.3rem 0.55rem;
-  background: rgb(243 230 0 / 10%);
-  border-left: 2px solid var(--cp-yellow);
-  color: var(--cp-yellow);
-  font-size: var(--fs-xs);
-}
-
-.inventoryEmpty {
-  --box-fill: rgb(14 14 23 / 68%);
-  --box-line: rgb(94 246 255 / 24%);
-  position: relative;
-  isolation: isolate;
-  margin: 0;
-  padding: 1.25rem 0.85rem;
-  color: var(--cp-text-dim);
-  font-size: var(--fs-xs);
-  text-align: center;
-}
-
-/* 物品选择与操作分开，左侧筛选格列表，右侧 CellFrame 详情卡 */
-.inventoryBrowser {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(240px, 0.95fr);
-  gap: 0.65rem;
-  align-items: stretch;
-}
-
-.inventoryGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  gap: 0.38rem;
-  min-height: 220px;
-  max-height: 295px;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0 2px 0 0;
-  list-style: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--cp-cyan-dim) transparent;
-}
-
-.gridItem {
-  --item-fill: rgb(14 14 23 / 80%);
-  --item-line: rgb(94 246 255 / 32%);
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: 3.1rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  min-height: 3.15rem;
-  padding: 0.4rem 0.7rem 0.44rem 0.85rem;
-  border: 0;
-  background: transparent;
-  color: var(--cp-text);
-  font: inherit;
-  font-size: var(--fs-label);
-  text-align: left;
-  cursor: var(--cp-cursor-hand);
-}
-
-.gridItem:hover {
-  --item-fill: rgb(16 26 38 / 88%);
-  --item-line: rgb(94 246 255 / 74%);
-}
-
-.gridItem:where([aria-pressed="true"]) {
-  --item-fill: rgb(40 34 10 / 48%);
-  --item-line: var(--cp-yellow);
-  color: var(--cp-yellow);
-}
-
-.gridItem:focus-visible {
-  outline: 2px solid var(--cp-cyan);
-  outline-offset: 1px;
-}
-
-.gridRarity {
-  top: 0.45rem;
-  right: auto;
-  bottom: 0.68rem;
-  left: 0.36rem;
-  width: 3px;
-}
-
-.gridThumb {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 3.1rem;
-  height: 2rem;
-}
-
-.gridThumb > :where(.weaponArt) {
-  width: 100%;
-  height: 2rem;
-  margin: 0;
-}
-
-.gridInfo {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  display: grid;
-  gap: 0.1rem;
-}
-
-.gridName {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gridSub {
-  color: var(--cp-text-dim);
-  font-size: 0.7rem;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gridMeta {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.gridCount {
-  color: var(--cp-cyan);
-  font-weight: 700;
-}
-
-.inventoryDetail {
-  --detail-line: var(--rarity, rgb(94 246 255 / 50%));
-  --box-fill: rgb(12 14 24 / 92%);
-  --box-line: var(--detail-line);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  min-height: 220px;
-  padding: 0.8rem 0.95rem 0.9rem 1.05rem;
-}
-
-.inventoryDetail:where([data-iconic]) {
-  --detail-line: var(--cp-yellow);
-}
-
-.detailGrid {
-  position: absolute;
-  inset: 8px 10px;
-  background-repeat: repeat;
-  background-size: 220px 205px;
-  opacity: 0.14;
-  pointer-events: none;
-}
-
-.detailRarity {
-  top: 0.65rem;
-  right: auto;
-  bottom: 0.95rem;
-  left: 0.42rem;
-  width: 3px;
-}
-
-.detailHead {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.detailTitleRow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.detailTitle {
-  font-size: var(--fs-body, 0.95rem);
-  font-weight: 700;
-  color: var(--cp-yellow);
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.detailCount {
-  color: var(--cp-cyan);
-  font-size: var(--fs-label);
-  font-variant-numeric: tabular-nums;
-}
-
-.detailTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.detailRarityTag,
-.detailTag,
-.detailTagActive {
-  position: relative;
-  isolation: isolate;
-  display: inline-flex;
-  align-items: center;
-  padding: 0.1rem 0.48rem;
-  font-size: 0.68rem;
-  line-height: 1.35;
-}
-
-.detailRarityTag {
-  color: var(--rarity, var(--cp-cyan));
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.detailRarityTag > :first-child {
-  opacity: 0.2;
-}
-
-.detailTag {
-  color: var(--cp-text);
-}
-
-.detailTagActive {
-  color: rgb(10 10 18);
-  font-weight: 700;
-}
-
-.detailShowcase {
-  --box-fill: rgb(8 10 18 / 88%);
-  --box-line: color-mix(in srgb, var(--rarity, var(--cp-cyan)) 42%, transparent);
-  position: relative;
-  isolation: isolate;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  height: 4.5rem;
-  padding: 0.4rem 0.75rem;
-}
-
-.detailShowcaseGrid {
-  position: absolute;
-  inset: 4px 6px;
-  z-index: -1;
-  background-repeat: repeat;
-  background-size: 160px 150px;
-  opacity: 0.22;
-  pointer-events: none;
-}
-
-.detailArt {
-  width: 100%;
-  height: 3.6rem;
-  object-fit: contain;
-}
-
-.detailBodyCopy {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 0.3rem;
-}
-
-.detailDesc {
-  margin: 0;
-  color: var(--cp-text);
-  font-size: var(--fs-xs);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.detailStat {
-  margin: 0;
-  color: var(--cp-cyan);
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
-
-.detailActions {
-  position: relative;
-  z-index: 1;
-  margin-top: auto;
-  padding-top: 0.45rem;
-  border-top: 1px solid rgb(94 246 255 / 18%);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.detailActionGroup {
-  display: grid;
-  gap: 0.25rem;
-  width: 100%;
-}
-
-.detailHint {
-  color: var(--cp-text-dim);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-
-.modTargetList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-@container pin (width < 520px) {
-  .inventoryBrowser {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .inventoryGrid {
-    min-height: 0;
-    max-height: 190px;
-  }
-
-  .inventoryDetail {
-    min-height: 0;
-  }
-}
-
-@container pin (width < 380px) {
-  .slotList {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.placesBar {
-  --box-fill: rgb(14 16 26 / 74%);
-  --box-line: rgb(255 68 68 / 28%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem 0.75rem;
-  padding: 0.42rem 0.68rem 0.46rem;
-}
-
-.placesLabel {
-  font-family: var(--font-display);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--cp-red);
-}
-
-.placesActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 /* 委托：标题、星级和报酬、中间人和期限、最新进展 */
@@ -2414,9 +1634,37 @@
 }
 
 .slang {
+  position: relative;
   text-decoration: underline dotted var(--cp-cyan);
   text-underline-offset: 3px;
   cursor: help;
+}
+
+.slang[data-meaning]:hover::after,
+.slang[data-meaning]:focus-visible::after {
+  content: attr(data-meaning);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  min-width: max-content;
+  max-width: 240px;
+  padding: 0.35rem 0.6rem;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.45;
+  text-indent: 0;
+  white-space: normal;
+  color: var(--cp-text);
+  background: rgb(8 12 22 / 96%);
+  border: 1px solid rgb(94 246 255 / 55%);
+  border-left: 2px solid var(--cp-cyan);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 65%);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .dialogue .slang {
@@ -5380,26 +4628,65 @@ ul.mapLegend > li {
   }
 }
 
-/* 潜网结构图，肉身状态常驻右下角 */
+/* 潜网深度仪表：融入右侧角块流，采用原作 NineSlice 框体，与地点、追踪、武器自然顺排 */
 .divePanel {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 6;
-  width: 230px;
-  padding: 10px;
-  border: 1px solid var(--cp-cyan);
-  background: rgb(4 8 14 / 92%);
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  width: var(--corner-w);
+  padding: 11px 14px 12px;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
   color: var(--cp-cyan);
   animation: diveIn 220ms var(--ease-snap) both;
 }
 
+.divePanel > [aria-hidden] {
+  z-index: -1;
+}
+
+.diveInner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+}
+
+.diveHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .diveTitle {
-  margin: 0 0 6px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--cp-cyan);
+}
+
+.diveTitle b {
+  font-weight: 700;
+}
+
+.diveDepth {
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border: 1px solid rgb(252 238 10 / 35%);
+  font-variant-numeric: tabular-nums;
 }
 
 .diveLayers {
+  display: grid;
+  gap: 3px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5407,18 +4694,46 @@ ul.mapLegend > li {
 
 .diveLayer {
   display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 3px 6px;
-  border-left: 2px solid rgb(0 240 255 / 30%);
-  opacity: 0.55;
+  padding: 3px 7px;
+  font-size: 12px;
+  border-left: 2px solid rgb(0 240 255 / 26%);
+  opacity: 0.52;
   transition:
     opacity var(--dur-flash),
     background-color var(--dur-flash),
     border-color var(--dur-flash);
 }
 
+.diveIdx {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.diveName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diveTag {
+  flex: none;
+  padding: 0 5px;
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #05080f;
+  background: var(--cp-cyan);
+}
+
 .diveLayer[data-past] {
-  opacity: 0.8;
+  opacity: 0.78;
 }
 
 .diveLayer[data-deep] {
@@ -5427,7 +4742,8 @@ ul.mapLegend > li {
 
 .diveLayer[data-here] {
   border-left-color: var(--cp-cyan);
-  background: rgb(0 240 255 / 12%);
+  background: rgb(0 240 255 / 14%);
+  color: var(--cp-text);
   opacity: 1;
   animation: diveHerePulse 1.6s ease-in-out infinite;
 }
@@ -5435,22 +4751,42 @@ ul.mapLegend > li {
 .diveLayer[data-wall] {
   border-left-color: var(--cp-red);
   color: var(--cp-red);
+  opacity: 0.85;
 }
 
 .diveBody {
   display: grid;
-  gap: 2px;
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid rgb(0 240 255 / 25%);
-  font-size: 12px;
+  gap: 3px;
+  padding-top: 7px;
+  border-top: 1px solid rgb(0 240 255 / 22%);
+  font-size: 11.5px;
+  color: var(--cp-text-dim);
 }
 
-@media (max-width: 900px) {
-  .divePanel {
-    position: static;
-    width: auto;
-  }
+.diveBody[data-alert] {
+  border-top-color: rgb(255 46 66 / 45%);
+  color: var(--cp-danger);
+}
+
+.diveBodyHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diveBodyHead small {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-faint);
+}
+
+.diveBodyHead b {
+  color: var(--cp-text);
+}
+
+.diveBody[data-alert] .diveBodyHead b {
+  color: var(--cp-danger);
 }
 
 /* ———— 文生图：回合场景插图 ———— */
@@ -5529,7 +4865,6 @@ ul.mapLegend > li {
   .escMenu,
   .choices > li,
   .toast,
-  .toast[data-leaving],
   .journalBackdrop,
   .journal,
   .dossierDialog,
@@ -5540,7 +4875,8 @@ ul.mapLegend > li {
     animation: none;
   }
 
-  .diveLayer {
+  .diveLayer,
+  .toastBtn {
     transition: none;
   }
 }
