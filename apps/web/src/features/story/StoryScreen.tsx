@@ -44,7 +44,7 @@ import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
 import { FactionsBody } from "./FactionsPanel";
 import { InputBar } from "./InputBar";
-import { InventoryPage } from "./InventoryPage";
+import { type InventoryFilter, InventoryPage } from "./InventoryPage";
 import { InventoryStorage } from "./InventoryStorage";
 import { MapBody } from "./MapPanel";
 import {
@@ -281,6 +281,11 @@ export function StoryScreen() {
   const busy = story.phase !== "idle";
   // 装备块一级页签（随身 / 存放 / 车辆）与当前选中的存放点；收起后复位回随身页，避免悬停误弹
   const [gearTab, setGearTab] = useState<GearTab>("carried");
+  const [inventoryFocus, setInventoryFocus] = useState<{
+    readonly filter?: InventoryFilter;
+    readonly itemId?: string;
+    readonly nonce: number;
+  } | null>(null);
   const [storageKey, setStorageKey] = useState<string | null>(null);
   const [storageBusy, setStorageBusy] = useState(false);
   const [bioTab, setBioTab] = useState<BioTab>("character");
@@ -289,10 +294,11 @@ export function StoryScreen() {
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
   useEffect(() => {
-    if (expand?.id !== "weapon" && gearTab !== "carried") {
-      setGearTab("carried");
+    if (expand?.id !== "weapon") {
+      if (gearTab !== "carried") setGearTab("carried");
+      if (inventoryFocus !== null) setInventoryFocus(null);
     }
-  }, [expand?.id, gearTab]);
+  }, [expand?.id, gearTab, inventoryFocus]);
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
   // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点，按 M 打开时不选
@@ -556,6 +562,17 @@ export function StoryScreen() {
     },
     [gearTab],
   );
+  // 从生物检测的个人神经芯片槽直接跳到随身物品栏的芯片/超梦分类并定位对应芯片
+  const openNeuralInventory = useCallback((itemId?: string) => {
+    setAtMap(false);
+    setGearTab("carried");
+    setInventoryFocus((prev) => ({
+      filter: "neural",
+      ...(itemId ? { itemId } : {}),
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+    setExpand({ id: "weapon", pinned: true });
+  }, []);
   const openMap = useCallback(() => {
     setExpand(null);
     setMapFocus(undefined);
@@ -800,6 +817,15 @@ export function StoryScreen() {
       onChange={setBioTab}
     />
   );
+  const draftAction =
+    busy || view.death || view.ended
+      ? undefined
+      : (text: string) => {
+          story.setDraft({
+            text: `${story.draft.text}${story.draft.text ? "\n" : ""}${text}`,
+          });
+          closePinned();
+        };
   const characterFull = (
     <div className={neuralStyles.pinBody}>
       {/* 按页签重新挂载，切页签时新内容淡入 */}
@@ -812,6 +838,8 @@ export function StoryScreen() {
           <CharacterPage
             view={view}
             busy={busy}
+            onOpenNeuralChip={openNeuralInventory}
+            onActionDraft={draftAction}
             onTrauma={
               busy || view.death || view.ended ? undefined : (action) => act(action, "trauma", true)
             }
@@ -831,12 +859,16 @@ export function StoryScreen() {
       : busy
         ? "正在处理行动，请稍候"
         : undefined;
-  const carriedUniqueCount = new Set([
-    ...Object.entries(view.inventory.backpack)
-      .filter(([, n]) => n > 0)
-      .map(([id]) => id),
-    ...[view.inventory.healing, view.inventory.grenade].flatMap((slot) => (slot ? [slot.id] : [])),
-  ]).size;
+  const carriedUniqueCount =
+    view.inventory.clothing.length +
+    new Set([
+      ...Object.entries(view.inventory.backpack)
+        .filter(([, n]) => n > 0)
+        .map(([id]) => id),
+      ...[view.inventory.healing, view.inventory.grenade].flatMap((slot) =>
+        slot ? [slot.id] : [],
+      ),
+    ]).size;
   const storedTotalCount = view.safehouse.storage.reduce(
     (sum, g) => sum + g.items.reduce((s, item) => s + item.count, 0),
     0,
@@ -877,6 +909,7 @@ export function StoryScreen() {
           view={view}
           storageKey={storageKey}
           onSelectStorage={setStorageKey}
+          initialFocus={inventoryFocus}
           disabledReason={gearDisabledReason}
           onHeal={
             busy || view.death || view.ended
@@ -900,16 +933,7 @@ export function StoryScreen() {
                   closePinned();
                 }
           }
-          onActionDraft={
-            busy || view.death || view.ended
-              ? undefined
-              : (text) => {
-                  story.setDraft({
-                    text: `${story.draft.text}${story.draft.text ? "\n" : ""}${text}`,
-                  });
-                  closePinned();
-                }
-          }
+          onActionDraft={draftAction}
           onEquip={
             busy || view.death || view.ended || view.combat.active
               ? undefined

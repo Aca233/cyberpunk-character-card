@@ -28,6 +28,8 @@ export function CharacterPage({
   view,
   onHabit,
   onTrauma,
+  onOpenNeuralChip,
+  onActionDraft,
   busy,
 }: {
   readonly view: View;
@@ -35,6 +37,8 @@ export function CharacterPage({
   readonly onTrauma?:
     | ((action: Extract<PlayerAction, { type: "trauma" }>) => Promise<void>)
     | undefined;
+  readonly onOpenNeuralChip?: ((carrierId?: string) => void) | undefined;
+  readonly onActionDraft?: ((text: string) => void) | undefined;
   readonly busy?: boolean | undefined;
 }) {
   const { character } = view;
@@ -71,7 +75,13 @@ export function CharacterPage({
       {character.name === null && (
         <p className={styles.dim}>这是未绑定角色的旧存档。新建存档时可以选择自己的角色。</p>
       )}
-      <BiomonitorPanel view={view} onTrauma={onTrauma} busy={busy} />
+      <BiomonitorPanel
+        view={view}
+        onTrauma={onTrauma}
+        onOpenNeuralChip={onOpenNeuralChip}
+        onActionDraft={onActionDraft}
+        busy={busy}
+      />
 
       {character.traits.length > 0 && (
         <section className={styles.traitSection} aria-label="角色主板">

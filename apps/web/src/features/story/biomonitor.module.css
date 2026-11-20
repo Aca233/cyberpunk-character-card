@@ -12,7 +12,7 @@
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 8px 12px;
   padding: 7px 10px;
@@ -39,7 +39,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1 1 240px;
+  flex: 1 1 220px;
 }
 
 .bannerAvatar {
@@ -134,11 +134,199 @@
   color: var(--cp-text-dim);
 }
 
+.bannerSide {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1 1 248px;
+  min-width: 0;
+}
+
 .bannerPills {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+}
+
+/* 顶部右侧：个人神经芯片槽（常驻可见，与头像区等高对齐） */
+.neuralDock {
+  display: grid;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid rgb(94 246 255 / 22%);
+  border-inline-start: 2px solid var(--cp-cyan);
+  background: rgb(7 12 22 / 78%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+}
+
+.neuralDockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.neuralDockTitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+}
+
+.neuralDockTitle b {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cp-yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.neuralReaderBadge {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--cp-text-dim);
+  white-space: nowrap;
+}
+
+.neuralReaderBadge:where([data-ready]) {
+  color: var(--cp-success);
+}
+
+.neuralSlotRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.neuralSlot {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid rgb(94 246 255 / 20%);
+  border-inline-start: 2px solid rgb(94 246 255 / 38%);
+  background: rgb(11 16 28 / 70%);
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.neuralSlot:where([data-empty]) {
+  border-style: dashed;
+  border-inline-start-style: solid;
+}
+
+.neuralSlot:where([data-empty][data-ready]) {
+  border-color: rgb(94 246 255 / 42%);
+  border-inline-start-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 8%);
+}
+
+.neuralSlot:where([data-filled]) {
+  border-color: rgb(252 238 10 / 34%);
+  border-inline-start-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 9%);
+}
+
+.neuralSlot:hover {
+  border-color: rgb(252 238 10 / 55%);
+  background: rgb(252 238 10 / 13%);
+}
+
+.neuralSlotMain {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  color: var(--cp-text);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+}
+
+.neuralSlotMain:disabled {
+  cursor: default;
+}
+
+.neuralSlotMain:focus-visible {
+  outline: 1px solid var(--cp-yellow);
+  outline-offset: -1px;
+}
+
+.neuralSlotName {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cp-yellow);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neuralSlotEmptyTitle {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--cp-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neuralSlotSub {
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--cp-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neuralSlot:where([data-empty][data-ready]) .neuralSlotSub {
+  color: var(--cp-cyan);
+}
+
+.neuralSlotEject {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  padding: 0;
+  border: 0;
+  border-inline-start: 1px solid rgb(252 238 10 / 22%);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+  opacity: 0.55;
+  transition:
+    opacity var(--dur-flash),
+    color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.neuralSlot:hover .neuralSlotEject,
+.neuralSlot:focus-within .neuralSlotEject {
+  opacity: 1;
+}
+
+.neuralSlotEject:hover,
+.neuralSlotEject:focus-visible {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
+  outline: none;
 }
 
 .statusPill {

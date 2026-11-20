@@ -145,15 +145,20 @@ function buildNeuroCells(humanity: View["humanity"]): readonly NeuroCell[] {
 
 /**
  * 3.0 生物检测核心终端面板：
+ * 顶栏展示头像、身份、个人神经芯片槽与创伤/救援状态；
  * 左栏叠加全息生理图层与街头名声；右栏呈现创伤监测、20 格神经稳态阵列、外设与代谢调度
  */
 export function BiomonitorPanel({
   view,
   onTrauma,
+  onOpenNeuralChip,
+  onActionDraft,
   busy,
 }: {
   readonly view: View;
   readonly onTrauma?: ((action: TraumaAction) => Promise<void>) | undefined;
+  readonly onOpenNeuralChip?: ((carrierId?: string) => void) | undefined;
+  readonly onActionDraft?: ((text: string) => void) | undefined;
   readonly busy?: boolean | undefined;
 }) {
   const {
@@ -167,6 +172,7 @@ export function BiomonitorPanel({
     sandevistan,
     time,
     inventory,
+    shards,
   } = view;
   const [membershipOpen, setMembershipOpen] = useState(false);
   const [rescuePending, setRescuePending] = useState(false);
@@ -244,10 +250,16 @@ export function BiomonitorPanel({
   const scarPins = [...new Set(wound.scars.map((s) => s.part))].filter((p) => !activePins.has(p));
 
   const hasStress = time.fatigued || time.blackLaceWithdrawal || inventory.bulky.overloaded;
+  const neuralSlots = shards.slots;
+  const emptyNeuralSlots = Math.max(0, neuralSlots.max - neuralSlots.used);
+  const slottableCarried = shards.carried.filter(
+    (chip) => !chip.slotted && (chip.category === "skill" || chip.category === "behavior"),
+  );
+  const firstSlottableCarrier = slottableCarried[0]?.carrier;
 
   return (
     <section className={styles.root} aria-label="生物检测">
-      {/* 顶部总控状态条：头像 + 身份信息 + 立绘操作 + 创伤/救援状态 */}
+      {/* 顶部总控状态条：左头像身份 + 右侧状态与个人神经芯片槽 */}
       <header className={styles.banner} data-tone={wound.tone}>
         <CellFrame />
         <div className={styles.bannerBrand}>
@@ -318,44 +330,138 @@ export function BiomonitorPanel({
             )}
           </div>
         </div>
-        <div className={styles.bannerPills}>
-          <span className={styles.statusPill} data-tone={wound.tone}>
-            <NineSlice
-              id="cyber.gaugeLabel"
-              tint={
-                wound.tone === "bad" || wound.tone === "dead"
-                  ? "rgb(255 0 60 / 22%)"
-                  : wound.tone === "warn" || wound.tone === "hurt"
-                    ? "rgb(252 238 10 / 16%)"
-                    : "rgb(94 246 255 / 15%)"
-              }
-              slice={4}
-            />
-            {wound.code}
-          </span>
-          {trauma.active && (
-            <span
-              className={styles.ttPill}
-              data-ok={trauma.coverage.ok || undefined}
-              data-blocked={!trauma.coverage.ok || undefined}
-              title={trauma.coverage.ok ? "创伤小组救援保障待命" : trauma.coverage.why}
-            >
-              <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
-              TT {trauma.tierLabel}
-              {trauma.coverage.ok ? "" : " · 受限"}
+        <div className={styles.bannerSide}>
+          <div className={styles.bannerPills}>
+            <span className={styles.statusPill} data-tone={wound.tone}>
+              <NineSlice
+                id="cyber.gaugeLabel"
+                tint={
+                  wound.tone === "bad" || wound.tone === "dead"
+                    ? "rgb(255 0 60 / 22%)"
+                    : wound.tone === "warn" || wound.tone === "hurt"
+                      ? "rgb(252 238 10 / 16%)"
+                      : "rgb(94 246 255 / 15%)"
+                }
+                slice={4}
+              />
+              {wound.code}
             </span>
-          )}
-          {trauma.rescue.ok && (
-            <Button
-              small
-              primary
-              disabled={busy || rescuePending || !onTrauma}
-              reason="正在处理行动，请稍候"
-              onClick={() => void callRescue()}
-            >
-              {rescuePending ? "救援呼叫中…" : "呼叫紧急救援"}
-            </Button>
-          )}
+            {trauma.active && (
+              <span
+                className={styles.ttPill}
+                data-ok={trauma.coverage.ok || undefined}
+                data-blocked={!trauma.coverage.ok || undefined}
+                title={trauma.coverage.ok ? "创伤小组救援保障待命" : trauma.coverage.why}
+              >
+                <NineSlice id="cyber.gaugeLabel" tint="rgb(255 255 255 / 8%)" slice={4} />
+                TT {trauma.tierLabel}
+                {trauma.coverage.ok ? "" : " · 受限"}
+              </span>
+            )}
+            {trauma.rescue.ok && (
+              <Button
+                small
+                primary
+                disabled={busy || rescuePending || !onTrauma}
+                reason="正在处理行动，请稍候"
+                onClick={() => void callRescue()}
+              >
+                {rescuePending ? "救援呼叫中…" : "呼叫紧急救援"}
+              </Button>
+            )}
+          </div>
+
+          <section className={styles.neuralDock} aria-label="个人神经芯片槽">
+            <div className={styles.neuralDockHead}>
+              <span className={styles.neuralDockTitle}>
+                神经芯片槽 <b>{`${neuralSlots.used}/${neuralSlots.max}`}</b>
+              </span>
+              <span
+                className={styles.neuralReaderBadge}
+                data-ready={shards.hasReader || undefined}
+                title={
+                  shards.hasReader
+                    ? "已携带隔离芯片读写器，可离线查毒与破译"
+                    : "未携带隔离芯片读写器，直插未知加密芯片存在风险"
+                }
+              >
+                {shards.hasReader ? "读写器就绪" : "无读写器"}
+              </span>
+            </div>
+            <div className={styles.neuralSlotRow}>
+              {neuralSlots.items.map((slot) => {
+                const slotName = displayItemName(view.names.items, slot.carrier);
+                const tipLines = [
+                  `${slot.title}（${slot.categoryLabel}）`,
+                  slot.protocol ? `协议：${slot.protocol}` : null,
+                  slot.ability ? `能力：${slot.ability}` : null,
+                  `接入于 ${slot.at}`,
+                  onOpenNeuralChip ? "点击前往随身物品栏查看详情" : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n");
+                return (
+                  <div key={slot.carrier} className={styles.neuralSlot} data-filled="">
+                    <button
+                      type="button"
+                      className={styles.neuralSlotMain}
+                      title={tipLines}
+                      disabled={!onOpenNeuralChip}
+                      onClick={() => onOpenNeuralChip?.(slot.carrier)}
+                    >
+                      <strong className={styles.neuralSlotName}>{slot.title}</strong>
+                      <span className={styles.neuralSlotSub}>
+                        {slot.protocol ?? slot.categoryLabel}
+                      </span>
+                    </button>
+                    {onActionDraft && (
+                      <button
+                        type="button"
+                        className={styles.neuralSlotEject}
+                        title={`拔出「${slotName}」`}
+                        aria-label={`从神经槽拔出${slotName}`}
+                        onClick={() => onActionDraft(`从颈后个人神经槽拔出${slotName}`)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {Array.from({ length: emptyNeuralSlots }, (_, index) => {
+                const slotNo = neuralSlots.used + index + 1;
+                const hasCandidates = slottableCarried.length > 0;
+                return (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 空神经槽按序号占位
+                    key={`empty-slot-${index}`}
+                    className={styles.neuralSlot}
+                    data-empty=""
+                    data-ready={hasCandidates || undefined}
+                  >
+                    <button
+                      type="button"
+                      className={styles.neuralSlotMain}
+                      disabled={!onOpenNeuralChip}
+                      title={
+                        hasCandidates
+                          ? `随身有 ${slottableCarried.length} 枚可插入的技能/行为芯片，点击打开随身物品栏`
+                          : "颈后个人神经芯片槽（空置），可插入技能或行为协议芯片；点击打开芯片分类"
+                      }
+                      onClick={() => onOpenNeuralChip?.(firstSlottableCarrier)}
+                    >
+                      <span className={styles.neuralSlotEmptyTitle}>神经槽 #{slotNo}</span>
+                      <span className={styles.neuralSlotSub}>
+                        {hasCandidates
+                          ? `可插 ${slottableCarried.length} 枚芯片`
+                          : "空闲 · 技能/行为"}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
       </header>
 

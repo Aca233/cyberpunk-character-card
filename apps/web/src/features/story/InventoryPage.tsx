@@ -22,7 +22,7 @@ import { type ShopModMeta, WeaponSlotInspector } from "./WeaponSlotInspector";
 /** 物品格九宫格切法，同四角在场的人用的 map.filterCell* */
 const CELL_SLICE = [20, 30, 30, 20] as const;
 
-type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "neural" | "misc";
+export type InventoryFilter = "all" | "usable" | "weapon" | "clothing" | "mod" | "neural" | "misc";
 
 type InventorySort = "default" | "rarity" | "kind" | "carry";
 
@@ -53,7 +53,13 @@ const KIND_RANK: Readonly<Record<string, number>> = {
   misc: 7,
 };
 
-const CLOTHING_SLOTS = inventoryRules.ClothingSlotSchema.options;
+interface InventoryEntry {
+  readonly key: string;
+  readonly id: string;
+  readonly count: number;
+  readonly worn: boolean;
+  readonly slot?: inventoryRules.ClothingSlot | undefined;
+}
 
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
@@ -63,13 +69,15 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * 随身物品栏（O）：紧凑 6 格混合着装条 + 个人神经槽 + 计数筛选/排序/搜索 + 全高双栏独立滚动 + 键盘快操。
+ * 随身物品栏（O）：计数筛选/排序/搜索 + 全高双栏独立滚动 + 键盘快操。
+ * 已穿服装直接置顶合入随身列表并标注「已穿」；个人神经芯片槽统一展示在展开的生物检测面板顶部；
  * 一级页签（随身 / 存放 / 车辆）与携带负担刻度由外层 Weapon 展开顶栏统一承载。
  */
 export function InventoryPage({
   view,
   storageKey,
   onSelectStorage,
+  initialFocus,
   onEquip,
   onUnequip,
   onMod,
@@ -84,6 +92,11 @@ export function InventoryPage({
   readonly view: View;
   readonly storageKey: string | null;
   readonly onSelectStorage: (key: string) => void;
+  /** 从其他面板（如生物检测的神经芯片槽）跳入时的预设筛选与定位物品 */
+  readonly initialFocus?:
+    | { readonly filter?: InventoryFilter; readonly itemId?: string; readonly nonce: number }
+    | null
+    | undefined;
   /** 非战斗治疗和压制剂直接结算；情境性使用交给行动输入，由玩家确认。 */
   readonly onHeal?: ((id: string) => Promise<void>) | undefined;
   readonly onSuppressant?: (() => Promise<void>) | undefined;
@@ -116,13 +129,8 @@ export function InventoryPage({
     () => new Map(view.shards.carried.map((chip) => [chip.carrier, chip])),
     [view.shards.carried],
   );
-  const neuralSlots = view.shards.slots;
-  const emptyNeuralSlots = Math.max(0, neuralSlots.max - neuralSlots.used);
 
-  const [filter, setFilter] = useState<InventoryFilter>("all");
-  const [clothingSlotFilter, setClothingSlotFilter] = useState<inventoryRules.ClothingSlot | null>(
-    null,
-  );
+  const [filter, setFilter] = useState<InventoryFilter>(() => initialFocus?.filter ?? "all");
   const [sort, setSort] = useState<InventorySort>("default");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -130,7 +138,16 @@ export function InventoryPage({
     id: string;
     worn?: boolean;
     fallbackIndex?: number;
-  } | null>(null);
+  } | null>(() => (initialFocus?.itemId ? { id: initialFocus.itemId, worn: false } : null));
+
+  useEffect(() => {
+    if (!initialFocus) return;
+    if (initialFocus.filter) setFilter(initialFocus.filter);
+    if (initialFocus.itemId) {
+      setPickedItem({ id: initialFocus.itemId, worn: false });
+      setSearch("");
+    }
+  }, [initialFocus]);
   const [openSlotPicker, setOpenSlotPicker] = useState<{
     weaponId: string;
     slot: inventoryRules.ModSlot;
@@ -186,6 +203,24 @@ export function InventoryPage({
     [carried],
   );
 
+  // 统一随身条目：已穿服装置顶，后接随身背包与快捷补给
+  const allEntries = useMemo<readonly InventoryEntry[]>(() => {
+    const wornEntries: InventoryEntry[] = inventory.clothing.map((entry) => ({
+      key: `worn:${entry.slot}:${entry.id}`,
+      id: entry.id,
+      count: 1,
+      worn: true,
+      slot: entry.slot,
+    }));
+    const bagEntries: InventoryEntry[] = allCarried.map(([id, count]) => ({
+      key: id,
+      id,
+      count,
+      worn: false,
+    }));
+    return [...wornEntries, ...bagEntries];
+  }, [allCarried, inventory.clothing]);
+
   const shopModMeta = useMemo(() => {
     const map = new Map<string, ShopModMeta>();
     for (const shop of view.shops) {
@@ -216,10 +251,10 @@ export function InventoryPage({
     return map;
   }, [view.shops]);
 
-  // 各类目数量统计
+  // 各类目数量统计（含已穿服装）
   const filterCounts = useMemo(() => {
     const counts: Record<InventoryFilter, number> = {
-      all: allCarried.length,
+      all: allEntries.length,
       usable: 0,
       weapon: 0,
       clothing: 0,
@@ -227,11 +262,15 @@ export function InventoryPage({
       neural: 0,
       misc: 0,
     };
-    for (const [id] of allCarried) {
-      const detail = inventory.details?.[id];
+    for (const entry of allEntries) {
+      if (entry.worn) {
+        counts.clothing += 1;
+        continue;
+      }
+      const detail = inventory.details?.[entry.id];
       const kind = detail?.kind;
       const isNeural = Boolean(detail?.neuralGroup);
-      if (isUsable(id)) counts.usable += 1;
+      if (isUsable(entry.id)) counts.usable += 1;
       if (kind === "weapon") counts.weapon += 1;
       if (kind === "clothing") counts.clothing += 1;
       if (kind === "mod") counts.mod += 1;
@@ -239,39 +278,19 @@ export function InventoryPage({
       if (kind === "misc" && !isNeural) counts.misc += 1;
     }
     return counts;
-  }, [allCarried, inventory.details, isUsable]);
-
-  // 每个服装部位在背包中可穿的件数（用于在空着装格上提示“可穿 +N”）
-  const bagClothingBySlot = useMemo(() => {
-    const counts = new Map<inventoryRules.ClothingSlot, number>();
-    for (const [id] of allCarried) {
-      const detail = inventory.details?.[id];
-      if (detail?.kind !== "clothing") continue;
-      const slot =
-        detail.clothingSlot ??
-        CLOTHING_SLOTS.find((s) => detail.subLabel === inventoryRules.CLOTHING_SLOT_LABELS[s]) ??
-        null;
-      if (slot) counts.set(slot, (counts.get(slot) ?? 0) + 1);
-    }
-    return counts;
-  }, [allCarried, inventory.details]);
-
-  const wornBySlot = useMemo(
-    () => new Map(inventory.clothing.map((entry) => [entry.slot, entry])),
-    [inventory.clothing],
-  );
+  }, [allEntries, inventory.details, isUsable]);
 
   // 过滤 + 多字段搜索 + 排序
-  const backpack = useMemo(() => {
+  const visibleEntries = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    const filtered = allCarried.filter(([id]) => {
-      const detail = inventory.details?.[id];
-      const kind = detail?.kind;
-      const isNeural = Boolean(detail?.neuralGroup);
+    const filtered = allEntries.filter((entry) => {
+      const detail = inventory.details?.[entry.id];
+      const kind = entry.worn ? "clothing" : detail?.kind;
+      const isNeural = !entry.worn && Boolean(detail?.neuralGroup);
       const matchesFilter =
         filter === "all" ||
         (filter === "usable"
-          ? isUsable(id)
+          ? !entry.worn && isUsable(entry.id)
           : filter === "neural"
             ? isNeural
             : filter === "misc"
@@ -279,22 +298,14 @@ export function InventoryPage({
               : kind === filter);
       if (!matchesFilter) return false;
 
-      if (clothingSlotFilter) {
-        if (kind !== "clothing") return false;
-        const slot =
-          detail?.clothingSlot ??
-          CLOTHING_SLOTS.find((s) => detail?.subLabel === inventoryRules.CLOTHING_SLOT_LABELS[s]) ??
-          null;
-        if (slot !== clothingSlotFilter) return false;
-      }
-
       if (!query) return true;
-      const chip = carriedChipById.get(id);
+      const chip = entry.worn ? undefined : carriedChipById.get(entry.id);
       const haystack = [
-        itemName(id),
-        detail?.subLabel ?? "",
+        itemName(entry.id),
+        detail?.subLabel ?? (entry.slot ? inventoryRules.CLOTHING_SLOT_LABELS[entry.slot] : ""),
         detail?.rarityLabel ?? "",
         detail?.ability ?? "",
+        entry.worn ? "已穿 穿着" : "",
         chip?.title ?? "",
         chip?.summary ?? "",
         chip?.categoryLabel ?? "",
@@ -306,30 +317,30 @@ export function InventoryPage({
 
     if (sort === "default") return filtered;
 
-    return [...filtered].sort(([idA], [idB]) => {
-      const dA = inventory.details?.[idA];
-      const dB = inventory.details?.[idB];
+    return [...filtered].sort((a, b) => {
+      const dA = inventory.details?.[a.id];
+      const dB = inventory.details?.[b.id];
       if (sort === "rarity") {
         const iconicDiff = Number(Boolean(dB?.iconic)) - Number(Boolean(dA?.iconic));
         if (iconicDiff !== 0) return iconicDiff;
-        const rA = RARITY_RANK[dA?.rarity ?? inventory.rarity[idA] ?? ""] ?? 0;
-        const rB = RARITY_RANK[dB?.rarity ?? inventory.rarity[idB] ?? ""] ?? 0;
+        const rA = RARITY_RANK[dA?.rarity ?? inventory.rarity[a.id] ?? ""] ?? 0;
+        const rB = RARITY_RANK[dB?.rarity ?? inventory.rarity[b.id] ?? ""] ?? 0;
         if (rB !== rA) return rB - rA;
       } else if (sort === "kind") {
-        const kA = KIND_RANK[dA?.kind ?? "misc"] ?? 9;
-        const kB = KIND_RANK[dB?.kind ?? "misc"] ?? 9;
+        const kA = KIND_RANK[a.worn ? "clothing" : (dA?.kind ?? "misc")] ?? 9;
+        const kB = KIND_RANK[b.worn ? "clothing" : (dB?.kind ?? "misc")] ?? 9;
         if (kA !== kB) return kA - kB;
       } else if (sort === "carry") {
-        const cA = dA?.carryUnits ?? 0;
-        const cB = dB?.carryUnits ?? 0;
+        const cA = a.worn ? 0 : (dA?.carryUnits ?? 0);
+        const cB = b.worn ? 0 : (dB?.carryUnits ?? 0);
         if (cB !== cA) return cB - cA;
       }
-      return itemName(idA).localeCompare(itemName(idB), "zh-Hans-CN");
+      if (a.worn !== b.worn) return a.worn ? -1 : 1;
+      return itemName(a.id).localeCompare(itemName(b.id), "zh-Hans-CN");
     });
   }, [
-    allCarried,
+    allEntries,
     carriedChipById,
-    clothingSlotFilter,
     filter,
     inventory.details,
     inventory.rarity,
@@ -339,29 +350,28 @@ export function InventoryPage({
     sort,
   ]);
 
-  // 智能焦点保持：支持武器改装物化 ID 变化追踪 + 物品耗尽/存入后就近邻项补位
-  const wornMatch = pickedItem?.worn
-    ? inventory.clothing.find((c) => c.id === pickedItem.id)
-    : undefined;
-  const packMatch =
-    !wornMatch && !pickedItem?.worn && pickedItem?.id
-      ? (backpack.find(([id]) => id === pickedItem.id) ??
-        backpack.find(
-          ([id]) =>
-            inventory.details?.[id]?.baseId ===
+  // 智能焦点保持：支持穿脱切换、武器改装物化 ID 变化追踪与耗尽/存入后就近邻项补位
+  const matchedEntry = pickedItem?.id
+    ? (visibleEntries.find(
+        (entry) => entry.id === pickedItem.id && entry.worn === Boolean(pickedItem.worn),
+      ) ??
+      visibleEntries.find((entry) => entry.id === pickedItem.id) ??
+      visibleEntries.find(
+        (entry) =>
+          !entry.worn &&
+          inventory.details?.[entry.id]?.baseId ===
             (inventory.details?.[pickedItem.id]?.baseId ?? baseWeaponIdOf(pickedItem.id)),
-        ))
-      : undefined;
+      ))
+    : undefined;
   const fallbackEntry =
-    pickedItem?.fallbackIndex !== undefined && backpack.length > 0
-      ? backpack[Math.min(pickedItem.fallbackIndex, backpack.length - 1)]
-      : backpack[0];
-  const selectedEntry = wornMatch
-    ? ([wornMatch.id, 1] as const)
-    : (packMatch ?? fallbackEntry ?? null);
-  const selectedId = selectedEntry?.[0] ?? null;
-  const selectedIsWorn = Boolean(wornMatch);
-  const selectedIndex = selectedIsWorn ? -1 : backpack.findIndex(([id]) => id === selectedId);
+    pickedItem?.fallbackIndex !== undefined && visibleEntries.length > 0
+      ? visibleEntries[Math.min(pickedItem.fallbackIndex, visibleEntries.length - 1)]
+      : visibleEntries[0];
+  const selectedEntry = matchedEntry ?? fallbackEntry ?? null;
+  const selectedIsWorn = Boolean(selectedEntry?.worn);
+  const selectedIndex = selectedEntry
+    ? visibleEntries.findIndex((entry) => entry.key === selectedEntry.key)
+    : -1;
 
   const selectItem = useCallback((id: string, worn = false, fallbackIndex?: number) => {
     setPickedItem(fallbackIndex === undefined ? { id, worn } : { id, worn, fallbackIndex });
@@ -391,14 +401,13 @@ export function InventoryPage({
   // 选中物品的派生操作状态（提取到顶层以便键盘 Enter 和双击动作复用）
   const selectedCtx = useMemo(() => {
     if (!selectedEntry) return null;
-    const [id, count] = selectedEntry;
-    const to = selectedIsWorn ? undefined : inventory.equipTo[id];
+    const { id, count, worn } = selectedEntry;
+    const to = worn ? undefined : inventory.equipTo[id];
     const detail = inventory.details?.[id];
-    const chip = selectedIsWorn ? undefined : carriedChipById.get(id);
-    const quick = selectedIsWorn ? undefined : quickItems.find((q) => q.id === id);
-    const kind = detail?.kind;
-    const usable =
-      !selectedIsWorn && (kind === "healing" || kind === "grenade" || kind === "consumable");
+    const chip = worn ? undefined : carriedChipById.get(id);
+    const quick = worn ? undefined : quickItems.find((q) => q.id === id);
+    const kind = worn ? "clothing" : detail?.kind;
+    const usable = !worn && (kind === "healing" || kind === "grenade" || kind === "consumable");
     const remaining = quick?.charges ?? detail?.remaining;
     const useSpare = Boolean(
       quick &&
@@ -459,7 +468,6 @@ export function InventoryPage({
     onUse,
     quickItems,
     selectedEntry,
-    selectedIsWorn,
     usingItem,
     view.combat.active,
     view.health.condition,
@@ -513,10 +521,15 @@ export function InventoryPage({
     [disabledReason, itemName, onMod, showReceipt, usingItem],
   );
 
-  // 安全快操：双击列表项或按 Enter 时执行“穿上 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
+  // 安全快操：双击列表项或按 Enter 时执行“穿上 / 脱下 / 设为当前补给 / 非战斗治疗或压制剂 / 切至可装槽位”
   const triggerSafePrimary = useCallback(
-    (id: string) => {
+    (entry: InventoryEntry) => {
       if (disabledReason || usingItem) return;
+      if (entry.worn) {
+        if (onUnequip) triggerUnequip(entry.id);
+        return;
+      }
+      const { id } = entry;
       const detail = inventory.details?.[id];
       const to = inventory.equipTo[id];
       const quick = quickItems.find((q) => q.id === id);
@@ -565,16 +578,18 @@ export function InventoryPage({
       onEquip,
       onHeal,
       onSuppressant,
+      onUnequip,
       quickItems,
       runDirectUse,
       selectedCtx,
       triggerEquip,
+      triggerUnequip,
       usingItem,
       view.combat.active,
     ],
   );
 
-  // 分层 Esc 接入全局面板栈：先关改装抽屉 → 退搜索框 → 清搜索/部位筛选 → 最后交回外层关面板
+  // 分层 Esc 接入全局面板栈：先关改装抽屉 → 退搜索框 → 清搜索 → 最后交回外层关面板
   useLayer(
     () => {
       if (openSlotPicker) {
@@ -584,10 +599,9 @@ export function InventoryPage({
         searchRef.current?.blur();
       } else {
         setSearch("");
-        setClothingSlotFilter(null);
       }
     },
-    Boolean(openSlotPicker || searchFocused || search || clothingSlotFilter),
+    Boolean(openSlotPicker || searchFocused || search),
   );
 
   // 键盘流：↑/↓ 切换列表项，/ 聚焦搜索，Enter 执行安全主操作
@@ -604,14 +618,14 @@ export function InventoryPage({
       }
 
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        if (backpack.length === 0) return;
+        if (visibleEntries.length === 0) return;
         event.preventDefault();
         const delta = event.key === "ArrowDown" ? 1 : -1;
         const cur = selectedIndex < 0 ? (delta > 0 ? -1 : 0) : selectedIndex;
-        const nextIdx = (cur + delta + backpack.length) % backpack.length;
-        const nextEntry = backpack[nextIdx];
+        const nextIdx = (cur + delta + visibleEntries.length) % visibleEntries.length;
+        const nextEntry = visibleEntries[nextIdx];
         if (nextEntry) {
-          selectItem(nextEntry[0], false, nextIdx);
+          selectItem(nextEntry.id, nextEntry.worn, nextIdx);
           const row = listRef.current?.querySelector<HTMLElement>(`[data-item-index="${nextIdx}"]`);
           row?.scrollIntoView({ block: "nearest" });
         }
@@ -627,18 +641,17 @@ export function InventoryPage({
         ) {
           return;
         }
-        if (selectedId && !selectedIsWorn) {
+        if (selectedEntry) {
           event.preventDefault();
-          triggerSafePrimary(selectedId);
+          triggerSafePrimary(selectedEntry);
         }
       }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [backpack, selectItem, selectedId, selectedIndex, selectedIsWorn, triggerSafePrimary]);
+  }, [selectItem, selectedEntry, selectedIndex, triggerSafePrimary, visibleEntries]);
 
-  const showNeuralSlots = filter === "neural" || (filter === "all" && neuralSlots.used > 0);
   const places = view.safehouse.forSale.length > 0;
   const storage = view.safehouse.storage;
   const storeTargets = storage.filter((group) => group.canStore);
@@ -700,155 +713,8 @@ export function InventoryPage({
         </div>
       )}
 
-      {/* 紧凑 6 格混合着装条：已穿显示缩略图与名称，空槽点击筛选对应部位服装 */}
-      <section className={styles.clothingBar} aria-label="6 格随身着装">
-        <ul className={styles.clothingGrid}>
-          {CLOTHING_SLOTS.map((slot) => {
-            const slotLabel = inventoryRules.CLOTHING_SLOT_LABELS[slot];
-            const worn = wornBySlot.get(slot);
-            const matchCount = bagClothingBySlot.get(slot) ?? 0;
-            const isSelected = Boolean(worn && selectedIsWorn && selectedId === worn.id);
-            const isFilteringSlot = !worn && clothingSlotFilter === slot;
-            const art = worn ? itemArtOf(worn.id) : undefined;
-
-            if (worn) {
-              return (
-                <li
-                  key={slot}
-                  className={styles.clothingCell}
-                  data-active={isSelected || undefined}
-                >
-                  <CellFrame />
-                  <button
-                    type="button"
-                    className={styles.clothingCellBtn}
-                    aria-pressed={isSelected}
-                    title={`${slotLabel}：${itemName(worn.id)}（点击查看详情）`}
-                    onClick={() => selectItem(worn.id, true)}
-                  >
-                    {art && (
-                      <span className={styles.clothingThumb} aria-hidden>
-                        <Asset id={art} className={styles.clothingThumbArt} />
-                      </span>
-                    )}
-                    <span className={styles.clothingCopy}>
-                      <span className={styles.clothingSlotLabel}>{slotLabel}</span>
-                      <b className={styles.clothingName}>{itemName(worn.id)}</b>
-                    </span>
-                  </button>
-                  {onUnequip && (
-                    <button
-                      type="button"
-                      className={styles.clothingUnequip}
-                      aria-label={`脱下${itemName(worn.id)}`}
-                      title={`脱下${itemName(worn.id)}`}
-                      disabled={usingItem || Boolean(disabledReason)}
-                      onClick={() => triggerUnequip(worn.id)}
-                    >
-                      ×
-                    </button>
-                  )}
-                </li>
-              );
-            }
-
-            return (
-              <li
-                key={slot}
-                className={styles.clothingCell}
-                data-empty=""
-                data-has-match={matchCount > 0 || undefined}
-                data-filtering={isFilteringSlot || undefined}
-              >
-                <CellFrame />
-                <button
-                  type="button"
-                  className={styles.clothingCellBtn}
-                  aria-pressed={isFilteringSlot}
-                  title={
-                    matchCount > 0
-                      ? `${slotLabel}空余 · 背包有 ${matchCount} 件可穿，点击筛选`
-                      : `${slotLabel}空余 · 背包暂无对应服装`
-                  }
-                  onClick={() => {
-                    if (isFilteringSlot) {
-                      setClothingSlotFilter(null);
-                    } else {
-                      setFilter("clothing");
-                      setClothingSlotFilter(slot);
-                      setPickedItem(null);
-                    }
-                  }}
-                >
-                  <span className={styles.clothingCopy}>
-                    <span className={styles.clothingSlotLabel}>
-                      <span>{slotLabel}</span>
-                      {matchCount > 0 && <b className={styles.clothingMatchPill}>+{matchCount}</b>}
-                    </span>
-                    <span className={styles.clothingEmptyLabel}>
-                      {isFilteringSlot ? "筛选中" : "未穿戴"}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {/* 个人神经芯片槽（仅切至芯片/超梦或已有插槽占用时展示，统一 CellFrame 材质） */}
-      {showNeuralSlots && (
-        <section className={styles.neuralStrip} aria-label="个人神经芯片槽">
-          <CellFrame />
-          <div className={styles.neuralHead}>
-            <span className={styles.neuralTitle}>
-              个人神经芯片槽 · {neuralSlots.used}/{neuralSlots.max}
-            </span>
-            <span className={styles.neuralMeta}>
-              {view.shards.hasReader
-                ? "已携隔离读写器（可离线查毒/破译）"
-                : "未携隔离读写器（直插未知加密片有风险）"}
-            </span>
-          </div>
-          <div className={styles.neuralGrid}>
-            {neuralSlots.items.map((slot) => {
-              const isSlotSelected = !selectedIsWorn && selectedId === slot.carrier;
-              return (
-                <button
-                  key={slot.carrier}
-                  type="button"
-                  className={styles.neuralSlot}
-                  data-active={isSlotSelected || undefined}
-                  onClick={() => {
-                    if (filter !== "all" && filter !== "neural") setFilter("neural");
-                    setClothingSlotFilter(null);
-                    selectItem(slot.carrier);
-                  }}
-                >
-                  <strong>{slot.title}</strong>
-                  <span className={styles.neuralSlotSub}>
-                    {slot.categoryLabel}
-                    {slot.protocol ? ` · ${slot.protocol}` : ""} · 接入于 {slot.at}
-                  </span>
-                </button>
-              );
-            })}
-            {Array.from({ length: emptyNeuralSlots }, (_, index) => (
-              <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: 空槽按序号占位
-                key={`empty-${index}`}
-                className={`${styles.neuralSlot} ${styles.neuralSlotEmpty}`}
-              >
-                <span>空余神经槽</span>
-                <span className={styles.neuralSlotSub}>可插入技能或行为协议芯片</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* 背包主区：筛选 + 排序 + 搜索 + 全高双栏独立滚动 */}
-      <section className={styles.packSection} aria-label="随身背包">
+      <section className={styles.packSection} aria-label="随身行装与背包">
         <div className={styles.toolbar}>
           <nav className={styles.filterRow} aria-label="物品分类筛选">
             {filterTabs.map(([key, label, count]) => (
@@ -860,7 +726,6 @@ export function InventoryPage({
                 data-zero={count === 0 && key !== "all" ? "" : undefined}
                 onClick={() => {
                   setFilter(key);
-                  if (key !== "clothing") setClothingSlotFilter(null);
                   setPickedItem(null);
                   setUseError("");
                 }}
@@ -911,36 +776,20 @@ export function InventoryPage({
           </div>
         </div>
 
-        {clothingSlotFilter && (
-          <div className={styles.slotFilterBar} role="status">
-            <span>
-              正在筛选「{inventoryRules.CLOTHING_SLOT_LABELS[clothingSlotFilter]}」部位可穿服装
-            </span>
-            <button
-              type="button"
-              className={styles.slotFilterClear}
-              onClick={() => setClothingSlotFilter(null)}
-            >
-              清除部位筛选
-            </button>
-          </div>
-        )}
-
-        {backpack.length === 0 && !selectedIsWorn ? (
+        {visibleEntries.length === 0 ? (
           <div className={styles.emptyBox}>
             <CellFrame />
             <span>
-              {allCarried.length === 0
-                ? "随身背包是空的。"
-                : search || clothingSlotFilter || filter !== "all"
+              {allEntries.length === 0
+                ? "随身物品栏是空的。"
+                : search || filter !== "all"
                   ? "没有符合当前筛选条件的物品。"
-                  : "随身背包是空的。"}
+                  : "随身物品栏是空的。"}
             </span>
-            {(search || clothingSlotFilter || filter !== "all") && (
+            {(search || filter !== "all") && (
               <ActionButton
                 onClick={() => {
                   setFilter("all");
-                  setClothingSlotFilter(null);
                   setSearch("");
                 }}
               >
@@ -950,184 +799,175 @@ export function InventoryPage({
           </div>
         ) : (
           <div className={styles.browser}>
-            {backpack.length === 0 ? (
-              <div className={styles.emptyBox}>
-                <CellFrame />
-                <span>没有符合筛选条件的背包物品。</span>
-                {(search || clothingSlotFilter || filter !== "all") && (
-                  <ActionButton
-                    onClick={() => {
-                      setFilter("all");
-                      setClothingSlotFilter(null);
-                      setSearch("");
-                    }}
-                  >
-                    重置筛选
-                  </ActionButton>
-                )}
-              </div>
-            ) : (
-              <ul ref={listRef} className={styles.itemList} aria-label="选择背包物品">
-                {backpack.map(([id, count], index) => {
-                  const quick = quickItems.find((item) => item.id === id);
-                  const detail = inventory.details?.[id];
-                  const chip = carriedChipById.get(id);
-                  const art = itemArtOf(detail?.baseId ?? id);
-                  const rarity = detail?.rarity ?? inventory.rarity[id];
-                  const isSelected = !selectedIsWorn && selectedId === id;
-                  const isHeld =
-                    detail?.kind === "weapon" && Boolean(inventory.heldWeapons?.includes(id));
-                  const isSilenced =
-                    detail?.kind === "weapon" &&
-                    detail.noise === "silent" &&
-                    !detail.subLabel.includes("刀剑") &&
-                    !detail.subLabel.includes("钝器");
-                  const modSlots = detail?.kind === "weapon" ? detail.modSlots : [];
-                  const carryUnits = detail?.carryUnits ?? 0;
-                  const chipStatusTags = chip
-                    ? [
-                        chip.categoryLabel,
-                        chip.encrypted ? chip.encryptionLabel : null,
-                        chip.inspected && chip.hazard && chip.hazard !== "none"
-                          ? chip.hazardLabel
-                          : !chip.inspected && chip.category === "daemon"
-                            ? "未查毒"
-                            : null,
-                        chip.eddiesRemaining > 0 ? `含 ${chip.eddiesRemaining} €$` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : null;
+            <ul ref={listRef} className={styles.itemList} aria-label="选择随身物品">
+              {visibleEntries.map((entry, index) => {
+                const { id, count, worn } = entry;
+                const quick = worn ? undefined : quickItems.find((item) => item.id === id);
+                const detail = inventory.details?.[id];
+                const chip = worn ? undefined : carriedChipById.get(id);
+                const art = itemArtOf(detail?.baseId ?? id);
+                const rarity = detail?.rarity ?? inventory.rarity[id];
+                const isSelected = selectedEntry?.key === entry.key;
+                const isHeld =
+                  !worn &&
+                  detail?.kind === "weapon" &&
+                  Boolean(inventory.heldWeapons?.includes(id));
+                const isSilenced =
+                  !worn &&
+                  detail?.kind === "weapon" &&
+                  detail.noise === "silent" &&
+                  !detail.subLabel.includes("刀剑") &&
+                  !detail.subLabel.includes("钝器");
+                const modSlots = !worn && detail?.kind === "weapon" ? detail.modSlots : [];
+                const carryUnits = worn ? 0 : (detail?.carryUnits ?? 0);
+                const subLabel =
+                  detail?.subLabel ??
+                  (entry.slot ? inventoryRules.CLOTHING_SLOT_LABELS[entry.slot] : "物品");
+                const chipStatusTags = chip
+                  ? [
+                      chip.categoryLabel,
+                      chip.encrypted ? chip.encryptionLabel : null,
+                      chip.inspected && chip.hazard && chip.hazard !== "none"
+                        ? chip.hazardLabel
+                        : !chip.inspected && chip.category === "daemon"
+                          ? "未查毒"
+                          : null,
+                      chip.eddiesRemaining > 0 ? `含 ${chip.eddiesRemaining} €$` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : null;
 
-                  return (
-                    <li key={id}>
-                      <button
-                        type="button"
-                        data-item-index={index}
-                        className={styles.itemRow}
-                        aria-pressed={isSelected}
-                        data-rarity={rarity ?? undefined}
-                        data-iconic={detail?.iconic || undefined}
-                        data-flash={flashId === id || undefined}
-                        onClick={() => selectItem(id, false, index)}
-                        onDoubleClick={() => {
-                          selectItem(id, false, index);
-                          triggerSafePrimary(id);
-                        }}
-                      >
+                return (
+                  <li key={entry.key}>
+                    <button
+                      type="button"
+                      data-item-index={index}
+                      className={styles.itemRow}
+                      aria-pressed={isSelected}
+                      data-worn={worn || undefined}
+                      data-rarity={rarity ?? undefined}
+                      data-iconic={detail?.iconic || undefined}
+                      data-flash={flashId === id || undefined}
+                      onClick={() => selectItem(id, worn, index)}
+                      onDoubleClick={() => {
+                        selectItem(id, worn, index);
+                        triggerSafePrimary(entry);
+                      }}
+                    >
+                      <NineSlice
+                        id="map.filterCellBg"
+                        tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                        slice={CELL_SLICE}
+                      />
+                      <NineSlice id="map.filterCellFg" tint="var(--item-line)" slice={CELL_SLICE} />
+                      {rarity && (
                         <NineSlice
-                          id="map.filterCellBg"
-                          tint="var(--item-fill, rgb(13 15 24 / 82%))"
-                          slice={CELL_SLICE}
+                          id="cyber.cellRarity"
+                          tint="var(--rarity)"
+                          slice={0}
+                          className={styles.itemRarityBar}
                         />
-                        <NineSlice
-                          id="map.filterCellFg"
-                          tint="var(--item-line)"
-                          slice={CELL_SLICE}
+                      )}
+
+                      <span className={styles.itemThumb} aria-hidden>
+                        <span
+                          className={styles.itemThumbGrid}
+                          style={{ backgroundImage: cssUrl("fx.grid") }}
                         />
-                        {rarity && (
-                          <NineSlice
-                            id="cyber.cellRarity"
-                            tint="var(--rarity)"
-                            slice={0}
-                            className={styles.itemRarityBar}
-                          />
+                        {art ? (
+                          <Asset id={art} className={styles.itemArt} />
+                        ) : (
+                          <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
                         )}
+                      </span>
 
-                        <span className={styles.itemThumb} aria-hidden>
-                          <span
-                            className={styles.itemThumbGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
-                          />
-                          {art ? (
-                            <Asset id={art} className={styles.itemArt} />
-                          ) : (
-                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                      <span className={styles.itemInfo}>
+                        <span className={styles.itemTopLine}>
+                          <strong className={styles.itemName}>{itemName(id)}</strong>
+                          {worn && (
+                            <span className={styles.miniTag} data-tone="yellow">
+                              已穿
+                            </span>
+                          )}
+                          {isHeld && (
+                            <span className={styles.miniTag} data-tone="yellow">
+                              持用
+                            </span>
+                          )}
+                          {isSilenced && <span className={styles.miniTag}>消音</span>}
+                          {detail?.grantsSmartLink && (
+                            <span className={styles.miniTag} data-tone="yellow">
+                              智能
+                            </span>
+                          )}
+                          {chip?.slotted && (
+                            <span className={styles.miniTag} data-tone="green">
+                              插槽
+                            </span>
                           )}
                         </span>
 
-                        <span className={styles.itemInfo}>
-                          <span className={styles.itemTopLine}>
-                            <strong className={styles.itemName}>{itemName(id)}</strong>
-                            {isHeld && (
-                              <span className={styles.miniTag} data-tone="yellow">
-                                持用
-                              </span>
-                            )}
-                            {isSilenced && <span className={styles.miniTag}>消音</span>}
-                            {detail?.grantsSmartLink && (
-                              <span className={styles.miniTag} data-tone="yellow">
-                                智能
-                              </span>
-                            )}
-                            {chip?.slotted && (
-                              <span className={styles.miniTag} data-tone="green">
-                                插槽
-                              </span>
+                        <span className={styles.itemSubLine}>
+                          <span className={styles.itemSubText}>
+                            {chipStatusTags ?? (
+                              <>
+                                {subLabel}
+                                {detail?.rarityLabel && (
+                                  <>
+                                    {" · "}
+                                    <span className={styles.itemRarityWord}>
+                                      {detail.rarityLabel}
+                                    </span>
+                                  </>
+                                )}
+                              </>
                             )}
                           </span>
-
-                          <span className={styles.itemSubLine}>
-                            <span className={styles.itemSubText}>
-                              {chipStatusTags ?? (
-                                <>
-                                  {detail?.subLabel ?? "物品"}
-                                  {detail?.rarityLabel && (
-                                    <>
-                                      {" · "}
-                                      <span className={styles.itemRarityWord}>
-                                        {detail.rarityLabel}
-                                      </span>
-                                    </>
-                                  )}
-                                </>
-                              )}
-                            </span>
-                            {modSlots.length > 0 && (
-                              <span
-                                className={styles.modPips}
-                                title={`${modSlots.length} 个改装槽位`}
-                                aria-hidden="true"
-                              >
-                                {modSlots.map((slot) => {
-                                  const locked =
-                                    detail?.weaponState?.lockedSlots.includes(slot) ?? false;
-                                  const filled = Boolean(detail?.weaponState?.mods[slot]);
-                                  return (
-                                    <i
-                                      key={slot}
-                                      className={styles.modPip}
-                                      data-state={locked ? "locked" : filled ? "filled" : "empty"}
-                                    />
-                                  );
-                                })}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-
-                        <span className={styles.itemMeta}>
-                          {quick ? (
-                            <UnreadBadge>{`${quick.charges}/${quick.max}`}</UnreadBadge>
-                          ) : count > 1 ? (
-                            <b className={styles.itemCount}>×{count}</b>
-                          ) : null}
-                          {carryUnits > 0 && (
+                          {modSlots.length > 0 && (
                             <span
-                              className={styles.itemCarryTag}
-                              data-bulky={detail?.bulky || undefined}
-                              title={`单件携带负担 ${carryUnits} 分`}
+                              className={styles.modPips}
+                              title={`${modSlots.length} 个改装槽位`}
+                              aria-hidden="true"
                             >
-                              负担 {carryUnits}
+                              {modSlots.map((slot) => {
+                                const locked =
+                                  detail?.weaponState?.lockedSlots.includes(slot) ?? false;
+                                const filled = Boolean(detail?.weaponState?.mods[slot]);
+                                return (
+                                  <i
+                                    key={slot}
+                                    className={styles.modPip}
+                                    data-state={locked ? "locked" : filled ? "filled" : "empty"}
+                                  />
+                                );
+                              })}
                             </span>
                           )}
                         </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                      </span>
+
+                      <span className={styles.itemMeta}>
+                        {quick ? (
+                          <UnreadBadge>{`${quick.charges}/${quick.max}`}</UnreadBadge>
+                        ) : count > 1 ? (
+                          <b className={styles.itemCount}>×{count}</b>
+                        ) : null}
+                        {carryUnits > 0 && (
+                          <span
+                            className={styles.itemCarryTag}
+                            data-bulky={detail?.bulky || undefined}
+                            title={`单件携带负担 ${carryUnits} 分`}
+                          >
+                            负担 {carryUnits}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
 
             {selectedCtx &&
               (() => {
@@ -1638,10 +1478,10 @@ export function InventoryPage({
                             disabled={usingItem}
                             onClick={() => {
                               const nextFallback = Math.max(selectedIndex, 0);
-                              if (count <= 1 && !selectedIsWorn) {
+                              if (count <= 1) {
                                 setPickedItem({
                                   id,
-                                  worn: false,
+                                  worn: selectedIsWorn,
                                   fallbackIndex: nextFallback,
                                 });
                               }
