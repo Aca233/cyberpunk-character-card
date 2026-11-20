@@ -1,12 +1,22 @@
 import type { ApplyOutcome } from "../../kernel/system";
 import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from "../cyberware";
 import type { DamageTier } from "../dice";
+import { RARITY_LABELS, type Rarity } from "../economy";
 import { BODY_PART_LABELS, type BodyPart, INJURY_HEAL_MINUTES } from "../health";
 import { neuralDisplay, neuralStage, STAGE_LABELS } from "../humanity";
 import {
+  CLOTHING_SLOT_LABELS,
+  type ClothingSlot,
   defaultInstanceStateFromDef,
   formatWeaponWithMods,
+  ITEM_KIND_LABELS,
+  type ItemDef,
+  type ItemKind,
   itemCatalog,
+  MOD_SLOT_LABELS,
+  rarityOf,
+  WEAPON_CATEGORY_LABELS,
+  WEAPON_TYPE_LABELS,
   type WeaponInstanceState,
   WeaponInstanceStateSchema,
 } from "../inventory";
@@ -421,10 +431,46 @@ export function applyNpcBody(
   }
 }
 
-interface GearDetail {
+export interface GearDetail {
   readonly id: string;
   readonly baseId?: string;
   readonly name: string;
+  readonly kind: ItemKind;
+  readonly subLabel: string;
+  readonly clothingSlot?: ClothingSlot;
+  readonly rarity: Rarity | null;
+  readonly rarityLabel: string | null;
+  readonly iconic: boolean;
+  readonly ability: string | null;
+}
+
+const CLOTHING_SLOT_ORDER: Readonly<Record<ClothingSlot, number>> = {
+  head: 0,
+  face: 1,
+  outer: 2,
+  inner: 3,
+  legs: 4,
+  feet: 5,
+};
+
+function gearSubLabel(def: ItemDef | undefined): string {
+  if (!def) return "未登记物品";
+  if (def.kind === "weapon") {
+    return [
+      def.weaponType ? WEAPON_TYPE_LABELS[def.weaponType] : null,
+      def.category ? WEAPON_CATEGORY_LABELS[def.category] : null,
+    ]
+      .filter(Boolean)
+      .join("");
+  }
+  if (def.kind === "clothing" && def.clothingSlot) return CLOTHING_SLOT_LABELS[def.clothingSlot];
+  if (def.kind === "mod" && def.modSlot) return `改装 · ${MOD_SLOT_LABELS[def.modSlot]}`;
+  if (def.braindanceDevice?.playback) {
+    return (def.braindanceDevice.analysis.length ?? 0) > 0 ? "超梦编辑头环" : "超梦花环";
+  }
+  if (def.chipDevice) return def.chipDevice === "reader-writer" ? "隔离读写器" : "芯片阅读器";
+  if (def.chipContentId || def.chipStorage) return def.chipContentId ? "神经芯片" : "空白芯片";
+  return ITEM_KIND_LABELS[def.kind];
 }
 
 function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
@@ -434,12 +480,24 @@ function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
     const def = items.get(id);
     const ws =
       worldObjectWeaponState(data, id) ?? (def ? defaultInstanceStateFromDef(def) : undefined);
-    const baseName = def?.name ?? (ws ? items.get(ws.baseId)?.name : undefined) ?? id;
+    const baseDef = def ?? (ws ? items.get(ws.baseId) : undefined);
+    const baseName = baseDef?.name ?? id;
     const name = ws ? formatWeaponWithMods(baseName, ws, items) : baseName;
+    const rarity =
+      baseDef && (baseDef.rarity || baseDef.kind === "weapon") ? rarityOf(baseDef) : null;
     return {
       id,
       ...(ws && ws.baseId !== id ? { baseId: ws.baseId } : {}),
       name,
+      kind: baseDef?.kind ?? "misc",
+      subLabel: gearSubLabel(baseDef),
+      ...(baseDef?.kind === "clothing" && baseDef.clothingSlot
+        ? { clothingSlot: baseDef.clothingSlot }
+        : {}),
+      rarity,
+      rarityLabel: baseDef?.iconic ? "不朽" : rarity ? RARITY_LABELS[rarity] : null,
+      iconic: Boolean(baseDef?.iconic),
+      ability: baseDef?.ability ?? null,
     };
   });
 }
@@ -519,21 +577,34 @@ function injurySummaryText(injuries: readonly NpcInjuryView[]): string {
     .join("；");
 }
 
-/** 完整卡上的一行身体：定性伤势与具体创口、装备、义体（带部位和效果）、人性阶段；不输出 RPG 阶层或属性数字 */
+/** 完整卡上的一行身体：定性伤势与具体创口、衣着/武器/随身物品、义体（带部位和效果）、人性阶段；不输出 RPG 阶层或属性数字 */
 export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): string {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const injuries = projectInjuries(v.injuries);
   const woundText =
     injuries.length > 0 ? `${woundLabel(v)}（${injurySummaryText(injuries)}）` : woundLabel(v);
-  const gear = gearDetails(body.gear, data).map((item) => item.name);
+  const details = gearDetails(body.gear, data);
+  const clothing = details
+    .filter((item) => item.kind === "clothing")
+    .sort(
+      (a, b) =>
+        (a.clothingSlot ? CLOTHING_SLOT_ORDER[a.clothingSlot] : 9) -
+        (b.clothingSlot ? CLOTHING_SLOT_ORDER[b.clothingSlot] : 9),
+    );
+  const weapons = details.filter((item) => item.kind === "weapon");
+  const belongings = details.filter((item) => item.kind !== "clothing" && item.kind !== "weapon");
   const chrome = chromeDetails(body.cyberware, data);
-  return [
-    `身体状态：${woundText}`,
-    `装备：${gear.length ? gear.join("、") : "没有"}`,
-    `义体：${chromeText(chrome)}`,
-    `人性状态：${STAGE_LABELS[neuralStage(v)]}`,
-  ].join("；");
+  const segments = [`身体状态：${woundText}`];
+  if (clothing.length > 0) {
+    segments.push(`衣着：${clothing.map((item) => `${item.name}（${item.subLabel}）`).join("、")}`);
+  }
+  segments.push(`武装：${weapons.length ? weapons.map((item) => item.name).join("、") : "无"}`);
+  if (belongings.length > 0) {
+    segments.push(`随身物品：${belongings.map((item) => item.name).join("、")}`);
+  }
+  segments.push(`义体：${chromeText(chrome)}`, `人性状态：${STAGE_LABELS[neuralStage(v)]}`);
+  return segments.join("；");
 }
 
 /** 一行人物里带的伤势：没受伤不写 */

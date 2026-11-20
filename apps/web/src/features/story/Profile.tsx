@@ -298,10 +298,22 @@ export function ProfileHead({
                       role: npc.role,
                       faction: npc.faction,
                       look: npc.look,
-                      outfit: npc.outfit,
+                      outfit: [
+                        npc.outfit,
+                        (
+                          npc.body?.gear
+                            .filter((item) => item.kind === "clothing")
+                            .map((item) => item.name) ?? []
+                        ).join("、"),
+                      ]
+                        .filter(Boolean)
+                        .join("；"),
                       wounds: wound.detail,
                       cyberware: npc.body?.scan?.chrome.map((item) => item.name) ?? [],
-                      gear: npc.body?.gear.map((item) => item.name) ?? [],
+                      gear:
+                        npc.body?.gear
+                          .filter((item) => item.kind !== "clothing")
+                          .map((item) => item.name) ?? [],
                       instruction: "",
                     },
                   })
@@ -581,7 +593,74 @@ function OverviewSection({
   );
 }
 
-/** 身体与扫描：生物监测风格细线指标条 + 具体创伤明细 + 植入体行 + 底栏扫描动作 */
+type NpcGearItem = NonNullable<Npc["body"]>["gear"][number];
+
+const CLOTHING_SLOT_INDEX: Readonly<Record<string, number>> = {
+  head: 0,
+  face: 1,
+  outer: 2,
+  inner: 3,
+  legs: 4,
+  feet: 5,
+};
+
+function GearGroup({
+  title,
+  items,
+  tone,
+}: {
+  readonly title: string;
+  readonly items: readonly NpcGearItem[];
+  readonly tone: "clothing" | "weapon" | "item";
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={styles.subSection}>
+      <header className={styles.subHead}>
+        <h3 className={styles.subTitle}>{title}</h3>
+        <span className={styles.subCount}>{items.length}</span>
+      </header>
+      <ul className={styles.gearGrid} aria-label={title}>
+        {items.map((item) => {
+          const baseId =
+            "baseId" in item && typeof item.baseId === "string" ? item.baseId : item.id;
+          const art = itemArtOf(baseId);
+          const label = item.name.startsWith("wpn:") ? baseWeaponIdOf(item.name) : item.name;
+          return (
+            <li
+              key={item.id}
+              className={styles.gearCard}
+              data-tone={tone}
+              data-rarity={item.rarity ?? undefined}
+              data-iconic={item.iconic || undefined}
+              data-art={art ? true : undefined}
+              title={item.ability ?? undefined}
+            >
+              {art && <Asset id={art} alt={label} className={styles.gearArt} />}
+              <div className={styles.gearCopy}>
+                <div className={styles.gearHead}>
+                  <b>{label}</b>
+                  {item.subLabel && <span className={styles.gearMeta}>{item.subLabel}</span>}
+                </div>
+                {(item.rarityLabel || item.iconic) && (
+                  <div className={styles.gearBadges}>
+                    {item.rarityLabel && (
+                      <span className={styles.gearRarity}>{item.rarityLabel}</span>
+                    )}
+                    {item.iconic && <span className={styles.gearIconic}>不朽</span>}
+                  </div>
+                )}
+                {item.ability && <p className={styles.gearDesc}>{item.ability}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** 身体与扫描：生物监测风格细线指标条 + 衣着/武装/随身物品 + 具体创伤明细 + 植入体行 + 底栏扫描动作 */
 function BodySection({
   body,
   onScan,
@@ -592,6 +671,25 @@ function BodySection({
   const { scan } = body;
   const wound = npcWoundSummary(body);
   const injuries = body.injuries ?? [];
+  const clothes = [...body.gear]
+    .filter((item) => item.kind === "clothing")
+    .sort(
+      (a, b) =>
+        (CLOTHING_SLOT_INDEX[a.clothingSlot ?? ""] ?? 99) -
+        (CLOTHING_SLOT_INDEX[b.clothingSlot ?? ""] ?? 99),
+    );
+  const weapons = body.gear.filter((item) => item.kind === "weapon");
+  const carried = body.gear.filter((item) => item.kind !== "clothing" && item.kind !== "weapon");
+  const gearSummary =
+    body.gear.length > 0
+      ? [
+          clothes.length > 0 ? `衣着 ${clothes.length} 件` : null,
+          weapons.length > 0 ? `武装 ${weapons.length} 件` : null,
+          carried.length > 0 ? `随身物品 ${carried.length} 件` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "暂无登记";
   const scanTimeText = scan
     ? scan.at > 0
       ? `扫于 ${worldRules.formatGameTime(scan.at)}`
@@ -612,30 +710,9 @@ function BodySection({
             {wound.headline}
           </dd>
         </div>
-        <div className={`${styles.telemetryRow} ${styles.gearRow}`}>
-          <dt>随身装备</dt>
-          <dd className={styles.telemetryVal}>
-            {body.gear.length > 0 ? (
-              <ul className={styles.gearList} aria-label="随身装备清单">
-                {body.gear.map((item) => {
-                  const baseId =
-                    "baseId" in item && typeof item.baseId === "string" ? item.baseId : item.id;
-                  const art = itemArtOf(baseId);
-                  const label = item.name.startsWith("wpn:")
-                    ? baseWeaponIdOf(item.name)
-                    : item.name;
-                  return (
-                    <li key={item.id} className={styles.gearItem}>
-                      {art && <Asset id={art} alt={label} className={styles.gearArt} />}
-                      <span>{label}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              "—"
-            )}
-          </dd>
+        <div className={styles.telemetryRow}>
+          <dt>随身清点</dt>
+          <dd className={styles.telemetryVal}>{gearSummary}</dd>
         </div>
         {scan && (
           <div className={styles.telemetryRow}>
@@ -646,6 +723,10 @@ function BodySection({
           </div>
         )}
       </dl>
+
+      <GearGroup title="衣着穿戴" items={clothes} tone="clothing" />
+      <GearGroup title="随身武装" items={weapons} tone="weapon" />
+      <GearGroup title="随身物品" items={carried} tone="item" />
 
       {injuries.length > 0 ? (
         <div className={styles.subSection}>

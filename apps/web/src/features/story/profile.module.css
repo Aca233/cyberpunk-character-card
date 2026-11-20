@@ -682,36 +682,118 @@
   color: var(--cp-success);
 }
 
-.gearRow {
-  align-items: center;
-}
-
-.gearList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
+/* NPC 衣着、武装与随身物品分组卡 */
+.gearGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.gearItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.gearCard {
+  display: grid;
+  gap: 3px;
   min-width: 0;
-  max-width: 100%;
+  padding: 6px 9px;
+  background: rgb(14 21 33 / 52%);
+  border-inline-start: 2px solid var(--rarity-color, rgb(94 246 255 / 45%));
 }
 
-.gearItem > span {
-  min-width: 0;
+.gearCard:where([data-tone="clothing"]) {
+  border-inline-start-color: rgb(94 246 255 / 62%);
+}
+
+.gearCard:where([data-tone="weapon"]) {
+  border-inline-start-color: var(--rarity-color, var(--cp-red));
+}
+
+.gearCard:where([data-tone="item"]) {
+  border-inline-start-color: var(--rarity-color, rgb(243 230 0 / 58%));
+}
+
+.gearCard:where([data-iconic]) {
+  box-shadow: inset 0 0 0 1px rgb(243 230 0 / 26%);
+}
+
+.gearCard:where([data-art]) {
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 9px;
+  align-items: center;
 }
 
 .gearArt {
   flex: none;
-  width: 52px;
+  width: 44px;
   height: 36px;
   object-fit: contain;
+}
+
+.gearCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gearHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gearHead > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.gearMeta {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: rgb(148 184 196);
+}
+
+.gearBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.gearRarity {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--rarity-color, var(--cp-text-dim));
+}
+
+.gearIconic {
+  padding: 0 4px;
+  background: rgb(243 230 0 / 16%);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+}
+
+.gearDesc {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.42;
+  color: var(--cp-text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* 具体伤势明细 */

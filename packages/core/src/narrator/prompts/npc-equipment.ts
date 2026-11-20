@@ -2,7 +2,9 @@ import type { WorldState } from "../../kernel/world";
 import { cyberwareCatalog, SLOT_LABELS } from "../../systems/cyberware";
 import { RARITY_LABELS, type Rarity } from "../../systems/economy";
 import {
+  CLOTHING_SLOT_LABELS,
   InventoryStateSchema,
+  ITEM_KIND_LABELS,
   itemCatalog,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
@@ -91,18 +93,43 @@ export function npcEquipmentReference(
   }
 
   const weapons: Candidate[] = [];
+  const clothes: Candidate[] = [];
+  const belongings: Candidate[] = [];
   if (data.items !== undefined) {
     for (const item of itemCatalog(data).values()) {
-      if (item.kind !== "weapon" || item.iconic || objects[item.id] || item.id.startsWith("wpn:"))
-        continue;
-      const type = item.weaponType ? WEAPON_TYPE_LABELS[item.weaponType] : "近战";
-      weapons.push({
-        id: item.id,
-        name: item.name,
-        group: item.category ? WEAPON_CATEGORY_LABELS[item.category] : "其他武器",
-        variant: `${type}:${budget(item.rarity)}`,
-        line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${type}，${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${item.ability ?? "按实际武器结构使用"}`,
-      });
+      if (item.iconic || objects[item.id] || item.id.startsWith("wpn:")) continue;
+      if (item.kind === "weapon") {
+        const type = item.weaponType ? WEAPON_TYPE_LABELS[item.weaponType] : "近战";
+        weapons.push({
+          id: item.id,
+          name: item.name,
+          group: item.category ? WEAPON_CATEGORY_LABELS[item.category] : "其他武器",
+          variant: `${type}:${budget(item.rarity)}`,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${type}，${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${item.ability ?? "按实际武器结构使用"}`,
+        });
+      } else if (item.kind === "clothing" && item.clothingSlot) {
+        clothes.push({
+          id: item.id,
+          name: item.name,
+          group: CLOTHING_SLOT_LABELS[item.clothingSlot],
+          variant: item.id,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${item.ability ?? "常规穿着"}`,
+        });
+      } else if (
+        (item.kind === "healing" ||
+          item.kind === "grenade" ||
+          item.kind === "consumable" ||
+          item.kind === "misc") &&
+        !item.chipContentId
+      ) {
+        belongings.push({
+          id: item.id,
+          name: item.name,
+          group: ITEM_KIND_LABELS[item.kind],
+          variant: item.id,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（参考价 ${item.price ?? "未知"}）：${item.ability ?? "常见随身物品"}`,
+        });
+      }
     }
   }
   const chrome: Candidate[] = [];
@@ -124,7 +151,13 @@ export function npcEquipmentReference(
       line: `- ${includeIds ? `${part.id} ` : ""}${part.name}（${RARITY_LABELS[part.rarity]}，参考价 ${part.price}）：${part.ability}`,
     });
   }
-  if (weapons.length === 0 && chrome.length === 0) return undefined;
+  if (
+    weapons.length === 0 &&
+    clothes.length === 0 &&
+    belongings.length === 0 &&
+    chrome.length === 0
+  )
+    return undefined;
 
   const seed = `${world.time}:${npcs.length}`;
   const weaponPicks = representatives(weapons, gearCounts, seed);
@@ -142,14 +175,20 @@ export function npcEquipmentReference(
   const repeats = [...repeated(weapons, gearCounts), ...repeated(chrome, chromeCounts)];
   return [
     "【新人物装备选型参考】",
-    "由你根据人物事实推演配装，不套职业模板：先判断人物靠什么能力工作、怎样应付风险，再结合经历、财力和来源，按目录能力选武器与义体。工作确实依赖身体或神经增强且有合理可得型号时，选择能直接支持该工作的部位与型号；普通人无需求时可以不装。义眼只在视觉强化符合工作或经历时选择，不能用来填满义体栏。",
-    "以下按武器门类、义体部位及预算/体系抽取代表，带真实能力；只是参考，不是白名单，也不是逐组配齐的清单。顶级件需要相称的身份和来源，不能因候选里有就给普通路人。参考价只帮助把握财力，不是现货或成交授权；不朽与独立实物不作为普通新人物的随机配装。",
+    "由你根据人物事实推演配装，不套职业模板：先判断人物靠什么能力工作、日常穿着与随身携带什么物件、怎样应付风险，再结合经历、财力和来源，按目录能力选衣物、随身物品、武器与义体。普通市民、商贩或文职也会穿着合身衣物并携带日常小物或应急药剂，不因不持枪就把 gear 留空；工作确实依赖身体或神经增强且有合理可得型号时，选择能直接支持该工作的部位与型号；普通人无需求时可以不装。义眼只在视觉强化符合工作或经历时选择，不能用来填满义体栏。",
+    "以下按服装部位、随身物品、武器门类及义体部位抽取代表，带真实用途；只是参考，不是白名单，也不是逐组配齐的清单。顶级件需要相称的身份和来源，不能因候选里有就给普通路人。参考价只帮助把握财力，不是现货或成交授权；不朽与独立实物不作为普通新人物的随机配装。",
     "明确型号、已装能力与既有卡面优先；同伙可有制式共性，同轮新人物按职责分工，不无理由复制同一整套。智能武器的自导须有真实智能联锁；接入仓、斯安威斯坦、狂暴共享一个操作系统位置，其余遵守部位容量。",
     "只在新建人物或允许定型的未定人物初始化时用于选型；已有空义体栏也可能是确认的无植入，不能见到参考就补装或换装。未在正文暴露的植入物是幕后事实，玩家须有观察、告知或扫描来源才能知道；正文按实际需要表现装备，不逐件报清单。",
     ...(repeats.length > 0
       ? [
           `近期已见自创人物中重复的型号：${repeats.join("、")}。用途与财力相当时可考虑其他型号；常见装备仍可合理重复。`,
         ]
+      : []),
+    ...(clothes.length > 0
+      ? [`服装候选（写入 body.gear，与 outfit 一致）\n${groupedLines(clothes)}`]
+      : []),
+    ...(belongings.length > 0
+      ? [`随身物品候选（药剂、工具、日常物件，写入 body.gear）\n${groupedLines(belongings)}`]
       : []),
     ...(weaponPicks.length > 0 ? [`武器候选\n${groupedLines(weaponPicks)}`] : []),
     ...(chromePicks.length > 0 ? [`义体候选\n${groupedLines(chromePicks)}`] : []),

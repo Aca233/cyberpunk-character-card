@@ -60,7 +60,18 @@ describe("NPC 的身体与物件持续存在", () => {
       ],
     };
     const beforeScan = bodyView(npc, data, 10);
-    expect(beforeScan.gear).toEqual([{ id: "unity", name: "统一手枪" }]);
+    expect(beforeScan.gear).toEqual([
+      {
+        id: "unity",
+        name: "统一手枪",
+        kind: "weapon",
+        subLabel: "威能手枪",
+        rarity: "common",
+        rarityLabel: "普通",
+        iconic: false,
+        ability: null,
+      },
+    ]);
     expect(beforeScan.scan).toBeNull();
     expect(applyNpcBody(npc, { type: "npcScan", id: npc.id }, 10, data).ok).toBe(true);
     expect(bodyView(npc, data, 10).scan).toMatchObject({
@@ -75,7 +86,7 @@ describe("NPC 的身体与物件持续存在", () => {
       ],
     });
     expect(bodyLine(npc, data, 10)).toContain(
-      "装备：统一手枪；义体：基础岐路司义眼（眼部：提供变焦和目标扫描）",
+      "武装：统一手枪；义体：基础岐路司义眼（眼部：提供变焦和目标扫描）",
     );
   });
   it("浅伤不按次数扣死人物；未治疗重伤不靠跨场等待消失", () => {

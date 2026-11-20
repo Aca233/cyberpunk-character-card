@@ -43,7 +43,7 @@ const NpcIdSchema = z
   .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 rebecca");
 
 /** 装备与植入物记录上限。 */
-export const NPC_GEAR_MAX = 6;
+export const NPC_GEAR_MAX = 12;
 export const NPC_CHROME_MAX = 8;
 /** 具体装备、义体与已确认的初始症状，不含阶层、HP 或人性点数。 */
 export const NpcBodyCardSchema = z
@@ -176,9 +176,9 @@ export const NpcCardSchema = z.object({
       "常驻地点 id（有固定店面/据点/常混的街区地标时填表内地点 id 或当前 location；流动作战可不写）",
     ),
   canon: z.boolean().default(false),
-  /** 身体：随身装备、义体、开局人性；不写按空身补 */
+  /** 身体：随身衣物、武器、物品与义体；不写按空身补 */
   body: NpcBodyCardSchema.optional().describe(
-    "随身武装与义体：gear（物品表 id，含武器与衣物）、cyberware（义体表 id）；不写属性点或档位",
+    "随身衣物、武装、物品与义体：gear（物品表 id，含服装、武器与药剂/工具/日常小物）、cyberware（义体表 id）；不写属性点或档位",
   ),
 });
 export type NpcCard = z.infer<typeof NpcCardSchema>;
@@ -673,7 +673,7 @@ export const NpcGearSchema = z
     item: z.string().min(1).describe("物品表里的 id"),
   })
   .describe(
-    `有卡的人的装备栏换了东西：拿到新武器、换衣服、丢了枪；最多 ${NPC_GEAR_MAX} 件。玩家角色给他买的，同时写 money 扣钱`,
+    `有卡的人的装备与随身物品发生变化：拿到新武器、换穿/脱下衣服、收下或递出药剂工具等物品、丢了东西；最多 ${NPC_GEAR_MAX} 件。玩家角色给他买的，同时写 money 扣钱`,
   );
 export type NpcGear = z.infer<typeof NpcGearSchema>;
 

@@ -73,29 +73,38 @@ export function buildImageSceneContext(
     )
     .sort((a, b) => Number(narrative.includes(b.name)) - Number(narrative.includes(a.name)))
     .slice(0, 31)
-    .map((npc) => ({
-      id: npc.id,
-      name: npc.name,
-      alias: npc.alias ?? "",
-      pronoun: npc.pronoun,
-      role: npc.role,
-      look:
-        npc.look.startsWith(NPC_UNDECIDED_PREFIX) ||
-        npc.look === "初见时未细看长相，待正式照面后写入档案"
-          ? ""
-          : npc.look,
-      outfit: npc.outfit ?? "",
-      wounds: npc.body
-        ? [
-            npc.body.wound,
-            ...npc.body.injuries.map(
-              (injury) => `${injury.partLabel} · ${injury.tierLabel} · ${injury.cause}`,
-            ),
-          ].join("；")
-        : "",
-      cyberware: npc.body?.scan?.chrome.map((item) => item.name) ?? [],
-      gear: npc.body?.gear.map((item) => item.name) ?? [],
-    }));
+    .map((npc) => {
+      const wornClothes =
+        npc.body?.gear.filter((item) => item.kind === "clothing").map((item) => item.name) ?? [];
+      const carriedGear =
+        npc.body?.gear.filter((item) => item.kind !== "clothing").map((item) => item.name) ?? [];
+      const outfit = [npc.outfit, wornClothes.length > 0 ? wornClothes.join("、") : ""]
+        .filter(Boolean)
+        .join("；");
+      return {
+        id: npc.id,
+        name: npc.name,
+        alias: npc.alias ?? "",
+        pronoun: npc.pronoun,
+        role: npc.role,
+        look:
+          npc.look.startsWith(NPC_UNDECIDED_PREFIX) ||
+          npc.look === "初见时未细看长相，待正式照面后写入档案"
+            ? ""
+            : npc.look,
+        outfit,
+        wounds: npc.body
+          ? [
+              npc.body.wound,
+              ...npc.body.injuries.map(
+                (injury) => `${injury.partLabel} · ${injury.tierLabel} · ${injury.cause}`,
+              ),
+            ].join("；")
+          : "",
+        cyberware: npc.body?.scan?.chrome.map((item) => item.name) ?? [],
+        gear: carriedGear,
+      };
+    });
   return ImageSceneContextSchema.parse({
     location: (names.location ?? clock.location ?? "").slice(0, 300),
     district: (names.district ?? "").slice(0, 160),
