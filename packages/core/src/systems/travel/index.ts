@@ -23,7 +23,17 @@ const VEHICLE_CONTEXT = /车|摩托|开|驾驶|骑|追|逃|甩|停|抛|弃|丢|�
 /** 出行和载具：路线面板确认的移动按路线表推进时间、扣路费、换地点，换城区时按几率定路上的偶遇；名下的车、偷车、追车 */
 export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | VehicleGrant>({
   id: "travel",
-  dependsOn: ["world", "economy", "heat", "character", "combat", "inventory", "cyberware"],
+  dependsOn: [
+    "world",
+    "economy",
+    "heat",
+    "character",
+    "combat",
+    "inventory",
+    "cyberware",
+    "factions",
+    "ncpd",
+  ],
   state: TravelStateSchema,
   initial: () => ({
     trips: [],

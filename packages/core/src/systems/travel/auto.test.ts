@@ -135,3 +135,89 @@ describe("autoMove（用户定的自动转出行、500 米内步行）", () => {
     expect(autoMove(world(0, null), data, "c")).toEqual({ kind: "none" });
   });
 });
+
+describe("路线联动（狗镇封锁、帮派敌对地盘、NCPD 警情、ft: 地铁站）", () => {
+  const linkageData: Readonly<Record<string, unknown>> = {
+    locations: [
+      { id: "watson_hub", name: "沃森枢纽", district: "沃森", x: 10, y: 10, metro: true },
+      { id: "dogtown_gate", name: "狗镇黑市", district: "狗镇", x: 30, y: 60 },
+      { id: "maelstrom_den", name: "全食品厂", district: "沃森", x: 22, y: 12 },
+    ],
+    mapAreas: {
+      districts: [
+        { id: "watson", name: "沃森", label: [15, 15], points: "0,0 50,0 50,50 0,50" },
+        { id: "dogtown", name: "狗镇", label: [30, 60], points: "0,50 50,50 50,100 0,100" },
+      ],
+      subdistricts: [],
+      centers: { 沃森: { x: 15, y: 15 }, 狗镇: { x: 30, y: 60 } },
+      kinds: [],
+    },
+    radar: [{ id: "ft:metro_north", name: "北区地铁站", kind: "地铁站", x: 25, y: 15 }],
+    factions: [
+      {
+        id: "maelstrom",
+        name: "漩涡帮",
+        en: "Maelstrom",
+        kind: "gang",
+        turf: ["沃森"],
+        style: "改造狂",
+        color: "#ff2a55",
+        allies: [],
+        enemies: [],
+        initial: "neutral",
+        source: "test",
+      },
+    ],
+  };
+
+  it("跨狗镇边界：Delamain 禁用且其他方式提示幽冥犬关口检查并抬高风险", () => {
+    const w = world(500, "watson_hub");
+    const routes = routeOptions(w, linkageData, "dogtown_gate");
+    const taxi = routes.find((r) => r.mode === "taxi");
+    const walk = routes.find((r) => r.mode === "walk");
+    expect(taxi?.blocked).toContain("Delamain");
+    expect(walk?.warnings?.some((msg) => msg.includes("狗镇"))).toBe(true);
+    expect(walk?.risk).toBe("medium");
+  });
+
+  it("敌对帮派地盘与当地活跃警情写入路线 warnings 并抬升风险", () => {
+    const w: TripWorld = {
+      ...world(500, "watson_hub"),
+      factions: {
+        stances: {
+          maelstrom: { attitude: "kos", reason: "砸了场子", at: 100 },
+        },
+        turf: [],
+      },
+      ncpd: {
+        alerts: [
+          {
+            id: "ncpd-1",
+            template: "shootout",
+            label: "帮派交火",
+            note: "街头火拼",
+            district: "沃森",
+            location: "maelstrom_den",
+            reward: 500,
+            risk: 2,
+            postedAt: 100,
+            expiresAt: 1500,
+          },
+        ],
+        lastPostedAt: 100,
+        nextId: 2,
+        cleared: 0,
+      },
+    };
+    const walk = routeOptions(w, linkageData, "maelstrom_den").find((r) => r.mode === "walk");
+    expect(walk?.risk).toBe("high");
+    expect(walk?.warnings?.some((msg) => msg.includes("漩涡帮"))).toBe(true);
+    expect(walk?.warnings?.some((msg) => msg.includes("警情"))).toBe(true);
+  });
+
+  it("ft: 地铁站支持轻轨路线，无需事先访问登记", () => {
+    const w = world(0, "watson_hub");
+    const metro = routeOptions(w, linkageData, "ft:metro_north").find((r) => r.mode === "metro");
+    expect(metro?.blocked).toBeUndefined();
+  });
+});

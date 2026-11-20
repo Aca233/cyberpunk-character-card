@@ -106,9 +106,9 @@ function atDestination(
 
 /** 按指令原有先后移动，不能把第二家店的出行挪到第一笔交易之前。 */
 function applyMovement(world: WorldState, command: Command, ctx: ApplyContext): ApplyBatchResult {
-  if (command.type !== "world" || typeof command.location !== "string")
+  if (command.type !== "world" || command.location === undefined)
     return registry.applyCommands(world, [command], ctx);
-  // 首访 poi: 也先在临时状态解析地点；不能只认识已经存过档的地点。
+  // 首访 poi:/ft: 或新建 {name, in, sub?} 地点都先在临时状态解析落点，统一走 autoMove 路程核算。
   const located = registry.applyCommands(world, [{ ...command, time: world.time }], ctx);
   if (!located.results[0]?.result.ok) return located;
   const target = WorldClockStateSchema.parse(located.world.slices.world).location;
@@ -130,7 +130,14 @@ function applyMovement(world: WorldState, command: Command, ctx: ApplyContext): 
     );
   const travel = registry.applyCommands(
     world,
-    [{ type: "travel", to: target, mode: move.trip.route.mode }],
+    [
+      {
+        type: "travel",
+        to: target,
+        mode: move.trip.route.mode,
+        ...(move.trip.route.vehicle ? { vehicle: move.trip.route.vehicle } : {}),
+      },
+    ],
     {
       ...ctx,
       data,

@@ -87,6 +87,8 @@ export const SavedPlaceSchema = z.object({
   note: z.string().min(1).optional(),
   /** 原作服务点的类别 id（gun、ripperdoc……）；新地点没有 */
   kind: z.string().min(1).optional(),
+  /** 附近有 NCART 轻轨站（原作 ft:* 地铁站自带 true） */
+  metro: z.boolean().optional(),
   /** 底图百分比 */
   x: z.number(),
   y: z.number(),
@@ -117,6 +119,8 @@ export type WorldClockState = z.infer<typeof WorldClockStateSchema>;
 export const NewPlaceSchema = z.object({
   name: z.string().min(1),
   in: z.string().min(1),
+  /** 可选街区中文名（如 北区、歌舞伎、日本街、谷地），用于同城跨街区精确定位 */
+  sub: z.string().min(1).optional(),
   note: z.string().min(1).optional(),
 });
 export type NewPlace = z.infer<typeof NewPlaceSchema>;
@@ -130,11 +134,11 @@ export const WorldCommandSchema = z
     time: GameTimeSchema.optional(),
     /** 3.0 相位推进步数（跨区办事、打完一场委托、动手术、睡觉各耗 1 相位） */
     phases: z.number().int().min(0).max(4).optional(),
-    /** 【地点】里的 id；到了新地方写 {name, in} */
+    /** 【地点】里的 id；到了新地方写 {name, in, sub?, note?} */
     location: z.union([z.string().min(1), NewPlaceSchema]).optional(),
   })
   .describe(
-    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, note?}，不写坐标",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, sub?（街区中文名）, note?}，不写坐标",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 
@@ -163,6 +167,8 @@ export const LocationDefSchema = z.object({
   name: z.string().min(1),
   /** 所在地区的中文名，例如沃森、威斯特布鲁克 */
   district: z.string().min(1),
+  /** 所在街区的中文名，例如歌舞伎、北区 */
+  sub: z.string().min(1).optional(),
   /** 给模型看的一句话 */
   note: z.string().min(1).optional(),
   /** 地图上的位置：底图宽、高的百分比（0–100），在 /dev/calibrate 校准；没写的不上地图 */

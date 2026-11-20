@@ -135,9 +135,11 @@ export function landmarkAnchors(
     .map((a) => ({ id: a.id, kind: (a as { kind?: string | null }).kind ?? null }));
 }
 
-function radarOf(data: Data): readonly { id: string; name: string; x: number; y: number }[] {
+function radarOf(
+  data: Data,
+): readonly { id: string; name: string; kind?: string | null; x: number; y: number }[] {
   return Array.isArray(data.radar)
-    ? (data.radar as { id: string; name: string; x: number; y: number }[])
+    ? (data.radar as { id: string; name: string; kind?: string | null; x: number; y: number }[])
     : [];
 }
 
@@ -147,6 +149,26 @@ function districtAt(areas: Areas, p: Pt): string {
 
 function subAt(areas: Areas, p: Pt): string | undefined {
   return areas.subs.find((s) => inside(s.poly, p.x, p.y))?.name;
+}
+
+/** 按中文名或 id 查指定城区内的街区多边形；找不到返回 undefined */
+function findSubArea(
+  areas: Areas,
+  district: string,
+  rawSub: string | undefined,
+): (Area & { readonly district: string }) | undefined {
+  const text = rawSub?.trim();
+  if (!text) return undefined;
+  const distId = areas.districts.find((d) => d.name === district)?.id;
+  const key = text.toLowerCase();
+  return areas.subs.find(
+    (s) =>
+      (distId === undefined || s.district === distId) &&
+      (s.name === text ||
+        s.id.toLowerCase() === key ||
+        s.name.includes(text) ||
+        text.includes(s.name)),
+  );
 }
 
 // ———— 坐标推算 ————
@@ -168,31 +190,39 @@ function offset(p: Pt, angle: number, r: number): Pt {
   return { x: p.x + r * Math.cos(angle), y: p.y - r * Math.sin(angle) };
 }
 
-/** 点在不在这个城区里；恶土是所有城区轮廓之外 */
-function fits(areas: Areas, district: string, p: Pt): boolean {
+/** 点在不在这个城区（以及可选街区）里；恶土是所有城区轮廓之外 */
+function fits(areas: Areas, district: string, p: Pt, subArea?: Area): boolean {
   if (p.x < 0 || p.x > 100 || p.y < 0 || p.y > 100) return false;
-  return districtAt(areas, p) === district;
+  if (districtAt(areas, p) !== district) return false;
+  return subArea ? inside(subArea.poly, p.x, p.y) : true;
 }
 
-/** 落到城区外面时往城区中心拉，拉不回来就用中心（§四：不落到城区边界外面） */
-function fitInto(areas: Areas, district: string, p: Pt): Pt {
-  if (fits(areas, district, p)) return p;
-  const c = areas.centers.get(district) ?? p;
+/** 落到城区/街区外面时往中心拉，拉不回来就用中心（§四：不落到边界外面） */
+function fitInto(areas: Areas, district: string, p: Pt, subArea?: Area): Pt {
+  if (fits(areas, district, p, subArea)) return p;
+  const c = subArea?.label ?? areas.centers.get(district) ?? p;
   for (let t = 0.1; t < 1; t += 0.1) {
     const q = { x: p.x + (c.x - p.x) * t, y: p.y + (c.y - p.y) * t };
-    if (fits(areas, district, q)) return q;
+    if (fits(areas, district, q, subArea)) return q;
   }
   return c;
 }
 
-/** 和已有的点叠在一起就绕着错开一点（§四），仍要在城区里 */
-function spread(areas: Areas, district: string, p: Pt, taken: readonly Pt[], seed: number): Pt {
+/** 和已有的点叠在一起就绕着错开一点（§四），仍要在城区/街区里 */
+function spread(
+  areas: Areas,
+  district: string,
+  p: Pt,
+  taken: readonly Pt[],
+  seed: number,
+  subArea?: Area,
+): Pt {
   const clear = (q: Pt) => taken.every((t) => Math.hypot(t.x - q.x, t.y - q.y) >= MIN_GAP);
   if (clear(p)) return p;
   for (let ring = 1; ring <= 6; ring++) {
     for (let k = 0; k < 8; k++) {
       const q = offset(p, seed * 2 * Math.PI + (k * Math.PI) / 4, ring * MIN_GAP);
-      if (fits(areas, district, q) && clear(q)) return q;
+      if (fits(areas, district, q, subArea) && clear(q)) return q;
     }
   }
   return p;
@@ -206,8 +236,10 @@ function hereOf(data: Data, clock: Pick<WorldClockState, "location">): LocationD
 }
 
 /**
- * 新地方的坐标：玩家就在这个城区时从玩家脚下找，否则从城区中心找；贴到最近的原作路边，
- * 贴不上就拉回城区里、和已有的点错开。偏移用地点 id 做种子，同一个地方每次算出来一样
+ * 新地方的坐标：
+ * - 指定了街区（sub）时：玩家就在该街区则从玩家脚下找，否则从该街区中心找并优先贴在街区内路面；
+ * - 未指定街区时：玩家就在该城区则从玩家脚下找，否则从城区中心找；
+ * 贴不上就拉回边界内并和已有地点错开。偏移用地点 id 做种子，同一个地方每次算出来一样
  */
 function inferSpot(
   areas: Areas,
@@ -215,15 +247,27 @@ function inferSpot(
   clock: Pick<WorldClockState, "location" | "places">,
   district: string,
   id: string,
+  subArea?: Area,
 ): Pt {
   const here = hereOf(data, clock);
-  const p: Pt =
-    here?.x !== undefined && here.y !== undefined && here.district === district
-      ? { x: here.x, y: here.y }
+  const herePt =
+    here?.x !== undefined && here.y !== undefined ? { x: here.x, y: here.y } : undefined;
+  const inTargetSub =
+    subArea !== undefined && herePt !== undefined && inside(subArea.poly, herePt.x, herePt.y);
+  const p: Pt = subArea
+    ? inTargetSub && herePt
+      ? herePt
+      : subArea.label
+    : herePt && here?.district === district
+      ? herePt
       : (areas.centers.get(district) ?? { x: 50, y: 50 });
   const taken = [...clock.places, ...radarOf(data)].map((t) => ({ x: t.x, y: t.y }));
-  const road = snapToRoad(areas, data, district, p, taken);
-  const q = road ?? spread(areas, district, fitInto(areas, district, p), taken, seedOf(id));
+  const road =
+    snapToRoad(areas, data, district, p, taken, subArea) ??
+    (subArea ? snapToRoad(areas, data, district, p, taken) : undefined);
+  const q =
+    road ??
+    spread(areas, district, fitInto(areas, district, p, subArea), taken, seedOf(id), subArea);
   return { x: round(q.x), y: round(q.y) };
 }
 
@@ -256,6 +300,7 @@ function snapToRoad(
   district: string,
   p: Pt,
   taken: readonly Pt[],
+  subArea?: Area,
 ): Pt | undefined {
   const spots = roadSpotsOf(data);
   if (spots.length === 0) return undefined;
@@ -265,7 +310,7 @@ function snapToRoad(
     .sort((a, b) => a.d - b.d)
     .find(
       (c) =>
-        fits(areas, district, c.s) &&
+        fits(areas, district, c.s, subArea) &&
         taken.every((t) => Math.hypot(t.x - c.s.x, t.y - c.s.y) >= MIN_GAP),
     )?.s;
 }
@@ -333,11 +378,13 @@ function anchorPlace(data: Data, id: string, now: number): SavedPlace | undefine
     const a = radarOf(data).find((r) => r.id === id);
     if (!a) return undefined;
     const sub = subAt(areas, a);
+    const metro = a.kind === "地铁站";
     return {
       id,
       name: a.name,
       district: districtAt(areas, a),
       ...(sub ? { sub } : {}),
+      ...(metro ? { metro: true } : {}),
       x: a.x,
       y: a.y,
       firstSeenAt: now,
@@ -357,16 +404,45 @@ export function locationForTravel(data: Data, id: string): LocationDef | undefin
     id: entry.id,
     name: entry.name,
     district: entry.district,
+    ...(entry.sub ? { sub: entry.sub } : {}),
     x: entry.x,
     y: entry.y,
+    ...(entry.metro ? { metro: true } : {}),
     ...(entry.kind ? { kind: entry.kind } : {}),
   };
 }
 
+/** 从自由文本里拆出可能附带的城区名（如 "沃森 · 无名小巷" / "日本街暗巷"）用于兜底落点 */
+function inferFallbackDistrict(
+  areas: Areas,
+  data: Data,
+  draft: Draft<WorldClockState>,
+  text: string,
+): { readonly district: string; readonly name: string; readonly sub?: string } {
+  for (const d of areas.centers.keys()) {
+    if (text.includes(d)) {
+      const cleaned = text
+        .replace(d, "")
+        .replace(/^[\s·\-—–:：/]+|[\s·\-—–:：/]+$/g, "")
+        .trim();
+      return { district: d, name: cleaned || text };
+    }
+  }
+  for (const s of areas.subs) {
+    if (text.includes(s.name)) {
+      const dName = areas.districts.find((d) => d.id === s.district)?.name;
+      if (dName) return { district: dName, name: text, sub: s.name };
+    }
+  }
+  const here = hereOf(data, draft);
+  return { district: here?.district ?? OUTSIDE, name: text };
+}
+
 /**
- * world 指令的 location 换成地点 id：已有的 id 原样；poi:、ft: 第一次去的记下；
- * 中文名对得上地点表或存档地点的换成那个 id；都对不上的照旧存中文名（旧存档兼容）。
- * 写了 poi:、ft: 却不认识时拒收
+ * world 指令的 location 换成地点 id：
+ * - 已有 id 原样；poi:、ft: 第一次去记下（不存在则拒收）；
+ * - 中文名对得上地点表或存档地点的换成那个 id；
+ * - 未匹配但具备地图数据时，自动兜底落点建 place:N，避免玩家掉出地图失去路由能力。
  */
 export function resolveLocation(
   draft: Draft<WorldClockState>,
@@ -386,7 +462,32 @@ export function resolveLocation(
     book.push(entry);
     return { ok: true, id: text, note: `记下地点 ${entry.name}（${entry.district}）` };
   }
-  return { ok: true, id: findByName(data, draft, text) ?? text };
+  const matched = findByName(data, draft, text);
+  if (matched !== undefined) return { ok: true, id: matched };
+  const areas = areasOf(data);
+  if (!areas) return { ok: true, id: text };
+  const inferred = inferFallbackDistrict(areas, data, draft, text);
+  const cleanedMatch = findByName(data, draft, inferred.name);
+  if (cleanedMatch !== undefined) return { ok: true, id: cleanedMatch };
+  const subArea = findSubArea(areas, inferred.district, inferred.sub);
+  const id = nextId(book);
+  const spot = inferSpot(areas, data, draft, inferred.district, id, subArea);
+  const sub = subAt(areas, spot) ?? subArea?.name;
+  book.push({
+    id,
+    name: inferred.name,
+    district: inferred.district,
+    ...(sub ? { sub } : {}),
+    x: spot.x,
+    y: spot.y,
+    firstSeenAt: now,
+    visitedAt: now,
+  });
+  return {
+    ok: true,
+    id,
+    note: `自动落点 ${inferred.name}（${inferred.district}${sub ? ` · ${sub}` : ""}）`,
+  };
 }
 
 /** 到了存档记下的地点：记最近去过的时间 */
@@ -424,11 +525,14 @@ export function createPlace(
     return { ok: true, notes: [`地点里已有 ${name}，用原来那一条`] };
   }
   const id = nextId(book);
-  const spot = inferSpot(areas, data, draft, district, id);
+  const subArea = findSubArea(areas, district, place.sub);
+  const spot = inferSpot(areas, data, draft, district, id, subArea);
+  const sub = subAt(areas, spot) ?? subArea?.name;
   book.push({
     id,
     name,
     district,
+    ...(sub ? { sub } : {}),
     ...(place.note !== undefined ? { note: place.note } : {}),
     x: spot.x,
     y: spot.y,
@@ -436,7 +540,7 @@ export function createPlace(
     visitedAt: now,
   });
   draft.location = id;
-  return { ok: true, notes: [`记下新地点 ${name}（${district}）`] };
+  return { ok: true, notes: [`记下新地点 ${name}（${district}${sub ? ` · ${sub}` : ""}）`] };
 }
 
 // ———— 并进地点表（world 系统的 data 钩子） ————
@@ -460,9 +564,11 @@ export function withPlaces(data: Data, places: readonly SavedPlace[] | undefined
         id: p.id,
         name: p.name,
         district: p.district,
+        ...(p.sub !== undefined ? { sub: p.sub } : {}),
         ...(p.note !== undefined ? { note: p.note } : {}),
         x: clampPct(p.x),
         y: clampPct(p.y),
+        ...(p.metro === true ? { metro: true } : {}),
         ...(p.kind !== undefined ? { kind: p.kind } : {}),
       })),
   ];
@@ -578,5 +684,5 @@ export const placeRules: RuleModule<WorldClockState> = {
   when: () => true,
   // 用户定的"统一为地点"（2026-11-02）：location 只有两种写法，店从【地点】里挑
   text: `- 去【地点】里有的地方：world 的 location 写它的 id。要找某一类店（武器店、义体医生、酒吧……），从【地点】里按括号里的类别挑，不要自己编店。
-- 【地点】里没有的新地方：location 写 {"name": "中文名", "in": "城区"}，in 必填（沃森、威斯特布鲁克、市政中心、海伍德、圣多明戈、太平洲、狗镇、恶土），可加 note；不写坐标，代码定位置，同名的用原来那一条。`,
+- 【地点】里没有的新地方：location 写 {"name": "中文名", "in": "城区", "sub": "街区（可选）"}，in 必填（沃森、威斯特布鲁克、市政中心、海伍德、圣多明戈、太平洲、狗镇、恶土），跨街区或明确街区时写 sub（如 北区、歌舞伎、小唐人街、日本街、谷地），可加 note；不写坐标，代码定位置，同名的用原来那一条。`,
 };

@@ -4,7 +4,16 @@ import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { CharacterStateSchema } from "../character";
 import { CombatStateSchema } from "../combat";
 import { EconomyStateSchema } from "../economy";
+import {
+  attitudeLabel,
+  currentAttitude,
+  currentTurf,
+  type FactionsState,
+  FactionsStateSchema,
+  factionCatalog,
+} from "../factions";
 import { HeatStateSchema } from "../heat";
+import { type NcpdState, NcpdStateSchema } from "../ncpd";
 import {
   formatGameTime,
   type LocationDef,
@@ -67,6 +76,8 @@ export interface RouteOption {
   readonly cost: number;
   readonly risk: Risk;
   readonly riskLabel: string;
+  /** 路线风险提示（帮派地盘、狗镇关口、警情等） */
+  readonly warnings?: readonly string[];
   /** 走不了时写原因 */
   readonly blocked?: string;
 }
@@ -81,6 +92,8 @@ export interface TripWorld {
   readonly eddies: number;
   readonly inCombat: boolean;
   readonly travel: TravelState;
+  readonly factions?: FactionsState;
+  readonly ncpd?: NcpdState;
 }
 
 export function tripWorldOf(world: {
@@ -105,6 +118,10 @@ export function tripWorldOf(world: {
         nextVehicleId: 1,
       },
     ),
+    ...(world.slices.factions !== undefined
+      ? { factions: FactionsStateSchema.parse(world.slices.factions) }
+      : {}),
+    ...(world.slices.ncpd !== undefined ? { ncpd: NcpdStateSchema.parse(world.slices.ncpd) } : {}),
   };
 }
 
@@ -239,6 +256,67 @@ export function tripDistance(
   return { d: (la.meters + mid + lb.meters) / 100 };
 }
 
+const RISK_ORDER: readonly Risk[] = ["low", "medium", "high"];
+
+function raiseRisk(a: Risk, b: Risk): Risk {
+  return RISK_ORDER.indexOf(a) >= RISK_ORDER.indexOf(b) ? a : b;
+}
+
+function crossesDogtown(here: LocationDef | undefined, there: LocationDef | undefined): boolean {
+  if (!here || !there || here.district === there.district) return false;
+  return here.district === "狗镇" || there.district === "狗镇";
+}
+
+function routeHazard(
+  w: TripWorld,
+  data: Readonly<Record<string, unknown>>,
+  mode: TravelMode,
+  period: Period,
+  here: LocationDef | undefined,
+  there: LocationDef | undefined,
+): { readonly risk: Risk; readonly warnings: readonly string[] } {
+  let risk = riskOf(mode, period, w.heat);
+  const warnings: string[] = [];
+
+  if (crossesDogtown(here, there)) {
+    if (mode === "stolen") {
+      risk = "high";
+      warnings.push("幽冥犬关口严查，开偷来的车极易暴露");
+    } else if (w.heat >= 2) {
+      risk = "high";
+      warnings.push("通缉在身，过狗镇关口风险极高");
+    } else {
+      risk = raiseRisk(risk, "medium");
+      warnings.push("需经狗镇幽冥犬关口检查");
+    }
+  }
+
+  if (there && w.factions) {
+    const turf = currentTurf(w.factions, data, true);
+    for (const f of factionCatalog(data).values()) {
+      if (!(turf.get(f.id) ?? f.turf).includes(there.district)) continue;
+      const att = currentAttitude(w.factions, f);
+      if (att === "kos") {
+        risk = raiseRisk(risk, mode === "taxi" || mode === "metro" ? "medium" : "high");
+        warnings.push(`${f.name}地盘（${attitudeLabel(f.kind, att)}）`);
+      } else if (att === "hostile") {
+        risk = raiseRisk(risk, mode === "walk" || mode === "stolen" ? "high" : "medium");
+        warnings.push(`${f.name}地盘（${attitudeLabel(f.kind, att)}）`);
+      }
+    }
+  }
+
+  if (there && w.ncpd) {
+    const alert = w.ncpd.alerts.find((a) => a.location === there.id);
+    if (alert) {
+      risk = raiseRisk(risk, alert.risk >= 3 ? "high" : "medium");
+      warnings.push(`目的地有 NCPD 警情：${alert.label}`);
+    }
+  }
+
+  return { risk, warnings };
+}
+
 function riskOf(mode: TravelMode, period: Period, heat: number): Risk {
   if (mode === "stolen") return "high";
   if (mode === "walk") {
@@ -278,7 +356,7 @@ export function routeOptions(
       d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit * factor));
     const cost =
       mode === "taxi" && d !== undefined ? Math.ceil((TAXI_BASE + d * TAXI_PER_UNIT) / 5) * 5 : 0;
-    const risk = riskOf(mode, period, w.heat);
+    const { risk, warnings } = routeHazard(w, data, mode, period, here, there);
     const base = {
       mode,
       ...(car ? { vehicle: car.id } : {}),
@@ -287,6 +365,7 @@ export function routeOptions(
       cost,
       risk,
       riskLabel: RISK_LABELS[risk],
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
     const blocked =
       blockOf(w, mode, here, there, d, cost) ??
@@ -326,6 +405,7 @@ function blockOf(
   if (here && here.id === there.id) return "已经在这里了";
   if (d === undefined)
     return spot(there) ? "现在的位置不在地图上，用自由输入写怎么去" : `${there.name}还没上地图`;
+  if (mode === "taxi" && crossesDogtown(here, there)) return "狗镇关口封锁，Delamain 不进出狗镇";
   if (mode === "metro" && !(here?.metro && there.metro)) return "两头不都有轻轨站";
   if (cost > w.eddies) return `钱不够：要 ${cost}，只有 ${w.eddies}`;
   return undefined;
@@ -422,8 +502,10 @@ export function planTrip(
 export function tripText(trip: PlannedTrip): string {
   const { route, from, to } = trip;
   const money = route.cost > 0 ? `路费 ${route.cost} 欧元由代码扣` : "不花钱";
+  const hazard =
+    route.warnings && route.warnings.length > 0 ? `（沿途注意：${route.warnings.join("；")}）` : "";
   const lines = [
-    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
+    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}${hazard}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
   ];
   // 偶遇是代码抽的素材，合适才写、可以改写或推迟（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
   if (trip.encounter) {
@@ -499,6 +581,8 @@ export function applyTravel(
     eddies: ctx.read<{ eddies: number }>("economy").eddies,
     inCombat: ctx.read<{ active: unknown }>("combat").active !== null,
     travel: draft as TravelState,
+    factions: FactionsStateSchema.parse(ctx.read("factions") ?? {}),
+    ncpd: NcpdStateSchema.parse(ctx.read("ncpd") ?? {}),
   };
   const fact = TravelFactSchema.safeParse(ctx.facts.travel);
   const fixed =

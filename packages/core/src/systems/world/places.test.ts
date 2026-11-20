@@ -189,14 +189,59 @@ describe("location 写 id", () => {
     expect(resolveLocation(fresh(), "poi:nope", data, 0).ok).toBe(false);
   });
 
-  it("中文名对得上的换成 id，对不上的照旧存中文名", () => {
+  it("中文名对得上的换成 id，对不上的有地图数据时自动落点建 place:N，无地图数据时照旧存中文名", () => {
     const clock = fresh();
     expect(resolveLocation(clock, "V 的公寓", data, 0)).toEqual({ ok: true, id: "vapt" });
-    expect(resolveLocation(clock, "沃森 · 无名小巷", data, 0)).toEqual({
-      ok: true,
-      id: "沃森 · 无名小巷",
+    const placed = resolveLocation(clock, "沃森 · 无名小巷", data, 5);
+    expect(placed).toMatchObject({ ok: true, id: "place:1" });
+    expect(clock.places[0]).toMatchObject({
+      id: "place:1",
+      name: "无名小巷",
+      district: "沃森",
+      visitedAt: 5,
     });
-    expect(clock.places).toEqual([]);
+    // 再次写同一自由文本时复用已建地点，不重复落点
+    expect(resolveLocation(clock, "沃森 · 无名小巷", data, 10)).toEqual({
+      ok: true,
+      id: "place:1",
+    });
+    expect(clock.places).toHaveLength(1);
+    expect(resolveLocation(fresh(), "未知偏僻地", {}, 0)).toEqual({
+      ok: true,
+      id: "未知偏僻地",
+    });
+  });
+
+  it("指定 sub 街区时落点在目标街区内并持久保存 sub", () => {
+    const clock = fresh();
+    const out = createPlace(clock, { name: "暗网黑市", in: "沃森", sub: "歌舞伎町" }, data, 20);
+    expect(out.ok).toBe(true);
+    expect(clock.places[0]).toMatchObject({
+      name: "暗网黑市",
+      district: "沃森",
+      sub: "歌舞伎町",
+    });
+    expect(clock.places[0]?.x).toBeLessThanOrEqual(25);
+    expect(clock.places[0]?.y).toBeLessThanOrEqual(25);
+  });
+
+  it("ft: 地铁站首次访问记下 metro: true 并透传给 locationCatalog", () => {
+    const metroData = {
+      ...data,
+      radar: [
+        ...(data.radar as Record<string, unknown>[]),
+        { id: "ft:metro_kabuki", name: "歌舞伎町地铁站", kind: "地铁站", x: 18, y: 18 },
+      ],
+    };
+    const clock = fresh();
+    expect(resolveLocation(clock, "ft:metro_kabuki", metroData, 10)).toMatchObject({
+      ok: true,
+      id: "ft:metro_kabuki",
+    });
+    expect(clock.places[0]).toMatchObject({ id: "ft:metro_kabuki", metro: true });
+    expect(locationCatalog(withPlaces(metroData, clock.places)).get("ft:metro_kabuki")?.metro).toBe(
+      true,
+    );
   });
 });
 
