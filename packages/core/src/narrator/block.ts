@@ -8,12 +8,17 @@ export const STATE_OPEN = "<state>";
 export const STATE_CLOSE = "</state>";
 
 const ChoiceBaseSchema = z.object({
-  text: z.string().trim().min(1).max(80).describe("用玩家的口吻写行动，不替角色说台词"),
+  text: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe("用玩家的口吻写行动或回应方向，不替角色写大段台词"),
   source: z
     .string()
     .trim()
     .min(1)
-    .max(24)
+    .max(40)
     .optional()
     .describe("专属选项的来源，例如 过往：荒坂前员工、义体：螳螂刀；只有这条路是角色独有的才写"),
 });
@@ -23,6 +28,30 @@ export type Choice = z.infer<typeof ChoiceSchema>;
 
 /** 模型提出的建议选项：零掷骰、零属性门槛，只给行动本身与特长/义体来源 */
 export const ChoiceProposalSchema = ChoiceSchema;
+
+const EMPTY_CHOICE_SOURCE = new Set(["", "无", "none", "null", "n/a"]);
+
+/** 归一化单条建议选项：兼容纯字符串、空/null source 与多余字段，避免无害格式差异误杀选项。 */
+export function normalizeChoiceProposal(raw: unknown): unknown {
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    return text === "" ? raw : { text: text.slice(0, 120) };
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+  const record = raw as Record<string, unknown>;
+  const trimmedText = typeof record.text === "string" ? record.text.trim() : record.text;
+  const text =
+    typeof trimmedText === "string" && trimmedText.length > 120
+      ? trimmedText.slice(0, 120)
+      : trimmedText;
+  if (typeof record.source === "string") {
+    const trimmedSource = record.source.trim();
+    if (!EMPTY_CHOICE_SOURCE.has(trimmedSource.toLowerCase())) {
+      return { text, source: trimmedSource.slice(0, 40) };
+    }
+  }
+  return { text };
+}
 
 export const MAX_CHOICES = 5;
 
@@ -36,7 +65,9 @@ export const ExtractDocSchema = z.object({
     .describe("必填事件清单；覆盖全部 changes 与 messages，依赖事件在前；没有事实条目时写 []"),
   choices: z
     .array(ChoiceProposalSchema)
-    .describe(`玩家角色可能的下一步，0–3 个，最多 ${MAX_CHOICES} 个；对话正进行时通常写 []`),
+    .describe(
+      `玩家角色接下来可采取的 2–4 个不同方向的行动或回应，最多 ${MAX_CHOICES} 个；正常回合（含对话进行中）都应给出，仅在玩家死亡或故事结束时写 []`,
+    ),
   messages: z
     .array(IncomingMessageSchema)
     .optional()

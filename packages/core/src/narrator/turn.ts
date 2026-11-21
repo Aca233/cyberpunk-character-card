@@ -46,6 +46,7 @@ import {
   type ExtractShape,
   issueText,
   MAX_CHOICES,
+  normalizeChoiceProposal,
   parseModelJson,
   readExtractShape,
   StateSplitter,
@@ -1429,7 +1430,7 @@ export async function runNarratorTurn(
         b.drop(where, item, `建议选项最多 ${MAX_CHOICES} 个`, "rules");
         continue;
       }
-      const choice = b.validate(where, item, ChoiceProposalSchema);
+      const choice = b.validate(where, normalizeChoiceProposal(item), ChoiceProposalSchema);
       if (!choice) continue;
       choices.push(verifySource(choice, chrome, traits, b.notes));
     }
