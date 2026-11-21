@@ -97,6 +97,17 @@ export function assetUrl(id: AssetId): string | undefined {
   return asset(id)?.url;
 }
 
+/** 仅供预载器使用：仅读取已载入索引中的地址，不触发缺图告警列表 */
+export function assetUrlIfExists(id: AssetId): string | undefined {
+  const entry = entries[id];
+  return entry ? `${BASE}${entry.path}` : undefined;
+}
+
+/** 当前索引中实际已载入的全部素材 ID（供分层后台预载筛选） */
+export function loadedAssetIds(): readonly AssetId[] {
+  return Object.keys(entries) as AssetId[];
+}
+
 /**
  * 地图瓦片：解包目录下的 build_map_tiles.py 从原作 3D 地图的网格烘焙，
  * 第 z 级把整张底图切成 2^z × 2^z 块，每块 tile 像素。没有瓦片时返回 null，地图退回 map.roads 整图
@@ -111,17 +122,23 @@ export interface MapTiles {
 }
 
 let tilesPromise: Promise<MapTiles | null> | null = null;
+let tilesCache: MapTiles | null = null;
+
+export function loadedMapTiles(): MapTiles | null {
+  return tilesCache;
+}
 
 export function loadMapTiles(): Promise<MapTiles | null> {
   tilesPromise ??= fetch(`${TILES_URL}/index.json`, { cache: "no-cache" })
     .then(async (response) => {
       if (!response.ok) return null;
       const data = (await response.json()) as { tile: number; maxZoom: number; format: string };
-      return {
+      tilesCache = {
         tile: data.tile,
         maxZoom: data.maxZoom,
         url: (z: number, x: number, y: number) => `${TILES_URL}/${z}/${x}_${y}.${data.format}`,
       };
+      return tilesCache;
     })
     .catch(() => null);
   return tilesPromise;

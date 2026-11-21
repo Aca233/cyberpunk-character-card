@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { type AssetId, asset, loadMapTiles, type MapTiles } from "../../assets";
+import { type AssetId, asset, loadedMapTiles, loadMapTiles, type MapTiles } from "../../assets";
 import { cssUrl } from "../../ui/Asset";
 
 /**
@@ -150,10 +150,11 @@ export function shapesViewBox(cam: Camera, size: { readonly w: number; readonly 
   return `${cam.cx - size.w / (2 * cam.k)} ${cam.cy - size.h / (2 * cam.k)} ${size.w / cam.k} ${size.h / cam.k}`;
 }
 
-/** 载入瓦片清单；没生成瓦片时一直是 null，调用方垫整张底图 */
+/** 载入瓦片清单；没生成瓦片时一直是 null，调用方垫整张底图；预载完成后首帧直接命中缓存 */
 export function useMapTiles(): MapTiles | null {
-  const [tiles, setTiles] = useState<MapTiles | null>(null);
+  const [tiles, setTiles] = useState<MapTiles | null>(() => loadedMapTiles());
   useEffect(() => {
+    if (tiles) return;
     let live = true;
     void loadMapTiles().then((t) => {
       if (live) setTiles(t);
@@ -161,7 +162,7 @@ export function useMapTiles(): MapTiles | null {
     return () => {
       live = false;
     };
-  }, []);
+  }, [tiles]);
   return tiles;
 }
 

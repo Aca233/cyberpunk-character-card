@@ -84,18 +84,35 @@ export function takeOverTab() {
   requestLock({ steal: true });
 }
 
+let browserModule: Promise<typeof import("@cp/server/browser")> | undefined;
 let backend: Promise<LocalBackend> | undefined;
 let origin = "http://localhost";
 
+function loadBrowserServerModule(): Promise<typeof import("@cp/server/browser")> {
+  browserModule ??= import("@cp/server/browser");
+  return browserModule;
+}
+
 function localBackend(): Promise<LocalBackend> {
   claimTab();
+  const modulePromise = loadBrowserServerModule();
   backend ??= owned.then(() =>
-    import("@cp/server/browser").then((m) => {
+    modulePromise.then((m) => {
       origin = m.LOCAL_ORIGIN;
       return m.createLocalBackend();
     }),
   );
   return backend;
+}
+
+/**
+ * 启动期预热：并行拉取浏览器本地服务层 JS chunk；若本标签页持有锁，则一并提前完成 IndexedDB 初始化。
+ * 不破坏多标签页 Web Locks 互斥协议，失败静默交由后续正式请求上报。
+ */
+export function warmLocalBackend(): void {
+  if (tab === "taken") return;
+  void loadBrowserServerModule().catch(() => {});
+  void localBackend().catch(() => {});
 }
 
 class TabTakenError extends Error {
