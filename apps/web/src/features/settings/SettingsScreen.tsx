@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { api, newRequestId, type TurnContext } from "../../api/client";
+import { playSfx, useAudioPrefs } from "../../audio";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -14,6 +15,7 @@ import { EmptyState } from "../status/StatusParts";
 import { LiveStageBar } from "../story/LiveStageBar";
 import neural from "../story/neural.module.css";
 import { useStory } from "../story/store";
+import { AudioSettings } from "./AudioSettings";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
 import { PresetSettings } from "./PresetSettings";
@@ -21,13 +23,14 @@ import { setNarrativePref } from "./prefs";
 import { useSpoilerView } from "./SpoilerBadge";
 import styles from "./settings.module.css";
 
-type Tab = "profiles" | "presets" | "narrative" | "context";
+type Tab = "profiles" | "presets" | "narrative" | "audio" | "context";
 
 const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: string }[] = [
   { id: "profiles", code: "01", label: "模型连接" },
   { id: "presets", code: "02", label: "酒馆预设" },
   { id: "narrative", code: "03", label: "叙事偏好" },
-  { id: "context", code: "04", label: "上下文（调试）" },
+  { id: "audio", code: "04", label: "音频" },
+  { id: "context", code: "05", label: "上下文（调试）" },
 ];
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
@@ -55,6 +58,7 @@ export function SettingsScreen() {
   const [leaving, setLeaving] = useState<Destination | null>(null);
   const activeSaveId = useStory((s) => (s.phase !== "idle" ? s.saveId : null));
   const { open: spoilersOpen } = useSpoilerView();
+  const audioPrefs = useAudioPrefs();
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: api.tavernPresets });
   const profilesReady = (() => {
@@ -74,7 +78,10 @@ export function SettingsScreen() {
 
   const tabParam = params.get("tab");
   const tab: Tab =
-    tabParam === "context" || tabParam === "narrative" || tabParam === "presets"
+    tabParam === "context" ||
+    tabParam === "narrative" ||
+    tabParam === "presets" ||
+    tabParam === "audio"
       ? tabParam
       : "profiles";
   const backTarget = activeSaveId
@@ -133,6 +140,7 @@ export function SettingsScreen() {
   const tabDot = (id: Tab): "ok" | "warn" | null => {
     if (id === "profiles" && profilesLoaded) return profilesReady ? "ok" : "warn";
     if (id === "presets" && activePreset) return "ok";
+    if (id === "audio" && audioPrefs.muted) return "warn";
     if (id === "context" && spoilersOpen) return "warn";
     return null;
   };
@@ -185,6 +193,12 @@ export function SettingsScreen() {
                 剧透调试
               </span>
             )}
+            {audioPrefs.muted && (
+              <span className={styles.teleChip} data-tone="warn">
+                <span className={styles.teleDot} aria-hidden />
+                音频静音
+              </span>
+            )}
           </div>
           <Asset id="fluff.code" tint="var(--cp-red)" height={18} className={styles.headFluff} />
         </div>
@@ -199,7 +213,13 @@ export function SettingsScreen() {
               type="button"
               className={`${neural.tab} ${styles.tabBtn}`}
               aria-pressed={tab === t.id}
-              onClick={() => requestGo(t.id)}
+              onMouseEnter={() => {
+                if (tab !== t.id) playSfx("hover");
+              }}
+              onClick={() => {
+                if (tab !== t.id) playSfx("tab");
+                requestGo(t.id);
+              }}
             >
               <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
               <span className={neural.inner}>
@@ -223,6 +243,8 @@ export function SettingsScreen() {
           <PresetSettings />
         ) : tab === "narrative" ? (
           <NarrativeSettings onOpenContext={() => requestGo("context")} />
+        ) : tab === "audio" ? (
+          <AudioSettings />
         ) : (
           <ContextViewer />
         )}

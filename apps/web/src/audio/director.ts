@@ -60,7 +60,8 @@ export function resolveStoryBgm(view: View | undefined): BgmId {
   }
 
   // 6. 夜之城探索：依据警方热度、深夜时段与场次交替选用两支原版氛围曲，兼顾层次感与耐听度
-  const highTensionCity = view.heat.stars >= 2 || (isNightOrLate(view.time) && view.scene % 2 === 1);
+  const highTensionCity =
+    view.heat.stars >= 2 || (isNightOrLate(view.time) && view.scene % 2 === 1);
   return highTensionCity ? "bgm.explorePulse" : "bgm.explore";
 }
 

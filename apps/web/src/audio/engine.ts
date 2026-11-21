@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
 import {
   AUDIO_LABELS,
-  audioAssetUrl,
   audioAssetsReady,
+  audioAssetUrl,
   type BgmId,
   loadedAudioCount,
   type SfxAssetId,
@@ -533,7 +533,12 @@ export function unlockAudioNow(): void {
     syncBgm(900);
   } else {
     ensureContext();
-    if (decks && effectiveBgm() && decks[activeDeckIdx].el.paused && effectiveBgmTargetVolume() > 0) {
+    if (
+      decks &&
+      effectiveBgm() &&
+      decks[activeDeckIdx].el.paused &&
+      effectiveBgmTargetVolume() > 0
+    ) {
       syncBgm(500);
     }
   }

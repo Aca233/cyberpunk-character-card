@@ -1,3 +1,4 @@
+import { playSfx, toggleMute, useAudioPrefs } from "../../audio";
 import { useLayer } from "../../ui/layers";
 import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
@@ -31,6 +32,7 @@ export function EscMenu({
   /** 正在生成时不传：这一轮写完才能回主菜单 */
   readonly onQuit?: (() => void) | undefined;
 }) {
+  const audio = useAudioPrefs();
   useLayer(onResume);
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 点击半透明遮罩关闭菜单，键盘 Esc 由 useLayer 负责
@@ -57,6 +59,15 @@ export function EscMenu({
           )}
           <nav className={styles.escList}>
             <MenuItem label="继续" onSelect={onResume} />
+            <MenuItem
+              label={audio.muted ? "声音：已静音" : "声音：开启"}
+              hint="Alt+M"
+              hintTone={audio.muted ? "warn" : "cyan"}
+              onSelect={() => {
+                const muted = toggleMute();
+                if (!muted) playSfx("toggleOn");
+              }}
+            />
             {canEndStory && (
               <MenuItem
                 label="结束故事"

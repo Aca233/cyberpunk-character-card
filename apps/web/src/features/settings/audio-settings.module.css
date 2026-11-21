@@ -1,0 +1,194 @@
+.audioGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 960px) {
+  .audioGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sliderRow {
+  display: grid;
+  gap: 8px;
+  padding: 10px 2px;
+  border-bottom: 1px solid rgb(255 62 77 / 14%);
+}
+
+.sliderRow:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.sliderHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sliderVal {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cp-cyan);
+  letter-spacing: 0.06em;
+}
+
+.sliderVal[data-dim="true"] {
+  color: var(--cp-text-faint);
+}
+
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgb(255 62 77 / 18%);
+  border: 1px solid rgb(255 62 77 / 36%);
+  outline: none;
+  cursor: pointer;
+}
+
+.range:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 18px;
+  background: var(--cp-cyan);
+  border: 1px solid rgb(10 14 20 / 90%);
+  box-shadow: 0 0 8px rgb(94 246 255 / 60%);
+  cursor: pointer;
+}
+
+.range::-moz-range-thumb {
+  width: 14px;
+  height: 18px;
+  background: var(--cp-cyan);
+  border: 1px solid rgb(10 14 20 / 90%);
+  border-radius: 0;
+  box-shadow: 0 0 8px rgb(94 246 255 / 60%);
+  cursor: pointer;
+}
+
+.trackList {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.trackBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgb(255 62 77 / 24%);
+  background: rgb(12 8 16 / 68%);
+  color: var(--cp-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.trackBtn:hover:not(:disabled) {
+  border-color: rgb(94 246 255 / 60%);
+  background: rgb(94 246 255 / 9%);
+  color: var(--cp-cyan);
+}
+
+.trackBtn[data-active="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
+}
+
+.trackBtn[data-preview="true"] {
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+  color: var(--cp-yellow);
+}
+
+.trackBtn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.trackLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trackName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trackMeta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.sfxGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sfxBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid rgb(255 62 77 / 24%);
+  background: rgb(12 8 16 / 66%);
+  color: var(--cp-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.sfxBtn:hover:not(:disabled) {
+  border-color: rgb(94 246 255 / 58%);
+  background: rgb(94 246 255 / 9%);
+  color: var(--cp-cyan);
+}
+
+.sfxBtn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.sfxTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  opacity: 0.68;
+}

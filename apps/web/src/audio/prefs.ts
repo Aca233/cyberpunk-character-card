@@ -78,7 +78,9 @@ export function audioPrefs(): AudioPrefs {
 
 export function setAudioPref<K extends keyof AudioPrefs>(key: K, value: AudioPrefs[K]): void {
   const nextValue =
-    typeof value === "number" ? (clampUnit(value, DEFAULT_AUDIO_PREFS[key] as number) as AudioPrefs[K]) : value;
+    typeof value === "number"
+      ? (clampUnit(value, DEFAULT_AUDIO_PREFS[key] as number) as AudioPrefs[K])
+      : value;
   save({ ...read(), [key]: nextValue });
 }
 

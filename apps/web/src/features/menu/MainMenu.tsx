@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
+import { playSfx, toggleMute, useAudioPrefs, useAudioState } from "../../audio";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -56,6 +57,8 @@ const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a
  */
 export function MainMenu() {
   const navigate = useNavigate();
+  const audioPrefs = useAudioPrefs();
+  const audioState = useAudioState();
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health });
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
@@ -350,6 +353,24 @@ export function MainMenu() {
             </dd>
             <dt>工坊</dt>
             <dd>未完成 · 暂未启用</dd>
+            <dt>音频</dt>
+            <dd data-tone={audioPrefs.muted ? "warn" : "ok"}>
+              <button
+                type="button"
+                className={styles.inlineLink}
+                title="点击切换静音（快捷键 Alt+M）"
+                onClick={() => {
+                  const muted = toggleMute();
+                  if (!muted) playSfx("toggleOn");
+                }}
+              >
+                {audioPrefs.muted
+                  ? "已静音 · 点击开启"
+                  : audioState.originalReady
+                    ? "原版音频 · 点击静音"
+                    : "已开启 · 点击静音"}
+              </button>
+            </dd>
           </dl>
         </div>
       </aside>

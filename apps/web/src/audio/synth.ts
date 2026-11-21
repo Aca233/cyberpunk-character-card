@@ -262,7 +262,14 @@ export function playSynthCue(ctx: AudioContext, dest: AudioNode, cue: SfxCue): v
       // 赛博欧元转账清脆三连微响
       tone(ctx, dest, { type: "sine", freq: 1175, duration: 0.06, gain: 0.11 });
       tone(ctx, dest, { type: "sine", freq: 1568, start: 0.055, duration: 0.07, gain: 0.12 });
-      tone(ctx, dest, { type: "triangle", freq: 2093, start: 0.11, duration: 0.13, gain: 0.11, filterFreq: 3200 });
+      tone(ctx, dest, {
+        type: "triangle",
+        freq: 2093,
+        start: 0.11,
+        duration: 0.13,
+        gain: 0.11,
+        filterFreq: 3200,
+      });
       return;
 
     case "holocall":
@@ -288,7 +295,14 @@ export function playSynthCue(ctx: AudioContext, dest: AudioNode, cue: SfxCue): v
       return;
 
     case "turnSubmit":
-      tone(ctx, dest, { type: "triangle", freq: 340, endFreq: 780, duration: 0.11, gain: 0.12, filterFreq: 1800 });
+      tone(ctx, dest, {
+        type: "triangle",
+        freq: 340,
+        endFreq: 780,
+        duration: 0.11,
+        gain: 0.12,
+        filterFreq: 1800,
+      });
       return;
 
     case "turnDone":
@@ -302,7 +316,14 @@ export function playSynthCue(ctx: AudioContext, dest: AudioNode, cue: SfxCue): v
       return;
 
     case "warning":
-      tone(ctx, dest, { type: "sawtooth", freq: 150, endFreq: 75, duration: 0.3, gain: 0.18, filterFreq: 520 });
+      tone(ctx, dest, {
+        type: "sawtooth",
+        freq: 150,
+        endFreq: 75,
+        duration: 0.3,
+        gain: 0.18,
+        filterFreq: 520,
+      });
       return;
 
     case "heartbeat":
@@ -310,25 +331,72 @@ export function playSynthCue(ctx: AudioContext, dest: AudioNode, cue: SfxCue): v
       return;
 
     case "sandevistan":
-      tone(ctx, dest, { type: "sawtooth", freq: 320, endFreq: 58, duration: 0.55, gain: 0.2, filterFreq: 900 });
+      tone(ctx, dest, {
+        type: "sawtooth",
+        freq: 320,
+        endFreq: 58,
+        duration: 0.55,
+        gain: 0.2,
+        filterFreq: 900,
+      });
       return;
 
     case "cyberware":
-      tone(ctx, dest, { type: "triangle", freq: 240, endFreq: 920, duration: 0.35, gain: 0.15, filterFreq: 2000 });
+      tone(ctx, dest, {
+        type: "triangle",
+        freq: 240,
+        endFreq: 920,
+        duration: 0.35,
+        gain: 0.15,
+        filterFreq: 2000,
+      });
       return;
 
     case "glitch":
-      noiseBurst(ctx, dest, { duration: 0.18, gain: 0.14, filterType: "bandpass", filterFreq: 1400, q: 1.5 });
-      tone(ctx, dest, { type: "sawtooth", freq: 140, endFreq: 540, duration: 0.14, gain: 0.1, filterFreq: 1100 });
+      noiseBurst(ctx, dest, {
+        duration: 0.18,
+        gain: 0.14,
+        filterType: "bandpass",
+        filterFreq: 1400,
+        q: 1.5,
+      });
+      tone(ctx, dest, {
+        type: "sawtooth",
+        freq: 140,
+        endFreq: 540,
+        duration: 0.14,
+        gain: 0.1,
+        filterFreq: 1100,
+      });
       return;
 
     case "quest":
-      tone(ctx, dest, { type: "triangle", freq: 293.66, duration: 0.22, gain: 0.14, filterFreq: 1600 });
-      tone(ctx, dest, { type: "triangle", freq: 440, start: 0.14, duration: 0.32, gain: 0.15, filterFreq: 2000 });
+      tone(ctx, dest, {
+        type: "triangle",
+        freq: 293.66,
+        duration: 0.22,
+        gain: 0.14,
+        filterFreq: 1600,
+      });
+      tone(ctx, dest, {
+        type: "triangle",
+        freq: 440,
+        start: 0.14,
+        duration: 0.32,
+        gain: 0.15,
+        filterFreq: 2000,
+      });
       return;
 
     case "boot":
-      tone(ctx, dest, { type: "sawtooth", freq: 80, endFreq: 240, duration: 0.45, gain: 0.14, filterFreq: 700 });
+      tone(ctx, dest, {
+        type: "sawtooth",
+        freq: 80,
+        endFreq: 240,
+        duration: 0.45,
+        gain: 0.14,
+        filterFreq: 700,
+      });
       return;
 
     case "farewell":

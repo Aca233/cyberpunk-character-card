@@ -29,12 +29,8 @@ const AudioEntrySchema = z.strictObject({
 
 const AudioManifestSchema = z.strictObject({
   $comment: z.string().optional(),
-  bgm: z
-    .array(AudioEntrySchema.refine((e) => BGM_ID.test(e.id), "bgm id 必须以 bgm. 开头"))
-    .min(1),
-  sfx: z
-    .array(AudioEntrySchema.refine((e) => SFX_ID.test(e.id), "sfx id 必须以 sfx. 开头"))
-    .min(1),
+  bgm: z.array(AudioEntrySchema.refine((e) => BGM_ID.test(e.id), "bgm id 必须以 bgm. 开头")).min(1),
+  sfx: z.array(AudioEntrySchema.refine((e) => SFX_ID.test(e.id), "sfx id 必须以 sfx. 开头")).min(1),
 });
 
 export interface AudioSpec {
