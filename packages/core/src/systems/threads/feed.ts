@@ -13,11 +13,12 @@ export function threadsFeed({ world }: ViewContext): readonly FeedItem[] {
       if (!s.told || s.kind !== "move") continue;
       // 不用数组下标：旧步骤裁掉后，已读标记仍能对上；同刻同文只留一条
       const id = `threads:${t.id}:${t.openedAt}:${s.at}:${encodeURIComponent(s.news)}`;
+      const isFaction = t.kind === "faction";
       items.set(id, {
         id,
         source: "threads",
-        channel: t.kind === "faction" ? "news" : "street",
-        from: t.kind === "faction" ? "新闻" : "街头",
+        channel: isFaction ? "news" : "street",
+        from: isFaction ? "新闻" : "街头",
         text: s.news,
         at: s.at,
         time: formatGameTime(s.at),

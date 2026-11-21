@@ -1,7 +1,7 @@
 import { defineSystem } from "../../kernel/system";
-import { applyThreads, tickThreads } from "./apply";
+import { applyThreads, cleanupDeadThreads, tickThreads } from "./apply";
 import { threadsFeed } from "./feed";
-import { threadRules, threadSection } from "./prompt";
+import { threadRules, threadSections } from "./prompt";
 import {
   ThreadCloseSchema,
   ThreadCommandSchema,
@@ -18,13 +18,12 @@ import {
 import { threadsView } from "./view";
 
 /**
- * 城里在发酵的事（用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账）：
- * 势力的打算、宿敌的报复、人物的心事并成一张单子，每件一个按游戏日走的定时器；
- * 响了以后发生什么由场外推演写，代码只看表、记账、守地盘和条数这几条硬账
+ * 城里在发酵的事（统一城中局势账本）：
+ * 城中突发与余波（civic）、势力打算、宿敌报复、人物心事并成一张单子，自动同步底层 city.events。
  */
 export const threads = defineSystem<ThreadsState, ThreadsCommand, ThreadsInternal>({
   id: "threads",
-  dependsOn: ["npc", "nemesis", "factions", "arcs"],
+  dependsOn: ["world", "npc", "nemesis", "factions", "arcs", "city"],
   state: ThreadsStateSchema,
   initial: () => ({ threads: [], closed: [] }),
   commands: {
@@ -39,15 +38,12 @@ export const threads = defineSystem<ThreadsState, ThreadsCommand, ThreadsInterna
     "thread.remind": ThreadRemindSchema,
   },
   apply: (draft, command, ctx) => applyThreads(draft, command, ctx),
+  on: {
+    "npc.died": (draft, ctx) => cleanupDeadThreads(draft, ctx),
+  },
   tick: (draft, _span, ctx) => tickThreads(draft, ctx),
   rules: [threadRules],
-  sections: [
-    {
-      order: 110,
-      title: "城里在发酵的事",
-      render: ({ world }) => threadSection(ThreadsStateSchema.parse(world.slices.threads ?? {})),
-    },
-  ],
+  sections: threadSections,
   view: { key: "threads", project: threadsView },
   feed: threadsFeed,
 });

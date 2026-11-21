@@ -5,7 +5,12 @@ export const CITY_KEPT = 30;
 /** 收场时离上次场外推演隔了这么多场，或者游戏时间过了这么多小时，就再推演一次 */
 export const OFFSCREEN_SCENES = 3;
 export const OFFSCREEN_HOURS = 12;
-/** 一次推演最多写几条动静、其中最多几条头条 */
+/** 同一场景未收场时，连续有效行动达到这么多轮且经过这么多分钟，防世界冻结触发推演 */
+export const OFFSCREEN_STALE_TURNS = 8;
+export const OFFSCREEN_STALE_MINUTES = 120;
+/** 失败退避的回合保底：即使游戏时间没动，经过这么多有效回合也解除退避 */
+export const OFFSCREEN_RETRY_TURNS = 3;
+/** 一次推演最多写几条动静/局势、其中最多几条头条 */
 export const OFFSCREEN_EVENTS = 3;
 export const OFFSCREEN_MAJOR = 1;
 /** 传闻最多留这么多条，旧的先删；一次推演最多写几条 */
@@ -119,6 +124,34 @@ export const BulletinSchema = BulletinFieldsSchema.extend({
 });
 export type Bulletin = z.infer<typeof BulletinSchema>;
 
+export const OffscreenTrackSchema = z.enum(["macro", "social"]);
+export type OffscreenTrack = z.infer<typeof OffscreenTrackSchema>;
+
+export const OffscreenCursorSchema = z.object({
+  lastScene: z.number().int().nullable().default(null),
+  lastAt: z.number().int().nullable().default(null),
+  processedThrough: z.number().int().min(-1).default(-1),
+  backlog: z.boolean().default(false),
+  lastAttemptAt: z.number().int().nullable().default(null),
+  retryAt: z.number().int().nullable().default(null),
+  retrySeq: z.number().int().nullable().default(null),
+  failures: z.number().int().min(0).default(0),
+});
+export type OffscreenCursor = z.infer<typeof OffscreenCursorSchema>;
+
+export function emptyOffscreenCursor(): OffscreenCursor {
+  return {
+    lastScene: null,
+    lastAt: null,
+    processedThrough: -1,
+    backlog: false,
+    lastAttemptAt: null,
+    retryAt: null,
+    retrySeq: null,
+    failures: 0,
+  };
+}
+
 /** 城里的动静：玩家没看着的地方在发生的事，只给模型看；新闻快讯玩家在侧栏看得到 */
 export const CityStateSchema = z.object({
   events: z.array(CityEventSchema).default([]),
@@ -128,7 +161,10 @@ export const CityStateSchema = z.object({
   /** 新闻快讯和电台插段，旧的在前，最多 BULLETINS_KEPT 条 */
   bulletins: z.array(BulletinSchema).default([]),
   nextBulletin: z.number().int().min(1).default(1),
-  /** 上次场外推演时是第几场、游戏时间几点；还没推演过为 null */
+  /** 双路场外推演的独立游标：宏观局势（macro）与人物生活/社交（social）互不拖累 */
+  macro: OffscreenCursorSchema.default(emptyOffscreenCursor),
+  social: OffscreenCursorSchema.default(emptyOffscreenCursor),
+  /** 汇总游标（与双路同步，便于诊断查看） */
   lastScene: z.number().int().nullable().default(null),
   lastAt: z.number().int().nullable().default(null),
   /** 已成功推演到的回合序号；-1 表示尚未处理任何回合。 */
@@ -138,8 +174,8 @@ export const CityStateSchema = z.object({
   /** 失败尝试独立记录，不覆盖最后成功的时刻。 */
   lastAttemptAt: z.number().int().nullable().default(null),
   retryAt: z.number().int().nullable().default(null),
+  retrySeq: z.number().int().nullable().default(null),
   failures: z.number().int().min(0).default(0),
-  // 谁来联系玩家改由主持人定，不再记挑人的时间（用户 2026-11-01 定的「全改」第 4 步）
 });
 export type CityState = z.infer<typeof CityStateSchema>;
 
@@ -164,12 +200,17 @@ export type CityBulletinCommand = z.infer<typeof CityBulletinCommandSchema>;
 /** 只能由代码发出：记下这次场外推演的场次和时间 */
 export const CityRanSchema = z.object({
   type: z.literal("city.ran"),
+  track: OffscreenTrackSchema.optional(),
   through: z.number().int().min(-1),
   backlog: z.boolean(),
 });
 
-/** 解析、业务校验或上游拒答失败：保留待推演事项，按游戏时间退避。 */
-export const CityFailedSchema = z.object({ type: z.literal("city.failed") });
+/** 解析、业务校验或上游拒答失败：保留待推演事项，按游戏时间或回合保底退避。 */
+export const CityFailedSchema = z.object({
+  type: z.literal("city.failed"),
+  track: OffscreenTrackSchema.optional(),
+  retrySeq: z.number().int().nullable().optional(),
+});
 
 export type CityInternal =
   | CityEventCommand

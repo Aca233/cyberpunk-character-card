@@ -23,11 +23,16 @@ export const cityRules: RuleModule<CityState> = {
   text: `- 正文里有人把【街头传闻】里带编号的某一条说给玩家听了（原话或差不多的意思），写 {"type": "rumorHeard", "id": 编号}；只是幕后存在、正文没让玩家听到的不写，玩家已经听说过的不再写。`,
 };
 
-/** 给模型看的【街头传闻】：新的在前；说的是玩家的标出来 */
-export function rumorSection(state: CityState): string | undefined {
+/** 给模型看的【街头传闻】：本区与全城优先，新的在前；说的是玩家的标出来 */
+export function rumorSection(state: CityState, district?: string): string | undefined {
   if (state.rumors.length === 0) return undefined;
-  return [...state.rumors]
-    .reverse()
+  const ranked = [...state.rumors].reverse().sort((a, b) => {
+    if (!district) return 0;
+    const score = (r: (typeof state.rumors)[number]) =>
+      r.district === district ? 2 : r.reach === "city" ? 1 : 0;
+    return score(b) - score(a);
+  });
+  return ranked
     .map((r) => {
       const where = r.reach !== "city" && r.district ? `，${r.district}` : "";
       const about = r.player ? "，说的是玩家角色" : "";
@@ -46,10 +51,13 @@ export function playerRumorLine(state: CityState): string | undefined {
   return mine.map((r) => `「${r.text}」（${RUMOR_REACH_LABELS[r.reach]}）`).join("；");
 }
 
-/** 给模型看的【城里的动静】：没结束的，最近有变化的在前 */
-export function citySection(state: CityState): string | undefined {
+/** 给模型看的【城里的动静】：没结束的，最近有变化的在前；可排除已由统一局势覆盖的 id */
+export function citySection(
+  state: CityState,
+  excludeIds?: ReadonlySet<string>,
+): string | undefined {
   const live = state.events
-    .filter((e) => e.status !== "over")
+    .filter((e) => e.status !== "over" && !(excludeIds?.has(e.id) ?? false))
     .sort((a, b) => b.updatedAt - a.updatedAt);
   if (live.length === 0) return undefined;
   return live

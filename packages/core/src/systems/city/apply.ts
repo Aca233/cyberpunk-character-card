@@ -52,7 +52,7 @@ export function applyBulletin(
   return { ok: true };
 }
 
-/** 按 id 合并：已有的整条替换、保留开始时间；新的不能一上来就是结束了的 */
+/** 按 id 合并：已有的整条替换、保留开始时间；尚不存在的事件若直接同步为 over 则安全忽略。 */
 export function applyCityEvent(
   draft: Draft<CityState>,
   command: CityEventCommand,
@@ -66,7 +66,7 @@ export function applyCityEvent(
     if (event.district === undefined) delete old.district;
     return { ok: true };
   }
-  if (event.status === "over") return { ok: false, reason: `没有 id 为 ${event.id} 的动静` };
+  if (event.status === "over") return { ok: true };
   draft.events.push({ ...event, startedAt: now, updatedAt: now });
   while (draft.events.length > CITY_KEPT) {
     const over = draft.events.findIndex((e) => e.status === "over");
