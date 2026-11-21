@@ -158,6 +158,7 @@ export function InventoryPage({
   onUnequip,
   onMod,
   onBuyHome,
+  onCallVehicle,
   onHeal,
   onSuppressant,
   onUse,
@@ -194,6 +195,7 @@ export function InventoryPage({
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   /** 买下当前地点的一处公寓；正在生成时不传 */
   readonly onBuyHome?: ((id: string) => void) | undefined;
+  readonly onCallVehicle?: ((id: string) => Promise<void>) | undefined;
 }) {
   const { inventory } = view;
   const quickItems = useMemo(
@@ -248,7 +250,7 @@ export function InventoryPage({
     setPickedItem(null);
     setOpenSlotPicker(null);
     setUseError("");
-    if (activeView !== "carried" && (filter === "vehicle" || filter === "neural")) {
+    if (activeView !== "carried" && filter === "vehicle") {
       setFilter("all");
     }
   }, [activeView, filter]);
@@ -423,12 +425,14 @@ export function InventoryPage({
         continue;
       }
       if (entry.entryType === "stored") {
-        const { kind } = entry.item;
+        const { kind, neuralGroup } = entry.item;
+        const isNeural = Boolean(neuralGroup);
         if (kind === "healing" || kind === "grenade" || kind === "consumable") counts.usable += 1;
         if (kind === "weapon") counts.weapon += 1;
         if (kind === "clothing") counts.clothing += 1;
         if (kind === "mod") counts.mod += 1;
-        if (kind === "misc") counts.misc += 1;
+        if (isNeural) counts.neural += 1;
+        if (kind === "misc" && !isNeural) counts.misc += 1;
         continue;
       }
       if (entry.worn) {
@@ -473,11 +477,16 @@ export function InventoryPage({
 
       if (entry.entryType === "stored") {
         const { item, group } = entry;
+        const isNeural = Boolean(item.neuralGroup);
         const matchesFilter =
           filter === "all" ||
           (filter === "usable"
             ? item.kind === "healing" || item.kind === "grenade" || item.kind === "consumable"
-            : item.kind === filter);
+            : filter === "neural"
+              ? isNeural
+              : filter === "misc"
+                ? item.kind === "misc" && !isNeural
+                : item.kind === filter);
         if (!matchesFilter) return false;
         if (!query) return true;
         const haystack = [
@@ -976,6 +985,7 @@ export function InventoryPage({
         ["weapon", "武器", filterCounts.weapon],
         ["clothing", "服装", filterCounts.clothing],
         ["mod", "改装件", filterCounts.mod],
+        ["neural", "芯片/超梦", filterCounts.neural],
         ["misc", "杂物", filterCounts.misc],
       ];
 
@@ -1203,7 +1213,7 @@ export function InventoryPage({
                       >
                         <NineSlice
                           id="map.filterCellBg"
-                          tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                          tint="var(--item-fill, var(--cp-surface))"
                           slice={CELL_SLICE}
                         />
                         <NineSlice
@@ -1290,7 +1300,7 @@ export function InventoryPage({
                       >
                         <NineSlice
                           id="map.filterCellBg"
-                          tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                          tint="var(--item-fill, var(--cp-surface))"
                           slice={CELL_SLICE}
                         />
                         <NineSlice
@@ -1415,7 +1425,7 @@ export function InventoryPage({
                     >
                       <NineSlice
                         id="map.filterCellBg"
-                        tint="var(--item-fill, rgb(13 15 24 / 82%))"
+                        tint="var(--item-fill, var(--cp-surface))"
                         slice={CELL_SLICE}
                       />
                       <NineSlice id="map.filterCellFg" tint="var(--item-line)" slice={CELL_SLICE} />
@@ -1643,8 +1653,21 @@ export function InventoryPage({
                     </div>
 
                     <footer className={styles.detailFooter}>
-                      {trunk ? (
-                        <div className={styles.actionRow}>
+                      <div className={styles.actionRow}>
+                        {!vehicle.here &&
+                          !vehicle.stolen &&
+                          vehicle.condition !== "wrecked" &&
+                          onCallVehicle && (
+                            <Button
+                              small
+                              primary
+                              disabled={Boolean(disabledReason) || Boolean(view.combat.active)}
+                              onClick={() => void onCallVehicle(vehicle.id)}
+                            >
+                              呼叫到当前位置
+                            </Button>
+                          )}
+                        {trunk && (
                           <Button
                             small
                             primary={trunkReachable}
@@ -1656,12 +1679,16 @@ export function InventoryPage({
                                 : "打开后备箱 →"
                               : `查看后备箱（${trunkCount} 件）→`}
                           </Button>
-                        </div>
-                      ) : null}
+                        )}
+                      </div>
                       <p className={styles.actionHint}>
                         {trunkReachable
                           ? "双击车辆条目或按 Enter 可直接切到后备箱。"
-                          : "开往或返回车辆停放地点后即可在现场存取后备箱物品。"}
+                          : vehicle.stolen
+                            ? "偷来的车未绑定自动驾驶呼叫链路，需返回车辆停放地点使用。"
+                            : vehicle.condition === "wrecked"
+                              ? "车辆已报废，无法远程呼叫。"
+                              : "可以远程呼叫爱车自动驶来（约 5 分钟），或自行前往取车。"}
                       </p>
                     </footer>
                   </article>
@@ -2123,9 +2150,17 @@ export function InventoryPage({
                                     {chip.lockedParts > 0 ? `（${chip.lockedParts} 段未破译）` : ""}
                                   </span>
                                 )}
-                                {!chip.inspected && (
+                                {!chip.inspected &&
+                                  (chip.encrypted || chip.category === "daemon") && (
+                                    <span
+                                      className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
+                                    >
+                                      尚未查毒
+                                    </span>
+                                  )}
+                                {chip.category === "behavior" && !view.shards.hasBehaviorChrome && (
                                   <span className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}>
-                                    尚未查毒
+                                    需安装完好行为芯片义体
                                   </span>
                                 )}
                                 {chip.inspected && chip.hazard && (
@@ -2251,7 +2286,19 @@ export function InventoryPage({
                             <Button
                               small
                               primary={!chip.slotted}
-                              disabled={Boolean(disabledReason)}
+                              disabled={
+                                Boolean(disabledReason) ||
+                                (!chip.slotted &&
+                                  chip.category === "behavior" &&
+                                  !view.shards.hasBehaviorChrome)
+                              }
+                              reason={
+                                !chip.slotted &&
+                                chip.category === "behavior" &&
+                                !view.shards.hasBehaviorChrome
+                                  ? "需先在义体医生处安装完好的玩偶行为芯片（doll-behavior-chip）"
+                                  : undefined
+                              }
                               onClick={() =>
                                 onActionDraft(
                                   chip.slotted
@@ -2285,21 +2332,24 @@ export function InventoryPage({
                                 读取内容
                               </Button>
                             )}
-                          {!chip.inspected && (chip.encrypted || chip.category === "daemon") && (
-                            <Button
-                              small
-                              disabled={Boolean(disabledReason)}
-                              onClick={() =>
-                                onActionDraft(
-                                  view.shards.hasReader
-                                    ? `用隔离芯片读写器对${itemName(id)}进行沙盒查毒`
-                                    : `检查${itemName(id)}是否带加密或恶意陷阱`,
-                                )
-                              }
-                            >
-                              {view.shards.hasReader ? "隔离查毒" : "检查风险"}
-                            </Button>
-                          )}
+                          {!chip.inspected &&
+                            (view.shards.hasReader ||
+                              chip.encrypted ||
+                              chip.category === "daemon") && (
+                              <Button
+                                small
+                                disabled={Boolean(disabledReason)}
+                                onClick={() =>
+                                  onActionDraft(
+                                    view.shards.hasReader
+                                      ? `用隔离芯片读写器对${itemName(id)}进行沙盒查毒`
+                                      : `检查${itemName(id)}是否带加密或恶意陷阱`,
+                                  )
+                                }
+                              >
+                                {view.shards.hasReader ? "隔离查毒" : "检查风险"}
+                              </Button>
+                            )}
                           {(chip.encrypted || chip.eddiesRemaining > 0) && (
                             <Button
                               small

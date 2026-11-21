@@ -253,7 +253,10 @@ export function BiomonitorPanel({
   const neuralSlots = shards.slots;
   const emptyNeuralSlots = Math.max(0, neuralSlots.max - neuralSlots.used);
   const slottableCarried = shards.carried.filter(
-    (chip) => !chip.slotted && (chip.category === "skill" || chip.category === "behavior"),
+    (chip) =>
+      !chip.slotted &&
+      !chip.encrypted &&
+      (chip.category === "skill" || (chip.category === "behavior" && shards.hasBehaviorChrome)),
   );
   const firstSlottableCarrier = slottableCarried[0]?.carrier;
 
@@ -283,7 +286,7 @@ export function BiomonitorPanel({
                 }
               }}
             >
-              <NineSlice id="map.filterCellBg" tint="rgb(10 12 20 / 92%)" slice={CELL_SLICE} />
+              <NineSlice id="map.filterCellBg" tint="var(--cp-surface-strong)" slice={CELL_SLICE} />
               {portraitId ? (
                 <GeneratedImage
                   imageId={portraitId}
@@ -372,6 +375,7 @@ export function BiomonitorPanel({
           </div>
 
           <section className={styles.neuralDock} aria-label="个人神经芯片槽">
+            <CellFrame />
             <div className={styles.neuralDockHead}>
               <span className={styles.neuralDockTitle}>
                 神经芯片槽 <b>{`${neuralSlots.used}/${neuralSlots.max}`}</b>
@@ -381,8 +385,8 @@ export function BiomonitorPanel({
                 data-ready={shards.hasReader || undefined}
                 title={
                   shards.hasReader
-                    ? "已携带隔离芯片读写器，可离线查毒与破译"
-                    : "未携带隔离芯片读写器，直插未知加密芯片存在风险"
+                    ? "已携带隔离芯片读写器，可离线沙盒查毒、刻录副本并配合网络接入仓破译"
+                    : "未携带隔离芯片读写器，直插未知来源或加密芯片存在风险"
                 }
               >
                 {shards.hasReader ? "读写器就绪" : "无读写器"}
