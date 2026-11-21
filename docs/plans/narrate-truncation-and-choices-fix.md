@@ -1,6 +1,6 @@
 # 正文截断草稿与选项缺失修复计划
 
-状态：执行中
+状态：已完成
 
 ## 问题与根因定位
 
@@ -23,16 +23,16 @@
 
 ## 实施步骤
 
-- [ ] **Step 1：放宽输出上限预算与完善完成判定/报错诊断**
+- [x] **Step 1：放宽输出上限预算与完善完成判定/报错诊断**
   - `packages/core/src/narrator/budget.ts`：将 `LARGE.reply` 提升至 `16000`，新增 `replyTokenCap(budget)`（按窗口 25% 上限计算安全回复上限，范围 `budget.parts.reply` 至 `65536`，128K 窗口允许最高 32000，32K 窗口允许最高 8000）。
   - `packages/core/src/narrator/completion.ts`：`completeFinish` 归一化大小写与空白；新增 `isLengthFinish(reason)` 识别 `length` / `max_tokens`。
   - `packages/core/src/narrator/turn.ts`：允许连接或预设在 `replyTokenCap` 范围内使用更大的 `maxOutputTokens`，仅在必需输入裁剪到底仍超窗时温和回退预留额度；未完整结束时在草稿说明中明确写出 `finishReason` 与输出 token / 上限信息。
   - `apps/server/src/providers/anthropic.ts`：`DEFAULT_MAX_TOKENS` 由 `4096` 提升至 `8192`。
   - 同步更新 `packages/core/src/narrator/budget-preset.test.ts` 等受影响测试断言。
-- [ ] **Step 2：修复建议选项默认留空与过严校验丢弃**
+- [x] **Step 2：修复建议选项默认留空与过严校验丢弃**
   - `packages/core/src/narrator/block.ts`：更新 `ExtractDocSchema.choices` 描述，明确正常回合（含对话进行中）均给出 2–4 个方向性建议；放宽 `text`（≤120 字）与 `source`（≤40 字）长度，新增 `normalizeChoiceProposal` 清洗 `source: null / "" / "无"`、字符串简写与多余键。
   - `packages/core/src/narrator/prompts/extract.ts`：更新 `【建议选项】` 规则，移除「对话正进行时通常写 `[]`」，明确每轮（含对话进行中）给出 2–4 个不同方向的行动/回应建议，仅死亡或完结时写 `[]`。
   - `packages/core/src/narrator/turn.ts`：在校验每条 choice 前先经 `normalizeChoiceProposal` 归一化，避免无害格式差异误杀选项。
-- [ ] **Step 3：静态检查与 Git 提交**
+- [x] **Step 3：静态检查与 Git 提交**
   - 按步骤分别提交 `git`；执行 `pnpm typecheck` 与 `pnpm lint` 验收（遵循项目约定，不主动执行单测/集成测试，交由用户验收）。
   - 更新本计划文档状态为已完成。
