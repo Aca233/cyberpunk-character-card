@@ -94,6 +94,8 @@ export interface TripWorld {
   readonly travel: TravelState;
   readonly factions?: FactionsState;
   readonly ncpd?: NcpdState;
+  /** 含玩家本人在内的同行人数（1 + 存活的同行 NPC 数），用于比对载具座位数 */
+  readonly partySize?: number;
 }
 
 export function tripWorldOf(world: {
@@ -101,6 +103,23 @@ export function tripWorldOf(world: {
   readonly slices: Readonly<Record<string, unknown>>;
 }): TripWorld {
   const clock = WorldClockStateSchema.parse(world.slices.world);
+  const npcSlice = world.slices.npc as
+    | {
+        readonly npcs?: Readonly<
+          Record<
+            string,
+            {
+              readonly location?: string | null;
+              readonly alive?: boolean;
+              readonly following?: boolean;
+            }
+          >
+        >;
+      }
+    | undefined;
+  const companions = Object.values(npcSlice?.npcs ?? {}).filter(
+    (card) => card.alive !== false && card.following === true,
+  ).length;
   return {
     now: world.time,
     scene: clock.scene,
@@ -122,6 +141,7 @@ export function tripWorldOf(world: {
       ? { factions: FactionsStateSchema.parse(world.slices.factions) }
       : {}),
     ...(world.slices.ncpd !== undefined ? { ncpd: NcpdStateSchema.parse(world.slices.ncpd) } : {}),
+    partySize: 1 + companions,
   };
 }
 
@@ -356,7 +376,14 @@ export function routeOptions(
       d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit * factor));
     const cost =
       mode === "taxi" && d !== undefined ? Math.ceil((TAXI_BASE + d * TAXI_PER_UNIT) / 5) * 5 : 0;
-    const { risk, warnings } = routeHazard(w, data, mode, period, here, there);
+    const { risk, warnings: baseWarnings } = routeHazard(w, data, mode, period, here, there);
+    const warnings = [...baseWarnings];
+    const partySize = w.partySize ?? 1;
+    if (carDef && partySize > carDef.seats) {
+      warnings.push(
+        `座位不足：当前同行 ${partySize} 人，${carDef.name} 仅 ${carDef.seats} 座（需分车、换大车或改打车）`,
+      );
+    }
     const base = {
       mode,
       ...(car ? { vehicle: car.id } : {}),

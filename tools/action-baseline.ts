@@ -176,11 +176,11 @@ for (const id of weapons) {
   });
 }
 add("craft 打斗中", fight(base), { type: "craft", action: "dismantle", id: backpack[0] ?? "x" });
-// 小队
-for (const npc of [...npcIds.slice(0, 3), "no-such-npc"]) {
-  for (const action of ["accept", "decline", "dismiss", "pay"]) {
-    add("squad", base, { type: "squad", action, npc });
-    add("squad 打斗中", fight(base), { type: "squad", action, npc });
+// 同行
+for (const id of [...npcIds.slice(0, 3), "no-such-npc"]) {
+  for (const following of [true, false]) {
+    add("npcCompanion", base, { type: "npcCompanion", id, following });
+    add("npcCompanion 打斗中", fight(base), { type: "npcCompanion", id, following });
   }
 }
 // 商店
@@ -264,32 +264,32 @@ const offeredJobs = set(base, "jobs", {
 for (const id of jobIds) add("acceptJob 挂着的", offeredJobs, { type: "acceptJob", id });
 const mate = npcIds[0];
 if (mate !== undefined) {
-  const name =
-    ((slice(base, "npc").npcs ?? {}) as Record<string, { name?: string }>)[mate]?.name ?? mate;
-  const terms = { npc: mate, name, specialty: "开车", trouble: "欠了帮派的钱" };
-  const offered = set(base, "squad", {
-    offers: [{ ...terms, kind: "friend", share: 10, wage: 0, at: base.time }],
-  });
-  for (const action of ["accept", "decline"]) {
-    add(`squad ${action} 有请求`, offered, { type: "squad", action, npc: mate });
-  }
-  const hired = rich(
-    set(base, "squad", {
-      members: [
-        {
-          ...terms,
-          kind: "hired",
-          share: 0,
-          wage: 500,
-          since: base.time,
-          status: "ok",
-          paidUntil: base.time,
-        },
-      ],
-    }),
-  );
-  for (const action of ["dismiss", "pay"]) {
-    add(`squad ${action} 有队员`, hired, { type: "squad", action, npc: mate });
+  const npcs = (slice(base, "npc").npcs ?? {}) as Record<string, Record<string, unknown>>;
+  const existing = npcs[mate];
+  const worldLocation = slice(base, "world").location;
+  if (existing) {
+    const friendly = set(base, "npc", {
+      npcs: {
+        ...npcs,
+        [mate]: { ...existing, met: true, alive: true, affinity: 25, location: worldLocation },
+      },
+    });
+    add("npcCompanion 结伴同行", friendly, {
+      type: "npcCompanion",
+      id: mate,
+      following: true,
+    });
+    const following = set(base, "npc", {
+      npcs: {
+        ...npcs,
+        [mate]: { ...existing, met: true, alive: true, following: true, location: worldLocation },
+      },
+    });
+    add("npcCompanion 暂别留守", following, {
+      type: "npcCompanion",
+      id: mate,
+      following: false,
+    });
   }
 }
 const summarized = set(base, "memory", {

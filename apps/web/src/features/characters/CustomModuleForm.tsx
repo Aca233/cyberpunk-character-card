@@ -25,20 +25,20 @@ function blankModule(slot: BoardSlot): BoardModule {
 
 function slotPlaceholder(slot: BoardSlot): string {
   if (slot === "origin") {
-    return "角色来自哪个阶层、巨企部门、帮派或边缘聚落？带着什么看家门路……";
+    return "角色来自哪个阶层、企业部门、帮派或恶土聚落？带着什么看家门路……";
   }
   if (slot === "past") {
-    return "曾经经历过哪场恶仗、背叛、走私交易或地下生涯？留下了什么人脉与余波……";
+    return "入城前亲历过哪段转折事件、险境逃生或特殊活计？练出了什么经验……";
   }
   if (slot === "flaw") {
-    return "欠了谁、得罪了谁、身上落下了何种神经创伤或致命软肋……";
+    return "背着什么债务、旧伤、通缉令或难以摆脱的处境短板……";
   }
-  return "这项本事是怎么练出来的，或者在街头闯出过什么独门绝活。";
+  return "这项性格作风或硬实力是怎么练出来的，在实战中有什么用处。";
 }
 
 /**
  * 自己写一块模块：先写设定，交给辅助模型解读（花一次模型调用），也可以不用模型直接手写；
- * 解读结果可以改名字、能力和钩子，确认后才插上
+ * 解读结果可以改名字与说明，确认后才插上
  */
 export function CustomModuleForm({
   slot,
@@ -130,33 +130,16 @@ export function CustomModuleForm({
             </FrameBox>
           </label>
           <label className={styles.field}>
-            <span>{slot === "flaw" ? "处境 / 负面效应" : "专长能力"}</span>
+            <span>{slot === "flaw" ? "负面影响说明" : "能力 / 经验说明"}</span>
             <FrameBox className={styles.inputBox}>
               <textarea
-                rows={2}
+                rows={3}
                 maxLength={200}
                 value={draft.ability}
                 onChange={(event) => patch({ ability: event.target.value })}
               />
             </FrameBox>
           </label>
-          <label className={styles.field}>
-            <span>剧情钩子</span>
-            <FrameBox className={styles.inputBox}>
-              <textarea
-                rows={2}
-                maxLength={200}
-                value={draft.hook}
-                onChange={(event) => patch({ hook: event.target.value })}
-              />
-            </FrameBox>
-          </label>
-          {draft.people.length > 0 && (
-            <p className={styles.moduleHook}>
-              人物：
-              {draft.people.map((p) => (p.role ? `${p.name}（${p.role}）` : p.name)).join("、")}
-            </p>
-          )}
           <div className={styles.slotTools}>
             <Button
               small
@@ -167,6 +150,8 @@ export function CustomModuleForm({
                 const mod: BoardModule = {
                   ...draft,
                   label: draft.label.trim(),
+                  hook: "",
+                  people: [],
                   custom: true,
                   packId: draft.packId ?? "local",
                 };

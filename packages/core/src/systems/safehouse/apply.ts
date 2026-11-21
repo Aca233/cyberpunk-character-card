@@ -1,7 +1,9 @@
 import type { Draft } from "immer";
-import type { ApplyOutcome, SystemContext } from "../../kernel/system";
+import { settleHousingRentBill } from "../../district-laws";
+import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import { type CyberwareState, cyberwareCatalog } from "../cyberware";
 import { rulingFact } from "../dice";
+import type { EconomyState } from "../economy";
 import { type InventoryState, itemCatalog, type PlacedKind, placedHolderTag } from "../inventory";
 import type { NpcState } from "../npc";
 import { type TravelState, vehicleCatalog } from "../travel";
@@ -9,11 +11,18 @@ import { locationCatalog, type WorldClockState } from "../world";
 import {
   ApartmentCatalogSchema,
   type ApartmentDef,
+  type Home,
+  HomeCatalogSchema,
   type HomeCommand,
+  type HomeDef,
   type ItemPlaceCommand,
+  RENT_DEFAULT_PERIOD_DAYS,
+  RENT_GRACE_DAYS,
   type SafehouseInternal,
   type SafehouseState,
 } from "./schema";
+
+const MINUTES_PER_DAY = 1440;
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
@@ -61,10 +70,16 @@ function resolveWhere(
       const part = cyber.parts[command.item];
       if (part) {
         const home = state.homes.find(
-          (h) => part.holder === `home:${h.id}` && reachable(h.location, true),
+          (h) =>
+            part.holder === `home:${h.id}` &&
+            (homeAt(h, here, ctx.data) ||
+              homeAt(h, startLoc, ctx.data) ||
+              reachable(h.location, true)),
         );
-        if (home)
+        if (home) {
+          if (home.locked) return `${home.name}因欠缴房租水电已被电子锁门，缴清后才能进门存取`;
           return { kind: "home", target: home.id, location: home.location, label: home.name };
+        }
         const car = travel.vehicles.find(
           (v) =>
             part.holder === `vehicle:${v.id}` &&
@@ -89,9 +104,23 @@ function resolveWhere(
         }
       }
       const candidates = inv.placed.filter((p) => p.item === command.item);
+      const isAtHere = (p: (typeof candidates)[number]): boolean => {
+        if (p.kind === "home") {
+          const h = state.homes.find((x) => x.id === p.target);
+          if (h && homeAt(h, here, ctx.data)) return true;
+        }
+        return p.location !== null && p.location === here;
+      };
+      const isAtStart = (p: (typeof candidates)[number]): boolean => {
+        if (p.kind === "home") {
+          const h = state.homes.find((x) => x.id === p.target);
+          if (h && homeAt(h, startLoc, ctx.data)) return true;
+        }
+        return p.location !== null && p.location === startLoc;
+      };
       const match =
-        candidates.find((p) => p.location !== null && p.location === here) ??
-        candidates.find((p) => p.location !== null && p.location === startLoc) ??
+        candidates.find(isAtHere) ??
+        candidates.find(isAtStart) ??
         candidates.find(
           (p) =>
             movedThisTurn &&
@@ -101,6 +130,9 @@ function resolveWhere(
         );
       if (match) {
         const home = match.kind === "home" ? state.homes.find((h) => h.id === match.target) : null;
+        if (home?.locked) {
+          return `${home.name}因欠缴房租水电已被电子锁门，缴清后才能进门存取`;
+        }
         const car =
           match.kind === "vehicle" ? travel.vehicles.find((v) => v.id === match.target) : null;
         const npc = match.kind === "npc" ? npcs[match.target] : null;
@@ -114,9 +146,11 @@ function resolveWhere(
       return "附近没有记录着这件留置物品";
     }
     const localHome =
-      state.homes.find((h) => h.location === here) ??
-      (startLoc !== null ? state.homes.find((h) => h.location === startLoc) : undefined);
+      state.homes.find((h) => homeAt(h, here, ctx.data)) ??
+      (startLoc !== null ? state.homes.find((h) => homeAt(h, startLoc, ctx.data)) : undefined);
     if (localHome) {
+      if (localHome.locked)
+        return `${localHome.name}因欠缴房租水电已被电子锁门，缴清后才能进门存取`;
       return {
         kind: "home",
         target: localHome.id,
@@ -132,7 +166,12 @@ function resolveWhere(
 
   const home = state.homes.find((h) => h.id === where || h.name === where);
   if (home) {
-    if (!reachable(home.location, true)) return `人不在${home.name}，也没在这轮顺路回去`;
+    if (home.locked) return `${home.name}因欠缴房租水电已被电子锁门，缴清后才能进门存取`;
+    const canReachHome =
+      homeAt(home, here, ctx.data) ||
+      homeAt(home, startLoc, ctx.data) ||
+      reachable(home.location, true);
+    if (!canReachHome) return `人不在${home.name}，也没在这轮顺路回去`;
     return { kind: "home", target: home.id, location: home.location, label: home.name };
   }
 
@@ -256,7 +295,14 @@ export function applyHome(
     if (location === null) return fail("新增住所需要明确所在地点");
     const name = command.name ?? command.id;
     if (draft.homes.some((h) => h.id === command.id)) return { ok: true, notes: [] };
-    draft.homes.push({ id: command.id, name, location, since: ctx.now });
+    draft.homes.push({
+      id: command.id,
+      name,
+      location,
+      since: ctx.now,
+      tenure: "owned",
+      locked: false,
+    });
     return { ok: true, notes: [`新住处：${name}（${command.reason}）`] };
   }
   const index = draft.homes.findIndex((h) => h.id === command.id || h.name === command.id);
@@ -267,12 +313,64 @@ export function applyHome(
 
 export function seedHome(
   draft: Draft<SafehouseState>,
-  command: SafehouseInternal,
+  command: Extract<SafehouseInternal, { type: "safehouse.seed" }>,
   now: number,
 ): ApplyOutcome {
   if (draft.homes.some((h) => h.id === command.id)) return { ok: true, notes: [] };
-  draft.homes.push({ id: command.id, name: command.name, location: command.location, since: now });
+  const tenure = command.tenure ?? "owned";
+  const periodDays = command.rentPeriodDays ?? RENT_DEFAULT_PERIOD_DAYS;
+  const entry: Home = {
+    id: command.id,
+    name: command.name,
+    location: command.location,
+    since: now,
+    tenure,
+    locked: false,
+    ...(tenure === "rented"
+      ? {
+          rentAmount: command.rentAmount ?? 1200,
+          rentPeriodDays: periodDays,
+          rentPaidUntil: now + periodDays * MINUTES_PER_DAY,
+        }
+      : {}),
+  };
+  draft.homes.push(entry);
   return { ok: true, notes: [`住处：${command.name}`] };
+}
+
+/** 缴纳租住公寓一期水电房租：扣款并延展截止期，若已锁门同步解除锁门 */
+export function payHomeRent(
+  draft: Draft<SafehouseState>,
+  command: Extract<SafehouseInternal, { type: "safehouse.payRent" }>,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const home = draft.homes.find((h) => h.id === command.id);
+  if (!home) return fail(`没有叫 ${command.id} 的住所`);
+  if (home.tenure !== "rented") return fail(`${home.name}是买断自有房产，不需要交房租`);
+  const amount = home.rentAmount ?? 1200;
+  const periodDays = home.rentPeriodDays ?? RENT_DEFAULT_PERIOD_DAYS;
+  const eddies = ctx.read<EconomyState>("economy").eddies;
+  const settled = settleHousingRentBill(home.name, amount, eddies);
+  if (!settled.paid) return fail(settled.summary);
+  const base = Math.max(ctx.now, home.rentPaidUntil ?? ctx.now);
+  home.rentPaidUntil = base + periodDays * MINUTES_PER_DAY;
+  home.locked = false;
+  return {
+    ok: true,
+    notes: [settled.summary],
+    emit: [{ type: "money", delta: -amount, reason: `缴纳${home.name}房租水电` }],
+  };
+}
+
+/** 时间推进时检查租住公寓是否逾期超出宽限期，超期自动电子锁门断水电 */
+export function tickSafehouse(draft: Draft<SafehouseState>, span: TimeSpan): void {
+  const graceMinutes = RENT_GRACE_DAYS * MINUTES_PER_DAY;
+  for (const home of draft.homes) {
+    if (home.tenure !== "rented" || home.rentPaidUntil === undefined) continue;
+    if (span.to >= home.rentPaidUntil + graceMinutes) {
+      home.locked = true;
+    }
+  }
 }
 
 /** 能买下的公寓表；数据表里没有时为空 */
@@ -281,13 +379,42 @@ export function apartmentList(data: Readonly<Record<string, unknown>>): readonly
   return parsed.success ? parsed.data : [];
 }
 
+/** 开局住所目录表；用于校验与住所连通的地图 POI 入口 */
+export function homeCatalog(data: Readonly<Record<string, unknown>>): readonly HomeDef[] {
+  const parsed = HomeCatalogSchema.safeParse(data.homes);
+  return parsed.success ? parsed.data : [];
+}
+
+/** 玩家是否在某套可购公寓的对应地点或出租/公寓 POI */
+export function apartmentAt(def: ApartmentDef, location: string | null | undefined): boolean {
+  if (location == null) return false;
+  return def.location === location || (def.poiIds?.includes(location) ?? false);
+}
+
+/** 玩家是否在某处已拥有住所的对应地点或连通 POI */
+export function homeAt(
+  home: { readonly id: string; readonly location: string },
+  location: string | null | undefined,
+  data: Readonly<Record<string, unknown>>,
+): boolean {
+  if (location == null) return false;
+  if (home.location === location) return true;
+  const homeDef = homeCatalog(data).find((d) => d.id === home.id);
+  if (homeDef?.poiIds?.includes(location)) return true;
+  const aptDef = apartmentList(data).find((d) => d.id === home.id);
+  if (aptDef?.poiIds?.includes(location)) return true;
+  return false;
+}
+
 /** 这处公寓为什么买不了；能买时为 undefined。同一个地点只算一处住所 */
 export function apartmentLocked(
   homes: readonly { readonly id: string; readonly name: string; readonly location: string }[],
   def: ApartmentDef,
 ): string | undefined {
   if (homes.some((h) => h.id === def.id)) return `${def.name}已经是你的了`;
-  const there = homes.find((h) => h.location === def.location);
+  const there = homes.find(
+    (h) => h.location === def.location || (def.poiIds?.includes(h.location) ?? false),
+  );
   if (there) return `这里已经有${there.name}，不用再买一处`;
   return undefined;
 }

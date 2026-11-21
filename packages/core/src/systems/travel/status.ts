@@ -20,6 +20,7 @@ export const travelStatus: readonly SystemStatus[] = [
             .map((v) => {
               const flags = [
                 v.classLabel,
+                v.seats > 0 ? `${v.seats} 座` : null,
                 v.condition !== "intact" ? v.conditionLabel : null,
                 v.stolen ? "偷来的" : null,
               ].filter((x): x is string => x !== null);

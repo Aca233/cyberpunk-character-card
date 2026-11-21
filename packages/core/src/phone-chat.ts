@@ -45,7 +45,6 @@ import {
   PhoneStateSchema,
 } from "./systems/phone";
 import { registry } from "./systems/registry";
-import { SquadStateSchema } from "./systems/squad";
 import {
   formatGameTime,
   locationCatalog,
@@ -232,6 +231,20 @@ function phoneChatOutput(): string {
   return cachedPhoneChatOutput;
 }
 
+let cachedPhoneChatSystem: string | null = null;
+function phoneChatSystem(): string {
+  cachedPhoneChatSystem ??= [
+    "你在扮演《赛博朋克 2077》夜之城里一位有血有肉的人物，正在用加密短讯回复玩家。",
+    "核心规则：",
+    "1. 口吻完全照人物卡的说话方式与台词样本，像手机短信：短、利落、带人味和当下处境；不要写长篇大论，不要替玩家做行动或代写旁白。",
+    "2. 如果玩家在手机里试图遥控打架、过检定、远程潜入/黑入、直接隔空买装备/装义体，或要求立刻把正在进行的委托当场结清收钱：在口吻里自然回绝（让对方到现场或走正事见面解决），job.action 一律写 none，绝不发放任何金钱或物品。",
+    "3. 严禁通过闲聊轻易刷好感：纯客套、打招呼、常规砍价写 none；只有真正说到心坎、切实替对方分忧、或担下重要承诺才写 upSmall（最多 +2）；踩到底线、挑衅、敷衍或食言写 downSmall / downMedium。",
+    "4. 委托控制与对话节奏须严格遵守用户消息里的【本条对话约束】。",
+    phoneChatOutput(),
+  ].join("\n");
+  return cachedPhoneChatSystem;
+}
+
 /** 构造发给辅助模型的极简双人私聊上下文 */
 export function buildPhoneChatPrompt(
   world: WorldState,
@@ -253,7 +266,6 @@ export function buildPhoneChatPrompt(
   const jobsState = JobsStateSchema.parse(world.slices.jobs);
   const nemeses = NemesisStateSchema.parse(world.slices.nemesis ?? {});
   const factions = FactionsStateSchema.parse(world.slices.factions ?? {});
-  const squad = SquadStateSchema.parse(world.slices.squad ?? {});
   const debts = CyberwareStateSchema.parse(world.slices.cyberware ?? {}).debts;
   const catalog = factionCatalog(data);
   const places = locationCatalog(withSavedPlaces(data, world));
@@ -288,7 +300,6 @@ export function buildPhoneChatPrompt(
   const doc = ripperdocList(data).find((d) => d.keeperNpc === npc.id);
   const ownedShops = shopList(data).filter((s) => s.keeperNpc === npc.id);
   const docDebts = doc ? debts.filter((d) => d.doc === doc.id) : [];
-  const squadMember = squad.members.find((m) => m.npc === npc.id);
 
   const urgentLines: string[] = [];
   for (const d of clock.deadlines) {
@@ -303,13 +314,10 @@ export function buildPhoneChatPrompt(
     }
   }
 
-  const system = [
-    "你在扮演《赛博朋克 2077》夜之城里一位有血有肉的人物，正在用加密短讯回复玩家。",
-    "核心规则：",
-    "1. 口吻完全照人物卡的说话方式与台词样本，像手机短信：短、利落、带人味和当下处境；不要写长篇大论，不要替玩家做行动或代写旁白。",
-    "2. 如果玩家在手机里试图遥控打架、过检定、远程潜入/黑入、直接隔空买装备/装义体，或要求立刻把正在进行的委托当场结清收钱：在口吻里自然回绝（让对方到现场或走正事见面解决），job.action 一律写 none，绝不发放任何金钱或物品。",
-    "3. 严禁通过闲聊轻易刷好感：纯客套、打招呼、常规砍价写 none；只有真正说到心坎、切实替对方分忧、或担下重要承诺才写 upSmall（最多 +2）；踩到底线、挑衅、敷衍或食言写 downSmall / downMedium。",
-    `4. 委托控制：${
+  // 系统层保持纯静态以命中跨轮/跨联系人提示词缓存；动态委托权限与场景轮次约束放进用户消息
+  const system = phoneChatSystem();
+  const dynamicRules = [
+    `委托控制：${
       canOfferJob
         ? '如果玩家明确在找活、问门路、求委托，且符合你的身份与双方交情，可以通过 job.action="offer" 挂出一单合乎夜之城体量与你的行当的新委托（不设就写 none，别硬塞）'
         : activeNemesis || isFixerBlocked
@@ -317,11 +325,10 @@ export function buildPhoneChatPrompt(
           : "当前不允许额外派发新委托（已有进行中委托、本场刚派过或交情不足）；如需接下待接的旧委托，可用 accept；更新进展记 note；玩家明确弃单可用 abandon"
     }。`,
     sceneTurns >= CHAT_SCENE_TURN_SOFT_CAP
-      ? `5. 你们在这个场景已经发了 ${sceneTurns} 轮短信了：顺手找个自然的借口或句点收尾（有事当面碰、忙手上活去），别没完没了拉扯。`
+      ? `对话节奏：你们在这个场景已经发了 ${sceneTurns} 轮短信了，顺手找个自然的借口或句点收尾（有事当面碰、忙手上活去），别没完没了拉扯。`
       : here
-        ? "5. 对方此时此刻就在你同一地点附近：简短几字回应即可，顺势让双方回到现场面对面聊。"
-        : "5. 时间照实际来回取 1–3 分钟，干脆收住回复。",
-    phoneChatOutput(),
+        ? "对话节奏：对方此时此刻就在你同一地点附近，简短几字回应即可，顺势让双方回到现场面对面聊。"
+        : "对话节奏：时间照实际来回取 1–3 分钟，干脆收住回复。",
   ].join("\n");
 
   const cardLines = [
@@ -340,9 +347,7 @@ export function buildPhoneChatPrompt(
     ownedShops.length > 0
       ? `服务身份：经营店铺（${ownedShops.map((s) => s.name).join("、")}）`
       : "",
-    squadMember
-      ? `小队关系：${squadMember.kind === "friend" ? "搭档" : "受雇队员"}（状态 ${squadMember.status}）`
-      : "",
+    npc.following ? "当前状态：正与玩家结伴同行" : "",
     npc.memories.length > 0
       ? `共同记忆：\n${npc.memories
           .slice(-6)
@@ -379,6 +384,7 @@ export function buildPhoneChatPrompt(
 
   const history = threadHistoryLines(phoneState.messages, npc.id);
   const user = [
+    `【本条对话约束】\n${dynamicRules}`,
     cardLines,
     history.length > 0
       ? `【近期短信往来】\n${history.join("\n")}`

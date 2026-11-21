@@ -251,14 +251,9 @@
       },
       { "id": "menu.nightCity", "atlas": "fullscreen/bg_nc", "slot": "bg_nc" },
       {
-        "id": "tarot.strength",
-        "atlas": "fullscreen/atlas_tarot2",
-        "slot": "tarot_strength"
-      },
-      {
-        "id": "tarot.chariot",
+        "id": "tarot.fool",
         "atlas": "fullscreen/atlas_tarot1",
-        "slot": "tarot_chariot"
+        "slot": "tarot_fool01"
       },
       {
         "id": "tarot.magician",
@@ -271,9 +266,99 @@
         "slot": "tarot_highpriestess"
       },
       {
+        "id": "tarot.empress",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_empress"
+      },
+      {
+        "id": "tarot.emperor",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_emperor"
+      },
+      {
+        "id": "tarot.hierophant",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_hierophant"
+      },
+      {
+        "id": "tarot.lovers",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_lovers"
+      },
+      {
+        "id": "tarot.chariot",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_chariot"
+      },
+      {
+        "id": "tarot.strength",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_strength"
+      },
+      {
+        "id": "tarot.hermit",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_hermit"
+      },
+      {
+        "id": "tarot.wheeloffortune",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_wheeloffortune"
+      },
+      {
+        "id": "tarot.justice",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_justice"
+      },
+      {
+        "id": "tarot.hangman",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_hangman"
+      },
+      {
+        "id": "tarot.death",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_death"
+      },
+      {
+        "id": "tarot.temperance",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_temperance"
+      },
+      {
+        "id": "tarot.devil",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_devil"
+      },
+      {
+        "id": "tarot.tower",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_tower"
+      },
+      {
+        "id": "tarot.star",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_star"
+      },
+      {
         "id": "tarot.moon",
         "atlas": "fullscreen/atlas_tarot2",
         "slot": "tarot_moon"
+      },
+      {
+        "id": "tarot.sun",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_sun"
+      },
+      {
+        "id": "tarot.judgement",
+        "atlas": "fullscreen/atlas_tarot1",
+        "slot": "tarot_judgement"
+      },
+      {
+        "id": "tarot.world",
+        "atlas": "fullscreen/atlas_tarot2",
+        "slot": "tarot_world"
       },
       {
         "id": "tarot.back",

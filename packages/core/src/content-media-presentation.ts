@@ -18,8 +18,7 @@ export function collectPresentedContentMedia(
       (command) =>
         command.type === "shard" ||
         (command.type === "chip" && command.action === "read") ||
-        (command.type === "braindance" &&
-          (command.action === "progress" || command.action === "replay")),
+        (command.type === "braindance" && command.action === "progress"),
     )
   )
     return [];
@@ -64,9 +63,10 @@ export function collectPresentedContentMedia(
       // 已结算事件是幂等空操作，不能用旧 start/exit 改变本轮实际播放源。
       if (settled.has(event.event)) continue;
       settled.add(event.event);
-      if (event.action === "start") activeWork = event.work;
-      else if (event.action === "exit" || event.action === "finish") activeWork = undefined;
-      else if (event.action === "progress" || event.action === "replay") {
+      if (event.action === "play") activeWork = event.work;
+      else if (event.action === "stop" && (event.outcome === "exited" || event.outcome === "finished"))
+        activeWork = undefined;
+      else if (event.action === "progress") {
         const work = activeWork ? braindance.works[activeWork] : undefined;
         const passage = work?.passages.find((entry) => entry.id === event.passage);
         if (work && passage?.media?.length && braindance.passages[work.id]?.[passage.id])

@@ -46,13 +46,13 @@ export function npcHackRulingFact(
   return parsed.success ? parsed.data : undefined;
 }
 
-/** 队员死亡必须有已确认的致命危机，旧检定字段不能替代现实依据。 */
+/** 同行者死亡必须有已确认的致命危机，旧检定字段不能替代现实依据。 */
 export function memberDeathBlocked(
   facts: Readonly<Record<string, unknown>>,
   names: readonly string[],
 ): string | undefined {
-  const who = names[0] ?? "队员";
+  const who = names[0] ?? "同行者";
   const ruling = rulingFact(facts);
   if (ruling?.harm === "lethal") return undefined;
-  return `${who}是队员：只有在致命危机（harm=lethal）且战场上真出事时才会死；平常受创最坏写 squad status hurt 或 captured`;
+  return `${who}正与你同行：只有在致命危机（harm=lethal）且战场上真出事时才会死；平常受创写 npcHurt`;
 }

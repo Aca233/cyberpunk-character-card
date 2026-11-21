@@ -37,7 +37,7 @@ export function MapLayer({
   }, [onClose, isTop]);
   return (
     <section className={neural.mapLayer} data-layer="map" role="dialog" aria-label="地图">
-      <NineSlice id="map.panelBg" tint="rgb(10 10 18 / 80%)" slice={PANEL_SLICE} />
+      <NineSlice id="map.panelBg" tint="var(--cp-surface)" slice={PANEL_SLICE} />
       <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={PANEL_SLICE} />
       {/* 关闭键在地图顶栏那一排里（MapBody 的 onClose），这里不再另浮一排按键（用户定的，计划第十二节） */}
       <div className={neural.mapInner}>{children}</div>

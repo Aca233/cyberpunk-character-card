@@ -126,7 +126,9 @@ export function registeredParty(world: QuoteWorld, id: string) {
 }
 
 export function normalizeEvidenceText(text: string): string {
-  return text.normalize("NFKC").replace(/[\s，。、；：！？""''「」『』（）()【】[\]—\-…·,.!?;:'"`]+/g, "");
+  return text
+    .normalize("NFKC")
+    .replace(/[\s，。、；：！？""''「」『』（）()【】[\]—\-…·,.!?;:'"`]+/g, "");
 }
 
 export function tradeEvidence(facts: Readonly<Record<string, unknown>>, quote: string): boolean {

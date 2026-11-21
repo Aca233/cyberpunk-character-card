@@ -234,6 +234,7 @@ const SCENE_IMPORTANCE: readonly [SceneImportance, string][] = [
 ];
 const SCENE_TITLE_CHARS = 24;
 const SCENE_TEXT_CHARS = 200;
+const BOND_TEXT_CHARS = 120;
 
 interface SceneEditInput {
   readonly action: "edit" | "remove";
@@ -242,6 +243,20 @@ interface SceneEditInput {
   readonly title?: string;
   readonly text?: string;
   readonly importance?: SceneImportance;
+}
+
+interface BondEditInput {
+  readonly action: "edit" | "remove";
+  readonly npc: string;
+  readonly index: number;
+  readonly before: string;
+  readonly text?: string;
+}
+
+interface BondMemoryGroup {
+  readonly npcId: string;
+  readonly npcName: string;
+  readonly memories: readonly string[];
 }
 
 function ContextViewer() {
@@ -285,8 +300,29 @@ function ContextViewer() {
     },
   });
 
+  const editBond = useMutation({
+    mutationFn: async (edit: BondEditInput) => {
+      const current = state.data;
+      if (!current) throw new Error("存档状态还没加载好");
+      await api.action(saveId, {
+        requestId: newRequestId(),
+        baseVersion: current.version,
+        action: { type: "editMemory", what: "bond", ...edit },
+      });
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["state", saveId] }),
+        queryClient.invalidateQueries({ queryKey: ["context", saveId] }),
+      ]);
+    },
+  });
+
   const update = (key: "save" | "seq", value: string) => {
-    if (key === "save") editScene.reset();
+    if (key === "save") {
+      editScene.reset();
+      editBond.reset();
+    }
     setParams(
       (p) => {
         const next = new URLSearchParams(p);
@@ -399,6 +435,17 @@ function ContextViewer() {
             state.data
               ? async (edit) => {
                   await editScene.mutateAsync(edit);
+                }
+              : undefined
+          }
+          bonds={(state.data?.npcs ?? [])
+            .filter((n) => n.memories.length > 0)
+            .map((n) => ({ npcId: n.id, npcName: n.name, memories: n.memories }))}
+          bondError={editBond.isError ? editBond.error.message : null}
+          onEditBond={
+            state.data
+              ? async (edit) => {
+                  await editBond.mutateAsync(edit);
                 }
               : undefined
           }
@@ -610,18 +657,192 @@ function SceneSummariesSection({
   );
 }
 
+function BondMemoriesSection({
+  bonds,
+  error,
+  onEdit,
+}: {
+  readonly bonds: readonly BondMemoryGroup[];
+  readonly error: string | null;
+  readonly onEdit?: ((edit: BondEditInput) => Promise<void>) | undefined;
+}) {
+  const [draft, setDraft] = useState<{
+    readonly npc: string;
+    readonly index: number;
+    readonly before: string;
+    readonly text: string;
+  } | null>(null);
+  const [confirming, setConfirming] = useState<{
+    readonly npc: string;
+    readonly index: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useLayer(
+    () => {
+      setDraft(null);
+      setConfirming(null);
+    },
+    draft !== null || confirming !== null,
+  );
+
+  const totalCount = bonds.reduce((sum, g) => sum + g.memories.length, 0);
+
+  const run = async (edit: BondEditInput) => {
+    if (!onEdit) return;
+    setSaving(true);
+    try {
+      await onEdit(edit);
+      setDraft(null);
+      setConfirming(null);
+    } catch {
+      // 失败原因由外层 error 提示
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title={totalCount > 0 ? `人物共同记忆（${totalCount}）` : "人物共同记忆"}>
+      {error && <p className={styles.error}>{error}</p>}
+      {totalCount === 0 ? (
+        <p className={styles.dim}>还没有人物共同记忆。</p>
+      ) : (
+        <ul className={styles.sceneList}>
+          {bonds.flatMap((group) =>
+            group.memories.map((text, index) => {
+              const key = `${group.npcId}-${index}`;
+              const isEditing = draft?.npc === group.npcId && draft.index === index;
+              const isConfirming = confirming?.npc === group.npcId && confirming.index === index;
+              return (
+                <li key={key} className={styles.sceneCard}>
+                  <div className={styles.sceneHead}>
+                    <strong>{group.npcName}</strong>
+                    <span className={styles.dim}>#{index + 1}</span>
+                  </div>
+                  {isEditing ? (
+                    <div className={styles.sceneForm}>
+                      <textarea
+                        className={styles.sceneTextarea}
+                        aria-label={`${group.npcName}的共同记忆`}
+                        rows={2}
+                        value={draft.text}
+                        maxLength={BOND_TEXT_CHARS}
+                        onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+                      />
+                      <div className={styles.sceneActions}>
+                        <Button
+                          primary
+                          disabled={saving || draft.text.trim() === ""}
+                          onClick={() =>
+                            void run({
+                              action: "edit",
+                              npc: group.npcId,
+                              index,
+                              before: text,
+                              text: draft.text.trim(),
+                            })
+                          }
+                        >
+                          保存
+                        </Button>
+                        <Button onClick={() => setDraft(null)}>取消</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p>{text}</p>
+                  )}
+                  {onEdit && !isEditing && (
+                    <div className={styles.sceneActions}>
+                      {isConfirming ? (
+                        <>
+                          <span className={styles.dim}>删掉以后该人物就不记得这条了。</span>
+                          <Button
+                            primary
+                            disabled={saving}
+                            onClick={() =>
+                              void run({
+                                action: "remove",
+                                npc: group.npcId,
+                                index,
+                                before: text,
+                              })
+                            }
+                          >
+                            删掉
+                          </Button>
+                          <Button onClick={() => setConfirming(null)}>留着</Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            disabled={saving}
+                            onClick={() => {
+                              setConfirming(null);
+                              setDraft({ npc: group.npcId, index, before: text, text });
+                            }}
+                          >
+                            改
+                          </Button>
+                          <Button
+                            disabled={saving}
+                            onClick={() => {
+                              setDraft(null);
+                              setConfirming({ npc: group.npcId, index });
+                            }}
+                          >
+                            删
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            }),
+          )}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+function formatUsageSummary(usage: {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cachedInputTokens?: number | undefined;
+  readonly cacheWriteTokens?: number | undefined;
+}): string {
+  const cached = usage.cachedInputTokens ?? 0;
+  const write = usage.cacheWriteTokens ?? 0;
+  const rate = usage.inputTokens > 0 ? Math.round((cached / usage.inputTokens) * 100) : 0;
+  const parts = [
+    `输入 ${usage.inputTokens.toLocaleString()}`,
+    ...(cached > 0 ? [`缓存命中 ${cached.toLocaleString()} (${rate}%)`] : []),
+    ...(write > 0 ? [`写入缓存 ${write.toLocaleString()}`] : []),
+    `输出 ${usage.outputTokens.toLocaleString()} tokens`,
+  ];
+  return parts.join(" · ");
+}
+
 function ContextDetail({
   ctx,
   saveId,
   scenes,
   sceneError,
   onEditScene,
+  bonds,
+  bondError,
+  onEditBond,
 }: {
   readonly ctx: TurnContext;
   readonly saveId: string;
   readonly scenes: readonly SceneSummaryItem[];
   readonly sceneError: string | null;
   readonly onEditScene?: ((edit: SceneEditInput) => Promise<void>) | undefined;
+  readonly bonds: readonly BondMemoryGroup[];
+  readonly bondError: string | null;
+  readonly onEditBond?: ((edit: BondEditInput) => Promise<void>) | undefined;
 }) {
   return (
     <div className={styles.detail}>
@@ -633,17 +854,12 @@ function ContextDetail({
         </div>
         <div className={styles.factCard}>
           <dt>本轮用量</dt>
-          <dd className="num">
-            {ctx.usage
-              ? `输入 ${ctx.usage.inputTokens} · 输出 ${ctx.usage.outputTokens} tokens`
-              : "没有记录"}
-          </dd>
+          <dd className="num">{ctx.usage ? formatUsageSummary(ctx.usage) : "没有记录"}</dd>
         </div>
         <div className={styles.factCard}>
           <dt>存档累计</dt>
           <dd className="num">
-            {ctx.totalUsage.turns} 轮 · 输入 {ctx.totalUsage.inputTokens.toLocaleString()} · 输出{" "}
-            {ctx.totalUsage.outputTokens.toLocaleString()} tokens
+            {ctx.totalUsage.turns} 轮 · {formatUsageSummary(ctx.totalUsage)}
           </dd>
         </div>
         <div className={`${styles.factCard} ${styles.factCardWide}`}>
@@ -787,6 +1003,12 @@ function ContextDetail({
         </Section>
       )}
       <SceneSummariesSection key={saveId} scenes={scenes} error={sceneError} onEdit={onEditScene} />
+      <BondMemoriesSection
+        key={`bond-${saveId}`}
+        bonds={bonds}
+        error={bondError}
+        onEdit={onEditBond}
+      />
       {ctx.lore && (
         <Section title={`设定库（原作资料，${ctx.lore.picked.length} 段）`}>
           <p>

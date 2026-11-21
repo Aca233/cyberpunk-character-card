@@ -1,15 +1,32 @@
+import {
+  type DistrictLawRule,
+  districtLawFor,
+  normalizeDistrictId,
+  type RentSettlementResult,
+  settleHousingRentBill,
+} from "./district-laws";
 import type { WeaponConcealment } from "./systems/dice";
 
+export {
+  type DistrictLawRule,
+  districtLawFor,
+  normalizeDistrictId,
+  type RentSettlementResult,
+  settleHousingRentBill,
+};
+
 /**
- * 真实城市物理安检与日常账单压力模块：
- * - 城区显眼长枪安检与高端场所毫米波武器门禁（含流浪者走私暗格、安全屋豁免）
- * - 住房/生活账单与断水断电门锁现实压力
- * （已移除 KPI 百分比晋升辞退公式与二手义体随机摇奖机制）
+ * 真实城市物理安检与租住账单压力模块：
+ * - 城区显眼长枪安检与高端场所毫米波武器门禁（由 DISTRICT_LAWS 驱动，含流浪者走私暗格、安全屋豁免）
+ * - 城区中文名/子区名统一映射到 canonical districtId
+ * - 租住公寓周期水电房租状态核验（替换旧版孤儿 WEEKLY_LIFESTYLE_BILLS）
  */
 
 export interface DistrictSecurityInput {
   readonly districtId: string;
   readonly weaponConcealment: WeaponConcealment;
+  /** 可选：来自 content/slices.ts 的城区法制条目；省略时按默认高安区集合判定 */
+  readonly districtLaw?: DistrictLawRule | undefined;
   readonly enteringHighEndVenue?: boolean;
   /** 人在自己的安全屋里：不算在街区巡逻安保眼皮底下公然扛枪走动 */
   readonly inSafehouse?: boolean;
@@ -22,12 +39,22 @@ export type DistrictSecurityResult =
   | { readonly passed: false; readonly reason: string };
 
 /**
- * 校验城区街头显眼长枪与高档场所毫米波武器门禁
+ * 校验城区街头显眼长枪与高档场所毫米波武器门禁（优先读取 DISTRICT_LAWS 规则）
  */
 export function evaluateDistrictSecurityCheck(
   input: DistrictSecurityInput,
 ): DistrictSecurityResult {
-  const highSecurity = input.districtId === "city-center" || input.districtId === "westbrook";
+  const canonicalId = normalizeDistrictId(input.districtId) ?? input.districtId;
+  const forbidsLongArms =
+    input.districtLaw?.forbidsOpenLongArms ??
+    (canonicalId === "city-center" || canonicalId === "westbrook");
+  const districtLabel =
+    input.districtLaw?.name ??
+    (canonicalId === "city-center"
+      ? "市政中心"
+      : canonicalId === "westbrook"
+        ? "威斯布鲁克富人区"
+        : input.districtId);
   const isLongArmVisible =
     input.weaponConcealment === "open" || input.weaponConcealment === "heavy";
 
@@ -38,10 +65,10 @@ export function evaluateDistrictSecurityCheck(
     };
   }
 
-  if (highSecurity && isLongArmVisible && !input.inSafehouse) {
+  if (forbidsLongArms && isLongArmVisible && !input.inSafehouse) {
     return {
       passed: false,
-      reason: `在${input.districtId === "city-center" ? "市政中心" : "威斯布鲁克富人区"}公然扛着显眼长枪或重武器走动，立刻引来巡逻安保无人机与武装警卫盘查拦截（须先放回安全屋存放箱、汽车后备箱，或只带贴身隐蔽武器）`,
+      reason: `在${districtLabel}公然扛着显眼长枪或重武器走动，违反本区明火持械禁令，立刻引来巡逻安保无人机与武装警卫盘查拦截（须先放回安全屋存放箱、汽车后备箱，或只带贴身隐蔽武器）`,
     };
   }
 
@@ -54,64 +81,6 @@ export function evaluateDistrictSecurityCheck(
   }
 
   return { passed: true };
-}
-
-export type HousingTier = "capsule" | "standard" | "penthouse";
-
-export const WEEKLY_LIFESTYLE_BILLS: Readonly<
-  Record<
-    HousingTier,
-    {
-      readonly label: string;
-      readonly weeklyCost: number;
-      readonly includesPlatinumTrauma: boolean;
-    }
-  >
-> = {
-  capsule: {
-    label: "摩天H楼胶囊公寓",
-    weeklyCost: 500,
-    includesPlatinumTrauma: false,
-  },
-  standard: {
-    label: "标准独立公寓",
-    weeklyCost: 2500,
-    includesPlatinumTrauma: false,
-  },
-  penthouse: {
-    label: "公司广场顶层豪宅（含创伤小组白金卡）",
-    weeklyCost: 10000,
-    includesPlatinumTrauma: true,
-  },
-};
-
-export function settleWeeklyLifestyleBill(
-  tier: HousingTier,
-  currentEddies: number,
-): {
-  readonly paid: boolean;
-  readonly cost: number;
-  readonly remainingEddies: number;
-  readonly evictedOrLocked: boolean;
-  readonly summary: string;
-} {
-  const info = WEEKLY_LIFESTYLE_BILLS[tier];
-  if (currentEddies >= info.weeklyCost) {
-    return {
-      paid: true,
-      cost: info.weeklyCost,
-      remainingEddies: currentEddies - info.weeklyCost,
-      evictedOrLocked: false,
-      summary: `已结清本周「${info.label}」租金与物业水电 ${info.weeklyCost}€`,
-    };
-  }
-  return {
-    paid: false,
-    cost: info.weeklyCost,
-    remainingEddies: currentEddies,
-    evictedOrLocked: true,
-    summary: `手头余额不够扣「${info.label}」这周房租水电（还差 ${info.weeklyCost - currentEddies}€），物业电子锁已经亮起欠费红灯并切断热水供应`,
-  };
 }
 
 export * from "./systems/city";

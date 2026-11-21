@@ -77,7 +77,7 @@
   gap: 0.28rem 0.56rem;
   padding: 0.28rem 0.56rem;
   border-left: 2px solid var(--cp-cyan);
-  background: rgb(9 14 24 / 76%);
+  background: var(--cp-surface-inset);
   font-size: 0.71rem;
 }
 
@@ -157,8 +157,8 @@
   align-items: center;
   gap: 0.28rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid rgb(94 246 255 / 22%);
-  background: rgb(10 14 22 / 78%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
   color: var(--cp-text-dim);
   font-family: var(--font-ui);
   font-size: 0.72rem;
@@ -211,14 +211,15 @@
   align-items: center;
   gap: 0.26rem;
   padding: 0.22rem 0.48rem;
-  border: 1px solid rgb(94 246 255 / 24%);
-  background: rgb(10 14 22 / 82%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
   color: var(--cp-text-dim);
   font-family: var(--font-ui);
   font-size: 0.68rem;
   line-height: 1.25;
   white-space: nowrap;
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
   transition:
     color var(--dur-flash),
     border-color var(--dur-flash);
@@ -237,8 +238,8 @@
 }
 
 .searchBox {
-  --box-fill: rgb(9 12 20 / 88%);
-  --box-line: rgb(94 246 255 / 32%);
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
   flex: 0 1 10.5rem;
   min-width: 7.5rem;
   display: flex;
@@ -247,7 +248,7 @@
 }
 
 .searchBox:focus-within {
-  --box-line: var(--cp-yellow);
+  --box-line: var(--cp-cyan);
 }
 
 .searchInput {
@@ -315,8 +316,8 @@
 }
 
 .emptyBox {
-  --box-fill: rgb(11 13 22 / 72%);
-  --box-line: rgb(94 246 255 / 20%);
+  --box-fill: var(--cp-surface-inset);
+  --box-line: var(--cp-line-subtle);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -366,8 +367,8 @@
 }
 
 .itemRow {
-  --item-fill: rgb(13 15 24 / 82%);
-  --item-line: rgb(94 246 255 / 26%);
+  --item-fill: var(--cp-surface);
+  --item-line: var(--cp-line-subtle);
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -388,7 +389,7 @@
 
 .itemRow:hover,
 .itemRow:focus-visible {
-  --item-fill: rgb(18 24 38 / 92%);
+  --item-fill: var(--cp-surface-hover);
   --item-line: rgb(94 246 255 / 60%);
   outline: none;
 }
@@ -441,7 +442,7 @@
   width: 2.65rem;
   height: 2rem;
   border: 1px solid color-mix(in srgb, var(--rarity, rgb(94 246 255 / 45%)) 34%, transparent);
-  background: rgb(6 9 16 / 90%);
+  background: var(--cp-surface-deep);
   overflow: hidden;
 }
 
@@ -597,8 +598,8 @@
 /* ———— 右侧详情卡（头尾固定、中间可滚动） ———— */
 
 .detailCard {
-  --detail-line: var(--rarity, rgb(94 246 255 / 48%));
-  --box-fill: rgb(11 13 22 / 94%);
+  --detail-line: var(--rarity, var(--cp-red-dim));
+  --box-fill: var(--cp-surface-strong);
   --box-line: var(--detail-line);
   position: relative;
   isolation: isolate;
@@ -723,7 +724,7 @@
 
 /* 增强展示台 */
 .showcase {
-  --box-fill: rgb(7 9 16 / 90%);
+  --box-fill: var(--cp-surface-deep);
   --box-line: color-mix(in srgb, var(--rarity, var(--cp-cyan)) 44%, transparent);
   position: relative;
   isolation: isolate;
@@ -804,7 +805,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -847,8 +848,8 @@
   display: grid;
   gap: 0.3rem;
   padding: 0.42rem 0.55rem 0.44rem 0.7rem;
-  border: 1px solid rgb(94 246 255 / 22%);
-  background: rgb(8 11 20 / 80%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
 }
 
 .slotCard[data-state="occupied"] {
@@ -857,8 +858,8 @@
 
 .slotCard[data-state="empty"] {
   border-style: dashed;
-  border-color: rgb(94 246 255 / 22%);
-  background: rgb(8 10 18 / 55%);
+  border-color: var(--cp-line-subtle);
+  background: var(--cp-surface-soft);
 }
 
 .slotCard[data-locked] {
@@ -937,7 +938,7 @@
   width: 2.1rem;
   height: 2.1rem;
   border: 1px solid color-mix(in srgb, var(--slot-rar, var(--cp-cyan)) 35%, transparent);
-  background: rgb(5 7 14 / 88%);
+  background: var(--cp-surface-deep);
 }
 
 .slotArt {
@@ -1009,8 +1010,8 @@
   align-items: center;
   gap: 0.45rem;
   padding: 0.3rem 0.42rem 0.3rem 0.56rem;
-  border: 1px solid rgb(94 246 255 / 20%);
-  background: rgb(11 15 26 / 90%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-raised);
 }
 
 .slotPickItem:hover {
@@ -1066,7 +1067,7 @@
 }
 
 .modTargetsHead {
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -1087,8 +1088,8 @@
   align-items: center;
   gap: 0.48rem;
   padding: 0.34rem 0.48rem;
-  border: 1px solid rgb(94 246 255 / 22%);
-  background: rgb(9 13 22 / 82%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
 }
 
 .modTargetThumb {
@@ -1096,8 +1097,8 @@
   place-items: center;
   width: 2.4rem;
   height: 1.6rem;
-  background: rgb(5 7 14 / 88%);
-  border: 1px solid rgb(94 246 255 / 16%);
+  background: var(--cp-surface-deep);
+  border: 1px solid var(--cp-line-faint);
 }
 
 .modTargetArt {
@@ -1183,12 +1184,13 @@
 
 .storeTargetChip {
   padding: 0.14rem 0.42rem;
-  border: 1px solid rgb(94 246 255 / 26%);
-  background: rgb(10 14 22 / 78%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
   color: var(--cp-text-dim);
   font-family: var(--font-ui);
   font-size: 0.66rem;
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
 }
 
 .storeTargetChip[aria-pressed="true"] {
@@ -1201,7 +1203,7 @@
 /* ———— 当前地点购房条 ———— */
 
 .placesBar {
-  --box-fill: rgb(14 16 26 / 78%);
+  --box-fill: var(--cp-surface);
   --box-line: rgb(255 68 68 / 30%);
   position: relative;
   isolation: isolate;
@@ -1217,7 +1219,7 @@
 .placesLabel {
   position: relative;
   z-index: 1;
-  font-family: var(--font-display);
+  font-family: var(--font-ui);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.14em;

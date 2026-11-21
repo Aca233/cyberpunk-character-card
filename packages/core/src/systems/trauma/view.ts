@@ -1,3 +1,4 @@
+import { districtLawFor } from "../../district-laws";
 import type { ViewContext } from "../../kernel/system";
 import { formatGameTime, locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../world";
 import {
@@ -21,13 +22,16 @@ export function traumaView({ world, data }: ViewContext) {
     (slices.health?.condition as "up" | "down" | "dying" | "dead" | undefined) ?? "up";
   const inCombat = (slices.combat?.active ?? null) !== null;
   const eddies = Number(slices.economy?.eddies ?? 0);
+  const district = clock.location === null ? null : (places.get(clock.location)?.district ?? null);
+  const law = districtLawFor(data, district);
   const input = {
     tier: state.tier,
     active,
     condition,
     inCombat,
-    district: clock.location === null ? null : (places.get(clock.location)?.district ?? null),
+    district,
     stars: Number(slices.heat?.stars ?? 0),
+    traumaCoverage: law?.traumaCoverage,
   };
   const rescue = dispatchCheck(input);
   const coverage = dispatchCheck({ ...input, condition: condition === "up" ? "down" : condition });

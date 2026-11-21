@@ -3,6 +3,7 @@ import { HealthStateSchema } from "../health";
 import type { PlacedKind } from "../inventory";
 import { TravelStateSchema, vehicleCatalog } from "../travel";
 import { locationCatalog, WorldClockStateSchema } from "../world";
+import { homeAt } from "./apply";
 import { SafehouseStateSchema } from "./schema";
 
 export interface StorageTarget {
@@ -48,7 +49,15 @@ export function ownStorageTargets(
 
   return [
     ...homes.map((home): StorageTarget => {
-      const blockedReason = accessReason(home.id, home.location);
+      const blockedReason =
+        commonBlocked ??
+        ((targetCounts.get(home.id) ?? 0) > 1
+          ? "存放位置标识重复，请通过行动说明交接位置"
+          : home.locked
+            ? "欠缴房租水电，物业电子门锁已上锁，请缴清房租后存取"
+            : !homeAt(home, here, data)
+              ? `需前往${placeName(home.location)}才能存取`
+              : null);
       return {
         key: `home:${home.id}`,
         kind: "home",

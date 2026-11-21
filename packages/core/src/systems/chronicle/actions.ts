@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineAction } from "../../kernel/system";
 import { EPITAPH_CHARS, StoryEndSchema } from "./schema";
 
-/** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读，角色进传说名册 */
+/** 履历页：玩家给这个角色的故事收尾（退休或停在这里），之后存档只读 */
 export const EndStoryActionSchema = z.strictObject({
   type: z.literal("endStory"),
   how: StoryEndSchema,

@@ -1,11 +1,17 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
-import { CommerceStateSchema, tradeEvidence } from "../commerce";
+import type { CyberwareState } from "../cyberware";
+import type { HealthState } from "../health";
 import { InventoryStateSchema, itemCatalog } from "../inventory";
 import { chipContentCatalog, ShardsStateSchema } from "../shards";
-import { merchantSites, type WorldClockState } from "../world";
+import { merchantAt, merchantSites, type WorldClockState } from "../world";
 import {
+  BD_LAYER_LABELS,
+  BD_MODE_LABELS,
+  BD_TIER_LABELS,
   type BdExperience,
+  type BdLayer,
+  type BdSource,
   type BdWork,
   BdWorkListSchema,
   type BraindanceCommand,
@@ -15,6 +21,7 @@ import {
 type Data = Readonly<Record<string, unknown>>;
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 const cache = new WeakMap<object, readonly BdWork[]>();
+
 export function braindanceCatalog(data: Data): readonly BdWork[] {
   const raw = data.braindances;
   if (!raw || typeof raw !== "object") return [];
@@ -24,12 +31,13 @@ export function braindanceCatalog(data: Data): readonly BdWork[] {
   cache.set(raw, works);
   return works;
 }
+
 export function braindanceWork(state: BraindanceState, data: Data, id: string): BdWork | undefined {
   return state.works[id] ?? braindanceCatalog(data).find((w) => w.id === id);
 }
 
 const projectedData = new WeakMap<BraindanceState, WeakMap<object, Data>>();
-/** 供交易核验的最小资料；不把片段梗概或未发现细节交给其他系统。 */
+/** 供其他系统读取的最小超梦目录信息；不把片段梗概或未发现细节暴露给其他系统。 */
 export function withBraindanceData(state: BraindanceState, data: Data): Data {
   let byBase = projectedData.get(state);
   if (!byBase) {
@@ -43,7 +51,7 @@ export function withBraindanceData(state: BraindanceState, data: Data): Data {
     braindanceWorks: Object.fromEntries(
       Object.values(state.works).map((work) => [
         work.id,
-        { id: work.id, title: work.title, durationMinutes: work.durationMinutes },
+        { id: work.id, title: work.title, tier: work.tier, durationMinutes: work.durationMinutes },
       ]),
     ),
     braindanceActivity: state.active,
@@ -52,12 +60,16 @@ export function withBraindanceData(state: BraindanceState, data: Data): Data {
   return merged;
 }
 
-type BdMethod = "observe" | "audio" | "thermal";
+export interface BdSourceOption {
+  source: BdSource;
+  analysis: readonly BdLayer[];
+}
+
 export function braindanceSources(
   work: BdWork,
   data: Data,
   slices: Readonly<Record<string, unknown>>,
-): readonly { source: BdExperience["source"]; analysis: readonly BdMethod[] }[] {
+): readonly BdSourceOption[] {
   const here = (slices.world as WorldClockState).location;
   const inventory = InventoryStateSchema.parse(slices.inventory);
   const catalog = itemCatalog(data);
@@ -79,30 +91,32 @@ export function braindanceSources(
     .map((id) => ({ id, definition: inventory.objects[id]?.definition ?? catalog.get(id) }));
   const devices = available.filter((d) => d.definition?.braindanceDevice?.playback);
   const contents = chipContentCatalog(data, ShardsStateSchema.parse(slices.shards));
-  const result: { source: BdExperience["source"]; analysis: readonly BdMethod[] }[] = [];
-  for (const service of Object.values(CommerceStateSchema.parse(slices.commerce).sessions)) {
-    const site = merchantSites(data).get(service.seller);
-    const device = site?.braindanceDevice;
-    if (
-      service.service === "bd-session" &&
-      service.terms.subject === work.id &&
-      service.location === here &&
-      ["active", "paused"].includes(service.status) &&
-      site?.braindanceWorks.includes(work.id) &&
-      device?.playback
-    )
-      result.push({ source: { kind: "service", id: service.id }, analysis: device.analysis });
+  const result: BdSourceOption[] = [];
+
+  for (const site of merchantSites(data).values()) {
+    const device = site.braindanceDevice;
+    if (!device?.playback) continue;
+    const atHere = site.locations.some((loc) => merchantAt(data, site.merchant, loc, here));
+    if (!atHere) continue;
+    if (site.braindanceWorks.includes(work.id)) {
+      result.push({
+        source: { kind: "venue", venue: site.merchant },
+        analysis: device.analysis,
+      });
+    }
   }
+
   for (const carrier of available) {
     const content = carrier.definition?.chipContentId
       ? contents.get(carrier.definition.chipContentId)
       : undefined;
     if (content?.braindance !== work.id) continue;
-    for (const device of devices)
+    for (const device of devices) {
       result.push({
-        source: { kind: "object", id: carrier.id, device: device.id },
+        source: { kind: "carrier", carrier: carrier.id, device: device.id },
         analysis: device.definition?.braindanceDevice?.analysis ?? [],
       });
+    }
   }
   return result;
 }
@@ -115,16 +129,46 @@ function sourceOptions(work: BdWork, ctx: SystemContext) {
     shards: ctx.read("shards"),
   });
 }
-function sourceBlock(active: BdExperience, work: BdWork, ctx: SystemContext): string | undefined {
-  if (ctx.read<WorldClockState>("world").location !== active.location)
-    return "先回到当前播放设备和来源所在地点，再继续体验";
-  if (
-    !sourceOptions(work, ctx).some(
-      (option) => JSON.stringify(option.source) === JSON.stringify(active.source),
-    )
-  )
-    return "没有匹配的实际载体和播放设备，或已付款服务不在本地、已经结束、未具备登记设备；按次重看需新的成交服务";
-  return undefined;
+
+function matchSource(
+  options: readonly BdSourceOption[],
+  target: BdSource,
+): BdSourceOption | undefined {
+  return options.find((opt) => {
+    if (opt.source.kind !== target.kind) return false;
+    if (opt.source.kind === "venue" && target.kind === "venue") {
+      return opt.source.venue === target.venue;
+    }
+    if (opt.source.kind === "carrier" && target.kind === "carrier") {
+      return opt.source.carrier === target.carrier && opt.source.device === target.device;
+    }
+    return false;
+  });
+}
+
+function sourceBlock(
+  active: Pick<BdExperience, "source" | "location" | "mode">,
+  work: BdWork,
+  ctx: SystemContext,
+): { error?: string; analysis: readonly BdLayer[] } {
+  if (ctx.read<WorldClockState>("world").location !== active.location) {
+    return { error: "先回到当前播放设备或场馆所在地点，再继续体验", analysis: [] };
+  }
+  const matched = matchSource(sourceOptions(work, ctx), active.source);
+  if (!matched) {
+    return {
+      error: "没有匹配的实际超梦载体与播放设备，或当前地点不具备对应的场馆播放设备",
+      analysis: [],
+    };
+  }
+  if (active.mode === "edit" && matched.analysis.length === 0) {
+    return {
+      error:
+        "普通便携播放器只支持沉浸回放；进入编辑分析模式需要专业超梦编辑头环（bd-editor-wreath）或调谐工作站",
+      analysis: matched.analysis,
+    };
+  }
+  return { analysis: matched.analysis };
 }
 
 export function applyBraindance(
@@ -133,15 +177,17 @@ export function applyBraindance(
   ctx: SystemContext,
 ): ApplyOutcome {
   const target =
-    command.action === "progress" || command.action === "replay"
+    command.action === "progress"
       ? command.passage
-      : command.action === "inspect"
-        ? command.detail
-        : command.action === "start"
+      : command.action === "scan"
+        ? `${command.layer}:${command.detail ?? "all"}`
+        : command.action === "play"
           ? command.id
           : command.action === "define"
             ? command.work.id
-            : "";
+            : command.action === "record"
+              ? command.workId
+              : command.outcome;
   const settlementKey = JSON.stringify([
     ctx.facts.braindanceTurn ?? "direct",
     command.action,
@@ -149,153 +195,272 @@ export function applyBraindance(
     target,
   ]);
   if (draft.settled.includes(settlementKey)) return { ok: true, notes: ["本次超梦操作已经结算"] };
+
   if (command.action === "define") {
     if (braindanceWork(draft, ctx.data, command.work.id))
-      return fail("作品已确立，不能覆盖原记录；不同剪辑请用清楚区分的新作品身份");
+      return fail("作品已确立，不能覆盖原记录；不同剪辑请用新作品 id");
     draft.works[command.work.id] = command.work;
     draft.settled.push(settlementKey);
-    return { ok: true, notes: [`记下作品：${command.work.title}`] };
+    return {
+      ok: true,
+      notes: [`记下超梦作品：${command.work.title}（${BD_TIER_LABELS[command.work.tier]}）`],
+    };
   }
-  if (command.action === "start") {
-    if (draft.active) return fail("先退出当前超梦，再开始另一部作品；恢复当前作品用 resume");
-    if (draft.history.some((h) => h.id === command.id))
-      return fail("体验 id 已使用；重看应建立新一次体验");
+
+  if (command.action === "record") {
+    const installed = ctx.read<CyberwareState>("cyberware").installed;
+    const broken = ctx.read<HealthState>("health").brokenChrome;
+    const hasRecorder =
+      installed.some((c) => c.id === "braindance-recorder") &&
+      !broken.includes("braindance-recorder");
+    if (!hasRecorder) {
+      return fail("现场录制超梦需要已安装且完好的义体「超梦录制器（braindance-recorder）」");
+    }
+    if (braindanceWork(draft, ctx.data, command.workId)) {
+      return fail("该录制作品 id 已存在，请使用新的 workId");
+    }
+    const here = ctx.read<WorldClockState>("world").location;
+    const passageId = "rec-1";
+    const work: BdWork = {
+      id: command.workId,
+      title: command.title,
+      tier: "raw",
+      recorder: "玩家自录",
+      synopsis: command.synopsis,
+      durationMinutes: command.durationMinutes,
+      ...(here ? { location: here } : {}),
+      passages: [
+        {
+          id: passageId,
+          label: "现场录制原片",
+          minutes: command.durationMinutes,
+          outline: command.synopsis,
+        },
+      ],
+      details: [],
+    };
+    draft.works[work.id] = work;
+    if (command.text) {
+      draft.passages[work.id] = { [passageId]: command.text };
+    }
+    const contentId = `chip-${command.workId}`;
+    const emit: Command[] = [
+      {
+        type: "shards.register",
+        content: {
+          id: contentId,
+          title: `原片：${command.title}`,
+          category: "braindance",
+          kind: "recording",
+          from: "个人超梦录制器",
+          summary: command.synopsis,
+          parts: [],
+          encryption: "none",
+          hazard: "none",
+          eddies: 0,
+          braindance: work.id,
+          related: here ? [here] : [],
+        },
+      },
+      {
+        type: "inventory.chipMint",
+        id: command.carrierId,
+        name: `超梦原片《${command.title}》`,
+        contentId,
+        ability: command.synopsis,
+        origin: "个人超梦录制器现场录制",
+        reason: `现场录制超梦原片：${command.title}`,
+      },
+    ];
+    draft.settled.push(settlementKey);
+    return {
+      ok: true,
+      notes: [
+        `现场录制完成：生成调查原片《${command.title}》（载体 ${command.carrierId}），已存入背包`,
+      ],
+      emit,
+    };
+  }
+
+  if (command.action === "play") {
     const work = braindanceWork(draft, ctx.data, command.work);
-    if (!work) return fail("作品尚未确立，先固定内容与已有材料");
+    if (!work) return fail("作品尚未确立，先用 define 固定作品内容");
+    const here = ctx.read<WorldClockState>("world").location;
+
+    // 恢复或切换当前暂停/进行中的同一部作品模式
+    if (draft.active) {
+      if (draft.active.work !== work.id) {
+        return fail("先 stop(exited/finished) 退出当前超梦，再播放另一部作品");
+      }
+      const nextState = {
+        ...draft.active,
+        mode: command.mode,
+        source: command.source,
+        location: here,
+        status: "playing" as const,
+      };
+      const check = sourceBlock(nextState, work, ctx);
+      if (check.error) return fail(check.error);
+      draft.active = nextState;
+      draft.settled.push(settlementKey);
+      return {
+        ok: true,
+        notes: [`继续《${work.title}》（${BD_MODE_LABELS[command.mode]}模式）`],
+      };
+    }
+
+    if (draft.history.some((h) => h.id === command.id))
+      return fail("体验 id 已使用；重新接入请使用新的体验 id");
     const previous = command.from ? draft.history.find((h) => h.id === command.from) : undefined;
     if (command.from && (!previous || previous.work !== work.id))
       return fail("续接位置必须来自这部作品已保存的实际体验");
+
     const active: BdExperience = {
       id: command.id,
       work: work.id,
+      mode: command.mode,
       source: command.source,
-      location: ctx.read<WorldClockState>("world").location,
+      location: here,
       startedAt: ctx.now,
       position: previous?.position ?? 0,
       watchedMinutes: previous?.watchedMinutes ?? 0,
       elapsed: 0,
       status: "playing",
     };
-    const block = sourceBlock(active, work, ctx);
-    if (block) return fail(block);
+    const check = sourceBlock(active, work, ctx);
+    if (check.error) return fail(check.error);
     draft.works[work.id] = work;
     draft.active = active;
     draft.settled.push(settlementKey);
-    return { ok: true, notes: [`接上超梦：${work.title}；后续通过正文继续、略写看完、暂停或退出`] };
+    const xbdWarn =
+      work.tier === "xbd"
+        ? `；警告：这是未经过滤的地下黑超梦（XBD）${work.xbdRisk ? `——${work.xbdRisk}` : ""}，请按剧烈感官冲击在正文中结算精神症状`
+        : "";
+    return {
+      ok: true,
+      notes: [
+        `接入超梦《${work.title}》（${BD_TIER_LABELS[work.tier]}｜${BD_MODE_LABELS[command.mode]}）${xbdWarn}`,
+      ],
+    };
   }
+
   const active = draft.active;
   if (!active) return fail("当前没有接上的超梦");
   const work = braindanceWork(draft, ctx.data, active.work);
   if (!work) return fail("当前作品资料缺失");
-  if (command.action !== "exit" && command.action !== "pause") {
-    const block = sourceBlock(active, work, ctx);
-    if (block) return fail(block);
-  }
-  if (active.status === "paused" && !["resume", "exit", "pause"].includes(command.action))
-    return fail("当前已暂停；现场交流结束后先恢复播放");
-  let minutes = 0;
-  let status: "active" | "paused" | "finished" | "exited" = "active";
-  const notes: string[] = [];
-  switch (command.action) {
-    case "progress": {
-      const passage = work.passages[active.position];
-      if (!passage || passage.id !== command.passage)
-        return fail("只可从已保存的位置接着呈现下一片段");
-      const fixed = draft.passages[work.id]?.[passage.id];
-      if (fixed && command.text && fixed !== command.text)
-        return fail("该片段已有定稿，重看不能改写原文");
-      if (!fixed && (!command.text || !tradeEvidence(ctx.facts, command.text)))
-        return fail("初次片段须保存本轮正文中实际呈现的作品原文");
-      draft.passages[work.id] ??= {};
-      (draft.passages[work.id] as Record<string, string>)[passage.id] =
-        fixed ?? (command.text as string);
-      active.position += 1;
-      active.watchedMinutes += passage.minutes;
-      minutes = passage.minutes;
-      notes.push(`体验「${passage.label}」：${minutes} 分钟`);
-      break;
-    }
-    case "finish":
-      minutes = work.durationMinutes - active.watchedMinutes;
+
+  if (command.action === "stop") {
+    let minutes = 0;
+    const notes: string[] = [];
+    if (command.outcome === "paused") {
+      active.status = "paused";
+      notes.push(`暂停超梦《${work.title}》，现场交流按普通场景记录`);
+    } else if (command.outcome === "exited") {
+      notes.push(`退出超梦《${work.title}》，保留已看 ${active.watchedMinutes} 分钟进度`);
+      draft.history.push({ ...active, outcome: "exited", at: ctx.now });
+      draft.active = null;
+    } else {
+      const check = sourceBlock(active, work, ctx);
+      if (check.error) return fail(check.error);
+      minutes = Math.max(0, work.durationMinutes - active.watchedMinutes);
       active.watchedMinutes = work.durationMinutes;
       active.position = work.passages.length;
-      status = "finished";
-      notes.push(`略写看完「${work.title}」，实际经过剩余 ${minutes} 分钟`);
-      break;
-    case "replay": {
+      active.elapsed += minutes;
+      notes.push(`看完超梦《${work.title}》，结算剩余 ${minutes} 分钟`);
+      draft.history.push({ ...active, outcome: "finished", at: ctx.now + minutes });
+      draft.active = null;
+    }
+    draft.settled.push(settlementKey);
+    return { ok: true, notes, ...(minutes > 0 ? { advanceTo: ctx.now + minutes } : {}) };
+  }
+
+  const check = sourceBlock(active, work, ctx);
+  if (check.error) return fail(check.error);
+  if (active.status === "paused") {
+    return fail("当前超梦已暂停，先用 play 恢复播放再继续操作");
+  }
+
+  if (command.action === "progress") {
+    if (command.replay) {
       const index = work.passages.findIndex((p) => p.id === command.passage);
       const passage = work.passages[index];
-      if (!passage || index >= active.position) return fail("先实际看到该片段，再要求重播");
+      if (!passage || index >= active.position) return fail("先实际看到该片段，再重播");
       const fixed = draft.passages[work.id]?.[passage.id];
-      if (fixed && command.text && fixed !== command.text) return fail("重播不能改写已有定稿");
-      if (!fixed && (!command.text || !tradeEvidence(ctx.facts, command.text)))
-        return fail("此前略写的片段首次展开时，须保存本轮实际呈现原文");
+      if (fixed && command.text && fixed !== command.text) return fail("重播不能改写已有定稿原文");
+      if (!fixed && !command.text) return fail("此前略写的片段首次展开重播时须提供本轮呈现原文");
       draft.passages[work.id] ??= {};
       (draft.passages[work.id] as Record<string, string>)[passage.id] =
         fixed ?? (command.text as string);
-      minutes = passage.minutes;
-      notes.push(`重播「${passage.label}」：${minutes} 分钟；作品进度保持不变`);
-      break;
+      active.elapsed += passage.minutes;
+      draft.settled.push(settlementKey);
+      return {
+        ok: true,
+        notes: [`重播「${passage.label}」：${passage.minutes} 分钟`],
+        advanceTo: ctx.now + passage.minutes,
+      };
     }
-    case "inspect": {
-      const detail = work.details.find((d) => d.id === command.detail);
-      const input = typeof ctx.facts.braindanceInput === "string" ? ctx.facts.braindanceInput : "";
-      const passageIndex = detail ? work.passages.findIndex((p) => p.id === detail.passage) : -1;
-      if (
-        !detail ||
-        passageIndex < 0 ||
-        passageIndex >= active.position ||
-        !detail.cues.some((cue) => input.includes(cue))
-      )
-        return fail("只能按本轮实际追问揭示已经看过、确有来源的材料细节");
-      const device = sourceOptions(work, ctx).find(
-        (option) => JSON.stringify(option.source) === JSON.stringify(active.source),
-      );
-      if (!device?.analysis.includes(detail.method))
-        return fail("原材料与当前设备没有共同支持这项分析，不能凭空生成红外、分离音轨或其他数据");
-      minutes = command.minutes;
-      if (!draft.discoveries.some((d) => d.work === work.id && d.detail === detail.id))
-        draft.discoveries.push({
-          work: work.id,
-          detail: detail.id,
-          finding: detail.finding,
-          at: ctx.now,
-        });
-      notes.push(
-        `查证来源「${work.title} / ${work.passages[passageIndex]?.label}」：${detail.finding}`,
-      );
-      break;
-    }
-    case "pause":
-      active.status = "paused";
-      status = "paused";
-      notes.push("暂停超梦，现场交流按普通场景记录");
-      break;
-    case "resume":
-      active.status = "playing";
-      notes.push("从原位置继续超梦");
-      break;
-    case "exit":
-      status = "exited";
-      notes.push(`退出「${work.title}」，保留已观看 ${active.watchedMinutes} 分钟的实际记录`);
-      break;
+
+    const passage = work.passages[active.position];
+    if (!passage || passage.id !== command.passage)
+      return fail("只可从已保存的位置接着呈现下一片段");
+    const fixed = draft.passages[work.id]?.[passage.id];
+    if (fixed && command.text && fixed !== command.text)
+      return fail("该片段已有定稿，重看不能改写原文");
+    if (!fixed && !command.text) return fail("初次呈现该片段须保存本轮正文中的作品原文");
+    draft.passages[work.id] ??= {};
+    (draft.passages[work.id] as Record<string, string>)[passage.id] =
+      fixed ?? (command.text as string);
+    active.position += 1;
+    active.watchedMinutes += passage.minutes;
+    active.elapsed += passage.minutes;
+    draft.settled.push(settlementKey);
+    return {
+      ok: true,
+      notes: [`体验「${passage.label}」：${passage.minutes} 分钟`],
+      advanceTo: ctx.now + passage.minutes,
+    };
   }
+
+  // action === "scan"
+  if (active.mode !== "edit") {
+    return fail(
+      "扫描三层线索需要先处于编辑分析（edit）模式；请用专业编辑头环或工作站切到 edit 模式",
+    );
+  }
+  if (!check.analysis.includes(command.layer)) {
+    return fail(`当前设备不支持${BD_LAYER_LABELS[command.layer]}分析`);
+  }
+  const seenPassages = new Set(work.passages.slice(0, active.position).map((p) => p.id));
+  if (seenPassages.size === 0) {
+    return fail("请先至少观看一个片段，再对已看时间轴进行图层扫描");
+  }
+  const candidates = work.details.filter(
+    (d) =>
+      d.layer === command.layer &&
+      seenPassages.has(d.passage) &&
+      (!command.detail || d.id === command.detail),
+  );
+  if (command.detail && candidates.length === 0) {
+    return fail("指定的材料细节不存在、不在已看片段内，或不属于当前扫描图层");
+  }
+  const newlyFound = candidates.filter(
+    (d) => !draft.discoveries.some((found) => found.work === work.id && found.detail === d.id),
+  );
+  for (const detail of newlyFound) {
+    draft.discoveries.push({
+      work: work.id,
+      detail: detail.id,
+      layer: detail.layer,
+      finding: detail.finding,
+      at: ctx.now,
+    });
+  }
+  const minutes = command.minutes ?? 5;
   active.elapsed += minutes;
-  const emit: Command[] =
-    active.source.kind === "service"
-      ? [
-          {
-            type: "commerce.sessionProgress",
-            id: active.source.id,
-            elapsed: active.elapsed,
-            status,
-          },
-        ]
-      : [];
-  if (status === "finished" || status === "exited") {
-    draft.history.push({ ...active, outcome: status, at: ctx.now + minutes });
-    draft.active = null;
-  }
   draft.settled.push(settlementKey);
-  return { ok: true, notes, emit, ...(minutes > 0 ? { advanceTo: ctx.now + minutes } : {}) };
+  const notes =
+    newlyFound.length > 0
+      ? newlyFound.map((d) => `【${BD_LAYER_LABELS[d.layer]}】查出线索：${d.finding}`)
+      : [`扫描${BD_LAYER_LABELS[command.layer]}（${minutes} 分钟），已看片段内未发现更多新异常`];
+  return { ok: true, notes, advanceTo: ctx.now + minutes };
 }

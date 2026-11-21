@@ -1,6 +1,6 @@
 {
   "id": "modules-chat-no-m2b",
-  "title": "闲聊时不带骇入、出行、小队、创伤小组、拳赛这些模块",
+  "title": "闲聊时不带骇入、出行、创伤小组、拳赛这些模块",
   "tags": ["modules"],
   "setup": {
     "history": [
@@ -19,16 +19,7 @@
       }
     },
     "modules": {
-      "forbid": [
-        "hacking",
-        "travel",
-        "squad",
-        "trauma",
-        "sidegigs",
-        "parts",
-        "safehouse",
-        "suppressant"
-      ]
+      "forbid": ["hacking", "travel", "trauma", "sidegigs", "parts", "safehouse", "suppressant"]
     }
   },
   "rubric": [

@@ -24,7 +24,6 @@ import {
 } from "../systems/character";
 import { CityStateSchema, OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
-import { CommerceStateSchema } from "../systems/commerce";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
 import { rulingFactFrom } from "../systems/dice";
 import { falloutKinds } from "../systems/fallout";
@@ -626,10 +625,16 @@ async function computeVectorScores(
   signal?: AbortSignalLike,
 ): Promise<ReadonlyMap<string, number> | undefined> {
   if (!embedder || pool.length === 0 || queryText.trim() === "") return undefined;
-  const vectors = await embedder.embed(
-    [queryText, ...pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600))],
-    signal,
-  );
+  let vectors: readonly (readonly number[])[];
+  try {
+    vectors = await embedder.embed(
+      [queryText, ...pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600))],
+      signal,
+    );
+  } catch {
+    if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
+    return undefined;
+  }
   if (vectors.length !== pool.length + 1) return undefined;
   const qVec = vectors[0];
   if (!qVec || qVec.length === 0) return undefined;
@@ -706,11 +711,12 @@ export async function runNarratorTurn(
     if (
       cp.confirmation &&
       ((deps.approvedSpend !== undefined && deps.approvedSpend !== cp.confirmation.quoteKey) ||
-        !(
-          plan.kind === "action" &&
-          plan.input.spendOk === true &&
-          deps.approvedSpend === cp.confirmation.quoteKey
-        ))
+        (cp.spend &&
+          !(
+            plan.kind === "action" &&
+            plan.input.spendOk === true &&
+            deps.approvedSpend === cp.confirmation.quoteKey
+          )))
     ) {
       return { kind: "confirmSpend", ...cp.confirmation };
     }
@@ -1085,6 +1091,7 @@ export async function runNarratorTurn(
       trip,
       purchases: prepared.purchases,
       confirmation,
+      spend: prepared.spend,
       decided,
       loreTrace,
       loreSection,
@@ -1499,7 +1506,6 @@ export async function runNarratorTurn(
     const alreadyFighting = CombatStateSchema.parse(world.slices.combat).active !== null;
     // 只有实际增加分钟的活动拥有时间；纯暂停/恢复仍可保留现场交谈的世界时间。
     const bdState = BraindanceStateSchema.parse(world.slices.braindance);
-    const commerceState = CommerceStateSchema.parse(world.slices.commerce);
     const parsedActivities = verified.map((proposal) => ({
       command: proposal.parse(proposal.value),
       event: owner.get(proposal.where),
@@ -1547,7 +1553,10 @@ export async function runNarratorTurn(
             deferredWorldClocks.set(id, clocks);
           }
           b.notes.push("体验分钟先按实际活动结算，再核对同事件的世界结束时刻，不重复叠加");
-          if (Object.keys(withoutElapsed).length === 1) {
+          const remainingKeys = Object.keys(withoutElapsed).filter(
+            (key) => key !== "type" && key !== "activity",
+          );
+          if (remainingKeys.length === 0) {
             redundant.add(proposal.where);
             continue;
           }
@@ -1576,19 +1585,21 @@ export async function runNarratorTurn(
         harmfulHackEvents.has(owner.get(where) ?? "") &&
         (command.type === "damage" || (command.type === "combat" && command.action === "wound"))
       ) {
-        b.drop(
-          where,
-          command,
-          "本次快速破解由 npcHack 统一结算，不另记 damage 或 combat wound",
-          "rules",
+        noteOnce(
+          b.notes,
+          "本次快速破解由 npcHack 统一结算，重复的 damage / combat wound 已合并忽略",
         );
         redundant.add(where);
         continue;
       }
-      // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；模型另写的 damage 不算，免得扣两次
+      // 战斗里挨打走 combat wound，伤口要记下谁、用什么、打在哪；同事件已有 wound 时重复 damage 静默合并
       if (combatEvents.has(owner.get(where) ?? "") && command.type === "damage") {
-        b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
-        if (woundEvents.has(owner.get(where) ?? "")) redundant.add(where);
+        if (woundEvents.has(owner.get(where) ?? "")) {
+          noteOnce(b.notes, "战斗中挨打已由 combat wound 记账，重复的 damage 已合并忽略");
+          redundant.add(where);
+        } else {
+          b.drop(where, command, "战斗中挨打发 combat wound（by、weapon、part、tier）", "rules");
+        }
         continue;
       }
       addCommand(proposal, command);
@@ -1818,13 +1829,30 @@ export async function runNarratorTurn(
       ? prepareSocialOffscreenBatch(settledWorld, records, extras, narrative, present, capacity)
       : undefined;
     const blockedReasons: string[] = [];
+    const blockedTracks: ("macro" | "social")[] = [];
     if (macroBatch?.kind === "blocked") {
       blockedReasons.push(macroBatch.reason);
+      blockedTracks.push("macro");
       considered.push(macroBatch.reason);
     }
     if (socialBatch?.kind === "blocked") {
       blockedReasons.push(socialBatch.reason);
+      blockedTracks.push("social");
       considered.push(socialBatch.reason);
+    }
+    if (blockedTracks.length > 0) {
+      const blockedRetrySeq = nextRetrySeq(records);
+      const backoff = registry.applyCommands(
+        currentWorld,
+        blockedTracks.map((track) => ({
+          type: "city.failed" as const,
+          track,
+          retrySeq: blockedRetrySeq,
+        })),
+        applyCtx,
+      );
+      currentWorld = backoff.world;
+      offscreenPatches.push(...backoff.patches);
     }
     if (
       blockedReasons.length > 0 &&

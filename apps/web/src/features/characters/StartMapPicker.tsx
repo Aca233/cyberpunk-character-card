@@ -104,7 +104,7 @@ export function StartMapPicker({
     if (q === "") return [];
     return RADAR_ANCHORS.filter(
       (a) => a.name.toLowerCase().includes(q) || (a.kind ?? "").toLowerCase().includes(q),
-    ).slice(0, 8);
+    );
   }, [query]);
 
   const choose = (a: RadarAnchor, focus: boolean) => {

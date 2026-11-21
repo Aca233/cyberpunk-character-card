@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { locationForTravel, WorldClockStateSchema } from "../world";
+import { travelActions } from "./actions";
 import { applyTravel, clearEncounter } from "./apply";
 import { travelRules } from "./prompt";
 import {
@@ -13,15 +14,21 @@ import {
   VehicleCommandSchema,
   type VehicleGrant,
   VehicleGrantSchema,
+  type VehicleSummon,
+  VehicleSummonSchema,
 } from "./schema";
 import { travelStatus } from "./status";
-import { applyVehicle, grantVehicle, vehicleCatalog } from "./vehicles";
+import { applyVehicle, grantVehicle, summonVehicle, vehicleCatalog } from "./vehicles";
 import { travelView } from "./view";
 
 const VEHICLE_CONTEXT = /车|摩托|开|驾驶|骑|追|逃|甩|停|抛|弃|丢|拿|取|放|留|修|偷|后备箱/;
 
 /** 出行和载具：路线面板确认的移动按路线表推进时间、扣路费、换地点，换城区时按几率定路上的偶遇；名下的车、偷车、追车 */
-export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | VehicleGrant>({
+export const travel = defineSystem<
+  TravelState,
+  VehicleCommand,
+  TravelCommand | VehicleGrant | VehicleSummon
+>({
   id: "travel",
   dependsOn: [
     "world",
@@ -46,6 +53,7 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
   internal: {
     travel: TravelCommandSchema,
     "vehicle.grant": VehicleGrantSchema,
+    "vehicle.summon": VehicleSummonSchema,
   },
   apply(draft, command, ctx) {
     switch (command.type) {
@@ -53,10 +61,13 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
         return applyTravel(draft, command, ctx);
       case "vehicle.grant":
         return grantVehicle(draft, command, ctx);
+      case "vehicle.summon":
+        return summonVehicle(draft, command, ctx);
       case "vehicle":
         return applyVehicle(draft, command, ctx);
     }
   },
+  actions: travelActions,
   on: {
     "scene.end": (draft) => clearEncounter(draft),
   },
@@ -103,6 +114,7 @@ export const travel = defineSystem<TravelState, VehicleCommand, TravelCommand | 
   status: travelStatus,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";

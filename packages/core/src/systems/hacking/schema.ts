@@ -64,12 +64,43 @@ export const DiveSchema = z.object({
   chair: z.string().min(1),
   /** 谁守着肉身 */
   guard: z.string().min(1),
+  /** 当前潜网会话在各层已确认的进展与发现（节点、冰墙、反制、数据等） */
+  notes: z.array(z.string().min(1)).default([]),
 });
 export type Dive = z.infer<typeof DiveSchema>;
+
+/** 持续生效的快速破解状态（由 applyHack 写入，供后续裁决与叙事感知，并在场景切换或目标脱离后自然失效） */
+export const ActiveHackEffectSchema = z.object({
+  program: z.string().min(1),
+  label: z.string().min(1),
+  category: QuickhackCategorySchema.nullable(),
+  target: z.string().min(1),
+  npc: z.string().min(1).optional(),
+  location: z.string().nullable(),
+  at: z.number().int(),
+  effect: z.string().min(1),
+});
+export type ActiveHackEffect = z.infer<typeof ActiveHackEffectSchema>;
+
+/** 最多保留的活跃快速破解状态条数 */
+export const ACTIVE_HACK_KEEP = 10;
 
 export const HackingStateSchema = z.object({
   /** 装着且完好的网络接入仓（义体 id）；由装着的义体推出来，没装或损坏是 null */
   deck: z.string().nullable().default(null),
+  /** 玩家已持有/熟悉的快速破解程序（不设硬性槽位门槛，仅用于网客店收藏与擅长提示） */
+  programs: z.array(z.string().min(1)).default([]),
+  /** 当前现场仍在持续的快速破解效果（例如重启义眼、武器故障、定位、过热灼烧） */
+  activeEffects: z.array(ActiveHackEffectSchema).default([]),
+  /** 最近对高安保目标高频进攻触发的反追踪警觉标记（场景结束或转移地点后自然散去） */
+  traceAlert: z
+    .object({
+      at: z.number().int(),
+      location: z.string().nullable(),
+      target: z.string().min(1),
+    })
+    .nullable()
+    .default(null),
   /** 入侵协议拿下的网络，最近的在后，最多留 BREACH_KEEP 条 */
   breachedNetworks: z.array(BreachedNetworkSchema).default([]),
   /** 正在潜网；没在潜是 null */

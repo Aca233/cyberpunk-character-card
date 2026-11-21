@@ -13,6 +13,28 @@ import {
 import { NpcStateSchema, onStage } from "../../systems/npc";
 import { WorldClockStateSchema } from "../../systems/world";
 
+/**
+ * 已登记到世界的独立物件/自定义改装物件简要索引（放在用户消息侧，避免污染系统层的静态物品基表缓存）。
+ */
+export function worldObjectsIndexSection(world: WorldState): string | undefined {
+  const objects = InventoryStateSchema.parse(world.slices.inventory).objects;
+  const entries = Object.entries(objects).filter(([id]) => !id.startsWith("wpn:"));
+  if (entries.length === 0) return undefined;
+  const lines = entries
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, obj]) => {
+      const def = obj.definition;
+      const holder =
+        obj.holder === "player"
+          ? "玩家持有"
+          : obj.holder.startsWith("npc:")
+            ? `人物 ${obj.holder.slice(4)} 持有`
+            : `存放于 ${obj.location ?? obj.holder}`;
+      return `- ${id} ${def.name}（${holder}；来源：${obj.origin}）`;
+    });
+  return `【本存档已登记的独立物件索引】（复用同一 id，禁止重复新建）\n${lines.join("\n")}`;
+}
+
 /** 索引与详情都合入世界里实际登记的独立物件，交给 NPC 后也保留同一身份。 */
 export function extractCatalogData(
   world: WorldState,

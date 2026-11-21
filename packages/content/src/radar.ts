@@ -3,7 +3,7 @@
  * 来源：原作固定地点（有坐标的）、原作服务点 SERVICE_POINTS（id 写 poi:<id>）、有坐标的原作地标 FAST_TRAVEL_POINTS（id 写 ft:<id>，本作约定）。
  * 存档记下的地点由 world 系统的 data 钩子并进来。坐标都是底图百分比。
  */
-import { FAST_TRAVEL_POINTS } from "./fastTravel.gen";
+import { FAST_TRAVEL_POINTS } from "./fastTravel";
 import { locations } from "./locations";
 // 经 mapShapes.ts 去掉了中间人一类（用户 2026-11-02："地图上不要搞专门的中间人了，都是npc"）
 import { SERVICE_POINTS, type ServicePointKind } from "./mapShapes";

@@ -148,10 +148,14 @@ export class PresetStore {
     });
   }
 
-  async remove(id: string): Promise<boolean> {
-    if (!PRESET_ID.test(id)) return false;
-    if ((await this.activeId()) === id) await this.setActive(null);
-    return this.docs.remove(this.path(id));
+  remove(id: string): Promise<boolean> {
+    if (!PRESET_ID.test(id)) return Promise.resolve(false);
+    return this.lock.run(ACTIVE, async () => {
+      if ((await this.activeId()) === id) {
+        await this.docs.write(ACTIVE, `${JSON.stringify({ id: null })}\n`);
+      }
+      return this.docs.remove(this.path(id));
+    });
   }
 
   async activeId(): Promise<string | null> {
@@ -160,10 +164,12 @@ export class PresetStore {
   }
 
   /** null：不用预设，照本作原样写 */
-  async setActive(id: string | null): Promise<boolean> {
-    if (id !== null && !(await this.get(id))) return false;
-    await this.docs.write(ACTIVE, `${JSON.stringify({ id })}\n`);
-    return true;
+  setActive(id: string | null): Promise<boolean> {
+    return this.lock.run(ACTIVE, async () => {
+      if (id !== null && !(await this.get(id))) return false;
+      await this.docs.write(ACTIVE, `${JSON.stringify({ id })}\n`);
+      return true;
+    });
   }
 
   /** 写正文时用的那一份；没启用或文件坏了返回 undefined */

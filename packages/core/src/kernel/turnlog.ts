@@ -38,7 +38,7 @@ const TurnRecordSchema = z.object({
   /** 提交时基于的日志版本（当时的记录条数） */
   baseVersion: z.number().int().min(0),
   input: z.unknown(),
-  dice: z.array(DiceRollSchema),
+  dice: z.array(DiceRollSchema).optional(),
   commands: z.array(z.unknown()),
   /** 没通过校验、被丢弃的指令，只供调试 */
   dropped: z.array(z.unknown()),
@@ -145,7 +145,12 @@ const TurnRecordSchema = z.object({
   /** 本轮带了哪些规则模块 */
   modules: z.array(z.string()).optional(),
   usage: z
-    .object({ inputTokens: z.number().int().min(0), outputTokens: z.number().int().min(0) })
+    .object({
+      inputTokens: z.number().int().min(0),
+      outputTokens: z.number().int().min(0),
+      cachedInputTokens: z.number().int().min(0).optional(),
+      cacheWriteTokens: z.number().int().min(0).optional(),
+    })
     .optional(),
 });
 

@@ -1,6 +1,5 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, TimeSpan } from "../../kernel/system";
-import type { NpcState } from "../npc";
 import { formatGameTime } from "../world";
 import type {
   Job,
@@ -150,13 +149,7 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
 }
 
 /** 记录约定结果和实际到款；不按任务结局自动兑换声望或好感。 */
-export function endJob(
-  draft: Draft<JobsState>,
-  command: JobEnd,
-  now: number,
-  npcs: NpcState["npcs"],
-  squad: readonly { npc: string; name: string; kind: string; share: number }[] = [],
-): ApplyOutcome {
+export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
   if (job.status !== "active") {
@@ -175,27 +168,7 @@ export function endJob(
     paid > 0
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
-  const cuts: { name: string; cut: number }[] = [];
-  for (const m of squad) {
-    if (m.kind !== "friend" || m.share <= 0 || paid <= 0 || !npcs[m.npc]?.alive) continue;
-    const cut = Math.floor((paid * m.share) / 100);
-    if (cut <= 0) continue;
-    cuts.push({ name: m.name, cut });
-    emit.push({
-      type: "money",
-      delta: -cut,
-      reason: `小队分账：${m.name}（${m.share}%）`,
-      event: `job:${job.id}:squad:${m.npc}`,
-    });
-  }
-  if (cuts.length > 0) {
-    const total = cuts.reduce((sum, c) => sum + c.cut, 0);
-    notes.push(
-      `小队分账：${cuts.map((c) => `${c.name} ${c.cut.toLocaleString("en-US")}`).join("、")}；到手 ${(paid - total).toLocaleString("en-US")}`,
-    );
-  }
   job.settlement = {
-    squad: cuts,
     credHalves: 0,
     affinity: null,
     humanity: null,

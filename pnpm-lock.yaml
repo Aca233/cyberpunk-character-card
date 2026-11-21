@@ -232,9 +232,6 @@ importers:
       '@cp/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@hono/node-server':
-        specifier: ^2.1.5
-        version: 2.1.5(hono@4.13.13)
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -560,12 +557,6 @@ packages:
 
   '@fontsource/rajdhani@5.3.0':
     resolution: {integrity: sha512-oBJgSIibWJvVBKseme1JczqPLoDHN97LHti4uh0LjfcJqQoVmnQQlRKIpEjTJV559rmVQ6qbVZZwKwk2wkBTtw==}
-
-  '@hono/node-server@2.1.5':
-    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      hono: ^4 || ^5.0.0-0
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -1504,10 +1495,6 @@ snapshots:
   '@fontsource-variable/noto-sans-sc@5.3.1': {}
 
   '@fontsource/rajdhani@5.3.0': {}
-
-  '@hono/node-server@2.1.5(hono@4.13.13)':
-    dependencies:
-      hono: 4.13.13
 
   '@img/colour@1.1.0': {}
 

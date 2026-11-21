@@ -197,6 +197,8 @@ export function memoryPool(
 export interface MemoryQuery {
   readonly input: string;
   readonly context: string;
+  /** 可选向量余弦相似度（按记忆条 id 索引，范围 0–1）；未配 embedding 时为空 */
+  readonly vectorScores?: ReadonlyMap<string, number> | undefined;
 }
 
 type Intent = "ask" | "trade" | "fight";
@@ -211,8 +213,33 @@ const DAY_WORDS: readonly (readonly [RegExp, number])[] = [
   [/今天|今晚|刚才/, 0],
 ];
 
-/** 各路的分值；向量相似度没配 embedding，记 0 */
-const WEIGHT = { input: 0.4, context: 0.2, time: 0.3, keyword: 0.5, intent: 0.15 } as const;
+/** 各路的分值；向量相似度仅在配置 embedding 并成功计算时计入 */
+const WEIGHT = {
+  vector: 0.45,
+  input: 0.4,
+  context: 0.2,
+  time: 0.3,
+  keyword: 0.5,
+  intent: 0.15,
+} as const;
+
+/** 计算两个向量的余弦相似度，归一化到 [0, 1] */
+export function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
+  if (a.length === 0 || a.length !== b.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    dot += x * y;
+    na += x * x;
+    nb += y * y;
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  if (denom <= 0) return 0;
+  return Math.max(0, Math.min(1, dot / denom));
+}
 export const IMPORTANCE_WEIGHT: Readonly<Record<Importance, number>> = {
   minor: 0.6,
   normal: 1,
@@ -279,7 +306,8 @@ export function scoreMemories(
   const q = grams(query.input);
   return pool
     .map((entry) => {
-      const vector = 0;
+      const sim = query.vectorScores?.get(entry.id) ?? 0;
+      const vector = WEIGHT.vector * Math.max(0, Math.min(1, sim));
       const person = entry.people.some((p) => named.has(p))
         ? WEIGHT.input
         : entry.people.some((p) => around.has(p))
@@ -298,7 +326,7 @@ export function scoreMemories(
       const exact = entry.people.some((p) => named.has(p)) ? EXACT_BONUS : 0;
       const times = IMPORTANCE_WEIGHT[entry.importance];
       const score = (vector + person + time + keyword + bias) * times + exact;
-      const parts = `人物 ${r2(person)}、时间 ${r2(time)}、关键词 ${r2(keyword)}、意图 ${r2(bias)}，×${times}${exact > 0 ? `，点名 +${EXACT_BONUS}` : ""}`;
+      const parts = `${vector > 0 ? `向量 ${r2(vector)}、` : ""}人物 ${r2(person)}、时间 ${r2(time)}、关键词 ${r2(keyword)}、意图 ${r2(bias)}，×${times}${exact > 0 ? `，点名 +${EXACT_BONUS}` : ""}`;
       return { entry, score: r2(score), parts };
     })
     .sort((a, b) => b.score - a.score);

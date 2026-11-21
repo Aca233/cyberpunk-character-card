@@ -199,6 +199,23 @@ export const cyberware = defineSystem<
         }
       }
     },
+    "cyberware.changed": (draft, ctx) => {
+      const chips = draft.behaviorChips;
+      if (!chips) return;
+      const installedIds = new Set(draft.installed.map((entry) => entry.id));
+      const brokenIds = new Set(ctx.read<HealthState>("health").brokenChrome);
+      for (const [deviceId, state] of Object.entries(chips)) {
+        if (state.mode === "off") continue;
+        if (!installedIds.has(deviceId) || brokenIds.has(deviceId)) {
+          if (state.mode === "doll") state.memoryGap = true;
+          state.mode = "off";
+          state.protocol = null;
+          state.carrier = null;
+          state.since = ctx.now;
+          if (state.lastControl && state.lastControl.to === null) state.lastControl.to = ctx.now;
+        }
+      }
+    },
   },
   tick(draft, span, ctx) {
     tickWorkshop(draft, span.to, ctx);

@@ -17,6 +17,16 @@
   --cp-bg: #0c080e;
   --cp-panel: rgb(18 10 16 / 88%);
   --cp-panel-strong: rgb(12 6 10 / 96%);
+  /* 统一暖暗紫黑表面色阶：与 --cp-bg / --cp-panel 同色温，避免子面板漂移成冷蓝灰 */
+  --cp-surface: rgb(16 10 16 / 82%);
+  --cp-surface-raised: rgb(22 13 20 / 90%);
+  --cp-surface-strong: rgb(14 9 14 / 94%);
+  --cp-surface-deep: rgb(11 7 12 / 96%);
+  --cp-surface-inset: rgb(12 8 13 / 74%);
+  --cp-surface-hover: rgb(28 16 24 / 92%);
+  --cp-surface-soft: rgb(18 12 18 / 56%);
+  --cp-line-subtle: rgb(255 97 88 / 22%);
+  --cp-line-faint: rgb(255 97 88 / 12%);
   /* 正文近白（对背景约 16:1）、次要文字灰（约 7:1） */
   --cp-text: #ece8e4;
   --cp-text-dim: #a8a3a0;
@@ -61,6 +71,7 @@
   /* 字体：英文和数字 Rajdhani，中文 Noto Sans SC */
   --font-ui: "Rajdhani", "Noto Sans SC Variable", sans-serif;
   --font-body: "Noto Sans SC Variable", "Rajdhani", sans-serif;
+  --font-mono: "Rajdhani", ui-monospace, "Cascadia Mono", Consolas, monospace;
 
   /* 字号分级 */
   --fs-title: 44px;

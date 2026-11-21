@@ -10,7 +10,6 @@ export * from "./kernel/system";
 export * from "./kernel/turnlog";
 export * from "./kernel/world";
 export * from "./ledger";
-export * from "./legends";
 export * from "./narrator";
 export {
   type AccessVector,
@@ -52,6 +51,11 @@ export * as arcRules from "./systems/arcs";
 export * as braindanceRules from "./systems/braindance";
 export * as characterRules from "./systems/character";
 export * as chronicleRules from "./systems/chronicle";
+export {
+  type ChronicleEntry,
+  type ChronicleKind,
+  chronicleEntries,
+} from "./systems/chronicle";
 export * as cityRules from "./systems/city";
 export * as combatRules from "./systems/combat";
 export * as cyberwareRules from "./systems/cyberware";
@@ -75,17 +79,19 @@ export { registry, systems } from "./systems/registry";
 export * as safehouseRules from "./systems/safehouse";
 export * as shardsRules from "./systems/shards";
 export * as sidegigRules from "./systems/sidegigs";
-export * as squadRules from "./systems/squad";
 export * as stealthRules from "./systems/stealth";
 export * as traumaRules from "./systems/trauma";
 export * as travelRules from "./systems/travel";
 export * as worldRules from "./systems/world";
 export * from "./tension";
+export * from "./ui-actions";
 export {
+  type DistrictLawRule,
   type DistrictSecurityInput,
   type DistrictSecurityResult,
+  districtLawFor,
   evaluateDistrictSecurityCheck,
-  type HousingTier,
-  settleWeeklyLifestyleBill,
-  WEEKLY_LIFESTYLE_BILLS,
+  normalizeDistrictId,
+  type RentSettlementResult,
+  settleHousingRentBill,
 } from "./worldClock";

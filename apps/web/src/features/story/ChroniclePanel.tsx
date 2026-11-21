@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "../../ui/Button";
+import { FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import styles from "./story.module.css";
@@ -63,7 +64,7 @@ export function ChronicleBody({ view }: { readonly view: View }) {
   );
 }
 
-/** 从 Esc 系统菜单打开的收尾弹窗：退休或将故事停在当下，结束后存档只读并记入传说名册 */
+/** 从 Esc 系统菜单打开的收尾弹窗：退休或将故事停在当下，结束后存档只读 */
 export function EndStoryModal({
   onEnd,
   onClose,
@@ -105,19 +106,16 @@ export function EndStoryModal({
                 <b>{label}</b> <span className={styles.dim}>{hint}</span>
               </label>
             ))}
-            <div className={styles.habitForm}>
+            <FrameBox>
               <input
                 value={epitaph}
                 maxLength={EPITAPH_CHARS}
                 placeholder="留一句话（可以不写）"
-                aria-label="留给名册的一句话"
+                aria-label="收尾寄语"
                 onChange={(e) => setEpitaph(e.target.value)}
               />
-            </div>
-            <p className={styles.dim}>
-              收尾之后不能再继续这份存档，角色会进主菜单的传说名册，之后的新角色开局时 AI
-              会知道这个人。
-            </p>
+            </FrameBox>
+            <p className={styles.dim}>收尾之后不能再继续这份存档，只能留作履历回看。</p>
             <div className={styles.memoryActions}>
               <Button primary disabled={saving} onClick={() => void end()}>
                 确定收尾

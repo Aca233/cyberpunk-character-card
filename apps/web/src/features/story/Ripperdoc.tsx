@@ -1,4 +1,3 @@
-import { humanityRules } from "@cp/core";
 import { type CSSProperties, useMemo, useState } from "react";
 import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -8,14 +7,7 @@ import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
 import { itemArtOf } from "./art";
 import { CYBER_LABELS, CyberItemCell, type CyberSlot } from "./CyberDoll";
-import {
-  CYBER_SLOT_ICON,
-  humanityStageLabelOf,
-  RARITY_ORDER,
-  rarityLabelOf,
-  rarityTintOf,
-  sumHumanityCost,
-} from "./cyberwareMeta";
+import { CYBER_SLOT_ICON, RARITY_ORDER, rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import rip from "./ripperdoc.module.css";
 import styles from "./story.module.css";
 import type { View } from "./view";
@@ -44,20 +36,7 @@ function money(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-function projectHumanityCap(
-  baseTotalCost: number,
-  deltaNominal: number,
-  tolerance: humanityRules.Tolerance,
-): number {
-  const newNominal = Math.max(0, baseTotalCost + deltaNominal);
-  const scaled = Math.min(
-    humanityRules.HUMANITY_MAX,
-    Math.round(newNominal * humanityRules.TOLERANCE_FACTOR[tolerance]),
-  );
-  return Math.max(0, humanityRules.HUMANITY_MAX - scaled);
-}
-
-/** 义体医生诊所终端：支持部位标签、稀有度与文本检索、已装拆修以及手术前后人性负荷预览 */
+/** 义体医生诊所终端：支持部位标签、稀有度与文本检索、已装拆修以及真实手术条件预览 */
 export function Ripperdoc({
   view,
   doc,
@@ -79,7 +58,8 @@ export function Ripperdoc({
 }) {
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("all");
   const [rarityFilter, setRarityFilter] = useState<string>("all");
-  const [onlyUnlocked, setOnlyUnlocked] = useState(false);
+  const [onlyAffordable, setOnlyAffordable] = useState(false);
+  const [onlyInStock, setOnlyInStock] = useState(false);
   const [query, setQuery] = useState("");
   const [focus, setFocus] = useState<FocusRef | null>(() =>
     doc.shelf[0]
@@ -92,9 +72,8 @@ export function Ripperdoc({
   const [working, setWorking] = useState(false);
 
   const eddies = view.money.eddies;
-  const totalHumanityCost = sumHumanityCost(view.cyberware);
   const brokenCount = view.cyberware.filter((c) => c.broken).length;
-  const tolerance = view.humanity.tolerance ?? "normal";
+  const neuralRisk = view.humanity.stage !== "stable" && !view.humanity.suppressed;
 
   const availableCredit = Math.max(0, doc.credit - (doc.debt?.amount ?? 0));
   const creditable = (item: ShelfItem) =>
@@ -144,13 +123,23 @@ export function Ripperdoc({
     return doc.shelf.filter((item) => {
       if (slotFilter !== "all" && item.slot !== slotFilter) return false;
       if (rarityFilter !== "all" && item.rarity !== rarityFilter) return false;
-      if (onlyUnlocked && item.locked !== null) return false;
+      if (onlyInStock && item.inStock <= 0) return false;
+      if (onlyAffordable && item.net > eddies + availableCredit) return false;
       if (!normalizedQuery) return true;
       return `${item.name} ${item.slotLabel} ${item.ability}`
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [doc.shelf, slotFilter, rarityFilter, onlyUnlocked, normalizedQuery]);
+  }, [
+    doc.shelf,
+    slotFilter,
+    rarityFilter,
+    onlyInStock,
+    onlyAffordable,
+    eddies,
+    availableCredit,
+    normalizedQuery,
+  ]);
 
   const activeShelf =
     focus?.kind === "shelf"
@@ -179,12 +168,6 @@ export function Ripperdoc({
       const rarityLabel = rarityLabelOf(item.rarity, item.iconic);
       const short = item.net > eddies;
       const credit = short && creditable(item);
-      const deltaNominal = item.humanityCost - item.replacesHumanityCost;
-      const estCap = projectHumanityCap(totalHumanityCost, deltaNominal, tolerance);
-      const estCurrent = Math.min(view.humanity.current, estCap);
-      const estStage = humanityStageLabelOf(estCurrent);
-      const entersGlitch =
-        !view.humanity.suppressed && view.humanity.current >= 40 && estCurrent < 40;
 
       return (
         <div
@@ -208,7 +191,7 @@ export function Ripperdoc({
                 rarityLabel,
                 CYBER_LABELS[item.slot],
                 item.installed ? "已装备" : null,
-                item.locked ? "未解锁" : null,
+                item.locked ? "不可手术" : item.inStock > 0 ? `现货 ${item.inStock} 件` : "无现货",
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -235,14 +218,16 @@ export function Ripperdoc({
               </strong>
             </div>
             <div className={rip.impactRow}>
-              <span>人性变化</span>
-              <strong data-tone={estCurrent < 40 ? "bad" : undefined}>
-                {deltaNominal >= 0 ? `−${deltaNominal}` : `+${Math.abs(deltaNominal)}`} · 术后{" "}
-                {estCurrent}/{estCap}（{estStage}）
+              <span>诊所库存</span>
+              <strong data-tone={item.inStock <= 0 ? "bad" : undefined}>
+                {item.inStock > 0 ? `${item.inStock} 件现货` : "缺货"}
               </strong>
             </div>
-            {entersGlitch && (
-              <p className={rip.impactWarn}>警告：安装后人性将低于 40，易发感知失真与排异。</p>
+            {neuralRisk && (
+              <p className={rip.impactWarn}>
+                神经风险提醒：当前处于「{view.humanity.stageLabel}
+                」状态，继续植入或更换高负载义体可能加重神经排异。
+              </p>
             )}
             {item.locked && <p className={rip.impactWarn}>{item.locked}</p>}
           </div>
@@ -289,7 +274,6 @@ export function Ripperdoc({
       const art = itemArtOf(part.id);
       const rarityTint = rarityTintOf(part.rarity, part.iconic);
       const rarityLabel = rarityLabelOf(part.rarity, part.iconic);
-      const estCap = projectHumanityCap(totalHumanityCost, -part.humanityCost, tolerance);
       const repairPrice = doc.repair[part.id];
       const buyback = doc.buyback[part.id] ?? 0;
 
@@ -321,13 +305,13 @@ export function Ripperdoc({
 
           <div className={rip.impactList}>
             <div className={rip.impactRow}>
-              <span>人性占用</span>
-              <strong>−{part.humanityCost}</strong>
+              <span>安装部位</span>
+              <strong>{CYBER_LABELS[part.slot]}</strong>
             </div>
             <div className={rip.impactRow}>
-              <span>卸除后上限</span>
-              <strong data-tone="cyan">
-                {view.humanity.cap} → {estCap}
+              <span>硬件状况</span>
+              <strong data-tone={part.broken ? "bad" : "cyan"}>
+                {part.broken ? "已损毁（失去功能）" : "正常运行"}
               </strong>
             </div>
             {buyback > 0 && (
@@ -410,8 +394,8 @@ export function Ripperdoc({
                 <span>
                   <b>{money(eddies)}</b> 欧元
                 </span>
-                <span data-tone={view.humanity.current < 40 ? "bad" : "cyan"}>
-                  人性 {view.humanity.current}/{view.humanity.cap}（{view.humanity.stageLabel}）
+                <span data-tone={neuralRisk ? "bad" : "cyan"}>
+                  神经状态：{view.humanity.stageLabel}
                 </span>
                 {brokenCount > 0 && <span data-tone="bad">损毁 {brokenCount}</span>}
                 <Button small onClick={onClose}>
@@ -503,14 +487,24 @@ export function Ripperdoc({
                     </button>
                   ))}
                   {slotFilter !== "installed" && (
-                    <button
-                      type="button"
-                      className={rip.filterChip}
-                      aria-pressed={onlyUnlocked}
-                      onClick={() => setOnlyUnlocked((v) => !v)}
-                    >
-                      仅看已解锁
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className={rip.filterChip}
+                        aria-pressed={onlyInStock}
+                        onClick={() => setOnlyInStock((v) => !v)}
+                      >
+                        仅看有现货
+                      </button>
+                      <button
+                        type="button"
+                        className={rip.filterChip}
+                        aria-pressed={onlyAffordable}
+                        onClick={() => setOnlyAffordable((v) => !v)}
+                      >
+                        仅看可负担
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -520,7 +514,7 @@ export function Ripperdoc({
                     type="search"
                     className={rip.searchInput}
                     aria-label="筛选义体名称或效果"
-                    placeholder="检索义体名称 / 属性 / 效果…"
+                    placeholder="检索义体名称 / 部位 / 效果…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -576,13 +570,7 @@ export function Ripperdoc({
                                   )}
                                 </span>
                                 <span className={rip.cardSub}>
-                                  {[
-                                    rarityLabel,
-                                    CYBER_LABELS[c.slot],
-                                    c.humanityCost > 0 ? `人性 −${c.humanityCost}` : null,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" · ")}
+                                  {[rarityLabel, CYBER_LABELS[c.slot]].filter(Boolean).join(" · ")}
                                 </span>
                               </span>
                             </button>
@@ -661,7 +649,7 @@ export function Ripperdoc({
                                     <span className={rip.cardSub}>
                                       {[
                                         item.rarityLabel,
-                                        item.humanityCost > 0 ? `人性 −${item.humanityCost}` : null,
+                                        item.inStock > 0 ? `现货 ${item.inStock}` : "缺货",
                                         item.replaces ? `换下 ${item.replaces}` : null,
                                       ]
                                         .filter(Boolean)
@@ -748,8 +736,7 @@ export function Ripperdoc({
           }
         >
           <p>
-            {confirming.slotLabel} · {rarityLabelOf(confirming.rarity, confirming.iconic)}，人性上限
-            −{confirming.humanityCost}
+            {confirming.slotLabel} · {rarityLabelOf(confirming.rarity, confirming.iconic)}
             {confirming.bonusText && `，${confirming.bonusText}`}
             {confirming.replaces &&
               `；会换下${confirming.replaces}${
@@ -760,6 +747,11 @@ export function Ripperdoc({
             。
           </p>
           <p>{confirming.ability}</p>
+          {neuralRisk && (
+            <p className={rip.lockNote}>
+              当前神经状态为「{view.humanity.stageLabel}」，术后建议留意神经排异症状。
+            </p>
+          )}
           {owed > 0 && (
             <p className={rip.lockNote}>
               身上的 {money(eddies)} 欧元全付掉，剩下 {money(owed)} 欧元赊着。

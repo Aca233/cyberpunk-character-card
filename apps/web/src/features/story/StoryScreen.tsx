@@ -25,6 +25,7 @@ import {
 import { type SaveImagesController, SaveImagesProvider } from "../images/SaveImagesContext";
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
+import { AutofixerModal } from "./AutofixerModal";
 import { ChronicleBody, EndStoryModal } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
 import {
@@ -74,7 +75,7 @@ import { buildTurnPromptRequest, ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
-import { diffViews, type Speaker, type Toast, type View } from "./view";
+import { diffViews, type Speaker, type Toast, trackTelemetry, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "factions" | "shards";
@@ -245,7 +246,7 @@ export function StoryScreen() {
 
   // 新的一轮写进存档后，和上一次看到的状态比，在右侧常驻列出变化通知，点一下即收起
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
-  const previous = useRef<View | null>(null);
+  const previous = useRef<{ saveId: string; view: View } | null>(null);
   // 委托结束后排队弹出的结算卡
   const [settled, setSettled] = useState<readonly SettledJob[]>([]);
   const closeSettlement = useCallback(() => setSettled((q) => q.slice(1)), []);
@@ -254,9 +255,10 @@ export function StoryScreen() {
   const closeRival = useCallback(() => setRivalsDone((q) => q.slice(1)), []);
   useEffect(() => {
     if (!view) return;
-    const prev = previous.current;
-    previous.current = view;
-    if (!prev) return;
+    const prevEntry = previous.current;
+    previous.current = { saveId, view };
+    if (!prevEntry || prevEntry.saveId !== saveId) return;
+    const prev = prevEntry.view;
     const fresh = diffViews(prev, view);
     if (fresh.length > 0) {
       setToasts((t) => [...t, ...fresh].slice(-6));
@@ -269,7 +271,7 @@ export function StoryScreen() {
     const wasEnded = new Set(prev.nemesesEnded.map((n) => n.npc));
     const ended = view.nemesesEnded.filter((n) => !wasEnded.has(n.npc));
     if (ended.length > 0) setRivalsDone((q) => [...q, ...ended]);
-  }, [view]);
+  }, [saveId, view]);
   const dropToast = useCallback(
     (key: string) => setToasts((t) => t.filter((x) => x.key !== key)),
     [],
@@ -318,9 +320,10 @@ export function StoryScreen() {
   const closePinned = useCallback(() => setExpand(null), []);
   // 正文里点了人名：弹出这个人的档案
   const [person, setPerson] = useState<string | null>(null);
-  // 商店、义体医生叠在界面上面
+  // 商店、义体医生、好车中间人终端叠在界面上面
   const [atDoc, setAtDoc] = useState(false);
   const [atShop, setAtShop] = useState<string | null>(null);
+  const [atAutofixer, setAtAutofixer] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
   // 按住 Tab 或点击按钮切换扫描；H 沉浸模式柔隐两侧角块；Esc 菜单
@@ -330,6 +333,26 @@ export function StoryScreen() {
   const [focusMode, setFocusMode] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
   const [atEndStory, setAtEndStory] = useState(false);
+
+  // 切换存档路由时组件不卸载，重置所有与当前存档绑定的局部浮层与排队状态
+  useEffect(() => {
+    void saveId;
+    setToasts([]);
+    setSettled([]);
+    setRivalsDone([]);
+    setExpand(null);
+    setAtMap(false);
+    setMapFocus(undefined);
+    setPerson(null);
+    setAtDoc(false);
+    setAtShop(null);
+    setAtAutofixer(false);
+    setBuyingHome(null);
+    setScanHold(false);
+    setScanPinned(false);
+    setAtEsc(false);
+    setAtEndStory(false);
+  }, [saveId]);
 
   const warn = useCallback((key: string, error: unknown) => {
     const text = error instanceof Error ? error.message : String(error);
@@ -527,6 +550,48 @@ export function StoryScreen() {
     [saveId, version, refresh, warn],
   );
 
+  // 逐个扫描在场未扫目标：串联每次返回的最新 version，避免并发/旧版本 409
+  const scanAllPresent = useCallback(async () => {
+    if (!view || busy || view.death || view.ended) return;
+    const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken);
+    if (!intactEye) {
+      const brokenEye = view.cyberware.find((c) => c.slot === "eyes" && c.broken);
+      warn(
+        "scan",
+        brokenEye
+          ? "义眼打坏了，扫描不了；先去义体医生处修好"
+          : "没装义眼，扫描不了；去义体医生那里装一副",
+      );
+      return;
+    }
+    const targets = view.npcs.filter((n) => n.here && n.alive && !n.body?.scan);
+    if (targets.length === 0) return;
+    let nextVersion = version;
+    try {
+      for (const npc of targets) {
+        const res = await api.action(saveId, {
+          requestId: newRequestId(),
+          baseVersion: nextVersion,
+          action: { type: "scanNpc", id: npc.id },
+        });
+        nextVersion = res.version;
+      }
+    } catch (error) {
+      warn("scan", error);
+    }
+    await refresh();
+  }, [view, busy, version, saveId, refresh, warn]);
+
+  const toggleScan = useCallback(() => {
+    const next = !scanPinned;
+    setScanPinned(next);
+    if (next && view && !busy && !view.death && !view.ended) {
+      const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken);
+      const hasUnscanned = view.npcs.some((n) => n.here && n.alive && !n.body?.scan);
+      if (intactEye && hasUnscanned) void scanAllPresent();
+    }
+  }, [scanPinned, view, busy, scanAllPresent]);
+
   // 夜之城难度死亡后重来：作废这个场景的回合，回到场景开头
   const restart = useCallback(async () => {
     try {
@@ -603,12 +668,22 @@ export function StoryScreen() {
     setAtMap(false);
     setExpand((cur) => (cur?.id === id && cur.pinned ? null : { id, pinned: true }));
   }, []);
-  // 只在具体某个会话被打开时按联系人粒度标已读；不再在切页签时把全部联系人的未读角标一次清光
+  // 只在具体某个会话被打开时按联系人粒度标已读；并发触发时排队合并，避免切联系人吞掉已读请求
   const readingPromise = useRef<Promise<void> | null>(null);
+  const queuedFeed = useRef<Set<string>>(new Set());
   const readPhoneFeed = useCallback(
     (feed: readonly string[]) => {
-      if (feed.length === 0 || readingPromise.current !== null) return;
-      const pending = act({ type: "readMessages", feed: [...feed] }, "phone").finally(() => {
+      if (feed.length === 0) return;
+      for (const id of feed) queuedFeed.current.add(id);
+      if (readingPromise.current !== null) return;
+      const drain = async () => {
+        while (queuedFeed.current.size > 0) {
+          const batch = [...queuedFeed.current];
+          queuedFeed.current.clear();
+          await act({ type: "readMessages", feed: batch }, "phone");
+        }
+      };
+      const pending = drain().finally(() => {
         if (readingPromise.current === pending) readingPromise.current = null;
       });
       readingPromise.current = pending;
@@ -700,12 +775,16 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, refresh]);
   const discardAndRetry = useCallback(async () => {
-    const pending = story.pending;
+    const pending =
+      story.pending ??
+      (view?.checkpoint && view.checkpoint.baseVersion === version
+        ? ({ kind: "input", input: view.checkpoint.input } as const)
+        : null);
     story.dismiss();
     await api.clearCheckpoint(saveId);
     await refresh();
     if (pending) void story.submit(saveId, version, pending, refresh);
-  }, [story, saveId, version, refresh]);
+  }, [story, saveId, version, refresh, view?.checkpoint]);
 
   const choose = useCallback(
     (index: number) => {
@@ -848,7 +927,18 @@ export function StoryScreen() {
             text: `${story.draft.text}${story.draft.text ? "\n" : ""}${text}`,
           });
           closePinned();
+          setScanPinned(false);
+          setPerson(null);
         };
+  const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken) ?? null;
+  const scanEnvironment =
+    draftAction && intactEye
+      ? () => {
+          draftAction(
+            `启动${intactEye.name}扫描周围环境，排查监控探头、警报炮塔、陷阱地雷、掩体弱点与墙后/暗处潜在伏兵。`,
+          );
+        }
+      : undefined;
   const characterFull = (
     <div className={neuralStyles.pinBody}>
       {/* 按页签重新挂载，切页签时新内容淡入 */}
@@ -1000,6 +1090,11 @@ export function StoryScreen() {
         onPlaceItem={placeItemAction}
         onTransferItem={transferItemAction}
         onBuyHome={busy ? undefined : setBuyingHome}
+        onCallVehicle={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => act({ type: "callVehicle", id }, "vehicle", true)
+        }
       />
     </div>
   );
@@ -1043,6 +1138,11 @@ export function StoryScreen() {
           onSendChat={sendPhoneChat}
           onReadThread={readThread}
           onReadCall={readCall}
+          onAnswerCall={
+            busy || view.death || view.ended
+              ? undefined
+              : (id, answer) => void act({ type: "answerCall", id, answer }, "call")
+          }
           chatSending={chatSending}
           pendingChat={pendingChat}
           busy={busy}
@@ -1078,10 +1178,33 @@ export function StoryScreen() {
       )}
     </div>
   );
+  const trackSummary = trackTelemetry(view);
   const trackFull = (
     <div className={neuralStyles.pinBody}>
       <div className={neuralStyles.pinPane}>
-        <JournalPage view={view} />
+        <JournalPage
+          view={view}
+          onLocatePlace={(placeId) => {
+            closePinned();
+            setMapFocus(placeId);
+            setAtMap(true);
+          }}
+          onAcceptJob={
+            busy || view.death || view.ended
+              ? undefined
+              : (id) => void act({ type: "acceptJob", id }, "job")
+          }
+          onPayRent={
+            busy || view.death || view.ended || view.combat.active
+              ? undefined
+              : (id) => void act({ type: "payRent", id }, "rent")
+          }
+          onOpenRipperdoc={() => {
+            closePinned();
+            setAtDoc(true);
+          }}
+          onDraftAction={draftAction}
+        />
       </div>
     </div>
   );
@@ -1099,7 +1222,7 @@ export function StoryScreen() {
     view.phone.feedUnread.news.length +
     view.phone.feedUnread.street.length +
     view.shards.unread;
-  const activeTrackCount = view.jobs.list.filter((j) => j.open).length + view.deadlines.length;
+  const activeTrackCount = trackSummary.activeCount + trackSummary.offeredCount;
   const currentLocationName = view.names.location ?? view.location ?? "夜之城";
   return (
     <SaveImagesProvider value={saveImagesController}>
@@ -1128,6 +1251,8 @@ export function StoryScreen() {
           />
           <HoloCall
             view={view}
+            disabled={busy || Boolean(view.death || view.ended)}
+            onAnswer={(id, answer) => void act({ type: "answerCall", id, answer }, "call")}
             onOpenPhone={() => {
               setUnreadTab("messages");
               pinBlock("unread");
@@ -1137,14 +1262,38 @@ export function StoryScreen() {
             view={view}
             scan={scan}
             peek={peek}
-            onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
-            onToggleScan={() => setScanPinned((v) => !v)}
+            onScan={
+              busy || view.death || view.ended
+                ? undefined
+                : (id) => void act({ type: "scanNpc", id }, "scan")
+            }
+            onScanAll={busy || view.death || view.ended ? undefined : () => void scanAllPresent()}
+            onScanEnv={scanEnvironment}
+            onToggleScan={toggleScan}
+            onCompanion={
+              busy || view.death || view.ended
+                ? undefined
+                : (id, following) => void act({ type: "npcCompanion", id, following }, "companion")
+            }
+            onDraftAction={draftAction}
           />
           <Unread view={view} peek={peek} full={unreadFull} tabs={unreadTabs} />
         </CornerSide>
         {/* 右侧角块：地点 / 潜网深度（潜网时融入列流，不遮挡追踪与武器） / 追踪+系统通知 / 武器装备 */}
         <CornerSide side="right" quiet={focusMode}>
-          <Zone view={view} onMap={openMap} onShop={setAtShop} onRipperdoc={() => setAtDoc(true)} />
+          <Zone
+            view={view}
+            onMap={openMap}
+            onShop={setAtShop}
+            onRipperdoc={() => setAtDoc(true)}
+            onAutofixer={() => setAtAutofixer(true)}
+            onBuyHome={busy || view.death || view.ended ? undefined : setBuyingHome}
+            onPayRent={
+              busy || view.death || view.ended || view.combat.active
+                ? undefined
+                : (id) => void act({ type: "payRent", id }, "rent")
+            }
+          />
           {view.hacking?.dive && (
             <DivePanel dive={view.hacking.dive} health={view.health} combat={view.combat} />
           )}
@@ -1172,7 +1321,7 @@ export function StoryScreen() {
               onClose={closeMap}
               focus={mapFocus}
               onTravel={
-                busy
+                busy || view.death || view.ended
                   ? undefined
                   : (dest, route) => {
                       setAtMap(false);
@@ -1200,6 +1349,9 @@ export function StoryScreen() {
             onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
             onRewrite={view.death || view.ended ? undefined : rewrite}
             onMark={onMark}
+            openingGuide={{
+              onSendPrompt: busy || view.death || view.ended ? undefined : (text) => send({ text }),
+            }}
           />
 
           {failure &&
@@ -1340,8 +1492,8 @@ export function StoryScreen() {
                 keyId="key.tab"
                 label="扫描"
                 active={scan}
-                title="按住 Tab 或点击切换 Kiroshi 义眼扫描"
-                onClick={() => setScanPinned((v) => !v)}
+                title="按住 Tab 或点击开启 Kiroshi 义眼扫描并一键透视在场目标"
+                onClick={toggleScan}
               />
               <KeyHint
                 keyText="H"
@@ -1425,12 +1577,12 @@ export function StoryScreen() {
                   view={view}
                   shop={shop}
                   onBuy={
-                    busy
+                    busy || view.death || view.ended
                       ? undefined
                       : (id) => act({ type: "buyItem", shop: shop.id, id }, "shop", true)
                   }
                   onSell={
-                    busy
+                    busy || view.death || view.ended
                       ? undefined
                       : (id) => act({ type: "sellItem", shop: shop.id, id }, "shop", true)
                   }
@@ -1459,7 +1611,7 @@ export function StoryScreen() {
             view={view}
             doc={view.ripperdoc}
             onBuy={
-              busy
+              busy || view.death || view.ended
                 ? undefined
                 : async (id, credit) => {
                     const doc = view.ripperdoc;
@@ -1468,7 +1620,7 @@ export function StoryScreen() {
                   }
             }
             onRemove={
-              busy
+              busy || view.death || view.ended
                 ? undefined
                 : async (id) => {
                     const doc = view.ripperdoc;
@@ -1477,7 +1629,7 @@ export function StoryScreen() {
                   }
             }
             onRepay={
-              busy
+              busy || view.death || view.ended
                 ? undefined
                 : async () => {
                     const doc = view.ripperdoc;
@@ -1486,7 +1638,7 @@ export function StoryScreen() {
                   }
             }
             onRepair={
-              busy
+              busy || view.death || view.ended
                 ? undefined
                 : async (id) => {
                     const doc = view.ripperdoc;
@@ -1495,6 +1647,20 @@ export function StoryScreen() {
                   }
             }
             onClose={() => setAtDoc(false)}
+          />
+        )}
+        {atAutofixer && view.travel.autofixer && (
+          <AutofixerModal
+            view={view}
+            terminal={view.travel.autofixer}
+            onBuy={
+              busy || view.death || view.ended
+                ? undefined
+                : async (model) => {
+                    await act({ type: "buyVehicle", model }, "autofixer", true);
+                  }
+            }
+            onClose={() => setAtAutofixer(false)}
           />
         )}
         {buyingHome &&
@@ -1535,11 +1701,21 @@ export function StoryScreen() {
                 <PersonModal
                   npc={npc}
                   fixer={view.jobs.fixers.find((f) => f.id === npc.id)}
-                  squad={view.squad.members.find((m) => m.npc === npc.id)}
                   foe={view.combat.active?.foes.find(
                     (f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name,
                   )}
-                  onScan={busy ? undefined : (id) => void act({ type: "scanNpc", id }, "scan")}
+                  onScan={
+                    busy || view.death || view.ended
+                      ? undefined
+                      : (id) => void act({ type: "scanNpc", id }, "scan")
+                  }
+                  onCompanion={
+                    busy || view.death || view.ended
+                      ? undefined
+                      : (id, following) =>
+                          void act({ type: "npcCompanion", id, following }, "companion")
+                  }
+                  onDraftAction={draftAction}
                   onClose={() => setPerson(null)}
                 />
               )
@@ -1656,16 +1832,18 @@ export function StoryScreen() {
 function PersonModal({
   npc,
   fixer,
-  squad,
   foe,
   onScan,
+  onCompanion,
+  onDraftAction,
   onClose,
 }: {
   readonly npc: View["npcs"][number];
   readonly fixer?: View["jobs"]["fixers"][number] | undefined;
-  readonly squad?: View["squad"]["members"][number] | undefined;
   readonly foe?: NonNullable<View["combat"]["active"]>["foes"][number] | undefined;
   readonly onScan?: ((id: string) => void) | undefined;
+  readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
   readonly onClose: () => void;
 }) {
   useLayer(onClose);
@@ -1680,7 +1858,14 @@ function PersonModal({
     >
       <div role="dialog" aria-label={npc.name} className={styles.dossierDialog}>
         <Panel as="div" title="人物档案" line="var(--cp-cyan)" frame>
-          <Profile npc={npc} fixer={fixer} squad={squad} foe={foe} onScan={onScan} />
+          <Profile
+            npc={npc}
+            fixer={fixer}
+            foe={foe}
+            onScan={onScan}
+            onCompanion={onCompanion}
+            onDraftAction={onDraftAction}
+          />
           <div className={styles.journalActions}>
             <Button onClick={onClose}>关闭</Button>
           </div>

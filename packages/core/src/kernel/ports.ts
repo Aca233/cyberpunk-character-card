@@ -46,11 +46,17 @@ export interface LlmRequest {
   readonly topK?: number;
   /** 开启服务商原生结构化 JSON 输出（纯文本流式叙事不传） */
   readonly responseFormat?: LlmResponseFormat;
+  /** 可选提示缓存路由键（如存档 id + 阶段），供支持 prompt_cache_key 的服务商稳定命中同一缓存桶 */
+  readonly cacheKey?: string;
 }
 
 export interface LlmUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /** 本次请求命中提示词缓存的输入 token 数（含 Anthropic cache_read / OpenAI cached_tokens / Gemini cachedContentTokenCount） */
+  readonly cachedInputTokens?: number | undefined;
+  /** 本次请求写入提示词缓存的输入 token 数（Anthropic cache_creation_input_tokens） */
+  readonly cacheWriteTokens?: number | undefined;
 }
 
 export type LlmEvent =
@@ -60,4 +66,12 @@ export type LlmEvent =
 
 export interface LlmClient {
   stream(request: LlmRequest, signal?: AbortSignalLike): AsyncIterable<LlmEvent>;
+}
+
+/** 可选向量嵌入客户端：用于旧记忆语义检索，未配置或失败时自动退化为规则检索 */
+export interface Embedder {
+  embed(
+    texts: readonly string[],
+    signal?: AbortSignalLike,
+  ): Promise<readonly (readonly number[])[]>;
 }

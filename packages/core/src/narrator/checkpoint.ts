@@ -37,6 +37,7 @@ export interface PreparedCheckpointData {
   readonly trip: PlannedTrip | undefined;
   readonly purchases: readonly PreparedPurchase[];
   readonly confirmation: BigSpend | undefined;
+  readonly spend: BigSpend | undefined;
   readonly decided: readonly string[];
   readonly loreTrace: LoreTrace | undefined;
   readonly loreSection: string | undefined;

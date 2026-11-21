@@ -5,7 +5,10 @@ import { CityStateSchema } from "./schema";
 
 function threadIdsOf(slice: unknown): ReadonlySet<string> {
   if (typeof slice !== "object" || slice === null) return new Set();
-  const raw = slice as { threads?: readonly { id?: unknown }[]; closed?: readonly { id?: unknown }[] };
+  const raw = slice as {
+    threads?: readonly { id?: unknown }[];
+    closed?: readonly { id?: unknown }[];
+  };
   const ids = new Set<string>();
   for (const item of [...(raw.threads ?? []), ...(raw.closed ?? [])]) {
     if (typeof item?.id === "string") ids.add(item.id);

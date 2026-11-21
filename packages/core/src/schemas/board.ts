@@ -5,13 +5,7 @@ import {
   SLOT_CAPACITY,
   SLOT_LABELS,
 } from "../systems/cyberware/schema";
-import { AttributeSchema } from "../systems/dice/schema";
-import {
-  HUMANITY_MAX,
-  TOLERANCE_FACTOR,
-  type Tolerance,
-  ToleranceSchema,
-} from "../systems/humanity/schema";
+import { TOLERANCE_EFFECTS, type Tolerance, ToleranceSchema } from "../systems/humanity/schema";
 import type { LedgerKind } from "../systems/npc/schema";
 
 /**
@@ -41,7 +35,239 @@ export const BOARD_SLOT_LABELS: Readonly<Record<BoardSlot, string>> = {
   flaw: "负面缺陷",
 };
 
+/** 赛博朋克 2077 命牌（大阿卡那 22 张塔罗牌）——角色气质锚点，对应全部 22 张内置原作塔罗牌 */
+export const TAROT_CARDS = [
+  "fool",
+  "magician",
+  "highpriestess",
+  "empress",
+  "emperor",
+  "hierophant",
+  "lovers",
+  "chariot",
+  "strength",
+  "hermit",
+  "wheeloffortune",
+  "justice",
+  "hangman",
+  "death",
+  "temperance",
+  "devil",
+  "tower",
+  "star",
+  "moon",
+  "sun",
+  "judgement",
+  "world",
+] as const;
+export const TarotCardSchema = z.enum(TAROT_CARDS);
+export type TarotCard = z.infer<typeof TarotCardSchema>;
+
+export const TAROT_LABELS: Readonly<Record<TarotCard, string>> = {
+  fool: "愚者",
+  magician: "魔术师",
+  highpriestess: "女祭司",
+  empress: "女皇",
+  emperor: "皇帝",
+  hierophant: "教皇",
+  lovers: "恋人",
+  chariot: "战车",
+  strength: "力量",
+  hermit: "隐者",
+  wheeloffortune: "命运之轮",
+  justice: "正义",
+  hangman: "倒吊人",
+  death: "死神",
+  temperance: "节制",
+  devil: "恶魔",
+  tower: "高塔",
+  star: "星星",
+  moon: "月亮",
+  sun: "太阳",
+  judgement: "审判",
+  world: "世界",
+};
+
+export interface TarotMeta {
+  readonly label: string;
+  readonly english: string;
+  readonly roman: string;
+  readonly vibe: string;
+  readonly prompt: string;
+}
+
+export const TAROT_INFO: Readonly<Record<TarotCard, TarotMeta>> = {
+  fool: {
+    label: "愚者",
+    english: "THE FOOL",
+    roman: "0",
+    vibe: "明知深渊在前仍纵身跃入、靠本能与好运改写开局的冒险者",
+    prompt: "愚者（不畏未知、敢拿命压上第一局，用直觉和锐气撞开夜之城的大门）",
+  },
+  magician: {
+    label: "魔术师",
+    english: "THE MAGICIAN",
+    roman: "I",
+    vibe: "化腐朽为利器、用改装与巧计改写胜算的操盘手",
+    prompt: "魔术师（精于工具、改装与布局，总能用非对称手段破局）",
+  },
+  highpriestess: {
+    label: "女祭司",
+    english: "THE HIGH PRIESTESS",
+    roman: "II",
+    vibe: "洞察底层暗流、冷静拆解情报与秘密的观测者",
+    prompt: "女祭司（深沉敏锐、看穿表象之下的暗流与隐秘规律）",
+  },
+  empress: {
+    label: "女皇",
+    english: "THE EMPRESS",
+    roman: "III",
+    vibe: "自带气场与人情网络、在铁血街头护住自己人的掌舵者",
+    prompt: "女皇（从容丰沛、重情重义且极富掌控力，靠人脉与魅力立足）",
+  },
+  emperor: {
+    label: "皇帝",
+    english: "THE EMPEROR",
+    roman: "IV",
+    vibe: "信奉铁腕与秩序、用实力和规矩压住全场的霸权者",
+    prompt: "皇帝（冷硬威严、寸步不让，习惯以权威、纪律与强硬手段定夺局面）",
+  },
+  hierophant: {
+    label: "教皇",
+    english: "THE HIEROPHANT",
+    roman: "V",
+    vibe: "恪守老派行规与师承、以信誉和原则说话的守道者",
+    prompt: "教皇（尊崇规矩、传承与街头信誉，宁可吃亏也不破自己的底线）",
+  },
+  lovers: {
+    label: "恋人",
+    english: "THE LOVERS",
+    roman: "VI",
+    vibe: "在忠诚与抉择间燃烧、愿为重要之人押上一切的赴约者",
+    prompt: "恋人（重羁绊与默契，每次关键选择都牵动人心与宿命）",
+  },
+  chariot: {
+    label: "战车",
+    english: "THE CHARIOT",
+    roman: "VII",
+    vibe: "高速突破、抢占先手、从不踩刹车的猎手",
+    prompt: "战车（锋利决断、永远向前推进、在速度与险境里掌控局面）",
+  },
+  strength: {
+    label: "力量",
+    english: "STRENGTH",
+    roman: "VIII",
+    vibe: "硬骨头、以肉身与意志扛住失控的压迫感",
+    prompt: "力量（逆境中不退步、靠硬骨头与克制的爆发力压场）",
+  },
+  hermit: {
+    label: "隐者",
+    english: "THE HERMIT",
+    roman: "IX",
+    vibe: "远离喧嚣与站队、独自在暗处打磨真相的独行客",
+    prompt: "隐者（寡言自持、冷眼旁观都市喧嚣，只信自己亲手验证过的真相）",
+  },
+  wheeloffortune: {
+    label: "命运之轮",
+    english: "WHEEL OF FORTUNE",
+    roman: "X",
+    vibe: "顺势借力、在风云突变与赌局翻盘中稳坐庄家席",
+    prompt: "命运之轮（敏于局势拐点、敢赌变数，总能在混乱洗牌里捞出筹码）",
+  },
+  justice: {
+    label: "正义",
+    english: "JUSTICE",
+    roman: "XI",
+    vibe: "恩怨分明、一笔一划清算黑账的冷面裁决者",
+    prompt: "正义（讲究等价清算、眼里容不得模糊账，该还的债必定连本带利讨回）",
+  },
+  hangman: {
+    label: "倒吊人",
+    english: "THE HANGED MAN",
+    roman: "XII",
+    vibe: "敢以退为进、忍常人所不能忍、换个角度看穿死局的破壁者",
+    prompt: "倒吊人（甘愿承受代价以换取逆转视角，越是绝境越能保持反常的清醒）",
+  },
+  death: {
+    label: "死神",
+    english: "DEATH",
+    roman: "XIII",
+    vibe: "干脆利落地斩断旧账与退路、从灰烬中重生的终结者",
+    prompt: "死神（果决冷冽、不恋过往，每一步都在终结旧秩序并逼出蜕变）",
+  },
+  temperance: {
+    label: "节制",
+    english: "TEMPERANCE",
+    roman: "XIV",
+    vibe: "在镀铬狂潮与人性底线间精准拿捏分寸的调和者",
+    prompt: "节制（克制冷静、擅长在钢丝上维持平衡，不被怒火或义体躁动吞噬）",
+  },
+  devil: {
+    label: "恶魔",
+    english: "THE DEVIL",
+    roman: "XV",
+    vibe: "看透欲望与筹码、敢与魔鬼签契约并反咬一口的野心家",
+    prompt: "恶魔（洞悉贪婪与人性弱点，不避黑暗交易，善于用欲望和利益套牢对手）",
+  },
+  tower: {
+    label: "高塔",
+    english: "THE TOWER",
+    roman: "XVI",
+    vibe: "把虚伪秩序连根掀翻、在爆破与废墟中撕开口子的叛逆者",
+    prompt: "高塔（炽烈颠覆、厌恶腐朽高墙，走到哪就把虚伪的铁幕掀到哪）",
+  },
+  star: {
+    label: "星星",
+    english: "THE STAR",
+    roman: "XVII",
+    vibe: "即便身处暗夜仍仰望自由与远方、留着一口微光的追梦人",
+    prompt: "星星（历经泥泞仍保有一线清澈与希冀，向往夜之城霓虹之外的天空）",
+  },
+  moon: {
+    label: "月亮",
+    english: "THE MOON",
+    roman: "XVIII",
+    vibe: "游走阴影、擅长伪装与反杀的孤狼与魅影",
+    prompt: "月亮（危险、莫测、善藏锋芒，游走于夜之城阴影与谎言之间）",
+  },
+  sun: {
+    label: "太阳",
+    english: "THE SUN",
+    roman: "XIX",
+    vibe: "轰轰烈烈活出名堂、把名字刻进大人物酒单的耀眼传奇",
+    prompt: "太阳（张扬炽热、坦荡耀眼，要干就干一票让整座夜之城记住的大事）",
+  },
+  judgement: {
+    label: "审判",
+    english: "JUDGEMENT",
+    roman: "XX",
+    vibe: "从旧日余烬中苏醒、迎向最终清算与自我救赎的觉醒者",
+    prompt: "审判（背负过往回响、面对命运召唤绝不逃避，以行动完成自我清算）",
+  },
+  world: {
+    label: "世界",
+    english: "THE WORLD",
+    roman: "XXI",
+    vibe: "历经百战已见全貌、把整座都市棋盘尽收眼底的圆融老手",
+    prompt: "世界（沉稳通透、视野宏阔，早已看清夜之城浮沉规律并自成闭环）",
+  },
+};
+
 const line = (max: number) => z.string().trim().max(max);
+
+/** 零输入 7 部位纯物理体貌选择（不含衣着/风格轮廓，避免与实时穿戴服装冲突） */
+export const AppearanceSelectionSchema = z.object({
+  build: line(32).optional(),
+  hairStyle: line(32).optional(),
+  hairColor: line(24).optional(),
+  age: line(20).optional(),
+  face: line(32).optional(),
+  eyes: line(32).optional(),
+  cyberwareFace: line(36).optional(),
+  marks: z.array(line(32)).max(2).default([]),
+  grooming: line(32).optional(),
+});
+export type AppearanceSelection = z.infer<typeof AppearanceSelectionSchema>;
 
 /** 模块带出的人物：开档后自动生成人物卡 */
 export const ModulePersonSchema = z.object({
@@ -61,8 +287,6 @@ export const BoardModuleSchema = z.object({
   /** 剧情钩子：叙事模型可以拿来做文章的线头 */
   hook: line(200).default(""),
   people: z.array(ModulePersonSchema).max(2).default([]),
-  /** 做哪些属性的检定时算有利条件 */
-  checks: z.array(AttributeSchema).max(2).default([]),
   /** 玩家自己写或来自社区创意工坊的模块 */
   custom: z.boolean().default(false),
   /** 创意工坊底座：所属模组包 id（本地自建为 "local"） */
@@ -80,6 +304,10 @@ export const StartCyberwareSchema = z.object({
   /** 创意工坊/自定义义体自包含快照字段 */
   slot: CyberwareSlotSchema.optional(),
   summary: line(200).optional(),
+  ability: line(200).optional(),
+  armor: z.boolean().optional(),
+  accelerator: z.boolean().optional(),
+  deckProfile: line(60).optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
 });
@@ -175,6 +403,10 @@ export type Acquaintance = z.infer<typeof AcquaintanceSchema>;
 
 export const BoardSchema = z.object({
   origin: BoardModuleSchema.nullable().default(null),
+  /** 赛博朋克 2077 命牌（角色气质锚点） */
+  tarot: TarotCardSchema.optional(),
+  /** 7 部位物理体貌结构化选项，用于生成外貌摘要与立绘提示词 */
+  appearance: AppearanceSelectionSchema.optional(),
   pasts: z.array(BoardModuleSchema).max(PAST_MAX).default([]),
   skills: z.array(BoardModuleSchema).max(SKILL_MAX).default([]),
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
@@ -188,18 +420,18 @@ export const BoardSchema = z.object({
 });
 export type Board = z.infer<typeof BoardSchema>;
 
-/** 义体耐受档位：影响人性消耗倍率和剧情钩子 */
+/** 义体耐受档位：定性神经耐受程度与剧情钩子（不折算数字倍率） */
 export const TOLERANCE_LEVELS: Readonly<
   Record<Tolerance, { readonly label: string; readonly hook: string }>
 > = {
   low: {
     label: "低耐受",
-    hook: "身体排斥义体：装一件就要难受好几天，义体医生看了你的病历都皱眉",
+    hook: "身体容易排异或出现神经感知失真：高烈度刺激或连续过载下更易浮现症状",
   },
   normal: { label: "普通", hook: "" },
   high: {
     label: "高耐受",
-    hook: "身体对义体来者不拒，有公司的研究员很想知道为什么",
+    hook: "身体对义体排异抗性极强，常规过载不易失控，有公司研究员很想知道为什么",
   },
 };
 
@@ -215,12 +447,6 @@ export const START_CYBERWARE_RARITIES: ReadonlySet<string> = new Set([
 /** 插在主板上的全部模块，按插槽顺序 */
 export function boardModules(board: Board): BoardModule[] {
   return [...(board.origin ? [board.origin] : []), ...board.pasts, ...board.skills, ...board.flaws];
-}
-
-/** 开局义体占掉的人性上限，按耐受档位折算 */
-export function boardHumanityCost(board: Board): number {
-  const raw = board.cyberware.reduce((sum, c) => sum + c.humanityCost, 0);
-  return Math.min(HUMANITY_MAX, Math.round(raw * TOLERANCE_FACTOR[board.tolerance]));
 }
 
 /** 主板哪里不合规矩；空数组表示通过模块校验，不限制点数或要求特质数量下限。 */
@@ -306,10 +532,43 @@ export function normalizeBoard(
       name: def.name,
       humanityCost: def.humanityCost,
       slot: def.slot,
+      ...(def.ability ? { ability: def.ability } : {}),
+      ...(def.armor ? { armor: true } : {}),
+      ...(def.accelerator ? { accelerator: true } : {}),
+      ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
       ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
     });
   }
   return { ok: true, board: { ...board, cyberware } };
+}
+
+/** 将主板中的自包含自定义义体快照转成运行时 CyberwareDef（已存在于目录的按目录为准） */
+export function customCyberwareDefs(
+  snapshots: readonly StartCyberware[] | undefined,
+  existingIds?: ReadonlySet<string>,
+): CyberwareDef[] {
+  if (!snapshots || snapshots.length === 0) return [];
+  const seen = new Set(existingIds);
+  const out: CyberwareDef[] = [];
+  for (const item of snapshots) {
+    if (!item.slot || seen.has(item.id)) continue;
+    if (!/^[a-z0-9-]+$/.test(item.id)) continue;
+    seen.add(item.id);
+    out.push({
+      id: item.id,
+      name: item.name,
+      slot: item.slot,
+      rarity: "rare",
+      price: 0,
+      humanityCost: item.humanityCost,
+      ability: item.ability || item.summary || "自定义义体模块",
+      armor: Boolean(item.armor),
+      accelerator: Boolean(item.accelerator),
+      iconic: false,
+      ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+    });
+  }
+  return out;
 }
 
 function moduleLine(m: BoardModule): string {
@@ -325,11 +584,14 @@ function moduleLine(m: BoardModule): string {
 
 /** 给模型看的主板：每块模块一行 */
 export function boardBrief(board: Board): string {
-  const lines = [...boardModules(board).map(moduleLine)];
+  const lines = [
+    ...(board.tarot ? [`- 命牌气质：${TAROT_INFO[board.tarot].prompt}`] : []),
+    ...boardModules(board).map(moduleLine),
+  ];
   const tolerance = TOLERANCE_LEVELS[board.tolerance];
   if (board.tolerance !== "normal") {
     lines.push(
-      `- 义体耐受：${tolerance.label}，义体的人性消耗 ×${TOLERANCE_FACTOR[board.tolerance]}；钩子：${tolerance.hook}`,
+      `- 义体耐受：${tolerance.label}（${TOLERANCE_EFFECTS[board.tolerance]}）；钩子：${tolerance.hook}`,
     );
   }
   if (board.cyberware.length > 0) {

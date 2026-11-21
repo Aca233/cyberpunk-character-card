@@ -1,31 +1,16 @@
 import { z } from "zod";
 import { GameTimeSchema } from "../world";
 
-/** 一次正文活动所需的约定，不是订单或预约平台。 */
-export const ServiceTermsSchema = z.object({
-  subject: z.string().trim().min(1).max(80).describe("本次实际作品 id 或成年服务者人物 id"),
-  scope: z.string().trim().min(1).max(600).describe("双方已经接受的实际服务范围与底线"),
-  duration: z.number().int().min(1).max(1440).describe("本次约定的总游戏分钟"),
-  recording: z.boolean().describe("是否明确允许记录；允许不代表已经录制或同意传播"),
-  earlyExit: z
-    .string()
-    .trim()
-    .min(1)
-    .max(300)
-    .describe("已说明的中止条件；不临时追加费用或自动退款"),
-});
-export type ServiceTerms = z.infer<typeof ServiceTermsSchema>;
-
+/** 轻量在场服务会话：记录场所、服务者/作品与进行状态，不强制五元组报价表单。 */
 export const ServiceSessionSchema = z.object({
   id: z.string().min(1),
   seller: z.string().min(1),
   service: z.enum(["bd-session", "adult-service"]),
-  terms: ServiceTermsSchema,
-  price: z.number().int().min(0),
+  subject: z.string().min(1).nullable().default(null),
   location: z.string().min(1),
-  paidAt: z.number().int(),
-  elapsed: z.number().int().min(0),
+  startedAt: z.number().int(),
   status: z.enum(["active", "paused", "finished", "exited"]),
+  note: z.string().max(240).optional(),
 });
 export type ServiceSession = z.infer<typeof ServiceSessionSchema>;
 
@@ -46,7 +31,6 @@ export const QuoteTermsSchema = z.object({
     .boolean()
     .default(false)
     .describe("是否已明确约定出售旧义体；仅报价不等于玩家已授权拆卸"),
-  session: ServiceTermsSchema.optional().describe("超梦按次体验或成人服务必须明确的本次条件"),
 });
 
 export const AgreedQuoteSchema = QuoteTermsSchema.extend({
@@ -118,13 +102,6 @@ export const OfferCommandSchema = QuoteTermsSchema.extend({
         offer.disposition !== undefined)
     )
       ctx.addIssue({ code: "custom", message: "只有义体报价可以约定旧件" });
-    const experiential =
-      offer.kind === "service" && ["bd-session", "adult-service"].includes(offer.target);
-    if (experiential !== (offer.session !== undefined))
-      ctx.addIssue({
-        code: "custom",
-        message: "超梦按次与成人服务必须给出本次完整条件；其他交易不填写 session",
-      });
   })
   .describe(
     "保存对方已认可的报价，不扣款、不交货、不代表玩家接受。后续成交引用 offer id；未成交的报价会持续保留。",
@@ -141,40 +118,26 @@ export const UsedOfferSchema = z.object({
   id: z.string().min(1),
 });
 
-/** 仅成功 trade 事务发出：同报价的一次付款与一次活动绑定。 */
-export const PaidServiceSchema = z.object({
-  type: z.literal("commerce.servicePaid"),
-  id: z.string().min(1),
-});
-
-/** 超梦自己结算时间，这里只同步已实际消费的累计分钟。 */
-export const SessionProgressSchema = z.object({
-  type: z.literal("commerce.sessionProgress"),
-  id: z.string().min(1),
-  elapsed: z.number().int().min(0),
-  status: z.enum(["active", "paused", "finished", "exited"]),
-});
-
 export const ServiceCommandSchema = z
   .object({
     type: z.literal("commerce.service"),
-    id: z.string().min(1).describe("已经实际成交的服务报价 id；超梦仅支持未接入时 exit"),
-    action: z.enum(["progress", "pause", "resume", "finish", "exit"]),
-    elapsed: z
-      .number()
-      .int()
-      .min(0)
+    id: z.string().min(1).max(80).describe("本次在场服务的稳定会话 id"),
+    action: z.enum(["start", "pause", "resume", "finish", "exit"]),
+    seller: z.string().min(1).max(80).optional().describe("start 时填场所或提供者 id"),
+    service: z
+      .enum(["bd-session", "adult-service"])
       .optional()
-      .describe("实际累计服务分钟，不是本轮增量；finish 省略时补足剩余约定时长"),
-    evidence: z
+      .describe("start 时填服务类型：bd-session 店内超梦，adult-service 成年从业者服务"),
+    subject: z
       .string()
-      .trim()
-      .min(2)
-      .max(600)
-      .describe("本轮正文里真实继续、暂停、结束或中止的原文"),
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("可选：具体服务者人物 id（如云顶玩偶/扭扭街性偶）或作品 id"),
+    note: z.string().trim().min(1).max(240).optional().describe("可选：简短现场备注或结束方式"),
   })
   .describe(
-    "已经接受的成人服务正文进度，不重新扣款；略写正常结束仍经过剩余约定分钟。超梦进度使用 braindance 指令；已付款但尚未接入的超梦可用 exit 结束本次服务。",
+    "轻量记录正在进行的会所/街头服务会话（开始、暂停、恢复、结束或中止）；不另扣款，时间随 world 正常推进。",
   );
 export type ServiceCommand = z.infer<typeof ServiceCommandSchema>;
 
@@ -182,7 +145,4 @@ export type CommerceCommand =
   | z.infer<typeof OfferCommandSchema>
   | z.infer<typeof WithdrawOfferSchema>
   | ServiceCommand;
-export type CommerceInternal =
-  | z.infer<typeof UsedOfferSchema>
-  | z.infer<typeof PaidServiceSchema>
-  | z.infer<typeof SessionProgressSchema>;
+export type CommerceInternal = z.infer<typeof UsedOfferSchema>;

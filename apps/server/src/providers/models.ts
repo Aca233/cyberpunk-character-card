@@ -182,10 +182,19 @@ export async function fetchProviderModels(
 
   if (input.type === "anthropic") {
     if (!apiKey) throw new UpstreamError(`请先填写或保存 ${label} API 密钥再获取模型列表`);
+    const modelsUrl = base.endsWith("/models")
+      ? base
+      : base.endsWith("/v1")
+        ? `${base}/models`
+        : `${base}/v1/models`;
     const json = await requestJson(
       label,
-      `${base}/models`,
-      { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      modelsUrl,
+      {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
       signal,
     );
     return extractModelIds(json);

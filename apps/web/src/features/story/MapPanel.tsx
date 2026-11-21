@@ -10,6 +10,7 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useStat
 import { type AssetId, asset } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
+import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 // 视角、瓦片和图标抽到 mapCamera.ts，和捏人选开局地点的地图共用（2026-10-30，用户定的"在地图上选择"）
 import {
@@ -570,24 +571,27 @@ export function MapBody({
             if (!e.currentTarget.contains(e.relatedTarget)) setSearchOpen(false);
           }}
         >
-          <input
-            type="search"
-            className={styles.mapSearchInput}
-            value={query}
-            placeholder="搜索地名 / 街区 / 城区…"
-            aria-label="搜索地图地点"
-            onFocus={() => setSearchOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.stopPropagation();
-                setSearchOpen(false);
-              }
-            }}
-          />
+          <span className={styles.mapSearchBox}>
+            <CellFrame />
+            <input
+              type="search"
+              className={styles.mapSearchInput}
+              value={query}
+              placeholder="搜索地名 / 街区 / 城区…"
+              aria-label="搜索地图地点"
+              onFocus={() => setSearchOpen(true)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setSearchOpen(false);
+                }
+              }}
+            />
+          </span>
           {searchOpen && trimmedQuery.length > 0 && (
             <ul className={styles.mapSearchResults} aria-label="搜索结果">
               {searchResults.length > 0 ? (

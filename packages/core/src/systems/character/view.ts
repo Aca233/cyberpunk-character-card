@@ -1,8 +1,8 @@
 import type { ViewContext } from "../../kernel/system";
 import { credTier } from "./apply";
-import { CharacterStateSchema, effectiveAttributes } from "./schema";
+import { CharacterStateSchema } from "./schema";
 
-/** 玩家看到的角色：属性（算上义体加成）、街头声望、主板模块、习惯、过往和闪回 */
+/** 玩家看到的角色：街头声望、主板模块、习惯、过往和闪回 */
 export function characterView({ world }: ViewContext) {
   const character = CharacterStateSchema.parse(world.slices.character);
   return {
@@ -10,16 +10,11 @@ export function characterView({ world }: ViewContext) {
     brief: character.brief,
     /** 角色卡提供的称谓与外貌；没有提供时不从简介补猜。 */
     visual: character.visual ? { ...character.visual } : null,
-    /** 检定用的属性，已经算上义体加成 */
-    attributes: effectiveAttributes(character),
-    /** 义体加成：侧栏标出来 */
-    bonuses: character.bonuses,
     streetCred: character.streetCred,
     credTier: credTier(character.streetCred).label,
     credWorld: credTier(character.streetCred).world,
     /** 攒着半级声望，再得半级就升级 */
     credHalf: character.credHalf,
-    attributePoints: character.attributePoints,
     /** 主板上的模块；没用主板的角色是空的 */
     traits: character.traits,
     /** 习惯栏，和叙事模型提议、等玩家确认的习惯 */

@@ -1,6 +1,10 @@
 import { applyPatches } from "immer";
 import { type LogRecord, voidedSeqs } from "./kernel/turnlog";
 import type { Snapshot, WorldState } from "./kernel/world";
+import { healthDisplay } from "./systems/health/apply";
+import { HealthStateSchema } from "./systems/health/schema";
+import { neuralDisplay } from "./systems/humanity/apply";
+import { HumanityStateSchema } from "./systems/humanity/schema";
 
 /** 账目对账默认看最近几轮 */
 export const LEDGER_TURNS = 10;
@@ -35,8 +39,13 @@ export function hardStats(world: WorldState): ReadonlyMap<string, number> {
   };
   const s = world.slices as Readonly<Record<string, unknown>>;
   put("欧元", num(s.economy, "eddies"));
-  put("人性", num(s.humanity, "current"));
-  put("生命", num(s.health, "hp"));
+  const humanityParsed = HumanityStateSchema.safeParse(s.humanity);
+  put(
+    "人性",
+    humanityParsed.success ? neuralDisplay(humanityParsed.data) : num(s.humanity, "current"),
+  );
+  const healthParsed = HealthStateSchema.safeParse(s.health);
+  put("生命", healthParsed.success ? healthDisplay(healthParsed.data).hp : num(s.health, "hp"));
   put("通缉星", num(s.heat, "stars") ?? 0);
   put("街头声望", num(s.character, "streetCred"));
   const npcs = (s.npc as Bag)?.npcs;

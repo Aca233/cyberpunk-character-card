@@ -53,7 +53,6 @@ export function jobsView({ world, data }: ViewContext) {
         j.settlement === null
           ? null
           : {
-              squad: j.settlement.squad,
               streetCred: j.settlement.credHalves / 2,
               affinity: j.settlement.affinity,
               humanity: j.settlement.humanity,

@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
-import { LEGENDS_SEEDED, LegendNoteSchema } from "../systems/chronicle/schema";
 import { ToleranceSchema } from "../systems/humanity/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
-import { StartKitSchema } from "./board";
+import { START_CYBERWARE_MAX, StartCyberwareSchema, StartKitSchema } from "./board";
 import { WorkshopPackSchema } from "./workshop";
 
 /** 开档时角色卡的快照：之后改角色卡不影响已有存档 */
@@ -13,6 +12,8 @@ export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 /** 建档时从角色主板带进来的：开局义体 id、义体耐受、开局行装定制和模块/自定义带出的人物卡 */
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
+  /** 自定义/本地义体的自包含快照：不依赖官方义体目录也能正常装入新档与投影显示 */
+  customCyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   tolerance: ToleranceSchema.default("normal"),
   /** 出身模块 id：按它给开局住所；旧存档没有 */
   origin: z.string().min(1).optional(),
@@ -53,8 +54,6 @@ export const SaveMetaSchema = z.object({
   loadouts: z.array(z.string().min(1)).optional(),
   /** 旧存档和没用主板的角色没有 */
   board: BoardStartSchema.optional(),
-  /** 建档时传说名册里的前人，开局写进履历系统给叙事模型看；旧存档和名册空着时没有 */
-  legends: z.array(LegendNoteSchema).max(LEGENDS_SEEDED).optional(),
   /** 建档时启用的内容包快照；后续停用或删除工坊包不会改变这份存档 */
   workshopPacks: z.array(WorkshopPackSchema).max(40).optional(),
 });

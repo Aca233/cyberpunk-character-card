@@ -56,7 +56,7 @@ export function Avatar({
     >
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--box-fill, rgb(14 14 23 / 78%))"
+        tint="var(--box-fill, var(--cp-surface))"
         slice={CELL_SLICE}
       />
       {customId ? (
@@ -128,6 +128,8 @@ export interface PhoneActions {
   readonly onReadThread?: ((unreadIds: readonly number[]) => void) | undefined;
   /** 查看一条未接来电时，只把这条来电提醒标已读 */
   readonly onReadCall?: ((id: number) => void) | undefined;
+  /** 接听或拒接正在响铃的全息来电 */
+  readonly onAnswerCall?: ((id: number, answer: boolean) => void) | undefined;
   /** 正在等待哪位联系人的手机直聊回复 */
   readonly chatSending?: string | null | undefined;
   /** 本地乐观展示的发送中消息 */
@@ -146,6 +148,36 @@ function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | un
     if (msg && msg.sender !== "player" && !msg.read) return msg;
   }
   return undefined;
+}
+
+function IncomingCallBanner({
+  incoming,
+  busy,
+  onAnswerCall,
+}: {
+  readonly incoming: NonNullable<View["calls"]>["incoming"];
+  readonly busy?: boolean | undefined;
+  readonly onAnswerCall?: ((id: number, answer: boolean) => void) | undefined;
+}) {
+  if (!incoming) return null;
+  const disabled = Boolean(busy || !onAnswerCall);
+  return (
+    <section className={styles.phoneIncomingCall} aria-label="正在响铃的全息来电">
+      <span className={styles.phoneIncomingCallMeta}>
+        <small>{"HOLOCALL // 响铃中"}</small>
+        <b>{incoming.name}</b>
+        <time className={styles.phoneIncomingCallTime}>{incoming.at}</time>
+      </span>
+      <span className={styles.phoneIncomingCallActions}>
+        <ActionButton disabled={disabled} onClick={() => onAnswerCall?.(incoming.id, true)}>
+          接通
+        </ActionButton>
+        <ActionButton disabled={disabled} onClick={() => onAnswerCall?.(incoming.id, false)}>
+          挂断
+        </ActionButton>
+      </span>
+    </section>
+  );
 }
 
 function MissedCalls({
@@ -419,7 +451,7 @@ function ThreadHead({
                 />
                 <NineSlice
                   id="map.tooltipBg"
-                  tint="rgb(14 14 23 / 94%)"
+                  tint="var(--cp-surface-strong)"
                   slice={TIP_SLICE}
                   className={styles.threadCardLayer}
                 />
@@ -430,12 +462,7 @@ function ThreadHead({
                   className={styles.threadCardLayer}
                 />
                 <div className={styles.threadCardBody}>
-                  <ProfileHead
-                    npc={npc}
-                    fixer={contact.fixer}
-                    squad={contact.squad}
-                    foe={contact.foe}
-                  />
+                  <ProfileHead npc={npc} fixer={contact.fixer} foe={contact.foe} />
                 </div>
               </div>
             )}
@@ -513,6 +540,7 @@ export function PhoneBody({
   onSendChat,
   onReadThread,
   onReadCall,
+  onAnswerCall,
   chatSending,
   pendingChat,
   busy,
@@ -581,6 +609,11 @@ export function PhoneBody({
   if (contacts.length === 0 || !current) {
     return (
       <div className={styles.phoneNoContacts}>
+        <IncomingCallBanner
+          incoming={view.calls?.incoming ?? null}
+          busy={busy}
+          onAnswerCall={onAnswerCall}
+        />
         <div className={styles.phoneEmpty}>
           <div className={styles.phoneEmptyCard}>
             <CellFrame />
@@ -602,12 +635,16 @@ export function PhoneBody({
     onSendChat,
     onReadThread,
     onReadCall,
+    onAnswerCall,
     chatSending,
     pendingChat,
     busy,
     onLocatePlace,
     onOpenRipperdoc,
   };
+  const answeredCall = (view.calls?.history ?? []).find(
+    (call) => call.from === current.key && call.status === "answered" && call.endedAt === null,
+  );
   const lockReason = inlineChatLockReason(current, view, actions);
   const sendingAny = Boolean(chatSending || pendingChat);
   const sendingThis = Boolean(pendingForCurrent !== null || chatSending === current.key);
@@ -670,6 +707,16 @@ export function PhoneBody({
         </ul>
       </aside>
       <section className={styles.threadPane} aria-label={`和${current.name}的消息`}>
+        <IncomingCallBanner
+          incoming={view.calls?.incoming ?? null}
+          busy={busy}
+          onAnswerCall={onAnswerCall}
+        />
+        {answeredCall && (
+          <div className={styles.phoneActiveCall} role="status">
+            全息通话已接通（{answeredCall.at}）— 可直接在下方行动栏与 {answeredCall.name} 对话
+          </div>
+        )}
         <MissedCalls calls={missedCalls} onReadCall={onReadCall} />
         <ThreadHead
           key={current.key}
@@ -824,30 +871,33 @@ export function PhoneBody({
               }}
             >
               <div className={styles.phoneComposerRow}>
-                <textarea
-                  ref={inputRef}
-                  className={styles.phoneInput}
-                  rows={1}
-                  maxLength={300}
-                  placeholder={
-                    sendingThis
-                      ? `${current.name} 正在回信…可先输入下一句`
-                      : `给 ${current.name} 发短讯…（Enter 发送，每轮 1–3 分钟）`
-                  }
-                  value={draftText}
-                  aria-label={`给${current.name}发短讯`}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    clearErrorFor(current.key);
-                    setDrafts((prev) => ({ ...prev, [current.key]: value }));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      void submitChat();
+                <span className={styles.phoneInputBox}>
+                  <CellFrame />
+                  <textarea
+                    ref={inputRef}
+                    className={styles.phoneInput}
+                    rows={1}
+                    maxLength={300}
+                    placeholder={
+                      sendingThis
+                        ? `${current.name} 正在回信…可先输入下一句`
+                        : `给 ${current.name} 发短讯…（Enter 发送，每轮 1–3 分钟）`
                     }
-                  }}
-                />
+                    value={draftText}
+                    aria-label={`给${current.name}发短讯`}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      clearErrorFor(current.key);
+                      setDrafts((prev) => ({ ...prev, [current.key]: value }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        void submitChat();
+                      }
+                    }}
+                  />
+                </span>
                 <ActionButton
                   submit
                   disabled={sendingAny || draftText.trim() === ""}

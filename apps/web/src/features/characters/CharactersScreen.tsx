@@ -1,17 +1,14 @@
-import {
-  type CharacterCard,
-  CharacterCardSchema,
-  DEFAULT_CARD_ATTRIBUTES,
-  WorkshopCharacterExportSchema,
-} from "@cp/core";
+import { type CharacterCard, CharacterCardSchema, WorkshopCharacterExportSchema } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
+import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
-import { CellFrame } from "../../ui/FrameBox";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { useLayer } from "../../ui/layers";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { CharacterCreator } from "./CharacterCreator";
 import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
@@ -32,7 +29,25 @@ interface Editor {
 type Destination =
   | { readonly editor: Editor }
   | { readonly back: true }
-  | { readonly workshop: true };
+  | { readonly importCard: CharacterCard };
+
+/** 对官方模板忽略仅变更 startLocation 的差异，避免仅挑起点就触发误标脏并强制另存副本。 */
+function isCardModified(card: CharacterCard, original: string, sample: boolean): boolean {
+  const serialized = JSON.stringify(card);
+  if (serialized === original) return false;
+  if (!sample) return true;
+  try {
+    const base = JSON.parse(original) as CharacterCard;
+    const stripLoc = (c: CharacterCard) => {
+      if (!c.board) return c;
+      const { startLocation: _loc, ...restBoard } = c.board;
+      return { ...c, board: restBoard };
+    };
+    return JSON.stringify(stripLoc(card)) !== JSON.stringify(stripLoc(base));
+  } catch {
+    return true;
+  }
+}
 
 /** 新角色默认带空白主板 */
 function blankCard(): CharacterCard {
@@ -47,7 +62,6 @@ function blankCard(): CharacterCard {
     voice: "",
     skills: "",
     locked: [],
-    attributes: { ...DEFAULT_CARD_ATTRIBUTES },
     board: emptyBoard(),
   };
 }
@@ -59,7 +73,6 @@ function editorFor(card: CharacterCard, id: string | null = null, sample = false
   const board = card.board ?? emptyBoard();
   const copy: CharacterCard = {
     ...card,
-    attributes: { ...card.attributes },
     board,
   };
   return {
@@ -71,20 +84,22 @@ function editorFor(card: CharacterCard, id: string | null = null, sample = false
   };
 }
 
-function downloadCharacter(card: CharacterCard) {
+function downloadCharacter(card: CharacterCard): string {
   const { portrait: _portrait, ...shareable } = card;
   const payload = WorkshopCharacterExportSchema.parse({
     format: "cp2077-character",
     version: 1,
     character: shareable,
   });
+  const fileName = `角色-${(card.name || "未命名").replace(/[\\/:*?"<>|]/g, "_")}.json`;
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `角色-${card.name || "未命名"}.json`;
+  anchor.download = fileName;
   anchor.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return fileName;
 }
 
 /** 恢复未保存的修改，同时保留原角色 id，避免刷新后再保存生成重复角色。 */
@@ -122,12 +137,18 @@ export function CharactersScreen() {
   currentEditor.current = editor;
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
-  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareNotice, setShareNotice] = useState<{
+    readonly tone: "ok" | "error";
+    readonly text: string;
+  } | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryQuery, setLibraryQuery] = useState("");
   const [launching, setLaunching] = useState(false);
   const [draftSaved, setDraftSaved] = useState(true);
 
-  const modified = JSON.stringify(editor.card) !== editor.original;
+  useLayer(() => setShowLibrary(false), showLibrary && !destination && !deleting);
+
+  const modified = isCardModified(editor.card, editor.original, editor.sample);
   const dirty = modified;
   const parsed = CharacterCardSchema.safeParse(editor.card);
 
@@ -139,7 +160,6 @@ export function CharactersScreen() {
         if (old.session !== submitted.session) return old;
         const copy: CharacterCard = {
           ...entry.card,
-          attributes: { ...entry.card.attributes },
           board: entry.card.board ?? emptyBoard(),
         };
         return {
@@ -163,26 +183,44 @@ export function CharactersScreen() {
     },
   });
 
+  const commitImport = useMutation({
+    mutationFn: (card: CharacterCard) => api.createCharacter(card),
+    onSuccess: async (entry) => {
+      await client.invalidateQueries({ queryKey: ["characters"] });
+      clearDraft();
+      setEditor(editorFor(entry.card, entry.id));
+      setShowLibrary(false);
+      save.reset();
+      remove.reset();
+      setShareNotice({ tone: "ok", text: `已导入角色「${entry.card.name}」并加入本地角色库` });
+    },
+    onError: (error) => setShareNotice({ tone: "error", text: `角色卡导入失败：${error.message}` }),
+  });
+
   const importCard = useMutation({
     mutationFn: async (file: File) => {
       const raw: unknown = JSON.parse(await file.text());
       const parsed = WorkshopCharacterExportSchema.safeParse(raw);
       if (!parsed.success) throw new Error("文件不是本作导出的角色卡");
-      const card = CharacterCardSchema.parse(parsed.data.character);
-      return api.createCharacter(card);
+      return CharacterCardSchema.parse(parsed.data.character);
     },
-    onSuccess: async (entry) => {
-      await client.invalidateQueries({ queryKey: ["characters"] });
-      const next = { editor: editorFor(entry.card, entry.id) };
+    onSuccess: (card) => {
       const current = currentEditor.current;
-      if (JSON.stringify(current.card) !== current.original) setDestination(next);
-      else go(next);
-      setShareError(null);
+      if (isCardModified(current.card, current.original, current.sample)) {
+        setDestination({ importCard: card });
+      } else {
+        commitImport.mutate(card);
+      }
     },
-    onError: (error) => setShareError(error.message),
+    onError: (error) => setShareNotice({ tone: "error", text: `角色卡导入失败：${error.message}` }),
   });
 
-  const busy = save.isPending || remove.isPending || launching || importCard.isPending;
+  const busy =
+    save.isPending ||
+    remove.isPending ||
+    launching ||
+    importCard.isPending ||
+    commitImport.isPending;
 
   const importCharacter = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -219,7 +257,7 @@ export function CharactersScreen() {
   const go = (next: Destination) => {
     clearDraft();
     if ("back" in next) navigate("/menu");
-    else if ("workshop" in next) navigate("/workshop");
+    else if ("importCard" in next) commitImport.mutate(next.importCard);
     else {
       setEditor(next.editor);
       setShowLibrary(false);
@@ -240,8 +278,16 @@ export function CharactersScreen() {
   };
 
   const allCharacters = characters.data ?? [];
-  const customCharacters = allCharacters.filter((entry) => !entry.sample);
-  const sampleCharacters = allCharacters.filter((entry) => entry.sample);
+  const filteredCharacters = useMemo(() => {
+    const q = libraryQuery.trim().toLowerCase();
+    if (!q) return allCharacters;
+    return allCharacters.filter((entry) => {
+      const hay = `${entry.card.name} ${entry.card.alias} ${entry.card.origin} ${entry.card.board?.origin?.label ?? ""}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [allCharacters, libraryQuery]);
+  const customCharacters = filteredCharacters.filter((entry) => !entry.sample);
+  const sampleCharacters = filteredCharacters.filter((entry) => entry.sample);
 
   const renderEntryCard = (entry: CharacterEntry) => {
     const b = entry.card.board;
@@ -293,9 +339,13 @@ export function CharactersScreen() {
       <span className={wb.scan} style={{ backgroundImage: cssUrl("fx.scanlines") }} aria-hidden />
       <NineSlice id="panel.frame" tint="var(--cp-red)" slice={FRAME_SLICE} className={wb.frame} />
       <header className={wb.head}>
-        <Asset id="menu.header" tint="var(--cp-red)" height={56} className={wb.headBg} />
-        <h1>身份档案</h1>
-        <Asset id="fluff.code" tint="var(--cp-red)" height={14} />
+        <Asset id="menu.header" tint="var(--cp-red)" height={52} className={wb.headBg} />
+        <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" className={wb.headGlow} />
+        <div className={wb.headTitleWrap}>
+          <span className={wb.headCode}>{"ID // DOSSIER"}</span>
+          <h1>身份档案</h1>
+        </div>
+        <Asset id="fluff.code" tint="var(--cp-red)" height={14} className={wb.headFluff} />
         <span className={wb.headSpacer} />
         <input
           ref={importRef}
@@ -304,34 +354,55 @@ export function CharactersScreen() {
           accept=".json,application/json"
           onChange={importCharacter}
         />
-        <Button small disabled={busy} onClick={() => importRef.current?.click()}>
-          {importCard.isPending ? "导入中…" : "导入角色 JSON"}
-        </Button>
-        <Button
-          small
-          disabled={!parsed.success || busy}
-          onClick={() => downloadCharacter(editor.card)}
-        >
-          导出当前角色
-        </Button>
-        <Button small disabled={busy} onClick={() => requestGo({ workshop: true })}>
-          创意工坊
-        </Button>
-        <Button small disabled={busy} onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
-          ＋ 新建空白档案
-        </Button>
-        <Button
-          small
-          disabled={busy}
-          pressed={showLibrary}
-          onClick={() => setShowLibrary((open) => !open)}
-        >
-          角色库{characters.data ? `（${characters.data.length}）` : ""}
-        </Button>
-        <Button small disabled={busy} onClick={() => requestGo({ back: true })}>
-          返回主菜单
-        </Button>
+        <fieldset className={wb.headGroup} aria-label="角色库与分享">
+          <Button
+            small
+            disabled={busy}
+            pressed={showLibrary}
+            onClick={() => setShowLibrary((open) => !open)}
+          >
+            角色库{characters.data ? ` (${characters.data.length})` : ""}
+          </Button>
+          <Button
+            small
+            disabled={busy}
+            onClick={() => requestGo({ editor: editorFor(blankCard()) })}
+          >
+            ＋ 新建
+          </Button>
+          <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+            {importCard.isPending || commitImport.isPending ? "导入中…" : "导入"}
+          </Button>
+          <Button
+            small
+            disabled={!parsed.success || busy}
+            reason={!parsed.success ? "先填写角色名与基本资料后即可导出" : undefined}
+            onClick={() => {
+              const fileName = downloadCharacter(editor.card);
+              setShareNotice({ tone: "ok", text: `已导出角色档案 ${fileName}` });
+            }}
+          >
+            导出
+          </Button>
+        </fieldset>
+        <span className={wb.headDivider} aria-hidden />
+        <fieldset className={wb.headGroup} aria-label="页面导航">
+          <Button small disabled reason="创意工坊尚未完成，暂未启用">
+            创意工坊（未完成）
+          </Button>
+          <Button small disabled={busy} onClick={() => requestGo({ back: true })}>
+            返回主菜单
+          </Button>
+        </fieldset>
       </header>
+      <span
+        className={wb.headLine}
+        style={{
+          maskImage: cssUrl("tab.line"),
+          WebkitMaskImage: cssUrl("tab.line"),
+        }}
+        aria-hidden
+      />
 
       <div className={wb.workspace}>
         {showLibrary && (
@@ -359,10 +430,24 @@ export function CharactersScreen() {
                 <div className={wb.topBar}>
                   <strong className={wb.drawerTitle}>夜之城角色库</strong>
                   <span className={wb.headSpacer} />
-                  <Button small onClick={() => setShowLibrary(false)}>
+                  <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+                    导入 JSON
+                  </Button>
+                  <Button small keyId="key.esc" onClick={() => setShowLibrary(false)}>
                     收起
                   </Button>
                 </div>
+                {allCharacters.length > 3 && (
+                  <FrameBox className={wb.drawerSearch}>
+                    <input
+                      type="search"
+                      value={libraryQuery}
+                      placeholder="搜索角色名、代号或出身…"
+                      aria-label="搜索角色库"
+                      onChange={(e) => setLibraryQuery(e.target.value)}
+                    />
+                  </FrameBox>
+                )}
                 {characters.isPending && <p role="status">正在读取角色库…</p>}
                 {characters.isError && (
                   <div role="alert">
@@ -375,6 +460,11 @@ export function CharactersScreen() {
                 {characters.isSuccess && allCharacters.length === 0 && (
                   <p className={wb.note}>还没有角色。</p>
                 )}
+                {characters.isSuccess &&
+                  allCharacters.length > 0 &&
+                  filteredCharacters.length === 0 && (
+                    <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
+                  )}
                 {customCharacters.length > 0 && (
                   <section className={wb.libraryGroup} aria-label="自建角色">
                     <h2 className={wb.libraryGroupTitle}>自建角色（{customCharacters.length}）</h2>
@@ -395,10 +485,16 @@ export function CharactersScreen() {
         )}
 
         <section className={wb.editorWrap} aria-label="角色设计工作台">
-          {shareError && (
-            <p className={wb.error} role="alert">
-              角色卡导入失败：{shareError}
-            </p>
+          {shareNotice && (
+            <div
+              className={wb.shareBanner}
+              data-tone={shareNotice.tone}
+              role={shareNotice.tone === "error" ? "alert" : "status"}
+            >
+              <CellFrame />
+              <p className={wb.shareBannerText}>{shareNotice.text}</p>
+              <ActionButton onClick={() => setShareNotice(null)}>关闭</ActionButton>
+            </div>
           )}
           {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
           {boardData.isError && (

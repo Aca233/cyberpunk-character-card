@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { memberDeathBlocked, rulingFact } from "./facts";
 
 describe("现场事实约束", () => {
-  it("队员死亡只接受已确认的致命危机，骰子失败不能替代依据", () => {
+  it("同行者死亡只接受已确认的致命危机，骰子失败不能替代依据", () => {
     expect(
       memberDeathBlocked({ check: { outcome: "failure", failure: "杰克会死" } }, ["杰克"]),
     ).toContain("致命危机");

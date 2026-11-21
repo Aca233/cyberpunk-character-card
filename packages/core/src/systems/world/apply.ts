@@ -9,6 +9,7 @@ import {
   type PhaseIndex,
   type WorldClockState,
   type WorldCommand,
+  type WorldRest,
 } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
@@ -196,4 +197,27 @@ export function endScene(draft: Draft<WorldClockState>, now: number): ApplyOutco
   draft.scene += 1;
   draft.sceneStartedAt = now;
   return { ok: true, notes: ["场景结束"], signals: ["scene.end"] };
+}
+
+export function applyWorldRest(
+  draft: Draft<WorldClockState>,
+  command: WorldRest,
+  now: number,
+): ApplyOutcome {
+  const notes: string[] = [];
+  if (command.mode === "reset") {
+    draft.phasesAwake = 0;
+    notes.push(`${command.reason}：睡了一觉，熬夜疲劳散去`);
+  } else if (command.mode === "relief") {
+    if (draft.phasesAwake > 0) {
+      draft.phasesAwake = Math.max(0, draft.phasesAwake - 1);
+      notes.push(`${command.reason}：精神与体力稍有缓和`);
+    }
+  }
+  const target = now + command.minutes;
+  const signals = command.mode === "reset" ? ["rest"] : [];
+  if (target > now) {
+    return { ok: true, notes, advanceTo: target, signals };
+  }
+  return { ok: true, notes, signals };
 }

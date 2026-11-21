@@ -146,6 +146,18 @@ export async function* readSse(
     data = [];
     return out;
   };
+  const consumeLine = (line: string): SseEvent | undefined => {
+    if (line === "") return flush();
+    if (!line.startsWith(":")) {
+      const colon = line.indexOf(":");
+      const field = colon < 0 ? line : line.slice(0, colon);
+      const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
+      if (field === "data") data.push(value);
+      else if (field === "event") event = value;
+      else if (field === "id") id = value;
+    }
+    return undefined;
+  };
   try {
     while (true) {
       let chunk: Awaited<ReturnType<typeof reader.read>>;
@@ -163,21 +175,20 @@ export async function* readSse(
       while (newline >= 0 && !(buffer[newline] === "\r" && newline === buffer.length - 1)) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + (buffer.startsWith("\r\n", newline) ? 2 : 1));
-        if (line === "") {
-          const out = flush();
-          if (out) yield out;
-        } else if (!line.startsWith(":")) {
-          const colon = line.indexOf(":");
-          const field = colon < 0 ? line : line.slice(0, colon);
-          const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
-          if (field === "data") data.push(value);
-          else if (field === "event") event = value;
-          else if (field === "id") id = value;
-        }
+        const out = consumeLine(line);
+        if (out) yield out;
         newline = buffer.search(/\r\n|\r|\n/);
       }
     }
     if (signal?.aborted) throw new AbortedError();
+    // 流结束时刷新解码器残留字节并处理无尾换行的末行
+    buffer += decoder.decode();
+    if (buffer !== "") {
+      for (const line of buffer.split(/\r\n|\r|\n/)) {
+        const out = consumeLine(line);
+        if (out) yield out;
+      }
+    }
     const out = flush();
     if (out) yield out;
   } finally {

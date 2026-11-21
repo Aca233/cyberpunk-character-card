@@ -207,6 +207,14 @@ export const VehicleGrantSchema = z.object({
 });
 export type VehicleGrant = z.infer<typeof VehicleGrantSchema>;
 
+/** 呼叫名下车辆自动驶来（只能由代码发出） */
+export const VehicleSummonSchema = z.object({
+  type: z.literal("vehicle.summon"),
+  id: z.string().min(1),
+  to: z.string().min(1),
+});
+export type VehicleSummon = z.infer<typeof VehicleSummonSchema>;
+
 export const TravelStateSchema = z.object({
   trips: z.array(TripSchema),
   /** 上一次偶遇在第几个场景；一个场景最多一次 */

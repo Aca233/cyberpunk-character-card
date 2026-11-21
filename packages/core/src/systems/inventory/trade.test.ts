@@ -17,7 +17,6 @@ const gun: ItemDef = {
   name: "测试手枪",
   kind: "weapon",
   category: "pistol",
-  attribute: "cool",
   iconic: false,
   price: 250,
   rarity: "rare",
@@ -328,7 +327,6 @@ describe("普通交易共用实际报价和货源", () => {
       name: "无价不朽手枪",
       kind: "weapon",
       category: "pistol",
-      attribute: "cool",
       iconic: true,
       rarity: "rare",
     };

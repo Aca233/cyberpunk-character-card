@@ -17,7 +17,14 @@ export const ScanNpcActionSchema = z.strictObject({
   id: z.string().min(1).max(64),
 });
 
-/** 人物的界面操作：校验在场和义眼，翻成 npcScan，统一由操作入口结算 */
+/** 在人物档案或左栏一键让已随行同伴留守/暂别；同行本身由剧情或交涉促成，不凭空强拉陌生人 */
+export const CompanionActionSchema = z.strictObject({
+  type: z.literal("npcCompanion"),
+  id: z.string().min(1).max(64),
+  following: z.boolean(),
+});
+
+/** 人物的界面操作：扫描与同行管理，统一由操作入口结算 */
 export const npcActions = {
   scanNpc: defineAction({
     schema: ScanNpcActionSchema,
@@ -36,6 +43,23 @@ export const npcActions = {
       if (eyes.length === 0) return "没装义眼，扫描不了；去义体医生那里装一副";
       if (eyes.every((c) => broken.includes(c.id))) return "义眼打坏了，扫描不了；先去修好";
       return [{ type: "npcScan", id: npc.id }];
+    },
+  }),
+  npcCompanion: defineAction({
+    schema: CompanionActionSchema,
+    commands: (action, { world }) => {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "打斗中顾不上调整同行，先解决眼前局面";
+      const npc = NpcStateSchema.parse(world.slices.npc).npcs[action.id];
+      if (!npc?.met) return "没有这个已结识的人物";
+      if (deathKnown(npc) || !npc.alive) return `${npc.name} 已经死了`;
+      if (action.following) {
+        const clock = WorldClockStateSchema.parse(world.slices.world);
+        const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+        if (!onStage(npc, stage)) return `${npc.name} 不在现场，先碰面再结伴同行`;
+        if (npc.affinity < 15) return `${npc.name} 和你交情还不够深，先在剧情里谈妥一起走`;
+      }
+      return [{ type: "npcCompanion", id: npc.id, following: action.following }];
     },
   }),
 };

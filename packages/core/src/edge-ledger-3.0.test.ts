@@ -9,7 +9,7 @@ import {
 } from "./npc";
 import { evaluatePhysicsBoundaries } from "./pipeline";
 import { advanceTension, type TensionSite, tensionFacts } from "./tension";
-import { evaluateDistrictSecurityCheck, settleWeeklyLifestyleBill } from "./worldClock";
+import { evaluateDistrictSecurityCheck, settleHousingRentBill } from "./worldClock";
 
 describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
   describe("Netrunning Physical Topology & Air-Gap Reality", () => {
@@ -182,10 +182,10 @@ describe("Night City 2077 Qualitative Physics & Living World Rules", () => {
       expect(concealedVisitor.passed).toBe(true);
     });
 
-    it("locks apartment smartlock and cuts hot water when weekly rent is unpaid", () => {
-      const unpaid = settleWeeklyLifestyleBill("standard", 200);
+    it("locks rented apartment smartlock and cuts utilities when rent is unpaid", () => {
+      const unpaid = settleHousingRentBill("H10 的公寓", 1200, 200);
       expect(unpaid.paid).toBe(false);
-      expect(unpaid.evictedOrLocked).toBe(true);
+      expect(unpaid.locked).toBe(true);
       expect(unpaid.summary).toContain("欠费");
     });
   });

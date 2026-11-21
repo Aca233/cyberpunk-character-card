@@ -102,11 +102,14 @@ export function ripperdocView({ world, data }: ViewContext) {
         price: quote?.price ?? item.price,
         tradeIn: quote?.tradeIn ?? item.tradeIn,
         net: quote?.total ?? item.net,
-        humanityCost: 0,
+        inStock:
+          (clinic.stock[item.def.id] ?? 0) +
+          Object.values(state.parts).filter(
+            (part) =>
+              part.holder === doc.id && part.model === item.def.id && part.condition === "intact",
+          ).length,
         ability: item.def.ability,
         bonusText: bonusText(item.def),
-        attributes: item.def.attributes,
-        checks: item.def.checks,
         armor: item.def.armor,
         accelerator: item.def.accelerator,
         deckProfile: item.def.deckProfile,
@@ -122,18 +125,22 @@ export function ripperdocView({ world, data }: ViewContext) {
         replaces: item.replaces?.name ?? null,
         replacesId: item.replaces?.id ?? null,
         replacesRarity: item.replaces?.rarity ?? null,
-        replacesHumanityCost: 0,
       };
     }),
   };
 }
 
 /** 欠义体医生的钱 */
-export function ripperdocDebtsView({ world }: ViewContext) {
-  const { debts } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
-  return debts.map((d) => ({
+export function ripperdocDebtsView({ world, data }: ViewContext) {
+  const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  const docs = new Map(ripperdocList(data, state).map((doc) => [doc.id, doc]));
+  return state.debts.map((d) => ({
+    docId: d.doc,
     docName: d.docName,
+    location: docs.get(d.doc)?.location ?? null,
     amount: d.amount,
     due: d.due === null ? "未约定期限" : formatGameTime(d.due),
+    dueIn: d.due === null ? null : d.due - world.time,
+    overdue: d.due !== null && d.due <= world.time,
   }));
 }

@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { NpcState } from "../npc";
-import type { SquadState } from "../squad";
+import { jobsActions } from "./actions";
 import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsEvents } from "./events";
 import { jobsObjectives } from "./objectives";
@@ -24,7 +24,7 @@ import { jobsView } from "./view";
 export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
   id: "jobs",
   // factions：派单看派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）；势力系统不依赖别的系统，不会循环
-  dependsOn: ["economy", "npc", "squad", "factions"],
+  dependsOn: ["economy", "npc", "factions"],
   state: JobsStateSchema,
   initial: () => ({ fixers: {}, jobs: [] }),
   commands: {
@@ -58,23 +58,19 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
       case "jobNote":
         return noteJob(draft, command);
       case "jobEnd":
-        return endJob(
-          draft,
-          command,
-          ctx.now,
-          ctx.read<NpcState>("npc").npcs,
-          ctx.read<SquadState>("squad").members,
-        );
+        return endJob(draft, command, ctx.now);
     }
   },
   tick: (draft, span) => tickJobs(draft, span),
   rules: [jobsRules],
+  actions: jobsActions,
   sections: jobsSections,
   objectives: jobsObjectives,
   events: jobsEvents,
   view: { key: "jobs", project: jobsView },
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./objectives";

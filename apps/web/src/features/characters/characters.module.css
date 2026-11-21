@@ -1,5 +1,5 @@
 /*
- * 创角工作台嵌入式步骤面板样式（仅供 CreatorSteps / CreatorLife / StartMapPicker / CustomModuleForm / DraftAll / ProseField 使用）：
+ * 创角工作台嵌入式步骤面板样式（仅供 CreatorSteps / CreatorLife / StartMapPicker / CustomModuleForm 使用）：
  * 统一采用原作 NineSlice 控件体系（CellFrame / FrameBox / Button / ActionButton），
  * 不画渐变与 backdrop-filter，遵守 prefers-reduced-motion。
  */
@@ -133,35 +133,84 @@
   display: flex;
 }
 
+.pickItem {
+  position: relative;
+}
+
+.localDelBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgb(255 97 88 / 55%);
+  background: rgb(26 10 14 / 94%);
+  color: var(--cp-red);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+}
+
+.localDelBtn:hover {
+  border-color: var(--cp-red);
+  background: rgb(255 60 60 / 24%);
+  color: var(--cp-text);
+}
+
+.localDelBtn:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 1px;
+}
+
 .pick {
-  --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 82%);
+  --box-line: rgb(255 97 88 / 38%);
+  --box-fill: rgb(14 16 26 / 84%);
   position: relative;
   isolation: isolate;
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  padding: 12px 15px 13px 14px;
+  padding: 11px 14px 12px;
   border: 0;
   color: rgb(205 200 196);
   background: none;
   font: inherit;
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.48;
   text-align: left;
   cursor: var(--cp-cursor-hand);
 }
 
 .pick:hover:not(:disabled) {
   --box-line: var(--cp-red);
+  --box-fill: rgb(22 18 28 / 90%);
 }
 
 .pick[aria-pressed="true"],
 .pick[data-on] {
   --box-line: var(--cp-cyan);
-  --box-fill: rgb(13 32 37 / 92%);
+  --box-fill: rgb(11 32 39 / 94%);
+  color: var(--cp-text);
+}
+
+.pick[data-tone="flaw"] {
+  --box-line: rgb(255 97 88 / 46%);
+  --box-fill: rgb(20 12 18 / 86%);
+}
+
+.pick[data-tone="flaw"]:hover:not(:disabled) {
+  --box-line: var(--cp-red);
+  --box-fill: rgb(32 14 20 / 92%);
+}
+
+.pick[data-tone="flaw"][aria-pressed="true"] {
+  --box-line: var(--cp-red);
+  --box-fill: rgb(42 14 20 / 94%);
   color: var(--cp-text);
 }
 
@@ -194,6 +243,10 @@
   color: var(--cp-cyan);
 }
 
+.pick[data-tone="flaw"][aria-pressed="true"] .pickName {
+  color: var(--cp-red);
+}
+
 .moduleBadges {
   display: inline-flex;
   flex-wrap: wrap;
@@ -212,6 +265,65 @@
 .moduleBadge[data-tone="active"] {
   color: var(--cp-cyan);
   background: rgb(94 246 255 / 14%);
+}
+
+.moduleBadge[data-tone="flaw"] {
+  color: var(--cp-red);
+  background: rgb(255 97 88 / 16%);
+}
+
+.moduleBadge[data-tone="workshop"] {
+  color: var(--cp-success);
+  background: rgb(63 242 160 / 13%);
+}
+
+.pickDesc {
+  color: rgb(214 210 206);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.pick[aria-pressed="true"] .pickDesc,
+.pick[data-on] .pickDesc {
+  color: var(--cp-text);
+}
+
+.pickMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.metaChip {
+  padding: 1px 6px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 5%);
+  color: var(--cp-text-dim);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.metaChip[data-tone="eddies"] {
+  border-color: rgb(252 238 10 / 34%);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+  font-family: var(--font-mono);
+}
+
+.metaChip[data-tone="perk"] {
+  border-color: rgb(63 242 160 / 36%);
+  background: rgb(63 242 160 / 11%);
+  color: var(--cp-success);
+}
+
+.metaChip[data-tone="attr"] {
+  border-color: rgb(94 246 255 / 32%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
 }
 
 .pickLine {
@@ -271,8 +383,8 @@
 
 .weaponGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -288,12 +400,24 @@
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 7px 6px 8px;
+  height: 100%;
+  padding: 8px 8px 9px;
   border: 0;
   color: var(--cp-text);
   background: transparent;
   font: inherit;
   cursor: var(--cp-cursor-hand);
+}
+
+.weaponWorkshopTag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0 5px;
+  background: rgb(63 242 160 / 18%);
+  color: var(--cp-success);
+  font-size: 0.62rem;
+  font-weight: 600;
 }
 
 .weaponTile[data-rarity="common"] {
@@ -363,6 +487,18 @@
 
 .weaponName[data-rarity="legendary"] {
   color: var(--rar-legendary);
+}
+
+.weaponAbility {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  width: 100%;
+  color: var(--cp-text-dim);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .weaponPreview {
@@ -459,12 +595,35 @@
   list-style: none;
 }
 
+.cyberShelfBody {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1420px) {
+  .cyberShelfBody,
+  .cyberListScroll {
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+.cyberListScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-color: rgb(255 97 88 / 52%) transparent;
+  scrollbar-width: thin;
+}
+
 .cyberGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(18.5rem, 100%), 1fr));
+  gap: 8px;
   margin: 0;
-  padding: 0;
+  padding: 0 0 4px;
   list-style: none;
 }
 
@@ -476,10 +635,10 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   height: 100%;
-  padding: 11px 13px 12px;
+  padding: 9px 12px 10px;
   border: 0;
   color: var(--cp-text);
   background: transparent;
@@ -747,7 +906,146 @@
   font-size: 1.05rem;
 }
 
-/* ———— 夜之城人脉网络（双栏：联系人网格 + 关系卡） ———— */
+/* ———— 夜之城人脉网络（顶部已选条 + 双栏联系人网格与关系卡） ———— */
+.peopleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.peopleSummary {
+  --box-line: var(--cp-cyan-dim);
+  --box-fill: rgb(10 20 26 / 86%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 13px 11px;
+}
+
+.peopleSummaryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.peopleSummaryTitle {
+  color: var(--cp-cyan);
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.peopleChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.peopleChip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--cp-cyan-dim);
+  background: rgb(13 32 37 / 88%);
+}
+
+.peopleChip[data-tone="bad"] {
+  border-color: var(--cp-red-dim);
+  background: rgb(38 14 18 / 88%);
+}
+
+.peopleChipMain {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.peopleChipMain:hover {
+  color: var(--cp-cyan);
+}
+
+.peopleChipMain small {
+  color: var(--cp-yellow);
+  font-size: 0.68rem;
+}
+
+.peopleChip[data-tone="bad"] .peopleChipMain small {
+  color: var(--cp-red);
+}
+
+.peopleChipRemove {
+  padding: 0 7px;
+  border: 0;
+  border-left: 1px solid rgb(255 255 255 / 14%);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.peopleChipRemove:hover {
+  color: var(--cp-red);
+  background: rgb(255 60 60 / 16%);
+}
+
+.peopleBio {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-cyan-dim);
+  background: rgb(255 255 255 / 4%);
+  color: var(--cp-text);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.ownEditGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.noteEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.quickNotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.quickNoteBtn {
+  padding: 3px 8px;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: rgb(10 22 28 / 78%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.quickNoteBtn:hover {
+  border-color: var(--cp-cyan);
+  color: var(--cp-cyan);
+}
+
 .people {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(17.5rem, 0.85fr);
@@ -759,6 +1057,43 @@
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.peopleTools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.peopleTitleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.peopleTag {
+  flex: none;
+  padding: 0 5px;
+  background: rgb(63 242 160 / 14%);
+  color: var(--cp-success);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.presetHint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-success);
+  background: rgb(63 242 160 / 9%);
+}
+
+.presetHint b {
+  color: var(--cp-success);
 }
 
 .peopleList > ul {
@@ -949,96 +1284,6 @@
 }
 
 .relationNote {
-  color: var(--cp-text-dim);
-  font-size: var(--fs-label);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ———— AI 撰稿与小传工作台 ———— */
-.draftAllBox {
-  --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(10 22 28 / 78%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 15px 13px;
-}
-
-.draftAllHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-}
-
-.draftAllTitle {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--cp-cyan);
-  font-size: var(--fs-ui);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.draftAllAsk {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tonePills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.prose {
-  --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 68%);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px 12px;
-}
-
-.prose[data-locked] {
-  --box-line: var(--cp-cyan-dim);
-  --box-fill: rgb(13 32 37 / 48%);
-}
-
-.proseHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 10px;
-}
-
-.proseTitleWrap {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.proseTitle {
-  color: var(--cp-text);
-  font-size: var(--fs-ui);
-  font-weight: 600;
-}
-
-.proseLockBadge {
-  padding: 1px 6px;
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 14%);
-  font-size: 0.68rem;
-}
-
-.proseCount {
   color: var(--cp-text-dim);
   font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;

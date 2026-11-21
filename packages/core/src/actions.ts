@@ -20,19 +20,21 @@ import {
   UnequipItemActionSchema,
   UseHealingActionSchema,
 } from "./systems/inventory";
+import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
-import { ScanNpcActionSchema } from "./systems/npc";
+import { CompanionActionSchema, ScanNpcActionSchema } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
 import {
   BuyHomeActionSchema,
+  PayRentActionSchema,
   PlaceItemActionSchema,
   TransferItemActionSchema,
 } from "./systems/safehouse";
 import { ReadShardsActionSchema } from "./systems/shards";
-import { SquadActionSchema } from "./systems/squad";
 import { TraumaActionSchema } from "./systems/trauma";
+import { BuyVehicleActionSchema, CallVehicleActionSchema } from "./systems/travel";
 
 export const PlayerActionSchema = z.discriminatedUnion("type", [
   /** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
@@ -53,8 +55,10 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   UnequipItemActionSchema,
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   ModWeaponActionSchema,
-  /** 小队面板：accept、decline 回应入队请求，dismiss 请队员离开，pay 发雇佣型队员的薪水 */
-  SquadActionSchema,
+  /** 人物同行切换：让在场熟人结伴同行，或让同行者暂别留守 */
+  CompanionActionSchema,
+  /** 在追踪板接下一单已递话的委托 */
+  AcceptJobActionSchema,
   /** 在商店买一件，放进背包 */
   BuyItemActionSchema,
   /** 把背包里的一件卖给商店 */
@@ -63,6 +67,12 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   GunsmithActionSchema,
   /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
   BuyHomeActionSchema,
+  /** 缴纳租住公寓一期水电房租，缴清后恢复门禁与水电 */
+  PayRentActionSchema,
+  /** 好车中间人终端直接购车：人在终端处一次付清，直接交付到当前地点 */
+  BuyVehicleActionSchema,
+  /** 呼叫名下车辆自动驶来当前位置 */
+  CallVehicleActionSchema,
   /** 物品栏存取：只操作身边的自有住所或车辆 */
   PlaceItemActionSchema,
   /** 同地点两个自有容器之间直转（如公寓 ↔ 后备箱） */

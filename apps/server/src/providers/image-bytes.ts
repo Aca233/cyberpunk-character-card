@@ -69,7 +69,13 @@ function pngDimensions(bytes: Uint8Array): { width: number; height: number } {
 }
 
 function jpegDimensions(bytes: Uint8Array): { width: number; height: number } {
-  if (bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9) {
+  // 允许合法 JPEG 在 EOI (FF D9) 之后带少量尾随填充字节（如部分编码器写入的 0x00 / 0xFF）
+  let end = bytes.length;
+  while (end >= 2 && (bytes[end - 1] === 0x00 || bytes[end - 1] === 0xff)) {
+    if (bytes[end - 2] === 0xff && bytes[end - 1] === 0xd9) break;
+    end -= 1;
+  }
+  if (end < 4 || bytes[end - 2] !== 0xff || bytes[end - 1] !== 0xd9) {
     return invalid("JPEG 图片数据不完整");
   }
   let offset = 2;

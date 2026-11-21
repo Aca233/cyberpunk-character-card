@@ -6,6 +6,7 @@ import {
   serviceAnchors,
   WorldClockStateSchema,
 } from "../world";
+import { autofixerCatalogAt } from "./actions";
 import { routeOptions, tripWorldOf } from "./apply";
 import { VEHICLE_CLASS_LABELS, VEHICLE_CONDITION_LABELS } from "./schema";
 import { vehicleCatalog } from "./vehicles";
@@ -114,9 +115,29 @@ export function travelView({ world, data }: ViewContext) {
         here: v.location !== null && v.location === w.location,
       };
     });
+  const terminal = autofixerCatalogAt(data, w.location);
+  const autofixer = terminal
+    ? {
+        id: terminal.id,
+        name: terminal.name,
+        vehicles: terminal.vehicles.map((v) => ({
+          id: v.id,
+          name: v.name,
+          maker: v.maker ?? null,
+          class: v.class,
+          classLabel: VEHICLE_CLASS_LABELS[v.class],
+          speed: v.speed,
+          seats: v.seats,
+          price: v.price,
+          note: v.note ?? null,
+          owned: vehicles.some((owned) => owned.model === v.id),
+        })),
+      }
+    : null;
   return {
     destinations,
     vehicles,
+    autofixer,
     encounter: encounter
       ? { label: encounter.label, note: encounter.note, district: encounter.district }
       : null,

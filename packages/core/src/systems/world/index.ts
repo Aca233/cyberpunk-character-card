@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyDeadline, applyWorld, endScene } from "./apply";
+import { applyDeadline, applyWorld, applyWorldRest, endScene } from "./apply";
 import { worldEvents } from "./events";
 import { worldFeed } from "./feed";
 import { merchantEntranceText } from "./merchant-context";
@@ -13,11 +13,17 @@ import {
   WorldClockStateSchema,
   type WorldCommand,
   WorldCommandSchema,
+  type WorldRest,
+  WorldRestSchema,
 } from "./schema";
 import { worldStatus } from "./status";
 import { worldView } from "./view";
 
-export const world = defineSystem<WorldClockState, WorldCommand | DeadlineCommand, EndScene>({
+export const world = defineSystem<
+  WorldClockState,
+  WorldCommand | DeadlineCommand,
+  EndScene | WorldRest
+>({
   id: "world",
   state: WorldClockStateSchema,
   initial: () => ({
@@ -34,7 +40,7 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
     world: WorldCommandSchema,
     deadline: DeadlineCommandSchema,
   },
-  internal: { "world.endScene": EndSceneSchema },
+  internal: { "world.endScene": EndSceneSchema, "world.rest": WorldRestSchema },
   apply(draft, command, ctx) {
     switch (command.type) {
       case "world":
@@ -43,6 +49,8 @@ export const world = defineSystem<WorldClockState, WorldCommand | DeadlineComman
         return applyDeadline(draft, command, ctx.now);
       case "world.endScene":
         return endScene(draft, ctx.now);
+      case "world.rest":
+        return applyWorldRest(draft, command, ctx.now);
     }
   },
   // 统一的地点表（用户定的，2026-11-01："统一为地点"）：存档里记下的地点并进地点表和周边锚点，别的系统照旧用 locationCatalog 查

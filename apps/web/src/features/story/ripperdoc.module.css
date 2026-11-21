@@ -42,7 +42,7 @@
   height: 56px;
   flex-shrink: 0;
   overflow: hidden;
-  --box-fill: rgb(8 12 20 / 92%);
+  --box-fill: var(--cp-surface-strong);
   --box-line: rgb(94 246 255 / 55%);
 }
 
@@ -139,29 +139,31 @@
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  border: 1px solid rgb(255 255 255 / 10%);
-  background: rgb(14 16 26 / 75%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
   color: var(--cp-text-dim);
   font: inherit;
   font-family: var(--font-ui);
   font-size: 12px;
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
   transition:
-    background 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
+    background var(--dur-flash) ease-out,
+    border-color var(--dur-flash) ease-out,
+    color var(--dur-flash) ease-out;
 }
 
 .slotBtn:hover {
-  border-color: rgb(94 246 255 / 45%);
-  color: var(--cp-text);
-  background: rgb(94 246 255 / 8%);
+  border-color: rgb(252 238 10 / 50%);
+  color: var(--cp-yellow);
+  background: var(--cp-surface-hover);
 }
 
 .slotBtn[aria-pressed="true"] {
   border-color: var(--cp-cyan);
   color: var(--cp-cyan);
-  background: rgb(94 246 255 / 14%);
+  background: rgb(94 246 255 / 16%);
+  font-weight: 700;
 }
 
 .filterRow {
@@ -181,23 +183,29 @@
 
 .filterChip {
   padding: 3px 10px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  background: rgb(255 255 255 / 4%);
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
   color: var(--cp-text-dim);
   font: inherit;
   font-family: var(--font-ui);
   font-size: 12px;
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  transition:
+    background var(--dur-flash) ease-out,
+    border-color var(--dur-flash) ease-out,
+    color var(--dur-flash) ease-out;
 }
 
 .filterChip:hover {
-  background: rgb(255 255 255 / 10%);
+  border-color: rgb(252 238 10 / 50%);
+  background: var(--cp-surface-hover);
   color: var(--cp-text);
 }
 
 .filterChip[aria-pressed="true"] {
   border-color: currentColor;
-  background: rgb(94 246 255 / 12%);
+  background: color-mix(in srgb, currentColor 14%, transparent);
   color: var(--cp-cyan);
 }
 
@@ -226,12 +234,12 @@
   isolation: isolate;
   flex: 0 1 16rem;
   min-width: 11rem;
-  --box-fill: rgb(10 13 22 / 90%);
-  --box-line: rgb(94 246 255 / 32%);
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
 }
 
 .searchWrap:focus-within {
-  --box-line: var(--cp-yellow);
+  --box-line: var(--cp-cyan);
 }
 
 .searchInput {
@@ -307,8 +315,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px 8px 13px;
-  --box-fill: rgb(12 14 23 / 82%);
-  --box-line: rgb(94 246 255 / 22%);
+  --box-fill: var(--cp-surface);
+  --box-line: var(--cp-line-subtle);
 }
 
 .card::before {
@@ -323,7 +331,7 @@
 }
 
 .card:hover {
-  --box-fill: rgb(18 22 34 / 92%);
+  --box-fill: var(--cp-surface-hover);
   --box-line: rgb(94 246 255 / 50%);
 }
 
@@ -447,7 +455,7 @@
   align-content: start;
   gap: 12px;
   padding: 14px;
-  --box-fill: rgb(10 13 22 / 92%);
+  --box-fill: var(--cp-surface-strong);
   --box-line: color-mix(in srgb, var(--rarity, var(--cp-cyan)) 48%, transparent);
   animation: clinicInspectIn 160ms var(--ease-cyber) both;
 }

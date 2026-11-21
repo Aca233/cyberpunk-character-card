@@ -1,35 +1,40 @@
+import { RADAR_ANCHORS } from "@cp/content";
 import {
+  type AppearanceSelection,
   type Board,
   CASH_TIER_INFO,
   type CharacterCard,
   cyberwareRules,
   FLAW_MAX,
-  humanityRules,
   type ImagePromptRequest,
   PAST_MAX,
-  PROSE_BLOCK_INFO,
-  PROSE_BLOCKS,
-  type ProseBlock,
   RELATION_INFO,
   SKILL_MAX,
+  TAROT_CARDS,
+  TAROT_INFO,
+  type TarotCard,
   TOLERANCE_LEVELS,
 } from "@cp/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type BoardData } from "../../api/client";
+import type { AssetId } from "../../assets";
 import { ActionButton } from "../../ui/ActionButton";
-import { cssUrl, NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
-import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { FrameBox } from "../../ui/FrameBox";
 import { GeneratedImage, ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
 import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
+import { AppearanceCustomizer } from "./AppearanceCustomizer";
+import { appearanceFilledCount } from "./appearance";
 import { PeoplePicker } from "./CreatorLife";
 import {
   CyberwareShelf,
   FlawPicker,
   LoadoutPicker,
   OriginPicker,
+  PastPicker,
   type PickerProps,
   TraitPicker,
 } from "./CreatorSteps";
@@ -41,8 +46,8 @@ import {
   creatorChecks,
   defaultStartLocationFor,
   emptyBoard,
-  humanityStageInfo,
   inherentCyberware,
+  LOCAL_MODULES_EVENT,
   loadLocalCustomModules,
   mergeCreatorCatalog,
   ORIGIN_ECOSYSTEM_LABELS,
@@ -50,83 +55,25 @@ import {
   originEcosystem,
   stepForCheckTarget,
   stepProgress,
-  totalStartHumanityCost,
+  toleranceSummary,
 } from "./creator";
-import { DraftAll } from "./DraftAll";
-import { ProseField } from "./ProseField";
 import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
 import wb from "./workbench.module.css";
 
-const { TOLERANCE_FACTOR } = humanityRules;
 type Tolerance = Board["tolerance"];
 const TOLERANCES: readonly Tolerance[] = ["low", "normal", "high"];
 const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 
-const CORE_PROSE_BLOCKS: readonly ProseBlock[] = PROSE_BLOCKS;
-
-const CYBER_SLOT_LIST: readonly CyberSlot[] = [
-  "frontalCortex",
-  "eyes",
-  "nervous",
-  "os",
-  "circulatory",
-  "integumentary",
-  "skeleton",
-  "hands",
-  "arms",
-  "legs",
-];
-
-type TraitsTab = "build" | "flaw";
-
-function DossierBlock({
-  title,
-  onEdit,
-  children,
-}: {
-  readonly title: string;
-  readonly onEdit: () => void;
-  readonly children: ReactNode;
-}) {
-  return (
-    <section className={wb.dossierBlock}>
-      <CellFrame />
-      <header className={wb.dossierHead}>
-        <h3 className={wb.dossierHeading}>{title}</h3>
-        <ActionButton onClick={onEdit}>修改 ▸</ActionButton>
-      </header>
-      {children}
-    </section>
-  );
-}
-
-function ChipList({
-  items,
-  empty,
-  warn = false,
-}: {
-  readonly items: readonly { readonly k: string; readonly t: string; readonly tip?: string }[];
-  readonly empty: string;
-  readonly warn?: boolean;
-}) {
-  if (items.length === 0) return <p className={wb.dossierDim}>{empty}</p>;
-  return (
-    <ul className={wb.dossierChips}>
-      {items.map((i) => (
-        <li key={i.k} className={wb.dossierChip} data-warn={warn || undefined} title={i.tip}>
-          {i.t}
-        </li>
-      ))}
-    </ul>
-  );
-}
+type TraitsTab = "past" | "skill" | "flaw";
+type CyberTab = "topology" | "loadout";
+type ConnectionsTab = "people" | "map";
 
 /**
- * 2077 赛博角色创建工作台（单页五步引导工作台）：
- * - 顶部五步导航栏（identity / traits / chrome_kit / people_prose / review）
- * - 主编辑舞台（所有选择器直接内嵌在当前步骤，无全屏弹窗）
- * - 右侧常驻实时档案摘要栏（< 1180px 自动收拢为顶部摘要条 + 可切换抽屉）
- * - 底部常驻操作条（保存/删除 · 上一步/下一步/战局接入）
+ * 2077 开放式五步角色创建工作台：
+ * - 顶部五步进度轨（01 身份与出身 / 02 体貌定制 / 03 履历与特质 / 04 义体与行装 / 05 旧识与落脚点）
+ * - 左侧开放主编辑舞台（所有定制器直出内嵌，子标签避免拥挤）
+ * - 右侧常驻 NC LIVE DOSSIER 档案栏（顶部 3:4 立绘、命牌、人性仪表、摘要、核验清单与唯一保存/入城发射台）
+ * - 底部纯净步骤导航条（上一步 / 下一步 + 草稿保存状态）
  */
 export function CharacterCreator({
   card,
@@ -165,29 +112,45 @@ export function CharacterCreator({
 }) {
   const board = card.board ?? emptyBoard();
   const [activeStep, setActiveStep] = useState<CreatorStepId>("identity");
-  const [traitsTab, setTraitsTab] = useState<TraitsTab>("build");
+  const [traitsTab, setTraitsTab] = useState<TraitsTab>("past");
+  const [cyberTab, setCyberTab] = useState<CyberTab>("topology");
+  const [connectionsTab, setConnectionsTab] = useState<ConnectionsTab>("people");
   const [activeSlot, setActiveSlot] = useState<CyberSlot>("os");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tarotExpanded, setTarotExpanded] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [localSaveError, setLocalSaveError] = useState<string | null>(null);
   const [portraitModalOpen, setPortraitModalOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [localModules, setLocalModules] = useState(() => loadLocalCustomModules());
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const queryClient = useQueryClient();
 
-  const localModules = loadLocalCustomModules();
-  const data = boardData ? mergeCreatorCatalog(boardData, localModules) : undefined;
+  useEffect(() => {
+    const sync = () => setLocalModules(loadLocalCustomModules());
+    window.addEventListener(LOCAL_MODULES_EVENT, sync);
+    return () => window.removeEventListener(LOCAL_MODULES_EVENT, sync);
+  }, []);
+
+  const data = useMemo(
+    () => (boardData ? mergeCreatorCatalog(boardData, localModules) : undefined),
+    [boardData, localModules],
+  );
   const fallbackLoc = defaultStartLocationFor(card, data);
-  const startLoc = board.startLocation || fallbackLoc;
+  const validBoardLoc =
+    board.startLocation && RADAR_ANCHORS.some((anchor) => anchor.id === board.startLocation)
+      ? board.startLocation
+      : undefined;
+  const startLoc = validBoardLoc || fallbackLoc;
 
   const commit = (next: Board, origin?: string) => {
     setLocalSaveError(null);
-    onChange({
-      ...card,
+    onChange((current) => ({
+      ...current,
       ...(origin !== undefined ? { origin } : {}),
       board: next,
-    });
+    }));
   };
 
   const change = (patch: Partial<CharacterCard>) => {
@@ -197,8 +160,52 @@ export function CharacterCreator({
 
   const setLoc = (loc: string) => {
     setLocalSaveError(null);
-    const { startLocation: _, ...rest } = board;
-    onChange({ ...card, board: { ...rest, ...(loc ? { startLocation: loc } : {}) } });
+    onChange((current) => {
+      const currentBoard = current.board ?? emptyBoard();
+      const { startLocation: _, ...rest } = currentBoard;
+      return {
+        ...current,
+        board: { ...rest, ...(loc ? { startLocation: loc } : {}) },
+      };
+    });
+  };
+
+  const setTarot = (tarot: TarotCard) => {
+    setLocalSaveError(null);
+    onChange((current) => {
+      const currentBoard = current.board ?? emptyBoard();
+      const nextTarot = currentBoard.tarot === tarot ? undefined : tarot;
+      const { tarot: _, ...rest } = currentBoard;
+      return {
+        ...current,
+        board: { ...rest, ...(nextTarot ? { tarot: nextTarot } : {}) },
+      };
+    });
+  };
+
+  const drawRandomTarot = () => {
+    const candidates = TAROT_CARDS.filter((id) => id !== board.tarot);
+    const picked = candidates[Math.floor(Math.random() * candidates.length)] ?? TAROT_CARDS[0];
+    setLocalSaveError(null);
+    onChange((current) => {
+      const currentBoard = current.board ?? emptyBoard();
+      return {
+        ...current,
+        board: { ...currentBoard, tarot: picked },
+      };
+    });
+  };
+
+  const updateAppearance = (nextSelection: AppearanceSelection, nextLook: string) => {
+    setLocalSaveError(null);
+    onChange((current) => {
+      const currentBoard = current.board ?? emptyBoard();
+      return {
+        ...current,
+        look: nextLook,
+        board: { ...currentBoard, appearance: nextSelection },
+      };
+    });
   };
 
   const launchMutation = useMutation({
@@ -236,17 +243,18 @@ export function CharacterCreator({
   const jumpToCheck = (target: CheckTarget) => {
     const step = stepForCheckTarget(target);
     goToStep(step);
+    if (target === "kit") setCyberTab("loadout");
+    if (target === "cyber") setCyberTab("topology");
+    if (target === "people") setConnectionsTab("people");
     if (target === "identity") {
       requestAnimationFrame(() => nameInputRef.current?.focus());
     }
   };
 
-  // ———— 义体、耐受与人性计算 ————
+  // ———— 义体与神经耐受 ————
   const inherent = inherentCyberware(card, data);
   const activeInherentCount = inherent.filter((i) => !i.replaced).length;
-  const humanityCost = totalStartHumanityCost(card, data);
-  const humanityNow = Math.max(0, 100 - humanityCost);
-  const stageInfo = humanityStageInfo(humanityNow);
+  const tolInfo = toleranceSummary(board.tolerance);
   const slotOf = new Map(data?.cyberware.map((o) => [o.id, o.slot]) ?? []);
   const rarityOf = new Map(data?.cyberware.map((o) => [o.id, o.rarity]) ?? []);
 
@@ -281,10 +289,10 @@ export function CharacterCreator({
   const customVehicleName = board.kit.vehicle
     ? (data?.vehicles?.find((v) => v.id === board.kit.vehicle)?.name ?? board.kit.vehicle)
     : null;
-  const allVehicles = [
-    ...loadoutSummary.freeVehicleNames,
-    ...(customVehicleName ? [customVehicleName] : []),
-  ];
+  // 专属载具会直接替换出身自带载具，档案栏与实际开局保持一致
+  const effectiveVehicles = customVehicleName
+    ? [customVehicleName]
+    : [...loadoutSummary.freeVehicleNames];
   const mountedChromeNames = [
     ...inherent.filter((i) => !i.replaced).map((i) => i.name),
     ...board.cyberware.map((c) => c.name),
@@ -293,7 +301,10 @@ export function CharacterCreator({
     ...board.pasts.map((m) => m.label),
     ...board.skills.map((m) => m.label),
   ];
-  const filledProseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
+  const activeTarot = board.tarot ? TAROT_INFO[board.tarot] : null;
+  const bioFilledCount = appearanceFilledCount(board.appearance);
+
+  // 立绘提示词仅传入随身武器与义体，不将载具塞进随身装备
   const characterPromptRequest: ImagePromptRequest = {
     kind: "character",
     name: card.name.trim() || "Merc",
@@ -301,12 +312,15 @@ export function CharacterCreator({
     pronoun: card.pronoun.trim() || "TA",
     origin: board.origin?.label ?? card.origin.trim(),
     look: card.look.trim(),
-    personality: card.personality.trim(),
-    skills: card.skills.trim(),
+    personality: activeTarot
+      ? [activeTarot.vibe, card.personality.trim()].filter(Boolean).join("；")
+      : card.personality.trim(),
+    skills: selectedTraitNames.join("、") || card.skills.trim(),
     cyberware: mountedChromeNames,
-    gear: [...weaponNames, ...allVehicles],
+    gear: weaponNames,
     instruction: "",
   };
+
   const clearPortrait = () => {
     setLocalSaveError(null);
     onChange((current) => {
@@ -326,24 +340,16 @@ export function CharacterCreator({
 
   const pickerProps: PickerProps | null = data ? { card, board, data, commit, change } : null;
   const currentStepIndex = CREATOR_STEPS.findIndex((s) => s.id === activeStep);
-  const currentStep = CREATOR_STEPS.find((s) => s.id === activeStep) ?? {
-    id: "identity" as const,
-    index: 1,
-    code: "01",
-    label: "身份与出身",
-    title: "身份铭牌与出身背景",
-    lead: "确立夜之城档案的基本称谓，并挑选或自创出身背景，决定初始家底、自带义体与默认落脚点。",
-  };
+  const currentStep = CREATOR_STEPS[currentStepIndex] ?? CREATOR_STEPS[0];
   const tabLineMask = cssUrl("tab.line");
+  const gridUrl = cssUrl("fx.grid");
   const displaySaveError = saveError ?? localSaveError;
-  const isReview = activeStep === "review";
 
   return (
     <div className={wb.bench}>
-      {/* —————— 顶部五步导航栏 —————— */}
+      {/* —————— 顶部五步进度轨 —————— */}
       <div className={wb.railBar} inert={busy}>
         <nav className={wb.stepRail} aria-label="创角流程步骤">
-          <CellFrame />
           {CREATOR_STEPS.map((step) => {
             const item = progress[step.id];
             const active = activeStep === step.id;
@@ -358,435 +364,642 @@ export function CharacterCreator({
                 data-ready={item.ready && item.filled ? "" : undefined}
                 onClick={() => goToStep(step.id)}
               >
-                <span className={wb.stepCode}>{step.code}</span>
-                <span className={wb.stepLabel}>{step.label}</span>
-                <span
-                  className={wb.stepBadge}
-                  data-warn={item.issueCount > 0 ? "" : undefined}
-                  data-ready={item.ready && item.filled ? "" : undefined}
-                >
-                  {statusIcon}
-                  {item.badge}
+                <span className={wb.stepTopRow}>
+                  <span className={wb.stepCode}>{step.code}</span>
+                  <span className={wb.stepLabel}>{step.label}</span>
+                  <span
+                    className={wb.stepBadge}
+                    data-warn={item.issueCount > 0 ? "" : undefined}
+                    data-ready={item.ready && item.filled ? "" : undefined}
+                  >
+                    {statusIcon}
+                    {item.badge}
+                  </span>
                 </span>
+                <span
+                  className={wb.stepUnderline}
+                  style={{
+                    maskImage: tabLineMask,
+                    WebkitMaskImage: tabLineMask,
+                  }}
+                  aria-hidden
+                />
               </button>
             );
           })}
         </nav>
 
-        {!isReview && (
-          <div className={wb.mobileSummaryToggle}>
-            <span className={wb.note}>
-              {card.name.trim() || "未命名角色"} · 人性 {humanityNow}/100 ·{" "}
-              {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
-            </span>
-            <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
-              {sidebarOpen ? "收起摘要" : "实时档案"}
-            </Button>
-          </div>
-        )}
+        <div className={wb.mobileSummaryToggle}>
+          <span className={wb.note}>
+            {card.name.trim() || "未命名角色"} · 耐受：{tolInfo.label} ·{" "}
+            {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
+          </span>
+          <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
+            {sidebarOpen ? "收起档案" : "实时档案与开局"}
+          </Button>
+        </div>
       </div>
 
-      {/* —————— 中央双栏：当前步骤主舞台 + 右侧常驻实时档案栏（Step 05 全宽单栏） —————— */}
-      <div className={wb.mainSplit} data-review={isReview || undefined} inert={busy}>
+      {/* —————— 中央双栏：开放主编辑舞台 + 常驻右侧 NC LIVE DOSSIER —————— */}
+      <div className={wb.mainSplit} inert={busy}>
         <div className={wb.stageShell}>
-          <NineSlice
-            id="notify.itemCellBg"
-            tint="rgb(8 8 14 / 82%)"
-            slice={30}
-            className={wb.panelLayer}
-          />
-          <NineSlice
-            id="notify.itemCellFg"
-            tint="var(--cp-cyan-dim)"
-            slice={30}
-            className={wb.panelLayer}
-          />
           <section
             ref={stageRef}
-            className={wb.stage}
-            data-split={activeStep === "kit" || activeStep === "cyberware" ? "split" : undefined}
-            aria-label={`第 ${currentStep.index} 步：${currentStep.title}`}
+            className={wb.stageScroll}
+            data-locked-scroll={
+              activeStep === "cyberware" && cyberTab === "topology" ? "" : undefined
+            }
+            aria-label={currentStep?.title}
           >
-            <header className={wb.stageHeader}>
-              <div className={wb.stageTitleRow}>
-                <h2 className={wb.stageTitle} title={currentStep.lead}>
-                  {currentStep.title}
-                </h2>
-                <div className={wb.stageHeaderRight}>
-                  {activeStep === "traits" && (
-                    <div className={wb.subTabBar} role="tablist" aria-label="特质与缺陷子页签">
-                      <Button
-                        small
-                        primary={traitsTab === "build"}
-                        pressed={traitsTab === "build"}
-                        onClick={() => setTraitsTab("build")}
-                      >
-                        过往与特质 ({board.pasts.length + board.skills.length})
-                      </Button>
-                      <Button
-                        small
-                        primary={traitsTab === "flaw"}
-                        pressed={traitsTab === "flaw"}
-                        onClick={() => setTraitsTab("flaw")}
-                      >
-                        负面缺陷 ({board.flaws.length}/{FLAW_MAX})
-                      </Button>
-                    </div>
-                  )}
-                  <span className={wb.stageEyebrow}>
-                    {currentStep.code} / 0{CREATOR_STEPS.length}
-                  </span>
-                </div>
+            <header className={wb.stageHead}>
+              <div className={wb.stageHeadRow}>
+                <span className={wb.stageCode}>STEP {currentStep?.code}</span>
+                <h2 className={wb.stageTitle}>{currentStep?.title}</h2>
+                {isSample && !dirty && <span className={wb.tag}>官方预设模板</span>}
               </div>
-              <span
-                className={wb.hairline}
-                style={{ maskImage: tabLineMask, WebkitMaskImage: tabLineMask }}
-                aria-hidden="true"
-              />
+              <p className={wb.stageLead}>{currentStep?.lead}</p>
             </header>
 
-            <div className={wb.stageBody}>
-              {activeStep === "identity" && (
-                <>
-                  <div className={wb.identityTop}>
-                    <section className={wb.sectionBox} aria-label="角色身份铭牌">
-                      <CellFrame />
-                      <header className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>身份铭牌 · NC CITIZEN ID</h3>
-                        {isSample && <span className={wb.sampleBadge}>官方预设</span>}
-                      </header>
-                      <div className={wb.idStack}>
-                        <label className={wb.fieldLabel}>
-                          <span>角色姓名 *</span>
-                          <FrameBox className={wb.compactBox}>
-                            <input
-                              ref={nameInputRef}
-                              maxLength={20}
-                              value={card.name}
-                              placeholder="例如：V、露西、大卫"
-                              onChange={(e) => change({ name: e.target.value })}
-                            />
-                          </FrameBox>
-                        </label>
-                        <div className={wb.idSplit}>
-                          <label className={wb.fieldLabel}>
-                            <span>街头外号（可选）</span>
-                            <FrameBox className={wb.compactBox}>
-                              <input
-                                maxLength={20}
-                                value={card.alias}
-                                placeholder="夜之城通行代号"
-                                onChange={(e) => change({ alias: e.target.value })}
-                              />
-                            </FrameBox>
-                          </label>
-                          <label className={wb.fieldLabel}>
-                            <span>人称代词 *</span>
-                            <FrameBox className={wb.compactBox}>
-                              <input
-                                maxLength={4}
-                                value={card.pronoun}
-                                placeholder="他 / 她 / TA"
-                                onChange={(e) => change({ pronoun: e.target.value })}
-                              />
-                            </FrameBox>
-                          </label>
-                        </div>
-                        <fieldset className={wb.pronounRow} aria-label="快捷代词">
-                          <span className={wb.sectionBoxSub}>快捷代词</span>
-                          <div className={wb.pronounPills}>
-                            {PRONOUN_PRESETS.map((p) => (
-                              <Button
-                                key={p}
-                                small
-                                pressed={card.pronoun === p}
-                                onClick={() => change({ pronoun: p })}
-                              >
-                                {p}
-                              </Button>
-                            ))}
-                          </div>
-                        </fieldset>
-                        <div className={wb.portraitRow}>
-                          <button
-                            type="button"
-                            className={wb.portraitFrame}
-                            data-empty={!card.portrait || undefined}
-                            disabled={!card.portrait}
-                            title={card.portrait ? "点击查看大图" : "尚未生成角色立绘"}
-                            onClick={() => setLightboxOpen(true)}
-                          >
-                            <CellFrame />
-                            <GeneratedImage
-                              imageId={card.portrait}
-                              alt={`${card.name.trim() || "角色"}立绘`}
-                              className={wb.portraitImg}
-                              fallback={<span className={wb.portraitEmpty}>NO PORTRAIT</span>}
-                            />
-                          </button>
-                          <div className={wb.portraitTools}>
-                            <span className={wb.portraitLabel}>角色肖像 · 文生图</span>
-                            <p className={wb.note}>
-                              依据外貌描写、出身与已装义体生成赛博朋克角色立绘，可随时重绘。
-                            </p>
-                            <div className={wb.portraitBtns}>
-                              <Button small onClick={() => setPortraitModalOpen(true)}>
-                                {card.portrait ? "AI 重绘立绘" : "AI 生成立绘"}
-                              </Button>
-                              {card.portrait && (
-                                <Button small onClick={clearPortrait}>
-                                  清除
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className={wb.sectionBox} aria-label="出身默认开局资助">
-                      <CellFrame />
-                      <header className={wb.sectionBoxHead}>
-                        <h3 className={wb.sectionBoxTitle}>出身默认开局资助</h3>
-                        <span className={wb.sectionBoxSub}>
-                          {board.origin
-                            ? ORIGIN_ECOSYSTEM_LABELS[originEcosystem(board.origin)]
-                            : "尚未选定出身"}
-                        </span>
-                      </header>
-                      <p className={wb.originSummaryTitle}>
-                        {board.origin?.label ?? "请在下方挑选或自创出身背景"}
-                      </p>
-                      <p className={wb.note}>
-                        {board.origin?.ability ||
-                          board.origin?.hook ||
-                          "出身将决定你的起始欧元、基础装备、自带义体与默认落脚点。"}
-                      </p>
-                      <div className={wb.loadoutFacts}>
-                        <p className={wb.factLine}>
-                          <span className={wb.factKey}>起始资金：</span>
-                          <span>
-                            基准 {loadoutSummary.baseEddies} €（当前档位进场{" "}
-                            <b>{loadoutSummary.finalEddies} €</b>）
-                          </span>
-                        </p>
-                        <p className={wb.factLine}>
-                          <span className={wb.factKey}>基础装备：</span>
-                          <span>
-                            {loadoutSummary.gearNames.length > 0
-                              ? loadoutSummary.gearNames.join("、")
-                              : "无额外默认装备"}
-                          </span>
-                        </p>
-                        <p className={wb.factLine}>
-                          <span className={wb.factKey}>自带义体：</span>
-                          <span>
-                            {inherent.length > 0
-                              ? inherent
-                                  .map((i) => `${i.name}${i.replaced ? "（已被替换）" : ""}`)
-                                  .join("、")
-                              : "无标配义体"}
-                          </span>
-                        </p>
-                        <p className={wb.factLine}>
-                          <span className={wb.factKey}>默认落脚点：</span>
-                          <span>{fallbackAnchor ? anchorLabel(fallbackAnchor) : fallbackLoc}</span>
-                        </p>
-                      </div>
-                    </section>
-                  </div>
-
-                  <section className={wb.sectionBox} aria-label="挑选出身背景">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>选择或自创出身背景</h3>
-                      <span className={wb.sectionBoxSub}>点击卡片即选中，可按生态检索</span>
-                    </header>
-                    {pickerProps ? (
-                      <OriginPicker {...pickerProps} />
-                    ) : (
-                      <p className={wb.note}>正在加载夜之城出身目录…</p>
-                    )}
-                  </section>
-                </>
-              )}
-
-              {activeStep === "traits" &&
-                (traitsTab === "build" ? (
-                  <section className={wb.sectionBox} aria-label="过往经历与核心特质目录">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>过往经历与核心特质</h3>
-                      <span className={wb.sectionBoxSub}>支持按分类筛选、搜索或自创</span>
-                    </header>
-                    {data ? (
-                      <TraitPicker board={board} data={data} commit={commit} />
-                    ) : (
-                      <p className={wb.note}>正在加载特质目录…</p>
-                    )}
-                  </section>
-                ) : (
-                  <section className={wb.sectionBox} aria-label="负面缺陷目录">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>负面缺陷</h3>
-                      <span className={wb.sectionBoxSub}>可选挂载：引入债主、宿敌或自定义冲突</span>
-                    </header>
-                    {data ? (
-                      <FlawPicker board={board} data={data} commit={commit} />
-                    ) : (
-                      <p className={wb.note}>正在加载缺陷目录…</p>
-                    )}
-                  </section>
-                ))}
-
-              {activeStep === "cyberware" && (
-                <div className={wb.chromeLayout}>
-                  <section
-                    className={`${wb.sectionBox} ${wb.chromeLeft}`}
-                    aria-label="人体义体拓扑与生理耐受"
-                  >
-                    <CellFrame />
-                    <div className={wb.dollFrame}>
-                      <CyberDoll
-                        parts={dollParts}
-                        selected={activeSlot}
-                        onCell={handleDollCell}
-                        humanity={{
-                          current: humanityNow,
-                          cap: 100,
-                          stageLabel: stageInfo.label,
-                        }}
-                      />
-                    </div>
-
-                    <section
-                      className={wb.humanityConsole}
-                      data-tone={stageInfo.tone}
-                      aria-label="生理耐受与标配义体"
-                    >
-                      <CellFrame />
-                      <fieldset className={wb.tolBar} aria-label="义体生理耐受档位">
-                        {TOLERANCES.map((t) => {
-                          const level = TOLERANCE_LEVELS[t];
-                          const active = board.tolerance === t;
-                          return (
-                            <Button
-                              key={t}
-                              small
-                              primary={active}
-                              pressed={active}
-                              onClick={() => commit({ ...board, tolerance: t })}
-                            >
-                              {level.label} ×{TOLERANCE_FACTOR[t]}
-                            </Button>
-                          );
-                        })}
-                      </fieldset>
-                      <p className={wb.humanityNote}>
-                        {stageInfo.note}
-                        {TOLERANCE_LEVELS[board.tolerance].hook
-                          ? ` · ${TOLERANCE_LEVELS[board.tolerance].hook}`
-                          : ""}
-                      </p>
-
-                      {inherent.length > 0 && (
-                        <div className={wb.inherentBox}>
-                          <span className={wb.inherentTitle}>
-                            出身 / 黑客标配免费义体（{inherent.length} 项）
-                          </span>
-                          <ul className={wb.inherentList}>
-                            {inherent.map((item) => (
-                              <li
-                                key={item.id}
-                                className={wb.inherentItem}
-                                data-replaced={item.replaced || undefined}
-                              >
-                                <span>
-                                  {item.name} · {item.source}（−{item.humanityCost} 人性）
-                                </span>
-                                <span className={wb.inherentStatus}>
-                                  {item.replaced ? "已被同部位自选义体替换" : "免费标配 · 已装配"}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </section>
-                  </section>
-
-                  <section
-                    className={`${wb.sectionBox} ${wb.kitLeftPane}`}
-                    aria-label="部位义体货架"
-                  >
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>
-                        {CYBER_LABELS[activeSlot]} · {(dollParts.get(activeSlot) ?? []).length}/
-                        {cyberwareRules.SLOT_CAPACITY[activeSlot]}
-                      </h3>
-                      <span className={wb.sectionBoxSub}>点卡片直接装上、卸下或替换</span>
-                    </header>
-                    <fieldset className={wb.slotRibbon} aria-label="部位快速切换">
-                      {CYBER_SLOT_LIST.map((s) => {
-                        const count = (dollParts.get(s) ?? []).length;
-                        const cap = cyberwareRules.SLOT_CAPACITY[s];
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            className={wb.slotTab}
-                            aria-pressed={activeSlot === s}
-                            onClick={() => setActiveSlot(s)}
-                          >
-                            {CYBER_LABELS[s]} {count}/{cap}
-                          </button>
-                        );
-                      })}
-                    </fieldset>
-                    <div className={wb.kitLeftScroll}>
-                      {pickerProps ? (
-                        <CyberwareShelf {...pickerProps} slot={activeSlot} />
-                      ) : (
-                        <p className={wb.note}>正在加载义体货架…</p>
-                      )}
-                    </div>
-                  </section>
-                </div>
-              )}
-
-              {activeStep === "kit" && (
-                <div className={wb.kitLayout}>
-                  <section
-                    className={`${wb.sectionBox} ${wb.kitLeftPane}`}
-                    aria-label="开局行装与座驾"
-                  >
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>启动资金、随身武器与载具</h3>
-                      <span className={wb.sectionBoxSub}>最多 2 把额外武器 · 1 台专属载具</span>
-                    </header>
-                    <div className={wb.kitLeftScroll}>
-                      {pickerProps ? (
-                        <LoadoutPicker {...pickerProps} />
-                      ) : (
-                        <p className={wb.note}>正在加载开局行装目录…</p>
-                      )}
-                    </div>
-                  </section>
-
-                  <section
-                    className={`${wb.sectionBox} ${wb.kitRightPane}`}
-                    aria-label="开局出生落脚点"
-                  >
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>夜之城出生落脚点</h3>
-                      <span className={wb.sectionBoxSub}>
-                        {anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
+            {/* ———— Step 01：身份与出身（公民铭牌 + 2077 命牌 + 出身背景） ———— */}
+            {activeStep === "identity" && (
+              <div className={wb.stepBody}>
+                <section className={wb.formCard} aria-label="公民身份信息">
+                  <h3 className={wb.cardTitle}>身份铭牌 · CITIZEN ID</h3>
+                  <div className={wb.nameGrid}>
+                    <label className={wb.field}>
+                      <span>
+                        姓名 <b className={wb.req}>*</b>
+                        <small>{card.name.length} / 30</small>
                       </span>
-                    </header>
+                      <FrameBox className={wb.compactBox}>
+                        <input
+                          ref={nameInputRef}
+                          value={card.name}
+                          maxLength={30}
+                          placeholder="例如：V、林烬、阿九"
+                          onChange={(e) => change({ name: e.target.value })}
+                        />
+                      </FrameBox>
+                    </label>
+                    <label className={wb.field}>
+                      <span>
+                        街头代号 / 绰号 <small>{card.alias.length} / 30</small>
+                      </span>
+                      <FrameBox className={wb.compactBox}>
+                        <input
+                          value={card.alias}
+                          maxLength={30}
+                          placeholder="选填，例如：幽灵、断线人"
+                          onChange={(e) => change({ alias: e.target.value })}
+                        />
+                      </FrameBox>
+                    </label>
+                    <div className={wb.field}>
+                      <span>
+                        人称代词 <b className={wb.req}>*</b>
+                      </span>
+                      <div className={wb.pronounRow}>
+                        <fieldset className={wb.pronounPills} aria-label="常用人称代词">
+                          {PRONOUN_PRESETS.map((p) => (
+                            <Button
+                              key={p}
+                              small
+                              pressed={card.pronoun === p}
+                              onClick={() => change({ pronoun: p })}
+                            >
+                              {p}
+                            </Button>
+                          ))}
+                        </fieldset>
+                        <FrameBox className={`${wb.compactBox} ${wb.pronounInput}`}>
+                          <input
+                            value={card.pronoun}
+                            maxLength={10}
+                            aria-label="自定义人称代词"
+                            placeholder="自填"
+                            onChange={(e) => change({ pronoun: e.target.value })}
+                          />
+                        </FrameBox>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className={wb.formCard} aria-label="2077 塔罗命牌">
+                  <div className={wb.subHeaderRow}>
+                    <h3 className={wb.cardTitle}>
+                      夜之城命牌 · TAROT ARCHETYPE（{TAROT_CARDS.length} 张大阿卡那）
+                      {activeTarot ? ` · ${activeTarot.roman} ${activeTarot.label}` : " · 选填"}
+                    </h3>
+                    <div className={wb.tarotToolbar}>
+                      <ActionButton onClick={drawRandomTarot}>随机抽牌</ActionButton>
+                      {board.tarot && (
+                        <ActionButton
+                          onClick={() => {
+                            if (board.tarot) setTarot(board.tarot);
+                          }}
+                        >
+                          清除命牌
+                        </ActionButton>
+                      )}
+                      <ActionButton onClick={() => setTarotExpanded((open) => !open)}>
+                        {tarotExpanded ? "收起牌阵" : `展开全部 ${TAROT_CARDS.length} 张`}
+                      </ActionButton>
+                    </div>
+                  </div>
+                  {activeTarot ? (
+                    <div className={wb.tarotSelectedBar}>
+                      <span className={wb.tarotSelectedArtWrap}>
+                        <Asset
+                          id={`tarot.${board.tarot}` as AssetId}
+                          alt={`${activeTarot.label}（${activeTarot.english}）`}
+                          className={wb.tarotArt}
+                        />
+                        <span className={wb.tarotRoman}>{activeTarot.roman}</span>
+                      </span>
+                      <div className={wb.tarotSelectedCopy}>
+                        <div className={wb.tarotSelectedHead}>
+                          <strong className={wb.tarotSelectedName}>
+                            {activeTarot.roman} · {activeTarot.label}
+                          </strong>
+                          <span className={wb.tarotEn}>{activeTarot.english}</span>
+                        </div>
+                        <p className={wb.tarotSelectedVibe}>{activeTarot.vibe}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className={wb.note}>
+                      从 22 张 2077
+                      原作大阿卡那塔罗中抽选一张命牌，定调角色在街头与叙事中的气质偏向（可随时切换或取消）。
+                    </span>
+                  )}
+                  <fieldset
+                    className={wb.tarotGrid}
+                    data-expanded={tarotExpanded || undefined}
+                    aria-label="选择 2077 塔罗命牌"
+                  >
+                    {TAROT_CARDS.map((id) => {
+                      const info = TAROT_INFO[id];
+                      const active = board.tarot === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className={wb.tarotCard}
+                          aria-pressed={active}
+                          title={`${info.roman} ${info.label}（${info.english}）— ${info.vibe}`}
+                          onClick={() => setTarot(id)}
+                        >
+                          <span className={wb.tarotArtWrap}>
+                            <Asset
+                              id={`tarot.${id}` as AssetId}
+                              alt={`${info.label}（${info.english}）`}
+                              className={wb.tarotArt}
+                            />
+                            <span className={wb.tarotRoman}>{info.roman}</span>
+                          </span>
+                          <span className={wb.tarotMeta}>
+                            <strong className={wb.tarotLabel}>{info.label}</strong>
+                            <span className={wb.tarotEn}>{info.english}</span>
+                            <span className={wb.tarotVibe}>{info.vibe}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </fieldset>
+                </section>
+
+                {board.origin && (
+                  <section className={wb.originSummary} aria-label="当前出身开局配置">
+                    <div className={wb.originSummaryHead}>
+                      <div className={wb.originSummaryTitle}>
+                        <span className={wb.tag}>
+                          {ORIGIN_ECOSYSTEM_LABELS[originEcosystem(board.origin)]}
+                        </span>
+                        <strong>{board.origin.label}</strong>
+                      </div>
+                      <span className={wb.originMetrics}>
+                        启动资金 <b>{loadoutSummary.finalEddies} €</b> · 标配义体{" "}
+                        <b>{activeInherentCount}</b> 件 · 默认起点{" "}
+                        <b>{fallbackAnchor?.name ?? "沃森 H10"}</b>
+                      </span>
+                    </div>
+                    {board.origin.ability && (
+                      <p className={wb.originLine}>{board.origin.ability}</p>
+                    )}
+                  </section>
+                )}
+
+                <section className={wb.embeddedPanel} aria-label="出身背景选择">
+                  <div className={wb.subHeaderRow}>
+                    <h3 className={wb.cardTitle}>
+                      出身背景 <b className={wb.req}>*</b>
+                    </h3>
+                    <span className={wb.note}>
+                      决定初始资金、默认落脚点与标配行装，支持按生态筛选、搜索与自定义。
+                    </span>
+                  </div>
+                  {pickerProps ? (
+                    <OriginPicker {...pickerProps} />
+                  ) : (
+                    <p className={wb.note}>正在加载出身背景目录…</p>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* ———— Step 02：体貌定制（7 部位纯物理 BIOMETRIC SCAN） ———— */}
+            {activeStep === "appearance" && (
+              <div className={wb.stepBody}>
+                <AppearanceCustomizer
+                  selection={board.appearance ?? { marks: [] }}
+                  look={card.look}
+                  pronoun={card.pronoun}
+                  onUpdate={updateAppearance}
+                  onManualLook={(look) => change({ look })}
+                />
+              </div>
+            )}
+
+            {/* ———— Step 03：履历与特质（三层分栏：过往履历 / 核心特质 / 负面缺陷） ———— */}
+            {activeStep === "traits" && (
+              <div className={wb.stepBody}>
+                <div className={wb.subTabs} role="tablist" aria-label="履历与特质分区">
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={traitsTab === "past"}
+                    onClick={() => setTraitsTab("past")}
+                  >
+                    <span>
+                      过往履历 ({board.pasts.length}/{PAST_MAX})
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={traitsTab === "skill"}
+                    onClick={() => setTraitsTab("skill")}
+                  >
+                    <span>
+                      核心特质 ({board.skills.length}/{SKILL_MAX})
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={traitsTab === "flaw"}
+                    onClick={() => setTraitsTab("flaw")}
+                  >
+                    <span>
+                      负面缺陷 ({board.flaws.length}/{FLAW_MAX})
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
+
+                {(board.pasts.length > 0 || board.skills.length > 0 || board.flaws.length > 0) && (
+                  <section className={wb.equippedTray} aria-label="已装配履历与特质">
+                    <span className={wb.equippedTrayLabel}>已选</span>
+                    <div className={wb.equippedChips}>
+                      {board.pasts.map((m) => (
+                        <span key={`p:${m.id}`} className={wb.equippedChip} data-kind="past">
+                          <button
+                            type="button"
+                            className={wb.equippedChipMain}
+                            onClick={() => setTraitsTab("past")}
+                          >
+                            <span className={wb.equippedChipKind}>履历</span>
+                            {m.label}
+                          </button>
+                          <button
+                            type="button"
+                            className={wb.equippedChipRemove}
+                            aria-label={`移除履历 ${m.label}`}
+                            onClick={() =>
+                              commit({ ...board, pasts: board.pasts.filter((x) => x.id !== m.id) })
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {board.skills.map((m) => (
+                        <span key={`s:${m.id}`} className={wb.equippedChip} data-kind="skill">
+                          <button
+                            type="button"
+                            className={wb.equippedChipMain}
+                            onClick={() => setTraitsTab("skill")}
+                          >
+                            <span className={wb.equippedChipKind}>特质</span>
+                            {m.label}
+                          </button>
+                          <button
+                            type="button"
+                            className={wb.equippedChipRemove}
+                            aria-label={`移除特质 ${m.label}`}
+                            onClick={() =>
+                              commit({
+                                ...board,
+                                skills: board.skills.filter((x) => x.id !== m.id),
+                              })
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {board.flaws.map((m) => (
+                        <span key={`f:${m.id}`} className={wb.equippedChip} data-kind="flaw">
+                          <button
+                            type="button"
+                            className={wb.equippedChipMain}
+                            onClick={() => setTraitsTab("flaw")}
+                          >
+                            <span className={wb.equippedChipKind}>缺陷</span>
+                            {m.label}
+                          </button>
+                          <button
+                            type="button"
+                            className={wb.equippedChipRemove}
+                            aria-label={`移除缺陷 ${m.label}`}
+                            onClick={() =>
+                              commit({ ...board, flaws: board.flaws.filter((x) => x.id !== m.id) })
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {traitsTab === "past" && (
+                  <div className={wb.embeddedPanel}>
+                    {pickerProps ? (
+                      <PastPicker {...pickerProps} />
+                    ) : (
+                      <p className={wb.note}>正在加载过往履历目录…</p>
+                    )}
+                  </div>
+                )}
+
+                {traitsTab === "skill" && (
+                  <div className={wb.embeddedPanel}>
+                    {pickerProps ? (
+                      <TraitPicker {...pickerProps} />
+                    ) : (
+                      <p className={wb.note}>正在加载核心特质目录…</p>
+                    )}
+                  </div>
+                )}
+
+                {traitsTab === "flaw" && (
+                  <div className={wb.embeddedPanel}>
+                    {pickerProps ? (
+                      <FlawPicker {...pickerProps} />
+                    ) : (
+                      <p className={wb.note}>正在加载负面缺陷目录…</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ———— Step 04：义体与行装（子标签隔离：义体拓扑 / 行装与座驾） ———— */}
+            {activeStep === "cyberware" && (
+              <div className={wb.stepBody}>
+                <div className={wb.subTabs} role="tablist" aria-label="义体与行装分区">
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={cyberTab === "topology"}
+                    onClick={() => setCyberTab("topology")}
+                  >
+                    <span>
+                      义体拓扑与耐受 ({board.cyberware.length + activeInherentCount} 件 ·{" "}
+                      {tolInfo.label})
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={cyberTab === "loadout"}
+                    onClick={() => setCyberTab("loadout")}
+                  >
+                    <span>
+                      行装与座驾 ({loadoutSummary.finalEddies} € · 武器 {board.kit.weapons.length}
+                      /2)
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
+
+                {cyberTab === "topology" && (
+                  <div className={wb.chromeWorkspace}>
+                    <div className={wb.chromeLeft}>
+                      <div className={wb.dollCard}>
+                        <div className={wb.dollHeader}>
+                          <span className={wb.cardTitle}>义体拓扑 · BODY TOPOLOGY</span>
+                          <span className={wb.note}>点击任一部位切换右侧装配清单</span>
+                        </div>
+                        <div className={wb.dollStage}>
+                          <CyberDoll
+                            parts={dollParts}
+                            humanity={{
+                              current: 100,
+                              cap: 100,
+                              stageLabel: `稳定 · ${tolInfo.label}`,
+                              suppressed: false,
+                            }}
+                            selected={activeSlot}
+                            onCell={handleDollCell}
+                          />
+                        </div>
+                      </div>
+
+                      <section className={wb.humanityConsole} aria-label="生理神经耐受">
+                        <div className={wb.toleranceRow}>
+                          <span className={wb.toleranceLabel}>生理耐受</span>
+                          <fieldset className={wb.tolerancePills} aria-label="选择义体耐受档位">
+                            {TOLERANCES.map((t) => (
+                              <Button
+                                key={t}
+                                small
+                                pressed={board.tolerance === t}
+                                onClick={() => commit({ ...board, tolerance: t })}
+                              >
+                                {TOLERANCE_LEVELS[t].label}
+                              </Button>
+                            ))}
+                          </fieldset>
+                          <span className={wb.stageBadge} data-tone={tolInfo.tone}>
+                            {tolInfo.label} · {mountedChromeNames.length} 件义体
+                          </span>
+                        </div>
+                        <p className={wb.humanityNote} data-tone={tolInfo.tone}>
+                          {tolInfo.note}
+                          {TOLERANCE_LEVELS[board.tolerance].hook
+                            ? `（${TOLERANCE_LEVELS[board.tolerance].hook}）`
+                            : ""}
+                        </p>
+                      </section>
+                    </div>
+
+                    <div className={wb.chromeRight}>
+                      <div className={wb.shelfPanel}>
+                        <div className={wb.shelfPanelHead}>
+                          <h3 className={wb.cardTitle}>
+                            当前部位：{CYBER_LABELS[activeSlot]}
+                            <small className={wb.note}>
+                              {" "}
+                              （容量上限 {cyberwareRules.SLOT_CAPACITY[activeSlot]}）
+                            </small>
+                          </h3>
+                          {board.cyberware.length > 0 && (
+                            <ActionButton onClick={() => commit({ ...board, cyberware: [] })}>
+                              一键卸除全部自选
+                            </ActionButton>
+                          )}
+                        </div>
+                        {pickerProps ? (
+                          <CyberwareShelf {...pickerProps} slot={activeSlot} />
+                        ) : (
+                          <p className={wb.note}>正在加载义体货架…</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {cyberTab === "loadout" && (
+                  <div className={wb.embeddedPanel}>
+                    {pickerProps ? (
+                      <LoadoutPicker {...pickerProps} />
+                    ) : (
+                      <p className={wb.note}>正在加载开局行装目录…</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ———— Step 05：旧识与落脚点（子标签隔离：夜之城旧识 / 开局落脚点） ———— */}
+            {activeStep === "connections" && (
+              <div className={wb.stepBody}>
+                <div className={wb.subTabs} role="tablist" aria-label="旧识与落脚点分区">
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={connectionsTab === "people"}
+                    onClick={() => setConnectionsTab("people")}
+                  >
+                    <span>夜之城旧识 ({board.acquaintances.length} 人)</span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={connectionsTab === "map"}
+                    onClick={() => setConnectionsTab("map")}
+                  >
+                    <span>
+                      开局落脚点 ·{" "}
+                      {anchor
+                        ? anchor.name
+                        : board.startLocation
+                          ? board.startLocation
+                          : "跟随出身"}
+                    </span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
+
+                {connectionsTab === "people" && (
+                  <div className={wb.embeddedPanel}>
+                    {data ? (
+                      <PeoplePicker board={board} data={data} commit={commit} />
+                    ) : (
+                      <p className={wb.note}>正在加载夜之城人物目录…</p>
+                    )}
+                  </div>
+                )}
+
+                {connectionsTab === "map" && (
+                  <section className={wb.embeddedPanel} aria-label="开局落脚点">
+                    <div className={wb.subHeaderRow}>
+                      <h3 className={wb.cardTitle}>
+                        开局落脚点：
+                        {anchor
+                          ? anchorLabel(anchor)
+                          : fallbackAnchor
+                            ? `${anchorLabel(fallbackAnchor)}（出身默认）`
+                            : "超级摩天楼 H10"}
+                      </h3>
+                      <span className={wb.note}>
+                        点击夜之城地图锚点或在搜索框输入街区/地标名，即可指定入城第一站。
+                      </span>
+                    </div>
                     <StartMapPicker
                       value={startLoc}
                       defaultStart={fallbackLoc}
@@ -794,550 +1007,339 @@ export function CharacterCreator({
                       onChange={setLoc}
                     />
                   </section>
-                </div>
-              )}
-
-              {activeStep === "people_prose" && (
-                <>
-                  <section className={wb.sectionBox} aria-label="夜之城人脉网络">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>夜之城人脉网络</h3>
-                      <span className={wb.sectionBoxSub}>
-                        已建立 {board.acquaintances.length} 位旧识交集
-                      </span>
-                    </header>
-                    {data ? (
-                      <PeoplePicker board={board} data={data} commit={commit} />
-                    ) : (
-                      <p className={wb.note}>正在加载夜之城人物档案…</p>
-                    )}
-                  </section>
-
-                  <section className={wb.sectionBox} aria-label="AI 撰稿工坊与核心人设小传">
-                    <CellFrame />
-                    <header className={wb.sectionBoxHead}>
-                      <h3 className={wb.sectionBoxTitle}>AI 撰稿工坊与核心人设小传</h3>
-                      <span className={wb.sectionBoxSub}>
-                        以下 4 项正剧区块将注入开局 AI 叙事上下文
-                      </span>
-                    </header>
-                    <DraftAll card={card} onChange={change} />
-                    <div className={wb.proseList}>
-                      {CORE_PROSE_BLOCKS.map((b) => (
-                        <ProseField key={b} block={b} card={card} onChange={change} />
-                      ))}
-                    </div>
-                  </section>
-                </>
-              )}
-
-              {activeStep === "review" && (
-                <>
-                  <div
-                    className={wb.reviewBanner}
-                    data-ready={checks.length === 0 ? "" : undefined}
-                    role="status"
-                  >
-                    <CellFrame />
-                    <p className={wb.reviewBannerText}>
-                      {checks.length === 0
-                        ? "✓ 档案所有必选项已就绪，可以直接保存并接入夜之城。"
-                        : `尚有 ${checks.length} 项待完善，点击右侧任意条目可直达对应步骤修改：`}
-                    </p>
-                    {checks.length > 0 && (
-                      <ul className={wb.checksList}>
-                        {checks.map((c) => (
-                          <li key={c.text}>
-                            <ActionButton onClick={() => jumpToCheck(c.target)}>
-                              ⚠ {c.text} ▸
-                            </ActionButton>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div className={wb.reviewColumns}>
-                    <div className={wb.reviewLeft}>
-                      <DossierBlock
-                        title="义体拓扑只读快照与术后人性"
-                        onEdit={() => goToStep("cyberware")}
-                      >
-                        <div className={wb.reviewDollFrame}>
-                          <CyberDoll
-                            parts={dollParts}
-                            humanity={{
-                              current: humanityNow,
-                              cap: 100,
-                              stageLabel: stageInfo.label,
-                            }}
-                          />
-                        </div>
-                        <strong className={wb.dossierBig} data-tone={stageInfo.tone}>
-                          人性 {humanityNow}
-                          <small>
-                            {" "}
-                            / 100 · {stageInfo.label} · {TOLERANCE_LEVELS[board.tolerance].label} ×
-                            {TOLERANCE_FACTOR[board.tolerance]}
-                          </small>
-                        </strong>
-                        <ChipList
-                          empty="无义体改造"
-                          items={[
-                            ...inherent
-                              .filter((i) => !i.replaced)
-                              .map((i) => ({ k: i.id, t: `${i.name}（标配）` })),
-                            ...board.cyberware.map((c) => ({ k: c.id, t: c.name })),
-                          ]}
-                        />
-                      </DossierBlock>
-
-                      <DossierBlock title="行装、座驾与落脚点" onEdit={() => goToStep("kit")}>
-                        <strong className={wb.dossierBig}>
-                          {loadoutSummary.finalEddies} €
-                          <small> · {CASH_TIER_INFO[board.kit.cashTier].label}</small>
-                        </strong>
-                        <p className={wb.dossierDim}>
-                          落脚点：{anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}
-                        </p>
-                        <ChipList
-                          empty="无额外随身装备"
-                          items={[...loadoutSummary.gearNames, ...weaponNames, ...allVehicles].map(
-                            (t) => ({ k: t, t }),
-                          )}
-                        />
-                      </DossierBlock>
-                    </div>
-
-                    <div className={wb.reviewRight}>
-                      <DossierBlock title="身份铭牌与出身背景" onEdit={() => goToStep("identity")}>
-                        <div className={wb.reviewIdentityRow}>
-                          {card.portrait && (
-                            <button
-                              type="button"
-                              className={wb.portraitFrame}
-                              title="点击查看大图"
-                              onClick={() => setLightboxOpen(true)}
-                            >
-                              <CellFrame />
-                              <GeneratedImage
-                                imageId={card.portrait}
-                                alt={`${card.name.trim() || "角色"}立绘`}
-                                className={wb.portraitImg}
-                              />
-                            </button>
-                          )}
-                          <div>
-                            <strong className={wb.dossierBig}>
-                              {card.name.trim() || "未命名角色"}
-                              {card.alias.trim() && <small> 「{card.alias.trim()}」</small>}
-                            </strong>
-                            <p className={wb.dossierDim}>
-                              代词：{card.pronoun.trim() || "未设定"} · 出身：
-                              {board.origin?.label ?? "尚未选择"}
-                            </p>
-                            <p className={wb.dossierText}>
-                              {board.origin?.ability || "决定初始家底、自带义体与街头人脉"}
-                            </p>
-                            {board.origin?.hook && (
-                              <p className={wb.dossierDim}>身世钩子：{board.origin.hook}</p>
-                            )}
-                          </div>
-                        </div>
-                      </DossierBlock>
-
-                      <DossierBlock title="过往、特质与缺陷" onEdit={() => goToStep("traits")}>
-                        <div className={wb.dossierTraitsGrid}>
-                          <div className={wb.dossierTraitCol}>
-                            <p className={wb.dossierLabel}>
-                              核心特质 {board.skills.length}/{SKILL_MAX}
-                            </p>
-                            <ChipList
-                              empty="未选"
-                              items={board.skills.map((m) => ({
-                                k: m.id,
-                                t: m.label,
-                                tip: m.ability,
-                              }))}
-                            />
-                          </div>
-                          <div className={wb.dossierTraitCol}>
-                            <p className={wb.dossierLabel}>
-                              过往经历 {board.pasts.length}/{PAST_MAX}
-                            </p>
-                            <ChipList
-                              empty="未选"
-                              items={board.pasts.map((m) => ({
-                                k: m.id,
-                                t: m.label,
-                                tip: m.hook || m.ability,
-                              }))}
-                            />
-                          </div>
-                          <div className={wb.dossierTraitCol}>
-                            <p className={wb.dossierLabel}>
-                              负面缺陷 {board.flaws.length}/{FLAW_MAX}
-                            </p>
-                            <ChipList
-                              warn
-                              empty="无"
-                              items={board.flaws.map((m) => ({
-                                k: m.id,
-                                t: m.label,
-                                tip: m.hook || m.ability,
-                              }))}
-                            />
-                          </div>
-                        </div>
-                      </DossierBlock>
-
-                      <DossierBlock
-                        title={`夜之城人脉 (${board.acquaintances.length})`}
-                        onEdit={() => goToStep("people_prose")}
-                      >
-                        <ChipList
-                          empty="暂无自选旧识"
-                          items={board.acquaintances.map((a) => ({
-                            k: a.id,
-                            t: `${a.name} · ${RELATION_INFO[a.relation].label}`,
-                            tip: a.note,
-                          }))}
-                        />
-                      </DossierBlock>
-
-                      <DossierBlock
-                        title={`人设小传 (${filledProseCount}/${PROSE_BLOCKS.length})`}
-                        onEdit={() => goToStep("people_prose")}
-                      >
-                        {filledProseCount === 0 ? (
-                          <p className={wb.dossierDim}>
-                            尚未撰写小传，可回到第 4 步手写或使用 AI 一键成稿。
-                          </p>
-                        ) : (
-                          <div className={wb.dossierProseList}>
-                            {PROSE_BLOCKS.filter((b) => card[b].trim() !== "").map((b) => (
-                              <div key={b} className={wb.dossierProseItem}>
-                                <span className={wb.dossierProseKey}>
-                                  {PROSE_BLOCK_INFO[b].label}
-                                </span>
-                                <p className={wb.dossierProseVal}>{card[b]}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </DossierBlock>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
-        {/* —————— 右侧常驻实时档案摘要栏（Step 05 隐藏避免重复；< 1180px 切换为抽屉） —————— */}
-        {!isReview && (
-          <>
-            {sidebarOpen && (
-              <button
-                type="button"
-                aria-label="收起实时档案摘要"
-                className={wb.sidebarBackdrop}
-                data-open=""
-                onClick={() => setSidebarOpen(false)}
-              />
-            )}
-            <aside
-              className={wb.sidebar}
-              data-open={sidebarOpen || undefined}
-              aria-label="实时档案摘要"
-            >
-              <NineSlice
-                id="notify.itemCellBg"
-                tint="rgb(8 8 14 / 92%)"
-                slice={30}
-                className={wb.panelLayer}
-              />
-              <NineSlice
-                id="notify.itemCellFg"
-                tint="var(--cp-red-dim)"
-                slice={30}
-                className={wb.panelLayer}
-              />
+        {/* —————— 右侧常驻实时档案栏（NC LIVE DOSSIER，跨全部 5 步常驻） —————— */}
+        <aside
+          className={wb.dossierAside}
+          data-open={sidebarOpen || undefined}
+          aria-label="实时角色档案与入城发射台"
+        >
+          <span className={wb.hudGridBg} style={{ backgroundImage: gridUrl }} aria-hidden />
+          <div className={wb.asideScroll}>
+            <div className={wb.asideHead}>
+              <span className={wb.asideCode}>{"NC // LIVE DOSSIER"}</span>
+              <span className={wb.asideStatus} data-ready={checks.length === 0 ? "" : undefined}>
+                {checks.length === 0 ? "✓ READY" : `待完善 ${checks.length} 项`}
+              </span>
+            </div>
 
-              <div className={wb.sidebarScroll}>
-                <div className={wb.sidebarTop}>
-                  <div className={wb.sidebarHeadMobile}>
-                    <span className={wb.sidebarEyebrow}>LIVE DOSSIER · 实时档案</span>
-                    <Button small onClick={() => setSidebarOpen(false)}>
-                      收起
-                    </Button>
-                  </div>
-
-                  <header className={wb.sidebarHero}>
-                    <div className={wb.sidebarTitleRow}>
-                      <span className={wb.sidebarEyebrow}>NC LIVE DOSSIER</span>
-                      {isSample && <span className={wb.sampleBadge}>官方预设</span>}
-                    </div>
-                    <div className={wb.sidebarHeroTop}>
-                      {card.portrait && (
-                        <button
-                          type="button"
-                          className={wb.heroAvatar}
-                          title="查看大图"
-                          onClick={() => setLightboxOpen(true)}
-                        >
-                          <CellFrame />
-                          <GeneratedImage
-                            imageId={card.portrait}
-                            alt={`${card.name.trim() || "角色"}肖像`}
-                            className={wb.portraitImg}
-                          />
-                        </button>
-                      )}
-                      <div className={wb.sidebarHeroMeta}>
-                        <h2 className={wb.heroName}>
-                          {card.name.trim() || "未命名角色"}
-                          {card.alias.trim() && (
-                            <span className={wb.heroAlias}>「{card.alias.trim()}」</span>
-                          )}
-                        </h2>
-                        <p className={wb.heroMeta}>
-                          {[
-                            card.pronoun.trim() || "未设代词",
-                            board.origin?.label ?? "未选出身",
-                            anchor ? anchorLabel(anchor) : startLoc || "未设落脚点",
-                          ].join(" · ")}
-                        </p>
-                      </div>
-                    </div>
-                  </header>
-
-                  <section
-                    className={wb.humanityConsole}
-                    data-tone={stageInfo.tone}
-                    aria-label="术后人性摘要"
+            {/* 顶部视觉焦点：3:4 切角立绘展示窗 + 右侧身份铭牌、人性条与操作 */}
+            <div className={wb.dossierHero}>
+              <div className={wb.dossierPortraitFrame}>
+                {card.portrait ? (
+                  <button
+                    type="button"
+                    className={wb.portraitBtn}
+                    onClick={() => setLightboxOpen(true)}
                   >
-                    <CellFrame />
-                    <div className={wb.humanityRow}>
-                      <span className={wb.humanityStageBadge} data-tone={stageInfo.tone}>
-                        {stageInfo.label}
-                      </span>
-                      <span className={wb.humanityNums}>
-                        <b>{humanityNow}</b> / 100
-                      </span>
-                    </div>
-                    <div className={wb.humanityTrack} aria-hidden="true">
-                      <span
-                        className={wb.humanityFill}
-                        data-tone={stageInfo.tone}
-                        style={{ width: `${Math.max(0, Math.min(100, humanityNow))}%` }}
-                      />
-                    </div>
-                    <p className={wb.humanityNote}>
-                      {TOLERANCE_LEVELS[board.tolerance].label} ×{TOLERANCE_FACTOR[board.tolerance]}
-                    </p>
-                  </section>
+                    <GeneratedImage
+                      imageId={card.portrait}
+                      alt={card.name.trim() || "角色立绘"}
+                      className={wb.portraitImg}
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={wb.dossierPortraitEmpty}
+                    onClick={() => setPortraitModalOpen(true)}
+                  >
+                    <span className={wb.portraitCornerTL} aria-hidden />
+                    <span className={wb.portraitCornerBR} aria-hidden />
+                    <span className={wb.portraitEmptyCode}>3:4</span>
+                    <span className={wb.portraitEmptyHint}>点击生成立绘</span>
+                  </button>
+                )}
+                {activeTarot && (
+                  <span
+                    className={wb.dossierTarotBadge}
+                    title={`${activeTarot.roman} ${activeTarot.label} · ${activeTarot.vibe}`}
+                  >
+                    {activeTarot.roman}
+                  </span>
+                )}
+              </div>
 
-                  <div className={wb.sidebarStats}>
-                    <div className={wb.sidebarStat}>
-                      <span className={wb.sidebarStatKey}>过往 / 特质 / 缺陷</span>
-                      <span className={wb.sidebarStatVal}>
-                        {board.pasts.length} / {board.skills.length} / {board.flaws.length}
-                      </span>
-                    </div>
-                    <div className={wb.sidebarStat}>
-                      <span className={wb.sidebarStatKey}>开局义体</span>
-                      <span className={wb.sidebarStatVal}>
-                        {board.cyberware.length + activeInherentCount} 件
-                      </span>
-                    </div>
-                    <div className={wb.sidebarStat}>
-                      <span className={wb.sidebarStatKey}>启动资金</span>
-                      <span className={wb.sidebarStatVal}>{loadoutSummary.finalEddies} €</span>
-                    </div>
-                    <div className={wb.sidebarStat}>
-                      <span className={wb.sidebarStatKey}>人脉 / 小传</span>
-                      <span className={wb.sidebarStatVal}>
-                        {board.acquaintances.length} 人 · {filledProseCount}/{PROSE_BLOCKS.length}
-                      </span>
-                    </div>
-                  </div>
+              <div className={wb.dossierHeroMeta}>
+                <div className={wb.asideIdentity}>
+                  <strong className={wb.asideName}>
+                    {card.name.trim() || "未命名雇佣兵"}
+                    {card.alias.trim() && <small>「{card.alias.trim()}」</small>}
+                  </strong>
+                  <span className={wb.asideSub}>
+                    {board.origin?.label || "待选出身"} · {card.pronoun.trim() || "未填代词"}
+                    {activeTarot ? ` · ${activeTarot.label}` : ""}
+                  </span>
                 </div>
 
-                <div className={wb.sidebarBottom}>
-                  <section className={wb.sidebarBuild} aria-label="当前构筑摘要">
-                    <div className={wb.telemetryHead}>
-                      <span className={wb.telemetryTitle}>当前构筑摘要</span>
-                      <span className={wb.sidebarBuildCount}>
-                        {board.origin?.label ?? "未选出身"}
-                      </span>
-                    </div>
-                    <dl className={wb.buildList}>
-                      <div className={wb.buildRow}>
-                        <dt>落脚点</dt>
-                        <dd>{anchor ? anchorLabel(anchor) : startLoc || "跟随出身"}</dd>
-                      </div>
-                      <div className={wb.buildRow}>
-                        <dt>已装义体</dt>
-                        <dd>
-                          {mountedChromeNames.length > 0
-                            ? mountedChromeNames.join(" · ")
-                            : "暂无自选义体"}
-                        </dd>
-                      </div>
-                      <div className={wb.buildRow}>
-                        <dt>特质履历</dt>
-                        <dd>
-                          {selectedTraitNames.length > 0
-                            ? selectedTraitNames.join(" · ")
-                            : "待补充"}
-                        </dd>
-                      </div>
-                      <div className={wb.buildRow}>
-                        <dt>武器载具</dt>
-                        <dd>
-                          {[...weaponNames, ...allVehicles].length > 0
-                            ? [...weaponNames, ...allVehicles].join(" · ")
-                            : "仅默认随身配置"}
-                        </dd>
-                      </div>
-                    </dl>
-                  </section>
+                <div className={wb.asideMeter}>
+                  <div className={wb.asideMeterHead}>
+                    <span>神经耐受</span>
+                    <b data-tone={tolInfo.tone}>{tolInfo.label}</b>
+                  </div>
+                  <p className={wb.humanityNote} data-tone={tolInfo.tone}>
+                    {tolInfo.note}
+                  </p>
+                </div>
 
-                  <section className={wb.sidebarChecks} aria-label="档案就绪检查">
-                    <div className={wb.telemetryHead}>
-                      <span className={wb.telemetryTitle}>档案就绪状态</span>
-                      <span
-                        className={wb.readyBadge}
-                        data-ready={checks.length === 0 ? "" : undefined}
-                      >
-                        {checks.length === 0 ? "✓ 档案就绪" : `待完善 ${checks.length} 项`}
-                      </span>
-                    </div>
-                    {checks.length === 0 ? (
-                      <p className={wb.note}>必选项已完成，可前往第 5 步总览或直接开局。</p>
-                    ) : (
-                      <ul className={wb.checksList} aria-label="待完善项">
-                        {checks.map((c) => (
-                          <li key={c.text}>
-                            <ActionButton onClick={() => jumpToCheck(c.target)}>
-                              ⚠ {c.text} ▸
-                            </ActionButton>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                <div className={wb.portraitActions}>
+                  <Button small primary onClick={() => setPortraitModalOpen(true)}>
+                    {card.portrait ? "重绘立绘" : "✦ 生成立绘"}
+                  </Button>
+                  {card.portrait && (
+                    <ActionButton onClick={() => setLightboxOpen(true)}>大图</ActionButton>
+                  )}
+                  {card.portrait && <ActionButton onClick={clearPortrait}>清除</ActionButton>}
                 </div>
               </div>
-            </aside>
-          </>
-        )}
+            </div>
+
+            {/* 核心遥测快览（2x2 紧凑数字/地标矩阵） */}
+            <div className={wb.dossierTelemetry}>
+              <div className={wb.teleCell}>
+                <span className={wb.teleKey}>启动资金</span>
+                <strong className={wb.teleValAccent}>{loadoutSummary.finalEddies} €</strong>
+                <span className={wb.teleSub}>{CASH_TIER_INFO[board.kit.cashTier].label}</span>
+              </div>
+              <div className={wb.teleCell}>
+                <span className={wb.teleKey}>装配义体</span>
+                <strong className={wb.teleVal}>{mountedChromeNames.length} 件</strong>
+                <span className={wb.teleSub}>耐受 {TOLERANCE_LEVELS[board.tolerance].label}</span>
+              </div>
+              <div className={wb.teleCell}>
+                <span className={wb.teleKey}>体貌定制</span>
+                <strong className={wb.teleVal}>{bioFilledCount} / 7</strong>
+                <span className={wb.teleSub}>{card.look.trim() ? "已合成" : "未设定"}</span>
+              </div>
+              <div className={wb.teleCell}>
+                <span className={wb.teleKey}>入城起点</span>
+                <strong className={wb.teleVal}>
+                  {anchor?.name ?? fallbackAnchor?.name ?? "沃森 H10"}
+                </strong>
+                <span className={wb.teleSub}>
+                  {board.acquaintances.length > 0
+                    ? `旧识 ${board.acquaintances.length} 人`
+                    : "孤狼"}
+                </span>
+              </div>
+            </div>
+
+            {/* 精简构筑总览 */}
+            <dl className={wb.asideList}>
+              <div>
+                <dt>体貌</dt>
+                <dd className={wb.asideLookText}>{card.look.trim() || "尚未设定体貌"}</dd>
+              </div>
+              <div>
+                <dt>履历</dt>
+                <dd>
+                  {board.pasts.length > 0 ? board.pasts.map((m) => m.label).join(" / ") : "未选"}
+                </dd>
+              </div>
+              <div>
+                <dt>特质</dt>
+                <dd>
+                  {board.skills.length > 0 ? board.skills.map((m) => m.label).join(" / ") : "未选"}
+                </dd>
+              </div>
+              {board.flaws.length > 0 && (
+                <div>
+                  <dt>缺陷</dt>
+                  <dd>{board.flaws.map((m) => m.label).join(" / ")}</dd>
+                </div>
+              )}
+              <div>
+                <dt>行装</dt>
+                <dd>
+                  {[
+                    weaponNames.length > 0 ? `武器：${weaponNames.join(" / ")}` : "出身标配武器",
+                    effectiveVehicles.length > 0
+                      ? `座驾：${effectiveVehicles.join(" / ")}`
+                      : "步行",
+                  ].join(" · ")}
+                </dd>
+              </div>
+              {board.acquaintances.length > 0 && (
+                <div>
+                  <dt>旧识</dt>
+                  <dd>
+                    {board.acquaintances
+                      .slice(0, 3)
+                      .map((a) => `${a.name}（${RELATION_INFO[a.relation].label}）`)
+                      .join("、") + (board.acquaintances.length > 3 ? "…" : "")}
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            {/* 档案就绪核验清单 */}
+            {checks.length > 0 && (
+              <section className={wb.asideChecks} aria-label="待完善项">
+                <span className={wb.asideCheckTitle}>需完善后方可保存与入城</span>
+                <ul>
+                  {checks.map((c) => (
+                    <li key={`${c.target}:${c.text}`}>
+                      <button
+                        type="button"
+                        className={wb.checkJump}
+                        onClick={() => jumpToCheck(c.target)}
+                      >
+                        ⚠ {c.text} →
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          {/* 固定底部唯一保存与入城发射台（永不滚出视野） */}
+          <section className={wb.launchDock} aria-label="保存与接入夜之城">
+            <label className={wb.field}>
+              <span>
+                存档名 <small>留空默认「{card.name.trim() || "角色"}的夜之城传奇」</small>
+              </span>
+              <FrameBox className={wb.compactBox}>
+                <input
+                  value={saveTitle}
+                  maxLength={80}
+                  placeholder={`${card.name.trim() || "V"}的夜之城传奇`}
+                  onChange={(e) => setSaveTitle(e.target.value)}
+                />
+              </FrameBox>
+            </label>
+
+            {displaySaveError && (
+              <p className={wb.error} role="alert">
+                {displaySaveError}
+              </p>
+            )}
+            {launchMutation.isError && (
+              <p className={wb.error} role="alert">
+                {launchMutation.error.message}
+              </p>
+            )}
+
+            <div className={wb.launchActionsRow}>
+              <Button
+                primary
+                disabled={!canLaunch}
+                reason={
+                  !data
+                    ? "目录尚未加载完成"
+                    : checks.length > 0
+                      ? checks[0]?.text
+                      : !canSave
+                        ? "请先补齐角色必填项"
+                        : undefined
+                }
+                onClick={() => {
+                  onLaunchingChange(true);
+                  launchMutation.mutate();
+                }}
+              >
+                {launchMutation.isPending
+                  ? "正在接入夜之城…"
+                  : isSample && !dirty
+                    ? "✦ 直接接入夜之城"
+                    : "✦ 保存并接入夜之城"}
+              </Button>
+            </div>
+
+            <div className={wb.launchSubActions}>
+              <Button
+                small
+                disabled={!canSave || busy || (!dirty && !isSample && saved)}
+                reason={!canSave ? (checks[0]?.text ?? "请先补齐必填项") : undefined}
+                onClick={() => void handleSave()}
+              >
+                {isSample ? "另存为我的角色" : saved ? "已入库" : "仅保存角色"}
+              </Button>
+              {canDelete && (
+                <ActionButton disabled={busy} onClick={onDelete}>
+                  删除角色
+                </ActionButton>
+              )}
+            </div>
+          </section>
+        </aside>
       </div>
 
-      {/* —————— 底部常驻操作条 —————— */}
-      <footer className={wb.bar}>
-        <CellFrame />
-        <div className={wb.barActions}>
-          <Button
-            disabled={!canSave || busy}
-            reason={checks[0]?.text}
-            onClick={() => void handleSave()}
-          >
-            {busy ? "保存中…" : isSample ? "另存为自定义角色" : "保存角色"}
-          </Button>
-          {canDelete && (
-            <Button small disabled={busy} onClick={onDelete}>
-              删除
+      {/* —————— 底部纯净步骤导航条 —————— */}
+      <footer className={wb.footerBar}>
+        <div className={wb.footerLeft}>
+          <span className={wb.footerMeta}>
+            第 {currentStepIndex + 1} / {CREATOR_STEPS.length} 步 · {currentStep?.label}
+          </span>
+          {dirty && (
+            <span className={wb.footerHint}>
+              {draftSaved ? "本地草稿已自动暂存" : "本地草稿暂存失败，请及时保存"}
+            </span>
+          )}
+          {!dirty && saved && <span className={wb.footerSaved}>✓ 角色档案已保存至本地角色库</span>}
+        </div>
+        <div className={wb.footerRight}>
+          {currentStepIndex > 0 && (
+            <Button
+              small
+              disabled={busy}
+              onClick={() => {
+                const prev = CREATOR_STEPS[currentStepIndex - 1];
+                if (prev) goToStep(prev.id);
+              }}
+            >
+              ◂ 上一步：{CREATOR_STEPS[currentStepIndex - 1]?.label}
             </Button>
           )}
-          {displaySaveError ? (
-            <span className={wb.statusError} role="alert">
-              {displaySaveError}
-            </span>
-          ) : (
-            <span className={wb.statusHint}>
-              {saved
-                ? "✓ 角色已保存至本地角色库"
-                : isSample && dirty
-                  ? "已修改官方预设：保存或开局将另存为新的自定义角色"
-                  : isSample
-                    ? "官方预设角色：可直接开启战局，或修改后另存为自定义角色"
-                    : draftSaved
-                      ? "已自动暂存本地草稿"
-                      : "本地草稿暂存失败"}
-            </span>
-          )}
-        </div>
-
-        <div className={wb.launchRow}>
-          {launchMutation.isError && (
-            <span className={wb.statusError} role="alert">
-              {launchMutation.error.message}
-            </span>
-          )}
-          <Button
-            disabled={busy || currentStepIndex <= 0}
-            onClick={() => {
-              const prev = CREATOR_STEPS[currentStepIndex - 1];
-              if (prev) goToStep(prev.id);
-            }}
-          >
-            上一步
-          </Button>
-          {currentStepIndex < CREATOR_STEPS.length - 1 && (
+          {currentStepIndex < CREATOR_STEPS.length - 1 ? (
             <Button
+              small
+              primary
               disabled={busy}
               onClick={() => {
                 const next = CREATOR_STEPS[currentStepIndex + 1];
                 if (next) goToStep(next.id);
               }}
             >
-              下一步
+              下一步：{CREATOR_STEPS[currentStepIndex + 1]?.label} ▸
             </Button>
+          ) : (
+            <span className={wb.footerReadyHint}>
+              {checks.length === 0
+                ? "✓ 全部配置完成，可随时在右侧档案栏接入夜之城"
+                : `⚠ 仍有 ${checks.length} 项必填未完成`}
+            </span>
           )}
-          <FrameBox className={wb.titleBox}>
-            <input
-              maxLength={80}
-              value={saveTitle}
-              aria-label="新战局代号"
-              placeholder={`${card.name.trim() || "未命名"}的夜之城传奇`}
-              onChange={(e) => setSaveTitle(e.target.value)}
-            />
-          </FrameBox>
-          <Button
-            primary
-            disabled={!canLaunch}
-            reason={!data ? "请等待创角目录读取完成" : (checks[0]?.text ?? "正在保存角色")}
-            onClick={() => {
-              onLaunchingChange(true);
-              launchMutation.mutate();
-            }}
-          >
-            {launchMutation.isPending
-              ? "正在接入夜之城…"
-              : isSample && !dirty
-                ? "用此预设开启战局"
-                : "保存并开启战局"}
-          </Button>
         </div>
       </footer>
+
       <ImageGenModal
         open={portraitModalOpen}
-        title="AI 生成角色立绘"
-        subtitle={card.name.trim() || "新建夜之城佣兵"}
+        title="生成角色立绘"
+        subtitle={
+          card.name.trim()
+            ? `${card.name.trim()}${board.origin?.label ? ` · ${board.origin.label}` : ""}`
+            : "夜之城角色立绘"
+        }
         promptRequest={characterPromptRequest}
-        draftKey={`character:${characterId ?? "new"}`}
         defaultAspectRatio="3:4"
+        draftKey={`character-portrait:${characterId ?? "draft"}`}
         onClose={() => setPortraitModalOpen(false)}
         onApplied={(image) => change({ portrait: image.id })}
       />
-      <ImageLightbox
-        imageId={lightboxOpen && card.portrait ? card.portrait : null}
-        title={`${card.name.trim() || "角色"} · 人物立绘`}
-        onClose={() => setLightboxOpen(false)}
-      />
+
+      {lightboxOpen && card.portrait && (
+        <ImageLightbox
+          imageId={card.portrait}
+          title={card.name.trim() || "角色立绘"}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

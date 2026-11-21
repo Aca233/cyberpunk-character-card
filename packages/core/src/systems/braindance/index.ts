@@ -10,10 +10,10 @@ import {
 } from "./schema";
 import { braindanceView } from "./view";
 
-/** 作品、正文体验与有来源的追问；消费不自动成为任务。 */
+/** 超梦系统：四级分类、沉浸/编辑双模式、三层扫描与现场录制 */
 export const braindance = defineSystem<BraindanceState, BraindanceCommand>({
   id: "braindance",
-  dependsOn: ["commerce", "inventory", "world", "shards"],
+  dependsOn: ["commerce", "inventory", "world", "shards", "cyberware", "health"],
   state: BraindanceStateSchema,
   initial: () => BraindanceStateSchema.parse({}),
   commands: { braindance: BraindanceCommandSchema },
@@ -24,12 +24,13 @@ export const braindance = defineSystem<BraindanceState, BraindanceCommand>({
     {
       order: 140,
       title: "超梦",
-      render: ({ world, data, input }) =>
+      render: ({ world, data, input, stage }) =>
         braindanceSection(
           BraindanceStateSchema.parse(world.slices.braindance ?? {}),
           data ?? {},
           input,
           world,
+          stage,
         ) || undefined,
     },
   ],

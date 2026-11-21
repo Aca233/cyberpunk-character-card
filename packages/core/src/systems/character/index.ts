@@ -1,6 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import { characterActions } from "./actions";
-import { gainCred, setBonuses, setCharacter } from "./apply";
+import { gainCred, setCharacter } from "./apply";
 import { characterEvents } from "./events";
 import { applyFlashback, tickFlashback } from "./flashback";
 import { changeHabit, offerHabit } from "./habits";
@@ -17,7 +17,6 @@ import {
   type HabitCommand,
   HabitCommandSchema,
   legacyStreetCred,
-  SetBonusesSchema,
   SetCharacterSchema,
   type StreetCredCommand,
   StreetCredCommandSchema,
@@ -26,7 +25,7 @@ import {
 import { characterStatus } from "./status";
 import { characterView } from "./view";
 
-/** 角色：名字、简介、属性、街头声望和属性点；声望升级时更新生命上限 */
+/** 角色：名字、简介、街头声望、主板模块、习惯与闪回 */
 export const character = defineSystem<
   CharacterState,
   StreetCredCommand | HabitCommand | FlashbackCommand,
@@ -37,13 +36,10 @@ export const character = defineSystem<
   initial: () => ({
     name: null,
     brief: "",
-    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
     streetCred: 1,
     credHalf: false,
-    attributePoints: 0,
     credSettled: [],
     traits: [],
-    bonuses: {},
     habits: [],
     habitOffers: [],
     flashbackUsed: [],
@@ -59,7 +55,6 @@ export const character = defineSystem<
   internal: {
     "character.set": SetCharacterSchema,
     "character.cred": GainCredSchema,
-    "character.setBonuses": SetBonusesSchema,
     "character.habit": HabitChangeSchema,
     "character.flashbackTick": FlashbackTickSchema,
   },
@@ -69,8 +64,6 @@ export const character = defineSystem<
         return setCharacter(draft, command);
       case "character.cred":
         return gainCred(draft, command.halves, command.reason, command.event);
-      case "character.setBonuses":
-        return setBonuses(draft, command);
       case "streetCred":
         return gainCred(draft, command.levels * 2, command.reason, command.event);
       case "habit":

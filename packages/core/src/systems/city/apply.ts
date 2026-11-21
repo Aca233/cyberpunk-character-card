@@ -66,7 +66,6 @@ export function applyCityEvent(
     if (event.district === undefined) delete old.district;
     return { ok: true };
   }
-  if (event.status === "over") return { ok: true };
   draft.events.push({ ...event, startedAt: now, updatedAt: now });
   while (draft.events.length > CITY_KEPT) {
     const over = draft.events.findIndex((e) => e.status === "over");

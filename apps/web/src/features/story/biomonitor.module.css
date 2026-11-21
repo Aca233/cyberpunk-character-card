@@ -17,7 +17,7 @@
   gap: 8px 12px;
   padding: 7px 10px;
   isolation: isolate;
-  --box-fill: rgb(14 10 16 / 94%);
+  --box-fill: var(--cp-surface-strong);
   --box-line: var(--cp-red-dim);
 }
 
@@ -153,18 +153,20 @@
   gap: 6px;
 }
 
-/* 顶部右侧：个人神经芯片槽（常驻可见，与头像区等高对齐） */
+/* 顶部右侧：个人神经芯片槽（常驻可见，与头像区等高对齐，沿用 CellFrame 原作切角框） */
 .neuralDock {
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: 4px;
-  padding: 5px 7px;
-  border: 1px solid rgb(94 246 255 / 22%);
-  border-inline-start: 2px solid var(--cp-cyan);
-  background: rgb(7 12 22 / 78%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+  padding: 6px 8px;
+  --box-fill: var(--cp-surface-inset);
+  --box-line: rgb(94 246 255 / 32%);
 }
 
 .neuralDockHead {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -201,6 +203,8 @@
 }
 
 .neuralSlotRow {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
@@ -210,9 +214,9 @@
   display: flex;
   align-items: stretch;
   min-width: 0;
-  border: 1px solid rgb(94 246 255 / 20%);
-  border-inline-start: 2px solid rgb(94 246 255 / 38%);
-  background: rgb(11 16 28 / 70%);
+  border: 1px solid var(--cp-line-subtle);
+  border-inline-start: 2px solid rgb(94 246 255 / 45%);
+  background: var(--cp-surface);
   transition:
     border-color var(--dur-flash),
     background-color var(--dur-flash);
@@ -437,7 +441,7 @@
   padding: 8px 9px;
   isolation: isolate;
   overflow: hidden;
-  --box-fill: rgb(9 12 20 / 94%);
+  --box-fill: var(--cp-surface-strong);
   --box-line: var(--cp-red-dim);
 }
 
@@ -552,7 +556,7 @@
   width: 9px;
   height: 9px;
   background: var(--cp-yellow);
-  border: 1.5px solid rgb(12 13 22 / 90%);
+  border: 1.5px solid var(--cp-surface-strong);
   box-shadow: 0 0 8px var(--cp-yellow);
 }
 
@@ -675,7 +679,7 @@
   gap: 4px;
   padding: 6px 10px;
   isolation: isolate;
-  --box-fill: rgb(12 13 22 / 88%);
+  --box-fill: var(--cp-surface-raised);
   --box-line: var(--cp-red-dim);
 }
 

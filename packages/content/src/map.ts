@@ -24,6 +24,10 @@ export const MAP_SPOTS: Readonly<Record<string, MapSpot>> = {
   /** 待核对：没找到餐馆的图钉，先放在 H10 旁边 */
   "tom-diner": { x: 33.1, y: 37.4, metro: true },
   japantown: { x: 42.5, y: 42.2, metro: true },
+  /** 超级摩天楼 H8（fastTravel.gen.ts wbr_jpn_dataterm_05: 41.0, 42.8） */
+  clouds: { x: 41.0, y: 42.8, metro: true },
+  /** 扭扭街位于日本街和歌子柏青哥店旁（wbr_fixer: 41.4, 42.0） */
+  "jig-jig-street": { x: 41.7, y: 42.3, metro: true },
   "coyote-cojo": { x: 33.9, y: 65.4, metro: true },
   "corpo-plaza": { x: 32.8, y: 52.8, metro: true },
   "grand-imperial-mall": { x: 19.9, y: 79.6, metro: false },
@@ -50,6 +54,8 @@ export const ROUTE_ALIASES: Readonly<Record<string, string>> = {
   "regina-office": "poi:wat_fixer",
   "wakako-pachinko": "poi:wbr_fixer",
   "kerry-estate": "poi:kerry_villa",
+  clouds: "ft:wbr_jpn_dataterm_05",
+  "jig-jig-street": "poi:wbr_fixer",
 };
 
 /** 城区中心：新地点没坐标时先放在这里，玩家可以拖到准确位置 */

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { WorldState } from "./kernel/world";
-import { CharacterStateSchema, effectiveAttributes } from "./systems/character/schema";
+import { CharacterStateSchema } from "./systems/character/schema";
 import { WeaponConcealmentSchema } from "./systems/dice/schema";
 import { woundSlotOf } from "./systems/health/apply";
 import { HealthStateSchema, WOUND_SLOT_LABELS, WoundSlotSchema } from "./systems/health/schema";
@@ -94,7 +94,7 @@ export function extractEdgeLedgerState(
     catalog,
   );
   const wounds = woundSlotOf(health);
-  const phase = phaseClockOf(world.time, clock.sceneStartedAt);
+  const phase = phaseClockOf(world.time, clock.startedAt ?? clock.sceneStartedAt);
   const suppressed = isImmunosuppressed(humanity, world.time);
 
   return {
@@ -122,7 +122,6 @@ export function extractEdgeLedgerState(
 
 export {
   CharacterStateSchema,
-  effectiveAttributes,
   HealthStateSchema,
   HumanityStateSchema,
   InventoryStateSchema,

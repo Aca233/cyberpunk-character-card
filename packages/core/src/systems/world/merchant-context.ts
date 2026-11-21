@@ -28,6 +28,7 @@ const KIND_LABELS: Record<MerchantSite["kind"], string> = {
   meds: "药店",
   food: "食品店",
   bar: "酒吧",
+  junk: "杂货旧货店",
   ripperdoc: "义体医生",
   netrunner: "黑客商店",
   mixed: "综合商店",
@@ -39,6 +40,7 @@ const KIND_WORDS: Record<MerchantSite["kind"], RegExp> = {
   meds: /药店|买药|药品/,
   food: /食品|饭店|餐厅|吃饭|咖啡/,
   bar: /酒吧|喝酒/,
+  junk: /杂货|旧货|垃圾|二手|破烂|当铺/,
   ripperdoc: /义体|诊所|医生/,
   netrunner: /黑客|潜网|网络行者|黑客商店|EMP|芯片/,
   mixed: /商店|商街/,
@@ -146,9 +148,14 @@ export function merchantEntranceText(
     const works = site.braindanceWorks.map((id) =>
       workLabels.has(id) ? `${id}「${workLabels.get(id)}」` : id,
     );
-    const playback = site.services.includes("bd-session")
-      ? `；店内固定片单 ${works.join("、") || "尚无已登记作品"}；片单来源 ${site.source}`
+    const bdCap = site.braindanceDevice?.playback
+      ? site.braindanceDevice.analysis.length > 0
+        ? `；超梦设备：专业调谐工作站（支持${site.braindanceDevice.analysis.join("/")}三层编辑分析）`
+        : "；超梦设备：商业试看设备（仅支持沉浸回放，三层编辑分析需专业头环或丽姿酒吧地下室工作站）"
       : "";
+    const playback = site.services.includes("bd-session")
+      ? `${bdCap}；店内固定片单 ${works.join("、") || "尚无已登记作品"}；片单来源 ${site.source}`
+      : bdCap;
     return `- ${site.merchant} ${names.get(site.merchant)?.name ?? "已登记经营者"}（${KIND_LABELS[site.kind]}）；地点 ${places.join(" / ")}；服务 ${site.services.join("、") || "无通用付费服务"}${playback}`;
   });
   const tail =

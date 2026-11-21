@@ -5,17 +5,11 @@ import { followTurn } from "../../api/events";
 import { beginProgress, type EndCategory, type ProgressHandle } from "../../progress";
 
 /**
- * 一轮生成的进度：提交 → 事件流（掷骰、正文逐字）→ 终止事件 → 刷新存档状态。
+ * 一轮生成的进度：提交 → 事件流（正文逐字、阶段推进）→ 终止事件 → 刷新存档状态。
  * 出错、被拦截、停止时玩家的输入留在输入框里，可以原样重试
  */
 
-export type Pending =
-  | { readonly kind: "input"; readonly input: TurnInput }
-  | {
-      readonly kind: "confirm";
-      readonly checkId: string;
-      readonly label: string;
-    };
+export type Pending = { readonly kind: "input"; readonly input: TurnInput };
 
 export type FailureKind =
   /** 被安全过滤拦截 */
@@ -26,7 +20,7 @@ export type FailureKind =
   | "stopped"
   /** 模型没配好（503），要去设置里改 */
   | "unavailable"
-  /** 后端拒绝：版本过期、已掷过骰、检定失效 */
+  /** 后端拒绝：版本过期或请求冲突 */
   | "rejected"
   /** 事件流断了，这一轮在后端找不到 */
   | "lost";
@@ -37,7 +31,6 @@ export interface Failure {
   readonly retryable: boolean;
 }
 
-export type Rolled = Extract<TurnEvent, { type: "rolled" }>;
 export type LiveBoost = Extract<TurnEvent, { type: "boost" }>;
 export type LiveStage = Extract<TurnEvent, { type: "stage" }> & {
   readonly startedAt: number;
@@ -63,7 +56,6 @@ interface StoryState {
   readonly turnId: string | null;
   /** 正在生成的正文；记账在正文之后由后端另外抽 */
   readonly text: string;
-  readonly rolled: Rolled | null;
   readonly boost: LiveBoost | null;
   readonly stage: LiveStage | null;
   readonly stageTrace: readonly CompletedStage[];
@@ -128,7 +120,6 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           }
           case "rolled":
-            set({ rolled: event });
             return;
           case "boost":
             set({ boost: event });
@@ -143,7 +134,6 @@ export const useStory = create<StoryState>()((set, get) => {
                 phase: "idle",
                 turnId: null,
                 text: "",
-                rolled: null,
                 boost: null,
                 stage: null,
                 stageTrace: [],
@@ -241,7 +231,6 @@ export const useStory = create<StoryState>()((set, get) => {
     saveId: null,
     turnId: null,
     text: "",
-    rolled: null,
     boost: null,
     stage: null,
     stageTrace: [],
@@ -264,7 +253,6 @@ export const useStory = create<StoryState>()((set, get) => {
         phase: "idle",
         turnId: null,
         text: "",
-        rolled: null,
         boost: null,
         stage: null,
         stageTrace: [],
@@ -281,9 +269,7 @@ export const useStory = create<StoryState>()((set, get) => {
       // 只清理本次实际发送且此后未编辑的草稿；选项、重连和下一步草稿都应保留。
       const draft = get().draft;
       const submittedDraft =
-        pending.kind === "input" &&
-        pending.input.text === draft.text.trim() &&
-        pending.input.replyTo === draft.replyTo
+        pending.input.text === draft.text.trim() && pending.input.replyTo === draft.replyTo
           ? draft
           : null;
       set({
@@ -292,7 +278,6 @@ export const useStory = create<StoryState>()((set, get) => {
         failure: null,
         spend: null,
         text: "",
-        rolled: null,
         stage: {
           type: "stage",
           stage: "judge",
@@ -303,21 +288,14 @@ export const useStory = create<StoryState>()((set, get) => {
         },
         stageTrace: [],
         boost:
-          pending.kind === "input" && pending.input.sandevistan === true
+          pending.input.sandevistan === true
             ? { type: "boost", id: "pending", name: "斯安威斯坦" }
             : null,
       });
       // 上一次没收尾的（照理不会有）先算被顶掉，再开这一次
       finish("aborted");
       progress = beginProgress("turn");
-      const body =
-        pending.kind === "input"
-          ? { requestId: newRequestId(), baseVersion, input: pending.input }
-          : {
-              requestId: newRequestId(),
-              baseVersion,
-              confirm: pending.checkId,
-            };
+      const body = { requestId: newRequestId(), baseVersion, input: pending.input };
       try {
         const result = await api.submit(saveId, body);
         if (!current()) return;

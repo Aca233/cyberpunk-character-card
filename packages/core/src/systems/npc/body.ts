@@ -429,10 +429,11 @@ export function applyNpcBody(
       }
       const verb = command.action === "install" ? "装上了" : "拆掉了";
       for (const [device, state] of Object.entries(npc.behaviorChips ?? {})) {
-        if (!npc.body?.cyberware.includes(device) && state.mode === "chip") {
-          state.mode = "personal";
+        if (!npc.body?.cyberware.includes(device) && state.mode !== "off") {
+          state.mode = "off";
+          state.protocol = null;
           state.since = now;
-          if (state.lastControl) state.lastControl.to = now;
+          if (state.lastControl && state.lastControl.to === null) state.lastControl.to = now;
         }
       }
       const swapNote = swapped === undefined ? "" : `，换下了 ${swapped}`;
@@ -461,7 +462,13 @@ export function applyNpcBody(
     case "npcScan": {
       const { v } = settle(npc, data, now);
       v.scannedAt = now;
-      return { ok: true, notes: [`扫描了 ${npc.name}`] };
+      const tactical = scanTacticalProfile(npc, data, now);
+      return {
+        ok: true,
+        notes: [
+          `用义眼扫描了 ${npc.name}：威胁「${tactical.threatLabel}」；${tactical.netLabel}${tactical.summaryBits.length > 0 ? `；${tactical.summaryBits.join("；")}` : ""}`,
+        ],
+      };
     }
   }
 }
@@ -659,7 +666,170 @@ export function woundNote(
   return woundLabel(v);
 }
 
-/** 玩家视图里的身体：见过的人看伤势（含具体创口）、装备；扫描过的看实际义体配置与精神/人性稳定度，不展示游戏数值 */
+export type ScanNetStatus = "unchromed" | "open" | "selfIce" | "netrunner";
+
+export interface ScanTacticalProfile {
+  readonly threat: "low" | "even" | "high";
+  readonly threatLabel: string;
+  readonly netStatus: ScanNetStatus;
+  readonly netLabel: string;
+  readonly summaryBits: readonly string[];
+  readonly tips: readonly string[];
+}
+
+/** 基于 NPC 真实义体、随身武装与伤势，生成可供义眼扫描展示与战术判断的定性情报（零骰、无虚拟数值） */
+export function scanTacticalProfile(
+  npc: Pick<Npc, "body" | "vitals">,
+  data: Data,
+  now: number,
+): ScanTacticalProfile {
+  const body = filledBody(npc.body);
+  const v = currentVitals(npc, data, now);
+  const catalog = cyberwareCatalog(data);
+  const chromeDefs = body.cyberware
+    .map((id) => catalog.get(id))
+    .filter((d): d is NonNullable<typeof d> => d !== undefined);
+  const chrome = chromeDetails(body.cyberware, data);
+  const details = gearDetails(body.gear, data);
+  const weapons = details.filter((item) => item.kind === "weapon");
+  const injuries = projectInjuries(v.injuries);
+
+  const hasDeck = chrome.some((c) => c.netTag === "deck");
+  const hasSelfIce = chrome.some((c) => c.netTag === "selfIce");
+  const hasArmor = chromeDefs.some((d) => d.armor);
+  const hasAccel = chromeDefs.some((d) => d.accelerator);
+  const hasArmWeapon = chromeDefs.some((d) => d.slot === "arms");
+  const hasBehaviorChip = chromeDefs.some((d) => d.behaviorChip);
+  const highGradeChrome = chromeDefs.filter(
+    (d) => d.iconic || d.rarity === "legendary" || d.rarity === "epic",
+  );
+  const hasHeavyWeapon = weapons.some(
+    (w) =>
+      w.subLabel.includes("步枪") ||
+      w.subLabel.includes("霰弹") ||
+      w.subLabel.includes("狙击") ||
+      w.subLabel.includes("机枪") ||
+      w.iconic,
+  );
+
+  // 1. 骇入链路判断
+  let netStatus: ScanNetStatus;
+  let netLabel: string;
+  if (chrome.length === 0) {
+    netStatus = "unchromed";
+    netLabel = "无植入体（无线快速破解不可锁定）";
+  } else if (hasDeck) {
+    netStatus = "netrunner";
+    netLabel = hasSelfIce
+      ? "敌方网络黑客（含接入仓与自我 ICE，强骇易遭反制）"
+      : "敌方网络黑客（装有接入仓，小心远程反骇）";
+  } else if (hasSelfIce) {
+    netStatus = "selfIce";
+    netLabel = "已装自我 ICE（常规无线快速破解易被首轮拦截）";
+  } else {
+    netStatus = "open";
+    netLabel = "无自我 ICE（可直接无线快速破解其义体）";
+  }
+
+  // 2. 威胁定级
+  let threat: "low" | "even" | "high" = "low";
+  let threatLabel = "常规目标";
+  if (
+    v.condition === "dying" ||
+    v.condition === "dead" ||
+    injuries.some((i) => i.tier === "lethal")
+  ) {
+    threat = "low";
+    threatLabel = "重创失能";
+  } else if (
+    hasAccel ||
+    highGradeChrome.length >= 2 ||
+    (hasArmor && (hasArmWeapon || hasHeavyWeapon || hasDeck)) ||
+    chrome.length >= 5
+  ) {
+    threat = "high";
+    threatLabel = "高危改装";
+  } else if (
+    chrome.length >= 2 ||
+    hasArmor ||
+    hasDeck ||
+    hasArmWeapon ||
+    hasHeavyWeapon ||
+    weapons.length >= 1
+  ) {
+    threat = "even";
+    threatLabel = "持械实战";
+  }
+
+  // 3. 简洁摘要 & 实战战术提示
+  const summaryBits: string[] = [];
+  const tips: string[] = [];
+
+  if (chrome.length === 0) {
+    summaryBits.push("未检出义体");
+    tips.push("纯肉体目标：无法无线快速破解，近身压制与常规枪械均无义体护甲阻拦");
+  } else {
+    const names = chrome.slice(0, 3).map((c) => c.name);
+    summaryBits.push(
+      `检出 ${chrome.length} 件义体（${names.join("、")}${chrome.length > 3 ? "等" : ""}）`,
+    );
+  }
+
+  if (hasAccel) {
+    const accelName = chromeDefs.find((d) => d.accelerator)?.name ?? "神经加速义体";
+    tips.push(`装有${accelName}：正面先手爆发极高，建议抢攻、伏击或先用义体过热/干扰压制`);
+  }
+  if (hasArmor) {
+    const armorName = chromeDefs.find((d) => d.armor)?.name ?? "护甲义体";
+    tips.push(
+      `带${armorName}：常规轻口径手枪正面难破防，优先用技术武器、大口径、近战或瞄准无甲弱点`,
+    );
+  }
+  if (hasArmWeapon) {
+    const armName = chromeDefs.find((d) => d.slot === "arms")?.name ?? "内置手臂武装";
+    tips.push(`隐蔽武装${armName}：哪怕空手也有贴身致命输出，别放松近距戒备`);
+  }
+  if (hasDeck) {
+    tips.push("持有网络接入仓：交火或僵持时可能远程过热/锁死你的义体，优先断视线或先手解决");
+  } else if (netStatus === "open") {
+    tips.push("义体无自我 ICE 防护：若有接入仓可直接无线锁义眼、卡武器或烧毁硬件");
+  } else if (netStatus === "selfIce") {
+    tips.push("带自我 ICE：初次无线骇入会被拦截，需靠高阶接入仓强破或改走物理压制");
+  }
+  if (hasBehaviorChip) {
+    tips.push("植入了行为芯片：可能处于托管/改装协议状态，也易受敌方黑客远程干扰");
+  }
+  if (weapons.length > 0) {
+    summaryBits.push(`随身武装：${weapons.map((w) => w.name).join("、")}`);
+  }
+  const untreated = injuries.filter((i) => !i.treated);
+  if (untreated.length > 0) {
+    const head = untreated[0];
+    if (head) {
+      summaryBits.push(`${head.partLabel}${head.tierLabel}未愈`);
+      tips.push(
+        `可趁伤势发难：${head.partLabel}${head.tierLabel}（${head.cause}）会影响其闪避与发力`,
+      );
+    }
+  }
+  const stage = neuralStage(v);
+  if (stage === "unstable" || stage === "edge" || stage === "crisis") {
+    tips.push(
+      `神经稳态偏低（${STAGE_LABELS[stage]}）：情绪与判断易受刺激波动，交涉或施压时可针对施压`,
+    );
+  }
+
+  return {
+    threat,
+    threatLabel,
+    netStatus,
+    netLabel,
+    summaryBits,
+    tips: tips.slice(0, 4),
+  };
+}
+
+/** 玩家视图里的身体：见过的人看伤势（含具体创口）、装备；扫描过的看实际义体配置、战术评估与精神/人性稳定度，不展示游戏数值 */
 export interface NpcBodyView {
   readonly wound: string;
   readonly injuries: readonly NpcInjuryView[];
@@ -667,6 +837,11 @@ export interface NpcBodyView {
   readonly scan: {
     readonly chrome: readonly ChromeDetail[];
     readonly humanityStage: string;
+    readonly threat: "low" | "even" | "high";
+    readonly threatLabel: string;
+    readonly netStatus: ScanNetStatus;
+    readonly netLabel: string;
+    readonly tips: readonly string[];
     readonly at: number;
   } | null;
 }
@@ -681,11 +856,17 @@ export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
     scan: null,
   };
   if (v.scannedAt === null) return view;
+  const tactical = scanTacticalProfile(npc, data, now);
   return {
     ...view,
     scan: {
       chrome: chromeDetails(body.cyberware, data),
       humanityStage: STAGE_LABELS[neuralStage(v)],
+      threat: tactical.threat,
+      threatLabel: tactical.threatLabel,
+      netStatus: tactical.netStatus,
+      netLabel: tactical.netLabel,
+      tips: tactical.tips,
       at: v.scannedAt,
     },
   };

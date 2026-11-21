@@ -413,7 +413,7 @@
   }
 }
 
-/* 特长 / 过往 / 负面 / 联动：轻量技术胶囊，按槽位着色与形态区分 */
+/* 特长 / 过往 / 负面 / 联动：2077 切角铭牌，按槽位着色与形态区分 */
 .traitChip {
   --trait-accent: var(--cp-cyan);
   display: inline-flex;
@@ -421,22 +421,21 @@
   gap: 0.34rem;
   min-block-size: 1.55rem;
   padding-block: 0.16rem;
-  padding-inline: 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--trait-accent) 34%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--trait-accent) 7%, rgb(12 14 22 / 80%));
+  padding-inline: 0.55rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--trait-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--trait-accent) 8%, var(--cp-surface));
   color: var(--cp-text);
   font: inherit;
   font-size: var(--fs-label);
   line-height: 1.25;
   text-align: start;
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
   scale: 1;
   transition:
-    border-color 140ms ease-out,
-    background-color 140ms ease-out,
-    box-shadow 140ms ease-out,
-    scale 140ms ease-out;
+    border-color var(--dur-flash) ease-out,
+    background-color var(--dur-flash) ease-out,
+    scale var(--dur-flash) ease-out;
 }
 
 .traitChip:where([data-slot="past"]) {
@@ -454,13 +453,12 @@
 
 .traitChip:where([aria-pressed="true"]) {
   border-color: var(--trait-accent);
-  background: color-mix(in srgb, var(--trait-accent) 18%, rgb(12 14 22 / 92%));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--trait-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--trait-accent) 18%, var(--cp-surface-strong));
 }
 
 .traitChip:hover {
   border-color: color-mix(in srgb, var(--trait-accent) 72%, transparent);
-  background: color-mix(in srgb, var(--trait-accent) 14%, rgb(12 14 22 / 88%));
+  background: color-mix(in srgb, var(--trait-accent) 14%, var(--cp-surface-hover));
 }
 
 .traitChip:active {
@@ -500,7 +498,7 @@
   padding-block: 0.42rem;
   padding-inline: 0.65rem;
   border-inline-start: 2px solid var(--trait-accent);
-  background: color-mix(in srgb, var(--trait-accent) 8%, rgb(10 12 20 / 82%));
+  background: color-mix(in srgb, var(--trait-accent) 8%, var(--cp-surface));
   font-size: var(--fs-label);
   line-height: 1.45;
 }
@@ -733,7 +731,7 @@
   font-family: var(--font-ui);
   font-size: var(--fs-label);
   color: var(--cp-text-dim);
-  background: linear-gradient(90deg, rgb(255 64 64 / 7%), transparent);
+  background: rgb(255 64 64 / 7%);
   border-left: 2px solid var(--cp-red-line);
 }
 
@@ -746,41 +744,40 @@
   border: 1px solid var(--cp-red-line);
 }
 
-.emptyBrief {
-  margin: 2.2rem 0 1.2rem;
-  padding: 1.15rem 1.35rem;
-  background: linear-gradient(135deg, rgb(14 18 28 / 78%), rgb(10 12 20 / 55%));
-  border-left: 3px solid var(--cp-cyan);
-  border-top: 1px solid rgb(94 246 255 / 22%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+.opening {
+  margin: 2.2rem 0 1.4rem;
   animation: rise var(--dur-slide) var(--ease-cyber) both;
 }
 
-.emptyHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  margin-bottom: 0.55rem;
-  font-family: var(--font-ui);
-  font-size: var(--fs-label);
-  letter-spacing: 0.12em;
-  color: var(--cp-cyan);
+.openingIntro {
+  margin: 1.2rem 0 1.4rem;
 }
 
-.emptyHead b {
-  font-size: 0.95rem;
-  letter-spacing: 0.08em;
-  color: var(--cp-yellow);
-}
-
-.emptyCopy {
+.openingLead {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 0.98em;
-  line-height: 1.85;
+  font-size: 1em;
+  line-height: var(--story-leading);
   color: var(--cp-text);
+  text-indent: 2em;
+}
+
+.openingLead b {
+  color: var(--cp-success);
+  font-weight: 500;
+}
+
+.openingChoices {
+  margin: 1.1rem 0 0;
+}
+
+.openingFoot {
+  margin: 1.1rem 0 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
+  color: var(--cp-text-dim);
+  text-align: center;
 }
 
 .scrollBottomBtn {
@@ -797,7 +794,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--cp-cyan);
-  background: rgb(8 14 24 / 92%);
+  background: var(--cp-surface-strong);
   border: 1px solid rgb(94 246 255 / 55%);
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
   cursor: var(--cp-cursor-hand);
@@ -893,6 +890,10 @@
 
 .unsettled {
   color: var(--cp-red);
+}
+
+.unsettledDetail {
+  color: var(--cp-text-dim);
 }
 
 .regenerate {
@@ -1018,7 +1019,7 @@
   border: 1px solid var(--cp-cyan-dim);
   color: var(--cp-yellow);
   font-size: 0.85em;
-  background: rgb(10 14 20 / 60%);
+  background: var(--cp-surface-soft);
 }
 
 .liveStageDetail {
@@ -1077,7 +1078,7 @@
   margin-bottom: 0.55rem;
   padding: 0.55rem 0.7rem;
   font-family: var(--font-ui);
-  background: linear-gradient(90deg, rgb(255 64 64 / 10%), transparent);
+  background: rgb(255 64 64 / 9%);
   border-left: 2px solid var(--cp-red);
 }
 
@@ -1300,8 +1301,8 @@
   font-size: 0.98rem;
   line-height: 1.6;
   color: var(--cp-text);
-  background: rgb(4 7 14 / 62%);
-  border: 1px solid var(--cp-red-line);
+  background: var(--cp-surface-inset);
+  border: 1px solid var(--cp-red-dim);
   border-left: 2px solid var(--mode-color);
   field-sizing: content;
   transition:
@@ -1316,7 +1317,7 @@
 
 .textarea:focus {
   outline: none;
-  background: rgb(6 10 18 / 80%);
+  background: var(--cp-surface-strong);
   border-color: var(--mode-color);
   box-shadow: 0 0 0 1px var(--mode-color) inset;
 }
@@ -1658,7 +1659,7 @@
   text-indent: 0;
   white-space: normal;
   color: var(--cp-text);
-  background: rgb(8 12 22 / 96%);
+  background: var(--cp-panel-strong);
   border: 1px solid rgb(94 246 255 / 55%);
   border-left: 2px solid var(--cp-cyan);
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
@@ -1669,6 +1670,158 @@
 
 .dialogue .slang {
   text-decoration-color: currentColor;
+}
+
+/* 正文里的武器与义体：与人名(青)、地名(绿)、自己(黄)、台词(暖金)错开色系 */
+.gearMention {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  text-indent: 0;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+  cursor: help;
+  transition:
+    color var(--dur-flash),
+    text-decoration-color var(--dur-flash);
+}
+
+.gearMention[data-kind="weapon"] {
+  color: #ff8e6b;
+  text-decoration-color: rgb(255 142 107 / 45%);
+}
+
+.gearMention[data-kind="cyberware"] {
+  color: #c88cff;
+  text-decoration-color: rgb(200 140 255 / 45%);
+}
+
+.gearMention[data-iconic] {
+  color: #ffb84d;
+  text-decoration-color: rgb(255 184 77 / 55%);
+}
+
+.gearMention:hover,
+.gearMention:focus-visible {
+  outline: none;
+  text-decoration-color: currentColor;
+  text-decoration-style: solid;
+}
+
+/* 武器 / 义体悬浮详情卡片 */
+.gearCard {
+  position: fixed;
+  z-index: 90;
+  padding: 0.72rem 0.85rem;
+  font-family: var(--font-ui);
+  color: var(--cp-text);
+  background: var(--cp-panel-strong);
+  border: 1px solid rgb(255 142 107 / 55%);
+  border-left: 3px solid #ff8e6b;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  box-shadow:
+    0 14px 36px rgb(0 0 0 / 78%),
+    0 0 18px rgb(255 142 107 / 14%);
+  pointer-events: none;
+}
+
+.gearCard[data-kind="cyberware"] {
+  border-color: rgb(200 140 255 / 55%);
+  border-left-color: #c88cff;
+  box-shadow:
+    0 14px 36px rgb(0 0 0 / 78%),
+    0 0 18px rgb(200 140 255 / 16%);
+}
+
+.gearCard[data-iconic] {
+  border-color: rgb(242 209 76 / 65%);
+  border-left-color: var(--rar-iconic);
+  box-shadow:
+    0 14px 36px rgb(0 0 0 / 78%),
+    0 0 20px rgb(242 209 76 / 18%);
+}
+
+.gearCardHead {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+.gearCardThumb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 44px;
+  padding: 3px 5px;
+  background: rgb(255 255 255 / 4%);
+  border: 1px solid rgb(255 255 255 / 12%);
+}
+
+.gearCardTitleWrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.gearCardTags {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+}
+
+.gearCardType {
+  color: #ff8e6b;
+  font-weight: 700;
+}
+
+.gearCard[data-kind="cyberware"] .gearCardType {
+  color: #c88cff;
+}
+
+.gearCard[data-iconic] .gearCardType {
+  color: var(--rar-iconic);
+}
+
+.gearCardStatus {
+  padding: 0 0.35rem;
+  font-size: 0.64rem;
+  color: var(--cp-cyan);
+  border: 1px solid rgb(94 246 255 / 38%);
+  background: rgb(94 246 255 / 10%);
+}
+
+.gearCardName {
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--cp-text);
+}
+
+.gearCardMeta {
+  font-size: 0.74rem;
+  color: var(--rarity, var(--cp-text-dim));
+  line-height: 1.25;
+}
+
+.gearCardDesc {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--cp-text);
+  text-indent: 0;
 }
 
 .cyberList {
@@ -1717,7 +1870,7 @@
 }
 
 .dossierDialog {
-  width: min(740px, calc(100vw - 32px));
+  width: min(780px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
   animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
@@ -1792,6 +1945,63 @@
 
 .trackCleanRow:where([data-overdue]) {
   border-left-color: var(--cp-danger);
+}
+
+.trackCleanRow:where([data-offered]) {
+  border-left-color: rgb(94 246 255 / 65%);
+}
+
+.trackCleanRow:where([data-closed]) {
+  border-left-color: rgb(184 206 214 / 28%);
+  opacity: 0.82;
+}
+
+.trackRowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.trackRowActions button {
+  padding: 0.16rem 0.52rem;
+  font-size: 11.5px;
+  min-height: 0;
+}
+
+.trackGigItem:where([data-offered]) {
+  border-left-color: rgb(94 246 255 / 55%);
+}
+
+.trackGigItem:where([data-offered][open]) {
+  border-left-color: var(--cp-cyan);
+}
+
+.trackHistoryWrap {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgb(184 206 214 / 14%);
+}
+
+.trackHistorySummary {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cp-text-dim);
+  cursor: var(--cp-cursor-hand);
+  list-style: none;
+}
+
+.trackHistorySummary::-webkit-details-marker {
+  display: none;
+}
+
+.trackClosedTag {
+  flex: none;
+  font-size: 11px;
+  color: var(--cp-text-dim);
 }
 
 .trackCleanTop {
@@ -1878,6 +2088,10 @@
 .trackGigItem:where([data-overdue]) .trackGigMeta {
   color: var(--cp-danger);
   font-weight: 700;
+}
+
+.trackGigItem:where([data-offered]) .trackGigMeta {
+  color: var(--cp-cyan);
 }
 
 .trackGigDetail {
@@ -2117,16 +2331,6 @@
   margin-top: 0.3rem;
 }
 
-.habitInput {
-  flex: 1;
-  min-width: 0;
-  padding: 0.1rem 0.3rem;
-  border: 1px solid var(--cp-cyan-dim);
-  background: transparent;
-  color: inherit;
-  font-size: var(--fs-label);
-}
-
 /* ———— 记忆面板 ———— */
 
 .memoryForm {
@@ -2230,6 +2434,59 @@
   border-right: 1px solid rgb(94 246 255 / 18%);
 }
 
+.phoneIncomingCall {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.45rem;
+  padding: 0.45rem 0.55rem;
+  background: rgb(14 34 40 / 72%);
+  border: 1px solid rgb(94 246 255 / 40%);
+  border-left: 3px solid var(--cp-cyan);
+}
+
+.phoneIncomingCallMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+
+.phoneIncomingCallMeta small {
+  color: var(--cp-cyan);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.phoneIncomingCallMeta b {
+  color: var(--cp-text);
+  font-size: var(--fs-label);
+}
+
+.phoneIncomingCallTime {
+  color: var(--cp-text-dim);
+  font-size: 10px;
+}
+
+.phoneIncomingCallActions {
+  display: flex;
+  flex: none;
+  gap: 0.35rem;
+}
+
+.phoneActiveCall {
+  flex: none;
+  margin: 0 0 0.45rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--cp-cyan);
+  font-size: var(--fs-label);
+  background: rgb(14 34 40 / 48%);
+  border-left: 2px solid var(--cp-cyan);
+}
+
 .phoneMissedCalls {
   display: flex;
   flex: none;
@@ -2321,12 +2578,11 @@
   display: flex;
   flex: none;
   flex-wrap: wrap;
-  gap: 0.1rem 0.55rem;
+  gap: 4px;
   min-inline-size: 0;
-  margin: 0 0 0.1rem;
-  padding: 0 0.15rem;
+  margin: 0 0 0.25rem;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid rgb(94 246 255 / 16%);
 }
 
 .phoneFilterLegend {
@@ -2340,31 +2596,36 @@
 
 .phoneFilter {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.2rem;
-  padding: 0.1rem 0.05rem 0.24rem;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.16rem 0.48rem;
   font-family: var(--font-ui);
   font-size: 11px;
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--cp-text-dim);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
+  background: var(--cp-surface-inset);
+  border: 1px solid var(--cp-line-subtle);
   cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
   transition:
     color var(--dur-flash),
-    border-color var(--dur-flash);
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
 }
 
 .phoneFilter:hover,
 .phoneFilter:focus-visible {
   outline: none;
-  color: var(--cp-text);
+  color: var(--cp-yellow);
+  border-color: rgb(252 238 10 / 50%);
+  background: var(--cp-surface-hover);
 }
 
 .phoneFilter[aria-pressed="true"] {
   color: var(--cp-cyan);
-  border-bottom-color: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+  font-weight: 700;
 }
 
 .phoneFilterCount {
@@ -2389,7 +2650,7 @@
 }
 
 .contact {
-  --box-fill: rgb(14 16 26 / 75%);
+  --box-fill: var(--cp-surface-inset);
   --box-line: rgb(94 246 255 / 35%);
   position: relative;
   display: flex;
@@ -2417,7 +2678,7 @@
 }
 
 .contact[aria-pressed="true"] {
-  --box-fill: rgb(12 24 34 / 88%);
+  --box-fill: var(--cp-surface-hover);
   --box-line: var(--cp-cyan);
   border-left-color: var(--cp-cyan);
   background: rgb(94 246 255 / 12%);
@@ -2777,8 +3038,8 @@
 
 .phoneEmptyCard,
 .feedEmpty {
-  --box-fill: rgb(14 16 26 / 68%);
-  --box-line: rgb(94 246 255 / 26%);
+  --box-fill: var(--cp-surface-inset);
+  --box-line: var(--cp-line-subtle);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -2834,7 +3095,7 @@
   align-self: flex-start;
   max-width: 82%;
   padding: 0.44rem 0.72rem 0.48rem 0.68rem;
-  background: rgb(14 20 32 / 86%);
+  background: var(--cp-surface-raised);
   border: 1px solid rgb(94 246 255 / 16%);
   border-left: 2px solid rgb(94 246 255 / 62%);
 }
@@ -3054,31 +3315,43 @@
   gap: 0.45rem;
 }
 
-.phoneInput {
+.phoneInputBox {
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
+  position: relative;
+  isolation: isolate;
   flex: 1;
+  min-width: 0;
+  display: block;
+}
+
+.phoneInputBox:hover {
+  --box-line: var(--cp-red);
+}
+
+.phoneInputBox:focus-within {
+  --box-line: var(--cp-cyan);
+}
+
+.phoneInput {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
   min-width: 0;
   box-sizing: border-box;
   resize: none;
   min-height: 2.2rem;
   max-height: 5.5rem;
   field-sizing: content;
-  padding: 0.38rem 0.6rem;
+  padding: 0.4rem 0.65rem;
   font: inherit;
   font-size: 0.875rem;
   line-height: 1.45;
   color: var(--cp-text);
-  background: rgb(10 14 24 / 86%);
-  border: 1px solid rgb(94 246 255 / 26%);
-  border-left: 2px solid var(--cp-cyan-dim);
+  background: transparent;
+  border: 0;
   outline: none;
-  transition:
-    border-color var(--dur-flash),
-    border-left-color var(--dur-flash);
-}
-
-.phoneInput:focus {
-  border-color: rgb(94 246 255 / 55%);
-  border-left-color: var(--cp-cyan);
 }
 
 .phoneInput::placeholder {
@@ -3119,8 +3392,8 @@
 }
 
 .feedCard {
-  --box-fill: rgb(14 16 26 / 78%);
-  --box-line: rgb(94 246 255 / 28%);
+  --box-fill: var(--cp-surface);
+  --box-line: var(--cp-line-subtle);
   position: relative;
   isolation: isolate;
   display: flex;
@@ -3453,7 +3726,7 @@
   gap: 0.5rem 1rem;
   padding: 0.6rem 1.2rem;
   border-bottom: 1px solid var(--cp-red-dim);
-  background: linear-gradient(180deg, rgb(255 0 60 / 10%), transparent);
+  background: rgb(255 0 60 / 6%);
 }
 
 .mapTopTitle {
@@ -3469,24 +3742,37 @@
   min-width: 10rem;
 }
 
+.mapSearchBox {
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
+  position: relative;
+  isolation: isolate;
+  display: block;
+}
+
+.mapSearchBox:hover {
+  --box-line: var(--cp-red);
+}
+
+.mapSearchBox:focus-within {
+  --box-line: var(--cp-cyan);
+}
+
 .mapSearchInput {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  padding: 0.25rem 0.55rem;
-  border: 1px solid var(--cp-red-dim);
-  background: rgb(10 14 22 / 90%);
+  padding: 0.28rem 0.6rem;
+  border: 0;
+  background: transparent;
   color: var(--cp-text);
   font: inherit;
   font-size: var(--fs-label);
   outline: none;
-  transition: border-color var(--dur-flash);
 }
 
 .mapSearchInput::placeholder {
   color: var(--cp-text-faint);
-}
-
-.mapSearchInput:focus {
-  border-color: var(--cp-cyan);
 }
 
 .mapSearchResults {
@@ -3501,7 +3787,7 @@
   max-height: 18rem;
   overflow-y: auto;
   border: 1px solid var(--cp-cyan);
-  background: rgb(10 13 22 / 96%);
+  background: var(--cp-panel-strong);
   box-shadow: 0 8px 24px rgb(0 0 0 / 70%);
 }
 
@@ -4453,7 +4739,7 @@ ul.mapLegend > li {
   height: 30px;
   place-items: center;
   border: 1px solid currentColor;
-  background: rgb(9 12 18 / 88%);
+  background: var(--cp-surface-strong);
   font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 700;
@@ -4529,24 +4815,6 @@ ul.mapLegend > li {
   cursor: var(--cp-cursor-hand);
   color: var(--cp-red);
   letter-spacing: 0.05em;
-}
-
-.squadOffer {
-  margin: 0 0 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--cp-red-dim);
-}
-
-.squadActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 4px;
-}
-
-.squadOwed {
-  color: var(--cp-red);
 }
 
 /* 人性干扰与视神经故障：靠夜之城底图偏色 + 正文红青色差、克制的帧撕裂与角标乱码造出义眼失调感，不遮盖正文阅读 */
@@ -4776,6 +5044,47 @@ ul.mapLegend > li {
   background: color-mix(in srgb, var(--cp-cyan) 12%, transparent);
 }
 
+.uiActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0.1rem 0 0.55rem;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--cp-cyan) 28%, transparent);
+  border-inline-start: 2px solid var(--cp-cyan);
+  background: color-mix(in srgb, var(--cp-cyan) 6%, transparent);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cp-text-dim);
+}
+
+.uiActions[data-pending] {
+  border-color: color-mix(in srgb, var(--cp-yellow) 36%, transparent);
+  border-inline-start-color: var(--cp-yellow);
+  background: color-mix(in srgb, var(--cp-yellow) 7%, transparent);
+}
+
+.uiActionsTag {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+}
+
+.uiActions[data-pending] .uiActionsTag {
+  color: var(--cp-yellow);
+}
+
+.uiActionsList {
+  margin: 0;
+  padding-inline-start: 1.05rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  color: var(--cp-text);
+}
+
 @keyframes sandy-flash {
   from {
     opacity: 0;
@@ -4985,7 +5294,7 @@ ul.mapLegend > li {
 .turnIllustration {
   margin: 10px 0 6px;
   padding: 6px;
-  background: rgb(8 10 18 / 82%);
+  background: var(--cp-surface);
   border-left: 2px solid var(--cp-cyan);
   animation: cityFadeIn 280ms ease-out both;
 }
@@ -5030,7 +5339,7 @@ ul.mapLegend > li {
   gap: 8px;
   margin: 8px 0 4px;
   padding: 6px 10px;
-  background: rgb(14 18 28 / 78%);
+  background: var(--cp-surface);
   border-left: 2px solid var(--cp-yellow);
   color: var(--cp-yellow);
   font-size: var(--fs-label);

@@ -31,6 +31,18 @@ const table = [
     note: "霓虹、夜市和虎爪帮的地盘",
   },
   {
+    id: "clouds",
+    name: "云顶",
+    district: "威斯特布鲁克",
+    note: "超级摩天楼 H8 顶层的高端玩偶俱乐部，由虎爪帮控制，前台存枪并通过个人链路算法匹配玩偶",
+  },
+  {
+    id: "jig-jig-street",
+    name: "扭扭街",
+    district: "威斯特布鲁克",
+    note: "日本街深处的红灯区与地下暗巷，聚集着街头性偶、黑市商贩与地下黑超梦摊位",
+  },
+  {
     id: "coyote-cojo",
     name: "野狼酒吧",
     district: "海伍德",

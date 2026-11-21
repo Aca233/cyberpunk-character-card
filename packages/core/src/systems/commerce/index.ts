@@ -8,18 +8,11 @@ import {
   type CommerceState,
   CommerceStateSchema,
   OfferCommandSchema,
-  PaidServiceSchema,
   ServiceCommandSchema,
-  SessionProgressSchema,
   UsedOfferSchema,
   WithdrawOfferSchema,
 } from "./schema";
-import {
-  applyPaidService,
-  applyService,
-  serviceSessionText,
-  syncServiceProgress,
-} from "./services";
+import { applyService, serviceSessionText } from "./services";
 
 export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInternal>({
   id: "commerce",
@@ -33,13 +26,8 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
   },
   internal: {
     "commerce.used": UsedOfferSchema,
-    "commerce.servicePaid": PaidServiceSchema,
-    "commerce.sessionProgress": SessionProgressSchema,
   },
   apply(draft, command, ctx) {
-    if (command.type === "commerce.servicePaid") return applyPaidService(draft, command.id, ctx);
-    if (command.type === "commerce.sessionProgress")
-      return syncServiceProgress(draft, command.id, command.elapsed, command.status);
     if (command.type === "commerce.service") return applyService(draft, command, ctx);
     if (command.type !== "commerce.offer") {
       const quote = draft.quotes[command.id];
@@ -95,14 +83,14 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
       when: (state, input) =>
         Object.values(state.quotes).some((q) => q.status === "offered") ||
         Object.values(state.sessions).some((s) => ["active", "paused"].includes(s.status)) ||
-        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|服务/.test(
+        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|云顶|扭扭街|丽姿|服务/.test(
           input.text,
         ),
       judge:
         "- 询价、讨价还价和提出条件不等于购买。花钱意图须指明实际交易对方和物件；已谈妥条件引用报价 id，不另猜折扣。",
       narrate:
-        "- 同一交易的报价、货源和拒售原因沿用给定事实；可以继续商谈或提出新条件。报价成立不代表玩家已接受，不替玩家完成购买、赊账或出售旧义体。超梦和成人服务先说清本次主体、范围、时长、是否允许记录及中止条件；消费记录不证明偏好、私人信任或感情。实际相处可以平静结束。暂停与私下聊天沿用普通时间；略写正常结束仍经过剩余分钟。",
-      text: "- 对方明确认可的新价格与条件写 commerce.offer，evidence 逐字引用本轮正文中的对方报价；玩家单方面要求、假设和打算不算。price 是本次单件最终现金对价，义体安装已包含约定折抵，不再重复扣抵。仅保存报价不发 trade 或 cyberware。确实成交时引用 offer id，钱货由同一交易指令完成，不另发 item gain 或 money。已有报价撤回须有正文依据。没有人物卡的现场服务者可随报价登记 party，不借此伪造私人货源。\n- bd-session 与 adult-service 报价必须填完整 session 条件，付款沿用 trade 并引用该 offer，不用 favor/info 代付。成人服务 subject 是已经确认成年且在场的人物；付款不代替本人持续意愿。已付成人服务用 commerce.service 记录正文中实际继续、暂停、恢复、正常结束或中止，elapsed 写累计实际分钟，重试不重复加时；正常 finish 补足剩余约定分钟，提前退出写 exit，不临时追加费用或凭空退款。超梦由 braindance 更新体验进度。记录许可不等于真实录制或传播。服务内迎合不自动增加好感或私人关系。",
+        "- 同一交易的报价、货源和拒售原因沿用给定事实；报价成立不代表玩家已接受，不替玩家完成购买、赊账或出售旧义体。会所点播超梦与街头/云顶服务按自然对话成交即可，不把夜之城消费写成法务表单。",
+      text: "- 对方明确认可的新价格写 commerce.offer（evidence 引用本轮正文中的对方报价）；仅保存报价不发 trade 或 cyberware。确实成交时发 trade/cyberware，钱货由同一交易指令完成，不另发 item gain 或 money。\n- 店内超梦（bd-session）与成年服务（adult-service）直接按店价或谈妥的 commerce.offer 走 trade 结算；仅在实际开展会所/街头服务时可用 commerce.service（start/pause/resume/finish/exit）记录当前在场会话，时间由 world 正常推进。",
     },
   ],
   sections: [
@@ -131,7 +119,6 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
           if (person.location === here || input.text.includes(person.name))
             localSellers.add(person.id);
         }
-        // 报价是未兑现承诺；完整保留在存档，当前请求只带有关对象。
         const relevant = quotes.filter(
           (q) =>
             input.text.includes(q.id) ||
@@ -143,7 +130,7 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
           ...parties.map((p) => `交易对方 ${p.id}：${p.name}，地点 ${p.location}`),
           ...relevant.map(
             (q) =>
-              `报价 ${q.id}：${q.seller} ${q.action} ${q.target}，最终对价 ${q.price} 欧元${q.replace ? `；拆下 ${q.replace}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.disposition ? `；旧件去向 ${q.disposition}` : q.tradeIn ? "；出售旧件" : ""}${q.session ? `；主体 ${q.session.subject}；范围 ${q.session.scope}；${q.session.duration} 分钟；允许记录 ${q.session.recording ? "是" : "否"}；中止 ${q.session.earlyExit}` : ""}；尚未成交；来源：${q.evidence}`,
+              `报价 ${q.id}：${q.seller} ${q.action} ${q.target}，最终对价 ${q.price} 欧元${q.replace ? `；拆下 ${q.replace}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.disposition ? `；旧件去向 ${q.disposition}` : q.tradeIn ? "；出售旧件" : ""}；尚未成交；来源：${q.evidence}`,
           ),
           ...Object.values(state.sessions)
             .filter(
@@ -151,9 +138,9 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
                 ["active", "paused"].includes(s.status) ||
                 localSellers.has(s.seller) ||
                 input.text.includes(s.id) ||
-                input.text.includes(s.terms.subject),
+                (s.subject !== null && input.text.includes(s.subject)),
             )
-            .sort((a, b) => b.paidAt - a.paidAt)
+            .sort((a, b) => b.startedAt - a.startedAt)
             .slice(0, 8)
             .map(serviceSessionText),
         ];

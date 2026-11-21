@@ -1,16 +1,22 @@
 import type { RuleModule } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import type { ContentMedia } from "../../schemas/content-media";
-import { CommerceStateSchema } from "../commerce";
-import { formatGameTime, merchantAt, merchantSites, WorldClockStateSchema } from "../world";
+import { formatGameTime, WorldClockStateSchema } from "../world";
 import { braindanceCatalog, braindanceSources, braindanceWork } from "./apply";
-import type { BdWork, BraindanceState } from "./schema";
+import {
+  BD_LAYER_LABELS,
+  BD_MODE_LABELS,
+  BD_TIER_LABELS,
+  type BdWork,
+  type BraindanceState,
+} from "./schema";
 
-const WORDS = /超梦|braindance|BD|选片|看一部|挑片/i;
-const RETURN_WORDS = /回放|重播|重看|上一部|刚才那部|刚看|继续看片|再看/;
+const WORDS = /超梦|braindance|BD|选片|看一部|挑片|黑超梦|XBD|录制|热成像|音轨|编辑模式/i;
+const RETURN_WORDS = /回放|重播|重看|上一部|刚才那部|刚看|继续看片|再看|扫描|分析/;
+
 export const braindanceRules: RuleModule<BraindanceState> = {
   id: "braindance",
-  title: "超梦体验与正文查证",
+  title: "超梦体验、三层扫描与现场录制",
   commands: ["braindance"],
   when: (state, input) =>
     input.mode !== "ooc" &&
@@ -18,29 +24,52 @@ export const braindanceRules: RuleModule<BraindanceState> = {
       WORDS.test(input.text) ||
       (state.history.length > 0 && RETURN_WORDS.test(input.text)) ||
       Object.values(state.works).some((w) => input.text.includes(w.title))),
-  judge:
-    "- 超梦选择、正常体验和正文查证不需要小游戏。按实际来源与设备判断能做什么；追问、猜测不是已经查明的事实。",
-  text: `- 超梦是日常娱乐，也可以是资料；没有任务仍可选片、正常消费、重看、与朋友交流并离开。不强加危险、奖励或片后委托。
-- 使用已有作品 id；正文中新确立作品先 define 固定录制者、简介、各片段梗概、时长和材料中实际可查细节，不能随着玩家猜测改内容。不要照着玩家猜的幕后因果补证据，也不创建标准答案。
-- 询价、简介和讨论不扣款。店内先由 commerce.offer 明确 bd-session、作品、范围、总时长和提前结束条件；玩家接受后 trade 成交，再 start 引用该 offer 形成的服务 id。自有载体播放引用实际 carrier 对象及手边的超梦设备；重看不重复购片。
-- start 只接入；progress 按下一片段写实际体验，初次 text 必须引用本轮正文中作品自身的定稿原文，重播已有定稿省略 text。continue 用下一次 progress，finish 是略写看完剩余内容，exit 仅记录已发生体验。暂停交流用 pause，回来用 resume。已结束后要在实际来源上接着查证或续看，可用新 start 并填 from=原体验 id；自有作品不再买片，已结束的按次服务不能复用。重看定稿不能改录制事件，现场朋友的插话不进入作品原文。
-- 片段可有 media 附件（link/image/video/audio，url、label，可选 caption；video 可有 poster、captionsUrl），只引用已经确立可用的本地资源、用户提供链接或素材库地址，不编造网址。媒体随片段定稿，由界面显示，正文可简短提标签，不写 HTML。链接与说明不证明资源内容或世界事实；界面加载不代表角色已经联网、看完未呈现片段或推进游戏时间。
-- progress/finish/replay/inspect 的游戏分钟由代码结算；不要为同一段观看或分析另发 world.time/phases。略写只省略文字，不免去剩余时间；此前略写的片段后来首次重播展开时，replay.text 仍须保存这次的实际定稿原文。查阅已经写出的文字不等于实际重播，不发 replay。
-- 记录里的人只能按原记录行动，不会回应观看者或因为被观看成为现实熟人。录制者的情绪只是感知输入，不替玩家决定喜好、感情、台词或动作。
-- 查证在正文中响应玩家实际追问、请人分析或回放；只可使用本轮提供的可查材料和已知发现。没有录到、设备不支持或无法辨认时保留不确定性，不能临时补真相。观察、文件说法、人物推断分别表达；没有证据也能行动、继续调查或改判断，不自动判任务失败。
-- 谁在场、同看过什么、摘设备后听到什么、明确说出的评价，沿用 NPC 与共同记忆规则分别记录。店员不知道私人体验；付款不证明偏好、信任或恋爱。`,
+  judge: `- 超梦分级：commercial（商业娱乐）、sensory（感官调谐）、raw（调查原片）、xbd（地下黑超梦）。无需骰点或数值属性检定，全按硬件条件与情境定性裁决。
+- 模式硬限制：普通便携播放器（bd-portable-player）仅能沉浸回放（immerse）；进入编辑分析（edit）扫描视觉/音频/热成像三层线索必须持有专业编辑头环（bd-editor-wreath）或在具备调谐工作站的场馆（如丽姿酒吧地下室）操作。
+- 地下黑超梦（xbd）缺少安全滤波，沉浸观看时可能引发剧烈感官过载、短暂解离或闪回等具体精神症状，不做数值扣除。
+- 现场录制原片必须已安装且完好的「超梦录制器（braindance-recorder）」义体。`,
+  narrate: `- 超梦既是夜之城的日常消遣（如丽姿酒吧包厢），也是调查取证工具；不因看片强加任务、奖励或危险。
+- 已有作品的片段、定稿原文与三层细节是固定记录，不随玩家猜测改写原片。片中人物只按原记录行动；录制者的感官与情绪是传入神经的刺激，不替玩家决定好恶或立场。
+- 沉浸模式以录制者第一人称感官经历呈现；编辑模式下玩家脱离感官束缚，切换视觉、音频或热成像图层逐一排查已看片段里的细节。地下黑超梦（XBD）缺少安全滤波，仅在确实冲击感官时写出过载或短暂抽离，不按次数预设症状。`,
+  text: `- 超梦既是夜之城日常娱乐（如丽姿酒吧），也是调查取证工具。不强加任务、奖励或强制危险。
+- 使用已有作品 id；新确立作品先 define 固定层级（tier）、录制者、简介、片段与三层细节（visual/audio/thermal），不能随玩家猜测篡改原片。
+- 场馆消费（如丽姿酒吧包厢）走普通口头报价+trade 结账，不再强制五项条款；自有芯片载体配播放器/编辑头环直接用 play(source={kind:"carrier",carrier,device}) 接入。
+- play 接入或恢复/切换模式（immerse/edit）；progress 呈现下一片段（初次写定稿原文 text；重播旧片段写 replay:true）；scan 在编辑模式下扫描 visual/audio/thermal 图层揭示已看片段中的隐藏细节；record 用已安装的超梦录制器现场录下 raw 原片并生成芯片载体；stop 暂停（paused）、退出（exited）或略写看完（finished）。
+- progress / scan / stop(finished) 的游戏分钟由代码结算，不要重复发 world.time。
+- 媒体附件（media）只引用已确立资源，不编造链接。片中人物只按原记录行动，录制者的情绪只是感官输入，不替玩家决定喜好或立场。`,
 };
 
 const publicWork = (work: BdWork) =>
-  `${work.id}「${work.title}」；录制者：${work.recorder}；${work.durationMinutes} 分钟；简介：${work.synopsis}`;
-const fixedMedia = (media: readonly ContentMedia[] | undefined): string =>
-  media?.length ? `；同段固定媒体元数据：${JSON.stringify(media)}（不据链接补出未知内容）` : "";
+  `${work.id}「${work.title}」[${BD_TIER_LABELS[work.tier]}]；录制者：${work.recorder}；${work.durationMinutes} 分钟；简介：${work.synopsis}${work.xbdRisk ? `；XBD风险：${work.xbdRisk}` : ""}`;
+
+const fixedMedia = (
+  media: readonly ContentMedia[] | undefined,
+  stage?: "judge" | "narrate" | "extract",
+): string =>
+  media?.length && stage === "extract"
+    ? `；同段固定媒体元数据：${JSON.stringify(media)}（不据链接补出未知内容）`
+    : "";
+
+function sourceLabel(
+  source: {
+    readonly kind: string;
+    readonly venue?: string;
+    readonly carrier?: string;
+    readonly device?: string;
+  },
+  stage?: "judge" | "narrate" | "extract",
+): string {
+  if (stage === "extract") return JSON.stringify(source);
+  if (source.kind === "venue") return `场馆设备（${source.venue ?? "现场"}）`;
+  return `随身芯片载体 ${source.carrier ?? ""}${source.device ? ` / 播放设备 ${source.device}` : ""}`;
+}
 
 export function braindanceSection(
   state: BraindanceState,
   data: Readonly<Record<string, unknown>>,
   input: { readonly text: string },
   world?: WorldState,
+  stage?: "judge" | "narrate" | "extract",
 ): string {
   const all = [
     ...braindanceCatalog(data),
@@ -51,20 +80,12 @@ export function braindanceSection(
   const here = world ? WorldClockStateSchema.parse(world.slices.world).location : null;
   const active = state.active;
   const recent = state.history.at(-1);
-  const paidWork = world
-    ? Object.values(CommerceStateSchema.parse(world.slices.commerce).sessions).find(
-        (s) =>
-          s.service === "bd-session" &&
-          ["active", "paused"].includes(s.status) &&
-          s.location === here,
-      )?.terms.subject
-    : undefined;
   const focusId =
     active?.work ??
-    paidWork ??
     all.find((w) => input.text.includes(w.id) || input.text.includes(w.title))?.id ??
     (recent && RETURN_WORDS.test(input.text) ? recent.work : undefined);
   const lines: string[] = [];
+
   if (WORDS.test(input.text) || active || focusId) {
     const selected = all.filter(
       (w) =>
@@ -78,104 +99,77 @@ export function braindanceSection(
     for (const work of selected) {
       lines.push(`- 固定作品：${publicWork(work)}`);
       const sources = world ? braindanceSources(work, data, world.slices) : [];
-      const pending = world
-        ? Object.values(CommerceStateSchema.parse(world.slices.commerce).quotes).filter(
-            (q) =>
-              q.status === "offered" &&
-              q.kind === "service" &&
-              q.target === "bd-session" &&
-              q.session?.subject === work.id &&
-              (q.expiresAt === null || q.expiresAt > world.time) &&
-              merchantSites(data).get(q.seller)?.braindanceDevice?.playback &&
-              merchantSites(data).get(q.seller)?.braindanceWorks.includes(work.id) &&
-              merchantSites(data)
-                .get(q.seller)
-                ?.locations.some((loc) => merchantAt(data, q.seller, loc, here)),
-          )
-        : [];
-      for (const option of sources)
+      for (const option of sources) {
         lines.push(
-          `  - 当前实际可用来源：${JSON.stringify(option.source)}；支持分析 ${option.analysis.join("、") || "无"}。已持有作品不再付购片费；服务来源必须引用此已成交 id。`,
+          `  - 可用来源：${sourceLabel(option.source, stage)}；支持编辑图层：${option.analysis.map((l) => `${l}(${BD_LAYER_LABELS[l]})`).join("、") || "仅沉浸回放"}`,
         );
-      const paid = sources.some((s) => s.source.kind === "service");
-      for (const quote of pending)
-        lines.push(
-          `  - 尚未成交报价 ${quote.id}：${quote.price} 欧元。仅当本轮玩家明确接受并且 trade 成功，才可 start.source={"kind":"service","id":"${quote.id}"}；报价本身不代表可播放。`,
-        );
-      if (!active && (focusId === work.id || paid || pending.length)) {
+      }
+      if (!active && (focusId === work.id || sources.length > 0)) {
         const previous = state.history.filter((h) => h.work === work.id).at(-1);
-        if (previous)
+        if (previous) {
           lines.push(
-            `  - 如续接/查证可 start.from=${previous.id}，位置 ${previous.position}，已看 ${previous.watchedMinutes} 分钟；从头重看则不写 from。已结束的原服务不是当前可用来源。`,
+            `  - 历史记录 ${previous.id}：位置 ${previous.position}/${work.passages.length}，已看 ${previous.watchedMinutes} 分钟${stage === "extract" ? `（续接可填 from="${previous.id}"）` : ""}。`,
           );
-        const first = work.passages[0];
-        if (first && (sources.length || pending.length))
-          lines.push(
-            `  - 从头开始时的首片段 ${first.id}「${first.label}」${first.minutes} 分钟：${state.passages[work.id]?.[first.id] ?? first.outline}${fixedMedia(first.media)}。必须先 start，再记录 progress；仅询价不能演成已经观看。`,
-          );
-        const watched = previous?.position ?? 0;
-        for (const passage of work.passages.slice(0, watched)) {
-          if (
-            RETURN_WORDS.test(input.text) &&
-            (input.text.includes(passage.label) || passage === work.passages[watched - 1])
-          )
-            lines.push(
-              `  - 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟：${state.passages[work.id]?.[passage.id] ?? passage.outline}${fixedMedia(passage.media)}`,
-            );
         }
-        for (const detail of work.details.filter(
-          (d) =>
-            work.passages.slice(0, watched).some((p) => p.id === d.passage) &&
-            d.cues.some((cue) => input.text.includes(cue)) &&
-            sources.some((s) => s.analysis.includes(d.method)),
-        ))
+        const first = work.passages[0];
+        if (first && sources.length > 0) {
           lines.push(
-            `  - 本轮有来源的查证材料 ${detail.id}（${detail.passage}/${detail.method}）：${detail.finding}。只有实际重新接入并分析后才 inspect 记为新发现；没有来源则不能声称又播了一次。`,
+            `  - 首片段 ${first.id}「${first.label}」${first.minutes} 分钟：${state.passages[work.id]?.[first.id] ?? first.outline}${fixedMedia(first.media, stage)}`,
           );
+        }
       }
     }
   }
+
   if (active) {
     const work = braindanceWork(state, data, active.work);
     if (!work) return lines.join("\n");
     lines.push(
-      `- 当前体验 ${active.id}：${work.id}；${active.status === "paused" ? "已暂停" : "播放中"}；下一片段序号 ${active.position}；已看 ${active.watchedMinutes}/${work.durationMinutes} 分钟；含重播分析实际消耗 ${active.elapsed} 分钟；来源 ${JSON.stringify(active.source)}`,
+      `- 当前体验 ${active.id}：${work.id}［${BD_TIER_LABELS[work.tier]}｜${BD_MODE_LABELS[active.mode]}｜${active.status === "paused" ? "已暂停" : "播放中"}］；进度 ${active.position}/${work.passages.length}（已看 ${active.watchedMinutes}/${work.durationMinutes} 分钟，耗时 ${active.elapsed} 分钟）；来源 ${sourceLabel(active.source, stage)}`,
     );
     const next = work.passages[active.position];
     if (next) {
       const fixed = state.passages[work.id]?.[next.id];
       lines.push(
-        `- 下一片段 ${next.id}「${next.label}」，${next.minutes} 分钟；${fixed ? `已有定稿原文（保持一致）：${fixed}` : `仅可据此展开，不能改主要事件：${next.outline}`}${fixedMedia(next.media)}`,
+        `- 下一片段 ${next.id}「${next.label}」${next.minutes} 分钟：${fixed ? `已有定稿原文（保持一致）：${fixed}` : `梗概：${next.outline}`}${fixedMedia(next.media, stage)}`,
       );
-    } else lines.push("- 全部片段已经实际看过；可以交流、追问、回放或 finish 正常结束。");
-    const replay = /回放|重播|重看|再看|刚才|前一段/.test(input.text);
-    for (const passage of work.passages.slice(0, active.position)) {
-      const fixed = state.passages[work.id]?.[passage.id];
+    } else {
       lines.push(
-        `- 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟${replay && (input.text.includes(passage.label) || input.text.includes(passage.id) || passage === work.passages[active.position - 1]) ? `；固定内容：${fixed ?? passage.outline}${fixedMedia(passage.media)}` : ""}`,
+        stage === "narrate"
+          ? "- 全部片段已看完；可以切编辑模式排查图层、重播片段或摘下头环结束。"
+          : "- 全部片段已看完；可切编辑模式扫描图层、重播片段或 stop(finished) 结束。",
       );
     }
     const seen = new Set(work.passages.slice(0, active.position).map((p) => p.id));
-    const device = world
-      ? braindanceSources(work, data, world.slices).find(
-          (s) => JSON.stringify(s.source) === JSON.stringify(active.source),
-        )
-      : undefined;
-    const requested = work.details.filter(
-      (d) =>
-        seen.has(d.passage) &&
-        d.cues.some((cue) => input.text.includes(cue)) &&
-        device?.analysis.includes(d.method),
-    );
-    for (const detail of requested)
+    for (const passage of work.passages.slice(0, active.position)) {
+      const fixed = state.passages[work.id]?.[passage.id];
       lines.push(
-        `- 本轮主动查证可揭示（原材料内已有，不是结论）：${detail.id}；片段 ${detail.passage}；方法 ${detail.method}；${detail.finding}。实际分析后 inspect 记录，所需分钟按活动判断。`,
+        `- 已看片段 ${passage.id}「${passage.label}」${passage.minutes} 分钟${RETURN_WORDS.test(input.text) ? `：${fixed ?? passage.outline}${fixedMedia(passage.media, stage)}` : ""}`,
       );
-    if (/查|分析|辨认|声音|热源|红外|是谁|哪里/.test(input.text) && requested.length === 0)
-      lines.push(
-        "- 本轮没有匹配到更多可查原材料；可据已经呈现内容讨论或保留不确定性，不能补出未提供的证据。",
+    }
+    if (active.mode === "edit" && seen.size > 0) {
+      const undiscovered = work.details.filter(
+        (d) =>
+          seen.has(d.passage) &&
+          !state.discoveries.some((found) => found.work === work.id && found.detail === d.id),
       );
+      if (undiscovered.length > 0) {
+        lines.push(
+          stage === "narrate"
+            ? "- 编辑模式下已看片段的隐藏细节（玩家实际扫到对应图层时才揭露）："
+            : "- 编辑模式下已看片段的可扫描细节（玩家实际扫到对应图层后用 scan 揭示）：",
+        );
+        for (const d of undiscovered) {
+          lines.push(
+            `  - [${d.layer}/${BD_LAYER_LABELS[d.layer]}] ${d.id}（片段 ${d.passage}）：${d.finding}`,
+          );
+        }
+      } else {
+        lines.push("- 已看片段的三层材料已全部扫出。");
+      }
+    }
   }
+
   const relevant = new Set(
     all
       .filter(
@@ -188,13 +182,15 @@ export function braindanceSection(
       )
       .map((w) => w.id),
   );
-  for (const d of state.discoveries.filter((d) => relevant.has(d.work)))
+  for (const d of state.discoveries.filter((d) => relevant.has(d.work))) {
     lines.push(
-      `- 已发现材料 ${d.work}/${d.detail}：${d.finding}；来源时间 ${formatGameTime(d.at)}。材料说法不等于幕后因果已证实。`,
+      `- 已发现材料 [${BD_LAYER_LABELS[d.layer]}] ${d.work}/${d.detail}：${d.finding}（${formatGameTime(d.at)}）`,
     );
-  for (const h of state.history.filter((h) => relevant.has(h.work)).slice(-4))
+  }
+  for (const h of state.history.filter((h) => relevant.has(h.work)).slice(-4)) {
     lines.push(
-      `- 实际经历 ${h.id}：${h.work}，${formatGameTime(h.at)} ${h.outcome === "finished" ? "看完" : "中途退出"}；已看 ${h.watchedMinutes} 分钟。未说出口的评价不在此推断。`,
+      `- 历史体验 ${h.id}：${h.work}，${formatGameTime(h.at)} ${h.outcome === "finished" ? "看完" : "中途退出"}（已看 ${h.watchedMinutes} 分钟）`,
     );
+  }
   return lines.join("\n");
 }

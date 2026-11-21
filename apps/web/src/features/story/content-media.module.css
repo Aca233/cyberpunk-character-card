@@ -101,14 +101,151 @@
   font-weight: 500;
 }
 
-/* 资料页轻量筛选栏（条目较多时出现） */
+/* 神经芯片与超梦工作台 */
+.slotStrip {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--cp-line-subtle);
+  border-inline-start: 2px solid var(--cp-cyan);
+  background: var(--cp-surface);
+}
+
+.slotHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--cp-cyan);
+}
+
+.slotCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.slotCard {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 0;
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 7%);
+  font-size: 13px;
+  color: inherit;
+  text-align: left;
+  font-family: inherit;
+}
+
+button.slotCard {
+  cursor: var(--cp-cursor-hand);
+}
+
+button.slotCard:hover,
+button.slotCard:focus-visible {
+  background: rgb(252 238 10 / 14%);
+  outline: none;
+}
+
+.slotCardSelected {
+  box-shadow: inset 0 0 0 1px rgb(252 238 10 / 45%);
+  background: rgb(252 238 10 / 14%);
+}
+
+.slotCardEmpty {
+  border-left-color: rgb(94 246 255 / 26%);
+  background: var(--cp-surface-soft);
+  color: var(--cp-text-dim);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid rgb(94 246 255 / 35%);
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+}
+
+.badgeWarn {
+  border-color: rgb(252 238 10 / 45%);
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+}
+
+.badgeDanger {
+  border-color: rgb(255 97 88 / 55%);
+  color: var(--cp-red);
+  background: rgb(255 97 88 / 14%);
+}
+
+.badgeActive {
+  border-color: color-mix(in srgb, var(--cp-success) 50%, transparent);
+  color: var(--cp-success);
+  background: color-mix(in srgb, var(--cp-success) 12%, transparent);
+}
+
+.layerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.layerCell {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.layerCellDone {
+  border-color: rgb(252 238 10 / 45%);
+  background: rgb(252 238 10 / 8%);
+}
+
+.clueList {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clueItem {
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 6%);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* 资料页轻量筛选栏（条目较多时出现，使用 CellFrame 原作切角框） */
 .archiveSide {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   padding: 0.2rem 0.55rem 0.2rem 0;
-  border-right: 1px solid rgb(94 246 255 / 22%);
+  border-right: 1px solid var(--cp-line-subtle);
 }
 
 .archiveSide > ul {
@@ -117,22 +254,30 @@
 }
 
 .archiveSearch {
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 8px;
-  border: 1px solid rgb(94 246 255 / 28%);
-  background: rgb(10 13 22 / 86%);
+}
+
+.archiveSearch:hover {
+  --box-line: var(--cp-red);
 }
 
 .archiveSearch:focus-within {
-  border-color: var(--cp-yellow);
+  --box-line: var(--cp-cyan);
 }
 
 .archiveSearchInput {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 6px 9px;
   border: 0;
   background: transparent;
   color: var(--cp-text);
@@ -147,14 +292,16 @@
 }
 
 .archiveSearchClear {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border: 0;
   background: transparent;
   color: var(--cp-text-dim);
   font-size: 13px;
   line-height: 1;
-  cursor: pointer;
+  cursor: var(--cp-cursor-hand);
 }
 
 .archiveSearchClear:hover,
@@ -174,6 +321,6 @@
     max-height: 13.5rem;
     padding: 0 0 0.5rem;
     border-right: 0;
-    border-bottom: 1px solid rgb(94 246 255 / 22%);
+    border-bottom: 1px solid var(--cp-line-subtle);
   }
 }

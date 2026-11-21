@@ -77,10 +77,17 @@ export const inventoryStatus: readonly SystemStatus[] = [
         `当前持用：${inv.heldWeapons === null ? "尚未明确；按玩家实际动作承接，不自动挑选最强武器" : inv.heldWeapons.length > 0 ? inv.heldWeapons.map((id) => names[id] ?? id).join("、") : "已明确收起武器"}`,
         `携带负担：${inv.loadout.carryLabel}（${inv.loadout.carryUnits}/${inv.loadout.carryMax} 携带单位；单位是体积与负担的粗分，不是公斤）${inv.loadout.carryLevel === "light" ? "；负担本身不额外限制日常动作，长枪显眼仍单独判断" : inv.loadout.carryLevel === "burdened" ? "；只在疾跑、攀爬、潜行、闪避、狭窄处取用等确受负担影响的动作中体现，不因此自动失败或受伤" : "；持续疾跑、攀爬和敏捷转身明显受累，按现场条件减速、寻找支撑或建议放下大件，不自动丢弃、扣钱或制造伤势"}`,
       );
-      if (inv.clothing.length > 0)
-        lines.push(
-          `穿着（只影响身份和伪装，没有护甲）：${inv.clothing.map((c) => `${c.id}（${c.label}）`).join("、")}`,
-        );
+      if (inv.clothing.length > 0) {
+        const clothLines = inv.clothing.map((c) => {
+          const tags = [
+            c.label,
+            ...(c.styleLabel ? [c.styleLabel] : []),
+            ...(c.concealsCoatWeapon ? ["可掩风衣档短枪"] : []),
+          ];
+          return `${names[c.id] ?? c.id}［${c.id}］（${tags.join("·")}）`;
+        });
+        lines.push(`穿着（只影响身份、门面和伪装，没有护甲）：${clothLines.join("、")}`);
+      }
       if (inv.healing)
         lines.push(
           `治疗品：${names[inv.healing.id] ?? inv.healing.id}（${inv.healing.id}），剩 ${inv.healing.charges} 次`,

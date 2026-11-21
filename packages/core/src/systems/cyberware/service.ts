@@ -125,6 +125,7 @@ export function beginService(
   if (q.startsAt > ctx.now) return { ok: false, reason: "预约尚未到开始时间" };
   const emit: Command[] = [];
   const notes: string[] = [];
+  const signals: string[] = [];
   const doc = ripperdocList(ctx.data).find((d) => d.id === q.doc);
   if (!doc) return { ok: false, reason: "已确认诊所已不存在" };
   const clinic = ensureClinic(draft, doc, ctx.now);
@@ -141,6 +142,7 @@ export function beginService(
     if (!result.ok) return result;
     emit.push(...(result.emit ?? []));
     notes.push(...(result.notes ?? []));
+    if (result.signals) signals.push(...result.signals);
     old.holder =
       q.disposition === "sell" ? q.doc : q.disposition === "scrap" ? "scrapped" : `service:${id}`;
     old.location = doc.location;
@@ -198,7 +200,7 @@ export function beginService(
       oldPart,
       reason: command.reason,
     };
-  return { ok: true, emit, notes };
+  return signals.length > 0 ? { ok: true, emit, notes, signals } : { ok: true, emit, notes };
 }
 
 function providerReady(
@@ -234,6 +236,7 @@ export function finishService(
   const unavailable = providerReady(service, draft, ctx);
   if (unavailable) return { ok: false, reason: unavailable };
   const emit: Command[] = [];
+  const finishNotes: string[] = [];
   if (service.terms.action === "install") {
     const physical = service.part ? draft.parts[service.part] : undefined;
     if (!physical || physical.holder !== `service:${id}`)
@@ -245,6 +248,7 @@ export function finishService(
     });
     if (!result.ok) return result;
     emit.push(...(result.emit ?? []));
+    finishNotes.push(...(result.notes ?? []));
   } else if (service.terms.action === "repair") {
     if (service.part) {
       const physical = draft.parts[service.part];
@@ -253,13 +257,19 @@ export function finishService(
       physical.condition = "intact";
       physical.holder = "player";
       physical.location = null;
-    } else
+      const repairedName = cyberwareCatalog(ctx.data).get(physical.model)?.name ?? physical.model;
+      finishNotes.push(`修好${repairedName}`);
+    } else {
+      const repairedName =
+        cyberwareCatalog(ctx.data).get(service.terms.id ?? "")?.name ?? service.terms.id;
       emit.push({
         type: "health.limb",
         action: "repair",
         id: service.terms.id,
-        name: cyberwareCatalog(ctx.data).get(service.terms.id ?? "")?.name ?? service.terms.id,
+        name: repairedName,
       });
+      if (repairedName) finishNotes.push(`修好${repairedName}`);
+    }
   }
   const old = service.oldPart ? draft.parts[service.oldPart] : undefined;
   if (old?.holder === `service:${id}`) {
@@ -271,7 +281,10 @@ export function finishService(
   return {
     ok: true,
     emit,
-    notes: [`${service.providerName}完成服务；开始 ${service.startedAt}，结束 ${service.endsAt}`],
+    notes: [
+      ...finishNotes,
+      `${service.providerName}完成服务；开始 ${service.startedAt}，结束 ${service.endsAt}`,
+    ],
     advanceTo: Math.max(ctx.now, service.endsAt),
     signals: ["cyberware.changed"],
   };
@@ -483,20 +496,20 @@ export function applyService(
     if (existing.status !== "interrupted") return { ok: false, reason: "只有已中断的手术才能继续" };
     const unavailable = providerReady(existing, draft, ctx);
     if (unavailable) return { ok: false, reason: unavailable };
-    if ((command.startAt ?? ctx.now) > ctx.now)
-      return { ok: false, reason: "尚未到继续手术的开始时刻" };
+    const resumeStart = command.startAt ?? ctx.now;
+    if (resumeStart > ctx.now) return { ok: false, reason: "尚未到继续手术的开始时刻" };
     const competing = Object.values(draft.services).some(
       (s) =>
         s.id !== existing.id &&
         s.provider === existing.provider &&
         ["active", "booked"].includes(s.status) &&
-        s.scheduledAt < ctx.now + existing.remaining &&
-        s.endsAt > ctx.now,
+        s.scheduledAt < resumeStart + existing.remaining &&
+        s.endsAt > resumeStart,
     );
     if (competing) return { ok: false, reason: "医生剩余时段与已有预约冲突" };
     if (existing.part && draft.parts[existing.part]?.holder !== `service:${existing.id}`)
       return { ok: false, reason: "服务实物已移出，不能直接继续" };
-    existing.endsAt = (command.startAt ?? ctx.now) + existing.remaining;
+    existing.endsAt = resumeStart + existing.remaining;
     existing.status = "active";
     return { ok: true, notes: ["按剩余服务时间继续，不重复收款"] };
   }

@@ -69,6 +69,7 @@ const ChunkSchema = z.object({
   usageMetadata: z
     .object({
       promptTokenCount: TokenCount.optional(),
+      cachedContentTokenCount: TokenCount.optional(),
       candidatesTokenCount: TokenCount.optional(),
       thoughtsTokenCount: TokenCount.optional(),
     })
@@ -359,11 +360,13 @@ export function geminiClient(profile: Profile, apiKey: string): LlmClient {
       if (signal?.aborted) throw new AbortedError();
       if (!finishReason) throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
       if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
+      const cachedInputTokens = tokens?.cachedContentTokenCount ?? 0;
       const usage: LlmUsage | undefined = tokens
         ? {
             inputTokens: tokens.promptTokenCount ?? 0,
             // 思考 token 按输出计费，一起算进输出
             outputTokens: (tokens.candidatesTokenCount ?? 0) + (tokens.thoughtsTokenCount ?? 0),
+            ...(cachedInputTokens > 0 ? { cachedInputTokens } : {}),
           }
         : undefined;
       yield { type: "done", finishReason, ...(usage ? { usage } : {}) };

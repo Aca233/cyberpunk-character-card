@@ -1,6 +1,4 @@
 import {
-  ATTRIBUTE_BASE,
-  ATTRIBUTE_CREATE_MAX,
   type Board,
   type BoardModule,
   BoardModuleSchema,
@@ -12,7 +10,7 @@ import {
   humanityRules,
   type Loadout,
   loadoutText,
-  PROSE_BLOCKS,
+  PAST_MAX,
   ProseBlockSchema,
   pickLoadouts,
   pickStartLocation,
@@ -21,8 +19,9 @@ import {
   WorkshopPackSchema,
 } from "@cp/core";
 import type { BoardData } from "../../api/client";
+import { appearanceFilledCount } from "./appearance";
 
-const { HUMANITY_MAX, STAGE_LABELS, TOLERANCE_FACTOR, humanityStage, isGlitchZone } = humanityRules;
+const { TOLERANCE_EFFECTS, TOLERANCE_LABELS } = humanityRules;
 
 /**
  * 2077 赛博档案工作台核心纯逻辑 + 创意工坊底座（Workshop-Ready Foundation）
@@ -47,9 +46,9 @@ export function pickedLoadouts(card: CharacterCard, data?: Pick<BoardData, "load
 export type OriginEcosystem = "corpo" | "street" | "net" | "badlands" | "custom";
 
 export const ORIGIN_ECOSYSTEM_LABELS: Readonly<Record<OriginEcosystem, string>> = {
-  corpo: "巨企与机构",
-  street: "街头与地下",
-  net: "潜网与边缘",
+  corpo: "巨企与体制",
+  street: "街头与暗巷",
+  net: "佣兵与潜网",
   badlands: "恶土与荒原",
   custom: "自定义与模组",
 };
@@ -69,12 +68,31 @@ export function originEcosystem(m: BoardModule): OriginEcosystem {
   return "street";
 }
 
+export type PastTheme = "all" | "street" | "corpo" | "badlands" | "net" | "custom";
+
+export const PAST_THEME_LABELS: Readonly<Record<PastTheme, string>> = {
+  all: "全部履历",
+  street: "街头风波",
+  corpo: "巨企暗战",
+  badlands: "荒原旧事",
+  net: "潜网异闻",
+  custom: "自定义与模组",
+};
+
+export function pastTheme(m: BoardModule): Exclude<PastTheme, "all"> {
+  if (m.custom) return "custom";
+  if (m.tags.includes("恶土") || m.tags.includes("走私")) return "badlands";
+  if (m.tags.includes("潜网") || m.tags.includes("黑客")) return "net";
+  if (m.tags.includes("巨企") || m.tags.includes("公司")) return "corpo";
+  return "street";
+}
+
 export type TraitFilter = "all" | "innate" | "craft" | "past" | "custom";
 
 export const TRAIT_FILTER_LABELS: Readonly<Record<TraitFilter, string>> = {
   all: "全部特质",
-  innate: "身心禀赋",
-  craft: "专长技艺",
+  innate: "性格禀赋",
+  craft: "实战专长",
   past: "过往履历",
   custom: "自定义与模组",
 };
@@ -86,7 +104,36 @@ export function traitCategory(m: BoardModule): Exclude<TraitFilter, "all"> {
   return "craft";
 }
 
-/** 随机补满：从特质库里（只抽禀赋和专长，不抽旧履历）随机补到 target 项 */
+export type SkillDomain = "all" | "innate" | "combat" | "tech" | "social" | "custom";
+
+export const SKILL_DOMAIN_LABELS: Readonly<Record<SkillDomain, string>> = {
+  all: "全部特质",
+  innate: "性格禀赋",
+  combat: "战斗技法",
+  tech: "潜入与技术",
+  social: "交涉与生存",
+  custom: "自定义与模组",
+};
+
+/** 细分核心特质所在领域，便于角色创建时按流派快速挑选 */
+export function skillDomain(m: BoardModule): Exclude<SkillDomain, "all"> {
+  if (m.custom) return "custom";
+  if (m.tags.includes("禀赋")) return "innate";
+  if (
+    m.tags.includes("战斗") ||
+    m.tags.includes("枪") ||
+    m.tags.includes("近战") ||
+    m.tags.includes("格斗")
+  ) {
+    return "combat";
+  }
+  if (m.tags.includes("潜入") || m.tags.includes("技术") || m.tags.includes("黑客")) {
+    return "tech";
+  }
+  return "social";
+}
+
+/** 随机补满：从特质库里（只抽禀赋和专长，不抽履历）随机补到 target 项 */
 export function rollTraits(
   board: Board,
   modules: readonly BoardModule[],
@@ -103,13 +150,59 @@ export function rollTraits(
   return { ...board, skills };
 }
 
+/** 随机补满：从过往履历库里随机补到 target 项 */
+export function rollPasts(
+  board: Board,
+  modules: readonly BoardModule[],
+  random: () => number,
+  target = 2,
+): Board {
+  const taken = new Set(board.pasts.map((m) => m.id));
+  const pool = modules.filter((m) => m.slot === "past" && !m.custom && !taken.has(m.id));
+  const pasts = [...board.pasts];
+  while (pasts.length < Math.min(target, PAST_MAX) && pool.length > 0) {
+    const [picked] = pool.splice(Math.floor(random() * pool.length), 1);
+    if (picked) pasts.push(picked);
+  }
+  return { ...board, pasts };
+}
+
+/** 预览某一项出身自带的开局资金、默认出生点与标配清单（用于出身卡片直显） */
+export function originPreview(
+  origin: BoardModule,
+  data?: Pick<BoardData, "loadouts" | "names">,
+): {
+  readonly eddies: number;
+  readonly locationId: string;
+  readonly extras: readonly string[];
+} {
+  const table = data?.loadouts ?? [];
+  const sampleCard = {
+    origin: origin.label,
+    board: BoardSchema.parse({ origin }),
+  } as unknown as CharacterCard;
+  const picked = pickedLoadouts(sampleCard, { loadouts: table });
+  const eddies = picked.reduce((sum, l) => sum + (l.eddies ?? 0), 0);
+  const locationId = pickStartLocation(loadoutText(sampleCard), table, "megabuilding-h10");
+  const extras: string[] = [];
+  const primaryWeapon = picked.flatMap((l) => l.gear).find((g) => g.slot === 1);
+  if (primaryWeapon) {
+    const wName = data?.names?.[primaryWeapon.id];
+    if (wName) extras.push(wName);
+  }
+  const hasDeck = picked.some((l) => (l.cyberware ?? []).includes("militech-paraline"));
+  const hasVehicle = picked.some((l) => (l.vehicles ?? []).length > 0);
+  if (hasDeck) extras.push("自带接入仓");
+  if (hasVehicle) extras.push("自带载具");
+  return { eddies, locationId, extras };
+}
+
 export interface DefaultLoadoutSummary {
   readonly baseEddies: number;
   readonly finalEddies: number;
   readonly gearNames: readonly string[];
   readonly freeVehicleIds: readonly string[];
   readonly freeVehicleNames: readonly string[];
-  readonly freePrograms: readonly string[];
   readonly labels: readonly string[];
 }
 
@@ -175,7 +268,6 @@ export function originDefaultLoadout(
     gearNames,
     freeVehicleIds: vehicles,
     freeVehicleNames: vehicles.map(name),
-    freePrograms: [],
     labels: picked.map((l) => l.label),
   };
 }
@@ -224,85 +316,33 @@ export function inherentCyberware(
   return out;
 }
 
-/** 建卡界面的真实开局人性消耗（含未被顶替的自带义体 + 自选义体，按耐受档位折算），与进场后一致 */
-export function totalStartHumanityCost(
-  card: CharacterCard,
-  data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
-): number {
-  const board = card.board;
-  if (!board) return 0;
-  const inherentRaw = inherentCyberware(card, data)
-    .filter((c) => !c.replaced)
-    .reduce((sum, c) => sum + c.humanityCost, 0);
-  const chosenRaw = board.cyberware.reduce((sum, c) => sum + c.humanityCost, 0);
-  return Math.min(
-    HUMANITY_MAX,
-    Math.round((inherentRaw + chosenRaw) * TOLERANCE_FACTOR[board.tolerance]),
-  );
-}
-
-export interface HumanityStageInfo {
-  readonly stage: humanityRules.HumanityStage;
+export interface ToleranceSummary {
+  readonly tolerance: Board["tolerance"];
   readonly label: string;
-  readonly tone: "ok" | "warn" | "danger";
-  readonly glitchZone: boolean;
+  readonly tone: "ok" | "warn";
   readonly note: string;
 }
 
-/** 根据术后剩余人性返回阶段标签、色彩倾向与神经感知说明 */
-export function humanityStageInfo(humanityNow: number): HumanityStageInfo {
-  const clamped = Math.max(0, Math.min(HUMANITY_MAX, Math.round(humanityNow)));
-  const stage = humanityStage(clamped);
-  const label = STAGE_LABELS[stage];
-  const glitchZone = isGlitchZone(clamped);
-  if (stage === "stable") {
-    return {
-      stage,
-      label,
-      tone: "ok",
-      glitchZone,
-      note: "神经回路稳定，义体与肉身同步良好",
-    };
-  }
-  if (stage === "detached") {
-    return {
-      stage,
-      label,
-      tone: "ok",
-      glitchZone,
-      note: "情绪略显抽离，感官偶尔泛起冷铁般的金属质感",
-    };
-  }
-  if (stage === "unstable") {
-    return {
-      stage,
-      label,
-      tone: "warn",
-      glitchZone,
-      note: "进入神经感知失真区（<40）：义眼偶发红帧雪花，强刺激下易产生冲动",
-    };
-  }
-  if (stage === "edge") {
-    return {
-      stage,
-      label,
-      tone: "danger",
-      glitchZone,
-      note: "赛博精神病边缘（<20）：视野重影与金属耳鸣频发，高压下易误判与短暂失控",
-    };
-  }
+/** 根据所选义体神经耐受档位返回定性标签、色彩倾向与神经说明（不折算数字人性值） */
+export function toleranceSummary(tolerance: Board["tolerance"]): ToleranceSummary {
   return {
-    stage,
-    label,
-    tone: "danger",
-    glitchZone,
-    note: "神经负荷临界（0）：躯壳濒临重度失控与断片，急需压制剂或卸除重型义体",
+    tolerance,
+    label: TOLERANCE_LABELS[tolerance],
+    tone: tolerance === "low" ? "warn" : "ok",
+    note: TOLERANCE_EFFECTS[tolerance],
   };
 }
 
 // ———— 创意工坊底座：本地自定义模块池 & 目录合并管线 ————
 
 const LOCAL_CUSTOM_MODULES_KEY = "cp.workshop.localModules";
+export const LOCAL_MODULES_EVENT = "cp.workshop.localModules";
+
+function emitLocalModulesEvent(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(LOCAL_MODULES_EVENT));
+  }
+}
 
 export function loadLocalCustomModules(): BoardModule[] {
   try {
@@ -325,6 +365,7 @@ export function saveLocalCustomModule(module: BoardModule): BoardModule[] {
   );
   try {
     localStorage.setItem(LOCAL_CUSTOM_MODULES_KEY, JSON.stringify(next));
+    emitLocalModulesEvent();
   } catch {
     // 隐私模式或空间已满时忽略
   }
@@ -335,6 +376,7 @@ export function removeLocalCustomModule(id: string): BoardModule[] {
   const next = loadLocalCustomModules().filter((m) => m.id !== id);
   try {
     localStorage.setItem(LOCAL_CUSTOM_MODULES_KEY, JSON.stringify(next));
+    emitLocalModulesEvent();
   } catch {
     // ignore
   }
@@ -428,12 +470,6 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
     if (!board.success) return null;
     const text = (key: keyof CharacterCard) =>
       typeof card[key] === "string" ? (card[key] as string) : (blank[key] as string);
-    const attrs = (card.attributes ?? {}) as Record<string, unknown>;
-    const attr = (key: keyof CharacterCard["attributes"]) => {
-      const v = attrs[key];
-      if (typeof v !== "number" || !Number.isFinite(v)) return blank.attributes[key];
-      return Math.max(ATTRIBUTE_BASE, Math.min(ATTRIBUTE_CREATE_MAX, Math.round(v)));
-    };
     const locked = Array.isArray(card.locked)
       ? [
           ...new Set(
@@ -455,14 +491,10 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
       personality: text("personality"),
       voice: text("voice"),
       skills: text("skills"),
+      ...(typeof card.portrait === "string" && card.portrait.trim() !== ""
+        ? { portrait: card.portrait }
+        : {}),
       locked,
-      attributes: {
-        body: attr("body"),
-        reflexes: attr("reflexes"),
-        tech: attr("tech"),
-        intelligence: attr("intelligence"),
-        cool: attr("cool"),
-      },
       board: board.data,
     };
     return {
@@ -551,7 +583,7 @@ export function creatorChecks(card: CharacterCard): Check[] {
   return checks;
 }
 
-export type CreatorStepId = "identity" | "traits" | "cyberware" | "kit" | "people_prose" | "review";
+export type CreatorStepId = "identity" | "appearance" | "traits" | "cyberware" | "connections";
 
 export interface CreatorStepMeta {
   readonly id: CreatorStepId;
@@ -568,48 +600,40 @@ export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
     index: 1,
     code: "01",
     label: "身份与出身",
-    title: "身份铭牌与出身背景",
-    lead: "确立夜之城档案的基本称谓，并挑选或自创出身背景，决定初始家底、自带义体与默认落脚点。",
+    title: "公民铭牌、2077 命牌与出身背景",
+    lead: "确立夜之城档案称谓、挑选 2077 命牌气质，并决定出身背景与初始家底、自带义体及默认落脚点。",
+  },
+  {
+    id: "appearance",
+    index: 2,
+    code: "02",
+    label: "体貌定制",
+    title: "BIOMETRIC SCAN · 七部位物理体貌定制",
+    lead: "零输入点选体型、发型发色、面容年龄、眼眸义眼、面部义体线、伤疤纹身与妆容毛发，实时合成外貌档案与立绘依据。",
   },
   {
     id: "traits",
-    index: 2,
-    code: "02",
-    label: "过往与特质",
-    title: "过往经历、核心特质与负面缺陷",
-    lead: "挑选过往履历、专长与身心禀赋，或挂载债主与宿敌等剧情钩子。",
+    index: 3,
+    code: "03",
+    label: "履历与特质",
+    title: "过往履历、核心特质与负面缺陷",
+    lead: "分栏勾选过往履历、性格禀赋与实战专长，或挂载处境短板；三层互不冲突，自由组合。",
   },
   {
     id: "cyberware",
-    index: 3,
-    code: "03",
-    label: "义体装配",
-    title: "义体拓扑装配与生理耐受",
-    lead: "在十个身体部位装配开局义体并调控生理耐受，实时平衡战力与人性值。",
-  },
-  {
-    id: "kit",
     index: 4,
     code: "04",
-    label: "行装与落脚点",
-    title: "启动资金、武器座驾与开局落脚点",
-    lead: "定制启动资金档位、额外随身武器、专属载具，并在夜之城地图上选定开局落脚点。",
+    label: "义体与行装",
+    title: "义体拓扑装配、神经耐受与开局行装",
+    lead: "在十个身体部位装配义体并调控生理耐受，同时敲定启动资金、随身武器与专属座驾。",
   },
   {
-    id: "people_prose",
+    id: "connections",
     index: 5,
     code: "05",
-    label: "人脉与小传",
-    title: "夜之城人脉网络与人设小传",
-    lead: "结识原作人物或自创旧识，并手写或交由 AI 协同生成角色外貌、背景、性格与口吻。",
-  },
-  {
-    id: "review",
-    index: 6,
-    code: "06",
-    label: "档案总览",
-    title: "完整档案核验与战局接入",
-    lead: "总览角色全部构筑、行装、人脉与小传，确认就绪后即可保存并直接接入夜之城。",
+    label: "旧识与落脚点",
+    title: "夜之城旧识网络与开局落脚点",
+    lead: "建立与夜之城核心人物或自建旧识的交集，并在全城地图上选定开局切入点。",
   },
 ];
 
@@ -618,12 +642,12 @@ const TARGET_STEP_MAP: Readonly<Record<CheckTarget, CreatorStepId>> = {
   origin: "identity",
   build: "traits",
   cyber: "cyberware",
-  kit: "kit",
-  people: "people_prose",
-  person: "people_prose",
+  kit: "cyberware",
+  people: "connections",
+  person: "appearance",
 };
 
-/** 将核验问题目标映射到六步引导工作台对应步骤 */
+/** 将核验问题目标映射到五步引导工作台对应步骤 */
 export function stepForCheckTarget(target: CheckTarget): CreatorStepId {
   return TARGET_STEP_MAP[target];
 }
@@ -638,7 +662,7 @@ export interface StepProgressItem {
 
 export type StepProgressMap = Readonly<Record<CreatorStepId, StepProgressItem>>;
 
-/** 计算六步引导工作台每一步的完成态、阻塞项与摘要计数 */
+/** 计算五步引导工作台每一步的完成态、阻塞项与摘要计数 */
 export function stepProgress(
   card: CharacterCard,
   data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
@@ -646,11 +670,10 @@ export function stepProgress(
   const checks = creatorChecks(card);
   const issueCounts: Record<CreatorStepId, number> = {
     identity: 0,
+    appearance: 0,
     traits: 0,
     cyberware: 0,
-    kit: 0,
-    people_prose: 0,
-    review: checks.length,
+    connections: 0,
   };
   for (const c of checks) {
     issueCounts[stepForCheckTarget(c.target)] += 1;
@@ -658,20 +681,19 @@ export function stepProgress(
 
   const board = card.board ?? emptyBoard();
   const identityReady = issueCounts.identity === 0;
+  const bioCount = appearanceFilledCount(board.appearance);
+  const appearanceFilled = bioCount > 0 || card.look.trim() !== "";
   const traitsCount = board.pasts.length + board.skills.length + board.flaws.length;
 
   const inherentCount = inherentCyberware(card, data).filter((c) => !c.replaced).length;
   const chromeCount = board.cyberware.length + inherentCount;
-  const humanityNow = Math.max(0, HUMANITY_MAX - totalStartHumanityCost(card, data));
-  const kitFilled =
-    board.kit.cashTier !== "standard" ||
-    board.kit.weapons.length > 0 ||
-    board.kit.vehicle !== null ||
-    Boolean(board.startLocation);
+  const tol = toleranceSummary(board.tolerance);
+  const kitTouched =
+    board.kit.cashTier !== "standard" || board.kit.weapons.length > 0 || board.kit.vehicle !== null;
 
-  const proseCount = PROSE_BLOCKS.filter((b) => card[b].trim() !== "").length;
   const peopleCount = board.acquaintances.length;
-  const peopleProseFilled = proseCount > 0 || peopleCount > 0;
+  const hasStartLoc = Boolean(board.startLocation);
+  const connectionsFilled = peopleCount > 0 || hasStartLoc;
 
   return {
     identity: {
@@ -680,6 +702,13 @@ export function stepProgress(
       filled: identityReady,
       badge: identityReady ? (board.origin?.label ?? "已填") : `待填 ${issueCounts.identity} 项`,
       issueCount: issueCounts.identity,
+    },
+    appearance: {
+      id: "appearance",
+      ready: issueCounts.appearance === 0,
+      filled: appearanceFilled,
+      badge: bioCount > 0 ? `${bioCount}/7 项` : card.look.trim() ? "已写外貌" : "可选",
+      issueCount: issueCounts.appearance,
     },
     traits: {
       id: "traits",
@@ -691,32 +720,18 @@ export function stepProgress(
     cyberware: {
       id: "cyberware",
       ready: issueCounts.cyberware === 0,
-      filled: board.cyberware.length > 0 || board.tolerance !== "normal",
-      badge: `人性 ${humanityNow}${chromeCount > 0 ? ` · ${chromeCount}件` : ""}`,
+      filled: board.cyberware.length > 0 || board.tolerance !== "normal" || kitTouched,
+      badge: `${tol.label}${chromeCount > 0 ? ` · ${chromeCount}件` : ""}`,
       issueCount: issueCounts.cyberware,
     },
-    kit: {
-      id: "kit",
-      ready: issueCounts.kit === 0,
-      filled: kitFilled,
-      badge: kitFilled ? "已定制" : "默认",
-      issueCount: issueCounts.kit,
-    },
-    people_prose: {
-      id: "people_prose",
-      ready: issueCounts.people_prose === 0,
-      filled: peopleProseFilled,
-      badge: peopleProseFilled
-        ? `${peopleCount}人 · ${proseCount}/${PROSE_BLOCKS.length}段`
-        : "可选",
-      issueCount: issueCounts.people_prose,
-    },
-    review: {
-      id: "review",
-      ready: checks.length === 0,
-      filled: checks.length === 0,
-      badge: checks.length === 0 ? "可开局" : `待完善 ${checks.length} 项`,
-      issueCount: checks.length,
+    connections: {
+      id: "connections",
+      ready: issueCounts.connections === 0,
+      filled: connectionsFilled,
+      badge: connectionsFilled
+        ? `${peopleCount} 位旧识${hasStartLoc ? " · 已定点" : ""}`
+        : "默认起点",
+      issueCount: issueCounts.connections,
     },
   };
 }

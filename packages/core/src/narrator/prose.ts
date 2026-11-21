@@ -13,7 +13,6 @@ import {
   type ProseBlock,
   ProseBlockSchema,
 } from "../schemas/character";
-import { AttributeSchema } from "../systems/dice/schema";
 
 /**
  * 角色正文：按名片、主板、本事和别的区块，让辅助模型写外貌、背景故事、性格、说话方式。
@@ -43,7 +42,6 @@ export const ProseCardSchema = z.object({
   pronoun: z.string().trim().min(1).max(4).default("TA"),
   origin: text(40),
   skills: text(400),
-  attributes: z.partialRecord(AttributeSchema, z.number().int()).optional(),
   board: BoardSchema.optional(),
   look: text(PROSE_BLOCK_INFO.look.max),
   past: text(PROSE_BLOCK_INFO.past.max),

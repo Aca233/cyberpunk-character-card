@@ -1,5 +1,13 @@
 import { defineSystem } from "../../kernel/system";
-import { applyBreach, applyDive, applyHack, applyNpcHack, syncDeck } from "./apply";
+import type { WorldClockState } from "../world";
+import {
+  applyBreach,
+  applyDive,
+  applyHack,
+  applyNpcHack,
+  clearLocalHackEffects,
+  syncDeck,
+} from "./apply";
 import { hackingRules } from "./prompt";
 import {
   type BreachCommand,
@@ -29,6 +37,9 @@ export const hacking = defineSystem<
   state: HackingStateSchema,
   initial: () => ({
     deck: null,
+    programs: [],
+    activeEffects: [],
+    traceAlert: null,
     breachedNetworks: [],
     dive: null,
     resolvedNpcHacks: [],
@@ -48,6 +59,14 @@ export const hacking = defineSystem<
   on: {
     "cyberware.changed": (draft, ctx) => {
       syncDeck(draft, ctx);
+    },
+    "scene.end": (draft) => {
+      draft.activeEffects = [];
+      draft.traceAlert = null;
+    },
+    "world.arrived": (draft, ctx) => {
+      const loc = ctx.read<WorldClockState>("world").location ?? null;
+      clearLocalHackEffects(draft, loc);
     },
   },
   rules: [hackingRules],

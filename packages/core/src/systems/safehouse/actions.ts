@@ -1,13 +1,19 @@
 import { z } from "zod";
 import { type Command, defineAction } from "../../kernel/system";
 import { EconomyStateSchema } from "../economy";
-import { apartmentList, apartmentLocked } from "./apply";
+import { apartmentAt, apartmentList, apartmentLocked } from "./apply";
 import { SafehouseStateSchema } from "./schema";
 import { ownStorageTargets } from "./storage";
 
 /** 买下一处公寓：人要在那个地点，一次付清，之后就是自己的安全屋 */
 export const BuyHomeActionSchema = z.strictObject({
   type: z.literal("buyHome"),
+  id: z.string().min(1).max(64),
+});
+
+/** 缴纳租住公寓一期水电房租，缴清后恢复电子门锁与水电供应 */
+export const PayRentActionSchema = z.strictObject({
+  type: z.literal("payRent"),
   id: z.string().min(1).max(64),
 });
 
@@ -116,7 +122,8 @@ export const safehouseActions = {
       const def = apartmentList(data).find((a) => a.id === action.id);
       if (!def) return `没有叫 ${action.id} 的公寓`;
       const here = (world.slices.world as { location?: unknown } | undefined)?.location;
-      if (here !== def.location) return `不在${def.name}那里，先过去看房`;
+      if (typeof here !== "string" || !apartmentAt(def, here))
+        return `不在${def.name}那里，先过去看房`;
       const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
       if (combat) return "打斗中顾不上买房";
       const homes = SafehouseStateSchema.parse(world.slices.safehouse ?? {}).homes;
@@ -130,8 +137,31 @@ export const safehouseActions = {
       }
       return [
         ...pay,
-        { type: "safehouse.seed", id: def.id, name: def.name, location: def.location },
+        {
+          type: "safehouse.seed",
+          id: def.id,
+          name: def.name,
+          location: def.location,
+          tenure: "owned",
+        },
       ];
+    },
+  }),
+  /** 缴纳租住公寓房租水电（全息远程转账即可，欠费锁门后可立即解锁） */
+  payRent: defineAction({
+    schema: PayRentActionSchema,
+    commands: (action, { world }) => {
+      const homes = SafehouseStateSchema.parse(world.slices.safehouse ?? {}).homes;
+      const home = homes.find((h) => h.id === action.id);
+      if (!home) return `没有叫 ${action.id} 的住所`;
+      if (home.tenure !== "rented") return `${home.name}是买断自有房产，不需要交房租`;
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "交火中顾不上转账交房租";
+      const amount = home.rentAmount ?? 1200;
+      const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
+      if (eddies < amount)
+        return `欧元不够：${home.name}本期房租水电要 ${amount}，身上只有 ${eddies}`;
+      return [{ type: "safehouse.payRent", id: home.id }];
     },
   }),
 };

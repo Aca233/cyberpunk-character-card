@@ -19,7 +19,7 @@ function fightLines(view: CombatView): string[] {
     );
   }
   const foes = a.foes.map((f) => {
-    const bits = [`id ${f.id}`, f.stateLabel];
+    const bits = [`id ${f.id}`, f.tierLabel, f.stateLabel];
     if (f.gang) bits.push(f.gang);
     if (f.carry.length > 0) bits.push(`身上有${goods(f.carry)}，能捡`);
     return `${f.name}（${bits.join("，")}）`;

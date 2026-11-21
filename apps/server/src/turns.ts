@@ -89,11 +89,20 @@ export class TurnHub {
       if (run.finishedAt !== null) return;
       await new Promise<void>((resolve) => {
         const set = this.waiters.get(run.turnId) ?? new Set();
-        set.add(resolve);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const wake = () => {
+          if (timer !== undefined) clearTimeout(timer);
+          set.delete(wake);
+          if (set.size === 0 && this.waiters.get(run.turnId) === set) {
+            this.waiters.delete(run.turnId);
+          }
+          resolve();
+        };
+        set.add(wake);
         this.waiters.set(run.turnId, set);
         // 定时醒来检查 closed，网页断开后不让等待一直挂着；Node 上 unref 不挡退出，浏览器没有 unref
-        const timer: unknown = setTimeout(resolve, 15_000);
-        (timer as { unref?: () => void }).unref?.();
+        timer = setTimeout(wake, 15_000);
+        (timer as unknown as { unref?: () => void }).unref?.();
       });
     }
   }

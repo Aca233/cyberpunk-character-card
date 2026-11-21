@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
+import { behaviorChipSummary, cyberwareCatalog } from "../cyberware";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
 import { currentOutfit, deathKnown } from "./apply";
 import { bodyView } from "./body";
@@ -48,6 +49,7 @@ export function npcsView({ world, data }: ViewContext) {
   const rivals = NemesisIdsSchema.parse(world.slices.nemesis ?? {});
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const places = locationCatalog(data);
+  const chromeCatalog = cyberwareCatalog(data);
   /** 地点 id 换成中文名；表外的地点只有本身是中文时才当名字，同 inventory 的 namesView */
   const placeName = (id: string | null | undefined) =>
     id == null ? null : (places.get(id)?.name ?? (/[㐀-鿿]/.test(id) ? id : null));
@@ -86,12 +88,15 @@ export function npcsView({ world, data }: ViewContext) {
       affinity: n.affinity,
       /** 玩家知道的生死：屏幕外死的，听说以前照旧显示活着 */
       alive: !deathKnown(n),
+      /** 是否正与玩家结伴同行 */
+      following: n.met && !deathKnown(n) && Boolean(n.following),
       here:
         n.met &&
         !deathKnown(n) &&
-        n.lastSeenAt !== null &&
-        n.lastSeenAt >= clock.sceneStartedAt &&
-        (n.lastKnownLocation === null || n.lastKnownLocation === clock.location),
+        (Boolean(n.following) ||
+          (n.lastSeenAt !== null &&
+            n.lastSeenAt >= clock.sceneStartedAt &&
+            (n.lastKnownLocation === null || n.lastKnownLocation === clock.location))),
       /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
       lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
       /** 最后出现的地点和常在的地点（中文名），人物档案信息栏用；没见过面的人不给 */
@@ -139,5 +144,9 @@ export function npcsView({ world, data }: ViewContext) {
        * 身体：见过的人看伤势和装备；扫描过的看义体配置与精神/人性状态。没见过的人是 null
        */
       body: n.met ? bodyView(n, data, world.time) : null,
+      /** 行为芯片当前状态（仅装有行为芯片且见过/已显露时返回） */
+      behaviorChip: n.met
+        ? behaviorChipSummary(n.body?.cyberware ?? [], n.behaviorChips, chromeCatalog)
+        : null,
     }));
 }

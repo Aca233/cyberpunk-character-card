@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { Trait } from "../systems/character/schema";
-import { AttributeSchema } from "../systems/dice/schema";
 import { NO_FACTION, NPC_UNDECIDED_PREFIX } from "../systems/npc/schema";
 import {
   type Acquaintance,
@@ -13,19 +12,6 @@ import {
   RELATION_INFO,
 } from "./board";
 import type { BoardStart, SaveCharacter, StartAcquaintance } from "./save";
-
-/** 创建时各项属性默认值（历史兼容，UI 与叙事不再使用属性点） */
-export const DEFAULT_CARD_ATTRIBUTES = {
-  body: 2,
-  reflexes: 2,
-  tech: 2,
-  intelligence: 2,
-  cool: 2,
-} as const;
-/** 创建时各项属性从这个值起步（历史兼容，UI 与叙事不再使用属性点） */
-export const ATTRIBUTE_BASE = 2;
-/** 创建时单项最高（历史兼容导出） */
-export const ATTRIBUTE_CREATE_MAX = 5;
 
 const text = (max: number) => z.string().trim().max(max);
 
@@ -62,9 +48,6 @@ export const CharacterCardSchema = z
     locked: z.array(ProseBlockSchema).max(PROSE_BLOCKS.length).default([]),
     /** 本事：会什么、不会什么 */
     skills: text(400).default(""),
-    attributes: z
-      .record(AttributeSchema, z.number().int().min(ATTRIBUTE_BASE).max(ATTRIBUTE_CREATE_MAX))
-      .default({ body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 }),
     /** 角色主板；只写了文字的旧卡没有 */
     board: BoardSchema.optional(),
     /** 本地生成的角色立绘 ID（存在浏览器 ImageStore） */
@@ -234,12 +217,14 @@ export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   };
 }
 
-/** 建档时从主板带进存档的东西：开局义体、义体耐受、开局行装定制、模块带出的人物和原作人物旧识 */
+/** 建档时从主板带进存档的东西：开局义体、自定义义体快照、义体耐受、开局行装定制、模块带出的人物和原作人物旧识 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
   const people = boardPeople(card.board);
+  const customCyberware = card.board.cyberware.filter((c) => Boolean(c.custom && c.slot));
   return {
     cyberware: card.board.cyberware.map((c) => c.id),
+    customCyberware,
     tolerance: card.board.tolerance,
     ...(card.board.origin ? { origin: card.board.origin.id } : {}),
     ...(card.board.kit ? { kit: card.board.kit } : {}),
@@ -282,7 +267,6 @@ export function saveCharacter(card: CharacterCard): SaveCharacter {
     name: card.name,
     brief: characterBrief(card),
     visual: { alias: card.alias, pronoun: card.pronoun, look: card.look },
-    attributes: { ...card.attributes },
     streetCred: 1,
     ...(card.board ? { traits: boardTraits(card.board) } : {}),
     ...(card.portrait ? { portrait: card.portrait } : {}),

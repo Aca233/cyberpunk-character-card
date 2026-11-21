@@ -3,22 +3,31 @@ import { ContentMediaListSchema } from "../../schemas/content-media";
 
 const Id = z.string().trim().min(1).max(100);
 const Text = z.string().trim().min(1);
-const GENERIC_CUES = new Set([
-  "是谁",
-  "哪里",
-  "什么",
-  "声音",
-  "热源",
-  "观察",
-  "查看",
-  "调查",
-  "细节",
-  "分析",
-  "回放",
-  "重播",
-]);
 
-/** 先固定作品与可查材料；定稿正文按需保存，不保存答案或线索完成度。 */
+export const BdTierSchema = z.enum(["commercial", "sensory", "raw", "xbd"]);
+export type BdTier = z.infer<typeof BdTierSchema>;
+export const BD_TIER_LABELS: Readonly<Record<BdTier, string>> = {
+  commercial: "商业娱乐",
+  sensory: "感官调谐",
+  raw: "调查原片",
+  xbd: "地下黑超梦",
+};
+
+export const BdModeSchema = z.enum(["immerse", "edit"]);
+export type BdMode = z.infer<typeof BdModeSchema>;
+export const BD_MODE_LABELS: Readonly<Record<BdMode, string>> = {
+  immerse: "沉浸回放",
+  edit: "编辑分析",
+};
+
+export const BdLayerSchema = z.enum(["visual", "audio", "thermal"]);
+export type BdLayer = z.infer<typeof BdLayerSchema>;
+export const BD_LAYER_LABELS: Readonly<Record<BdLayer, string>> = {
+  visual: "视觉层",
+  audio: "音频层",
+  thermal: "热成像层",
+};
+
 export const BdPassageSchema = z.object({
   id: Id,
   label: Text.max(80),
@@ -26,31 +35,27 @@ export const BdPassageSchema = z.object({
   outline: Text.max(2000),
   media: ContentMediaListSchema.optional(),
 });
+export type BdPassage = z.infer<typeof BdPassageSchema>;
+
 export const BdDetailSchema = z.object({
   id: Id,
   passage: Id,
-  cues: z
-    .array(
-      Text.min(2)
-        .max(80)
-        .refine(
-          (cue) => !GENERIC_CUES.has(cue),
-          "查证触发词须指向具体材料，不能仅用声音、哪里或分析等泛词",
-        ),
-    )
-    .min(1)
-    .max(12),
-  method: z.enum(["observe", "audio", "thermal"]),
+  layer: BdLayerSchema,
   finding: Text.max(3000),
 });
+export type BdDetail = z.infer<typeof BdDetailSchema>;
+
 export const BdWorkSchema = z
   .object({
     id: Id,
     title: Text.max(80),
+    tier: BdTierSchema.default("commercial"),
     recorder: Text.max(100),
     synopsis: Text.max(1000),
     durationMinutes: z.number().int().min(1).max(1440),
     location: Id.optional(),
+    /** 地下黑超梦（xbd）的感官过载/精神反噬说明 */
+    xbdRisk: Text.max(400).optional(),
     passages: z.array(BdPassageSchema).min(1).max(40),
     details: z.array(BdDetailSchema).max(80).default([]),
   })
@@ -67,18 +72,30 @@ export const BdWorkSchema = z
         ctx.addIssue({ code: "custom", message: `细节 ${detail.id} 引用了不存在的片段` });
   });
 export type BdWork = z.infer<typeof BdWorkSchema>;
+
 export const BdWorkListSchema = z.array(BdWorkSchema).superRefine((works, ctx) => {
   if (new Set(works.map((w) => w.id)).size !== works.length)
     ctx.addIssue({ code: "custom", message: "作品 id 不能重复" });
 });
 
 export const BdSourceSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("service"), id: Id }),
-  z.object({ kind: z.literal("object"), id: Id, device: Id }),
+  z.object({
+    kind: z.literal("venue"),
+    venue: Id.describe("场馆/商家站点 id（如 lizzies-bar、sleeve-corner）"),
+    service: Id.optional().describe("可选：本次场馆服务会话 id"),
+  }),
+  z.object({
+    kind: z.literal("carrier"),
+    carrier: Id.describe("随身或现场的超梦载体芯片 id"),
+    device: Id.describe("随身或现场的播放/编辑头环 id（如 bd-portable-player、bd-editor-wreath）"),
+  }),
 ]);
+export type BdSource = z.infer<typeof BdSourceSchema>;
+
 export const BdExperienceSchema = z.object({
   id: Id,
   work: Id,
+  mode: BdModeSchema,
   source: BdSourceSchema,
   location: z.string().nullable(),
   startedAt: z.number().int(),
@@ -91,7 +108,7 @@ export type BdExperience = z.infer<typeof BdExperienceSchema>;
 
 export const BraindanceStateSchema = z.object({
   works: z.record(z.string(), BdWorkSchema).default({}),
-  /** 只保存实际呈现且定稿的作品正文；同行者插话不写入这里。 */
+  /** 只保存实际呈现且定稿的作品正文；现场插话不写入这里。 */
   passages: z.record(z.string(), z.record(z.string(), Text)).default({}),
   active: BdExperienceSchema.nullable().default(null),
   history: z
@@ -100,7 +117,15 @@ export const BraindanceStateSchema = z.object({
     )
     .default([]),
   discoveries: z
-    .array(z.object({ work: Id, detail: Id, finding: Text, at: z.number().int() }))
+    .array(
+      z.object({
+        work: Id,
+        detail: Id,
+        layer: BdLayerSchema,
+        finding: Text,
+        at: z.number().int(),
+      }),
+    )
     .default([]),
   settled: z.array(z.string().min(1)).default([]),
 });
@@ -110,44 +135,61 @@ const Event = {
   type: z.literal("braindance"),
   event: Id.describe("本次实际操作的稳定事件 id；重试复用，不与其他操作复用"),
 };
+
 export const BraindanceCommandSchema = z
   .discriminatedUnion("action", [
     z.object({ ...Event, action: z.literal("define"), work: BdWorkSchema }),
     z.object({
       ...Event,
-      action: z.literal("start"),
-      id: Id,
+      action: z.literal("play"),
+      id: Id.describe("本次体验 id；恢复当前暂停的超梦时可复用当前体验 id"),
       work: Id,
-      source: BdSourceSchema,
-      from: Id.optional().describe(
-        "从已保存的某次体验位置重新接入；引用 history.id。已结束的收费服务不能复用，需新的实际来源；省略表示从头重看",
+      mode: BdModeSchema.default("immerse").describe(
+        "immerse 沉浸回放（需播放器或场馆设备）；edit 编辑分析（需专业编辑头环或调谐师工作站）",
       ),
+      source: BdSourceSchema,
+      from: Id.optional().describe("从已保存的某次体验位置续接（引用 history.id）；省略从头开始"),
     }),
     z.object({
       ...Event,
       action: z.literal("progress"),
       passage: Id,
       text: Text.optional().describe(
-        "初次呈现须写本轮正文中作品片段的定稿原文，不含现场交谈；已有定稿的重播省略 text，直接复用原记录",
+        "初次呈现该片段时填写本轮正文中的作品定稿原文；已有定稿的重播省略 text",
       ),
-    }),
-    z.object({ ...Event, action: z.enum(["finish", "pause", "resume", "exit"]) }),
-    z.object({
-      ...Event,
-      action: z.literal("replay"),
-      passage: Id,
-      text: Text.optional().describe(
-        "若该片段此前只有略写、尚无定稿，本次首次展开时写本轮实际呈现原文；已有定稿则省略，不改旧文",
-      ),
+      replay: z
+        .boolean()
+        .optional()
+        .describe("设为 true 表示回放一个已经看过的片段（不推进位置，只结算回放时长）"),
     }),
     z.object({
       ...Event,
-      action: z.literal("inspect"),
-      detail: Id,
-      minutes: z.number().int().min(1).max(240),
+      action: z.literal("scan"),
+      layer: BdLayerSchema.describe("扫描图层：visual 视觉层 / audio 音频层 / thermal 热成像层"),
+      detail: Id.optional().describe(
+        "可选：指定本轮定位到的材料细节 id；省略则扫描已看片段上该图层全部未发现细节",
+      ),
+      minutes: z.number().int().min(1).max(240).default(5),
+    }),
+    z.object({
+      ...Event,
+      action: z.literal("record"),
+      workId: Id.describe("新录制的 raw 原片作品 id"),
+      carrierId: Id.describe("生成到背包里的超梦原片载体物品 id"),
+      title: Text.max(80),
+      synopsis: Text.max(1000),
+      durationMinutes: z.number().int().min(1).max(240).default(5),
+      text: Text.max(8000).optional().describe("可选：本段录制现场的客观感官记录原文"),
+    }),
+    z.object({
+      ...Event,
+      action: z.literal("stop"),
+      outcome: z.enum(["paused", "exited", "finished"]).describe(
+        "paused 暂停交流；exited 中途退出保留进度；finished 略写看完剩余时长并结束",
+      ),
     }),
   ])
   .describe(
-    "超梦正文体验：先 define 固定新作品；start 引用作品与实际来源（已成交 bd-session 服务或自有载体和设备）；progress 逐个呈现下一片段并保存正文，代码结算该片段分钟；finish 略写正常看完余下时长；pause/resume/exit 暂停、恢复、退出；replay 实际重播已看片段；inspect 仅引用本轮追问已提供的材料细节。收费使用原 trade，以上操作不另扣款，耗时不另发 world.time/phases。查阅旧正文不发操作。",
+    "超梦系统：define 固定新作品；play 接入/恢复播放或切换编辑模式；progress 呈现下一片段或重播已看片段；scan 在编辑模式下扫描视觉/音频/热成像三层线索；record 用已安装的超梦录制器（braindance-recorder）现场录制原片并生成芯片载体；stop 暂停/退出/看完。progress/scan/stop(finished) 自动结算时间，不要重复发 world.time。",
   );
 export type BraindanceCommand = z.infer<typeof BraindanceCommandSchema>;

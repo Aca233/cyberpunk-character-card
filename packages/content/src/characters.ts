@@ -24,8 +24,8 @@ const loBoard = BoardSchema.parse({
       ],
       custom: true,
     },
-    library("clinic-apprentice"),
-    library("smuggler"),
+    library("past-black-market-parts"),
+    library("past-border-run"),
   ],
   skills: [library("mechanic"), library("lockpick"), library("driving")],
   flaws: [

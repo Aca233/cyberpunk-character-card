@@ -16,7 +16,7 @@ import { Panel } from "../../ui/Panel";
 import styles from "./model-settings.module.css";
 import shared from "./settings.module.css";
 
-type Preset = "gemini" | "relay" | "openai" | "ollama" | "sdwebui" | "comfyui";
+type Preset = "gemini" | "anthropic" | "relay" | "openai" | "ollama" | "sdwebui" | "comfyui";
 const PRESETS: Record<
   Preset,
   {
@@ -31,6 +31,12 @@ const PRESETS: Record<
     hint: "Google AI Studio 密钥",
     type: "gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  },
+  anthropic: {
+    title: "Anthropic 官方",
+    hint: "Anthropic Console 密钥（x-api-key）",
+    type: "anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
   },
   relay: {
     title: "中转站 / OpenAI 兼容",
@@ -77,7 +83,6 @@ const IMAGE_PROTOCOLS: readonly { readonly id: ImageProtocol; readonly label: st
 function problems(profile: PublicProfile | undefined): string[] {
   if (!profile) return ["还没有选择模型连接"];
   const out: string[] = [];
-  if (profile.type === "anthropic") out.push("anthropic 原生接口暂未实现，请另建 OpenAI 兼容连接");
   if (profile.keyStatus === "missing") out.push("还没有填写 API 密钥");
   return out;
 }
@@ -604,6 +609,7 @@ function ConnectionForm({
   const [contextWindow, setContextWindow] = useState(String(source?.contextWindow ?? 128000));
   const [temperature, setTemperature] = useState(source?.temperature?.toString() ?? "");
   const [maxOutput, setMaxOutput] = useState(source?.maxOutputTokens?.toString() ?? "");
+  const [embeddingModel, setEmbeddingModel] = useState(source?.embeddingModel ?? "");
   const [imageProtocol, setImageProtocol] = useState<ImageProtocol>(
     source?.imageProtocol ?? "auto",
   );
@@ -625,6 +631,7 @@ function ConnectionForm({
         model.trim() ||
           key ||
           (baseUrl.trim() !== "" && baseUrl !== baseDefault) ||
+          embeddingModel.trim() !== "" ||
           imageProtocol !== "auto" ||
           comfyWorkflow.trim() !== "",
       )
@@ -633,6 +640,7 @@ function ConnectionForm({
       contextWindow !== String(profile.contextWindow) ||
       temperature !== (profile.temperature?.toString() ?? "") ||
       maxOutput !== (profile.maxOutputTokens?.toString() ?? "") ||
+      embeddingModel !== (profile.embeddingModel ?? "") ||
       imageProtocol !== (profile.imageProtocol ?? "auto") ||
       comfyWorkflow !== (profile.comfyWorkflow ?? "") ||
       key !== "";
@@ -680,6 +688,11 @@ function ConnectionForm({
       };
       if (comfyWorkflow.trim()) {
         patch.comfyWorkflow = comfyWorkflow.trim();
+      }
+      if (embeddingModel.trim()) {
+        patch.embeddingModel = embeddingModel.trim();
+      } else if (profile?.embeddingModel !== undefined) {
+        throw new Error("当前接口不支持通过留空删除向量模型，请填写一个值或撤销修改。");
       }
       if (url) patch.baseUrl = url;
       if (temperature.trim()) {
@@ -810,6 +823,7 @@ function ConnectionForm({
     setContextWindow(String(profile?.contextWindow ?? 128000));
     setTemperature(profile?.temperature?.toString() ?? "");
     setMaxOutput(profile?.maxOutputTokens?.toString() ?? "");
+    setEmbeddingModel(profile?.embeddingModel ?? "");
     setImageProtocol(profile?.imageProtocol ?? "auto");
     setComfyWorkflow(profile?.comfyWorkflow ?? "");
     setKey("");
@@ -1123,6 +1137,22 @@ function ConnectionForm({
                 />
               </FrameBox>
             </label>
+            {(currentType === "openai" || currentType === "ollama") && (
+              <label className={styles.field}>
+                <span>向量嵌入模型（可选，用于记忆检索）</span>
+                <FrameBox>
+                  <input
+                    name="cp-embedding-model"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    placeholder="如 text-embedding-3-small"
+                    value={embeddingModel}
+                    onChange={(e) => setEmbeddingModel(e.target.value)}
+                  />
+                </FrameBox>
+                <small>留空则仅使用规则检索，支持 OpenAI 兼容 /v1/embeddings。</small>
+              </label>
+            )}
           </div>
         </details>
 

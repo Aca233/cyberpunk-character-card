@@ -11,10 +11,7 @@ import { baseWeaponIdOf } from "./art";
 
 export type View = PlayerView & { readonly checkpoint?: TurnCheckpointSummary };
 export type Turn = View["turns"][number];
-export type CheckOffer = View["offers"]["checks"][number];
 export type Choice = View["offers"]["choices"][number];
-export type DamageTier = NonNullable<CheckOffer["damage"]>;
-export type Outcome = "critical" | "success" | "costly" | "failure" | "fumble";
 
 /** 地点 id 里出现这些词就用对应地区的图标；都不匹配时用夜之城 */
 const DISTRICTS: readonly (readonly [AssetId, readonly string[]])[] = [
@@ -178,38 +175,6 @@ function plainInput(input: TurnInput): string {
     case "ooc":
       return `[出戏] ${input.text}`;
   }
-}
-
-export const OUTCOME_LABELS: Readonly<Record<Outcome, string>> = {
-  critical: "大成功",
-  success: "干净利落",
-  costly: "惨胜",
-  failure: "失败",
-  fumble: "大失败",
-};
-
-export function isSuccess(outcome: Outcome): boolean {
-  return outcome === "critical" || outcome === "success" || outcome === "costly";
-}
-
-export const DAMAGE: Readonly<
-  Record<DamageTier, { readonly label: string; readonly icon: AssetId }>
-> = {
-  graze: { label: "擦伤", icon: "check.damageGraze" },
-  heavy: { label: "重击", icon: "check.damageHeavy" },
-  lethal: { label: "致命", icon: "check.damageLethal" },
-};
-
-interface DiceLike {
-  readonly faces: readonly number[];
-  readonly total: number;
-  readonly dv: number;
-  readonly outcome: Outcome;
-}
-
-/** 例如：骰面 7 + 检定值 → 18 对 DV 15 · 成功 */
-export function formatDice(d: DiceLike): string {
-  return `骰面 ${d.faces.join(" / ")} → 合计 ${d.total}，难度值 ${d.dv} · ${OUTCOME_LABELS[d.outcome]}`;
 }
 
 export function signed(n: number): string {
@@ -691,32 +656,43 @@ export function neuroTelemetry(
 
 export interface TrackItem {
   readonly id: string;
-  readonly kind: "objective" | "deadline";
+  readonly kind: "objective" | "deadline" | "bill" | "offer";
   readonly source: string;
   readonly sourceLabel: string;
   readonly title: string;
+  /** 地图定位用的地点 id（能对上旅行目的地的才填） */
+  readonly locationId: string | null;
   readonly location: string | null;
   readonly dueLabel: string | null;
   readonly dueIn: number | null;
   readonly progress: string | null;
-  readonly status: "overdue" | "active";
+  readonly status: "overdue" | "active" | "offered";
   readonly icon: AssetId;
+  /** 关联的可操作 id：委托 id / 住所 id / 义体医生 id */
+  readonly jobId?: string | undefined;
+  readonly homeId?: string | undefined;
+  readonly docId?: string | undefined;
+  readonly amount?: number | undefined;
 }
 
 export interface TrackTelemetry {
-  /** 正在推进中的事项：超期 / 期限约定 / 在办待办 */
+  /** 正在推进中的事项：超期 / 期限约定 / 在办待办 / 临期账单与欠款 */
   readonly active: readonly TrackItem[];
+  /** 已递话但尚未正式接下的委托、熟人开口的心事与 NCPD 警情 */
+  readonly offered: readonly TrackItem[];
   readonly overdueCount: number;
   readonly activeCount: number;
-  /** 折叠态卡片展示的最多 3 条在办事项 */
+  readonly offeredCount: number;
+  /** 折叠态卡片展示的最多 3 条高优先级摘要（优先在办/账单，没有时补待接动向） */
   readonly preview: readonly TrackItem[];
 }
 
 function trackPriority(item: TrackItem): [number, number, number] {
-  const overdueRank = item.status === "overdue" ? 0 : 1;
-  if (item.dueIn !== null) return [overdueRank, 0, item.dueIn];
-  if (item.kind === "deadline") return [overdueRank, 1, 0];
-  return [overdueRank, 2, 0];
+  const statusRank = item.status === "overdue" ? 0 : item.status === "active" ? 1 : 2;
+  if (item.kind === "bill") return [statusRank, 0, item.dueIn ?? 0];
+  if (item.dueIn !== null) return [statusRank, 1, item.dueIn];
+  if (item.kind === "deadline") return [statusRank, 2, 0];
+  return [statusRank, 3, 0];
 }
 
 function compareTrackItems(a: TrackItem, b: TrackItem): number {
@@ -727,10 +703,14 @@ function compareTrackItems(a: TrackItem, b: TrackItem): number {
   return pa[2] - pb[2];
 }
 
-/** 统一折叠追踪卡与展开追踪页的数据投影，只列手头在办与期限约定 */
+/** 统一折叠追踪卡与展开追踪页的数据投影：汇集在办单子、约定、临期账务与待决风声 */
 export function trackTelemetry(view: View): TrackTelemetry {
   const active: TrackItem[] = [];
-  const placeNames = new Map((view.travel?.destinations ?? []).map((d) => [d.id, d.name]));
+  const offered: TrackItem[] = [];
+  const destinations = view.travel?.destinations ?? [];
+  const placeNames = new Map(destinations.map((d) => [d.id, d.name]));
+  const placeIdOf = (loc: string | null): string | null =>
+    loc !== null && placeNames.has(loc) ? loc : null;
   const placeOf = (loc: string | null): string | null =>
     loc === null ? null : (placeNames.get(loc) ?? loc);
 
@@ -741,18 +721,76 @@ export function trackTelemetry(view: View): TrackTelemetry {
       source: "deadline",
       sourceLabel: "约定",
       title: d.label,
+      locationId: null,
       location: null,
       dueLabel: d.overdue ? "已超期" : `${d.due} 前`,
-      dueIn: null,
+      dueIn: d.dueIn ?? null,
       progress: null,
       status: d.overdue ? "overdue" : "active",
       icon: d.overdue ? "notify.warning" : "status.timeCircle",
     });
   }
 
+  for (const home of view.safehouse?.homes ?? []) {
+    if (home.tenure !== "rented" || (!home.locked && !home.rentDue)) continue;
+    const amount = home.rentAmount ?? 1200;
+    active.push({
+      id: `rent:${home.id}`,
+      kind: "bill",
+      source: "rent",
+      sourceLabel: "房租",
+      title: home.locked ? `${home.name} 已欠租锁门` : `${home.name} 房租到期`,
+      locationId: placeIdOf(home.location),
+      location: home.locationName,
+      dueLabel: home.locked ? "已锁门" : home.rentPaidUntil ? `${home.rentPaidUntil} 止` : "待缴",
+      dueIn: home.locked ? -1 : null,
+      progress: `${amount.toLocaleString("en-US")} 欧元`,
+      status: home.locked ? "overdue" : "active",
+      icon: home.locked ? "notify.warning" : "map.poi.apartment",
+      homeId: home.id,
+      amount,
+    });
+  }
+
+  for (const debt of view.ripperdocDebts ?? []) {
+    active.push({
+      id: `debt:${debt.docId}`,
+      kind: "bill",
+      source: "debt",
+      sourceLabel: "赊账",
+      title: `欠 ${debt.docName} ${debt.amount.toLocaleString("en-US")} 欧元`,
+      locationId: placeIdOf(debt.location),
+      location: placeOf(debt.location),
+      dueLabel: debt.overdue ? "已超期" : debt.due === "未约定期限" ? "待还" : `${debt.due} 前`,
+      dueIn: debt.dueIn,
+      progress: debt.location ? `回诊所还款` : "前往诊所结清",
+      status: debt.overdue ? "overdue" : "active",
+      icon: debt.overdue ? "notify.warning" : "map.poi.ripperdoc",
+      docId: debt.docId,
+      amount: debt.amount,
+    });
+  }
+
   for (const o of view.objectives) {
-    if (o.status === "offered") continue;
+    const locationId = placeIdOf(o.location);
     const place = placeOf(o.location);
+    if (o.status === "offered") {
+      offered.push({
+        id: o.id,
+        kind: "offer",
+        source: o.source,
+        sourceLabel: o.sourceLabel,
+        title: o.title,
+        locationId,
+        location: place,
+        dueLabel: o.due === null ? null : `${o.due} 前`,
+        dueIn: o.dueIn,
+        progress: o.progress,
+        status: "offered",
+        icon: o.source === "ncpd" ? "notify.attention" : "notify.questUpdate",
+      });
+      continue;
+    }
     const overdue = o.status === "overdue";
     active.push({
       id: o.id,
@@ -760,25 +798,57 @@ export function trackTelemetry(view: View): TrackTelemetry {
       source: o.source,
       sourceLabel: o.sourceLabel,
       title: o.title,
+      locationId,
       location: place,
       dueLabel: o.due === null ? null : overdue ? "已超期" : `${o.due} 前`,
       dueIn: o.dueIn,
       progress: o.progress,
       status: overdue ? "overdue" : "active",
       icon: overdue ? "notify.warning" : "notify.questUpdate",
+      jobId: o.source === "jobs" ? o.id.replace(/^jobs:/, "") : undefined,
+    });
+  }
+
+  for (const job of view.jobs.list) {
+    if (job.status !== "offered") continue;
+    const locationId = placeIdOf(job.location);
+    const place = placeOf(job.location);
+    offered.push({
+      id: `job-offer:${job.id}`,
+      kind: "offer",
+      source: "jobs",
+      sourceLabel: "待接委托",
+      title: job.title,
+      locationId,
+      location: place,
+      dueLabel: job.due === null ? null : job.overdue ? "已超期" : `${job.due} 前`,
+      dueIn: job.dueIn,
+      progress: [
+        job.fixer ? `${job.fixer} 递话` : job.client,
+        job.reward > 0 ? `${job.reward.toLocaleString("en-US")} €` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      status: "offered",
+      icon: "notify.questUpdate",
+      jobId: job.id,
     });
   }
 
   active.sort(compareTrackItems);
+  offered.sort(compareTrackItems);
 
   const overdueCount = active.filter((i) => i.status === "overdue").length;
   const activeCount = active.length;
-  const preview = active.slice(0, 3);
+  const offeredCount = offered.length;
+  const preview = [...active, ...offered].slice(0, 3);
 
   return {
     active,
+    offered,
     overdueCount,
     activeCount,
+    offeredCount,
     preview,
   };
 }
@@ -928,8 +998,6 @@ export interface ContactSummary {
   readonly messageCount: number;
   readonly preview: string | null;
   readonly fixer: View["jobs"]["fixers"][number] | undefined;
-  readonly squad: View["squad"]["members"][number] | undefined;
-  readonly squadOffer: View["squad"]["offers"][number] | undefined;
   readonly foe: NonNullable<View["combat"]["active"]>["foes"][number] | undefined;
   readonly badges: readonly ContactBadge[];
   readonly utilityLine: string;
@@ -943,8 +1011,6 @@ export interface ContactSummary {
 
 type ViewNpc = View["npcs"][number];
 type ViewFixer = View["jobs"]["fixers"][number];
-type ViewSquadMember = View["squad"]["members"][number];
-type ViewSquadOffer = View["squad"]["offers"][number];
 type ViewFoe = NonNullable<View["combat"]["active"]>["foes"][number];
 type ViewMessage = View["phone"]["messages"][number];
 
@@ -991,7 +1057,7 @@ function appendRoleTraitBadges(
   if (!npc.met) return;
   for (const trait of ROLE_TRAITS) {
     if (!trait.pattern.test(npc.role)) continue;
-    // 已有明确系统身份（如帮派头目/中间人/小队/敌人）时，不叠泛泛的「战力」「情报站」
+    // 已有明确系统身份（如帮派头目/中间人/同行者/敌人）时，不叠泛泛的「战力」「情报站」
     if (
       hasPrimaryChannel &&
       trait.tone === "dim" &&
@@ -1015,8 +1081,6 @@ function summarizeNpcContact(
   view: View,
   thread: readonly ViewMessage[],
   fixer: ViewFixer | undefined,
-  squad: ViewSquadMember | undefined,
-  squadOffer: ViewSquadOffer | undefined,
   foe: ViewFoe | undefined,
 ): ContactSummary {
   const { npc } = raw;
@@ -1097,22 +1161,12 @@ function summarizeNpcContact(
   } else if (isFixer) {
     badges.push({ label: "中间人", tone: "accent", detail: "可接单派活" });
   }
-  if (squad) {
+  if (npc?.following) {
     badges.push({
-      label: squad.specialty ? `小队·${squad.specialty}` : "小队",
-      shortLabel: "小队",
+      label: "同行中",
       tone: "accent",
-      detail: `${squad.kindLabel} · ${squad.terms}`,
+      detail: "正与你结伴行动",
     });
-    if (squad.owed > 0) {
-      badges.push({
-        label: `欠薪${squad.owed}周`,
-        tone: "danger",
-        detail: squad.leavesAt ? `最迟 ${squad.leavesAt} 结算` : undefined,
-      });
-    }
-  } else if (squadOffer) {
-    badges.push({ label: "邀入队", tone: "cyan", detail: squadOffer.terms });
   }
   if (owesYou.length > 0) {
     badges.push({
@@ -1145,9 +1199,7 @@ function summarizeNpcContact(
       detail: openConcerns.map((c) => c.title).join("；"),
     });
   }
-  const hasPrimaryChannel = Boolean(
-    foe || doc || shops.length > 0 || isFixer || squad || squadOffer,
-  );
+  const hasPrimaryChannel = Boolean(foe || doc || shops.length > 0 || isFixer || npc?.following);
   if (npc) appendRoleTraitBadges(npc, badges, hasPrimaryChannel);
 
   const primaryPlaceId = npc?.placeId ?? doc?.location ?? shops[0]?.location ?? null;
@@ -1192,10 +1244,8 @@ function summarizeNpcContact(
     } else if (isFixer) {
       descParts.push("接单派活");
     }
-    if (squad) {
-      descParts.push(squad.owed > 0 ? `小队欠薪${squad.owed}周` : `小队(${squad.terms})`);
-    } else if (squadOffer) {
-      descParts.push(`可入队(${squadOffer.terms})`);
+    if (npc?.following) {
+      descParts.push("同行中");
     }
     if (descParts.length === 0) {
       const headline = roleHeadline(npc.role);
@@ -1223,10 +1273,6 @@ function summarizeNpcContact(
     highlight = `${doc.name} 欠款 ${doc.debt.amount.toLocaleString("en-US")}€ · ${doc.debt.due} 到期`;
   } else if (fixer?.blocked && fixer.blockReason) {
     highlight = fixer.blockReason;
-  } else if (squad && squad.owed > 0) {
-    highlight = `已欠薪 ${squad.owed} 周${squad.leavesAt ? `（${squad.leavesAt} 前不发会离队）` : ""}`;
-  } else if (squadOffer) {
-    highlight = `邀你搭档：${squadOffer.specialty ? `${squadOffer.specialty} · ` : ""}${squadOffer.terms}`;
   } else if (owesYou[0]) {
     highlight = `欠你人情：${owesYou[0].text}`;
   } else if (grudges[0]) {
@@ -1246,12 +1292,10 @@ function summarizeNpcContact(
     openJobs.length > 0 ||
     unsettled.length > 0 ||
     Boolean(doc?.debt) ||
-    Boolean(squad && squad.owed > 0) ||
-    Boolean(squadOffer) ||
     openConcerns.length > 0;
   const isUtility =
     Boolean(npc?.alive !== false) &&
-    Boolean(doc || shops.length > 0 || isFixer || squad || squadOffer || npc?.services);
+    Boolean(doc || shops.length > 0 || isFixer || npc?.following || npc?.services);
   const isPresent = Boolean(npc?.here && npc.alive);
 
   const latestMsg = msgs[0];
@@ -1268,8 +1312,6 @@ function summarizeNpcContact(
         : latestMsg.text
       : null,
     fixer,
-    squad,
-    squadOffer,
     foe,
     badges,
     utilityLine: utilityParts.join(" · "),
@@ -1288,8 +1330,6 @@ export function contactDirectory(view: View): ContactSummary[] {
   const messages = view.phone?.messages ?? [];
   const contacts = view.phone?.contacts ?? [];
   const fixers = view.jobs?.fixers ?? [];
-  const squadMembers = view.squad?.members ?? [];
-  const squadOffers = view.squad?.offers ?? [];
   const foes = view.combat?.active?.foes ?? [];
 
   const npcById = new Map(npcs.map((n) => [n.id, n]));
@@ -1321,20 +1361,10 @@ export function contactDirectory(view: View): ContactSummary[] {
   return [...listed, ...rest].map((raw) => {
     const { npc } = raw;
     const fixer = npc ? fixers.find((f) => f.id === npc.id) : undefined;
-    const squad = npc ? squadMembers.find((m) => m.npc === npc.id) : undefined;
-    const squadOffer = npc ? squadOffers.find((o) => o.npc === npc.id) : undefined;
     const foe = foes.find(
       (f) => (npc && (f.npc === npc.id || f.id === npc.id)) || f.name === raw.name,
     );
-    return summarizeNpcContact(
-      raw,
-      view,
-      threads.get(raw.key) ?? [],
-      fixer,
-      squad,
-      squadOffer,
-      foe,
-    );
+    return summarizeNpcContact(raw, view, threads.get(raw.key) ?? [], fixer, foe);
   });
 }
 

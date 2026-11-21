@@ -26,6 +26,7 @@ import {
   BASE_CONSTRAINTS,
   DEFAULT_WORLD_STYLE,
   estimateTokens,
+  modulesBlock,
   systemMessage,
   userMessage,
 } from "./layers";
@@ -44,6 +45,7 @@ export const NARRATE_STAGE = `【这一步：写正文】
 【人物与事实】
 - 人物卡的说话方式、台词样本、经历、关系、诉求和底线属于这个人的身份与处境；文风偏好不能把不同人物改成同一性格，也不能改写玩家原话。
 - 只写确实发生的物理后果：受伤才写疼痛，设备受干扰才写异常，门禁确有条件才写阻拦。不把示例中的伤残、警报或敌意当作本轮事实。
+- 若存在【上一轮之后玩家刚刚在界面完成的操作】，须把其中每一项刚发生的实际举动（买卖、装卸改装、手术、穿脱、接单、交租等）自然写进本轮正文的开头或过渡里，并与玩家本轮输入衔接起来，不用“界面”“系统”“按钮”等出戏词。
 
 【玩家角色边界】
 - 玩家写了台词时，用引号一字不改、不润色地原话保留，再写别人听完怎么反应。
@@ -186,9 +188,11 @@ export function buildNarratorPrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = stageModules(world, plan.input, extras);
-  const rules = systemMessage("narrate", [coreRules(extras.hasPreset)], modules);
-  // 系统层不带完整 ID 查阅表；本轮用户消息补充真实装备的创作参考。
-  const system = [rules, ...narrateTablesOf(view, extras)].join("\n\n");
+  // 系统层只放跨回合完全不变的静态核心规则与静态剧情素材表，动态激活的场景模块放进本轮用户消息，
+  // 防止某轮切换模块时把系统提示词连同整段对话历史的前缀缓存一并打穿。
+  const staticRules = systemMessage("narrate", [coreRules(extras.hasPreset)]);
+  const activeModulesText = modulesBlock("narrate", modules);
+  const system = [staticRules, ...narrateTablesOf(view, extras)].join("\n\n");
   const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
   let history = 0;
@@ -229,6 +233,7 @@ export function buildNarratorPrompt(
       : npcEquipmentReference(world, extras.data);
   const content = userMessage({
     recap,
+    modules: activeModulesText,
     scene,
     decided: extras.decided,
     recall,
@@ -245,9 +250,10 @@ export function buildNarratorPrompt(
   });
   messages.push({ role: "user", content });
   const tokens = (s: string | undefined) => (s === undefined ? 0 : estimateTokens(s));
+  const moduleTokens = tokens(activeModulesText);
   const hotTokens = tokens(scene.join("\n\n")) + tokens((extras.decided ?? []).join("\n"));
   const parts = {
-    rules: tokens(system),
+    rules: tokens(system) + moduleTokens,
     history,
     recap: tokens(recap),
     hot: hotTokens,
@@ -255,8 +261,18 @@ export function buildNarratorPrompt(
     world: tokens(extras.lore),
     other: Math.max(
       0,
-      tokens(content) - tokens(recap) - hotTokens - tokens(recall) - tokens(extras.lore),
+      tokens(content) -
+        moduleTokens -
+        tokens(recap) -
+        hotTokens -
+        tokens(recall) -
+        tokens(extras.lore),
     ),
   };
-  return { messages, modules: modules.map((m) => m.id), rules: rules.length, parts };
+  return {
+    messages,
+    modules: modules.map((m) => m.id),
+    rules: staticRules.length + (activeModulesText?.length ?? 0),
+    parts,
+  };
 }

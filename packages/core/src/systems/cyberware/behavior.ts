@@ -65,11 +65,12 @@ export function applyBehaviorChip(
     }
 
     const prevMode = state.mode;
+    const leavingDoll = prevMode === "doll" && command.mode !== "doll" && profile.recall === "none";
+    if (leavingDoll) {
+      state.memoryGap = true;
+    }
     if (command.mode === "off") {
       if (state.lastControl && state.lastControl.to === null) state.lastControl.to = now;
-      if (prevMode === "doll" && profile.recall === "none") {
-        state.memoryGap = true;
-      }
       state.protocol = null;
       state.carrier = null;
     } else if (command.mode === "doll") {

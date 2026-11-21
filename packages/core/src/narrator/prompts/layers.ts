@@ -69,18 +69,28 @@ export function moduleSection(module: RuleModule, stage: PromptStage): string | 
   ].join("\n");
 }
 
-/** 系统消息：fixed 是这一步不变的几层（L0、L1、L3 和示例），后面接按状态挑的规则模块和表 */
+/** 系统消息：只拼静态可缓存层（L0、L1、L3、示例和静态数据表），不含每轮动态模块，保证前缀缓存稳定命中 */
 export function systemMessage(
   stage: PromptStage,
   fixed: readonly string[],
   modules: readonly RuleModule[] = [],
   tables: readonly string[] = [],
 ): string {
+  const dynamic = modulesBlock(stage, modules);
+  return [...fixed, ...(dynamic ? [dynamic] : []), ...tables].join("\n\n");
+}
+
+/** 按当前状态激活的场景规则模块块：放到用户消息中，不打断系统提示词与历史对话的静态前缀缓存 */
+export function modulesBlock(
+  stage: PromptStage,
+  modules: readonly RuleModule[] = [],
+): string | undefined {
   const rendered = modules
     .map((m) => moduleSection(m, stage))
     .filter((s): s is string => s !== undefined);
-  const note = rendered.length > 0 && stage !== "extract" ? [MODULE_NOTE] : [];
-  return [...fixed, ...note, ...rendered, ...tables].join("\n\n");
+  if (rendered.length === 0) return undefined;
+  const note = stage !== "extract" ? [MODULE_NOTE] : [];
+  return [...note, ...rendered].join("\n\n");
 }
 
 /** 规则层预算：32K 上下文的模型约 4K token（规格“上下文预算”） */
@@ -103,6 +113,8 @@ export interface PromptSlots {
   readonly recap?: string | undefined;
   /** 最近几轮原文（判断用；写正文的原文放在对话历史里） */
   readonly recent?: string | undefined;
+  /** 按本轮状态动态激活的场景规则模块（放在用户消息内，保持系统提示与对话历史前缀 100% 可缓存） */
+  readonly modules?: string | undefined;
   /** 局面：当前状态、人物、约定、近期后果、到期事件、开场与因果裁决 */
   readonly scene: readonly string[];
   /** 写正文之前代码已经定下的事 */
@@ -125,6 +137,7 @@ export function userMessage(slots: PromptSlots): string {
   return [
     slots.recap,
     slots.recent,
+    slots.modules,
     ...slots.scene,
     decided.length > 0 ? `【本轮已定的事】\n${decided.join("\n")}` : undefined,
     slots.recall,

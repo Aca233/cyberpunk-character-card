@@ -1,4 +1,5 @@
 import type { Draft } from "immer";
+import { districtLawFor } from "../../district-laws";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
 import type { CombatState } from "../combat";
 import type { EconomyState } from "../economy";
@@ -24,17 +25,29 @@ export interface DispatchInput {
   readonly inCombat: boolean;
   readonly district: string | null;
   readonly stars: number;
+  /** 来自 DISTRICT_LAWS[district].traumaCoverage 的实时覆盖等级；缺省时退回默认排除表 */
+  readonly traumaCoverage?: "full" | "platinumOnly" | "blocked" | undefined;
 }
 
-/** 实际救援资格；健康时的保障待命由投影以假设倒地的状态另行核对。 */
+/** 实际救援资格；优先读取城区法制表的 traumaCoverage（blocked 全禁，platinumOnly 仅白金），健康时由投影假设倒地核对。 */
 export function dispatchCheck(input: DispatchInput): {
   readonly ok: boolean;
   readonly why: string;
 } {
   if (input.tier === "none" || !input.active) return { ok: false, why: "没有有效的会籍" };
   if (input.district === null) return { ok: false, why: "当前位置未确认，无法定位救援" };
-  if (TRAUMA_EXCLUDED_DISTRICTS.includes(input.district))
+  if (input.traumaCoverage === "blocked") {
+    return { ok: false, why: `${input.district}空域与地面封锁，创伤小组无法降落` };
+  }
+  if (input.traumaCoverage === "platinumOnly" && input.tier !== "platinum") {
+    return {
+      ok: false,
+      why: `${input.district}为高危法外/荒漠区，仅白金卡会员享受创伤小组武装外勤覆盖`,
+    };
+  }
+  if (input.traumaCoverage === undefined && TRAUMA_EXCLUDED_DISTRICTS.includes(input.district)) {
     return { ok: false, why: `${input.district}创伤小组不进` };
+  }
   if (input.stars >= TRAUMA_MAXTAC_STARS) return { ok: false, why: "暴恐机动队出动时创伤小组不来" };
   if (input.condition === "up") return { ok: false, why: "生命体征稳定，尚不需要紧急救援" };
   if (input.condition === "dead") return { ok: false, why: "已经死亡，无法通过会员救援复活" };
@@ -171,6 +184,7 @@ export function applyTrauma(
   const location = ctx.read<WorldClockState>("world").location;
   const district =
     location === null ? null : (locationCatalog(ctx.data).get(location)?.district ?? null);
+  const law = districtLawFor(ctx.data, district);
   const check = dispatchCheck({
     tier: draft.tier,
     active: isActive(draft, ctx.now),
@@ -178,6 +192,7 @@ export function applyTrauma(
     inCombat,
     district,
     stars: ctx.read<HeatState>("heat").stars,
+    traumaCoverage: law?.traumaCoverage,
   });
   if (!check.ok) return fail(`创伤小组不会来：${check.why}`);
   if (draft.tier === "none") return fail("没有有效的会籍");

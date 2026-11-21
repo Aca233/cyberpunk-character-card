@@ -118,7 +118,8 @@ describe("抽取目录按需展开能力，完整身份索引保留", () => {
       },
     };
     const result = prompt(world, "老赵把划痕信物还给你。");
-    expect(result.system).toContain("token 划痕信物");
+    expect(result.system).not.toContain("token 划痕信物");
+    expect(result.user).toContain("token 划痕信物");
     expect(result.user).toContain("token 划痕信物：凭刻痕认出原主人。");
     expect(result.system).toContain("不是存在资格白名单");
   });

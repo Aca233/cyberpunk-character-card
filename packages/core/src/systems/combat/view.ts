@@ -18,6 +18,13 @@ import {
   MOURNER_LABELS,
 } from "./schema";
 
+const FOE_TIER_LABELS: Readonly<Record<string, string>> = {
+  street: "街头杂兵",
+  veteran: "老练打手",
+  elite: "精锐重装",
+  legend: "传奇人物",
+};
+
 /** 玩家可见的战斗：谁在场、倒下的人身上有什么；案底里的死者、伤、疤、流言、录像 */
 export function combatView({ world, data }: ViewContext) {
   const combat = CombatStateSchema.parse(world.slices.combat);
@@ -71,6 +78,8 @@ export function combatView({ world, data }: ViewContext) {
         npc: f.npc,
         name: f.name,
         gang: f.gang,
+        tier: f.tier,
+        tierLabel: FOE_TIER_LABELS[f.tier] ?? f.tier,
         state: f.state,
         stateLabel: FOE_STATE_LABELS[f.state],
         carry: lootable(f.state) ? named(stillCarried(f.npc, f.carry), f.carrySpecs) : [],

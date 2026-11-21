@@ -1,8 +1,4 @@
 import { z } from "zod";
-import { type Attribute, AttributeSchema } from "../dice";
-
-export const ATTRIBUTE_MAX = 10;
-export const AttributeValueSchema = z.number().int().min(1).max(ATTRIBUTE_MAX);
 
 export const STREET_CRED_MAX = 50;
 
@@ -63,19 +59,14 @@ export const CharacterStateSchema = z.object({
   brief: z.string(),
   /** 配图只读取这份明确的视觉资料，不拆解混合简介。 */
   visual: CharacterVisualSchema.optional(),
-  attributes: z.record(AttributeSchema, AttributeValueSchema),
   /** 街头声望等级 */
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX),
   /** 声望按半级增长：攒着半级时为 true，再得半级就升一级 */
   credHalf: z.boolean().default(false),
-  /** 还没分配的属性点 */
-  attributePoints: z.number().int().min(0).default(0),
   /** 已经结算过声望的事件 id；同一事件只结算一次 */
   credSettled: z.array(z.string()).default([]),
   /** 旧存档和没用主板的角色是空的 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
-  /** 装着的义体带来的属性加成，由义体系统算好写进来；旧存档没有 */
-  bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)).default({}),
   /** 习惯：玩家自己写的，或者确认过的叙事模型提议；不加数值 */
   habits: z.array(HabitTextSchema).max(HABITS_MAX).default([]),
   /** 叙事模型提议、玩家还没确认的习惯 */
@@ -97,7 +88,6 @@ export const SetCharacterSchema = z.object({
   name: z.string().min(1),
   brief: z.string(),
   visual: CharacterVisualSchema.optional(),
-  attributes: z.record(AttributeSchema, AttributeValueSchema),
   streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
   /** 旧存档的角色快照没有 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).optional(),
@@ -173,13 +163,6 @@ export const GainCredSchema = z.object({
 });
 export type GainCred = z.infer<typeof GainCredSchema>;
 
-/** 只能由代码发出：义体装卸后重算的属性加成 */
-export const SetBonusesSchema = z.object({
-  type: z.literal("character.setBonuses"),
-  bonuses: z.partialRecord(AttributeSchema, z.number().int().min(0).max(ATTRIBUTE_MAX)),
-});
-export type SetBonuses = z.infer<typeof SetBonusesSchema>;
-
 /** 模型使用：{"type": "habit", "text": "..."}，玩家确认后才写进角色卡 */
 export const HabitCommandSchema = z
   .object({ type: z.literal("habit"), text: HabitTextSchema })
@@ -218,23 +201,4 @@ export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
 export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
 export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
 
-export type CharacterInternal = SetCharacter | GainCred | SetBonuses | HabitChange | FlashbackTick;
-
-/** 检定用的属性：自己的加上义体加成，最高 20 */
-export function effectiveAttribute(
-  state: Pick<CharacterState, "attributes"> & { readonly bonuses?: CharacterState["bonuses"] },
-  attribute: Attribute,
-): number {
-  return Math.min(
-    ATTRIBUTE_MAX,
-    (state.attributes[attribute] ?? 0) + (state.bonuses?.[attribute] ?? 0),
-  );
-}
-
-export function effectiveAttributes(
-  state: Pick<CharacterState, "attributes"> & { readonly bonuses?: CharacterState["bonuses"] },
-): Record<Attribute, number> {
-  return Object.fromEntries(
-    (Object.keys(state.attributes) as Attribute[]).map((a) => [a, effectiveAttribute(state, a)]),
-  ) as Record<Attribute, number>;
-}
+export type CharacterInternal = SetCharacter | GainCred | HabitChange | FlashbackTick;

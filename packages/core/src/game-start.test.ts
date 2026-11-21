@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type GameContent, newGameWorld } from "./game";
+import { type GameContent, newGameWorld, projectState } from "./game";
 import { WorldClockStateSchema } from "./systems/world/schema";
 
 /**
@@ -100,5 +100,118 @@ describe("建档时选开局地点", () => {
 
   it("不认识的原作地点建不了档", () => {
     expect(() => startAt("poi:nope")).toThrow();
+  });
+});
+
+describe("开局神经耐受、自定义义体快照与载具替换", () => {
+  const richContent: GameContent = {
+    ...content,
+    cyberware: [
+      {
+        id: "base-optics",
+        name: "岐路司光学义眼",
+        slot: "eyes",
+        rarity: "common",
+        price: 1000,
+        humanityCost: 4,
+        ability: "基础义眼扫描",
+        armor: false,
+        accelerator: false,
+        iconic: false,
+      },
+      {
+        id: "subdermal-armour",
+        name: "皮下护甲",
+        slot: "integumentary",
+        rarity: "rare",
+        price: 3000,
+        humanityCost: 12,
+        ability: "基础装甲",
+        armor: true,
+        accelerator: false,
+        iconic: false,
+      },
+    ],
+    vehicles: [
+      {
+        id: "origin-car",
+        name: "出身旧车",
+        maker: "霆威",
+        class: "economy",
+        speed: 2,
+        seats: 4,
+        price: 5000,
+      },
+      {
+        id: "custom-bike",
+        name: "草薙刃 CT-3X",
+        maker: "Yaiba",
+        class: "moto",
+        speed: 4,
+        seats: 2,
+        price: 22000,
+      },
+    ],
+    loadouts: [
+      {
+        id: "nomad-kit",
+        label: "流浪者行装",
+        kind: "origin",
+        keywords: [],
+        gear: [],
+        cyberware: ["base-optics"],
+        vehicles: ["origin-car"],
+        eddies: 500,
+      },
+    ],
+  };
+
+  it("开局写入定性神经耐受，自定义义体自包含生效，专属载具替换出身载具", () => {
+    const customChrome = {
+      id: "custom-blade-1",
+      name: "自制热能爪",
+      humanityCost: 8,
+      slot: "arms" as const,
+      ability: "高温切割",
+      custom: true,
+    };
+    const world = newGameWorld(
+      {
+        startTime: START,
+        opening: "test-open",
+        loadouts: ["nomad-kit"],
+        board: {
+          cyberware: ["subdermal-armour", "custom-blade-1"],
+          customCyberware: [customChrome],
+          tolerance: "low",
+          kit: { cashTier: "standard", weapons: [], vehicle: "custom-bike" },
+          people: [],
+          acquaintances: [],
+        },
+      },
+      richContent,
+    );
+    const view = projectState(world, [], {
+      cyberware: [
+        ...(richContent.cyberware ?? []),
+        {
+          id: "custom-blade-1",
+          name: "自制热能爪",
+          slot: "arms",
+          rarity: "rare",
+          price: 0,
+          humanityCost: 8,
+          ability: "高温切割",
+          armor: false,
+          accelerator: false,
+          iconic: false,
+        },
+      ],
+      vehicles: richContent.vehicles ?? [],
+    });
+    expect(view.humanity.tolerance).toBe("low");
+    expect(view.humanity.stage).toBe("steady");
+    expect(view.cyberware.map((c) => c.id)).toContain("custom-blade-1");
+    expect(view.travel.vehicles.map((v) => v.model)).toEqual(["custom-bike"]);
   });
 });

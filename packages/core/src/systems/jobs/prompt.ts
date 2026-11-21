@@ -66,24 +66,47 @@ function jobLine(job: Job, state: JobsState): string {
   return lines.join("\n");
 }
 
-/** 给模型看的【委托】：中间人、挂着和接下的单子，加最近结束的几单 */
+interface FixerTemperamentEntry {
+  readonly id: string;
+  readonly preferredStyle: string;
+  readonly taboo: string;
+}
+
+const FIXER_TEMPERAMENT_ALIASES: Readonly<Record<string, string>> = {
+  "mr-hands": "hands",
+};
+
+function temperamentOf(
+  id: string,
+  list: readonly FixerTemperamentEntry[] | undefined,
+): FixerTemperamentEntry | undefined {
+  if (!list || list.length === 0) return undefined;
+  const canonical = FIXER_TEMPERAMENT_ALIASES[id] ?? id;
+  return list.find((t) => t.id === id || t.id === canonical);
+}
+
+/** 给模型看的【委托】：中间人（含办事风格与忌讳）、挂着和接下的单子，加最近结束的几单 */
 export function jobsSection(
   state: JobsState,
   _streetCred: number,
   affinityOf: (id: string) => number,
   /** 派单人所属势力的态度；不传时不算 */
   sideOf: (id: string) => FixerCard["faction"] = () => undefined,
+  /** 中间人脾气与偏好表（data.fixerTemperaments） */
+  temperaments?: readonly FixerTemperamentEntry[],
 ): string | undefined {
   const fixers = Object.values(state.fixers);
   if (fixers.length === 0 && state.jobs.length === 0) return undefined;
   const lines = fixers.map((f) => {
     const affinity = affinityOf(f.id);
     const side = sideOf(f.id);
+    const temp = temperamentOf(f.id, temperaments);
+    const tempNote = temp ? `；风格：${temp.preferredStyle}；忌讳：${temp.taboo}` : "";
     if (side !== undefined && fixerBlocked(side.attitude)) {
-      return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单`;
+      return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单${tempNote}`;
     }
     const friendly = side && (side.attitude === "friendly" || side.attitude === "family");
-    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}${friendly ? `（所属${side.name}待玩家友善）` : ""}`;
+    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}${friendly ? `（所属${side.name}待玩家友善）` : ""}${tempNote}`;
   });
   const open = state.jobs.filter(isOpen);
   if (open.length === 0) lines.push("- 眼下没有挂着或接下的委托");

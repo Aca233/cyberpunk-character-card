@@ -15,7 +15,7 @@ export function CellFrame() {
     <>
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--box-fill, rgb(14 14 23 / 72%))"
+        tint="var(--box-fill, var(--cp-surface))"
         slice={CELL_SLICE}
         className={styles.slice}
       />

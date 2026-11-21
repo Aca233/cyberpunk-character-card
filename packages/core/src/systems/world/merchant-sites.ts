@@ -10,6 +10,7 @@ export const MerchantSiteSchema = z.object({
     "meds",
     "food",
     "bar",
+    "junk",
     "ripperdoc",
     "netrunner",
     "mixed",
@@ -21,7 +22,7 @@ export const MerchantSiteSchema = z.object({
   braindanceDevice: z
     .object({
       playback: z.boolean(),
-      analysis: z.array(z.enum(["observe", "audio", "thermal"])),
+      analysis: z.array(z.enum(["visual", "audio", "thermal"])),
     })
     .optional(),
   source: z.string().min(1),

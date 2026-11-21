@@ -90,7 +90,10 @@ export function turnTokens(input: unknown, text: string): number {
   return estimateTokens(inputText(input)) + estimateTokens(text) + 8;
 }
 
-/** 写正文带最近几轮原文：至少 MIN_HISTORY 轮，再往前补到预算用完，最多 max 轮 */
+/** 对话历史分块滑窗步长：超过上限后按块推进起始轮次，让连续多轮共享完全一致的历史前缀以命中 KV 缓存 */
+export const HISTORY_STRIDE = 4;
+
+/** 写正文带最近几轮原文：至少 MIN_HISTORY 轮，再往前补到预算用完，最多 max 轮；超出后按 HISTORY_STRIDE 分块滑窗以保前缀缓存 */
 export function historyTurns(records: readonly LogRecord[], tokens: number, max: number): number {
   const turns = effectiveTurns(records);
   let used = 0;
@@ -102,6 +105,13 @@ export function historyTurns(records: readonly LogRecord[], tokens: number, max:
     if (n >= MIN_HISTORY && used + cost > tokens) break;
     used += cost;
     n += 1;
+  }
+  if (n < turns.length && n > MIN_HISTORY) {
+    // 把窗口起点向上对齐到 HISTORY_STRIDE 的整数倍，使连续最多 HISTORY_STRIDE 轮拥有相同起始轮次与前缀
+    const rawStart = turns.length - n;
+    const alignedStart = Math.ceil(rawStart / HISTORY_STRIDE) * HISTORY_STRIDE;
+    const alignedCount = turns.length - alignedStart;
+    if (alignedCount >= MIN_HISTORY) return alignedCount;
   }
   return n;
 }

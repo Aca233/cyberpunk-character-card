@@ -35,7 +35,6 @@ const spareGun: ItemDef = {
   name: "备用手枪",
   kind: "weapon",
   category: "pistol",
-  attribute: "cool",
   iconic: false,
 };
 function recipient(location = "workshop", gear: string[] = []) {

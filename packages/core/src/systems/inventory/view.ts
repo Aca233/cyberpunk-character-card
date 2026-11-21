@@ -5,6 +5,7 @@ import { itemCatalog, rarityOf, withWorldObjects } from "./apply";
 import {
   availableQuickSupply,
   CLOTHING_SLOT_LABELS,
+  CLOTHING_STYLE_LABELS,
   ClothingSlotSchema,
   canAttachMod,
   carriedHeldWeaponIds,
@@ -227,7 +228,18 @@ export function inventoryView({ world, data }: ViewContext) {
     /** 穿着的服装，按格子顺序；没穿的格子不列 */
     clothing: CLOTHING_SLOTS.flatMap((slot) => {
       const id = inventory.clothing[slot];
-      return id === undefined ? [] : [{ slot, label: CLOTHING_SLOT_LABELS[slot], id }];
+      if (id === undefined) return [];
+      const def = items.get(id);
+      return [
+        {
+          slot,
+          label: CLOTHING_SLOT_LABELS[slot],
+          id,
+          style: def?.clothingStyle ?? null,
+          styleLabel: def?.clothingStyle ? CLOTHING_STYLE_LABELS[def.clothingStyle] : null,
+          concealsCoatWeapon: Boolean(def?.concealsCoatWeapon),
+        },
+      ];
     }),
     /** 背包里每件东西能装到哪：quick 快捷栏、clothing 服装格；武器直接放背包使用不再单装 */
     equipTo: Object.fromEntries(

@@ -17,7 +17,7 @@ import {
   recapFor,
   situation,
 } from "./context";
-import { BASE_RULES, systemMessage, userMessage } from "./layers";
+import { BASE_RULES, modulesBlock, systemMessage, userMessage } from "./layers";
 
 /** ① 判断：辅助模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
 export const JUDGE_TEMPERATURE = 0.3;
@@ -38,7 +38,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 只有当行动涉及物理硬条件（护甲/口径/断肢/没装接入仓/离线气隙/城区安防门禁/重伤疲惫）、硬闯潜入、正面交锋，或触及 NPC 利益与底线时，才给出 ruling：
   1. blocked（客观阻断）：明确违背现实逻辑或缺少硬条件（比如没装螳螂刀却要弹出刀片、轻手枪正面轰重型机甲、无线黑没有电子接口的纯肉体/气隙主机、在防备森严的公司大堂公然提长枪硬闯），在 outcome 写明它怎么在现实里被挡回来。
   2. costly（有具体代价地做成 / 部分做成）：已有条件导致可说明的代价，例如踩松动铁皮发出声响、切入带反制的军用冰墙遭反馈。outcome 写明收获、代价及其原因；没有因果依据就不选 costly。暴露或耗时不等于受伤，harm 按具体身体伤害风险写 none / graze / heavy / lethal，不把“危险”直接写成必然中弹。
-  3. possible（条件充分顺畅做成）：玩家规划周密、条件全对得上（用对钥匙、穿对衣服、从暗格避过安检、找准对方诉求或过往恩怨谈拢），写明顺理成章怎么成，harm 写 none。
+  3. possible（条件充分顺畅做成）：玩家规划周密、条件全对得上（用对钥匙、穿对衣服、从暗格避过安检、找准对方诉求或过往恩怨谈拢），或**玩家的义体武装度与武器对当前对手构成明显硬件代差**（如重度/顶配义体收拾街头混混与普通杂兵），写明顺理成章怎么干脆做成，harm 写 none；不要为了制造紧张感强行把硬件碾压降格成 costly。
 - 社交与说服不按好感数字放水：哪怕熟人深交，触到底线也会讨价还价或拒绝；看【人物】里的诉求、忌讳、人情债与秘密判断对方会怎么接招。
 - 加成的条件（武器、义体、物品、人脉）必须在【当前状态】或【装备/义体】里真实存在；没有就是没有。
 - limb：仅在刀刃、霰弹枪、爆炸、重型机械等真可能当场打断手臂或腿的致命场面写 true；平常不写。
@@ -51,7 +51,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 没有固定动作格，也不按发动次数扣人性；按距离、动作所需时间、设备和身体的实际状态判断收益。设备过热、损坏和症状只有真正发生才记下。
 
 【交易确认】
-- buy：只在玩家明确要买入、卖出、支付服务、安装、拆卸、维修或还款时填写；询价、砍价和提出尚未获同意的新条件写 null。单笔写一个对象；多笔或多件按玩家授权的实际顺序逐件列数组，同款买两件也列两项，不能从一次授权推断重复成交。
+- buy：只在玩家明确要买入、卖出、支付服务、安装、拆卸、维修或还款时填写；询价、砍价和提出尚未获同意的新条件写 null；【上一轮之后玩家刚刚在界面完成的操作】里已经买完、装完或付完的事不要再次填进 buy。单笔写一个对象；多笔或多件按玩家授权的实际顺序逐件列数组，同款买两件也列两项，不能从一次授权推断重复成交。
 - 普通物品写 item，买入写 action:buy、卖出写 action:sell；服务写 service。with 始终写实际交易对方的稳定商店/人物 id，不能默认同地点第一家；已谈妥报价写 offer。价格由代码与货架共用报价，不能自行猜折扣；车辆按真实目录价。
 - 店内超梦用 service:bd-session，成年从业者服务用 service:adult-service；谈妥价格后成交即可，询价、挑片或聊天不算接受。不用 favor/info 代付。
 - 枪匠工坊写 gunsmith（install 从货架直装或用自带件改锁定槽、detach 拆锁定件解锁、convert 智能靶向联锁或精工固锁）、商店 with 与随身武器 weapon；install/detach 写 mod（自带件写 source:backpack），精工固锁写 slot 与 conversion:precision-lock，智能改造写 conversion:smart-link。普通未锁定配件的日常战外装卸在界面上免费做，不填 buy。
@@ -90,22 +90,26 @@ export function buildJudgePrompt(
     .slice(-JUDGE_TURNS)
     .map((t) => `${formatInput(t.input)}\n${t.text}`)
     .join("\n\n");
+  const activeModulesText = modulesBlock("judge", modules);
   const content = userMessage({
     recap: recapFor(world, records, JUDGE_TURNS),
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
+    modules: activeModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "judge"),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
     input: formatInput(plan.input),
     after: [boostNote(view, plan, "judge")],
     reminder: "（只输出判断的 JSON 对象。）",
   });
-  const system = systemMessage(
-    "judge",
-    [BASE_RULES, JUDGE_STAGE, CARRY_AND_WEAPON_RULES, judgeOutput()],
-    modules,
-  );
+  // 系统层保持 100% 静态可缓存前缀；随状态变化的场景规则模块放进用户消息
+  const system = systemMessage("judge", [
+    BASE_RULES,
+    JUDGE_STAGE,
+    CARRY_AND_WEAPON_RULES,
+    judgeOutput(),
+  ]);
   return {
-    rules: system.length,
+    rules: system.length + (activeModulesText?.length ?? 0),
     messages: [
       { role: "system", content: system },
       { role: "user", content },

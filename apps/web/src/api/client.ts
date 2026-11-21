@@ -264,6 +264,8 @@ export interface StartWeaponOption {
   readonly category?: string;
   readonly rarity: string;
   readonly ability: string;
+  readonly custom?: boolean;
+  readonly packId?: string;
 }
 
 export interface StartVehicleOption {
@@ -281,6 +283,7 @@ export interface CanonNpcBrief {
   readonly alias?: string;
   readonly role: string;
   readonly look: string;
+  readonly faction?: string;
   readonly packId?: string;
 }
 
@@ -404,6 +407,7 @@ export interface ProfilePatch {
   temperature?: number;
   maxOutputTokens?: number;
   contextWindow?: number;
+  embeddingModel?: string;
   imageProtocol?: ImageProtocol;
   comfyWorkflow?: string;
 }
@@ -449,10 +453,8 @@ export type SubmitResult =
   | { readonly kind: "started"; readonly turnId: string }
   | { readonly kind: "duplicate"; readonly seq: number; readonly version: number };
 
-/** 重新生成时要重发的内容：当时的输入，或当时确认的检定 */
-export type Regenerated =
-  | { readonly kind: "input"; readonly input: TurnInput }
-  | { readonly kind: "confirm"; readonly checkId: string; readonly label: string };
+/** 重新生成时要重发的内容：当时的玩家输入 */
+export type Regenerated = { readonly kind: "input"; readonly input: TurnInput };
 
 export interface TurnContext {
   readonly seq: number;
@@ -567,10 +569,7 @@ export interface CityEventView {
   readonly updatedAt: number;
 }
 
-export type TurnBody = { requestId: string; baseVersion: number } & (
-  | { input: TurnInput }
-  | { confirm: string }
-);
+export type TurnBody = { requestId: string; baseVersion: number; input: TurnInput };
 
 export const api = {
   health: () => request<Health>("GET", "/health"),
@@ -692,14 +691,14 @@ export const api = {
     request<{ version: number; voided: number }>("POST", `/saves/${saveId}/restart`, {
       baseVersion,
     }),
-  /** 重新生成最后一轮：后端作废它，返回当时的输入或检定，网页再按原流程提交；骰子不重掷 */
+  /** 重新生成最后一轮：后端作废它，返回当时的输入，网页再按原流程提交 */
   regenerate: (saveId: string, baseVersion: number) =>
     request<{ version: number; voided: number; pending: Regenerated }>(
       "POST",
       `/saves/${saveId}/regenerate`,
       { baseVersion },
     ),
-  /** 按账目改写最后一轮（未定稿的）：只换正文，账目和骰子不动；要等模型写完才返回 */
+  /** 按账目改写最后一轮（未定稿的）：只换正文，账目不动；要等模型写完才返回 */
   rewrite: (saveId: string, baseVersion: number) =>
     request<{ version: number; replaced: number }>("POST", `/saves/${saveId}/rewrite`, {
       baseVersion,

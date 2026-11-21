@@ -7,20 +7,27 @@ import {
 } from "@cp/core";
 import { describe, expect, it } from "vitest";
 import type { BoardData } from "../../api/client";
+import { appearanceFilledCount, randomizeAppearance, synthesizeAppearanceLook } from "./appearance";
 import {
   CREATOR_STEPS,
+  clearDraft,
   creatorChecks,
   emptyBoard,
-  humanityStageInfo,
   inherentCyberware,
+  loadDraft,
   mergeCreatorCatalog,
   originDefaultLoadout,
   originEcosystem,
+  originPreview,
+  pastTheme,
   pruneKitForOrigin,
+  rollPasts,
   rollTraits,
+  saveDraft,
+  skillDomain,
   stepForCheckTarget,
   stepProgress,
-  totalStartHumanityCost,
+  toleranceSummary,
   traitCategory,
 } from "./creator";
 
@@ -41,33 +48,31 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
     voice: "",
     skills: "",
     locked: [],
-    attributes: { body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 },
     board: emptyBoard(),
   } as unknown as CharacterCard;
 
-  it("CREATOR_STEPS 按 6 步顺序定义且映射全部 CheckTarget", () => {
+  it("CREATOR_STEPS 按 5 步顺序定义且映射全部 CheckTarget", () => {
     expect(CREATOR_STEPS.map((s) => s.id)).toEqual([
       "identity",
+      "appearance",
       "traits",
       "cyberware",
-      "kit",
-      "people_prose",
-      "review",
+      "connections",
     ]);
     expect(stepForCheckTarget("identity")).toBe("identity");
     expect(stepForCheckTarget("origin")).toBe("identity");
     expect(stepForCheckTarget("build")).toBe("traits");
     expect(stepForCheckTarget("cyber")).toBe("cyberware");
-    expect(stepForCheckTarget("kit")).toBe("kit");
-    expect(stepForCheckTarget("people")).toBe("people_prose");
-    expect(stepForCheckTarget("person")).toBe("people_prose");
+    expect(stepForCheckTarget("kit")).toBe("cyberware");
+    expect(stepForCheckTarget("people")).toBe("connections");
+    expect(stepForCheckTarget("person")).toBe("appearance");
   });
 
   it("stepProgress 正确统计各步就绪态与摘要计数", () => {
     const emptyProg = stepProgress(blank);
     expect(emptyProg.identity.ready).toBe(false);
     expect(emptyProg.identity.issueCount).toBe(2); // 缺姓名和出身
-    expect(emptyProg.review.ready).toBe(false);
+    expect(emptyProg.appearance.filled).toBe(false);
 
     const readyCard = {
       ...blank,
@@ -76,6 +81,8 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
       look: "义眼泛着冷光",
       board: BoardSchema.parse({
         origin: mod("street-kid", "origin"),
+        tarot: "strength",
+        appearance: { build: "lean", hairStyle: "short-crop", eyes: "cyan-ring", marks: [] },
         skills: [mod("s1", "skill")],
         pasts: [mod("p1", "past")],
         acquaintances: [{ id: "jackie", name: "杰克", relation: "friend", note: "" }],
@@ -83,13 +90,54 @@ describe("emptyBoard / 五步引导工作台辅助函数", () => {
     } as CharacterCard;
     const readyProg = stepProgress(readyCard);
     expect(readyProg.identity).toMatchObject({ ready: true, filled: true, badge: "street-kid" });
+    expect(readyProg.appearance).toMatchObject({ ready: true, filled: true, badge: "3/7 项" });
     expect(readyProg.traits).toMatchObject({ ready: true, filled: true, badge: "2 项" });
-    expect(readyProg.people_prose).toMatchObject({
+    expect(readyProg.connections).toMatchObject({
       ready: true,
       filled: true,
-      badge: "1人 · 1/4段",
+      badge: "1 位旧识",
     });
-    expect(readyProg.review).toMatchObject({ ready: true, issueCount: 0, badge: "可开局" });
+  });
+
+  it("纯物理体貌合成与锁定随机严格不含衣着且不超过 300 字", () => {
+    const picked = randomizeAppearance(
+      { build: "broad", marks: [] },
+      new Set(["build"]),
+      "她",
+      () => 0,
+    );
+    expect(picked.build).toBe("broad");
+    expect(appearanceFilledCount(picked)).toBeGreaterThanOrEqual(5);
+    const look = synthesizeAppearanceLook(picked);
+    expect(look.length).toBeGreaterThan(0);
+    expect(look.length).toBeLessThanOrEqual(300);
+    expect(look).not.toMatch(/外套|夹克|西装|大衣|穿搭|制服|风衣/);
+  });
+
+  it("saveDraft / loadDraft 完整保留已生成的角色立绘引用", () => {
+    const store = new Map<string, string>();
+    const prev = (globalThis as { localStorage?: Storage }).localStorage;
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, v),
+        removeItem: (k: string) => store.delete(k),
+      },
+    });
+    try {
+      const withPortrait: CharacterCard = {
+        ...blank,
+        name: "露西",
+        portrait: "img_portrait_123",
+      };
+      expect(saveDraft({ card: withPortrait, startLocation: "megabuilding-h10" })).toBe(true);
+      const restored = loadDraft(blank);
+      expect(restored?.card.portrait).toBe("img_portrait_123");
+      clearDraft();
+    } finally {
+      Object.defineProperty(globalThis, "localStorage", { configurable: true, value: prev });
+    }
   });
 });
 
@@ -105,7 +153,6 @@ describe("creatorChecks", () => {
     voice: "",
     skills: "",
     locked: [],
-    attributes: { body: 3, reflexes: 3, tech: 3, intelligence: 3, cool: 3 },
     board: BoardSchema.parse({}),
   } as unknown as CharacterCard;
 
@@ -121,11 +168,10 @@ describe("creatorChecks", () => {
     expect(checks.find((c) => c.text === "尚未设定人称代词")?.target).toBe("identity");
   });
 
-  it("零过往、零特长与自由高属性构筑不阻塞保存", () => {
+  it("零过往、零特长自由构筑不阻塞保存", () => {
     const sandbox = {
       ...draft,
       origin: "街头流浪小子",
-      attributes: { body: 5, reflexes: 5, tech: 5, intelligence: 5, cool: 5 },
       board: BoardSchema.parse({
         origin: mod("street-kid", "origin"),
         pasts: [],
@@ -184,7 +230,7 @@ describe("originDefaultLoadout & pruneKitForOrigin", () => {
   });
 });
 
-describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => {
+describe("inherentCyberware & toleranceSummary", () => {
   const streetLoadout: Loadout = {
     id: "street-kid",
     label: "街头小子",
@@ -245,7 +291,7 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
     ],
   } as unknown as Pick<BoardData, "cyberware" | "loadouts" | "names">;
 
-  it("自动显示出身与黑客履历自带的免费义体并计入真实开局人性消耗", () => {
+  it("自动显示出身与黑客履历自带的免费义体", () => {
     const card = {
       origin: "街头小子",
       board: BoardSchema.parse({
@@ -265,7 +311,6 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
     const inherent = inherentCyberware(card, data);
     expect(inherent.map((i) => i.id)).toEqual(["kiroshi-mk1", "militech-paraline"]);
     expect(inherent.every((i) => !i.replaced)).toBe(true);
-    expect(totalStartHumanityCost(card, data)).toBe(8); // 2 + 6
   });
 
   it("自选义体占满槽位后标配义体自动标为已顶替，未占满部位的标配共存", () => {
@@ -285,7 +330,7 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
           { id: "kiroshi-mk2", name: "Kiroshi Mk.2", humanityCost: 4, slot: "eyes" },
           { id: "sandevistan", name: "斯安威斯坦", humanityCost: 12, slot: "os" },
         ],
-        tolerance: "high", // TOLERANCE_FACTOR.high = 0.7
+        tolerance: "high",
       }),
     } as unknown as CharacterCard;
 
@@ -294,40 +339,23 @@ describe("inherentCyberware, totalStartHumanityCost & humanityStageInfo", () => 
       expect.objectContaining({ id: "kiroshi-mk1", replaced: false }),
       expect.objectContaining({ id: "militech-paraline", replaced: true }),
     ]);
-    // 保留的 kiroshi-mk1 (2) + kiroshi-mk2 (4) + sandevistan (12) = 18; 18 * 0.7 = 12.6 -> round 13
-    expect(totalStartHumanityCost(card, data)).toBe(13);
   });
 
-  it("humanityStageInfo 返回准确的神经阶段与感知失真阈值（<40）", () => {
-    expect(humanityStageInfo(85)).toMatchObject({
-      stage: "stable",
-      label: "稳定",
-      tone: "ok",
-      glitchZone: false,
-    });
-    expect(humanityStageInfo(50)).toMatchObject({
-      stage: "detached",
-      label: "疏离",
-      tone: "ok",
-      glitchZone: false,
-    });
-    expect(humanityStageInfo(35)).toMatchObject({
-      stage: "unstable",
-      label: "不稳定",
+  it("toleranceSummary 返回准确的定性耐受档位标签与提示色调", () => {
+    expect(toleranceSummary("low")).toMatchObject({
+      tolerance: "low",
+      label: "低耐受",
       tone: "warn",
-      glitchZone: true,
     });
-    expect(humanityStageInfo(12)).toMatchObject({
-      stage: "edge",
-      label: "边缘",
-      tone: "danger",
-      glitchZone: true,
+    expect(toleranceSummary("normal")).toMatchObject({
+      tolerance: "normal",
+      label: "普通",
+      tone: "ok",
     });
-    expect(humanityStageInfo(0)).toMatchObject({
-      stage: "crisis",
-      label: "临界",
-      tone: "danger",
-      glitchZone: true,
+    expect(toleranceSummary("high")).toMatchObject({
+      tolerance: "high",
+      label: "高耐受",
+      tone: "ok",
     });
   });
 });
@@ -366,6 +394,17 @@ describe("分类、随机特质与工坊合并", () => {
     ).toBe("custom");
   });
 
+  it("pastTheme 与 skillDomain 正确细分过往履历主题与核心特质领域", () => {
+    expect(pastTheme(mod("p-st", "past", ["街头"]))).toBe("street");
+    expect(pastTheme(mod("p-cp", "past", ["巨企"]))).toBe("corpo");
+    expect(pastTheme(mod("p-bd", "past", ["恶土"]))).toBe("badlands");
+    expect(pastTheme(mod("p-nt", "past", ["潜网"]))).toBe("net");
+    expect(skillDomain(mod("s-in", "skill", ["禀赋"]))).toBe("innate");
+    expect(skillDomain(mod("s-cb", "skill", ["战斗", "枪"]))).toBe("combat");
+    expect(skillDomain(mod("s-tk", "skill", ["潜入", "技术"]))).toBe("tech");
+    expect(skillDomain(mod("s-sc", "skill", ["谈判"]))).toBe("social");
+  });
+
   it("rollTraits 仅从非自定义 skill 特质抽取并避开已有特质", () => {
     const s1 = mod("s1", "skill");
     const pool = [
@@ -382,6 +421,89 @@ describe("分类、随机特质与工坊合并", () => {
     const start = BoardSchema.parse({ skills: [s1] });
     const next = rollTraits(start, pool, () => 0, 3);
     expect(next.skills.map((s) => s.id)).toEqual(["s1", "s2"]);
+  });
+
+  it("rollPasts 仅从非自定义 past 履历抽取并避开已有履历", () => {
+    const p1 = mod("p1", "past");
+    const pool = [
+      p1,
+      mod("p2", "past"),
+      mod("s1", "skill"),
+      BoardModuleSchema.parse({
+        id: "p-custom",
+        slot: "past",
+        label: "自定义",
+        custom: true,
+      }),
+    ];
+    const start = BoardSchema.parse({ pasts: [p1] });
+    const next = rollPasts(start, pool, () => 0, 3);
+    expect(next.pasts.map((p) => p.id)).toEqual(["p1", "p2"]);
+  });
+
+  it("originPreview 准确提取出身初始资金、落脚点与自带接入仓/载具特征", () => {
+    const netOrigin = BoardModuleSchema.parse({
+      id: "origin-netrunner",
+      slot: "origin",
+      label: "地下潜网黑客",
+      tags: ["黑客"],
+    });
+    const nomadOrigin = BoardModuleSchema.parse({
+      id: "nomad",
+      slot: "origin",
+      label: "恶土部族流浪者",
+      tags: ["恶土"],
+    });
+    const data = {
+      loadouts: [
+        {
+          id: "origin-netrunner",
+          label: "黑客行装",
+          kind: "origin",
+          origins: ["origin-netrunner"],
+          keywords: ["黑客"],
+          defaultLocation: "kabuki-market",
+          eddies: 400,
+          cyberware: ["kiroshi-mk1", "militech-paraline"],
+          gear: [],
+        },
+        {
+          id: "nomad",
+          label: "流浪者行装",
+          kind: "origin",
+          origins: ["nomad"],
+          keywords: ["恶土"],
+          defaultLocation: "badlands-outpost",
+          eddies: 400,
+          cyberware: ["kiroshi-mk1"],
+          gear: [],
+          vehicles: ["thorton-galena"],
+        },
+      ],
+      cyberware: [
+        {
+          id: "militech-paraline",
+          name: "军用科技平行线",
+          slot: "os",
+          rarity: "common",
+          humanityCost: 6,
+          ability: "接入仓",
+          deck: { ram: 4, buffer: 4, slots: 3 },
+        },
+      ],
+      names: {},
+    } as unknown as Pick<BoardData, "loadouts" | "names" | "cyberware">;
+
+    expect(originPreview(netOrigin, data)).toEqual({
+      eddies: 400,
+      locationId: "kabuki-market",
+      extras: ["自带接入仓"],
+    });
+    expect(originPreview(nomadOrigin, data)).toEqual({
+      eddies: 400,
+      locationId: "badlands-outpost",
+      extras: ["自带载具"],
+    });
   });
 
   it("mergeCreatorCatalog 按 id 去重合并官方目录、本地自定义模块与工坊扩展包", () => {

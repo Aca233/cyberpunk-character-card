@@ -34,7 +34,7 @@ export function neuralStage(state: Pick<HumanityState, "symptoms">): HumanitySta
 export function neuralDisplay(state: Pick<HumanityState, "symptoms">): number {
   return DISPLAY[neuralStage(state)];
 }
-/** 给现有 UI 的读出转换，运行规则读取 neuralStage，不读取显示数字。 */
+/** 给现有 UI 状态条的阶段换算。 */
 export function humanityStage(value: number): HumanityStage {
   if (value >= 70) return "stable";
   if (value >= 40) return "detached";

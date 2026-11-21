@@ -1,383 +1,48 @@
 /*
- * 人物档案：左栏 Kiroshi 身份卡 + 右栏双页签（关系与情报、身体与扫描）。
- * 沿用生物监测面板与追踪面板的轻量化细竖线/细分割线文法，去掉多层套框与空心方块格。
+ * 人物档案（对标 BiomonitorPanel 原生 2077 质感）：
+ * 顶行单层合并条（页签 + 目标快切/关闭）→ 紧凑身份横幅 → 通透细分割内容区，
+ * 去掉黑底套娃卡片与多余横条。保留独立 .head 供手机联系人悬停卡复用。
  */
 
 .profile {
   container: profile / inline-size;
-  min-width: 0;
-}
-
-.profileGrid {
-  display: grid;
-  gap: 12px;
-  align-items: start;
-  min-width: 0;
-}
-
-.workspace {
-  container: workspace / inline-size;
   display: grid;
   gap: 10px;
-  align-content: start;
   min-width: 0;
 }
 
-/* 左栏身份卡：软透明切角底 + 原作低透明点阵；仅独立浮层保留柔光与侧边色条 */
-.head {
-  container: profilehead / inline-size;
-  position: relative;
-  display: grid;
-  gap: 9px;
-  min-width: 0;
-  padding: 12px 13px;
-  isolation: isolate;
-  --head-bg: rgb(14 14 23 / 84%);
-  --head-glow: rgb(94 246 255 / 14%);
-  --portrait-line: var(--cp-cyan);
-}
+/* ———— 顶部合并条：左双页签，右目标快切与关闭 ———— */
 
-.headStandalone {
-  padding: 11px 14px 12px 16px;
-  --head-bg: rgb(19 26 39 / 94%);
-}
-
-.head:where([data-tone="hostile"]) {
-  --head-glow: rgb(255 0 60 / 18%);
-  --portrait-line: var(--cp-danger);
-}
-
-.head:where([data-tone="nemesis"]) {
-  --head-glow: rgb(255 97 88 / 18%);
-  --portrait-line: var(--cp-red);
-}
-
-.head:where([data-tone="ally"]) {
-  --head-glow: rgb(252 238 10 / 14%);
-  --portrait-line: var(--cp-yellow);
-}
-
-.head:where([data-dead]) {
-  --head-glow: rgb(168 163 160 / 8%);
-  --portrait-line: var(--cp-text-dim);
-}
-
-.headGlow,
-.headRail {
-  z-index: 0;
-  pointer-events: none;
-}
-
-.headGlow {
-  opacity: 0.72;
-}
-
-.headRail {
-  top: 4px;
-  right: auto;
-  bottom: 4px;
-  width: 4px;
-  opacity: 0.88;
-}
-
-/* 档案点阵：原作 fx.grid 按约半尺寸平铺，静态低透明度，不影响阅读 */
-.headGrid {
-  position: absolute;
-  inset: 6px 8px 8px 10px;
-  z-index: 0;
-  background-repeat: repeat;
-  background-size: 255px 238px;
-  opacity: 0.11;
-  pointer-events: none;
-}
-
-.headTop {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 11px;
+.topBar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  min-width: 0;
-}
-
-/* 头像格：原作筛选格的底和框 + 下角斜切裁边，图等比铺满 */
-.portrait {
-  position: relative;
-  z-index: 1;
-  isolation: isolate;
-  display: grid;
-  place-items: center;
-  width: 50px;
-  height: 50px;
-  overflow: hidden;
-  font-family: var(--font-ui);
-  font-size: 20px;
-  color: var(--portrait-line, var(--cp-cyan));
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
-}
-
-.portrait > :first-child {
-  z-index: 0;
-}
-
-.portrait > :last-child {
-  z-index: 2;
-}
-
-.portrait > b {
-  display: grid;
-  place-items: center;
-  font-weight: 600;
-  color: var(--portrait-line, var(--cp-cyan));
-}
-
-.portrait:where([data-dead]) {
-  opacity: 0.45;
-}
-
-.portraitArt {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.identity {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  font-family: var(--font-ui);
-}
-
-.portraitTools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 7px;
-  margin: 0;
-  font-size: 18.5px;
-  line-height: 1.2;
-  letter-spacing: 0.03em;
-  color: var(--cp-yellow);
-}
-
-.name small {
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: var(--cp-text-dim);
-}
-
-.pronoun {
-  color: rgb(148 184 196 / 80%);
-}
-
-/* 状态标签：原作 cyber.gaugeLabel 小牌，字压在牌上 */
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tag {
-  position: relative;
-  padding: 1px 8px 2px;
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
-  color: var(--tag-ink, rgb(14 14 23));
-}
-
-.tag:where([data-ink="light"]) {
-  --tag-ink: var(--cp-text);
-}
-
-.tag > b {
-  position: relative;
-  font-weight: 600;
-}
-
-/* 身份介绍与结构化键值对 */
-.brief {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  font-family: var(--font-ui);
-}
-
-.briefRole {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  line-height: 1.48;
-  color: #dfe4ea;
-}
-
-.briefFacts {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-top: 7px;
-  border-top: 1px solid rgb(94 246 255 / 12%);
-}
-
-.briefRow {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 3px 10px;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.briefRow > dt {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  color: rgb(138 176 188);
-}
-
-.briefRow > dd {
-  margin: 0;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--cp-text);
-  overflow-wrap: anywhere;
-}
-
-.affinityBlock {
-  display: grid;
-  gap: 5px;
-  padding-top: 7px;
-  border-top: 1px solid rgb(94 246 255 / 12%);
-}
-
-.affinityTop {
-  display: flex;
-  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-}
-
-.affinityTop > span {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  color: rgb(138 176 188);
-}
-
-.affinityVal {
-  font-size: 12.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--cp-text);
-}
-
-.affinityVal:where([data-tone="pos"]) {
-  color: var(--cp-yellow);
-}
-
-.affinityVal:where([data-tone="neg"]) {
-  color: var(--cp-red);
-}
-
-/* 好感条：原作 cyber.gaugeBar 横条，从中心零点向左右延展 */
-.affinity {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 5px;
-}
-
-.headStandalone .affinity {
-  max-width: 140px;
-}
-
-.affinityFill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: calc(var(--fill) * 50%);
-}
-
-.affinity:where([data-neg]) .affinityFill {
-  right: 50%;
-  left: auto;
-}
-
-.note {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--cp-text-dim);
-}
-
-/* 头部档案分割线：用原作 tab.line 遮罩，把概览和外貌/穿着自然隔开 */
-.headRule {
-  position: relative;
-  z-index: 1;
-  display: block;
-  height: 1px;
-  background: var(--portrait-line, var(--cp-cyan-dim));
-  opacity: 0.42;
-  mask-size: 100% 100%;
-}
-
-.lookStrip {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 5px;
-}
-
-.look {
-  display: grid;
-  gap: 1px;
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1.48;
-  color: #c8d0d6;
-}
-
-.lookKey {
-  font-family: var(--font-ui);
-  font-size: 10.5px;
-  font-style: normal;
-  letter-spacing: 0.1em;
-  color: var(--portrait-line, var(--cp-cyan));
-  opacity: 0.88;
-}
-
-/*
- * 右侧页签栏：压过 neural.module.css 的全局红色页签底，统一为蓝青义眼色系；
- * tab.bg 保留半透明冷青衬底，选中加 tab.line 底线
- */
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 6px;
+  gap: 6px 12px;
+  padding-bottom: 7px;
   border-bottom: 1px solid rgb(94 246 255 / 16%);
 }
 
+.topSlot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tabs {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .tabs > button {
-  padding: 5px 12px;
+  padding: 4px 12px;
   font-size: 12.5px;
   letter-spacing: 0.06em;
   color: rgb(94 210 230 / 48%);
@@ -386,7 +51,7 @@
 .tabs > button > span:not([aria-hidden]):not(.tabActiveLine) {
   position: relative;
   z-index: 1;
-  color: #dbe6eb;
+  color: var(--cp-text);
   transition: color 140ms ease;
 }
 
@@ -425,22 +90,689 @@
   pointer-events: none;
 }
 
-/* 换栏时新内容淡入、从左推进 6px */
-.pane {
+/* ———— 顶部通栏身份横幅 ———— */
+
+.banner {
+  position: relative;
+  isolation: isolate;
   min-width: 0;
-  animation: paneIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  padding: 10px 14px 10px 16px;
+  --banner-bg: var(--cp-surface-raised);
+  --banner-glow: rgb(94 246 255 / 12%);
+  --banner-line: var(--cp-cyan);
 }
 
-.sectionBody {
+.bannerEmbedded {
+  padding: 0 0 9px;
+  border-bottom: 1px solid rgb(94 246 255 / 14%);
+}
+
+.banner:where([data-tone="hostile"]) {
+  --banner-bg: rgb(28 11 16 / 92%);
+  --banner-glow: rgb(255 0 60 / 20%);
+  --banner-line: var(--cp-danger);
+}
+
+.banner:where([data-tone="nemesis"]) {
+  --banner-glow: rgb(255 97 88 / 16%);
+  --banner-line: var(--cp-red);
+}
+
+.banner:where([data-tone="ally"]) {
+  --banner-glow: rgb(252 238 10 / 12%);
+  --banner-line: var(--cp-yellow);
+}
+
+.banner:where([data-dead]) {
+  --banner-glow: rgb(168 163 160 / 7%);
+  --banner-line: var(--cp-text-dim);
+}
+
+.bannerMain {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 11px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 13px;
+  align-items: start;
   min-width: 0;
+}
+
+.bannerPortraitWrap {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  flex: none;
+}
+
+.bannerPortrait {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 74px;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  color: var(--banner-line, var(--cp-cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  transition: filter 120ms ease-out;
+}
+
+.bannerPortrait > :first-child {
+  z-index: 0;
+}
+
+.bannerPortrait > :last-child {
+  z-index: 2;
+}
+
+.bannerPortrait > b {
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: var(--banner-line, var(--cp-cyan));
+}
+
+.bannerPortrait:where([data-dead]) {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.portraitMicroTools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.microToolBtn {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--cp-text-dim);
+  opacity: 0.72;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    opacity var(--dur-flash),
+    color var(--dur-flash);
+}
+
+.microToolBtn:hover,
+.microToolBtn:focus-visible {
+  outline: none;
+  opacity: 1;
+  color: var(--cp-cyan);
+}
+
+.bannerIdentity {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+
+.bannerNameLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.bannerName {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  color: var(--cp-yellow);
+}
+
+.bannerName small {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--cp-text-dim);
+}
+
+.bannerSubtitle {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.42;
+  color: var(--cp-text-dim);
+}
+
+.bannerFootRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px 12px;
+  margin-top: 2px;
+}
+
+.bannerAffinity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+
+.bannerAffinityLabel {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.bannerMeter {
+  position: relative;
+  display: block;
+  width: 76px;
+  height: 5px;
+}
+
+.bannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* 克制的原作半透明细边按钮，不再用刺眼大色块 */
+.cmdBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 7%);
+  border: 1px solid rgb(94 246 255 / 34%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash);
+}
+
+.cmdBtn:where([data-highlight]) {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 15%);
+  box-shadow: inset 0 0 10px rgb(94 246 255 / 14%);
+}
+
+.cmdBtn:where([data-tone="yellow"]) {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 7%);
+  border-color: rgb(252 238 10 / 34%);
+}
+
+.cmdBtn:where([data-tone="dim"]) {
+  color: var(--cp-text-dim);
+  background: transparent;
+  border-color: rgb(236 232 228 / 22%);
+}
+
+.cmdBtn:hover,
+.cmdBtn:focus-visible {
+  outline: none;
+  color: #09060b;
+  background: var(--cp-cyan);
+  border-color: var(--cp-cyan);
+}
+
+.cmdBtn:where([data-tone="yellow"]):hover,
+.cmdBtn:where([data-tone="yellow"]):focus-visible {
+  color: #09060b;
+  background: var(--cp-yellow);
+  border-color: var(--cp-yellow);
+}
+
+.cmdBtn:where([data-tone="dim"]):hover,
+.cmdBtn:where([data-tone="dim"]):focus-visible {
+  color: var(--cp-text);
+  background: rgb(236 232 228 / 12%);
+  border-color: rgb(236 232 228 / 45%);
+}
+
+/* ———— 独立身份卡（手机联系人悬停卡复用） ———— */
+
+.head {
+  container: profilehead / inline-size;
+  position: relative;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px 14px 13px 16px;
+  isolation: isolate;
+  --head-bg: var(--cp-surface);
+  --head-glow: rgb(94 246 255 / 11%);
+  --portrait-line: var(--cp-cyan);
+}
+
+.headStandalone {
+  padding: 12px 14px 13px 16px;
+  --head-bg: var(--cp-surface-strong);
+}
+
+.head:where([data-tone="hostile"]) {
+  --head-glow: rgb(255 0 60 / 18%);
+  --portrait-line: var(--cp-danger);
+}
+
+.head:where([data-tone="nemesis"]) {
+  --head-glow: rgb(255 97 88 / 16%);
+  --portrait-line: var(--cp-red);
+}
+
+.head:where([data-tone="ally"]) {
+  --head-glow: rgb(252 238 10 / 12%);
+  --portrait-line: var(--cp-yellow);
+}
+
+.head:where([data-dead]) {
+  --head-glow: rgb(168 163 160 / 7%);
+  --portrait-line: var(--cp-text-dim);
+}
+
+.headGlow,
+.headRail {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.headGlow {
+  opacity: 0.65;
+}
+
+.headRail {
+  top: 5px;
+  right: auto;
+  bottom: 5px;
+  width: 3px;
+  opacity: 0.9;
+}
+
+.headGrid {
+  position: absolute;
+  inset: 6px 8px 8px 10px;
+  z-index: 0;
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.headTop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.portraitCol {
+  flex: none;
+}
+
+.portraitBtn {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: var(--cp-cursor-hand);
+}
+
+.portrait {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 78px;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 24px;
+  color: var(--portrait-line, var(--cp-cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+  transition: filter 120ms ease-out;
+}
+
+.portraitBtn:hover .portrait,
+.portraitBtn:focus-visible .portrait,
+.portraitBtn:hover .bannerPortrait,
+.portraitBtn:focus-visible .bannerPortrait {
+  filter: brightness(1.08);
+}
+
+.portrait > :first-child {
+  z-index: 0;
+}
+
+.portrait > :last-child {
+  z-index: 2;
+}
+
+.portrait > b {
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: var(--portrait-line, var(--cp-cyan));
+}
+
+.portrait:where([data-dead]) {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.portraitArt {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.identity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 1px;
+  font-family: var(--font-ui);
+}
+
+.nameBlock {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.portraitTools {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 7px;
+  border-top: 1px solid rgb(94 246 255 / 12%);
+}
+
+.name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.18;
+  letter-spacing: 0.03em;
+  color: var(--cp-yellow);
+}
+
+.name small {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--cp-text-dim);
+}
+
+.aliasLine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.pronoun {
+  color: var(--cp-text-dim);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  --tag-accent: var(--cp-cyan);
+  --tag-bg: rgb(94 246 255 / 10%);
+  --tag-ink: var(--cp-cyan);
+  position: relative;
+  padding: 1px 7px 1px 6px;
+  border-inline-start: 2px solid var(--tag-accent);
+  background: var(--tag-bg);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  color: var(--tag-ink);
+}
+
+.tag:where([data-tone="yellow"]) {
+  --tag-accent: var(--cp-yellow);
+  --tag-bg: rgb(252 238 10 / 12%);
+  --tag-ink: var(--cp-yellow);
+}
+
+.tag:where([data-tone="red"]) {
+  --tag-accent: var(--cp-red);
+  --tag-bg: rgb(255 97 88 / 14%);
+  --tag-ink: #ff9c94;
+}
+
+.tag:where([data-tone="danger"]) {
+  --tag-accent: var(--cp-danger);
+  --tag-bg: rgb(255 0 60 / 16%);
+  --tag-ink: #ff8ca0;
+}
+
+.tag:where([data-tone="dim"]) {
+  --tag-accent: rgb(168 163 160 / 55%);
+  --tag-bg: rgb(168 163 160 / 10%);
+  --tag-ink: var(--cp-text-dim);
+}
+
+.tag:where([data-solid]) {
+  border-inline-start-color: transparent;
+  background: var(--tag-accent);
+  color: var(--cp-text);
+}
+
+.tag > b {
+  position: relative;
+  font-weight: 600;
+}
+
+.brief {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-family: var(--font-ui);
+}
+
+.briefRole {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.48;
+  color: var(--cp-text);
+}
+
+.briefFacts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid rgb(94 246 255 / 12%);
+}
+
+.briefRow {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.briefRow > dt {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.briefRow > dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.affinityBlock {
+  display: grid;
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid rgb(94 246 255 / 12%);
+}
+
+.affinityTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.affinityTop > span {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.affinityVal {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cp-text);
+}
+
+.affinityVal:where([data-tone="pos"]) {
+  color: var(--cp-yellow);
+}
+
+.affinityVal:where([data-tone="neg"]) {
+  color: var(--cp-red);
+}
+
+.affinity {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 5px;
+}
+
+.headStandalone .affinity {
+  max-width: 140px;
+}
+
+.affinityFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: calc(var(--fill) * 50%);
+}
+
+.affinity:where([data-neg]) .affinityFill,
+.bannerMeter:where([data-neg]) .affinityFill {
+  right: 50%;
+  left: auto;
+}
+
+.note {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cp-text-dim);
+}
+
+.headRule {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 1px;
+  background: var(--portrait-line, var(--cp-cyan-dim));
+  opacity: 0.42;
+  mask-size: 100% 100%;
+}
+
+.lookStrip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+}
+
+.look {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.52;
+  color: var(--cp-text);
+}
+
+.lookKey {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-cyan);
+  opacity: 0.9;
+}
+
+/* ———— 切换动效 ———— */
+
+.pane {
+  min-width: 0;
+  animation: paneIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @keyframes paneIn {
   from {
     opacity: 0;
-    transform: translateX(-6px);
+    transform: translateY(3px);
   }
 }
 
@@ -450,20 +782,724 @@
   }
 }
 
-/* 关系与情报：轻量化细左竖线，不用空心套框 */
-.overviewStack {
+/* ———— 页 1：现场透视（通透遥测带 + 双栏轻列表） ———— */
+
+.tacticalRoot {
   display: grid;
-  gap: 10px;
+  gap: 11px;
+  min-width: 0;
+}
+
+.telemetryRibbon {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(94 246 255 / 14%);
+}
+
+.statStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 0;
+  margin: 0;
+}
+
+.statCell,
+.statStamp {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-inline: 14px;
+  border-inline-start: 1px solid rgb(94 246 255 / 16%);
+}
+
+.statCell:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.statStamp {
+  margin-left: auto;
+  text-align: right;
+  border-inline-start: 0;
+  padding-inline: 0;
+}
+
+.statCell > dt,
+.statStamp > dt {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--cp-text-dim);
+}
+
+.statCell > dd {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cp-text);
+}
+
+.statStamp > dd {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.statCell > dd:where([data-threat="high"], [data-threat="skull"]) {
+  color: var(--cp-danger);
+}
+
+.statCell > dd:where([data-threat="even"]) {
+  color: var(--cp-yellow);
+}
+
+.statCell > dd:where([data-threat="low"]) {
+  color: var(--cp-success);
+}
+
+/* 骇入防线通栏：零黑盒，仅以细左色线轻标 */
+.netRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+  padding: 5px 10px;
+  border-inline-start: 2px solid rgb(94 246 255 / 50%);
+  background: rgb(94 246 255 / 4%);
+}
+
+.netRow:where([data-threat="low"]) {
+  border-inline-start-color: var(--cp-success);
+  background: rgb(63 242 160 / 5%);
+}
+
+.netRow:where([data-threat="high"]) {
+  border-inline-start-color: var(--cp-danger);
+  background: rgb(255 0 60 / 7%);
+}
+
+.netRowKey {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--cp-text-dim);
+}
+
+.netRowVal {
+  min-width: 0;
+  flex: 1 1 220px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.46;
+  color: var(--cp-text);
+}
+
+.netRow:where([data-threat="low"]) .netRowVal {
+  color: var(--cp-success);
+}
+
+.netRow:where([data-threat="high"]) .netRowVal {
+  color: #ff9c94;
+}
+
+.unscannedNote {
+  margin: 0;
+  padding: 4px 10px;
+  border-inline-start: 2px solid rgb(94 246 255 / 32%);
+  font-size: 12px;
+  line-height: 1.48;
+  color: var(--cp-text-dim);
+}
+
+.tacticalColumns {
+  display: grid;
+  gap: 14px 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.tacticalCol {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* ———— 通用分段抬头与通透细列表 ———— */
+
+.subSection {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  align-content: start;
+}
+
+.subHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgb(94 246 255 / 15%);
+}
+
+.subTitle {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cp-cyan);
+  opacity: 0.85;
+}
+
+.subCount {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--cp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.subHint {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: rgb(252 238 10 / 78%);
+}
+
+.emptyNote {
+  margin: 0;
+  padding-inline-start: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cp-text-dim);
+}
+
+.entryList {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entryItem {
+  min-width: 0;
+}
+
+/* 原作九宫格切角条目（同背包 InventoryPage.itemRow）：CellFrame + 左侧 cyber.cellRarity + 带格缩略框 */
+.entryRow,
+.entryRowBtn {
+  --box-fill: var(--cp-surface);
+  --box-line: rgb(94 246 255 / 22%);
+  --entry-accent: var(--cp-cyan);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 5px 10px 5px 11px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  transition: transform 90ms ease-out;
+}
+
+.entryRowBtn {
+  cursor: var(--cp-cursor-hand);
+}
+
+.entryRowBtn:hover,
+.entryRowBtn:focus-visible {
+  --box-fill: var(--cp-surface-hover);
+  --box-line: rgb(94 246 255 / 62%);
+  outline: none;
+}
+
+.entryRow:where([data-tone="chrome"]),
+.entryRowBtn:where([data-tone="chrome"]) {
+  --entry-accent: var(--cp-cyan);
+  --box-line: rgb(94 246 255 / 28%);
+}
+
+.entryRow:where([data-tone="weapon"]),
+.entryRowBtn:where([data-tone="weapon"]) {
+  --entry-accent: var(--rarity, var(--cp-red));
+  --box-line: color-mix(in srgb, var(--rarity, var(--cp-red)) 38%, transparent);
+}
+
+.entryRow:where([data-tone="weapon"]):hover,
+.entryRowBtn:where([data-tone="weapon"]):hover,
+.entryRowBtn:where([data-tone="weapon"]):focus-visible {
+  --box-line: var(--rarity, var(--cp-red));
+}
+
+.entryRow:where([data-tone="item"]),
+.entryRowBtn:where([data-tone="item"]) {
+  --entry-accent: var(--rarity, rgb(252 238 10 / 72%));
+  --box-line: color-mix(in srgb, var(--rarity, rgb(94 246 255 / 45%)) 32%, transparent);
+}
+
+.entryRow:where([data-iconic]),
+.entryRowBtn:where([data-iconic]) {
+  --box-fill: rgb(252 238 10 / 6%);
+  --box-line: color-mix(in srgb, var(--cp-yellow) 62%, transparent);
+}
+
+.entryRarityBar {
+  top: 5px;
+  right: auto;
+  bottom: 5px;
+  left: 4px;
+  width: 3px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.entryThumb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 30px;
+  border: 1px solid
+    color-mix(in srgb, var(--rarity, var(--entry-accent, var(--cp-cyan))) 38%, transparent);
+  background: var(--cp-surface-deep);
+  overflow: hidden;
+}
+
+.entryThumbGrid {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-size: 80px 75px;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.entryArt {
+  position: relative;
+  z-index: 1;
+  max-width: 34px;
+  max-height: 26px;
+  object-fit: contain;
+}
+
+.entryFallbackIcon {
+  position: relative;
+  z-index: 1;
+  opacity: 0.72;
+}
+
+.entryCopy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.entryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  min-width: 0;
+}
+
+.entryHead > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.28;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.entryMeta {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+}
+
+.entryRarity {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--rarity, var(--cp-text-dim));
+}
+
+.entryDesc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.38;
+  color: var(--cp-text-dim);
+}
+
+.entryCue {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+  opacity: 0;
+  transition: opacity var(--dur-flash);
+}
+
+.entryRowBtn:hover .entryCue,
+.entryRowBtn:focus-visible .entryCue {
+  opacity: 1;
+}
+
+.chromeSlot {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+  opacity: 0.85;
+}
+
+.chromeTag {
+  padding: 0 5px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 12%);
+}
+
+.chromeTag:where([data-tone="warn"]) {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 14%);
+}
+
+.gearIconic {
+  padding: 0 4px;
+  background: rgb(252 238 10 / 16%);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+}
+
+/* 战术弱点：与物品/义体一致的原作 CellFrame 切角条目 + 编号标签 */
+.tacticalList {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tacticalItem,
+.tacticalBtn {
+  --box-fill: var(--cp-surface);
+  --box-line: rgb(252 238 10 / 32%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px 6px 11px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--cp-text);
+  transition: transform 90ms ease-out;
+}
+
+.tacticalBtn {
+  cursor: var(--cp-cursor-hand);
+}
+
+.tacticalBtn:hover,
+.tacticalBtn:focus-visible {
+  --box-fill: rgb(252 238 10 / 9%);
+  --box-line: var(--cp-yellow);
+  outline: none;
+}
+
+.tacticalBadge {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  padding: 2px 5px;
+  border: 1px solid rgb(252 238 10 / 36%);
+  background: rgb(252 238 10 / 8%);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--cp-yellow);
+}
+
+.tacticalText {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.44;
+  color: var(--cp-text);
+}
+
+.tacticalBtn:hover .tacticalText,
+.tacticalBtn:focus-visible .tacticalText {
+  color: var(--cp-yellow);
+}
+
+.tacticalCue {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-yellow);
+  opacity: 0.52;
+  transition: opacity var(--dur-flash);
+}
+
+.tacticalBtn:hover .tacticalCue,
+.tacticalBtn:focus-visible .tacticalCue {
+  opacity: 1;
+}
+
+/* 具体伤势明细：原作 CellFrame 切角卡 + 左侧严重度色条 + 部位标块 */
+.woundList {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.woundItem {
+  --box-fill: var(--cp-surface);
+  --box-line: rgb(252 238 10 / 34%);
+  --wound-accent: var(--cp-yellow);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 6px 10px 6px 11px;
+}
+
+.woundItem:where([data-tier="heavy"]) {
+  --box-fill: rgb(255 156 66 / 7%);
+  --box-line: rgb(255 156 66 / 46%);
+  --wound-accent: #ff9c42;
+}
+
+.woundItem:where([data-tier="lethal"]) {
+  --box-fill: rgb(255 0 60 / 9%);
+  --box-line: rgb(255 0 60 / 56%);
+  --wound-accent: var(--cp-danger);
+}
+
+.woundPart {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--wound-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--wound-accent) 10%, var(--cp-surface-deep));
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--wound-accent);
+}
+
+.woundInfo {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.woundTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+.woundTop > b {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.32;
+  color: var(--cp-text);
+  overflow-wrap: anywhere;
+}
+
+.woundTier {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--wound-accent);
+}
+
+.woundInfo > small {
+  font-size: 10.5px;
+  color: var(--cp-text-dim);
+}
+
+.woundTag {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--wound-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--wound-accent) 10%, transparent);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--wound-accent);
+}
+
+.woundTag:where([data-treated]) {
+  border-color: rgb(94 246 255 / 36%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+}
+
+/* 穿戴衣物：原作九宫格切角卡片网格 */
+.clothGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clothRow {
+  --box-fill: var(--cp-surface);
+  --box-line: color-mix(in srgb, var(--rarity, rgb(94 246 255 / 40%)) 34%, transparent);
+  --entry-accent: var(--rarity, var(--cp-cyan));
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 8px 5px 10px;
+}
+
+.clothRarityBar {
+  top: 4px;
+  right: auto;
+  bottom: 4px;
+  left: 3px;
+  width: 2.5px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.clothThumb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--rarity, rgb(94 246 255 / 45%)) 34%, transparent);
+  background: var(--cp-surface-deep);
+  overflow: hidden;
+}
+
+.clothArt {
+  position: relative;
+  z-index: 1;
+  max-width: 26px;
+  max-height: 24px;
+  object-fit: contain;
+}
+
+.clothCopy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.clothSlot {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.clothCopy > b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+/* ———— 页 2：档案与关系 ———— */
+
+.dossierStack {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
 }
 
 .relationCallout {
-  padding: 6px 10px 6px 11px;
+  padding: 6px 10px;
   border-inline-start: 2px solid rgb(94 246 255 / 48%);
   background: rgb(94 246 255 / 4%);
 }
 
 .relationCallout:where([data-empty]) {
-  border-inline-start-color: rgb(94 246 255 / 26%);
+  border-inline-start-color: rgb(94 246 255 / 22%);
   background: transparent;
 }
 
@@ -482,7 +1518,7 @@
   font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.55;
-  color: #e4edf2;
+  color: var(--cp-text);
 }
 
 .relationCallout:where([data-tone="ally"]) .relationText {
@@ -494,20 +1530,15 @@
 }
 
 .relationCallout:where([data-empty]) .relationText {
-  color: #8ea5b2;
+  color: var(--cp-text-dim);
 }
 
 .contextCallout {
   display: grid;
   gap: 3px;
-  padding: 6px 10px 6px 11px;
-  border-inline-start: 2px solid rgb(94 246 255 / 45%);
-  background: rgb(14 21 33 / 44%);
-}
-
-.contextCallout:where([data-tone="ally"]) {
-  border-inline-start-color: var(--cp-yellow);
-  background: rgb(252 238 10 / 5%);
+  padding: 6px 10px;
+  border-inline-start: 2px solid rgb(94 246 255 / 42%);
+  background: rgb(255 255 255 / 2.5%);
 }
 
 .contextCallout:where([data-tone="danger"]) {
@@ -533,9 +1564,46 @@
   color: var(--cp-red);
 }
 
+.appearancePanel {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  background: rgb(255 255 255 / 2.5%);
+  border-inline-start: 2px solid rgb(94 246 255 / 30%);
+}
+
+.factStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgb(94 246 255 / 12%);
+}
+
+.factCell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.factCell > dt {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+.factCell > dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cp-text);
+}
+
 .duoGrid {
   display: grid;
-  gap: 11px 16px;
+  gap: 12px 18px;
   min-width: 0;
 }
 
@@ -546,47 +1614,6 @@
   min-width: 0;
 }
 
-.subSection {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  align-content: start;
-}
-
-.subHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgb(94 246 255 / 14%);
-}
-
-.subTitle {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: rgb(148 184 196);
-}
-
-.subCount {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  color: rgb(138 176 188);
-  font-variant-numeric: tabular-nums;
-}
-
-.emptyNote {
-  margin: 0;
-  padding-inline-start: 2px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--cp-text-dim);
-}
-
-/* 记忆、情报与传闻列表 */
 .list {
   display: grid;
   gap: 8px;
@@ -595,7 +1622,7 @@
   list-style: none;
   font-size: 12.5px;
   line-height: 1.58;
-  color: #dde3e8;
+  color: var(--cp-text);
 }
 
 .list > li:where([data-settled]) {
@@ -624,11 +1651,11 @@
 }
 
 .kind:where([data-tone="tie"]) {
-  color: rgb(148 212 224);
+  color: var(--cp-cyan);
 }
 
 .kind:where([data-tone="memory"]) {
-  color: rgb(148 184 196);
+  color: var(--cp-text-dim);
 }
 
 .list small {
@@ -636,360 +1663,14 @@
   color: var(--cp-text-dim);
 }
 
-/* 身体与扫描：生物监测风格细线体征行，不做空心三格矩阵 */
-.telemetry {
-  margin: 0;
-  border-top: 1px solid rgb(94 246 255 / 12%);
-}
+/* ———— 容器响应式断点 ———— */
 
-.telemetryRow {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
-  gap: 6px 12px;
-  align-items: baseline;
-  padding: 7px 2px;
-  border-bottom: 1px solid rgb(94 246 255 / 12%);
-}
-
-.telemetryRow > dt {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: rgb(148 184 196);
-}
-
-.telemetryVal {
-  min-width: 0;
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--cp-text);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.telemetryVal:where([data-threat="high"], [data-threat="skull"]) {
-  color: var(--cp-danger);
-}
-
-.telemetryVal:where([data-threat="even"]) {
-  color: var(--cp-yellow);
-}
-
-.telemetryVal:where([data-threat="low"]) {
-  color: var(--cp-success);
-}
-
-/* NPC 衣着、武装与随身物品分组卡 */
-.gearGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gearCard {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 6px 9px;
-  background: rgb(14 21 33 / 52%);
-  border-inline-start: 2px solid var(--rarity-color, rgb(94 246 255 / 45%));
-}
-
-.gearCard:where([data-tone="clothing"]) {
-  border-inline-start-color: rgb(94 246 255 / 62%);
-}
-
-.gearCard:where([data-tone="weapon"]) {
-  border-inline-start-color: var(--rarity-color, var(--cp-red));
-}
-
-.gearCard:where([data-tone="item"]) {
-  border-inline-start-color: var(--rarity-color, rgb(243 230 0 / 58%));
-}
-
-.gearCard:where([data-iconic]) {
-  box-shadow: inset 0 0 0 1px rgb(243 230 0 / 26%);
-}
-
-.gearCard:where([data-art]) {
-  grid-template-columns: 44px minmax(0, 1fr);
-  column-gap: 9px;
-  align-items: center;
-}
-
-.gearArt {
-  flex: none;
-  width: 44px;
-  height: 36px;
-  object-fit: contain;
-}
-
-.gearCopy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.gearHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-}
-
-.gearHead > b {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--cp-text);
-  overflow-wrap: anywhere;
-}
-
-.gearMeta {
-  flex: none;
-  font-family: var(--font-ui);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: rgb(148 184 196);
-}
-
-.gearBadges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-}
-
-.gearRarity {
-  font-family: var(--font-ui);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--rarity-color, var(--cp-text-dim));
-}
-
-.gearIconic {
-  padding: 0 4px;
-  background: rgb(243 230 0 / 16%);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--cp-yellow);
-}
-
-.gearDesc {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 11.5px;
-  line-height: 1.42;
-  color: var(--cp-text-dim);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 具体伤势明细 */
-.woundList {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.woundItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 5px 8px;
-  background: rgb(94 246 255 / 6%);
-  border-inline-start: 2px solid var(--cp-yellow);
-}
-
-.woundItem:where([data-tier="heavy"]) {
-  background: rgb(255 156 66 / 9%);
-  border-inline-start-color: #ff9c42;
-}
-
-.woundItem:where([data-tier="lethal"]) {
-  background: rgb(255 0 60 / 12%);
-  border-inline-start-color: var(--cp-danger);
-}
-
-.woundPart {
-  flex: none;
-  padding: 1px 6px;
-  background: rgb(255 255 255 / 7%);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--cp-text);
-}
-
-.woundInfo {
-  min-width: 0;
-  flex: 1;
-  display: grid;
-  gap: 1px;
-}
-
-.woundInfo > b {
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--cp-text);
-  overflow-wrap: anywhere;
-}
-
-.woundInfo > small {
-  font-size: 11px;
-  color: var(--cp-text-dim);
-}
-
-.woundTag {
-  flex: none;
-  font-family: var(--font-ui);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--cp-yellow);
-}
-
-.woundItem:where([data-tier="heavy"]) .woundTag {
-  color: #ff9c42;
-}
-
-.woundItem:where([data-tier="lethal"]) .woundTag {
-  color: var(--cp-hp-low);
-}
-
-.woundTag:where([data-treated]) {
-  color: var(--cp-cyan);
-}
-
-/* 已检出植入体行 */
-.chromeList {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chromeItem {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 10px;
-  background: rgb(14 21 33 / 52%);
-  border-inline-start: 2px solid var(--cp-cyan);
-}
-
-.chromeItem:where([data-art]) {
-  grid-template-columns: 56px minmax(0, 1fr);
-  column-gap: 10px;
-  align-items: center;
-}
-
-.chromeArt {
-  width: 56px;
-  height: 48px;
-  object-fit: contain;
-}
-
-.chromeCopy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.chromeHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.chromeHead > b {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--cp-text);
-  overflow-wrap: anywhere;
-}
-
-.chromeSlot {
-  flex: none;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--cp-cyan);
-  opacity: 0.88;
-}
-
-.chromeDesc {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1.48;
-  color: var(--cp-text-dim);
-}
-
-/* 身体栏底部扫描状态与操作条 */
-.bodyFoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgb(94 246 255 / 14%);
-}
-
-.scanFootNote {
-  font-family: var(--font-ui);
-  font-size: 12px;
-  color: var(--cp-text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.bodyFoot > .scanButton {
-  flex: none;
-  margin-top: 0;
-  padding: 5px 12px;
-  font-size: 12.5px;
-  letter-spacing: 0.06em;
-  color: var(--cp-cyan);
-}
-
-.bodyFoot > .scanButton:is(:hover, :focus-visible) {
-  color: var(--cp-yellow);
-}
-
-.bodyFoot > .scanButton > span {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-@container profile (width >= 520px) {
-  .profileGrid {
-    grid-template-columns: minmax(222px, 246px) minmax(0, 1fr);
-    gap: 16px;
+@container profile (width >= 540px) {
+  .tacticalColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px;
   }
-}
 
-@container workspace (width >= 520px) {
   .duoGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -997,9 +1678,9 @@
 
 @container profilehead (width < 220px) {
   .portrait {
-    width: 44px;
-    height: 44px;
-    font-size: 18px;
+    width: 50px;
+    height: 62px;
+    font-size: 19px;
   }
 
   .name {

@@ -50,7 +50,6 @@ function view(world: World, before?: World) {
   for (const [label, entries] of [
     ["待办", v.objectives],
     ["威胁", v.threats],
-    ["交互", v.interactions],
     ["消息", v.feed],
   ] as const) {
     const ids = entries.map((entry) => entry.id);
@@ -241,31 +240,24 @@ const text = (v: ReturnType<typeof view>) => JSON.stringify([v.objectives, v.thr
   }
 }
 
-// 交互：商店、义体医生按当前地点出现；没在查超梦时没有编辑器入口
+// 商店、义体医生按当前地点投影出现；没在查超梦时没有活跃超梦会话
 {
   const at = (location: string) => set(base, "world", { location });
   const shop = shops[0];
   if (shop) {
-    const here = view(at(shop.location)).interactions;
+    const here = view(at(shop.location)).shops;
     expect(
-      "在店里有进店交互",
-      here.some((x) => x.id === `inventory:shop:${shop.id}` && x.target === shop.id),
+      "在店里有商店视图",
+      here.some((x) => x.id === shop.id),
       here,
     );
   }
   const doc = ripperdocs[0];
   if (doc) {
-    const here = view(at(doc.location)).interactions;
-    expect(
-      "在诊所有义体医生交互",
-      here.some((x) => x.id === `cyberware:ripperdoc:${doc.id}`),
-      here,
-    );
+    const here = view(at(doc.location)).ripperdoc;
+    expect("在诊所有义体医生视图", here?.id === doc.id, here);
   }
-  expect(
-    "没在查超梦时没有编辑器交互",
-    !view(base).interactions.some((x) => x.source === "braindance"),
-  );
+  expect("没在查超梦时没有活跃超梦会话", view(base).braindance.active === null);
 }
 
 // 事件：没给前态时不出；只比玩家看得到的变化，暗中的准备和结局不触发

@@ -1,166 +1,388 @@
 import { braindanceRules } from "@cp/core";
 
-/** 本作原创的固定目录；普通娱乐不附带委托或危险。 */
+/**
+ * 夜之城四级超梦目录：
+ * - commercial：商业娱乐片（歌舞伎音像摊、日常解压）
+ * - sensory：莫克斯精修感官调谐片（丽姿酒吧、高端会所）
+ * - raw：未剪辑第一人称调查原片（支持编辑模式 visual / audio / thermal 三层轨道扫描）
+ * - xbd：地下黑超梦（未经滤波，高神经冲击风险，藏匿关键地下线索）
+ */
 export const braindances = braindanceRules.BdWorkListSchema.parse([
+  // 1. commercial — 商业娱乐
   {
-    id: "bd-night-market",
-    title: "摊灯熄灭以前",
-    recorder: "歌舞伎夜市摊主阿娴",
-    synopsis: "收摊前的一顿夜宵。没有追逐，也没有英雄，只是从一个夜班人的位置看看街口。",
-    durationMinutes: 18,
+    id: "bd-nc-night-drift",
+    title: "沃森午夜飙车·雨幕霓虹",
+    tier: "commercial",
+    recorder: "商业超梦厂牌「霓虹冲浪」",
+    synopsis: "从改装石英跑车驾驶席直冲沃森高架与歌舞伎霓虹隧道的肾上腺素娱乐片。",
+    durationMinutes: 14,
+    location: "kabuki-market",
     passages: [
       {
-        id: "last-orders",
-        label: "最后几单",
+        id: "ramp-launch",
+        label: "高架起步",
+        minutes: 5,
+        outline:
+          "双涡轮在雨夜高架匝道拉高转速，挡风玻璃上霓虹拉成赤蓝光带，车尾甩过积水护栏直切进主干道车流。",
+      },
+      {
+        id: "tunnel-sprint",
+        label: "隧道极速",
+        minutes: 5,
+        outline:
+          "车速拉满冲入歌舞伎下沉隧道，引擎低吼与合成器节拍同步震动胸腔，擦着重型货车盲区完成连续超车。",
+      },
+      {
+        id: "pier-cooldown",
+        label: "海风收尾",
+        minutes: 4,
+        outline:
+          "跑车滑停在北岸防波堤，熄火后只剩雨滴敲打引擎盖与远处全息广告的低吟，感官滤波器平稳淡出。",
+      },
+    ],
+    details: [
+      {
+        id: "drift-tunnel-plate",
+        passage: "tunnel-sprint",
+        layer: "visual",
+        finding: "隧道超车瞬间，右侧重型货车的车厢侧栏闪过「歌舞伎夜航物流·04 号冷链」编号贴纸。",
+      },
+      {
+        id: "drift-radio-chatter",
+        passage: "pier-cooldown",
+        layer: "audio",
+        finding:
+          "熄火后远处的海风里混着微弱的街头飙车暗网频道播报，提到每周五子夜在北岸工业区发车。",
+      },
+    ],
+  },
+  // 2. commercial — 商业娱乐
+  {
+    id: "bd-us-cracks-live",
+    title: "激光泡泡·日本街不插电现场",
+    tier: "commercial",
+    recorder: "日落演艺发行",
+    synopsis: "贴近舞台边缘与后台的流行演出超梦，含人群音浪、镁光灯热感与安可合唱。",
+    durationMinutes: 18,
+    location: "japantown",
+    passages: [
+      {
+        id: "backstage-warm",
+        label: "后台暖场",
+        minutes: 5,
+        outline: "全息化妆镜亮起，乐手试音的合成器泛音混着香槟气泡味，舞台监督倒数三秒推开侧幕。",
+      },
+      {
+        id: "main-chorus",
+        label: "霓虹副歌",
+        minutes: 9,
+        outline:
+          "聚光灯打满舞池，观众荧光棒连成海浪，低音炮震动顺着脚底直冲脊背，情绪轨道调谐得轻快上头。",
+      },
+      {
+        id: "encore-fade",
+        label: "散场余温",
+        minutes: 4,
+        outline: "彩带落满肩头，录制者退回侧台喝下半杯冰水，掌声在滤波器中渐弱，结束得干脆舒缓。",
+      },
+    ],
+    details: [
+      {
+        id: "cracks-vip-pass",
+        passage: "backstage-warm",
+        layer: "visual",
+        finding:
+          "化妆台角落放着一张日本街黑蓝宝石巡演协办方的后台通行证，落款来自威斯特布鲁克某家虎爪帮控股的演艺公司。",
+      },
+      {
+        id: "cracks-stage-comms",
+        passage: "encore-fade",
+        layer: "audio",
+        finding:
+          "侧台耳返泄漏出舞台监督压低声音的叮嘱：“散场走地下货运梯，别碰正门那群等债的记者。”",
+      },
+    ],
+  },
+  // 3. sensory — 丽姿酒吧感官调谐
+  {
+    id: "bd-lizzies-velvet",
+    title: "绯红天鹅绒·丽姿定制调谐",
+    tier: "sensory",
+    recorder: "莫克斯特约调谐室（丽姿酒吧）",
+    synopsis: "丽姿酒吧招牌高沉浸感官调谐卷轴，放大雨夜丝绒、低频心跳与近距呼吸的温度。",
+    durationMinutes: 20,
+    location: "lizzies-bar",
+    passages: [
+      {
+        id: "neon-booth",
+        label: "暗红丝绒包厢",
         minutes: 6,
         outline:
-          "录制者在夜市小摊翻热汤，把同事留的塑料杯挪到风扇下。客人点加辣，送货员抱怨停车位。事件止于正常交付，不出现隐藏求救。",
+          "门帘隔绝了丽姿舞池的轰鸣，紫红霓虹斜落在丝绒沙发与冰杯壁上，空气里浮着淡淡雪松与合成樱桃香。",
       },
       {
-        id: "shared-table",
-        label: "共用的折叠桌",
-        minutes: 7,
+        id: "pulse-sync",
+        label: "呼吸与脉搏共鸣",
+        minutes: 9,
         outline:
-          "录制者端自己的面坐到街沿桌边，与隔壁修鞋的中年人商量明天谁带热水壶。街上广告循环、有人争论球赛，没人向观看者搭话。",
+          "调谐师精细校准了触觉与体温层：指尖掠过锁骨的温差、贴耳低语的气流与稳定渐升的心跳节拍层层叠加。",
       },
       {
-        id: "lights-out",
-        label: "关灯",
+        id: "afterglow",
+        label: "余韵缓释",
         minutes: 5,
-        outline:
-          "录制者清点当天零钱，把没卖完的食材装进保温箱，和对面摊位互道明天见。记录在卷下棚布时自然结束。",
-      },
-    ],
-    details: [],
-  },
-  {
-    id: "bd-rain-rooftop",
-    title: "雨停后的屋顶",
-    recorder: "独立录制者洛蕾",
-    synopsis: "屋顶花箱、楼下的洗衣房和一杯逐渐变凉的咖啡。一段可以安静待着的私人授权作品。",
-    durationMinutes: 15,
-    passages: [
-      {
-        id: "stairs",
-        label: "走上屋顶",
-        minutes: 4,
-        outline:
-          "录制者沿熟悉的楼梯走上屋顶，把咖啡放在干燥的水泥沿。楼下洗衣房传来滚筒转动声，雨水仍从天线滴落。",
-      },
-      {
-        id: "planters",
-        label: "花箱边",
-        minutes: 7,
-        outline:
-          "录制者给几株薄荷修掉烂叶，远处邻居晾起衣服。片中有短信提示但内容未被打开，不能据此辨认发件人或关系。",
-      },
-      {
-        id: "sun-break",
-        label: "云层开了一点",
-        minutes: 4,
-        outline: "云隙透光，录制者喝完咖啡，提起空壶下楼。记录不附秘密或后续任务，平静结束。",
-      },
-    ],
-    details: [],
-  },
-  {
-    id: "bd-small-stage",
-    title: "返场第三首",
-    recorder: "本地乐手咪娜",
-    synopsis: "从小场地键盘手的位置参加一场普通夜演，连同调音、紧张、失误和散场。",
-    durationMinutes: 24,
-    passages: [
-      {
-        id: "soundcheck",
-        label: "试音",
-        minutes: 5,
-        outline:
-          "录制者在狭窄后台调试键盘，与鼓手确认返场曲目。工作人员递温水，左侧监听音箱偶尔有低噪。",
-        media: [
-          {
-            kind: "image",
-            url: "/media/everyday/needle-drop-program.svg",
-            label: "《返场第三首》随片节目单",
-            caption:
-              "本作原创的发行资料，列出试音、返场与散场顺序；不是现实演出公告，也不包含未发现的分析材料。",
-          },
-          {
-            kind: "link",
-            url: "/media/everyday/needle-drop-program.svg",
-            label: "查看节目单原件",
-          },
-        ],
-      },
-      {
-        id: "encore",
-        label: "返场",
-        minutes: 14,
-        outline:
-          "演出实际经过几首曲子，录制者一处和弦按晚半拍，同伴用眼神提醒，观众继续跟唱。不得把录制者的紧张与释然写成观看者自己决定的情绪。",
-      },
-      {
-        id: "load-out",
-        label: "散场",
-        minutes: 5,
-        outline:
-          "录制者收线、整理租来的设备，和工作人员约好取回落下的围巾。现场正常散去，片中约定不会自动变成观看者的任务。",
+        outline: "感官增益按莫克斯安全曲线缓缓回落，留下一段微醺松弛的体感余韵，不带残留眩晕。",
       },
     ],
     details: [
       {
-        id: "monitor-noise",
-        passage: "soundcheck",
-        cues: ["监听", "低噪", "音箱", "接触不良"],
-        method: "audio",
+        id: "velvet-tune-signature",
+        passage: "pulse-sync",
+        layer: "thermal",
         finding:
-          "低噪只出现在左侧监听，随录制者按住接口消失；录音支持接触不良这一解释，不能据此证明有人破坏设备。",
+          "体温与皮电曲线经过极其细腻的人工分段限幅，带有朱迪调谐工作站特有的莫克斯防成瘾安全签名。",
       },
     ],
   },
+  // 4. sensory — 高端感官调谐
   {
-    id: "bd-service-corridor",
-    title: "后勤通道的三分钟",
-    recorder: "某酒店维修员，来源标注待核实",
-    synopsis: "一份已取得的短记录。可回放门禁声与走廊标识，不包含走廊之外的画面。",
-    durationMinutes: 3,
+    id: "bd-clouds-dream-suite",
+    title: "霓虹雨夜·高空云端套房",
+    tier: "sensory",
+    recorder: "威斯特布鲁克私享调谐厂牌",
+    synopsis:
+      "面向企业高管与贵宾的奢华感官片：落地窗外俯瞰夜之城霓虹雨海，主打彻底抽离现实的温柔沉浸。",
+    durationMinutes: 22,
+    location: "clouds",
     passages: [
       {
-        id: "corridor-entry",
-        label: "走入走廊",
-        minutes: 1,
+        id: "glass-rain",
+        label: "百层雨幕",
+        minutes: 7,
         outline:
-          "录制者提着工具箱走进酒店后勤走廊，右边有贴着 C-17 标签的配电箱。一个穿工作服的人从侧门经过，面部被门框挡住。",
+          "站在超级摩天楼顶层落地玻璃前，整座夜之城在脚下化成无声光河，真皮地毯暖意渗入赤足。",
       },
       {
-        id: "lock-tone",
-        label: "门锁响起",
-        minutes: 1,
-        outline: "录制者低头检查墙面检修口，身后门禁响过一次；画面未拍到刷卡者。远处有人推餐车。",
+        id: "whisper-lounge",
+        label: "低语与温水",
+        minutes: 10,
+        outline:
+          "暖灯调暗，轻缓的声线在耳畔把现实烦恼逐一拆散；调谐后的多巴胺与催产素曲线让人产生被无条件理解的错觉。",
       },
       {
-        id: "recording-ends",
-        label: "记录结束",
-        minutes: 1,
-        outline:
-          "录制者收回检修探头，拿起工具箱离开，记录正常截止。没有录到房内人员或后续去向，不能补全为既定案情。",
+        id: "dawn-fade",
+        label: "晨雾淡出",
+        minutes: 5,
+        outline: "远方天际渗出灰蓝，播放程序按预设安全阈值平稳断开连接。",
       },
     ],
     details: [
       {
-        id: "panel-label",
-        passage: "corridor-entry",
-        cues: ["配电箱", "C-17", "箱上标签", "走廊标识"],
-        method: "observe",
+        id: "dream-suite-watermark",
+        passage: "glass-rain",
+        layer: "visual",
         finding:
-          "配电箱标签能辨出 C-17，下面的楼层编号被磨损，无法从记录确认酒店名称或具体楼层；需要另外查证。",
+          "落地窗角落极淡的玻璃倒影里闪过 H8 摩天楼云顶会所的定制编码水印与一套玩偶行为算法版本号。",
       },
       {
-        id: "door-tone",
-        passage: "lock-tone",
-        cues: ["门禁", "门锁", "刷卡", "确认音"],
-        method: "audio",
+        id: "dream-suite-carrier-hum",
+        passage: "whisper-lounge",
+        layer: "audio",
         finding:
-          "门禁发出一次短促确认音；录音没有报读卡号、持卡人或权限类别，不能据此认定某个人刷卡。",
+          "在温柔低语的底层频段藏着一段极低幅度的脉冲诱导音频，用来延长贵宾的情感依赖与复购意愿。",
+      },
+    ],
+  },
+  // 5. raw — 调查原片（绀碧大厦偷拍风格 / 荒坂高层线）
+  {
+    id: "bd-konpeki-suite-raw",
+    title: "顶层套房偷录原片·未剪辑",
+    tier: "raw",
+    recorder: "匿名潜入录制者",
+    synopsis:
+      "一段未经任何调谐与剪辑的酒店顶层套房第一人称原始卷轴，包含视觉、音频与热感三层硬线索。",
+    durationMinutes: 10,
+    location: "lizzies-bar",
+    passages: [
+      {
+        id: "suite-entry",
+        label: "步入套房客厅",
+        minutes: 4,
+        outline:
+          "录制者端着香槟托盘走进挑高客厅，全息盆景旁站着一名穿深灰西装的荒坂保镖，桌上数据板亮着微弱蓝光。",
+      },
+      {
+        id: "balcony-call",
+        label: "阳台加密通话",
+        minutes: 3,
+        outline: "套房主人背身走向落地窗接听加密语音，壁炉左侧墙体传出微弱制冷压缩机嗡鸣。",
+      },
+      {
+        id: "exit-corridor",
+        label: "退回电梯厅",
+        minutes: 3,
+        outline: "录制者在保镖目光催促下退出房门，镜头扫过电梯面板与墙角安保终端后中断。",
+      },
+    ],
+    details: [
+      {
+        id: "konpeki-pad-code",
+        passage: "suite-entry",
+        layer: "visual",
+        finding: "放大客厅数据板反光可见临时安保权限码「ARS-7741」与北码头三号冷库签收单。",
+      },
+      {
+        id: "konpeki-voice-name",
+        passage: "balcony-call",
+        layer: "audio",
+        finding: "剥离雨声与背景乐后，加密通话里清晰提到“今晚子夜在歌舞伎货运通道交接芯片原型”。",
+      },
+      {
+        id: "konpeki-cold-safe",
+        passage: "balcony-call",
+        layer: "thermal",
+        finding: "壁炉左侧暗墙后存在明显的低温制冷轮廓，是一具恒温生物冷藏保险箱。",
+      },
+    ],
+  },
+  // 6. raw — 调查原片（云顶后台与虎爪帮监控）
+  {
+    id: "bd-clouds-vip-raw",
+    title: "云顶贵宾走廊·原片碎片",
+    tier: "raw",
+    recorder: "云顶某名玩偶私录",
+    synopsis: "一段在云顶后台维护通道仓促录下的 8 分钟原片，记录了虎爪帮头目与管事的密谈与暗门。",
+    durationMinutes: 8,
+    location: "clouds",
+    passages: [
+      {
+        id: "vip-hall",
+        label: "贵宾厅侧门",
+        minutes: 4,
+        outline:
+          "录制者低头端着托盘穿过樱花投影走廊，右侧办公室虚掩着门缝，两名虎爪帮武装人员守在转角。",
+      },
+      {
+        id: "office-pass",
+        label: "管事门外驻足",
+        minutes: 4,
+        outline: "门内传来低沉争吵与芯片烧录器的提示音，录制者假装整理托盘停顿十余秒后快步离开。",
+      },
+    ],
+    details: [
+      {
+        id: "clouds-door-badge",
+        passage: "vip-hall",
+        layer: "visual",
+        finding: "转角安保腰间挂着虎爪帮 H8 贵宾区电子门禁卡，卡面印有「VIP-09 / 木头人办公室」。",
+      },
+      {
+        id: "clouds-debt-talk",
+        passage: "office-pass",
+        layer: "audio",
+        finding:
+          "门内管事压低声音说“把坏掉行为芯片的货连夜转去扭扭街地下诊所，别让莫克斯帮嗅到风声”。",
+      },
+      {
+        id: "clouds-server-heat",
+        passage: "office-pass",
+        layer: "thermal",
+        finding: "办公室暗门后方的墙体呈高热红斑，藏着一台持续满载运转的玩偶行为算法本地服务器。",
+      },
+    ],
+  },
+  // 7. raw — 调查原片（街角伏击与交易记录）
+  {
+    id: "bd-kabuki-ambush-raw",
+    title: "歌舞伎后巷交货原片",
+    tier: "raw",
+    recorder: "无名跑腿仔（来源不明）",
+    synopsis: "一段在歌舞伎雨夜后巷戛然而止的 6 分钟第一人称原片，适合用编辑头环查清伏击者身份。",
+    durationMinutes: 6,
+    location: "kabuki-market",
+    passages: [
+      {
+        id: "alley-wait",
+        label: "霓虹巷口等候",
+        minutes: 3,
+        outline:
+          "录制者靠在生锈自动售货机旁抽烟，手里攥着一只带军用科技封条的铝箱，远处停着一辆熄灯的改装厢货。",
+      },
+      {
+        id: "sudden-flash",
+        label: "红点与断联",
+        minutes: 3,
+        outline: "巷口铁梯上方闪过一道激光瞄准红点，紧接着电磁脉冲炸响，画面雪花翻涌后彻底黑屏。",
+      },
+    ],
+    details: [
+      {
+        id: "ambush-plate",
+        passage: "alley-wait",
+        layer: "visual",
+        finding: "厢货挡风玻璃内侧贴着漩涡帮沃森废弃食品厂的通行涂鸦标志。",
+      },
+      {
+        id: "ambush-comms",
+        passage: "sudden-flash",
+        layer: "audio",
+        finding: "脉冲炸响前半秒，巷顶无线电泄出沙哑指令：“箱子带走，活口拖回全食品厂拆义体。”",
+      },
+      {
+        id: "ambush-snipers",
+        passage: "sudden-flash",
+        layer: "thermal",
+        finding: "铁梯上方与对面空调外机处藏着两处明显高于环境温度的义体散热源。",
+      },
+    ],
+  },
+  // 8. xbd — 地下黑超梦（清道夫厂牌，高神经冲击风险 + 关键线索）
+  {
+    id: "bd-scav-xbd-moth",
+    title: "死蛾子·地下黑超梦（XBD）",
+    tier: "xbd",
+    xbdRisk: "未经任何痛觉与恐惧滤波，直看极易引发剧烈耳鸣、感官解离与幻痛神经症状",
+    recorder: "清道夫地下厂牌「死蛾子」",
+    synopsis:
+      "扭扭街暗巷私下流通的非法无滤波黑超梦，记录了清道夫地下冰浴作坊的残酷片段，却也无意间露出了作坊位置线索。",
+    durationMinutes: 6,
+    location: "jig-jig-street",
+    passages: [
+      {
+        id: "ice-basement",
+        label: "潮湿地下室",
+        minutes: 3,
+        outline:
+          "刺眼的冷白日光灯剧烈频闪，录制者的剧烈心跳、缺氧喘息与刺骨寒意毫无过滤地砸进神经，四周摆满挂着塑料帘的铁架床。",
+      },
+      {
+        id: "scav-mask",
+        label: "全息面具与杂音",
+        minutes: 3,
+        outline:
+          "两名戴着闪屏全息面具的清道夫推着手术车走近，电锯预热声与失真重金属混作一团，强神经冲击令画面在剧痛中强行切断。",
+      },
+    ],
+    details: [
+      {
+        id: "xbd-crate-logo",
+        passage: "ice-basement",
+        layer: "visual",
+        finding: "铁架床角落堆着印有「圣多明戈发电厂旧仓 B-4」字样的工业冷链箱与扭扭街外卖纸杯。",
+      },
+      {
+        id: "xbd-subway-echo",
+        passage: "ice-basement",
+        layer: "audio",
+        finding:
+          "剥离失真音乐后，每隔四十五秒天花板就会传来轻轨列车驶过钢梁的低频轰鸣与工业排风声。",
+      },
+      {
+        id: "xbd-tub-cold",
+        passage: "scav-mask",
+        layer: "thermal",
+        finding:
+          "塑料帘后方藏着三口零度以下的冰浴槽与一台大功率工业制冰机散热口，直通地下排水管网。",
       },
     ],
   },

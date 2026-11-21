@@ -91,8 +91,8 @@ export const SERVICES: Readonly<
   medical: { label: "街头诊所看伤", price: 300 },
   fine: { label: "交罚款", price: 500 },
   favor: { label: "打点、请人帮个小忙", price: 100 },
-  "bd-session": { label: "店内超梦体验（须有明确约定）", price: 50 },
-  "adult-service": { label: "成年从业者服务（须有明确约定）", price: 200 },
+  "bd-session": { label: "店内超梦体验", price: 50 },
+  "adult-service": { label: "成年从业者服务", price: 200 },
 };
 
 /** 按折扣档算价钱，舍到十位，最少 10 */

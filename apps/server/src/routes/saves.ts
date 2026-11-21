@@ -60,9 +60,6 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
 
   app.get("/", async (c) => c.json({ saves: await game.list() }));
 
-  // 传说名册：死了不能重来、或者收了尾的角色；按各存档现算
-  app.get("/legends", async (c) => c.json({ legends: await game.legends() }));
-
   app.post("/", async (c) => {
     const parsed = await body(c, CreateSaveSchema);
     if (!parsed.ok) return c.json({ error: "存档信息不对", details: parsed.errors }, 400);

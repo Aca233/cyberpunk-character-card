@@ -50,6 +50,8 @@ export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 export interface TurnUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
+  readonly cachedInputTokens?: number | undefined;
+  readonly cacheWriteTokens?: number | undefined;
 }
 
 export type TurnStage =

@@ -5,8 +5,9 @@ import { Button } from "../../ui/Button";
 import styles from "./story.module.css";
 
 const MAX = 2000;
+const WARN_AT = 1600;
 
-/** 只有一个输入框；Enter 发送，Shift+Enter 换行；生成时变成“停止生成” */
+/** 神经终端输入条：Enter 发送，Shift+Enter 换行；生成中支持一键中断 */
 export function InputBar({
   busy,
   streaming,
@@ -33,12 +34,13 @@ export function InputBar({
 }) {
   const area = useRef<HTMLTextAreaElement>(null);
   const text = draft.text.trim();
-  const tooLong = text.length > MAX;
+  const len = text.length;
+  const tooLong = len > MAX;
+  const nearLimit = !tooLong && len >= WARN_AT;
   const canSend = !busy && !disabled && text !== "" && !tooLong;
-  // 只提示输入框不能用的原因；斯安威斯坦由模型按文本与局势自动判断开启
   const hint = disabled && reason ? reason : null;
 
-  // 改写检定文字或点选「回复」时，把焦点放进输入框
+  // 点选「回复」或外部写入草稿时，把焦点放进输入框
   const last = useRef(draft.text);
   const lastReplyTo = useRef(draft.replyTo);
   useEffect(() => {
@@ -60,9 +62,16 @@ export function InputBar({
     });
   };
 
+  const placeholder = reply
+    ? `回复 ${reply.name}（可直接答应接活、谈条件或回绝…）`
+    : busy
+      ? "正在推演本轮剧情，可提前输入下一步行动…"
+      : "写下你的行动或对白…（Enter 发送 · Shift+Enter 换行）";
+
   return (
     <form
       className={styles.inputBar}
+      data-busy={busy || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         send();
@@ -71,31 +80,36 @@ export function InputBar({
       {reply && (
         <p className={styles.replyChip}>
           <span className={styles.replyText}>
-            回复 {reply.name}：{reply.text}
+            回复 <b>{reply.name}</b>：{reply.text}
           </span>
           {onCancelReply && <ActionButton onClick={onCancelReply}>取消</ActionButton>}
         </p>
       )}
       <div className={styles.inputRow}>
-        <textarea
-          ref={area}
-          className={styles.textarea}
-          rows={2}
-          value={draft.text}
-          disabled={disabled}
-          placeholder={
-            reply ? `回消息给 ${reply.name}（可直接答应接活、谈条件或回绝…）` : undefined
-          }
-          aria-label="你的行动"
-          aria-describedby={hint ? "story-input-hint" : undefined}
-          onChange={(e) => onDraft({ text: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              send();
-            }
-          }}
-        />
+        <div className={styles.inputBox} data-invalid={tooLong || undefined}>
+          <textarea
+            ref={area}
+            className={styles.textarea}
+            rows={2}
+            value={draft.text}
+            disabled={disabled}
+            placeholder={placeholder}
+            aria-label="你的行动"
+            aria-describedby={hint ? "story-input-hint" : undefined}
+            onChange={(e) => onDraft({ text: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          {(nearLimit || tooLong) && (
+            <span className={styles.charCount} data-over={tooLong || undefined}>
+              {len}/{MAX}
+            </span>
+          )}
+        </div>
         {streaming ? (
           <Button onClick={onStop}>停止生成</Button>
         ) : (
@@ -104,15 +118,15 @@ export function InputBar({
             primary
             keyId="key.enter"
             disabled={!canSend}
-            reason={busy ? "正在提交" : tooLong ? `超过 ${MAX} 字` : undefined}
+            reason={busy ? "正在建立回合，请稍候" : tooLong ? `超过 ${MAX} 字上限` : undefined}
           >
-            发送
+            {busy ? "推演中…" : "发送"}
           </Button>
         )}
       </div>
       {tooLong ? (
         <p className={styles.warn}>
-          {text.length}/{MAX} 字，太长了
+          已超出上限（{len}/{MAX} 字），精简后再发送
         </p>
       ) : (
         hint && (

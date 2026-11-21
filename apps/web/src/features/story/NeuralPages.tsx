@@ -1,20 +1,18 @@
 import { characterRules, type PlayerAction } from "@cp/core";
 import { type ReactNode, useState } from "react";
 import { Button } from "../../ui/Button";
+import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { BiomonitorPanel } from "./BiomonitorPanel";
 import { ContentMediaList, InlineContentText } from "./ContentMedia";
 import { CYBER_LABELS, CyberDoll, type CyberSlot } from "./CyberDoll";
 import mediaStyles from "./content-media.module.css";
 import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
-import { FactionsBody } from "./FactionsPanel";
 import { type HabitAction, Habits } from "./Habits";
 import { countdown } from "./Journal";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
-import { Avatar, type PhoneActions, PhoneBody, UnreadBadge } from "./Phone";
-import { Profile } from "./Profile";
-import { type SquadAction, SquadPanel } from "./SquadPanel";
+import { type PhoneActions, PhoneBody, UnreadBadge } from "./Phone";
 import styles from "./story.module.css";
 import { trackTelemetry, type View } from "./view";
 
@@ -270,10 +268,27 @@ function SubTabs<T extends string>({
   );
 }
 
-/** 追踪（J）：只列眼下揽在手里的单子与期限约定；日常超梦不自动生成待办。 */
-export function JournalPage({ view }: { readonly view: View }) {
+/** 追踪（J）：在办单子、账务与期限、待决委托/心事/警情与已结案记录，并附带直达定位与快捷行动 */
+export function JournalPage({
+  view,
+  onLocatePlace,
+  onAcceptJob,
+  onPayRent,
+  onOpenRipperdoc,
+  onDraftAction,
+}: {
+  readonly view: View;
+  readonly onLocatePlace?: ((placeId: string) => void) | undefined;
+  readonly onAcceptJob?: ((jobId: string) => void) | undefined;
+  readonly onPayRent?: ((homeId: string) => void) | undefined;
+  readonly onOpenRipperdoc?: (() => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
+}) {
   const track = trackTelemetry(view);
-  const placeNames = new Map((view.travel?.destinations ?? []).map((d) => [d.id, d.name]));
+  const destinations = view.travel?.destinations ?? [];
+  const placeNames = new Map(destinations.map((d) => [d.id, d.name]));
+  const placeIdOf = (loc: string | null): string | null =>
+    loc !== null && placeNames.has(loc) ? loc : null;
   const activeJobs = [...view.jobs.list.filter((j) => j.status === "active")].sort((a, b) => {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
     if (a.dueIn !== null && b.dueIn !== null) return a.dueIn - b.dueIn;
@@ -281,15 +296,89 @@ export function JournalPage({ view }: { readonly view: View }) {
     if (b.dueIn !== null) return 1;
     return 0;
   });
-  const otherActive = track.active.filter((item) => item.source !== "jobs");
-  const nothingActive = activeJobs.length === 0 && otherActive.length === 0;
+  const offeredJobs = [...view.jobs.list.filter((j) => j.status === "offered")].sort((a, b) => {
+    if (a.dueIn !== null && b.dueIn !== null) return a.dueIn - b.dueIn;
+    if (a.dueIn !== null) return -1;
+    if (b.dueIn !== null) return 1;
+    return 0;
+  });
+  const closedJobs = [...view.jobs.list.filter((j) => !j.open)].reverse();
+  const billItems = track.active.filter((item) => item.kind === "bill");
+  const otherActive = track.active.filter((item) => item.source !== "jobs" && item.kind !== "bill");
+  const otherOffered = track.offered.filter((item) => item.source !== "jobs");
+  const hasAnything =
+    activeJobs.length > 0 ||
+    billItems.length > 0 ||
+    otherActive.length > 0 ||
+    offeredJobs.length > 0 ||
+    otherOffered.length > 0;
 
   return (
     <div className={styles.trackPane}>
-      {nothingActive && (
+      {!hasAnything && (
         <p className={styles.trackQuietNote}>
-          手头眼下没有在办单子或约定；街头走动、回消息时谈妥的事会记到这里。
+          手头眼下没有在办单子、账务或待决风声；街头走动、打听消息或联系中间人谈妥的事都会自动汇总到这里。
         </p>
+      )}
+
+      {billItems.length > 0 && (
+        <section className={styles.trackSection}>
+          <h3 className={styles.trackMicroHead}>账务与欠款</h3>
+          <ul className={styles.trackCleanList}>
+            {billItems.map((item) => {
+              const atDocHere =
+                item.source === "debt" &&
+                view.ripperdoc !== null &&
+                item.docId !== undefined &&
+                view.ripperdoc.id === item.docId;
+              const canPayRentHere = item.source === "rent" && item.homeId && onPayRent;
+              return (
+                <li
+                  key={item.id}
+                  className={styles.trackCleanRow}
+                  data-kind="bill"
+                  data-overdue={item.status === "overdue" || undefined}
+                >
+                  <div className={styles.trackCleanTop}>
+                    <strong>{item.title}</strong>
+                    {item.dueLabel && (
+                      <time
+                        className={styles.trackCleanTime}
+                        data-overdue={item.status === "overdue" || undefined}
+                      >
+                        {item.dueIn !== null && item.dueIn > 0 && item.status !== "overdue"
+                          ? `${item.dueLabel} · ${countdown(item.dueIn)}`
+                          : item.dueLabel}
+                      </time>
+                    )}
+                  </div>
+                  <div className={styles.trackCleanMeta}>
+                    <span>{item.sourceLabel}</span>
+                    {item.location && <span>{item.location}</span>}
+                    {item.progress && <span>{item.progress}</span>}
+                  </div>
+                  <div className={styles.trackRowActions}>
+                    {canPayRentHere && (
+                      <Button small primary onClick={() => onPayRent(item.homeId as string)}>
+                        {item.status === "overdue" ? "缴租解锁" : "缴纳房租"}
+                      </Button>
+                    )}
+                    {atDocHere && onOpenRipperdoc && (
+                      <Button small primary onClick={onOpenRipperdoc}>
+                        打开诊所还款
+                      </Button>
+                    )}
+                    {!atDocHere && item.locationId && onLocatePlace && (
+                      <Button small onClick={() => onLocatePlace(item.locationId as string)}>
+                        地图定位
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {activeJobs.length > 0 && (
@@ -297,6 +386,7 @@ export function JournalPage({ view }: { readonly view: View }) {
           <h3 className={styles.trackMicroHead}>手头在办</h3>
           <div className={styles.trackCleanList}>
             {activeJobs.map((job) => {
+              const placeId = placeIdOf(job.location);
               const place =
                 job.location === null ? null : (placeNames.get(job.location) ?? job.location);
               const metaTag = job.overdue
@@ -319,6 +409,7 @@ export function JournalPage({ view }: { readonly view: View }) {
                   key={job.id}
                   className={styles.trackGigItem}
                   data-overdue={job.overdue || undefined}
+                  open
                 >
                   <summary>
                     <strong>{job.title}</strong>
@@ -339,6 +430,28 @@ export function JournalPage({ view }: { readonly view: View }) {
                           <li key={i}>{note}</li>
                         ))}
                       </ol>
+                    )}
+                    {(placeId || onDraftAction) && (
+                      <div className={styles.trackRowActions}>
+                        {placeId && onLocatePlace && (
+                          <Button small onClick={() => onLocatePlace(placeId)}>
+                            地图定位{place ? ` · ${place}` : ""}
+                          </Button>
+                        )}
+                        {onDraftAction && (
+                          <Button
+                            small
+                            primary
+                            onClick={() =>
+                              onDraftAction(
+                                `着手推进「${job.title}」${place ? `（${place}）` : ""}：`,
+                              )
+                            }
+                          >
+                            写入行动
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </details>
@@ -381,10 +494,162 @@ export function JournalPage({ view }: { readonly view: View }) {
                   )}
                   {item.progress && <span>{item.progress}</span>}
                 </div>
+                {(item.locationId || onDraftAction) && (
+                  <div className={styles.trackRowActions}>
+                    {item.locationId && onLocatePlace && (
+                      <Button small onClick={() => onLocatePlace(item.locationId as string)}>
+                        地图定位
+                      </Button>
+                    )}
+                    {onDraftAction && (
+                      <Button
+                        small
+                        primary
+                        onClick={() => onDraftAction(`处理「${item.title}」：`)}
+                      >
+                        写入行动
+                      </Button>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         </section>
+      )}
+
+      {(offeredJobs.length > 0 || otherOffered.length > 0) && (
+        <section className={styles.trackSection}>
+          <h3 className={styles.trackMicroHead}>待决风声与委托</h3>
+          <div className={styles.trackCleanList}>
+            {offeredJobs.map((job) => {
+              const placeId = placeIdOf(job.location);
+              const place =
+                job.location === null ? null : (placeNames.get(job.location) ?? job.location);
+              const metaTag =
+                job.dueIn !== null
+                  ? countdown(job.dueIn)
+                  : job.reward > 0
+                    ? `${job.reward.toLocaleString("en-US")} €`
+                    : "待接";
+              const detailsLine = [
+                job.kindLabel,
+                place,
+                `委托方 ${job.client}`,
+                job.fixer ? `${job.fixer} 递话` : null,
+                job.reward > 0 ? `报酬 ${job.reward.toLocaleString("en-US")} 欧元` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <details key={job.id} className={styles.trackGigItem} data-offered>
+                  <summary>
+                    <strong>{job.title}</strong>
+                    <span className={styles.trackGigMeta}>{metaTag}</span>
+                  </summary>
+                  <div className={styles.trackGigDetail}>
+                    {detailsLine && <p>{detailsLine}</p>}
+                    {job.due !== null && (
+                      <p>
+                        期限：{job.due}
+                        {job.dueIn !== null ? ` · ${countdown(job.dueIn)}` : ""}
+                      </p>
+                    )}
+                    <div className={styles.trackRowActions}>
+                      {onAcceptJob && (
+                        <Button small primary onClick={() => onAcceptJob(job.id)}>
+                          接下这单
+                        </Button>
+                      )}
+                      {placeId && onLocatePlace && (
+                        <Button small onClick={() => onLocatePlace(placeId)}>
+                          地图定位
+                        </Button>
+                      )}
+                      {onDraftAction && (
+                        <Button
+                          small
+                          onClick={() =>
+                            onDraftAction(
+                              `联系${job.fixer ?? job.client}，细问「${job.title}」的细节和条件：`,
+                            )
+                          }
+                        >
+                          先谈条件
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
+            {otherOffered.map((item) => (
+              <div key={item.id} className={styles.trackCleanRow} data-offered>
+                <div className={styles.trackCleanTop}>
+                  <strong>{item.title}</strong>
+                  {item.dueLabel && (
+                    <time className={styles.trackCleanTime}>
+                      {item.dueIn !== null ? countdown(item.dueIn) : item.dueLabel}
+                    </time>
+                  )}
+                </div>
+                <div className={styles.trackCleanMeta}>
+                  <span>{item.sourceLabel}</span>
+                  {item.location && !item.progress?.includes(item.location) && (
+                    <span>{item.location}</span>
+                  )}
+                  {item.progress && <span>{item.progress}</span>}
+                </div>
+                {(item.locationId || onDraftAction) && (
+                  <div className={styles.trackRowActions}>
+                    {item.locationId && onLocatePlace && (
+                      <Button small onClick={() => onLocatePlace(item.locationId as string)}>
+                        地图定位
+                      </Button>
+                    )}
+                    {onDraftAction && (
+                      <Button
+                        small
+                        onClick={() =>
+                          onDraftAction(
+                            item.source === "ncpd"
+                              ? `赶去查看警情「${item.title}」${item.location ? `（${item.location}）` : ""}`
+                              : `跟进「${item.title}」：`,
+                          )
+                        }
+                      >
+                        写入行动
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {closedJobs.length > 0 && (
+        <details className={styles.trackHistoryWrap}>
+          <summary className={styles.trackHistorySummary}>近期结案（{closedJobs.length}）</summary>
+          <ul className={styles.trackCleanList}>
+            {closedJobs.map((job) => (
+              <li key={job.id} className={styles.trackCleanRow} data-closed>
+                <div className={styles.trackCleanTop}>
+                  <strong>{job.title}</strong>
+                  <span className={styles.trackClosedTag}>{job.statusLabel}</span>
+                </div>
+                <div className={styles.trackCleanMeta}>
+                  <span>{job.fixer ?? job.client}</span>
+                  {job.paid !== null && job.paid > 0 && (
+                    <span>实收 {job.paid.toLocaleString("en-US")} €</span>
+                  )}
+                  {job.summary && <span>{job.summary}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );
@@ -400,6 +665,7 @@ export function MessagesPage({
   onSendChat,
   onReadThread,
   onReadCall,
+  onAnswerCall,
   chatSending,
   pendingChat,
   busy,
@@ -423,6 +689,7 @@ export function MessagesPage({
     onSendChat,
     onReadThread,
     onReadCall,
+    onAnswerCall,
     chatSending,
     pendingChat,
     busy,
@@ -453,79 +720,6 @@ export function MessagesPage({
       ) : (
         <Panel as="section" title={tab === "dm" ? "私信" : "新闻"} line="var(--cp-cyan)" frame>
           {tab === "dm" ? <PhoneBody view={view} {...actions} /> : <NewsBody view={view} />}
-        </Panel>
-      )}
-    </>
-  );
-}
-
-type ContactsTab = "people" | "squad" | "factions";
-
-/** 联系人：人物档案（含宿敌）、小队、势力 */
-export function ContactsPage({
-  view,
-  onSquad,
-}: {
-  readonly view: View;
-  /** 小队的动作；正在生成时不传，按钮不显示 */
-  readonly onSquad?: ((action: SquadAction, npc: string) => void) | undefined;
-}) {
-  const [tab, setTab] = useState<ContactsTab>("people");
-  const people = view.npcs.filter((n) => n.met || n.nemesis || n.known.length > 0);
-  const [picked, setPicked] = useState<string | null>(null);
-  const current = people.find((n) => n.id === picked) ?? people[0];
-
-  return (
-    <>
-      <SubTabs<ContactsTab>
-        tabs={[
-          ["people", "人物"],
-          ["squad", `小队 ${view.squad.members.length}/${view.squad.max}`],
-          ["factions", "势力"],
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-      {tab === "people" &&
-        (people.length === 0 || !current ? (
-          <p className={styles.dim}>还没有认识的人。</p>
-        ) : (
-          <div className={neural.split}>
-            <Panel as="section" title="人物" line="var(--cp-cyan)">
-              <ul className={styles.contactList} aria-label="人物">
-                {people.map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      className={styles.contact}
-                      aria-pressed={n.id === current.id}
-                      onClick={() => setPicked(n.id)}
-                    >
-                      <Avatar npc={n.id} name={n.name} dead={!n.alive} />
-                      <span className={styles.contactName}>
-                        <b>{n.name}</b>
-                        <small className={styles.dim}>
-                          {!n.alive
-                            ? "已故"
-                            : n.met
-                              ? `${n.role} · 好感 ${n.affinity > 0 ? "+" : ""}${n.affinity}${n.behaviorChip ? ` · ${n.behaviorChip.label}` : ""}`
-                              : n.nemesis
-                                ? "交过手"
-                                : "只听说过"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-            <Profile npc={current} fixer={view.jobs.fixers.find((f) => f.id === current.id)} />
-          </div>
-        ))}
-      {tab === "squad" && <SquadPanel squad={view.squad} onSquad={onSquad} />}
-      {tab === "factions" && (
-        <Panel as="section" title="势力" line="var(--cp-yellow)">
-          <FactionsBody view={view} />
         </Panel>
       )}
     </>
@@ -637,6 +831,7 @@ function ChipArchive({
       {showSearch ? (
         <div className={mediaStyles.archiveSide}>
           <div className={mediaStyles.archiveSearch}>
+            <CellFrame />
             <input
               type="search"
               value={query}

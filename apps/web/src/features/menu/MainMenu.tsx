@@ -1,3 +1,4 @@
+import { RADAR_ANCHORS } from "@cp/content/radar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -15,19 +16,25 @@ import { anchorLabel, startAnchor } from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
 import styles from "./menu.module.css";
 
-type Item = "continue" | "new" | "load" | "characters" | "settings";
+type Item = "continue" | "new" | "load" | "characters" | "workshop" | "settings";
 
 /** 右侧舞台的标题，跟着左边选中的菜单项走 */
 const STAGE_TITLES: Partial<Record<Item, string>> = {
   continue: "继续",
   new: "新建存档",
   load: "读取存档",
+  characters: "角色档案",
+  workshop: "创意工坊",
+  settings: "设置",
 };
 
 const STAGE_CODES: Partial<Record<Item, string>> = {
   continue: "01 // RESUME",
   new: "02 // NEW_RUN",
   load: "03 // ARCHIVE",
+  characters: "04 // CITIZEN_ID",
+  workshop: "05 // WORKSHOP",
+  settings: "06 // SYS_CONFIG",
 };
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
@@ -105,6 +112,14 @@ export function MainMenu() {
     reason?: string;
   }[] = [
     {
+      id: "workshop",
+      label: "创意工坊",
+      hint: "未完成",
+      hintTone: "dim",
+      disabled: true,
+      reason: "创意工坊尚未完成，暂未启用",
+    },
+    {
       id: "settings",
       label: "设置",
       hint: modelReady === false ? "未配好" : modelReady ? "就绪" : undefined,
@@ -117,6 +132,7 @@ export function MainMenu() {
   const select = (id: Item) => {
     if (id === "continue" && latest) navigate(`/play/${latest.id}`);
     else if (id === "characters") navigate("/characters");
+    else if (id === "workshop") return;
     else if (id === "settings") navigate("/settings");
     else setFocus(id);
   };
@@ -187,7 +203,15 @@ export function MainMenu() {
         ? "最近一次冒险"
         : focus === "new" && characters.data
           ? `${characters.data.length} 名可用角色`
-          : "";
+          : focus === "characters" && characters.data
+            ? `${characters.data.length} 张档案`
+            : focus === "workshop"
+              ? "未完成 · 暂未启用"
+              : focus === "settings" && modelReady !== null
+                ? modelReady
+                  ? "连接就绪"
+                  : "待配置"
+                : "";
 
   const narratorName = profiles.data?.narrator;
 
@@ -305,6 +329,8 @@ export function MainMenu() {
               {saves.isSuccess ? `${sorted.length} 个` : "—"}
               {characters.data ? ` · ${characters.data.length} 张角色卡` : ""}
             </dd>
+            <dt>工坊</dt>
+            <dd>未完成 · 暂未启用</dd>
           </dl>
         </div>
       </aside>
@@ -430,6 +456,53 @@ export function MainMenu() {
                 </ul>
               )}
             </div>
+          )}
+
+          {focus === "characters" && (
+            <Panel line="var(--cp-red-dim)">
+              <div className={styles.form}>
+                <p className={styles.note}>
+                  五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
+                  AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
+                </p>
+                <div className={styles.submit}>
+                  <span className={styles.note}>
+                    当前本地共有 {characters.data?.length ?? 0} 张角色卡
+                  </span>
+                  <Button primary onClick={() => navigate("/characters")}>
+                    进入角色工作台
+                  </Button>
+                </div>
+              </div>
+            </Panel>
+          )}
+
+          {focus === "workshop" && (
+            <Panel line="var(--cp-red-dim)">
+              <div className={styles.form}>
+                <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
+              </div>
+            </Panel>
+          )}
+
+          {focus === "settings" && (
+            <Panel line="var(--cp-red-dim)">
+              <div className={styles.form}>
+                <p className={styles.note}>
+                  配置叙事模型、辅助模型与文生图连接，管理酒馆预设与叙事偏好，或在调试视图检查提示词上下文。
+                </p>
+                <div className={styles.submit}>
+                  <span className={styles.note}>
+                    {modelReady
+                      ? `当前叙事模型：${narratorName || "已就绪"}`
+                      : "尚未完成模型连接配置"}
+                  </span>
+                  <Button primary onClick={() => navigate("/settings")}>
+                    打开设置
+                  </Button>
+                </div>
+              </div>
+            </Panel>
           )}
         </div>
       </section>
@@ -649,15 +722,18 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   });
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
+  const [customStartLocation, setCustomStartLocation] = useState("");
   const entries = characters.data ?? [];
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const characterId = selected?.id ?? "";
-  const startLocation = selected
+  const defaultLocation = selected
     ? selected.card.board?.startLocation && startAnchor(selected.card.board.startLocation)
       ? selected.card.board.startLocation
       : defaultStartLocationFor(selected.card, boardData.data)
     : undefined;
+  const startLocation = customStartLocation || defaultLocation;
   const startSpot = startAnchor(startLocation);
+  const defaultSpot = startAnchor(defaultLocation);
   const create = useMutation({
     mutationFn: () =>
       api.createSave({
@@ -701,7 +777,10 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
                   id="new-save-character"
                   value={characterId}
                   disabled={create.isPending || !characters.isSuccess || entries.length === 0}
-                  onChange={(e) => setSelectedId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedId(e.target.value);
+                    setCustomStartLocation("");
+                  }}
                 >
                   {entries.length === 0 && (
                     <option value="">
@@ -721,6 +800,27 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
               </Button>
             </div>
           </div>
+          {selected && (
+            <label className={styles.field}>
+              <span>开局地点（可选覆盖）</span>
+              <FrameBox>
+                <select
+                  value={customStartLocation}
+                  disabled={create.isPending}
+                  onChange={(e) => setCustomStartLocation(e.target.value)}
+                >
+                  <option value="">
+                    默认（{defaultSpot ? anchorLabel(defaultSpot) : "按出身分配"}）
+                  </option>
+                  {RADAR_ANCHORS.map((anchor) => (
+                    <option key={anchor.id} value={anchor.id}>
+                      {anchorLabel(anchor)}
+                    </option>
+                  ))}
+                </select>
+              </FrameBox>
+            </label>
+          )}
         </div>
         {characters.isError && (
           <div role="alert" className={styles.fieldRow}>

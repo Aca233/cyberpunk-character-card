@@ -1,6 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { type CharacterState, type SetBonuses, type SetCharacter, STREET_CRED_MAX } from "./schema";
+import { type CharacterState, type SetCharacter, STREET_CRED_MAX } from "./schema";
 
 /** 传奇之路：声望到达里程碑时世界的反应；叙事模型据此写路人、帮派和中间人的态度 */
 export const CRED_TIERS = [
@@ -15,7 +15,8 @@ export const CRED_TIERS = [
   {
     from: 50,
     label: "传奇",
-    world: "你的事迹已传遍夜之城，来生的佣兵和中间人把你当作传奇，也有人想借你的名声获利；是否有以你命名的调酒，须由实际发生的纪念事件决定",
+    world:
+      "你的事迹已传遍夜之城，来生的佣兵和中间人把你当作传奇，也有人想借你的名声获利；是否有以你命名的调酒，须由实际发生的纪念事件决定",
   },
 ] as const;
 export type CredTier = (typeof CRED_TIERS)[number];
@@ -33,30 +34,20 @@ export function credGateLabel(threshold: number): string {
   return "在街上先混出点风声";
 }
 
-/** 建档：写入角色，声望进度和属性点从零开始 */
+/** 建档：写入角色，声望进度从零开始 */
 export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter): ApplyOutcome {
   draft.name = command.name;
   draft.brief = command.brief;
   if (command.visual !== undefined) draft.visual = { ...command.visual };
   else delete draft.visual;
-  draft.attributes = { ...command.attributes };
   draft.streetCred = command.streetCred;
   draft.credHalf = false;
-  draft.attributePoints = 0;
   draft.traits = (command.traits ?? []).map((t) => ({ ...t }));
   draft.flashbackUsed = [];
   draft.flashback = null;
   draft.pastFacts = [];
   if (command.portrait) draft.portrait = command.portrait;
   else delete draft.portrait;
-  return { ok: true };
-}
-
-/** 义体装卸同步兼容状态快照（不再输出 RPG 属性加减提示） */
-export function setBonuses(draft: Draft<CharacterState>, command: SetBonuses): ApplyOutcome {
-  draft.bonuses = Object.fromEntries(
-    Object.entries(command.bonuses).filter(([, n]) => n !== undefined && n > 0),
-  );
   return { ok: true };
 }
 

@@ -17,6 +17,9 @@ export const CARRY_AND_WEAPON_RULES = `【随身、持用与负担】
 - 留在家、车里、现场或别人处的物件先按实际位置取回，提到物品名称不等于已经拿到；不要代玩家存放、丢弃、出售或购买装备。
 - 携带负担以【当前状态】的代码分档为准，不自行估算公斤数或叠加一套负重。负担只在攀爬、潜行、钻缝、闪避、追逐等相关行动中按实情影响便利性与耗时；正常携带、对话和安全休息不凭空受罚，超载也不自动造成疲劳、受伤或失败。`;
 
+/** 静态数据表的渲染缓存：纯静态物品表不随回合变化，缓存拼好的字符串避免每轮重建 */
+const catalogRenderCache = new WeakMap<object, Map<boolean, string>>();
+
 /** 物品表：内容不随状态变，放在系统提示词末尾；模型给、拿、用物品时只能用这些 id。
  * 按类别分组，每行只写这件东西自己的特点，几十件也不太占篇幅 */
 export function catalogSection(
@@ -24,6 +27,11 @@ export function catalogSection(
   includeAbilities = true,
 ): string | undefined {
   if (data.items === undefined) return undefined;
+  const raw = data.items;
+  if (typeof raw === "object" && raw !== null) {
+    const hit = catalogRenderCache.get(raw)?.get(includeAbilities);
+    if (hit !== undefined) return hit;
+  }
   const groups = new Map<string, string[]>();
   for (const item of itemCatalog(data).values()) {
     if (item.id.startsWith("wpn:")) continue;
@@ -46,7 +54,7 @@ export function catalogSection(
     groups.set(group, [...(groups.get(group) ?? []), line]);
   }
   const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
-  return `【物品表】
+  const rendered = `【物品表】
 下表是物品模板，不是存在资格白名单。已有物件使用其稳定 id，正文用名称。剧情实际取得目录外物件时，item gain 同时写 definition（id、name、kind、ability 等定义）和 origin（来源/此前归属）；普通工具、信物用 misc，消耗品用 consumable。新定义只登记一次，以后保持同一 id，禁止重复获得同一个独立物件。拿起环境物件同样可以登记，不受是否正在交战限制。
 - 治疗品与手雷的 charges 是这份实物的余量；切场、休息和结束战斗均不补满。补充必须确实购买、制作或取得另一份物品。工具和信物使用后保留，只有 consumable 的 use 才消耗掉。
 - 独立物件交给已有卡的人时写 item lose，recipient 写人物 id；对方交还时写 item gain 同一物件 id，代码同步双方装备，不另发同一物件的 npcGear。
@@ -54,6 +62,15 @@ export function catalogSection(
 每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）${includeAbilities ? "：能力" : "；本轮相关能力另列在用户消息里。完整索引始终保留，未展开能力不代表物件不存在，也不能据此重复新建同名物件"}。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）。参考价不是成交价，交易以实际卖方、货源和已确认报价为准；不朽标签说明特殊来历，不禁止真实持有人转让，也不能据目录凭空购买。
 改装件只对实际装着它的那把武器生效（【当前状态】随身武器括号里写着的），例如使用装有消音器的枪才压低枪口爆鸣；装卸在界面上做，你不发指令。
 ${body}`;
+  if (typeof raw === "object" && raw !== null) {
+    let byMode = catalogRenderCache.get(raw);
+    if (!byMode) {
+      byMode = new Map();
+      catalogRenderCache.set(raw, byMode);
+    }
+    byMode.set(includeAbilities, rendered);
+  }
+  return rendered;
 }
 
 const WORDS = /零件|拆解|拆成零件|升级武器/;

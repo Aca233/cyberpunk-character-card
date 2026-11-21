@@ -28,6 +28,7 @@ import {
   openings,
   quickhacks,
   ripperdocs,
+  SERVICE_POINTS,
   sampleCharacters,
   shops,
   sidegigs,
@@ -423,8 +424,12 @@ for (const h of homes) {
 
 // 能买的公寓：id 不和开局住所撞，地点要在地点表里，来源要标原作依据、本作改编或待核对
 unique("开局住所和公寓", [...homes.map((h) => h.id), ...apartments.map((a) => a.id)]);
+const apartmentLocations = new Set<string>([
+  ...locationIds,
+  ...SERVICE_POINTS.map((p) => `poi:${p.id}`),
+]);
 for (const a of apartments) {
-  refs(`公寓 ${a.id}`, [a.location], locationIds, "地点");
+  refs(`公寓 ${a.id}`, [a.location, ...(a.poiIds ?? [])], apartmentLocations, "地点");
   if (!/原作依据|本作改编|待核对/.test(a.source))
     errors.push(`公寓 ${a.id}：来源要标原作依据、本作改编或待核对`);
 }

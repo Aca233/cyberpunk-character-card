@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import type { WorldClockState } from "../world";
 import { npcActions } from "./actions";
 import {
   applyNpc,
@@ -6,6 +7,7 @@ import {
   applyOffscreenDeath,
   applyOffscreenDoing,
   editNpcMemory,
+  moveFollowingNpcs,
   seedNpc,
 } from "./apply";
 import { applyNpcCondition } from "./body";
@@ -25,6 +27,7 @@ import {
   NpcBehaviorSchema,
   NpcChromeSchema,
   type NpcCommand,
+  NpcCompanionSchema,
   NpcConditionSchema,
   NpcDeathSchema,
   NpcGearSchema,
@@ -50,9 +53,10 @@ import { npcSections } from "./sections";
 import { npcStatus } from "./status";
 import { npcsView } from "./view";
 
-/** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、生死和位置、血量装备义体人性；路人不建卡 */
+/** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、同行状态、生死和位置、装备义体人性；路人不建卡 */
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   id: "npc",
+  dependsOn: ["world"],
   state: NpcStateSchema,
   initial: () => ({ npcs: {}, seedTags: {} }),
   commands: {
@@ -76,6 +80,7 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcHumanity: NpcHumanitySchema,
     npcScan: NpcScanSchema,
     npcBehavior: NpcBehaviorSchema,
+    npcCompanion: NpcCompanionSchema,
   },
   proposals: {
     affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity },
@@ -107,6 +112,12 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
       return applyOffscreenDoing(draft, command, ctx.now);
     }
     return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
+  },
+  on: {
+    "world.arrived": (draft, ctx) => {
+      const loc = ctx.read<WorldClockState>("world").location ?? null;
+      moveFollowingNpcs(draft, loc, ctx.now);
+    },
   },
   rules: [npcRules, adultServicesRules],
   // 名字格和档案里的「扫描」按钮（计划第十二节第 14 条）

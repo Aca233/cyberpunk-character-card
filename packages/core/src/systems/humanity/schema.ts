@@ -4,11 +4,15 @@ import { z } from "zod";
 export const HUMANITY_MAX = 100;
 export const ToleranceSchema = z.enum(["low", "normal", "high"]);
 export type Tolerance = z.infer<typeof ToleranceSchema>;
-/** 角色创建预览使用的资料系数；不参与运行时义体或精神结算。 */
-export const TOLERANCE_FACTOR: Readonly<Record<Tolerance, number>> = {
-  low: 1.3,
-  normal: 1,
-  high: 0.7,
+export const TOLERANCE_LABELS: Readonly<Record<Tolerance, string>> = {
+  low: "低耐受",
+  normal: "普通",
+  high: "高耐受",
+};
+export const TOLERANCE_EFFECTS: Readonly<Record<Tolerance, string>> = {
+  low: "神经耐受较低：面对高烈度战斗、连续加速过载、剧痛排异或精神创伤时更易浮现感知失真与神经症状",
+  normal: "神经耐受普通：常态下义体同步稳定，持续高压或创伤刺激下仍可能出现神经症状",
+  high: "神经耐受较高：对义体排异与高压刺激抗性更强，常规过载不易立刻引发解离或失控",
 };
 export const NeuralStageSchema = z.enum(["stable", "detached", "unstable", "edge", "crisis"]);
 export type HumanityStage = z.infer<typeof NeuralStageSchema>;

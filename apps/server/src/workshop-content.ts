@@ -10,7 +10,9 @@ import {
   shops,
 } from "@cp/content";
 import {
+  customCyberwareDefs,
   namespaceWorkshopPack,
+  type StartCyberware,
   type WorkshopCatalogIndex,
   type WorkshopPack,
   workshopEntityPackId,
@@ -70,14 +72,20 @@ function withRipperdocListings(
   });
 }
 
-/** 每份新存档基于自己冻结的内容包快照建立运行时目录。 */
-export function workshopRuntime(packs: readonly WorkshopPack[]) {
+/** 每份新存档基于自己冻结的内容包快照建立运行时目录（并注入角色自包含自定义义体）。 */
+export function workshopRuntime(
+  packs: readonly WorkshopPack[],
+  extraCyberware?: readonly StartCyberware[],
+) {
   const expanded = packs.map(namespaceWorkshopPack);
   const modules = expanded.flatMap((pack) => pack.modules);
   const acquaintances = expanded.flatMap((pack) => pack.acquaintances);
   const customNpcs = expanded.flatMap((pack) => pack.npcs);
   const customItems = expanded.flatMap((pack) => pack.items);
-  const customCyberware = expanded.flatMap((pack) => pack.cyberware);
+  const packCyberware = expanded.flatMap((pack) => pack.cyberware);
+  const existingCwIds = new Set([...cyberware, ...packCyberware].map((c) => c.id));
+  const snapshotCyberware = customCyberwareDefs(extraCyberware, existingCwIds);
+  const customCyberware = [...packCyberware, ...snapshotCyberware];
   const customBraindances = expanded.flatMap((pack) => pack.braindances);
   const customChipContents = expanded.flatMap((pack) => pack.chipContents);
   const shopListings = expanded.flatMap((pack) => pack.shopListings);

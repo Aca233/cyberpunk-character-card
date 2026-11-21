@@ -18,6 +18,9 @@ reference/
 tools/evals/results/
 tools/evals/drafts/
 
+# 本地宣传图与生成预览
+promo-images/
+
 # Playwright
 test-results/
 playwright-report/

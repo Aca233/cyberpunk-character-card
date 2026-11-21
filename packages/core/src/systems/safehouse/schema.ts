@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { ItemDefSchema } from "../inventory";
 
+/** 住所产权类型：租住（周期交租，逾期断水电锁门）或自有买断（免房租） */
+export const HomeTenureSchema = z.enum(["rented", "owned"]);
+export type HomeTenure = z.infer<typeof HomeTenureSchema>;
+
+/** 租住公寓默认账单周期（30 天）与宽限期（3 天），单位为游戏分钟 */
+export const RENT_DEFAULT_PERIOD_DAYS = 30;
+export const RENT_GRACE_DAYS = 3;
+export const RENT_REMIND_BEFORE_DAYS = 3;
+
 /** 开局住所表的一条：按出身模块 id 给；origin 写 default 的是没对上时用的。数据在 content 包的 safehouses.ts */
 export const HomeDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
@@ -11,18 +20,28 @@ export const HomeDefSchema = z.object({
   name: z.string().min(1).max(24),
   /** 地点表里的 id */
   location: z.string().min(1),
+  /** 与此住所连通的地图服务点（如 poi:v_room），在这些入口也视为身处住所 */
+  poiIds: z.array(z.string().min(1)).optional(),
+  /** 产权形态：H10 胶囊公寓为租住（rented），恶土拖车与买断公寓为自有（owned） */
+  tenure: HomeTenureSchema.default("owned"),
+  /** 租住公寓每期租金与水电物业费（欧元） */
+  rentAmount: z.number().int().min(0).optional(),
+  /** 租住公寓账单周期（天），默认 30 天 */
+  rentPeriodDays: z.number().int().min(1).max(90).optional(),
   note: z.string().min(1).max(120),
   source: z.string().min(1),
 });
 export type HomeDef = z.infer<typeof HomeDefSchema>;
 export const HomeCatalogSchema = z.array(HomeDefSchema);
 
-/** 能买下的公寓：一次付清，不收房租；人在那个地点时在界面上买。数据在 content 包的 safehouses.ts */
+/** 能买下的公寓：一次付清，不收房租；人在对应地点或出租/公寓 POI 时均可购置。数据在 content 包的 safehouses.ts */
 export const ApartmentDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   name: z.string().min(1).max(24),
   /** 地点表里的 id */
   location: z.string().min(1),
+  /** 对应的地图服务点（rent / apartment POI，如 poi:japantown、poi:dlc6_apart_wbr_jpn） */
+  poiIds: z.array(z.string().min(1)).optional(),
   price: z.number().int().min(1000).max(500_000),
   note: z.string().min(1).max(120),
   source: z.string().min(1),
@@ -35,6 +54,13 @@ export const HomeSchema = z.object({
   name: z.string().min(1),
   location: z.string().min(1),
   since: z.number().int(),
+  tenure: HomeTenureSchema.default("owned"),
+  rentAmount: z.number().int().min(0).optional(),
+  rentPeriodDays: z.number().int().min(1).max(90).optional(),
+  /** 本期房租水电缴清截止时刻（游戏分钟）；租住住所必填，自有住所省略 */
+  rentPaidUntil: z.number().int().optional(),
+  /** 是否因欠租超宽限期被物业电子锁锁门并停水电 */
+  locked: z.boolean().default(false),
 });
 export type Home = z.infer<typeof HomeSchema>;
 
@@ -92,13 +118,20 @@ export const HomeCommandSchema = z
   );
 export type HomeCommand = z.infer<typeof HomeCommandSchema>;
 
-/** 只能由代码发出：建档时给开局住所或界面买房 */
+/** 只能由代码发出：建档时给开局住所、界面买房或缴纳租住房租解锁门禁 */
 export const SafehouseInternalSchemas = {
   "safehouse.seed": z.object({
     type: z.literal("safehouse.seed"),
     id: z.string().min(1),
     name: z.string().min(1),
     location: z.string().min(1),
+    tenure: HomeTenureSchema.optional(),
+    rentAmount: z.number().int().min(0).optional(),
+    rentPeriodDays: z.number().int().min(1).max(90).optional(),
+  }),
+  "safehouse.payRent": z.object({
+    type: z.literal("safehouse.payRent"),
+    id: z.string().min(1),
   }),
 };
 export type SafehouseInternal = z.infer<

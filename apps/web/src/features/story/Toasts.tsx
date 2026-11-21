@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
 import { Asset, NineSlice } from "../../ui/Asset";
 import styles from "./story.module.css";
 import type { Toast } from "./view";
 
-const SHOW_MS = 4500;
-const LEAVE_MS = 200;
+const TONE_TINT: Readonly<Record<Toast["tone"], string>> = {
+  good: "var(--cp-success)",
+  bad: "var(--cp-danger)",
+  info: "var(--cp-cyan)",
+};
 
 function ToastItem({
   toast,
@@ -13,31 +15,12 @@ function ToastItem({
   readonly toast: Toast;
   readonly onDone: (key: string) => void;
 }) {
-  const [leaving, setLeaving] = useState(false);
-
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const leaveTimer = reduce
-      ? null
-      : window.setTimeout(() => setLeaving(true), Math.max(0, SHOW_MS - LEAVE_MS));
-    const doneTimer = window.setTimeout(() => onDone(toast.key), SHOW_MS);
-    return () => {
-      if (leaveTimer !== null) window.clearTimeout(leaveTimer);
-      window.clearTimeout(doneTimer);
-    };
-  }, [toast.key, onDone]);
-  const tint =
-    toast.tone === "good"
-      ? "var(--cp-success)"
-      : toast.tone === "bad"
-        ? "var(--cp-danger)"
-        : "var(--cp-yellow)";
   return (
-    <li className={styles.toast} data-tone={toast.tone} data-leaving={leaving || undefined}>
-      {/* 底和托架都是原作素材（用户定的换框对照表，计划第十二节第 9 条）；托架上下各留 12 原图像素不拉伸 */}
+    <li className={styles.toast} data-tone={toast.tone}>
+      {/* 底和托架沿用原作素材，常态显示在右侧，点按即收起 */}
       <NineSlice
         id="notify.itemCellBg"
-        tint="rgb(14 14 23 / 85%)"
+        tint="var(--cp-surface-raised)"
         slice={30}
         className={styles.toastBg}
       />
@@ -47,16 +30,22 @@ function ToastItem({
         slice={[12, 0, 12, 0]}
         className={styles.toastBracket}
       />
-      <Asset id={toast.icon} tint={tint} height={22} />
-      <span>{toast.text}</span>
+      <button
+        type="button"
+        className={styles.toastBtn}
+        title="点击关闭通知"
+        onClick={() => onDone(toast.key)}
+      >
+        <Asset id={toast.icon} tint={TONE_TINT[toast.tone]} height={20} />
+        <span className={styles.toastText}>{toast.text}</span>
+      </button>
     </li>
   );
 }
 
-/** D 系统通知最多同时几条（计划第九节），更早的还在队列里等着到点消失，Z 通知记录里都能翻到 */
-const SHOW_MAX = 3;
+/** 常驻在右侧追踪下方展示，逐条点击即消失；队列最多保留 6 条，超出后仅显示最新几条 */
+const SHOW_MAX = 6;
 
-/** D 系统通知：接在 C 追踪下面，几秒后自己消失 */
 export function Toasts({
   toasts,
   onDone,

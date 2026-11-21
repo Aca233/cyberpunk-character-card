@@ -61,14 +61,12 @@ const STORY = [
 
 /** 演示选项：形状照投影里的 offers.choices，交给正式剧情页的 ChoiceList 画 */
 const CHOICES: readonly Choice[] = [
-  { text: "我就是来送货的。", gate: null, checkId: "demo.1", source: null },
+  { text: "我就是来送货的。", source: null },
   {
     text: "先看看那台终端。",
-    gate: null,
-    checkId: null,
     source: "黑客专长",
   },
-  { text: "（看向那个穿夹克的人）", gate: null, checkId: null, source: "过往：街头小子" },
+  { text: "（看向那个穿夹克的人）", source: "过往：街头小子" },
 ];
 
 /** 舞台按 1920×1080 画，再整体缩放到窗口 */

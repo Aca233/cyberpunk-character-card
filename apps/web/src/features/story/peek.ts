@@ -24,11 +24,10 @@ export interface Expand {
 export type SetExpand = Dispatch<SetStateAction<Expand | null>>;
 
 /**
- * 鼠标进块这么久就展开（用户嫌响应慢，计划第十二节第 4 条）：从进块开始算，在块里移动不再重新计时；
- * 一路快速划过去（不到 90ms 就离开）照样不弹
+ * 鼠标停稳 180ms 后再预览展开，防止掠过屏幕两侧误触；点击和快捷键依然 0ms 瞬开
  */
-const OPEN_MS = 90;
-const CLOSE_MS = 300;
+const OPEN_MS = 180;
+const CLOSE_MS = 280;
 /** 最后一次在输入框里按键之后多久之内算「正在打字」 */
 const TYPING_MS = 800;
 

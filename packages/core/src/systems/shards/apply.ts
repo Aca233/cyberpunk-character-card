@@ -237,22 +237,34 @@ export function applyChip(
       const chipState = behaviorDevice
         ? ctx.read<CyberwareState>("cyberware").behaviorChips?.[behaviorDevice]
         : undefined;
-      const stillHasBehavior = draft.slots.some(
+      const fallbackBehavior = draft.slots.find(
         (slot) => catalog.get(slot.contentId)?.category === "behavior",
       );
       if (
         behaviorDevice &&
         chipState?.mode === "protocol" &&
-        !stillHasBehavior &&
         (chipState.carrier === null || chipState.carrier === command.carrier)
       ) {
-        emit.push({
-          type: "cyberware.behavior",
-          device: behaviorDevice,
-          action: "mode",
-          mode: "off",
-          reason: `从个人神经槽拔出行为协议芯片《${title}》`,
-        });
+        if (fallbackBehavior) {
+          const nextContent = catalog.get(fallbackBehavior.contentId);
+          emit.push({
+            type: "cyberware.behavior",
+            device: behaviorDevice,
+            action: "mode",
+            mode: "protocol",
+            protocol: nextContent?.protocol ?? nextContent?.title ?? fallbackBehavior.contentId,
+            carrier: fallbackBehavior.carrier,
+            reason: `拔出《${title}》，行为芯片切换为仍在槽内的《${nextContent?.title ?? fallbackBehavior.contentId}》`,
+          });
+        } else {
+          emit.push({
+            type: "cyberware.behavior",
+            device: behaviorDevice,
+            action: "mode",
+            mode: "off",
+            reason: `从个人神经槽拔出行为协议芯片《${title}》`,
+          });
+        }
       }
     }
     return {
@@ -383,6 +395,17 @@ export function applyChip(
           ok: false,
           reason:
             "运行行为协议芯片需要先在义体医生处安装完好的行为芯片植入体（doll-behavior-chip）",
+        };
+      }
+      if (
+        draft.slots.some(
+          (slot) =>
+            chipContentCatalog(ctx.data, draft).get(slot.contentId)?.category === "behavior",
+        )
+      ) {
+        return {
+          ok: false,
+          reason: "行为芯片植入体一次只能加载一块行为协议芯片，请先 unequip 拔出当前行为芯片再换装",
         };
       }
       emit.push({

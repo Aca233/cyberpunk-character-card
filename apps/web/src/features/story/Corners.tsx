@@ -23,7 +23,6 @@ import {
   NpcPortrait,
   Profile,
   profileTone,
-  type SquadMember,
   threatOfHumanity,
 } from "./Profile";
 import { type Expand, type SetExpand, usePeek } from "./peek";
@@ -368,7 +367,11 @@ export function BioMonitor({
                 data-portrait={portraitId ? true : undefined}
                 title={`${character.name ?? "宿主"} · 街头名声 ${character.credTier}：${character.credWorld}`}
               >
-                <NineSlice id="map.filterCellBg" tint="rgb(14 10 16 / 86%)" slice={CELL_SLICE} />
+                <NineSlice
+                  id="map.filterCellBg"
+                  tint="var(--cp-surface-strong)"
+                  slice={CELL_SLICE}
+                />
                 {portraitId ? (
                   <GeneratedImage
                     imageId={portraitId}
@@ -526,8 +529,8 @@ type Fixer = View["jobs"]["fixers"][number];
 
 interface PersonBadge {
   readonly label: string;
-  readonly tint: string;
-  readonly lightInk?: boolean;
+  readonly tone: "cyan" | "yellow" | "red" | "danger";
+  readonly solid?: boolean;
 }
 
 function isNestedInteractive(target: EventTarget | null, currentTarget: EventTarget): boolean {
@@ -541,28 +544,27 @@ function isNestedInteractive(target: EventTarget | null, currentTarget: EventTar
 function personBadges(
   person: Npc,
   fixer: Fixer | undefined,
-  squad: SquadMember | undefined,
   foe: CombatFoe | undefined,
 ): PersonBadge[] {
   const badges: PersonBadge[] = [];
   if (foe) {
-    badges.push({ label: foe.stateLabel, tint: "var(--cp-danger)", lightInk: true });
+    badges.push({ label: foe.stateLabel, tone: "danger", solid: true });
   }
   if (person.nemesis && !person.nemesis.ended) {
-    badges.push({ label: "宿敌", tint: "var(--cp-red)", lightInk: true });
+    badges.push({ label: "宿敌", tone: "red", solid: true });
   }
-  if (squad) {
-    badges.push({ label: "小队", tint: "var(--cp-yellow)" });
+  if (person.following) {
+    badges.push({ label: "同行", tone: "yellow" });
   }
   if (fixer) {
-    badges.push({ label: "中间人", tint: "var(--cp-yellow)" });
+    badges.push({ label: "中间人", tone: "yellow" });
   }
   const scanChrome = person.body?.scan?.chrome ?? [];
   if (scanChrome.some((c) => c.netTag === "deck")) {
-    badges.push({ label: "接入仓", tint: "var(--cp-cyan)" });
+    badges.push({ label: "接入仓", tone: "cyan" });
   }
   if (scanChrome.some((c) => c.netTag === "selfIce")) {
-    badges.push({ label: "自我 ICE", tint: "var(--cp-yellow)" });
+    badges.push({ label: "自我 ICE", tone: "yellow" });
   }
   // 具象创口在 .personWound 单独一行展示部位与原因；仅当只有模糊等级时兜底用小牌提示
   const hasDetailedWounds = (person.body?.injuries?.length ?? 0) > 0;
@@ -571,32 +573,45 @@ function personBadges(
     const high = wound.threat === "high";
     badges.push({
       label: wound.badge,
-      tint: high ? "var(--cp-danger)" : "var(--cp-yellow)",
-      lightInk: high,
+      tone: high ? "danger" : "yellow",
+      solid: high,
     });
   }
   return badges.slice(0, 3);
+}
+
+/** 展开某人时顶部快切条里的目标项 */
+interface QuickSwitchTarget {
+  readonly id: string;
+  readonly name: string;
+  readonly tone: "hostile" | "nemesis" | "ally" | undefined;
 }
 
 /** S 里的一个人：鼠标停在名字格上展开人物档案，点击固定/取消固定 */
 function PresentPerson({
   person,
   fixer,
-  squad,
   foe,
   index,
   scan,
+  hasOptics,
   peek,
+  switchTargets,
   onScan,
+  onCompanion,
+  onDraftAction,
 }: {
   readonly person: Npc;
   readonly fixer?: Fixer | undefined;
-  readonly squad?: SquadMember | undefined;
   readonly foe?: CombatFoe | undefined;
   readonly index: number;
   readonly scan: boolean;
+  readonly hasOptics: boolean;
   readonly peek: PeekState;
+  readonly switchTargets: readonly QuickSwitchTarget[];
   readonly onScan?: ((id: string) => void) | undefined;
+  readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const s = person.body?.scan ?? null;
   const injuries = person.body?.injuries ?? [];
@@ -606,7 +621,7 @@ function PresentPerson({
   const open = p.open && !scan;
   // 名字格展开时加宽：收起时等档案收完再缩回原宽，不在收到一半时把档案挤成窄条
   const wideOn = useLinger(open);
-  const tone = profileTone(person, squad, foe);
+  const tone = profileTone(person, foe);
   const subLabel = foe
     ? [
         foe.gang ?? (person.met ? person.role : "敌对目标"),
@@ -619,19 +634,28 @@ function PresentPerson({
       : person.nemesis
         ? "交过手 · 底细不明"
         : "底细不明";
-  const badges = personBadges(person, fixer, squad, foe);
+  const badges = personBadges(person, fixer, foe);
   const humanityThreat = s ? threatOfHumanity(s.humanityStage) : undefined;
-  const scanAlert = Boolean(foe) || wound.threat === "high" || humanityThreat === "high";
-  const scanStatusText = foe
-    ? injuries.length > 0
-      ? `${foe.stateLabel} · ${wound.headline}`
-      : wound.badge
-        ? `${foe.stateLabel} · ${wound.badge}`
-        : foe.stateLabel
-    : injuries.length > 0
-      ? wound.headline
-      : (wound.badge ?? (person.alive ? "存活" : "死亡"));
-  const scanStatusThreat = foe || wound.threat === "high" ? "high" : wound.threat;
+  const scanAlert =
+    Boolean(foe) || wound.threat === "high" || humanityThreat === "high" || s?.threat === "high";
+  const scanStatusText = s
+    ? s.threatLabel
+    : foe
+      ? injuries.length > 0
+        ? `${foe.stateLabel} · ${wound.headline}`
+        : wound.badge
+          ? `${foe.stateLabel} · ${wound.badge}`
+          : foe.stateLabel
+      : injuries.length > 0
+        ? wound.headline
+        : (wound.badge ?? (person.alive ? "存活" : "死亡"));
+  const scanStatusThreat = s ? s.threat : foe || wound.threat === "high" ? "high" : wound.threat;
+  const netThreat =
+    s?.netStatus === "open"
+      ? "low"
+      : s?.netStatus === "selfIce" || s?.netStatus === "netrunner"
+        ? "high"
+        : undefined;
   const scanWoundText =
     injuries.length > 0
       ? injuries
@@ -646,26 +670,27 @@ function PresentPerson({
           .map((c) => c.name)
           .join(" / ")}${s.chrome.length > 2 ? ` +${s.chrome.length - 2}` : ""}`
       : "";
+  const primaryTip = s?.tips[0] ?? null;
   const togglePin = () => {
     if (p.pinned) p.close();
     else peek.setExpand({ id: `person:${person.id}`, pinned: true });
   };
   return (
-    // biome-ignore lint/a11y/useSemanticElements: 名字格是列表项，里面套着九宫格和展开面板，不能换成 button
-    <li
+    // biome-ignore lint/a11y/useSemanticElements: 名字格里套着九宫格和展开面板，不能换成 button
+    <div
       className={styles.person}
       style={{ "--i": index } as CSSProperties}
       data-open={wideOn || undefined}
       data-active={open || undefined}
       data-pinned={p.pinned || undefined}
       data-tone={tone}
-      // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: 名字格本身就是可点的锁定框
       role="button"
       tabIndex={0}
       aria-expanded={open}
       aria-label={`${person.name}，${subLabel}${wound.detail ? `，${wound.detail}` : ""}，点击${p.pinned ? "取消固定" : "固定展开"}，按 Esc 收起`}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
+        if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) return;
         togglePin();
       }}
       onKeyDown={(event) => {
@@ -679,13 +704,13 @@ function PresentPerson({
       <BlockShadow />
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--person-bg, rgb(14 14 23 / 88%))"
+        tint="var(--person-bg, var(--cp-surface-raised))"
         slice={CELL_SLICE}
       />
       <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
       <NineSlice
         id="panel.glowLeft"
-        tint="var(--person-glow, rgb(94 246 255 / 14%))"
+        tint="var(--person-glow, rgb(94 246 255 / 12%))"
         slice={[16, 20, 16, 20]}
         className={styles.personGlow}
       />
@@ -695,26 +720,18 @@ function PresentPerson({
         slice={0}
         className={styles.personRail}
       />
-      <NineSlice
-        id="cyber.cellTexture"
-        tint="var(--person-circuit, rgb(94 246 255 / 7%))"
-        slice={0}
-        className={styles.personCircuit}
-      />
-      <span
-        className={styles.personGrid}
-        style={{ backgroundImage: cssUrl("fx.grid") }}
-        aria-hidden
-      />
       {/* 常态的名字格：折叠时隐藏并滑入完整档案，避免头像和名字上下重复 */}
       <div className={styles.personSummary}>
         <div className={`${styles.inner} ${styles.personRow}`}>
-          <NpcPortrait
-            npc={person}
-            className={styles.personFace}
-            artClassName={styles.personFaceArt}
-            line="var(--face-line, var(--person-line))"
-          />
+          <span className={styles.personFaceWrap}>
+            <NpcPortrait
+              npc={person}
+              className={styles.personFace}
+              artClassName={styles.personFaceArt}
+              line="var(--face-line, var(--person-line))"
+            />
+            {s && <i className={styles.personScanDot} title="已通过义眼扫描" aria-hidden />}
+          </span>
           <span className={styles.personText}>
             <span className={styles.personHead}>
               <b className={styles.personName}>{person.name}</b>
@@ -734,9 +751,9 @@ function PresentPerson({
                   <span
                     key={b.label}
                     className={styles.personBadge}
-                    data-ink={b.lightInk ? "light" : undefined}
+                    data-tone={b.tone}
+                    data-solid={b.solid || undefined}
                   >
-                    <NineSlice id="cyber.gaugeLabel" tint={b.tint} slice={4} />
                     <b>{b.label}</b>
                   </span>
                 ))}
@@ -745,82 +762,220 @@ function PresentPerson({
           </span>
           <span className={styles.personSide}>
             {person.met && person.affinity !== 0 && (
-              <>
-                <span
-                  className={styles.personAffinity}
-                  data-tone={affinityTone(person.affinity)}
-                  title={`好感 ${formatAffinity(person.affinity)}`}
-                >
+              <span
+                className={styles.personAffinityWrap}
+                title={`好感 ${formatAffinity(person.affinity)}`}
+              >
+                <span className={styles.personAffinity} data-tone={affinityTone(person.affinity)}>
                   {formatAffinity(person.affinity)}
                 </span>
                 <AffinityMeter affinity={person.affinity} className={styles.personMeter} />
-              </>
+              </span>
             )}
-            <span
-              className={styles.personState}
-              data-pinned={p.pinned || undefined}
-              data-scanned={Boolean(s) || undefined}
-            >
-              {p.pinned ? "已固定" : s ? "已扫 ›" : "档案 ›"}
+            <span className={styles.personActions}>
+              {hasOptics && onScan && !s && (
+                <button
+                  type="button"
+                  className={styles.personIconBtn}
+                  title={`义眼扫描 ${person.name}`}
+                  aria-label={`义眼扫描 ${person.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onScan(person.id);
+                  }}
+                >
+                  <Asset id="interaction.scan" tint="currentColor" height={12} />
+                </button>
+              )}
+              {onDraftAction && (
+                <button
+                  type="button"
+                  className={styles.personIconBtn}
+                  title={
+                    foe
+                      ? `向 ${person.name} 发起战术行动`
+                      : person.following
+                        ? `向同行伙伴 ${person.name} 示意配合`
+                        : `与 ${person.name} 互动`
+                  }
+                  aria-label={`与 ${person.name} 互动`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDraftAction(
+                      foe
+                        ? `盯紧 ${person.name}，`
+                        : person.following
+                          ? `向同行的 ${person.name} 示意配合：`
+                          : `转向 ${person.name}，`,
+                    );
+                  }}
+                >
+                  ▸
+                </button>
+              )}
             </span>
           </span>
         </div>
       </div>
       <span className={styles.scanCard} data-alert={scanAlert || undefined} aria-hidden={!scan}>
-        <NineSlice id="map.tooltipBg" tint="rgb(10 10 18 / 96%)" slice={TOOLTIP_SLICE} />
+        <NineSlice id="map.tooltipBg" tint="var(--cp-panel-strong)" slice={TOOLTIP_SLICE} />
         <NineSlice
           id="map.tooltipFg"
           tint={scanAlert ? "var(--cp-danger)" : "var(--cp-cyan)"}
           slice={TOOLTIP_SLICE}
         />
+        <span
+          className={styles.scanLines}
+          style={{ backgroundImage: cssUrl("fx.scanlines") }}
+          aria-hidden
+        />
         <span className={`${styles.inner} ${styles.scanInner}`}>
           <span className={styles.scanTop}>
-            <em>{s ? "KIROSHI // 已扫描" : "KIROSHI // 未扫描"}</em>
-            <em data-threat={scanStatusThreat}>{scanStatusText}</em>
+            <em className={styles.scanBrand}>{s ? "KIROSHI // 已建档" : "KIROSHI // 未扫描"}</em>
+            <em className={styles.scanThreatPill} data-threat={scanStatusThreat}>
+              {scanStatusText}
+            </em>
           </span>
           {scanWoundText && (
             <span className={styles.scanWound} data-threat={wound.threat}>
-              创伤：{scanWoundText}
+              创伤 · {scanWoundText}
             </span>
           )}
-          <span className={styles.scanMeta}>
-            {s ? (
-              <>
-                义体 <em>{s.chrome.length}</em> 件{chromePreview && ` (${chromePreview})`} · 神经{" "}
-                <em data-threat={humanityThreat}>{s.humanityStage}</em>
-              </>
-            ) : (
-              <>{person.met ? "已建档" : "底细不明"} · 悬停或点击人物栏后扫描</>
-            )}
-          </span>
+          {s ? (
+            <>
+              <span className={styles.scanGrid}>
+                <span className={styles.scanCell}>
+                  <small>骇入链路</small>
+                  <em data-threat={netThreat}>{s.netLabel}</em>
+                </span>
+                <span className={styles.scanCell}>
+                  <small>神经稳态</small>
+                  <em data-threat={humanityThreat}>{s.humanityStage}</em>
+                </span>
+              </span>
+              <span className={styles.scanMeta}>
+                植入体 <em>{s.chrome.length}</em> 件{chromePreview && ` · ${chromePreview}`}
+              </span>
+              {primaryTip && <span className={styles.scanTip}>{primaryTip}</span>}
+              {onDraftAction && (
+                <span className={styles.scanActions}>
+                  <button
+                    type="button"
+                    className={styles.scanQuickBtn}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const lead = primaryTip ?? `${s.threatLabel}，${s.netLabel}`;
+                      onDraftAction(`利用义眼刚扫出的 ${person.name} 情报（${lead}），`);
+                    }}
+                  >
+                    按情报行动
+                  </button>
+                </span>
+              )}
+            </>
+          ) : (
+            <span className={styles.scanUnscannedRow}>
+              <span className={styles.scanMeta}>
+                {hasOptics
+                  ? `${person.met ? "已建档" : "底细不明"} · 立即透视义体与防线`
+                  : "未装完好义眼 · 无法扫描"}
+              </span>
+              {hasOptics && onScan && (
+                <button
+                  type="button"
+                  className={styles.scanQuickBtn}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onScan(person.id);
+                  }}
+                >
+                  义眼扫描
+                </button>
+              )}
+            </span>
+          )}
         </span>
       </span>
-      {/* 瞄着谁就只看谁（用户定的）：不再带「联系人 / 所有人」页签，联系人列表去消息页看 */}
+      {/* 瞄着谁就只看谁：展开时隐藏其他列表项，页签+目标快切+关闭合为单行顶条 */}
       <Grow
         open={open}
-        title={
-          <span className={styles.personPeekTitle}>
-            <Asset id="fluff.code" tint="currentColor" height={10} />
-            <span>{`档案 // ${person.name}`}</span>
-          </span>
-        }
-        hint={p.pinned ? "已固定 · ESC / 再点收起" : "点击固定"}
+        head={null}
         line={
           tone === "hostile"
             ? "var(--cp-danger)"
             : tone === "nemesis"
               ? "var(--cp-red)"
-              : "var(--cp-cyan)"
+              : tone === "ally"
+                ? "var(--cp-yellow)"
+                : "var(--cp-cyan)"
         }
       >
-        <Profile npc={person} fixer={fixer} squad={squad} foe={foe} onScan={onScan} />
+        <Profile
+          npc={person}
+          fixer={fixer}
+          foe={foe}
+          embedded
+          topSlot={
+            <>
+              {switchTargets.length > 1 && (
+                <nav className={styles.personQuickSwitch} aria-label="切换在场目标">
+                  {switchTargets.map((target) => {
+                    const active = target.id === person.id;
+                    return (
+                      <button
+                        key={target.id}
+                        type="button"
+                        className={styles.personSwitchBtn}
+                        data-tone={target.tone}
+                        aria-current={active ? "true" : undefined}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!active) {
+                            peek.setExpand({ id: `person:${target.id}`, pinned: true });
+                          }
+                        }}
+                      >
+                        <i aria-hidden />
+                        <span>{target.name}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              )}
+              <button
+                type="button"
+                className={styles.personHeadBtn}
+                data-active={p.pinned || undefined}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  togglePin();
+                }}
+              >
+                <span>{p.pinned ? "关闭 · ESC" : "固定"}</span>
+              </button>
+            </>
+          }
+          onScan={hasOptics ? onScan : undefined}
+          onCompanion={onCompanion}
+          onDraftAction={onDraftAction}
+        />
       </Grow>
-    </li>
+    </div>
   );
 }
 
 /** 无独立人物卡但在交战中的场内敌手（杂兵或临时对手） */
-function PresentFoe({ foe, index }: { readonly foe: CombatFoe; readonly index: number }) {
+function PresentFoe({
+  foe,
+  index,
+  scan,
+  onDraftAction,
+}: {
+  readonly foe: CombatFoe;
+  readonly index: number;
+  readonly scan: boolean;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
+}) {
   const dead = foe.state === "dead" || foe.state === "fled";
   const sub = [
     foe.gang ?? "敌对目标",
@@ -828,18 +983,24 @@ function PresentFoe({ foe, index }: { readonly foe: CombatFoe; readonly index: n
   ]
     .filter(Boolean)
     .join(" · ");
+  const tierThreat =
+    foe.tier === "legend" || foe.tier === "elite"
+      ? "high"
+      : foe.tier === "veteran"
+        ? "even"
+        : "low";
   return (
-    <li className={styles.person} style={{ "--i": index } as CSSProperties} data-tone="hostile">
+    <div className={styles.person} style={{ "--i": index } as CSSProperties} data-tone="hostile">
       <BlockShadow />
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--person-bg, rgb(14 14 23 / 88%))"
+        tint="var(--person-bg, var(--cp-surface-raised))"
         slice={CELL_SLICE}
       />
       <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
       <NineSlice
         id="panel.glowLeft"
-        tint="var(--person-glow, rgb(255 0 60 / 20%))"
+        tint="var(--person-glow, rgb(255 0 60 / 18%))"
         slice={[16, 20, 16, 20]}
         className={styles.personGlow}
       />
@@ -851,10 +1012,12 @@ function PresentFoe({ foe, index }: { readonly foe: CombatFoe; readonly index: n
       />
       <div className={styles.personSummary}>
         <div className={`${styles.inner} ${styles.personRow}`}>
-          <span className={styles.personFace} data-dead={dead || undefined} aria-hidden>
-            <NineSlice id="map.filterCellBg" tint="rgb(24 10 14 / 86%)" slice={CELL_SLICE} />
-            <Asset id="portrait.unknown" className={styles.personFaceArt} />
-            <NineSlice id="map.filterCellFg" tint="var(--cp-danger)" slice={CELL_SLICE} />
+          <span className={styles.personFaceWrap}>
+            <span className={styles.personFace} data-dead={dead || undefined} aria-hidden>
+              <NineSlice id="map.filterCellBg" tint="rgb(24 10 14 / 86%)" slice={CELL_SLICE} />
+              <Asset id="portrait.unknown" className={styles.personFaceArt} />
+              <NineSlice id="map.filterCellFg" tint="var(--cp-danger)" slice={CELL_SLICE} />
+            </span>
           </span>
           <span className={styles.personText}>
             <span className={styles.personHead}>
@@ -864,62 +1027,183 @@ function PresentFoe({ foe, index }: { readonly foe: CombatFoe; readonly index: n
               {sub}
             </small>
             <span className={styles.personBadges}>
-              <span className={styles.personBadge} data-ink="light">
-                <NineSlice id="cyber.gaugeLabel" tint="var(--cp-danger)" slice={4} />
+              <span className={styles.personBadge} data-tone="danger" data-solid>
                 <b>{foe.stateLabel}</b>
+              </span>
+              <span
+                className={styles.personBadge}
+                data-tone={tierThreat === "high" ? "danger" : "yellow"}
+              >
+                <b>{foe.tierLabel}</b>
               </span>
             </span>
           </span>
           <span className={styles.personSide}>
-            <span className={styles.personState}>交战</span>
+            {!dead && onDraftAction ? (
+              <span className={styles.personActions}>
+                <button
+                  type="button"
+                  className={styles.personIconBtn}
+                  title={`盯紧 ${foe.name} 并行动`}
+                  aria-label={`盯紧 ${foe.name} 并行动`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDraftAction(`瞄准 ${foe.name}，`);
+                  }}
+                >
+                  ▸
+                </button>
+              </span>
+            ) : (
+              <span className={styles.personState}>{dead ? "脱离" : "交战"}</span>
+            )}
           </span>
         </div>
       </div>
-    </li>
+      <span className={styles.scanCard} data-alert={!dead || undefined} aria-hidden={!scan}>
+        <NineSlice id="map.tooltipBg" tint="var(--cp-panel-strong)" slice={TOOLTIP_SLICE} />
+        <NineSlice
+          id="map.tooltipFg"
+          tint={dead ? "var(--cp-cyan)" : "var(--cp-danger)"}
+          slice={TOOLTIP_SLICE}
+        />
+        <span
+          className={styles.scanLines}
+          style={{ backgroundImage: cssUrl("fx.scanlines") }}
+          aria-hidden
+        />
+        <span className={`${styles.inner} ${styles.scanInner}`}>
+          <span className={styles.scanTop}>
+            <em className={styles.scanBrand}>{"KIROSHI // 敌对目标"}</em>
+            <em className={styles.scanThreatPill} data-threat={tierThreat}>
+              {foe.tierLabel}
+            </em>
+          </span>
+          <span className={styles.scanMeta}>
+            状态 <em data-threat={dead ? "low" : "high"}>{foe.stateLabel}</em>
+            {foe.gang ? ` · ${foe.gang}` : ""}
+          </span>
+          {foe.carry.length > 0 && (
+            <span className={styles.scanTip}>
+              可拾取：{foe.carry.map((i) => i.name).join("、")}
+            </span>
+          )}
+        </span>
+      </span>
+    </div>
   );
 }
 
-/** S 在场的人：义眼叠加层。整合在场人物卡与交战敌手，按住 Tab 或点击顶栏切换扫描卡 */
+type PresentGroupKey = "hostile" | "companion" | "present";
+
+interface PresentEntry {
+  readonly group: PresentGroupKey;
+  readonly key: string;
+  readonly npc?: Npc | undefined;
+  readonly foe?: CombatFoe | undefined;
+}
+
+const PRESENT_GROUP_META: Readonly<
+  Record<PresentGroupKey, { readonly code: string; readonly label: string }>
+> = {
+  hostile: { code: "HOSTILE", label: "敌对交战" },
+  companion: { code: "ALLY", label: "同行伙伴" },
+  present: { code: "SCENE", label: "现场人员" },
+};
+
+/** S 在场的人：义眼叠加层。按敌对/同行/在场分组，整合人物档案与 Kiroshi 扫描卡 */
 export function Present({
   view,
   scan,
   peek,
   onScan,
+  onScanAll,
+  onScanEnv,
   onToggleScan,
+  onCompanion,
+  onDraftAction,
 }: {
   readonly view: View;
   readonly scan: boolean;
   readonly peek: PeekState;
-  /** 档案里的「扫描」按钮：点一下立刻用义眼扫，不调模型 */
+  /** 档案与扫描卡里的「扫描」按钮：点一下立刻用义眼扫，不调模型 */
   readonly onScan?: ((id: string) => void) | undefined;
+  /** 一键扫描全部未扫在场目标 */
+  readonly onScanAll?: (() => void) | undefined;
+  /** 用当前安装的义眼模型起草一次环境/埋伏/监控扫描行动 */
+  readonly onScanEnv?: (() => void) | undefined;
   /** 点击顶栏 TAB 按钮切换扫描视图 */
   readonly onToggleScan?: (() => void) | undefined;
+  /** 切换人物随行同行/暂别留守 */
+  readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  /** 按扫描情报生成输入框草稿 */
+  readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
-  const herePeople = view.npcs.filter((n) => n.here && n.alive);
   const foes = view.combat.active?.foes ?? [];
+  const foeOf = (n: Npc) => foes.find((f) => f.npc === n.id || f.id === n.id || f.name === n.name);
+  const herePeople = view.npcs.filter((n) => n.here && n.alive);
   const extraFoes = foes.filter(
     (f) => !herePeople.some((n) => f.npc === n.id || f.id === n.id || f.name === n.name),
   );
-  const totalCount = herePeople.length + extraFoes.length;
-  if (totalCount === 0) return null;
-  const people = herePeople.slice(0, PRESENT_MAX);
-  const shownExtraFoes = extraFoes.slice(0, Math.max(0, PRESENT_MAX - people.length));
-  const overflow = totalCount - people.length - shownExtraFoes.length;
-  const open = people.some((n) => peek.expand?.id === `person:${n.id}`);
+  const hostileEntries: PresentEntry[] = [
+    ...herePeople
+      .filter((n) => Boolean(foeOf(n)))
+      .map((n): PresentEntry => ({ group: "hostile", key: `npc:${n.id}`, npc: n, foe: foeOf(n) })),
+    ...extraFoes.map((f): PresentEntry => ({ group: "hostile", key: `foe:${f.id}`, foe: f })),
+  ];
+  const companionEntries: PresentEntry[] = herePeople
+    .filter((n) => !foeOf(n) && n.following)
+    .map((n): PresentEntry => ({ group: "companion", key: `npc:${n.id}`, npc: n }));
+  const regularEntries: PresentEntry[] = herePeople
+    .filter((n) => !foeOf(n) && !n.following)
+    .map((n): PresentEntry => ({ group: "present", key: `npc:${n.id}`, npc: n }));
+
+  const allEntries = [...hostileEntries, ...companionEntries, ...regularEntries];
+  const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken) ?? null;
+  const unscannedCount = herePeople.filter((n) => !n.body?.scan).length;
+  const totalCount = allEntries.length;
+  if (totalCount === 0 && !scan) return null;
+
+  const shownEntries = allEntries.slice(0, PRESENT_MAX);
+  const overflow = totalCount - shownEntries.length;
+  const distinctGroups = new Set(shownEntries.map((e) => e.group));
+  const showGroupHeaders = distinctGroups.size > 1 || hostileEntries.length > 0;
+  const open = shownEntries.some((e) => e.npc && peek.expand?.id === `person:${e.npc.id}`);
+  const switchTargets: readonly QuickSwitchTarget[] = shownEntries
+    .filter((e): e is PresentEntry & { readonly npc: Npc } => Boolean(e.npc))
+    .map((e) => ({
+      id: e.npc.id,
+      name: e.npc.name,
+      tone: profileTone(e.npc, e.foe),
+    }));
+
+  const summaryBits = [
+    hostileEntries.length > 0 ? `交战 ${hostileEntries.length}` : null,
+    companionEntries.length > 0 ? `同行 ${companionEntries.length}` : null,
+  ].filter(Boolean);
+
   return (
     <section
       className={`${styles.block} ${styles.present}`}
       data-layer="optics"
       data-scan={scan || undefined}
       data-open={open || undefined}
+      data-combat={hostileEntries.length > 0 || undefined}
       aria-label="在场的人"
     >
       <header className={styles.label}>
-        <Asset id="interaction.scan" tint="currentColor" height={18} />
-        <span>{scan ? "KIROSHI · 扫描中" : "在场目标"}</span>
-        <em className={styles.presentCount}>
-          {overflow > 0 ? `${people.length + shownExtraFoes.length}/${totalCount}` : totalCount}
-        </em>
+        <Asset id="interaction.scan" tint="currentColor" height={17} />
+        <span className={styles.labelTitle}>
+          {scan ? (intactEye ? `KIROSHI · ${intactEye.name}` : "未装完好义眼") : "在场目标"}
+        </span>
+        {totalCount > 0 && (
+          <em className={styles.presentCount}>
+            {overflow > 0 ? `${shownEntries.length}/${totalCount}` : totalCount}
+          </em>
+        )}
+        {summaryBits.length > 0 && !scan && (
+          <span className={styles.presentMeta}>{summaryBits.join(" · ")}</span>
+        )}
         <span
           className={styles.labelLine}
           style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
@@ -931,7 +1215,7 @@ export function Present({
             className={styles.labelScanBtn}
             data-active={scan || undefined}
             aria-pressed={scan}
-            title="点击或按住 Tab 扫描在场人物"
+            title="点击或按住 Tab 切换 Kiroshi 义眼扫描"
             onClick={onToggleScan}
           >
             {scan ? "SCAN ●" : "TAB"}
@@ -940,24 +1224,75 @@ export function Present({
           <kbd className={styles.labelHint}>{scan ? "SCAN" : open ? "ESC" : "TAB"}</kbd>
         )}
       </header>
-      <ul>
-        {people.map((n, i) => (
-          <PresentPerson
-            key={n.id}
-            person={n}
-            fixer={view.jobs.fixers.find((f) => f.id === n.id)}
-            squad={view.squad.members.find((m) => m.npc === n.id)}
-            foe={foes.find((f) => f.npc === n.id || f.id === n.id || f.name === n.name)}
-            index={i}
-            scan={scan}
-            peek={peek}
-            onScan={onScan}
-          />
-        ))}
-        {shownExtraFoes.map((f, i) => (
-          <PresentFoe key={f.id} foe={f} index={people.length + i} />
-        ))}
-      </ul>
+      {scan && !open && (
+        <div className={styles.scanToolbar}>
+          {intactEye ? (
+            <>
+              {unscannedCount > 0 && onScanAll && (
+                <button type="button" className={styles.scanToolbarBtn} onClick={onScanAll}>
+                  全扫目标（{unscannedCount}）
+                </button>
+              )}
+              {onScanEnv && (
+                <button type="button" className={styles.scanToolbarBtn} onClick={onScanEnv}>
+                  扫描环境 / 监控 / 伏兵
+                </button>
+              )}
+            </>
+          ) : (
+            <span className={styles.scanToolbarNote}>
+              未装完好义眼：前往义体医生安装或修复后解锁扫描
+            </span>
+          )}
+        </div>
+      )}
+      {totalCount > 0 && (
+        <ul className={styles.presentList}>
+          {shownEntries.map((entry, idx) => {
+            const prevGroup = idx > 0 ? shownEntries[idx - 1]?.group : null;
+            const renderGroupHeader = showGroupHeaders && entry.group !== prevGroup && !open;
+            const groupMeta = PRESENT_GROUP_META[entry.group];
+            const isSlotOpen = Boolean(entry.npc && peek.expand?.id === `person:${entry.npc.id}`);
+            return (
+              <li
+                key={entry.key}
+                className={styles.presentSlot}
+                data-open={isSlotOpen || undefined}
+              >
+                {renderGroupHeader && (
+                  <div className={styles.presentGroupHead} data-group={entry.group} aria-hidden>
+                    <em>{groupMeta.code}</em>
+                    <span>{groupMeta.label}</span>
+                    <i />
+                  </div>
+                )}
+                {entry.npc ? (
+                  <PresentPerson
+                    person={entry.npc}
+                    fixer={view.jobs.fixers.find((f) => f.id === entry.npc?.id)}
+                    foe={entry.foe}
+                    index={idx}
+                    scan={scan}
+                    hasOptics={Boolean(intactEye)}
+                    peek={peek}
+                    switchTargets={switchTargets}
+                    onScan={onScan}
+                    onCompanion={onCompanion}
+                    onDraftAction={onDraftAction}
+                  />
+                ) : entry.foe ? (
+                  <PresentFoe
+                    foe={entry.foe}
+                    index={idx}
+                    scan={scan}
+                    onDraftAction={onDraftAction}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {overflow > 0 && (
         <p className={styles.presentMore}>另有 {overflow} 人在场 · 全部人物见联系人</p>
       )}
@@ -1003,7 +1338,7 @@ export function Unread({
   const shown = items.filter((i) => i.n > 0);
   // 一直显示：这里就是消息与芯片的入口，读完了也要找得到
   const newest = view.phone.messages.find((m) => !m.read) ?? null;
-  const totalUnread = view.phone.unread + newsCount + view.shards.unread;
+  const totalUnread = view.phone.unread + unreadCalls + newsCount + view.shards.unread;
   const togglePin = () => {
     if (p.pinned) p.close();
     else peek.setExpand({ id: "unread", pinned: true });
@@ -1039,7 +1374,7 @@ export function Unread({
       {...p.bind}
     >
       <BlockShadow />
-      <NineSlice id="map.panelBg" tint="rgb(14 14 23 / 72%)" slice={PANEL_SLICE} />
+      <NineSlice id="map.panelBg" tint="var(--cp-surface)" slice={PANEL_SLICE} />
       <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={PANEL_SLICE} />
       <div className={`${styles.inner} ${styles.unreadInner}`}>
         <Grow
@@ -1142,16 +1477,32 @@ export function Zone({
   onMap,
   onShop,
   onRipperdoc,
+  onAutofixer,
+  onBuyHome,
+  onPayRent,
 }: {
   readonly view: View;
   readonly onMap: () => void;
   readonly onShop: (id: string) => void;
   readonly onRipperdoc: () => void;
+  readonly onAutofixer?: (() => void) | undefined;
+  readonly onBuyHome?: ((id: string) => void) | undefined;
+  readonly onPayRent?: ((id: string) => void) | undefined;
 }) {
   const { heat, stealth } = view;
   const bounty = heat.bounties.reduce((sum, b) => sum + b.reward, 0);
   const threats = [...view.threats].sort((a, b) => b.level - a.level);
   const shownThreats = threats.slice(0, ZONE_THREAT_MAX);
+  const homesForSaleHere = view.safehouse.forSale.filter((h) => !h.locked);
+  const homesNeedingRent = view.safehouse.homes.filter(
+    (h) => h.tenure === "rented" && (h.locked || h.rentDue),
+  );
+  const hasServices =
+    view.shops.length > 0 ||
+    Boolean(view.ripperdoc) ||
+    Boolean(view.travel.autofixer && onAutofixer) ||
+    (homesForSaleHere.length > 0 && Boolean(onBuyHome)) ||
+    (homesNeedingRent.length > 0 && Boolean(onPayRent));
   return (
     <div className={`${styles.block} ${styles.zone}`} data-layer="optics">
       {/* biome-ignore lint/a11y/useSemanticElements: 地点框里套着原作框和威胁列表，不能整个换成 button */}
@@ -1235,8 +1586,8 @@ export function Zone({
           </div>
         )}
       </div>
-      {(view.shops.length > 0 || view.ripperdoc) && (
-        <section className={styles.zoneServices} aria-label="当前地点商家">
+      {hasServices && (
+        <section className={styles.zoneServices} aria-label="当前地点服务与商家">
           {view.shops.map((shop) => (
             <ZoneServiceBar
               key={shop.id}
@@ -1256,13 +1607,42 @@ export function Zone({
               onClick={onRipperdoc}
             />
           )}
+          {view.travel.autofixer && onAutofixer && (
+            <ZoneServiceBar
+              icon="map.poi.autofixer"
+              name={view.travel.autofixer.name}
+              tag="购车终端"
+              onClick={onAutofixer}
+            />
+          )}
+          {onBuyHome &&
+            homesForSaleHere.map((home) => (
+              <ZoneServiceBar
+                key={home.id}
+                icon="map.poi.apartment"
+                name={home.name}
+                tag={`${home.price.toLocaleString("en-US")} €`}
+                onClick={() => onBuyHome(home.id)}
+              />
+            ))}
+          {onPayRent &&
+            homesNeedingRent.map((home) => (
+              <ZoneServiceBar
+                key={`rent-${home.id}`}
+                icon="map.poi.apartment"
+                name={`${home.name} · ${home.locked ? "缴租解锁" : "续缴房租"}`}
+                tag={`${(home.rentAmount ?? 1200).toLocaleString("en-US")} €`}
+                blackMarket={home.locked}
+                onClick={() => onPayRent(home.id)}
+              />
+            ))}
         </section>
       )}
     </div>
   );
 }
 
-/** C 追踪：统一展示在办事项/约定与附近可接动向；展开后适度加宽并切换待办/委托，children 是 D 系统通知 */
+/** C 追踪：统一展示在办事项/约定、临期账务与待接风声；展开后可直达地图定位、接单、缴租或写入行动框，children 是 D 系统通知 */
 export function Track({
   view,
   peek,
@@ -1278,24 +1658,28 @@ export function Track({
   const p = usePeek("track", peek.expand, peek.setExpand);
   const track = trackTelemetry(view);
   const rows = track.preview.slice(0, TRACK_MAX);
+  const totalShown = track.activeCount + track.offeredCount;
+  const idle = totalShown === 0;
   const statusPill =
     track.overdueCount > 0
       ? ({ tone: "bad", label: `超期 ${track.overdueCount}` } as const)
       : track.activeCount > 0
         ? ({ tone: "warn", label: `在办 ${track.activeCount}` } as const)
-        : ({ tone: "muted", label: "空闲" } as const);
+        : track.offeredCount > 0
+          ? ({ tone: "cyan", label: `待决 ${track.offeredCount}` } as const)
+          : ({ tone: "muted", label: "无待办" } as const);
   const togglePin = () => {
     if (p.pinned) p.close();
     else peek.setExpand({ id: "track", pinned: true });
   };
 
-  // 一直显示：手头只追真正揽下来的单子与约定
   return (
     <div
       className={`${styles.block} ${styles.track}`}
       data-layer="optics"
       data-open={p.open || undefined}
       data-pinned={p.pinned || undefined}
+      data-idle={idle || undefined}
     >
       {
         // biome-ignore lint/a11y/useSemanticElements: 追踪框里套着可展开详情，不能整个换成 button
@@ -1307,6 +1691,9 @@ export function Track({
           aria-label={`追踪，点击${p.pinned ? "取消固定" : "固定展开"}，按 J 切换，按 Esc 收起`}
           onClick={(event) => {
             if (isNestedInteractive(event.target, event.currentTarget)) return;
+            if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) {
+              return;
+            }
             togglePin();
           }}
           onKeyDown={(event) => {
@@ -1331,51 +1718,55 @@ export function Track({
               </span>
               <kbd className={styles.trackKeyHint}>{p.pinned ? "ESC" : "J"}</kbd>
             </div>
-            {/* 常态摘要在展开后收进 0fr，腾出纵向空间 */}
-            <div className={styles.trackSummary}>
-              <div className={styles.trackSummaryInner}>
-                {rows.length === 0 ? (
-                  <p className={styles.trackEmpty}>手头眼下没有在办单子或约定</p>
-                ) : (
-                  <>
-                    <ul className={styles.trackList}>
-                      {rows.map((r) => {
-                        const loc =
-                          r.location && !r.progress?.includes(r.location) ? r.location : null;
-                        const sub = [r.sourceLabel, r.progress, loc].filter(Boolean).join(" · ");
-                        return (
-                          <li key={r.id} data-overdue={r.status === "overdue" || undefined}>
-                            <Asset
-                              id={r.icon}
-                              tint={
-                                r.status === "overdue" ? "var(--cp-danger)" : "var(--cp-yellow)"
-                              }
-                              height={20}
-                            />
-                            <span className={styles.trackItemText}>
-                              <span className={styles.trackItemTop}>
-                                <b>{r.title}</b>
-                                {r.dueLabel && (
-                                  <time data-overdue={r.status === "overdue" || undefined}>
-                                    {r.dueLabel}
-                                  </time>
-                                )}
-                              </span>
-                              {sub && <small>{sub}</small>}
+            {/* 常态摘要在展开后收进 0fr，腾出纵向空间；空闲态保持极简，仅留标题栏 */}
+            {!idle && (
+              <div className={styles.trackSummary}>
+                <div className={styles.trackSummaryInner}>
+                  <ul className={styles.trackList}>
+                    {rows.map((r) => {
+                      const loc =
+                        r.location && !r.progress?.includes(r.location) ? r.location : null;
+                      const sub = [r.sourceLabel, r.progress, loc].filter(Boolean).join(" · ");
+                      return (
+                        <li
+                          key={r.id}
+                          data-overdue={r.status === "overdue" || undefined}
+                          data-offered={r.status === "offered" || undefined}
+                        >
+                          <Asset
+                            id={r.icon}
+                            tint={
+                              r.status === "overdue"
+                                ? "var(--cp-danger)"
+                                : r.status === "offered"
+                                  ? "var(--cp-cyan)"
+                                  : "var(--cp-yellow)"
+                            }
+                            height={20}
+                          />
+                          <span className={styles.trackItemText}>
+                            <span className={styles.trackItemTop}>
+                              <b>{r.title}</b>
+                              {r.dueLabel && (
+                                <time data-overdue={r.status === "overdue" || undefined}>
+                                  {r.dueLabel}
+                                </time>
+                              )}
                             </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {track.activeCount > rows.length && (
-                      <p className={styles.trackMore}>
-                        +{track.activeCount - rows.length} 项在办 · 展开查看
-                      </p>
-                    )}
-                  </>
-                )}
+                            {sub && <small>{sub}</small>}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {totalShown > rows.length && (
+                    <p className={styles.trackMore}>
+                      +{totalShown - rows.length} 项待办与风声 · 按 J 展开操作
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
             <Grow open={p.open} line="var(--cp-yellow)">
               {full}
             </Grow>
@@ -1563,7 +1954,7 @@ export function Weapon({
         <BlockShadow />
         <NineSlice
           id="hud.slotBg"
-          tint={p.open ? "rgb(8 11 18 / 97%)" : "rgb(14 14 23 / 90%)"}
+          tint={p.open ? "var(--cp-panel-strong)" : "var(--cp-surface-raised)"}
           slice={SLOT_SLICE}
         />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
@@ -1716,9 +2107,13 @@ const HOLO_SLICE = [4, 20, 20, 4] as const;
 export function HoloCall({
   view,
   onOpenPhone,
+  onAnswer,
+  disabled = false,
 }: {
   readonly view: View;
   readonly onOpenPhone: () => void;
+  readonly onAnswer?: ((id: number, answer: boolean) => void) | undefined;
+  readonly disabled?: boolean | undefined;
 }) {
   const incoming = view.calls?.incoming;
   if (!incoming) return null;
@@ -1732,50 +2127,75 @@ export function HoloCall({
   const scanlineImg = cssUrl("fx.scanlines");
 
   return (
-    <button
-      type="button"
+    <section
       className={`${styles.block} ${styles.holocall}`}
       data-layer="optics"
-      onClick={onOpenPhone}
-      aria-label={`全息来电：${incoming.name}，点击查看消息`}
+      aria-label={`全息来电：${incoming.name}`}
     >
       <BlockShadow />
-      <NineSlice id="dialog.lineSelect" tint="rgb(10 18 28 / 92%)" slice={HOLO_SLICE} />
+      <NineSlice id="dialog.lineSelect" tint="var(--cp-surface-strong)" slice={HOLO_SLICE} />
       <NineSlice
         id="panel.glowLeft"
         tint="rgb(94 246 255 / 22%)"
         slice={[16, 20, 16, 20]}
         className={styles.holoGlow}
       />
-      <div className={`${styles.inner} ${styles.holoRow}`}>
-        <span className={styles.holoFaceWrap}>
-          <NpcPortrait
-            npc={caller}
-            className={styles.personFace}
-            artClassName={styles.personFaceArt}
-            line="var(--cp-cyan)"
-          />
-          {scanlineImg && (
-            <span
-              className={styles.holoScan}
-              style={{ backgroundImage: scanlineImg }}
-              aria-hidden
+      <div className={`${styles.inner} ${styles.holoStack}`}>
+        <button
+          type="button"
+          className={styles.holoHead}
+          onClick={onOpenPhone}
+          aria-label={`全息来电：${incoming.name}，打开通讯终端`}
+        >
+          <span className={styles.holoFaceWrap}>
+            <NpcPortrait
+              npc={caller}
+              className={styles.personFace}
+              artClassName={styles.personFaceArt}
+              line="var(--cp-cyan)"
             />
-          )}
-        </span>
-        <span className={styles.holoMeta}>
-          <small>{"HOLOCALL // 来电接入"}</small>
-          <b>{incoming.name}</b>
-          <span>{incoming.statusLabel} · 点击查看终端</span>
-        </span>
-        <span className={styles.holoWave} aria-hidden>
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
+            {scanlineImg && (
+              <span
+                className={styles.holoScan}
+                style={{ backgroundImage: scanlineImg }}
+                aria-hidden
+              />
+            )}
+          </span>
+          <span className={styles.holoMeta}>
+            <small>{"HOLOCALL // 来电接入"}</small>
+            <b>{incoming.name}</b>
+            <span>{incoming.statusLabel}</span>
+          </span>
+          <span className={styles.holoWave} aria-hidden>
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
+        {onAnswer && (
+          <div className={styles.holoActions}>
+            <button
+              type="button"
+              className={`${styles.holoBtn} ${styles.holoAccept}`}
+              disabled={disabled}
+              onClick={() => onAnswer(incoming.id, true)}
+            >
+              接通
+            </button>
+            <button
+              type="button"
+              className={`${styles.holoBtn} ${styles.holoDecline}`}
+              disabled={disabled}
+              onClick={() => onAnswer(incoming.id, false)}
+            >
+              挂断
+            </button>
+          </div>
+        )}
       </div>
-    </button>
+    </section>
   );
 }
 

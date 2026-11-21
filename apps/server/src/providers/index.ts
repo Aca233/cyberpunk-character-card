@@ -1,5 +1,7 @@
-import type { AbortSignalLike, LlmClient, LlmEvent, LlmRequest } from "@cp/core";
+import type { AbortSignalLike, Embedder, LlmClient, LlmEvent, LlmRequest } from "@cp/core";
 import type { ConfigService, Profile } from "../config";
+import { anthropicClient } from "./anthropic";
+import { openAiEmbedder } from "./embedding";
 import { geminiClient } from "./gemini";
 import { UpstreamError } from "./http";
 import { openAiClient } from "./openai";
@@ -53,10 +55,13 @@ export class LlmRouter implements LlmClient {
         }
         return { ok: true, profile, client: geminiClient(profile, key) };
       case "anthropic":
-        return {
-          ok: false,
-          error: `${role}方案「${profile.name}」是 anthropic 类型，原生接入还没做好；先把${role}指向 OpenAI 兼容的方案（例如 relay）`,
-        };
+        if (!key) {
+          return {
+            ok: false,
+            error: `${role}方案「${profile.name}」没有密钥：到设置页的「模型方案」里粘贴密钥并保存`,
+          };
+        }
+        return { ok: true, profile, client: anthropicClient(profile, key) };
       case "sdwebui":
       case "comfyui":
         return {
@@ -64,6 +69,21 @@ export class LlmRouter implements LlmClient {
           error: `${role}方案「${profile.name}」是 ${profile.type} 文生图服务，只能用于「文生图模型」，不能当${role}`,
         };
     }
+  }
+
+  /** 为旧记忆语义检索解析可选的 embedding 客户端（优先 aux 方案，其次 narrator 方案） */
+  async resolveEmbedder(onWarn?: (message: string) => void): Promise<Embedder | undefined> {
+    const state = await this.config.load();
+    if (state.status !== "ok") return undefined;
+    const names = [this.pick.aux ?? state.config.aux, this.pick.narrator ?? state.config.narrator];
+    for (const name of names) {
+      if (!name) continue;
+      const profile = state.config.profiles.find((p) => p.name === name);
+      if (!profile?.embeddingModel) continue;
+      const embedder = openAiEmbedder(profile, this.config.keyFor(profile), onWarn);
+      if (embedder) return embedder;
+    }
+    return undefined;
   }
 
   async *stream(request: LlmRequest, signal?: AbortSignalLike): AsyncGenerator<LlmEvent> {

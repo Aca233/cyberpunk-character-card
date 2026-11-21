@@ -13,6 +13,7 @@ import {
   type VehicleCommand,
   type VehicleDef,
   type VehicleGrant,
+  type VehicleSummon,
 } from "./schema";
 
 const catalogs = new WeakMap<object, ReadonlyMap<string, VehicleDef>>();
@@ -145,6 +146,30 @@ export function grantVehicle(
     location: currentLocation(ctx),
   });
   return { ok: true, notes: [`有了一辆${def.name}（${command.reason}）`] };
+}
+
+export function summonVehicle(
+  draft: Draft<TravelState>,
+  command: VehicleSummon,
+  ctx: SystemContext,
+): ApplyOutcome {
+  const car = draft.vehicles.find((v) => v.id === command.id);
+  if (!car) return fail(`名下没有 ${command.id}`);
+  if (car.abandoned || car.stolen || car.condition === "wrecked") {
+    return fail("这辆车当前无法远程呼叫");
+  }
+  car.location = command.to;
+  const def = vehicleCatalog(ctx.data).get(car.model);
+  const name = def?.name ?? car.model;
+  return {
+    ok: true,
+    notes: [`呼叫${name}自动驶到${locationName(ctx, command.to)}附近停妥（耗去 5 分钟）`],
+    advanceTo: ctx.now + 5,
+    emit: [
+      { type: "inventory.relocateVehicle", vehicle: car.id, location: command.to },
+      { type: "cyberware.relocateVehicle", vehicle: car.id, location: command.to },
+    ],
+  };
 }
 
 export function applyVehicle(

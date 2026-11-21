@@ -105,13 +105,6 @@ export function rarityLabelOf(rarity?: string | null, iconic?: boolean): string 
   return base;
 }
 
-/** 汇总已装义体名义人性消耗（义体诊所手术预览与捏人算上限用） */
-export function sumHumanityCost(parts: readonly { readonly humanityCost: number }[]): number {
-  let total = 0;
-  for (const part of parts) total += part.humanityCost;
-  return total;
-}
-
 export function humanityToneOf(current: number): "ok" | "mid" | "warn" | "bad" {
   const stage = humanityRules.humanityStage(current);
   if (stage === "stable") return "ok";

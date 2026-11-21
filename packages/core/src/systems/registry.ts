@@ -27,7 +27,6 @@ import { psychosis } from "./psychosis";
 import { safehouse } from "./safehouse";
 import { shards } from "./shards";
 import { sidegigs } from "./sidegigs";
-import { squad } from "./squad";
 import { stealth } from "./stealth";
 import { tension } from "./tension";
 import { threads } from "./threads";
@@ -63,7 +62,6 @@ export const systems: readonly AnySystem[] = [
   trauma,
   safehouse,
   psychosis,
-  squad,
   sidegigs,
   notes,
   chronicle,

@@ -2,7 +2,14 @@ import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
-import { type CyberwareDef, CyberwareStateSchema, DECK_TRAIT_LABELS, SLOT_LABELS } from "./schema";
+import {
+  BEHAVIOR_CHIP_MODE_LABELS,
+  type BehaviorChipMode,
+  type CyberwareDef,
+  CyberwareStateSchema,
+  DECK_TRAIT_LABELS,
+  SLOT_LABELS,
+} from "./schema";
 
 export function cyberwarePartsView({ world, data }: ViewContext) {
   const state = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
@@ -31,11 +38,13 @@ export function bonusText(def: CyberwareDef): string {
 
 /** 装着的义体，按装上的先后；打坏的标出来 */
 export function cyberwareView({ world, data }: ViewContext) {
-  const { installed } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
+  const { installed, behaviorChips } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   const health = HealthStateSchema.parse(world.slices.health);
   const parts = cyberwareCatalog(data);
   return installed.map((c) => {
     const def = parts.get(c.id);
+    const chipState = def?.behaviorChip ? behaviorChips?.[c.id] : undefined;
+    const chipMode: BehaviorChipMode | null = def?.behaviorChip ? (chipState?.mode ?? "off") : null;
     return {
       id: c.id,
       name: def?.name ?? c.id,
@@ -47,13 +56,19 @@ export function cyberwareView({ world, data }: ViewContext) {
       iconic: def?.iconic ?? false,
       ability: def?.ability ?? null,
       bonusText: def ? bonusText(def) : "",
-      humanityCost: 0,
-      attributes: def?.attributes ?? {},
-      checks: def?.checks ?? [],
       armor: def?.armor ?? false,
       accelerator: def?.accelerator ?? false,
       deckProfile: def?.deckProfile,
       deckTraits: def?.deckTraits?.map((t) => DECK_TRAIT_LABELS[t]),
+      behaviorChip:
+        chipMode !== null
+          ? {
+              mode: chipMode,
+              label: BEHAVIOR_CHIP_MODE_LABELS[chipMode],
+              protocol: chipState?.protocol ?? null,
+              memoryGap: chipState?.memoryGap ?? false,
+            }
+          : null,
       /** 被打坏了：修好前失去能力 */
       broken: health.brokenChrome.includes(c.id),
     };

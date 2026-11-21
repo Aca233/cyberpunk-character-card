@@ -35,12 +35,30 @@ interface ChatChunk {
     readonly delta?: { readonly content?: string | null };
     readonly finish_reason?: string | null;
   }[];
-  readonly usage?: { readonly prompt_tokens?: number; readonly completion_tokens?: number } | null;
+  readonly usage?: {
+    readonly prompt_tokens?: number;
+    readonly completion_tokens?: number;
+    readonly prompt_tokens_details?: { readonly cached_tokens?: number } | null;
+    readonly prompt_cache_hit_tokens?: number;
+    readonly cache_read_input_tokens?: number;
+    readonly cache_creation_input_tokens?: number;
+  } | null;
   readonly error?: {
     readonly message?: string;
     readonly code?: string | null;
     readonly type?: string;
   };
+}
+
+/** 仅向官方 OpenAI 端点附加 prompt_cache_key，避免部分第三方兼容中转站报 unknown field */
+function supportsPromptCacheKey(profile: Profile): boolean {
+  if (profile.type !== "openai") return false;
+  if (!profile.baseUrl) return true;
+  try {
+    return new URL(profile.baseUrl).hostname === "api.openai.com";
+  } catch {
+    return false;
+  }
 }
 
 export function chatCompletionsUrl(profile: Profile): string {
@@ -88,12 +106,16 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         ...(request.responseFormat?.type === "json"
           ? { response_format: { type: "json_object" } }
           : {}),
+        ...(request.cacheKey && supportsPromptCacheKey(profile)
+          ? { prompt_cache_key: request.cacheKey }
+          : {}),
       };
       const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
       const res = await post(provider, chatCompletionsUrl(profile), headers, body, signal);
       if (!res.ok) {
         const detail = await errorDetail(res);
-        if (detail.code && BLOCK_CODES.has(detail.code)) {
+        if (signal?.aborted) throw new AbortedError();
+        if (detail.code && BLOCK_CODES.has(detail.code.toLowerCase())) {
           yield { type: "blocked", reason: detail.message || "上游拦截了这段内容" };
           return;
         }
@@ -120,7 +142,7 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         }
         if (chunk.error) {
           const code = chunk.error.code ?? chunk.error.type ?? "";
-          if (BLOCK_CODES.has(code)) {
+          if (BLOCK_CODES.has(code.toLowerCase())) {
             yield { type: "blocked", reason: chunk.error.message || "上游拦截了这段内容" };
             return;
           }
@@ -146,16 +168,24 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           if (choice.finish_reason) finishReason = choice.finish_reason;
         }
         if (chunk.usage) {
+          const cached =
+            chunk.usage.prompt_tokens_details?.cached_tokens ??
+            chunk.usage.prompt_cache_hit_tokens ??
+            chunk.usage.cache_read_input_tokens ??
+            0;
+          const write = chunk.usage.cache_creation_input_tokens ?? 0;
           usage = {
             inputTokens: chunk.usage.prompt_tokens ?? 0,
             outputTokens: chunk.usage.completion_tokens ?? 0,
+            ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+            ...(write > 0 ? { cacheWriteTokens: write } : {}),
           };
         }
       }
       if (headState !== "story" && UPSTREAM_ERROR_TEXT.test(head))
         throw textAsError(provider, head);
       if (headState === "pending" && head !== "") yield { type: "text", text: head };
-      if (finishReason === "content_filter") {
+      if (finishReason === "content_filter" || finishReason === "refusal") {
         yield { type: "blocked", reason: "上游在生成途中拦截了这段内容" };
         return;
       }

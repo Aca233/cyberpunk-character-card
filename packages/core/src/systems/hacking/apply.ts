@@ -12,6 +12,7 @@ import type { HealthState } from "../health";
 import { currentVitals, filledBody, type NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import {
+  ACTIVE_HACK_KEEP,
   BREACH_GAIN_LABELS,
   BREACH_KEEP,
   type BreachCommand,
@@ -113,7 +114,7 @@ function blackwallAttackBlocked(
     : "黑墙攻击需要实际装有完好的黑墙原型接入仓，普通入侵能力不能替代";
 }
 
-/** 快速破解一次行动内自然结算：只要有完好的接入仓，且前置物理与潜网裁决没有阻断；不装卸程序，也不比容量 */
+/** 快速破解一次行动内自然结算：登记活跃状态与高危反追踪警示，供后续裁决与战局读取；不设 RAM 或槽位门槛 */
 export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemContext): ApplyOutcome {
   syncDeck(draft, ctx);
   if (!draft.deck) return fail("没装完好的网络接入仓，放不了快速破解");
@@ -122,10 +123,52 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
   const def = findProgram(quickhackCatalog(ctx.data), command.program);
   const blocked = blackwallAttackBlocked(draft.deck, command.program, def, ctx.data);
   if (blocked) return fail(blocked);
-  const label = def
-    ? `「${def.name}」（${CATEGORY_LABELS[def.category]}）`
-    : `「${command.program}」`;
-  return { ok: true, notes: [`快速破解${label} → ${command.target}`] };
+  const location = ctx.read<WorldClockState>("world").location ?? null;
+  const programId = def?.id ?? command.program;
+  if (def && !draft.programs.includes(def.id)) {
+    draft.programs.push(def.id);
+  }
+  const effectDesc = def?.effect ?? `${command.program}已作用于目标`;
+  const existingIdx = draft.activeEffects.findIndex(
+    (e) => e.program === programId && e.target === command.target && e.location === location,
+  );
+  const entry = {
+    program: programId,
+    label: def?.name ?? command.program,
+    category: def?.category ?? null,
+    target: command.target,
+    ...(command.npc ? { npc: command.npc } : {}),
+    location,
+    at: ctx.now,
+    effect: effectDesc,
+  };
+  if (existingIdx >= 0) {
+    draft.activeEffects[existingIdx] = entry;
+  } else {
+    draft.activeEffects.push(entry);
+    if (draft.activeEffects.length > ACTIVE_HACK_KEEP) {
+      draft.activeEffects.splice(0, draft.activeEffects.length - ACTIVE_HACK_KEEP);
+    }
+  }
+  const notes = [
+    `快速破解${def ? `「${def.name}」（${CATEGORY_LABELS[def.category]}）` : `「${command.program}」`} → ${command.target}`,
+  ];
+  // 攻击型/终极型破解对未静音目标易引发对方黑客/安保反追踪警觉
+  if (def && (def.category === "damage" || def.category === "ultimate")) {
+    draft.traceAlert = { at: ctx.now, location, target: command.target };
+    notes.push(`对方链路出现反向追踪信号（${command.target}）`);
+  }
+  return { ok: true, notes };
+}
+
+/** 场景结束或离开现场时，清理已失效的临时快速破解状态与本地反追踪警示 */
+export function clearLocalHackEffects(draft: Hacking, location: string | null): void {
+  draft.activeEffects = draft.activeEffects.filter(
+    (e) => location !== null && e.location === location,
+  );
+  if (draft.traceAlert && draft.traceAlert.location !== location) {
+    draft.traceAlert = null;
+  }
 }
 /** 入侵协议按已确认的接入路径结算；同一地点的既有网络授权持续存在。 */
 export function applyBreach(
@@ -179,6 +222,7 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
       startedAt: ctx.now,
       chair: command.chair ?? "",
       guard: command.guard ?? "",
+      notes: command.reason ? [`L1：${command.reason}`] : [],
     };
     return {
       ok: true,
@@ -198,6 +242,10 @@ export function applyDive(draft: Hacking, command: DiveCommand, ctx: SystemConte
   }
   const target = dive.layer + 1;
   dive.layer = target;
+  const noteText = command.reason ?? ruling?.reason;
+  if (noteText) {
+    dive.notes.push(`L${target}：${noteText}`);
+  }
   return {
     ok: true,
     notes: [

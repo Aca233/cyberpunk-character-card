@@ -65,7 +65,7 @@ function CyberCellFace() {
     <>
       <NineSlice
         id="cyber.cellShape"
-        tint="rgb(12 14 24 / 90%)"
+        tint="var(--cp-surface-raised)"
         slice={0}
         className={neural.cellSquare}
       />

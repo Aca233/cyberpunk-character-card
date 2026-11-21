@@ -498,7 +498,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      await this.deps.checkpoints?.clear(id);
+      await this.clearCheckpointBestEffort(id);
       await this.maybeSnapshot(id, version + 1);
       return { status: 200, body: { seq: version, version: version + 1, notes: result.notes } };
     });
@@ -596,7 +596,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      await this.deps.checkpoints?.clear(id);
+      await this.clearCheckpointBestEffort(id);
       await this.maybeSnapshot(id, version + 1);
       return {
         status: 200,
@@ -660,7 +660,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      await this.deps.checkpoints?.clear(id);
+      await this.clearCheckpointBestEffort(id);
       return { status: 200, body: { version: version + targets.length, voided: targets.length } };
     });
   }
@@ -714,7 +714,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      await this.deps.checkpoints?.clear(id);
+      await this.clearCheckpointBestEffort(id);
       const pending = { kind: "input", input: input.data };
       return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
     });
@@ -800,7 +800,7 @@ export class GameService {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
-      await this.deps.checkpoints?.clear(id);
+      await this.clearCheckpointBestEffort(id);
       return { status: 200, body: { version: version + 1, replaced: last.seq } };
     });
   }
@@ -1345,11 +1345,22 @@ export class GameService {
         ...(usage ? { usage } : {}),
       };
       await saves.appendAt(run.saveId, seq, serializeRecord(record));
-      await this.deps.checkpoints?.clear(run.saveId);
+      await this.clearCheckpointBestEffort(run.saveId);
       const version = seq + 1;
       await this.maybeSnapshot(run.saveId, version);
       return { seq, version };
     });
+  }
+
+  /** 断点只是续跑缓存：落盘成功后清断点失败不能把已保存的操作误报为失败。 */
+  private async clearCheckpointBestEffort(id: string): Promise<void> {
+    try {
+      await this.deps.checkpoints?.clear(id);
+    } catch (error) {
+      this.deps.log(
+        `存档 ${id} 的记录已保存，但清理旧断点失败：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** 快照只是缓存：失败不能把已经落盘的操作误报为失败。调用方持有这个存档的锁。 */
