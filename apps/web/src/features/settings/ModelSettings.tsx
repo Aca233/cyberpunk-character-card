@@ -582,7 +582,7 @@ export function ModelSettings({
       </div>
 
       <div className={styles.privacyBar}>
-        <span className={styles.privacyTag}>LOCAL // INDEXEDDB</span>
+        <span className={styles.privacyTag}>{"LOCAL // INDEXEDDB"}</span>
         <p className={styles.privacy}>
           密钥只存在这个浏览器里，由浏览器直接发给模型服务商，不经过本站服务器；公用电脑用完请清除密钥。服务商需允许网页跨域访问（CORS），本地
           Ollama 需设置 OLLAMA_ORIGINS。
@@ -941,7 +941,7 @@ function ConnectionForm({
           {!profile && !copyFrom && (
             <div className={`${styles.field} ${styles.span2}`}>
               <span>接入方式</span>
-              <div className={styles.presetGrid} role="group" aria-label="选择接入方式">
+              <fieldset className={styles.presetGrid} aria-label="选择接入方式">
                 {(Object.entries(PRESETS) as [Preset, (typeof PRESETS)[Preset]][]).map(
                   ([id, value]) => (
                     <button
@@ -958,7 +958,7 @@ function ConnectionForm({
                     </button>
                   ),
                 )}
-              </div>
+              </fieldset>
             </div>
           )}
           {!profile && (
@@ -1362,11 +1362,7 @@ function ConnectionActions({
         </div>
       </div>
       {result && (
-        <div
-          role="status"
-          className={styles.testResult}
-          data-ok={result.ok || undefined}
-        >
+        <div role="status" className={styles.testResult} data-ok={result.ok || undefined}>
           <span className={styles.testBadge} data-ok={result.ok || undefined}>
             {result.ok ? "连通成功" : "连接失败"}
           </span>

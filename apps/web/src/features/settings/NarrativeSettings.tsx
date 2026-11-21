@@ -89,11 +89,7 @@ const DEBUG: readonly [NarrativeToggle, string, string][] = [
  * 叙事偏好：存在这台浏览器里，换设备要重新选。
  * 桌面端采用上排双栏（左呈现 / 右节奏+调试）+ 下排 2×2 生图提示词工作区
  */
-export function NarrativeSettings({
-  onOpenContext,
-}: {
-  readonly onOpenContext?: () => void;
-}) {
+export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: () => void }) {
   const prefs = useNarrativePrefs();
   const [resetDone, setResetDone] = useState(false);
 
@@ -103,7 +99,7 @@ export function NarrativeSettings({
     return () => window.clearTimeout(timer);
   }, [resetDone]);
 
-  const currentPace = PACES.find((p) => p.id === prefs.offscreen) ?? PACES[2];
+  const currentPaceLabel = PACES.find((p) => p.id === prefs.offscreen)?.title ?? "常规";
 
   const toggle = ([key, label, hint]: readonly [NarrativeToggle, string, string]) => (
     <Row key={key} id={`pref-${key}`} label={label} hint={hint}>
@@ -120,12 +116,15 @@ export function NarrativeSettings({
     <div className={styles.prefsRoot}>
       <div className={styles.prefsSummary}>
         <div className={styles.prefsSummaryLeft}>
-          <span className={styles.prefsTag}>PREFS // LOCAL</span>
+          <span className={styles.prefsTag}>{"PREFS // LOCAL"}</span>
           <span className={styles.dim}>仅存于本浏览器 · 修改后即时生效</span>
         </div>
         <div className={styles.presetStats}>
-          <span className={styles.statChip} data-tone={prefs.offscreen === "off" ? undefined : "ok"}>
-            城市节奏：{currentPace.title}
+          <span
+            className={styles.statChip}
+            data-tone={prefs.offscreen === "off" ? undefined : "ok"}
+          >
+            城市节奏：{currentPaceLabel}
           </span>
           <span className={styles.statChip} data-tone={prefs.autoTurnImage ? "ok" : undefined}>
             自动配图：{prefs.autoTurnImage ? "开" : "关"}
@@ -187,19 +186,14 @@ export function NarrativeSettings({
                 <strong>城里的动静</strong>
                 <small>你不在场时夜之城的场外生态运转与人物动向推演频率</small>
               </div>
-              <div
-                className={styles.paceSegment}
-                role="radiogroup"
-                aria-label="城里的动静推演频率"
-              >
+              <fieldset className={styles.paceSegment} aria-label="城里的动静推演频率">
                 {PACES.map((pace) => {
                   const selected = prefs.offscreen === pace.id;
                   return (
                     <button
                       key={pace.id}
                       type="button"
-                      role="radio"
-                      aria-checked={selected}
+                      aria-pressed={selected}
                       className={styles.paceBtn}
                       onClick={() => setOffscreenPace(pace.id)}
                     >
@@ -209,7 +203,7 @@ export function NarrativeSettings({
                     </button>
                   );
                 })}
-              </div>
+              </fieldset>
             </div>
           </section>
 

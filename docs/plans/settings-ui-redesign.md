@@ -1,7 +1,7 @@
 # 设置界面美化与体验优化计划
 
 - **日期**：2026-11-22
-- **状态**：进行中
+- **状态**：已完成（静态类型、Biome 规范与素材合规检查均通过，交由用户验收）
 - **范围**：`apps/web/src/features/settings/` 与 `apps/web/src/ui/togglecheck.module.css`
 - **视觉红线**：沿用 2077 原作贴图（`NineSlice`、`Asset`、`CellFrame`、`FrameBox`、`fx.grid`）与 `tokens.css` 统一暖暗紫黑表面色阶；不使用 CSS 渐变与 `backdrop-filter`；交互指针统一使用 `var(--cp-cursor-hand)` / `var(--cp-cursor-invalid)`；完整兼容 `prefers-reduced-motion`；保留全部既有接口契约与用户已确认的功能边界（如「设为叙事模型」「设为辅助模型」「设为文生图模型」独立按钮不合并）。
 

@@ -626,7 +626,12 @@
   color: var(--cp-text);
 }
 
-.sectionToggle[aria-expanded="true"] .expandArrow {
+.sectionArrow {
+  transform: rotate(180deg);
+  transition: transform 200ms var(--ease-snap);
+}
+
+.sectionToggle[aria-expanded="true"] .sectionArrow {
   transform: rotate(0deg);
 }
 
@@ -993,6 +998,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .paceBtn {
@@ -1025,7 +1033,7 @@
   transform: translateY(1px);
 }
 
-.paceBtn[aria-checked="true"] {
+.paceBtn[aria-pressed="true"] {
   --box-line: var(--cp-cyan);
   --box-fill: rgb(16 30 34 / 88%);
 }
@@ -1040,7 +1048,7 @@
   font-weight: 700;
 }
 
-.paceBtn[aria-checked="true"] strong {
+.paceBtn[aria-pressed="true"] strong {
   color: var(--cp-cyan);
 }
 
@@ -1113,6 +1121,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .filterPill {
@@ -1573,6 +1584,7 @@
   }
 
   .expandArrow,
+  .sectionArrow,
   .fileButton,
   .fileBg,
   .filterPill,

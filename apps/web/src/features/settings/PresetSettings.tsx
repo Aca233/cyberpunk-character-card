@@ -229,7 +229,7 @@ export function PresetSettings() {
           ) : (
             <Panel line="var(--cp-red-dim)" className={styles.emptyPresetPanel}>
               <div className={styles.emptyPresetBody}>
-                <span className={ms.kicker}>TAVERN PRESET // STANDBY</span>
+                <span className={ms.kicker}>{"TAVERN PRESET // STANDBY"}</span>
                 <h3>导入你的 SillyTavern 聊天补全预设</h3>
                 <p className={ms.help}>
                   预设条目仅在叙事模型撰写正文时生效，负责文风、节奏与描写技法；世界状态与规则结算仍由系统严格把关。
@@ -286,11 +286,16 @@ function PresetDetail({
     <div className={ms.form} aria-busy={pending}>
       <header className={styles.detailHead}>
         <div>
-          <span className={ms.kicker}>PRESET // 预设详情</span>
+          <span className={ms.kicker}>{"PRESET // 预设详情"}</span>
           <h3>{preset.name}</h3>
           <p className={ms.help}>导入于 {formatDate(preset.importedAt)}</p>
         </div>
-        <Button primary pressed={preset.active} onClick={onActivate} disabled={pending || preset.active}>
+        <Button
+          primary
+          pressed={preset.active}
+          onClick={onActivate}
+          disabled={pending || preset.active}
+        >
           {preset.active ? "正在使用" : "启用这份预设"}
         </Button>
       </header>
@@ -496,7 +501,7 @@ function ToggleList({
               />
             </FrameBox>
           )}
-          <div className={styles.filterPills} role="group" aria-label="按开启状态筛选">
+          <fieldset className={styles.filterPills} aria-label="按开启状态筛选">
             <button
               type="button"
               className={styles.filterPill}
@@ -521,7 +526,7 @@ function ToggleList({
             >
               已关 {offCount}
             </button>
-          </div>
+          </fieldset>
         </div>
       )}
       <ul className={styles.presetToggles} data-expandable={renderDetail ? true : undefined}>

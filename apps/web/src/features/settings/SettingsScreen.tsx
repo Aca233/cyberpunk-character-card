@@ -59,7 +59,7 @@ export function SettingsScreen() {
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: api.tavernPresets });
   const profilesReady = (() => {
     const data = profilesQuery.data;
-    if (!data || data.status !== "ok") return false;
+    if (data?.status !== "ok") return false;
     const okRole = (name: string | undefined) => {
       if (!name) return false;
       const p = data.profiles.find((item) => item.name === name);
@@ -146,11 +146,7 @@ export function SettingsScreen() {
         aria-hidden
       />
       <span className={styles.shade} aria-hidden />
-      <span
-        className={styles.gridTex}
-        style={{ backgroundImage: cssUrl("fx.grid") }}
-        aria-hidden
-      />
+      <span className={styles.gridTex} style={{ backgroundImage: cssUrl("fx.grid") }} aria-hidden />
       <span
         className={styles.scan}
         style={{ backgroundImage: cssUrl("fx.scanlines") }}
@@ -170,12 +166,9 @@ export function SettingsScreen() {
           <h1>设置</h1>
         </div>
         <div className={styles.headRight}>
-          <div className={styles.headTelemetry} aria-label="系统配置概览">
+          <div className={styles.headTelemetry}>
             {profilesLoaded && (
-              <span
-                className={styles.teleChip}
-                data-tone={profilesReady ? "ok" : "warn"}
-              >
+              <span className={styles.teleChip} data-tone={profilesReady ? "ok" : "warn"}>
                 <span className={styles.teleDot} aria-hidden />
                 {profilesReady ? "模型就绪" : "模型待配置"}
               </span>
@@ -241,7 +234,7 @@ export function SettingsScreen() {
           aria-hidden
         />
         <div className={styles.footRow}>
-          <span className={styles.footHint}>LOCAL // 配置仅存于本机浏览器</span>
+          <span className={styles.footHint}>{"LOCAL // 配置仅存于本机浏览器"}</span>
           <SettingsTurnProgress />
           <div className={styles.footActions}>
             {canReturnBack ? (
@@ -411,7 +404,7 @@ function ContextViewer() {
     return (
       <Panel line="var(--cp-yellow)" className={styles.gateCard}>
         <div className={styles.gateBody}>
-          <span className={styles.gateKicker}>DEBUG // SPOILER GATE</span>
+          <span className={styles.gateKicker}>{"DEBUG // SPOILER GATE"}</span>
           <div className={styles.gateHead}>
             <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
             <h2>剧透调试视图</h2>
@@ -1045,8 +1038,8 @@ function ContextDetail({
           {...(ctx.budget.total > ctx.budget.limit ? { tone: "warn" as const } : {})}
         >
           <p className={styles.budgetSummary}>
-            窗口 {ctx.budget.window.toLocaleString()} token · 带了最近 {ctx.budget.history}{" "}
-            轮原文 · 前情上限 {ctx.budget.recapTokens.toLocaleString()} token
+            窗口 {ctx.budget.window.toLocaleString()} token · 带了最近 {ctx.budget.history} 轮原文 ·
+            前情上限 {ctx.budget.recapTokens.toLocaleString()} token
           </p>
           <div className={styles.budgetList}>
             {ctx.budget.parts.map((p) => {
@@ -1253,7 +1246,7 @@ function Section({
             id="menu.arrowFill"
             width={9}
             tint="currentColor"
-            className={styles.expandArrow}
+            className={styles.sectionArrow}
           />
         </span>
       </button>
