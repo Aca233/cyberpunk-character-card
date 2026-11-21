@@ -13,12 +13,14 @@ import { items } from "./items";
 import { consequences, jobTemplates, twists } from "./jobs";
 import { loadouts } from "./loadouts";
 import { locations } from "./locations";
+import { canonTimeline } from "./lore";
 import { DISTRICT_CENTERS, ROUTE_ALIASES } from "./map";
 // 经 mapShapes.ts 去掉了中间人一类图钉和服务点（用户 2026-11-02："地图上不要搞专门的中间人了，都是npc"）
 import { DISTRICT_SHAPES, MAP_POI_KINDS, SERVICE_POINTS, SUBDISTRICT_SHAPES } from "./mapShapes";
 import { merchantSites } from "./merchant-sites";
 import { ncpdAlerts } from "./ncpd";
 import { npcs } from "./npcs";
+import { npcTies } from "./npcTies";
 import { openings } from "./openings";
 import { RADAR_ANCHORS } from "./radar";
 import { ripperdocs } from "./ripperdocs";
@@ -27,6 +29,7 @@ import { ROUTE_ANCHORS, ROUTE_METERS } from "./routeTable.gen";
 import { apartments, homes } from "./safehouses";
 import { shops } from "./shops";
 import { sidegigs } from "./sidegigs";
+import { DISTRICT_LAWS, FIXER_TEMPERAMENTS, NIGHT_CITY_SLICES } from "./slices";
 import { vehicles } from "./vehicles";
 
 export { agendas } from "./agendas";
@@ -38,8 +41,8 @@ export { cyberware } from "./cyberware";
 export { encounters } from "./encounters";
 export { everydayLife, everydayPeople } from "./everydayLife";
 export { factions } from "./factions";
-// 原作 171 个快速移动点（数据终端 + 地铁站）的名字与所属街区：129 个有场景节点坐标，42 个为 null；只当地标，不传送（用户定的：不要快速移动）。见 docs/places-plan.md 第三、七节
-export { FAST_TRAVEL_POINTS, type FastTravelPoint } from "./fastTravel.gen";
+// 原作快速移动点（数据终端 + 地铁站）：经 fastTravel.ts 补全 24 处核心狗镇/城区/恶土地标坐标并剔除 18 处废弃/无设施占位点；只当地标，不传送（用户定的：不要快速移动）
+export { FAST_TRAVEL_POINTS, type FastTravelPoint } from "./fastTravel";
 export { fixers } from "./fixers";
 export { quickhacks } from "./hacking";
 export { items } from "./items";
@@ -55,7 +58,13 @@ export { merchantSites } from "./merchant-sites";
 export { boardModules } from "./modules";
 export { ncpdAlerts } from "./ncpd";
 export { npcs } from "./npcs";
-export { DEFAULT_OPENING, type OpeningContext, openingPremise, openings } from "./openings";
+export { npcTies } from "./npcTies";
+export {
+  DEFAULT_OPENING,
+  type OpeningContext,
+  openingPremise,
+  openings,
+} from "./openings";
 // 开局地点“在地图上选择”（用户定的，2026-10-30）：选点与服务端校验共用已有锚点，不为缺坐标的地点补造位置
 export { RADAR_ANCHORS, type RadarAnchor } from "./radar";
 export { ripperdocs } from "./ripperdocs";
@@ -93,6 +102,7 @@ const mapData = {
 /** 新存档放进世界的内容 */
 export const gameContent: GameContent = {
   npcs,
+  npcTies,
   fixers,
   items,
   cyberware,
@@ -130,6 +140,7 @@ export const gameData: Readonly<Record<string, unknown>> = {
   consequences,
   jobTemplates,
   sidegigs,
+  homes,
   apartments,
   // 路面距离表（places-plan §七 简单版做法）；出行系统按 data.routes 查，表里没有的地点先直线连到最近的锚点，再按路面距离算；
   // aliases 是坐标直接取自某个锚点的地点，当作那个锚点查（map.ts 的 ROUTE_ALIASES）
@@ -141,5 +152,9 @@ export const gameData: Readonly<Record<string, unknown>> = {
   ...mapData,
   // 原作路面的路边点（3dmap_roads 主连通分量，25 m 一格去重，x、y 交替摊平）：模型新建的地点贴到最近的路边（用户定的"先贴路面"，2026-10-30），坐标本作改编
   roadSpots: ROAD_SPOTS,
-  // 原剧第 1–6 集节点（canonTimeline）属于以后的 2075 剧本；现在只做 2077 开局，《边缘行者》已经是过去的事，不放进来
+  // 城区物理安检法则、中间人脾气、百态生活切片与 2077 世界大事件时间线
+  districtLaws: DISTRICT_LAWS,
+  fixerTemperaments: FIXER_TEMPERAMENTS,
+  nightCitySlices: NIGHT_CITY_SLICES,
+  canon: canonTimeline,
 };
