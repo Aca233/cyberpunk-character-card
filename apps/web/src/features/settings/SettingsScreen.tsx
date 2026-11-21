@@ -23,11 +23,11 @@ import styles from "./settings.module.css";
 
 type Tab = "profiles" | "presets" | "narrative" | "context";
 
-const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
-  { id: "profiles", label: "模型连接" },
-  { id: "presets", label: "酒馆预设" },
-  { id: "narrative", label: "叙事偏好" },
-  { id: "context", label: "上下文（调试）" },
+const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: string }[] = [
+  { id: "profiles", code: "01", label: "模型连接" },
+  { id: "presets", code: "02", label: "酒馆预设" },
+  { id: "narrative", code: "03", label: "叙事偏好" },
+  { id: "context", code: "04", label: "上下文（调试）" },
 ];
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
@@ -54,6 +54,24 @@ export function SettingsScreen() {
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Destination | null>(null);
   const activeSaveId = useStory((s) => (s.phase !== "idle" ? s.saveId : null));
+  const { open: spoilersOpen } = useSpoilerView();
+  const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
+  const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: api.tavernPresets });
+  const profilesReady = (() => {
+    const data = profilesQuery.data;
+    if (!data || data.status !== "ok") return false;
+    const okRole = (name: string | undefined) => {
+      if (!name) return false;
+      const p = data.profiles.find((item) => item.name === name);
+      return Boolean(
+        p && p.keyStatus !== "missing" && p.type !== "sdwebui" && p.type !== "comfyui",
+      );
+    };
+    return okRole(data.narrator) && okRole(data.aux);
+  })();
+  const profilesLoaded = profilesQuery.data !== undefined;
+  const activePreset = presetsQuery.data?.presets.find((p) => p.active);
+
   const tabParam = params.get("tab");
   const tab: Tab =
     tabParam === "context" || tabParam === "narrative" || tabParam === "presets"
@@ -112,15 +130,27 @@ export function SettingsScreen() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  const tabDot = (id: Tab): "ok" | "warn" | null => {
+    if (id === "profiles" && profilesLoaded) return profilesReady ? "ok" : "warn";
+    if (id === "presets" && activePreset) return "ok";
+    if (id === "context" && spoilersOpen) return "warn";
+    return null;
+  };
+
   return (
     <div className={styles.screen}>
-      {/* 外框照神经界面（用户定的重排）：夜之城远景压暗、扫描线、原作 panel.frame 红框，都不挡点击 */}
+      {/* 外框照神经界面（用户定的重排）：夜之城远景压暗、低透明网格肌理、扫描线、原作 panel.frame 红框 */}
       <span
         className={styles.bg}
         style={{ backgroundImage: cssUrl("menu.nightCity") }}
         aria-hidden
       />
       <span className={styles.shade} aria-hidden />
+      <span
+        className={styles.gridTex}
+        style={{ backgroundImage: cssUrl("fx.grid") }}
+        aria-hidden
+      />
       <span
         className={styles.scan}
         style={{ backgroundImage: cssUrl("fx.scanlines") }}
@@ -134,30 +164,62 @@ export function SettingsScreen() {
       />
       <header className={styles.head}>
         <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.headBg} />
-        <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" />
+        <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" className={styles.headGlow} />
         <div className={styles.headTitleWrap}>
           <span className={styles.headCode}>{"SYS // CONFIG"}</span>
           <h1>设置</h1>
         </div>
-        <Asset id="fluff.code" tint="var(--cp-red)" height={18} className={styles.headFluff} />
+        <div className={styles.headRight}>
+          <div className={styles.headTelemetry} aria-label="系统配置概览">
+            {profilesLoaded && (
+              <span
+                className={styles.teleChip}
+                data-tone={profilesReady ? "ok" : "warn"}
+              >
+                <span className={styles.teleDot} aria-hidden />
+                {profilesReady ? "模型就绪" : "模型待配置"}
+              </span>
+            )}
+            {activePreset && (
+              <span className={styles.teleChip} data-tone="ok" title={activePreset.name}>
+                <span className={styles.teleDot} aria-hidden />
+                预设：{activePreset.name}
+              </span>
+            )}
+            {spoilersOpen && (
+              <span className={styles.teleChip} data-tone="warn">
+                <span className={styles.teleDot} aria-hidden />
+                剧透调试
+              </span>
+            )}
+          </div>
+          <Asset id="fluff.code" tint="var(--cp-red)" height={18} className={styles.headFluff} />
+        </div>
       </header>
       {/* 页签：原作 tab.bg 九宫格，切法同神经界面；下面一道 tab.line */}
       <nav className={styles.tabs} aria-label="设置分页">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={neural.tab}
-            aria-pressed={tab === t.id}
-            onClick={() => requestGo(t.id)}
-          >
-            <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-            <span className={neural.inner}>{t.label}</span>
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const dot = tabDot(t.id);
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className={`${neural.tab} ${styles.tabBtn}`}
+              aria-pressed={tab === t.id}
+              onClick={() => requestGo(t.id)}
+            >
+              <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
+              <span className={neural.inner}>
+                <span className={styles.tabCode}>{t.code}</span>
+                <span>{t.label}</span>
+                {dot && <span className={styles.tabStatus} data-tone={dot} aria-hidden />}
+              </span>
+            </button>
+          );
+        })}
       </nav>
       <span
-        className={neural.tabLine}
+        className={`${neural.tabLine} ${styles.tabLine}`}
         style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
         aria-hidden
       />
@@ -173,21 +235,31 @@ export function SettingsScreen() {
         )}
       </main>
       <footer className={styles.foot}>
-        <SettingsTurnProgress />
-        {canReturnBack ? (
-          <>
-            <Button small keyId="key.esc" onClick={() => requestGo("back")}>
-              {backLabel}
-            </Button>
-            <Button small onClick={() => requestGo("menu")}>
-              返回主菜单
-            </Button>
-          </>
-        ) : (
-          <Button small keyId="key.esc" onClick={() => requestGo("menu")}>
-            返回主菜单
-          </Button>
-        )}
+        <span
+          className={styles.footLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
+        <div className={styles.footRow}>
+          <span className={styles.footHint}>LOCAL // 配置仅存于本机浏览器</span>
+          <SettingsTurnProgress />
+          <div className={styles.footActions}>
+            {canReturnBack ? (
+              <>
+                <Button small keyId="key.esc" onClick={() => requestGo("back")}>
+                  {backLabel}
+                </Button>
+                <Button small onClick={() => requestGo("menu")}>
+                  返回主菜单
+                </Button>
+              </>
+            ) : (
+              <Button small keyId="key.esc" onClick={() => requestGo("menu")}>
+                返回主菜单
+              </Button>
+            )}
+          </div>
+        </div>
       </footer>
       {leaving !== null && (
         <Dialog

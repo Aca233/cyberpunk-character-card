@@ -1,9 +1,10 @@
 /*
- * 设置页（统一使用原作面板/线/底图：menu.header、tab.bg、tab.line、panel.frame、notify.itemCell*、CellFrame）
- * 不手画边框、不用渐变和 backdrop-filter
+ * 设置页（统一使用原作面板/线/底图：menu.header、tab.bg、tab.line、panel.frame、notify.itemCell*、CellFrame、fx.grid）
+ * 统一暖暗紫黑表面色阶与居中限宽容器，不手画大框、不用渐变和 backdrop-filter
  */
 
 .screen {
+  --settings-max: 1360px;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -11,7 +12,7 @@
   width: 100%;
   max-width: 100%;
   height: 100dvh;
-  padding: 48px 72px 38px;
+  padding: 44px 64px 28px;
   overflow: hidden;
   box-sizing: border-box;
   background: var(--cp-bg);
@@ -24,7 +25,7 @@
 }
 
 .screen > :where(header, nav, main, footer),
-.screen > span:not(.bg, .shade, .scan, .frame) {
+.screen > span:not(.bg, .shade, .gridTex, .scan, .frame) {
   position: relative;
   z-index: 1;
 }
@@ -35,38 +36,52 @@
   background-position: center 40%;
   background-size: cover;
   background-repeat: no-repeat;
-  animation: bgIn 600ms ease-out both;
+  animation: bgIn 700ms var(--ease-snap) both;
 }
 
 .shade {
   position: absolute;
   inset: 0;
-  background: rgb(5 5 10 / 70%);
+  background: rgb(8 5 10 / 74%);
+}
+
+.gridTex {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.065;
+  pointer-events: none;
 }
 
 .scan {
   position: absolute;
   inset: 0;
   background-repeat: repeat;
-  opacity: 0.1;
+  opacity: 0.09;
   mix-blend-mode: screen;
   pointer-events: none;
-  animation: sweep 300ms ease-out both;
+  animation: sweep 380ms var(--ease-snap) both;
 }
 
 .screen > .frame {
   inset: 6px 20px 4px;
   opacity: 0.72;
+  animation: frameIn 420ms var(--ease-snap) 40ms both;
 }
 
-/* ———— 顶部标题区：避开 panel.frame 顶部编号文字 ———— */
+/* ———— 顶部标题区：避开 panel.frame 顶部编号文字，居中对齐主容器 ———— */
 
 .head {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-left: 4px;
+  width: 100%;
+  max-width: var(--settings-max);
+  margin: 0 auto;
+  padding: 0 4px;
+  animation: headIn 340ms var(--ease-snap) 70ms both;
 }
 
 .headBg {
@@ -81,6 +96,10 @@
   position: relative;
 }
 
+.headGlow {
+  flex: none;
+}
+
 .headTitleWrap {
   display: flex;
   align-items: baseline;
@@ -92,7 +111,8 @@
   font-family: var(--font-mono);
   font-size: var(--fs-label);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
 }
 
 .head h1 {
@@ -102,42 +122,173 @@
   font-weight: 700;
   letter-spacing: 0.22em;
   text-shadow:
-    0 0 4px rgb(5 5 10),
-    0 0 12px rgb(5 5 10);
+    0 0 4px rgb(8 5 10),
+    0 0 12px rgb(8 5 10);
+}
+
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.headTelemetry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.teleChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 16rem;
+  padding: 3px 10px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-strong);
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teleChip[data-tone="ok"] {
+  border-color: rgb(94 246 255 / 38%);
+  background: rgb(94 246 255 / 9%);
+  color: var(--cp-cyan);
+}
+
+.teleChip[data-tone="warn"] {
+  border-color: rgb(252 238 10 / 42%);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+}
+
+.teleDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 .headFluff {
-  margin-left: auto;
-  opacity: 0.52;
+  flex: none;
+  opacity: 0.48;
   pointer-events: none;
 }
 
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--settings-max);
+  margin: 10px auto 0;
+  animation: tabsIn 320ms var(--ease-snap) 110ms both;
+}
+
+.tabBtn {
+  padding: 9px 18px;
+}
+
+.tabCode {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+}
+
+.tabBtn[aria-pressed="true"] .tabCode {
+  opacity: 1;
+}
+
+.tabStatus {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.tabStatus[data-tone="ok"] {
+  background: var(--cp-cyan);
+  box-shadow: 0 0 6px rgb(94 246 255 / 70%);
+}
+
+.tabStatus[data-tone="warn"] {
+  background: var(--cp-yellow);
+  box-shadow: 0 0 6px rgb(252 238 10 / 70%);
+  animation: statusPulse 2.2s ease-in-out infinite;
+}
+
+.tabLine {
+  width: 100%;
+  max-width: var(--settings-max);
+  margin-inline: auto;
 }
 
 .body {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: var(--settings-max);
   min-height: 0;
-  margin-top: 16px;
+  margin: 16px auto 0;
   padding: 2px 6px 6px 2px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
-  animation: fadeIn 200ms ease-out both;
+  animation: paneIn 260ms var(--ease-snap) both;
 }
 
 .foot {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: var(--settings-max);
+  margin: 10px auto 0;
+}
+
+.footLine {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--cp-red-dim);
+  opacity: 0.45;
+  mask-size: 100% 100%;
+}
+
+.footRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.footHint {
+  color: var(--cp-text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.footActions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .turnProgress {
@@ -665,7 +816,7 @@
 
 .expandArrow {
   transform: rotate(180deg);
-  transition: transform var(--dur-flash);
+  transition: transform 200ms var(--ease-snap);
 }
 
 .expand[aria-expanded="true"] {
@@ -683,6 +834,7 @@
 
 .entryDetail {
   padding: 4px 12px 14px 38px;
+  animation: detailReveal 200ms var(--ease-snap) both;
 }
 
 .entryEditor {
@@ -712,11 +864,19 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   cursor: var(--cp-cursor-hand);
-  transition: color var(--dur-flash);
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    text-shadow var(--dur-flash) var(--ease-cyber),
+    transform 100ms var(--ease-snap);
 }
 
 .fileButton:hover {
   color: var(--cp-cyan);
+  text-shadow: 0 0 10px rgb(94 246 255 / 45%);
+}
+
+.fileButton:active {
+  transform: translateY(1px) scale(0.975);
 }
 
 .fileBg {
@@ -758,7 +918,13 @@
 
 @media (width < 1280px) {
   .screen {
-    padding: 44px 56px 36px;
+    padding: 40px 48px 26px;
+  }
+}
+
+@media (width < 920px) {
+  .headTelemetry {
+    display: none;
   }
 }
 
@@ -767,7 +933,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 36px 28px 34px;
+    padding: 36px 24px 28px;
     overflow-x: hidden;
     overflow-y: auto;
   }
@@ -784,7 +950,8 @@
     margin-top: 8px;
   }
 
-  .headFluff {
+  .headFluff,
+  .footHint {
     display: none;
   }
 
@@ -802,9 +969,50 @@
   }
 }
 
-@keyframes fadeIn {
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.75);
+  }
+}
+
+@keyframes paneIn {
   from {
     opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes frameIn {
+  from {
+    opacity: 0;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes headIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes tabsIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes detailReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
   }
 }
 
@@ -820,19 +1028,29 @@
 @keyframes bgIn {
   from {
     opacity: 0;
-    transform: scale(1.04);
+    transform: scale(1.045);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bg,
   .scan,
-  .body {
-    animation-duration: 1ms;
-    animation-delay: 0ms;
+  .screen > .frame,
+  .head,
+  .tabs,
+  .tabStatus,
+  .body,
+  .entryDetail {
+    animation: none;
   }
 
-  .expandArrow {
+  .expandArrow,
+  .fileButton,
+  .fileBg {
     transition: none;
+  }
+
+  .fileButton:active {
+    transform: none;
   }
 }

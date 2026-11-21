@@ -16,7 +16,7 @@
 /* ── 紧凑复选框（用于条目开关列表） ── */
 
 .checkbox {
-  --chk-fill: rgb(14 14 23 / 82%);
+  --chk-fill: var(--cp-surface-strong);
   --chk-line: var(--cp-red-dim);
   position: relative;
   display: inline-grid;
@@ -26,8 +26,8 @@
   width: 20px;
   height: 20px;
   transition:
-    --chk-line var(--dur-flash),
-    --chk-fill var(--dur-flash);
+    --chk-line var(--dur-flash) var(--ease-cyber),
+    --chk-fill var(--dur-flash) var(--ease-cyber);
 }
 
 .slice {
@@ -70,7 +70,7 @@
 /* ── 战术开关（用于偏好设置等独立开关行） ── */
 
 .switch {
-  --box-fill: rgb(14 14 23 / 82%);
+  --box-fill: var(--cp-surface-strong);
   --box-line: var(--cp-red-dim);
   position: relative;
   display: grid;
@@ -80,6 +80,9 @@
   width: 74px;
   height: 32px;
   padding: 4px 6px;
+  transition:
+    --box-line var(--dur-flash) var(--ease-cyber),
+    --box-fill var(--dur-flash) var(--ease-cyber);
 }
 
 .switch:hover:not([data-disabled]) {
@@ -87,7 +90,7 @@
 }
 
 .switch[data-checked] {
-  --box-fill: rgb(94 246 255 / 12%);
+  --box-fill: rgb(94 246 255 / 14%);
   --box-line: var(--cp-cyan);
 }
 
@@ -110,6 +113,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   user-select: none;
+  transition: color var(--dur-flash) var(--ease-cyber);
 }
 
 .switch[data-checked] .switchState {
@@ -119,22 +123,26 @@
 
 .thumb {
   position: relative;
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
   justify-self: start;
   width: 26px;
   height: 22px;
   pointer-events: none;
+  transform: translateX(0);
+  transition: transform 180ms var(--ease-snap);
 }
 
 .switch[data-checked] .thumb {
-  grid-column: 2;
-  justify-self: end;
+  transform: translateX(36px);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .checkbox,
-  .tick {
+  .tick,
+  .switch,
+  .switchState,
+  .thumb {
     transition: none;
   }
 }
