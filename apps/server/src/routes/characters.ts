@@ -35,7 +35,9 @@ async function readCard(c: Context, workshop?: WorkshopStore) {
   const parsed = CharacterCardSchema.safeParse(raw);
   if (parsed.success) {
     if (!parsed.data.board) return { ok: true as const, card: parsed.data };
-    const packs = ((await workshop?.list()) ?? []).map((entry) => entry.pack);
+    const packs = ((await workshop?.list()) ?? [])
+      .filter((entry) => entry.enabled)
+      .map((entry) => entry.pack);
     const runtime = workshopRuntime(packs);
     // 按内容表重算开局义体快照并校验部位容量，再检查角色卡结构。
     // 旧识只认原作人物表和模块带出的人，对不上的去掉（用户定的，2026-10-30：15 个原作人物全部能选）
@@ -96,17 +98,19 @@ export function characterRoutes(
     const allItems = runtime.content.items ?? items;
     const allCyberware = runtime.content.cyberware ?? cyberware;
     const allNpcs = runtime.content.npcs ?? npcs;
+    const allVehicles = runtime.content.vehicles ?? vehicles;
     const customPackId = workshopEntityPackId;
     return c.json({
       modules: [...boardModules, ...runtime.modules],
       acquaintances: runtime.acquaintances,
-      // 捏人能选的原作人物：只给名片上公开的几项，秘密和身体不下发
+      // 捏人能选的 2077 预制人物：只给名片上公开的几项，秘密和身体不下发
       npcs: allNpcs.map((n) => ({
         id: n.id,
         name: n.name,
         ...(n.alias ? { alias: n.alias } : {}),
         role: n.role,
         look: n.look,
+        ...(n.faction && n.faction !== "none" ? { faction: n.faction } : {}),
         ...(customPackId(n.id) ? { packId: customPackId(n.id) } : {}),
       })),
       cyberware: allCyberware.flatMap((def) =>
@@ -128,8 +132,6 @@ export function characterRoutes(
                   : {}),
                 ...(def.armor ? { armor: true } : {}),
                 ...(def.accelerator ? { accelerator: true } : {}),
-                ...(def.checks.length > 0 ? { checks: def.checks } : {}),
-                ...(Object.keys(def.attributes).length > 0 ? { attributes: def.attributes } : {}),
                 ability: def.ability,
                 ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
               },
@@ -151,10 +153,11 @@ export function characterRoutes(
             ...(def.category ? { category: def.category } : {}),
             rarity: def.rarity,
             ability: def.ability,
+            ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
           },
         ];
       }),
-      vehicles: vehicles.map((v) => ({
+      vehicles: allVehicles.map((v) => ({
         id: v.id,
         name: v.name,
         maker: v.maker,
@@ -166,7 +169,7 @@ export function characterRoutes(
       loadouts,
       names: Object.fromEntries([
         ...allItems.map((i) => [i.id, i.name] as const),
-        ...vehicles.map((v) => [v.id, v.name] as const),
+        ...allVehicles.map((v) => [v.id, v.name] as const),
         ...quickhacks.map((q) => [q.id, q.name] as const),
         ...allCyberware.map((c) => [c.id, c.name] as const),
       ]),

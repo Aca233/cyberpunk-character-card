@@ -109,6 +109,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     id: "wilson",
     name: "威尔逊的枪店",
     keeper: "威尔逊",
+    keeperNpc: "wilson",
     location: "megabuilding-h10",
     note: "H10 巨型公寓里的枪店兼靶场，店主是退伍兵，卖出去的枪都亲手调过",
     shelf: [
@@ -167,6 +168,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     id: "kabuki-arms",
     name: "阿涛的摊子",
     keeper: "阿涛",
+    keeperNpc: "atao",
     location: "kabuki-market",
     note: "歌舞伎市场里卖刀卖枪的摊子，货不问来路，有的枪号码锉掉了",
     priceFactor: 0.7,

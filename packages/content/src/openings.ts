@@ -1,65 +1,22 @@
 import type { GameOpening } from "@cp/core";
-import { everydayPeople } from "./everydayLife";
 import { locations } from "./locations";
 import { DISTRICT_SHAPES } from "./mapShapes.gen";
+import { npcs } from "./npcs";
 import { RADAR_ANCHORS } from "./radar";
 import { DISTRICT_LAWS, NIGHT_CITY_SLICES } from "./slices";
 
-/** 新存档默认用的自由沙盘开场 */
+/** 新存档唯一使用的 2077 自由沙盘开场 */
 export const DEFAULT_OPENING = "sandbox-2077";
 
 export const openings: readonly GameOpening[] = [
   {
-    // 2077 自由沙盘开局：《边缘行者》已是旧闻，不强加任何主线芯片委托或倒计时
-    id: "sandbox-2077",
-    title: "夜之城自由沙盘",
+    // 2077 年 4 月中旬自由沙盘开局：主线序章前夕的暗流窗口，不强加芯片死线或必接任务
+    id: DEFAULT_OPENING,
+    title: "夜之城 2077 自由沙盘",
     location: "megabuilding-h10",
-    cast: [
-      ...everydayPeople.map((person) => person.id),
-      "judy",
-      "regina",
-      "viktor",
-      "jackie",
-      "misty",
-      "rogue",
-      "wakako",
-      "dex",
-      "padre",
-      "panam",
-      "river",
-      "kerry",
-      "dino",
-      "el-capitan",
-      "dakota",
-      "mr-hands",
-      "takemura",
-      "evelyn",
-      "hanako",
-      "yorinobu",
-      "saburo",
-      "hellman",
-      "t-bug",
-      "dum-dum",
-      "royce",
-      "placide",
-      "brigitte",
-      "mama-welles",
-      "meredith",
-      "claire",
-      "nix",
-      "lizzy-wizzy",
-      "smasher",
-      "saul",
-      "mitch",
-      "carol",
-      "songbird",
-      "reed",
-      "myers",
-      "hansen",
-      "alex",
-    ],
-    premise: `这是一场 2077 年初夜之城自由沙盘开局：没有强塞给玩家的预设芯片死线或必接任务，城市照自己的逻辑运转，各方中间人、帮派与巨企各怀盘算。
-《边缘行者》里的事已经过去了，是街头的旧闻：大卫、丽贝卡、曼恩一伙和中间人法拉第都死了，有人提起时照旧闻写，他们不会出场。
+    cast: npcs.map((person) => person.id),
+    premise: `这是一场 2077 年 4 月中旬的夜之城自由沙盘开局：主角不是 V，没有强塞给玩家的预设芯片死线或必接主线，整座城市照着自己的利益与时间线运转。
+此时荒坂赖宣刚携机密抵城下榻绀碧大厦、荒坂三郎与华子尚在东京；军用科技在沃森丢了原型货、漩涡帮刚易主；德克斯特低调回城、各路中间人与帮派暗流涌动。去年《边缘行者》（大卫、曼因、丽贝卡、法拉第）的事已经落幕，只作为街头旧闻存在，他们不会出场。
 第一轮直接从玩家当前所在地点的一个具体瞬间切进去：感官噪音、气味、街角摊贩/过路人或旧识的动静。绝不写干巴巴的背景综述，不要列选项，也不要反问玩家想做什么；玩家的第一句话已经写了在做什么或说什么，就顺着它接着往下推。
 如玩家主动打听活计、联系中间人或撞上现场麻烦，可通过正常的委托/人际机制自然生出差事（jobOffer），不要硬塞线性剧本。`,
     gear: [],

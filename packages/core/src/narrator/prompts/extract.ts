@@ -5,7 +5,7 @@ import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
 import { ExtractDocSchema } from "../block";
 import { commandDoc, schemaDoc } from "../doc";
-import { extractCatalogData, extractCatalogDetails } from "./catalogs";
+import { extractCatalogData, extractCatalogDetails, worldObjectsIndexSection } from "./catalogs";
 import {
   activeOpening,
   CORE_COMMANDS,
@@ -17,7 +17,7 @@ import {
   stageModules,
   tablesOf,
 } from "./context";
-import { BOOKKEEPING_BASE, systemMessage, userMessage } from "./layers";
+import { BOOKKEEPING_BASE, modulesBlock, systemMessage, userMessage } from "./layers";
 import { npcEquipmentReference } from "./npc-equipment";
 
 /** ④ 抽取：辅助模型，低温，只输出 JSON */
@@ -31,6 +31,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 计划、打算、还没兑现的威胁不算；玩家角色的台词和决定只认玩家输入，正文里替玩家补写的不算。
 - 【本轮已定的事】中的客观阻碍、伤害上限和出行条件仍然有效；正文若与它冲突，不把被阻断行动的成功或依赖其成功的收益记账，冲突及原因写进 dropped。同轮独立发生、符合条件的其他事实仍照常记录。
 - 考虑过但没抽的写进 dropped，每条带原因（“只是打算，没发生”“玩家角色心里想的”）；dropped 必须写，没有就写 []。
+- 若存在【上一轮之后已在界面完成并结算的操作】，这些事项已经落盘完毕，正文只是回述它们；严禁为其中任何一项重复发 trade/item/money/cyberware/gunsmith/jobAccept/vehicle/safehouse/heal/suppressant 等指令，可在 dropped 注明“已在界面结算”。
 - 交易询价与成交分开：对方已认可的新价格保存 commerce.offer 并引用正文证据；只有玩家已接受且正文实际交付才发 trade/cyberware/gunsmith，沿用实际对方、报价和旧件条件。多件逐件按先后记账，不能额外发 item gain 或 money 重复结算；到店购买先记实际到达，转交刚买的东西再记其转交。报价清单是可成交条件，不代表正文已经交付。
 - 照正文写实，不夸大：子弹擦过或皮外磕碰是 graze，贯通中枪或重击是 heavy；正文只花了钱没拿到东西，就不写 item gain。
 - 唯有 npc 建卡或用 npcUpdate 首次定型「还没定」旧识时，按身份、所属势力、财力和现场表现补齐真实 body：gear 包含实际穿着的衣物、随身武器与药剂/工具/日常物件（普通人也应有合身衣物与随身小物）。cyberware 按夜之城常态推演：大多数新人物（含普通市民、商贩、雇员、帮派成员与佣兵）通常常配 1–3 件贴合身份、生计与财力的基础或常见义体（如基础岐路司义眼、生物监测、合成肺叶、持握衬垫、通用义肢、防火/接地镀层，或与工作直接相关的接入仓、皮下护甲、神经/骨骼件），按人物特点错开部位、不千篇一律只填同一款义眼；只有正文明确无植入、信仰排斥义体或极端拮据者才留空。正文明确无植入、或给出扫描所得的完整植入清单时照事实保留；npcUpdate 不得覆盖已定型人物的 body，实际变化用 npcChrome / npcGear。不得因模型没写具体武器型号或秘密把新人物留成空壳。
@@ -73,7 +74,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 收场（sceneEnd 为 true）时，这一场里和玩家角色有过实质来往的有卡人物，每人写一条 memory：一句话记这一场你们之间发生了什么（帮了谁、欠了什么、闹翻了没有），只写正文里写了的；已经记过的同一件事不重复写。`;
 
 /** ④ 抽取的例子 */
-export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-01-01 22:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
+export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-04-12 21:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
 let extractCore: string | undefined;
 
@@ -123,11 +124,15 @@ export function buildExtractPrompt(
     `${plan.input.text}\n${narrative}`,
     modules.some((m) => m.id === "hacking"),
   );
+  const activeModulesText = modulesBlock("extract", modules);
+  const worldObjectIndex = worldObjectsIndexSection(world);
   const content = userMessage({
+    modules: activeModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
       npcEquipmentReference(world, extras.data, true),
+      worldObjectIndex,
       details,
       extras.decided?.length ? `【本轮已定的事】\n${extras.decided.join("\n")}` : undefined,
       tradePlans ? `【本轮已核对的交易条件】\n${tradePlans}` : undefined,
@@ -135,11 +140,23 @@ export function buildExtractPrompt(
     ],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
-  const rules = systemMessage("extract", [extractRules()], modules);
+  // 系统层只放纯静态抽取规则 + 纯静态基础目录表（剥离每轮动态模块与存档独立物件），
+  // 让几千 token 的抽取系统提示词跨回合 100% 命中提示缓存。
+  const staticData =
+    extras.data &&
+    "baseData" in extras.data &&
+    extras.data.baseData &&
+    typeof extras.data.baseData === "object"
+      ? (extras.data.baseData as Readonly<Record<string, unknown>>)
+      : extras.data;
+  const staticRules = systemMessage("extract", [extractRules()]);
   return {
-    rules: rules.length,
+    rules: staticRules.length + (activeModulesText?.length ?? 0),
     messages: [
-      { role: "system", content: [rules, ...tablesOf(view, { ...extras, data })].join("\n\n") },
+      {
+        role: "system",
+        content: [staticRules, ...tablesOf(view, { ...extras, data: staticData })].join("\n\n"),
+      },
       { role: "user", content },
     ],
     modules: modules.map((m) => m.id),

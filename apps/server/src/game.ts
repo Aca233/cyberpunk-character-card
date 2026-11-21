@@ -24,11 +24,8 @@ import {
   HISTORY_TURNS,
   isSnapshotValid,
   judgeCandidates,
-  type Legend,
   type LlmMessage,
   type LogRecord,
-  legendNotes,
-  legendOf,
   loadoutText,
   logVersion,
   memoryPool,
@@ -96,7 +93,7 @@ import { requiredPackIds, workshopRuntime } from "./workshop-content";
 
 /** 每追加这么多条记录写一次快照 */
 export const SNAPSHOT_EVERY = 10;
-export const DEFAULT_START = "2077-01-01 22:00";
+export const DEFAULT_START = "2077-04-12 21:00";
 
 export const CreateSaveSchema = z.strictObject({
   title: z.string().trim().min(1, "存档名不能为空").max(80, "存档名最多 80 字"),
@@ -189,18 +186,19 @@ interface Loaded {
   readonly world: WorldState;
 }
 
-/** 名册里的一位：带上存档 id 和标题，好从名册点回去回看 */
-export type SavedLegend = Legend & { readonly saveId: string; readonly title: string };
-
 class VersionMovedError extends Error {
   override name = "VersionMovedError";
 }
 
 function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined {
   if (!a && b.inputTokens === 0 && b.outputTokens === 0) return undefined;
+  const cached = (a?.cachedInputTokens ?? 0) + (b.cachedInputTokens ?? 0);
+  const write = (a?.cacheWriteTokens ?? 0) + (b.cacheWriteTokens ?? 0);
   return {
     inputTokens: (a?.inputTokens ?? 0) + b.inputTokens,
     outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
+    ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+    ...(write > 0 ? { cacheWriteTokens: write } : {}),
   };
 }
 
@@ -221,7 +219,7 @@ export class GameService {
   constructor(private readonly deps: GameDeps) {}
 
   private runtime(meta: SaveMeta) {
-    return workshopRuntime(meta.workshopPacks ?? []);
+    return workshopRuntime(meta.workshopPacks ?? [], meta.board?.customCyberware);
   }
 
   async list(): Promise<Record<string, unknown>[]> {
@@ -237,30 +235,6 @@ export class GameService {
       }
     }
     return out;
-  }
-
-  /**
-   * 传说名册：死了不能重来、或者玩家给故事收了尾的角色，最近的在前。
-   * 每次请求按各存档现算，所以旧存档里死掉的角色也在；读不了的存档跳过
-   */
-  async legends(): Promise<SavedLegend[]> {
-    const out: SavedLegend[] = [];
-    for (const id of await this.deps.saves.list()) {
-      try {
-        const legend = await this.locks.run(id, async (): Promise<SavedLegend | null> => {
-          const { meta, world, records } = await this.load(id);
-          const view = projectState(world, records, this.runtime(meta).data);
-          const found = legendOf(view, world.time, meta.startTime);
-          return found && { ...found, saveId: id, title: meta.title };
-        });
-        if (legend) out.push(legend);
-      } catch (error) {
-        this.deps.log(
-          `名册跳过读不了的存档 ${id}：${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-    return out.sort((a, b) => b.at - a.at);
   }
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
@@ -293,7 +267,8 @@ export class GameService {
     if (workshopPacks.length > 40) {
       return { status: 400, body: { error: "每份存档最多使用 40 个内容包，请先停用部分包。" } };
     }
-    const runtime = workshopRuntime(workshopPacks);
+    const start = boardStart(entry.card);
+    const runtime = workshopRuntime(workshopPacks, start?.customCyberware);
     const matchInput = loadoutText(entry.card);
     const cardStart = entry.card.board?.startLocation;
     const startLocation =
@@ -301,9 +276,6 @@ export class GameService {
       (cardStart && RADAR_ANCHORS.some((anchor) => anchor.id === cardStart)
         ? cardStart
         : pickStartLocation(matchInput, runtime.content.loadouts ?? []));
-    const start = boardStart(entry.card);
-    // 名册摘要在建档时冻结进 meta：之后名册再变，这份存档重放出来的提示词也不变
-    const legends = legendNotes(await this.legends());
     const meta: SaveMeta = {
       ...input,
       startLocation,
@@ -313,7 +285,6 @@ export class GameService {
       loadouts: pickLoadouts(matchInput, runtime.content.loadouts ?? [], DEFAULT_LOADOUT),
       workshopPacks,
       ...(start ? { board: start } : {}),
-      ...(legends.length > 0 ? { legends } : {}),
     };
     try {
       newGameWorld(meta, runtime.content);
@@ -979,11 +950,19 @@ export class GameService {
       }
       const narrate = prompts.find((p) => p.stage === "narrate");
       const prompt = narrate ? { messages: narrate.messages, modules: narrate.modules } : null;
-      const total = { inputTokens: 0, outputTokens: 0, turns: 0 };
+      const total = {
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        turns: 0,
+      };
       for (const turn of effectiveTurns(records)) {
         if (!turn.usage) continue;
         total.inputTokens += turn.usage.inputTokens;
         total.outputTokens += turn.usage.outputTokens;
+        total.cachedInputTokens += turn.usage.cachedInputTokens ?? 0;
+        total.cacheWriteTokens += turn.usage.cacheWriteTokens ?? 0;
         total.turns += 1;
       }
       return {
@@ -1163,9 +1142,11 @@ export class GameService {
           : plan.input.spendOk
             ? checkpoint?.prepared.confirmation?.quoteKey
             : undefined;
+      const embedder = await this.deps.llm.resolveEmbedder((msg) => this.deps.log(msg));
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
+          embedder,
           contextWindow: resolved.profile.contextWindow,
           maxOutputTokens: resolved.profile.maxOutputTokens,
           auxContextWindow: aux.ok ? aux.profile.contextWindow : undefined,
@@ -1306,7 +1287,6 @@ export class GameService {
         requestId: run.requestId,
         baseVersion: run.baseVersion,
         input: plan.input,
-        dice: [],
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,

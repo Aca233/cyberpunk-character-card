@@ -20,6 +20,7 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
   {
     id: "needle",
     name: "针眼",
+    keeperNpc: "needle",
     location: "kabuki-market",
     note: "歌舞伎市场里摆摊的黑市义体医生，不问来路，也不保修",
     priceFactor: 0.8,
