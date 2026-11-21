@@ -11,10 +11,11 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
 import { warmLocalBackend } from "./api/transport";
 import { router } from "./app";
-import { loadAssetIndex } from "./assets";
+import { loadAssetIndex, loadAudioAssetIndex } from "./assets";
 import { installGameCursor } from "./assets/cursor";
 import { preloadBootAssets } from "./assets/preload";
 import { warmInitialQueries } from "./assets/usePreload";
+import { installAudioUnlock } from "./audio";
 import { FatalScreen } from "./features/status/FatalScreen";
 
 const queryClient = new QueryClient({
@@ -22,9 +23,10 @@ const queryClient = new QueryClient({
 });
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
-const loaded = await loadAssetIndex();
-// 启动期并行预热：自绘指针、主菜单与通用 UI 骨架素材、本地后端 chunk 及首屏查询缓存
+const [loaded] = await Promise.all([loadAssetIndex(), loadAudioAssetIndex()]);
+// 启动期并行预热：自绘指针、原版音频解锁、主菜单与通用 UI 骨架素材、本地后端 chunk 及首屏查询缓存
 if (loaded.ok) {
+  installAudioUnlock();
   void installGameCursor();
   void preloadBootAssets();
   warmLocalBackend();

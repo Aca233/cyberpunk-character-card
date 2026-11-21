@@ -1,6 +1,16 @@
 import { useSyncExternalStore } from "react";
+import type { AudioAssetId, BgmId, SfxAssetId } from "./audio-ids.gen";
 import type { AssetId } from "./ids.gen";
 
+export {
+  AUDIO_ASSET_IDS,
+  AUDIO_LABELS,
+  type AudioAssetId,
+  BGM_IDS,
+  type BgmId,
+  SFX_ASSET_IDS,
+  type SfxAssetId,
+} from "./audio-ids.gen";
 export type { AssetId } from "./ids.gen";
 
 /**
@@ -15,6 +25,22 @@ export type { AssetId } from "./ids.gen";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const INDEX_URL = `${BASE}/assets/local/ui/index.json`;
+const AUDIO_INDEX_URL = `${BASE}/assets/local/audio/index.json`;
+
+interface AudioEntry {
+  readonly path: string;
+  readonly kind: "bgm" | "sfx";
+  readonly label: string;
+  readonly duration: number;
+  readonly source: "demo" | "release";
+}
+
+export interface AudioAssetInfo {
+  readonly url: string;
+  readonly kind: "bgm" | "sfx";
+  readonly label: string;
+  readonly duration: number;
+}
 
 interface Entry {
   readonly path: string;
@@ -36,10 +62,13 @@ export interface AssetInfo {
 }
 
 let entries: Readonly<Record<string, Entry>> = {};
+let audioEntries: Readonly<Record<string, AudioEntry>> = {};
+let audioIndexLoaded = false;
 let tier: "demo" | "release" | null = null;
 const missing = new Set<string>();
 let missingList: readonly string[] = [];
 const listeners = new Set<() => void>();
+const audioListeners = new Set<() => void>();
 
 export async function loadAssetIndex(): Promise<{ ok: true } | { ok: false; error: string }> {
   let response: Response;
@@ -142,6 +171,49 @@ export function loadMapTiles(): Promise<MapTiles | null> {
     })
     .catch(() => null);
   return tilesPromise;
+}
+
+export async function loadAudioAssetIndex(): Promise<boolean> {
+  try {
+    const response = await fetch(AUDIO_INDEX_URL, { cache: "no-cache" });
+    if (!response.ok) return false;
+    const data = (await response.json()) as { assets?: Record<string, AudioEntry> };
+    if (!data.assets || typeof data.assets !== "object") return false;
+    audioEntries = data.assets;
+    audioIndexLoaded = Object.keys(audioEntries).length > 0;
+    for (const listener of audioListeners) listener();
+    return audioIndexLoaded;
+  } catch {
+    return false;
+  }
+}
+
+export function audioAsset(id: AudioAssetId | BgmId | SfxAssetId): AudioAssetInfo | undefined {
+  const entry = audioEntries[id];
+  if (!entry) return undefined;
+  return {
+    url: `${BASE}${entry.path}`,
+    kind: entry.kind,
+    label: entry.label,
+    duration: entry.duration,
+  };
+}
+
+export function audioAssetUrl(id: AudioAssetId | BgmId | SfxAssetId): string | undefined {
+  return audioAsset(id)?.url;
+}
+
+export function audioAssetsReady(): boolean {
+  return audioIndexLoaded;
+}
+
+export function loadedAudioCount(): number {
+  return Object.keys(audioEntries).length;
+}
+
+export function subscribeAudioIndex(listener: () => void): () => void {
+  audioListeners.add(listener);
+  return () => audioListeners.delete(listener);
 }
 
 export function useMissingAssets(): readonly string[] {
