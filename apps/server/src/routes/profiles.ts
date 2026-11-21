@@ -202,7 +202,7 @@ export function profileRoutes(config: ConfigService): Hono {
         if (event.type === "text") reply += event.text;
         else if (event.type === "blocked") {
           return c.json({ ok: false, error: `请求被拦截：${redact(event.reason)}` });
-        } else usage = event.usage;
+        } else if (event.type === "done") usage = event.usage;
       }
     } catch (error) {
       return c.json({

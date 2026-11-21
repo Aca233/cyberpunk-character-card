@@ -38,6 +38,7 @@ interface AnthropicEvent {
   readonly delta?: {
     readonly type?: string;
     readonly text?: string;
+    readonly thinking?: string;
     readonly stop_reason?: string | null;
   };
   readonly usage?: AnthropicUsage;
@@ -206,6 +207,9 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
         } else if (kind === "content_block_delta" && payload.delta?.type === "text_delta") {
           const text = payload.delta.text;
           if (text) yield { type: "text", text };
+        } else if (kind === "content_block_delta" && payload.delta?.type === "thinking_delta") {
+          const thinking = payload.delta.thinking;
+          if (thinking) yield { type: "thought", text: thinking };
         } else if (kind === "message_delta") {
           if (payload.delta?.stop_reason) finishReason = payload.delta.stop_reason;
           if (payload.usage) absorbUsage(payload.usage);

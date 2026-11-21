@@ -243,7 +243,13 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
       ...(request.responseFormat?.type === "json" ? { responseMimeType: "application/json" } : {}),
       ...(responseSchema ? { responseSchema } : {}),
       ...(profile.thinkingLevel !== undefined
-        ? { thinkingConfig: { thinkingLevel: profile.thinkingLevel, includeThoughts: false } }
+        ? {
+            thinkingConfig: {
+              thinkingLevel: profile.thinkingLevel,
+              includeThoughts:
+                request.purpose === "narrator" && request.responseFormat === undefined,
+            },
+          }
         : {}),
     },
     // 沿用配置含义：off/未设置不传，遵循上游默认；blockNone 显式传阈值。
@@ -338,9 +344,13 @@ export function geminiClient(profile: Profile, apiKey: string): LlmClient {
           yield { type: "blocked", reason: blockedMessage };
           return;
         }
-        // 先放出这一块的正文，再看结束原因：截断时已写出的字留在界面上，但这一轮仍按出错处理
+        // 先放出这一块的正文与思考，再看结束原因：截断时已写出的字留在界面上，但这一轮仍按出错处理
         for (const part of candidate.content?.parts ?? []) {
-          if (part.thought === true || !part.text) continue;
+          if (!part.text) continue;
+          if (part.thought === true) {
+            yield { type: "thought", text: part.text };
+            continue;
+          }
           if (part.text.trim() !== "") visible = true;
           yield { type: "text", text: part.text };
         }

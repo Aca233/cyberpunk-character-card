@@ -32,7 +32,12 @@ const HEAD_CHECK = 24;
 
 interface ChatChunk {
   readonly choices?: readonly {
-    readonly delta?: { readonly content?: string | null };
+    readonly delta?: {
+      readonly content?: string | null;
+      readonly reasoning_content?: string | null;
+      readonly reasoning?: string | null;
+      readonly thinking?: string | null;
+    };
     readonly finish_reason?: string | null;
   }[];
   readonly usage?: {
@@ -153,6 +158,9 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           );
         }
         for (const choice of chunk.choices ?? []) {
+          const thought =
+            choice.delta?.reasoning_content ?? choice.delta?.reasoning ?? choice.delta?.thinking;
+          if (thought) yield { type: "thought", text: thought };
           const text = choice.delta?.content;
           if (text) {
             if (headState === "story") {

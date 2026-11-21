@@ -1169,6 +1169,7 @@ export class GameService {
             await this.deps.checkpoints?.save(run.saveId, cp);
           },
           onText: (text) => hub.push(run, { type: "text", text }),
+          onThought: (text) => hub.push(run, { type: "thought", text }),
           onStage: (info) => {
             const model = stageModel(info.stage);
             hub.push(run, { type: "stage", ...info, ...(model ? { model } : {}) });
@@ -1290,6 +1291,7 @@ export class GameService {
         commands: [...turn.commands],
         dropped: [...turn.dropped],
         text: turn.text,
+        ...(turn.thought ? { thought: turn.thought } : {}),
         ...(media.length ? { media } : {}),
         ...(imageContext ? { imageContext } : {}),
         patches: [...turn.patches],
