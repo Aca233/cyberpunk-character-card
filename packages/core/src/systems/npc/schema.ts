@@ -213,7 +213,9 @@ export type NpcCard = z.infer<typeof NpcCardSchema>;
 /** 每个人物最多留这么多条人情和仇，满了先删最早了结的，再删最早的 */
 export const LEDGER_KEPT = 12;
 /** 关系笔记一句的长度上限 */
-export const RELATION_CHARS = 60;
+export const RELATION_CHARS = 120;
+/** 人情/仇、传闻、近况、死亡/伤愈原因等单句说明长度上限 */
+export const NPC_NOTE_CHARS = 120;
 
 /** owesYou 对方欠你人情，youOwe 你欠对方人情，grudge 对方记你的仇 */
 export const LedgerKindSchema = z.enum(["owesYou", "youOwe", "grudge"]);
@@ -226,13 +228,13 @@ export const LEDGER_KIND_LABELS: Readonly<Record<LedgerKind, string>> = {
 
 export const LedgerEntrySchema = z.object({
   kind: LedgerKindSchema,
-  text: z.string().min(1).max(80),
+  text: z.string().min(1).max(NPC_NOTE_CHARS),
   /** 记下的游戏时间 */
   at: z.number().int(),
   /** 了结（还了、报了、放下了）的游戏时间；没了结是 null */
   settledAt: z.number().int().nullable(),
   /** 怎么了结的 */
-  how: z.string().min(1).max(60).optional(),
+  how: z.string().min(1).max(NPC_NOTE_CHARS).optional(),
 });
 export type LedgerEntry = z.infer<typeof LedgerEntrySchema>;
 
@@ -251,7 +253,7 @@ export const KNOWN_SOURCE_LABELS: Readonly<Record<KnownSource, string>> = {
 };
 
 export const KnownFactSchema = z.object({
-  text: z.string().min(1).max(80),
+  text: z.string().min(1).max(NPC_NOTE_CHARS),
   source: KnownSourceSchema,
   at: z.number().int(),
 });
@@ -260,7 +262,7 @@ export type KnownFact = z.infer<typeof KnownFactSchema>;
 /** 每个人最多记这么多个认识的人，满了先删最早的 */
 export const TIES_KEPT = 12;
 /** 认识的人的关系一句的长度上限 */
-export const TIE_CHARS = 40;
+export const TIE_CHARS = 120;
 
 /** 一个人认识的另一个有卡的人：对方 id、一句关系（从这个人的角度写）、外人看不看得出来 */
 export const NpcTieSchema = z.object({
@@ -472,7 +474,7 @@ export const AffinitySchema = z
       .number()
       .int()
       .refine((v) => v !== 0, "好感变化不能为 0"),
-    reason: z.string().trim().min(1).max(80),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe(
     `好感变化（结算用；模型写的是方向和大小，见 AffinityProposalSchema）；单条最多 ±${AFFINITY_STEP_CAP}，范围 ${AFFINITY_MIN} 到 ${AFFINITY_MAX}，代码截断`,
@@ -497,7 +499,7 @@ export const AffinityProposalSchema = z
     size: z
       .enum(["small", "medium", "large"])
       .describe("small 小事（一句好话、一点冒犯），medium 帮了忙或伤了感情，large 救命之恩或背叛"),
-    reason: z.string().trim().min(1).max(80),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe("好感变化：只选方向和大小，不写数字，代码换算并截断")
   .transform(
@@ -507,32 +509,38 @@ export const AffinityProposalSchema = z
     }),
   );
 
-/** 模型仍写了数字好感时：换成最近的大小档（一样近取小的），方向看正负 */
+/** 模型仍写了数字好感时：换成最近的大小档（一样近取小的），方向看正负；同时温和截断超长 reason */
 export function legacyAffinity(
   raw: Readonly<Record<string, unknown>>,
 ): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
-  if (!("delta" in raw)) return undefined;
-  const { delta, ...rest } = raw;
-  if (rest.dir !== undefined && rest.size !== undefined) {
-    return { value: rest, note: "好感写了数字，按写的方向和大小处理，数字不用" };
+  let out: Record<string, unknown> = { ...raw };
+  const notes: string[] = [];
+  if ("delta" in raw) {
+    const { delta, ...rest } = raw;
+    if (rest.dir !== undefined && rest.size !== undefined) {
+      out = { ...rest };
+      notes.push("好感写了数字，按写的方向和大小处理，数字不用");
+    } else if (typeof delta === "number" && Number.isFinite(delta) && delta !== 0) {
+      const abs = Math.abs(delta);
+      const sizes = Object.entries(AFFINITY_SIZES) as [AffinitySize, number][];
+      const [size] = sizes.reduce((best, cur) =>
+        Math.abs(cur[1] - abs) < Math.abs(best[1] - abs) ? cur : best,
+      );
+      out = { ...rest, dir: delta > 0 ? "up" : "down", size };
+      notes.push(`好感写了数字，已按最近的档位（${AFFINITY_SIZE_LABELS[size]}）处理`);
+    }
   }
-  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) return undefined;
-  const abs = Math.abs(delta);
-  const sizes = Object.entries(AFFINITY_SIZES) as [AffinitySize, number][];
-  const [size] = sizes.reduce((best, cur) =>
-    Math.abs(cur[1] - abs) < Math.abs(best[1] - abs) ? cur : best,
-  );
-  return {
-    value: { ...rest, dir: delta > 0 ? "up" : "down", size },
-    note: `好感写了数字，已按最近的档位（${AFFINITY_SIZE_LABELS[size]}）处理`,
-  };
+  if (normalizeTextField(out, "reason", NPC_NOTE_CHARS, false)) {
+    notes.push("好感原因已按长度上限微调");
+  }
+  return notes.length > 0 ? { value: out, note: notes.join("；") } : undefined;
 }
 
 export const MemorySchema = z
   .object({
     type: z.literal("memory"),
     id: NpcIdSchema,
-    text: z.string().trim().min(1).max(120),
+    text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     source: z
       .enum(["experienced", "told", "log"])
       .optional()
@@ -547,7 +555,7 @@ export const NpcDeathSchema = z
   .object({
     type: z.literal("npcDeath"),
     id: NpcIdSchema,
-    reason: z.string().trim().min(1).max(80),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe("人物死亡；死了的人不会再出场");
 export type NpcDeath = z.infer<typeof NpcDeathSchema>;
@@ -556,7 +564,7 @@ export const DoingSchema = z
   .object({
     type: z.literal("doing"),
     id: NpcIdSchema,
-    text: z.string().trim().min(1).max(80),
+    text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     /**
      * NPC 会移动（用户 2026-11-02："npc是能移动的"）：这段时间他去了别处，写现在在的地点 id；
      * 没挪地方不写。场外推演由代码核对地点 id 必须存在
@@ -639,7 +647,7 @@ export const LedgerSchema = z
     kind: LedgerKindSchema.describe(
       "owesYou 对方欠玩家角色人情，youOwe 玩家角色欠对方人情，grudge 对方记玩家角色的仇",
     ),
-    text: z.string().trim().min(1).max(80),
+    text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe("记一笔人情或仇：帮了大忙、救过命、替人扛了事、结下梁子；一句话写清是什么事");
 export type Ledger = z.infer<typeof LedgerSchema>;
@@ -649,7 +657,7 @@ export const LedgerSettleSchema = z
     type: z.literal("ledgerSettle"),
     id: NpcIdSchema,
     entry: z.number().int().min(1).describe("【人物】里这个人的人情和仇的第几条"),
-    how: z.string().trim().min(1).max(60),
+    how: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe("了结一笔人情或仇：还了、报了、放下了；how 一句话写怎么了结的");
 export type LedgerSettle = z.infer<typeof LedgerSettleSchema>;
@@ -658,7 +666,7 @@ export const LearnSchema = z
   .object({
     type: z.literal("learn"),
     id: NpcIdSchema,
-    text: z.string().trim().min(1).max(80),
+    text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     source: KnownSourceSchema.describe(
       "seen 玩家角色亲眼看到，self 本人说的，told 别人说的，rumor 传闻、新闻，scan 扫描",
     ),
@@ -676,7 +684,7 @@ export const NpcHurtSchema = z
       "受伤部位（head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一），打中哪就写哪",
     ),
     tier: DamageTierSchema.describe("graze 擦伤，heavy 重伤，lethal 致命；和玩家的伤害档一样"),
-    reason: z.string().trim().min(1).max(80).describe("具体怎么伤的、用了什么家伙"),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS).describe("具体怎么伤的、用了什么家伙"),
   })
   .describe(
     "有卡的人受了伤（打斗里中枪挨刀、出事故）：写明 part 部位、tier 档位和 reason 致伤经过；记入具体伤势明细；伤势已经综合装备防护与实际击中位置，不再重复减伤。致命伤需急救，死亡另写 npcDeath",
@@ -690,7 +698,7 @@ export const NpcHealSchema = z
     how: z
       .enum(["rest", "maxdoc", "ripperdoc"])
       .describe("rest 休整了一阵，maxdoc 用了治疗品，ripperdoc 找义体医生治好了"),
-    reason: z.string().trim().min(1).max(80).optional(),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS).optional(),
   })
   .describe(
     "有卡的人得到真实治疗：rest 仅休整不清空创口；maxdoc 缓解不适；ripperdoc 稳定伤势并开始恢复，重伤不会随切场自动好",
@@ -763,7 +771,7 @@ export const NpcCompanionSchema = z
     type: z.literal("npcCompanion"),
     id: NpcIdSchema,
     following: z.boolean().describe("true 开始与玩家同行；false 分开、留守或各自行动"),
-    reason: z.string().trim().min(1).max(80).optional().describe("同行或分开的原因"),
+    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS).optional().describe("同行或分开的原因"),
   })
   .describe(
     "标记有卡人物是否正与玩家结伴同行：剧情里谈妥一起走、组队干活或护送时设 following:true；分开、留守、谈崩或各忙各的设 following:false",
@@ -917,6 +925,42 @@ export function normalizeNpcProposal(
   return changed ? { value: out, note: "人物卡字段已按长度与去重规则微调" } : undefined;
 }
 
+const NPC_TEXT_FIELDS: Readonly<
+  Record<string, readonly (readonly [key: string, maxLen: number, optional: boolean])[]>
+> = {
+  tie: [
+    ["aToB", TIE_CHARS, false],
+    ["bToA", TIE_CHARS, false],
+  ],
+  relation: [["text", RELATION_CHARS, false]],
+  doing: [["text", NPC_NOTE_CHARS, false]],
+  memory: [["text", NPC_NOTE_CHARS, false]],
+  learn: [["text", NPC_NOTE_CHARS, false]],
+  ledger: [["text", NPC_NOTE_CHARS, false]],
+  ledgerSettle: [["how", NPC_NOTE_CHARS, false]],
+  npcOutfit: [["text", OUTFIT_CHARS, false]],
+  npcDeath: [["reason", NPC_NOTE_CHARS, false]],
+  npcHurt: [["reason", NPC_NOTE_CHARS, false]],
+  npcHeal: [["reason", NPC_NOTE_CHARS, true]],
+  npcHumanity: [["reason", 160, false]],
+  npcCompanion: [["reason", NPC_NOTE_CHARS, true]],
+};
+
+/** 对人物指令里的描述性文本字段做温和去空白与长度截断，不改动任何 id 字段 */
+export function normalizeNpcTextProposal(
+  raw: Readonly<Record<string, unknown>>,
+): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
+  const type = typeof raw.type === "string" ? raw.type : undefined;
+  const rules = type ? NPC_TEXT_FIELDS[type] : undefined;
+  if (!rules) return undefined;
+  const out: Record<string, unknown> = { ...raw };
+  let changed = false;
+  for (const [key, maxLen, optional] of rules) {
+    if (normalizeTextField(out, key, maxLen, optional)) changed = true;
+  }
+  return changed ? { value: out, note: `${type} 描述文本已按长度上限微调` } : undefined;
+}
+
 /** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
 export const SeedNpcSchema = NpcCardSchema.extend({
   type: z.literal("npc.seed"),
@@ -930,7 +974,7 @@ export const SeedNpcSchema = NpcCardSchema.extend({
   relation: z.string().trim().min(1).max(RELATION_CHARS).optional(),
   /** 旧识关系附带的开局人情或仇（他欠你人情、你欠他人情、旧仇）；同上，用户定的关系表 */
   ledger: z
-    .array(z.object({ kind: LedgerKindSchema, text: z.string().trim().min(1).max(80) }))
+    .array(z.object({ kind: LedgerKindSchema, text: z.string().trim().min(1).max(NPC_NOTE_CHARS) }))
     .max(2)
     .default([]),
 });
@@ -946,7 +990,7 @@ export const NpcMemoryEditSchema = z.object({
   index: z.number().int().min(0),
   before: z.string().min(1),
   action: z.enum(["edit", "remove"]),
-  text: z.string().trim().min(1).max(120).optional(),
+  text: z.string().trim().min(1).max(NPC_NOTE_CHARS).optional(),
 });
 export type NpcMemoryEdit = z.infer<typeof NpcMemoryEditSchema>;
 
@@ -962,7 +1006,7 @@ export type NpcPast = z.infer<typeof NpcPastSchema>;
 export const NpcOffscreenDeathSchema = z.object({
   type: z.literal("npc.offscreenDeath"),
   id: NpcIdSchema,
-  cause: z.string().trim().min(1).max(80),
+  cause: z.string().trim().min(1).max(NPC_NOTE_CHARS),
 });
 export type NpcOffscreenDeath = z.infer<typeof NpcOffscreenDeathSchema>;
 

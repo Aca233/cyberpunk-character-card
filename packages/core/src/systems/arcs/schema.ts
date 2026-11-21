@@ -13,7 +13,7 @@ export const ARC_NOTES_KEPT = 6;
 export const ARC_TITLE_MAX = 24;
 export const ARC_TEXT_MAX = 120;
 /** 关系笔记的长度上限，和 npc 系统的 RELATION_CHARS 一致 */
-export const ARC_BOND_MAX = 60;
+export const ARC_BOND_MAX = 120;
 
 const SlugSchema = z.string().regex(/^[a-z0-9-]+$/);
 

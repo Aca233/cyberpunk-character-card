@@ -15,6 +15,7 @@ interface JsonSchema {
   readonly description?: string;
   readonly minimum?: number;
   readonly maximum?: number;
+  readonly maxLength?: number;
   /** schema 的 meta 里指定的写法，代替自动生成的（例如能接受两种输入、只想让模型用一种） */
   readonly modelDoc?: string;
 }
@@ -55,7 +56,9 @@ function render(schema: JsonSchema): string {
     case "number":
       return range(schema, "数字");
     case "string":
-      return "文本";
+      return schema.maxLength !== undefined && schema.maxLength < SHOWN_LIMIT
+        ? `文本 ≤${schema.maxLength}字`
+        : "文本";
     case "boolean":
       return "true|false";
     case "null":

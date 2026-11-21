@@ -32,7 +32,7 @@ export interface ValidationFailure {
   readonly reason: string;
 }
 
-const BATCH_TASK = `下面是同一阶段中格式不合法的条目。只修字段格式，不改原意、不补充事实。
+const BATCH_TASK = `下面是同一阶段中格式不合法的条目。只修字段格式，不改原意、不补充事实；文本字段超出字数上限时，保留原意精简到上限以内。
 只返回 {"fixes":[{"key":"原样的条目键","value":修好的条目}]}。
 只允许修列出的条目，每个 key 最多一次；修不了的省略。不得返回或改动其他条目。`;
 

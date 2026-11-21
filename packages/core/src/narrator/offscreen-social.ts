@@ -100,7 +100,7 @@ export function offscreenFixers(
 
 const SocialNpcSchema = z.object({
   id: z.string().trim().min(1),
-  doing: z.string().trim().min(1).max(80),
+  doing: z.string().trim().min(1).max(120),
   location: z.string().trim().min(1).nullable().optional(),
 });
 
@@ -113,8 +113,8 @@ const SocialTieSchema = TieSchema.omit({ type: true });
 
 const SocialDeathSchema = z.object({
   id: z.string().trim().min(1),
-  cause: z.string().trim().min(1).max(80),
-  rumor: z.string().trim().min(1).max(80).nullable().optional(),
+  cause: z.string().trim().min(1).max(120),
+  rumor: z.string().trim().min(1).max(120).nullable().optional(),
 });
 
 const SocialMessageSchema = z.object({
