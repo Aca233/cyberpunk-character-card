@@ -7,7 +7,6 @@ import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
 import { ImageStore } from "./images";
 import { PresetStore } from "./presets";
 import { TurnHub } from "./turns";
-import { WorkshopStore } from "./workshop";
 
 /**
  * 纯前端（静态网站）用的本地服务层：和服务器同一套路由和游戏逻辑，存储换成浏览器里的 IndexedDB。
@@ -45,7 +44,7 @@ export async function createLocalBackend(
     presets: new PresetStore(docs),
     images: new ImageStore(docs),
     checkpoints: new TurnCheckpointStore(docs),
-    workshop: new WorkshopStore(docs),
+    // 创意工坊尚未完成，暂不启用
     hub,
     log: (message) => console.warn(message),
   });

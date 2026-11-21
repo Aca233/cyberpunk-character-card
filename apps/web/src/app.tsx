@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { createHashRouter, Outlet } from "react-router";
+import { createHashRouter, Navigate, Outlet } from "react-router";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { Calibrate } from "./features/dev/Calibrate";
 import { NeuralMock } from "./features/dev/NeuralMock";
@@ -15,7 +15,6 @@ import {
 } from "./features/status/StatusParts";
 import { StoryScreen } from "./features/story/StoryScreen";
 import { useStory } from "./features/story/store";
-import { WorkshopScreen } from "./features/workshop/WorkshopScreen";
 
 function Shell() {
   const busy = useStory((s) => s.phase !== "idle");
@@ -51,7 +50,8 @@ const routes = [
       { path: "/characters", element: <CharactersScreen /> },
       { path: "/play/:saveId", element: <StoryScreen /> },
       { path: "/settings", element: <SettingsScreen /> },
-      { path: "/workshop", element: <WorkshopScreen /> },
+      // 创意工坊尚未完成，暂不启用
+      { path: "/workshop", element: <Navigate to="/menu" replace /> },
       // 开发用的页：地图校准、U0 神经界面视觉稿，只在 pnpm dev 下有
       ...(import.meta.env.DEV
         ? [
