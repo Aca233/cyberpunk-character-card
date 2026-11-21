@@ -58,6 +58,7 @@ import {
   historyTurns,
   MIN_HISTORY,
   memoryTokens,
+  replyTokenCap,
 } from "./budget";
 import {
   type ExtractedCheckpointData,
@@ -68,7 +69,7 @@ import {
   type TurnCheckpointStage,
   turnInputKey,
 } from "./checkpoint";
-import { completeFinish } from "./completion";
+import { completeFinish, isLengthFinish } from "./completion";
 import { responseJsonSchema, schemaDoc } from "./doc";
 import { readEventPlan } from "./event-plan";
 import { applyEventCommands, type SettlementEvent } from "./event-settlement";
@@ -980,16 +981,12 @@ export async function runNarratorTurn(
       ? applyExpandedPreset([], expandedPreset).reduce((n, m) => n + estimateTokens(m.content), 0)
       : 0;
     const sampling = preset?.sampling ?? {};
-    const maxOutputTokens = Math.max(
-      1,
-      Math.floor(
-        Math.min(
-          budget.parts.reply,
-          deps.maxOutputTokens ?? budget.parts.reply,
-          sampling.maxOutputTokens ?? budget.parts.reply,
-        ),
-      ),
-    );
+    const replyCap = replyTokenCap(budget);
+    const requestedReply =
+      deps.maxOutputTokens !== undefined && sampling.maxOutputTokens !== undefined
+        ? Math.min(deps.maxOutputTokens, sampling.maxOutputTokens)
+        : (deps.maxOutputTokens ?? sampling.maxOutputTokens ?? budget.parts.reply);
+    let maxOutputTokens = Math.max(1, Math.floor(Math.min(requestedReply, replyCap)));
     const inCombatNow = CombatStateSchema.parse(world.slices.combat).active !== null;
     const exposure = currentTension(world).exposure;
     const intensity: NarrativeIntensity =
@@ -1017,7 +1014,7 @@ export async function runNarratorTurn(
         recapTokens,
       });
     // 整份超出窗口时先撤可选装备参考，再按原顺序裁记忆材料；原文保留 MIN_HISTORY 轮。
-    const limit = budget.window - maxOutputTokens;
+    let limit = budget.window - maxOutputTokens;
     const totalOf = (p: ReturnType<typeof build>) =>
       presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
     let prompt = build();
@@ -1037,6 +1034,11 @@ export async function runNarratorTurn(
       } else if (hot > MIN_HISTORY) {
         hot -= 1;
         cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
+      } else if (maxOutputTokens > budget.parts.reply) {
+        maxOutputTokens = Math.max(budget.parts.reply, budget.window - total);
+        limit = budget.window - maxOutputTokens;
+        cuts.push(`整份超出，回复预留降至 ${maxOutputTokens}`);
+        continue;
       } else {
         return {
           kind: "blocked",
@@ -1232,8 +1234,19 @@ export async function runNarratorTurn(
         } else {
           addNarrator(event.usage);
           narrativeComplete = completeFinish(event.finishReason);
-          if (!narrativeComplete)
-            narrativeIssue = "正文未完整生成，已保存草稿；本轮未推进世界，请重新生成。";
+          if (!narrativeComplete) {
+            if (isLengthFinish(event.finishReason)) {
+              const usedOut = event.usage?.outputTokens ?? usage?.outputTokens;
+              const stat =
+                usedOut !== undefined
+                  ? `${usedOut}/${maxOutputTokens} tokens`
+                  : `上限 ${maxOutputTokens} tokens`;
+              narrativeIssue = `正文未完整生成（输出达到上限：${stat}，${event.finishReason}），已保存草稿；本轮未推进世界，请调大最大输出上限或重新生成。`;
+            } else {
+              const reasonTag = event.finishReason ? `（结束原因：${event.finishReason}）` : "";
+              narrativeIssue = `正文未完整生成${reasonTag}，已保存草稿；本轮未推进世界，请重新生成。`;
+            }
+          }
         }
       }
     } catch (error) {

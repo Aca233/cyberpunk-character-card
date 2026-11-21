@@ -50,7 +50,7 @@ const LARGE: Readonly<Record<BudgetPart, number>> = {
   expanded: 10000,
   recap: 8000,
   history: 40000,
-  reply: 8000,
+  reply: 16000,
 };
 const SMALL_WINDOW = 32_000;
 const LARGE_WINDOW = 128_000;
@@ -78,6 +78,11 @@ export function contextBudget(window: number = DEFAULT_WINDOW): ContextBudget {
     parts[key] = Math.round(value);
   }
   return { window: w, parts };
+}
+
+/** 单轮回复（含思考/思维链 token）在当前上下文窗口下允许的最大预留上限，至少保留 75% 给输入。 */
+export function replyTokenCap(budget: ContextBudget): number {
+  return Math.max(budget.parts.reply, Math.min(65_536, Math.floor(budget.window * 0.25)));
 }
 
 function inputText(input: unknown): string {

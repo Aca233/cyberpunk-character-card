@@ -38,6 +38,7 @@ async function run(
   style?: TavernPreset,
   history: readonly LogRecord[] = records,
   maxOutputTokens?: number,
+  contextWindow = 32_000,
 ) {
   const requests: LlmRequest[] = [];
   let rolls = 0;
@@ -71,7 +72,7 @@ async function run(
           return 3;
         },
       },
-      contextWindow: 32_000,
+      contextWindow,
       maxOutputTokens,
       data: { items: [], cyberware: [] },
       offscreen: null,
@@ -113,7 +114,27 @@ describe("最终正文请求的预设预算", () => {
     expect(request.messages.at(-2)?.content).toBe(`${"风".repeat(Math.floor(extra / 2))}3`);
     expect(request.messages.at(-1)?.content).toContain("【玩家】继续听他说");
     expect(rolls).toBe(1);
-    expect(request.maxOutputTokens).toBe(4000);
+    expect(request.maxOutputTokens).toBe(8000);
+  });
+
+  it("大上下文窗口允许预设和连接使用更大的输出上限，不再硬顶在 8000", async () => {
+    const withPreset = await run(preset("简洁叙事", "", 65_535), [], undefined, 128_000);
+    expect(withPreset.result.kind).toBe("done");
+    expect(withPreset.requests.find((r) => r.responseFormat === undefined)?.maxOutputTokens).toBe(
+      32_000,
+    );
+
+    const withProfileCap = await run(undefined, [], 24_000, 128_000);
+    expect(withProfileCap.result.kind).toBe("done");
+    expect(
+      withProfileCap.requests.find((r) => r.responseFormat === undefined)?.maxOutputTokens,
+    ).toBe(24_000);
+
+    const defaultLarge = await run(undefined, [], undefined, 128_000);
+    expect(defaultLarge.result.kind).toBe("done");
+    expect(defaultLarge.requests.find((r) => r.responseFormat === undefined)?.maxOutputTokens).toBe(
+      16_000,
+    );
   });
 
   it("尊重预设更小的输出上限，并把相同额度留在窗口里", async () => {

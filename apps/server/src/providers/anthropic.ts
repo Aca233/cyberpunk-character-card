@@ -21,7 +21,7 @@ import {
 
 const DEFAULT_BASE = "https://api.anthropic.com/v1";
 const ANTHROPIC_VERSION = "2023-06-01";
-const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_MAX_TOKENS = 8192;
 
 interface AnthropicUsage {
   readonly input_tokens?: number;
