@@ -1,7 +1,9 @@
 # 夜之城世界演化机制重构策划案
 
-> 状态：待评审（Draft）
+> 状态：Phase 1 + Phase 2 已落地（静态类型与规范检查通过，待用户试玩验收）；Phase 3 待体感评估后决定
 > 创建日期：2026-11-21
+> 更新日期：2026-11-21
+> 落地提交：`df8b3c4`（Layer 1 确定性硬账层与断链修复）、`587216c`（统一局势账本与导演桥接层）、`cbd65c3`（双路并行场外推演、四维触发器与分级容错）
 > 适用前提：制作阶段不做历史兼容；提示词优化以正文质量为主，文笔交给预设；**不改动现有前端界面、布局、样式与展开面板**；测试与验收由用户自行执行（开发阶段仅做静态类型与规范检查）。
 
 ---
@@ -326,24 +328,24 @@ flowchart TD
 
 ## 8. 分阶段实施计划
 
-### Phase 1：止血修复与容错底座（改动小、收益立竿见影）
+### Phase 1：止血修复与容错底座（已完成 — `df8b3c4`, `cbd65c3`）
 1. 修复全部已知断链：
    - 移除 `worldFeed` 对 `data.canon` 的硬播；
    - `turfSection` 改为真实地盘（`toldOnly = false`）；
-   - `tickThreads` 与 `applyArcOffscreen` 补齐死人 `concern` 清理与存活拦截；
-   - `offscreenDue` 首次时间基准改用 `was.startedAt ?? was.sceneStartedAt`，去掉 `after.time > before.time` 卡点；
+   - `tickThreads`、`on["npc.died"]` 与 `applyArcOffscreen` 补齐死人 `concern` 清理与存活拦截；
+   - `trackOffscreenDue` 首次时间基准改用 `was.startedAt ?? was.sceneStartedAt`，去掉 `after.time > before.time` 卡点；
    - `offscreenSkipReason` 补充退避期说明。
-2. 落地 L0/L1/L2 分级容错：区分结构硬错与单条降级/丢弃，修掉 `bulletin.threads` 校验漏判。
-3. 为场外推演补齐原生 Zod JSON Schema 与 1 次限额内 `repair`。
+2. 落地 L0/L1/L2 分级容错：区分结构硬错与单条降级/丢弃，修掉 `bulletin.situationIds` 校验漏判。
+3. 为双路场外推演补齐原生 Zod JSON Schema（`MacroOffscreenDocSchema` / `SocialOffscreenDocSchema`）与每通道 1 次限额内 `repair`。
 
-### Phase 2：账本收敛、双路解耦与导演桥接（核心架构升级）
-1. 将 `city.events` 收敛进 `threads`（新增 `civic` 类型、`weight`、`district`、`status`），消灭重复记账与手动交叉 ID。
-2. 拆分 `MacroWorldSim`（Track A）与 `SocialLifeSim`（Track B），并行执行并各自独立容错提交。
-3. 落地四维触发器（加入「同场景长对话防冻结」「大事件余波即时推演」「多日快进跨度感知」）。
-4. 落地 Layer 3 导演桥接层（叙事端改为「眼前与本区实时风声 + 远方脉动」切片；NCPD 警情与动荡城区加权联动）。
-5. 清理废弃旧实现与对应过期测试。
+### Phase 2：账本收敛、双路解耦与导演桥接（已完成 — `587216c`, `cbd65c3`）
+1. 将 `civic` 城中突发事件收敛进 `threads`（含 `weight`、`district`、`status`、`updatedAt`），并在开立/推进/收场时自动 `emit` 同步底层 `city.events`，供 `logistics`/`inventory`/`cyberware`/`ncpd` 与剧透视图无环共享，彻底消灭重复记账。
+2. 拆分 `MacroWorldSim`（[offscreen-macro.ts](file:///c:/cyberpunk-character-card/packages/core/src/narrator/offscreen-macro.ts)）与 `SocialLifeSim`（[offscreen-social.ts](file:///c:/cyberpunk-character-card/packages/core/src/narrator/offscreen-social.ts)），通过 `Promise.all` 并行执行并按 `city.macro` / `city.social` 独立容错提交。
+3. 落地四维触发器（[offscreen-trigger.ts](file:///c:/cyberpunk-character-card/packages/core/src/narrator/offscreen-trigger.ts)）：支持同场景长对话防冻结（≥8 轮且 ≥2 小时）、大事件余波即时推演、多日快进跨度提示、以及时间/回合双保险退避。
+4. 落地 Layer 3 导演桥接层：叙事端改为「【眼前与本区实时风声】（上限 3 条）+【城中远方脉动】」相关性切片；NCPD 警情对 `heating` 动荡城区 2× 加权。
+5. 清理旧单轨实现并重写对应单元测试与校验脚本引用；`@cp/core`、`@cp/content`、`@cp/server`、`@cp/web` 静态类型检查零报错，`biome check` 零报错。
 
-### Phase 3：后台非阻塞化演进（可选）
+### Phase 3：后台非阻塞化演进（可选，待定）
 - 若 Phase 2 上线后实测并行双路延迟仍影响回合收尾体感，再将第 ⑥ 步拆出回合主响应流，改为「正文 commit 后后台执行 → 下一轮开跑前合并（带版本锁与冲突丢弃/重试）」。由于涉及并发日志合并复杂度，需待 Phase 2 真实游玩体验后再决定是否启用。
 
 ---
