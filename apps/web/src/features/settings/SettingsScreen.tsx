@@ -411,6 +411,7 @@ function ContextViewer() {
     return (
       <Panel line="var(--cp-yellow)" className={styles.gateCard}>
         <div className={styles.gateBody}>
+          <span className={styles.gateKicker}>DEBUG // SPOILER GATE</span>
           <div className={styles.gateHead}>
             <Asset id="fluff.attentionFill" height={34} tint="var(--cp-yellow)" />
             <h2>剧透调试视图</h2>
@@ -418,6 +419,11 @@ function ContextViewer() {
           <p>
             这里会显示发给模型的全部提示词与判定内部过程，包括人物的诉求、底线、秘密和委托的隐藏信息。
           </p>
+          <ul className={styles.gateList}>
+            <li>查看各阶段发送给模型的完整消息、规则模块与 token 预算占比</li>
+            <li>直接核对结算记录、账目变动、旧记忆检索与设定库命中</li>
+            <li>手动修订场景摘要与人物共同记忆，或将本轮导出为评测用例</li>
+          </ul>
           <p className={styles.dim}>打开后屏幕顶部会一直标着「剧透」，在叙事偏好里随时可以关掉。</p>
           <div>
             <Button primary onClick={() => setNarrativePref("spoilers", true)}>
@@ -452,36 +458,51 @@ function ContextViewer() {
 
   return (
     <div className={styles.context}>
-      <div className={styles.pickers}>
-        <label>
-          <span>存档</span>
-          <FrameBox>
-            <select value={saveId} onChange={(e) => update("save", e.target.value)}>
-              {saves.data.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title} · {formatDate(s.createdAt)}
-                </option>
-              ))}
-            </select>
-          </FrameBox>
-        </label>
-        <label>
-          <span>轮次</span>
-          <FrameBox>
-            <select
-              value={seq ?? ""}
-              onChange={(e) => update("seq", e.target.value)}
-              disabled={turns.length === 0}
-            >
-              {turns.map((t) => (
-                <option key={t.seq} value={t.seq}>
-                  #{t.seq} {t.input.text.slice(0, 24)}
-                </option>
-              ))}
-            </select>
-          </FrameBox>
-        </label>
-      </div>
+      <section className={styles.contextBar} aria-label="选择存档与轮次">
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={30}
+          tint="var(--cp-surface-strong)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={30}
+          tint="var(--cp-red-dim)"
+          className={styles.slice}
+        />
+        <div className={styles.pickers}>
+          <label>
+            <span>存档</span>
+            <FrameBox>
+              <select value={saveId} onChange={(e) => update("save", e.target.value)}>
+                {saves.data.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title} · {formatDate(s.createdAt)}
+                  </option>
+                ))}
+              </select>
+            </FrameBox>
+          </label>
+          <label>
+            <span>轮次</span>
+            <FrameBox>
+              <select
+                value={seq ?? ""}
+                onChange={(e) => update("seq", e.target.value)}
+                disabled={turns.length === 0}
+              >
+                {turns.map((t) => (
+                  <option key={t.seq} value={t.seq}>
+                    #{t.seq} {t.input.text.slice(0, 24)}
+                  </option>
+                ))}
+              </select>
+            </FrameBox>
+          </label>
+          {seq !== null && <SaveAsCase key={`${saveId}-${seq}`} saveId={saveId} seq={seq} />}
+        </div>
+      </section>
 
       {turns.length === 0 && state.isSuccess && (
         <Panel line="var(--cp-red-dim)">
@@ -546,13 +567,13 @@ function SaveAsCase({ saveId, seq }: { readonly saveId: string; readonly seq: nu
     },
   });
   return (
-    <div className={styles.caseRow}>
+    <div className={styles.caseAction}>
       <Button onClick={() => save.mutate()} disabled={save.isPending}>
-        导出评测用例
+        {save.isPending ? "导出中…" : "导出评测用例"}
       </Button>
       {save.isSuccess && (
-        <p className={styles.dim}>
-          已下载 {save.data.fileName}：补上 expect 和 rubric，放进 tools/evals/ 即可进测评
+        <p className={styles.caseNote}>
+          已下载 {save.data.fileName}（补上 expect 和 rubric 即可放进 tools/evals/）
         </p>
       )}
       {save.isError && <p className={styles.error}>没导成：{save.error.message}</p>}
@@ -918,7 +939,6 @@ function ContextDetail({
 }) {
   return (
     <div className={styles.detail}>
-      <SaveAsCase key={`${saveId}-${ctx.seq}`} saveId={saveId} seq={ctx.seq} />
       <dl className={styles.facts}>
         <div className={styles.factCard}>
           <dt>时间</dt>
@@ -935,8 +955,20 @@ function ContextDetail({
           </dd>
         </div>
         <div className={`${styles.factCard} ${styles.factCardWide}`}>
-          <dt>载入模块</dt>
-          <dd>{ctx.modules.length > 0 ? ctx.modules.join("、") : "无"}</dd>
+          <dt>载入模块（{ctx.modules.length}）</dt>
+          <dd>
+            {ctx.modules.length > 0 ? (
+              <div className={styles.modulePills}>
+                {ctx.modules.map((m) => (
+                  <span key={m} className={styles.modulePill}>
+                    {m}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className={styles.dim}>无</span>
+            )}
+          </dd>
         </div>
       </dl>
 
@@ -961,7 +993,7 @@ function ContextDetail({
         </Section>
       )}
       {ctx.notes.length > 0 && (
-        <Section title="结算记录">
+        <Section title={`结算记录（${ctx.notes.length}）`}>
           <ul>
             {ctx.notes.map((n, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 结算记录按发生顺序排，可能重复
@@ -973,6 +1005,7 @@ function ContextDetail({
       {ctx.ledger && ctx.ledger.length > 0 && (
         <Section
           title={`账目对账（最近 ${ctx.ledger.filter((e) => e.kind === "turn").length} 轮）`}
+          defaultOpen={false}
         >
           <ul>
             {ctx.ledger.map((e) => (
@@ -992,7 +1025,7 @@ function ContextDetail({
         </Section>
       )}
       {ctx.considered.length > 0 && (
-        <Section title={`考虑过没记账的（${ctx.considered.length}）`}>
+        <Section title={`考虑过没记账的（${ctx.considered.length}）`} defaultOpen={false}>
           <ul>
             {ctx.considered.map((n, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: 按抽取给的顺序排，可能重复
@@ -1011,30 +1044,46 @@ function ContextDetail({
           title={`上下文预算（约 ${ctx.budget.total.toLocaleString()} / ${ctx.budget.limit.toLocaleString()} token）`}
           {...(ctx.budget.total > ctx.budget.limit ? { tone: "warn" as const } : {})}
         >
-          <p>
-            窗口 {ctx.budget.window.toLocaleString()} token；带了最近 {ctx.budget.history}{" "}
-            轮原文；前情上限 {ctx.budget.recapTokens.toLocaleString()} token
+          <p className={styles.budgetSummary}>
+            窗口 {ctx.budget.window.toLocaleString()} token · 带了最近 {ctx.budget.history}{" "}
+            轮原文 · 前情上限 {ctx.budget.recapTokens.toLocaleString()} token
           </p>
-          <ul>
-            {ctx.budget.parts.map((p) => (
-              <li
-                key={p.part}
-                className={p.limit !== null && p.tokens > p.limit ? undefined : styles.dim}
-              >
-                {p.part === "reply" ? (
-                  `${p.label}：预留 ${(p.limit ?? 0).toLocaleString()}`
-                ) : (
-                  <>
-                    {p.label}：约 {p.tokens.toLocaleString()}
-                    {p.limit === null ? "（不设上限）" : ` / ${p.limit.toLocaleString()}`}
-                    {p.limit !== null && p.tokens > p.limit ? "（超了，必需的部分不裁）" : ""}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className={styles.budgetList}>
+            {ctx.budget.parts.map((p) => {
+              const denom = p.limit ?? Math.max(ctx.budget?.limit ?? 1, p.tokens, 1);
+              const val = p.part === "reply" ? (p.limit ?? 0) : p.tokens;
+              const pct = Math.min(100, Math.max(0, Math.round((val / denom) * 100)));
+              const over = p.limit !== null && p.tokens > p.limit;
+              return (
+                <div key={p.part} className={styles.budgetRow} data-over={over || undefined}>
+                  <div className={styles.budgetRowHead}>
+                    <span className={styles.budgetLabel}>{p.label}</span>
+                    <span className={styles.budgetVal}>
+                      {p.part === "reply" ? (
+                        `预留 ${(p.limit ?? 0).toLocaleString()}`
+                      ) : (
+                        <>
+                          约 {p.tokens.toLocaleString()}
+                          {p.limit === null ? "（不设上限）" : ` / ${p.limit.toLocaleString()}`}
+                          {over ? " · 超限（必需保留）" : ""}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <div className={styles.budgetTrack} aria-hidden>
+                    <span
+                      className={styles.budgetFill}
+                      data-over={over || undefined}
+                      data-reply={p.part === "reply" || undefined}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {ctx.budget.cuts.length > 0 ? (
-            <p>为了塞进窗口：{ctx.budget.cuts.join("；")}</p>
+            <p className={styles.budgetCut}>为了塞进窗口：{ctx.budget.cuts.join("；")}</p>
           ) : (
             <p className={styles.dim}>没有砍任何部分</p>
           )}
@@ -1042,7 +1091,7 @@ function ContextDetail({
         </Section>
       )}
       {(ctx.retrieval || (ctx.recalled && ctx.recalled.length > 0)) && (
-        <Section title="扩展层（旧记忆）">
+        <Section title="扩展层（旧记忆）" defaultOpen={false}>
           {ctx.recalled && ctx.recalled.length > 0 && <p>判断调的：{ctx.recalled.join("；")}</p>}
           {ctx.retrieval ? (
             <>
@@ -1082,7 +1131,7 @@ function ContextDetail({
         onEdit={onEditBond}
       />
       {ctx.lore && (
-        <Section title={`设定库（原作资料，${ctx.lore.picked.length} 段）`}>
+        <Section title={`设定库（原作资料，${ctx.lore.picked.length} 段）`} defaultOpen={false}>
           <p>
             检索词：{ctx.lore.terms.length > 0 ? ctx.lore.terms.join("、") : "没有"}；命中{" "}
             {ctx.lore.candidates} 段
@@ -1103,12 +1152,12 @@ function ContextDetail({
         </Section>
       )}
       {ctx.offscreenSkip && (
-        <Section title="⑥ 场外推演">
+        <Section title="⑥ 场外推演" defaultOpen={false}>
           <p className={styles.dim}>这一轮没跑：{ctx.offscreenSkip}</p>
         </Section>
       )}
       {ctx.city && ctx.city.length > 0 && (
-        <Section title={`城里的动静（这一轮之后，${ctx.city.length}）`}>
+        <Section title={`城里的动静（这一轮之后，${ctx.city.length}）`} defaultOpen={false}>
           <ul>
             {ctx.city.map((e) => (
               <li key={e.id} className={e.over ? styles.dim : undefined}>
@@ -1119,7 +1168,7 @@ function ContextDetail({
           </ul>
         </Section>
       )}
-      <Section title={`生效的指令（${ctx.commands.length}）`}>
+      <Section title={`生效的指令（${ctx.commands.length}）`} defaultOpen={false}>
         <pre>{JSON.stringify(ctx.commands, null, 2)}</pre>
       </Section>
       {(
@@ -1138,6 +1187,7 @@ function ContextDetail({
         <Section
           key={p.stage}
           title={`${p.label}：${p.messages.length} 条消息 · ${p.chars.toLocaleString()} 字`}
+          defaultOpen={p.stage === "narrate"}
         >
           <p className={styles.stageModules}>
             规则模块：{p.modules.length > 0 ? p.modules.join("、") : "无"}
@@ -1167,18 +1217,21 @@ function ContextDetail({
 function Section({
   title,
   tone,
+  defaultOpen = true,
   children,
 }: {
   readonly title: string;
   readonly tone?: "warn";
+  readonly defaultOpen?: boolean;
   readonly children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className={styles.section} data-tone={tone}>
+    <section className={styles.section} data-tone={tone} data-collapsed={!open || undefined}>
       <NineSlice
         id="notify.itemCellBg"
         slice={30}
-        tint="rgb(12 10 18 / 82%)"
+        tint="var(--cp-surface)"
         className={styles.slice}
       />
       <NineSlice
@@ -1187,8 +1240,24 @@ function Section({
         tint={tone === "warn" ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
         className={styles.slice}
       />
-      <h2>{title}</h2>
-      {children}
+      <button
+        type="button"
+        className={styles.sectionToggle}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <h2>{title}</h2>
+        <span className={styles.sectionState}>
+          <span>{open ? "收起" : "展开"}</span>
+          <Asset
+            id="menu.arrowFill"
+            width={9}
+            tint="currentColor"
+            className={styles.expandArrow}
+          />
+        </span>
+      </button>
+      {open && <div className={styles.sectionBody}>{children}</div>}
     </section>
   );
 }
