@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
+import { useCharactersPreload } from "../../assets/usePreload";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -145,6 +146,8 @@ export function CharactersScreen() {
   const [libraryQuery, setLibraryQuery] = useState("");
   const [launching, setLaunching] = useState(false);
   const [draftSaved, setDraftSaved] = useState(true);
+
+  useCharactersPreload(editor.card, characters.data, client);
 
   useLayer(() => setShowLibrary(false), showLibrary && !destination && !deleting);
 

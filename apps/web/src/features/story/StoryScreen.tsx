@@ -9,6 +9,7 @@ import {
   newRequestId,
   type SaveImageBindings,
 } from "../../api/client";
+import { useStoryPreload } from "../../assets/usePreload";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
@@ -206,6 +207,7 @@ export function StoryScreen() {
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
   });
   const view = query.data;
+  useStoryPreload(view, bindings, client);
   const imageModalTarget = imageModal?.bind;
   const modalTurn =
     imageModalTarget?.kind === "turn"

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createHashRouter, Navigate, Outlet } from "react-router";
+import { useRoutePreload } from "./assets/usePreload";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { Calibrate } from "./features/dev/Calibrate";
 import { NeuralMock } from "./features/dev/NeuralMock";
@@ -18,6 +19,7 @@ import { useStory } from "./features/story/store";
 
 function Shell() {
   const busy = useStory((s) => s.phase !== "idle");
+  useRoutePreload(busy);
   // 回合在内存中继续运行，切到设置后刷新或关闭页面也需要提醒。
   useEffect(() => {
     if (!busy) return;

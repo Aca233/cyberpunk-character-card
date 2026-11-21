@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type AssetId, assetUrl } from "../../assets";
+import { isUrlPreloaded, preloadAsset } from "../../assets/preload";
 import { cssUrl } from "../../ui/Asset";
 import { type BackdropQuery, backdropOf } from "./art";
 import styles from "./story.module.css";
@@ -7,7 +8,7 @@ import styles from "./story.module.css";
 /**
  * 正文背后的夜之城（用户定的，2026-11-02："H10 全景当正文背景"）：
  * 压暗、偏冷，正文那一列再压暗一层，字不受影响；慢慢推近，不拦截点击。
- * 按当前地点与时段切换对应原作实景图，切换前预加载并做淡入过渡，未匹配地点回退 menu.nightCity
+ * 按当前地点与时段切换对应原作实景图，切换前预加载并解码后做淡入过渡，未匹配地点回退 menu.nightCity
  */
 export function CityBackdrop(query: BackdropQuery) {
   const target = backdropOf(query);
@@ -22,23 +23,14 @@ export function CityBackdrop(query: BackdropQuery) {
     const commit = () => {
       setLayer((cur) => (cur.active === target ? cur : { active: target, prev: cur.active }));
     };
-    if (!targetUrl) {
+    if (!targetUrl || isUrlPreloaded(targetUrl)) {
       commit();
       return;
     }
     let cancelled = false;
-    const img = new Image();
-    img.src = targetUrl;
-    if (img.complete) {
-      commit();
-      return;
-    }
-    img.onload = () => {
+    void preloadAsset(target, "high", { decode: true }).then(() => {
       if (!cancelled) commit();
-    };
-    img.onerror = () => {
-      if (!cancelled) commit();
-    };
+    });
     return () => {
       cancelled = true;
     };
