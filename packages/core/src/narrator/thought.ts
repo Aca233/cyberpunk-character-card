@@ -83,7 +83,7 @@ export class ThoughtStreamSplitter {
     while (work !== "") {
       if (this.mode === "body") {
         const match = OPEN_TAG_RE.exec(work);
-        if (match && match[1]) {
+        if (match?.[1]) {
           const before = work.slice(0, match.index);
           if (before !== "") {
             textOut += before;

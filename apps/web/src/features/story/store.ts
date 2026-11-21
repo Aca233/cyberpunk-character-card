@@ -56,6 +56,8 @@ interface StoryState {
   readonly turnId: string | null;
   /** 正在生成的正文；记账在正文之后由后端另外抽 */
   readonly text: string;
+  /** 正在生成的思维链（原生思考流或思考标签剥离所得） */
+  readonly thought: string;
   readonly boost: LiveBoost | null;
   readonly stage: LiveStage | null;
   readonly stageTrace: readonly CompletedStage[];
@@ -124,6 +126,9 @@ export const useStory = create<StoryState>()((set, get) => {
           case "boost":
             set({ boost: event });
             return;
+          case "thought":
+            set((s) => ({ thought: s.thought + event.text }));
+            return;
           case "text":
             set((s) => ({ text: s.text + event.text }));
             return;
@@ -134,6 +139,7 @@ export const useStory = create<StoryState>()((set, get) => {
                 phase: "idle",
                 turnId: null,
                 text: "",
+                thought: "",
                 boost: null,
                 stage: null,
                 stageTrace: [],
@@ -152,6 +158,7 @@ export const useStory = create<StoryState>()((set, get) => {
               phase: "idle",
               turnId: null,
               text: "",
+              thought: "",
               boost: null,
               stage: null,
               stageTrace: [],
@@ -231,6 +238,7 @@ export const useStory = create<StoryState>()((set, get) => {
     saveId: null,
     turnId: null,
     text: "",
+    thought: "",
     boost: null,
     stage: null,
     stageTrace: [],
@@ -253,6 +261,7 @@ export const useStory = create<StoryState>()((set, get) => {
         phase: "idle",
         turnId: null,
         text: "",
+        thought: "",
         boost: null,
         stage: null,
         stageTrace: [],
@@ -278,6 +287,7 @@ export const useStory = create<StoryState>()((set, get) => {
         failure: null,
         spend: null,
         text: "",
+        thought: "",
         stage: {
           type: "stage",
           stage: "judge",

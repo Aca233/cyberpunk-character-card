@@ -1,4 +1,4 @@
-import type { TurnImagePromptInput } from "@cp/core";
+import { extractThoughtFromText, type TurnImagePromptInput } from "@cp/core";
 import { useQuery } from "@tanstack/react-query";
 import {
   type CSSProperties,
@@ -15,6 +15,7 @@ import { Link } from "react-router";
 import { api } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
+import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { useNarrativePrefs } from "../settings/prefs";
@@ -27,6 +28,7 @@ import { LiveStageBar } from "./LiveStageBar";
 import { OpeningGuide, type OpeningGuideActions } from "./OpeningGuide";
 import type { useStory } from "./store";
 import styles from "./story.module.css";
+import { ThoughtBlock } from "./ThoughtBlock";
 import {
   type Choice,
   formatInput,
@@ -42,8 +44,20 @@ import {
 
 type Live = Pick<
   ReturnType<typeof useStory.getState>,
-  "phase" | "text" | "boost" | "pending" | "stage" | "stageTrace"
+  "phase" | "text" | "thought" | "boost" | "pending" | "stage" | "stageTrace"
 >;
+
+/** 合并已保存/流式思维链与正文内联思考标签（兼容旧存档残留标签），保持正文阅读纯净。 */
+function splitDisplayThought(
+  text: string,
+  savedThought?: string | null,
+): { readonly body: string; readonly thought: string } {
+  const inline = extractThoughtFromText(text);
+  const thought = [savedThought?.trim() ?? "", inline.thought]
+    .filter((part) => part !== "")
+    .join("\n\n");
+  return { body: inline.body, thought };
+}
 
 /** 黑话术语表只取一次；select 是模块级函数，react-query 会缓存编好的正则 */
 function useGlossary() {
@@ -358,6 +372,11 @@ function TurnBlock({
     });
   };
 
+  const display = useMemo(
+    () => splitDisplayThought(turn.text, turn.thought),
+    [turn.text, turn.thought],
+  );
+
   return (
     <article className={styles.turn} data-boost={turn.sandevistan || undefined}>
       {prefs.sceneTitles && turn.sceneTitle && (
@@ -389,12 +408,13 @@ function TurnBlock({
           <strong>[失控]</strong> 你想：{turn.lostControl.intent}；实际：{turn.lostControl.actual}
         </p>
       )}
+      {display.thought !== "" && <ThoughtBlock thought={display.thought} />}
       {turn.blackout ? (
         <details className={styles.blackout}>
           <summary className={styles.blackoutTitle}>
             [记忆缺失] 这一段角色记不起来；展开看回合日志里的原文
           </summary>
-          {paragraphs(turn.text).map((p, i) => (
+          {paragraphs(display.body).map((p, i) => (
             <Paragraph
               // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
               key={`${turn.seq}-${i}`}
@@ -409,7 +429,7 @@ function TurnBlock({
         </details>
       ) : (
         <>
-          {paragraphs(turn.text).map((p, i) => (
+          {paragraphs(display.body).map((p, i) => (
             <Paragraph
               // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
               key={`${turn.seq}-${i}`}
@@ -628,6 +648,20 @@ export function StoryLog({
     () => buildGearMatcher(view, new Set(speakers.map((s) => s.name))),
     [view, speakers],
   );
+  const liveDisplay = useMemo(
+    () => (generating ? splitDisplayThought(live.text, live.thought) : { body: "", thought: "" }),
+    [generating, live.text, live.thought],
+  );
+  const cpDisplay = useMemo(
+    () =>
+      !generating && view.checkpoint && view.checkpoint.baseVersion === view.version
+        ? splitDisplayThought(
+            view.checkpoint.narrativePreview ?? "",
+            view.checkpoint.thoughtPreview,
+          )
+        : null,
+    [generating, view.checkpoint, view.version],
+  );
 
   return (
     <div className={styles.logShell}>
@@ -671,12 +705,14 @@ export function StoryLog({
           {!generating &&
             view.checkpoint &&
             view.checkpoint.baseVersion === view.version &&
-            view.checkpoint.narrativePreview && (
+            cpDisplay &&
+            (cpDisplay.body !== "" || cpDisplay.thought !== "") && (
               <article className={styles.turn} data-live>
                 <p className={styles.input} data-mode={view.checkpoint.input.mode}>
                   {formatInput(view.checkpoint.input)}
                 </p>
-                {paragraphs(view.checkpoint.narrativePreview).map((p, i) => (
+                {cpDisplay.thought !== "" && <ThoughtBlock thought={cpDisplay.thought} />}
+                {paragraphs(cpDisplay.body).map((p, i) => (
                   <Paragraph
                     // biome-ignore lint/suspicious/noArrayIndexKey: 断点预览正文按段落顺序展示
                     key={`cp-${i}`}
@@ -711,7 +747,10 @@ export function StoryLog({
                   <span>{`SANDEVISTAN // ${live.boost?.name ?? "斯安威斯坦"}超频`}</span>
                 </p>
               )}
-              {paragraphs(live.text).map((p, i) => (
+              {liveDisplay.thought !== "" && (
+                <ThoughtBlock thought={liveDisplay.thought} streaming={liveDisplay.body === ""} />
+              )}
+              {paragraphs(liveDisplay.body).map((p, i) => (
                 <Paragraph
                   // biome-ignore lint/suspicious/noArrayIndexKey: 正在生成的正文只会往后追加
                   key={i}
@@ -744,6 +783,48 @@ export function StoryLog({
 
 const KEYS: readonly AssetId[] = ["key.1", "key.2", "key.3", "key.4"];
 
+function ChoiceRow({
+  choice,
+  index,
+  locked,
+  onChoose,
+}: {
+  readonly choice: Choice;
+  readonly index: number;
+  readonly locked: boolean;
+  readonly onChoose: (index: number) => void;
+}) {
+  const key = KEYS[index];
+  const tilt = useCardTilt<HTMLButtonElement>({
+    disabled: locked,
+    maxRotate: 4.5,
+    maxShift: 4,
+    shadowShift: 4,
+  });
+  return (
+    <li style={{ "--i": index } as CSSProperties}>
+      <button
+        type="button"
+        className={styles.choice}
+        disabled={locked}
+        onClick={() => onChoose(index)}
+        {...tilt}
+      >
+        {key ? (
+          <Asset id={key} tint="currentColor" height={20} />
+        ) : (
+          <span className={styles.num}>{index + 1}</span>
+        )}
+        {choice.source && <span className={styles.source}>{choice.source}</span>}
+        <span className={styles.choiceText}>{choice.text}</span>
+        <span className={styles.choiceArrow} aria-hidden>
+          ▸
+        </span>
+      </button>
+    </li>
+  );
+}
+
 /** 行动选项：纯直觉行动列表，数字键 1–4 直选 */
 export function ChoiceList({
   choices,
@@ -756,31 +837,16 @@ export function ChoiceList({
 }) {
   return (
     <ol className={styles.choices}>
-      {choices.map((c, i) => {
-        const key = KEYS[i];
-        return (
+      {choices.map((c, i) => (
+        <ChoiceRow
           // biome-ignore lint/suspicious/noArrayIndexKey: 选项的位置对应数字键，位置就是身份
-          <li key={`${i}-${c.text}`} style={{ "--i": i } as CSSProperties}>
-            <button
-              type="button"
-              className={styles.choice}
-              disabled={locked}
-              onClick={() => onChoose(i)}
-            >
-              {key ? (
-                <Asset id={key} tint="currentColor" height={20} />
-              ) : (
-                <span className={styles.num}>{i + 1}</span>
-              )}
-              {c.source && <span className={styles.source}>{c.source}</span>}
-              <span className={styles.choiceText}>{c.text}</span>
-              <span className={styles.choiceArrow} aria-hidden>
-                ▸
-              </span>
-            </button>
-          </li>
-        );
-      })}
+          key={`${i}-${c.text}`}
+          choice={c}
+          index={i}
+          locked={locked}
+          onChoose={onChoose}
+        />
+      ))}
     </ol>
   );
 }
