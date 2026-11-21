@@ -22,7 +22,7 @@ import {
   type Trait,
   type TraitSlot,
 } from "../systems/character";
-import { OFFSCREEN_SCENES } from "../systems/city";
+import { CityStateSchema, OFFSCREEN_SCENES } from "../systems/city";
 import { CombatStateSchema } from "../systems/combat";
 import { CommerceStateSchema } from "../systems/commerce";
 import { CyberwareStateSchema, cyberwareCatalog, sandevistanOf } from "../systems/cyberware";
@@ -76,12 +76,17 @@ import { applyEventCommands, type SettlementEvent } from "./event-settlement";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import { preparePurchases } from "./merchant-settlement";
 import {
+  MacroOffscreenDocSchema,
+  nextRetrySeq,
   OFFSCREEN_TEMPERATURE,
-  offscreenDue,
   offscreenSkipReason,
-  prepareOffscreenBatch,
+  prepareMacroOffscreenBatch,
+  prepareSocialOffscreenBatch,
   presentNpcs,
-  readOffscreen,
+  readMacroOffscreen,
+  readSocialOffscreen,
+  SocialOffscreenDocSchema,
+  trackOffscreenDue,
 } from "./offscreen";
 import { applyExpandedPreset, applyPresetRegex, presetMessages, type TavernPreset } from "./preset";
 import {
@@ -425,16 +430,24 @@ class TurnBuilder {
 
   /** 顶层和条目修复共用阶段额度；不因错误数量增加调用次数。 */
   async repair(stage: RepairStage, task: string, raw: string): Promise<unknown> {
+    const stageLabel =
+      stage === "judge"
+        ? "判断"
+        : stage === "extract"
+          ? "抽取"
+          : stage === "offscreen-macro"
+            ? "宏观推演"
+            : "人物推演";
     const content = `${task}\n\n原文：\n${raw}`;
     const denied = this.repairBudget.claim(stage, `${REPAIR_SYSTEM}\n${content}`);
     if (denied) {
-      noteOnce(this.notes, `${stage === "judge" ? "判断" : "抽取"}：${denied}，未追加修复请求`);
+      noteOnce(this.notes, `${stageLabel}：${denied}，未追加修复请求`);
       return undefined;
     }
     this.repairs += 1;
     this.deps.onStage?.({
       stage: "repair",
-      label: `格式修复（${stage === "judge" ? "判断" : "抽取"}）`,
+      label: `格式修复（${stageLabel}）`,
       detail: "修正结构化 JSON 输出",
     });
     const reply = await this.supplement({
@@ -1775,147 +1788,282 @@ export async function runNarratorTurn(
   const before = WorldClockStateSchema.parse(world.slices.world);
   const after = WorldClockStateSchema.parse(settledWorld.slices.world);
 
-  // ⑥ 按游戏时间、到期事件和收场批次推演；结果与本次行动一起落盘撤回
+  // ⑥ 双路并行场外演化（宏观局势 + 人物社交），自带原生 JSON Schema、L0 限额修复与 L1/L2 局部容错
   const dead = HealthStateSchema.parse(settledWorld.slices.health).condition === "dead";
   let currentWorld = settledWorld;
-  let offscreenPatches: Patch[] = [];
+  const offscreenPatches: Patch[] = [];
   let offscreenTrace: { prompt: string; reply: string } | undefined;
   let offscreenCapacityReason: string | undefined;
   const every = deps.offscreen === undefined ? OFFSCREEN_SCENES : deps.offscreen;
-  if (
-    settle &&
-    !inFlashback &&
-    !dead &&
-    unsettled === undefined &&
-    every !== null &&
-    offscreenDue(world, settledWorld, every)
-  ) {
+  const offscreenEligible =
+    settle && !inFlashback && !dead && unsettled === undefined && every !== null;
+  const dueOpts = { every: every ?? OFFSCREEN_SCENES, records, accepted };
+  const macroDue =
+    offscreenEligible && trackOffscreenDue(world, settledWorld, { track: "macro", ...dueOpts });
+  const socialDue =
+    offscreenEligible && trackOffscreenDue(world, settledWorld, { track: "social", ...dueOpts });
+
+  if (macroDue || socialDue) {
     const present = presentNpcs(world, settledWorld);
-    const batch = prepareOffscreenBatch(settledWorld, records, extras, narrative, present, {
+    const capacity = {
       contextWindow: deps.auxContextWindow ?? 32_000,
       ...(deps.auxMaxOutputTokens === undefined
         ? {}
         : { maxOutputTokens: deps.auxMaxOutputTokens }),
-    });
-    if (batch.kind === "blocked") {
-      offscreenCapacityReason = batch.reason;
-      considered.push(batch.reason);
-    } else {
+    };
+    const macroBatch = macroDue
+      ? prepareMacroOffscreenBatch(settledWorld, records, extras, narrative, capacity)
+      : undefined;
+    const socialBatch = socialDue
+      ? prepareSocialOffscreenBatch(settledWorld, records, extras, narrative, present, capacity)
+      : undefined;
+    const blockedReasons: string[] = [];
+    if (macroBatch?.kind === "blocked") {
+      blockedReasons.push(macroBatch.reason);
+      considered.push(macroBatch.reason);
+    }
+    if (socialBatch?.kind === "blocked") {
+      blockedReasons.push(socialBatch.reason);
+      considered.push(socialBatch.reason);
+    }
+    if (
+      blockedReasons.length > 0 &&
+      macroBatch?.kind !== "ready" &&
+      socialBatch?.kind !== "ready"
+    ) {
+      offscreenCapacityReason = blockedReasons.join("；");
+    }
+
+    if (macroBatch?.kind === "ready" || socialBatch?.kind === "ready") {
       deps.onStage?.({
         stage: "offscreen",
         label: "⑥ 场外世界推演",
-        detail: "推进城市动静、传闻与私信",
+        detail:
+          macroBatch?.kind === "ready" && socialBatch?.kind === "ready"
+            ? "并行推演宏观局势与人物动向"
+            : macroBatch?.kind === "ready"
+              ? "推演城中局势、新闻与商家经营"
+              : "推演人物近况、关系与私信",
       });
-      const messages = batch.messages;
-      const reply = await b.supplement({
-        purpose: "aux",
-        temperature: OFFSCREEN_TEMPERATURE,
-        maxOutputTokens: batch.maxOutputTokens,
-        messages,
-        responseFormat: responseJsonSchema("offscreen"),
-        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen` } : {}),
-      });
-      offscreenTrace = {
-        prompt: messages[messages.length - 1]?.content ?? "",
-        reply:
-          "failed" in reply
-            ? "（辅助请求失败，未采用不完整回复）"
-            : "blocked" in reply
-              ? `（拒答：${reply.blocked}）`
-              : reply.text,
-      };
-      let offscreen: Command[] = [];
-      let offscreenComplete = false;
-      let offscreenResults: readonly AppliedCommand[] = [];
-      if ("failed" in reply) {
-        considered.push("场外推演请求失败，保留本轮正文与待处理事项");
-      } else if ("blocked" in reply) {
-        considered.push(`场外推演被辅助模型拒答：${reply.blocked}`);
-      } else {
-        b.auxUsage = addUsage(b.auxUsage, reply.usage);
-        const sent = accepted.filter((c) => c.type === "phone.receive").length;
-        const got = readOffscreen(reply.text, settledWorld, {
-          present,
-          messages: MESSAGES_PER_TURN - sent,
-          data: extras.data ?? {},
-        });
-        considered.push(...got.notes);
-        offscreen = got.commands;
-        offscreenComplete = got.ok;
-      }
-      // 批次完整解析且全部结算成功才提交；失败不发送消息、不挪期限，也不推进成功游标。
-      if (offscreenComplete) {
-        const trial = registry.applyCommands(
-          settledWorld,
-          [
-            ...offscreen,
-            ...(batch.backlog ? [] : [{ type: "thread.remind" }]),
-            { type: "city.ran", through: batch.through, backlog: batch.backlog },
-          ],
-          applyCtx,
-        );
-        const rejected = trial.results.filter(({ result }) => !result.ok);
-        if (rejected.length === 0) {
-          currentWorld = trial.world;
-          offscreenPatches = [...trial.patches];
-          offscreenResults = trial.results;
-          if (batch.backlog)
-            considered.push(
-              `场外推演已处理至回合 ${batch.through}，剩余积压保留到后续批次，尚未推进全部时限`,
-            );
-        } else {
-          offscreenComplete = false;
-          for (const { command, result } of rejected) {
-            if (!result.ok) considered.push(`场外推演批次未提交：${command.type} ${result.reason}`);
+
+      const [macroReply, socialReply] = await Promise.all([
+        macroBatch?.kind === "ready"
+          ? b.supplement({
+              purpose: "aux",
+              temperature: OFFSCREEN_TEMPERATURE,
+              maxOutputTokens: macroBatch.maxOutputTokens,
+              messages: macroBatch.messages,
+              responseFormat: responseJsonSchema("offscreen_macro", MacroOffscreenDocSchema),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-macro` } : {}),
+            })
+          : Promise.resolve(undefined),
+        socialBatch?.kind === "ready"
+          ? b.supplement({
+              purpose: "aux",
+              temperature: OFFSCREEN_TEMPERATURE,
+              maxOutputTokens: socialBatch.maxOutputTokens,
+              messages: socialBatch.messages,
+              responseFormat: responseJsonSchema("offscreen_social", SocialOffscreenDocSchema),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-social` } : {}),
+            })
+          : Promise.resolve(undefined),
+      ]);
+
+      const tracePrompts: string[] = [];
+      const traceReplies: string[] = [];
+      const formatReplyText = (reply: Reply | { failed: true }) =>
+        "failed" in reply
+          ? "（辅助请求失败，未采用不完整回复）"
+          : "blocked" in reply
+            ? `（拒答：${reply.blocked}）`
+            : reply.text;
+
+      const recordOffscreenResults = (results: readonly AppliedCommand[]) => {
+        for (const { command, result } of results) {
+          if (!result.ok) {
+            considered.push(`场外推演：${command.type} 未生效（已跳过）：${result.reason}`);
+            continue;
+          }
+          if (command.type === "phone.receive" || command.type === "streetCred") {
+            b.notes.push(...result.notes);
+          } else {
+            const c = command as {
+              type: string;
+              id?: string;
+              title?: string;
+              text?: string;
+              cause?: string;
+            };
+            if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
+            else if (c.type === "npc.offscreenDoing")
+              considered.push(`场外推演：${c.id} 最近 ${c.text}`);
+            else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
+            else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
+            else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
+            else if (c.type === "threadTold") considered.push(`场外推演：快讯播了局势 ${c.id}`);
+            else if (c.type === "jobOffer")
+              considered.push(`场外推演：新委托 ${c.id}「${c.title}」`);
+            else if (c.type.startsWith("thread.") && c.id)
+              considered.push(`场外推演：局势 ${c.id}（${c.type}）${c.text ?? ""}`);
+            considered.push(...result.notes.map((n) => `场外推演：${n}`));
           }
         }
-      }
-      if (!offscreenComplete) {
-        const failedApply = registry.applyCommands(
-          settledWorld,
-          [{ type: "city.failed" }],
-          applyCtx,
+      };
+
+      const retrySeq = nextRetrySeq(records);
+
+      // 提交 Track A：宏观局势（逐条容错，仅 L0 硬失败才记 macro 退避）
+      if (macroBatch?.kind === "ready" && macroReply !== undefined) {
+        tracePrompts.push(
+          `【通道 A：宏观局势推演】\n${macroBatch.messages[macroBatch.messages.length - 1]?.content ?? ""}`,
         );
-        currentWorld = failedApply.world;
-        offscreenPatches = [...failedApply.patches];
-        offscreenResults = failedApply.results;
-        considered.push("场外推演未完整完成，保留待处理事项，经过重试间隔后再推演");
-      }
-      for (const { command, result } of offscreenResults) {
-        if (!result.ok) considered.push(`场外推演：${command.type} 没生效：${result.reason}`);
-        // 消息和头条带来的声望玩家看得到；其余只进剧透视图
-        else if (command.type === "phone.receive" || command.type === "streetCred") {
-          b.notes.push(...result.notes);
+        traceReplies.push(`【通道 A：宏观局势推演】\n${formatReplyText(macroReply)}`);
+        let macroCommands: Command[] | undefined;
+        if ("failed" in macroReply) {
+          considered.push("宏观局势推演请求失败，保留待处理事项");
+        } else if ("blocked" in macroReply) {
+          considered.push(`宏观局势推演被辅助模型拒答：${macroReply.blocked}`);
         } else {
-          const c = command as {
-            type: string;
-            id?: string;
-            title?: string;
-            text?: string;
-            cause?: string;
-            npc?: string;
-            concern?: string;
-            resolve?: boolean;
-          };
-          if (c.type === "city.event") considered.push(`场外推演：动静 ${c.id}「${c.title}」`);
-          else if (c.type === "npc.offscreenDoing")
-            considered.push(`场外推演：${c.id} 最近 ${c.text}`);
-          else if (c.type === "city.rumor") considered.push(`场外推演：传闻「${c.text}」`);
-          else if (c.type === "city.bulletin") considered.push(`场外推演：快讯「${c.title}」`);
-          else if (c.type === "npc.past") considered.push(`场外推演：${c.id} 的经历压成摘要`);
-          else if (c.type === "threadTold") considered.push(`场外推演：快讯播了事项 ${c.id}`);
-          else if (c.type === "jobOffer") considered.push(`场外推演：新委托 ${c.id}「${c.title}」`);
-          else if (c.type.startsWith("thread.") && c.id)
-            considered.push(`场外推演：事项 ${c.id}（${c.type}）${c.text ?? ""}`);
-          else if (c.type === "arc.offscreen")
-            considered.push(
-              `场外推演：${c.npc} 的心事 ${c.concern}${c.resolve ? "有了结果" : ""}：${c.text ?? ""}`,
+          b.auxUsage = addUsage(b.auxUsage, macroReply.usage);
+          let parsed = readMacroOffscreen(macroReply.text, currentWorld, {
+            data: extras.data ?? {},
+          });
+          if (!parsed.ok && parsed.fatal) {
+            const fixed = await b.repair(
+              "offscreen-macro",
+              `下面的宏观世界推演结果解析失败（${parsed.fatal}）。修成一个包含 situations 数组的 JSON 对象，不补充原文没有的事实。`,
+              macroReply.text,
             );
-          considered.push(...result.notes.map((n) => `场外推演：${n}`));
+            if (fixed !== undefined) {
+              const second = readMacroOffscreen(JSON.stringify(fixed), currentWorld, {
+                data: extras.data ?? {},
+              });
+              if (second.ok) {
+                parsed = second;
+                considered.push("宏观局势推演格式已自动修复");
+              }
+            }
+          }
+          considered.push(...parsed.notes);
+          if (parsed.ok) macroCommands = parsed.commands;
         }
+        if (macroCommands !== undefined) {
+          const appliedMacro = registry.applyCommands(
+            currentWorld,
+            [
+              ...macroCommands,
+              ...(macroBatch.backlog ? [] : [{ type: "thread.remind" }]),
+              {
+                type: "city.ran",
+                track: "macro",
+                through: macroBatch.through,
+                backlog: macroBatch.backlog,
+              },
+            ],
+            applyCtx,
+          );
+          currentWorld = appliedMacro.world;
+          offscreenPatches.push(...appliedMacro.patches);
+          recordOffscreenResults(appliedMacro.results);
+          if (macroBatch.backlog) {
+            considered.push(`宏观局势推演已处理至回合 ${macroBatch.through}，剩余积压保留到下一批`);
+          }
+        } else {
+          const failedMacro = registry.applyCommands(
+            currentWorld,
+            [{ type: "city.failed", track: "macro", retrySeq }],
+            applyCtx,
+          );
+          currentWorld = failedMacro.world;
+          offscreenPatches.push(...failedMacro.patches);
+          considered.push("宏观局势推演未完成，已进入独立重试间隔");
+        }
+      }
+
+      // 提交 Track B：人物生活与社交（逐条容错，仅 L0 硬失败才记 social 退避）
+      if (socialBatch?.kind === "ready" && socialReply !== undefined) {
+        tracePrompts.push(
+          `【通道 B：人物社交推演】\n${socialBatch.messages[socialBatch.messages.length - 1]?.content ?? ""}`,
+        );
+        traceReplies.push(`【通道 B：人物社交推演】\n${formatReplyText(socialReply)}`);
+        let socialCommands: Command[] | undefined;
+        const sent = accepted.filter((c) => c.type === "phone.receive").length;
+        if ("failed" in socialReply) {
+          considered.push("人物社交推演请求失败，保留待处理事项");
+        } else if ("blocked" in socialReply) {
+          considered.push(`人物社交推演被辅助模型拒答：${socialReply.blocked}`);
+        } else {
+          b.auxUsage = addUsage(b.auxUsage, socialReply.usage);
+          let parsed = readSocialOffscreen(socialReply.text, currentWorld, {
+            present,
+            messages: MESSAGES_PER_TURN - sent,
+            data: extras.data ?? {},
+          });
+          if (!parsed.ok && parsed.fatal) {
+            const fixed = await b.repair(
+              "offscreen-social",
+              `下面的人物社交推演结果解析失败（${parsed.fatal}）。修成一个包含 npcs 与 messages 数组的 JSON 对象，不补充原文没有的事实。`,
+              socialReply.text,
+            );
+            if (fixed !== undefined) {
+              const second = readSocialOffscreen(JSON.stringify(fixed), currentWorld, {
+                present,
+                messages: MESSAGES_PER_TURN - sent,
+                data: extras.data ?? {},
+              });
+              if (second.ok) {
+                parsed = second;
+                considered.push("人物社交推演格式已自动修复");
+              }
+            }
+          }
+          considered.push(...parsed.notes);
+          if (parsed.ok) socialCommands = parsed.commands;
+        }
+        if (socialCommands !== undefined) {
+          const appliedSocial = registry.applyCommands(
+            currentWorld,
+            [
+              ...socialCommands,
+              {
+                type: "city.ran",
+                track: "social",
+                through: socialBatch.through,
+                backlog: socialBatch.backlog,
+              },
+            ],
+            applyCtx,
+          );
+          currentWorld = appliedSocial.world;
+          offscreenPatches.push(...appliedSocial.patches);
+          recordOffscreenResults(appliedSocial.results);
+          if (socialBatch.backlog) {
+            considered.push(
+              `人物社交推演已处理至回合 ${socialBatch.through}，剩余积压保留到下一批`,
+            );
+          }
+        } else {
+          const failedSocial = registry.applyCommands(
+            currentWorld,
+            [{ type: "city.failed", track: "social", retrySeq }],
+            applyCtx,
+          );
+          currentWorld = failedSocial.world;
+          offscreenPatches.push(...failedSocial.patches);
+          considered.push("人物社交推演未完成，已进入独立重试间隔");
+        }
+      }
+
+      if (tracePrompts.length > 0) {
+        offscreenTrace = {
+          prompt: tracePrompts.join("\n\n---\n\n"),
+          reply: traceReplies.join("\n\n---\n\n"),
+        };
       }
     }
   }
+  const cityAfter = CityStateSchema.parse(currentWorld.slices.city ?? {});
+  const retrying = cityAfter.macro.retryAt !== null || cityAfter.social.retryAt !== null;
   const offscreenSkip =
     offscreenCapacityReason ??
     (offscreenTrace === undefined
@@ -1925,6 +2073,7 @@ export async function runNarratorTurn(
           unsettled: unsettled !== undefined,
           dead,
           every,
+          retrying,
         })
       : undefined);
 

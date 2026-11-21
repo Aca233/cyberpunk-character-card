@@ -12,7 +12,7 @@ import {
   shops,
 } from "@cp/content";
 import { newGameWorld, projectState, registry, withAllSlices } from "@cp/core";
-import { readOffscreen } from "../packages/core/src/narrator/offscreen";
+import { readSocialOffscreen } from "../packages/core/src/narrator/offscreen";
 
 type World = ReturnType<typeof newGameWorld>;
 type Slice = Record<string, unknown>;
@@ -441,8 +441,8 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
       npcs: { ...npcs, [id]: { ...npcs[id], met: true, alive: true, affinity: 60 } },
     });
     const about = "仅供叙事模型的来电用意";
-    const raw = JSON.stringify({ calls: [{ from: id, about }] });
-    const got = readOffscreen(raw, ready, { data: gameData, messages: 2 });
+    const raw = JSON.stringify({ npcs: [], messages: [], calls: [{ from: id, about }] });
+    const got = readSocialOffscreen(raw, ready, { data: gameData, messages: 2 });
     expect(
       "场外提议产生一通来电",
       got.commands.filter((c) => c.type === "phone.call").length === 1,
@@ -450,7 +450,7 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
     const v = view(run(ready, got.commands));
     expect("场外来电接入玩家投影", v.calls.incoming?.from === id);
     expect("场外来意不进玩家投影", !JSON.stringify(v).includes(about));
-    const full = readOffscreen(raw, ready, { data: gameData, messages: 0 });
+    const full = readSocialOffscreen(raw, ready, { data: gameData, messages: 0 });
     expect("联系额度用完不能来电", !full.commands.some((c) => c.type === "phone.call"));
   }
 }

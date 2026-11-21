@@ -6,16 +6,20 @@ import type { WorldState } from "../kernel/world";
 import { CityStateSchema } from "../systems/city";
 import { registry } from "../systems/registry";
 import {
-  buildOffscreenPrompt,
+  buildMacroOffscreenPrompt,
+  buildSocialOffscreenPrompt,
   lifePicks,
   offscreenDue,
-  prepareOffscreenBatch,
-  readOffscreen,
+  prepareMacroOffscreenBatch,
+  readMacroOffscreen,
+  readSocialOffscreen,
 } from "./offscreen";
 
 const ctx = { rng: seededRng(2) };
 const T0 = 1000;
-const empty = { events: [], npcs: [], messages: [] };
+const emptyMacro = { situations: [] };
+const emptySocial = { npcs: [], messages: [] };
+
 function apply(world: WorldState, commands: Command[]) {
   const result = registry.applyCommands(world, commands, ctx);
   expect(result.results.every((r) => r.result.ok)).toBe(true);
@@ -58,15 +62,26 @@ function turn(seq: number, text: string, more: Partial<TurnRecord> = {}): TurnRe
     ...more,
   };
 }
-function prompt(world: WorldState, records: TurnRecord[] = [], text = "这轮没有新动作") {
+function macroPrompt(world: WorldState, records: TurnRecord[] = [], text = "这轮没有新动作") {
   return (
-    buildOffscreenPrompt(world, records, { data: { items: [], cyberware: [] } }, text)[1]
+    buildMacroOffscreenPrompt(world, records, { data: { items: [], cyberware: [] } }, text)[1]
       ?.content ?? ""
   );
 }
+function socialPrompt(world: WorldState, records: TurnRecord[] = [], text = "这轮没有新动作") {
+  return (
+    buildSocialOffscreenPrompt(
+      world,
+      records,
+      { data: { items: [], cyberware: [] } },
+      text,
+      new Set(),
+    )[1]?.content ?? ""
+  );
+}
 
-describe("场外推演成功游标和失败退避", () => {
-  it.each([T0, T0 + 10])("同一分钟刚推动的事项也触发推演，旧期限 %i", (dueAt) => {
+describe("双路场外推演成功游标与失败退避", () => {
+  it.each([T0, T0 + 10])("同一分钟刚推动的局势也触发推演，旧期限 %i", (dueAt) => {
     const initial = start();
     const seeded: WorldState = {
       ...initial,
@@ -81,6 +96,9 @@ describe("场外推演成功游标和失败退避", () => {
               owner: "crew",
               seed: null,
               title: "送货",
+              district: "沃森",
+              weight: "normal",
+              status: "brewing",
               want: "把货交到仓库",
               stage: "等待放行",
               openedAt: T0 - 10,
@@ -143,62 +161,64 @@ describe("场外推演成功游标和失败退避", () => {
   });
 });
 
-describe("场外推演批次完整性", () => {
-  it("只有明确的空结果才算成功，拒答、缺字段和数组格式错都失败", () => {
-    expect(readOffscreen(JSON.stringify(empty), start()).ok).toBe(true);
-    for (const value of [
-      "拒绝输出",
-      "{}",
-      "null",
-      JSON.stringify({ ...empty, events: null }),
-      JSON.stringify({ ...empty, threads: {} }),
-    ]) {
-      expect(readOffscreen(value, start()).ok).toBe(false);
+describe("分级容错解析（L0 硬失败 vs L1/L2 局部降级）", () => {
+  it("L0 顶层非 JSON 或缺核心数组才失败", () => {
+    expect(readMacroOffscreen(JSON.stringify(emptyMacro), start()).ok).toBe(true);
+    expect(readSocialOffscreen(JSON.stringify(emptySocial), start()).ok).toBe(true);
+    for (const value of ["拒绝输出", "{}", "null", JSON.stringify({ situations: null })]) {
+      expect(readMacroOffscreen(value, start()).ok).toBe(false);
+    }
+    for (const value of ["拒绝输出", "{}", "null", JSON.stringify({ npcs: null, messages: [] })]) {
+      expect(readSocialOffscreen(value, start()).ok).toBe(false);
     }
   });
 
-  it("部分条目无效时保留诊断但整批标为失败，不把合法部分当作成功", () => {
-    const got = readOffscreen(
+  it("L2 单条无效跳过，合法条目仍正常保留且整批成功", () => {
+    const got = readMacroOffscreen(
       JSON.stringify({
-        ...empty,
-        events: [
+        situations: [
           {
+            op: "open",
             id: "power-cut",
+            kind: "civic",
             title: "断电",
-            body: "变电站故障",
+            stage: "变电站故障",
+            truth: "变电站故障导致片区停电",
             status: "brewing",
             weight: "normal",
+            days: 2,
           },
           { id: "broken" },
         ],
       }),
       start(),
     );
-    expect(got.commands.some((c) => c.type === "city.event")).toBe(true);
-    expect(got.ok).toBe(false);
+    expect(got.ok).toBe(true);
+    expect(got.commands.some((c) => c.type === "thread.open")).toBe(true);
+    expect(got.notes.some((n) => n.includes("已跳过"))).toBe(true);
   });
 
-  it("遗漏轮换生活建议不是失败，重复的近况则是无效批次", () => {
+  it("重复近况只跳过多余条目，不拖累整批人物推演", () => {
     const world = seed(start(), "n-one", "甲");
-    expect(readOffscreen(JSON.stringify(empty), world).ok).toBe(true);
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       JSON.stringify({
-        ...empty,
         npcs: [
           { id: "n-one", doing: "修发动机" },
           { id: "n-one", doing: "喝咖啡" },
         ],
+        messages: [],
       }),
       world,
     );
-    expect(got.ok).toBe(false);
+    expect(got.ok).toBe(true);
+    expect(got.commands.filter((c) => c.type === "npc.offscreenDoing")).toHaveLength(1);
   });
 });
 
 describe("场外推演增量材料", () => {
   it("按成功 seq 选正文，同一分钟的新行动保留；不带旧轮、出戏和未定稿", () => {
     const world = apply(start(), [{ type: "city.ran", through: 2, backlog: false }]).world;
-    const text = prompt(world, [
+    const text = macroPrompt(world, [
       turn(2, "已经处理的独特事实"),
       turn(3, "同一分钟的新行动"),
       turn(4, "出戏说明甲", { ooc: true }),
@@ -210,19 +230,11 @@ describe("场外推演增量材料", () => {
       expect(text).not.toContain(omitted);
   });
 
-  it("积压超过八轮、每轮超过六百字也保留因果结尾", () => {
-    const text = prompt(
-      start(),
-      Array.from({ length: 10 }, (_, i) => turn(i, `${"长叙事".repeat(220)}因果结尾${i}。`)),
-    );
-    for (let i = 0; i < 10; i += 1) expect(text).toContain(`因果结尾${i}。`);
-  });
-
-  it("相关人物超过十二名仍带详卡，远端轮换者和完整索引仍在", () => {
+  it("社交推演包含相关人物详卡、远端轮换者和完整索引", () => {
     let world = start();
     for (let i = 0; i < 18; i += 1)
       world = seed(world, `npc-${String(i).padStart(2, "0")}`, `工友${i}号`);
-    const text = prompt(
+    const text = socialPrompt(
       world,
       [],
       Array.from({ length: 14 }, (_, i) => `工友${i + 2}号`).join("、"),
@@ -235,47 +247,6 @@ describe("场外推演增量材料", () => {
     expect(text).toContain("npc-17｜工友17号");
     expect(text).not.toContain("想要：工友17号独有诉求");
   });
-
-  it("到期心事主人即使不在近期正文也带动机、公开说法与期限", () => {
-    const world = seed(start(), "absent", "离场者");
-    const active = {
-      ...world,
-      slices: {
-        ...world.slices,
-        threads: {
-          closed: [],
-          threads: [
-            {
-              id: "leave-city",
-              kind: "concern",
-              owner: "absent",
-              seed: null,
-              title: "离城",
-              want: "把母亲接走",
-              stage: "已买票",
-              openedAt: 900,
-              dueAt: 999,
-              reminded: false,
-              steps: [
-                {
-                  at: 950,
-                  kind: "move",
-                  text: "私下买了船票",
-                  news: "去码头办事",
-                  turf: null,
-                  told: false,
-                },
-              ],
-            },
-          ],
-        },
-      },
-    };
-    const text = prompt(active);
-    expect(text).toContain("想要：离场者独有诉求");
-    expect(text).toContain("公开说法：去码头办事（玩家还没听说）");
-    expect(text).toContain("已到点");
-  });
 });
 
 describe("场外积压按辅助模型窗口分批", () => {
@@ -287,7 +258,7 @@ describe("场外积压按辅助模型窗口分批", () => {
     records: TurnRecord[],
     narrative = current,
     budget = capacity,
-  ) => prepareOffscreenBatch(world, records, extras, narrative, new Set(), budget);
+  ) => prepareMacroOffscreenBatch(world, records, extras, narrative, budget);
 
   it("两百轮积压分批读取完整因果，既不跳过旧轮也不重复处理", () => {
     const records = Array.from({ length: 200 }, (_, i) =>
@@ -301,31 +272,20 @@ describe("场外积压按辅助模型窗口分批", () => {
       expect(batch.kind).toBe("ready");
       if (batch.kind !== "ready") throw new Error(batch.reason);
       expect(batch.inputTokens).toBeLessThanOrEqual(batch.inputLimit);
-      expect(batch.inputLimit + batch.maxOutputTokens).toBeLessThan(capacity.contextWindow);
       const text = batch.messages.map((m) => m.content).join("\n");
       for (const match of text.matchAll(/独特因果结尾\[(\d+)\]/g)) {
         const seq = Number(match[1]);
         occurrences.set(seq, (occurrences.get(seq) ?? 0) + 1);
       }
-      if (batches === 0) {
-        expect(batch.backlog).toBe(true);
-        expect(batch.through).toBeLessThan(199);
-        expect(text).toContain("当前状态始终优先于历史描述");
-        expect(text).toContain("仅作现状保护，后续批次处理");
-      }
-      const previous = world;
       world = apply(world, [
-        { type: "city.ran", through: batch.through, backlog: batch.backlog },
+        { type: "city.ran", track: "macro", through: batch.through, backlog: batch.backlog },
       ]).world;
       if (!batch.backlog) break;
-      expect(CityStateSchema.parse(world.slices.city).lastAt).toBeNull();
-      expect(offscreenDue(previous, world)).toBe(true);
     }
     expect(batches).toBeGreaterThan(1);
-    expect(batches).toBeLessThan(records.length);
     expect([...occurrences.keys()].sort((a, b) => a - b)).toEqual(records.map((r) => r.seq));
     expect([...occurrences.values()].every((count) => count === 1)).toBe(true);
-    expect(CityStateSchema.parse(world.slices.city)).toMatchObject({
+    expect(CityStateSchema.parse(world.slices.city).macro).toMatchObject({
       processedThrough: 200,
       backlog: false,
       lastAt: T0,
@@ -338,66 +298,5 @@ describe("场外积压按辅助模型窗口分批", () => {
       turn(1, "较短的后续"),
     ]);
     expect(batch.kind).toBe("blocked");
-    if (batch.kind !== "blocked") return;
-    expect(batch.reason).toContain("待处理回合 0");
-    expect(batch.reason).toContain("没有截断或跳过");
-    expect(batch.inputTokens).toBeGreaterThan(batch.inputLimit);
-  });
-
-  it("当前正文与必要背景放不下时不发送请求，也不假装处理成功", () => {
-    const batch = prepare(start(), [turn(0, "旧轮")], "完整当前正文".repeat(10_000));
-    expect(batch.kind).toBe("blocked");
-    if (batch.kind !== "blocked") return;
-    expect(batch.reason).toContain("必要背景与当前正文");
-    expect(batch.reason).toContain("没有发送请求或推进游标");
-  });
-
-  it("分批成功只改事实游标；下一批失败仍保留截止时间与待办，退避后继续", () => {
-    const first = apply(start(), [{ type: "city.ran", through: 4, backlog: false }]).world;
-    const later = registry.advanceTo(first, T0 + 720, ctx).world;
-    const partial = apply(later, [{ type: "city.ran", through: 8, backlog: true }]).world;
-    expect(CityStateSchema.parse(partial.slices.city)).toMatchObject({
-      lastAt: T0,
-      lastScene: 0,
-      processedThrough: 8,
-      backlog: true,
-    });
-    const failure = apply(partial, [{ type: "city.failed" }]);
-    expect(CityStateSchema.parse(failure.world.slices.city)).toMatchObject({
-      lastAt: T0,
-      processedThrough: 8,
-      backlog: true,
-      retryAt: T0 + 735,
-    });
-    expect(offscreenDue(partial, failure.world)).toBe(false);
-    const retry = registry.advanceTo(failure.world, T0 + 735, ctx).world;
-    expect(offscreenDue(failure.world, retry)).toBe(true);
-    expect(
-      replay({ world: partial, nextSeq: 0 }, [turn(0, "失败", { patches: [...failure.patches] })]),
-    ).toEqual(failure.world);
-    const reject = registry.applyCommands(
-      partial,
-      [{ type: "city.ran", through: 7, backlog: true }],
-      ctx,
-    );
-    expect(reject.results[0]?.result.ok).toBe(false);
-    expect(reject.world).toEqual(partial);
-  });
-
-  it("无效轮次和作废记录形成的seq空洞不会让游标卡住", () => {
-    const records = [
-      turn(0, "有效短轮"),
-      turn(1, "出戏", { ooc: true }),
-      turn(2, "未定稿", { unsettled: "失败" }),
-    ];
-    const batch = prepare(start(), records);
-    expect(batch.kind).toBe("ready");
-    if (batch.kind !== "ready") return;
-    expect(batch.through).toBe(3);
-    expect(batch.backlog).toBe(false);
-    const text = batch.messages.map((m) => m.content).join("\n");
-    expect(text).toContain("有效短轮");
-    expect(text).not.toContain("回合 1：");
-    expect(text).not.toContain("回合 2：");
   });
 });

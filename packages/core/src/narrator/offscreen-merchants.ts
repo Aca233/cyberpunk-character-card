@@ -1,6 +1,7 @@
 import type { Command } from "../kernel/system";
 import type { WorldState } from "../kernel/world";
 import { CityEventFieldsSchema, CityStateSchema } from "../systems/city";
+import { normalizeEvidenceText } from "../systems/commerce";
 import { CyberwareStateSchema, ripperdocList } from "../systems/cyberware";
 import { InventoryStateSchema } from "../systems/inventory";
 import { LogisticsStateSchema, routeLocations } from "../systems/logistics";
@@ -32,11 +33,11 @@ const MERCHANT_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-export const OFFSCREEN_MERCHANT_RULE = `- 商家经营：只处理【已激活商家】中的具体店铺、诊所和它们途经的道路。真实停业/恢复、明确人员或设备变化、真实封路/恢复通行才写 merchantChanges；每项必须有 sourceEvent，指向已有【城里的动静】或本批 events 的 id，evidence 必须逐字引用该事件 title/body 中已经发生的事实。普通营业无需变化，不因全城新闻推导所有商家停业或涨价。已登记订单的到货由本地时间和路况推进，不在这里加库存。不得替玩家买卖、付款、订货、预约、开工或完成手术。未完手术只作为经营约束，不能借经营变化替玩家授权。`;
+export const OFFSCREEN_MERCHANT_RULE = `- 商家经营：只处理【已激活商家】中的具体店铺、诊所和它们途经的道路。真实停业/恢复、明确人员或设备变化、真实封路/恢复通行才写 merchantChanges；每项必须有 sourceEvent，指向已有【城中局势】或本批 situations 的 id，evidence 引用该局势标题或本步事实片段。普通营业无需变化，不因全城新闻推导所有商家停业或涨价。已登记订单的到货由本地时间和路况推进，不在这里加库存。不得替玩家买卖、付款、订货、预约、开工或完成手术。`;
 export const OFFSCREEN_MERCHANT_OUTPUT = `merchantChanges：可省略或 []；只接受以下三类，sourceEvent 与 evidence 必填，字段不得扩展。只改变具体经营条件，不改变玩家款项或身体：
-- 商店：{"type":"shopBusiness","shop":"已激活商店 id","action":"open|close|staff","reason":"事实原因","evidence":"事件里的逐字原话","sourceEvent":"事件 id"}；staff 可加 keeperNpc 和 serviceNpcs，必须为已存在在世人物。
-- 诊所：{"type":"cyberware.clinic","doc":"已激活诊所 id","open":false,"reason":"事实原因","evidence":"事件里的逐字原话","sourceEvent":"事件 id"}；实际人员或设备变化可写 staff、equipment，不变的字段省略。
-- 道路：{"type":"logistics.route","location":"供货路线里的已登记地点 id","blocked":true,"reason":"事实原因","evidence":"事件里的逐字原话","sourceEvent":"事件 id"}；恢复通行 blocked:false。已结束事件不能新建持续封锁。`;
+- 商店：{"type":"shopBusiness","shop":"已激活商店 id","action":"open|close|staff","reason":"事实原因","evidence":"局势里的事实原话","sourceEvent":"局势 id"}；staff 可加 keeperNpc 和 serviceNpcs，必须为已存在在世人物。
+- 诊所：{"type":"cyberware.clinic","doc":"已激活诊所 id","open":false,"reason":"事实原因","evidence":"局势里的事实原话","sourceEvent":"局势 id"}；实际人员或设备变化可写 staff、equipment，不变的字段省略。
+- 道路：{"type":"logistics.route","location":"供货路线里的已登记地点 id","blocked":true,"reason":"事实原因","evidence":"局势里的事实原话","sourceEvent":"局势 id"}；恢复通行 blocked:false。已结束局势不能新建持续封锁。`;
 
 /** 只送出已进入存档的经营状态和未完事项，不把全城货架送给场外模型。 */
 export function offscreenMerchantContext(world: WorldState, data: Data): string[] {
@@ -107,14 +108,22 @@ export function offscreenMerchantContext(world: WorldState, data: Data): string[
   ];
 }
 
-/** 经营变化只接受窄指令集合，格式与实际执行使用同一个 schema。 */
+export interface OffscreenEventSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly body: string;
+  readonly status: "brewing" | "heating" | "cooling" | "over";
+}
+
+/** 经营变化只接受窄指令集合，格式与实际执行使用同一个 schema；证据比对做空白与标点归一化。 */
 export function readOffscreenMerchantChanges(
   raw: unknown,
   world: WorldState,
   events: readonly Command[],
   data: Data,
+  extraEvents: readonly OffscreenEventSummary[] = [],
 ): { commands: Command[]; notes: string[] } {
-  if (raw === undefined) return { commands: [], notes: [] };
+  if (raw === undefined || raw === null) return { commands: [], notes: [] };
   if (!Array.isArray(raw)) return { commands: [], notes: ["merchantChanges 必须是数组"] };
   const commands: Command[] = [];
   const notes: string[] = [];
@@ -128,6 +137,9 @@ export function readOffscreenMerchantChanges(
     if (command.type !== "city.event") continue;
     const event = CityEventFieldsSchema.parse(command);
     cityEvents.set(event.id, event);
+  }
+  for (const event of extraEvents) {
+    cityEvents.set(event.id, { title: event.title, body: event.body, status: event.status });
   }
   const inventory = InventoryStateSchema.parse(world.slices.inventory);
   const cyberware = CyberwareStateSchema.parse(world.slices.cyberware);
@@ -150,7 +162,11 @@ export function readOffscreenMerchantChanges(
       reject("必须是具体经营指令");
       continue;
     }
-    const value = item as Record<string, unknown>;
+    // 清理 JSON Schema 中可能出现的 null 可选字段，避免 strict schema 误拒
+    const value: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
+      if (v !== null && v !== undefined) value[k] = v;
+    }
     const type = typeof value.type === "string" ? value.type : "";
     const keys = Object.hasOwn(MERCHANT_KEYS, type) ? MERCHANT_KEYS[type] : undefined;
     if (!keys) {
@@ -170,8 +186,13 @@ export function readOffscreenMerchantChanges(
     const sourceEvent = typeof command.sourceEvent === "string" ? command.sourceEvent : "";
     const evidence = typeof command.evidence === "string" ? command.evidence : "";
     const event = cityEvents.get(sourceEvent);
-    if (!event || !evidence.trim() || !`${event.title}\n${event.body}`.includes(evidence)) {
-      reject("必须逐字引用已有或本批城市事件的事实，并填写 sourceEvent");
+    const needle = normalizeEvidenceText(evidence);
+    if (
+      !event ||
+      !needle ||
+      !normalizeEvidenceText(`${event.title}\n${event.body}`).includes(needle)
+    ) {
+      reject("必须引用已有或本批局势中的实际事实，并填写 sourceEvent");
       continue;
     }
     const target =

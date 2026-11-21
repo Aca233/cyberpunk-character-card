@@ -5,7 +5,7 @@ import type { WorldState } from "../kernel/world";
 import { NpcStateSchema } from "../systems/npc";
 import { npcsView } from "../systems/npc/view";
 import { registry } from "../systems/registry";
-import { readOffscreen } from "./offscreen";
+import { readSocialOffscreen } from "./offscreen";
 
 // NPC 会移动（用户 2026-11-02："npc是能移动的"，中间人也一样）：场外推演的近况可以带地点
 const T0 = 60 * 24 * 10;
@@ -41,7 +41,7 @@ function start(): WorldState {
   ]).world;
 }
 
-const reply = (npcs: unknown[]) => JSON.stringify({ events: [], npcs, messages: [], jobs: [] });
+const reply = (npcs: unknown[]) => JSON.stringify({ npcs, messages: [], jobs: [] });
 
 const where = (world: WorldState) => NpcStateSchema.parse(world.slices.npc).npcs.regina?.location;
 
@@ -49,11 +49,12 @@ describe("场外推演里人物移动", () => {
   it("中间人也写近况，带了已有地点就挪过去", () => {
     const world = start();
     expect(where(world)).toBe("regina-office");
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply([{ id: "regina", doing: "去来生酒吧见一个老客户", location: "afterlife" }]),
       world,
       { data },
     );
+    expect(got.ok).toBe(true);
     expect(got.commands).toContainEqual({
       type: "npc.offscreenDoing",
       id: "regina",
@@ -70,13 +71,14 @@ describe("场外推演里人物移动", () => {
     });
   });
 
-  it("地点不在地点表里：近况照收，位置不动", () => {
+  it("地点不在地点表里：局部降级，近况照收，位置不动，整批仍成功", () => {
     const world = start();
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply([{ id: "regina", doing: "出城办事", location: "made-up-place" }]),
       world,
       { data },
     );
+    expect(got.ok).toBe(true);
     const doing = got.commands.find((c) => c.type === "npc.offscreenDoing");
     expect(doing).toEqual({ type: "npc.offscreenDoing", id: "regina", text: "出城办事" });
     expect(got.notes.some((n) => n.includes("不在地点表里"))).toBe(true);

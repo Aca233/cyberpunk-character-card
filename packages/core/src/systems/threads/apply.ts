@@ -126,7 +126,12 @@ function applyOpen(draft: State, command: ThreadOpen, ctx: SystemContext): Apply
   draft.threads.push(entry);
   const emit: Command[] = [syncCityEvent(entry, command.body ?? command.stage, entry.status)];
   if (command.kind === "concern" && command.owner !== null && command.seed !== null) {
-    emit.push({ type: "arc.start", npc: command.owner, concern: command.seed, text: command.stage });
+    emit.push({
+      type: "arc.start",
+      npc: command.owner,
+      concern: command.seed,
+      text: command.stage,
+    });
   }
   return {
     ok: true,

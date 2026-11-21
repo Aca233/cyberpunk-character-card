@@ -32,7 +32,9 @@ export const THREAD_STAGE_MAX = 80;
 export const THREAD_TEXT_MAX = 160;
 export const THREAD_NEWS_MAX = 80;
 
-const SlugSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "id 用小写英文、数字和连字符，最长 40");
+const SlugSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "id 用小写英文、数字和连字符，最长 40");
 
 export const ThreadKindSchema = z.enum(["civic", "faction", "nemesis", "concern"]);
 export type ThreadKind = z.infer<typeof ThreadKindSchema>;

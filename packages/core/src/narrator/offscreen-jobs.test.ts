@@ -5,7 +5,7 @@ import type { WorldState } from "../kernel/world";
 import { JobsStateSchema } from "../systems/jobs";
 import { PhoneStateSchema } from "../systems/phone";
 import { registry } from "../systems/registry";
-import { OFFERED_CAP, offscreenFixers, readOffscreen } from "./offscreen";
+import { OFFERED_CAP, offscreenFixers, readSocialOffscreen } from "./offscreen";
 
 // 场外推演里中间人主动派单（用户定的，2026-10-30："能不能接到世界演变里"）
 const T0 = 60 * 24 * 10;
@@ -35,7 +35,7 @@ const job = (over: Record<string, unknown> = {}) => ({
 });
 
 const reply = (value: Record<string, unknown>) =>
-  JSON.stringify({ events: [], npcs: [], messages: [], jobs: [], ...value });
+  JSON.stringify({ npcs: [], messages: [], jobs: [], ...value });
 
 describe("场外推演派单", () => {
   it("列出登记过的中间人，不附带声望星级门槛", () => {
@@ -46,7 +46,7 @@ describe("场外推演派单", () => {
 
   it("新委托排在带它的派单消息前面，结算后委托挂出、消息带着这一单", () => {
     const world = start();
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [job()],
         messages: [{ from: "regina", text: "有活，过来聊。", job: "scav-den" }],
@@ -67,7 +67,7 @@ describe("场外推演派单", () => {
   // 「全改」第 2 步（用户 2026-11-01：模型当主持人，代码只管记账）：没消息的单补消息，星级超了压到上限，条数是软上限
   it("中间人的单没有派单消息：代码补一条，单照挂", () => {
     const world = start();
-    const got = readOffscreen(reply({ jobs: [job()] }), world);
+    const got = readSocialOffscreen(reply({ jobs: [job()] }), world);
     expect(got.commands.some((c) => c.type === "jobOffer")).toBe(true);
     const message = got.commands.find((c) => c.type === "phone.receive");
     expect(message?.from).toBe("regina");
@@ -78,7 +78,7 @@ describe("场外推演派单", () => {
   });
 
   it("别的中间人发消息带这一单：他的消息去掉委托，派单的中间人由代码补一条", () => {
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [job()],
         messages: [{ from: "wakako", text: "听说你缺钱。", job: "scav-den" }],
@@ -92,7 +92,7 @@ describe("场外推演派单", () => {
   });
 
   it("风险按实际事件保留，没登记的中间人不要", () => {
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [job({ risk: 3 }), job({ id: "ghost-job", fixer: "nobody" })],
         messages: [{ from: "regina", text: "有活。", job: "scav-den" }],
@@ -106,7 +106,7 @@ describe("场外推演派单", () => {
   });
 
   it("一次多派的照收到软上限；补的消息也占这一轮的消息额度", () => {
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [job({ id: "a" }), job({ id: "b" }), job({ id: "c" }), job({ id: "d" })],
         messages: [
@@ -129,7 +129,7 @@ describe("场外推演派单", () => {
     }
     expect(JobsStateSchema.parse(world.slices.jobs).jobs).toHaveLength(OFFERED_CAP);
     expect(offscreenFixers(world)).toEqual([]);
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [job()],
         messages: [{ from: "regina", text: "有活。", job: "scav-den" }],
@@ -170,7 +170,7 @@ describe("场外推演熟人求助", () => {
 
   it("被挑出来联系玩家的熟人发消息求助：委托挂出，没有中间人", () => {
     const world = withFriend();
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [ask()],
         messages: [{ from: "misty", text: "能来店里一趟吗？有人找麻烦。", job: "misty-shop" }],
@@ -192,7 +192,7 @@ describe("场外推演熟人求助", () => {
   it("别有用心的托事：照他说的挂出，真相存在 twist 里", () => {
     const world = withFriend();
     const twist = "根本没人收保护费，米丝蒂想把玩家引到店里，让漩涡帮的人等着";
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [ask({ twist })],
         messages: [{ from: "misty", text: "能来店里一趟吗？有人找麻烦。", job: "misty-shop" }],
@@ -213,7 +213,7 @@ describe("场外推演熟人求助", () => {
   // 熟人发消息也可以只是闲聊（用户定的，2026-10-30："也有可能是闲聊啊"）
   it("熟人只是闲聊：消息照发、不带委托，也不挂新单", () => {
     const world = withFriend();
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         messages: [{ from: "misty", text: "今晚的牌又抽到了塔，你那边没出事吧？" }],
       }),
@@ -231,7 +231,7 @@ describe("场外推演熟人求助", () => {
   // 「全改」第 2 步（用户 2026-11-01）：求助星级超了压到他的上限，不整单作废
   it("熟人求助按实际风险登记，不按好感压低分量", () => {
     const world = withFriend();
-    const got = readOffscreen(
+    const got = readSocialOffscreen(
       reply({
         jobs: [ask({ risk: 3 })],
         messages: [{ from: "misty", text: "出事了。", job: "misty-shop" }],
@@ -246,7 +246,7 @@ describe("场外推演熟人求助", () => {
   });
 
   it("求助的单由中间人带不要；好感低的熟人也能发", () => {
-    const byFixer = readOffscreen(
+    const byFixer = readSocialOffscreen(
       reply({
         jobs: [ask()],
         messages: [{ from: "regina", text: "米丝蒂托我问你。", job: "misty-shop" }],
@@ -255,7 +255,7 @@ describe("场外推演熟人求助", () => {
     );
     expect(byFixer.commands.some((c) => c.type === "jobOffer")).toBe(false);
     // 好感 10：谁来联系玩家由模型定（「全改」第 4 步），消息照发
-    const quiet = readOffscreen(
+    const quiet = readSocialOffscreen(
       reply({ messages: [{ from: "misty", text: "在吗？" }] }),
       withFriend(10),
     );

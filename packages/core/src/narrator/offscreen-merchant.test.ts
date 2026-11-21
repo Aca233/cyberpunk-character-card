@@ -7,7 +7,7 @@ import { EconomyStateSchema } from "../systems/economy";
 import { InventoryStateSchema } from "../systems/inventory";
 import { LogisticsStateSchema } from "../systems/logistics";
 import { registry } from "../systems/registry";
-import { buildOffscreenPrompt, readOffscreen } from "./offscreen";
+import { buildMacroOffscreenPrompt, readMacroOffscreen } from "./offscreen";
 import { offscreenMerchantContext } from "./offscreen-merchants";
 
 const data = {
@@ -81,6 +81,19 @@ function apply(world: WorldState, commands: Command[]) {
   return result.world;
 }
 const evidence = "桥口实际封路，街角工具店和诊所都暂时停业。";
+const situationOpen = {
+  op: "open",
+  id: "bridge-block",
+  kind: "civic",
+  title: "桥口封路",
+  district: "沃森",
+  weight: "minor",
+  status: "heating",
+  want: "封锁桥口排查走私",
+  stage: evidence,
+  truth: evidence,
+  days: 2,
+};
 const event = {
   id: "bridge-block",
   title: "桥口封路",
@@ -113,19 +126,22 @@ const clinic = {
   sourceEvent: event.id,
 };
 function read(world: WorldState, more: Record<string, unknown> = {}) {
-  return readOffscreen(JSON.stringify({ events: [], npcs: [], messages: [], ...more }), world, {
+  return readMacroOffscreen(JSON.stringify({ situations: [], ...more }), world, {
     data,
   });
 }
 
 describe("场外推演的经营事实", () => {
-  it("经营变化可以省略，只有已经记录或本批真实事件才能驱动，先记事件再改经营", () => {
+  it("经营变化可以省略，只有已经记录或本批真实局势才能驱动，先记局势再改经营", () => {
     const world = base();
     expect(read(world).ok).toBe(true);
-    const batch = read(world, { events: [event], merchantChanges: [block, close, clinic] });
+    const batch = read(world, {
+      situations: [situationOpen],
+      merchantChanges: [block, close, clinic],
+    });
     expect(batch.ok).toBe(true);
     expect(batch.commands.map((command) => command.type)).toEqual([
-      "city.event",
+      "thread.open",
       "logistics.route",
       "shopBusiness",
       "cyberware.clinic",
@@ -137,21 +153,29 @@ describe("场外推演的经营事实", () => {
     expect(EconomyStateSchema.parse(changed.slices.economy).eddies).toBe(1000);
     expect(cyber(changed).installed).toEqual([]);
     const recorded = apply(world, [{ type: "city.event", ...event }]);
-    expect(read(recorded, { merchantChanges: [close] }).ok).toBe(true);
+    expect(read(recorded, { merchantChanges: [close] }).commands.map((c) => c.type)).toEqual([
+      "shopBusiness",
+    ]);
   });
   it.each([
     { merchantChanges: [close] },
-    { events: [event], merchantChanges: [{ ...close, sourceEvent: "fake" }] },
-    { events: [event], merchantChanges: [{ ...close, evidence: "店主没有说过的话" }] },
-    { events: [event], merchantChanges: [{ ...close, sourceEvent: undefined }] },
-    { events: [event], merchantChanges: [{ ...close, money: -100 }] },
-    { events: [event], merchantChanges: [{ ...close, shop: "unvisited" }] },
-    { events: [event], merchantChanges: [{ ...block, location: "far" }] },
-    { events: [{ ...event, status: "over" }], merchantChanges: [block] },
-    { events: [event], merchantChanges: [close, close] },
+    { situations: [situationOpen], merchantChanges: [{ ...close, sourceEvent: "fake" }] },
+    { situations: [situationOpen], merchantChanges: [{ ...close, evidence: "店主没有说过的话" }] },
+    { situations: [situationOpen], merchantChanges: [{ ...close, sourceEvent: undefined }] },
+    { situations: [situationOpen], merchantChanges: [{ ...close, money: -100 }] },
+    { situations: [situationOpen], merchantChanges: [{ ...close, shop: "unvisited" }] },
+    { situations: [situationOpen], merchantChanges: [{ ...block, location: "far" }] },
+    { situations: [situationOpen], merchantChanges: [close, close] },
     { merchantChanges: {} },
-  ])("不存在的事实、范围和扩展字段整批拒绝：%o", (reply) => {
-    expect(read(base(), reply).ok).toBe(false);
+  ])("不合法的经营条目局部跳过，不注入无效经营指令：%o", (reply) => {
+    const got = read(base(), reply);
+    expect(got.ok).toBe(true);
+    expect(got.notes.length).toBeGreaterThan(0);
+    expect(
+      got.commands.filter((c) =>
+        ["shopBusiness", "cyberware.clinic", "logistics.route"].includes(c.type),
+      ).length,
+    ).toBeLessThanOrEqual(1);
   });
   it.each([
     "trade",
@@ -165,27 +189,20 @@ describe("场外推演的经营事实", () => {
     "constructor",
   ])("不能夹带 %s 替玩家交易或手术", (type) => {
     const got = read(base(), {
-      events: [event],
+      situations: [situationOpen],
       merchantChanges: [{ type, evidence, sourceEvent: event.id }],
     });
-    expect(got.ok).toBe(false);
     expect(got.commands.some((command) => command.type === type)).toBe(false);
-  });
-  it("新事件优先于同 id 的旧事件，不可引用被本批改写掉的旧事实", () => {
-    const before = apply(base(), [{ type: "city.event", ...event }]);
-    expect(
-      read(before, {
-        events: [{ ...event, body: "路障已经移走，运输恢复通行。", status: "over" }],
-        merchantChanges: [block],
-      }).ok,
-    ).toBe(false);
   });
   it("真实停业阻止成交，封路暂停已存在订单，恢复后走完剩余路程才到货", () => {
     const bought = apply(base(), [
       { type: "trade", action: "buy", with: "store", item: "tool", reason: "实际购买" },
     ]);
     const beforeBlock = registry.advanceTo(bought, 1020, context).world;
-    const parsed = read(beforeBlock, { events: [event], merchantChanges: [close, block] });
+    const parsed = read(beforeBlock, {
+      situations: [situationOpen],
+      merchantChanges: [close, block],
+    });
     expect(parsed.ok).toBe(true);
     const blocked = apply(beforeBlock, parsed.commands);
     const attempted = registry.applyCommands(
@@ -202,9 +219,8 @@ describe("场外推演的经营事实", () => {
       remainingMinutes: 40,
     });
     const clearEvidence = "路障已撤，工具店重新开门，配送恢复通行。";
-    const clearEvent = { ...event, body: clearEvidence, status: "over" };
     const cleared = read(later, {
-      events: [clearEvent],
+      situations: [{ op: "close", id: "bridge-block", truth: clearEvidence }],
       merchantChanges: [
         { ...block, blocked: false, reason: "恢复通行", evidence: clearEvidence },
         { ...close, action: "open", reason: "恢复营业", evidence: clearEvidence },
@@ -308,7 +324,7 @@ describe("场外商家材料按已激活状态组装", () => {
       expect(section).toContain(required);
     for (const omitted of ["从未到过的商店", "unrelated-stock", "不相关的远方路障"])
       expect(section).not.toContain(omitted);
-    const prompt = buildOffscreenPrompt(state, [], { data }, "这一轮已经结束。");
+    const prompt = buildMacroOffscreenPrompt(state, [], { data }, "这一轮已经结束。");
     expect(prompt[1]?.content).toContain("【已激活商家】");
     expect(prompt[0]?.content).toContain("不得替玩家买卖、付款、订货、预约、开工或完成手术");
   });

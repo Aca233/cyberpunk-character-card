@@ -3,11 +3,11 @@ import { issueText } from "./block";
 import { schemaDoc } from "./doc";
 import { estimateTokens } from "./prompts/layers";
 
-export type RepairStage = "judge" | "extract";
+export type RepairStage = "judge" | "extract" | "offscreen-macro" | "offscreen-social";
 export const REPAIR_INPUT_TOKENS = 8_000;
 export const REPAIR_OUTPUT_TOKENS = 2_048;
 
-/** 每阶段最多一次修复，包括顶层 JSON 修复；整轮最多两次。 */
+/** 每阶段最多一次修复，包括顶层 JSON 修复。 */
 export class RepairBudget {
   private readonly used = new Set<RepairStage>();
 

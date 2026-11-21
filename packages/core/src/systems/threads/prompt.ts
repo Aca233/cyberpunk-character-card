@@ -2,12 +2,7 @@ import type { RuleModule, SectionContext, SystemSection } from "../../kernel/sys
 import { CITY_STATUS_LABELS } from "../city";
 import { NpcStateSchema, onStage } from "../npc";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
-import {
-  THREAD_KIND_LABELS,
-  type Thread,
-  type ThreadsState,
-  ThreadsStateSchema,
-} from "./schema";
+import { THREAD_KIND_LABELS, type Thread, type ThreadsState, ThreadsStateSchema } from "./schema";
 
 /** 高相关现场风声最多展示几条，避免后台全城账本挤占正文注意力 */
 const LOCAL_FOCUS_MAX = 3;
@@ -48,9 +43,7 @@ function detailedLine(t: Thread): string {
 
 function compactLine(t: Thread): string {
   const latest = t.steps.at(-1);
-  const tail = latest
-    ? `${latest.news}（${latest.told ? "玩家已知" : "玩家尚未听说"}）`
-    : t.stage;
+  const tail = latest ? `${latest.news}（${latest.told ? "玩家已知" : "玩家尚未听说"}）` : t.stage;
   return `- ${t.id}｜${THREAD_KIND_LABELS[t.kind]}·${t.title}${metaTag(t)}：${tail}`;
 }
 
