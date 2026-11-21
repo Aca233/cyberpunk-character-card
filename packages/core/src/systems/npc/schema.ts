@@ -63,7 +63,7 @@ export const NpcBodyCardSchema = z
       .max(NPC_CHROME_MAX)
       .default([])
       .describe(
-        "根据人物工作、行动、风险和可负担来源推演后选择的义体表 id；工作确实依赖增强且有合理型号时选匹配部位，没有需求才留空；义眼只用于有实际视觉强化需求的人",
+        "按夜之城常态及人物身份、生计与财力推演的义体表 id：大多数新人物常配 1–3 件贴合身份的基础或常见义体并按用途错开部位；只有正文明确无植入、排斥义体或极端拮据者才留空",
       ),
     symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
   })

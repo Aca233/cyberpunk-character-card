@@ -162,10 +162,23 @@ export function npcEquipmentReference(
   const seed = `${world.time}:${npcs.length}`;
   const weaponPicks = representatives(weapons, gearCounts, seed);
   const chromePicks = representatives(chrome, chromeCounts, seed);
-  // 智能枪的自导需要真实联锁，不能因本轮轮换隐藏其基础配套。
-  const smartLink = chrome.find((part) => part.id === "smart-link");
-  if (smartLink && !chromePicks.some((part) => part.id === smartLink.id))
-    chromePicks.push(smartLink);
+  // 夜之城最常见的基础民用/街头义体与智能联锁常驻参考，避免被轮换隐藏后模型只能留空或误选偏门战术件。
+  const stapleChromeIds = [
+    "kiroshi-mk1",
+    "biomonitor",
+    "syn-lungs",
+    "clutch-padding",
+    "prosthetic-arms",
+    "prosthetic-legs",
+    "subdermal-armor",
+    "smart-link",
+  ];
+  for (const stapleId of stapleChromeIds) {
+    const part = chrome.find((entry) => entry.id === stapleId);
+    if (part && !chromePicks.some((entry) => entry.id === part.id)) {
+      chromePicks.push(part);
+    }
+  }
   const repeated = (candidates: readonly Candidate[], counts: ReadonlyMap<string, number>) =>
     candidates
       .filter((candidate) => (counts.get(candidate.id) ?? 0) >= 2)
@@ -176,14 +189,14 @@ export function npcEquipmentReference(
   const lead = includeIds
     ? [
         "【新人物装备选型参考】",
-        "由你根据人物事实推演配装，不套职业模板：先判断人物靠什么能力工作、日常穿着与随身携带什么物件、怎样应付风险，再结合经历、财力和来源，按目录能力选衣物、随身物品、武器与义体。普通市民、商贩或文职也会穿着合身衣物并携带日常小物或应急药剂，不因不持枪就把 gear 留空；工作确实依赖身体或神经增强且有合理可得型号时，选择能直接支持该工作的部位与型号；普通人无需求时可以不装。义眼只在视觉强化符合工作或经历时选择，不能用来填满义体栏。",
-        "以下按服装部位、随身物品、武器门类及义体部位抽取代表，带真实用途；只是参考，不是白名单，也不是逐组配齐的清单。顶级件需要相称的身份和来源，不能因候选里有就给普通路人。参考价只帮助把握财力，不是现货或成交授权；不朽与独立实物不作为普通新人物的随机配装。",
+        "由你根据人物事实推演配装，不套职业模板：先判断人物靠什么能力工作、日常穿着与随身携带什么物件、怎样应付风险，再结合经历、财力和来源，按目录能力选衣物、随身物品、武器与义体。普通市民、商贩或文职也会穿着合身衣物并携带日常小物或应急药剂，不因不持枪就把 gear 留空；在夜之城，大多数人日常都常配 1–3 件贴合身份、生计与财力的基础或常见义体（例如普通市民、商贩、雇员与中间人可按生活与工作习惯选基础岐路司义眼、生物监测、合成肺叶、持握衬垫、通用义肢或防火/接地镀层，街头与专业从业者再搭配相应部位的接入仓、皮下护甲、神经或骨骼/手腿件）；只有正文明确无植入、信仰排斥义体或极端拮据的人才留空。不同人物优先按工作与习惯错开部位，不要千篇一律只填同一款义眼。",
+        "以下按服装部位、随身物品、武器门类及义体部位抽取代表，并常驻常见基础义体，带真实用途；只是参考，不是白名单，也不是逐组配齐的清单。顶级件需要相称的身份和来源，不能因候选里有就给普通路人。参考价只帮助把握财力，不是现货或成交授权；不朽与独立实物不作为普通新人物的随机配装。",
         "明确型号、已装能力与既有卡面优先；同伙可有制式共性，同轮新人物按职责分工，不无理由复制同一整套。智能武器的自导须有真实智能联锁；接入仓、斯安威斯坦、狂暴共享一个操作系统位置，其余遵守部位容量。",
         "只在新建人物或允许定型的未定人物初始化时用于选型；已有空义体栏也可能是确认的无植入，不能见到参考就补装或换装。",
       ]
     : [
         "【新人物装备创作参考】",
-        "仅在首次引入重要新人物或尚未定型的旧识时供选型参考；不套职业模板，按身份、工作、财力和来源自然呈现衣着、随身物件、武器与义体，不逐件报清单，也不改写已定型人物的配置。",
+        "仅在首次引入重要新人物或尚未定型的旧识时供选型参考；夜之城人物通常装有贴合身份与财力的常见基础或专业义体（纯肉身属少数特例）。不套职业模板，按身份、工作、财力和来源自然呈现衣着、随身物件、武器与义体，不逐件报清单，也不改写已定型人物的配置。",
       ];
   return [
     ...lead,

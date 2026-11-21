@@ -131,9 +131,40 @@ export function sanitizeNpcBody(
 
   const hasChromeCatalog = Array.isArray(data.cyberware);
   const chrome = hasChromeCatalog ? cyberwareCatalog(data) : null;
+  const normalizeChromeKey = (value: string) =>
+    value
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[\s\p{P}·•・]/gu, "");
   const chromeByName = chrome
-    ? new Map([...chrome.values()].map((def) => [def.name.trim().toLowerCase(), def.id]))
+    ? new Map([...chrome.values()].map((def) => [normalizeChromeKey(def.name), def.id]))
     : null;
+  // 模型偶发写出常见简称时温和归位到目录内基础义体，避免静默清空整栏。
+  const chromeAliases: Readonly<Record<string, string>> = {
+    kiroshi: "kiroshi-mk1",
+    kiroshimk1: "kiroshi-mk1",
+    岐路司: "kiroshi-mk1",
+    岐路司义眼: "kiroshi-mk1",
+    岐路司光学义眼: "kiroshi-mk1",
+    岐路司光学义眼mk1: "kiroshi-mk1",
+    岐路司义眼1型: "kiroshi-mk1",
+    岐路司义眼mk1: "kiroshi-mk1",
+    基础义眼: "kiroshi-mk1",
+    普通义眼: "kiroshi-mk1",
+    义眼: "kiroshi-mk1",
+    岐路司mk2: "kiroshi-mk2",
+    岐路司义眼mk2: "kiroshi-mk2",
+    生物监测器: "biomonitor",
+    合成肺: "syn-lungs",
+    义肢手臂: "prosthetic-arms",
+    通用义肢: "prosthetic-arms",
+    义肢腿: "prosthetic-legs",
+    猩猩臂: "gorilla-arms",
+    猩猩手臂: "gorilla-arms",
+    军用科技平行线: "militech-paraline",
+    平行线接入仓: "militech-paraline",
+    基础接入仓: "militech-paraline",
+  };
 
   const cyberware: string[] = [];
   const droppedChrome: string[] = [];
@@ -142,7 +173,11 @@ export function sanitizeNpcBody(
     if (cyberware.length >= NPC_CHROME_MAX) break;
     let id = raw;
     if (chrome && !chrome.has(id)) {
-      const hit = chromeByName?.get(raw.trim().toLowerCase());
+      const normalized = normalizeChromeKey(raw);
+      const aliasTarget = chromeAliases[normalized];
+      const hit =
+        chromeByName?.get(normalized) ??
+        (aliasTarget && chrome.has(aliasTarget) ? aliasTarget : undefined);
       if (hit) id = hit;
       else {
         droppedChrome.push(raw);

@@ -376,7 +376,12 @@ export function applyNpc(
       const notes: string[] = [];
       const unfinalized =
         npc.look.startsWith(NPC_UNDECIDED_PREFIX) || npc.voice.startsWith(NPC_UNDECIDED_PREFIX);
-      if (command.body !== undefined && !unfinalized) {
+      const emptyUnscannedBody =
+        (npc.body?.gear.length ?? 0) === 0 &&
+        (npc.body?.cyberware.length ?? 0) === 0 &&
+        npc.vitals?.scannedAt == null;
+      const canInitializeBody = unfinalized || emptyUnscannedBody;
+      if (command.body !== undefined && !canInitializeBody) {
         notes.push(`保留了 ${npc.name} 已确立的装备与义体；实际变化请用 npcGear / npcChrome`);
       }
       let updated = false;
@@ -444,7 +449,7 @@ export function applyNpc(
         }
       }
       const nextBody =
-        command.body !== undefined && unfinalized
+        command.body !== undefined && canInitializeBody
           ? sanitizeNpcBody(command.body, data, notes, npc.id)
           : undefined;
       if (nextBody !== undefined) {
