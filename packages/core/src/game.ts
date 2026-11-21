@@ -12,6 +12,7 @@ import {
 import type { WorldState } from "./kernel/world";
 import { looseCyberwareView } from "./loose-cyberware-view";
 import { currentOffers } from "./narrator/pending";
+import { customCyberwareDefs } from "./schemas/board";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import type { arcCardsView } from "./systems/arcs";
@@ -33,7 +34,6 @@ import {
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
-import type { Attribute, DamageTier } from "./systems/dice/schema";
 import type { moneyView } from "./systems/economy";
 import type { factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
@@ -52,7 +52,7 @@ import type { jobsView } from "./systems/jobs";
 import type { memoryView } from "./systems/memory";
 import type { ncpdView } from "./systems/ncpd";
 import type { nemesesEndedView, nemesisCardsView } from "./systems/nemesis";
-import type { NpcCard, npcsView, perceivedView } from "./systems/npc";
+import type { InitialNpcTie, NpcCard, npcsView, perceivedView } from "./systems/npc";
 import { type phoneCallsView, phoneFeedUnread, type phoneMessagesView } from "./systems/phone";
 import {
   blackoutTurns,
@@ -64,7 +64,6 @@ import { registry } from "./systems/registry";
 import type { HomeDef, safehouseView } from "./systems/safehouse";
 import type { shardsView } from "./systems/shards";
 import type { sidegigsView } from "./systems/sidegigs/apply";
-import type { squadView } from "./systems/squad/apply";
 import type { stealthView } from "./systems/stealth";
 import type { traumaView } from "./systems/trauma";
 import {
@@ -78,6 +77,7 @@ import type { worldView } from "./systems/world";
 import { formatGameTime } from "./systems/world/apply";
 import { withSavedPlaces } from "./systems/world/places";
 import { type LocationDef, locationCatalog, WorldClockStateSchema } from "./systems/world/schema";
+import { pendingUiActions, uiActionsBeforeTurn } from "./ui-actions";
 
 /** 状态接口最多带最近这么多轮的正文；更早的按需翻页 */
 export const VIEW_TURNS = 50;
@@ -85,6 +85,8 @@ export const VIEW_TURNS = 50;
 /** 新存档要放进世界的静态内容（content 包），例如原作人物卡 */
 export interface GameContent {
   readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
+  /** 预制人物之间的初始双向关系网（建档时写入双方 ties） */
+  readonly npcTies?: readonly InitialNpcTie[];
   /** 物品表；开局装备要用它结算 */
   readonly items?: readonly ItemDef[];
   /** 义体表；开局自带的义体要用它结算 */
@@ -338,11 +340,12 @@ function applyBoardKit(
     }
   }
   const validVehicles = content.vehicles ? new Set(content.vehicles.map((v) => v.id)) : null;
-  const extraVehicle =
+  const chosenVehicle =
     boardKit.vehicle && (!validVehicles || validVehicles.has(boardKit.vehicle))
-      ? [boardKit.vehicle]
-      : [];
-  const vehicles = [...new Set([...(base.vehicles ?? []), ...extraVehicle])];
+      ? boardKit.vehicle
+      : null;
+  // 玩家显式指定了专属载具时替换掉出身默认载具，避免同开局重叠两辆车
+  const vehicles = chosenVehicle ? [chosenVehicle] : [...(base.vehicles ?? [])];
   return {
     ...base,
     gear,
@@ -385,9 +388,7 @@ const setupRng = { roll: () => 1 };
 /** 新存档的世界：按存档的开场时间与标准夜之城规则初始化，写入玩家角色和原作人物卡 */
 export function newGameWorld(
   meta: Pick<SaveMeta, "startTime"> &
-    Partial<
-      Pick<SaveMeta, "character" | "opening" | "startLocation" | "loadouts" | "board" | "legends">
-    >,
+    Partial<Pick<SaveMeta, "character" | "opening" | "startLocation" | "loadouts" | "board">>,
   content: GameContent = {},
 ): WorldState {
   const opening =
@@ -401,7 +402,7 @@ export function newGameWorld(
     return found;
   });
   const castIds = opening?.cast ?? content.defaultCast;
-  // 捏人第 3 步选成旧识的原作人物：不在开场人物里的也放进来（用户定的，2026-10-30："15 个原作人物全部能选"）
+  // 捏人选成旧识的原作人物：不在开场人物里的也放进来
   const acquaintances = meta.board?.acquaintances ?? [];
   const inCast = (id: string) =>
     castIds === undefined || castIds.includes(id) || acquaintances.some((a) => a.id === id);
@@ -429,36 +430,51 @@ export function newGameWorld(
         ...clock,
         // 先放在开场自带的地点；建档时选了开局地点的，由最后那条 world 指令换过去并记进存档（见 commands 末尾）
         location: opening?.location ?? clock.location,
+        startedAt: meta.startTime,
         sceneStartedAt: meta.startTime,
       },
     },
   };
+  const baseCyberware = content.cyberware ?? [];
+  const extraCyberware = customCyberwareDefs(
+    meta.board?.customCyberware,
+    new Set(baseCyberware.map((c) => c.id)),
+  );
+  const effectiveCyberware =
+    extraCyberware.length > 0 ? [...baseCyberware, ...extraCyberware] : content.cyberware;
   const rawKit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
   const adjustedKit = rawKit && applyBoardKit(rawKit, meta.board?.kit, content);
-  const validCyberware = content.cyberware ? new Set(content.cyberware.map((c) => c.id)) : null;
-  // 主板的义体在开局行装之后装：先根据部位上限筛掉会被顶掉的自带件（并联动过滤黑客程序）
+  const validCyberware = effectiveCyberware ? new Set(effectiveCyberware.map((c) => c.id)) : null;
+  // 主板的义体在开局行装之后装：先根据部位上限筛掉会被顶掉的自带件
   const boardCyberware = (meta.board?.cyberware ?? []).filter(
     (id) =>
       !(adjustedKit?.cyberware ?? []).includes(id) && (!validCyberware || validCyberware.has(id)),
   );
-  const kit = adjustedKit && resolveStartKit(adjustedKit, boardCyberware, content.cyberware);
+  const kit = adjustedKit && resolveStartKit(adjustedKit, boardCyberware, effectiveCyberware);
+  const seededNpcIds = new Set<string>([
+    ...cast.map((c) => c.id),
+    ...(meta.board?.people ?? [])
+      .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
+      .map((p) => p.id),
+  ]);
+  const initialTies = (content.npcTies ?? []).filter(
+    (t) => seededNpcIds.has(t.a) && seededNpcIds.has(t.b),
+  );
   const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
-    // 耐受要在装任何义体之前写进去，人性消耗才按它折算
+    // 定性神经耐受要在装任何义体之前写进去
     ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
     ...cast.map((card) => ({ type: "npc.seed", ...castSeed(card) })),
     ...(meta.board?.people ?? [])
       .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
       .map((p) => ({ type: "npc.seed", ...p })),
+    ...initialTies.map((t) => ({ type: "tie", ...t })),
     ...(content.fixers ?? [])
       .filter((f) => inCast(f.id))
       .map((f) => ({ type: "jobs.seedFixer", ...f })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
     ...homeSeed(content, meta.board?.origin),
-    ...(meta.legends && meta.legends.length > 0
-      ? [{ type: "chronicle.seedLegends", legends: meta.legends }]
-      : []),
     // 开局地点“在地图上选择”（用户定的，2026-10-30）：沿用 world 的解析登记原作地点，不写 time，不推进时间
     ...(meta.startLocation !== undefined
       ? [{ type: "world", activity: "travel", location: meta.startLocation }]
@@ -482,7 +498,7 @@ export function newGameWorld(
       ...(content.mapData ?? {}),
       ...(content.locations ? { locations: content.locations } : {}),
       ...(content.items ? { items: content.items } : {}),
-      ...(content.cyberware ? { cyberware: content.cyberware } : {}),
+      ...(effectiveCyberware ? { cyberware: effectiveCyberware } : {}),
       ...(content.shops ? { shops: content.shops } : {}),
       ...(content.ripperdocs ? { ripperdocs: content.ripperdocs } : {}),
       ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),
@@ -504,7 +520,17 @@ function homeSeed(content: GameContent, origin: string | undefined): unknown[] {
       ? homes.find((h) => h.origin === origin || h.origins?.includes(origin))
       : undefined) ?? homes.find((h) => h.origin === "default");
   return home
-    ? [{ type: "safehouse.seed", id: home.id, name: home.name, location: home.location }]
+    ? [
+        {
+          type: "safehouse.seed",
+          id: home.id,
+          name: home.name,
+          location: home.location,
+          tenure: home.tenure,
+          ...(home.rentAmount !== undefined ? { rentAmount: home.rentAmount } : {}),
+          ...(home.rentPeriodDays !== undefined ? { rentPeriodDays: home.rentPeriodDays } : {}),
+        },
+      ]
     : [];
 }
 
@@ -569,44 +595,8 @@ function turnInput(raw: unknown): TurnInput {
   return parsed.success ? parsed.data : { text: String(raw) };
 }
 
-/** 保持现有界面的投影字段；沙盘不生成检定卡或属性门槛。 */
-interface CappedTotal {
-  readonly items: readonly { source: string; value: number; reason: string }[];
-  readonly raw: number;
-  readonly total: number;
-}
-
-interface CheckPanelProjection {
-  readonly id: string;
-  readonly label: string;
-  readonly attribute: Attribute;
-  readonly attributeLabel: string;
-  readonly attributeValue: number;
-  readonly tierLabel: string;
-  readonly baseDv: number;
-  readonly dv: number;
-  readonly modeDv: number;
-  readonly modifier: number;
-  readonly bonuses: CappedTotal;
-  readonly penalties: CappedTotal;
-  readonly dvMods: CappedTotal;
-  readonly capped: boolean;
-  readonly chance: number;
-  readonly success: string;
-  readonly failure: string;
-  readonly damage: DamageTier | null;
-  readonly rolled: boolean;
-}
-
 interface ChoicePanelProjection {
   readonly text: string;
-  readonly gate: {
-    readonly attribute: Attribute;
-    readonly value: number;
-    readonly attributeLabel: string;
-    readonly met: boolean;
-  } | null;
-  readonly checkId: string | null;
   readonly source: string | null;
 }
 
@@ -618,14 +608,10 @@ function projectOffers(records: readonly LogRecord[]) {
     choices: offers.choices.map(
       (choice): ChoicePanelProjection => ({
         text: choice.text,
-        gate: null,
-        checkId: null,
         source: choice.source ?? null,
       }),
     ),
-    checks: [] as readonly CheckPanelProjection[],
     clutch: offers.turn?.clutch === true,
-    rolled: null as string | null,
   };
 }
 
@@ -699,7 +685,6 @@ export function projectState(
     /** 安全屋、存放箱与后备箱 */
     safehouse: views.safehouse as ReturnType<typeof safehouseView>,
     psychosis: views.psychosis as ReturnType<typeof psychosisView>,
-    squad: views.squad as ReturnType<typeof squadView>,
     sidegigs: views.sidegigs as ReturnType<typeof sidegigsView>,
     /** 当前地点开着的义体医生；不在诊所时是 null */
     ripperdoc: views.ripperdoc as ReturnType<typeof ripperdocView>,
@@ -783,8 +768,6 @@ export function projectState(
     objectives: registry.objectives({ world, records, data }),
     /** 威胁：警方热度、悬赏、宿敌和敌对势力；只用玩家知道的事定等级 */
     threats: registry.threats({ world, records, data }),
-    /** 当前可打开的地点功能和超梦编辑器；打开面板不结算操作 */
-    interactions: registry.interactions({ world, records, data }),
     /** 各系统交的公开消息，按时间倒序；投影不修改已读状态或发送额度 */
     feed,
     /**
@@ -822,9 +805,13 @@ export function projectState(
     })(),
     /** 别人眼里的你：交给叙事模型，NPC 的第一反应照这一行写 */
     perceived: views.perceived as ReturnType<typeof perceivedView>,
+    /** 上一轮之后玩家在界面直接完成、待写进下一条正文的操作 */
+    pendingUiActions: pendingUiActions(records),
     totalTurns: turns.length,
     turns: turns.slice(-VIEW_TURNS).map((t, i, shown) => {
       const input = turnInput(t.input);
+      const prevTurnSeq = turns[turns.length - shown.length + i - 1]?.seq ?? -1;
+      const uiActions = uiActionsBeforeTurn(records, t.seq, prevTurnSeq);
       const boosted = t.commands.some(
         (c) =>
           typeof c === "object" &&
@@ -843,6 +830,8 @@ export function projectState(
         /** 这一轮弹出的特写卡 */
         closeup: t.closeup ?? null,
         at: t.at,
+        /** 这一轮开始前通过界面直接完成的操作（已随本轮一起写进正文） */
+        uiActions,
         input,
         /** 这一轮是否真正开启了斯安威斯坦（含界面开关、选项或判断阶段识别） */
         sandevistan: input.sandevistan === true || boosted,

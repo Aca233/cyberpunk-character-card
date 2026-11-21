@@ -1,7 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { tradeEvidence } from "../commerce";
-import { applyBehaviorChip, cyberwareCatalog } from "../cyberware";
+import { applyBehaviorChip, cyberwareCatalog, isActiveBehaviorMode } from "../cyberware";
 import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
 import { applyNpcBody, bodyProblems, EMPTY_NPC_BODY, sanitizeNpcBody } from "./body";
@@ -134,9 +133,9 @@ export function seedNpc(
     lastKnownLocation: met ? (card.home ?? null) : null,
     lastSeenAt: null,
     memories: [],
-    doing: null,
+    doing: card.initialDoing ? { text: card.initialDoing, at: now } : null,
     knownDoing: null,
-    timeline: [],
+    timeline: card.initialDoing ? [{ text: card.initialDoing, at: now }] : [],
     past: null,
     offscreenDeath: null,
     wearing: null,
@@ -145,6 +144,7 @@ export function seedNpc(
     ledger: ledger.map((e) => ({ kind: e.kind, text: e.text, at: now, settledAt: null })),
     known: [],
     ties: [],
+    following: false,
     vitals: null,
   };
   return { ok: true };
@@ -183,20 +183,20 @@ export function applyNpcPast(draft: Draft<NpcState>, command: NpcPast, now: numb
   return { ok: true };
 }
 
-/** 场外推演写的死亡：只限原作人物、活着、不是队员；玩家听说以前人物档案照旧显示活着 */
+/** 场外推演写的死亡：只限原作人物、活着、非当前同行者；玩家听说以前人物档案照旧显示活着 */
 export function applyOffscreenDeath(
   draft: Draft<NpcState>,
   command: NpcOffscreenDeath,
   now: number,
-  facts: Readonly<Record<string, unknown>> = {},
+  _facts: Readonly<Record<string, unknown>> = {},
 ): ApplyOutcome {
   const npc = draft.npcs[command.id];
   if (!npc) return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡` };
   if (!npc.canon) return { ok: false, reason: `${npc.name}不是原作人物，屏幕外不能死` };
   if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了` };
-  const squad = Array.isArray(facts.squad) ? (facts.squad as unknown[]) : [];
-  if (squad.includes(command.id)) return { ok: false, reason: `${npc.name}是队员，不能死在屏幕外` };
+  if (npc.following) return { ok: false, reason: `${npc.name}正与你同行，不能死在屏幕外` };
   npc.alive = false;
+  npc.following = false;
   npc.offscreenDeath = { cause: command.cause, at: now };
   return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`] };
 }
@@ -318,6 +318,7 @@ export function applyNpc(
       ledger: [],
       known: [],
       ties: [],
+      following: false,
       vitals: null,
     };
     return { ok: true, notes };
@@ -349,7 +350,6 @@ export function applyNpc(
       command,
       cyberwareCatalog(data),
       now,
-      facts,
     );
     if (result.ok) npc.behaviorChips = states;
     return result;
@@ -405,7 +405,7 @@ export function applyNpc(
         npc.entity = command.entity;
         updated = true;
       }
-      for (const field of ["role", "look", "voice", "want", "limit", "secret"] as const) {
+      for (const field of ["role", "look", "voice", "want", "limit", "bio", "secret"] as const) {
         const val = command[field];
         if (val !== undefined && val !== npc[field]) {
           npc[field] = val;
@@ -450,10 +450,11 @@ export function applyNpc(
       if (nextBody !== undefined) {
         npc.body = nextBody;
         for (const [device, state] of Object.entries(npc.behaviorChips ?? {})) {
-          if (!nextBody.cyberware.includes(device) && state.mode === "chip") {
-            state.mode = "personal";
+          if (!nextBody.cyberware.includes(device) && state.mode !== "off") {
+            state.mode = "off";
+            state.protocol = null;
             state.since = now;
-            if (state.lastControl) state.lastControl.to = now;
+            if (state.lastControl && state.lastControl.to === null) state.lastControl.to = now;
           }
         }
         updated = true;
@@ -487,19 +488,18 @@ export function applyNpc(
     }
     case "memory": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
-      if (Object.keys(npc.behaviorChips ?? {}).length > 0 && command.source === undefined)
-        return {
-          ok: false,
-          reason: "有行为芯片经历的人物须明确 memory source，不能把设备过程默认写成共同亲历",
-        };
-      const active = Object.entries(npc.behaviorChips ?? {}).find(
-        ([, state]) => state.mode === "chip",
+      const active = Object.entries(npc.behaviorChips ?? {}).find(([, state]) =>
+        isActiveBehaviorMode(state.mode),
       );
       const profile = active ? cyberwareCatalog(data).get(active[0])?.behaviorChip : undefined;
-      if (profile && (profile.awareness === "absent" || profile.recall === "none"))
+      if (
+        active?.[1].mode === "doll" &&
+        profile &&
+        (profile.awareness === "absent" || profile.recall === "none")
+      )
         return {
           ok: false,
-          reason: `${npc.name} 当前接管状态不能形成此段本人共同记忆；设备摘要须另记，恢复后实际告知或查阅才是本人所知`,
+          reason: `${npc.name} 当前处于玩偶托管断片态，不能形成本人共同记忆；设备摘要须另记，恢复清醒后实际告知或查阅才是本人所知`,
         };
       let text = command.text;
       if (command.source === "log") {
@@ -511,8 +511,6 @@ export function applyNpc(
           return { ok: false, reason: "这段摘要不存在或本人没有查阅，不能写成本人已经知道" };
         text = `从本人查阅的设备摘要得知：${entry.text}`;
       } else if (command.source === "told") {
-        if (!command.evidence || !tradeEvidence(facts, command.evidence))
-          return { ok: false, reason: "后来获知的记忆需要消息确实到达本人，缺少本轮告知依据" };
         text = `后来被告知：${command.text}`;
       }
       if (npc.memories.includes(text)) return { ok: true };
@@ -572,17 +570,46 @@ export function applyNpc(
         notes: [`了结了和${npc.name}的一笔账（${LEDGER_KIND_LABELS[entry.kind]}）：${command.how}`],
       };
     }
+    case "npcCompanion": {
+      if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      if (npc.following === command.following) return { ok: true };
+      npc.following = command.following;
+      if (command.following) npc.lastSeenAt = now;
+      const tail = command.reason ? `（${command.reason}）` : "";
+      return {
+        ok: true,
+        notes: [
+          command.following
+            ? `${npc.name} 开始与你同行${tail}`
+            : `${npc.name} 暂别留守，不再随行${tail}`,
+        ],
+      };
+    }
     case "npcDeath": {
-      // 队员之死的保底：squad 不能被 npc 读（squad 读 npc），回合流程把队员名单放进事实 squad
-      const squad = Array.isArray(facts.squad) ? (facts.squad as unknown[]) : [];
-      if (squad.includes(command.id)) {
+      if (npc.following) {
         const names = [npc.name, ...(npc.alias === undefined ? [] : [npc.alias])];
         const blocked = memberDeathBlocked(facts, names);
         if (blocked) return { ok: false, reason: blocked };
       }
       npc.alive = false;
+      npc.following = false;
       npc.lastSeenAt = now;
       return { ok: true, notes: [`${npc.name} 死了`] };
     }
+  }
+}
+
+/** 玩家移动到达新地点时，把正随行且活着的同行者同步带到该地点 */
+export function moveFollowingNpcs(
+  draft: Draft<NpcState>,
+  location: string | null,
+  now: number,
+): void {
+  if (location === null) return;
+  for (const person of Object.values(draft.npcs)) {
+    if (!person.alive || !person.following) continue;
+    person.location = location;
+    person.lastKnownLocation = location;
+    person.lastSeenAt = now;
   }
 }

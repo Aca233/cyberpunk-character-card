@@ -1,3 +1,4 @@
+import { districtLawFor, normalizeDistrictId } from "../../district-laws";
 import type { PlayerView } from "../../game";
 import type { LlmMessage } from "../../kernel/ports";
 import type { RuleModule, SectionStage } from "../../kernel/system";
@@ -36,6 +37,7 @@ import { registry } from "../../systems/registry";
 import { SafehouseStateSchema } from "../../systems/safehouse/schema";
 import { currentTension } from "../../systems/tension";
 import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../../systems/world";
+import { pendingUiActions } from "../../ui-actions";
 import { canonSection } from "../canon";
 import { twistSection } from "../examples";
 import { merchantContext } from "../merchant-context";
@@ -173,20 +175,6 @@ export function narrateTablesOf(_view: PlayerView, extras: PromptExtras): string
   );
 }
 
-const DISTRICT_ID_MAP: Readonly<Record<string, string>> = {
-  市政中心: "city-center",
-  市中心: "city-center",
-  公司广场: "city-center",
-  威斯特布鲁克: "westbrook",
-  日本街: "westbrook",
-  宪章山: "westbrook",
-  北橡区: "westbrook",
-  沃森: "watson",
-  海伍德: "heywood",
-  圣多明戈: "santo-domingo",
-  太平洲: "pacifica",
-};
-
 const DIRECT_LINK = /(?:个人连接线|直插|数据线|插孔)/;
 const AIR_GAP_HINT = /(?:气隙|离线隔离|物理断网|air[- ]?gapped)/i;
 const UNCHROMED_HINT = /(?:纯肉体|没装义体|无义体|纯机械)/;
@@ -318,7 +306,8 @@ export function physicsSection(
   const clock = WorldClockStateSchema.parse(world.slices.world ?? {});
   const mergedData = withSavedPlaces(safeData, world);
   const place = clock.location ? locationCatalog(mergedData).get(clock.location) : undefined;
-  const districtId = place ? (DISTRICT_ID_MAP[place.district] ?? place.district) : undefined;
+  const districtId = place ? normalizeDistrictId(place.district) : undefined;
+  const districtLaw = place ? districtLawFor(safeData, place.district) : undefined;
 
   const inv = InventoryStateSchema.safeParse(world.slices.inventory);
   const items = safeData.items
@@ -433,6 +422,7 @@ export function physicsSection(
           securityCheck: {
             districtId,
             weaponConcealment: loadout.concealment,
+            ...(districtLaw ? { districtLaw } : {}),
             ...(inSafehouse ? { inSafehouse: true } : {}),
             ...(HIGH_END_VENUE.test(inputText) ? { enteringHighEndVenue: true } : {}),
           },
@@ -444,6 +434,23 @@ export function physicsSection(
 
   if (result.directives.length === 0) return undefined;
   return result.directives.map((d) => `- ${d}`).join("\n");
+}
+
+/** 上一轮之后玩家通过界面直接完成的世界内操作（如商店买卖、义体安装、穿脱装备等），供判断/正文/抽取共用 */
+export function uiActionsSection(
+  records: readonly LogRecord[],
+  stage: SectionStage,
+): string | undefined {
+  const actions = pendingUiActions(records);
+  if (actions.length === 0) return undefined;
+  const lines = actions.map((a) => `- ${a.summary}`).join("\n");
+  if (stage === "extract") {
+    return `【上一轮之后已在界面完成并结算的操作（严禁重复记账）】\n以下操作在玩家发本轮消息前已经通过界面直接扣款、交付或改好状态并写入【当前状态】，本轮正文只是把它们自然写进故事里。绝不要为以下事项再发 trade、item、money、cyberware、gunsmith、jobAccept、vehicle、safehouse、heal、suppressant 等重复指令：\n${lines}`;
+  }
+  if (stage === "judge") {
+    return `【上一轮之后玩家刚刚在界面完成的操作（已实际生效）】\n以下事在玩家输入本轮行动之前已经完成并结算，相关物品、义体、资金与状态都已更新到【当前状态】；不要把这些已完成的操作再次当成本轮新的购买意图（buy）：\n${lines}`;
+  }
+  return `【上一轮之后玩家刚刚在界面完成的操作（必须写进本轮正文）】\n在发本轮行动前，玩家刚在界面上完成了以下操作（钱、货、装备、义体与状态已由代码实际结算完毕）。请在写本轮正文时把这些刚发生的举动顺理成章、具体自然地写进开头或行文里（例如刚在柜台买下某物收进包里、刚装好义体、刚换上衣服等，不要跳过去不提，也不要用“界面/系统”等出戏词）：\n${lines}`;
 }
 
 /** 按阶段拼局面：状态、阶段可见的情境节、商品报价、场景记忆、物理约束、原剧时间线与开场 */
@@ -460,6 +467,8 @@ export function situation(
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
     ...registry.sections({ world, data: extras.data, input, stage }),
   ];
+  const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
+  if (uiActions) parts.push(uiActions);
   const sceneMemory = sceneMemorySection(world, input.text);
   const market = merchantContext(view, input.text);
   if (market) parts.push(market);
@@ -469,10 +478,10 @@ export function situation(
     const physics = physicsSection(world, extras.data, input.text);
     if (physics) parts.push(`【物理与安防现状】\n${physics}`);
   }
-  // 原剧时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的原作节点误记为本轮事实
+  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
   if (stage !== "extract") {
     const canon = canonSection(extras.data, extras.startTime, world.time);
-    if (canon) parts.push(`【原剧时间线】\n${canon}`);
+    if (canon) parts.push(`【2077 世界时间线】\n${canon}`);
   }
   if (stage !== "extract" && extras.opening && view.totalTurns === 0)
     parts.push(`【开场】\n${extras.opening}`);

@@ -27,20 +27,23 @@ export const PAST_MAX = 160;
 export const NPC_UNDECIDED_PREFIX = "还没定：";
 /** 人物卡基础文本字段长度与样本上限 */
 export const NAME_CHARS = 20;
-export const ROLE_CHARS = 40;
-export const LOOK_CHARS = 200;
+export const ROLE_CHARS = 64;
+export const LOOK_CHARS = 260;
 /** 穿着一句的长度上限 */
-export const OUTFIT_CHARS = 120;
-export const VOICE_CHARS = 200;
-export const SAMPLE_CHARS = 120;
-export const NPC_SAMPLES_MAX = 4;
-export const WANT_CHARS = 160;
-export const LIMIT_CHARS = 160;
-export const SECRET_CHARS = 160;
+export const OUTFIT_CHARS = 160;
+export const VOICE_CHARS = 240;
+export const SAMPLE_CHARS = 150;
+export const NPC_SAMPLES_MAX = 5;
+export const WANT_CHARS = 220;
+export const LIMIT_CHARS = 220;
+export const SECRET_CHARS = 240;
+export const BIO_CHARS = 320;
+export const INITIAL_DOING_CHARS = 120;
+export const HANGOUTS_MAX = 4;
 
 const NpcIdSchema = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 rebecca");
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 judy");
 
 /** 装备与植入物记录上限。 */
 export const NPC_GEAR_MAX = 12;
@@ -52,7 +55,9 @@ export const NpcBodyCardSchema = z
       .array(z.string().min(1))
       .max(NPC_GEAR_MAX)
       .default([])
-      .describe("实际随身衣物与武器的稳定 id；按用途、财力和已定事实选型，来自已登记物品定义"),
+      .describe(
+        "实际穿着的衣物（外套、内搭、裤鞋、头面饰件）、随身武器与日常/功能物品的稳定 id；按用途、财力和已定事实选型，来自已登记物品定义",
+      ),
     cyberware: z
       .array(z.string().min(1))
       .max(NPC_CHROME_MAX)
@@ -73,7 +78,7 @@ export type NpcBodyCard = z.infer<typeof NpcBodyCardSchema>;
 /** 人物卡里写定以后不改的部分；canon 是原作人物，预先写在 content 包里 */
 export const NpcCardSchema = z.object({
   id: NpcIdSchema,
-  age: z.number().int().min(0).max(150).optional().describe("已经确立的年龄，不明时不猜"),
+  age: z.number().int().min(0).max(200).optional().describe("已经确立的年龄，不明时不猜"),
   adult: z.boolean().optional().describe("已经确认成年与否；成人服务前必须确立，不由职业推断"),
   entity: z
     .enum(["human", "synthetic", "robot"])
@@ -157,6 +162,14 @@ export const NpcCardSchema = z.object({
     .min(1)
     .max(LIMIT_CHARS)
     .describe("绝不跨越的底线或逆鳞（具体到人、规矩或一碰就翻脸的事）"),
+  /** 生平背景与性格底色：过往履历、习惯反差、待人分寸；只给模型演人物用，不等于玩家已知 */
+  bio: z
+    .string()
+    .trim()
+    .min(1)
+    .max(BIO_CHARS)
+    .optional()
+    .describe("过往经历、性格底色与待人习惯（幕后人物资料，不直接透给玩家）"),
   /** 秘密：真实动机、隐藏身份或计划；只有模型看得到 */
   secret: z
     .string()
@@ -175,6 +188,20 @@ export const NpcCardSchema = z.object({
     .describe(
       "常驻地点 id（有固定店面/据点/常混的街区地标时填表内地点 id 或当前 location；流动作战可不写）",
     ),
+  /** 除常驻地点外的常出没地点 id，用于同城区老面孔检索 */
+  hangouts: z
+    .array(z.string().min(1))
+    .max(HANGOUTS_MAX)
+    .optional()
+    .describe("除常驻地点外的常出没地点 id（如常去的酒吧、街区、诊所）"),
+  /** 预制人物开局正在忙的事（只用于 seedNpc 初始化 doing，不自动算作玩家已知） */
+  initialDoing: z
+    .string()
+    .trim()
+    .min(1)
+    .max(INITIAL_DOING_CHARS)
+    .optional()
+    .describe("开局时此人正在忙的事（幕后初始近况，不代表玩家已知）"),
   canon: z.boolean().default(false),
   /** 身体：随身衣物、武器、物品与义体；不写按空身补 */
   body: NpcBodyCardSchema.optional().describe(
@@ -230,8 +257,8 @@ export const KnownFactSchema = z.object({
 });
 export type KnownFact = z.infer<typeof KnownFactSchema>;
 
-/** 每个人最多记这么多个认识的人，满了先删最早的（暂定，试玩时调） */
-export const TIES_KEPT = 8;
+/** 每个人最多记这么多个认识的人，满了先删最早的 */
+export const TIES_KEPT = 12;
 /** 认识的人的关系一句的长度上限 */
 export const TIE_CHARS = 40;
 
@@ -328,6 +355,8 @@ const BaseNpcSchema = NpcCardSchema.extend({
    * 旧的在前，最多 TIES_KEPT 条；open 是外人看得出来的关系，暗地里的（私通、卧底、暗中勾结）是 false，只给模型看
    */
   ties: z.array(NpcTieSchema).default([]),
+  /** 是否正与玩家同行（随行搭档）：随玩家转场、计入载具座位数、不在屏幕外擅自活动或暴毙 */
+  following: z.boolean().default(false),
   /** 已经发生的身体与神经事实；可惰性计算已治疗创口的恢复。 */
   vitals: z
     .object({
@@ -360,25 +389,24 @@ export const EverydayLifeSchema = z.array(
     location: z.string().min(1),
     people: z.array(z.string().min(1)),
     note: z.string().min(1),
-    services: z.array(
-      z.object({
-        seller: z.string().min(1),
-        subject: z.string().min(1),
-        service: z.literal("adult-service"),
-        scope: z.string().min(1),
-        duration: z.number().int().min(1),
-        price: z.number().int().min(0),
-        recording: z.boolean(),
-        earlyExit: z.string().min(1),
-      }),
-    ),
+    services: z
+      .array(
+        z.object({
+          seller: z.string().min(1),
+          subject: z.string().min(1),
+          service: z.enum(["adult-service", "bd-session"]),
+          scope: z.string().min(1),
+          price: z.number().int().min(0),
+        }),
+      )
+      .default([]),
   }),
 );
 
 const LocationSchema = z.string().min(1).describe("地点 id，和 world 指令用的一致");
 
 /** 模型使用：剧情里新认识、有实质互动或推动剧情的人，当场建卡；没名字先用称呼（用户定的 2026-10-30：在场块一直只有朱迪） */
-export const NewNpcSchema = NpcCardSchema.omit({ canon: true })
+export const NewNpcSchema = NpcCardSchema.omit({ canon: true, initialDoing: true })
   .extend({
     type: z.literal("npc"),
     location: LocationSchema.optional(),
@@ -414,6 +442,7 @@ export const NpcUpdateSchema = z
       .describe("补入的示范台词 1–3 句，只用来定口吻"),
     want: NpcCardSchema.shape.want.optional(),
     limit: NpcCardSchema.shape.limit.optional(),
+    bio: NpcCardSchema.shape.bio,
     secret: NpcCardSchema.shape.secret,
     home: NpcCardSchema.shape.home,
     body: NpcBodyCardSchema.optional().describe("仅供还没定型的旧识首次初始化身体"),
@@ -507,16 +536,9 @@ export const MemorySchema = z
     source: z
       .enum(["experienced", "told", "log"])
       .optional()
-      .describe("亲历、实际被告知或本人查过的设备日志；行为芯片断片不能冒充亲历"),
+      .describe("亲历、后来被告知或本人查过的设备日志；行为芯片断片期间不能冒充亲历"),
     device: z.string().min(1).optional(),
     log: z.string().min(1).optional().describe("source:log 引用本人已查阅的稳定日志 id"),
-    evidence: z
-      .string()
-      .trim()
-      .min(2)
-      .max(500)
-      .optional()
-      .describe("source:told 时引用本轮真正把消息告诉本人的正文；不以经营者知情代替本人听到"),
   })
   .describe("记下这个人和玩家角色之间值得记住的事：承诺、人情、冲突、秘密被说破；一句话");
 export type Memory = z.infer<typeof MemorySchema>;
@@ -576,6 +598,16 @@ export const NpcOutfitSchema = z
     "有卡的人换了穿着（换上潜水服、穿了正装赴宴、衣服被打烂换了一件）：一句话写现在穿什么，会替换卡上的「现在穿」；长相不变，不写进来",
   );
 export type NpcOutfit = z.infer<typeof NpcOutfitSchema>;
+
+/** 预制人物之间的初始双向关系（建档时由 newGameWorld 写入双方 ties） */
+export const InitialNpcTieSchema = z.object({
+  a: NpcIdSchema,
+  b: NpcIdSchema,
+  aToB: z.string().trim().min(1).max(TIE_CHARS),
+  bToA: z.string().trim().min(1).max(TIE_CHARS),
+  open: z.boolean().default(true),
+});
+export type InitialNpcTie = z.infer<typeof InitialNpcTieSchema>;
 
 /** 模型使用：两个有卡的人之间的关系（用户 2026-10-31："npc也有自己的生活，也有认识的npc"） */
 export const TieSchema = z
@@ -722,12 +754,25 @@ export const NpcBehaviorSchema = BehaviorChipTermsSchema.extend({
   type: z.literal("npcBehavior"),
   id: NpcIdSchema,
 }).describe(
-  "已装行为芯片人物的实际启停、设备摘要或本人查阅；mode:chip 须本人接管前同意的 consent 原文。普通从业者不自动拥有芯片，清醒意愿、接管反应、日志所知和本人亲历分别处理，不因付款切换模式。",
+  "已装行为芯片人物的四态切换（off/doll/protocol/glitch）、设备摘要（log）或本人查阅（review）。扭扭街等未装行为芯片的普通从业者不可启用；清醒意愿、玩偶托管反应、改装协议与本人亲历分别处理。",
 );
 export type NpcBehavior = z.infer<typeof NpcBehaviorSchema>;
 
+export const NpcCompanionSchema = z
+  .object({
+    type: z.literal("npcCompanion"),
+    id: NpcIdSchema,
+    following: z.boolean().describe("true 开始与玩家同行；false 分开、留守或各自行动"),
+    reason: z.string().trim().min(1).max(80).optional().describe("同行或分开的原因"),
+  })
+  .describe(
+    "标记有卡人物是否正与玩家结伴同行：剧情里谈妥一起走、组队干活或护送时设 following:true；分开、留守、谈崩或各忙各的设 following:false",
+  );
+export type NpcCompanion = z.infer<typeof NpcCompanionSchema>;
+
 export type NpcCommand =
   | NpcBehavior
+  | NpcCompanion
   | NpcHurt
   | NpcHeal
   | NpcGear
@@ -803,7 +848,9 @@ export function normalizeNpcProposal(
     ["voice", VOICE_CHARS, false],
     ["want", WANT_CHARS, false],
     ["limit", LIMIT_CHARS, false],
+    ["bio", BIO_CHARS, true],
     ["secret", SECRET_CHARS, true],
+    ["initialDoing", INITIAL_DOING_CHARS, true],
   ] as const) {
     if (normalizeTextField(out, key, max, opt)) changed = true;
   }

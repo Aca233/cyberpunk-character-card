@@ -48,6 +48,7 @@ function formatEverydayCard(card: {
   readonly outfit?: string | undefined;
   readonly voice: string;
   readonly samples?: readonly string[] | undefined;
+  readonly bio?: string | undefined;
   readonly want: string;
   readonly limit: string;
   readonly secret?: string | undefined;
@@ -70,6 +71,7 @@ function formatEverydayCard(card: {
     card.outfit ? `穿着：${card.outfit}` : undefined,
     `说话：${card.voice}`,
     card.samples?.length ? `样本：${card.samples.map((s) => `「${s}」`).join(" ")}` : undefined,
+    card.bio ? `生平与底色：${card.bio}` : undefined,
     `诉求：${card.want}；底线：${card.limit}`,
     card.secret ? `幕后秘密：${card.secret}` : undefined,
   ].filter(Boolean);

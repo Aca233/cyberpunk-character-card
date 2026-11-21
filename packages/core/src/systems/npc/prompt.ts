@@ -1,7 +1,7 @@
 import type { RuleModule } from "../../kernel/system";
 import { behaviorChipLines, cyberwareCatalog } from "../cyberware";
 import { currentOutfit } from "./apply";
-import { bodyLine, woundNote } from "./body";
+import { bodyLine, scanTacticalProfile, woundNote } from "./body";
 import {
   KNOWN_SOURCE_LABELS,
   type LedgerKind,
@@ -46,11 +46,13 @@ export const npcRules: RuleModule<NpcState> = {
     "npcChrome",
     "npcHumanity",
     "npcScan",
+    "npcCompanion",
   ],
   when: () => true,
   judge: `- 对话、说服、谈判、套话看对方当下处境、利益诉求、底线、人情债与实际筹码：触到底线或没有足以打动对方的条件就不会答应，不靠数值公式决定。
 - 人物未卸防前藏着的核心秘密只有你知道，可用于判断对方会不会说漏嘴或顺水推舟，不直接写进玩家可见摘要。
 - 有卡的人能做什么看卡上的体格、装备、义体与伤势：重伤或残缺做不了剧烈动作，没装接入仓的人破不了子网，倒下了什么也做不了。
+- 标了「同行中」的人正跟玩家一起行动：其装备、义体、专长与伤势是现场真实的协同条件，玩家对其下达调度或分工按其实际能力、状态与立场裁决；关系紧张或拿对方当炮灰时对方会拒绝或翻脸。
 - 死了的人不再出场。`,
   narrate: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，不在场的只有一行。诉求、底线和秘密是幕后设定，玩家只能知道有实际来源或已揭露的内容。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。对方对你冷热如何看卡上的态度、关系、人情与仇怨，能不能谈成看诉求和底线。
@@ -61,6 +63,7 @@ export const npcRules: RuleModule<NpcState> = {
 - 重要新人物或尚未定型的旧识首次正式出场时，身份、外貌、穿着、随身装备、义体与说话方式应互相一致；按这个人的工作、财力和行事方式自然呈现，不套职业模板，不为介绍人物而额外安排动作或秘密揭露；后续沿用已经确立的事实。
 - 承诺、人情、冲突这类以后会被提起的事，让人物记着、以后提起。死了的人不再出场，也不会发消息。
 - 人物有自己的日子，不是为玩家角色存在的：见面时先带着他自己的事来（刚碰上的麻烦、心情、手上正忙的活），会主动提起「最近」和「这段时间的经历」里的事，会提起「共同记忆」里的旧事、翻旧账、兑现或追问承诺；有自己的事要忙时会拒绝、改约、让玩家等，不随叫随到。交情与信任要看得出变化：熟了说话更随便、开玩笑、说点心里话，生分了客气、冷淡、话少。
+- 标了「同行中」的人正跟玩家角色一起行动（搭档干活、护送、同行转场）：照其性格、装备与伤势自然参与掩护、配合、吐槽或分工；失手吃亏或受伤算在对方自己身上，不替玩家做决定；若谈崩、有急事或分道扬镳则分开各自行动。
 - 人物之间也认识：卡上的「认识的人」只说明关系，不是共享消息的网络。熟人出事后，先看他是否亲历、接到通信或听见传闻，以及消息何时能到；没有来源就仍不知道，可以主动打听。收到的说法可能滞后或有误，不自动等于幕后真相；标了「暗地里」的关系不当着外人提。
 - 卡上的「最近」是这个人在屏幕外的近况，后续行动须接续已有进展。时间大段跳过时，有前因的离屏事件可以继续发展；只有新闻、传闻、通信或本人告知确实到达时，才进入玩家的知情范围，不替玩家做事。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。
@@ -86,31 +89,32 @@ export const npcRules: RuleModule<NpcState> = {
 - 死了的人不再出场，也不会发消息。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。
 - 有卡的人实际受了伤写 npcHurt（part 填受伤部位 head / face / chest / belly / left-arm / right-arm / left-leg / right-leg 之一，tier 写 graze / heavy / lethal，reason 写明怎么伤的），得到治疗写 npcHeal；重伤需实际医疗稳定并等待恢复，不因切场自动痊愈，死了另写 npcDeath。已登记在当前交战中的敌人倒下、死亡或逃走时，另写 combat foe，state 分别为 down、dead、fled；仅受伤但仍站着不写 foe。玩家角色实际扫描了有卡的人写 npcScan，不写 combat scan。
-- 有卡的人拿到或丢了武器、换穿或脱下衣服、收下或递出药剂工具等随身物品写 npcGear，装上或拆掉义体写 npcChrome；玩家角色出钱给队员买装备、装义体，同时写 money 扣钱。
+- 有卡的人拿到或丢了武器、换穿或脱下衣服、收下或递出药剂工具等随身物品写 npcGear，装上或拆掉义体写 npcChrome；玩家角色出钱给同行者买装备、装义体，或现场约好分账/付酬劳，同时写 money 扣钱。
+- 有卡的人明确开始与玩家结伴同行（一起出活、护送、同车转场）写 npcCompanion（following:true）；分开、留守、谈崩或各自去忙写 npcCompanion（following:false）。同行者只有在场面真正陷入必死绝境（lethal）且确实避无可避时才会死，平时受创写 npcHurt。
 - 有卡的人实际出现神经症状时写 npcHumanity affect（symptomId、symptom、stage、reason），真实缓解写 recover 引用 symptomId；经历和义体本身不自动扣分。玩家只知道已经观察到的表现。`,
 };
 
 export const adultServicesRules: RuleModule<NpcState> = {
   id: "adult-services",
-  title: "成人服务与行为芯片",
+  title: "夜之城色情生态与行为芯片",
   commands: ["npcBehavior"],
   when: (state, input) =>
-    /性偶|玩偶|成人|性工作|接客|芯片接管|亲密|约会|扭扭街|诺亚|预约|\bR18\b/i.test(input.text) ||
+    /性偶|玩偶|云顶|丽姿|莫克斯|扭扭街|成人|性工作|行为芯片|安全词|芯片接管|亲密|预约|\bR18\b/i.test(
+      input.text,
+    ) ||
     Object.values(state.npcs).some(
       (person) =>
         person.met &&
-        (/性工作|玩偶|成人服务/.test(person.role) || person.behaviorChips !== undefined),
+        (/性偶|性工作|玩偶|成人服务|超梦/.test(person.role) || person.behaviorChips !== undefined),
     ),
-  judge: `- 成人服务只发生在已明确成年的参与者之间，未知年龄或成年情况先确认，不由职业、外貌或付费推断。真人从业者、已装行为芯片的真人玩偶和明确设定的合成人/机器人按各自身份与能力处理。
-- 先明确提供者、范围、时长、价格、记录许可和提前结束条件，双方实际接受才开始。付款、设备权限、工作中的配合、本人持续意愿、私人信任与感情彼此独立；本人拒绝或中止须按实际发生处理，不能凭付款或设备迎合推翻。
-- 行为芯片只利用实际取得的客户资料与现场输入，不读取玩家心声；安装、启用、当时意识、事后亲历和查阅日志是不同事实。没有装设备的人不会因为职业而被接管。`,
-  narrate: `- 相处沿正文和自由输入继续、暂停、略写或结束；普通聊天、购买、熟客来往和私人亲密都可平静收场，不强加危机、秘密、任务或好感奖励。
-- 回访沿用同一人、工作地点与实际说过的小事。人物可以忙、休息、改约、拒绝，也有同事和普通生活。经营者只知道亲眼见过或实际收到的资料；本人断片期间的事不自动成为其回忆。
-- 明确区分本人主导与芯片接管；依固定条件呈现当时意识和事后记忆。本人看过日志只知道日志写了什么，不等于恢复当时的感受。设备摘要不自动产生超梦、录音或分享许可。玩家自身设备不能替玩家决定感情、台词或行动意图。`,
-  text: `- 收费服务沿 commerce.offer（kind:service、target:adult-service、session 约定完整）与引用报价的 trade 成交，不用 favor 或 money 绕开授权。询价不扣款，接受商业服务不自动开启芯片；进度沿 commerce.service 的累计实际分钟结算，略写正常完成仍经过剩余时长，中止按已经明确的条件，不另加一次 time。
-- 真实芯片操作写 npcBehavior：mode 指定 personal/chip；进入 chip 必须在接管前引用本人同意范围的 consent 与实际启动 evidence。退出可由本人或真实中断触发；服务 finish/exit 时若正文实际结束接管，同轮另记 mode:personal，不把恢复主导写成自动获知过程。不要因玩家出资替其他人安装、启动或编辑人格。
-- 有记录能力且接管中真实留下摘要时才 log，使用稳定 log id 与固定 text；不把所有接待自动写成日志。本人恢复后实际查阅才 review。设备日志不是当事人的共同亲历，不自动送进记忆或共享给前台。
-- 记本人真实知情时，有芯片运行经历必须明确 memory 的 source：experienced（本人实际能保留的亲历）、told（后来实际被告知，须 evidence 引用消息到达本人）、log（本人已 review，须 device/log，代码引用原摘要）分别记录。断片后的本人不能复述没有获知的过程，尤其不能把芯片迎合、付款或日志摘要当作私人情感。前台、同行者与本人分别记录各自真正知情的内容。`,
+  judge: `- 成人服务只发生在已明确成年的参与者之间；夜之城分三层生态：扭扭街（清醒肉身性偶，无行为芯片，靠本人真实反应与口头谈价）、丽姿酒吧（莫克斯帮护持的感官超梦夜店，主打定制超梦与地下室调校，不搞强制玩偶托管）、云顶（H8 虎爪帮控制的玩偶屋，前台扫神经网络匹配，包厢内靠行为芯片托管且受虎爪帮保安与黑客控制）。
+- 行为芯片（doll-behavior-chip）统一四态（off 清醒 / doll 玩偶托管 / protocol 改装协议 / glitch 故障被骇）：没有装芯片的人不会被接管；玩偶托管只利用前台/现场实际取得的数据，不读心；安全词可随时打断托管退回 off。
+- 付款、芯片托管反应与本人清醒意愿彼此独立；本人拒绝、改约或中止须按实际发生处理。改装协议（如武术、礼仪、伪装等）在激活时提供真实动作/表现条件，高强度或长时间运行可能引发自我抽离类神经症状，且容易遭敌方黑客远程干扰。`,
+  narrate: `- 区分三层场所气质与本人清醒度：扭扭街直白烟火气、丽姿霓虹迷幻且有人情护短、云顶精致梦幻却带着商业监控与记忆断层的凉意。普通聊天、消费、熟客来往与私人亲密都可平静收场，不强塞任务、危机或好感奖励。
+- 明确区分清醒本人（off）与玩偶托管（doll）：托管切回 off 时若芯片无事后回忆，本人对托管期间的对话与细节断片；本人查过设备日志只知道日志文字，不等于恢复亲历感受。`,
+  text: `- 店内服务消费直接走 trade（service:adult-service 或 bd-session），需要跟踪正在进行的体验时用 commerce.service（start/pause/resume/finish/exit）。询价不扣款，付款不自动切换芯片模式。
+- 真实芯片操作写 npcBehavior（NPC）或 cyberware.behavior（玩家）：mode 填 off / doll / protocol（须写 protocol 协议名）/ glitch。安全词或中途打断托管切回 off；托管中设备确实留下摘要才 log，清醒后本人实际查阅才 review。
+- 处于 doll 断片态时，禁止把托管过程记入本人 memory；恢复清醒后只有通过 source:"told" 或已查阅的 source:"log" 才进入本人所知。`,
 };
 
 export interface Stage {
@@ -138,6 +142,7 @@ export const LOCALS_LISTED = 8;
 
 export function onStage(npc: Npc, stage: Stage): boolean {
   if (!npc.alive) return false;
+  if (npc.following) return true;
   if (stage.location !== null && npc.location === stage.location) return true;
   return npc.lastSeenAt !== null && npc.lastSeenAt >= stage.sceneStartedAt;
 }
@@ -194,7 +199,7 @@ export function attitudeLabel(npc: Pick<Npc, "affinity">): string {
 
 function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   const lines = [
-    `- ${label(npc, stage)} ${npc.role}；态度：${attitudeLabel(npc)}${npc.met ? "" : "；还没见过玩家角色"}`,
+    `- ${label(npc, stage)} ${npc.role}；态度：${attitudeLabel(npc)}${npc.following ? "；【同行中】" : ""}${npc.met ? "" : "；还没见过玩家角色"}`,
     // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
     ...appearanceLines(npc),
     `  说话：${npc.voice}`,
@@ -202,7 +207,23 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   if (npc.samples.length > 0) {
     lines.push(`  样本：${npc.samples.map((s) => `「${s}」`).join(" ")}`);
   }
+  if (npc.bio) {
+    lines.push(`  生平与底色（幕后人物资料，不等于玩家已知）：${npc.bio}`);
+  }
   lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
+  if (Array.isArray(stage.data?.fixerTemperaments)) {
+    const alias = npc.id === "mr-hands" ? "hands" : npc.id;
+    const temp = (
+      stage.data.fixerTemperaments as readonly {
+        readonly id: string;
+        readonly preferredStyle: string;
+        readonly taboo: string;
+      }[]
+    ).find((t) => t.id === npc.id || t.id === alias);
+    if (temp) {
+      lines.push(`  中间人做派：偏好「${temp.preferredStyle}」；忌讳「${temp.taboo}」`);
+    }
+  }
   if (npc.age !== undefined || npc.adult !== undefined || npc.entity !== undefined) {
     lines.push(
       `  已定身份事实：${npc.age !== undefined ? `${npc.age} 岁；` : ""}${npc.adult === true ? "已确认成年；" : npc.adult === false ? "未成年；" : ""}${npc.entity === "human" ? "真人" : npc.entity === "synthetic" ? "合成人" : npc.entity === "robot" ? "机器人" : "实体身份未补定"}。这些事实不代表玩家已全部获知。`,
@@ -216,6 +237,12 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   }
   if (stage.data !== undefined && stage.now !== undefined) {
     lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
+    if (npc.vitals?.scannedAt !== undefined && npc.vitals.scannedAt !== null) {
+      const tactical = scanTacticalProfile(npc, stage.data, stage.now);
+      lines.push(
+        `  【玩家已用义眼扫描此人】玩家已掌握其植入体配置、威胁档次（${tactical.threatLabel}）与骇入条件（${tactical.netLabel}）${tactical.tips.length > 0 ? `；实战情报：${tactical.tips.join("；")}` : ""}。玩家针对这些已扫出的义体、护甲弱点、旧伤或无 ICE 缺口采取行动、骇入或交涉施压时，直接享有确切情报与先手优势。`,
+      );
+    }
     lines.push(
       ...behaviorChipLines(
         npc.body?.cyberware ?? [],
@@ -288,8 +315,10 @@ export function localFaces(state: NpcState, stage: Stage): Npc[] {
   return Object.values(state.npcs)
     .filter((n) => n.alive && !onStage(n, stage))
     .filter((n) => {
-      const where = n.location ?? n.home;
-      return where !== null && where !== undefined && districtOf(where) === district;
+      const places = [n.location ?? n.home, ...(n.hangouts ?? [])];
+      return places.some(
+        (where) => where !== null && where !== undefined && districtOf(where) === district,
+      );
     })
     .sort((a, b) => Number(b.met) - Number(a.met) || (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
     .slice(0, LOCALS_LISTED);

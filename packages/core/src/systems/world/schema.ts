@@ -104,6 +104,8 @@ export const WorldClockStateSchema = z.object({
   deadlines: z.array(DeadlineSchema),
   /** 第几个场景，从 0 起 */
   scene: z.number().int().min(0),
+  /** 存档开局的游戏时间（分钟）；用于稳定计算「第 X 天」与 2077 时间线进度 */
+  startedAt: z.number().int().optional(),
   sceneStartedAt: z.number().int(),
   /** 存档记下的地点，并进地点表；旧存档没有这个字段，当空表 */
   places: z.array(SavedPlaceSchema).default([]),
@@ -205,3 +207,14 @@ export function locationCatalog(
 /** 只能由代码发出：叙事模型标了 sceneEnd 之后由回合流程发出 */
 export const EndSceneSchema = z.object({ type: z.literal("world.endScene") });
 export type EndScene = z.infer<typeof EndSceneSchema>;
+
+/** 只能由代码发出：生活服务（旅馆住宿、餐饮、咖啡提神等）结算疲劳恢复与时间推进 */
+export const WorldRestSchema = z.object({
+  type: z.literal("world.rest"),
+  /** reset 清零连续未睡相位（住旅馆），relief 减缓熬夜疲劳（饮食/咖啡），none 仅记录不改疲劳 */
+  mode: z.enum(["reset", "relief", "none"]).default("relief"),
+  /** 推进的分钟数（0 表示不额外推钟） */
+  minutes: z.number().int().min(0).max(720).default(0),
+  reason: z.string().min(1),
+});
+export type WorldRest = z.infer<typeof WorldRestSchema>;

@@ -40,7 +40,6 @@ import {
   MESSAGES_PER_TURN,
   PhoneStateSchema,
 } from "../systems/phone";
-import { SquadStateSchema } from "../systems/squad";
 import {
   THREAD_KIND_LABELS,
   THREADS_MAX,
@@ -174,16 +173,13 @@ export function offscreenSkipReason(o: {
 }
 
 /**
- * 熟人的联系范围：见过、活着、不在场也不在队里；中间人也是普通人物，一样在里面
+ * 熟人的联系范围：见过、活着、不在场也不正与玩家同行；中间人也是普通人物，一样在里面
  * （用户 2026-11-02："都是npc"）。派单另走【能派单的中间人】。
  * 不打分、不挑前几名，谁来联系由主持人定（用户 2026-11-01 定的"全改"第 4 步）
  */
 export function contactable(world: WorldState, present: ReadonlySet<string> = new Set()): Npc[] {
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
-  return Object.values(npcs).filter(
-    (n) => n.alive && n.met && !present.has(n.id) && !squad.has(n.id),
-  );
+  return Object.values(npcs).filter((n) => n.alive && n.met && !present.has(n.id) && !n.following);
 }
 
 // 心事什么时候往前走由【城里在发酵的事】的定时器管，不再由代码挑（用户 2026-11-01 定的「全改」第 4 步）
@@ -201,13 +197,12 @@ export const OFFSCREEN_LIVES = 2;
 export const OFFSCREEN_TIES = 2;
 
 /**
- * 该过自己日子的人：活着、不在场、不在玩家队里；见过的优先，近况最久没变的优先（没写过近况的最先），
+ * 该过自己日子的人：活着、不在场、不正与玩家同行；见过的优先，近况最久没变的优先（没写过近况的最先），
  * 一样久按 id。由代码轮着挑，每个人迟早都会轮到
  */
 export function lifePicks(world: WorldState, present: ReadonlySet<string> = new Set()): Npc[] {
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   return Object.values(NpcStateSchema.parse(world.slices.npc).npcs)
-    .filter((n) => n.alive && !present.has(n.id) && !squad.has(n.id))
+    .filter((n) => n.alive && !present.has(n.id) && !n.following)
     .sort(
       (a, b) =>
         Number(b.met) - Number(a.met) ||
@@ -248,9 +243,8 @@ export function offscreenFixers(
   if (!offscreenJobsOpen(world)) return [];
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   return Object.values(jobs.fixers)
-    .filter((f) => npcs[f.id]?.alive !== false && !present.has(f.id) && !squad.has(f.id))
+    .filter((f) => npcs[f.id]?.alive !== false && !present.has(f.id) && !npcs[f.id]?.following)
     .map((f) => ({ id: f.id, name: f.name }));
 }
 
@@ -267,18 +261,18 @@ const OFFSCREEN_STAGE = `【这一步：场外推演】
 - 【城里的动静】里已有的照原 id 更新（升级、平息、结束），整条重写；新的事才起新 id。
 - 动静一般不超过 ${OFFSCREEN_EVENTS} 条，major 一般 ${OFFSCREEN_MAJOR} 条（多的 major 代码按 normal 记）：城不能每次都在爆炸；真有那么多事也可以多写。
 - 人物近况写这次推演牵涉到的、【人物】里活着的人，一人一句，一般不超过 ${OFFSCREEN_NPCS} 个；标了「本场在场」的人就在玩家眼前，不写近况。
-- 人物移动：中间人也是普通人物，同样有自己的生活、可以离开办公室或常驻地点；派单身份不代表固定站在那里。近况里确实去了别处时，在 npcs 的同一条里写 location，值必须是已有地点 id，doing 和目的地要对得上；没移动就省略，不凭空编地点 id。移动要符合这段时间和前因，不瞬移，不强行安排与玩家见面；本场在场或在玩家队里的人不由场外推演移动。
+- 人物移动：中间人也是普通人物，同样有自己的生活、可以离开办公室或常驻地点；派单身份不代表固定站在那里。近况里确实去了别处时，在 npcs 的同一条里写 location，值必须是已有地点 id，doing 和目的地要对得上；没移动就省略，不凭空编地点 id。移动要符合这段时间和前因，不瞬移，不强行安排与玩家见面；本场在场或正与玩家同行的人不由场外推演移动。
 - 各过各的日子：【该过自己日子的人】是代码按多久没写近况轮出来的建议，这次尽量在 npcs 里给他们各写一句近况（不占上面的名额），别的人想写也行，写他自己的生活，不围着玩家转：照他的诉求、秘密、身份和所属势力，接着他上一条近况往下走（工作上的进展或麻烦、和身边人的来往、吵架和好、生病受伤、换住处、攒钱或欠债、迷上什么、碰上城里的动静）。大多是小事，有起有落、不总是顺的；可以和卡上「认识的人」或【人物】里别的人有来往（一起喝酒、闹翻、帮忙、结怨），两边对得上；两个有卡的人这次新认识了、或者关系真的变了，在 ties 里写一条（一次最多 ${OFFSCREEN_TIES} 条，aToB 写 a 眼里的 b，bToA 写 b 眼里的 a，各一句；私下的、外人不该知道的关系 open 写 false），只是照旧来往不写。不写玩家角色，不写他在等玩家、想玩家，也不为了引出委托才写。
 - 不改任何状态数值或账目（欧元、人性、伤势、关系深浅、通缉热度；声望只按下面「头条和声望」由代码涨），不改已有委托和期限（新委托只按下面「中间人派单」写）；动静里可以提到没卡的人，但不建新人物。
 - 原作人物没到时候的结局不提前写；死在屏幕外见下面「原作人物」。
-- 主动联系：【能联系玩家的人】是玩家见过、活着、不在场也不在队里的人，谁发、发不发由你看局面定：交情极深或积怨深重、挂着人情或仇、消息没回、分开后有了新情况、很久没见、宿敌想放句狠话、熟到想说心事，都是说得过去的理由；中间人有生意上的事随时可以发。大多数时候没人发；发的也不一定有正事：可以只是闲聊（问一句在干嘛、吐槽两句、说说他最近碰上的事、顺嘴提一句城里的动静），也可以托事（见下面「熟人托事」）。闲聊照他的性格、口吻、双方交情和近况写：关系近的随意亲近，交恶带刺、记着仇的阴阳怪气或冷淡试探；闲聊消息不写 job。发的话要接着他的近况和理由写，像真的短信；最多 ${MESSAGES_PER_TURN} 条。
+- 主动联系：【能联系玩家的人】是玩家见过、活着、不在场也未与玩家同行的人，谁发、发不发由你看局面定：交情极深或积怨深重、挂着人情或仇、消息没回、分开后有了新情况、很久没见、宿敌想放句狠话、熟到想说心事，都是说得过去的理由；中间人有生意上的事随时可以发。大多数时候没人发；发的也不一定有正事：可以只是闲聊（问一句在干嘛、吐槽两句、说说他最近碰上的事、顺嘴提一句城里的动静），也可以托事（见下面「熟人托事」）。闲聊照他的性格、口吻、双方交情和近况写：关系近的随意亲近，交恶带刺、记着仇的阴阳怪气或冷淡试探；闲聊消息不写 job。发的话要接着他的近况和理由写，像真的短信；最多 ${MESSAGES_PER_TURN} 条。
 - 人物经历：近况（npcs）每写一次就进这个人的经历。【该压成摘要的经历】里列出的人，在 pasts 里把他较早的经历压成一段 ${PAST_MAX} 字以内的摘要（接着旧摘要写，保留和玩家有关的、改变了这个人的事），代码只留最近几条原样的。
 - 街头传闻：这次推演里有值得传的事（尤其是新的或升级了的动静、和玩家有关的事），在 rumors 里写 0–${OFFSCREEN_RUMORS} 条街上传的原话。truth 标和真相差多少：true 属实，exaggerated 夸大，garbled 走样；reach 标传多远：street 一条街，district 一个城区（写 district），city 全城。同一件事可以有几种说法；说的是玩家角色的标 player: true，按街上的人看到的写（有人看见、有人添油加醋），不写玩家没做过的大事。
 - 节日与纪念日：先按【当前状态】的游戏年月日、已建立的城市动静和现场前因判断；日期不符、没有活动迹象或相关前因时，不凭历史日历自动制造全城活动。荒魂祭／荒坂赞助的日本街游行、海伍德的亡灵节与 Ofrenda、家庭成人礼，以及圣诞、7 月 4 日等旧世界节日都是可选素材，不保证全城参与。荒坂三郎追悼游行属于具体剧情节点；只有当前时间线或已发生事实支持时，才写巨型花车、全息锦鲤等场面，并依已确立的剧情决定华子是否现身或献唱，不提前触发或剧透。海伍德的 Ofrenda 可体现当地家庭和社区缅怀逝者的传统；杰克的仪式是具体人物的追悼，不代表所有人都采用相同形式。成人礼通常是个人与家庭场合，不写成全城节庆。
 - 历史周年只按游戏日期和已有设定核对：夜之城于 1994 年建市，2074 年是建市 80 周年，但当前资料未定具体建市日，不得自行补日期；荒坂塔核爆发生于 2023-08-20，游戏时间到 8 月 20 日时，可按本局人物、地点和局势写小范围悼念、幸存者的纪念或相应报道，不预设全城庆典。不要断言某个帮派每年都庆祝，也不要把讽刺性说法当成普遍事实。
 - 新闻快讯：bulletin 写一段 N54／WNS 等主流新闻（kind: news）或电台主持词（kind: radio），玩家会在界面的「新闻」里看到原文。主流媒体按公司与赞助方立场选择事实、强调秩序或淡化不利细节；地下电台可写明台名，以主持人、来电者、旧歌或幸存者证词回应主流叙事，但只说播出者有依据知道的内容，不自动掌握幕后真相。标题或正文应能辨认具体频道；不要把新闻、电台、广告写成同一种口吻。商业节日广告只在有场景依据时作为背景，不单独制造事件。报道引用已传开的版本（可与真相不同），不提只有你知道的幕后、人物的诉求底线秘密或没传开的事。这次写了 major 的动静时必须写；其余时候有值得播的才写，没有就写 null。快讯确实播了【城里在发酵的事】里某件事已发生的进展，就在 bulletin.threads 里写它的 id（算玩家听说了）；只播公开说法，不播 text、want、stage 或倒计时。只有开事或延期、没有新进展的，不算播了新消息。
 - 头条和声望：major 的动静如果玩家角色是当事人（做下这件事的就是玩家，街上也知道是他），写 player: true，可以再写 cred（small、medium、large，默认 medium）；代码会让街头声望按这个涨一次。不是玩家做的不要标。
-- 原作人物：【人物】里标了「原作人物」的人可以死在屏幕外，写进 deaths（一次最多 ${OFFSCREEN_DEATHS} 个）：只在局面真的走到那一步时写（原作里这个人这段时间的命运、城里的动静或势力动向牵连到他、他自己的近况把他推到那里）；【原剧时间线】只是参考，玩家插过手的照玩家改过的走。大多数时候 deaths 是空的。写了死，最好再写一条能让玩家以后听说的动静或传闻；他死了就不要再给他写近况和消息。标了「本场在场」、在玩家队里的人不能写。
+- 原作人物：【人物】里标了「原作人物」的人可以死在屏幕外，写进 deaths（一次最多 ${OFFSCREEN_DEATHS} 个）：只在局面真的走到那一步时写（原作里这个人这段时间的命运、城里的动静或势力动向牵连到他、他自己的近况把他推到那里）；【原剧时间线】只是参考，玩家插过手的照玩家改过的走。大多数时候 deaths 是空的。写了死，最好再写一条能让玩家以后听说的动静或传闻；他死了就不要再给他写近况和消息。标了「本场在场」、或正与玩家同行的人不能写。
 - 城里在发酵的事：【城里在发酵的事】是一张单子，势力的打算、宿敌的报复、人物的心事都在上面，每件带一个下次推进的时间。标「已到点」的，这次在 threads 里写一条 thread.step（这一步实际发生了什么、传开后怎么说、days 写下次几天后再推，1–10）；局面不合适就写 thread.defer（days 和一句 why）；事情走到头了写 thread.close（end 写怎么收场，心事收场再写 fate：better、canon、worse，和原作结局比）。没到点的也可以提前推一步。每件一次只写一条。
 - 开新事：单子有空位、又有前因时才写 thread.open：kind 写 faction（owner 写势力 id，seed 可以写【势力打算素材】里的种子 id）、nemesis（owner 写宿敌的人物 id）或 concern（owner 写人物 id，seed 写他的心事 id）；want 写他想要什么，stage 写眼下走到哪，days 写第一次几天后推。心事素材是条件情境，不是已发生事实：必须由本批正文或已记录动静支持其触发前因，stage 写已经成立的具体前因，代码会登记后再准许推进；不能仅凭好感、到期或原作结局补写绑架、死亡、坦克入手等事件。宿敌刚冒出来时代码会自己开一件，不用再开。
 - 素材只是素材：手段可以从「可能的法子」里挑，也可以按局面换、半路改主意、被对头或别的势力截胡；接着上一步写，和【城里的动静】【人物】对得上，原作里有的人和事优先照原作写。宿敌的一步只写他在屏幕外做了什么（打听玩家下落、找玩家在乎的人麻烦、截玩家的单子），不让他亲自和玩家见面；心事的原作结局只是没人插手时的参考，玩家不是 V。
@@ -337,6 +331,7 @@ function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>> = {}): s
     `底线：${n.limit}`,
     `口吻：${n.voice}`,
   ];
+  if (n.bio) parts.push(`背景：${n.bio}`);
   if (n.secret) parts.push(`秘密：${n.secret}`);
   parts.push(`当前地点：${n.location ?? "未知"}`);
   if (n.home) parts.push(`常驻地点：${n.home}（不代表现在在那里）`);
@@ -421,7 +416,6 @@ export function buildOffscreenPrompt(
       .slice(0, EXTRA_CARDS),
   ];
   const dispatch = scope?.backlog ? [] : offscreenFixers(world, present);
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   const concerns = arcOffscreenSection(
     ArcsStateSchema.parse(world.slices.arcs ?? {}),
     extras.data ?? {},
@@ -522,7 +516,7 @@ export function buildOffscreenPrompt(
         Object.values(roster)
           .map(
             (n) =>
-              `- ${n.id}｜${n.name}｜${n.role}｜${n.faction}｜${n.location ?? "位置未知"}${n.alive ? "" : "｜已死"}${present.has(n.id) ? "｜本场在场" : ""}${squad.has(n.id) ? "｜玩家队伍" : ""}`,
+              `- ${n.id}｜${n.name}｜${n.role}｜${n.faction}｜${n.location ?? "位置未知"}${n.alive ? "" : "｜已死"}${present.has(n.id) ? "｜本场在场" : ""}${n.following ? "｜同行中" : ""}`,
           )
           .join("\n") || "（还没有）"
       }`,
@@ -576,7 +570,7 @@ export function buildOffscreenPrompt(
               .join("\n")}`,
           ]
         : []),
-      ...(canon ? [`【原剧时间线】（只是参考）\n${canon}`] : []),
+      ...(canon ? [`【2077 世界时间线】（只是参考）\n${canon}`] : []),
       `【城里在发酵的事】\n${due}`,
       `【势力素材索引】（全城可用；素材不是已发生事实，没给详细法子的不要凭空当作既定计划）\n${seeds.map((s) => `- ${s.id}｜${s.faction}｜${s.title}｜${s.goal}`).join("\n") || "（没有）"}`,
       `【势力打算素材】（本批相关与轮换素材；有前因且单子有空位才考虑开新事）\n${
@@ -864,7 +858,6 @@ export function readOffscreen(
   const lives = new Map(lifePicks(world, opts.present).map((n) => [n.id, n]));
   const lived = new Set<string>();
   const updatedIds = new Set<string>();
-  const squad = new Set(SquadStateSchema.parse(world.slices.squad ?? {}).members.map((m) => m.npc));
   let updated = 0;
   for (const [i, item] of list("npcs").entries()) {
     const parsed = OffscreenNpcSchema.safeParse(item);
@@ -877,8 +870,8 @@ export function readOffscreen(
       reject(`场外推演：npcs[${i}] ${parsed.data.id} ${npc ? "已经死了" : "不在人物卡里"}`);
       continue;
     }
-    if (opts.present?.has(npc.id) || squad.has(npc.id)) {
-      reject(`场外推演：${npc.name}本场在场或在玩家队里，近况由正文写`);
+    if (opts.present?.has(npc.id) || npc.following) {
+      reject(`场外推演：${npc.name}本场在场或正与你同行，近况由正文写`);
       continue;
     }
     if (updatedIds.has(npc.id)) {
@@ -969,8 +962,8 @@ export function readOffscreen(
           ? "已经死了"
           : opts.present?.has(npc.id)
             ? "本场在场"
-            : squad.has(npc.id)
-              ? "在玩家队里"
+            : npc.following
+              ? "正与玩家同行"
               : undefined;
     if (problem || !npc) {
       reject(`场外推演：deaths[${i}] ${parsed.data.id} ${problem ?? ""}，不能死在屏幕外`);
@@ -1091,7 +1084,7 @@ export function readOffscreen(
       npc?.alive === false ||
       died.has(from) ||
       opts.present?.has(from) ||
-      squad.has(from)
+      npc?.following === true
     ) {
       reject(`场外推演：messages[${i}] 的 ${from} 不符合主动联系条件`);
       continue;
@@ -1176,7 +1169,7 @@ export function readOffscreen(
       npc?.alive === false ||
       died.has(from) ||
       opts.present?.has(from) ||
-      squad.has(from)
+      npc?.following === true
     ) {
       reject(`场外推演：calls[${i}] 来电者不符合主动联系条件`);
       continue;
