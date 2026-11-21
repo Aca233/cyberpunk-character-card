@@ -1,29 +1,50 @@
 import { inventoryRules } from "@cp/core";
-import { chipRetailShops } from "./chip-retail";
 import { poiShops } from "./merchant-sites";
 
-/** 阿岚只选市场日常与熟悉的发行；其他街区的专门货不在这里自动齐货。 */
+/** 阿岚的歌舞伎芯片小铺：正版商业超梦、情报/技能协议芯片与灰市隔离读写器材。 */
 const sleeveStock: Record<string, number> = {
   "chip-reader-writer": 2,
   "bd-portable-player": 2,
+  "bd-editor-wreath": 1,
   "blank-shard": 10,
-  "shard-night-market": 3,
-  "shard-rain-rooftop": 2,
-  "shard-small-stage": 2,
-  "shard-repair-notes": 4,
-  "shard-stall-note": 4,
-  "shard-night-magazine": 2,
-  "shard-service-assist": 2,
-  "shard-kabuki-morning-radio": 4,
-  "shard-stall-supper-cookbook": 3,
-  "shard-stall-account-book": 3,
-  "shard-pantry-scale-assist": 1,
-  "shard-counter-phrase-assist": 1,
+  "shard-bd-nc-night-drift": 3,
+  "shard-bd-us-cracks-live": 3,
+  "shard-bd-kabuki-ambush-raw": 1,
+  "shard-intel-kabuki-rumors": 4,
+  "shard-intel-ncpd-scanner": 2,
+  "shard-daemon-militech-cred": 1,
+  "shard-skill-translator": 2,
+  "shard-skill-trauma-field": 2,
+  "shard-skill-tactical-reload": 1,
+  "shard-skill-lockbypass": 2,
+};
+
+/** 丽姿酒吧超梦柜台：莫克斯感官调谐卷轴、高端超梦花环与朱迪外流的改装协议。 */
+const lizziesBdStock: Record<string, number> = {
+  "bd-portable-player": 2,
+  "bd-editor-wreath": 1,
+  "shard-bd-lizzies-velvet": 4,
+  "shard-bd-clouds-dream-suite": 2,
+  "shard-intel-clouds-manual": 2,
+  "shard-behavior-doll-combat": 1,
+  nicola: 12,
+  coffee: 8,
+};
+
+/** 扭扭街暗巷摊位（灰舌）：非法无滤波黑超梦、调查原片与来路不明的加密/行为协议芯片。 */
+const jigjigXbdStock: Record<string, number> = {
+  "chip-reader-writer": 1,
+  "blank-shard": 6,
+  "shard-bd-scav-xbd-moth": 2,
+  "shard-bd-clouds-vip-raw": 1,
+  "shard-bd-konpeki-suite-raw": 1,
+  "shard-daemon-arasaka-backdoor": 1,
+  "shard-behavior-social-mask": 1,
 };
 
 /**
  * 商店开局条件：威尔逊按参考价；阿涛的摊子便宜三成、货源非正规渠道。
- * 日本町商店街卖服装、药和吃的。阿涛为本作自创人物；标签不替代具体货况与交易事实。
+ * 日本町商店街卖服装、药和吃的。阿涛、阿岚与灰舌为本作自创人物；标签不替代具体货况与交易事实。
  */
 export const shops = inventoryRules.ShopListSchema.parse([
   {
@@ -32,16 +53,57 @@ export const shops = inventoryRules.ShopListSchema.parse([
     keeper: "阿岚",
     keeperNpc: "sleeve-shop-keeper",
     location: "kabuki-market",
-    note: "本作原创：卖生活录制、演出、维修资料与成年作者刊物的小铺。有店内超梦设备；询价不自动开机或成交。",
+    note: "歌舞伎市场正版与灰市兼营的芯片音像小铺：卖商业超梦、技能协议芯片、隔离读写器与编辑头环，店内配有基础超梦试看设备；询价不自动开机或成交。",
     shelf: Object.keys(sleeveStock),
     initialStock: sleeveStock,
     supply: {
       supplier: "kabuki-independent-chip-coop",
       origin:
-        "本作开局合同：市场作者授权副本由歌舞伎独立发行合作点供货；读写器与空白载体走配件批发，阿岚核对封套后入柜。",
+        "本作开局合同：正版商业超梦与技能芯片走歌舞伎分销渠道，读写器与头环走配件批发；灰市奇货（加密信用芯片与调查原片）售完不走常规补货。",
       route: ["kabuki-market"],
       leadMinutes: 480,
+      items: [
+        "chip-reader-writer",
+        "bd-portable-player",
+        "bd-editor-wreath",
+        "blank-shard",
+        "shard-bd-nc-night-drift",
+        "shard-bd-us-cracks-live",
+        "shard-intel-kabuki-rumors",
+        "shard-intel-ncpd-scanner",
+        "shard-skill-translator",
+        "shard-skill-trauma-field",
+        "shard-skill-tactical-reload",
+        "shard-skill-lockbypass",
+      ],
     },
+  },
+  {
+    id: "lizzies-bar-bd",
+    name: "丽姿酒吧超梦柜台",
+    keeper: "莫克斯调谐柜台",
+    location: "lizzies-bar",
+    note: "丽姿酒吧（莫克斯帮据点）：楼上提供莫克斯精修感官超梦包厢点播与酒水，地下室为朱迪的专业超梦调谐工作站（支持视觉/音频/热感三层扫描）。",
+    shelf: Object.keys(lizziesBdStock),
+    initialStock: lizziesBdStock,
+    supply: {
+      supplier: "mox-bd-studio",
+      origin: "丽姿酒吧莫克斯调谐室自制与合作厂牌直供。",
+      route: ["lizzies-bar"],
+      leadMinutes: 360,
+    },
+  },
+  {
+    id: "jigjig-xbd-stall",
+    name: "扭扭街暗巷黑片摊",
+    keeper: "灰舌",
+    keeperNpc: "jigjig-xbd-dealer",
+    location: "jig-jig-street",
+    note: "扭扭街暗巷流动黑市摊位，由灰舌私售清道夫地下黑超梦（XBD）、来路不明的调查原片与加密/行为协议芯片，只收现钱、不包售后与防毒。",
+    priceFactor: 1.15,
+    blackMarket: true,
+    shelf: Object.keys(jigjigXbdStock),
+    initialStock: jigjigXbdStock,
   },
   {
     id: "wilson",
@@ -50,6 +112,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     location: "megabuilding-h10",
     note: "H10 巨型公寓里的枪店兼靶场，店主是退伍兵，卖出去的枪都亲手调过",
     shelf: [
+      "dying-night",
       "unity",
       "lexington",
       "nue",
@@ -180,8 +243,8 @@ export const shops = inventoryRules.ShopListSchema.parse([
       "coffee",
       "synth-cigs",
       "real-liquor",
-      "shard-stage-wardrobe-guide",
-      "shard-counter-phrase-assist",
+      "shard-bd-us-cracks-live",
+      "shard-skill-translator",
     ],
     supply: {
       supplier: "japantown-retail-distribution",
@@ -200,6 +263,5 @@ export const shops = inventoryRules.ShopListSchema.parse([
     note: "诊所里上锁的药柜，压制剂只卖给他看过的病人，每次都要叮嘱一句别吃多",
     shelf: ["psycho-suppressant", "maxdoc", "bounce-back"],
   },
-  ...chipRetailShops,
   ...poiShops,
 ]);

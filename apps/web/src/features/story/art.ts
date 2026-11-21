@@ -49,8 +49,33 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "alecto-silencer": "itemArt.alectoSilencer",
   "kanetsugu-scope": "itemArt.kanetsuguScope",
   "gaki-scope": "itemArt.gakiScope",
-  shard: "itemArt.shard",
   "saika-scope": "itemArt.saikaScope",
+  // 芯片、超梦卷轴与神经读写硬件
+  "chip-reader-writer": "cyberArt.exDisk",
+  "bd-portable-player": "cyberArt.kiroshiMk1",
+  "bd-editor-wreath": "cyberArt.visualCortexSupport",
+  "blank-shard": "itemArt.shard",
+  "shard-bd-nc-night-drift": "itemArt.shard",
+  "shard-bd-us-cracks-live": "itemArt.shard",
+  "shard-bd-lizzies-velvet": "itemArt.shard",
+  "shard-bd-clouds-dream-suite": "itemArt.shard",
+  "shard-bd-konpeki-suite-raw": "itemArt.shard",
+  "shard-bd-clouds-vip-raw": "itemArt.shard",
+  "shard-bd-kabuki-ambush-raw": "itemArt.shard",
+  "shard-bd-scav-xbd-moth": "itemArt.shard",
+  "shard-intel-kabuki-rumors": "itemArt.shard",
+  "shard-intel-clouds-manual": "itemArt.shard",
+  "shard-intel-ncpd-scanner": "itemArt.shard",
+  "shard-daemon-militech-cred": "itemArt.shard",
+  "shard-daemon-arasaka-backdoor": "itemArt.shard",
+  "shard-skill-translator": "itemArt.shard",
+  "shard-skill-trauma-field": "itemArt.shard",
+  "shard-skill-tactical-reload": "itemArt.shard",
+  "shard-skill-lockbypass": "itemArt.shard",
+  "shard-behavior-doll-combat": "itemArt.shard",
+  "shard-behavior-social-mask": "itemArt.shard",
+  "doll-behavior-chip": "cyberArt.ramUpgrade",
+  "braindance-recorder": "cyberArt.visualCortexSupport",
   "nomad-duster": "itemArt.nomadDuster",
   shigure: "weaponArt.shigure",
   // 通用服装使用同类原作服装示意图；插件共用原作改装件图标。
@@ -313,6 +338,7 @@ const SHOP_POI_ICONS: Readonly<Record<string, AssetId>> = {
   meds: "map.poi.meds",
   food: "map.poi.food",
   bar: "map.poi.bar",
+  junk: "map.poi.junk",
   ripperdoc: "map.poi.ripperdoc",
   netrunner: "map.poi.netrunner",
 };
@@ -326,15 +352,26 @@ export function portraitOf(npc: string | null | undefined): AssetId | undefined 
   return npc ? PORTRAITS[npc] : undefined;
 }
 
-/** 从物化武器实例 ID（wpn:<baseId>:<seq>）提取基础模板 ID */
+/** 从物化实例 ID（wpn:<baseId>:<seq> 或 chip:<baseId>:<seq>）提取基础模板 ID */
 export function baseWeaponIdOf(id: string): string {
-  const match = /^wpn:([^:]+):\d+$/.exec(id);
+  const match = /^(?:wpn|chip):([^:]+):\d+$/.exec(id);
   return match?.[1] ?? id;
 }
 
 export function itemArtOf(item: string | null | undefined): AssetId | undefined {
   if (!item) return undefined;
-  return ITEM_ART[item] ?? ITEM_ART[baseWeaponIdOf(item)];
+  const base = baseWeaponIdOf(item);
+  const exact = ITEM_ART[item] ?? ITEM_ART[base];
+  if (exact) return exact;
+  if (
+    item.startsWith("chip:") ||
+    item.startsWith("shard-") ||
+    item.startsWith("carrier-") ||
+    base.startsWith("shard-")
+  ) {
+    return "itemArt.shard";
+  }
+  return undefined;
 }
 
 /** 武器 ID 与副标题 → 右下角 HUD 用的高对比 2077 单色武器轮廓剪影 */

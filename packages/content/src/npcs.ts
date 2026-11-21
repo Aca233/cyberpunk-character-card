@@ -110,7 +110,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tailored-slacks",
           "dress-shoes",
           "holo-phone",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["kiroshi-mk1"],
       },
@@ -175,7 +175,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "combat-boots",
           "holo-phone",
           "synth-cigs",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["kiroshi-mk1"],
       },
@@ -264,7 +264,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "liberty",
+          "pride",
           "nekomata",
           "street-jacket",
           "street-tee",
@@ -297,7 +297,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "wakako-pachinko",
       canon: true,
       body: {
-        gear: ["kimono-haori", "silk-shirt", "dress-shoes", "holo-phone", "shard"],
+        gear: ["byakko", "kimono-haori", "silk-shirt", "dress-shoes", "holo-phone", "blank-shard"],
         cyberware: ["kiroshi-mk1"],
       },
     },
@@ -341,7 +341,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "liberty",
+          "plan-b",
           "mirror-shades",
           "corpo-suit",
           "silk-shirt",
@@ -430,7 +430,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "overture",
+          "crash",
           "flashbang",
           "street-jacket",
           "street-tee",
@@ -462,7 +462,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "overture",
+          "archangel",
           "omaha",
           "mirror-shades",
           "street-jacket",
@@ -604,7 +604,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tailored-slacks",
           "dress-shoes",
           "holo-phone",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["kiroshi-mk1"],
       },
@@ -671,7 +671,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       home: "japantown",
       canon: true,
       body: {
-        gear: ["club-dress", "dress-shoes", "holo-phone", "synth-cigs", "shard"],
+        gear: ["club-dress", "dress-shoes", "holo-phone", "synth-cigs", "blank-shard"],
         cyberware: ["kiroshi-mk1", "doll-behavior-chip", "braindance-recorder"],
       },
     },
@@ -723,7 +723,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "kenshin",
+          "kongou",
           "long-trenchcoat",
           "silk-shirt",
           "tailored-slacks",
@@ -755,7 +755,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "秘密推进以 Relic 技术延续自身生命与权力的研究，不会轻易向家族外的人交代其真正用途",
       canon: true,
       body: {
-        gear: ["satori", "kimono-haori", "silk-shirt", "dress-shoes", "shard"],
+        gear: ["satori", "kimono-haori", "silk-shirt", "dress-shoes", "blank-shard"],
         cyberware: ["kiroshi-mk2", "prosthetic-arms"],
       },
     },
@@ -786,7 +786,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tailored-slacks",
           "dress-shoes",
           "corpo-badge",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["kiroshi-mk1"],
       },
@@ -818,7 +818,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "netrunner-suit",
           "street-sneakers",
           "holo-phone",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["militech-paraline", "kiroshi-mk1"],
       },
@@ -843,7 +843,14 @@ export const npcs = npcRules.NpcCardSchema.extend({
       limit: "有人在谈判桌上对罗伊斯动手；拿了货不给钱",
       canon: true,
       body: {
-        gear: ["nova", "black-lace", "street-jacket", "leather-pants", "combat-boots", "maxdoc"],
+        gear: [
+          "doom-doom",
+          "black-lace",
+          "street-jacket",
+          "leather-pants",
+          "combat-boots",
+          "maxdoc",
+        ],
         cyberware: ["kiroshi-mk2", "militech-paraline"],
       },
     },
@@ -869,7 +876,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       secret: "夺走了布里克的首领位置，把前任关在食品厂；不愿让前任的支持者重新威胁自己的控制",
       canon: true,
       body: {
-        gear: ["lexington", "street-jacket", "leather-pants", "combat-boots", "black-lace"],
+        gear: ["chaos", "street-jacket", "leather-pants", "combat-boots", "black-lace"],
         cyberware: ["kiroshi-mk2", "subdermal-armor"],
       },
     },
@@ -929,7 +936,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "想越过黑墙接触奥特·坎宁安，为巫毒帮在可能到来的网络冲突中寻找活路；不会向外人坦白全部计划",
       canon: true,
       body: {
-        gear: ["netrunner-suit", "combat-boots", "shard", "chip-reader-writer"],
+        gear: ["netrunner-suit", "combat-boots", "blank-shard", "chip-reader-writer"],
         cyberware: ["raven-microcyber", "kiroshi-mk2", "self-ice"],
       },
     },
@@ -1051,7 +1058,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "street-sneakers",
           "chip-reader-writer",
           "synth-cigs",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["biotech-sigma", "kiroshi-mk1"],
       },
@@ -1075,7 +1082,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       limit: "被当成商品摆弄；有人背着她打她的主意",
       canon: true,
       body: {
-        gear: ["club-dress", "dress-shoes", "holo-phone", "shard"],
+        gear: ["club-dress", "dress-shoes", "holo-phone", "blank-shard"],
         cyberware: ["kiroshi-mk2", "prosthetic-arms", "prosthetic-legs", "subdermal-armor"],
       },
     },
@@ -1100,7 +1107,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       limit: "被人当成可以讨价还价的对手；有人在他面前耍小聪明",
       canon: true,
       body: {
-        gear: ["defender"],
+        gear: ["ba-xing-chong", "defender"],
         cyberware: [
           "zetatech-sandevistan",
           "projectile-launch-system",
@@ -1246,7 +1253,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "netrunner-suit",
           "combat-boots",
           "holo-phone",
-          "shard",
+          "blank-shard",
         ],
         cyberware: ["songbird-military-netrunning", "kiroshi-mk2", "smart-link", "self-ice"],
       },
@@ -1384,7 +1391,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: [
-          "lexington",
+          "her-majesty",
           "street-jacket",
           "street-tee",
           "cargo-pants",
