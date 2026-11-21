@@ -242,7 +242,7 @@ export function MainMenu() {
 
       <aside className={styles.side}>
         <header className={styles.brand}>
-          <Asset id="splash.logo" height={78} alt="赛博朋克 2077" />
+          <Asset id="splash.logo" height={78} alt="赛博朋克2091" />
           <span
             className={styles.brandLine}
             style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}

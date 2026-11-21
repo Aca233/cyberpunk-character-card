@@ -23,13 +23,13 @@ export function Splash() {
   return (
     <main className={styles.splash}>
       <div className={styles.logo}>
-        <Asset id="splash.logo" height={180} alt="赛博朋克 2077" className={styles.base} />
+        <Asset id="splash.logo" height={180} alt="赛博朋克2091" className={styles.base} />
         <Asset id="splash.logo" height={180} className={styles.ghostA} />
         <Asset id="splash.logo" height={180} className={styles.ghostB} />
       </div>
       <div className={styles.footer}>
         <Asset id="loading.circle" height={28} tint="var(--cp-red)" className={styles.spinner} />
-        <span className="label">夜之城角色卡 · 按任意键继续</span>
+        <span className="label">赛博朋克2091 · 按任意键继续</span>
       </div>
     </main>
   );
