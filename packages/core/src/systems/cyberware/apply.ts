@@ -1,7 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import { checkNarratedPurchase } from "../commerce";
-import type { Attribute } from "../dice";
 import type { WorldClockState } from "../world";
 import { quoteCyberware } from "./quote";
 import {
@@ -112,23 +111,6 @@ export function ripperdocShelf(
   });
 }
 
-/** 装着的义体一共给哪些属性加多少 */
-function bonusCommand(
-  draft: Draft<CyberwareState>,
-  catalog: ReadonlyMap<string, CyberwareDef>,
-): Command {
-  const bonuses: Partial<Record<Attribute, number>> = {};
-  for (const c of draft.installed) {
-    for (const [a, n] of Object.entries(catalog.get(c.id)?.attributes ?? {}) as [
-      Attribute,
-      number,
-    ][]) {
-      bonuses[a] = (bonuses[a] ?? 0) + n;
-    }
-  }
-  return { type: "character.setBonuses", bonuses };
-}
-
 export interface Purchase {
   readonly price: number;
   /** 身上现有的欧元 */
@@ -175,10 +157,12 @@ export function install(
       }
       notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
       const control = draft.behaviorChips?.[prev.id];
-      if (control?.mode === "chip") {
-        control.mode = "personal";
+      if (control && control.mode !== "off") {
+        control.mode = "off";
+        control.protocol = null;
+        control.carrier = null;
         control.since = now;
-        if (control.lastControl) control.lastControl.to = now;
+        if (control.lastControl && control.lastControl.to === null) control.lastControl.to = now;
       }
       emit.push({ type: "health.limb", action: "clear", id: prev.id });
     }
@@ -212,7 +196,6 @@ export function install(
       ...(purchase.event ? { event: purchase.event } : {}),
     });
   }
-  emit.push(bonusCommand(draft, catalog));
   return { ok: true, notes, emit, signals: ["cyberware.changed"] };
 }
 
@@ -227,10 +210,12 @@ export function remove(
   if (i < 0) return { ok: false, reason: `没有装着${name}` };
   draft.installed.splice(i, 1);
   const control = draft.behaviorChips?.[id];
-  if (control?.mode === "chip") {
-    control.mode = "personal";
+  if (control && control.mode !== "off") {
+    control.mode = "off";
+    control.protocol = null;
+    control.carrier = null;
     control.since = now;
-    if (control.lastControl) control.lastControl.to = now;
+    if (control.lastControl && control.lastControl.to === null) control.lastControl.to = now;
   }
   for (const part of Object.values(draft.parts)) {
     if (part.holder === "installed" && part.model === id) part.holder = "player";
@@ -238,7 +223,7 @@ export function remove(
   return {
     ok: true,
     notes: [`卸下${name}`],
-    emit: [bonusCommand(draft, catalog), { type: "health.limb", action: "clear", id }],
+    emit: [{ type: "health.limb", action: "clear", id }],
     signals: ["cyberware.changed"],
   };
 }

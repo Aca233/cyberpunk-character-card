@@ -112,8 +112,11 @@ export function applyDamage(
   const notes = [
     `${part ? BODY_PART_LABELS[part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
   ];
+  const chromeBefore = draft.brokenChrome.length;
   if (command.limb) notes.push(loseLimb(draft, command.limb, ctx));
-  return ok(...notes);
+  return draft.brokenChrome.length > chromeBefore
+    ? { ok: true, notes, signals: ["cyberware.changed"] }
+    : ok(...notes);
 }
 function loseLimb(draft: Health, limb: Limb, ctx: SystemContext): string {
   const chrome = ChromeLimbsFactSchema.safeParse(ctx.facts.chrome ?? {});

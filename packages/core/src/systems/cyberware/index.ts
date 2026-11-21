@@ -1,10 +1,10 @@
 import { defineSystem } from "../../kernel/system";
 import type { HealthState } from "../health";
+import type { InventoryState } from "../inventory";
 import { cyberwareActions } from "./actions";
 import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
 import { applyBehaviorChip, behaviorChipLines } from "./behavior";
 import { cyberwareEvents } from "./events";
-import { cyberwareInteractions } from "./interactions";
 import { cyberwareRules } from "./prompt";
 import { ripperdocDebtsView, ripperdocView } from "./ripperdoc";
 import { sandevistanView } from "./sandevistan";
@@ -54,6 +54,7 @@ export const cyberware = defineSystem<
     "humanity",
     "character",
     "world",
+    "inventory",
     "health",
     "npc",
     "commerce",
@@ -120,7 +121,6 @@ export const cyberware = defineSystem<
         command,
         catalog,
         ctx.now,
-        ctx.facts,
         ctx.read<HealthState>("health").brokenChrome,
       );
       if (result.ok) draft.behaviorChips = states;
@@ -178,11 +178,27 @@ export const cyberware = defineSystem<
       },
     },
   ],
-  interactions: cyberwareInteractions,
   events: cyberwareEvents,
   on: {
     "world.arrived": visitClinics,
     "logistics.changed": (draft, ctx) => advanceSupplies(draft, ctx.now, ctx),
+    "inventory.changed": (draft, ctx) => {
+      const chips = draft.behaviorChips;
+      if (!chips) return;
+      const inv = ctx.read<InventoryState>("inventory");
+      for (const state of Object.values(chips)) {
+        if (state.mode !== "protocol" || !state.carrier) continue;
+        const obj = inv.objects[state.carrier];
+        const held = (inv.backpack[state.carrier] ?? 0) > 0 && (!obj || obj.holder === "player");
+        if (!held) {
+          state.mode = "off";
+          state.protocol = null;
+          state.carrier = null;
+          state.since = ctx.now;
+          if (state.lastControl && state.lastControl.to === null) state.lastControl.to = ctx.now;
+        }
+      }
+    },
   },
   tick(draft, span, ctx) {
     tickWorkshop(draft, span.to, ctx);
@@ -193,7 +209,6 @@ export * from "./actions";
 export * from "./apply";
 export * from "./behavior";
 export * from "./events";
-export * from "./interactions";
 export * from "./prompt";
 export * from "./quote";
 export * from "./ripperdoc";

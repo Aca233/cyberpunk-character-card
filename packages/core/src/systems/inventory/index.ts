@@ -4,6 +4,8 @@ import type { NpcState } from "../npc";
 import type { WorldClockState } from "../world";
 import { inventoryActions } from "./actions";
 import {
+  applyChipDrain,
+  applyChipMint,
   applyChipWrite,
   applyItem,
   applyMod,
@@ -18,7 +20,6 @@ import {
 } from "./apply";
 import { inventoryEvents } from "./events";
 import { applyGunsmith, type GunsmithCommand, GunsmithCommandSchema } from "./gunsmith";
-import { inventoryInteractions } from "./interactions";
 import { applyShopBusiness, visitMerchants, withMerchants } from "./merchants";
 import { namesView } from "./names";
 import {
@@ -88,6 +89,15 @@ export const inventory = defineSystem<
       switch (command.type) {
         case "inventory.chipWrite":
           return applyChipWrite(draft, command, ctx.now);
+        case "inventory.chipDrain":
+          return applyChipDrain(draft, command, ctx.now);
+        case "inventory.chipMint":
+          return applyChipMint(
+            draft,
+            command,
+            ctx.now,
+            ctx.read<WorldClockState>("world").location,
+          );
         case "weaponHold":
           return applyWeaponHold(
             draft,
@@ -255,7 +265,6 @@ export const inventory = defineSystem<
     { key: "names", project: namesView },
   ],
   status: inventoryStatus,
-  interactions: inventoryInteractions,
   events: inventoryEvents,
 });
 
@@ -263,7 +272,6 @@ export * from "./actions";
 export * from "./apply";
 export * from "./events";
 export * from "./gunsmith";
-export * from "./interactions";
 export * from "./merchants";
 export * from "./names";
 export * from "./prompt";

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { AttributeSchema } from "../dice";
 import { RaritySchema } from "../economy";
 
 /** 义体部位，按原作分类；每个部位能装几件见 SLOT_CAPACITY */
@@ -71,57 +70,79 @@ export const DECK_TRAIT_LABELS: Readonly<Record<DeckTrait, string>> = {
   recovery: "散热缓冲",
 };
 
+/** 行为芯片统一四态模型（玩家与 NPC 共用）：清醒 / 玩偶托管 / 改装协议 / 芯片异常 */
+export const BehaviorChipModeSchema = z.enum(["off", "doll", "protocol", "glitch"]);
+export type BehaviorChipMode = z.infer<typeof BehaviorChipModeSchema>;
+
+export const BEHAVIOR_CHIP_MODE_LABELS: Readonly<Record<BehaviorChipMode, string>> = {
+  off: "清醒",
+  doll: "玩偶托管",
+  protocol: "改装协议",
+  glitch: "芯片异常",
+};
+
 /** 设备本身的固定行为与记忆条件；职业称呼不等于实际安装。 */
 export const BehaviorChipProfileSchema = z.object({
   purpose: z.string().trim().min(1).max(160),
-  awareness: z.enum(["present", "absent"]),
-  recall: z.enum(["retained", "none"]),
-  logging: z.enum(["none", "local-summary"]),
+  awareness: z.enum(["present", "absent"]).default("absent"),
+  recall: z.enum(["retained", "none"]).default("none"),
+  logging: z.enum(["none", "local-summary"]).default("local-summary"),
+  safeword: z.string().trim().min(1).max(40).optional(),
 });
 export type BehaviorChipProfile = z.infer<typeof BehaviorChipProfileSchema>;
 
 export const BehaviorChipStateSchema = z.object({
-  mode: z.enum(["personal", "chip"]),
+  mode: BehaviorChipModeSchema,
+  protocol: z.string().trim().min(1).max(120).nullable().default(null),
+  /** 由外置行为协议芯片驱动时记录对应载体 id；现场直刷协议为 null */
+  carrier: z.string().min(1).nullable().default(null),
   since: z.number().int(),
-  lastControl: z.object({ from: z.number().int(), to: z.number().int().nullable() }).optional(),
+  memoryGap: z.boolean().default(false),
+  lastControl: z
+    .object({
+      from: z.number().int(),
+      to: z.number().int().nullable(),
+      mode: BehaviorChipModeSchema.optional(),
+    })
+    .optional(),
   /** 日志是设备摘要，不是超梦、亲历记忆或全知客户档案。 */
-  logs: z.array(
-    z.object({
-      id: z.string().min(1),
-      text: z.string().trim().min(1).max(240),
-      at: z.number().int(),
-      reviewedAt: z.number().int().nullable(),
-    }),
-  ),
+  logs: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        text: z.string().trim().min(1).max(240),
+        at: z.number().int(),
+        reviewedAt: z.number().int().nullable(),
+      }),
+    )
+    .default([]),
 });
 export type BehaviorChipState = z.infer<typeof BehaviorChipStateSchema>;
 
 export const BehaviorChipTermsSchema = z.object({
-  device: z.string().min(1).describe("本人实际已安装的行为芯片型号 id"),
+  device: z.string().min(1).describe("实际已安装的行为芯片型号 id（如 doll-behavior-chip）"),
   action: z.enum(["mode", "log", "review"]),
-  mode: z.enum(["personal", "chip"]).optional(),
+  mode: BehaviorChipModeSchema.optional().describe(
+    "四态切换：off 清醒、doll 玩偶托管、protocol 改装协议、glitch 芯片故障/被骇",
+  ),
+  protocol: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe("mode=protocol 时写入当前刷入的协议名或芯片（如格斗/潜行/情绪屏蔽协议）"),
+  carrier: z.string().min(1).optional().describe("可选：驱动该协议的外置行为协议芯片载体 id"),
   log: z.string().min(1).optional().describe("一段实际设备摘要的稳定 id；重复记录不改原文"),
   text: z.string().trim().min(1).max(240).optional().describe("实际记录到的摘要，不写未取得的想法"),
-  evidence: z
-    .string()
-    .trim()
-    .min(2)
-    .max(500)
-    .describe("逐字引用本轮正文中实际启停、记录或本人查阅的依据"),
-  consent: z
-    .string()
-    .trim()
-    .min(2)
-    .max(500)
-    .optional()
-    .describe("启用接管时，本人在接管前明确同意本次范围的原话；付款或芯片迎合不能代替"),
+  reason: z.string().trim().min(1).max(240).optional().describe("可选：触发切换或故障的具体原因"),
 });
 export type BehaviorChipTerms = z.infer<typeof BehaviorChipTermsSchema>;
 
 export const BehaviorChipCommandSchema = BehaviorChipTermsSchema.extend({
   type: z.literal("cyberware.behavior"),
 }).describe(
-  "玩家本人行为芯片的实际模式变化与日志；不安装新设备，不替玩家选择感情、台词或行动意图。mode:chip 必须本人明确授权。日志查阅不会恢复亲历记忆，也不自动共享。只有真实发生变化才写。",
+  "玩家本人已安装行为芯片的四态切换（off/doll/protocol/glitch）、设备摘要记录与查阅；不替玩家自动安装或替玩家做情感决定。安全词随时切回 off。",
 );
 export type BehaviorChipCommand = z.infer<typeof BehaviorChipCommandSchema>;
 
@@ -137,11 +158,7 @@ export const CyberwareDefSchema = z.object({
   humanityCost: z.number().int().min(0).max(20),
   /** 装上后角色真的能做到什么；写给模型，也显示在侧栏 */
   ability: z.string().min(1),
-  /** 做哪些属性的检定时算有利条件 */
-  checks: z.array(AttributeSchema).default([]),
-  /** 装着时属性加多少（+1 至 +3）；把属性推到 11–20 主要靠它 */
-  attributes: z.partialRecord(AttributeSchema, z.number().int().min(1).max(3)).default({}),
-  /** 护甲义体：受到的伤害降一档；装着几件护甲也只降一档 */
+  /** 护甲义体：提供身体防护，具体承受能力与覆盖部位按现场与装备描述判断 */
   armor: z.boolean().default(false),
   /**
    * 黑客硬件的定性特化方向；操作系统义体写了这一项才算网络接入仓，

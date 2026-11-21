@@ -1,22 +1,36 @@
 import type { RuleModule, SectionContext } from "../../kernel/system";
+import { CyberwareStateSchema } from "../cyberware";
+import { HackingStateSchema } from "../hacking";
+import { HealthStateSchema } from "../health";
 import { type InventoryState, InventoryStateSchema, itemCatalog } from "../inventory";
 import type { NpcState } from "../npc";
 import { formatGameTime, type WorldClockState } from "../world";
-import { chipContentCatalog, readableChipPart } from "./apply";
-import { SHARD_KIND_LABELS, type Shard, type ShardsState } from "./schema";
+import { activeChipHazard, chipContentCatalog, readableChipPart } from "./apply";
+import {
+  CHIP_CATEGORY_LABELS,
+  CHIP_ENCRYPTION_LABELS,
+  CHIP_HAZARD_LABELS,
+  NEURAL_CHIP_SLOTS,
+  SHARD_KIND_LABELS,
+  type Shard,
+  type ShardsState,
+} from "./schema";
 
 export const shardsRules: RuleModule<ShardsState> = {
   id: "shards",
-  title: "芯片与阅读",
+  title: "神经芯片与阅读",
   commands: ["shard", "chip"],
   when: () => true,
-  text: `- 芯片是有载体、有内容身份的真实物件。拿到或买到只登记物品，不自动阅读、安装、获得技能或触发任务。载体归属沿用 item/trade；目录芯片取得后使用实际 chip: 开头的独立载体 id，不再取得同一份。
-- 已确立的内容先按实际设备与玩家要求展开，角色真正读到时写 chip read（carrier、device、parts）；原文由代码引用，不能改写。只看标签和简介不发 read。加密分段先按实际条件做 breach 取得 data，再用 chip unlock 引用对应保护网络，不能靠猜测或一次普通读取解开。
-- 新资料先固定内容和来源，目录外真实载体用 item gain 的 definition.chipContentId 关联，chip define 登记一次，以后复用。普通邮件、日记、录音实际读到时才写 shard，固定 contentId + partId；后续分段不能覆盖原文，未解开、未读到的内容不进入知识。read 标记仅表示玩家界面是否点开，不代表角色未读。
-- 复制用 chip copy，必须有实际来源、可用读写器和不同的空白载体 destination；副本引用同一内容，不复制钱、技能或其他资产。赠送与交付用 item lose + recipient；借出还需把真实返还约定写入已有承诺/人物记忆，交出原件不清除已读知识。给别人看或转述只按真实到达的信息更新其记忆，不把持有当阅读或让所有人同步得知。
-- 功能辅助仅 chip use，本次能力受真实硬件、接口和固定功能限制，不变成永久技能、属性或装载槽。行为芯片只能经实际义体安装与本人运行状态启用，读说明不等于芯片接管；超梦媒体接正文体验，不把芯片 read 当作看完整部。
-- 分段可有 media 附件（link/image/video/audio，url、label，可选 caption；video 可有 poster、captionsUrl），只引用已经确立可用的本地资源、用户提供链接或素材库地址，不编造网址。附件随原文定稿；正文可引用标签，不写 HTML。链接、标签和说明不证明远端内容或世界事实，界面加载也不代表角色已经联网、读取未解密部分或消耗游戏时间。
-- 原文是文件的说法，可以有错、被剪辑或撒谎，不等于证实世界真相。调查通过正文追问与已有设备规则承接。重读保持固定内容；普通教程、音乐、私人便条与成年作品可平静结束，不强加阴谋、伤害、任务或关系奖励。文风和篇幅由写作预设负责。`,
+  judge: `- 【当前状态】里的「神经芯片槽」是角色此刻插在颈后运行的技能/行为协议芯片，写着的能力是真实客观条件，与义体同等采信；拔出即失效，不提供任何属性数值或骰点加值。
+- 未加密、无隐患的芯片可直接插个人颈后槽读取；但未知来源、带毒（malware）或带黑冰（black-ice）的芯片若未经隔离读写器（chip-reader-writer）沙盒查毒就直插读取，按具体威胁裁决反噬（神经症状、具体伤势或义体损坏）。
+- 离线破译加密芯片依赖完好网络接入仓（可配合隔离读写器沙盒操作），按加密等级（standard / corp / military）与硬件条件定性裁决。`,
+  narrate: `- 买到或捡到芯片只是拿在手里，不代表角色已经插入或读过内容。未解密的加密分段在破译前读不到正文；隐藏病毒或黑冰在查毒或触发反噬前角色不知情。
+- 芯片和档案里的文字只是记录方的说法，可能撒谎、片面或被篡改，不自动成为客观真相；插在颈后神经芯片槽里的技能或行为协议按真实效果融入动作表现，拔出即失效。`,
+  text: `- 芯片分五类：intel 情报资料、daemon 加密魔偶（含加密信用芯片/陷阱）、skill 技能协议、braindance 超梦卷轴、behavior 行为协议。买到或捡到只登记物品，不自动读取或插槽。
+- 安全未加密芯片可直接通过颈后槽读（chip read，device 可省略）；未知来历芯片可先用隔离读写器沙盒查毒（chip inspect，device 填 chip-reader-writer）；有加密分段须有完好网络接入仓离线破译（chip decrypt，按需写 cleanHazard 清毒、extractEddies 提取信用芯片欧元）。
+- skill / behavior 芯片用 chip equip 插入个人神经芯片槽（上限 ${NEURAL_CHIP_SLOTS} 槽，同款协议不可重复叠加）立即生效，拔出用 chip unequip；behavior 芯片须先装完好的 doll-behavior-chip，插拔时会自动联动切换其 protocol / off 状态，无需另发重复切态。
+- 新确立载体内容用 chip define 登记，刻录副本用 chip copy（需读写器与空白芯片 blank-shard，信用芯片欧元不可复制）。现场零散邮件/日记/录音用 shard 快捷归档。
+- 文件原文是记录方的说法，可能撒谎或被篡改，不自动成为世界真相；媒体附件（media）只引用已确立资源，不编造链接。`,
 };
 
 function recallScore(shard: Shard, context?: SectionContext): number {
@@ -47,6 +61,67 @@ function recallScore(shard: Shard, context?: SectionContext): number {
   return score;
 }
 
+const GENERIC_CHIP_TOKENS = new Set([
+  "芯片",
+  "资料",
+  "情报",
+  "技能",
+  "行为",
+  "协议",
+  "加密",
+  "密钥",
+  "信用",
+  "卷轴",
+  "超梦",
+  "调查",
+  "原片",
+  "数据",
+  "副本",
+  "简报",
+  "须知",
+  "速查",
+  "实时",
+  "神经",
+  "改装",
+  "现场",
+  "已提空",
+]);
+
+function chipKeywords(title: string, name: string): string[] {
+  const raw = `${title} ${name}`;
+  const chunks = raw
+    .split(/[·：:（）()「」《》、\s/\\-]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2);
+  const tokens = new Set<string>();
+  for (const chunk of chunks) {
+    if (!GENERIC_CHIP_TOKENS.has(chunk)) tokens.add(chunk);
+    // 针对 4 字以上连写中文标题提取常见 2–4 字区分片段（如“歌舞伎黑市风声”→“歌舞伎”“黑市”“风声”）
+    if (/^[\p{Script=Han}]{4,}$/u.test(chunk)) {
+      for (const size of [3, 2]) {
+        for (let i = 0; i + size <= chunk.length; i += size) {
+          const piece = chunk.slice(i, i + size);
+          if (!GENERIC_CHIP_TOKENS.has(piece)) tokens.add(piece);
+        }
+      }
+    }
+  }
+  return [...tokens];
+}
+
+function hasIntactDeckInWorld(context: SectionContext): boolean {
+  const cyber = CyberwareStateSchema.safeParse(context.world.slices.cyberware ?? {});
+  const health = HealthStateSchema.safeParse(context.world.slices.health ?? {});
+  const hacking = HackingStateSchema.safeParse(context.world.slices.hacking ?? {});
+  if (!cyber.success || !health.success || !hacking.success) return false;
+  const deck = hacking.data.deck;
+  return (
+    !!deck &&
+    cyber.data.installed.some((c) => c.id === deck) &&
+    !health.data.brokenChrome.includes(deck)
+  );
+}
+
 function carrierLines(
   state: ShardsState,
   context: SectionContext,
@@ -64,30 +139,66 @@ function carrierLines(
   });
   const input = context.input.text;
   const reading =
-    /读|播放|听|打开|查看内容|看一下|看看|重看|回放|翻阅/.test(input) &&
-    !/不读|不看|先别|不要|只看标签|只看简介|能不能|可以.*[读看]|怎么读|多少钱|询价/.test(input);
+    /(?:读|插|看|听|打开|破译|解密|破解|解开|查毒|查验|扫描|重看|翻阅|翻看|提取|解析|解码|念|运行|刷入|启用)/.test(
+      input,
+    ) && !/不读|不看|先别|不要|只看标签|只看简介|多少钱|询价/.test(input);
+  const decrypting = /(?:破译|解密|破解|解开|提取)/.test(input) && hasIntactDeckInWorld(context);
+  const categoryCounts = new Map<string, number>();
+  for (const item of carried) {
+    categoryCounts.set(item.content.category, (categoryCounts.get(item.content.category) ?? 0) + 1);
+  }
   const lines: string[] = [];
   for (const { id, def, content } of carried) {
+    const slotted = state.slots.some((s) => s.carrier === id);
+    const inspected = state.inspected.includes(id);
+    const hazard = activeChipHazard(state, id, content);
+    const eddiesLeft = content.eddies > 0 && !state.drained.includes(id) ? content.eddies : 0;
+    const tags = [
+      CHIP_CATEGORY_LABELS[content.category],
+      ...(slotted ? ["已插槽运行中"] : []),
+      ...(content.encryption !== "none" ? [CHIP_ENCRYPTION_LABELS[content.encryption]] : []),
+      ...(hazard !== "none"
+        ? [
+            inspected
+              ? `已检出${CHIP_HAZARD_LABELS[hazard]}`
+              : `隐藏隐患:${CHIP_HAZARD_LABELS[hazard]}(角色未查毒未知)`,
+          ]
+        : []),
+      ...(eddiesLeft > 0 ? [`含 ${eddiesLeft} 欧元凭证`] : []),
+      ...(content.braindance ? [`超梦作品 ${content.braindance}`] : []),
+      ...(content.protocol ? [`协议 ${content.protocol}`] : []),
+    ];
     lines.push(
-      `载体 ${id} ${def.name} → 内容 ${content.id}《${content.title}》｜${content.purpose}｜${content.summary}${content.braindance ? `｜超梦作品 ${content.braindance}` : ""}${content.requirements.length ? `｜实际所需设备 ${content.requirements.join("、")}` : ""}${content.ability ? `｜固定功能 ${content.ability}` : ""}`,
+      `载体 ${id} ${def.name} → 《${content.title}》（${content.id}）｜${tags.join("｜")}｜${content.summary}${content.ability ? `｜槽位能力：${content.ability}` : ""}`,
     );
+    const categoryLabel = CHIP_CATEGORY_LABELS[content.category];
     const selected =
       input.includes(id) ||
       input.includes(content.id) ||
       input.includes(content.title) ||
       input.includes(def.name) ||
-      carried.length === 1;
+      carried.length === 1 ||
+      ((categoryCounts.get(content.category) ?? 0) === 1 &&
+        (input.includes(categoryLabel) ||
+          (content.category === "daemon" && /(?:加密|信用|黑冰|病毒)/.test(input)) ||
+          (content.category === "intel" && /(?:情报|资料)/.test(input)) ||
+          (content.category === "skill" && /技能/.test(input)) ||
+          (content.category === "behavior" && /行为/.test(input)))) ||
+      chipKeywords(content.title, def.name).some((kw) => input.includes(kw));
     for (const part of content.parts) {
-      const readable = readableChipPart(state, content, part.id);
+      const readable = readableChipPart(state, id, content, part.id);
       lines.push(
-        `  段落 ${part.id} ${part.label}：${readable ? "可读取" : `受保护，网络 ${part.protectionNetwork}`}`,
+        `  段落 ${part.id} ${part.label}：${readable ? "可读取" : `已加密（${CHIP_ENCRYPTION_LABELS[content.encryption]}，${context.stage === "narrate" ? "未破译前不可读" : "需先 decrypt"}）`}`,
       );
+      if (context.stage === "judge") continue;
       if (reading && selected && readable) {
-        lines.push(`  【仅供本轮实际读取的固定材料；未执行读取前不算角色已知】${part.text}`);
-        if (part.media?.length)
-          lines.push(
-            `  同段固定媒体附件（按原元数据呈现，不推断资源内未知内容）：${JSON.stringify(part.media)}`,
-          );
+        lines.push(`  【本轮可读取固定材料】${part.text}`);
+        if (part.media?.length && context.stage === "extract")
+          lines.push(`  同段媒体元数据：${JSON.stringify(part.media)}`);
+      } else if (context.stage === "narrate" && decrypting && selected && !readable) {
+        lines.push(
+          `  【仅当本轮裁决允许破译成功时可见的密文；若裁决为 blocked 或本轮未破译，严禁在正文泄露】${part.text}`,
+        );
       }
     }
   }
@@ -114,19 +225,19 @@ export function shardsSection(state: ShardsState, context?: SectionContext): str
   );
   for (let index = Math.max(0, state.shards.length - 3); index < state.shards.length; index++)
     selected.add(index);
-  if (selected.size) lines.push("已实际读过的原文（资料的说法，未必属实；交出载体后仍可引用）：");
+  if (selected.size) lines.push("已读档案（资料说法未必属实；交出载体后仍记得）：");
   for (const index of [...selected].sort((a, b) => a - b)) {
     const shard = state.shards[index];
     if (!shard) continue;
     lines.push(
-      `- #${shard.id} ${shard.contentId}/${shard.partId}［${SHARD_KIND_LABELS[shard.kind]}］${shard.title}${shard.from ? `（${shard.from}）` : ""}｜${formatGameTime(shard.at)}${shard.carrier ? `｜来自载体 ${shard.carrier}` : ""}：${shard.text}`,
+      `- #${shard.id} ${shard.contentId}/${shard.partId}［${CHIP_CATEGORY_LABELS[shard.category]}·${SHARD_KIND_LABELS[shard.kind]}］${shard.title}${shard.from ? `（${shard.from}）` : ""}｜${formatGameTime(shard.at)}${shard.carrier ? `｜载体 ${shard.carrier}` : ""}：${shard.text}`,
     );
-    if (shard.media?.length)
-      lines.push(`  已归档媒体元数据：${JSON.stringify(shard.media)}；不据链接补出未知内容。`);
+    if (shard.media?.length && context?.stage === "extract")
+      lines.push(`  已归档媒体元数据：${JSON.stringify(shard.media)}`);
   }
   if (state.shards.length > selected.size)
     lines.push(
-      `另有 ${state.shards.length - selected.size} 段已读原文持续保存在阅读档案，按资料名、来源或有关人物地点引用可再次召回，不代表丢失。`,
+      `另有 ${state.shards.length - selected.size} 段已读档案保存在芯片库，可按标题、来源或关联人地召回。`,
     );
   return lines.length ? lines.join("\n") : undefined;
 }

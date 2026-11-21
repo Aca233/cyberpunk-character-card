@@ -185,6 +185,7 @@ export function withWorldObjects(
   const base = Array.isArray(data.items) ? data.items.filter((item) => !objects[item.id]) : [];
   const merged = {
     ...data,
+    baseData: data,
     worldObjects: objects,
     items: [...base, ...Object.values(objects).map((o) => o.definition)],
   };
@@ -356,7 +357,7 @@ export function applyPlaceItem(
       return fail(`指定来源没有足够的${def.name}`);
     moveObject(draft, id, holder, location, now, summary);
     mergePlaced(draft, { item: id, count, kind, target, location, note, since: now });
-    return ok();
+    return { ok: true, notes: [], signals: ["inventory.changed"] };
   }
 
   if (command.source !== undefined) return fail("取回物品不指定随身来源");
@@ -590,8 +591,14 @@ export function applyItem(
           now,
           command.reason,
         );
-      return result.ok && toNpc
-        ? { ...result, emit: [{ type: "npcGear", id: toNpc.id, action: "add", item: def.id }] }
+      return result.ok
+        ? {
+            ...result,
+            signals: ["inventory.changed"],
+            ...(toNpc
+              ? { emit: [{ type: "npcGear", id: toNpc.id, action: "add", item: def.id }] }
+              : {}),
+          }
         : result;
     }
     case "equip":
@@ -635,9 +642,65 @@ export function applyChipWrite(
     destination.copiedFrom = command.source;
   }
   destination.definition.chipContentId = command.contentId;
+  if (command.title) {
+    destination.definition.name = command.source
+      ? `芯片副本·${command.title}`
+      : `数据芯片·${command.title}`;
+  }
   destination.changedAt = now;
   destination.lastChange = command.reason;
   return ok("内容已经写入实际载体；写入不等于角色已经阅读");
+}
+
+/** 信用芯片提空后同步降低载体残值与名称标识，防止空壳按原价倒卖。 */
+export function applyChipDrain(
+  draft: Inventory,
+  command: Extract<InventoryInternal, { type: "inventory.chipDrain" }>,
+  now: number,
+): ApplyOutcome {
+  const carrier = draft.objects[command.carrier];
+  if (!carrier) return ok();
+  carrier.definition.price = 20;
+  if (!carrier.definition.name.includes("已提空")) {
+    carrier.definition.name = `${carrier.definition.name}（已提空）`;
+  }
+  carrier.changedAt = now;
+  carrier.lastChange = command.reason;
+  return ok();
+}
+
+/** 超梦录制系统生成新的物理卷轴载体，幂等放入随身背包。 */
+export function applyChipMint(
+  draft: Inventory,
+  command: Extract<InventoryInternal, { type: "inventory.chipMint" }>,
+  now: number,
+  location: string | null = null,
+): ApplyOutcome {
+  const existing = draft.objects[command.id];
+  if (existing) {
+    if (existing.definition.chipContentId === command.contentId) return ok();
+    return fail(`载体 ${command.id} 已存在且关联不同内容`);
+  }
+  const definition: ItemDef = {
+    id: command.id,
+    name: command.name,
+    kind: "misc",
+    iconic: false,
+    chipContentId: command.contentId,
+    ...(command.ability ? { ability: command.ability } : {}),
+  };
+  draft.objects[command.id] = {
+    kind: "story",
+    definition,
+    origin: command.origin,
+    holder: "player",
+    location,
+    changedAt: now,
+    lastChange: command.reason,
+    remaining: null,
+  };
+  put(draft, command.id);
+  return ok(`生成实体超梦载体：${command.name}`);
 }
 
 /** 失去整件武器（含其已安装改装件） */
@@ -749,8 +812,17 @@ function use(
       return fail("治疗品用 heal 指令（source: maxdoc）结算");
     case "grenade":
       return spend(draft, "grenade", catalog, def.id, now);
-    case "consumable":
-      return take(draft, def.id) ? ok(`用掉 ${def.name}`) : fail(`背包里没有 ${def.name}`);
+    case "consumable": {
+      if (!take(draft, def.id)) return fail(`背包里没有 ${def.name}`);
+      if (def.id === "nicola" || def.id === "hawtdawg" || def.id === "coffee") {
+        return {
+          ok: true,
+          notes: [`用掉 ${def.name}`],
+          emit: [{ type: "world.rest", mode: "relief", minutes: 0, reason: `享用${def.name}` }],
+        };
+      }
+      return ok(`用掉 ${def.name}`);
+    }
     case "misc":
       return (draft.backpack[def.id] ?? 0) > 0
         ? ok(`使用 ${def.name}`)

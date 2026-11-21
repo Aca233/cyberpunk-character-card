@@ -80,6 +80,20 @@ export function weaponDisplayNames(
     list.sort((a, b) => weaponSeqOf(a) - weaponSeqOf(b) || a.localeCompare(b));
   }
 
+  const chipGroups = new Map<string, string[]>();
+  for (const id of idList) {
+    const obj = objects[id];
+    if (obj && obj.kind !== "customized" && id.startsWith("chip:")) {
+      const nameKey = obj.definition.name;
+      const list = chipGroups.get(nameKey) ?? [];
+      list.push(id);
+      chipGroups.set(nameKey, list);
+    }
+  }
+  for (const list of chipGroups.values()) {
+    list.sort((a, b) => weaponSeqOf(a) - weaponSeqOf(b) || a.localeCompare(b));
+  }
+
   const out = new Map<string, string>();
   for (const id of idList) {
     const obj = objects[id];
@@ -98,6 +112,14 @@ export function weaponDisplayNames(
       }
     } else if (customizedByBase.has(id)) {
       out.set(id, `${baseName}（未改装）`);
+    } else if (obj && id.startsWith("chip:")) {
+      const siblings = chipGroups.get(obj.definition.name) ?? [id];
+      if (siblings.length > 1) {
+        const idx = siblings.indexOf(id) + 1;
+        out.set(id, `${obj.definition.name} #${idx}`);
+      } else {
+        out.set(id, obj.definition.name);
+      }
     } else {
       out.set(id, def?.name ?? id);
     }

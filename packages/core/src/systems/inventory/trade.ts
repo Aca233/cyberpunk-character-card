@@ -1,12 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import {
-  agreedQuote,
-  CommerceStateSchema,
-  checkNarratedPurchase,
-  registeredParty,
-} from "../commerce";
+import { agreedQuote, checkNarratedPurchase, registeredParty } from "../commerce";
 import {
   CyberwareStateSchema,
   clinicProvider,
@@ -18,7 +13,7 @@ import { type EconomyState, MONEY_CAP, type Rarity, SERVICES } from "../economy"
 import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
 import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
-import { merchantAt, merchantServices, merchantSites, type WorldClockState } from "../world";
+import { merchantAt, merchantServices, type WorldClockState } from "../world";
 import { applyItem, itemCatalog, shopList, withWorldObjects } from "./apply";
 import { ensureMerchant, merchantState, shopUnavailable, withMerchants } from "./merchants";
 import { moodLock, moodPrice, shopMood } from "./mood";
@@ -184,49 +179,13 @@ export function quoteTrade(
     ...(request.offer ? { offer: request.offer } : {}),
   });
   if (!match.ok) return match;
-  if (
-    request.action === "service" &&
-    ["bd-session", "adult-service"].includes(request.service ?? "")
-  ) {
-    if (!request.offer || !match.quote?.session)
-      return { ok: false, reason: "先明确本次主体、范围、价格、时长与中止条件，再接受指定报价" };
+  if (request.action === "service" && request.service === "adult-service" && party.npc) {
+    const subject = party.npc;
     if (
-      Object.values(CommerceStateSchema.parse(world.slices.commerce ?? {}).sessions).some((s) =>
-        ["active", "paused"].includes(s.status),
-      )
+      (subject.age !== undefined && subject.age < 18) ||
+      !(subject.adult === true || (subject.age !== undefined && subject.age >= 18))
     )
-      return { ok: false, reason: "当前体验尚未结束；先继续或明确中止，再接受新体验" };
-    const terms = match.quote.session;
-    if (request.service === "bd-session") {
-      const snapshot = world.slices.braindance as
-        | { works?: Record<string, { id: string; durationMinutes: number }> }
-        | undefined;
-      const saved = (data.braindanceWorks ?? snapshot?.works ?? {}) as Record<
-        string,
-        { id: string; durationMinutes: number }
-      >;
-      const fixed = Array.isArray(data.braindances)
-        ? (data.braindances as { id: string; durationMinutes: number }[])
-        : [];
-      const work = saved[terms.subject] ?? fixed.find((row) => row.id === terms.subject);
-      if (!work || !Number.isInteger(work.durationMinutes) || work.durationMinutes < 1)
-        return { ok: false, reason: "这部作品尚未确立，先选定实际目录再确认体验" };
-      const site = merchantSites(data).get(party.id);
-      if (!site?.braindanceDevice?.playback)
-        return { ok: false, reason: "提供者没有已确立的现场超梦设备，不能先收取播放费用" };
-      if (!site.braindanceWorks.includes(terms.subject))
-        return { ok: false, reason: "提供者没有登记这部作品的店内播放来源，不能收取体验费用" };
-    }
-    if (request.service === "adult-service") {
-      const subject = (world.slices.npc as NpcState).npcs[terms.subject];
-      if (!subject?.alive || subject.location !== location)
-        return { ok: false, reason: "本次服务者必须已确立身份、在场且能够提供服务" };
-      if (
-        (subject.age !== undefined && subject.age < 18) ||
-        !(subject.adult === true || (subject.age !== undefined && subject.age >= 18))
-      )
-        return { ok: false, reason: "只有已明确确认成年的服务者才能接受成人服务约定" };
-    }
+      return { ok: false, reason: "只有已明确确认成年的服务者才能接受成人服务" };
   }
   const mood = shop ? shopMood(world, data, shop) : undefined;
   const itemObject = item ? inventory.objects[item.id] : undefined;
@@ -357,7 +316,6 @@ export function applyTrade(
     action: command.action,
     target: quoted.item?.id ?? (command.service as string),
     price: quoted.price,
-    ...(quoted.quote?.session ? { sessionOffer: quoted.quote.id } : {}),
   });
   if (changed) return { ok: false, reason: changed };
   const emitted: Command[] = [];
@@ -430,13 +388,80 @@ export function applyTrade(
       delta: command.action === "sell" ? quoted.price : -quoted.price,
       reason: `${quoted.party.name}：${quoted.label}，${command.reason}`,
     });
-  if (quoted.quote?.session) emitted.push({ type: "commerce.servicePaid", id: quoted.quote.id });
+  const serviceNotes: string[] = [];
+  if (command.action === "service" && command.service) {
+    const heat = world.slices.heat as { stars?: number } | undefined;
+    switch (command.service) {
+      case "meal":
+        emitted.push({
+          type: "world.rest",
+          mode: "relief",
+          minutes: 20,
+          reason: `在${quoted.party.name}吃了一顿`,
+        });
+        break;
+      case "drink":
+        emitted.push({
+          type: "world.rest",
+          mode: "relief",
+          minutes: 15,
+          reason: `在${quoted.party.name}喝了一杯`,
+        });
+        break;
+      case "lodging":
+        emitted.push({
+          type: "world.rest",
+          mode: "reset",
+          minutes: 360,
+          reason: `在${quoted.party.name}住了一晚`,
+        });
+        break;
+      case "medical":
+        emitted.push({
+          type: "heal",
+          source: "ripperdoc",
+          reason: `${quoted.party.name}：${command.reason}`,
+        });
+        break;
+      case "fine":
+        if ((heat?.stars ?? 0) > 0) {
+          emitted.push({
+            type: "heat.relief",
+            reason: `缴纳罚款：${command.reason}`,
+          });
+        } else {
+          serviceNotes.push("当前无通缉星级，罚款用于平息纠纷");
+        }
+        break;
+      case "favor":
+        if (quoted.party.npc) {
+          emitted.push({
+            type: "affinity",
+            npc: quoted.party.npc.id,
+            delta: 1,
+            reason: `打点示好：${command.reason}`,
+          });
+        }
+        break;
+      case "cab":
+        serviceNotes.push("已付车资；实际到达地点由出行或地点指令落盘");
+        break;
+      case "info":
+        serviceNotes.push(`已向${quoted.party.name}付清情报费`);
+        break;
+      case "bd-session":
+      case "adult-service":
+        break;
+    }
+  }
   if (quoted.quote) emitted.push({ type: "commerce.used", id: quoted.quote.id });
   return {
     ok: true,
     notes: [
       `${command.action === "sell" ? "卖出" : command.action === "buy" ? "取得" : "支付"}${quoted.label}，${quoted.price} 欧元（${quoted.party.name}）`,
+      ...serviceNotes,
     ],
     emit: emitted,
+    ...(command.action === "sell" ? { signals: ["inventory.changed"] } : {}),
   };
 }

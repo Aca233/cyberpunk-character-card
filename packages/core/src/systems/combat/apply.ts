@@ -71,7 +71,7 @@ function districtHere(ctx: SystemContext): string | null {
 const NETRUNNER_LOOT_IDS = new Set([
   "emp-grenade",
   "recon-grenade",
-  "shard",
+  "blank-shard",
   "glitter",
   "netrunner-suit",
 ]);

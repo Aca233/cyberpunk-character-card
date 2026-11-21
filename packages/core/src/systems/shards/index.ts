@@ -2,7 +2,7 @@ import { defineSystem } from "../../kernel/system";
 import type { InventoryState } from "../inventory";
 import type { WorldClockState } from "../world";
 import { shardsActions } from "./actions";
-import { applyChip, applyShard, chipContentCatalog, readShards } from "./apply";
+import { applyChip, applyShard, chipContentCatalog, pruneSlots, readShards } from "./apply";
 import { shardsRules, shardsSection } from "./prompt";
 import {
   type ChipCommand,
@@ -10,22 +10,42 @@ import {
   type ShardCommand,
   ShardCommandSchema,
   ShardReadSchema,
+  ShardRegisterSchema,
   type ShardsInternal,
   type ShardsState,
   ShardsStateSchema,
 } from "./schema";
+import { shardsStatus } from "./status";
 import { shardsView } from "./view";
 
-/** 芯片：录音、邮件、日记统一收进数据库页；原文是玩家读到的，玩家和叙事模型看的是同一份 */
+/** 神经芯片与资料库：个人 2 槽即时协议、隔离查毒、离线破译与阅读档案 */
 export const shards = defineSystem<ShardsState, ShardCommand | ChipCommand, ShardsInternal>({
   id: "shards",
-  dependsOn: ["inventory", "world", "cyberware", "health", "hacking"],
+  dependsOn: ["inventory", "world", "cyberware", "health", "hacking", "economy"],
   state: ShardsStateSchema,
-  initial: () => ({ shards: [], nextShard: 1, contents: {}, unlocked: {} }),
+  initial: () => ({
+    shards: [],
+    nextShard: 1,
+    contents: {},
+    unlocked: {},
+    inspected: [],
+    cleansed: [],
+    drained: [],
+    slots: [],
+  }),
   commands: { shard: ShardCommandSchema, chip: ChipCommandSchema },
-  internal: { "shards.read": ShardReadSchema },
+  internal: {
+    "shards.read": ShardReadSchema,
+    "shards.register": ShardRegisterSchema,
+  },
   apply(draft, command, ctx) {
     if (command.type === "shards.read") return readShards(draft, command.ids);
+    if (command.type === "shards.register") {
+      if (!chipContentCatalog(ctx.data, draft).has(command.content.id)) {
+        draft.contents[command.content.id] = command.content;
+      }
+      return { ok: true };
+    }
     if (command.type === "chip") return applyChip(draft, command, ctx);
     if (chipContentCatalog(ctx.data, draft).has(command.contentId))
       return {
@@ -42,11 +62,16 @@ export const shards = defineSystem<ShardsState, ShardCommand | ChipCommand, Shar
     }
     return applyShard(draft, command, ctx.now, ctx.read<WorldClockState>("world").location);
   },
+  on: {
+    "inventory.changed": (draft, ctx) => pruneSlots(draft, ctx),
+    "cyberware.changed": (draft, ctx) => pruneSlots(draft, ctx),
+  },
   rules: [shardsRules],
+  status: shardsStatus,
   sections: [
     {
       order: 160,
-      title: "读过的芯片",
+      title: "神经芯片与档案",
       render: (context) =>
         shardsSection(ShardsStateSchema.parse(context.world.slices.shards ?? {}), context),
     },
@@ -59,4 +84,5 @@ export * from "./actions";
 export * from "./apply";
 export * from "./prompt";
 export * from "./schema";
+export * from "./status";
 export * from "./view";

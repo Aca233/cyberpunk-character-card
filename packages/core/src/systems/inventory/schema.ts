@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Attribute, AttributeSchema, type WeaponConcealment, type WeaponNoise } from "../dice";
+import type { WeaponConcealment, WeaponNoise } from "../dice";
 import { RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
@@ -34,6 +34,28 @@ export const CLOTHING_SLOT_LABELS: Readonly<Record<ClothingSlot, string>> = {
   inner: "内衣",
   legs: "腿部",
   feet: "鞋子",
+};
+
+/** 服装定性风格标签（无护甲数值，用于门禁体面、阶层第一印象与街区融入） */
+export const ClothingStyleSchema = z.enum([
+  "corpo",
+  "street",
+  "nomad",
+  "tactical",
+  "formal",
+  "workwear",
+  "netrunner",
+]);
+export type ClothingStyle = z.infer<typeof ClothingStyleSchema>;
+
+export const CLOTHING_STYLE_LABELS: Readonly<Record<ClothingStyle, string>> = {
+  corpo: "公司正装",
+  street: "街头便装",
+  nomad: "恶土流浪",
+  tactical: "战术安保",
+  formal: "体面礼装",
+  workwear: "工装劳务",
+  netrunner: "黑客潜网",
 };
 
 /** 武器类别，按原作 */
@@ -86,41 +108,20 @@ export const WEAPON_TYPE_LABELS: Readonly<Record<WeaponType, string>> = {
 
 const MELEE: ReadonlySet<WeaponCategory> = new Set(["blade", "blunt"]);
 
-/** 武器用哪项属性检定（照原作 2.0）：技术武器用技术，智能武器用智能，其余按类别 */
-export function weaponAttribute(category: WeaponCategory, type?: WeaponType): Attribute {
-  if (type === "tech") return "tech";
-  if (type === "smart") return "intelligence";
-  switch (category) {
-    case "shotgun":
-    case "lmg":
-    case "blunt":
-      return "body";
-    case "blade":
-    case "assaultRifle":
-    case "smg":
-      return "reflexes";
-    case "pistol":
-    case "revolver":
-    case "precisionRifle":
-    case "sniperRifle":
-      return "cool";
-  }
-}
-
 /** 物品表的一条；数据在 content 包的 items.ts，结算时通过 ctx.data.items 传入 */
 export const ItemDefSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     kind: ItemKindSchema,
-    /** 武器用哪项属性检定 */
-    attribute: AttributeSchema.optional(),
     /** 治疗品和手雷：一份实际补给内的可用数量 */
     charges: z.number().int().min(1).optional(),
     /** 治疗品：每次回复生命上限的百分之几 */
     healPercent: z.number().int().min(1).max(100).optional(),
     /** 不朽物品（原作的 Iconic）：只能从剧情获得 */
     iconic: z.boolean().default(false),
+    /** 非市售证件/专属物件（如公司工牌、NCPD 警徽）：不在常规商铺上架，只能由开局出身、剧情或人物取得 */
+    untradable: z.boolean().optional(),
     price: z.number().int().min(0).optional(),
     rarity: RaritySchema.optional(),
     /** 非武器大件的粗略携带负担，不是公斤；普通小物不填，首次登记时定下。 */
@@ -137,6 +138,10 @@ export const ItemDefSchema = z
     lockedModSlots: z.array(ModSlotSchema).optional(),
     /** 服装穿在哪一格；服装必须写 */
     clothingSlot: ClothingSlotSchema.optional(),
+    /** 服装定性风格标签（无护甲数值，供第一印象、伪装与门禁体面参考） */
+    clothingStyle: ClothingStyleSchema.optional(),
+    /** 服装是否自带宽大衣摆或暗袋，便于遮掩风衣档短枪/小型武器 */
+    concealsCoatWeapon: z.boolean().optional(),
     /** 改装件装在武器的哪个位置；改装件必须写 */
     modSlot: ModSlotSchema.optional(),
     /** 改装件能装到哪些类别的武器上；改装件必须写 */
@@ -159,7 +164,7 @@ export const ItemDefSchema = z
     braindanceDevice: z
       .object({
         playback: z.boolean(),
-        analysis: z.array(z.enum(["observe", "audio", "thermal"])),
+        analysis: z.array(z.enum(["visual", "audio", "thermal"])),
       })
       .optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
@@ -175,8 +180,6 @@ export const ItemDefSchema = z
       if (item.category === undefined) report("武器必须写明类别");
       else if (MELEE.has(item.category) && item.weaponType !== undefined) {
         report("近战武器没有威能、技术、智能之分");
-      } else if (item.attribute !== weaponAttribute(item.category, item.weaponType)) {
-        report(`按类别和类型应该用${weaponAttribute(item.category, item.weaponType)}检定`);
       }
       if (item.category !== undefined) {
         const allowedSlots = defaultWeaponSlots(item);
@@ -488,7 +491,7 @@ export const TradeCommandSchema = z
       .describe("buy 买物品，sell 卖物品，service 买服务（含超梦按次与成年从业者服务）"),
     item: z.string().min(1).optional().describe("buy 和 sell 写物品表里的 id"),
     service: ServiceSchema.optional().describe(
-      "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点，bd-session 店内超梦，adult-service 成年从业者服务；后两项必须引用完整条件的 offer",
+      "service 写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点，bd-session 店内超梦，adult-service 成年从业者服务",
     ),
     offer: z
       .string()
@@ -549,7 +552,24 @@ export const InventoryInternalSchemas = {
     type: z.literal("inventory.chipWrite"),
     destination: z.string().min(1),
     contentId: z.string().min(1),
+    title: z.string().min(1).max(80).optional(),
     source: z.string().min(1).optional(),
+    reason: z.string().min(1).max(240),
+  }),
+  /** 资料系统：信用芯片欧元已提空，将实体载体参考价降至空壳残值，防倒卖套利。 */
+  "inventory.chipDrain": z.strictObject({
+    type: z.literal("inventory.chipDrain"),
+    carrier: z.string().min(1),
+    reason: z.string().min(1).max(240),
+  }),
+  /** 超梦录制系统：将新录制的原片生成物理载体放入随身背包。 */
+  "inventory.chipMint": z.strictObject({
+    type: z.literal("inventory.chipMint"),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    contentId: z.string().min(1),
+    ability: z.string().min(1).optional(),
+    origin: z.string().min(1).max(240),
     reason: z.string().min(1).max(240),
   }),
   "inventory.spend": z.object({ type: z.literal("inventory.spend"), slot: QuickSlotNameSchema }),
