@@ -1,11 +1,11 @@
 # 2077 时间线重构与预制 NPC 内容扩充计划
 
-- **状态**：进行中（2026-11-21）
+- **状态**：已完成（2026-11-21）
 - **范围**：
   1. 以 **2077 自由沙盘**为核心重构时间线，修复游戏内天数重置与新闻错位 Bug，清理 2075 残留冲突。
-  2. 升级 NPC 档案结构并全面深化现有 41 位 2077 预制 NPC（背景履历、秘密、年龄、常驻/出没地点、更多示范台词、开局近况）。
-  3. 预置 2077 核心人物之间的双向初始关系网（`ties`），告别开局孤岛。
-  4. 补齐 18 位关键 2077 预制 NPC（含已有店铺/诊所的具名店主与城内重要势力/剧情人物），并将店铺 `keeperNpc` 绑定。
+  2. 升级 NPC 档案结构并全面深化现有 48 位 2077 预制 NPC（41 位原作 + 7 位日常街坊：背景履历、秘密、年龄、常驻/出没地点、更多示范台词、开局近况）。
+  3. 预置 2077 核心人物之间的 **56 组双向初始关系网（`ties`）**，告别开局孤岛。
+  4. 补齐 **18 位关键 2077 预制 NPC**（总计 **66 位**，含已有店铺/诊所的具名店主与城内重要势力/剧情人物），并将店铺 `keeperNpc` 绑定。
 - **遵循约束**：
   - 制作阶段不做历史兼容，直接收口为 2077 自由沙盘架构。
   - 不改动前端界面布局与样式；亲密/红灯区相关设定保持克制写实、不直写露骨细节。
@@ -54,12 +54,12 @@
 - `GameContent` 新增 `npcTies?: readonly InitialNpcTie[]`，在 `newGameWorld()` 种子人物入库后自动写入双向初始 `ties`（公开与暗地关系）。
 - 同步更新 `npc/prompt.ts`（`fullCard`、`localFaces`）、`npc/sections.ts`（`formatEverydayCard`）、`narrator/offscreen.ts`（`card`）。
 
-### 2.2 现有 41 位 2077 预制 NPC 全面深化
-- `packages/content/src/npcs.ts`（清理 3 位 2075 已故人物，保留并全面重写深化 34 位 2077 原作人物）
+### 2.2 现有 48 位 2077 预制 NPC 全面深化
+- `packages/content/src/npcs.ts`（清理 3 位 2075 已故人物，保留并全面重写深化 41 位 2077 原作人物）
 - `packages/content/src/everydayLife.ts`（深化 7 位日常街坊与红灯区人物）
 - 全员补齐：`age`、`adult`、`entity`、`bio`、`secret`、校准 `role`、更立体的 `look/outfit/voice`、至少 3 句差异化 `samples`、`home/hangouts`、`initialDoing`。
 
-### 2.3 新增 18 位关键 2077 预制 NPC（总计 59 位）
+### 2.3 新增 18 位关键 2077 预制 NPC（总计 66 位）
 - **常驻店主补卡（3 位，并绑定 `shops.ts` / `ripperdocs.ts` `keeperNpc`）**：
   - `wilson`（罗伯特·威尔逊 / H10 枪店）、`atao`（阿涛 / 歌舞伎黑市武器摊）、`needle`（针眼 / 歌舞伎黑市义体医生）
 - **丽姿酒吧 / 云顶 / 扭扭街生态（5 位）**：
@@ -70,14 +70,14 @@
   - `oda`（小田三太夫 / 华子贴身保镖）、`jefferson-peralez`（杰弗逊·佩拉莱斯 / 市长候选人）、`elizabeth-peralez`（伊丽莎白·佩拉莱斯 / 竞选智囊）、`bryce-mosley`（布莱斯·莫斯利 / 网监外勤探员）、`delamain`（德拉曼 / 出租车公司核心 AI）、`blue-moon`（蓝月亮 / 刚烈主唱）
 
 ### 2.4 预置双向初始关系网（`packages/content/src/npcTies.ts`）
-- 覆盖沃森/海伍德街坊圈、丽姿与云顶生态、来生与中间人圈、荒坂帝国权力网、阿德卡多与恶土、漩涡帮/巫毒帮/动物帮/网监对峙、往日之影狗镇暗线、市政与演艺圈，共约 50 组公开与暗地双向关系。
+- 覆盖沃森/海伍德街坊圈、丽姿与云顶生态、来生与中间人圈、荒坂帝国权力网、阿德卡多与恶土、漩涡帮/巫毒帮/动物帮/网监对峙、往日之影狗镇暗线、市政与演艺圈，共 **56 组**公开与暗地双向关系。
 
 ---
 
 ## 三、实施步骤与进度追踪
 
-- [x] Step 1：落盘计划文档并提交
-- [ ] Step 2：升级 `packages/core` 时间线、时钟 Bug 修复、NPC Schema/Prompt/Seed/Ties 支持
-- [ ] Step 3：重构 `packages/content` 2077 时间线、开场配置、商店/诊所店主绑定与 `apps/server` 接线
-- [ ] Step 4：全面深化 41 位现有 NPC、新增 18 位关键 NPC、编写 `npcTies.ts` 并接入 `gameContent`
-- [ ] Step 5：执行静态类型检查与代码规范检查（`tsc` / `biome`），更新计划文档状态并收口提交
+- [x] Step 1：落盘计划文档并提交（`b47d6dd`）
+- [x] Step 2：升级 `packages/core` 时间线、时钟 Bug 修复、NPC Schema/Prompt/Seed/Ties 支持（`1544743`）
+- [x] Step 3：重构 `packages/content` 2077 时间线、开场配置、商店/诊所店主绑定与 `apps/server` 接线（`723a8b9`）
+- [x] Step 4：全面深化 48 位现有 NPC、新增 18 位关键 NPC、编写 `npcTies.ts` 并接入 `gameContent`（`f96a907`）
+- [x] Step 5：静态检查收口（`core` / `content` / `server` / `web` 四包 `tsc --noEmit` 全过、`biome check` 全过、66 名 NPC / 56 组双向关系 / 10 阶段 2077 时间线开局初始化校验通过），更新计划文档状态并提交
