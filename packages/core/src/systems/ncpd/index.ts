@@ -9,7 +9,7 @@ import { ncpdView } from "./view";
 /** NCPD 警情：每隔一段在 NCPD 管得到的地点挂一条街头案子，在地图与势力面板显示，不再占待办列表 */
 export const ncpd = defineSystem<NcpdState, NcpdCommand>({
   id: "ncpd",
-  dependsOn: ["world", "economy", "heat"],
+  dependsOn: ["world", "economy", "heat", "city"],
   state: NcpdStateSchema,
   initial: () => ({ alerts: [], lastPostedAt: null, nextId: 1, cleared: 0 }),
   commands: { ncpd: NcpdCommandSchema },

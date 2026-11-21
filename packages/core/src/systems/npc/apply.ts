@@ -198,7 +198,7 @@ export function applyOffscreenDeath(
   npc.alive = false;
   npc.following = false;
   npc.offscreenDeath = { cause: command.cause, at: now };
-  return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`] };
+  return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`], signals: ["npc.died"] };
 }
 
 function updateDoing(
@@ -599,7 +599,7 @@ export function applyNpc(
       npc.alive = false;
       npc.following = false;
       npc.lastSeenAt = now;
-      return { ok: true, notes: [`${npc.name} 死了`] };
+      return { ok: true, notes: [`${npc.name} 死了`], signals: ["npc.died"] };
     }
   }
 }

@@ -1,5 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
+import type { CityState } from "../city";
 import { rulingFact } from "../dice";
 import { locationCatalog, type WorldClockState } from "../world";
 import {
@@ -56,7 +57,18 @@ function post(draft: Draft<NcpdState>, at: number, ctx: SystemContext): void {
       !taken.has(p.id),
   );
   if (places.length === 0) return;
-  const place = places[ctx.rng.roll(places.length) - 1] ?? places[0];
+  // 正在升温的城中局势所在城区给予 2x 权重加成，让街头治安与城中动荡产生呼应
+  const hotDistricts = new Set(
+    ctx
+      .read<CityState>("city")
+      .events.filter((e) => e.status === "heating" && e.district !== undefined)
+      .map((e) => e.district as string),
+  );
+  const place =
+    pickWeighted(
+      places.map((p) => ({ place: p, weight: hotDistricts.has(p.district) ? 2 : 1 })),
+      ctx.rng.roll.bind(ctx.rng),
+    )?.place ?? places[0];
   if (!place) return;
   draft.alerts.push({
     id: `ncpd-${draft.nextId}`,

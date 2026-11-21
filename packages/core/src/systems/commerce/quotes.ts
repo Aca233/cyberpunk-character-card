@@ -39,7 +39,6 @@ export interface NarratedPurchase {
   readonly slot?: string | undefined;
   readonly conversion?: "smart-link" | "precision-lock" | undefined;
   readonly lock?: boolean | undefined;
-  readonly sessionOffer?: string | undefined;
 }
 
 /** 正文开始前已给出的交易不能在抽取时换对象或改价；未形成报价时只能继续商谈。 */
@@ -78,8 +77,7 @@ export function checkNarratedPurchase(
     expected.source !== actual.source ||
     expected.slot !== actual.slot ||
     expected.conversion !== actual.conversion ||
-    (expected.lock ?? false) !== (actual.lock ?? false) ||
-    expected.sessionOffer !== actual.sessionOffer
+    (expected.lock ?? false) !== (actual.lock ?? false)
   )
     return "成交对象、金额或旧件条件与正文前确认的报价不同，需要重新确认";
   return undefined;
@@ -127,11 +125,15 @@ export function registeredParty(world: QuoteWorld, id: string) {
   return CommerceStateSchema.parse(world.slices.commerce ?? {}).parties[id];
 }
 
+export function normalizeEvidenceText(text: string): string {
+  return text.normalize("NFKC").replace(/[\s，。、；：！？""''「」『』（）()【】[\]—\-…·,.!?;:'"`]+/g, "");
+}
+
 export function tradeEvidence(facts: Readonly<Record<string, unknown>>, quote: string): boolean {
   const source = facts.tradeNarrative;
   if (typeof source !== "string") return false;
-  const clean = (text: string) => text.normalize("NFKC").replace(/\s+/g, "");
-  return clean(source).includes(clean(quote));
+  const needle = normalizeEvidenceText(quote);
+  return needle.length > 0 && normalizeEvidenceText(source).includes(needle);
 }
 
 /** 只能核对引文包含所报金额；是否为对方认可的最终对价仍须由抽取按语义判断。 */

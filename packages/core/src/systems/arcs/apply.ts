@@ -257,7 +257,8 @@ export function applyArcOffscreen(
 ): ApplyOutcome {
   const found = resolve(command.npc, command.concern, ctx);
   if (typeof found === "string") return fail(found);
-  const { seed, concern, name } = found;
+  const { seed, concern, card, name } = found;
+  if (!card?.alive) return fail(`${name}已经死了，心事不再继续推进`);
   const now = ctx.now;
   const current = concernOf(arcOf(draft, seed.npc), concern.id);
   if (current.onset === null) return fail(`「${concern.title}」尚无已成立的前因，不能场外推进`);

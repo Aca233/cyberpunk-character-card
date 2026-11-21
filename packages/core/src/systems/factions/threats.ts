@@ -50,7 +50,8 @@ export function turfSection({
   const place = locationCatalog(data).get(location);
   if (place === undefined) return undefined;
   const state = FactionsStateSchema.parse(world.slices.factions ?? {});
-  const turf = currentTurf(state, data, true);
+  // 叙事模型看到实际地盘变化（不限于玩家已听闻），玩家侧界面与威胁栏仍按 toldOnly 隔离
+  const turf = currentTurf(state, data, false);
   const lines: string[] = [];
   for (const f of factionCatalog(data).values()) {
     if (!(turf.get(f.id) ?? f.turf).includes(place.district)) continue;

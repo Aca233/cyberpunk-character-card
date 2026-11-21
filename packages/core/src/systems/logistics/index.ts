@@ -1,5 +1,6 @@
 import { defineSystem } from "../../kernel/system";
 import type { CityState } from "../city";
+import { normalizeEvidenceText } from "../commerce";
 import { locationForTravel, merchantSites } from "../world";
 import {
   type LogisticsState,
@@ -38,8 +39,8 @@ export const logistics = defineSystem<LogisticsState, RouteCommand>({
     if (command.sourceEvent && !event)
       return { ok: false, reason: "没有这条城市事件，不能凭空改变供货路线" };
     const source = event ? `${event.title}\n${event.body}` : ctx.facts.tradeNarrative;
-    const clean = (text: string) => text.normalize("NFKC").replace(/\s+/g, "");
-    if (typeof source !== "string" || !clean(source).includes(clean(command.evidence)))
+    const needle = normalizeEvidenceText(command.evidence);
+    if (typeof source !== "string" || !needle || !normalizeEvidenceText(source).includes(needle))
       return { ok: false, reason: "路线变化缺少实际发生的来源证据" };
     if (event?.status === "over" && command.blocked)
       return { ok: false, reason: "已经结束的事件不能新建持续封锁" };
