@@ -2,6 +2,7 @@ import { type TurnEvent, type TurnInput, TurnInputSchema } from "@cp/core";
 import { create } from "zustand";
 import { ApiError, api, newRequestId } from "../../api/client";
 import { followTurn } from "../../api/events";
+import { playSfx } from "../../audio";
 import { beginProgress, type EndCategory, type ProgressHandle } from "../../progress";
 
 /**
@@ -124,6 +125,7 @@ export const useStory = create<StoryState>()((set, get) => {
           case "rolled":
             return;
           case "boost":
+            if (get().boost === null) playSfx("sandevistan");
             set({ boost: event });
             return;
           case "thought":
@@ -135,6 +137,7 @@ export const useStory = create<StoryState>()((set, get) => {
           case "done": {
             const complete = () => {
               if (!current()) return;
+              playSfx("turnDone");
               set((s) => ({
                 phase: "idle",
                 turnId: null,
@@ -176,6 +179,7 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           }
           case "blocked":
+            playSfx("error");
             finish("blocked", event.reason);
             set({
               phase: "idle",
@@ -188,6 +192,7 @@ export const useStory = create<StoryState>()((set, get) => {
             void refresh();
             return;
           case "stopped":
+            playSfx("cancel");
             finish("stopped");
             set({
               phase: "idle",
@@ -204,6 +209,7 @@ export const useStory = create<StoryState>()((set, get) => {
             void refresh();
             return;
           case "error":
+            playSfx("error");
             finish("error", event.message);
             set({
               phase: "idle",
@@ -219,6 +225,7 @@ export const useStory = create<StoryState>()((set, get) => {
       },
       onLost: (reason) => {
         if (!current()) return;
+        playSfx("error");
         finish("lost", reason);
         set({
           phase: "idle",
@@ -304,6 +311,7 @@ export const useStory = create<StoryState>()((set, get) => {
       });
       // 上一次没收尾的（照理不会有）先算被顶掉，再开这一次
       finish("aborted");
+      playSfx(pending.input.sandevistan === true ? "sandevistan" : "turnSubmit");
       progress = beginProgress("turn");
       const body = { requestId: newRequestId(), baseVersion, input: pending.input };
       try {

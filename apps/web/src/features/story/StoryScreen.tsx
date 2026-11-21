@@ -76,6 +76,7 @@ import { buildTurnPromptRequest, ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
+import { useStoryAudio } from "./useStoryAudio";
 import { diffViews, type Speaker, type Toast, trackTelemetry, type View } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
@@ -335,6 +336,18 @@ export function StoryScreen() {
   const [focusMode, setFocusMode] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
   const [atEndStory, setAtEndStory] = useState(false);
+
+  useStoryAudio({
+    saveId,
+    view,
+    atEsc,
+    overlayOpen:
+      atEsc || atMap || atDoc || atShop !== null || atAutofixer || person !== null || atEndStory,
+    scan,
+    settledCount: settled.length,
+    rivalsCount: rivalsDone.length,
+    latestToasts: toasts,
+  });
 
   // 切换存档路由时组件不卸载，重置所有与当前存档绑定的局部浮层与排队状态
   useEffect(() => {

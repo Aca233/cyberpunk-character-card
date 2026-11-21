@@ -1,4 +1,5 @@
 import type { Ref } from "react";
+import { playSfx } from "../audio";
 import { Asset } from "./Asset";
 import styles from "./menuitem.module.css";
 
@@ -39,8 +40,14 @@ export function MenuItem({
       data-selected={selected || undefined}
       disabled={disabled}
       title={disabled ? reason : undefined}
-      onClick={onSelect}
-      onMouseEnter={onFocus}
+      onClick={() => {
+        if (!disabled) playSfx("confirm");
+        onSelect();
+      }}
+      onMouseEnter={() => {
+        if (!disabled) playSfx("hover");
+        onFocus?.();
+      }}
       onFocus={onFocus}
     >
       <span className={styles.mark} aria-hidden>

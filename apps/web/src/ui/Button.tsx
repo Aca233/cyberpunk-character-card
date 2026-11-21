@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AssetId } from "../assets";
+import { playSfx } from "../audio";
 import { Asset, NineSlice } from "./Asset";
 import styles from "./button.module.css";
 
@@ -41,7 +42,13 @@ export function Button({
       data-small={small || undefined}
       aria-pressed={pressed}
       aria-label={label}
-      onClick={onClick}
+      onMouseEnter={() => {
+        if (!disabled) playSfx("hover");
+      }}
+      onClick={() => {
+        if (!disabled) playSfx(primary ? "confirm" : "click");
+        onClick?.();
+      }}
       disabled={disabled}
       title={disabled ? reason : undefined}
     >

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { playSfx } from "../audio";
 import { NineSlice } from "./Asset";
 import styles from "./actionbutton.module.css";
 
@@ -34,7 +35,13 @@ export function ActionButton({
       aria-expanded={expanded}
       title={title}
       disabled={disabled}
-      onClick={onClick}
+      onMouseEnter={() => {
+        if (!disabled) playSfx("hover");
+      }}
+      onClick={() => {
+        if (!disabled) playSfx("click");
+        onClick?.();
+      }}
     >
       <NineSlice id="tab.bg" tint="currentColor" slice={14} className={styles.bg} />
       {children}

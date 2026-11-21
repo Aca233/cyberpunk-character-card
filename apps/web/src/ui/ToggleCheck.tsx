@@ -1,3 +1,4 @@
+import { playSfx } from "../audio";
 import { Asset, NineSlice } from "./Asset";
 import { CellFrame } from "./FrameBox";
 import styles from "./togglecheck.module.css";
@@ -40,7 +41,11 @@ export function ToggleCheck({
           disabled={disabled}
           aria-label={ariaLabel}
           className={styles.input}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={(e) => {
+            const next = e.target.checked;
+            playSfx(next ? "toggleOn" : "toggleOff");
+            onChange(next);
+          }}
         />
         <span className={styles.switchState} aria-hidden>
           {checked ? "开" : "关"}

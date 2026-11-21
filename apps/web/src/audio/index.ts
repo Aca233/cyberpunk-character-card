@@ -1,4 +1,9 @@
-export { resolveRouteBgm, resolveStoryBgm } from "./director";
+export {
+  getLastStoryBgm,
+  rememberStoryBgm,
+  resolveRouteBgm,
+  resolveStoryBgm,
+} from "./director";
 export {
   type AudioSnapshot,
   auditionSfxAsset,

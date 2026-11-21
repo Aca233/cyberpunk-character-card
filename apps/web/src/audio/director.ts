@@ -7,8 +7,19 @@ import type { View } from "../features/story/view";
  * 选择最贴合当前氛围的原版《赛博朋克 2077》配乐。
  */
 
-function isNightOrLate(timeText: string): boolean {
-  const m = timeText.match(/(\d{1,2}):\d{2}/);
+let lastStoryBgm: BgmId | null = null;
+
+export function rememberStoryBgm(bgm: BgmId | null): void {
+  lastStoryBgm = bgm;
+}
+
+export function getLastStoryBgm(): BgmId | null {
+  return lastStoryBgm;
+}
+
+function isNightOrLate(time: View["time"]): boolean {
+  if (time.phase === 3) return true;
+  const m = time.text.match(/(\d{1,2}):\d{2}/);
   if (!m) return false;
   const hour = Number(m[1]);
   return hour >= 20 || hour < 5;
@@ -29,9 +40,8 @@ export function resolveStoryBgm(view: View | undefined): BgmId {
 
   // 3. 潜网深入 / 反向追踪告警 / 超梦调查 / 赛博精神病发作或断片
   const inNetrun =
-    view.hacking?.dive !== null && view.hacking?.dive !== undefined
-      ? true
-      : view.hacking?.traceAlert !== null && view.hacking?.traceAlert !== undefined;
+    (view.hacking?.dive !== null && view.hacking?.dive !== undefined) ||
+    (view.hacking?.traceAlert !== null && view.hacking?.traceAlert !== undefined);
   const inBraindance = view.braindance.active !== null;
   const inPsychosis = view.psychosis.episodeHere || view.psychosis.blackoutOpen;
   if (inNetrun || inBraindance || inPsychosis) {
@@ -49,15 +59,15 @@ export function resolveStoryBgm(view: View | undefined): BgmId {
     return "bgm.safehouse";
   }
 
-  // 6. 夜之城探索：依据警方热度、深夜时段或场次交替选用两支原版氛围曲，兼顾层次感与耐听度
+  // 6. 夜之城探索：依据警方热度、深夜时段与场次交替选用两支原版氛围曲，兼顾层次感与耐听度
   const highTensionCity = view.heat.stars >= 2 || (isNightOrLate(view.time) && view.scene % 2 === 1);
   return highTensionCity ? "bgm.explorePulse" : "bgm.explore";
 }
 
-export function resolveRouteBgm(
-  pathname: string,
-  lastStoryBgm: BgmId | null,
-): { readonly bgm: BgmId | null; readonly duckSettings: boolean } {
+export function resolveRouteBgm(pathname: string): {
+  readonly bgm: BgmId | null;
+  readonly duckSettings: boolean;
+} {
   if (pathname === "/") {
     return { bgm: null, duckSettings: false };
   }

@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+import { playSfx } from "../audio";
 import { Asset } from "./Asset";
 import styles from "./dialog.module.css";
 import { useLayer } from "./layers";
@@ -16,6 +17,9 @@ interface DialogProps {
 /** 原作样式的提示框：居中、左侧警示图标、底部按钮；占面板栈顶，Esc 关闭（没有 onClose 时 Esc 不穿透到下层） */
 export function Dialog({ title, tone = "warning", children, actions, onClose }: DialogProps) {
   useLayer(() => onClose?.());
+  useEffect(() => {
+    playSfx(tone === "danger" ? "warning" : "panelOpen");
+  }, [tone]);
   const color =
     tone === "danger"
       ? "var(--cp-danger)"

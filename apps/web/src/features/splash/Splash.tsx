@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
+import { playSfx, unlockAudioNow } from "../../audio";
 import { Asset, cssUrl } from "../../ui/Asset";
 import styles from "./splash.module.css";
 
@@ -9,15 +10,25 @@ const DURATION_MS = 2400;
 export function Splash() {
   const navigate = useNavigate();
   useEffect(() => {
-    const go = () => navigate("/menu", { replace: true });
+    let left = false;
+    const go = (withGesture: boolean) => {
+      if (left) return;
+      left = true;
+      if (withGesture) {
+        unlockAudioNow();
+        playSfx("boot");
+      }
+      navigate("/menu", { replace: true });
+    };
+    const onGesture = () => go(true);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const timer = window.setTimeout(go, reduced ? 800 : DURATION_MS);
-    window.addEventListener("keydown", go);
-    window.addEventListener("pointerdown", go);
+    const timer = window.setTimeout(() => go(false), reduced ? 800 : DURATION_MS);
+    window.addEventListener("keydown", onGesture);
+    window.addEventListener("pointerdown", onGesture);
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener("keydown", go);
-      window.removeEventListener("pointerdown", go);
+      window.removeEventListener("keydown", onGesture);
+      window.removeEventListener("pointerdown", onGesture);
     };
   }, [navigate]);
   return (
