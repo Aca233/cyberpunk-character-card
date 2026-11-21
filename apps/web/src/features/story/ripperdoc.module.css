@@ -568,16 +568,22 @@
 }
 
 @keyframes clinicIn {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(14px) scale(0.975);
+    clip-path: inset(0 0 12% 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
   }
 }
 
 @keyframes clinicInspectIn {
   from {
     opacity: 0;
-    transform: translateX(6px);
+    transform: translateX(10px);
   }
 }
 

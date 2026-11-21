@@ -174,6 +174,7 @@
   background: var(--cp-success);
   box-shadow: 0 0 6px color-mix(in srgb, var(--cp-success) 75%, transparent);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  animation: tabDotPulse 2.2s ease-in-out infinite;
 }
 
 .tabLine {
@@ -182,6 +183,8 @@
   margin-top: 4px;
   background: var(--cp-red);
   mask-size: 100% 100%;
+  transform-origin: left center;
+  animation: tabLineSweep 380ms var(--ease-snap) 90ms both;
 }
 
 /* ———— 页面：左列表 640、右详情 1120；各页自己决定用不用两栏 ———— */
@@ -574,8 +577,19 @@
   border: 0;
   cursor: var(--cp-cursor-hand);
   transition:
-    opacity 160ms ease-out,
-    transform 140ms ease-out;
+    opacity 160ms var(--ease-cyber),
+    transform 160ms var(--ease-snap),
+    filter 160ms var(--ease-cyber);
+}
+
+.cyberCell:hover,
+.cyberCell:focus-visible {
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 10px rgb(94 246 255 / 32%));
+}
+
+.cyberCell:active {
+  transform: scale(0.97);
 }
 
 .cyberCell > .cellSquare {
@@ -1051,11 +1065,32 @@
   }
 }
 
+@keyframes tabLineSweep {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+}
+
+@keyframes tabDotPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.75);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .menu,
   .menuBg,
   .menuScan,
   .tabs,
+  .tabLine,
+  .tabDot,
   .body,
   .pinBody,
   .mapLayer {

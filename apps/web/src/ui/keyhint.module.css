@@ -35,21 +35,6 @@
   transform: scaleX(1);
 }
 
-button.hint {
-  cursor: var(--cp-cursor-hand);
-}
-
-button.hint:hover:not(:disabled),
-button.hint:focus-visible {
-  outline: none;
-  color: var(--cp-cyan);
-}
-
-button.hint:disabled {
-  opacity: 0.4;
-  cursor: var(--cp-cursor-invalid);
-}
-
 .cap {
   display: inline-grid;
   place-items: center;
@@ -63,6 +48,40 @@ button.hint:disabled {
   line-height: 1;
   color: inherit;
   opacity: 0.88;
+  transition:
+    transform 120ms var(--ease-snap),
+    box-shadow var(--dur-flash) var(--ease-cyber);
+}
+
+button.hint {
+  cursor: var(--cp-cursor-hand);
+}
+
+button.hint:hover:not(:disabled),
+button.hint:focus-visible {
+  outline: none;
+  color: var(--cp-cyan);
+  text-shadow: 0 0 10px rgb(94 246 255 / 32%);
+}
+
+button.hint:hover:not(:disabled)::after,
+button.hint:focus-visible::after {
+  transform: scaleX(0.65);
+}
+
+button.hint:focus-visible .cap,
+button.hint:hover:not(:disabled) .cap {
+  transform: translateY(-1px);
+  box-shadow: 0 0 8px rgb(94 246 255 / 26%);
+}
+
+button.hint:active:not(:disabled) .cap {
+  transform: translateY(1px) scale(0.92);
+}
+
+button.hint:disabled {
+  opacity: 0.4;
+  cursor: var(--cp-cursor-invalid);
 }
 
 .badge {
@@ -79,6 +98,7 @@ button.hint:disabled {
   color: #08080e;
   background: var(--cp-yellow);
   font-variant-numeric: tabular-nums;
+  animation: badgePop 260ms var(--ease-snap) both;
 }
 
 .bar {
@@ -88,4 +108,29 @@ button.hint:disabled {
   justify-content: flex-end;
   gap: 6px 14px;
   padding: 4px 4px 2px;
+}
+
+@keyframes badgePop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint,
+  .hint::after,
+  .cap {
+    transition: none;
+  }
+
+  button.hint:focus-visible .cap,
+  button.hint:hover:not(:disabled) .cap,
+  button.hint:active:not(:disabled) .cap {
+    transform: none;
+  }
+
+  .badge {
+    animation: none;
+  }
 }

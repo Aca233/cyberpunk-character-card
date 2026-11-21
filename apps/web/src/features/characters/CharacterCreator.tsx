@@ -23,6 +23,7 @@ import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { FrameBox } from "../../ui/FrameBox";
+import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage, ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
 import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
@@ -67,6 +68,49 @@ const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 type TraitsTab = "past" | "skill" | "flaw";
 type CyberTab = "topology" | "loadout";
 type ConnectionsTab = "people" | "map";
+
+/** 塔罗命牌卡：带光标跟随 3D 按压倾斜与全息镜面反光 */
+function TarotCardButton({
+  id,
+  active,
+  onPick,
+}: {
+  readonly id: TarotCard;
+  readonly active: boolean;
+  readonly onPick: () => void;
+}) {
+  const info = TAROT_INFO[id];
+  const tilt = useCardTilt<HTMLButtonElement>({
+    maxRotate: 9,
+    maxShift: 5,
+    shadowShift: 6,
+  });
+  return (
+    <button
+      type="button"
+      className={wb.tarotCard}
+      aria-pressed={active}
+      title={`${info.roman} ${info.label}（${info.english}）— ${info.vibe}`}
+      onClick={onPick}
+      {...tilt}
+    >
+      <span className={wb.tarotSheen} aria-hidden />
+      <span className={wb.tarotArtWrap}>
+        <Asset
+          id={`tarot.${id}` as AssetId}
+          alt={`${info.label}（${info.english}）`}
+          className={wb.tarotArt}
+        />
+        <span className={wb.tarotRoman}>{info.roman}</span>
+      </span>
+      <span className={wb.tarotMeta}>
+        <strong className={wb.tarotLabel}>{info.label}</strong>
+        <span className={wb.tarotEn}>{info.english}</span>
+        <span className={wb.tarotVibe}>{info.vibe}</span>
+      </span>
+    </button>
+  );
+}
 
 /**
  * 2077 开放式五步角色创建工作台：
@@ -422,7 +466,7 @@ export function CharacterCreator({
 
             {/* ———— Step 01：身份与出身（公民铭牌 + 2077 命牌 + 出身背景） ———— */}
             {activeStep === "identity" && (
-              <div className={wb.stepBody}>
+              <div key="step-identity" className={wb.stepBody}>
                 <section className={wb.formCard} aria-label="公民身份信息">
                   <h3 className={wb.cardTitle}>身份铭牌 · CITIZEN ID</h3>
                   <div className={wb.nameGrid}>
@@ -508,7 +552,7 @@ export function CharacterCreator({
                     </div>
                   </div>
                   {activeTarot ? (
-                    <div className={wb.tarotSelectedBar}>
+                    <div key={board.tarot} className={wb.tarotSelectedBar}>
                       <span className={wb.tarotSelectedArtWrap}>
                         <Asset
                           id={`tarot.${board.tarot}` as AssetId}
@@ -538,34 +582,14 @@ export function CharacterCreator({
                     data-expanded={tarotExpanded || undefined}
                     aria-label="选择 2077 塔罗命牌"
                   >
-                    {TAROT_CARDS.map((id) => {
-                      const info = TAROT_INFO[id];
-                      const active = board.tarot === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          className={wb.tarotCard}
-                          aria-pressed={active}
-                          title={`${info.roman} ${info.label}（${info.english}）— ${info.vibe}`}
-                          onClick={() => setTarot(id)}
-                        >
-                          <span className={wb.tarotArtWrap}>
-                            <Asset
-                              id={`tarot.${id}` as AssetId}
-                              alt={`${info.label}（${info.english}）`}
-                              className={wb.tarotArt}
-                            />
-                            <span className={wb.tarotRoman}>{info.roman}</span>
-                          </span>
-                          <span className={wb.tarotMeta}>
-                            <strong className={wb.tarotLabel}>{info.label}</strong>
-                            <span className={wb.tarotEn}>{info.english}</span>
-                            <span className={wb.tarotVibe}>{info.vibe}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {TAROT_CARDS.map((id) => (
+                      <TarotCardButton
+                        key={id}
+                        id={id}
+                        active={board.tarot === id}
+                        onPick={() => setTarot(id)}
+                      />
+                    ))}
                   </fieldset>
                 </section>
 
@@ -610,7 +634,7 @@ export function CharacterCreator({
 
             {/* ———— Step 02：体貌定制（7 部位纯物理 BIOMETRIC SCAN） ———— */}
             {activeStep === "appearance" && (
-              <div className={wb.stepBody}>
+              <div key="step-appearance" className={wb.stepBody}>
                 <AppearanceCustomizer
                   selection={board.appearance ?? { marks: [] }}
                   look={card.look}
@@ -623,7 +647,7 @@ export function CharacterCreator({
 
             {/* ———— Step 03：履历与特质（三层分栏：过往履历 / 核心特质 / 负面缺陷） ———— */}
             {activeStep === "traits" && (
-              <div className={wb.stepBody}>
+              <div key="step-traits" className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="履历与特质分区">
                   <button
                     type="button"
@@ -762,7 +786,7 @@ export function CharacterCreator({
                 )}
 
                 {traitsTab === "past" && (
-                  <div className={wb.embeddedPanel}>
+                  <div key="tab-past" className={wb.embeddedPanel}>
                     {pickerProps ? (
                       <PastPicker {...pickerProps} />
                     ) : (
@@ -772,7 +796,7 @@ export function CharacterCreator({
                 )}
 
                 {traitsTab === "skill" && (
-                  <div className={wb.embeddedPanel}>
+                  <div key="tab-skill" className={wb.embeddedPanel}>
                     {pickerProps ? (
                       <TraitPicker {...pickerProps} />
                     ) : (
@@ -782,7 +806,7 @@ export function CharacterCreator({
                 )}
 
                 {traitsTab === "flaw" && (
-                  <div className={wb.embeddedPanel}>
+                  <div key="tab-flaw" className={wb.embeddedPanel}>
                     {pickerProps ? (
                       <FlawPicker {...pickerProps} />
                     ) : (
@@ -795,7 +819,7 @@ export function CharacterCreator({
 
             {/* ———— Step 04：义体与行装（子标签隔离：义体拓扑 / 行装与座驾） ———— */}
             {activeStep === "cyberware" && (
-              <div className={wb.stepBody}>
+              <div key="step-cyberware" className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="义体与行装分区">
                   <button
                     type="button"

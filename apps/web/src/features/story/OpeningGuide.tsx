@@ -1,6 +1,7 @@
 import { type CSSProperties, useMemo } from "react";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
+import { useCardTilt } from "../../ui/useCardTilt";
 import styles from "./story.module.css";
 import type { View } from "./view";
 
@@ -87,6 +88,48 @@ function buildOpeningPrompts(view: View): readonly OpeningPrompt[] {
   return prompts.slice(0, 3);
 }
 
+function OpeningChoiceItem({
+  prompt,
+  index,
+  disabled,
+  onPick,
+}: {
+  readonly prompt: OpeningPrompt;
+  readonly index: number;
+  readonly disabled: boolean;
+  readonly onPick: () => void;
+}) {
+  const key = KEYS[index];
+  const tilt = useCardTilt<HTMLButtonElement>({
+    disabled,
+    maxRotate: 4.5,
+    maxShift: 4,
+    shadowShift: 4,
+  });
+  return (
+    <li style={{ "--i": index } as CSSProperties}>
+      <button
+        type="button"
+        className={styles.choice}
+        disabled={disabled}
+        onClick={onPick}
+        {...tilt}
+      >
+        {key ? (
+          <Asset id={key} tint="currentColor" height={20} />
+        ) : (
+          <span className={styles.num}>{index + 1}</span>
+        )}
+        <span className={styles.source}>{prompt.source}</span>
+        <span className={styles.choiceText}>{prompt.label}</span>
+        <span className={styles.choiceArrow} aria-hidden>
+          ▸
+        </span>
+      </button>
+    </li>
+  );
+}
+
 /** 0 轮新档序幕：沿用本作场景标题卡与 2077 对话选项样式，自然起手进入第一幕 */
 export function OpeningGuide({
   view,
@@ -138,30 +181,15 @@ export function OpeningGuide({
       {actions.onSendPrompt && (
         <div className={styles.openingChoices}>
           <ol className={styles.choices}>
-            {prompts.map((p, i) => {
-              const key = KEYS[i];
-              return (
-                <li key={p.source} style={{ "--i": i } as CSSProperties}>
-                  <button
-                    type="button"
-                    className={styles.choice}
-                    disabled={disabled}
-                    onClick={() => actions.onSendPrompt?.(p.text)}
-                  >
-                    {key ? (
-                      <Asset id={key} tint="currentColor" height={20} />
-                    ) : (
-                      <span className={styles.num}>{i + 1}</span>
-                    )}
-                    <span className={styles.source}>{p.source}</span>
-                    <span className={styles.choiceText}>{p.label}</span>
-                    <span className={styles.choiceArrow} aria-hidden>
-                      ▸
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
+            {prompts.map((p, i) => (
+              <OpeningChoiceItem
+                key={p.source}
+                prompt={p}
+                index={i}
+                disabled={disabled}
+                onPick={() => actions.onSendPrompt?.(p.text)}
+              />
+            ))}
           </ol>
         </div>
       )}

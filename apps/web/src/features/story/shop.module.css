@@ -435,7 +435,8 @@
   cursor: var(--cp-cursor-hand);
   transition:
     --box-fill var(--dur-flash) ease-out,
-    --box-line var(--dur-flash) ease-out;
+    --box-line var(--dur-flash) ease-out,
+    transform 160ms var(--ease-snap);
 }
 
 .itemCard::before {
@@ -454,6 +455,7 @@
 .itemCard:hover {
   --box-fill: var(--cp-surface-hover);
   --box-line: color-mix(in srgb, var(--item-tint, var(--cp-cyan)) 62%, transparent);
+  transform: translateX(3px);
 }
 
 .itemCard[data-active],
@@ -1051,22 +1053,29 @@
 }
 
 @keyframes shopModalIn {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(14px) scale(0.975);
+    clip-path: inset(0 0 12% 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
   }
 }
 
 @keyframes shopBodyIn {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
 }
 
 @keyframes shopInspectIn {
   from {
     opacity: 0;
-    transform: translateX(6px);
+    transform: translateX(10px);
   }
 }
 
@@ -1084,5 +1093,9 @@
   .toggleChip,
   .itemCard {
     transition: none;
+  }
+
+  .itemCard:hover {
+    transform: none;
   }
 }

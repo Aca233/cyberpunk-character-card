@@ -29,7 +29,7 @@
   background-position: center 40%;
   background-size: cover;
   background-repeat: no-repeat;
-  animation: bgIn 600ms ease-out both;
+  animation: bgIn 780ms var(--ease-snap) both;
 }
 
 .dim {
@@ -50,6 +50,7 @@
   background-size: auto 100%;
   background-repeat: no-repeat;
   opacity: 0.42;
+  animation: stripIn 540ms var(--ease-snap) 80ms both;
 }
 
 .scan {
@@ -59,13 +60,14 @@
   opacity: 0.1;
   mix-blend-mode: screen;
   pointer-events: none;
-  animation: sweep 300ms ease-out both;
+  animation: sweep 420ms var(--ease-snap) both;
 }
 
 /* 全屏外框：原作 panel.frame，四边往里收 */
 .menu > .frame {
   inset: 6px 20px 4px;
   opacity: 0.72;
+  animation: frameBoot 440ms var(--ease-snap) 40ms both;
 }
 
 /* ———— 左列：标志、菜单、终端状态 ———— */
@@ -81,6 +83,7 @@
   justify-items: start;
   gap: 8px;
   margin-bottom: 32px;
+  animation: brandIn 460ms var(--ease-snap) 80ms both;
 }
 
 .brandLine {
@@ -90,12 +93,42 @@
   margin-top: 6px;
   background: var(--cp-red-dim);
   mask-size: 100% 100%;
+  transform-origin: left center;
+  animation: lineSweep 460ms var(--ease-snap) 160ms both;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.nav > * {
+  animation: navItemIn 340ms var(--ease-snap) both;
+}
+
+.nav > :nth-child(1) {
+  animation-delay: 130ms;
+}
+
+.nav > :nth-child(2) {
+  animation-delay: 175ms;
+}
+
+.nav > :nth-child(3) {
+  animation-delay: 220ms;
+}
+
+.nav > :nth-child(4) {
+  animation-delay: 265ms;
+}
+
+.nav > :nth-child(5) {
+  animation-delay: 310ms;
+}
+
+.nav > :nth-child(6) {
+  animation-delay: 355ms;
 }
 
 .navDivider {
@@ -106,6 +139,7 @@
   background: var(--cp-red-dim);
   opacity: 0.55;
   mask-size: 100% 100%;
+  transform-origin: left center;
 }
 
 .statusCard {
@@ -113,6 +147,73 @@
   isolation: isolate;
   margin: auto 0 0;
   padding: 12px 16px 14px;
+  animation: statusCardIn 420ms var(--ease-snap) 290ms both;
+  will-change: transform;
+  transform-origin: center center;
+  transition:
+    transform 240ms var(--ease-snap),
+    filter 180ms ease-out;
+}
+
+.statusCard[data-tilting] {
+  transform: perspective(900px) translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 8px)
+    rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transition:
+    transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    filter 160ms ease-out;
+  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 56%));
+}
+
+.statusCard[data-tilting][data-pressed] {
+  transform: perspective(900px)
+    translate3d(calc(var(--tilt-tx, 0px) * 0.45), calc(var(--tilt-ty, 0px) * 0.45 + 1.5px), -4px)
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.2)) rotateY(calc(var(--tilt-ry, 0deg) * 1.2)) scale(0.985);
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 48%));
+}
+
+/* 同形九宫格蒙版裁切的压铸暗面材质 + 倾角斜向掠射玻璃丝（零矩形漏边、零光球噪纹） */
+.cardGlare {
+  --glare-tint: 205 248 255;
+  z-index: -1;
+  pointer-events: none;
+  background-color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 4%) 0%,
+    rgb(255 255 255 / 0%) 34%,
+    rgb(0 0 0 / 0%) 66%,
+    rgb(0 0 0 / 26%) 100%
+  );
+  opacity: 0.9;
+  transition: opacity 180ms ease-out;
+}
+
+.statusCard .cardGlare {
+  --glare-tint: 255 210 206;
+}
+
+:where(.statusCard, .saveCard, .charDossier)[data-tilting] .cardGlare {
+  background-image:
+    linear-gradient(
+      var(--tilt-angle, 128deg),
+      transparent calc(var(--tilt-glare, 50%) - 26%),
+      rgb(var(--glare-tint) / 4.5%) calc(var(--tilt-glare, 50%) - 10%),
+      rgb(255 255 255 / 11%) var(--tilt-glare, 50%),
+      rgb(var(--glare-tint) / 3.5%) calc(var(--tilt-glare, 50%) + 6%),
+      transparent calc(var(--tilt-glare, 50%) + 19%)
+    ),
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 5.5%) 0%,
+      rgb(255 255 255 / 0%) 32%,
+      rgb(0 0 0 / 0%) 64%,
+      rgb(0 0 0 / 28%) 100%
+    );
+  opacity: 1;
+}
+
+:where(.statusCard, .saveCard, .charDossier)[data-tilting][data-pressed] .cardGlare {
+  opacity: 0.65;
 }
 
 .statusSlice {
@@ -200,6 +301,7 @@
   gap: 12px;
   height: 52px;
   padding: 0 8px 0 6px;
+  animation: stageHeadIn 360ms var(--ease-snap) 120ms both;
 }
 
 .stageHeadBg {
@@ -216,6 +318,7 @@
 
 .stageGlow {
   flex: none;
+  animation: stageGlowPulse 3.6s ease-in-out infinite;
 }
 
 .stageHeading {
@@ -259,6 +362,8 @@
   margin-top: 4px;
   background: var(--cp-red);
   mask-size: 100% 100%;
+  transform-origin: left center;
+  animation: lineSweep 440ms var(--ease-snap) 180ms both;
 }
 
 .stageBody {
@@ -270,7 +375,7 @@
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
-  animation: paneIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: paneIn 280ms var(--ease-snap) both;
 }
 
 .warn {
@@ -370,7 +475,12 @@
   color: var(--cp-red);
   text-align: left;
   cursor: var(--cp-cursor-hand);
-  transition: color var(--dur-flash);
+  will-change: transform;
+  transform-origin: center center;
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    transform 240ms var(--ease-snap),
+    filter var(--dur-flash) var(--ease-cyber);
 }
 
 .saveCard[data-featured] {
@@ -382,13 +492,47 @@
 .saveCard:hover,
 .saveCard:focus-visible {
   --box-line: var(--cp-cyan);
-  --box-fill: rgb(18 36 44 / 84%);
+  --box-fill: rgb(18 36 44 / 86%);
   outline: none;
   color: var(--cp-cyan);
+  transform: translateX(4px);
+  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 56%));
+}
+
+.saveCard[data-tilting] {
+  transform: perspective(1000px)
+    translate3d(calc(var(--tilt-tx, 0px) + 3px), var(--tilt-ty, 0px), 10px)
+    rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    filter var(--dur-flash) var(--ease-cyber);
+}
+
+.saveCard:active {
+  transform: translateX(2px) scale(0.99);
+}
+
+.saveCard[data-tilting][data-pressed] {
+  transform: perspective(1000px)
+    translate3d(
+      calc(var(--tilt-tx, 0px) * 0.45 + 1px),
+      calc(var(--tilt-ty, 0px) * 0.45 + 1.5px),
+      -6px
+    )
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.25)) rotateY(calc(var(--tilt-ry, 0deg) * 1.25))
+    scale(0.985);
+  transition-duration: 55ms;
 }
 
 .saveIcon {
   flex: none;
+  transition: transform 200ms var(--ease-snap);
+}
+
+.saveCard:hover .saveIcon,
+.saveCard:focus-visible .saveIcon {
+  transform: scale(1.08);
 }
 
 .saveInfo {
@@ -446,11 +590,17 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    transform 190ms var(--ease-snap),
+    text-shadow var(--dur-flash) var(--ease-cyber);
 }
 
 .saveCard:hover .saveCta,
 .saveCard:focus-visible .saveCta {
   color: var(--cp-cyan);
+  transform: translateX(4px);
+  text-shadow: 0 0 10px rgb(94 246 255 / 45%);
 }
 
 .saveCard[data-compact] {
@@ -503,8 +653,13 @@
   letter-spacing: 0.1em;
 }
 
+.fieldSpan {
+  grid-column: 1 / -1;
+}
+
 .fieldRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -512,6 +667,147 @@
 
 .grow {
   flex: 1;
+}
+
+.startSpotBar {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 78%);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 14px;
+}
+
+.startSpotName {
+  overflow: hidden;
+  color: var(--cp-text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.startSpotBadge {
+  flex: none;
+  padding: 1px 8px;
+  background: rgb(255 97 88 / 14%);
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.startSpotBadge[data-custom] {
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+}
+
+/* ———— 主菜单大地图开局选点浮层 ———— */
+
+.mapModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(4 4 9 / 78%);
+  animation: mapModalFadeIn 160ms ease-out both;
+}
+
+.mapModalDismiss {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.mapModal {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  width: min(1440px, calc(100vw - 40px));
+  height: min(900px, calc(100dvh - 40px));
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  animation: mapModalIn var(--dur-modal) var(--ease-snap) both;
+}
+
+.mapModalInner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  padding: 16px 20px 18px;
+  overflow: hidden;
+}
+
+.mapModalHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.mapModalHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.mapModalCode {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.mapModalTitle {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.mapModalActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.mapModalPicked {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.mapModalPicked strong {
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.mapModalBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .charDossier {
@@ -522,6 +818,21 @@
   display: grid;
   gap: 6px;
   padding: 12px 18px 14px;
+  will-change: transform;
+  transform-origin: center center;
+  transition:
+    transform 240ms var(--ease-snap),
+    filter 180ms ease-out;
+}
+
+.charDossier[data-tilting] {
+  --box-line: var(--cp-cyan);
+  transform: perspective(900px) translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 8px)
+    rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transition:
+    transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
+    filter 160ms ease-out;
+  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 54%));
 }
 
 .charDossierHead {
@@ -646,16 +957,31 @@
   .saveCta {
     grid-column: 2;
   }
+
+  .mapModalBackdrop {
+    padding: 8px;
+  }
+
+  .mapModal {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .mapModalInner {
+    padding: 12px;
+  }
 }
 
 @keyframes paneIn {
   from {
     opacity: 0;
-    transform: translateX(-8px);
+    transform: translateX(-12px);
+    clip-path: inset(0 0 10% 0);
   }
   to {
     opacity: 1;
     transform: none;
+    clip-path: inset(0 0 0 0);
   }
 }
 
@@ -671,19 +997,131 @@
 @keyframes bgIn {
   from {
     opacity: 0;
-    transform: scale(1.04);
+    transform: scale(1.055);
+  }
+}
+
+@keyframes stripIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+@keyframes frameBoot {
+  from {
+    opacity: 0;
+    transform: scale(1.012);
+  }
+}
+
+@keyframes brandIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes lineSweep {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+}
+
+@keyframes navItemIn {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+@keyframes statusCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes stageHeadIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes stageGlowPulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    filter: drop-shadow(0 0 4px rgb(255 97 88 / 35%));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgb(255 97 88 / 65%));
+  }
+}
+
+@keyframes mapModalFadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes mapModalIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.975);
+    clip-path: inset(0 0 12% 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
   }
 }
 
 /* 减少动态效果 */
 @media (prefers-reduced-motion: reduce) {
   .bg,
+  .strip,
   .scan,
-  .stageBody {
+  .menu > .frame,
+  .brand,
+  .brandLine,
+  .nav > *,
+  .statusCard,
+  .stageHead,
+  .stageGlow,
+  .stageLine,
+  .stageBody,
+  .mapModalBackdrop,
+  .mapModal {
     animation: none;
   }
 
-  .saveCard {
+  .saveCard,
+  .saveIcon,
+  .saveCta,
+  .statusCard,
+  .charDossier {
     transition: none;
+  }
+
+  .cardGlare {
+    display: none;
+  }
+
+  .saveCard:hover,
+  .saveCard:focus-visible,
+  .saveCard:active,
+  .saveCard[data-tilting],
+  .statusCard[data-tilting],
+  .charDossier[data-tilting],
+  .saveCard:hover .saveIcon,
+  .saveCard:focus-visible .saveIcon,
+  .saveCard:hover .saveCta,
+  .saveCard:focus-visible .saveCta {
+    transform: none;
   }
 }

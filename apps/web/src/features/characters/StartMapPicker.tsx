@@ -5,7 +5,7 @@ import {
   SUBDISTRICT_SHAPES,
 } from "@cp/content/mapShapes";
 import { RADAR_ANCHORS, type RadarAnchor } from "@cp/content/radar";
-import { type CSSProperties, useId, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useId, useMemo, useState } from "react";
 import { asset } from "../../assets";
 import { cssUrl, MissingAsset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -65,14 +65,26 @@ export function StartMapPicker({
   value,
   defaultStart = DEFAULT_START,
   automatic = false,
+  resetLabel = "跟随出身",
+  automaticLabel = "已跟随出身",
+  fillHeight = false,
   onChange,
+  topActions,
 }: {
   /** 选中的锚点 id */
   readonly value: string;
-  /** 出身对应的默认开局锚点 id */
+  /** 默认开局锚点 id */
   readonly defaultStart?: string;
   readonly automatic?: boolean;
+  /** 复位到默认起点按钮文案（非默认态） */
+  readonly resetLabel?: string;
+  /** 复位到默认起点按钮文案（当前已是默认态） */
+  readonly automaticLabel?: string;
+  /** 全屏大地图容器里铺满剩余高度，不被窄屏固定高度截断 */
+  readonly fillHeight?: boolean;
   readonly onChange: (id: string) => void;
+  /** 地图顶栏右侧附加按钮（如全屏选点弹窗的“完成 / 关闭”） */
+  readonly topActions?: ReactNode;
 }) {
   const tiles = useMapTiles();
   const {
@@ -232,7 +244,7 @@ export function StartMapPicker({
             }
           }}
         >
-          {automatic ? "已跟随出身" : "跟随出身"} · {resetAnchor?.name ?? "出身起点"}
+          {automatic ? automaticLabel : resetLabel} · {resetAnchor?.name ?? "默认起点"}
         </Button>
       </div>
       {query.trim() !== "" && (
@@ -248,7 +260,12 @@ export function StartMapPicker({
         </ul>
       )}
 
-      <section aria-label="开局地点地图" className={styles.startMap} style={pinVars()}>
+      <section
+        aria-label="开局地点地图"
+        className={styles.startMap}
+        data-fill={fillHeight || undefined}
+        style={pinVars()}
+      >
         {/* 不借剧情地图的 mapTop：它带下边框和渐变，捏人页不新加这两样（项目约束） */}
         <header className={styles.startMapTop}>
           <h3 className={story.mapTopTitle}>夜之城</h3>
@@ -260,6 +277,15 @@ export function StartMapPicker({
                 : "还没选开局地点"}
           </span>
           <div className={story.mapTools}>
+            {picked && (
+              <Button
+                small
+                label="定位到已选开局地点"
+                onClick={() => lookAt(picked.x, picked.y, Math.max(zoom, POI_ZOOM))}
+              >
+                定位当前选点
+              </Button>
+            )}
             <span className={story.mapZoom}>
               <Button small label="缩小" onClick={() => zoomBy(1 / 1.4)}>
                 −
@@ -272,6 +298,7 @@ export function StartMapPicker({
                 复位
               </Button>
             </span>
+            {topActions}
           </div>
         </header>
 

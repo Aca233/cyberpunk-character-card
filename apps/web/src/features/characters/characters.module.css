@@ -1312,6 +1312,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  max-height: 7.5rem;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1374,14 +1376,14 @@
 }
 
 @media (max-width: 1320px) {
-  .startMap {
+  .startMap:not([data-fill]) {
     flex: 0 0 auto;
     height: clamp(20rem, 48vh, 30rem);
   }
 }
 
 @media (max-width: 760px) {
-  .startMap {
+  .startMap:not([data-fill]) {
     height: 20rem;
   }
 }

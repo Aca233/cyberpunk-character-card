@@ -485,6 +485,7 @@
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 6px currentColor;
+  animation: bioPulse 1.8s ease-in-out infinite;
 }
 
 .scanLive:where([data-alert="warn"]) {
@@ -1047,17 +1048,17 @@
 
 @keyframes bioScanSweep {
   0% {
-    top: 4%;
+    transform: translateY(4px);
     opacity: 0;
   }
   10% {
-    opacity: 0.52;
+    opacity: 0.56;
   }
   90% {
-    opacity: 0.52;
+    opacity: 0.56;
   }
   100% {
-    top: 94%;
+    transform: translateY(100px);
     opacity: 0;
   }
 }
@@ -1068,12 +1069,13 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.52;
+    opacity: 0.48;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .scanBeam,
+  .scanLive i,
   .statusPill:where([data-tone="bad"], [data-tone="dead"]) {
     animation: none;
   }

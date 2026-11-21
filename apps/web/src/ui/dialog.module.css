@@ -10,7 +10,7 @@
 
 .dialog {
   width: min(560px, calc(100vw - 32px));
-  animation: dialogSnapIn var(--dur-modal) var(--ease-snap) both;
+  animation: dialogSnapIn 240ms var(--ease-snap) both;
 }
 
 .layout {
@@ -53,9 +53,15 @@
 }
 
 @keyframes dialogSnapIn {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(14px) scale(0.96);
+    clip-path: inset(0 0 18% 0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
   }
 }
 

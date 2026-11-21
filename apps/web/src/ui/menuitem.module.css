@@ -7,8 +7,9 @@
   color: var(--cp-red);
   text-align: left;
   transition:
-    color var(--dur-flash),
-    transform var(--dur-flash);
+    color var(--dur-flash) var(--ease-cyber),
+    transform 190ms var(--ease-snap),
+    text-shadow var(--dur-flash) var(--ease-cyber);
 }
 
 /* 左边的原作菱形格（计划第十二节第 9 条）：描边和实心两层叠在同一格里，实心那层平时藏着 */
@@ -16,6 +17,7 @@
   display: inline-grid;
   flex: none;
   place-items: center;
+  transition: transform 200ms var(--ease-snap);
 }
 
 .mark > * {
@@ -24,7 +26,11 @@
 
 .markFill {
   opacity: 0;
-  transition: opacity var(--dur-flash);
+  transform: scale(0.45);
+  transition:
+    opacity var(--dur-flash) var(--ease-cyber),
+    transform 210ms var(--ease-snap),
+    filter var(--dur-flash) var(--ease-cyber);
 }
 
 .label {
@@ -32,6 +38,8 @@
   font-family: var(--font-ui);
   font-size: var(--fs-menu);
   font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: letter-spacing 190ms var(--ease-snap);
 }
 
 .hint {
@@ -43,6 +51,9 @@
   letter-spacing: 0.04em;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    transform 190ms var(--ease-snap);
 }
 
 .hint[data-tone="cyan"] {
@@ -55,17 +66,29 @@
 }
 
 .item:hover:not(:disabled),
+.item:focus-visible:not(:disabled),
 .item[data-selected] {
   color: var(--cp-cyan);
-  transform: translateX(3px);
+  transform: translateX(6px);
+  text-shadow: 0 0 14px rgb(94 246 255 / 38%);
 }
 
-.item[data-selected] .markFill {
-  opacity: 1;
+.item[data-selected] .label,
+.item:hover:not(:disabled) .label,
+.item:focus-visible:not(:disabled) .label {
+  letter-spacing: 0.08em;
 }
 
-.item:hover:not(:disabled) .markFill {
+.item[data-selected] .markFill,
+.item:hover:not(:disabled) .markFill,
+.item:focus-visible:not(:disabled) .markFill {
   opacity: 1;
+  transform: scale(1);
+  filter: drop-shadow(0 0 6px rgb(94 246 255 / 60%));
+}
+
+.item:active:not(:disabled) {
+  transform: translateX(3px) scale(0.99);
 }
 
 .item:disabled {
@@ -75,12 +98,27 @@
 
 @media (prefers-reduced-motion: reduce) {
   .item,
-  .markFill {
+  .mark,
+  .markFill,
+  .label,
+  .hint {
     transition: none;
   }
 
   .item:hover:not(:disabled),
-  .item[data-selected] {
+  .item:focus-visible:not(:disabled),
+  .item[data-selected],
+  .item:active:not(:disabled) {
+    transform: none;
+  }
+
+  .item[data-selected] .label,
+  .item:hover:not(:disabled) .label,
+  .item:focus-visible:not(:disabled) .label {
+    letter-spacing: 0.04em;
+  }
+
+  .markFill {
     transform: none;
   }
 }

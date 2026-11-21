@@ -1,6 +1,6 @@
-import { RADAR_ANCHORS } from "@cp/content/radar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
 import { formatDate } from "../../labels";
@@ -9,10 +9,17 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
+import { layerOpen, useLayer } from "../../ui/layers";
 import { MenuItem } from "../../ui/MenuItem";
 import { Panel } from "../../ui/Panel";
+import { useCardTilt } from "../../ui/useCardTilt";
 import { defaultStartLocationFor } from "../characters/creator";
-import { anchorLabel, startAnchor } from "../characters/StartMapPicker";
+import {
+  anchorLabel,
+  DEFAULT_START,
+  StartMapPicker,
+  startAnchor,
+} from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
 import styles from "./menu.module.css";
 
@@ -39,6 +46,7 @@ const STAGE_CODES: Partial<Record<Item, string>> = {
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
 const FRAME_SLICE = 120;
+const CELL_SLICE = [20, 30, 30, 20] as const;
 
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
@@ -139,7 +147,7 @@ export function MainMenu() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
+      if (e.defaultPrevented || layerOpen()) return;
       const active = document.activeElement;
       if (
         e.target instanceof HTMLInputElement ||
@@ -214,6 +222,11 @@ export function MainMenu() {
                 : "";
 
   const narratorName = profiles.data?.narrator;
+  const statusTilt = useCardTilt<HTMLDivElement>({
+    maxRotate: 7,
+    maxShift: 4,
+    shadowShift: 6,
+  });
 
   return (
     <main className={styles.menu}>
@@ -290,12 +303,18 @@ export function MainMenu() {
           ))}
         </nav>
 
-        <div className={styles.statusCard}>
+        <div className={styles.statusCard} {...statusTilt}>
           <NineSlice
             id="notify.itemCellBg"
             slice={30}
             tint="rgb(10 7 14 / 86%)"
             className={styles.statusSlice}
+          />
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="transparent"
+            className={styles.cardGlare}
           />
           <NineSlice
             id="notify.itemCellFg"
@@ -675,6 +694,11 @@ function SaveCard({
   compact?: boolean;
   featured?: boolean;
 }) {
+  const tilt = useCardTilt<HTMLButtonElement>({
+    maxRotate: featured ? 6.5 : 5,
+    maxShift: featured ? 6 : 4,
+    shadowShift: 8,
+  });
   return (
     <button
       type="button"
@@ -682,8 +706,18 @@ function SaveCard({
       data-compact={compact || undefined}
       data-featured={featured || undefined}
       onClick={onOpen}
+      {...tilt}
     >
-      <CellFrame />
+      <CellFrame
+        surface={
+          <NineSlice
+            id="map.filterCellBg"
+            slice={CELL_SLICE}
+            tint="transparent"
+            className={styles.cardGlare}
+          />
+        }
+      />
       <Asset
         id="menu.saveSlot"
         height={compact ? 24 : 40}
@@ -723,6 +757,12 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
   const [customStartLocation, setCustomStartLocation] = useState("");
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const dossierTilt = useCardTilt<HTMLDivElement>({
+    maxRotate: 5.5,
+    maxShift: 4,
+    shadowShift: 6,
+  });
   const entries = characters.data ?? [];
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
   const characterId = selected?.id ?? "";
@@ -801,25 +841,31 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
             </div>
           </div>
           {selected && (
-            <label className={styles.field}>
+            <div className={`${styles.field} ${styles.fieldSpan}`}>
               <span>开局地点（可选覆盖）</span>
-              <FrameBox>
-                <select
-                  value={customStartLocation}
-                  disabled={create.isPending}
-                  onChange={(e) => setCustomStartLocation(e.target.value)}
-                >
-                  <option value="">
-                    默认（{defaultSpot ? anchorLabel(defaultSpot) : "按出身分配"}）
-                  </option>
-                  {RADAR_ANCHORS.map((anchor) => (
-                    <option key={anchor.id} value={anchor.id}>
-                      {anchorLabel(anchor)}
-                    </option>
-                  ))}
-                </select>
-              </FrameBox>
-            </label>
+              <div className={styles.fieldRow}>
+                <div className={styles.startSpotBar}>
+                  <CellFrame />
+                  <span className={styles.startSpotName}>
+                    {startSpot ? anchorLabel(startSpot) : "按出身分配"}
+                  </span>
+                  <span
+                    className={styles.startSpotBadge}
+                    data-custom={customStartLocation ? "" : undefined}
+                  >
+                    {customStartLocation ? "已自定义覆盖" : defaultSpot ? "角色默认" : "按出身分配"}
+                  </span>
+                </div>
+                <Button disabled={create.isPending} onClick={() => setMapPickerOpen(true)}>
+                  大地图选点
+                </Button>
+                {customStartLocation && (
+                  <Button disabled={create.isPending} onClick={() => setCustomStartLocation("")}>
+                    恢复默认
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </div>
         {characters.isError && (
@@ -834,8 +880,17 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <p className={styles.note}>还没有角色。</p>
         )}
         {selected && (
-          <div className={styles.charDossier}>
-            <CellFrame />
+          <div className={styles.charDossier} {...dossierTilt}>
+            <CellFrame
+              surface={
+                <NineSlice
+                  id="map.filterCellBg"
+                  slice={CELL_SLICE}
+                  tint="transparent"
+                  className={styles.cardGlare}
+                />
+              }
+            />
             <div className={styles.charDossierHead}>
               <strong>{selected.card.name}</strong>
               {selected.card.alias && (
@@ -863,6 +918,94 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           </Button>
         </div>
       </form>
+      {selected && mapPickerOpen && (
+        <StartLocationMapModal
+          characterName={selected.card.name}
+          value={startLocation ?? DEFAULT_START}
+          defaultStart={defaultLocation ?? DEFAULT_START}
+          automatic={!customStartLocation}
+          onChange={(id) => {
+            if (!id || id === defaultLocation) setCustomStartLocation("");
+            else setCustomStartLocation(id);
+          }}
+          onClose={() => setMapPickerOpen(false)}
+        />
+      )}
     </Panel>
   );
+}
+
+/** 切法照地图浮层 map.panel* */
+const MAP_PANEL_SLICE = [20, 20, 30, 30] as const;
+
+/** 主菜单新建存档的全屏大地图开局选点浮层 */
+function StartLocationMapModal({
+  characterName,
+  value,
+  defaultStart,
+  automatic,
+  onChange,
+  onClose,
+}: {
+  readonly characterName: string;
+  readonly value: string;
+  readonly defaultStart: string;
+  readonly automatic: boolean;
+  readonly onChange: (id: string) => void;
+  readonly onClose: () => void;
+}) {
+  useLayer(onClose);
+  const picked = startAnchor(value);
+  const content = (
+    <div className={styles.mapModalBackdrop}>
+      <button
+        type="button"
+        className={styles.mapModalDismiss}
+        aria-label="关闭大地图选点"
+        onClick={onClose}
+      />
+      <section
+        className={styles.mapModal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="夜之城大地图选开局地点"
+      >
+        <NineSlice id="map.panelBg" tint="var(--cp-surface)" slice={MAP_PANEL_SLICE} />
+        <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={MAP_PANEL_SLICE} />
+        <div className={styles.mapModalInner}>
+          <header className={styles.mapModalHead}>
+            <div className={styles.mapModalHeading}>
+              <span className={styles.mapModalCode}>{"NIGHT CITY // DROP POINT"}</span>
+              <h2 className={styles.mapModalTitle}>为「{characterName}」选择开局地点</h2>
+            </div>
+            <div className={styles.mapModalActions}>
+              <span className={styles.mapModalPicked}>
+                当前选点：
+                <strong>{picked ? anchorLabel(picked) : "按出身分配"}</strong>
+                {automatic ? "（默认）" : "（已覆盖）"}
+              </span>
+              <Button primary small onClick={onClose}>
+                确认此地点
+              </Button>
+              <Button small label="关闭大地图（Esc）" onClick={onClose}>
+                关闭
+              </Button>
+            </div>
+          </header>
+          <div className={styles.mapModalBody}>
+            <StartMapPicker
+              value={value}
+              defaultStart={defaultStart}
+              automatic={automatic}
+              resetLabel="恢复默认"
+              automaticLabel="当前默认"
+              fillHeight
+              onChange={onChange}
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+  return createPortal(content, document.body);
 }

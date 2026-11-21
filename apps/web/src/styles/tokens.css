@@ -88,8 +88,11 @@
   --dur-flash: 150ms;
   --dur-slide: 250ms;
   --dur-modal: 200ms;
+  --dur-enter: 320ms;
+  --dur-exit: 180ms;
   --ease-cyber: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-glitch: steps(2, end);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -97,5 +100,7 @@
     --dur-flash: 0ms;
     --dur-slide: 0ms;
     --dur-modal: 0ms;
+    --dur-enter: 0ms;
+    --dur-exit: 0ms;
   }
 }

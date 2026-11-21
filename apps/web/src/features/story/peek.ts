@@ -24,9 +24,10 @@ export interface Expand {
 export type SetExpand = Dispatch<SetStateAction<Expand | null>>;
 
 /**
- * 鼠标停稳 180ms 后再预览展开，防止掠过屏幕两侧误触；点击和快捷键依然 0ms 瞬开
+ * 鼠标停稳 420ms 后再预览展开：既有充足时间感受常态卡片的 3D 按压倾斜质感、防止掠过误触，
+ * 停下来看依然能自然预览；点击和快捷键依然 0ms 瞬开
  */
-const OPEN_MS = 180;
+const OPEN_MS = 420;
 const CLOSE_MS = 280;
 /** 最后一次在输入框里按键之后多久之内算「正在打字」 */
 const TYPING_MS = 800;

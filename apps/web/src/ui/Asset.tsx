@@ -85,7 +85,8 @@ interface NineSliceProps {
 
 /**
  * 九宫格：铺满最近的 position: relative 父元素，按切线拉伸、染色。
- * 用 -webkit-mask-box-image（Chromium 内核浏览器）
+ * 用 -webkit-mask-box-image（Chromium 内核浏览器）；
+ * 若传入自定义 background（如线性掠射高光），会自动叠加在同形蒙版内，严格贴合原作斜切轮廓不漏边。
  */
 export function NineSlice({ id, tint, slice, className, style }: NineSliceProps) {
   const info = asset(id);
@@ -98,8 +99,8 @@ export function NineSlice({ id, tint, slice, className, style }: NineSliceProps)
       aria-hidden
       className={[styles.nineSlice, className].filter(Boolean).join(" ")}
       style={{
-        ...style,
         backgroundColor: tint,
+        ...style,
         WebkitMaskBoxImage: `url("${info.url}") ${cut} fill / ${widths} stretch`,
       }}
     />

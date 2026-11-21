@@ -8,9 +8,10 @@ const CELL_SLICE = [20, 30, 30, 20] as const;
 /**
  * 原作格子的底和框两层（用户定的：只用原作素材，不手画边框）。
  * 颜色走父元素上的 --box-fill / --box-line，悬停、选中、聚焦时父元素改变量即可；
- * 父元素要 position: relative 和 isolation: isolate，两层垫在内容下面
+ * 父元素要 position: relative 和 isolation: isolate，两层垫在内容下面。
+ * 可选 surface 插在底板与框线之间，用来承载同形蒙版材质/斜向掠射反光，确保框线锐利不糊。
  */
-export function CellFrame() {
+export function CellFrame({ surface }: { readonly surface?: ReactNode } = {}) {
   return (
     <>
       <NineSlice
@@ -19,6 +20,7 @@ export function CellFrame() {
         slice={CELL_SLICE}
         className={styles.slice}
       />
+      {surface}
       <NineSlice
         id="map.filterCellFg"
         tint="var(--box-line, var(--cp-red-dim))"

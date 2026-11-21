@@ -11,14 +11,15 @@
   isolation: isolate;
   cursor: var(--cp-cursor-hand);
   transition:
-    color var(--dur-flash),
-    transform 90ms ease-out;
+    color var(--dur-flash) var(--ease-cyber),
+    transform 110ms var(--ease-snap),
+    text-shadow var(--dur-flash) var(--ease-cyber);
 }
 
 .bg {
   z-index: -1;
   opacity: 0.16;
-  transition: opacity var(--dur-flash);
+  transition: opacity var(--dur-flash) var(--ease-cyber);
 }
 
 .action:disabled {
@@ -26,14 +27,20 @@
   cursor: default;
 }
 
+.action:focus-visible,
+.action[aria-expanded="true"],
+.action:hover:not(:disabled) {
+  text-shadow: 0 0 8px rgb(94 246 255 / 36%);
+}
+
 .action:focus-visible .bg,
 .action[aria-expanded="true"] .bg,
 .action:hover:not(:disabled) .bg {
-  opacity: 0.32;
+  opacity: 0.34;
 }
 
 .action:active:not(:disabled) {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 
 @media (prefers-reduced-motion: reduce) {

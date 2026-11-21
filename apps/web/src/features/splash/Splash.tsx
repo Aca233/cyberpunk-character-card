@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Asset } from "../../ui/Asset";
+import { Asset, cssUrl } from "../../ui/Asset";
 import styles from "./splash.module.css";
 
-const DURATION_MS = 2200;
+const DURATION_MS = 2400;
 
-/** 启动画面：黄色 Logo 故障闪入，约 2 秒后进主菜单；任意键或点击跳过 */
+/** 启动画面：扫描线唤醒 + 黄色 Logo 色差故障闪入，约 2.4 秒后进主菜单；任意键或点击跳过 */
 export function Splash() {
   const navigate = useNavigate();
   useEffect(() => {
@@ -22,6 +22,12 @@ export function Splash() {
   }, [navigate]);
   return (
     <main className={styles.splash}>
+      <span
+        className={styles.scan}
+        style={{ backgroundImage: cssUrl("fx.scanlines") }}
+        aria-hidden
+      />
+      <span className={styles.flashLine} aria-hidden />
       <div className={styles.logo}>
         <Asset id="splash.logo" height={180} alt="赛博朋克2091" className={styles.base} />
         <Asset id="splash.logo" height={180} className={styles.ghostA} />
