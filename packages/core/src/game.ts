@@ -836,6 +836,7 @@ export function projectState(
         /** 这一轮是否真正开启了斯安威斯坦（含界面开关、选项或判断阶段识别） */
         sandevistan: input.sandevistan === true || boosted,
         text: t.text,
+        thought: t.thought ?? null,
         media: t.media ?? [],
         imageContext: t.imageContext ?? null,
         draft: t.draft === true,

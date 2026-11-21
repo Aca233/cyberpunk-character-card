@@ -130,6 +130,7 @@ import {
   TransactionIntentSchema,
 } from "./stages";
 import { buildSummaryPrompt, readSummary, SUMMARY_TEMPERATURE, SummaryDocSchema } from "./summary";
+import { ThoughtStreamSplitter } from "./thought";
 import {
   REPAIR_OUTPUT_TOKENS,
   RepairBudget,
@@ -212,6 +213,8 @@ export function unsettledReason(dropped: readonly Dropped[]): string | undefined
 export interface NarratorTurn {
   /** 正文 */
   readonly text: string;
+  /** 本轮思维链（模型原生推理流或思考标签剥离所得），供前端默认折叠展示 */
+  readonly thought?: string | undefined;
   readonly read: string | undefined;
   readonly choices: readonly Choice[];
   /** 自由行动不产生检定；投影维持现有界面形状 */
@@ -305,6 +308,8 @@ export interface NarratorDeps {
   readonly signal?: AbortSignalLike;
   /** 每收到一段可以显示的正文就调用 */
   readonly onText?: (text: string) => void;
+  /** 每收到一段思维链（模型原生思考或思考标签内文本）就调用 */
+  readonly onThought?: (text: string) => void;
   /** 每次进入主要生成阶段或模型调用前通知，让界面展示实时进度 */
   readonly onStage?: (stage: TurnStageInfo) => void;
   /** 判断或前端触发了斯安威斯坦时，在正文流式输出前通知前端激活超频特效 */
@@ -408,7 +413,7 @@ class TurnBuilder {
     for await (const event of this.deps.llm.stream(request, this.deps.signal)) {
       if (event.type === "text") text += event.text;
       else if (event.type === "blocked") return { blocked: event.reason };
-      else {
+      else if (event.type === "done") {
         usage = event.usage;
         complete = completeFinish(event.finishReason);
       }
@@ -1147,11 +1152,13 @@ export async function runNarratorTurn(
     deps.onBoost?.({ id: activeBoost.id, name: activeBoost.name });
   }
   let narrative: string;
+  let thought: string | undefined;
   let narratedData: NarratedCheckpointData;
   const draftOnly = (text: string, reason: string): NarratorResult => ({
     kind: "done",
     turn: {
       text,
+      ...(thought !== undefined ? { thought } : {}),
       read,
       choices: [],
       check: undefined,
@@ -1194,6 +1201,7 @@ export async function runNarratorTurn(
   if (deps.checkpoint?.narrated) {
     narratedData = deps.checkpoint.narrated;
     narrative = narratedData.narrative;
+    thought = narratedData.thought;
     usage = narratedData.usage;
     b.notes.splice(0, b.notes.length, ...narratedData.notes);
     b.dropped.splice(0, b.dropped.length, ...narratedData.dropped);
@@ -1202,12 +1210,21 @@ export async function runNarratorTurn(
       label: "已恢复第 ③ 步正文",
       detail: "跳过重新生成，直接继续记账",
     });
+    if (thought) deps.onThought?.(thought);
     deps.onText?.(narrative);
   } else {
     const splitter = new StateSplitter();
+    const thoughtSplitter = new ThoughtStreamSplitter();
+    let nativeThought = "";
     let narrativeIssue: string | undefined;
     let narrativeComplete = false;
     let narrativeError: unknown;
+    const emitBodyChunk = (chunk: string) => {
+      if (chunk === "") return;
+      const piece = thoughtSplitter.push(chunk);
+      if (piece.thought !== "") deps.onThought?.(piece.thought);
+      if (piece.text !== "") deps.onText?.(piece.text);
+    };
     b.checkAborted();
     deps.onStage?.({
       stage: "narrate",
@@ -1227,12 +1244,16 @@ export async function runNarratorTurn(
         },
         deps.signal,
       )) {
-        if (event.type === "text") {
-          const shown = splitter.push(event.text);
-          if (shown !== "") deps.onText?.(shown);
+        if (event.type === "thought") {
+          if (event.text !== "") {
+            nativeThought += event.text;
+            deps.onThought?.(event.text);
+          }
+        } else if (event.type === "text") {
+          emitBodyChunk(splitter.push(event.text));
         } else if (event.type === "blocked") {
           return { kind: "blocked", reason: event.reason };
-        } else {
+        } else if (event.type === "done") {
           addNarrator(event.usage);
           narrativeComplete = completeFinish(event.finishReason);
           if (!narrativeComplete) {
@@ -1259,14 +1280,22 @@ export async function runNarratorTurn(
     if (narrativeError) throw narrativeError;
     const split = splitter.finish();
     const { rest, block } = split;
-    if (rest !== "") deps.onText?.(rest);
-    // 预设正则改存下来的正文（思维链、八股词之类）；边收边放的那份不改，存档和抽取按改过的
-    const cleaned = preset ? applyPresetRegex(split.narrative, preset).trim() : split.narrative;
+    if (rest !== "") emitBodyChunk(rest);
+    const thoughtSplit = thoughtSplitter.finish();
+    if (thoughtSplit.restThought !== "") deps.onThought?.(thoughtSplit.restThought);
+    if (thoughtSplit.restText !== "") deps.onText?.(thoughtSplit.restText);
+    const mergedThought = [nativeThought.trim(), thoughtSplit.thought]
+      .filter((part) => part !== "")
+      .join("\n\n");
+    thought = mergedThought !== "" ? mergedThought : undefined;
+    // 预设正则改存下来的纯净正文（标签、八股词之类）；思考标签已单独收入 thought 供折叠查看
+    const rawBody = thoughtSplit.body;
+    const cleaned = preset ? applyPresetRegex(rawBody, preset).trim() : rawBody;
     // 正则把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
-    const wiped = preset !== undefined && cleaned === "" && split.narrative.trim() !== "";
-    narrative = wiped ? split.narrative : cleaned;
+    const wiped = preset !== undefined && cleaned === "" && rawBody.trim() !== "";
+    narrative = wiped ? rawBody : cleaned;
     if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
-    else if (preset && narrative !== split.narrative.trim())
+    else if (preset && narrative !== rawBody.trim())
       b.notes.push("正文按预设正则清理过（思维链、标签等）");
     if (narrative === "") {
       throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
@@ -1281,6 +1310,7 @@ export async function runNarratorTurn(
 
     narratedData = {
       narrative,
+      ...(thought !== undefined ? { thought } : {}),
       usage,
       notes: [...b.notes],
       dropped: [...b.dropped],
@@ -2190,6 +2220,7 @@ export async function runNarratorTurn(
     kind: "done",
     turn: {
       text: narrative,
+      ...(thought !== undefined ? { thought } : {}),
       read,
       choices: unsettled === undefined ? choices : [],
       check: undefined,

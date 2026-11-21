@@ -61,6 +61,7 @@ export interface LlmUsage {
 
 export type LlmEvent =
   | { readonly type: "text"; readonly text: string }
+  | { readonly type: "thought"; readonly text: string }
   | { readonly type: "blocked"; readonly reason: string }
   | { readonly type: "done"; readonly finishReason: string; readonly usage?: LlmUsage };
 

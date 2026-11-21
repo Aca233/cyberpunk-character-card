@@ -16,4 +16,5 @@ export * from "./rewrite";
 export * from "./scene-memory";
 export * from "./stages";
 export * from "./summary";
+export * from "./thought";
 export * from "./turn";

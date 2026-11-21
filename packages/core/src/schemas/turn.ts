@@ -91,6 +91,7 @@ export type TurnEvent =
     }
   /** 这一轮激活了斯安威斯坦（前端主动开启或判断阶段识别）：不是终止事件 */
   | { readonly type: "boost"; readonly id: string; readonly name: string }
+  | { readonly type: "thought"; readonly text: string }
   | { readonly type: "text"; readonly text: string }
   /** 以下五种是终止事件，每一轮恰好一个 */
   | {
@@ -121,6 +122,7 @@ export function isTerminalEvent(event: TurnEvent): event is TerminalTurnEvent {
     event.type !== "stage" &&
     event.type !== "rolled" &&
     event.type !== "boost" &&
+    event.type !== "thought" &&
     event.type !== "text"
   );
 }

@@ -65,7 +65,7 @@ export async function rewriteNarrative(
     if (event.type === "text") text += event.text;
     else if (event.type === "blocked")
       return { ok: false, error: `模型拒绝了这次改写：${event.reason}；原来的正文保留` };
-    else {
+    else if (event.type === "done") {
       finished = completeFinish(event.finishReason);
       usage = event.usage;
     }

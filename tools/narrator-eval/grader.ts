@@ -88,7 +88,7 @@ export async function grade(
     if (event.type === "text") text += event.text;
     else if (event.type === "blocked")
       return { ok: false, error: `评分模型拒答：${event.reason}`, usage };
-    else usage = event.usage;
+    else if (event.type === "done") usage = event.usage;
   }
   const json = parseModelJson(text);
   const parsed = json.ok ? ReplySchema.safeParse(json.value) : undefined;

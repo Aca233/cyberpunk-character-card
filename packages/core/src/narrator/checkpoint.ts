@@ -61,6 +61,7 @@ export interface PreparedCheckpointData {
 
 export interface NarratedCheckpointData {
   readonly narrative: string;
+  readonly thought?: string | undefined;
   readonly usage: LlmUsage | undefined;
   readonly notes: readonly string[];
   readonly dropped: readonly TurnDroppedEntry[];
@@ -103,6 +104,7 @@ export interface TurnCheckpointSummary {
   readonly completedLabels: readonly string[];
   readonly input: TurnInput;
   readonly narrativePreview?: string | undefined;
+  readonly thoughtPreview?: string | undefined;
   readonly updatedAt: string;
 }
 
@@ -114,12 +116,14 @@ export const TURN_CHECKPOINT_LABELS: Readonly<Record<TurnCheckpointStage, readon
 
 export function checkpointSummaryOf(cp: TurnCheckpoint): TurnCheckpointSummary {
   const preview = cp.narrated?.narrative;
+  const thoughtPreview = cp.narrated?.thought;
   return {
     baseVersion: cp.baseVersion,
     stage: cp.stage,
     completedLabels: TURN_CHECKPOINT_LABELS[cp.stage],
     input: cp.input,
     ...(preview !== undefined ? { narrativePreview: preview } : {}),
+    ...(thoughtPreview !== undefined ? { thoughtPreview } : {}),
     updatedAt: cp.updatedAt,
   };
 }
