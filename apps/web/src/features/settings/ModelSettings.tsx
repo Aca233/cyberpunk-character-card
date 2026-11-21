@@ -216,6 +216,7 @@ export function ModelSettings({
 
   const narrator = data.profiles.find((p) => p.name === data.narrator);
   const aux = data.profiles.find((p) => p.name === data.aux);
+  const image = data.profiles.find((p) => p.name === data.image);
   const narratorProblems = textRoleProblems(narrator);
   const auxProblems = textRoleProblems(aux);
   const ready = narratorProblems.length === 0 && auxProblems.length === 0;
@@ -227,6 +228,40 @@ export function ModelSettings({
     : undefined;
   const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
 
+  const roleSlots: readonly {
+    readonly key: "narrator" | "aux" | "image";
+    readonly code: string;
+    readonly label: string;
+    readonly name: string | undefined;
+    readonly model: string | undefined;
+    readonly state: "ok" | "warn" | "optional";
+  }[] = [
+    {
+      key: "narrator",
+      code: "NARRATOR",
+      label: "叙事模型",
+      name: data.narrator,
+      model: narrator?.model,
+      state: narratorProblems.length === 0 ? "ok" : "warn",
+    },
+    {
+      key: "aux",
+      code: "AUX",
+      label: "辅助模型",
+      name: data.aux,
+      model: aux?.model,
+      state: auxProblems.length === 0 ? "ok" : "warn",
+    },
+    {
+      key: "image",
+      code: "IMAGE",
+      label: "文生图模型",
+      name: data.image,
+      model: image?.model,
+      state: data.image ? (problems(image).length === 0 ? "ok" : "warn") : "optional",
+    },
+  ];
+
   return (
     <div className={styles.root}>
       <section
@@ -237,7 +272,7 @@ export function ModelSettings({
         <NineSlice
           id="notify.itemCellBg"
           slice={30}
-          tint="rgb(12 10 18 / 86%)"
+          tint="var(--cp-surface-strong)"
           className={styles.slice}
         />
         <NineSlice
@@ -248,7 +283,7 @@ export function ModelSettings({
         />
         <Asset
           id="panel.glowLeft"
-          height={34}
+          height={42}
           tint={ready ? "var(--cp-cyan)" : "var(--cp-yellow)"}
           className={styles.readyGlow}
         />
@@ -260,50 +295,6 @@ export function ModelSettings({
             <strong className={styles.readyTitle}>
               {ready ? "模型已选好 · 仅检查配置，未发连通测试" : "当前选择还不能开始剧情"}
             </strong>
-          </div>
-          <div className={styles.readyMeta}>
-            <span className={styles.rolePair}>
-              叙事模型：
-              <button
-                type="button"
-                className={styles.roleChip}
-                disabled={!data.narrator}
-                onClick={() => {
-                  if (!data.narrator || (!adding && selected?.name === data.narrator)) return;
-                  requestSelect(data.narrator);
-                }}
-              >
-                {data.narrator ?? "未选择"}
-              </button>
-            </span>
-            <span className={styles.rolePair}>
-              辅助模型：
-              <button
-                type="button"
-                className={styles.roleChip}
-                disabled={!data.aux}
-                onClick={() => {
-                  if (!data.aux || (!adding && selected?.name === data.aux)) return;
-                  requestSelect(data.aux);
-                }}
-              >
-                {data.aux ?? "未选择"}
-              </button>
-            </span>
-            <span className={styles.rolePair}>
-              文生图模型：
-              <button
-                type="button"
-                className={styles.roleChip}
-                disabled={!data.image}
-                onClick={() => {
-                  if (!data.image || (!adding && selected?.name === data.image)) return;
-                  requestSelect(data.image);
-                }}
-              >
-                {data.image ?? "未选择（可选）"}
-              </button>
-            </span>
             {!ready && (
               <span className={styles.readyErrors}>
                 {[
@@ -312,6 +303,36 @@ export function ModelSettings({
                 ].join(" · ")}
               </span>
             )}
+          </div>
+          <div className={styles.roleSlots}>
+            {roleSlots.map((slot) => {
+              const isSelected = Boolean(slot.name && !adding && selected?.name === slot.name);
+              return (
+                <button
+                  key={slot.key}
+                  type="button"
+                  className={styles.roleSlot}
+                  data-state={slot.state}
+                  data-selected={isSelected || undefined}
+                  disabled={!slot.name}
+                  onClick={() => {
+                    if (!slot.name || isSelected) return;
+                    requestSelect(slot.name);
+                  }}
+                >
+                  <div className={styles.roleSlotHead}>
+                    <span className={styles.roleSlotLabel}>{slot.label}</span>
+                    <span className={styles.roleSlotCode}>{slot.code}</span>
+                  </div>
+                  <strong className={styles.roleSlotName}>
+                    {slot.name ?? (slot.state === "optional" ? "未配置（可选）" : "未选择")}
+                  </strong>
+                  <span className={styles.roleSlotModel} title={slot.model}>
+                    {slot.model || (slot.name ? "未填模型名" : "点击下方连接并分配")}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
         {!ready && candidate && (
@@ -329,9 +350,17 @@ export function ModelSettings({
       </section>
 
       {notice && (
-        <p className={styles.success} role="status">
-          {notice}
-        </p>
+        <div className={styles.banner} role="status">
+          <span>{notice}</span>
+          <button
+            type="button"
+            className={styles.bannerClose}
+            aria-label="关闭提示"
+            onClick={() => setNotice("")}
+          >
+            关闭
+          </button>
+        </div>
       )}
       {assign.isError && (
         <p className={styles.error} role="alert">
@@ -344,7 +373,7 @@ export function ModelSettings({
           <NineSlice
             id="notify.itemCellBg"
             slice={30}
-            tint="rgb(12 10 18 / 84%)"
+            tint="var(--cp-surface)"
             className={styles.slice}
           />
           <NineSlice
@@ -354,65 +383,78 @@ export function ModelSettings({
             className={styles.slice}
           />
           <div className={styles.listHead}>
-            <h3>我的连接</h3>
+            <div className={styles.listTitleWrap}>
+              <h3>我的连接</h3>
+              <span className={styles.countBadge}>{data.profiles.length}</span>
+            </div>
             <Button
               small
+              primary={adding}
               onClick={() => {
                 if (!adding) requestSelect("@new");
               }}
             >
-              添加连接
+              + 添加连接
             </Button>
           </div>
           <div className={styles.listScroll}>
-            <ul className={styles.list}>
-              {data.profiles.map((profile) => {
-                const issues = problems(profile);
-                const isNarrator = data.narrator === profile.name;
-                const isAux = data.aux === profile.name;
-                const isImage = data.image === profile.name;
-                return (
-                  <li key={profile.name}>
-                    <button
-                      type="button"
-                      className={styles.connection}
-                      aria-pressed={!adding && selected?.name === profile.name}
-                      onClick={() => {
-                        if (!adding && selected?.name === profile.name) return;
-                        requestSelect(profile.name);
-                      }}
-                    >
-                      <CellFrame />
-                      <div className={styles.connTop}>
-                        <strong>{profile.name}</strong>
-                        <span
-                          className={styles.statusDot}
-                          data-ready={issues.length === 0 || undefined}
-                        >
-                          {issues.length ? "待处理" : "已配"}
-                        </span>
-                      </div>
-                      <span className={styles.modelName}>{profile.model || "未填模型名"}</span>
-                      {(isNarrator || isAux || isImage) && (
-                        <div className={styles.roles}>
-                          {isNarrator && (
-                            <span className={styles.rolePill} data-role="narrator">
-                              叙事模型
-                            </span>
-                          )}
-                          {isAux && <span className={styles.rolePill}>辅助模型</span>}
-                          {isImage && (
-                            <span className={styles.rolePill} data-role="image">
-                              文生图
-                            </span>
-                          )}
+            {data.profiles.length === 0 ? (
+              <p className={styles.help}>还没有连接，请在右侧新增第一个模型连接。</p>
+            ) : (
+              <ul className={styles.list}>
+                {data.profiles.map((profile) => {
+                  const issues = problems(profile);
+                  const isNarrator = data.narrator === profile.name;
+                  const isAux = data.aux === profile.name;
+                  const isImage = data.image === profile.name;
+                  return (
+                    <li key={profile.name}>
+                      <button
+                        type="button"
+                        className={styles.connection}
+                        aria-pressed={!adding && selected?.name === profile.name}
+                        onClick={() => {
+                          if (!adding && selected?.name === profile.name) return;
+                          requestSelect(profile.name);
+                        }}
+                      >
+                        <CellFrame />
+                        <div className={styles.connTop}>
+                          <strong>{profile.name}</strong>
+                          <span
+                            className={styles.statusDot}
+                            data-ready={issues.length === 0 || undefined}
+                          >
+                            {issues.length ? "待处理" : "就绪"}
+                          </span>
                         </div>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        <div className={styles.connSub}>
+                          <span className={styles.typeTag}>{profile.type}</span>
+                          <span className={styles.modelName} title={profile.model || undefined}>
+                            {profile.model || "未填模型名"}
+                          </span>
+                        </div>
+                        {(isNarrator || isAux || isImage) && (
+                          <div className={styles.roles}>
+                            {isNarrator && (
+                              <span className={styles.rolePill} data-role="narrator">
+                                叙事模型
+                              </span>
+                            )}
+                            {isAux && <span className={styles.rolePill}>辅助模型</span>}
+                            {isImage && (
+                              <span className={styles.rolePill} data-role="image">
+                                文生图
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </aside>
 
@@ -420,7 +462,7 @@ export function ModelSettings({
           <NineSlice
             id="notify.itemCellBg"
             slice={30}
-            tint="rgb(12 10 18 / 84%)"
+            tint="var(--cp-surface)"
             className={styles.slice}
           />
           <NineSlice
@@ -461,10 +503,11 @@ export function ModelSettings({
                   <span className={styles.kicker}>02 / 用于游戏</span>
                   <h3>保存之后，明确选它来玩。</h3>
                 </div>
-                {/* 用户定的：只留「设为叙事模型」「设为辅助模型」两个按钮，不要合并按钮和折叠区 */}
-                <div className={styles.actions}>
+                {/* 用户定的：保留三个独立角色按钮，不要合并按钮和折叠区 */}
+                <div className={styles.roleActions}>
                   <Button
                     primary
+                    pressed={data.narrator === selected.name}
                     disabled={
                       dirty ||
                       assign.isPending ||
@@ -482,6 +525,7 @@ export function ModelSettings({
                   </Button>
                   <Button
                     primary
+                    pressed={data.aux === selected.name}
                     disabled={
                       dirty ||
                       assign.isPending ||
@@ -499,6 +543,7 @@ export function ModelSettings({
                   </Button>
                   <Button
                     primary
+                    pressed={data.image === selected.name}
                     disabled={
                       dirty ||
                       assign.isPending ||
@@ -536,10 +581,13 @@ export function ModelSettings({
         </section>
       </div>
 
-      <p className={styles.privacy}>
-        密钥只存在这个浏览器里（IndexedDB），由浏览器直接发给模型服务商，不经过本站服务器；公用电脑上用完请清除密钥。服务商需允许网页跨域访问（CORS），本地
-        Ollama 要设置 OLLAMA_ORIGINS。
-      </p>
+      <div className={styles.privacyBar}>
+        <span className={styles.privacyTag}>LOCAL // INDEXEDDB</span>
+        <p className={styles.privacy}>
+          密钥只存在这个浏览器里，由浏览器直接发给模型服务商，不经过本站服务器；公用电脑用完请清除密钥。服务商需允许网页跨域访问（CORS），本地
+          Ollama 需设置 OLLAMA_ORIGINS。
+        </p>
+      </div>
 
       {leaving !== null && (
         <Dialog
@@ -606,6 +654,7 @@ function ConnectionForm({
   const [model, setModel] = useState(source?.model ?? "");
   const [baseUrl, setBaseUrl] = useState(source?.baseUrl ?? "");
   const [key, setKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
   const [contextWindow, setContextWindow] = useState(String(source?.contextWindow ?? 128000));
   const [temperature, setTemperature] = useState(source?.temperature?.toString() ?? "");
   const [maxOutput, setMaxOutput] = useState(source?.maxOutputTokens?.toString() ?? "");
@@ -745,6 +794,7 @@ function ConnectionForm({
         setStage("参数已保存，正在保存密钥…");
         await api.setKey(connectionName, key.trim());
         setKey("");
+        setShowKey(false);
       }
       return connectionName;
     },
@@ -827,6 +877,7 @@ function ConnectionForm({
     setImageProtocol(profile?.imageProtocol ?? "auto");
     setComfyWorkflow(profile?.comfyWorkflow ?? "");
     setKey("");
+    setShowKey(false);
     setSaved("");
     setStage("");
     save.reset();
@@ -835,6 +886,30 @@ function ConnectionForm({
     event.preventDefault();
     if (!save.isPending) save.mutate();
   };
+  const selectPreset = (next: Preset) => {
+    if (persisted.current !== null || save.isPending) return;
+    setPreset(next);
+    setBaseUrl(PRESETS[next].baseUrl);
+    if (next === "sdwebui") {
+      setImageProtocol("sdwebui");
+      if (!model.trim()) setModel("default");
+    } else if (next === "comfyui") {
+      setImageProtocol("comfyui");
+    } else {
+      setImageProtocol("auto");
+    }
+  };
+  const keyBadge =
+    profile?.keyStatus === "configured"
+      ? { label: "已保存密钥", tone: "ok" as const }
+      : isLocalNoKey
+        ? { label: "本地免密钥", tone: "dim" as const }
+        : { label: "未填写", tone: "warn" as const };
+  const advSummaryParts = [
+    `窗口 ${contextWindow.trim() ? Number(contextWindow).toLocaleString() : "—"}`,
+    `温度 ${temperature.trim() || "默认"}`,
+    `输出 ${maxOutput.trim() || "默认"}`,
+  ];
 
   return (
     <form className={styles.form} autoComplete="off" onSubmit={submit}>
@@ -864,35 +939,27 @@ function ConnectionForm({
       <fieldset disabled={save.isPending}>
         <div className={styles.formGrid}>
           {!profile && !copyFrom && (
-            <label className={styles.field}>
+            <div className={`${styles.field} ${styles.span2}`}>
               <span>接入方式</span>
-              <FrameBox>
-                <select
-                  value={preset}
-                  disabled={persisted.current !== null}
-                  onChange={(event) => {
-                    const next = event.target.value as Preset;
-                    setPreset(next);
-                    setBaseUrl(PRESETS[next].baseUrl);
-                    if (next === "sdwebui") {
-                      setImageProtocol("sdwebui");
-                      if (!model.trim()) setModel("default");
-                    } else if (next === "comfyui") {
-                      setImageProtocol("comfyui");
-                    } else {
-                      setImageProtocol("auto");
-                    }
-                  }}
-                >
-                  {Object.entries(PRESETS).map(([id, value]) => (
-                    <option key={id} value={id}>
-                      {value.title}
-                    </option>
-                  ))}
-                </select>
-              </FrameBox>
-              <small>{PRESETS[preset].hint}</small>
-            </label>
+              <div className={styles.presetGrid} role="group" aria-label="选择接入方式">
+                {(Object.entries(PRESETS) as [Preset, (typeof PRESETS)[Preset]][]).map(
+                  ([id, value]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={styles.presetCard}
+                      aria-pressed={preset === id}
+                      disabled={persisted.current !== null || save.isPending}
+                      onClick={() => selectPreset(id)}
+                    >
+                      <CellFrame />
+                      <strong className={styles.presetCardTitle}>{value.title}</strong>
+                      <span className={styles.presetCardHint}>{value.hint}</span>
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
           )}
           {!profile && (
             <label className={styles.field}>
@@ -1034,11 +1101,27 @@ function ConnectionForm({
               </div>
             </Panel>
           )}
-          <label className={`${styles.field} ${styles.span2}`}>
-            <span>API 密钥{profile?.keyStatus === "configured" ? " · 已保存" : ""}</span>
+          <div className={`${styles.field} ${styles.span2}`}>
+            <div className={styles.fieldHead}>
+              <div className={styles.fieldTitleGroup}>
+                <label htmlFor="cp-api-key">API 密钥</label>
+                <span className={styles.keyBadge} data-tone={keyBadge.tone}>
+                  {keyBadge.label}
+                </span>
+              </div>
+              <button
+                type="button"
+                className={styles.inlineToggle}
+                disabled={save.isPending || key.length === 0}
+                onClick={() => setShowKey((v) => !v)}
+              >
+                {showKey ? "隐藏输入" : "显示输入"}
+              </button>
+            </div>
             <FrameBox>
               <input
-                type="password"
+                id="cp-api-key"
+                type={showKey ? "text" : "password"}
                 name="cp-api-key"
                 autoComplete="new-password"
                 data-lpignore="true"
@@ -1060,7 +1143,7 @@ function ConnectionForm({
                 ? `本地 ${currentType} 通常不需要密钥。`
                 : "没有密钥也可以先保存连接，但不能用于剧情或文生图。"}
             </small>
-          </label>
+          </div>
           <label className={styles.field}>
             <span>文生图协议（用于「设为文生图模型」时）</span>
             <FrameBox>
@@ -1094,65 +1177,78 @@ function ConnectionForm({
         </div>
 
         <details className={styles.advanced}>
-          <summary>高级参数 · 不确定时先保持原值</summary>
-          <div className={styles.advGrid}>
-            <label className={styles.field}>
-              <span>上下文长度（tokens）</span>
-              <FrameBox>
-                <input
-                  name="cp-context-window"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  required
-                  inputMode="numeric"
-                  value={contextWindow}
-                  onChange={(e) => setContextWindow(e.target.value)}
-                />
-              </FrameBox>
-              <small>按服务商文档填写，非单次输出字数。</small>
-            </label>
-            <label className={styles.field}>
-              <span>温度（0–2，可留空）</span>
-              <FrameBox>
-                <input
-                  name="cp-temperature"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  inputMode="decimal"
-                  value={temperature}
-                  onChange={(e) => setTemperature(e.target.value)}
-                />
-              </FrameBox>
-            </label>
-            <label className={styles.field}>
-              <span>最大输出（tokens，可留空）</span>
-              <FrameBox>
-                <input
-                  name="cp-max-output"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  inputMode="numeric"
-                  value={maxOutput}
-                  onChange={(e) => setMaxOutput(e.target.value)}
-                />
-              </FrameBox>
-            </label>
-            {(currentType === "openai" || currentType === "ollama") && (
+          <summary className={styles.advSummary}>
+            <span className={styles.advTitle}>
+              <Asset
+                id="menu.arrowFill"
+                width={9}
+                tint="currentColor"
+                className={styles.advArrow}
+              />
+              <span>高级参数</span>
+            </span>
+            <span className={styles.advMeta}>{advSummaryParts.join(" · ")}</span>
+          </summary>
+          <div className={styles.advBody}>
+            <div className={styles.advGrid}>
               <label className={styles.field}>
-                <span>向量嵌入模型（可选，用于记忆检索）</span>
+                <span>上下文长度（tokens）</span>
                 <FrameBox>
                   <input
-                    name="cp-embedding-model"
+                    name="cp-context-window"
                     autoComplete="off"
                     data-lpignore="true"
-                    placeholder="如 text-embedding-3-small"
-                    value={embeddingModel}
-                    onChange={(e) => setEmbeddingModel(e.target.value)}
+                    required
+                    inputMode="numeric"
+                    value={contextWindow}
+                    onChange={(e) => setContextWindow(e.target.value)}
                   />
                 </FrameBox>
-                <small>留空则仅使用规则检索，支持 OpenAI 兼容 /v1/embeddings。</small>
+                <small>按服务商文档填写，非单次输出字数。</small>
               </label>
-            )}
+              <label className={styles.field}>
+                <span>温度（0–2，可留空）</span>
+                <FrameBox>
+                  <input
+                    name="cp-temperature"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    inputMode="decimal"
+                    value={temperature}
+                    onChange={(e) => setTemperature(e.target.value)}
+                  />
+                </FrameBox>
+              </label>
+              <label className={styles.field}>
+                <span>最大输出（tokens，可留空）</span>
+                <FrameBox>
+                  <input
+                    name="cp-max-output"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    inputMode="numeric"
+                    value={maxOutput}
+                    onChange={(e) => setMaxOutput(e.target.value)}
+                  />
+                </FrameBox>
+              </label>
+              {(currentType === "openai" || currentType === "ollama") && (
+                <label className={styles.field}>
+                  <span>向量嵌入模型（可选，用于记忆检索）</span>
+                  <FrameBox>
+                    <input
+                      name="cp-embedding-model"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      placeholder="如 text-embedding-3-small"
+                      value={embeddingModel}
+                      onChange={(e) => setEmbeddingModel(e.target.value)}
+                    />
+                  </FrameBox>
+                  <small>留空则仅使用规则检索，支持 OpenAI 兼容 /v1/embeddings。</small>
+                </label>
+              )}
+            </div>
           </div>
         </details>
 
@@ -1232,41 +1328,57 @@ function ConnectionActions({
         <span className={styles.kicker}>03 / 可选验证与管理</span>
         <span className={styles.help}>测试连接会发出真实请求，可能产生费用</span>
       </div>
-      <div className={styles.actions}>
-        <Button
-          disabled={busy || dirty}
-          reason={dirty ? "先保存或撤销修改" : "正在处理连接"}
-          onClick={onDuplicate}
-        >
-          复制连接
-        </Button>
-        <Button
-          disabled={busy || dirty || problems(profile).length > 0}
-          reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}
-          onClick={() => setDialog("test")}
-        >
-          {test.isPending ? "正在测试…" : "测试连接…"}
-        </Button>
-        {profile.keySource === "config" && (
-          <Button disabled={busy || dirty} onClick={() => setDialog("key")}>
-            清除已保存密钥
+      <div className={styles.actionBar}>
+        <div className={styles.actionGroup}>
+          <Button
+            disabled={busy || dirty}
+            reason={dirty ? "先保存或撤销修改" : "正在处理连接"}
+            onClick={onDuplicate}
+          >
+            复制连接
           </Button>
-        )}
-        <Button
-          disabled={busy || dirty || inUse}
-          reason={inUse ? "先将角色和辅助模型改用其他连接" : "先保存或撤销修改"}
-          onClick={() => setDialog("delete")}
-        >
-          删除连接
-        </Button>
-        {inUse && <span className={styles.help}>使用中，不能删除</span>}
+          <Button
+            disabled={busy || dirty || problems(profile).length > 0}
+            reason={dirty ? "先保存或撤销修改" : problems(profile).join("；")}
+            onClick={() => setDialog("test")}
+          >
+            {test.isPending ? "正在测试…" : "测试连接…"}
+          </Button>
+        </div>
+        <div className={styles.dangerGroup}>
+          {profile.keySource === "config" && (
+            <Button disabled={busy || dirty} onClick={() => setDialog("key")}>
+              清除已保存密钥
+            </Button>
+          )}
+          <Button
+            disabled={busy || dirty || inUse}
+            reason={inUse ? "先将角色和辅助模型改用其他连接" : "先保存或撤销修改"}
+            onClick={() => setDialog("delete")}
+          >
+            删除连接
+          </Button>
+          {inUse && <span className={styles.help}>使用中不可删</span>}
+        </div>
       </div>
       {result && (
-        <p role="status" className={result.ok ? styles.success : styles.error}>
-          {result.ok
-            ? `本次连接成功 · ${result.model} · ${result.ms} ms`
-            : `连接失败：${result.error}`}
-        </p>
+        <div
+          role="status"
+          className={styles.testResult}
+          data-ok={result.ok || undefined}
+        >
+          <span className={styles.testBadge} data-ok={result.ok || undefined}>
+            {result.ok ? "连通成功" : "连接失败"}
+          </span>
+          {result.ok ? (
+            <>
+              <span className={styles.testModel}>{result.model}</span>
+              <span className={styles.testLatency}>{result.ms} ms</span>
+            </>
+          ) : (
+            <span className={styles.testErrText}>{result.error}</span>
+          )}
+        </div>
       )}
       {remove.isError && (
         <p className={styles.error} role="alert">
