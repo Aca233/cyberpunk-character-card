@@ -229,7 +229,7 @@ export function SettingsScreen() {
         ) : tab === "presets" ? (
           <PresetSettings />
         ) : tab === "narrative" ? (
-          <NarrativeSettings />
+          <NarrativeSettings onOpenContext={() => requestGo("context")} />
         ) : (
           <ContextViewer />
         )}

@@ -1,8 +1,8 @@
 import type { OffscreenPace } from "@cp/core";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
-import { FrameBox } from "../../ui/FrameBox";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import {
@@ -16,11 +16,15 @@ import {
 } from "./prefs";
 import styles from "./settings.module.css";
 
-const PACES: readonly [OffscreenPace, string][] = [
-  ["off", "关"],
-  ["slow", "慢（隔 5 场）"],
-  ["normal", "常规（隔 3 场）"],
-  ["fast", "快（隔 2 场）"],
+const PACES: readonly {
+  readonly id: OffscreenPace;
+  readonly title: string;
+  readonly sub: string;
+}[] = [
+  { id: "off", title: "关", sub: "仅聚焦当前" },
+  { id: "slow", title: "慢", sub: "每隔 5 场" },
+  { id: "normal", title: "常规", sub: "每隔 3 场" },
+  { id: "fast", title: "快", sub: "每隔 2 场" },
 ];
 
 /** 开关分两组：剧情里看得到的呈现，和只给调试用的剧透 */
@@ -38,6 +42,8 @@ const SHOW: readonly [NarrativeToggle, string, string][] = [
   ],
 ];
 
+const PROMPT_MAX = 800;
+
 const IMAGE_PROMPT_FIELDS: readonly {
   readonly key: ImagePromptField;
   readonly label: string;
@@ -50,41 +56,55 @@ const IMAGE_PROMPT_FIELDS: readonly {
     label: "角色 / NPC 肖像画风提示词",
     hint: "附加到角色立绘与 NPC 肖像的基准风格描述（建议英文）",
     placeholder: "Cyberpunk 2077 aesthetic, Night City neo-noir character portrait...",
-    rows: 2,
+    rows: 3,
   },
   {
     key: "imageScenePrompt",
     label: "回合场景插图画风提示词",
     hint: "附加到剧情回合插图的基准风格、光影与构图描述（建议英文）",
     placeholder: "Cyberpunk 2077 aesthetic, Night City cinematic scene illustration...",
-    rows: 2,
+    rows: 3,
   },
   {
     key: "imageNegativePrompt",
     label: "默认反向提示词（Negative Prompt）",
     hint: "告知生图模型尽量避开的元素，例如水印、文字框、崩坏手部等",
     placeholder: "lowres, blurry, watermark, text...",
-    rows: 2,
+    rows: 3,
   },
   {
     key: "imageAuxInstruction",
     label: "辅助模型提炼额外指令（可选）",
-    hint: "例如指定二次元赛璐璐、胶片颗粒、写实摄影或固定色调，提炼英文提示词时将一并遵循",
+    hint: "例如指定赛璐璐、胶片颗粒、写实摄影或固定色调，提炼英文提示词时将一并遵循",
     placeholder: "例如：采用《边缘行者》动画赛璐璐质感，偏冷青与洋红霓虹光影",
-    rows: 2,
+    rows: 3,
   },
 ];
 
 const DEBUG: readonly [NarrativeToggle, string, string][] = [
-  ["spoilers", "显示剧透", "人物隐藏动机与城市暗线"],
+  ["spoilers", "显示剧透", "解锁上下文调试视图，展示人物隐藏动机、判定过程与城市暗线"],
 ];
 
 /**
  * 叙事偏好：存在这台浏览器里，换设备要重新选。
- * 版式统一使用原作 notify.itemCell 外框 + 左侧发光标记，控件右对齐
+ * 桌面端采用上排双栏（左呈现 / 右节奏+调试）+ 下排 2×2 生图提示词工作区
  */
-export function NarrativeSettings() {
+export function NarrativeSettings({
+  onOpenContext,
+}: {
+  readonly onOpenContext?: () => void;
+}) {
   const prefs = useNarrativePrefs();
+  const [resetDone, setResetDone] = useState(false);
+
+  useEffect(() => {
+    if (!resetDone) return;
+    const timer = window.setTimeout(() => setResetDone(false), 2600);
+    return () => window.clearTimeout(timer);
+  }, [resetDone]);
+
+  const currentPace = PACES.find((p) => p.id === prefs.offscreen) ?? PACES[2];
+
   const toggle = ([key, label, hint]: readonly [NarrativeToggle, string, string]) => (
     <Row key={key} id={`pref-${key}`} label={label} hint={hint}>
       <ToggleCheck
@@ -95,79 +115,144 @@ export function NarrativeSettings() {
       />
     </Row>
   );
+
   return (
     <div className={styles.prefsRoot}>
-      <p className={styles.dim}>仅存于本浏览器 · 即时生效</p>
-
-      <section className={styles.prefGroup} aria-label="呈现">
-        <NineSlice
-          id="notify.itemCellBg"
-          slice={30}
-          tint="rgb(12 10 18 / 84%)"
-          className={styles.slice}
-        />
-        <NineSlice
-          id="notify.itemCellFg"
-          slice={30}
-          tint="var(--cp-red-dim)"
-          className={styles.slice}
-        />
-        <div className={styles.groupHeader}>
-          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
-          <span className={ms.kicker}>01 / 呈现</span>
+      <div className={styles.prefsSummary}>
+        <div className={styles.prefsSummaryLeft}>
+          <span className={styles.prefsTag}>PREFS // LOCAL</span>
+          <span className={styles.dim}>仅存于本浏览器 · 修改后即时生效</span>
         </div>
-        <span
-          className={styles.thinLine}
-          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-          aria-hidden
-        />
-        {SHOW.map(toggle)}
-      </section>
-
-      <section className={styles.prefGroup} aria-label="城市节奏">
-        <NineSlice
-          id="notify.itemCellBg"
-          slice={30}
-          tint="rgb(12 10 18 / 84%)"
-          className={styles.slice}
-        />
-        <NineSlice
-          id="notify.itemCellFg"
-          slice={30}
-          tint="var(--cp-red-dim)"
-          className={styles.slice}
-        />
-        <div className={styles.groupHeader}>
-          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
-          <span className={ms.kicker}>02 / 城市节奏</span>
+        <div className={styles.presetStats}>
+          <span className={styles.statChip} data-tone={prefs.offscreen === "off" ? undefined : "ok"}>
+            城市节奏：{currentPace.title}
+          </span>
+          <span className={styles.statChip} data-tone={prefs.autoTurnImage ? "ok" : undefined}>
+            自动配图：{prefs.autoTurnImage ? "开" : "关"}
+          </span>
         </div>
-        <span
-          className={styles.thinLine}
-          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-          aria-hidden
-        />
-        <Row id="pref-offscreen" label="城里的动静" hint="你不在场时城里的城市运转与人物动向">
-          <FrameBox>
-            <select
-              id="pref-offscreen"
-              value={prefs.offscreen}
-              onChange={(e) => setOffscreenPace(e.target.value as OffscreenPace)}
-            >
-              {PACES.map(([pace, label]) => (
-                <option key={pace} value={pace}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FrameBox>
-        </Row>
-      </section>
+      </div>
+
+      <div className={styles.prefsTwoCol}>
+        <section className={styles.prefGroup} aria-label="呈现">
+          <NineSlice
+            id="notify.itemCellBg"
+            slice={30}
+            tint="var(--cp-surface)"
+            className={styles.slice}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            slice={30}
+            tint="var(--cp-red-dim)"
+            className={styles.slice}
+          />
+          <div className={styles.groupHeader}>
+            <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+            <span className={ms.kicker}>01 / 呈现</span>
+          </div>
+          <span
+            className={styles.thinLine}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
+          />
+          <div className={styles.prefRows}>{SHOW.map(toggle)}</div>
+        </section>
+
+        <div className={styles.prefsSideStack}>
+          <section className={styles.prefGroup} aria-label="城市节奏">
+            <NineSlice
+              id="notify.itemCellBg"
+              slice={30}
+              tint="var(--cp-surface)"
+              className={styles.slice}
+            />
+            <NineSlice
+              id="notify.itemCellFg"
+              slice={30}
+              tint="var(--cp-red-dim)"
+              className={styles.slice}
+            />
+            <div className={styles.groupHeader}>
+              <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+              <span className={ms.kicker}>02 / 城市节奏</span>
+            </div>
+            <span
+              className={styles.thinLine}
+              style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+              aria-hidden
+            />
+            <div className={styles.paceBlock}>
+              <div className={styles.prefText}>
+                <strong>城里的动静</strong>
+                <small>你不在场时夜之城的场外生态运转与人物动向推演频率</small>
+              </div>
+              <div
+                className={styles.paceSegment}
+                role="radiogroup"
+                aria-label="城里的动静推演频率"
+              >
+                {PACES.map((pace) => {
+                  const selected = prefs.offscreen === pace.id;
+                  return (
+                    <button
+                      key={pace.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={styles.paceBtn}
+                      onClick={() => setOffscreenPace(pace.id)}
+                    >
+                      <CellFrame />
+                      <strong>{pace.title}</strong>
+                      <span>{pace.sub}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className={styles.prefGroup} aria-label="调试">
+            <NineSlice
+              id="notify.itemCellBg"
+              slice={30}
+              tint="var(--cp-surface)"
+              className={styles.slice}
+            />
+            <NineSlice
+              id="notify.itemCellFg"
+              slice={30}
+              tint="var(--cp-yellow)"
+              className={styles.slice}
+            />
+            <div className={styles.groupHeader}>
+              <Asset id="panel.glowLeft" height={18} tint="var(--cp-yellow)" />
+              <span className={ms.kicker}>04 / 调试</span>
+            </div>
+            <span
+              className={styles.thinLine}
+              style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+              aria-hidden
+            />
+            <div className={styles.prefRows}>{DEBUG.map(toggle)}</div>
+            {prefs.spoilers && onOpenContext && (
+              <div className={styles.debugJump}>
+                <span className={styles.dim}>剧透调试已开启，可查看完整提示词与结算明细。</span>
+                <Button small onClick={onOpenContext}>
+                  打开上下文（调试）
+                </Button>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
 
       <section className={styles.prefGroup} aria-label="文生图提示词设置">
         <NineSlice
           id="notify.itemCellBg"
           slice={30}
-          tint="rgb(12 10 18 / 84%)"
+          tint="var(--cp-surface)"
           className={styles.slice}
         />
         <NineSlice
@@ -180,7 +265,14 @@ export function NarrativeSettings() {
           <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
           <span className={ms.kicker}>03 / 文生图提示词</span>
           <div className={styles.groupAction}>
-            <Button small onClick={() => resetImagePromptFields()}>
+            {resetDone && <span className={styles.savedPill}>已恢复默认</span>}
+            <Button
+              small
+              onClick={() => {
+                resetImagePromptFields();
+                setResetDone(true);
+              }}
+            >
               恢复默认提示词
             </Button>
           </div>
@@ -191,50 +283,33 @@ export function NarrativeSettings() {
           aria-hidden
         />
         <div className={styles.promptGrid}>
-          {IMAGE_PROMPT_FIELDS.map((field) => (
-            <label key={field.key} className={styles.promptField} htmlFor={`pref-${field.key}`}>
-              <div className={styles.prefText}>
-                <strong>{field.label}</strong>
-                <small>{field.hint}</small>
-              </div>
-              <FrameBox>
-                <textarea
-                  id={`pref-${field.key}`}
-                  rows={field.rows}
-                  maxLength={800}
-                  value={prefs[field.key]}
-                  placeholder={field.placeholder}
-                  onChange={(e) => setImagePromptField(field.key, e.target.value)}
-                />
-              </FrameBox>
-            </label>
-          ))}
+          {IMAGE_PROMPT_FIELDS.map((field) => {
+            const value = prefs[field.key];
+            return (
+              <label key={field.key} className={styles.promptField} htmlFor={`pref-${field.key}`}>
+                <div className={styles.promptFieldHead}>
+                  <div className={styles.prefText}>
+                    <strong>{field.label}</strong>
+                    <small>{field.hint}</small>
+                  </div>
+                  <span className={styles.charCount}>
+                    {value.length} / {PROMPT_MAX}
+                  </span>
+                </div>
+                <FrameBox>
+                  <textarea
+                    id={`pref-${field.key}`}
+                    rows={field.rows}
+                    maxLength={PROMPT_MAX}
+                    value={value}
+                    placeholder={field.placeholder}
+                    onChange={(e) => setImagePromptField(field.key, e.target.value)}
+                  />
+                </FrameBox>
+              </label>
+            );
+          })}
         </div>
-      </section>
-
-      <section className={styles.prefGroup} aria-label="调试">
-        <NineSlice
-          id="notify.itemCellBg"
-          slice={30}
-          tint="rgb(12 10 18 / 84%)"
-          className={styles.slice}
-        />
-        <NineSlice
-          id="notify.itemCellFg"
-          slice={30}
-          tint="var(--cp-yellow)"
-          className={styles.slice}
-        />
-        <div className={styles.groupHeader}>
-          <Asset id="panel.glowLeft" height={18} tint="var(--cp-yellow)" />
-          <span className={ms.kicker}>04 / 调试</span>
-        </div>
-        <span
-          className={styles.thinLine}
-          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-          aria-hidden
-        />
-        {DEBUG.map(toggle)}
       </section>
     </div>
   );
