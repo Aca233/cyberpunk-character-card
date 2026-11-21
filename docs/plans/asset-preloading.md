@@ -1,6 +1,6 @@
 # 前端资源分层预载计划
 
-状态：进行中（2026-11-22）
+状态：已完成（2026-11-22）
 
 ## 背景与痛点
 
@@ -32,6 +32,7 @@
 
 ### 步骤 1：素材索引无副作用查询与本地后端预热
 - `apps/web/src/assets/index.ts`：新增 `assetUrlIfExists`、`loadedAssetIds`、`loadedMapTiles`，避免预载查询误报缺图。
+- `apps/web/src/features/story/mapCamera.ts`：`useMapTiles` 首帧同步读取 `loadedMapTiles()`，预载完成后打开地图不再闪切整图。
 - `apps/web/src/api/transport.ts`：新增 `warmLocalBackend()`，缓存动态导入模块并安全预热本地后端。
 
 ### 步骤 2：分层优先级预载引擎与场景 Hooks
@@ -46,5 +47,5 @@
 - `apps/web/src/features/characters/CharactersScreen.tsx`：接入 `useCharactersPreload(editor.card, characters.data, client)`。
 
 ### 步骤 4：静态检查与收口
-- 运行 `pnpm check-assets`、`pnpm typecheck` 与 `pnpm lint`，确保素材引用规范、类型与 Biome 检查全部通过。
-- 更新本计划状态并分步提交 Git（不混入工作区其他未提交改动）。
+- 已通过 `tools/assets/check.ts`（673 张素材与路径规范检查）、`tsc -p apps/web/tsconfig.json`、`tsc -p apps/web/tsconfig.node.json` 与 `biome check`（全部 0 错误）。
+- 已更新本计划状态并分步提交 Git，交由用户实际运行验收。

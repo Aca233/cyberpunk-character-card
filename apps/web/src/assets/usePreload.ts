@@ -210,9 +210,8 @@ export function useStoryPreload(
     }
 
     // 3. 玩家当前装备、随身物品、已装义体与名下载具
-    for (const slot of view.inventory.weapons) {
-      if (!slot) continue;
-      const art = itemArtOf(slot.id);
+    for (const weapon of view.inventory.carriedWeapons) {
+      const art = itemArtOf(weapon.id);
       if (art) highAssets.add(art);
     }
     if (view.inventory.healing) {
@@ -223,9 +222,8 @@ export function useStoryPreload(
       const art = itemArtOf(view.inventory.grenade.id);
       if (art) highAssets.add(art);
     }
-    for (const wornId of Object.values(view.inventory.worn)) {
-      if (!wornId) continue;
-      const art = itemArtOf(wornId);
+    for (const worn of view.inventory.clothing) {
+      const art = itemArtOf(worn.id);
       if (art) highAssets.add(art);
     }
     for (const itemId of Object.keys(view.inventory.backpack)) {
@@ -287,16 +285,19 @@ export function useCharactersPreload(
     const ids = new Set<AssetId>();
     const board = card.board;
     if (board) {
-      for (const cwId of board.cyberware) {
-        const art = itemArtOf(cwId);
+      if (board.tarot) {
+        ids.add(`tarot.${board.tarot}`);
+      }
+      for (const cw of board.cyberware) {
+        const art = itemArtOf(cw.id);
         if (art) ids.add(art);
       }
-      for (const weaponId of board.weapons ?? []) {
+      for (const weaponId of board.kit.weapons) {
         const art = itemArtOf(weaponId);
         if (art) ids.add(art);
       }
-      if (board.vehicle) {
-        const art = vehicleArtOf(board.vehicle);
+      if (board.kit.vehicle) {
+        const art = vehicleArtOf(board.kit.vehicle);
         if (art) ids.add(art);
       }
     }
