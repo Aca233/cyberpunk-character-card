@@ -6,7 +6,7 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
-import { Panel } from "../../ui/Panel";
+import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import styles from "./settings.module.css";
@@ -58,13 +58,13 @@ export function PresetSettings() {
       >
         <NineSlice
           id="notify.itemCellBg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-surface-strong)"
           className={ms.slice}
         />
         <NineSlice
           id="notify.itemCellFg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint={active ? "var(--cp-cyan)" : "var(--cp-yellow)"}
           className={ms.slice}
         />
@@ -139,13 +139,13 @@ export function PresetSettings() {
         <aside className={ms.sidebar} aria-label="预设列表">
           <NineSlice
             id="notify.itemCellBg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-surface)"
             className={ms.slice}
           />
           <NineSlice
             id="notify.itemCellFg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-red-dim)"
             className={ms.slice}
           />
@@ -207,48 +207,50 @@ export function PresetSettings() {
         <section className={ms.editor} aria-label="预设详情">
           <NineSlice
             id="notify.itemCellBg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-surface)"
             className={ms.slice}
           />
           <NineSlice
             id="notify.itemCellFg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-red-dim)"
             className={ms.slice}
           />
-          {selected ? (
-            <PresetDetail
-              key={selected.id}
-              preset={selected}
-              busy={choose.isPending}
-              onActivate={() => choose.mutate(selected.id)}
-              onChanged={refresh}
-              onDeleted={() => setPicked(null)}
-            />
-          ) : (
-            <Panel line="var(--cp-red-dim)" className={styles.emptyPresetPanel}>
-              <div className={styles.emptyPresetBody}>
-                <span className={ms.kicker}>{"TAVERN PRESET // STANDBY"}</span>
-                <h3>导入你的 SillyTavern 聊天补全预设</h3>
-                <p className={ms.help}>
-                  预设条目仅在叙事模型撰写正文时生效，负责文风、节奏与描写技法；世界状态与规则结算仍由系统严格把关。
-                </p>
-                <div>
-                  <label className={styles.fileButton}>
-                    <NineSlice
-                      id="tab.bg"
-                      tint="currentColor"
-                      slice={14}
-                      className={styles.fileBg}
-                    />
-                    <input type="file" accept=".json,application/json" onChange={onFile} />
-                    <span>{upload.isPending ? "导入中…" : "选择酒馆 .json 预设文件"}</span>
-                  </label>
+          <div className={ms.editorScroll}>
+            {selected ? (
+              <PresetDetail
+                key={selected.id}
+                preset={selected}
+                busy={choose.isPending}
+                onActivate={() => choose.mutate(selected.id)}
+                onChanged={refresh}
+                onDeleted={() => setPicked(null)}
+              />
+            ) : (
+              <Panel line="var(--cp-red-dim)" className={styles.emptyPresetPanel}>
+                <div className={styles.emptyPresetBody}>
+                  <span className={ms.kicker}>{"TAVERN PRESET // STANDBY"}</span>
+                  <h3>导入你的 SillyTavern 聊天补全预设</h3>
+                  <p className={ms.help}>
+                    预设条目仅在叙事模型撰写正文时生效，负责文风、节奏与描写技法；世界状态与规则结算仍由系统严格把关。
+                  </p>
+                  <div>
+                    <label className={styles.fileButton}>
+                      <NineSlice
+                        id="tab.bg"
+                        tint="currentColor"
+                        slice={14}
+                        className={styles.fileBg}
+                      />
+                      <input type="file" accept=".json,application/json" onChange={onFile} />
+                      <span>{upload.isPending ? "导入中…" : "选择酒馆 .json 预设文件"}</span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-            </Panel>
-          )}
+              </Panel>
+            )}
+          </div>
         </section>
       </div>
     </div>

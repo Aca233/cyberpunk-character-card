@@ -12,7 +12,7 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
-import { Panel } from "../../ui/Panel";
+import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import styles from "./model-settings.module.css";
 import shared from "./settings.module.css";
 
@@ -271,13 +271,13 @@ export function ModelSettings({
       >
         <NineSlice
           id="notify.itemCellBg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-surface-strong)"
           className={styles.slice}
         />
         <NineSlice
           id="notify.itemCellFg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint={ready ? "var(--cp-cyan)" : "var(--cp-yellow)"}
           className={styles.slice}
         />
@@ -372,13 +372,13 @@ export function ModelSettings({
         <aside className={styles.sidebar} aria-label="模型连接列表">
           <NineSlice
             id="notify.itemCellBg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-surface)"
             className={styles.slice}
           />
           <NineSlice
             id="notify.itemCellFg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-red-dim)"
             className={styles.slice}
           />
@@ -461,123 +461,125 @@ export function ModelSettings({
         <section className={styles.editor} aria-label="编辑模型连接">
           <NineSlice
             id="notify.itemCellBg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-surface)"
             className={styles.slice}
           />
           <NineSlice
             id="notify.itemCellFg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-red-dim)"
             className={styles.slice}
           />
-          {adding ? (
-            <ConnectionForm
-              key={`new-${copyFrom?.name ?? ""}`}
-              {...(copyFrom ? { copyFrom } : {})}
-              names={data.profiles.map((p) => p.name)}
-              onDirty={setDirty}
-              onSaved={(name) => {
-                setNotice(`「${name}」已保存。接下来点「设为叙事模型」或「设为辅助模型」。`);
-                select(name);
-              }}
-            />
-          ) : selected ? (
-            <div key={selected.name} className={styles.form}>
+          <div className={styles.editorScroll}>
+            {adding ? (
               <ConnectionForm
-                profile={selected}
+                key={`new-${copyFrom?.name ?? ""}`}
+                {...(copyFrom ? { copyFrom } : {})}
                 names={data.profiles.map((p) => p.name)}
                 onDirty={setDirty}
-                onSaved={() => {
-                  setDirty(false);
-                  setNotice("连接设置已保存。未发送模型请求。");
+                onSaved={(name) => {
+                  setNotice(`「${name}」已保存。接下来点「设为叙事模型」或「设为辅助模型」。`);
+                  select(name);
                 }}
               />
-              <span
-                className={shared.thinLine}
-                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-                aria-hidden
-              />
-              <section className={styles.usage}>
-                <div className={styles.usageHead}>
-                  <span className={styles.kicker}>02 / 用于游戏</span>
-                  <h3>保存之后，明确选它来玩。</h3>
-                </div>
-                {/* 用户定的：保留三个独立角色按钮，不要合并按钮和折叠区 */}
-                <div className={styles.roleActions}>
-                  <Button
-                    primary
-                    pressed={data.narrator === selected.name}
-                    disabled={
-                      dirty ||
-                      assign.isPending ||
-                      textRoleProblems(selected).length > 0 ||
-                      data.narrator === selected.name
-                    }
-                    reason={
-                      dirty
-                        ? "请先保存连接"
-                        : textRoleProblems(selected).join("；") || "已经是叙事模型"
-                    }
-                    onClick={() => assign.mutate({ narrator: selected.name })}
-                  >
-                    {data.narrator === selected.name ? "叙事模型使用中" : "设为叙事模型"}
-                  </Button>
-                  <Button
-                    primary
-                    pressed={data.aux === selected.name}
-                    disabled={
-                      dirty ||
-                      assign.isPending ||
-                      textRoleProblems(selected).length > 0 ||
-                      data.aux === selected.name
-                    }
-                    reason={
-                      dirty
-                        ? "请先保存连接"
-                        : textRoleProblems(selected).join("；") || "已经是辅助模型"
-                    }
-                    onClick={() => assign.mutate({ aux: selected.name })}
-                  >
-                    {data.aux === selected.name ? "辅助模型使用中" : "设为辅助模型"}
-                  </Button>
-                  <Button
-                    primary
-                    pressed={data.image === selected.name}
-                    disabled={
-                      dirty ||
-                      assign.isPending ||
-                      problems(selected).length > 0 ||
-                      data.image === selected.name
-                    }
-                    reason={
-                      dirty ? "请先保存连接" : problems(selected).join("；") || "已经是文生图模型"
-                    }
-                    onClick={() => assign.mutate({ image: selected.name })}
-                  >
-                    {data.image === selected.name ? "文生图模型使用中" : "设为文生图模型"}
-                  </Button>
-                </div>
-              </section>
-              <span
-                className={shared.thinLine}
-                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-                aria-hidden
-              />
-              <ConnectionActions
-                configVersion={overview.dataUpdatedAt}
-                profile={selected}
-                dirty={dirty}
-                inUse={
-                  data.narrator === selected.name ||
-                  data.aux === selected.name ||
-                  data.image === selected.name
-                }
-                onDuplicate={() => duplicate(selected)}
-                onDeleted={() => select("@new")}
-              />
-            </div>
-          ) : null}
+            ) : selected ? (
+              <div key={selected.name} className={styles.form}>
+                <ConnectionForm
+                  profile={selected}
+                  names={data.profiles.map((p) => p.name)}
+                  onDirty={setDirty}
+                  onSaved={() => {
+                    setDirty(false);
+                    setNotice("连接设置已保存。未发送模型请求。");
+                  }}
+                />
+                <span
+                  className={shared.thinLine}
+                  style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                  aria-hidden
+                />
+                <section className={styles.usage}>
+                  <div className={styles.usageHead}>
+                    <span className={styles.kicker}>02 / 用于游戏</span>
+                    <h3>保存之后，明确选它来玩。</h3>
+                  </div>
+                  {/* 用户定的：保留三个独立角色按钮，不要合并按钮和折叠区 */}
+                  <div className={styles.roleActions}>
+                    <Button
+                      primary
+                      pressed={data.narrator === selected.name}
+                      disabled={
+                        dirty ||
+                        assign.isPending ||
+                        textRoleProblems(selected).length > 0 ||
+                        data.narrator === selected.name
+                      }
+                      reason={
+                        dirty
+                          ? "请先保存连接"
+                          : textRoleProblems(selected).join("；") || "已经是叙事模型"
+                      }
+                      onClick={() => assign.mutate({ narrator: selected.name })}
+                    >
+                      {data.narrator === selected.name ? "叙事模型使用中" : "设为叙事模型"}
+                    </Button>
+                    <Button
+                      primary
+                      pressed={data.aux === selected.name}
+                      disabled={
+                        dirty ||
+                        assign.isPending ||
+                        textRoleProblems(selected).length > 0 ||
+                        data.aux === selected.name
+                      }
+                      reason={
+                        dirty
+                          ? "请先保存连接"
+                          : textRoleProblems(selected).join("；") || "已经是辅助模型"
+                      }
+                      onClick={() => assign.mutate({ aux: selected.name })}
+                    >
+                      {data.aux === selected.name ? "辅助模型使用中" : "设为辅助模型"}
+                    </Button>
+                    <Button
+                      primary
+                      pressed={data.image === selected.name}
+                      disabled={
+                        dirty ||
+                        assign.isPending ||
+                        problems(selected).length > 0 ||
+                        data.image === selected.name
+                      }
+                      reason={
+                        dirty ? "请先保存连接" : problems(selected).join("；") || "已经是文生图模型"
+                      }
+                      onClick={() => assign.mutate({ image: selected.name })}
+                    >
+                      {data.image === selected.name ? "文生图模型使用中" : "设为文生图模型"}
+                    </Button>
+                  </div>
+                </section>
+                <span
+                  className={shared.thinLine}
+                  style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                  aria-hidden
+                />
+                <ConnectionActions
+                  configVersion={overview.dataUpdatedAt}
+                  profile={selected}
+                  dirty={dirty}
+                  inUse={
+                    data.narrator === selected.name ||
+                    data.aux === selected.name ||
+                    data.image === selected.name
+                  }
+                  onDuplicate={() => duplicate(selected)}
+                  onDeleted={() => select("@new")}
+                />
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
 

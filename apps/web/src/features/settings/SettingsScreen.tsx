@@ -9,7 +9,7 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
-import { Panel } from "../../ui/Panel";
+import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { EmptyState } from "../status/StatusParts";
 import { LiveStageBar } from "../story/LiveStageBar";
 import neural from "../story/neural.module.css";
@@ -454,13 +454,13 @@ function ContextViewer() {
       <section className={styles.contextBar} aria-label="选择存档与轮次">
         <NineSlice
           id="notify.itemCellBg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-surface-strong)"
           className={styles.slice}
         />
         <NineSlice
           id="notify.itemCellFg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-red-dim)"
           className={styles.slice}
         />
@@ -1223,13 +1223,13 @@ function Section({
     <section className={styles.section} data-tone={tone} data-collapsed={!open || undefined}>
       <NineSlice
         id="notify.itemCellBg"
-        slice={30}
+        slice={ITEM_CELL_SLICE}
         tint="var(--cp-surface)"
         className={styles.slice}
       />
       <NineSlice
         id="notify.itemCellFg"
-        slice={30}
+        slice={ITEM_CELL_SLICE}
         tint={tone === "warn" ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
         className={styles.slice}
       />

@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import {
@@ -136,13 +137,13 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
         <section className={styles.prefGroup} aria-label="呈现">
           <NineSlice
             id="notify.itemCellBg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-surface)"
             className={styles.slice}
           />
           <NineSlice
             id="notify.itemCellFg"
-            slice={30}
+            slice={ITEM_CELL_SLICE}
             tint="var(--cp-red-dim)"
             className={styles.slice}
           />
@@ -162,13 +163,13 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
           <section className={styles.prefGroup} aria-label="城市节奏">
             <NineSlice
               id="notify.itemCellBg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="var(--cp-surface)"
               className={styles.slice}
             />
             <NineSlice
               id="notify.itemCellFg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="var(--cp-red-dim)"
               className={styles.slice}
             />
@@ -210,13 +211,13 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
           <section className={styles.prefGroup} aria-label="调试">
             <NineSlice
               id="notify.itemCellBg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="var(--cp-surface)"
               className={styles.slice}
             />
             <NineSlice
               id="notify.itemCellFg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="var(--cp-yellow)"
               className={styles.slice}
             />
@@ -245,13 +246,13 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
       <section className={styles.prefGroup} aria-label="文生图提示词设置">
         <NineSlice
           id="notify.itemCellBg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-surface)"
           className={styles.slice}
         />
         <NineSlice
           id="notify.itemCellFg"
-          slice={30}
+          slice={ITEM_CELL_SLICE}
           tint="var(--cp-red-dim)"
           className={styles.slice}
         />

@@ -496,7 +496,7 @@
 .contextBar {
   position: relative;
   isolation: isolate;
-  padding: 14px 18px 16px;
+  padding: 14px 28px 20px 28px;
 }
 
 .pickers {
@@ -586,7 +586,7 @@
 .section {
   position: relative;
   isolation: isolate;
-  padding: 12px 18px 14px;
+  padding: 14px 28px 20px 28px;
 }
 
 .sectionToggle {
@@ -922,7 +922,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 16px 20px 16px;
+  padding: 16px 28px 22px 28px;
 }
 
 .groupHeader {
@@ -1011,7 +1011,7 @@
   display: grid;
   gap: 2px;
   place-items: center;
-  padding: 10px 8px;
+  padding: 10px 14px 15px 12px;
   border: 0;
   background: none;
   color: var(--cp-text);
@@ -1376,7 +1376,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 32px;
-  padding: 0 14px;
+  padding: 4px 18px;
   color: var(--cp-yellow);
   font-family: var(--font-ui);
   font-size: var(--fs-label);
