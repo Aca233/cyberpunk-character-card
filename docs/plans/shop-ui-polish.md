@@ -1,6 +1,6 @@
 # 商店页面视觉美化与体验优化计划
 
-> 状态：进行中（2026-11-22）
+> 状态：已完成（2026-11-22）
 > 目标：在既有双栏商店终端基础上，全面升级 `Shop.tsx` 与 `shop.module.css` 的赛博朋克 2077 视觉质感、空间利用率、浏览筛选效率、右侧全息检视台、武器工坊界面与交易确认回执体验，同时确保共用样式的 `AutofixerModal.tsx` 保持完整兼容并同步受益。
 
 ## 1. 现状诊断与优化目标
@@ -36,7 +36,7 @@
 
 ## 3. 实施步骤
 
-1. **Step 1**：落盘本计划文档 `docs/plans/shop-ui-polish.md` 并提交 git。
-2. **Step 2**：重构 `apps/web/src/features/story/shop.module.css`，保留并美化 `AutofixerModal.tsx` 共用类，新增展柜网格、3D 展台掠射高光、吸底结算账单、余额变动动画、工坊仪表与黑市氛围样式。
-3. **Step 3**：重构 `apps/web/src/features/story/Shop.tsx`，实现紧凑两层控制台、排序与双视图切换、余额变动提示、3D 展台、吸底结算检视台、精修工坊与回执确认弹窗，以及键盘导航。
-4. **Step 4**：运行静态类型检查（`pnpm typecheck`）与规范检查（`pnpm lint`），同步更新本计划状态并提交 git（按项目约定不执行单元/浏览器测试，交由用户验收）。
+1. **Step 1**：落盘本计划文档 `docs/plans/shop-ui-polish.md` 并提交 git（已完成）。
+2. **Step 2**：重构 `apps/web/src/features/story/shop.module.css`，保留并美化 `AutofixerModal.tsx` 共用类，新增展柜网格、3D 展台掠射高光、吸底结算账单、余额变动动画、工坊仪表与黑市氛围样式（已完成）。
+3. **Step 3**：重构 `apps/web/src/features/story/Shop.tsx`，实现紧凑两层控制台、排序与双视图切换、余额变动提示、3D 展台、吸底结算检视台、精修工坊与回执确认弹窗，以及键盘导航（已完成）。
+4. **Step 4**：通过静态类型检查（`tsc -p apps/web/tsconfig.json --noEmit`、`tsc -p apps/web/tsconfig.node.json --noEmit`）与规范检查（`biome check`），同步更新本计划状态并提交 git；按项目约定不执行单元/浏览器测试，交由用户验收（已完成）。
