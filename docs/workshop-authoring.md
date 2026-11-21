@@ -93,11 +93,11 @@ items 中的实体载体
                    braindance → braindances 中的超梦作品
 ```
 
-`chipContents` 的 `parts` 是可读取的正文分段，每段有 `id`、`label`、`text`，可带媒体；`kind` 为 `recording`、`email`、`diary` 或 `data`。`purpose` 为 `data`、`media`、`function` 或 `behavior`。普通资料不需要填写 `braindance`。
+`chipContents` 的 `parts` 是可读取的正文分段，每段有 `id`、`label`、`text`，可选 `media` 与 `encrypted`（布尔，默认 `false`）；`kind` 为 `recording`、`email`、`diary` 或 `data`；`category` 必填，为 `intel`（情报资料）、`daemon`（加密魔偶/信用芯片/陷阱）、`skill`（技能协议）、`braindance`（超梦卷轴）或 `behavior`（行为协议）。可选字段：`encryption`（`none` / `standard` / `corp` / `military`）、`hazard`（`none` / `malware` / `black-ice`）、`eddies`（加密信用芯片内含欧元，默认 `0`）、`ability`（技能/行为协议插槽后的定性能力描述）、`protocol`（行为协议名）、`braindance`（关联超梦作品 ID）。
 
-- 阅读资料要实际持有载体并拥有可用读取设备。读取设备的物品定义填写 `chipDevice: "reader"` 或 `"reader-writer"`；空白存储载体填写 `chipStorage: true`。
-- 播放实体超梦需要可接触的作品载体，以及填写了 `braindanceDevice.playback: true` 的真实设备。`analysis` 只能列出设备确实支持的 `observe`、`audio`、`thermal` 分析模式。
-- `requirements` 引用功能芯片实际需要的物品或义体接口；功能芯片使用时会检查设备是否真实持有、义体是否已安装且完好。持有功能芯片不会直接增加属性或永久技能。
+- 未加密、无隐患的芯片可直接通过个人颈后神经槽读取；未知来历或带隐患芯片需隔离芯片读写器（`chipDevice: "reader-writer"`）执行沙盒查毒；离线破译加密芯片需要完好网络接入仓（可配合隔离读写器）；空白存储载体填写 `chipStorage: true`。
+- 播放实体超梦需要可接触的作品载体，以及填写了 `braindanceDevice.playback: true` 的真实设备。`analysis` 只能列出设备确实支持的 `visual`、`audio`、`thermal` 三层轨道（不要给纯超梦头环填写 `chipDevice`）。
+- `skill` / `behavior` 类芯片可插入个人颈后神经槽（上限 2 槽，同款协议不可重复叠加）提供真实定性能力，拔出即失效，不提供属性数值或骰点加值；`behavior` 芯片需已安装完好的行为芯片义体（`doll-behavior-chip`）。
 - 买到芯片不等于已经阅读；买到超梦也不等于已经观看或发现全部细节。内容定义不是角色已经知道的事实。
 - 目前包可以出售实体超梦载体和播放设备；不能通过 `shopListings` 把作品直接添加到商家的付费超梦体验服务片单。
 
@@ -129,21 +129,20 @@ items 中的实体载体
       "kind": "misc",
       "price": 300,
       "rarity": "common",
-      "chipDevice": "reader",
       "braindanceDevice": {
         "playback": true,
-        "analysis": ["observe", "audio"]
+        "analysis": ["visual", "audio"]
       },
-      "ability": "读取作品芯片并播放超梦，支持画面与音轨查证，不支持热成像分析。"
+      "ability": "播放超梦卷轴，支持视觉与音频双层轨道分析，不支持热成像或芯片隔离查毒。"
     }
   ],
   "chipContents": [
     {
       "id": "rooftop-program",
       "title": "《屋顶晚风》发行资料",
-      "kind": "data",
+      "category": "braindance",
+      "kind": "recording",
       "from": "独立录制者林野",
-      "purpose": "media",
       "summary": "一段收工后整理屋顶花箱的授权生活记录，无额外任务或隐藏报酬。",
       "braindance": "rooftop-evening",
       "parts": [
@@ -159,6 +158,7 @@ items 中的实体载体
     {
       "id": "rooftop-evening",
       "title": "屋顶晚风",
+      "tier": "raw",
       "recorder": "独立录制者林野",
       "synopsis": "结束夜班后，录制者提着水壶走上屋顶，给花箱浇水，再安静地下楼。",
       "durationMinutes": 6,
@@ -180,8 +180,7 @@ items 中的实体载体
         {
           "id": "washer-rattle",
           "passage": "planters",
-          "cues": ["洗衣机异响", "滚筒碰撞"],
-          "method": "audio",
+          "layer": "audio",
           "finding": "音轨里能辨认出滚筒周期性的轻碰声，但没有设备型号、房号或故障检测结果，不能仅凭此认定机器损坏。"
         }
       ]

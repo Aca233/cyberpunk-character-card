@@ -176,7 +176,6 @@ export function workshopPackIssues(pack: WorkshopPack, catalog: WorkshopCatalogI
     ...catalog.cyberware.map((item) => item.id),
     ...pack.cyberware.map((item) => item.id),
   ]);
-  const equipmentIds = new Set([...itemIds, ...cyberwareIds]);
   const npcIds = new Set([
     ...catalog.npcs.map((item) => item.id),
     ...pack.npcs.map((item) => item.id),
@@ -218,7 +217,6 @@ export function workshopPackIssues(pack: WorkshopPack, catalog: WorkshopCatalogI
     }
   }
   for (const content of pack.chipContents) {
-    checkRefs(content.requirements, equipmentIds, "设备或物品", content.title);
     if (content.braindance && !workIds.has(content.braindance)) {
       issues.push(`${content.title} 引用了不存在的超梦作品：${content.braindance}`);
     }
@@ -266,7 +264,6 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
   const npcId = (id: string) => (npcIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const workId = (id: string) => (workIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const chipId = (id: string) => (contentIds.has(id) ? workshopEntityId(pack.id, id) : id);
-  const requirementId = (id: string) => (cyberwareIds.has(id) ? chromeId(id) : itemId(id));
   const acquaintanceIsCatalogNpc = (entry: WorkshopPack["acquaintances"][number]) =>
     npcIds.has(entry.id) ||
     (!entry.custom && !entry.id.startsWith("custom-") && !entry.id.startsWith("wk-"));
@@ -339,7 +336,6 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
       ...entry,
       id: workshopEntityId(pack.id, entry.id),
       ...(entry.braindance ? { braindance: workId(entry.braindance) } : {}),
-      requirements: entry.requirements.map(requirementId),
       related: entry.related.map(relatedId),
     })),
     shopListings: pack.shopListings.map((entry) => ({
