@@ -2,6 +2,7 @@ import { access, copyFile, mkdir, readdir, rm, stat, writeFile } from "node:fs/p
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import sharp from "sharp";
+import { pickAudioAssets } from "./audio";
 import {
   type AssetIndex,
   type AssetSpec,
@@ -15,13 +16,14 @@ import {
 } from "./manifest";
 
 /**
- * 按清单从解包目录挑素材：pnpm pick-assets [--tier demo|release] [--source 解包目录] [--install 游戏目录]
- *   demo：默认以 /mnt/c/Cyberpunk 2077/_unpack 为源，只在本机用，index.json 每条标 source: demo
+ * 按清单从解包目录挑素材：pnpm pick-assets [--tier demo|release] [--source 解包目录] [--install 游戏目录] [--only ui|audio]
+ *   demo：默认以解包目录（Windows 下 C:\Cyberpunk 2077\_unpack，WSL 下 /mnt/c/Cyberpunk 2077/_unpack）为源，只在本机用
  *   release：只认核验通过的正版安装重新解包的目录，必须给 --install 和 --source，不接受 demo 的源
- * 每次重新生成 public/assets/local/ui/ 整个目录和 apps/web/src/assets/ids.gen.ts
+ * 每次重新生成 public/assets/local/{ui,audio}/ 目录及对应的 ids.gen.ts
  */
 
-const DEMO_SOURCE = "/mnt/c/Cyberpunk 2077/_unpack";
+const DEMO_SOURCE =
+  process.platform === "win32" ? "C:\\Cyberpunk 2077\\_unpack" : "/mnt/c/Cyberpunk 2077/_unpack";
 /** 从高到低找；值是相对 1080p 的倍数 */
 const RESOLUTIONS = [
   ["2160p", 2],
@@ -37,6 +39,7 @@ const { values: args } = parseArgs({
     tier: { type: "string", default: "demo" },
     source: { type: "string" },
     install: { type: "string" },
+    only: { type: "string" },
   },
 });
 
@@ -99,83 +102,107 @@ async function main(): Promise<number> {
   const tier = args.tier;
   if (tier !== "demo" && tier !== "release")
     throw new Error(`--tier 只能是 demo 或 release：${tier}`);
+  const only = args.only;
+  if (only !== undefined && only !== "ui" && only !== "audio") {
+    throw new Error(`--only 只能是 ui 或 audio：${only}`);
+  }
   const root = await sourceFor(tier);
-  if (!(await exists(join(root, "export", "ui_sprites")))) {
-    throw new Error(`${root} 下没有 export/ui_sprites，检查解包目录`);
-  }
-  const specs = await loadManifest();
-  console.log(`${tier} 档，源 ${root}，清单 ${specs.length} 张`);
+  let exitCode = 0;
 
-  // 不整个删掉重建：开着的 Vite 会丢掉对 public 目录的监听，之后所有素材都回 index.html。
-  // 原地覆盖，最后只删这次没写到的旧文件
-  await mkdir(UI_DIR, { recursive: true });
-  const written = new Set<string>([resolve(INDEX)]);
-
-  const assets: Record<string, IndexEntry> = {};
-  const missing: string[] = [];
-  let next = 0;
-  let webp = 0;
-  let bytes = 0;
-  const worker = async () => {
-    while (next < specs.length) {
-      const spec = specs[next] as AssetSpec;
-      next += 1;
-      const found = await locate(root, spec);
-      if (!found) {
-        missing.push(`${spec.id}（${spec.file ?? `${spec.atlas} 的 ${spec.slot}`}）`);
-        continue;
-      }
-      const size = (await stat(found.file)).size;
-      const ext = size > WEBP_OVER ? "webp" : "png";
-      const rel = outputName(spec, ext);
-      const out = join(UI_DIR, rel);
-      written.add(resolve(out));
-      await mkdir(dirname(out), { recursive: true });
-      if (ext === "webp") {
-        const quality = spec.group === "backdrop" ? 82 : 90;
-        await sharp(found.file).webp({ quality, alphaQuality: 100, effort: 5 }).toFile(out);
-        webp += 1;
-      } else {
-        await copyFile(found.file, out);
-      }
-      // 先等到大小再加：写成 bytes += await … 时，8 个并发会读到旧的 bytes，总数偏小
-      const outSize = (await stat(out)).size;
-      bytes += outSize;
-      const meta = await sharp(found.file).metadata();
-      assets[spec.id] = {
-        path: `/assets/local/ui/${rel}`,
-        width: meta.width,
-        height: meta.height,
-        scale: found.scale,
-        source: tier,
-      };
+  if (only !== "audio") {
+    if (!(await exists(join(root, "export", "ui_sprites")))) {
+      throw new Error(`${root} 下没有 export/ui_sprites，检查解包目录`);
     }
-  };
-  await Promise.all(Array.from({ length: JOBS }, worker));
+    const specs = await loadManifest();
+    console.log(`${tier} 档，源 ${root}，UI 清单 ${specs.length} 张`);
 
-  const sorted = Object.fromEntries(Object.entries(assets).sort(([a], [b]) => a.localeCompare(b)));
-  const index: AssetIndex = { tier, generatedAt: new Date().toISOString(), assets: sorted };
-  await writeFile(INDEX, `${JSON.stringify(index, null, 2)}\n`);
-  let stale = 0;
-  for (const entry of await readdir(UI_DIR, { recursive: true, withFileTypes: true })) {
-    const path = resolve(entry.parentPath, entry.name);
-    if (entry.isFile() && !written.has(path)) {
-      await rm(path);
-      stale += 1;
+    // 不整个删掉重建：开着的 Vite 会丢掉对 public 目录的监听，之后所有素材都回 index.html。
+    // 原地覆盖，最后只删这次没写到的旧文件
+    await mkdir(UI_DIR, { recursive: true });
+    const written = new Set<string>([resolve(INDEX)]);
+
+    const assets: Record<string, IndexEntry> = {};
+    const missing: string[] = [];
+    let next = 0;
+    let webp = 0;
+    let bytes = 0;
+    const worker = async () => {
+      while (next < specs.length) {
+        const spec = specs[next] as AssetSpec;
+        next += 1;
+        const found = await locate(root, spec);
+        if (!found) {
+          missing.push(`${spec.id}（${spec.file ?? `${spec.atlas} 的 ${spec.slot}`}）`);
+          continue;
+        }
+        const size = (await stat(found.file)).size;
+        const ext = size > WEBP_OVER ? "webp" : "png";
+        const rel = outputName(spec, ext);
+        const out = join(UI_DIR, rel);
+        written.add(resolve(out));
+        await mkdir(dirname(out), { recursive: true });
+        if (ext === "webp") {
+          const quality = spec.group === "backdrop" ? 82 : 90;
+          await sharp(found.file).webp({ quality, alphaQuality: 100, effort: 5 }).toFile(out);
+          webp += 1;
+        } else {
+          await copyFile(found.file, out);
+        }
+        // 先等到大小再加：写成 bytes += await … 时，8 个并发会读到旧的 bytes，总数偏小
+        const outSize = (await stat(out)).size;
+        bytes += outSize;
+        const meta = await sharp(found.file).metadata();
+        assets[spec.id] = {
+          path: `/assets/local/ui/${rel}`,
+          width: meta.width,
+          height: meta.height,
+          scale: found.scale,
+          source: tier,
+        };
+      }
+    };
+    await Promise.all(Array.from({ length: JOBS }, worker));
+
+    const sorted = Object.fromEntries(
+      Object.entries(assets).sort(([a], [b]) => a.localeCompare(b)),
+    );
+    const index: AssetIndex = { tier, generatedAt: new Date().toISOString(), assets: sorted };
+    await writeFile(INDEX, `${JSON.stringify(index, null, 2)}\n`);
+    let stale = 0;
+    for (const entry of await readdir(UI_DIR, { recursive: true, withFileTypes: true })) {
+      const path = resolve(entry.parentPath, entry.name);
+      if (entry.isFile() && !written.has(path)) {
+        await rm(path);
+        stale += 1;
+      }
+    }
+    if (stale > 0) console.log(`删掉 ${stale} 个清单里已经没有的旧文件`);
+    await mkdir(dirname(IDS_MODULE), { recursive: true });
+    await writeFile(IDS_MODULE, renderIdsModule(specs));
+
+    console.log(
+      `复制 ${Object.keys(assets).length} 张（其中 ${webp} 张转 WebP），共 ${(bytes / 1024 / 1024).toFixed(1)} MB`,
+    );
+    if (missing.length > 0) {
+      console.error(`\n解包目录里找不到 ${missing.length} 张：\n  ${missing.sort().join("\n  ")}`);
+      exitCode = 1;
     }
   }
-  if (stale > 0) console.log(`删掉 ${stale} 个清单里已经没有的旧文件`);
-  await mkdir(dirname(IDS_MODULE), { recursive: true });
-  await writeFile(IDS_MODULE, renderIdsModule(specs));
 
-  console.log(
-    `复制 ${Object.keys(assets).length} 张（其中 ${webp} 张转 WebP），共 ${(bytes / 1024 / 1024).toFixed(1)} MB`,
-  );
-  if (missing.length > 0) {
-    console.error(`\n解包目录里找不到 ${missing.length} 张：\n  ${missing.sort().join("\n  ")}`);
-    return 1;
+  if (only !== "ui") {
+    const audioRes = await pickAudioAssets(root, tier);
+    console.log(
+      `处理原版音频 ${audioRes.count} 条，共 ${(audioRes.bytes / 1024 / 1024).toFixed(1)} MB`,
+    );
+    if (!audioRes.ok) {
+      console.error(
+        `\n解包目录里找不到 ${audioRes.missing.length} 条音频：\n  ${audioRes.missing.sort().join("\n  ")}`,
+      );
+      exitCode = 1;
+    }
   }
-  return 0;
+
+  return exitCode;
 }
 
 try {

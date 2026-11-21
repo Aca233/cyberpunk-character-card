@@ -1,6 +1,13 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
+  AUDIO_IDS_MODULE,
+  AUDIO_INDEX,
+  type AudioAssetIndex,
+  loadAudioManifest,
+  renderAudioIdsModule,
+} from "./audio";
+import {
   type AssetIndex,
   IDS_MODULE,
   INDEX,
@@ -77,6 +84,51 @@ async function main(): Promise<number> {
     }
   }
 
+  const audioSpecs = await loadAudioManifest();
+  let audioIds = "";
+  try {
+    audioIds = await readFile(AUDIO_IDS_MODULE, "utf8");
+  } catch {}
+  if (audioIds !== renderAudioIdsModule(audioSpecs)) {
+    problems.push(
+      "apps/web/src/assets/audio-ids.gen.ts 和音频清单不一致：运行 pnpm pick-assets 重新生成",
+    );
+  }
+  let audioIndex: AudioAssetIndex | undefined;
+  try {
+    audioIndex = JSON.parse(await readFile(AUDIO_INDEX, "utf8")) as AudioAssetIndex;
+  } catch {
+    problems.push("没有 public/assets/local/audio/index.json：运行 pnpm pick-assets 生成音频素材");
+  }
+  if (audioIndex) {
+    const missingAudio: string[] = [];
+    for (const spec of audioSpecs) {
+      const entry = audioIndex.assets[spec.id];
+      if (!entry) {
+        missingAudio.push(`${spec.id}：audio/index.json 里没有`);
+        continue;
+      }
+      const file = join(PUBLIC, entry.path);
+      try {
+        if ((await stat(file)).size === 0) missingAudio.push(`${spec.id}：${entry.path} 是空文件`);
+      } catch {
+        missingAudio.push(`${spec.id}：缺少 ${entry.path}`);
+      }
+    }
+    if (missingAudio.length > 0) {
+      problems.push(
+        `缺 ${missingAudio.length} 条音频素材，运行 pnpm pick-assets：\n    ${missingAudio.join("\n    ")}`,
+      );
+    }
+    const knownAudio = new Set(audioSpecs.map((s) => s.id));
+    const staleAudio = Object.keys(audioIndex.assets).filter((id) => !knownAudio.has(id));
+    if (staleAudio.length > 0) {
+      problems.push(
+        `audio/index.json 里有清单外的素材（${staleAudio.join("、")}）：运行 pnpm pick-assets 重新生成`,
+      );
+    }
+  }
+
   const direct: string[] = [];
   for (const file of await sourceFiles(WEB_SRC)) {
     if (file === ASSET_MODULE) continue;
@@ -92,7 +144,7 @@ async function main(): Promise<number> {
     return 1;
   }
   console.log(
-    `素材检查通过：${specs.length} 张（${index?.tier} 档，生成于 ${index?.generatedAt}）`,
+    `素材检查通过：UI ${specs.length} 张 + 音频 ${audioSpecs.length} 条（${index?.tier} 档，生成于 ${index?.generatedAt}）`,
   );
   // 纯静态版公开部署时：demo 档照样放行，只提醒（用户定的）
   if (index?.tier === "demo") {
