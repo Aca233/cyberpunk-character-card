@@ -9,7 +9,7 @@ import type { TurnInput } from "../../schemas/turn";
 import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
-import { deckOf, mentionsHacking, npcDeckOf } from "../../systems/hacking";
+import { attemptsHacking, deckOf, mentionsHacking, npcDeckOf } from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
 import { HealthStateSchema } from "../../systems/health";
 import {
@@ -295,6 +295,31 @@ function buildWeaponAdvisories(
   return advisories;
 }
 
+/** 判断玩家在没有完好网络接入仓时是否主动尝试发起黑客破解/入侵，返回代码级硬阻断理由 */
+export function hardHackBlockReason(
+  world: WorldState,
+  data: Readonly<Record<string, unknown>> | undefined,
+  text: string,
+): string | undefined {
+  if (!attemptsHacking(text)) return undefined;
+  const safeData = data ?? {};
+  const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
+  const health = HealthStateSchema.safeParse(world.slices.health ?? {});
+  const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
+  const installed = cyber.success ? cyber.data.installed : [];
+  const brokenChrome = health.success ? health.data.brokenChrome : [];
+  const deckInfo = deckOf(installed, safeData, brokenChrome);
+  const hasCyberdeck = deckInfo
+    ? deckInfo.deck !== null
+    : hacking.success && hacking.data.deck !== null && !brokenChrome.includes(hacking.data.deck);
+  if (hasCyberdeck) return undefined;
+  const result = evaluatePhysicsBoundaries({
+    currentEddies: 0,
+    hackCheck: { vector: "wireless", hasCyberdeck: false },
+  });
+  return result.blocked ? result.directives[0] : undefined;
+}
+
 /** 计算当前局面客观触发的物理与安防约束（余额、高安区明火武器/高档场所门禁、无接入仓与物理网络拓扑） */
 export function physicsSection(
   world: WorldState,
@@ -343,7 +368,9 @@ export function physicsSection(
     ? deckInfo.deck !== null
     : hacking.success && hacking.data.deck !== null && !brokenChrome.includes(hacking.data.deck);
 
-  const wantHack = mentionsHacking(inputText) || (hacking.success && hacking.data.dive !== null);
+  const wantHack =
+    (hasCyberdeck ? mentionsHacking(inputText) : attemptsHacking(inputText)) ||
+    (hacking.success && hacking.data.dive !== null);
   let hackCheck: Parameters<typeof evaluatePhysicsBoundaries>[0]["hackCheck"];
   if (wantHack && hacking.success) {
     const breachedHere = hacking.data.breachedNetworks

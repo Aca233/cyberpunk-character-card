@@ -2,6 +2,7 @@ import type { Patch } from "immer";
 import type { z } from "zod";
 import type {
   AbortSignalLike,
+  Embedder,
   LlmClient,
   LlmMessage,
   LlmRequest,
@@ -38,6 +39,7 @@ import { registry } from "../systems/registry";
 import { currentTension } from "../systems/tension";
 import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
 import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import { pendingUiActions } from "../ui-actions";
 import {
   type Choice,
   ChoiceProposalSchema,
@@ -88,12 +90,20 @@ import {
   buildNarratorPrompt,
   EXTRACT_TEMPERATURE,
   HISTORY_TURNS,
+  hardHackBlockReason,
   JUDGE_TEMPERATURE,
   type NarratorPlan,
   type PromptExtras,
 } from "./prompts";
 import { estimateTokens } from "./prompts/layers";
-import { type Expansion, expandMemories, judgeCandidates, memoryPool } from "./retrieve";
+import {
+  cosineSimilarity,
+  type Expansion,
+  expandMemories,
+  judgeCandidates,
+  type MemoryEntry,
+  memoryPool,
+} from "./retrieve";
 import { sceneTitle } from "./scene";
 import { readSceneMemory, summaryFromExtract } from "./scene-memory";
 import {
@@ -277,6 +287,8 @@ export interface NarratorDeps {
   /** 服务端曾展示且玩家确认的具体报价；单独的 spendOk 不能授权不同交易。 */
   readonly approvedSpend?: string | undefined;
   readonly llm: LlmClient;
+  /** 可选向量嵌入客户端：用于旧记忆语义检索，未配置或失败时自动退化为规则检索 */
+  readonly embedder?: Embedder | undefined;
   readonly rng: Rng;
   /** 静态数据表（content 包） */
   readonly data?: Readonly<Record<string, unknown>>;
@@ -337,10 +349,17 @@ const ZERO: LlmUsage = { inputTokens: 0, outputTokens: 0 };
 const FOES_CHARS = 160;
 const RULING_CHARS = 200;
 
-const addUsage = (a: LlmUsage, b: LlmUsage | undefined): LlmUsage =>
-  b
-    ? { inputTokens: a.inputTokens + b.inputTokens, outputTokens: a.outputTokens + b.outputTokens }
-    : a;
+const addUsage = (a: LlmUsage, b: LlmUsage | undefined): LlmUsage => {
+  if (!b) return a;
+  const cached = (a.cachedInputTokens ?? 0) + (b.cachedInputTokens ?? 0);
+  const write = (a.cacheWriteTokens ?? 0) + (b.cacheWriteTokens ?? 0);
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+    ...(write > 0 ? { cacheWriteTokens: write } : {}),
+  };
+};
 
 type Reply =
   | { readonly text: string; readonly usage: LlmUsage | undefined }
@@ -587,6 +606,31 @@ function sanityGuard(
   return kept;
 }
 
+async function computeVectorScores(
+  embedder: Embedder | undefined,
+  pool: readonly MemoryEntry[],
+  queryText: string,
+  signal?: AbortSignalLike,
+): Promise<ReadonlyMap<string, number> | undefined> {
+  if (!embedder || pool.length === 0 || queryText.trim() === "") return undefined;
+  const vectors = await embedder.embed(
+    [queryText, ...pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600))],
+    signal,
+  );
+  if (vectors.length !== pool.length + 1) return undefined;
+  const qVec = vectors[0];
+  if (!qVec || qVec.length === 0) return undefined;
+  const map = new Map<string, number>();
+  for (let i = 0; i < pool.length; i += 1) {
+    const entry = pool[i];
+    const vec = vectors[i + 1];
+    if (!entry || !vec || vec.length === 0) continue;
+    const sim = cosineSimilarity(qVec, vec);
+    if (sim > 0) map.set(entry.id, sim);
+  }
+  return map.size > 0 ? map : undefined;
+}
+
 export async function runNarratorTurn(
   deps: NarratorDeps,
   world: WorldState,
@@ -676,9 +720,13 @@ export async function runNarratorTurn(
       .slice(-2)
       .map((t) => t.text)
       .join("\n");
+    const vectorScores =
+      plan.kind === "action" && !legacyOoc
+        ? await computeVectorScores(deps.embedder, pool, plan.input.text, deps.signal)
+        : undefined;
     const memories: Memory[] =
       plan.kind === "action"
-        ? judgeCandidates(pool, world, { input: plan.input.text, context: lately })
+        ? judgeCandidates(pool, world, { input: plan.input.text, context: lately, vectorScores })
         : [];
     if (plan.kind === "action" && !legacyOoc) {
       deps.onStage?.({
@@ -692,6 +740,7 @@ export async function runNarratorTurn(
         temperature: JUDGE_TEMPERATURE,
         responseFormat: responseJsonSchema("judge", JudgeDocSchema),
         messages: prompt.messages,
+        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:judge` } : {}),
       });
       if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
@@ -749,6 +798,22 @@ export async function runNarratorTurn(
         rulingSpec = judged.get("ruling") as JudgeRuling;
       }
     }
+    // 代码级物理硬锁：未装完好网络接入仓却主动尝试发起快速破解/黑客入侵时，强制锁定 blocked，不依赖模型自觉
+    if (plan.kind === "action" && !ooc && !inFlashback && rulingSpec?.kind !== "blocked") {
+      const hackBlock = hardHackBlockReason(
+        world,
+        deps.data,
+        [plan.input.text, read ?? ""].join("\n"),
+      );
+      if (hackBlock) {
+        rulingSpec = {
+          kind: "blocked",
+          outcome: hackBlock,
+          harm: "none",
+          reason: hackBlock,
+        };
+      }
+    }
     let counterHackSpec: CounterHackRuling | undefined;
     if (judge.counterHack !== undefined && judge.counterHack !== null) {
       if (ooc || inFlashback) {
@@ -779,7 +844,7 @@ export async function runNarratorTurn(
             world,
             promptRecords,
             hot,
-            { input: [plan.input.text, read ?? ""].join("\n"), context: lately },
+            { input: [plan.input.text, read ?? ""].join("\n"), context: lately, vectorScores },
             recalled,
             deps.data ?? {},
           )
@@ -797,6 +862,14 @@ export async function runNarratorTurn(
     // ② 拼上下文：写正文之前代码已经定下的事
     const decided: string[] = [];
     if (ooc) decided.push("场外提问：跳出角色，用一两句话直接回答，不推进剧情");
+    if (!ooc && !inFlashback) {
+      const uiActions = pendingUiActions(records);
+      if (uiActions.length > 0) {
+        decided.push(
+          `【刚完成的界面操作（已结算，须自然写进本轮正文，严禁重复扣款/发货）】${uiActions.map((a) => a.summary).join("；")}`,
+        );
+      }
+    }
     if (rulingSpec) decided.push(rulingText(rulingSpec));
     if (counterHackSpec) decided.push(counterHackText(counterHackSpec));
     // 路线面板确认的出行：耗时、路费和路上偶遇在写正文前由代码定下
@@ -1127,6 +1200,7 @@ export async function runNarratorTurn(
           ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
           ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
           maxOutputTokens,
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:narrate` } : {}),
         },
         deps.signal,
       )) {
@@ -1225,6 +1299,7 @@ export async function runNarratorTurn(
           temperature: EXTRACT_TEMPERATURE,
           responseFormat: responseJsonSchema("extract"),
           messages: extract.messages,
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:extract` } : {}),
         });
       } catch (error) {
         b.checkAborted();
@@ -1420,38 +1495,25 @@ export async function runNarratorTurn(
       parsedActivities.flatMap(({ command: cmd, event: id }) => {
         let ownsTime = false;
         if (cmd?.type === "braindance") {
-          ownsTime = ["progress", "replay", "inspect"].includes(String(cmd.action));
-          if (cmd.action === "finish") {
-            const start = parsedActivities.find(
+          ownsTime = ["progress", "scan"].includes(String(cmd.action));
+          if (cmd.action === "stop" && cmd.outcome === "finished") {
+            const play = parsedActivities.find(
               (p) =>
-                p.event === id && p.command?.type === "braindance" && p.command.action === "start",
+                p.event === id && p.command?.type === "braindance" && p.command.action === "play",
             )?.command;
             const previous =
-              typeof start?.from === "string"
-                ? bdState.history.find((h) => h.id === start.from)
+              typeof play?.from === "string"
+                ? bdState.history.find((h) => h.id === play.from)
                 : undefined;
-            const workId = typeof start?.work === "string" ? start.work : bdState.active?.work;
+            const workId = typeof play?.work === "string" ? play.work : bdState.active?.work;
             const work = workId ? braindanceWork(bdState, deps.data ?? {}, workId) : undefined;
             ownsTime =
               !!work &&
               work.durationMinutes >
-                (start ? (previous?.watchedMinutes ?? 0) : (bdState.active?.watchedMinutes ?? 0));
+                (play ? (previous?.watchedMinutes ?? 0) : (bdState.active?.watchedMinutes ?? 0));
           }
-        } else if (
-          cmd?.type === "commerce.service" &&
-          cmd.action !== "resume" &&
-          typeof cmd.id === "string"
-        ) {
-          const session = commerceState.sessions[cmd.id];
-          const duration =
-            session?.terms.duration ?? commerceState.quotes[cmd.id]?.session?.duration;
-          const elapsed =
-            typeof cmd.elapsed === "number"
-              ? cmd.elapsed
-              : cmd.action === "finish"
-                ? duration
-                : session?.elapsed;
-          ownsTime = typeof elapsed === "number" && elapsed > (session?.elapsed ?? 0);
+        } else if (cmd?.type === "commerce.service") {
+          ownsTime = false;
         }
         return id && ownsTime ? [id] : [];
       }),
@@ -1538,9 +1600,6 @@ export async function runNarratorTurn(
         reason: counterHackSpec.reason,
       });
     }
-    // 护甲降档：health 不能读义体（health→cyberware→character→health 会成环），这里把护甲义体的名字放进事实
-    const armor = working.map((c) => parts.get(c.id)).find((d) => d?.armor === true);
-    if (armor) facts.armor = armor.name;
     // 断肢打在义肢上改记为义体损坏：坏着的也要放进来，不然会当成血肉再断一次
     const limbChrome = Object.fromEntries(
       installedChrome
@@ -1558,10 +1617,6 @@ export async function runNarratorTurn(
     if (!trip && !leaves && here !== undefined && (homes ?? []).some((h) => h.location === here)) {
       facts.hideout = true;
     }
-    // 队员名单：npc 不能读小队（squad 读 npc），写 npcDeath 杀队员时按它走同一道保底
-    const members = (world.slices.squad as { members?: { npc?: unknown }[] } | undefined)?.members;
-    const squadIds = (members ?? []).map((m) => m.npc).filter((id) => typeof id === "string");
-    if (squadIds.length > 0) facts.squad = squadIds;
     const setup: SettlementEvent[] = [];
     const prependSetup = (id: string, command: Command): void => {
       setup.unshift({ id, requires: [], commands: [command] });
@@ -1758,6 +1813,7 @@ export async function runNarratorTurn(
         maxOutputTokens: batch.maxOutputTokens,
         messages,
         responseFormat: responseJsonSchema("offscreen"),
+        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen` } : {}),
       });
       offscreenTrace = {
         prompt: messages[messages.length - 1]?.content ?? "",
@@ -1912,6 +1968,7 @@ export async function runNarratorTurn(
           temperature: SUMMARY_TEMPERATURE,
           messages,
           responseFormat: responseJsonSchema("summary", SummaryDocSchema),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:summary` } : {}),
         });
         summaryTrace = {
           prompt: messages[messages.length - 1]?.content ?? "",
