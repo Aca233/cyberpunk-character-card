@@ -171,6 +171,55 @@ function git(args: string[], options: { capture?: boolean; allowFailure?: boolea
   });
 }
 
+function detectWindowsSystemProxy(): NodeJS.ProcessEnv | undefined {
+  if (process.platform !== "win32") return undefined;
+  if (
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy
+  ) {
+    return undefined;
+  }
+
+  const res = runCommand(
+    "reg",
+    ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"],
+    { capture: true, allowFailure: true },
+  );
+  if (res.status !== 0) return undefined;
+
+  const enableMatch = res.stdout.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-fA-F]+)/i);
+  if (!enableMatch?.[1] || Number.parseInt(enableMatch[1], 16) !== 1) return undefined;
+
+  const serverMatch = res.stdout.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+  const rawServer = serverMatch?.[1]?.trim();
+  if (!rawServer) return undefined;
+
+  const normalize = (value: string): string =>
+    /^https?:\/\//i.test(value) ? value : `http://${value}`;
+
+  if (rawServer.includes("=")) {
+    const entries = new Map<string, string>();
+    for (const part of rawServer.split(";")) {
+      const [key, val] = part.split("=");
+      if (key && val) entries.set(key.trim().toLowerCase(), val.trim());
+    }
+    const httpVal = entries.get("http");
+    const httpsVal = entries.get("https") ?? httpVal;
+    const env: NodeJS.ProcessEnv = {};
+    if (httpVal) env.HTTP_PROXY = normalize(httpVal);
+    if (httpsVal) env.HTTPS_PROXY = normalize(httpsVal);
+    return Object.keys(env).length > 0 ? env : undefined;
+  }
+
+  const proxyUrl = normalize(rawServer);
+  return {
+    HTTP_PROXY: proxyUrl,
+    HTTPS_PROXY: proxyUrl,
+  };
+}
+
 function readPackageManagerVersion(): string | undefined {
   try {
     const pkg = JSON.parse(readFileSync(join(ROOT_DIR, "package.json"), "utf8")) as {
@@ -422,6 +471,11 @@ async function main(): Promise<void> {
     throw new Error("不能同时指定 --skip-git 和 --skip-pages");
   }
 
+  const proxyEnv = detectWindowsSystemProxy();
+  if (proxyEnv) {
+    Object.assign(process.env, proxyEnv);
+  }
+
   const branch = getCurrentBranch();
   const wranglerConfig = readWranglerConfig();
   const projectName = options.project ?? wranglerConfig.projectName;
@@ -439,6 +493,9 @@ async function main(): Promise<void> {
   console.log("====================================================");
   console.log(`仓库目录: ${ROOT_DIR}`);
   console.log(`当前分支: ${branch}`);
+  if (proxyEnv?.HTTPS_PROXY) {
+    console.log(`系统代理: ${proxyEnv.HTTPS_PROXY}（已自动继承）`);
+  }
 
   if (options.runCheck && pnpmRunner) {
     currentStep += 1;
