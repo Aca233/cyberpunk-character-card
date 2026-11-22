@@ -432,12 +432,14 @@ function deployToCloudflarePages(
   console.log(
     `\n正在上传 ${distRelPath} 到 Cloudflare Pages（项目: ${projectName}，分支: ${branch}）...`,
   );
-  const isWin = process.platform === "win32";
-  const npxCmd = isWin ? "npx.cmd" : "npx";
+  const deployEnv: NodeJS.ProcessEnv = {
+    ...(pnpmRunner.env ?? {}),
+  };
   const deployRes = runCommand(
-    npxCmd,
+    pnpmRunner.command,
     [
-      "--yes",
+      ...pnpmRunner.prefixArgs,
+      "dlx",
       "wrangler",
       "pages",
       "deploy",
@@ -448,14 +450,15 @@ function deployToCloudflarePages(
       branch,
     ],
     {
-      shell: isWin,
+      shell: pnpmRunner.shell,
       allowFailure: true,
+      ...(Object.keys(deployEnv).length > 0 ? { env: deployEnv } : {}),
     },
   );
 
   if (deployRes.status !== 0) {
     throw new Error(
-      "Cloudflare Pages 部署失败。若是首次使用或登录过期，请先执行 npx wrangler login 后重试。",
+      "Cloudflare Pages 部署失败。若是首次使用或登录过期，请先执行 pnpm dlx wrangler login 后重试。",
     );
   }
 }
