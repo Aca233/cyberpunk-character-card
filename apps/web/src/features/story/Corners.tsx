@@ -11,7 +11,7 @@ import { playSfx } from "../../audio";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
-import { mergePointerBind, useCardTilt } from "../../ui/useCardTilt";
+import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { shopPoiIconOf, weaponHudIconOf } from "./art";
@@ -44,7 +44,7 @@ import { weaponPreview } from "./weaponPreview";
 /**
  * 四角（2077-interface-plan.md 第九节）：A 生物监测左上、S 在场的人左中、G 未读左下、
  * B 地点右上、C 追踪右中、H 随身武器与物品栏右下，横幅在中列顶上。
- * 第十二节：鼠标停在块上就地展开概要，朝屏幕中间展开、盖在中列上，块本身不动；点块钉住或跳到完整内容。
+ * 点击卡片或按快捷键（P/J/T/O）就地朝屏幕中间展开、盖在中列上，块本身不动；悬停仅触发 3D 按压质感，不自动展开。
  * 素材和切法照 U0 视觉稿 NeuralMock，不用 CSS 画边框
  */
 
@@ -353,10 +353,6 @@ export function BioMonitor({
   const resizing = useResizing(wideOn || diagOn, p.open);
 
   const humanityPct = `${Math.max(0, Math.min(100, humanity.current))}%`;
-  const togglePin = () => {
-    if (p.pinned) p.close();
-    else peek.setExpand({ id: "bio", pinned: true });
-  };
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着面板和按钮，不能整个换成 button
@@ -365,26 +361,31 @@ export function BioMonitor({
       data-layer="os"
       data-low={low || undefined}
       data-open={p.open || undefined}
-      data-pinned={p.pinned || undefined}
       data-wide={wideOn || undefined}
       data-diag={diagOn || undefined}
       data-resizing={resizing || undefined}
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
-      aria-label={`生物监测，点击${p.pinned ? "取消固定" : "固定展开"}，按 P 或 Esc 收起`}
+      aria-label={`生物监测，点击${p.open ? "收起" : "展开"}，按 P 或 Esc 收起`}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
-        if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) return;
-        togglePin();
+        if (
+          event.target instanceof Element &&
+          event.target.closest(`.${styles.grow}`) &&
+          !event.target.closest(`.${styles.bioDrawerHead}`)
+        ) {
+          return;
+        }
+        p.toggle();
       }}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
-          togglePin();
+          p.toggle();
         }
       }}
-      {...mergePointerBind(p.bind, tilt)}
+      {...tilt}
     >
       <BlockShadow />
       <Panel
@@ -402,7 +403,7 @@ export function BioMonitor({
                   {character.credTier}
                 </em>
               </span>
-              <kbd className={styles.bioKeyHint}>{p.pinned ? "ESC" : "P"}</kbd>
+              <kbd className={styles.bioKeyHint}>{p.open ? "ESC" : "P"}</kbd>
             </div>
             <div className={styles.bioRow}>
               <span
@@ -555,7 +556,7 @@ export function BioMonitor({
               {tabs ?? <span className={styles.bioDrawerTitle}>人物</span>}
               <span className={styles.bioDrawerMeta}>
                 {character.name && <em>{character.name}</em>}
-                <kbd>P</kbd>
+                <kbd title="点击顶栏、按 P 或 Esc 收起">ESC</kbd>
               </span>
             </header>
           }
@@ -714,10 +715,6 @@ function PresentPerson({
           .join(" / ")}${s.chrome.length > 2 ? ` +${s.chrome.length - 2}` : ""}`
       : "";
   const primaryTip = s?.tips[0] ?? null;
-  const togglePin = () => {
-    if (p.pinned) p.close();
-    else peek.setExpand({ id: `person:${person.id}`, pinned: true });
-  };
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: open || wideOn,
     maxRotate: 9,
@@ -731,24 +728,23 @@ function PresentPerson({
       style={{ "--i": index } as CSSProperties}
       data-open={wideOn || undefined}
       data-active={open || undefined}
-      data-pinned={p.pinned || undefined}
       data-tone={tone}
       role="button"
       tabIndex={0}
       aria-expanded={open}
-      aria-label={`${person.name}，${subLabel}${wound.detail ? `，${wound.detail}` : ""}，点击${p.pinned ? "取消固定" : "固定展开"}，按 Esc 收起`}
+      aria-label={`${person.name}，${subLabel}${wound.detail ? `，${wound.detail}` : ""}，点击${p.open ? "收起" : "展开"}，按 Esc 收起`}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
         if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) return;
-        togglePin();
+        p.toggle();
       }}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
-          togglePin();
+          p.toggle();
         }
       }}
-      {...mergePointerBind(p.bind, tilt)}
+      {...tilt}
     >
       <BlockShadow />
       <NineSlice
@@ -987,7 +983,7 @@ function PresentPerson({
                         onClick={(event) => {
                           event.stopPropagation();
                           if (!active) {
-                            peek.setExpand({ id: `person:${target.id}`, pinned: true });
+                            peek.setExpand(`person:${target.id}`);
                           }
                         }}
                       >
@@ -1001,13 +997,13 @@ function PresentPerson({
               <button
                 type="button"
                 className={styles.personHeadBtn}
-                data-active={p.pinned || undefined}
+                data-active={p.open || undefined}
                 onClick={(event) => {
                   event.stopPropagation();
-                  togglePin();
+                  p.close();
                 }}
               >
-                <span>{p.pinned ? "关闭 · ESC" : "固定"}</span>
+                <span>关闭 · ESC</span>
               </button>
             </>
           }
@@ -1235,7 +1231,7 @@ export function Present({
   const overflow = totalCount - shownEntries.length;
   const distinctGroups = new Set(shownEntries.map((e) => e.group));
   const showGroupHeaders = distinctGroups.size > 1 || hostileEntries.length > 0;
-  const open = shownEntries.some((e) => e.npc && peek.expand?.id === `person:${e.npc.id}`);
+  const open = shownEntries.some((e) => e.npc && peek.expand === `person:${e.npc.id}`);
   const switchTargets: readonly QuickSwitchTarget[] = shownEntries
     .filter((e): e is PresentEntry & { readonly npc: Npc } => Boolean(e.npc))
     .map((e) => ({
@@ -1319,7 +1315,7 @@ export function Present({
             const prevGroup = idx > 0 ? shownEntries[idx - 1]?.group : null;
             const renderGroupHeader = showGroupHeaders && entry.group !== prevGroup && !open;
             const groupMeta = PRESENT_GROUP_META[entry.group];
-            const isSlotOpen = Boolean(entry.npc && peek.expand?.id === `person:${entry.npc.id}`);
+            const isSlotOpen = Boolean(entry.npc && peek.expand === `person:${entry.npc.id}`);
             return (
               <li
                 key={entry.key}
@@ -1406,10 +1402,6 @@ export function Unread({
   // 一直显示：这里就是消息与芯片的入口，读完了也要找得到
   const newest = view.phone.messages.find((m) => !m.read) ?? null;
   const totalUnread = view.phone.unread + unreadCalls + newsCount + view.shards.unread;
-  const togglePin = () => {
-    if (p.pinned) p.close();
-    else peek.setExpand({ id: "unread", pinned: true });
-  };
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
     maxRotate: 8.5,
@@ -1423,28 +1415,27 @@ export function Unread({
       className={`${styles.block} ${styles.unread}`}
       data-layer="os"
       data-open={p.open || undefined}
-      data-pinned={p.pinned || undefined}
       data-wide={wideOn || undefined}
       data-resizing={resizing || undefined}
-      aria-label={`未读消息，点击${p.pinned ? "取消固定" : "固定展开"}，按 T 或 Esc 收起`}
+      aria-label={`未读消息，点击${p.open ? "收起" : "展开"}，按 T 或 Esc 收起`}
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
-        // 点击展开正文区（选联系人、复制消息、漏点按钮或输入框边缘）不顺手固定或关闭，保留鼠标移走收起；点外框或底栏再切换固定
+        // 点击展开正文区（选联系人、复制消息、漏点按钮或输入框边缘）不顺手关闭；点外框或底栏再切换收起
         if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) {
           return;
         }
-        togglePin();
+        p.toggle();
       }}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
-          togglePin();
+          p.toggle();
         }
       }}
-      {...mergePointerBind(p.bind, tilt)}
+      {...tilt}
     >
       <BlockShadow />
       <NineSlice id="map.panelBg" tint="var(--cp-surface)" slice={PANEL_SLICE} />
@@ -1455,7 +1446,7 @@ export function Unread({
           open={p.open}
           head={null}
           title="消息 · 资料"
-          hint={p.pinned ? "ESC" : "T"}
+          hint={p.open ? "ESC" : "T"}
           line="var(--cp-red)"
         >
           {full}
@@ -1465,7 +1456,7 @@ export function Unread({
             {tabs}
             <span className={styles.unreadTabMeta}>
               <span>{totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}</span>
-              <kbd className={styles.unreadKey}>{p.pinned ? "ESC" : "T"}</kbd>
+              <kbd className={styles.unreadKey}>{p.open ? "ESC" : "T"}</kbd>
             </span>
           </div>
         ) : (
@@ -1762,10 +1753,6 @@ export function Track({
         : track.offeredCount > 0
           ? ({ tone: "cyan", label: `待决 ${track.offeredCount}` } as const)
           : ({ tone: "muted", label: "无待办" } as const);
-  const togglePin = () => {
-    if (p.pinned) p.close();
-    else peek.setExpand({ id: "track", pinned: true });
-  };
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
     maxRotate: 8.5,
@@ -1778,7 +1765,6 @@ export function Track({
       className={`${styles.block} ${styles.track}`}
       data-layer="optics"
       data-open={p.open || undefined}
-      data-pinned={p.pinned || undefined}
       data-idle={idle || undefined}
     >
       {
@@ -1788,13 +1774,13 @@ export function Track({
           role="button"
           tabIndex={0}
           aria-expanded={p.open}
-          aria-label={`追踪，点击${p.pinned ? "取消固定" : "固定展开"}，按 J 切换，按 Esc 收起`}
+          aria-label={`追踪，点击${p.open ? "收起" : "展开"}，按 J 切换，按 Esc 收起`}
           onClick={(event) => {
             if (isNestedInteractive(event.target, event.currentTarget)) return;
             if (event.target instanceof Element && event.target.closest(`.${styles.grow}`)) {
               return;
             }
-            togglePin();
+            p.toggle();
           }}
           onKeyDown={(event) => {
             if (
@@ -1802,10 +1788,10 @@ export function Track({
               (event.key === "Enter" || event.key === " ")
             ) {
               event.preventDefault();
-              togglePin();
+              p.toggle();
             }
           }}
-          {...mergePointerBind(p.bind, tilt)}
+          {...tilt}
         >
           <BlockShadow />
           <Panel
@@ -1820,7 +1806,7 @@ export function Track({
                   {statusPill.label}
                 </span>
               </span>
-              <kbd className={styles.trackKeyHint}>{p.pinned ? "ESC" : "J"}</kbd>
+              <kbd className={styles.trackKeyHint}>{p.open ? "ESC" : "J"}</kbd>
             </div>
             {/* 常态摘要在展开后收进 0fr，腾出纵向空间；空闲态保持极简，仅留标题栏 */}
             {!idle && (
@@ -1961,7 +1947,7 @@ function LoadMeter({
   );
 }
 
-/** H 随身武器与物品栏：平权并排显示随身武器缩略格，底行展示治疗/手雷充能格与欧元；hover 预览、点一下钉住 */
+/** H 随身武器与物品栏：平权并排显示随身武器缩略格，底行展示治疗/手雷充能格与欧元；点击或按 O 展开 */
 export function Weapon({
   view,
   peek,
@@ -2022,43 +2008,30 @@ export function Weapon({
       className={`${styles.block} ${styles.weapon}`}
       data-layer="os"
       data-open={p.open || undefined}
-      data-pinned={p.pinned || undefined}
       data-wide={wideOn || undefined}
-      aria-label="武器、物品栏与车辆，点击固定展开，按 Esc 收起"
+      aria-label={`武器、物品栏与车辆，点击${p.open ? "收起" : "展开"}，按 O 或 Esc 收起`}
       role="button"
       tabIndex={0}
       aria-expanded={p.open}
-      onPointerDownCapture={(event) => {
-        // 悬停预览态下只要在展开区内部点按交互控件，立刻升级为钉住，避免滑出失焦误关
-        if (
-          p.open &&
-          !p.pinned &&
-          event.target instanceof Element &&
-          event.target.closest(`.${styles.grow}`)
-        ) {
-          peek.setExpand({ id: "weapon", pinned: true });
-        }
-      }}
       onClick={(event) => {
         if (isNestedInteractive(event.target, event.currentTarget)) return;
         if (
-          p.pinned &&
+          p.open &&
           event.target instanceof Element &&
-          event.target.closest(`.${styles.grow}`)
+          event.target.closest(`.${styles.grow}`) &&
+          !event.target.closest(`.${styles.weaponDrawerHead}`)
         ) {
           return;
         }
-        if (p.pinned) p.close();
-        else peek.setExpand({ id: "weapon", pinned: true });
+        p.toggle();
       }}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
-          if (p.pinned) p.close();
-          else peek.setExpand({ id: "weapon", pinned: true });
+          p.toggle();
         }
       }}
-      {...mergePointerBind(p.bind, tilt)}
+      {...tilt}
     >
       <div className={styles.slot}>
         <BlockShadow />
@@ -2202,7 +2175,7 @@ export function Weapon({
                   <Asset id="notify.cash" tint="var(--cp-yellow)" height={11} />
                   <strong>{eddiesText}</strong>
                 </span>
-                <kbd className={styles.slotHint}>{p.pinned ? "ESC" : "O"}</kbd>
+                <kbd className={styles.slotHint}>{p.open ? "ESC" : "O"}</kbd>
               </span>
             </span>
           </span>

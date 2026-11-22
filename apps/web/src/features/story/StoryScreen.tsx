@@ -293,15 +293,15 @@ export function StoryScreen() {
   } | null>(null);
   const [bioTab, setBioTab] = useState<BioTab>("character");
   // 视野里就地展开：四角的块、在场的人，同一时间只展开一处；
-  // 钉住（点块或按 P/J/T）时块里放完整内容
+  // 点击卡片或按 P/J/T/O 展开完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
   const peek = useMemo(() => ({ expand, setExpand }), [expand]);
   useEffect(() => {
-    if (expand?.id !== "weapon") {
+    if (expand !== "weapon") {
       if (inventoryView !== "carried") setInventoryView("carried");
       if (inventoryFocus !== null) setInventoryFocus(null);
     }
-  }, [expand?.id, inventoryView, inventoryFocus]);
+  }, [expand, inventoryView, inventoryFocus]);
   const storagePartition = useMemo(
     () => (view ? partitionStorageGroups(view) : { own: [], elsewhere: [] }),
     [view],
@@ -639,16 +639,12 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
-  // 钉住右下角装备块；再次按 O 或点击时若已在随身视图就收起，否则切回随身。
+  // 展开右下角装备块；再次按 O 或点击时若已在随身视图就收起，否则切回随身。
   const showGear = useCallback(
     (target: InventoryViewKey = "carried") => {
       setAtMap(false);
       setInventoryView(target);
-      setExpand((cur) =>
-        cur?.id === "weapon" && cur.pinned && effectiveInventoryView === target
-          ? null
-          : { id: "weapon", pinned: true },
-      );
+      setExpand((cur) => (cur === "weapon" && effectiveInventoryView === target ? null : "weapon"));
     },
     [effectiveInventoryView],
   );
@@ -661,7 +657,7 @@ export function StoryScreen() {
       ...(itemId ? { itemId } : {}),
       nonce: (prev?.nonce ?? 0) + 1,
     }));
-    setExpand({ id: "weapon", pinned: true });
+    setExpand("weapon");
   }, []);
   const openMap = useCallback(() => {
     setExpand(null);
@@ -678,10 +674,10 @@ export function StoryScreen() {
       setPerson(mark.npc);
     }
   }, []);
-  // 钉住一个块（P 生物监测、J 追踪、T 未读）；按键时同一块已经钉着就收起
+  // 展开/收起一个块（P 生物监测、J 追踪、T 未读）；按键时同一块已经展开就收起
   const pinBlock = useCallback((id: string) => {
     setAtMap(false);
-    setExpand((cur) => (cur?.id === id && cur.pinned ? null : { id, pinned: true }));
+    setExpand((cur) => (cur === id ? null : id));
   }, []);
   // 只在具体某个会话被打开时按联系人粒度标已读；并发触发时排队合并，避免切联系人吞掉已读请求
   const readingPromise = useRef<Promise<void> | null>(null);
@@ -838,7 +834,7 @@ export function StoryScreen() {
       if (k === "o") {
         e.preventDefault();
         showGear("carried");
-      } else if ((k === "q" || k === "e") && expand?.id === "weapon") {
+      } else if ((k === "q" || k === "e") && expand === "weapon") {
         if (inventoryViewKeys.length <= 1) return;
         e.preventDefault();
         setInventoryView((cur) => {
@@ -885,7 +881,7 @@ export function StoryScreen() {
     };
   }, [
     choose,
-    expand?.id,
+    expand,
     inventoryViewKeys,
     scanPinned,
     story.failure,
@@ -1446,7 +1442,7 @@ export function StoryScreen() {
                 <Button
                   onClick={() => {
                     setBioTab("chronicle");
-                    setExpand({ id: "bio", pinned: true });
+                    setExpand("bio");
                   }}
                 >
                   看履历
@@ -1479,19 +1475,19 @@ export function StoryScreen() {
               <KeyHint
                 keyId="key.p"
                 label="人物"
-                active={expand?.id === "bio"}
+                active={expand === "bio"}
                 onClick={() => pinBlock("bio")}
               />
               <KeyHint
                 keyId="key.o"
                 label="装备"
-                active={expand?.id === "weapon"}
+                active={expand === "weapon"}
                 onClick={() => showGear("carried")}
               />
               <KeyHint
                 keyId="key.j"
                 label="追踪"
-                active={expand?.id === "track"}
+                active={expand === "track"}
                 badge={activeTrackCount}
                 onClick={() => pinBlock("track")}
               />
@@ -1499,7 +1495,7 @@ export function StoryScreen() {
               <KeyHint
                 keyId="key.t"
                 label="消息"
-                active={expand?.id === "unread"}
+                active={expand === "unread"}
                 badge={unreadBadgeCount}
                 onClick={() => pinBlock("unread")}
               />

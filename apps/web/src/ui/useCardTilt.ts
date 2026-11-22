@@ -1,4 +1,4 @@
-import { type PointerEvent, type PointerEventHandler, useCallback, useEffect, useRef } from "react";
+import { type PointerEvent, useCallback, useEffect, useRef } from "react";
 
 /**
  * 赛博卡片磁吸 3D 按压倾斜 + 鼠标跟随高光系统（零重渲染，走 rAF 写入 CSS 变量）。
@@ -166,52 +166,5 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
     onPointerUp,
     onPointerLeave,
     onPointerCancel,
-  };
-}
-
-/** 合并两组指针事件处理器（例如 usePeek.bind 与 useCardTilt），避免覆盖 */
-export function mergePointerBind<T extends HTMLElement>(
-  a: {
-    readonly onPointerEnter?: PointerEventHandler<T>;
-    readonly onPointerMove?: PointerEventHandler<T>;
-    readonly onPointerDown?: PointerEventHandler<T>;
-    readonly onPointerUp?: PointerEventHandler<T>;
-    readonly onPointerLeave?: PointerEventHandler<T>;
-    readonly onPointerCancel?: PointerEventHandler<T>;
-  },
-  b: {
-    readonly onPointerEnter?: PointerEventHandler<T>;
-    readonly onPointerMove?: PointerEventHandler<T>;
-    readonly onPointerDown?: PointerEventHandler<T>;
-    readonly onPointerUp?: PointerEventHandler<T>;
-    readonly onPointerLeave?: PointerEventHandler<T>;
-    readonly onPointerCancel?: PointerEventHandler<T>;
-  },
-) {
-  return {
-    onPointerEnter: (e: PointerEvent<T>) => {
-      a.onPointerEnter?.(e);
-      b.onPointerEnter?.(e);
-    },
-    onPointerMove: (e: PointerEvent<T>) => {
-      a.onPointerMove?.(e);
-      b.onPointerMove?.(e);
-    },
-    onPointerDown: (e: PointerEvent<T>) => {
-      a.onPointerDown?.(e);
-      b.onPointerDown?.(e);
-    },
-    onPointerUp: (e: PointerEvent<T>) => {
-      a.onPointerUp?.(e);
-      b.onPointerUp?.(e);
-    },
-    onPointerLeave: (e: PointerEvent<T>) => {
-      a.onPointerLeave?.(e);
-      b.onPointerLeave?.(e);
-    },
-    onPointerCancel: (e: PointerEvent<T>) => {
-      a.onPointerCancel?.(e);
-      b.onPointerCancel?.(e);
-    },
   };
 }

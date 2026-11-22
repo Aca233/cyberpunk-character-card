@@ -767,7 +767,7 @@
   --face-line: var(--cp-yellow);
 }
 
-.person:where([data-pinned]) {
+.person:where([data-open]) {
   --person-rail: var(--cp-yellow);
 }
 
@@ -805,8 +805,8 @@
     opacity 140ms ease-out;
 }
 
-.person:where(:hover, [data-open], [data-pinned]) > .personGlow,
-.person:where(:hover, [data-open], [data-pinned]) > .personRail {
+.person:where(:hover, [data-open]) > .personGlow,
+.person:where(:hover, [data-open]) > .personRail {
   opacity: 1;
 }
 
@@ -921,7 +921,7 @@
   transition: color 120ms ease-out;
 }
 
-.person:where(:hover, [data-pinned], :focus-visible) .personName {
+.person:where(:hover, [data-open], :focus-visible) .personName {
   color: var(--cp-yellow);
 }
 
@@ -1058,7 +1058,7 @@
   transition: opacity 120ms ease-out;
 }
 
-.person:where(:hover, :focus-within, [data-pinned]) .personActions {
+.person:where(:hover, :focus-within, [data-open]) .personActions {
   opacity: 1;
 }
 
@@ -2521,16 +2521,16 @@
   cursor: var(--cp-cursor-hand);
 }
 
-.person:where(:hover, [data-open], [data-pinned], :focus-visible) {
+.person:where(:hover, [data-open], :focus-visible) {
   --person-line: var(--cp-cyan);
   z-index: 2;
 }
 
-.person:where([data-tone="hostile"]):where(:hover, [data-open], [data-pinned], :focus-visible) {
+.person:where([data-tone="hostile"]):where(:hover, [data-open], :focus-visible) {
   --person-line: var(--cp-danger);
 }
 
-.person:where([data-tone="nemesis"]):where(:hover, [data-open], [data-pinned], :focus-visible) {
+.person:where([data-tone="nemesis"]):where(:hover, [data-open], :focus-visible) {
   --person-line: var(--cp-red);
 }
 
@@ -2834,7 +2834,7 @@
   color: rgb(184 206 214);
 }
 
-.person:where([data-pinned]) :where(.peekHead) kbd {
+.person:where([data-open]) :where(.peekHead) kbd {
   color: var(--cp-yellow);
 }
 
