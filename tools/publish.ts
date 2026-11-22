@@ -370,8 +370,10 @@ function deployToCloudflarePages(
   if (skipBuild) {
     console.log("已按参数跳过构建，直接检查现有产物目录。");
   } else {
+    console.log("校验素材清单...");
+    runPnpm(pnpmRunner, ["--filter", "@cp/tools", "run", "check-assets"]);
     console.log("开始构建前端静态产物（CP_BASE=/）...");
-    runPnpm(pnpmRunner, ["build"], { CP_BASE: "/" });
+    runPnpm(pnpmRunner, ["--filter", "@cp/web", "exec", "vite", "build"], { CP_BASE: "/" });
   }
 
   if (!existsSync(join(distAbsPath, "index.html"))) {
@@ -440,8 +442,8 @@ async function main(): Promise<void> {
 
   if (options.runCheck && pnpmRunner) {
     currentStep += 1;
-    logStep(currentStep, totalSteps, "静态类型检查（pnpm typecheck）");
-    runPnpm(pnpmRunner, ["typecheck"]);
+    logStep(currentStep, totalSteps, "静态类型检查（typecheck）");
+    runPnpm(pnpmRunner, ["-r", "--parallel", "run", "typecheck"]);
   }
 
   let remoteUrl: string | undefined;
