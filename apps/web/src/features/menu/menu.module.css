@@ -8,26 +8,24 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
-  padding: 46px clamp(40px, 5vw, 96px) 18px;
+  padding: 52px clamp(44px, 5.5vw, 108px) 18px;
   overflow: hidden;
   background-color: var(--cp-bg);
   color: var(--cp-text);
   font-family: var(--font-ui);
 }
 
-.menu > :not(.bg, .dim, .strip, .scan, .frame) {
+.menu > :not(.bg, .dim, .strip, .gridTex, .scan, .frame) {
   position: relative;
   z-index: 1;
 }
 
-/* 居中内容舞台：上方横跨的放大版 Logo + 下方三栏（左菜单 / 中舞台 / 右更新日志） */
+/* 居中双栏舞台：左列放大版 Logo + 导航 + 终端状态；右列上方操作舞台 + 下方更新日志终端 */
 .layout {
   display: grid;
-  grid-template-columns: minmax(290px, 340px) minmax(420px, 1.15fr) minmax(300px, 390px);
-  grid-template-rows: auto minmax(0, 1fr);
-  column-gap: clamp(28px, 3.2vw, 52px);
-  row-gap: 22px;
-  width: min(1520px, 100%);
+  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  column-gap: clamp(40px, 4.5vw, 76px);
+  width: min(1440px, 100%);
   min-height: 0;
   margin: 0 auto;
 }
@@ -45,29 +43,38 @@
 .dim {
   position: absolute;
   inset: 0;
-  background: rgb(5 5 10 / 70%);
+  background: rgb(6 5 11 / 68%);
 }
 
-/* 左侧条幅垫底，对齐外框边缘并柔和收边 */
+/* 左侧条幅垫底，对齐左栏 */
 .strip {
   position: absolute;
   top: 6px;
   bottom: 4px;
   left: 20px;
-  width: min(32vw, 480px);
+  width: min(36vw, 520px);
   overflow: hidden;
   background-position: left top;
   background-size: auto 100%;
   background-repeat: no-repeat;
-  opacity: 0.36;
+  opacity: 0.34;
   animation: stripIn 540ms var(--ease-snap) 80ms both;
+}
+
+.gridTex {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.055;
+  pointer-events: none;
 }
 
 .scan {
   position: absolute;
   inset: 0;
   background-repeat: repeat;
-  opacity: 0.1;
+  opacity: 0.09;
   mix-blend-mode: screen;
   pointer-events: none;
   animation: sweep 420ms var(--ease-snap) both;
@@ -80,22 +87,51 @@
   animation: frameBoot 440ms var(--ease-snap) 40ms both;
 }
 
-/* ———— 顶部品牌标志 + 左列菜单与终端状态 ———— */
+/* ———— 左列：放大版品牌标志 + 主菜单 + 终端状态 ———— */
+
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 .brand {
-  grid-column: 1 / -1;
   display: grid;
   justify-items: start;
-  gap: 10px;
+  gap: 8px;
+  margin-bottom: 24px;
   animation: brandIn 460ms var(--ease-snap) 80ms both;
 }
 
 .brandLogo {
   display: block;
   width: auto;
-  height: clamp(86px, 8.6vw, 126px);
+  height: clamp(92px, 6.8vw, 124px);
   max-width: 100%;
-  filter: drop-shadow(0 0 18px rgb(252 238 10 / 26%)) drop-shadow(0 6px 18px rgb(0 0 0 / 55%));
+  filter: drop-shadow(0 0 18px rgb(252 238 10 / 28%)) drop-shadow(0 6px 16px rgb(0 0 0 / 55%));
+}
+
+.brandMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.brandTag {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.brandSub {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  letter-spacing: 0.14em;
 }
 
 .brandLine {
@@ -103,16 +139,10 @@
   width: 100%;
   height: 2px;
   margin-top: 2px;
-  background: var(--cp-red-dim);
+  background: var(--cp-red);
   mask-size: 100% 100%;
   transform-origin: left center;
   animation: lineSweep 460ms var(--ease-snap) 160ms both;
-}
-
-.side {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .nav {
@@ -164,7 +194,7 @@
   position: relative;
   isolation: isolate;
   margin: auto 0 0;
-  padding: 12px 16px 14px;
+  padding: 16px 22px 18px 26px;
   animation: statusCardIn 420ms var(--ease-snap) 290ms both;
   will-change: transform;
   transform-origin: center center;
@@ -202,7 +232,7 @@
   --glare-tint: 255 210 206;
 }
 
-:where(.statusCard, .saveCard, .charDossier)[data-glare] .cardGlare {
+:where(.statusCard, .saveCard, .charDossier, .changelog)[data-glare] .cardGlare {
   background-image:
     linear-gradient(
       var(--tilt-angle, 126deg),
@@ -216,7 +246,7 @@
   opacity: 1;
 }
 
-:where(.statusCard, .saveCard, .charDossier)[data-glare][data-pressed] .cardGlare {
+:where(.statusCard, .saveCard, .charDossier, .changelog)[data-glare][data-pressed] .cardGlare {
   opacity: 0.55;
 }
 
@@ -288,7 +318,15 @@
   color: var(--cp-cyan);
 }
 
-/* ———— 中列舞台：标题压在原作 menu.header 上，下面一道 tab.line ———— */
+/* ———— 右列主区：上方当前舞台 + 下方更新日志终端，纵向上下饱满铺展 ———— */
+
+.rightPane {
+  display: grid;
+  grid-template-rows: minmax(0, 1.12fr) minmax(240px, 0.88fr);
+  gap: 20px;
+  min-width: 0;
+  min-height: 0;
+}
 
 .stage {
   display: grid;
@@ -303,7 +341,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 52px;
+  height: 50px;
   padding: 0 8px 0 6px;
   animation: stageHeadIn 360ms var(--ease-snap) 120ms both;
 }
@@ -373,9 +411,9 @@
 .stageBody {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-height: 0;
-  padding: 20px 10px 8px 0;
+  padding: 16px 8px 4px 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
@@ -394,145 +432,200 @@
 }
 
 .keys {
-  width: min(1520px, 100%);
+  width: min(1440px, 100%);
   margin: 12px auto 0;
   text-shadow:
     0 0 3px rgb(5 5 10),
     0 0 8px rgb(5 5 10);
 }
 
-/* ———— 右列：更新日志面板 ———— */
+/* ———— 右列下方：更新日志终端（原作 notify.itemCell 九宫格切角容器） ———— */
 
 .changelog {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  animation: paneIn 320ms var(--ease-snap) 160ms both;
+  will-change: transform;
+  transform-origin: center center;
+  animation: statusCardIn 420ms var(--ease-snap) 220ms both;
+  transition: filter 180ms ease-out;
+}
+
+.changelog[data-tilting] {
+  transform: perspective(1100px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 32%));
+}
+
+.changelogBg,
+.changelogFg {
+  z-index: -1;
+}
+
+.changelogInner {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  padding: 16px 26px 20px 28px;
 }
 
 .changelogHead {
-  position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 8px 0 6px;
-  animation: stageHeadIn 360ms var(--ease-snap) 150ms both;
+  justify-content: space-between;
+  gap: 10px 16px;
 }
 
-.changelogHead > :not(.stageHeadBg) {
-  position: relative;
+.changelogTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.changelogGlow {
+  flex: none;
+  animation: stageGlowPulse 3.6s ease-in-out infinite;
 }
 
 .changelogCode {
   color: var(--cp-yellow);
   font-family: var(--font-mono);
   font-size: var(--fs-label);
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   white-space: nowrap;
 }
 
 .changelogTitle {
   margin: 0;
   color: var(--cp-text);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  text-shadow:
-    0 0 4px rgb(5 5 10),
-    0 0 12px rgb(5 5 10);
 }
 
-.changelogBadge {
-  margin-left: auto;
-  padding: 2px 8px;
-  background: rgb(252 238 10 / 14%);
-  color: var(--cp-yellow);
+.changelogTabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.changelogTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid rgb(255 97 88 / 26%);
+  background: rgb(255 97 88 / 6%);
+  color: var(--cp-text-dim);
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    border-color var(--dur-flash) var(--ease-cyber),
+    background-color var(--dur-flash) var(--ease-cyber);
 }
 
-.changelogBody {
-  min-height: 0;
-  padding: 20px 8px 8px 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--cp-red-dim) transparent;
+.changelogTab:hover {
+  border-color: var(--cp-cyan);
+  color: var(--cp-cyan);
 }
 
-.changelogList {
+.changelogTab[data-active] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+  box-shadow: 0 0 10px rgb(94 246 255 / 22%);
+}
+
+.changelogTabNew {
+  padding: 0 4px;
+  background: var(--cp-yellow);
+  color: #100c08;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+}
+
+.changelogDivider {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin: 12px 0;
+  background: var(--cp-red-dim);
+  mask-size: 100% 100%;
+}
+
+.changelogContent {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  min-height: 0;
+  padding-right: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+  animation: paneIn 220ms var(--ease-snap) both;
 }
 
-.changelogCard {
-  --box-line: var(--cp-red-dim);
-  --box-fill: rgb(14 14 23 / 78%);
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  gap: 8px;
-  padding: 14px 18px 16px;
-}
-
-.changelogCard[data-latest] {
-  --box-line: var(--cp-red);
-  --box-fill: rgb(16 14 24 / 86%);
-}
-
-.changelogMeta {
+.changelogSummary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.changelogSummaryLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
-.changelogVersion {
+.changelogVersionPill {
+  flex: none;
+  padding: 1px 8px;
+  background: rgb(94 246 255 / 14%);
   color: var(--cp-cyan);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-}
-
-.changelogLatest {
-  padding: 1px 6px;
-  background: rgb(252 238 10 / 16%);
-  color: var(--cp-yellow);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.changelogDate {
-  margin-left: auto;
-  color: var(--cp-text-dim);
-  font-size: 11px;
-  letter-spacing: 0.06em;
 }
 
 .changelogEntryTitle {
   margin: 0;
+  overflow: hidden;
   color: var(--cp-text);
   font-size: 15px;
   font-weight: 700;
-  line-height: 1.4;
   letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changelogDate {
+  flex: none;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
 }
 
 .changelogItems {
   display: grid;
-  gap: 6px;
-  margin: 2px 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -542,7 +635,10 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 8px;
-  font-size: 12.5px;
+  padding: 6px 8px;
+  background: rgb(255 255 255 / 2.5%);
+  border-left: 2px solid rgb(255 97 88 / 30%);
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -573,7 +669,7 @@
 }
 
 .changelogText {
-  color: var(--cp-text-dim);
+  color: var(--cp-text);
   word-break: break-word;
 }
 
@@ -629,6 +725,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saveGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1068,15 +1173,13 @@
   }
 
   .layout {
-    grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
     column-gap: 32px;
-    row-gap: 18px;
   }
 
-  .changelog {
-    grid-column: 1 / -1;
-    max-height: 240px;
+  .saveGrid,
+  .changelogItems {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .fields {
@@ -1112,30 +1215,34 @@
     width: 100%;
   }
 
+  .rightPane {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
   .side,
   .stage,
   .changelog {
     flex: none;
     min-height: auto;
-    max-height: none;
   }
 
   .brandLogo {
-    height: 76px;
+    height: 82px;
   }
 
   .statusCard {
     margin: 16px 0 0;
   }
 
-  .stage,
-  .changelog {
+  .stage {
     grid-template-rows: auto auto auto;
     max-width: none;
   }
 
   .stageBody,
-  .changelogBody {
+  .changelogContent {
     overflow: visible;
   }
 
@@ -1285,7 +1392,8 @@
   .stageLine,
   .stageBody,
   .changelog,
-  .changelogHead,
+  .changelogGlow,
+  .changelogContent,
   .mapModalBackdrop,
   .mapModal {
     animation: none;
@@ -1295,7 +1403,8 @@
   .saveIcon,
   .saveCta,
   .statusCard,
-  .charDossier {
+  .charDossier,
+  .changelog {
     transition: none;
   }
 
@@ -1309,6 +1418,7 @@
   .saveCard[data-tilting],
   .statusCard[data-tilting],
   .charDossier[data-tilting],
+  .changelog[data-tilting],
   .saveCard:hover .saveIcon,
   .saveCard:focus-visible .saveIcon,
   .saveCard:hover .saveCta,

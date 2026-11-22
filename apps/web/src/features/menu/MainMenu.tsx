@@ -12,7 +12,7 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { layerOpen, useLayer } from "../../ui/layers";
 import { MenuItem } from "../../ui/MenuItem";
-import { Panel } from "../../ui/Panel";
+import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { useCardTilt } from "../../ui/useCardTilt";
 import { defaultStartLocationFor } from "../characters/creator";
 import {
@@ -54,7 +54,7 @@ const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a
 
 /**
  * 主菜单：夜之城远景压暗、扫描线、原作 panel.frame 红框；
- * 居中三栏布局：左列标志/菜单/终端状态，中列选中项舞台，右列更新日志
+ * 居中双栏布局：左栏放大版 Logo + 导航菜单 + 终端状态，右栏上方当前选中舞台 + 下方更新日志终端
  */
 export function MainMenu() {
   const navigate = useNavigate();
@@ -244,6 +244,7 @@ export function MainMenu() {
         style={{ backgroundImage: cssUrl("menu.background") }}
         aria-hidden
       />
+      <span className={styles.gridTex} style={{ backgroundImage: cssUrl("fx.grid") }} aria-hidden />
       <span
         className={styles.scan}
         style={{ backgroundImage: cssUrl("fx.scanlines") }}
@@ -257,16 +258,20 @@ export function MainMenu() {
       />
 
       <div className={styles.layout}>
-        <header className={styles.brand}>
-          <Asset id="splash.logo" height={116} alt="赛博朋克2091" className={styles.brandLogo} />
-          <span
-            className={styles.brandLine}
-            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-            aria-hidden
-          />
-        </header>
-
         <aside className={styles.side}>
+          <header className={styles.brand}>
+            <Asset id="splash.logo" height={124} alt="赛博朋克2091" className={styles.brandLogo} />
+            <div className={styles.brandMeta}>
+              <span className={styles.brandTag}>{"NIGHT CITY // 2091"}</span>
+              <span className={styles.brandSub}>交互式叙事终端</span>
+            </div>
+            <span
+              className={styles.brandLine}
+              style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+              aria-hidden
+            />
+          </header>
+
           <nav ref={navRef} className={styles.nav} aria-label="主菜单">
             {primaryItems.map((item) => (
               <MenuItem
@@ -310,19 +315,19 @@ export function MainMenu() {
           <div className={styles.statusCard} {...statusTilt}>
             <NineSlice
               id="notify.itemCellBg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="rgb(10 7 14 / 86%)"
               className={styles.statusSlice}
             />
             <NineSlice
               id="notify.itemCellBg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint="transparent"
               className={styles.cardGlare}
             />
             <NineSlice
               id="notify.itemCellFg"
-              slice={30}
+              slice={ITEM_CELL_SLICE}
               tint={modelReady === false ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
               className={styles.statusSlice}
             />
@@ -352,8 +357,6 @@ export function MainMenu() {
                 {saves.isSuccess ? `${sorted.length} 个` : "—"}
                 {characters.data ? ` · ${characters.data.length} 张角色卡` : ""}
               </dd>
-              <dt>工坊</dt>
-              <dd>未完成 · 暂未启用</dd>
               <dt>音频</dt>
               <dd data-tone={audioPrefs.muted ? "warn" : "ok"}>
                 <button
@@ -377,185 +380,187 @@ export function MainMenu() {
           </div>
         </aside>
 
-        <section ref={stageRef} className={styles.stage} aria-label={stageTitle}>
-          <header className={styles.stageHead}>
-            <Asset
-              id="menu.header"
-              tint="var(--cp-red)"
-              height={52}
-              className={styles.stageHeadBg}
+        <div className={styles.rightPane}>
+          <section ref={stageRef} className={styles.stage} aria-label={stageTitle}>
+            <header className={styles.stageHead}>
+              <Asset
+                id="menu.header"
+                tint="var(--cp-red)"
+                height={50}
+                className={styles.stageHeadBg}
+              />
+              <Asset
+                id="panel.glowLeft"
+                height={26}
+                tint="var(--cp-cyan)"
+                className={styles.stageGlow}
+              />
+              <div className={styles.stageHeading}>
+                {stageCode && <span className={styles.stageCode}>{stageCode}</span>}
+                <h1 className={styles.stageTitle}>{stageTitle}</h1>
+              </div>
+              {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
+            </header>
+            <span
+              className={styles.stageLine}
+              style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+              aria-hidden
             />
-            <Asset
-              id="panel.glowLeft"
-              height={28}
-              tint="var(--cp-cyan)"
-              className={styles.stageGlow}
-            />
-            <div className={styles.stageHeading}>
-              {stageCode && <span className={styles.stageCode}>{stageCode}</span>}
-              <h1 className={styles.stageTitle}>{stageTitle}</h1>
-            </div>
-            {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
-          </header>
-          <span
-            className={styles.stageLine}
-            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-            aria-hidden
-          />
-          <div className={styles.stageBody} key={focus}>
-            {health.data &&
-              (health.data.config !== "ok" || health.data.models?.ready === false) && (
-                <Panel line="var(--cp-yellow)" className={styles.warn}>
-                  <div className={styles.warnRow}>
-                    <span>
-                      {health.data.models?.narrator.error ??
-                        health.data.models?.aux.error ??
-                        "模型还没配好，剧情暂时不能开始。"}
-                    </span>
-                    <Button onClick={() => navigate("/settings")}>去设置</Button>
-                  </div>
+            <div className={styles.stageBody} key={focus}>
+              {health.data &&
+                (health.data.config !== "ok" || health.data.models?.ready === false) && (
+                  <Panel line="var(--cp-yellow)" className={styles.warn}>
+                    <div className={styles.warnRow}>
+                      <span>
+                        {health.data.models?.narrator.error ??
+                          health.data.models?.aux.error ??
+                          "模型还没配好，剧情暂时不能开始。"}
+                      </span>
+                      <Button onClick={() => navigate("/settings")}>去设置</Button>
+                    </div>
+                  </Panel>
+                )}
+              {health.isError && (
+                <Panel line="var(--cp-danger)" className={styles.warn}>
+                  {health.error.message}
                 </Panel>
               )}
-            {health.isError && (
-              <Panel line="var(--cp-danger)" className={styles.warn}>
-                {health.error.message}
-              </Panel>
-            )}
 
-            {focus === "continue" && latest && (
-              <div className={styles.continue}>
-                <SaveCard
-                  save={latest}
-                  character={charById.get(latest.characterId)}
-                  featured
-                  onOpen={() => navigate(`/play/${latest.id}`)}
-                />
-                {sorted.length > 1 && (
-                  <>
-                    <div className={styles.groupRow}>
-                      <h2 className={styles.groupHead}>其他近期存档</h2>
-                      {sorted.length > 4 && (
-                        <Button small onClick={() => setFocus("load")}>
-                          全部 {sorted.length} 份 →
-                        </Button>
-                      )}
-                    </div>
+              {focus === "continue" && latest && (
+                <div className={styles.continue}>
+                  <SaveCard
+                    save={latest}
+                    character={charById.get(latest.characterId)}
+                    featured
+                    onOpen={() => navigate(`/play/${latest.id}`)}
+                  />
+                  {sorted.length > 1 && (
+                    <>
+                      <div className={styles.groupRow}>
+                        <h2 className={styles.groupHead}>其他近期存档</h2>
+                        {sorted.length > 5 && (
+                          <Button small onClick={() => setFocus("load")}>
+                            全部 {sorted.length} 份 →
+                          </Button>
+                        )}
+                      </div>
+                      <ul className={styles.saveGrid}>
+                        {sorted.slice(1, 5).map((save) => (
+                          <li key={save.id}>
+                            <SaveCard
+                              save={save}
+                              character={charById.get(save.characterId)}
+                              onOpen={() => navigate(`/play/${save.id}`)}
+                              compact
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
+
+              {focus === "load" && (
+                <div className={styles.load}>
+                  {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
+                  <div className={styles.loadToolbar}>
+                    {sorted.length > 0 && (
+                      <FrameBox className={styles.loadSearch}>
+                        <input
+                          value={loadFilter}
+                          onChange={(e) => setLoadFilter(e.target.value)}
+                          placeholder="筛选存档名、角色或出身…"
+                          aria-label="筛选存档"
+                        />
+                      </FrameBox>
+                    )}
+                    <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
+                  </div>
+                  <p className={styles.note}>
+                    存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份；导入的存档文件会建成新存档，文件内含剧透，请妥善保管。
+                  </p>
+                  {sorted.length === 0 ? (
+                    <EmptyState
+                      text="还没有存档"
+                      action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
+                    />
+                  ) : filteredSaves.length === 0 ? (
+                    <EmptyState
+                      text={`没有匹配「${loadFilter}」的存档`}
+                      action={<Button onClick={() => setLoadFilter("")}>清空筛选</Button>}
+                    />
+                  ) : (
                     <ul className={styles.saveList}>
-                      {sorted.slice(1, 4).map((save) => (
-                        <li key={save.id}>
+                      {filteredSaves.map((save) => (
+                        <li key={save.id} className={styles.saveRow}>
                           <SaveCard
                             save={save}
                             character={charById.get(save.characterId)}
                             onOpen={() => navigate(`/play/${save.id}`)}
                             compact
                           />
+                          <ExportSave save={save} />
                         </li>
                       ))}
                     </ul>
-                  </>
-                )}
-              </div>
-            )}
-
-            {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
-
-            {focus === "load" && (
-              <div className={styles.load}>
-                {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
-                <div className={styles.loadToolbar}>
-                  {sorted.length > 0 && (
-                    <FrameBox className={styles.loadSearch}>
-                      <input
-                        value={loadFilter}
-                        onChange={(e) => setLoadFilter(e.target.value)}
-                        placeholder="筛选存档名、角色或出身…"
-                        aria-label="筛选存档"
-                      />
-                    </FrameBox>
                   )}
-                  <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
                 </div>
-                <p className={styles.note}>
-                  存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份；导入的存档文件会建成新存档，文件内含剧透，请妥善保管。
-                </p>
-                {sorted.length === 0 ? (
-                  <EmptyState
-                    text="还没有存档"
-                    action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
-                  />
-                ) : filteredSaves.length === 0 ? (
-                  <EmptyState
-                    text={`没有匹配「${loadFilter}」的存档`}
-                    action={<Button onClick={() => setLoadFilter("")}>清空筛选</Button>}
-                  />
-                ) : (
-                  <ul className={styles.saveList}>
-                    {filteredSaves.map((save) => (
-                      <li key={save.id} className={styles.saveRow}>
-                        <SaveCard
-                          save={save}
-                          character={charById.get(save.characterId)}
-                          onOpen={() => navigate(`/play/${save.id}`)}
-                          compact
-                        />
-                        <ExportSave save={save} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+              )}
 
-            {focus === "characters" && (
-              <Panel line="var(--cp-red-dim)">
-                <div className={styles.form}>
-                  <p className={styles.note}>
-                    五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
-                    AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
-                  </p>
-                  <div className={styles.submit}>
-                    <span className={styles.note}>
-                      当前本地共有 {characters.data?.length ?? 0} 张角色卡
-                    </span>
-                    <Button primary onClick={() => navigate("/characters")}>
-                      进入角色工作台
-                    </Button>
+              {focus === "characters" && (
+                <Panel line="var(--cp-red-dim)">
+                  <div className={styles.form}>
+                    <p className={styles.note}>
+                      五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
+                      AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
+                    </p>
+                    <div className={styles.submit}>
+                      <span className={styles.note}>
+                        当前本地共有 {characters.data?.length ?? 0} 张角色卡
+                      </span>
+                      <Button primary onClick={() => navigate("/characters")}>
+                        进入角色工作台
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Panel>
-            )}
+                </Panel>
+              )}
 
-            {focus === "workshop" && (
-              <Panel line="var(--cp-red-dim)">
-                <div className={styles.form}>
-                  <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
-                </div>
-              </Panel>
-            )}
-
-            {focus === "settings" && (
-              <Panel line="var(--cp-red-dim)">
-                <div className={styles.form}>
-                  <p className={styles.note}>
-                    配置叙事模型、辅助模型与文生图连接，管理酒馆预设与叙事偏好，或在调试视图检查提示词上下文。
-                  </p>
-                  <div className={styles.submit}>
-                    <span className={styles.note}>
-                      {modelReady
-                        ? `当前叙事模型：${narratorName || "已就绪"}`
-                        : "尚未完成模型连接配置"}
-                    </span>
-                    <Button primary onClick={() => navigate("/settings")}>
-                      打开设置
-                    </Button>
+              {focus === "workshop" && (
+                <Panel line="var(--cp-red-dim)">
+                  <div className={styles.form}>
+                    <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
                   </div>
-                </div>
-              </Panel>
-            )}
-          </div>
-        </section>
+                </Panel>
+              )}
 
-        <ChangelogPanel />
+              {focus === "settings" && (
+                <Panel line="var(--cp-red-dim)">
+                  <div className={styles.form}>
+                    <p className={styles.note}>
+                      配置叙事模型、辅助模型与文生图连接，管理酒馆预设与叙事偏好，或在调试视图检查提示词上下文。
+                    </p>
+                    <div className={styles.submit}>
+                      <span className={styles.note}>
+                        {modelReady
+                          ? `当前叙事模型：${narratorName || "已就绪"}`
+                          : "尚未完成模型连接配置"}
+                      </span>
+                      <Button primary onClick={() => navigate("/settings")}>
+                        打开设置
+                      </Button>
+                    </div>
+                  </div>
+                </Panel>
+              )}
+            </div>
+          </section>
+
+          <ChangelogPanel />
+        </div>
       </div>
 
       <div className={styles.keys}>
@@ -569,70 +574,95 @@ export function MainMenu() {
   );
 }
 
-/** 主菜单右侧：更新日志面板，承接原本宽屏右侧的留白区域 */
+/** 主菜单右侧：更新日志终端（原作斜切容器 + 顶部版本切换 + 可滚完整日志列表，无底部留白） */
 function ChangelogPanel() {
-  const latestVersion = CHANGELOG_ENTRIES[0]?.version ?? "";
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const current = CHANGELOG_ENTRIES[selectedIndex] ?? CHANGELOG_ENTRIES[0];
+  const tilt = useCardTilt<HTMLElement>({
+    maxRotate: 2.2,
+    shadowShift: 3,
+  });
+  if (!current) return null;
+
   return (
-    <aside className={styles.changelog} aria-label="更新日志">
-      <header className={styles.changelogHead}>
-        <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.stageHeadBg} />
-        <Asset
-          id="panel.glowLeft"
-          height={28}
-          tint="var(--cp-yellow)"
-          className={styles.stageGlow}
-        />
-        <div className={styles.stageHeading}>
-          <span className={styles.changelogCode}>{"PATCH // LOG"}</span>
-          <h2 className={styles.changelogTitle}>更新日志</h2>
-        </div>
-        {latestVersion && <span className={styles.changelogBadge}>{latestVersion}</span>}
-      </header>
-      <span
-        className={styles.stageLine}
-        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-        aria-hidden
+    <aside className={styles.changelog} aria-label="更新日志" {...tilt}>
+      <NineSlice
+        id="notify.itemCellBg"
+        slice={ITEM_CELL_SLICE}
+        tint="rgb(13 9 16 / 86%)"
+        className={styles.changelogBg}
       />
-      <div className={styles.changelogBody}>
-        <ol className={styles.changelogList}>
-          {CHANGELOG_ENTRIES.map((entry) => (
-            <li
-              key={`${entry.version}-${entry.date}`}
-              className={styles.changelogCard}
-              data-latest={entry.latest || undefined}
-            >
-              <CellFrame
-                surface={
-                  <NineSlice
-                    id="map.filterCellBg"
-                    slice={CELL_SLICE}
-                    tint="transparent"
-                    className={styles.cardGlare}
-                  />
-                }
-              />
-              <div className={styles.changelogMeta}>
-                <span className={styles.changelogVersion}>{entry.version}</span>
-                {entry.latest && <span className={styles.changelogLatest}>最新</span>}
-                <time className={`${styles.changelogDate} num`}>{entry.date}</time>
-              </div>
-              <h3 className={styles.changelogEntryTitle}>{entry.title}</h3>
-              <ul className={styles.changelogItems}>
-                {entry.items.map((item) => (
-                  <li
-                    key={`${entry.version}-${item.tag}-${item.text}`}
-                    className={styles.changelogItem}
-                  >
-                    <span className={styles.changelogTag} data-tag={item.tag}>
-                      {item.tag}
-                    </span>
-                    <span className={styles.changelogText}>{item.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ol>
+      <NineSlice
+        id="notify.itemCellBg"
+        slice={ITEM_CELL_SLICE}
+        tint="transparent"
+        className={styles.cardGlare}
+      />
+      <NineSlice
+        id="notify.itemCellFg"
+        slice={ITEM_CELL_SLICE}
+        tint="var(--cp-red)"
+        className={styles.changelogFg}
+      />
+
+      <div className={styles.changelogInner}>
+        <header className={styles.changelogHead}>
+          <div className={styles.changelogTitleGroup}>
+            <Asset
+              id="panel.glowLeft"
+              height={22}
+              tint="var(--cp-yellow)"
+              className={styles.changelogGlow}
+            />
+            <span className={styles.changelogCode}>{"PATCH // LOG"}</span>
+            <h2 className={styles.changelogTitle}>更新日志</h2>
+          </div>
+          <div className={styles.changelogTabs} role="tablist" aria-label="版本切换">
+            {CHANGELOG_ENTRIES.map((entry, idx) => (
+              <button
+                key={entry.version}
+                type="button"
+                role="tab"
+                aria-selected={idx === selectedIndex}
+                className={styles.changelogTab}
+                data-active={idx === selectedIndex || undefined}
+                onClick={() => setSelectedIndex(idx)}
+              >
+                <span className="num">{entry.version}</span>
+                {entry.latest && <span className={styles.changelogTabNew}>NEW</span>}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <span
+          className={styles.changelogDivider}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
+
+        <div className={styles.changelogContent} key={current.version}>
+          <div className={styles.changelogSummary}>
+            <div className={styles.changelogSummaryLeft}>
+              <span className={styles.changelogVersionPill}>{current.version}</span>
+              <h3 className={styles.changelogEntryTitle}>{current.title}</h3>
+            </div>
+            <time className={`${styles.changelogDate} num`}>{current.date}</time>
+          </div>
+          <ul className={styles.changelogItems}>
+            {current.items.map((item) => (
+              <li
+                key={`${current.version}-${item.tag}-${item.text}`}
+                className={styles.changelogItem}
+              >
+                <span className={styles.changelogTag} data-tag={item.tag}>
+                  {item.tag}
+                </span>
+                <span className={styles.changelogText}>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </aside>
   );
