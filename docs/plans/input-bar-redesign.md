@@ -70,7 +70,7 @@
 ## 三、实施记录与改动范围
 
 - `apps/web/src/features/story/store.ts`：新增按 `saveId` 持久化草稿（`cp.storyDraft:${saveId}`），统一清理可选字段与 `sandevistan` 复位逻辑。
-- `apps/web/src/features/story/InputBar.tsx`：重构为一体化赛博命令终端壳体（双层斜切角、顶部内嵌回复横幅、纯净自适应编辑区、恒定高度内联底栏），补全发送键位切换（`Enter` / `Ctrl+Enter`）、长文展开（`Alt+E`）、清空、`Esc` 失焦、空框 `↑` 调回上一轮输入、斯安威斯坦芯片开关与封存单行态。
+- `apps/web/src/features/story/InputBar.tsx`：视觉全面回归原作素材组件体系——采用原作 `CellFrame`（`map.filterCellBg`/`map.filterCellFg` 九宫格切角框）、`map.shadowSmall` 原作浮层软阴影、同形蒙版光学玻璃极薄微反光，以及底对齐恒定高度的正式 `<Button>` / `<ActionButton>`；去掉框内手绘工具条、塑料实心黄块与视觉噪音，将斯安威斯坦开关、字数、清空、展开（`Alt+E`）、发送键位切换（`Enter` / `Ctrl+Enter`）极克制地收进框下静默 HUD 附属微行。保留全部键盘流与交互升级（`/` 聚焦、`Esc` 失焦/收起、空框 `↑` 调回、封存单行 `CellFrame`）。
 - `apps/web/src/features/story/StoryScreen.tsx`：新增 `/` 一键聚焦输入框快捷键，透传 `view.sandevistan` 与本存档最近一条玩家输入 `lastSentText`。
 - `apps/web/src/features/story/story.module.css`：将滚动隔离至 `.choices`，重写 `.inputBar` 六态样式与降动效适配，清理旧 `.replyChip`。
 - `apps/web/src/features/story/Phone.tsx`：按用户确认保持现状。
