@@ -20,10 +20,25 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
   {
+    version: "v0.9.61",
+    date: "2026-11-23",
+    title: "修复枪店交易身份冲突与不朽武器 0 元锁死问题",
+    latest: true,
+    items: [
+      {
+        tag: "修复",
+        text: "修复商店与店主 NPC 共用 ID（如威尔逊的枪店）时触发「身份不唯一」导致全店武器 0 元且无法购买的问题。",
+      },
+      {
+        tag: "修复",
+        text: "补全全部传奇不朽武器参考标价，修复终夜及狗镇军火商货架不朽武器显示 0 欧元并锁死的问题，并新增货架标价数据校验。",
+      },
+    ],
+  },
+  {
     version: "v0.9.6",
     date: "2026-11-22",
     title: "新主菜单、终端质感、地图交互与音频系统升级",
-    latest: true,
     items: [
       {
         tag: "重构",

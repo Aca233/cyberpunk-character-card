@@ -11,11 +11,11 @@ export function merchantDataIssues(data: Readonly<Record<string, unknown>>): str
   } catch (error) {
     return [`经营场所索引：${String(error)}`];
   }
-  const itemIds = new Set(
-    inventoryRules.ItemCatalogSchema.parse(data.items ?? []).map((i) => i.id),
+  const itemCatalog = new Map(
+    inventoryRules.ItemCatalogSchema.parse(data.items ?? []).map((i) => [i.id, i]),
   );
-  const chromeIds = new Set(
-    cyberwareRules.CyberwareCatalogSchema.parse(data.cyberware ?? []).map((c) => c.id),
+  const chromeCatalog = new Map(
+    cyberwareRules.CyberwareCatalogSchema.parse(data.cyberware ?? []).map((c) => [c.id, c]),
   );
   const merchants = new Map<string, { location: string; clinic: boolean }>();
   const checkPlace = (label: string, location: string) => {
@@ -38,7 +38,10 @@ export function merchantDataIssues(data: Readonly<Record<string, unknown>>): str
   }
   for (const shop of shops) {
     for (const id of [...shop.shelf, ...(shop.supply?.items ?? [])]) {
-      if (!itemIds.has(id)) errors.push(`商店 ${shop.id}：引用了不存在的物品「${id}」`);
+      const def = itemCatalog.get(id);
+      if (!def) errors.push(`商店 ${shop.id}：引用了不存在的物品「${id}」`);
+      else if (def.price === undefined || def.price <= 0)
+        errors.push(`商店 ${shop.id}：货架商品「${id}」缺少有效的正向标价`);
     }
     if (!shop.supply) continue;
     for (const location of shop.supply.route) checkPlace(`商店 ${shop.id} 的供货路线`, location);
@@ -52,7 +55,10 @@ export function merchantDataIssues(data: Readonly<Record<string, unknown>>): str
   }
   for (const doc of docs) {
     for (const id of doc.shelf) {
-      if (!chromeIds.has(id)) errors.push(`义体医生 ${doc.id}：引用了不存在的义体「${id}」`);
+      const def = chromeCatalog.get(id);
+      if (!def) errors.push(`义体医生 ${doc.id}：引用了不存在的义体「${id}」`);
+      else if (def.price === undefined || def.price <= 0)
+        errors.push(`义体医生 ${doc.id}：货架义体「${id}」缺少有效的正向标价`);
     }
   }
   for (const [id, merchant] of merchants) {

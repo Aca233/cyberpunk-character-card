@@ -105,22 +105,36 @@ function counterparty(
   const exact: Counterparty[] = [
     ...(shop ? [{ id: shop.id, name: shop.name, location: shop.location, shop }] : []),
     ...(clinic ? [{ id: clinic.id, name: clinic.name, location: clinic.location, clinic }] : []),
-    ...(npc && clinic?.keeperNpc !== npc.id && !clinic?.serviceNpcs.includes(npc.id)
+    ...(npc &&
+    shop?.keeperNpc !== npc.id &&
+    !shop?.serviceNpcs.includes(npc.id) &&
+    clinic?.keeperNpc !== npc.id &&
+    !clinic?.serviceNpcs.includes(npc.id)
       ? [{ id: npc.id, name: npc.name, location: npc.location, npc }]
       : []),
     ...(party && !shop && !npc && !clinic ? [party] : []),
   ];
   if (exact.length === 1) return exact[0] as Counterparty;
   if (exact.length > 1) return `交易对象 ${id} 的身份不唯一`;
+  const shopMatches = shops.filter((s) => s.name === id || s.keeper === id);
+  const clinicMatches = clinics.filter((doc) => doc.name === id);
+  const matchedKeeperIds = new Set<string>([
+    ...shopMatches.flatMap((s) => [...(s.keeperNpc ? [s.keeperNpc] : []), ...s.serviceNpcs]),
+    ...clinicMatches.flatMap((doc) => [
+      ...(doc.keeperNpc ? [doc.keeperNpc] : []),
+      ...doc.serviceNpcs,
+    ]),
+  ]);
   const matches: Counterparty[] = [
-    ...shops
-      .filter((s) => s.name === id || s.keeper === id)
-      .map((s) => ({ id: s.id, name: s.name, location: s.location, shop: s })),
-    ...clinics
-      .filter((doc) => doc.name === id)
-      .map((doc) => ({ id: doc.id, name: doc.name, location: doc.location, clinic: doc })),
+    ...shopMatches.map((s) => ({ id: s.id, name: s.name, location: s.location, shop: s })),
+    ...clinicMatches.map((doc) => ({
+      id: doc.id,
+      name: doc.name,
+      location: doc.location,
+      clinic: doc,
+    })),
     ...npcs
-      .filter((n) => n.name === id || n.alias === id)
+      .filter((n) => (n.name === id || n.alias === id) && !matchedKeeperIds.has(n.id))
       .map((n) => ({ id: n.id, name: n.name, location: n.location, npc: n })),
   ];
   return matches.length === 1

@@ -421,6 +421,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 78000,
     ability:
       "可在联情局安全屋取得的诺科他特制威能狙击步枪，发射爆炸弹药。瞄准时以短连发实施精确压制，腰射时可全自动开火；连发后坐和爆炸波及范围需要实际控制。",
     source: `${W}Ranged-Base_Osprey`,
@@ -877,7 +878,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
       "高硬度双手破拆大锤。每一次抡砸都倾注全身离心力，足以粉碎砖墙、破开铁铸闸门，正面命中足以将战斗机器人砸到系统停摆。",
     source: `${W}Melee-DisplayName-Preset_Hammer`,
   },
-  // 不朽武器：只从剧情获得
+  // 不朽武器：多由剧情/任务或狗镇黑市等特殊渠道流通；均配有传奇档参考价以便货架与二手回收估值
   {
     id: "la-chingona-dorada",
     name: "金色狠婆娘",
@@ -887,6 +888,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 55000,
     ability:
       "杰克·威尔斯定制的一对镀金海啸鵺。握柄雕花，枪膛改模，双枪齐射倾泻着瓦伦蒂诺帮的傲骨与家族义气；枪一拔出来，整条街的熟面孔都知道来者是谁。",
     source: `${W}Ranged-Preset_Nue_Jackie`,
@@ -900,6 +902,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "legendary",
     iconic: true,
+    price: 48000,
     ability:
       "苏西·Q 留在莫克斯酒吧地下的粉红涂装奥马哈。电磁改装后蓄力可喷射多发密集弹幕，近距离重击足以放倒任何敢在店里闹事的混混。",
     source: `${W}Ranged-DisplayName-Preset_Omaha_Suzie`,
@@ -913,6 +916,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 45000,
     ability:
       "威尔逊在第二修正案武器店为 V 量身定制的莱克星顿。加重枪管配人体工学握把，大幅加快换弹速度并提高爆头时的致命穿透暴击伤害。",
     source: `${W}Ranged-DisplayName-Base_Lexington_Wilson`,
@@ -926,6 +930,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 58000,
     ability:
       "瑞弗·沃德赠予的重型前奏左轮。改装了特殊机械蓄发扳机，长按蓄力后释放可在瞬间将整个弹仓的重型威能弹全自动暴烈倾泻而出。",
     source: `${W}Melee-DisplayName-Preset_Overture_River`,
@@ -939,6 +944,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 62000,
     ability:
       "克里·欧罗伯斯随身携带的大口径定制左轮。配重经专门调校，后坐力平稳；弹头附带高压电弧，开火声像插满失真单块的重型电吉他。",
     source: `${W}Melee-DisplayName-Preset_Overture_Kerry`,
@@ -952,6 +958,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "legendary",
     iconic: true,
+    price: 52000,
     ability:
       "漩涡帮前头目罗伊斯的改装谦信。每次换弹都会随机切换弹药特化涂层，在燃烧、电击、生化与撕裂伤害之间轮转，难以预判。",
     source: `${W}Ranged-DisplayName-Preset_Kenshin_Royce`,
@@ -965,6 +972,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 65000,
     ability:
       "来生女王罗格佩戴一生的金质自由手枪。第一发弹丸具备极高的首发要害伤害与暴击率，对生命体征处于低谷的目标拥有无情的终结制止力。",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Rogue`,
@@ -978,6 +986,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 54000,
     ability:
       "荒坂赖宣藏在绀碧大厦顶层套房枕边的改装自由。即使使用者手部未植入弹道协同处理器，也能完全激活威能子弹在墙面地表的高角度反弹跳弹。",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Yorinobu`,
@@ -991,6 +1000,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 50000,
     ability:
       "中间人德克斯特·德肖恩的镀金自由手枪。改装了资金接口，每一发子弹直接从你的银行账户扣除 1 欧元作为击发弹药，并造成大量出血伤口。",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Dex`,
@@ -1004,6 +1014,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 58000,
     ability:
       "杜姆·杜姆魔改的新星左轮手枪。单次扣动扳机可连发四枚大口径弹丸，近距离交火能轻易轰烂木板掩体并打碎骨头。",
     source: `${W}Ranged-DisplayName-Preset_Nova_Doom_Doom`,
@@ -1017,6 +1028,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "legendary",
     iconic: true,
+    price: 68000,
     ability:
       "乱刀会头目纳什改装的阿喀琉斯技术步枪。每次蓄力开火射出双倍的电磁穿甲弹丸，并在穿透掩体命中敌人时引爆严重的生化化学毒性伤害。",
     source: `${W}Ranged-DisplayName-Preset_Achilles_Nash`,
@@ -1030,6 +1042,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 56000,
     ability:
       "漩涡帮窝点中存放的改装萨拉托加冲锋枪。射击可造成电击并诱发义体故障，适合压制依赖义体的敌人。",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Maelstrom`,
@@ -1043,6 +1056,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 58000,
     ability:
       "乱刀会营地缴获的改装萨拉托加。加装翻倍容量弹鼓与过载击发连杆，射速被拉到危险的临界点，能瞬间用密集弹雨压制整片区域。",
     source: `${W}Ranged-DisplayName-Preset_Saratoga_Raffen`,
@@ -1056,6 +1070,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
+    price: 72000,
     ability:
       "荒坂工业园密级集装箱里的原型智能冲锋枪。配合智能链接，陀螺微弹自修正弹道，命中后引爆微型热能破片，杀伤周遭敌人。",
     source: `${W}Ranged-DisplayName-Preset_Shingen_Prototype`,
@@ -1069,6 +1084,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
+    price: 75000,
     ability:
       "康陶典式智能冲锋枪军用测试型。弹头装填微型放电芯片，命中时释放局部 EMP 脉冲，能短时间瘫痪目标义体与临近设备。",
     source: `${W}Melee-DisplayName-Preset_Dian_Yinglong`,
@@ -1082,6 +1098,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 92000,
     ability:
       "军用科技废弃地下设施打捞出的黑墙污染冲锋枪。射击时枪身渗出暗红代码微光；当目标重伤濒死时，内置的黑墙恶意进程会顺着神经接口直接烧穿对方大脑。",
     source: `${W}Ranged-DisplayName-Preset_Borg4a_Haunted_Gun`,
@@ -1095,6 +1112,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "legendary",
     iconic: true,
+    price: 62000,
     ability:
       "丽贝卡生前亲手改装的大口径杀戮霰弹枪。涂鸦斑驳、后坐凶暴，一枪轰出能将重装士兵轰飞数米撞穿隔墙；握在手里似乎还能听到那个暴躁绿发姑娘在耳边咆哮着先开枪再说。",
     source: `${W}Ranged-Preset_Carnage_Edgerunners`,
@@ -1108,6 +1126,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
+    price: 95000,
     ability:
       "亚当·重锤的个人专属智能霰弹重炮。发射一整串微型追踪高爆导弹，出膛后呈扇面散开自锁定敌人弱点群，爆炸动能足以将机甲与外骨骼轰成碎渣。",
     source: `${W}Melee-DisplayName-Preset_Zhou_Eight_Star`,
@@ -1121,6 +1140,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 88000,
     ability:
       "强尼·银手使用的定制大口径半自动手枪，按他的义肢承受能力设计。重型枪弹具备强劲杀伤，特殊近战攻击可从枪口喷出火焰；其性能与来历属于这把独立武器。",
     source: `${W}Ranged-Preset_Silverhand_3516`,
@@ -1134,6 +1154,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 68000,
     ability:
       "亚历克斯移交的潜行特工统一手枪。搭载特化消音器与光学反射，在光学迷彩激活期间射击必定触发绝对暴击，冷酷处决目标而不留一丝声息。",
     source: `${W}Ranged-DisplayName-Preset_Unity_Agent`,
@@ -1147,6 +1168,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "intelligence",
     rarity: "legendary",
     iconic: true,
+    price: 64000,
     grantsSmartLink: true,
     ability:
       "带有会说话的 AI 与内置智能追踪系统的特殊智能手枪，无需手部智能连接义体也能锁定目标。提供瞄准头部或四肢的射击模式，AI 会依内置规则切换模式并评论使用者的行为。",
@@ -1161,6 +1183,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "legendary",
     iconic: true,
+    price: 72000,
     ability:
       "深度改装的单发 RT-46 风暴左轮。弹巢仅装填一枚高装药穿甲爆破弹，蓄能击发伴随剧烈电磁轰鸣，能直接穿透混凝土掩体击碎目标。",
     source: `${W}Melee-DisplayName-Preset_Burya_Comrade`,
@@ -1173,6 +1196,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 75000,
     ability:
       "荒坂三郎随身佩戴的传世武士刀。刃薄如蝉翼，寒芒刺骨，出鞘极快且切削暴击时断金切玉；任何认得刀铭的荒坂特工见到此刀都会脸色煞白。",
     source: `${W}Melee-Preset_Katana_Saburo`,
@@ -1185,6 +1209,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 72000,
     ability:
       "小田三太夫使用的精工武士刀，可在击败小田后取得。光学迷彩激活时斩击更容易命中要害，连斩末段的攻击尤其凶狠。",
     source: `${W}Melee-DisplayName-Preset_Katana_Takemura`,
@@ -1197,6 +1222,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 68000,
     ability:
       "冈田和歌子交付的精工武士刀。适合迅速突进到敌人近前斩击，击倒敌人后可继续展开更快的连斩；突进仍须有可通行的接近路线。",
     source: `${W}Melee-DisplayName-Preset_Katana_Wakako`,
@@ -1209,6 +1235,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "reflexes",
     rarity: "legendary",
     iconic: true,
+    price: 70000,
     ability:
       "熔解炉深处打捞出的热能过载武士刀。整把刀刃处于赤红炽热状态，劈砍时直接灼烧割开伤口，对处于燃烧状态的敌人必定打出致死暴击。",
     source: `${W}Melee-DisplayName-Preset_Katana_E3`,
@@ -1222,6 +1249,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 74000,
     ability:
       "帕南·帕尔默交付的改装冰暴狙击枪。定制消音器压低枪口爆声，高倍镜便于隐蔽阵位上的远距离瞄准；弹道、射界与目标防护仍决定实际杀伤。",
     source: `${W}Ranged-Preset_Grad_Panam`,
@@ -1235,6 +1263,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "tech",
     rarity: "legendary",
     iconic: true,
+    price: 82000,
     ability:
       "海啸“猫又”重度改装版本。电磁加速的钨芯穿甲弹穿透掩体后弹道更加平直，能无视多层墙壁直接击中后方掩蔽的目标。",
     source: `${W}Melee-DisplayName-Preset_Nekomata_Breakthrough`,
@@ -1248,6 +1277,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "cool",
     rarity: "legendary",
     iconic: true,
+    price: 76000,
     ability:
       "从阿罗约拳赛老兵巴克手中赢下的改装冰暴狙击枪。弹膛专供重型高爆杀伤弹，每一发扣动都在百米外引发迫击炮级别的剧烈爆炸。",
     source: `${W}Ranged-DisplayName-Preset_Grad_Buck`,
@@ -1260,6 +1290,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     attribute: "body",
     rarity: "legendary",
     iconic: true,
+    price: 42000,
     ability:
       "军用科技特工斯托特在汽车旅馆落下的高频震动钝器。通电后剧烈震动，抽在脸上钝击沉重，而且带有极具侮辱性的戏剧效果。",
     source: `${W}Melee-DisplayName-Preset_Dildo_Stout`,
