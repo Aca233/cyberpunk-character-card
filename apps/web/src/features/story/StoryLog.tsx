@@ -156,15 +156,16 @@ function InlineText({
     <>
       {splitSpeakers(text, speakers).map((part, i) => {
         const s = part.speaker;
-        if (s && onMark && (s.npc !== undefined || s.place !== undefined)) {
+        const isPlace = s?.place !== undefined || s?.area !== undefined;
+        if (s && onMark && (s.npc !== undefined || isPlace)) {
           return (
             <button
               // biome-ignore lint/suspicious/noArrayIndexKey: 同一段里的片段按顺序排，不会重排
               key={i}
               type="button"
               className={`${styles.speaker} ${styles.mark}`}
-              data-place={s.place !== undefined || undefined}
-              title={s.place !== undefined ? `在地图上看 ${part.text}` : `查看 ${part.text} 的档案`}
+              data-place={isPlace || undefined}
+              title={isPlace ? `在地图上定位 ${part.text}` : `查看 ${part.text} 的档案`}
               onClick={() => onMark(s)}
             >
               {part.text}
@@ -177,7 +178,7 @@ function InlineText({
             key={i}
             className={styles.speaker}
             data-self={s.self || undefined}
-            data-place={s.place !== undefined || undefined}
+            data-place={isPlace || undefined}
           >
             {part.text}
           </b>
@@ -643,6 +644,7 @@ export function StoryLog({
     live.boost !== null ||
     (live.pending?.kind === "input" && live.pending.input.sandevistan === true);
   const earlier = view.totalTurns - view.turns.length;
+  const glossary = useGlossary();
   const speakers = useMemo(() => speakersOf(view), [view]);
   const gearMatcher = useMemo(
     () => buildGearMatcher(view, new Set(speakers.map((s) => s.name))),
@@ -674,7 +676,12 @@ export function StoryLog({
             </p>
           )}
           {view.turns.length === 0 && !generating && (
-            <OpeningGuide view={view} busy={generating} actions={openingGuide ?? {}} />
+            <OpeningGuide
+              view={view}
+              busy={generating}
+              actions={openingGuide ?? {}}
+              onMark={onMark}
+            />
           )}
           {view.turns.map((t, i) => (
             <TurnBlock
@@ -698,7 +705,16 @@ export function StoryLog({
           {!generating && view.offers.read && (
             <aside className={styles.read} aria-label="局势感知">
               <span className={styles.readTag}>{"KIROSHI // 局势感知"}</span>
-              <p className={styles.readText}>{view.offers.read}</p>
+              <p className={styles.readText}>
+                <InlineText
+                  text={view.offers.read}
+                  speakers={speakers}
+                  onMark={onMark}
+                  glossary={glossary}
+                  gearMatcher={gearMatcher}
+                  onGearHover={onGearHover}
+                />
+              </p>
             </aside>
           )}
 
@@ -718,6 +734,7 @@ export function StoryLog({
                     key={`cp-${i}`}
                     text={p}
                     speakers={speakers}
+                    onMark={onMark}
                     gearMatcher={gearMatcher}
                     onGearHover={onGearHover}
                   />

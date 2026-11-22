@@ -1986,6 +1986,10 @@
   transition: text-decoration-color var(--dur-flash);
 }
 
+.mark[data-place] {
+  text-decoration-color: color-mix(in srgb, currentColor 48%, transparent);
+}
+
 .mark:hover,
 .mark:focus-visible {
   outline: none;
@@ -3929,6 +3933,40 @@
   color: var(--cp-red);
 }
 
+.mapHereJump {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.16rem 0.5rem;
+  border: 1px solid rgb(41 255 185 / 35%);
+  background: rgb(41 255 185 / 8%);
+  color: var(--cp-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash),
+    color var(--dur-flash);
+}
+
+.mapHereJump::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--pin-green);
+  box-shadow: 0 0 8px var(--pin-green);
+}
+
+.mapHereJump:hover,
+.mapHereJump:focus-visible {
+  outline: none;
+  border-color: var(--pin-green);
+  background: rgb(41 255 185 / 18%);
+  color: #fff;
+}
+
 .mapSearch {
   position: relative;
   flex: 0 1 15rem;
@@ -4388,6 +4426,14 @@
   height: 0;
 }
 
+.mapDest[data-picked] {
+  z-index: 2;
+}
+
+.mapDest[data-here] {
+  z-index: 3;
+}
+
 /* 目的地图标：1080p 原图 32×32，缩到 24 */
 .mapDestPin {
   position: absolute;
@@ -4427,31 +4473,84 @@
   transform: scale(1.25);
 }
 
-/* 当前位置：player 箭头 1080p 原图 26×23；没有朝向数据，箭头一直朝上，原作的视野扇形 playerCone 不画 */
-.mapDest[data-here] .mapDestPin {
-  left: -11px;
-  top: -10px;
-  width: 22px;
-  height: 20px;
-  color: var(--pin-green);
-  mask-image: var(--pin-player);
-  transform: none;
-  cursor: var(--cp-cursor);
+/* 当前位置：加大暗底荧光绿准星底座与放大发光箭头，避免在密集底图和其他图钉之间淹没 */
+.mapDest[data-here] .mapPinShadow {
+  left: -28px;
+  top: -28px;
+  width: 56px;
+  height: 56px;
+  opacity: 0.9;
 }
 
-/* 定位圈：原作 circle / circle2 两层 recording1 圆环；原作的动画没解出来，沿用本作的一圈扩散 */
+.mapHereBeacon {
+  position: absolute;
+  left: -19px;
+  top: -19px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--pin-green);
+  background: radial-gradient(circle, rgb(4 22 20 / 94%) 55%, rgb(41 255 185 / 26%) 100%);
+  box-shadow:
+    0 0 0 2px rgb(0 0 0 / 85%),
+    0 0 18px rgb(41 255 185 / 85%),
+    0 0 34px rgb(41 255 185 / 45%);
+  pointer-events: none;
+}
+
+.mapHereBurst {
+  position: absolute;
+  left: -2.9rem;
+  top: -2.9rem;
+  width: 5.8rem;
+  height: 5.8rem;
+  border-radius: 50%;
+  border: 2px solid var(--pin-green);
+  box-shadow: 0 0 16px rgb(41 255 185 / 80%);
+  pointer-events: none;
+  animation: here-burst 0.85s ease-out 1 forwards;
+}
+
+.mapDest[data-here] .mapDestPin {
+  left: -13px;
+  top: -12px;
+  width: 26px;
+  height: 24px;
+  color: var(--pin-green);
+  mask-image: var(--pin-player);
+  filter: drop-shadow(0 0 6px rgb(41 255 185 / 95%));
+  transform: none;
+  cursor: var(--cp-cursor-hand);
+}
+
+.mapDest[data-here] .mapDestPin:hover,
+.mapDest[data-here] .mapDestPin:focus-visible {
+  color: #b8ffe8;
+  transform: scale(1.12);
+}
+
+/* 定位圈：玩家位置放大并提亮，便于全城缩览时一眼锁定；选中地点保留黄色扩散圈 */
 .mapDest[data-here]::before,
 .mapDest[data-picked]::before {
   content: "";
   position: absolute;
-  left: -1.1rem;
-  top: -1.1rem;
-  width: 2.2rem;
-  height: 2.2rem;
+  left: -1.35rem;
+  top: -1.35rem;
+  width: 2.7rem;
+  height: 2.7rem;
   background: var(--pin-ring);
   mask: var(--pin-ping) center / contain no-repeat;
   pointer-events: none;
   animation: here-ping 1.8s ease-out infinite;
+}
+
+.mapDest[data-here]::before {
+  left: -2.3rem;
+  top: -2.3rem;
+  width: 4.6rem;
+  height: 4.6rem;
+  background: var(--pin-green);
+  animation: here-beacon-ping 1.9s ease-out infinite;
 }
 
 .mapDest[data-picked]:not([data-here])::before {
@@ -4466,14 +4565,77 @@
   }
 
   to {
-    transform: scale(1.4);
+    transform: scale(1.45);
     opacity: 0;
   }
+}
+
+@keyframes here-beacon-ping {
+  from {
+    transform: scale(0.45);
+    opacity: 0.95;
+  }
+
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes here-burst {
+  from {
+    transform: scale(0.35);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+/* 正文点击城区/街区跳转时的聚焦标记 */
+.mapAreaFocus {
+  position: absolute;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.mapAreaFocusRing {
+  position: absolute;
+  left: -1.8rem;
+  top: -1.8rem;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--cp-success);
+  box-shadow: 0 0 18px rgb(41 255 185 / 55%);
+  animation: here-beacon-ping 2.1s ease-out infinite;
+}
+
+.mapAreaFocusTag {
+  position: absolute;
+  left: 0;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  padding: 0.14rem 0.5rem;
+  border: 1px solid var(--cp-success);
+  background: rgb(4 14 14 / 90%);
+  color: var(--cp-success);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  box-shadow: 0 0 12px rgb(41 255 185 / 35%);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mapDest[data-here]::before,
   .mapDest[data-picked]::before,
+  .mapHereBurst,
+  .mapAreaFocusRing,
   .turn,
   .liveStage,
   .liveStage::after,
@@ -4530,9 +4692,24 @@
   z-index: 2;
 }
 
-/* 原作 player_mappin 的名字 MainColors.Gold、黑底 */
+/* 玩家当前位置的地名牌始终可见，高对比度描边并让开准星圆环 */
 .mapDest[data-here] .mapDestLabel {
+  display: block;
+  padding: 0.08rem 0.45rem;
+  border: 1px solid rgb(255 215 65 / 65%);
   color: var(--pin-gold);
+  font-weight: 600;
+  background: rgb(3 10 14 / 92%);
+  box-shadow: 0 0 10px rgb(0 0 0 / 85%);
+}
+
+.mapDest[data-here] .mapDestLabel[data-side="right"],
+.mapDest[data-here] .mapDestLabel[data-side="hidden"] {
+  left: 1.55rem;
+}
+
+.mapDest[data-here] .mapDestLabel[data-side="left"] {
+  right: 1.55rem;
 }
 
 .mapDest[data-picked] .mapDestLabel {
@@ -4543,15 +4720,39 @@
 .mapHereTag {
   position: absolute;
   left: 0;
-  bottom: 0.95rem;
+  bottom: 1.2rem;
   transform: translateX(-50%);
-  padding: 0 0.3rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.15em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid rgb(255 215 65 / 70%);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   white-space: nowrap;
   color: var(--pin-gold);
-  background: rgb(0 0 0 / 75%);
+  background: rgb(4 12 14 / 92%);
   pointer-events: none;
+}
+
+.mapDest[data-here] .mapHereTag {
+  bottom: 1.65rem;
+  border-color: var(--pin-green);
+  color: #c8ffeb;
+  background: rgb(3 18 16 / 95%);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 80%),
+    0 0 14px rgb(41 255 185 / 60%);
+}
+
+.mapDest[data-here] .mapHereTag::before {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--pin-green);
+  box-shadow: 0 0 6px var(--pin-green);
 }
 
 /* 地图瓦片：按缩放挑一级，只摆视野里的几块 */
@@ -4590,7 +4791,7 @@
   position: absolute;
   right: 0.8rem;
   bottom: 0.8rem;
-  z-index: 3;
+  z-index: 4;
   isolation: isolate;
   display: flex;
   flex-direction: column;
@@ -4640,7 +4841,7 @@
   position: absolute;
   left: 0.8rem;
   bottom: 2rem;
-  z-index: 3;
+  z-index: 4;
   isolation: isolate;
   display: flex;
   flex-direction: column;
@@ -4858,11 +5059,19 @@ ul.mapLegend > li {
   stroke: none;
 }
 
+/* 正文点击街区名跳转后的高亮轮廓 */
+.mapSubFocus {
+  fill: rgb(41 255 185 / 14%);
+  stroke: var(--cp-success);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
 .mapDistrictCard {
   position: absolute;
   top: 0.8rem;
   right: 0.8rem;
-  z-index: 3;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

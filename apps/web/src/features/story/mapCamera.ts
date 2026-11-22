@@ -29,6 +29,11 @@ export const CITY = { x0: 4, x1: 72, y0: 2, y1: 96 } as const;
 /** 放大到默认的几倍以后显示街区名和服务点 */
 export const SUB_ZOOM = 1.35;
 export const POI_ZOOM = 1.6;
+/** 跳转到单个地点或玩家当前位置时的放大倍率，保证看清道路、周边标记与目标位置 */
+export const FOCUS_ZOOM = 4.0;
+/** 跳转到街区 / 城区区域时的放大倍率 */
+export const SUB_AREA_ZOOM = 3.0;
+export const DISTRICT_AREA_ZOOM = 2.2;
 export const MAX_ZOOM = 8;
 
 /** 底图整图：瓦片没生成或还没载入时垫在下面，正方形 */

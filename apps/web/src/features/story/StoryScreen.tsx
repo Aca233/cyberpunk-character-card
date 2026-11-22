@@ -72,7 +72,15 @@ import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
 import { TrackerPanel } from "./TrackerPanel";
 import { useStoryAudio } from "./useStoryAudio";
-import { diffViews, type Speaker, type Toast, trackTelemetry, type View } from "./view";
+import {
+  diffViews,
+  type MapAreaTarget,
+  type MapFocus,
+  type Speaker,
+  type Toast,
+  trackTelemetry,
+  type View,
+} from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
 type UnreadTab = "messages" | "news" | "factions" | "shards";
@@ -311,9 +319,9 @@ export function StoryScreen() {
     : "carried";
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
-  // 地图浮层（M）；mapFocus 是正文里点了地名时打开地图先选中的地点，按 M 打开时不选
+  // 地图浮层（M）；mapFocus 是正文里点了地名/区域或追踪定位时打开地图先聚焦的目标，按 M 打开时不选
   const [atMap, setAtMap] = useState(false);
-  const [mapFocus, setMapFocus] = useState<string | undefined>(undefined);
+  const [mapFocus, setMapFocus] = useState<MapFocus | undefined>(undefined);
   const closeMap = useCallback(() => setAtMap(false), []);
   const closePinned = useCallback(() => setExpand(null), []);
   // 正文里点了人名：弹出这个人的档案
@@ -659,16 +667,29 @@ export function StoryScreen() {
     setMapFocus(undefined);
     setAtMap(true);
   }, []);
-  // 正文里点了名字（第 3 条）：地点打开地图并选中，出普通路线卡；人物弹档案
-  const onMark = useCallback((mark: Speaker) => {
-    if (mark.place !== undefined) {
-      setExpand(null);
-      setMapFocus(mark.place);
-      setAtMap(true);
-    } else if (mark.npc !== undefined) {
-      setPerson(mark.npc);
-    }
+  const focusPlace = useCallback((placeId: string) => {
+    setExpand(null);
+    setMapFocus((prev) => ({ kind: "place", id: placeId, nonce: (prev?.nonce ?? 0) + 1 }));
+    setAtMap(true);
   }, []);
+  const focusArea = useCallback((area: MapAreaTarget) => {
+    setExpand(null);
+    setMapFocus((prev) => ({ kind: "area", area, nonce: (prev?.nonce ?? 0) + 1 }));
+    setAtMap(true);
+  }, []);
+  // 正文里点了名字（第 3 条）：地点打开地图并放大选中，出普通路线卡；城区/街区打开地图并放大到对应区域；人物弹档案
+  const onMark = useCallback(
+    (mark: Speaker) => {
+      if (mark.place !== undefined) {
+        focusPlace(mark.place);
+      } else if (mark.area !== undefined) {
+        focusArea(mark.area);
+      } else if (mark.npc !== undefined) {
+        setPerson(mark.npc);
+      }
+    },
+    [focusPlace, focusArea],
+  );
   // 展开/收起一个块（P 生物监测、J 追踪、T 未读）；按键时同一块已经展开就收起
   const pinBlock = useCallback((id: string) => {
     setAtMap(false);
@@ -1194,11 +1215,7 @@ export function StoryScreen() {
                   closePinned();
                 }
           }
-          onLocatePlace={(placeId) => {
-            closePinned();
-            setMapFocus(placeId);
-            setAtMap(true);
-          }}
+          onLocatePlace={focusPlace}
           onOpenRipperdoc={() => {
             closePinned();
             setAtDoc(true);
@@ -1213,11 +1230,7 @@ export function StoryScreen() {
       <div className={neuralStyles.pinPane}>
         <TrackerPanel
           view={view}
-          onLocatePlace={(placeId) => {
-            closePinned();
-            setMapFocus(placeId);
-            setAtMap(true);
-          }}
+          onLocatePlace={focusPlace}
           onAcceptJob={
             busy || view.death || view.ended
               ? undefined

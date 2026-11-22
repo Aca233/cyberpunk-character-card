@@ -1,3 +1,4 @@
+import { DISTRICT_SHAPES, SUBDISTRICT_SHAPES } from "@cp/content/mapShapes";
 import {
   inventoryRules,
   type PlayerView,
@@ -55,6 +56,18 @@ export function locationLabel(location: string | null): string {
   return location.replace(/[._/]+/g, " · ").replace(/-/g, " ");
 }
 
+export interface MapAreaTarget {
+  readonly id: string;
+  readonly name: string;
+  readonly level: "district" | "sub";
+  readonly x: number;
+  readonly y: number;
+}
+
+export type MapFocus =
+  | { readonly kind: "place"; readonly id: string; readonly nonce: number }
+  | { readonly kind: "area"; readonly area: MapAreaTarget; readonly nonce: number };
+
 export interface Speaker {
   readonly name: string;
   readonly self: boolean;
@@ -62,6 +75,8 @@ export interface Speaker {
   readonly npc?: string | undefined;
   /** 地点的 id：点了打开地图并选中它，照常出行，不传送；人物没有 */
   readonly place?: string | undefined;
+  /** 城区或街区：点了打开地图并放大聚焦到该区域 */
+  readonly area?: MapAreaTarget | undefined;
 }
 
 export interface Segment {
@@ -69,10 +84,75 @@ export interface Segment {
   readonly speaker?: Speaker | undefined;
 }
 
+/** 未到访服务点/地标的纯泛称：避免普通旁白里“酒保”“商贩”“义体医生”等职业/类别词误链向随机店铺 */
+const GENERIC_UNVISITED_PLACE_NAMES = new Set([
+  "酒保",
+  "商贩",
+  "食品商贩",
+  "服装商贩",
+  "枪支商贩",
+  "医药商贩",
+  "垃圾商贩",
+  "近战武器商贩",
+  "网络黑客",
+  "义体医生",
+  "酒吧",
+  "饮食",
+  "服装",
+  "武器店",
+  "医疗点",
+  "垃圾商店",
+  "公寓",
+  "公寓出租",
+  "好车中间人终端",
+  "加油站",
+  "射击场",
+  "环路",
+  "大坝",
+]);
+
+/** 固定核心地点的常见简称与口语写法（优先指向核心地点 id，避免落到同名未访 POI） */
+const PLACE_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  "megabuilding-h10": ["H10公寓", "H10 公寓", "H10"],
+  "vik-clinic": ["维克多诊所", "老维的诊所", "老维诊所"],
+  afterlife: ["来生"],
+  "coyote-cojo": ["野狼"],
+  "regina-office": ["瑞吉娜的办公室", "瑞吉娜办公室"],
+  "wakako-pachinko": ["和歌子柏青哥店"],
+  "kerry-estate": ["克里的别墅", "克里别墅"],
+};
+
+const DISTRICT_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  watson: ["沃森区"],
+  westbrook: ["威斯布鲁克", "威斯特布鲁克区"],
+  heywood: ["海伍德区"],
+  santo_domingo: ["圣多明戈区"],
+  pacifica: ["太平洲区"],
+};
+
+const SUBDISTRICT_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  kabuki: ["歌舞伎"],
+  glen: ["谷地"],
+  north_oak: ["北橡"],
+};
+
+function placeLayerRank(layer: View["travel"]["destinations"][number]["layer"]): number {
+  switch (layer) {
+    case "fixed":
+      return 0;
+    case "place":
+      return 1;
+    case "ft":
+      return 2;
+    case "poi":
+      return 3;
+  }
+}
+
 /**
- * 正文里要标出来的名字：玩家自己、见过和听说过的人（连同外号）、地图上的地点（第 3 条，用户定的"本地匹配"，2026-11-02）。
- * 只在网页上按名字匹配，正文原样不改。同名时人物优先，去过的地点优先于没去过的原作地点；
- * 长的先匹配，免得「丽贝」吃掉「丽贝卡」
+ * 正文里要标出来的名字：玩家自己、见过和听说过的人（连同外号）、地图上的地点与城区/街区（本地匹配）。
+ * 只在网页上按名字匹配，正文原样不改。同名时人物优先，去过的地点优先于没去过的原作地点，
+ * 具体地点优先于城区/街区；长的先匹配，免得「丽贝」吃掉「丽贝卡」、「歌舞伎」吃掉「歌舞伎市场」。
  */
 export function speakersOf(view: View): Speaker[] {
   const out: Speaker[] = [];
@@ -82,9 +162,62 @@ export function speakersOf(view: View): Speaker[] {
     if (npc.alias) out.push({ name: npc.alias, self: false, npc: npc.id });
   }
   const places = [...view.travel.destinations].sort(
-    (a, b) => Number(a.firstVisit) - Number(b.firstVisit),
+    (a, b) =>
+      Number(a.firstVisit) - Number(b.firstVisit) ||
+      placeLayerRank(a.layer) - placeLayerRank(b.layer),
   );
-  for (const d of places) out.push({ name: d.name, self: false, place: d.id });
+  const destIds = new Set(places.map((d) => d.id));
+  const pushPlace = (name: string, id: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    out.push({ name: clean, self: false, place: id });
+    const compact = clean.replace(/\s+/g, "");
+    if (compact !== clean) out.push({ name: compact, self: false, place: id });
+  };
+  for (const d of places) {
+    if (d.firstVisit && GENERIC_UNVISITED_PLACE_NAMES.has(d.name.trim())) continue;
+    pushPlace(d.name, d.id);
+    const aliases = PLACE_ALIASES[d.id];
+    if (aliases) {
+      for (const alias of aliases) pushPlace(alias, d.id);
+    }
+    if (d.metro && d.name.startsWith("地铁：")) {
+      const station = d.name.slice("地铁：".length).trim();
+      if ([...station].length >= 2) {
+        pushPlace(`${station}地铁站`, d.id);
+        if (!station.endsWith("站")) pushPlace(`${station}站`, d.id);
+      }
+    }
+  }
+  for (const home of view.safehouse.homes) {
+    if (destIds.has(home.location)) pushPlace(home.name, home.location);
+  }
+  for (const s of SUBDISTRICT_SHAPES) {
+    const area: MapAreaTarget = {
+      id: s.id,
+      name: s.name,
+      level: "sub",
+      x: s.label[0],
+      y: s.label[1],
+    };
+    out.push({ name: s.name, self: false, area });
+    for (const alias of SUBDISTRICT_ALIASES[s.id] ?? []) {
+      out.push({ name: alias, self: false, area });
+    }
+  }
+  for (const d of DISTRICT_SHAPES) {
+    const area: MapAreaTarget = {
+      id: d.id,
+      name: d.name,
+      level: "district",
+      x: d.label[0],
+      y: d.label[1],
+    };
+    out.push({ name: d.name, self: false, area });
+    for (const alias of DISTRICT_ALIASES[d.id] ?? []) {
+      out.push({ name: alias, self: false, area });
+    }
+  }
   const seen = new Set<string>();
   return out
     .filter((s) => {

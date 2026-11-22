@@ -1,9 +1,9 @@
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties, Fragment, useMemo } from "react";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
 import { useCardTilt } from "../../ui/useCardTilt";
 import styles from "./story.module.css";
-import type { View } from "./view";
+import type { Speaker, View } from "./view";
 
 export interface OpeningPrompt {
   readonly source: string;
@@ -134,15 +134,21 @@ export function OpeningGuide({
   view,
   busy,
   actions,
+  onMark,
 }: {
   readonly view: View;
   readonly busy: boolean;
   readonly actions: OpeningGuideActions;
+  readonly onMark?: ((mark: Speaker) => void) | undefined;
 }) {
   const prompts = useMemo(() => buildOpeningPrompts(view), [view]);
   const loc = view.names.location ?? view.location ?? "夜之城";
+  const hereDest =
+    view.travel.destinations.find((d) => d.here) ??
+    (view.location ? view.travel.destinations.find((d) => d.id === view.location) : undefined);
   const district = view.names.district;
   const hereNpcs = view.npcs.filter((n) => n.here && n.alive);
+  const visibleNpcs = hereNpcs.slice(0, 3);
   const firstJob = view.jobs.list.find((j) => j.open);
   const deadline = view.deadlines[0];
   const disabled = busy || view.death !== null || view.ended !== null;
@@ -151,20 +157,11 @@ export function OpeningGuide({
     .filter(Boolean)
     .join("  //  ");
 
-  const leadBits: string[] = [];
-  if (hereNpcs.length > 0) {
-    leadBits.push(
-      `视野里能看到 ${hereNpcs
-        .map((n) => n.name)
-        .slice(0, 3)
-        .join("、")}。`,
-    );
-  }
-  if (deadline) {
-    leadBits.push(`眼下期限：${deadline.label}（${deadline.due} 前）。`);
-  } else if (firstJob) {
-    leadBits.push(`手头有一笔「${firstJob.title}」的线索。`);
-  }
+  const tailNote = deadline
+    ? `眼下期限：${deadline.label}（${deadline.due} 前）。`
+    : firstJob
+      ? `手头有一笔「${firstJob.title}」的线索。`
+      : null;
 
   return (
     <section className={styles.opening} aria-label="开场序幕">
@@ -172,8 +169,45 @@ export function OpeningGuide({
 
       <div className={styles.openingIntro}>
         <p className={styles.openingLead}>
-          夜之城的霓虹在雨雾里明灭。此刻你身在 <b>{loc}</b>，正准备迈出第一步。
-          {leadBits.length > 0 ? ` ${leadBits.join("")}` : ""}
+          夜之城的霓虹在雨雾里明灭。此刻你身在{" "}
+          {hereDest && onMark ? (
+            <button
+              type="button"
+              className={`${styles.speaker} ${styles.mark}`}
+              data-place=""
+              title={`在地图上定位 ${loc}`}
+              onClick={() => onMark({ name: loc, self: false, place: hereDest.id })}
+            >
+              {loc}
+            </button>
+          ) : (
+            <b>{loc}</b>
+          )}
+          ，正准备迈出第一步。
+          {visibleNpcs.length > 0 && (
+            <>
+              {" 视野里能看到 "}
+              {visibleNpcs.map((npc, i) => (
+                <Fragment key={npc.id}>
+                  {i > 0 && "、"}
+                  {onMark ? (
+                    <button
+                      type="button"
+                      className={`${styles.speaker} ${styles.mark}`}
+                      title={`查看 ${npc.name} 的档案`}
+                      onClick={() => onMark({ name: npc.name, self: false, npc: npc.id })}
+                    >
+                      {npc.name}
+                    </button>
+                  ) : (
+                    <span className={styles.speaker}>{npc.name}</span>
+                  )}
+                </Fragment>
+              ))}
+              。
+            </>
+          )}
+          {tailNote ? ` ${tailNote}` : ""}
         </p>
       </div>
 

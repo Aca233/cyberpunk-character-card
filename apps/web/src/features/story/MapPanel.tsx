@@ -6,7 +6,15 @@ import {
   type MapPoiKind,
   SUBDISTRICT_SHAPES,
 } from "@cp/content/mapShapes";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type AssetId, asset } from "../../assets";
 import { Asset, cssUrl, MissingAsset, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -14,12 +22,15 @@ import { CellFrame } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 // 视角、瓦片和图标抽到 mapCamera.ts，和捏人选开局地点的地图共用（2026-10-30，用户定的"在地图上选择"）
 import {
+  DISTRICT_AREA_ZOOM,
+  FOCUS_ZOOM,
   iconStyle,
   MAP,
   onOverlay,
   POI_ZOOM,
   pinVars,
   poiIcon,
+  SUB_AREA_ZOOM,
   SUB_ZOOM,
   shapesViewBox,
   tileImages,
@@ -28,7 +39,7 @@ import {
 } from "./mapCamera";
 import styles from "./story.module.css";
 import { vehicleArtOf } from "./vehicle-art";
-import { districtIcon, type View } from "./view";
+import { districtIcon, type MapAreaTarget, type MapFocus, type View } from "./view";
 
 export type MapDestination = View["travel"]["destinations"][number];
 export type MapRoute = MapDestination["routes"][number];
@@ -43,11 +54,14 @@ export function MapShapes({
   labels = true,
   viewBox = "0 0 100 100",
   active,
+  activeSub,
 }: {
   readonly labels?: boolean;
   readonly viewBox?: string;
-  /** 鼠标停着的城区（名字），整块提亮 */
+  /** 鼠标停着或正文聚焦的城区（名字），整块提亮 */
   readonly active?: string | undefined;
+  /** 正文聚焦的街区（名字），整块提亮 */
+  readonly activeSub?: string | undefined;
 }) {
   return (
     <>
@@ -59,6 +73,9 @@ export function MapShapes({
       >
         {DISTRICT_SHAPES.filter((d) => d.name === active).map((d) => (
           <polygon key={`${d.id}-hover`} points={d.points} className={styles.mapDistrictHover} />
+        ))}
+        {SUBDISTRICT_SHAPES.filter((s) => s.name === activeSub).map((s) => (
+          <polygon key={`${s.id}-focus`} points={s.points} className={styles.mapSubFocus} />
         ))}
         {SUBDISTRICT_SHAPES.map((s) => (
           <polygon key={s.id} points={s.points} className={styles.mapSubdistrict} />
@@ -249,17 +266,21 @@ export function MapBody({
   readonly onTravel?: ((dest: MapDestination, route: MapRoute) => void) | undefined;
   /** 收起地图：顶栏工具那一排最右边出「关闭」按钮，同 M、Esc（用户定的，计划第十二节）；不传不出 */
   readonly onClose?: (() => void) | undefined;
-  /** 打开时先选中的地点 id（正文里点了地名，第 3 条）：照常出路线卡，不传送；当前位置不选 */
-  readonly focus?: string | undefined;
+  /** 打开时聚焦的目标（正文里点了地名/区域或追踪定位）：放大定位，不传送 */
+  readonly focus?: MapFocus | undefined;
 }) {
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [focusedArea, setFocusedArea] = useState<MapAreaTarget | null>(() =>
+    focus?.kind === "area" ? focus.area : null,
+  );
+  const [herePing, setHerePing] = useState(0);
   const [picked, setPicked] = useState<string | null>(() =>
-    focus !== undefined && view.travel.destinations.some((d) => d.id === focus && !d.here)
-      ? focus
+    focus?.kind === "place" && view.travel.destinations.some((d) => d.id === focus.id && !d.here)
+      ? focus.id
       : null,
   );
   const tiles = useMapTiles();
@@ -368,25 +389,72 @@ export function MapBody({
     keyPan,
   } = useMapCamera();
 
-  // 打开地图带 focus 时，视口量出尺寸后自动聚焦到对应地点
-  const focusedRef = useRef<string | undefined>(undefined);
+  // 打开地图带 focus 时，视口量出尺寸后自动聚焦并放大到对应地点或区域
+  const focusedNonceRef = useRef<number | null>(null);
   const lookAtRef = useRef(lookAt);
   lookAtRef.current = lookAt;
-  useEffect(() => {
-    if (!focus || size.w === 0 || focusedRef.current === focus) return;
-    const target = destById.get(focus);
-    if (!target) return;
-    focusedRef.current = focus;
-    if (!target.here) setPicked(target.id);
-    lookAtRef.current(target.x, target.y, POI_ZOOM);
+  useLayoutEffect(() => {
+    if (!focus || size.w === 0 || focusedNonceRef.current === focus.nonce) return;
+    if (focus.kind === "place") {
+      const target = destById.get(focus.id);
+      if (!target) return;
+      focusedNonceRef.current = focus.nonce;
+      setFocusedArea(null);
+      if (target.here) {
+        setPicked(null);
+        setHidden((prev) => {
+          if (!prev.has("here")) return prev;
+          const next = new Set(prev);
+          next.delete("here");
+          return next;
+        });
+        setHerePing((n) => n + 1);
+      } else {
+        setPicked(target.id);
+      }
+      lookAtRef.current(target.x, target.y, FOCUS_ZOOM);
+      return;
+    }
+    focusedNonceRef.current = focus.nonce;
+    setPicked(null);
+    setShapes(true);
+    setFocusedArea(focus.area);
+    lookAtRef.current(
+      focus.area.x,
+      focus.area.y,
+      focus.area.level === "sub" ? SUB_AREA_ZOOM : DISTRICT_AREA_ZOOM,
+    );
   }, [focus, size.w, destById]);
 
+  const focusHere = () => {
+    if (!here) return;
+    setFocusedArea(null);
+    setHidden((prev) => {
+      if (!prev.has("here")) return prev;
+      const next = new Set(prev);
+      next.delete("here");
+      return next;
+    });
+    setHerePing((n) => n + 1);
+    lookAt(here.x, here.y, Math.max(zoom, FOCUS_ZOOM));
+  };
+
   const selectDestination = (target: MapDestination) => {
-    setPicked(target.here ? null : target.id);
-    lookAt(target.x, target.y, Math.max(zoom, POI_ZOOM));
     setSearchOpen(false);
     setQuery("");
+    if (target.here) {
+      setPicked(null);
+      focusHere();
+      return;
+    }
+    setFocusedArea(null);
+    setPicked(target.id);
+    lookAt(target.x, target.y, Math.max(zoom, FOCUS_ZOOM));
   };
+
+  useEffect(() => {
+    if (picked !== null) setFocusedArea(null);
+  }, [picked]);
 
   // 搜索框打开时 Esc 先收起下拉，再取消选中地点，最后交给神经界面关闭
   useLayer(() => setSearchOpen(false), searchOpen);
@@ -555,11 +623,18 @@ export function MapBody({
     <section aria-label="地图" className={styles.mapScreen} style={pinVars()}>
       <header className={styles.mapTop}>
         <h2 className={styles.mapTopTitle}>夜之城</h2>
-        <span className={styles.dim}>
-          {here
-            ? `当前位置：${here.name} · ${here.sub ? `${here.district} · ${here.sub}` : here.district}`
-            : "现在的位置不在地图上"}
-        </span>
+        {here ? (
+          <button
+            type="button"
+            className={styles.mapHereJump}
+            title="点击定位并放大到当前位置"
+            onClick={focusHere}
+          >
+            {`当前位置：${here.name} · ${here.sub ? `${here.district} · ${here.sub}` : here.district}`}
+          </button>
+        ) : (
+          <span className={styles.dim}>现在的位置不在地图上</span>
+        )}
         <form
           className={styles.mapSearch}
           data-overlay=""
@@ -622,11 +697,7 @@ export function MapBody({
         </form>
         <div className={styles.mapTools}>
           {here && (
-            <Button
-              small
-              label="定位到当前位置"
-              onClick={() => lookAt(here.x, here.y, Math.max(zoom, SUB_ZOOM))}
-            >
+            <Button small label="定位并放大到当前位置" onClick={focusHere}>
               当前位置
             </Button>
           )}
@@ -641,7 +712,13 @@ export function MapBody({
             <Button small label="放大" onClick={() => zoomBy(1.4)}>
               ＋
             </Button>
-            <Button small onClick={reset}>
+            <Button
+              small
+              onClick={() => {
+                setFocusedArea(null);
+                reset();
+              }}
+            >
               复位
             </Button>
           </span>
@@ -717,7 +794,17 @@ export function MapBody({
               style={{ backgroundImage: cssUrl("fx.grid") }}
               aria-hidden
             />
-            {shapes && <MapShapes labels={false} viewBox={shapesBox} active={hover?.district} />}
+            {shapes && (
+              <MapShapes
+                labels={false}
+                viewBox={shapesBox}
+                active={
+                  hover?.district ??
+                  (focusedArea?.level === "district" ? focusedArea.name : undefined)
+                }
+                activeSub={focusedArea?.level === "sub" ? focusedArea.name : undefined}
+              />
+            )}
 
             {shapes &&
               zoom >= SUB_ZOOM &&
@@ -796,6 +883,19 @@ export function MapBody({
               </svg>
             )}
 
+            {focusedArea && onScreen(toScreen(focusedArea.x, focusedArea.y)) && (
+              <div
+                className={styles.mapAreaFocus}
+                style={toScreen(focusedArea.x, focusedArea.y)}
+                aria-hidden="true"
+              >
+                <span className={styles.mapAreaFocusRing} />
+                <span className={styles.mapAreaFocusTag}>
+                  {focusedArea.level === "sub" ? "街区" : "城区"} · {focusedArea.name}
+                </span>
+              </div>
+            )}
+
             {visibleDests.map((d) => (
               <div
                 key={d.id}
@@ -808,6 +908,10 @@ export function MapBody({
                 style={toScreen(d.x, d.y)}
               >
                 {d.here && <span className={styles.mapHereTag}>当前位置</span>}
+                {d.here && <span className={styles.mapHereBeacon} aria-hidden="true" />}
+                {d.here && herePing > 0 && (
+                  <span key={herePing} className={styles.mapHereBurst} aria-hidden="true" />
+                )}
                 {/* 原作 mappin 的 shadow2 / iconBlack：图标下垫一块黑影，压住底图 */}
                 <i className={styles.mapPinShadow} aria-hidden="true" />
                 <button
@@ -818,9 +922,26 @@ export function MapBody({
                   title={destTitle(d)}
                   aria-label={d.name}
                   aria-pressed={d.id === picked}
-                  onClick={() => setPicked(d.here ? null : d.id)}
+                  onClick={() => {
+                    setFocusedArea(null);
+                    if (d.here) {
+                      setPicked(null);
+                      focusHere();
+                    } else {
+                      setPicked(d.id);
+                    }
+                  }}
                 />
-                <span className={styles.mapDestLabel} data-side={sides.get(d.id) ?? "hidden"}>
+                <span
+                  className={styles.mapDestLabel}
+                  data-side={
+                    d.here
+                      ? sides.get(d.id) === "left"
+                        ? "left"
+                        : "right"
+                      : (sides.get(d.id) ?? "hidden")
+                  }
+                >
                   {d.name}
                 </span>
               </div>
