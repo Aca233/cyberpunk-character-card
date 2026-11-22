@@ -1655,21 +1655,19 @@
 }
 
 .zoneHit[data-tilting] {
-  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 10px)
+  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 2px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
-  transition:
-    transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
-    filter 160ms ease-out;
-  filter: drop-shadow(0 12px 18px rgb(0 0 0 / 52%));
+  transition: transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .zoneHit[data-tilting][data-pressed] {
   transform: translate3d(
       calc(var(--tilt-tx, 0px) * 0.5),
-      calc(var(--tilt-ty, 0px) * 0.5 + 1.5px),
-      -6px
+      calc(var(--tilt-ty, 0px) * 0.5 + 1px),
+      -3px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.2)) rotateY(calc(var(--tilt-ry, 0deg) * 1.2)) scale(0.982);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.99);
   transition-duration: 55ms;
 }
 
@@ -1678,7 +1676,7 @@
   gap: 5px;
   width: 100%;
   padding: 6px 0 0;
-  perspective: 800px;
+  perspective: 1000px;
 }
 
 .zoneService {
@@ -1720,11 +1718,11 @@
 .zoneService:where(:hover, :focus-visible) {
   --box-fill: var(--cp-surface-hover);
   --box-line: var(--cp-cyan);
-  filter: drop-shadow(0 6px 12px rgb(0 0 0 / 48%));
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 30%));
 }
 
 .zoneService[data-tilting] {
-  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 4px)
+  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 1px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
   transition:
     transform 65ms cubic-bezier(0.2, 0.9, 0.3, 1),
@@ -1735,10 +1733,11 @@
 .zoneService[data-tilting][data-pressed] {
   transform: translate3d(
       calc(var(--tilt-tx, 0px) * 0.4),
-      calc(var(--tilt-ty, 0px) * 0.4 + 1px),
-      -3px
+      calc(var(--tilt-ty, 0px) * 0.4 + 0.8px),
+      -2px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.2)) rotateY(calc(var(--tilt-ry, 0deg) * 1.2)) scale(0.982);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.992);
 }
 
 .zoneServiceRail {
@@ -2693,21 +2692,19 @@
 }
 
 .trackHit[data-tilting] {
-  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 10px)
+  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 2px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
-  transition:
-    transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
-    filter 160ms ease-out;
-  filter: drop-shadow(0 12px 20px rgb(0 0 0 / 56%));
+  transition: transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .trackHit[data-tilting][data-pressed] {
   transform: translate3d(
       calc(var(--tilt-tx, 0px) * 0.5),
-      calc(var(--tilt-ty, 0px) * 0.5 + 1.5px),
-      -6px
+      calc(var(--tilt-ty, 0px) * 0.5 + 1px),
+      -3px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.2)) rotateY(calc(var(--tilt-ry, 0deg) * 1.2)) scale(0.982);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.99);
   transition-duration: 55ms;
 }
 
@@ -3111,14 +3108,14 @@
 
 /*
  * ———— 立体感与按压跟随动效 ————
- * 1) 常态：每侧独立透视，块绕外侧边略微朝视野中间侧转（左 +5deg / 右 -5deg），像投射在曲面战术目镜上。
- * 2) 鼠标移入常态卡片：由 useCardTilt 驱动的 3D 按压倾斜（鼠标压哪一侧那一侧向屏内下陷，对侧微抬）+
- *    实体微偏移（--tilt-tx / --tilt-ty）+ 阴影反向视差（--shadow-x / --shadow-y）+ 鼠标跟随镜面冷光表层。
- * 3) 点按瞬间（data-pressed）：整卡下沉（translateZ + scale），松手弹性回位。
+ * 1) 常态：每侧独立透视，块以中心为轴略微朝视野中间侧转（左 +3.5deg / 右 -3.5deg），保持目镜环绕感且悬停切换零跳变。
+ * 2) 鼠标移入常态卡片：由 useCardTilt 按卡片实际宽高自适应驱动 3D 轻按压倾斜 + 克制微偏移 +
+ *    九宫格阴影微视差 + 轻透光学玻璃掠射高光（不叠加重复 drop-shadow，避免厚重与扁平化 preserve-3d）。
+ * 3) 点按瞬间（data-pressed）：整卡轻压下沉，松手利落回弹。
  * 4) 展开（[data-open]）：彻底归正平面、淡出表层反光，确保长内容阅读与滚动稳固。
  */
 .side {
-  perspective: 1100px;
+  perspective: 1200px;
 }
 
 /*
@@ -3129,94 +3126,85 @@
 .side > .block {
   will-change: transform;
   transform-style: preserve-3d;
+  transform-origin: center center;
   transition:
-    transform 240ms var(--ease-snap),
+    transform 220ms var(--ease-snap),
     opacity 120ms ease-out,
-    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 180ms ease-out;
+    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .side:where([data-side="left"]) > .block {
-  transform: rotateY(5deg);
-  transform-origin: left center;
+  transform: rotateY(3.5deg);
 }
 
 .side:where([data-side="right"]) > .block {
-  transform: rotateY(-5deg);
-  transform-origin: right center;
+  transform: rotateY(-3.5deg);
 }
 
 .side > .block:is(:hover, :focus-within, [data-open]) {
   transform: rotateY(0deg);
 }
 
-/* 鼠标移动时的 3D 按压跟随 + 偏移（未展开态生效；hover 跟随期间缩短 transform 时长以获得跟手阻尼） */
+/* 鼠标移动时的 3D 按压跟随 + 克制微偏移（未展开态生效；保持同一 transform-origin 过渡丝滑无跳变） */
 .side > .block[data-tilting]:not([data-open]) {
-  transform-origin: center center;
-  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 10px)
+  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 2px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
   transition:
     transform 75ms cubic-bezier(0.2, 0.9, 0.3, 1),
     opacity 120ms ease-out,
-    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 160ms ease-out;
-  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 56%));
+    width 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .side > .block[data-tilting][data-pressed]:not([data-open]) {
   transform: translate3d(
-      calc(var(--tilt-tx, 0px) * 0.55),
-      calc(var(--tilt-ty, 0px) * 0.55 + 1.5px),
-      -6px
+      calc(var(--tilt-tx, 0px) * 0.5),
+      calc(var(--tilt-ty, 0px) * 0.5 + 1px),
+      -3px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.2)) rotateY(calc(var(--tilt-ry, 0deg) * 1.2)) scale(0.982);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.99);
   transition-duration: 55ms;
-  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 50%));
 }
 
 /* 在场人物列表的每张小卡各自拥有独立透视与 3D 按压倾斜 */
 .presentList {
-  perspective: 900px;
+  perspective: 1100px;
 }
 
 .presentList .person {
   will-change: transform;
+  transform-style: preserve-3d;
   transform-origin: center center;
   transition:
-    transform 240ms var(--ease-snap),
+    transform 220ms var(--ease-snap),
     width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 120ms ease-out,
-    filter 180ms ease-out;
+    opacity 120ms ease-out;
 }
 
 .person[data-tilting]:not([data-open]) {
-  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 8px)
+  transform: translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 2px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
   transition:
     transform 70ms cubic-bezier(0.2, 0.9, 0.3, 1),
     width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 120ms ease-out,
-    filter 160ms ease-out;
-  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 55%));
+    opacity 120ms ease-out;
 }
 
 .person[data-tilting][data-pressed]:not([data-open]) {
   transform: translate3d(
       calc(var(--tilt-tx, 0px) * 0.5),
-      calc(var(--tilt-ty, 0px) * 0.5 + 1.5px),
-      -6px
+      calc(var(--tilt-ty, 0px) * 0.5 + 1px),
+      -3px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.25)) rotateY(calc(var(--tilt-ry, 0deg) * 1.25))
-    scale(0.98);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.99);
   transition-duration: 55ms;
-  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 48%));
 }
 
 /*
- * ———— 卡片材质与倾角掠射高光（严格走同款九宫格蒙版裁切，零矩形漏边、零彩虹光斑） ————
- * 常态：极克制的金属暗面微明暗（顶部 3% 受光 + 底部 22% 压沉），增强卡体厚度但不糊字。
- * 悬停倾斜：两条随 --tilt-angle / --tilt-glare 扫过的低饱和斜切玻璃掠射丝（像哑光防眩军规玻璃划过环境灯），
- * 绝不出现大团彩色发光圆球。
+ * ———— 轻透光学玻璃材质与倾角掠射高光（严格走同款九宫格蒙版裁切，零矩形漏边、零厚重暗底） ————
+ * 常态：极轻盈的顶缘冷光微映，不压黑底部，保持赛博光学目镜的通透轻薄感。
+ * 悬停倾斜：随 --tilt-angle / --tilt-glare 扫过的细薄玻璃掠射反光，轻盈通透不糊字。
  */
 .cardGlare {
   --glare-tint: 210 245 255;
@@ -3225,13 +3213,11 @@
   background-color: transparent;
   background-image: linear-gradient(
     180deg,
-    rgb(255 255 255 / 4%) 0%,
-    rgb(255 255 255 / 0%) 34%,
-    rgb(0 0 0 / 0%) 66%,
-    rgb(0 0 0 / 26%) 100%
+    rgb(var(--glare-tint) / 4.5%) 0%,
+    rgb(255 255 255 / 0%) 28%
   );
-  opacity: 0.9;
-  transition: opacity 180ms ease-out;
+  opacity: 0.7;
+  transition: opacity 160ms ease-out;
 }
 
 /* 嵌在 CellFrame 内时与底板同处 z-index: -1，位于 Fg 框线与文字之下 */
@@ -3255,32 +3241,26 @@
   opacity: 0;
 }
 
-/* 悬停倾斜态：斜向窄带硬质玻璃反光（随倾斜角度与位置真实滑动） */
+/* 悬停倾斜态：轻薄通透的斜向玻璃反光（随倾斜角度与位置柔和滑动） */
 :where(.zoneService, .trackHit)[data-tilting] .cardGlare,
 :where(.block, .person)[data-tilting]:not([data-open]) .cardGlare {
   background-image:
     linear-gradient(
-      var(--tilt-angle, 128deg),
-      transparent calc(var(--tilt-glare, 50%) - 26%),
-      rgb(var(--glare-tint) / 4.5%) calc(var(--tilt-glare, 50%) - 10%),
-      rgb(255 255 255 / 11%) var(--tilt-glare, 50%),
-      rgb(var(--glare-tint) / 3.5%) calc(var(--tilt-glare, 50%) + 6%),
-      transparent calc(var(--tilt-glare, 50%) + 19%)
+      var(--tilt-angle, 126deg),
+      transparent calc(var(--tilt-glare, 50%) - 24%),
+      rgb(var(--glare-tint) / 3.5%) calc(var(--tilt-glare, 50%) - 9%),
+      rgb(255 255 255 / 7.5%) var(--tilt-glare, 50%),
+      rgb(var(--glare-tint) / 2.5%) calc(var(--tilt-glare, 50%) + 7%),
+      transparent calc(var(--tilt-glare, 50%) + 18%)
     ),
-    linear-gradient(
-      180deg,
-      rgb(255 255 255 / 5.5%) 0%,
-      rgb(255 255 255 / 0%) 32%,
-      rgb(0 0 0 / 0%) 64%,
-      rgb(0 0 0 / 28%) 100%
-    );
+    linear-gradient(180deg, rgb(255 255 255 / 4%) 0%, rgb(255 255 255 / 0%) 26%);
   opacity: 1;
 }
 
-/* 点按瞬间掠射高光微敛，强化压入平面的触感 */
+/* 点按瞬间掠射高光微敛，强化轻压入面的触感 */
 :where(.zoneService, .trackHit)[data-tilting][data-pressed] .cardGlare,
 :where(.block, .person)[data-tilting][data-pressed]:not([data-open]) .cardGlare {
-  opacity: 0.65;
+  opacity: 0.55;
 }
 
 /* 减少动态效果：倾斜保留，转正时直接切换，不做转动 */
@@ -3300,12 +3280,11 @@
 
 /*
  * 投影（用户定的，计划第十二节第 9 条）：Corners.tsx 的 BlockShadow，原作 map.shadowSmall 九宫格。
- * 排在框的前面，DOM 顺序在下层，不用 z-index；往右下错开、四边外扩一点，像块浮在画面上。
- * 悬停按压时投影按 --shadow-x / --shadow-y 反向错位，拉出肉眼可见的悬浮立体感。
+ * 贴近卡体轻度错开，呈现悬浮光学玻璃的轻盈层次而非厚重黑影。
  */
 /* 写成 .block .shadow：和 asset.module.css 的 .nineSlice（inset: 0）同级时谁赢看样式表加载顺序，这里压过它 */
 .block .shadow {
-  inset: 10px -14px -16px 6px;
+  inset: 6px -8px -10px 4px;
   transform: translate3d(0, 0, 0);
   transition:
     inset 180ms var(--ease-cyber),
@@ -3314,15 +3293,15 @@
 
 /* 块转正（聚焦、展开）时投影收近一点，像块贴回屏幕 */
 :where(.side > .block):is(:focus-within, [data-open]) .shadow {
-  inset: 6px -8px -10px 4px;
+  inset: 4px -6px -7px 3px;
 }
 
-/* 鼠标在常态卡片上按压倾斜时，阴影反向微移并略微拉开，立体深度立竿见影 */
+/* 鼠标在常态卡片上按压倾斜时，阴影轻微反向视差，轻盈立体的悬浮层次 */
 :where(.zoneHit, .trackHit)[data-tilting] .shadow,
 :where(.person)[data-tilting]:not([data-open]) > .shadow,
 :where(.side > .block)[data-tilting]:not([data-open]) .shadow {
-  inset: 12px -16px -18px 8px;
-  transform: translate3d(var(--shadow-x, 0px), var(--shadow-y, 0px), -16px);
+  inset: 7px -10px -12px 5px;
+  transform: translate3d(var(--shadow-x, 0px), var(--shadow-y, 0px), -8px);
   transition:
     inset 140ms var(--ease-cyber),
     transform 80ms cubic-bezier(0.2, 0.9, 0.3, 1);
@@ -3331,11 +3310,11 @@
 :where(.zoneHit, .trackHit)[data-tilting][data-pressed] .shadow,
 :where(.person)[data-tilting][data-pressed]:not([data-open]) > .shadow,
 :where(.side > .block)[data-tilting][data-pressed]:not([data-open]) .shadow {
-  inset: 4px -6px -8px 2px;
+  inset: 3px -4px -5px 2px;
   transform: translate3d(
     calc(var(--shadow-x, 0px) * 0.35),
     calc(var(--shadow-y, 0px) * 0.35),
-    -4px
+    -2px
   );
 }
 

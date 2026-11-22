@@ -102,9 +102,9 @@ function OpeningChoiceItem({
   const key = KEYS[index];
   const tilt = useCardTilt<HTMLButtonElement>({
     disabled,
-    maxRotate: 4.5,
-    maxShift: 4,
-    shadowShift: 4,
+    maxRotate: 3.5,
+    maxShift: 2,
+    shadowShift: 3,
   });
   return (
     <li style={{ "--i": index } as CSSProperties}>

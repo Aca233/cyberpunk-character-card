@@ -9,7 +9,7 @@ import {
 import type { AssetId } from "../../assets";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
-import { Panel } from "../../ui/Panel";
+import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
@@ -63,7 +63,7 @@ function BlockShadow() {
   return (
     <NineSlice
       id="map.shadowSmall"
-      tint="rgb(0 0 0 / 76%)"
+      tint="rgb(0 0 0 / 46%)"
       slice={SHADOW_SLICE}
       className={styles.shadow}
     />
@@ -335,9 +335,9 @@ export function BioMonitor({
   const p = usePeek("bio", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 8.5,
-    maxShift: 6,
-    shadowShift: 10,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
   // 整块收起时等内容收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡
   const lingeredWide = useLinger(wide && p.open);
@@ -385,7 +385,7 @@ export function BioMonitor({
       <Panel
         as="section"
         line="var(--cp-red)"
-        surface={<CardGlare maskId="notify.itemCellBg" slice={30} tone="red" />}
+        surface={<CardGlare maskId="notify.itemCellBg" slice={ITEM_CELL_SLICE} tone="red" />}
       >
         {/* 常态摘要包一层折叠容器：展开人物/义体时同步收起，避免顶栏被拉成超长横条并消除上下重复读数 */}
         <div className={styles.bioSummary}>
@@ -711,9 +711,9 @@ function PresentPerson({
   const primaryTip = s?.tips[0] ?? null;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: open || wideOn,
-    maxRotate: 9,
-    maxShift: 6,
-    shadowShift: 9,
+    maxRotate: 5,
+    maxShift: 2,
+    shadowShift: 4,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 名字格里套着九宫格和展开面板，不能换成 button
@@ -743,7 +743,7 @@ function PresentPerson({
       <BlockShadow />
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--person-bg, var(--cp-surface-raised))"
+        tint="var(--person-bg, var(--cp-surface))"
         slice={CELL_SLICE}
       />
       <CardGlare
@@ -1036,9 +1036,9 @@ function PresentFoe({
         ? "even"
         : "low";
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 9,
-    maxShift: 6,
-    shadowShift: 9,
+    maxRotate: 5,
+    maxShift: 2,
+    shadowShift: 4,
   });
   return (
     <div
@@ -1050,7 +1050,7 @@ function PresentFoe({
       <BlockShadow />
       <NineSlice
         id="map.filterCellBg"
-        tint="var(--person-bg, var(--cp-surface-raised))"
+        tint="var(--person-bg, var(--cp-surface))"
         slice={CELL_SLICE}
       />
       <CardGlare maskId="map.filterCellBg" slice={CELL_SLICE} tone="red" />
@@ -1398,9 +1398,9 @@ export function Unread({
   const totalUnread = view.phone.unread + unreadCalls + newsCount + view.shards.unread;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 8.5,
-    maxShift: 6,
-    shadowShift: 10,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
@@ -1503,9 +1503,9 @@ function ZoneServiceBar({
   readonly onClick: () => void;
 }) {
   const tilt = useCardTilt<HTMLButtonElement>({
-    maxRotate: 6,
-    maxShift: 4,
-    shadowShift: 4,
+    maxRotate: 4,
+    maxShift: 1.5,
+    shadowShift: 2.5,
   });
   return (
     <button
@@ -1577,9 +1577,9 @@ export function Zone({
     (homesForSaleHere.length > 0 && Boolean(onBuyHome)) ||
     (homesNeedingRent.length > 0 && Boolean(onPayRent));
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 9,
-    maxShift: 6,
-    shadowShift: 10,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
   return (
     <div className={`${styles.block} ${styles.zone}`} data-layer="optics">
@@ -1749,9 +1749,9 @@ export function Track({
           : ({ tone: "muted", label: "无待办" } as const);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 8.5,
-    maxShift: 6,
-    shadowShift: 10,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
 
   return (
@@ -1791,7 +1791,7 @@ export function Track({
           <Panel
             as="section"
             line="var(--cp-yellow)"
-            surface={<CardGlare maskId="notify.itemCellBg" slice={30} tone="yellow" />}
+            surface={<CardGlare maskId="notify.itemCellBg" slice={ITEM_CELL_SLICE} tone="yellow" />}
           >
             <div className={styles.trackHead}>
               <span className={styles.trackHeadLeft}>
@@ -1960,9 +1960,9 @@ export function Weapon({
   const p = usePeek("weapon", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 8.5,
-    maxShift: 6,
-    shadowShift: 10,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
@@ -2031,7 +2031,7 @@ export function Weapon({
         <BlockShadow />
         <NineSlice
           id="hud.slotBg"
-          tint={p.open ? "var(--cp-panel-strong)" : "var(--cp-surface-raised)"}
+          tint={p.open ? "var(--cp-panel-strong)" : "var(--cp-surface)"}
           slice={SLOT_SLICE}
         />
         <CardGlare maskId="hud.slotBg" slice={SLOT_SLICE} tone="cyan" />
@@ -2195,9 +2195,9 @@ export function HoloCall({
 }) {
   const incoming = view.calls?.incoming;
   const tilt = useCardTilt<HTMLElement>({
-    maxRotate: 8,
-    maxShift: 5,
-    shadowShift: 9,
+    maxRotate: 5.5,
+    maxShift: 2.5,
+    shadowShift: 5,
   });
   if (!incoming) return null;
   const npc = view.npcs.find((n) => n.id === incoming.from);

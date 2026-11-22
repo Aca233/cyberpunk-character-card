@@ -1259,12 +1259,12 @@
   outline: none;
   color: #000;
   border-left-color: var(--cp-cyan);
-  transform: translateX(4px);
-  filter: drop-shadow(0 8px 16px rgb(0 0 0 / 50%));
+  transform: translateX(3px);
+  filter: drop-shadow(0 5px 12px rgb(0 0 0 / 32%));
 }
 
 .choice[data-tilting]:not(:disabled) {
-  transform: translate3d(calc(var(--tilt-tx, 0px) + 3px), var(--tilt-ty, 0px), 6px)
+  transform: translate3d(calc(var(--tilt-tx, 0px) + 2px), var(--tilt-ty, 0px), 2px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
   transition:
     color var(--dur-flash) var(--ease-cyber),
@@ -1274,17 +1274,17 @@
 }
 
 .choice:active:not(:disabled) {
-  transform: translateX(1px) scale(0.99);
+  transform: translateX(1px) scale(0.992);
 }
 
 .choice[data-tilting][data-pressed]:not(:disabled) {
   transform: translate3d(
       calc(var(--tilt-tx, 0px) * 0.4 + 1px),
-      calc(var(--tilt-ty, 0px) * 0.4 + 1.5px),
-      -4px
+      calc(var(--tilt-ty, 0px) * 0.4 + 0.8px),
+      -2px
     )
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.25)) rotateY(calc(var(--tilt-ry, 0deg) * 1.25))
-    scale(0.985);
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.992);
   transition-duration: 50ms;
 }
 

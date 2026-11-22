@@ -963,14 +963,14 @@
 
 .tarotCard[data-tilting] {
   z-index: 2;
-  transform: perspective(700px) translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 10px)
+  transform: perspective(1000px) translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 3px)
     rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
   transition:
     border-color var(--dur-flash) var(--ease-cyber),
     background-color var(--dur-flash) var(--ease-cyber),
     transform 70ms cubic-bezier(0.2, 0.9, 0.3, 1),
     filter 160ms ease-out;
-  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 56%));
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 36%));
 }
 
 .tarotCard[data-tilting] .tarotSheen {
@@ -978,16 +978,16 @@
 }
 
 .tarotCard:active {
-  transform: translateY(0) scale(0.985);
+  transform: translateY(0) scale(0.99);
 }
 
 .tarotCard[data-tilting][data-pressed] {
-  transform: perspective(700px)
-    translate3d(calc(var(--tilt-tx, 0px) * 0.45), calc(var(--tilt-ty, 0px) * 0.45 + 1.5px), -6px)
-    rotateX(calc(var(--tilt-rx, 0deg) * 1.25)) rotateY(calc(var(--tilt-ry, 0deg) * 1.25))
-    scale(0.98);
+  transform: perspective(1000px)
+    translate3d(calc(var(--tilt-tx, 0px) * 0.45), calc(var(--tilt-ty, 0px) * 0.45 + 1px), -3px)
+    rotateX(calc(var(--tilt-rx, 0deg) * 1.12)) rotateY(calc(var(--tilt-ry, 0deg) * 1.12))
+    scale(0.99);
   transition-duration: 55ms;
-  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 48%));
+  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 30%));
 }
 
 .tarotCard[aria-pressed="true"] {
@@ -997,7 +997,7 @@
 }
 
 .tarotCard[aria-pressed="true"][data-tilting] {
-  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 56%));
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 36%));
 }
 
 .tarotCard:focus-visible {
