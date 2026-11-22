@@ -1340,24 +1340,167 @@
   transform: translateX(3px);
 }
 
-/* ———— 剧情神经输入槽（沿用原作 CellFrame 九宫格 + map.shadowSmall 软投影 + 正式 Button） ———— */
+/* ———— 剧情神经输入终端（一体化布局 + 原作 notify.itemCell 九宫格壳体 + 光学玻璃材质 + 正式 Button） ———— */
 
 .inputBar {
-  display: grid;
-  gap: 0.36rem;
+  --composer-fill: var(--cp-panel);
+  --composer-line: rgb(255 97 88 / 64%);
+  --composer-accent: var(--cp-red);
+  --composer-divider: rgb(255 97 88 / 22%);
+  --glare-tint: 255 212 206;
+  display: block;
 }
 
+.inputBar:hover {
+  --composer-line: var(--cp-red);
+}
+
+.inputBar:focus-within {
+  --composer-fill: var(--cp-panel-strong);
+  --composer-line: var(--cp-cyan);
+  --composer-accent: var(--cp-cyan);
+  --composer-divider: rgb(94 246 255 / 24%);
+  --glare-tint: 205 248 255;
+}
+
+.inputBar[data-busy] {
+  --composer-line: rgb(94 246 255 / 66%);
+  --composer-accent: var(--cp-cyan);
+  --composer-divider: rgb(94 246 255 / 22%);
+  --glare-tint: 205 248 255;
+}
+
+.inputBar[data-busy]:focus-within {
+  --composer-line: var(--cp-cyan);
+}
+
+.inputBar[data-reply] {
+  --composer-line: rgb(252 238 10 / 62%);
+  --composer-accent: var(--cp-yellow);
+  --composer-divider: rgb(252 238 10 / 24%);
+  --glare-tint: 255 248 196;
+}
+
+.inputBar[data-reply]:focus-within {
+  --composer-line: var(--cp-yellow);
+}
+
+.inputBar[data-boost] {
+  --composer-fill: var(--cp-panel-strong);
+  --composer-line: var(--cp-yellow);
+  --composer-accent: var(--cp-yellow);
+  --composer-divider: rgb(252 238 10 / 28%);
+  --glare-tint: 255 248 196;
+}
+
+.inputBar[data-invalid] {
+  --composer-line: var(--cp-danger);
+  --composer-accent: var(--cp-danger);
+  --composer-divider: rgb(255 0 60 / 28%);
+  --glare-tint: 255 170 180;
+}
+
+.composerShell {
+  position: relative;
+  isolation: isolate;
+}
+
+/* 原作 map.shadowSmall 柔边浮层投影（同四角 HUD，聚焦微收贴屏） */
+.composerShell > .composerShadow,
+.inputLocked > .composerShadow {
+  z-index: -3;
+  inset: 6px -8px -10px 4px;
+  transition: inset 180ms var(--ease-cyber);
+}
+
+.inputBar:focus-within .composerShell > .composerShadow {
+  inset: 4px -6px -7px 3px;
+}
+
+.composerShell > .composerBg {
+  z-index: -2;
+  transition: background-color var(--dur-flash) var(--ease-cyber);
+}
+
+/* 同形原作蒙版内的顶面光学玻璃微反光与极细全息扫描纹，严格贴合左侧缺口与右下斜切角 */
+.composerShell > .composerGlare {
+  z-index: -1;
+  pointer-events: none;
+  background-color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    rgb(var(--glare-tint) / 5.5%) 0%,
+    rgb(255 255 255 / 0%) 34%
+  );
+}
+
+.composerShell > .composerScan {
+  z-index: -1;
+  pointer-events: none;
+  background-color: transparent;
+  background-repeat: repeat;
+  opacity: 0.08;
+  mix-blend-mode: screen;
+}
+
+.composerShell > .composerFg {
+  z-index: 0;
+  pointer-events: none;
+  transition: background-color var(--dur-flash) var(--ease-cyber);
+}
+
+/* 推演中顶部极细遥测扫光线 */
+.composerSweep {
+  position: absolute;
+  inset: 2px 14px auto 22px;
+  z-index: 2;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.composerSweep::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 32%;
+  background: linear-gradient(90deg, transparent, var(--cp-cyan), transparent);
+  animation: liveTelemetrySweep 2.1s var(--ease-cyber) infinite;
+}
+
+/* 内部留白精确避让原作 notify.itemCell 左侧双竖线/缺口（18px）与右下 45° 斜切角（23px） */
+.composerBody {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0.56rem 1.45rem 0.52rem 1.55rem;
+}
+
+/* 顶部内嵌回复引用条（克制细线风） */
 .replyBanner {
   display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  margin: 0;
-  padding-left: 0.6rem;
-  border-left: 2px solid var(--cp-yellow-dim);
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.42rem;
+  padding-bottom: 0.38rem;
+  border-bottom: 1px solid rgb(252 238 10 / 18%);
   font-family: var(--font-ui);
   font-size: var(--fs-label);
   color: var(--cp-text-dim);
   animation: rise 150ms var(--ease-cyber) both;
+}
+
+.replyTag {
+  flex: none;
+  padding: 0.02rem 0.34rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border: 1px solid rgb(252 238 10 / 34%);
 }
 
 .replyText {
@@ -1373,123 +1516,67 @@
   font-weight: 600;
 }
 
-.inputRow {
+.replyClose {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--cp-text-faint);
+  cursor: var(--cp-cursor-hand);
+  transition: color var(--dur-flash);
+}
+
+.replyClose:hover,
+.replyClose:focus-visible {
+  outline: none;
+  color: var(--cp-yellow);
+}
+
+/* 中部纯净编辑区 */
+.editorWrap {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 0.6rem;
+  padding: 0.08rem 0 0.42rem;
 }
 
-.inputCell {
-  --box-fill: var(--cp-panel);
-  --box-line: var(--cp-red-dim);
-  --glare-tint: 255 212 206;
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  transition: --box-line var(--dur-flash);
+/* 左侧微型光学信号竖灯：平时柔和暗红，聚焦青光，斯安威斯坦亮金 */
+.promptBar {
+  flex: none;
+  width: 2px;
+  height: 1.05rem;
+  margin-top: 0.28rem;
+  background: var(--composer-accent);
+  opacity: 0.62;
+  transition:
+    background-color var(--dur-flash),
+    opacity var(--dur-flash),
+    box-shadow var(--dur-flash);
 }
 
-.inputCell:hover {
-  --box-line: var(--cp-red);
-}
-
-.inputCell:focus-within {
-  --box-fill: var(--cp-panel-strong);
-  --box-line: var(--cp-cyan);
-  --glare-tint: 205 248 255;
-}
-
-.inputBar[data-busy] .inputCell {
-  --box-line: var(--cp-cyan-dim);
-  --glare-tint: 205 248 255;
-}
-
-.inputBar[data-busy] .inputCell:focus-within {
-  --box-line: var(--cp-cyan);
-}
-
-.inputBar[data-reply] .inputCell {
-  --box-line: var(--cp-yellow-dim);
-  --glare-tint: 255 248 196;
-}
-
-.inputBar[data-reply] .inputCell:focus-within {
-  --box-line: var(--cp-yellow);
-}
-
-.inputBar[data-boost] .inputCell {
-  --box-fill: var(--cp-panel-strong);
-  --box-line: var(--cp-yellow);
-  --glare-tint: 255 248 196;
-}
-
-.inputBar[data-invalid] .inputCell {
-  --box-line: var(--cp-danger);
-  --glare-tint: 255 170 180;
-}
-
-/* 原作柔边浮层投影（同四角 HUD） */
-.inputCell > .inputShadow,
-.inputLocked > .inputShadow {
-  z-index: -2;
-  inset: 5px -7px -9px 3px;
-  transition: inset 180ms var(--ease-cyber);
-}
-
-.inputCell:focus-within > .inputShadow {
-  inset: 3px -5px -6px 2px;
-}
-
-/* 同形九宫格蒙版内的顶面光学玻璃极薄微反光，严格贴合斜切角不漏死角 */
-.inputCell > .inputGlare {
-  z-index: -1;
-  pointer-events: none;
-  background-color: transparent;
-  background-image: linear-gradient(
-    180deg,
-    rgb(var(--glare-tint) / 4.8%) 0%,
-    rgb(255 255 255 / 0%) 36%
-  );
-}
-
-/* 推演中顶部极细遥测扫光线 */
-.inputSweep {
-  position: absolute;
-  inset: 2px 10px auto 10px;
-  height: 1px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.inputSweep::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 32%;
-  background: linear-gradient(90deg, transparent, var(--cp-cyan), transparent);
-  animation: liveTelemetrySweep 2.1s var(--ease-cyber) infinite;
+.inputBar:focus-within .promptBar,
+.inputBar[data-boost] .promptBar {
+  opacity: 1;
+  box-shadow: 0 0 8px var(--composer-accent);
 }
 
 .textarea {
-  position: relative;
-  z-index: 1;
   flex: 1;
   min-width: 0;
   resize: none;
-  min-height: 2.85rem;
+  min-height: 2.35rem;
   max-height: 9.5rem;
-  padding: 0.6rem 1.05rem 0.64rem 0.9rem;
+  padding: 0;
   margin: 0;
   border: 0;
   outline: none;
   background: transparent;
   font-family: var(--font-body);
   font-size: 0.98rem;
-  line-height: 1.58;
+  line-height: 1.6;
   color: var(--cp-text);
-  caret-color: var(--box-line);
+  caret-color: var(--composer-accent);
   field-sizing: content;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
@@ -1500,7 +1587,7 @@
   opacity: 0.85;
 }
 
-.inputCell:focus-within .textarea {
+.inputBar:focus-within .textarea {
   scrollbar-color: var(--cp-cyan-dim) transparent;
 }
 
@@ -1509,66 +1596,62 @@
   max-height: min(22rem, 42dvh);
 }
 
-/* 右侧正式 Button 底对齐且恒定高度，多行输入绝不拉变形 */
-.inputSubmit {
-  flex: none;
-  display: flex;
-  align-items: flex-end;
-}
-
-.inputSubmit > button {
-  min-height: 2.85rem;
-}
-
-/* 框下极克制的静默 HUD 附属微行：无底无框，平时低对比退隐，悬停/聚焦清晰可读 */
-.inputMeta {
+/* 底部通透内联控制栏：渐隐发丝分隔线 + 正式 Button，不拉变形、无厚重黑带 */
+.composerFooter {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 1.45rem;
-  padding: 0 0.15rem;
+  gap: 0.7rem;
+  padding: 0.42rem 0.25rem 0.04rem 0;
   font-family: var(--font-ui);
   font-size: var(--fs-label);
 }
 
-.inputMetaLeft,
-.inputMetaRight {
+.composerFooter::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--composer-divider),
+    rgb(255 255 255 / 5%) 72%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.footerLeft,
+.footerRight {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.65rem;
   min-width: 0;
 }
 
-.inputMetaLeft {
+.footerLeft {
   flex: 1;
   flex-wrap: wrap;
 }
 
-.inputMetaRight {
+.footerRight {
   flex: none;
-  opacity: 0.56;
-  transition: opacity var(--dur-flash) var(--ease-cyber);
 }
 
-.inputBar:hover .inputMetaRight,
-.inputBar:focus-within .inputMetaRight,
-.inputBar[data-expanded] .inputMetaRight,
-.inputBar[data-invalid] .inputMetaRight {
-  opacity: 0.95;
-}
-
-.boostBtnInner {
+.boostBtnInner,
+.expandInner {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
-.inputBusyNote {
+.footerStatus {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   color: var(--cp-cyan);
+  white-space: nowrap;
 }
 
 .statusDot {
@@ -1579,15 +1662,29 @@
   animation: liveDotPulse 1.15s ease-in-out infinite;
 }
 
-.inputAlert {
+.footerAlert {
   color: var(--cp-danger);
+  white-space: nowrap;
+}
+
+.shortcutNote {
+  color: rgb(168 163 160 / 42%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+@media (width < 1100px) {
+  .shortcutNote {
+    display: none;
+  }
 }
 
 .charMeter {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
-  color: var(--cp-text-dim);
+  color: var(--cp-text-faint);
+  white-space: nowrap;
 }
 
 .charMeter[data-warn] {
@@ -1615,6 +1712,16 @@
 .metaLink[data-active] {
   outline: none;
   color: var(--cp-cyan);
+}
+
+.footerAction {
+  display: inline-flex;
+  flex: none;
+}
+
+.footerAction > button {
+  min-height: 28px;
+  padding: 3px 14px;
 }
 
 /* 封存/死亡态：原作 CellFrame 单行静默提示条 */
@@ -2189,251 +2296,6 @@
   max-height: calc(100vh - 48px);
   overflow: auto;
   animation: modalSnapIn var(--dur-modal) var(--ease-snap) both;
-}
-
-/* 追踪块：轻量化层级、细左竖线与紧凑节奏，不套多层厚边灰盒子 */
-.trackPane {
-  display: grid;
-  gap: 0.85rem;
-  min-width: 0;
-}
-
-.trackSection {
-  display: grid;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.trackMicroHead {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: rgb(184 206 214 / 62%);
-}
-
-.trackQuietNote {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--cp-text-dim);
-}
-
-.trackBdCard {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.9rem;
-  padding: 0.45rem 0 0.45rem 0.65rem;
-  border-left: 2px solid var(--cp-cyan);
-}
-
-.trackBdInfo {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.trackBdTag {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--cp-cyan);
-}
-
-.trackCleanList {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.trackCleanRow {
-  display: grid;
-  gap: 0.14rem;
-  padding: 0.35rem 0.1rem 0.35rem 0.65rem;
-  border-left: 2px solid var(--cp-yellow);
-}
-
-.trackCleanRow:where([data-overdue]) {
-  border-left-color: var(--cp-danger);
-}
-
-.trackCleanRow:where([data-offered]) {
-  border-left-color: rgb(94 246 255 / 65%);
-}
-
-.trackCleanRow:where([data-closed]) {
-  border-left-color: rgb(184 206 214 / 28%);
-  opacity: 0.82;
-}
-
-.trackRowActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.3rem;
-}
-
-.trackRowActions button {
-  padding: 0.16rem 0.52rem;
-  font-size: 11.5px;
-  min-height: 0;
-}
-
-.trackGigItem:where([data-offered]) {
-  border-left-color: rgb(94 246 255 / 55%);
-}
-
-.trackGigItem:where([data-offered][open]) {
-  border-left-color: var(--cp-cyan);
-}
-
-.trackHistoryWrap {
-  display: grid;
-  gap: 0.4rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid rgb(184 206 214 / 14%);
-}
-
-.trackHistorySummary {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--cp-text-dim);
-  cursor: var(--cp-cursor-hand);
-  list-style: none;
-}
-
-.trackHistorySummary::-webkit-details-marker {
-  display: none;
-}
-
-.trackClosedTag {
-  flex: none;
-  font-size: 11px;
-  color: var(--cp-text-dim);
-}
-
-.trackCleanTop {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.trackCleanTop strong {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--cp-text);
-}
-
-.trackCleanTime {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--cp-yellow);
-  font-variant-numeric: tabular-nums;
-}
-
-.trackCleanTime:where([data-overdue]) {
-  color: var(--cp-danger);
-  font-weight: 700;
-}
-
-.trackCleanMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2rem 0.65rem;
-  font-size: 12px;
-  color: var(--cp-text-dim);
-}
-
-.trackGigItem {
-  border-left: 2px solid rgb(252 238 10 / 55%);
-  transition: border-color 140ms ease-out;
-}
-
-.trackGigItem:where([open]) {
-  border-left-color: var(--cp-yellow);
-}
-
-.trackGigItem:where([data-overdue]) {
-  border-left-color: var(--cp-danger);
-}
-
-.trackGigItem > summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.65rem;
-  padding: 0.36rem 0.45rem 0.36rem 0.65rem;
-  list-style: none;
-  cursor: var(--cp-cursor-hand);
-  transition: background 140ms ease-out;
-}
-
-.trackGigItem > summary::-webkit-details-marker {
-  display: none;
-}
-
-.trackGigItem > summary:hover,
-.trackGigItem > summary:focus-visible {
-  outline: none;
-  background: rgb(252 238 10 / 6%);
-}
-
-.trackGigItem > summary strong {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--cp-text);
-}
-
-.trackGigMeta {
-  flex: none;
-  font-size: 11.5px;
-  color: var(--cp-yellow);
-}
-
-.trackGigItem:where([data-overdue]) .trackGigMeta {
-  color: var(--cp-danger);
-  font-weight: 700;
-}
-
-.trackGigItem:where([data-offered]) .trackGigMeta {
-  color: var(--cp-cyan);
-}
-
-.trackGigDetail {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.1rem 0.45rem 0.45rem 0.65rem;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--cp-text-dim);
-}
-
-.trackGigDetail p {
-  margin: 0;
-}
-
-.trackNotes {
-  display: grid;
-  gap: 0.18rem;
-  margin: 0.15rem 0 0;
-  padding-left: 1.15rem;
-  color: var(--cp-text);
-}
-
-.trackQuietLine {
-  margin: 0.2rem 0 0;
-  font-size: 12px;
-  color: var(--cp-text-dim);
 }
 
 .journalActions {
@@ -5694,7 +5556,7 @@ ul.mapLegend > li {
   .journal,
   .dossierDialog,
   .replyBanner,
-  .inputSweep::after,
+  .composerSweep::after,
   .statusDot,
   .divePanel,
   .diveLayer[data-here],
@@ -5705,7 +5567,7 @@ ul.mapLegend > li {
   .choice,
   .choice[data-tilting],
   .choice[data-tilting][data-pressed],
-  .inputCell > .inputShadow,
+  .composerShell > .composerShadow,
   .diveLayer,
   .toastBtn {
     transition: none;

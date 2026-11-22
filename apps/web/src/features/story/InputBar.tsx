@@ -1,15 +1,14 @@
 import type { TurnInput } from "@cp/core";
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ActionButton } from "../../ui/ActionButton";
-import { Asset, NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
+import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import styles from "./story.module.css";
 
 const MAX = 2000;
 const WARN_AT = 1600;
 const SEND_MODE_KEY = "cp.inputSendMode";
-const CELL_SLICE = [20, 30, 30, 20] as const;
 const SHADOW_SLICE = 40;
 
 type SendMode = "enter" | "ctrlEnter";
@@ -36,7 +35,7 @@ function supportsFieldSizing(): boolean {
   return typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
 }
 
-/** 剧情神经输入槽：沿用原作 CellFrame 九宫格与 Button 组件，保持 HUD 统一质感与完整键盘流 */
+/** 剧情神经输入终端：一体化三段式布局 + 原作 notify.itemCell 九宫格壳体、map.shadowSmall 软投影与正式 Button */
 export function InputBar({
   busy,
   streaming,
@@ -157,9 +156,9 @@ export function InputBar({
       <div className={styles.inputLocked} role="status" aria-live="polite">
         <NineSlice
           id="map.shadowSmall"
-          tint="rgb(0 0 0 / 42%)"
+          tint="rgb(0 0 0 / 44%)"
           slice={SHADOW_SLICE}
-          className={styles.inputShadow}
+          className={styles.composerShadow}
         />
         <CellFrame />
         <Asset id="notify.attention" height={14} tint="var(--cp-red)" />
@@ -176,15 +175,17 @@ export function InputBar({
       ? `写下 ${sandevistan.name} 慢动作内的连贯动作…`
       : busy
         ? "正在推演本轮剧情，可先起草下一步行动…"
-        : sendMode === "enter"
-          ? "写下你的行动或对白…（Enter 发送 · Shift+Enter 换行）"
-          : "写下你的行动或对白…（Ctrl+Enter 发送 · Enter 换行）";
+        : "写下你的行动、对白或想法…";
 
   const sendDisabledReason = busy
     ? "正在推演当前回合，可先起草下一步行动"
     : tooLong
-      ? `超过 ${MAX} 字上限`
-      : undefined;
+      ? `已超过 ${MAX} 字上限，请精简后再发送`
+      : text === ""
+        ? "输入你的行动或对白"
+        : undefined;
+
+  const scanUrl = cssUrl("fx.scanlines");
 
   return (
     <form
@@ -199,176 +200,251 @@ export function InputBar({
         send();
       }}
     >
-      {reply && (
-        <p className={styles.replyBanner}>
-          <span className={styles.replyText}>
-            回复 <b>{reply.name}</b>：{reply.text}
-          </span>
-          {onCancelReply && <ActionButton onClick={onCancelReply}>取消</ActionButton>}
-        </p>
-      )}
-
-      <div className={styles.inputRow}>
-        <div className={styles.inputCell}>
+      <div className={styles.composerShell}>
+        <NineSlice
+          id="map.shadowSmall"
+          tint="rgb(0 0 0 / 48%)"
+          slice={SHADOW_SLICE}
+          className={styles.composerShadow}
+        />
+        <NineSlice
+          id="notify.itemCellBg"
+          tint="var(--composer-fill)"
+          slice={ITEM_CELL_SLICE}
+          className={styles.composerBg}
+        />
+        <NineSlice
+          id="notify.itemCellBg"
+          tint="transparent"
+          slice={ITEM_CELL_SLICE}
+          className={styles.composerGlare}
+        />
+        {scanUrl && (
           <NineSlice
-            id="map.shadowSmall"
-            tint="rgb(0 0 0 / 46%)"
-            slice={SHADOW_SLICE}
-            className={styles.inputShadow}
+            id="notify.itemCellBg"
+            tint="transparent"
+            slice={ITEM_CELL_SLICE}
+            className={styles.composerScan}
+            style={{ backgroundImage: scanUrl }}
           />
-          <CellFrame
-            surface={
-              <NineSlice
-                id="map.filterCellBg"
-                tint="transparent"
-                slice={CELL_SLICE}
-                className={styles.inputGlare}
-              />
-            }
-          />
-          {busy && <span className={styles.inputSweep} aria-hidden="true" />}
-          <textarea
-            ref={setAreaRef}
-            className={styles.textarea}
-            rows={expanded ? 6 : 1}
-            value={draft.text}
-            placeholder={placeholder}
-            aria-label="你的行动"
-            aria-invalid={tooLong || undefined}
-            onChange={(e) => onDraft({ text: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === "Escape") {
-                e.preventDefault();
-                if (expanded) {
-                  setExpanded(false);
-                } else {
-                  e.currentTarget.blur();
-                }
-                return;
-              }
-              if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "e") {
-                e.preventDefault();
-                setExpanded((v) => !v);
-                return;
-              }
-              if (
-                e.key === "ArrowUp" &&
-                !e.shiftKey &&
-                !e.ctrlKey &&
-                !e.metaKey &&
-                !e.altKey &&
-                draft.text === "" &&
-                lastSentText
-              ) {
-                e.preventDefault();
-                onDraft({ text: lastSentText });
-                const target = e.currentTarget;
-                requestAnimationFrame(() => {
-                  const end = target.value.length;
-                  target.setSelectionRange(end, end);
-                });
-                return;
-              }
-              if (e.key === "Enter") {
-                if (e.ctrlKey || e.metaKey) {
+        )}
+        <NineSlice
+          id="notify.itemCellFg"
+          tint="var(--composer-line)"
+          slice={ITEM_CELL_SLICE}
+          className={styles.composerFg}
+        />
+
+        {busy && <span className={styles.composerSweep} aria-hidden="true" />}
+
+        <div className={styles.composerBody}>
+          {reply && (
+            <div className={styles.replyBanner}>
+              <span className={styles.replyTag}>REPLY</span>
+              <span className={styles.replyText}>
+                回复 <b>{reply.name}</b>：{reply.text}
+              </span>
+              {onCancelReply && (
+                <button
+                  type="button"
+                  className={styles.replyClose}
+                  onClick={onCancelReply}
+                  aria-label="取消回复"
+                  title="取消回复"
+                >
+                  <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                    <path
+                      d="M2.2 2.2 9.8 9.8M9.8 2.2 2.2 9.8"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="square"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className={styles.editorWrap}>
+            <span className={styles.promptBar} aria-hidden="true" />
+            <textarea
+              ref={setAreaRef}
+              className={styles.textarea}
+              rows={expanded ? 6 : 1}
+              value={draft.text}
+              placeholder={placeholder}
+              aria-label="你的行动"
+              aria-invalid={tooLong || undefined}
+              onChange={(e) => onDraft({ text: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Escape") {
                   e.preventDefault();
-                  send();
+                  if (expanded) {
+                    setExpanded(false);
+                  } else {
+                    e.currentTarget.blur();
+                  }
                   return;
                 }
-                if (sendMode === "enter" && !e.shiftKey && !e.altKey) {
+                if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "e") {
                   e.preventDefault();
-                  send();
+                  setExpanded((v) => !v);
+                  return;
                 }
-              }
-            }}
-          />
-        </div>
-
-        <div className={styles.inputSubmit}>
-          {streaming ? (
-            <Button onClick={onStop}>停止生成</Button>
-          ) : (
-            <Button
-              type="submit"
-              primary
-              keyId={busy ? undefined : "key.enter"}
-              disabled={!canSend}
-              reason={sendDisabledReason}
-            >
-              {busy ? "推演中…" : "发送"}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.inputMeta}>
-        <div className={styles.inputMetaLeft}>
-          {boostAvailable && sandevistan && (
-            <Button
-              small
-              pressed={boostOn}
-              onClick={() => {
-                onDraft({ sandevistan: !boostOn });
-                area.current?.focus();
+                if (
+                  e.key === "ArrowUp" &&
+                  !e.shiftKey &&
+                  !e.ctrlKey &&
+                  !e.metaKey &&
+                  !e.altKey &&
+                  draft.text === "" &&
+                  lastSentText
+                ) {
+                  e.preventDefault();
+                  onDraft({ text: lastSentText });
+                  const target = e.currentTarget;
+                  requestAnimationFrame(() => {
+                    const end = target.value.length;
+                    target.setSelectionRange(end, end);
+                  });
+                  return;
+                }
+                if (e.key === "Enter") {
+                  if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    send();
+                    return;
+                  }
+                  if (sendMode === "enter" && !e.shiftKey && !e.altKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }
               }}
-            >
-              <span className={styles.boostBtnInner}>
-                <Asset id="cyber.os" height={12} tint="currentColor" />
-                <span>{sandevistan.name}</span>
-              </span>
-            </Button>
-          )}
-          {tooLong ? (
-            <span className={styles.inputAlert} role="alert">
-              已超出上限（{len}/{MAX} 字），精简后再发送
-            </span>
-          ) : (
-            busy && (
-              <span className={styles.inputBusyNote}>
-                <i className={styles.statusDot} aria-hidden="true" />
-                <span>推演中 · 可提前起草下一轮</span>
-              </span>
-            )
-          )}
-        </div>
+            />
+          </div>
 
-        <div className={styles.inputMetaRight}>
-          {len > 0 && (
-            <span
-              className={styles.charMeter}
-              data-warn={nearLimit || undefined}
-              data-over={tooLong || undefined}
-            >
-              {nearLimit || tooLong ? `${len}/${MAX}` : `${len} 字`}
-            </span>
-          )}
-          {hasRawText && (
-            <button type="button" className={styles.metaLink} onClick={clearDraft}>
-              清空
-            </button>
-          )}
-          <button
-            type="button"
-            className={styles.metaLink}
-            data-active={expanded || undefined}
-            aria-pressed={expanded}
-            title="Alt+E 切换长文编辑高度"
-            onClick={() => {
-              setExpanded((v) => !v);
-              area.current?.focus();
-            }}
-          >
-            {expanded ? "收起" : "展开"}
-          </button>
-          <button
-            type="button"
-            className={styles.metaLink}
-            title="点击切换发送键位（Ctrl+Enter 始终可发送）"
-            onClick={toggleSendMode}
-          >
-            {sendMode === "enter" ? "Enter 发送" : "Ctrl+Enter 发送"}
-          </button>
+          <div className={styles.composerFooter}>
+            <div className={styles.footerLeft}>
+              {boostAvailable && sandevistan && (
+                <Button
+                  small
+                  pressed={boostOn}
+                  onClick={() => {
+                    onDraft({ sandevistan: !boostOn });
+                    area.current?.focus();
+                  }}
+                >
+                  <span className={styles.boostBtnInner}>
+                    <Asset id="cyber.os" height={12} tint="currentColor" />
+                    <span>{sandevistan.name}</span>
+                  </span>
+                </Button>
+              )}
+
+              {tooLong ? (
+                <span className={styles.footerAlert} role="alert">
+                  超出上限，精简 {len - MAX} 字后发送
+                </span>
+              ) : busy ? (
+                <span className={styles.footerStatus}>
+                  <i className={styles.statusDot} aria-hidden="true" />
+                  <span>推演中 · 可预写下一步</span>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={styles.metaLink}
+                    title={
+                      sendMode === "enter"
+                        ? "Enter 发送 · Shift+Enter 换行（点击切换为 Ctrl+Enter 发送）"
+                        : "Ctrl+Enter 发送 · Enter 换行（点击切换为 Enter 发送）"
+                    }
+                    onClick={toggleSendMode}
+                  >
+                    {sendMode === "enter" ? "Enter 发送" : "Ctrl+Enter 发送"}
+                  </button>
+                  <span className={styles.shortcutNote} aria-hidden="true">
+                    · / 聚焦 · Esc 退出
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className={styles.footerRight}>
+              {len > 0 && (
+                <span
+                  className={styles.charMeter}
+                  data-warn={nearLimit || undefined}
+                  data-over={tooLong || undefined}
+                >
+                  {nearLimit || tooLong ? `${len}/${MAX}` : `${len} 字`}
+                </span>
+              )}
+
+              {hasRawText && (
+                <button type="button" className={styles.metaLink} onClick={clearDraft}>
+                  清空
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={styles.metaLink}
+                data-active={expanded || undefined}
+                aria-pressed={expanded}
+                title={expanded ? "收起编辑区（Alt+E）" : "展开长文编辑区（Alt+E）"}
+                onClick={() => {
+                  setExpanded((v) => !v);
+                  area.current?.focus();
+                }}
+              >
+                <span className={styles.expandInner}>
+                  <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                    {expanded ? (
+                      <path
+                        d="M2.5 4.5 6 8 9.5 4.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="square"
+                      />
+                    ) : (
+                      <path
+                        d="M2.5 7.5 6 4 9.5 7.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="square"
+                      />
+                    )}
+                  </svg>
+                  <span>{expanded ? "收起" : "展开"}</span>
+                </span>
+              </button>
+
+              <span className={styles.footerAction}>
+                {streaming ? (
+                  <Button small onClick={onStop}>
+                    停止生成
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    primary
+                    small
+                    keyId={busy ? undefined : "key.enter"}
+                    disabled={!canSend}
+                    reason={sendDisabledReason}
+                  >
+                    {busy ? "推演中…" : "发送"}
+                  </Button>
+                )}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </form>

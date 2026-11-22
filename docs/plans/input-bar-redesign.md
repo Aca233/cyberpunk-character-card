@@ -70,7 +70,7 @@
 ## 三、实施记录与改动范围
 
 - `apps/web/src/features/story/store.ts`：新增按 `saveId` 持久化草稿（`cp.storyDraft:${saveId}`），统一清理可选字段与 `sandevistan` 复位逻辑。
-- `apps/web/src/features/story/InputBar.tsx`：视觉全面回归原作素材组件体系——采用原作 `CellFrame`（`map.filterCellBg`/`map.filterCellFg` 九宫格切角框）、`map.shadowSmall` 原作浮层软阴影、同形蒙版光学玻璃极薄微反光，以及底对齐恒定高度的正式 `<Button>` / `<ActionButton>`；去掉框内手绘工具条、塑料实心黄块与视觉噪音，将斯安威斯坦开关、字数、清空、展开（`Alt+E`）、发送键位切换（`Enter` / `Ctrl+Enter`）极克制地收进框下静默 HUD 附属微行。保留全部键盘流与交互升级（`/` 聚焦、`Esc` 失焦/收起、空框 `↑` 调回、封存单行 `CellFrame`）。
+- `apps/web/src/features/story/InputBar.tsx`：结合「一体化三段式命令终端布局」与「100% 原作素材高质感材质」——壳体直接采用与四角 HUD 同模具的原作 `notify.itemCellBg`/`notify.itemCellFg` 九宫格（左侧双竖线+机械缺口+右下 45° 斜切细线）、底层 `map.shadowSmall` 原作柔边阴影、同形蒙版 5.5% 光学玻璃微反光与极淡 `fx.scanlines` 全息细纹；内部为内嵌回复横幅 + 纯净自适应编辑区（配 2px 光学信号竖灯）+ 通透渐隐发丝线内联底栏 + 正式原作 `<Button>`（`NineSlice tab.bg` 半透明斜切发光）；保留全部交互增强（`/` 聚焦、`Esc` 失焦/收起、空框 `↑` 调回、`Alt+E` 长文展开、键位切换、斯安威斯坦开关、草稿持久化）。
 - `apps/web/src/features/story/StoryScreen.tsx`：新增 `/` 一键聚焦输入框快捷键，透传 `view.sandevistan` 与本存档最近一条玩家输入 `lastSentText`。
 - `apps/web/src/features/story/story.module.css`：将滚动隔离至 `.choices`，重写 `.inputBar` 六态样式与降动效适配，清理旧 `.replyChip`。
 - `apps/web/src/features/story/Phone.tsx`：按用户确认保持现状。
