@@ -57,6 +57,11 @@ export const health = defineSystem<HealthState, DamageCommand | HealCommand, Hea
         return applyHit(draft, command, ctx);
     }
   },
+  on: {
+    "trade.medical": (draft, ctx) => {
+      applyHeal(draft, { type: "heal", source: "ripperdoc" }, ctx);
+    },
+  },
   tick: (draft, span) => recoverInjuries(draft, span),
   view: { key: "health", project: healthView },
   status: healthStatus,

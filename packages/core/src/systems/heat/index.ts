@@ -64,6 +64,11 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
       return applyEvent(draft, command, district, ctx.now);
     },
+    on: {
+      "trade.fine": (draft) => {
+        applyRelief(draft, { type: "heat.relief", reason: "缴纳罚款" });
+      },
+    },
     tick(draft, span, ctx) {
       const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
       // 证据按实际入库时间结算；中间只衰减，安全屋和换区仍按完整跨度结算一次。

@@ -389,8 +389,8 @@ export function applyTrade(
       reason: `${quoted.party.name}：${quoted.label}，${command.reason}`,
     });
   const serviceNotes: string[] = [];
+  const signals: string[] = [...(command.action === "sell" ? ["inventory.changed"] : [])];
   if (command.action === "service" && command.service) {
-    const heat = world.slices.heat as { stars?: number } | undefined;
     switch (command.service) {
       case "meal":
         emitted.push({
@@ -417,21 +417,12 @@ export function applyTrade(
         });
         break;
       case "medical":
-        emitted.push({
-          type: "heal",
-          source: "ripperdoc",
-          reason: `${quoted.party.name}：${command.reason}`,
-        });
+        signals.push("trade.medical");
+        serviceNotes.push("医生完成清创和稳定处理，伤口进入恢复期；断肢和损坏义体仍需专门处理");
         break;
       case "fine":
-        if ((heat?.stars ?? 0) > 0) {
-          emitted.push({
-            type: "heat.relief",
-            reason: `缴纳罚款：${command.reason}`,
-          });
-        } else {
-          serviceNotes.push("当前无通缉星级，罚款用于平息纠纷");
-        }
+        signals.push("trade.fine");
+        serviceNotes.push("已缴纳罚款；若有通缉热度则下降 1 星");
         break;
       case "favor":
         if (quoted.party.npc?.met) {
@@ -462,6 +453,6 @@ export function applyTrade(
       ...serviceNotes,
     ],
     emit: emitted,
-    ...(command.action === "sell" ? { signals: ["inventory.changed"] } : {}),
+    ...(signals.length > 0 ? { signals } : {}),
   };
 }

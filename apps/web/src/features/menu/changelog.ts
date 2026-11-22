@@ -53,6 +53,10 @@ export const CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
         tag: "新增",
         text: "剧情流支持采集并默认折叠展示模型思维链，可随时展开查看推理过程。",
       },
+      {
+        tag: "修复",
+        text: "修复商店医疗清创、缴纳罚款与打点示好服务的跨系统信号联动结算。",
+      },
     ],
   },
   {
