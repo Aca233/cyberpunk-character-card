@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
@@ -6,8 +6,8 @@ import { useLayer } from "../../ui/layers";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { portraitOf } from "./art";
-import { ProfileHead } from "./Profile";
-import styles from "./story.module.css";
+import { affinityTone, ProfileHead } from "./Profile";
+import styles from "./phone.module.css";
 import {
   buildChatBubbles,
   type ContactFilter,
@@ -21,6 +21,8 @@ type PhoneMessage = View["phone"]["messages"][number];
 type CallHistoryItem = NonNullable<View["calls"]>["history"][number];
 
 const CELL_SLICE = [20, 30, 30, 20] as const;
+const MAX_MESSAGE_LEN = 300;
+const SEARCH_THRESHOLD = 4;
 
 const FILTER_OPTIONS: readonly {
   readonly id: ContactFilter;
@@ -28,60 +30,68 @@ const FILTER_OPTIONS: readonly {
   readonly match: (c: ContactSummary) => boolean;
 }[] = [
   { id: "all", label: "全部", match: () => true },
+  { id: "unread", label: "未读", match: (c) => c.unread > 0 },
   { id: "active", label: "有事", match: (c) => c.isActive },
   { id: "utility", label: "渠道", match: (c) => c.isUtility },
   { id: "present", label: "在场", match: (c) => c.isPresent },
 ];
 
-/** 头像：有原作头像（avatars 图集）的人物用原作图，没有的（曼因、丽贝卡、法拉第等）用名字的第一个字；框用原作 map.filterCell* */
+/** 头像：有原作头像（avatars 图集）或自定义生图的人物用肖像图，没有的用名字首字；框用原作 map.filterCell* */
 export function Avatar({
   name,
   dead,
   npc,
+  size,
+  present,
+  scan,
 }: {
   readonly name: string;
   readonly dead: boolean;
   /** 人物 id；不传或没有原作头像时退回名字的第一个字 */
   readonly npc?: string | undefined;
+  readonly size?: "sm" | "lg" | undefined;
+  readonly present?: boolean | undefined;
+  readonly scan?: boolean | undefined;
 }) {
   const saveImages = useSaveImages();
   const customId = npc ? (saveImages?.bindings.npcs[npc] ?? null) : null;
   const portrait = portraitOf(npc);
   return (
-    <span
-      className={styles.avatar}
-      data-dead={dead || undefined}
-      data-portrait={customId || portrait ? true : undefined}
-      aria-hidden="true"
-    >
-      <NineSlice
-        id="map.filterCellBg"
-        tint="var(--box-fill, var(--cp-surface))"
-        slice={CELL_SLICE}
-      />
-      {customId ? (
-        <GeneratedImage
-          imageId={customId}
-          alt={name}
-          className={styles.avatarArt}
-          fallback={
-            portrait ? (
-              <Asset id={portrait} className={styles.avatarArt} />
-            ) : (
-              <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>
-            )
-          }
+    <span className={styles.avatarWrap} aria-hidden="true">
+      <span className={styles.avatar} data-dead={dead || undefined} data-size={size}>
+        <NineSlice
+          id="map.filterCellBg"
+          tint="var(--box-fill, var(--cp-surface))"
+          slice={CELL_SLICE}
         />
-      ) : portrait ? (
-        <Asset id={portrait} className={styles.avatarArt} />
-      ) : (
-        <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>
-      )}
-      <NineSlice
-        id="map.filterCellFg"
-        tint="var(--box-line, var(--cp-cyan-dim))"
-        slice={CELL_SLICE}
-      />
+        {customId ? (
+          <GeneratedImage
+            imageId={customId}
+            alt={name}
+            className={styles.avatarArt}
+            fallback={
+              portrait ? (
+                <Asset id={portrait} className={styles.avatarArt} />
+              ) : (
+                <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>
+              )
+            }
+          />
+        ) : portrait ? (
+          <Asset id={portrait} className={styles.avatarArt} />
+        ) : (
+          <b className={styles.avatarGlyph}>{[...name][0] ?? "?"}</b>
+        )}
+        {scan && (
+          <span className={styles.avatarScan} style={{ backgroundImage: cssUrl("fx.scanlines") }} />
+        )}
+        <NineSlice
+          id="map.filterCellFg"
+          tint="var(--box-line, var(--cp-cyan-dim))"
+          slice={CELL_SLICE}
+        />
+      </span>
+      {present && !dead && <i className={styles.presentBeacon} title="就在现场" />}
     </span>
   );
 }
@@ -89,7 +99,7 @@ export function Avatar({
 /** 未读角标（计划第十二节第 9 条）：联系人和芯片共用原作数字格，四边保留 16 原图像素，字数增加时只拉伸中间 */
 export function UnreadBadge({ children }: { readonly children: string | number }) {
   return (
-    <span className={styles.contactUnread}>
+    <span className={styles.unreadBadge}>
       <NineSlice id="dialog.numberSlot" tint="var(--cp-yellow)" slice={16} />
       {children}
     </span>
@@ -150,6 +160,32 @@ function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | un
   return undefined;
 }
 
+/** 根据联系人身份推荐快捷破冰短语，点击后填入输入框并聚焦，不自动替玩家发送 */
+function starterPromptsOf(contact: ContactSummary): readonly string[] {
+  const { npc } = contact;
+  if (!npc?.met || !npc.alive) return [];
+  const doc = npc.services?.ripperdoc;
+  const shops = npc.services?.shops ?? [];
+  const isFixer = Boolean(contact.fixer || npc.role.includes("中间人"));
+  if (doc) {
+    return doc.debt
+      ? ["手头凑了点钱，诊所现在方便过来还账吗？", "最近诊所有什么新义体到货？"]
+      : ["诊所现在方便吗？想聊聊义体改装的事。", "最近有没有搞到什么好货？"];
+  }
+  if (isFixer) {
+    return contact.fixer?.blocked
+      ? ["关于之前那档子事，咱们还有得谈吗？", "最近街上风声怎么样？"]
+      : ["手头最近有合适的新活派吗？", "最近这片街区有什么风声？"];
+  }
+  if (shops.length > 0) {
+    return ["店里最近有没有新到的货？", "最近这片街区还太平吗？"];
+  }
+  if (npc.following) {
+    return ["准备得怎么样？下一步咱们怎么走？", "留意下周围动静，有情况随时喊我。"];
+  }
+  return ["最近怎么样？还在忙什么？", "打听个事，最近街上有什么新鲜风声吗？"];
+}
+
 function IncomingCallBanner({
   incoming,
   busy,
@@ -162,19 +198,40 @@ function IncomingCallBanner({
   if (!incoming) return null;
   const disabled = Boolean(busy || !onAnswerCall);
   return (
-    <section className={styles.phoneIncomingCall} aria-label="正在响铃的全息来电">
-      <span className={styles.phoneIncomingCallMeta}>
-        <small>{"HOLOCALL // 响铃中"}</small>
-        <b>{incoming.name}</b>
-        <time className={styles.phoneIncomingCallTime}>{incoming.at}</time>
-      </span>
-      <span className={styles.phoneIncomingCallActions}>
-        <ActionButton disabled={disabled} onClick={() => onAnswerCall?.(incoming.id, true)}>
+    <section className={styles.incomingCall} aria-label="正在响铃的全息来电">
+      <div className={styles.incomingLead}>
+        <Avatar npc={incoming.from} name={incoming.name} dead={false} size="sm" scan />
+        <span className={styles.incomingMeta}>
+          <span className={styles.incomingKicker}>
+            <span>{"HOLOCALL // 响铃中"}</span>
+            <span className={styles.callWave} aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+          </span>
+          <b className={styles.incomingName}>{incoming.name}</b>
+          <time className={styles.incomingTime}>{incoming.at}</time>
+        </span>
+      </div>
+      <span className={styles.incomingActions}>
+        <button
+          type="button"
+          className={`${styles.callBtn} ${styles.callAccept}`}
+          disabled={disabled}
+          onClick={() => onAnswerCall?.(incoming.id, true)}
+        >
           接通
-        </ActionButton>
-        <ActionButton disabled={disabled} onClick={() => onAnswerCall?.(incoming.id, false)}>
+        </button>
+        <button
+          type="button"
+          className={`${styles.callBtn} ${styles.callDecline}`}
+          disabled={disabled}
+          onClick={() => onAnswerCall?.(incoming.id, false)}
+        >
           挂断
-        </ActionButton>
+        </button>
       </span>
     </section>
   );
@@ -182,57 +239,102 @@ function IncomingCallBanner({
 
 function MissedCalls({
   calls,
+  contactKeys,
   onReadCall,
+  onSelectContact,
 }: {
   readonly calls: readonly CallHistoryItem[];
+  readonly contactKeys: ReadonlySet<string>;
   readonly onReadCall?: ((id: number) => void) | undefined;
+  readonly onSelectContact?: ((key: string) => void) | undefined;
 }) {
   if (calls.length === 0) return null;
   return (
-    <section className={styles.phoneMissedCalls} aria-label="未接全息电话">
-      <h3 className={styles.phoneMissedCallsTitle}>未接全息电话</h3>
-      <ul className={styles.phoneMissedCallList}>
-        {calls.map((call) => (
-          <li key={call.id} className={styles.phoneMissedCall}>
-            <span className={styles.phoneMissedCallDetails}>
-              <span className={styles.phoneMissedCallMeta}>
-                <b>{call.name}</b>
-                <time className={styles.phoneMissedCallTime}>{call.at}</time>
+    <section className={styles.missedCalls} aria-label="未接全息电话">
+      <div className={styles.missedCallsHead}>
+        <h3 className={styles.missedCallsTitle}>
+          <Asset id="notify.warning" tint="var(--cp-red)" height={12} />
+          <span>未接全息电话 · {calls.length}</span>
+        </h3>
+      </div>
+      <ul className={styles.missedCallList}>
+        {calls.map((call) => {
+          const canJump = Boolean(onSelectContact && contactKeys.has(call.from));
+          return (
+            <li key={call.id} className={styles.missedCallRow}>
+              <span className={styles.missedCallInfo}>
+                <b className={styles.missedCallName}>{call.name}</b>
+                <time className={styles.missedCallTime}>{call.at}</time>
               </span>
-              <span className={styles.phoneMissedCallText}>全息电话没接</span>
-            </span>
-            <ActionButton onClick={() => onReadCall?.(call.id)}>查看并标已读</ActionButton>
-          </li>
-        ))}
+              <span className={styles.missedCallActions}>
+                {canJump && (
+                  <ActionButton
+                    onClick={() => {
+                      onSelectContact?.(call.from);
+                      onReadCall?.(call.id);
+                    }}
+                  >
+                    去回信
+                  </ActionButton>
+                )}
+                <ActionButton onClick={() => onReadCall?.(call.id)}>标已读</ActionButton>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
 }
 
+interface LockInfo {
+  readonly reason: string;
+  readonly tone: "danger" | "busy" | "neutral";
+}
+
 /** 结构性禁用直聊的原因（不包含短暂等待发送，避免发送期间卸载输入框丢焦点） */
-function inlineChatLockReason(
+function inlineChatLockInfo(
   contact: ContactSummary,
   view: View,
   actions: Pick<PhoneActions, "onSendChat" | "busy">,
-): string | null {
-  if (view.death || view.ended) return "故事已结束，频道仅可回看";
-  if (view.combat?.active) return "正在交火，先脱身或解决眼前这架再发消息";
-  if (!contact.npc) return "匿名加密频道暂不支持私聊，可点上方消息「回复」在行动框里处理";
-  if (!contact.npc.met) return `还没正式见过 ${contact.name}，先在剧情里打过照面`;
-  if (!contact.npc.alive) return `${contact.name} 的终端已离线`;
-  if (actions.busy) return "行动回合正在生成，请稍候";
-  if (!actions.onSendChat) return "当前暂不可发送私信";
+): LockInfo | null {
+  if (view.death || view.ended) {
+    return { reason: "故事已结束，通讯频道仅可回看", tone: "neutral" };
+  }
+  if (view.combat?.active) {
+    return { reason: "正在交火，先脱身或解决眼前这架再发消息", tone: "danger" };
+  }
+  if (!contact.npc) {
+    return {
+      reason: "匿名加密频道暂不支持私聊，可点上方「回复」在行动框里处理",
+      tone: "neutral",
+    };
+  }
+  if (!contact.npc.met) {
+    return { reason: `还没正式见过 ${contact.name}，先在剧情里打过照面`, tone: "neutral" };
+  }
+  if (!contact.npc.alive) {
+    return { reason: `${contact.name} 的终端已离线`, tone: "danger" };
+  }
+  if (actions.busy) {
+    return { reason: "主线回合正在生成，请稍候片刻", tone: "busy" };
+  }
+  if (!actions.onSendChat) {
+    return { reason: "当前暂不可发送私信", tone: "neutral" };
+  }
   return null;
 }
 
 function computeFilterTabs(contacts: readonly ContactSummary[]) {
   const counts: Record<ContactFilter, number> = {
     all: contacts.length,
+    unread: 0,
     active: 0,
     utility: 0,
     present: 0,
   };
   for (const c of contacts) {
+    if (c.unread > 0) counts.unread += 1;
     if (c.isActive) counts.active += 1;
     if (c.isUtility) counts.utility += 1;
     if (c.isPresent) counts.present += 1;
@@ -246,53 +348,80 @@ function computeFilterTabs(contacts: readonly ContactSummary[]) {
   };
 }
 
-/** 联系人左栏卡片：简洁双行——顶行「姓名 + 在场圆点 + 首要职能短牌」，底行「未读预览 / 关键待办 / 一句话用途」 */
+function matchesSearch(c: ContactSummary, q: string): boolean {
+  const hay = [
+    c.name,
+    c.npc?.alias ?? "",
+    c.npc?.role ?? "",
+    c.npc?.faction ?? "",
+    c.npc?.lastPlace ?? "",
+    c.npc?.homePlace ?? "",
+    c.utilityLine,
+    c.highlight ?? "",
+    c.preview ?? "",
+    ...c.badges.map((b) => b.label),
+  ]
+    .join("\n")
+    .toLocaleLowerCase();
+  return hay.includes(q);
+}
+
+/** 联系人左栏卡片：姓名 + 末次时间 + 职能短牌 + 草稿/未读摘要 + 右侧未读数 */
 function ContactRow({
   contact,
   active,
+  draft,
   onSelect,
 }: {
   readonly contact: ContactSummary;
   readonly active: boolean;
+  readonly draft: string;
   readonly onSelect: () => void;
 }) {
   const dead = contact.npc?.alive === false;
   const primaryBadge = contact.badges[0];
-  const subLine =
-    (contact.unread > 0 && contact.preview) || contact.highlight || contact.utilityLine;
+  const hasDraft = draft.trim().length > 0 && !active;
+  const subLine = hasDraft
+    ? draft.trim()
+    : (contact.unread > 0 && contact.preview) || contact.highlight || contact.utilityLine;
   return (
     <li>
       <button
         type="button"
-        className={styles.contact}
+        className={styles.contactBtn}
         aria-pressed={active}
         data-dead={dead || undefined}
+        data-unread={contact.unread > 0 && !active ? true : undefined}
         onClick={onSelect}
       >
-        <Avatar npc={contact.npc?.id} name={contact.name} dead={dead} />
-        <span className={styles.contactName}>
+        <Avatar
+          npc={contact.npc?.id}
+          name={contact.name}
+          dead={dead}
+          present={contact.isPresent}
+          scan={active}
+        />
+        <span className={styles.contactInfo}>
           <span className={styles.contactTop}>
-            <span className={styles.contactLead}>
-              <b className={styles.contactTitle}>{contact.name}</b>
-              {contact.isPresent && (
-                <span className={styles.contactHereDot} title="就在现场" aria-hidden="true" />
-              )}
-            </span>
+            <b className={styles.contactName}>{contact.name}</b>
             {primaryBadge ? (
               <span
-                className={styles.contactBadge}
+                className={styles.badge}
                 data-tone={primaryBadge.tone}
                 title={primaryBadge.detail ?? primaryBadge.label}
               >
                 {primaryBadge.shortLabel ?? primaryBadge.label}
               </span>
-            ) : contact.isPresent ? (
-              <span className={styles.contactHere}>在场</span>
+            ) : contact.last ? (
+              <time className={styles.contactTime}>{contact.last}</time>
             ) : null}
           </span>
-          <small className={styles.contactSub} data-unread={contact.unread > 0 || undefined}>
-            {subLine}
-          </small>
+          <span className={styles.contactBottom}>
+            {hasDraft && <span className={styles.contactDraftTag}>草稿</span>}
+            <small className={styles.contactSub} data-unread={contact.unread > 0 || undefined}>
+              {subLine}
+            </small>
+          </span>
         </span>
         {contact.unread > 0 && <UnreadBadge>{contact.unread}</UnreadBadge>}
       </button>
@@ -301,25 +430,27 @@ function ContactRow({
 }
 
 /**
- * 极简顶栏：单行收纳头像（悬浮/点击看全卡）、姓名与关键职能、精简状态与直达按钮，释放垂直空间给聊天流
+ * 终端对话顶栏：扫描线头像（悬停/点击展开档案浮层）、姓名与多职能短牌、色阶好感胶囊、直达操作按钮与关键待办条
  */
 function ThreadHead({
   contact,
   view,
   thread,
   actions,
+  lockInfo,
 }: {
   readonly contact: ContactSummary;
   readonly view: View;
   readonly thread: readonly PhoneMessage[];
   readonly actions: PhoneActions;
+  readonly lockInfo: LockInfo | null;
 }) {
   const { npc } = contact;
   const [hoverOpen, setHoverOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
   const hovering = useRef(false);
-  const peekRef = useRef<HTMLSpanElement>(null);
+  const peekRef = useRef<HTMLDivElement>(null);
   const open = hoverOpen || pinned;
 
   const clearCloseTimer = useCallback(() => {
@@ -334,7 +465,7 @@ function ThreadHead({
   const scheduleClose = useCallback(() => {
     clearCloseTimer();
     if (pinned) return;
-    closeTimer.current = window.setTimeout(() => setHoverOpen(false), 350);
+    closeTimer.current = window.setTimeout(() => setHoverOpen(false), 320);
   }, [clearCloseTimer, pinned]);
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
@@ -347,8 +478,15 @@ function ThreadHead({
     return () => document.removeEventListener("pointerdown", onOutsidePointerDown, true);
   }, [closeCard, pinned]);
 
-  // 浮层开着时 Esc 先收浮层，没开时交给神经界面关闭
+  // 浮层开着时 Esc 先收浮层，没开时交给抽屉关闭
   useLayer(closeCard, open);
+
+  const toggleDossier = () => {
+    clearCloseTimer();
+    const next = !pinned;
+    setPinned(next);
+    setHoverOpen(next || hovering.current);
+  };
 
   const metaParts: string[] = [];
   if (!npc) {
@@ -371,21 +509,29 @@ function ThreadHead({
     docService && view.ripperdoc?.id === docService.id && actions.onOpenRipperdoc,
   );
 
-  const lockReason = inlineChatLockReason(contact, view, actions);
   const latestMsg = thread[thread.length - 1];
   const unreadTarget = contact.unread > 0 ? (latestUnreadMessage(thread) ?? latestMsg) : undefined;
-  const canFallback = lockReason !== null && !view.combat?.active && !actions.chatSending;
-  const commAction = !canFallback
+  const canEscalate = !view.combat?.active && !actions.chatSending && !actions.busy;
+  const commAction = !canEscalate
     ? null
-    : alive && unreadTarget && actions.onReply
-      ? { label: "回复未读", onClick: () => actions.onReply?.(unreadTarget.id) }
+    : lockInfo !== null && alive && unreadTarget && actions.onReply
+      ? {
+          label: "回复未读",
+          title: "带入下方主线行动栏回复该未读消息",
+          onClick: () => actions.onReply?.(unreadTarget.id),
+        }
       : alive && npc?.met && actions.onMessageNpc
         ? {
-            label: "转行动框",
+            label: lockInfo !== null ? "转行动框" : "进主线",
+            title: "填入主线行动栏（适合涉及检定、交易或剧情推进的重要对话）",
             onClick: () => actions.onMessageNpc?.(contact.key, contact.name),
           }
-        : alive && latestMsg && actions.onReply
-          ? { label: "回复", onClick: () => actions.onReply?.(latestMsg.id) }
+        : lockInfo !== null && alive && latestMsg && actions.onReply
+          ? {
+              label: "回复",
+              title: "带入下方主线行动栏回复",
+              onClick: () => actions.onReply?.(latestMsg.id),
+            }
           : null;
 
   const locateId = contact.locatePlaceId;
@@ -393,18 +539,16 @@ function ThreadHead({
   const hasLocate = Boolean(locateId && locateName && actions.onLocatePlace);
   const hasActions = Boolean(commAction || hasLocate || canOpenDoc);
   const highlightTone = contact.badges[0]?.tone === "danger" ? "danger" : undefined;
-  const primaryBadge = contact.badges[0];
+  const visibleBadges = npc && !npc.alive ? [] : contact.badges.slice(0, 2);
 
   return (
     <header className={styles.threadHead}>
-      <div className={styles.threadHeadRow}>
+      <div ref={peekRef} className={styles.threadHeadBar} data-dead={!alive || undefined}>
         {npc ? (
-          // biome-ignore lint/a11y/noStaticElementInteractions: 外层只管悬停和焦点进出，鼠标从头像移到浮层不断开；能点、能聚焦的是里面的头像按钮
+          // biome-ignore lint/a11y/noStaticElementInteractions: 外层仅处理悬停焦点进出，确保鼠标移入档案浮层不断开
           <span
-            ref={peekRef}
             className={styles.threadPeek}
             onPointerEnter={(e) => {
-              // 触屏没有悬停，靠点按钮开关
               if (e.pointerType !== "touch") {
                 hovering.current = true;
                 clearCloseTimer();
@@ -428,111 +572,154 @@ function ThreadHead({
           >
             <button
               type="button"
-              className={styles.threadAvatar}
+              className={styles.threadAvatarBtn}
               aria-expanded={open}
               aria-pressed={pinned}
-              aria-label={`${contact.name}的档案`}
-              onClick={() => {
-                clearCloseTimer();
-                const next = !pinned;
-                setPinned(next);
-                setHoverOpen(next || hovering.current);
-              }}
+              aria-label={`查看 ${contact.name} 的档案`}
+              onClick={toggleDossier}
             >
-              <Avatar npc={npc.id} name={contact.name} dead={!npc.alive} />
+              <Avatar
+                npc={npc.id}
+                name={contact.name}
+                dead={!npc.alive}
+                present={contact.isPresent}
+                scan
+              />
+              <span className={styles.avatarDossierCue}>档案</span>
             </button>
-            {open && (
-              <div className={styles.threadCard} data-overlay="">
-                <NineSlice
-                  id="map.shadowSmall"
-                  tint="rgb(0 0 0 / 70%)"
-                  slice={TIP_SHADOW_SLICE}
-                  className={styles.threadCardShadow}
-                />
-                <NineSlice
-                  id="map.tooltipBg"
-                  tint="var(--cp-surface-strong)"
-                  slice={TIP_SLICE}
-                  className={styles.threadCardLayer}
-                />
-                <NineSlice
-                  id="map.tooltipFg"
-                  tint="rgb(94 246 255 / 30%)"
-                  slice={TIP_SLICE}
-                  className={styles.threadCardLayer}
-                />
-                <div className={styles.threadCardBody}>
-                  <ProfileHead npc={npc} fixer={contact.fixer} foe={contact.foe} />
-                </div>
-              </div>
-            )}
           </span>
         ) : (
-          <Avatar name={contact.name} dead={false} />
+          <Avatar name={contact.name} dead={false} scan />
         )}
+
         <span className={styles.threadIdentity}>
           <span className={styles.threadTitleRow}>
             <b className={styles.threadTitle}>{contact.name}</b>
-            {contact.isPresent && (
-              <span className={styles.contactHereDot} title="就在现场" aria-hidden="true" />
-            )}
-            {npc && !npc.alive ? (
-              <span className={styles.threadBadge} data-tone="danger">
+            {npc && !npc.alive && (
+              <span className={styles.badge} data-tone="danger">
                 已故
               </span>
-            ) : primaryBadge ? (
+            )}
+            {visibleBadges.map((badge) => (
               <span
-                className={styles.threadBadge}
-                data-tone={primaryBadge.tone}
-                title={primaryBadge.detail ?? primaryBadge.label}
+                key={badge.label}
+                className={styles.badge}
+                data-tone={badge.tone}
+                title={badge.detail ?? badge.label}
               >
-                {primaryBadge.shortLabel ?? primaryBadge.label}
+                {badge.shortLabel ?? badge.label}
               </span>
-            ) : null}
+            ))}
             {npc?.met && npc.alive && (
-              <span className={styles.threadAffinity}>{affinityLabel(npc.affinity)}</span>
+              <span className={styles.affinityPill} data-tone={affinityTone(npc.affinity)}>
+                {affinityLabel(npc.affinity)}
+              </span>
             )}
           </span>
-          {metaText && (
-            <small className={styles.threadMeta} title={metaText}>
-              {metaText}
-            </small>
-          )}
+          <span className={styles.threadMetaRow}>
+            {metaText && (
+              <small className={styles.threadMeta} title={metaText}>
+                {metaText}
+              </small>
+            )}
+            {npc && (
+              <button
+                type="button"
+                className={styles.dossierTrigger}
+                aria-expanded={open}
+                onClick={toggleDossier}
+              >
+                {pinned ? "收起档案" : "查看档案"}
+              </button>
+            )}
+          </span>
         </span>
+
         {hasActions && (
           <div className={styles.threadActions}>
-            {commAction && (
-              <ActionButton onClick={commAction.onClick}>{commAction.label}</ActionButton>
+            {canOpenDoc && actions.onOpenRipperdoc && (
+              <ActionButton title="直接打开义体诊所界面" onClick={actions.onOpenRipperdoc}>
+                <span className={styles.headActionContent}>
+                  <Asset id="map.poi.ripperdoc" tint="currentColor" height={12} />
+                  <span>进诊所</span>
+                </span>
+              </ActionButton>
             )}
             {locateId && locateName && actions.onLocatePlace && (
               <ActionButton
                 title={`在地图上定位到${locateName}`}
                 onClick={() => actions.onLocatePlace?.(locateId)}
               >
-                定位
+                <span className={styles.headActionContent}>
+                  <Asset id="map.pinDest" tint="currentColor" height={12} />
+                  <span>定位</span>
+                </span>
               </ActionButton>
             )}
-            {canOpenDoc && actions.onOpenRipperdoc && (
-              <ActionButton onClick={actions.onOpenRipperdoc}>进诊所</ActionButton>
+            {commAction && (
+              <ActionButton title={commAction.title} onClick={commAction.onClick}>
+                <span className={styles.headActionContent}>
+                  <Asset id="interaction.talk" tint="currentColor" height={12} />
+                  <span>{commAction.label}</span>
+                </span>
+              </ActionButton>
             )}
           </div>
         )}
+
+        {npc && open && (
+          <div
+            className={styles.threadCard}
+            data-overlay=""
+            onPointerEnter={() => {
+              hovering.current = true;
+              clearCloseTimer();
+            }}
+            onPointerLeave={() => {
+              hovering.current = false;
+              scheduleClose();
+            }}
+          >
+            <NineSlice
+              id="map.shadowSmall"
+              tint="rgb(0 0 0 / 74%)"
+              slice={TIP_SHADOW_SLICE}
+              className={styles.threadCardShadow}
+            />
+            <NineSlice
+              id="map.tooltipBg"
+              tint="var(--cp-surface-strong)"
+              slice={TIP_SLICE}
+              className={styles.threadCardLayer}
+            />
+            <NineSlice
+              id="map.tooltipFg"
+              tint="rgb(94 246 255 / 34%)"
+              slice={TIP_SLICE}
+              className={styles.threadCardLayer}
+            />
+            <div className={styles.threadCardBody}>
+              <ProfileHead npc={npc} fixer={contact.fixer} foe={contact.foe} />
+            </div>
+          </div>
+        )}
       </div>
+
       {contact.highlight && (
         <p className={styles.threadHighlight} data-tone={highlightTone}>
-          {contact.highlight}
+          <Asset
+            id={highlightTone === "danger" ? "notify.warning" : "notify.questUpdate"}
+            tint={highlightTone === "danger" ? "var(--cp-red)" : "var(--cp-yellow)"}
+            height={13}
+          />
+          <span>{contact.highlight}</span>
         </p>
       )}
-      <span
-        className={styles.threadRule}
-        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-        aria-hidden
-      />
     </header>
   );
 }
 
-/** 消息页的私信栏：左边按职能/在场筛选联系人并一眼看出用途，右边查看往来短讯或直接发起联系 */
+/** 消息页的私信栏：左栏支持搜索与未读/职能/在场筛选，右栏展示全息对话、委托快捷回填与加密私聊输入 */
 export function PhoneBody({
   view,
   onReply,
@@ -550,15 +737,35 @@ export function PhoneBody({
   const contacts = contactDirectory(view);
   const { counts, tabs } = computeFilterTabs(contacts);
   const [filter, setFilter] = useState<ContactFilter>("all");
+  const [query, setQuery] = useState("");
   const activeFilter: ContactFilter = filter !== "all" && counts[filter] > 0 ? filter : "all";
   const filterRule = FILTER_OPTIONS.find((opt) => opt.id === activeFilter) ?? FILTER_OPTIONS[0];
-  const filtered =
-    activeFilter === "all" || !filterRule ? contacts : contacts.filter(filterRule.match);
+
+  const showSearch = contacts.length > SEARCH_THRESHOLD;
+  const keyword = showSearch ? query.trim().toLocaleLowerCase() : "";
 
   const [picked, setPicked] = useState<string | null>(
     () => (contacts.find((c) => c.unread > 0) ?? contacts[0])?.key ?? null,
   );
+  // 在「未读」筛选下打开某条未读会话后会立刻标已读；保留当前选中会话在列表里，避免读到一半界面跳走
+  const filtered = useMemo(() => {
+    const byTab =
+      activeFilter === "all" || !filterRule
+        ? contacts
+        : contacts.filter(
+            (c) => filterRule.match(c) || (activeFilter === "unread" && c.key === picked),
+          );
+    return keyword ? byTab.filter((c) => matchesSearch(c, keyword)) : byTab;
+  }, [activeFilter, contacts, filterRule, keyword, picked]);
+
+  const contactKeys = useMemo(() => new Set(contacts.map((c) => c.key)), [contacts]);
+  const totalUnreadMessages = useMemo(
+    () => contacts.reduce((sum, c) => sum + c.unread, 0),
+    [contacts],
+  );
+
   const current = filtered.find((c) => c.key === picked) ?? filtered[0] ?? contacts[0];
+
   // 消息往来旧的在前，像聊天窗口
   const thread = current ? view.phone.messages.filter((m) => m.from === current.key).reverse() : [];
   const pendingForCurrent =
@@ -573,8 +780,10 @@ export function PhoneBody({
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [chatErrors, setChatErrors] = useState<Record<string, string>>({});
+  const [scrolledUp, setScrolledUp] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
   const clearErrorFor = (key: string) => {
     setChatErrors((prev) => {
       if (!(key in prev)) return prev;
@@ -604,27 +813,52 @@ export function PhoneBody({
     const el = listRef.current;
     if (!el || !scrollSig) return;
     el.scrollTop = el.scrollHeight;
+    setScrolledUp(false);
   }, [scrollSig]);
+
+  const handleListScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setScrolledUp(gap > 90);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setScrolledUp(false);
+  }, []);
 
   if (contacts.length === 0 || !current) {
     return (
-      <div className={styles.phoneNoContacts}>
+      <div className={styles.noContacts}>
         <IncomingCallBanner
           incoming={view.calls?.incoming ?? null}
           busy={busy}
           onAnswerCall={onAnswerCall}
         />
-        <div className={styles.phoneEmpty}>
-          <div className={styles.phoneEmptyCard}>
+        <div className={styles.emptyWrap}>
+          <div className={styles.emptyCard}>
             <CellFrame />
             <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={24} />
-            <b className={styles.phoneEmptyTitle}>还没有联系人</b>
-            <p className={styles.phoneEmptyText}>
-              在夜之城结识新人物或收到加密简讯后，频道会在此出现。
+            <span className={styles.emptyKicker}>{"HOLOPHONE // STANDBY"}</span>
+            <b className={styles.emptyTitle}>还没有联系人</b>
+            <p className={styles.emptyText}>
+              在夜之城结识新人物或收到加密简讯后，对应频道会自动同步到这里。
             </p>
           </div>
         </div>
-        <MissedCalls calls={missedCalls} onReadCall={onReadCall} />
+        <MissedCalls
+          calls={missedCalls}
+          contactKeys={contactKeys}
+          onReadCall={onReadCall}
+          onSelectContact={(key) => {
+            setFilter("all");
+            setQuery("");
+            setPicked(key);
+          }}
+        />
       </div>
     );
   }
@@ -645,19 +879,33 @@ export function PhoneBody({
   const answeredCall = (view.calls?.history ?? []).find(
     (call) => call.from === current.key && call.status === "answered" && call.endedAt === null,
   );
-  const lockReason = inlineChatLockReason(current, view, actions);
+  const lockInfo = inlineChatLockInfo(current, view, actions);
   const sendingAny = Boolean(chatSending || pendingChat);
   const sendingThis = Boolean(pendingForCurrent !== null || chatSending === current.key);
   const fallbackReply =
-    current.npc?.alive !== false && lockReason !== null && !view.combat?.active && !sendingAny
+    current.npc?.alive !== false && lockInfo !== null && !view.combat?.active && !sendingAny
       ? onReply
       : undefined;
   const draftText = drafts[current.key] ?? "";
   const currentError = chatErrors[current.key] ?? null;
   const urgentWarning = urgentChatDeadline(view);
+  const starters = lockInfo === null ? starterPromptsOf(current) : [];
+  const charTone =
+    draftText.length >= 290 ? "danger" : draftText.length >= 240 ? "warn" : undefined;
+
+  const fillComposer = (text: string) => {
+    clearErrorFor(current.key);
+    setDrafts((prev) => ({ ...prev, [current.key]: text }));
+    window.requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
 
   const submitChat = async () => {
-    if (lockReason !== null || sendingAny || !onSendChat) return;
+    if (lockInfo !== null || sendingAny || !onSendChat) return;
     const text = draftText.trim();
     if (text === "") return;
     const targetKey = current.key;
@@ -676,36 +924,102 @@ export function PhoneBody({
   };
 
   return (
-    <div className={styles.phoneLayout}>
-      <aside className={styles.phoneLeft} aria-label="联系人筛选与目录">
-        {tabs.length > 1 && contacts.length > 3 && (
-          <fieldset className={styles.phoneFilters}>
-            <legend className={styles.phoneFilterLegend}>筛选联系人</legend>
+    <div className={styles.layout}>
+      <aside className={styles.roster} aria-label="联系人筛选与目录">
+        <div className={styles.rosterBar}>
+          <span className={styles.rosterKicker}>{"HOLOPHONE // LINKS"}</span>
+          <span className={styles.rosterStats}>
+            {totalUnreadMessages > 0 ? (
+              <>
+                <b>{totalUnreadMessages}</b> 未读 · {contacts.length} 人
+              </>
+            ) : (
+              `${contacts.length} 联系人`
+            )}
+          </span>
+        </div>
+
+        {showSearch && (
+          <div className={styles.searchBox}>
+            <CellFrame />
+            <span className={styles.searchIcon} aria-hidden="true">
+              /
+            </span>
+            <input
+              type="search"
+              className={styles.searchInput}
+              value={query}
+              placeholder="搜姓名、职能、地点…"
+              aria-label="搜索联系人"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button
+                type="button"
+                className={styles.searchClear}
+                aria-label="清空搜索"
+                onClick={() => setQuery("")}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
+        {tabs.length > 1 && contacts.length > 2 && (
+          <fieldset className={styles.filterBar}>
+            <legend className={styles.srOnly}>筛选联系人</legend>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                className={styles.phoneFilter}
+                className={styles.filterBtn}
+                data-tone={tab.id === "unread" ? "unread" : undefined}
                 aria-pressed={activeFilter === tab.id}
-                onClick={() => setFilter(tab.id)}
+                onClick={() => {
+                  setFilter(tab.id);
+                  if (tab.id === "unread") {
+                    const firstUnread = contacts.find((c) => c.unread > 0);
+                    if (firstUnread) setPicked(firstUnread.key);
+                  }
+                }}
               >
                 <span>{tab.label}</span>
-                <span className={styles.phoneFilterCount}>{tab.count}</span>
+                <span className={styles.filterCount}>{tab.count}</span>
               </button>
             ))}
           </fieldset>
         )}
-        <ul className={styles.contactList} aria-label="联系人">
-          {filtered.map((c) => (
-            <ContactRow
-              key={c.key}
-              contact={c}
-              active={c.key === current.key}
-              onSelect={() => setPicked(c.key)}
-            />
-          ))}
-        </ul>
+
+        {filtered.length > 0 ? (
+          <ul className={styles.contactList} aria-label="联系人">
+            {filtered.map((c) => (
+              <ContactRow
+                key={c.key}
+                contact={c}
+                active={c.key === current.key}
+                draft={drafts[c.key] ?? ""}
+                onSelect={() => setPicked(c.key)}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className={styles.rosterEmpty}>
+            <span>没有匹配的联系人</span>
+            <button
+              type="button"
+              className={styles.rosterResetBtn}
+              onClick={() => {
+                setFilter("all");
+                setQuery("");
+              }}
+            >
+              重置筛选
+            </button>
+          </div>
+        )}
       </aside>
+
       <section className={styles.threadPane} aria-label={`和${current.name}的消息`}>
         <IncomingCallBanner
           incoming={view.calls?.incoming ?? null}
@@ -713,140 +1027,223 @@ export function PhoneBody({
           onAnswerCall={onAnswerCall}
         />
         {answeredCall && (
-          <div className={styles.phoneActiveCall} role="status">
-            全息通话已接通（{answeredCall.at}）— 可直接在下方行动栏与 {answeredCall.name} 对话
+          <div className={styles.activeCall} role="status">
+            <i className={styles.liveDot} aria-hidden="true" />
+            <span>
+              全息通话已接通（{answeredCall.at}）— 可直接在下方行动栏与 {answeredCall.name} 对话
+            </span>
           </div>
         )}
-        <MissedCalls calls={missedCalls} onReadCall={onReadCall} />
+        <MissedCalls
+          calls={missedCalls}
+          contactKeys={contactKeys}
+          onReadCall={onReadCall}
+          onSelectContact={(key) => {
+            setFilter("all");
+            setQuery("");
+            setPicked(key);
+          }}
+        />
+
         <ThreadHead
           key={current.key}
           contact={current}
           view={view}
           thread={thread}
           actions={actions}
+          lockInfo={lockInfo}
         />
-        {bubbles.length === 0 && !sendingThis ? (
-          <div className={styles.phoneEmpty}>
-            <div className={styles.phoneEmptyCard}>
-              <CellFrame />
-              <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={24} />
-              <b className={styles.phoneEmptyTitle}>暂无通讯记录</b>
-              <p className={styles.phoneEmptyText}>
-                {current.npc
-                  ? current.npc.alive === false
-                    ? `${current.name} 的终端已离线。`
-                    : current.npc.met
-                      ? `与 ${current.name} 还没有短讯往来，在下方直接发一句就能接上线。`
-                      : "尚未建立直接加密连线。"
-                  : "该频道暂无历史消息。"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <ul ref={listRef} className={styles.phoneList}>
-            {bubbles.map((b) => {
-              const showHead = !b.grouped || b.unread || b.pending;
-              return (
-                <li
-                  key={b.key}
-                  className={styles.phoneItem}
-                  data-sender={b.sender}
-                  data-grouped={b.grouped || undefined}
-                >
-                  <div
-                    className={b.sender === "player" ? styles.phoneReply : styles.phoneBubble}
-                    data-unread={b.unread || undefined}
-                    data-pending={b.pending || undefined}
-                  >
-                    {showHead && (
-                      <p className={styles.phoneHead}>
-                        {!b.grouped && (
-                          <span
-                            className={
-                              b.sender === "player" ? styles.phoneReplySender : styles.phoneSender
-                            }
-                          >
-                            {b.sender === "player" ? "你" : current.name}
-                          </span>
-                        )}
-                        {b.unread && <UnreadBadge>新</UnreadBadge>}
-                        {b.at && <time className={styles.phoneTime}>{b.at}</time>}
-                      </p>
-                    )}
-                    <p className={styles.phoneText}>
-                      {b.text}
-                      {!showHead && b.at && <time className={styles.phoneTimeInline}>{b.at}</time>}
-                    </p>
-                    {b.job && (
-                      <div
-                        className={styles.phoneJobTag}
-                        data-status={
-                          b.job.status === "offered"
-                            ? "offered"
-                            : b.job.status === "active"
-                              ? "active"
-                              : "closed"
-                        }
+
+        <div className={styles.chatStage}>
+          <span
+            className={styles.chatStageGrid}
+            style={{ backgroundImage: cssUrl("fx.grid") }}
+            aria-hidden="true"
+          />
+          {bubbles.length === 0 && !sendingThis ? (
+            <div className={styles.emptyWrap}>
+              <div className={styles.emptyCard}>
+                <CellFrame />
+                <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={22} />
+                <span className={styles.emptyKicker}>{"CHANNEL // STANDBY"}</span>
+                <b className={styles.emptyTitle}>暂无通讯记录</b>
+                <p className={styles.emptyText}>
+                  {current.npc
+                    ? current.npc.alive === false
+                      ? `${current.name} 的终端已离线。`
+                      : current.npc.met
+                        ? `与 ${current.name} 还没有短讯往来，直接发一句即可接通加密频道。`
+                        : "尚未建立直接加密连线。"
+                    : "该频道暂无历史消息。"}
+                </p>
+                {starters.length > 0 && (
+                  <div className={styles.starterRow}>
+                    {starters.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        className={styles.starterChip}
+                        onClick={() => fillComposer(prompt)}
                       >
-                        <span className={styles.phoneJobTitle}>
-                          {b.job.status === "offered"
-                            ? `来活提议 · ${b.job.title}`
-                            : b.job.status === "active"
-                              ? `已接手 · ${b.job.title}`
-                              : `${b.job.statusLabel} · ${b.job.title}`}
-                        </span>
-                        <span className={styles.phoneJobMeta}>
-                          {b.job.reward > 0
-                            ? `报酬 ${b.job.reward.toLocaleString("en-US")} 欧元`
-                            : null}
-                          {b.job.due ? `${b.job.reward > 0 ? " · " : ""}${b.job.due} 前` : null}
-                          {b.job.status === "offered"
-                            ? `${b.job.reward > 0 || b.job.due ? " · " : ""}${
-                                lockReason === null
-                                  ? "直接在下方私信答应即可接单"
-                                  : view.combat?.active
-                                    ? "脱战后私信即可答应接单"
-                                    : "点「回复」在行动框里答应即可接进追踪"
-                              }`
-                            : null}
-                        </span>
-                      </div>
-                    )}
-                    {((b.fallbackId !== null && fallbackReply) || b.ack) && (
-                      <div className={styles.phoneItemFoot}>
-                        {b.ack && <span className={styles.phoneAck}>已回复</span>}
-                        {b.fallbackId !== null && fallbackReply && (
-                          <ActionButton onClick={() => fallbackReply(b.fallbackId as number)}>
-                            回复
-                          </ActionButton>
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <ul ref={listRef} className={styles.messageList} onScroll={handleListScroll}>
+                {bubbles.map((b) => {
+                  const showHead = !b.grouped || b.unread || b.pending;
+                  const jobStatus =
+                    b.job?.status === "offered"
+                      ? "offered"
+                      : b.job?.status === "active"
+                        ? "active"
+                        : "closed";
+                  return (
+                    <li
+                      key={b.key}
+                      className={styles.messageItem}
+                      data-sender={b.sender}
+                      data-grouped={b.grouped || undefined}
+                    >
+                      <div
+                        className={b.sender === "player" ? styles.bubblePlayer : styles.bubbleNpc}
+                        data-unread={b.unread || undefined}
+                        data-pending={b.pending || undefined}
+                      >
+                        {showHead && (
+                          <p className={styles.bubbleHead}>
+                            {!b.grouped && (
+                              <span
+                                className={
+                                  b.sender === "player" ? styles.senderPlayer : styles.senderNpc
+                                }
+                              >
+                                {b.sender === "player" ? "你" : current.name}
+                              </span>
+                            )}
+                            {b.unread && <UnreadBadge>新</UnreadBadge>}
+                            {b.at && <time className={styles.bubbleTime}>{b.at}</time>}
+                          </p>
+                        )}
+                        <p className={styles.bubbleText}>
+                          {b.text}
+                          {!showHead && b.at && (
+                            <time className={styles.bubbleTimeInline}>{b.at}</time>
+                          )}
+                        </p>
+                        {b.job && (
+                          <div className={styles.jobCard} data-status={jobStatus}>
+                            <div className={styles.jobCardHead}>
+                              <span className={styles.jobCardTitle}>
+                                <Asset
+                                  id="notify.questUpdate"
+                                  tint={
+                                    jobStatus === "offered"
+                                      ? "var(--cp-yellow)"
+                                      : jobStatus === "active"
+                                        ? "var(--cp-cyan)"
+                                        : "var(--cp-text-dim)"
+                                  }
+                                  height={13}
+                                />
+                                <span>
+                                  {b.job.status === "offered"
+                                    ? `来活提议 · ${b.job.title}`
+                                    : b.job.status === "active"
+                                      ? `已接手 · ${b.job.title}`
+                                      : `${b.job.statusLabel} · ${b.job.title}`}
+                                </span>
+                              </span>
+                            </div>
+                            <span className={styles.jobCardMeta}>
+                              {b.job.reward > 0 && (
+                                <span className={styles.jobReward}>
+                                  {b.job.reward.toLocaleString("en-US")} €$
+                                </span>
+                              )}
+                              {b.job.due && <span>{b.job.due} 前</span>}
+                              {b.job.status === "offered" && (
+                                <span>
+                                  {lockInfo === null
+                                    ? "下方私信答应即可接单"
+                                    : view.combat?.active
+                                      ? "脱战后私信即可答应接单"
+                                      : "点「回复」在行动框里答应即可接进追踪"}
+                                </span>
+                              )}
+                            </span>
+                            {b.job.status === "offered" && lockInfo === null && (
+                              <button
+                                type="button"
+                                className={styles.jobQuickBtn}
+                                onClick={() =>
+                                  fillComposer(
+                                    `「${b.job?.title ?? "这单"}」我接了，具体细节发我。`,
+                                  )
+                                }
+                              >
+                                填入答应接单
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {((b.fallbackId !== null && fallbackReply) || b.ack) && (
+                          <div className={styles.bubbleFoot}>
+                            {b.ack && <span className={styles.bubbleAck}>已回复</span>}
+                            {b.fallbackId !== null && fallbackReply && (
+                              <ActionButton onClick={() => fallbackReply(b.fallbackId as number)}>
+                                回复
+                              </ActionButton>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-            {sendingThis && (
-              <li className={styles.phoneItem} data-sender="npc">
-                <div className={`${styles.phoneBubble} ${styles.phoneTyping}`} aria-live="polite">
-                  <span className={styles.phoneSender}>{current.name}</span>
-                  <span
-                    className={styles.phoneTypingDots}
-                    role="img"
-                    aria-label={`${current.name} 正在输入`}
-                  >
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </div>
-              </li>
-            )}
-          </ul>
-        )}
-        <footer className={styles.phoneComposerWrap}>
-          {urgentWarning && lockReason === null && (
-            <p className={styles.phoneDueWarn}>
+                    </li>
+                  );
+                })}
+                {sendingThis && (
+                  <li className={styles.messageItem} data-sender="npc">
+                    <div
+                      className={`${styles.bubbleNpc} ${styles.typingBubble}`}
+                      aria-live="polite"
+                    >
+                      <span className={styles.senderNpc}>{current.name}</span>
+                      <span className={styles.typingLabel}>正在加密回信</span>
+                      <span
+                        className={styles.typingDots}
+                        role="img"
+                        aria-label={`${current.name} 正在输入`}
+                      >
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    </div>
+                  </li>
+                )}
+              </ul>
+              {scrolledUp && (
+                <button
+                  type="button"
+                  className={styles.scrollDownBtn}
+                  onClick={scrollToBottom}
+                  aria-label="滚动到最新消息"
+                >
+                  ↓ 最新消息
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        <footer className={styles.composerWrap}>
+          {urgentWarning && lockInfo === null && (
+            <p className={styles.dueWarn}>
               <Asset id="notify.attention" tint="var(--cp-yellow)" height={13} />
               <span>
                 紧急约定「{urgentWarning.title}」仅剩 {urgentWarning.left} 分钟（每轮短讯耗时 1–3
@@ -855,33 +1252,46 @@ export function PhoneBody({
             </p>
           )}
           {currentError && (
-            <p className={styles.phoneComposerError} role="alert">
+            <p className={styles.composerError} role="alert">
               <Asset id="notify.warning" tint="var(--cp-red)" height={13} />
               <span>{currentError}</span>
             </p>
           )}
-          {lockReason !== null ? (
-            <p className={styles.phoneComposerLock}>{lockReason}</p>
+          {lockInfo !== null ? (
+            <p className={styles.composerLock} data-tone={lockInfo.tone}>
+              <Asset
+                id={lockInfo.tone === "danger" ? "notify.warning" : "notify.attention"}
+                tint={
+                  lockInfo.tone === "danger"
+                    ? "var(--cp-red)"
+                    : lockInfo.tone === "busy"
+                      ? "var(--cp-cyan)"
+                      : "var(--cp-text-dim)"
+                }
+                height={13}
+              />
+              <span>{lockInfo.reason}</span>
+            </p>
           ) : (
             <form
-              className={styles.phoneComposer}
+              className={styles.composerForm}
               onSubmit={(e) => {
                 e.preventDefault();
                 void submitChat();
               }}
             >
-              <div className={styles.phoneComposerRow}>
-                <span className={styles.phoneInputBox}>
+              <div className={styles.composerRow}>
+                <span className={styles.inputBox}>
                   <CellFrame />
                   <textarea
                     ref={inputRef}
-                    className={styles.phoneInput}
+                    className={styles.input}
                     rows={1}
-                    maxLength={300}
+                    maxLength={MAX_MESSAGE_LEN}
                     placeholder={
                       sendingThis
                         ? `${current.name} 正在回信…可先输入下一句`
-                        : `给 ${current.name} 发短讯…（Enter 发送，每轮 1–3 分钟）`
+                        : `给 ${current.name} 发加密短讯…`
                     }
                     value={draftText}
                     aria-label={`给${current.name}发短讯`}
@@ -898,13 +1308,20 @@ export function PhoneBody({
                     }}
                   />
                 </span>
-                <ActionButton
-                  submit
+                <button
+                  type="submit"
+                  className={styles.sendBtn}
                   disabled={sendingAny || draftText.trim() === ""}
                   title="Enter 发送（每轮消耗 1–3 分钟，不在手机内做检定或完单结算）"
                 >
-                  {sendingThis ? "回信中" : "发送"}
-                </ActionButton>
+                  {sendingThis ? "回信中…" : "发送"}
+                </button>
+              </div>
+              <div className={styles.composerFoot}>
+                <span>Enter 发送 · Shift+Enter 换行 · 耗时 1–3 分钟</span>
+                <span className={styles.charCount} data-tone={charTone}>
+                  {draftText.length}/{MAX_MESSAGE_LEN}
+                </span>
               </div>
             </form>
           )}

@@ -810,7 +810,7 @@
 
 .threadHead {
   position: relative;
-  z-index: 3;
+  z-index: 10;
   display: flex;
   flex: none;
   flex-direction: column;
@@ -825,13 +825,23 @@
   gap: 0.58rem;
   min-width: 0;
   padding: 0.4rem 0.55rem;
-  background: linear-gradient(90deg, rgb(94 246 255 / 8%) 0%, rgb(16 10 16 / 52%) 68%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(94 246 255 / 8%) 0%,
+    rgb(16 10 16 / 52%) 68%,
+    transparent 100%
+  );
   border: 1px solid rgb(94 246 255 / 16%);
   border-left: 2.5px solid var(--cp-cyan);
 }
 
 .threadHeadBar[data-dead] {
-  background: linear-gradient(90deg, rgb(255 97 88 / 8%) 0%, rgb(16 10 16 / 52%) 68%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(255 97 88 / 8%) 0%,
+    rgb(16 10 16 / 52%) 68%,
+    transparent 100%
+  );
   border-color: rgb(255 97 88 / 22%);
   border-left-color: var(--cp-red);
 }
@@ -1049,6 +1059,7 @@
 
 .chatStage {
   position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   flex-direction: column;

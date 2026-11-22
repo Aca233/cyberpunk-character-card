@@ -980,7 +980,7 @@ export function diffViews(prev: View, next: View): Toast[] {
 }
 
 export type ContactBadgeTone = "accent" | "cyan" | "danger" | "warn" | "dim";
-export type ContactFilter = "all" | "active" | "utility" | "present";
+export type ContactFilter = "all" | "unread" | "active" | "utility" | "present";
 
 export interface ContactBadge {
   readonly label: string;
