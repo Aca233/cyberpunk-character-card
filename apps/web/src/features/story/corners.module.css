@@ -1847,7 +1847,7 @@
   transform: translateX(2px);
 }
 
-/* ———— C 追踪（右中，常态摘要最多 3 条；展开默认收束至 390px，切到有单可接的委托时加宽到 560px） ———— */
+/* ———— C 追踪（右中，常态摘要最多 3 条；展开平滑加宽至 540px，内部固定顶栏+独立滚动） ———— */
 
 .track {
   align-self: flex-end;
@@ -1860,7 +1860,7 @@
   --cp-panel: var(--cp-panel-strong);
   --tab-tint: rgb(252 238 10 / 78%);
   width: min(
-    390px,
+    540px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
 }
@@ -1882,7 +1882,9 @@
     4px 100%,
     0 calc(100% - 4px)
   );
-  background: var(--cp-surface-deep);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(252 238 10 / 7%), transparent 46%),
+    var(--cp-surface-deep);
   pointer-events: none;
 }
 
@@ -1895,7 +1897,7 @@
 }
 
 .track:where([data-open]) .trackHead {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .track:where([data-idle]):not([data-open]) .trackHead {
@@ -1905,8 +1907,13 @@
 .trackHeadLeft {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
+}
+
+.trackHeadIcon {
+  flex: none;
+  filter: drop-shadow(0 0 6px rgb(252 238 10 / 35%));
 }
 
 .trackTitle {
@@ -1916,6 +1923,77 @@
   font-size: var(--fs-ui);
   font-weight: 700;
   letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.trackKicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgb(252 238 10 / 52%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+@media (width < 1100px) {
+  .trackKicker {
+    display: none;
+  }
+}
+
+.trackHeadRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.trackCash {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  background: rgb(252 238 10 / 8%);
+  border: 1px solid rgb(252 238 10 / 26%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--cp-yellow);
+}
+
+.trackCash b {
+  font-weight: 700;
+}
+
+.trackCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(252 238 10 / 28%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.trackCloseBtn:hover,
+.trackCloseBtn:focus-visible {
+  color: var(--cp-yellow);
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+  outline: none;
 }
 
 .trackStatus {
@@ -1927,12 +2005,14 @@
   background: rgb(252 238 10 / 10%);
   color: var(--cp-yellow);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .trackStatus:where([data-tone="bad"]) {
   border-left-color: var(--cp-danger);
-  background: rgb(255 0 60 / 15%);
+  background: rgb(255 0 60 / 16%);
   color: var(--cp-danger);
+  animation: pulse 1400ms ease-in-out infinite;
 }
 
 .trackStatus:where([data-tone="cyan"]) {
@@ -2817,9 +2897,25 @@
   padding: 0 0 14px;
 }
 
-.bio:where([data-open]) .growBody,
-.track:where([data-open]) .growBody {
+.bio:where([data-open]) .growBody {
   padding-top: 2px;
+}
+
+/* 追踪展开区：高度仍按内容自适应并受 useRoomLeft 行内 maxHeight 约束，长内容由内部列表独立滚动、筛选栏固定吸顶 */
+.track:where([data-open]) .growBody {
+  display: flex;
+  flex-direction: column;
+  padding-top: 2px;
+  overflow: hidden;
+}
+
+.track:where([data-open]) .growBody > div,
+.track:where([data-open]) .growBody > div > div {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 常态名字格已经同步收起，长出的档案顶上不再空一大截 */
@@ -2897,7 +2993,7 @@
 
 .track :where(.peekLine) {
   margin-bottom: 10px;
-  opacity: 0.45;
+  opacity: 0.65;
 }
 
 .weapon:where([data-wide]) .peekLine {

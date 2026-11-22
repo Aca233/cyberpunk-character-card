@@ -335,9 +335,8 @@ export function BioMonitor({
   const p = usePeek("bio", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
   // 整块收起时等内容收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡
   const lingeredWide = useLinger(wide && p.open);
@@ -1398,9 +1397,8 @@ export function Unread({
   const totalUnread = view.phone.unread + unreadCalls + newsCount + view.shards.unread;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
@@ -1756,11 +1754,11 @@ export function Track({
         : track.offeredCount > 0
           ? ({ tone: "cyan", label: `待决 ${track.offeredCount}` } as const)
           : ({ tone: "muted", label: "无待办" } as const);
+  const eddiesText = view.money.eddies.toLocaleString("en-US");
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
 
   return (
@@ -1804,12 +1802,38 @@ export function Track({
           >
             <div className={styles.trackHead}>
               <span className={styles.trackHeadLeft}>
+                {p.open && (
+                  <Asset
+                    id="notify.journal"
+                    tint="var(--cp-yellow)"
+                    height={16}
+                    className={styles.trackHeadIcon}
+                  />
+                )}
                 <h2 className={styles.trackTitle}>追踪</h2>
+                {p.open && <span className={styles.trackKicker}>OBJECTIVE // LOG</span>}
                 <span className={styles.trackStatus} data-tone={statusPill.tone}>
                   {statusPill.label}
                 </span>
               </span>
-              <kbd className={styles.trackKeyHint}>{p.open ? "ESC" : "J"}</kbd>
+              {p.open ? (
+                <span className={styles.trackHeadRight}>
+                  <span className={styles.trackCash} title={`当前随身欧元：${eddiesText} €`}>
+                    <Asset id="notify.cash" tint="var(--cp-yellow)" height={13} />
+                    <b>{eddiesText}</b>
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.trackCloseBtn}
+                    title="收起追踪面板（Esc / J）"
+                    onClick={p.toggle}
+                  >
+                    ESC
+                  </button>
+                </span>
+              ) : (
+                <kbd className={styles.trackKeyHint}>J</kbd>
+              )}
             </div>
             {/* 常态摘要在展开后收进 0fr，腾出纵向空间；空闲态保持极简，仅留标题栏 */}
             {!idle && (
@@ -1969,9 +1993,8 @@ export function Weapon({
   const p = usePeek("weapon", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
