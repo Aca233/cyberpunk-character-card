@@ -53,13 +53,7 @@ import {
   partitionStorageGroups,
 } from "./InventoryPage";
 import { MapBody } from "./MapPanel";
-import {
-  CharacterPage,
-  CyberwarePage,
-  JournalPage,
-  MessagesPage,
-  ShardsPanel,
-} from "./NeuralPages";
+import { CharacterPage, CyberwarePage, MessagesPage, ShardsPanel } from "./NeuralPages";
 import neuralStyles from "./neural.module.css";
 import type { PhoneSendResult } from "./Phone";
 import { Profile } from "./Profile";
@@ -76,6 +70,7 @@ import { buildTurnPromptRequest, ChoiceList, StoryLog } from "./StoryLog";
 import { useStory } from "./store";
 import styles from "./story.module.css";
 import { Toasts } from "./Toasts";
+import { TrackerPanel } from "./TrackerPanel";
 import { useStoryAudio } from "./useStoryAudio";
 import { diffViews, type Speaker, type Toast, trackTelemetry, type View } from "./view";
 
@@ -1216,7 +1211,7 @@ export function StoryScreen() {
   const trackFull = (
     <div className={neuralStyles.pinBody}>
       <div className={neuralStyles.pinPane}>
-        <JournalPage
+        <TrackerPanel
           view={view}
           onLocatePlace={(placeId) => {
             closePinned();
@@ -1237,6 +1232,7 @@ export function StoryScreen() {
             closePinned();
             setAtDoc(true);
           }}
+          onOpenMap={openMap}
           onDraftAction={draftAction}
         />
       </div>
@@ -1797,13 +1793,13 @@ export function StoryScreen() {
             onClose={story.dismiss}
             actions={
               <>
-                <Button primary onClick={retry}>
-                  {activeCheckpoint ? "从断点重试" : "原样重试"}
+                <Button primary onClick={story.dismiss}>
+                  改一改再发
                 </Button>
+                <Button onClick={retry}>{activeCheckpoint ? "从断点重试" : "原样重试"}</Button>
                 {activeCheckpoint && (
                   <Button onClick={() => void discardAndRetry()}>清除断点重头生成</Button>
                 )}
-                <Button onClick={story.dismiss}>改一改再发</Button>
               </>
             }
           >
@@ -1814,7 +1810,9 @@ export function StoryScreen() {
                 。重试将跳过已完成步骤。
               </p>
             )}
-            <p>这一轮没有写进存档。可以换个说法，或者到设置里检查这个方案的安全选项。</p>
+            <p>
+              这一轮没有写进存档。原样重试可能再次触发拦截，建议换个说法，或到设置里检查当前方案的安全选项。
+            </p>
           </Dialog>
         )}
         {failure?.kind === "error" && (
