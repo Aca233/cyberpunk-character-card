@@ -41,31 +41,28 @@ interface AssetCueSpec {
   readonly jitter?: number;
 }
 
-/** 优先映射到《赛博朋克 2077》原版解包音效的语义事件 */
+/** 优先映射到《赛博朋克 2077》原版解包音效的剧情与事件（界面悬停/点击/面板滑开由轻柔阻尼微动层负责） */
 const CUE_TO_ASSET: Partial<Record<SfxCue, AssetCueSpec>> = {
-  boot: { asset: "sfx.boot", gain: 0.72 },
-  click: { asset: "sfx.click", gain: 0.48, jitter: 0.04 },
-  confirm: { asset: "sfx.click", gain: 0.58, rate: 1.09, jitter: 0.025 },
-  panelOpen: { asset: "sfx.panel", gain: 0.52 },
-  turnSubmit: { asset: "sfx.data", gain: 0.56 },
-  turnDone: { asset: "sfx.notify", gain: 0.42 },
-  notify: { asset: "sfx.notify", gain: 0.56 },
+  boot: { asset: "sfx.boot", gain: 0.68 },
+  turnSubmit: { asset: "sfx.data", gain: 0.5 },
+  turnDone: { asset: "sfx.notify", gain: 0.45 },
+  notify: { asset: "sfx.notify", gain: 0.58 },
   scan: { asset: "sfx.scan", gain: 0.58 },
-  quest: { asset: "sfx.quest", gain: 0.72 },
-  warning: { asset: "sfx.warning", gain: 0.66 },
-  heartbeat: { asset: "sfx.heartbeat", gain: 0.68 },
-  sandevistan: { asset: "sfx.sandevistan", gain: 0.78 },
-  cyberware: { asset: "sfx.cyberware", gain: 0.72 },
-  glitch: { asset: "sfx.glitch", gain: 0.66 },
-  farewell: { asset: "sfx.farewell", gain: 0.76 },
+  quest: { asset: "sfx.quest", gain: 0.7 },
+  warning: { asset: "sfx.warning", gain: 0.56 },
+  heartbeat: { asset: "sfx.heartbeat", gain: 0.62 },
+  sandevistan: { asset: "sfx.sandevistan", gain: 0.72 },
+  cyberware: { asset: "sfx.cyberware", gain: 0.68 },
+  glitch: { asset: "sfx.glitch", gain: 0.6 },
+  farewell: { asset: "sfx.farewell", gain: 0.72 },
 };
 
 /** 防止短时间高频触发造成破音或刺耳连响的冷却毫秒数 */
 const COOLDOWN_MS: Partial<Record<SfxCue, number>> = {
-  hover: 48,
+  hover: 42,
   click: 35,
-  confirm: 50,
-  tab: 50,
+  confirm: 45,
+  tab: 45,
   panelOpen: 110,
   panelClose: 110,
   notify: 220,
@@ -77,9 +74,7 @@ const COOLDOWN_MS: Partial<Record<SfxCue, number>> = {
 };
 
 const CORE_PRELOAD_SFX: readonly SfxAssetId[] = [
-  "sfx.click",
   "sfx.data",
-  "sfx.panel",
   "sfx.notify",
   "sfx.warning",
   "sfx.scan",
@@ -97,6 +92,8 @@ interface Deck {
 const listeners = new Set<() => void>();
 const duckReasons = new Set<DuckReason>();
 const lastPlayedAt = new Map<string, number>();
+const rawByteCache = new Map<SfxAssetId, ArrayBuffer>();
+const rawByteLoading = new Map<SfxAssetId, Promise<ArrayBuffer | null>>();
 const bufferCache = new Map<SfxAssetId, AudioBuffer>();
 const bufferLoading = new Map<SfxAssetId, Promise<AudioBuffer | null>>();
 
@@ -106,8 +103,8 @@ let decks: [Deck, Deck] | null = null;
 let activeDeckIdx: 0 | 1 = 0;
 
 let unlocked = false;
-let unlockInstalled = false;
 let listenersInstalled = false;
+let unlockArmed = false;
 let sceneBgm: BgmId | null = null;
 let previewBgmId: BgmId | null = null;
 let currentDuckGain = 1;
@@ -131,7 +128,7 @@ function effectiveBgmTargetVolume(): number {
   const prefs = audioPrefs();
   if (prefs.muted || !prefs.bgmEnabled) return 0;
   // 留出音乐动态余量，确保阅读剧情时不喧宾夺主
-  return Math.max(0, Math.min(1, prefs.masterVolume * prefs.bgmVolume * 0.72));
+  return Math.max(0, Math.min(1, prefs.masterVolume * prefs.bgmVolume * 0.68));
 }
 
 function effectiveSfxVolume(): number {
@@ -171,6 +168,10 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
+function isNotAllowedError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "NotAllowedError";
+}
+
 function ensureContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (!audioCtx) {
@@ -182,9 +183,18 @@ function ensureContext(): AudioContext | null {
     sfxBus = audioCtx.createGain();
     sfxBus.gain.value = effectiveSfxVolume();
     sfxBus.connect(audioCtx.destination);
-  }
-  if (audioCtx.state === "suspended") {
-    void audioCtx.resume().catch(() => {});
+    // 浏览器若已允许当前站点自动播放（AudioContext 直接为 running），立即可用无需等首次点击
+    if (audioCtx.state === "running") {
+      unlocked = true;
+    }
+    audioCtx.addEventListener("statechange", () => {
+      if (audioCtx?.state === "running" && !unlocked) {
+        unlocked = true;
+        preloadCoreSfx();
+        syncBgm(700);
+        emit();
+      }
+    });
   }
   if (sfxBus) {
     sfxBus.gain.value = effectiveSfxVolume();
@@ -284,6 +294,21 @@ function isHidden(): boolean {
   return typeof document !== "undefined" && document.visibilityState === "hidden";
 }
 
+function armGestureUnlock(): void {
+  if (unlockArmed || typeof window === "undefined") return;
+  unlockArmed = true;
+  const onGesture = () => {
+    unlockArmed = false;
+    window.removeEventListener("pointerdown", onGesture, true);
+    window.removeEventListener("keydown", onGesture, true);
+    window.removeEventListener("touchstart", onGesture, true);
+    unlockAudioNow();
+  };
+  window.addEventListener("pointerdown", onGesture, { capture: true, passive: true });
+  window.addEventListener("keydown", onGesture, { capture: true, passive: true });
+  window.addEventListener("touchstart", onGesture, { capture: true, passive: true });
+}
+
 function syncBgm(crossfadeMs = CROSSFADE_MS): void {
   const pair = ensureDecks();
   if (!pair) return;
@@ -319,9 +344,13 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
       void current.el
         .play()
         .then(() => emit())
-        .catch(() => {
-          unlocked = false;
-          emit();
+        .catch((err) => {
+          // 仅自动播放受限时重挂解锁监听，绝不因 AbortError 锁死音频
+          if (isNotAllowedError(err)) {
+            unlocked = false;
+            armGestureUnlock();
+            emit();
+          }
         });
     } else {
       applyDeckVolumes();
@@ -332,6 +361,7 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
 
   // 未解锁前先记住目标，不硬调 play 避免浏览器控制台报 NotAllowedError
   if (!unlocked) {
+    armGestureUnlock();
     emit();
     return;
   }
@@ -353,6 +383,7 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
   void toDeck.el
     .play()
     .then(() => {
+      if (toDeck.bgm !== desired) return;
       if (fromDeck.bgm && !fromDeck.el.paused && crossfadeMs > 0) {
         fadeState = {
           fromIdx,
@@ -370,12 +401,38 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
       }
       emit();
     })
-    .catch(() => {
-      // 偶发自动播放拦截时保留目标，待下一次用户交互自动接续
-      toDeck.bgm = null;
-      unlocked = false;
-      emit();
+    .catch((err) => {
+      if (isNotAllowedError(err)) {
+        toDeck.bgm = null;
+        unlocked = false;
+        armGestureUnlock();
+        emit();
+      }
     });
+}
+
+async function fetchSfxBytes(id: SfxAssetId): Promise<ArrayBuffer | null> {
+  const cached = rawByteCache.get(id);
+  if (cached) return cached;
+  const pending = rawByteLoading.get(id);
+  if (pending) return pending;
+
+  const url = audioAssetUrl(id);
+  if (!url) return null;
+
+  const task = fetch(url)
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const arr = await res.arrayBuffer();
+      rawByteCache.set(id, arr);
+      return arr;
+    })
+    .catch(() => null)
+    .finally(() => {
+      rawByteLoading.delete(id);
+    });
+  rawByteLoading.set(id, task);
+  return task;
 }
 
 async function loadSfxBuffer(id: SfxAssetId): Promise<AudioBuffer | null> {
@@ -384,15 +441,14 @@ async function loadSfxBuffer(id: SfxAssetId): Promise<AudioBuffer | null> {
   const pending = bufferLoading.get(id);
   if (pending) return pending;
 
-  const url = audioAssetUrl(id);
   const ctx = ensureContext();
-  if (!url || !ctx) return null;
+  if (!ctx) return null;
 
-  const task = fetch(url)
-    .then(async (res) => {
-      if (!res.ok) return null;
-      const arr = await res.arrayBuffer();
-      return await ctx.decodeAudioData(arr);
+  const task = fetchSfxBytes(id)
+    .then(async (raw) => {
+      if (!raw) return null;
+      // decodeAudioData 会 detach 传入的 ArrayBuffer，必须 slice 副本
+      return await ctx.decodeAudioData(raw.slice(0));
     })
     .then((buf) => {
       if (buf) bufferCache.set(id, buf);
@@ -410,7 +466,7 @@ function playBuffer(
   ctx: AudioContext,
   dest: AudioNode,
   buf: AudioBuffer,
-  gain = 0.75,
+  gain = 0.82,
   rate = 1,
   jitter = 0,
 ): void {
@@ -426,11 +482,35 @@ function playBuffer(
 }
 
 export function preloadCoreSfx(): void {
-  if (corePreloaded || !audioAssetsReady() || !unlocked) return;
+  if (!audioAssetsReady()) return;
+  // 先预拉原版短音效原始字节（无需等待 AudioContext 解锁）
+  for (const id of CORE_PRELOAD_SFX) {
+    void fetchSfxBytes(id);
+  }
+  if (corePreloaded || !unlocked) return;
   corePreloaded = true;
   for (const id of CORE_PRELOAD_SFX) {
     void loadSfxBuffer(id);
   }
+}
+
+function emitCueNow(ctx: AudioContext, dest: AudioNode, cue: SfxCue): void {
+  const mapped = CUE_TO_ASSET[cue];
+  if (mapped && audioAssetUrl(mapped.asset)) {
+    const cached = bufferCache.get(mapped.asset);
+    if (cached) {
+      playBuffer(ctx, dest, cached, mapped.gain, mapped.rate ?? 1, mapped.jitter ?? 0);
+      return;
+    }
+    void loadSfxBuffer(mapped.asset).then((buf) => {
+      if (buf && sfxBus && effectiveSfxVolume() > 0) {
+        playBuffer(ctx, sfxBus, buf, mapped.gain, mapped.rate ?? 1, mapped.jitter ?? 0);
+      }
+    });
+    return;
+  }
+
+  playSynthCue(ctx, dest, cue);
 }
 
 /** 触发语义音效：优先播放原版解包素材，未覆盖的微交互或缺失时使用赛博合成层 */
@@ -449,25 +529,35 @@ export function playSfx(cue: SfxCue): void {
 
   const ctx = ensureContext();
   if (!ctx || !sfxBus) return;
-  if (ctx.state === "suspended" && !unlocked) return;
 
-  const mapped = CUE_TO_ASSET[cue];
-  if (mapped && audioAssetUrl(mapped.asset)) {
-    const cached = bufferCache.get(mapped.asset);
-    if (cached) {
-      playBuffer(ctx, sfxBus, cached, mapped.gain, mapped.rate ?? 1, mapped.jitter ?? 0);
-      return;
+  if (ctx.state === "running") {
+    if (!unlocked) {
+      unlocked = true;
+      preloadCoreSfx();
     }
-    // 首次未缓存时异步解码并播放，同时不阻塞交互
-    void loadSfxBuffer(mapped.asset).then((buf) => {
-      if (buf && sfxBus && effectiveSfxVolume() > 0) {
-        playBuffer(ctx, sfxBus, buf, mapped.gain, mapped.rate ?? 1, mapped.jitter ?? 0);
-      }
-    });
+    emitCueNow(ctx, sfxBus, cue);
     return;
   }
 
-  playSynthCue(ctx, sfxBus, cue);
+  // 悬停不能触发浏览器音频解锁，处于 suspended 时直接静默跳过，避免堆积延迟响声
+  if (cue === "hover") {
+    return;
+  }
+
+  // 非悬停音（点击 / 确认 / 切换等）：趁当前用户手势立即 resume 并在恢复后马上出声
+  const dest = sfxBus;
+  void ctx
+    .resume()
+    .then(() => {
+      if (ctx.state === "running" && effectiveSfxVolume() > 0) {
+        if (!unlocked) {
+          unlocked = true;
+          preloadCoreSfx();
+        }
+        emitCueNow(ctx, dest, cue);
+      }
+    })
+    .catch(() => {});
 }
 
 /** 直接试听某条原版音效素材（供设置页试听按钮使用） */
@@ -477,16 +567,27 @@ export function auditionSfxAsset(id: SfxAssetId): void {
   unlockAudioNow();
   const ctx = ensureContext();
   if (!ctx || !sfxBus) return;
-  const cached = bufferCache.get(id);
-  if (cached) {
-    playBuffer(ctx, sfxBus, cached, 0.78, 1, 0);
-    return;
-  }
-  void loadSfxBuffer(id).then((buf) => {
-    if (buf && sfxBus && !audioPrefs().muted) {
-      playBuffer(ctx, sfxBus, buf, 0.78, 1, 0);
+  const play = () => {
+    if (!sfxBus || audioPrefs().muted) return;
+    const cached = bufferCache.get(id);
+    if (cached) {
+      playBuffer(ctx, sfxBus, cached, 0.88, 1, 0);
+      return;
     }
-  });
+    void loadSfxBuffer(id).then((buf) => {
+      if (buf && sfxBus && !audioPrefs().muted) {
+        playBuffer(ctx, sfxBus, buf, 0.88, 1, 0);
+      }
+    });
+  };
+  if (ctx.state === "running") {
+    play();
+  } else {
+    void ctx
+      .resume()
+      .then(play)
+      .catch(() => {});
+  }
 }
 
 /** 设定当前场景应播放的 BGM（由路由与剧情导演调用） */
@@ -526,13 +627,16 @@ export function setAudioDuck(reason: DuckReason, active: boolean): void {
 }
 
 export function unlockAudioNow(): void {
+  const ctx = ensureContext();
+  if (ctx && ctx.state === "suspended") {
+    void ctx.resume().catch(() => {});
+  }
   if (!unlocked) {
     unlocked = true;
-    ensureContext();
     preloadCoreSfx();
     syncBgm(900);
   } else {
-    ensureContext();
+    preloadCoreSfx();
     if (
       decks &&
       effectiveBgm() &&
@@ -554,7 +658,7 @@ function ensureGlobalListeners(): void {
   });
 
   subscribeAudioIndex(() => {
-    if (unlocked) preloadCoreSfx();
+    preloadCoreSfx();
     syncBgm(600);
   });
 
@@ -581,21 +685,14 @@ function ensureGlobalListeners(): void {
   document.addEventListener("ended", onMediaStop, true);
 }
 
-/** 安装首次交互解锁监听器（启动时调用一次即可） */
+/** 安装首次交互解锁监听器并预拉核心短音效（启动时调用一次即可） */
 export function installAudioUnlock(): void {
   ensureGlobalListeners();
-  if (unlockInstalled || typeof window === "undefined") return;
-  unlockInstalled = true;
-
-  const onFirstGesture = () => {
-    unlockAudioNow();
-    window.removeEventListener("pointerdown", onFirstGesture, true);
-    window.removeEventListener("keydown", onFirstGesture, true);
-    window.removeEventListener("touchstart", onFirstGesture, true);
-  };
-  window.addEventListener("pointerdown", onFirstGesture, { capture: true, passive: true });
-  window.addEventListener("keydown", onFirstGesture, { capture: true, passive: true });
-  window.addEventListener("touchstart", onFirstGesture, { capture: true, passive: true });
+  ensureContext();
+  preloadCoreSfx();
+  if (!unlocked) {
+    armGestureUnlock();
+  }
 }
 
 export function subscribeAudioState(listener: () => void): () => void {

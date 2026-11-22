@@ -1,5 +1,4 @@
 import type { Ref } from "react";
-import { playSfx } from "../audio";
 import { Asset } from "./Asset";
 import styles from "./menuitem.module.css";
 
@@ -14,6 +13,8 @@ interface MenuItemProps {
   readonly buttonRef?: Ref<HTMLButtonElement> | undefined;
   readonly onSelect: () => void;
   readonly onFocus?: () => void;
+  /** 覆盖默认确认音效（如静音开关传 "none"） */
+  readonly sfx?: string | undefined;
 }
 
 /**
@@ -31,6 +32,7 @@ export function MenuItem({
   buttonRef,
   onSelect,
   onFocus,
+  sfx = "confirm",
 }: MenuItemProps) {
   return (
     <button
@@ -38,16 +40,11 @@ export function MenuItem({
       type="button"
       className={styles.item}
       data-selected={selected || undefined}
+      data-sfx={sfx}
       disabled={disabled}
       title={disabled ? reason : undefined}
-      onClick={() => {
-        if (!disabled) playSfx("confirm");
-        onSelect();
-      }}
-      onMouseEnter={() => {
-        if (!disabled) playSfx("hover");
-        onFocus?.();
-      }}
+      onClick={onSelect}
+      onMouseEnter={onFocus}
       onFocus={onFocus}
     >
       <span className={styles.mark} aria-hidden>

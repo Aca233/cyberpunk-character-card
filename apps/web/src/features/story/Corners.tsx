@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 import type { AssetId } from "../../assets";
-import { playSfx } from "../../audio";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
@@ -126,13 +125,8 @@ export function PinTabs<T extends string>({
           type="button"
           className={neural.tab}
           aria-pressed={id === value}
-          onMouseEnter={() => {
-            if (id !== value) playSfx("hover");
-          }}
-          onClick={() => {
-            if (id !== value) playSfx("tab");
-            onChange(id);
-          }}
+          data-sfx={id === value ? "none" : "tab"}
+          onClick={() => onChange(id)}
         >
           <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
           <span className={neural.inner}>

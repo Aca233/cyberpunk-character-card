@@ -20,9 +20,13 @@ import ms from "./model-settings.module.css";
 import styles from "./settings.module.css";
 
 const SYNTH_AUDITION: readonly { readonly cue: SfxCue; readonly label: string }[] = [
+  { cue: "hover", label: "悬停微动" },
+  { cue: "click", label: "按键点击" },
+  { cue: "confirm", label: "主操作确认" },
+  { cue: "tab", label: "页签切换" },
+  { cue: "panelOpen", label: "面板展开" },
   { cue: "eddies", label: "欧元转账" },
   { cue: "holocall", label: "全息来电" },
-  { cue: "tab", label: "页签切换" },
   { cue: "error", label: "操作拒绝" },
 ];
 
@@ -272,8 +276,8 @@ export function AudioSettings() {
                   className={audioStyles.trackBtn}
                   data-active={isActive || undefined}
                   data-preview={isPreview || undefined}
+                  data-sfx="none"
                   disabled={!info || prefs.muted || !prefs.bgmEnabled}
-                  onMouseEnter={() => playSfx("hover")}
                   onClick={() => previewBgm(id)}
                 >
                   <span className={audioStyles.trackLeft}>
@@ -330,6 +334,7 @@ export function AudioSettings() {
                 key={id}
                 type="button"
                 className={audioStyles.sfxBtn}
+                data-sfx="none"
                 disabled={!info || prefs.muted || !prefs.sfxEnabled}
                 onClick={() => auditionSfxAsset(id)}
               >
@@ -343,6 +348,7 @@ export function AudioSettings() {
               key={item.cue}
               type="button"
               className={audioStyles.sfxBtn}
+              data-sfx="none"
               disabled={prefs.muted || !prefs.sfxEnabled}
               onClick={() => playSfx(item.cue)}
             >

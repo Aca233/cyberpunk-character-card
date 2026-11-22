@@ -358,6 +358,7 @@ export function MainMenu() {
               <button
                 type="button"
                 className={styles.inlineLink}
+                data-sfx="none"
                 title="点击切换静音（快捷键 Alt+M）"
                 onClick={() => {
                   const muted = toggleMute();

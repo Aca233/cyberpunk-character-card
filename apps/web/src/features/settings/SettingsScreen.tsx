@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { api, newRequestId, type TurnContext } from "../../api/client";
-import { playSfx, useAudioPrefs } from "../../audio";
+import { useAudioPrefs } from "../../audio";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -213,13 +213,8 @@ export function SettingsScreen() {
               type="button"
               className={`${neural.tab} ${styles.tabBtn}`}
               aria-pressed={tab === t.id}
-              onMouseEnter={() => {
-                if (tab !== t.id) playSfx("hover");
-              }}
-              onClick={() => {
-                if (tab !== t.id) playSfx("tab");
-                requestGo(t.id);
-              }}
+              data-sfx={tab === t.id ? "none" : "tab"}
+              onClick={() => requestGo(t.id)}
             >
               <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
               <span className={neural.inner}>

@@ -67,27 +67,12 @@
       "gainDb": 0
     },
     {
-      "id": "sfx.click",
-      "file": "audio_sfx_ogg/base/sound/soundbanks/media/1029072525.ogg",
-      "label": "界面触感点击",
-      "gainDb": -2
-    },
-    {
       "id": "sfx.data",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/21503561.ogg",
       "label": "神经终端发送",
       "trimStart": 0,
-      "trimDuration": 0.72,
-      "fadeOut": 0.16,
-      "gainDb": -3
-    },
-    {
-      "id": "sfx.panel",
-      "file": "audio_sfx_ogg/base/sound/soundbanks/media/133473450.ogg",
-      "label": "终端面板开启",
-      "trimStart": 0,
       "trimDuration": 0.65,
-      "fadeOut": 0.18,
+      "fadeOut": 0.2,
       "gainDb": -4
     },
     {
@@ -95,44 +80,44 @@
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/486881345.ogg",
       "label": "系统与消息提示",
       "trimStart": 0,
-      "trimDuration": 2.0,
-      "fadeOut": 0.45,
-      "gainDb": 1
+      "trimDuration": 1.8,
+      "fadeOut": 0.5,
+      "gainDb": 0
     },
     {
       "id": "sfx.scan",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/333447428.ogg",
       "label": "岐路司扫描启动",
       "trimStart": 0,
-      "trimDuration": 1.6,
-      "fadeOut": 0.35,
-      "gainDb": 0
+      "trimDuration": 1.4,
+      "fadeOut": 0.4,
+      "gainDb": 2
     },
     {
       "id": "sfx.quest",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/306847309.ogg",
       "label": "委托与宿敌结算",
-      "fadeOut": 0.25,
-      "gainDb": -1
+      "fadeOut": 0.3,
+      "gainDb": 1
     },
     {
       "id": "sfx.warning",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/243532491.ogg",
       "label": "危险与交战告警",
-      "fadeOut": 0.15,
-      "gainDb": -2
+      "fadeOut": 0.2,
+      "gainDb": -4
     },
     {
       "id": "sfx.heartbeat",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/107694433.ogg",
       "label": "低频神经脉动",
-      "gainDb": -2
+      "gainDb": 0
     },
     {
       "id": "sfx.sandevistan",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/513553115.ogg",
       "label": "斯安威斯坦启动",
-      "fadeOut": 0.35,
+      "fadeOut": 0.4,
       "gainDb": 0
     },
     {
@@ -140,18 +125,18 @@
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/128060733.ogg",
       "label": "义体植入校准",
       "trimStart": 0,
-      "trimDuration": 2.8,
-      "fadeOut": 0.45,
-      "gainDb": 0
+      "trimDuration": 2.6,
+      "fadeOut": 0.5,
+      "gainDb": 3
     },
     {
       "id": "sfx.glitch",
       "file": "audio_sfx_ogg/base/sound/soundbanks/media/59558242.ogg",
       "label": "神经故障失真",
       "trimStart": 0,
-      "trimDuration": 1.8,
-      "fadeOut": 0.35,
-      "gainDb": -2
+      "trimDuration": 1.6,
+      "fadeOut": 0.4,
+      "gainDb": 1
     },
     {
       "id": "sfx.farewell",
@@ -160,7 +145,7 @@
       "trimStart": 0,
       "trimDuration": 3.4,
       "fadeOut": 0.6,
-      "gainDb": 1
+      "gainDb": 6
     }
   ]
 }

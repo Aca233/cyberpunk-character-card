@@ -63,6 +63,7 @@ export function EscMenu({
               label={audio.muted ? "声音：已静音" : "声音：开启"}
               hint="Alt+M"
               hintTone={audio.muted ? "warn" : "cyan"}
+              sfx="none"
               onSelect={() => {
                 const muted = toggleMute();
                 if (!muted) playSfx("toggleOn");

@@ -28,3 +28,4 @@ export {
   useAudioPrefs,
 } from "./prefs";
 export type { SfxCue } from "./synth";
+export { installUiAudioDelegation } from "./ui-delegation";
