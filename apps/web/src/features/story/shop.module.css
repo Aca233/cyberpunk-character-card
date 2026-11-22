@@ -1339,7 +1339,8 @@
 }
 
 .inspectShowcase[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
 }
 
 .inspectGrid {

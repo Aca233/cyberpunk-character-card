@@ -797,8 +797,8 @@ function ChoiceRow({
   const key = KEYS[index];
   const tilt = useCardTilt<HTMLButtonElement>({
     disabled: locked,
-    maxRotate: 1.8,
-    shadowShift: 1.5,
+    maxRotate: 4,
+    shadowShift: 3,
   });
   return (
     <li style={{ "--i": index } as CSSProperties}>

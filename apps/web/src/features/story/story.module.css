@@ -1262,7 +1262,8 @@
 }
 
 .choice[data-tilting]:not(:disabled) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   transition:
     color var(--dur-flash) var(--ease-cyber),
     border-color var(--dur-flash) var(--ease-cyber),
@@ -1270,12 +1271,12 @@
 }
 
 .choice:active:not(:disabled) {
-  transform: scale(0.994);
+  transform: scale(0.99);
 }
 
 .choice[data-tilting][data-pressed]:not(:disabled) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.994);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.988);
 }
 
 .choice:hover:not(:disabled)::before,
@@ -1394,18 +1395,40 @@
 .composerShell {
   position: relative;
   isolation: isolate;
+  will-change: transform;
+  transform-style: preserve-3d;
+  transform-origin: center center;
 }
 
-/* 原作 map.shadowSmall 柔边浮层投影（同四角 HUD，聚焦微收贴屏） */
+.composerShell[data-tilting] {
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
+}
+
+.composerShell[data-tilting][data-pressed] {
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.99);
+}
+
+/* 原作 map.shadowSmall 柔边浮层投影（同四角 HUD，悬停微视差、按下与聚焦微收贴屏） */
 .composerShell > .composerShadow,
 .inputLocked > .composerShadow {
   z-index: -3;
-  inset: 6px -8px -10px 4px;
+  inset: 5px -7px -8px 4px;
+  transform: translate3d(0, 0, 0);
   transition: inset 180ms var(--ease-cyber);
 }
 
+.composerShell[data-tilting] > .composerShadow {
+  transform: translate3d(var(--shadow-x, 0px), var(--shadow-y, 0px), 0);
+}
+
 .inputBar:focus-within .composerShell > .composerShadow {
-  inset: 4px -6px -7px 3px;
+  inset: 4px -5px -6px 3px;
+}
+
+.composerShell[data-tilting][data-pressed] > .composerShadow {
+  inset: 3px -4px -5px 2px;
 }
 
 .composerShell > .composerBg {
@@ -1413,16 +1436,36 @@
   transition: background-color var(--dur-flash) var(--ease-cyber);
 }
 
-/* 同形原作蒙版内的顶面光学玻璃微反光与极细全息扫描纹，严格贴合左侧缺口与右下斜切角 */
+/* 同形原作蒙版内的顶面光学玻璃微反光与悬停动态掠射光，严格贴合左侧缺口与右下斜切角 */
 .composerShell > .composerGlare {
   z-index: -1;
   pointer-events: none;
   background-color: transparent;
   background-image: linear-gradient(
     180deg,
-    rgb(var(--glare-tint) / 5.5%) 0%,
-    rgb(255 255 255 / 0%) 34%
+    rgb(var(--glare-tint) / 4.5%) 0%,
+    rgb(255 255 255 / 0%) 28%
   );
+  opacity: 0.7;
+  transition: opacity 160ms ease-out;
+}
+
+.composerShell[data-glare] > .composerGlare {
+  background-image:
+    linear-gradient(
+      var(--tilt-angle, 126deg),
+      transparent calc(var(--tilt-glare, 50%) - 24%),
+      rgb(var(--glare-tint) / 3.5%) calc(var(--tilt-glare, 50%) - 9%),
+      rgb(255 255 255 / 7.5%) var(--tilt-glare, 50%),
+      rgb(var(--glare-tint) / 2.5%) calc(var(--tilt-glare, 50%) + 7%),
+      transparent calc(var(--tilt-glare, 50%) + 18%)
+    ),
+    linear-gradient(180deg, rgb(255 255 255 / 4%) 0%, rgb(255 255 255 / 0%) 26%);
+  opacity: 1;
+}
+
+.composerShell[data-glare][data-pressed] > .composerGlare {
+  opacity: 0.55;
 }
 
 .composerShell > .composerScan {
@@ -5558,6 +5601,9 @@ ul.mapLegend > li {
   .choice,
   .choice[data-tilting],
   .choice[data-tilting][data-pressed],
+  .composerShell,
+  .composerShell[data-tilting],
+  .composerShell[data-tilting][data-pressed],
   .composerShell > .composerShadow,
   .diveLayer,
   .toastBtn {

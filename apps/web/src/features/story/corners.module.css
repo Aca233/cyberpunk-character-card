@@ -1700,12 +1700,13 @@
 }
 
 .zoneHit[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
 }
 
 .zoneHit[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
 }
 
 .zoneServices {
@@ -1758,15 +1759,16 @@
 }
 
 .zoneService[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   transition:
     color var(--dur-flash),
     filter var(--dur-flash);
 }
 
 .zoneService[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.994);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.988);
 }
 
 .zoneServiceRail {
@@ -2799,12 +2801,13 @@
 }
 
 .trackHit[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
 }
 
 .trackHit[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
 }
 
 /*
@@ -3244,17 +3247,18 @@
     width 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* 鼠标移动时的原地微幅 3D 按压倾斜（未展开态生效；由 rAF 阻尼插值，不与 CSS transform transition 冲突） */
+/* 鼠标移动时的原地 3D 按压倾斜（未展开态生效；由 rAF 阻尼插值，不与 CSS transform transition 冲突） */
 .side > .block[data-tilting]:not([data-open]) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
 }
 
 .side > .block[data-tilting][data-pressed]:not([data-open]) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
 }
 
-/* 在场人物列表的每张小卡各自拥有独立居中透视与原地微幅 3D 按压倾斜 */
+/* 在场人物列表的每张小卡各自拥有独立居中透视与原地 3D 按压倾斜 */
 .presentList .person {
   will-change: transform;
   transform-style: preserve-3d;
@@ -3265,12 +3269,13 @@
 }
 
 .person[data-tilting]:not([data-open]) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
 }
 
 .person[data-tilting][data-pressed]:not([data-open]) {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
 }
 
 /*

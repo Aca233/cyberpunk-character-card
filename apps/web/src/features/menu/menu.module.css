@@ -154,13 +154,14 @@
 }
 
 .statusCard[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   filter: drop-shadow(0 5px 12px rgb(0 0 0 / 30%));
 }
 
 .statusCard[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
   filter: drop-shadow(0 3px 8px rgb(0 0 0 / 28%));
 }
 
@@ -484,19 +485,20 @@
 }
 
 .saveCard[data-tilting] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   transition:
     color var(--dur-flash) var(--ease-cyber),
     filter var(--dur-flash) var(--ease-cyber);
 }
 
 .saveCard:active {
-  transform: scale(0.993);
+  transform: scale(0.988);
 }
 
 .saveCard[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.993);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
 }
 
 .saveIcon {
@@ -801,7 +803,8 @@
 
 .charDossier[data-tilting] {
   --box-line: var(--cp-cyan);
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   filter: drop-shadow(0 5px 12px rgb(0 0 0 / 30%));
 }
 

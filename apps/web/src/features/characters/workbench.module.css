@@ -962,7 +962,8 @@
 
 .tarotCard[data-tilting] {
   z-index: 2;
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
   transition:
     border-color var(--dur-flash) var(--ease-cyber),
     background-color var(--dur-flash) var(--ease-cyber),
@@ -975,12 +976,12 @@
 }
 
 .tarotCard:active {
-  transform: scale(0.992);
+  transform: scale(0.988);
 }
 
 .tarotCard[data-tilting][data-pressed] {
-  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg))
-    scale(0.992);
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
   filter: drop-shadow(0 3px 8px rgb(0 0 0 / 28%));
 }
 

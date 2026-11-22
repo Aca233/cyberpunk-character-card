@@ -4,6 +4,7 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
 import { ITEM_CELL_SLICE } from "../../ui/Panel";
+import { useCardTilt } from "../../ui/useCardTilt";
 import styles from "./story.module.css";
 
 const MAX = 2000;
@@ -72,6 +73,12 @@ export function InputBar({
   const area = useRef<HTMLTextAreaElement | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>(readSendMode);
   const [expanded, setExpanded] = useState(false);
+  const tilt = useCardTilt<HTMLDivElement>({
+    disabled: disabled || expanded,
+    maxRotate: 4.8,
+    shadowShift: 4.5,
+    pressDepth: 6,
+  });
 
   const setAreaRef = useCallback(
     (node: HTMLTextAreaElement | null) => {
@@ -200,7 +207,7 @@ export function InputBar({
         send();
       }}
     >
-      <div className={styles.composerShell}>
+      <div className={styles.composerShell} {...tilt}>
         <NineSlice
           id="map.shadowSmall"
           tint="rgb(0 0 0 / 48%)"

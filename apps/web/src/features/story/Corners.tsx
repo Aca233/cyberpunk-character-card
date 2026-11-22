@@ -335,8 +335,8 @@ export function BioMonitor({
   const p = usePeek("bio", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
   // 整块收起时等内容收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡
   const lingeredWide = useLinger(wide && p.open);
@@ -710,8 +710,8 @@ function PresentPerson({
   const primaryTip = s?.tips[0] ?? null;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: open || wideOn,
-    maxRotate: 2.2,
-    shadowShift: 2,
+    maxRotate: 5.2,
+    shadowShift: 4,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 名字格里套着九宫格和展开面板，不能换成 button
@@ -1034,8 +1034,8 @@ function PresentFoe({
         ? "even"
         : "low";
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 2.2,
-    shadowShift: 2,
+    maxRotate: 5.2,
+    shadowShift: 4,
   });
   return (
     <div
@@ -1395,8 +1395,8 @@ export function Unread({
   const totalUnread = view.phone.unread + unreadCalls + newsCount + view.shards.unread;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
@@ -1508,8 +1508,8 @@ function ZoneServiceBar({
   readonly onClick: () => void;
 }) {
   const tilt = useCardTilt<HTMLButtonElement>({
-    maxRotate: 1.8,
-    shadowShift: 1.5,
+    maxRotate: 4.2,
+    shadowShift: 3,
   });
   return (
     <button
@@ -1581,8 +1581,8 @@ export function Zone({
     (homesForSaleHere.length > 0 && Boolean(onBuyHome)) ||
     (homesNeedingRent.length > 0 && Boolean(onPayRent));
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
   return (
     <div className={`${styles.block} ${styles.zone}`} data-layer="optics">
@@ -1753,8 +1753,8 @@ export function Track({
   const eddiesText = view.money.eddies.toLocaleString("en-US");
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
 
   return (
@@ -1989,8 +1989,8 @@ export function Weapon({
   const p = usePeek("weapon", peek.expand, peek.setExpand);
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: p.open,
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
@@ -2223,8 +2223,8 @@ export function HoloCall({
 }) {
   const incoming = view.calls?.incoming;
   const tilt = useCardTilt<HTMLElement>({
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.8,
+    shadowShift: 5,
   });
   if (!incoming) return null;
   const npc = view.npcs.find((n) => n.id === incoming.from);

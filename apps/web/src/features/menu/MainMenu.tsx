@@ -226,8 +226,8 @@ export function MainMenu() {
 
   const narratorName = profiles.data?.narrator;
   const statusTilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 2.6,
-    shadowShift: 2.5,
+    maxRotate: 5.5,
+    shadowShift: 4.5,
   });
 
   return (
@@ -716,8 +716,8 @@ function SaveCard({
   featured?: boolean;
 }) {
   const tilt = useCardTilt<HTMLButtonElement>({
-    maxRotate: featured ? 2.6 : 2.2,
-    shadowShift: 2.5,
+    maxRotate: featured ? 5.5 : 4.8,
+    shadowShift: 4.5,
   });
   return (
     <button
@@ -779,8 +779,8 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   const [customStartLocation, setCustomStartLocation] = useState("");
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const dossierTilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 2.4,
-    shadowShift: 2.5,
+    maxRotate: 5.2,
+    shadowShift: 4.5,
   });
   const entries = characters.data ?? [];
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];

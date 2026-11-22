@@ -1,31 +1,34 @@
 import { type PointerEvent, useCallback, useEffect, useRef } from "react";
 
 /**
- * 赛博卡片微幅 3D 原地按压倾斜 + 光学掠射高光系统（零重渲染，帧率无关 rAF 阻尼插值）。
+ * 赛博卡片 3D 原地按压倾斜 + 光学掠射高光系统（零重渲染，帧率无关 rAF 阻尼插值）。
  *
- * 物理直觉（原地按压，不滑移不跳变）：
- * - 鼠标移到卡片任意位置时，光标所在侧向屏内轻压、对侧微抬，卡片严格原地枢转（不做 X/Y 位移滑移）。
- * - 按卡片实际像素宽高与长宽比自适应收敛倾角，并封顶边缘 Z 轴景深（5px），窄卡、扁条与大卡观感一致稳重。
- * - 进入、移动、按压与离开均由 rAF 指数阻尼平滑插值，收敛后自动停帧，零瞬跳、零 CSS 过渡打架、零闲置开销。
- * - 展开（disabled=true）或 prefers-reduced-motion: reduce 时立即归零，保证阅读与滚动绝对平稳。
+ * 物理直觉（原地按压，跟手有压感、不滑移不跳变）：
+ * - 鼠标移到卡片任意位置时，光标所在侧向屏内下压、对侧微抬，卡片严格原地枢转（不做 X/Y 位移滑移）。
+ * - 按卡片实际像素宽高与长宽比做柔和的平方根衰减，并封顶边缘 Z 轴景深（16px），
+ *   大卡、宽条与窄卡都能感受到清晰压感，同时避免窄卡剧烈翻转或梯形畸变。
+ * - 鼠标按下（pointerdown）时进一步压深倾角（1.45×）并下沉 Z 轴（--tilt-tz），松手利落回弹。
+ * - 进入、移动、按压与离开均由 rAF 指数阻尼平滑插值，收敛后自动停帧释放。
  */
 export interface CardTiltOptions {
-  /** 禁用（例如 HUD 角块展开时归正，不倾斜） */
+  /** 禁用（例如 HUD 角块或输入框展开时归正，不倾斜） */
   readonly disabled?: boolean;
-  /** 标准卡片最大俯仰角（度），默认 2.6；窄卡/扁条/大卡按尺寸自动收敛 */
+  /** 标准卡片悬停最大俯仰角（度），默认 5.8；窄卡/扁条/宽条按尺寸自动平衡 */
   readonly maxRotate?: number;
-  /** 阴影反向微视差（px），默认 2.5 */
+  /** 阴影反向微视差（px），默认 5 */
   readonly shadowShift?: number;
+  /** 按下瞬间的 Z 轴下沉深度（px，正值表示向屏内压入），默认 7 */
+  readonly pressDepth?: number;
 }
 
-/** 参考标准卡片边长（px）：短于该尺寸的轴按比例收敛倾角 */
-const REF_AXIS_PX = 160;
+/** 参考标准卡片边长（px）：短于该尺寸的轴按平方根柔和衰减 */
+const REF_AXIS_PX = 130;
 /** 垂直短轴稳定基准（px）：抑制扁长条/细竖条的梯形透视畸变 */
-const STAB_AXIS_PX = 140;
-/** 边缘最大 Z 轴景深（px）：保持细腻微 3D，文字清晰不变形 */
-const MAX_EDGE_Z_PX = 5;
-/** 按下瞬间在当前倾角基础上的轻微加深倍率 */
-const PRESS_DEPTH_MULT = 1.2;
+const STAB_AXIS_PX = 120;
+/** 边缘最大 Z 轴景深（px）：宽卡保持自然压感且不过度变形 */
+const MAX_EDGE_Z_PX = 16;
+/** 按下瞬间在当前倾角基础上的压深倍率 */
+const PRESS_DEPTH_MULT = 1.45;
 
 const DEFAULT_GLARE_ANGLE = 126;
 const DEFAULT_GLARE_POS = 50;
@@ -39,6 +42,7 @@ interface TiltState {
   pressed: boolean;
   curRx: number;
   curRy: number;
+  curTz: number;
   curSx: number;
   curSy: number;
   curAngle: number;
@@ -58,6 +62,7 @@ function createTiltState(): TiltState {
     pressed: false,
     curRx: 0,
     curRy: 0,
+    curTz: 0,
     curSx: 0,
     curSy: 0,
     curAngle: DEFAULT_GLARE_ANGLE,
@@ -75,6 +80,7 @@ function createTiltState(): TiltState {
 function resetVars(el: HTMLElement) {
   el.style.removeProperty("--tilt-rx");
   el.style.removeProperty("--tilt-ry");
+  el.style.removeProperty("--tilt-tz");
   el.style.removeProperty("--shadow-x");
   el.style.removeProperty("--shadow-y");
   el.style.removeProperty("--tilt-angle");
@@ -87,6 +93,7 @@ function resetVars(el: HTMLElement) {
 function applyVars(el: HTMLElement, s: TiltState) {
   el.style.setProperty("--tilt-rx", `${s.curRx.toFixed(3)}deg`);
   el.style.setProperty("--tilt-ry", `${s.curRy.toFixed(3)}deg`);
+  el.style.setProperty("--tilt-tz", `${s.curTz.toFixed(2)}px`);
   el.style.setProperty("--shadow-x", `${s.curSx.toFixed(2)}px`);
   el.style.setProperty("--shadow-y", `${s.curSy.toFixed(2)}px`);
   el.style.setProperty("--tilt-angle", `${s.curAngle.toFixed(1)}deg`);
@@ -101,8 +108,9 @@ function prefersReducedMotion(): boolean {
 
 export function useCardTilt<T extends HTMLElement = HTMLElement>({
   disabled = false,
-  maxRotate = 2.6,
-  shadowShift = 2.5,
+  maxRotate = 5.8,
+  shadowShift = 5,
+  pressDepth = 7,
 }: CardTiltOptions = {}) {
   const elRef = useRef<T | null>(null);
   const rafRef = useRef<number>(0);
@@ -133,27 +141,30 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       const mult = s.active && s.pressed ? PRESS_DEPTH_MULT : 1;
       const tgtRx = s.active ? s.baseRx * mult : 0;
       const tgtRy = s.active ? s.baseRy * mult : 0;
-      const tgtSx = s.active ? s.baseSx * (s.pressed ? 0.35 : 1) : 0;
-      const tgtSy = s.active ? s.baseSy * (s.pressed ? 0.35 : 1) : 0;
+      const tgtTz = s.active && s.pressed ? -pressDepth : 0;
+      const tgtSx = s.active ? s.baseSx * (s.pressed ? 0.25 : 1) : 0;
+      const tgtSy = s.active ? s.baseSy * (s.pressed ? 0.25 : 1) : 0;
       const tgtAngle = s.active ? s.tgtAngle : DEFAULT_GLARE_ANGLE;
       const tgtGlare = s.active ? s.tgtGlare : DEFAULT_GLARE_POS;
 
-      // 帧率无关指数平滑：进入/跟手利落顺滑，离开舒缓回平
-      const speed = s.active ? 18 : 14;
+      // 帧率无关指数平滑：进入/跟手/按下响应利落，离开舒缓回平
+      const speed = s.active ? 22 : 14;
       const alpha = 1 - Math.exp(-speed * dt);
 
       s.curRx += (tgtRx - s.curRx) * alpha;
       s.curRy += (tgtRy - s.curRy) * alpha;
+      s.curTz += (tgtTz - s.curTz) * alpha;
       s.curSx += (tgtSx - s.curSx) * alpha;
       s.curSy += (tgtSy - s.curSy) * alpha;
       s.curAngle += (tgtAngle - s.curAngle) * alpha;
       s.curGlare += (tgtGlare - s.curGlare) * alpha;
 
       const settled =
-        Math.abs(tgtRx - s.curRx) < 0.006 &&
-        Math.abs(tgtRy - s.curRy) < 0.006 &&
-        Math.abs(tgtSx - s.curSx) < 0.015 &&
-        Math.abs(tgtSy - s.curSy) < 0.015 &&
+        Math.abs(tgtRx - s.curRx) < 0.008 &&
+        Math.abs(tgtRy - s.curRy) < 0.008 &&
+        Math.abs(tgtTz - s.curTz) < 0.03 &&
+        Math.abs(tgtSx - s.curSx) < 0.02 &&
+        Math.abs(tgtSy - s.curSy) < 0.02 &&
         Math.abs(tgtGlare - s.curGlare) < 0.08;
 
       if (settled) {
@@ -164,6 +175,7 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
         }
         s.curRx = tgtRx;
         s.curRy = tgtRy;
+        s.curTz = tgtTz;
         s.curSx = tgtSx;
         s.curSy = tgtSy;
         s.curAngle = tgtAngle;
@@ -176,7 +188,7 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       applyVars(el, s);
       rafRef.current = window.requestAnimationFrame(step);
     },
-    [disabled],
+    [disabled, pressDepth],
   );
 
   const ensureLoop = useCallback(() => {
@@ -197,26 +209,26 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       const nx = Math.max(-1, Math.min(1, ((clientX - rect.left) / w) * 2 - 1));
       const ny = Math.max(-1, Math.min(1, ((clientY - rect.top) / h) * 2 - 1));
 
-      const wDamp = Math.min(1, w / REF_AXIS_PX);
-      const hDamp = Math.min(1, h / REF_AXIS_PX);
-      const wStab = Math.min(1, Math.sqrt(w / STAB_AXIS_PX));
-      const hStab = Math.min(1, Math.sqrt(h / STAB_AXIS_PX));
+      const wDamp = Math.min(1, Math.max(0.5, Math.sqrt(w / REF_AXIS_PX)));
+      const hDamp = Math.min(1, Math.max(0.5, Math.sqrt(h / REF_AXIS_PX)));
+      const wStab = Math.min(1, Math.max(0.68, (w / STAB_AXIS_PX) ** 0.3));
+      const hStab = Math.min(1, Math.max(0.68, (h / STAB_AXIS_PX) ** 0.3));
 
       const rxMax = Math.min(maxRotate * hDamp * wStab, edgeCapDeg(h));
       const ryMax = Math.min(maxRotate * wDamp * hStab, edgeCapDeg(w));
 
-      const sxMax = Math.min(shadowShift, w * 0.01);
-      const syMax = Math.min(shadowShift, h * 0.014);
+      const sxMax = Math.min(shadowShift, w * 0.018);
+      const syMax = Math.min(shadowShift, h * 0.025);
 
       const s = stateRef.current;
       s.active = true;
-      // 标准 CSS 3D 左手系（+Z 朝向观察者）：光标压在哪一侧，那一侧向屏内微沉
+      // 标准 CSS 3D 左手系（+Z 朝向观察者）：光标压在哪一侧，那一侧向屏内下沉
       s.baseRx = -ny * rxMax;
       s.baseRy = nx * ryMax;
       s.baseSx = -nx * sxMax;
       s.baseSy = -ny * syMax;
-      s.tgtAngle = DEFAULT_GLARE_ANGLE + nx * 14 - ny * 8;
-      s.tgtGlare = DEFAULT_GLARE_POS + nx * 26 + ny * 12;
+      s.tgtAngle = DEFAULT_GLARE_ANGLE + nx * 18 - ny * 10;
+      s.tgtGlare = DEFAULT_GLARE_POS + nx * 32 + ny * 14;
 
       el.setAttribute("data-tilting", "true");
       el.setAttribute("data-glare", "true");

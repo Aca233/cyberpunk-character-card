@@ -238,7 +238,7 @@ function ShowcaseStage({
   readonly rarityText: string | null;
   readonly cornerBadge?: ReactNode;
 }) {
-  const tilt = useCardTilt<HTMLDivElement>({ maxRotate: 2.6, shadowShift: 2 });
+  const tilt = useCardTilt<HTMLDivElement>({ maxRotate: 5.5, shadowShift: 4 });
 
   return (
     <div className={shopCss.inspectShowcase} {...tilt}>

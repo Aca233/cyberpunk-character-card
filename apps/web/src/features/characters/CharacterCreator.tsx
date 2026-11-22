@@ -81,8 +81,8 @@ function TarotCardButton({
 }) {
   const info = TAROT_INFO[id];
   const tilt = useCardTilt<HTMLButtonElement>({
-    maxRotate: 3.5,
-    shadowShift: 2.5,
+    maxRotate: 6.5,
+    shadowShift: 5,
   });
   return (
     <button
