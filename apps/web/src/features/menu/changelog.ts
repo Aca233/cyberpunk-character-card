@@ -20,7 +20,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
   {
-    version: "v0.9.61",
+    version: "v0.9.6.1",
     date: "2026-11-23",
     title: "修复枪店交易身份冲突与不朽武器 0 元锁死问题",
     latest: true,
