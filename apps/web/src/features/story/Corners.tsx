@@ -710,9 +710,8 @@ function PresentPerson({
   const primaryTip = s?.tips[0] ?? null;
   const tilt = useCardTilt<HTMLDivElement>({
     disabled: open || wideOn,
-    maxRotate: 5,
-    maxShift: 2,
-    shadowShift: 4,
+    maxRotate: 2.2,
+    shadowShift: 2,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 名字格里套着九宫格和展开面板，不能换成 button
@@ -1035,9 +1034,8 @@ function PresentFoe({
         ? "even"
         : "low";
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 5,
-    maxShift: 2,
-    shadowShift: 4,
+    maxRotate: 2.2,
+    shadowShift: 2,
   });
   return (
     <div
@@ -1510,9 +1508,8 @@ function ZoneServiceBar({
   readonly onClick: () => void;
 }) {
   const tilt = useCardTilt<HTMLButtonElement>({
-    maxRotate: 4,
-    maxShift: 1.5,
-    shadowShift: 2.5,
+    maxRotate: 1.8,
+    shadowShift: 1.5,
   });
   return (
     <button
@@ -1584,9 +1581,8 @@ export function Zone({
     (homesForSaleHere.length > 0 && Boolean(onBuyHome)) ||
     (homesNeedingRent.length > 0 && Boolean(onPayRent));
   const tilt = useCardTilt<HTMLDivElement>({
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
   return (
     <div className={`${styles.block} ${styles.zone}`} data-layer="optics">
@@ -1811,7 +1807,7 @@ export function Track({
                   />
                 )}
                 <h2 className={styles.trackTitle}>追踪</h2>
-                {p.open && <span className={styles.trackKicker}>OBJECTIVE // LOG</span>}
+                {p.open && <span className={styles.trackKicker}>{"OBJECTIVE // LOG"}</span>}
                 <span className={styles.trackStatus} data-tone={statusPill.tone}>
                   {statusPill.label}
                 </span>
@@ -2227,9 +2223,8 @@ export function HoloCall({
 }) {
   const incoming = view.calls?.incoming;
   const tilt = useCardTilt<HTMLElement>({
-    maxRotate: 5.5,
-    maxShift: 2.5,
-    shadowShift: 5,
+    maxRotate: 2.6,
+    shadowShift: 2.5,
   });
   if (!incoming) return null;
   const npc = view.npcs.find((n) => n.id === incoming.from);

@@ -1336,13 +1336,10 @@
     inset 0 0 34px color-mix(in srgb, var(--item-tint, var(--cp-cyan)) 14%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--item-tint, var(--cp-cyan)) 35%, transparent);
   transform-style: preserve-3d;
-  transition: transform 220ms var(--ease-snap);
 }
 
 .inspectShowcase[data-tilting] {
-  transform: perspective(640px) translate3d(var(--tilt-tx, 0px), var(--tilt-ty, 0px), 4px)
-    rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
-  transition: transform 65ms linear;
+  transform: perspective(1200px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
 }
 
 .inspectGrid {
@@ -1374,7 +1371,7 @@
   transition: opacity 180ms ease-out;
 }
 
-.inspectShowcase[data-tilting] .inspectGlare {
+.inspectShowcase[data-glare] .inspectGlare {
   opacity: 1;
   background-image: linear-gradient(
     var(--tilt-angle, 128deg),
