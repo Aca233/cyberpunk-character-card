@@ -1,6 +1,6 @@
 # 消息页面视觉美化与体验优化计划
 
-> 状态：进行中（2026-11-22）
+> 状态：已完成（2026-11-22）
 > 目标：全面升级消息页面（`Phone.tsx`、`NewsPanel.tsx` 与左下角 `Unread` 抽屉壳层）的赛博朋克 2077 全息通讯终端视觉质感与交互效率，修复新闻栏溢出无法滚动的问题，并保持与全站原作 UI 令牌、暖暗紫黑表面色阶和 `FactionsPanel` / `ShardsPanel` 共用样式的完全解耦与协调。
 
 ## 1. 现状诊断与优化目标
@@ -53,7 +53,7 @@
 
 ## 3. 实施步骤
 
-1. **Step 1**：落盘本计划文档 `docs/plans/messages-ui-polish.md` 并提交 git。
-2. **Step 2**：编写 `apps/web/src/features/story/phone.module.css`，同步优化 `apps/web/src/features/story/corners.module.css` 与 `apps/web/src/features/story/Corners.tsx` 的 `Unread` 抽屉壳层并提交 git。
-3. **Step 3**：更新 `apps/web/src/features/story/view.ts`（扩展 `ContactFilter`），全面重构优化 `apps/web/src/features/story/Phone.tsx` 与 `apps/web/src/features/story/NewsPanel.tsx` 并提交 git。
-4. **Step 4**：运行静态类型检查（`pnpm --filter @cp/web run typecheck`）与规范检查（`biome check`），修正任何告警后更新本计划状态并提交 git；按项目约定不执行单元/浏览器测试，交由用户验收。
+1. **Step 1**：落盘本计划文档 `docs/plans/messages-ui-polish.md` 并提交 git（已完成）。
+2. **Step 2**：编写 `apps/web/src/features/story/phone.module.css`，同步优化 `apps/web/src/features/story/corners.module.css` 与 `apps/web/src/features/story/Corners.tsx` 的 `Unread` 抽屉壳层并提交 git（已完成）。
+3. **Step 3**：更新 `apps/web/src/features/story/view.ts`（扩展 `ContactFilter`），全面重构优化 `apps/web/src/features/story/Phone.tsx` 与 `apps/web/src/features/story/NewsPanel.tsx` 并提交 git（已完成）。
+4. **Step 4**：通过静态类型检查（`tsc -p apps/web/tsconfig.json --noEmit`、`tsc -p apps/web/tsconfig.node.json --noEmit`）与规范检查（`biome check`），同步更新本计划状态并提交 git；按项目约定不执行单元/浏览器测试，交由用户验收（已完成）。
