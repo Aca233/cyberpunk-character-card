@@ -1449,8 +1449,17 @@ export function Unread({
           <div className={styles.unreadTabs}>
             {tabs}
             <span className={styles.unreadTabMeta}>
-              <span>{totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}</span>
-              <kbd className={styles.unreadKey}>{p.open ? "ESC" : "T"}</kbd>
+              <span className={styles.unreadTabStat} data-active={totalUnread > 0 || undefined}>
+                {totalUnread > 0 ? `未读 ${totalUnread}` : "全部已读"}
+              </span>
+              <button
+                type="button"
+                className={styles.unreadCloseBtn}
+                title="收起消息终端（Esc / T）"
+                onClick={p.toggle}
+              >
+                ESC
+              </button>
             </span>
           </div>
         ) : (

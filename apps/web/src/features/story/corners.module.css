@@ -1377,14 +1377,14 @@
 }
 
 /*
- * 私信页签朝中列舒展加宽：左栏放宽到能完整看清人名与用途，右栏保留充裕对话气泡区，同时仍不挡中间小说正文。
+ * 私信页签朝中列舒展加宽：左栏放宽到能完整看清人名、搜索与用途，右栏保留充裕对话气泡区，同时仍不挡中间小说正文。
  */
 .unread:where([data-wide]) {
   width: min(
-    680px,
+    760px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
-  padding: 12px 18px 14px;
+  padding: 14px 18px 14px;
 }
 
 /* 里层占满块宽：长出来的消息页按块宽排，不按内容宽缩 */
@@ -1397,12 +1397,24 @@
 
 /* 消息、新闻页签放在底下，挨着常态那一行，手不用伸到块顶上去切（用户定的） */
 .unreadTabs {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-top: 4px;
-  border-top: 1px solid rgb(255 64 64 / 20%);
+  padding-top: 8px;
+  border-top: 1px solid rgb(255 97 88 / 22%);
+}
+
+.unreadTabs::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: min(220px, 44%);
+  height: 2px;
+  background: linear-gradient(90deg, var(--cp-red), var(--cp-cyan), transparent);
+  pointer-events: none;
 }
 
 .unreadTabs > nav {
@@ -1420,11 +1432,48 @@
   white-space: nowrap;
 }
 
+.unreadTabStat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.unreadTabStat[data-active] {
+  color: var(--cp-yellow);
+}
+
+.unreadCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 97 88 / 28%);
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.unreadCloseBtn:hover,
+.unreadCloseBtn:focus-visible {
+  color: var(--cp-yellow);
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  outline: none;
+}
+
 .unreadCounts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 10px;
   width: 100%;
 }
 
@@ -1432,11 +1481,11 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 1px 6px;
+  padding: 2px 7px;
   font-size: 12.5px;
   color: var(--cp-text-dim);
-  background: rgb(255 64 64 / 8%);
-  border-left: 2px solid rgb(255 64 64 / 55%);
+  background: rgb(255 64 64 / 10%);
+  border-left: 2px solid var(--cp-red);
 }
 
 .unreadIdle {
@@ -1455,22 +1504,21 @@
   color: var(--cp-text-dim);
 }
 
-.unreadTabMeta > .unreadKey {
-  margin-left: 0;
-}
-
 .unreadLatest {
   margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid rgb(252 238 10 / 55%);
   overflow: hidden;
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
   color: var(--cp-text-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .unreadLatest b {
-  margin-right: 8px;
+  margin-right: 7px;
   color: var(--cp-yellow);
 }
 
@@ -1482,9 +1530,8 @@
   color: var(--cp-text-dim);
 }
 
-/* 只染常态那两行的数字和名字，不漏进长出来的私信页和人物档案（计划第十二节第 14 条） */
-.unreadCounts b,
-.unreadLatest b {
+/* 只染常态那两行的数字，不漏进长出来的私信页和人物档案（计划第十二节第 14 条） */
+.unreadCounts b {
   color: var(--cp-red);
 }
 
@@ -3320,12 +3367,12 @@
 
 /*
  * 消息面板定高并给同侧左栏留出空间；Grow 行内的 maxHeight 再按剩余空间收紧，
- * 中间消息流在面板内部滚动，不隐藏左上角的生物监测与全息来电。
+ * 中间消息流与新闻流在面板内部滚动，不隐藏左上角的生物监测与全息来电。
  */
 .unread[data-wide] .growBody {
   display: flex;
   flex-direction: column;
-  height: min(460px, 56dvh);
+  height: min(560px, 66dvh);
   overflow: hidden;
   padding: 0 0 6px;
 }
@@ -3339,7 +3386,7 @@
   display: none;
 }
 
-/* pinBody / pinPane -> PhoneBody (.phoneLayout) 一路撑满剩余高度 */
+/* pinBody / pinPane -> PhoneBody (.layout) 与 NewsBody (.newsShell) 一路撑满剩余高度 */
 .unread[data-wide] .growBody > div {
   display: flex;
   flex: 1 1 0%;
@@ -3347,7 +3394,7 @@
   min-height: 0;
 }
 
-.unread[data-wide] .growBody > div > div {
+.unread[data-wide] .growBody > div > :is(div, section) {
   flex: 1 1 0%;
   min-height: 0;
 }
