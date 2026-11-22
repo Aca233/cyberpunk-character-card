@@ -811,7 +811,20 @@ export function StoryScreen() {
     [offers, busy, send, view?.sandevistan, view?.death, view?.ended],
   );
 
-  // 剧情页快捷键：1–5 选选项，P/O/J/T 钉住对应角块，M 地图，H 沉浸模式，按住 Tab 扫描
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSentText = useMemo(() => {
+    const turns = view?.turns;
+    if (!turns) return undefined;
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i];
+      if (!turn || turn.draft) continue;
+      const candidate = turn.input?.text?.trim();
+      if (candidate) return candidate;
+    }
+    return undefined;
+  }, [view?.turns]);
+
+  // 剧情页快捷键：1–5 选选项，/ 聚焦输入框，P/O/J/T 钉住对应角块，M 地图，H 沉浸模式，按住 Tab 扫描
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
@@ -830,6 +843,16 @@ export function StoryScreen() {
         return;
       }
       if (e.repeat) return;
+      if (e.key === "/") {
+        const el = inputRef.current;
+        if (el && !el.disabled) {
+          e.preventDefault();
+          el.focus();
+          const end = el.value.length;
+          el.setSelectionRange(end, end);
+        }
+        return;
+      }
       const k = e.key.toLowerCase();
       if (k === "o") {
         e.preventDefault();
@@ -1468,6 +1491,9 @@ export function StoryScreen() {
                   : view.phone.messages.find((m) => m.id === story.draft.replyTo)
               }
               onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
+              sandevistan={view.sandevistan}
+              lastSentText={lastSentText}
+              inputRef={inputRef}
               onSend={send}
               onStop={() => void story.stop()}
             />

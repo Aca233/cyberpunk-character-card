@@ -1160,19 +1160,14 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.55rem;
   max-width: calc(var(--story-width) + 4rem);
   width: 100%;
-  /* 操作区最高 296，高度跟内容走（计划第九节）；选项多时在这里面滚，不压正文 */
-  max-height: 296px;
   margin: 0 auto;
-  padding-bottom: 0.9rem;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--cp-red-dim) transparent;
+  padding-bottom: 0.85rem;
 }
 
-/* 1280 档（计划第九节）：两侧各 24 + 280 + 24，中列 624，正文不再限宽，操作区最高 232 */
+/* 1280 档（计划第九节）：两侧各 24 + 280 + 24，中列 624，正文不再限宽；选项独立限高滚动，保证输入框常驻底部 */
 @media (width < 1600px) {
   .screen {
     --corner-edge: 24px;
@@ -1184,17 +1179,21 @@
     --story-width: 100%;
   }
 
-  .dock {
-    max-height: 232px;
+  .choices {
+    max-height: 132px;
   }
 }
 
 .choices {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 4px 2px 0;
   display: grid;
-  gap: 0.36rem;
+  gap: 0.34rem;
+  max-height: 178px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-cyan-dim) transparent;
   perspective: 900px;
 }
 
@@ -1341,92 +1340,545 @@
   transform: translateX(3px);
 }
 
-/* 输入框 */
+/* ———— 神经终端输入条（一体化赛博命令终端） ———— */
+
 .inputBar {
-  display: grid;
-  gap: 0.35rem;
-  --mode-color: var(--cp-yellow);
+  --composer-border: rgb(255 97 88 / 38%);
+  --composer-rail: rgb(255 97 88 / 76%);
+  --composer-top-glow: rgb(255 97 88 / 12%);
+  --composer-divider: rgb(255 97 88 / 14%);
+  --composer-glyph: rgb(255 97 88 / 70%);
+  position: relative;
+  display: block;
+  filter: drop-shadow(0 8px 22px rgb(0 0 0 / 48%));
+  transition: filter var(--dur-flash) var(--ease-cyber);
+}
+
+.inputBar:hover {
+  --composer-border: rgb(255 97 88 / 58%);
+  --composer-rail: var(--cp-red);
+}
+
+.inputBar:focus-within {
+  --composer-border: rgb(94 246 255 / 72%);
+  --composer-rail: var(--cp-cyan);
+  --composer-top-glow: rgb(94 246 255 / 22%);
+  --composer-divider: rgb(94 246 255 / 20%);
+  --composer-glyph: var(--cp-cyan);
+  filter: drop-shadow(0 0 14px rgb(94 246 255 / 14%)) drop-shadow(0 10px 26px rgb(0 0 0 / 56%));
+}
+
+.inputBar[data-reply] {
+  --composer-border: rgb(252 238 10 / 56%);
+  --composer-rail: var(--cp-yellow);
+  --composer-top-glow: rgb(252 238 10 / 20%);
+  --composer-divider: rgb(252 238 10 / 18%);
+  --composer-glyph: var(--cp-yellow);
 }
 
 .inputBar[data-busy] {
-  --mode-color: var(--cp-cyan);
+  --composer-border: rgb(94 246 255 / 54%);
+  --composer-rail: var(--cp-cyan);
+  --composer-top-glow: rgb(94 246 255 / 22%);
+  --composer-divider: rgb(94 246 255 / 18%);
+  --composer-glyph: var(--cp-cyan);
 }
 
-.hint {
-  font-family: var(--font-ui);
-  font-size: 0.75rem;
-  color: var(--cp-text-faint);
+.inputBar[data-boost] {
+  --composer-border: rgb(252 238 10 / 82%);
+  --composer-rail: var(--cp-yellow);
+  --composer-top-glow: rgb(252 238 10 / 28%);
+  --composer-divider: rgb(252 238 10 / 26%);
+  --composer-glyph: var(--cp-yellow);
+  filter: drop-shadow(0 0 16px rgb(252 238 10 / 18%)) drop-shadow(0 10px 26px rgb(0 0 0 / 58%));
 }
 
-.inputRow {
-  display: flex;
-  align-items: stretch;
-  gap: 0.6rem;
+.inputBar[data-invalid] {
+  --composer-border: var(--cp-danger);
+  --composer-rail: var(--cp-danger);
+  --composer-top-glow: rgb(255 0 60 / 24%);
+  --composer-divider: rgb(255 0 60 / 26%);
+  --composer-glyph: var(--cp-danger);
+  filter: drop-shadow(0 0 14px rgb(255 0 60 / 22%)) drop-shadow(0 8px 22px rgb(0 0 0 / 52%));
 }
 
-.inputBox {
+/* 双层斜切角外壳：外层提供连贯的 1px 发光切角边，避免 clip-path 裁断斜角边框 */
+.composerFrame {
+  padding: 1px;
+  background: var(--composer-border);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  transition: background-color var(--dur-flash) var(--ease-cyber);
+}
+
+.composerInner {
   position: relative;
   display: flex;
-  flex: 1;
-  min-width: 0;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgb(21 13 20 / 94%), rgb(12 8 14 / 97%));
+  box-shadow:
+    inset 3px 0 0 var(--composer-rail),
+    inset 0 1px 0 var(--composer-top-glow);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%);
+  transition: box-shadow var(--dur-flash) var(--ease-cyber);
 }
 
-.textarea {
+.composerProgress {
+  position: absolute;
+  inset: 0 0 auto 3px;
+  height: 2px;
+  overflow: hidden;
+  background: rgb(94 246 255 / 16%);
+  pointer-events: none;
+}
+
+.composerProgress::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, var(--cp-cyan), transparent);
+  animation: liveTelemetrySweep 2s var(--ease-cyber) infinite;
+}
+
+/* 顶部内嵌回复引用条 */
+.replyBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.36rem 0.65rem 0.36rem 0.85rem;
+  background: linear-gradient(90deg, rgb(252 238 10 / 10%), rgb(252 238 10 / 2%) 78%, transparent);
+  border-bottom: 1px solid rgb(252 238 10 / 18%);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  animation: rise 150ms var(--ease-cyber) both;
+}
+
+.replyBadge {
+  flex: none;
+  padding: 0.05rem 0.36rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #09080c;
+  background: var(--cp-yellow);
+}
+
+.replyText {
   flex: 1;
-  resize: none;
-  min-height: 3.2rem;
-  max-height: 10rem;
-  padding: 0.55rem 0.85rem;
-  font-family: var(--font-body);
-  font-size: 0.98rem;
-  line-height: 1.6;
-  color: var(--cp-text);
-  background: var(--cp-surface-inset);
-  border: 1px solid var(--cp-red-dim);
-  border-left: 2px solid var(--mode-color);
-  field-sizing: content;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cp-text-dim);
+}
+
+.replyText b {
+  color: var(--cp-yellow);
+  font-weight: 600;
+}
+
+.replyClose {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--cp-text-dim);
+  border: 1px solid transparent;
+  cursor: var(--cp-cursor-hand);
   transition:
+    color var(--dur-flash),
     border-color var(--dur-flash),
     background-color var(--dur-flash);
 }
 
-.inputBox[data-invalid] .textarea {
-  border-color: var(--cp-danger);
-  border-left-color: var(--cp-danger);
-}
-
-.textarea:focus {
+.replyClose:hover,
+.replyClose:focus-visible {
   outline: none;
-  background: var(--cp-surface-strong);
-  border-color: var(--mode-color);
-  box-shadow: 0 0 0 1px var(--mode-color) inset;
-}
-
-.textarea:disabled {
-  opacity: 0.5;
-}
-
-.charCount {
-  position: absolute;
-  right: 0.55rem;
-  bottom: 0.3rem;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
   color: var(--cp-yellow);
-  pointer-events: none;
+  border-color: rgb(252 238 10 / 45%);
+  background: rgb(252 238 10 / 10%);
 }
 
-.charCount[data-over] {
+/* 中部纯净编辑区 */
+.editorWrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.58rem 0.85rem 0.44rem 0.8rem;
+}
+
+.promptGlyph {
+  flex: none;
+  padding-top: 0.06rem;
+  font-family: var(--font-mono);
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--composer-glyph);
+  user-select: none;
+  transition:
+    color var(--dur-flash),
+    text-shadow var(--dur-flash);
+}
+
+.inputBar:focus-within .promptGlyph {
+  text-shadow: 0 0 8px rgb(94 246 255 / 45%);
+}
+
+.inputBar[data-boost] .promptGlyph {
+  text-shadow: 0 0 10px rgb(252 238 10 / 55%);
+}
+
+.textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  min-height: 2.35rem;
+  max-height: 9.5rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--cp-text);
+  caret-color: var(--composer-rail);
+  field-sizing: content;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 97 88 / 38%) transparent;
+}
+
+.textarea::placeholder {
+  color: var(--cp-text-faint);
+  opacity: 0.88;
+}
+
+.inputBar:focus-within .textarea {
+  scrollbar-color: var(--cp-cyan-dim) transparent;
+}
+
+.inputBar[data-expanded] .textarea {
+  min-height: 13.5rem;
+  max-height: min(22rem, 42dvh);
+}
+
+/* 底部恒定高度内联控制栏 */
+.composerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.34rem 0.65rem 0.4rem 0.82rem;
+  border-top: 1px solid var(--composer-divider);
+  background: rgb(8 5 10 / 42%);
+  font-family: var(--font-ui);
+  font-size: var(--fs-label);
+  transition: border-color var(--dur-flash) var(--ease-cyber);
+}
+
+.footerLeft,
+.footerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.footerLeft {
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.footerRight {
+  flex: none;
+}
+
+/* 斯安威斯坦芯片开关 */
+.chipToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  height: 24px;
+  padding: 0 0.52rem;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(252 238 10 / 82%);
+  background: rgb(252 238 10 / 8%);
+  border: 1px solid rgb(252 238 10 / 32%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  cursor: var(--cp-cursor-hand);
+  white-space: nowrap;
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash),
+    box-shadow var(--dur-flash);
+}
+
+.chipToggle:hover,
+.chipToggle:focus-visible {
+  outline: none;
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
+  border-color: rgb(252 238 10 / 65%);
+}
+
+.chipToggle[data-active] {
+  color: #09080c;
+  background: var(--cp-yellow);
+  border-color: var(--cp-yellow);
+  box-shadow: 0 0 12px rgb(252 238 10 / 36%);
+}
+
+.chipToggle[data-active]:hover,
+.chipToggle[data-active]:focus-visible {
+  color: #09080c;
+  background: #fff44d;
+  border-color: #fff44d;
+}
+
+/* 发送键位切换按钮 */
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.32rem;
+  font-family: var(--font-ui);
+  font-size: 0.73rem;
+  color: var(--cp-text-faint);
+  border: 1px solid transparent;
+  cursor: var(--cp-cursor-hand);
+  white-space: nowrap;
+  transition:
+    color var(--dur-flash),
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.modeToggle:hover,
+.modeToggle:focus-visible {
+  outline: none;
+  color: var(--cp-cyan);
+  border-color: rgb(94 246 255 / 32%);
+  background: rgb(94 246 255 / 8%);
+}
+
+.miniKey {
+  display: inline-block;
+  padding: 0.02rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid rgb(255 255 255 / 16%);
+}
+
+.modeToggle:hover .miniKey,
+.modeToggle:focus-visible .miniKey {
+  color: var(--cp-cyan);
+  border-color: rgb(94 246 255 / 45%);
+}
+
+.shortcutNote {
+  font-size: 0.72rem;
+  color: rgb(168 163 160 / 46%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+@media (width < 1100px) {
+  .shortcutNote {
+    display: none;
+  }
+}
+
+/* 推演状态与告警提示 */
+.footerStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--cp-cyan);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  background: var(--cp-cyan);
+  box-shadow: 0 0 8px var(--cp-cyan);
+  animation: liveDotPulse 1.15s ease-in-out infinite;
+}
+
+.footerAlert {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--cp-danger);
+  white-space: nowrap;
+}
+
+/* 右侧计数、工具键、发送与停止按钮 */
+.charMeter {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cp-text-faint);
+  white-space: nowrap;
+}
+
+.charMeter[data-warn] {
+  color: var(--cp-yellow);
+}
+
+.charMeter[data-over] {
   color: var(--cp-danger);
   font-weight: 700;
 }
 
-.warn {
-  margin: 0;
+.iconTool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  height: 24px;
+  padding: 0 0.42rem;
+  font-family: var(--font-ui);
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--cp-text-dim);
+  border: 1px solid transparent;
+  cursor: var(--cp-cursor-hand);
+  white-space: nowrap;
+  transition:
+    color var(--dur-flash),
+    background-color var(--dur-flash),
+    border-color var(--dur-flash);
+}
+
+.iconTool:hover,
+.iconTool:focus-visible {
+  outline: none;
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 9%);
+  border-color: rgb(94 246 255 / 32%);
+}
+
+.iconTool[data-active] {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 12%);
+  border-color: rgb(94 246 255 / 42%);
+}
+
+.sendBtn,
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.36rem;
+  height: 28px;
+  padding: 0 0.85rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+  transition:
+    color var(--dur-flash) var(--ease-cyber),
+    background-color var(--dur-flash) var(--ease-cyber),
+    transform 100ms var(--ease-snap),
+    filter var(--dur-flash) var(--ease-cyber);
+}
+
+.sendBtn {
+  color: var(--cp-text-faint);
+  background: rgb(255 255 255 / 6%);
+  cursor: var(--cp-cursor-invalid);
+}
+
+.sendBtn[data-ready] {
+  color: #09080c;
+  background: var(--cp-yellow);
+  cursor: var(--cp-cursor-hand);
+}
+
+.sendBtn[data-ready][data-boost] {
+  box-shadow: 0 0 14px rgb(252 238 10 / 45%);
+}
+
+.sendBtn[data-ready]:hover,
+.sendBtn[data-ready]:focus-visible {
+  outline: none;
+  color: #05080f;
+  background: var(--cp-cyan);
+  filter: drop-shadow(0 0 8px rgb(94 246 255 / 35%));
+}
+
+.sendBtn[data-ready]:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.stopBtn {
+  color: var(--cp-red);
+  background: rgb(255 42 60 / 16%);
+  border: 1px solid rgb(255 97 88 / 58%);
+  cursor: var(--cp-cursor-hand);
+}
+
+.stopBtn:hover,
+.stopBtn:focus-visible {
+  outline: none;
+  color: #fff;
+  background: var(--cp-danger);
+  border-color: var(--cp-danger);
+  filter: drop-shadow(0 0 8px rgb(255 0 60 / 38%));
+}
+
+.stopBtn:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.stopSquare {
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+}
+
+/* 封存/禁用态：收起为单行紧凑赛博状态条，把空间还给剧情回看 */
+.inputLocked {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.9rem;
   font-family: var(--font-ui);
   font-size: var(--fs-label);
-  color: var(--cp-danger);
+  color: var(--cp-text-dim);
+  background: linear-gradient(90deg, rgb(255 97 88 / 9%), rgb(16 10 16 / 86%) 45%);
+  border: 1px solid rgb(255 97 88 / 28%);
+  border-left: 3px solid var(--cp-red-dim);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+}
+
+.inputLockedTag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cp-red);
+}
+
+.inputLockedText {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ———— D 系统通知：在 C 追踪的容器里，紧贴追踪下面，右对齐 ———— */
@@ -3601,24 +4053,6 @@
   opacity: 0.55;
 }
 
-.replyChip {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin: 0 0 0.3rem;
-  padding-left: 0.5rem;
-  border-left: 2px solid var(--cp-yellow-dim);
-  font-size: var(--fs-label);
-  animation: rise 160ms var(--ease-cyber) both;
-}
-
-.replyText {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* RAM 格：血条下方一排青色格子，放程序逐格熄灭，回复逐格点亮 */
 .ram {
   display: flex;
@@ -5503,7 +5937,9 @@ ul.mapLegend > li {
   .journalBackdrop,
   .journal,
   .dossierDialog,
-  .replyChip,
+  .replyBanner,
+  .composerProgress::after,
+  .statusDot,
   .divePanel,
   .diveLayer[data-here],
   .turnIllustration {
@@ -5513,6 +5949,8 @@ ul.mapLegend > li {
   .choice,
   .choice[data-tilting],
   .choice[data-tilting][data-pressed],
+  .sendBtn,
+  .stopBtn,
   .diveLayer,
   .toastBtn {
     transition: none;

@@ -111,9 +111,7 @@ function loadSavedDraft(saveId: string): TurnInput {
     const parsed = JSON.parse(raw) as Partial<TurnInput>;
     const text = typeof parsed.text === "string" ? parsed.text : "";
     const replyTo =
-      typeof parsed.replyTo === "number" &&
-      Number.isInteger(parsed.replyTo) &&
-      parsed.replyTo >= 1
+      typeof parsed.replyTo === "number" && Number.isInteger(parsed.replyTo) && parsed.replyTo >= 1
         ? parsed.replyTo
         : undefined;
     const sandevistan = parsed.sandevistan === true ? true : undefined;
