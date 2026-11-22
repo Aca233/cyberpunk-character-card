@@ -13,7 +13,7 @@ import {
   runNarratorTurn,
   seededRng,
 } from "@cp/core";
-import { configAt, LlmRouter, UpstreamError } from "@cp/server/llm";
+import { configAt, LlmRouter, UpstreamError } from "@cp/runtime/llm";
 import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
 import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
 import { grade, type Score } from "./narrator-eval/grader";

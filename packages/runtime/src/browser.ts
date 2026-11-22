@@ -9,9 +9,9 @@ import { PresetStore } from "./presets";
 import { TurnHub } from "./turns";
 
 /**
- * 纯前端（静态网站）用的本地服务层：和服务器同一套路由和游戏逻辑，存储换成浏览器里的 IndexedDB。
- * 网页不发网络请求到后端，而是把 Request 直接交给 app.fetch；回合事件直接订阅内存里的 TurnHub。
- * 不依赖 Node；没有设定库（官方文本库只在本机服务器上有）、没有内容工坊和评测草稿
+ * 浏览器端纯静态运行时：使用 Hono 在页面内存里分发虚拟路由（app.fetch），
+ * 所有存档、角色卡、预设、图片与模型配置均保存在浏览器 IndexedDB，无独立后端进程。
+ * 回合事件流直接订阅内存中的 TurnHub；不依赖 Node。
  */
 
 export interface LocalBackend {

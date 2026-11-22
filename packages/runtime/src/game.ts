@@ -230,7 +230,7 @@ export class GameService {
         out.push({ id, ...meta, running: this.deps.hub.running(id) !== undefined });
       } catch (error) {
         this.deps.log(
-          `跳过读不了的存档 ${id}：${error instanceof Error ? error.message : String(error)}`,
+          `跳过无法解析的存档 ${id}（可能与当前版本格式不兼容或数据已损坏，可在读取存档页导入 JSON 备份）：${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -321,7 +321,12 @@ export class GameService {
   /** 导入完整导出：逐行校验日志、从头重放；快照对不上时以日志为准，建成一个新存档 */
   async importSave(input: z.output<typeof SaveExportSchema>): Promise<Reply> {
     const meta = SaveMetaSchema.safeParse(input.meta);
-    if (!meta.success) return { status: 400, body: { error: "存档信息（meta）格式不对" } };
+    if (!meta.success) {
+      return {
+        status: 400,
+        body: { error: "存档信息（meta）格式不兼容或已损坏，无法导入当前版本" },
+      };
+    }
     let records: readonly LogRecord[];
     try {
       records = parseLog(input.records.map((r) => `${JSON.stringify(r)}\n`).join("")).records;

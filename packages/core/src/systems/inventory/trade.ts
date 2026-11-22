@@ -12,7 +12,7 @@ import {
 import { type EconomyState, MONEY_CAP, type Rarity, SERVICES } from "../economy";
 import { LogisticsStateSchema } from "../logistics";
 // biome-ignore lint/style/noRestrictedImports: NPC 入口经 perceived 反向初始化 inventory，读取独立 schema 避免循环。
-import { NPC_GEAR_MAX, type NpcState } from "../npc/schema";
+import { NPC_GEAR_MAX, NPC_NOTE_CHARS, type NpcState } from "../npc/schema";
 import { merchantAt, merchantServices, type WorldClockState } from "../world";
 import { applyItem, itemCatalog, shopList, withWorldObjects } from "./apply";
 import { ensureMerchant, merchantState, shopUnavailable, withMerchants } from "./merchants";
@@ -434,12 +434,12 @@ export function applyTrade(
         }
         break;
       case "favor":
-        if (quoted.party.npc) {
+        if (quoted.party.npc?.met) {
           emitted.push({
             type: "affinity",
-            npc: quoted.party.npc.id,
+            id: quoted.party.npc.id,
             delta: 1,
-            reason: `打点示好：${command.reason}`,
+            reason: `打点示好：${command.reason.trim()}`.slice(0, NPC_NOTE_CHARS),
           });
         }
         break;

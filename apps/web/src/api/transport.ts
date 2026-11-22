@@ -1,5 +1,5 @@
 import type { TurnEvent } from "@cp/core";
-import type { LocalBackend } from "@cp/server/browser";
+import type { LocalBackend } from "@cp/runtime/browser";
 
 /**
  * 纯前端静态运行层：整个游戏在浏览器里运行，存档与密钥存在 IndexedDB，
@@ -84,12 +84,12 @@ export function takeOverTab() {
   requestLock({ steal: true });
 }
 
-let browserModule: Promise<typeof import("@cp/server/browser")> | undefined;
+let browserModule: Promise<typeof import("@cp/runtime/browser")> | undefined;
 let backend: Promise<LocalBackend> | undefined;
 let origin = "http://localhost";
 
-function loadBrowserServerModule(): Promise<typeof import("@cp/server/browser")> {
-  browserModule ??= import("@cp/server/browser");
+function loadBrowserServerModule(): Promise<typeof import("@cp/runtime/browser")> {
+  browserModule ??= import("@cp/runtime/browser");
   return browserModule;
 }
 

@@ -1,19 +1,19 @@
 # 《赛博朋克2091》玩法与机制总览
 
-> **历史机制说明，已不适用于当前沙盘版本。** 本文仍含旧骰点、属性门槛、场次配额和固定正文风格，不应作为实现或测试的验收依据。现行规则请看 [沙盘后台清理交付](sandbox-cleanup-delivery.md)、[商店沙盘交付](merchant-sandbox-delivery.md) 和 [玩法与逻辑检查](gameplay-logic-audit-2026-11-17.md)。
+> **早期机制参考说明**：部分章节仍保留早期规则描述（如旧骰点、属性门槛与固定篇幅设定），具体数值与边界请以源码为准。
 
-> 从代码（`packages/core`、`packages/content`、`apps/web`、`apps/server`）反推出来的机制说明。
-> 文中数值都取自源码里的常量；凡标「代码」的就是硬规则，标「提示词」的是写给叙事模型的约束。
+> 从代码（`packages/core`、`packages/content`、`apps/web`、`packages/runtime`）整理出来的机制说明。
+> 文中数值取自源码里的常量；凡标「代码」的是硬规则，标「提示词」的是写给叙事模型的约束。
 
 ---
 
 ## 0. 一句话定位
 
 夜之城文字角色扮演。大语言模型扮演**所有人**（每个 NPC + 夜之城本身），玩家扮演自建佣兵，用自由文字行动。
-**模型只管"发生什么"，代码管"账怎么记"**：属性、骰子、欧元、生命、人性、时间、物品、关系，全部由代码结算，模型只提交"事件"。
+**模型只管"发生什么"，代码管"账怎么记"**：属性、欧元、生命、人性、时间、物品、关系，全部由代码结算，模型只提交"事件"。
 
-技术形态：pnpm monorepo（`apps/web` React 19 + Vite / `apps/server` Hono / `packages/core` 纯逻辑 / `packages/content` 静态数据）。
-可纯前端静态托管：存档、角色卡、模型密钥都在浏览器 IndexedDB，前端直连模型 API；也可用本地 Hono 服务器模式。
+技术形态：pnpm monorepo（`apps/web` React 19 + Vite / `packages/runtime` 浏览器端 Hono 虚拟路由 + IndexedDB / `packages/core` 纯逻辑 / `packages/content` 静态数据）。
+纯前端静态运行：存档、角色卡、模型密钥都在浏览器 IndexedDB，前端直连模型 API，无独立后端服务。
 
 ---
 
