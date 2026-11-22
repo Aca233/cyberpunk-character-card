@@ -1,6 +1,6 @@
 # 剧情主界面输入框（InputBar）视觉与交互优化方案
 
-状态：待用户确认方案
+状态：已完成（2026-11-22，按用户确认全套落地，仅调整剧情主界面输入框，手机私信框保持现状）
 
 ## 一、现状诊断
 
@@ -67,12 +67,13 @@
 
 ---
 
-## 三、预计改动范围
+## 三、实施记录与改动范围
 
-- `apps/web/src/features/story/InputBar.tsx`：重构终端容器结构、内联底栏、展开/清空/发送键位切换、斯安威斯坦开关、`Esc` 失焦与 `↑` 调回历史输入。
-- `apps/web/src/features/story/story.module.css`：重写 `.dock` 滚动层级与 `.inputBar` / 终端壳体 / 内联底栏 / 附属条 / 多态样式与降动效兼容。
-- `apps/web/src/features/story/StoryScreen.tsx`：接入 `/` 快捷聚焦、透传 `view.sandevistan` 与上一条玩家输入文本、`draft.sandevistan` 状态。
-- `apps/web/src/features/story/store.ts`：补齐 `draft.sandevistan` 的提交清理判断与按 `saveId` 轻持久化草稿。
-- （可选）`apps/web/src/features/story/Phone.tsx`：是否同步统一手机私信输入框的视觉细节，视用户确认决定。
+- `apps/web/src/features/story/store.ts`：新增按 `saveId` 持久化草稿（`cp.storyDraft:${saveId}`），统一清理可选字段与 `sandevistan` 复位逻辑。
+- `apps/web/src/features/story/InputBar.tsx`：重构为一体化赛博命令终端壳体（双层斜切角、顶部内嵌回复横幅、纯净自适应编辑区、恒定高度内联底栏），补全发送键位切换（`Enter` / `Ctrl+Enter`）、长文展开（`Alt+E`）、清空、`Esc` 失焦、空框 `↑` 调回上一轮输入、斯安威斯坦芯片开关与封存单行态。
+- `apps/web/src/features/story/StoryScreen.tsx`：新增 `/` 一键聚焦输入框快捷键，透传 `view.sandevistan` 与本存档最近一条玩家输入 `lastSentText`。
+- `apps/web/src/features/story/story.module.css`：将滚动隔离至 `.choices`，重写 `.inputBar` 六态样式与降动效适配，清理旧 `.replyChip`。
+- `apps/web/src/features/story/Phone.tsx`：按用户确认保持现状。
+- 静态检查：`npx biome check` 与 `npx tsc --noEmit -p apps/web/tsconfig.json` 均通过（按项目约定交由用户实机测试验收）。
 
 不涉及后端接口改动、不改动提示词逻辑、不改动两侧 HUD 角块与展开面板布局。
