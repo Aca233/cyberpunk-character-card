@@ -92,6 +92,62 @@ function finish(category: EndCategory, message?: string): void {
 }
 
 const EMPTY_DRAFT: TurnInput = { text: "" };
+const DRAFT_KEY_PREFIX = "cp.storyDraft:";
+
+function mergeDraft(current: TurnInput, patch: Partial<TurnInput>): TurnInput {
+  const merged = { ...current, ...patch };
+  return {
+    text: merged.text,
+    ...(merged.replyTo !== undefined ? { replyTo: merged.replyTo } : {}),
+    ...(merged.sandevistan === true ? { sandevistan: true } : {}),
+  };
+}
+
+function loadSavedDraft(saveId: string): TurnInput {
+  if (typeof localStorage === "undefined") return EMPTY_DRAFT;
+  try {
+    const raw = localStorage.getItem(`${DRAFT_KEY_PREFIX}${saveId}`);
+    if (!raw) return EMPTY_DRAFT;
+    const parsed = JSON.parse(raw) as Partial<TurnInput>;
+    const text = typeof parsed.text === "string" ? parsed.text : "";
+    const replyTo =
+      typeof parsed.replyTo === "number" &&
+      Number.isInteger(parsed.replyTo) &&
+      parsed.replyTo >= 1
+        ? parsed.replyTo
+        : undefined;
+    const sandevistan = parsed.sandevistan === true ? true : undefined;
+    if (text === "" && replyTo === undefined && !sandevistan) return EMPTY_DRAFT;
+    return {
+      text,
+      ...(replyTo !== undefined ? { replyTo } : {}),
+      ...(sandevistan ? { sandevistan: true } : {}),
+    };
+  } catch {
+    return EMPTY_DRAFT;
+  }
+}
+
+function persistDraft(saveId: string | null, draft: TurnInput): void {
+  if (!saveId || typeof localStorage === "undefined") return;
+  const key = `${DRAFT_KEY_PREFIX}${saveId}`;
+  try {
+    if (draft.text === "" && draft.replyTo === undefined && draft.sandevistan !== true) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        text: draft.text,
+        ...(draft.replyTo !== undefined ? { replyTo: draft.replyTo } : {}),
+        ...(draft.sandevistan === true ? { sandevistan: true } : {}),
+      }),
+    );
+  } catch {
+    // 隐私模式或存储配额不足时静默忽略
+  }
+}
 
 export const useStory = create<StoryState>()((set, get) => {
   let generation = 0;
@@ -138,17 +194,21 @@ export const useStory = create<StoryState>()((set, get) => {
             const complete = () => {
               if (!current()) return;
               playSfx("turnDone");
-              set((s) => ({
-                phase: "idle",
-                turnId: null,
-                text: "",
-                thought: "",
-                boost: null,
-                stage: null,
-                stageTrace: [],
-                pending: null,
-                draft: s.draft === submittedDraft ? EMPTY_DRAFT : s.draft,
-              }));
+              set((s) => {
+                const nextDraft = s.draft === submittedDraft ? EMPTY_DRAFT : s.draft;
+                if (nextDraft !== s.draft) persistDraft(saveId, nextDraft);
+                return {
+                  phase: "idle",
+                  turnId: null,
+                  text: "",
+                  thought: "",
+                  boost: null,
+                  stage: null,
+                  stageTrace: [],
+                  pending: null,
+                  draft: nextDraft,
+                };
+              });
               finish("ok");
             };
             void refresh().then(complete, complete);
@@ -253,7 +313,12 @@ export const useStory = create<StoryState>()((set, get) => {
     failure: null,
     spend: null,
     draft: EMPTY_DRAFT,
-    setDraft: (draft) => set((s) => ({ draft: { ...s.draft, ...draft } })),
+    setDraft: (draft) =>
+      set((s) => {
+        const next = mergeDraft(s.draft, draft);
+        persistDraft(s.saveId, next);
+        return { draft: next };
+      }),
     dismiss: () => set({ failure: null }),
     cancelSpend: () => set({ spend: null }),
     enter: (saveId) => {
@@ -275,7 +340,7 @@ export const useStory = create<StoryState>()((set, get) => {
         pending: null,
         failure: null,
         spend: null,
-        draft: EMPTY_DRAFT,
+        draft: loadSavedDraft(saveId),
       });
     },
     async submit(saveId, baseVersion, pending, refresh) {
@@ -285,7 +350,9 @@ export const useStory = create<StoryState>()((set, get) => {
       // 只清理本次实际发送且此后未编辑的草稿；选项、重连和下一步草稿都应保留。
       const draft = get().draft;
       const submittedDraft =
-        pending.input.text === draft.text.trim() && pending.input.replyTo === draft.replyTo
+        pending.input.text === draft.text.trim() &&
+        pending.input.replyTo === draft.replyTo &&
+        Boolean(pending.input.sandevistan) === Boolean(draft.sandevistan)
           ? draft
           : null;
       set({
