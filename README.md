@@ -44,7 +44,10 @@ CP_BASE=/仓库名/ pnpm --filter @cp/web build # GitHub Pages 项目子路径�
 ```bash
 npx wrangler login                          # 首次使用需登录
 pnpm deploy                                 # 构建并部署 apps/web/dist 到 Cloudflare Pages
+pnpm push                                   # 一键推送 GitHub 并构建部署 Cloudflare Pages
 ```
+
+- **Windows 一键双击**：直接双击根目录的 [`publish.cmd`](publish.cmd)，即可自动完成 GitHub 推送 + 构建并部署 Cloudflare Pages（若有未提交改动会交互提示输入 commit 说明，也支持命令行传参，例如 `.\publish.cmd -m "说明"`、`.\publish.cmd --check`、`.\publish.cmd --skip-git`、`.\publish.cmd --skip-pages`）。
 
 > **Windows PowerShell 子路径构建提示**：PowerShell 不支持 `VAR=val cmd` 行内环境变量写法，如需指定 `CP_BASE` 可执行：  
 > `$env:CP_BASE='/仓库名/'; pnpm build`。
