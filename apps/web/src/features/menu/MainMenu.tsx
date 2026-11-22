@@ -22,6 +22,7 @@ import {
   startAnchor,
 } from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
+import { CHANGELOG_ENTRIES } from "./changelog";
 import styles from "./menu.module.css";
 
 type Item = "continue" | "new" | "load" | "characters" | "workshop" | "settings";
@@ -53,7 +54,7 @@ const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a
 
 /**
  * 主菜单：夜之城远景压暗、扫描线、原作 panel.frame 红框；
- * 左列是标志、菜单和状态终端，右边是选中项的舞台
+ * 居中三栏布局：左列标志/菜单/终端状态，中列选中项舞台，右列更新日志
  */
 export function MainMenu() {
   const navigate = useNavigate();
@@ -255,9 +256,9 @@ export function MainMenu() {
         className={styles.frame}
       />
 
-      <aside className={styles.side}>
+      <div className={styles.layout}>
         <header className={styles.brand}>
-          <Asset id="splash.logo" height={78} alt="赛博朋克2091" />
+          <Asset id="splash.logo" height={116} alt="赛博朋克2091" className={styles.brandLogo} />
           <span
             className={styles.brandLine}
             style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
@@ -265,287 +266,297 @@ export function MainMenu() {
           />
         </header>
 
-        <nav ref={navRef} className={styles.nav} aria-label="主菜单">
-          {primaryItems.map((item) => (
-            <MenuItem
-              key={item.id}
-              buttonRef={(el) => {
-                itemRefs.current[item.id] = el;
-              }}
-              label={item.label}
-              hint={item.hint}
-              hintTone={item.hintTone}
-              selected={focus === item.id}
-              disabled={item.disabled ?? false}
-              reason={item.reason}
-              onFocus={() => !item.disabled && setFocus(item.id)}
-              onSelect={() => select(item.id)}
+        <aside className={styles.side}>
+          <nav ref={navRef} className={styles.nav} aria-label="主菜单">
+            {primaryItems.map((item) => (
+              <MenuItem
+                key={item.id}
+                buttonRef={(el) => {
+                  itemRefs.current[item.id] = el;
+                }}
+                label={item.label}
+                hint={item.hint}
+                hintTone={item.hintTone}
+                selected={focus === item.id}
+                disabled={item.disabled ?? false}
+                reason={item.reason}
+                onFocus={() => !item.disabled && setFocus(item.id)}
+                onSelect={() => select(item.id)}
+              />
+            ))}
+            <span
+              className={styles.navDivider}
+              style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+              aria-hidden
             />
-          ))}
-          <span
-            className={styles.navDivider}
-            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-            aria-hidden
-          />
-          {utilityItems.map((item) => (
-            <MenuItem
-              key={item.id}
-              buttonRef={(el) => {
-                itemRefs.current[item.id] = el;
-              }}
-              label={item.label}
-              hint={item.hint}
-              hintTone={item.hintTone}
-              selected={focus === item.id}
-              disabled={item.disabled ?? false}
-              reason={item.reason}
-              onFocus={() => !item.disabled && setFocus(item.id)}
-              onSelect={() => select(item.id)}
-            />
-          ))}
-        </nav>
+            {utilityItems.map((item) => (
+              <MenuItem
+                key={item.id}
+                buttonRef={(el) => {
+                  itemRefs.current[item.id] = el;
+                }}
+                label={item.label}
+                hint={item.hint}
+                hintTone={item.hintTone}
+                selected={focus === item.id}
+                disabled={item.disabled ?? false}
+                reason={item.reason}
+                onFocus={() => !item.disabled && setFocus(item.id)}
+                onSelect={() => select(item.id)}
+              />
+            ))}
+          </nav>
 
-        <div className={styles.statusCard} {...statusTilt}>
-          <NineSlice
-            id="notify.itemCellBg"
-            slice={30}
-            tint="rgb(10 7 14 / 86%)"
-            className={styles.statusSlice}
-          />
-          <NineSlice
-            id="notify.itemCellBg"
-            slice={30}
-            tint="transparent"
-            className={styles.cardGlare}
-          />
-          <NineSlice
-            id="notify.itemCellFg"
-            slice={30}
-            tint={modelReady === false ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
-            className={styles.statusSlice}
-          />
-          <div className={styles.statusTop}>
-            <span className={styles.statusHead}>终端状态</span>
-            <span className={styles.statusMode}>浏览器本地</span>
-          </div>
-          <dl className={styles.status}>
-            <dt>模型</dt>
-            <dd data-tone={modelReady === false ? "warn" : modelReady ? "ok" : undefined}>
-              {modelReady === null ? (
-                "检查中…"
-              ) : modelReady ? (
-                <>就绪{narratorName ? ` · ${narratorName}` : ""}</>
-              ) : (
+          <div className={styles.statusCard} {...statusTilt}>
+            <NineSlice
+              id="notify.itemCellBg"
+              slice={30}
+              tint="rgb(10 7 14 / 86%)"
+              className={styles.statusSlice}
+            />
+            <NineSlice
+              id="notify.itemCellBg"
+              slice={30}
+              tint="transparent"
+              className={styles.cardGlare}
+            />
+            <NineSlice
+              id="notify.itemCellFg"
+              slice={30}
+              tint={modelReady === false ? "var(--cp-yellow)" : "var(--cp-red-dim)"}
+              className={styles.statusSlice}
+            />
+            <div className={styles.statusTop}>
+              <span className={styles.statusHead}>终端状态</span>
+              <span className={styles.statusMode}>浏览器本地</span>
+            </div>
+            <dl className={styles.status}>
+              <dt>模型</dt>
+              <dd data-tone={modelReady === false ? "warn" : modelReady ? "ok" : undefined}>
+                {modelReady === null ? (
+                  "检查中…"
+                ) : modelReady ? (
+                  <>就绪{narratorName ? ` · ${narratorName}` : ""}</>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.inlineLink}
+                    onClick={() => navigate("/settings")}
+                  >
+                    未配好 · 去设置 →
+                  </button>
+                )}
+              </dd>
+              <dt>存档</dt>
+              <dd className="num">
+                {saves.isSuccess ? `${sorted.length} 个` : "—"}
+                {characters.data ? ` · ${characters.data.length} 张角色卡` : ""}
+              </dd>
+              <dt>工坊</dt>
+              <dd>未完成 · 暂未启用</dd>
+              <dt>音频</dt>
+              <dd data-tone={audioPrefs.muted ? "warn" : "ok"}>
                 <button
                   type="button"
                   className={styles.inlineLink}
-                  onClick={() => navigate("/settings")}
+                  data-sfx="none"
+                  title="点击切换静音（快捷键 Alt+M）"
+                  onClick={() => {
+                    const muted = toggleMute();
+                    if (!muted) playSfx("toggleOn");
+                  }}
                 >
-                  未配好 · 去设置 →
+                  {audioPrefs.muted
+                    ? "已静音 · 点击开启"
+                    : audioState.originalReady
+                      ? "原版音频 · 点击静音"
+                      : "已开启 · 点击静音"}
                 </button>
-              )}
-            </dd>
-            <dt>存档</dt>
-            <dd className="num">
-              {saves.isSuccess ? `${sorted.length} 个` : "—"}
-              {characters.data ? ` · ${characters.data.length} 张角色卡` : ""}
-            </dd>
-            <dt>工坊</dt>
-            <dd>未完成 · 暂未启用</dd>
-            <dt>音频</dt>
-            <dd data-tone={audioPrefs.muted ? "warn" : "ok"}>
-              <button
-                type="button"
-                className={styles.inlineLink}
-                data-sfx="none"
-                title="点击切换静音（快捷键 Alt+M）"
-                onClick={() => {
-                  const muted = toggleMute();
-                  if (!muted) playSfx("toggleOn");
-                }}
-              >
-                {audioPrefs.muted
-                  ? "已静音 · 点击开启"
-                  : audioState.originalReady
-                    ? "原版音频 · 点击静音"
-                    : "已开启 · 点击静音"}
-              </button>
-            </dd>
-          </dl>
-        </div>
-      </aside>
-
-      <section ref={stageRef} className={styles.stage} aria-label={stageTitle}>
-        <header className={styles.stageHead}>
-          <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.stageHeadBg} />
-          <Asset
-            id="panel.glowLeft"
-            height={28}
-            tint="var(--cp-cyan)"
-            className={styles.stageGlow}
-          />
-          <div className={styles.stageHeading}>
-            {stageCode && <span className={styles.stageCode}>{stageCode}</span>}
-            <h1 className={styles.stageTitle}>{stageTitle}</h1>
+              </dd>
+            </dl>
           </div>
-          {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
-        </header>
-        <span
-          className={styles.stageLine}
-          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-          aria-hidden
-        />
-        <div className={styles.stageBody} key={focus}>
-          {health.data && (health.data.config !== "ok" || health.data.models?.ready === false) && (
-            <Panel line="var(--cp-yellow)" className={styles.warn}>
-              <div className={styles.warnRow}>
-                <span>
-                  {health.data.models?.narrator.error ??
-                    health.data.models?.aux.error ??
-                    "模型还没配好，剧情暂时不能开始。"}
-                </span>
-                <Button onClick={() => navigate("/settings")}>去设置</Button>
-              </div>
-            </Panel>
-          )}
-          {health.isError && (
-            <Panel line="var(--cp-danger)" className={styles.warn}>
-              {health.error.message}
-            </Panel>
-          )}
+        </aside>
 
-          {focus === "continue" && latest && (
-            <div className={styles.continue}>
-              <SaveCard
-                save={latest}
-                character={charById.get(latest.characterId)}
-                featured
-                onOpen={() => navigate(`/play/${latest.id}`)}
-              />
-              {sorted.length > 1 && (
-                <>
-                  <div className={styles.groupRow}>
-                    <h2 className={styles.groupHead}>其他近期存档</h2>
-                    {sorted.length > 4 && (
-                      <Button small onClick={() => setFocus("load")}>
-                        全部 {sorted.length} 份 →
-                      </Button>
-                    )}
+        <section ref={stageRef} className={styles.stage} aria-label={stageTitle}>
+          <header className={styles.stageHead}>
+            <Asset
+              id="menu.header"
+              tint="var(--cp-red)"
+              height={52}
+              className={styles.stageHeadBg}
+            />
+            <Asset
+              id="panel.glowLeft"
+              height={28}
+              tint="var(--cp-cyan)"
+              className={styles.stageGlow}
+            />
+            <div className={styles.stageHeading}>
+              {stageCode && <span className={styles.stageCode}>{stageCode}</span>}
+              <h1 className={styles.stageTitle}>{stageTitle}</h1>
+            </div>
+            {stageCount && <span className={styles.stageCount}>{stageCount}</span>}
+          </header>
+          <span
+            className={styles.stageLine}
+            style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+            aria-hidden
+          />
+          <div className={styles.stageBody} key={focus}>
+            {health.data &&
+              (health.data.config !== "ok" || health.data.models?.ready === false) && (
+                <Panel line="var(--cp-yellow)" className={styles.warn}>
+                  <div className={styles.warnRow}>
+                    <span>
+                      {health.data.models?.narrator.error ??
+                        health.data.models?.aux.error ??
+                        "模型还没配好，剧情暂时不能开始。"}
+                    </span>
+                    <Button onClick={() => navigate("/settings")}>去设置</Button>
                   </div>
+                </Panel>
+              )}
+            {health.isError && (
+              <Panel line="var(--cp-danger)" className={styles.warn}>
+                {health.error.message}
+              </Panel>
+            )}
+
+            {focus === "continue" && latest && (
+              <div className={styles.continue}>
+                <SaveCard
+                  save={latest}
+                  character={charById.get(latest.characterId)}
+                  featured
+                  onOpen={() => navigate(`/play/${latest.id}`)}
+                />
+                {sorted.length > 1 && (
+                  <>
+                    <div className={styles.groupRow}>
+                      <h2 className={styles.groupHead}>其他近期存档</h2>
+                      {sorted.length > 4 && (
+                        <Button small onClick={() => setFocus("load")}>
+                          全部 {sorted.length} 份 →
+                        </Button>
+                      )}
+                    </div>
+                    <ul className={styles.saveList}>
+                      {sorted.slice(1, 4).map((save) => (
+                        <li key={save.id}>
+                          <SaveCard
+                            save={save}
+                            character={charById.get(save.characterId)}
+                            onOpen={() => navigate(`/play/${save.id}`)}
+                            compact
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+
+            {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
+
+            {focus === "load" && (
+              <div className={styles.load}>
+                {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
+                <div className={styles.loadToolbar}>
+                  {sorted.length > 0 && (
+                    <FrameBox className={styles.loadSearch}>
+                      <input
+                        value={loadFilter}
+                        onChange={(e) => setLoadFilter(e.target.value)}
+                        placeholder="筛选存档名、角色或出身…"
+                        aria-label="筛选存档"
+                      />
+                    </FrameBox>
+                  )}
+                  <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
+                </div>
+                <p className={styles.note}>
+                  存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份；导入的存档文件会建成新存档，文件内含剧透，请妥善保管。
+                </p>
+                {sorted.length === 0 ? (
+                  <EmptyState
+                    text="还没有存档"
+                    action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
+                  />
+                ) : filteredSaves.length === 0 ? (
+                  <EmptyState
+                    text={`没有匹配「${loadFilter}」的存档`}
+                    action={<Button onClick={() => setLoadFilter("")}>清空筛选</Button>}
+                  />
+                ) : (
                   <ul className={styles.saveList}>
-                    {sorted.slice(1, 4).map((save) => (
-                      <li key={save.id}>
+                    {filteredSaves.map((save) => (
+                      <li key={save.id} className={styles.saveRow}>
                         <SaveCard
                           save={save}
                           character={charById.get(save.characterId)}
                           onOpen={() => navigate(`/play/${save.id}`)}
                           compact
                         />
+                        <ExportSave save={save} />
                       </li>
                     ))}
                   </ul>
-                </>
-              )}
-            </div>
-          )}
-
-          {focus === "new" && <NewSave onCreated={(id) => navigate(`/play/${id}`)} />}
-
-          {focus === "load" && (
-            <div className={styles.load}>
-              {saves.isError && <p className={styles.error}>{saves.error.message}</p>}
-              <div className={styles.loadToolbar}>
-                {sorted.length > 0 && (
-                  <FrameBox className={styles.loadSearch}>
-                    <input
-                      value={loadFilter}
-                      onChange={(e) => setLoadFilter(e.target.value)}
-                      placeholder="筛选存档名、角色或出身…"
-                      aria-label="筛选存档"
-                    />
-                  </FrameBox>
                 )}
-                <ImportSave onImported={(id) => navigate(`/play/${id}`)} />
               </div>
-              <p className={styles.note}>
-                存档只存在这个浏览器里，清除网站数据就没了，记得定期导出备份；导入的存档文件会建成新存档，文件内含剧透，请妥善保管。
-              </p>
-              {sorted.length === 0 ? (
-                <EmptyState
-                  text="还没有存档"
-                  action={<Button onClick={() => setFocus("new")}>新建存档</Button>}
-                />
-              ) : filteredSaves.length === 0 ? (
-                <EmptyState
-                  text={`没有匹配「${loadFilter}」的存档`}
-                  action={<Button onClick={() => setLoadFilter("")}>清空筛选</Button>}
-                />
-              ) : (
-                <ul className={styles.saveList}>
-                  {filteredSaves.map((save) => (
-                    <li key={save.id} className={styles.saveRow}>
-                      <SaveCard
-                        save={save}
-                        character={charById.get(save.characterId)}
-                        onOpen={() => navigate(`/play/${save.id}`)}
-                        compact
-                      />
-                      <ExportSave save={save} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+            )}
 
-          {focus === "characters" && (
-            <Panel line="var(--cp-red-dim)">
-              <div className={styles.form}>
-                <p className={styles.note}>
-                  五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
-                  AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
-                </p>
-                <div className={styles.submit}>
-                  <span className={styles.note}>
-                    当前本地共有 {characters.data?.length ?? 0} 张角色卡
-                  </span>
-                  <Button primary onClick={() => navigate("/characters")}>
-                    进入角色工作台
-                  </Button>
+            {focus === "characters" && (
+              <Panel line="var(--cp-red-dim)">
+                <div className={styles.form}>
+                  <p className={styles.note}>
+                    五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
+                    AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
+                  </p>
+                  <div className={styles.submit}>
+                    <span className={styles.note}>
+                      当前本地共有 {characters.data?.length ?? 0} 张角色卡
+                    </span>
+                    <Button primary onClick={() => navigate("/characters")}>
+                      进入角色工作台
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </Panel>
-          )}
+              </Panel>
+            )}
 
-          {focus === "workshop" && (
-            <Panel line="var(--cp-red-dim)">
-              <div className={styles.form}>
-                <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
-              </div>
-            </Panel>
-          )}
-
-          {focus === "settings" && (
-            <Panel line="var(--cp-red-dim)">
-              <div className={styles.form}>
-                <p className={styles.note}>
-                  配置叙事模型、辅助模型与文生图连接，管理酒馆预设与叙事偏好，或在调试视图检查提示词上下文。
-                </p>
-                <div className={styles.submit}>
-                  <span className={styles.note}>
-                    {modelReady
-                      ? `当前叙事模型：${narratorName || "已就绪"}`
-                      : "尚未完成模型连接配置"}
-                  </span>
-                  <Button primary onClick={() => navigate("/settings")}>
-                    打开设置
-                  </Button>
+            {focus === "workshop" && (
+              <Panel line="var(--cp-red-dim)">
+                <div className={styles.form}>
+                  <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
                 </div>
-              </div>
-            </Panel>
-          )}
-        </div>
-      </section>
+              </Panel>
+            )}
+
+            {focus === "settings" && (
+              <Panel line="var(--cp-red-dim)">
+                <div className={styles.form}>
+                  <p className={styles.note}>
+                    配置叙事模型、辅助模型与文生图连接，管理酒馆预设与叙事偏好，或在调试视图检查提示词上下文。
+                  </p>
+                  <div className={styles.submit}>
+                    <span className={styles.note}>
+                      {modelReady
+                        ? `当前叙事模型：${narratorName || "已就绪"}`
+                        : "尚未完成模型连接配置"}
+                    </span>
+                    <Button primary onClick={() => navigate("/settings")}>
+                      打开设置
+                    </Button>
+                  </div>
+                </div>
+              </Panel>
+            )}
+          </div>
+        </section>
+
+        <ChangelogPanel />
+      </div>
 
       <div className={styles.keys}>
         <KeyBar>
@@ -555,6 +566,75 @@ export function MainMenu() {
         </KeyBar>
       </div>
     </main>
+  );
+}
+
+/** 主菜单右侧：更新日志面板，承接原本宽屏右侧的留白区域 */
+function ChangelogPanel() {
+  const latestVersion = CHANGELOG_ENTRIES[0]?.version ?? "";
+  return (
+    <aside className={styles.changelog} aria-label="更新日志">
+      <header className={styles.changelogHead}>
+        <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.stageHeadBg} />
+        <Asset
+          id="panel.glowLeft"
+          height={28}
+          tint="var(--cp-yellow)"
+          className={styles.stageGlow}
+        />
+        <div className={styles.stageHeading}>
+          <span className={styles.changelogCode}>{"PATCH // LOG"}</span>
+          <h2 className={styles.changelogTitle}>更新日志</h2>
+        </div>
+        {latestVersion && <span className={styles.changelogBadge}>{latestVersion}</span>}
+      </header>
+      <span
+        className={styles.stageLine}
+        style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+        aria-hidden
+      />
+      <div className={styles.changelogBody}>
+        <ol className={styles.changelogList}>
+          {CHANGELOG_ENTRIES.map((entry) => (
+            <li
+              key={`${entry.version}-${entry.date}`}
+              className={styles.changelogCard}
+              data-latest={entry.latest || undefined}
+            >
+              <CellFrame
+                surface={
+                  <NineSlice
+                    id="map.filterCellBg"
+                    slice={CELL_SLICE}
+                    tint="transparent"
+                    className={styles.cardGlare}
+                  />
+                }
+              />
+              <div className={styles.changelogMeta}>
+                <span className={styles.changelogVersion}>{entry.version}</span>
+                {entry.latest && <span className={styles.changelogLatest}>最新</span>}
+                <time className={`${styles.changelogDate} num`}>{entry.date}</time>
+              </div>
+              <h3 className={styles.changelogEntryTitle}>{entry.title}</h3>
+              <ul className={styles.changelogItems}>
+                {entry.items.map((item) => (
+                  <li
+                    key={`${entry.version}-${item.tag}-${item.text}`}
+                    className={styles.changelogItem}
+                  >
+                    <span className={styles.changelogTag} data-tag={item.tag}>
+                      {item.tag}
+                    </span>
+                    <span className={styles.changelogText}>{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </aside>
   );
 }
 

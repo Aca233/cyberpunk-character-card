@@ -6,11 +6,9 @@
 .menu {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
-  column-gap: 60px;
   height: 100%;
-  padding: 58px 72px 18px;
+  padding: 46px clamp(40px, 5vw, 96px) 18px;
   overflow: hidden;
   background-color: var(--cp-bg);
   color: var(--cp-text);
@@ -20,6 +18,18 @@
 .menu > :not(.bg, .dim, .strip, .scan, .frame) {
   position: relative;
   z-index: 1;
+}
+
+/* 居中内容舞台：上方横跨的放大版 Logo + 下方三栏（左菜单 / 中舞台 / 右更新日志） */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 340px) minmax(420px, 1.15fr) minmax(300px, 390px);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: clamp(28px, 3.2vw, 52px);
+  row-gap: 22px;
+  width: min(1520px, 100%);
+  min-height: 0;
+  margin: 0 auto;
 }
 
 /* 底图：原作全屏菜单的夜之城远景，铺满不变形，打开时略放大后落定 */
@@ -38,18 +48,18 @@
   background: rgb(5 5 10 / 70%);
 }
 
-/* 左侧条幅垫底，对齐左列宽度避免在正中生硬截断 */
+/* 左侧条幅垫底，对齐外框边缘并柔和收边 */
 .strip {
   position: absolute;
   top: 6px;
   bottom: 4px;
   left: 20px;
-  width: min(36vw, 438px);
+  width: min(32vw, 480px);
   overflow: hidden;
   background-position: left top;
   background-size: auto 100%;
   background-repeat: no-repeat;
-  opacity: 0.42;
+  opacity: 0.36;
   animation: stripIn 540ms var(--ease-snap) 80ms both;
 }
 
@@ -70,31 +80,39 @@
   animation: frameBoot 440ms var(--ease-snap) 40ms both;
 }
 
-/* ———— 左列：标志、菜单、终端状态 ———— */
-
-.side {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
+/* ———— 顶部品牌标志 + 左列菜单与终端状态 ———— */
 
 .brand {
+  grid-column: 1 / -1;
   display: grid;
   justify-items: start;
-  gap: 8px;
-  margin-bottom: 32px;
+  gap: 10px;
   animation: brandIn 460ms var(--ease-snap) 80ms both;
+}
+
+.brandLogo {
+  display: block;
+  width: auto;
+  height: clamp(86px, 8.6vw, 126px);
+  max-width: 100%;
+  filter: drop-shadow(0 0 18px rgb(252 238 10 / 26%)) drop-shadow(0 6px 18px rgb(0 0 0 / 55%));
 }
 
 .brandLine {
   display: block;
   width: 100%;
   height: 2px;
-  margin-top: 6px;
+  margin-top: 2px;
   background: var(--cp-red-dim);
   mask-size: 100% 100%;
   transform-origin: left center;
   animation: lineSweep 460ms var(--ease-snap) 160ms both;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .nav {
@@ -270,13 +288,13 @@
   color: var(--cp-cyan);
 }
 
-/* ———— 右列舞台：标题压在原作 menu.header 上，下面一道 tab.line ———— */
+/* ———— 中列舞台：标题压在原作 menu.header 上，下面一道 tab.line ———— */
 
 .stage {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   width: 100%;
-  max-width: 860px;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -376,11 +394,187 @@
 }
 
 .keys {
-  grid-column: 1 / -1;
-  margin-top: 12px;
+  width: min(1520px, 100%);
+  margin: 12px auto 0;
   text-shadow:
     0 0 3px rgb(5 5 10),
     0 0 8px rgb(5 5 10);
+}
+
+/* ———— 右列：更新日志面板 ———— */
+
+.changelog {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  animation: paneIn 320ms var(--ease-snap) 160ms both;
+}
+
+.changelogHead {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 8px 0 6px;
+  animation: stageHeadIn 360ms var(--ease-snap) 150ms both;
+}
+
+.changelogHead > :not(.stageHeadBg) {
+  position: relative;
+}
+
+.changelogCode {
+  color: var(--cp-yellow);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.changelogTitle {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-shadow:
+    0 0 4px rgb(5 5 10),
+    0 0 12px rgb(5 5 10);
+}
+
+.changelogBadge {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: rgb(252 238 10 / 14%);
+  color: var(--cp-yellow);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.changelogBody {
+  min-height: 0;
+  padding: 20px 8px 8px 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
+}
+
+.changelogList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelogCard {
+  --box-line: var(--cp-red-dim);
+  --box-fill: rgb(14 14 23 / 78%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 8px;
+  padding: 14px 18px 16px;
+}
+
+.changelogCard[data-latest] {
+  --box-line: var(--cp-red);
+  --box-fill: rgb(16 14 24 / 86%);
+}
+
+.changelogMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.changelogVersion {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.changelogLatest {
+  padding: 1px 6px;
+  background: rgb(252 238 10 / 16%);
+  color: var(--cp-yellow);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.changelogDate {
+  margin-left: auto;
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.changelogEntryTitle {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+}
+
+.changelogItems {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelogItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.changelogTag {
+  margin-top: 2px;
+  padding: 0 6px;
+  background: rgb(255 97 88 / 16%);
+  color: var(--cp-red);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.changelogTag[data-tag="新增"] {
+  background: rgb(94 246 255 / 15%);
+  color: var(--cp-cyan);
+}
+
+.changelogTag[data-tag="优化"] {
+  background: rgb(252 238 10 / 15%);
+  color: var(--cp-yellow);
+}
+
+.changelogTag[data-tag="修复"] {
+  background: rgb(63 242 160 / 15%);
+  color: var(--cp-success);
+}
+
+.changelogText {
+  color: var(--cp-text-dim);
+  word-break: break-word;
 }
 
 .keys > footer {
@@ -866,12 +1060,23 @@
   font-size: var(--fs-ui);
 }
 
-/* ———— 窄屏：上下排 ———— */
+/* ———— 中等屏与窄屏适配 ———— */
 
-@media (width < 1100px) {
+@media (width < 1260px) {
   .menu {
-    column-gap: 36px;
-    padding: 50px 44px 18px;
+    padding: 44px 36px 18px;
+  }
+
+  .layout {
+    grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    column-gap: 32px;
+    row-gap: 18px;
+  }
+
+  .changelog {
+    grid-column: 1 / -1;
+    max-height: 240px;
   }
 
   .fields {
@@ -900,26 +1105,37 @@
     display: none;
   }
 
-  .side,
-  .stage {
-    flex: none;
-    min-height: auto;
+  .layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
   }
 
-  .brand {
-    margin-bottom: 16px;
+  .side,
+  .stage,
+  .changelog {
+    flex: none;
+    min-height: auto;
+    max-height: none;
+  }
+
+  .brandLogo {
+    height: 76px;
   }
 
   .statusCard {
     margin: 16px 0 0;
   }
 
-  .stage {
+  .stage,
+  .changelog {
     grid-template-rows: auto auto auto;
     max-width: none;
   }
 
-  .stageBody {
+  .stageBody,
+  .changelogBody {
     overflow: visible;
   }
 
@@ -1068,6 +1284,8 @@
   .stageGlow,
   .stageLine,
   .stageBody,
+  .changelog,
+  .changelogHead,
   .mapModalBackdrop,
   .mapModal {
     animation: none;
