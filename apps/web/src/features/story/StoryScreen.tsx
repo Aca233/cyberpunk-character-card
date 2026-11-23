@@ -146,7 +146,7 @@ export function StoryScreen() {
       cancelSpend: s.cancelSpend,
     })),
   );
-  const { enter, submit: submitStory, dismiss: dismissStory, stop: stopStory } = story;
+  const { enter, submit: submitStory, dismiss: dismissStory, stop: stopStory, setDraft } = story;
 
   useEffect(() => enter(saveId), [enter, saveId]);
 
@@ -172,9 +172,12 @@ export function StoryScreen() {
     readonly bind: ImageTarget;
     readonly turnPromptKey?: string | undefined;
   } | null>(null);
-  const [lightbox, setLightbox] = useState<{ readonly id: string; readonly title: string } | null>(
-    null,
-  );
+  const [lightbox, setLightbox] = useState<{
+    readonly id: string;
+    readonly title: string;
+    readonly onReplace?: () => void;
+    readonly replaceLabel?: string;
+  } | null>(null);
   const [autoPendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
   const [autoTurnProgress, setAutoTurnProgress] = useState<
     Readonly<Record<number, { readonly current: number; readonly total: number }>>
@@ -722,7 +725,13 @@ export function StoryScreen() {
         setImageModal({ ...structuredClone(options), saveId, turnPromptKey });
       },
       unbindImage,
-      openLightbox: (id, title) => setLightbox({ id, title }),
+      openLightbox: (id, title, options) =>
+        setLightbox({
+          id,
+          title,
+          ...(options?.onReplace ? { onReplace: options.onReplace } : {}),
+          ...(options?.replaceLabel ? { replaceLabel: options.replaceLabel } : {}),
+        }),
       cancelTurnAutoImage: (seq) => {
         cancelTurnAutoImage(seq);
         cancelTurnImageJobs(saveId, seq);
@@ -810,17 +819,65 @@ export function StoryScreen() {
     await refresh();
   }, [saveId, version, refresh, warn]);
 
+  // 取消指定回合及之后回合挂起的手动/自动生图任务，避免撤回或重写后旧图继续回写
+  const cancelTurnImagesFrom = useCallback(
+    (fromSeq: number) => {
+      const seqs = new Set<number>([fromSeq]);
+      for (const turn of view?.turns ?? []) {
+        if (turn.seq >= fromSeq) seqs.add(turn.seq);
+      }
+      for (const seq of autoAbortRef.current.keys()) {
+        if (seq >= fromSeq) seqs.add(seq);
+      }
+      for (const seq of seqs) {
+        cancelTurnImageJobs(saveId, seq);
+        cancelTurnAutoImage(seq);
+      }
+    },
+    [saveId, view?.turns, cancelTurnAutoImage],
+  );
+
   // 重新生成最后一轮：后端作废它，再用当时的输入按原流程重推
   const regenerate = useCallback(async () => {
     try {
       const r = await api.regenerate(saveId, version);
+      cancelTurnImagesFrom(r.voided);
       await refresh();
       await submitStory(saveId, r.version, r.pending, refresh);
     } catch (error) {
       warn("regenerate", error);
       await refresh();
     }
-  }, [saveId, version, refresh, warn, submitStory]);
+  }, [saveId, version, cancelTurnImagesFrom, refresh, warn, submitStory]);
+
+  // 删楼：撤回指定回合及之后所有有效记录，并把被删那一楼的原输入填回输入框便于修改重发
+  const undoTurn = useCallback(
+    async (fromSeq?: number) => {
+      try {
+        const r = await api.undoTurn(saveId, version, fromSeq);
+        cancelTurnImagesFrom(r.fromSeq);
+        const restoredText = r.input?.text?.trim() ?? "";
+        if (restoredText !== "") {
+          setDraft({
+            text: restoredText,
+            ...(r.input?.sandevistan ? { sandevistan: true } : {}),
+          });
+          requestAnimationFrame(() => {
+            const el = inputRef.current;
+            if (!el || el.disabled) return;
+            el.focus();
+            const end = el.value.length;
+            el.setSelectionRange(end, end);
+          });
+        }
+        await refresh();
+      } catch (error) {
+        warn("undo", error);
+        await refresh();
+      }
+    },
+    [saveId, version, cancelTurnImagesFrom, setDraft, refresh, warn],
+  );
 
   // 按账目改写最后一轮：只换正文，不改状态
   const rewrite = useCallback(async () => {
@@ -1003,21 +1060,48 @@ export function StoryScreen() {
     if (pending) void submitStory(saveId, version, pending, refresh);
   }, [story.pending, dismissStory, submitStory, saveId, version, refresh, view?.checkpoint]);
 
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const focusInputEnd = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    });
+  }, []);
+
   const choose = useCallback(
     (index: number) => {
       const choice = offers?.choices[index];
       if (!choice || busy || view?.death || view?.ended) return;
       const choiceBoost =
         view?.sandevistan != null && Boolean(choice.source?.includes(view.sandevistan.name));
+      if (prefs.choiceFillOnly) {
+        setDraft({
+          text: choice.text,
+          sandevistan: choiceBoost,
+        });
+        focusInputEnd();
+        return;
+      }
       send({
         text: choice.text,
         ...(choiceBoost ? { sandevistan: true } : {}),
       });
     },
-    [offers, busy, send, view?.sandevistan, view?.death, view?.ended],
+    [
+      offers,
+      busy,
+      prefs.choiceFillOnly,
+      setDraft,
+      focusInputEnd,
+      send,
+      view?.sandevistan,
+      view?.death,
+      view?.ended,
+    ],
   );
-
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSentText = useMemo(() => {
     const turns = view?.turns;
     if (!turns) return undefined;
@@ -1418,6 +1502,11 @@ export function StoryScreen() {
               ? undefined
               : (id, answer) => void act({ type: "answerCall", id, answer }, "call")
           }
+          onAcceptJob={
+            busy || view.death || view.ended
+              ? undefined
+              : (id) => void act({ type: "acceptJob", id }, "job")
+          }
           chatSending={chatSending}
           pendingChat={pendingChat}
           busy={busy}
@@ -1623,9 +1712,20 @@ export function StoryScreen() {
             saveId={saveId}
             onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
             onRewrite={view.death || view.ended ? undefined : rewrite}
+            onUndo={view.ended && !view.death ? undefined : undoTurn}
             onMark={onMark}
             openingGuide={{
-              onSendPrompt: busy || view.death || view.ended ? undefined : (text) => send({ text }),
+              onSendPrompt:
+                busy || view.death || view.ended
+                  ? undefined
+                  : (text) => {
+                      if (prefs.choiceFillOnly) {
+                        setDraft({ text });
+                        focusInputEnd();
+                      } else {
+                        send({ text });
+                      }
+                    },
             }}
           />
 
@@ -2108,6 +2208,8 @@ export function StoryScreen() {
         <ImageLightbox
           imageId={lightbox?.id ?? null}
           title={lightbox?.title ?? "图片预览"}
+          onReplace={lightbox?.onReplace}
+          replaceLabel={lightbox?.replaceLabel}
           onClose={() => setLightbox(null)}
         />
       </div>

@@ -1,13 +1,17 @@
 import {
   buildTurnSegmentPromptInput,
+  IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH,
+  IMAGE_INSTRUCTION_MAX_LENGTH,
+  IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   IMAGE_PROMPT_MAX_LENGTH,
+  IMAGE_STYLE_FIELD_MAX_LENGTH,
   type ImagePromptLanguage,
   type ImagePromptRequest,
   splitTurnSceneSegments,
   type TurnImagePromptInput,
 } from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { type AspectRatio, api, type SaveImageBindings, type StoredImage } from "../../api/client";
 import { Button } from "../../ui/Button";
@@ -69,6 +73,18 @@ function mergeExclusionsIntoPrompt(
       ? "排除元素（画面中不要出现）："
       : "User-requested exclusions (render the image without these): ";
   return `${pos}\n${prefix}${neg}`;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("读取图片文件失败"));
+    };
+    reader.onerror = () => reject(new Error("读取图片文件失败"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function makeEmptySlotPrompts(
@@ -211,14 +227,14 @@ export function ImageGenModal({
 
   const [drafting, setDrafting] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [localError, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const job = useImageJob(key);
   const generating = isImageJobPending(job);
-  const preview =
-    job?.sourceKey === sourceKey && job.image ? { image: job.image, sessionKey } : null;
-  const previewList =
-    job?.sourceKey === sourceKey && job.images && job.images.length > 0 ? job.images : [];
+  const preview = job?.image ? { image: job.image, sessionKey } : null;
+  const previewList = job?.images && job.images.length > 0 ? job.images : [];
   const abortRef = useRef<AbortController | null>(null);
   const liveKeyRef = useRef(sessionKey);
   liveKeyRef.current = sessionKey;
@@ -259,6 +275,7 @@ export function ImageGenModal({
     setDrafting(false);
     setDraftProgress(null);
     setApplying(false);
+    setUploading(false);
   }, []);
   const closeModal = useCallback(() => {
     liveKeyRef.current = "";
@@ -606,7 +623,58 @@ export function ImageGenModal({
       }
     }
   };
-  const busy = drafting || generating || applying;
+  const handleLocalFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const session = sessionRef.current;
+    if (!file || !session || liveKeyRef.current !== session.key) return;
+    cancelLocal();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setUploading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      if (!isCurrent(controller, session.key)) return;
+      const uploaded = await api.uploadImage(
+        {
+          dataUrl,
+          label: file.name ? `本地图片：${file.name}` : "本地上传图片",
+        },
+        controller.signal,
+      );
+      if (!isCurrent(controller, session.key)) return;
+      queryClient.setQueryData(["image", uploaded.image.id], uploaded.image);
+      if (session.bind) {
+        const bindings = await api.bindSaveImage(
+          session.bind.saveId,
+          {
+            ...session.bind.target,
+            imageId: uploaded.image.id,
+          },
+          controller.signal,
+        );
+        if (!isCurrent(controller, session.key)) return;
+        queryClient.setQueryData(["saveImages", session.bind.saveId], bindings);
+        onApplied(uploaded.image, bindings);
+      } else {
+        onApplied(uploaded.image);
+      }
+      closeModal();
+    } catch (caught) {
+      if (isCurrent(controller, session.key)) {
+        setError(caught instanceof Error ? caught.message : "上传本地图片失败");
+      }
+    } finally {
+      if (isCurrent(controller, session.key)) {
+        abortRef.current = null;
+        setUploading(false);
+      }
+    }
+  };
+
+  const busy = drafting || generating || applying || uploading;
   const applied = Boolean(
     bind &&
       preview &&
@@ -615,7 +683,7 @@ export function ImageGenModal({
         ? job.status === "done"
         : boundImage(bindingState.data, bind.target) === preview.image.id),
   );
-  const error = localError ?? (!applied && job?.sourceKey === sourceKey ? job.error : null);
+  const error = localError ?? (!applied && job?.error ? job.error : null);
   const displayNotice = [
     notice,
     generating
@@ -672,10 +740,20 @@ export function ImageGenModal({
             </Button>
           </div>
 
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => void handleLocalFileChange(e)}
+          />
           <div className={styles.modalBody}>
             {!imageModelReady && (
               <div className={styles.notice} role="status">
-                <span>{imageModelError ?? "尚未设置文生图模型"}</span>
+                <span>
+                  {imageModelError ?? "尚未设置文生图模型"}
+                  （仍可直接点击下方「上传本地图片」选用本机图片）
+                </span>
                 <Link to="/settings?tab=profiles">前往配置文生图模型 →</Link>
               </div>
             )}
@@ -739,7 +817,7 @@ export function ImageGenModal({
                 </span>
                 <FrameBox>
                   <input
-                    maxLength={240}
+                    maxLength={IMAGE_INSTRUCTION_MAX_LENGTH}
                     disabled={busy}
                     value={instruction}
                     placeholder="例如：霓虹雨夜侧脸、红黑公司西装、手持武士刀"
@@ -868,7 +946,7 @@ export function ImageGenModal({
                   <FrameBox>
                     <textarea
                       rows={2}
-                      maxLength={1200}
+                      maxLength={IMAGE_STYLE_FIELD_MAX_LENGTH}
                       disabled={busy}
                       value={prefs.imageCustomPrompt}
                       placeholder="例如：masterpiece, best quality, very aesthetic, absurdres"
@@ -882,8 +960,8 @@ export function ImageGenModal({
                   </span>
                   <FrameBox>
                     <textarea
-                      rows={3}
-                      maxLength={4000}
+                      rows={4}
+                      maxLength={IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH}
                       disabled={busy}
                       value={prefs.imageAuxSystemPrompt}
                       onChange={(e) => setImagePromptField("imageAuxSystemPrompt", e.target.value)}
@@ -904,7 +982,7 @@ export function ImageGenModal({
                   <FrameBox>
                     <textarea
                       rows={2}
-                      maxLength={2000}
+                      maxLength={IMAGE_NEGATIVE_PROMPT_MAX_LENGTH}
                       disabled={busy}
                       value={negativePrompt}
                       onChange={(e) => updateCurrentNegative(e.target.value)}
@@ -976,6 +1054,9 @@ export function ImageGenModal({
 
           <div className={styles.actions}>
             <div className={styles.actionsLeft}>
+              <Button small disabled={busy} onClick={() => fileInputRef.current?.click()}>
+                {uploading ? "上传中…" : "上传本地图片"}
+              </Button>
               {preview && previewList.length <= 1 && !busy && (
                 <Button small onClick={() => downloadStoredImage(preview.image, title)}>
                   下载图片

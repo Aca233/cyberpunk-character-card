@@ -1236,7 +1236,7 @@ function summarizeNpcContact(
   const msgs = thread;
   const jobsList = view.jobs?.list ?? [];
   const destinations = view.travel?.destinations ?? [];
-  const offeredMsg = msgs.find((m) => m.sender !== "player" && m.job?.status === "offered");
+  const offeredMsgs = msgs.filter((m) => m.sender !== "player" && m.job?.status === "offered");
   const activeMsg = msgs.find((m) => m.sender !== "player" && m.job?.status === "active");
   const openConcerns =
     npc?.arc?.concerns.filter((c) => c.status === "told" || c.status === "involved") ?? [];
@@ -1272,12 +1272,26 @@ function summarizeNpcContact(
   if (npc?.nemesis && !npc.nemesis.ended) {
     badges.push({ label: "宿敌", tone: "danger", detail: "宿敌正在暗处盯着你" });
   }
-  if (offeredMsg?.job) {
+  const offeredJobs = openJobs.filter((j) => j.status === "offered");
+  const offeredCount = Math.max(
+    offeredJobs.length,
+    new Set(offeredMsgs.map((m) => m.job?.id).filter(Boolean)).size,
+  );
+  const firstOffered = offeredJobs[0] ?? offeredMsgs[0]?.job ?? null;
+  if (firstOffered) {
     badges.push({
-      label: "来活待接",
-      shortLabel: "来活",
+      label: offeredCount > 1 ? `来活待接×${offeredCount}` : "来活待接",
+      shortLabel: offeredCount > 1 ? `来活×${offeredCount}` : "来活",
       tone: "accent",
-      detail: `${offeredMsg.job.title}${offeredMsg.job.reward > 0 ? `（${offeredMsg.job.reward.toLocaleString("en-US")}€）` : ""}`,
+      detail:
+        offeredJobs.length > 1
+          ? offeredJobs
+              .map(
+                (j) =>
+                  `${j.title}${j.reward > 0 ? `（${j.reward.toLocaleString("en-US")}€）` : ""}`,
+              )
+              .join(" / ")
+          : `${firstOffered.title}${firstOffered.reward > 0 ? `（${firstOffered.reward.toLocaleString("en-US")}€）` : ""}`,
     });
   } else if (activeMsg?.job || openJobs.some((j) => j.status === "active")) {
     const activeJob = activeMsg?.job ?? openJobs.find((j) => j.status === "active");
@@ -1425,8 +1439,10 @@ function summarizeNpcContact(
   }
 
   let highlight: string | null = null;
-  if (offeredMsg?.job) {
-    const j = offeredMsg.job;
+  if (offeredJobs.length > 1) {
+    highlight = `待接来活（${offeredJobs.length} 单）：${offeredJobs.map((j) => j.title).join(" / ")}`;
+  } else if (firstOffered) {
+    const j = firstOffered;
     const extra = [
       j.reward > 0 ? `${j.reward.toLocaleString("en-US")}€` : null,
       j.due ? `${j.due} 前` : null,
@@ -1453,7 +1469,7 @@ function summarizeNpcContact(
   const hasUnread = raw.unread > 0;
   const isActive =
     hasUnread ||
-    Boolean(offeredMsg?.job) ||
+    Boolean(firstOffered) ||
     openJobs.length > 0 ||
     unsettled.length > 0 ||
     Boolean(doc?.debt) ||

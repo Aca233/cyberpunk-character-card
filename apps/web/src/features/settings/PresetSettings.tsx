@@ -380,7 +380,12 @@ function PresetDetail({
               开启
             </span>
             <ToggleList
-              items={preset.regex.map((r) => ({ id: r.id, name: r.name, enabled: r.enabled }))}
+              items={preset.regex.map((r) => ({
+                id: r.id,
+                name: r.name,
+                enabled: r.enabled,
+                ...(r.htmlUi ? { meta: "HTML 界面模板（自动跳过）" } : {}),
+              }))}
               disabled={pending}
               onToggle={(id, on) => patch.mutate({ regex: { [id]: on } })}
             />

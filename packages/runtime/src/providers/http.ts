@@ -37,27 +37,53 @@ export function statusError(provider: string, status: number, detail: string): U
   return new UpstreamError(`${provider} 拒绝了请求（HTTP ${status}）${tail}`, status);
 }
 
+const NETWORK_RETRY_DELAYS_MS = [800, 1_800] as const;
+
+function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new AbortedError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new AbortedError());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 async function send(
   provider: string,
   url: string,
   init: RequestInit,
   signal?: AbortSignal,
 ): Promise<Response> {
-  try {
-    return await fetch(url, {
-      ...init,
-      ...(signal ? { signal } : {}),
-    });
-  } catch (error) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt += 1) {
     if (signal?.aborted) throw new AbortedError();
-    const reason =
-      error instanceof Error
-        ? error.cause instanceof Error
-          ? error.cause.message
-          : error.message
-        : String(error);
-    throw new UpstreamError(`连不上 ${provider}：${reason}`, undefined, true);
+    try {
+      return await fetch(url, {
+        ...init,
+        ...(signal ? { signal } : {}),
+      });
+    } catch (error) {
+      if (signal?.aborted) throw new AbortedError();
+      lastError = error;
+      const delay = NETWORK_RETRY_DELAYS_MS[attempt];
+      if (delay !== undefined) {
+        await sleepWithAbort(delay, signal);
+      }
+    }
   }
+  const reason =
+    lastError instanceof Error
+      ? lastError.cause instanceof Error
+        ? lastError.cause.message
+        : lastError.message
+      : String(lastError);
+  throw new UpstreamError(`连不上 ${provider}：${reason}`, undefined, true);
 }
 
 /** 发 POST 请求；网络失败和停止都转成上面两种错误 */

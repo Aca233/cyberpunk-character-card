@@ -89,7 +89,13 @@ import {
   SocialOffscreenDocSchema,
   trackOffscreenDue,
 } from "./offscreen";
-import { applyExpandedPreset, applyPresetRegex, presetMessages, type TavernPreset } from "./preset";
+import {
+  applyExpandedPreset,
+  applyPresetRegex,
+  presetMessages,
+  sanitizePresetNarrative,
+  type TavernPreset,
+} from "./preset";
 import {
   buildExtractPrompt,
   buildJudgePrompt,
@@ -1299,8 +1305,9 @@ export async function runNarratorTurn(
     thought = mergedThought !== "" ? mergedThought : undefined;
     // 预设正则改存下来的纯净正文（标签、八股词之类）；思考标签已单独收入 thought 供折叠查看
     const rawBody = thoughtSplit.body;
-    const cleaned = preset ? applyPresetRegex(rawBody, preset).trim() : rawBody;
-    // 正则把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
+    const regexCleaned = preset ? applyPresetRegex(rawBody, preset).trim() : rawBody;
+    const cleaned = preset ? sanitizePresetNarrative(regexCleaned) : regexCleaned;
+    // 正则或标签清理把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
     const wiped = preset !== undefined && cleaned === "" && rawBody.trim() !== "";
     narrative = wiped ? rawBody : cleaned;
     if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
@@ -1350,26 +1357,49 @@ export async function runNarratorTurn(
         label: "④ 抽取状态与记账",
         detail: "识别事件、交易、物件与关系变化",
       });
-      const extract = buildExtractPrompt(
+      // 兼容从旧断点恢复的正文：防御性剥离酒馆预设残留的 HTML/脚本与元信息块，避免送入抽取时撑爆请求或触发断连
+      const extractNarrative = sanitizePresetNarrative(narrative);
+      const tradePlansText = preparedPurchases.length
+        ? preparedPurchases
+            .map(
+              ({ proposal, quote }) =>
+                `${JSON.stringify(proposal)}：${quote.ok ? quote.detail : `未获准成交：${quote.reason}`}`,
+            )
+            .join("\n")
+        : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。";
+      let extract = buildExtractPrompt(
         world,
         records,
         live,
         { ...extras, decided },
-        narrative,
-        preparedPurchases.length
-          ? preparedPurchases
-              .map(
-                ({ proposal, quote }) =>
-                  `${JSON.stringify(proposal)}：${quote.ok ? quote.detail : `未获准成交：${quote.reason}`}`,
-              )
-              .join("\n")
-          : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。",
+        extractNarrative,
+        tradePlansText,
       );
+      // 超出辅助模型上下文预算时优先撤下可选的 12K 新人物装备选型参考（系统层仍有完整物品与义体基表可查 ID）
+      const auxBudget = deps.auxContextWindow
+        ? Math.max(8_000, deps.auxContextWindow - (deps.auxMaxOutputTokens ?? 4_096))
+        : undefined;
+      if (auxBudget !== undefined) {
+        const estimated = extract.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+        if (estimated > auxBudget) {
+          extract = buildExtractPrompt(
+            world,
+            records,
+            live,
+            { ...extras, decided, includeNpcEquipment: false },
+            extractNarrative,
+            tradePlansText,
+          );
+        }
+      }
       let reply: Reply;
       try {
         reply = await b.call({
           purpose: "aux",
           temperature: EXTRACT_TEMPERATURE,
+          ...(deps.auxMaxOutputTokens !== undefined
+            ? { maxOutputTokens: deps.auxMaxOutputTokens }
+            : {}),
           responseFormat: responseJsonSchema("extract"),
           messages: extract.messages,
           ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:extract` } : {}),

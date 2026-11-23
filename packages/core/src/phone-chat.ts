@@ -113,7 +113,7 @@ export const PhoneChatLlmReplySchema = z.object({
     action: z
       .enum(["none", "accept", "offer", "note", "abandon"])
       .describe(
-        "委托动向：none 无变化；accept 答应接下待接的委托；offer 仅在上下文明确允许且顺理成章时挂出一单新委托；note 记一句进行中/待接委托的改约或备注；abandon 玩家主动明确推掉进行中委托。严禁在这里把任何委托标成完成/给钱",
+        "委托动向：none 无变化；accept 答应接下待接的委托（多单并存时必须填准确 jobId）；offer 在上下文允许且玩家找活/要多看一单时挂出一单新委托（不会覆盖旧待接委托）；note 记一句进行中/待接委托的改约或备注；abandon 玩家主动明确推掉待接或进行中委托。严禁在这里把任何委托标成完成/给钱",
       ),
     jobId: z
       .string()
@@ -278,7 +278,8 @@ export function buildPhoneChatPrompt(
   const sceneTurns = prevBudget?.scene === scene ? prevBudget.turns : 0;
   const gained = prevBudget?.scene === scene ? prevBudget.affinityGained : 0;
   const remainingAffinityBudget = Math.max(0, CHAT_AFFINITY_SCENE_CAP - gained);
-  const jobOfferedThisScene = prevBudget?.scene === scene ? prevBudget.jobOffered : false;
+  const jobsOfferedThisScene =
+    prevBudget?.scene === scene ? (prevBudget.jobsOffered ?? (prevBudget.jobOffered ? 1 : 0)) : 0;
 
   const isFixer = Boolean(jobsState.fixers[npc.id]);
   const factionDef = npc.faction === NO_FACTION ? undefined : catalog.get(npc.faction);
@@ -289,13 +290,17 @@ export function buildPhoneChatPrompt(
   const relatedJobs = jobsState.jobs.filter(
     (j) => isOpen(j) && (j.fixer === npc.id || j.asker === npc.id || j.client === npc.name),
   );
-  const hasOpenJobFromContact = relatedJobs.length > 0;
+  const relatedOfferedCount = relatedJobs.filter((j) => j.status === "offered").length;
+  // 中间人允许同时挂出多单待接委托供玩家挑选（同联系人最多 3 单待接、单场景最多新挂 3 单）；
+  // 普通熟人无未结托事且好感非负时可托 1 单，避免给第二单时把第一单挤掉或彻底拒绝。
+  const maxOfferedFromContact = isFixer ? 3 : 1;
+  const maxSceneOffers = isFixer ? 3 : 1;
   const canOfferJob =
     !activeNemesis &&
     !isFixerBlocked &&
-    !jobOfferedThisScene &&
-    !hasOpenJobFromContact &&
-    (isFixer || npc.affinity >= 0);
+    jobsOfferedThisScene < maxSceneOffers &&
+    relatedOfferedCount < maxOfferedFromContact &&
+    (isFixer || (npc.affinity >= 0 && relatedJobs.length === 0));
 
   const here =
     npc.met && onStage(npc, { location: clock.location, sceneStartedAt: clock.sceneStartedAt });
@@ -322,10 +327,10 @@ export function buildPhoneChatPrompt(
   const dynamicRules = [
     `委托控制：${
       canOfferJob
-        ? '如果玩家明确在找活、问门路、求委托，且符合你的身份与双方交情，可以通过 job.action="offer" 挂出一单合乎夜之城体量与你的行当的新委托（不设就写 none，别硬塞）'
+        ? '如果玩家明确在找活、问门路、求委托、或让你再多给一个单子挑选，且符合你的身份与双方交情，可以通过 job.action="offer" 挂出一单新的委托（必须与你之前挂出的单子不同，绝不会覆盖或作废先前的待接委托；不派新单就写 none）。如果玩家明确答应接下某单已挂出的委托，写 job.action="accept" 并务必在 job.jobId 填对应 id'
         : activeNemesis || isFixerBlocked
           ? "对方当前与你处于敌对或拉黑/宿敌状态：不要给好感加成，不要派新活"
-          : "当前不允许额外派发新委托（已有进行中委托、本场刚派过或交情不足）；如需接下待接的旧委托，可用 accept；更新进展记 note；玩家明确弃单可用 abandon"
+          : "你手头眼下已经挂出足够多的待接委托或暂不适合再派新活，请如实回复并保留既有待接委托（绝不能假装没提过先前的单子）；如需接下待接的旧委托，写 accept 并在 job.jobId 写明对应 id；更新进展记 note；玩家明确拒绝/弃单可用 abandon"
     }。`,
     sceneTurns >= CHAT_SCENE_TURN_SOFT_CAP
       ? `对话节奏：你们在这个场景已经发了 ${sceneTurns} 轮短信了，顺手找个自然的借口或句点收尾（有事当面碰、忙手上活去），别没完没了拉扯。`
@@ -504,19 +509,27 @@ function resolveJobForContact(
   npc: Npc,
   jobId: string,
   status?: "offered" | "active",
+  hintText?: string,
 ) {
   const matchContact = (j: (typeof jobs)[number]) =>
     isOpen(j) && (j.fixer === npc.id || j.asker === npc.id || j.client === npc.name);
-  if (jobId !== "") {
-    const exact = jobs.find((j) => j.id === jobId);
-    if (exact && matchContact(exact) && (status === undefined || exact.status === status)) {
-      return exact;
-    }
-  }
   const candidates = jobs.filter(
     (j) => matchContact(j) && (status === undefined || j.status === status),
   );
-  return candidates.length === 1 ? candidates[0] : undefined;
+  if (jobId !== "") {
+    const exact = candidates.find((j) => j.id === jobId);
+    if (exact) return exact;
+    const byTitle = candidates.find((j) => j.title === jobId || j.title.includes(jobId));
+    if (byTitle) return byTitle;
+  }
+  if (candidates.length === 1) return candidates[0];
+  if (hintText && candidates.length > 1) {
+    const mentioned = candidates.filter(
+      (j) => hintText.includes(j.title) || hintText.includes(j.id),
+    );
+    if (mentioned.length === 1) return mentioned[0];
+  }
+  return undefined;
 }
 
 /** 轻量手机直聊主流程：校验对象 -> 辅助模型生成短信与微调意图 -> 代码硬规则截断并按 3 步原子记账推进时间 */
@@ -566,25 +579,27 @@ export async function runPhoneChat(
   let minutes = Math.max(1, Math.min(3, Math.round(reply.minutes)));
   const step1Commands: Command[] = [{ type: "phone.send", to: npc.id, text }];
 
+  const jobHint = `${text}
+${reply.reply}`;
   if (reply.job.action === "accept") {
-    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId, "offered");
+    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId, "offered", jobHint);
     if (job && (job.due === null || job.due > world.time)) {
       step1Commands.push({ type: "jobAccept", id: job.id });
       minutes = Math.max(minutes, 2);
     }
   } else if (reply.job.action === "note" && reply.job.note !== "") {
-    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId);
+    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId, undefined, jobHint);
     if (job) {
       step1Commands.push({ type: "jobNote", id: job.id, note: reply.job.note });
     }
   } else if (reply.job.action === "abandon") {
-    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId, "active");
+    const job = resolveJobForContact(jobsBefore.jobs, npc, reply.job.jobId, undefined, jobHint);
     if (job) {
       step1Commands.push({
         type: "jobEnd",
         id: job.id,
         outcome: "abandoned",
-        summary: reply.job.summary || "玩家通过私信提前告知放弃这单委托",
+        summary: reply.job.summary || "玩家通过私信提前告知放弃/推掉这单委托",
       });
     }
   }

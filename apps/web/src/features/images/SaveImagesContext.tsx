@@ -20,7 +20,11 @@ export interface SaveImagesController {
     readonly bind: ImageTarget;
   }) => void;
   readonly unbindImage: (target: SaveImageUnbindTarget) => Promise<void>;
-  readonly openLightbox: (imageId: string, title: string) => void;
+  readonly openLightbox: (
+    imageId: string,
+    title: string,
+    options?: { readonly onReplace?: () => void; readonly replaceLabel?: string },
+  ) => void;
   readonly cancelTurnAutoImage: (seq: number) => void;
 }
 

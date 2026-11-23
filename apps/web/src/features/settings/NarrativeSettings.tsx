@@ -1,4 +1,10 @@
-import type { ImagePromptLanguage, OffscreenPace } from "@cp/core";
+import {
+  IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH,
+  IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
+  IMAGE_STYLE_FIELD_MAX_LENGTH,
+  type ImagePromptLanguage,
+  type OffscreenPace,
+} from "@cp/core";
 import { type ReactNode, useEffect, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -61,6 +67,11 @@ const SHOW: readonly [NarrativeToggle, string, string][] = [
   ],
   ["sceneTitles", "场景标题卡", "城区 · 地点 · 时间 · 天气"],
   [
+    "choiceFillOnly",
+    "点选选项仅填入输入框",
+    "点击行动选项或按数字键 1–5 时，改为把内容填入下方输入框而不自动发送，方便修改或补充细节后再发",
+  ],
+  [
     "autoTurnImage",
     "回合自动配图",
     "每轮叙事完成后自动生成场景插图（需在「模型连接」中设定文生图模型）",
@@ -85,16 +96,16 @@ const IMAGE_PROMPT_FIELDS: readonly {
     label: "通用自定义提示词（前缀 / 画质词 / 画师串）",
     hint: "总是固定拼在生成提示词最前面，无论是否开启辅助模型提炼均生效（例如 NovelAI 画质词或 LoRA 触发词）",
     placeholder: "例如：masterpiece, best quality, very aesthetic, absurdres",
-    rows: 2,
-    max: 1200,
+    rows: 3,
+    max: IMAGE_STYLE_FIELD_MAX_LENGTH,
   },
   {
     key: "imageAuxSystemPrompt",
     label: "辅助模型提炼主提示词（System Prompt · 可直接替换接管）",
-    hint: "直接决定辅助模型如何把角色/剧情转化为生图 Prompt；可把你自己的生图导演提示词整段粘进来",
+    hint: "直接决定辅助模型如何把角色/剧情转化为生图 Prompt；支持直接粘贴超长生图导演预设（最多 10 万字）",
     placeholder: "你是《赛博朋克 2077》角色扮演游戏的专业 AI 视觉分镜与生图提示词导演…",
-    rows: 4,
-    max: 4000,
+    rows: 6,
+    max: IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH,
   },
   {
     key: "imagePortraitPrompt",
@@ -102,7 +113,7 @@ const IMAGE_PROMPT_FIELDS: readonly {
     hint: "附加到角色立绘与 NPC 肖像的基准风格描述（切换上方语言时默认画风会自动同步中英文）",
     placeholder: "Cyberpunk 2077 aesthetic, Night City neo-noir character portrait...",
     rows: 3,
-    max: 1200,
+    max: IMAGE_STYLE_FIELD_MAX_LENGTH,
   },
   {
     key: "imageScenePrompt",
@@ -110,7 +121,7 @@ const IMAGE_PROMPT_FIELDS: readonly {
     hint: "附加到剧情回合插图的基准风格、光影与构图描述",
     placeholder: "Cyberpunk 2077 aesthetic, Night City cinematic scene illustration...",
     rows: 3,
-    max: 1200,
+    max: IMAGE_STYLE_FIELD_MAX_LENGTH,
   },
   {
     key: "imageNegativePrompt",
@@ -118,15 +129,15 @@ const IMAGE_PROMPT_FIELDS: readonly {
     hint: "告知生图模型尽量避开的元素，例如水印、文字框、崩坏手部等",
     placeholder: "lowres, blurry, watermark, text...",
     rows: 3,
-    max: 1200,
+    max: IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   },
   {
     key: "imageAuxInstruction",
     label: "补充微调要求（可选）",
     hint: "附加在主提示词或本地拼接末尾的额外风格、色调或镜头要求",
     placeholder: "例如：采用《边缘行者》动画赛璐璐质感，偏冷青与洋红霓虹光影",
-    rows: 2,
-    max: 2400,
+    rows: 3,
+    max: IMAGE_STYLE_FIELD_MAX_LENGTH,
   },
 ];
 

@@ -352,7 +352,13 @@ export function ProfileHead({
               type="button"
               className={styles.portraitBtn}
               title={`查看大图：${npc.name}`}
-              onClick={() => saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`)}
+              onClick={() =>
+                saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`, {
+                  onReplace: () =>
+                    openPortraitGenerator(saveImages, npc, wound.detail, customPortraitId),
+                  replaceLabel: "重绘 / 更换肖像",
+                })
+              }
             >
               <NpcPortrait
                 npc={npc}
@@ -468,7 +474,13 @@ export function ProfileHead({
           {customPortraitId && (
             <>
               <ActionButton
-                onClick={() => saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`)}
+                onClick={() =>
+                  saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`, {
+                    onReplace: () =>
+                      openPortraitGenerator(saveImages, npc, wound.detail, customPortraitId),
+                    replaceLabel: "重绘 / 更换肖像",
+                  })
+                }
               >
                 查看大图
               </ActionButton>
@@ -580,7 +592,13 @@ function ProfileBanner({
               type="button"
               className={styles.portraitBtn}
               title={`查看大图：${npc.name}`}
-              onClick={() => saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`)}
+              onClick={() =>
+                saveImages.openLightbox(customPortraitId, `${npc.name} · 肖像`, {
+                  onReplace: () =>
+                    openPortraitGenerator(saveImages, npc, wound.detail, customPortraitId),
+                  replaceLabel: "重绘 / 更换肖像",
+                })
+              }
             >
               <NpcPortrait
                 npc={npc}

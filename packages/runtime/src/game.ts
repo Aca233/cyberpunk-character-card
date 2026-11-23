@@ -689,39 +689,110 @@ export class GameService {
         return { status: 409, body: { error: "角色已经死了，不能重新生成", version } };
       }
       const voided = voidedSeqs(records);
-      let last = records.findLast((r) => r.kind !== "void" && !voided.has(r.seq));
-      if (last?.kind !== "turn") {
-        const latestTurn = effectiveTurns(records).at(-1);
-        // 零结算草稿没有改变世界，撤掉它不会影响此后的读消息、装备或习惯等操作。
-        // 已结算回合仍要求位于最后一步，避免其后的操作依赖被撤掉的状态。
-        if (latestTurn?.draft === true && latestTurn.patches.length === 0) last = latestTurn;
+      const latestTurn = effectiveTurns(records).at(-1);
+      if (!latestTurn) {
+        return { status: 409, body: { error: "还没有可以重新生成的回合", version } };
       }
-      if (last?.kind !== "turn") {
-        return {
-          status: 409,
-          body: { error: "最后一步不是可以重写的回合（之后可能有别的操作）", version },
-        };
-      }
-      const input = TurnInputSchema.safeParse(last.input);
+      const input = TurnInputSchema.safeParse(latestTurn.input);
       if (!input.success) {
         return { status: 409, body: { error: "这一轮的输入读不出来，不能重新生成", version } };
       }
-      const record: VoidRecord = {
-        kind: "void",
-        seq: version,
-        at: this.deps.clock.now().toISOString(),
-        target: last.seq,
-        reason: "regenerate",
-      };
+      const targets =
+        latestTurn.draft === true && latestTurn.patches.length === 0
+          ? [latestTurn]
+          : records.filter(
+              (r) => r.seq >= latestTurn.seq && r.kind !== "void" && !voided.has(r.seq),
+            );
+      const at = this.deps.clock.now().toISOString();
+      const lines = targets.map((target, index) => {
+        const record: VoidRecord = {
+          kind: "void",
+          seq: version + index,
+          at,
+          target: target.seq,
+          reason: "regenerate",
+        };
+        return serializeRecord(record);
+      });
       try {
-        await this.deps.saves.appendAt(id, version, serializeRecord(record));
+        await this.deps.saves.appendManyAt(id, version, lines);
       } catch (error) {
         if (!(error instanceof SaveMovedError)) throw error;
         return { status: 409, body: { error: error.message, version: error.actual } };
       }
       await this.clearCheckpointBestEffort(id);
       const pending = { kind: "input", input: input.data };
-      return { status: 200, body: { version: version + 1, voided: last.seq, pending } };
+      return {
+        status: 200,
+        body: { version: version + targets.length, voided: latestTurn.seq, pending },
+      };
+    });
+  }
+
+  /**
+   * 删楼（撤销指定回合及之后的所有有效记录）：把 fromSeq 及之后的回合、界面操作与后台记录一并作废，
+   * 并将该回合的原始玩家输入返回给前端，便于玩家直接修改后再发或放弃。
+   */
+  undoTurn(id: string, request: z.output<typeof UndoTurnRequestSchema>): Promise<Reply> {
+    return this.locks.run(id, async (): Promise<Reply> => {
+      const { meta, world, records } = await this.load(id);
+      const runtime = this.runtime(meta);
+      const version = logVersion(records);
+      if (this.deps.hub.running(id)) {
+        return { status: 409, body: { error: "这一轮还在生成，等它结束再删楼", version } };
+      }
+      if (request.baseVersion !== version) {
+        return { status: 409, body: { error: "存档已经更新过，请刷新后再操作", version } };
+      }
+      const view = projectState(world, records, runtime.data);
+      if (view.ended && !view.death) {
+        return { status: 409, body: { error: "这个角色的故事已经结束，不能删楼", version } };
+      }
+      const voided = voidedSeqs(records);
+      const effective = effectiveTurns(records);
+      const targetTurn =
+        request.fromSeq !== undefined
+          ? effective.find((t) => t.seq === request.fromSeq)
+          : effective.at(-1);
+      if (!targetTurn) {
+        return { status: 404, body: { error: "找不到要删除的那一楼（可能已被撤销）", version } };
+      }
+      const targets =
+        targetTurn.draft === true &&
+        targetTurn.patches.length === 0 &&
+        targetTurn.seq === effective.at(-1)?.seq
+          ? [targetTurn]
+          : records.filter(
+              (r) => r.seq >= targetTurn.seq && r.kind !== "void" && !voided.has(r.seq),
+            );
+      const at = this.deps.clock.now().toISOString();
+      const lines = targets.map((target, index) => {
+        const record: VoidRecord = {
+          kind: "void",
+          seq: version + index,
+          at,
+          target: target.seq,
+          reason: "undo",
+        };
+        return serializeRecord(record);
+      });
+      try {
+        await this.deps.saves.appendManyAt(id, version, lines);
+      } catch (error) {
+        if (!(error instanceof SaveMovedError)) throw error;
+        return { status: 409, body: { error: error.message, version: error.actual } };
+      }
+      await this.clearCheckpointBestEffort(id);
+      const parsedInput = TurnInputSchema.safeParse(targetTurn.input);
+      return {
+        status: 200,
+        body: {
+          version: version + targets.length,
+          voided: targets.length,
+          fromSeq: targetTurn.seq,
+          ...(parsedInput.success ? { input: parsedInput.data } : {}),
+        },
+      };
     });
   }
 
@@ -1447,6 +1518,12 @@ const REWRITE_TIMEOUT_MS = 120_000;
 const PHONE_CHAT_TIMEOUT_MS = 45_000;
 
 export const RegenerateRequestSchema = z.object({ baseVersion: z.number().int().min(0) });
+
+/** 删楼 / 撤销到指定回合之前：fromSeq 缺省时删除最后一楼 */
+export const UndoTurnRequestSchema = z.object({
+  baseVersion: z.number().int().min(0),
+  fromSeq: z.number().int().min(0).optional(),
+});
 
 /** 角色死了、或玩家给故事收了尾，就不能再提交回合和操作 */
 function deathBlock(

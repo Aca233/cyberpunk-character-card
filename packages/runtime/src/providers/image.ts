@@ -30,7 +30,7 @@ interface RawImageGenerateResult {
 export interface ImageGenerationMetadata {
   readonly profileName: string;
   readonly model: string;
-  readonly protocol: ResolvedImageProtocol;
+  readonly protocol: ResolvedImageProtocol | "local-upload";
   readonly requestedAspectRatio?: AspectRatio;
   readonly requestedSize?: string;
   readonly sentSize?: string;

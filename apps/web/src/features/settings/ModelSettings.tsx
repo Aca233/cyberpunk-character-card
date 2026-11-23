@@ -119,6 +119,7 @@ function useRefresh() {
     await Promise.all([
       client.invalidateQueries({ queryKey: ["profiles"] }),
       client.invalidateQueries({ queryKey: ["health"] }),
+      client.invalidateQueries({ queryKey: ["imageCapabilities"] }),
     ]);
   };
 }
@@ -137,8 +138,12 @@ export function ModelSettings({
   const [notice, setNotice] = useState("");
   const assign = useMutation({
     mutationFn: api.setRoles,
-    onSuccess: async () => {
-      setNotice("使用方案已更新。没有发送模型请求，后续回合使用新选择。");
+    onSuccess: async (_result, variables) => {
+      setNotice(
+        variables.image === null
+          ? "已停用文生图模型，后续不会自动生图，也可删除该连接。"
+          : "使用方案已更新。没有发送模型请求，后续回合使用新选择。",
+      );
       await refresh();
     },
   });
@@ -566,17 +571,39 @@ export function ModelSettings({
                       disabled={
                         dirty ||
                         assign.isPending ||
-                        problems(selected).length > 0 ||
-                        data.image === selected.name
+                        (data.image !== selected.name && problems(selected).length > 0)
                       }
                       reason={
-                        dirty ? "请先保存连接" : problems(selected).join("；") || "已经是文生图模型"
+                        dirty
+                          ? "请先保存连接"
+                          : data.image === selected.name
+                            ? "点击停用文生图模型"
+                            : problems(selected).join("；")
                       }
-                      onClick={() => assign.mutate({ image: selected.name })}
+                      onClick={() =>
+                        assign.mutate({
+                          image: data.image === selected.name ? null : selected.name,
+                        })
+                      }
                     >
-                      {data.image === selected.name ? "文生图模型使用中" : "设为文生图模型"}
+                      {data.image === selected.name ? "文生图使用中（点击停用）" : "设为文生图模型"}
                     </Button>
                   </div>
+                  {data.image && (
+                    <div className={styles.roleMetaRow}>
+                      <span className={styles.help}>
+                        当前文生图模型：{data.image}（可选功能，停用后可卸载或删除该连接）
+                      </span>
+                      <Button
+                        small
+                        disabled={dirty || assign.isPending}
+                        reason="请先保存连接"
+                        onClick={() => assign.mutate({ image: null })}
+                      >
+                        停用文生图模型
+                      </Button>
+                    </div>
+                  )}
                 </section>
                 <span
                   className={shared.thinLine}
@@ -591,6 +618,11 @@ export function ModelSettings({
                     data.narrator === selected.name ||
                     data.aux === selected.name ||
                     data.image === selected.name
+                  }
+                  inUseReason={
+                    data.narrator === selected.name || data.aux === selected.name
+                      ? "先将叙事或辅助模型改用其他连接，再删除此连接"
+                      : "先点击上方「停用文生图模型」，再删除此连接"
                   }
                   onDuplicate={() => duplicate(selected)}
                   onDeleted={() => select("@new")}
@@ -1312,6 +1344,7 @@ function ConnectionActions({
   configVersion,
   profile,
   inUse,
+  inUseReason,
   dirty,
   onDuplicate,
   onDeleted,
@@ -1319,6 +1352,7 @@ function ConnectionActions({
   readonly configVersion: number;
   readonly profile: PublicProfile;
   readonly inUse: boolean;
+  readonly inUseReason: string;
   readonly dirty: boolean;
   readonly onDuplicate: () => void;
   readonly onDeleted: () => void;
@@ -1378,7 +1412,7 @@ function ConnectionActions({
           )}
           <Button
             disabled={busy || dirty || inUse}
-            reason={inUse ? "先将角色和辅助模型改用其他连接" : "先保存或撤销修改"}
+            reason={inUse ? inUseReason : "先保存或撤销修改"}
             onClick={() => setDialog("delete")}
           >
             删除连接

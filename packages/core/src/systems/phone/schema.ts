@@ -66,6 +66,8 @@ export const ChatSceneBudgetSchema = z.object({
   turns: z.number().int().min(0).default(0),
   affinityGained: z.number().int().min(0).default(0),
   jobOffered: z.boolean().default(false),
+  /** 本场该联系人已通过私信挂出的委托数量（支持中间人一次拿出多单供挑选） */
+  jobsOffered: z.number().int().min(0).default(0),
 });
 export type ChatSceneBudget = z.infer<typeof ChatSceneBudgetSchema>;
 

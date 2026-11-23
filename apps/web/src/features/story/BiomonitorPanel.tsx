@@ -277,21 +277,24 @@ export function BiomonitorPanel({
       <header className={styles.banner} data-tone={wound.tone}>
         <CellFrame />
         <div className={styles.bannerBrand}>
-          {character.name !== null && (portraitId || saveImages) ? (
+          {portraitId || saveImages ? (
             <button
               type="button"
               className={styles.bannerAvatar}
               disabled={!portraitId && !saveImages}
               title={
                 portraitId
-                  ? "点击查看大图"
+                  ? "点击查看大图 / 重新生成或上传立绘"
                   : saveImages
-                    ? "点击生成角色立绘"
+                    ? "点击生成或上传角色立绘"
                     : `街头名声 · ${character.credTier}：${character.credWorld}`
               }
               onClick={() => {
                 if (portraitId) {
-                  saveImages?.openLightbox(portraitId, `${character.name ?? "主角"} · 人物立绘`);
+                  saveImages?.openLightbox(portraitId, `${character.name ?? "主角"} · 人物立绘`, {
+                    onReplace: openPortraitModal,
+                    replaceLabel: "重绘 / 更换立绘",
+                  });
                 } else {
                   openPortraitModal();
                 }
@@ -330,10 +333,10 @@ export function BiomonitorPanel({
               <strong className={styles.bannerName}>{character.name ?? "未建档宿主"}</strong>
               {dossier.subtitle && <span className={styles.bannerSub}>{dossier.subtitle}</span>}
             </div>
-            {character.name !== null && saveImages && (
+            {saveImages && (
               <div className={styles.bannerActions}>
                 <Button small onClick={openPortraitModal}>
-                  {portraitId ? "AI 重绘" : "AI 生成立绘"}
+                  {portraitId ? "重绘 / 换图" : "生成 / 上传立绘"}
                 </Button>
                 {saveImages.bindings.playerPortrait && (
                   <Button small onClick={() => void saveImages.unbindImage({ kind: "character" })}>

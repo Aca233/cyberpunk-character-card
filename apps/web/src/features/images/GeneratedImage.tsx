@@ -62,10 +62,14 @@ export function GeneratedImage({
 export function ImageLightbox({
   imageId,
   title,
+  onReplace,
+  replaceLabel = "重新生成 / 更换图片",
   onClose,
 }: {
   readonly imageId: string | null;
   readonly title: string;
+  readonly onReplace?: (() => void) | undefined;
+  readonly replaceLabel?: string | undefined;
   readonly onClose: () => void;
 }) {
   useLayer(onClose, imageId !== null);
@@ -104,6 +108,17 @@ export function ImageLightbox({
                   {query.data.revisedPrompt ?? query.data.prompt}
                 </p>
                 <div className={styles.actions}>
+                  {onReplace && (
+                    <Button
+                      small
+                      onClick={() => {
+                        onClose();
+                        onReplace();
+                      }}
+                    >
+                      {replaceLabel}
+                    </Button>
+                  )}
                   <Button small onClick={() => downloadStoredImage(query.data, title)}>
                     下载图片
                   </Button>

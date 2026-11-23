@@ -71,8 +71,46 @@ function readSampling(raw: Obj): PresetSampling {
   };
 }
 
+/** 酒馆界面美化/交互脚本类正则特征：本作只渲染纯文本正文，不执行 HTML/CSS/JS 模板 */
+const HTML_UI_REGEX_RE =
+  /<!doctype\s+html|<html\b|<head\b|<body\b|<script\b|<style\b|<iframe\b|<div\s+(?:class|id|style)=/i;
+
+/** 判断一条预设正则的替换串是否属于酒馆前端 HTML/JS 界面美化脚本 */
+export function isHtmlUiRegex(regex: Pick<PresetRegex, "replace">): boolean {
+  return HTML_UI_REGEX_RE.test(regex.replace);
+}
+
+/** 预设常见的辅助元信息块（选项、摘要、注释、导演评论、IDE 追踪等），不应混入纯文本正文和记账抽取 */
+const PRESET_META_BLOCKS: readonly RegExp[] = [
+  /<!doctype\s+html[\s\S]*?<\/html>/gi,
+  /<script(?:\s[^>]*)?>[\s\S]*?<\/script>/gi,
+  /<style(?:\s[^>]*)?>[\s\S]*?<\/style>/gi,
+  /<!--\s*\[IDE_AST_TRACE\][\s\S]*?-->/gi,
+  /<<<\|catgodml\|[\s\S]*?>>>/gi,
+  /<(options|choices|summary|sumUp|pose|comment|talk|background|run_tool_replacement)(?:\s[^>]*)?>[\s\S]*?<\/\1\s*>/gi,
+  /<\|(?:sep|merge)\|>/gi,
+];
+
+/** 预设常见的正文外层容器标签：保留内部正文，剥去壳标签 */
+const PRESET_WRAPPER_TAG_RE = /<\/?(?:game|content|hidden|story|body)(?:\s[^>]*)?>/gi;
+
 /**
- * 读预设：条目取 prompt_order 里条目最多的那一份（酒馆里 100001 是默认那份），
+ * 清理酒馆预设输出里残留的界面 HTML、脚本、AST 追踪、选项/总结元标签与外层壳标签，
+ * 避免污染存档正文，也避免把几十 KB 冗余标签或脚本送入第 ④ 步抽取导致超时/断连。
+ * 若清理后整段变空，保底返回原文（不丢剧情）。
+ */
+export function sanitizePresetNarrative(input: string): string {
+  let out = input;
+  for (const re of PRESET_META_BLOCKS) {
+    out = out.replace(re, "");
+  }
+  out = out.replace(PRESET_WRAPPER_TAG_RE, "");
+  // 去掉因剥离块级标签产生的连续空行
+  out = out.replace(/\n{3,}/g, "\n\n").trim();
+  return out !== "" ? out : input.trim();
+}
+
+/** 读预设：条目取 prompt_order 里条目最多的那一份（酒馆里 100001 是默认那份），
  * marker（角色描述、聊天记录等槽位）和空条目跳过；正则只收 AI 输出（placement 含 2）那一类
  */
 export function readTavernPreset(
@@ -125,6 +163,7 @@ export function readTavernPreset(
 
   const ext = isObj(raw.extensions) ? raw.extensions : {};
   const regex: PresetRegex[] = [];
+  let htmlUiRegexCount = 0;
   for (const r of Array.isArray(ext.regex_scripts) ? ext.regex_scripts : []) {
     if (!isObj(r)) continue;
     const placement = Array.isArray(r.placement) ? r.placement : [];
@@ -137,20 +176,29 @@ export function readTavernPreset(
       warnings.push(`正则「${text(r.scriptName)}」本机认不出，跳过了`);
       continue;
     }
+    const replace = text(r.replaceString);
+    const htmlUi = isHtmlUiRegex({ replace });
+    if (htmlUi) htmlUiRegexCount += 1;
     regex.push({
       id: text(r.id) || text(r.scriptName),
       name: text(r.scriptName) || "未命名正则",
       find,
       flags,
-      replace: text(r.replaceString),
-      // 只改显示（markdownOnly 且不改提示词）的那类是酒馆界面的美化，本作不渲染它的 HTML，默认关掉；
+      replace,
+      // 只改显示（markdownOnly 且不改提示词）或替换串是 HTML/JS 界面美化脚本的，本作不渲染它的 HTML，默认关掉；
       // minDepth 大于 0 的只改较早的楼层、碰不到最新一条回复，本作只改最新回复，也默认关掉
       enabled:
         r.disabled !== true &&
+        !htmlUi &&
         !(r.markdownOnly === true && r.promptOnly !== true) &&
         (num(r.minDepth) ?? 0) <= 0,
       promptOnly: r.promptOnly === true,
     });
+  }
+  if (htmlUiRegexCount > 0) {
+    warnings.push(
+      `已自动停用 ${htmlUiRegexCount} 条酒馆 HTML/脚本界面美化正则（本作使用独立纯文本界面，不执行这类模板）`,
+    );
   }
   if (isObj(ext.tavern_helper)) warnings.push("预设带的酒馆助手脚本不会执行");
 
@@ -273,11 +321,11 @@ export function applyExpandedPreset(
   return out;
 }
 
-/** 预设正则用在模型输出上：本作存下的正文照这个改；坏掉的正则跳过 */
+/** 预设正则用在模型输出上：本作存下的正文照这个改；跳过 HTML/JS 界面美化脚本和坏掉的正则 */
 export function applyPresetRegex(input: string, preset: TavernPreset): string {
   let out = input;
   for (const r of preset.regex) {
-    if (!r.enabled) continue;
+    if (!r.enabled || isHtmlUiRegex(r)) continue;
     try {
       out = out.replace(new RegExp(r.find, r.flags), r.replace.replace(/\{\{match\}\}/gi, "$&"));
     } catch {

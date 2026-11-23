@@ -62,7 +62,7 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       if (command.type === "bounty") return applyBounty(draft, command, ctx.now);
       if (command.type === "heat.relief") return applyRelief(draft, command);
       const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
-      return applyEvent(draft, command, district, ctx.now);
+      return applyEvent(draft, command, district, ctx.now, ctx.data);
     },
     on: {
       "trade.fine": (draft) => {

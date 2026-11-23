@@ -20,6 +20,8 @@ export interface NarrativePrefs {
   readonly sceneTitles: boolean;
   /** 局内应用界面主题：开启后剧情界面也使用当前所选主题的动态壁纸与配色；关闭则按当前地点与时段显示夜之城实景 */
   readonly storyTheme: boolean;
+  /** 点选行动选项时只填入输入框、不自动发送，方便修改或补充细节后再发 */
+  readonly choiceFillOnly: boolean;
   /** 剧透调试视图：上下文查看器、存为测评用例；打开时屏幕顶部常驻「剧透」 */
   readonly spoilers: boolean;
   /** 城里的动静（场外生态推演）多久跑一次；每轮随请求带给后端 */
@@ -49,6 +51,7 @@ export interface NarrativePrefs {
 export type NarrativeToggle =
   | "sceneTitles"
   | "storyTheme"
+  | "choiceFillOnly"
   | "spoilers"
   | "autoTurnImage"
   | "autoImageUseAux";
@@ -70,6 +73,7 @@ const EVENT = "cp-narrative-prefs";
 const DEFAULTS: NarrativePrefs = {
   sceneTitles: false,
   storyTheme: true,
+  choiceFillOnly: false,
   spoilers: false,
   offscreen: "normal",
   autoTurnImage: false,
@@ -101,6 +105,7 @@ function read(): NarrativePrefs {
       value = {
         sceneTitles: parsed.sceneTitles === true,
         storyTheme: parsed.storyTheme !== false,
+        choiceFillOnly: parsed.choiceFillOnly === true,
         spoilers: parsed.spoilers === true,
         offscreen: PACES.find((p) => p === parsed.offscreen) ?? "normal",
         autoTurnImage: parsed.autoTurnImage === true,

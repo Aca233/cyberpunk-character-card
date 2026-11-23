@@ -1,4 +1,5 @@
 import type { Draft } from "immer";
+import { districtLawFor, normalizeDistrictId } from "../../district-laws";
 import type { ApplyOutcome, TimeSpan } from "../../kernel/system";
 import {
   BOUNTY_MIN_STARS,
@@ -10,6 +11,7 @@ import {
   EVENT_LABELS,
   type EventCommand,
   type EventKind,
+  type EventVictim,
   HEAT_DECAY_MINUTES,
   HEAT_MAX,
   type HeatCommand,
@@ -33,20 +35,179 @@ const BASE_HEAT: Readonly<Record<EventKind, number>> = {
 
 const VIOLENT: ReadonlySet<EventKind> = new Set(["kill", "publicViolence"]);
 
+/** 文本兜底识别受害/对抗对象身份（当模型未填 victim 时按 target 与 reason 判断） */
+const NCPD_PATTERN = /ncpd|暴恐|maxtac|警察|警员|巡警|警车|警局|netwatch|网络监察|创伤小组|trauma/i;
+const CORP_PATTERN =
+  /荒坂|arasaka|军用科技|militech|康陶|kang[- ]?tao|生物技术|biotechnica|沛卓|petrochem|企业安保|公司安保|公司高管|公司特工|公司保安/i;
+const GANG_PATTERN =
+  /六街帮|sixth[- ]?street|漩涡帮|maelstrom|虎爪帮|tyger[- ]?claws|瓦伦蒂诺|valentinos|动物帮|animals|巫毒帮|voodoo[- ]?boys|莫克斯|mox|清道夫|scavengers?|夜游鬼|乱刀会|wraiths|幽冥犬|幽灵犬|barghest|帮派|混混|打手|暴徒|劫匪|掠夺者|毒贩|佣兵团/i;
+const CIVILIAN_PATTERN = /平民|路人|市民|店主|店员|摊贩|医生|护士|无辜|居民|游客|服务员|司机/;
+
+export interface HeatEventContext {
+  readonly district?: string | null | undefined;
+  readonly data?: Readonly<Record<string, unknown>> | undefined;
+}
+
 /** 整星显示 */
 export function shownStars(stars: number): number {
   return Math.floor(stars);
 }
 
-/** 按事件推导热度增量（星），附一句理由：公开或五人以上看见的暴力多涨一星；没人看见也没人报警不涨 */
-export function heatDelta(event: EventCommand): { readonly delta: number; readonly why: string } {
-  const base = BASE_HEAT[event.kind];
-  if (base === 0) return { delta: 0, why: "这类事不惊动警察" };
-  if (event.witnesses === 0 && !event.public && !event.reportedTo) {
-    return { delta: 0, why: "没人看见" };
+/** 推断事件的受害对象类别：显式 victim 优先，否则结合势力表与 target/reason 关键词兜底 */
+export function inferEventVictim(
+  event: EventCommand,
+  data?: Readonly<Record<string, unknown>>,
+): EventVictim {
+  if (event.victim) return event.victim;
+  const hay = `${event.target ?? ""} ${event.reason}`;
+  if (NCPD_PATTERN.test(hay)) return "ncpd";
+  const rawFactions = data?.factions;
+  if (Array.isArray(rawFactions)) {
+    const lowerTarget = (event.target ?? "").trim().toLowerCase();
+    for (const entry of rawFactions) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const rec = entry as { id?: unknown; name?: unknown; kind?: unknown };
+      if (typeof rec.id !== "string" || typeof rec.name !== "string") continue;
+      if (
+        (lowerTarget !== "" &&
+          (lowerTarget === rec.id || lowerTarget.includes(rec.name.toLowerCase()))) ||
+        hay.includes(rec.name) ||
+        hay.toLowerCase().includes(rec.id)
+      ) {
+        if (rec.kind === "law" || rec.kind === "service") return "ncpd";
+        if (rec.kind === "corp") return "corp";
+        if (rec.kind === "gang") return "gang";
+      }
+    }
   }
-  const loud = VIOLENT.has(event.kind) && (event.public || event.witnesses >= 5) ? 1 : 0;
-  return { delta: base + loud, why: event.reportedTo ? "有人报了警" : "" };
+  if (CORP_PATTERN.test(hay)) return "corp";
+  if (GANG_PATTERN.test(hay)) return "gang";
+  if (CIVILIAN_PATTERN.test(hay)) return "civilian";
+  return "civilian";
+}
+
+/** 同时间戳（同回合）内本类事件最多允许累计的新增星数，防止按人数拆条瞬间飙到 5 星 */
+function sameMomentCap(victim: EventVictim, kind: EventKind, securityTier: number): number {
+  if (!VIOLENT.has(kind)) return 1.5;
+  if (victim === "ncpd") return 3;
+  if (victim === "gang") return securityTier >= 3 ? 2 : 1;
+  if (victim === "corp") return securityTier >= 3 ? 2.5 : 2;
+  return securityTier >= 3 ? 3 : 2;
+}
+
+/**
+ * 按事件对象身份、目击/报警情况与城区警力等级推导热度增量（星）：
+ * - 太平洲 / 恶土 / 狗镇无 NCPD 常规管辖，非针对 NCPD/暴恐不涨 NCPD 通缉星；
+ * - 清剿敌对帮派在底/中安区很少惊动 NCPD（无报警且非闹市不涨，公开火并最多 +1 星）；
+ * - 袭警、高安区公开动武或屠杀平民才会快速升星。
+ */
+export function heatDelta(
+  event: EventCommand,
+  ctx?: HeatEventContext,
+): {
+  readonly delta: number;
+  readonly why: string;
+  readonly victim: EventVictim;
+  readonly securityTier: number;
+} {
+  const victim = inferEventVictim(event, ctx?.data);
+  const districtId = normalizeDistrictId(ctx?.district);
+  const law = districtLawFor(ctx?.data, districtId);
+  const securityTier = law?.securityTier ?? 2;
+  const base = BASE_HEAT[event.kind];
+  if (base === 0) return { delta: 0, why: "这类事不惊动警察", victim, securityTier };
+
+  const outsideNcpd = securityTier === 0 || districtId === "badlands" || districtId === "dogtown";
+  if (outsideNcpd && victim !== "ncpd") {
+    const placeLabel =
+      districtId === "pacifica"
+        ? "太平洲"
+        : districtId === "badlands"
+          ? "恶土"
+          : districtId === "dogtown"
+            ? "狗镇"
+            : "法外城区";
+    return {
+      delta: 0,
+      why: `${placeLabel}不在 NCPD 常规出警管辖内`,
+      victim,
+      securityTier,
+    };
+  }
+
+  if (event.witnesses === 0 && !event.public && !event.reportedTo) {
+    return { delta: 0, why: "没人看见", victim, securityTier };
+  }
+
+  if (victim === "gang" && VIOLENT.has(event.kind)) {
+    if (event.reportedTo === "ncpd") {
+      return {
+        delta: securityTier >= 3 ? 1.5 : 1,
+        why: "帮派冲突波及外界且有人报了警",
+        victim,
+        securityTier,
+      };
+    }
+    if (securityTier <= 1) {
+      if (event.public && event.witnesses >= 5) {
+        return { delta: 1, why: "闹市帮派火并闹大，巡警迟缓响应", victim, securityTier };
+      }
+      if (event.public || event.witnesses >= 3) {
+        return { delta: 0.5, why: "街头帮派火并，NCPD 在该区通常敷衍了事", victim, securityTier };
+      }
+      return { delta: 0, why: "低安区街头帮派火并，NCPD 懒得管", victim, securityTier };
+    }
+    if (securityTier === 2) {
+      if (event.public || event.witnesses >= 5) {
+        return { delta: 1, why: "帮派火并惊动街区巡警", victim, securityTier };
+      }
+      return { delta: 0.5, why: "帮派冲突动静不大，仅引起零星注意", victim, securityTier };
+    }
+    const highZoneDelta = event.public || event.witnesses >= 5 ? 2 : 1;
+    return { delta: highZoneDelta, why: "高安保区动武清剿帮派", victim, securityTier };
+  }
+
+  if (victim === "ncpd" && VIOLENT.has(event.kind)) {
+    const loud = event.public || event.witnesses >= 5 || event.reportedTo ? 1 : 0;
+    return {
+      delta: Math.min(3, base + loud),
+      why: "袭击执法力量",
+      victim,
+      securityTier,
+    };
+  }
+
+  if (victim === "corp" && VIOLENT.has(event.kind)) {
+    const corpDelta =
+      event.kind === "kill"
+        ? securityTier >= 3
+          ? event.public || event.witnesses >= 5
+            ? 2.5
+            : 2
+          : 1.5
+        : securityTier >= 3
+          ? 1.5
+          : 1;
+    return {
+      delta: corpDelta,
+      why: event.reportedTo ? "企业安保联动 NCPD 报警" : "触动企业安保与警务联动",
+      victim,
+      securityTier,
+    };
+  }
+
+  const loud =
+    VIOLENT.has(event.kind) && (event.public || event.witnesses >= 5)
+      ? securityTier >= 3
+        ? 1
+        : 0.5
+      : 0;
+  return {
+    delta: base + loud,
+    why: event.reportedTo ? "有人报了警" : "",
+    victim,
+    securityTier,
+  };
 }
 
 function remember(draft: Draft<HeatState>, entry: HeatState["recent"][number]): void {
@@ -82,8 +243,19 @@ export function applyEvent(
   event: EventCommand,
   district: string | null,
   now: number,
+  data?: Readonly<Record<string, unknown>>,
 ): ApplyOutcome {
-  const { delta, why } = heatDelta(event);
+  const computed = heatDelta(event, { district, data });
+  // 同时间戳（同一场交火/同回合）防按人头拆条连乘暴涨：按该类事件同轮封顶裁剪增量
+  const sameMomentAccumulated = draft.recent
+    .filter((entry) => entry.at === now && entry.delta > 0)
+    .reduce((sum, entry) => sum + entry.delta, 0);
+  const cap = sameMomentCap(computed.victim, event.kind, computed.securityTier);
+  const remaining = Math.max(0, cap - sameMomentAccumulated);
+  const capped = computed.delta > remaining;
+  const delta = Math.min(computed.delta, remaining);
+  const why = capped && delta === 0 ? "同一场冲突的热度已结算，不按人头重复叠星" : computed.why;
+
   const before = shownStars(draft.stars);
   draft.stars = Math.min(HEAT_MAX, draft.stars + delta);
   if (delta > 0) seen(draft, now);
@@ -103,7 +275,11 @@ export function applyEvent(
   if (before === after)
     return {
       ok: true,
-      notes: [`${label}（${event.reason}）：警方热度已经是 ${after} 星，到顶了，重新计时`],
+      notes: [
+        draft.stars >= HEAT_MAX
+          ? `${label}（${event.reason}）：警方热度已经是 ${after} 星，到顶了，重新计时`
+          : `${label}（${event.reason}）：警方热度仍为 ${after} 星${why ? `（${why}）` : ""}`,
+      ],
     };
   return {
     ok: true,

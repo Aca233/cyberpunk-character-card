@@ -1,8 +1,11 @@
 import { z } from "zod";
 
-export const IMAGE_PROMPT_MAX_LENGTH = 12000;
+export const IMAGE_PROMPT_MAX_LENGTH = 24000;
+export const IMAGE_NEGATIVE_PROMPT_MAX_LENGTH = 10000;
+export const IMAGE_STYLE_FIELD_MAX_LENGTH = 20000;
+export const IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH = 100000;
 export const IMAGE_SCENE_MAX_LENGTH = 60000;
-export const IMAGE_INSTRUCTION_MAX_LENGTH = 2000;
+export const IMAGE_INSTRUCTION_MAX_LENGTH = 8000;
 
 /** 外貌、服装、伤势分别保留；装备/义体是参考资料，不表示全部可见或正在使用。 */
 export const ImageCharacterReferenceSchema = z.object({

@@ -355,6 +355,8 @@ const TurnBlock = memo(function TurnBlock({
   onGearHover,
   onRegenerate,
   onRewrite,
+  onUndo,
+  trailingCount,
   onMark,
 }: {
   readonly turn: Turn;
@@ -367,12 +369,18 @@ const TurnBlock = memo(function TurnBlock({
   readonly onRegenerate?: (() => void) | undefined;
   /** 按账目改写；和重新生成同样只给最后一轮 */
   readonly onRewrite?: (() => Promise<void>) | undefined;
+  /** 删楼：撤回本轮（若为历史楼层则连同其后的楼层一并撤回） */
+  readonly onUndo?: (() => Promise<void>) | undefined;
+  /** 本楼之后还有多少轮有效正文（0 表示本楼是最后一楼） */
+  readonly trailingCount: number;
   /** 点了正文里的人名或地名 */
   readonly onMark?: OnMark | undefined;
 }) {
   const prefs = useNarrativePrefs();
   const [rewriting, setRewriting] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState(false);
   const saveImages = useSaveImages();
   const turnImageIds = saveImages ? turnImagesOf(saveImages.bindings, turn.seq) : [];
   const autoPending = saveImages?.pendingTurnSeqs.has(turn.seq) ?? false;
@@ -384,6 +392,12 @@ const TurnBlock = memo(function TurnBlock({
     const t = window.setTimeout(() => setConfirmRegen(false), 4000);
     return () => window.clearTimeout(t);
   }, [confirmRegen]);
+
+  useEffect(() => {
+    if (!confirmUndo) return;
+    const t = window.setTimeout(() => setConfirmUndo(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [confirmUndo]);
 
   const attachedMedia = turn.media?.map((group) => (
     <section className={mediaStyles.group} key={group.id} aria-label={group.title}>
@@ -641,10 +655,63 @@ const TurnBlock = memo(function TurnBlock({
             <button
               type="button"
               className={styles.regenerate}
-              onClick={() => setConfirmRegen(true)}
+              onClick={() => {
+                setConfirmUndo(false);
+                setConfirmRegen(true);
+              }}
               title="作废这一轮，用同样的输入重新生成"
             >
               重新生成
+            </button>
+          ))}
+        {onUndo &&
+          (confirmUndo ? (
+            <span className={styles.regenConfirm}>
+              <button
+                type="button"
+                className={`${styles.regenerate} ${styles.regenDanger}`}
+                disabled={undoing}
+                onClick={async () => {
+                  setUndoing(true);
+                  setConfirmUndo(false);
+                  try {
+                    await onUndo();
+                  } finally {
+                    setUndoing(false);
+                  }
+                }}
+              >
+                {undoing
+                  ? "撤回中…"
+                  : trailingCount > 0
+                    ? `确认删此楼及后 ${trailingCount} 轮`
+                    : "确认删除本楼"}
+              </button>
+              <button
+                type="button"
+                className={styles.regenerate}
+                disabled={undoing}
+                onClick={() => setConfirmUndo(false)}
+              >
+                取消
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={styles.regenerate}
+              disabled={undoing}
+              onClick={() => {
+                setConfirmRegen(false);
+                setConfirmUndo(true);
+              }}
+              title={
+                trailingCount > 0
+                  ? `删除本楼及之后的 ${trailingCount} 轮记录，并将本楼原输入填回输入框`
+                  : "删除本楼并恢复到本轮之前的状态，原输入填回输入框"
+              }
+            >
+              {trailingCount > 0 ? "删至此处" : "删楼"}
             </button>
           ))}
         {saveImages && turnImageIds.length === 0 && !autoPending && (
@@ -777,6 +844,7 @@ export function StoryLog({
   saveId,
   onRegenerate,
   onRewrite,
+  onUndo,
   onMark,
   openingGuide,
 }: {
@@ -786,6 +854,8 @@ export function StoryLog({
   readonly onRegenerate?: (() => void) | undefined;
   /** 按账目改写最后一轮；角色死了时不给 */
   readonly onRewrite?: (() => Promise<void>) | undefined;
+  /** 删楼：删除指定 seq 及之后的所有记录 */
+  readonly onUndo?: ((fromSeq: number) => Promise<void>) | undefined;
   /** 点了正文里的人名或地名；正在生成的这一轮还在变，不给点 */
   readonly onMark?: OnMark | undefined;
   /** 0 轮新档开局引导快捷动作 */
@@ -967,20 +1037,25 @@ export function StoryLog({
               onMark={onMark}
             />
           )}
-          {view.turns.map((t, i) => (
-            <TurnBlock
-              key={t.seq}
-              turn={t}
-              view={view}
-              saveId={saveId}
-              speakers={speakers}
-              gearMatcher={gearMatcher}
-              onGearHover={onGearHover}
-              onRegenerate={i === view.turns.length - 1 && !generating ? onRegenerate : undefined}
-              onRewrite={onRewrite}
-              onMark={onMark}
-            />
-          ))}
+          {view.turns.map((t, i) => {
+            const trailingCount = view.turns.length - 1 - i;
+            return (
+              <TurnBlock
+                key={t.seq}
+                turn={t}
+                view={view}
+                saveId={saveId}
+                speakers={speakers}
+                gearMatcher={gearMatcher}
+                onGearHover={onGearHover}
+                onRegenerate={trailingCount === 0 && !generating ? onRegenerate : undefined}
+                onRewrite={onRewrite}
+                onUndo={onUndo && !generating ? () => onUndo(t.seq) : undefined}
+                trailingCount={trailingCount}
+                onMark={onMark}
+              />
+            );
+          })}
 
           {!generating && view.pendingUiActions && view.pendingUiActions.length > 0 && (
             <UiActionsStrip actions={view.pendingUiActions} pending />

@@ -1,9 +1,12 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 import {
+  IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH,
   IMAGE_INSTRUCTION_MAX_LENGTH,
+  IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   IMAGE_PROMPT_MAX_LENGTH,
   IMAGE_SCENE_MAX_LENGTH,
+  IMAGE_STYLE_FIELD_MAX_LENGTH,
   type ImageCharacterReference,
   ImageCharacterReferenceSchema,
 } from "../schemas/image";
@@ -48,12 +51,12 @@ export const DEFAULT_AUX_SYSTEM_PROMPT = [
 
 export const ImageStyleConfigSchema = z.object({
   promptLanguage: ImagePromptLanguageSchema.optional(),
-  customPrompt: z.string().trim().max(1200).optional(),
-  portraitStyle: z.string().trim().max(1200).optional(),
-  sceneStyle: z.string().trim().max(1200).optional(),
-  negativePrompt: z.string().trim().max(1200).optional(),
-  auxInstruction: z.string().trim().max(2400).optional(),
-  auxSystemPrompt: z.string().trim().max(4000).optional(),
+  customPrompt: z.string().trim().max(IMAGE_STYLE_FIELD_MAX_LENGTH).optional(),
+  portraitStyle: z.string().trim().max(IMAGE_STYLE_FIELD_MAX_LENGTH).optional(),
+  sceneStyle: z.string().trim().max(IMAGE_STYLE_FIELD_MAX_LENGTH).optional(),
+  negativePrompt: z.string().trim().max(IMAGE_NEGATIVE_PROMPT_MAX_LENGTH).optional(),
+  auxInstruction: z.string().trim().max(IMAGE_STYLE_FIELD_MAX_LENGTH).optional(),
+  auxSystemPrompt: z.string().trim().max(IMAGE_AUX_SYSTEM_PROMPT_MAX_LENGTH).optional(),
 });
 export type ImageStyleConfig = z.infer<typeof ImageStyleConfigSchema>;
 
@@ -621,7 +624,7 @@ function buildAuxMessages(
     "Strict Output Specification:",
     '1. Output valid JSON ONLY with keys: "prompt" (string) and "negativePrompt" (string).',
     `2. ${languageRule}`,
-    `3. Maximum ${IMAGE_PROMPT_MAX_LENGTH} characters for "prompt" and 2000 for "negativePrompt". Describe only visible elements (composition, lighting, appearance, pose, expression, outfit, visible implants, environment). No HUD, no text overlays, no watermarks.`,
+    `3. Maximum ${IMAGE_PROMPT_MAX_LENGTH} characters for "prompt" and ${IMAGE_NEGATIVE_PROMPT_MAX_LENGTH} for "negativePrompt". Describe only visible elements (composition, lighting, appearance, pose, expression, outfit, visible implants, environment). No HUD, no text overlays, no watermarks.`,
     targetStyle ? `4. Visual style baseline: ${targetStyle}` : "",
     customPrompt
       ? `5. Custom fixed prompt prefix/tags to preserve at the beginning of "prompt": ${customPrompt}`
@@ -709,7 +712,7 @@ function buildAuxMessages(
 
 const AuxPromptPayloadSchema = z.object({
   prompt: z.string().trim().min(8).max(IMAGE_PROMPT_MAX_LENGTH),
-  negativePrompt: z.string().trim().max(2000).optional(),
+  negativePrompt: z.string().trim().max(IMAGE_NEGATIVE_PROMPT_MAX_LENGTH).optional(),
 });
 
 function parseAuxReply(

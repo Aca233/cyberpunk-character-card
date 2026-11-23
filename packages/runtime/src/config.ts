@@ -78,7 +78,8 @@ export const NewProfileSchema = ProfileBase.omit({ apiKey: true, apiKeyEnv: true
 const RolesSchema = z.strictObject({
   narrator: z.string().min(1).optional(),
   aux: z.string().min(1).optional(),
-  image: z.string().min(1).optional(),
+  /** 传 null 表示停用/卸载文生图模型 */
+  image: z.string().min(1).nullable().optional(),
 });
 
 /** 旧版 config.json 用 gm 记叙事模型的方案：读的时候当成 narrator，下次保存就写成新键 */
@@ -375,7 +376,13 @@ export class ConfigService {
         ]
           .filter((r) => r !== null)
           .join("和");
-        if (roles !== "") return fail(409, `「${name}」正在当${roles}，先换成别的方案再删`);
+        if (roles !== "") {
+          const hint =
+            config.image === name && config.narrator !== name && config.aux !== name
+              ? "先停用文生图模型或换成别的方案再删"
+              : "先换成别的方案再删";
+          return fail(409, `「${name}」正在当${roles}，${hint}`);
+        }
         return { draft: { ...config, profiles: config.profiles.filter((p) => p.name !== name) } };
       },
       () => null,
@@ -389,7 +396,16 @@ export class ConfigService {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
     return this.edit(
-      (config) => ({ draft: { ...config, ...parsed.data } }),
+      (config) => {
+        const { image, ...rest } = parsed.data;
+        const next: Record<string, unknown> = { ...config, ...rest };
+        if (image === null) {
+          delete next.image;
+        } else if (image !== undefined) {
+          next.image = image;
+        }
+        return { draft: next };
+      },
       (config) => ({
         ...(config.narrator === undefined ? {} : { narrator: config.narrator }),
         ...(config.aux === undefined ? {} : { aux: config.aux }),

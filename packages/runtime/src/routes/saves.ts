@@ -10,6 +10,7 @@ import {
   type Reply,
   RestartRequestSchema,
   SaveExportSchema,
+  UndoTurnRequestSchema,
 } from "../game";
 import { isSaveId, SaveExistsError, SaveNotFoundError } from "../ports";
 import type { TurnHub } from "../turns";
@@ -117,6 +118,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
     const parsed = await body(c, RegenerateRequestSchema);
     if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
     return reply(c, await game.rewrite(c.req.param("id"), parsed.value));
+  });
+
+  app.post("/:id/undo", async (c) => {
+    const parsed = await body(c, UndoTurnRequestSchema);
+    if (!parsed.ok) return c.json({ error: "提交的内容不对", details: parsed.errors }, 400);
+    return reply(c, await game.undoTurn(c.req.param("id"), parsed.value));
   });
 
   app.get("/:id/turns/:turnId/events", (c) => {

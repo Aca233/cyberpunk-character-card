@@ -6,10 +6,11 @@ export const eventRules: RuleModule<HeatState> = {
   title: "事件",
   commands: ["event"],
   when: () => true,
-  judge: `- 杀人、公开动手、偷东西、砸东西会被看见、被报警：判断风险时把目击者和摄像头算进去；警方热度由代码推导，不用你算。`,
-  narrate: `- 杀人、公开动手、偷东西、砸东西时，正文写清有没有人看见、是不是在公开场合、有没有人报了警；没人看见就写没人看见。`,
-  text: `- 角色杀人、公开动手、偷东西、砸东西时写一条 event，只报告发生了什么：kind、看见的人数 witnesses、是不是在公开场合 public；有人报了警加 reportedTo: "ncpd"。警方热度由代码推导，不要自己算。
-- 没人看见、也没被摄像头拍到时 witnesses 写 0、public 写 false；事后有人报警再补一条带 reportedTo 的 event。`,
+  judge: `- 杀人、公开动手、偷东西、砸东西的警方风险要区分对象与城区：在太平洲、恶土或低安保帮派地盘内火并清剿六街帮/漩涡帮/清道夫等帮派分子，只要没波及无辜平民，NCPD 通常不管或迟缓应付；在市政中心、威斯特布鲁克等高安区公开动武、伤害无辜平民或袭击 NCPD/企业安保才会迅速引来重兵。警方热度由代码推导，不用你算。`,
+  narrate: `- 杀人、公开动手、偷东西、砸东西时，正文写清对手身份（帮派混混/平民/企业安保/NCPD）、有没有无辜路人看见、是不是在闹市公开场合、有没有人报了警；没人看见就写没人看见。`,
+  text: `- 角色杀人、公开动手、偷东西、砸东西时写一条汇总 event，只报告发生了什么：kind、victim（帮派分子/清道夫/乱刀会等写 "gang"，无辜平民写 "civilian"，企业安保写 "corp"，NCPD/暴恐/创伤小组写 "ncpd"）、target、看见的无辜旁观人数 witnesses（不把敌对交火成员算成目击者）、是不是在闹市公开场合 public；确实有人报了警才加 reportedTo: "ncpd"。警方热度由代码按对象与城区警力推导，不要自己算。
+- 【严禁按人头拆条】：同一场火并或清剿无论干掉几个敌人，只写**一条**汇总 event（例如 reason 写「清剿四名六街帮成员」，victim: "gang"），严禁每人拆成一条 kill。
+- 暗巷/仓库/帮派据点内没有无辜路人看见且没报警的清剿帮派：witnesses 写 0、public 写 false；事后有人报警再补一条带 reportedTo 的 event。`,
 };
 
 export const heatRules: RuleModule<HeatState> = {

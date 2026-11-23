@@ -1,5 +1,6 @@
 import {
   IMAGE_INSTRUCTION_MAX_LENGTH,
+  IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   IMAGE_PROMPT_MAX_LENGTH,
   type ImagePromptRequest,
 } from "@cp/core";
@@ -25,7 +26,7 @@ interface CacheEntry {
 const STORAGE_KEY = "cp.imagePromptDrafts";
 const MAX_DRAFTS = 50;
 const MAX_KEY_LENGTH = 512;
-const MAX_STORED_LENGTH = MAX_DRAFTS * 18000 * 6;
+const MAX_STORED_LENGTH = MAX_DRAFTS * 48000 * 6;
 const memory = new Map<string, CacheEntry>();
 const RATIOS: readonly string[] = ["1:1", "3:4", "4:3", "16:9", "9:16"];
 
@@ -61,7 +62,7 @@ function parseDraft(value: unknown): SavedImageDraft | null {
     !record(value) ||
     !text(value.sourceKey, 160) ||
     !text(value.prompt, IMAGE_PROMPT_MAX_LENGTH) ||
-    !text(value.negativePrompt, 2000) ||
+    !text(value.negativePrompt, IMAGE_NEGATIVE_PROMPT_MAX_LENGTH) ||
     !text(value.instruction, IMAGE_INSTRUCTION_MAX_LENGTH) ||
     typeof value.useAux !== "boolean" ||
     typeof value.aspectRatio !== "string" ||

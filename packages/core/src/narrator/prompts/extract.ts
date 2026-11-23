@@ -28,7 +28,7 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 读这一轮的玩家输入和定稿的正文，把已经发生的状态变化抽成提议，再给出建议选项。正文已经定稿，你不改写，也不补剧情。
 
 【只抽已经发生的事】
-- 计划、打算、还没兑现的威胁不算；玩家角色的台词和决定只认玩家输入，正文里替玩家补写的不算。
+- 计划、打算、还没兑现的威胁不算；玩家角色的台词和决定只认玩家输入，正文里替玩家补写的不算。（注：中间人或熟人向玩家提出的具体委托提议属于“对方已经开口派单”的既成事实，必须立刻发 jobOffer 入账为待接委托，不要因为玩家尚未答应就丢进 dropped；等玩家明确答应再补 jobAccept。）
 - 【本轮已定的事】中的客观阻碍、伤害上限和出行条件仍然有效；正文若与它冲突，不把被阻断行动的成功或依赖其成功的收益记账，冲突及原因写进 dropped。同轮独立发生、符合条件的其他事实仍照常记录。
 - 考虑过但没抽的写进 dropped，每条带原因（“只是打算，没发生”“玩家角色心里想的”）；dropped 必须写，没有就写 []。
 - 若存在【上一轮之后已在界面完成并结算的操作】，这些事项已经落盘完毕，正文只是回述它们；严禁为其中任何一项重复发 trade/item/money/cyberware/gunsmith/jobAccept/vehicle/safehouse/heal/suppressant 等指令，可在 dropped 注明“已在界面结算”。
@@ -76,7 +76,38 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 /** ④ 抽取的例子 */
 export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-04-12 21:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
+/**
+ * 抽取阶段固定常驻的规则模块（所有非 ooc 回合均激活）：
+ * 归入 system 提示词，使约 28K 字的常驻模块规则与指令 schema 跨回合稳定命中提示缓存，
+ * 同时大幅缩小每轮未缓存的 user 消息体量，降低辅助模型首包耗时与代理断连风险。
+ */
+const ALWAYS_ON_EXTRACT_MODULE_IDS: ReadonlySet<string> = new Set([
+  "economy",
+  "places",
+  "npcs",
+  "factions",
+  "streetCred",
+  "habits",
+  "jobs",
+  "cyberware",
+  "events",
+  "phone",
+  "notes",
+  "chronicle",
+  "arcs",
+  "shards",
+]);
+
 let extractCore: string | undefined;
+let extractStaticModulesText: string | undefined;
+
+function staticExtractModules(): string | undefined {
+  if (extractStaticModulesText === undefined) {
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+    extractStaticModulesText = modulesBlock("extract", fixed) ?? "";
+  }
+  return extractStaticModulesText === "" ? undefined : extractStaticModulesText;
+}
 
 /** ④ 抽取不变的几层：L0 的两条、L1、L3（schema 生成的格式、常驻指令、例子）；第一次用时检查每种模型可用的指令都有说明 */
 export function extractRules(): string {
@@ -124,14 +155,21 @@ export function buildExtractPrompt(
     `${plan.input.text}\n${narrative}`,
     modules.some((m) => m.id === "hacking"),
   );
-  const activeModulesText = modulesBlock("extract", modules);
+  // 常驻抽取模块放在可缓存 system 层；只有本轮按状态动态激活的模块才放进 user 层
+  const dynamicModules = modules.filter((m) => !ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+  const staticModulesText = staticExtractModules();
+  const dynamicModulesText = modulesBlock("extract", dynamicModules);
   const worldObjectIndex = worldObjectsIndexSection(world);
+  const npcEquipment =
+    extras.includeNpcEquipment === false
+      ? undefined
+      : npcEquipmentReference(world, extras.data, true);
   const content = userMessage({
-    modules: activeModulesText,
+    modules: dynamicModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
-      npcEquipmentReference(world, extras.data, true),
+      npcEquipment,
       worldObjectIndex,
       details,
       extras.decided?.length ? `【本轮已定的事】\n${extras.decided.join("\n")}` : undefined,
@@ -140,8 +178,8 @@ export function buildExtractPrompt(
     ],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
-  // 系统层只放纯静态抽取规则 + 纯静态基础目录表（剥离每轮动态模块与存档独立物件），
-  // 让几千 token 的抽取系统提示词跨回合 100% 命中提示缓存。
+  // 系统层放纯静态抽取规则 + 纯静态常驻模块 + 纯静态基础目录表（剥离动态模块与存档独立物件），
+  // 让抽取系统提示词跨回合稳定命中提示缓存，并把每轮未缓存的用户消息压到最小。
   const staticData =
     extras.data &&
     "baseData" in extras.data &&
@@ -149,9 +187,12 @@ export function buildExtractPrompt(
     typeof extras.data.baseData === "object"
       ? (extras.data.baseData as Readonly<Record<string, unknown>>)
       : extras.data;
-  const staticRules = systemMessage("extract", [extractRules()]);
+  const staticRules = systemMessage("extract", [
+    extractRules(),
+    ...(staticModulesText ? [staticModulesText] : []),
+  ]);
   return {
-    rules: staticRules.length + (activeModulesText?.length ?? 0),
+    rules: staticRules.length + (dynamicModulesText?.length ?? 0),
     messages: [
       {
         role: "system",

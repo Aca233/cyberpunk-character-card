@@ -111,11 +111,17 @@ export const HeatStateSchema = z.object({
 });
 export type HeatState = z.infer<typeof HeatStateSchema>;
 
-/** 模型使用：{"type": "event", "kind": "kill", "witnesses": 3, "public": true, "reason": "..."} */
+export const EVENT_VICTIMS = ["gang", "civilian", "corp", "ncpd"] as const;
+export const EventVictimSchema = z.enum(EVENT_VICTIMS);
+export type EventVictim = z.infer<typeof EventVictimSchema>;
+
+/** 模型使用：{"type": "event", "kind": "kill", "victim": "gang", "target": "sixth-street", "witnesses": 0, "public": false, "reason": "..."} */
 export const EventCommandSchema = z
   .object({
     type: z.literal("event"),
     kind: EventKindSchema,
+    /** 受害/对抗对象身份：gang 帮派混混/清道夫/乱刀会等武装匪徒；civilian 无辜平民/路人；corp 企业安保/权贵；ncpd 警察/暴恐/创伤小组 */
+    victim: EventVictimSchema.optional(),
     /** 对谁做的：人物 id、势力或一句话 */
     target: z.string().min(1).optional(),
     witnesses: z.number().int().min(0).max(1000),
@@ -125,7 +131,7 @@ export const EventCommandSchema = z
     reason: z.string().min(1),
   })
   .describe(
-    "事件：只报告发生了什么，热度和声望由代码推导。kind 从固定列表里选；witnesses 是看见的人数（没人看见、也没被拍到写 0）；public 是不是在公开场合；有人报了警写 reportedTo: ncpd",
+    "事件：只报告发生了什么，热度由代码按对象身份与城区警力推导；同一场交火或清剿只写一条汇总 event，严禁按阵亡人数拆成多条 kill。victim 标明目标身份（帮派写 gang，平民写 civilian，企业安保写 corp，NCPD/暴恐写 ncpd），witnesses 仅计无辜旁观/可能报警者（不包含交火敌方成员），public 是闹市或公众场合，reportedTo 只在有人报了警时写",
   );
 export type EventCommand = z.infer<typeof EventCommandSchema>;
 

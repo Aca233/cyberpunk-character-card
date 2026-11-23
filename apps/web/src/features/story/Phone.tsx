@@ -140,6 +140,8 @@ export interface PhoneActions {
   readonly onReadCall?: ((id: number) => void) | undefined;
   /** 接听或拒接正在响铃的全息来电 */
   readonly onAnswerCall?: ((id: number, answer: boolean) => void) | undefined;
+  /** 直接接下消息卡片上附带的待接委托 */
+  readonly onAcceptJob?: ((id: string) => void) | undefined;
   /** 正在等待哪位联系人的手机直聊回复 */
   readonly chatSending?: string | null | undefined;
   /** 本地乐观展示的发送中消息 */
@@ -753,6 +755,7 @@ export function PhoneBody({
   onReadThread,
   onReadCall,
   onAnswerCall,
+  onAcceptJob,
   chatSending,
   pendingChat,
   busy,
@@ -1219,18 +1222,33 @@ export function PhoneBody({
                                 </span>
                               )}
                             </span>
-                            {b.job.status === "offered" && lockInfo === null && (
-                              <button
-                                type="button"
-                                className={styles.jobQuickBtn}
-                                onClick={() =>
-                                  fillComposer(
-                                    `「${b.job?.title ?? "这单"}」我接了，具体细节发我。`,
-                                  )
-                                }
+                            {b.job.status === "offered" && (
+                              <span
+                                style={{ display: "inline-flex", gap: "0.45rem", flexWrap: "wrap" }}
                               >
-                                填入答应接单
-                              </button>
+                                {onAcceptJob && !busy && !view.death && !view.ended && (
+                                  <button
+                                    type="button"
+                                    className={styles.jobQuickBtn}
+                                    onClick={() => b.job && onAcceptJob(b.job.id)}
+                                  >
+                                    直接接下这单
+                                  </button>
+                                )}
+                                {lockInfo === null && (
+                                  <button
+                                    type="button"
+                                    className={styles.jobQuickBtn}
+                                    onClick={() =>
+                                      fillComposer(
+                                        `「${b.job?.title ?? "这单"}」我接了，具体细节发我。`,
+                                      )
+                                    }
+                                  >
+                                    私信答应
+                                  </button>
+                                )}
+                              </span>
                             )}
                           </div>
                         )}

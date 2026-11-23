@@ -844,7 +844,10 @@ export function TrackerPanel({
                     key={job.id}
                     job={job}
                     mode="offered"
-                    defaultOpen={activeBucketCount === 0 && billItems.length === 0 && idx === 0}
+                    defaultOpen={
+                      offeredJobs.length <= 3 ||
+                      (activeBucketCount === 0 && billItems.length === 0 && idx < 2)
+                    }
                     placeId={placeId}
                     place={place}
                     onLocatePlace={onLocatePlace}

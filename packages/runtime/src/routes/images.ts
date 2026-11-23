@@ -1,6 +1,7 @@
 import {
   type Clock,
   draftImagePrompt,
+  IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   IMAGE_PROMPT_MAX_LENGTH,
   ImagePromptRequestSchema,
   ImageStyleConfigSchema,
@@ -12,6 +13,7 @@ import { ImageBindingError, type ImageStore, MAX_TURN_IMAGES } from "../images";
 import { isSaveId } from "../ports";
 import { AbortedError, UpstreamError } from "../providers/http";
 import { type ImageRouter, imageProtocolCapabilities } from "../providers/image";
+import { validateImageDataUrl } from "../providers/image-bytes";
 import type { LlmRouter } from "../providers/index";
 
 const AspectRatioSchema = z.enum(["1:1", "3:4", "4:3", "16:9", "9:16"]);
@@ -68,13 +70,18 @@ const UnbindTargetSchema = z.discriminatedUnion("kind", [
 
 const GenerateBodySchema = z.strictObject({
   prompt: z.string().trim().min(1, "提示词不能为空").max(IMAGE_PROMPT_MAX_LENGTH),
-  negativePrompt: z.string().trim().max(2000).optional(),
+  negativePrompt: z.string().trim().max(IMAGE_NEGATIVE_PROMPT_MAX_LENGTH).optional(),
   aspectRatio: AspectRatioSchema.optional(),
   size: z.string().trim().max(32).optional(),
   steps: z.number().int().min(1).max(150).optional(),
   cfgScale: z.number().min(1).max(30).optional(),
   seed: z.number().int().optional(),
   profileName: z.string().trim().min(1).optional(),
+});
+
+const UploadBodySchema = z.strictObject({
+  dataUrl: z.string().min(1, "图片数据不能为空"),
+  label: z.string().trim().max(240).optional(),
 });
 
 function actualAspectRatio(width: number, height: number): string {
@@ -204,6 +211,54 @@ export function imageRoutes(
         { error: redact(message) },
         error instanceof UpstreamError && error.status === 400 ? 400 : 502,
       );
+    }
+  });
+
+  app.post("/upload", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const parsed = UploadBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json(
+        { error: parsed.error.issues.map((i) => i.message).join("；") || "图片上传参数不对" },
+        400,
+      );
+    }
+    try {
+      const validated = await validateImageDataUrl(parsed.data.dataUrl, c.req.raw.signal);
+      if (c.req.raw.signal.aborted) throw new AbortedError();
+      const label = parsed.data.label?.trim() || "本地上传图片";
+      const saved = await store.save(
+        {
+          dataUrl: validated.dataUrl,
+          mimeType: validated.mimeType,
+          width: validated.width,
+          height: validated.height,
+          byteLength: validated.byteLength,
+          metadata: {
+            profileName: "local",
+            model: "local-upload",
+            protocol: "local-upload",
+            requestedPrompt: label,
+            sentPrompt: label,
+          },
+          prompt: label,
+          aspectRatio: actualAspectRatio(validated.width, validated.height),
+        },
+        clock.now(),
+      );
+      return c.json({ image: saved });
+    } catch (error) {
+      if (error instanceof ImageBindingError) return c.json({ error: error.message }, error.status);
+      if (error instanceof AbortedError || c.req.raw.signal.aborted) {
+        return c.json({ error: "已取消上传" }, 400);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ error: message.replace(/^生成图片校验失败：/, "本地图片校验失败：") }, 400);
     }
   });
 

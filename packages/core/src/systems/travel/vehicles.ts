@@ -3,7 +3,7 @@ import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { rulingFact } from "../dice";
 import { InventoryStateSchema, itemCatalog } from "../inventory";
-import { locationCatalog, WorldClockStateSchema } from "../world";
+import { locationCatalog, placeKey, WorldClockStateSchema } from "../world";
 import {
   type OwnedVehicle,
   REPAIR_SHARE,
@@ -107,6 +107,26 @@ function currentLocation(ctx: SystemContext): string | null {
 function locationName(ctx: SystemContext, id: string | null): string {
   if (id === null) return "未知地点";
   return locationCatalog(ctx.data).get(id)?.name ?? id;
+}
+
+/** 将地点 id 或中文名解析为已知地点 id（含当前存档新记地点）；解析不到时保留原文本 */
+function resolveLocationId(
+  ctx: SystemContext,
+  raw: string | undefined,
+  fallback: string | null,
+): string | null {
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (trimmed === "") return fallback;
+  const places = locationCatalog(ctx.data);
+  if (places.has(trimmed)) return trimmed;
+  const key = placeKey(trimmed);
+  for (const def of places.values()) {
+    if (placeKey(def.name) === key) return def.id;
+  }
+  const book = WorldClockStateSchema.parse(ctx.read("world")).places;
+  const saved = book.find((p) => p.id === trimmed || placeKey(p.name) === key);
+  return saved?.id ?? trimmed;
 }
 
 function vehicleLeftovers(vehicleId: string, ctx: SystemContext): string[] {
@@ -235,11 +255,21 @@ export function applyVehicle(
             relevantLocation === null ? [] : active.filter((v) => v.location === relevantLocation);
           return local.length > 0 ? local : active;
         })()
-      : active.filter((v) => {
-          if (relevantLocation === null || v.location !== relevantLocation) return false;
-          if (command.action === "repair") return v.condition === "damaged";
-          return v.condition !== "wrecked";
-        });
+      : command.action === "drive"
+        ? (() => {
+            const drivable = active.filter((v) => v.condition !== "wrecked");
+            if (drivable.length <= 1) return drivable;
+            const local =
+              relevantLocation === null
+                ? []
+                : drivable.filter((v) => v.location === relevantLocation);
+            return local.length === 1 ? local : drivable;
+          })()
+        : active.filter((v) => {
+            if (relevantLocation === null || v.location !== relevantLocation) return false;
+            if (command.action === "repair") return v.condition === "damaged";
+            return v.condition !== "wrecked";
+          });
   if (command.vehicle === undefined && candidates.length > 1)
     return fail("相关地点有多辆候选车辆，请明确 vehicle，不会替你选另一辆");
   const target =
@@ -255,6 +285,27 @@ export function applyVehicle(
   }
 
   switch (command.action) {
+    case "drive": {
+      if (target.abandoned) return fail(`${name(target)}已经弃置，无法直接驾驶`);
+      if (target.condition === "wrecked") return fail(`${name(target)}已经报废，开不了`);
+      const destination = resolveLocationId(ctx, command.location, here);
+      if (destination === null) return fail("当前位置未知，无法记录车辆停放地点");
+      if (target.location === destination) {
+        return {
+          ok: true,
+          notes: [`${name(target)}已停在${locationName(ctx, destination)}`],
+        };
+      }
+      target.location = destination;
+      return {
+        ok: true,
+        notes: [`将${name(target)}开至${locationName(ctx, destination)}：${command.reason}`],
+        emit: [
+          { type: "inventory.relocateVehicle", vehicle: target.id, location: destination },
+          { type: "cyberware.relocateVehicle", vehicle: target.id, location: destination },
+        ],
+      };
+    }
     case "damage":
     case "wreck": {
       if (target.condition === "wrecked") return fail(`${name(target)}已经报废了`);

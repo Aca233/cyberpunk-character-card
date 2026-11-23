@@ -772,6 +772,15 @@
   gap: 10px;
 }
 
+.roleMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 2px;
+}
+
 .usage {
   display: grid;
   gap: 10px;

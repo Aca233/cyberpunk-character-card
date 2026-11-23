@@ -171,12 +171,12 @@ export const REPAIR_SHARE = 0.1;
 export const VehicleCommandSchema = z
   .object({
     type: z.literal("vehicle"),
-    action: z.enum(["buy", "steal", "damage", "repair", "wreck", "abandon", "chase"]),
+    action: z.enum(["buy", "steal", "drive", "damage", "repair", "wreck", "abandon", "chase"]),
     /** buy、steal 写车型 id */
     model: z.string().min(1).optional(),
     /** 对哪辆车；相关现场只有一辆候选车时可以省略，多辆须明确。 */
     vehicle: z.string().min(1).optional(),
-    /** damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车或追逐。 */
+    /** drive：开到/停放的目标地点（缺省为当前地点）；damage/wreck 发生在远处时写车辆所在地点；不得用来远程修车或追逐。 */
     location: z.string().min(1).optional(),
     /** steal：看见的人数 */
     witnesses: z.number().int().min(0).max(1000).optional(),
@@ -195,7 +195,7 @@ export const VehicleCommandSchema = z
       ctx.addIssue({ code: "custom", path: ["stake"], message: "chase 要写 stake（失败的代价）" });
   })
   .describe(
-    "载具：buy 买车；steal 偷车；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、chase 只能操作身边车辆；abandon 可随时丢下车辆（车内留有物品或证据时连车带物留下并继续承受后果）；同一现场多辆候选车必须明确 vehicle",
+    "载具：buy 买车；steal 偷车；drive 记录正文里实际取回/驾驶/呼叫名下车辆并停到当前位置或指定 location（同步车内物品位置）；damage/wreck 记录车辆实际受损，远处发生时标明地点；repair、chase 只能操作身边车辆；abandon 可随时丢下车辆（车内留有物品或证据时连车带物留下并继续承受后果）；多辆候选车须明确 vehicle",
   );
 export type VehicleCommand = z.infer<typeof VehicleCommandSchema>;
 

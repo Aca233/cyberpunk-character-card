@@ -152,9 +152,14 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
 export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
-  if (job.status !== "active") {
+  if (job.status === "offered") {
+    // 玩家明确推掉待接委托，或未点接单直接把待接活办完/搞砸时，允许直接结算；其余已结单不可重复结束
+    if (command.outcome !== "abandoned") {
+      job.acceptedAt = job.acceptedAt ?? now;
+    }
+  } else if (job.status !== "active") {
     return fail(
-      `委托 ${job.title} 现在是「${JOB_STATUS_LABELS[job.status]}」，只有进行中的委托能结束`,
+      `委托 ${job.title} 现在是「${JOB_STATUS_LABELS[job.status]}」，已经结束，不能再重复结算`,
     );
   }
   const label = JOB_OUTCOME_LABELS[command.outcome];

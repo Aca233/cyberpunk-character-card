@@ -1,4 +1,4 @@
-import type { Clock } from "@cp/core";
+import { type Clock, isHtmlUiRegex } from "@cp/core";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import {
@@ -37,7 +37,12 @@ function summary(entry: StoredPreset, active: string | null) {
       depth: e.depth,
       chars: e.content.length,
     })),
-    regex: preset.regex.map((r) => ({ id: r.id, name: r.name, enabled: r.enabled })),
+    regex: preset.regex.map((r) => ({
+      id: r.id,
+      name: r.name,
+      enabled: r.enabled,
+      ...(isHtmlUiRegex(r) ? { htmlUi: true } : {}),
+    })),
   };
 }
 

@@ -320,7 +320,7 @@ export interface StoredImage {
   readonly metadata: {
     readonly profileName: string;
     readonly model: string;
-    readonly protocol: Exclude<ImageProtocol, "auto">;
+    readonly protocol: Exclude<ImageProtocol, "auto"> | "local-upload";
     readonly requestedPrompt: string;
     readonly sentPrompt: string;
     readonly requestedAspectRatio?: AspectRatio;
@@ -421,6 +421,7 @@ export interface PresetSummary {
     readonly id: string;
     readonly name: string;
     readonly enabled: boolean;
+    readonly htmlUi?: boolean;
   }[];
 }
 
@@ -641,7 +642,7 @@ export const api = {
     request<ModelsResult>("POST", "/profiles/-/models", input),
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
-  setRoles: (roles: { narrator?: string; aux?: string; image?: string }) =>
+  setRoles: (roles: { narrator?: string; aux?: string; image?: string | null }) =>
     request<{ narrator?: string; aux?: string; image?: string }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),
@@ -743,6 +744,12 @@ export const api = {
     request<{ version: number; replaced: number }>("POST", `/saves/${saveId}/rewrite`, {
       baseVersion,
     }),
+  undoTurn: (saveId: string, baseVersion: number, fromSeq?: number) =>
+    request<{ version: number; voided: number; fromSeq: number; input?: TurnInput }>(
+      "POST",
+      `/saves/${saveId}/undo`,
+      fromSeq === undefined ? { baseVersion } : { baseVersion, fromSeq },
+    ),
   stop: (saveId: string, turnId: string) =>
     request<{ stopping: boolean }>("POST", `/saves/${saveId}/turns/${turnId}/stop`),
   context: (saveId: string, seq: number) =>
@@ -819,6 +826,27 @@ export const api = {
       if (!res.ok) {
         throw new ApiError(
           typeof data.error === "string" ? data.error : `文生图失败（${res.status}）`,
+          res.status,
+          data,
+        );
+      }
+      return data as { readonly image: StoredImage };
+    }),
+  /** 上传本地图片（PNG / JPEG / 静态 WebP）并保存到浏览器本地 ImageStore */
+  uploadImage: (
+    input: { readonly dataUrl: string; readonly label?: string },
+    signal?: AbortSignal,
+  ) =>
+    apiFetch("/images/upload", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    }).then(async (res) => {
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : `上传图片失败（${res.status}）`,
           res.status,
           data,
         );

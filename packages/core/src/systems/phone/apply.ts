@@ -145,12 +145,15 @@ export function applyChatMeta(draft: Draft<PhoneState>, command: ChatMeta): Appl
   const base =
     prev && prev.scene === command.scene
       ? prev
-      : { scene: command.scene, turns: 0, affinityGained: 0, jobOffered: false };
+      : { scene: command.scene, turns: 0, affinityGained: 0, jobOffered: false, jobsOffered: 0 };
+  const prevCount = base.jobsOffered ?? (base.jobOffered ? 1 : 0);
+  const nextCount = prevCount + (command.jobOffered ? 1 : 0);
   draft.chatBudget[command.npc] = {
     scene: command.scene,
     turns: base.turns + 1,
     affinityGained: base.affinityGained + (command.affinityGained ?? 0),
-    jobOffered: base.jobOffered || Boolean(command.jobOffered),
+    jobOffered: nextCount > 0,
+    jobsOffered: nextCount,
   };
   return { ok: true };
 }

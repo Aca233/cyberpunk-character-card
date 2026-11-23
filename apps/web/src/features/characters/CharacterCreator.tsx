@@ -1075,7 +1075,7 @@ export function CharacterCreator({
                     <span className={wb.portraitCornerTL} aria-hidden />
                     <span className={wb.portraitCornerBR} aria-hidden />
                     <span className={wb.portraitEmptyCode}>3:4</span>
-                    <span className={wb.portraitEmptyHint}>点击生成立绘</span>
+                    <span className={wb.portraitEmptyHint}>生成或上传立绘</span>
                   </button>
                 )}
                 {activeTarot && (
@@ -1112,7 +1112,7 @@ export function CharacterCreator({
 
                 <div className={wb.portraitActions}>
                   <Button small primary onClick={() => setPortraitModalOpen(true)}>
-                    {card.portrait ? "重绘立绘" : "✦ 生成立绘"}
+                    {card.portrait ? "重绘 / 换图" : "✦ 生成 / 上传立绘"}
                   </Button>
                   {card.portrait && (
                     <ActionButton onClick={() => setLightboxOpen(true)}>大图</ActionButton>
@@ -1360,6 +1360,8 @@ export function CharacterCreator({
         <ImageLightbox
           imageId={card.portrait}
           title={card.name.trim() || "角色立绘"}
+          onReplace={() => setPortraitModalOpen(true)}
+          replaceLabel="重绘 / 更换立绘"
           onClose={() => setLightboxOpen(false)}
         />
       )}

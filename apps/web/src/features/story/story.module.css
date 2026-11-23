@@ -998,17 +998,23 @@
 }
 
 .regenerate {
-  padding: 0;
+  padding: 0.08rem 0.25rem;
   font: inherit;
-  color: var(--cp-text-faint);
+  color: var(--cp-text-dim);
   background: none;
   border: 0;
   cursor: var(--cp-cursor-hand);
+  transition: color 0.14s ease;
 }
 
 .regenerate:hover,
 .regenerate:focus-visible {
   color: var(--cp-cyan);
+}
+
+.regenerate:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .regenConfirm {
@@ -5872,20 +5878,24 @@ ul.mapLegend > li {
 }
 
 .turnIllusButton {
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   padding: 0;
   border: 0;
-  background: none;
+  background: rgb(6 6 12 / 64%);
   cursor: var(--cp-cursor-hand);
   overflow: hidden;
 }
 
 .turnIllusImg {
   display: block;
-  width: 100%;
-  max-height: 360px;
-  object-fit: cover;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(62dvh, 520px);
+  object-fit: contain;
 }
 
 .turnIllusFoot {
