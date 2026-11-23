@@ -11,6 +11,7 @@ import {
   EDGERUNNERS_LYRICS,
   type EdgerunnersLyricLine,
   findActiveLyricIndex,
+  type LyricWordSpan,
 } from "./edgerunnersLyrics";
 import { useReducedMotion } from "./ShellBackdrop";
 import { useShellTheme } from "./store";
@@ -77,7 +78,7 @@ export function ThemeLyricsStage({ immersive }: ThemeLyricsStageProps) {
       const snap = getActiveBgmTime();
       setClock((prev) => {
         if (
-          Math.abs(prev.currentTime - snap.currentTime) < 0.025 &&
+          Math.abs(prev.currentTime - snap.currentTime) < 0.016 &&
           prev.playing === snap.playing
         ) {
           return prev;
@@ -104,8 +105,6 @@ export function ThemeLyricsStage({ immersive }: ThemeLyricsStageProps) {
 
   if (!activeLine) return null;
 
-  const lineSpan = Math.max(0.25, activeLine.endTime - activeLine.startTime);
-  const lineProgress = clamp01((clock.currentTime - activeLine.startTime) / lineSpan);
   const currentModeSpec = FOLIA_MODES.find((m) => m.id === mode) ?? FOLIA_MODES[0];
 
   const cycleMode = () => {
@@ -126,7 +125,7 @@ export function ThemeLyricsStage({ immersive }: ThemeLyricsStageProps) {
   const handleSeek = (line: EdgerunnersLyricLine) => {
     if (audioPrefs.muted) setAudioPref("muted", false);
     if (!audioPrefs.bgmEnabled) setAudioPref("bgmEnabled", true);
-    seekActiveBgm(line.startTime + 0.05);
+    seekActiveBgm(line.startTime + 0.01);
     playSfx("click");
   };
 
@@ -157,13 +156,13 @@ export function ThemeLyricsStage({ immersive }: ThemeLyricsStageProps) {
           {mode === "tilt" ? (
             <TiltActiveLine
               line={activeLine}
-              lineProgress={lineProgress}
+              currentTime={clock.currentTime}
               reducedMotion={reducedMotion}
             />
           ) : (
             <LumiereActiveLine
               line={activeLine}
-              lineProgress={lineProgress}
+              currentTime={clock.currentTime}
               reducedMotion={reducedMotion}
             />
           )}
@@ -209,61 +208,90 @@ export function ThemeLyricsStage({ immersive }: ThemeLyricsStageProps) {
   );
 }
 
+/** 将 joinNext 标记的连续音节（如 self- + control）聚合成同一不换行词簇，同时保留逐音节时间轴 */
+function groupWordClusters(words: readonly LyricWordSpan[]): readonly (readonly LyricWordSpan[])[] {
+  const clusters: LyricWordSpan[][] = [];
+  let current: LyricWordSpan[] = [];
+  for (const word of words) {
+    current.push(word);
+    if (!word.joinNext) {
+      clusters.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
+function wordProgressAt(word: LyricWordSpan, currentTime: number): number {
+  const span = Math.max(0.04, word.endTime - word.startTime);
+  return clamp01((currentTime - word.startTime) / span);
+}
+
 /**
  * 模式 1 & 3（流光 Lumiere / 云阶 Partita）：
- * 逐词渐进裁剪高光扫掠 + 正在演唱词的正弦波抬升与放大脉冲
+ * 基于 .fia 逐词绝对时间戳驱动渐进裁剪高光扫掠 + 正在演唱词的正弦波抬升与放大脉冲
  */
 function LumiereActiveLine({
   line,
-  lineProgress,
+  currentTime,
   reducedMotion,
 }: {
   readonly line: EdgerunnersLyricLine;
-  readonly lineProgress: number;
+  readonly currentTime: number;
   readonly reducedMotion: boolean;
 }) {
+  const clusters = groupWordClusters(line.words);
+
+  const renderWord = (word: LyricWordSpan) => {
+    const wordProgress = wordProgressAt(word, currentTime);
+    const activePulse =
+      !reducedMotion && wordProgress > 0 && wordProgress < 1 ? Math.sin(wordProgress * Math.PI) : 0;
+    const scale = 1 + activePulse * (line.isChorus ? 0.17 : 0.12);
+    const lift = -activePulse * (line.isChorus ? 4 : 2.5);
+    const clipRight = ((1 - wordProgress) * 100).toFixed(1);
+
+    return (
+      <span
+        key={`${line.id}-${word.key}`}
+        className={styles.lumiereWord}
+        data-emphasis={word.emphasis || undefined}
+        style={
+          activePulse > 0.005
+            ? {
+                transform: `translateY(${lift.toFixed(2)}px) scale(${scale.toFixed(3)})`,
+              }
+            : undefined
+        }
+      >
+        <span>{word.text}</span>
+        {wordProgress > 0 && (
+          <span
+            className={styles.lumiereWordLit}
+            style={{
+              clipPath: `inset(-25% ${clipRight}% -25% -15%)`,
+            }}
+            aria-hidden
+          >
+            {word.text}
+          </span>
+        )}
+      </span>
+    );
+  };
+
   return (
     <div className={styles.lumiereWrap}>
       <div className={styles.lumiereWords}>
-        {line.words.map((word) => {
-          const span = Math.max(0.01, word.endRatio - word.startRatio);
-          const wordProgress = clamp01((lineProgress - word.startRatio) / span);
-          const activePulse =
-            !reducedMotion && wordProgress > 0 && wordProgress < 1
-              ? Math.sin(wordProgress * Math.PI)
-              : 0;
-          const scale = 1 + activePulse * (line.isChorus ? 0.17 : 0.12);
-          const lift = -activePulse * (line.isChorus ? 4 : 2.5);
-          const clipRight = ((1 - wordProgress) * 100).toFixed(1);
-
-          return (
-            <span
-              key={`${line.id}-${word.key}`}
-              className={styles.lumiereWord}
-              data-emphasis={word.emphasis || undefined}
-              style={
-                activePulse > 0.005
-                  ? {
-                      transform: `translateY(${lift.toFixed(2)}px) scale(${scale.toFixed(3)})`,
-                    }
-                  : undefined
-              }
-            >
-              <span>{word.text}</span>
-              {wordProgress > 0 && (
-                <span
-                  className={styles.lumiereWordLit}
-                  style={{
-                    clipPath: `inset(-25% ${clipRight}% -25% -15%)`,
-                  }}
-                  aria-hidden
-                >
-                  {word.text}
-                </span>
-              )}
+        {clusters.map((cluster) =>
+          cluster.length === 1 && cluster[0] ? (
+            renderWord(cluster[0])
+          ) : (
+            <span key={`${line.id}-c-${cluster[0]?.key ?? ""}`} className={styles.wordCluster}>
+              {cluster.map(renderWord)}
             </span>
-          );
-        })}
+          ),
+        )}
       </div>
     </div>
   );
@@ -275,63 +303,95 @@ function LumiereActiveLine({
  */
 function TiltActiveLine({
   line,
-  lineProgress,
+  currentTime,
   reducedMotion,
 }: {
   readonly line: EdgerunnersLyricLine;
-  readonly lineProgress: number;
+  readonly currentTime: number;
   readonly reducedMotion: boolean;
 }) {
-  const words = line.words;
-  const splitIdx = words.length > 3 ? Math.ceil(words.length * 0.5) : 0;
-  const primaryWords = splitIdx > 0 ? words.slice(0, splitIdx) : [];
-  const tiltWords = splitIdx > 0 ? words.slice(splitIdx) : words;
-  const tiltText = tiltWords.map((w) => w.text).join(" ");
-  const tiltStartRatio = tiltWords[0]?.startRatio ?? 0;
-  const tiltSpan = Math.max(0.05, 1 - tiltStartRatio);
-  const tiltProgress = clamp01((lineProgress - tiltStartRatio) / tiltSpan);
-  const chars = Array.from(tiltText, (ch, pos) => ({
-    id: `${line.id}-tc-${pos}-${ch}`,
-    ch,
-    pos,
-  }));
+  const clusters = groupWordClusters(line.words);
+  const splitClusterIdx = clusters.length > 3 ? Math.ceil(clusters.length * 0.5) : 0;
+  const primaryClusters = splitClusterIdx > 0 ? clusters.slice(0, splitClusterIdx) : [];
+  const tiltWords = (splitClusterIdx > 0 ? clusters.slice(splitClusterIdx) : clusters).flat();
+
+  const chars: {
+    readonly id: string;
+    readonly ch: string;
+    readonly pos: number;
+    readonly startTime: number;
+    readonly endTime: number;
+  }[] = [];
+
+  let pos = 0;
+  for (let wi = 0; wi < tiltWords.length; wi++) {
+    const word = tiltWords[wi];
+    if (!word) continue;
+    const letters = Array.from(word.text);
+    const wordSpan = Math.max(0.04, word.endTime - word.startTime);
+    for (let ci = 0; ci < letters.length; ci++) {
+      const ch = letters[ci] ?? "";
+      const cStart = word.startTime + (ci / Math.max(1, letters.length)) * wordSpan;
+      const cEnd = word.startTime + ((ci + 1) / Math.max(1, letters.length)) * wordSpan;
+      chars.push({
+        id: `${line.id}-tc-${pos}-${ch}`,
+        ch,
+        pos,
+        startTime: cStart,
+        endTime: cEnd,
+      });
+      pos++;
+    }
+    if (!word.joinNext && wi < tiltWords.length - 1) {
+      chars.push({
+        id: `${line.id}-tc-${pos}-sp`,
+        ch: " ",
+        pos,
+        startTime: word.endTime,
+        endTime: word.endTime,
+      });
+      pos++;
+    }
+  }
 
   return (
     <div className={styles.tiltWrap}>
-      {primaryWords.length > 0 && (
+      {primaryClusters.length > 0 && (
         <div className={styles.tiltPrimary}>
-          {primaryWords.map((w) => {
-            const wp = clamp01(
-              (lineProgress - w.startRatio) / Math.max(0.01, w.endRatio - w.startRatio),
-            );
-            return (
-              <span
-                key={`${line.id}-${w.key}`}
-                style={{
-                  opacity: 0.45 + wp * 0.55,
-                  color: wp > 0.5 ? "var(--cp-text)" : "var(--cp-text-dim)",
-                }}
-              >
-                {w.text}
-              </span>
-            );
-          })}
+          {primaryClusters.map((cluster) => (
+            <span key={`${line.id}-pc-${cluster[0]?.key ?? ""}`} className={styles.wordCluster}>
+              {cluster.map((w) => {
+                const wp = wordProgressAt(w, currentTime);
+                return (
+                  <span
+                    key={`${line.id}-${w.key}`}
+                    style={{
+                      opacity: 0.45 + wp * 0.55,
+                      color: wp > 0.5 ? "var(--cp-text)" : "var(--cp-text-dim)",
+                    }}
+                  >
+                    {w.text}
+                  </span>
+                );
+              })}
+            </span>
+          ))}
         </div>
       )}
 
       <div className={styles.tiltItalicRow}>
         {chars.map((item) => {
           const isSpace = item.ch === " ";
-          const charRatio = chars.length > 1 ? item.pos / (chars.length - 1) : 0;
-          const dist = Math.abs(tiltProgress - charRatio);
+          const midTime = (item.startTime + item.endTime) * 0.5;
+          const timeDist = Math.abs(currentTime - midTime);
           const pulse =
-            !reducedMotion && !isSpace && tiltProgress > 0 && dist < 0.22
-              ? Math.cos((dist / 0.22) * Math.PI * 0.5)
+            !reducedMotion && !isSpace && currentTime >= line.startTime && timeDist < 0.28
+              ? Math.cos((timeDist / 0.28) * Math.PI * 0.5)
               : 0;
           const yStagger = isSpace || reducedMotion ? 0 : (item.pos % 2 === 0 ? -1 : 1) * 3.2;
           const yLift = yStagger - pulse * 4.2;
           const scale = 1 + pulse * 0.18;
-          const lit = tiltProgress >= charRatio - 0.04;
+          const lit = currentTime >= item.startTime - 0.02;
 
           return (
             <span

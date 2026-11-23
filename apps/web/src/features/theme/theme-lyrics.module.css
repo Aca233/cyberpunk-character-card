@@ -214,6 +214,13 @@
   will-change: transform;
 }
 
+/* 连字符/分音节词簇（如 self- + control）无间隙拼接且禁止在词内折行 */
+.wordCluster {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
 .lumiereWordLit {
   position: absolute;
   inset: 0;
