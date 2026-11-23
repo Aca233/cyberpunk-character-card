@@ -5,13 +5,23 @@ import {
   type ImagePromptLanguage,
   type OffscreenPace,
 } from "@cp/core";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import audioStyles from "./audio-settings.module.css";
+import {
+  ensureImportedFontLoaded,
+  FONT_FILE_ACCEPT,
+  formatFontSize,
+  importedFontFamilyName,
+  importFontFile,
+  listImportedFonts,
+  removeImportedFont,
+  type StoredFontMeta,
+} from "./fontStore";
 import ms from "./model-settings.module.css";
 import {
   type ImageBatchCount,
@@ -24,14 +34,12 @@ import {
   STORY_FONT_SIZE_MIN,
   STORY_LINE_HEIGHT_MAX,
   STORY_LINE_HEIGHT_MIN,
-  type StoryFontPreset,
   setImageBatchCount,
   setImagePromptField,
   setImagePromptLanguage,
+  setImportedFont,
   setNarrativePref,
   setOffscreenPace,
-  setStoryCustomFont,
-  setStoryFont,
   setStoryFontSize,
   setStoryLineHeight,
   setUiFontScale,
@@ -60,19 +68,6 @@ const PROMPT_LANGUAGES: readonly {
   { id: "en", title: "纯英文自然语言", sub: "Flux / Gemini / DALL·E" },
   { id: "en-tags", title: "纯英文 Tag 词组", sub: "NovelAI V5 / SD 二次元" },
   { id: "zh", title: "纯中文描述", sub: "中文模型 / 本地纯中文拼接" },
-];
-
-const FONT_OPTIONS: readonly {
-  readonly id: StoryFontPreset;
-  readonly title: string;
-  readonly sub: string;
-}[] = [
-  { id: "default", title: "思源黑体", sub: "默认无衬线" },
-  { id: "serif", title: "宋体衬线", sub: "纸书长文阅读" },
-  { id: "kai", title: "楷体书风", sub: "温润叙事感" },
-  { id: "system", title: "系统黑体", sub: "微软雅黑 / 苹方" },
-  { id: "mono", title: "终端等宽", sub: "黑客矩阵风" },
-  { id: "custom", title: "自定义字体", sub: "填本机字体名" },
 ];
 
 const BATCH_OPTIONS: readonly {
@@ -181,6 +176,25 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
   const prefs = useNarrativePrefs();
   const [resetDone, setResetDone] = useState(false);
   const [fontResetDone, setFontResetDone] = useState(false);
+  const [fonts, setFonts] = useState<readonly StoredFontMeta[]>([]);
+  const [fontBusy, setFontBusy] = useState(false);
+  const [fontError, setFontError] = useState<string | null>(null);
+  const [fontNote, setFontNote] = useState<string | null>(null);
+  const fontInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void listImportedFonts().then((list) => {
+      if (!alive) return;
+      setFonts(list);
+      for (const item of list) {
+        void ensureImportedFontLoaded(item.id);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!resetDone) return;
@@ -194,8 +208,62 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
     return () => window.clearTimeout(timer);
   }, [fontResetDone]);
 
+  useEffect(() => {
+    if (!fontNote) return;
+    const timer = window.setTimeout(() => setFontNote(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [fontNote]);
+
+  const handleImportFont = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFontError(null);
+    setFontNote(null);
+    setFontBusy(true);
+    try {
+      const meta = await importFontFile(file);
+      const list = await listImportedFonts();
+      setFonts(list);
+      setImportedFont({ id: meta.id, name: meta.name });
+      setFontNote(`已导入并启用「${meta.name}」`);
+    } catch (err) {
+      setFontError(err instanceof Error ? err.message : "导入字体失败");
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
+  const handleSelectFont = async (meta: StoredFontMeta | null) => {
+    setFontError(null);
+    if (!meta) {
+      setImportedFont(null);
+      return;
+    }
+    const ok = await ensureImportedFontLoaded(meta.id);
+    if (!ok) {
+      setFontError(`字体「${meta.name}」加载失败，请重新导入`);
+      return;
+    }
+    setImportedFont({ id: meta.id, name: meta.name });
+  };
+
+  const handleRemoveFont = async (meta: StoredFontMeta) => {
+    setFontError(null);
+    await removeImportedFont(meta.id);
+    const list = await listImportedFonts();
+    setFonts(list);
+    if (prefs.importedFontId === meta.id) {
+      setImportedFont(null);
+    }
+    setFontNote(`已删除字体「${meta.name}」`);
+  };
+
   const currentPaceLabel = PACES.find((p) => p.id === prefs.offscreen)?.title ?? "常规";
-  const currentFontLabel = FONT_OPTIONS.find((f) => f.id === prefs.storyFont)?.title ?? "思源黑体";
+  const activeFontMeta = prefs.importedFontId
+    ? fonts.find((f) => f.id === prefs.importedFontId)
+    : undefined;
+  const currentFontLabel = activeFontMeta?.name ?? (prefs.importedFontName || "默认字体");
   const currentLangLabel =
     PROMPT_LANGUAGES.find((l) => l.id === prefs.imagePromptLanguage)?.title ?? "纯英文";
 
@@ -383,49 +451,104 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
 
         <div className={styles.prefsTwoCol}>
           <div className={styles.paceBlock}>
-            <div className={styles.prefText}>
-              <strong>阅读字体风格</strong>
-              <small>
-                立即改变剧情正文排版字体；如需连同按钮、HUD 与面板一并换字体，可开启下方开关
-              </small>
+            <div className={styles.fontImportHead}>
+              <div className={styles.prefText}>
+                <strong>导入本地字体文件</strong>
+                <small>
+                  支持 .ttf / .otf / .woff / .woff2（单文件上限 40
+                  MB），存于本机浏览器离线持久化，不上传服务器
+                </small>
+              </div>
+              <input
+                ref={fontInputRef}
+                type="file"
+                accept={FONT_FILE_ACCEPT}
+                hidden
+                onChange={(e) => void handleImportFont(e)}
+              />
+              <Button
+                primary
+                small
+                disabled={fontBusy}
+                onClick={() => fontInputRef.current?.click()}
+              >
+                {fontBusy ? "导入中…" : "导入字体文件"}
+              </Button>
             </div>
-            <fieldset className={styles.fontSegment} aria-label="阅读字体风格">
-              {FONT_OPTIONS.map((opt) => {
-                const selected = prefs.storyFont === opt.id;
+
+            {fontError && (
+              <p className={styles.fontError} role="alert">
+                {fontError}
+              </p>
+            )}
+            {fontNote && <p className={styles.fontNote}>{fontNote}</p>}
+
+            <fieldset className={styles.fontList} aria-label="已导入字体列表">
+              <div
+                className={styles.fontItem}
+                data-active={prefs.importedFontId === null ? "true" : undefined}
+              >
+                <button
+                  type="button"
+                  aria-pressed={prefs.importedFontId === null}
+                  className={styles.fontPickBtn}
+                  onClick={() => void handleSelectFont(null)}
+                >
+                  <CellFrame />
+                  <span className={styles.fontPickMain}>
+                    <span className={styles.fontPickTitle}>内置默认字体（思源黑体）</span>
+                    <small>应用随附字体 · 无需导入</small>
+                  </span>
+                  {prefs.importedFontId === null && (
+                    <span className={styles.fontActiveTag}>使用中</span>
+                  )}
+                </button>
+              </div>
+
+              {fonts.map((meta) => {
+                const selected = prefs.importedFontId === meta.id;
                 return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    aria-pressed={selected}
-                    className={styles.paceBtn}
-                    onClick={() => setStoryFont(opt.id)}
+                  <div
+                    key={meta.id}
+                    className={styles.fontItem}
+                    data-active={selected ? "true" : undefined}
                   >
-                    <CellFrame />
-                    <strong>{opt.title}</strong>
-                    <span>{opt.sub}</span>
-                  </button>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      className={styles.fontPickBtn}
+                      onClick={() => void handleSelectFont(meta)}
+                    >
+                      <CellFrame />
+                      <span className={styles.fontPickMain}>
+                        <span
+                          className={styles.fontPickTitle}
+                          style={{
+                            fontFamily: `"${importedFontFamilyName(meta.id)}", var(--font-body)`,
+                          }}
+                        >
+                          {meta.name}
+                        </span>
+                        <small>
+                          {meta.fileName} · {formatFontSize(meta.size)}
+                        </small>
+                      </span>
+                      {selected && <span className={styles.fontActiveTag}>使用中</span>}
+                    </button>
+                    <Button small onClick={() => void handleRemoveFont(meta)}>
+                      删除
+                    </Button>
+                  </div>
                 );
               })}
-            </fieldset>
 
-            {prefs.storyFont === "custom" && (
-              <div className={styles.customFontRow}>
-                <label className={styles.prefText} htmlFor="pref-storyCustomFont">
-                  <strong>自定义本机字体名称</strong>
-                  <small>填写本机已安装的字体名（多个用逗号分隔，留空回退默认字体）</small>
-                </label>
-                <FrameBox>
-                  <input
-                    id="pref-storyCustomFont"
-                    type="text"
-                    maxLength={120}
-                    placeholder="例如：霞鹜文楷, LXGW WenKai, Microsoft YaHei"
-                    value={prefs.storyCustomFont}
-                    onChange={(e) => setStoryCustomFont(e.target.value)}
-                  />
-                </FrameBox>
-              </div>
-            )}
+              {fonts.length === 0 && (
+                <p className={styles.dim}>
+                  尚未导入本地字体。点击上方「导入字体文件」选择 .ttf / .otf / .woff / .woff2
+                  即可立即生效。
+                </p>
+              )}
+            </fieldset>
 
             <div className={styles.prefRows}>
               {toggle([

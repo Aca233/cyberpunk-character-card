@@ -287,7 +287,7 @@ export function BiomonitorPanel({
                   ? "点击查看大图 / 重新生成或上传立绘"
                   : saveImages
                     ? "点击生成或上传角色立绘"
-                    : `街头名声 · ${character.credTier}：${character.credWorld}`
+                    : `外界风声 · ${character.reputationLabel}：${character.reputationSummary}`
               }
               onClick={() => {
                 if (portraitId) {
@@ -316,7 +316,7 @@ export function BiomonitorPanel({
           ) : (
             <span
               className={styles.bannerCrest}
-              title={`街头名声 · ${character.credTier}：${character.credWorld}`}
+              title={`外界风声 · ${character.reputationLabel}：${character.reputationSummary}`}
             >
               <Asset id="hud.levelFrame" tint="var(--cp-red)" height={34} />
               <Asset
@@ -626,9 +626,9 @@ export function BiomonitorPanel({
                 <span className={styles.scanBeam} aria-hidden="true" />
               </div>
 
-              <div className={styles.credLine} title={character.credWorld}>
-                <small>街头名声</small>
-                <span>{character.credTier}</span>
+              <div className={styles.credLine} title={character.reputationSummary}>
+                <small>外界风声</small>
+                <span>{character.reputationLabel}</span>
               </div>
             </div>
 

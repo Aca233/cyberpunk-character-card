@@ -1,6 +1,5 @@
 import type { SystemSection } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { CharacterStateSchema } from "../character";
 import { NpcStateSchema } from "../npc";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { jobsSection } from "./prompt";
@@ -73,7 +72,6 @@ export const jobsSections: readonly SystemSection[] = [
         : undefined;
       return jobsSection(
         JobsStateSchema.parse(world.slices.jobs),
-        CharacterStateSchema.parse(world.slices.character).streetCred,
         (id) => npcs[id]?.affinity ?? 0,
         // 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）：和派单时一样算
         (id) => factionSide(npcs[id]?.faction, data ?? {}, world.slices.factions),

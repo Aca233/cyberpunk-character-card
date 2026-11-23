@@ -1032,18 +1032,115 @@
   font-size: 11px;
 }
 
-.fontSegment {
+.fontImportHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.fontList {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.customFontRow {
+.fontItem {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.fontPickBtn {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  --box-fill: var(--cp-surface-inset);
+  --box-line: var(--cp-line-subtle);
+  transition:
+    --box-fill var(--dur-flash),
+    --box-line var(--dur-flash);
+}
+
+.fontPickBtn:hover {
+  --box-fill: var(--cp-surface-hover);
+  --box-line: var(--cp-cyan-dim);
+}
+
+.fontPickBtn[aria-pressed="true"] {
+  --box-fill: rgb(94 246 255 / 12%);
+  --box-line: var(--cp-cyan);
+}
+
+.fontPickMain {
   display: grid;
-  gap: 6px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fontPickTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+.fontPickBtn[aria-pressed="true"] .fontPickTitle {
+  color: var(--cp-cyan);
+}
+
+.fontPickMain small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cp-text-dim);
+}
+
+.fontActiveTag {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid rgb(94 246 255 / 55%);
+  background: rgb(94 246 255 / 12%);
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.fontError {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-danger);
+  background: rgb(255 97 88 / 10%);
+  color: var(--cp-red);
+  font-size: 12px;
+}
+
+.fontNote {
+  margin: 0;
+  padding: 7px 10px;
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+  font-size: 12px;
 }
 
 .fontRightCol {
@@ -1511,8 +1608,7 @@
     grid-template-columns: 1fr;
   }
 
-  .paceSegment,
-  .fontSegment {
+  .paceSegment {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

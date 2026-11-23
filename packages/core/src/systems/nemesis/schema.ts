@@ -5,8 +5,7 @@ export const NEMESES_MAX = 2;
 // 场外行动的期限和步骤记录统一归新单子管理（用户 2026-11-01 定的"全改"第 4 步）
 /** 打完多久以内还能把逃掉、放走的人升成宿敌（小时） */
 export const NEMESIS_RISE_HOURS = 24;
-/** 了结一个宿敌给的街头声望，按半级计：2 级 */
-export const NEMESIS_CRED_HALVES = 4;
+
 export const HOW_MAX = 80;
 export const PREP_MAX = 60;
 export const END_TEXT_MAX = 120;

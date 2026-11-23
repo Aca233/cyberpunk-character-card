@@ -1995,7 +1995,7 @@ export async function runNarratorTurn(
             considered.push(`场外推演：${command.type} 未生效（已跳过）：${result.reason}`);
             continue;
           }
-          if (command.type === "phone.receive" || command.type === "streetCred") {
+          if (command.type === "phone.receive" || command.type === "character.deed") {
             b.notes.push(...result.notes);
           } else {
             const c = command as {

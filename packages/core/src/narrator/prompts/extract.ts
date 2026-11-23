@@ -86,7 +86,7 @@ const ALWAYS_ON_EXTRACT_MODULE_IDS: ReadonlySet<string> = new Set([
   "places",
   "npcs",
   "factions",
-  "streetCred",
+  "reputation",
   "habits",
   "jobs",
   "cyberware",

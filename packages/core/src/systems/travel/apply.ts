@@ -1,7 +1,7 @@
 import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
-import { CharacterStateSchema } from "../character";
+import { CharacterStateSchema, hasDeedAtLeast, type KnownDeed } from "../character";
 import { CombatStateSchema } from "../combat";
 import { EconomyStateSchema } from "../economy";
 import {
@@ -88,7 +88,7 @@ export interface TripWorld {
   readonly scene: number;
   readonly location: string | null;
   readonly heat: number;
-  readonly cred: number;
+  readonly deeds: readonly KnownDeed[];
   readonly eddies: number;
   readonly inCombat: boolean;
   readonly travel: TravelState;
@@ -125,7 +125,7 @@ export function tripWorldOf(world: {
     scene: clock.scene,
     location: clock.location,
     heat: HeatStateSchema.parse(world.slices.heat).stars,
-    cred: CharacterStateSchema.parse(world.slices.character).streetCred,
+    deeds: CharacterStateSchema.parse(world.slices.character).deeds,
     eddies: EconomyStateSchema.parse(world.slices.economy).eddies,
     inCombat: CombatStateSchema.parse(world.slices.combat).active !== null,
     travel: TravelStateSchema.parse(
@@ -463,7 +463,7 @@ export function encounterChance(route: RouteOption, w: TripWorld, factor: number
   return Math.min(ENCOUNTER_MAX, Math.round(base * factor));
 }
 
-/** 能抽到的偶遇：按目的地城区、到达时段、通缉星、声望、出行方式筛 */
+/** 能抽到的偶遇：按目的地城区、到达时段、通缉星、外界传开的事迹范围、出行方式筛 */
 export function eligibleEncounters(
   defs: readonly EncounterDef[],
   district: string,
@@ -476,7 +476,7 @@ export function eligibleEncounters(
       (!e.districts || e.districts.includes(district)) &&
       (!e.periods || e.periods.includes(period)) &&
       (e.minHeat === undefined || w.heat >= e.minHeat) &&
-      (e.minCred === undefined || w.cred >= e.minCred) &&
+      (e.minReach === undefined || hasDeedAtLeast(w.deeds, e.minReach, district)) &&
       (!e.modes || e.modes.includes(mode)),
   );
 }
@@ -604,7 +604,7 @@ export function applyTravel(
     scene: clock.scene,
     location: clock.location,
     heat: ctx.read<{ stars: number }>("heat").stars,
-    cred: ctx.read<{ streetCred: number }>("character").streetCred,
+    deeds: CharacterStateSchema.parse(ctx.read("character")).deeds,
     eddies: ctx.read<{ eddies: number }>("economy").eddies,
     inCombat: ctx.read<{ active: unknown }>("combat").active !== null,
     travel: draft as TravelState,

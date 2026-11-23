@@ -48,12 +48,11 @@ export function jobsView({ world, data }: ViewContext) {
       notes: j.notes,
       paid: j.paid,
       summary: j.summary,
-      /** 结算卡：声望按级、中间人好感变化、接单以来的人性变化 */
+      /** 结算卡：中间人好感变化、接单以来的人性变化 */
       settlement:
         j.settlement === null
           ? null
           : {
-              streetCred: j.settlement.credHalves / 2,
               affinity: j.settlement.affinity,
               humanity: j.settlement.humanity,
             },

@@ -17,7 +17,7 @@ import { nemesesEndedView, nemesisCardsView } from "./view";
 /** 宿敌：记身份、败因、准备和了结；场外动作归统一单子（用户 2026-11-01 定的"全改"第 4 步） */
 export const nemesis = defineSystem<NemesisState, NemesisCommand>({
   id: "nemesis",
-  dependsOn: ["combat", "npc", "character"],
+  dependsOn: ["combat", "npc"],
   state: NemesisStateSchema,
   initial: () => ({ nemeses: [], ended: [], recent: null }),
   commands: { nemesis: NemesisCommandSchema },

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DeedReachSchema } from "../character";
 
 /** 出行方式：不做快速移动，路线面板只给这几种 */
 export const TravelModeSchema = z.enum(["walk", "metro", "taxi", "car", "stolen"]);
@@ -31,8 +32,8 @@ export const EncounterDefSchema = z.object({
     .optional(),
   /** 通缉星至少这么多才出现 */
   minHeat: z.number().min(0).max(5).optional(),
-  /** 街头声望至少这么多才出现 */
-  minCred: z.number().int().min(0).optional(),
+  /** 至少要有传播到此范围的外界事迹才出现（local 圈内风声 / district 城区传开 / city 全城皆知） */
+  minReach: DeedReachSchema.optional(),
   /** 只在这些出行方式上出现 */
   modes: z.array(TravelModeSchema).min(1).optional(),
   /** 抽中的权重 1–5 */

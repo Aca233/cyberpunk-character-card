@@ -11,11 +11,9 @@ import {
   type OffscreenPace,
 } from "@cp/core";
 import { useSyncExternalStore } from "react";
+import { ensureImportedFontLoaded, importedFontFamilyName } from "./fontStore";
 
 export type ImageBatchCount = 1 | 2 | 3 | 4;
-
-/** 正文字体预设：内置默认无衬线 / 宋体衬线 / 楷体手书 / 系统黑体 / 终端等宽 / 自定义字体名 */
-export type StoryFontPreset = "default" | "serif" | "kai" | "system" | "mono" | "custom";
 
 export const STORY_FONT_SIZE_MIN = 14;
 export const STORY_FONT_SIZE_MAX = 26;
@@ -30,16 +28,6 @@ export const UI_FONT_SCALE_DEFAULT = 100;
 export const DEFAULT_FONT_BODY = '"Noto Sans SC Variable", "Rajdhani", sans-serif';
 export const DEFAULT_FONT_UI = '"Rajdhani", "Noto Sans SC Variable", sans-serif';
 
-export const STORY_FONT_STACKS: Readonly<Record<Exclude<StoryFontPreset, "custom">, string>> = {
-  default: DEFAULT_FONT_BODY,
-  serif:
-    '"Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", "FangSong", Georgia, serif',
-  kai: '"LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "BiauKai", Georgia, serif',
-  system:
-    '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, -apple-system, sans-serif',
-  mono: '"JetBrains Mono", "Cascadia Mono", "Sarasa Mono SC", "Noto Sans SC Variable", Consolas, ui-monospace, monospace',
-};
-
 /** 叙事与文生图偏好：只存在这台浏览器里 */
 export interface NarrativePrefs {
   /** 场景开头打出一行标题卡：城区 · 地点 · 时间 · 天气 */
@@ -52,11 +40,11 @@ export interface NarrativePrefs {
   readonly spoilers: boolean;
   /** 城里的动静（场外生态推演）多久跑一次；每轮随请求带给后端 */
   readonly offscreen: OffscreenPace;
-  /** 正文字体风格 */
-  readonly storyFont: StoryFontPreset;
-  /** 自定义正文字体名（逗号分隔，仅 storyFont === "custom" 时生效，如 霞鹜文楷, Microsoft YaHei） */
-  readonly storyCustomFont: string;
-  /** 是否把所选字体同步应用到全部界面文字（关闭时仅作用于剧情正文） */
+  /** 当前启用的本地导入字体 ID；null 表示使用内置默认字体 */
+  readonly importedFontId: string | null;
+  /** 当前启用的本地导入字体显示名称（用于汇总芯片展示） */
+  readonly importedFontName: string;
+  /** 是否把当前导入字体同步应用到全部界面文字（关闭时仅作用于剧情正文） */
   readonly applyFontToUi: boolean;
   /** 剧情正文字号（px，14–26） */
   readonly storyFontSize: number;
@@ -106,14 +94,6 @@ export type ImagePromptField =
 const PACES: readonly OffscreenPace[] = ["off", "slow", "normal", "fast"];
 const LANGUAGES: readonly ImagePromptLanguage[] = ["en", "en-tags", "zh"];
 const BATCH_COUNTS: readonly ImageBatchCount[] = [1, 2, 3, 4];
-const FONT_PRESETS: readonly StoryFontPreset[] = [
-  "default",
-  "serif",
-  "kai",
-  "system",
-  "mono",
-  "custom",
-];
 
 const KEY = "cp.narrativePrefs";
 const EVENT = "cp-narrative-prefs";
@@ -123,8 +103,8 @@ const DEFAULTS: NarrativePrefs = {
   choiceFillOnly: false,
   spoilers: false,
   offscreen: "normal",
-  storyFont: "default",
-  storyCustomFont: "",
+  importedFontId: null,
+  importedFontName: "",
   applyFontToUi: false,
   storyFontSize: STORY_FONT_SIZE_DEFAULT,
   storyLineHeight: STORY_LINE_HEIGHT_DEFAULT,
@@ -153,34 +133,15 @@ function clampNumber(raw: unknown, min: number, max: number, fallback: number, s
   return Math.round(clamped / step) * step;
 }
 
-/** 构造安全的 CSS font-family 声明，防止自定义字体名破坏样式语法 */
-function buildCustomFontFamily(raw: string): string {
-  const names = raw
-    .split(/[,，\n]+/)
-    .map((part) =>
-      part
-        .trim()
-        .replace(/^["']+|["']+$/g, "")
-        .replace(/[;"'\\{}<>]/g, ""),
-    )
-    .filter((part) => part.length > 0)
-    .slice(0, 6);
-  if (names.length === 0) return DEFAULT_FONT_BODY;
-  const quoted = names.map((name) => (/^[a-zA-Z0-9-]+$/.test(name) ? name : `"${name}"`));
-  return `${quoted.join(", ")}, ${DEFAULT_FONT_BODY}`;
-}
-
 /** 计算当前生效的正文 font-family */
-export function resolveStoryFontFamily(
-  prefs: Pick<NarrativePrefs, "storyFont" | "storyCustomFont">,
-): string {
-  if (prefs.storyFont === "custom") {
-    return buildCustomFontFamily(prefs.storyCustomFont);
+export function resolveStoryFontFamily(prefs: Pick<NarrativePrefs, "importedFontId">): string {
+  if (prefs.importedFontId) {
+    return `"${importedFontFamilyName(prefs.importedFontId)}", ${DEFAULT_FONT_BODY}`;
   }
-  return STORY_FONT_STACKS[prefs.storyFont] ?? DEFAULT_FONT_BODY;
+  return DEFAULT_FONT_BODY;
 }
 
-/** 把字体与字号设置立即同步到 documentElement CSS 变量，全站与剧情正文实时生效 */
+/** 把字体与字号设置立即同步到 documentElement CSS 变量，并异步确保导入字体已注册 */
 export function applyTypographyPrefs(prefs: NarrativePrefs = read()): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -208,6 +169,16 @@ export function applyTypographyPrefs(prefs: NarrativePrefs = read()): void {
     root.style.setProperty("--fs-label", roundPx(12));
     root.style.setProperty("--fs-menu", roundPx(26));
   }
+
+  if (prefs.importedFontId) {
+    const expectedId = prefs.importedFontId;
+    void ensureImportedFontLoaded(expectedId).then((loaded) => {
+      // 如果存储里的字体已被清理，则平滑回退到默认字体
+      if (!loaded && read().importedFontId === expectedId) {
+        setImportedFont(null);
+      }
+    });
+  }
 }
 
 let typographyBound = false;
@@ -230,14 +201,18 @@ function read(): NarrativePrefs {
     try {
       const parsed = JSON.parse(raw) as Partial<Record<keyof NarrativePrefs, unknown>>;
       const lang = LANGUAGES.find((l) => l === parsed.imagePromptLanguage) ?? "en";
+      const importedFontId =
+        typeof parsed.importedFontId === "string" && parsed.importedFontId.trim().length > 0
+          ? parsed.importedFontId.trim().slice(0, 64)
+          : null;
       value = {
         sceneTitles: parsed.sceneTitles === true,
         storyTheme: parsed.storyTheme !== false,
         choiceFillOnly: parsed.choiceFillOnly === true,
         spoilers: parsed.spoilers === true,
         offscreen: PACES.find((p) => p === parsed.offscreen) ?? "normal",
-        storyFont: FONT_PRESETS.find((f) => f === parsed.storyFont) ?? "default",
-        storyCustomFont: strField(parsed.storyCustomFont, "").slice(0, 120),
+        importedFontId,
+        importedFontName: importedFontId ? strField(parsed.importedFontName, "").slice(0, 48) : "",
         applyFontToUi: parsed.applyFontToUi === true,
         storyFontSize: clampNumber(
           parsed.storyFontSize,
@@ -329,12 +304,12 @@ export function setOffscreenPace(pace: OffscreenPace): void {
   save({ ...read(), offscreen: pace });
 }
 
-export function setStoryFont(font: StoryFontPreset): void {
-  save({ ...read(), storyFont: font });
-}
-
-export function setStoryCustomFont(value: string): void {
-  save({ ...read(), storyCustomFont: value.slice(0, 120) });
+export function setImportedFont(font: { readonly id: string; readonly name: string } | null): void {
+  save({
+    ...read(),
+    importedFontId: font ? font.id : null,
+    importedFontName: font ? font.name.slice(0, 48) : "",
+  });
 }
 
 export function setStoryFontSize(size: number): void {
@@ -375,8 +350,8 @@ export function setUiFontScale(scale: number): void {
 export function resetTypographyPrefs(): void {
   save({
     ...read(),
-    storyFont: "default",
-    storyCustomFont: "",
+    importedFontId: null,
+    importedFontName: "",
     applyFontToUi: false,
     storyFontSize: STORY_FONT_SIZE_DEFAULT,
     storyLineHeight: STORY_LINE_HEIGHT_DEFAULT,

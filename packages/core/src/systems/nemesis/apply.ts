@@ -4,7 +4,6 @@ import type { CombatState } from "../combat";
 import type { NpcState } from "../npc";
 import {
   NEMESES_MAX,
-  NEMESIS_CRED_HALVES,
   NEMESIS_END_LABELS,
   NEMESIS_RISE_HOURS,
   NEMESIS_STYLE_LABELS,
@@ -101,14 +100,6 @@ function end(draft: State, command: NemesisCommand, ctx: SystemContext): ApplyOu
   return {
     ok: true,
     notes: [`和${n.name}的恩怨了结了：${NEMESIS_END_LABELS[command.end]}`],
-    emit: [
-      {
-        type: "character.cred",
-        halves: NEMESIS_CRED_HALVES,
-        reason: `了结宿敌${n.name}`,
-        event: `nemesis:${n.npc}`,
-      },
-    ],
   };
 }
 

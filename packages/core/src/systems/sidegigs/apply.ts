@@ -2,7 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { TravelState } from "../travel";
 import { resolveVehicleAt } from "../travel";
-import { formatGameTime, type WorldClockState } from "../world";
+import { formatGameTime, locationCatalog, type WorldClockState } from "../world";
 import {
   GIG_KIND_LABELS,
   GigCatalogSchema,
@@ -83,6 +83,9 @@ export function applySidegig(
   draft.active = null;
   if (command.action === "win") {
     draft.record[gig.id] = { ...record, wins: record.wins + 1, lastAt: ctx.now };
+    const district = locationCatalog(ctx.data).get(gig.location)?.district;
+    const crowd = gig.kind === "fight" ? "地下拳场圈" : "街头飙车圈";
+    const reach = gig.tier === "elite" ? "district" : "local";
     return {
       ok: true,
       notes: [`赢下${label}，打败${gig.opponent}`],
@@ -93,7 +96,14 @@ export function applySidegig(
           reason: `${label}的奖金`,
           event: `gig:${gig.id}:win`,
         },
-        { type: "character.cred", halves: 1, reason: `赢下${label}`, event: `gig:${gig.id}:win` },
+        {
+          type: "character.deed",
+          id: `gig:${gig.id}:win`,
+          summary: `在${gig.name}击败${gig.opponent}`,
+          knownBy: [crowd, ...(district ? [`${district}街头`] : [])],
+          reach,
+          ...(district ? { district } : {}),
+        },
       ],
     };
   }

@@ -91,7 +91,6 @@ function temperamentOf(
 /** 给模型看的【委托】：中间人（含办事风格与忌讳）、挂着和接下的单子，加最近结束的几单 */
 export function jobsSection(
   state: JobsState,
-  _streetCred: number,
   affinityOf: (id: string) => number,
   /** 派单人所属势力的态度；不传时不算 */
   sideOf: (id: string) => FixerCard["faction"] = () => undefined,

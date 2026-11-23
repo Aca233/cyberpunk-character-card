@@ -11,7 +11,7 @@ import {
 } from "./schema";
 import { sidegigsStatus } from "./status";
 
-/** 拳赛和赛车：报名扣押金，赢了拿奖金和声望；比赛本身走检定 */
+/** 拳赛和赛车：报名扣押金，赢了拿奖金并在场子圈内留名；比赛本身走物理裁决 */
 export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
   id: "sidegigs",
   dependsOn: ["economy", "character", "world", "travel"],

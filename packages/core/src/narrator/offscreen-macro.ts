@@ -4,7 +4,7 @@ import type { Command } from "../kernel/system";
 import type { LogRecord } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import { ArcsStateSchema, arcOffscreenSection, ConcernFateSchema } from "../systems/arcs";
-import { CRED_SIZES } from "../systems/character";
+import { DeedReachSchema } from "../systems/character";
 import {
   BULLETIN_MAX,
   BulletinKindSchema,
@@ -93,7 +93,14 @@ const MacroSituationSchema = z.object({
   days: z.number().int().min(THREAD_DAYS_MIN).max(THREAD_DAYS_MAX).optional(),
   why: z.string().trim().min(1).max(THREAD_NEWS_MAX).optional(),
   turf: TurfChangeSchema.nullable().optional(),
-  playerCred: z.enum(["small", "medium", "large"]).nullable().optional(),
+  playerDeed: z
+    .object({
+      summary: z.string().trim().min(1).max(80),
+      knownBy: z.array(z.string().trim().min(1).max(24)).max(4).optional(),
+      reach: DeedReachSchema.optional(),
+    })
+    .nullable()
+    .optional(),
   fate: ConcernFateSchema.nullable().optional(),
   rumors: z.array(MacroRumorSchema).optional(),
 });
@@ -132,7 +139,7 @@ export const MacroOffscreenDocSchema = z.object({
 const MACRO_STAGE = `【这一步：宏观世界局势推演】
 你只负责推演夜之城的宏观局势、势力暗流、街头传闻、新闻/电台快讯与受波及商家的经营变化；人物日常私生活、人际关系与发短信派单由另一独立通道负责，本步不写人物私信或 NPC 近况。
 - 【上次成功推演后的正文】是尚未处理的新事实，当前状态是本轮结算后的事实。沿着已有因果推进，不重复制造已处理的事，不凭空制造戏剧性；没有值得记的变化时 situations 输出 []、bulletin 写 null。
-- 不改玩家状态数值或账目（欧元、人性、伤势、好感、通缉热度；仅玩家当事的 major 头条局势写 playerCred 由代码记一次街头声望）；不写玩家做了什么、说了什么、想了什么。
+- 不改玩家状态数值或账目（欧元、人性、伤势、好感、通缉热度）；仅当某件局势把玩家干过的事在外界传开或登上媒体时，可在该局势里写 playerDeed 记录外界流传的说法与知情圈子，不写玩家私下做了什么、说了什么、想了什么。
 - 【城中局势】把四类事统一在一张单子上（最多 ${THREADS_MAX} 件，不必填满）：
   - civic：城中突发事件、帮派摩擦、公司动作、玩家行动留下的余波（owner 写 null）；
   - faction：势力的系统性扩张与打算（owner 写势力 id，可照【势力打算素材】填 seed）；
@@ -148,8 +155,8 @@ const MACRO_STAGE = `【这一步：宏观世界局势推演】
 
 const MACRO_OUTPUT = `【输出格式】
 只输出一个 JSON 对象，不要代码块。situations 必须是数组（无变化写 []）：
-- open：{"op":"open","id":"小写英文连字符","kind":"civic|faction|nemesis|concern","owner":"势力或人物id，civic写null","seed":"种子id或null","title":"24字以内","district":"城区或null","weight":"minor|normal|major","status":"brewing|heating|cooling","want":"120字以内目标/核心矛盾","stage":"80字以内当前阶段","truth":"可选：160字以内已发生事实摘要","days":3,"playerCred":"可省：玩家当事头条写small|medium|large","rumors":[...]}
-- step：{"op":"step","id":"已有局势id","truth":"160字以内实际发生了什么（幕后真相）","publicText":"80字以内传开后的公开说法","stage":"可选：更新当前阶段","district":"可选","weight":"可选","status":"可选：brewing|heating|cooling","turf":null,"days":3,"playerCred":"可省","rumors":[...]}
+- open：{"op":"open","id":"小写英文连字符","kind":"civic|faction|nemesis|concern","owner":"势力或人物id，civic写null","seed":"种子id或null","title":"24字以内","district":"城区或null","weight":"minor|normal|major","status":"brewing|heating|cooling","want":"120字以内目标/核心矛盾","stage":"80字以内当前阶段","truth":"可选：160字以内已发生事实摘要","days":3,"playerDeed":"可省：{summary,knownBy,reach} 玩家当事且已传开时记外界说法","rumors":[...]}
+- step：{"op":"step","id":"已有局势id","truth":"160字以内实际发生了什么（幕后真相）","publicText":"80字以内传开后的公开说法","stage":"可选：更新当前阶段","district":"可选","weight":"可选","status":"可选：brewing|heating|cooling","turf":null,"days":3,"playerDeed":"可省：{summary,knownBy,reach}","rumors":[...]}
 - defer：{"op":"defer","id":"已有局势id","days":3,"why":"80字以内延期理由"}
 - close：{"op":"close","id":"已有局势id","truth":"160字以内实际结局","fate":"心事收场写better|canon|worse，其余省略","rumors":[...]}
 - standaloneRumors：[{"text":"80字以内传闻原话","truth":"true|exaggerated|garbled","reach":"street|district|city","district":"reach非city时写城区","player":false}]
@@ -411,7 +418,24 @@ export function readMacroOffscreen(
   const steppedIds = new Set<string>();
   const eventSummaries: OffscreenEventSummary[] = [];
   const rumorCommands: Command[] = [];
-  const credits: Command[] = [];
+  const deeds: Command[] = [];
+  const pushPlayerDeed = (
+    id: string,
+    deed: NonNullable<z.infer<typeof MacroSituationSchema>["playerDeed"]>,
+    weight: z.infer<typeof CityWeightSchema>,
+    district: string | null | undefined,
+  ): void => {
+    const reach =
+      deed.reach ?? (weight === "major" ? "city" : weight === "normal" ? "district" : "local");
+    deeds.push({
+      type: "character.deed",
+      id: `city:${id}`,
+      summary: deed.summary,
+      knownBy: deed.knownBy ?? [],
+      reach,
+      ...(reach !== "city" && district ? { district } : {}),
+    });
+  };
   let activeCount = threadsState.threads.length;
   let majors = 0;
   let keptSituations = 0;
@@ -504,13 +528,8 @@ export function readMacroOffscreen(
       activeCount += 1;
       keptSituations += 1;
       for (const r of s.rumors ?? []) pushRumor(r, s.id);
-      if (s.playerCred && weight === "major") {
-        credits.push({
-          type: "streetCred",
-          levels: CRED_SIZES[s.playerCred],
-          reason: `上了头条：${title}`,
-          event: `city:${s.id}`,
-        });
+      if (s.playerDeed) {
+        pushPlayerDeed(s.id, s.playerDeed, weight, s.district);
       }
       continue;
     }
@@ -602,13 +621,8 @@ export function readMacroOffscreen(
     steppedIds.add(s.id);
     keptSituations += 1;
     for (const r of s.rumors ?? []) pushRumor(r, s.id);
-    if (s.playerCred && weight === "major") {
-      credits.push({
-        type: "streetCred",
-        levels: CRED_SIZES[s.playerCred],
-        reason: `上了头条：${existing.title}`,
-        event: `city:${s.id}`,
-      });
+    if (s.playerDeed) {
+      pushPlayerDeed(s.id, s.playerDeed, weight, s.district ?? existing.district);
     }
   }
 
@@ -659,6 +673,6 @@ export function readMacroOffscreen(
     notes.push("宏观推演：本批写了头条局势但未附带新闻快讯");
   }
 
-  commands.push(...credits);
+  commands.push(...deeds);
   return { ok: true, commands, notes };
 }

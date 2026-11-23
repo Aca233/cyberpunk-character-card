@@ -51,8 +51,8 @@ export const encounters = travelRules.EncounterCatalogSchema.parse([
   {
     id: "recognized",
     label: "有人认出你",
-    note: "有人认出了你做过的事，可能是崇拜者、想雇你的人，也可能是来寻仇的",
-    minCred: 10,
+    note: "有人认出了你干过、在街上传开的事，可能是崇拜者、想雇你的人，也可能是来寻仇的",
+    minReach: "district",
     weight: 2,
   },
   {
@@ -134,8 +134,8 @@ export const encounters = travelRules.EncounterCatalogSchema.parse([
   {
     id: "reporter",
     label: "记者拦人",
-    note: "一个拿着摄像机的记者认出你，想问你最近那件事；说什么都可能上新闻",
-    minCred: 5,
+    note: "一个拿着摄像机的记者认出你，想问你最近传开的那件事；说什么都可能上新闻",
+    minReach: "district",
     weight: 1,
   },
   {
@@ -234,10 +234,10 @@ export const encounters = travelRules.EncounterCatalogSchema.parse([
   {
     id: "rooftop-party",
     label: "派对邀请",
-    note: "一个喝高了的有钱人把你拉进楼顶派对，说早听过你的名字；派对上有人想雇你，也有人在等着看你出丑",
+    note: "一个喝高了的有钱人把你拉进楼顶派对，说听过你干的那件事；派对上有人想雇你，也有人在等着看你出丑",
     districts: ["威斯特布鲁克"],
     periods: ["night"],
-    minCred: 5,
+    minReach: "local",
     weight: 1,
   },
   {

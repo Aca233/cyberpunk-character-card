@@ -174,7 +174,6 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
   job.settlement = {
-    credHalves: 0,
     affinity: null,
     humanity: null,
   };

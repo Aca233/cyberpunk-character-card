@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
-import { CharacterStateSchema, credTier } from "../character";
+import { CharacterStateSchema, type KnownDeed, reputationOverview } from "../character";
 import { CyberwareStateSchema, cyberwareCatalog, SLOT_LABELS } from "../cyberware";
 import { HealthStateSchema, LIMB_LABELS, woundTag } from "../health";
 import { ClothingSlotSchema, InventoryStateSchema, type ItemDef, itemCatalog } from "../inventory";
@@ -41,7 +41,7 @@ const WOUND_LOOKS: Readonly<Record<string, string>> = {
 
 export interface Looks {
   readonly traits: readonly { readonly slot: string; readonly label: string }[];
-  readonly streetCred: number;
+  readonly deeds: readonly KnownDeed[];
   readonly clothing: Readonly<Partial<Record<string, string>>>;
   readonly installed: readonly { readonly id: string; readonly slot: string }[];
   readonly lostLimbs: readonly string[];
@@ -49,7 +49,7 @@ export interface Looks {
   readonly heatStars: number;
 }
 
-/** 别人眼里的你：每轮从出身、口音、穿着、看得见的义体、伤势、声望和热度拼一行 */
+/** 别人眼里的你：每轮从出身、口音、穿着、看得见的义体、伤势、外界传开的事迹和热度拼一行 */
 export function perceivedLine(
   looks: Looks,
   parts: ReadonlyMap<string, { readonly name: string }>,
@@ -83,7 +83,16 @@ export function perceivedLine(
   }
   const wound = WOUND_LOOKS[looks.wound];
   if (wound) bits.push(wound);
-  bits.push(`街头名声：${credTier(looks.streetCred).label}`);
+  if (looks.deeds.length === 0) {
+    bits.push("外界印象：籍籍无名，街上还没传开你的事");
+  } else {
+    const rep = reputationOverview(looks.deeds);
+    const recent = looks.deeds
+      .slice(-2)
+      .map((d) => `「${d.summary}」`)
+      .join("、");
+    bits.push(`外界风声（${rep.label}）：有人听过${recent}`);
+  }
   if (looks.heatStars >= WANTED_STARS) {
     bits.push(`NCPD 通缉中（${looks.heatStars} 星），赏金猎人和眼尖的人认得出`);
   } else if (looks.heatStars > 0) {
@@ -104,7 +113,7 @@ export function perceivedView({ world, data }: ViewContext): string {
   return perceivedLine(
     {
       traits: character.traits,
-      streetCred: character.streetCred,
+      deeds: character.deeds,
       clothing: inventory.clothing,
       installed,
       lostLimbs: health.lostLimbs,

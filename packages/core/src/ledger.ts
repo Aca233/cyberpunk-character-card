@@ -31,7 +31,7 @@ function num(slice: unknown, key: string): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
-/** 欧元、人性、生命、通缉星、街头声望和每个人的好感；只读这几个字段，不校验整片状态 */
+/** 欧元、人性、生命、通缉星、已知事迹数和每个人的好感；只读这几个字段，不校验整片状态 */
 export function hardStats(world: WorldState): ReadonlyMap<string, number> {
   const out = new Map<string, number>();
   const put = (label: string, v: number | undefined) => {
@@ -47,7 +47,8 @@ export function hardStats(world: WorldState): ReadonlyMap<string, number> {
   const healthParsed = HealthStateSchema.safeParse(s.health);
   put("生命", healthParsed.success ? healthDisplay(healthParsed.data).hp : num(s.health, "hp"));
   put("通缉星", num(s.heat, "stars") ?? 0);
-  put("街头声望", num(s.character, "streetCred"));
+  const deeds = (s.character as Bag)?.deeds;
+  if (Array.isArray(deeds)) put("外界事迹", deeds.length);
   const npcs = (s.npc as Bag)?.npcs;
   if (typeof npcs === "object" && npcs !== null) {
     for (const [id, n] of Object.entries(npcs as Record<string, Bag>)) {

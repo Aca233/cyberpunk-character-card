@@ -1076,16 +1076,20 @@ export function diffViews(prev: View, next: View): Toast[] {
     });
   }
 
-  const cred = next.character.streetCred - prev.character.streetCred;
-  if (cred !== 0) {
-    out.push({
-      icon: "notify.streetCred",
-      text:
-        next.character.credTier !== prev.character.credTier
-          ? `街头名声升至 · ${next.character.credTier}`
-          : `街上风声渐起（${next.character.credTier}）`,
-      tone: cred > 0 ? "good" : "bad",
-    });
+  const prevDeedMap = new Map(prev.character.deeds.map((d) => [d.id, d] as const));
+  const changedDeeds = next.character.deeds.filter((d) => {
+    const old = prevDeedMap.get(d.id);
+    return !old || old.summary !== d.summary || old.reach !== d.reach;
+  });
+  if (changedDeeds.length > 0) {
+    const latest = changedDeeds[changedDeeds.length - 1];
+    if (latest) {
+      out.push({
+        icon: "notify.streetCred",
+        text: `外界风声 · ${latest.reachLabel}：${latest.summary}`,
+        tone: "info",
+      });
+    }
   }
 
   const hum = next.humanity.current - prev.humanity.current;

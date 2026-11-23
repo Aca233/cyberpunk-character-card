@@ -29,7 +29,7 @@ export const nemesisRules: RuleModule<NemesisState> = {
 - rise 或之后的 prep 写他回来前做的准备：against 写玩家最常用的打法（${STYLES}），按玩家这一路实际使顺手的战斗与应对方式判断；prep 写他怎么专克这一手（例如装了防火墙专克快速破解，${PREP_MAX} 字以内）。打法变了可以再写 prep。
 - 玩家扫描他、找人打听或亲眼看穿时写 nemesis reveal；在这之前正文只露端倪，不点破准备的内容。
 - 他什么时候亲自露面由你按情势定；没露面时通过消息、传闻和被他找过麻烦的人带出他的动静。他在屏幕外的报复（打听玩家的下落、找玩家在乎的人麻烦、抢玩家的单子）记在【城里在发酵的事】里，正文写这些行动的后果，不要自己另编一次。
-- 了结宿敌写 nemesis end：end 写 killed（要先写他的死）、reconciled 或 gone（彻底退场），text 写怎么了结的。街头名声由代码自动记涨，不用另写 streetCred。`,
+- 了结宿敌写 nemesis end：end 写 killed（要先写他的死）、reconciled 或 gone（彻底退场），text 写怎么了结的。若这件事有目击者或在圈子里传开，另按外界风声规则写 reputation；私下无人知晓的不写。`,
 };
 
 /**

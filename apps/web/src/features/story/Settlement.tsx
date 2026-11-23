@@ -11,13 +11,7 @@ function signed(n: number): string {
   return n > 0 ? `+${n}` : String(n);
 }
 
-function credGainText(delta: number): string {
-  if (delta >= 2) return "名声大噪";
-  if (delta >= 1) return "名声传开";
-  return "多了些风声";
-}
-
-/** 委托结束后弹出的结算卡：结局、报酬、声望、中间人好感、人性和一句总评 */
+/** 委托结束后弹出的结算卡：结局、报酬、中间人好感、人性和一句总评 */
 export function SettlementCard({
   job,
   onClose,
@@ -35,7 +29,6 @@ export function SettlementCard({
       job.paid !== null && job.paid > 0 ? "good" : undefined,
     ],
   ];
-  if (s && s.streetCred > 0) rows.push(["街头名声", credGainText(s.streetCred), "good"]);
   if (s?.affinity && job.fixer) {
     const delta = s.affinity.to - s.affinity.from;
     rows.push([
@@ -81,7 +74,7 @@ export function SettlementCard({
 
 export type EndedNemesis = View["nemesesEnded"][number];
 
-/** 了结宿敌后弹出的结算卡：怎么结下的梁子、怎么了结的、街头声望 */
+/** 了结宿敌后弹出的结算卡：怎么结下的梁子、怎么了结的 */
 export function NemesisSettlementCard({
   nemesis,
   onClose,
@@ -92,7 +85,6 @@ export function NemesisSettlementCard({
   const rows: [string, string, "good" | undefined][] = [
     ["结下梁子", `${nemesis.since} · ${nemesis.how}`, undefined],
     ["了结", `${nemesis.at} · ${nemesis.endLabel}`, undefined],
-    ["街头名声", credGainText(nemesis.cred), "good"],
   ];
   return (
     <Dialog

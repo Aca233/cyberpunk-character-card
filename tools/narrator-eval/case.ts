@@ -27,9 +27,8 @@ export const EVAL_CHARACTER = {
   name: "洛·门多萨",
   brief:
     "在沃森区长大的街头小子，给小诊所和车行打零工的修理工。会修车、懂一点电子锁，不会骇客，没装战斗义体。话少，记仇，对帮派没好感。",
-  // 内核建档占位字段（实际叙事与裁决不再使用属性点）
+  // 内核建档占位字段（实际叙事与裁决不再使用属性点或声望数值）
   attributes: { body: 2, reflexes: 2, tech: 2, intelligence: 2, cool: 2 },
-  streetCred: 3,
 } as const;
 
 const HistoryTurnSchema = z.strictObject({

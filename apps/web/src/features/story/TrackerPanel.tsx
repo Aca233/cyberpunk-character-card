@@ -539,15 +539,9 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
       {job.summary && <p className={styles.progressText}>{job.summary}</p>}
 
       {settlement &&
-        (settlement.streetCred > 0 ||
-          (affinityDelta !== null && affinityDelta !== 0) ||
+        ((affinityDelta !== null && affinityDelta !== 0) ||
           (settlement.humanity !== null && settlement.humanity !== 0)) && (
           <div className={styles.settlementRow}>
-            {settlement.streetCred > 0 && (
-              <span className={styles.pill} data-tone="yellow">
-                声望 +{settlement.streetCred}
-              </span>
-            )}
             {affinityDelta !== null && affinityDelta !== 0 && (
               <span className={styles.pill} data-tone={affinityDelta > 0 ? "good" : "bad"}>
                 好感 {affinityDelta > 0 ? `+${affinityDelta}` : affinityDelta}

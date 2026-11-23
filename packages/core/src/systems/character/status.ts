@@ -1,7 +1,8 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
+import { formatDeed } from "./apply";
 import type { characterView } from "./view";
 
-/** 【当前状态】里人物的几组行：名字与履历背景、习惯和闪回、过往里确认的事（彻底不展示属性点） */
+/** 【当前状态】里人物的几组行：名字与履历背景、外界知道的事迹、习惯和闪回、过往里确认的事 */
 
 type CharacterView = ReturnType<typeof characterView>;
 
@@ -12,10 +13,26 @@ export const characterStatus: readonly SystemStatus[] = [
     order: 10,
     lines(ctx) {
       const c = characterOf(ctx);
-      return [
-        `人物：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`,
-        `街面名声：${c.credTier}——${c.credWorld}`,
-      ];
+      const lines = [`人物：${c.name ?? "（还没建档）"}${c.brief ? `。${c.brief}` : ""}`];
+      if (c.deeds.length === 0) {
+        lines.push(
+          "外界知道你干过的事：暂无（街上还没传开你的名号，路人只按穿着、义体与眼前举止判断）",
+        );
+      } else {
+        const recent = c.deeds.slice(-8).map((d) =>
+          formatDeed({
+            id: d.id,
+            summary: d.summary,
+            knownBy: d.knownBy,
+            reach: d.reach,
+            ...(d.district ? { district: d.district } : {}),
+            at: d.at,
+            updatedAt: d.updatedAt,
+          }),
+        );
+        lines.push(`外界知道你干过的事（${c.reputationLabel}）：${recent.join("；")}`);
+      }
+      return lines;
     },
   },
   {

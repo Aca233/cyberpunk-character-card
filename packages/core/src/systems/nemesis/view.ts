@@ -1,11 +1,6 @@
 import type { ViewContext } from "../../kernel/system";
 import { formatGameTime } from "../world";
-import {
-  NEMESIS_CRED_HALVES,
-  NEMESIS_END_LABELS,
-  NEMESIS_STYLE_LABELS,
-  NemesisStateSchema,
-} from "./schema";
+import { NEMESIS_END_LABELS, NEMESIS_STYLE_LABELS, NemesisStateSchema } from "./schema";
 
 /**
  * 人物列表里的宿敌一栏，按人物 id：怎么输给你的；准备只在扫描或打听到以后给，屏幕外的动静不在这里。
@@ -60,7 +55,5 @@ export function nemesesEndedView({ world }: ViewContext) {
     how: e.how,
     since: formatGameTime(e.since),
     at: formatGameTime(e.at),
-    /** 了结宿敌给的街头声望（级） */
-    cred: NEMESIS_CRED_HALVES / 2,
   }));
 }

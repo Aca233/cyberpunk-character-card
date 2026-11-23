@@ -12,7 +12,7 @@ import styles from "./profile.module.css";
 import { npcWoundSummary, type View } from "./view";
 
 type Npc = View["npcs"][number];
-/** 中间人的派单信息（委托系统按好感、声望和势力算）；人物档案里同 id 的中间人才有 */
+/** 中间人的派单信息（委托系统按好感和势力算）；人物档案里同 id 的中间人才有 */
 type Fixer = View["jobs"]["fixers"][number];
 export type CombatFoe = NonNullable<View["combat"]["active"]>["foes"][number];
 

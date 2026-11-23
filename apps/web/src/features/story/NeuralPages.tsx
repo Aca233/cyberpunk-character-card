@@ -143,6 +143,29 @@ export function CharacterPage({
           )}
         </section>
       )}
+      {character.deeds.length > 0 && (
+        <section className={styles.habits} aria-label="外界知道的事">
+          <h4 className={styles.habitsTitle}>外界知道的事 · {character.reputationLabel}</h4>
+          <ul className={styles.habitList}>
+            {[...character.deeds].reverse().map((deed) => {
+              const scope =
+                deed.reach === "city"
+                  ? deed.reachLabel
+                  : deed.district
+                    ? `${deed.district}·${deed.reachLabel}`
+                    : deed.reachLabel;
+              const meta =
+                deed.knownBy.length > 0 ? `${scope} · ${deed.knownBy.join("、")}` : scope;
+              return (
+                <li key={deed.id} className={styles.habitItem}>
+                  <span className={styles.habitText}>{deed.summary}</span>
+                  <small>{meta}</small>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <Habits habits={character.habits} offers={character.habitOffers} onHabit={onHabit} />
     </div>
   );

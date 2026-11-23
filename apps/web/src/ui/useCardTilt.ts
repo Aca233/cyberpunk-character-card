@@ -19,6 +19,8 @@ export interface CardTiltOptions {
   readonly shadowShift?: number;
   /** 按下瞬间的 Z 轴下沉深度（px，正值表示向屏内压入），默认 7 */
   readonly pressDepth?: number;
+  /** 常态 Y 轴侧倾基线（度，例如左列 +5 / 右列 -5）；移入叠加微倾、离开平滑回弹到该倾角，避免与 CSS 常态斜角切换跳变 */
+  readonly restRy?: number;
 }
 
 /** 参考标准卡片边长（px）：短于该尺寸的轴按平方根柔和衰减 */
@@ -60,12 +62,12 @@ interface TiltState {
   lastTs: number;
 }
 
-function createTiltState(): TiltState {
+function createTiltState(restRy = 0): TiltState {
   return {
     active: false,
     pressed: false,
     curRx: 0,
-    curRy: 0,
+    curRy: restRy,
     curTz: 0,
     curSx: 0,
     curSy: 0,
@@ -123,19 +125,20 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
   maxRotate = 5.8,
   shadowShift = 5,
   pressDepth = 7,
+  restRy = 0,
 }: CardTiltOptions = {}) {
   const elRef = useRef<T | null>(null);
   const rafRef = useRef<number>(0);
-  const stateRef = useRef<TiltState>(createTiltState());
+  const stateRef = useRef<TiltState>(createTiltState(restRy));
 
   const stopImmediate = useCallback(() => {
     if (rafRef.current) {
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     }
-    stateRef.current = createTiltState();
+    stateRef.current = createTiltState(restRy);
     if (elRef.current) resetVars(elRef.current);
-  }, []);
+  }, [restRy]);
 
   const step = useCallback(
     (now: number) => {
@@ -152,7 +155,7 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
 
       const mult = s.active && s.pressed ? PRESS_DEPTH_MULT : 1;
       const tgtRx = s.active ? s.baseRx * mult : 0;
-      const tgtRy = s.active ? s.baseRy * mult : 0;
+      const tgtRy = s.active ? s.baseRy * mult : restRy;
       const tgtTz = s.active && s.pressed ? -pressDepth : 0;
       const tgtSx = s.active ? s.baseSx * (s.pressed ? 0.25 : 1) : 0;
       const tgtSy = s.active ? s.baseSy * (s.pressed ? 0.25 : 1) : 0;
@@ -187,7 +190,7 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
 
       if (settled) {
         if (!s.active) {
-          stateRef.current = createTiltState();
+          stateRef.current = createTiltState(restRy);
           resetVars(el);
           return;
         }
@@ -208,7 +211,7 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       applyVars(el, s);
       rafRef.current = window.requestAnimationFrame(step);
     },
-    [disabled, pressDepth],
+    [disabled, pressDepth, restRy],
   );
 
   const ensureLoop = useCallback(() => {

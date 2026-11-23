@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-export const STREET_CRED_MAX = 50;
-
 /** 角色主板上的一块：出身、过往、特长或负面经历；专属选项的来源按它核对，侧栏也显示 */
 export const TRAIT_SLOTS = ["origin", "past", "skill", "flaw"] as const;
 export const TraitSlotSchema = z.enum(TRAIT_SLOTS);
@@ -27,6 +25,38 @@ export const HabitTextSchema = z.string().trim().min(1).max(40);
 
 /** 闪回里确认的事最多记这么多条 */
 export const PAST_FACTS_MAX = 24;
+
+/** 街上传开的事迹最多保留条数 */
+export const DEEDS_MAX = 16;
+
+/** 一条事迹传了多远：圈子/街角、整个城区、全夜之城 */
+export const DEED_REACHES = ["local", "district", "city"] as const;
+export const DeedReachSchema = z.enum(DEED_REACHES);
+export type DeedReach = z.infer<typeof DeedReachSchema>;
+export const DEED_REACH_LABELS: Readonly<Record<DeedReach, string>> = {
+  local: "圈内风声",
+  district: "城区传开",
+  city: "全城皆知",
+};
+
+/** 别人记住你干过的某件事：谁知道、传到哪一步、怎么说 */
+export const KnownDeedSchema = z.object({
+  /** 事件稳定 id，例如 deed:h10-cage-win、city:arasaka-heist；同一 id 再次上报会升级/更新而非重复追加 */
+  id: z.string().trim().min(1).max(60),
+  /** 别人知道你干了什么（一句话，60 字以内，可含夸大、污名或具体口碑） */
+  summary: z.string().trim().min(1).max(80),
+  /** 哪些圈子或群体知道，例如 ["虎爪帮", "日本町街头", "沃森中间人"] */
+  knownBy: z.array(z.string().trim().min(1).max(24)).max(4).default([]),
+  /** 传播范围 */
+  reach: DeedReachSchema,
+  /** 主要流传城区；全城皆知时可省 */
+  district: z.string().trim().min(1).max(20).optional(),
+  /** 首次传开的游戏时间 */
+  at: z.number().int(),
+  /** 最近扩散或改写说法的游戏时间 */
+  updatedAt: z.number().int(),
+});
+export type KnownDeed = z.infer<typeof KnownDeedSchema>;
 
 export const ActiveFlashbackSchema = z.object({
   /** 过往模块的名字 */
@@ -59,12 +89,8 @@ export const CharacterStateSchema = z.object({
   brief: z.string(),
   /** 配图只读取这份明确的视觉资料，不拆解混合简介。 */
   visual: CharacterVisualSchema.optional(),
-  /** 街头声望等级 */
-  streetCred: z.number().int().min(0).max(STREET_CRED_MAX),
-  /** 声望按半级增长：攒着半级时为 true，再得半级就升一级 */
-  credHalf: z.boolean().default(false),
-  /** 已经结算过声望的事件 id；同一事件只结算一次 */
-  credSettled: z.array(z.string()).default([]),
+  /** 外界知道你干过的事（名声与口碑的唯一真相源，无数值等级） */
+  deeds: z.array(KnownDeedSchema).max(DEEDS_MAX).default([]),
   /** 旧存档和没用主板的角色是空的 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).default([]),
   /** 习惯：玩家自己写的，或者确认过的叙事模型提议；不加数值 */
@@ -88,80 +114,42 @@ export const SetCharacterSchema = z.object({
   name: z.string().min(1),
   brief: z.string(),
   visual: CharacterVisualSchema.optional(),
-  streetCred: z.number().int().min(0).max(STREET_CRED_MAX).default(1),
   /** 旧存档的角色快照没有 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).optional(),
   portrait: z.string().min(1).max(120).optional(),
 });
 export type SetCharacter = z.infer<typeof SetCharacterSchema>;
 
-/** 模型使用：传闻和公开事件带来的声望 */
-export const StreetCredCommandSchema = z
+/** 模型或场外推演使用：记录或扩散外界知道主角干过的某件事 */
+export const ReputationCommandSchema = z
   .object({
-    type: z.literal("streetCred"),
-    levels: z.number().multipleOf(0.5).min(0.5).max(2),
-    reason: z.string().min(1),
-    /** 事件 id，例如 rumor:arasaka-tower；同一事件只结算一次 */
-    event: z.string().min(1),
+    type: z.literal("reputation"),
+    /** 事件稳定 id，例如 kabuki-shootout、militech-convoy；同一件事后续扩散或改口复用同一个 id */
+    id: z.string().trim().min(1).max(60),
+    /** 外界流传的说法：别人知道你干了什么、留下了什么名声或恶名（80 字以内） */
+    summary: z.string().trim().min(1).max(80),
+    /** 哪些圈子/群体知道（最多 4 个短语），例如 ["漩涡帮", "沃森中间人", "歌舞伎街坊"] */
+    knownBy: z.array(z.string().trim().min(1).max(24)).max(4).default([]),
+    /** 传播范围：local 圈内/街角在传，district 整个城区传开，city 全城皆知（上新闻/全城议论） */
+    reach: DeedReachSchema.default("local"),
+    /** 主要流传城区；reach 为 city 时可省 */
+    district: z.string().trim().min(1).max(20).optional(),
   })
   .describe(
-    "街头声望上涨（结算用；模型写的是大小，见 StreetCredProposalSchema）；同一事件只结算一次",
+    "登记或更新外界知道主角干过的事：仅当有目击、消息流出、新闻播报或圈内议论时使用（含好名声、狠名、恶名、黑吃黑或丢脸事）；无人知晓的私事不记。同一件事扩散或口碑演变时复用同一 id 更新。",
   );
-export type StreetCredCommand = z.infer<typeof StreetCredCommandSchema>;
+export type ReputationCommand = z.infer<typeof ReputationCommandSchema>;
 
-/** 声望的大小档：传闻传开、街上有人谈论、轰动的公开事件；换算表只在这里写一份（暂定，试玩时调） */
-export const CRED_SIZES = { small: 0.5, medium: 1, large: 2 } as const;
-export type CredSize = keyof typeof CRED_SIZES;
-const CRED_SIZE_LABELS: Readonly<Record<CredSize, string>> = {
-  small: "小",
-  medium: "中",
-  large: "大",
-};
-
-/** 模型写的声望：只选大小，代码按 CRED_SIZES 换成级数 */
-export const StreetCredProposalSchema = z
-  .object({
-    type: z.literal("streetCred"),
-    size: z
-      .enum(["small", "medium", "large"])
-      .describe("small 传闻传开，medium 街上有人认出、谈论，large 轰动的公开事件"),
-    reason: z.string().min(1),
-    /** 事件 id，例如 rumor:arasaka-tower；同一事件只结算一次 */
-    event: z.string().min(1),
-  })
-  .describe(
-    "街头声望上涨：只选大小，不写数字；同一事件只结算一次。只有确实公开传播的事件才改变名声，完成委托本身不自动奖励名声",
-  )
-  .transform(({ size, ...rest }): StreetCredCommand => ({ ...rest, levels: CRED_SIZES[size] }));
-
-/** 模型仍写了级数时：换成最近的大小档（一样近取小的） */
-export function legacyStreetCred(
-  raw: Readonly<Record<string, unknown>>,
-): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
-  if (!("levels" in raw)) return undefined;
-  const { levels, ...rest } = raw;
-  if (rest.size !== undefined) {
-    return { value: rest, note: "街头声望写了数字，按写的大小处理，数字不用" };
-  }
-  if (typeof levels !== "number" || !Number.isFinite(levels) || levels <= 0) return undefined;
-  const sizes = Object.entries(CRED_SIZES) as [CredSize, number][];
-  const [size] = sizes.reduce((best, cur) =>
-    Math.abs(cur[1] - levels) < Math.abs(best[1] - levels) ? cur : best,
-  );
-  return {
-    value: { ...rest, size },
-    note: `街头声望写了数字，已按最近的档位（${CRED_SIZE_LABELS[size]}）处理`,
-  };
-}
-
-/** 只能由代码发出：委托完成等带来的声望，按半级计 */
-export const GainCredSchema = z.object({
-  type: z.literal("character.cred"),
-  halves: z.number().int().min(1).max(12),
-  reason: z.string().min(1),
-  event: z.string().min(1),
+/** 只能由代码发出：场内/场外已确认公开事件写入外界事迹 */
+export const RecordDeedSchema = z.object({
+  type: z.literal("character.deed"),
+  id: z.string().trim().min(1).max(60),
+  summary: z.string().trim().min(1).max(80),
+  knownBy: z.array(z.string().trim().min(1).max(24)).max(4).default([]),
+  reach: DeedReachSchema.default("local"),
+  district: z.string().trim().min(1).max(20).optional(),
 });
-export type GainCred = z.infer<typeof GainCredSchema>;
+export type RecordDeed = z.infer<typeof RecordDeedSchema>;
 
 /** 模型使用：{"type": "habit", "text": "..."}，玩家确认后才写进角色卡 */
 export const HabitCommandSchema = z
@@ -201,4 +189,4 @@ export type FlashbackCommand = z.infer<typeof FlashbackCommandSchema>;
 export const FlashbackTickSchema = z.object({ type: z.literal("character.flashbackTick") });
 export type FlashbackTick = z.infer<typeof FlashbackTickSchema>;
 
-export type CharacterInternal = SetCharacter | GainCred | HabitChange | FlashbackTick;
+export type CharacterInternal = SetCharacter | RecordDeed | HabitChange | FlashbackTick;

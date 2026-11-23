@@ -385,6 +385,7 @@ export function BioMonitor({
     disabled: p.open,
     maxRotate: 5.8,
     shadowShift: 5,
+    restRy: 7.5,
   });
   // 整块收起时等内容收完再变回原宽；还开着时切页签直接跟着变，宽度由 CSS 过渡
   const lingeredWide = useLinger(wide && p.open);
@@ -661,7 +662,7 @@ export function BioMonitor({
               <span
                 className={styles.bioEmblem}
                 data-portrait={portraitId ? true : undefined}
-                title={`${character.name ?? "宿主"} · 街头名声 ${character.credTier}：${character.credWorld}`}
+                title={`${character.name ?? "宿主"} · 外界风声 ${character.reputationLabel}：${character.reputationSummary}`}
               >
                 <NineSlice
                   id="map.filterCellBg"
@@ -716,8 +717,8 @@ export function BioMonitor({
               <div className={styles.bioIdentCol}>
                 <div className={styles.bioNameRow}>
                   <b className={styles.bioCallsign}>{character.name ?? "宿主"}</b>
-                  <span className={styles.bioCred} title={character.credWorld}>
-                    {character.credTier}
+                  <span className={styles.bioCred} title={character.reputationSummary}>
+                    {character.reputationLabel}
                   </span>
                   {trauma.active && (
                     <span
@@ -1732,6 +1733,7 @@ export function Unread({
     disabled: p.open,
     maxRotate: 5.8,
     shadowShift: 5,
+    restRy: 7.5,
   });
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着九宫格和展开面板，不能整个换成 button
@@ -2350,6 +2352,7 @@ export function Weapon({
     disabled: p.open,
     maxRotate: 5.8,
     shadowShift: 5,
+    restRy: -7.5,
   });
   const wideOn = useLinger(p.open);
   const weapons = inventory.carriedWeapons;
@@ -2591,6 +2594,7 @@ export function HoloCall({
   const tilt = useCardTilt<HTMLElement>({
     maxRotate: 5.8,
     shadowShift: 5,
+    restRy: 7.5,
   });
   if (!incoming) return null;
   const npc = view.npcs.find((n) => n.id === incoming.from);
