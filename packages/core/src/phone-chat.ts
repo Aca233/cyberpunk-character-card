@@ -41,6 +41,7 @@ import {
 import {
   CHAT_AFFINITY_SCENE_CAP,
   CHAT_SCENE_TURN_SOFT_CAP,
+  hasContactChannel,
   type Message,
   PhoneStateSchema,
 } from "./systems/phone";
@@ -174,6 +175,7 @@ export function validatePhoneChatTarget(world: WorldState, contact: string): Pho
     return { ok: false, reason: "正在交火，先脱身或解决眼前这架再回消息" };
   }
 
+  const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const npc = npcs.npcs[contact];
   if (!npc) {
@@ -182,10 +184,10 @@ export function validatePhoneChatTarget(world: WorldState, contact: string): Pho
       reason: "对方是没有建档的加密频道，暂不支持主动发起手机私聊",
     };
   }
-  if (!npc.met) {
+  if (!hasContactChannel(phone, contact)) {
     return {
       ok: false,
-      reason: `你还没正式见过 ${npc.name}，先在剧情里打过照面再私信`,
+      reason: `你还没有 ${npc.name} 的联系方式，先在剧情里互留频道再发私信`,
     };
   }
   if (!npc.alive) {
@@ -295,7 +297,8 @@ export function buildPhoneChatPrompt(
     !hasOpenJobFromContact &&
     (isFixer || npc.affinity >= 0);
 
-  const here = onStage(npc, { location: clock.location, sceneStartedAt: clock.sceneStartedAt });
+  const here =
+    npc.met && onStage(npc, { location: clock.location, sceneStartedAt: clock.sceneStartedAt });
   const phoneStatus = evaluatePhoneAvailability(npc, world.time);
   const doc = ripperdocList(data).find((d) => d.keeperNpc === npc.id);
   const ownedShops = shopList(data).filter((s) => s.keeperNpc === npc.id);
@@ -333,6 +336,9 @@ export function buildPhoneChatPrompt(
 
   const cardLines = [
     `【目标人物】${npc.name}${npc.alias ? `（外号：${npc.alias}）` : ""} · ${npc.pronoun} · ${npc.role}`,
+    !npc.met
+      ? "照面状态：你们尚未当面见过，仅通过全息通讯联络（不要写成已经见过面或描写当面外貌细节）"
+      : "",
     `势力：${factionDef ? `${factionDef.name}（态度：${factionAttitude}）` : NO_FACTION_LABEL}`,
     `好感度：${npc.affinity}${npc.relation ? `｜关系笔记：${npc.relation.text}` : ""}`,
     `性格口吻：${npc.voice}`,
@@ -677,10 +683,11 @@ export async function runPhoneChat(
       id: npc.id,
       delta: affinityDelta,
       reason: reply.affinityReason || "手机私信交谈",
+      channel: "phone",
     });
   }
   if (reply.memory !== "") {
-    tailCommands.push({ type: "memory", id: npc.id, text: reply.memory });
+    tailCommands.push({ type: "memory", id: npc.id, text: reply.memory, source: "phone" });
   }
   tailCommands.push({
     type: "phone.receive",

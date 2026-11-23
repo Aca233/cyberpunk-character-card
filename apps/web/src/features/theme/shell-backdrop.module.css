@@ -1,0 +1,336 @@
+/*
+ * 外壳界面共享背景层：主菜单 / 设置页 / 角色工作台统一挂载
+ * 严格遵循项目视觉红线：无 CSS 渐变、无 backdrop-filter、尊重 prefers-reduced-motion
+ */
+
+.backdrop {
+  --bg-px: 0px;
+  --bg-py: 0px;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 媒体视差承载层：略微放大留出安全边，叠加鼠标阻尼视差与缓慢镜头呼吸 */
+.mediaStage {
+  --bg-shift-x: 0%;
+  position: absolute;
+  inset: -18px;
+  transform: translate3d(calc(var(--bg-shift-x) + var(--bg-px)), var(--bg-py), 0);
+  transition: transform 420ms var(--ease-snap);
+  will-change: transform;
+}
+
+/*
+ * 居中人物主题（月球舷窗 / 月面余光）在宽屏主菜单下自动向右微移画面焦点（约 16%），
+ * 把正中的露西/舷窗/宇航盔让到右侧开放视野区，左侧边缘平滑溶入深空底色；
+ * 按 H 开启「赏景」收起右侧面板时自动平滑回正居中。
+ */
+@media (min-width: 1200px) {
+  .backdrop[data-variant="menu"][data-theme="lunar-porthole"] .mediaStage,
+  .backdrop[data-variant="menu"][data-theme="moon-helmet"] .mediaStage {
+    --bg-shift-x: 15.5%;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 18%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%);
+  }
+
+  :global(:root[data-menu-immersive])
+    .backdrop[data-variant="menu"][data-theme="lunar-porthole"]
+    .mediaStage,
+  :global(:root[data-menu-immersive])
+    .backdrop[data-variant="menu"][data-theme="moon-helmet"]
+    .mediaStage {
+    --bg-shift-x: 0%;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
+.bg,
+.poster,
+.video,
+.shade,
+.fxCanvas,
+.gridTex,
+.scan {
+  position: absolute;
+  inset: 0;
+}
+
+.fxCanvas {
+  width: 100%;
+  height: 100%;
+}
+
+.bg,
+.poster {
+  background-position: center 40%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  animation:
+    backdropIn 740ms var(--ease-snap) both,
+    cameraBreath 22s ease-in-out 740ms infinite alternate;
+}
+
+.backdrop[data-theme="lunar-porthole"] .poster {
+  background-position: center 44%;
+}
+
+.backdrop[data-theme="rain-window"] .poster {
+  background-position: center center;
+}
+
+.backdrop[data-theme="moon-helmet"] .poster {
+  background-position: center 40%;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 44%;
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+  animation: cameraBreath 22s ease-in-out infinite alternate;
+}
+
+.backdrop[data-theme="rain-window"] .video {
+  object-position: center center;
+}
+
+.backdrop[data-theme="moon-helmet"] .video {
+  object-position: center 40%;
+}
+
+.backdrop[data-theme="lunar-porthole"] .poster,
+.backdrop[data-theme="lunar-porthole"] .video {
+  filter: saturate(1.1) brightness(1.16) contrast(1.02);
+}
+
+.backdrop[data-theme="rain-window"] .poster,
+.backdrop[data-theme="rain-window"] .video {
+  filter: saturate(1.12) brightness(1.18) contrast(1.02);
+}
+
+.backdrop[data-theme="moon-helmet"] .poster,
+.backdrop[data-theme="moon-helmet"] .video {
+  filter: saturate(1.1) brightness(1.16) contrast(1.02);
+}
+
+.video[data-ready] {
+  opacity: 1;
+}
+
+/* 默认夜之城压暗遮罩：适度提亮透出城市霓虹细节 */
+.backdrop[data-variant="menu"] .shade {
+  background: rgb(6 5 11 / 44%);
+}
+
+.backdrop[data-variant="settings"] .shade {
+  background: rgb(8 5 10 / 54%);
+}
+
+.backdrop[data-variant="characters"] .shade {
+  background: rgb(5 5 10 / 54%);
+}
+
+/* 月球舷窗：主菜单极轻透提亮呈现中央舷窗与飞船深空，设置与角色工作台轻度压暗保障表单可读性 */
+.backdrop[data-theme="lunar-porthole"][data-variant="menu"] .shade {
+  background: rgb(7 8 18 / 10%);
+}
+
+.backdrop[data-theme="lunar-porthole"][data-variant="settings"] .shade,
+.backdrop[data-theme="lunar-porthole"][data-variant="characters"] .shade {
+  background: rgb(7 8 18 / 24%);
+}
+
+/* 雨夜窗畔：主菜单极轻遮罩（6%）充分透出雨夜霓虹与露西光影；设置与角色工作台轻度遮罩 */
+.backdrop[data-theme="rain-window"][data-variant="menu"] .shade {
+  background: rgb(5 10 20 / 6%);
+}
+
+.backdrop[data-theme="rain-window"][data-variant="settings"] .shade,
+.backdrop[data-theme="rain-window"][data-variant="characters"] .shade {
+  background: rgb(5 10 20 / 20%);
+}
+
+/* 月面余光：主菜单极轻遮罩（8%）突出头盔面罩与星尘细节，设置与角色页轻度遮罩 */
+.backdrop[data-theme="moon-helmet"][data-variant="menu"] .shade {
+  background: rgb(5 9 18 / 8%);
+}
+
+.backdrop[data-theme="moon-helmet"][data-variant="settings"] .shade,
+.backdrop[data-theme="moon-helmet"][data-variant="characters"] .shade {
+  background: rgb(5 9 18 / 22%);
+}
+
+/* 左侧条幅垫底（仅默认夜之城主菜单） */
+.strip {
+  position: absolute;
+  top: 6px;
+  bottom: 4px;
+  left: 20px;
+  width: min(36vw, 520px);
+  overflow: hidden;
+  background-position: left top;
+  background-size: auto 100%;
+  background-repeat: no-repeat;
+  opacity: 0.34;
+  animation: stripIn 540ms var(--ease-snap) 80ms both;
+}
+
+.gridTex {
+  background-repeat: repeat;
+  background-size: 255px 238px;
+  opacity: 0.055;
+  transform: translate3d(calc(var(--bg-px) * -0.35), calc(var(--bg-py) * -0.35), 0);
+}
+
+.backdrop[data-variant="settings"] .gridTex {
+  opacity: 0.065;
+}
+
+.backdrop[data-theme="lunar-porthole"] .gridTex,
+.backdrop[data-theme="rain-window"] .gridTex,
+.backdrop[data-theme="moon-helmet"] .gridTex {
+  opacity: 0.032;
+}
+
+.scan {
+  background-repeat: repeat;
+  opacity: 0.09;
+  mix-blend-mode: screen;
+  animation: sweepIn 400ms var(--ease-snap) both;
+}
+
+.backdrop[data-variant="characters"] .scan {
+  opacity: 0.1;
+}
+
+.backdrop[data-theme="lunar-porthole"] .scan,
+.backdrop[data-theme="rain-window"] .scan,
+.backdrop[data-theme="moon-helmet"] .scan {
+  opacity: 0.05;
+}
+
+/* 极细全息水平扫线：每 9 秒轻缓滑过屏幕一次，低存在感营造终端质感 */
+.scanBeam {
+  position: absolute;
+  top: 0;
+  right: 22px;
+  left: 22px;
+  height: 1px;
+  background: var(--cp-cyan);
+  box-shadow: 0 0 12px var(--cp-cyan);
+  opacity: 0;
+  animation: scanBeamSweep 9.5s linear 1.2s infinite;
+}
+
+/* 全屏外框：原作 panel.frame，四边往里收 */
+.frame {
+  inset: 6px 20px 4px;
+  opacity: 0.72;
+  animation: frameBoot 440ms var(--ease-snap) 40ms both;
+}
+
+.backdrop[data-theme="lunar-porthole"] .frame,
+.backdrop[data-theme="rain-window"] .frame,
+.backdrop[data-theme="moon-helmet"] .frame {
+  opacity: 0.66;
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0.25;
+    transform: scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes stripIn {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 0.34;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sweepIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.09;
+  }
+}
+
+@keyframes frameBoot {
+  from {
+    opacity: 0;
+    transform: scale(1.012);
+  }
+  to {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+}
+
+@keyframes cameraBreath {
+  from {
+    transform: scale(1.01) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.045) translate3d(0, -4px, 0);
+  }
+}
+
+@keyframes scanBeamSweep {
+  0% {
+    opacity: 0;
+    transform: translateY(-10vh);
+  }
+  8% {
+    opacity: 0.24;
+  }
+  42% {
+    opacity: 0.16;
+  }
+  52%,
+  100% {
+    opacity: 0;
+    transform: translateY(105vh);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mediaStage,
+  .gridTex {
+    transform: none;
+  }
+
+  .bg,
+  .poster,
+  .video,
+  .strip,
+  .scan,
+  .scanBeam,
+  .frame {
+    animation: none;
+  }
+
+  .scanBeam {
+    display: none;
+  }
+
+  .video {
+    transition: none;
+  }
+}

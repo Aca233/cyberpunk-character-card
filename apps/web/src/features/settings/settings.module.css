@@ -24,50 +24,9 @@
   z-index: -1;
 }
 
-.screen > :where(header, nav, main, footer),
-.screen > span:not(.bg, .shade, .gridTex, .scan, .frame) {
+.screen > :not([data-shell-backdrop]) {
   position: relative;
   z-index: 1;
-}
-
-.bg {
-  position: absolute;
-  inset: 0;
-  background-position: center 40%;
-  background-size: cover;
-  background-repeat: no-repeat;
-  animation: bgIn 700ms var(--ease-snap) both;
-}
-
-.shade {
-  position: absolute;
-  inset: 0;
-  background: rgb(8 5 10 / 74%);
-}
-
-.gridTex {
-  position: absolute;
-  inset: 0;
-  background-repeat: repeat;
-  background-size: 255px 238px;
-  opacity: 0.065;
-  pointer-events: none;
-}
-
-.scan {
-  position: absolute;
-  inset: 0;
-  background-repeat: repeat;
-  opacity: 0.09;
-  mix-blend-mode: screen;
-  pointer-events: none;
-  animation: sweep 380ms var(--ease-snap) both;
-}
-
-.screen > .frame {
-  inset: 6px 20px 4px;
-  opacity: 0.72;
-  animation: frameIn 420ms var(--ease-snap) 40ms both;
 }
 
 /* ———— 顶部标题区：避开 panel.frame 顶部编号文字，居中对齐主容器 ———— */
@@ -170,6 +129,21 @@
   border-color: rgb(252 238 10 / 42%);
   background: rgb(252 238 10 / 10%);
   color: var(--cp-yellow);
+}
+
+.teleChipBtn {
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color var(--dur-flash) var(--ease-cyber),
+    color var(--dur-flash) var(--ease-cyber),
+    background-color var(--dur-flash) var(--ease-cyber);
+}
+
+.teleChipBtn:hover,
+.teleChipBtn:focus-visible {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
 }
 
 .teleDot {
@@ -1527,13 +1501,6 @@
   }
 }
 
-@keyframes frameIn {
-  from {
-    opacity: 0;
-    transform: scale(1.01);
-  }
-}
-
 @keyframes headIn {
   from {
     opacity: 0;
@@ -1555,26 +1522,7 @@
   }
 }
 
-@keyframes sweep {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-@keyframes bgIn {
-  from {
-    opacity: 0;
-    transform: scale(1.045);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .bg,
-  .scan,
-  .screen > .frame,
   .head,
   .tabs,
   .tabStatus,

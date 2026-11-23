@@ -1,13 +1,21 @@
-import type { ImagePromptRequest, PlayerAction, TurnInput } from "@cp/core";
+import {
+  buildTurnSegmentPromptInput,
+  type ImagePromptRequest,
+  type PlayerAction,
+  type TurnInput,
+} from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { useShallow } from "zustand/react/shallow";
 import {
   ApiError,
   type AspectRatio,
   api,
   newRequestId,
   type SaveImageBindings,
+  type SaveImageUnbindTarget,
+  turnImagesOf,
 } from "../../api/client";
 import { useStoryPreload } from "../../assets/usePreload";
 import { Button } from "../../ui/Button";
@@ -19,6 +27,8 @@ import { ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
 import {
   cancelImageJob,
+  cancelTurnImageJobs,
+  type ImageTarget,
   imageTargetKey,
   isImageJobPending,
   useImageJobs,
@@ -41,6 +51,8 @@ import {
   Weapon,
   Zone,
 } from "./Corners";
+import { CyberdeckPage } from "./CyberdeckPage";
+import type { HackTarget } from "./DeckQuickbar";
 import { DivePanel } from "./DivePanel";
 import { MapLayer } from "./EdgeDrawers";
 import { EscMenu } from "./EscMenu";
@@ -55,6 +67,7 @@ import {
 import { MapBody } from "./MapPanel";
 import { CharacterPage, CyberwarePage, MessagesPage, ShardsPanel } from "./NeuralPages";
 import neuralStyles from "./neural.module.css";
+import { PeopleBody } from "./PeoplePanel";
 import type { PhoneSendResult } from "./Phone";
 import { Profile } from "./Profile";
 import { type Expand, peekOnTop } from "./peek";
@@ -83,13 +96,14 @@ import {
 } from "./view";
 
 /** 钉住的未读块、生物监测块里的页签 */
-type UnreadTab = "messages" | "news" | "factions" | "shards";
-type BioTab = "character" | "cyberware" | "chronicle";
+type UnreadTab = "messages" | "people" | "news" | "factions" | "shards";
+type BioTab = "character" | "deck" | "cyberware" | "chronicle";
 
 interface AutoImageTask {
   readonly controller: AbortController;
   readonly saveId: string;
   readonly promptKey: string;
+  readonly boundIds: string[];
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -115,8 +129,24 @@ export function StoryScreen() {
   const { saveId = "" } = useParams();
   const navigate = useNavigate();
   const client = useQueryClient();
-  const story = useStory();
-  const { enter } = story;
+  const story = useStory(
+    useShallow((s) => ({
+      phase: s.phase,
+      stopping: s.stopping,
+      boost: s.boost,
+      pending: s.pending,
+      failure: s.failure,
+      spend: s.spend,
+      draft: s.draft,
+      enter: s.enter,
+      submit: s.submit,
+      stop: s.stop,
+      setDraft: s.setDraft,
+      dismiss: s.dismiss,
+      cancelSpend: s.cancelSpend,
+    })),
+  );
+  const { enter, submit: submitStory, dismiss: dismissStory, stop: stopStory } = story;
 
   useEffect(() => enter(saveId), [enter, saveId]);
 
@@ -139,15 +169,16 @@ export function StoryScreen() {
     readonly subtitle?: string | undefined;
     readonly promptRequest: ImagePromptRequest;
     readonly defaultAspectRatio: AspectRatio;
-    readonly bind:
-      | { readonly kind: "turn"; readonly seq: number }
-      | { readonly kind: "npc"; readonly npcId: string }
-      | { readonly kind: "character" };
+    readonly bind: ImageTarget;
+    readonly turnPromptKey?: string | undefined;
   } | null>(null);
   const [lightbox, setLightbox] = useState<{ readonly id: string; readonly title: string } | null>(
     null,
   );
   const [autoPendingTurnSeqs, setPendingTurnSeqs] = useState<ReadonlySet<number>>(() => new Set());
+  const [autoTurnProgress, setAutoTurnProgress] = useState<
+    Readonly<Record<number, { readonly current: number; readonly total: number }>>
+  >({});
   const imageJobs = useImageJobs();
   const manualPendingTurnSeqs = useMemo(
     () =>
@@ -166,6 +197,22 @@ export function StoryScreen() {
     () => new Set([...autoPendingTurnSeqs, ...manualPendingTurnSeqs]),
     [autoPendingTurnSeqs, manualPendingTurnSeqs],
   );
+  const turnImageProgress = useMemo(() => {
+    const merged: Record<number, { readonly current: number; readonly total: number }> = {
+      ...autoTurnProgress,
+    };
+    for (const job of imageJobs) {
+      if (
+        isImageJobPending(job) &&
+        job.progress &&
+        job.binding?.saveId === saveId &&
+        job.binding.target.kind === "turn"
+      ) {
+        merged[job.binding.target.seq] = job.progress;
+      }
+    }
+    return merged;
+  }, [autoTurnProgress, imageJobs, saveId]);
   const turnImageErrors = useMemo(
     () =>
       Object.fromEntries(
@@ -193,6 +240,7 @@ export function StoryScreen() {
 
   useEffect(() => {
     setPendingTurnSeqs(new Set());
+    setAutoTurnProgress({});
     setImageModal(null);
     setLightbox(null);
     return () => {
@@ -222,7 +270,7 @@ export function StoryScreen() {
     (imageModalTarget?.kind !== "turn" ||
       (modalTurn !== undefined &&
         JSON.stringify(buildTurnPromptRequest(modalTurn)) ===
-          JSON.stringify(imageModal.promptRequest)));
+          (imageModal.turnPromptKey ?? JSON.stringify(imageModal.promptRequest))));
   const imageContextRef = useRef({ saveId, view, enabled: prefs.autoTurnImage, bindings });
   imageContextRef.current = { saveId, view, enabled: prefs.autoTurnImage, bindings };
 
@@ -232,8 +280,13 @@ export function StoryScreen() {
       task.controller.signal.aborted ||
       autoAbortRef.current.get(seq) !== task ||
       current.saveId !== task.saveId ||
-      !current.enabled ||
-      current.bindings.turns[String(seq)] !== undefined
+      !current.enabled
+    )
+      return false;
+    const currentList = turnImagesOf(current.bindings, seq);
+    if (
+      currentList.length !== task.boundIds.length ||
+      currentList.some((id, idx) => id !== task.boundIds[idx])
     )
       return false;
     const turn = current.view?.turns.find((candidate) => candidate.seq === seq);
@@ -294,7 +347,98 @@ export function StoryScreen() {
     readonly itemId?: string;
     readonly nonce: number;
   } | null>(null);
+  const hackTargets: readonly HackTarget[] = useMemo(() => {
+    if (!view?.hacking) return [];
+    const breached = view.hacking.breachedTargets;
+    const allEffects = view.hacking.activeEffects;
+    const breachOf = (name: string, npcId?: string | null) =>
+      breached.find((b) => (npcId && b.npc === npcId) || b.target === name);
+    const effectsOf = (name: string, isBreached: boolean): readonly string[] => [
+      ...new Set(
+        allEffects
+          .filter((e) => {
+            if (e.target !== name) return false;
+            if (isBreached && e.categoryLabel === null && /破冰|breach/i.test(e.label)) {
+              return false;
+            }
+            return true;
+          })
+          .map((e) => e.label),
+      ),
+    ];
+    const foes = (view.combat.active?.foes ?? []).filter(
+      (f) => f.state !== "dead" && f.state !== "fled",
+    );
+    const foeOf = (n: (typeof view.npcs)[number]) =>
+      foes.find((f) => f.npc === n.id || f.id === n.id || f.name === n.name);
+    const herePeople = view.npcs.filter((n) => n.here && n.alive);
+    const extraFoes = foes.filter(
+      (f) => !herePeople.some((n) => f.npc === n.id || f.id === n.id || f.name === n.name),
+    );
+    const toNpcTarget = (
+      n: (typeof view.npcs)[number],
+      tone: "hostile" | "companion" | "present",
+    ): HackTarget => {
+      const hit = breachOf(n.name, n.id);
+      const scanInfo = n.body?.scan;
+      const isBreached = Boolean(hit);
+      const activeEffects = effectsOf(n.name, isBreached);
+      return {
+        key: `npc:${n.id}`,
+        kind: "person",
+        name: n.name,
+        role: n.role || undefined,
+        tone,
+        breached: isBreached,
+        breachedVia: hit?.via ?? null,
+        activeEffects: activeEffects.length > 0 ? activeEffects : undefined,
+        netLabel: scanInfo?.netLabel ?? null,
+        chromeSummary: scanInfo?.chrome.length ? scanInfo.chrome.slice(0, 3).join("、") : null,
+      };
+    };
+    const hostiles: HackTarget[] = [
+      ...herePeople.filter((n) => Boolean(foeOf(n))).map((n) => toNpcTarget(n, "hostile")),
+      ...extraFoes.map((f): HackTarget => {
+        const hit = breachOf(f.name, f.npc);
+        const isBreached = Boolean(hit);
+        const activeEffects = effectsOf(f.name, isBreached);
+        return {
+          key: `foe:${f.id}`,
+          kind: "person",
+          name: f.name,
+          role: [f.tierLabel, f.stateLabel].filter(Boolean).join(" · ") || undefined,
+          tone: "hostile",
+          breached: isBreached,
+          breachedVia: hit?.via ?? null,
+          activeEffects: activeEffects.length > 0 ? activeEffects : undefined,
+        };
+      }),
+    ];
+    const companions = herePeople
+      .filter((n) => !foeOf(n) && n.following)
+      .map((n) => toNpcTarget(n, "companion"));
+    const regulars = herePeople
+      .filter((n) => !foeOf(n) && !n.following)
+      .map((n) => toNpcTarget(n, "present"));
+    const envTarget: HackTarget = {
+      key: "env:local",
+      kind: "env",
+      name: `${view.names.location}现场设备/监控`,
+      role: "摄像头、炮塔、门禁与局域节点",
+      tone: "env",
+      breached: view.hacking.breaches.length > 0,
+      breachedVia: view.hacking.breaches[0]?.name ?? null,
+    };
+    return [...hostiles, ...companions, ...regulars, envTarget];
+  }, [view]);
   const [bioTab, setBioTab] = useState<BioTab>("character");
+  const openBioTab = useCallback((tab: BioTab) => {
+    setPerson(null);
+    setAtMap(false);
+    setBioTab(tab);
+    setExpand("bio");
+  }, []);
+  const openDeckTab = useCallback(() => openBioTab("deck"), [openBioTab]);
   // 视野里就地展开：四角的块、在场的人，同一时间只展开一处；
   // 点击卡片或按 P/J/T/O 展开完整内容
   const [expand, setExpand] = useState<Expand | null>(null);
@@ -319,6 +463,16 @@ export function StoryScreen() {
     : "carried";
   // 钉住的未读块停在哪个页签；收起后再钉住还是那个
   const [unreadTab, setUnreadTab] = useState<UnreadTab>("messages");
+  // 从「人物」页或正文档案跳到手机「消息」页时自动选中的联系人 key
+  const [focusPhoneContact, setFocusPhoneContact] = useState<string | null>(null);
+  const consumeFocusPhoneContact = useCallback(() => setFocusPhoneContact(null), []);
+  const openPhoneChatWith = useCallback((contactId: string) => {
+    setPerson(null);
+    setAtMap(false);
+    setFocusPhoneContact(contactId);
+    setUnreadTab("messages");
+    setExpand("unread");
+  }, []);
   // 地图浮层（M）；mapFocus 是正文里点了地名/区域或追踪定位时打开地图先聚焦的目标，按 M 打开时不选
   const [atMap, setAtMap] = useState(false);
   const [mapFocus, setMapFocus] = useState<MapFocus | undefined>(undefined);
@@ -359,6 +513,7 @@ export function StoryScreen() {
     setSettled([]);
     setRivalsDone([]);
     setExpand(null);
+    setFocusPhoneContact(null);
     setAtMap(false);
     setMapFocus(undefined);
     setPerson(null);
@@ -378,23 +533,29 @@ export function StoryScreen() {
     setToasts((t) => [...t, toast].slice(-6));
   }, []);
 
+  const clearAutoTurnState = useCallback((seq: number) => {
+    setPendingTurnSeqs((prev) => {
+      if (!prev.has(seq)) return prev;
+      const next = new Set(prev);
+      next.delete(seq);
+      return next;
+    });
+    setAutoTurnProgress((prev) => {
+      if (!(seq in prev)) return prev;
+      const { [seq]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   const unbindImage = useCallback(
-    async (
-      target:
-        | { readonly kind: "turn"; readonly seq: number }
-        | { readonly kind: "npc"; readonly npcId: string }
-        | { readonly kind: "character" },
-    ) => {
-      cancelImageJob(imageTargetKey({ saveId, target }));
+    async (target: SaveImageUnbindTarget) => {
       if (target.kind === "turn") {
+        cancelTurnImageJobs(saveId, target.seq);
         autoAbortRef.current.get(target.seq)?.controller.abort();
         autoAbortRef.current.delete(target.seq);
-        setPendingTurnSeqs((prev) => {
-          if (!prev.has(target.seq)) return prev;
-          const next = new Set(prev);
-          next.delete(target.seq);
-          return next;
-        });
+        clearAutoTurnState(target.seq);
+      } else {
+        cancelImageJob(imageTargetKey({ saveId, target }));
       }
       try {
         const next = await api.unbindSaveImage(saveId, target);
@@ -403,19 +564,17 @@ export function StoryScreen() {
         warn("image-unbind", error);
       }
     },
-    [saveId, client, warn],
+    [saveId, client, warn, clearAutoTurnState],
   );
 
-  const cancelTurnAutoImage = useCallback((seq: number) => {
-    autoAbortRef.current.get(seq)?.controller.abort();
-    autoAbortRef.current.delete(seq);
-    setPendingTurnSeqs((prev) => {
-      if (!prev.has(seq)) return prev;
-      const next = new Set(prev);
-      next.delete(seq);
-      return next;
-    });
-  }, []);
+  const cancelTurnAutoImage = useCallback(
+    (seq: number) => {
+      autoAbortRef.current.get(seq)?.controller.abort();
+      autoAbortRef.current.delete(seq);
+      clearAutoTurnState(seq);
+    },
+    [clearAutoTurnState],
+  );
 
   useEffect(() => {
     for (const [seq, task] of autoAbortRef.current) {
@@ -437,7 +596,7 @@ export function StoryScreen() {
       latest.seq <= baselineSeqRef.current ||
       autoAttemptedRef.current.has(latest.seq) ||
       manualPendingTurnSeqs.has(latest.seq) ||
-      bindings.turns[String(latest.seq)] !== undefined ||
+      turnImagesOf(bindings, latest.seq).length > 0 ||
       !healthQuery.data?.models?.image?.ready
     ) {
       return;
@@ -448,43 +607,69 @@ export function StoryScreen() {
     const request = structuredClone(buildTurnPromptRequest(latest));
     const style = imageStyleConfig();
     const useAux = prefs.autoImageUseAux;
-    const task: AutoImageTask = { controller, saveId, promptKey: JSON.stringify(request) };
+    const totalCount = prefs.imageBatchCount;
+    const task: AutoImageTask = {
+      controller,
+      saveId,
+      promptKey: JSON.stringify(request),
+      boundIds: [],
+    };
     autoAbortRef.current.set(seq, task);
     setPendingTurnSeqs((prev) => new Set(prev).add(seq));
+    if (totalCount > 1) {
+      setAutoTurnProgress((prev) => ({ ...prev, [seq]: { current: 1, total: totalCount } }));
+    }
 
     void (async () => {
       try {
         const profiles = await api.profiles();
         if (!isAutoImageCurrent(seq, task)) return;
         if (!profiles.image) throw new Error("尚未设置文生图模型");
-        const promptRes = await api.draftImagePrompt(
-          {
-            request,
-            useAux,
-            style,
-            profileName: profiles.image,
-          },
-          controller.signal,
-        );
-        if (!isAutoImageCurrent(seq, task)) return;
-        const generated = await api.generateImage(
-          {
-            prompt: promptRes.prompt,
-            negativePrompt: promptRes.negativePrompt,
-            aspectRatio: "16:9",
-            profileName: profiles.image,
-          },
-          controller.signal,
-        );
-        if (!isAutoImageCurrent(seq, task)) return;
-        client.setQueryData(["image", generated.image.id], generated.image);
-        const nextBindings = await api.bindSaveImage(
-          saveId,
-          { kind: "turn", seq, imageId: generated.image.id, expectedImageId: null },
-          controller.signal,
-        );
-        if (!isAutoImageCurrent(seq, task)) return;
-        client.setQueryData(["saveImages", saveId], nextBindings);
+
+        for (let i = 0; i < totalCount; i++) {
+          if (!isAutoImageCurrent(seq, task)) return;
+          if (totalCount > 1) {
+            setAutoTurnProgress((prev) => ({
+              ...prev,
+              [seq]: { current: i + 1, total: totalCount },
+            }));
+          }
+          const segmentRequest =
+            totalCount > 1 ? buildTurnSegmentPromptInput(request, i, totalCount) : request;
+          const promptRes = await api.draftImagePrompt(
+            {
+              request: segmentRequest,
+              useAux,
+              style,
+              profileName: profiles.image,
+            },
+            controller.signal,
+          );
+          if (!isAutoImageCurrent(seq, task)) return;
+          const generated = await api.generateImage(
+            {
+              prompt: promptRes.prompt,
+              negativePrompt: promptRes.negativePrompt,
+              aspectRatio: "16:9",
+              profileName: profiles.image,
+            },
+            controller.signal,
+          );
+          if (!isAutoImageCurrent(seq, task)) return;
+          client.setQueryData(["image", generated.image.id], generated.image);
+          const nextBindings = await api.bindSaveImage(
+            saveId,
+            i === 0
+              ? { kind: "turn", seq, imageId: generated.image.id, expectedImageId: null }
+              : { kind: "turn", seq, imageId: generated.image.id, append: true },
+            controller.signal,
+          );
+          if (!isAutoImageCurrent(seq, task)) return;
+          task.boundIds.push(generated.image.id);
+          // 同步更新本地引用，避免下一轮循环读取到渲染前的旧 bindings
+          imageContextRef.current = { ...imageContextRef.current, bindings: nextBindings };
+          client.setQueryData(["saveImages", saveId], nextBindings);
+        }
       } catch (error) {
         if (isAutoImageCurrent(seq, task)) {
           warn("auto-turn-image", error);
@@ -493,12 +678,7 @@ export function StoryScreen() {
         if (autoAbortRef.current.get(seq) === task) {
           autoAbortRef.current.delete(seq);
           if (imageContextRef.current.saveId === saveId) {
-            setPendingTurnSeqs((prev) => {
-              if (!prev.has(seq)) return prev;
-              const next = new Set(prev);
-              next.delete(seq);
-              return next;
-            });
+            clearAutoTurnState(seq);
           }
         }
       }
@@ -509,13 +689,15 @@ export function StoryScreen() {
     busy,
     prefs.autoTurnImage,
     prefs.autoImageUseAux,
-    bindings.turns,
+    prefs.imageBatchCount,
+    bindings,
     manualPendingTurnSeqs,
     healthQuery.data?.models?.image?.ready,
     client,
     warn,
     isAutoImageCurrent,
     cancelTurnAutoImage,
+    clearAutoTurnState,
   ]);
 
   const saveImagesController = useMemo<SaveImagesController>(
@@ -524,19 +706,26 @@ export function StoryScreen() {
       bindings,
       pendingTurnSeqs,
       manualPendingTurnSeqs,
+      turnImageProgress,
       turnImageErrors,
       openImageModal: (options) => {
+        let turnPromptKey: string | undefined;
         if (options.bind.kind === "turn") {
-          autoAttemptedRef.current.add(options.bind.seq);
-          cancelTurnAutoImage(options.bind.seq);
+          const turnSeq = options.bind.seq;
+          autoAttemptedRef.current.add(turnSeq);
+          cancelTurnAutoImage(turnSeq);
+          const sourceTurn = imageContextRef.current.view?.turns.find((t) => t.seq === turnSeq);
+          if (sourceTurn) {
+            turnPromptKey = JSON.stringify(buildTurnPromptRequest(sourceTurn));
+          }
         }
-        setImageModal({ ...structuredClone(options), saveId });
+        setImageModal({ ...structuredClone(options), saveId, turnPromptKey });
       },
       unbindImage,
       openLightbox: (id, title) => setLightbox({ id, title }),
       cancelTurnAutoImage: (seq) => {
         cancelTurnAutoImage(seq);
-        cancelImageJob(imageTargetKey({ saveId, target: { kind: "turn", seq } }));
+        cancelTurnImageJobs(saveId, seq);
       },
     }),
     [
@@ -544,6 +733,7 @@ export function StoryScreen() {
       bindings,
       pendingTurnSeqs,
       manualPendingTurnSeqs,
+      turnImageProgress,
       turnImageErrors,
       unbindImage,
       cancelTurnAutoImage,
@@ -625,12 +815,12 @@ export function StoryScreen() {
     try {
       const r = await api.regenerate(saveId, version);
       await refresh();
-      await story.submit(saveId, r.version, r.pending, refresh);
+      await submitStory(saveId, r.version, r.pending, refresh);
     } catch (error) {
       warn("regenerate", error);
       await refresh();
     }
-  }, [saveId, version, refresh, warn, story]);
+  }, [saveId, version, refresh, warn, submitStory]);
 
   // 按账目改写最后一轮：只换正文，不改状态
   const rewrite = useCallback(async () => {
@@ -784,9 +974,9 @@ export function StoryScreen() {
   const send = useCallback(
     (input: TurnInput) => {
       if (!view) return;
-      void story.submit(saveId, version, { kind: "input", input }, refresh);
+      void submitStory(saveId, version, { kind: "input", input }, refresh);
     },
-    [story, saveId, version, view, refresh],
+    [submitStory, saveId, version, view, refresh],
   );
   const retry = useCallback(() => {
     const pending =
@@ -794,9 +984,9 @@ export function StoryScreen() {
       (view?.checkpoint && view.checkpoint.baseVersion === version
         ? ({ kind: "input", input: view.checkpoint.input } as const)
         : null);
-    story.dismiss();
-    if (pending) void story.submit(saveId, version, pending, refresh);
-  }, [story, saveId, version, refresh, view?.checkpoint]);
+    dismissStory();
+    if (pending) void submitStory(saveId, version, pending, refresh);
+  }, [story.pending, dismissStory, submitStory, saveId, version, refresh, view?.checkpoint]);
   const clearCheckpoint = useCallback(async () => {
     await api.clearCheckpoint(saveId);
     await refresh();
@@ -807,11 +997,11 @@ export function StoryScreen() {
       (view?.checkpoint && view.checkpoint.baseVersion === version
         ? ({ kind: "input", input: view.checkpoint.input } as const)
         : null);
-    story.dismiss();
+    dismissStory();
     await api.clearCheckpoint(saveId);
     await refresh();
-    if (pending) void story.submit(saveId, version, pending, refresh);
-  }, [story, saveId, version, refresh, view?.checkpoint]);
+    if (pending) void submitStory(saveId, version, pending, refresh);
+  }, [story.pending, dismissStory, submitStory, saveId, version, refresh, view?.checkpoint]);
 
   const choose = useCallback(
     (index: number) => {
@@ -958,14 +1148,20 @@ export function StoryScreen() {
     view.checkpoint && view.checkpoint.baseVersion === version ? view.checkpoint : undefined;
 
   // 钉住块时块里放的完整内容：页签放进 BioMonitor 展开顶栏，不再上下叠两道标题
+  const effectiveBioTab: BioTab = bioTab === "deck" && !view.hacking ? "character" : bioTab;
+  const deckTabBadge =
+    view.hacking && (view.hacking.thermal.level === "critical" || Boolean(view.hacking.traceAlert))
+      ? 1
+      : 0;
   const characterTabs = (
     <PinTabs<BioTab>
       tabs={[
         ["character", "人物", 0],
+        ...(view.hacking ? ([["deck", "接入仓", deckTabBadge]] as const) : []),
         ["cyberware", "义体", view.cyberware.filter((c) => c.broken).length],
         ["chronicle", "履历", 0],
       ]}
-      value={bioTab}
+      value={effectiveBioTab}
       onChange={setBioTab}
     />
   );
@@ -980,6 +1176,10 @@ export function StoryScreen() {
           setScanPinned(false);
           setPerson(null);
         };
+  const deckLoadHandler =
+    busy || view.death || view.ended
+      ? undefined
+      : (action: Extract<PlayerAction, { type: "deckLoad" }>) => act(action, "deckLoad", true);
   const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken) ?? null;
   const scanEnvironment =
     draftAction && intactEye
@@ -992,10 +1192,17 @@ export function StoryScreen() {
   const characterFull = (
     <div className={neuralStyles.pinBody}>
       {/* 按页签重新挂载，切页签时新内容淡入 */}
-      <div key={bioTab} className={neuralStyles.pinPane}>
-        {bioTab === "cyberware" ? (
+      <div key={effectiveBioTab} className={neuralStyles.pinPane}>
+        {effectiveBioTab === "deck" ? (
+          <CyberdeckPage
+            view={view}
+            busy={busy}
+            onDeckLoad={deckLoadHandler}
+            onActionDraft={draftAction}
+          />
+        ) : effectiveBioTab === "cyberware" ? (
           <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
-        ) : bioTab === "chronicle" ? (
+        ) : effectiveBioTab === "chronicle" ? (
           <ChronicleBody view={view} />
         ) : (
           <CharacterPage
@@ -1158,6 +1365,7 @@ export function StoryScreen() {
           view.phone.unread +
             view.phone.feedUnread.messages.filter((id) => id.startsWith("phone:call:")).length,
         ],
+        ["people", "人物", 0],
         ["news", "新闻", view.phone.feedUnread.news.length + view.phone.feedUnread.street.length],
         ["factions", "势力", 0],
         ["shards", "资料", view.shards.unread],
@@ -1171,7 +1379,24 @@ export function StoryScreen() {
   );
   const unreadFull = (
     <div key={unreadTab} className={`${neuralStyles.pinBody} ${neuralStyles.pinPane}`}>
-      {unreadTab === "shards" ? (
+      {unreadTab === "people" ? (
+        <PeopleBody
+          view={view}
+          onOpenChat={openPhoneChatWith}
+          onLocatePlace={focusPlace}
+          onScan={
+            busy || view.death || view.ended
+              ? undefined
+              : (id) => void act({ type: "scanNpc", id }, "scan")
+          }
+          onCompanion={
+            busy || view.death || view.ended
+              ? undefined
+              : (id, following) => void act({ type: "npcCompanion", id, following }, "companion")
+          }
+          onDraftAction={draftAction}
+        />
+      ) : unreadTab === "shards" ? (
         <ShardsPanel
           view={view}
           onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
@@ -1220,6 +1445,9 @@ export function StoryScreen() {
             closePinned();
             setAtDoc(true);
           }}
+          onOpenPeople={() => setUnreadTab("people")}
+          focusContact={focusPhoneContact}
+          onConsumeFocus={consumeFocusPhoneContact}
         />
       )}
     </div>
@@ -1289,8 +1517,13 @@ export function StoryScreen() {
             peek={peek}
             tabs={characterTabs}
             full={characterFull}
-            wide={bioTab === "cyberware"}
-            diag={bioTab === "character" || bioTab === "chronicle"}
+            wide={effectiveBioTab === "cyberware"}
+            diag={
+              effectiveBioTab === "character" ||
+              effectiveBioTab === "deck" ||
+              effectiveBioTab === "chronicle"
+            }
+            onOpenTab={openBioTab}
           />
           <HoloCall
             view={view}
@@ -1383,12 +1616,11 @@ export function StoryScreen() {
         )}
 
         <main className={styles.column}>
-          {/* 横幅：交战、对峙、潜网、闪回，同时只出一个 */}
+          {/* 横幅：潜网、闪回、神经异常，同时只出一个 */}
           <Banner view={view} />
           <StoryLog
             view={view}
             saveId={saveId}
-            live={story}
             onRegenerate={view.death || view.ended ? undefined : () => void regenerate()}
             onRewrite={view.death || view.ended ? undefined : rewrite}
             onMark={onMark}
@@ -1484,6 +1716,7 @@ export function StoryScreen() {
             <InputBar
               busy={busy}
               streaming={story.phase === "streaming"}
+              stopping={story.stopping}
               disabled={view.death !== null || view.ended !== null}
               reason={
                 view.death !== null
@@ -1501,10 +1734,13 @@ export function StoryScreen() {
               }
               onCancelReply={() => story.setDraft({ replyTo: undefined } as Partial<TurnInput>)}
               sandevistan={view.sandevistan}
+              hacking={view.hacking}
+              hackTargets={hackTargets}
+              onOpenDeckTab={view.hacking ? openDeckTab : undefined}
               lastSentText={lastSentText}
               inputRef={inputRef}
               onSend={send}
-              onStop={() => void story.stop()}
+              onStop={() => void stopStory()}
             />
             <KeyBar>
               <KeyHint
@@ -1742,6 +1978,7 @@ export function StoryScreen() {
           (() => {
             // 正文里点了人名（第 3 条）：弹这个人的档案；扫描照档案里的按钮，回合进行中不让点
             const npc = view.npcs.find((n) => n.id === person);
+            const hasContact = Boolean(npc && view.phone.contacts.some((c) => c.from === npc.id));
             return (
               npc && (
                 <PersonModal
@@ -1750,6 +1987,8 @@ export function StoryScreen() {
                   foe={view.combat.active?.foes.find(
                     (f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name,
                   )}
+                  hasContact={hasContact}
+                  onOpenChat={hasContact ? () => openPhoneChatWith(npc.id) : undefined}
                   onScan={
                     busy || view.death || view.ended
                       ? undefined
@@ -1881,6 +2120,8 @@ function PersonModal({
   npc,
   fixer,
   foe,
+  hasContact,
+  onOpenChat,
   onScan,
   onCompanion,
   onDraftAction,
@@ -1889,6 +2130,8 @@ function PersonModal({
   readonly npc: View["npcs"][number];
   readonly fixer?: View["jobs"]["fixers"][number] | undefined;
   readonly foe?: NonNullable<View["combat"]["active"]>["foes"][number] | undefined;
+  readonly hasContact?: boolean | undefined;
+  readonly onOpenChat?: (() => void) | undefined;
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
@@ -1915,6 +2158,11 @@ function PersonModal({
             onDraftAction={onDraftAction}
           />
           <div className={styles.journalActions}>
+            {hasContact && onOpenChat && (
+              <Button primary onClick={onOpenChat}>
+                发消息
+              </Button>
+            )}
             <Button onClick={onClose}>关闭</Button>
           </div>
         </Panel>

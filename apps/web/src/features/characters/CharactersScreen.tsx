@@ -1,7 +1,7 @@
 import { type CharacterCard, CharacterCardSchema, WorkshopCharacterExportSchema } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
 import { useCharactersPreload } from "../../assets/usePreload";
 import { ActionButton } from "../../ui/ActionButton";
@@ -10,13 +10,12 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
+import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage } from "../images/GeneratedImage";
+import { ShellBackdrop } from "../theme";
 import { CharacterCreator } from "./CharacterCreator";
 import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
 import wb from "./workbench.module.css";
-
-/** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切（同设置页） */
-const FRAME_SLICE = 120;
 
 interface Editor {
   readonly id: string | null;
@@ -29,6 +28,7 @@ interface Editor {
 
 type Destination =
   | { readonly editor: Editor }
+  | { readonly roster: true }
   | { readonly back: true }
   | { readonly importCard: CharacterCard };
 
@@ -103,28 +103,35 @@ function downloadCharacter(card: CharacterCard): string {
   return fileName;
 }
 
-/** 恢复未保存的修改，同时保留原角色 id，避免刷新后再保存生成重复角色。 */
-function initialEditor(): Editor {
+/** 读取浏览器中上次未保存的角色草稿（若有）；不直接劫持角色库入口 */
+function readSavedDraft(): Editor | null {
   const draft = loadDraft(blankCard());
-  if (!draft) return editorFor(blankCard());
+  if (!draft) return null;
+  const card: CharacterCard = {
+    ...draft.card,
+    board: {
+      ...(draft.card.board ?? emptyBoard()),
+      ...(draft.startLocation ? { startLocation: draft.startLocation } : {}),
+    },
+  };
+  const original = draft.original ?? "";
+  if (!isCardModified(card, original, draft.sample ?? false)) {
+    clearDraft();
+    return null;
+  }
   return {
     id: draft.characterId ?? null,
     sample: draft.sample ?? false,
-    card: {
-      ...draft.card,
-      board: {
-        ...(draft.card.board ?? emptyBoard()),
-        ...(draft.startLocation ? { startLocation: draft.startLocation } : {}),
-      },
-    },
-    original: draft.original ?? "",
+    card,
+    original,
     session: newSession(),
   };
 }
 
-/** 角色库与 2077 赛博档案工作台 */
+/** 角色库总览与 2077 赛博档案工作台：默认先展示角色库，再按需新建或编辑 */
 export function CharactersScreen() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const client = useQueryClient();
   const importRef = useRef<HTMLInputElement>(null);
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
@@ -133,9 +140,13 @@ export function CharactersScreen() {
     queryFn: api.characterBoard,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const [editor, setEditor] = useState<Editor>(initialEditor);
+  const [editor, setEditor] = useState<Editor | null>(() =>
+    params.get("new") === "1" ? editorFor(blankCard()) : null,
+  );
+  const [pendingDraft, setPendingDraft] = useState<Editor | null>(() => readSavedDraft());
   const currentEditor = useRef(editor);
   currentEditor.current = editor;
+  const handledParamRef = useRef<string | null>(null);
   const [destination, setDestination] = useState<Destination | null>(null);
   const [deleting, setDeleting] = useState<CharacterEntry | null>(null);
   const [shareNotice, setShareNotice] = useState<{
@@ -147,20 +158,48 @@ export function CharactersScreen() {
   const [launching, setLaunching] = useState(false);
   const [draftSaved, setDraftSaved] = useState(true);
 
-  useCharactersPreload(editor.card, characters.data, client);
+  const preloadCard = useMemo(() => editor?.card ?? blankCard(), [editor]);
+  useCharactersPreload(preloadCard, characters.data, client);
 
   useLayer(() => setShowLibrary(false), showLibrary && !destination && !deleting);
 
-  const modified = isCardModified(editor.card, editor.original, editor.sample);
+  // 支持从主菜单携带 ?new=1 或 ?id=<characterId> 直达对应动作
+  const paramNew = params.get("new");
+  const paramId = params.get("id");
+  useEffect(() => {
+    if (paramNew === "1") {
+      if (handledParamRef.current === "new") return;
+      handledParamRef.current = "new";
+      setEditor((cur) => cur ?? editorFor(blankCard()));
+      setParams({}, { replace: true });
+      return;
+    }
+    if (!paramId) return;
+    if (handledParamRef.current === `id:${paramId}`) return;
+    if (!characters.data) return;
+    handledParamRef.current = `id:${paramId}`;
+    const matched = characters.data.find((entry) => entry.id === paramId);
+    if (matched) {
+      setEditor(editorFor(matched.card, matched.id, matched.sample));
+    } else {
+      setShareNotice({ tone: "error", text: "未找到该角色档案，已回到角色库" });
+    }
+    setParams({}, { replace: true });
+  }, [paramNew, paramId, characters.data, setParams]);
+
+  const modified = editor ? isCardModified(editor.card, editor.original, editor.sample) : false;
   const dirty = modified;
-  const parsed = CharacterCardSchema.safeParse(editor.card);
+  const parsed = useMemo(
+    () => (editor ? CharacterCardSchema.safeParse(editor.card) : { success: false as const }),
+    [editor],
+  );
 
   const save = useMutation({
     mutationFn: ({ id, card }: { id: string | null; card: CharacterCard; session: string }) =>
       id === null ? api.createCharacter(card) : api.updateCharacter(id, card),
     onSuccess: (entry, submitted) => {
       setEditor((old) => {
-        if (old.session !== submitted.session) return old;
+        if (!old || old.session !== submitted.session) return old;
         const copy: CharacterCard = {
           ...entry.card,
           board: entry.card.board ?? emptyBoard(),
@@ -173,6 +212,7 @@ export function CharactersScreen() {
           original: JSON.stringify(copy),
         };
       });
+      setPendingDraft(null);
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
   });
@@ -180,7 +220,15 @@ export function CharactersScreen() {
   const remove = useMutation({
     mutationFn: api.deleteCharacter,
     onSuccess: (_result, id) => {
-      if (editor.id === id) setEditor(editorFor(blankCard()));
+      if (editor?.id === id) {
+        clearDraft();
+        setEditor(null);
+        setShowLibrary(false);
+      }
+      if (pendingDraft?.id === id) {
+        clearDraft();
+        setPendingDraft(null);
+      }
       setDeleting(null);
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
@@ -191,7 +239,10 @@ export function CharactersScreen() {
     onSuccess: async (entry) => {
       await client.invalidateQueries({ queryKey: ["characters"] });
       clearDraft();
-      setEditor(editorFor(entry.card, entry.id));
+      setPendingDraft(null);
+      if (currentEditor.current) {
+        setEditor(editorFor(entry.card, entry.id));
+      }
       setShowLibrary(false);
       save.reset();
       remove.reset();
@@ -203,13 +254,13 @@ export function CharactersScreen() {
   const importCard = useMutation({
     mutationFn: async (file: File) => {
       const raw: unknown = JSON.parse(await file.text());
-      const parsed = WorkshopCharacterExportSchema.safeParse(raw);
-      if (!parsed.success) throw new Error("文件不是本作导出的角色卡");
-      return CharacterCardSchema.parse(parsed.data.character);
+      const parsedFile = WorkshopCharacterExportSchema.safeParse(raw);
+      if (!parsedFile.success) throw new Error("文件不是本作导出的角色卡");
+      return CharacterCardSchema.parse(parsedFile.data.character);
     },
     onSuccess: (card) => {
       const current = currentEditor.current;
-      if (isCardModified(current.card, current.original, current.sample)) {
+      if (current && isCardModified(current.card, current.original, current.sample)) {
         setDestination({ importCard: card });
       } else {
         commitImport.mutate(card);
@@ -232,8 +283,10 @@ export function CharactersScreen() {
   };
 
   useEffect(() => {
+    if (!editor) return;
     if (!dirty) {
       clearDraft();
+      setPendingDraft(null);
       return;
     }
     setDraftSaved(
@@ -257,10 +310,29 @@ export function CharactersScreen() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  // 角色库总览页按 Esc 返回主菜单
+  useEffect(() => {
+    if (editor !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector("[role=dialog], [role=alertdialog]")) return;
+      if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
+      navigate("/menu");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editor, navigate]);
+
   const go = (next: Destination) => {
     clearDraft();
+    setPendingDraft(null);
     if ("back" in next) navigate("/menu");
-    else if ("importCard" in next) commitImport.mutate(next.importCard);
+    else if ("roster" in next) {
+      setEditor(null);
+      setShowLibrary(false);
+      save.reset();
+      remove.reset();
+    } else if ("importCard" in next) commitImport.mutate(next.importCard);
     else {
       setEditor(next.editor);
       setShowLibrary(false);
@@ -276,7 +348,9 @@ export function CharactersScreen() {
   };
 
   const handleCardChange = (next: CharacterCard | ((current: CharacterCard) => CharacterCard)) => {
-    setEditor((old) => ({ ...old, card: typeof next === "function" ? next(old.card) : next }));
+    setEditor((old) =>
+      old ? { ...old, card: typeof next === "function" ? next(old.card) : next } : old,
+    );
     if (!save.isPending && save.isError) save.reset();
   };
 
@@ -301,7 +375,7 @@ export function CharactersScreen() {
         <button
           type="button"
           className={wb.card}
-          aria-pressed={editor.id === entry.id}
+          aria-pressed={editor?.id === entry.id}
           disabled={busy}
           onClick={() => requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })}
         >
@@ -335,18 +409,44 @@ export function CharactersScreen() {
     );
   };
 
+  const renderRosterCard = (entry: CharacterEntry) => (
+    <RosterCard
+      key={entry.id}
+      entry={entry}
+      busy={busy}
+      onOpen={() => requestGo({ editor: editorFor(entry.card, entry.id, entry.sample) })}
+      onExport={() => {
+        const fileName = downloadCharacter(entry.card);
+        setShareNotice({ tone: "ok", text: `已导出角色档案 ${fileName}` });
+      }}
+      onDelete={() => {
+        remove.reset();
+        setDeleting(entry);
+      }}
+    />
+  );
+
+  const headCode = editor === null ? "ID // ROSTER" : "ID // DOSSIER";
+  const headTitle =
+    editor === null
+      ? "角色档案库"
+      : editor.id === null
+        ? "新建角色"
+        : editor.sample
+          ? "预设档案"
+          : "编辑档案";
+  const totalCustom = allCharacters.filter((entry) => !entry.sample).length;
+  const totalSample = allCharacters.length - totalCustom;
+
   return (
     <main className={wb.screen}>
-      <span className={wb.bg} style={{ backgroundImage: cssUrl("menu.nightCity") }} aria-hidden />
-      <span className={wb.shade} aria-hidden />
-      <span className={wb.scan} style={{ backgroundImage: cssUrl("fx.scanlines") }} aria-hidden />
-      <NineSlice id="panel.frame" tint="var(--cp-red)" slice={FRAME_SLICE} className={wb.frame} />
+      <ShellBackdrop variant="characters" />
       <header className={wb.head}>
         <Asset id="menu.header" tint="var(--cp-red)" height={52} className={wb.headBg} />
         <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" className={wb.headGlow} />
         <div className={wb.headTitleWrap}>
-          <span className={wb.headCode}>{"ID // DOSSIER"}</span>
-          <h1>身份档案</h1>
+          <span className={wb.headCode}>{headCode}</span>
+          <h1>{headTitle}</h1>
         </div>
         <Asset id="fluff.code" tint="var(--cp-red)" height={14} className={wb.headFluff} />
         <span className={wb.headSpacer} />
@@ -357,46 +457,77 @@ export function CharactersScreen() {
           accept=".json,application/json"
           onChange={importCharacter}
         />
-        <fieldset className={wb.headGroup} aria-label="角色库与分享">
-          <Button
-            small
-            disabled={busy}
-            pressed={showLibrary}
-            onClick={() => setShowLibrary((open) => !open)}
-          >
-            角色库{characters.data ? ` (${characters.data.length})` : ""}
-          </Button>
-          <Button
-            small
-            disabled={busy}
-            onClick={() => requestGo({ editor: editorFor(blankCard()) })}
-          >
-            ＋ 新建
-          </Button>
-          <Button small disabled={busy} onClick={() => importRef.current?.click()}>
-            {importCard.isPending || commitImport.isPending ? "导入中…" : "导入"}
-          </Button>
-          <Button
-            small
-            disabled={!parsed.success || busy}
-            reason={!parsed.success ? "先填写角色名与基本资料后即可导出" : undefined}
-            onClick={() => {
-              const fileName = downloadCharacter(editor.card);
-              setShareNotice({ tone: "ok", text: `已导出角色档案 ${fileName}` });
-            }}
-          >
-            导出
-          </Button>
-        </fieldset>
-        <span className={wb.headDivider} aria-hidden />
-        <fieldset className={wb.headGroup} aria-label="页面导航">
-          <Button small disabled reason="创意工坊尚未完成，暂未启用">
-            创意工坊（未完成）
-          </Button>
-          <Button small disabled={busy} onClick={() => requestGo({ back: true })}>
-            返回主菜单
-          </Button>
-        </fieldset>
+        {editor === null ? (
+          <>
+            <fieldset className={wb.headGroup} aria-label="角色库操作">
+              <Button
+                small
+                primary
+                disabled={busy}
+                onClick={() => requestGo({ editor: editorFor(blankCard()) })}
+              >
+                ＋ 新建角色
+              </Button>
+              <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+                {importCard.isPending || commitImport.isPending ? "导入中…" : "导入 JSON"}
+              </Button>
+            </fieldset>
+            <span className={wb.headDivider} aria-hidden />
+            <fieldset className={wb.headGroup} aria-label="页面导航">
+              <Button
+                small
+                keyId="key.esc"
+                disabled={busy}
+                onClick={() => requestGo({ back: true })}
+              >
+                返回主菜单
+              </Button>
+            </fieldset>
+          </>
+        ) : (
+          <>
+            <fieldset className={wb.headGroup} aria-label="角色库与分享">
+              <Button small disabled={busy} onClick={() => requestGo({ roster: true })}>
+                ← 返回角色库
+              </Button>
+              <Button
+                small
+                disabled={busy}
+                pressed={showLibrary}
+                onClick={() => setShowLibrary((open) => !open)}
+              >
+                快速切换{characters.data ? ` (${characters.data.length})` : ""}
+              </Button>
+              <Button
+                small
+                disabled={busy}
+                onClick={() => requestGo({ editor: editorFor(blankCard()) })}
+              >
+                ＋ 新建
+              </Button>
+              <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+                {importCard.isPending || commitImport.isPending ? "导入中…" : "导入"}
+              </Button>
+              <Button
+                small
+                disabled={!parsed.success || busy}
+                reason={!parsed.success ? "先填写角色名与基本资料后即可导出" : undefined}
+                onClick={() => {
+                  const fileName = downloadCharacter(editor.card);
+                  setShareNotice({ tone: "ok", text: `已导出角色档案 ${fileName}` });
+                }}
+              >
+                导出
+              </Button>
+            </fieldset>
+            <span className={wb.headDivider} aria-hidden />
+            <fieldset className={wb.headGroup} aria-label="页面导航">
+              <Button small disabled={busy} onClick={() => requestGo({ back: true })}>
+                返回主菜单
+              </Button>
+            </fieldset>
+          </>
+        )}
       </header>
       <span
         className={wb.headLine}
@@ -408,141 +539,264 @@ export function CharactersScreen() {
       />
 
       <div className={wb.workspace}>
-        {showLibrary && (
-          <>
-            <button
-              type="button"
-              aria-label="收起角色库"
-              className={wb.libraryBackdrop}
-              onClick={() => setShowLibrary(false)}
-            />
-            <aside className={wb.libraryDrawer} aria-label="角色库">
-              <NineSlice
-                id="notify.itemCellBg"
-                tint="rgb(8 8 14 / 97%)"
-                slice={30}
-                className={wb.drawerLayer}
-              />
-              <NineSlice
-                id="notify.itemCellFg"
-                tint="var(--cp-red)"
-                slice={30}
-                className={wb.drawerLayer}
-              />
-              <div className={wb.drawerScroll}>
-                <div className={wb.topBar}>
-                  <strong className={wb.drawerTitle}>夜之城角色库</strong>
-                  <span className={wb.headSpacer} />
-                  <Button small disabled={busy} onClick={() => importRef.current?.click()}>
-                    导入 JSON
+        {editor === null ? (
+          <section className={wb.rosterView} aria-label="角色档案库">
+            {shareNotice && (
+              <div
+                className={wb.shareBanner}
+                data-tone={shareNotice.tone}
+                role={shareNotice.tone === "error" ? "alert" : "status"}
+              >
+                <CellFrame />
+                <p className={wb.shareBannerText}>{shareNotice.text}</p>
+                <ActionButton onClick={() => setShareNotice(null)}>关闭</ActionButton>
+              </div>
+            )}
+
+            {pendingDraft && (
+              <div className={wb.draftBanner} role="status">
+                <CellFrame />
+                <p className={wb.draftBannerText}>
+                  检测到上次未保存的角色草稿
+                  {pendingDraft.card.name.trim() ? `「${pendingDraft.card.name.trim()}」` : ""}
+                </p>
+                <div className={wb.draftBannerActions}>
+                  <Button
+                    small
+                    primary
+                    onClick={() => {
+                      setEditor(pendingDraft);
+                      setPendingDraft(null);
+                    }}
+                  >
+                    继续编辑
                   </Button>
-                  <Button small keyId="key.esc" onClick={() => setShowLibrary(false)}>
-                    收起
+                  <Button
+                    small
+                    onClick={() => {
+                      clearDraft();
+                      setPendingDraft(null);
+                    }}
+                  >
+                    丢弃草稿
                   </Button>
                 </div>
-                {allCharacters.length > 3 && (
-                  <FrameBox className={wb.drawerSearch}>
-                    <input
-                      type="search"
-                      value={libraryQuery}
-                      placeholder="搜索角色名、代号或出身…"
-                      aria-label="搜索角色库"
-                      onChange={(e) => setLibraryQuery(e.target.value)}
-                    />
-                  </FrameBox>
-                )}
-                {characters.isPending && <p role="status">正在读取角色库…</p>}
-                {characters.isError && (
-                  <div role="alert">
-                    <p className={wb.error}>{characters.error.message}</p>
-                    <Button small onClick={() => void characters.refetch()}>
-                      重新读取
+              </div>
+            )}
+
+            <div className={wb.rosterToolbar}>
+              <FrameBox className={wb.rosterSearch}>
+                <input
+                  type="search"
+                  value={libraryQuery}
+                  placeholder="搜索角色名、代号或出身…"
+                  aria-label="搜索角色库"
+                  onChange={(e) => setLibraryQuery(e.target.value)}
+                />
+              </FrameBox>
+              <span className={wb.rosterCount}>
+                共 <strong className="num">{allCharacters.length}</strong> 张档案 · 自建{" "}
+                <span className="num">{totalCustom}</span> · 官方预设{" "}
+                <span className="num">{totalSample}</span>
+              </span>
+            </div>
+
+            <div className={wb.rosterScroll}>
+              {characters.isPending && <p role="status">正在读取角色库…</p>}
+              {characters.isError && (
+                <div role="alert">
+                  <p className={wb.error}>{characters.error.message}</p>
+                  <Button small onClick={() => void characters.refetch()}>
+                    重新读取
+                  </Button>
+                </div>
+              )}
+              {characters.isSuccess && allCharacters.length === 0 && (
+                <div className={wb.rosterEmpty}>
+                  <p className={wb.note}>
+                    还没有角色档案，点击「＋ 新建角色」创建你的第一位夜之城来客。
+                  </p>
+                  <Button primary onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
+                    ＋ 新建角色
+                  </Button>
+                </div>
+              )}
+              {characters.isSuccess &&
+                allCharacters.length > 0 &&
+                filteredCharacters.length === 0 && (
+                  <div className={wb.rosterEmpty}>
+                    <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
+                    <Button small onClick={() => setLibraryQuery("")}>
+                      清空搜索
                     </Button>
                   </div>
                 )}
-                {characters.isSuccess && allCharacters.length === 0 && (
-                  <p className={wb.note}>还没有角色。</p>
-                )}
-                {characters.isSuccess &&
-                  allCharacters.length > 0 &&
-                  filteredCharacters.length === 0 && (
-                    <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
-                  )}
-                {customCharacters.length > 0 && (
-                  <section className={wb.libraryGroup} aria-label="自建角色">
-                    <h2 className={wb.libraryGroupTitle}>自建角色（{customCharacters.length}）</h2>
-                    <ul className={wb.cards}>{customCharacters.map(renderEntryCard)}</ul>
-                  </section>
-                )}
-                {sampleCharacters.length > 0 && (
-                  <section className={wb.libraryGroup} aria-label="官方预设模板">
-                    <h2 className={wb.libraryGroupTitle}>
+
+              {customCharacters.length > 0 && (
+                <section className={wb.rosterSection} aria-label="自建角色">
+                  <div className={wb.rosterSectionHead}>
+                    <h2 className={wb.rosterSectionTitle}>自建角色（{customCharacters.length}）</h2>
+                  </div>
+                  <ul className={wb.rosterGrid}>{customCharacters.map(renderRosterCard)}</ul>
+                </section>
+              )}
+
+              {sampleCharacters.length > 0 && (
+                <section className={wb.rosterSection} aria-label="官方预设模板">
+                  <div className={wb.rosterSectionHead}>
+                    <h2 className={wb.rosterSectionTitle}>
                       官方预设模板（{sampleCharacters.length}）
                     </h2>
-                    <ul className={wb.cards}>{sampleCharacters.map(renderEntryCard)}</ul>
-                  </section>
-                )}
+                    <span className={wb.rosterSectionHint}>
+                      可直接用于新建存档，或打开另存为自建副本
+                    </span>
+                  </div>
+                  <ul className={wb.rosterGrid}>{sampleCharacters.map(renderRosterCard)}</ul>
+                </section>
+              )}
+            </div>
+          </section>
+        ) : (
+          <>
+            {showLibrary && (
+              <>
+                <button
+                  type="button"
+                  aria-label="收起角色库"
+                  className={wb.libraryBackdrop}
+                  onClick={() => setShowLibrary(false)}
+                />
+                <aside className={wb.libraryDrawer} aria-label="角色库">
+                  <NineSlice
+                    id="notify.itemCellBg"
+                    tint="rgb(8 8 14 / 97%)"
+                    slice={30}
+                    className={wb.drawerLayer}
+                  />
+                  <NineSlice
+                    id="notify.itemCellFg"
+                    tint="var(--cp-red)"
+                    slice={30}
+                    className={wb.drawerLayer}
+                  />
+                  <div className={wb.drawerScroll}>
+                    <div className={wb.topBar}>
+                      <strong className={wb.drawerTitle}>夜之城角色库</strong>
+                      <span className={wb.headSpacer} />
+                      <Button small disabled={busy} onClick={() => importRef.current?.click()}>
+                        导入 JSON
+                      </Button>
+                      <Button small keyId="key.esc" onClick={() => setShowLibrary(false)}>
+                        收起
+                      </Button>
+                    </div>
+                    {allCharacters.length > 3 && (
+                      <FrameBox className={wb.drawerSearch}>
+                        <input
+                          type="search"
+                          value={libraryQuery}
+                          placeholder="搜索角色名、代号或出身…"
+                          aria-label="搜索角色库"
+                          onChange={(e) => setLibraryQuery(e.target.value)}
+                        />
+                      </FrameBox>
+                    )}
+                    {characters.isPending && <p role="status">正在读取角色库…</p>}
+                    {characters.isError && (
+                      <div role="alert">
+                        <p className={wb.error}>{characters.error.message}</p>
+                        <Button small onClick={() => void characters.refetch()}>
+                          重新读取
+                        </Button>
+                      </div>
+                    )}
+                    {characters.isSuccess && allCharacters.length === 0 && (
+                      <p className={wb.note}>还没有角色。</p>
+                    )}
+                    {characters.isSuccess &&
+                      allCharacters.length > 0 &&
+                      filteredCharacters.length === 0 && (
+                        <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
+                      )}
+                    {customCharacters.length > 0 && (
+                      <section className={wb.libraryGroup} aria-label="自建角色">
+                        <h2 className={wb.libraryGroupTitle}>
+                          自建角色（{customCharacters.length}）
+                        </h2>
+                        <ul className={wb.cards}>{customCharacters.map(renderEntryCard)}</ul>
+                      </section>
+                    )}
+                    {sampleCharacters.length > 0 && (
+                      <section className={wb.libraryGroup} aria-label="官方预设模板">
+                        <h2 className={wb.libraryGroupTitle}>
+                          官方预设模板（{sampleCharacters.length}）
+                        </h2>
+                        <ul className={wb.cards}>{sampleCharacters.map(renderEntryCard)}</ul>
+                      </section>
+                    )}
+                  </div>
+                </aside>
+              </>
+            )}
+
+            <section className={wb.editorWrap} aria-label="角色设计工作台">
+              {shareNotice && (
+                <div
+                  className={wb.shareBanner}
+                  data-tone={shareNotice.tone}
+                  role={shareNotice.tone === "error" ? "alert" : "status"}
+                >
+                  <CellFrame />
+                  <p className={wb.shareBannerText}>{shareNotice.text}</p>
+                  <ActionButton onClick={() => setShareNotice(null)}>关闭</ActionButton>
+                </div>
+              )}
+              {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
+              {boardData.isError && (
+                <div role="alert">
+                  <p className={wb.error}>{boardData.error.message}</p>
+                  <Button small onClick={() => void boardData.refetch()}>
+                    重新读取创角目录
+                  </Button>
+                </div>
+              )}
+              <div className={wb.benchHost}>
+                <CharacterCreator
+                  key={editor.session}
+                  card={{ ...editor.card, board: editor.card.board ?? emptyBoard() }}
+                  boardData={boardData.data}
+                  busy={busy}
+                  canSave={parsed.success}
+                  canDelete={editor.id !== null && !editor.sample}
+                  isSample={editor.sample}
+                  dirty={modified}
+                  characterId={editor.id}
+                  saveError={save.isError ? save.error.message : null}
+                  saved={editor.id !== null && !editor.sample && !dirty}
+                  draftSaved={draftSaved}
+                  onLaunchingChange={setLaunching}
+                  onChange={handleCardChange}
+                  onSave={(card) =>
+                    save.mutateAsync({
+                      id: editor.sample ? null : editor.id,
+                      card,
+                      session: editor.session,
+                    })
+                  }
+                  onDelete={() => {
+                    if (!editor.id || editor.sample) return;
+                    const entry = characters.data?.find((item) => item.id === editor.id);
+                    if (entry && !entry.sample) {
+                      remove.reset();
+                      setDeleting(entry);
+                    }
+                  }}
+                  onLaunch={(saveId) => navigate(`/play/${saveId}`)}
+                />
               </div>
-            </aside>
+            </section>
           </>
         )}
-
-        <section className={wb.editorWrap} aria-label="角色设计工作台">
-          {shareNotice && (
-            <div
-              className={wb.shareBanner}
-              data-tone={shareNotice.tone}
-              role={shareNotice.tone === "error" ? "alert" : "status"}
-            >
-              <CellFrame />
-              <p className={wb.shareBannerText}>{shareNotice.text}</p>
-              <ActionButton onClick={() => setShareNotice(null)}>关闭</ActionButton>
-            </div>
-          )}
-          {boardData.isPending && <p role="status">正在读取出身、特质与义体目录…</p>}
-          {boardData.isError && (
-            <div role="alert">
-              <p className={wb.error}>{boardData.error.message}</p>
-              <Button small onClick={() => void boardData.refetch()}>
-                重新读取创角目录
-              </Button>
-            </div>
-          )}
-          <div className={wb.benchHost}>
-            <CharacterCreator
-              key={editor.session}
-              card={{ ...editor.card, board: editor.card.board ?? emptyBoard() }}
-              boardData={boardData.data}
-              busy={busy}
-              canSave={parsed.success}
-              canDelete={editor.id !== null && !editor.sample}
-              isSample={editor.sample}
-              dirty={modified}
-              characterId={editor.id}
-              saveError={save.isError ? save.error.message : null}
-              saved={editor.id !== null && !editor.sample && !dirty}
-              draftSaved={draftSaved}
-              onLaunchingChange={setLaunching}
-              onChange={handleCardChange}
-              onSave={(card) =>
-                save.mutateAsync({
-                  id: editor.sample ? null : editor.id,
-                  card,
-                  session: editor.session,
-                })
-              }
-              onDelete={() => {
-                if (!editor.id || editor.sample) return;
-                const entry = characters.data?.find((item) => item.id === editor.id);
-                if (entry && !entry.sample) {
-                  remove.reset();
-                  setDeleting(entry);
-                }
-              }}
-              onLaunch={(saveId) => navigate(`/play/${saveId}`)}
-            />
-          </div>
-        </section>
       </div>
 
       {destination && (
@@ -594,5 +848,83 @@ export function CharactersScreen() {
         </Dialog>
       )}
     </main>
+  );
+}
+
+function RosterCard({
+  entry,
+  busy,
+  onOpen,
+  onExport,
+  onDelete,
+}: {
+  readonly entry: CharacterEntry;
+  readonly busy: boolean;
+  readonly onOpen: () => void;
+  readonly onExport: () => void;
+  readonly onDelete: () => void;
+}) {
+  const b = entry.card.board;
+  const traitCount = (b?.skills.length ?? 0) + (b?.pasts.length ?? 0);
+  const cyberCount = b?.cyberware.length ?? 0;
+  const originText = entry.card.origin || b?.origin?.label || "未知出身";
+  const summaryText = entry.card.personality || entry.card.past || entry.card.look || "";
+  const monogram = (entry.card.name.trim()[0] ?? "V").toUpperCase();
+  const tilt = useCardTilt<HTMLLIElement>({
+    maxRotate: 4.8,
+    shadowShift: 4,
+    disabled: busy,
+  });
+
+  return (
+    <li className={wb.rosterCard} {...tilt}>
+      <CellFrame />
+      <button type="button" className={wb.rosterCardMain} disabled={busy} onClick={onOpen}>
+        <span className={wb.rosterThumb}>
+          {entry.card.portrait ? (
+            <GeneratedImage
+              imageId={entry.card.portrait}
+              alt={entry.card.name}
+              className={wb.portraitImg}
+            />
+          ) : (
+            <span className={wb.rosterMonogram} aria-hidden>
+              {monogram}
+            </span>
+          )}
+        </span>
+        <div className={wb.rosterMeta}>
+          <div className={wb.rosterTopRow}>
+            <span className={wb.rosterBadge} data-sample={entry.sample || undefined}>
+              {entry.sample ? "官方预设" : "自建角色"}
+            </span>
+            <span className={wb.rosterOrigin}>{originText}</span>
+          </div>
+          <strong className={wb.rosterName}>
+            {entry.card.name}
+            {entry.card.alias ? (
+              <span className={wb.rosterAlias}>「{entry.card.alias}」</span>
+            ) : null}
+          </strong>
+          <span className={wb.rosterStats}>
+            {b ? `特质 ${traitCount} · 义体 ${cyberCount}` : "自定义文本角色卡"}
+          </span>
+          {summaryText && <p className={wb.rosterSummary}>{summaryText}</p>}
+        </div>
+      </button>
+      <div className={wb.rosterActions}>
+        <Button small primary disabled={busy} onClick={onOpen}>
+          {entry.sample ? "查看 / 另存" : "编辑档案"}
+        </Button>
+        <Button small disabled={busy} onClick={onExport}>
+          导出
+        </Button>
+        {!entry.sample && (
+          <Button small disabled={busy} onClick={onDelete}>
+            删除
+          </Button>
+        )}
+      </div>
+    </li>
   );
 }

@@ -131,12 +131,28 @@ export async function* readSse(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
 ): AsyncGenerator<SseEvent> {
+  if (signal?.aborted) {
+    void body.cancel().catch(() => {});
+    throw new AbortedError();
+  }
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let event: string | undefined;
   let id: string | undefined;
   let data: string[] = [];
+  let rejectAbort: ((error: Error) => void) | undefined;
+  const aborted = signal
+    ? new Promise<never>((_resolve, reject) => {
+        rejectAbort = reject;
+      })
+    : undefined;
+  aborted?.catch(() => {});
+  const onAbort = () => {
+    void reader.cancel().catch(() => {});
+    rejectAbort?.(new AbortedError());
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
   const flush = (): SseEvent | undefined => {
     const out =
       data.length > 0
@@ -160,19 +176,22 @@ export async function* readSse(
   };
   try {
     while (true) {
+      if (signal?.aborted) throw new AbortedError();
       let chunk: Awaited<ReturnType<typeof reader.read>>;
       try {
-        chunk = await reader.read();
-      } catch {
-        if (signal?.aborted) throw new AbortedError();
+        chunk = aborted ? await Promise.race([reader.read(), aborted]) : await reader.read();
+      } catch (error) {
+        if (error instanceof AbortedError || signal?.aborted) throw new AbortedError();
         throw new UpstreamError(`${provider} 的连接中途断开`, undefined, true);
       }
+      if (signal?.aborted) throw new AbortedError();
       if (chunk.done) break;
       // stream: true 让被切开的多字节汉字留到下一块再解码
       buffer += decoder.decode(chunk.value, { stream: true });
       let newline = buffer.search(/\r\n|\r|\n/);
       // 末尾单独的 \r 可能是 \r\n 的前半，等下一块再处理
       while (newline >= 0 && !(buffer[newline] === "\r" && newline === buffer.length - 1)) {
+        if (signal?.aborted) throw new AbortedError();
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + (buffer.startsWith("\r\n", newline) ? 2 : 1));
         const out = consumeLine(line);
@@ -185,14 +204,17 @@ export async function* readSse(
     buffer += decoder.decode();
     if (buffer !== "") {
       for (const line of buffer.split(/\r\n|\r|\n/)) {
+        if (signal?.aborted) throw new AbortedError();
         const out = consumeLine(line);
         if (out) yield out;
       }
     }
+    if (signal?.aborted) throw new AbortedError();
     const out = flush();
     if (out) yield out;
   } finally {
-    await reader.cancel().catch(() => {});
+    signal?.removeEventListener("abort", onAbort);
+    void reader.cancel().catch(() => {});
   }
 }
 

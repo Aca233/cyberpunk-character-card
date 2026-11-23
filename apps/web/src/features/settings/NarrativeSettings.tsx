@@ -1,4 +1,4 @@
-import type { OffscreenPace } from "@cp/core";
+import type { ImagePromptLanguage, OffscreenPace } from "@cp/core";
 import { type ReactNode, useEffect, useState } from "react";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -7,10 +7,13 @@ import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import { ToggleCheck } from "../../ui/ToggleCheck";
 import ms from "./model-settings.module.css";
 import {
+  type ImageBatchCount,
   type ImagePromptField,
   type NarrativeToggle,
   resetImagePromptFields,
+  setImageBatchCount,
   setImagePromptField,
+  setImagePromptLanguage,
   setNarrativePref,
   setOffscreenPace,
   useNarrativePrefs,
@@ -28,8 +31,34 @@ const PACES: readonly {
   { id: "fast", title: "快", sub: "每隔 2 场" },
 ];
 
+const PROMPT_LANGUAGES: readonly {
+  readonly id: ImagePromptLanguage;
+  readonly title: string;
+  readonly sub: string;
+}[] = [
+  { id: "en", title: "纯英文自然语言", sub: "Flux / Gemini / DALL·E" },
+  { id: "en-tags", title: "纯英文 Tag 词组", sub: "NovelAI V5 / SD 二次元" },
+  { id: "zh", title: "纯中文描述", sub: "中文模型 / 本地纯中文拼接" },
+];
+
+const BATCH_OPTIONS: readonly {
+  readonly count: ImageBatchCount;
+  readonly title: string;
+  readonly sub: string;
+}[] = [
+  { count: 1, title: "1 张", sub: "整轮单幅插图" },
+  { count: 2, title: "2 张", sub: "两幕分镜穿插" },
+  { count: 3, title: "3 张", sub: "三幕分镜穿插" },
+  { count: 4, title: "4 张", sub: "四幕分镜穿插" },
+];
+
 /** 开关分两组：剧情里看得到的呈现，和只给调试用的剧透 */
 const SHOW: readonly [NarrativeToggle, string, string][] = [
+  [
+    "storyTheme",
+    "局内应用界面主题",
+    "开启后剧情界面也使用当前所选主题的动态壁纸与配色；关闭则按当前地点与时段显示夜之城实景",
+  ],
   ["sceneTitles", "场景标题卡", "城区 · 地点 · 时间 · 天气"],
   [
     "autoTurnImage",
@@ -39,11 +68,9 @@ const SHOW: readonly [NarrativeToggle, string, string][] = [
   [
     "autoImageUseAux",
     "辅助模型提炼生图提示词",
-    "生成肖像或插图时由辅助模型提炼英文提示词；关闭则直接拼接设定文本",
+    "开启时按下方提炼主提示词生成指定语言 Prompt；关闭则按所选语言直接本地拼接设定文本",
   ],
 ];
-
-const PROMPT_MAX = 800;
 
 const IMAGE_PROMPT_FIELDS: readonly {
   readonly key: ImagePromptField;
@@ -51,20 +78,39 @@ const IMAGE_PROMPT_FIELDS: readonly {
   readonly hint: string;
   readonly placeholder: string;
   readonly rows: number;
+  readonly max: number;
 }[] = [
+  {
+    key: "imageCustomPrompt",
+    label: "通用自定义提示词（前缀 / 画质词 / 画师串）",
+    hint: "总是固定拼在生成提示词最前面，无论是否开启辅助模型提炼均生效（例如 NovelAI 画质词或 LoRA 触发词）",
+    placeholder: "例如：masterpiece, best quality, very aesthetic, absurdres",
+    rows: 2,
+    max: 1200,
+  },
+  {
+    key: "imageAuxSystemPrompt",
+    label: "辅助模型提炼主提示词（System Prompt · 可直接替换接管）",
+    hint: "直接决定辅助模型如何把角色/剧情转化为生图 Prompt；可把你自己的生图导演提示词整段粘进来",
+    placeholder: "你是《赛博朋克 2077》角色扮演游戏的专业 AI 视觉分镜与生图提示词导演…",
+    rows: 4,
+    max: 4000,
+  },
   {
     key: "imagePortraitPrompt",
     label: "角色 / NPC 肖像画风提示词",
-    hint: "附加到角色立绘与 NPC 肖像的基准风格描述（建议英文）",
+    hint: "附加到角色立绘与 NPC 肖像的基准风格描述（切换上方语言时默认画风会自动同步中英文）",
     placeholder: "Cyberpunk 2077 aesthetic, Night City neo-noir character portrait...",
     rows: 3,
+    max: 1200,
   },
   {
     key: "imageScenePrompt",
     label: "回合场景插图画风提示词",
-    hint: "附加到剧情回合插图的基准风格、光影与构图描述（建议英文）",
+    hint: "附加到剧情回合插图的基准风格、光影与构图描述",
     placeholder: "Cyberpunk 2077 aesthetic, Night City cinematic scene illustration...",
     rows: 3,
+    max: 1200,
   },
   {
     key: "imageNegativePrompt",
@@ -72,13 +118,15 @@ const IMAGE_PROMPT_FIELDS: readonly {
     hint: "告知生图模型尽量避开的元素，例如水印、文字框、崩坏手部等",
     placeholder: "lowres, blurry, watermark, text...",
     rows: 3,
+    max: 1200,
   },
   {
     key: "imageAuxInstruction",
-    label: "辅助模型提炼额外指令（可选）",
-    hint: "例如指定赛璐璐、胶片颗粒、写实摄影或固定色调，提炼英文提示词时将一并遵循",
+    label: "补充微调要求（可选）",
+    hint: "附加在主提示词或本地拼接末尾的额外风格、色调或镜头要求",
     placeholder: "例如：采用《边缘行者》动画赛璐璐质感，偏冷青与洋红霓虹光影",
-    rows: 3,
+    rows: 2,
+    max: 2400,
   },
 ];
 
@@ -88,7 +136,7 @@ const DEBUG: readonly [NarrativeToggle, string, string][] = [
 
 /**
  * 叙事偏好：存在这台浏览器里，换设备要重新选。
- * 桌面端采用上排双栏（左呈现 / 右节奏+调试）+ 下排 2×2 生图提示词工作区
+ * 桌面端采用上排双栏（左呈现 / 右节奏+调试）+ 下排生图提示词工作区
  */
 export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: () => void }) {
   const prefs = useNarrativePrefs();
@@ -101,6 +149,8 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
   }, [resetDone]);
 
   const currentPaceLabel = PACES.find((p) => p.id === prefs.offscreen)?.title ?? "常规";
+  const currentLangLabel =
+    PROMPT_LANGUAGES.find((l) => l.id === prefs.imagePromptLanguage)?.title ?? "纯英文";
 
   const toggle = ([key, label, hint]: readonly [NarrativeToggle, string, string]) => (
     <Row key={key} id={`pref-${key}`} label={label} hint={hint}>
@@ -121,14 +171,17 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
           <span className={styles.dim}>仅存于本浏览器 · 修改后即时生效</span>
         </div>
         <div className={styles.presetStats}>
+          <span className={styles.statChip} data-tone={prefs.storyTheme ? "ok" : undefined}>
+            局内主题：{prefs.storyTheme ? "开" : "关"}
+          </span>
           <span
             className={styles.statChip}
             data-tone={prefs.offscreen === "off" ? undefined : "ok"}
           >
             城市节奏：{currentPaceLabel}
           </span>
-          <span className={styles.statChip} data-tone={prefs.autoTurnImage ? "ok" : undefined}>
-            自动配图：{prefs.autoTurnImage ? "开" : "关"}
+          <span className={styles.statChip} data-tone="ok">
+            生图语言：{currentLangLabel} · {prefs.imageBatchCount} 张
           </span>
         </div>
       </div>
@@ -243,7 +296,7 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
         </div>
       </div>
 
-      <section className={styles.prefGroup} aria-label="文生图提示词设置">
+      <section className={styles.prefGroup} aria-label="文生图提示词与数量设置">
         <NineSlice
           id="notify.itemCellBg"
           slice={ITEM_CELL_SLICE}
@@ -258,7 +311,7 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
         />
         <div className={styles.groupHeader}>
           <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
-          <span className={ms.kicker}>03 / 文生图提示词</span>
+          <span className={ms.kicker}>03 / 文生图提示词与数量控制</span>
           <div className={styles.groupAction}>
             {resetDone && <span className={styles.savedPill}>已恢复默认</span>}
             <Button
@@ -277,6 +330,64 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
           style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
           aria-hidden
         />
+
+        <div className={styles.prefsTwoCol}>
+          <div className={styles.paceBlock}>
+            <div className={styles.prefText}>
+              <strong>提示词语言与格式（消除中英混合）</strong>
+              <small>
+                辅助模型提炼与本地拼接均严格按此语言输出；NovelAI 推荐「纯英文 Tag 词组」
+              </small>
+            </div>
+            <fieldset className={styles.paceSegment} aria-label="提示词语言与格式">
+              {PROMPT_LANGUAGES.map((lang) => {
+                const selected = prefs.imagePromptLanguage === lang.id;
+                return (
+                  <button
+                    key={lang.id}
+                    type="button"
+                    aria-pressed={selected}
+                    className={styles.paceBtn}
+                    onClick={() => setImagePromptLanguage(lang.id)}
+                  >
+                    <CellFrame />
+                    <strong>{lang.title}</strong>
+                    <span>{lang.sub}</span>
+                  </button>
+                );
+              })}
+            </fieldset>
+          </div>
+
+          <div className={styles.paceBlock}>
+            <div className={styles.prefText}>
+              <strong>单轮正文默认插图数量（分段穿插）</strong>
+              <small>
+                单轮剧情正文内自动分镜生成并穿插展示的插图张数（1~4
+                张），自动配图与弹窗均按此数量默认切分
+              </small>
+            </div>
+            <fieldset className={styles.paceSegment} aria-label="单轮正文默认插图数量">
+              {BATCH_OPTIONS.map((opt) => {
+                const selected = prefs.imageBatchCount === opt.count;
+                return (
+                  <button
+                    key={opt.count}
+                    type="button"
+                    aria-pressed={selected}
+                    className={styles.paceBtn}
+                    onClick={() => setImageBatchCount(opt.count)}
+                  >
+                    <CellFrame />
+                    <strong>{opt.title}</strong>
+                    <span>{opt.sub}</span>
+                  </button>
+                );
+              })}
+            </fieldset>
+          </div>
+        </div>
+
         <div className={styles.promptGrid}>
           {IMAGE_PROMPT_FIELDS.map((field) => {
             const value = prefs[field.key];
@@ -288,14 +399,14 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
                     <small>{field.hint}</small>
                   </div>
                   <span className={styles.charCount}>
-                    {value.length} / {PROMPT_MAX}
+                    {value.length} / {field.max}
                   </span>
                 </div>
                 <FrameBox>
                   <textarea
                     id={`pref-${field.key}`}
                     rows={field.rows}
-                    maxLength={PROMPT_MAX}
+                    maxLength={field.max}
                     value={value}
                     placeholder={field.placeholder}
                     onChange={(e) => setImagePromptField(field.key, e.target.value)}

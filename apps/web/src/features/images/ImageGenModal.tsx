@@ -1,13 +1,26 @@
-import { IMAGE_PROMPT_MAX_LENGTH, type ImagePromptRequest } from "@cp/core";
+import {
+  buildTurnSegmentPromptInput,
+  IMAGE_PROMPT_MAX_LENGTH,
+  type ImagePromptLanguage,
+  type ImagePromptRequest,
+  splitTurnSceneSegments,
+  type TurnImagePromptInput,
+} from "@cp/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { type AspectRatio, api, type SaveImageBindings, type StoredImage } from "../../api/client";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { useLayer } from "../../ui/layers";
 import { Panel } from "../../ui/Panel";
-import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
+import {
+  type ImageBatchCount,
+  imageStyleConfig,
+  setImagePromptField,
+  setImagePromptLanguage,
+  useNarrativePrefs,
+} from "../settings/prefs";
 import { downloadStoredImage } from "./GeneratedImage";
 import {
   imagePromptSourceKey,
@@ -22,6 +35,7 @@ import {
   imageTargetKey,
   isImageJobPending,
   startImageJob,
+  startMultiTurnImageJob,
   useImageJob,
 } from "./image-jobs";
 import styles from "./images.module.css";
@@ -33,6 +47,42 @@ const RATIOS: readonly { readonly id: AspectRatio; readonly label: string }[] = 
   { id: "4:3", label: "4:3 横版场景" },
   { id: "9:16", label: "9:16 竖屏特写" },
 ];
+
+const PROMPT_LANGUAGES: readonly { readonly id: ImagePromptLanguage; readonly label: string }[] = [
+  { id: "en", label: "纯英文自然语言" },
+  { id: "en-tags", label: "纯英文 Tag 词组" },
+  { id: "zh", label: "纯中文描述" },
+];
+
+const SEGMENT_COUNTS: readonly ImageBatchCount[] = [1, 2, 3, 4];
+
+function mergeExclusionsIntoPrompt(
+  promptText: string,
+  negativeText: string,
+  lang: ImagePromptLanguage,
+): string {
+  const pos = promptText.trim();
+  const neg = negativeText.trim();
+  if (!neg) return pos;
+  const prefix =
+    lang === "zh"
+      ? "排除元素（画面中不要出现）："
+      : "User-requested exclusions (render the image without these): ";
+  return `${pos}\n${prefix}${neg}`;
+}
+
+function makeEmptySlotPrompts(
+  count: number,
+  defaultNegative: string,
+): {
+  readonly prompts: readonly string[];
+  readonly negatives: readonly string[];
+} {
+  return {
+    prompts: Array.from({ length: count }, () => ""),
+    negatives: Array.from({ length: count }, () => defaultNegative),
+  };
+}
 
 export interface ImageGenModalProps {
   readonly open: boolean;
@@ -78,6 +128,23 @@ export function ImageGenModal({
   const key = bind ? imageTargetKey(bind) : (draftKey ?? `image:${sourceKey}`);
   const sessionKey =
     open && promptRequest ? JSON.stringify([key, sourceKey, defaultAspectRatio]) : "";
+
+  /** 仅当整轮场景生图（非单槽位重绘、非末尾单张追加）时开放多图分镜穿插模式 */
+  const canMultiTurn = Boolean(
+    promptRequest?.kind === "turn" &&
+      bind?.target.kind === "turn" &&
+      bind.target.slot === undefined &&
+      !bind.target.append,
+  );
+  const [segmentCount, setSegmentCount] = useState<ImageBatchCount>(1);
+  const [activeSegment, setActiveSegment] = useState(0);
+  const [segmentPrompts, setSegmentPrompts] = useState<readonly string[]>([""]);
+  const [segmentNegatives, setSegmentNegatives] = useState<readonly string[]>([""]);
+  const [draftProgress, setDraftProgress] = useState<{
+    readonly current: number;
+    readonly total: number;
+  } | null>(null);
+
   const [draft, setDraft] = useState<ModalDraft>({
     sessionKey: "",
     sourceKey: "",
@@ -89,9 +156,59 @@ export function ImageGenModal({
     profileName: null,
     capabilities: null,
   });
-  const { useAux, instruction, prompt, negativePrompt, aspectRatio } = draft;
+  const { useAux, instruction, aspectRatio } = draft;
+  const isMultiMode = canMultiTurn && segmentCount > 1;
+  const prompt = isMultiMode ? (segmentPrompts[activeSegment] ?? "") : draft.prompt;
+  const negativePrompt = isMultiMode
+    ? (segmentNegatives[activeSegment] ?? prefs.imageNegativePrompt)
+    : draft.negativePrompt;
+
   const updateDraft = (patch: Partial<SavedImageDraft>) =>
     setDraft((previous) => ({ ...previous, ...patch }));
+
+  const updateCurrentPrompt = (value: string) => {
+    if (isMultiMode) {
+      setSegmentPrompts((prev) => prev.map((item, i) => (i === activeSegment ? value : item)));
+    } else {
+      updateDraft({ prompt: value });
+    }
+  };
+
+  const updateCurrentNegative = (value: string) => {
+    if (isMultiMode) {
+      setSegmentNegatives((prev) => prev.map((item, i) => (i === activeSegment ? value : item)));
+    } else {
+      updateDraft({ negativePrompt: value });
+    }
+  };
+
+  const handleSegmentCountChange = (nextCount: ImageBatchCount) => {
+    if (!canMultiTurn || nextCount === segmentCount) return;
+    setSegmentCount(nextCount);
+    setActiveSegment(0);
+    if (nextCount > 1) {
+      setSegmentPrompts((prev) =>
+        Array.from({ length: nextCount }, (_, i) => prev[i] ?? (i === 0 ? draft.prompt : "")),
+      );
+      setSegmentNegatives((prev) =>
+        Array.from(
+          { length: nextCount },
+          (_, i) => prev[i] ?? (i === 0 ? draft.negativePrompt : prefs.imageNegativePrompt),
+        ),
+      );
+    } else if (segmentPrompts[0]?.trim() && !draft.prompt.trim()) {
+      updateDraft({
+        prompt: segmentPrompts[0],
+        negativePrompt: segmentNegatives[0] ?? prefs.imageNegativePrompt,
+      });
+    }
+  };
+
+  const segmentExcerpts = useMemo(() => {
+    if (!isMultiMode || promptRequest?.kind !== "turn") return [] as readonly string[];
+    return splitTurnSceneSegments(promptRequest.sceneText, segmentCount);
+  }, [isMultiMode, promptRequest, segmentCount]);
+
   const [drafting, setDrafting] = useState(false);
   const [applying, setApplying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -100,11 +217,29 @@ export function ImageGenModal({
   const generating = isImageJobPending(job);
   const preview =
     job?.sourceKey === sourceKey && job.image ? { image: job.image, sessionKey } : null;
+  const previewList =
+    job?.sourceKey === sourceKey && job.images && job.images.length > 0 ? job.images : [];
   const abortRef = useRef<AbortController | null>(null);
   const liveKeyRef = useRef(sessionKey);
   liveKeyRef.current = sessionKey;
-  const initialRef = useRef({ promptRequest, bind, defaultAspectRatio, prefs, key, sourceKey });
-  initialRef.current = { promptRequest, bind, defaultAspectRatio, prefs, key, sourceKey };
+  const initialRef = useRef({
+    promptRequest,
+    bind,
+    defaultAspectRatio,
+    prefs,
+    key,
+    sourceKey,
+    canMultiTurn,
+  });
+  initialRef.current = {
+    promptRequest,
+    bind,
+    defaultAspectRatio,
+    prefs,
+    key,
+    sourceKey,
+    canMultiTurn,
+  };
   const sessionRef = useRef<{
     readonly key: string;
     readonly request: ImagePromptRequest;
@@ -122,6 +257,7 @@ export function ImageGenModal({
     abortRef.current?.abort();
     abortRef.current = null;
     setDrafting(false);
+    setDraftProgress(null);
     setApplying(false);
   }, []);
   const closeModal = useCallback(() => {
@@ -145,6 +281,12 @@ export function ImageGenModal({
       request: structuredClone(initial.promptRequest),
       bind: structuredClone(initial.bind),
     };
+    const defaultCount: ImageBatchCount = initial.canMultiTurn ? initial.prefs.imageBatchCount : 1;
+    setSegmentCount(defaultCount);
+    setActiveSegment(0);
+    const emptySlots = makeEmptySlotPrompts(defaultCount, initial.prefs.imageNegativePrompt);
+    setSegmentPrompts(emptySlots.prompts);
+    setSegmentNegatives(emptySlots.negatives);
     setDraft({
       ...(saved ?? {
         sourceKey: initial.sourceKey,
@@ -160,11 +302,13 @@ export function ImageGenModal({
     });
     setError(null);
     setNotice(
-      saved?.prompt
-        ? saved.sourceKey === initial.sourceKey
-          ? "已恢复上次编辑的提示词，可直接复用。"
-          : "人物或场景资料已变化，已保留上次提示词；点击重新提炼可更新资料。"
-        : "填写提示词，或点击「提炼提示词」。打开面板不会调用辅助模型。",
+      defaultCount > 1
+        ? `当前将按正文切分为 ${defaultCount} 幕分镜插图穿插展示；点击「提炼全部分镜」即可一次性生成各幕提示词。`
+        : saved?.prompt
+          ? saved.sourceKey === initial.sourceKey
+            ? "已恢复上次编辑的提示词，可直接复用。"
+            : "人物或场景资料已变化，已保留上次提示词；点击重新提炼可更新资料。"
+          : "填写提示词，或点击「提炼提示词」。打开面板不会调用辅助模型。",
     );
     return () => {
       abortRef.current?.abort();
@@ -179,7 +323,7 @@ export function ImageGenModal({
     writeImageDraft(key, saved);
   }, [key, sessionKey, draft]);
 
-  const runDraft = async () => {
+  const runDraft = async (mode: "single" | "all" = isMultiMode ? "all" : "single") => {
     const session = sessionRef.current;
     if (!session || liveKeyRef.current !== session.key) return;
     cancelLocal();
@@ -188,17 +332,69 @@ export function ImageGenModal({
     setDrafting(true);
     setError(null);
     setNotice(null);
-    const request: ImagePromptRequest = {
-      ...structuredClone(session.request),
-      instruction: [session.request.instruction.trim(), instruction.trim()]
-        .filter(Boolean)
-        .join("\n"),
-    };
     const style = imageStyleConfig();
     try {
       const selected = await api.imageCapabilities(undefined, controller.signal);
       if (!isCurrent(controller, session.key)) return;
       queryClient.setQueryData(["imageCapabilities"], selected);
+
+      if (isMultiMode && session.request.kind === "turn") {
+        const baseTurn: TurnImagePromptInput = {
+          ...structuredClone(session.request),
+          instruction: [session.request.instruction.trim(), instruction.trim()]
+            .filter(Boolean)
+            .join("\n"),
+        };
+        const indices =
+          mode === "all"
+            ? Array.from({ length: segmentCount }, (_, i) => i)
+            : [Math.min(activeSegment, segmentCount - 1)];
+        const fallbackNotes: string[] = [];
+        const nextPrompts = [...segmentPrompts];
+        const nextNegs = [...segmentNegatives];
+        while (nextPrompts.length < segmentCount) nextPrompts.push("");
+        while (nextNegs.length < segmentCount) nextNegs.push(prefs.imageNegativePrompt);
+
+        for (let step = 0; step < indices.length; step++) {
+          const segIdx = indices[step];
+          if (segIdx === undefined) continue;
+          setDraftProgress({ current: step + 1, total: indices.length });
+          const segReq = buildTurnSegmentPromptInput(baseTurn, segIdx, segmentCount);
+          const result = await api.draftImagePrompt(
+            {
+              request: segReq,
+              useAux,
+              style,
+              ...(selected.profileName ? { profileName: selected.profileName } : {}),
+            },
+            controller.signal,
+          );
+          if (!isCurrent(controller, session.key)) return;
+          nextPrompts[segIdx] = result.prompt;
+          nextNegs[segIdx] = result.negativePrompt;
+          setSegmentPrompts([...nextPrompts]);
+          setSegmentNegatives([...nextNegs]);
+          if (result.fallbackReason)
+            fallbackNotes.push(`分镜 ${segIdx + 1}：${result.fallbackReason}`);
+        }
+        if (fallbackNotes.length > 0) {
+          setNotice(`部分分镜改用本地拼接（${fallbackNotes.join("；")}），仍可自由修改。`);
+        } else {
+          setNotice(
+            mode === "all"
+              ? `已完成全部 ${segmentCount} 幕分镜提示词提炼，可切页逐张微调。`
+              : `已完成分镜 ${activeSegment + 1} 提示词提炼。`,
+          );
+        }
+        return;
+      }
+
+      const request: ImagePromptRequest = {
+        ...structuredClone(session.request),
+        instruction: [session.request.instruction.trim(), instruction.trim()]
+          .filter(Boolean)
+          .join("\n"),
+      };
       const result = await api.draftImagePrompt(
         {
           request,
@@ -225,6 +421,7 @@ export function ImageGenModal({
       if (isCurrent(controller, session.key)) {
         abortRef.current = null;
         setDrafting(false);
+        setDraftProgress(null);
       }
     }
   };
@@ -236,6 +433,7 @@ export function ImageGenModal({
   const normalizedForRef = useRef("");
   useEffect(() => {
     if (
+      isMultiMode ||
       !sessionKey ||
       draft.sessionKey !== sessionKey ||
       model.isFetching ||
@@ -246,20 +444,31 @@ export function ImageGenModal({
     const normalizationKey = JSON.stringify([sessionKey, model.data.profileName]);
     if (normalizedForRef.current === normalizationKey) return;
     normalizedForRef.current = normalizationKey;
-    if (!prompt.trim() || !negativePrompt.trim()) return;
-    const finalPrompt = `${prompt.trim()}\nUser-requested exclusions (render the image without these): ${negativePrompt.trim()}`;
+    if (!draft.prompt.trim() || !draft.negativePrompt.trim()) return;
+    const finalPrompt = mergeExclusionsIntoPrompt(
+      draft.prompt,
+      draft.negativePrompt,
+      prefs.imagePromptLanguage,
+    );
     if (finalPrompt.length > IMAGE_PROMPT_MAX_LENGTH) return;
     setDraft((previous) => ({ ...previous, prompt: finalPrompt, negativePrompt: "" }));
   }, [
+    isMultiMode,
     sessionKey,
     draft.sessionKey,
     model.isFetching,
     model.data?.ready,
     model.data?.profileName,
     independentNegative,
-    negativePrompt,
-    prompt,
+    draft.negativePrompt,
+    draft.prompt,
+    prefs.imagePromptLanguage,
   ]);
+
+  const allSegmentsReady = isMultiMode
+    ? segmentPrompts.slice(0, segmentCount).every((p) => p.trim().length > 0)
+    : prompt.trim().length > 0;
+
   const handleGenerate = () => {
     const session = sessionRef.current;
     if (
@@ -269,13 +478,59 @@ export function ImageGenModal({
       !model.data.profileName
     )
       return;
+
+    if (isMultiMode && session.bind?.target.kind === "turn") {
+      const requests: Parameters<typeof api.generateImage>[0][] = [];
+      for (let i = 0; i < segmentCount; i++) {
+        const rawPos = (segmentPrompts[i] ?? "").trim();
+        const rawNeg = (segmentNegatives[i] ?? "").trim();
+        if (!rawPos) {
+          setActiveSegment(i);
+          setError(`分镜 ${i + 1} 尚未填写或提炼提示词，请先补全或点击「提炼全部分镜」`);
+          return;
+        }
+        const finalPos = independentNegative
+          ? rawPos
+          : mergeExclusionsIntoPrompt(rawPos, rawNeg, prefs.imagePromptLanguage);
+        if (finalPos.length > IMAGE_PROMPT_MAX_LENGTH) {
+          setActiveSegment(i);
+          setError(`分镜 ${i + 1} 提示词合计不能超过 ${IMAGE_PROMPT_MAX_LENGTH} 字符`);
+          return;
+        }
+        requests.push({
+          prompt: finalPos,
+          aspectRatio,
+          profileName: model.data.profileName,
+          ...(independentNegative && rawNeg ? { negativePrompt: rawNeg } : {}),
+        });
+      }
+      cancelLocal();
+      setError(null);
+      setNotice(null);
+      startMultiTurnImageJob({
+        key,
+        sourceKey,
+        client: queryClient,
+        requests,
+        binding: {
+          saveId: session.bind.saveId,
+          seq: session.bind.target.seq,
+        },
+      });
+      return;
+    }
+
     let finalPrompt = prompt.trim();
     if (!finalPrompt) {
       setError("请先填写或提炼提示词");
       return;
     }
     if (!independentNegative && negativePrompt.trim()) {
-      finalPrompt += `\nUser-requested exclusions (render the image without these): ${negativePrompt.trim()}`;
+      finalPrompt = mergeExclusionsIntoPrompt(
+        finalPrompt,
+        negativePrompt,
+        prefs.imagePromptLanguage,
+      );
     }
     if (finalPrompt.length > IMAGE_PROMPT_MAX_LENGTH) {
       setError(`提示词与排除要求合计不能超过 ${IMAGE_PROMPT_MAX_LENGTH} 字符，请精简后重试`);
@@ -356,19 +611,25 @@ export function ImageGenModal({
     bind &&
       preview &&
       bindingState.data &&
-      boundImage(bindingState.data, bind.target) === preview.image.id,
+      (job?.images && job.images.length > 1
+        ? job.status === "done"
+        : boundImage(bindingState.data, bind.target) === preview.image.id),
   );
   const error = localError ?? (!applied && job?.sourceKey === sourceKey ? job.error : null);
   const displayNotice = [
     notice,
     generating
-      ? bind
-        ? "可以关闭面板继续后台生成，完成后会自动显示在原目标。"
-        : "可以关闭面板继续后台生成，完成后重新打开即可预览和采用。"
+      ? job?.progress && job.progress.total > 1
+        ? `正在后台按顺序绘制第 ${job.progress.current}/${job.progress.total} 张分镜插图，可以关闭面板，每张完成后都会立即穿插显示在正文。`
+        : bind
+          ? "可以关闭面板继续后台生成，完成后会自动显示在原目标。"
+          : "可以关闭面板继续后台生成，完成后重新打开即可预览和采用。"
       : null,
     applied
       ? bind?.target.kind === "turn"
-        ? "图片已显示在对应回合正文。"
+        ? job?.images && job.images.length > 1
+          ? `全部 ${job.images.length} 张分镜插图已穿插显示在对应回合正文。`
+          : "图片已显示在对应回合正文。"
         : "图片已自动采用。"
       : null,
     model.data?.ready && !independentNegative
@@ -381,6 +642,15 @@ export function ImageGenModal({
     .filter(Boolean)
     .join("；");
   if (!open || !promptRequest) return null;
+
+  const currentExcerpt = segmentExcerpts[activeSegment];
+
+  const langHint =
+    prefs.imagePromptLanguage === "zh"
+      ? "纯中文描述"
+      : prefs.imagePromptLanguage === "en-tags"
+        ? "纯英文 Tag 词组"
+        : "纯英文自然语言";
 
   return (
     <div className={styles.backdrop} role="dialog" aria-modal="true" aria-label={title}>
@@ -422,6 +692,46 @@ export function ImageGenModal({
               </div>
             )}
 
+            <div className={styles.quickConfigRow}>
+              <div className={styles.quickGroup}>
+                <span className={styles.quickLabel}>提示词语言</span>
+                <fieldset className={styles.pillBar} aria-label="提示词语言">
+                  {PROMPT_LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.id}
+                      type="button"
+                      disabled={busy}
+                      aria-pressed={prefs.imagePromptLanguage === lang.id}
+                      className={styles.pillBtn}
+                      onClick={() => setImagePromptLanguage(lang.id)}
+                    >
+                      {lang.label}
+                    </button>
+                  ))}
+                </fieldset>
+              </div>
+
+              {canMultiTurn && (
+                <div className={styles.quickGroup}>
+                  <span className={styles.quickLabel}>本轮插图数量（正文穿插）</span>
+                  <fieldset className={styles.pillBar} aria-label="本轮插图数量">
+                    {SEGMENT_COUNTS.map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        disabled={busy}
+                        aria-pressed={segmentCount === count}
+                        className={styles.pillBtn}
+                        onClick={() => handleSegmentCountChange(count)}
+                      >
+                        {count} 张
+                      </button>
+                    ))}
+                  </fieldset>
+                </div>
+              )}
+            </div>
+
             <div className={styles.rowSplit}>
               <label className={styles.field}>
                 <span className={styles.fieldHead}>
@@ -448,17 +758,67 @@ export function ImageGenModal({
                   />
                   <span>辅助模型提炼</span>
                 </label>
-                <Button small disabled={busy} onClick={() => void runDraft()}>
-                  {drafting ? "提炼中…" : prompt.trim() ? "重新提炼提示词" : "提炼提示词"}
-                </Button>
+                {isMultiMode ? (
+                  <>
+                    <Button small disabled={busy} onClick={() => void runDraft("all")}>
+                      {drafting && draftProgress
+                        ? `提炼中 ${draftProgress.current}/${draftProgress.total}…`
+                        : "提炼全部分镜"}
+                    </Button>
+                    <Button small disabled={busy} onClick={() => void runDraft("single")}>
+                      重提当前分镜
+                    </Button>
+                  </>
+                ) : (
+                  <Button small disabled={busy} onClick={() => void runDraft("single")}>
+                    {drafting ? "提炼中…" : prompt.trim() ? "重新提炼提示词" : "提炼提示词"}
+                  </Button>
+                )}
               </div>
             </div>
+
+            {isMultiMode && (
+              <div className={styles.segmentBox}>
+                <div className={styles.segmentTabs} role="tablist" aria-label="分镜切分列表">
+                  {Array.from({ length: segmentCount }, (_, i) => {
+                    const filled = (segmentPrompts[i] ?? "").trim().length > 0;
+                    return (
+                      <button
+                        // biome-ignore lint/suspicious/noArrayIndexKey: 固定按分镜序号排列
+                        key={i}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeSegment === i}
+                        className={styles.segmentTab}
+                        data-filled={filled || undefined}
+                        onClick={() => setActiveSegment(i)}
+                      >
+                        <span>分镜 {i + 1}</span>
+                        <span className={styles.segmentDot} aria-hidden />
+                      </button>
+                    );
+                  })}
+                </div>
+                {currentExcerpt && (
+                  <p className={styles.segmentExcerpt}>
+                    <strong>对应正文片段：</strong>
+                    {currentExcerpt.length > 160
+                      ? `${currentExcerpt.slice(0, 160)}…`
+                      : currentExcerpt}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className={styles.rowSplit}>
               <label className={styles.field}>
                 <span className={styles.fieldHead}>
-                  <span>生图提示词（可直接修改或手写英文 Prompt）</span>
-                  <Link to="/settings?tab=narrative">在设置中修改默认画风</Link>
+                  <span>
+                    {isMultiMode
+                      ? `分镜 ${activeSegment + 1}/${segmentCount} 提示词（${langHint}）`
+                      : `生图提示词（${langHint}，可直接手写或修改）`}
+                  </span>
+                  <Link to="/settings?tab=narrative">更多默认画风设置</Link>
                 </span>
                 <FrameBox>
                   <textarea
@@ -466,8 +826,14 @@ export function ImageGenModal({
                     maxLength={IMAGE_PROMPT_MAX_LENGTH}
                     disabled={busy}
                     value={prompt}
-                    placeholder="Cyberpunk 2077 character portrait..."
-                    onChange={(e) => updateDraft({ prompt: e.target.value })}
+                    placeholder={
+                      prefs.imagePromptLanguage === "zh"
+                        ? "赛博朋克 2077 夜之城电影感场景，霓虹雨夜…"
+                        : prefs.imagePromptLanguage === "en-tags"
+                          ? "1girl, cyberpunk, neon rain, night city, masterpiece..."
+                          : "Cyberpunk 2077 cinematic scene in Night City..."
+                    }
+                    onChange={(e) => updateCurrentPrompt(e.target.value)}
                   />
                 </FrameBox>
               </label>
@@ -492,9 +858,48 @@ export function ImageGenModal({
               </label>
             </div>
 
+            <details className={styles.negFold}>
+              <summary>自定义前缀提示词 & 辅助模型提炼主提示词（同步保存到全局设置）</summary>
+              <div className={styles.customPromptStack}>
+                <label className={styles.field}>
+                  <span className={styles.fieldHead}>
+                    <span>通用自定义提示词（前缀 / 画质词 / 画师串 / LoRA 触发词）</span>
+                  </span>
+                  <FrameBox>
+                    <textarea
+                      rows={2}
+                      maxLength={1200}
+                      disabled={busy}
+                      value={prefs.imageCustomPrompt}
+                      placeholder="例如：masterpiece, best quality, very aesthetic, absurdres"
+                      onChange={(e) => setImagePromptField("imageCustomPrompt", e.target.value)}
+                    />
+                  </FrameBox>
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldHead}>
+                    <span>辅助模型提炼主提示词（System Prompt）</span>
+                  </span>
+                  <FrameBox>
+                    <textarea
+                      rows={3}
+                      maxLength={4000}
+                      disabled={busy}
+                      value={prefs.imageAuxSystemPrompt}
+                      onChange={(e) => setImagePromptField("imageAuxSystemPrompt", e.target.value)}
+                    />
+                  </FrameBox>
+                </label>
+              </div>
+            </details>
+
             {independentNegative && (
               <details className={styles.negFold}>
-                <summary>反向提示词（Negative Prompt）</summary>
+                <summary>
+                  {isMultiMode
+                    ? `分镜 ${activeSegment + 1} 反向提示词（Negative Prompt）`
+                    : "反向提示词（Negative Prompt）"}
+                </summary>
                 <label className={styles.field}>
                   <FrameBox>
                     <textarea
@@ -502,24 +907,65 @@ export function ImageGenModal({
                       maxLength={2000}
                       disabled={busy}
                       value={negativePrompt}
-                      onChange={(e) => updateDraft({ negativePrompt: e.target.value })}
+                      onChange={(e) => updateCurrentNegative(e.target.value)}
                     />
                   </FrameBox>
                 </label>
               </details>
             )}
 
-            {(generating || drafting || preview) && (
+            {(generating || drafting || preview || previewList.length > 0) && (
               <div className={styles.previewBox}>
                 <CellFrame />
                 {generating ? (
                   <div className={styles.previewStatus}>
-                    <span>图片正在排队或生成…</span>
+                    <span>
+                      {job?.progress && job.progress.total > 1
+                        ? `正在绘制第 ${job.progress.current} / ${job.progress.total} 张分镜插图…`
+                        : "图片正在排队或生成…"}
+                    </span>
                     <small>取决于服务商或本地显卡，可能需要几秒到数十秒</small>
+                    {previewList.length > 0 && (
+                      <div className={styles.previewGrid}>
+                        {previewList.map((img, i) => (
+                          <img
+                            key={img.id}
+                            src={img.dataUrl}
+                            alt={`已生成分镜 ${i + 1}`}
+                            className={styles.previewThumb}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : drafting && !preview ? (
                   <div className={styles.previewStatus}>
-                    <span>正在提炼英文提示词…</span>
+                    <span>
+                      {draftProgress && draftProgress.total > 1
+                        ? `正在提炼第 ${draftProgress.current} / ${draftProgress.total} 幕分镜提示词（${langHint}）…`
+                        : `正在提炼提示词（${langHint}）…`}
+                    </span>
+                  </div>
+                ) : previewList.length > 1 ? (
+                  <div className={styles.previewGrid}>
+                    {previewList.map((img, i) => (
+                      <figure key={img.id} className={styles.previewGridItem}>
+                        <img
+                          src={img.dataUrl}
+                          alt={`${title} · 分镜 ${i + 1}`}
+                          className={styles.previewThumb}
+                        />
+                        <figcaption className={styles.previewThumbCap}>
+                          <span>分镜 {i + 1}</span>
+                          <Button
+                            small
+                            onClick={() => downloadStoredImage(img, `${title}-分镜${i + 1}`)}
+                          >
+                            下载
+                          </Button>
+                        </figcaption>
+                      </figure>
+                    ))}
                   </div>
                 ) : preview ? (
                   <img src={preview.image.dataUrl} alt={title} className={styles.previewImg} />
@@ -530,7 +976,7 @@ export function ImageGenModal({
 
           <div className={styles.actions}>
             <div className={styles.actionsLeft}>
-              {preview && !busy && (
+              {preview && previewList.length <= 1 && !busy && (
                 <Button small onClick={() => downloadStoredImage(preview.image, title)}>
                   下载图片
                 </Button>
@@ -546,12 +992,16 @@ export function ImageGenModal({
                 <Button onClick={closeModal}>关闭</Button>
                 <Button
                   primary={!preview}
-                  disabled={!prompt.trim() || !imageModelReady || model.isFetching}
+                  disabled={!allSegmentsReady || !imageModelReady || model.isFetching}
                   onClick={() => void handleGenerate()}
                 >
-                  {preview ? "重新生成" : "开始生成"}
+                  {isMultiMode
+                    ? `生成全部 ${segmentCount} 张插图`
+                    : preview
+                      ? "重新生成"
+                      : "开始生成"}
                 </Button>
-                {preview && !applied && (
+                {preview && !applied && !isMultiMode && (
                   <Button primary onClick={() => void handleApply()}>
                     采用此图
                   </Button>

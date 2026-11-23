@@ -45,7 +45,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 3000,
     humanityCost: 2,
     ability:
-      "加装辅助神经缓存单元，加快神经突触的数据吞吐与散热，让接入仓的可用 RAM 迅速回充，缩短连续施放快速破解的待机间隙。",
+      "加装辅助神经缓存单元，加快神经突触的数据吞吐与散热，让接入仓在连续上传快速破解时更稳、更不易积热过载。",
     checks: ["intelligence"],
     attributes: { intelligence: 1 },
   },
@@ -94,7 +94,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 25000,
     humanityCost: 3,
     ability:
-      "植入式神经协处理器扩展盘，为网络接入仓额外拓展 RAM 运算单元容量，并大幅缩短快速破解程序的神经上传延迟。",
+      "植入式神经协处理器扩展盘，为网络接入仓提供额外并行算力与缓冲余量，大幅缩短快速破解程序的神经上传延迟并降低过载风险。",
     checks: ["intelligence"],
   },
   {
@@ -107,7 +107,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 85000,
     humanityCost: 6,
     ability:
-      "内置敌方神经信号衰减回收模块，每当一名被接入仓标记的敌人断气或瘫痪，其神经余波即被回收转化为自身接入仓的 RAM 回充。",
+      "内置敌方神经信号衰减回收模块，每当一名被接入仓标记的敌人断气或瘫痪，其逸散的神经信号余波即被回收用来稳压降温，让接入仓在长战里维持充足缓冲。",
     checks: ["intelligence"],
   },
   {
@@ -120,7 +120,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 3,
     ability:
-      "卡米略神经应急管理套件，当接入仓 RAM 即将耗尽临界过载时，紧急启动备用神经旁路，瞬间反冲补足大额 RAM 储备。",
+      "卡米略神经应急管理套件，当接入仓在高强度入侵中濒临过热过载时，紧急启动备用神经旁路分流泄压，迅速拉回稳定运行区间。",
     checks: ["intelligence"],
   },
   {
@@ -387,40 +387,45 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "militech-paraline",
     deckTraits: [],
-    deckProfile: "街头入门仓：应付摄像头、门锁和普通帮派义体绰绰有余，硬闯公司或军用黑冰容易被挡回",
+    deckSlots: 4,
+    deckProfile: "街头入门仓（4 存储插槽）：可热待命 4 款程序，应付街头义体够用，难扛公司军用黑冰",
     name: "军用科技平行线 1 型",
     slot: "os",
     rarity: "common",
     price: 4000,
     humanityCost: 3,
     ability:
-      "军用科技民兵与警备部队的标准接入仓。提供稳定的潜网环境，支持对视线内连网目标与安保终端上传基础快速破解程序。",
+      "军用科技民兵与警备部队的标准接入仓。硬件编译容量可同时挂载 4 张热待命程序芯片，支持对视线内连网目标与安保终端上传基础快速破解程序。",
     checks: ["intelligence"],
   },
   {
     id: "biotech-sigma",
     deckTraits: ["stealth"],
-    deckProfile: "街头入门仓：神经伪装协议让上传更难被溯源，但扛不住公司或军用级黑冰",
+    deckSlots: 4,
+    deckProfile:
+      "街头隐蔽仓（4 存储插槽）：神经伪装协议让上传更难被溯源，但 4 槽编译容量与防线强度扛不住公司或军用级黑冰",
     name: "生物技术 Σ 1 型",
     slot: "os",
     rarity: "uncommon",
     price: 9000,
     humanityCost: 4,
     ability:
-      "生物技术出品的高保密接入仓。优化神经伪装协议，显著提升破解程序的上传速率，潜网入侵时更难被敌方 ICE 溯源定位。",
+      "生物技术出品的高保密接入仓。优化神经伪装协议，可同时热待命 4 款程序，潜网入侵与隐蔽上传时更难被敌方 ICE 溯源定位。",
     checks: ["intelligence"],
   },
   {
     id: "raven-microcyber",
     deckTraits: ["spread"],
-    deckProfile: "渡鸦群控仓：擅长局域网群发，多节点同步压制，单点深度渗透不是长处",
+    deckSlots: 6,
+    deckProfile:
+      "渡鸦群控仓（6 存储插槽）：6 槽并发编译容量擅长局域网群发与多节点同步压制，单点深度渗透不是长处",
     name: "乌鸦微控 3 型",
     slot: "os",
     rarity: "rare",
     price: 28000,
     humanityCost: 6,
     ability:
-      "乌鸦微控的多线程进攻型接入仓。搭载神经扩频总线，令特定快速破解程序在命中的同时向相邻的连网设备与敌方神经系统横向跳跃蔓延。",
+      "乌鸦微控的多线程进攻型接入仓。搭载神经扩频总线，支持 6 张热待命程序芯片，令特定快速破解程序在命中的同时向相邻的连网设备与敌方神经系统横向跳跃蔓延。",
     checks: ["intelligence"],
   },
   {
@@ -461,33 +466,39 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "arasaka-deck",
     deckTraits: ["stealth"],
-    deckProfile: "荒坂隐蔽仓：擅长潜行渗透与抹除痕迹，低噪控制，不易触发内网警报",
+    deckSlots: 6,
+    deckProfile:
+      "荒坂隐蔽仓（6 存储插槽）：6 槽编译容量专精潜行渗透与抹除痕迹，低噪控制，不易触发内网警报",
     name: "荒坂 1 型",
     slot: "os",
-    rarity: "common",
-    price: 4500,
+    rarity: "rare",
+    price: 24000,
     humanityCost: 5,
     ability:
-      "荒坂隐秘行动特工定制的网络接入仓。深度加密的数据总线让上传的快速破解动静极小，将潜伏黑客在敌对子网中的被追踪风险降至冰点。",
+      "荒坂隐秘行动特工定制的网络接入仓。深度加密的数据总线支持 6 张热待命程序芯片，上传快速破解动静极小，将潜伏黑客在敌对子网中的被追踪风险降至冰点。",
     checks: ["intelligence", "cool"],
   },
   {
     id: "tetratronic-rippler",
     deckTraits: ["combat"],
-    deckProfile: "四相强攻仓：高功率神经冲击与义体烧毁，正面压制力强，动静也大",
+    deckSlots: 6,
+    deckProfile:
+      "四相强攻仓（6 存储插槽）：6 槽高功率输出专精神经冲击与义体烧毁，正面压制力强，动静与发热量也大",
     name: "四相传电涟漪 1 型",
     slot: "os",
-    rarity: "common",
-    price: 4500,
+    rarity: "rare",
+    price: 26000,
     humanityCost: 5,
     ability:
-      "四相传电出品的高烈度军用接入仓。针对进攻型战斗程序专项优化，将电磁过载、突触熔断等破坏性破解的神经杀伤效率推向极限。",
+      "四相传电出品的高烈度军用接入仓。支持 6 张热待命程序芯片并针对进攻型战斗程序专项优化，将电磁过载、突触熔断等破坏性破解的神经杀伤效率推向极限。",
     checks: ["intelligence"],
   },
   {
     id: "militech-canto",
     deckTraits: ["blackwall", "combat", "spread"],
-    deckProfile: "赛诺苏尔原型接入仓：可上传黑墙网关，接触流窜 AI 的神经侵蚀风险极高",
+    deckSlots: 4,
+    deckProfile:
+      "顶级危险级·黑墙原型仓（常规槽减至 4 槽换算力给黑墙网关）：绝非入门仓，侵蚀与高热风险极高",
     name: "军用科技篇章 6 型",
     slot: "os",
     rarity: "legendary",
@@ -495,7 +506,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 11,
     iconic: true,
     ability:
-      "依赛诺苏尔原型蓝图与回收的关键组件制作的特殊网络接入仓，能够上传黑墙网关并向相邻连网目标扩散致命攻击。接触被黑墙隔离的流窜 AI 会威胁使用者的神经与身体状态。需要真实取得蓝图、组件并完成制作，不是普通诊所的量产零售设备。",
+      "依赛诺苏尔原型蓝图与回收的关键组件制作的顶级危险级特殊网络接入仓（非普通诊所量产件）。硬件将大半底层编译算力硬绑定给内置黑墙网关模块，因此常规程序仅保留 4 个存储插槽；可上传黑墙网关并向相邻连网目标扩散致命攻击，但接触被黑墙隔离的流窜 AI 会持续威胁使用者的神经与身体状态。",
     checks: ["intelligence"],
   },
   // 本作将百灵鸟原作独有的军用神经与潜网改造记录为专属 OS，名称不是官方商品型号。
@@ -509,7 +520,9 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 0,
     iconic: true,
     deckTraits: ["blackwall"],
-    deckProfile: "百灵鸟在联情局接受的专属军用神经改造，能够在实际接入条件下接触黑墙",
+    deckSlots: 8,
+    deckProfile:
+      "非市售 NPC 专属·联情局军用神经改造（8 存储插槽）：与篇章 6 型独立，实际接入下可接触黑墙",
     ability:
       "百灵鸟在联情局服役期间接受的军用神经与潜网改造，与她的身体深度结合。她能够按实际接入条件和已发生的剧情接触黑墙；持续接触被隔离的流窜 AI 会侵蚀她的身体、记忆与人格。能力取决于她当时的身体状态、控制情况和实际网络连接。这是百灵鸟自身改造的记录，不作为可购买的独立商品。",
     checks: ["intelligence"],
@@ -760,7 +773,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 42000,
     humanityCost: 4,
     ability:
-      "额定神经网架联动装甲。当网络接入仓连续上传破解导致可用 RAM 处于低谷时，表皮纳米纤维自动硬化收缩，为处于算力间隙的黑客提供坚韧护甲屏障。",
+      "额定神经网架联动装甲。当网络接入仓连续上传破解进入高负载与散热间隙时，表皮纳米纤维自动硬化收缩，为专注潜网或对攻中的黑客提供额外防护屏障。",
     checks: ["intelligence"],
   },
   {
@@ -940,7 +953,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 11000,
     humanityCost: 5,
     ability:
-      "神经骨骼应急电容。当网络接入仓 RAM 濒临耗尽时，骨骼内嵌的辅助神经束紧急介入，使 RAM 回充速度进入极速超频模式。",
+      "神经骨骼应急电容。当网络接入仓在高强度对攻中濒临过载锁死时，骨骼内嵌的辅助神经束紧急介入分流散热，加快神经回路恢复稳态。",
     checks: ["intelligence"],
   },
   {
@@ -951,7 +964,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 24000,
     humanityCost: 5,
     ability:
-      "压电骨骼能量收集器。骨骼承受物理打击与冲击波形变时，压电晶体将机械创伤转化为电信号，直接回充为网络接入仓的可用 RAM。",
+      "压电骨骼能量收集器。骨骼承受物理打击与冲击波形变时，压电晶体将机械应力转化为稳压电脉冲，反哺网络接入仓缓冲过载压力。",
     checks: ["intelligence"],
   },
   {
@@ -1191,7 +1204,9 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
   {
     id: "netwatch-netdriver",
     deckTraits: ["netwatch", "antiIce", "combat"],
-    deckProfile: "网络监察高端接入仓：擅长设备入侵与通过摄像头等网络节点实施快速破解",
+    deckSlots: 8,
+    deckProfile:
+      "网络监察顶配接入仓（8 存储插槽）：8 槽完整编译容量，专精多设备控制与经由监控节点实施快速破解",
     name: "网络监察网驱 5 型",
     slot: "os",
     rarity: "legendary",
@@ -1199,7 +1214,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 10,
     iconic: true,
     ability:
-      "以网络监察技术打造的高端网络接入仓，针对设备控制和经网络节点发起的快速破解做了优化。设备提供运算与防护能力，使用者仍须取得实际接入路径与目标权限；网络监察的追查取决于实际行动留下的证据与入侵目标。",
+      "以网络监察技术打造的高端网络接入仓，提供完整的 8 槽热待命编译容量，针对设备控制和经网络节点发起的快速破解做了优化。设备提供运算与防护能力，使用者仍须取得实际接入路径与目标权限；网络监察的追查取决于实际行动留下的证据与入侵目标。",
     checks: ["intelligence"],
   },
   {
@@ -1298,7 +1313,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     iconic: true,
     ability:
-      "额叶神经应急缓存重置芯片。当网络接入仓可用 RAM 跌入临界低谷时，瞬间强制分流重构神经运算总线，短时间内一次性补充满额可用 RAM。",
+      "额叶神经应急缓存重置芯片。当网络接入仓逼近热过载临界点时，瞬间强制分流重构神经运算总线，短时间内清空积压噪点并恢复满载稳态。",
     checks: ["intelligence"],
   },
   {

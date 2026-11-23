@@ -11,13 +11,42 @@ export const CATEGORY_LABELS: Readonly<Record<QuickhackCategory, string>> = {
   ultimate: "终极",
 };
 
-/** 常见黑客手段词典的一条，照原作 2.x 的类别归类；数据在 content 包的 hacking.ts。不是需要装载的程序，也没有容量门槛 */
+/** 快速破解的算力与神经热负荷档次：低负载、中负载、高负载、极高过载 */
+export const HACK_LOADS = ["light", "medium", "heavy", "extreme"] as const;
+export const HackLoadSchema = z.enum(HACK_LOADS);
+export type HackLoad = z.infer<typeof HackLoadSchema>;
+export const HACK_LOAD_LABELS: Readonly<Record<HackLoad, string>> = {
+  light: "低负载",
+  medium: "中负载",
+  heavy: "高负载",
+  extreme: "极高过载",
+};
+
+/** 接入仓与神经突触的定性热负荷档次：常温稳定 → 轻度升温 → 芯片发烫 → 过载临界 */
+export const THERMAL_LEVELS = ["cool", "warm", "hot", "critical"] as const;
+export const ThermalLevelSchema = z.enum(THERMAL_LEVELS);
+export type ThermalLevel = z.infer<typeof ThermalLevelSchema>;
+export const THERMAL_LABELS: Readonly<Record<ThermalLevel, string>> = {
+  cool: "常温稳定",
+  warm: "轻度升温",
+  hot: "芯片发烫",
+  critical: "过载临界",
+};
+export const THERMAL_MAX_HEAT = 6;
+
+/** 快速破解程序芯片目录的一条，照原作 2.x 的类别归类；数据在 content 包的 hacking.ts */
 export const QuickhackDefSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   name: z.string().min(1).max(12),
   category: QuickhackCategorySchema,
-  /** 放出去会怎样；写给模型 */
-  effect: z.string().min(1).max(80),
+  /** 上传该程序对接入仓与神经造成的算力热负荷档次 */
+  load: HackLoadSchema.default("medium"),
+  /** 是否必须先破开目标个人黑冰、建立深层立足点才能上传（终极神经接管类） */
+  requiresFoothold: z.boolean().default(false),
+  /** 硬件与无线接口前提说明（例如需联网义眼、联网枪械、体内电子义体） */
+  targetRequirement: z.string().min(1).max(60).optional(),
+  /** 物理与硬件层面的实际破坏效果；写给模型 */
+  effect: z.string().min(1).max(140),
   /** 出处：原作依据（版本）或本作改编 */
   source: z.string().min(1),
 });
@@ -84,15 +113,46 @@ export type ActiveHackEffect = z.infer<typeof ActiveHackEffectSchema>;
 
 /** 最多保留的活跃快速破解状态条数 */
 export const ACTIVE_HACK_KEEP = 10;
+/** 最多保留的已破冰目标记录条数 */
+export const BREACHED_TARGET_KEEP = 12;
+
+/** 已捅穿个人防火墙/自卫黑冰并取得立足点的现场目标（场景切换或离开现场后失效） */
+export const BreachedTargetSchema = z.object({
+  target: z.string().min(1),
+  npc: z.string().min(1).optional(),
+  location: z.string().nullable(),
+  at: z.number().int(),
+  via: z.string().min(1).optional(),
+});
+export type BreachedTarget = z.infer<typeof BreachedTargetSchema>;
+
+/** 接入仓与神经热负荷状态（替代蓝条/回蓝：随连续并发高负载程序升温，随时间与冷却设施自然散热） */
+export const ThermalStateSchema = z.object({
+  /** 内部积热刻度 0–6：0 常温稳定，1–2 轻度升温，3–4 芯片发烫，5–6 过载临界 */
+  heat: z.number().int().min(0).max(THERMAL_MAX_HEAT).default(0),
+  /** 最近一次积热或散热的时间（游戏分钟） */
+  updatedAt: z.number().int().default(0),
+  /** 本场因顶着过热硬发导致神经灼伤的次数 */
+  overloadCount: z.number().int().min(0).default(0),
+});
+export type ThermalState = z.infer<typeof ThermalStateSchema>;
 
 export const HackingStateSchema = z.object({
   /** 装着且完好的网络接入仓（义体 id）；由装着的义体推出来，没装或损坏是 null */
   deck: z.string().nullable().default(null),
-  /** 玩家已持有/熟悉的快速破解程序（不设硬性槽位门槛，仅用于网客店收藏与擅长提示） */
+  /** 接入仓当前插装在存储插槽里的热待命程序芯片 id 列表（受接入仓硬件编译容量上限约束） */
   programs: z.array(z.string().min(1)).default([]),
-  /** 当前现场仍在持续的快速破解效果（例如重启义眼、武器故障、定位、过热灼烧） */
+  /** 随身芯片盒中持有的全部程序芯片库（未插装的芯片可在脱战且未潜网时换插进存储插槽） */
+  ownedPrograms: z.array(z.string().min(1)).default([]),
+  /** 是否已完成首次装仓时的出厂基础程序烧录（避免先买芯片再装仓漏发基础芯片，也不在玩家主动清空槽位后重复回填） */
+  starterSeeded: z.boolean().default(false),
+  /** 接入仓与神经热负荷状态 */
+  thermal: ThermalStateSchema.default({ heat: 0, updatedAt: 0, overloadCount: 0 }),
+  /** 当前现场已捅穿个人黑冰、建立入侵立足点的目标列表 */
+  breachedTargets: z.array(BreachedTargetSchema).default([]),
+  /** 当前现场仍在持续的快速破解效果（例如重启义眼、武器故障、定位、义体过热） */
   activeEffects: z.array(ActiveHackEffectSchema).default([]),
-  /** 最近对高安保目标高频进攻触发的反追踪警觉标记（场景结束或转移地点后自然散去） */
+  /** 最近对高安保目标高频进攻或破冰受阻触发的反追踪警觉标记（场景结束或转移地点后自然散去） */
   traceAlert: z
     .object({
       at: z.number().int(),
@@ -115,11 +175,11 @@ export const NpcHackCommandSchema = z
   .object({
     type: z.literal("npcHack"),
     id: z.string().min(1).describe("放快速破解的人的卡 id"),
-    program: z.string().min(1).describe("手段 id（快速破解参考表里的，用来归类效果）"),
+    program: z.string().min(1).describe("程序 id（快速破解程序表里的，用来归类物理效果）"),
     target: z.string().trim().min(1).max(40).describe("对谁放：对玩家角色写「你」，对别人写称呼"),
   })
   .describe(
-    "有卡的人放快速破解：他身上要装着完好的网络接入仓；黑墙攻击还须实际完好的黑墙原型接入仓，通用入侵能力不能替代。上传结束即释放，不积累使用次数。对玩家角色放时，自我 ICE 是否挡下由本轮已确认的设备状态和网络裁决决定。对玩家的伤害类、终极类要经敌方黑客独立裁决 counterHack 与事实绑定（本轮事件 id），代码统一结算伤害，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照效果写",
+    "有卡的人放快速破解：他身上要装着完好的网络接入仓；黑墙攻击还须实际完好的黑墙原型接入仓，通用入侵能力不能替代。对玩家角色放时，个人防火墙与完好自我 ICE 是否挡下由本轮已确认的设备状态和独立反制裁决 counterHack 决定。对玩家的伤害类、终极类由代码统一依据 counterHack 结算神经创伤，同一裁决只结算一次，不另写 damage 或 combat wound；损坏的自我 ICE 无效；控制、隐蔽类照硬件与感官故障写",
   );
 export type NpcHackCommand = z.infer<typeof NpcHackCommandSchema>;
 
@@ -132,18 +192,41 @@ export const HackCommandSchema = z
       .trim()
       .min(1)
       .max(40)
-      .describe("手段：快速破解参考表里的 id 或名字；表外的写简短的中文说明"),
-    target: z.string().trim().min(1).max(40).describe("对谁或什么放"),
-    npc: z
-      .string()
-      .min(1)
+      .describe("程序芯片：接入仓已插装的程序 id 或名字；现场临时改写的街头小脚本写简短中文说明"),
+    target: z.string().trim().min(1).max(40).describe("对谁或什么设备放"),
+    npc: z.string().min(1).optional().describe("目标有人物卡时写卡的 id；先过个人黑冰与链路裁决"),
+    iceBreached: z
+      .boolean()
       .optional()
-      .describe("目标有人物卡时写卡的 id；对有卡的人要先经前置潜网对抗裁决"),
+      .describe("本轮是否同步捅穿了目标的个人黑冰/防火墙并建立立足点（true 时写入已破冰记录）"),
   })
   .describe(
-    "快速破解：装着完好网络接入仓的人，一次行动内对符合现场电子设备与义体逻辑的目标放出入侵手段，无需装载、卸载程序，也没有容量门槛；黑墙攻击还须实际完好的黑墙原型接入仓，通用入侵能力不能替代。是否成立看前置的物理与潜网裁决，终极类不自动扣人性",
+    "电子战快速破解：须装有完好网络接入仓，目标须具备可接入的电子义体/联网接口且无线未被物理离线或气隙隔断；调用目录程序须已插装对应程序芯片；终极神经接管类（自我了断、赛博精神病、系统崩溃）须先捅穿目标个人黑冰建立立足点。上传按程序算力档位累计接入仓与神经热负荷，过热临界硬发会反烧大脑造成神经创伤。黑墙攻击还须完好黑墙原型接入仓。终极类不自动扣人性",
   );
 export type HackCommand = z.infer<typeof HackCommandSchema>;
+
+/** 模型使用：{"type": "deckLoad", "action": "slot", "program": "overheat"} */
+export const DeckLoadCommandSchema = z
+  .object({
+    type: z.literal("deckLoad"),
+    action: z
+      .enum(["acquire", "slot", "unslot"])
+      .describe(
+        "acquire 购入/拷贝获得新程序芯片（若装有完好接入仓且存储插槽未满顺带插装）；slot 将随身芯片盒中已持有的芯片插进存储插槽；unslot 从存储插槽拔下芯片退回随身芯片盒",
+      ),
+    program: z.string().trim().min(1).max(40).describe("快速破解程序目录中的 id 或中文名"),
+    replace: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .optional()
+      .describe("存储插槽已满时，可选指定要拔下腾位的已插装程序 id 或中文名"),
+  })
+  .describe(
+    "管理接入仓程序芯片：获得（购买/拷贝/搜刮）快速破解芯片，或在脱战且未潜网时插拔接入仓存储插槽里的热待命程序芯片；不同接入仓的存储插槽与编译容量上限不同，实战只能直接调用当前插在槽位里的程序",
+  );
+export type DeckLoadCommand = z.infer<typeof DeckLoadCommandSchema>;
 /** 模型使用：{"type": "breach", "network": "漩涡帮仓库的内网", "via": "卸货口旁的接入点", "gains": ["cameras", "doors"]} */
 export const BreachCommandSchema = z
   .object({

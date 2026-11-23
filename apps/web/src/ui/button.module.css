@@ -59,7 +59,8 @@
 .button:hover:not(:disabled),
 .button:focus-visible:not(:disabled) {
   color: var(--cp-cyan);
-  filter: drop-shadow(0 0 6px rgb(94 246 255 / 22%));
+  transform: perspective(560px) translateY(-1px) rotateX(4deg);
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 32%)) drop-shadow(0 0 6px rgb(94 246 255 / 22%));
 }
 
 .button:hover:not(:disabled) .bg,
@@ -78,7 +79,7 @@
 }
 
 .button:active:not(:disabled) {
-  transform: translateY(1px) scale(0.975);
+  transform: perspective(560px) translateY(1px) rotateX(-3deg) scale(0.975);
   filter: drop-shadow(0 0 10px rgb(94 246 255 / 42%));
 }
 
@@ -93,6 +94,8 @@
     transition: none;
   }
 
+  .button:hover:not(:disabled),
+  .button:focus-visible:not(:disabled),
   .button:active:not(:disabled) {
     transform: none;
   }

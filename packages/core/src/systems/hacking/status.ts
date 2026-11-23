@@ -1,7 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { hackingView } from "./view";
 
-/** 【当前状态】里骇入的几行：网络接入仓和程序、正在潜网、这里入侵过的网络；没装或损坏时明确标出不可破解 */
+/** 【当前状态】里骇入的几行：接入仓硬件、已插装程序芯片、热负荷、破冰立足点、活跃破解、潜网与已控内网 */
 
 type HackingView = ReturnType<typeof hackingView>;
 type CyberwareItem = {
@@ -36,7 +36,29 @@ export const hackingStatus: readonly SystemStatus[] = [
       const lines: string[] = [];
       const parts = [...h.traitLabels, ...(h.selfIce ? ["配完好自我 ICE"] : [])];
       const suffix = parts.length > 0 ? `（${parts.join("，")}）` : "";
-      lines.push(`网络接入仓：${h.deckName}${suffix}`);
+      const thermalWarn =
+        h.thermal.level === "critical"
+          ? "【过载临界：再强发必反烧脑神经！】"
+          : h.thermal.level === "hot"
+            ? "（芯片发烫，硬发高负载/终极程序易烧伤大脑）"
+            : "";
+      lines.push(`网络接入仓：${h.deckName}${suffix}｜热负荷：${h.thermal.label}${thermalWarn}`);
+      const loadedList =
+        h.programs.length > 0
+          ? h.programs.map((p) => `${p.name}${p.loadLabel ? `[${p.loadLabel}]` : ""}`).join("、")
+          : "空槽";
+      const spareSuffix =
+        h.sparePrograms.length > 0
+          ? `；随身芯片盒备用（脱战未潜网可换插）：${h.sparePrograms.map((p) => p.name).join("、")}`
+          : "";
+      lines.push(
+        `接入仓存储插槽（热待命 ${h.programs.length}/${h.slots} 槽）：${loadedList}${spareSuffix}`,
+      );
+      if (h.breachedTargets.length > 0) {
+        lines.push(
+          `本场已破开个人黑冰的目标（已建立立足点）：${h.breachedTargets.map((b) => `${b.target}${b.via ? `（经${b.via}）` : ""}`).join("、")}`,
+        );
+      }
       if (h.activeEffects.length > 0) {
         lines.push(
           `当前生效中的快速破解：${h.activeEffects.map((e) => `「${e.label}」→ ${e.target}（${e.effect}）`).join("；")}`,

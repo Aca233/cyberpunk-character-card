@@ -8,12 +8,14 @@ import {
   resolveRouteBgm,
   setAudioDuck,
   setBgmTarget,
+  setThemeBgmOverride,
   toggleMute,
 } from "./audio";
 import { CharactersScreen } from "./features/characters/CharactersScreen";
 import { Calibrate } from "./features/dev/Calibrate";
 import { NeuralMock } from "./features/dev/NeuralMock";
 import { MainMenu } from "./features/menu/MainMenu";
+import { useNarrativePrefs } from "./features/settings/prefs";
 import { SettingsScreen } from "./features/settings/SettingsScreen";
 import { SpoilerBadge } from "./features/settings/SpoilerBadge";
 import { Splash } from "./features/splash/Splash";
@@ -25,11 +27,35 @@ import {
 } from "./features/status/StatusParts";
 import { StoryScreen } from "./features/story/StoryScreen";
 import { useStory } from "./features/story/store";
+import { themeById, useShellTheme } from "./features/theme";
+
+function isShellThemedPath(path: string): boolean {
+  return path === "/menu" || path.startsWith("/settings") || path.startsWith("/characters");
+}
 
 function Shell() {
   const location = useLocation();
   const busy = useStory((s) => s.phase !== "idle");
+  const { effectiveId: shellThemeId } = useShellTheme();
+  const { storyTheme } = useNarrativePrefs();
   useRoutePreload(busy);
+
+  // 外壳主题配色与专属配乐：主题配乐仅在主菜单等非局内外壳界面播放，进入局内剧情一律使用原版自适应场景配乐
+  useEffect(() => {
+    const root = document.documentElement;
+    const isShell = isShellThemedPath(location.pathname);
+    const applyTheme = isShell || (storyTheme && location.pathname.startsWith("/play/"));
+    const spec = themeById(shellThemeId);
+    if (applyTheme && shellThemeId !== "night-city") {
+      root.dataset.shellTheme = shellThemeId;
+    } else {
+      delete root.dataset.shellTheme;
+    }
+    setThemeBgmOverride(isShell && spec.bgm ? spec.bgm : null);
+    return () => {
+      delete root.dataset.shellTheme;
+    };
+  }, [location.pathname, shellThemeId, storyTheme]);
 
   // 路由级 BGM 调度与设置页闪避；剧情内场景音乐由 StoryScreen 实时细化接管
   useEffect(() => {

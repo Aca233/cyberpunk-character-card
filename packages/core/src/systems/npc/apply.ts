@@ -477,7 +477,9 @@ export function applyNpc(
       return { ok: true, notes };
     }
     case "affinity": {
-      if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      if (!npc.met && command.channel !== "phone") {
+        return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      }
       const notes: string[] = [];
       let delta = command.delta;
       if (Math.abs(delta) > AFFINITY_STEP_CAP) {
@@ -492,7 +494,9 @@ export function applyNpc(
       return { ok: true, notes };
     }
     case "memory": {
-      if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      if (!npc.met && command.source !== "phone") {
+        return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
+      }
       const active = Object.entries(npc.behaviorChips ?? {}).find(([, state]) =>
         isActiveBehaviorMode(state.mode),
       );

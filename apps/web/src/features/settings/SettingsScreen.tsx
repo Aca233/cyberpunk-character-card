@@ -15,6 +15,7 @@ import { EmptyState } from "../status/StatusParts";
 import { LiveStageBar } from "../story/LiveStageBar";
 import neural from "../story/neural.module.css";
 import { useStory } from "../story/store";
+import { ShellBackdrop, ThemeModal, themeById, useShellTheme } from "../theme";
 import { AudioSettings } from "./AudioSettings";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
@@ -32,9 +33,6 @@ const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: 
   { id: "audio", code: "04", label: "音频" },
   { id: "context", code: "05", label: "上下文（调试）" },
 ];
-
-/** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
-const FRAME_SLICE = 120;
 
 const CITY_WEIGHT = { minor: "街角小事", normal: "几个街区在传", major: "头条" } as const;
 
@@ -56,9 +54,12 @@ export function SettingsScreen() {
   const [params, setParams] = useSearchParams();
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Destination | null>(null);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const activeSaveId = useStory((s) => (s.phase !== "idle" ? s.saveId : null));
   const { open: spoilersOpen } = useSpoilerView();
   const audioPrefs = useAudioPrefs();
+  const shellTheme = useShellTheme();
+  const activeTheme = themeById(shellTheme.effectiveId);
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: api.tavernPresets });
   const profilesReady = (() => {
@@ -68,7 +69,11 @@ export function SettingsScreen() {
       if (!name) return false;
       const p = data.profiles.find((item) => item.name === name);
       return Boolean(
-        p && p.keyStatus !== "missing" && p.type !== "sdwebui" && p.type !== "comfyui",
+        p &&
+          p.keyStatus !== "missing" &&
+          p.type !== "sdwebui" &&
+          p.type !== "comfyui" &&
+          p.type !== "novelai",
       );
     };
     return okRole(data.narrator) && okRole(data.aux);
@@ -147,25 +152,7 @@ export function SettingsScreen() {
 
   return (
     <div className={styles.screen}>
-      {/* 外框照神经界面（用户定的重排）：夜之城远景压暗、低透明网格肌理、扫描线、原作 panel.frame 红框 */}
-      <span
-        className={styles.bg}
-        style={{ backgroundImage: cssUrl("menu.nightCity") }}
-        aria-hidden
-      />
-      <span className={styles.shade} aria-hidden />
-      <span className={styles.gridTex} style={{ backgroundImage: cssUrl("fx.grid") }} aria-hidden />
-      <span
-        className={styles.scan}
-        style={{ backgroundImage: cssUrl("fx.scanlines") }}
-        aria-hidden
-      />
-      <NineSlice
-        id="panel.frame"
-        tint="var(--cp-red)"
-        slice={FRAME_SLICE}
-        className={styles.frame}
-      />
+      <ShellBackdrop variant="settings" />
       <header className={styles.head}>
         <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.headBg} />
         <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" className={styles.headGlow} />
@@ -175,6 +162,16 @@ export function SettingsScreen() {
         </div>
         <div className={styles.headRight}>
           <div className={styles.headTelemetry}>
+            <button
+              type="button"
+              className={`${styles.teleChip} ${styles.teleChipBtn}`}
+              data-tone={activeTheme.media ? "ok" : undefined}
+              title="切换或按需下载外壳界面主题"
+              onClick={() => setThemeModalOpen(true)}
+            >
+              <span className={styles.teleDot} aria-hidden />
+              主题：{activeTheme.name}
+            </button>
             {profilesLoaded && (
               <span className={styles.teleChip} data-tone={profilesReady ? "ok" : "warn"}>
                 <span className={styles.teleDot} aria-hidden />
@@ -287,6 +284,7 @@ export function SettingsScreen() {
           <p>输入中的设置和密钥还没有保存。已经保存成功的步骤不会撤回。</p>
         </Dialog>
       )}
+      <ThemeModal open={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
     </div>
   );
 }

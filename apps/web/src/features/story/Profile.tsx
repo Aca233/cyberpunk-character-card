@@ -6,7 +6,7 @@ import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
-import { baseWeaponIdOf, itemArtOf, portraitOf } from "./art";
+import { baseWeaponIdOf, itemArtOf, portraitOf, weaponHudIconOf } from "./art";
 import neural from "./neural.module.css";
 import styles from "./profile.module.css";
 import { npcWoundSummary, type View } from "./view";
@@ -16,13 +16,47 @@ type Npc = View["npcs"][number];
 type Fixer = View["jobs"]["fixers"][number];
 export type CombatFoe = NonNullable<View["combat"]["active"]>["foes"][number];
 
+/** 在场目标当前的电子战破冰与生效快速破解态势 */
+export interface ProfileHackStatus {
+  readonly breached: boolean;
+  readonly breachedVia?: string | null | undefined;
+  readonly activeEffects: readonly string[];
+}
+
 type NpcGearItem = NonNullable<Npc["body"]>["gear"][number];
 type NpcChromeItem = NonNullable<NonNullable<Npc["body"]>["scan"]>["chrome"][number];
 
 const CELL_SLICE = [20, 30, 30, 20] as const;
 const HEAD_SLICE = [4, 20, 20, 4] as const;
+const QH_SLICE = [18, 22, 22, 18] as const;
 /** 好感的范围，同 core 的 AFFINITY_MAX */
 const AFFINITY_MAX = 100;
+
+/** 2077 原生切角插槽底框（qh.cellBg / qh.cellFg，无左侧竖色条） */
+function TacticalCellFrame({
+  tone = "default",
+}: {
+  readonly tone?: "default" | "warn" | "danger";
+}) {
+  const fill =
+    tone === "danger"
+      ? "rgb(34 10 16 / 82%)"
+      : tone === "warn"
+        ? "rgb(28 22 12 / 76%)"
+        : "rgb(14 16 26 / 74%)";
+  const line =
+    tone === "danger"
+      ? "rgb(255 97 88 / 44%)"
+      : tone === "warn"
+        ? "rgb(252 238 10 / 38%)"
+        : "rgb(94 246 255 / 26%)";
+  return (
+    <>
+      <NineSlice id="qh.cellBg" tint={fill} slice={QH_SLICE} className={styles.qhFrame} />
+      <NineSlice id="qh.cellFg" tint={line} slice={QH_SLICE} className={styles.qhFrame} />
+    </>
+  );
+}
 
 const CLOTHING_SLOT_INDEX: Readonly<Record<string, number>> = {
   head: 0,
@@ -32,6 +66,47 @@ const CLOTHING_SLOT_INDEX: Readonly<Record<string, number>> = {
   legs: 4,
   feet: 5,
 };
+
+/** 义体中文部位名 → 2077 原作部位回退图标 */
+const CHROME_SLOT_ICON: Readonly<Record<string, AssetId>> = {
+  额叶皮质: "cyber.frontalCortex",
+  眼部: "cyber.eyes",
+  神经系统: "cyber.nervous",
+  操作系统: "cyber.os",
+  循环系统: "cyber.circulatory",
+  皮肤: "cyber.integumentary",
+  骨骼: "cyber.skeleton",
+  手部: "cyber.hands",
+  手臂: "cyber.arms",
+  腿部: "cyber.legs",
+};
+
+/** 物品/义体/衣着统一缩略图槽：切角细框 + 专图或按部位/类型回退原作图标 */
+function SlotThumb({
+  art,
+  fallback,
+  alt,
+  size = "md",
+  tint = "var(--slot-accent, var(--cp-cyan))",
+}: {
+  readonly art: AssetId | null | undefined;
+  readonly fallback: AssetId;
+  readonly alt: string;
+  readonly size?: "sm" | "md" | "wide";
+  readonly tint?: string;
+}) {
+  const fallbackHeight = size === "sm" ? 18 : 24;
+  return (
+    <span className={styles.slotThumb} data-size={size} aria-hidden>
+      <span className={styles.slotThumbGrid} style={{ backgroundImage: cssUrl("fx.grid") }} />
+      {art ? (
+        <Asset id={art} alt={alt} className={styles.slotThumbArt} />
+      ) : (
+        <Asset id={fallback} tint={tint} height={fallbackHeight} className={styles.slotThumbIcon} />
+      )}
+    </span>
+  );
+}
 
 /** 扫描出的人性阶段转威胁档位 */
 export function threatOfHumanity(stage: string): "high" | "even" | "low" {
@@ -74,7 +149,7 @@ export function AffinityMeter({
   const fill = Math.min(1, Math.abs(affinity) / AFFINITY_MAX);
   return (
     <span
-      className={className}
+      className={className ? `${styles.affinity} ${className}` : styles.affinity}
       data-neg={affinity < 0 || undefined}
       style={{ "--fill": fill } as CSSProperties}
       aria-hidden
@@ -415,6 +490,7 @@ function ProfileBanner({
   npc,
   fixer,
   foe,
+  hackStatus,
   embedded = false,
   onScan,
   onCompanion,
@@ -423,6 +499,7 @@ function ProfileBanner({
   readonly npc: Npc;
   readonly fixer?: Fixer | undefined;
   readonly foe?: CombatFoe | undefined;
+  readonly hackStatus?: ProfileHackStatus | undefined;
   readonly embedded?: boolean | undefined;
   readonly onScan?: (() => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
@@ -470,6 +547,7 @@ function ProfileBanner({
       canCompanionDirect ||
       canCompanionAsk,
   );
+  const humanityThreat = scan ? threatOfHumanity(scan.humanityStage) : undefined;
 
   return (
     <header
@@ -563,6 +641,23 @@ function ProfileBanner({
                   {npc.nemesis.ended ? "旧宿敌" : "宿敌"}
                 </Tag>
               )}
+              {hackStatus?.breached && (
+                <Tag
+                  tone="cyan"
+                  title={
+                    hackStatus.breachedVia
+                      ? `已捅穿个人黑冰（经${hackStatus.breachedVia}），可上传终极神经接管`
+                      : "已捅穿个人黑冰建立立足点"
+                  }
+                >
+                  已破冰
+                </Tag>
+              )}
+              {hackStatus?.activeEffects.map((eff) => (
+                <Tag key={eff} tone="yellow" title={`当前正在该目标身上生效的快速破解：${eff}`}>
+                  {eff}
+                </Tag>
+              ))}
               {npc.following && <Tag tone="yellow">同行中</Tag>}
               {fixer && <Tag tone="yellow">中间人</Tag>}
               {!npc.alive && <Tag tone="dim">已故</Tag>}
@@ -600,19 +695,48 @@ function ProfileBanner({
                 </Tag>
               )}
             </ul>
+            {npc.met && (
+              <div
+                className={styles.bannerAffinity}
+                title={`关系好感 ${formatAffinity(npc.affinity)}`}
+              >
+                <span className={styles.bannerAffinityLabel}>好感</span>
+                <AffinityMeter affinity={npc.affinity} className={styles.bannerMeter} />
+                <b className={styles.affinityVal} data-tone={affinityTone(npc.affinity)}>
+                  {formatAffinity(npc.affinity)}
+                </b>
+              </div>
+            )}
           </div>
 
           <p className={styles.bannerSubtitle}>{subtitleBits.join(" · ")}</p>
 
-          {(npc.met || hasActions) && (
+          {(npc.body || hasActions) && (
             <div className={styles.bannerFootRow}>
-              {npc.met && (
-                <div className={styles.bannerAffinity}>
-                  <span className={styles.bannerAffinityLabel}>好感</span>
-                  <AffinityMeter affinity={npc.affinity} className={styles.bannerMeter} />
-                  <b className={styles.affinityVal} data-tone={affinityTone(npc.affinity)}>
-                    {formatAffinity(npc.affinity)}
-                  </b>
+              {npc.body && (
+                <div className={styles.inlineTelemetry}>
+                  <span className={styles.teleItem}>
+                    <em>体征</em>
+                    <b data-threat={wound.threat}>{wound.headline}</b>
+                  </span>
+                  {scan && (
+                    <>
+                      <span className={styles.teleSep} aria-hidden>
+                        ·
+                      </span>
+                      <span className={styles.teleItem}>
+                        <em>威胁</em>
+                        <b data-threat={scan.threat}>{scan.threatLabel}</b>
+                      </span>
+                      <span className={styles.teleSep} aria-hidden>
+                        ·
+                      </span>
+                      <span className={styles.teleItem}>
+                        <em>神经</em>
+                        <b data-threat={humanityThreat}>{scan.humanityStage}</b>
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -684,56 +808,35 @@ function ProfileBanner({
   );
 }
 
-/** 原作物品缩略格：固定底框 + 细网格 + 专图或按类型回退矢量图标 */
-function ItemThumb({
-  art,
-  fallback,
-  alt,
-  compact = false,
-}: {
-  readonly art: AssetId | null | undefined;
-  readonly fallback: AssetId;
-  readonly alt: string;
-  readonly compact?: boolean | undefined;
-}) {
-  return (
-    <span className={compact ? styles.clothThumb : styles.entryThumb} aria-hidden>
-      <span className={styles.entryThumbGrid} style={{ backgroundImage: cssUrl("fx.grid") }} />
-      {art ? (
-        <Asset id={art} alt={alt} className={compact ? styles.clothArt : styles.entryArt} />
-      ) : (
-        <Asset
-          id={fallback}
-          tint="var(--entry-accent, var(--cp-cyan))"
-          height={compact ? 14 : 16}
-          className={styles.entryFallbackIcon}
-        />
-      )}
-    </span>
-  );
-}
-
 /**
- * 现场透视：顶部无套盒通透 Kiroshi 读数带（体征 / 威胁 / 神经 + 完整骇入防线），
- * 下方左右两列自然平铺（左：已检出义体 + 创伤明细 + 穿戴衣物；右：战术弱点 + 随身武装/物品）。
+ * 现场透视：沿用 BiomonitorPanel / CyberdeckPage 原生 2077 语言——
+ * 外层红框 CellFrame 诊断卡 + subRows 键值表 + 双列 qh.cell 切角插槽（无左侧竖色条、无假图标框、不拉长）。
  */
 function ScanTacticalView({
   npc,
   body,
   foe,
+  hackStatus,
   onDraftAction,
 }: {
   readonly npc: Npc;
   readonly body: NonNullable<Npc["body"]>;
   readonly foe?: CombatFoe | undefined;
+  readonly hackStatus?: ProfileHackStatus | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const { scan } = body;
-  const wound = npcWoundSummary(body);
   const injuries = body.injuries ?? [];
   const chrome = scan?.chrome ?? [];
   const weapons = body.gear.filter((item) => item.kind === "weapon");
   const carried = body.gear.filter((item) => item.kind !== "clothing" && item.kind !== "weapon");
+  const arsenal: readonly {
+    readonly item: NpcGearItem;
+    readonly tone: "weapon" | "item";
+  }[] = [
+    ...weapons.map((item) => ({ item, tone: "weapon" as const })),
+    ...carried.map((item) => ({ item, tone: "item" as const })),
+  ];
   const clothes = [...body.gear]
     .filter((item) => item.kind === "clothing")
     .sort(
@@ -742,391 +845,348 @@ function ScanTacticalView({
         (CLOTHING_SLOT_INDEX[b.clothingSlot ?? ""] ?? 99),
     );
 
-  const humanityThreat = scan ? threatOfHumanity(scan.humanityStage) : undefined;
-  const netThreat =
-    scan?.netStatus === "open"
-      ? "low"
+  const netTone =
+    hackStatus?.breached || scan?.netStatus === "open"
+      ? "good"
       : scan?.netStatus === "selfIce" || scan?.netStatus === "netrunner"
-        ? "high"
-        : undefined;
-  const scanTimeText = scan
-    ? scan.at > 0
-      ? `扫于 ${worldRules.formatGameTime(scan.at)}`
-      : "已建档"
-    : null;
+        ? "bad"
+        : "cyan";
 
-  const hasRightContent =
-    (scan && scan.tips.length > 0) ||
-    Boolean(foe && foe.carry.length > 0) ||
-    weapons.length > 0 ||
-    carried.length > 0;
+  const scanClock =
+    scan && scan.at > 0
+      ? (worldRules.formatGameTime(scan.at).split(" ").pop() ?? worldRules.formatGameTime(scan.at))
+      : null;
 
   return (
     <section className={styles.tacticalRoot} aria-label="现场透视">
-      {/* 顶部通透 Kiroshi 遥测带：用细分割线取代厚黑卡片，零截断读全骇入防线 */}
-      <div className={styles.telemetryRibbon} data-scanned={Boolean(scan) || undefined}>
-        <dl className={styles.statStrip}>
-          <div className={styles.statCell}>
-            <dt>体征</dt>
-            <dd data-threat={wound.threat}>{wound.headline}</dd>
+      {/* 卡 1：光学链路、创口与表观装备汇总（subRows 紧凑行，零竖色条） */}
+      <section className={styles.card} aria-label="光学与表观态势">
+        <CellFrame />
+        <div className={styles.cardHead}>
+          <span className={styles.cardLabel}>OPTICS {"//"} 链路 · 创口 · 表观</span>
+          <span className={styles.cardValue} data-tone={scan ? "cyan" : undefined}>
+            {scan ? (scanClock ? `SCAN ${scanClock}` : "OPTICS ONLINE") : "STANDBY"}
+          </span>
+        </div>
+        <div className={styles.subRows}>
+          <div className={styles.subRow}>
+            <span className={styles.subKey}>骇入防线</span>
+            <span className={styles.subVal} data-tone={scan ? netTone : undefined}>
+              {scan ? scan.netLabel : "待扫描 · 点击上方「义眼扫描」即时透视防线、植入体与弱点"}
+            </span>
           </div>
-          <div className={styles.statCell}>
-            <dt>威胁评级</dt>
-            <dd data-threat={scan?.threat}>{scan ? scan.threatLabel : "未扫描"}</dd>
-          </div>
-          <div className={styles.statCell}>
-            <dt>神经稳态</dt>
-            <dd data-threat={humanityThreat}>{scan ? scan.humanityStage : "未扫描"}</dd>
-          </div>
-          {scanTimeText && (
-            <div className={styles.statStamp}>
-              <dt>扫描</dt>
-              <dd>{scanTimeText}</dd>
+          {hackStatus && (
+            <div className={styles.subRow}>
+              <span className={styles.subKey}>电子战态势</span>
+              <span className={styles.subVal} data-tone="cyan">
+                {[
+                  hackStatus.breached
+                    ? hackStatus.breachedVia
+                      ? `已破冰（经${hackStatus.breachedVia}）`
+                      : "已破冰（立足点）"
+                    : null,
+                  ...hackStatus.activeEffects.map((eff) => `生效中：${eff}`),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
             </div>
           )}
-        </dl>
-
-        {scan ? (
-          <div className={styles.netRow} data-threat={netThreat}>
-            <span className={styles.netRowKey}>骇入防线</span>
-            <span className={styles.netRowVal}>{scan.netLabel}</span>
-          </div>
-        ) : (
-          <p className={styles.unscannedNote}>
-            尚未扫描 · 点击上方「义眼扫描」可即时透视骇入防线、全部植入体与战术弱点（不消耗回合）。
-          </p>
-        )}
-      </div>
-
-      {/* 下方双栏：左列义体、创伤与穿戴衣物，右列战术弱点与随身武装/物品 */}
-      <div className={styles.tacticalColumns}>
-        <div className={styles.tacticalCol}>
-          <div className={styles.subSection}>
-            <header className={styles.subHead}>
-              <h4 className={styles.subTitle}>已检出义体</h4>
-              <span className={styles.subCount}>{scan ? chrome.length : "—"}</span>
-            </header>
-            {!scan ? (
-              <p className={styles.emptyNote}>扫描后显示植入体结构与无线骇入节点。</p>
-            ) : chrome.length > 0 ? (
-              <ul className={styles.entryList} aria-label="已检出义体">
-                {chrome.map((c: NpcChromeItem) => {
-                  const art = itemArtOf(c.id);
-                  const inner = (
-                    <>
-                      <CellFrame />
-                      <NineSlice
-                        id="cyber.cellRarity"
-                        tint="var(--entry-accent, var(--cp-cyan))"
-                        slice={0}
-                        className={styles.entryRarityBar}
+          {injuries.length > 0 && (
+            <div className={styles.subRow}>
+              <span className={styles.subKey}>具体创口</span>
+              <span className={styles.subVal} data-tone="warn">
+                {injuries
+                  .map(
+                    (inj) =>
+                      `${inj.partLabel}·${inj.cause}（${inj.tierLabel}${inj.treated ? "/已处理" : ""}）`,
+                  )
+                  .join(" ｜ ")}
+              </span>
+            </div>
+          )}
+          {foe && foe.carry.length > 0 && (
+            <div className={styles.subRow} data-block>
+              <span className={styles.subKey}>可见掉落</span>
+              <div className={styles.inlineVisualList}>
+                {foe.carry.map((carryItem) => {
+                  const baseId = carryItem.baseId ?? carryItem.id;
+                  const art = itemArtOf(baseId);
+                  return (
+                    <span key={carryItem.id} className={styles.inlineVisualChip} data-tone="warn">
+                      <SlotThumb
+                        art={art}
+                        fallback="notify.inventory"
+                        alt={carryItem.name}
+                        size="sm"
+                        tint="var(--cp-yellow)"
                       />
-                      <ItemThumb art={art} fallback="cyber.os" alt={c.name} />
-                      <span className={styles.entryCopy}>
-                        <span className={styles.entryHead}>
-                          <b>{c.name}</b>
-                          {c.slot && <span className={styles.chromeSlot}>{c.slot}</span>}
-                          {c.netTag === "deck" && <span className={styles.chromeTag}>接入仓</span>}
+                      <span className={styles.inlineChipText}>{carryItem.name}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {clothes.length > 0 && (
+            <div className={styles.subRow} data-block>
+              <span className={styles.subKey}>穿戴衣着</span>
+              <div className={styles.inlineVisualList}>
+                {clothes.map((item) => {
+                  const baseId = item.baseId ?? item.id;
+                  const art = itemArtOf(baseId);
+                  const tooltip = [item.subLabel, item.name, item.rarityLabel, item.ability]
+                    .filter(Boolean)
+                    .join("\n");
+                  return (
+                    <span
+                      key={item.id}
+                      className={styles.inlineVisualChip}
+                      data-rarity={item.rarity ?? undefined}
+                      title={tooltip}
+                    >
+                      <SlotThumb
+                        art={art}
+                        fallback="map.poi.clothes"
+                        alt={item.name}
+                        size="sm"
+                        tint="var(--rarity, var(--cp-cyan))"
+                      />
+                      <span className={styles.inlineChipCopy}>
+                        {item.subLabel && (
+                          <em className={styles.inlineChipSlot}>{item.subLabel}</em>
+                        )}
+                        <span className={styles.inlineChipText}>{item.name}</span>
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 卡 2：战术弱点（双列 qh.cell 切角插槽） */}
+      {scan && scan.tips.length > 0 && (
+        <section className={styles.card} aria-label="战术弱点">
+          <CellFrame />
+          <div className={styles.cardHead}>
+            <span className={styles.cardLabel}>WEAKNESS {"//"} 战术突破口</span>
+            <span className={styles.cardValue} data-tone="warn">
+              {scan.tips.length} 处弱点
+            </span>
+          </div>
+          <div className={styles.progGrid}>
+            {scan.tips.map((tip, idx) => {
+              const indexCode = String(idx + 1).padStart(2, "0");
+              return (
+                <div key={tip} className={styles.progCell} data-tone="warn" title={tip}>
+                  <TacticalCellFrame tone="warn" />
+                  <div className={styles.progTop}>
+                    <span className={styles.progIdent}>
+                      <span className={styles.slotIndex}>{indexCode}</span>
+                      <strong className={styles.progName}>战术弱点</strong>
+                    </span>
+                    {onDraftAction && (
+                      <button
+                        type="button"
+                        className={styles.slotAction}
+                        data-tone="warn"
+                        onClick={() => onDraftAction(`针对 ${npc.name} 的弱点（${tip}），`)}
+                      >
+                        <NineSlice
+                          id="tab.bg"
+                          tint="currentColor"
+                          slice={14}
+                          className={styles.actionBg}
+                        />
+                        <span>采用</span>
+                      </button>
+                    )}
+                  </div>
+                  <p className={styles.progDesc}>{tip}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* 卡 3：已检出义体（双列 qh.cell 切角插槽 + 2077 义体实图） */}
+      {scan && (
+        <section className={styles.card} aria-label="已检出义体">
+          <CellFrame />
+          <div className={styles.cardHead}>
+            <span className={styles.cardLabel}>CYBERWARE {"//"} 已检出植入体</span>
+            <span className={styles.cardValue}>{chrome.length} 件</span>
+          </div>
+          {chrome.length > 0 ? (
+            <div className={styles.progGrid}>
+              {chrome.map((c: NpcChromeItem, idx) => {
+                const indexCode = String(idx + 1).padStart(2, "0");
+                const art = itemArtOf(c.id);
+                const fallbackIcon: AssetId = CHROME_SLOT_ICON[c.slot] ?? "cyber.os";
+                const tooltip = [c.name, c.slot, c.ability].filter(Boolean).join("\n");
+                return (
+                  <div
+                    key={c.id}
+                    className={styles.progCell}
+                    data-has-thumb
+                    data-tone={c.netTag === "selfIce" ? "warn" : undefined}
+                    title={tooltip}
+                  >
+                    <TacticalCellFrame tone={c.netTag === "selfIce" ? "warn" : "default"} />
+                    <SlotThumb
+                      art={art}
+                      fallback={fallbackIcon}
+                      alt={c.name}
+                      tint={c.netTag === "selfIce" ? "var(--cp-yellow)" : "var(--cp-cyan)"}
+                    />
+                    <div className={styles.progBody}>
+                      <div className={styles.progTop}>
+                        <span className={styles.progIdent}>
+                          <span className={styles.slotIndex}>{indexCode}</span>
+                          <strong className={styles.progName}>{c.name}</strong>
+                        </span>
+                        {onDraftAction && (
+                          <button
+                            type="button"
+                            className={styles.slotAction}
+                            onClick={() =>
+                              onDraftAction(`针对 ${npc.name} 的植入体「${c.name}」，`)
+                            }
+                          >
+                            <NineSlice
+                              id="tab.bg"
+                              tint="currentColor"
+                              slice={14}
+                              className={styles.actionBg}
+                            />
+                            <span>针对</span>
+                          </button>
+                        )}
+                      </div>
+                      {(c.slot || c.netTag) && (
+                        <div className={styles.progMeta}>
+                          {c.slot && <span className={styles.metaItem}>{c.slot}</span>}
+                          {c.netTag === "deck" && <span className={styles.metaItem}>接入仓</span>}
                           {c.netTag === "selfIce" && (
-                            <span className={styles.chromeTag} data-tone="warn">
+                            <span className={styles.metaItem} data-tone="warn">
                               自我 ICE
                             </span>
                           )}
-                        </span>
-                        {c.ability && <span className={styles.entryDesc}>{c.ability}</span>}
-                      </span>
-                      {onDraftAction && (
-                        <em className={styles.entryCue} aria-hidden>
-                          针对 ▸
-                        </em>
-                      )}
-                    </>
-                  );
-                  return (
-                    <li key={c.id} className={styles.entryItem}>
-                      {onDraftAction ? (
-                        <button
-                          type="button"
-                          className={styles.entryRowBtn}
-                          data-tone="chrome"
-                          title={`针对「${c.name}」填入行动草稿`}
-                          onClick={() => onDraftAction(`针对 ${npc.name} 的植入体「${c.name}」，`)}
-                        >
-                          {inner}
-                        </button>
-                      ) : (
-                        <div className={styles.entryRow} data-tone="chrome">
-                          {inner}
                         </div>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className={styles.emptyNote}>未检出可识别义体，属低改或纯肉身目标。</p>
-            )}
-          </div>
-
-          {injuries.length > 0 ? (
-            <div className={styles.subSection}>
-              <header className={styles.subHead}>
-                <h4 className={styles.subTitle}>创伤明细</h4>
-                <span className={styles.subCount}>{injuries.length}</span>
-              </header>
-              <ul className={styles.woundList} aria-label="具体伤势">
-                {injuries.map((inj) => (
-                  <li key={inj.id} className={styles.woundItem} data-tier={inj.tier}>
-                    <CellFrame />
-                    <NineSlice
-                      id="cyber.cellRarity"
-                      tint="var(--wound-accent, var(--cp-yellow))"
-                      slice={0}
-                      className={styles.entryRarityBar}
-                    />
-                    <span className={styles.woundPart}>{inj.partLabel}</span>
-                    <span className={styles.woundInfo}>
-                      <span className={styles.woundTop}>
-                        <b>{inj.cause}</b>
-                        <span className={styles.woundTier}>{inj.tierLabel}</span>
-                      </span>
-                      <small>{worldRules.formatGameTime(inj.at)}</small>
-                    </span>
-                    <span className={styles.woundTag} data-treated={inj.treated || undefined}>
-                      {inj.treated ? "已处理" : "未处理"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                    </div>
+                    {c.ability && <p className={styles.progDesc}>{c.ability}</p>}
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            body.wound !== "没受伤" && (
-              <p className={styles.emptyNote}>当前呈{body.wound}状态，暂无具体部位创口记录。</p>
-            )
+            <p className={styles.emptyNote}>未检出可识别义体，属低改或纯肉身目标。</p>
           )}
+        </section>
+      )}
 
-          {clothes.length > 0 && (
-            <div className={styles.subSection}>
-              <header className={styles.subHead}>
-                <h4 className={styles.subTitle}>穿戴衣物</h4>
-                <span className={styles.subCount}>{clothes.length}</span>
-              </header>
-              <ul className={styles.clothGrid} aria-label="穿戴衣物">
-                {clothes.map((item) => {
-                  const baseId =
-                    "baseId" in item && typeof item.baseId === "string" ? item.baseId : item.id;
-                  const art = itemArtOf(baseId);
-                  return (
-                    <li
-                      key={item.id}
-                      className={styles.clothRow}
-                      data-rarity={item.rarity ?? undefined}
-                      title={item.ability ?? undefined}
-                    >
-                      <CellFrame />
-                      <NineSlice
-                        id="cyber.cellRarity"
-                        tint="var(--rarity, rgb(94 246 255 / 55%))"
-                        slice={0}
-                        className={styles.clothRarityBar}
-                      />
-                      <ItemThumb art={art} fallback="map.poi.clothes" alt={item.name} compact />
-                      <span className={styles.clothCopy}>
-                        {item.subLabel && <em className={styles.clothSlot}>{item.subLabel}</em>}
-                        <b>{item.name}</b>
+      {/* 卡 4：随身武装与物品合并双列切角插槽（附 2077 武器/物品实图） */}
+      {arsenal.length > 0 && (
+        <section className={styles.card} aria-label="随身武装与物品">
+          <CellFrame />
+          <div className={styles.cardHead}>
+            <span className={styles.cardLabel}>ARSENAL {"//"} 随身武装与物品</span>
+            <span className={styles.cardValue}>{arsenal.length} 件</span>
+          </div>
+          <div className={styles.progGrid}>
+            {arsenal.map(({ item, tone }, idx) => {
+              const indexCode = String(idx + 1).padStart(2, "0");
+              const baseId = item.baseId ?? item.id;
+              const art = itemArtOf(baseId);
+              const fallbackIcon: AssetId =
+                tone === "weapon" ? weaponHudIconOf(baseId, item.subLabel) : "notify.inventory";
+              const label = item.name.startsWith("wpn:") ? baseWeaponIdOf(item.name) : item.name;
+              const draftPrompt =
+                tone === "weapon"
+                  ? `盯着 ${npc.name} 身上的「${label}」，`
+                  : `留意 ${npc.name} 随身带着的「${label}」，`;
+              const tooltip = [label, item.subLabel, item.rarityLabel, item.ability]
+                .filter(Boolean)
+                .join("\n");
+              return (
+                <div
+                  key={item.id}
+                  className={styles.progCell}
+                  data-has-thumb
+                  data-tone={item.iconic ? "warn" : tone === "weapon" ? "danger" : undefined}
+                  data-rarity={item.rarity ?? undefined}
+                  title={tooltip}
+                >
+                  <TacticalCellFrame
+                    tone={item.iconic ? "warn" : tone === "weapon" ? "danger" : "default"}
+                  />
+                  <SlotThumb
+                    art={art}
+                    fallback={fallbackIcon}
+                    alt={label}
+                    size={tone === "weapon" ? "wide" : "md"}
+                    tint={
+                      item.iconic
+                        ? "var(--rar-iconic, var(--cp-yellow))"
+                        : "var(--rarity, var(--slot-accent, var(--cp-cyan)))"
+                    }
+                  />
+                  <div className={styles.progBody}>
+                    <div className={styles.progTop}>
+                      <span className={styles.progIdent}>
+                        <span className={styles.slotIndex}>{indexCode}</span>
+                        <strong className={styles.progName}>{label}</strong>
                       </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className={styles.tacticalCol}>
-          {scan && scan.tips.length > 0 && (
-            <div className={styles.subSection}>
-              <header className={styles.subHead}>
-                <h4 className={styles.subTitle}>战术弱点</h4>
-                <span className={styles.subHint}>
-                  {onDraftAction ? "点选填入行动" : `${scan.tips.length} 条`}
-                </span>
-              </header>
-              <ul className={styles.tacticalList}>
-                {scan.tips.map((tip, idx) => {
-                  const indexCode = String(idx + 1).padStart(2, "0");
-                  const inner = (
-                    <>
-                      <CellFrame />
-                      <NineSlice
-                        id="cyber.cellRarity"
-                        tint="var(--cp-yellow)"
-                        slice={0}
-                        className={styles.entryRarityBar}
-                      />
-                      <span className={styles.tacticalBadge} aria-hidden>
-                        {indexCode}
-                      </span>
-                      <span className={styles.tacticalText}>{tip}</span>
                       {onDraftAction && (
-                        <em className={styles.tacticalCue} aria-hidden>
-                          采用 ▸
-                        </em>
-                      )}
-                    </>
-                  );
-                  return (
-                    <li key={tip}>
-                      {onDraftAction ? (
                         <button
                           type="button"
-                          className={styles.tacticalBtn}
-                          onClick={() => onDraftAction(`针对 ${npc.name} 的弱点（${tip}），`)}
+                          className={styles.slotAction}
+                          data-tone={tone === "weapon" ? "danger" : "warn"}
+                          onClick={() => onDraftAction(draftPrompt)}
                         >
-                          {inner}
+                          <NineSlice
+                            id="tab.bg"
+                            tint="currentColor"
+                            slice={14}
+                            className={styles.actionBg}
+                          />
+                          <span>{tone === "weapon" ? "盯防" : "留意"}</span>
                         </button>
-                      ) : (
-                        <div className={styles.tacticalItem}>{inner}</div>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {foe && foe.carry.length > 0 && (
-            <div className={styles.contextCallout} data-tone="danger">
-              <p className={styles.contextMeta}>
-                <strong>战利品可见：</strong>
-                {foe.carry.map((i) => i.name).join("、")}
-              </p>
-            </div>
-          )}
-
-          {weapons.length > 0 && (
-            <GearGroup
-              title="随身武装"
-              npcName={npc.name}
-              items={weapons}
-              tone="weapon"
-              onDraftAction={onDraftAction}
-            />
-          )}
-
-          {carried.length > 0 && (
-            <GearGroup
-              title="随身物品"
-              npcName={npc.name}
-              items={carried}
-              tone="item"
-              onDraftAction={onDraftAction}
-            />
-          )}
-
-          {!hasRightContent && (
-            <p className={styles.emptyNote}>
-              {scan ? "暂未发现明显弱点或登记随身武装。" : "暂未发现肉眼可见明面装备。"}
-            </p>
-          )}
-        </div>
-      </div>
+                    </div>
+                    {(item.subLabel || item.rarityLabel || item.iconic) && (
+                      <div className={styles.progMeta}>
+                        {item.subLabel && <span className={styles.metaItem}>{item.subLabel}</span>}
+                        {item.rarityLabel && (
+                          <span className={styles.metaItem} data-rarity>
+                            {item.rarityLabel}
+                          </span>
+                        )}
+                        {item.iconic && (
+                          <span className={styles.metaItem} data-tone="warn">
+                            不朽
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {item.ability && <p className={styles.progDesc}>{item.ability}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </section>
   );
 }
 
-function GearGroup({
-  title,
-  npcName,
-  items,
-  tone,
-  onDraftAction,
-}: {
-  readonly title: string;
-  readonly npcName: string;
-  readonly items: readonly NpcGearItem[];
-  readonly tone: "weapon" | "item";
-  readonly onDraftAction?: ((text: string) => void) | undefined;
-}) {
-  return (
-    <div className={styles.subSection}>
-      <header className={styles.subHead}>
-        <h4 className={styles.subTitle}>{title}</h4>
-        <span className={styles.subCount}>{items.length}</span>
-      </header>
-      <ul className={styles.entryList} aria-label={title}>
-        {items.map((item) => {
-          const baseId =
-            "baseId" in item && typeof item.baseId === "string" ? item.baseId : item.id;
-          const art = itemArtOf(baseId);
-          const label = item.name.startsWith("wpn:") ? baseWeaponIdOf(item.name) : item.name;
-          const draftPrompt =
-            tone === "weapon"
-              ? `盯着 ${npcName} 身上的「${label}」，`
-              : `留意 ${npcName} 随身带着的「${label}」，`;
-          const fallbackIcon: AssetId = tone === "weapon" ? "weapon.pistol" : "notify.inventory";
-          const inner = (
-            <>
-              <CellFrame />
-              <NineSlice
-                id="cyber.cellRarity"
-                tint="var(--rarity, var(--entry-accent, var(--cp-cyan)))"
-                slice={0}
-                className={styles.entryRarityBar}
-              />
-              <ItemThumb art={art} fallback={fallbackIcon} alt={label} />
-              <span className={styles.entryCopy}>
-                <span className={styles.entryHead}>
-                  <b>{label}</b>
-                  {item.subLabel && <span className={styles.entryMeta}>{item.subLabel}</span>}
-                  {item.rarityLabel && (
-                    <span className={styles.entryRarity}>{item.rarityLabel}</span>
-                  )}
-                  {item.iconic && <span className={styles.gearIconic}>不朽</span>}
-                </span>
-                {item.ability && <span className={styles.entryDesc}>{item.ability}</span>}
-              </span>
-              {onDraftAction && (
-                <em className={styles.entryCue} aria-hidden>
-                  留意 ▸
-                </em>
-              )}
-            </>
-          );
-          return (
-            <li key={item.id} className={styles.entryItem}>
-              {onDraftAction ? (
-                <button
-                  type="button"
-                  className={styles.entryRowBtn}
-                  data-tone={tone}
-                  data-rarity={item.rarity ?? undefined}
-                  data-iconic={item.iconic || undefined}
-                  title={item.ability ?? `针对「${label}」填入行动草稿`}
-                  onClick={() => onDraftAction(draftPrompt)}
-                >
-                  {inner}
-                </button>
-              ) : (
-                <div
-                  className={styles.entryRow}
-                  data-tone={tone}
-                  data-rarity={item.rarity ?? undefined}
-                  data-iconic={item.iconic || undefined}
-                  title={item.ability ?? undefined}
-                >
-                  {inner}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-/** 档案与关系页：关系定性、宿敌恩怨、外貌与背景资料、共同记忆、已知情报与人际关系 */
+/** 档案与关系页：统一使用 2077 CellFrame 诊断卡 + subRows 键值与时间轴行 */
 function DossierSection({
   npc,
   fixer,
@@ -1142,184 +1202,133 @@ function DossierSection({
   const hasMemories = npc.ledger.length > 0 || npc.memories.length > 0;
   const hasKnownInfo = npc.known.length > 0 || concerns.length > 0;
   const hasTies = npc.ties.length > 0;
-  const hasOther = hasKnownInfo || hasTies;
 
   const tone = profileTone(npc, foe);
   const relationTone =
     tone === "hostile" || tone === "nemesis"
-      ? "danger"
+      ? "bad"
       : tone === "ally" || npc.affinity >= 20
-        ? "ally"
-        : "neutral";
+        ? "warn"
+        : "cyan";
 
   const showBlocked = Boolean(fixer?.blocked && fixer.blockReason);
-  const facts: readonly (readonly [string, string])[] = [
-    ...(npc.homePlace ? ([["常在地点", npc.homePlace]] as const) : []),
-    ...(npc.doing ? ([["近期动向", npc.doing]] as const) : []),
-    ...(!npc.here && npc.lastPlace ? ([["最后出现", npc.lastPlace]] as const) : []),
-    ...(showBlocked && fixer?.blockReason ? ([["中间人渠道", fixer.blockReason]] as const) : []),
-  ];
   const hasStructuredClothes = Boolean(npc.body?.gear.some((item) => item.kind === "clothing"));
   const showOutfitText = Boolean(npc.outfit && !hasStructuredClothes);
-  const hasProfileNotes = npc.met && (Boolean(npc.look) || showOutfitText || facts.length > 0);
-  const memoryCount = npc.ledger.length + npc.memories.length;
-  const knownCount = npc.known.length + concerns.length;
+  const facts: readonly (readonly [string, string, ("bad" | "warn" | "cyan")?])[] = [
+    ...(npc.nemesis
+      ? ([
+          [
+            npc.nemesis.ended ? "旧宿敌恩怨" : "宿敌恩怨",
+            `${npc.nemesis.since}：${npc.nemesis.how}${npc.nemesis.ended ? `（结局：${npc.nemesis.ended}）` : npc.nemesis.prep ? `（动向：${npc.nemesis.prep}）` : ""}`,
+            "bad",
+          ],
+        ] as const)
+      : []),
+    ...(npc.homePlace ? ([["常在地点", npc.homePlace]] as const) : []),
+    ...(npc.doing ? ([["近期动向", npc.doing, "cyan"]] as const) : []),
+    ...(!npc.here && npc.lastPlace ? ([["最后出现", npc.lastPlace]] as const) : []),
+    ...(showBlocked && fixer?.blockReason
+      ? ([["中间人渠道", fixer.blockReason, "warn"]] as const)
+      : []),
+    ...(npc.met && npc.look ? ([["外貌特征", npc.look]] as const) : []),
+    ...(npc.met && showOutfitText && npc.outfit ? ([["日常衣着", npc.outfit]] as const) : []),
+  ];
 
-  const memoryBlock = hasMemories && (
-    <div className={styles.subSection}>
-      <header className={styles.subHead}>
-        <h4 className={styles.subTitle}>共同记忆</h4>
-        <span className={styles.subCount}>{memoryCount}</span>
-      </header>
-      <ul className={styles.list}>
-        {unsettledLedger.map((e) => (
-          <li key={`${e.at}|${e.kind}|${e.text}`}>
-            <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
-              {e.label}
-            </span>
-            {e.text}
-            <small>{e.at} · 未了结</small>
-          </li>
-        ))}
-        {npc.memories.map((m) => (
-          <li key={m}>
-            <span className={styles.kind} data-tone="memory">
-              记忆
-            </span>
-            {m}
-          </li>
-        ))}
-        {settledLedger.map((e) => (
-          <li key={`${e.at}|${e.kind}|${e.text}`} data-settled>
-            <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
-              {e.label}
-            </span>
-            {e.text}
-            <small>
-              {e.at}，{e.settled} 了结{e.how ? `：${e.how}` : ""}
-            </small>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  const knownBlock = hasKnownInfo && (
-    <div className={styles.subSection}>
-      <header className={styles.subHead}>
-        <h4 className={styles.subTitle}>已知情报</h4>
-        <span className={styles.subCount}>{knownCount}</span>
-      </header>
-      <ul className={styles.list}>
-        {npc.known.map((k) => (
-          <li key={k.text}>
-            <span className={styles.kind}>{k.sourceLabel}</span>
-            {k.text}
-            <small>{k.at}</small>
-          </li>
-        ))}
-        {concerns.map((c) => (
-          <li key={c.id}>
-            <span className={styles.kind} data-tone="warn">
-              心事 · {c.statusLabel}
-            </span>
-            {c.title}
-            {c.outcome && <small>{c.outcome}</small>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  const tiesBlock = hasTies && (
-    <div className={styles.subSection}>
-      <header className={styles.subHead}>
-        <h4 className={styles.subTitle}>认识的人</h4>
-        <span className={styles.subCount}>{npc.ties.length}</span>
-      </header>
-      <ul className={styles.list}>
-        {npc.ties.map((t) => (
-          <li key={t.id} data-settled={!t.alive || undefined}>
-            <span className={styles.kind} data-tone="tie">
-              {t.name}
-            </span>
-            {t.text}
-            {!t.alive && <small>已故</small>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  const totalRecords =
+    npc.ledger.length + npc.memories.length + npc.known.length + concerns.length + npc.ties.length;
 
   return (
     <section className={styles.dossierStack} aria-label="档案与关系">
-      <div
-        className={styles.relationCallout}
-        data-tone={relationTone}
-        data-empty={!npc.relation || undefined}
-      >
-        <p className={styles.relationText}>{npc.relation ?? "还说不上什么关系。"}</p>
-      </div>
-
-      {npc.nemesis && (
-        <div className={styles.contextCallout} data-tone="danger">
-          <p className={styles.contextMeta}>
-            <strong>{npc.nemesis.ended ? "旧宿敌恩怨" : "宿敌恩怨"}</strong> · {npc.nemesis.since}：
-            {npc.nemesis.how}
-          </p>
-          {npc.nemesis.ended ? (
-            <p className={styles.contextMeta}>结局：{npc.nemesis.ended}</p>
-          ) : (
-            npc.nemesis.prep && <p className={styles.contextWarn}>动向：{npc.nemesis.prep}</p>
-          )}
+      {/* 卡 1：关系定性与背景档案 */}
+      <section className={styles.card} aria-label="关系与背景">
+        <CellFrame />
+        <div className={styles.cardHead}>
+          <span className={styles.cardLabel}>RELATION {"//"} 关系与背景档案</span>
+          <span className={styles.cardValue} data-tone={relationTone}>
+            {npc.met ? `好感 ${formatAffinity(npc.affinity)}` : "未正式照面"}
+          </span>
         </div>
-      )}
-
-      {hasProfileNotes && (
-        <div className={styles.appearancePanel}>
-          {facts.length > 0 && (
-            <dl className={styles.factStrip}>
-              {facts.map(([label, value]) => (
-                <div key={label} className={styles.factCell}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-          {npc.look && (
-            <p className={styles.look}>
-              <em className={styles.lookKey}>外貌</em>
-              <span>{npc.look}</span>
-            </p>
-          )}
-          {showOutfitText && npc.outfit && (
-            <p className={styles.look}>
-              <em className={styles.lookKey}>衣着</em>
-              <span>{npc.outfit}</span>
-            </p>
-          )}
-        </div>
-      )}
-
-      {hasMemories && hasOther ? (
-        <div className={styles.duoGrid}>
-          {memoryBlock}
-          <div className={styles.subStack}>
-            {knownBlock}
-            {tiesBlock}
+        <p className={styles.relationCopy} data-tone={relationTone}>
+          {npc.relation ?? "还说不上什么关系。"}
+        </p>
+        {facts.length > 0 && (
+          <div className={styles.subRows}>
+            {facts.map(([label, value, rowTone]) => (
+              <div key={label} className={styles.subRow}>
+                <span className={styles.subKey}>{label}</span>
+                <span className={styles.subVal} data-tone={rowTone}>
+                  {value}
+                </span>
+              </div>
+            ))}
           </div>
-        </div>
-      ) : (
-        <>
-          {memoryBlock}
-          {knownBlock}
-          {tiesBlock}
-        </>
-      )}
+        )}
+      </section>
 
-      {!hasMemories && !hasOther && !hasProfileNotes && (
-        <p className={styles.emptyNote}>还没攒下共同记忆，也还没打听到更多底细。</p>
+      {/* 卡 2：共同记忆、已知情报与人际脉络 */}
+      {(hasMemories || hasKnownInfo || hasTies) && (
+        <section className={styles.card} aria-label="记忆与情报记录">
+          <CellFrame />
+          <div className={styles.cardHead}>
+            <span className={styles.cardLabel}>CHRONICLE {"//"} 记忆 · 情报 · 人脉</span>
+            <span className={styles.cardValue}>{totalRecords} 条记录</span>
+          </div>
+          <div className={styles.subRows}>
+            {unsettledLedger.map((e) => (
+              <div key={`${e.at}|${e.kind}|${e.text}`} className={styles.dossierRow}>
+                <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
+                  {e.label}
+                </span>
+                <span className={styles.listBody}>{e.text}</span>
+                <small>{e.at} · 未了结</small>
+              </div>
+            ))}
+            {npc.memories.map((m) => (
+              <div key={m} className={styles.dossierRow}>
+                <span className={styles.kind} data-tone="memory">
+                  记忆
+                </span>
+                <span className={styles.listBody}>{m}</span>
+              </div>
+            ))}
+            {settledLedger.map((e) => (
+              <div key={`${e.at}|${e.kind}|${e.text}`} className={styles.dossierRow} data-settled>
+                <span className={styles.kind} data-tone={e.kind === "grudge" ? "danger" : "accent"}>
+                  {e.label}
+                </span>
+                <span className={styles.listBody}>{e.text}</span>
+                <small>
+                  {e.at} · {e.settled}了结{e.how ? `：${e.how}` : ""}
+                </small>
+              </div>
+            ))}
+            {npc.known.map((k) => (
+              <div key={k.text} className={styles.dossierRow}>
+                <span className={styles.kind}>{k.sourceLabel}</span>
+                <span className={styles.listBody}>{k.text}</span>
+                <small>{k.at}</small>
+              </div>
+            ))}
+            {concerns.map((c) => (
+              <div key={c.id} className={styles.dossierRow}>
+                <span className={styles.kind} data-tone="warn">
+                  心事 · {c.statusLabel}
+                </span>
+                <span className={styles.listBody}>{c.title}</span>
+                {c.outcome && <small>{c.outcome}</small>}
+              </div>
+            ))}
+            {npc.ties.map((t) => (
+              <div key={t.id} className={styles.dossierRow} data-settled={!t.alive || undefined}>
+                <span className={styles.kind} data-tone="tie">
+                  人脉 · {t.name}
+                </span>
+                <span className={styles.listBody}>{t.text}</span>
+                {!t.alive && <small>已故</small>}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </section>
   );
@@ -1351,7 +1360,9 @@ export function Profile({
   npc,
   fixer,
   foe,
+  hackStatus,
   embedded = false,
+  headerSlot,
   topSlot,
   onScan,
   onCompanion,
@@ -1360,9 +1371,12 @@ export function Profile({
   readonly npc: Npc;
   readonly fixer?: Fixer | undefined;
   readonly foe?: CombatFoe | undefined;
+  readonly hackStatus?: ProfileHackStatus | undefined;
   /** 嵌入外层人物展开框时去掉内层重复的九宫格边框 */
   readonly embedded?: boolean | undefined;
-  /** 嵌入页签栏右侧的附属控件（如在场目标快切 + 关闭按钮），把顶栏和页签合成一行 */
+  /** 位于分栏页签上方的顶行控制条（如在场目标切换 + 收起按钮） */
+  readonly headerSlot?: ReactNode;
+  /** 嵌入页签栏右侧的附属控件（如人物面板里的连线状态与定位操作） */
   readonly topSlot?: ReactNode;
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
@@ -1380,41 +1394,54 @@ export function Profile({
 
   return (
     <article className={styles.profile} aria-label={`${npc.name}的档案`}>
-      {(tabs.length > 1 || topSlot) && (
-        <div className={styles.topBar}>
-          {tabs.length > 1 && (
-            <nav className={styles.tabs} aria-label="档案分栏">
-              {tabs.map(([id, name, count]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={neural.tab}
-                  aria-pressed={id === tab}
-                  data-danger={
-                    (id === "dossier" &&
-                      (Boolean(foe) || Boolean(npc.nemesis && !npc.nemesis.ended))) ||
-                    (id === "tactical" && npcWoundSummary(npc.body).threat === "high") ||
-                    undefined
-                  }
-                  onClick={() => setPickedByNpc({ npcId: npc.id, tab: id })}
-                >
-                  <NineSlice id="tab.bg" tint="currentColor" slice={14} className={neural.tabBg} />
-                  <span className={neural.inner}>
-                    {name}
-                    {count > 0 && <b className={neural.badge}>{count}</b>}
-                  </span>
-                  {id === tab && (
-                    <span
-                      className={styles.tabActiveLine}
-                      style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
-                      aria-hidden
-                    />
-                  )}
-                </button>
-              ))}
-            </nav>
+      {(headerSlot || tabs.length > 1 || topSlot) && (
+        <div className={styles.topStack}>
+          {headerSlot && <div className={styles.headerRow}>{headerSlot}</div>}
+          {(tabs.length > 1 || topSlot) && (
+            <div className={styles.topBar}>
+              {tabs.length > 1 && (
+                <nav className={styles.tabs} aria-label="档案分栏">
+                  {tabs.map(([id, name, count]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={neural.tab}
+                      aria-pressed={id === tab}
+                      data-danger={
+                        (id === "dossier" &&
+                          (Boolean(foe) || Boolean(npc.nemesis && !npc.nemesis.ended))) ||
+                        (id === "tactical" && npcWoundSummary(npc.body).threat === "high") ||
+                        undefined
+                      }
+                      onClick={() => setPickedByNpc({ npcId: npc.id, tab: id })}
+                    >
+                      <NineSlice
+                        id="tab.bg"
+                        tint="currentColor"
+                        slice={14}
+                        className={neural.tabBg}
+                      />
+                      <span className={neural.inner}>
+                        {name}
+                        {count > 0 && <b className={neural.badge}>{count}</b>}
+                      </span>
+                      {id === tab && (
+                        <span
+                          className={styles.tabActiveLine}
+                          style={{
+                            maskImage: cssUrl("tab.line"),
+                            WebkitMaskImage: cssUrl("tab.line"),
+                          }}
+                          aria-hidden
+                        />
+                      )}
+                    </button>
+                  ))}
+                </nav>
+              )}
+              {topSlot && <div className={styles.topSlot}>{topSlot}</div>}
+            </div>
           )}
-          {topSlot && <div className={styles.topSlot}>{topSlot}</div>}
         </div>
       )}
 
@@ -1422,15 +1449,22 @@ export function Profile({
         npc={npc}
         fixer={fixer}
         foe={foe}
+        hackStatus={hackStatus}
         embedded={embedded}
         onScan={onScan && (() => onScan(npc.id))}
         onCompanion={onCompanion}
         onDraftAction={onDraftAction}
       />
 
-      <div className={styles.pane} key={`${npc.id}:${tab}`}>
+      <div className={styles.pane} key={tab}>
         {tab === "tactical" && npc.body && (
-          <ScanTacticalView npc={npc} body={npc.body} foe={foe} onDraftAction={onDraftAction} />
+          <ScanTacticalView
+            npc={npc}
+            body={npc.body}
+            foe={foe}
+            hackStatus={hackStatus}
+            onDraftAction={onDraftAction}
+          />
         )}
         {tab === "dossier" && <DossierSection npc={npc} fixer={fixer} foe={foe} />}
       </div>

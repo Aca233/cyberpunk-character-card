@@ -11,7 +11,13 @@ const CELL_SLICE = [20, 30, 30, 20] as const;
  * 父元素要 position: relative 和 isolation: isolate，两层垫在内容下面。
  * 可选 surface 插在底板与框线之间，用来承载同形蒙版材质/斜向掠射反光，确保框线锐利不糊。
  */
-export function CellFrame({ surface }: { readonly surface?: ReactNode } = {}) {
+export function CellFrame({
+  surface,
+  borderFx,
+}: {
+  readonly surface?: ReactNode;
+  readonly borderFx?: ReactNode;
+} = {}) {
   return (
     <>
       <NineSlice
@@ -27,6 +33,7 @@ export function CellFrame({ surface }: { readonly surface?: ReactNode } = {}) {
         slice={CELL_SLICE}
         className={styles.slice}
       />
+      {borderFx}
     </>
   );
 }

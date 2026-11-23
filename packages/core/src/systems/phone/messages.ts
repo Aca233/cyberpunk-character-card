@@ -50,7 +50,8 @@ type PhoneState = ReturnType<typeof PhoneStateSchema.parse>;
 export function phoneMessagesView({ world }: ViewContext) {
   const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
   const npcs = NpcStateSchema.parse(world.slices.npc);
-  const jobs = new Map(JobsStateSchema.parse(world.slices.jobs).jobs.map((j) => [j.id, j]));
+  const jobsState = JobsStateSchema.parse(world.slices.jobs);
+  const jobs = new Map(jobsState.jobs.map((j) => [j.id, j]));
   const shown = selectShownMessages(phoneState.messages, jobs);
   return {
     unread: phoneState.messages.filter((m) => m.sender !== "player" && !m.read).length,
@@ -80,27 +81,70 @@ export function phoneMessagesView({ world }: ViewContext) {
         repliedAt: m.repliedAt === undefined ? null : formatGameTime(m.repliedAt),
       };
     }),
-    /** 联系人：按最后一条消息排，新的在前；有人物卡的带好感和玩家知道的死活 */
+    /** 通讯录联系人：仅包含已交换联系方式或已有通讯往来的人物/频道；未读与最近往来在前 */
     contacts: (() => {
-      const latest = new Map<string, (typeof phoneState.messages)[number]>();
-      for (const m of phoneState.messages) latest.set(m.from, m);
-      return [...latest.values()]
-        .sort((a, b) => b.at - a.at || b.id - a.id)
-        .map((m) => {
-          const npc = npcs.npcs[m.from];
+      const latestMsg = new Map<string, (typeof phoneState.messages)[number]>();
+      for (const m of phoneState.messages) latestMsg.set(m.from, m);
+      const latestCall = new Map<string, (typeof phoneState.calls)[number]>();
+      for (const c of phoneState.calls) latestCall.set(c.from, c);
+
+      const keys = new Set<string>([
+        ...Object.keys(phoneState.contacts),
+        ...latestMsg.keys(),
+        ...latestCall.keys(),
+      ]);
+
+      return [...keys]
+        .map((from) => {
+          const entry = phoneState.contacts[from];
+          const msg = latestMsg.get(from);
+          const call = latestCall.get(from);
+          const npc = npcs.npcs[from];
+          const fixer = jobsState.fixers[from];
+          const unread = phoneState.messages.filter(
+            (x) => x.from === from && x.sender !== "player" && !x.read,
+          ).length;
+          const count = phoneState.messages.filter((x) => x.from === from).length;
+          const msgAt = msg ? Math.max(msg.at, msg.repliedAt ?? msg.at) : null;
+          const callAt = call ? (call.endedAt ?? call.at) : null;
+          const activityAt =
+            msgAt !== null && callAt !== null
+              ? Math.max(msgAt, callAt)
+              : (msgAt ?? callAt ?? entry?.addedAt ?? -1);
+          const alive = npc ? !deathKnown(npc) : true;
+          const met = Boolean(npc?.met);
+          const isFixer = Boolean(fixer);
           return {
-            from: m.from,
-            name: m.name,
-            npc: npc?.met ? npc.id : null,
-            affinity: npc?.met ? npc.affinity : null,
-            alive: npc ? !deathKnown(npc) : true,
-            last: formatGameTime(Math.max(m.at, m.repliedAt ?? m.at)),
-            unread: phoneState.messages.filter(
-              (x) => x.from === m.from && x.sender !== "player" && !x.read,
-            ).length,
-            count: phoneState.messages.filter((x) => x.from === m.from).length,
+            from,
+            name: npc?.name ?? fixer?.name ?? msg?.name ?? call?.name ?? from,
+            npc: met && npc ? npc.id : null,
+            affinity: met && npc ? npc.affinity : null,
+            alive,
+            met,
+            isFixer,
+            canChat: Boolean(npc) && alive,
+            contactSource: entry?.source ?? "inbound",
+            contactNote: entry?.note ?? null,
+            last:
+              msgAt !== null
+                ? formatGameTime(msgAt)
+                : callAt !== null
+                  ? formatGameTime(callAt)
+                  : null,
+            unread,
+            count,
+            _sortAt: activityAt,
+            _sortId: msg?.id ?? 0,
           };
-        });
+        })
+        .sort(
+          (a, b) =>
+            Number(b.unread > 0) - Number(a.unread > 0) ||
+            b._sortAt - a._sortAt ||
+            b._sortId - a._sortId ||
+            (a.from < b.from ? -1 : a.from > b.from ? 1 : 0),
+        )
+        .map(({ _sortAt: _at, _sortId: _id, ...item }) => item);
     })(),
   };
 }

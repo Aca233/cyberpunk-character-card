@@ -68,6 +68,7 @@ export const inventory = defineSystem<
     heldWeapons: null,
     clothing: {},
     parts: 0,
+    claimedQuickhacks: [],
     merchants: {},
     supplyOrders: {},
     nextSupply: 1,

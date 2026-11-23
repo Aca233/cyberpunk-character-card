@@ -1,0 +1,453 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 4 10 / 74%);
+  animation: fadeIn var(--dur-modal) ease-out both;
+}
+
+.modal {
+  position: relative;
+  isolation: isolate;
+  width: min(960px, 100%);
+  max-height: min(90dvh, 840px);
+  display: flex;
+  flex-direction: column;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  animation: popIn 240ms var(--ease-snap) both;
+}
+
+.slice {
+  z-index: -1;
+}
+
+.inner {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+  padding: 22px 28px 22px 30px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.headLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.headGlow {
+  flex: none;
+}
+
+.headTitles {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.code {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+
+.title {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scopeChip {
+  padding: 3px 10px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface);
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.divider {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin: 14px 0 18px;
+  background: var(--cp-red);
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+}
+
+.gridWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.storyToggleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--cp-line-subtle);
+  border-left: 3px solid var(--cp-cyan);
+  background: var(--cp-surface);
+  cursor: var(--cp-cursor-hand);
+}
+
+.storyToggleText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.storyToggleText strong {
+  color: var(--cp-text);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.storyToggleText span {
+  color: var(--cp-text-dim);
+  font-size: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.grid[data-compact] {
+  gap: 12px;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-strong);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+  will-change: transform;
+  transform-origin: center center;
+  transition:
+    border-color var(--dur-flash) var(--ease-cyber),
+    filter var(--dur-flash) var(--ease-cyber);
+}
+
+.card[data-tilting] {
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg));
+  filter: drop-shadow(0 8px 16px rgb(0 0 0 / 38%));
+}
+
+.card[data-tilting][data-pressed] {
+  transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
+    rotateY(var(--tilt-ry, 0deg)) scale(0.986);
+}
+
+.card[data-active] {
+  border-color: var(--cp-cyan);
+  box-shadow: 0 0 16px rgb(94 246 255 / 16%);
+}
+
+.preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background-color: var(--cp-bg);
+  background-position: center 42%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-bottom: 1px solid var(--cp-line-faint);
+}
+
+.previewShade {
+  position: absolute;
+  inset: 0;
+  background: rgb(6 6 14 / 20%);
+}
+
+.previewBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 8px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(8 8 16 / 82%);
+  color: var(--cp-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.statusChip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--cp-line-subtle);
+  background: rgb(8 8 16 / 86%);
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.statusChip[data-tone="active"] {
+  border-color: var(--cp-cyan);
+  background: rgb(14 42 52 / 90%);
+  color: var(--cp-cyan);
+}
+
+.statusChip[data-tone="ready"] {
+  border-color: rgb(63 242 160 / 48%);
+  color: var(--cp-success);
+}
+
+.statusChip[data-tone="busy"] {
+  border-color: var(--cp-yellow);
+  color: var(--cp-yellow);
+}
+
+.statusChip[data-tone="error"] {
+  border-color: var(--cp-danger);
+  color: var(--cp-danger);
+}
+
+.palette {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(6 6 14 / 80%);
+}
+
+.swatch {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgb(255 255 255 / 32%);
+}
+
+.cardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 18px;
+}
+
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardCode {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.cardSummary {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.cardMeta {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.progressBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-deep);
+}
+
+.progressHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--cp-yellow);
+  font-size: 12px;
+}
+
+.progressRail {
+  height: 6px;
+  background: rgb(255 255 255 / 10%);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  background: var(--cp-cyan);
+  transition: width 120ms linear;
+}
+
+.error {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cp-danger);
+  background: rgb(255 0 60 / 10%);
+  color: var(--cp-danger);
+  font-size: 12px;
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.grid[data-compact] .cardBody {
+  gap: 6px;
+  padding: 10px 12px 12px;
+}
+
+.grid[data-compact] .cardTitle {
+  font-size: 15px;
+}
+
+.grid[data-compact] .cardActions {
+  padding-top: 2px;
+}
+
+.activeHint {
+  margin-right: auto;
+  color: var(--cp-cyan);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.confirmText {
+  margin-right: auto;
+  color: var(--cp-yellow);
+  font-size: 12px;
+}
+
+.foot {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cp-line-faint);
+}
+
+.footNote {
+  color: var(--cp-text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 780px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scopeChip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .modal {
+    animation: none;
+  }
+
+  .card[data-tilting],
+  .card[data-tilting][data-pressed] {
+    transform: none;
+    filter: none;
+  }
+
+  .progressFill {
+    transition: none;
+  }
+}

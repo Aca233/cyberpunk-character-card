@@ -52,8 +52,20 @@ import type { jobsView } from "./systems/jobs";
 import type { memoryView } from "./systems/memory";
 import type { ncpdView } from "./systems/ncpd";
 import type { nemesesEndedView, nemesisCardsView } from "./systems/nemesis";
-import type { InitialNpcTie, NpcCard, npcsView, perceivedView } from "./systems/npc";
-import { type phoneCallsView, phoneFeedUnread, type phoneMessagesView } from "./systems/phone";
+import {
+  type InitialNpcTie,
+  type NpcCard,
+  NpcStateSchema,
+  type npcsView,
+  type perceivedView,
+} from "./systems/npc";
+import {
+  type ContactEntry,
+  PhoneStateSchema,
+  type phoneCallsView,
+  phoneFeedUnread,
+  type phoneMessagesView,
+} from "./systems/phone";
 import {
   blackoutTurns,
   episodeOf,
@@ -451,11 +463,13 @@ export function newGameWorld(
       !(adjustedKit?.cyberware ?? []).includes(id) && (!validCyberware || validCyberware.has(id)),
   );
   const kit = adjustedKit && resolveStartKit(adjustedKit, boardCyberware, effectiveCyberware);
-  const seededNpcIds = new Set<string>([
-    ...cast.map((c) => c.id),
-    ...(meta.board?.people ?? [])
-      .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
-      .map((p) => p.id),
+  const boardPeople = (meta.board?.people ?? []).filter(
+    (p) => !cast.some((c) => c.id === p.id || c.name === p.name),
+  );
+  const seededNpcIds = new Set<string>([...cast.map((c) => c.id), ...boardPeople.map((p) => p.id)]);
+  const initialContacts = new Set<string>([
+    ...cast.filter((card) => acquaintances.some((a) => a.id === card.id)).map((card) => card.id),
+    ...boardPeople.filter((p) => p.met !== false).map((p) => p.id),
   ]);
   const initialTies = (content.npcTies ?? []).filter(
     (t) => seededNpcIds.has(t.a) && seededNpcIds.has(t.b),
@@ -465,13 +479,16 @@ export function newGameWorld(
     // 定性神经耐受要在装任何义体之前写进去
     ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
     ...cast.map((card) => ({ type: "npc.seed", ...castSeed(card) })),
-    ...(meta.board?.people ?? [])
-      .filter((p) => !cast.some((c) => c.id === p.id || c.name === p.name))
-      .map((p) => ({ type: "npc.seed", ...p })),
+    ...boardPeople.map((p) => ({ type: "npc.seed", ...p })),
     ...initialTies.map((t) => ({ type: "tie", ...t })),
     ...(content.fixers ?? [])
       .filter((f) => inCast(f.id))
       .map((f) => ({ type: "jobs.seedFixer", ...f })),
+    ...[...initialContacts].map((id) => ({
+      type: "phone.seedContact",
+      id,
+      source: "opening" as const,
+    })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
     ...homeSeed(content, meta.board?.origin),
@@ -546,15 +563,50 @@ export function sandevistanBlock(
   return sandevistanOf(world, data) ? null : "没装能用的加速义体";
 }
 
+/** 旧存档还没有独立通讯录字段时，把已有通讯往来和曾见过面的人物一次性迁入 contacts */
+function migrateLegacyPhoneContacts(
+  rawPhone: Record<string, unknown>,
+  rawNpc: unknown,
+  now: number,
+): Record<string, unknown> {
+  if ("contacts" in rawPhone) return rawPhone;
+  const parsedPhone = PhoneStateSchema.safeParse(rawPhone);
+  const contacts: Record<string, ContactEntry> = {};
+  if (parsedPhone.success) {
+    for (const m of parsedPhone.data.messages) {
+      if (contacts[m.from] === undefined) {
+        contacts[m.from] = { addedAt: m.at, source: "inbound" };
+      }
+    }
+    for (const c of parsedPhone.data.calls) {
+      if (contacts[c.from] === undefined) {
+        contacts[c.from] = { addedAt: c.at, source: "inbound" };
+      }
+    }
+  }
+  const parsedNpc = NpcStateSchema.safeParse(rawNpc);
+  if (parsedNpc.success) {
+    for (const npc of Object.values(parsedNpc.data.npcs)) {
+      if (npc.met && contacts[npc.id] === undefined) {
+        contacts[npc.id] = { addedAt: npc.lastSeenAt ?? now, source: "legacy" };
+      }
+    }
+  }
+  return { ...rawPhone, contacts };
+}
+
 /** 旧快照里没有后来加的系统和字段：缺的系统用初始值，缺的字段用 schema 默认值补上 */
 export function withAllSlices(world: WorldState): WorldState {
   const base = registry.initialWorld(world.time);
   const slices: Record<string, unknown> = { ...world.slices };
   for (const system of registry.order) {
-    const raw = slices[system.id];
+    let raw = slices[system.id];
     if (raw === undefined) {
       slices[system.id] = base.slices[system.id];
       continue;
+    }
+    if (system.id === "phone" && typeof raw === "object" && raw !== null) {
+      raw = migrateLegacyPhoneContacts(raw as Record<string, unknown>, slices.npc, world.time);
     }
     // 后来加的字段按 schema 的默认值补上；旧字段原样保留
     const parsed = system.state.safeParse(raw);

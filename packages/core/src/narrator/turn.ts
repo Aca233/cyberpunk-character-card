@@ -163,6 +163,7 @@ function noteOnce(notes: string[], note: string): void {
 const KEY_ITEMS: Readonly<Record<string, string>> = {
   combat: "战斗后果",
   hack: "快速破解",
+  deckLoad: "程序芯片插拔",
   breach: "入侵协议",
   dive: "潜网行动",
   npcHack: "快速破解",
@@ -411,6 +412,7 @@ class TurnBuilder {
     let usage: LlmUsage | undefined;
     let complete = false;
     for await (const event of this.deps.llm.stream(request, this.deps.signal)) {
+      this.checkAborted();
       if (event.type === "text") text += event.text;
       else if (event.type === "blocked") return { blocked: event.reason };
       else if (event.type === "done") {
@@ -589,6 +591,7 @@ const DEAD_NPC_BLOCKED_TYPES = new Set([
   "npc.heal",
   "npc.status",
   "npc.equip",
+  "phoneContact",
 ]);
 
 /** 确定性常识与物理一致性复核：不再调用额外的辅助模型质检，代码拦截死人行动等硬错误 */
@@ -631,6 +634,7 @@ async function computeVectorScores(
   queryText: string,
   signal?: AbortSignalLike,
 ): Promise<ReadonlyMap<string, number> | undefined> {
+  if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
   if (!embedder || pool.length === 0 || queryText.trim() === "") return undefined;
   let vectors: readonly (readonly number[])[];
   try {
@@ -642,6 +646,7 @@ async function computeVectorScores(
     if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
     return undefined;
   }
+  if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
   if (vectors.length !== pool.length + 1) return undefined;
   const qVec = vectors[0];
   if (!qVec || qVec.length === 0) return undefined;
@@ -670,6 +675,7 @@ export async function runNarratorTurn(
     ),
   };
   const b = new TurnBuilder(deps);
+  b.checkAborted();
   const extras: PromptExtras = {
     data: deps.data,
     opening: deps.opening,
@@ -690,6 +696,7 @@ export async function runNarratorTurn(
     narrated?: NarratedCheckpointData,
     extracted?: ExtractedCheckpointData,
   ): Promise<void> => {
+    b.checkAborted();
     if (!deps.onCheckpoint || deps.saveId === undefined || deps.baseVersion === undefined) return;
     if (plan.kind !== "action") return;
     await deps.onCheckpoint({
@@ -703,6 +710,7 @@ export async function runNarratorTurn(
       ...(narrated ? { narrated } : {}),
       ...(extracted ? { extracted } : {}),
     });
+    b.checkAborted();
   };
 
   let preparedData: PreparedCheckpointData;
@@ -1244,6 +1252,7 @@ export async function runNarratorTurn(
         },
         deps.signal,
       )) {
+        b.checkAborted();
         if (event.type === "thought") {
           if (event.text !== "") {
             nativeThought += event.text;
@@ -1624,7 +1633,7 @@ export async function runNarratorTurn(
         b.drop(where, command, "战斗中不能闪回", "rules");
         continue;
       }
-      // 对玩家造成伤害的快速破解由 npcHack 统一结算；不允许独立伤害绕过 RAM、ICE 或重复扣血
+      // 对玩家造成伤害的快速破解由 npcHack 依据独立裁决统一结算；不允许重复记 damage / combat wound
       if (
         harmfulHackEvents.has(owner.get(where) ?? "") &&
         (command.type === "damage" || (command.type === "combat" && command.action === "wound"))

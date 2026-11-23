@@ -13,6 +13,8 @@ export interface TurnRun {
   readonly controller: AbortController;
   /** 下标就是 SSE 的事件 id */
   readonly events: TurnEvent[];
+  /** 已通过写盘前核对并开始不可逆写入存档，不再接受中途停止 */
+  committing: boolean;
   finishedAt: number | null;
 }
 
@@ -36,6 +38,7 @@ export class TurnHub {
       input,
       controller: new AbortController(),
       events: [],
+      committing: false,
       finishedAt: null,
     };
     this.runs.set(run.turnId, run);
@@ -80,6 +83,14 @@ export class TurnHub {
   ): AsyncGenerator<[number, TurnEvent]> {
     let next = Math.max(0, from);
     while (!closed()) {
+      if (run.finishedAt !== null) {
+        const lastIndex = run.events.length - 1;
+        const last = lastIndex >= next ? run.events[lastIndex] : undefined;
+        if (last?.type === "stopped") {
+          yield [lastIndex, last];
+          return;
+        }
+      }
       while (next < run.events.length) {
         const event = run.events[next] as TurnEvent;
         yield [next, event];

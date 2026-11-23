@@ -8,7 +8,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import type { ConfigService } from "../config";
-import { ImageBindingError, type ImageStore } from "../images";
+import { ImageBindingError, type ImageStore, MAX_TURN_IMAGES } from "../images";
 import { isSaveId } from "../ports";
 import { AbortedError, UpstreamError } from "../providers/http";
 import { type ImageRouter, imageProtocolCapabilities } from "../providers/image";
@@ -29,6 +29,14 @@ const BindTargetSchema = z
       kind: z.literal("turn"),
       seq: z.number().int().min(0),
       imageId: z.string().min(1),
+      slot: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_TURN_IMAGES - 1)
+        .optional(),
+      append: z.boolean().optional(),
+      replaceAll: z.boolean().optional(),
     }),
     z.object({
       kind: z.literal("npc"),
@@ -43,7 +51,17 @@ const BindTargetSchema = z
   .and(z.object({ expectedImageId: z.string().min(1).nullable().optional() }));
 
 const UnbindTargetSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("turn"), seq: z.number().int().min(0) }),
+  z.object({
+    kind: z.literal("turn"),
+    seq: z.number().int().min(0),
+    slot: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_TURN_IMAGES - 1)
+      .optional(),
+    imageId: z.string().min(1).optional(),
+  }),
   z.object({ kind: z.literal("npc"), npcId: z.string().trim().min(1).max(120) }),
   z.object({ kind: z.literal("character") }),
 ]);

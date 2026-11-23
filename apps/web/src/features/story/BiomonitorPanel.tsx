@@ -175,6 +175,8 @@ export function BiomonitorPanel({
     shards,
   } = view;
   const [membershipOpen, setMembershipOpen] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<BodyPart | null>(null);
+  const [hoveredPart, setHoveredPart] = useState<BodyPart | null>(null);
   const [rescuePending, setRescuePending] = useState(false);
   const [rescueError, setRescueError] = useState<string | null>(null);
   const rescueRunning = useRef(false);
@@ -247,7 +249,16 @@ export function BiomonitorPanel({
       prev.labels.push(`${item.headline}（${item.cause}）`);
     }
   }
-  const scarPins = [...new Set(wound.scars.map((s) => s.part))].filter((p) => !activePins.has(p));
+  const scarParts = new Set(wound.scars.map((s) => s.part));
+  const scarPins = [...scarParts].filter((p) => !activePins.has(p));
+  const effectiveSelectedPart =
+    selectedPart && (activePins.has(selectedPart) || scarParts.has(selectedPart))
+      ? selectedPart
+      : null;
+  const focusedPart = hoveredPart ?? effectiveSelectedPart;
+  const togglePart = (part: BodyPart) => {
+    setSelectedPart((prev) => (prev === part ? null : part));
+  };
 
   const hasStress = time.fatigued || time.blackLaceWithdrawal || inventory.bulky.overloaded;
   const neuralSlots = shards.slots;
@@ -475,185 +486,277 @@ export function BiomonitorPanel({
         </p>
       )}
 
-      {/* 主体：左生理解剖扫描图 + 右三组遥测诊断 */}
-      <div className={styles.workspace}>
-        <aside className={styles.scanCol} data-tone={wound.tone}>
+      {/* 主体：顶部「生理解剖 + 创伤档案」整卡 + 下方双栏（左神经稳态 / 右外设代谢） */}
+      <div className={styles.stack}>
+        <article className={styles.vitalCard} data-tone={wound.tone}>
           <CellFrame />
-          <span
-            className={styles.scanGridBg}
-            style={{ backgroundImage: cssUrl("fx.grid") }}
-            aria-hidden
-          />
-          <div className={styles.scanHead}>
-            <span>VITAL-MAP</span>
-            <span className={styles.scanLive} data-alert={layers.scanAlert}>
-              <i aria-hidden />
-              {layers.scanAlert === "bad"
-                ? "ALERT"
-                : layers.scanAlert === "warn"
-                  ? "STRAIN"
-                  : "SCAN OK"}
-            </span>
-          </div>
-
-          <div className={styles.bodyStage} aria-hidden>
-            <span className={styles.bodyReticle} />
-            {(wound.tone === "bad" || wound.tone === "dead" || layers.nervousAlert === "bad") && (
-              <Asset
-                id="hud.damageGlow"
-                tint="var(--cp-danger)"
-                height={116}
-                className={styles.bodyGlow}
-              />
-            )}
-            <Asset
-              id="cyber.bodySkin"
-              height={104}
-              className={styles.bodyLayer}
-              style={{ opacity: layers.skinOpacity }}
-            />
-            <Asset
-              id="cyber.bodyImmune"
-              height={104}
-              className={styles.bodyLayer}
-              style={{ opacity: layers.immuneOpacity }}
-            />
-            <Asset
-              id="cyber.bodySkeleton"
-              height={104}
-              className={styles.bodyLayer}
-              style={{ opacity: layers.skeletonOpacity }}
-            />
-            <Asset
-              id="cyber.bodyNervous"
-              height={104}
-              className={styles.bodyLayer}
-              style={{
-                opacity: layers.nervousOpacity,
-                filter:
-                  layers.nervousAlert === "bad"
-                    ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
-                    : layers.nervousAlert === "warn"
-                      ? "drop-shadow(0 0 4px rgb(252 238 10 / 60%))"
-                      : undefined,
-              }}
-            />
-            <Asset
-              id="cyber.bodyCirculatory"
-              height={104}
-              className={styles.bodyLayer}
-              style={{
-                opacity: layers.circulatoryOpacity,
-                filter:
-                  layers.vascularAlert === "bad"
-                    ? "drop-shadow(0 0 5px rgb(255 0 60 / 80%))"
-                    : undefined,
-              }}
-            />
-            {scarPins.map((part) => {
-              const pos = BODY_ZONES[part];
-              return (
-                <span
-                  key={`scar-${part}`}
-                  className={styles.scarPin}
-                  style={{ top: pos.top, left: pos.left }}
-                  title={`${pos.label} · 永久留疤`}
-                />
-              );
-            })}
-            {[...activePins.entries()].map(([part, info]) => {
-              const pos = BODY_ZONES[part];
-              return (
-                <span
-                  key={`pin-${part}`}
-                  className={styles.zonePin}
-                  data-tone={info.tone}
-                  style={{ top: pos.top, left: pos.left }}
-                  title={`${pos.label}：${info.labels.join("；")}`}
-                />
-              );
-            })}
-            <span className={styles.scanBeam} />
-          </div>
-
-          <div className={styles.systemLegend}>
-            <span className={styles.sysDot} data-alert={layers.vascularAlert}>
-              循环/体征
-            </span>
-            <span className={styles.sysDot} data-alert={layers.nervousAlert}>
-              中枢神经
-            </span>
-            <span className={styles.sysDot} data-alert={layers.skeletalAlert}>
-              骨骼/义肢
-            </span>
-            <span className={styles.sysDot} data-alert={layers.immuneAlert}>
-              免疫代谢
-            </span>
-          </div>
-
-          <div className={styles.credLine} title={character.credWorld}>
-            <small>街头名声</small>
-            <span>{character.credTier}</span>
-          </div>
-        </aside>
-
-        <div className={styles.telemetryCol}>
-          {/* 卡 1：具体创伤档案 */}
-          <article className={styles.card} data-tone={wound.tone}>
-            <CellFrame />
-            <div className={styles.cardHead}>
-              <span className={styles.cardLabel}>TRAUMA {"//"} 具体创伤档案</span>
+          <div className={styles.cardHead}>
+            <span className={styles.cardLabel}>VITAL-MAP {"//"} 躯体扫描与创伤档案</span>
+            <div className={styles.vitalHeadRight}>
               <span className={styles.cardValue} data-tone={wound.tone}>
                 {wound.title}
                 {health.painSuppressed && wound.level === 2 ? " · 镇痛阻断" : ""}
               </span>
+              <span className={styles.scanLive} data-alert={layers.scanAlert}>
+                <i aria-hidden="true" />
+                {layers.scanAlert === "bad"
+                  ? "ALERT"
+                  : layers.scanAlert === "warn"
+                    ? "STRAIN"
+                    : "SCAN OK"}
+              </span>
             </div>
-            {wound.items.length > 0 ? (
-              <>
-                <ul className={styles.traumaList}>
-                  {wound.items.map((item) => (
-                    <li key={item.id} className={styles.traumaItem} data-tone={item.tone}>
-                      <span className={styles.traumaPart}>{item.partLabel}</span>
-                      <div className={styles.traumaInfo}>
-                        <strong className={styles.traumaHeadline}>
-                          {item.tierLabel} · {item.cause}
-                        </strong>
-                        <span className={styles.traumaCare}>{item.careNote}</span>
-                      </div>
-                      <span className={styles.traumaTag} data-treated={item.treated || undefined}>
-                        {item.careTag}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {wound.level >= 2 && <p className={styles.cardNote}>{wound.impact}</p>}
-              </>
-            ) : (
-              <p className={styles.traumaClear}>{wound.impact}</p>
-            )}
-            {health.painSuppressed && (
-              <div className={styles.chipRow}>
-                <span className={styles.alertChip} data-kind="suppress">
-                  {wound.level >= 3
-                    ? "镇痛药效难以压住当前重创"
-                    : "医疗针镇痛生效 · 暂蔽创痛，仍须清创缝合"}
-                </span>
-              </div>
-            )}
-            {wound.scars.length > 0 && (
-              <div className={styles.scarBox}>
-                <small className={styles.scarHead}>创疤档案</small>
-                <div className={styles.scarList}>
-                  {wound.scars.map((s) => (
-                    <span key={s.id} className={styles.scarChip}>
-                      {s.summary}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </article>
+          </div>
 
+          <div className={styles.vitalBody}>
+            <div className={styles.bodyCol}>
+              <div className={styles.bodyStage}>
+                <span
+                  className={styles.scanGridBg}
+                  style={{ backgroundImage: cssUrl("fx.grid") }}
+                  aria-hidden="true"
+                />
+                <span className={styles.bodyReticle} aria-hidden="true" />
+                {(wound.tone === "bad" ||
+                  wound.tone === "dead" ||
+                  layers.nervousAlert === "bad") && (
+                  <Asset
+                    id="hud.damageGlow"
+                    tint="var(--cp-danger)"
+                    height={196}
+                    className={styles.bodyGlow}
+                    aria-hidden="true"
+                  />
+                )}
+                <Asset
+                  id="cyber.bodySkin"
+                  height={186}
+                  className={styles.bodyLayer}
+                  style={{ opacity: layers.skinOpacity }}
+                  aria-hidden="true"
+                />
+                <Asset
+                  id="cyber.bodyImmune"
+                  height={186}
+                  className={styles.bodyLayer}
+                  style={{ opacity: layers.immuneOpacity }}
+                  aria-hidden="true"
+                />
+                <Asset
+                  id="cyber.bodySkeleton"
+                  height={186}
+                  className={styles.bodyLayer}
+                  style={{ opacity: layers.skeletonOpacity }}
+                  aria-hidden="true"
+                />
+                <Asset
+                  id="cyber.bodyNervous"
+                  height={186}
+                  className={styles.bodyLayer}
+                  style={{
+                    opacity: layers.nervousOpacity,
+                    filter:
+                      layers.nervousAlert === "bad"
+                        ? "drop-shadow(0 0 6px rgb(255 0 60 / 80%))"
+                        : layers.nervousAlert === "warn"
+                          ? "drop-shadow(0 0 4px rgb(252 238 10 / 60%))"
+                          : undefined,
+                  }}
+                  aria-hidden="true"
+                />
+                <Asset
+                  id="cyber.bodyCirculatory"
+                  height={186}
+                  className={styles.bodyLayer}
+                  style={{
+                    opacity: layers.circulatoryOpacity,
+                    filter:
+                      layers.vascularAlert === "bad"
+                        ? "drop-shadow(0 0 6px rgb(255 0 60 / 80%))"
+                        : undefined,
+                  }}
+                  aria-hidden="true"
+                />
+                {scarPins.map((part) => {
+                  const pos = BODY_ZONES[part];
+                  const active = focusedPart === part;
+                  return (
+                    <button
+                      key={`scar-${part}`}
+                      type="button"
+                      className={styles.scarPin}
+                      data-active={active || undefined}
+                      aria-pressed={effectiveSelectedPart === part}
+                      aria-label={`定位${pos.label}创疤`}
+                      style={{ top: pos.top, left: pos.left }}
+                      title={`${pos.label} · 永久留疤`}
+                      onMouseEnter={() => setHoveredPart(part)}
+                      onMouseLeave={() => setHoveredPart((prev) => (prev === part ? null : prev))}
+                      onFocus={() => setHoveredPart(part)}
+                      onBlur={() => setHoveredPart((prev) => (prev === part ? null : prev))}
+                      onClick={() => togglePart(part)}
+                    />
+                  );
+                })}
+                {[...activePins.entries()].map(([part, info]) => {
+                  const pos = BODY_ZONES[part];
+                  const active = focusedPart === part;
+                  return (
+                    <button
+                      key={`pin-${part}`}
+                      type="button"
+                      className={styles.zonePin}
+                      data-tone={info.tone}
+                      data-active={active || undefined}
+                      aria-pressed={effectiveSelectedPart === part}
+                      aria-label={`定位${pos.label}伤势：${info.labels.join("；")}`}
+                      style={{ top: pos.top, left: pos.left }}
+                      title={`${pos.label}：${info.labels.join("；")}`}
+                      onMouseEnter={() => setHoveredPart(part)}
+                      onMouseLeave={() => setHoveredPart((prev) => (prev === part ? null : prev))}
+                      onFocus={() => setHoveredPart(part)}
+                      onBlur={() => setHoveredPart((prev) => (prev === part ? null : prev))}
+                      onClick={() => togglePart(part)}
+                    />
+                  );
+                })}
+                <span className={styles.scanBeam} aria-hidden="true" />
+              </div>
+
+              <div className={styles.credLine} title={character.credWorld}>
+                <small>街头名声</small>
+                <span>{character.credTier}</span>
+              </div>
+            </div>
+
+            <div className={styles.vitalContent}>
+              <div className={styles.vitalSystems}>
+                <span className={styles.sysDot} data-alert={layers.vascularAlert}>
+                  循环/体征
+                </span>
+                <span className={styles.sysDot} data-alert={layers.nervousAlert}>
+                  中枢神经
+                </span>
+                <span className={styles.sysDot} data-alert={layers.skeletalAlert}>
+                  骨骼/义肢
+                </span>
+                <span className={styles.sysDot} data-alert={layers.immuneAlert}>
+                  免疫代谢
+                </span>
+                {effectiveSelectedPart && (
+                  <button
+                    type="button"
+                    className={styles.bodyFocusClear}
+                    onClick={() => setSelectedPart(null)}
+                  >
+                    {BODY_ZONES[effectiveSelectedPart].label} ×
+                  </button>
+                )}
+              </div>
+
+              {wound.items.length > 0 ? (
+                <>
+                  <ul className={styles.traumaList}>
+                    {wound.items.map((item) => {
+                      const part = isBodyPart(item.zone) ? item.zone : null;
+                      const highlighted = part !== null && focusedPart === part;
+                      const dimmed =
+                        effectiveSelectedPart !== null && part !== effectiveSelectedPart;
+                      const inner = (
+                        <>
+                          <span className={styles.traumaRowHead}>
+                            <span className={styles.traumaPart}>{item.partLabel}</span>
+                            <span className={styles.traumaTier}>{item.tierLabel}</span>
+                            <span
+                              className={styles.traumaTag}
+                              data-treated={item.treated || undefined}
+                            >
+                              {item.careTag}
+                            </span>
+                          </span>
+                          <span className={styles.traumaCause}>{item.cause}</span>
+                        </>
+                      );
+                      return (
+                        <li
+                          key={item.id}
+                          className={styles.traumaItem}
+                          data-tone={item.tone}
+                          data-highlighted={highlighted || undefined}
+                          data-dimmed={dimmed || undefined}
+                          title={`${item.headline}（${item.cause}）\n${item.careNote}`}
+                        >
+                          {part ? (
+                            <button
+                              type="button"
+                              className={styles.traumaBtn}
+                              aria-pressed={effectiveSelectedPart === part}
+                              onMouseEnter={() => setHoveredPart(part)}
+                              onMouseLeave={() =>
+                                setHoveredPart((prev) => (prev === part ? null : prev))
+                              }
+                              onFocus={() => setHoveredPart(part)}
+                              onBlur={() => setHoveredPart((prev) => (prev === part ? null : prev))}
+                              onClick={() => togglePart(part)}
+                            >
+                              {inner}
+                            </button>
+                          ) : (
+                            <div className={styles.traumaStatic}>{inner}</div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {wound.level >= 2 && <p className={styles.cardNote}>{wound.impact}</p>}
+                </>
+              ) : (
+                <p className={styles.traumaClear}>{wound.impact}</p>
+              )}
+
+              {health.painSuppressed && (
+                <div className={styles.chipRow}>
+                  <span className={styles.alertChip} data-kind="suppress">
+                    {wound.level >= 3
+                      ? "镇痛药效难以压住当前重创"
+                      : "医疗针镇痛生效 · 暂蔽创痛，仍须清创缝合"}
+                  </span>
+                </div>
+              )}
+
+              {wound.scars.length > 0 && (
+                <div className={styles.scarList}>
+                  {wound.scars.map((s) => {
+                    const highlighted = focusedPart === s.part;
+                    const dimmed =
+                      effectiveSelectedPart !== null && s.part !== effectiveSelectedPart;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={styles.scarChip}
+                        data-highlighted={highlighted || undefined}
+                        data-dimmed={dimmed || undefined}
+                        aria-pressed={effectiveSelectedPart === s.part}
+                        onMouseEnter={() => setHoveredPart(s.part)}
+                        onMouseLeave={() =>
+                          setHoveredPart((prev) => (prev === s.part ? null : prev))
+                        }
+                        onFocus={() => setHoveredPart(s.part)}
+                        onBlur={() => setHoveredPart((prev) => (prev === s.part ? null : prev))}
+                        onClick={() => togglePart(s.part)}
+                      >
+                        {s.summary}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </article>
+
+        <div className={styles.bottomGrid}>
           {/* 卡 2：神经稳态感知 */}
           <article className={styles.card} data-tone={neuro.tone}>
             <CellFrame />

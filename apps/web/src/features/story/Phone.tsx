@@ -150,6 +150,12 @@ export interface PhoneActions {
   readonly onLocatePlace?: ((placeId: string) => void) | undefined;
   /** 就在对方诊所时直接打开义体诊所界面 */
   readonly onOpenRipperdoc?: (() => void) | undefined;
+  /** 从空通讯录跳到「人物」页查看已知人物 */
+  readonly onOpenPeople?: (() => void) | undefined;
+  /** 外部指定自动定位到的联系人 key（例如从「人物」页点击发消息） */
+  readonly focusContact?: string | null | undefined;
+  /** 消费完 focusContact 后的回调 */
+  readonly onConsumeFocus?: (() => void) | undefined;
 }
 
 function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | undefined {
@@ -163,10 +169,18 @@ function latestUnreadMessage(thread: readonly PhoneMessage[]): PhoneMessage | un
 /** 根据联系人身份推荐快捷破冰短语，点击后填入输入框并聚焦，不自动替玩家发送 */
 function starterPromptsOf(contact: ContactSummary): readonly string[] {
   const { npc } = contact;
-  if (!npc?.met || !npc.alive) return [];
+  if (!contact.alive || !contact.canChat) return [];
+  if (!npc?.met) {
+    if (contact.isFixer) {
+      return contact.fixer?.blocked
+        ? ["关于之前那档子事，咱们还有得谈吗？", "最近街上风声怎么样？"]
+        : ["手头最近有合适的新活派吗？", "关于你发来的单子，具体细节怎么说？"];
+    }
+    return ["刚存了你的频道，确认下能收到吗？", "方便聊聊之前提到的事吗？"];
+  }
   const doc = npc.services?.ripperdoc;
   const shops = npc.services?.shops ?? [];
-  const isFixer = Boolean(contact.fixer || npc.role.includes("中间人"));
+  const isFixer = Boolean(contact.fixer || contact.isFixer || npc.role.includes("中间人"));
   if (doc) {
     return doc.debt
       ? ["手头凑了点钱，诊所现在方便过来还账吗？", "最近诊所有什么新义体到货？"]
@@ -304,17 +318,14 @@ function inlineChatLockInfo(
   if (view.combat?.active) {
     return { reason: "正在交火，先脱身或解决眼前这架再发消息", tone: "danger" };
   }
-  if (!contact.npc) {
+  if (!contact.alive) {
+    return { reason: `${contact.name} 的终端已离线`, tone: "danger" };
+  }
+  if (!contact.canChat) {
     return {
       reason: "匿名加密频道暂不支持私聊，可点上方「回复」在行动框里处理",
       tone: "neutral",
     };
-  }
-  if (!contact.npc.met) {
-    return { reason: `还没正式见过 ${contact.name}，先在剧情里打过照面`, tone: "neutral" };
-  }
-  if (!contact.npc.alive) {
-    return { reason: `${contact.name} 的终端已离线`, tone: "danger" };
   }
   if (actions.busy) {
     return { reason: "主线回合正在生成，请稍候片刻", tone: "busy" };
@@ -378,7 +389,7 @@ function ContactRow({
   readonly draft: string;
   readonly onSelect: () => void;
 }) {
-  const dead = contact.npc?.alive === false;
+  const dead = !contact.alive;
   const primaryBadge = contact.badges[0];
   const hasDraft = draft.trim().length > 0 && !active;
   const subLine = hasDraft
@@ -395,7 +406,7 @@ function ContactRow({
         onClick={onSelect}
       >
         <Avatar
-          npc={contact.npc?.id}
+          npc={contact.npc?.id ?? contact.key}
           name={contact.name}
           dead={dead}
           present={contact.isPresent}
@@ -490,12 +501,26 @@ function ThreadHead({
 
   const metaParts: string[] = [];
   if (!npc) {
-    metaParts.push("匿名加密频道");
+    if (!contact.alive) {
+      metaParts.push("终端已离线");
+    } else if (contact.isFixer) {
+      metaParts.push("中间人 · 加密连线（尚未照面）");
+    } else if (contact.canChat) {
+      metaParts.push("加密连线 · 尚未照面");
+    } else {
+      metaParts.push("匿名加密频道");
+    }
   } else if (!npc.alive) {
     if (npc.met && npc.role) metaParts.push(npc.role);
     metaParts.push("终端已离线");
   } else if (!npc.met) {
-    metaParts.push(npc.nemesis ? "交过手 · 底细不明" : "只听说过 · 尚未照面");
+    metaParts.push(
+      npc.nemesis
+        ? "交过手 · 底细不明"
+        : contact.isFixer
+          ? "中间人 · 尚未照面"
+          : "加密连线 · 尚未照面",
+    );
   } else {
     if (npc.role) metaParts.push(npc.role);
     const place = npc.here ? "就在现场" : (npc.lastPlace ?? npc.homePlace);
@@ -503,7 +528,7 @@ function ThreadHead({
   }
   const metaText = metaParts.join(" · ");
 
-  const alive = npc?.alive !== false;
+  const alive = contact.alive;
   const docService = alive ? npc?.services?.ripperdoc : undefined;
   const canOpenDoc = Boolean(
     docService && view.ripperdoc?.id === docService.id && actions.onOpenRipperdoc,
@@ -520,7 +545,7 @@ function ThreadHead({
           title: "带入下方主线行动栏回复该未读消息",
           onClick: () => actions.onReply?.(unreadTarget.id),
         }
-      : alive && npc?.met && actions.onMessageNpc
+      : alive && contact.canChat && actions.onMessageNpc
         ? {
             label: lockInfo !== null ? "转行动框" : "进主线",
             title: "填入主线行动栏（适合涉及检定、交易或剧情推进的重要对话）",
@@ -539,7 +564,7 @@ function ThreadHead({
   const hasLocate = Boolean(locateId && locateName && actions.onLocatePlace);
   const hasActions = Boolean(commAction || hasLocate || canOpenDoc);
   const highlightTone = contact.badges[0]?.tone === "danger" ? "danger" : undefined;
-  const visibleBadges = npc && !npc.alive ? [] : contact.badges.slice(0, 2);
+  const visibleBadges = !alive ? [] : contact.badges.slice(0, 2);
 
   return (
     <header className={styles.threadHead}>
@@ -589,13 +614,13 @@ function ThreadHead({
             </button>
           </span>
         ) : (
-          <Avatar name={contact.name} dead={false} scan />
+          <Avatar npc={contact.key} name={contact.name} dead={!alive} scan />
         )}
 
         <span className={styles.threadIdentity}>
           <span className={styles.threadTitleRow}>
             <b className={styles.threadTitle}>{contact.name}</b>
-            {npc && !npc.alive && (
+            {!alive && (
               <span className={styles.badge} data-tone="danger">
                 已故
               </span>
@@ -733,6 +758,9 @@ export function PhoneBody({
   busy,
   onLocatePlace,
   onOpenRipperdoc,
+  onOpenPeople,
+  focusContact,
+  onConsumeFocus,
 }: { readonly view: View } & PhoneActions) {
   const contacts = contactDirectory(view);
   const { counts, tabs } = computeFilterTabs(contacts);
@@ -745,8 +773,20 @@ export function PhoneBody({
   const keyword = showSearch ? query.trim().toLocaleLowerCase() : "";
 
   const [picked, setPicked] = useState<string | null>(
-    () => (contacts.find((c) => c.unread > 0) ?? contacts[0])?.key ?? null,
+    () =>
+      (focusContact && contacts.some((c) => c.key === focusContact)
+        ? focusContact
+        : (contacts.find((c) => c.unread > 0) ?? contacts[0])?.key) ?? null,
   );
+  const onConsumeFocusRef = useRef(onConsumeFocus);
+  onConsumeFocusRef.current = onConsumeFocus;
+  useEffect(() => {
+    if (!focusContact) return;
+    setFilter("all");
+    setQuery("");
+    setPicked(focusContact);
+    onConsumeFocusRef.current?.();
+  }, [focusContact]);
   // 在「未读」筛选下打开某条未读会话后会立刻标已读；保留当前选中会话在列表里，避免读到一半界面跳走
   const filtered = useMemo(() => {
     const byTab =
@@ -831,6 +871,7 @@ export function PhoneBody({
   }, []);
 
   if (contacts.length === 0 || !current) {
+    const knownCount = view.npcs.length;
     return (
       <div className={styles.noContacts}>
         <IncomingCallBanner
@@ -843,10 +884,15 @@ export function PhoneBody({
             <CellFrame />
             <Asset id="notify.attention" tint="var(--cp-cyan-dim)" height={24} />
             <span className={styles.emptyKicker}>{"HOLOPHONE // STANDBY"}</span>
-            <b className={styles.emptyTitle}>还没有联系人</b>
+            <b className={styles.emptyTitle}>通讯录暂无联系人</b>
             <p className={styles.emptyText}>
-              在夜之城结识新人物或收到加密简讯后，对应频道会自动同步到这里。
+              在剧情中与他人交换联系方式，或收到中间人/熟人的加密简讯后，对应频道会自动同步到这里。
             </p>
+            {knownCount > 0 && onOpenPeople && (
+              <div className={styles.starterRow}>
+                <ActionButton onClick={onOpenPeople}>查看已知人物（{knownCount}）</ActionButton>
+              </div>
+            )}
           </div>
         </div>
         <MissedCalls
@@ -883,9 +929,7 @@ export function PhoneBody({
   const sendingAny = Boolean(chatSending || pendingChat);
   const sendingThis = Boolean(pendingForCurrent !== null || chatSending === current.key);
   const fallbackReply =
-    current.npc?.alive !== false && lockInfo !== null && !view.combat?.active && !sendingAny
-      ? onReply
-      : undefined;
+    current.alive && lockInfo !== null && !view.combat?.active && !sendingAny ? onReply : undefined;
   const draftText = drafts[current.key] ?? "";
   const currentError = chatErrors[current.key] ?? null;
   const urgentWarning = urgentChatDeadline(view);
@@ -1068,13 +1112,11 @@ export function PhoneBody({
                 <span className={styles.emptyKicker}>{"CHANNEL // STANDBY"}</span>
                 <b className={styles.emptyTitle}>暂无通讯记录</b>
                 <p className={styles.emptyText}>
-                  {current.npc
-                    ? current.npc.alive === false
-                      ? `${current.name} 的终端已离线。`
-                      : current.npc.met
-                        ? `与 ${current.name} 还没有短讯往来，直接发一句即可接通加密频道。`
-                        : "尚未建立直接加密连线。"
-                    : "该频道暂无历史消息。"}
+                  {!current.alive
+                    ? `${current.name} 的终端已离线。`
+                    : current.canChat
+                      ? `与 ${current.name} 还没有短讯往来，直接发一句即可接通加密频道。`
+                      : "该频道暂无历史消息。"}
                 </p>
                 {starters.length > 0 && (
                   <div className={styles.starterRow}>

@@ -9,7 +9,17 @@ import type { TurnInput } from "../../schemas/turn";
 import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
-import { attemptsHacking, deckOf, mentionsHacking, npcDeckOf } from "../../systems/hacking";
+import {
+  attemptsHacking,
+  deckOf,
+  effectiveHeatAt,
+  hasTargetFoothold,
+  mentionsHacking,
+  npcDeckOf,
+  quickhackCatalog,
+  STARTER_DECK_PROGRAMS,
+  thermalLevelOf,
+} from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
 import { HealthStateSchema } from "../../systems/health";
 import {
@@ -176,10 +186,14 @@ export function narrateTablesOf(_view: PlayerView, extras: PromptExtras): string
 }
 
 const DIRECT_LINK = /(?:个人连接线|直插|数据线|插孔)/;
-const AIR_GAP_HINT = /(?:气隙|离线隔离|物理断网|air[- ]?gapped)/i;
-const UNCHROMED_HINT = /(?:纯肉体|没装义体|无义体|纯机械)/;
+const AIR_GAP_HINT =
+  /(?:气隙|离线隔离|物理断网|端口离线|物理离线|无线屏蔽|电磁屏蔽|air[- ]?gapped)/i;
+const UNCHROMED_HINT = /(?:纯肉体|没装义体|无义体|纯机械(?:锁|盒|门|终端))/;
+const MECHANICAL_WEAPON_HINT =
+  /(?:纯机械(?:枪|手枪|土枪|左轮|步枪|霰弹枪|武器)|老式(?:机械)?(?:土枪|左轮|霰弹枪)|无智能芯片|机械土枪|冷兵器)/;
+const WEAPON_GLITCH_HINT = /(?:武器故障|卡壳|卡死.{0,4}枪|黑.{0,6}(?:枪|武器))/;
 const HARDENED_ICE_HINT =
-  /(?:公司数据堡垒|军用黑冰|硬化黑冰|自卫黑冰|自我\s*ICE|网络黑客|网监|军用防火墙)/i;
+  /(?:公司数据堡垒|军用黑冰|硬化黑冰|自卫黑冰|个人黑冰|高阶黑冰|自我\s*ICE|网络黑客|网监|军用防火墙|公司特工)/i;
 const SUBNET_MENTION = /([\u4e00-\u9fa5A-Za-z0-9·-]{2,14}(?:内网|子网))/;
 const SUBNET_GATE = /(?:隔离|封闭|必须先渗入|局域网|本地子网)/;
 const HIGH_END_VENUE =
@@ -405,10 +419,13 @@ export function physicsSection(
       : [];
 
     const targetAirGapped = AIR_GAP_HINT.test(sceneContext);
+    const mechanicalWeaponOnly =
+      WEAPON_GLITCH_HINT.test(inputText) && MECHANICAL_WEAPON_HINT.test(sceneContext);
     const targetUnchromed =
-      UNCHROMED_HINT.test(inputText) ||
-      (targetedNpcs.length > 0 &&
-        targetedNpcs.every((n) => n.body !== undefined && n.body.cyberware.length === 0));
+      !mechanicalWeaponOnly &&
+      (UNCHROMED_HINT.test(inputText) ||
+        (targetedNpcs.length > 0 &&
+          targetedNpcs.every((n) => n.body !== undefined && n.body.cyberware.length === 0)));
 
     const vector = DIRECT_LINK.test(inputText)
       ? "directLink"
@@ -431,6 +448,52 @@ export function physicsSection(
     });
     const hardenedIce = npcHasHardenedChrome || HARDENED_ICE_HINT.test(sceneContext);
 
+    // 核对玩家是否点名施放某个目录程序，且槽位未装或终极程序缺破冰立足点
+    const qCatalog = quickhackCatalog(safeData);
+    const loadedPrograms =
+      hacking.data.programs.length === 0 && hacking.data.ownedPrograms.length === 0
+        ? STARTER_DECK_PROGRAMS.filter((id) => qCatalog.size === 0 || qCatalog.has(id)).slice(
+            0,
+            deckInfo?.slots ?? 4,
+          )
+        : hacking.data.programs;
+    let missingProgramName: string | undefined;
+    let missingFootholdFor: string | undefined;
+    if (hasCyberdeck && attemptsHacking(inputText)) {
+      const mentionedProgram = [...qCatalog.values()].find(
+        (q) => inputText.includes(q.name) || inputText.toLowerCase().includes(q.id),
+      );
+      if (mentionedProgram) {
+        if (!loadedPrograms.includes(mentionedProgram.id)) {
+          missingProgramName = mentionedProgram.name;
+        } else if (mentionedProgram.requiresFoothold) {
+          const anyFoothold =
+            targetedNpcs.length > 0
+              ? targetedNpcs.some((n) =>
+                  hasTargetFoothold(hacking.data, n.name, n.id, clock.location ?? null),
+                )
+              : hacking.data.breachedTargets.some(
+                  (b) => b.location === null || b.location === (clock.location ?? null),
+                ) ||
+                hacking.data.activeEffects.some(
+                  (e) =>
+                    (e.location === null || e.location === (clock.location ?? null)) &&
+                    e.category !== "ultimate",
+                );
+          if (!anyFoothold) {
+            missingFootholdFor = mentionedProgram.name;
+          }
+        }
+      }
+    }
+
+    const thermalLevel = thermalLevelOf(
+      effectiveHeatAt(hacking.data.thermal, world.time, {
+        hasRecovery: deckInfo?.traits.includes("recovery") ?? false,
+        inDiveChair: hacking.data.dive !== null,
+      }),
+    );
+
     hackCheck = {
       vector,
       hasCyberdeck,
@@ -438,7 +501,11 @@ export function physicsSection(
       ...(targetAirGapped ? { targetAirGapped: true } : {}),
       ...(requiredSubnet ? { requiredSubnet } : {}),
       ...(targetUnchromed ? { targetUnchromed: true } : {}),
+      ...(mechanicalWeaponOnly ? { mechanicalWeaponOnly: true } : {}),
       ...(hardenedIce ? { hardenedIce: true } : {}),
+      ...(missingProgramName ? { missingProgramName } : {}),
+      ...(missingFootholdFor ? { missingFootholdFor } : {}),
+      ...(hasCyberdeck ? { thermalLevel } : {}),
     };
   }
 

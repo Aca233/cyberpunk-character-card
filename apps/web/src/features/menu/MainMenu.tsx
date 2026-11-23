@@ -22,10 +22,18 @@ import {
   startAnchor,
 } from "../characters/StartMapPicker";
 import { EmptyState } from "../status/StatusParts";
+import {
+  SHELL_THEMES,
+  ShellBackdrop,
+  ThemeGrid,
+  ThemeLyricsStage,
+  themeById,
+  useShellTheme,
+} from "../theme";
 import { CHANGELOG_ENTRIES } from "./changelog";
 import styles from "./menu.module.css";
 
-type Item = "continue" | "new" | "load" | "characters" | "workshop" | "settings";
+type Item = "continue" | "new" | "load" | "characters" | "workshop" | "theme" | "settings";
 
 /** 右侧舞台的标题，跟着左边选中的菜单项走 */
 const STAGE_TITLES: Partial<Record<Item, string>> = {
@@ -34,6 +42,7 @@ const STAGE_TITLES: Partial<Record<Item, string>> = {
   load: "读取存档",
   characters: "角色档案",
   workshop: "创意工坊",
+  theme: "界面主题",
   settings: "设置",
 };
 
@@ -43,23 +52,24 @@ const STAGE_CODES: Partial<Record<Item, string>> = {
   load: "03 // ARCHIVE",
   characters: "04 // CITIZEN_ID",
   workshop: "05 // WORKSHOP",
-  settings: "06 // SYS_CONFIG",
+  theme: "06 // SHELL_THEME",
+  settings: "07 // SYS_CONFIG",
 };
 
-/** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
-const FRAME_SLICE = 120;
 const CELL_SLICE = [20, 30, 30, 20] as const;
 
 const byNewest = (a: SaveSummary, b: SaveSummary) => b.createdAt.localeCompare(a.createdAt);
 
 /**
- * 主菜单：夜之城远景压暗、扫描线、原作 panel.frame 红框；
+ * 主菜单：共享外壳背景层（支持默认夜之城或按需下载的动态主题）与原作 panel.frame 外框；
  * 居中双栏布局：左栏放大版 Logo + 导航菜单 + 终端状态，右栏上方当前选中舞台 + 下方更新日志终端
  */
 export function MainMenu() {
   const navigate = useNavigate();
   const audioPrefs = useAudioPrefs();
   const audioState = useAudioState();
+  const shellTheme = useShellTheme();
+  const activeTheme = themeById(shellTheme.effectiveId);
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health });
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
@@ -73,10 +83,65 @@ export function MainMenu() {
   );
 
   const [focus, setFocus] = useState<Item>("continue");
+  const [immersive, setImmersive] = useState(false);
   const [loadFilter, setLoadFilter] = useState("");
+  const [charFilter, setCharFilter] = useState("");
+  const layoutRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const itemRefs = useRef<Partial<Record<Item, HTMLButtonElement | null>>>({});
+
+  // 主菜单双栏跟随鼠标做极轻的 3D 全息视角微偏（零重渲染，减动效或切后台自动停止）
+  useEffect(() => {
+    const el = layoutRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let targetRx = 0;
+    let targetRy = 0;
+    let curRx = 0;
+    let curRy = 0;
+    let raf = 0;
+
+    const tick = () => {
+      raf = 0;
+      if (document.hidden) return;
+      curRx += (targetRx - curRx) * 0.08;
+      curRy += (targetRy - curRy) * 0.08;
+      el.style.setProperty("--hud-rx", `${curRx.toFixed(3)}deg`);
+      el.style.setProperty("--hud-ry", `${curRy.toFixed(3)}deg`);
+      if (Math.abs(targetRx - curRx) > 0.015 || Math.abs(targetRy - curRy) > 0.015) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    const schedule = () => {
+      if (raf === 0 && !document.hidden) raf = requestAnimationFrame(tick);
+    };
+
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      const nx = event.clientX / Math.max(1, window.innerWidth) - 0.5;
+      const ny = event.clientY / Math.max(1, window.innerHeight) - 0.5;
+      targetRy = nx * 2.4;
+      targetRx = -ny * 1.8;
+      schedule();
+    };
+
+    const onLeave = () => {
+      targetRx = 0;
+      targetRy = 0;
+      schedule();
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("mouseleave", onLeave);
+    return () => {
+      if (raf !== 0) cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("mouseleave", onLeave);
+      el.style.removeProperty("--hud-rx");
+      el.style.removeProperty("--hud-ry");
+    };
+  }, []);
 
   const modelReady = health.data
     ? health.data.config === "ok" && health.data.models?.ready !== false
@@ -132,6 +197,12 @@ export function MainMenu() {
       reason: "创意工坊尚未完成，暂未启用",
     },
     {
+      id: "theme",
+      label: "界面主题",
+      hint: activeTheme.name,
+      hintTone: "cyan",
+    },
+    {
       id: "settings",
       label: "设置",
       hint: modelReady === false ? "未配好" : modelReady ? "就绪" : undefined,
@@ -141,9 +212,18 @@ export function MainMenu() {
 
   const allItems = [...primaryItems, ...utilityItems];
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (immersive) root.dataset.menuImmersive = "true";
+    else delete root.dataset.menuImmersive;
+    return () => {
+      delete root.dataset.menuImmersive;
+    };
+  }, [immersive]);
+
   const select = (id: Item) => {
+    if (immersive) setImmersive(false);
     if (id === "continue" && latest) navigate(`/play/${latest.id}`);
-    else if (id === "characters") navigate("/characters");
     else if (id === "workshop") return;
     else if (id === "settings") navigate("/settings");
     else setFocus(id);
@@ -162,6 +242,11 @@ export function MainMenu() {
           e.preventDefault();
           itemRefs.current[focus]?.focus();
         }
+        return;
+      }
+      if (!e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "h") {
+        e.preventDefault();
+        setImmersive((v) => !v);
         return;
       }
       if (e.key === "Escape" && stageRef.current?.contains(active)) {
@@ -204,6 +289,24 @@ export function MainMenu() {
     });
   }, [sorted, charById, normalizedFilter]);
 
+  const normalizedCharFilter = charFilter.trim().toLowerCase();
+  const filteredCharacters = useMemo(() => {
+    const list = characters.data ?? [];
+    if (!normalizedCharFilter) return list;
+    return list.filter((entry) => {
+      const hay = [
+        entry.card.name,
+        entry.card.alias,
+        entry.card.origin,
+        entry.card.board?.origin?.label,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(normalizedCharFilter);
+    });
+  }, [characters.data, normalizedCharFilter]);
+
   const stageTitle = STAGE_TITLES[focus] ?? "";
   const stageCode = STAGE_CODES[focus] ?? "";
   const stageCount =
@@ -219,11 +322,13 @@ export function MainMenu() {
             ? `${characters.data.length} 张档案`
             : focus === "workshop"
               ? "未完成 · 暂未启用"
-              : focus === "settings" && modelReady !== null
-                ? modelReady
-                  ? "连接就绪"
-                  : "待配置"
-                : "";
+              : focus === "theme"
+                ? `${SHELL_THEMES.length} 套可选`
+                : focus === "settings" && modelReady !== null
+                  ? modelReady
+                    ? "连接就绪"
+                    : "待配置"
+                  : "";
 
   const narratorName = profiles.data?.narrator;
   const statusTilt = useCardTilt<HTMLDivElement>({
@@ -233,34 +338,29 @@ export function MainMenu() {
 
   return (
     <main className={styles.menu}>
-      <span
-        className={styles.bg}
-        style={{ backgroundImage: cssUrl("menu.nightCity") }}
-        aria-hidden
-      />
-      <span className={styles.dim} aria-hidden />
-      <span
-        className={styles.strip}
-        style={{ backgroundImage: cssUrl("menu.background") }}
-        aria-hidden
-      />
-      <span className={styles.gridTex} style={{ backgroundImage: cssUrl("fx.grid") }} aria-hidden />
-      <span
-        className={styles.scan}
-        style={{ backgroundImage: cssUrl("fx.scanlines") }}
-        aria-hidden
-      />
-      <NineSlice
-        id="panel.frame"
-        tint="var(--cp-red)"
-        slice={FRAME_SLICE}
-        className={styles.frame}
-      />
+      <ShellBackdrop variant="menu" />
 
-      <div className={styles.layout}>
+      <div ref={layoutRef} className={styles.layout} data-immersive={immersive || undefined}>
         <aside className={styles.side}>
           <header className={styles.brand}>
-            <Asset id="splash.logo" height={124} alt="赛博朋克2091" className={styles.brandLogo} />
+            <div className={styles.brandLogoWrap}>
+              <Asset
+                id="splash.logo"
+                height={124}
+                alt="赛博朋克2091"
+                className={styles.brandLogo}
+              />
+              <Asset
+                id="splash.logo"
+                height={124}
+                className={`${styles.brandLogo} ${styles.brandGhostA}`}
+              />
+              <Asset
+                id="splash.logo"
+                height={124}
+                className={`${styles.brandLogo} ${styles.brandGhostB}`}
+              />
+            </div>
             <div className={styles.brandMeta}>
               <span className={styles.brandTag}>{"NIGHT CITY // 2091"}</span>
               <span className={styles.brandSub}>交互式叙事终端</span>
@@ -316,7 +416,7 @@ export function MainMenu() {
             <NineSlice
               id="notify.itemCellBg"
               slice={ITEM_CELL_SLICE}
-              tint="rgb(10 7 14 / 86%)"
+              tint="var(--cp-menu-status-bg)"
               className={styles.statusSlice}
             />
             <NineSlice
@@ -374,6 +474,17 @@ export function MainMenu() {
                     : audioState.originalReady
                       ? "原版音频 · 点击静音"
                       : "已开启 · 点击静音"}
+                </button>
+              </dd>
+              <dt>主题</dt>
+              <dd data-tone={activeTheme.media ? "ok" : undefined}>
+                <button
+                  type="button"
+                  className={styles.inlineLink}
+                  title="切到界面主题面板"
+                  onClick={() => setFocus("theme")}
+                >
+                  {activeTheme.name} · 切换
                 </button>
               </dd>
             </dl>
@@ -511,22 +622,60 @@ export function MainMenu() {
               )}
 
               {focus === "characters" && (
-                <Panel line="var(--cp-red-dim)">
-                  <div className={styles.form}>
-                    <p className={styles.note}>
-                      五步赛博建卡工作台：自由搭配出身、特质、负面缺陷、义体拓扑、随身行装与人脉关系，支持
-                      AI 生成立绘与小传，以及 JSON 角色卡分享导入导出。
-                    </p>
-                    <div className={styles.submit}>
+                <div className={styles.load}>
+                  <div className={styles.loadToolbar}>
+                    {(characters.data?.length ?? 0) > 4 ? (
+                      <FrameBox className={styles.loadSearch}>
+                        <input
+                          value={charFilter}
+                          onChange={(e) => setCharFilter(e.target.value)}
+                          placeholder="筛选角色名、外号或出身…"
+                          aria-label="筛选角色"
+                        />
+                      </FrameBox>
+                    ) : (
                       <span className={styles.note}>
-                        当前本地共有 {characters.data?.length ?? 0} 张角色卡
+                        共 {characters.data?.length ?? 0} 张角色档案 · 点击角色进入档案编辑
                       </span>
-                      <Button primary onClick={() => navigate("/characters")}>
-                        进入角色工作台
+                    )}
+                    <div className={styles.saveTools}>
+                      <Button small onClick={() => navigate("/characters")}>
+                        管理全部
+                      </Button>
+                      <Button small primary onClick={() => navigate("/characters?new=1")}>
+                        ＋ 新建角色
                       </Button>
                     </div>
                   </div>
-                </Panel>
+                  {(characters.data?.length ?? 0) === 0 ? (
+                    <EmptyState
+                      text="还没有角色档案"
+                      action={
+                        <Button primary onClick={() => navigate("/characters?new=1")}>
+                          ＋ 新建角色
+                        </Button>
+                      }
+                    />
+                  ) : filteredCharacters.length === 0 ? (
+                    <EmptyState
+                      text={`没有匹配「${charFilter}」的角色档案`}
+                      action={<Button onClick={() => setCharFilter("")}>清空筛选</Button>}
+                    />
+                  ) : (
+                    <ul className={styles.saveGrid}>
+                      {filteredCharacters.map((entry) => (
+                        <li key={entry.id}>
+                          <CharPreviewCard
+                            entry={entry}
+                            onOpen={() =>
+                              navigate(`/characters?id=${encodeURIComponent(entry.id)}`)
+                            }
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
 
               {focus === "workshop" && (
@@ -536,6 +685,8 @@ export function MainMenu() {
                   </div>
                 </Panel>
               )}
+
+              {focus === "theme" && <ThemeGrid compact />}
 
               {focus === "settings" && (
                 <Panel line="var(--cp-red-dim)">
@@ -563,14 +714,49 @@ export function MainMenu() {
         </div>
       </div>
 
+      <ThemeLyricsStage immersive={immersive} onToggleImmersive={() => setImmersive((v) => !v)} />
+
       <div className={styles.keys}>
         <KeyBar>
           <KeyHint keyId="key.enter" label="进入 / 选择" />
           <KeyHint keyId="key.tab" label="切到右侧" />
           <KeyHint keyId="key.esc" label="回菜单栏" />
+          <KeyHint
+            keyText="H"
+            label={immersive ? "还原面板" : "赏景"}
+            active={immersive}
+            title="收起或还原右侧舞台与日志面板，欣赏完整壁纸（快捷键 H）"
+            onClick={() => setImmersive((v) => !v)}
+          />
         </KeyBar>
       </div>
     </main>
+  );
+}
+
+function CharPreviewCard({
+  entry,
+  onOpen,
+}: {
+  readonly entry: CharacterEntry;
+  readonly onOpen: () => void;
+}) {
+  const tilt = useCardTilt<HTMLButtonElement>({
+    maxRotate: 5.5,
+    shadowShift: 4.5,
+  });
+  return (
+    <button type="button" className={styles.charPreviewCard} onClick={onOpen} {...tilt}>
+      <CellFrame />
+      <span className={styles.charPreviewBadge}>{entry.sample ? "官方预设" : "自建角色"}</span>
+      <strong className={styles.charPreviewName}>
+        {entry.card.name}
+        {entry.card.alias ? `「${entry.card.alias}」` : ""}
+      </strong>
+      <span className={styles.charPreviewMeta}>
+        {entry.card.origin || entry.card.board?.origin?.label || "未知出身"}
+      </span>
+    </button>
   );
 }
 
@@ -589,7 +775,7 @@ function ChangelogPanel() {
       <NineSlice
         id="notify.itemCellBg"
         slice={ITEM_CELL_SLICE}
-        tint="rgb(13 9 16 / 86%)"
+        tint="var(--cp-menu-changelog-bg)"
         className={styles.changelogBg}
       />
       <NineSlice

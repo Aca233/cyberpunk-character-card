@@ -161,6 +161,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
       );
       if (!res.ok) {
         const detail = await errorDetail(res);
+        if (signal?.aborted) throw new AbortedError();
         throw statusError(provider, res.status, detail.message);
       }
       if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status, true);

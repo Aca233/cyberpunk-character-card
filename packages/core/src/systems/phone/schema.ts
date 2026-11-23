@@ -69,6 +69,17 @@ export const ChatSceneBudgetSchema = z.object({
 });
 export type ChatSceneBudget = z.infer<typeof ChatSceneBudgetSchema>;
 
+/** 通讯录来源：开局旧识 / 剧情交换联系方式 / 对方来信来电入录 / 旧存档迁移 */
+export const ContactSourceSchema = z.enum(["opening", "exchange", "inbound", "legacy"]);
+export type ContactSource = z.infer<typeof ContactSourceSchema>;
+
+export const ContactEntrySchema = z.object({
+  addedAt: z.number().int(),
+  source: ContactSourceSchema,
+  note: z.string().trim().min(1).max(80).optional(),
+});
+export type ContactEntry = z.infer<typeof ContactEntrySchema>;
+
 export const PhoneStateSchema = z.object({
   messages: z.array(MessageSchema).max(PHONE_KEPT).default([]),
   nextId: z.number().int().min(1).default(1),
@@ -78,8 +89,46 @@ export const PhoneStateSchema = z.object({
   feedRead: z.array(z.string().min(1)).default([]),
   /** 手机直聊每个人物在当前场景下的次数/好感/派单配额；旧存档没有 */
   chatBudget: z.record(z.string(), ChatSceneBudgetSchema).default({}),
+  /** 已建立全息联络渠道的通讯录（键为人物 id 或中间人 id）；旧存档没有 */
+  contacts: z.record(z.string(), ContactEntrySchema).default({}),
 });
 export type PhoneState = z.infer<typeof PhoneStateSchema>;
+
+/** 模型在正文明确交换联系方式、留名片或拉黑删号时发出 */
+export const PhoneContactSchema = z
+  .object({
+    type: z.literal("phoneContact"),
+    id: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .describe("对方的人物 id 或中间人 id（必须已有卡或是已登记中间人）"),
+    action: z
+      .enum(["add", "remove"])
+      .default("add")
+      .describe("add 交换/记下联系方式入录，remove 明确拉黑或删除联系频道"),
+    note: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .optional()
+      .describe("可省：留号方式或备注，例如“留了私人频道”“中间人转线”"),
+  })
+  .describe(
+    "通讯录变更：仅正文明确发生交换全息号、留联系方式/名片或拉黑删号时发出；单纯见面或听说不发",
+  );
+export type PhoneContactCommand = z.infer<typeof PhoneContactSchema>;
+
+/** 只能由代码发出：开局旧识等初始化写入通讯录 */
+export const SeedContactSchema = z.object({
+  type: z.literal("phone.seedContact"),
+  id: z.string().trim().min(1).max(40),
+  source: ContactSourceSchema.default("opening"),
+  note: z.string().trim().min(1).max(80).optional(),
+});
+export type SeedContactCommand = z.infer<typeof SeedContactSchema>;
 
 /** 抽取结果顶层的一条 messages */
 export const IncomingMessageSchema = z.object({
@@ -147,6 +196,8 @@ export const ChatMetaSchema = z.object({
 });
 export type ChatMeta = z.infer<typeof ChatMetaSchema>;
 
+export type PhoneCommand = PhoneContactCommand;
+
 export type PhoneInternal =
   | z.infer<typeof ReceiveSchema>
   | z.infer<typeof ReadSchema>
@@ -154,4 +205,13 @@ export type PhoneInternal =
   | z.infer<typeof CallCommandSchema>
   | z.infer<typeof AnswerSchema>
   | SendCommand
-  | ChatMeta;
+  | ChatMeta
+  | SeedContactCommand;
+
+/** 检查某个频道/人物是否已建立全息联系渠道（显式入录或已有消息/来电往来） */
+export function hasContactChannel(phone: PhoneState, id: string): boolean {
+  if (phone.contacts[id] !== undefined) return true;
+  if (phone.messages.some((m) => m.from === id)) return true;
+  if (phone.calls.some((c) => c.from === id)) return true;
+  return false;
+}

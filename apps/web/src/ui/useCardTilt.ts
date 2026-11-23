@@ -47,12 +47,16 @@ interface TiltState {
   curSy: number;
   curAngle: number;
   curGlare: number;
+  curPx: number;
+  curPy: number;
   baseRx: number;
   baseRy: number;
   baseSx: number;
   baseSy: number;
   tgtAngle: number;
   tgtGlare: number;
+  tgtPx: number;
+  tgtPy: number;
   lastTs: number;
 }
 
@@ -67,12 +71,16 @@ function createTiltState(): TiltState {
     curSy: 0,
     curAngle: DEFAULT_GLARE_ANGLE,
     curGlare: DEFAULT_GLARE_POS,
+    curPx: 50,
+    curPy: 50,
     baseRx: 0,
     baseRy: 0,
     baseSx: 0,
     baseSy: 0,
     tgtAngle: DEFAULT_GLARE_ANGLE,
     tgtGlare: DEFAULT_GLARE_POS,
+    tgtPx: 50,
+    tgtPy: 50,
     lastTs: 0,
   };
 }
@@ -85,6 +93,8 @@ function resetVars(el: HTMLElement) {
   el.style.removeProperty("--shadow-y");
   el.style.removeProperty("--tilt-angle");
   el.style.removeProperty("--tilt-glare");
+  el.style.removeProperty("--tilt-x");
+  el.style.removeProperty("--tilt-y");
   el.removeAttribute("data-tilting");
   el.removeAttribute("data-glare");
   el.removeAttribute("data-pressed");
@@ -98,6 +108,8 @@ function applyVars(el: HTMLElement, s: TiltState) {
   el.style.setProperty("--shadow-y", `${s.curSy.toFixed(2)}px`);
   el.style.setProperty("--tilt-angle", `${s.curAngle.toFixed(1)}deg`);
   el.style.setProperty("--tilt-glare", `${s.curGlare.toFixed(1)}%`);
+  el.style.setProperty("--tilt-x", `${s.curPx.toFixed(1)}%`);
+  el.style.setProperty("--tilt-y", `${s.curPy.toFixed(1)}%`);
 }
 
 function prefersReducedMotion(): boolean {
@@ -146,6 +158,8 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       const tgtSy = s.active ? s.baseSy * (s.pressed ? 0.25 : 1) : 0;
       const tgtAngle = s.active ? s.tgtAngle : DEFAULT_GLARE_ANGLE;
       const tgtGlare = s.active ? s.tgtGlare : DEFAULT_GLARE_POS;
+      const tgtPx = s.active ? s.tgtPx : 50;
+      const tgtPy = s.active ? s.tgtPy : 50;
 
       // 帧率无关指数平滑：进入/跟手/按下响应利落，离开舒缓回平
       const speed = s.active ? 22 : 14;
@@ -158,6 +172,8 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       s.curSy += (tgtSy - s.curSy) * alpha;
       s.curAngle += (tgtAngle - s.curAngle) * alpha;
       s.curGlare += (tgtGlare - s.curGlare) * alpha;
+      s.curPx += (tgtPx - s.curPx) * alpha;
+      s.curPy += (tgtPy - s.curPy) * alpha;
 
       const settled =
         Math.abs(tgtRx - s.curRx) < 0.008 &&
@@ -165,7 +181,9 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
         Math.abs(tgtTz - s.curTz) < 0.03 &&
         Math.abs(tgtSx - s.curSx) < 0.02 &&
         Math.abs(tgtSy - s.curSy) < 0.02 &&
-        Math.abs(tgtGlare - s.curGlare) < 0.08;
+        Math.abs(tgtGlare - s.curGlare) < 0.08 &&
+        Math.abs(tgtPx - s.curPx) < 0.1 &&
+        Math.abs(tgtPy - s.curPy) < 0.1;
 
       if (settled) {
         if (!s.active) {
@@ -180,6 +198,8 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
         s.curSy = tgtSy;
         s.curAngle = tgtAngle;
         s.curGlare = tgtGlare;
+        s.curPx = tgtPx;
+        s.curPy = tgtPy;
         s.lastTs = 0;
         applyVars(el, s);
         return;
@@ -229,6 +249,8 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
       s.baseSy = -ny * syMax;
       s.tgtAngle = DEFAULT_GLARE_ANGLE + nx * 18 - ny * 10;
       s.tgtGlare = DEFAULT_GLARE_POS + nx * 32 + ny * 14;
+      s.tgtPx = ((nx + 1) / 2) * 100;
+      s.tgtPy = ((ny + 1) / 2) * 100;
 
       el.setAttribute("data-tilting", "true");
       el.setAttribute("data-glare", "true");
@@ -264,6 +286,12 @@ export function useCardTilt<T extends HTMLElement = HTMLElement>({
   const onPointerDown = useCallback(
     (e: PointerEvent<T>) => {
       if (disabled || e.pointerType !== "mouse" || prefersReducedMotion()) return;
+      // 点击容器内部的按钮/链接/输入控件时不再按压整张大卡片，避免 3D 缩放把按钮从光标下移走导致丢 click
+      const target = e.target instanceof Element ? e.target : null;
+      const nestedInteractive = target?.closest(
+        'button, a[href], input, textarea, select, summary, [role="button"], [role="tab"]',
+      );
+      if (nestedInteractive && nestedInteractive !== e.currentTarget) return;
       elRef.current = e.currentTarget;
       stateRef.current.pressed = true;
       e.currentTarget.setAttribute("data-pressed", "true");

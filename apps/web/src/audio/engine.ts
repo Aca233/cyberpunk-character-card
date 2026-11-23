@@ -13,11 +13,19 @@ import { playSynthCue, type SfxCue } from "./synth";
 
 export type DuckReason = "esc" | "settings" | "dialog" | "holocall" | "media";
 
+export interface ThemeBgmSpec {
+  readonly id: string;
+  readonly url: string;
+  readonly label: string;
+}
+
 export interface AudioSnapshot {
   /** 浏览器自动播放限制是否已由用户交互解锁 */
   readonly unlocked: boolean;
   /** 当前实际播放中的原版 BGM（含试听覆盖） */
   readonly activeBgm: BgmId | null;
+  /** 当前实际播放中的曲目唯一键（原版 BgmId 或主题专属曲目 id） */
+  readonly activeTrackKey: string | null;
   /** 当前场景期望的 BGM */
   readonly sceneBgm: BgmId | null;
   /** 设置页试听覆盖的 BGM */
@@ -85,9 +93,20 @@ const DUCK_SMOOTH_MS = 320;
 
 interface Deck {
   readonly el: HTMLAudioElement;
+  key: string | null;
   bgm: BgmId | null;
+  label: string | null;
   weight: number;
 }
+
+interface DesiredTrack {
+  readonly key: string;
+  readonly bgm: BgmId | null;
+  readonly url: string | null;
+  readonly label: string;
+}
+
+const THEME_OVERRIDABLE_BGMS: ReadonlySet<BgmId> = new Set(["bgm.menu", "bgm.creator"]);
 
 const listeners = new Set<() => void>();
 const duckReasons = new Set<DuckReason>();
@@ -107,6 +126,7 @@ let listenersInstalled = false;
 let unlockArmed = false;
 let sceneBgm: BgmId | null = null;
 let previewBgmId: BgmId | null = null;
+let themeBgmOverride: ThemeBgmSpec | null = null;
 let currentDuckGain = 1;
 let targetDuckGain = 1;
 let fadeRaf: number | null = null;
@@ -120,8 +140,30 @@ let duckRaf: number | null = null;
 let corePreloaded = false;
 let snapshot: AudioSnapshot = buildSnapshot();
 
-function effectiveBgm(): BgmId | null {
-  return previewBgmId ?? sceneBgm;
+function resolveDesiredTrack(): DesiredTrack | null {
+  if (previewBgmId !== null) {
+    return {
+      key: previewBgmId,
+      bgm: previewBgmId,
+      url: audioAssetUrl(previewBgmId) ?? null,
+      label: AUDIO_LABELS[previewBgmId],
+    };
+  }
+  if (sceneBgm === null) return null;
+  if (themeBgmOverride !== null && THEME_OVERRIDABLE_BGMS.has(sceneBgm)) {
+    return {
+      key: themeBgmOverride.id,
+      bgm: null,
+      url: themeBgmOverride.url,
+      label: themeBgmOverride.label,
+    };
+  }
+  return {
+    key: sceneBgm,
+    bgm: sceneBgm,
+    url: audioAssetUrl(sceneBgm) ?? null,
+    label: AUDIO_LABELS[sceneBgm],
+  };
 }
 
 function effectiveBgmTargetVolume(): number {
@@ -145,17 +187,21 @@ function computeDuckTarget(): number {
 }
 
 function buildSnapshot(): AudioSnapshot {
-  const active = decks ? decks[activeDeckIdx].bgm : null;
-  const deckEl = decks ? decks[activeDeckIdx].el : null;
+  const activeDeck = decks ? decks[activeDeckIdx] : null;
+  const active = activeDeck ? activeDeck.bgm : null;
+  const activeKey = activeDeck ? activeDeck.key : null;
+  const activeLabel = activeDeck ? activeDeck.label : null;
+  const deckEl = activeDeck ? activeDeck.el : null;
   const playing = Boolean(
-    deckEl && !deckEl.paused && effectiveBgmTargetVolume() > 0 && active !== null,
+    deckEl && !deckEl.paused && effectiveBgmTargetVolume() > 0 && activeKey !== null,
   );
   return {
     unlocked,
     activeBgm: active,
+    activeTrackKey: activeKey,
     sceneBgm,
     previewBgm: previewBgmId,
-    activeLabel: active ? AUDIO_LABELS[active] : null,
+    activeLabel,
     playing,
     ducked: duckReasons.size > 0,
     originalReady: audioAssetsReady(),
@@ -210,7 +256,7 @@ function ensureDecks(): [Deck, Deck] | null {
       el.loop = true;
       el.preload = "auto";
       el.volume = 0;
-      return { el, bgm: null, weight: 0 };
+      return { el, key: null, bgm: null, label: null, weight: 0 };
     };
     decks = [make(), make()];
   }
@@ -251,7 +297,9 @@ function tickFade(now: number): void {
   if (t >= 1) {
     fromDeck.weight = 0;
     fromDeck.el.pause();
+    fromDeck.key = null;
     fromDeck.bgm = null;
+    fromDeck.label = null;
     toDeck.weight = 1;
     applyDeckVolumes();
     fadeState = null;
@@ -313,7 +361,7 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
   const pair = ensureDecks();
   if (!pair) return;
 
-  const desired = effectiveBgm();
+  const desired = resolveDesiredTrack();
   const vol = effectiveBgmTargetVolume();
   const current = pair[activeDeckIdx];
 
@@ -324,26 +372,34 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
       d.weight = 0;
       d.el.volume = 0;
       if (!d.el.paused) d.el.pause();
-      if (!desired) d.bgm = null;
+      if (!desired) {
+        d.key = null;
+        d.bgm = null;
+        d.label = null;
+      }
     }
     emit();
     return;
   }
 
-  const url = audioAssetUrl(desired);
+  const url = desired.url;
   if (!url) {
     emit();
     return;
   }
 
   // 目标曲目已在当前主轨上：仅确保它在播放并同步音量
-  if (current.bgm === desired) {
-    if (current.el.paused && unlocked) {
+  if (current.key === desired.key) {
+    current.label = desired.label;
+    if (current.el.paused) {
       current.weight = 1;
       applyDeckVolumes();
       void current.el
         .play()
-        .then(() => emit())
+        .then(() => {
+          unlocked = true;
+          emit();
+        })
         .catch((err) => {
           // 仅自动播放受限时重挂解锁监听，绝不因 AbortError 锁死音频
           if (isNotAllowedError(err)) {
@@ -359,32 +415,28 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
     return;
   }
 
-  // 未解锁前先记住目标，不硬调 play 避免浏览器控制台报 NotAllowedError
-  if (!unlocked) {
-    armGestureUnlock();
-    emit();
-    return;
-  }
-
   const nextIdx: 0 | 1 = activeDeckIdx === 0 ? 1 : 0;
   const fromIdx = activeDeckIdx;
   const fromDeck = pair[fromIdx];
   const toDeck = pair[nextIdx];
 
   stopFade();
-  toDeck.bgm = desired;
+  toDeck.key = desired.key;
+  toDeck.bgm = desired.bgm;
+  toDeck.label = desired.label;
   toDeck.el.src = url;
   toDeck.el.currentTime = 0;
   toDeck.el.loop = true;
-  toDeck.weight = fromDeck.bgm && !fromDeck.el.paused ? 0 : 1;
+  toDeck.weight = fromDeck.key && !fromDeck.el.paused ? 0 : 1;
   activeDeckIdx = nextIdx;
   applyDeckVolumes();
 
   void toDeck.el
     .play()
     .then(() => {
-      if (toDeck.bgm !== desired) return;
-      if (fromDeck.bgm && !fromDeck.el.paused && crossfadeMs > 0) {
+      unlocked = true;
+      if (toDeck.key !== desired.key) return;
+      if (fromDeck.key && !fromDeck.el.paused && crossfadeMs > 0) {
         fadeState = {
           fromIdx,
           toIdx: nextIdx,
@@ -395,7 +447,9 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
       } else {
         fromDeck.weight = 0;
         fromDeck.el.pause();
+        fromDeck.key = null;
         fromDeck.bgm = null;
+        fromDeck.label = null;
         toDeck.weight = 1;
         applyDeckVolumes();
       }
@@ -403,7 +457,9 @@ function syncBgm(crossfadeMs = CROSSFADE_MS): void {
     })
     .catch((err) => {
       if (isNotAllowedError(err)) {
+        toDeck.key = null;
         toDeck.bgm = null;
+        toDeck.label = null;
         unlocked = false;
         armGestureUnlock();
         emit();
@@ -608,6 +664,61 @@ export function previewBgm(bgm: BgmId): void {
   syncBgm(500);
 }
 
+/** 设定主题专属配乐覆盖（当选用雨夜窗畔 / 月球舷窗 / 月面余光等主题时无缝接管主菜单与常规背景音乐） */
+export function setThemeBgmOverride(spec: ThemeBgmSpec | null, crossfadeMs = CROSSFADE_MS): void {
+  const prevId = themeBgmOverride?.id ?? null;
+  const nextId = spec?.id ?? null;
+  if (prevId === nextId && themeBgmOverride?.url === spec?.url) return;
+  themeBgmOverride = spec;
+  if (previewBgmId === null) {
+    syncBgm(crossfadeMs);
+  } else {
+    emit();
+  }
+}
+
+/** 读取当前正在播放的 BGM 实时进度（供主菜单 Folia 风格歌词舞台以 60fps 驱动逐词同步） */
+export function getActiveBgmTime(): {
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly playing: boolean;
+  readonly trackKey: string | null;
+} {
+  const activeDeck = decks ? decks[activeDeckIdx] : null;
+  if (!activeDeck) {
+    return { currentTime: 0, duration: 0, playing: false, trackKey: null };
+  }
+  const el = activeDeck.el;
+  return {
+    currentTime: Number.isFinite(el.currentTime) ? el.currentTime : 0,
+    duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 246.7,
+    playing: !el.paused && effectiveBgmTargetVolume() > 0 && activeDeck.key !== null,
+    trackKey: activeDeck.key,
+  };
+}
+
+/** 点击歌词行或进度条时直接跳转当前 BGM 播放时间点 */
+export function seekActiveBgm(timeSec: number): void {
+  unlockAudioNow();
+  const activeDeck = decks ? decks[activeDeckIdx] : null;
+  if (!activeDeck) return;
+  const el = activeDeck.el;
+  const clamped = Math.max(0, timeSec);
+  try {
+    el.currentTime = clamped;
+  } catch {
+    // 音频尚未加载完元数据时忽略
+  }
+  if (el.paused && effectiveBgmTargetVolume() > 0) {
+    void el
+      .play()
+      .then(() => emit())
+      .catch(() => {});
+  } else {
+    emit();
+  }
+}
+
 /** 退出设置页时清除试听覆盖，无缝切回当前场景配乐 */
 export function clearBgmPreview(): void {
   if (previewBgmId === null) return;
@@ -639,7 +750,7 @@ export function unlockAudioNow(): void {
     preloadCoreSfx();
     if (
       decks &&
-      effectiveBgm() &&
+      resolveDesiredTrack() &&
       decks[activeDeckIdx].el.paused &&
       effectiveBgmTargetVolume() > 0
     ) {

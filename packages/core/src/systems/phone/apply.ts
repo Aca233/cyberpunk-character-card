@@ -6,12 +6,48 @@ import {
   CALL_STATUS_LABELS,
   CALLS_KEPT,
   type ChatMeta,
+  type ContactSource,
   type Message,
   PHONE_KEPT,
   PHONE_THREAD_MIN,
   type PhoneState,
   PhoneStateSchema,
 } from "./schema";
+
+/** 幂等写入通讯录：已有记录时仅按需补充 note，不覆盖最初来源 */
+export function addContact(
+  draft: Draft<PhoneState>,
+  id: string,
+  name: string,
+  source: ContactSource,
+  now: number,
+  note?: string,
+  silent = false,
+): ApplyOutcome {
+  const existing = draft.contacts[id];
+  if (existing) {
+    if (note !== undefined && existing.note === undefined) {
+      existing.note = note;
+    }
+    return { ok: true };
+  }
+  draft.contacts[id] = {
+    addedAt: now,
+    source,
+    ...(note === undefined ? {} : { note }),
+  };
+  return {
+    ok: true,
+    ...(silent ? {} : { notes: [`已添加 ${name} 到通讯录`] }),
+  };
+}
+
+/** 从通讯录移除联系人（剧情拉黑/删号） */
+export function removeContact(draft: Draft<PhoneState>, id: string, name: string): ApplyOutcome {
+  if (draft.contacts[id] === undefined) return { ok: true };
+  delete draft.contacts[id];
+  return { ok: true, notes: [`已从通讯录移除 ${name}`] };
+}
 
 function isProtectedJobMessage(m: Message, openJobIds: ReadonlySet<string>): boolean {
   return m.job !== undefined && openJobIds.has(m.job);
@@ -54,6 +90,9 @@ export function receiveMessage(
   job?: string,
   openJobIds: ReadonlySet<string> = new Set(),
 ): ApplyOutcome {
+  if (draft.contacts[from] === undefined) {
+    draft.contacts[from] = { addedAt: now, source: "inbound" };
+  }
   draft.messages.push({
     id: draft.nextId,
     from,
@@ -173,6 +212,9 @@ export function receiveCall(
 ): ApplyOutcome {
   if (draft.calls.some((c) => c.status === "ringing")) {
     return { ok: false, reason: "已经有一通全息电话在响，先接或拒接" };
+  }
+  if (draft.contacts[from] === undefined) {
+    draft.contacts[from] = { addedAt: now, source: "inbound" };
   }
   draft.calls.push({
     id: draft.nextCall,

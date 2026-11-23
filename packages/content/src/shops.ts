@@ -17,6 +17,9 @@ const sleeveStock: Record<string, number> = {
   "shard-skill-trauma-field": 2,
   "shard-skill-tactical-reload": 1,
   "shard-skill-lockbypass": 2,
+  "qh-sonic-shock": 2,
+  "qh-cripple-movement": 2,
+  "qh-memory-wipe": 1,
 };
 
 /** 丽姿酒吧超梦柜台：莫克斯感官调谐卷轴、高端超梦花环与朱迪外流的改装协议。 */
@@ -40,6 +43,8 @@ const jigjigXbdStock: Record<string, number> = {
   "shard-bd-konpeki-suite-raw": 1,
   "shard-daemon-arasaka-backdoor": 1,
   "shard-behavior-social-mask": 1,
+  "qh-short-circuit": 1,
+  "qh-contagion": 1,
 };
 
 /**
@@ -75,6 +80,9 @@ export const shops = inventoryRules.ShopListSchema.parse([
         "shard-skill-trauma-field",
         "shard-skill-tactical-reload",
         "shard-skill-lockbypass",
+        "qh-sonic-shock",
+        "qh-cripple-movement",
+        "qh-memory-wipe",
       ],
     },
   },

@@ -36,11 +36,11 @@ export function rulingFact(facts: Readonly<Record<string, unknown>>): RulingFact
   return parsed.success ? parsed.data : undefined;
 }
 
-/** 读取本轮敌方黑客反制的独立裁决；未单独给出时回退到 ruling */
+/** 读取本轮敌方黑客反制的独立裁决；未单独给出时返回 undefined，绝不复用主行动 ruling */
 export function npcHackRulingFact(
   facts: Readonly<Record<string, unknown>>,
 ): RulingFact | undefined {
-  const raw = facts.npcHackRuling ?? facts.ruling;
+  const raw = facts.npcHackRuling;
   if (raw === undefined) return undefined;
   const parsed = RulingFactSchema.safeParse(raw);
   return parsed.success ? parsed.data : undefined;

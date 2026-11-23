@@ -201,6 +201,159 @@
   cursor: var(--cp-cursor-hand);
 }
 
+.quickConfigRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: rgb(14 14 23 / 72%);
+  border-left: 2px solid var(--cp-cyan);
+}
+
+.quickGroup {
+  display: grid;
+  gap: 5px;
+}
+
+.quickLabel {
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.pillBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pillBtn {
+  padding: 4px 10px;
+  border: 1px solid var(--cp-red-dim);
+  background: rgb(12 12 20 / 84%);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  line-height: 1.4;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.pillBtn:hover:not(:disabled) {
+  border-color: var(--cp-cyan);
+  color: var(--cp-text);
+}
+
+.pillBtn[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(0 240 255 / 14%);
+  color: var(--cp-cyan);
+}
+
+.pillBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.segmentBox {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgb(12 12 20 / 76%);
+  border: 1px solid var(--cp-red-dim);
+}
+
+.segmentTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmentTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--cp-red-dim);
+  background: rgb(18 18 28 / 85%);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+  cursor: var(--cp-cursor-hand);
+}
+
+.segmentTab[aria-selected="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(0 240 255 / 14%);
+  color: var(--cp-cyan);
+}
+
+.segmentDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cp-red-dim);
+}
+
+.segmentTab[data-filled] .segmentDot {
+  background: var(--cp-cyan);
+}
+
+.segmentExcerpt {
+  margin: 0;
+  color: var(--cp-text-dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.segmentExcerpt strong {
+  color: var(--cp-text);
+  font-weight: 500;
+}
+
+.customPromptStack {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.previewGridItem {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  background: rgb(16 16 26 / 84%);
+  border: 1px solid var(--cp-red-dim);
+}
+
+.previewThumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.previewThumbCap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
 /* ———— 灯箱预览 ———— */
 
 .lightbox {

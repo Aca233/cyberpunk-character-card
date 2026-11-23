@@ -1114,6 +1114,8 @@ export function diffViews(prev: View, next: View): Toast[] {
 
 export type ContactBadgeTone = "accent" | "cyan" | "danger" | "warn" | "dim";
 export type ContactFilter = "all" | "unread" | "active" | "utility" | "present";
+export type PeopleFilter = "all" | "present" | "met" | "heard" | "linked" | "unlinked";
+export type ContactSource = View["phone"]["contacts"][number]["contactSource"];
 
 export interface ContactBadge {
   readonly label: string;
@@ -1137,6 +1139,13 @@ export interface ContactSummary {
   readonly highlight: string | null;
   readonly locatePlaceId: string | null;
   readonly locatePlaceName: string | null;
+  readonly alive: boolean;
+  readonly met: boolean;
+  readonly isFixer: boolean;
+  readonly canChat: boolean;
+  readonly hasContact: boolean;
+  readonly contactSource: ContactSource | null;
+  readonly contactNote: string | null;
   readonly isActive: boolean;
   readonly isUtility: boolean;
   readonly isPresent: boolean;
@@ -1153,6 +1162,13 @@ interface RawContact {
   readonly npc: ViewNpc | undefined;
   readonly last: string | null;
   readonly unread: number;
+  readonly alive: boolean;
+  readonly met: boolean;
+  readonly isFixer: boolean;
+  readonly canChat: boolean;
+  readonly hasContact: boolean;
+  readonly contactSource: ContactSource | null;
+  readonly contactNote: string | null;
 }
 
 const ROLE_TRAITS: readonly {
@@ -1222,16 +1238,6 @@ function summarizeNpcContact(
   const destinations = view.travel?.destinations ?? [];
   const offeredMsg = msgs.find((m) => m.sender !== "player" && m.job?.status === "offered");
   const activeMsg = msgs.find((m) => m.sender !== "player" && m.job?.status === "active");
-  const openJobs = npc
-    ? jobsList.filter(
-        (j) =>
-          j.open &&
-          (j.fixer === npc.name ||
-            j.fixer === npc.id ||
-            j.client === npc.name ||
-            j.client === npc.id),
-      )
-    : [];
   const openConcerns =
     npc?.arc?.concerns.filter((c) => c.status === "told" || c.status === "involved") ?? [];
   const unsettled = npc?.ledger.filter((e) => e.settled === null) ?? [];
@@ -1242,7 +1248,22 @@ function summarizeNpcContact(
   const doc = services?.ripperdoc ?? null;
   const shops = services?.shops ?? [];
   const isRoleFixer = Boolean(npc?.met && npc.role.includes("中间人"));
-  const isFixer = Boolean(fixer || isRoleFixer);
+  const isFixer = Boolean(fixer || raw.isFixer || isRoleFixer);
+  const alive = npc ? npc.alive : raw.alive;
+  const met = npc ? npc.met : raw.met;
+  const openJobs = jobsList.filter(
+    (j) =>
+      j.open &&
+      (j.fixer === raw.name ||
+        j.fixer === raw.key ||
+        j.client === raw.name ||
+        j.client === raw.key ||
+        (npc !== undefined &&
+          (j.fixer === npc.name ||
+            j.fixer === npc.id ||
+            j.client === npc.name ||
+            j.client === npc.id))),
+  );
 
   const badges: ContactBadge[] = [];
   if (foe) {
@@ -1350,12 +1371,23 @@ function summarizeNpcContact(
 
   let utilityParts: string[] = [];
   if (!npc) {
-    utilityParts = ["未建档加密频道", ...(raw.last ? [raw.last] : [])];
+    if (!alive) {
+      utilityParts = ["已故", ...(isFixer ? ["中间人"] : [])];
+    } else if (isFixer) {
+      utilityParts = [
+        fixer?.blocked ? "派单暂停" : "中间人 · 加密连线",
+        ...(raw.last ? [raw.last] : []),
+      ];
+    } else if (raw.canChat) {
+      utilityParts = ["加密连线 · 尚未照面", ...(raw.last ? [raw.last] : [])];
+    } else {
+      utilityParts = ["未建档加密频道", ...(raw.last ? [raw.last] : [])];
+    }
   } else if (!npc.alive) {
     utilityParts = ["已故", ...(npc.met ? [roleHeadline(npc.role)] : [])];
   } else if (!npc.met) {
     utilityParts = [
-      npc.nemesis ? "交过手 · 底细不明" : "只听说过 · 尚未照面",
+      npc.nemesis ? "交过手 · 底细不明" : isFixer ? "中间人 · 尚未照面" : "只听说过 · 尚未照面",
       ...(raw.last ? [raw.last] : []),
     ];
   } else {
@@ -1427,8 +1459,7 @@ function summarizeNpcContact(
     Boolean(doc?.debt) ||
     openConcerns.length > 0;
   const isUtility =
-    Boolean(npc?.alive !== false) &&
-    Boolean(doc || shops.length > 0 || isFixer || npc?.following || npc?.services);
+    alive && Boolean(doc || shops.length > 0 || isFixer || npc?.following || npc?.services);
   const isPresent = Boolean(npc?.here && npc.alive);
 
   const latestMsg = msgs[0];
@@ -1451,13 +1482,20 @@ function summarizeNpcContact(
     highlight,
     locatePlaceId: locateDest ? locateDest.id : null,
     locatePlaceName: locateDest ? locateDest.name : null,
+    alive,
+    met,
+    isFixer,
+    canChat: raw.canChat && alive,
+    hasContact: raw.hasContact,
+    contactSource: raw.contactSource,
+    contactNote: raw.contactNote,
     isActive,
     isUtility,
     isPresent,
   };
 }
 
-/** 整理消息页面的联系人名录，补充每人核心职能、可用服务、人情账与快捷跳转信息 */
+/** 手机通讯录名录：严格只包含已交换联系方式或已有通讯往来的联系人/频道 */
 export function contactDirectory(view: View): ContactSummary[] {
   const npcs = view.npcs ?? [];
   const messages = view.phone?.messages ?? [];
@@ -1473,32 +1511,84 @@ export function contactDirectory(view: View): ContactSummary[] {
     else threads.set(m.from, [m]);
   }
 
-  const listed: RawContact[] = contacts.map((c) => ({
-    key: c.from,
-    name: c.name,
-    npc: c.npc === null ? undefined : npcById.get(c.npc),
-    last: c.last,
-    unread: c.unread,
-  }));
-  const seen = new Set(listed.map((c) => c.key));
-  const rest: RawContact[] = npcs
-    .filter((n) => !seen.has(n.id))
-    .map((n) => ({
-      key: n.id,
-      name: n.name,
-      npc: n,
-      last: n.lastSeen,
-      unread: 0,
-    }));
-
-  return [...listed, ...rest].map((raw) => {
-    const { npc } = raw;
-    const fixer = npc ? fixers.find((f) => f.id === npc.id) : undefined;
+  return contacts.map((c) => {
+    const npc = (c.npc !== null ? npcById.get(c.npc) : undefined) ?? npcById.get(c.from);
+    const raw: RawContact = {
+      key: c.from,
+      name: c.name,
+      npc,
+      last: c.last,
+      unread: c.unread,
+      alive: c.alive,
+      met: c.met,
+      isFixer: c.isFixer,
+      canChat: c.canChat,
+      hasContact: true,
+      contactSource: c.contactSource,
+      contactNote: c.contactNote,
+    };
+    const fixer = fixers.find((f) => f.id === c.from || (npc !== undefined && f.id === npc.id));
     const foe = foes.find(
       (f) => (npc && (f.npc === npc.id || f.id === npc.id)) || f.name === raw.name,
     );
     return summarizeNpcContact(raw, view, threads.get(raw.key) ?? [], fixer, foe);
   });
+}
+
+export interface PersonDirectoryItem extends ContactSummary {
+  readonly npc: ViewNpc;
+}
+
+/** 已知人物名录：汇总所有见过面、听说过或交过手的人物，标注各自是否已建立全息联系方式 */
+export function peopleDirectory(view: View): PersonDirectoryItem[] {
+  const npcs = view.npcs ?? [];
+  const messages = view.phone?.messages ?? [];
+  const contacts = view.phone?.contacts ?? [];
+  const fixers = view.jobs?.fixers ?? [];
+  const foes = view.combat?.active?.foes ?? [];
+
+  const contactByKey = new Map(contacts.map((c) => [c.from, c]));
+  const threads = new Map<string, ViewMessage[]>();
+  for (const m of messages) {
+    const list = threads.get(m.from);
+    if (list) list.push(m);
+    else threads.set(m.from, [m]);
+  }
+
+  return [...npcs]
+    .sort(
+      (a, b) =>
+        Number(b.here && b.alive) - Number(a.here && a.alive) ||
+        Number(b.following) - Number(a.following) ||
+        Number(b.alive) - Number(a.alive) ||
+        Number(b.met) - Number(a.met),
+    )
+    .map((npc) => {
+      const contact = contactByKey.get(npc.id);
+      const fixer = fixers.find((f) => f.id === npc.id);
+      const foe = foes.find((f) => f.npc === npc.id || f.id === npc.id || f.name === npc.name);
+      const raw: RawContact = {
+        key: npc.id,
+        name: npc.name,
+        npc,
+        last: contact?.last ?? npc.lastSeen,
+        unread: contact?.unread ?? 0,
+        alive: npc.alive,
+        met: npc.met,
+        isFixer: Boolean(fixer || contact?.isFixer),
+        canChat: Boolean(contact?.canChat && npc.alive),
+        hasContact: contact !== undefined,
+        contactSource: contact?.contactSource ?? null,
+        contactNote: contact?.contactNote ?? null,
+      };
+      return summarizeNpcContact(
+        raw,
+        view,
+        threads.get(npc.id) ?? [],
+        fixer,
+        foe,
+      ) as PersonDirectoryItem;
+    });
 }
 
 export interface ChatBubble {

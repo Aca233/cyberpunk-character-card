@@ -140,10 +140,23 @@ const chromeIds = unique(
   "义体表",
   cyberware.map((c) => c.id),
 );
-unique(
+const quickhackIds = unique(
   "快速破解",
   quickhacks.map((q) => q.id),
 );
+const ultimateQuickhackIds = new Set(
+  quickhacks.filter((q) => q.category === "ultimate").map((q) => q.id),
+);
+for (const item of items) {
+  if (item.quickhackId !== undefined) {
+    if (!quickhackIds.has(item.quickhackId)) {
+      errors.push(`物品 ${item.id}：quickhackId「${item.quickhackId}」不在快速破解目录中`);
+    }
+    if (ultimateQuickhackIds.has(item.quickhackId)) {
+      errors.push(`物品 ${item.id}：终极快速破解「${item.quickhackId}」不得作为常规市售商品芯片`);
+    }
+  }
+}
 for (const c of cyberware) {
   if (c.deckTraits !== undefined && c.slot !== "os" && c.slot !== "frontalCortex")
     errors.push(`义体 ${c.id}：只有操作系统或额叶皮质义体能带黑客硬件特化（deckTraits）`);

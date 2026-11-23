@@ -12,6 +12,7 @@ const NARRATED_UI_ACTION_TYPES: ReadonlySet<string> = new Set([
   "removeCyberware",
   "repairCyberware",
   "repayRipperdoc",
+  "deckLoad",
   "equipItem",
   "unequipItem",
   "modWeapon",

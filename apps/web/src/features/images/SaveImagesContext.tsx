@@ -1,29 +1,25 @@
 import type { ImagePromptRequest } from "@cp/core";
 import { createContext, useContext } from "react";
-import type { SaveImageBindings } from "../../api/client";
+import type { SaveImageBindings, SaveImageUnbindTarget } from "../../api/client";
+import type { ImageTarget } from "./image-jobs";
 
 export interface SaveImagesController {
   readonly saveId: string;
   readonly bindings: SaveImageBindings;
   readonly pendingTurnSeqs: ReadonlySet<number>;
   readonly manualPendingTurnSeqs: ReadonlySet<number>;
+  readonly turnImageProgress: Readonly<
+    Record<number, { readonly current: number; readonly total: number }>
+  >;
   readonly turnImageErrors: Readonly<Record<number, string>>;
   readonly openImageModal: (options: {
     readonly title: string;
     readonly subtitle?: string | undefined;
     readonly promptRequest: ImagePromptRequest;
     readonly defaultAspectRatio: "3:4" | "1:1" | "16:9";
-    readonly bind:
-      | { readonly kind: "turn"; readonly seq: number }
-      | { readonly kind: "npc"; readonly npcId: string }
-      | { readonly kind: "character" };
+    readonly bind: ImageTarget;
   }) => void;
-  readonly unbindImage: (
-    target:
-      | { readonly kind: "turn"; readonly seq: number }
-      | { readonly kind: "npc"; readonly npcId: string }
-      | { readonly kind: "character" },
-  ) => Promise<void>;
+  readonly unbindImage: (target: SaveImageUnbindTarget) => Promise<void>;
   readonly openLightbox: (imageId: string, title: string) => void;
   readonly cancelTurnAutoImage: (seq: number) => void;
 }

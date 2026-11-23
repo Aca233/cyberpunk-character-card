@@ -162,11 +162,13 @@ export const CyberwareDefSchema = z.object({
   armor: z.boolean().default(false),
   /**
    * 黑客硬件的定性特化方向；操作系统义体写了这一项才算网络接入仓，
-   * 额叶皮质等义体写了则作为脑部黑客配件并入接入仓的特化。没有槽位或 RAM 数字门槛。
+   * 额叶皮质等义体写了则作为脑部黑客配件并入接入仓的特化。
    */
   deckTraits: z.array(DeckTraitSchema).optional(),
   /** 接入仓或黑客配件的档次与定位，一句话；写给模型，也显示在侧栏 */
   deckProfile: z.string().min(1).max(60).optional(),
+  /** 接入仓可同时插装的程序芯片槽数（操作系统义体专用；未填时按档次推算） */
+  deckSlots: z.number().int().min(2).max(8).optional(),
   /** 加速义体（斯安威斯坦）：生死瞬间可以开，按现场时距和设备能力加速行动 */
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */

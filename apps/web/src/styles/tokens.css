@@ -1,4 +1,14 @@
 /*
+ * 卡片九宫格蒙版流光边框用的可插值角度变量（@property 放全局表避免 CSS Modules 作用域化）。
+ * 浏览器通过 GPU 合成对 --cp-border-angle 做线性 0deg -> 360deg 旋转，驱动 conic-gradient 沿斜切边框流动。
+ */
+@property --cp-border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/*
  * 设计令牌。原作 UI 图集几乎都是白色蒙版，颜色在引擎里着色，所以颜色只在这里定义，
  * 组件用 mask 把素材染成这些颜色。数值先按贴图取样（Logo 黄、红框、菜单底色），之后用实机截图校正
  */
@@ -27,6 +37,14 @@
   --cp-surface-soft: rgb(18 12 18 / 56%);
   --cp-line-subtle: rgb(255 97 88 / 22%);
   --cp-line-faint: rgb(255 97 88 / 12%);
+  --cp-accent-tint: rgb(255 97 88 / 6%);
+  --cp-accent-tint-strong: rgb(255 97 88 / 16%);
+  --cp-accent-border: rgb(255 97 88 / 28%);
+  --cp-menu-status-bg: rgb(10 7 14 / 86%);
+  --cp-menu-changelog-bg: rgb(13 9 16 / 86%);
+  --cp-menu-card-fill: rgb(14 14 23 / 78%);
+  --cp-menu-card-featured-fill: rgb(16 14 24 / 86%);
+  --cp-menu-card-hover-fill: rgb(18 36 44 / 86%);
   /* 正文近白（对背景约 16:1）、次要文字灰（约 7:1） */
   --cp-text: #ece8e4;
   --cp-text-dim: #a8a3a0;
@@ -103,4 +121,113 @@
     --dur-enter: 0ms;
     --dur-exit: 0ms;
   }
+}
+
+/*
+ * 可选外壳主题：月球舷窗（仅在主菜单、设置与角色工作台由 Shell 挂到 html[data-shell-theme]，
+ * 剧情界面自动移除以保留夜之城实景与原生红/黄/青氛围）
+ */
+:root[data-shell-theme="lunar-porthole"] {
+  --cp-red: #b794ff;
+  --cp-red-dim: #665296;
+  --cp-red-line: #8f6bff;
+  --cp-cyan: #7cf2ff;
+  --cp-cyan-dim: #266c80;
+  --cp-yellow: #ffe270;
+  --cp-yellow-dim: #8a7424;
+  --cp-bg: #070812;
+  --cp-panel: rgb(11 12 24 / 70%);
+  --cp-panel-strong: rgb(8 9 20 / 88%);
+  --cp-surface: rgb(12 14 28 / 62%);
+  --cp-surface-raised: rgb(18 20 38 / 74%);
+  --cp-surface-strong: rgb(10 12 24 / 78%);
+  --cp-surface-deep: rgb(7 9 19 / 84%);
+  --cp-surface-inset: rgb(9 11 22 / 58%);
+  --cp-surface-hover: rgb(24 26 48 / 80%);
+  --cp-surface-soft: rgb(13 15 30 / 42%);
+  --cp-line-subtle: rgb(183 148 255 / 28%);
+  --cp-line-faint: rgb(183 148 255 / 15%);
+  --cp-accent-tint: rgb(183 148 255 / 8%);
+  --cp-accent-tint-strong: rgb(183 148 255 / 18%);
+  --cp-accent-border: rgb(183 148 255 / 32%);
+  --cp-menu-status-bg: rgb(9 11 24 / 64%);
+  --cp-menu-changelog-bg: rgb(10 12 26 / 64%);
+  --cp-menu-card-fill: rgb(11 13 28 / 60%);
+  --cp-menu-card-featured-fill: rgb(14 16 34 / 68%);
+  --cp-menu-card-hover-fill: rgb(18 40 52 / 78%);
+  --cp-text: #f0f2ff;
+  --cp-text-dim: #b6bedb;
+  --cp-text-faint: #7882a4;
+}
+
+/*
+ * 可选外壳主题：雨夜窗畔（冷雨冰蓝、霓虹天青与深午夜蓝底色阶，呼应窗外雨幕与露西冷蓝光影）
+ */
+:root[data-shell-theme="rain-window"] {
+  --cp-red: #78b8ff;
+  --cp-red-dim: #365f8a;
+  --cp-red-line: #4da3ff;
+  --cp-cyan: #6ef7ff;
+  --cp-cyan-dim: #1d6478;
+  --cp-yellow: #f7dc6f;
+  --cp-yellow-dim: #8a7528;
+  --cp-bg: #050a14;
+  --cp-panel: rgb(7 14 26 / 66%);
+  --cp-panel-strong: rgb(5 10 20 / 86%);
+  --cp-surface: rgb(8 16 30 / 58%);
+  --cp-surface-raised: rgb(12 22 40 / 70%);
+  --cp-surface-strong: rgb(6 13 24 / 74%);
+  --cp-surface-deep: rgb(4 9 18 / 82%);
+  --cp-surface-inset: rgb(6 12 22 / 54%);
+  --cp-surface-hover: rgb(14 30 50 / 78%);
+  --cp-surface-soft: rgb(8 17 32 / 40%);
+  --cp-line-subtle: rgb(120 184 255 / 28%);
+  --cp-line-faint: rgb(120 184 255 / 15%);
+  --cp-accent-tint: rgb(120 184 255 / 8%);
+  --cp-accent-tint-strong: rgb(120 184 255 / 18%);
+  --cp-accent-border: rgb(120 184 255 / 32%);
+  --cp-menu-status-bg: rgb(6 12 24 / 62%);
+  --cp-menu-changelog-bg: rgb(7 14 27 / 62%);
+  --cp-menu-card-fill: rgb(7 15 28 / 58%);
+  --cp-menu-card-featured-fill: rgb(9 18 34 / 66%);
+  --cp-menu-card-hover-fill: rgb(14 38 56 / 76%);
+  --cp-text: #eef6ff;
+  --cp-text-dim: #a8c2de;
+  --cp-text-faint: #6c88a8;
+}
+
+/*
+ * 可选外壳主题：月面余光（月面宇航盔冷银蓝、泪光青与边缘行者经典赛博黄）
+ */
+:root[data-shell-theme="moon-helmet"] {
+  --cp-red: #8ec5ff;
+  --cp-red-dim: #3d628c;
+  --cp-red-line: #5eaaff;
+  --cp-cyan: #72f6ff;
+  --cp-cyan-dim: #1d667a;
+  --cp-yellow: #fcee0a;
+  --cp-yellow-dim: #8a7f08;
+  --cp-bg: #050912;
+  --cp-panel: rgb(7 13 25 / 68%);
+  --cp-panel-strong: rgb(5 9 18 / 86%);
+  --cp-surface: rgb(8 15 28 / 60%);
+  --cp-surface-raised: rgb(12 21 38 / 72%);
+  --cp-surface-strong: rgb(6 12 23 / 76%);
+  --cp-surface-deep: rgb(4 8 16 / 84%);
+  --cp-surface-inset: rgb(6 11 21 / 56%);
+  --cp-surface-hover: rgb(15 28 48 / 78%);
+  --cp-surface-soft: rgb(8 16 30 / 42%);
+  --cp-line-subtle: rgb(142 197 255 / 28%);
+  --cp-line-faint: rgb(142 197 255 / 15%);
+  --cp-accent-tint: rgb(142 197 255 / 8%);
+  --cp-accent-tint-strong: rgb(142 197 255 / 18%);
+  --cp-accent-border: rgb(142 197 255 / 32%);
+  --cp-menu-status-bg: rgb(6 11 22 / 64%);
+  --cp-menu-changelog-bg: rgb(7 13 25 / 64%);
+  --cp-menu-card-fill: rgb(7 14 26 / 60%);
+  --cp-menu-card-featured-fill: rgb(9 17 32 / 68%);
+  --cp-menu-card-hover-fill: rgb(14 38 56 / 78%);
+  --cp-text: #f2f7ff;
+  --cp-text-dim: #aec6e0;
+  --cp-text-faint: #7089a6;
 }

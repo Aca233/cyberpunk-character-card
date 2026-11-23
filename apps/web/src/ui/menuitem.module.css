@@ -69,7 +69,7 @@
 .item:focus-visible:not(:disabled),
 .item[data-selected] {
   color: var(--cp-cyan);
-  transform: translateX(6px);
+  transform: perspective(680px) translateX(8px) rotateY(4.5deg) translateZ(6px);
   text-shadow: 0 0 14px rgb(94 246 255 / 38%);
 }
 
@@ -88,7 +88,7 @@
 }
 
 .item:active:not(:disabled) {
-  transform: translateX(3px) scale(0.99);
+  transform: perspective(680px) translateX(4px) rotateY(2deg) scale(0.985);
 }
 
 .item:disabled {

@@ -17,6 +17,7 @@ import {
 } from "../systems/npc";
 import {
   CallCommandSchema,
+  hasContactChannel,
   IncomingMessageSchema,
   MESSAGES_PER_TURN,
   PhoneStateSchema,
@@ -59,10 +60,13 @@ export interface OffscreenFixer {
   readonly name: string;
 }
 
-/** 熟人联系范围：见过、活着、不在场也不正与玩家同行 */
+/** 熟人联系范围：见过、活着、已互留联系方式、不在场也不正与玩家同行 */
 export function contactable(world: WorldState, present: ReadonlySet<string> = new Set()): Npc[] {
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
-  return Object.values(npcs).filter((n) => n.alive && n.met && !present.has(n.id) && !n.following);
+  const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
+  return Object.values(npcs).filter(
+    (n) => n.alive && n.met && hasContactChannel(phone, n.id) && !present.has(n.id) && !n.following,
+  );
 }
 
 /** 该过自己日子的人：活着、不在场、非同行；见过的优先，最久没更新近况的优先 */
@@ -314,7 +318,7 @@ export function buildSocialOffscreenPrompt(
           ]
         : []),
       `【地点索引】（人物移动只用已有 id）\n${[...places.values()].map((p) => `${p.id}｜${p.name}｜${p.district}`).join("\n") || "（没有）"}`,
-      `【能联系玩家的人】\n${
+      `【能联系玩家的人】（仅限已互留联系方式的熟人；没在通讯录里的普通人物不主动发消息）\n${
         contactable(world, present)
           .map(
             (n) => `- ${n.id}｜${n.name}：态度「${attitudeLabel(n)}」${canAsk ? "；可以托事" : ""}`,

@@ -11,6 +11,7 @@ import {
   RepairCyberwareActionSchema,
   RepayRipperdocActionSchema,
 } from "./systems/cyberware";
+import { DeckLoadActionSchema } from "./systems/hacking";
 import {
   BuyItemActionSchema,
   EquipItemActionSchema,
@@ -45,6 +46,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   RepayRipperdocActionSchema,
   /** 请义体医生修好一件打坏的义体 */
   RepairCyberwareActionSchema,
+  /** 脱战且未潜网时，直接插拔网络接入仓存储插槽里的热待命程序芯片 */
+  DeckLoadActionSchema,
   /** 从背包装上一件：治疗品和手雷进快捷栏，服装穿到对应的格子 */
   EquipItemActionSchema,
   /** 非战斗时使用当前治疗品，回复生命并扣除一次使用次数 */

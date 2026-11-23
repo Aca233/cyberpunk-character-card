@@ -341,9 +341,41 @@ export interface StoredImage {
 
 export interface SaveImageBindings {
   readonly turns: Readonly<Record<string, string>>;
+  readonly turnLists?: Readonly<Record<string, readonly string[]>>;
   readonly npcs: Readonly<Record<string, string>>;
   readonly playerPortrait?: string;
 }
+
+/** 读取指定回合的有序插图列表（优先读 turnLists，兼容只有 turns[seq] 的旧存档） */
+export function turnImagesOf(bindings: SaveImageBindings, seq: number): readonly string[] {
+  const key = String(seq);
+  const list = bindings.turnLists?.[key];
+  if (list && list.length > 0) return list;
+  const legacy = bindings.turns[key];
+  return legacy ? [legacy] : [];
+}
+
+export type SaveImageBindTarget =
+  | {
+      readonly kind: "turn";
+      readonly seq: number;
+      readonly imageId: string;
+      readonly slot?: number | undefined;
+      readonly append?: boolean | undefined;
+      readonly replaceAll?: boolean | undefined;
+    }
+  | { readonly kind: "npc"; readonly npcId: string; readonly imageId: string }
+  | { readonly kind: "character"; readonly imageId: string };
+
+export type SaveImageUnbindTarget =
+  | {
+      readonly kind: "turn";
+      readonly seq: number;
+      readonly slot?: number | undefined;
+      readonly imageId?: string | undefined;
+    }
+  | { readonly kind: "npc"; readonly npcId: string }
+  | { readonly kind: "character" };
 
 /** 后端返回的方案：不含密钥，只说配没配 */
 export interface PublicProfile {
@@ -806,11 +838,7 @@ export const api = {
     ).then((r) => r.bindings),
   bindSaveImage: (
     saveId: string,
-    target: (
-      | { readonly kind: "turn"; readonly seq: number; readonly imageId: string }
-      | { readonly kind: "npc"; readonly npcId: string; readonly imageId: string }
-      | { readonly kind: "character"; readonly imageId: string }
-    ) & { readonly expectedImageId?: string | null },
+    target: SaveImageBindTarget & { readonly expectedImageId?: string | null },
     signal?: AbortSignal,
   ) =>
     request<{ readonly bindings: SaveImageBindings }>(
@@ -820,13 +848,7 @@ export const api = {
       {},
       signal,
     ).then((r) => r.bindings),
-  unbindSaveImage: (
-    saveId: string,
-    target:
-      | { readonly kind: "turn"; readonly seq: number }
-      | { readonly kind: "npc"; readonly npcId: string }
-      | { readonly kind: "character" },
-  ) =>
+  unbindSaveImage: (saveId: string, target: SaveImageUnbindTarget) =>
     request<{ readonly bindings: SaveImageBindings }>(
       "DELETE",
       `/saves/${encodeURIComponent(saveId)}/images`,

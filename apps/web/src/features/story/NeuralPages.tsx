@@ -283,6 +283,9 @@ export function MessagesPage({
   busy,
   onLocatePlace,
   onOpenRipperdoc,
+  onOpenPeople,
+  focusContact,
+  onConsumeFocus,
   onNews,
   initialTab = "dm",
   hideTabs = false,
@@ -307,6 +310,9 @@ export function MessagesPage({
     busy,
     onLocatePlace,
     onOpenRipperdoc,
+    onOpenPeople,
+    focusContact,
+    onConsumeFocus,
   };
   return (
     <>

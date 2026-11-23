@@ -145,6 +145,25 @@ function counterparty(
 }
 
 /** 货架、正文和执行入口共用报价；checkFunds:false 用于展示仍可询价但暂时买不起的货。 */
+function quickhackAlreadyOwned(
+  world: WorldState,
+  inventory: InventoryState,
+  quickhackId: string,
+): boolean {
+  if (inventory.claimedQuickhacks.includes(quickhackId)) return true;
+  const rawHacking = world.slices.hacking;
+  if (typeof rawHacking === "object" && rawHacking !== null) {
+    const h = rawHacking as {
+      readonly programs?: readonly string[];
+      readonly ownedPrograms?: readonly string[];
+    };
+    if (h.programs?.includes(quickhackId) || h.ownedPrograms?.includes(quickhackId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function quoteTrade(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
@@ -260,6 +279,9 @@ export function quoteTrade(
   if (item) {
     const object = inventory.objects[item.id];
     if (request.action === "buy") {
+      if (item.quickhackId && quickhackAlreadyOwned(world, inventory, item.quickhackId)) {
+        return fail(`随身芯片盒里已经有「${item.name}」，不用重复购买`);
+      }
       if (
         object &&
         object.holder !== party.id &&
@@ -333,48 +355,72 @@ export function applyTrade(
   });
   if (changed) return { ok: false, reason: changed };
   const emitted: Command[] = [];
+  const signals: string[] = [...(command.action === "sell" ? ["inventory.changed"] : [])];
+  const serviceNotes: string[] = [];
   const item = quoted.item;
   if (item) {
     const npcs = (world.slices.npc as NpcState).npcs;
     const location = (world.slices.world as WorldClockState).location;
     const object = draft.objects[item.id];
-    if (
-      command.action === "buy" &&
-      quoted.shop &&
-      object &&
-      object.holder === quoted.shop.id &&
-      object.location !== null &&
-      merchantAt(data, quoted.shop.id, object.location, location)
-    ) {
-      object.location = null;
+    if (command.action === "buy" && item.quickhackId) {
+      if (!draft.claimedQuickhacks.includes(item.quickhackId)) {
+        draft.claimedQuickhacks.push(item.quickhackId);
+      }
+      signals.push("inventory.quickhack");
+      serviceNotes.push("已收录进接入仓芯片库（有空槽时自动插装，满槽或暂未装仓则存进随身芯片盒）");
+      if (object) {
+        object.holder = "player";
+        object.location = null;
+        object.changedAt = world.time;
+        object.lastChange = `购入并收录至接入仓芯片库：${command.reason}`;
+      }
+      if (!object && quoted.party.npc) {
+        emitted.push({
+          type: "npcGear",
+          id: quoted.party.npc.id,
+          action: "remove",
+          item: item.id,
+        });
+      }
+    } else {
+      if (
+        command.action === "buy" &&
+        quoted.shop &&
+        object &&
+        object.holder === quoted.shop.id &&
+        object.location !== null &&
+        merchantAt(data, quoted.shop.id, object.location, location)
+      ) {
+        object.location = null;
+      }
+      const result = applyItem(
+        draft,
+        {
+          type: "item",
+          action: command.action === "buy" ? "gain" : "lose",
+          id: item.id,
+          ...(command.action === "sell" ? { recipient: quoted.counterparty } : {}),
+          reason: command.reason,
+        },
+        itemCatalog(withWorldObjects(data, draft.objects)),
+        world.time,
+        location,
+        npcs,
+      );
+      if (!result.ok) return result;
+      if (command.action === "sell" && quoted.shop) {
+        const soldObj = draft.objects[item.id];
+        if (soldObj) soldObj.location = null;
+      }
+      emitted.push(...(result.emit ?? []));
+      if (!object && quoted.party.npc && command.action === "buy")
+        emitted.push({
+          type: "npcGear",
+          id: quoted.party.npc.id,
+          action: "remove",
+          item: item.id,
+        });
     }
-    const result = applyItem(
-      draft,
-      {
-        type: "item",
-        action: command.action === "buy" ? "gain" : "lose",
-        id: item.id,
-        ...(command.action === "sell" ? { recipient: quoted.counterparty } : {}),
-        reason: command.reason,
-      },
-      itemCatalog(withWorldObjects(data, draft.objects)),
-      world.time,
-      location,
-      npcs,
-    );
-    if (!result.ok) return result;
-    if (command.action === "sell" && quoted.shop) {
-      const soldObj = draft.objects[item.id];
-      if (soldObj) soldObj.location = null;
-    }
-    emitted.push(...(result.emit ?? []));
-    if (!object && quoted.party.npc && command.action === "buy")
-      emitted.push({
-        type: "npcGear",
-        id: quoted.party.npc.id,
-        action: "remove",
-        item: item.id,
-      });
     if (quoted.shop) {
       const merchant = ensureMerchant(
         draft,
@@ -402,8 +448,6 @@ export function applyTrade(
       delta: command.action === "sell" ? quoted.price : -quoted.price,
       reason: `${quoted.party.name}：${quoted.label}，${command.reason}`,
     });
-  const serviceNotes: string[] = [];
-  const signals: string[] = [...(command.action === "sell" ? ["inventory.changed"] : [])];
   if (command.action === "service" && command.service) {
     switch (command.service) {
       case "meal":

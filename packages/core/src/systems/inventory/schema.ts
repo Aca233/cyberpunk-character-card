@@ -156,6 +156,8 @@ export const ItemDefSchema = z
     ability: z.string().min(1).optional(),
     /** 固定内容关联；取得载体不等于已经阅读。 */
     chipContentId: z.string().min(1).optional(),
+    /** 关联的快速破解程序 id（在黑客铺子或暗巷黑市购入后，直接收入接入仓随身芯片盒，不占背包格也不可转卖套利） */
+    quickhackId: z.string().min(1).optional(),
     /** 具有实际读写能力的设备。 */
     chipDevice: z.enum(["reader", "reader-writer"]).optional(),
     /** 可以接收副本的真实存储载体。 */
@@ -434,6 +436,8 @@ export const InventoryStateSchema = z.object({
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
   /** 拆解得来的零件（保留作可选扩展，默认 0） */
   parts: z.number().int().min(0).default(0),
+  /** 已通过商铺交易购入的快速破解程序芯片 id（由 hacking 监听 inventory.quickhack 同步至芯片库，防止重复购买） */
+  claimedQuickhacks: z.array(z.string().min(1)).default([]),
 });
 export type InventoryState = z.infer<typeof InventoryStateSchema>;
 

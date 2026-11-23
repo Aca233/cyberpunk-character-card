@@ -16,6 +16,8 @@ interface PanelProps {
   readonly frame?: boolean;
   /** 夹在底板与框线之间的自定义表层（如卡片材质/掠射反光，确保不压过框线与文字） */
   readonly surface?: ReactNode;
+  /** 叠在框线之上、文字之下的动态边框特效层（同形九宫格蒙版流光，pointer-events: none） */
+  readonly borderFx?: ReactNode;
 }
 
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
@@ -37,6 +39,7 @@ export function Panel({
   as: Tag = "section",
   frame = false,
   surface,
+  borderFx,
 }: PanelProps) {
   return (
     <Tag
@@ -55,6 +58,7 @@ export function Panel({
       ) : (
         <NineSlice id="notify.itemCellFg" tint={line} slice={ITEM_CELL_SLICE} />
       )}
+      {borderFx}
       {title !== undefined && <h2 className={styles.title}>{title}</h2>}
       <div className={styles.body}>{children}</div>
     </Tag>

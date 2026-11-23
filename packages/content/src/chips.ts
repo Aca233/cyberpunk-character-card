@@ -621,4 +621,56 @@ export const everydayChipItems = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     chipContentId: "chip-behavior-social-mask",
   },
+
+  // 快速破解程序芯片（非终极类可于黑客铺子或暗巷黑市明码购入，购入后自动录入接入仓芯片库；终极神经接管类禁止明买）
+  {
+    id: "qh-sonic-shock",
+    name: "快速破解芯片·音波震冲",
+    kind: "misc",
+    price: 1800,
+    rarity: "uncommon",
+    quickhackId: "sonic-shock",
+    ability:
+      "隐蔽类快速破解程序芯片（低负载）。购入后收入随身芯片盒，插进接入仓存储插槽即可使用：干扰对方听觉义体并掐断其小队无线通信链路。",
+  },
+  {
+    id: "qh-memory-wipe",
+    name: "快速破解芯片·记忆擦除",
+    kind: "misc",
+    price: 3600,
+    rarity: "rare",
+    quickhackId: "memory-wipe",
+    ability:
+      "隐蔽类快速破解程序芯片（高负载）。购入后收入随身芯片盒，插进接入仓存储插槽即可使用：强行清刷对方神经接口缓存并中断敌方追踪与警戒信号。",
+  },
+  {
+    id: "qh-cripple-movement",
+    name: "快速破解芯片·阻碍移动",
+    kind: "misc",
+    price: 2600,
+    rarity: "uncommon",
+    quickhackId: "cripple-movement",
+    ability:
+      "控制类快速破解程序芯片（中负载）。购入后收入随身芯片盒，插进接入仓存储插槽即可使用：锁死腿部与下肢运动义体伺服电机，让带动力义腿者原地僵死。",
+  },
+  {
+    id: "qh-short-circuit",
+    name: "快速破解芯片·电磁短路",
+    kind: "misc",
+    price: 4200,
+    rarity: "rare",
+    quickhackId: "short-circuit",
+    ability:
+      "伤害类快速破解程序芯片（中负载）。购入后收入随身芯片盒，插进接入仓存储插槽即可使用：高压电涌直穿义肢、斯安威斯坦或机械电路，致其冒烟瘫痪。",
+  },
+  {
+    id: "qh-contagion",
+    name: "快速破解芯片·连带传染",
+    kind: "misc",
+    price: 4800,
+    rarity: "rare",
+    quickhackId: "contagion",
+    ability:
+      "伤害类快速破解程序芯片（高负载）。购入后收入随身芯片盒，插进接入仓存储插槽即可使用：向目标体内医疗/生物义体注入神经毒素脚本并沿局域子网向邻近连网节点扩散。",
+  },
 ]);

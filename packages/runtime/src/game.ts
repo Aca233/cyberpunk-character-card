@@ -814,9 +814,16 @@ export class GameService {
     const run = this.deps.hub.get(id, turnId);
     if (!run) return { status: 404, body: { error: "没有这一轮，可能已经过期" } };
     if (run.finishedAt !== null) {
+      if (run.events.at(-1)?.type === "stopped") {
+        return { status: 200, body: { stopping: true, stopped: true } };
+      }
       return { status: 409, body: { error: "这一轮已经结束", result: run.events.at(-1)?.type } };
     }
     run.controller.abort();
+    // 尚未进入不可逆落盘前立即向事件流宣告停止，不让上游连接关闭延迟拖住前端
+    if (!run.committing) {
+      this.deps.hub.push(run, { type: "stopped" });
+    }
     return { status: 202, body: { stopping: true } };
   }
 
@@ -1148,6 +1155,8 @@ export class GameService {
             ? checkpoint?.prepared.confirmation?.quoteKey
             : undefined;
       const embedder = await this.deps.llm.resolveEmbedder((msg) => this.deps.log(msg));
+      const preset = await this.deps.presets?.active();
+      if (signal.aborted) throw new NarratorAbortedError("已停止");
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
@@ -1164,12 +1173,13 @@ export class GameService {
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
           // 本轮开始前读取一次预设；生成途中切换开关，不改变这一轮已经选定的内容。
-          preset: await this.deps.presets?.active(),
+          preset,
           signal,
           saveId: run.saveId,
           baseVersion: run.baseVersion,
           checkpoint,
           onCheckpoint: async (cp) => {
+            if (signal.aborted) throw new NarratorAbortedError("已停止");
             latestCheckpoint = cp;
             await this.deps.checkpoints?.save(run.saveId, cp);
           },
@@ -1185,6 +1195,7 @@ export class GameService {
         records,
         plan,
       );
+      if (signal.aborted) throw new NarratorAbortedError("已停止");
       if (result.kind === "blocked") {
         hub.push(run, { type: "blocked", reason: redact(result.reason) });
         return;
@@ -1199,7 +1210,6 @@ export class GameService {
         hub.push(run, { type: "confirmSpend", label, price, eddies });
         return;
       }
-      if (signal.aborted) throw new NarratorAbortedError("已停止");
       const { turn } = result;
       const usage = addUsage(addUsage(turn.usage, turn.auxUsage), turn.repairUsage);
       hub.push(run, {
@@ -1351,6 +1361,7 @@ export class GameService {
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
       };
+      run.committing = true;
       await saves.appendAt(run.saveId, seq, serializeRecord(record));
       await this.clearCheckpointBestEffort(run.saveId);
       const version = seq + 1;

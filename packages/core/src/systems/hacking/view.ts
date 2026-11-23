@@ -2,16 +2,25 @@ import type { ViewContext } from "../../kernel/system";
 import { CyberwareStateSchema, DECK_TRAIT_LABELS } from "../cyberware";
 import { HealthStateSchema } from "../health";
 import { formatGameTime, WorldClockStateSchema } from "../world";
-import { deckOf, quickhackCatalog } from "./apply";
+import {
+  deckOf,
+  effectiveHeatAt,
+  quickhackCatalog,
+  STARTER_DECK_PROGRAMS,
+  thermalLevelOf,
+} from "./apply";
 import {
   BREACH_GAIN_LABELS,
   CATEGORY_LABELS,
   DIVE_LAYERS,
   DIVE_MAX,
+  HACK_LOAD_LABELS,
   HackingStateSchema,
+  THERMAL_LABELS,
+  THERMAL_MAX_HEAT,
 } from "./schema";
 
-/** 接入仓的定性硬件状态、活跃破解效果、潜网连接与当前地点已攻破内网；损坏的接入仓不提供可用状态。 */
+/** 接入仓的硬件状态、已插装程序芯片、热负荷、破冰立足点、活跃破解效果、潜网连接与当前地点已攻破内网 */
 export function hackingView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const { installed } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
@@ -21,6 +30,43 @@ export function hackingView({ world, data }: ViewContext) {
   const state = HackingStateSchema.parse(world.slices.hacking ?? {});
   const catalog = quickhackCatalog(data);
   const blackwallCapable = found.traits.includes("blackwall");
+  const hasRecovery = found.traits.includes("recovery");
+
+  // 兼容旧存档与尚未触发 syncDeck 的初始视图：按与 ensureStarterPrograms 相同规则推算已插装与芯片盒列表
+  const starterIds = STARTER_DECK_PROGRAMS.filter((id) => catalog.size === 0 || catalog.has(id));
+  const hasExisting =
+    state.starterSeeded ||
+    state.programs.length > 0 ||
+    state.ownedPrograms.some((id) => starterIds.includes(id));
+  const ownedIds = hasExisting
+    ? [...new Set([...state.ownedPrograms, ...state.programs])]
+    : [...new Set([...state.ownedPrograms, ...starterIds])];
+  const loadedIds = hasExisting
+    ? state.programs.slice(0, found.slots)
+    : ownedIds.slice(0, found.slots);
+  const spareIds = ownedIds.filter((id) => !loadedIds.includes(id));
+
+  const formatProg = (id: string) => {
+    const def = catalog.get(id);
+    return {
+      id,
+      name: def?.name ?? id,
+      category: def?.category ?? null,
+      categoryLabel: def ? CATEGORY_LABELS[def.category] : null,
+      load: def?.load ?? null,
+      loadLabel: def ? HACK_LOAD_LABELS[def.load] : null,
+      requiresFoothold: def?.requiresFoothold ?? false,
+      targetRequirement: def?.targetRequirement ?? null,
+      effect: def?.effect ?? null,
+    };
+  };
+
+  const heat = effectiveHeatAt(state.thermal, world.time, {
+    hasRecovery,
+    inDiveChair: state.dive !== null,
+  });
+  const thermalLevel = thermalLevelOf(heat);
+
   const activeEffects = state.activeEffects
     .filter((e) => e.location === null || e.location === location)
     .map((e) => ({
@@ -31,18 +77,35 @@ export function hackingView({ world, data }: ViewContext) {
       effect: e.effect,
       at: formatGameTime(e.at),
     }));
+
+  const breachedTargets = state.breachedTargets
+    .filter((b) => b.location === null || b.location === location)
+    .map((b) => ({
+      target: b.target,
+      npc: b.npc ?? null,
+      via: b.via ?? null,
+      at: formatGameTime(b.at),
+    }));
+
   return {
     deck: found.deck,
     deckName: found.deckName ?? found.deck,
     profile: found.profile,
+    slots: found.slots,
     traits: found.traits,
     traitLabels: found.traits.map((t) => DECK_TRAIT_LABELS[t]),
     selfIce: found.selfIce,
     blackwallCapable,
-    programs: state.programs.map((id) => ({
-      id,
-      name: catalog.get(id)?.name ?? id,
-    })),
+    programs: loadedIds.map(formatProg),
+    sparePrograms: spareIds.map(formatProg),
+    thermal: {
+      heat,
+      maxHeat: THERMAL_MAX_HEAT,
+      level: thermalLevel,
+      label: THERMAL_LABELS[thermalLevel],
+      overloadCount: state.thermal.overloadCount,
+    },
+    breachedTargets,
     activeEffects,
     traceAlert:
       state.traceAlert &&

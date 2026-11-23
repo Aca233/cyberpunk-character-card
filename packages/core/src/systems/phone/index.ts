@@ -3,11 +3,13 @@ import { isOpen, type JobsState } from "../jobs";
 import type { NpcState } from "../npc";
 import { phoneActions } from "./actions";
 import {
+  addContact,
   answerCall,
   applyChatMeta,
   readAll,
   receiveCall,
   receiveMessage,
+  removeContact,
   replyMessage,
   sendPlayerMessage,
   tickCalls,
@@ -19,12 +21,15 @@ import {
   AnswerSchema,
   CallCommandSchema,
   ChatMetaSchema,
+  type PhoneCommand,
+  PhoneContactSchema,
   type PhoneInternal,
   type PhoneState,
   PhoneStateSchema,
   ReadSchema,
   ReceiveSchema,
   ReplySchema,
+  SeedContactSchema,
   SendSchema,
 } from "./schema";
 import { phoneSections } from "./sections";
@@ -39,8 +44,41 @@ function contactNameOf(id: string, npcs: NpcState, jobs: JobsState): string {
   return npcs.npcs[id]?.name ?? jobs.fixers[id]?.name ?? id;
 }
 
-/** 消息：抽取按正文记 messages，玩家看、回复、私聊、全息电话 */
-export const phone = defineSystem<PhoneState, never, PhoneInternal>({
+/** 按 id 优先查找人物卡或中间人；若模型误填中文名且唯一命中则回退解析其 id */
+function resolveContactTarget(
+  rawId: string,
+  npcs: NpcState,
+  jobs: JobsState,
+): { readonly id: string; readonly name: string; readonly alive: boolean } | undefined {
+  const directNpc = npcs.npcs[rawId];
+  if (directNpc) return { id: directNpc.id, name: directNpc.name, alive: directNpc.alive };
+  const directFixer = jobs.fixers[rawId];
+  if (directFixer) {
+    const fixerNpc = npcs.npcs[directFixer.id];
+    return {
+      id: directFixer.id,
+      name: fixerNpc?.name ?? directFixer.name,
+      alive: fixerNpc?.alive !== false,
+    };
+  }
+  const byNpcName = Object.values(npcs.npcs).filter((n) => n.name === rawId);
+  if (byNpcName.length === 1 && byNpcName[0]) {
+    return { id: byNpcName[0].id, name: byNpcName[0].name, alive: byNpcName[0].alive };
+  }
+  const byFixerName = Object.values(jobs.fixers).filter((f) => f.name === rawId);
+  if (byFixerName.length === 1 && byFixerName[0]) {
+    const fixerNpc = npcs.npcs[byFixerName[0].id];
+    return {
+      id: byFixerName[0].id,
+      name: fixerNpc?.name ?? byFixerName[0].name,
+      alive: fixerNpc?.alive !== false,
+    };
+  }
+  return undefined;
+}
+
+/** 消息与通讯录：抽取按正文记 messages 与 phoneContact，玩家看、回复、私聊、全息电话 */
+export const phone = defineSystem<PhoneState, PhoneCommand, PhoneInternal>({
   id: "phone",
   dependsOn: ["npc", "jobs"],
   state: PhoneStateSchema,
@@ -51,8 +89,11 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
     nextCall: 1,
     feedRead: [],
     chatBudget: {},
+    contacts: {},
   }),
-  commands: {},
+  commands: {
+    phoneContact: PhoneContactSchema,
+  },
   internal: {
     "phone.receive": ReceiveSchema,
     "phone.read": ReadSchema,
@@ -61,9 +102,34 @@ export const phone = defineSystem<PhoneState, never, PhoneInternal>({
     "phone.answer": AnswerSchema,
     "phone.send": SendSchema,
     "phone.chatMeta": ChatMetaSchema,
+    "phone.seedContact": SeedContactSchema,
   },
   apply(draft, command, ctx) {
     switch (command.type) {
+      case "phoneContact": {
+        const npcs = ctx.read<NpcState>("npc");
+        const jobs = ctx.read<JobsState>("jobs");
+        const target = resolveContactTarget(command.id, npcs, jobs);
+        if (!target) {
+          return {
+            ok: false,
+            reason: `找不到人物或中间人 ${command.id}，先建卡再记录联系方式`,
+          };
+        }
+        if (command.action === "remove") {
+          return removeContact(draft, target.id, target.name);
+        }
+        if (!target.alive) {
+          return { ok: false, reason: `${target.name} 已经死亡，无法交换联系方式` };
+        }
+        return addContact(draft, target.id, target.name, "exchange", ctx.now, command.note);
+      }
+      case "phone.seedContact": {
+        const npcs = ctx.read<NpcState>("npc");
+        const jobs = ctx.read<JobsState>("jobs");
+        const name = contactNameOf(command.id, npcs, jobs);
+        return addContact(draft, command.id, name, command.source, ctx.now, command.note, true);
+      }
       case "phone.call": {
         const caller = ctx.read<NpcState>("npc").npcs[command.from];
         if (caller?.alive === false) return { ok: false, reason: "对方已无法发起全息通话" };

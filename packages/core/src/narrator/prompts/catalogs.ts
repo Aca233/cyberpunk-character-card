@@ -2,7 +2,12 @@ import type { PlayerView } from "../../game";
 import type { WorldState } from "../../kernel/world";
 import { CombatStateSchema } from "../../systems/combat";
 import { cyberwareCatalog } from "../../systems/cyberware";
-import { CATEGORY_LABELS, mentionsHacking, quickhackCatalog } from "../../systems/hacking";
+import {
+  CATEGORY_LABELS,
+  HACK_LOAD_LABELS,
+  mentionsHacking,
+  quickhackCatalog,
+} from "../../systems/hacking";
 import { HackingStateSchema } from "../../systems/hacking/schema";
 import {
   formatWeaponWithMods,
@@ -175,13 +180,23 @@ export function extractCatalogDetails(
   if (details.length > 0) sections.push(`【本轮相关物件能力】\n${details.join("\n")}`);
   const hacking = HackingStateSchema.safeParse(world.slices.hacking ?? {});
   const hackRelevant =
-    hackingActive || (hacking.success && hacking.data.dive !== null) || mentionsHacking(text);
+    hackingActive ||
+    (hacking.success && (hacking.data.dive !== null || hacking.data.thermal.heat > 0)) ||
+    mentionsHacking(text);
   if (hackRelevant) {
-    const qLines = [...quickhackCatalog(data).values()].map(
-      (q) => `- ${q.id} ${q.name}（${CATEGORY_LABELS[q.category]}）：${q.effect}`,
-    );
+    const qLines = [...quickhackCatalog(data).values()].map((q) => {
+      const tags = [
+        CATEGORY_LABELS[q.category],
+        HACK_LOAD_LABELS[q.load],
+        ...(q.requiresFoothold ? ["需先破冰建立足点"] : []),
+      ].join("/");
+      const req = q.targetRequirement ? `［接口前提：${q.targetRequirement}］` : "";
+      return `- ${q.id} ${q.name}（${tags}）${req}：${q.effect}`;
+    });
     if (qLines.length > 0) {
-      sections.push(`【常见快速破解手段参考（供 hack / npcHack 归类）】\n${qLines.join("\n")}`);
+      sections.push(
+        `【快速破解程序芯片目录（供 hack / deckLoad / npcHack 对照）】\n${qLines.join("\n")}`,
+      );
     }
   }
   return sections.length > 0 ? sections.join("\n\n") : undefined;

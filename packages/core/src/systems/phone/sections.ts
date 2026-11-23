@@ -1,9 +1,37 @@
 import type { SystemSection } from "../../kernel/system";
+import { JobsStateSchema } from "../jobs";
+import { deathKnown, NpcStateSchema } from "../npc";
 import { formatGameTime } from "../world";
 import { CALL_STATUS_LABELS, PhoneStateSchema } from "./schema";
 
-/** 通话用意只给叙事模型；未接听时不能泄露，也不能替玩家接起 */
+/** 通讯录与通话用意：通讯录告诉三阶段哪些人已有私人频道；通话用意只给叙事模型，未接听时不泄露 */
 export const phoneSections: readonly SystemSection[] = [
+  {
+    order: 145,
+    title: "通讯录",
+    stages: ["judge", "narrate", "extract"],
+    render: ({ world }) => {
+      const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
+      const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
+      const fixers = JobsStateSchema.parse(world.slices.jobs).fixers;
+      const keys = new Set<string>([
+        ...Object.keys(phone.contacts),
+        ...phone.messages.map((m) => m.from),
+        ...phone.calls.map((c) => c.from),
+      ]);
+      if (keys.size === 0) {
+        return "暂无已交换联系方式的联系人（普通人物未在通讯录里时，双方没有彼此私人全息号）。";
+      }
+      const items = [...keys].map((id) => {
+        const npc = npcs[id];
+        const name = npc?.name ?? fixers[id]?.name ?? id;
+        const deadTag = npc && deathKnown(npc) ? "，已故" : "";
+        const note = phone.contacts[id]?.note ? `（${phone.contacts[id]?.note}）` : "";
+        return `${name}［${id}${deadTag}］${note}`;
+      });
+      return `已有联系方式：${items.join("、")}。其余人物未留全息频道。`;
+    },
+  },
   {
     order: 150,
     title: "全息电话",

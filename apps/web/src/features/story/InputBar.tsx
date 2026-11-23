@@ -5,6 +5,7 @@ import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
 import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import { useCardTilt } from "../../ui/useCardTilt";
+import { DeckQuickbar, type HackingView, type HackTarget } from "./DeckQuickbar";
 import styles from "./story.module.css";
 
 const MAX = 2000;
@@ -40,6 +41,7 @@ function supportsFieldSizing(): boolean {
 export function InputBar({
   busy,
   streaming,
+  stopping = false,
   disabled,
   reason,
   draft,
@@ -49,11 +51,15 @@ export function InputBar({
   reply,
   onCancelReply,
   sandevistan,
+  hacking,
+  hackTargets,
+  onOpenDeckTab,
   lastSentText,
   inputRef,
 }: {
   readonly busy: boolean;
   readonly streaming: boolean;
+  readonly stopping?: boolean | undefined;
   readonly disabled: boolean;
   readonly reason?: string | undefined;
   readonly draft: TurnInput;
@@ -65,6 +71,12 @@ export function InputBar({
   readonly onCancelReply?: (() => void) | undefined;
   /** 角色已安装且未损坏的加速义体 */
   readonly sandevistan?: { readonly id: string; readonly name: string } | null | undefined;
+  /** 角色已安装且完好的网络接入仓 */
+  readonly hacking?: HackingView | null | undefined;
+  /** 当前在场可点选的破解目标 */
+  readonly hackTargets?: readonly HackTarget[] | undefined;
+  /** 打开左上角「接入仓」独立页签 */
+  readonly onOpenDeckTab?: (() => void) | undefined;
   /** 本存档最近一条玩家发出的自由行动（空框按 ↑ 调回） */
   readonly lastSentText?: string | undefined;
   /** 外部快捷键（如 /）聚焦用 */
@@ -73,8 +85,10 @@ export function InputBar({
   const area = useRef<HTMLTextAreaElement | null>(null);
   const [sendMode, setSendMode] = useState<SendMode>(readSendMode);
   const [expanded, setExpanded] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(false);
+  const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null);
   const tilt = useCardTilt<HTMLDivElement>({
-    disabled: disabled || expanded,
+    disabled: disabled || expanded || busy,
     maxRotate: 4.8,
     shadowShift: 4.5,
     pressDepth: 6,
@@ -94,6 +108,8 @@ export function InputBar({
   const nearLimit = !tooLong && len >= WARN_AT;
   const boostAvailable = sandevistan != null;
   const boostOn = boostAvailable && draft.sandevistan === true;
+  const deckAvailable = hacking != null;
+  const activeDeckOpen = deckAvailable && deckOpen;
   const canSend = !busy && !disabled && text !== "" && !tooLong;
   const hasRawText = draft.text !== "";
 
@@ -103,6 +119,23 @@ export function InputBar({
       onDraft({ sandevistan: false });
     }
   }, [boostAvailable, draft.sandevistan, onDraft]);
+
+  // 接入仓卸下或损毁时收起快捷栏；目标离场时清除选中项
+  useEffect(() => {
+    if (!deckAvailable && deckOpen) {
+      setDeckOpen(false);
+      setSelectedTargetKey(null);
+    }
+  }, [deckAvailable, deckOpen]);
+
+  useEffect(() => {
+    if (
+      selectedTargetKey !== null &&
+      !(hackTargets ?? []).some((t) => t.key === selectedTargetKey)
+    ) {
+      setSelectedTargetKey(null);
+    }
+  }, [hackTargets, selectedTargetKey]);
 
   // 兼容不支持 field-sizing: content 的浏览器：按内容自动调整高度
   useLayoutEffect(() => {
@@ -146,10 +179,30 @@ export function InputBar({
   const send = () => {
     if (!canSend) return;
     if (expanded) setExpanded(false);
+    if (deckOpen) {
+      setDeckOpen(false);
+      setSelectedTargetKey(null);
+    }
     onSend({
       text,
       ...(reply && draft.replyTo !== undefined ? { replyTo: draft.replyTo } : {}),
       ...(boostOn ? { sandevistan: true } : {}),
+    });
+  };
+
+  const applyHackDraft = (line: string) => {
+    onDraft({
+      text: draft.text.trim() ? `${draft.text}\n${line}` : line,
+    });
+    setDeckOpen(false);
+    setSelectedTargetKey(null);
+    requestAnimationFrame(() => {
+      const el = area.current;
+      if (el) {
+        el.focus();
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      }
     });
   };
 
@@ -199,6 +252,7 @@ export function InputBar({
       className={styles.inputBar}
       data-busy={busy || undefined}
       data-boost={boostOn || undefined}
+      data-deck={activeDeckOpen || undefined}
       data-reply={reply ? "" : undefined}
       data-invalid={tooLong || undefined}
       data-expanded={expanded || undefined}
@@ -287,7 +341,10 @@ export function InputBar({
                 if (e.nativeEvent.isComposing) return;
                 if (e.key === "Escape") {
                   e.preventDefault();
-                  if (expanded) {
+                  if (activeDeckOpen) {
+                    setDeckOpen(false);
+                    setSelectedTargetKey(null);
+                  } else if (expanded) {
                     setExpanded(false);
                   } else {
                     e.currentTarget.blur();
@@ -346,6 +403,40 @@ export function InputBar({
                   <span className={styles.boostBtnInner}>
                     <Asset id="cyber.os" height={12} tint="currentColor" />
                     <span>{sandevistan.name}</span>
+                  </span>
+                </Button>
+              )}
+
+              {deckAvailable && hacking && (
+                <Button
+                  small
+                  pressed={activeDeckOpen}
+                  onClick={() => {
+                    setDeckOpen((open) => !open);
+                    setSelectedTargetKey(null);
+                  }}
+                >
+                  <span
+                    className={styles.boostBtnInner}
+                    title={[
+                      `${hacking.deckName} · 热负荷 ${hacking.thermal.label}（${hacking.thermal.heat}/${hacking.thermal.maxHeat}）`,
+                      hacking.traceAlert
+                        ? `反追踪警报：${hacking.traceAlert.target}（${hacking.traceAlert.at}）`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  >
+                    <Asset id="cyber.os" height={12} tint="currentColor" />
+                    <span>{hacking.deckName}</span>
+                    {hacking.thermal.heat > 0 && (
+                      <span className={styles.deckBtnMeter} data-level={hacking.thermal.level}>
+                        {hacking.thermal.level === "critical"
+                          ? `过载 ${hacking.thermal.heat}/${hacking.thermal.maxHeat}`
+                          : `${hacking.thermal.heat}/${hacking.thermal.maxHeat}`}
+                      </span>
+                    )}
+                    {hacking.traceAlert && <span className={styles.deckBtnAlert}>反追踪</span>}
                   </span>
                 </Button>
               )}
@@ -433,20 +524,25 @@ export function InputBar({
               </button>
 
               <span className={styles.footerAction}>
-                {streaming ? (
-                  <Button small onClick={onStop}>
-                    停止生成
+                {busy || streaming ? (
+                  <Button
+                    small
+                    onClick={onStop}
+                    disabled={stopping}
+                    reason={stopping ? "正在停止当前回合" : undefined}
+                  >
+                    {stopping ? "正在停止…" : "停止生成"}
                   </Button>
                 ) : (
                   <Button
                     type="submit"
                     primary
                     small
-                    keyId={busy ? undefined : "key.enter"}
+                    keyId="key.enter"
                     disabled={!canSend}
                     reason={sendDisabledReason}
                   >
-                    {busy ? "推演中…" : "发送"}
+                    发送
                   </Button>
                 )}
               </span>
@@ -454,6 +550,21 @@ export function InputBar({
           </div>
         </div>
       </div>
+
+      {activeDeckOpen && hacking && (
+        <DeckQuickbar
+          hacking={hacking}
+          targets={hackTargets ?? []}
+          selectedKey={selectedTargetKey}
+          onSelectTarget={setSelectedTargetKey}
+          onPickDraft={applyHackDraft}
+          onOpenDeckTab={onOpenDeckTab}
+          onClose={() => {
+            setDeckOpen(false);
+            setSelectedTargetKey(null);
+          }}
+        />
+      )}
     </form>
   );
 }

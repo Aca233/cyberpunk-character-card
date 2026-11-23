@@ -27,7 +27,6 @@ import {
   threatOfHumanity,
 } from "./Profile";
 import { type Expand, type SetExpand, usePeek } from "./peek";
-import story from "./story.module.css";
 import {
   displayItemName,
   districtIcon,
@@ -49,6 +48,7 @@ import { weaponPreview } from "./weaponPreview";
 
 /** 九宫格切法照正式页面里同一张素材的用法 */
 const CELL_SLICE = [20, 30, 30, 20] as const; // MapPanel 筛选格 map.filterCell*
+const QH_CELL_SLICE = [18, 22, 22, 18] as const; // 原作 qh.cell* 切角读数格
 const TOOLTIP_SLICE = [10, 30, 70, 10] as const; // MapPanel 地图提示 map.tooltip*
 const PANEL_SLICE = [20, 20, 30, 30] as const; // MapPanel 侧板 map.panel*
 const SLOT_SLICE = [20, 38, 50, 38] as const; // 原 Hud 武器格 hud.slot*
@@ -91,6 +91,46 @@ function CardGlare({
       tint="transparent"
       slice={slice}
       className={`${styles.cardGlare} ${toneClass}`}
+    />
+  );
+}
+
+/**
+ * 贴合原作九宫格斜切框线（*Fg）的赛博能量流光边框：
+ * 用同款 *Fg 蒙版裁切双光束旋转锥形渐变 + 悬停电弧追踪热点，零矩形漏边、完整走过斜切角与缺口；
+ * 展开抽屉后自动收敛为柔和呼吸流光，低血/敌对/紧急态自动提速增亮。
+ */
+function CardBorderFx({
+  maskId,
+  slice,
+  tone = "cyan",
+  phase = 0,
+  urgent = false,
+}: {
+  readonly maskId: AssetId;
+  readonly slice: number | readonly [number, number, number, number];
+  readonly tone?: "red" | "cyan" | "yellow" | "danger";
+  /** 错开各角卡片的光束起始相位（秒，负值表示从周期中间起跑，避免全屏齐步转） */
+  readonly phase?: number;
+  readonly urgent?: boolean;
+}) {
+  const toneClass =
+    tone === "danger"
+      ? styles.borderFxDanger
+      : tone === "red"
+        ? styles.borderFxRed
+        : tone === "yellow"
+          ? styles.borderFxYellow
+          : styles.borderFxCyan;
+  const style =
+    phase !== 0 ? ({ ["--border-delay" as string]: `${phase}s` } as CSSProperties) : undefined;
+  return (
+    <NineSlice
+      id={maskId}
+      tint="transparent"
+      slice={slice}
+      {...(style ? { style } : {})}
+      className={`${styles.cardBorderFx} ${toneClass}${urgent ? ` ${styles.borderFxUrgent}` : ""}`}
     />
   );
 }
@@ -181,8 +221,11 @@ function useRoomLeft(open: boolean) {
       // 收起后 display: none 的不占位，也不算间距
       const others = [...side.children].filter((c) => c !== block && c.getClientRects().length > 0);
       const used = others.reduce((sum, c) => sum + c.getBoundingClientRect().height + gap, 0);
-      const fixed = block.getBoundingClientRect().height - el.getBoundingClientRect().height;
-      // 收起时 .personSummary 先保持占位再缩到 0fr，过渡完再重算一次才能释放完整高度
+      // 在场人物展开时顶栏与常态摘要格均收起为 0，固定边距仅为展开框自身上下内边距（避免过渡首帧把尚未收完的摘要算进 fixed 导致 185ms 后跳高）
+      const isPersonCard = Boolean(el.closest(`.${styles.person}`));
+      const fixed = isPersonCard
+        ? 24
+        : block.getBoundingClientRect().height - el.getBoundingClientRect().height;
       const next = Math.max(ROOM_MIN, Math.floor(side.clientHeight - used - fixed));
       setRoom((prev) => (prev === next ? prev : next));
     };
@@ -294,7 +337,9 @@ function Grow({
   );
 }
 
-/** A 生物监测（3.0）：创伤刻痕、神经稳态与外设/救援遥测 */
+export type BioTabId = "character" | "deck" | "cyberware" | "chronicle";
+
+/** A 生物监测（3.1）：紧凑斜切 HUD 卡片（血条/神经稳态/硬件一行，点击整卡或按 P 展开） */
 export function BioMonitor({
   view,
   peek,
@@ -302,6 +347,7 @@ export function BioMonitor({
   tabs,
   wide = false,
   diag = false,
+  onOpenTab,
 }: {
   readonly view: View;
   readonly peek: PeekState;
@@ -313,6 +359,8 @@ export function BioMonitor({
   readonly wide?: boolean;
   /** 人物/生物检测页签：展开时中幅加宽以并排展示生理躯体扫描与遥测卡 */
   readonly diag?: boolean;
+  /** 点击紧急告警时直接展开到指定页签 */
+  readonly onOpenTab?: ((tab: BioTabId) => void) | undefined;
 }) {
   const {
     health,
@@ -345,7 +393,184 @@ export function BioMonitor({
   const diagOn = p.open ? diag && !wide : !wideOn && lingeredDiag;
   const resizing = useResizing(wideOn || diagOn, p.open);
 
-  const humanityPct = `${Math.max(0, Math.min(100, humanity.current))}%`;
+  const deckTone =
+    hacking?.thermal.level === "critical" || hacking?.traceAlert
+      ? "bad"
+      : hacking?.thermal.level === "hot"
+        ? "warn"
+        : undefined;
+  const deckStatusTitle = hacking
+    ? [
+        hacking.deckName,
+        `热负荷：${hacking.thermal.label}（${hacking.thermal.heat}/${hacking.thermal.maxHeat}）`,
+        `已插装 ${hacking.programs.length}/${hacking.slots} 枚程序`,
+        hacking.traceAlert ? `反追踪警报：${hacking.traceAlert.target}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : undefined;
+
+  const urgentAlert: {
+    readonly label: string;
+    readonly tone: "bad" | "warn";
+    readonly title: string;
+    readonly target?: BioTabId;
+  } | null = hacking?.traceAlert
+    ? {
+        label: "反追踪",
+        tone: "bad",
+        title: `检测到反向追踪信号（${hacking.traceAlert.target} · ${hacking.traceAlert.at}）：点击查看接入仓`,
+        target: "deck",
+      }
+    : hacking?.thermal.level === "critical"
+      ? {
+          label: `过载 ${hacking.thermal.heat}/${hacking.thermal.maxHeat}`,
+          tone: "bad",
+          title: "接入仓神经热负荷达到过载临界，继续硬发破解会反烧大脑",
+          target: "deck",
+        }
+      : health.lostLimbs.length > 0
+        ? {
+            label: "肢体缺损",
+            tone: "bad",
+            title: `缺损部位：${health.lostLimbs.join("、")}`,
+            target: "character",
+          }
+        : brokenCount > 0
+          ? {
+              label: `义体损毁 ×${brokenCount}`,
+              tone: "bad",
+              title: "有义体已损毁，需前往义体医生检修，点击打开义体页",
+              target: "cyberware",
+            }
+          : time.blackLaceWithdrawal
+            ? {
+                label: "黑蕾丝戒断",
+                tone: "bad",
+                title: "黑蕾丝停药戒断中，神经反应受损",
+                target: "character",
+              }
+            : trauma.active && !trauma.coverage.ok
+              ? {
+                  label: "TT受阻",
+                  tone: "warn",
+                  title: `创伤小组救援受阻：${trauma.coverage.why}`,
+                  target: "character",
+                }
+              : time.fatigued
+                ? {
+                    label: "疲劳",
+                    tone: "warn",
+                    title: "连续熬夜导致疲劳，需休息恢复",
+                    target: "character",
+                  }
+                : null;
+
+  const neuroStageTag = psychosis.blackoutOpen
+    ? `${humanity.stageLabel}·盲区`
+    : psychosis.suppressant.until
+      ? `${humanity.stageLabel}·阻断`
+      : psychosis.suppressant.withdrawal
+        ? `${humanity.stageLabel}·戒断`
+        : humanity.stageLabel;
+
+  const primaryWound = wound.items[0];
+  const vitalLabel = primaryWound
+    ? `${primaryWound.partLabel}${primaryWound.tierLabel}${wound.items.length > 1 ? ` +${wound.items.length - 1}` : ""}`
+    : wound.tone === "ok"
+      ? wound.scars.length > 0
+        ? `无伤 · 疤${wound.scars.length}`
+        : "完好"
+      : `${wound.title}${health.painSuppressed && wound.level === 2 ? " · 镇痛" : ""}`;
+  const vitalTitle = primaryWound
+    ? wound.items
+        .slice(0, 3)
+        .map((item) => `${item.partLabel}${item.tierLabel}（${item.cause} · ${item.careTag}）`)
+        .join(" / ")
+    : wound.scars.length > 0
+      ? `机能完好 · 旧疤：${wound.scars.map((s) => s.summary).join("；")}`
+      : "体征平稳，无活动创伤";
+
+  const installedCyberCount = cyberware.filter((c) => !c.broken).length;
+  // 右侧硬件槽：按角色核心装备优先显示 接入仓 > 斯安威斯坦 > 创伤小组 > 义体数
+  const hardwareStat: {
+    readonly key: string;
+    readonly value: string;
+    readonly tone: "cyan" | "warn" | "bad" | "sandy" | "good" | undefined;
+    readonly title: string;
+  } = hacking
+    ? {
+        key: hacking.thermal.heat > 0 ? "热负荷" : "接入仓",
+        value:
+          hacking.thermal.heat > 0
+            ? `${hacking.thermal.heat}/${hacking.thermal.maxHeat}`
+            : `${hacking.programs.length}/${hacking.slots} 槽`,
+        tone: deckTone ?? "cyan",
+        title: deckStatusTitle ?? hacking.deckName,
+      }
+    : sandevistan
+      ? {
+          key: "操作系统",
+          value: "斯安威斯坦",
+          tone: "sandy",
+          title: `斯安威斯坦已装机：${sandevistan.name}`,
+        }
+      : trauma.active
+        ? {
+            key: "创伤小组",
+            value: trauma.coverage.ok ? trauma.tierLabel : "受阻",
+            tone: trauma.coverage.ok ? "good" : "warn",
+            title: trauma.coverage.ok
+              ? `创伤小组 ${trauma.tierLabel} 保障待命`
+              : `创伤小组救援受阻：${trauma.coverage.why}`,
+          }
+        : {
+            key: "义体",
+            value: `${installedCyberCount} 件`,
+            tone: brokenCount > 0 ? "bad" : undefined,
+            title:
+              brokenCount > 0
+                ? `已装 ${installedCyberCount} 件义体，另有 ${brokenCount} 件损毁待修`
+                : `当前已装机 ${installedCyberCount} 件义体`,
+          };
+
+  const neuroTitle = `神经稳态 ${humanity.current}/100 · ${neuro.summary}${
+    psychosis.suppressant.until
+      ? ` · 免疫抑剂至 ${psychosis.suppressant.until}`
+      : psychosis.suppressant.withdrawal
+        ? " · 停药戒断中"
+        : ""
+  }`;
+  const neuroCellCount = 12;
+  const activeNeuroCells = Math.max(
+    0,
+    Math.min(neuroCellCount, Math.round((humanity.current / 100) * neuroCellCount)),
+  );
+  const vitalCellLine =
+    wound.tone === "bad" || wound.tone === "dead"
+      ? "rgb(255 0 60 / 62%)"
+      : wound.tone === "hurt"
+        ? "rgb(255 156 66 / 54%)"
+        : wound.tone === "warn"
+          ? "rgb(252 238 10 / 48%)"
+          : "rgb(255 97 88 / 32%)";
+  const hwCellLine =
+    hardwareStat.tone === "bad"
+      ? "rgb(255 0 60 / 62%)"
+      : hardwareStat.tone === "warn" || hardwareStat.tone === "sandy"
+        ? "rgb(252 238 10 / 46%)"
+        : hardwareStat.tone === "good"
+          ? "rgb(63 230 160 / 46%)"
+          : "rgb(94 246 255 / 34%)";
+  const neuroGaugeTone = neuro.tone === "bad" ? "bad" : neuro.tone === "warn" ? "warn" : "ok";
+
+  const openOrToggle = (tab: BioTabId) => {
+    if (onOpenTab) {
+      onOpenTab(tab);
+    } else {
+      p.toggle();
+    }
+  };
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: 块里套着面板和按钮，不能整个换成 button
@@ -384,163 +609,202 @@ export function BioMonitor({
       <Panel
         as="section"
         line="var(--cp-red)"
+        className={styles.bioPanel}
         surface={<CardGlare maskId="notify.itemCellBg" slice={ITEM_CELL_SLICE} tone="red" />}
+        borderFx={
+          <CardBorderFx
+            maskId="notify.itemCellFg"
+            slice={ITEM_CELL_SLICE}
+            tone={low ? "danger" : "red"}
+            phase={-0.6}
+            urgent={low || neuro.tone === "bad" || urgentAlert?.tone === "bad"}
+          />
+        }
       >
-        {/* 常态摘要包一层折叠容器：展开人物/义体时同步收起，避免顶栏被拉成超长横条并消除上下重复读数 */}
-        <div className={styles.bioSummary}>
-          <div className={styles.bioSummaryInner}>
-            <div className={styles.bioTopHead}>
-              <span className={styles.bioIdentity}>
-                <b className={styles.bioCallsign}>{character.name ?? "宿主"}</b>
-                <em className={styles.bioCred} title={character.credWorld}>
-                  {character.credTier}
-                </em>
-              </span>
-              <kbd className={styles.bioKeyHint}>{p.open ? "ESC" : "P"}</kbd>
-            </div>
-            <div className={styles.bioRow}>
+        {/* 常态：2077 生物监测终端卡——顶部系统标尺、主体头像/代号+体征/硬件双切角读数格、底部 12 格神经稳态刻槽 */}
+        <div className={styles.bioHud}>
+          <div className={styles.bioHudInner}>
+            <div className={styles.bioHudBar}>
+              <span className={styles.bioCodeTag}>KIROSHI {"//"} BIOMON</span>
               <span
-                className={styles.bioAvatar}
+                className={styles.bioBarLine}
+                style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+                aria-hidden
+              />
+              {urgentAlert &&
+                (urgentAlert.target && onOpenTab ? (
+                  <button
+                    type="button"
+                    className={styles.bioUrgent}
+                    data-tone={urgentAlert.tone}
+                    title={urgentAlert.title}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (urgentAlert.target) openOrToggle(urgentAlert.target);
+                    }}
+                  >
+                    {urgentAlert.label}
+                  </button>
+                ) : (
+                  <span
+                    className={styles.bioUrgent}
+                    data-tone={urgentAlert.tone}
+                    title={urgentAlert.title}
+                  >
+                    {urgentAlert.label}
+                  </span>
+                ))}
+              <kbd className={styles.bioKeyHint}>P</kbd>
+            </div>
+
+            <div className={styles.bioTopRow}>
+              <span
+                className={styles.bioEmblem}
                 data-portrait={portraitId ? true : undefined}
                 title={`${character.name ?? "宿主"} · 街头名声 ${character.credTier}：${character.credWorld}`}
               >
                 <NineSlice
                   id="map.filterCellBg"
-                  tint="var(--cp-surface-strong)"
+                  tint="rgb(18 10 14 / 92%)"
                   slice={CELL_SLICE}
+                  className={styles.bioEmblemBg}
                 />
+                {!portraitId && (
+                  <NineSlice
+                    id="cyber.cellTexture"
+                    tint="rgb(255 97 88 / 26%)"
+                    slice={0}
+                    className={styles.bioEmblemTex}
+                  />
+                )}
                 {portraitId ? (
                   <GeneratedImage
                     imageId={portraitId}
                     alt={character.name ?? "主角头像"}
-                    className={styles.bioAvatarArt}
-                    fallback={<Asset id="portrait.unknown" className={styles.bioAvatarUnknown} />}
+                    className={styles.bioEmblemArt}
+                    fallback={
+                      <span className={styles.bioCrest}>
+                        <Asset id="hud.levelFrame" tint="var(--cp-red)" height={40} />
+                        <Asset
+                          id="notify.streetCred"
+                          tint="var(--cp-red)"
+                          height={18}
+                          className={styles.bioCrestIcon}
+                        />
+                      </span>
+                    }
                   />
                 ) : (
-                  <Asset id="portrait.unknown" className={styles.bioAvatarUnknown} />
-                )}
-                <NineSlice id="map.filterCellFg" tint="var(--cp-red-dim)" slice={CELL_SLICE} />
-              </span>
-              <div className={styles.trauma}>
-                <div className={styles.woundHead}>
-                  <span className={styles.woundText} data-tone={wound.tone}>
-                    {wound.title}
-                    {health.painSuppressed && wound.level === 2 ? " · 镇痛" : ""}
-                  </span>
-                  <span className={styles.woundCode} data-tone={wound.tone}>
-                    {wound.code}
-                  </span>
-                </div>
-                <div className={styles.woundList}>
-                  {wound.items.length > 0 ? (
-                    <>
-                      {wound.items.slice(0, 2).map((item) => (
-                        <span
-                          key={item.id}
-                          className={styles.woundChip}
-                          data-tone={item.tone}
-                          title={`${item.headline} · ${item.cause}（${item.careNote}）`}
-                        >
-                          <b className={styles.woundPart}>{item.partLabel}</b>
-                          <span className={styles.woundDesc}>
-                            {item.tierLabel} · {item.cause}
-                          </span>
-                          <em className={styles.woundCare}>{item.careTag}</em>
-                        </span>
-                      ))}
-                      {wound.items.length > 2 && (
-                        <span className={styles.woundMore}>
-                          +{wound.items.length - 2} 处伤势 · 点开查看
-                        </span>
-                      )}
-                    </>
-                  ) : wound.scars.length > 0 ? (
-                    <p
-                      className={styles.woundNominal}
-                      data-scar
-                      title={wound.scars.map((s) => s.summary).join("；")}
-                    >
-                      机能完好 · 旧疤：{wound.scars[0]?.partLabel}
-                      {wound.scars.length > 1 ? ` 等 ${wound.scars.length} 处` : ""}
-                    </p>
-                  ) : (
-                    <p className={styles.woundNominal}>机能完好 · 全身无创口</p>
-                  )}
-                </div>
-                <div className={styles.bioHwBar}>
-                  <span
-                    className={styles.bioMiniGauge}
-                    title={`神经稳态 ${humanity.current}/100 · ${neuro.summary}`}
-                  >
-                    <span
-                      className={styles.bioMiniFill}
-                      data-tone={neuro.tone}
-                      style={{ width: humanityPct }}
+                  <span className={styles.bioCrest}>
+                    <Asset id="hud.levelFrame" tint="var(--cp-red)" height={40} />
+                    <Asset
+                      id="notify.streetCred"
+                      tint="var(--cp-red)"
+                      height={18}
+                      className={styles.bioCrestIcon}
                     />
                   </span>
-                  <span
-                    className={styles.bioHwText}
-                    data-tone={neuro.tone}
-                    title={
-                      psychosis.suppressant.until
-                        ? `免疫抑剂药效至 ${psychosis.suppressant.until}`
-                        : psychosis.suppressant.withdrawal
-                          ? "停药戒断反应：手抖、冷汗与焦躁"
-                          : neuro.summary
-                    }
-                  >
-                    {humanity.stageLabel}
-                    {psychosis.blackoutOpen
-                      ? " · 盲区"
-                      : psychosis.suppressant.until
-                        ? " · 阻断"
-                        : psychosis.suppressant.withdrawal
-                          ? " · 戒断"
-                          : ""}
+                )}
+                <NineSlice
+                  id="map.filterCellFg"
+                  tint={low ? "var(--cp-danger)" : "rgb(255 97 88 / 72%)"}
+                  slice={CELL_SLICE}
+                  className={styles.bioEmblemFg}
+                />
+              </span>
+
+              <div className={styles.bioIdentCol}>
+                <div className={styles.bioNameRow}>
+                  <b className={styles.bioCallsign}>{character.name ?? "宿主"}</b>
+                  <span className={styles.bioCred} title={character.credWorld}>
+                    {character.credTier}
                   </span>
+                  {trauma.active && (
+                    <span
+                      className={styles.bioTtTag}
+                      data-blocked={!trauma.coverage.ok || undefined}
+                      title={
+                        trauma.coverage.ok
+                          ? `创伤小组 ${trauma.tierLabel} 保障待命`
+                          : `创伤小组受阻：${trauma.coverage.why}`
+                      }
+                    >
+                      TT·{trauma.tierLabel}
+                    </span>
+                  )}
+                  <kbd className={styles.bioCompactKey}>P</kbd>
+                </div>
+
+                <div className={styles.bioCells}>
+                  <div className={styles.bioCell} data-tone={wound.tone} title={vitalTitle}>
+                    <NineSlice
+                      id="qh.cellBg"
+                      tint={low ? "rgb(36 9 16 / 86%)" : "rgb(14 14 23 / 78%)"}
+                      slice={QH_CELL_SLICE}
+                      className={styles.bioCellFrame}
+                    />
+                    <NineSlice
+                      id="qh.cellFg"
+                      tint={vitalCellLine}
+                      slice={QH_CELL_SLICE}
+                      className={styles.bioCellFrame}
+                    />
+                    <span className={styles.bioCellKey}>体征</span>
+                    <strong className={styles.bioCellVal}>{vitalLabel}</strong>
+                  </div>
+
+                  <div
+                    className={styles.bioCell}
+                    data-tone={hardwareStat.tone}
+                    title={hardwareStat.title}
+                  >
+                    <NineSlice
+                      id="qh.cellBg"
+                      tint={
+                        hardwareStat.tone === "bad" ? "rgb(36 9 16 / 86%)" : "rgb(14 16 26 / 78%)"
+                      }
+                      slice={QH_CELL_SLICE}
+                      className={styles.bioCellFrame}
+                    />
+                    <NineSlice
+                      id="qh.cellFg"
+                      tint={hwCellLine}
+                      slice={QH_CELL_SLICE}
+                      className={styles.bioCellFrame}
+                    />
+                    <span className={styles.bioCellKey}>{hardwareStat.key}</span>
+                    <strong className={styles.bioCellVal}>{hardwareStat.value}</strong>
+                  </div>
                 </div>
               </div>
             </div>
-            <p className={styles.bioLine}>
-              {hacking ? (
-                <span
-                  className={styles.bioOsTag}
-                  data-os="deck"
-                  title={`${hacking.deckName}${hacking.profile ? ` · ${hacking.profile}` : ""}`}
-                >
-                  {`DECK · ${[hacking.traitLabels[0] ?? hacking.deckName ?? "在线", hacking.selfIce ? "ICE" : null].filter(Boolean).join(" · ")}`}
+
+            <div className={styles.bioNeuroStrip} data-tone={neuroGaugeTone} title={neuroTitle}>
+              <div className={styles.bioNeuroHead}>
+                <span className={styles.bioNeuroKey}>NEURO {"//"} 神经稳态</span>
+                <span className={styles.bioNeuroVal}>
+                  <em className={styles.bioNeuroStage}>{neuroStageTag}</em>
+                  <b className={styles.bioNeuroScore}>{humanity.current}</b>
                 </span>
-              ) : sandevistan ? (
-                <span className={styles.bioOsTag} data-os="sandy">
-                  {`SNV · ${sandevistan.name}`}
-                </span>
-              ) : (
-                <span className={styles.bioOsTag}>神经链路正常</span>
-              )}
-              {health.lostLimbs.length > 0 ? (
-                <span className={styles.bioAlert}>肢体缺损</span>
-              ) : brokenCount > 0 ? (
-                <span className={styles.bioAlert}>义体损毁 ×{brokenCount}</span>
-              ) : time.blackLaceWithdrawal ? (
-                <span className={styles.bioAlert}>黑蕾丝戒断</span>
-              ) : time.fatigued ? (
-                <span className={styles.bioWarn}>熬夜疲劳</span>
-              ) : trauma.active ? (
-                <span
-                  className={trauma.coverage.ok ? styles.bioGood : styles.bioWarn}
-                  title={
-                    trauma.coverage.ok ? "创伤小组救援保障待命" : `受阻：${trauma.coverage.why}`
-                  }
-                >
-                  TT {trauma.tierLabel}
-                  {trauma.coverage.ok ? "" : " · 受阻"}
-                </span>
-              ) : (
-                <span className={styles.bioHintCopy}>点按或按 P 展开</span>
-              )}
-            </p>
+              </div>
+              <div className={styles.bioNeuroGauge} aria-hidden="true">
+                {Array.from({ length: neuroCellCount }, (_, idx) => {
+                  const active = idx < activeNeuroCells;
+                  return (
+                    <span
+                      // biome-ignore lint/suspicious/noArrayIndexKey: 12 格固定神经稳态刻槽
+                      key={idx}
+                      className={styles.bioNeuroCell}
+                      data-on={active || undefined}
+                      data-tone={active ? neuroGaugeTone : undefined}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
+
         <Grow
           open={p.open}
           line="var(--cp-red)"
@@ -582,6 +846,7 @@ function personBadges(
   person: Npc,
   fixer: Fixer | undefined,
   foe: CombatFoe | undefined,
+  breached = false,
 ): PersonBadge[] {
   const badges: PersonBadge[] = [];
   if (foe) {
@@ -589,6 +854,9 @@ function personBadges(
   }
   if (person.nemesis && !person.nemesis.ended) {
     badges.push({ label: "宿敌", tone: "red", solid: true });
+  }
+  if (breached) {
+    badges.push({ label: "已破冰", tone: "cyan" });
   }
   if (person.following) {
     badges.push({ label: "同行", tone: "yellow" });
@@ -624,13 +892,21 @@ interface QuickSwitchTarget {
   readonly tone: "hostile" | "nemesis" | "ally" | undefined;
 }
 
+interface PersonHackStatus {
+  readonly breached: boolean;
+  readonly breachedVia?: string | null | undefined;
+  readonly activeEffects: readonly string[];
+}
+
 /** S 里的一个人：鼠标停在名字格上展开人物档案，点击固定/取消固定 */
 function PresentPerson({
   person,
   fixer,
   foe,
+  hackStatus,
   index,
   scan,
+  groupOpen,
   hasOptics,
   peek,
   switchTargets,
@@ -641,8 +917,10 @@ function PresentPerson({
   readonly person: Npc;
   readonly fixer?: Fixer | undefined;
   readonly foe?: CombatFoe | undefined;
+  readonly hackStatus?: PersonHackStatus | undefined;
   readonly index: number;
   readonly scan: boolean;
+  readonly groupOpen: boolean;
   readonly hasOptics: boolean;
   readonly peek: PeekState;
   readonly switchTargets: readonly QuickSwitchTarget[];
@@ -656,8 +934,9 @@ function PresentPerson({
   const p = usePeek(`person:${person.id}`, peek.expand, peek.setExpand);
   // 按住 Tab 扫描时让给扫描卡
   const open = p.open && !scan;
-  // 名字格展开时加宽：收起时等档案收完再缩回原宽，不在收到一半时把档案挤成窄条
-  const wideOn = useLinger(open);
+  // 名字格展开时加宽：收起时等档案收完再缩回原宽，不在收到一半时把档案挤成窄条；同组已展开时候选槽位直接就位
+  const lingeredOpen = useLinger(open);
+  const wideOn = open || (groupOpen && !scan) || lingeredOpen;
   const tone = profileTone(person, foe);
   const subLabel = foe
     ? [
@@ -671,7 +950,7 @@ function PresentPerson({
       : person.nemesis
         ? "交过手 · 底细不明"
         : "底细不明";
-  const badges = personBadges(person, fixer, foe);
+  const badges = personBadges(person, fixer, foe, hackStatus?.breached);
   const humanityThreat = s ? threatOfHumanity(s.humanityStage) : undefined;
   const scanAlert =
     Boolean(foe) || wound.threat === "high" || humanityThreat === "high" || s?.threat === "high";
@@ -719,7 +998,7 @@ function PresentPerson({
       className={styles.person}
       style={{ "--i": index } as CSSProperties}
       data-open={wideOn || undefined}
-      data-active={open || undefined}
+      data-active={open || (groupOpen && !scan) || undefined}
       data-tone={tone}
       role="button"
       tabIndex={0}
@@ -752,6 +1031,15 @@ function PresentPerson({
         }
       />
       <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
+      <CardBorderFx
+        maskId="map.filterCellFg"
+        slice={CELL_SLICE}
+        tone={
+          tone === "hostile" || tone === "nemesis" ? "danger" : tone === "ally" ? "yellow" : "cyan"
+        }
+        phase={-1.4}
+        urgent={tone === "hostile" || tone === "nemesis"}
+      />
       <NineSlice
         id="panel.glowLeft"
         tint="var(--person-glow, rgb(94 246 255 / 12%))"
@@ -958,8 +1246,9 @@ function PresentPerson({
           npc={person}
           fixer={fixer}
           foe={foe}
+          hackStatus={hackStatus}
           embedded
-          topSlot={
+          headerSlot={
             <>
               {switchTargets.length > 1 && (
                 <nav className={styles.personQuickSwitch} aria-label="切换在场目标">
@@ -989,13 +1278,14 @@ function PresentPerson({
               <button
                 type="button"
                 className={styles.personHeadBtn}
-                data-active={p.open || undefined}
+                title="收起在场人物档案（Esc）"
                 onClick={(event) => {
                   event.stopPropagation();
                   p.close();
                 }}
               >
-                <span>关闭 · ESC</span>
+                <span>收起</span>
+                <kbd className={styles.personHeadKey}>ESC</kbd>
               </button>
             </>
           }
@@ -1052,6 +1342,13 @@ function PresentFoe({
       />
       <CardGlare maskId="map.filterCellBg" slice={CELL_SLICE} tone="red" />
       <NineSlice id="map.filterCellFg" tint="var(--person-line)" slice={CELL_SLICE} />
+      <CardBorderFx
+        maskId="map.filterCellFg"
+        slice={CELL_SLICE}
+        tone="danger"
+        phase={-0.9}
+        urgent={!dead}
+      />
       <NineSlice
         id="panel.glowLeft"
         tint="var(--person-glow, rgb(255 0 60 / 18%))"
@@ -1214,15 +1511,49 @@ export function Present({
 
   const allEntries = [...hostileEntries, ...companionEntries, ...regularEntries];
   const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken) ?? null;
+  const hackStatusOf = (npc: Npc): PersonHackStatus | undefined => {
+    if (!view.hacking) return undefined;
+    const hit = view.hacking.breachedTargets.find((b) => b.npc === npc.id || b.target === npc.name);
+    const isBreached = Boolean(hit);
+    const activeEffects = [
+      ...new Set(
+        view.hacking.activeEffects
+          .filter((e) => {
+            if (e.target !== npc.name) return false;
+            if (isBreached && e.categoryLabel === null && /破冰|breach/i.test(e.label)) {
+              return false;
+            }
+            return true;
+          })
+          .map((e) => e.label),
+      ),
+    ];
+    if (!isBreached && activeEffects.length === 0) return undefined;
+    return {
+      breached: isBreached,
+      breachedVia: hit?.via ?? null,
+      activeEffects,
+    };
+  };
   const unscannedCount = herePeople.filter((n) => !n.body?.scan).length;
   const totalCount = allEntries.length;
+  const shownEntries = allEntries.slice(0, PRESENT_MAX);
+  const open = shownEntries.some((e) => e.npc && peek.expand === `person:${e.npc.id}`);
+  const [ready, setReady] = useState(false);
+  const wasOpenRef = useRef(false);
+  const switching = wasOpenRef.current && open;
+  useEffect(() => {
+    const t = window.setTimeout(() => setReady(true), 550);
+    return () => window.clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    wasOpenRef.current = open;
+  }, [open]);
   if (totalCount === 0 && !scan) return null;
 
-  const shownEntries = allEntries.slice(0, PRESENT_MAX);
   const overflow = totalCount - shownEntries.length;
   const distinctGroups = new Set(shownEntries.map((e) => e.group));
   const showGroupHeaders = distinctGroups.size > 1 || hostileEntries.length > 0;
-  const open = shownEntries.some((e) => e.npc && peek.expand === `person:${e.npc.id}`);
   const switchTargets: readonly QuickSwitchTarget[] = shownEntries
     .filter((e): e is PresentEntry & { readonly npc: Npc } => Boolean(e.npc))
     .map((e) => ({
@@ -1242,6 +1573,8 @@ export function Present({
       data-layer="optics"
       data-scan={scan || undefined}
       data-open={open || undefined}
+      data-switching={switching || undefined}
+      data-ready={ready || open || undefined}
       data-combat={hostileEntries.length > 0 || undefined}
       aria-label="在场的人"
     >
@@ -1325,8 +1658,10 @@ export function Present({
                     person={entry.npc}
                     fixer={view.jobs.fixers.find((f) => f.id === entry.npc?.id)}
                     foe={entry.foe}
+                    hackStatus={hackStatusOf(entry.npc)}
                     index={idx}
                     scan={scan}
+                    groupOpen={open}
                     hasOptics={Boolean(intactEye)}
                     peek={peek}
                     switchTargets={switchTargets}
@@ -1348,7 +1683,7 @@ export function Present({
         </ul>
       )}
       {overflow > 0 && (
-        <p className={styles.presentMore}>另有 {overflow} 人在场 · 全部人物见联系人</p>
+        <p className={styles.presentMore}>另有 {overflow} 人在场 · 全部人物见「人物」</p>
       )}
     </section>
   );
@@ -1431,6 +1766,7 @@ export function Unread({
       <NineSlice id="map.panelBg" tint="var(--cp-surface)" slice={PANEL_SLICE} />
       <CardGlare maskId="map.panelBg" slice={PANEL_SLICE} tone="red" />
       <NineSlice id="map.panelFg" tint="var(--cp-red)" slice={PANEL_SLICE} />
+      <CardBorderFx maskId="map.panelFg" slice={PANEL_SLICE} tone="red" phase={-3.4} />
       <div className={`${styles.inner} ${styles.unreadInner}`}>
         <Grow
           open={p.open}
@@ -1527,6 +1863,14 @@ function ZoneServiceBar({
             tone={blackMarket ? "yellow" : "cyan"}
           />
         }
+        borderFx={
+          <CardBorderFx
+            maskId="map.filterCellFg"
+            slice={CELL_SLICE}
+            tone={blackMarket ? "yellow" : "cyan"}
+            phase={-3.1}
+          />
+        }
       />
       <NineSlice
         id="cyber.cellRarity"
@@ -1608,6 +1952,13 @@ export function Zone({
             tint="var(--cp-yellow)"
             height={96}
             className={styles.zoneFrame}
+          />
+          <Asset
+            id="hud.zoneFrame"
+            tint="transparent"
+            height={96}
+            style={{ ["--border-delay" as string]: "-1.8s" } as CSSProperties}
+            className={`${styles.zoneFrame} ${styles.cardBorderFx} ${styles.borderFxYellow}${heat.stars >= 3 ? ` ${styles.borderFxUrgent}` : ""}`}
           />
           <div className={styles.zoneText}>
             <div className={styles.zoneTitleRow}>
@@ -1795,6 +2146,14 @@ export function Track({
             as="section"
             line="var(--cp-yellow)"
             surface={<CardGlare maskId="notify.itemCellBg" slice={ITEM_CELL_SLICE} tone="yellow" />}
+            borderFx={
+              <CardBorderFx
+                maskId="notify.itemCellFg"
+                slice={ITEM_CELL_SLICE}
+                tone="yellow"
+                phase={-3.7}
+              />
+            }
           >
             <div className={styles.trackHead}>
               <span className={styles.trackHeadLeft}>
@@ -2064,6 +2423,13 @@ export function Weapon({
         />
         <CardGlare maskId="hud.slotBg" slice={SLOT_SLICE} tone="cyan" />
         <NineSlice id="hud.slotFg" tint="rgb(94 246 255 / 80%)" slice={SLOT_SLICE} />
+        <CardBorderFx
+          maskId="hud.slotFg"
+          slice={SLOT_SLICE}
+          tone="cyan"
+          phase={-2.8}
+          urgent={Boolean(view.combat.active)}
+        />
         <Grow
           open={p.open}
           line="var(--cp-cyan)"
@@ -2246,6 +2612,7 @@ export function HoloCall({
       <BlockShadow />
       <NineSlice id="dialog.lineSelect" tint="var(--cp-surface-strong)" slice={HOLO_SLICE} />
       <CardGlare maskId="dialog.lineSelect" slice={HOLO_SLICE} tone="cyan" />
+      <CardBorderFx maskId="dialog.lineSelect" slice={HOLO_SLICE} tone="cyan" phase={-0.3} urgent />
       <NineSlice
         id="panel.glowLeft"
         tint="rgb(94 246 255 / 22%)"
@@ -2311,45 +2678,10 @@ export function HoloCall({
   );
 }
 
-/** 横幅：交战、对峙、潜网、闪回，同时只出一个（交战最先） */
+/** 横幅：潜网、闪回、神经过载/戒断/义体排异，同时只出一个（交战目标已由左侧在场目标面板分组呈现） */
 export function Banner({ view }: { readonly view: View }) {
-  const { combat, character, humanity, psychosis } = view;
+  const { character, humanity, psychosis } = view;
   const dive = view.hacking?.dive ?? null;
-  if (combat.active) {
-    const a = combat.active;
-    const aliveCount = a.foes.filter((f) => f.state !== "dead" && f.state !== "fled").length;
-    return (
-      <Panel as="section" line="var(--cp-red)" className={styles.banner}>
-        <div className={styles.bannerRow} role="status">
-          <Asset id="notify.warning" tint="var(--cp-red)" height={24} />
-          <b>交战中</b>
-          {a.district && <span className={story.combatTitle}>{a.district}</span>}
-          <small className={styles.bannerStat}>
-            活跃敌手 {aliveCount}/{a.foes.length}
-          </small>
-        </div>
-        <ul className={styles.bannerFoes} aria-label="交战目标">
-          {a.foes.map((f) => (
-            <li
-              key={f.id}
-              className={styles.bannerFoe}
-              data-down={f.state === "dead" || f.state === "fled" || undefined}
-            >
-              <b>{f.name}</b>
-              <em className={styles.bannerFoeState}>{f.stateLabel}</em>
-              {f.gang && <small>{f.gang}</small>}
-              {f.carry.length > 0 && (
-                <small className={styles.bannerLoot}>
-                  可拾取：{f.carry.map((i) => i.name).join("、")}
-                </small>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    );
-  }
-  // 不在交战中时，继续显示潜网或闪回横幅。
   if (dive) {
     return (
       <Panel as="section" line="var(--cp-netwatch)" className={styles.banner}>

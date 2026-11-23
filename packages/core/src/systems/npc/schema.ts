@@ -475,6 +475,8 @@ export const AffinitySchema = z
       .int()
       .refine((v) => v !== 0, "好感变化不能为 0"),
     reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
+    /** 可选渠道标记：代码侧 phone-chat 传 phone 时允许对未见面但已通联的联系人记好感 */
+    channel: z.enum(["scene", "phone"]).optional(),
   })
   .describe(
     `好感变化（结算用；模型写的是方向和大小，见 AffinityProposalSchema）；单条最多 ±${AFFINITY_STEP_CAP}，范围 ${AFFINITY_MIN} 到 ${AFFINITY_MAX}，代码截断`,
@@ -542,9 +544,11 @@ export const MemorySchema = z
     id: NpcIdSchema,
     text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     source: z
-      .enum(["experienced", "told", "log"])
+      .enum(["experienced", "told", "log", "phone"])
       .optional()
-      .describe("亲历、后来被告知或本人查过的设备日志；行为芯片断片期间不能冒充亲历"),
+      .describe(
+        "亲历、后来被告知、本人查过的设备日志，或手机私聊记录；行为芯片断片期间不能冒充亲历",
+      ),
     device: z.string().min(1).optional(),
     log: z.string().min(1).optional().describe("source:log 引用本人已查阅的稳定日志 id"),
   })

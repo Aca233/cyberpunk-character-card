@@ -53,6 +53,7 @@ export interface Spend {
 
 interface StoryState {
   readonly phase: "idle" | "submitting" | "streaming";
+  readonly stopping: boolean;
   readonly saveId: string | null;
   readonly turnId: string | null;
   /** 正在生成的正文；记账在正文之后由后端另外抽 */
@@ -149,6 +150,41 @@ function persistDraft(saveId: string | null, draft: TurnInput): void {
 
 export const useStory = create<StoryState>()((set, get) => {
   let generation = 0;
+  let pendingText = "";
+  let pendingThought = "";
+  let flushRaf = 0;
+
+  const clearPendingStream = () => {
+    pendingText = "";
+    pendingThought = "";
+    if (flushRaf !== 0 && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(flushRaf);
+    }
+    flushRaf = 0;
+  };
+
+  const flushPendingStream = () => {
+    flushRaf = 0;
+    if (pendingText === "" && pendingThought === "") return;
+    const addText = pendingText;
+    const addThought = pendingThought;
+    pendingText = "";
+    pendingThought = "";
+    set((s) => ({
+      ...(addText !== "" ? { text: s.text + addText } : {}),
+      ...(addThought !== "" ? { thought: s.thought + addThought } : {}),
+    }));
+  };
+
+  const scheduleStreamFlush = () => {
+    if (flushRaf !== 0) return;
+    if (typeof requestAnimationFrame === "function") {
+      flushRaf = requestAnimationFrame(flushPendingStream);
+    } else {
+      flushPendingStream();
+    }
+  };
+
   const follow = (
     saveId: string,
     turnId: string,
@@ -156,6 +192,7 @@ export const useStory = create<StoryState>()((set, get) => {
     current: () => boolean,
     submittedDraft: TurnInput | null,
   ) => {
+    clearPendingStream();
     unsubscribe?.();
     set({ phase: "streaming", turnId });
     unsubscribe = followTurn(saveId, turnId, {
@@ -165,6 +202,7 @@ export const useStory = create<StoryState>()((set, get) => {
           case "started":
             return;
           case "stage": {
+            if (get().stopping) return;
             const now = Date.now();
             set((s) => {
               const prev = s.stage;
@@ -179,24 +217,33 @@ export const useStory = create<StoryState>()((set, get) => {
           case "rolled":
             return;
           case "boost":
+            if (get().stopping) return;
             if (get().boost === null) playSfx("sandevistan");
             set({ boost: event });
             return;
           case "thought":
-            set((s) => ({ thought: s.thought + event.text }));
+            if (get().stopping) return;
+            pendingThought += event.text;
+            scheduleStreamFlush();
             return;
           case "text":
-            set((s) => ({ text: s.text + event.text }));
+            if (get().stopping) return;
+            pendingText += event.text;
+            scheduleStreamFlush();
             return;
           case "done": {
+            if (!get().stopping) flushPendingStream();
+            else clearPendingStream();
             const complete = () => {
               if (!current()) return;
+              clearPendingStream();
               playSfx("turnDone");
               set((s) => {
                 const nextDraft = s.draft === submittedDraft ? EMPTY_DRAFT : s.draft;
                 if (nextDraft !== s.draft) persistDraft(saveId, nextDraft);
                 return {
                   phase: "idle",
+                  stopping: false,
                   turnId: null,
                   text: "",
                   thought: "",
@@ -213,10 +260,12 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           }
           case "confirmSpend": {
+            clearPendingStream();
             const pending = get().pending;
             finish("confirmSpend");
             set({
               phase: "idle",
+              stopping: false,
               turnId: null,
               text: "",
               thought: "",
@@ -237,10 +286,12 @@ export const useStory = create<StoryState>()((set, get) => {
             return;
           }
           case "blocked":
+            clearPendingStream();
             playSfx("error");
             finish("blocked", event.reason);
             set({
               phase: "idle",
+              stopping: false,
               turnId: null,
               boost: null,
               stage: null,
@@ -250,10 +301,12 @@ export const useStory = create<StoryState>()((set, get) => {
             void refresh();
             return;
           case "stopped":
+            clearPendingStream();
             playSfx("cancel");
             finish("stopped");
             set({
               phase: "idle",
+              stopping: false,
               turnId: null,
               boost: null,
               stage: null,
@@ -267,10 +320,12 @@ export const useStory = create<StoryState>()((set, get) => {
             void refresh();
             return;
           case "error":
+            clearPendingStream();
             playSfx("error");
             finish("error", event.message);
             set({
               phase: "idle",
+              stopping: false,
               turnId: null,
               boost: null,
               stage: null,
@@ -283,10 +338,12 @@ export const useStory = create<StoryState>()((set, get) => {
       },
       onLost: (reason) => {
         if (!current()) return;
+        clearPendingStream();
         playSfx("error");
         finish("lost", reason);
         set({
           phase: "idle",
+          stopping: false,
           turnId: null,
           boost: null,
           stage: null,
@@ -298,8 +355,31 @@ export const useStory = create<StoryState>()((set, get) => {
     });
   };
 
+  const requestStop = async (
+    saveId: string,
+    turnId: string,
+    activeGeneration: number,
+  ): Promise<void> => {
+    try {
+      await api.stop(saveId, turnId);
+    } catch (error) {
+      if (generation !== activeGeneration || get().turnId !== turnId) return;
+      // 回合刚好自然结束或已过期时，不再把 404/409 误报给玩家
+      if (error instanceof ApiError && (error.status === 404 || error.status === 409)) return;
+      set({
+        stopping: false,
+        failure: {
+          kind: "error",
+          message: error instanceof Error ? error.message : String(error),
+          retryable: false,
+        },
+      });
+    }
+  };
+
   return {
     phase: "idle",
+    stopping: false,
     saveId: null,
     turnId: null,
     text: "",
@@ -322,6 +402,7 @@ export const useStory = create<StoryState>()((set, get) => {
     enter: (saveId) => {
       if (get().saveId === saveId) return;
       generation += 1;
+      clearPendingStream();
       unsubscribe?.();
       unsubscribe = null;
       // 换了存档：上一个存档没收尾的这一轮算被顶掉
@@ -329,6 +410,7 @@ export const useStory = create<StoryState>()((set, get) => {
       set({
         saveId,
         phase: "idle",
+        stopping: false,
         turnId: null,
         text: "",
         thought: "",
@@ -345,6 +427,7 @@ export const useStory = create<StoryState>()((set, get) => {
       if (get().phase !== "idle" || get().saveId !== saveId) return;
       const activeGeneration = ++generation;
       const current = () => generation === activeGeneration && get().saveId === saveId;
+      clearPendingStream();
       // 只清理本次实际发送且此后未编辑的草稿；选项、重连和下一步草稿都应保留。
       const draft = get().draft;
       const submittedDraft =
@@ -355,6 +438,7 @@ export const useStory = create<StoryState>()((set, get) => {
           : null;
       set({
         phase: "submitting",
+        stopping: false,
         pending,
         failure: null,
         spend: null,
@@ -383,12 +467,14 @@ export const useStory = create<StoryState>()((set, get) => {
         const result = await api.submit(saveId, body);
         if (!current()) return;
         if (result.kind === "started") {
+          const shouldStop = get().stopping;
           follow(saveId, result.turnId, refresh, current, submittedDraft);
+          if (shouldStop) await requestStop(saveId, result.turnId, activeGeneration);
           return;
         }
         await refresh();
         if (!current()) return;
-        set({ phase: "idle", pending: null, stage: null, stageTrace: [] });
+        set({ phase: "idle", stopping: false, pending: null, stage: null, stageTrace: [] });
         finish("ok");
       } catch (error) {
         if (!current()) return;
@@ -403,6 +489,7 @@ export const useStory = create<StoryState>()((set, get) => {
             finish("rejected", "未能恢复上一轮的输入");
             set({
               phase: "idle",
+              stopping: false,
               pending: null,
               boost: null,
               stage: null,
@@ -416,8 +503,10 @@ export const useStory = create<StoryState>()((set, get) => {
             await refresh();
             return;
           }
+          const shouldStop = get().stopping;
           set({ pending: { kind: "input", input: original.data }, boost: null });
           follow(saveId, error.body.turnId, refresh, current, null);
+          if (shouldStop) await requestStop(saveId, error.body.turnId, activeGeneration);
           return;
         }
         const message = error instanceof Error ? error.message : String(error);
@@ -430,6 +519,7 @@ export const useStory = create<StoryState>()((set, get) => {
         finish(kind, message);
         set({
           phase: "idle",
+          stopping: false,
           stage: null,
           stageTrace: [],
           failure: { kind, message, retryable: kind === "error" },
@@ -438,21 +528,12 @@ export const useStory = create<StoryState>()((set, get) => {
       }
     },
     async stop() {
-      const { saveId, turnId } = get();
-      if (!saveId || !turnId) return;
-      const activeGeneration = generation;
-      try {
-        await api.stop(saveId, turnId);
-      } catch (error) {
-        if (generation !== activeGeneration || get().turnId !== turnId) return;
-        set({
-          failure: {
-            kind: "error",
-            message: error instanceof Error ? error.message : String(error),
-            retryable: false,
-          },
-        });
-      }
+      const { phase, saveId, turnId, stopping } = get();
+      if (phase === "idle" || stopping || !saveId) return;
+      clearPendingStream();
+      set({ stopping: true });
+      if (!turnId) return;
+      await requestStop(saveId, turnId, generation);
     },
   };
 });

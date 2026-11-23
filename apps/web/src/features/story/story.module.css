@@ -27,6 +27,8 @@
  * 原作主菜单的 H10 全景压暗、偏冷；正文那一列再压暗、四周暗角，字不受影响
  */
 .city {
+  --bg-px: 0px;
+  --bg-py: 0px;
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -35,13 +37,20 @@
   background: var(--cp-bg);
 }
 
+.cityStage {
+  position: absolute;
+  inset: -16px;
+  transform: translate3d(var(--bg-px), var(--bg-py), 0);
+  will-change: transform;
+}
+
 .cityImage {
   position: absolute;
   inset: -3%;
   background-position: center 30%;
   background-size: cover;
   background-repeat: no-repeat;
-  filter: saturate(0.75) brightness(0.4) contrast(1.1);
+  filter: saturate(0.84) brightness(0.56) contrast(1.06);
   animation: cityDrift 120s ease-in-out infinite alternate;
 }
 
@@ -49,6 +58,81 @@
   animation:
     cityDrift 120s ease-in-out infinite alternate,
     cityFadeIn 0.9s ease both;
+}
+
+.cityThemePoster,
+.cityThemeVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  object-fit: cover;
+  object-position: center center;
+  filter: saturate(1.06) brightness(0.92) contrast(1.03);
+  animation: cityCameraBreath 22s ease-in-out infinite alternate;
+}
+
+.cityThemeVideo {
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+}
+
+.cityThemeVideo[data-ready] {
+  opacity: 1;
+}
+
+.cityFxCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.cityScanBeam {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--cp-cyan);
+  box-shadow: 0 0 12px var(--cp-cyan);
+  opacity: 0;
+  pointer-events: none;
+  animation: cityScanSweep 10.5s linear 1.2s infinite;
+}
+
+@keyframes cityCameraBreath {
+  0% {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.035) translate3d(-0.5%, -0.35%, 0) rotate(-0.18deg);
+  }
+  100% {
+    transform: scale(1.018) translate3d(0.45%, 0.25%, 0) rotate(0.14deg);
+  }
+}
+
+@keyframes cityScanSweep {
+  0% {
+    transform: translateY(2vh);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.22;
+  }
+  65% {
+    opacity: 0.16;
+  }
+  78%,
+  100% {
+    transform: translateY(96vh);
+    opacity: 0;
+  }
 }
 
 @keyframes cityFadeIn {
@@ -65,9 +149,22 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 34% 80% at 50% 55%, rgb(5 5 12 / 72%), transparent 100%),
-    radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 70%) 100%),
-    linear-gradient(180deg, rgb(8 14 30 / 35%), rgb(5 6 14 / 70%));
+    radial-gradient(ellipse 36% 82% at 50% 55%, rgb(5 5 12 / 62%), transparent 100%),
+    radial-gradient(ellipse at center, transparent 52%, rgb(0 0 0 / 54%) 100%),
+    linear-gradient(180deg, rgb(8 14 30 / 24%), rgb(5 6 14 / 52%));
+}
+
+.city[data-story-theme]::after {
+  background:
+    linear-gradient(
+      90deg,
+      rgb(4 7 15 / 12%) 0%,
+      rgb(4 7 15 / 44%) 25%,
+      rgb(4 7 15 / 54%) 50%,
+      rgb(4 7 15 / 44%) 75%,
+      rgb(4 7 15 / 12%) 100%
+    ),
+    linear-gradient(180deg, rgb(5 9 18 / 12%), rgb(4 6 14 / 30%));
 }
 
 @keyframes cityDrift {
@@ -83,7 +180,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cityImage,
-  .cityImageEnter {
+  .cityImageEnter,
+  .cityThemePoster,
+  .cityThemeVideo,
+  .cityScanBeam {
     animation: none;
   }
 }
@@ -708,6 +808,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   scrollbar-width: thin;
   scrollbar-color: var(--cp-red-dim) transparent;
   mask-image: linear-gradient(180deg, transparent 0, #000 2.5rem);
@@ -1335,6 +1436,7 @@
 /* ———— 剧情神经输入终端（一体化布局 + 原作 notify.itemCell 九宫格壳体 + 光学玻璃材质 + 正式 Button） ———— */
 
 .inputBar {
+  position: relative;
   --composer-fill: var(--cp-panel);
   --composer-line: rgb(255 97 88 / 64%);
   --composer-accent: var(--cp-red);
@@ -1385,6 +1487,14 @@
   --glare-tint: 255 248 196;
 }
 
+.inputBar[data-deck] {
+  --composer-fill: var(--cp-panel-strong);
+  --composer-line: var(--cp-cyan);
+  --composer-accent: var(--cp-cyan);
+  --composer-divider: rgb(94 246 255 / 26%);
+  --glare-tint: 205 248 255;
+}
+
 .inputBar[data-invalid] {
   --composer-line: var(--cp-danger);
   --composer-accent: var(--cp-danger);
@@ -1395,12 +1505,12 @@
 .composerShell {
   position: relative;
   isolation: isolate;
-  will-change: transform;
-  transform-style: preserve-3d;
   transform-origin: center center;
 }
 
 .composerShell[data-tilting] {
+  will-change: transform;
+  transform-style: preserve-3d;
   transform: perspective(860px) translateZ(var(--tilt-tz, 0px)) rotateX(var(--tilt-rx, 0deg))
     rotateY(var(--tilt-ry, 0deg));
 }
@@ -1678,6 +1788,32 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+.deckBtnMeter,
+.deckBtnAlert {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.deckBtnMeter {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+}
+
+.deckBtnMeter[data-level="hot"] {
+  color: #ff9c42;
+  background: rgb(255 156 66 / 16%);
+}
+
+.deckBtnMeter[data-level="critical"],
+.deckBtnAlert {
+  color: var(--cp-danger);
+  background: rgb(255 46 66 / 18%);
 }
 
 .footerStatus {
@@ -5248,11 +5384,15 @@ ul.mapLegend > li {
 }
 
 /* 人性干扰与视神经故障：靠夜之城底图偏色 + 正文红青色差、克制的帧撕裂与角标乱码造出义眼失调感，不遮盖正文阅读 */
-.screen[data-glitch="2"] .cityImage {
+.screen[data-glitch="2"] .cityImage,
+.screen[data-glitch="2"] .cityThemePoster,
+.screen[data-glitch="2"] .cityThemeVideo {
   filter: saturate(1.1) brightness(0.36) contrast(1.26) hue-rotate(-14deg);
 }
 
-.screen[data-glitch="3"] .cityImage {
+.screen[data-glitch="3"] .cityImage,
+.screen[data-glitch="3"] .cityThemePoster,
+.screen[data-glitch="3"] .cityThemeVideo {
   filter: saturate(1.38) brightness(0.32) contrast(1.38) hue-rotate(-26deg);
   animation:
     cityDrift 120s ease-in-out infinite alternate,
@@ -5430,7 +5570,9 @@ ul.mapLegend > li {
     sandy-pulse 2s ease-in-out 0.4s infinite;
 }
 
-.screen[data-boost] .cityImage {
+.screen[data-boost] .cityImage,
+.screen[data-boost] .cityThemePoster,
+.screen[data-boost] .cityThemeVideo {
   filter: hue-rotate(-14deg) saturate(1.4) contrast(1.08) brightness(0.95);
   animation-play-state: paused;
 }

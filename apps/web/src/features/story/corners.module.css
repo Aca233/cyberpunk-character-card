@@ -69,7 +69,7 @@
 
 .side:has(> [data-open])
   > .block:not([data-open])
-  :is(.bioLine, .unreadLatest, .slotLine, .label, .trackLeadHint, .trackMore) {
+  :is(.unreadLatest, .slotLine, .label, .trackLeadHint, .trackMore) {
   display: none;
 }
 
@@ -155,117 +155,151 @@
  * 照别的块展开时一样压暗、缩成一行读数留在原位，人体用 useRoomLeft 量出的剩余高度
  */
 
-.bioSummary {
+/*
+ * 生物监测外框：沿用原作 notify.itemCell 红色斜切卡片，常态为 2077 生物监测终端卡
+ * （顶部 Kiroshi 标尺 + 切角底座头像/代号与双切角遥测格 + 底部 12 格神经稳态刻槽），
+ * 展开态（[data-open]）恢复完整内边距并平滑滑出抽屉内容
+ */
+.bio:not([data-open]) .bioPanel {
+  padding: 10px 18px 14px 20px;
+}
+
+.bioHud {
+  position: relative;
   display: grid;
   grid-template-rows: 1fr;
   opacity: 1;
   transition:
-    grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 100ms ease-out;
+    grid-template-rows 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 110ms ease-out;
 }
 
-.bioSummaryInner {
+.bioHudInner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
   min-height: 0;
   overflow: hidden;
+  cursor: var(--cp-cursor-hand);
 }
 
-.bioTopHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 7px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgb(255 64 64 / 22%);
-}
-
-.bioIdentity {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-}
-
-.bioCallsign {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--cp-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bioCred {
-  flex: none;
-  padding: 0 5px;
-  font-style: normal;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 10%);
-  border: 1px solid rgb(252 238 10 / 28%);
-}
-
-.bioKeyHint {
-  flex: none;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--cp-text-dim);
-}
-
-.bio:where([data-open]) .bioSummary {
+.bio:where([data-open]) .bioHud {
   grid-template-rows: 0fr;
   opacity: 0;
   pointer-events: none;
 }
 
-.bioRow {
+/* 顶部系统标尺：KIROSHI // BIOMON + 原作 tab.line 细线 + 告警 + P 键 */
+.bioHudBar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
-/* 展开在场人物时，生物监测只保留顶行代号与 P 键，把纵向高度完整让给档案抽屉 */
-.side:has(> .present[data-open]) > .bio:not([data-open]) .bioRow {
-  display: none;
+.bioCodeTag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  color: var(--cp-red);
 }
 
-.side:has(> .present[data-open]) > .bio:not([data-open]) .bioTopHead {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: 0;
+.bioBarLine {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--cp-red);
+  opacity: 0.42;
+  mask-size: 100% 100%;
 }
 
-.side:has(> .present[data-open]) > .bio:not([data-open]) .frame {
-  padding: 9px 14px;
+.bioUrgent {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  color: var(--cp-danger);
+  white-space: nowrap;
+  animation: pulse 1100ms ease-in-out infinite;
 }
 
-.bioAvatar {
+.bioUrgent[data-tone="warn"] {
+  color: var(--cp-yellow);
+  animation: none;
+}
+
+button.bioUrgent {
+  cursor: var(--cp-cursor-hand);
+}
+
+button.bioUrgent:hover,
+button.bioUrgent:focus-visible {
+  outline: none;
+  filter: brightness(1.2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bioKeyHint {
+  flex: none;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--cp-text-dim);
+  transition: color var(--dur-flash);
+}
+
+.bio:not([data-open]):hover .bioKeyHint {
+  color: var(--cp-yellow);
+}
+
+/* 主体段：左侧切角底座肖像/街头徽记 + 右侧代号行与体征/硬件双切角读数格 */
+.bioTopRow {
+  display: flex;
+  align-items: stretch;
+  gap: 11px;
+  min-width: 0;
+}
+
+.bioEmblem {
   position: relative;
   z-index: 1;
   isolation: isolate;
   display: grid;
   flex: none;
   place-items: center;
-  width: 46px;
-  height: 56px;
+  width: 66px;
+  height: 66px;
   overflow: hidden;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
 }
 
-.bioAvatar > :first-child {
+.bioEmblemBg {
   z-index: 0;
 }
 
-.bioAvatar > :last-child {
+.bioEmblemTex {
+  z-index: 0;
+  opacity: 0.6;
+}
+
+.bioEmblemFg {
   z-index: 2;
 }
 
-.bioAvatarArt {
+.bioEmblemArt {
   position: relative;
   z-index: 1;
   width: 100%;
@@ -274,260 +308,252 @@
   object-position: top center;
 }
 
-.bioAvatarUnknown {
+.bioCrest {
   position: relative;
   z-index: 1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.9;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 7px rgb(255 97 88 / 30%));
+  transition: filter var(--dur-flash) var(--ease-cyber);
 }
 
-.trauma {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+.bio:not([data-open]):hover .bioCrest {
+  filter: drop-shadow(0 0 12px rgb(255 97 88 / 55%));
+}
+
+.bioCrestIcon {
+  position: absolute;
+  pointer-events: none;
+}
+
+.bioIdentCol {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   flex: 1;
   min-width: 0;
-  gap: 5px;
+  gap: 6px;
 }
 
-.woundHead {
+.bioNameRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bioCallsign {
+  overflow: hidden;
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  color: var(--cp-text);
+  text-shadow: 0 1px 6px rgb(0 0 0 / 80%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bioCred {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--cp-yellow);
+  white-space: nowrap;
+}
+
+.bioTtTag {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--cp-success);
+  white-space: nowrap;
+}
+
+.bioTtTag:where([data-blocked]) {
+  color: var(--cp-yellow);
+}
+
+.bioCompactKey {
+  display: none;
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-text-dim);
+}
+
+/* 右下双切角遥测读数格（原作 qh.cellBg / qh.cellFg） */
+.bioCells {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.bioCell {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 8px 6px;
+}
+
+.bioCellFrame {
+  z-index: -1;
+}
+
+.bioCellKey {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.05;
+  color: var(--cp-text-faint);
+}
+
+.bioCellVal {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  color: var(--cp-text);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bioCell:where([data-tone="ok"]) .bioCellVal {
+  color: var(--cp-text);
+}
+
+.bioCell:where([data-tone="cyan"]) .bioCellVal {
+  color: var(--cp-cyan);
+}
+
+.bioCell:where([data-tone="warn"], [data-tone="sandy"]) .bioCellVal {
+  color: var(--cp-yellow);
+}
+
+.bioCell:where([data-tone="hurt"]) .bioCellVal {
+  color: #ff9c42;
+}
+
+.bioCell:where([data-tone="bad"], [data-tone="dead"]) .bioCellVal {
+  color: var(--cp-hp-low);
+  animation: pulse 900ms ease-in-out infinite;
+}
+
+.bioCell:where([data-tone="good"]) .bioCellVal {
+  color: var(--cp-success);
+}
+
+/* 底部全宽神经稳态矩阵：12 格斜切赛博刻槽（呼应 BiomonitorPanel 与 CyberdeckPage） */
+.bioNeuroStrip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bioNeuroHead {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
 }
 
-.woundText {
-  font-size: 13px;
+.bioNeuroKey {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
+  color: var(--cp-text-dim);
+}
+
+.bioNeuroVal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bioNeuroStage {
+  font-style: normal;
+  letter-spacing: 0.04em;
   color: var(--cp-cyan);
 }
 
-.woundText:where([data-tone="warn"]) {
-  color: var(--cp-yellow);
-}
-
-.woundText:where([data-tone="hurt"]) {
-  color: #ff9c42;
-}
-
-.woundText:where([data-tone="bad"], [data-tone="dead"]) {
-  color: var(--cp-hp-low);
-  animation: pulse 900ms ease-in-out infinite;
-}
-
-.woundCode {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--cp-text-dim);
+.bioNeuroScore {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
-}
-
-.woundCode:where([data-tone="warn"]) {
-  color: var(--cp-yellow);
-}
-
-.woundCode:where([data-tone="hurt"]) {
-  color: #ff9c42;
-}
-
-.woundCode:where([data-tone="bad"], [data-tone="dead"]) {
-  color: var(--cp-hp-low);
-}
-
-.woundList {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.woundChip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  padding: 2px 6px;
-  background: rgb(94 246 255 / 7%);
-  border-inline-start: 2px solid var(--cp-yellow);
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-.woundChip:where([data-tone="hurt"]) {
-  background: rgb(255 156 66 / 10%);
-  border-inline-start-color: #ff9c42;
-}
-
-.woundChip:where([data-tone="bad"], [data-tone="dead"]) {
-  background: rgb(255 0 60 / 13%);
-  border-inline-start-color: var(--cp-hp-low);
-}
-
-.woundPart {
-  flex: none;
-  font-weight: 700;
   color: var(--cp-text);
 }
 
-.woundDesc {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--cp-text-dim);
-}
-
-.woundCare {
-  flex: none;
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 700;
+.bioNeuroStrip:where([data-tone="warn"]) :is(.bioNeuroStage, .bioNeuroScore) {
   color: var(--cp-yellow);
 }
 
-.woundChip:where([data-tone="hurt"]) .woundCare {
-  color: #ff9c42;
-}
-
-.woundChip:where([data-tone="bad"], [data-tone="dead"]) .woundCare {
+.bioNeuroStrip:where([data-tone="bad"]) :is(.bioNeuroStage, .bioNeuroScore) {
   color: var(--cp-hp-low);
 }
 
-.woundMore {
-  font-size: 10.5px;
-  color: var(--cp-text-dim);
+.bioNeuroGauge {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+  height: 6px;
 }
 
-.woundNominal {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--cp-text-dim);
-}
-
-.woundNominal:where([data-scar]) {
-  color: var(--cp-yellow);
-}
-
-.bioHwBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 14px;
-}
-
-.bioHwText {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--cp-cyan);
-  font-variant-numeric: tabular-nums;
-}
-
-.bioSandy {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--cp-cyan);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bioMiniGauge {
-  flex: 1;
-  height: 4px;
-  background: rgb(94 246 255 / 14%);
-  overflow: hidden;
-}
-
-.bioMiniFill {
-  display: block;
+.bioNeuroCell {
   height: 100%;
+  background: rgb(94 246 255 / 12%);
+  clip-path: polygon(0 0, calc(100% - 2px) 0, 100% 100%, 2px 100%);
+  transition: background-color 180ms ease-out;
+}
+
+.bioNeuroCell:where([data-on]) {
   background: var(--cp-cyan);
-  transition: width 220ms ease-out;
+  box-shadow: 0 0 5px rgb(94 246 255 / 34%);
 }
 
-.bioMiniFill:where([data-hw="ram"]) {
-  background: var(--cp-ram);
-}
-
-.bioMiniFill:where([data-tone="warn"]) {
+.bioNeuroCell:where([data-on][data-tone="warn"]) {
   background: var(--cp-yellow);
+  box-shadow: 0 0 5px rgb(252 238 10 / 36%);
 }
 
-.bioMiniFill:where([data-tone="bad"]) {
+.bioNeuroCell:where([data-on][data-tone="bad"]) {
   background: var(--cp-danger);
+  box-shadow: 0 0 6px rgb(255 0 60 / 48%);
 }
 
-.bioLine {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  color: var(--cp-text-dim);
+/* 同侧在场人物展开时，生物监测只保留单行代号、声望与 P 键，把纵向高度完整让给档案抽屉 */
+.side:has(> .present[data-open])
+  > .bio:not([data-open])
+  :is(.bioEmblem, .bioCells, .bioNeuroStrip, .bioHudBar) {
+  display: none;
 }
 
-.bioOsTag {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  color: var(--cp-text-dim);
-  background: rgb(255 255 255 / 5%);
-  border-left: 2px solid var(--cp-text-faint);
-  white-space: nowrap;
+.side:has(> .present[data-open]) > .bio:not([data-open]) .bioCompactKey {
+  display: inline;
 }
 
-.bioOsTag[data-os="deck"] {
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 8%);
-  border-left-color: var(--cp-cyan);
-}
-
-.bioOsTag[data-os="sandy"] {
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 8%);
-  border-left-color: var(--cp-yellow);
-}
-
-.bioOsTag[data-tone="warn"] {
-  color: var(--cp-yellow);
-  border-left-color: var(--cp-yellow);
-}
-
-.bioOsTag[data-tone="bad"] {
-  color: var(--cp-danger);
-  background: rgb(255 46 66 / 10%);
-  border-left-color: var(--cp-danger);
-}
-
-.bioHintCopy {
-  font-size: 11px;
-  color: var(--cp-text-faint);
-  white-space: nowrap;
-}
-
-.bioLine :where([data-tone="bad"], [data-stage="edge"], [data-stage="crisis"]),
-.bioAlert {
-  color: var(--voice-humanity);
-}
-
-.bioWarn {
-  color: var(--cp-yellow);
-}
-
-.bioGood {
-  color: var(--cp-success);
+.side:has(> .present[data-open]) > .bio:not([data-open]) .bioPanel {
+  padding: 10px 18px 10px 20px;
 }
 
 .bioDrawerHead {
@@ -2558,67 +2584,6 @@
   color: var(--cp-text-dim);
 }
 
-.bannerStat {
-  margin-left: auto;
-  padding: 1px 7px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cp-yellow);
-  background: rgb(252 238 10 / 10%);
-  border: 1px solid rgb(252 238 10 / 30%);
-  font-variant-numeric: tabular-nums;
-}
-
-.bannerFoes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  font-family: var(--font-ui);
-}
-
-.bannerFoe {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-  color: var(--cp-text);
-  background: rgb(255 46 66 / 10%);
-  border-left: 2px solid var(--cp-danger);
-}
-
-.bannerFoe[data-down] {
-  opacity: 0.48;
-  border-left-color: var(--cp-text-faint);
-  text-decoration: line-through;
-}
-
-.bannerFoe b {
-  font-weight: 700;
-}
-
-.bannerFoeState {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--cp-danger);
-}
-
-.bannerFoe[data-down] .bannerFoeState {
-  color: var(--cp-text-dim);
-}
-
-.bannerFoe small {
-  font-size: 11px;
-  color: var(--cp-text-dim);
-}
-
-.bannerFoe .bannerLoot {
-  color: var(--cp-yellow);
-}
-
 /* ———— 就地展开：原作九宫格作底，朝视野中间展开，不挤动正文 ———— */
 
 .block:where([data-open]) {
@@ -2655,6 +2620,17 @@
   display: none;
 }
 
+/* 初次入场动画播完或进入展开态后，不再因为 display:none 切换重播 nameIn 延迟动画（消除切人与收起时的闪烁和卡顿） */
+.present:where([data-ready], [data-open]) .person {
+  animation: none;
+}
+
+/* 在已展开态下通过顶部快切条切换不同在场人物时，直接跳过宽高与折叠过渡，做到 0ms 瞬切不闪 */
+.present:where([data-switching]) .person,
+.present:where([data-switching]) .personSummary {
+  transition: none;
+}
+
 /*
  * 瞄着一个人看档案时，名字格朝中列舒展加宽并限在右侧栏外：
  * 780px 让「现场透视」双栏舒展显示，避免义体/物品描述折行拉长高度。
@@ -2662,22 +2638,23 @@
 .person[data-open] {
   --person-bg: var(--cp-panel-strong);
   width: min(
-    780px,
+    680px,
     calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap))
   );
   max-width: none;
-  padding: 12px 16px 14px 18px;
+  padding: 10px 14px 12px 15px;
 }
 
 .person[data-open] > .personRail {
-  width: 3px;
+  display: none;
 }
 
 .personQuickSwitch {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   min-width: 0;
 }
@@ -2741,31 +2718,40 @@
 .personSwitchBtn[aria-current="true"] {
   color: var(--cp-text);
   border-color: var(--switch-accent);
-  background: rgb(94 246 255 / 12%);
+  background: rgb(94 246 255 / 14%);
+  box-shadow: inset 0 0 10px rgb(94 246 255 / 12%);
 }
 
 .personSwitchBtn[aria-current="true"]:where([data-tone="hostile"]) {
-  background: rgb(255 0 60 / 16%);
+  background: rgb(255 0 60 / 18%);
+  box-shadow: inset 0 0 10px rgb(255 0 60 / 14%);
+}
+
+.personSwitchBtn[aria-current="true"]:where([data-tone="nemesis"]) {
+  background: rgb(255 97 88 / 16%);
+  box-shadow: inset 0 0 10px rgb(255 97 88 / 14%);
 }
 
 .personSwitchBtn[aria-current="true"]:where([data-tone="ally"]) {
-  background: rgb(252 238 10 / 12%);
+  background: rgb(252 238 10 / 14%);
   color: var(--cp-yellow);
+  box-shadow: inset 0 0 10px rgb(252 238 10 / 12%);
 }
 
 .personHeadBtn {
   display: inline-flex;
   flex: none;
+  margin-left: auto;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 2px 8px;
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.07em;
-  color: var(--cp-cyan);
-  background: rgb(94 246 255 / 7%);
-  border: 1px solid rgb(94 246 255 / 32%);
+  letter-spacing: 0.06em;
+  color: var(--cp-text-dim);
+  background: rgb(255 255 255 / 4%);
+  border: 1px solid rgb(94 246 255 / 26%);
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
   cursor: var(--cp-cursor-hand);
   transition:
@@ -2774,18 +2760,28 @@
     border-color var(--dur-flash);
 }
 
+.personHeadKey {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cp-cyan);
+  padding: 0 3px;
+  background: rgb(94 246 255 / 10%);
+}
+
 .personHeadBtn:hover,
 .personHeadBtn:focus-visible {
   outline: none;
-  color: #05080f;
-  background: var(--cp-cyan);
-  border-color: var(--cp-cyan);
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+  border-color: var(--cp-yellow);
 }
 
-.personHeadBtn[data-active] {
-  color: #05080f;
-  background: var(--cp-yellow);
-  border-color: var(--cp-yellow);
+.personHeadBtn:hover .personHeadKey,
+.personHeadBtn:focus-visible .personHeadKey {
+  color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
 }
 
 .track {
@@ -2843,6 +2839,10 @@
     grid-template-rows 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 120ms ease-out,
     visibility 0s;
+}
+
+.present:where([data-switching]) .grow {
+  transition: none;
 }
 
 .growClip {
@@ -3124,6 +3124,45 @@
 /* ———— 1280 档（计划第九节）：角块宽 280、边距 24 由 story.module.css 的变量给，这里收紧凑态名字格和扫描卡 ———— */
 
 @media (width < 1600px) {
+  .bio:not([data-open]) .bioPanel {
+    padding: 9px 14px 12px 16px;
+  }
+
+  .bioHudInner {
+    gap: 7px;
+  }
+
+  .bioEmblem {
+    width: 56px;
+    height: 56px;
+  }
+
+  .bioCrest {
+    width: 38px;
+    height: 38px;
+  }
+
+  .bioCallsign {
+    font-size: 14.5px;
+  }
+
+  .bioCells {
+    gap: 5px;
+  }
+
+  .bioCell {
+    padding: 4px 6px 5px;
+  }
+
+  .bioCellVal {
+    font-size: 11px;
+  }
+
+  .bioNeuroGauge {
+    gap: 2px;
+    height: 5px;
+  }
+
   .person:not([data-open]) {
     padding: 8px 11px 8px 14px;
   }
@@ -3340,7 +3379,143 @@
   opacity: 0.55;
 }
 
-/* 减少动态效果：关闭过渡与反光 */
+/*
+ * ———— 克制的赛博流光边框（同款 *Fg 九宫格/原生蒙版裁切，零矩形漏边） ————
+ * 常态：单道同色系微光慢速巡航，低不透明度轻扫斜切角，不抢中列正文视觉重心；
+ * 悬停/聚焦：随光标位置（--tilt-x/--tilt-y）在斜切边缘局部点亮锐利电弧热点并唤醒双色流光；
+ * 展开抽屉：近乎隐去，专注阅读。
+ */
+@keyframes borderTrace {
+  from {
+    --cp-border-angle: 0deg;
+  }
+  to {
+    --cp-border-angle: 360deg;
+  }
+}
+
+.cardBorderFx {
+  --fx-core: #ffe9e6;
+  --fx-primary: #5ef6ff;
+  --fx-accent: #5ef6ff;
+  --fx-glow: rgb(94 246 255 / 32%);
+  --fx-hover-glow: rgb(94 246 255 / 62%);
+  --fx-dur: 9.5s;
+  --border-delay: 0s;
+  z-index: 0;
+  pointer-events: none;
+  background-color: transparent;
+  background-image: conic-gradient(
+    from var(--cp-border-angle),
+    transparent 0deg,
+    transparent 24deg,
+    color-mix(in srgb, var(--fx-primary) 55%, transparent) 44deg,
+    var(--fx-core) 56deg,
+    color-mix(in srgb, var(--fx-primary) 55%, transparent) 68deg,
+    transparent 92deg,
+    transparent 360deg
+  );
+  opacity: 0.46;
+  filter: drop-shadow(0 0 3px var(--fx-glow));
+  animation: borderTrace var(--fx-dur) linear var(--border-delay) infinite;
+  transition:
+    opacity 220ms ease-out,
+    filter 220ms ease-out;
+}
+
+/* 地点条服务按钮嵌在 CellFrame 内：处于背景切片上层、按钮文字下层 */
+:where(.zoneService) > .cardBorderFx {
+  z-index: -1;
+}
+
+.borderFxRed {
+  --fx-core: #ffd0cb;
+  --fx-primary: #ff6158;
+  --fx-accent: #5ef6ff;
+  --fx-glow: rgb(255 97 88 / 32%);
+  --fx-hover-glow: rgb(255 97 88 / 64%);
+  --fx-dur: 10.5s;
+}
+
+.borderFxCyan {
+  --fx-core: #d8fcff;
+  --fx-primary: #5ef6ff;
+  --fx-accent: #fcee0a;
+  --fx-glow: rgb(94 246 255 / 34%);
+  --fx-hover-glow: rgb(94 246 255 / 66%);
+  --fx-dur: 9.2s;
+}
+
+.borderFxYellow {
+  --fx-core: #fff9c4;
+  --fx-primary: #fcee0a;
+  --fx-accent: #5ef6ff;
+  --fx-glow: rgb(252 238 10 / 28%);
+  --fx-hover-glow: rgb(252 238 10 / 58%);
+  --fx-dur: 10s;
+}
+
+.borderFxDanger {
+  --fx-core: #ffd6de;
+  --fx-primary: #ff003c;
+  --fx-accent: #fcee0a;
+  --fx-glow: rgb(255 0 60 / 48%);
+  --fx-hover-glow: rgb(255 0 60 / 78%);
+  --fx-dur: 5.5s;
+}
+
+.borderFxUrgent {
+  --fx-dur: 5.2s;
+  opacity: 0.72;
+  filter: drop-shadow(0 0 4px var(--fx-hover-glow));
+}
+
+/* 展开态抽屉：彻底收敛为极弱微光，不打扰大段正文与面板阅读 */
+:where(.block, .person):where([data-open]) .cardBorderFx {
+  --fx-dur: 14s;
+  opacity: 0.2;
+  filter: none;
+}
+
+/* 悬停 / 聚焦态：光标所到之处沿斜切边点亮局部高能电弧 + 清晰流光扫边 */
+:where(.zoneHit, .zoneService, .trackHit):where(:hover, :focus-visible, [data-glare]) .cardBorderFx,
+:where(.block, .person):not([data-open]):where(:hover, :focus-visible, [data-glare]) .cardBorderFx {
+  background-image:
+    radial-gradient(
+      145px circle at var(--tilt-x, 50%) var(--tilt-y, 50%),
+      #ffffff 0%,
+      var(--fx-core) 18%,
+      var(--fx-primary) 42%,
+      color-mix(in srgb, var(--fx-accent) 45%, transparent) 66%,
+      transparent 84%
+    ),
+    conic-gradient(
+      from var(--cp-border-angle),
+      transparent 0deg,
+      transparent 16deg,
+      color-mix(in srgb, var(--fx-accent) 75%, transparent) 34deg,
+      var(--fx-primary) 50deg,
+      #ffffff 58deg,
+      var(--fx-primary) 68deg,
+      transparent 98deg,
+      transparent 208deg,
+      color-mix(in srgb, var(--fx-primary) 70%, transparent) 228deg,
+      var(--fx-core) 240deg,
+      transparent 268deg,
+      transparent 360deg
+    );
+  opacity: 0.94;
+  filter: drop-shadow(0 0 3px var(--fx-hover-glow)) drop-shadow(0 0 8px var(--fx-glow));
+}
+
+/* 点按瞬间：轻微紧致闪亮 */
+:where(.zoneHit, .zoneService, .trackHit)[data-pressed] .cardBorderFx,
+:where(.block, .person)[data-pressed]:not([data-open]) .cardBorderFx {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--fx-core)) drop-shadow(0 0 10px var(--fx-hover-glow));
+}
+
+/* 减少动态效果：关闭过渡、反光与流光动画 */
 @media (prefers-reduced-motion: reduce) {
   .side > .block,
   .presentList .person,
@@ -3350,8 +3525,10 @@
     transition: none;
   }
 
-  .cardGlare {
+  .cardGlare,
+  .cardBorderFx {
     display: none;
+    animation: none;
   }
 }
 

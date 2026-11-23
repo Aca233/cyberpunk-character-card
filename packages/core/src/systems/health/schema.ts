@@ -150,11 +150,12 @@ export const HealthInternalSchemas = {
     id: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
   }),
-  /** 战斗登记具体损伤，和非战斗伤势共用身体事实 */
+  /** 代码内部记伤（战斗伤口或敌方神经快速破解等），和非战斗伤势共用身体事实 */
   "health.hit": z.object({
     type: z.literal("health.hit"),
     tier: DamageTierSchema,
     part: BodyPartSchema.optional(),
+    source: z.enum(["injury", "combat"]).optional(),
     injuryId: z.string().min(1).optional(),
     reason: z.string().min(1),
   }),

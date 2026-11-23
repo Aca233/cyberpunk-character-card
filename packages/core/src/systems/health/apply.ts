@@ -159,7 +159,7 @@ export function applyHit(
     tier: command.tier,
     cause: command.reason,
     now: ctx.now,
-    source: "combat",
+    source: command.source ?? "combat",
     ...(command.injuryId ? { id: command.injuryId } : {}),
   });
   return ok(

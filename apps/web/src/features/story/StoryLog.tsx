@@ -1,8 +1,14 @@
-import { extractThoughtFromText, type TurnImagePromptInput } from "@cp/core";
+import {
+  buildTurnSegmentPromptInput,
+  extractThoughtFromText,
+  type TurnImagePromptInput,
+} from "@cp/core";
 import { useQuery } from "@tanstack/react-query";
 import {
   type CSSProperties,
   Fragment,
+  memo,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,7 +18,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
-import { api } from "../../api/client";
+import { useShallow } from "zustand/react/shallow";
+import { api, turnImagesOf } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { Asset } from "../../ui/Asset";
 import { useCardTilt } from "../../ui/useCardTilt";
@@ -26,7 +33,7 @@ import { type DialoguePart, dialogueParagraphs as paragraphs } from "./dialogue"
 import { buildGearMatcher, type GearMatcher, type InlineGearItem, splitGear } from "./inlineGear";
 import { LiveStageBar } from "./LiveStageBar";
 import { OpeningGuide, type OpeningGuideActions } from "./OpeningGuide";
-import type { useStory } from "./store";
+import { useStory } from "./store";
 import styles from "./story.module.css";
 import { ThoughtBlock } from "./ThoughtBlock";
 import {
@@ -41,11 +48,6 @@ import {
   type Turn,
   type View,
 } from "./view";
-
-type Live = Pick<
-  ReturnType<typeof useStory.getState>,
-  "phase" | "text" | "thought" | "boost" | "pending" | "stage" | "stageTrace"
->;
 
 /** 合并已保存/流式思维链与正文内联思考标签（兼容旧存档残留标签），保持正文阅读纯净。 */
 function splitDisplayThought(
@@ -315,7 +317,36 @@ function UiActionsStrip({
   );
 }
 
-function TurnBlock({
+const MAX_TURN_ILLUSTRATIONS = 8;
+
+/** 计算每张插图应当紧跟在哪一段正文后面（单图沉底；多图按段落比例均匀穿插，最后一张落在文末） */
+function computeInterleaveSlots(paragraphCount: number, imageCount: number): Map<number, number[]> {
+  const map = new Map<number, number[]>();
+  if (imageCount <= 0) return map;
+  const lastParagraph = Math.max(0, paragraphCount - 1);
+  if (imageCount === 1 || paragraphCount <= 1) {
+    map.set(
+      lastParagraph,
+      Array.from({ length: imageCount }, (_, i) => i),
+    );
+    return map;
+  }
+  for (let i = 0; i < imageCount; i++) {
+    const afterIndex =
+      i === imageCount - 1
+        ? lastParagraph
+        : Math.min(
+            lastParagraph,
+            Math.max(0, Math.round(((i + 1) * paragraphCount) / imageCount) - 1),
+          );
+    const bucket = map.get(afterIndex);
+    if (bucket) bucket.push(i);
+    else map.set(afterIndex, [i]);
+  }
+  return map;
+}
+
+const TurnBlock = memo(function TurnBlock({
   turn,
   view,
   saveId,
@@ -343,8 +374,9 @@ function TurnBlock({
   const [rewriting, setRewriting] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const saveImages = useSaveImages();
-  const imageId = saveImages?.bindings.turns[String(turn.seq)] ?? null;
+  const turnImageIds = saveImages ? turnImagesOf(saveImages.bindings, turn.seq) : [];
   const autoPending = saveImages?.pendingTurnSeqs.has(turn.seq) ?? false;
+  const imageProgress = saveImages?.turnImageProgress[turn.seq];
   const imageError = saveImages?.turnImageErrors[turn.seq];
 
   useEffect(() => {
@@ -362,10 +394,13 @@ function TurnBlock({
     </section>
   ));
 
-  const openIllustration = () => {
+  const openWholeTurnIllustration = () => {
     if (!saveImages) return;
     saveImages.openImageModal({
-      title: imageId ? `重绘 #${turn.seq + 1} 场景插图` : `为 #${turn.seq + 1} 生成场景插图`,
+      title:
+        turnImageIds.length > 0
+          ? `重绘 #${turn.seq + 1} 场景插图`
+          : `为 #${turn.seq + 1} 生成场景插图`,
       subtitle: turn.sceneTitle ?? view.names.location ?? undefined,
       defaultAspectRatio: "16:9",
       bind: { kind: "turn", seq: turn.seq },
@@ -373,10 +408,107 @@ function TurnBlock({
     });
   };
 
+  const openSlotRedraw = (slot: number, total: number) => {
+    if (!saveImages) return;
+    const base = buildTurnPromptRequest(turn);
+    saveImages.openImageModal({
+      title:
+        total > 1
+          ? `重绘 #${turn.seq + 1} 场景分镜 ${slot + 1}/${total}`
+          : `重绘 #${turn.seq + 1} 场景插图`,
+      subtitle: turn.sceneTitle ?? view.names.location ?? undefined,
+      defaultAspectRatio: "16:9",
+      bind: { kind: "turn", seq: turn.seq, slot },
+      promptRequest: total > 1 ? buildTurnSegmentPromptInput(base, slot, total) : base,
+    });
+  };
+
+  const openAppendIllustration = () => {
+    if (!saveImages) return;
+    const base = buildTurnPromptRequest(turn);
+    const nextTotal = Math.min(4, turnImageIds.length + 1);
+    saveImages.openImageModal({
+      title: `为 #${turn.seq + 1} 追加插图（第 ${turnImageIds.length + 1} 张）`,
+      subtitle: turn.sceneTitle ?? view.names.location ?? undefined,
+      defaultAspectRatio: "16:9",
+      bind: { kind: "turn", seq: turn.seq, append: true },
+      promptRequest: buildTurnSegmentPromptInput(base, nextTotal - 1, nextTotal),
+    });
+  };
+
   const display = useMemo(
     () => splitDisplayThought(turn.text, turn.thought),
     [turn.text, turn.thought],
   );
+  const bodyParagraphs = useMemo(() => paragraphs(display.body), [display.body]);
+  const interleaveMap = useMemo(
+    () => computeInterleaveSlots(bodyParagraphs.length, turnImageIds.length),
+    [bodyParagraphs.length, turnImageIds.length],
+  );
+
+  const renderIllustration = (slot: number) => {
+    const id = turnImageIds[slot];
+    if (!id) return null;
+    const total = turnImageIds.length;
+    const label = total > 1 ? `场景分镜 ${slot + 1}/${total}` : "场景插图";
+    return (
+      <figure key={`${turn.seq}-img-${slot}-${id}`} className={styles.turnIllustration}>
+        <button
+          type="button"
+          className={styles.turnIllusButton}
+          title="点击查看大图"
+          onClick={() => saveImages?.openLightbox(id, `#${turn.seq + 1} ${label}`)}
+        >
+          <GeneratedImage
+            imageId={id}
+            alt={`第 ${turn.seq + 1} 轮${label}`}
+            className={styles.turnIllusImg}
+          />
+        </button>
+        <figcaption className={styles.turnIllusFoot}>
+          <span>{label}</span>
+          <span className={styles.turnIllusActions}>
+            <button
+              type="button"
+              className={styles.regenerate}
+              onClick={() => openSlotRedraw(slot, total)}
+            >
+              重绘
+            </button>
+            <button
+              type="button"
+              className={styles.regenerate}
+              onClick={() => void saveImages?.unbindImage({ kind: "turn", seq: turn.seq, slot })}
+            >
+              移除
+            </button>
+          </span>
+        </figcaption>
+      </figure>
+    );
+  };
+
+  const renderBodyWithIllustrations = () => {
+    if (bodyParagraphs.length === 0) {
+      return turnImageIds.map((_, slot) => renderIllustration(slot));
+    }
+    return bodyParagraphs.map((p, i) => {
+      const slotsAfter = interleaveMap.get(i);
+      return (
+        // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
+        <Fragment key={`${turn.seq}-${i}`}>
+          <Paragraph
+            text={p}
+            speakers={speakers}
+            onMark={onMark}
+            gearMatcher={gearMatcher}
+            onGearHover={onGearHover}
+          />
+          {slotsAfter?.map((slot) => renderIllustration(slot))}
+        </Fragment>
+      );
+    });
+  };
 
   return (
     <article className={styles.turn} data-boost={turn.sandevistan || undefined}>
@@ -415,87 +547,46 @@ function TurnBlock({
           <summary className={styles.blackoutTitle}>
             [记忆缺失] 这一段角色记不起来；展开看回合日志里的原文
           </summary>
-          {paragraphs(display.body).map((p, i) => (
-            <Paragraph
-              // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-              key={`${turn.seq}-${i}`}
-              text={p}
-              speakers={speakers}
-              onMark={onMark}
-              gearMatcher={gearMatcher}
-              onGearHover={onGearHover}
-            />
-          ))}
+          {renderBodyWithIllustrations()}
           {attachedMedia}
         </details>
       ) : (
         <>
-          {paragraphs(display.body).map((p, i) => (
-            <Paragraph
-              // biome-ignore lint/suspicious/noArrayIndexKey: 段落按正文顺序排，不会重排
-              key={`${turn.seq}-${i}`}
-              text={p}
-              speakers={speakers}
-              onMark={onMark}
-              gearMatcher={gearMatcher}
-              onGearHover={onGearHover}
-            />
-          ))}
+          {renderBodyWithIllustrations()}
           {attachedMedia}
         </>
       )}
-      {imageId ? (
-        <figure className={styles.turnIllustration}>
-          <button
-            type="button"
-            className={styles.turnIllusButton}
-            title="点击查看大图"
-            onClick={() => saveImages?.openLightbox(imageId, `#${turn.seq + 1} 场景插图`)}
-          >
-            <GeneratedImage
-              imageId={imageId}
-              alt={`第 ${turn.seq + 1} 轮场景插图`}
-              className={styles.turnIllusImg}
-            />
-          </button>
-          <figcaption className={styles.turnIllusFoot}>
-            <span>场景插图</span>
-            <span className={styles.turnIllusActions}>
-              <button type="button" className={styles.regenerate} onClick={openIllustration}>
-                重绘
-              </button>
+      {autoPending && (
+        <div className={styles.turnIllusPending} role="status">
+          <span>
+            {imageProgress && imageProgress.total > 1
+              ? `正在后台绘制本回合第 ${imageProgress.current}/${imageProgress.total} 张分镜插图…`
+              : "正在后台绘制本回合场景插图…"}
+          </span>
+          <span className={styles.turnIllusActions}>
+            {saveImages?.manualPendingTurnSeqs.has(turn.seq) && (
               <button
                 type="button"
                 className={styles.regenerate}
-                onClick={() => void saveImages?.unbindImage({ kind: "turn", seq: turn.seq })}
+                onClick={openWholeTurnIllustration}
               >
-                移除
+                查看进度
               </button>
-            </span>
-          </figcaption>
-        </figure>
-      ) : null}
-      {autoPending && (
-        <div className={styles.turnIllusPending} role="status">
-          <span>正在后台绘制本回合场景插图…</span>
-          {saveImages?.manualPendingTurnSeqs.has(turn.seq) && (
-            <button type="button" className={styles.regenerate} onClick={openIllustration}>
-              查看进度
+            )}
+            <button
+              type="button"
+              className={styles.regenerate}
+              onClick={() => saveImages?.cancelTurnAutoImage(turn.seq)}
+            >
+              取消
             </button>
-          )}
-          <button
-            type="button"
-            className={styles.regenerate}
-            onClick={() => saveImages?.cancelTurnAutoImage(turn.seq)}
-          >
-            取消
-          </button>
+          </span>
         </div>
       )}
       {!autoPending && imageError && (
         <div className={styles.turnIllusPending} role="status">
           <span>插图未能采用：{imageError}</span>
-          <button type="button" className={styles.regenerate} onClick={openIllustration}>
+          <button type="button" className={styles.regenerate} onClick={openWholeTurnIllustration}>
             查看详情
           </button>
         </div>
@@ -556,16 +647,29 @@ function TurnBlock({
               重新生成
             </button>
           ))}
-        {saveImages && !imageId && !autoPending && (
+        {saveImages && turnImageIds.length === 0 && !autoPending && (
           <button
             type="button"
             className={styles.regenerate}
-            onClick={openIllustration}
+            onClick={openWholeTurnIllustration}
             title="由文生图模型为这一轮剧情绘制场景插图"
           >
             生成插图
           </button>
         )}
+        {saveImages &&
+          turnImageIds.length > 0 &&
+          turnImageIds.length < MAX_TURN_ILLUSTRATIONS &&
+          !autoPending && (
+            <button
+              type="button"
+              className={styles.regenerate}
+              onClick={openAppendIllustration}
+              title="在本轮正文穿插追加一张新的场景分镜插图"
+            >
+              ＋ 追加插图
+            </button>
+          )}
         {turn.dropped > 0 && !turn.unsettled && (
           <span className={styles.dropped} title="本轮部分指令未能通过系统校验，已自动舍弃">
             本轮数值未结算（{turn.dropped} 条）
@@ -575,13 +679,102 @@ function TurnBlock({
       </footer>
     </article>
   );
+});
+
+/** 正在流式生成的这一轮：独立订阅高频 text/thought 状态，避免每个 token 重绘整页与历史回合 */
+function LiveTurn({
+  view,
+  speakers,
+  gearMatcher,
+  onGearHover,
+  onContentUpdate,
+  articleRef,
+  suppressed,
+}: {
+  readonly view: View;
+  readonly speakers: readonly Speaker[];
+  readonly gearMatcher: GearMatcher | null;
+  readonly onGearHover: OnGearHover;
+  readonly onContentUpdate: () => void;
+  readonly articleRef: RefObject<HTMLElement | null>;
+  /** 新回合已写进 view.turns、等待 store 切回 idle 的那一帧隐藏，避免新旧两块同帧叠加导致高度跳变 */
+  readonly suppressed: boolean;
+}) {
+  const live = useStory(
+    useShallow((s) => ({
+      phase: s.phase,
+      text: s.text,
+      thought: s.thought,
+      boost: s.boost,
+      pending: s.pending,
+      stage: s.stage,
+      stageTrace: s.stageTrace,
+    })),
+  );
+  const generating = live.phase !== "idle" && !suppressed;
+  const liveBoosting =
+    live.boost !== null ||
+    (live.pending?.kind === "input" && live.pending.input.sandevistan === true);
+  const liveDisplay = useMemo(
+    () => (generating ? splitDisplayThought(live.text, live.thought) : { body: "", thought: "" }),
+    [generating, live.text, live.thought],
+  );
+
+  const liveScrollKey = `${live.text.length}:${live.thought.length}:${live.stage?.stage ?? ""}:${live.stageTrace.length}`;
+  useLayoutEffect(() => {
+    if (!generating || !liveScrollKey) return;
+    onContentUpdate();
+  }, [generating, liveScrollKey, onContentUpdate]);
+
+  if (!generating) return null;
+
+  return (
+    <article
+      ref={articleRef}
+      className={styles.turn}
+      data-live
+      data-boost={liveBoosting || undefined}
+    >
+      {view.pendingUiActions && view.pendingUiActions.length > 0 && (
+        <UiActionsStrip actions={view.pendingUiActions} />
+      )}
+      {live.pending?.kind === "input" && (
+        <p
+          className={styles.input}
+          data-mode={live.pending.input.mode}
+          data-boost={liveBoosting || undefined}
+        >
+          {formatInput(live.pending.input)}
+        </p>
+      )}
+      {liveBoosting && (
+        <p className={styles.boostLine}>
+          <span>{`SANDEVISTAN // ${live.boost?.name ?? "斯安威斯坦"}超频`}</span>
+        </p>
+      )}
+      {liveDisplay.thought !== "" && (
+        <ThoughtBlock thought={liveDisplay.thought} streaming={liveDisplay.body === ""} />
+      )}
+      {paragraphs(liveDisplay.body).map((p, i) => (
+        <Paragraph
+          // biome-ignore lint/suspicious/noArrayIndexKey: 正在生成的正文只会往后追加
+          key={i}
+          text={p}
+          speakers={speakers}
+          gearMatcher={gearMatcher}
+          onGearHover={onGearHover}
+        />
+      ))}
+      <span className={styles.caret} aria-hidden />
+      <LiveStageBar stage={live.stage} trace={live.stageTrace} />
+    </article>
+  );
 }
 
-/** 正文：已写进存档的各轮，加上正在生成的这一轮；贴近底部时自动跟随，向上翻阅时提供一键回底 */
+/** 正文：已写进存档的各轮，加上正在生成的这一轮；新轮开始时将开头带入视野后停住，输出完毕不跳转到底部 */
 export function StoryLog({
   view,
   saveId,
-  live,
   onRegenerate,
   onRewrite,
   onMark,
@@ -589,7 +782,6 @@ export function StoryLog({
 }: {
   readonly view: View;
   readonly saveId: string;
-  readonly live: Live;
   /** 重新生成最后一轮；角色死了时不给 */
   readonly onRegenerate?: (() => void) | undefined;
   /** 按账目改写最后一轮；角色死了时不给 */
@@ -599,31 +791,131 @@ export function StoryLog({
   /** 0 轮新档开局引导快捷动作 */
   readonly openingGuide?: OpeningGuideActions | undefined;
 }) {
+  const generating = useStory((s) => s.phase !== "idle");
   const box = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
+  const liveArticleRef = useRef<HTMLElement | null>(null);
+  // manual: 不自动滚动；reveal-start: 新回合开头进视口后自动停住；follow-bottom: 用户主动点「跟随最新生成」时贴底
+  const scrollModeRef = useRef<"manual" | "reveal-start" | "follow-bottom">("manual");
+  const lastScrollTopRef = useRef(0);
+  const prevGeneratingRef = useRef(false);
+  const liveStartVersionRef = useRef<number | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+
+  if (generating && liveStartVersionRef.current === null) {
+    liveStartVersionRef.current = view.version;
+  } else if (!generating) {
+    liveStartVersionRef.current = null;
+  }
+  const liveSuppressed =
+    generating &&
+    liveStartVersionRef.current !== null &&
+    view.version !== liveStartVersionRef.current;
+
+  const syncAtBottom = useCallback(() => {
+    const el = box.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    setAtBottom((prev) => (prev === near ? prev : near));
+  }, []);
 
   useEffect(() => {
     const el = box.current;
     if (!el) return;
     const onScroll = () => {
-      const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-      stick.current = near;
+      const top = el.scrollTop;
+      const near = el.scrollHeight - top - el.clientHeight < 48;
+      if (top < lastScrollTopRef.current - 4) {
+        scrollModeRef.current = "manual";
+      }
+      lastScrollTopRef.current = top;
       setAtBottom((prev) => (prev === near ? prev : near));
     };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY !== 0) {
+        scrollModeRef.current = "manual";
+      }
+    };
+    const onTouchStart = () => {
+      scrollModeRef.current = "manual";
+    };
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+    };
   }, []);
 
+  // 打开或切换存档时落到最新位置一次，之后交给阅读位置保持
   useLayoutEffect(() => {
     const el = box.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  });
+    if (!el || !saveId) return;
+    scrollModeRef.current = "manual";
+    el.scrollTop = el.scrollHeight;
+    lastScrollTopRef.current = el.scrollTop;
+    syncAtBottom();
+  }, [saveId, syncAtBottom]);
+
+  const handleLiveUpdate = useCallback(() => {
+    const el = box.current;
+    if (!el) return;
+    if (scrollModeRef.current === "follow-bottom") {
+      el.scrollTop = el.scrollHeight;
+      lastScrollTopRef.current = el.scrollTop;
+      syncAtBottom();
+      return;
+    }
+    if (scrollModeRef.current === "reveal-start") {
+      const liveEl = liveArticleRef.current;
+      const bottomTop = Math.max(0, el.scrollHeight - el.clientHeight);
+      if (liveEl) {
+        const liveTop =
+          liveEl.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+        // 顶部留出 44px，刚好避开 .log 顶部 2.5rem 渐隐遮罩，让新回合开头稳稳停在最上方可读区
+        const maxTopForStart = Math.max(0, liveTop - 44);
+        const target = Math.min(bottomTop, maxTopForStart);
+        if (target > el.scrollTop) {
+          el.scrollTop = target;
+          lastScrollTopRef.current = el.scrollTop;
+        }
+        if (el.scrollTop >= maxTopForStart - 2 && bottomTop > maxTopForStart) {
+          scrollModeRef.current = "manual";
+        }
+      } else if (bottomTop > el.scrollTop) {
+        el.scrollTop = bottomTop;
+        lastScrollTopRef.current = el.scrollTop;
+      }
+    }
+    syncAtBottom();
+  }, [syncAtBottom]);
+
+  // 仅在新回合开始生成时把开头带入视野；输出完毕时停留在当前阅读位置，绝不跳转到底部
+  useLayoutEffect(() => {
+    const wasGenerating = prevGeneratingRef.current;
+    prevGeneratingRef.current = generating;
+    if (generating && !wasGenerating) {
+      scrollModeRef.current = "reveal-start";
+      handleLiveUpdate();
+      return;
+    }
+    if (!generating && wasGenerating) {
+      scrollModeRef.current = "manual";
+    }
+    syncAtBottom();
+  }, [generating, handleLiveUpdate, syncAtBottom]);
+
+  // 回合数或断点状态变化时仅刷新「回到最新」按钮显隐，不强行滚到底部
+  const contentSig = `${view.turns.length}:${view.checkpoint?.updatedAt ?? ""}:${view.offers.read ?? ""}`;
+  useLayoutEffect(() => {
+    if (contentSig) syncAtBottom();
+  }, [contentSig, syncAtBottom]);
 
   const scrollToBottom = () => {
     const el = box.current;
     if (!el) return;
-    stick.current = true;
+    scrollModeRef.current = generating ? "follow-bottom" : "manual";
     setAtBottom(true);
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
@@ -639,20 +931,12 @@ export function StoryLog({
     return () => el.removeEventListener("scroll", hide);
   }, []);
 
-  const generating = live.phase !== "idle";
-  const liveBoosting =
-    live.boost !== null ||
-    (live.pending?.kind === "input" && live.pending.input.sandevistan === true);
   const earlier = view.totalTurns - view.turns.length;
   const glossary = useGlossary();
   const speakers = useMemo(() => speakersOf(view), [view]);
   const gearMatcher = useMemo(
     () => buildGearMatcher(view, new Set(speakers.map((s) => s.name))),
     [view, speakers],
-  );
-  const liveDisplay = useMemo(
-    () => (generating ? splitDisplayThought(live.text, live.thought) : { body: "", thought: "" }),
-    [generating, live.text, live.thought],
   );
   const cpDisplay = useMemo(
     () =>
@@ -745,42 +1029,15 @@ export function StoryLog({
               </article>
             )}
 
-          {generating && (
-            <article className={styles.turn} data-live data-boost={liveBoosting || undefined}>
-              {view.pendingUiActions && view.pendingUiActions.length > 0 && (
-                <UiActionsStrip actions={view.pendingUiActions} />
-              )}
-              {live.pending?.kind === "input" && (
-                <p
-                  className={styles.input}
-                  data-mode={live.pending.input.mode}
-                  data-boost={liveBoosting || undefined}
-                >
-                  {formatInput(live.pending.input)}
-                </p>
-              )}
-              {liveBoosting && (
-                <p className={styles.boostLine}>
-                  <span>{`SANDEVISTAN // ${live.boost?.name ?? "斯安威斯坦"}超频`}</span>
-                </p>
-              )}
-              {liveDisplay.thought !== "" && (
-                <ThoughtBlock thought={liveDisplay.thought} streaming={liveDisplay.body === ""} />
-              )}
-              {paragraphs(liveDisplay.body).map((p, i) => (
-                <Paragraph
-                  // biome-ignore lint/suspicious/noArrayIndexKey: 正在生成的正文只会往后追加
-                  key={i}
-                  text={p}
-                  speakers={speakers}
-                  gearMatcher={gearMatcher}
-                  onGearHover={onGearHover}
-                />
-              ))}
-              <span className={styles.caret} aria-hidden />
-              <LiveStageBar stage={live.stage} trace={live.stageTrace} />
-            </article>
-          )}
+          <LiveTurn
+            view={view}
+            speakers={speakers}
+            gearMatcher={gearMatcher}
+            onGearHover={onGearHover}
+            onContentUpdate={handleLiveUpdate}
+            articleRef={liveArticleRef}
+            suppressed={liveSuppressed}
+          />
         </div>
       </div>
       {gearHover && <GearHoverCard hover={gearHover} />}

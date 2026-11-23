@@ -1,6 +1,6 @@
 import type { AbortSignalLike, Embedder } from "@cp/core";
 import type { Profile } from "../config";
-import { toAbortSignal } from "./http";
+import { AbortedError, toAbortSignal } from "./http";
 
 /** OpenAI 兼容的 /v1/embeddings 轻量客户端；未配置 embeddingModel 或调用失败时降级为空，不阻断回合 */
 
@@ -67,7 +67,7 @@ export function openAiEmbedder(
         const ordered = [...json.data].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
         return ordered.map((row) => (Array.isArray(row.embedding) ? row.embedding : []));
       } catch (error) {
-        if (callerSignal?.aborted) return [];
+        if (callerSignal?.aborted) throw new AbortedError();
         onWarn?.(
           `向量检索不可用，本轮降级为规则检索：${error instanceof Error ? error.message : String(error)}`,
         );

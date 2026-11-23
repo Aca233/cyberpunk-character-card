@@ -41,12 +41,14 @@ import {
 import { quoteTrade } from "./trade";
 
 function itemGroup(def: ItemDef): string {
+  if (def.quickhackId) return "快速破解芯片";
   return def.kind === "weapon" && def.category
     ? WEAPON_CATEGORY_LABELS[def.category]
     : ITEM_KIND_LABELS[def.kind];
 }
 
 function itemSubLabel(def: ItemDef): string {
+  if (def.quickhackId) return "快速破解芯片";
   if (def.kind === "weapon") {
     return [
       def.weaponType ? WEAPON_TYPE_LABELS[def.weaponType] : null,

@@ -148,6 +148,9 @@ const SHOP_SEEDS: Record<
       glitter: 2,
       "smart-target-mod": 1,
       "smart-link-module": 1,
+      "qh-sonic-shock": 2,
+      "qh-cripple-movement": 2,
+      "qh-short-circuit": 1,
     },
     services: [],
     leadMinutes: 720,
@@ -205,28 +208,35 @@ const NETRUNNER_CHIPS: Readonly<Record<string, Record<string, number>>> = {
     "shard-skill-lockbypass": 2,
     "shard-skill-translator": 1,
     "shard-intel-ncpd-scanner": 2,
+    "qh-memory-wipe": 1,
   },
   westbrook: {
     "shard-skill-translator": 2,
     "shard-intel-clouds-manual": 2,
     "shard-bd-clouds-dream-suite": 1,
+    "qh-memory-wipe": 1,
   },
   heywood: {
     "shard-skill-tactical-reload": 1,
     "shard-skill-trauma-field": 1,
+    "qh-contagion": 1,
   },
   pacifica: {
     "shard-skill-lockbypass": 2,
     "shard-daemon-militech-cred": 1,
+    "qh-contagion": 1,
   },
   dogtown: {
     "shard-skill-tactical-reload": 2,
     "shard-skill-trauma-field": 2,
     "shard-daemon-arasaka-backdoor": 1,
+    "qh-memory-wipe": 1,
+    "qh-contagion": 1,
   },
   badlands: {
     "shard-skill-trauma-field": 2,
     "shard-skill-lockbypass": 1,
+    "qh-contagion": 1,
   },
 };
 

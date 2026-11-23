@@ -2,7 +2,13 @@ import type { CharacterCard } from "@cp/core";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
-import { api, type CharacterEntry, type SaveImageBindings, type SaveSummary } from "../api/client";
+import {
+  api,
+  type CharacterEntry,
+  type SaveImageBindings,
+  type SaveSummary,
+  turnImagesOf,
+} from "../api/client";
 import { backdropOf, itemArtOf, portraitOf, shopPoiIconOf } from "../features/story/art";
 import { vehicleArtOf } from "../features/story/vehicle-art";
 import type { View } from "../features/story/view";
@@ -269,7 +275,9 @@ export function useStoryPreload(
       }
       const recentTurns = view.turns.slice(-4);
       for (const turn of recentTurns) {
-        prefetchStoredImage(queryClient, bindings.turns[String(turn.seq)]);
+        for (const imgId of turnImagesOf(bindings, turn.seq)) {
+          prefetchStoredImage(queryClient, imgId);
+        }
       }
     }
   }, [bindings, view, queryClient]);

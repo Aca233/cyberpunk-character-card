@@ -11,24 +11,49 @@ import {
 /**
  * 文生图提示词提炼器：
  * - 支持三类对象：玩家角色立绘（character）、NPC 肖像（npc）、回合剧情场景插图（turn）。
- * - 默认交由辅助模型（aux）结合赛博朋克 2077 视觉基调提炼英文画面提示词与反向提示词；
- *   若未配置辅助模型或玩家关闭提炼，则回退为保留源语言的本地拼接提示词。
+ * - 支持三种输出语言/格式：
+ *   1. `en`：纯英文自然语言描述（严禁夹杂中文，适合 Flux / Gemini / DALL·E / SDXL）
+ *   2. `en-tags`：纯英文 Tag 词组（严禁夹杂中文，按逗号分隔 Danbooru 标签，适合 NovelAI V5 / V4.5 / 二次元 SD）
+ *   3. `zh`：纯中文画面描述（严禁夹杂英文元指令，适合中文生图模型或本地直接中文生图）
+ * - 支持玩家自定义固定提示词（`customPrompt`，如画质词/画师串/LoRA）与直接自定义辅助模型提炼 System Prompt（`auxSystemPrompt`）。
  */
+
+export const ImagePromptLanguageSchema = z.enum(["en", "en-tags", "zh"]);
+export type ImagePromptLanguage = z.infer<typeof ImagePromptLanguageSchema>;
 
 export const DEFAULT_NEGATIVE_PROMPT =
   "lowres, blurry, bad anatomy, bad hands, extra fingers, deformed face, watermark, signature, text, speech bubble, UI overlay, frame, border, frame-within-frame";
 
+export const DEFAULT_NEGATIVE_PROMPT_ZH =
+  "低分辨率, 模糊, 肢体崩坏, 手部畸形, 多余手指, 面部扭曲, 水印, 签名, 文字, 对话气泡, 界面UI, 外框";
+
 export const DEFAULT_PORTRAIT_STYLE =
   "Cyberpunk 2077-inspired Night City portrait, restrained neo-noir palette with cyan and magenta accents, practical directional lighting, grounded skin, fabric, and metal textures, uncluttered background";
+
+export const DEFAULT_PORTRAIT_STYLE_ZH =
+  "赛博朋克 2077 夜之城人物肖像，冷峻霓虹黑色电影基调，青色与洋红环境边光，细腻的皮肤、衣物与义体金属接缝质感，背景干净有层次";
 
 export const DEFAULT_SCENE_STYLE =
   "Cyberpunk 2077-inspired Night City scene, grounded urban architecture, neon from plausible in-scene sources, atmospheric depth, readable staging, no HUD";
 
+export const DEFAULT_SCENE_STYLE_ZH =
+  "赛博朋克 2077 夜之城场景插画，真实都市建筑与室内空间感，潮湿路面或环境霓虹反射，富有电影感的镜头构图与景深，无文字水印与界面框";
+
+export const DEFAULT_AUX_SYSTEM_PROMPT = [
+  "你是《赛博朋克 2077》角色扮演游戏的专业 AI 视觉分镜与生图提示词导演。",
+  "请将提供的角色或剧情场景资料转化为一张单幅画面的生图提示词（只描写画面中肉眼可见的镜头构图、人物外貌、神态动作、服饰材质、外显义体、环境光影与氛围，不要写抽象背景故事、心理活动或游戏数值）。",
+  "- 若目标为人物/NPC 肖像：默认采用半身或胸像构图，突出面部神态、发型、衣着与外显义体细节。",
+  "- 若目标为回合场景插图：定格本轮叙事中最具画面感的一个已发生瞬间，严格还原正文中已成立的结果（不要把失败或未遂的动作画成成功），只画当前镜头内实际在场的人物。",
+].join("\n");
+
 export const ImageStyleConfigSchema = z.object({
-  portraitStyle: z.string().trim().max(800).optional(),
-  sceneStyle: z.string().trim().max(800).optional(),
-  negativePrompt: z.string().trim().max(800).optional(),
-  auxInstruction: z.string().trim().max(800).optional(),
+  promptLanguage: ImagePromptLanguageSchema.optional(),
+  customPrompt: z.string().trim().max(1200).optional(),
+  portraitStyle: z.string().trim().max(1200).optional(),
+  sceneStyle: z.string().trim().max(1200).optional(),
+  negativePrompt: z.string().trim().max(1200).optional(),
+  auxInstruction: z.string().trim().max(2400).optional(),
+  auxSystemPrompt: z.string().trim().max(4000).optional(),
 });
 export type ImageStyleConfig = z.infer<typeof ImageStyleConfigSchema>;
 
@@ -94,42 +119,212 @@ export interface ImagePromptResult {
 
 export type ImageNegativePromptMode = "independent" | "in-prompt";
 
-function genderHint(pronoun: string): string {
-  const p = pronoun.trim();
-  if (p === "她" || p.toLowerCase() === "she" || p.toLowerCase() === "her") return "female";
-  if (p === "他" || p.toLowerCase() === "he" || p.toLowerCase() === "him") return "male";
-  return "";
+export const MAX_TURN_SCENE_SEGMENTS = 4;
+
+/** 将单轮剧情正文按段落（段落不足时按句子）均分为 1~4 个连续叙事分镜片段 */
+export function splitTurnSceneSegments(sceneText: string, count: number): readonly string[] {
+  const normalized = sceneText.trim();
+  const target = Math.max(1, Math.min(MAX_TURN_SCENE_SEGMENTS, Math.floor(count)));
+  if (!normalized || target <= 1) return normalized ? [normalized] : [];
+
+  const rawParagraphs = normalized
+    .split(/\n\s*\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p !== "");
+  const lineParagraphs =
+    rawParagraphs.length > 1
+      ? rawParagraphs
+      : normalized
+          .split(/\n+/)
+          .map((p) => p.trim())
+          .filter((p) => p !== "");
+
+  let units: readonly string[] = lineParagraphs;
+  if (units.length < target) {
+    const sentences = normalized
+      .split(/(?<=[。！？!?…\n])\s*/)
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+    if (sentences.length > units.length) {
+      units = sentences;
+    }
+  }
+
+  if (units.length <= 1) {
+    return Array.from({ length: target }, () => normalized);
+  }
+
+  const effectiveCount = Math.min(target, units.length);
+  const totalChars = units.reduce((sum, u) => sum + u.length, 0);
+  const segments: string[] = [];
+  let cursor = 0;
+
+  for (let seg = 0; seg < effectiveCount; seg++) {
+    const remainingSegs = effectiveCount - seg;
+    if (remainingSegs === 1) {
+      segments.push(units.slice(cursor).join("\n\n"));
+      break;
+    }
+    const maxEnd = units.length - (remainingSegs - 1);
+    const idealChars = totalChars / effectiveCount;
+    let end = cursor + 1;
+    let acc = units[cursor]?.length ?? 0;
+    while (end < maxEnd) {
+      const nextLen = units[end]?.length ?? 0;
+      if (Math.abs(acc + nextLen - idealChars) <= Math.abs(acc - idealChars)) {
+        acc += nextLen;
+        end += 1;
+      } else {
+        break;
+      }
+    }
+    segments.push(units.slice(cursor, end).join("\n\n"));
+    cursor = end;
+  }
+
+  while (segments.length < target) {
+    segments.push(segments.at(-1) ?? normalized);
+  }
+  return segments;
 }
 
-function compact(parts: readonly (string | null | undefined)[]): string {
+/** 构造单轮正文第 segmentIndex（从 0 开始）个分镜对应的生图提示词输入 */
+export function buildTurnSegmentPromptInput(
+  input: TurnImagePromptInput,
+  segmentIndex: number,
+  totalSegments: number,
+): TurnImagePromptInput {
+  const total = Math.max(1, Math.min(MAX_TURN_SCENE_SEGMENTS, Math.floor(totalSegments)));
+  if (total <= 1) return input;
+  const segments = splitTurnSceneSegments(input.sceneText, total);
+  const idx = Math.max(0, Math.min(segments.length - 1, Math.floor(segmentIndex)));
+  const segmentText = segments[idx] ?? input.sceneText;
+  const phaseLabel =
+    idx === 0
+      ? "开篇建立镜头"
+      : idx === total - 1
+        ? "高潮/收束镜头"
+        : `中段推进镜头（第 ${idx + 1} 幕）`;
+  const segmentHint = `这是本轮正文连续 ${total} 张插图中的第 ${idx + 1} 张（${phaseLabel}）。请只聚焦下面这一片段正在发生的视觉瞬间与构图，与同轮其他分镜在景别或视角上保持区分。`;
+  return {
+    ...input,
+    sceneText: segmentText,
+    instruction: [segmentHint, input.instruction.trim()].filter(Boolean).join("\n"),
+  };
+}
+
+function genderHint(pronoun: string, lang: ImagePromptLanguage = "en"): string {
+  const p = pronoun.trim();
+  const isFemale = p === "她" || p.toLowerCase() === "she" || p.toLowerCase() === "her";
+  const isMale = p === "他" || p.toLowerCase() === "he" || p.toLowerCase() === "him";
+  if (lang === "zh") {
+    return isFemale ? "女性" : isMale ? "男性" : "";
+  }
+  if (lang === "en-tags") {
+    return isFemale ? "1girl, solo" : isMale ? "1boy, solo" : "solo";
+  }
+  return isFemale ? "female" : isMale ? "male" : "";
+}
+
+function compact(parts: readonly (string | null | undefined)[], sep = ", "): string {
   return parts
     .map((p) => p?.trim() ?? "")
     .filter((p) => p !== "")
-    .join(", ");
+    .join(sep);
+}
+
+function prependCustomPrompt(prompt: string, customPrompt?: string, sep = ", "): string {
+  const custom = customPrompt?.trim() ?? "";
+  const body = prompt.trim();
+  if (!custom) return body;
+  if (!body) return custom;
+  if (body.toLowerCase().startsWith(custom.toLowerCase())) return body;
+  return `${custom}${sep}${body}`;
+}
+
+function resolvePortraitStyle(
+  style: ImageStyleConfig | undefined,
+  lang: ImagePromptLanguage,
+): string {
+  const raw = style?.portraitStyle?.trim();
+  if (raw === undefined) {
+    return lang === "zh" ? DEFAULT_PORTRAIT_STYLE_ZH : DEFAULT_PORTRAIT_STYLE;
+  }
+  if (lang === "zh" && raw === DEFAULT_PORTRAIT_STYLE) {
+    return DEFAULT_PORTRAIT_STYLE_ZH;
+  }
+  return raw;
+}
+
+function resolveSceneStyle(style: ImageStyleConfig | undefined, lang: ImagePromptLanguage): string {
+  const raw = style?.sceneStyle?.trim();
+  if (raw === undefined) {
+    return lang === "zh" ? DEFAULT_SCENE_STYLE_ZH : DEFAULT_SCENE_STYLE;
+  }
+  if (lang === "zh" && raw === DEFAULT_SCENE_STYLE) {
+    return DEFAULT_SCENE_STYLE_ZH;
+  }
+  return raw;
+}
+
+function resolveNegativePrompt(
+  style: ImageStyleConfig | undefined,
+  lang: ImagePromptLanguage,
+): string {
+  const raw = style?.negativePrompt?.trim();
+  if (raw === undefined) {
+    return lang === "zh" ? DEFAULT_NEGATIVE_PROMPT_ZH : DEFAULT_NEGATIVE_PROMPT;
+  }
+  if (lang === "zh" && raw === DEFAULT_NEGATIVE_PROMPT) {
+    return DEFAULT_NEGATIVE_PROMPT_ZH;
+  }
+  return raw;
 }
 
 function sceneExcerpt(sceneText: string, maxLength: number): string {
   const normalized = sceneText.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
-  const headLength = Math.floor((maxLength - 80) * 0.25);
-  const tailLength = maxLength - headLength - 80;
-  return `Earlier context: ${normalized.slice(0, headLength).trimEnd()} … Scene ending: ${normalized.slice(-tailLength).trimStart()}`;
+  const headLength = Math.floor((maxLength - 40) * 0.25);
+  const tailLength = maxLength - headLength - 40;
+  return `${normalized.slice(0, headLength).trimEnd()} … ${normalized.slice(-tailLength).trimStart()}`;
 }
 
-function characterReferenceText(character: ImageCharacterReference, concise = false): string {
+function characterReferenceText(
+  character: ImageCharacterReference,
+  concise = false,
+  lang: ImagePromptLanguage = "en",
+): string {
   const limit = (text: string, length: number) => (concise ? text.slice(0, length) : text);
+  if (lang === "zh") {
+    return [
+      `${character.name}${character.alias ? `（${character.alias}）` : ""}`,
+      character.pronoun ? `代词：${character.pronoun}` : "",
+      character.role ? `身份：${limit(character.role, 80)}` : "",
+      character.look ? `外貌：${limit(character.look, 240)}` : "",
+      character.outfit ? `衣着：${limit(character.outfit, 160)}` : "",
+      character.wounds ? `状态：${limit(character.wounds, 120)}` : "",
+      character.cyberware.length
+        ? `义体：${(concise ? character.cyberware.slice(0, 4) : character.cyberware).join("、")}`
+        : "",
+      character.gear.length
+        ? `随身装备：${(concise ? character.gear.slice(0, 3) : character.gear).join("、")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("；");
+  }
   return [
     `[${character.id}] ${character.name}${character.alias ? ` (${character.alias})` : ""}`,
     character.pronoun ? `pronoun: ${character.pronoun}` : "",
     character.role ? `role: ${limit(character.role, 80)}` : "",
-    character.look ? `fixed appearance: ${limit(character.look, 240)}` : "",
-    character.outfit ? `current outfit: ${limit(character.outfit, 160)}` : "",
-    character.wounds ? `known condition: ${limit(character.wounds, 120)}` : "",
+    character.look ? `appearance: ${limit(character.look, 240)}` : "",
+    character.outfit ? `outfit: ${limit(character.outfit, 160)}` : "",
+    character.wounds ? `condition: ${limit(character.wounds, 120)}` : "",
     character.cyberware.length
-      ? `installed implants (not all visible): ${(concise ? character.cyberware.slice(0, 4) : character.cyberware).join(", ")}`
+      ? `cyberware: ${(concise ? character.cyberware.slice(0, 4) : character.cyberware).join(", ")}`
       : "",
     character.gear.length
-      ? `carried gear (not necessarily held): ${(concise ? character.gear.slice(0, 3) : character.gear).join(", ")}`
+      ? `gear: ${(concise ? character.gear.slice(0, 3) : character.gear).join(", ")}`
       : "",
   ]
     .filter(Boolean)
@@ -188,11 +383,11 @@ function auxCharacterReferences(input: TurnImagePromptInput): string {
       .join("; ");
     const fields = [
       { label: "role", value: character.role },
-      { label: "fixed appearance", value: character.look },
-      { label: "current outfit", value: character.outfit },
-      { label: "known condition", value: character.wounds },
-      { label: "installed implants (not all visible)", value: character.cyberware.join(", ") },
-      { label: "carried gear (not necessarily held)", value: character.gear.join(", ") },
+      { label: "appearance", value: character.look },
+      { label: "outfit", value: character.outfit },
+      { label: "condition", value: character.wounds },
+      { label: "cyberware", value: character.cyberware.join(", ") },
+      { label: "gear", value: character.gear.join(", ") },
     ].filter(({ value }) => value.length > 0);
     return { identity, fields, weight };
   });
@@ -232,88 +427,170 @@ function auxCharacterReferences(input: TurnImagePromptInput): string {
     .join("\n");
 }
 
-/** 不调用辅助模型时的兜底提示词；原始资料保留源语言，不冒充已翻译的英文 */
+/**
+ * 不调用辅助模型时的本地拼接提示词：
+ * - 去除冗长的英文说教元指令，仅拼接干净的视觉要素、玩家自定义提示词与画风；
+ * - 当语言设为 `zh` 时全程使用中文拼接，彻底避免中英混杂。
+ */
 export function fallbackImagePrompt(
   input: ImagePromptRequest,
   style?: ImageStyleConfig,
   negativePromptMode: ImageNegativePromptMode = "independent",
 ): ImagePromptResult {
-  const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
-  const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
-  const negativePrompt = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
+  const lang: ImagePromptLanguage = style?.promptLanguage ?? "en";
+  const sep = lang === "zh" ? "，" : ", ";
+  const portraitStyle = resolvePortraitStyle(style, lang);
+  const sceneStyle = resolveSceneStyle(style, lang);
+  const negativePrompt = resolveNegativePrompt(style, lang);
+  const customPrompt = style?.customPrompt?.trim() || "";
   const auxExtra = style?.auxInstruction?.trim() || "";
+  const exclusionPrefix =
+    lang === "zh"
+      ? "\n排除元素（画面中不要出现）："
+      : "\nUser-requested exclusions (render the image without these): ";
   const exclusions =
     negativePromptMode === "in-prompt" && negativePrompt
-      ? `\nUser-requested exclusions (render the image without these): ${negativePrompt}`
+      ? `${exclusionPrefix}${negativePrompt}`
       : "";
-  const finish = (prompt: string): ImagePromptResult => ({
-    prompt: `${prompt}${exclusions}`,
-    negativePrompt: negativePromptMode === "in-prompt" ? "" : negativePrompt,
-    usedAux: false,
-  });
+  const finish = (rawPrompt: string): ImagePromptResult => {
+    const withCustom = prependCustomPrompt(rawPrompt, customPrompt, sep);
+    return {
+      prompt: `${withCustom}${exclusions}`,
+      negativePrompt: negativePromptMode === "in-prompt" ? "" : negativePrompt,
+      usedAux: false,
+    };
+  };
 
   if (input.kind === "character") {
+    if (lang === "zh") {
+      return finish(
+        compact(
+          [
+            genderHint(input.pronoun, "zh")
+              ? `${genderHint(input.pronoun, "zh")}佣兵半身肖像`
+              : "夜之城佣兵半身肖像",
+            input.origin ? `出身背景：${input.origin}` : "",
+            input.look ? `外貌特征：${input.look}` : "",
+            input.outfit ? `当前穿着：${input.outfit}` : "",
+            input.wounds ? `伤势状态：${input.wounds}` : "",
+            input.cyberware.length > 0 ? `义体：${input.cyberware.slice(0, 6).join("、")}` : "",
+            input.gear.length > 0 ? `装备：${input.gear.slice(0, 4).join("、")}` : "",
+            input.instruction,
+            auxExtra,
+            portraitStyle,
+          ],
+          "，",
+        ),
+      );
+    }
     const subject = compact([
-      `${genderHint(input.pronoun)} mercenary portrait`,
-      input.origin ? `background: ${input.origin}` : "",
-      input.look ? `appearance: ${input.look}` : "",
-      input.outfit ? `current outfit: ${input.outfit}` : "",
-      input.wounds ? `known condition: ${input.wounds}` : "",
-      input.cyberware.length > 0
-        ? `installed cyberware (only depict explicitly visible parts): ${input.cyberware.slice(0, 6).join(", ")}`
-        : "",
-      input.gear.length > 0
-        ? `carried gear (not necessarily held): ${input.gear.slice(0, 4).join(", ")}`
-        : "",
-      input.instruction ? `additional details: ${input.instruction}` : "",
+      genderHint(input.pronoun, lang),
+      lang === "en-tags"
+        ? "cyberpunk, mercenary, upper body, portrait"
+        : "cyberpunk mercenary upper-body portrait",
+      input.origin,
+      input.look,
+      input.outfit,
+      input.wounds,
+      input.cyberware.length > 0 ? input.cyberware.slice(0, 6).join(", ") : "",
+      input.gear.length > 0 ? input.gear.slice(0, 4).join(", ") : "",
+      input.instruction,
       auxExtra,
-      "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
     return finish(subject);
   }
+
   if (input.kind === "npc") {
+    if (lang === "zh") {
+      return finish(
+        compact(
+          [
+            genderHint(input.pronoun, "zh")
+              ? `${genderHint(input.pronoun, "zh")}角色半身肖像`
+              : "夜之城角色半身肖像",
+            input.role ? `身份：${input.role}` : "",
+            input.faction && input.faction !== "无" ? `所属势力：${input.faction}` : "",
+            input.look ? `外貌特征：${input.look}` : "",
+            input.outfit ? `当前穿着：${input.outfit}` : "",
+            input.wounds ? `伤势状态：${input.wounds}` : "",
+            input.cyberware?.length ? `义体：${input.cyberware.slice(0, 6).join("、")}` : "",
+            input.gear?.length ? `装备：${input.gear.slice(0, 4).join("、")}` : "",
+            input.instruction,
+            auxExtra,
+            portraitStyle,
+          ],
+          "，",
+        ),
+      );
+    }
     const subject = compact([
-      `${genderHint(input.pronoun)} Night City character portrait`,
-      input.role ? `role: ${input.role}` : "",
-      input.faction && input.faction !== "无" ? `faction aesthetic: ${input.faction}` : "",
-      input.look ? `appearance: ${input.look}` : "",
-      input.outfit ? `wearing: ${input.outfit}` : "",
-      input.wounds ? `condition: ${input.wounds}` : "",
-      input.cyberware?.length
-        ? `installed implants (not all visible): ${input.cyberware.slice(0, 6).join(", ")}`
-        : "",
-      input.gear?.length
-        ? `carried gear (not necessarily held): ${input.gear.slice(0, 4).join(", ")}`
-        : "",
-      input.instruction ? `additional details: ${input.instruction}` : "",
+      genderHint(input.pronoun, lang),
+      lang === "en-tags"
+        ? "cyberpunk, character portrait, upper body"
+        : "Night City character upper-body portrait",
+      input.role,
+      input.faction && input.faction !== "无" ? input.faction : "",
+      input.look,
+      input.outfit,
+      input.wounds,
+      input.cyberware?.length ? input.cyberware.slice(0, 6).join(", ") : "",
+      input.gear?.length ? input.gear.slice(0, 4).join(", ") : "",
+      input.instruction,
       auxExtra,
-      "single character portrait; use upper-body framing unless the user requests another composition",
       portraitStyle,
     ]);
     return finish(subject);
   }
+
   const references = input.characters
     .slice(0, 8)
-    .map((character) => characterReferenceText(character, true))
+    .map((character) => characterReferenceText(character, true, lang))
     .join("\n")
-    .slice(0, 4000);
+    .slice(0, 3600);
+  if (lang === "zh") {
+    const framing = compact(
+      [
+        input.location || input.district
+          ? `地点：${[input.district, input.location].filter(Boolean).join(" · ")}`
+          : "夜之城街头或室内场景",
+        input.timeText ? `时间：${input.timeText}` : "",
+        input.weather ? `天气：${input.weather}` : "",
+        input.instruction ? `画面重点：${input.instruction}` : "",
+        auxExtra,
+        sceneStyle,
+      ],
+      "，",
+    );
+    const fixed = references
+      ? `${framing}\n在场人物参考：\n${references}\n场景画面：\n`
+      : `${framing}\n场景画面：\n`;
+    const excerpt = sceneExcerpt(
+      input.sceneText,
+      Math.max(
+        300,
+        IMAGE_PROMPT_MAX_LENGTH - fixed.length - exclusions.length - customPrompt.length,
+      ),
+    );
+    return finish(`${fixed}${excerpt}`);
+  }
+
   const framing = compact([
-    "single coherent scene illustration",
-    "Depict one moment established in the narrative, preserving its outcome; do not turn attempted or failed actions into successes. Character references do not imply that everyone is on screen. Internal implants and carried gear are not automatically visible",
     input.location || input.district
-      ? `location: ${[input.district, input.location].filter(Boolean).join(" - ")}`
-      : "Night City street or moody interior",
-    input.timeText ? `time: ${input.timeText}` : "",
-    input.weather ? `weather: ${input.weather}` : "",
-    input.instruction ? `style/focus: ${input.instruction}` : "",
+      ? [input.district, input.location].filter(Boolean).join(" - ")
+      : "Night City scene",
+    input.timeText,
+    input.weather,
+    input.instruction,
     auxExtra,
     sceneStyle,
   ]);
-  const fixed = `${framing}\nCharacter references:\n${references}\nNarrative source:\n`;
+  const fixed = references
+    ? `${framing}\nCharacters:\n${references}\nScene:\n`
+    : `${framing}\nScene:\n`;
   const excerpt = sceneExcerpt(
     input.sceneText,
-    Math.max(300, IMAGE_PROMPT_MAX_LENGTH - fixed.length - exclusions.length),
+    Math.max(300, IMAGE_PROMPT_MAX_LENGTH - fixed.length - exclusions.length - customPrompt.length),
   );
   return finish(`${fixed}${excerpt}`);
 }
@@ -323,55 +600,49 @@ function buildAuxMessages(
   style?: ImageStyleConfig,
   negativePromptMode: ImageNegativePromptMode = "independent",
 ): readonly LlmMessage[] {
-  const portraitStyle = style?.portraitStyle?.trim() ?? DEFAULT_PORTRAIT_STYLE;
-  const sceneStyle = style?.sceneStyle?.trim() ?? DEFAULT_SCENE_STYLE;
-  const negativeHint = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
+  const lang: ImagePromptLanguage = style?.promptLanguage ?? "en";
+  const portraitStyle = resolvePortraitStyle(style, lang);
+  const sceneStyle = resolveSceneStyle(style, lang);
+  const negativeHint = resolveNegativePrompt(style, lang);
   const targetStyle = input.kind === "turn" ? sceneStyle : portraitStyle;
-  const visualBrief =
-    input.kind === "character"
-      ? [
-          "Create one player-character portrait. Default to upper-body or bust framing unless the user requests another composition.",
-          "Prioritize the supplied appearance, clothing, visible cyberware, scars, and gear. Treat personality and skills only as subtle expression or posture cues when supported by the supplied facts.",
-          "Preserve stated age, ethnicity, body traits, equipment, scars, and cyberware; leave unspecified traits undescribed. Installed internal implants are not automatically visible. Do not turn a name into invented appearance details.",
-        ]
-      : input.kind === "npc"
-        ? [
-            "Create one NPC portrait. Default to head-and-shoulders or upper-body framing unless the user requests another composition.",
-            "Prioritize the supplied appearance, current outfit, role, and visible wounds; keep those details consistent instead of redesigning the subject.",
-            "Preserve stated age, ethnicity, body traits, equipment, scars, and cyberware; leave unspecified traits undescribed. Do not turn a name into invented appearance details.",
-          ]
-        : [
-            "Create one coherent image of the decisive moment in the supplied scene, not a montage or a summary of several events.",
-            "The narrative states what actually happened. Player Action describes intent only: do not depict an attempted, prevented, or failed action as successful. Use the narrative's established result to select the depicted moment.",
-            "Use character and location references to identify subjects, but let the narrative determine who is visible and their state at that moment. Never merge one person's appearance, equipment, or actions into another person.",
-            "Keep only facts supported by the scene. Do not add characters, weapons, weather, injuries, props, or outcomes that are not stated.",
-            "Adapt the composition to the requested image dimensions; do not assume a fixed aspect ratio.",
-          ];
+  const customPrompt = style?.customPrompt?.trim() || "";
+  const userDirectorPrompt = style?.auxSystemPrompt?.trim() || DEFAULT_AUX_SYSTEM_PROMPT;
+
+  const languageRule =
+    lang === "en-tags"
+      ? 'LANGUAGE & FORMAT RULE: "prompt" MUST be 100% pure English comma-separated Danbooru/NovelAI visual tags (e.g., "1girl, solo, cyberpunk, neon lights, cybernetic eyes, leather jacket, rainy street, cinematic lighting"). Translate every Chinese feature/outfit/cyberware/place into accurate English tags. NEVER output any Chinese characters in "prompt".'
+      : lang === "zh"
+        ? 'LANGUAGE & FORMAT RULE: "prompt" MUST be 100% pure, fluent Chinese visual description (纯中文画面描述). Do NOT mix English labels or English sentences into "prompt" (except user-supplied custom tags if any).'
+        : 'LANGUAGE & FORMAT RULE: "prompt" MUST be 100% pure English natural-language visual description. Translate all Chinese appearance, cyberware, clothing, and scene details into vivid English visual prose. NEVER output any Chinese characters in "prompt".';
+
   const system = [
-    "You are an expert AI visual prompt director for a Cyberpunk 2077 roleplaying game.",
-    "Convert the supplied Chinese/English source facts into one concrete English image-generation prompt describing visible pixels, not plot summary or backstory.",
-    "Requirements:",
+    userDirectorPrompt,
+    "",
+    "Strict Output Specification:",
     '1. Output valid JSON ONLY with keys: "prompt" (string) and "negativePrompt" (string).',
-    `2. Keep "prompt" focused on the defining visual facts, with enough detail to preserve identity, action, spatial relationships, and composition. Use concrete visual language, no game stats, abstract backstory, filler, or quality-score tags. Maximum ${IMAGE_PROMPT_MAX_LENGTH} characters for "prompt" and 2000 for "negativePrompt".`,
-    `3. Follow this image-specific brief: ${visualBrief.join(" ")}`,
-    `4. Apply the user's preferred visual style baseline only where it does not conflict with specific source facts or the user's extra instruction: ${targetStyle}`,
+    `2. ${languageRule}`,
+    `3. Maximum ${IMAGE_PROMPT_MAX_LENGTH} characters for "prompt" and 2000 for "negativePrompt". Describe only visible elements (composition, lighting, appearance, pose, expression, outfit, visible implants, environment). No HUD, no text overlays, no watermarks.`,
+    targetStyle ? `4. Visual style baseline: ${targetStyle}` : "",
+    customPrompt
+      ? `5. Custom fixed prompt prefix/tags to preserve at the beginning of "prompt": ${customPrompt}`
+      : "",
     negativeHint
       ? negativePromptMode === "in-prompt"
-        ? `5. The target image model uses one natural-language prompt. Express all of these user-requested exclusions as concise natural-language constraints inside "prompt", translated faithfully if needed; return "negativePrompt": "". Exclusions: ${negativeHint}`
-        : `5. Preserve these exclusions in "negativePrompt" without copying them into the positive prompt: ${negativeHint}`
-      : '5. The user has cleared negative prompts. Return "negativePrompt": ""; do not add default exclusions.',
-    "6. Exclude text overlays, speech bubbles, watermarks, and HUD frames from the artwork.",
-    "7. Treat the user's extra instruction as the highest-priority visual direction, unless it conflicts with the supplied character or scene facts.",
+        ? `6. Target model uses a single prompt without a separate negative field. Incorporate these exclusions concisely at the end of "prompt" in the selected language and return "negativePrompt": "". Exclusions: ${negativeHint}`
+        : `6. Keep these exclusions in "negativePrompt": ${negativeHint}`
+      : '6. Return "negativePrompt": "".',
     ...(style?.auxInstruction?.trim()
-      ? [`8. Global Player Visual Directive: ${style.auxInstruction.trim()}`]
+      ? [`7. Additional player directive: ${style.auxInstruction.trim()}`]
       : []),
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   if (input.kind === "character") {
     const lines = [
       `Target: Player character portrait`,
       `Name/Alias: ${input.name}${input.alias ? ` (${input.alias})` : ""}`,
-      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun) || "unspecified; do not infer gendered features"}`,
+      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun, "en") || "unspecified"}`,
       input.origin ? `Origin/Background: ${input.origin}` : "",
       input.look ? `Appearance: ${input.look}` : "",
       input.outfit ? `Current outfit: ${input.outfit}` : "",
@@ -394,7 +665,7 @@ function buildAuxMessages(
     const lines = [
       `Target: NPC character portrait`,
       `Name/Alias: ${input.name}${input.alias ? ` (${input.alias})` : ""}`,
-      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun) || "unspecified; do not infer gendered features"}`,
+      `Pronoun: ${input.pronoun}; gender cue: ${genderHint(input.pronoun, "en") || "unspecified"}`,
       input.role ? `Role: ${input.role}` : "",
       input.faction && input.faction !== "无" ? `Faction: ${input.faction}` : "",
       input.look ? `Appearance: ${input.look}` : "",
@@ -466,7 +737,7 @@ function parseAuxReply(
 }
 
 /**
- * 调用辅助模型提炼英文生图提示词；
+ * 调用辅助模型提炼生图提示词；
  * 当 useAux=false 或辅助模型未就绪/失败时，不抛错而是退回确定性兜底提示词并附带 fallbackReason。
  */
 export async function draftImagePrompt(
@@ -481,6 +752,8 @@ export async function draftImagePrompt(
 ): Promise<ImagePromptResult> {
   const useAux = options.useAux ?? true;
   const style = options.style;
+  const lang: ImagePromptLanguage = style?.promptLanguage ?? "en";
+  const sep = lang === "zh" ? "，" : ", ";
   const negativePromptMode = options.negativePromptMode ?? "independent";
   if (!useAux || !llm) {
     return fallbackImagePrompt(input, style, negativePromptMode);
@@ -527,7 +800,7 @@ export async function draftImagePrompt(
       fallbackReason: `辅助模型输出达到长度上限（${finishReason}），已回退本地拼接提示词`,
     };
   }
-  const defaultNeg = style?.negativePrompt?.trim() ?? DEFAULT_NEGATIVE_PROMPT;
+  const defaultNeg = resolveNegativePrompt(style, lang);
   const parsed = parseAuxReply(reply, defaultNeg);
   if (!parsed) {
     return {
@@ -535,10 +808,15 @@ export async function draftImagePrompt(
       fallbackReason: "辅助模型返回内容格式异常，已回退本地拼接提示词",
     };
   }
+  const withCustom = prependCustomPrompt(parsed.prompt, style?.customPrompt, sep);
+  const exclusionPrefix =
+    lang === "zh"
+      ? "\n排除元素（画面中不要出现）："
+      : "\nUser-requested exclusions (render the image without these): ";
   const prompt =
     negativePromptMode === "in-prompt" && parsed.negativePrompt
-      ? `${parsed.prompt}\nUser-requested exclusions (render the image without these): ${parsed.negativePrompt}`
-      : parsed.prompt;
+      ? `${withCustom}${exclusionPrefix}${parsed.negativePrompt}`
+      : withCustom;
   if (prompt.length > IMAGE_PROMPT_MAX_LENGTH) {
     return {
       ...fallbackImagePrompt(input, style, negativePromptMode),
