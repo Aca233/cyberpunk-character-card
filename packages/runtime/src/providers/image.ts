@@ -60,12 +60,16 @@ export type ImageResolved =
     }
   | { readonly ok: false; readonly error: string };
 
-const DEFAULT_BASE: Record<"openai" | "ollama" | "gemini" | "sdwebui" | "comfyui", string> = {
+const DEFAULT_BASE: Record<
+  "openai" | "ollama" | "gemini" | "sdwebui" | "comfyui" | "novelai",
+  string
+> = {
   openai: "https://api.openai.com/v1",
   ollama: "http://127.0.0.1:11434/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta",
   sdwebui: "http://127.0.0.1:7860",
   comfyui: "http://127.0.0.1:8188",
+  novelai: "https://image.novelai.net",
 };
 
 const COMFY_POLL_MS = 800;
@@ -237,12 +241,41 @@ function openAiSizeFor(model: string, ratio: AspectRatio = "1:1", explicit?: str
   }
 }
 
+function novelAiDimensionsFor(request: ImageGenerateRequest): { width: number; height: number } {
+  const size = request.size?.trim();
+  if (size) {
+    const { width, height } = dimensionsForRequest(request);
+    if (width % 64 !== 0 || height % 64 !== 0) {
+      throw new UpstreamError(
+        "NovelAI 生图尺寸的宽和高必须是 64 的整数倍（例如 832x1216、1024x1024）",
+      );
+    }
+    return { width, height };
+  }
+  switch (request.aspectRatio) {
+    case "3:4":
+      return { width: 832, height: 1216 };
+    case "4:3":
+      return { width: 1216, height: 832 };
+    case "16:9":
+      return { width: 1280, height: 704 };
+    case "9:16":
+      return { width: 704, height: 1280 };
+    default:
+      return { width: 1024, height: 1024 };
+  }
+}
+
 export function imageProtocolCapabilities(protocol: ResolvedImageProtocol) {
   return {
-    negativePrompt: protocol === "sdwebui" || protocol === "comfyui",
+    negativePrompt: protocol === "sdwebui" || protocol === "comfyui" || protocol === "novelai",
     aspectRatio: protocol === "gemini-native" || protocol === "gemini-imagen",
-    size: protocol === "openai-images" || protocol === "sdwebui" || protocol === "comfyui",
-    sampling: protocol === "sdwebui" || protocol === "comfyui",
+    size:
+      protocol === "openai-images" ||
+      protocol === "sdwebui" ||
+      protocol === "comfyui" ||
+      protocol === "novelai",
+    sampling: protocol === "sdwebui" || protocol === "comfyui" || protocol === "novelai",
   } as const;
 }
 
@@ -253,11 +286,15 @@ export function resolveImageProtocol(profile: Profile): ResolvedImageProtocol {
   }
   if (profile.type === "sdwebui") return "sdwebui";
   if (profile.type === "comfyui") return "comfyui";
+  if (profile.type === "novelai") return "novelai";
   if (profile.type === "gemini") {
     const cleanModel = profile.model.replace(/^models\//, "");
     return /^imagen/i.test(cleanModel) ? "gemini-imagen" : "gemini-native";
   }
   const m = profile.model.toLowerCase();
+  if (m.startsWith("nai-diffusion")) {
+    return "novelai";
+  }
   if (
     m.includes("dall-e") ||
     m.includes("gpt-image") ||
@@ -802,6 +839,192 @@ async function generateComfyUi(
   throw new UpstreamError(`${provider} ComfyUI 生成超时，请检查本地队列或工作流`);
 }
 
+/* ———— 5. NovelAI Diffusion V5 / V4.5 / V4 / V3 (/ai/generate-image) ———— */
+
+function isRawImageBytes(bytes: Uint8Array): boolean {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return true;
+  }
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return true;
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function extractNovelAiZipImage(
+  provider: string,
+  bytes: Uint8Array,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  if (isRawImageBytes(bytes)) return bytes;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 30 || view.getUint32(0, true) !== 0x04034b50) {
+    throw new UpstreamError(`${provider} 返回的数据既不是 ZIP 归档也不是有效图片`);
+  }
+
+  let method = view.getUint16(8, true);
+  let compressedSize = view.getUint32(18, true);
+  let localHeaderOffset = 0;
+
+  // 若 Local File Header 因流式 Data Descriptor 未写 compressedSize，从末尾 Central Directory 读取
+  const minEocd = Math.max(0, bytes.length - 65557);
+  for (let pos = bytes.length - 22; pos >= minEocd; pos -= 1) {
+    if (view.getUint32(pos, true) === 0x06054b50) {
+      const cdOffset = view.getUint32(pos + 16, true);
+      if (cdOffset + 46 <= bytes.length && view.getUint32(cdOffset, true) === 0x02014b50) {
+        method = view.getUint16(cdOffset + 10, true);
+        compressedSize = view.getUint32(cdOffset + 20, true);
+        localHeaderOffset = view.getUint32(cdOffset + 42, true);
+      }
+      break;
+    }
+  }
+
+  if (
+    localHeaderOffset + 30 > bytes.length ||
+    view.getUint32(localHeaderOffset, true) !== 0x04034b50
+  ) {
+    throw new UpstreamError(`${provider} 返回的 ZIP 文件头损坏`);
+  }
+  const fileNameLen = view.getUint16(localHeaderOffset + 26, true);
+  const extraLen = view.getUint16(localHeaderOffset + 28, true);
+  const dataStart = localHeaderOffset + 30 + fileNameLen + extraLen;
+  if (compressedSize === 0 || dataStart + compressedSize > bytes.length) {
+    throw new UpstreamError(`${provider} 返回的 ZIP 图像数据不完整`);
+  }
+  const slice = bytes.subarray(dataStart, dataStart + compressedSize);
+  if (method === 0) return slice;
+  if (method === 8) {
+    if (typeof DecompressionStream === "undefined") {
+      throw new UpstreamError("当前浏览器不支持 DecompressionStream，无法解压 NovelAI ZIP 响应");
+    }
+    const stream = new Blob([new Uint8Array(slice)])
+      .stream()
+      .pipeThrough(new DecompressionStream("deflate-raw"));
+    return readImageResponseBytes(new Response(stream), signal);
+  }
+  throw new UpstreamError(`${provider} 返回的 ZIP 压缩算法不受支持（method=${method}）`);
+}
+
+function novelAiGenerateUrl(baseUrl: string | undefined): string {
+  const base = cleanBaseUrl(baseUrl, DEFAULT_BASE.novelai);
+  if (base.endsWith("/ai/generate-image")) return base;
+  if (base.endsWith("/ai")) return `${base}/generate-image`;
+  return `${base}/ai/generate-image`;
+}
+
+async function generateNovelAi(
+  provider: string,
+  profile: Profile,
+  apiKey: string,
+  request: ImageGenerateRequest,
+  signal?: AbortSignal,
+): Promise<RawImageGenerateResult> {
+  const url = novelAiGenerateUrl(profile.baseUrl);
+  const model = profile.model.trim() || "nai-diffusion-5-full";
+  const { width, height } = novelAiDimensionsFor(request);
+  const prompt = request.prompt.trim();
+  const negativePrompt = request.negativePrompt?.trim() ?? "";
+  const steps = request.steps ?? 28;
+  const scale = request.cfgScale ?? 5.5;
+  const seed =
+    request.seed !== undefined && request.seed >= 0
+      ? request.seed
+      : (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) % 2_147_483_647;
+  const isV5 = /^nai-diffusion-5/i.test(model);
+  const isV4OrV5 = isV5 || /^nai-diffusion-4/i.test(model);
+
+  const parameters: Record<string, unknown> = {
+    params_version: isV5 ? 4 : isV4OrV5 ? 3 : 1,
+    width,
+    height,
+    scale,
+    sampler: "k_euler_ancestral",
+    steps,
+    n_samples: 1,
+    ucPreset: 0,
+    qualityToggle: true,
+    autoSmea: false,
+    dynamic_thresholding: false,
+    controlnet_strength: 1,
+    legacy: false,
+    add_original_image: true,
+    cfg_rescale: 0,
+    noise_schedule: "karras",
+    legacy_v3_extend: false,
+    seed,
+    negative_prompt: negativePrompt,
+    ...(isV4OrV5
+      ? {
+          v4_prompt: {
+            caption: {
+              base_caption: prompt,
+              char_captions: [],
+            },
+            use_coords: false,
+            use_order: true,
+          },
+          v4_negative_prompt: {
+            caption: {
+              base_caption: negativePrompt,
+              char_captions: [],
+            },
+            use_coords: false,
+            use_order: true,
+          },
+        }
+      : {}),
+  };
+
+  const body = {
+    input: prompt,
+    model,
+    action: "generate",
+    parameters,
+  };
+
+  const res = await post(
+    provider,
+    url,
+    {
+      authorization: `Bearer ${apiKey}`,
+      accept: "application/x-zip-compressed, application/zip, application/octet-stream, image/png",
+    },
+    body,
+    signal,
+  );
+  if (!res.ok) {
+    const detail = await errorDetail(res);
+    throw statusError(provider, res.status, detail.message);
+  }
+  const zipOrImgBytes = await readImageResponseBytes(res, signal);
+  const imgBytes = await extractNovelAiZipImage(provider, zipOrImgBytes, signal);
+  const b64 = imageBytesToBase64(imgBytes);
+  return {
+    ...toDataUrl(b64, "image/png"),
+    actualSeed: seed,
+  };
+}
+
 /* ———— 统一路由 ———— */
 
 async function withImageDeadline<T>(
@@ -859,6 +1082,9 @@ async function requestImageWithProfile(
       return generateSdWebUi(provider, profile, apiKey, request, signal);
     case "comfyui":
       return generateComfyUi(provider, profile, apiKey, request, signal);
+    case "novelai":
+      if (!apiKey) throw new UpstreamError(`${provider} 缺少 NovelAI API 密钥`);
+      return generateNovelAi(provider, profile, apiKey, request, signal);
   }
 }
 
@@ -883,8 +1109,8 @@ export function generateImageWithProfile(
   }
   const sampling = capabilities.sampling
     ? {
-        steps: original.steps ?? 24,
-        cfgScale: original.cfgScale ?? 7,
+        steps: original.steps ?? (protocol === "novelai" ? 28 : 24),
+        cfgScale: original.cfgScale ?? (protocol === "novelai" ? 5.5 : 7),
         seed:
           original.seed !== undefined && original.seed >= 0
             ? original.seed
@@ -919,7 +1145,10 @@ export function generateImageWithProfile(
         let sentSize: string | undefined;
         if (protocol === "openai-images")
           sentSize = openAiSizeFor(snapshot.model, original.aspectRatio, original.size);
-        else if (capabilities.size) {
+        else if (protocol === "novelai") {
+          const size = novelAiDimensionsFor(prepared);
+          sentSize = `${size.width}x${size.height}`;
+        } else if (capabilities.size) {
           const size = dimensionsForRequest(prepared);
           sentSize = `${size.width}x${size.height}`;
         }

@@ -11,6 +11,7 @@ export const ProviderTypeSchema = z.enum([
   "ollama",
   "sdwebui",
   "comfyui",
+  "novelai",
 ]);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 
@@ -22,6 +23,7 @@ export const ImageProtocolSchema = z.enum([
   "gemini-imagen",
   "sdwebui",
   "comfyui",
+  "novelai",
 ]);
 export type ImageProtocol = z.infer<typeof ImageProtocolSchema>;
 

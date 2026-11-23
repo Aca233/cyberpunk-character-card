@@ -289,7 +289,14 @@ export interface CanonNpcBrief {
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
 
-export type ProviderType = "gemini" | "anthropic" | "openai" | "ollama" | "sdwebui" | "comfyui";
+export type ProviderType =
+  | "gemini"
+  | "anthropic"
+  | "openai"
+  | "ollama"
+  | "sdwebui"
+  | "comfyui"
+  | "novelai";
 
 export type ImageProtocol =
   | "auto"
@@ -298,7 +305,8 @@ export type ImageProtocol =
   | "gemini-native"
   | "gemini-imagen"
   | "sdwebui"
-  | "comfyui";
+  | "comfyui"
+  | "novelai";
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
 

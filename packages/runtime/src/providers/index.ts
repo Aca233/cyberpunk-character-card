@@ -64,6 +64,7 @@ export class LlmRouter implements LlmClient {
         return { ok: true, profile, client: anthropicClient(profile, key) };
       case "sdwebui":
       case "comfyui":
+      case "novelai":
         return {
           ok: false,
           error: `${role}方案「${profile.name}」是 ${profile.type} 文生图服务，只能用于「文生图模型」，不能当${role}`,

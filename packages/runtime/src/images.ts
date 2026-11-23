@@ -18,6 +18,7 @@ const ImageGenerationMetadataSchema = z.object({
     "gemini-imagen",
     "sdwebui",
     "comfyui",
+    "novelai",
   ]),
   requestedPrompt: z.string(),
   sentPrompt: z.string(),

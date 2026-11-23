@@ -16,7 +16,15 @@ import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import styles from "./model-settings.module.css";
 import shared from "./settings.module.css";
 
-type Preset = "gemini" | "anthropic" | "relay" | "openai" | "ollama" | "sdwebui" | "comfyui";
+type Preset =
+  | "gemini"
+  | "anthropic"
+  | "relay"
+  | "openai"
+  | "ollama"
+  | "novelai"
+  | "sdwebui"
+  | "comfyui";
 const PRESETS: Record<
   Preset,
   {
@@ -56,6 +64,12 @@ const PRESETS: Record<
     type: "ollama",
     baseUrl: "",
   },
+  novelai: {
+    title: "NovelAI（文生图）",
+    hint: "Persistent API Token (pst-...)，支持 V5 / V4.5",
+    type: "novelai",
+    baseUrl: "https://image.novelai.net",
+  },
   sdwebui: {
     title: "SD WebUI 本地（文生图）",
     hint: "启动需带 --api --cors-allow-origins=*",
@@ -78,6 +92,7 @@ const IMAGE_PROTOCOLS: readonly { readonly id: ImageProtocol; readonly label: st
   { id: "gemini-imagen", label: "Gemini Imagen (:predict)" },
   { id: "sdwebui", label: "Stable Diffusion WebUI (/sdapi/v1/txt2img)" },
   { id: "comfyui", label: "ComfyUI (/prompt)" },
+  { id: "novelai", label: "NovelAI V5 / V4.5 (/ai/generate-image)" },
 ];
 
 function problems(profile: PublicProfile | undefined): string[] {
@@ -89,7 +104,10 @@ function problems(profile: PublicProfile | undefined): string[] {
 
 function textRoleProblems(profile: PublicProfile | undefined): string[] {
   const out = problems(profile);
-  if (profile && (profile.type === "sdwebui" || profile.type === "comfyui")) {
+  if (
+    profile &&
+    (profile.type === "sdwebui" || profile.type === "comfyui" || profile.type === "novelai")
+  ) {
     out.push(`${profile.type} 仅用于文生图模型`);
   }
   return out;
@@ -897,6 +915,9 @@ function ConnectionForm({
       if (!model.trim()) setModel("default");
     } else if (next === "comfyui") {
       setImageProtocol("comfyui");
+    } else if (next === "novelai") {
+      setImageProtocol("novelai");
+      if (!model.trim() || model === "default") setModel("nai-diffusion-5-full");
     } else {
       setImageProtocol("auto");
     }
@@ -1000,7 +1021,9 @@ function ConnectionForm({
                 ? "SD WebUI 根地址（默认 http://127.0.0.1:7860），不要带 /sdapi/v1。"
                 : currentType === "comfyui"
                   ? "ComfyUI 根地址（默认 http://127.0.0.1:8188）。"
-                  : "OpenAI 兼容填 /v1 根地址，不要填 /chat/completions 或 /images/generations。"}
+                  : currentType === "novelai"
+                    ? "NovelAI 图像服务根地址（默认 https://image.novelai.net），自动请求 /ai/generate-image。"
+                    : "OpenAI 兼容填 /v1 根地址，不要填 /chat/completions 或 /images/generations。"}
             </small>
           </label>
           <div className={styles.field}>

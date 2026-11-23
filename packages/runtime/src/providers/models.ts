@@ -14,6 +14,7 @@ const LABELS: Record<ProviderType, string> = {
   anthropic: "Anthropic",
   sdwebui: "Stable Diffusion WebUI",
   comfyui: "ComfyUI",
+  novelai: "NovelAI",
 };
 
 const DEFAULT_BASE: Record<ProviderType, string> = {
@@ -23,7 +24,18 @@ const DEFAULT_BASE: Record<ProviderType, string> = {
   anthropic: "https://api.anthropic.com/v1",
   sdwebui: "http://127.0.0.1:7860",
   comfyui: "http://127.0.0.1:8188",
+  novelai: "https://image.novelai.net",
 };
+
+const NOVELAI_MODELS: readonly string[] = [
+  "nai-diffusion-5-full",
+  "nai-diffusion-5-curated",
+  "nai-diffusion-4-5-full",
+  "nai-diffusion-4-5-curated",
+  "nai-diffusion-4-full",
+  "nai-diffusion-4-curated-preview",
+  "nai-diffusion-3",
+];
 
 const MAX_GEMINI_PAGES = 4;
 
@@ -198,6 +210,10 @@ export async function fetchProviderModels(
       signal,
     );
     return extractModelIds(json);
+  }
+
+  if (input.type === "novelai") {
+    return [...NOVELAI_MODELS];
   }
 
   if (input.type === "sdwebui") {

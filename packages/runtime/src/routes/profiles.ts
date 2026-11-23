@@ -150,7 +150,8 @@ export function profileRoutes(config: ConfigService): Hono {
     const imageOnly =
       overview.status === "ok" &&
       profile !== undefined &&
-      ((profile.imageProtocol !== undefined && profile.imageProtocol !== "auto") ||
+      (profile.type === "novelai" ||
+        (profile.imageProtocol !== undefined && profile.imageProtocol !== "auto") ||
         (overview.config.image === name &&
           overview.config.narrator !== name &&
           overview.config.aux !== name));
