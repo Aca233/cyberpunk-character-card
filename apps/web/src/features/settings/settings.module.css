@@ -1032,6 +1032,49 @@
   font-size: 11px;
 }
 
+.fontSegment {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.customFontRow {
+  display: grid;
+  gap: 6px;
+}
+
+.fontRightCol {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.fontPreview {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
+  color: var(--cp-text);
+}
+
+.fontPreview p {
+  margin: 0;
+  text-indent: 2em;
+}
+
+.fontPreviewTag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  color: var(--cp-cyan);
+}
+
 .debugJump {
   display: flex;
   flex-wrap: wrap;
@@ -1468,7 +1511,8 @@
     grid-template-columns: 1fr;
   }
 
-  .paceSegment {
+  .paceSegment,
+  .fontSegment {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -16,7 +16,10 @@ import { installGameCursor } from "./assets/cursor";
 import { preloadBootAssets } from "./assets/preload";
 import { warmInitialQueries } from "./assets/usePreload";
 import { installAudioUnlock, installUiAudioDelegation } from "./audio";
+import { installTypographyPrefs } from "./features/settings/prefs";
 import { FatalScreen } from "./features/status/FatalScreen";
+
+installTypographyPrefs();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

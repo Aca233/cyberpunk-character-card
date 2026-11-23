@@ -11,17 +11,32 @@ import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { ITEM_CELL_SLICE } from "../../ui/Panel";
 import { ToggleCheck } from "../../ui/ToggleCheck";
+import audioStyles from "./audio-settings.module.css";
 import ms from "./model-settings.module.css";
 import {
   type ImageBatchCount,
   type ImagePromptField,
   type NarrativeToggle,
   resetImagePromptFields,
+  resetTypographyPrefs,
+  resolveStoryFontFamily,
+  STORY_FONT_SIZE_MAX,
+  STORY_FONT_SIZE_MIN,
+  STORY_LINE_HEIGHT_MAX,
+  STORY_LINE_HEIGHT_MIN,
+  type StoryFontPreset,
   setImageBatchCount,
   setImagePromptField,
   setImagePromptLanguage,
   setNarrativePref,
   setOffscreenPace,
+  setStoryCustomFont,
+  setStoryFont,
+  setStoryFontSize,
+  setStoryLineHeight,
+  setUiFontScale,
+  UI_FONT_SCALE_MAX,
+  UI_FONT_SCALE_MIN,
   useNarrativePrefs,
 } from "./prefs";
 import styles from "./settings.module.css";
@@ -45,6 +60,19 @@ const PROMPT_LANGUAGES: readonly {
   { id: "en", title: "纯英文自然语言", sub: "Flux / Gemini / DALL·E" },
   { id: "en-tags", title: "纯英文 Tag 词组", sub: "NovelAI V5 / SD 二次元" },
   { id: "zh", title: "纯中文描述", sub: "中文模型 / 本地纯中文拼接" },
+];
+
+const FONT_OPTIONS: readonly {
+  readonly id: StoryFontPreset;
+  readonly title: string;
+  readonly sub: string;
+}[] = [
+  { id: "default", title: "思源黑体", sub: "默认无衬线" },
+  { id: "serif", title: "宋体衬线", sub: "纸书长文阅读" },
+  { id: "kai", title: "楷体书风", sub: "温润叙事感" },
+  { id: "system", title: "系统黑体", sub: "微软雅黑 / 苹方" },
+  { id: "mono", title: "终端等宽", sub: "黑客矩阵风" },
+  { id: "custom", title: "自定义字体", sub: "填本机字体名" },
 ];
 
 const BATCH_OPTIONS: readonly {
@@ -152,6 +180,7 @@ const DEBUG: readonly [NarrativeToggle, string, string][] = [
 export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: () => void }) {
   const prefs = useNarrativePrefs();
   const [resetDone, setResetDone] = useState(false);
+  const [fontResetDone, setFontResetDone] = useState(false);
 
   useEffect(() => {
     if (!resetDone) return;
@@ -159,7 +188,14 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
     return () => window.clearTimeout(timer);
   }, [resetDone]);
 
+  useEffect(() => {
+    if (!fontResetDone) return;
+    const timer = window.setTimeout(() => setFontResetDone(false), 2600);
+    return () => window.clearTimeout(timer);
+  }, [fontResetDone]);
+
   const currentPaceLabel = PACES.find((p) => p.id === prefs.offscreen)?.title ?? "常规";
+  const currentFontLabel = FONT_OPTIONS.find((f) => f.id === prefs.storyFont)?.title ?? "思源黑体";
   const currentLangLabel =
     PROMPT_LANGUAGES.find((l) => l.id === prefs.imagePromptLanguage)?.title ?? "纯英文";
 
@@ -190,6 +226,9 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
             data-tone={prefs.offscreen === "off" ? undefined : "ok"}
           >
             城市节奏：{currentPaceLabel}
+          </span>
+          <span className={styles.statChip} data-tone="ok">
+            字体：{currentFontLabel} · {prefs.storyFontSize}px
           </span>
           <span className={styles.statChip} data-tone="ok">
             生图语言：{currentLangLabel} · {prefs.imageBatchCount} 张
@@ -287,7 +326,7 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
             />
             <div className={styles.groupHeader}>
               <Asset id="panel.glowLeft" height={18} tint="var(--cp-yellow)" />
-              <span className={ms.kicker}>04 / 调试</span>
+              <span className={ms.kicker}>05 / 调试</span>
             </div>
             <span
               className={styles.thinLine}
@@ -307,6 +346,174 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
         </div>
       </div>
 
+      <section className={styles.prefGroup} aria-label="字体与字号设置">
+        <NineSlice
+          id="notify.itemCellBg"
+          slice={ITEM_CELL_SLICE}
+          tint="var(--cp-surface)"
+          className={styles.slice}
+        />
+        <NineSlice
+          id="notify.itemCellFg"
+          slice={ITEM_CELL_SLICE}
+          tint="var(--cp-cyan)"
+          className={styles.slice}
+        />
+        <div className={styles.groupHeader}>
+          <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
+          <span className={ms.kicker}>03 / 字体与字号排版</span>
+          <div className={styles.groupAction}>
+            {fontResetDone && <span className={styles.savedPill}>已恢复默认</span>}
+            <Button
+              small
+              onClick={() => {
+                resetTypographyPrefs();
+                setFontResetDone(true);
+              }}
+            >
+              恢复默认字体
+            </Button>
+          </div>
+        </div>
+        <span
+          className={styles.thinLine}
+          style={{ maskImage: cssUrl("tab.line"), WebkitMaskImage: cssUrl("tab.line") }}
+          aria-hidden
+        />
+
+        <div className={styles.prefsTwoCol}>
+          <div className={styles.paceBlock}>
+            <div className={styles.prefText}>
+              <strong>阅读字体风格</strong>
+              <small>
+                立即改变剧情正文排版字体；如需连同按钮、HUD 与面板一并换字体，可开启下方开关
+              </small>
+            </div>
+            <fieldset className={styles.fontSegment} aria-label="阅读字体风格">
+              {FONT_OPTIONS.map((opt) => {
+                const selected = prefs.storyFont === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={selected}
+                    className={styles.paceBtn}
+                    onClick={() => setStoryFont(opt.id)}
+                  >
+                    <CellFrame />
+                    <strong>{opt.title}</strong>
+                    <span>{opt.sub}</span>
+                  </button>
+                );
+              })}
+            </fieldset>
+
+            {prefs.storyFont === "custom" && (
+              <div className={styles.customFontRow}>
+                <label className={styles.prefText} htmlFor="pref-storyCustomFont">
+                  <strong>自定义本机字体名称</strong>
+                  <small>填写本机已安装的字体名（多个用逗号分隔，留空回退默认字体）</small>
+                </label>
+                <FrameBox>
+                  <input
+                    id="pref-storyCustomFont"
+                    type="text"
+                    maxLength={120}
+                    placeholder="例如：霞鹜文楷, LXGW WenKai, Microsoft YaHei"
+                    value={prefs.storyCustomFont}
+                    onChange={(e) => setStoryCustomFont(e.target.value)}
+                  />
+                </FrameBox>
+              </div>
+            )}
+
+            <div className={styles.prefRows}>
+              {toggle([
+                "applyFontToUi",
+                "同步应用到全部界面文字",
+                "开启后主菜单、侧栏、HUD、弹窗与按钮也使用当前字体；关闭时保留原有赛博标题字体，仅改剧情正文",
+              ])}
+            </div>
+          </div>
+
+          <div className={styles.fontRightCol}>
+            <div className={audioStyles.sliderRow}>
+              <div className={audioStyles.sliderHead}>
+                <label className={styles.prefText} htmlFor="pref-storyFontSize">
+                  <strong>剧情正文字号</strong>
+                  <small>影响剧情阅读栏正文与实时流式输出的文字大小</small>
+                </label>
+                <span className={audioStyles.sliderVal}>{prefs.storyFontSize} px</span>
+              </div>
+              <input
+                id="pref-storyFontSize"
+                type="range"
+                min={STORY_FONT_SIZE_MIN}
+                max={STORY_FONT_SIZE_MAX}
+                step={1}
+                value={prefs.storyFontSize}
+                className={audioStyles.range}
+                onChange={(e) => setStoryFontSize(Number(e.target.value))}
+              />
+            </div>
+
+            <div className={audioStyles.sliderRow}>
+              <div className={audioStyles.sliderHead}>
+                <label className={styles.prefText} htmlFor="pref-storyLineHeight">
+                  <strong>剧情正文行距</strong>
+                  <small>调节段落行间距，长文阅读更轻松</small>
+                </label>
+                <span className={audioStyles.sliderVal}>{prefs.storyLineHeight.toFixed(2)} ×</span>
+              </div>
+              <input
+                id="pref-storyLineHeight"
+                type="range"
+                min={STORY_LINE_HEIGHT_MIN}
+                max={STORY_LINE_HEIGHT_MAX}
+                step={0.05}
+                value={prefs.storyLineHeight}
+                className={audioStyles.range}
+                onChange={(e) => setStoryLineHeight(Number(e.target.value))}
+              />
+            </div>
+
+            <div className={audioStyles.sliderRow}>
+              <div className={audioStyles.sliderHead}>
+                <label className={styles.prefText} htmlFor="pref-uiFontScale">
+                  <strong>界面文字缩放</strong>
+                  <small>同步微调菜单、面板、对话与状态栏文字大小</small>
+                </label>
+                <span className={audioStyles.sliderVal}>{prefs.uiFontScale}%</span>
+              </div>
+              <input
+                id="pref-uiFontScale"
+                type="range"
+                min={UI_FONT_SCALE_MIN}
+                max={UI_FONT_SCALE_MAX}
+                step={5}
+                value={prefs.uiFontScale}
+                className={audioStyles.range}
+                onChange={(e) => setUiFontScale(Number(e.target.value))}
+              />
+            </div>
+
+            <div
+              className={styles.fontPreview}
+              style={{
+                fontFamily: resolveStoryFontFamily(prefs),
+                fontSize: `${prefs.storyFontSize}px`,
+                lineHeight: prefs.storyLineHeight,
+              }}
+            >
+              <span className={styles.fontPreviewTag}>{"PREVIEW // 实时预览"}</span>
+              <p>
+                霓虹雨水顺着歌舞伎市场的玻璃幕墙滑落，义眼微光在暗巷里扫过。你把夹克领口立起，检查了弹匣与接入仓温度——夜之城的下一单活，今晚才刚开始。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className={styles.prefGroup} aria-label="文生图提示词与数量设置">
         <NineSlice
           id="notify.itemCellBg"
@@ -322,7 +529,7 @@ export function NarrativeSettings({ onOpenContext }: { readonly onOpenContext?: 
         />
         <div className={styles.groupHeader}>
           <Asset id="panel.glowLeft" height={18} tint="var(--cp-cyan)" />
-          <span className={ms.kicker}>03 / 文生图提示词与数量控制</span>
+          <span className={ms.kicker}>04 / 文生图提示词与数量控制</span>
           <div className={styles.groupAction}>
             {resetDone && <span className={styles.savedPill}>已恢复默认</span>}
             <Button
