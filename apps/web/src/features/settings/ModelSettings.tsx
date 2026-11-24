@@ -7,6 +7,7 @@ import {
   type ImageProtocol,
   type ProfilePatch,
   type PublicProfile,
+  type RoleKey,
 } from "../../api/client";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -134,6 +135,57 @@ function rerankerRoleProblems(profile: PublicProfile | undefined): string[] {
   return out;
 }
 
+function imageRoleProblems(profile: PublicProfile | undefined): string[] {
+  const out = problems(profile);
+  if (profile && profile.type === "anthropic") {
+    out.push("anthropic 暂不支持文生图接口");
+  }
+  return out;
+}
+
+function isProfileCompatibleWithRole(profile: PublicProfile, role: RoleKey): boolean {
+  if (role === "narrator" || role === "aux") {
+    return profile.type !== "sdwebui" && profile.type !== "comfyui" && profile.type !== "novelai";
+  }
+  if (role === "image") {
+    return profile.type !== "anthropic";
+  }
+  if (role === "embedding") {
+    return profile.type === "openai" || profile.type === "ollama" || profile.type === "gemini";
+  }
+  return profile.type === "openai" || profile.type === "ollama";
+}
+
+function defaultModelForRole(profile: PublicProfile, role: RoleKey): string {
+  if (role === "embedding") return profile.embeddingModel || profile.model;
+  return profile.model;
+}
+
+const ROLE_FILTER_PRESETS: Partial<
+  Record<RoleKey, readonly { readonly label: string; readonly query: string }[]>
+> = {
+  embedding: [{ label: "只看 embedding / bge / m3", query: "embed" }],
+  reranker: [{ label: "只看 rerank", query: "rerank" }],
+  image: [{ label: "只看 image / flux / gpt-image / nai", query: "image" }],
+};
+
+function matchesRoleModelFilter(id: string, query: string): boolean {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return true;
+  if (trimmed === "embed") {
+    return /embed|bge-|m3e|text-embedding|jina-embeddings|nomic-embed/i.test(id);
+  }
+  if (trimmed === "rerank") {
+    return /rerank|bge-reranker/i.test(id);
+  }
+  if (trimmed === "image") {
+    return /image|imagen|dall-e|flux|midjourney|mj|sdxl|stable-diffusion|nai-|kolors|ideogram|recraft|seedream|wanx|grok-2-image/i.test(
+      id,
+    );
+  }
+  return id.toLowerCase().includes(trimmed);
+}
+
 function useRefresh() {
   const client = useQueryClient();
   return async () => {
@@ -157,9 +209,18 @@ export function ModelSettings({
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [modelCache, setModelCache] = useState<Record<string, readonly string[]>>({});
+  const [pickerRole, setPickerRole] = useState<RoleKey | null>(null);
+  const [pickerFilter, setPickerFilter] = useState("");
+  const [pickerCustomModel, setPickerCustomModel] = useState("");
+  const [pickerError, setPickerError] = useState("");
+
   const assign = useMutation({
     mutationFn: api.setRoles,
     onSuccess: async (_result, variables) => {
+      const roleModelKeys = variables.roleModels
+        ? (Object.keys(variables.roleModels) as RoleKey[])
+        : [];
       setNotice(
         variables.image === null
           ? "已停用文生图模型，后续不会自动生图，也可删除该连接。"
@@ -167,11 +228,73 @@ export function ModelSettings({
             ? "已停用独立向量模型，若对话方案未附挂向量模型则回退规则检索。"
             : variables.reranker === null
               ? "已停用语义重排模型，后续回合将跳过二阶段精排。"
-              : "使用方案已更新。没有发送模型请求，后续回合使用新选择。",
+              : roleModelKeys.length > 0 &&
+                  variables.narrator === undefined &&
+                  variables.aux === undefined &&
+                  variables.image === undefined &&
+                  variables.embedding === undefined &&
+                  variables.reranker === undefined
+                ? "该角色的独立模型已更新。同一连接可直接复用于多个角色，无需重复创建连接。"
+                : "使用方案已更新。没有发送模型请求，后续回合使用新选择。",
       );
       await refresh();
     },
   });
+
+  const fetchRoleModels = useMutation({
+    gcTime: 0,
+    retry: false,
+    mutationFn: async (profileName: string) => ({
+      profileName,
+      result: await api.fetchModels({ profileName }),
+    }),
+    onSuccess: ({ profileName, result }) => {
+      if (!result.ok) {
+        setPickerError(result.error);
+        return;
+      }
+      setPickerError("");
+      setModelCache((prev) => ({ ...prev, [profileName]: result.models }));
+    },
+    onError: (err) => {
+      setPickerError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const openRoleModelPicker = (
+    role: RoleKey,
+    profileName: string,
+    currentEffectiveModel: string,
+  ) => {
+    if (pickerRole === role) {
+      setPickerRole(null);
+      setPickerError("");
+      return;
+    }
+    setPickerRole(role);
+    setPickerFilter("");
+    setPickerCustomModel(currentEffectiveModel);
+    setPickerError("");
+    if (!(profileName in modelCache)) {
+      fetchRoleModels.mutate(profileName);
+    }
+  };
+
+  const applyRoleModel = (role: RoleKey, profile: PublicProfile, rawModel: string | null) => {
+    const trimmed = rawModel === null ? null : rawModel.trim();
+    const defaultModel = defaultModelForRole(profile, role);
+    const nextValue = !trimmed || trimmed === defaultModel ? null : trimmed;
+    assign.mutate(
+      { roleModels: { [role]: nextValue } },
+      {
+        onSuccess: () => {
+          setPickerRole(null);
+          setPickerError("");
+        },
+      },
+    );
+  };
+
   const init = useMutation({ mutationFn: api.initConfig, onSuccess: refresh });
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -287,47 +410,62 @@ export function ModelSettings({
   const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
 
   const roleSlots: readonly {
-    readonly key: "narrator" | "aux" | "image" | "embedding" | "reranker";
+    readonly key: RoleKey;
     readonly code: string;
     readonly label: string;
-    readonly name: string | undefined;
+    readonly optional: boolean;
+    readonly boundProfile: PublicProfile | undefined;
+    readonly displayName: string | undefined;
     readonly model: string | undefined;
+    readonly overrideModel: string | undefined;
     readonly state: "ok" | "warn" | "optional";
   }[] = [
     {
       key: "narrator",
       code: "NARRATOR",
       label: "叙事模型",
-      name: data.narrator,
-      model: narrator?.model,
+      optional: false,
+      boundProfile: narrator,
+      displayName: data.narrator,
+      model: data.roleModels?.narrator || narrator?.model,
+      overrideModel: data.roleModels?.narrator,
       state: narratorProblems.length === 0 ? "ok" : "warn",
     },
     {
       key: "aux",
       code: "AUX",
       label: "辅助模型",
-      name: data.aux,
-      model: aux?.model,
+      optional: false,
+      boundProfile: aux,
+      displayName: data.aux,
+      model: data.roleModels?.aux || aux?.model,
+      overrideModel: data.roleModels?.aux,
       state: auxProblems.length === 0 ? "ok" : "warn",
     },
     {
       key: "image",
       code: "IMAGE",
       label: "文生图模型",
-      name: data.image,
-      model: image?.model,
-      state: data.image ? (problems(image).length === 0 ? "ok" : "warn") : "optional",
+      optional: true,
+      boundProfile: image,
+      displayName: data.image,
+      model: data.roleModels?.image || image?.model,
+      overrideModel: data.roleModels?.image,
+      state: data.image ? (imageRoleProblems(image).length === 0 ? "ok" : "warn") : "optional",
     },
     {
       key: "embedding",
       code: "EMBEDDING",
       label: "向量检索",
-      name: activeEmbedding?.name,
+      optional: true,
+      boundProfile: embedding,
+      displayName: activeEmbedding?.name,
       model: embedding
-        ? embedding.embeddingModel || embedding.model
+        ? data.roleModels?.embedding || embedding.embeddingModel || embedding.model
         : attachedEmbedding?.embeddingModel
           ? `${attachedEmbedding.embeddingModel}（附挂）`
           : undefined,
+      overrideModel: embedding ? data.roleModels?.embedding : undefined,
       state: activeEmbedding
         ? embeddingRoleProblems(activeEmbedding).length === 0
           ? "ok"
@@ -338,8 +476,11 @@ export function ModelSettings({
       key: "reranker",
       code: "RERANKER",
       label: "语义重排",
-      name: data.reranker,
-      model: reranker?.model,
+      optional: true,
+      boundProfile: reranker,
+      displayName: data.reranker,
+      model: data.roleModels?.reranker || reranker?.model,
+      overrideModel: data.roleModels?.reranker,
       state: data.reranker
         ? rerankerRoleProblems(reranker).length === 0
           ? "ok"
@@ -347,6 +488,16 @@ export function ModelSettings({
         : "optional",
     },
   ];
+
+  const activePickerSlot = pickerRole ? roleSlots.find((s) => s.key === pickerRole) : undefined;
+  const activePickerProfile = activePickerSlot?.boundProfile;
+  const cachedPickerModels = activePickerProfile ? modelCache[activePickerProfile.name] : undefined;
+  const visiblePickerModels = cachedPickerModels
+    ? cachedPickerModels.filter((id) => matchesRoleModelFilter(id, pickerFilter))
+    : [];
+  const activeFilterPresets = activePickerSlot
+    ? ROLE_FILTER_PRESETS[activePickerSlot.key]
+    : undefined;
 
   return (
     <div className={styles.root}>
@@ -379,7 +530,9 @@ export function ModelSettings({
               {ready ? "配置已就绪" : "还差一步"}
             </span>
             <strong className={styles.readyTitle}>
-              {ready ? "模型已选好 · 仅检查配置，未发连通测试" : "当前选择还不能开始剧情"}
+              {ready
+                ? "同一连接可直接分配给多个角色，点「换模型」单独指定模型 ID"
+                : "当前选择还不能开始剧情"}
             </strong>
             {!ready && (
               <span className={styles.readyErrors}>
@@ -392,34 +545,277 @@ export function ModelSettings({
           </div>
           <div className={styles.roleSlots}>
             {roleSlots.map((slot) => {
-              const isSelected = Boolean(slot.name && !adding && selected?.name === slot.name);
+              const isSelected = Boolean(
+                slot.displayName && !adding && selected?.name === slot.displayName,
+              );
+              const isPickerOpen = pickerRole === slot.key;
+              const compatible = data.profiles.filter(
+                (p) =>
+                  isProfileCompatibleWithRole(p, slot.key) || p.name === slot.boundProfile?.name,
+              );
               return (
-                <button
+                <div
                   key={slot.key}
-                  type="button"
                   className={styles.roleSlot}
                   data-state={slot.state}
                   data-selected={isSelected || undefined}
-                  disabled={!slot.name}
-                  onClick={() => {
-                    if (!slot.name || isSelected) return;
-                    requestSelect(slot.name);
-                  }}
+                  data-picker-open={isPickerOpen || undefined}
                 >
                   <div className={styles.roleSlotHead}>
-                    <span className={styles.roleSlotLabel}>{slot.label}</span>
-                    <span className={styles.roleSlotCode}>{slot.code}</span>
+                    <div className={styles.roleSlotTitleWrap}>
+                      <span className={styles.roleSlotLabel}>{slot.label}</span>
+                      {slot.overrideModel && (
+                        <span className={styles.roleOverrideTag}>独立模型</span>
+                      )}
+                    </div>
+                    {slot.displayName ? (
+                      <button
+                        type="button"
+                        className={styles.roleSlotEditBtn}
+                        onClick={() => {
+                          if (!slot.displayName || isSelected) return;
+                          requestSelect(slot.displayName);
+                        }}
+                      >
+                        {isSelected ? "编辑中" : "编辑"}
+                      </button>
+                    ) : (
+                      <span className={styles.roleSlotCode}>{slot.code}</span>
+                    )}
                   </div>
-                  <strong className={styles.roleSlotName}>
-                    {slot.name ?? (slot.state === "optional" ? "未配置（可选）" : "未选择")}
-                  </strong>
-                  <span className={styles.roleSlotModel} title={slot.model}>
-                    {slot.model || (slot.name ? "未填模型名" : "点击下方连接并分配")}
-                  </span>
-                </button>
+                  <select
+                    aria-label={`${slot.label}所用连接`}
+                    className={styles.roleSlotSelect}
+                    value={slot.boundProfile?.name ?? ""}
+                    disabled={assign.isPending || dirty}
+                    title={dirty ? "请先保存或撤销正在编辑的连接" : `切换${slot.label}的连接`}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      if (pickerRole === slot.key) setPickerRole(null);
+                      if (!nextName) {
+                        if (slot.optional) assign.mutate({ [slot.key]: null });
+                        return;
+                      }
+                      assign.mutate({ [slot.key]: nextName });
+                    }}
+                  >
+                    {slot.optional ? (
+                      <option value="">
+                        {slot.key === "embedding" && attachedEmbedding
+                          ? `跟随附挂（${attachedEmbedding.name}）`
+                          : "未启用（可选）"}
+                      </option>
+                    ) : (
+                      !slot.boundProfile && <option value="">未选择连接</option>
+                    )}
+                    {compatible.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                        {p.keyStatus === "missing" ? " · 缺密钥" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div className={styles.roleSlotModelRow}>
+                    <span
+                      className={styles.roleSlotModel}
+                      data-override={Boolean(slot.overrideModel) || undefined}
+                      title={slot.model}
+                    >
+                      {slot.model || (slot.boundProfile ? "未填模型名" : "未分配")}
+                    </span>
+                    {slot.boundProfile && (
+                      <button
+                        type="button"
+                        className={styles.roleSlotModelBtn}
+                        aria-expanded={isPickerOpen}
+                        disabled={assign.isPending || dirty}
+                        title={
+                          dirty ? "请先保存或撤销正在编辑的连接" : `为${slot.label}单独指定模型 ID`
+                        }
+                        onClick={() => {
+                          if (!slot.boundProfile) return;
+                          openRoleModelPicker(
+                            slot.key,
+                            slot.boundProfile.name,
+                            slot.overrideModel || defaultModelForRole(slot.boundProfile, slot.key),
+                          );
+                        }}
+                      >
+                        {isPickerOpen ? "收起" : "换模型"}
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
+          {activePickerSlot && activePickerProfile && (
+            <section className={styles.roleModelTray} aria-label="角色独立模型选择器">
+              <div className={styles.roleModelTrayHead}>
+                <div className={styles.roleModelTrayHeading}>
+                  <strong className={styles.roleModelTrayTitle}>
+                    为「{activePickerSlot.label}」独立选模型 · 连接：{activePickerProfile.name}
+                  </strong>
+                  <span className={styles.roleModelTraySub}>
+                    连接默认模型：
+                    {defaultModelForRole(activePickerProfile, activePickerSlot.key) || "未设置"}
+                    {cachedPickerModels
+                      ? ` · 已缓存 ${cachedPickerModels.length} 个模型（同连接切换角色免重复拉取）`
+                      : ""}
+                  </span>
+                </div>
+                <div className={styles.roleModelTrayActions}>
+                  {activePickerSlot.overrideModel && (
+                    <Button
+                      small
+                      disabled={assign.isPending}
+                      onClick={() =>
+                        applyRoleModel(activePickerSlot.key, activePickerProfile, null)
+                      }
+                    >
+                      恢复连接默认
+                    </Button>
+                  )}
+                  <Button
+                    small
+                    disabled={fetchRoleModels.isPending}
+                    onClick={() => {
+                      setPickerError("");
+                      fetchRoleModels.mutate(activePickerProfile.name);
+                    }}
+                  >
+                    {fetchRoleModels.isPending ? "拉取中…" : "刷新模型列表"}
+                  </Button>
+                  <Button
+                    small
+                    onClick={() => {
+                      setPickerRole(null);
+                      setPickerError("");
+                    }}
+                  >
+                    收起
+                  </Button>
+                </div>
+              </div>
+              <form
+                className={styles.roleModelCustomRow}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (assign.isPending) return;
+                  applyRoleModel(activePickerSlot.key, activePickerProfile, pickerCustomModel);
+                }}
+              >
+                <div className={styles.roleModelInputWrap}>
+                  <FrameBox>
+                    <input
+                      aria-label={`${activePickerSlot.label}独立模型 ID`}
+                      value={pickerCustomModel}
+                      onChange={(e) => setPickerCustomModel(e.target.value)}
+                      spellCheck={false}
+                      placeholder="直接输入或粘贴模型 ID，留空则恢复连接默认"
+                    />
+                  </FrameBox>
+                </div>
+                <Button small primary type="submit" disabled={assign.isPending}>
+                  {assign.isPending ? "应用中…" : "应用模型"}
+                </Button>
+              </form>
+              {pickerError && (
+                <p className={styles.error} role="alert">
+                  拉取模型列表失败：{pickerError}（仍可在上方直接手填模型 ID 并点「应用模型」）
+                </p>
+              )}
+              {fetchRoleModels.isPending && !cachedPickerModels ? (
+                <p className={styles.help} role="status">
+                  正在从「{activePickerProfile.name}」拉取可用模型列表…
+                </p>
+              ) : cachedPickerModels ? (
+                <div className={styles.roleModelListWrap}>
+                  <div className={styles.roleModelFilterRow}>
+                    <div className={styles.pickerFilter}>
+                      <FrameBox>
+                        <input
+                          aria-label="筛选该连接的可用模型"
+                          value={pickerFilter}
+                          onChange={(e) => setPickerFilter(e.target.value)}
+                          spellCheck={false}
+                          placeholder={`搜索 ${cachedPickerModels.length} 个模型…`}
+                        />
+                      </FrameBox>
+                    </div>
+                    {activeFilterPresets && (
+                      <div className={styles.roleFilterChips}>
+                        <button
+                          type="button"
+                          className={styles.inlineToggle}
+                          aria-pressed={pickerFilter === ""}
+                          onClick={() => setPickerFilter("")}
+                        >
+                          全部 ({cachedPickerModels.length})
+                        </button>
+                        {activeFilterPresets.map((chip) => (
+                          <button
+                            key={chip.query}
+                            type="button"
+                            className={styles.inlineToggle}
+                            aria-pressed={pickerFilter === chip.query}
+                            onClick={() =>
+                              setPickerFilter((cur) => (cur === chip.query ? "" : chip.query))
+                            }
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <span className={styles.roleModelCount}>
+                      匹配 {visiblePickerModels.length} / {cachedPickerModels.length}
+                    </span>
+                  </div>
+                  {cachedPickerModels.length === 0 ? (
+                    <p className={styles.help}>接口未返回模型列表，请在上方手动填写模型 ID。</p>
+                  ) : visiblePickerModels.length === 0 ? (
+                    <p className={styles.help}>
+                      没有匹配「{pickerFilter.trim()}」的模型，可清空筛选或直接在上方手填。
+                    </p>
+                  ) : (
+                    <div
+                      className={styles.modelList}
+                      role="listbox"
+                      aria-label={`${activePickerSlot.label}可选模型列表`}
+                    >
+                      {visiblePickerModels.map((id) => {
+                        const effective =
+                          activePickerSlot.overrideModel ||
+                          defaultModelForRole(activePickerProfile, activePickerSlot.key);
+                        const active = id === effective;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            title={id}
+                            disabled={assign.isPending}
+                            className={[styles.modelOption, active ? styles.modelOptionActive : ""]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() =>
+                              applyRoleModel(activePickerSlot.key, activePickerProfile, id)
+                            }
+                          >
+                            <CellFrame />
+                            <span className={styles.modelOptionName}>{id}</span>
+                            {active && <span className={styles.modelOptionTag}>当前</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          )}
         </div>
         {!ready && candidate && (
           <div className={styles.fix}>
@@ -525,23 +921,46 @@ export function ModelSettings({
                         {(isNarrator || isAux || isImage || isEmbedding || isReranker) && (
                           <div className={styles.roles}>
                             {isNarrator && (
-                              <span className={styles.rolePill} data-role="narrator">
+                              <span
+                                className={styles.rolePill}
+                                data-role="narrator"
+                                title={`叙事模型：${data.roleModels?.narrator || profile.model}`}
+                              >
                                 叙事模型
                               </span>
                             )}
-                            {isAux && <span className={styles.rolePill}>辅助模型</span>}
+                            {isAux && (
+                              <span
+                                className={styles.rolePill}
+                                title={`辅助模型：${data.roleModels?.aux || profile.model}`}
+                              >
+                                辅助模型
+                              </span>
+                            )}
                             {isImage && (
-                              <span className={styles.rolePill} data-role="image">
+                              <span
+                                className={styles.rolePill}
+                                data-role="image"
+                                title={`文生图：${data.roleModels?.image || profile.model}`}
+                              >
                                 文生图
                               </span>
                             )}
                             {isEmbedding && (
-                              <span className={styles.rolePill} data-role="embedding">
+                              <span
+                                className={styles.rolePill}
+                                data-role="embedding"
+                                title={`向量模型：${data.roleModels?.embedding || profile.embeddingModel || profile.model}`}
+                              >
                                 向量模型
                               </span>
                             )}
                             {isReranker && (
-                              <span className={styles.rolePill} data-role="reranker">
+                              <span
+                                className={styles.rolePill}
+                                data-role="reranker"
+                                title={`重排模型：${data.roleModels?.reranker || profile.model}`}
+                              >
                                 重排模型
                               </span>
                             )}
@@ -587,6 +1006,9 @@ export function ModelSettings({
                   profile={selected}
                   names={data.profiles.map((p) => p.name)}
                   onDirty={setDirty}
+                  onModelsFetched={(profileName, models) =>
+                    setModelCache((prev) => ({ ...prev, [profileName]: models }))
+                  }
                   onSaved={() => {
                     setDirty(false);
                     setNotice("连接设置已保存。未发送模型请求。");
@@ -600,7 +1022,7 @@ export function ModelSettings({
                 <section className={styles.usage}>
                   <div className={styles.usageHead}>
                     <span className={styles.kicker}>02 / 用于游戏</span>
-                    <h3>保存之后，明确选它来玩。</h3>
+                    <h3>同一连接可同时承担多个角色，顶部槽位可按角色单独换模型。</h3>
                   </div>
                   {/* 用户定的：保留三个独立角色按钮，不要合并按钮和折叠区 */}
                   <div className={styles.roleActions}>
@@ -646,14 +1068,14 @@ export function ModelSettings({
                       disabled={
                         dirty ||
                         assign.isPending ||
-                        (data.image !== selected.name && problems(selected).length > 0)
+                        (data.image !== selected.name && imageRoleProblems(selected).length > 0)
                       }
                       reason={
                         dirty
                           ? "请先保存连接"
                           : data.image === selected.name
                             ? "点击停用文生图模型"
-                            : problems(selected).join("；")
+                            : imageRoleProblems(selected).join("；")
                       }
                       onClick={() =>
                         assign.mutate({
@@ -830,12 +1252,14 @@ function ConnectionForm({
   copyFrom,
   names,
   onDirty,
+  onModelsFetched,
   onSaved,
 }: {
   readonly profile?: PublicProfile;
   readonly copyFrom?: PublicProfile;
   readonly names: readonly string[];
   readonly onDirty: (dirty: boolean) => void;
+  readonly onModelsFetched?: (profileName: string, models: readonly string[]) => void;
   readonly onSaved: (name: string) => void;
 }) {
   const refresh = useRefresh();
@@ -959,14 +1383,14 @@ function ConnectionForm({
           throw new Error("温度要填写 0 到 2 之间的数字。");
         patch.temperature = value;
       } else if (profile?.temperature !== undefined) {
-        throw new Error("当前接口不支持通过留空删除温度，请填写一个值或撤销修改。");
+        patch.temperature = null;
       }
       if (maxOutput.trim()) {
         const value = Number(maxOutput);
         if (!Number.isSafeInteger(value) || value < 1) throw new Error("最大输出长度要填正整数。");
         patch.maxOutputTokens = value;
       } else if (profile?.maxOutputTokens !== undefined) {
-        throw new Error("当前接口不支持通过留空删除输出限制，请填写一个值或撤销修改。");
+        patch.maxOutputTokens = null;
       }
 
       if (!persisted.current) {
@@ -1055,6 +1479,8 @@ function ConnectionForm({
       setModelError("");
       setModelFilter("");
       setModelList(res.models);
+      const cachedName = persisted.current ?? profile?.name;
+      if (cachedName) onModelsFetched?.(cachedName, res.models);
     },
     onError: (err) => {
       setModelError(err instanceof Error ? err.message : String(err));
@@ -1109,7 +1535,7 @@ function ConnectionForm({
       setImageProtocol("comfyui");
     } else if (next === "novelai") {
       setImageProtocol("novelai");
-      if (!model.trim() || model === "default") setModel("nai-diffusion-5-full");
+      if (!model.trim() || model === "default") setModel("nai-diffusion-4-5-full");
     } else {
       setImageProtocol("auto");
     }

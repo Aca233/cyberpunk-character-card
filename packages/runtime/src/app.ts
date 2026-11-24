@@ -168,6 +168,7 @@ export function createApp(deps: AppDeps): Hono {
               image: state.config.image ?? null,
               embedding: state.config.embedding ?? null,
               reranker: state.config.reranker ?? null,
+              roleModels: state.config.roleModels ?? null,
             },
             list: state.config.profiles.map((p) => {
               const pub = deps.config.publicProfile(p);

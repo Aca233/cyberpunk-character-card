@@ -111,16 +111,15 @@
 
 .roleSlot {
   display: grid;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
-  padding: 7px 10px 8px 12px;
+  padding: 7px 10px 8px 11px;
   border: 1px solid var(--cp-line-faint);
   border-left: 3px solid var(--cp-red-dim);
   background: var(--cp-surface-inset);
   color: var(--cp-text);
   font: inherit;
   text-align: left;
-  cursor: var(--cp-cursor-hand);
   transition:
     background-color var(--dur-flash) var(--ease-cyber),
     border-color var(--dur-flash) var(--ease-cyber);
@@ -139,19 +138,14 @@
   border-left-color: var(--cp-text-faint);
 }
 
-.roleSlot:hover:not(:disabled) {
-  border-color: rgb(94 246 255 / 45%);
-  background: var(--cp-surface-hover);
-}
-
 .roleSlot[data-selected] {
-  border-color: rgb(94 246 255 / 55%);
-  background: rgb(94 246 255 / 9%);
+  border-color: rgb(94 246 255 / 42%);
+  background: rgb(94 246 255 / 7%);
 }
 
-.roleSlot:disabled {
-  cursor: default;
-  opacity: 0.78;
+.roleSlot[data-picker-open] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 11%);
 }
 
 .roleSlotHead {
@@ -159,6 +153,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
+}
+
+.roleSlotTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .roleSlotLabel {
@@ -166,6 +168,19 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.roleOverrideTag {
+  padding: 0 4px;
+  border: 1px solid rgb(94 246 255 / 40%);
+  background: rgb(94 246 255 / 12%);
+  color: var(--cp-cyan);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.45;
+  white-space: nowrap;
 }
 
 .roleSlotCode {
@@ -176,31 +191,195 @@
   letter-spacing: 0.12em;
 }
 
-.roleSlotName {
-  overflow: hidden;
-  color: var(--cp-text);
-  font-size: 13px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.roleSlotEditBtn {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--cp-line-faint);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color var(--dur-flash) var(--ease-cyber),
+    color var(--dur-flash) var(--ease-cyber),
+    background-color var(--dur-flash) var(--ease-cyber);
 }
 
-.roleSlot[data-state="warn"] .roleSlotName {
+.roleSlotEditBtn:hover {
+  border-color: rgb(94 246 255 / 55%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+}
+
+.roleSlotSelect {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-deep);
+  color: var(--cp-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: var(--cp-cursor-hand);
+  transition: border-color var(--dur-flash) var(--ease-cyber);
+}
+
+.roleSlotSelect:hover:not(:disabled) {
+  border-color: rgb(94 246 255 / 55%);
+}
+
+.roleSlotSelect:disabled {
+  opacity: 0.6;
+  cursor: var(--cp-cursor-invalid);
+}
+
+.roleSlotSelect option {
+  background: var(--cp-surface-deep);
+  color: var(--cp-text);
+}
+
+.roleSlot[data-state="warn"] .roleSlotSelect {
+  border-color: rgb(252 238 10 / 45%);
   color: var(--cp-yellow);
 }
 
-.roleSlot[data-state="optional"] .roleSlotName {
-  color: var(--cp-text-dim);
-  font-weight: 500;
+.roleSlotModelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 
 .roleSlotModel {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: var(--cp-text-faint);
   font-family: var(--font-mono);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.roleSlotModel[data-override] {
+  color: var(--cp-cyan);
+}
+
+.roleSlotModelBtn {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid rgb(94 246 255 / 35%);
+  background: rgb(94 246 255 / 8%);
+  color: var(--cp-cyan);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color var(--dur-flash) var(--ease-cyber),
+    background-color var(--dur-flash) var(--ease-cyber);
+}
+
+.roleSlotModelBtn:hover:not(:disabled),
+.roleSlotModelBtn[aria-expanded="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 20%);
+}
+
+.roleSlotModelBtn:disabled {
+  opacity: 0.45;
+  cursor: var(--cp-cursor-invalid);
+}
+
+/* 角色独立模型快速选择抽屉 */
+.roleModelTray {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(94 246 255 / 42%);
+  border-left: 3px solid var(--cp-cyan);
+  background: var(--cp-surface-deep);
+}
+
+.roleModelTrayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.roleModelTrayHeading {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.roleModelTrayTitle {
+  color: var(--cp-cyan);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.roleModelTraySub {
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.roleModelTrayActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.roleModelCustomRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.roleModelInputWrap {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.roleModelListWrap {
+  display: grid;
+  gap: 8px;
+}
+
+.roleModelFilterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.roleFilterChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.roleModelCount {
+  margin-left: auto;
+  color: var(--cp-text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .fix {
@@ -373,7 +552,9 @@
 .connection:focus-visible,
 .advanced summary:focus-visible,
 .presetCard:focus-visible,
-.roleSlot:focus-visible {
+.roleSlotSelect:focus-visible,
+.roleSlotEditBtn:focus-visible,
+.roleSlotModelBtn:focus-visible {
   outline: 2px solid var(--cp-cyan);
   outline-offset: 2px;
 }
@@ -695,9 +876,10 @@
     background-color var(--dur-flash) var(--ease-cyber);
 }
 
-.inlineToggle:hover:not(:disabled) {
+.inlineToggle:hover:not(:disabled),
+.inlineToggle[aria-pressed="true"] {
   border-color: var(--cp-cyan);
-  background: rgb(94 246 255 / 12%);
+  background: rgb(94 246 255 / 16%);
 }
 
 .inlineToggle:disabled {
@@ -1103,6 +1285,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .roleSlot,
+  .roleSlotEditBtn,
+  .roleSlotSelect,
+  .roleSlotModelBtn,
   .connection,
   .connection::before,
   .presetCard,

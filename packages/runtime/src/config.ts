@@ -67,7 +67,9 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export const ProfilePatchSchema = z
   .strictObject({
     ...tunables,
-    /** 传 null 表示清空已保存的附挂向量模型 */
+    /** 传 null 表示清空已保存的温度 / 输出上限 / 附挂向量模型 */
+    temperature: z.number().min(0).max(2).nullable().optional(),
+    maxOutputTokens: z.number().int().min(1).nullable().optional(),
     embeddingModel: z.string().min(1).nullable().optional(),
   })
   .partial();
@@ -83,6 +85,30 @@ export const NewProfileSchema = ProfileBase.omit({ apiKey: true, apiKeyEnv: true
   copyKeyFrom: z.string().min(1).max(40).optional(),
 });
 
+export type RoleKey = "narrator" | "aux" | "image" | "embedding" | "reranker";
+const ROLE_KEYS: readonly RoleKey[] = ["narrator", "aux", "image", "embedding", "reranker"];
+
+const RoleModelsSchema = z
+  .strictObject({
+    narrator: z.string().trim().min(1).optional(),
+    aux: z.string().trim().min(1).optional(),
+    image: z.string().trim().min(1).optional(),
+    embedding: z.string().trim().min(1).optional(),
+    reranker: z.string().trim().min(1).optional(),
+  })
+  .optional();
+export type RoleModels = NonNullable<z.infer<typeof RoleModelsSchema>>;
+
+const RoleModelsPatchSchema = z
+  .strictObject({
+    narrator: z.string().trim().nullable().optional(),
+    aux: z.string().trim().nullable().optional(),
+    image: z.string().trim().nullable().optional(),
+    embedding: z.string().trim().nullable().optional(),
+    reranker: z.string().trim().nullable().optional(),
+  })
+  .optional();
+
 const RolesSchema = z.strictObject({
   narrator: z.string().min(1).optional(),
   aux: z.string().min(1).optional(),
@@ -92,6 +118,8 @@ const RolesSchema = z.strictObject({
   embedding: z.string().min(1).nullable().optional(),
   /** 传 null 表示停用语义重排模型 */
   reranker: z.string().min(1).nullable().optional(),
+  /** 按角色独立指定模型 ID，让同一个中转站连接同时承担多个不同模型，无需重复建连接 */
+  roleModels: RoleModelsPatchSchema,
 });
 
 /** 旧版 config.json 用 gm 记叙事模型的方案：读的时候当成 narrator，下次保存就写成新键 */
@@ -117,6 +145,8 @@ export const ConfigSchema = z.preprocess(
       embedding: z.string().min(1).optional(),
       /** 语义重排模型（Reranker，用于二阶段记忆精排）用哪个方案 */
       reranker: z.string().min(1).optional(),
+      /** 各角色独立模型覆写（同一中转站连接可同时分配不同模型） */
+      roleModels: RoleModelsSchema,
     })
     .superRefine((config, ctx) => {
       const names = new Set<string>();
@@ -302,6 +332,9 @@ export class ConfigService {
       image: config.image,
       embedding: config.embedding,
       reranker: config.reranker,
+      ...(config.roleModels && Object.keys(config.roleModels).length > 0
+        ? { roleModels: config.roleModels }
+        : {}),
       profiles: config.profiles.map((p) => this.publicProfile(p)),
     };
   }
@@ -337,13 +370,14 @@ export class ConfigService {
     return this.edit(
       (config) =>
         withProfile(config, name, (p) => {
-          const { embeddingModel, ...rest } = parsed.data;
+          const { embeddingModel, temperature, maxOutputTokens, ...rest } = parsed.data;
           const next: Record<string, unknown> = { ...p, ...rest };
-          if (embeddingModel === null) {
-            delete next.embeddingModel;
-          } else if (embeddingModel !== undefined) {
-            next.embeddingModel = embeddingModel;
-          }
+          if (embeddingModel === null) delete next.embeddingModel;
+          else if (embeddingModel !== undefined) next.embeddingModel = embeddingModel;
+          if (temperature === null) delete next.temperature;
+          else if (temperature !== undefined) next.temperature = temperature;
+          if (maxOutputTokens === null) delete next.maxOutputTokens;
+          else if (maxOutputTokens !== undefined) next.maxOutputTokens = maxOutputTokens;
           return next;
         }),
       (config) => this.publicOf(config, name),
@@ -431,7 +465,7 @@ export class ConfigService {
     );
   }
 
-  /** 换角色 / 辅助 / 文生图 / 向量检索 / 语义重排用的方案 */
+  /** 换角色 / 辅助 / 文生图 / 向量检索 / 语义重排用的方案及各角色独立模型覆写 */
   setRoles(body: unknown): Promise<
     Result<{
       narrator?: string;
@@ -439,6 +473,7 @@ export class ConfigService {
       image?: string;
       embedding?: string;
       reranker?: string;
+      roleModels?: RoleModels;
     }>
   > {
     const parsed = RolesSchema.safeParse(body);
@@ -447,23 +482,46 @@ export class ConfigService {
     }
     return this.edit(
       (config) => {
-        const { image, embedding, reranker, ...rest } = parsed.data;
+        const { image, embedding, reranker, roleModels: roleModelsPatch, ...rest } = parsed.data;
         const next: Record<string, unknown> = { ...config, ...rest };
-        if (image === null) {
-          delete next.image;
-        } else if (image !== undefined) {
-          next.image = image;
+        if (image === null) delete next.image;
+        else if (image !== undefined) next.image = image;
+        if (embedding === null) delete next.embedding;
+        else if (embedding !== undefined) next.embedding = embedding;
+        if (reranker === null) delete next.reranker;
+        else if (reranker !== undefined) next.reranker = reranker;
+
+        const nextRoleModels: Record<string, string> = {};
+        if (config.roleModels) {
+          for (const role of ROLE_KEYS) {
+            const existingModel = config.roleModels[role];
+            if (existingModel !== undefined) nextRoleModels[role] = existingModel;
+          }
         }
-        if (embedding === null) {
-          delete next.embedding;
-        } else if (embedding !== undefined) {
-          next.embedding = embedding;
+        for (const role of ROLE_KEYS) {
+          const prevProfile = config[role];
+          const nextProfile = typeof next[role] === "string" ? (next[role] as string) : undefined;
+          const patchVal = roleModelsPatch?.[role];
+          if (nextProfile === undefined) {
+            delete nextRoleModels[role];
+            continue;
+          }
+          if (patchVal !== undefined) {
+            const trimmed = patchVal === null ? "" : patchVal.trim();
+            const bound = config.profiles.find((p) => p.name === nextProfile);
+            if (!trimmed || (bound && trimmed === bound.model)) {
+              delete nextRoleModels[role];
+            } else {
+              nextRoleModels[role] = trimmed;
+            }
+          } else if (prevProfile !== nextProfile) {
+            // 切换到另一条连接且未指定新覆写模型时，清除旧连接的残留覆写
+            delete nextRoleModels[role];
+          }
         }
-        if (reranker === null) {
-          delete next.reranker;
-        } else if (reranker !== undefined) {
-          next.reranker = reranker;
-        }
+        if (Object.keys(nextRoleModels).length > 0) next.roleModels = nextRoleModels;
+        else delete next.roleModels;
+
         return { draft: next };
       },
       (config) => ({
@@ -472,6 +530,9 @@ export class ConfigService {
         ...(config.image === undefined ? {} : { image: config.image }),
         ...(config.embedding === undefined ? {} : { embedding: config.embedding }),
         ...(config.reranker === undefined ? {} : { reranker: config.reranker }),
+        ...(config.roleModels && Object.keys(config.roleModels).length > 0
+          ? { roleModels: config.roleModels }
+          : {}),
       }),
     );
   }

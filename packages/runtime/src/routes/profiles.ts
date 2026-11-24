@@ -170,7 +170,7 @@ export function profileRoutes(config: ConfigService): Hono {
         );
         return c.json({
           ok: true,
-          model: profile.model,
+          model: overview.config.roleModels?.image?.trim() || profile.model,
           ms: Date.now() - started,
           reply: `生图测试成功（${result.mimeType}）`,
         });
@@ -192,7 +192,8 @@ export function profileRoutes(config: ConfigService): Hono {
       overview.config.reranker !== name;
     if (embeddingOnly) {
       const started = Date.now();
-      const targetModel = embeddingModelFor(profile, "dedicated");
+      const targetModel =
+        overview.config.roleModels?.embedding?.trim() || embeddingModelFor(profile, "dedicated");
       if (!targetModel) {
         return c.json({ ok: false, error: "向量连接还没有填写模型名" });
       }
@@ -227,7 +228,7 @@ export function profileRoutes(config: ConfigService): Hono {
       overview.config.embedding !== name;
     if (rerankerOnly) {
       const started = Date.now();
-      const targetModel = profile.model.trim();
+      const targetModel = overview.config.roleModels?.reranker?.trim() || profile.model.trim();
       if (!targetModel) {
         return c.json({ ok: false, error: "重排连接还没有填写模型名" });
       }

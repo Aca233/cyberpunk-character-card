@@ -940,7 +940,7 @@ async function generateNovelAi(
   signal?: AbortSignal,
 ): Promise<RawImageGenerateResult> {
   const url = novelAiGenerateUrl(profile.baseUrl);
-  const model = profile.model.trim() || "nai-diffusion-5-full";
+  const model = profile.model.trim() || "nai-diffusion-4-5-full";
   const { width, height } = novelAiDimensionsFor(request);
   const prompt = request.prompt.trim();
   const negativePrompt = request.negativePrompt?.trim() ?? "";
@@ -1165,7 +1165,9 @@ export function generateImageWithProfile(
         if (requestSignal.aborted) throw new AbortedError();
         const validated = await validateImageDataUrl(raw.dataUrl, requestSignal);
         const ratio = original.aspectRatio?.split(":").map(Number);
-        if (ratio?.[0] && ratio[1]) {
+        const matchesSentSize =
+          sentSize !== undefined && sentSize === `${validated.width}x${validated.height}`;
+        if (!matchesSentSize && ratio?.[0] && ratio[1]) {
           const expected = ratio[0] / ratio[1];
           if (Math.abs(validated.width / validated.height / expected - 1) > 0.01) {
             warnings.push(
@@ -1223,10 +1225,15 @@ export class ImageRouter {
         error: "还没有选文生图模型：到设置页「模型连接」添加或选择一个连接，再点「设为文生图模型」",
       };
     }
-    const profile = state.config.profiles.find((p) => p.name === name);
-    if (!profile) {
+    const rawProfile = state.config.profiles.find((p) => p.name === name);
+    if (!rawProfile) {
       return { ok: false, error: `文生图模型指向的方案「${name}」不存在` };
     }
+    const modelOverride =
+      !profileNameOverride || profileNameOverride === state.config.image
+        ? state.config.roleModels?.image?.trim()
+        : undefined;
+    const profile: Profile = modelOverride ? { ...rawProfile, model: modelOverride } : rawProfile;
     if (profile.type === "anthropic") {
       return {
         ok: false,

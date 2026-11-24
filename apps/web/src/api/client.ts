@@ -455,6 +455,10 @@ export interface PresetPatch {
   readonly useSampling?: boolean;
 }
 
+export type RoleKey = "narrator" | "aux" | "image" | "embedding" | "reranker";
+export type RoleModels = Readonly<Partial<Record<RoleKey, string>>>;
+export type RoleModelsPatch = Partial<Record<RoleKey, string | null>>;
+
 export interface ProfilesOverview {
   readonly status: "ok" | "missing" | "invalid";
   readonly errors: readonly string[];
@@ -463,14 +467,15 @@ export interface ProfilesOverview {
   readonly image?: string;
   readonly embedding?: string;
   readonly reranker?: string;
+  readonly roleModels?: RoleModels;
   readonly profiles: readonly PublicProfile[];
 }
 
 export interface ProfilePatch {
   baseUrl?: string;
   model?: string;
-  temperature?: number;
-  maxOutputTokens?: number;
+  temperature?: number | null;
+  maxOutputTokens?: number | null;
   contextWindow?: number;
   embeddingModel?: string | null;
   imageProtocol?: ImageProtocol;
@@ -788,6 +793,7 @@ export const api = {
     image?: string | null;
     embedding?: string | null;
     reranker?: string | null;
+    roleModels?: RoleModelsPatch;
   }) =>
     request<{
       narrator?: string;
@@ -795,6 +801,7 @@ export const api = {
       image?: string;
       embedding?: string;
       reranker?: string;
+      roleModels?: RoleModels;
     }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),

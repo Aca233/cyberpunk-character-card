@@ -28,13 +28,14 @@ const DEFAULT_BASE: Record<ProviderType, string> = {
 };
 
 const NOVELAI_MODELS: readonly string[] = [
-  "nai-diffusion-5-full",
-  "nai-diffusion-5-curated",
   "nai-diffusion-4-5-full",
   "nai-diffusion-4-5-curated",
+  "nai-diffusion-5-full",
+  "nai-diffusion-5-curated",
   "nai-diffusion-4-full",
   "nai-diffusion-4-curated-preview",
   "nai-diffusion-3",
+  "nai-diffusion-furry-3",
 ];
 
 const MAX_GEMINI_PAGES = 4;

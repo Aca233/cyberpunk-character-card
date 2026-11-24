@@ -80,14 +80,18 @@ export class LlmRouter implements LlmClient {
     if (state.status !== "ok")
       return { ok: false, error: `模型配置还不能用：${state.errors.join("；")}` };
     const name = this.pick[purpose] ?? state.config[purpose];
-    const profile = state.config.profiles.find((p) => p.name === name);
+    const rawProfile = state.config.profiles.find((p) => p.name === name);
     const role = purpose === "narrator" ? "叙事模型" : "辅助模型";
     if (name === undefined)
       return {
         ok: false,
         error: `还没有选${role}：到设置页添加一个模型连接，再点「设为${role}」`,
       };
-    if (!profile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };
+    if (!rawProfile) return { ok: false, error: `${role}指向的方案「${name}」不存在` };
+    const modelOverride = !this.pick[purpose]
+      ? state.config.roleModels?.[purpose]?.trim()
+      : undefined;
+    const profile: Profile = modelOverride ? { ...rawProfile, model: modelOverride } : rawProfile;
     const key = this.config.keyFor(profile);
     switch (profile.type) {
       case "openai":
@@ -185,7 +189,8 @@ export class LlmRouter implements LlmClient {
           error: `向量模型指向的方案「${state.config.embedding}」不存在`,
         };
       }
-      const model = embeddingModelFor(profile, "dedicated");
+      const model =
+        state.config.roleModels?.embedding?.trim() || embeddingModelFor(profile, "dedicated");
       if (!model) {
         return {
           configured: true,
@@ -258,7 +263,7 @@ export class LlmRouter implements LlmClient {
         error: `重排方案「${profile.name}」（${profile.type}）不支持 /rerank 接口，请改用 OpenAI 兼容或 Ollama 连接`,
       };
     }
-    const model = profile.model.trim();
+    const model = state.config.roleModels?.reranker?.trim() || profile.model.trim();
     if (!model) {
       return {
         configured: true,
