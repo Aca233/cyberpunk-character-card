@@ -1,7 +1,7 @@
 import { inventoryRules } from "@cp/core";
 import { poiShops } from "./merchant-sites";
 
-/** 阿岚的歌舞伎芯片小铺：正版商业超梦、情报/技能协议芯片与灰市隔离读写器材。 */
+/** 洋子的歌舞伎黑客芯片铺：快速破解程序、正版商业超梦、情报/技能协议芯片与隔离读写器材。 */
 const sleeveStock: Record<string, number> = {
   "chip-reader-writer": 2,
   "bd-portable-player": 2,
@@ -34,7 +34,7 @@ const lizziesBdStock: Record<string, number> = {
   coffee: 8,
 };
 
-/** 扭扭街暗巷摊位（灰舌）：非法无滤波黑超梦、调查原片与来路不明的加密/行为协议芯片。 */
+/** 扭扭街暗巷摊位（兰尼·尼罗）：非法无滤波黑超梦、调查原片与来路不明的加密/行为协议芯片。 */
 const jigjigXbdStock: Record<string, number> = {
   "chip-reader-writer": 1,
   "blank-shard": 6,
@@ -48,17 +48,17 @@ const jigjigXbdStock: Record<string, number> = {
 };
 
 /**
- * 商店开局条件：威尔逊按参考价；阿涛的摊子便宜三成、货源非正规渠道。
- * 日本町商店街卖服装、药和吃的。阿涛、阿岚与灰舌为本作自创人物；标签不替代具体货况与交易事实。
+ * 商店开局条件：威尔逊按参考价；歌舞伎黑市武器摊便宜三成、货源非正规渠道。
+ * 日本町商店街卖服装、药和吃的；洋子·鹤与兰尼·尼罗为原作角色，标签不替代具体货况与交易事实。
  */
 export const shops = inventoryRules.ShopListSchema.parse([
   {
     id: "sleeve-corner",
-    name: "阿岚的芯片小铺",
-    keeper: "阿岚",
-    keeperNpc: "sleeve-shop-keeper",
+    name: "边缘网络（洋子芯片铺）",
+    keeper: "洋子·鹤",
+    keeperNpc: "yoko-tsuru",
     location: "kabuki-market",
-    note: "歌舞伎市场正版与灰市兼营的芯片音像小铺：卖商业超梦、技能协议芯片、隔离读写器与编辑头环，店内配有基础超梦试看设备；询价不自动开机或成交。",
+    note: "歌舞伎市场环状商业街的黑客芯片小铺（店主洋子·鹤）：卖快速破解、商业超梦、技能协议芯片、隔离读写器与编辑头环，店内配有基础超梦试看设备；询价不自动开机或成交。",
     shelf: Object.keys(sleeveStock),
     initialStock: sleeveStock,
     supply: {
@@ -103,11 +103,11 @@ export const shops = inventoryRules.ShopListSchema.parse([
   },
   {
     id: "jigjig-xbd-stall",
-    name: "扭扭街暗巷黑片摊",
-    keeper: "灰舌",
-    keeperNpc: "jigjig-xbd-dealer",
+    name: "兰尼的黑超梦摊",
+    keeper: "兰尼·尼罗",
+    keeperNpc: "lenny-nero",
     location: "jig-jig-street",
-    note: "扭扭街暗巷流动黑市摊位，由灰舌私售清道夫地下黑超梦（XBD）、来路不明的调查原片与加密/行为协议芯片，只收现钱、不包售后与防毒。",
+    note: "扭扭街暗巷黑市摊位，由兰尼·尼罗私售清道夫地下黑超梦（XBD）、来路不明的调查原片与加密/行为协议芯片，只收现钱、不包售后与防毒。",
     priceFactor: 1.15,
     blackMarket: true,
     shelf: Object.keys(jigjigXbdStock),
@@ -174,11 +174,10 @@ export const shops = inventoryRules.ShopListSchema.parse([
   },
   {
     id: "kabuki-arms",
-    name: "阿涛的摊子",
-    keeper: "阿涛",
-    keeperNpc: "atao",
+    name: "歌舞伎黑市武器摊",
+    keeper: "歌舞伎黑市摊主",
     location: "kabuki-market",
-    note: "歌舞伎市场里卖刀卖枪的摊子，货不问来路，有的枪号码锉掉了",
+    note: "歌舞伎市场里卖刀卖枪的黑市摊位，货不问来路，有的枪号码锉掉了",
     priceFactor: 0.7,
     blackMarket: true,
     shelf: [

@@ -2161,6 +2161,11 @@
       { "id": "portrait.wilson", "atlas": "common/avatars2", "slot": "wilson" },
       { "id": "portrait.fingers", "atlas": "common/avatars_tooltips", "slot": "ripper_fingers" },
       {
+        "id": "portrait.charlesBucks",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_kabuki3"
+      },
+      {
         "id": "portrait.cassiusRyder",
         "atlas": "common/avatars_tooltips",
         "slot": "ripper_cassius"
@@ -2172,7 +2177,7 @@
       { "id": "portrait.lizzyWizzy", "atlas": "common/avatars1", "slot": "lizzy" },
       { "id": "portrait.mrBlueEyes", "atlas": "common/avatars1", "slot": "mr_blue_eyes" },
       { "id": "portrait.ozob", "atlas": "common/avatars1", "slot": "ozob" },
-      { "id": "portrait.coachFred", "atlas": "common/avatars0", "slot": "coach" },
+      { "id": "portrait.coachFred", "atlas": "common/avatars0", "slot": "fred" },
       { "id": "portrait.scorpion", "atlas": "common/avatars2", "slot": "scorpion" },
       { "id": "portrait.cassidy", "atlas": "common/avatars0", "slot": "cassidy" },
       { "id": "portrait.nancy", "atlas": "common/avatars1", "slot": "nancy" },

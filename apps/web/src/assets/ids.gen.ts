@@ -527,6 +527,7 @@ export const ASSET_IDS = [
   "portrait.carol",
   "portrait.cassidy",
   "portrait.cassiusRyder",
+  "portrait.charlesBucks",
   "portrait.claire",
   "portrait.coachFred",
   "portrait.dakota",

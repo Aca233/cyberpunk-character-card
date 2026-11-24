@@ -254,7 +254,7 @@ export const inventory = defineSystem<
       commands: ["gunsmith"],
       when: (state, input) =>
         Object.values(state.objects).some((o) => o.kind === "customized") ||
-        /枪匠|工坊|改装|加装|拆下|解锁|强化武器|智能连接|智能握把|固锁|威尔逊|阿涛/.test(
+        /枪匠|工坊|改装|加装|拆下|解锁|强化武器|智能连接|智能握把|固锁|威尔逊|武器摊/.test(
           input.text,
         ),
       judge:

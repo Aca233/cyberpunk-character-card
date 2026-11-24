@@ -50,20 +50,10 @@ interface ChatChunk {
   readonly usage?: {
     readonly prompt_tokens?: number;
     readonly completion_tokens?: number;
-    readonly input_tokens?: number;
-    readonly output_tokens?: number;
-    readonly prompt_tokens_details?: {
-      readonly cached_tokens?: number;
-      readonly cache_read_tokens?: number;
-      readonly cache_read_input_tokens?: number;
-      readonly cache_write_tokens?: number;
-      readonly cache_creation_input_tokens?: number;
-    } | null;
-    readonly input_tokens_details?: { readonly cached_tokens?: number } | null;
+    readonly prompt_tokens_details?: { readonly cached_tokens?: number } | null;
     readonly prompt_cache_hit_tokens?: number;
     readonly cache_read_input_tokens?: number;
     readonly cache_creation_input_tokens?: number;
-    readonly cached_tokens?: number;
   } | null;
   readonly error?: {
     readonly message?: string;
@@ -72,123 +62,15 @@ interface ChatChunk {
   };
 }
 
-const EPHEMERAL = { type: "ephemeral" } as const;
-
-/** 记录明确返回 400 拒绝 prompt_cache_key / user 字段的上游端点，后续请求自动省略对应字段 */
-const rejectedCacheKeyEndpoints = new Set<string>();
-const rejectedUserFieldEndpoints = new Set<string>();
-
-function endpointKey(profile: Profile): string {
-  return `${profile.baseUrl ?? DEFAULT_BASE.openai}::${profile.model}`;
-}
-
-function isGoogleDirectOpenAiCompat(profile: Profile): boolean {
-  if (!profile.baseUrl) return false;
+/** 仅向官方 OpenAI 端点附加 prompt_cache_key，避免部分第三方兼容中转站报 unknown field */
+function supportsPromptCacheKey(profile: Profile): boolean {
+  if (profile.type !== "openai") return false;
+  if (!profile.baseUrl) return true;
   try {
-    return new URL(profile.baseUrl).hostname.toLowerCase() === "generativelanguage.googleapis.com";
+    return new URL(profile.baseUrl).hostname === "api.openai.com";
   } catch {
     return false;
   }
-}
-
-/**
- * 向 OpenAI 官方与各类兼容中转站（New API / One API / Sub2API / agg-direct / OpenRouter 等）
- * 透传 prompt_cache_key 与 user，使聚合多号网关能按「存档会话」做统一粘性路由（与 Codex 机制一致），
- * 避免轮询切号或跨阶段拆分账号导致上游隐式缓存失效。仅跳过 Ollama 与严格校验未知字段的 Google 官方 OpenAI 兼容端点。
- */
-function supportsPromptCacheKey(profile: Profile): boolean {
-  if (profile.type !== "openai") return false;
-  if (isGoogleDirectOpenAiCompat(profile)) return false;
-  return !rejectedCacheKeyEndpoints.has(endpointKey(profile));
-}
-
-function supportsUserStickyField(profile: Profile): boolean {
-  if (profile.type !== "openai") return false;
-  if (isGoogleDirectOpenAiCompat(profile)) return false;
-  return !rejectedUserFieldEndpoints.has(endpointKey(profile));
-}
-
-function isRejectedFieldError(status: number, message: string, field: string): boolean {
-  if (status !== 400 && status !== 422) return false;
-  const lower = message.toLowerCase();
-  if (!lower.includes(field.toLowerCase())) return false;
-  return (
-    lower.includes("unknown") ||
-    lower.includes("unrecognized") ||
-    lower.includes("unexpected") ||
-    lower.includes("unsupported") ||
-    lower.includes("extra_forbidden") ||
-    lower.includes("additional properties") ||
-    lower.includes("not permitted") ||
-    lower.includes("invalid")
-  );
-}
-
-/**
- * 通过 OpenAI 兼容接口（New API / One API / OpenRouter / LiteLLM 等）调用 Claude 时，
- * 上游 Anthropic 协议要求显式 cache_control 断点，否则提示词缓存命中率恒为 0%；
- * OpenRouter 调用 Gemini 时同样支持通过 cache_control 启用显式缓存。
- * 对纯 OpenAI / DeepSeek / 通义 / Ollama 等自动缓存或不支持该字段的后端不发送，避免 400 报错。
- */
-function supportsExplicitCacheControl(profile: Profile): boolean {
-  if (profile.type !== "openai") return false;
-  const model = profile.model.toLowerCase();
-  if (model.includes("claude")) return true;
-  if (profile.baseUrl && model.includes("gemini")) {
-    try {
-      const host = new URL(profile.baseUrl).hostname.toLowerCase();
-      if (host === "openrouter.ai" || host.endsWith(".openrouter.ai")) return true;
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
-
-/**
- * 合并连续的前导 system 消息（例如酒馆预设的 20+ 条静态 system 条目 + 本作静态规则）为单条 system 消息，
- * 避免部分 OpenAI→Gemini / OpenAI→Claude 协议转换中转站对多条 system 消息处理不一致而破坏前缀缓存。
- */
-function normalizeLeadingSystem(messages: readonly LlmMessage[]): LlmMessage[] {
-  const leading: string[] = [];
-  let idx = 0;
-  while (idx < messages.length) {
-    const m = messages[idx];
-    if (m?.role !== "system") break;
-    if (m.content.trim() !== "") leading.push(m.content);
-    idx += 1;
-  }
-  if (idx <= 1) return [...messages];
-  return [
-    ...(leading.length > 0 ? [{ role: "system" as const, content: leading.join("\n\n") }] : []),
-    ...messages.slice(idx),
-  ];
-}
-
-/** 计算 OpenAI 兼容消息列表里应打 cache_control 断点的下标（最多 3 处：系统前缀末尾 + 最近两轮历史断点）。 */
-function cacheBreakpointIndices(messages: readonly LlmMessage[]): Set<number> {
-  const indices = new Set<number>();
-  // 断点 1：前导 system 消息（已合并酒馆静态预设 + 本作静态规则与静态表）
-  if (messages[0]?.role === "system" && messages[0].content.trim() !== "") {
-    indices.add(0);
-  }
-
-  // 断点 2 & 3：多轮对话时在倒数第 2 条与倒数第 4 条非 system 消息上打滚动断点，
-  // 既写入本轮最新历史缓存，也能在未实现 20-block lookback 的中转站上稳定命中上一轮缓存。
-  const nonSystem: number[] = [];
-  for (let i = 0; i < messages.length; i += 1) {
-    const m = messages[i];
-    if (m && m.role !== "system" && m.content.trim() !== "") nonSystem.push(i);
-  }
-  if (nonSystem.length >= 3) {
-    const recent = nonSystem[nonSystem.length - 2];
-    if (recent !== undefined) indices.add(recent);
-  }
-  if (nonSystem.length >= 5) {
-    const prev = nonSystem[nonSystem.length - 4];
-    if (prev !== undefined) indices.add(prev);
-  }
-  return indices;
 }
 
 export function chatCompletionsUrl(profile: Profile): string {
@@ -223,13 +105,9 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       if (signal?.aborted) throw new AbortedError();
       const maxTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
       const temperature = request.temperature ?? profile.temperature;
-      const normalizedMessages = normalizeLeadingSystem(request.messages);
-      const useCacheControl = supportsExplicitCacheControl(profile);
-      const breakpoints = useCacheControl ? cacheBreakpointIndices(normalizedMessages) : undefined;
-      const buildBody = (includeCacheKey: boolean, includeUser: boolean) => ({
+      const body = {
         model: profile.model,
-        messages: normalizedMessages.map((m: LlmMessage, index: number) => {
-          const markCache = breakpoints?.has(index) === true && m.content.trim() !== "";
+        messages: request.messages.map((m: LlmMessage) => {
           if (m.role === "user" && m.images?.length) {
             return {
               role: m.role,
@@ -238,22 +116,8 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
                   type: "image_url" as const,
                   image_url: { url: `data:${img.mimeType};base64,${img.data}` },
                 })),
-                ...(m.content
-                  ? [
-                      {
-                        type: "text" as const,
-                        text: m.content,
-                        ...(markCache ? { cache_control: EPHEMERAL } : {}),
-                      },
-                    ]
-                  : []),
+                ...(m.content ? [{ type: "text" as const, text: m.content }] : []),
               ],
-            };
-          }
-          if (markCache) {
-            return {
-              role: m.role,
-              content: [{ type: "text" as const, text: m.content, cache_control: EPHEMERAL }],
             };
           }
           return { role: m.role, content: m.content };
@@ -268,43 +132,12 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         ...(request.responseFormat?.type === "json"
           ? { response_format: { type: "json_object" } }
           : {}),
-        ...(includeCacheKey && request.cacheKey ? { prompt_cache_key: request.cacheKey } : {}),
-        ...(includeUser && request.cacheKey ? { user: request.cacheKey } : {}),
-      });
+        ...(request.cacheKey && supportsPromptCacheKey(profile)
+          ? { prompt_cache_key: request.cacheKey }
+          : {}),
+      };
       const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
-      const url = chatCompletionsUrl(profile);
-      let includeCacheKey = Boolean(request.cacheKey && supportsPromptCacheKey(profile));
-      let includeUser = Boolean(request.cacheKey && supportsUserStickyField(profile));
-      let res = await post(provider, url, headers, buildBody(includeCacheKey, includeUser), signal);
-      for (
-        let attempt = 0;
-        attempt < 2 && !res.ok && (includeCacheKey || includeUser);
-        attempt += 1
-      ) {
-        const detail = await errorDetail(res);
-        if (signal?.aborted) throw new AbortedError();
-        const rejectKey =
-          includeCacheKey && isRejectedFieldError(res.status, detail.message, "prompt_cache_key");
-        const rejectUser = includeUser && isRejectedFieldError(res.status, detail.message, "user");
-        if (!rejectKey && !rejectUser) {
-          if (detail.code && BLOCK_CODES.has(detail.code.toLowerCase())) {
-            yield { type: "blocked", reason: detail.message || "上游拦截了这段内容" };
-            return;
-          }
-          throw statusError(provider, res.status, detail.message);
-        }
-        // 参数 schema 校验 400 未进入上游计费或生成，记下不支持的字段后立即降级重发
-        const key = endpointKey(profile);
-        if (rejectKey) {
-          rejectedCacheKeyEndpoints.add(key);
-          includeCacheKey = false;
-        }
-        if (rejectUser) {
-          rejectedUserFieldEndpoints.add(key);
-          includeUser = false;
-        }
-        res = await post(provider, url, headers, buildBody(includeCacheKey, includeUser), signal);
-      }
+      const res = await post(provider, chatCompletionsUrl(profile), headers, body, signal);
       if (!res.ok) {
         const detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
@@ -317,12 +150,7 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status, true);
 
       let finishReason = "";
-      let promptTokens = 0;
-      let completionTokens = 0;
-      let cachedInputTokens = 0;
-      let cacheWriteTokens = 0;
-      let hasUsage = false;
-      let anthropicUncachedStyle = false;
+      let usage: LlmUsage | undefined;
       let finished = false;
       // 开头先攒住，确认不是写成正文的上游错误再放出去；是错误就一直攒到结束再报
       let head = "";
@@ -369,34 +197,18 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           if (choice.finish_reason) finishReason = choice.finish_reason;
         }
         if (chunk.usage) {
-          const u = chunk.usage;
-          const details = u.prompt_tokens_details;
-          const inTok = u.prompt_tokens ?? u.input_tokens;
-          const outTok = u.completion_tokens ?? u.output_tokens;
           const cached =
-            details?.cached_tokens ??
-            details?.cache_read_tokens ??
-            details?.cache_read_input_tokens ??
-            u.input_tokens_details?.cached_tokens ??
-            u.prompt_cache_hit_tokens ??
-            u.cache_read_input_tokens ??
-            u.cached_tokens;
-          const write =
-            u.cache_creation_input_tokens ??
-            details?.cache_write_tokens ??
-            details?.cache_creation_input_tokens;
-          if (inTok !== undefined) promptTokens = Math.max(promptTokens, inTok);
-          if (outTok !== undefined) completionTokens = Math.max(completionTokens, outTok);
-          if (cached !== undefined) cachedInputTokens = Math.max(cachedInputTokens, cached);
-          if (write !== undefined) cacheWriteTokens = Math.max(cacheWriteTokens, write);
-          // 部分中转站直接透传 Anthropic 原生字段（prompt_tokens 仅含未命中部分），需要加回缓存 token 才与总输入口径一致
-          if (
-            details?.cached_tokens === undefined &&
-            (u.cache_read_input_tokens !== undefined || u.cache_creation_input_tokens !== undefined)
-          ) {
-            anthropicUncachedStyle = true;
-          }
-          hasUsage = true;
+            chunk.usage.prompt_tokens_details?.cached_tokens ??
+            chunk.usage.prompt_cache_hit_tokens ??
+            chunk.usage.cache_read_input_tokens ??
+            0;
+          const write = chunk.usage.cache_creation_input_tokens ?? 0;
+          usage = {
+            inputTokens: chunk.usage.prompt_tokens ?? 0,
+            outputTokens: chunk.usage.completion_tokens ?? 0,
+            ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+            ...(write > 0 ? { cacheWriteTokens: write } : {}),
+          };
         }
       }
       if (headState !== "story" && UPSTREAM_ERROR_TEXT.test(head))
@@ -408,18 +220,6 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       }
       if (!finished && !finishReason)
         throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
-      const totalInputTokens =
-        anthropicUncachedStyle && promptTokens < cachedInputTokens + cacheWriteTokens
-          ? promptTokens + cachedInputTokens + cacheWriteTokens
-          : promptTokens;
-      const usage: LlmUsage | undefined = hasUsage
-        ? {
-            inputTokens: totalInputTokens,
-            outputTokens: completionTokens,
-            ...(cachedInputTokens > 0 ? { cachedInputTokens } : {}),
-            ...(cacheWriteTokens > 0 ? { cacheWriteTokens } : {}),
-          }
-        : undefined;
       yield { type: "done", finishReason: finishReason || "stop", ...(usage ? { usage } : {}) };
     },
   };

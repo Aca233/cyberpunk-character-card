@@ -3,10 +3,10 @@ import { everydayPeople } from "./everydayLife";
 import { extraNpcs } from "./npcsExtra";
 
 /**
- * 2077 夜之城预制人物总表（共 77 人，按 7 大圈层归类，基准时间 2077-04-12 21:00）：
- * - everydayPeople（7 人）：歌舞伎/丽姿/云顶/扭扭街日常与红灯区人物
+ * 2077 夜之城原作预制人物总表（共 74 人，100% 为《赛博朋克 2077》原作人物，按 7 大圈层归类，基准时间 2077-04-12 21:00）：
+ * - everydayPeople（5 人）：歌舞伎（洋子·鹤）、云顶（切丽·诺林/丝凯/安吉尔）、扭扭街（兰尼·尼罗）
  * - 本文件核心原作人物（41 人）：全部补齐年龄、生平底色（bio）、幕后秘密（secret）、常出没地点（hangouts）、3 句差异化口吻样本与开局近况（initialDoing）
- * - extraNpcs（29 人）：常驻店主（威尔逊/阿涛/针眼）、帮派/云顶/荒坂/市政/执法/城市标志人物，以及 11 位 2077 经典世界角色（蓝眼先生、恶兆、弗雷德教练、蝎子、卡西迪、南希、埃默里克、韦兰、佩佩、柯克、红色威胁）
+ * - extraNpcs（28 人）：原作店主/医者（威尔逊/查尔斯·巴克斯/指头哥/卡西乌斯·赖德）、帮派/云顶/荒坂/市政/执法/城市标志人物，以及 11 位 2077 经典世界角色（蓝眼先生、恶兆、弗雷德教练、蝎子、卡西迪、南希、埃默里克、韦兰、佩佩、柯克、红色威胁）
  *
  * 约定：
  * - 人物卡中的 bio、want、limit、secret、initialDoing 均为幕后设定，不自动等同于玩家角色已获知；
@@ -60,7 +60,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tool-kit",
           "bd-editor-wreath",
         ],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "smart-link"],
       },
     },
     {
@@ -144,7 +144,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tool-kit",
           "maxdoc",
         ],
-        cyberware: ["biomonitor"],
+        cyberware: ["kiroshi-mk2", "biomonitor"],
       },
     },
     {
@@ -265,7 +265,15 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "坐在扭扭街柏青哥店后屋喝焙茶，听手下汇报日本街荒魂祭筹备风声和虎爪帮近期的异常账目。",
       canon: true,
       body: {
-        gear: ["byakko", "kimono-haori", "silk-shirt", "dress-shoes", "holo-phone", "blank-shard"],
+        gear: [
+          "byakko",
+          "kimono-haori",
+          "silk-shirt",
+          "tailored-slacks",
+          "dress-shoes",
+          "holo-phone",
+          "blank-shard",
+        ],
         cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
@@ -718,7 +726,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "dress-shoes",
           "corpo-badge",
         ],
-        cyberware: ["kiroshi-mk2", "subdermal-armor", "kerenzikov", "self-ice"],
+        cyberware: ["kiroshi-mk2", "subdermal-armor", "kerenzikov", "self-ice", "smart-link"],
       },
     },
     {
@@ -785,7 +793,14 @@ export const npcs = npcRules.NpcCardSchema.extend({
         "在东京荒坂本家弹完一曲古筝，随后听取小田关于随父乘坐“鲸鱼号”前往夜之城的礼仪与安保安排。",
       canon: true,
       body: {
-        gear: ["kimono-haori", "silk-shirt", "dress-shoes", "corpo-badge", "holo-phone"],
+        gear: [
+          "kimono-haori",
+          "silk-shirt",
+          "tailored-slacks",
+          "dress-shoes",
+          "corpo-badge",
+          "holo-phone",
+        ],
         cyberware: ["arasaka-deck", "kiroshi-mk2", "self-ice"],
       },
     },
@@ -858,7 +873,14 @@ export const npcs = npcRules.NpcCardSchema.extend({
       initialDoing: "在东京荒坂本家医疗舱旁手书日记，下令“鲸鱼号”航母编队起航驶向夜之城外海。",
       canon: true,
       body: {
-        gear: ["satori", "kimono-haori", "silk-shirt", "dress-shoes", "blank-shard"],
+        gear: [
+          "satori",
+          "kimono-haori",
+          "silk-shirt",
+          "tailored-slacks",
+          "dress-shoes",
+          "blank-shard",
+        ],
         cyberware: ["kiroshi-mk2", "prosthetic-arms", "self-ice"],
       },
     },
@@ -1355,7 +1377,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "titanium-bones",
           "prosthetic-legs",
           "kiroshi-mk2",
-          "pain-editor",
+          "smart-link",
           "self-ice",
         ],
       },
@@ -1579,6 +1601,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "behavioral-faceplate",
           "personal-sound-silencer",
           "self-ice",
+          "smart-link",
         ],
       },
     },

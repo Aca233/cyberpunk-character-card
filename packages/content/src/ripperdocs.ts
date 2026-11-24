@@ -3,9 +3,8 @@ import { cyberware } from "./cyberware";
 import { poiRipperdocs } from "./merchant-sites";
 
 /**
- * 义体医生：维克多的货最全、价钱公道；歌舞伎市场的黑市医生便宜两成，但货来路不明。
- * 维克多肯赊账，黑市医生只收现钱；实际货物与服务条件以持续保存的诊所状态为准。
- * 针眼是本作自创人物；地图诊所的开局备货是本作设定，不是原作库存复刻。
+ * 义体医生：维克多的货最全、价钱公道；歌舞伎市场查尔斯·巴克斯诊所便宜两成，但货来路不明。
+ * 维克多肯赊账，查尔斯只收现钱；实际货物与服务条件以持续保存的诊所状态为准。
  */
 export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
   {
@@ -18,11 +17,11 @@ export const ripperdocs = cyberwareRules.RipperdocListSchema.parse([
     credit: 20000,
   },
   {
-    id: "needle",
-    name: "针眼",
-    keeperNpc: "needle",
+    id: "charles-bucks",
+    name: "查尔斯·巴克斯",
+    keeperNpc: "charles-bucks",
     location: "kabuki-market",
-    note: "歌舞伎市场里摆摊的黑市义体医生，不问来路，也不保修",
+    note: "歌舞伎市场地下诊所义体医生，价低手快、不问来路，也不保修",
     priceFactor: 0.8,
     blackMarket: true,
     shelf: [

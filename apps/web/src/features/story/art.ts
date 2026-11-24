@@ -46,6 +46,7 @@ const PORTRAITS: Readonly<Record<string, AssetId>> = {
   placide: "portrait.placide",
   brigitte: "portrait.brigitte",
   wilson: "portrait.wilson",
+  "charles-bucks": "portrait.charlesBucks",
   fingers: "portrait.fingers",
   "cassius-ryder": "portrait.cassiusRyder",
   "jefferson-peralez": "portrait.jeffersonPeralez",

@@ -589,7 +589,7 @@ function BraindanceArchive({ view }: { readonly view: View }) {
       {!currentWork ? (
         <div className={styles.phoneEmpty}>
           <p className={styles.dim}>
-            还没有体验或扫描过的超梦卷轴。前往丽姿酒吧、阿岚小铺或佩戴超梦花环播放后，定稿片段与三层轨道线索会留在这里。
+            还没有体验或扫描过的超梦卷轴。前往丽姿酒吧、洋子芯片铺或佩戴超梦花环播放后，定稿片段与三层轨道线索会留在这里。
           </p>
         </div>
       ) : (

@@ -161,10 +161,12 @@ function shopKind(kind: string): kind is ShopKind {
   return Object.hasOwn(SHOP_SEEDS, kind);
 }
 
-/** 只合并经过核对的两个原作经营者；不按同名、距离或街区猜测其他入口。 */
+/** 只合并经过核对的原作经营者（威尔逊、维克多、洋子·鹤「边缘网络」、查尔斯·巴克斯）；不按同名、距离或街区猜测其他入口。 */
 const KNOWN_POIS: Readonly<Record<string, string>> = {
   wat_lch_gunsmith_01: "wilson",
   wat_lch_ripperdoc_01: "viktor",
+  wat_kab_netrunner_01: "sleeve-corner",
+  wat_kab_ripperdoc_02: "charles-bucks",
 };
 
 function merchantId(point: ServicePoint): string {
@@ -469,12 +471,12 @@ export const merchantSites = [
   {
     merchant: "sleeve-corner",
     kind: "netrunner",
-    locations: ["kabuki-market"],
+    locations: ["kabuki-market", "poi:wat_kab_netrunner_01"],
     services: ["bd-session"],
     braindanceDevice: { playback: true, analysis: [] },
     braindanceWorks: ["bd-nc-night-drift", "bd-us-cracks-live"],
     source:
-      "歌舞伎市场阿岚芯片小铺；店内配有基础商业超梦试看设备，支持沉浸体验店内商业卷轴（不支持三层轨道编辑分析）。",
+      "Vendors.wat_kab_netrunner_01 / 边缘网络（洋子·鹤）：歌舞伎市场黑客芯片铺；店内配有基础商业超梦试看设备，支持沉浸体验店内商业卷轴（不支持三层轨道编辑分析）。",
   },
   {
     merchant: "lizzies-bar-bd",
@@ -496,7 +498,7 @@ export const merchantSites = [
     kind: "netrunner",
     locations: ["jig-jig-street"],
     services: [],
-    source: "扭扭街暗巷灰舌黑市摊位，私售地下黑超梦（XBD）、调查原片与加密/行为协议芯片。",
+    source: "扭扭街暗巷兰尼·尼罗黑超梦摊位，私售地下黑超梦（XBD）、调查原片与加密/行为协议芯片。",
   },
   {
     merchant: "wilson",
@@ -510,7 +512,7 @@ export const merchantSites = [
     kind: "mixed",
     locations: ["kabuki-market"],
     services: [],
-    source: "本作自创阿涛摊位；未与原作 POI 合并",
+    source: "歌舞伎市场黑市武器摊位；未与单个原作 POI 合并",
   },
   {
     merchant: "japantown-arcade",
@@ -534,11 +536,11 @@ export const merchantSites = [
     source: "Mappins.wat_lch_ripperdoc_01 / Viktor Vektor：维克多诊所",
   },
   {
-    merchant: "needle",
+    merchant: "charles-bucks",
     kind: "ripperdoc",
-    locations: ["kabuki-market"],
+    locations: ["kabuki-market", "poi:wat_kab_ripperdoc_02"],
     services: ["medical"],
-    source: "本作自创针眼诊所；未与原作 POI 合并",
+    source: "Mappins.wat_kab_ripperdoc_02 / Charles Bucks：歌舞伎市场查尔斯·巴克斯地下诊所",
   },
   ...SERVICE_POINTS.flatMap((point) => {
     if (KNOWN_POIS[point.id] || (!shopKind(point.kind) && point.kind !== "ripperdoc")) return [];

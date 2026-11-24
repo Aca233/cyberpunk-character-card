@@ -1114,7 +1114,6 @@ export class GameService {
           dice: record.dice,
           resolves: record.resolves ?? null,
           usage: record.usage ?? null,
-          stageUsage: record.stageUsage ?? null,
           totalUsage: total,
           prompt,
           prompts,
@@ -1442,7 +1441,6 @@ export class GameService {
         },
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
-        ...(turn.stageUsage ? { stageUsage: turn.stageUsage } : {}),
       };
       run.committing = true;
       await saves.appendAt(run.saveId, seq, serializeRecord(record));

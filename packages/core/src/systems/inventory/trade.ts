@@ -229,7 +229,7 @@ export function quoteTrade(
     ...(request.offer ? { offer: request.offer } : {}),
   };
   let match = agreedQuote(world, { seller: party.id, ...quoteSelector });
-  // 谈价时可能把 seller 写成了店主人物 id（例如 atao），成交解析到店铺（kabuki-arms）后仍兼容对应店主报价
+  // 谈价时可能把 seller 写成了店主人物 id（例如 wilson / yoko-tsuru），成交解析到店铺后仍兼容对应店主报价
   if (shop && (!match.ok || match.quote === null)) {
     const aliasSellers = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs].filter(
       (id) => id !== party.id,

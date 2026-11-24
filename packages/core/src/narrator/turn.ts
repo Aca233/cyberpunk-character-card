@@ -15,7 +15,7 @@ import type { LogRecord } from "../kernel/turnlog";
 import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { NarrativeIntensity } from "../physics";
-import type { TurnStage, TurnStageUsage } from "../schemas/turn";
+import type { TurnStage } from "../schemas/turn";
 import { BraindanceStateSchema, braindanceWork } from "../systems/braindance";
 import {
   CharacterStateSchema,
@@ -270,8 +270,6 @@ export interface NarratorTurn {
   readonly usage: LlmUsage | undefined;
   /** 辅助模型的用量（判断、抽取、场外推演和场景摘要） */
   readonly auxUsage: LlmUsage;
-  /** 分阶段用量明细（判断 / 正文 / 抽取 / 其他），供上下文查看器精确排查各步缓存命中率 */
-  readonly stageUsage?: TurnStageUsage | undefined;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
@@ -758,14 +756,11 @@ export async function runNarratorTurn(
     b.checkAborted();
   };
 
-  let judgeUsage: LlmUsage | undefined;
-  let extractUsage: LlmUsage | undefined;
   let preparedData: PreparedCheckpointData;
   if (deps.checkpoint) {
     const cp = deps.checkpoint.prepared;
     preparedData = cp;
     b.auxUsage = cp.auxUsage;
-    judgeUsage = cp.judgeUsage;
     b.repairs = cp.repairs;
     b.repairUsage = cp.repairUsage;
     b.notes.push(...cp.notes);
@@ -837,12 +832,10 @@ export async function runNarratorTurn(
         temperature: JUDGE_TEMPERATURE,
         responseFormat: responseJsonSchema("judge", JudgeDocSchema),
         messages: prompt.messages,
-        // 同存档各阶段共用同一粘性会话 key，避免多号聚合中转站按阶段拆路由到不同上游账号导致掉缓存
-        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:judge` } : {}),
       });
       if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
-      if (reply.usage) judgeUsage = addUsage(judgeUsage ?? ZERO, reply.usage);
       judge = await b.readJudge(reply.text);
       if (b.dropped.some((d) => d.where === "判断"))
         return {
@@ -1192,7 +1185,6 @@ export async function runNarratorTurn(
       },
       presetName: preset?.name,
       auxUsage: b.auxUsage,
-      ...(judgeUsage ? { judgeUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       notes: [...b.notes],
@@ -1265,14 +1257,6 @@ export async function runNarratorTurn(
       ooc,
       usage,
       auxUsage: b.auxUsage,
-      ...(judgeUsage || usage
-        ? {
-            stageUsage: {
-              ...(judgeUsage ? { judge: judgeUsage } : {}),
-              ...(usage ? { narrate: usage } : {}),
-            },
-          }
-        : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       messages: narrateMessages,
@@ -1327,7 +1311,7 @@ export async function runNarratorTurn(
           ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
           ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
           maxOutputTokens,
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:narrate` } : {}),
         },
         deps.signal,
       )) {
@@ -1413,7 +1397,6 @@ export async function runNarratorTurn(
   if (deps.checkpoint?.extracted) {
     extractedData = deps.checkpoint.extracted;
     b.auxUsage = extractedData.auxUsage;
-    extractUsage = extractedData.extractUsage;
     b.repairs = extractedData.repairs;
     b.repairUsage = extractedData.repairUsage;
     b.notes.splice(0, b.notes.length, ...extractedData.notes);
@@ -1476,7 +1459,7 @@ export async function runNarratorTurn(
             : {}),
           responseFormat: responseJsonSchema("extract"),
           messages: extract.messages,
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:extract` } : {}),
         });
       } catch (error) {
         b.checkAborted();
@@ -1500,7 +1483,6 @@ export async function runNarratorTurn(
         );
       }
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
-      if (reply.usage) extractUsage = addUsage(extractUsage ?? ZERO, reply.usage);
       shape = await b.readExtract(reply.text);
       const extractDrop = b.dropped.find((entry) => entry.where === "抽取");
       if (extractDrop) {
@@ -1930,7 +1912,6 @@ export async function runNarratorTurn(
       title: computedTitle,
       unsettled: computedUnsettled,
       auxUsage: b.auxUsage,
-      ...(extractUsage ? { extractUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       notes: [...b.notes],
@@ -2041,7 +2022,7 @@ export async function runNarratorTurn(
               maxOutputTokens: macroBatch.maxOutputTokens,
               messages: macroBatch.messages,
               responseFormat: responseJsonSchema("offscreen_macro", MacroOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-macro` } : {}),
             })
           : Promise.resolve(undefined),
         socialBatch?.kind === "ready"
@@ -2051,7 +2032,7 @@ export async function runNarratorTurn(
               maxOutputTokens: socialBatch.maxOutputTokens,
               messages: socialBatch.messages,
               responseFormat: responseJsonSchema("offscreen_social", SocialOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-social` } : {}),
             })
           : Promise.resolve(undefined),
       ]);
@@ -2304,7 +2285,7 @@ export async function runNarratorTurn(
           temperature: SUMMARY_TEMPERATURE,
           messages,
           responseFormat: responseJsonSchema("summary", SummaryDocSchema),
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:summary` } : {}),
         });
         summaryTrace = {
           prompt: messages[messages.length - 1]?.content ?? "",
@@ -2331,40 +2312,6 @@ export async function runNarratorTurn(
       }
     }
   }
-  const nonCoreAuxIn =
-    b.auxUsage.inputTokens - (judgeUsage?.inputTokens ?? 0) - (extractUsage?.inputTokens ?? 0);
-  const nonCoreAuxOut =
-    b.auxUsage.outputTokens - (judgeUsage?.outputTokens ?? 0) - (extractUsage?.outputTokens ?? 0);
-  const nonCoreAuxCached =
-    (b.auxUsage.cachedInputTokens ?? 0) -
-    (judgeUsage?.cachedInputTokens ?? 0) -
-    (extractUsage?.cachedInputTokens ?? 0);
-  const nonCoreAuxWrite =
-    (b.auxUsage.cacheWriteTokens ?? 0) -
-    (judgeUsage?.cacheWriteTokens ?? 0) -
-    (extractUsage?.cacheWriteTokens ?? 0);
-  const extraAux: LlmUsage | undefined =
-    nonCoreAuxIn > 0 || nonCoreAuxOut > 0
-      ? {
-          inputTokens: Math.max(0, nonCoreAuxIn),
-          outputTokens: Math.max(0, nonCoreAuxOut),
-          ...(nonCoreAuxCached > 0 ? { cachedInputTokens: nonCoreAuxCached } : {}),
-          ...(nonCoreAuxWrite > 0 ? { cacheWriteTokens: nonCoreAuxWrite } : {}),
-        }
-      : undefined;
-  const otherUsage =
-    extraAux || b.repairUsage.inputTokens > 0 || b.repairUsage.outputTokens > 0
-      ? addUsage(extraAux ?? ZERO, b.repairUsage)
-      : undefined;
-  const stageUsage: TurnStageUsage | undefined =
-    judgeUsage || usage || extractUsage || otherUsage
-      ? {
-          ...(judgeUsage ? { judge: judgeUsage } : {}),
-          ...(usage ? { narrate: usage } : {}),
-          ...(extractUsage ? { extract: extractUsage } : {}),
-          ...(otherUsage ? { other: otherUsage } : {}),
-        }
-      : undefined;
   return {
     kind: "done",
     turn: {
@@ -2398,7 +2345,6 @@ export async function runNarratorTurn(
       ooc,
       usage,
       auxUsage: b.auxUsage,
-      ...(stageUsage ? { stageUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       // 返回实际发送的消息，包含预设条目和展开后的宏，供上下文检查与测评使用

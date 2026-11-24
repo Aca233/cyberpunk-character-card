@@ -346,29 +346,8 @@ export function geminiClient(profile: Profile, apiKey: string): LlmClient {
           yield { type: "blocked", reason: blockedMessage };
           return;
         }
-        // 用量是到目前为止的累计值：各字段取最大值，防止部分中转站尾包把 cachedContentTokenCount 归零冲掉前值
-        if (chunk.usageMetadata) {
-          const prev = tokens;
-          const next = chunk.usageMetadata;
-          const pickMax = (a?: number, b?: number) =>
-            a === undefined ? b : b === undefined ? a : Math.max(a, b);
-          const promptTokenCount = pickMax(prev?.promptTokenCount, next.promptTokenCount);
-          const cachedContentTokenCount = pickMax(
-            prev?.cachedContentTokenCount,
-            next.cachedContentTokenCount,
-          );
-          const candidatesTokenCount = pickMax(
-            prev?.candidatesTokenCount,
-            next.candidatesTokenCount,
-          );
-          const thoughtsTokenCount = pickMax(prev?.thoughtsTokenCount, next.thoughtsTokenCount);
-          tokens = {
-            ...(promptTokenCount !== undefined ? { promptTokenCount } : {}),
-            ...(cachedContentTokenCount !== undefined ? { cachedContentTokenCount } : {}),
-            ...(candidatesTokenCount !== undefined ? { candidatesTokenCount } : {}),
-            ...(thoughtsTokenCount !== undefined ? { thoughtsTokenCount } : {}),
-          };
-        }
+        // 用量是到目前为止的累计值：后面的块覆盖前面的，不相加
+        if (chunk.usageMetadata) tokens = { ...tokens, ...chunk.usageMetadata };
         const candidate = chunk.candidates?.find((c) => (c.index ?? 0) === 0);
         if (!candidate) continue;
         const reason = candidate.finishReason;

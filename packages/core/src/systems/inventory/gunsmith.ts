@@ -110,7 +110,7 @@ export type GunsmithQuoteResult =
   | { readonly ok: true; readonly quote: GunsmithQuote }
   | { readonly ok: false; readonly reason: string };
 
-/** 只有威尔逊、阿涛及武器/近战专卖店提供枪匠工坊服务 */
+/** 只有威尔逊、歌舞伎黑市武器摊及武器/近战专卖店提供枪匠工坊服务 */
 export function isGunsmithShop(shop: Shop, data: Readonly<Record<string, unknown>>): boolean {
   if (shop.id === "wilson" || shop.id === "kabuki-arms") return true;
   const kind = merchantSites(data).get(shop.id)?.kind;

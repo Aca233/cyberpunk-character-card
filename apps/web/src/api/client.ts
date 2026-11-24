@@ -16,7 +16,6 @@ import type {
   ProseMode,
   TurnCheckpointSummary,
   TurnInput,
-  TurnStageUsage,
   TurnUsage,
   WorkshopPack,
 } from "@cp/core";
@@ -586,7 +585,6 @@ export interface TurnContext {
   readonly dice: readonly unknown[];
   readonly resolves: string | null;
   readonly usage: TurnUsage | null;
-  readonly stageUsage?: TurnStageUsage | null;
   readonly totalUsage: TurnUsage & { readonly turns: number };
   readonly prompt: {
     readonly messages: readonly { readonly role: string; readonly content: string }[];

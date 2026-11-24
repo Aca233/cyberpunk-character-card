@@ -197,6 +197,32 @@ const LEGEND_KEYS = new Set<string>([
 ]);
 /** 关掉的图例项记在浏览器里，下次打开地图照旧 */
 const HIDDEN_STORE = "cp.mapHidden";
+/** 图例展开状态记在浏览器里，默认收起以释放夜之城地图视野 */
+const LEGEND_OPEN_STORE = "cp.mapLegendOpen";
+/** 精简态势预设：仅保留当前位置、核心地点、住处、载具、委托、人物与 NCPD 警情 */
+const CORE_LEGEND_KEYS: ReadonlySet<LegendKey> = new Set([
+  "here",
+  "dest",
+  "homes",
+  "vehicles",
+  "jobs",
+  "npcs",
+  "police",
+]);
+
+function loadLegendOpen(): boolean {
+  try {
+    return localStorage.getItem(LEGEND_OPEN_STORE) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function riskToneOf(risk: string): "low" | "mid" | "high" {
+  if (risk === "high" || risk === "extreme") return "high";
+  if (risk === "medium" || risk === "mid" || risk === "moderate") return "mid";
+  return "low";
+}
 
 /** 未访问过的非地铁站快速移动终端：低缩放时不铺满全图，放大或搜索时再显示 */
 function isUnvisitedTerminal(d: MapDestination): boolean {
@@ -272,8 +298,10 @@ export function MapBody({
   const [shapes, setShapes] = useState(true);
   const [hover, setHover] = useState<Hover | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<LegendKey>>(loadHidden);
+  const [legendOpen, setLegendOpen] = useState<boolean>(loadLegendOpen);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchIdx, setSearchIdx] = useState(0);
   const [focusedArea, setFocusedArea] = useState<MapAreaTarget | null>(() =>
     focus?.kind === "area" ? focus.area : null,
   );
@@ -362,6 +390,35 @@ export function MapBody({
     }
   }, [hidden]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(LEGEND_OPEN_STORE, legendOpen ? "1" : "0");
+    } catch {
+      // 同上
+    }
+  }, [legendOpen]);
+
+  // 搜索空输入时的快捷重点目标：正在进行的委托、住处与停放载具
+  const quickTargets = useMemo(() => {
+    const seen = new Set<string>();
+    const out: {
+      readonly dest: MapDestination;
+      readonly badge: string;
+      readonly tone: "job" | "home" | "vehicle";
+    }[] = [];
+    const push = (id: string, badge: string, tone: "job" | "home" | "vehicle") => {
+      if (seen.has(id)) return;
+      const d = destById.get(id);
+      if (!d) return;
+      seen.add(id);
+      out.push({ dest: d, badge, tone });
+    };
+    for (const id of jobsAt.keys()) push(id, "委托", "job");
+    for (const id of homesAt.keys()) push(id, "住处", "home");
+    for (const id of vehiclesAt.keys()) push(id, "载具", "vehicle");
+    return out.slice(0, 6);
+  }, [destById, jobsAt, homesAt, vehiclesAt]);
+
   const toggleLegend = (key: LegendKey) =>
     setHidden((prev) => {
       const next = new Set(prev);
@@ -442,6 +499,7 @@ export function MapBody({
   const selectDestination = (target: MapDestination) => {
     setSearchOpen(false);
     setQuery("");
+    setSearchIdx(0);
     if (target.here) {
       setPicked(null);
       focusHere();
@@ -450,6 +508,22 @@ export function MapBody({
     setFocusedArea(null);
     setPicked(target.id);
     lookAt(target.x, target.y, Math.max(zoom, FOCUS_ZOOM));
+  };
+
+  const focusDistrict = (district: (typeof DISTRICT_SHAPES)[number]) => {
+    setSearchOpen(false);
+    setQuery("");
+    setSearchIdx(0);
+    setPicked(null);
+    setShapes(true);
+    setFocusedArea({
+      id: district.id,
+      level: "district",
+      name: district.name,
+      x: district.label[0],
+      y: district.label[1],
+    });
+    lookAt(district.label[0], district.label[1], DISTRICT_AREA_ZOOM);
   };
 
   useEffect(() => {
@@ -617,30 +691,54 @@ export function MapBody({
     });
   }
   const hiddenCount = legend.filter((l) => hidden.has(l.key)).length;
+  const coreLegend = legend.filter((l) => !MAP_POI_KINDS.some((k) => k.id === l.key));
+  const poiLegend = legend.filter((l) => MAP_POI_KINDS.some((k) => k.id === l.key));
+  const isTacticalPreset = legend.every((l) =>
+    CORE_LEGEND_KEYS.has(l.key) ? !hidden.has(l.key) : hidden.has(l.key),
+  );
+  const applyTacticalPreset = () =>
+    setHidden(new Set(legend.filter((l) => !CORE_LEGEND_KEYS.has(l.key)).map((l) => l.key)));
+  const quickestMinutes =
+    dest && !dest.here
+      ? dest.routes
+          .filter((r) => r.blocked === undefined)
+          .reduce<number | null>(
+            (min, r) => (min === null || r.minutes < min ? r.minutes : min),
+            null,
+          )
+      : null;
   const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
 
   return (
     <section aria-label="地图" className={styles.mapScreen} style={pinVars()}>
       <header className={styles.mapTop}>
-        <h2 className={styles.mapTopTitle}>夜之城</h2>
+        <div className={styles.mapTopBrand}>
+          <span className={styles.mapTopKicker}>{"NC // TACTICAL MAP"}</span>
+          <h2 className={styles.mapTopTitle}>夜之城</h2>
+        </div>
         {here ? (
           <button
             type="button"
             className={styles.mapHereJump}
-            title="点击定位并放大到当前位置"
+            title="点击居中并高亮当前位置"
             onClick={focusHere}
           >
-            {`当前位置：${here.name} · ${here.sub ? `${here.district} · ${here.sub}` : here.district}`}
+            <span className={styles.mapHereJumpTag}>当前</span>
+            <strong className={styles.mapHereJumpName}>{here.name}</strong>
+            <span className={styles.mapHereJumpArea}>
+              {here.sub ? `${here.district} · ${here.sub}` : here.district}
+            </span>
           </button>
         ) : (
-          <span className={styles.dim}>现在的位置不在地图上</span>
+          <span className={styles.dim}>当前位置未在地图标定</span>
         )}
         <form
           className={styles.mapSearch}
           data-overlay=""
           onSubmit={(e) => {
             e.preventDefault();
-            if (searchResults[0]) selectDestination(searchResults[0]);
+            const chosen = searchResults[searchIdx] ?? searchResults[0];
+            if (chosen) selectDestination(chosen);
           }}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) setSearchOpen(false);
@@ -648,59 +746,143 @@ export function MapBody({
         >
           <span className={styles.mapSearchBox}>
             <CellFrame />
+            <span className={styles.mapSearchIcon} aria-hidden="true">
+              /
+            </span>
             <input
               type="search"
               className={styles.mapSearchInput}
               value={query}
-              placeholder="搜索地名 / 街区 / 城区…"
+              placeholder="搜索地名、街区、城区或快速跳转…"
               aria-label="搜索地图地点"
               onFocus={() => setSearchOpen(true)}
               onChange={(e) => {
                 setQuery(e.target.value);
+                setSearchIdx(0);
                 setSearchOpen(true);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   e.stopPropagation();
                   setSearchOpen(false);
+                } else if (e.key === "ArrowDown" && searchResults.length > 0) {
+                  e.preventDefault();
+                  setSearchOpen(true);
+                  setSearchIdx((i) => (i + 1) % searchResults.length);
+                } else if (e.key === "ArrowUp" && searchResults.length > 0) {
+                  e.preventDefault();
+                  setSearchOpen(true);
+                  setSearchIdx((i) => (i - 1 + searchResults.length) % searchResults.length);
                 }
               }}
             />
+            {query.length > 0 && (
+              <button
+                type="button"
+                className={styles.mapSearchClear}
+                aria-label="清空搜索"
+                onClick={() => {
+                  setQuery("");
+                  setSearchIdx(0);
+                }}
+              >
+                ×
+              </button>
+            )}
           </span>
-          {searchOpen && trimmedQuery.length > 0 && (
-            <ul className={styles.mapSearchResults} aria-label="搜索结果">
-              {searchResults.length > 0 ? (
-                searchResults.map((d) => (
-                  <li key={d.id}>
-                    <button
-                      type="button"
-                      className={styles.mapSearchItem}
-                      onClick={() => selectDestination(d)}
-                    >
-                      <b>
-                        {d.name}
-                        {d.here ? "（当前）" : ""}
-                      </b>
-                      <small className={styles.dim}>
-                        {d.sub ? `${d.district} · ${d.sub}` : d.district}
-                        {d.metro ? " · 地铁站" : ""}
-                        {d.firstVisit ? " · 未到访" : ""}
-                      </small>
-                    </button>
-                  </li>
-                ))
+          {searchOpen && (
+            <section className={styles.mapSearchDrop} aria-label="地图检索与快速定位">
+              {trimmedQuery.length > 0 ? (
+                <ul className={styles.mapSearchResults} aria-label="搜索结果">
+                  {searchResults.length > 0 ? (
+                    searchResults.map((d, idx) => (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          className={styles.mapSearchItem}
+                          data-active={idx === searchIdx || undefined}
+                          onMouseEnter={() => setSearchIdx(idx)}
+                          onClick={() => selectDestination(d)}
+                        >
+                          <span className={styles.mapSearchItemRow}>
+                            <b>{d.name}</b>
+                            {d.here && (
+                              <em className={styles.mapSearchBadge} data-tone="here">
+                                当前
+                              </em>
+                            )}
+                            {!d.here && d.metro && (
+                              <em className={styles.mapSearchBadge} data-tone="metro">
+                                NCART
+                              </em>
+                            )}
+                            {!d.here && d.firstVisit && (
+                              <em className={styles.mapSearchBadge} data-tone="dim">
+                                未到访
+                              </em>
+                            )}
+                          </span>
+                          <small className={styles.dim}>
+                            {d.sub ? `${d.district} · ${d.sub}` : d.district}
+                          </small>
+                        </button>
+                      </li>
+                    ))
+                  ) : (
+                    <li className={styles.mapSearchEmpty}>
+                      没有找到匹配的地点，可尝试搜索城区名或商铺类型（如「义体医生」「武器」）
+                    </li>
+                  )}
+                </ul>
               ) : (
-                <li className={styles.mapSearchEmpty}>没有找到匹配的地点</li>
+                <div className={styles.mapQuickJump}>
+                  {quickTargets.length > 0 && (
+                    <div className={styles.mapQuickGroup}>
+                      <span className={styles.mapQuickHead}>关键目标</span>
+                      <ul className={styles.mapSearchResults}>
+                        {quickTargets.map(({ dest: d, badge, tone }) => (
+                          <li key={d.id}>
+                            <button
+                              type="button"
+                              className={styles.mapSearchItem}
+                              onClick={() => selectDestination(d)}
+                            >
+                              <span className={styles.mapSearchItemRow}>
+                                <b>{d.name}</b>
+                                <em className={styles.mapSearchBadge} data-tone={tone}>
+                                  {badge}
+                                </em>
+                              </span>
+                              <small className={styles.dim}>
+                                {d.sub ? `${d.district} · ${d.sub}` : d.district}
+                              </small>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className={styles.mapQuickGroup}>
+                    <span className={styles.mapQuickHead}>城区速览</span>
+                    <div className={styles.mapDistrictChips}>
+                      {DISTRICT_SHAPES.map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          className={styles.mapDistrictChip}
+                          onClick={() => focusDistrict(d)}
+                        >
+                          {d.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
-            </ul>
+            </section>
           )}
         </form>
         <div className={styles.mapTools}>
-          {here && (
-            <Button small label="定位并放大到当前位置" onClick={focusHere}>
-              当前位置
-            </Button>
-          )}
           <Button small pressed={shapes} onClick={() => setShapes((s) => !s)}>
             城区边界
           </Button>
@@ -708,7 +890,7 @@ export function MapBody({
             <Button small label="缩小" onClick={() => zoomBy(1 / 1.4)}>
               −
             </Button>
-            <span className={styles.dim}>{zoom.toFixed(1)}×</span>
+            <span className={styles.mapZoomVal}>{zoom.toFixed(1)}×</span>
             <Button small label="放大" onClick={() => zoomBy(1.4)}>
               ＋
             </Button>
@@ -860,27 +1042,45 @@ export function MapBody({
             })}
 
             {routeLine && (
-              <svg
-                className={styles.mapRouteLineSvg}
-                width={size.w}
-                height={size.h}
-                aria-hidden="true"
-              >
-                <line
-                  x1={routeLine.from.left}
-                  y1={routeLine.from.top}
-                  x2={routeLine.to.left}
-                  y2={routeLine.to.top}
-                  className={styles.mapRouteLineGlow}
-                />
-                <line
-                  x1={routeLine.from.left}
-                  y1={routeLine.from.top}
-                  x2={routeLine.to.left}
-                  y2={routeLine.to.top}
-                  className={styles.mapRouteLine}
-                />
-              </svg>
+              <>
+                <svg
+                  className={styles.mapRouteLineSvg}
+                  width={size.w}
+                  height={size.h}
+                  aria-hidden="true"
+                >
+                  <line
+                    x1={routeLine.from.left}
+                    y1={routeLine.from.top}
+                    x2={routeLine.to.left}
+                    y2={routeLine.to.top}
+                    className={styles.mapRouteLineGlow}
+                  />
+                  <line
+                    x1={routeLine.from.left}
+                    y1={routeLine.from.top}
+                    x2={routeLine.to.left}
+                    y2={routeLine.to.top}
+                    className={styles.mapRouteLine}
+                  />
+                </svg>
+                {quickestMinutes !== null &&
+                  Math.hypot(
+                    routeLine.to.left - routeLine.from.left,
+                    routeLine.to.top - routeLine.from.top,
+                  ) >= 72 && (
+                    <span
+                      className={styles.mapRouteMid}
+                      style={{
+                        left: (routeLine.from.left + routeLine.to.left) / 2,
+                        top: (routeLine.from.top + routeLine.to.top) / 2,
+                      }}
+                      aria-hidden="true"
+                    >
+                      最快 {quickestMinutes} 分钟
+                    </span>
+                  )}
+              </>
             )}
 
             {focusedArea && onScreen(toScreen(focusedArea.x, focusedArea.y)) && (
@@ -1097,6 +1297,10 @@ export function MapBody({
             );
           })}
 
+        {/* 柔和暗角与四角战术取景刻度（纯装饰，不拦截交互） */}
+        <span className={styles.mapVignette} aria-hidden="true" />
+        <span className={styles.mapHudCorners} aria-hidden="true" />
+
         {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
         {hover && (
           <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
@@ -1106,37 +1310,40 @@ export function MapBody({
               slice={TEXT_SHADOW_SLICE}
               className={styles.mapDistrictShadow}
             />
-            <div className={styles.mapDistrictHead}>
-              {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
-              <Asset id={districtIcon(hover.district)} height={44} />
-              <div>
-                <h3 className={styles.mapTitle}>{hover.district}</h3>
-                {hover.sub && <span className={styles.dim}>{hover.sub}</span>}
+            <div className={styles.mapDistrictSurface}>
+              <span className={styles.mapDistrictKicker}>SECTOR INTEL</span>
+              <div className={styles.mapDistrictHead}>
+                {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
+                <Asset id={districtIcon(hover.district)} height={44} />
+                <div>
+                  <h3 className={styles.mapTitle}>{hover.district}</h3>
+                  {hover.sub && <span className={styles.mapDistrictSub}>{hover.sub}</span>}
+                </div>
               </div>
+              {/* 原作 LocKey#77912 UI-Tooltips-LeadingGangs */}
+              <h4 className={styles.mapGangsLabel}>主要帮派</h4>
+              {hoverGangs.length > 0 ? (
+                <ul className={styles.mapGangList}>
+                  {hoverGangs.map((g) => {
+                    const logo = GANG_LOGOS[g.id];
+                    return (
+                      <li key={g.id} className={styles.mapGang}>
+                        {logo ? <Asset id={logo} height={34} width={34} /> : <i />}
+                        <span className={styles.mapGangText}>
+                          <b style={{ color: g.color }}>{g.name}</b>
+                          <small className={styles.dim}>
+                            {g.attitudeLabel}
+                            {g.turfNote ? ` · ${g.turfNote}` : ""}
+                          </small>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className={styles.dim}>没有帮派占着这里</p>
+              )}
             </div>
-            {/* 原作 LocKey#77912 UI-Tooltips-LeadingGangs */}
-            <h4 className={styles.mapGangsLabel}>主要帮派：</h4>
-            {hoverGangs.length > 0 ? (
-              <ul className={styles.mapGangList}>
-                {hoverGangs.map((g) => {
-                  const logo = GANG_LOGOS[g.id];
-                  return (
-                    <li key={g.id} className={styles.mapGang}>
-                      {logo ? <Asset id={logo} height={36} width={36} /> : <i />}
-                      <span className={styles.mapGangText}>
-                        <b style={{ color: g.color }}>{g.name}</b>
-                        <small className={styles.dim}>
-                          {g.attitudeLabel}
-                          {g.turfNote ? ` · ${g.turfNote}` : ""}
-                        </small>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className={styles.dim}>没有帮派占着这里</p>
-            )}
           </section>
         )}
 
@@ -1163,136 +1370,184 @@ export function MapBody({
             />
             <div className={styles.mapRouteBody}>
               <div className={styles.mapRouteHead}>
-                <div>
-                  <h3 className={`${styles.mapTitle} ${styles.mapTipTitle}`}>{dest.name}</h3>
-                  <span className={styles.dim}>
-                    {dest.sub ? `${dest.district} · ${dest.sub}` : dest.district}
-                    {dest.metro && " · 有 NCART 站台"}
+                <div className={styles.mapRouteHeadText}>
+                  <span className={styles.mapRouteKicker}>
+                    {dest.sub ? `${dest.district} // ${dest.sub}` : dest.district}
                   </span>
+                  <h3 className={`${styles.mapTitle} ${styles.mapTipTitle}`}>{dest.name}</h3>
+                  <div className={styles.mapRoutePills}>
+                    {dest.here && (
+                      <span className={styles.mapRoutePill} data-tone="here">
+                        当前位置
+                      </span>
+                    )}
+                    {dest.metro && (
+                      <span className={styles.mapRoutePill} data-tone="metro">
+                        NCART 站台
+                      </span>
+                    )}
+                    {dest.firstVisit && (
+                      <span className={styles.mapRoutePill} data-tone="dim">
+                        未到访
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Button small label="取消选中" onClick={() => setPicked(null)}>
                   ✕
                 </Button>
               </div>
-              {destHomes.length > 0 && (
-                <ul className={styles.jobs}>
+              {(destHomes.length > 0 ||
+                destVehicles.length > 0 ||
+                destJobs.length > 0 ||
+                destAlerts.length > 0 ||
+                destGigs.length > 0 ||
+                destNpcs.length > 0) && (
+                <ul className={styles.mapIntelList} aria-label="地点态势情报">
                   {destHomes.map((h) => (
-                    <li key={h.id}>
-                      <strong>{h.name}</strong>
-                      <span>住处 · 可休息与存取储物箱</span>
+                    <li key={`home-${h.id}`} className={styles.mapIntelItem} data-kind="home">
+                      <span className={styles.mapIntelBadge}>住处</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>{h.name}</strong>
+                        <span>可休息与存取储物箱</span>
+                      </div>
                     </li>
                   ))}
-                </ul>
-              )}
-              {destVehicles.length > 0 && (
-                <ul className={styles.jobs}>
                   {destVehicles.map((v) => (
-                    <li key={v.id}>
-                      <strong>{v.name}</strong>
-                      <span>{`停放载具 · ${v.conditionLabel}${v.stolen ? " · 赃车" : ""}`}</span>
+                    <li key={`veh-${v.id}`} className={styles.mapIntelItem} data-kind="vehicle">
+                      <span className={styles.mapIntelBadge}>载具</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>{v.name}</strong>
+                        <span>{`${v.conditionLabel}${v.stolen ? " · 赃车" : ""}`}</span>
+                      </div>
                     </li>
                   ))}
-                </ul>
-              )}
-              {/* 这里进行中的委托：只列名字、状态和报酬，不在地图上预设任务 */}
-              {destJobs.length > 0 && (
-                <ul className={styles.jobs}>
                   {destJobs.map((j) => (
-                    <li key={j.id} data-overdue={j.overdue || undefined}>
-                      <strong>{j.title}</strong>
-                      <span>
-                        {`委托 · ${j.statusLabel} · 报酬 ${j.reward.toLocaleString("en-US")} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {destAlerts.length > 0 && (
-                <ul className={styles.jobs}>
-                  {destAlerts.map((a) => (
-                    <li key={a.id}>
-                      <strong>NCPD 警情 · {a.label}</strong>
-                      <span>
-                        {`赏金 ${a.reward.toLocaleString("en-US")} 欧元 · ${a.until} 前 · ${a.note}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {destGigs.length > 0 && (
-                <ul className={styles.jobs}>
-                  {destGigs.map((g) => (
-                    <li key={g.id}>
-                      <strong>{g.name}</strong>
-                      <span>
-                        {g.beaten
-                          ? `街头风声 · 听说${g.opponent}被人放倒之后，这阵子台上冷清了不少`
-                          : `街头风声 · ${g.note}${g.rematch ? `（听说${g.rematch}才重新凑局）` : ""}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {/* 这里现在有谁（用户 2026-11-02："npc是能移动的"）：只列名字和身份，见面照常靠剧情 */}
-              {destNpcs.length > 0 && (
-                <ul className={styles.jobs}>
-                  {destNpcs.map((n) => (
-                    <li key={n.id}>
-                      <strong>{n.name}</strong>
-                      <span>{`人物 · ${n.role}${n.here ? " · 就在你身边" : ""}`}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <ul className={styles.routeList}>
-                {dest.routes.map((r) => {
-                  const vehicle = view.travel.vehicles.find((v) => v.id === r.vehicle);
-                  const art = vehicleArtOf(vehicle?.model);
-                  return (
-                    <li key={r.vehicle ? `${r.mode}:${r.vehicle}` : r.mode}>
-                      <button
-                        type="button"
-                        className={styles.routeOption}
-                        data-vehicle-art={art ? true : undefined}
-                        disabled={!onTravel || r.blocked !== undefined}
-                        onClick={() => onTravel?.(dest, r)}
-                      >
-                        {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
-                        <NineSlice
-                          id="map.filterCellBg"
-                          tint="var(--f-bg)"
-                          slice={CELL_SLICE}
-                          className={styles.mapFilterLayer}
-                        />
-                        <NineSlice
-                          id="map.filterCellFg"
-                          tint="var(--f-frame)"
-                          slice={CELL_SLICE}
-                          className={styles.mapFilterLayer}
-                        />
-                        <span className={styles.routeOptionDetails}>
-                          <b>{r.label}</b>
-                          <span>
-                            {r.minutes} 分钟 · {r.cost > 0 ? `${r.cost} 欧元` : "不花钱"} · 风险
-                            {r.riskLabel}
-                          </span>
-                          {r.warnings && r.warnings.length > 0 && (
-                            <span className={styles.routeWarnings}>
-                              {r.warnings.map((w) => (
-                                <small key={w} className={styles.routeWarning}>
-                                  ⚠ {w}
-                                </small>
-                              ))}
-                            </span>
-                          )}
-                          {r.blocked && <small className={styles.dim}>{r.blocked}</small>}
+                    <li
+                      key={`job-${j.id}`}
+                      className={styles.mapIntelItem}
+                      data-kind="job"
+                      data-overdue={j.overdue || undefined}
+                    >
+                      <span className={styles.mapIntelBadge}>委托</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>{j.title}</strong>
+                        <span>
+                          {`${j.statusLabel} · ${j.reward.toLocaleString("en-US")} 欧元${j.due ? ` · ${j.due} 前` : ""}`}
                         </span>
-                        {art && <Asset id={art} className={styles.routeVehicleArt} />}
-                      </button>
+                      </div>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                  {destAlerts.map((a) => (
+                    <li key={`alert-${a.id}`} className={styles.mapIntelItem} data-kind="police">
+                      <span className={styles.mapIntelBadge}>警情</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>{a.label}</strong>
+                        <span>
+                          {`赏金 ${a.reward.toLocaleString("en-US")} 欧元 · ${a.until} 前 · ${a.note}`}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                  {destGigs.map((g) => (
+                    <li key={`gig-${g.id}`} className={styles.mapIntelItem} data-kind="gig">
+                      <span className={styles.mapIntelBadge}>风声</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>{g.name}</strong>
+                        <span>
+                          {g.beaten
+                            ? `听说${g.opponent}被人放倒之后，这阵子台上冷清了不少`
+                            : `${g.note}${g.rematch ? `（听说${g.rematch}才重新凑局）` : ""}`}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                  {destNpcs.map((n) => (
+                    <li key={`npc-${n.id}`} className={styles.mapIntelItem} data-kind="npc">
+                      <span className={styles.mapIntelBadge}>人物</span>
+                      <div className={styles.mapIntelText}>
+                        <strong>
+                          {n.name}
+                          {n.here ? " · 在场" : ""}
+                        </strong>
+                        <span>{n.role}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {dest.routes.length > 0 && (
+                <div className={styles.mapRouteSection}>
+                  <span className={styles.mapRouteSectionHead}>出行方式</span>
+                  <ul className={styles.routeList}>
+                    {dest.routes.map((r) => {
+                      const vehicle = view.travel.vehicles.find((v) => v.id === r.vehicle);
+                      const art = vehicleArtOf(vehicle?.model);
+                      const riskTone = riskToneOf(r.risk);
+                      return (
+                        <li key={r.vehicle ? `${r.mode}:${r.vehicle}` : r.mode}>
+                          <button
+                            type="button"
+                            className={styles.routeOption}
+                            data-vehicle-art={art ? true : undefined}
+                            disabled={!onTravel || r.blocked !== undefined}
+                            onClick={() => onTravel?.(dest, r)}
+                          >
+                            {/* 原作 tooltip 里没有逐行的框；借同一屏筛选开关（FiltersListItem）的 cell_bg 底、cell_fg 框 */}
+                            <NineSlice
+                              id="map.filterCellBg"
+                              tint="var(--f-bg)"
+                              slice={CELL_SLICE}
+                              className={styles.mapFilterLayer}
+                            />
+                            <NineSlice
+                              id="map.filterCellFg"
+                              tint="var(--f-frame)"
+                              slice={CELL_SLICE}
+                              className={styles.mapFilterLayer}
+                            />
+                            <span className={styles.routeOptionDetails}>
+                              <span className={styles.routeOptionTop}>
+                                <b>{r.label}</b>
+                                <span
+                                  className={styles.routeCostBadge}
+                                  data-free={r.cost === 0 || undefined}
+                                >
+                                  {r.cost > 0 ? `${r.cost} €$` : "免费"}
+                                </span>
+                              </span>
+                              <span className={styles.routeMetaRow}>
+                                <span className={styles.routeDuration}>约 {r.minutes} 分钟</span>
+                                <span className={styles.routeRiskPill} data-risk={riskTone}>
+                                  风险·{r.riskLabel}
+                                </span>
+                                {onTravel && r.blocked === undefined && (
+                                  <span className={styles.routeGoArrow} aria-hidden="true">
+                                    出发 →
+                                  </span>
+                                )}
+                              </span>
+                              {r.warnings && r.warnings.length > 0 && (
+                                <span className={styles.routeWarnings}>
+                                  {r.warnings.map((w) => (
+                                    <small key={w} className={styles.routeWarning}>
+                                      ⚠ {w}
+                                    </small>
+                                  ))}
+                                </span>
+                              )}
+                              {r.blocked && (
+                                <small className={styles.routeBlocked}>{r.blocked}</small>
+                              )}
+                            </span>
+                            {art && <Asset id={art} className={styles.routeVehicleArt} />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
               {dest.here && <p className={styles.dim}>你就在这里。</p>}
               {!onTravel && !dest.here && (
                 <p className={styles.dim}>这一轮还没写完，写完再出发。</p>
@@ -1302,7 +1557,7 @@ export function MapBody({
         )}
 
         {/* 原作筛选列表没有底框；为了压住底图，借同一界面说明面板（FastTravelInstructions）的 cell_flip 底和框 */}
-        <div className={styles.mapLegendBox} data-overlay="">
+        <div className={styles.mapLegendBox} data-open={legendOpen || undefined} data-overlay="">
           <NineSlice
             id="map.panelBg"
             tint="var(--panel-bg)"
@@ -1315,93 +1570,181 @@ export function MapBody({
             slice={PANEL_SLICE}
             className={styles.mapPanelFrame}
           />
-          <details className={styles.mapLegendBody} open>
-            <summary>
-              图例
-              {hiddenCount > 0 && (
-                <span className={styles.dim}>{` · 隐藏了 ${hiddenCount} 项`}</span>
-              )}
-            </summary>
-            {/* 原作世界地图的自定义筛选：「全部显示」是 UI-Menus-WorldMap-Filter-All，「全部隐藏」本作加的 */}
-            <div className={styles.mapFilterBar}>
-              <Button small disabled={hiddenCount === 0} onClick={() => setHidden(new Set())}>
-                全部显示
-              </Button>
-              <Button
-                small
-                disabled={hiddenCount === legend.length}
-                onClick={() => setHidden(new Set(legend.map((l) => l.key)))}
-              >
-                全部隐藏
-              </Button>
-            </div>
-            <ul className={styles.mapLegend}>
-              {legend.map((l) => {
-                const on = !hidden.has(l.key);
-                return (
-                  <li key={l.key}>
-                    <button
-                      type="button"
-                      className={styles.mapFilter}
-                      aria-pressed={on}
-                      title={
-                        l.key === "terminals"
-                          ? on
-                            ? `在地图上隐藏${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
-                            : `在地图上显示${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
-                          : on
-                            ? `在地图上隐藏${l.name}`
-                            : `在地图上显示${l.name}`
-                      }
-                      onClick={() => toggleLegend(l.key)}
-                    >
-                      {/* 原作 FiltersListItem：cell_bg 底、cell_fg 框；方框是 color_bg 底、color_fg 框、color_bg 填色 */}
-                      <NineSlice
-                        id="map.filterCellBg"
-                        tint="var(--f-bg)"
-                        slice={CELL_SLICE}
-                        className={styles.mapFilterLayer}
-                      />
-                      <NineSlice
-                        id="map.filterCellFg"
-                        tint="var(--f-frame)"
-                        slice={CELL_SLICE}
-                        className={styles.mapFilterLayer}
-                      />
-                      <span className={styles.mapFilterBox} aria-hidden="true">
-                        <NineSlice
-                          id="map.filterBoxBg"
-                          tint="var(--f-box-bg)"
-                          slice={BOX_SLICE}
-                          className={styles.mapFilterBoxBg}
-                        />
-                        <NineSlice
-                          id="map.filterBoxFg"
-                          tint="var(--f-box-frame)"
-                          slice={BOX_SLICE}
-                          className={styles.mapFilterLayer}
-                        />
-                        <NineSlice
-                          id="map.filterBoxBg"
-                          tint="var(--f-box)"
-                          slice={BOX_SLICE}
-                          className={styles.mapFilterBoxFill}
-                        />
-                      </span>
-                      <span className={styles.mapFilterIcon} aria-hidden="true">
-                        {l.icon}
-                      </span>
-                      <span className={styles.mapFilterName}>{l.name}</span>
-                      {l.count !== null && <span className={styles.mapFilterCount}>{l.count}</span>}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </details>
+          <div className={styles.mapLegendBody}>
+            <button
+              type="button"
+              className={styles.mapLegendToggle}
+              aria-expanded={legendOpen}
+              onClick={() => setLegendOpen((open) => !open)}
+            >
+              <span className={styles.mapLegendTitle}>
+                图层筛选
+                {hiddenCount > 0 && (
+                  <em className={styles.mapLegendCount}>{`已隐 ${hiddenCount}`}</em>
+                )}
+              </span>
+              <span className={styles.mapLegendChevron} aria-hidden="true">
+                {legendOpen ? "▾" : "▴"}
+              </span>
+            </button>
+            {legendOpen && (
+              <div className={styles.mapLegendDrawer}>
+                {/* 原作世界地图的自定义筛选 + 本作新增「精简态势」一键预设 */}
+                <div className={styles.mapFilterBar}>
+                  <Button small disabled={hiddenCount === 0} onClick={() => setHidden(new Set())}>
+                    全部显示
+                  </Button>
+                  <Button small pressed={isTacticalPreset} onClick={applyTacticalPreset}>
+                    精简态势
+                  </Button>
+                  <Button
+                    small
+                    disabled={hiddenCount === legend.length}
+                    onClick={() => setHidden(new Set(legend.map((l) => l.key)))}
+                  >
+                    全部隐藏
+                  </Button>
+                </div>
+                <div className={styles.mapLegendGroup}>
+                  <span className={styles.mapLegendGroupHead}>核心态势</span>
+                  <ul className={styles.mapLegend}>
+                    {coreLegend.map((l) => {
+                      const on = !hidden.has(l.key);
+                      return (
+                        <li key={l.key}>
+                          <button
+                            type="button"
+                            className={styles.mapFilter}
+                            aria-pressed={on}
+                            title={
+                              l.key === "terminals"
+                                ? on
+                                  ? `在地图上隐藏${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
+                                  : `在地图上显示${l.name}（放大至 ${POI_ZOOM}× 以上显示）`
+                                : on
+                                  ? `在地图上隐藏${l.name}`
+                                  : `在地图上显示${l.name}`
+                            }
+                            onClick={() => toggleLegend(l.key)}
+                          >
+                            <NineSlice
+                              id="map.filterCellBg"
+                              tint="var(--f-bg)"
+                              slice={CELL_SLICE}
+                              className={styles.mapFilterLayer}
+                            />
+                            <NineSlice
+                              id="map.filterCellFg"
+                              tint="var(--f-frame)"
+                              slice={CELL_SLICE}
+                              className={styles.mapFilterLayer}
+                            />
+                            <span className={styles.mapFilterBox} aria-hidden="true">
+                              <NineSlice
+                                id="map.filterBoxBg"
+                                tint="var(--f-box-bg)"
+                                slice={BOX_SLICE}
+                                className={styles.mapFilterBoxBg}
+                              />
+                              <NineSlice
+                                id="map.filterBoxFg"
+                                tint="var(--f-box-frame)"
+                                slice={BOX_SLICE}
+                                className={styles.mapFilterLayer}
+                              />
+                              <NineSlice
+                                id="map.filterBoxBg"
+                                tint="var(--f-box)"
+                                slice={BOX_SLICE}
+                                className={styles.mapFilterBoxFill}
+                              />
+                            </span>
+                            <span className={styles.mapFilterIcon} aria-hidden="true">
+                              {l.icon}
+                            </span>
+                            <span className={styles.mapFilterName}>{l.name}</span>
+                            {l.count !== null && (
+                              <span className={styles.mapFilterCount}>{l.count}</span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                {poiLegend.length > 0 && (
+                  <div className={styles.mapLegendGroup}>
+                    <span className={styles.mapLegendGroupHead}>商铺与设施</span>
+                    <ul className={styles.mapLegend}>
+                      {poiLegend.map((l) => {
+                        const on = !hidden.has(l.key);
+                        return (
+                          <li key={l.key}>
+                            <button
+                              type="button"
+                              className={styles.mapFilter}
+                              aria-pressed={on}
+                              title={on ? `在地图上隐藏${l.name}` : `在地图上显示${l.name}`}
+                              onClick={() => toggleLegend(l.key)}
+                            >
+                              <NineSlice
+                                id="map.filterCellBg"
+                                tint="var(--f-bg)"
+                                slice={CELL_SLICE}
+                                className={styles.mapFilterLayer}
+                              />
+                              <NineSlice
+                                id="map.filterCellFg"
+                                tint="var(--f-frame)"
+                                slice={CELL_SLICE}
+                                className={styles.mapFilterLayer}
+                              />
+                              <span className={styles.mapFilterBox} aria-hidden="true">
+                                <NineSlice
+                                  id="map.filterBoxBg"
+                                  tint="var(--f-box-bg)"
+                                  slice={BOX_SLICE}
+                                  className={styles.mapFilterBoxBg}
+                                />
+                                <NineSlice
+                                  id="map.filterBoxFg"
+                                  tint="var(--f-box-frame)"
+                                  slice={BOX_SLICE}
+                                  className={styles.mapFilterLayer}
+                                />
+                                <NineSlice
+                                  id="map.filterBoxBg"
+                                  tint="var(--f-box)"
+                                  slice={BOX_SLICE}
+                                  className={styles.mapFilterBoxFill}
+                                />
+                              </span>
+                              <span className={styles.mapFilterIcon} aria-hidden="true">
+                                {l.icon}
+                              </span>
+                              <span className={styles.mapFilterName}>{l.name}</span>
+                              {l.count !== null && (
+                                <span className={styles.mapFilterCount}>{l.count}</span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <p className={styles.mapHint}>底图和图标取自原作</p>
+        <p className={styles.mapStatusBar}>
+          <span>滚轮缩放 · 拖拽平移 · Esc 取消</span>
+          <span className={styles.mapStatusSep} aria-hidden="true">
+            /
+          </span>
+          <span>底图和图标取自原作</span>
+        </p>
       </div>
     </section>
   );

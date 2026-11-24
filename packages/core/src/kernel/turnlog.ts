@@ -154,42 +154,6 @@ const TurnRecordSchema = z.object({
       cacheWriteTokens: z.number().int().min(0).optional(),
     })
     .optional(),
-  stageUsage: z
-    .object({
-      judge: z
-        .object({
-          inputTokens: z.number().int().min(0),
-          outputTokens: z.number().int().min(0),
-          cachedInputTokens: z.number().int().min(0).optional(),
-          cacheWriteTokens: z.number().int().min(0).optional(),
-        })
-        .optional(),
-      narrate: z
-        .object({
-          inputTokens: z.number().int().min(0),
-          outputTokens: z.number().int().min(0),
-          cachedInputTokens: z.number().int().min(0).optional(),
-          cacheWriteTokens: z.number().int().min(0).optional(),
-        })
-        .optional(),
-      extract: z
-        .object({
-          inputTokens: z.number().int().min(0),
-          outputTokens: z.number().int().min(0),
-          cachedInputTokens: z.number().int().min(0).optional(),
-          cacheWriteTokens: z.number().int().min(0).optional(),
-        })
-        .optional(),
-      other: z
-        .object({
-          inputTokens: z.number().int().min(0),
-          outputTokens: z.number().int().min(0),
-          cachedInputTokens: z.number().int().min(0).optional(),
-          cacheWriteTokens: z.number().int().min(0).optional(),
-        })
-        .optional(),
-    })
-    .optional(),
 });
 
 /** 玩家确认检定后、调模型之前写下的掷骰；之后重试和重新生成都用这次的骰面 */

@@ -54,13 +54,6 @@ export interface TurnUsage {
   readonly cacheWriteTokens?: number | undefined;
 }
 
-export interface TurnStageUsage {
-  readonly judge?: TurnUsage | undefined;
-  readonly narrate?: TurnUsage | undefined;
-  readonly extract?: TurnUsage | undefined;
-  readonly other?: TurnUsage | undefined;
-}
-
 export type TurnStage =
   | "judge"
   | "prepare"

@@ -136,34 +136,14 @@ export interface PromptExtras {
   readonly includeNpcEquipment?: boolean | undefined;
 }
 
-/** 把【当前状态】拆成「同场基本不变的稳定行」与「每轮跳变的【时间：】行」，便于按消息边界切片缓存。 */
-export function splitStateSummary(
-  world: WorldState,
-  records: readonly LogRecord[],
-  data: Readonly<Record<string, unknown>> = {},
-): { readonly stable: string; readonly ticking: string | undefined } {
-  const views = registry.project({ world, records, data });
-  const lines = registry.status({ views });
-  const stable: string[] = [];
-  const ticking: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith("时间：")) ticking.push(line);
-    else stable.push(line);
-  }
-  return {
-    stable: stable.join("\n"),
-    ticking: ticking.length > 0 ? ticking.join("\n") : undefined,
-  };
-}
-
 export function stateSummary(
   world: WorldState,
   records: readonly LogRecord[],
   data: Readonly<Record<string, unknown>> = {},
 ): string {
-  // 把每轮必变的「时间：」行移到【当前状态】末尾，避免单行分钟变化截断后面 2K+ 字稳定角色状态的 KV 前缀缓存。
-  const { stable, ticking } = splitStateSummary(world, records, data);
-  return ticking ? `${stable}\n${ticking}` : stable;
+  // 各系统交自己的几行，按 order 穿插排好；这里只负责投影和拼接
+  const views = registry.project({ world, records, data });
+  return registry.status({ views }).join("\n");
 }
 
 export function formatInput(input: TurnInput): string {
@@ -647,49 +627,7 @@ export function uiActionsSection(
   return `【上一轮之后玩家刚刚在界面完成的操作（必须写进本轮正文）】\n在发本轮行动前，玩家刚在界面上完成了以下操作（钱、货、装备、义体与状态已由代码实际结算完毕）。请在写本轮正文时把这些刚发生的举动顺理成章、具体自然地写进开头或行文里（例如刚在柜台买下某物收进包里、刚装好义体、刚换上衣服等，不要跳过去不提，也不要用“界面/系统”等出戏词）：\n${lines}`;
 }
 
-/**
- * 将局面拆成「同场稳定的半静态世界上下文」与「每轮跳变的动态尾部」：
- * - `judge` / `extract` 借此按完整消息边界拆成 `[system, user(半静态世界), assistant(确认), user(本轮动态)]`，
- *   无论上游是按完整消息分块缓存（Claude / 部分中转站）还是隐式前缀缓存（Gemini / OpenAI），都能整块命中。
- * - `narrate` 维持 `situation()` 单列表形式。
- */
-export function splitSituation(
-  world: WorldState,
-  records: readonly LogRecord[],
-  view: PlayerView,
-  plan: NarratorPlan,
-  extras: PromptExtras,
-  stage: SectionStage = "narrate",
-): { readonly stable: string[]; readonly volatile: string[] } {
-  const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
-  const stable = [...registry.sections({ world, data: extras.data, input, stage })];
-  const market = merchantContext(view, input.text);
-  if (market) stable.push(market);
-  const state = splitStateSummary(world, records, extras.data);
-  if (state.stable !== "") stable.push(`【当前状态】\n${state.stable}`);
-
-  const volatile: string[] = [];
-  if (state.ticking) volatile.push(`【当前时间】\n${state.ticking}`);
-  const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
-  if (uiActions) volatile.push(uiActions);
-  const sceneMemory = sceneMemorySection(world, input.text);
-  if (sceneMemory) volatile.push(sceneMemory);
-  // 物理与安防约束给判断和正文落地；抽取以【本轮已定的事】与定稿正文为准，不重复带长段武器战术建议
-  if (stage !== "extract") {
-    const physics = physicsSection(world, extras.data, input.text);
-    if (physics) volatile.push(`【物理与安防现状】\n${physics}`);
-  }
-  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
-  if (stage !== "extract") {
-    const canon = canonSection(extras.data, extras.startTime, world.time);
-    if (canon) volatile.push(`【2077 世界时间线】\n${canon}`);
-  }
-  if (stage !== "extract" && extras.opening && view.totalTurns === 0)
-    volatile.push(`【开场】\n${extras.opening}`);
-  return { stable, volatile };
-}
-
-/** 按阶段拼局面（稳定在前、变动在后） */
+/** 按阶段拼局面：状态、阶段可见的情境节、商品报价、场景记忆、物理约束、原剧时间线与开场 */
 export function situation(
   world: WorldState,
   records: readonly LogRecord[],
@@ -698,8 +636,30 @@ export function situation(
   extras: PromptExtras,
   stage: SectionStage = "narrate",
 ): string[] {
-  const { stable, volatile } = splitSituation(world, records, view, plan, extras, stage);
-  return [...stable, ...volatile];
+  const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
+  const parts = [
+    `【当前状态】\n${stateSummary(world, records, extras.data)}`,
+    ...registry.sections({ world, data: extras.data, input, stage }),
+  ];
+  const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
+  if (uiActions) parts.push(uiActions);
+  const sceneMemory = sceneMemorySection(world, input.text);
+  const market = merchantContext(view, input.text);
+  if (market) parts.push(market);
+  if (sceneMemory) parts.push(sceneMemory);
+  // 物理与安防约束给判断和正文落地；抽取以【本轮已定的事】与定稿正文为准，不重复带长段武器战术建议
+  if (stage !== "extract") {
+    const physics = physicsSection(world, extras.data, input.text);
+    if (physics) parts.push(`【物理与安防现状】\n${physics}`);
+  }
+  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
+  if (stage !== "extract") {
+    const canon = canonSection(extras.data, extras.startTime, world.time);
+    if (canon) parts.push(`【2077 世界时间线】\n${canon}`);
+  }
+  if (stage !== "extract" && extras.opening && view.totalTurns === 0)
+    parts.push(`【开场】\n${extras.opening}`);
+  return parts;
 }
 
 /** 开了斯安威斯坦时的说明；没开或开不了时为 undefined */

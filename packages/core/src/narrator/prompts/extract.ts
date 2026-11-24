@@ -13,20 +13,12 @@ import {
   type NarratorPlan,
   type NarratorPrompt,
   type PromptExtras,
-  splitSituation,
+  situation,
   stageModules,
   tablesOf,
 } from "./context";
-import {
-  ALWAYS_ON_MODULE_IDS,
-  BOOKKEEPING_BASE,
-  modulesBlock,
-  staticAlwaysOnModules,
-  staticBaseData,
-  systemMessage,
-  userMessage,
-} from "./layers";
-import { npcEquipmentRepeatHint, staticNpcEquipmentReference } from "./npc-equipment";
+import { BOOKKEEPING_BASE, modulesBlock, systemMessage, userMessage } from "./layers";
+import { npcEquipmentReference } from "./npc-equipment";
 
 /** ④ 抽取：辅助模型，低温，只输出 JSON */
 export const EXTRACT_TEMPERATURE = 0.2;
@@ -84,7 +76,38 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 /** ④ 抽取的例子 */
 export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-04-12 21:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
+/**
+ * 抽取阶段固定常驻的规则模块（所有非 ooc 回合均激活）：
+ * 归入 system 提示词，使约 28K 字的常驻模块规则与指令 schema 跨回合稳定命中提示缓存，
+ * 同时大幅缩小每轮未缓存的 user 消息体量，降低辅助模型首包耗时与代理断连风险。
+ */
+const ALWAYS_ON_EXTRACT_MODULE_IDS: ReadonlySet<string> = new Set([
+  "economy",
+  "places",
+  "npcs",
+  "factions",
+  "reputation",
+  "habits",
+  "jobs",
+  "cyberware",
+  "events",
+  "phone",
+  "notes",
+  "chronicle",
+  "arcs",
+  "shards",
+]);
+
 let extractCore: string | undefined;
+let extractStaticModulesText: string | undefined;
+
+function staticExtractModules(): string | undefined {
+  if (extractStaticModulesText === undefined) {
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+    extractStaticModulesText = modulesBlock("extract", fixed) ?? "";
+  }
+  return extractStaticModulesText === "" ? undefined : extractStaticModulesText;
+}
 
 /** ④ 抽取不变的几层：L0 的两条、L1、L3（schema 生成的格式、常驻指令、例子）；第一次用时检查每种模型可用的指令都有说明 */
 export function extractRules(): string {
@@ -132,35 +155,22 @@ export function buildExtractPrompt(
     `${plan.input.text}\n${narrative}`,
     modules.some((m) => m.id === "hacking"),
   );
-  // 常驻抽取模块与静态新人物装备选型参考放在可缓存 system 层；
-  // 只有本轮按状态动态激活的模块与轻量的重复型号提醒才放进 user 层。
-  const staticData = staticBaseData(extras.data);
-  const dynamicModules = modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
-  const staticModulesText = staticAlwaysOnModules("extract");
+  // 常驻抽取模块放在可缓存 system 层；只有本轮按状态动态激活的模块才放进 user 层
+  const dynamicModules = modules.filter((m) => !ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+  const staticModulesText = staticExtractModules();
   const dynamicModulesText = modulesBlock("extract", dynamicModules);
   const worldObjectIndex = worldObjectsIndexSection(world);
-  const staticEquipment =
+  const npcEquipment =
     extras.includeNpcEquipment === false
       ? undefined
-      : staticNpcEquipmentReference(staticData, true);
-  const equipmentRepeatHint =
-    extras.includeNpcEquipment === false ? undefined : npcEquipmentRepeatHint(world, extras.data);
-  const { stable, volatile } = splitSituation(
-    world,
-    records,
-    view,
-    plan,
-    { ...extras, opening },
-    "extract",
-  );
-  const stableContext = [dynamicModulesText, ...stable, worldObjectIndex]
-    .filter((s): s is string => s !== undefined && s !== "")
-    .join("\n\n");
-  const volatileTurn = userMessage({
-    scene: volatile,
+      : npcEquipmentReference(world, extras.data, true);
+  const content = userMessage({
+    modules: dynamicModulesText,
+    scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
-      equipmentRepeatHint,
+      npcEquipment,
+      worldObjectIndex,
       details,
       extras.decided?.length ? `【本轮已定的事】\n${extras.decided.join("\n")}` : undefined,
       tradePlans ? `【本轮已核对的交易条件】\n${tradePlans}` : undefined,
@@ -168,32 +178,28 @@ export function buildExtractPrompt(
     ],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
-  // 系统层放纯静态抽取规则 + 纯静态常驻模块 + 纯静态基础目录表 + 纯静态装备选型参考（剥离动态模块与存档独立物件）；
-  // 半静态世界/人物背景独立成前导 user+assistant 消息块，与本轮正文/输入物理隔离以整块命中缓存。
+  // 系统层放纯静态抽取规则 + 纯静态常驻模块 + 纯静态基础目录表（剥离动态模块与存档独立物件），
+  // 让抽取系统提示词跨回合稳定命中提示缓存，并把每轮未缓存的用户消息压到最小。
+  const staticData =
+    extras.data &&
+    "baseData" in extras.data &&
+    extras.data.baseData &&
+    typeof extras.data.baseData === "object"
+      ? (extras.data.baseData as Readonly<Record<string, unknown>>)
+      : extras.data;
   const staticRules = systemMessage("extract", [
     extractRules(),
     ...(staticModulesText ? [staticModulesText] : []),
   ]);
-  const system = [
-    staticRules,
-    ...tablesOf(view, { ...extras, data: staticData }),
-    ...(staticEquipment ? [staticEquipment] : []),
-  ].join("\n\n");
-  const messages =
-    stableContext !== ""
-      ? [
-          { role: "system" as const, content: system },
-          { role: "user" as const, content: stableContext },
-          { role: "assistant" as const, content: "已核对当前世界状态与在场人物资料。" },
-          { role: "user" as const, content: volatileTurn },
-        ]
-      : [
-          { role: "system" as const, content: system },
-          { role: "user" as const, content: volatileTurn },
-        ];
   return {
     rules: staticRules.length + (dynamicModulesText?.length ?? 0),
-    messages,
+    messages: [
+      {
+        role: "system",
+        content: [staticRules, ...tablesOf(view, { ...extras, data: staticData })].join("\n\n"),
+      },
+      { role: "user", content },
+    ],
     modules: modules.map((m) => m.id),
   };
 }
